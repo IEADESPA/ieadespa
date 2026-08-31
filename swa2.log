@@ -1,0 +1,28 @@
+
+Welcome to Azure Static Web Apps CLI (2.0.10)
+
+***********************************************************************
+* WARNING: This emulator may not match the cloud environment exactly. *
+* Always deploy and test your app in Azure.                           *
+***********************************************************************
+
+
+Found configuration file:
+  C:\sistemas vs code\ieadespa\governanca-ieadespa\staticwebapp.config.json
+
+
+Serving static content:
+  C:\sistemas vs code\ieadespa\governanca-ieadespa\app
+
+Using dev server for API:
+  http://localhost:7071
+
+Azure Static Web Apps emulator started at http://localhost:4280. Press CTRL+C to exit.
+
+
+GET http://127.0.0.1:7071/api/membros/3/frequencia (proxy)
+GET http://localhost:4280/api/membros/3/frequencia - 200
+GET http://127.0.0.1:7071/api/catalogos/situacoes (proxy)
+GET http://127.0.0.1:7071/api/catalogos/departamentos (proxy)
+GET http://localhost:4280/api/catalogos/situacoes - 200
+GET http://localhost:4280/api/catalogos/departamentos - 200

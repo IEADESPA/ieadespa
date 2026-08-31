@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Frequência Ministerial — IEADESPA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- SheetJS: só usado na aba Assembleia Geral, pra ler o Excel de elegíveis no navegador -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- Toasts (mensagens de sucesso/erro) e modal (confirmação/texto) — ver script.js -->
+  <div id="toastContainer"></div>
+  <div id="modalOverlay" class="escondido">
+    <div class="modal-caixa" id="modalCaixa"></div>
+  </div>
+
+  <!-- TELA INICIAL: PORTARIA / CHECK-IN -->
+  <div id="telaCheckin">
+    <div class="caixa-login">
+      <h2>Frequência Ministerial</h2>
+      <p class="subtitle">IEADESPA — Ministério</p>
+
+      <form onsubmit="event.preventDefault(); enviarPresenca();">
+        <div class="input-group">
+          <label>Número de Matrícula:</label>
+          <input type="number" id="matricula" placeholder="Ex: 3" />
+        </div>
+        <div class="input-group">
+          <label>Senha da Reunião:</label>
+          <input type="text" id="senha" placeholder="Senha da Portaria" />
+        </div>
+        <button id="btnBaterPonto" class="btn-confirmar" type="submit">Registrar Presença</button>
+      </form>
+
+      <a href="#" class="link-secretaria" onclick="mostrarTelaPainelInicial()">📋 Acessar meu Painel</a>
+    </div>
+  </div>
+
+  <!-- PAINEL ÚNICO: um só acesso, os módulos visíveis dependem das permissões da pessoa -->
+  <div id="telaPainel" style="display:none;">
+
+    <!-- Portão de entrada: matrícula sempre, senha só quem tem acesso administrativo -->
+    <div class="caixa-login" id="cxLoginPainel">
+      <h2>📋 Meu Painel</h2>
+      <p class="subtitle">Informe sua matrícula. Se você tiver acesso administrativo, informe também a senha.</p>
+
+      <form onsubmit="event.preventDefault(); acessarPainel();">
+        <div class="input-group">
+          <label>Número de Matrícula:</label>
+          <input type="number" id="matriculaPainel" placeholder="Ex: 3" />
+        </div>
+        <div class="input-group">
+          <label>Senha (só se você tiver acesso administrativo):</label>
+          <input type="password" id="senhaPainel" placeholder="Deixe em branco se não tiver" />
+        </div>
+        <button class="btn-confirmar" type="submit">Entrar</button>
+      </form>
+
+      <p id="resultadoLogin"></p>
+
+      <a href="#" class="link-secretaria" onclick="voltarParaCheckin()">← Voltar para a Portaria</a>
+    </div>
+
+    <!-- Conteúdo do painel (dashboard com abas) -->
+    <div class="painel-layout" id="cxPainelConteudo" style="display:none;">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-topo">
+          <span class="sidebar-titulo">IEADESPA</span>
+          <button class="btn-icon" onclick="alternarSidebar()" title="Recolher/Expandir menu">☰</button>
+        </div>
+        <nav class="abas-secretaria" id="navAbasSecretaria">
+          <button class="btn-aba ativo" id="btnAbaMeupainel" onclick="mostrarAbaSecretaria('meupainel')"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
+          <button class="btn-aba" id="btnAbaReunioes" data-permissao="reunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
+          <button class="btn-aba" id="btnAbaAssembleia" data-permissao="assembleia" onclick="mostrarAbaSecretaria('assembleia')"><span class="icone">🗳️</span><span class="rotulo">Assembleia Geral</span></button>
+          <button class="btn-aba" id="btnAbaPessoas" data-permissao="pessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
+          <button class="btn-aba" id="btnAbaFuncoes" data-permissao="pessoas" onclick="mostrarAbaSecretaria('funcoes')"><span class="icone">🎖️</span><span class="rotulo">Funções</span></button>
+          <button class="btn-aba" id="btnAbaOrgaos" data-permissao="pessoas" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
+          <button class="btn-aba" id="btnAbaEstrutura" data-permissao="pessoas" onclick="mostrarAbaSecretaria('estrutura')"><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
+          <button class="btn-aba" id="btnAbaCatalogos" data-permissao="pessoas" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
+          <button class="btn-aba" id="btnAbaPermissoes" data-permissao="permissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
+          <button class="btn-aba" id="btnAbaConsagracoes" data-permissao="consagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
+        </nav>
+        <div class="sidebar-rodape">
+          <span id="nomeLogado" class="nome-logado"></span>
+          <a href="#" class="link-secretaria" onclick="sairDoPainel()">Sair</a>
+        </div>
+      </aside>
+      <main class="conteudo">
+        <div class="cabecalho-secretaria">
+          <h2 id="tituloModulo">Meu Painel</h2>
+        </div>
+
+      <!-- ABA: MEU PAINEL (sempre visível, todo mundo tem) -->
+      <div id="abaMeupainel" class="aba-secretaria">
+        <div id="cartaoPerfilPessoal"></div>
+        <div id="resumoStatsPessoal"></div>
+        <div id="resultadoPainelPessoal"></div>
+      </div>
+
+      <!-- ABA: REUNIÕES -->
+      <div id="abaReunioes" class="aba-secretaria" style="display:none;">
+        <form onsubmit="event.preventDefault(); abrirReuniao();">
+          <div class="input-group">
+            <label>Descrição da reunião:</label>
+            <input type="text" id="descricaoReuniao" placeholder="Ex: Reunião Administrativa de Agosto" />
+          </div>
+          <div class="input-group">
+            <label>Senha para a Portaria:</label>
+            <input type="text" id="senhaNovaReuniao" placeholder="Ex: 1234" />
+          </div>
+          <button class="btn-confirmar" type="submit">▶️ Abrir Reunião</button>
+        </form>
+
+        <p id="resultadoSecretaria"></p>
+
+        <hr />
+
+        <h3>Reuniões</h3>
+        <div id="resultadoListaReunioes"></div>
+
+        <hr />
+
+        <div id="blocoFrequencia" style="display:none;">
+          <h3>Lista de Frequência — <span id="tituloFrequencia"></span></h3>
+          <div id="resumoQuorum" class="resumo-quorum"></div>
+          <div id="resultadoFrequencia"></div>
+        </div>
+      </div>
+
+      <!-- ABA: ASSEMBLEIA GERAL -->
+      <div id="abaAssembleia" class="aba-secretaria" style="display:none;">
+        <h3>Lista de Elegíveis (em comunhão, aptos a votar e ser votados)</h3>
+        <p class="subtitle">
+          Importe uma planilha Excel (.xlsx) com as colunas <strong>Matrícula</strong> e
+          <strong>Nome</strong>. É uma lista única e contínua: cada nova importação substitui
+          quem estava elegível antes por quem está na planilha agora.
+        </p>
+        <div class="input-group">
+          <input type="file" id="arquivoExcelAssembleia" accept=".xlsx,.xls" />
+        </div>
+        <button class="btn-confirmar" type="button" onclick="importarExcelAssembleiaGeral()">📥 Importar Lista de Elegíveis</button>
+        <p id="resultadoImportacaoAssembleia"></p>
+
+        <hr />
+
+        <h3>Elegíveis Atuais</h3>
+        <div class="barra-lista">
+          <input type="text" id="assembleiaBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroElegiveis()" />
+          <span id="assembleiaInfo" class="subtitle" style="margin:0;"></span>
+        </div>
+        <div class="rolagem-tabela">
+          <div id="resultadoListaElegiveisAssembleia"></div>
+        </div>
+        <div class="paginacao" id="assembleiaPaginacao"></div>
+
+        <hr />
+
+        <h3>Convocações / Chamada da Assembleia</h3>
+        <form onsubmit="event.preventDefault(); abrirReuniaoAssembleia();">
+          <div class="input-group">
+            <label>Descrição da assembleia:</label>
+            <input type="text" id="descricaoAssembleia" placeholder="Ex: Assembleia Geral Ordinária" />
+          </div>
+          <div class="input-group">
+            <label>Senha para a Portaria:</label>
+            <input type="text" id="senhaNovaAssembleia" placeholder="Ex: 1234" />
+          </div>
+          <button class="btn-confirmar" type="submit">▶️ Abrir Assembleia</button>
+        </form>
+
+        <p id="resultadoAssembleiaReuniao"></p>
+
+        <hr />
+
+        <h3>Convocações</h3>
+        <div id="resultadoListaReunioesAssembleia"></div>
+
+        <hr />
+
+        <div id="blocoFrequenciaAssembleia" style="display:none;">
+          <h3>Lista de Presença — <span id="tituloFrequenciaAssembleia"></span></h3>
+          <div id="resumoQuorumAssembleia" class="resumo-quorum"></div>
+          <div id="resultadoFrequenciaAssembleia"></div>
+        </div>
+      </div>
+
+      <!-- ABA: PESSOAS -->
+      <div id="abaPessoas" class="aba-secretaria" style="display:none;">
+        <h3>Cadastrar / Editar Pessoa</h3>
+        <form onsubmit="event.preventDefault(); salvarPessoa();">
+          <div class="input-group">
+            <label>Matrícula:</label>
+            <input type="number" id="pessoaMatricula" placeholder="Ex: 15" />
+          </div>
+          <div class="input-group">
+            <label>Nome completo:</label>
+            <input type="text" id="pessoaNome" placeholder="Ex: Maria da Silva" />
+          </div>
+          <div class="input-group">
+            <label>Função eclesiástica:</label>
+            <select id="pessoaFuncao"></select>
+          </div>
+          <div class="input-group">
+            <label>Congregação:</label>
+            <select id="pessoaCongregacao"></select>
+          </div>
+          <div class="input-group">
+            <label>Status:</label>
+            <select id="pessoaStatus">
+              <option value="ATIVO">ATIVO</option>
+              <option value="LICENÇA">LICENÇA</option>
+              <option value="INATIVO">INATIVO</option>
+              <option value="DESLIGADO">DESLIGADO</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Data de Nascimento:</label>
+            <input type="date" id="pessoaDataNascimento" />
+          </div>
+          <div class="input-group">
+            <label>Data de Admissão (batismo/recepção):</label>
+            <input type="date" id="pessoaDataAdmissao" />
+          </div>
+          <div class="input-group">
+            <label>Situação:</label>
+            <select id="pessoaSituacao">
+              <option value="EM_COMUNHAO">Membro em Comunhão</option>
+              <option value="SEM_COMUNHAO">Membro sem Comunhão</option>
+              <option value="CONGREGADO">Congregado</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Dizimista Fiel (só o Geral pode afirmar):</label>
+            <select id="pessoaDizimista">
+              <option value="">Não informado</option>
+              <option value="true">Sim</option>
+              <option value="false">Não</option>
+            </select>
+          </div>
+          <button class="btn-confirmar" type="submit">💾 Salvar Pessoa</button>
+        </form>
+        <p id="resultadoPessoa"></p>
+
+        <hr />
+        <div class="barra-lista">
+          <input type="text" id="pessoasBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroPessoas()" />
+          <select id="pessoasFiltroCategoria" onchange="aplicarFiltroPessoas()">
+            <option value="">Todas as categorias</option>
+            <option value="Membro Elegível">Membro Elegível</option>
+            <option value="Capacidade Eleitoral Ativa">Capacidade Eleitoral Ativa</option>
+            <option value="Membro em Comunhão">Membro em Comunhão</option>
+            <option value="Sem comunhão">Sem comunhão</option>
+            <option value="Congregado">Congregado</option>
+            <option value="Dados incompletos">Dados incompletos</option>
+          </select>
+          <span id="pessoasInfo" class="subtitle" style="margin:0;"></span>
+        </div>
+        <div class="rolagem-tabela">
+          <div id="resultadoListaPessoas"></div>
+        </div>
+        <div class="paginacao" id="pessoasPaginacao"></div>
+      </div>
+
+      <!-- ABA: FUNÇÕES -->
+      <div id="abaFuncoes" class="aba-secretaria" style="display:none;">
+        <h3>Cadastrar / Renomear Função Eclesiástica</h3>
+        <form onsubmit="event.preventDefault(); salvarFuncao();">
+          <div class="input-group">
+            <label>Nome:</label>
+            <input type="text" id="funcaoNome" placeholder="Ex: Presbítero" />
+          </div>
+          <button class="btn-confirmar" type="submit">💾 Salvar Função</button>
+        </form>
+        <p id="resultadoFuncao"></p>
+
+        <hr />
+        <div id="resultadoListaFuncoes"></div>
+      </div>
+
+      <!-- ABA: ÓRGÃOS -->
+      <div id="abaOrgaos" class="aba-secretaria" style="display:none;">
+        <h3>Cadastrar / Editar Órgão</h3>
+        <form onsubmit="event.preventDefault(); salvarOrgao();">
+          <input type="hidden" id="orgaoId" />
+          <div class="input-group">
+            <label>Sigla (ex: CLI):</label>
+            <input type="text" id="orgaoSigla" placeholder="CLI" />
+          </div>
+          <div class="input-group">
+            <label>Nome:</label>
+            <input type="text" id="orgaoNome" placeholder="Câmara de Liderança Institucional" />
+          </div>
+          <div class="input-group">
+            <label>Quórum mínimo (%) — opcional:</label>
+            <input type="number" id="orgaoQuorumMinimo" placeholder="Ex: 10" />
+          </div>
+          <div class="input-group">
+            <label>Quórum deliberativo (%) — opcional:</label>
+            <input type="number" id="orgaoQuorumDeliberativo" placeholder="Ex: 20" />
+          </div>
+          <div class="input-group">
+            <label>Faltas para perda de assento — opcional:</label>
+            <input type="number" id="orgaoFaltasPerda" placeholder="Ex: 3" />
+          </div>
+          <button class="btn-confirmar" type="submit">💾 Salvar Órgão</button>
+        </form>
+        <p id="resultadoOrgao"></p>
+        <hr />
+        <div class="rolagem-tabela">
+          <div id="resultadoListaOrgaos"></div>
+        </div>
+      </div>
+
+      <!-- ABA: ESTRUTURA (Hierarquia de 6 níveis) -->
+      <div id="abaEstrutura" class="aba-secretaria" style="display:none;">
+        <h3>Governança Escalonada (Regimento Art. 104)</h3>
+        <p class="subtitle">Níveis 0 a 6: Extensão da Tenda → Congregação → Área → Região → Quadrante → Distrito → Sede Geral. Tudo editável.</p>
+        <div id="estruturaConteudo"></div>
+      </div>
+
+      <!-- ABA: CATÁLOGOS -->
+      <div id="abaCatalogos" class="aba-secretaria" style="display:none;">
+        <h3>Catálogos Configuráveis</h3>
+        <div id="catalogosConteudo"></div>
+
+        <hr />
+        <h3>🧹 Excluir dados fictícios</h3>
+        <p class="subtitle">Marque o que deseja apagar. O admin (matrícula 3) e seu acesso são sempre preservados.</p>
+        <div class="grade-permissoes" id="dadosExclusaoCheckboxes">
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="pessoas" /> Pessoas (membros)</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="congregacoes" /> Congregações</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="estrutura" /> Estrutura (áreas/regiões/quadrantes/distritos/extensões)</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="funcoes" /> Funções</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="orgaos" /> Órgãos</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="departamentos" /> Departamentos</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="situacoes" /> Situações de Membro</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="permissoes" /> Funcionalidades + Papéis</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="liderancas" /> Acessos (lideranças)</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="consagracoes" /> Consagrações</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="reunioes" /> Reuniões / Presenças</label>
+        </div>
+        <button class="btn-confirmar btn-perigo" style="margin-top:12px;" onclick="excluirDadosFicticios()">🗑️ Excluir selecionados</button>
+        <p id="resultadoExclusaoDados"></p>
+      </div>
+
+      <!-- ABA: PERMISSÕES -->
+      <div id="abaPermissoes" class="aba-secretaria" style="display:none;">
+
+        <h3>Papéis (perfis predefinidos de acesso)</h3>
+        <form onsubmit="event.preventDefault(); salvarPapel();">
+          <input type="hidden" id="papelId" />
+          <div class="barra-lista">
+            <input type="text" id="papelNome" placeholder="Nome do papel (ex: Tesoureiro)" style="min-width:220px;" />
+            <select id="papelNivel">
+              <option value="GLOBAL">Global (tudo)</option>
+              <option value="AREA">Área</option>
+              <option value="CONGREGACAO">Congregação</option>
+            </select>
+            <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">💾 Salvar Papel</button>
+          </div>
+          <div class="input-group">
+            <label>Permissões deste papel:</label>
+            <div id="papelPermissoesCheckboxes" class="grade-permissoes"></div>
+          </div>
+        </form>
+        <p id="resultadoPapel"></p>
+        <div class="rolagem-tabela"><div id="resultadoListaPapeis"></div></div>
+
+        <hr />
+
+        <h3>Atribuir acesso a uma pessoa</h3>
+        <form onsubmit="event.preventDefault(); salvarPermissao();">
+          <div class="barra-lista">
+            <input type="number" id="permissaoMatricula" placeholder="Matrícula" style="min-width:140px;" />
+            <select id="permissaoPapel"></select>
+            <select id="permissaoEscopoTipo" onchange="onChangeEscopoTipoPermissao()">
+              <option value="GLOBAL">Escopo: Global</option>
+              <option value="CONGREGACAO">Escopo: Congregação</option>
+            </select>
+            <select id="permissaoEscopoId" style="display:none;"></select>
+            <input type="password" id="permissaoSenha" placeholder="Senha (1º acesso)" style="min-width:150px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">💾 Conceder Acesso</button>
+          </div>
+        </form>
+        <p id="resultadoPermissao"></p>
+        <div class="rolagem-tabela"><div id="resultadoListaPermissoes"></div></div>
+      </div>
+
+      <!-- ABA: CONSAGRAÇÕES -->
+      <div id="abaConsagracoes" class="aba-secretaria" style="display:none;">
+        <h3>Protocolar Processo</h3>
+        <form onsubmit="event.preventDefault(); salvarConsagracao();">
+          <div class="input-group">
+            <label>Matrícula da pessoa:</label>
+            <input type="number" id="consagracaoMatricula" placeholder="Ex: 15" />
+          </div>
+          <div class="input-group">
+            <label>Assunto:</label>
+            <select id="consagracaoAssunto">
+              <option value="Integração">Integração</option>
+              <option value="Reintegração">Reintegração</option>
+              <option value="Separação ao Diaconato">Separação ao Diaconato</option>
+              <option value="Consagração a Presbítero">Consagração a Presbítero</option>
+              <option value="Consagração a Evangelista">Consagração a Evangelista</option>
+              <option value="__outro">Outro (digitar)</option>
+            </select>
+            <input type="text" id="consagracaoAssuntoOutro" placeholder="Digite o assunto" style="display:none; margin-top:8px;" />
+          </div>
+          <div class="input-group">
+            <label>Matrícula do proponente:</label>
+            <input type="number" id="consagracaoProponente" placeholder="Quem está propondo" />
+          </div>
+          <button class="btn-confirmar" type="submit">📩 Protocolar</button>
+        </form>
+        <p id="resultadoConsagracao"></p>
+
+        <hr />
+        <h3>Esteira Ativa</h3>
+        <div id="resultadoListaConsagracoes"></div>
+      </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

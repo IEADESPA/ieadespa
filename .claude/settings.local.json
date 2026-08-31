@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-NetTCPConnection -LocalPort 7071,4281 -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='func.exe'\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 4281 -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='func.exe'\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='func.exe' or Name='node.exe'\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match \"swa|func\" } | Select-Object ProcessId, CommandLine)",
+      "PowerShell(Get-Process func,swa -ErrorAction SilentlyContinue)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:7071/api/membros/7/frequencia\" -Method GET)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:7071/api/membros/3/frequencia\" -Method GET)"
+    ]
+  }
+}

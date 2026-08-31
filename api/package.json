@@ -1,0 +1,11 @@
+{
+  "name": "governanca-ieadespa-api",
+  "version": "1.0.0",
+  "description": "Backend de governança (CLI, CEI, NIF, AFM) - Azure Functions",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "mssql": "^10.0.1"
+  }
+}

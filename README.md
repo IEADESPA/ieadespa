@@ -109,15 +109,24 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v0.1 — Base configurável
 
-- [ ] ✅ Painel único (um só acesso; módulos visíveis por permissão).
-- [ ] ✅ `api/shared/estatuto.js` (idade, interstício, capacidade eleitoral, quórum 2 estágios).
-- [ ] ✅ `MembroReferencia` com DataNascimento / DataAdmissao / DizimistaFiel.
-- [ ] ✅ Catálogo real de `Orgaos` (6 órgãos do Art. 13).
+- [x] ✅ Painel único (um só acesso; módulos visíveis por permissão).
+- [x] ✅ `api/shared/estatuto.js` (idade, interstício, capacidade eleitoral, quórum 2 estágios).
+- [x] ✅ `MembroReferencia` com DataNascimento / DataAdmissao / DizimistaFiel.
+- [x] ✅ Catálogo real de `Orgaos` (6 órgãos do Art. 13).
 - [ ] Catálogos configuráveis com CRUD + auditoria (Campos, Áreas, Níveis, Congregações,
       Departamentos, órgãos, papéis, situações, cargos ministeriais, prazos).
+      — ✅ feitos via `GestaoCatalogos`: Congregações, Departamentos, Situações, Papéis,
+      Funcionalidades, Áreas, Regiões, Quadrantes, Distritos, Extensões, Tipos de Proposta
+      (Consagrações). Faltam: **Cargos Ministeriais** e **Prazos** (ainda sem catálogo/CRUD).
+      Nenhum catálogo grava em `AuditLog` ainda (auditoria pendente em todos eles).
 - [ ] Hierarquia de 6 níveis no banco (`Areas`, `Regioes`, `Quadrantes`, `Distritos`,
       `ExtensoesTenda`, `VinculoCongregacaoArea`, `OrgaosLocais`).
-- [ ] Permissões estruturadas (papel × funcionalidade × escopo campo/área/congregação).
+      — ✅ tabelas existem com o vínculo pai-filho completo (migração 004) e já são usadas de
+      verdade no escopo de acesso (`shared/escopo.js`). Falta: `OrgaosLocais` (JAI/JEA/CRA/
+      TER/CEQ/Distrito) sem seed e sem nenhuma rota usando ainda.
+- [x] ✅ Permissões estruturadas (papel × funcionalidade × escopo campo/área/congregação).
+      Feito para Global/Distrito/Quadrante/Região/Área/Congregação; falta só Extensão da
+      Tenda (o cadastro de pessoas ainda não tem vínculo direto com `ExtensoesTenda`).
 
 #### v0.2 — Perfil do membro (base da identidade)
 

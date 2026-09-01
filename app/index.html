@@ -222,8 +222,20 @@
             <select id="pessoaFuncao"></select>
           </div>
           <div class="input-group">
+            <label>Cargo Ministerial:</label>
+            <select id="pessoaCargoMinisterial"><option value="">Não informado</option></select>
+          </div>
+          <div class="input-group">
             <label>Congregação:</label>
             <select id="pessoaCongregacao"></select>
+          </div>
+          <div class="input-group">
+            <label>Departamento de afiliação:</label>
+            <select id="pessoaDepartamento"><option value="">Não informado</option></select>
+          </div>
+          <div class="input-group">
+            <label>Extensão da Tenda (se houver):</label>
+            <select id="pessoaExtensao"><option value="">Não se aplica (fica só na Congregação)</option></select>
           </div>
           <div class="input-group">
             <label>Status:</label>
@@ -257,6 +269,19 @@
               <option value="true">Sim</option>
               <option value="false">Não</option>
             </select>
+          </div>
+          <p class="subtitle" style="margin:16px 0 4px;">Dados de contato (LGPD — coleta mínima, uso restrito a quem tem permissão de Pessoas):</p>
+          <div class="input-group">
+            <label>Telefone/WhatsApp:</label>
+            <input type="tel" id="pessoaTelefone" placeholder="Ex: (11) 91234-5678" />
+          </div>
+          <div class="input-group">
+            <label>E-mail:</label>
+            <input type="email" id="pessoaEmail" placeholder="Ex: nome@exemplo.com" />
+          </div>
+          <div class="input-group">
+            <label>Endereço:</label>
+            <input type="text" id="pessoaEndereco" placeholder="Rua, número, bairro, cidade" />
           </div>
           <button class="btn-confirmar" type="submit">💾 Salvar Pessoa</button>
         </form>
@@ -355,6 +380,8 @@
           <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="orgaos" /> Órgãos</label>
           <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="departamentos" /> Departamentos</label>
           <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="situacoes" /> Situações de Membro</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="cargosMinisteriais" /> Cargos Ministeriais</label>
+          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="prazos" /> Prazos</label>
           <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="permissoes" /> Funcionalidades + Papéis</label>
           <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="liderancas" /> Acessos (lideranças)</label>
           <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="consagracoes" /> Consagrações</label>
@@ -404,6 +431,7 @@
               <option value="REGIAO">Escopo: Região/Subsede</option>
               <option value="AREA">Escopo: Área</option>
               <option value="CONGREGACAO">Escopo: Congregação</option>
+              <option value="EXTENSAO">Escopo: Extensão da Tenda</option>
             </select>
             <select id="permissaoEscopoId" style="display:none;"></select>
             <input type="password" id="permissaoSenha" placeholder="Senha (deixe em branco pra manter a atual)" autocomplete="new-password" style="min-width:220px;" />

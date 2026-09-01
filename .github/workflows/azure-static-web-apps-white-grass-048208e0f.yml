@@ -69,6 +69,20 @@ jobs:
           path: 'sql/migrations/007_seed_orgaos_locais.sql'
           action: 'Script'
 
+      - name: Executar Migração SQL 008
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/008_perfil_membro_contato_prazos.sql'
+          action: 'Script'
+
+      - name: Executar Migração SQL 009
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/009_membro_extensao_tenda.sql'
+          action: 'Script'
+
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1

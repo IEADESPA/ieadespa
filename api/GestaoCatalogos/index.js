@@ -63,6 +63,14 @@ const CATALOGOS = {
   orgaosLocais: {
     tabela: "OrgaosLocais", chave: "OrgaoLocalId", idField: "orgaoLocalId",
     campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(200), nivel: sql.Int, referenciaId: sql.Int, ativo: sql.Bit }
+  },
+  cargosMinisteriais: {
+    tabela: "CargosMinisteriais", chave: "CargoId", idField: "cargoId",
+    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(100), ordem: sql.Int, ativo: sql.Bit }
+  },
+  prazos: {
+    tabela: "Prazos", chave: "PrazoId", idField: "prazoId",
+    campos: { sigla: sql.NVarChar(40), nome: sql.NVarChar(150), dias: sql.Int, ativo: sql.Bit }
   }
 };
 

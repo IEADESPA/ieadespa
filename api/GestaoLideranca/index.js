@@ -13,10 +13,8 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 
-// Níveis da Governança Escalonada aceitos como escopo de acesso. "Extensão da
-// Tenda" fica de fora por enquanto: MembroReferencia ainda não tem vínculo com
-// ExtensoesTenda, então não haveria ninguém pra esse escopo enxergar.
-const ESCOPO_TIPOS_VALIDOS = ["GLOBAL", "CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO"];
+// Níveis da Governança Escalonada aceitos como escopo de acesso.
+const ESCOPO_TIPOS_VALIDOS = ["GLOBAL", "EXTENSAO", "CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO"];
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "permissoes");

@@ -396,10 +396,12 @@ const CATALOGOS_CFG = {
   situacoes: { titulo: "Situações de Membro", idField: "situacaoId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
   departamentos: { titulo: "Departamentos", idField: "departamentoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["numero", "Número"]] },
   tiposConsagracao: { titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId", campos: [["nome", "Nome do Tipo"]] },
-  orgaosLocais: { titulo: "Órgãos Locais (JAI/JEA/CRA/TER/CEQ/Distrito)", idField: "orgaoLocalId", campos: [["sigla", "Sigla (JAI/JEA/CRA/TER/CEQ/DISTRITO)"], ["nome", "Nome"], ["nivel", "Nível (1-5)"], ["referenciaId", "Id da Congregação/Área/Região/Quadrante/Distrito"]] }
+  orgaosLocais: { titulo: "Órgãos Locais (JAI/JEA/CRA/TER/CEQ/Distrito)", idField: "orgaoLocalId", campos: [["sigla", "Sigla (JAI/JEA/CRA/TER/CEQ/DISTRITO)"], ["nome", "Nome"], ["nivel", "Nível (1-5)"], ["referenciaId", "Id da Congregação/Área/Região/Quadrante/Distrito"]] },
+  cargosMinisteriais: { titulo: "Cargos Ministeriais (escada — Art. 71)", idField: "cargoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["ordem", "Ordem na escada"]] },
+  prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] }
 };
 const ESTRUTURA_ORDEM = ["congregacoes", "areas", "regioes", "quadrantes", "distritos", "extensoes", "orgaosLocais"];
-const CATALOGOS_ORDEM = ["situacoes", "departamentos", "tiposConsagracao"];
+const CATALOGOS_ORDEM = ["situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos"];
 const CATALOGOS_PAGINA = 15;
 let catalogoCache = {};
 let catalogoPagina = {};
@@ -906,18 +908,37 @@ async function marcarPresencaManual(sessaoId, membroId, presente) {
 
 // ---- SECRETARIA / ABA PESSOAS ----
 async function carregarOpcoesFormPessoa() {
-  const [resCong, resFunc] = await Promise.all([
+  const [resCong, resFunc, resDepto, resCargo, resExt] = await Promise.all([
     fetchProtegido(`${API_BASE}/congregacoes`),
-    fetchProtegido(`${API_BASE}/funcoes`)
+    fetchProtegido(`${API_BASE}/funcoes`),
+    fetch(`${API_BASE}/catalogos/departamentos`),
+    fetch(`${API_BASE}/catalogos/cargosMinisteriais`),
+    fetch(`${API_BASE}/catalogos/extensoes`)
   ]);
   const congregacoes = await resCong.json();
   const funcoes = await resFunc.json();
+  const departamentos = await resDepto.json();
+  const cargos = await resCargo.json();
+  const extensoes = await resExt.json();
 
   const selectCong = document.getElementById("pessoaCongregacao");
   selectCong.innerHTML = congregacoes.filter(c => c.ativa).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
 
+  const selectExt = document.getElementById("pessoaExtensao");
+  const nomeCongPorId = Object.fromEntries(congregacoes.map(c => [String(c.congregacaoId), c.nome]));
+  selectExt.innerHTML = `<option value="">Não se aplica (fica só na Congregação)</option>` +
+    extensoes.filter(e => e.ativa).map(e => `<option value="${e.extensaoId}">${e.nome} (${nomeCongPorId[String(e.congregacaoMaeId)] || "?"})</option>`).join("");
+
   const selectFunc = document.getElementById("pessoaFuncao");
   selectFunc.innerHTML = funcoes.filter(f => f.ativa).map(f => `<option value="${f.nome}">${f.nome}</option>`).join("");
+
+  const selectDepto = document.getElementById("pessoaDepartamento");
+  selectDepto.innerHTML = `<option value="">Não informado</option>` +
+    departamentos.filter(d => d.ativo).map(d => `<option value="${d.departamentoId}">${d.nome}</option>`).join("");
+
+  const selectCargo = document.getElementById("pessoaCargoMinisterial");
+  selectCargo.innerHTML = `<option value="">Não informado</option>` +
+    cargos.filter(c => c.ativo).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(c => `<option value="${c.sigla}">${c.nome}</option>`).join("");
 }
 
 async function salvarPessoa() {
@@ -931,6 +952,12 @@ async function salvarPessoa() {
   const situacaoMembro = document.getElementById("pessoaSituacao").value;
   const dizimistaSelect = document.getElementById("pessoaDizimista").value;
   const dizimistaFiel = dizimistaSelect === "" ? null : dizimistaSelect === "true";
+  const departamentoId = document.getElementById("pessoaDepartamento").value || null;
+  const cargoMinisterial = document.getElementById("pessoaCargoMinisterial").value || null;
+  const telefone = document.getElementById("pessoaTelefone").value.trim() || null;
+  const email = document.getElementById("pessoaEmail").value.trim() || null;
+  const endereco = document.getElementById("pessoaEndereco").value.trim() || null;
+  const extensaoId = document.getElementById("pessoaExtensao").value || null;
   const msg = document.getElementById("resultadoPessoa");
 
   if (!membroId || !nome) {
@@ -941,13 +968,19 @@ async function salvarPessoa() {
   const res = await fetchProtegido(`${API_BASE}/pessoas`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, nome, funcao, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel })
+    body: JSON.stringify({
+      membroId, nome, funcao, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
+      departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId
+    })
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
   if (data.sucesso) {
     document.getElementById("pessoaMatricula").value = "";
     document.getElementById("pessoaNome").value = "";
+    document.getElementById("pessoaTelefone").value = "";
+    document.getElementById("pessoaEmail").value = "";
+    document.getElementById("pessoaEndereco").value = "";
     carregarPessoas();
   }
 }
@@ -984,7 +1017,7 @@ function renderizarPessoas() {
   const pagina = pessoasFiltradas.slice(inicio, inicio + TAM_PAGINA);
 
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Matrícula</th><th>Nome</th><th>Idade</th><th>Categoria</th><th>Função</th><th>Congregação</th><th>Status</th><th class="acoes-inline"></th>
+    <th>Matrícula</th><th>Nome</th><th>Idade</th><th>Categoria</th><th>Função</th><th>Cargo Ministerial</th><th>Congregação</th><th>Status</th><th class="acoes-inline"></th>
   </tr></thead><tbody>`;
 
   pagina.forEach(p => {
@@ -994,6 +1027,7 @@ function renderizarPessoas() {
       <td>${idadeDe(p.dataNascimento) ?? "-"}</td>
       <td>${badgeCategoria(p.capacidade)}</td>
       <td>${p.funcao || "-"}</td>
+      <td>${p.cargoMinisterial || "-"}</td>
       <td>${p.congregacao || "-"}</td>
       <td>${badgeStatusPessoa(p.status)}</td>
       <td class="acoes-inline">
@@ -1030,6 +1064,12 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaDataAdmissao").value = pessoa.dataAdmissao || "";
   document.getElementById("pessoaSituacao").value = pessoa.situacaoMembro || "EM_COMUNHAO";
   document.getElementById("pessoaDizimista").value = pessoa.dizimistaFiel == null ? "" : String(pessoa.dizimistaFiel);
+  document.getElementById("pessoaDepartamento").value = pessoa.departamentoId != null ? String(pessoa.departamentoId) : "";
+  document.getElementById("pessoaCargoMinisterial").value = pessoa.cargoMinisterial || "";
+  document.getElementById("pessoaTelefone").value = pessoa.telefone || "";
+  document.getElementById("pessoaEmail").value = pessoa.email || "";
+  document.getElementById("pessoaEndereco").value = pessoa.endereco || "";
+  document.getElementById("pessoaExtensao").value = pessoa.extensaoId != null ? String(pessoa.extensaoId) : "";
   document.getElementById("pessoaMatricula").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1236,8 +1276,8 @@ async function carregarOpcoesEscopoPermissao() {
 
 // Cada nível da Governança Escalonada usado como escopo de acesso -> catálogo
 // de onde vem a lista de opções (ex: escopo "Área" -> catálogo "areas").
-// "Extensão da Tenda" fica fora: ver comentário em api/shared/escopo.js.
 const ESCOPO_NIVEIS = {
+  EXTENSAO: { origem: "extensoes", idField: "extensaoId" },
   CONGREGACAO: { origem: "congregacoes", idField: "congregacaoId" },
   AREA: { origem: "areas", idField: "areaId" },
   REGIAO: { origem: "regioes", idField: "regiaoId" },

@@ -310,3 +310,34 @@ INSERT INTO CargosMinisteriais (Sigla, Nome, Ordem) VALUES
 ALTER TABLE ProcessosDisciplinares ADD
     DiasSancao          INT NULL,
     DataTerminoPrevisao DATE NULL;
+
+-- ============================================================
+-- Perfil do membro (v0.2): dados de contato (LGPD, coleta mínima) +
+-- catálogo de Prazos citados no Estatuto/Regimento.
+-- ============================================================
+ALTER TABLE MembroReferencia ADD
+    Telefone  NVARCHAR(20)  NULL,
+    Email     NVARCHAR(150) NULL,
+    Endereco  NVARCHAR(300) NULL;
+
+-- Vínculo do membro com a Extensão da Tenda (nível 0), quando aplicável —
+-- fecha a lacuna que impedia "EXTENSAO" de virar um escopo de acesso real
+-- (ver api/shared/escopo.js e api/GestaoLideranca/index.js).
+ALTER TABLE MembroReferencia ADD ExtensaoId INT NULL REFERENCES ExtensoesTenda(ExtensaoId);
+
+CREATE TABLE Prazos (
+    PrazoId INT IDENTITY PRIMARY KEY,
+    Sigla   NVARCHAR(40) NOT NULL,
+    Nome    NVARCHAR(150) NOT NULL,
+    Dias    INT NOT NULL,
+    Ativo   BIT NOT NULL DEFAULT 1
+);
+INSERT INTO Prazos (Sigla, Nome, Dias) VALUES
+    ('INTEGRACAO',            'Período de Integração (Art. 6º §2º)',                          90),
+    ('INTERSTICIO_FIDELIDADE','Interstício de Fidelidade p/ Diretoria/CF (Art. 23 §2º, I)',   365),
+    ('CARTA_RECOMENDACAO',    'Validade da Carta de Recomendação (Reg. Art. 131)',             30),
+    ('DEFESA_PREVIA',         'Prazo de defesa prévia no processo disciplinar (Reg. Art. 101)', 5),
+    ('PARECER_COMISSAO',      'Parecer de comissão da CLI (Regimento)',                         15),
+    ('RECURSO_ASSEMBLEIA',    'Recurso à Assembleia contra perda de membresia (Art. 11)',       30),
+    ('ABANDONO_MATERIAL',     'Abandono Eclesiástico Material (Art. 11)',                       90),
+    ('ABANDONO_DIGITAL',      'Abandono Eclesiástico Digital/incomunicável (Art. 11)',          90);

@@ -113,35 +113,67 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [x] ✅ `api/shared/estatuto.js` (idade, interstício, capacidade eleitoral, quórum 2 estágios).
 - [x] ✅ `MembroReferencia` com DataNascimento / DataAdmissao / DizimistaFiel.
 - [x] ✅ Catálogo real de `Orgaos` (6 órgãos do Art. 13).
-- [ ] Catálogos configuráveis com CRUD + auditoria (Campos, Áreas, Níveis, Congregações,
+- [x] Catálogos configuráveis com CRUD + auditoria (Campos, Áreas, Níveis, Congregações,
       Departamentos, órgãos, papéis, situações, cargos ministeriais, prazos).
       — ✅ feitos via `GestaoCatalogos`: Congregações, Departamentos, Situações, Papéis,
       Funcionalidades, Áreas, Regiões, Quadrantes, Distritos, Extensões, Tipos de Proposta
-      (Consagrações), Órgãos Locais. Faltam: **Cargos Ministeriais** e **Prazos** (ainda sem
-      catálogo/CRUD). ✅ `GestaoCatalogos` e `GetOrgaos` agora gravam em `AuditLog` (criação,
-      atualização e exclusão, com dados de antes/depois) — cobre automaticamente qualquer
-      catálogo novo adicionado ao mapa `CATALOGOS` no futuro.
-- [ ] Hierarquia de 6 níveis no banco (`Areas`, `Regioes`, `Quadrantes`, `Distritos`,
+      (Consagrações), Órgãos Locais, **Cargos Ministeriais** e **Prazos** (migração 008 — antes
+      só existiam como tabela, sem CRUD; `CargosMinisteriais` já alimenta o cadastro de pessoas).
+      **Importante:** `Prazos` NÃO alimenta os cálculos automáticos de categoria/elegibilidade
+      (Art. 7º/23º) — esses continuam fixos em `api/shared/estatuto.js` de propósito ("regra
+      jurídica vira função, não dado editável por tela"), pra ninguém mudar sem querer um número
+      com peso jurídico. `Prazos` serve como valor padrão *sugerido* para o processo disciplinar
+      (v0.2, item pendente "Processo disciplinar com término automático") — lá sim o prazo pode
+      ser reduzido caso a caso pela Câmara/Conselho, desde que fique registrado no `AuditLog`
+      com justificativa (decisão confirmada em conversa, ainda não implementada). ✅
+      `GestaoCatalogos` e `GetOrgaos` agora gravam em `AuditLog` (criação, atualização e
+      exclusão, com dados de antes/depois) — cobre automaticamente qualquer catálogo novo
+      adicionado ao mapa `CATALOGOS` no futuro.
+- [x] Hierarquia de 6 níveis no banco (`Areas`, `Regioes`, `Quadrantes`, `Distritos`,
       `ExtensoesTenda`, `VinculoCongregacaoArea`, `OrgaosLocais`).
       — ✅ tabelas existem com o vínculo pai-filho completo (migração 004) e já são usadas de
       verdade no escopo de acesso (`shared/escopo.js`). ✅ `OrgaosLocais` (JAI/JEA/CRA/TER/CEQ/
       Distrito) agora tem CRUD via `GestaoCatalogos` (aba Estrutura) e seed automático da JAI
       de cada congregação (migração 007 — único nível com ativação "base"). JEA/CRA/TER/CEQ/
       Distrito continuam sem seed automático: dependem de regra de contagem (≥3 congregações,
-      ≥3 áreas etc., FASE 9) ainda não implementada — cadastro manual disponível enquanto isso.
+      ≥3 áreas etc.) — isso é escopo da **FASE 9** (Expansão), não da v0.1; cadastro manual
+      disponível enquanto isso.
 - [x] ✅ Permissões estruturadas (papel × funcionalidade × escopo campo/área/congregação).
-      Feito para Global/Distrito/Quadrante/Região/Área/Congregação; falta só Extensão da
-      Tenda (o cadastro de pessoas ainda não tem vínculo direto com `ExtensoesTenda`).
+      Feito para Global/Distrito/Quadrante/Região/Área/Congregação/**Extensão da Tenda**
+      (migração 009 — `MembroReferencia.ExtensaoId`; escopo `EXTENSAO` resolvido em
+      `shared/escopo.js` e restrito de verdade em `GestaoPessoas`, que filtra pela Extensão
+      exata, não só pela Congregação-Mãe).
 - [x] ✅ Documentos de Governança (Estatuto 2026 + Regimento Interno 2026) publicados em
       `app/documentos/` e acessíveis a qualquer usuário logado pela aba **Documentos**.
 
 #### v0.2 — Perfil do membro (base da identidade)
 
-- [ ] `MembroReferencia` completo: matrícula importada, SituacaoMembro, DepartamentoId,
+- [x] `MembroReferencia` completo: matrícula importada, SituacaoMembro, DepartamentoId,
       CargoMinisterial, dados de contato (LGPD).
-- [ ] Categorias de membresia calculadas (4 categorias do Art. 7º).
-- [ ] Elegibilidade calculada (votar / ser votado) + badge na lista de pessoas.
+      — ✅ `CargoMinisterial` (já existia na tabela desde a migração 001) agora tem catálogo
+      configurável (`CargosMinisteriais`, via `GestaoCatalogos`) e está exposto no cadastro
+      (`GestaoPessoas`) e na tela (seletor + coluna na lista). ✅ Departamento de afiliação
+      (`DepartamentoId`) ganhou seletor no formulário (antes só existia na API). ✅ Dados de
+      contato — Telefone, E-mail, Endereço — novos (migração 008), com coleta mínima: só
+      quem tem a permissão `pessoas` visualiza/edita; dados sensíveis (saúde, menores) ficam
+      para a v1.7, e o fluxo formal de consentimento/retenção LGPD é a v0.3.
+- [x] Categorias de membresia calculadas (4 categorias do Art. 7º).
+      — já resolvido em `api/shared/estatuto.js` (`calcularCapacidadeEleitoral`): Congregado /
+      Membro em Comunhão / Capacidade Eleitoral Ativa / Membro Elegível, sempre calculado a
+      partir de SituacaoMembro + idade + dias desde a admissão + dizimista fiel — nunca marcação
+      manual (Art. 7º §1º).
+- [x] Elegibilidade calculada (votar / ser votado) + badge na lista de pessoas.
+      — já resolvido: `badgeCategoria()` no front colore a categoria calculada por pessoa na
+      lista, com filtro por categoria na busca.
 - [ ] Processo disciplinar com término automático (dias de sanção).
+      — schema já preparado (`ProcessosDisciplinares.DiasSancao`/`DataTerminoPrevisao`,
+      `estaSobDisciplina()` em `estatuto.js`), mas ainda sem Function/tela própria — fica para
+      quando o módulo do CEI entrar (v3.x adianta parte disso). **Desenho confirmado em
+      conversa:** ao contrário das categorias (sempre automáticas), o prazo de sanção nasce de
+      um padrão sugerido pelo catálogo `Prazos` mas pode ser reduzido caso a caso pela
+      Câmara/Conselho responsável durante o processo (ex: previsão de 90 dias encerrada em 60 —
+      quem decide é o órgão, não o sistema) — toda alteração de prazo precisa ficar no
+      `AuditLog` com justificativa, para rastrear quem alterou e por quê.
 - [ ] Vínculo familiar (cônjuge, filhos) — base para vedação de nepotismo.
 
 #### v0.3 — Auditoria e trilha de dados

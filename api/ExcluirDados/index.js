@@ -82,8 +82,17 @@ module.exports = async function (context, req) {
       await r().query(`DELETE FROM SituacoesMembro`);
     }
 
+    if (quer("cargosMinisteriais")) {
+      await r().query(`UPDATE MembroReferencia SET CargoMinisterial = NULL`);
+      await r().query(`DELETE FROM CargosMinisteriais`);
+    }
+
+    if (quer("prazos")) {
+      await r().query(`DELETE FROM Prazos`);
+    }
+
     if (quer("congregacoes")) {
-      await r().query(`UPDATE MembroReferencia SET CongregacaoId = NULL`);
+      await r().query(`UPDATE MembroReferencia SET CongregacaoId = NULL, ExtensaoId = NULL`);
       await r().query(`DELETE FROM VinculoCongregacaoArea`);
       await r().query(`DELETE FROM ExtensoesTenda`);
       await r().query(`DELETE FROM Congregacoes`);

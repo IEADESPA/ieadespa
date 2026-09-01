@@ -205,7 +205,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "auditoria", "protecaodedados", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "auditoria", "protecaodedados", "documentos"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -213,7 +213,7 @@ const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "funcoes", "orgaos", "es
 // reunioes/assembleia/cli — a aba única de Reuniões reflete isso).
 const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
-  congregacoes: ["pessoas"], funcoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"]
+  congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"]
 };
 function permissoesDaAba(nome) {
   return ABA_PERMISSOES_ALT[nome] || [nome];
@@ -241,8 +241,7 @@ function mostrarAbaSecretaria(aba) {
   document.getElementById("tituloModulo").textContent = TITULOS_MODULOS[aba] || "Governança";
   if (aba === "reunioes") { carregarOpcoesOrgaosReuniao().then(carregarReunioes); carregarElegiveisAssembleia(); }
   if (aba === "pessoas") { carregarOpcoesFormPessoa(); carregarPessoas(); }
-  if (aba === "funcoes") carregarFuncoes();
-  if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); }
+  if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
   if (aba === "estrutura") montarEstrutura();
   if (aba === "catalogos") montarCatalogos();
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
@@ -258,7 +257,7 @@ function alternarSidebar() {
 }
 const TITULOS_MODULOS = {
   meupainel: "Meu Painel", reunioes: "Reuniões",
-  pessoas: "Pessoas", congregacoes: "Congregações", funcoes: "Funções",
+  pessoas: "Pessoas", congregacoes: "Congregações",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", documentos: "Documentos"
@@ -498,20 +497,37 @@ const CATALOGOS_CFG = {
   extensoes: { titulo: "Extensões da Tenda (Nível 0)", idField: "extensaoId", campos: [["nome", "Nome da Extensão"]], pai: { campo: "congregacaoMaeId", rotulo: "Congregação-Mãe", origem: "congregacoes" } },
   situacoes: { titulo: "Situações de Membro", idField: "situacaoId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
   departamentos: { titulo: "Departamentos", idField: "departamentoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["numero", "Número"]] },
-  tiposConsagracao: { titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId", campos: [["nome", "Nome do Tipo"]] },
+  tiposConsagracao: {
+    titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId",
+    campos: [
+      ["nome", "Nome do Tipo"],
+      ["cargoMinisterialResultante", "Cargo Ministerial resultante (opcional)", [
+        ["MEMBRO", "Membro"], ["AUXILIAR", "Auxiliar"], ["MISSIONARIO", "Missionário(a)"],
+        ["DIACONO", "Diácono"], ["PRESBITERO", "Presbítero"], ["EVANGELISTA", "Evangelista"], ["PASTOR", "Pastor"]
+      ], true]
+    ]
+  },
   orgaosLocais: { titulo: "Órgãos Locais (JAI/JEA/CRA/TER/CEQ/Distrito)", idField: "orgaoLocalId", campos: [["sigla", "Sigla (JAI/JEA/CRA/TER/CEQ/DISTRITO)"], ["nome", "Nome"], ["nivel", "Nível (1-5)"], ["referenciaId", "Id da Congregação/Área/Região/Quadrante/Distrito"]] },
   cargosMinisteriais: { titulo: "Cargos Ministeriais (escada — Art. 71)", idField: "cargoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["ordem", "Ordem na escada"]] },
   prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] },
   tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] },
   politicasRetencao: { titulo: "Políticas de Retenção (LGPD)", idField: "politicaId", campos: [["categoria", "Categoria"], ["baseLegal", "Base legal"], ["diasRetencao", "Dias (vazio = indeterminado)"]] }
 };
-const ESTRUTURA_ORDEM = ["congregacoes", "areas", "regioes", "quadrantes", "distritos", "extensoes", "orgaosLocais"];
+// Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
+// pra cima: Extensão da Tenda primeiro, Distrito por último. Órgãos Locais
+// (JAI/JEA/CRA/TER/CEQ/Distrito) saiu daqui — é órgão, mora na aba Órgãos.
+const ESTRUTURA_ORDEM = ["extensoes", "congregacoes", "areas", "regioes", "quadrantes", "distritos"];
 const CATALOGOS_ORDEM = ["situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar"];
 const POLITICAS_RETENCAO_ORDEM = ["politicasRetencao"];
+const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
 
 function montarPoliticasRetencao() {
   document.getElementById("politicasRetencaoConteudo").innerHTML = POLITICAS_RETENCAO_ORDEM.map(k => secaoCatalogo(k)).join("");
   POLITICAS_RETENCAO_ORDEM.forEach(k => { carregarOpcoesPai(k); carregarCatalogoLista(k); });
+}
+function montarOrgaosLocais() {
+  document.getElementById("orgaosLocaisConteudo").innerHTML = ORGAOS_LOCAIS_ORDEM.map(k => secaoCatalogo(k)).join("");
+  ORGAOS_LOCAIS_ORDEM.forEach(k => { carregarOpcoesPai(k); carregarCatalogoLista(k); });
 }
 const CATALOGOS_PAGINA = 15;
 let catalogoCache = {};
@@ -527,9 +543,14 @@ function montarCatalogos() {
   CATALOGOS_ORDEM.forEach(k => { carregarOpcoesPai(k); carregarCatalogoLista(k); });
 }
 
+// Campo = [id, rotulo] (texto livre) ou [id, rotulo, opcoes] (select, quando o
+// valor precisa ser controlado — ex: sigla de outro catálogo, tipo enum fixo).
 function secaoCatalogo(key) {
   const c = CATALOGOS_CFG[key];
-  const camposHtml = c.campos.map(([id, rotulo]) => `<input type="text" id="cat_${key}_${id}" placeholder="${rotulo}" style="min-width:150px;" />`).join("");
+  const camposHtml = c.campos.map(([id, rotulo, opcoes]) => opcoes
+    ? `<select id="cat_${key}_${id}"><option value="">${rotulo}</option>${opcoes.map(([v, r]) => `<option value="${v}">${r}</option>`).join("")}</select>`
+    : `<input type="text" id="cat_${key}_${id}" placeholder="${rotulo}" style="min-width:150px;" />`
+  ).join("");
   const paiHtml = c.pai ? `<select id="cat_${key}_${c.pai.campo}" style="min-width:180px;"><option value="">Sem ${c.pai.rotulo}</option></select>` : "";
   return `<div class="cartao-perfil" style="margin-bottom:16px;">
     <h4 style="margin:0 0 10px; color: var(--cor-primaria);">${c.titulo}</h4>
@@ -633,7 +654,8 @@ async function salvarCatalogo(key) {
   const c = CATALOGOS_CFG[key];
   const dados = {};
   c.campos.forEach(([fid]) => dados[fid] = document.getElementById(`cat_${key}_${fid}`).value.trim());
-  if (c.campos.some(([fid]) => !dados[fid])) { mostrarToast("Preencha todos os campos.", "erro"); return; }
+  if (c.campos.some(([fid, , , opcional]) => !opcional && !dados[fid])) { mostrarToast("Preencha todos os campos obrigatórios.", "erro"); return; }
+  c.campos.forEach(([fid, , , opcional]) => { if (opcional && !dados[fid]) dados[fid] = null; });
   if (c.pai) dados[c.pai.campo] = document.getElementById(`cat_${key}_${c.pai.campo}`).value || null;
   const editando = window._editandoCatalogo && window._editandoCatalogo.key === key ? window._editandoCatalogo.id : null;
   const body = editando ? { id: editando, ...dados } : dados;
@@ -957,15 +979,13 @@ async function marcarPresencaManual(sessaoId, membroId, presente) {
 
 // ---- SECRETARIA / ABA PESSOAS ----
 async function carregarOpcoesFormPessoa() {
-  const [resCong, resFunc, resDepto, resCargo, resExt] = await Promise.all([
+  const [resCong, resDepto, resCargo, resExt] = await Promise.all([
     fetchProtegido(`${API_BASE}/congregacoes`),
-    fetchProtegido(`${API_BASE}/funcoes`),
     fetch(`${API_BASE}/catalogos/departamentos`),
     fetch(`${API_BASE}/catalogos/cargosMinisteriais`),
     fetch(`${API_BASE}/catalogos/extensoes`)
   ]);
   const congregacoes = await resCong.json();
-  const funcoes = await resFunc.json();
   const departamentos = await resDepto.json();
   const cargos = await resCargo.json();
   const extensoes = await resExt.json();
@@ -977,9 +997,6 @@ async function carregarOpcoesFormPessoa() {
   const nomeCongPorId = Object.fromEntries(congregacoes.map(c => [String(c.congregacaoId), c.nome]));
   selectExt.innerHTML = `<option value="">Não se aplica (fica só na Congregação)</option>` +
     extensoes.filter(e => e.ativa).map(e => `<option value="${e.extensaoId}">${e.nome} (${nomeCongPorId[String(e.congregacaoMaeId)] || "?"})</option>`).join("");
-
-  const selectFunc = document.getElementById("pessoaFuncao");
-  selectFunc.innerHTML = funcoes.filter(f => f.ativa).map(f => `<option value="${f.nome}">${f.nome}</option>`).join("");
 
   const selectDepto = document.getElementById("pessoaDepartamento");
   selectDepto.innerHTML = `<option value="">Não informado</option>` +
@@ -993,7 +1010,6 @@ async function carregarOpcoesFormPessoa() {
 async function salvarPessoa() {
   const membroId = document.getElementById("pessoaMatricula").value;
   const nome = document.getElementById("pessoaNome").value;
-  const funcao = document.getElementById("pessoaFuncao").value;
   const congregacaoId = document.getElementById("pessoaCongregacao").value;
   const status = document.getElementById("pessoaStatus").value;
   const dataNascimento = document.getElementById("pessoaDataNascimento").value || null;
@@ -1018,7 +1034,7 @@ async function salvarPessoa() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      membroId, nome, funcao, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
+      membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
       departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId
     })
   });
@@ -1109,7 +1125,6 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaMatricula").value = pessoa.membroId;
   document.getElementById("pessoaNome").value = pessoa.nome;
   document.getElementById("pessoaStatus").value = pessoa.status;
-  document.getElementById("pessoaFuncao").value = pessoa.funcao || "";
   document.getElementById("pessoaCongregacao").value = pessoa.congregacaoId != null ? String(pessoa.congregacaoId) : "";
   document.getElementById("pessoaDataNascimento").value = pessoa.dataNascimento || "";
   document.getElementById("pessoaDataAdmissao").value = pessoa.dataAdmissao || "";
@@ -1282,90 +1297,6 @@ async function excluirCongregacaoAcao(id) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarCongregacoes();
-}
-
-// ---- SECRETARIA / ABA FUNÇÕES ----
-let funcaoEditandoId = null;
-
-async function carregarFuncoes() {
-  const container = document.getElementById("resultadoListaFuncoes");
-  const res = await fetchProtegido(`${API_BASE}/funcoes`);
-  const funcoes = await res.json();
-  window._funcoesCache = funcoes;
-
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Status</th><th></th></tr></thead><tbody>`;
-  funcoes.forEach(f => {
-    html += `<tr>
-      <td>${f.nome}</td>
-      <td>${f.ativa ? "Ativa" : "Inativa"}</td>
-      <td>
-        <button class="btn-link" onclick="editarFuncao(${f.funcaoId})">Renomear</button>
-        ${f.ativa
-          ? `<button class="btn-link" onclick="desativarFuncaoAcao(${f.funcaoId})">Desativar</button>`
-          : `<button class="btn-link" onclick="reativarFuncaoAcao(${f.funcaoId})">Reativar</button>`}
-        <button class="btn-link btn-link-perigo" onclick="excluirFuncaoAcao(${f.funcaoId})">Excluir</button>
-      </td>
-    </tr>`;
-  });
-  html += "</tbody></table>";
-  container.innerHTML = html;
-}
-
-function editarFuncao(id) {
-  const f = (window._funcoesCache || []).find(x => x.funcaoId === id);
-  if (!f) return;
-  funcaoEditandoId = id;
-  document.getElementById("funcaoNome").value = f.nome;
-}
-
-async function salvarFuncao() {
-  const nome = document.getElementById("funcaoNome").value;
-  const msg = document.getElementById("resultadoFuncao");
-  if (!nome) return;
-
-  const res = await fetchProtegido(`${API_BASE}/funcoes`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ funcaoId: funcaoEditandoId || undefined, nome })
-  });
-  const data = await res.json();
-  msg.textContent = data.mensagem;
-  if (data.sucesso) {
-    document.getElementById("funcaoNome").value = "";
-    funcaoEditandoId = null;
-    carregarFuncoes();
-  }
-}
-
-async function desativarFuncaoAcao(id) {
-  if (!(await confirmarAcao("Confirma desativar esta função? Ela some das listas de cadastro, mas o histórico continua.", "Desativar"))) return;
-  const res = await fetchProtegido(`${API_BASE}/funcoes/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ativa: false })
-  });
-  const data = await res.json();
-  avisarResultado(data);
-  if (data.sucesso) carregarFuncoes();
-}
-
-async function reativarFuncaoAcao(id) {
-  const res = await fetchProtegido(`${API_BASE}/funcoes/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ativa: true })
-  });
-  const data = await res.json();
-  avisarResultado(data);
-  if (data.sucesso) carregarFuncoes();
-}
-
-async function excluirFuncaoAcao(id) {
-  if (!(await confirmarAcao("Confirma EXCLUIR esta função? Isso não pode ser desfeito. Só funciona se nenhuma pessoa estiver cadastrada com ela.", "Excluir"))) return;
-  const res = await fetchProtegido(`${API_BASE}/funcoes/${id}`, { method: "DELETE" });
-  const data = await res.json();
-  avisarResultado(data);
-  if (data.sucesso) carregarFuncoes();
 }
 
 // ---- SECRETARIA / ABA PERMISSÕES ----

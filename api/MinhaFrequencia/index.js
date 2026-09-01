@@ -16,10 +16,11 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const membroResult = await pool.request().input("mat", sql.Int, matricula).query(`
-    SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, m.CongregacaoId AS congregacaoId,
+    SELECT m.MembroId AS membroId, m.Nome AS nome, COALESCE(cm.Nome, m.Funcao) AS funcao, m.CongregacaoId AS congregacaoId,
            c.Nome AS congregacao, m.Status AS status
     FROM MembroReferencia m
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
     WHERE m.MembroId = @mat`);
   const membro = membroResult.recordset[0];
   if (!membro) {

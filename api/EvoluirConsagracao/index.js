@@ -4,8 +4,14 @@
 // (ou REPROVAR em qualquer etapa, o que arquiva o processo). Exige a
 // permissão "consagracoes".
 //
-// Quando chega em CONCLUIDO e o assunto não é "Integração"/"Reintegração",
-// atualiza automaticamente a função do membro na base — igual ao sistema atual.
+// Quando chega em CONCLUIDO e o assunto não é "Integração"/"Reintegração":
+// 1. Grava o Assunto em MembroReferencia.Funcao — texto histórico/descritivo,
+//    igual ao sistema atual (não alimenta mais nenhum cálculo, ver ponto 2).
+// 2. Se o Tipo de Consagração (catálogo `TiposConsagracao`) tiver um
+//    CargoMinisterialResultante configurado (migração 013), atualiza também
+//    MembroReferencia.CargoMinisterial — é ESSE campo que shared/universo.js
+//    usa pra calcular composição por Ordenação (CLI, Art. 15). Sem essa
+//    configuração no tipo, o Assunto não muda o Cargo Ministerial sozinho.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
@@ -60,6 +66,14 @@ module.exports = async function (context, req) {
       if (atual.assunto !== "Integração" && atual.assunto !== "Reintegração") {
         await pool.request().input("membroId", sql.Int, atual.membroId).input("funcao", sql.NVarChar(100), atual.assunto)
           .query(`UPDATE MembroReferencia SET Funcao = @funcao WHERE MembroId = @membroId`);
+
+        const tipoResult = await pool.request().input("nome", sql.NVarChar(100), atual.assunto)
+          .query(`SELECT TOP 1 CargoMinisterialResultante FROM TiposConsagracao WHERE Nome = @nome`);
+        const cargoResultante = tipoResult.recordset[0] && tipoResult.recordset[0].CargoMinisterialResultante;
+        if (cargoResultante) {
+          await pool.request().input("membroId", sql.Int, atual.membroId).input("cargo", sql.NVarChar(30), cargoResultante)
+            .query(`UPDATE MembroReferencia SET CargoMinisterial = @cargo WHERE MembroId = @membroId`);
+        }
       }
     } else {
       await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("status", sql.NVarChar(30), novoStatus)

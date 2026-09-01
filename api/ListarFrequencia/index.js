@@ -31,12 +31,13 @@ module.exports = async function (context, req) {
   }
 
   const presencasResult = await pool.request().input("id", sql.Int, sessaoId).query(`
-    SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, m.CongregacaoId AS congregacaoId,
+    SELECT m.MembroId AS membroId, m.Nome AS nome, COALESCE(cm.Nome, m.Funcao) AS funcao, m.CongregacaoId AS congregacaoId,
            c.Nome AS congregacao, p.Presente AS presente, p.FaltaJustificada AS faltaJustificada,
            p.MotivoJustificativa AS motivoJustificativa, p.JustificativaPendente AS justificativaPendente
     FROM Presencas p
     JOIN MembroReferencia m ON m.MembroId = p.MembroId
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
     WHERE p.SessaoId = @id`);
 
   const frequencia = presencasResult.recordset

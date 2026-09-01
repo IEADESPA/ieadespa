@@ -58,7 +58,7 @@ const CATALOGOS = {
   },
   tiposConsagracao: {
     tabela: "TiposConsagracao", chave: "TipoConsagracaoId", idField: "tipoConsagracaoId",
-    campos: { nome: sql.NVarChar(100), ativo: sql.Bit }
+    campos: { nome: sql.NVarChar(100), ativo: sql.Bit, cargoMinisterialResultante: sql.NVarChar(30) }
   },
   orgaosLocais: {
     tabela: "OrgaosLocais", chave: "OrgaoLocalId", idField: "orgaoLocalId",

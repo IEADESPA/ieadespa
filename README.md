@@ -171,11 +171,17 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       `ExtensoesTenda`, `VinculoCongregacaoArea`, `OrgaosLocais`).
       — ✅ tabelas existem com o vínculo pai-filho completo (migração 004) e já são usadas de
       verdade no escopo de acesso (`shared/escopo.js`). ✅ `OrgaosLocais` (JAI/JEA/CRA/TER/CEQ/
-      Distrito) agora tem CRUD via `GestaoCatalogos` (aba Estrutura) e seed automático da JAI
+      Distrito) agora tem CRUD via `GestaoCatalogos` e seed automático da JAI
       de cada congregação (migração 007 — único nível com ativação "base"). JEA/CRA/TER/CEQ/
       Distrito continuam sem seed automático: dependem de regra de contagem (≥3 congregações,
       ≥3 áreas etc.) — isso é escopo da **FASE 9** (Expansão), não da v0.1; cadastro manual
-      disponível enquanto isso.
+      disponível enquanto isso. **Reorganização (v0.3):** a tela de `OrgaosLocais` saiu da
+      aba Estrutura e foi pra aba **Órgãos** — é órgão também, só escalonado por nível
+      territorial (1 por Congregação/Área/Região/Quadrante/Distrito) em vez de único como
+      Assembleia/CLI/Diretoria/CEI/Conselho Fiscal; ficar junto com os outros órgãos deixa
+      isso mais claro do que estar "escondido" dentro da hierarquia territorial. A aba
+      Estrutura, sem `OrgaosLocais`, passou a listar os catálogos territoriais na ordem dos
+      níveis (0 a 5: Extensão → Congregação → Área → Região → Quadrante → Distrito).
 - [x] ✅ Permissões estruturadas (papel × funcionalidade × escopo campo/área/congregação).
       Feito para Global/Distrito/Quadrante/Região/Área/Congregação/**Extensão da Tenda**
       (migração 009 — `MembroReferencia.ExtensaoId`; escopo `EXTENSAO` resolvido em
@@ -195,6 +201,16 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       contato — Telefone, E-mail, Endereço — novos (migração 008), com coleta mínima: só
       quem tem a permissão `pessoas` visualiza/edita; dados sensíveis (saúde, menores) ficam
       para a v1.7, e o fluxo formal de consentimento/retenção LGPD é a v0.3.
+      **Correção (v0.3, migração 013):** existia uma duplicação real com a antiga aba
+      **Funções** (`MembroReferencia.Funcao`, texto livre) — e pior, `shared/universo.js`
+      calculava a composição "por Ordenação" da CLI (Art. 15) lendo `Funcao`, não
+      `CargoMinisterial`, então quem só preenchia o catálogo novo ficava fora do quórum
+      da CLI. `CargoMinisterial` (catálogo fechado, com escada) virou a única fonte de
+      verdade: aba Funções saiu do painel, `universo.js` corrigido, `EvoluirConsagracao`
+      passa a atualizar `CargoMinisterial` (via `TiposConsagracao.CargoMinisterialResultante`,
+      configurável) além do `Funcao` histórico, e a migração faz backfill dos dados
+      antigos. `Funcao` continua na tabela (nunca apagar dado real) só como texto
+      descritivo, gerido automaticamente pela esteira de Consagrações.
 - [x] Categorias de membresia calculadas (4 categorias do Art. 7º).
       — já resolvido em `api/shared/estatuto.js` (`calcularCapacidadeEleitoral`): Congregado /
       Membro em Comunhão / Capacidade Eleitoral Ativa / Membro Elegível, sempre calculado a
@@ -380,6 +396,14 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 - [ ] Dirigente de Congregação como Assento tipo FUNCAO ligado à CLI.
 - [ ] Catálogo de Departamentos Gerais e Secretarias Adjuntas (Art. 47).
+      **Nota (v0.3):** os 8 `Departamentos` seedados na v0.1 são todos demográficos
+      (UCADESPA/UMADESPA/USADESPA/UHADESPA por faixa etária/gênero, EBD, Família) —
+      mas `SEMIADESPA` (Missões) e `ACAO_DA_FE` (Ação Social) são conceitualmente
+      **transversais** (atravessam todas as idades, não um grupo específico), mais
+      parecidos com a "Secretaria Adjunta" do Art. 47 do que com um Departamento.
+      Fica registrado aqui pra quando esta versão desenhar `Departamentos` vs.
+      `SecretariasAdjuntas`: decidir se é uma coluna `Tipo` no catálogo existente
+      ou uma tabela nova — e se `SEMIADESPA`/`ACAO_DA_FE` migram de categoria.
 - [ ] Pastores de Área e Áreas Estratégicas (Art. 48).
 - [ ] Termo de Compromisso de Gestão do Dirigente (Art. 57).
 - [ ] Autonomia de arrecadação/gasto dos departamentos (Art. 49).

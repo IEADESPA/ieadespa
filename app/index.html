@@ -77,7 +77,6 @@
           <button class="btn-aba ativo" id="btnAbaMeupainel" onclick="mostrarAbaSecretaria('meupainel')"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
           <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
           <button class="btn-aba" id="btnAbaPessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
-          <button class="btn-aba" id="btnAbaFuncoes" onclick="mostrarAbaSecretaria('funcoes')"><span class="icone">🎖️</span><span class="rotulo">Funções</span></button>
           <button class="btn-aba" id="btnAbaOrgaos" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
           <button class="btn-aba" id="btnAbaEstrutura" onclick="mostrarAbaSecretaria('estrutura')"><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
           <button class="btn-aba" id="btnAbaCatalogos" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
@@ -237,11 +236,7 @@
             <input type="text" id="pessoaNome" placeholder="Ex: Maria da Silva" />
           </div>
           <div class="input-group">
-            <label>Função eclesiástica:</label>
-            <select id="pessoaFuncao"></select>
-          </div>
-          <div class="input-group">
-            <label>Cargo Ministerial:</label>
+            <label>Cargo Ministerial (escada — Art. 71):</label>
             <select id="pessoaCargoMinisterial"><option value="">Não informado</option></select>
           </div>
           <div class="input-group">
@@ -336,22 +331,6 @@
         <div class="paginacao" id="pessoasPaginacao"></div>
       </div>
 
-      <!-- ABA: FUNÇÕES -->
-      <div id="abaFuncoes" class="aba-secretaria" style="display:none;">
-        <h3>Cadastrar / Renomear Função Eclesiástica</h3>
-        <form onsubmit="event.preventDefault(); salvarFuncao();">
-          <div class="input-group">
-            <label>Nome:</label>
-            <input type="text" id="funcaoNome" placeholder="Ex: Presbítero" />
-          </div>
-          <button class="btn-confirmar" type="submit">💾 Salvar Função</button>
-        </form>
-        <p id="resultadoFuncao"></p>
-
-        <hr />
-        <div id="resultadoListaFuncoes"></div>
-      </div>
-
       <!-- ABA: ÓRGÃOS -->
       <div id="abaOrgaos" class="aba-secretaria" style="display:none;">
         <h3>Cadastrar / Editar Órgão</h3>
@@ -404,12 +383,17 @@
         <div class="rolagem-tabela">
           <div id="resultadoListaAssentos"></div>
         </div>
+
+        <hr />
+        <h3>Órgãos Locais (escalonados por nível — JAI/JEA/CRA/TER/CEQ/Distrito)</h3>
+        <p class="subtitle">São órgãos também — só que replicados por nível territorial (1 JAI por Congregação, 1 JEA por Área...) em vez de únicos como os de cima. Cada um se liga à Congregação/Área/Região/Quadrante/Distrito correspondente pelo id.</p>
+        <div id="orgaosLocaisConteudo"></div>
       </div>
 
       <!-- ABA: ESTRUTURA (Hierarquia de 6 níveis) -->
       <div id="abaEstrutura" class="aba-secretaria" style="display:none;">
         <h3>Governança Escalonada (Regimento Art. 104)</h3>
-        <p class="subtitle">Níveis 0 a 6: Extensão da Tenda → Congregação → Área → Região → Quadrante → Distrito → Sede Geral. Tudo editável.</p>
+        <p class="subtitle">Níveis 0 a 5: Extensão da Tenda → Congregação → Área → Região → Quadrante → Distrito (Sede Geral, nível 6, é sempre única — não tem catálogo). Tudo editável.</p>
         <div id="estruturaConteudo"></div>
       </div>
 

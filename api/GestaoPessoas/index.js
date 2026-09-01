@@ -1,7 +1,7 @@
 // GestaoPessoas
 // Cadastro de obreiros (MembroReferencia). Exige a permissão "pessoas".
 // GET    /api/pessoas            -> lista (filtrada pelo escopo de quem está logado)
-// POST   /api/pessoas            -> body: { membroId, nome, funcao, congregacaoId, status, ... } -> cria ou atualiza
+// POST   /api/pessoas            -> body: { membroId, nome, cargoMinisterial, congregacaoId, status, ... } -> cria ou atualiza
 // DELETE /api/pessoas/{membroId} -> não remove de verdade: marca status = DESLIGADO
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
@@ -9,8 +9,14 @@ const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
 
+// "funcao" no retorno é só de exibição: prioriza o nome do Cargo Ministerial
+// (catálogo fechado, com escada — Art. 71) e cai pro texto livre antigo só se
+// a pessoa ainda não tiver Cargo Ministerial definido (dado histórico). Quem
+// alimenta isso é a esteira de Consagrações (EvoluirConsagracao) e/ou o campo
+// Cargo Ministerial do próprio cadastro — não existe mais edição manual de
+// "função" nesta tela (ver migração 013).
 const SELECT_MEMBRO = `
-  SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, m.CongregacaoId AS congregacaoId,
+  SELECT m.MembroId AS membroId, m.Nome AS nome, COALESCE(cm.Nome, m.Funcao) AS funcao, m.CongregacaoId AS congregacaoId,
          c.Nome AS congregacao, m.Status AS status,
          CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
          CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
@@ -19,7 +25,8 @@ const SELECT_MEMBRO = `
          m.ExtensaoId AS extensaoId, e.Nome AS extensao
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
-  LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId`;
+  LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
+  LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial`;
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -52,19 +59,12 @@ module.exports = async function (context, req) {
   // ---- POST: criar ou atualizar ----
   if (method === "POST") {
     const {
-      membroId, nome, funcao, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
+      membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
       situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId
     } = req.body || {};
     if (!membroId || !nome) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
       return;
-    }
-    if (funcao) {
-      const f = await pool.request().input("nome", sql.NVarChar(100), funcao).query(`SELECT TOP 1 1 AS x FROM Funcoes WHERE Nome = @nome`);
-      if (f.recordset.length === 0) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: `Função "${funcao}" não está cadastrada.` } };
-        return;
-      }
     }
     if (congregacaoId) {
       const c = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT TOP 1 1 AS x FROM Congregacoes WHERE CongregacaoId = @id`);
@@ -102,7 +102,6 @@ module.exports = async function (context, req) {
     const request = pool.request()
       .input("id", sql.Int, membroId)
       .input("nome", sql.NVarChar(200), nome)
-      .input("funcao", sql.NVarChar(100), funcao || null)
       .input("congregacaoId", sql.Int, congregacaoId || null)
       .input("status", sql.NVarChar(20), status || "ATIVO")
       .input("dataNascimento", sql.Date, dataNascimento || null)
@@ -117,16 +116,19 @@ module.exports = async function (context, req) {
       .input("extensaoId", sql.Int, extensaoId || null);
 
     if (existia) {
+      // Funcao não entra aqui de propósito: é campo histórico gerido só pela
+      // esteira de Consagrações (ver EvoluirConsagracao) — salvar a pessoa
+      // nunca deve apagar o que já estava lá.
       await request.query(`
-        UPDATE MembroReferencia SET Nome = @nome, Funcao = @funcao, CongregacaoId = @congregacaoId, Status = @status,
+        UPDATE MembroReferencia SET Nome = @nome, CongregacaoId = @congregacaoId, Status = @status,
                DataNascimento = @dataNascimento, DataAdmissao = @dataAdmissao, DizimistaFiel = @dizimistaFiel,
                SituacaoMembro = @situacaoMembro, DepartamentoId = @departamentoId, CargoMinisterial = @cargoMinisterial,
                Telefone = @telefone, Email = @email, Endereco = @endereco, ExtensaoId = @extensaoId
         WHERE MembroId = @id`);
     } else {
       await request.query(`
-        INSERT INTO MembroReferencia (MembroId, Nome, Funcao, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId)
-        VALUES (@id, @nome, @funcao, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId)`);
+        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId)
+        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId)`);
     }
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
@@ -142,7 +144,7 @@ module.exports = async function (context, req) {
       registroId: Number(membroId),
       acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
       usuarioId: usuario.membroId,
-      dadosDepois: { nome, funcao, congregacaoId, status }
+      dadosDepois: { nome, cargoMinisterial, congregacaoId, status }
     });
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: existia ? "✅ Pessoa atualizada." : "✅ Pessoa cadastrada.", membro } };

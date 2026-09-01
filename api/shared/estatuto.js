@@ -33,11 +33,14 @@ function diasDesde(data, hoje) {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
-// Art. 40/41 — a jurisdição disciplinar é do CEI, que ainda não tem módulo próprio nesta etapa
-// (ProcessosDisciplinares só existe no schema, sem Function). Fica "livre de disciplina" sempre
-// até o módulo do CEI existir e alimentar isso de verdade.
+// Art. 40/41 — jurisdição disciplinar. `estatuto.js` continua síncrono e sem acesso a
+// banco (é chamado dentro de .map()/.filter() síncronos em vários lugares) — quem busca
+// o dado real é o chamador (shared/disciplina.js, numa query em lote), que anexa
+// `processoDisciplinarAtivo` ao objeto `membro` antes de chamar calcularCapacidadeEleitoral.
+// Se o chamador não anexar o flag (ex: alguém sem a permissão "disciplina" vendo a lista
+// de Pessoas — mascaramento intencional), o membro aparece como livre de disciplina.
 function estaSobDisciplina(membro) {
-  return false;
+  return membro.processoDisciplinarAtivo === true;
 }
 
 // Art. 7º, 8º e 23º — categorias de membresia e capacidade eleitoral. A transição entre

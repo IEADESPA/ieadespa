@@ -84,6 +84,7 @@
           <button class="btn-aba" id="btnAbaCatalogos" data-permissao="pessoas" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
           <button class="btn-aba" id="btnAbaPermissoes" data-permissao="permissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
           <button class="btn-aba" id="btnAbaConsagracoes" data-permissao="consagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
+          <button class="btn-aba" id="btnAbaDisciplina" data-permissao="disciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
           <button class="btn-aba" id="btnAbaDocumentos" onclick="mostrarAbaSecretaria('documentos')"><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
         </nav>
         <div class="sidebar-rodape">
@@ -287,6 +288,16 @@
         </form>
         <p id="resultadoPessoa"></p>
 
+        <div id="blocoVinculosFamiliares" class="cartao-perfil" style="display:none; margin:16px 0;">
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Vínculos Familiares de <span id="vinculoFamiliaNome"></span></h4>
+          <div class="barra-lista">
+            <select id="vinculoTipo"></select>
+            <input type="number" id="vinculoMatriculaParente" placeholder="Matrícula da outra pessoa" style="min-width:180px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarVinculoFamiliar()">➕ Adicionar Vínculo</button>
+          </div>
+          <div id="resultadoListaVinculosFamiliares"></div>
+        </div>
+
         <hr />
         <div class="barra-lista">
           <input type="text" id="pessoasBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroPessoas()" />
@@ -466,6 +477,36 @@
         <hr />
         <h3>Esteira Ativa</h3>
         <div id="resultadoListaConsagracoes"></div>
+      </div>
+
+      <!-- ABA: PROCESSO DISCIPLINAR -->
+      <div id="abaDisciplina" class="aba-secretaria" style="display:none;">
+        <h3>Abrir Processo Disciplinar</h3>
+        <p class="subtitle">Núcleo mínimo (v0.2): catálogo de infrações/penalidades e o
+          rito completo (citação, defesa, revelia, recurso) ficam para a FASE 3.</p>
+        <form onsubmit="event.preventDefault(); salvarProcessoDisciplinar();">
+          <div class="input-group">
+            <label>Matrícula da pessoa:</label>
+            <input type="number" id="disciplinaMatricula" placeholder="Ex: 15" />
+          </div>
+          <div class="input-group">
+            <label>Órgão responsável:</label>
+            <select id="disciplinaOrgao"></select>
+          </div>
+          <div class="input-group">
+            <label>Motivo:</label>
+            <textarea id="disciplinaMotivo" rows="2" placeholder="O que aconteceu"></textarea>
+          </div>
+          <div class="input-group">
+            <label><input type="checkbox" id="disciplinaSigiloso" checked /> Sigiloso</label>
+          </div>
+          <button class="btn-confirmar" type="submit">⚖️ Abrir Processo</button>
+        </form>
+        <p id="resultadoDisciplina"></p>
+
+        <hr />
+        <h3>Processos Ativos</h3>
+        <div id="resultadoListaDisciplina"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

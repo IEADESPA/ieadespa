@@ -341,3 +341,39 @@ INSERT INTO Prazos (Sigla, Nome, Dias) VALUES
     ('RECURSO_ASSEMBLEIA',    'Recurso à Assembleia contra perda de membresia (Art. 11)',       30),
     ('ABANDONO_MATERIAL',     'Abandono Eclesiástico Material (Art. 11)',                       90),
     ('ABANDONO_DIGITAL',      'Abandono Eclesiástico Digital/incomunicável (Art. 11)',          90);
+
+-- ============================================================
+-- Processo Disciplinar (núcleo mínimo, v0.2) — catálogo de infrações/penalidades
+-- e status intermediário AFASTAMENTO_CAUTELAR ficam para v3.3/v3.4/v3.2.
+-- ============================================================
+ALTER TABLE ProcessosDisciplinares ADD Motivo NVARCHAR(500) NULL;
+
+-- ============================================================
+-- Vínculo Familiar (núcleo mínimo, v0.2) — cálculo de grau de parentesco por
+-- travessia (shared/parentesco.js) nasce em v2.6/v3.1, quando tiver consumidor.
+-- ============================================================
+CREATE TABLE TiposVinculoFamiliar (
+    TipoVinculoId  INT IDENTITY PRIMARY KEY,
+    Codigo         NVARCHAR(30) NOT NULL,
+    RotuloDireto   NVARCHAR(100) NOT NULL,
+    RotuloInverso  NVARCHAR(100) NULL,
+    Simetrico      BIT NOT NULL DEFAULT 0,
+    Ativo          BIT NOT NULL DEFAULT 1
+);
+CREATE UNIQUE INDEX UQ_TiposVinculoFamiliar_Codigo ON TiposVinculoFamiliar(Codigo);
+INSERT INTO TiposVinculoFamiliar (Codigo, RotuloDireto, RotuloInverso, Simetrico) VALUES
+    ('CONJUGE',         'Cônjuge de',              NULL,               1),
+    ('PAI_FILHO',       'Pai/Mãe de',              'Filho(a) de',      0),
+    ('IRMAO',           'Irmão/Irmã de',           NULL,               1),
+    ('SOGRO_GENRO_NORA','Sogro/Sogra de',          'Genro/Nora de',    0);
+
+CREATE TABLE VinculosFamiliares (
+    VinculoId        INT IDENTITY PRIMARY KEY,
+    MembroId         INT NOT NULL REFERENCES MembroReferencia(MembroId),
+    MembroParenteId  INT NOT NULL REFERENCES MembroReferencia(MembroId),
+    TipoVinculoId    INT NOT NULL REFERENCES TiposVinculoFamiliar(TipoVinculoId),
+    CriadoEm         DATETIME2 DEFAULT SYSUTCDATETIME(),
+    CriadoPor        INT NULL REFERENCES MembroReferencia(MembroId),
+    CONSTRAINT CK_VinculosFamiliares_NaoAutoVinculo CHECK (MembroId <> MembroParenteId)
+);
+CREATE UNIQUE INDEX UQ_VinculosFamiliares_Par ON VinculosFamiliares(MembroId, MembroParenteId, TipoVinculoId);

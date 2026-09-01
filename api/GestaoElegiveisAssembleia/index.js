@@ -12,6 +12,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
+const disciplina = require("../shared/disciplina");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "assembleia");
@@ -31,7 +32,12 @@ module.exports = async function (context, req) {
       FROM MembroReferencia m
       LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
     `);
-    const elegiveis = result.recordset
+    // Sempre real, nunca mascarado por permissão: isso é o cálculo de quem de fato
+    // pode votar, não uma tela de exibição — mascarar aqui reabriria o voto de quem
+    // está sob disciplina (ver mascaramento equivalente, mas só de exibição, em GestaoPessoas).
+    const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
+    const comFlag = result.recordset.map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }));
+    const elegiveis = comFlag
       .filter(m => estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva)
       .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: elegiveis };

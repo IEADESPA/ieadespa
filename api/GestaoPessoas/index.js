@@ -7,6 +7,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
+const disciplina = require("../shared/disciplina");
 
 const SELECT_MEMBRO = `
   SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, m.CongregacaoId AS congregacaoId,
@@ -30,12 +31,19 @@ module.exports = async function (context, req) {
 
   // ---- GET: listar (só quem está no escopo de quem está logado) ----
   if (method === "GET") {
+    // Mascaramento intencional (sigilo do processo disciplinar): só quem tem a
+    // permissão "disciplina" recebe o dado real de processo ativo — sem ele, o membro
+    // aparece com a categoria normal na lista, mesmo estando sob disciplina de verdade.
+    const idsSobDisciplina = usuario.permissoes.includes("disciplina")
+      ? await disciplina.membrosSobDisciplina(pool)
+      : new Set();
     const result = await pool.request().query(`${SELECT_MEMBRO} ORDER BY m.Nome`);
     const membros = result.recordset
       .filter(m => auth.estaNoEscopo(usuario, m.congregacao))
       // Escopo EXTENSAO é mais estreito que a Congregação-Mãe (já garantida acima):
       // só quem tem exatamente essa Extensão vinculada entra na lista.
       .filter(m => !usuario.escopoExtensaoNome || m.extensao === usuario.escopoExtensaoNome)
+      .map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }))
       .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: membros };
     return;
@@ -123,6 +131,10 @@ module.exports = async function (context, req) {
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
     const membro = result.recordset[0];
+    if (usuario.permissoes.includes("disciplina")) {
+      const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
+      membro.processoDisciplinarAtivo = idsSobDisciplina.has(membro.membroId);
+    }
     membro.capacidade = estatuto.calcularCapacidadeEleitoral(membro);
 
     await registrarAuditoria({

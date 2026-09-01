@@ -10,6 +10,7 @@
 //   não há um universo mais específico definido).
 const { sql } = require("./db");
 const estatuto = require("./estatuto");
+const disciplina = require("./disciplina");
 
 async function universoDoOrgao(pool, orgao) {
   if (!orgao) {
@@ -29,7 +30,11 @@ async function universoDoOrgao(pool, orgao) {
       FROM MembroReferencia m
       LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
     `);
-    return result.recordset.filter(m => estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva);
+    // Sempre real, nunca mascarado — mesma razão de GestaoElegiveisAssembleia: este é
+    // o universo de quem realmente pode votar, não uma tela de exibição.
+    const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
+    const comFlag = result.recordset.map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }));
+    return comFlag.filter(m => estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva);
   }
 
   if (orgao.sigla === "CLI") {

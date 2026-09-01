@@ -71,6 +71,10 @@ const CATALOGOS = {
   prazos: {
     tabela: "Prazos", chave: "PrazoId", idField: "prazoId",
     campos: { sigla: sql.NVarChar(40), nome: sql.NVarChar(150), dias: sql.Int, ativo: sql.Bit }
+  },
+  tiposVinculoFamiliar: {
+    tabela: "TiposVinculoFamiliar", chave: "TipoVinculoId", idField: "tipoVinculoId",
+    campos: { codigo: sql.NVarChar(30), rotuloDireto: sql.NVarChar(100), rotuloInverso: sql.NVarChar(100), simetrico: sql.Bit, ativo: sql.Bit }
   }
 };
 

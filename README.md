@@ -165,16 +165,32 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [x] Elegibilidade calculada (votar / ser votado) + badge na lista de pessoas.
       — já resolvido: `badgeCategoria()` no front colore a categoria calculada por pessoa na
       lista, com filtro por categoria na busca.
-- [ ] Processo disciplinar com término automático (dias de sanção).
-      — schema já preparado (`ProcessosDisciplinares.DiasSancao`/`DataTerminoPrevisao`,
-      `estaSobDisciplina()` em `estatuto.js`), mas ainda sem Function/tela própria — fica para
-      quando o módulo do CEI entrar (v3.x adianta parte disso). **Desenho confirmado em
-      conversa:** ao contrário das categorias (sempre automáticas), o prazo de sanção nasce de
-      um padrão sugerido pelo catálogo `Prazos` mas pode ser reduzido caso a caso pela
-      Câmara/Conselho responsável durante o processo (ex: previsão de 90 dias encerrada em 60 —
-      quem decide é o órgão, não o sistema) — toda alteração de prazo precisa ficar no
-      `AuditLog` com justificativa, para rastrear quem alterou e por quê.
-- [ ] Vínculo familiar (cônjuge, filhos) — base para vedação de nepotismo.
+- [x] Processo disciplinar — **núcleo mínimo**: abrir processo (membro + motivo em
+      texto livre + órgão responsável), julgar (Resultado: ARQUIVADO/SANCAO/EXCLUSAO +
+      DiasSancao ou prazo indeterminado), ajustar prazo caso a caso com justificativa
+      auditada, suspensão automática de voto/ser votado (`estaSobDisciplina()` deixa de
+      ser stub), término automático calculado na leitura (sem job/timer), e vacância
+      automática de `Assentos` só no caso inequívoco de `EXCLUSAO` (Regimento: exclusão
+      sempre implica perda de tudo; os demais níveis de pena exigem o catálogo de
+      penalidades para saber se há perda de mandato — isso é v3.4). Badge de categoria
+      mascarado por permissão (quem só tem `pessoas` não vê o efeito da disciplina; quem
+      tem `disciplina` vê). **Diluído para não virar uma "montanha" só nesta versão —
+      fica explicitamente para depois (ver v3.2/v3.3/v3.4, que já existiam no roadmap e
+      constroem em cima deste núcleo):** catálogo de Tipos de Infração (Art. 96-99),
+      catálogo de Tipos de Penalidade (Art. 95 §2º) e a vacância automática de Assentos
+      por nível de pena, esteira com `AFASTAMENTO_CAUTELAR` como status intermediário,
+      citação formal, defesa prévia com testemunhas, revelia, recurso, Segredo de
+      Justiça, jurisdição dupla CEI+CIADSETA, Rito de Retorno/AFM (Art. 77). O catálogo
+      `Prazos` (v0.1) segue como valor sugerido opcional na tela, nunca fonte fixa.
+- [x] Vínculo familiar — **núcleo mínimo**: tabela de relacionamento entre duas pessoas
+      (`VinculosFamiliares`, direcional, 1 linha por par) + catálogo configurável de
+      tipos (`TiposVinculoFamiliar`: Cônjuge, Pai/Mãe-Filho, Irmão, Sogro/Genro/Nora —
+      esse último cadastrável direto, já que ainda não há motor de dedução por travessia)
+      + seção de cadastro dentro da tela de uma Pessoa. **Diluído:** o helper de cálculo
+      de grau de parentesco (grafo/BFS entre duas pessoas) e a Function de consulta só
+      nascem quando tiverem um consumidor de verdade — v2.6 (vedação de nepotismo no
+      Conselho Fiscal, Art. 43 §3º) e v3.1 (impedimento de conselheiro do CEI, Art. 91) —
+      construídos em cima da tabela que esta versão já deixa pronta.
 
 #### v0.3 — Auditoria e trilha de dados
 
@@ -288,7 +304,10 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 - [ ] Assentos: 3 titulares + 3 suplentes, mandato = Diretoria (Art. 43).
 - [ ] Sessão mensal (3º domingo) reaproveitando o motor de sessão (Art. 46).
-- [ ] Vedação de nepotismo na eleição (Art. 43 §3º) — usar vínculo familiar.
+- [ ] Vedação de nepotismo na eleição (Art. 43 §3º, parentesco até 2º grau) — usa a
+      tabela `VinculosFamiliares` (v0.2); é aqui que nasce `shared/parentesco.js`
+      (grafo/BFS pra calcular caminho entre duas pessoas) e a Function de consulta —
+      não faz sentido construir esse motor antes de ter um primeiro consumidor real.
 - [ ] Medidas cautelares de proteção patrimonial (Art. 45).
 - [ ] Fiscalização contábil (Reg. Art. 145): balancetes, talões, parecer mensal, ata própria.
 
@@ -325,32 +344,48 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [ ] Indicação pelo Pastor Presidente + sabatina/homologação pela CLI (Art. 89).
 - [ ] Mandato 2 anos + destituição só por 2/3 da CLI (estabilidade).
 - [ ] Incompatibilidade: vedado acúmulo com Mesa Diretora/Vice de Quadrante/Superintendente (Art. 90).
-- [ ] Impedimento/suspeição: parente (3º grau), mesma congregação, inimizade/amizade íntima (Art. 91).
+- [ ] Impedimento/suspeição: parente (3º grau, via `shared/parentesco.js` — v2.6), mesma
+      congregação, inimizade/amizade íntima (Art. 91).
 - [ ] Segredo de Justiça Eclesiástica (Art. 92): rito fechado, sem gravação.
 
 #### v3.2 — Processo disciplinar (abertura, citação, defesa)
 
-- [ ] Abertura de processo (denúncia, partes, relator).
+- [ ] Abertura de processo (denúncia, partes, relator) — o núcleo (`AbrirProcessoDisciplinar`,
+      `EvoluirProcessoDisciplinar`, `ProcessosDisciplinares`) já existe desde a v0.2;
+      aqui entra a instrução formal por cima disso.
 - [ ] Citação por WhatsApp (riscos azuis) ou Carta Registrada/testemunhas (Reg. Art. 101).
 - [ ] Prazo de defesa prévia: 5 dias corridos + até 3 testemunhas.
 - [ ] Revelia: julgamento à revelia com presunção dos fatos (se houver prova mínima).
 - [ ] Defensor eclesiástico ou advogado constituído (Art. 102).
-- [ ] Esteira: EM_ANDAMENTO → AFASTAMENTO_CAUTELAR → JULGADO.
+- [ ] Esteira ganha o status intermediário `AFASTAMENTO_CAUTELAR` (a v0.2 só tem
+      EM_ANDAMENTO → JULGADO direto).
 
 #### v3.3 — Código Penal Eclesiástico (infrações)
 
 - [ ] Graduação de infrações: leves, médias, graves e gravíssimas.
-- [ ] Catálogo de infrações do Regimento (conduta, doutrina, financeiro, sigilo, rebelião).
+- [ ] Catálogo `TiposInfracao` (Art. 96-99 do Regimento, ~50 incisos — conduta, doutrina,
+      financeiro, sigilo, rebelião), via `GestaoCatalogos`, substituindo o campo de
+      motivo em texto livre da v0.2. Nesse ponto vale ampliar `GestaoCatalogos` pra
+      aceitar permissão configurável por catálogo (hoje só aceita a permissão fixa
+      `pessoas`), pra restringir esse catálogo à permissão `disciplina`.
 - [ ] Infrações de intervenção (Reg. Art. 144): gatos de energia/água, atraso de repasse,
       despesas pessoais, ausência de notas fiscais.
 
 #### v3.4 — Julgamento e sanções
 
 - [ ] Julgamento pelo CEI (jurisdição dupla para ministros: CEI + CIADSETA).
-- [ ] Sanções: advertência, afastamento, suspensão de comunhão, exclusão (Ultima Ratio).
-- [ ] Suspensão automática de voto/ser votado/cargos durante sanção.
-- [ ] Término automático da sanção (dias) → retorno à comunhão.
-- [ ] Sigilo do processo + permissão `cei`.
+- [ ] Catálogo `TiposPenalidade` (Art. 95 §2º: Advertência / Suspensão Temporária /
+      Disciplina Rigorosa / Exclusão), via `GestaoCatalogos` — substitui o Resultado
+      genérico (ARQUIVADO/SANCAO/EXCLUSAO) da v0.2 por um nível de pena explícito.
+- [ ] Vacância automática de `Assentos` por nível de pena (Disciplina Rigorosa/Exclusão
+      = perda de mandato; Suspensão Temporária = afastamento sem perder o mandato) — a
+      v0.2 só fecha `Assentos` automaticamente no caso inequívoco de EXCLUSAO.
+- [x] Suspensão automática de voto/ser votado/cargos durante sanção — já em v0.2
+      (`estaSobDisciplina()`, mascarado por permissão).
+- [x] Término automático da sanção (dias) → retorno à comunhão — já em v0.2 (calculado
+      na leitura, sem job/timer).
+- [ ] Sigilo do processo com efeito funcional real (hoje, v0.2, `Sigiloso` é só metadado
+      informativo — quem tem a permissão `disciplina` vê tudo) + permissão `cei`.
 
 #### v3.5 — Reabilitação e retorno (Art. 77 Regimento)
 

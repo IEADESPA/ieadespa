@@ -206,7 +206,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "assembleia", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "assembleia", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "documentos"];
 
 function aplicarPermissoesNoMenu() {
   NOMES_ABAS.forEach(nome => {
@@ -238,6 +238,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "catalogos") montarCatalogos();
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
+  if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -248,7 +249,8 @@ const TITULOS_MODULOS = {
   meupainel: "Meu Painel", reunioes: "Reuniões", assembleia: "Assembleia Geral",
   pessoas: "Pessoas", congregacoes: "Congregações", funcoes: "Funções",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
-  permissoes: "Permissões", consagracoes: "Consagrações", documentos: "Documentos"
+  permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
+  documentos: "Documentos"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -398,10 +400,11 @@ const CATALOGOS_CFG = {
   tiposConsagracao: { titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId", campos: [["nome", "Nome do Tipo"]] },
   orgaosLocais: { titulo: "Órgãos Locais (JAI/JEA/CRA/TER/CEQ/Distrito)", idField: "orgaoLocalId", campos: [["sigla", "Sigla (JAI/JEA/CRA/TER/CEQ/DISTRITO)"], ["nome", "Nome"], ["nivel", "Nível (1-5)"], ["referenciaId", "Id da Congregação/Área/Região/Quadrante/Distrito"]] },
   cargosMinisteriais: { titulo: "Cargos Ministeriais (escada — Art. 71)", idField: "cargoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["ordem", "Ordem na escada"]] },
-  prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] }
+  prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] },
+  tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] }
 };
 const ESTRUTURA_ORDEM = ["congregacoes", "areas", "regioes", "quadrantes", "distritos", "extensoes", "orgaosLocais"];
-const CATALOGOS_ORDEM = ["situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos"];
+const CATALOGOS_ORDEM = ["situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar"];
 const CATALOGOS_PAGINA = 15;
 let catalogoCache = {};
 let catalogoPagina = {};
@@ -981,6 +984,8 @@ async function salvarPessoa() {
     document.getElementById("pessoaTelefone").value = "";
     document.getElementById("pessoaEmail").value = "";
     document.getElementById("pessoaEndereco").value = "";
+    document.getElementById("blocoVinculosFamiliares").style.display = "none";
+    window._membroFamiliaAtual = null;
     carregarPessoas();
   }
 }
@@ -1071,6 +1076,12 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaEndereco").value = pessoa.endereco || "";
   document.getElementById("pessoaExtensao").value = pessoa.extensaoId != null ? String(pessoa.extensaoId) : "";
   document.getElementById("pessoaMatricula").scrollIntoView({ behavior: "smooth", block: "start" });
+
+  window._membroFamiliaAtual = pessoa.membroId;
+  document.getElementById("vinculoFamiliaNome").textContent = pessoa.nome;
+  document.getElementById("blocoVinculosFamiliares").style.display = "block";
+  carregarOpcoesTipoVinculo();
+  carregarVinculosFamiliares(pessoa.membroId);
 }
 
 async function desligarPessoa(membroId) {
@@ -1080,6 +1091,67 @@ async function desligarPessoa(membroId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarPessoas();
+}
+
+// ---- Vínculos Familiares (seção dentro do cadastro de uma Pessoa) ----
+// Núcleo mínimo (v0.2): cadastro do relacionamento em si. O cálculo de grau de
+// parentesco por travessia nasce em v2.6/v3.1, quando tiver um consumidor de verdade.
+async function carregarOpcoesTipoVinculo() {
+  const select = document.getElementById("vinculoTipo");
+  const res = await fetch(`${API_BASE}/catalogos/tiposVinculoFamiliar`);
+  const tipos = await res.json();
+  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.tipoVinculoId}">${t.rotuloDireto}</option>`).join("");
+}
+
+async function carregarVinculosFamiliares(membroId) {
+  const container = document.getElementById("resultadoListaVinculosFamiliares");
+  const res = await fetchProtegido(`${API_BASE}/vinculos-familiares?membroId=${membroId}`);
+  const vinculos = await res.json();
+
+  if (vinculos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum vínculo familiar cadastrado.</p>";
+    return;
+  }
+
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Parentesco</th><th>Pessoa</th><th></th></tr></thead><tbody>`;
+  vinculos.forEach(v => {
+    html += `<tr>
+      <td>${v.rotulo}</td>
+      <td>${v.outraPessoaNome} (${v.outraPessoaId})</td>
+      <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="removerVinculoFamiliar(${v.vinculoId})">Remover</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarVinculoFamiliar() {
+  const membroId = window._membroFamiliaAtual;
+  const tipoVinculoId = document.getElementById("vinculoTipo").value;
+  const membroParenteId = document.getElementById("vinculoMatriculaParente").value;
+  if (!membroId || !tipoVinculoId || !membroParenteId) {
+    mostrarToast("Informe o tipo de vínculo e a matrícula da outra pessoa.", "erro");
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/vinculos-familiares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, membroParenteId, tipoVinculoId })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("vinculoMatriculaParente").value = "";
+    carregarVinculosFamiliares(membroId);
+  }
+}
+
+async function removerVinculoFamiliar(vinculoId) {
+  if (!(await confirmarAcao("Remover este vínculo familiar?", "Remover"))) return;
+  const res = await fetchProtegido(`${API_BASE}/vinculos-familiares/${vinculoId}`, { method: "DELETE" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarVinculosFamiliares(window._membroFamiliaAtual);
 }
 
 // ---- SECRETARIA / ABA CONGREGAÇÕES ----
@@ -1535,6 +1607,187 @@ async function reprovarConsagracaoAcao(id) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarConsagracoes();
+}
+
+// ---- SECRETARIA / ABA PROCESSO DISCIPLINAR ----
+// Núcleo mínimo (v0.2): abrir + julgar + ajustar prazo. Catálogo de infrações/
+// penalidades e rito completo (citação, defesa, revelia, recurso) ficam pra FASE 3.
+async function carregarOpcoesFormDisciplina() {
+  const res = await fetch(`${API_BASE}/orgaos`);
+  const orgaos = await res.json();
+  document.getElementById("disciplinaOrgao").innerHTML = orgaos.map(o => `<option value="${o.orgaoId}">${o.sigla}</option>`).join("");
+}
+
+async function salvarProcessoDisciplinar() {
+  const membroId = document.getElementById("disciplinaMatricula").value;
+  const orgaoResponsavelId = document.getElementById("disciplinaOrgao").value;
+  const motivo = document.getElementById("disciplinaMotivo").value.trim();
+  const sigiloso = document.getElementById("disciplinaSigiloso").checked;
+  const msg = document.getElementById("resultadoDisciplina");
+  if (!membroId || !orgaoResponsavelId || !motivo) {
+    msg.textContent = "Informe matrícula, órgão e motivo.";
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/processos-disciplinares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, orgaoResponsavelId, motivo, sigiloso })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("disciplinaMatricula").value = "";
+    document.getElementById("disciplinaMotivo").value = "";
+    carregarProcessosDisciplinares();
+  }
+}
+
+const ROTULO_SITUACAO_DISCIPLINA = {
+  EM_ANDAMENTO: "Em andamento",
+  CUMPRINDO_SANCAO: "Cumprindo sanção",
+  PRAZO_INDETERMINADO: "Sanção — prazo indeterminado",
+  CUMPRIDO: "Sanção cumprida",
+  ARQUIVADO: "Arquivado",
+  EXCLUIDO: "Excluído"
+};
+
+function badgeSituacaoDisciplina(situacao) {
+  const cores = {
+    EM_ANDAMENTO: "badge-licenca", CUMPRINDO_SANCAO: "badge-licenca", PRAZO_INDETERMINADO: "badge-licenca",
+    CUMPRIDO: "badge-ativo", ARQUIVADO: "badge-ativo", EXCLUIDO: "badge-desligado"
+  };
+  return `<span class="badge-status ${cores[situacao] || ""}">${ROTULO_SITUACAO_DISCIPLINA[situacao] || situacao}</span>`;
+}
+
+async function carregarProcessosDisciplinares() {
+  const container = document.getElementById("resultadoListaDisciplina");
+  const res = await fetchProtegido(`${API_BASE}/processos-disciplinares`);
+  const processos = await res.json();
+
+  if (processos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum processo ativo.</p>";
+    return;
+  }
+
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Nome</th><th>Órgão</th><th>Motivo</th><th>Situação</th><th>Dias restantes</th><th></th>
+  </tr></thead><tbody>`;
+
+  processos.forEach(p => {
+    const podeJulgar = p.status === "EM_ANDAMENTO";
+    const podeAjustarPrazo = p.situacaoEfetiva === "CUMPRINDO_SANCAO" || p.situacaoEfetiva === "PRAZO_INDETERMINADO";
+    html += `<tr>
+      <td>${p.nome}${p.sigiloso ? " 🔒" : ""}</td>
+      <td>${p.orgaoSigla}</td>
+      <td>${p.motivo || "-"}</td>
+      <td>${badgeSituacaoDisciplina(p.situacaoEfetiva)}</td>
+      <td>${p.diasRestantes ?? "-"}</td>
+      <td class="acoes-inline">
+        ${podeJulgar ? `<button class="btn-link" onclick="julgarProcessoAcao(${p.processoId})">Julgar</button>` : ""}
+        ${podeAjustarPrazo ? `<button class="btn-link" onclick="ajustarPrazoProcessoAcao(${p.processoId})">Ajustar Prazo</button>` : ""}
+      </td>
+    </tr>`;
+  });
+
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+// Modal customizado (mesmo padrão de pedirTexto/confirmarAcao) — Promise<{resultado, diasSancao}|null>.
+function pedirJulgamento() {
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Julgar processo</h3>
+      <div class="input-group">
+        <label>Resultado:</label>
+        <select id="modalResultado">
+          <option value="ARQUIVADO">Arquivado (sem sanção)</option>
+          <option value="SANCAO">Sanção (dias de suspensão)</option>
+          <option value="EXCLUSAO">Exclusão</option>
+        </select>
+      </div>
+      <div class="input-group" id="modalGrupoDias">
+        <label>Dias de sanção (deixe em branco para prazo indeterminado):</label>
+        <input type="number" id="modalDiasSancao" min="1" />
+      </div>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar" id="modalConfirmar">Julgar</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    const selectResultado = document.getElementById("modalResultado");
+    const grupoDias = document.getElementById("modalGrupoDias");
+    const atualizarVisibilidade = () => { grupoDias.style.display = selectResultado.value === "SANCAO" ? "block" : "none"; };
+    selectResultado.addEventListener("change", atualizarVisibilidade);
+    atualizarVisibilidade();
+    document.getElementById("modalConfirmar").onclick = () => {
+      const resultado = selectResultado.value;
+      const diasSancao = document.getElementById("modalDiasSancao").value || null;
+      fecharModal();
+      resolve({ resultado, diasSancao });
+    };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
+// Promise<{novoDiasSancao, justificativa}|null> — justificativa é validada no chamador.
+function pedirAjustePrazo() {
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Ajustar prazo da sanção</h3>
+      <div class="input-group">
+        <label>Novo total de dias de sanção (deixe em branco para tornar indeterminado):</label>
+        <input type="number" id="modalNovoDias" min="1" />
+      </div>
+      <div class="input-group">
+        <label>Justificativa (obrigatória — fica registrada na auditoria):</label>
+        <textarea id="modalJustificativa" rows="3"></textarea>
+      </div>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar" id="modalConfirmar">Ajustar</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    document.getElementById("modalConfirmar").onclick = () => {
+      const novoDiasSancao = document.getElementById("modalNovoDias").value || null;
+      const justificativa = document.getElementById("modalJustificativa").value.trim();
+      fecharModal();
+      resolve({ novoDiasSancao, justificativa });
+    };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
+async function julgarProcessoAcao(processoId) {
+  const dados = await pedirJulgamento();
+  if (!dados) return;
+  const res = await fetchProtegido(`${API_BASE}/processos-disciplinares/${processoId}/evoluir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ acao: "JULGAR", resultado: dados.resultado, diasSancao: dados.diasSancao })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarProcessosDisciplinares();
+}
+
+async function ajustarPrazoProcessoAcao(processoId) {
+  const dados = await pedirAjustePrazo();
+  if (!dados) return;
+  if (!dados.justificativa) {
+    mostrarToast("Justificativa é obrigatória para ajustar o prazo.", "erro");
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/processos-disciplinares/${processoId}/evoluir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ acao: "AJUSTAR_PRAZO", novoDiasSancao: dados.novoDiasSancao, prazoIndeterminado: !dados.novoDiasSancao, justificativa: dados.justificativa })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarProcessosDisciplinares();
 }
 
 // ---- ABA MEU PAINEL: minha frequência (mesma consulta pública de sempre, só por matrícula) ----

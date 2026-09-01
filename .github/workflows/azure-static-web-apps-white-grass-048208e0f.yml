@@ -20,11 +20,18 @@ jobs:
           submodules: true
           lfs: false
           
-      - name: Executar Migrações SQL
+      - name: Executar Migração SQL 001
         uses: azure/sql-action@v2
         with:
           connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations'
+          path: 'sql/migrations/001_esquema_inicial_idempotente.sql'
+          action: 'Script'
+
+      - name: Executar Migração SQL 002
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/002_papeis_funcionalidades_lideranca.sql'
           action: 'Script'
 
       - name: Build And Deploy

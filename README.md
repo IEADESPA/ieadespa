@@ -117,16 +117,23 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       Departamentos, órgãos, papéis, situações, cargos ministeriais, prazos).
       — ✅ feitos via `GestaoCatalogos`: Congregações, Departamentos, Situações, Papéis,
       Funcionalidades, Áreas, Regiões, Quadrantes, Distritos, Extensões, Tipos de Proposta
-      (Consagrações). Faltam: **Cargos Ministeriais** e **Prazos** (ainda sem catálogo/CRUD).
-      Nenhum catálogo grava em `AuditLog` ainda (auditoria pendente em todos eles).
+      (Consagrações), Órgãos Locais. Faltam: **Cargos Ministeriais** e **Prazos** (ainda sem
+      catálogo/CRUD). ✅ `GestaoCatalogos` e `GetOrgaos` agora gravam em `AuditLog` (criação,
+      atualização e exclusão, com dados de antes/depois) — cobre automaticamente qualquer
+      catálogo novo adicionado ao mapa `CATALOGOS` no futuro.
 - [ ] Hierarquia de 6 níveis no banco (`Areas`, `Regioes`, `Quadrantes`, `Distritos`,
       `ExtensoesTenda`, `VinculoCongregacaoArea`, `OrgaosLocais`).
       — ✅ tabelas existem com o vínculo pai-filho completo (migração 004) e já são usadas de
-      verdade no escopo de acesso (`shared/escopo.js`). Falta: `OrgaosLocais` (JAI/JEA/CRA/
-      TER/CEQ/Distrito) sem seed e sem nenhuma rota usando ainda.
+      verdade no escopo de acesso (`shared/escopo.js`). ✅ `OrgaosLocais` (JAI/JEA/CRA/TER/CEQ/
+      Distrito) agora tem CRUD via `GestaoCatalogos` (aba Estrutura) e seed automático da JAI
+      de cada congregação (migração 007 — único nível com ativação "base"). JEA/CRA/TER/CEQ/
+      Distrito continuam sem seed automático: dependem de regra de contagem (≥3 congregações,
+      ≥3 áreas etc., FASE 9) ainda não implementada — cadastro manual disponível enquanto isso.
 - [x] ✅ Permissões estruturadas (papel × funcionalidade × escopo campo/área/congregação).
       Feito para Global/Distrito/Quadrante/Região/Área/Congregação; falta só Extensão da
       Tenda (o cadastro de pessoas ainda não tem vínculo direto com `ExtensoesTenda`).
+- [x] ✅ Documentos de Governança (Estatuto 2026 + Regimento Interno 2026) publicados em
+      `app/documentos/` e acessíveis a qualquer usuário logado pela aba **Documentos**.
 
 #### v0.2 — Perfil do membro (base da identidade)
 
@@ -603,6 +610,7 @@ governanca-ieadespa/
 │   ├── shared/auditoria.js Auditoria reutilizada
 │   └── <Function>/         Uma pasta por rota
 └── app/                    Front estático (index.html, style.css, script.js)
+    └── documentos/         Estatuto e Regimento Interno (cópia servida como estático)
 ```
 
 ### 6.6 Módulos adaptados do Google Apps Script

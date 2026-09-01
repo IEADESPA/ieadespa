@@ -206,11 +206,11 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "assembleia", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes"];
+const NOMES_ABAS = ["meupainel", "reunioes", "assembleia", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "documentos"];
 
 function aplicarPermissoesNoMenu() {
   NOMES_ABAS.forEach(nome => {
-    if (nome === "meupainel") return;
+    if (nome === "meupainel" || nome === "documentos") return;
     const btn = document.getElementById(`btnAba${capitalize(nome)}`);
     const pode = authPermissoes.includes(btn.dataset.permissao);
     btn.style.display = pode ? "inline-block" : "none";
@@ -221,7 +221,7 @@ function aplicarPermissoesNoMenu() {
 function mostrarAbaSecretaria(aba) {
   NOMES_ABAS.forEach(nome => {
     const chavePermissao = ["congregacoes", "funcoes", "orgaos", "estrutura", "catalogos"].includes(nome) ? "pessoas" : nome;
-    const podeVer = nome === "meupainel" || authPermissoes.includes(chavePermissao);
+    const podeVer = nome === "meupainel" || nome === "documentos" || authPermissoes.includes(chavePermissao);
     const divAba = document.getElementById(`aba${capitalize(nome)}`);
     const mostrar = nome === aba && podeVer;
     divAba.style.display = mostrar ? "block" : "none";
@@ -248,7 +248,7 @@ const TITULOS_MODULOS = {
   meupainel: "Meu Painel", reunioes: "Reuniões", assembleia: "Assembleia Geral",
   pessoas: "Pessoas", congregacoes: "Congregações", funcoes: "Funções",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
-  permissoes: "Permissões", consagracoes: "Consagrações"
+  permissoes: "Permissões", consagracoes: "Consagrações", documentos: "Documentos"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -395,9 +395,10 @@ const CATALOGOS_CFG = {
   extensoes: { titulo: "Extensões da Tenda (Nível 0)", idField: "extensaoId", campos: [["nome", "Nome da Extensão"]], pai: { campo: "congregacaoMaeId", rotulo: "Congregação-Mãe", origem: "congregacoes" } },
   situacoes: { titulo: "Situações de Membro", idField: "situacaoId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
   departamentos: { titulo: "Departamentos", idField: "departamentoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["numero", "Número"]] },
-  tiposConsagracao: { titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId", campos: [["nome", "Nome do Tipo"]] }
+  tiposConsagracao: { titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId", campos: [["nome", "Nome do Tipo"]] },
+  orgaosLocais: { titulo: "Órgãos Locais (JAI/JEA/CRA/TER/CEQ/Distrito)", idField: "orgaoLocalId", campos: [["sigla", "Sigla (JAI/JEA/CRA/TER/CEQ/DISTRITO)"], ["nome", "Nome"], ["nivel", "Nível (1-5)"], ["referenciaId", "Id da Congregação/Área/Região/Quadrante/Distrito"]] }
 };
-const ESTRUTURA_ORDEM = ["congregacoes", "areas", "regioes", "quadrantes", "distritos", "extensoes"];
+const ESTRUTURA_ORDEM = ["congregacoes", "areas", "regioes", "quadrantes", "distritos", "extensoes", "orgaosLocais"];
 const CATALOGOS_ORDEM = ["situacoes", "departamentos", "tiposConsagracao"];
 const CATALOGOS_PAGINA = 15;
 let catalogoCache = {};

@@ -84,6 +84,7 @@
           <button class="btn-aba" id="btnAbaCatalogos" data-permissao="pessoas" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
           <button class="btn-aba" id="btnAbaPermissoes" data-permissao="permissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
           <button class="btn-aba" id="btnAbaConsagracoes" data-permissao="consagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
+          <button class="btn-aba" id="btnAbaDocumentos" onclick="mostrarAbaSecretaria('documentos')"><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
         </nav>
         <div class="sidebar-rodape">
           <span id="nomeLogado" class="nome-logado"></span>
@@ -437,6 +438,17 @@
         <hr />
         <h3>Esteira Ativa</h3>
         <div id="resultadoListaConsagracoes"></div>
+      </div>
+
+      <!-- ABA: DOCUMENTOS (Governança) -->
+      <div id="abaDocumentos" class="aba-secretaria" style="display:none;">
+        <h3>Documentos de Governança</h3>
+        <p class="subtitle">Realidade jurídica: Estatuto 2026 (oficial) + Regimento Interno 2026
+          (entregue). O Regimento regulamenta o Estatuto — vale o que o Regimento descreve.</p>
+        <ul class="lista-documentos">
+          <li><a href="documentos/estatuto.txt" target="_blank" rel="noopener">📜 Estatuto (2026)</a></li>
+          <li><a href="documentos/regimento-interno.txt" target="_blank" rel="noopener">📜 Regimento Interno (2026)</a></li>
+        </ul>
       </div>
 
       </main>

@@ -167,6 +167,15 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .cartao-perfil .nome-perfil { font-size: 1.2rem; font-weight: 700; color: var(--cor-primaria); margin: 0 0 6px; }
 .cartao-perfil .linha-perfil { font-size: 0.85rem; color: var(--cor-texto-suave); margin: 2px 0; }
 
+/* ---- lista de documentos (aba Documentos) ---- */
+.lista-documentos { list-style: none; margin: 0; padding: 0; }
+.lista-documentos li { margin-bottom: 10px; }
+.lista-documentos a {
+  display: block; background: var(--cor-primaria-suave); border-radius: var(--raio);
+  padding: 14px 18px; color: var(--cor-primaria); font-weight: 600; text-decoration: none;
+}
+.lista-documentos a:hover { text-decoration: underline; }
+
 .resumo-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
 .stat-tile {
   flex: 1; min-width: 84px; background: var(--cor-superficie); border: 1px solid var(--cor-borda);

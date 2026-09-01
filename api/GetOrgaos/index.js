@@ -3,6 +3,7 @@
 // POST   /api/orgaos             -> cria/atualiza órgão (permissão "pessoas")
 // DELETE /api/orgaos/{orgaoId}   -> exclui órgão (permissão "pessoas")
 const auth = require("../shared/auth");
+const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 
 const SELECT_ORGAO = `SELECT OrgaoId AS orgaoId, Sigla AS sigla, Nome AS nome,
@@ -29,7 +30,11 @@ module.exports = async function (context, req) {
       return;
     }
 
+    let dadosAntes = null;
     if (orgaoId) {
+      const anterior = await pool.request().input("id", sql.Int, orgaoId).query(`${SELECT_ORGAO} WHERE OrgaoId = @id`);
+      dadosAntes = anterior.recordset[0] || null;
+
       const upd = await pool.request()
         .input("id", sql.Int, orgaoId)
         .input("sigla", sql.NVarChar(30), sigla)
@@ -56,7 +61,14 @@ module.exports = async function (context, req) {
 
     const result = await pool.request().input("sigla", sql.NVarChar(30), sigla)
       .query(`${SELECT_ORGAO} WHERE Sigla = @sigla ORDER BY OrgaoId DESC`);
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Órgão salvo.", orgao: result.recordset[0] } };
+    const orgao = result.recordset[0];
+
+    await registrarAuditoria({
+      tabela: "Orgaos", registroId: orgao.orgaoId, acao: orgaoId ? "Atualizou órgão" : "Criou órgão",
+      usuarioId: usuario.membroId, dadosAntes, dadosDepois: orgao
+    });
+
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Órgão salvo.", orgao } };
     return;
   }
 
@@ -66,8 +78,12 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o órgão na rota: /api/orgaos/{orgaoId}" } };
       return;
     }
+    const anterior = await pool.request().input("id", sql.Int, orgaoId).query(`${SELECT_ORGAO} WHERE OrgaoId = @id`);
     const del = await pool.request().input("id", sql.Int, orgaoId).query(`DELETE FROM Orgaos WHERE OrgaoId = @id`);
     const ok = del.rowsAffected[0] > 0;
+    if (ok) {
+      await registrarAuditoria({ tabela: "Orgaos", registroId: Number(orgaoId), acao: "Excluiu órgão", usuarioId: usuario.membroId, dadosAntes: anterior.recordset[0] || null });
+    }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: ok, mensagem: ok ? "✅ Órgão excluído." : "Órgão não encontrado." } };
     return;
   }

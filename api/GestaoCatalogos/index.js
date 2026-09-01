@@ -7,6 +7,7 @@
 // tabela + campos (camelCase do front -> PascalCase da coluna, por
 // capitalização simples — ex: "congregacaoMaeId" -> "CongregacaoMaeId").
 const auth = require("../shared/auth");
+const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 
 const CATALOGOS = {
@@ -58,6 +59,10 @@ const CATALOGOS = {
   tiposConsagracao: {
     tabela: "TiposConsagracao", chave: "TipoConsagracaoId", idField: "tipoConsagracaoId",
     campos: { nome: sql.NVarChar(100), ativo: sql.Bit }
+  },
+  orgaosLocais: {
+    tabela: "OrgaosLocais", chave: "OrgaoLocalId", idField: "orgaoLocalId",
+    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(200), nivel: sql.Int, referenciaId: sql.Int, ativo: sql.Bit }
   }
 };
 
@@ -151,14 +156,23 @@ module.exports = async function (context, req) {
     const dados = req.body || {};
     const idCorpo = dados.id;
     if (idCorpo) {
+      const dadosAntes = await buscarPorId(pool, config, idCorpo);
       const registro = await atualizar(pool, config, idCorpo, dados);
       if (!registro) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Registro não encontrado." } };
         return;
       }
+      await registrarAuditoria({
+        tabela: config.tabela, registroId: Number(idCorpo), acao: "Atualizou registro",
+        usuarioId: usuario.membroId, dadosAntes, dadosDepois: registro
+      });
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro atualizado.", registro } };
     } else {
       const registro = await criar(pool, config, dados);
+      await registrarAuditoria({
+        tabela: config.tabela, registroId: registro[config.idField], acao: "Criou registro",
+        usuarioId: usuario.membroId, dadosDepois: registro
+      });
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro criado.", registro } };
     }
     return;
@@ -173,7 +187,11 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Não é possível excluir: registro em uso. Desative em vez de excluir." } };
       return;
     }
+    const dadosAntes = await buscarPorId(pool, config, id);
     const ok = await excluir(pool, config, id);
+    if (ok) {
+      await registrarAuditoria({ tabela: config.tabela, registroId: Number(id), acao: "Excluiu registro", usuarioId: usuario.membroId, dadosAntes });
+    }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: ok, mensagem: ok ? "✅ Excluído." : "Registro não encontrado." } };
     return;
   }

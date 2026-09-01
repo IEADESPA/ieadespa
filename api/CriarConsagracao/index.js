@@ -1,10 +1,9 @@
 // CriarConsagracao
-// Adaptado de enviarPropostaConsagracaoApp(). Um líder (Dirigente/Pastor de Área)
-// protocola um processo. Entra sempre com status inicial PROTOCOLADO. Exige a
-// permissão "consagracoes".
+// Um líder (Dirigente/Pastor de Área) protocola um processo. Entra sempre
+// com status inicial PROTOCOLADO. Exige a permissão "consagracoes".
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "consagracoes");
@@ -16,29 +15,39 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, assunto, proponenteMembroId." } };
     return;
   }
-  if (!mockDb.getMembro(membroId)) {
+
+  const pool = await getPool();
+  const membroResult = await pool.request().input("id", sql.Int, membroId).query(`SELECT Funcao FROM MembroReferencia WHERE MembroId = @id`);
+  if (membroResult.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada. Cadastre a pessoa antes." } };
     return;
   }
 
-  // ---- Versão real com Azure SQL ----
-  // const sql = require("mssql");
-  // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-  // await pool.request()
-  //   .input("membroId", sql.Int, membroId)
-  //   .input("cargoAtual", sql.NVarChar, cargoAtual || null)
-  //   .input("assunto", sql.NVarChar, assunto)
-  //   .input("proponenteMembroId", sql.Int, proponenteMembroId)
-  //   .query(`
-  //     INSERT INTO Consagracoes (MembroId, CargoAtual, Assunto, ProponenteMembroId, Status)
-  //     VALUES (@membroId, @cargoAtual, @assunto, @proponenteMembroId, 'PROTOCOLADO')
-  //   `);
+  const result = await pool.request()
+    .input("membroId", sql.Int, membroId)
+    .input("cargoAtual", sql.NVarChar(100), cargoAtual || membroResult.recordset[0].Funcao || null)
+    .input("assunto", sql.NVarChar(100), assunto)
+    .input("proponenteMembroId", sql.Int, proponenteMembroId)
+    .query(`
+      INSERT INTO Consagracoes (MembroId, CargoAtual, Assunto, ProponenteMembroId, Status)
+      OUTPUT INSERTED.ConsagracaoId
+      VALUES (@membroId, @cargoAtual, @assunto, @proponenteMembroId, 'PROTOCOLADO')
+    `);
+  const consagracaoId = result.recordset[0].ConsagracaoId;
 
-  const consagracao = mockDb.criarConsagracao({ membroId, cargoAtual, assunto, proponenteMembroId });
+  const consagracaoResult = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).query(`
+    SELECT c.ConsagracaoId AS consagracaoId, c.MembroId AS membroId, m.Nome AS nome,
+           c.CargoAtual AS cargoAtual, c.Assunto AS assunto, p.Nome AS proponente,
+           c.Status AS status, CONVERT(varchar(10), c.DataProtocolo, 120) AS dataProtocolo
+    FROM Consagracoes c
+    JOIN MembroReferencia m ON m.MembroId = c.MembroId
+    LEFT JOIN MembroReferencia p ON p.MembroId = c.ProponenteMembroId
+    WHERE c.ConsagracaoId = @id`);
+  const consagracao = consagracaoResult.recordset[0];
 
   await registrarAuditoria({
     tabela: "Consagracoes",
-    registroId: membroId,
+    registroId: Number(membroId),
     acao: "Protocolou processo",
     usuarioId: usuario.membroId,
     dadosDepois: { assunto, cargoAtual }

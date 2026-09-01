@@ -1,13 +1,14 @@
 // EncerrarReuniao
-// Adaptado de encerrarReuniaoApp(). Ao encerrar:
+// Ao encerrar:
 // 1. Marca a sessão como ENCERRADA
-// 2. Para todo membro ATIVO que NÃO bateu ponto, gera uma falta (Presente = 0)
+// 2. Para todo membro do universo do órgão (shared/universo.js) que NÃO
+//    bateu ponto, gera uma falta (Presente = 0)
 // 3. A justificativa dessa falta é lançada depois, pela Secretaria, via
-//    JustificarFalta — não existe (ainda) fila de crédito aprovado previamente
-//    (ver "Próximos módulos sugeridos" no README).
+//    JustificarFalta.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
+const { universoDoOrgao } = require("../shared/universo");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -21,31 +22,10 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // ---- Versão real com Azure SQL ----
-  // const sql = require("mssql");
-  // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-  //
-  // await pool.request().input("id", sql.Int, sessaoId)
-  //   .query(`UPDATE Sessoes SET Status = 'ENCERRADA' WHERE SessaoId = @id`);
-  //
-  // const jaBateram = await pool.request().input("id", sql.Int, sessaoId)
-  //   .query(`SELECT MembroId FROM Presencas WHERE SessaoId = @id`);
-  // const idsPresentes = jaBateram.recordset.map(r => r.MembroId);
-  //
-  // const ativos = await pool.request()
-  //   .query(`SELECT MembroId FROM MembroReferencia WHERE Status = 'ATIVO'`);
-  //
-  // let totalPresentes = idsPresentes.length, totalFaltas = 0;
-  //
-  // for (const membro of ativos.recordset) {
-  //   if (idsPresentes.includes(membro.MembroId)) continue;
-  //   await pool.request().input("sessaoId", sql.Int, sessaoId).input("mat", sql.Int, membro.MembroId)
-  //     .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente, FaltaJustificada) VALUES (@sessaoId, @mat, 0, 0)`);
-  //   totalFaltas++;
-  // }
-
-  // ---- Modo mock ----
-  const sessao = mockDb.getSessao(sessaoId);
+  const pool = await getPool();
+  const sessaoResult = await pool.request().input("id", sql.Int, sessaoId)
+    .query(`SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, Status AS status FROM Sessoes WHERE SessaoId = @id`);
+  const sessao = sessaoResult.recordset[0];
   if (!sessao) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Reunião não encontrada." } };
     return;
@@ -55,7 +35,27 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const { totalPresentes, totalFaltas, totalJustificadas } = mockDb.encerrarSessao(sessaoId);
+  await pool.request().input("id", sql.Int, sessaoId).query(`UPDATE Sessoes SET Status = 'ENCERRADA' WHERE SessaoId = @id`);
+
+  const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId)
+    .query(`SELECT OrgaoId AS orgaoId, Sigla AS sigla FROM Orgaos WHERE OrgaoId = @id`);
+  const orgao = orgaoResult.recordset[0] || null;
+
+  const presencasResult = await pool.request().input("id", sql.Int, sessaoId)
+    .query(`SELECT MembroId AS membroId, Presente AS presente, FaltaJustificada AS faltaJustificada FROM Presencas WHERE SessaoId = @id`);
+  const idsComPresenca = new Set(presencasResult.recordset.map(p => p.membroId));
+
+  const universo = await universoDoOrgao(pool, orgao);
+  let totalFaltas = 0;
+  for (const membro of universo) {
+    if (idsComPresenca.has(membro.membroId)) continue;
+    await pool.request().input("sessaoId", sql.Int, sessaoId).input("mat", sql.Int, membro.membroId)
+      .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente, FaltaJustificada) VALUES (@sessaoId, @mat, 0, 0)`);
+    totalFaltas++;
+  }
+
+  const totalPresentes = presencasResult.recordset.filter(p => p.presente).length;
+  const totalJustificadas = presencasResult.recordset.filter(p => !p.presente && p.faltaJustificada).length;
 
   await registrarAuditoria({ tabela: "Sessoes", registroId: Number(sessaoId), acao: "Encerrou reunião", usuarioId });
 

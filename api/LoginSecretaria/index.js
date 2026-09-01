@@ -2,7 +2,7 @@
 // Só quem tem registro em Lideranca (Dirigente, Pastor de Área etc.) consegue
 // logar no painel da Secretaria. Ver api/shared/auth.js.
 const auth = require("../shared/auth");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
   const { matricula, senha } = req.body || {};
@@ -12,18 +12,16 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // ---- Versão real com Azure SQL ----
-  // const sql = require("mssql");
-  // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-  // const result = await pool.request().input("mat", sql.Int, matricula).query(`
-  //   SELECT l.LiderancaId, l.MembroId, l.Tipo, l.Escopo, l.SenhaHash, m.Nome
-  //   FROM Lideranca l JOIN MembroReferencia m ON m.MembroId = l.MembroId
-  //   WHERE l.MembroId = @mat
-  // `);
-  // if (result.recordset.length === 0) { ... "Matrícula sem acesso à Secretaria." }
-  // if (!auth.verificarSenha(senha, result.recordset[0].SenhaHash)) { ... "Senha incorreta." }
-
-  const lideranca = mockDb.getLideranca(matricula);
+  const pool = await getPool();
+  const result = await pool.request().input("mat", sql.Int, matricula).query(`
+    SELECT l.MembroId AS membroId, l.EscopoTipo AS escopoTipo, l.EscopoId AS escopoId, l.SenhaHash AS senhaHash,
+           p.Nome AS papelNome, p.Permissoes AS permissoesStr, m.Nome AS nome
+    FROM Lideranca l
+    JOIN Papeis p ON p.PapelId = l.PapelId
+    JOIN MembroReferencia m ON m.MembroId = l.MembroId
+    WHERE l.MembroId = @mat
+  `);
+  const lideranca = result.recordset[0];
   if (!lideranca) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula sem acesso à Secretaria." } };
     return;
@@ -33,13 +31,20 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const membro = mockDb.getMembro(lideranca.membroId);
+  let escopo = "TODAS";
+  if (lideranca.escopoTipo === "CONGREGACAO" && lideranca.escopoId) {
+    const cong = await pool.request().input("id", sql.Int, lideranca.escopoId)
+      .query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id`);
+    escopo = cong.recordset[0] ? [cong.recordset[0].Nome] : "TODAS";
+  }
+  const permissoes = lideranca.permissoesStr ? lideranca.permissoesStr.split(",").map(p => p.trim()).filter(Boolean) : [];
+
   const token = auth.criarSessao({
     membroId: lideranca.membroId,
-    nome: membro ? membro.nome : "(desconhecido)",
-    tipo: lideranca.tipo,
-    escopoCongregacoes: lideranca.escopo,
-    permissoes: lideranca.permissoes || []
+    nome: lideranca.nome,
+    tipo: lideranca.papelNome,
+    escopoCongregacoes: escopo,
+    permissoes
   });
 
   context.res = {
@@ -48,10 +53,10 @@ module.exports = async function (context, req) {
     body: {
       sucesso: true,
       token,
-      nome: membro ? membro.nome : null,
-      tipo: lideranca.tipo,
-      escopo: lideranca.escopo,
-      permissoes: lideranca.permissoes || []
+      nome: lideranca.nome,
+      tipo: lideranca.papelNome,
+      escopo,
+      permissoes
     }
   };
 };

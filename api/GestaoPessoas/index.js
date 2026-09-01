@@ -1,11 +1,21 @@
 // GestaoPessoas
 // Cadastro de obreiros (MembroReferencia). Exige a permissão "pessoas".
 // GET    /api/pessoas            -> lista (filtrada pelo escopo de quem está logado)
-// POST   /api/pessoas            -> body: { membroId, nome, funcao, congregacaoId, status } -> cria ou atualiza
+// POST   /api/pessoas            -> body: { membroId, nome, funcao, congregacaoId, status, ... } -> cria ou atualiza
 // DELETE /api/pessoas/{membroId} -> não remove de verdade: marca status = DESLIGADO
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
+const estatuto = require("../shared/estatuto");
+
+const SELECT_MEMBRO = `
+  SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, m.CongregacaoId AS congregacaoId,
+         c.Nome AS congregacao, m.Status AS status,
+         CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
+         CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
+         m.DizimistaFiel AS dizimistaFiel, m.SituacaoMembro AS situacaoMembro, m.DepartamentoId AS departamentoId
+  FROM MembroReferencia m
+  LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId`;
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -13,24 +23,15 @@ module.exports = async function (context, req) {
 
   const method = req.method;
   const membroIdRota = context.bindingData.membroId;
+  const pool = await getPool();
 
   // ---- GET: listar (só quem está no escopo de quem está logado) ----
   if (method === "GET") {
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // const result = await pool.request().query(`
-    //   SELECT m.*, c.Nome AS Congregacao FROM MembroReferencia m
-    //   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId ORDER BY m.Nome
-    // `);
-    // context.res = { status: 200, body: result.recordset }; // filtre por escopo na aplicação, igual ao mock
-    // return;
-
-    context.res = {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-      body: mockDb.listarMembros({ escopoCongregacoes: usuario.escopoCongregacoes })
-    };
+    const result = await pool.request().query(`${SELECT_MEMBRO} ORDER BY m.Nome`);
+    const membros = result.recordset
+      .filter(m => auth.estaNoEscopo(usuario, m.congregacao))
+      .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }));
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: membros };
     return;
   }
 
@@ -41,39 +42,52 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
       return;
     }
-    if (funcao && !mockDb.getFuncaoPorNome(funcao)) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: `Função "${funcao}" não está cadastrada.` } };
-      return;
+    if (funcao) {
+      const f = await pool.request().input("nome", sql.NVarChar(100), funcao).query(`SELECT TOP 1 1 AS x FROM Funcoes WHERE Nome = @nome`);
+      if (f.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Função "${funcao}" não está cadastrada.` } };
+        return;
+      }
     }
-    if (congregacaoId && !mockDb.getCongregacao(congregacaoId)) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação inválida." } };
-      return;
+    if (congregacaoId) {
+      const c = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT TOP 1 1 AS x FROM Congregacoes WHERE CongregacaoId = @id`);
+      if (c.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação inválida." } };
+        return;
+      }
     }
 
-    // ---- Versão real com Azure SQL (upsert) ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // const existente = await pool.request().input("id", sql.Int, membroId)
-    //   .query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
-    // if (existente.recordset.length > 0) {
-    //   await pool.request().input("id", sql.Int, membroId).input("nome", sql.NVarChar, nome)
-    //     .input("funcao", sql.NVarChar, funcao).input("congregacaoId", sql.Int, congregacaoId || null).input("status", sql.NVarChar, status || "ATIVO")
-    //     .query(`UPDATE MembroReferencia SET Nome=@nome, Funcao=@funcao, CongregacaoId=@congregacaoId, Status=@status WHERE MembroId=@id`);
-    // } else {
-    //   await pool.request().input("id", sql.Int, membroId).input("nome", sql.NVarChar, nome)
-    //     .input("funcao", sql.NVarChar, funcao).input("congregacaoId", sql.Int, congregacaoId || null).input("status", sql.NVarChar, status || "ATIVO")
-    //     .query(`INSERT INTO MembroReferencia (MembroId, Nome, Funcao, CongregacaoId, Status) VALUES (@id, @nome, @funcao, @congregacaoId, @status)`);
-    // }
+    const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+    const existia = existente.recordset.length > 0;
+    const situacaoFinal = situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO");
 
-    const existia = mockDb.getMembro(membroId);
-    const membro = existia
-      ? mockDb.atualizarMembro(membroId, { nome, funcao, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel, situacaoMembro, departamentoId })
-      : mockDb.criarMembro({ membroId, nome, funcao, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel, situacaoMembro, departamentoId });
+    const request = pool.request()
+      .input("id", sql.Int, membroId)
+      .input("nome", sql.NVarChar(200), nome)
+      .input("funcao", sql.NVarChar(100), funcao || null)
+      .input("congregacaoId", sql.Int, congregacaoId || null)
+      .input("status", sql.NVarChar(20), status || "ATIVO")
+      .input("dataNascimento", sql.Date, dataNascimento || null)
+      .input("dataAdmissao", sql.Date, dataAdmissao || null)
+      .input("dizimistaFiel", sql.Bit, dizimistaFiel === undefined ? null : dizimistaFiel)
+      .input("situacaoMembro", sql.NVarChar(30), situacaoFinal)
+      .input("departamentoId", sql.Int, departamentoId || null);
 
-    if (!membro) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula já cadastrada." } };
-      return;
+    if (existia) {
+      await request.query(`
+        UPDATE MembroReferencia SET Nome = @nome, Funcao = @funcao, CongregacaoId = @congregacaoId, Status = @status,
+               DataNascimento = @dataNascimento, DataAdmissao = @dataAdmissao, DizimistaFiel = @dizimistaFiel,
+               SituacaoMembro = @situacaoMembro, DepartamentoId = @departamentoId
+        WHERE MembroId = @id`);
+    } else {
+      await request.query(`
+        INSERT INTO MembroReferencia (MembroId, Nome, Funcao, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId)
+        VALUES (@id, @nome, @funcao, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId)`);
     }
+
+    const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
+    const membro = result.recordset[0];
+    membro.capacidade = estatuto.calcularCapacidadeEleitoral(membro);
 
     await registrarAuditoria({
       tabela: "MembroReferencia",
@@ -93,21 +107,12 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota: /api/pessoas/{membroId}" } };
       return;
     }
-
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // await pool.request().input("id", sql.Int, membroIdRota)
-    //   .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO' WHERE MembroId = @id`);
-
-    const membro = mockDb.desligarMembro(membroIdRota);
-    if (!membro) {
+    const upd = await pool.request().input("id", sql.Int, membroIdRota).query(`UPDATE MembroReferencia SET Status = 'DESLIGADO' WHERE MembroId = @id`);
+    if (upd.rowsAffected[0] === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
       return;
     }
-
     await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(membroIdRota), acao: "Desligou pessoa", usuarioId: usuario.membroId });
-
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Pessoa desligada." } };
     return;
   }

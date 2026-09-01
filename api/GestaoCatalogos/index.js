@@ -2,40 +2,141 @@
 // GET    /api/catalogos/{catalogo}        -> lista
 // POST   /api/catalogos/{catalogo}        -> cria (sem id) ou atualiza (com id)
 // DELETE /api/catalogos/{catalogo}/{id}   -> exclui
+//
+// Cada entrada mapeia o nome do catálogo (o que o front usa na URL) pra
+// tabela + campos (camelCase do front -> PascalCase da coluna, por
+// capitalização simples — ex: "congregacaoMaeId" -> "CongregacaoMaeId").
 const auth = require("../shared/auth");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 
 const CATALOGOS = {
-  situacoes: mockDb.situacoesMembro,
-  departamentos: mockDb.departamentos,
-  areas: mockDb.areas,
-  regioes: mockDb.regioes,
-  quadrantes: mockDb.quadrantes,
-  distritos: mockDb.distritos,
-  extensoes: mockDb.extensoes,
-  congregacoes: {
-    listar: () => mockDb.listarCongregacoes(),
-    criar: (dados) => mockDb.criarCongregacao(dados),
-    atualizar: (id, dados) => mockDb.atualizarCongregacao(id, dados),
-    excluir: (id) => { const r = mockDb.excluirCongregacao(id); return r === true; }
+  situacoes: {
+    tabela: "SituacoesMembro", chave: "SituacaoId", idField: "situacaoId",
+    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(100), ativa: sql.Bit }
   },
-  funcionalidades: mockDb.funcionalidades,
-  papeis: mockDb.papeis
+  departamentos: {
+    tabela: "Departamentos", chave: "DepartamentoId", idField: "departamentoId",
+    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), numero: sql.Int, ativo: sql.Bit }
+  },
+  areas: {
+    tabela: "Areas", chave: "AreaId", idField: "areaId",
+    campos: { nome: sql.NVarChar(150), ativa: sql.Bit, ativadaEm: sql.Date, regiaoId: sql.Int }
+  },
+  regioes: {
+    tabela: "Regioes", chave: "RegiaoId", idField: "regiaoId",
+    campos: { nome: sql.NVarChar(150), subsede: sql.Bit, ativa: sql.Bit, quadranteId: sql.Int }
+  },
+  quadrantes: {
+    tabela: "Quadrantes", chave: "QuadranteId", idField: "quadranteId",
+    campos: { nome: sql.NVarChar(150), ativo: sql.Bit, distritoId: sql.Int }
+  },
+  distritos: {
+    tabela: "Distritos", chave: "DistritoId", idField: "distritoId",
+    campos: { nome: sql.NVarChar(150), ativo: sql.Bit }
+  },
+  extensoes: {
+    tabela: "ExtensoesTenda", chave: "ExtensaoId", idField: "extensaoId",
+    campos: { nome: sql.NVarChar(150), congregacaoMaeId: sql.Int, ativa: sql.Bit }
+  },
+  congregacoes: {
+    tabela: "Congregacoes", chave: "CongregacaoId", idField: "congregacaoId",
+    campos: { nome: sql.NVarChar(150), ativa: sql.Bit, areaId: sql.Int },
+    emUso: async (pool, id) => {
+      const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);
+      return r.recordset[0].Total > 0;
+    }
+  },
+  funcionalidades: {
+    tabela: "Funcionalidades", chave: "FuncionalidadeId", idField: "funcionalidadeId",
+    campos: { chave: sql.NVarChar(50), nome: sql.NVarChar(100) }
+  },
+  papeis: {
+    tabela: "Papeis", chave: "PapelId", idField: "papelId",
+    campos: { nome: sql.NVarChar(100), nivel: sql.NVarChar(30), permissoes: sql.NVarChar(500) },
+    arrayFields: ["permissoes"]
+  }
 };
+
+function coluna(campo) {
+  return campo.charAt(0).toUpperCase() + campo.slice(1);
+}
+
+function paraJson(config, linha) {
+  const objeto = { [config.idField]: linha[config.chave] };
+  for (const campo of Object.keys(config.campos)) {
+    let valor = linha[coluna(campo)];
+    if (config.arrayFields && config.arrayFields.includes(campo)) {
+      valor = valor ? String(valor).split(",").map(v => v.trim()).filter(Boolean) : [];
+    }
+    objeto[campo] = valor;
+  }
+  return objeto;
+}
+
+async function buscarPorId(pool, config, id) {
+  const result = await pool.request().input("id", sql.Int, id).query(`SELECT * FROM ${config.tabela} WHERE ${config.chave} = @id`);
+  return result.recordset[0] ? paraJson(config, result.recordset[0]) : null;
+}
+
+async function listar(pool, config) {
+  const result = await pool.request().query(`SELECT * FROM ${config.tabela}`);
+  return result.recordset.map(linha => paraJson(config, linha));
+}
+
+async function criar(pool, config, dados) {
+  const camposPresentes = Object.keys(config.campos).filter(c => dados[c] !== undefined);
+  const request = pool.request();
+  const colunas = [];
+  const placeholders = [];
+  for (const campo of camposPresentes) {
+    let valor = dados[campo];
+    if (config.arrayFields && config.arrayFields.includes(campo) && Array.isArray(valor)) valor = valor.join(",");
+    request.input(campo, config.campos[campo], valor);
+    colunas.push(coluna(campo));
+    placeholders.push(`@${campo}`);
+  }
+  const result = await request.query(
+    `INSERT INTO ${config.tabela} (${colunas.join(", ")}) OUTPUT INSERTED.${config.chave} VALUES (${placeholders.join(", ")})`
+  );
+  return buscarPorId(pool, config, result.recordset[0][config.chave]);
+}
+
+async function atualizar(pool, config, id, dados) {
+  const camposPresentes = Object.keys(config.campos).filter(c => dados[c] !== undefined);
+  if (camposPresentes.length === 0) return buscarPorId(pool, config, id);
+  const request = pool.request().input("id", sql.Int, id);
+  const sets = [];
+  for (const campo of camposPresentes) {
+    let valor = dados[campo];
+    if (config.arrayFields && config.arrayFields.includes(campo) && Array.isArray(valor)) valor = valor.join(",");
+    request.input(campo, config.campos[campo], valor);
+    sets.push(`${coluna(campo)} = @${campo}`);
+  }
+  const upd = await request.query(`UPDATE ${config.tabela} SET ${sets.join(", ")} WHERE ${config.chave} = @id`);
+  if (upd.rowsAffected[0] === 0) return null;
+  return buscarPorId(pool, config, id);
+}
+
+async function excluir(pool, config, id) {
+  const del = await pool.request().input("id", sql.Int, id).query(`DELETE FROM ${config.tabela} WHERE ${config.chave} = @id`);
+  return del.rowsAffected[0] > 0;
+}
 
 module.exports = async function (context, req) {
   const method = (req.method || "GET").toUpperCase();
   const catalogoNome = context.bindingData.catalogo;
   const id = context.bindingData.id;
-  const crud = CATALOGOS[catalogoNome];
+  const config = CATALOGOS[catalogoNome];
 
-  if (!crud) {
+  if (!config) {
     context.res = { status: 404, body: { sucesso: false, mensagem: "Catálogo não encontrado." } };
     return;
   }
 
+  const pool = await getPool();
+
   if (method === "GET") {
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: crud.listar() };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: await listar(pool, config) };
     return;
   }
 
@@ -46,15 +147,15 @@ module.exports = async function (context, req) {
     const dados = req.body || {};
     const idCorpo = dados.id;
     if (idCorpo) {
-      const x = crud.atualizar(idCorpo, dados);
-      if (!x) {
+      const registro = await atualizar(pool, config, idCorpo, dados);
+      if (!registro) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Registro não encontrado." } };
         return;
       }
-      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro atualizado.", registro: x } };
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro atualizado.", registro } };
     } else {
-      const x = crud.criar(dados);
-      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro criado.", registro: x } };
+      const registro = await criar(pool, config, dados);
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro criado.", registro } };
     }
     return;
   }
@@ -64,7 +165,11 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/catalogos/{catalogo}/{id}" } };
       return;
     }
-    const ok = crud.excluir(id);
+    if (config.emUso && (await config.emUso(pool, id))) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Não é possível excluir: registro em uso. Desative em vez de excluir." } };
+      return;
+    }
+    const ok = await excluir(pool, config, id);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: ok, mensagem: ok ? "✅ Excluído." : "Registro não encontrado." } };
     return;
   }

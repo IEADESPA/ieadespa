@@ -1,14 +1,17 @@
 // GestaoElegiveisAssembleia
-// Lista contínua de elegíveis da Assembleia Geral (membro em comunhão, apto a
-// votar e ser votado) e importação por Excel — o parse do .xlsx acontece no
-// navegador (SheetJS), aqui só chega o JSON já extraído: [{ matricula, nome }].
-// Cada importação é a fonte da verdade: quem estava elegível e não veio nesta
-// leva perde a elegibilidade (ver mockDb.importarElegiveisAssembleia).
-// GET  /api/assembleia/elegiveis           -> lista os elegíveis atuais
+// Lista de elegíveis da Assembleia Geral (capacidade eleitoral ativa, Art. 23
+// §1º) — CALCULADA a partir de MembroReferencia (idade, admissão, dízimo),
+// nunca uma marcação manual (não existe coluna "ElegivelAssembleia" no
+// schema — ver api/shared/estatuto.js e a regra do Art. 7º §1º no README).
+// A importação por Excel é o mesmo upsert de matrícula+nome que a tela de
+// Pessoas já faz (GestaoPessoas) — o parse do .xlsx acontece no navegador
+// (SheetJS), aqui só chega o JSON já extraído: [{ matricula, nome }].
+// GET  /api/assembleia/elegiveis           -> lista os elegíveis atuais (calculado)
 // POST /api/assembleia/elegiveis/importar  -> body: { linhas: [{ matricula, nome }] }
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
+const estatuto = require("../shared/estatuto");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "assembleia");
@@ -16,29 +19,26 @@ module.exports = async function (context, req) {
 
   const acao = context.bindingData.acao;
   const method = req.method;
+  const pool = await getPool();
 
   // ---- GET /assembleia/elegiveis: listar ----
   if (method === "GET" && !acao) {
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // const result = await pool.request().query(`
-    //   SELECT m.MembroId, m.Nome, c.Nome AS Congregacao FROM MembroReferencia m
-    //   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
-    //   WHERE m.ElegivelAssembleia = 1 ORDER BY m.Nome
-    // `);
-    // context.res = { status: 200, body: result.recordset };
-    // return;
-
-    context.res = {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-      body: mockDb.listarElegiveisAssembleia()
-    };
+    const result = await pool.request().query(`
+      SELECT m.MembroId AS membroId, m.Nome AS nome, m.Status AS status, c.Nome AS congregacao,
+             CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
+             CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
+             m.DizimistaFiel AS dizimistaFiel, m.SituacaoMembro AS situacaoMembro
+      FROM MembroReferencia m
+      LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    `);
+    const elegiveis = result.recordset
+      .filter(m => estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva)
+      .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }));
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: elegiveis };
     return;
   }
 
-  // ---- POST /assembleia/elegiveis/importar: substitui a lista de elegíveis ----
+  // ---- POST /assembleia/elegiveis/importar: upsert em massa (matrícula + nome) ----
   if (method === "POST" && acao === "importar") {
     const linhas = (req.body || {}).linhas;
     if (!Array.isArray(linhas) || linhas.length === 0) {
@@ -51,21 +51,23 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // await pool.request().query(`UPDATE MembroReferencia SET ElegivelAssembleia = 0`);
-    // for (const linha of linhasValidas) {
-    //   await pool.request().input("id", sql.Int, linha.matricula).input("nome", sql.NVarChar, linha.nome)
-    //     .query(`
-    //       MERGE MembroReferencia AS alvo
-    //       USING (SELECT @id AS MembroId) AS origem ON alvo.MembroId = origem.MembroId
-    //       WHEN MATCHED THEN UPDATE SET Nome = @nome, ElegivelAssembleia = 1
-    //       WHEN NOT MATCHED THEN INSERT (MembroId, Nome, Status, ElegivelAssembleia) VALUES (@id, @nome, 'ATIVO', 1);
-    //     `);
-    // }
-
-    const resumo = mockDb.importarElegiveisAssembleia(linhasValidas);
+    let incluidos = 0;
+    let atualizados = 0;
+    for (const linha of linhasValidas) {
+      const membroId = Number(linha.matricula);
+      const nome = String(linha.nome).trim();
+      const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+      if (existente.recordset.length > 0) {
+        await pool.request().input("id", sql.Int, membroId).input("nome", sql.NVarChar(200), nome)
+          .query(`UPDATE MembroReferencia SET Nome = @nome WHERE MembroId = @id`);
+        atualizados++;
+      } else {
+        await pool.request().input("id", sql.Int, membroId).input("nome", sql.NVarChar(200), nome)
+          .query(`INSERT INTO MembroReferencia (MembroId, Nome, Status) VALUES (@id, @nome, 'ATIVO')`);
+        incluidos++;
+      }
+    }
+    const resumo = { incluidos, atualizados };
 
     await registrarAuditoria({
       tabela: "MembroReferencia",
@@ -80,7 +82,7 @@ module.exports = async function (context, req) {
       headers: { "Content-Type": "application/json" },
       body: {
         sucesso: true,
-        mensagem: `✅ Importação concluída: ${resumo.incluidos} incluídos, ${resumo.atualizados} atualizados, ${resumo.removidosDaElegibilidade} perderam elegibilidade.`,
+        mensagem: `✅ Importação concluída: ${resumo.incluidos} incluídos, ${resumo.atualizados} atualizados. A elegibilidade é recalculada automaticamente pelo Estatuto (idade, admissão e dízimo).`,
         resumo
       }
     };

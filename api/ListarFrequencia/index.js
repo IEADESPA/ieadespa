@@ -2,50 +2,55 @@
 // Roster de uma sessão: matrícula, nome, função eclesiástica, presente/falta/
 // justificada — filtrado pelo escopo de quem está logado (um Dirigente só vê
 // gente da(s) congregação(ões) dele). O quórum, por ser um dado institucional
-// (não individual), é calculado sobre TODOS os ATIVOS do órgão, não só o
+// (não individual), é calculado sobre TODO o universo do órgão, não só o
 // escopo de quem está vendo.
 const auth = require("../shared/auth");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
+const { universoDoOrgao } = require("../shared/universo");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
   const sessaoId = context.bindingData.sessaoId;
-
   if (!sessaoId) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o sessaoId na rota." } };
     return;
   }
 
-  // ---- Versão real com Azure SQL ----
-  // const sql = require("mssql");
-  // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-  // const result = await pool.request().input("sessaoId", sql.Int, sessaoId).query(`
-  //   SELECT m.MembroId, m.Nome, m.Funcao, c.Nome AS Congregacao, p.Presente, p.FaltaJustificada, p.MotivoJustificativa
-  //   FROM Presencas p
-  //   JOIN MembroReferencia m ON m.MembroId = p.MembroId
-  //   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
-  //   WHERE p.SessaoId = @sessaoId
-  //   ORDER BY m.Nome
-  // `); // filtre por escopo na aplicação, igual ao mock, e calcule quórum à parte (sem filtro de escopo)
-  // context.res = { status: 200, body: result.recordset };
-  // return;
-
-  const sessao = mockDb.getSessao(sessaoId);
+  const pool = await getPool();
+  const sessaoResult = await pool.request().input("id", sql.Int, sessaoId).query(`
+    SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, Descricao AS descricao,
+           CONVERT(varchar(10), DataSessao, 120) AS dataSessao, Status AS status
+    FROM Sessoes WHERE SessaoId = @id`);
+  const sessao = sessaoResult.recordset[0];
   if (!sessao) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Reunião não encontrada." } };
     return;
   }
 
-  const frequencia = mockDb
-    .listarFrequenciaPorSessao(sessaoId, { escopoCongregacoes: usuario.escopoCongregacoes })
+  const presencasResult = await pool.request().input("id", sql.Int, sessaoId).query(`
+    SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, m.CongregacaoId AS congregacaoId,
+           c.Nome AS congregacao, p.Presente AS presente, p.FaltaJustificada AS faltaJustificada,
+           p.MotivoJustificativa AS motivoJustificativa, p.JustificativaPendente AS justificativaPendente
+    FROM Presencas p
+    JOIN MembroReferencia m ON m.MembroId = p.MembroId
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    WHERE p.SessaoId = @id`);
+
+  const frequencia = presencasResult.recordset
+    .filter(item => auth.estaNoEscopo(usuario, item.congregacao))
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
-  const orgao = mockDb.getOrgao(sessao.orgaoId);
-  const totalAtivos = mockDb.contarUniversoOrgao(orgao, "TODAS");
-  const totalPresentesGeral = mockDb.listarFrequenciaPorSessao(sessaoId).filter(f => f.presente).length;
+  const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId).query(
+    `SELECT OrgaoId AS orgaoId, Sigla AS sigla, QuorumMinimoPct AS quorumMinimoPct FROM Orgaos WHERE OrgaoId = @id`
+  );
+  const orgao = orgaoResult.recordset[0] || null;
+
+  const universo = await universoDoOrgao(pool, orgao);
+  const totalAtivos = universo.length;
+  const totalPresentesGeral = presencasResult.recordset.filter(f => f.presente).length;
   const percentualPresenca = totalAtivos > 0 ? Math.round((totalPresentesGeral / totalAtivos) * 100) : 0;
 
   // Assembleia Geral e CLI usam o quórum de instalação em 2 estágios do Estatuto (maioria

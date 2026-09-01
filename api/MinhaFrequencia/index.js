@@ -4,8 +4,7 @@
 // Autenticação real (ligar isso à matrícula logada) fica para quando o painel
 // pessoal se integrar ao sistema de membros/credenciais existente — por ora,
 // consulta por matrícula digitada, igual ao check-in da Portaria.
-
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -15,45 +14,44 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // ---- Versão real com Azure SQL ----
-  // const sql = require("mssql");
-  // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-  // const membro = await pool.request().input("mat", sql.Int, matricula)
-  //   .query(`SELECT * FROM MembroReferencia WHERE MembroId = @mat`);
-  // if (membro.recordset.length === 0) {
-  //   context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
-  //   return;
-  // }
-  // const historico = await pool.request().input("mat", sql.Int, matricula).query(`
-  //   SELECT s.SessaoId, s.Descricao, s.DataSessao, p.Presente, p.FaltaJustificada, p.MotivoJustificativa
-  //   FROM Presencas p JOIN Sessoes s ON s.SessaoId = p.SessaoId
-  //   WHERE p.MembroId = @mat
-  //   ORDER BY s.DataSessao DESC
-  // `);
-  // context.res = { status: 200, body: { sucesso: true, membro: membro.recordset[0], historico: historico.recordset } };
-  // return;
-
-  const membro = mockDb.getMembro(matricula);
+  const pool = await getPool();
+  const membroResult = await pool.request().input("mat", sql.Int, matricula).query(`
+    SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, m.CongregacaoId AS congregacaoId,
+           c.Nome AS congregacao, m.Status AS status
+    FROM MembroReferencia m
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    WHERE m.MembroId = @mat`);
+  const membro = membroResult.recordset[0];
   if (!membro) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
   }
-  const congregacao = mockDb.getCongregacao(membro.congregacaoId);
 
-  const historico = mockDb
-    .listarFrequenciaPorMembro(matricula)
-    .sort((a, b) => String(b.dataSessao).localeCompare(String(a.dataSessao)));
+  const historicoResult = await pool.request().input("mat", sql.Int, matricula).query(`
+    SELECT s.SessaoId AS sessaoId, s.Descricao AS descricao, CONVERT(varchar(10), s.DataSessao, 120) AS dataSessao,
+           p.Presente AS presente, p.FaltaJustificada AS faltaJustificada, p.MotivoJustificativa AS motivoJustificativa,
+           p.JustificativaPendente AS justificativaPendente
+    FROM Presencas p
+    JOIN Sessoes s ON s.SessaoId = p.SessaoId
+    WHERE p.MembroId = @mat
+    ORDER BY s.DataSessao DESC`);
+  const historico = historicoResult.recordset;
 
-  const resumo = mockDb.resumoFrequenciaPorMembro(matricula);
+  const totalReunioes = historico.length;
+  const totalPresencas = historico.filter(h => h.presente).length;
+  const totalFaltas = historico.filter(h => !h.presente).length;
+  const totalJustificadas = historico.filter(h => !h.presente && h.faltaJustificada).length;
+  const resumo = {
+    totalReunioes,
+    totalPresencas,
+    totalFaltas,
+    totalJustificadas,
+    percentualPresenca: totalReunioes > 0 ? Math.round((totalPresencas / totalReunioes) * 100) : null
+  };
 
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json" },
-    body: {
-      sucesso: true,
-      membro: Object.assign({}, membro, { congregacao: congregacao ? congregacao.nome : null }),
-      resumo,
-      historico
-    }
+    body: { sucesso: true, membro, resumo, historico }
   };
 };

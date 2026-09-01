@@ -16,6 +16,12 @@ jobs:
     name: Build and Deploy Job
     steps:
       - uses: actions/checkout@v3
+      - name: Executar Migrações SQL
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/schema.sql'
+          action: 'Script'
         with:
           submodules: true
           lfs: false

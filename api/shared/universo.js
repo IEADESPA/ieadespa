@@ -52,13 +52,25 @@ async function universoDoOrgao(pool, orgao) {
     // Cadeira com mandato vencido (DataTerminoPrevisao no passado) para de contar
     // pro universo assim que vence, mesmo sem alguém ter formalmente encerrado a
     // cadeira (ver GestaoAssentos — "vencimento calculado na leitura").
+    //
+    // Composição por Função (Art. 15) entra na CLI de duas formas: (a) cadeira
+    // aberta DIRETO na CLI (Dirigente de Congregação, Líder Geral — não têm
+    // órgão próprio) ou (b) cadeira em Diretoria/Conselho Fiscal/CEI — quem já
+    // é Presidente/Tesoureiro/Conselheiro/etc. naqueles órgãos entra na CLI
+    // automaticamente por causa do cargo, sem precisar cadastrar a MESMA pessoa
+    // de novo aqui. Cadastra uma vez, na Diretoria (por exemplo), e ela já conta
+    // nas reuniões da Diretoria E na composição da CLI.
     const porFuncao = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId).query(`
-      SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao
+      SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao
       FROM Assentos a
       JOIN MembroReferencia m ON m.MembroId = a.MembroId
       LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
-      WHERE a.OrgaoId = @orgaoId AND a.DataFim IS NULL
+      WHERE a.DataFim IS NULL
         AND (a.DataTerminoPrevisao IS NULL OR a.DataTerminoPrevisao >= CAST(SYSUTCDATETIME() AS DATE))
+        AND (
+          a.OrgaoId = @orgaoId
+          OR a.OrgaoId IN (SELECT OrgaoId FROM Orgaos WHERE Sigla IN ('DIRETORIA_EXECUTIVA', 'CONSELHO_FISCAL', 'CEI'))
+        )
     `);
     return porOrdenacao.recordset.concat(porFuncao.recordset.filter(m => !idsPorOrdenacao.has(m.membroId)));
   }

@@ -136,6 +136,18 @@ faz o cálculo de conflito de reunião do parágrafo acima funcionar direito pra
 card "Meus Órgãos" do Meu Painel (`MinhaFrequencia`) lê daqui — fica vazio até alguém
 cadastrar a primeira cadeira.
 
+**Sem cadastro duplicado:** quem já tem cadeira em Diretoria, Conselho Fiscal ou CEI
+entra na composição da CLI **automaticamente** por causa do cargo — não precisa
+cadastrar a mesma pessoa de novo direto na CLI. Cadeira direto na CLI só faz sentido
+pra quem não tem órgão próprio (Dirigente de Congregação, Líder Geral). E o mais
+importante: `Assentos` só existe pra cargo **eletivo/nomeado** de posse individual
+(Diretoria = 10 pessoas fixas — Art. 29; Conselho Fiscal = 6 — Art. 43; CEI = 9 —
+Art. 88; 1 Dirigente por Congregação) — nunca pra Assembleia (universo 100%
+calculado pela capacidade eleitoral, zero cadeira manual) nem pra "Membro"/"Auxiliar"
+comum (calculado pelo Cargo Ministerial no próprio cadastro da pessoa, também zero
+cadeira manual). Não é retrabalho de cadastrar dúzias/centenas de pessoas — é só a
+minoria em posto eletivo específico.
+
 **Cadeira com prazo (mandato):** cargo eletivo/nomeado (Tesoureiro, Secretário,
 Conselheiro Fiscal...) tem tempo determinado, diferente de Ordenação (que não vence).
 Ao criar a cadeira, dá pra informar `duracaoMeses` — `DataTerminoPrevisao` é calculada

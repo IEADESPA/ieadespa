@@ -80,7 +80,11 @@ tratados como **dados reais**: nenhuma atualização pode apagá-los, recriá-lo
   `sql/migrations/NNN_descricao.sql`, **sempre idempotente** (use `IF NOT EXISTS` /
   `IF EXISTS`). **Nunca** `DROP TABLE`/`DROP COLUMN` sem etapa de transição explícita e aprovada.
 - `sql/schema.sql` é só referência/leitura; **não** é o que roda no deploy.
-- O workflow roda a pasta `sql/migrations/` em ordem no deploy (action `azure/sql-action`).
+- O workflow (`.github/workflows/azure-static-web-apps-*.yml`) roda cada migração com um
+  step próprio do `azure/sql-action` (ele espera um arquivo, não uma pasta) — **ao criar
+  uma migração nova, é obrigatório adicionar o step dela no workflow**, na ordem certa,
+  antes do "Build And Deploy". Migração sem step no workflow nunca chega a rodar no Azure
+  SQL de verdade, mesmo já estando commitada.
 
 **Código ↔ banco em sincronia:**
 - Antes de subir uma versão, o schema precisa refletir a lógica atual do app.

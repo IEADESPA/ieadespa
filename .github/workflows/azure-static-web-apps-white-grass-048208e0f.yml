@@ -34,6 +34,27 @@ jobs:
           path: 'sql/migrations/002_papeis_funcionalidades_lideranca.sql'
           action: 'Script'
 
+      - name: Executar Migração SQL 003
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/003_lideranca_legado_opcional.sql'
+          action: 'Script'
+
+      - name: Executar Migração SQL 004
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/004_hierarquia_vinculos_pai.sql'
+          action: 'Script'
+
+      - name: Executar Migração SQL 005
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/005_seed_admin_inicial.sql'
+          action: 'Script'
+
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1

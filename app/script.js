@@ -172,8 +172,26 @@ async function abrirPainelConteudo(matricula) {
   document.getElementById("cxLoginPainel").style.display = "none";
   document.getElementById("cxPainelConteudo").style.display = "flex";
   document.getElementById("nomeLogado").textContent = authNome ? `Olá, ${authNome}` : "";
+  document.getElementById("cxTrocarSenha").style.display = authToken ? "block" : "none";
   aplicarPermissoesNoMenu();
   await carregarPainelPessoal(matricula);
+}
+
+// Self-service: só aparece pra quem logou com senha (tem Lideranca). Não pede
+// a senha atual — a sessão já autenticada é a prova de identidade.
+async function trocarMinhaSenha() {
+  const novaSenha = document.getElementById("novaSenhaPessoal").value;
+  const msg = document.getElementById("resultadoTrocaSenha");
+  if (!novaSenha) { msg.textContent = "Informe a nova senha."; return; }
+  const res = await fetchProtegido(`${API_BASE}/auth/senha`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ novaSenha })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) document.getElementById("novaSenhaPessoal").value = "";
 }
 
 function sairDoPainel() {
@@ -219,7 +237,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "estrutura") montarEstrutura();
   if (aba === "catalogos") montarCatalogos();
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
-  if (aba === "consagracoes") carregarConsagracoes();
+  if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -376,10 +394,11 @@ const CATALOGOS_CFG = {
   distritos: { titulo: "Distritos (Nível 5)", idField: "distritoId", campos: [["nome", "Nome do Distrito"]] },
   extensoes: { titulo: "Extensões da Tenda (Nível 0)", idField: "extensaoId", campos: [["nome", "Nome da Extensão"]], pai: { campo: "congregacaoMaeId", rotulo: "Congregação-Mãe", origem: "congregacoes" } },
   situacoes: { titulo: "Situações de Membro", idField: "situacaoId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
-  departamentos: { titulo: "Departamentos", idField: "departamentoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["numero", "Número"]] }
+  departamentos: { titulo: "Departamentos", idField: "departamentoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["numero", "Número"]] },
+  tiposConsagracao: { titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId", campos: [["nome", "Nome do Tipo"]] }
 };
 const ESTRUTURA_ORDEM = ["congregacoes", "areas", "regioes", "quadrantes", "distritos", "extensoes"];
-const CATALOGOS_ORDEM = ["situacoes", "departamentos"];
+const CATALOGOS_ORDEM = ["situacoes", "departamentos", "tiposConsagracao"];
 const CATALOGOS_PAGINA = 15;
 let catalogoCache = {};
 let catalogoPagina = {};
@@ -715,7 +734,7 @@ async function importarExcelAssembleiaGeral() {
   const data = await res.json();
   avisarResultado(data);
   msg.textContent = data.sucesso
-    ? `Incluídos: ${data.resumo.incluidos} · Atualizados: ${data.resumo.atualizados} · Perderam elegibilidade: ${data.resumo.removidosDaElegibilidade}`
+    ? `Incluídos: ${data.resumo.incluidos} · Atualizados: ${data.resumo.atualizados}`
     : "";
   input.value = "";
   if (data.sucesso) carregarElegiveisAssembleia();
@@ -1200,22 +1219,30 @@ function onChangeEscopoTodas() {
 let funcionalidadesCache = [];
 
 async function carregarOpcoesEscopoPermissao() {
-  const [fres, pres, cres] = await Promise.all([
+  const [fres, pres] = await Promise.all([
     fetchProtegido(`${API_BASE}/catalogos/funcionalidades`),
-    fetchProtegido(`${API_BASE}/catalogos/papeis`),
-    fetchProtegido(`${API_BASE}/catalogos/congregacoes`)
+    fetchProtegido(`${API_BASE}/catalogos/papeis`)
   ]);
   funcionalidadesCache = await fres.json();
   const papeis = await pres.json();
-  const congregacoes = await cres.json();
 
   document.getElementById("permissaoPapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${p.nome}</option>`).join("");
-  document.getElementById("permissaoEscopoId").innerHTML = congregacoes.filter(c => c.ativa).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
 
   montarCheckboxesPapeis();
   carregarPapeis();
   carregarPermissoes();
 }
+
+// Cada nível da Governança Escalonada usado como escopo de acesso -> catálogo
+// de onde vem a lista de opções (ex: escopo "Área" -> catálogo "areas").
+// "Extensão da Tenda" fica fora: ver comentário em api/shared/escopo.js.
+const ESCOPO_NIVEIS = {
+  CONGREGACAO: { origem: "congregacoes", idField: "congregacaoId" },
+  AREA: { origem: "areas", idField: "areaId" },
+  REGIAO: { origem: "regioes", idField: "regiaoId" },
+  QUADRANTE: { origem: "quadrantes", idField: "quadranteId" },
+  DISTRITO: { origem: "distritos", idField: "distritoId" }
+};
 
 function montarCheckboxesPapeis() {
   document.getElementById("papelPermissoesCheckboxes").innerHTML = funcionalidadesCache.map(f =>
@@ -1223,9 +1250,19 @@ function montarCheckboxesPapeis() {
   ).join("");
 }
 
-function onChangeEscopoTipoPermissao() {
+async function onChangeEscopoTipoPermissao() {
   const tipo = document.getElementById("permissaoEscopoTipo").value;
-  document.getElementById("permissaoEscopoId").style.display = tipo === "CONGREGACAO" ? "inline-block" : "none";
+  const select = document.getElementById("permissaoEscopoId");
+  const nivel = ESCOPO_NIVEIS[tipo];
+  if (!nivel) {
+    select.style.display = "none";
+    select.innerHTML = "";
+    return;
+  }
+  const res = await fetch(`${API_BASE}/catalogos/${nivel.origem}`);
+  const itens = (await res.json()).filter(x => x.ativa !== false && x.ativo !== false);
+  select.innerHTML = itens.map(x => `<option value="${x[nivel.idField]}">${x.nome}</option>`).join("");
+  select.style.display = "inline-block";
 }
 
 async function salvarPapel() {
@@ -1283,7 +1320,7 @@ async function salvarPermissao() {
   const membroId = document.getElementById("permissaoMatricula").value;
   const papelId = document.getElementById("permissaoPapel").value;
   const escopoTipo = document.getElementById("permissaoEscopoTipo").value;
-  const escopoId = escopoTipo === "CONGREGACAO" ? document.getElementById("permissaoEscopoId").value : null;
+  const escopoId = escopoTipo === "GLOBAL" ? null : document.getElementById("permissaoEscopoId").value;
   const senha = document.getElementById("permissaoSenha").value;
   const msg = document.getElementById("resultadoPermissao");
   if (!membroId || !papelId) { msg.textContent = "Informe matrícula e papel."; return; }
@@ -1315,11 +1352,30 @@ async function carregarPermissoes() {
       <td>${l.papel}</td>
       <td>${l.nivel}</td>
       <td>${(l.permissoes || []).join(", ") || "-"}</td>
-      <td><button class="btn-link btn-link-perigo" onclick="removerPermissao(${l.membroId})">Remover</button></td>
+      <td class="acoes-inline">
+        <button class="btn-link" onclick="editarPermissao(${l.membroId})">Editar</button>
+        <button class="btn-link btn-link-perigo" onclick="removerPermissao(${l.membroId})">Remover</button>
+      </td>
     </tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// Pré-preenche o formulário de cima com uma liderança já existente — permite
+// trocar papel/escopo, ou resetar a senha (deixando em branco mantém a atual).
+async function editarPermissao(membroId) {
+  const res = await fetchProtegido(`${API_BASE}/lideranca`);
+  const liderancas = await res.json();
+  const l = liderancas.find(x => String(x.membroId) === String(membroId));
+  if (!l) return;
+  document.getElementById("permissaoMatricula").value = l.membroId;
+  document.getElementById("permissaoPapel").value = l.papelId;
+  document.getElementById("permissaoEscopoTipo").value = l.escopoTipo || "GLOBAL";
+  await onChangeEscopoTipoPermissao();
+  if (l.escopoId) document.getElementById("permissaoEscopoId").value = l.escopoId;
+  document.getElementById("permissaoSenha").value = "";
+  document.getElementById("permissaoMatricula").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function removerPermissao(membroId) {
@@ -1331,6 +1387,18 @@ async function removerPermissao(membroId) {
 }
 
 // ---- SECRETARIA / ABA CONSAGRAÇÕES ----
+// Os tipos de proposta ("Assunto") são um catálogo configurável (Catálogos ->
+// Tipos de Proposta), não mais uma lista fixa no HTML — dá pra adicionar/
+// renomear/excluir tipo sem mexer em código.
+async function carregarTiposConsagracao() {
+  const select = document.getElementById("consagracaoAssunto");
+  const res = await fetch(`${API_BASE}/catalogos/tiposConsagracao`);
+  const tipos = await res.json();
+  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.nome}">${t.nome}</option>`).join("")
+    + `<option value="__outro">Outro (digitar)</option>`;
+  document.getElementById("consagracaoAssuntoOutro").style.display = "none";
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const select = document.getElementById("consagracaoAssunto");
   if (select) select.addEventListener("change", () => {

@@ -52,11 +52,11 @@
       <form onsubmit="event.preventDefault(); acessarPainel();">
         <div class="input-group">
           <label>Número de Matrícula:</label>
-          <input type="number" id="matriculaPainel" placeholder="Ex: 3" />
+          <input type="number" id="matriculaPainel" placeholder="Ex: 3" autocomplete="username" />
         </div>
         <div class="input-group">
           <label>Senha (só se você tiver acesso administrativo):</label>
-          <input type="password" id="senhaPainel" placeholder="Deixe em branco se não tiver" />
+          <input type="password" id="senhaPainel" placeholder="Deixe em branco se não tiver" autocomplete="current-password" />
         </div>
         <button class="btn-confirmar" type="submit">Entrar</button>
       </form>
@@ -100,6 +100,20 @@
         <div id="cartaoPerfilPessoal"></div>
         <div id="resumoStatsPessoal"></div>
         <div id="resultadoPainelPessoal"></div>
+
+        <!-- Só aparece pra quem logou com senha (tem acesso à Secretaria) -->
+        <div id="cxTrocarSenha" style="display:none; margin-top:24px;">
+          <hr />
+          <h3>🔑 Trocar minha senha</h3>
+          <form onsubmit="event.preventDefault(); trocarMinhaSenha();">
+            <div class="input-group">
+              <label>Nova senha:</label>
+              <input type="password" id="novaSenhaPessoal" placeholder="Digite a nova senha" autocomplete="new-password" />
+            </div>
+            <button class="btn-confirmar" type="submit">Salvar nova senha</button>
+          </form>
+          <p id="resultadoTrocaSenha"></p>
+        </div>
       </div>
 
       <!-- ABA: REUNIÕES -->
@@ -137,8 +151,9 @@
         <h3>Lista de Elegíveis (em comunhão, aptos a votar e ser votados)</h3>
         <p class="subtitle">
           Importe uma planilha Excel (.xlsx) com as colunas <strong>Matrícula</strong> e
-          <strong>Nome</strong>. É uma lista única e contínua: cada nova importação substitui
-          quem estava elegível antes por quem está na planilha agora.
+          <strong>Nome</strong>: cadastra quem ainda não existe e atualiza o nome de quem já
+          existe. A elegibilidade pra votar é sempre calculada automaticamente pelo Estatuto
+          (idade, tempo de admissão e dízimo) — não depende desta importação.
         </p>
         <div class="input-group">
           <input type="file" id="arquivoExcelAssembleia" accept=".xlsx,.xls" />
@@ -358,6 +373,9 @@
             <input type="text" id="papelNome" placeholder="Nome do papel (ex: Tesoureiro)" style="min-width:220px;" />
             <select id="papelNivel">
               <option value="GLOBAL">Global (tudo)</option>
+              <option value="DISTRITO">Distrito</option>
+              <option value="QUADRANTE">Quadrante</option>
+              <option value="REGIAO">Região/Subsede</option>
               <option value="AREA">Área</option>
               <option value="CONGREGACAO">Congregação</option>
             </select>
@@ -380,11 +398,15 @@
             <select id="permissaoPapel"></select>
             <select id="permissaoEscopoTipo" onchange="onChangeEscopoTipoPermissao()">
               <option value="GLOBAL">Escopo: Global</option>
+              <option value="DISTRITO">Escopo: Distrito</option>
+              <option value="QUADRANTE">Escopo: Quadrante</option>
+              <option value="REGIAO">Escopo: Região/Subsede</option>
+              <option value="AREA">Escopo: Área</option>
               <option value="CONGREGACAO">Escopo: Congregação</option>
             </select>
             <select id="permissaoEscopoId" style="display:none;"></select>
-            <input type="password" id="permissaoSenha" placeholder="Senha (1º acesso)" style="min-width:150px;" />
-            <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">💾 Conceder Acesso</button>
+            <input type="password" id="permissaoSenha" placeholder="Senha (deixe em branco pra manter a atual)" autocomplete="new-password" style="min-width:220px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">💾 Salvar Acesso</button>
           </div>
         </form>
         <p id="resultadoPermissao"></p>
@@ -401,14 +423,7 @@
           </div>
           <div class="input-group">
             <label>Assunto:</label>
-            <select id="consagracaoAssunto">
-              <option value="Integração">Integração</option>
-              <option value="Reintegração">Reintegração</option>
-              <option value="Separação ao Diaconato">Separação ao Diaconato</option>
-              <option value="Consagração a Presbítero">Consagração a Presbítero</option>
-              <option value="Consagração a Evangelista">Consagração a Evangelista</option>
-              <option value="__outro">Outro (digitar)</option>
-            </select>
+            <select id="consagracaoAssunto"></select>
             <input type="text" id="consagracaoAssuntoOutro" placeholder="Digite o assunto" style="display:none; margin-top:8px;" />
           </div>
           <div class="input-group">

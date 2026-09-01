@@ -608,5 +608,15 @@ governanca-ieadespa/
 | `CriarConsagracao` | `POST /api/consagracoes` | `enviarPropostaConsagracaoApp()` |
 | `EvoluirConsagracao` | `POST /api/consagracoes/{id}/evoluir` | `evoluirConsagracaoApp()` |
 
+### 6.7 Ideia futura: PWA (instalar como app)
+
+Ainda não implementado — fica registrado para uma versão posterior. A ideia é
+adicionar um `manifest.json` (nome, ícones, cor do tema) em `app/` e referenciá-lo
+no `<head>` do `index.html`, além de um Service Worker básico — isso permite
+"Instalar app" no navegador (celular ou notebook), com ícone próprio fora do
+navegador. Pode vir em fases: primeiro só o manifest (instalável, sem cache
+offline), depois um Service Worker cacheando o shell estático (`app/`) para uso
+com internet instável.
+
 Todas seguem o padrão: lógica real comentada (SQL) + resposta mock ativa para testar
 localmente. `shared/auditoria.js` é reutilizado pelas outras Functions.

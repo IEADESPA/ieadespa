@@ -3,6 +3,7 @@
 // logar no painel da Secretaria. Ver api/shared/auth.js.
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
+const { resolverEscopoCongregacoes } = require("../shared/escopo");
 
 module.exports = async function (context, req) {
   const { matricula, senha } = req.body || {};
@@ -31,12 +32,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  let escopo = "TODAS";
-  if (lideranca.escopoTipo === "CONGREGACAO" && lideranca.escopoId) {
-    const cong = await pool.request().input("id", sql.Int, lideranca.escopoId)
-      .query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id`);
-    escopo = cong.recordset[0] ? [cong.recordset[0].Nome] : "TODAS";
-  }
+  const escopo = await resolverEscopoCongregacoes(pool, lideranca.escopoTipo, lideranca.escopoId);
   const permissoes = lideranca.permissoesStr ? lideranca.permissoesStr.split(",").map(p => p.trim()).filter(Boolean) : [];
 
   const token = auth.criarSessao({

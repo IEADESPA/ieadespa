@@ -54,6 +54,10 @@ const CATALOGOS = {
     tabela: "Papeis", chave: "PapelId", idField: "papelId",
     campos: { nome: sql.NVarChar(100), nivel: sql.NVarChar(30), permissoes: sql.NVarChar(500) },
     arrayFields: ["permissoes"]
+  },
+  tiposConsagracao: {
+    tabela: "TiposConsagracao", chave: "TipoConsagracaoId", idField: "tipoConsagracaoId",
+    campos: { nome: sql.NVarChar(100), ativo: sql.Bit }
   }
 };
 

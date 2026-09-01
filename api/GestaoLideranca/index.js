@@ -13,6 +13,11 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 
+// Níveis da Governança Escalonada aceitos como escopo de acesso. "Extensão da
+// Tenda" fica de fora por enquanto: MembroReferencia ainda não tem vínculo com
+// ExtensoesTenda, então não haveria ninguém pra esse escopo enxergar.
+const ESCOPO_TIPOS_VALIDOS = ["GLOBAL", "CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO"];
+
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "permissoes");
   if (!usuario) return;
@@ -52,6 +57,10 @@ module.exports = async function (context, req) {
     const { membroId, papelId, escopoTipo, escopoId, senha } = req.body || {};
     if (!membroId || !papelId) {
       context.res = { status: 400, body: { erro: "Campos obrigatórios: membroId, papelId." } };
+      return;
+    }
+    if (escopoTipo && !ESCOPO_TIPOS_VALIDOS.includes(escopoTipo)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Tipo de escopo inválido." } };
       return;
     }
     const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);

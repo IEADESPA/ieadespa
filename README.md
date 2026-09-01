@@ -109,21 +109,43 @@ qual sessão aberta é essa.
 
 **Prioridade em vez de trava global:** até a v0.3, só podia existir 1 sessão `ABERTA`
 no banco inteiro, de qualquer órgão — o que ia travar assim que a Fase 2 trouxesse CLI,
-Diretoria e Conselho Fiscal com reunião própria. A regra agora é por escopo: a
-**Assembleia Geral é exclusiva** (órgão soberano — Regimento Art. 104 e segs.: enquanto
-ela está aberta, nenhuma outra reunião abre, e ela não abre se já houver outra em
-andamento); os **demais órgãos só travam contra si mesmos** (não dá pra ter 2 sessões
-abertas do mesmo órgão, mas CLI e Conselho Fiscal, por exemplo, podem correr em
-paralelo). Ver `api/AbrirReuniao`.
+Diretoria e Conselho Fiscal com reunião própria. A regra agora é: a **Assembleia Geral
+é exclusiva** (órgão soberano — Regimento Art. 104 e segs.: enquanto ela está aberta,
+nenhuma outra reunião abre, e ela não abre se já houver outra em andamento); os
+**demais órgãos travam por sobreposição real de pessoas**, não por "mesmo órgão" —
+calculado a partir de `shared/universo.js` (o mesmo motor que decide quem falta quando
+a reunião encerra), comparando o universo do órgão que está abrindo contra o de cada
+sessão já aberta. Motivo: a CLI tem composição mista (Regimento Art. 15 — Diretoria +
+Conselho Fiscal + CEI + Dirigentes entram por Assento) e comparecimento obrigatório
+(Art. 27 — faltas consecutivas tiram o assento), então abrir CLI e Diretoria ao mesmo
+horário faria quem está nas duas levar falta automática numa delas só por causa da
+agenda, não por ausência de verdade. Nenhuma tabela de prioridade configurada à mão —
+a trava nasce sozinha de quem está cadastrado em cada órgão, e cobre qualquer
+composição futura. Ver `api/AbrirReuniao`.
 
 **`Assentos`** é quem sabe "quem pertence a qual órgão" além da regra genérica ATIVO
-(`shared/universo.js`): cadeira por Ordenação (Pastor/Evangelista/Presbítero, calculado)
-ou por Função (Diretoria, Conselho Fiscal, CEI, Dirigente de Congregação — cadastrado).
-Até a v0.3 a tabela existia e já era **lida** pela CLI, mas nada a **escrevia** — por
-isso a composição mista da CLI (Art. 15) só funcionava pela metade. CRUD em
-`GestaoAssentos`, embutido na aba **Órgãos** (mesma permissão, `pessoas`). O card
-"Meus Órgãos" do Meu Painel (`MinhaFrequencia`) lê daqui — fica vazio até alguém
+(`shared/universo.js`): cadeira por Ordenação (Pastor/Evangelista/Presbítero, calculado
+a partir de `CargoMinisterial`) ou por Função (Diretoria, Conselho Fiscal, CEI,
+Dirigente de Congregação — cadastrado). Até a v0.3 a tabela existia e já era **lida**
+pela CLI, mas nada a **escrevia** — por isso a composição mista da CLI (Art. 15) só
+funcionava pela metade. CRUD em `GestaoAssentos`, embutido na aba **Órgãos** (mesma
+permissão, `pessoas`); assim que um órgão sem regra própria (Diretoria, CEI, Conselho
+Fiscal) ganha sua primeira cadeira cadastrada, `universo.js` passa a usar essa
+composição real em vez do padrão genérico "todo mundo ATIVO" — o que também é o que
+faz o cálculo de conflito de reunião do parágrafo acima funcionar direito pra eles. O
+card "Meus Órgãos" do Meu Painel (`MinhaFrequencia`) lê daqui — fica vazio até alguém
 cadastrar a primeira cadeira.
+
+**Cadeira com prazo (mandato):** cargo eletivo/nomeado (Tesoureiro, Secretário,
+Conselheiro Fiscal...) tem tempo determinado, diferente de Ordenação (que não vence).
+Ao criar a cadeira, dá pra informar `duracaoMeses` — `DataTerminoPrevisao` é calculada
+na hora (migração 014); igual ao prazo da sanção disciplinar (v0.2), o vencimento é
+**lido, não fechado sozinho**: a cadeira some do universo do órgão (e do card "Meus
+Órgãos") assim que a data passa, mas continua listada com o badge "Mandato vencido"
+até alguém confirmar/renovar/encerrar formalmente — nunca perde o histórico de quem
+já ocupou. A tabela `Mandatos` (duração padrão por órgão) existe no schema desde a
+migração 001 mas segue sem CRUD/uso — por ora a duração é informada cadeira a cadeira,
+igual ao padrão "valor sugerido" do catálogo `Prazos`.
 
 **Check-in com mais de uma reunião aberta:** desde que órgãos diferentes podem ter
 sessão simultânea, `RegistrarPresenca` não pode mais pegar "a" sessão aberta — ele
@@ -363,6 +385,14 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [ ] Voto de Minerva + poder de veto presidencial.
 - [ ] Sigilo corporativo (Art. 26) + comunicado administrativo pós-sessão.
 - [ ] Comparecimento obrigatório: 3 faltas = exclusão automática (Art. 27).
+      **Nota (v0.3):** conversa com o usuário levantou que existe (ou vai existir) um
+      órgão "Academia" que se alterna com a CLI a cada 3 meses pra treinar
+      Presbíteros/Evangelistas/Pastores, e as faltas dos dois deveriam **somar** pro
+      mesmo contador de 3 (são "órgãos de fusão" pra esse fim, mesmo com calendário
+      diferente — não é conflito de horário, é o mesmo Art. 27 valendo pros dois).
+      Não dá pra implementar isso ainda: nem a Academia existe como órgão, nem o
+      contador de 3 faltas em si existe (é esse item aqui, ainda `[ ]`). Quando
+      ambos nascerem, essa soma entre órgãos "fundidos" precisa entrar no desenho.
 - [ ] Verificação de perda de assento por faltas.
 
 #### v2.4 — CLI (comissões e planejamento)

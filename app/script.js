@@ -383,6 +383,12 @@ async function carregarOrgaos() {
   if (selectAssento) selectAssento.innerHTML = orgaos.map(o => `<option value="${o.orgaoId}">${o.nome}</option>`).join("");
 }
 
+function badgeSituacaoAssento(situacao) {
+  const classes = { ATIVA: "badge-ativo", MANDATO_VENCIDO: "badge-licenca", ENCERRADA: "badge-desligado" };
+  const rotulos = { ATIVA: "Ativa", MANDATO_VENCIDO: "Mandato vencido", ENCERRADA: "Encerrada" };
+  return `<span class="badge-status ${classes[situacao] || ""}">${rotulos[situacao] || situacao}</span>`;
+}
+
 async function carregarAssentos() {
   const container = document.getElementById("resultadoListaAssentos");
   const res = await fetchProtegido(`${API_BASE}/assentos`);
@@ -392,7 +398,7 @@ async function carregarAssentos() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Matrícula</th><th>Nome</th><th>Órgão</th><th>Tipo</th><th>Cargo/Função</th><th>Desde</th><th></th>
+    <th>Matrícula</th><th>Nome</th><th>Órgão</th><th>Tipo</th><th>Cargo/Função</th><th>Desde</th><th>Até</th><th>Situação</th><th></th>
   </tr></thead><tbody>`;
   assentos.forEach(a => {
     html += `<tr>
@@ -402,6 +408,8 @@ async function carregarAssentos() {
       <td>${a.tipoAssento === "ORDENACAO" ? "Ordenação" : "Função"}</td>
       <td>${a.cargoOuFuncao || "-"}</td>
       <td>${a.dataInicio}</td>
+      <td>${a.dataTerminoPrevisao || "sem prazo"}</td>
+      <td>${badgeSituacaoAssento(a.situacaoEfetiva)}</td>
       <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="encerrarAssentoAcao(${a.assentoId})">Encerrar</button></td>
     </tr>`;
   });
@@ -414,12 +422,13 @@ async function salvarAssento() {
   const orgaoId = document.getElementById("assentoOrgao").value;
   const tipoAssento = document.getElementById("assentoTipo").value;
   const cargoOuFuncao = document.getElementById("assentoCargoOuFuncao").value.trim();
+  const duracaoMeses = document.getElementById("assentoDuracaoMeses").value || null;
   const msg = document.getElementById("resultadoAssento");
   if (!membroId || !orgaoId) { msg.textContent = "Informe a matrícula e o órgão."; return; }
   const res = await fetchProtegido(`${API_BASE}/assentos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, orgaoId, tipoAssento, cargoOuFuncao: cargoOuFuncao || null })
+    body: JSON.stringify({ membroId, orgaoId, tipoAssento, cargoOuFuncao: cargoOuFuncao || null, duracaoMeses })
   });
   const data = await res.json();
   avisarResultado(data);
@@ -427,6 +436,7 @@ async function salvarAssento() {
   if (data.sucesso) {
     document.getElementById("assentoMatricula").value = "";
     document.getElementById("assentoCargoOuFuncao").value = "";
+    document.getElementById("assentoDuracaoMeses").value = "";
     carregarAssentos();
   }
 }

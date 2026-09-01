@@ -366,7 +366,7 @@
 
         <hr />
         <h3>Cadeiras (Assentos)</h3>
-        <p class="subtitle">Quem ocupa cadeira institucional em cada órgão — é essa lista que a CLI usa pra saber quem participa dela por Função (Diretoria, Conselho Fiscal, CEI, Dirigente de Congregação...), além de quem já entra por Ordenação.</p>
+        <p class="subtitle">Quem ocupa cadeira institucional em cada órgão — é essa lista que a CLI usa pra saber quem participa dela por Função (Diretoria, Conselho Fiscal, CEI, Dirigente de Congregação...), além de quem já entra por Ordenação. Deixe a duração em branco pra cadeira sem prazo (ex: Dirigente); informe os meses do mandato pra cargo eletivo (ex: Tesoureiro) — o sistema para de contar a cadeira sozinho quando o prazo vence.</p>
         <form onsubmit="event.preventDefault(); salvarAssento();">
           <div class="barra-lista">
             <input type="number" id="assentoMatricula" placeholder="Matrícula" style="min-width:120px;" />
@@ -376,6 +376,7 @@
               <option value="ORDENACAO">Por Ordenação</option>
             </select>
             <input type="text" id="assentoCargoOuFuncao" placeholder="Cargo/função (ex: 1º Tesoureiro)" style="min-width:180px;" />
+            <input type="number" id="assentoDuracaoMeses" placeholder="Duração em meses (ex: 24 = mandato de 2 anos)" style="min-width:220px;" />
             <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar Cadeira</button>
           </div>
         </form>

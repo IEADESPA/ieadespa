@@ -24,20 +24,50 @@ function verificarSenha(senha, senhaHash) {
   return crypto.timingSafeEqual(bufHash, bufTentativa);
 }
 
-const sessoes = new Map(); // token -> { membroId, nome, tipo, escopo }
+// ---- Sessão STATELESS (token assinado) ----
+// Não usa memória (Map). Em Azure Functions serverless há várias instâncias e
+// cold starts; uma sessão em memória faz o usuário "desconectar" a cada troca de
+// tela. Aqui o token carrega os dados do usuário assinados com HMAC, então qualquer
+// instância consegue validar sem estado compartilhado.
+// O segredo vem de AUTH_SECRET (obrigatório definir em produção no Azure).
+const SEGREDO = process.env.AUTH_SECRET || "dev-secret-ieadespa";
 
-function criarSessao(info) {
-  const token = crypto.randomBytes(24).toString("hex");
-  sessoes.set(token, info);
-  return token;
+function assinar(payload) {
+  const corpo = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const assinatura = crypto.createHmac("sha256", SEGREDO).update(corpo).digest("base64url");
+  return `${corpo}.${assinatura}`;
 }
 
-function encerrarSessao(token) {
-  return sessoes.delete(token);
+function verificarToken(token) {
+  try {
+    const [corpo, assinatura] = String(token).split(".");
+    if (!corpo || !assinatura) return null;
+    const esperada = crypto.createHmac("sha256", SEGREDO).update(corpo).digest("base64url");
+    const bufA = Buffer.from(assinatura);
+    const bufE = Buffer.from(esperada);
+    if (bufA.length !== bufE.length || !crypto.timingSafeEqual(bufA, bufE)) return null;
+    const payload = JSON.parse(Buffer.from(corpo, "base64url").toString("utf8"));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+function criarSessao(info) {
+  return assinar({ ...info, exp: Date.now() + (1000 * 60 * 60 * 12) }); // 12 horas
+}
+
+function encerrarSessao() {
+  return true; // stateless: descartar o token no cliente já "encerra"
 }
 
 function getSessao(token) {
-  return sessoes.get(token) || null;
+  if (!token) return null;
+  const payload = verificarToken(token);
+  if (!payload) return null;
+  const { exp, ...info } = payload;
+  return info;
 }
 
 function extrairToken(req) {

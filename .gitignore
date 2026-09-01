@@ -3,3 +3,12 @@ api/node_modules/
 api/local.settings.json
 .env
 .vscode/
+
+# Logs do func start / Static Web Apps CLI (não versionar)
+*.log
+api/func.log
+swa.log
+swa2.log
+
+# Banco mock local — não é banco de verdade, só desenvolvimento
+api/data/mockdb.json

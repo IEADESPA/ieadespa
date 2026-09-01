@@ -98,6 +98,44 @@ tratados como **dados reais**: nenhuma atualização pode apagá-los, recriá-lo
   Secrets do GitHub (`AZURE_SQL_CONNECTION_STRING`) — nunca valores no repositório.
 - Toda ação relevante grava no `AuditLog` (via `shared/auditoria.js`).
 
+### 2.5 Motor de Sessões (Reuniões) — único e órgão-agnóstico
+
+Existe **uma só engine de sessão/presença** (`Sessoes` + `Presencas`, Functions
+`AbrirReuniao`/`EncerrarReuniao`/`ListarReunioes`/`RegistrarPresenca`), reaproveitada
+por **qualquer órgão** — não existe (nem deve existir) uma Function/tabela de reunião
+por órgão. A aba única **Reuniões** do painel escolhe o órgão (puxado de `Orgaos`) e
+abre a sessão nele; a Portaria (`/api/presenca`) resolve sozinha, pela senha digitada,
+qual sessão aberta é essa.
+
+**Prioridade em vez de trava global:** até a v0.3, só podia existir 1 sessão `ABERTA`
+no banco inteiro, de qualquer órgão — o que ia travar assim que a Fase 2 trouxesse CLI,
+Diretoria e Conselho Fiscal com reunião própria. A regra agora é por escopo: a
+**Assembleia Geral é exclusiva** (órgão soberano — Regimento Art. 104 e segs.: enquanto
+ela está aberta, nenhuma outra reunião abre, e ela não abre se já houver outra em
+andamento); os **demais órgãos só travam contra si mesmos** (não dá pra ter 2 sessões
+abertas do mesmo órgão, mas CLI e Conselho Fiscal, por exemplo, podem correr em
+paralelo). Ver `api/AbrirReuniao`.
+
+**`Assentos`** é quem sabe "quem pertence a qual órgão" além da regra genérica ATIVO
+(`shared/universo.js`): cadeira por Ordenação (Pastor/Evangelista/Presbítero, calculado)
+ou por Função (Diretoria, Conselho Fiscal, CEI, Dirigente de Congregação — cadastrado).
+Até a v0.3 a tabela existia e já era **lida** pela CLI, mas nada a **escrevia** — por
+isso a composição mista da CLI (Art. 15) só funcionava pela metade. CRUD em
+`GestaoAssentos`, embutido na aba **Órgãos** (mesma permissão, `pessoas`). O card
+"Meus Órgãos" do Meu Painel (`MinhaFrequencia`) lê daqui — fica vazio até alguém
+cadastrar a primeira cadeira.
+
+**Check-in com mais de uma reunião aberta:** desde que órgãos diferentes podem ter
+sessão simultânea, `RegistrarPresenca` não pode mais pegar "a" sessão aberta — ele
+filtra pela senha digitada, valida universo e presença já registrada, e só pergunta
+qual reunião (`precisaEscolher`) no caso raro de duas sessões concorrentes usarem a
+mesma senha e a pessoa ser elegível pras duas.
+
+Escopo territorial (`OrgaosLocais` — JAI/JEA/CRA/TER/CEQ/Distrito) **não** passa por
+essa engine ainda: `Sessoes.OrgaoId` só referencia `Orgaos` (os 6 órgãos únicos do
+Art. 13), não `OrgaosLocais`. Reunião de junta local fica pra quando houver um
+consumidor real (nenhuma fase do roteiro pede isso ainda).
+
 
 ## 3. Plano de versões (mega sistema, fase a fase)
 
@@ -280,7 +318,11 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v2.1 — Assembleia Geral (sessão e quórum)
 
-- [ ] ✅ Motor de sessão + quórum de instalação em 2 estágios (Art. 21).
+- [x] ✅ Motor de sessão + quórum de instalação em 2 estágios (Art. 21).
+      — ✅ v0.3: motor virou órgão-agnóstico de verdade (aba única **Reuniões**, com
+      prioridade por escopo em vez de trava global — Assembleia exclusiva, demais
+      órgãos só travam contra si mesmos) e ganhou a gestão de `Assentos` (cadeira
+      institucional) que faltava pra composição mista da CLI funcionar. Ver seção 2.5.
 - [ ] Classificação AGO (dezembro) / AGE (a qualquer tempo) (Art. 17).
 - [ ] Lista de votantes calculada (capacidade ativa — Art. 23 §1º).
 - [ ] Registro de presença (check-in por matrícula) + acesso restrito (Art. 22).

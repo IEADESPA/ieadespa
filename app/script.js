@@ -1,5 +1,4 @@
 const API_BASE = "/api";
-const ORGAO_ID_MINISTERIO = 1; // único órgão em vigor hoje (Estatuto 2021)
 
 // ---- mensagens em tela (substituem alert/confirm/prompt do navegador) ----
 function mostrarToast(mensagem, tipo) {
@@ -206,13 +205,25 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "assembleia", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "auditoria", "protecaodedados", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "auditoria", "protecaodedados", "documentos"];
+
+// Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
+// deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
+// exatamente o que cada Function já checa no backend (ex: AbrirReuniao aceita
+// reunioes/assembleia/cli — a aba única de Reuniões reflete isso).
+const ABA_PERMISSOES_ALT = {
+  reunioes: ["reunioes", "assembleia", "cli"],
+  congregacoes: ["pessoas"], funcoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"]
+};
+function permissoesDaAba(nome) {
+  return ABA_PERMISSOES_ALT[nome] || [nome];
+}
 
 function aplicarPermissoesNoMenu() {
   NOMES_ABAS.forEach(nome => {
     if (nome === "meupainel" || nome === "documentos") return;
     const btn = document.getElementById(`btnAba${capitalize(nome)}`);
-    const pode = authPermissoes.includes(btn.dataset.permissao);
+    const pode = permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
     btn.style.display = pode ? "inline-block" : "none";
   });
   mostrarAbaSecretaria("meupainel");
@@ -220,8 +231,7 @@ function aplicarPermissoesNoMenu() {
 
 function mostrarAbaSecretaria(aba) {
   NOMES_ABAS.forEach(nome => {
-    const chavePermissao = ["congregacoes", "funcoes", "orgaos", "estrutura", "catalogos"].includes(nome) ? "pessoas" : nome;
-    const podeVer = nome === "meupainel" || nome === "documentos" || authPermissoes.includes(chavePermissao);
+    const podeVer = nome === "meupainel" || nome === "documentos" || permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
     const divAba = document.getElementById(`aba${capitalize(nome)}`);
     const mostrar = nome === aba && podeVer;
     divAba.style.display = mostrar ? "block" : "none";
@@ -229,11 +239,10 @@ function mostrarAbaSecretaria(aba) {
     if (btn) btn.classList.toggle("ativo", nome === aba);
   });
   document.getElementById("tituloModulo").textContent = TITULOS_MODULOS[aba] || "Governança";
-  if (aba === "reunioes") carregarReunioes();
-  if (aba === "assembleia") carregarAssembleia();
+  if (aba === "reunioes") { carregarOpcoesOrgaosReuniao().then(carregarReunioes); carregarElegiveisAssembleia(); }
   if (aba === "pessoas") { carregarOpcoesFormPessoa(); carregarPessoas(); }
   if (aba === "funcoes") carregarFuncoes();
-  if (aba === "orgaos") carregarOrgaos();
+  if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); }
   if (aba === "estrutura") montarEstrutura();
   if (aba === "catalogos") montarCatalogos();
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
@@ -248,7 +257,7 @@ function alternarSidebar() {
   document.getElementById("sidebar").classList.toggle("recolhido");
 }
 const TITULOS_MODULOS = {
-  meupainel: "Meu Painel", reunioes: "Reuniões", assembleia: "Assembleia Geral",
+  meupainel: "Meu Painel", reunioes: "Reuniões",
   pessoas: "Pessoas", congregacoes: "Congregações", funcoes: "Funções",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
@@ -256,7 +265,11 @@ const TITULOS_MODULOS = {
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
-async function enviarPresenca() {
+// Normalmente a senha já identifica a reunião certa sozinha. O único caso em que
+// sobra mais de uma candidata é duas reuniões concorrentes usando a mesma senha
+// E a pessoa sendo elegível pras duas — aí o backend devolve precisaEscolher e a
+// gente pergunta antes de reenviar com o sessaoId escolhido.
+async function enviarPresenca(sessaoIdEscolhida) {
   const matricula = document.getElementById("matricula").value;
   const senha = document.getElementById("senha").value;
   if (!matricula || !senha) return;
@@ -268,9 +281,15 @@ async function enviarPresenca() {
     const res = await fetch(`${API_BASE}/presenca`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matricula, senha })
+      body: JSON.stringify({ matricula, senha, sessaoId: sessaoIdEscolhida || undefined })
     });
     const data = await res.json();
+    if (data.precisaEscolher) {
+      const escolha = await escolherReuniaoParaCheckin(data.sessoes, data.mensagem);
+      btn.textContent = "Registrar Presença";
+      if (escolha) return enviarPresenca(escolha);
+      return;
+    }
     avisarResultado(data);
     if (data.sucesso) {
       document.getElementById("matricula").value = "";
@@ -281,6 +300,25 @@ async function enviarPresenca() {
   } finally {
     btn.textContent = "Registrar Presença";
   }
+}
+
+// Promise<string|null> — sessaoId escolhido, ou null se cancelou.
+function escolherReuniaoParaCheckin(sessoes, mensagem) {
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Qual reunião?</h3>
+      <p>${mensagem || ""}</p>
+      <div class="modal-acoes" style="flex-direction:column; align-items:stretch;">
+        ${sessoes.map(s => `<button class="btn-confirmar" style="margin-bottom:6px;" data-sessao="${s.sessaoId}">${s.orgaoNome} — ${s.descricao}</button>`).join("")}
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    caixa.querySelectorAll("[data-sessao]").forEach(botao => {
+      botao.onclick = () => { const id = botao.dataset.sessao; fecharModal(); resolve(id); };
+    });
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
 }
 
 // ---- SECRETARIA / ABA REUNIÕES ----
@@ -341,6 +379,67 @@ async function carregarOrgaos() {
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+
+  const selectAssento = document.getElementById("assentoOrgao");
+  if (selectAssento) selectAssento.innerHTML = orgaos.map(o => `<option value="${o.orgaoId}">${o.nome}</option>`).join("");
+}
+
+async function carregarAssentos() {
+  const container = document.getElementById("resultadoListaAssentos");
+  const res = await fetchProtegido(`${API_BASE}/assentos`);
+  const assentos = await res.json();
+  if (!Array.isArray(assentos) || assentos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma cadeira cadastrada ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Matrícula</th><th>Nome</th><th>Órgão</th><th>Tipo</th><th>Cargo/Função</th><th>Desde</th><th></th>
+  </tr></thead><tbody>`;
+  assentos.forEach(a => {
+    html += `<tr>
+      <td>${a.membroId}</td>
+      <td>${a.nome}</td>
+      <td>${a.orgaoNome}</td>
+      <td>${a.tipoAssento === "ORDENACAO" ? "Ordenação" : "Função"}</td>
+      <td>${a.cargoOuFuncao || "-"}</td>
+      <td>${a.dataInicio}</td>
+      <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="encerrarAssentoAcao(${a.assentoId})">Encerrar</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarAssento() {
+  const membroId = document.getElementById("assentoMatricula").value;
+  const orgaoId = document.getElementById("assentoOrgao").value;
+  const tipoAssento = document.getElementById("assentoTipo").value;
+  const cargoOuFuncao = document.getElementById("assentoCargoOuFuncao").value.trim();
+  const msg = document.getElementById("resultadoAssento");
+  if (!membroId || !orgaoId) { msg.textContent = "Informe a matrícula e o órgão."; return; }
+  const res = await fetchProtegido(`${API_BASE}/assentos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, orgaoId, tipoAssento, cargoOuFuncao: cargoOuFuncao || null })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("assentoMatricula").value = "";
+    document.getElementById("assentoCargoOuFuncao").value = "";
+    carregarAssentos();
+  }
+}
+
+async function encerrarAssentoAcao(assentoId) {
+  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarAssentos();
 }
 
 function editarOrgao(orgaoId) {
@@ -567,17 +666,28 @@ async function excluirDadosFicticios() {
   document.getElementById("resultadoExclusaoDados").textContent = data.mensagem || "";
 }
 
-let sessaoFrequenciaAberta = null; // { sessaoId, descricao, prefixo } — pra atualizar a tela após encerrar/justificar
+let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar a tela após encerrar/justificar
+
+// Popula os dois seletores de órgão da aba (abrir reunião + filtrar a lista) a
+// partir do catálogo de Órgãos — a mesma tela agora abre reunião de qualquer um.
+async function carregarOpcoesOrgaosReuniao() {
+  const res = await fetchProtegido(`${API_BASE}/orgaos`);
+  const orgaos = await res.json();
+  const opcoes = orgaos.map(o => `<option value="${o.orgaoId}">${o.nome}</option>`).join("");
+  document.getElementById("reuniaoOrgao").innerHTML = opcoes;
+  document.getElementById("reunioesFiltroOrgao").innerHTML = `<option value="">Todos os órgãos</option>` + opcoes;
+}
 
 async function abrirReuniao() {
+  const orgaoId = document.getElementById("reuniaoOrgao").value;
   const descricao = document.getElementById("descricaoReuniao").value;
   const senhaAcesso = document.getElementById("senhaNovaReuniao").value;
-  if (!descricao || !senhaAcesso) return;
+  if (!orgaoId || !descricao || !senhaAcesso) { mostrarToast("Escolha o órgão e preencha descrição e senha.", "erro"); return; }
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/abrir`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orgaoId: ORGAO_ID_MINISTERIO, descricao, senhaAcesso })
+    body: JSON.stringify({ orgaoId, descricao, senhaAcesso })
   });
   const data = await res.json();
   document.getElementById("resultadoSecretaria").textContent = data.mensagem;
@@ -588,10 +698,7 @@ async function abrirReuniao() {
   carregarReunioes();
 }
 
-// prefixo diferencia onde reaproveitar essa mesma engine de sessão/presença:
-// "" = aba Reuniões (Ministério), "Assembleia" = aba Assembleia Geral.
-async function encerrarReuniaoAcao(sessaoId, prefixo) {
-  prefixo = prefixo || "";
+async function encerrarReuniaoAcao(sessaoId) {
   if (!(await confirmarAcao("Tem certeza que deseja encerrar esta reunião?", "Encerrar"))) return;
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/${sessaoId}/encerrar`, {
@@ -601,15 +708,16 @@ async function encerrarReuniaoAcao(sessaoId, prefixo) {
   });
   const data = await res.json();
   avisarResultado(data);
-  if (prefixo === "Assembleia") carregarReunioesAssembleia(); else carregarReunioes();
+  carregarReunioes();
   if (data.sucesso && sessaoFrequenciaAberta && String(sessaoFrequenciaAberta.sessaoId) === String(sessaoId)) {
-    verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao, sessaoFrequenciaAberta.prefixo);
+    verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
   }
 }
 
 async function carregarReunioes() {
   const container = document.getElementById("resultadoListaReunioes");
-  const res = await fetchProtegido(`${API_BASE}/reunioes?orgaoId=${ORGAO_ID_MINISTERIO}`);
+  const orgaoId = document.getElementById("reunioesFiltroOrgao").value;
+  const res = await fetchProtegido(`${API_BASE}/reunioes${orgaoId ? `?orgaoId=${orgaoId}` : ""}`);
   const reunioes = await res.json();
 
   if (reunioes.length === 0) {
@@ -618,12 +726,13 @@ async function carregarReunioes() {
   }
 
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Descrição</th><th>Data</th><th>Status</th><th>Presentes</th><th>Faltas</th><th>Justificadas</th><th></th>
+    <th>Órgão</th><th>Descrição</th><th>Data</th><th>Status</th><th>Presentes</th><th>Faltas</th><th>Justificadas</th><th></th>
   </tr></thead><tbody>`;
 
   reunioes.forEach(r => {
     const descricaoEscapada = r.descricao.replace(/'/g, "\\'");
     html += `<tr>
+      <td>${r.orgaoNome || "-"}</td>
       <td>${r.descricao}</td>
       <td>${r.dataSessao}</td>
       <td>${r.status}</td>
@@ -641,22 +750,7 @@ async function carregarReunioes() {
   container.innerHTML = html;
 }
 
-// ---- ASSEMBLEIA GERAL: mesma engine de sessão/presença, órgão diferente ----
-let ORGAO_ID_ASSEMBLEIA = null;
-async function getOrgaoIdAssembleia() {
-  if (ORGAO_ID_ASSEMBLEIA) return ORGAO_ID_ASSEMBLEIA;
-  const res = await fetchProtegido(`${API_BASE}/orgaos`);
-  const orgaos = await res.json();
-  const orgao = orgaos.find(o => o.sigla === "ASSEMBLEIA_GERAL");
-  ORGAO_ID_ASSEMBLEIA = orgao ? orgao.orgaoId : null;
-  return ORGAO_ID_ASSEMBLEIA;
-}
-
-async function carregarAssembleia() {
-  await carregarElegiveisAssembleia();
-  await carregarReunioesAssembleia();
-}
-
+// ---- Elegíveis da Assembleia Geral (fica sempre disponível na aba Reuniões única) ----
 let elegiveisAssembleia = [];
 let elegiveisFiltrados = [];
 let paginaAtualElegiveis = 1;
@@ -755,72 +849,15 @@ async function importarExcelAssembleiaGeral() {
   if (data.sucesso) carregarElegiveisAssembleia();
 }
 
-async function abrirReuniaoAssembleia() {
-  const descricao = document.getElementById("descricaoAssembleia").value;
-  const senhaAcesso = document.getElementById("senhaNovaAssembleia").value;
-  if (!descricao || !senhaAcesso) return;
-
-  const orgaoId = await getOrgaoIdAssembleia();
-  const res = await fetchProtegido(`${API_BASE}/reunioes/abrir`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orgaoId, descricao, senhaAcesso })
-  });
-  const data = await res.json();
-  document.getElementById("resultadoAssembleiaReuniao").textContent = data.mensagem;
-  if (data.sucesso) {
-    document.getElementById("descricaoAssembleia").value = "";
-    document.getElementById("senhaNovaAssembleia").value = "";
-  }
-  carregarReunioesAssembleia();
-}
-
-async function carregarReunioesAssembleia() {
-  const container = document.getElementById("resultadoListaReunioesAssembleia");
-  const orgaoId = await getOrgaoIdAssembleia();
-  const res = await fetchProtegido(`${API_BASE}/reunioes?orgaoId=${orgaoId}`);
-  const reunioes = await res.json();
-
-  if (reunioes.length === 0) {
-    container.innerHTML = "<p class='subtitle'>Nenhuma convocação ainda.</p>";
-    return;
-  }
-
-  let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Descrição</th><th>Data</th><th>Status</th><th>Presentes</th><th>Faltas</th><th>Justificadas</th><th></th>
-  </tr></thead><tbody>`;
-
-  reunioes.forEach(r => {
-    const descricaoEscapada = r.descricao.replace(/'/g, "\\'");
-    html += `<tr>
-      <td>${r.descricao}</td>
-      <td>${r.dataSessao}</td>
-      <td>${r.status}</td>
-      <td>${r.totalPresentes}</td>
-      <td>${r.totalFaltas}</td>
-      <td>${r.totalJustificadas}</td>
-      <td>
-        <button class="btn-link" onclick="verFrequencia(${r.sessaoId}, '${descricaoEscapada}', 'Assembleia')">Ver presença</button>
-        ${r.status === "ABERTA" ? `<button class="btn-link" onclick="encerrarReuniaoAcao(${r.sessaoId}, 'Assembleia')">Encerrar</button>` : ""}
-      </td>
-    </tr>`;
-  });
-
-  html += "</tbody></table>";
-  container.innerHTML = html;
-}
-
-// prefixo: "" (Reuniões) ou "Assembleia" — decide em qual bloco da tela desenhar.
-async function verFrequencia(sessaoId, descricao, prefixo) {
-  prefixo = prefixo || "";
-  sessaoFrequenciaAberta = { sessaoId, descricao, prefixo };
-  document.getElementById("blocoFrequencia" + prefixo).style.display = "block";
-  document.getElementById("tituloFrequencia" + prefixo).textContent = descricao;
+async function verFrequencia(sessaoId, descricao) {
+  sessaoFrequenciaAberta = { sessaoId, descricao };
+  document.getElementById("blocoFrequencia").style.display = "block";
+  document.getElementById("tituloFrequencia").textContent = descricao;
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/${sessaoId}/frequencia`);
   const data = await res.json();
-  const container = document.getElementById("resultadoFrequencia" + prefixo);
-  const resumo = document.getElementById("resumoQuorum" + prefixo);
+  const container = document.getElementById("resultadoFrequencia");
+  const resumo = document.getElementById("resumoQuorum");
   if (!data.sucesso) {
     container.textContent = data.mensagem;
     resumo.textContent = "";
@@ -872,7 +909,7 @@ async function justificarFalta(sessaoId, membroId) {
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao, sessaoFrequenciaAberta.prefixo);
+  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
 }
 
 // Aprova um pedido que o próprio obreiro enviou pelo painel pessoal — reaproveita
@@ -888,7 +925,7 @@ async function aprovarJustificativaPendente(sessaoId, membroId, motivoSugerido) 
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao, sessaoFrequenciaAberta.prefixo);
+  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
 }
 
 async function rejeitarJustificativaAcao(sessaoId, membroId) {
@@ -901,7 +938,7 @@ async function rejeitarJustificativaAcao(sessaoId, membroId) {
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao, sessaoFrequenciaAberta.prefixo);
+  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
 }
 
 async function marcarPresencaManual(sessaoId, membroId, presente) {
@@ -915,7 +952,7 @@ async function marcarPresencaManual(sessaoId, membroId, presente) {
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao, sessaoFrequenciaAberta.prefixo);
+  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
 }
 
 // ---- SECRETARIA / ABA PESSOAS ----
@@ -1822,6 +1859,11 @@ async function carregarPainelPessoal(matricula) {
       <p class="linha-perfil">Matrícula ${data.membro.membroId} · ${data.membro.funcao || "sem função cadastrada"}</p>
       <p class="linha-perfil">${data.membro.congregacao || "sem congregação cadastrada"} · ${badgeStatusPessoa(data.membro.status)}</p>
     </div>`;
+
+  const orgaosContainer = document.getElementById("cartaoMeusOrgaos");
+  orgaosContainer.innerHTML = (data.assentos && data.assentos.length)
+    ? `<div class="cartao-perfil"><p class="linha-perfil"><strong>Meus órgãos:</strong> ${data.assentos.map(a => `${a.orgao}${a.cargoOuFuncao ? " — " + a.cargoOuFuncao : ""}`).join(" · ")}</p></div>`
+    : "";
 
   const r = data.resumo;
   stats.innerHTML = `

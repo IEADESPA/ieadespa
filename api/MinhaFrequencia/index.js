@@ -27,6 +27,13 @@ module.exports = async function (context, req) {
     return;
   }
 
+  const assentosResult = await pool.request().input("mat", sql.Int, matricula).query(`
+    SELECT o.Nome AS orgao, o.Sigla AS orgaoSigla, a.TipoAssento AS tipoAssento, a.CargoOuFuncao AS cargoOuFuncao,
+           CONVERT(varchar(10), a.DataInicio, 120) AS dataInicio
+    FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId
+    WHERE a.MembroId = @mat AND a.DataFim IS NULL
+    ORDER BY o.Nome`);
+
   const historicoResult = await pool.request().input("mat", sql.Int, matricula).query(`
     SELECT s.SessaoId AS sessaoId, s.Descricao AS descricao, CONVERT(varchar(10), s.DataSessao, 120) AS dataSessao,
            p.Presente AS presente, p.FaltaJustificada AS faltaJustificada, p.MotivoJustificativa AS motivoJustificativa,
@@ -52,6 +59,6 @@ module.exports = async function (context, req) {
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: true, membro, resumo, historico }
+    body: { sucesso: true, membro, resumo, historico, assentos: assentosResult.recordset }
   };
 };

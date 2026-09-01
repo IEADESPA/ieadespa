@@ -75,18 +75,17 @@
         </div>
         <nav class="abas-secretaria" id="navAbasSecretaria">
           <button class="btn-aba ativo" id="btnAbaMeupainel" onclick="mostrarAbaSecretaria('meupainel')"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
-          <button class="btn-aba" id="btnAbaReunioes" data-permissao="reunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
-          <button class="btn-aba" id="btnAbaAssembleia" data-permissao="assembleia" onclick="mostrarAbaSecretaria('assembleia')"><span class="icone">🗳️</span><span class="rotulo">Assembleia Geral</span></button>
-          <button class="btn-aba" id="btnAbaPessoas" data-permissao="pessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
-          <button class="btn-aba" id="btnAbaFuncoes" data-permissao="pessoas" onclick="mostrarAbaSecretaria('funcoes')"><span class="icone">🎖️</span><span class="rotulo">Funções</span></button>
-          <button class="btn-aba" id="btnAbaOrgaos" data-permissao="pessoas" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
-          <button class="btn-aba" id="btnAbaEstrutura" data-permissao="pessoas" onclick="mostrarAbaSecretaria('estrutura')"><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
-          <button class="btn-aba" id="btnAbaCatalogos" data-permissao="pessoas" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
-          <button class="btn-aba" id="btnAbaPermissoes" data-permissao="permissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
-          <button class="btn-aba" id="btnAbaConsagracoes" data-permissao="consagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
-          <button class="btn-aba" id="btnAbaDisciplina" data-permissao="disciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
-          <button class="btn-aba" id="btnAbaAuditoria" data-permissao="auditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
-          <button class="btn-aba" id="btnAbaProtecaodedados" data-permissao="protecaodedados" onclick="mostrarAbaSecretaria('protecaodedados')"><span class="icone">🛡️</span><span class="rotulo">Proteção de Dados</span></button>
+          <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
+          <button class="btn-aba" id="btnAbaPessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
+          <button class="btn-aba" id="btnAbaFuncoes" onclick="mostrarAbaSecretaria('funcoes')"><span class="icone">🎖️</span><span class="rotulo">Funções</span></button>
+          <button class="btn-aba" id="btnAbaOrgaos" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
+          <button class="btn-aba" id="btnAbaEstrutura" onclick="mostrarAbaSecretaria('estrutura')"><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
+          <button class="btn-aba" id="btnAbaCatalogos" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
+          <button class="btn-aba" id="btnAbaPermissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
+          <button class="btn-aba" id="btnAbaConsagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
+          <button class="btn-aba" id="btnAbaDisciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
+          <button class="btn-aba" id="btnAbaAuditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
+          <button class="btn-aba" id="btnAbaProtecaodedados" onclick="mostrarAbaSecretaria('protecaodedados')"><span class="icone">🛡️</span><span class="rotulo">Proteção de Dados</span></button>
           <button class="btn-aba" id="btnAbaDocumentos" onclick="mostrarAbaSecretaria('documentos')"><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
         </nav>
         <div class="sidebar-rodape">
@@ -102,6 +101,7 @@
       <!-- ABA: MEU PAINEL (sempre visível, todo mundo tem) -->
       <div id="abaMeupainel" class="aba-secretaria">
         <div id="cartaoPerfilPessoal"></div>
+        <div id="cartaoMeusOrgaos"></div>
         <div id="resumoStatsPessoal"></div>
         <div id="resultadoPainelPessoal"></div>
 
@@ -150,9 +150,21 @@
         <div id="resultadoListaSolicitacoesLGPD"></div>
       </div>
 
-      <!-- ABA: REUNIÕES -->
+      <!-- ABA: REUNIÕES (motor único de sessão, qualquer órgão) -->
       <div id="abaReunioes" class="aba-secretaria" style="display:none;">
+        <h3>Abrir Reunião</h3>
+        <p class="subtitle">
+          Escolha o órgão — a mesma tela abre reunião de qualquer um deles (Assembleia,
+          CLI, Diretoria...). A Assembleia Geral é exclusiva: enquanto ela está aberta,
+          nenhuma outra reunião pode abrir, e ela não abre se já houver outra em
+          andamento. Os demais órgãos só travam contra si mesmos — dá pra ter, por
+          exemplo, CLI e Conselho Fiscal reunidos ao mesmo tempo.
+        </p>
         <form onsubmit="event.preventDefault(); abrirReuniao();">
+          <div class="input-group">
+            <label>Órgão:</label>
+            <select id="reuniaoOrgao"></select>
+          </div>
           <div class="input-group">
             <label>Descrição da reunião:</label>
             <input type="text" id="descricaoReuniao" placeholder="Ex: Reunião Administrativa de Agosto" />
@@ -169,6 +181,11 @@
         <hr />
 
         <h3>Reuniões</h3>
+        <div class="barra-lista">
+          <select id="reunioesFiltroOrgao" onchange="carregarReunioes()">
+            <option value="">Todos os órgãos</option>
+          </select>
+        </div>
         <div id="resultadoListaReunioes"></div>
 
         <hr />
@@ -178,11 +195,10 @@
           <div id="resumoQuorum" class="resumo-quorum"></div>
           <div id="resultadoFrequencia"></div>
         </div>
-      </div>
 
-      <!-- ABA: ASSEMBLEIA GERAL -->
-      <div id="abaAssembleia" class="aba-secretaria" style="display:none;">
-        <h3>Lista de Elegíveis (em comunhão, aptos a votar e ser votados)</h3>
+        <hr />
+
+        <h3>Elegíveis da Assembleia Geral</h3>
         <p class="subtitle">
           Importe uma planilha Excel (.xlsx) com as colunas <strong>Matrícula</strong> e
           <strong>Nome</strong>: cadastra quem ainda não existe e atualiza o nome de quem já
@@ -197,7 +213,7 @@
 
         <hr />
 
-        <h3>Elegíveis Atuais</h3>
+        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Elegíveis Atuais</h4>
         <div class="barra-lista">
           <input type="text" id="assembleiaBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroElegiveis()" />
           <span id="assembleiaInfo" class="subtitle" style="margin:0;"></span>
@@ -206,36 +222,6 @@
           <div id="resultadoListaElegiveisAssembleia"></div>
         </div>
         <div class="paginacao" id="assembleiaPaginacao"></div>
-
-        <hr />
-
-        <h3>Convocações / Chamada da Assembleia</h3>
-        <form onsubmit="event.preventDefault(); abrirReuniaoAssembleia();">
-          <div class="input-group">
-            <label>Descrição da assembleia:</label>
-            <input type="text" id="descricaoAssembleia" placeholder="Ex: Assembleia Geral Ordinária" />
-          </div>
-          <div class="input-group">
-            <label>Senha para a Portaria:</label>
-            <input type="text" id="senhaNovaAssembleia" placeholder="Ex: 1234" />
-          </div>
-          <button class="btn-confirmar" type="submit">▶️ Abrir Assembleia</button>
-        </form>
-
-        <p id="resultadoAssembleiaReuniao"></p>
-
-        <hr />
-
-        <h3>Convocações</h3>
-        <div id="resultadoListaReunioesAssembleia"></div>
-
-        <hr />
-
-        <div id="blocoFrequenciaAssembleia" style="display:none;">
-          <h3>Lista de Presença — <span id="tituloFrequenciaAssembleia"></span></h3>
-          <div id="resumoQuorumAssembleia" class="resumo-quorum"></div>
-          <div id="resultadoFrequenciaAssembleia"></div>
-        </div>
       </div>
 
       <!-- ABA: PESSOAS -->
@@ -397,6 +383,26 @@
         <hr />
         <div class="rolagem-tabela">
           <div id="resultadoListaOrgaos"></div>
+        </div>
+
+        <hr />
+        <h3>Cadeiras (Assentos)</h3>
+        <p class="subtitle">Quem ocupa cadeira institucional em cada órgão — é essa lista que a CLI usa pra saber quem participa dela por Função (Diretoria, Conselho Fiscal, CEI, Dirigente de Congregação...), além de quem já entra por Ordenação.</p>
+        <form onsubmit="event.preventDefault(); salvarAssento();">
+          <div class="barra-lista">
+            <input type="number" id="assentoMatricula" placeholder="Matrícula" style="min-width:120px;" />
+            <select id="assentoOrgao"></select>
+            <select id="assentoTipo">
+              <option value="FUNCAO">Por Função</option>
+              <option value="ORDENACAO">Por Ordenação</option>
+            </select>
+            <input type="text" id="assentoCargoOuFuncao" placeholder="Cargo/função (ex: 1º Tesoureiro)" style="min-width:180px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar Cadeira</button>
+          </div>
+        </form>
+        <p id="resultadoAssento"></p>
+        <div class="rolagem-tabela">
+          <div id="resultadoListaAssentos"></div>
         </div>
       </div>
 

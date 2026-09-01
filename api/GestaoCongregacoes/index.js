@@ -8,7 +8,7 @@
 // DELETE /api/congregacoes/{congregacaoId}     -> exclui de verdade (só se ninguém mais usa)
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -16,16 +16,14 @@ module.exports = async function (context, req) {
 
   const method = req.method;
   const idRota = context.bindingData.congregacaoId;
+  const pool = await getPool();
 
   if (method === "GET") {
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // const result = await pool.request().query(`SELECT * FROM Congregacoes ORDER BY Nome`);
-    // context.res = { status: 200, body: result.recordset };
-    // return;
-
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: mockDb.listarCongregacoes() };
+    const result = await pool.request().query(
+      `SELECT CongregacaoId AS congregacaoId, Nome AS nome, Ativa AS ativa, AreaId AS areaId
+       FROM Congregacoes ORDER BY Nome`
+    );
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
     return;
   }
 
@@ -35,32 +33,36 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o nome da congregação." } };
       return;
     }
+    const nomeLimpo = nome.trim();
 
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // if (congregacaoId) {
-    //   await pool.request().input("id", sql.Int, congregacaoId).input("nome", sql.NVarChar, nome)
-    //     .query(`UPDATE Congregacoes SET Nome = @nome WHERE CongregacaoId = @id`);
-    // } else {
-    //   await pool.request().input("nome", sql.NVarChar, nome).query(`INSERT INTO Congregacoes (Nome) VALUES (@nome)`);
-    // }
-
-    const congregacao = congregacaoId
-      ? mockDb.atualizarCongregacao(congregacaoId, { nome: nome.trim(), areaId })
-      : mockDb.criarCongregacao({ nome: nome.trim(), areaId });
-
-    if (!congregacao) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
-      return;
+    if (congregacaoId) {
+      const upd = await pool.request()
+        .input("id", sql.Int, congregacaoId)
+        .input("nome", sql.NVarChar(150), nomeLimpo)
+        .input("areaId", sql.Int, areaId || null)
+        .query(`UPDATE Congregacoes SET Nome = @nome, AreaId = @areaId WHERE CongregacaoId = @id`);
+      if (upd.rowsAffected[0] === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
+        return;
+      }
+    } else {
+      await pool.request()
+        .input("nome", sql.NVarChar(150), nomeLimpo)
+        .input("areaId", sql.Int, areaId || null)
+        .query(`INSERT INTO Congregacoes (Nome, AreaId) VALUES (@nome, @areaId)`);
     }
+
+    const result = await pool.request().input("nome", sql.NVarChar(150), nomeLimpo)
+      .query(`SELECT TOP 1 CongregacaoId AS congregacaoId, Nome AS nome, Ativa AS ativa, AreaId AS areaId
+              FROM Congregacoes WHERE Nome = @nome ORDER BY CongregacaoId DESC`);
+    const congregacao = result.recordset[0];
 
     await registrarAuditoria({
       tabela: "Congregacoes",
       registroId: congregacao.congregacaoId,
       acao: congregacaoId ? "Renomeou congregação" : "Cadastrou congregação",
       usuarioId: usuario.membroId,
-      dadosDepois: { nome }
+      dadosDepois: { nome: nomeLimpo, areaId }
     });
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Congregação salva.", congregacao } };
@@ -73,21 +75,13 @@ module.exports = async function (context, req) {
       return;
     }
     const { ativa } = req.body || {};
-
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // await pool.request().input("id", sql.Int, idRota).input("ativa", sql.Bit, ativa)
-    //   .query(`UPDATE Congregacoes SET Ativa = @ativa WHERE CongregacaoId = @id`);
-
-    const congregacao = ativa ? mockDb.reativarCongregacao(idRota) : mockDb.desativarCongregacao(idRota);
-    if (!congregacao) {
+    const upd = await pool.request().input("id", sql.Int, idRota).input("ativa", sql.Bit, !!ativa)
+      .query(`UPDATE Congregacoes SET Ativa = @ativa WHERE CongregacaoId = @id`);
+    if (upd.rowsAffected[0] === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
       return;
     }
-
     await registrarAuditoria({ tabela: "Congregacoes", registroId: Number(idRota), acao: ativa ? "Reativou congregação" : "Desativou congregação", usuarioId: usuario.membroId });
-
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: ativa ? "✅ Congregação reativada." : "✅ Congregação desativada." } };
     return;
   }
@@ -97,27 +91,18 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o congregacaoId na rota." } };
       return;
     }
-
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // const emUso = await pool.request().input("id", sql.Int, idRota)
-    //   .query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);
-    // if (emUso.recordset[0].Total > 0) { ... "Não é possível excluir: existem pessoas nessa congregação." }
-    // await pool.request().input("id", sql.Int, idRota).query(`DELETE FROM Congregacoes WHERE CongregacaoId = @id`);
-
-    const resultado = mockDb.excluirCongregacao(idRota);
-    if (resultado.erro === "NAO_ENCONTRADA") {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
-      return;
-    }
-    if (resultado.erro === "EM_USO") {
+    const emUso = await pool.request().input("id", sql.Int, idRota)
+      .query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);
+    if (emUso.recordset[0].Total > 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Não é possível excluir: existem pessoas cadastradas nessa congregação. Desative em vez de excluir." } };
       return;
     }
-
+    const del = await pool.request().input("id", sql.Int, idRota).query(`DELETE FROM Congregacoes WHERE CongregacaoId = @id`);
+    if (del.rowsAffected[0] === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
+      return;
+    }
     await registrarAuditoria({ tabela: "Congregacoes", registroId: Number(idRota), acao: "Excluiu congregação", usuarioId: usuario.membroId });
-
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Congregação excluída." } };
     return;
   }

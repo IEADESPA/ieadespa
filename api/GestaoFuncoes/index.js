@@ -8,7 +8,7 @@
 // DELETE /api/funcoes/{funcaoId}     -> exclui de verdade (só se ninguém mais usa)
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -16,16 +16,13 @@ module.exports = async function (context, req) {
 
   const method = req.method;
   const idRota = context.bindingData.funcaoId;
+  const pool = await getPool();
 
   if (method === "GET") {
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // const result = await pool.request().query(`SELECT * FROM Funcoes ORDER BY Nome`);
-    // context.res = { status: 200, body: result.recordset };
-    // return;
-
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: mockDb.listarFuncoes() };
+    const result = await pool.request().query(
+      `SELECT FuncaoId AS funcaoId, Nome AS nome, Ativa AS ativa FROM Funcoes ORDER BY Nome`
+    );
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
     return;
   }
 
@@ -35,32 +32,30 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o nome da função." } };
       return;
     }
+    const nomeLimpo = nome.trim();
 
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // if (funcaoId) {
-    //   await pool.request().input("id", sql.Int, funcaoId).input("nome", sql.NVarChar, nome)
-    //     .query(`UPDATE Funcoes SET Nome = @nome WHERE FuncaoId = @id`);
-    // } else {
-    //   await pool.request().input("nome", sql.NVarChar, nome).query(`INSERT INTO Funcoes (Nome) VALUES (@nome)`);
-    // }
-
-    const funcao = funcaoId
-      ? mockDb.atualizarFuncao(funcaoId, nome.trim())
-      : mockDb.criarFuncao(nome.trim());
-
-    if (!funcao) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Função não encontrada." } };
-      return;
+    if (funcaoId) {
+      const upd = await pool.request().input("id", sql.Int, funcaoId).input("nome", sql.NVarChar(100), nomeLimpo)
+        .query(`UPDATE Funcoes SET Nome = @nome WHERE FuncaoId = @id`);
+      if (upd.rowsAffected[0] === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Função não encontrada." } };
+        return;
+      }
+    } else {
+      await pool.request().input("nome", sql.NVarChar(100), nomeLimpo)
+        .query(`INSERT INTO Funcoes (Nome) VALUES (@nome)`);
     }
+
+    const result = await pool.request().input("nome", sql.NVarChar(100), nomeLimpo)
+      .query(`SELECT TOP 1 FuncaoId AS funcaoId, Nome AS nome, Ativa AS ativa FROM Funcoes WHERE Nome = @nome ORDER BY FuncaoId DESC`);
+    const funcao = result.recordset[0];
 
     await registrarAuditoria({
       tabela: "Funcoes",
       registroId: funcao.funcaoId,
       acao: funcaoId ? "Renomeou função" : "Cadastrou função",
       usuarioId: usuario.membroId,
-      dadosDepois: { nome }
+      dadosDepois: { nome: nomeLimpo }
     });
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Função salva.", funcao } };
@@ -73,21 +68,13 @@ module.exports = async function (context, req) {
       return;
     }
     const { ativa } = req.body || {};
-
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // await pool.request().input("id", sql.Int, idRota).input("ativa", sql.Bit, ativa)
-    //   .query(`UPDATE Funcoes SET Ativa = @ativa WHERE FuncaoId = @id`);
-
-    const funcao = ativa ? mockDb.reativarFuncao(idRota) : mockDb.desativarFuncao(idRota);
-    if (!funcao) {
+    const upd = await pool.request().input("id", sql.Int, idRota).input("ativa", sql.Bit, !!ativa)
+      .query(`UPDATE Funcoes SET Ativa = @ativa WHERE FuncaoId = @id`);
+    if (upd.rowsAffected[0] === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Função não encontrada." } };
       return;
     }
-
     await registrarAuditoria({ tabela: "Funcoes", registroId: Number(idRota), acao: ativa ? "Reativou função" : "Desativou função", usuarioId: usuario.membroId });
-
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: ativa ? "✅ Função reativada." : "✅ Função desativada." } };
     return;
   }
@@ -97,27 +84,20 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o funcaoId na rota." } };
       return;
     }
-
-    // ---- Versão real com Azure SQL ----
-    // const sql = require("mssql");
-    // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-    // const emUso = await pool.request().input("nome", sql.NVarChar, nomeDaFuncao)
-    //   .query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE Funcao = @nome`);
-    // if (emUso.recordset[0].Total > 0) { ... "Não é possível excluir: existem pessoas com essa função." }
-    // await pool.request().input("id", sql.Int, idRota).query(`DELETE FROM Funcoes WHERE FuncaoId = @id`);
-
-    const resultado = mockDb.excluirFuncao(idRota);
-    if (resultado.erro === "NAO_ENCONTRADA") {
+    const alvo = await pool.request().input("id", sql.Int, idRota)
+      .query(`SELECT Nome FROM Funcoes WHERE FuncaoId = @id`);
+    if (alvo.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Função não encontrada." } };
       return;
     }
-    if (resultado.erro === "EM_USO") {
+    const emUso = await pool.request().input("nome", sql.NVarChar(100), alvo.recordset[0].Nome)
+      .query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE Funcao = @nome`);
+    if (emUso.recordset[0].Total > 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Não é possível excluir: existem pessoas cadastradas com essa função. Desative em vez de excluir." } };
       return;
     }
-
+    await pool.request().input("id", sql.Int, idRota).query(`DELETE FROM Funcoes WHERE FuncaoId = @id`);
     await registrarAuditoria({ tabela: "Funcoes", registroId: Number(idRota), acao: "Excluiu função", usuarioId: usuario.membroId });
-
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Função excluída." } };
     return;
   }

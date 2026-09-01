@@ -69,6 +69,32 @@ Categorias **calculadas** (Estatuto Art. 7º), transição automática:
   membro sai da disciplina sozinho (voto/ser votado ficam suspensos durante a sanção).
 - **Departamento de afiliação + cargo ministerial:** configuráveis no cadastro.
 
+### 2.4 Banco de dados, migrações e deploy (regras permanentes)
+
+O Azure SQL é a **fonte de verdade**. Mesmo os dados de demonstração/seed são
+tratados como **dados reais**: nenhuma atualização pode apagá-los, recriá-los ou
+"sumir" com eles.
+
+**Migrações (obrigatório):**
+- Toda mudança de schema (criar/alterar tabela, coluna, constraint, seed) entra em
+  `sql/migrations/NNN_descricao.sql`, **sempre idempotente** (use `IF NOT EXISTS` /
+  `IF EXISTS`). **Nunca** `DROP TABLE`/`DROP COLUMN` sem etapa de transição explícita e aprovada.
+- `sql/schema.sql` é só referência/leitura; **não** é o que roda no deploy.
+- O workflow roda a pasta `sql/migrations/` em ordem no deploy (action `azure/sql-action`).
+
+**Código ↔ banco em sincronia:**
+- Antes de subir uma versão, o schema precisa refletir a lógica atual do app.
+  Não suba código que dependa de tabela/coluna que não existe no banco.
+- As rotas usam `api/shared/db.js` e `SQL_CONNECTION_STRING`; nunca hardcode de
+  credenciais e nunca caia no mock em produção.
+
+**Segurança dos dados:**
+- `api/local.settings.json` fica no `.gitignore` (nunca versionar senhas/segredos).
+- Produção usa Application Settings (`SQL_CONNECTION_STRING`, `AUTH_SECRET`) +
+  Secrets do GitHub (`AZURE_SQL_CONNECTION_STRING`) — nunca valores no repositório.
+- Toda ação relevante grava no `AuditLog` (via `shared/auditoria.js`).
+
+
 ## 3. Plano de versões (mega sistema, fase a fase)
 
 Cada fase agrupa versões; cada versão é um conjunto de processos com checklist `- [ ]`.

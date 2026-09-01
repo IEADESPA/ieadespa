@@ -4,7 +4,7 @@
 // presenças (Presente = 1).
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -19,30 +19,21 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const membroAlvo = mockDb.getMembro(membroId);
-  const congregacaoAlvo = membroAlvo ? mockDb.getCongregacao(membroAlvo.congregacaoId) : null;
-  if (!auth.estaNoEscopo(usuario, congregacaoAlvo ? congregacaoAlvo.nome : null)) {
+  const pool = await getPool();
+  const alvo = await pool.request().input("id", sql.Int, membroId)
+    .query(`SELECT c.Nome AS Congregacao FROM MembroReferencia m
+            LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`);
+  const congregacaoNome = alvo.recordset[0] ? alvo.recordset[0].Congregacao : null;
+  if (!auth.estaNoEscopo(usuario, congregacaoNome)) {
     context.res = { status: 403, body: { sucesso: false, mensagem: "Este obreiro está fora do seu escopo de acesso." } };
     return;
   }
 
-  // ---- Versão real com Azure SQL ----
-  // const sql = require("mssql");
-  // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-  // const result = await pool.request()
-  //   .input("sessaoId", sql.Int, sessaoId).input("membroId", sql.Int, membroId).input("motivo", sql.NVarChar, motivo || null)
-  //   .query(`
-  //     UPDATE Presencas SET FaltaJustificada = 1, MotivoJustificativa = @motivo
-  //     WHERE SessaoId = @sessaoId AND MembroId = @membroId AND Presente = 0
-  //   `);
-  // if (result.rowsAffected[0] === 0) {
-  //   context.res = { status: 200, body: { sucesso: false, mensagem: "Não há falta registrada para esse membro nesta reunião." } };
-  //   return;
-  // }
-
-  // ---- Modo mock ----
-  const presenca = mockDb.justificarFalta(sessaoId, membroId, motivo);
-  if (!presenca) {
+  const upd = await pool.request()
+    .input("sessaoId", sql.Int, sessaoId).input("membroId", sql.Int, membroId).input("motivo", sql.NVarChar(300), motivo || null)
+    .query(`UPDATE Presencas SET FaltaJustificada = 1, MotivoJustificativa = @motivo
+            WHERE SessaoId = @sessaoId AND MembroId = @membroId AND Presente = 0`);
+  if (upd.rowsAffected[0] === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não há falta registrada para esse membro nesta reunião." } };
     return;
   }
@@ -55,9 +46,5 @@ module.exports = async function (context, req) {
     dadosDepois: { sessaoId: Number(sessaoId), motivo }
   });
 
-  context.res = {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-    body: { sucesso: true, mensagem: "✅ Falta justificada." }
-  };
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Falta justificada." } };
 };

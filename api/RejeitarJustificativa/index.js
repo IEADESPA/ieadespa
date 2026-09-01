@@ -1,10 +1,9 @@
 // RejeitarJustificativa
-// Secretaria recusa um pedido de justificativa que o obreiro enviou pelo
-// painel pessoal — a falta continua como falta (não justificada), só some o
-// pedido pendente. Ver SolicitarJustificativa e JustificarFalta (aprovar).
+// Secretaria recusa um pedido de justificativa que o obreiro enviou — a falta
+// continua como falta (não justificada), só some o pedido pendente.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -18,21 +17,19 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const membroAlvo = mockDb.getMembro(membroId);
-  const congregacaoAlvo = membroAlvo ? mockDb.getCongregacao(membroAlvo.congregacaoId) : null;
-  if (!auth.estaNoEscopo(usuario, congregacaoAlvo ? congregacaoAlvo.nome : null)) {
+  const pool = await getPool();
+  const alvo = await pool.request().input("id", sql.Int, membroId)
+    .query(`SELECT c.Nome AS Congregacao FROM MembroReferencia m
+            LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`);
+  if (!auth.estaNoEscopo(usuario, alvo.recordset[0] ? alvo.recordset[0].Congregacao : null)) {
     context.res = { status: 403, body: { sucesso: false, mensagem: "Este obreiro está fora do seu escopo de acesso." } };
     return;
   }
 
-  // ---- Versão real com Azure SQL ----
-  // const sql = require("mssql");
-  // const pool = await sql.connect(process.env.SQL_CONNECTION_STRING);
-  // await pool.request().input("sessaoId", sql.Int, sessaoId).input("membroId", sql.Int, membroId)
-  //   .query(`UPDATE Presencas SET JustificativaPendente = NULL WHERE SessaoId = @sessaoId AND MembroId = @membroId`);
-
-  const presenca = mockDb.rejeitarJustificativaPendente(sessaoId, membroId);
-  if (!presenca) {
+  const upd = await pool.request()
+    .input("sessaoId", sql.Int, sessaoId).input("membroId", sql.Int, membroId)
+    .query(`UPDATE Presencas SET JustificativaPendente = NULL WHERE SessaoId = @sessaoId AND MembroId = @membroId`);
+  if (upd.rowsAffected[0] === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não há registro de frequência para esse membro nesta reunião." } };
     return;
   }

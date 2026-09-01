@@ -91,7 +91,10 @@ function limparSessao() {
 // fetch com o header de autenticação da Secretaria; se a sessão expirou (401)
 // ou falta permissão (403), avisa e (no caso de 401) volta pro login.
 async function fetchProtegido(url, opts = {}) {
-  const headers = Object.assign({}, opts.headers, { Authorization: "Bearer " + authToken });
+  const headers = Object.assign({}, opts.headers, {
+    "x-auth-token": authToken,
+    Authorization: "Bearer " + authToken
+  });
   const res = await fetch(url, Object.assign({}, opts, { headers }));
   if (res.status === 401) {
     limparSessao();

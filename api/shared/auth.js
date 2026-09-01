@@ -71,7 +71,12 @@ function getSessao(token) {
 }
 
 function extrairToken(req) {
-  const header = (req.headers && (req.headers.authorization || req.headers.Authorization)) || "";
+  const headers = (req && req.headers) || {};
+  // O Azure Static Web Apps pode não repassar o header "Authorization" padrão
+  // para a API. Usamos um header próprio (x-auth-token) como via principal.
+  const direto = headers["x-auth-token"] || headers["X-Auth-Token"];
+  if (direto) return String(direto).trim();
+  const header = headers.authorization || headers.Authorization || "";
   const [tipo, token] = header.split(" ");
   return tipo === "Bearer" ? token : null;
 }

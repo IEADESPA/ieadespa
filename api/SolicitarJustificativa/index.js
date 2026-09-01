@@ -2,6 +2,7 @@
 // O próprio obreiro pede justificativa de uma falta, usando só a matrícula.
 // Fica "pendente" até a Secretaria aprovar ou rejeitar.
 const { getPool, sql } = require("../shared/db");
+const { registrarAuditoria } = require("../shared/auditoria");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -22,6 +23,11 @@ module.exports = async function (context, req) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não há falta pendente de justificativa nessa reunião." } };
     return;
   }
+
+  await registrarAuditoria({
+    tabela: "Presencas", registroId: Number(sessaoId), acao: "Solicitou justificativa de falta",
+    usuarioId: Number(matricula), dadosDepois: { motivo: motivo.trim() }
+  });
 
   context.res = {
     status: 200,

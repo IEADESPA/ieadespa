@@ -85,6 +85,8 @@
           <button class="btn-aba" id="btnAbaPermissoes" data-permissao="permissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
           <button class="btn-aba" id="btnAbaConsagracoes" data-permissao="consagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
           <button class="btn-aba" id="btnAbaDisciplina" data-permissao="disciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
+          <button class="btn-aba" id="btnAbaAuditoria" data-permissao="auditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
+          <button class="btn-aba" id="btnAbaProtecaodedados" data-permissao="protecaodedados" onclick="mostrarAbaSecretaria('protecaodedados')"><span class="icone">🛡️</span><span class="rotulo">Proteção de Dados</span></button>
           <button class="btn-aba" id="btnAbaDocumentos" onclick="mostrarAbaSecretaria('documentos')"><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
         </nav>
         <div class="sidebar-rodape">
@@ -116,6 +118,36 @@
           </form>
           <p id="resultadoTrocaSenha"></p>
         </div>
+
+        <hr />
+        <h3>🔒 Meus Dados (LGPD)</h3>
+        <p class="subtitle">Seus direitos como titular dos dados (LGPD Art. 18): acessar tudo que
+          temos sobre você, controlar o consentimento dos seus dados de contato e pedir
+          acesso, exclusão, retificação ou portabilidade.</p>
+
+        <div class="input-group">
+          <label><input type="checkbox" id="consentimentoDadosContato" onchange="salvarConsentimentoLGPD()" /> Autorizo o uso do meu telefone, e-mail e endereço pela Secretaria</label>
+        </div>
+        <p id="resultadoConsentimentoLGPD" class="subtitle"></p>
+
+        <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarMeusDadosLGPD()">📄 Ver meus dados</button>
+        <div id="cxMeusDadosLGPD" style="display:none; margin-top:12px;"></div>
+
+        <hr />
+        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Minhas solicitações</h4>
+        <form onsubmit="event.preventDefault(); criarSolicitacaoLGPD();">
+          <div class="barra-lista">
+            <select id="solicitacaoLgpdTipo">
+              <option value="ACESSO">Acesso aos meus dados</option>
+              <option value="RETIFICACAO">Retificação (corrigir dado errado)</option>
+              <option value="PORTABILIDADE">Portabilidade (exportar meus dados)</option>
+              <option value="EXCLUSAO">Exclusão dos meus dados de contato</option>
+            </select>
+            <input type="text" id="solicitacaoLgpdDescricao" placeholder="Detalhe seu pedido (opcional)" style="min-width:220px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">📨 Enviar pedido</button>
+          </div>
+        </form>
+        <div id="resultadoListaSolicitacoesLGPD"></div>
       </div>
 
       <!-- ABA: REUNIÕES -->
@@ -507,6 +539,43 @@
         <hr />
         <h3>Processos Ativos</h3>
         <div id="resultadoListaDisciplina"></div>
+      </div>
+
+      <!-- ABA: AUDITORIA -->
+      <div id="abaAuditoria" class="aba-secretaria" style="display:none;">
+        <h3>Trilha de Auditoria</h3>
+        <p class="subtitle">Quem mudou o quê e quando — cada criação, atualização e exclusão relevante do sistema fica aqui.</p>
+        <div class="barra-lista">
+          <input type="text" id="auditoriaFiltroTabela" placeholder="Filtrar por tabela (ex: MembroReferencia)" />
+          <input type="number" id="auditoriaFiltroUsuario" placeholder="Matrícula do usuário" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarAuditoria()">🔍 Filtrar</button>
+        </div>
+        <div class="rolagem-tabela">
+          <div id="resultadoListaAuditoria"></div>
+        </div>
+      </div>
+
+      <!-- ABA: PROTEÇÃO DE DADOS (Encarregado de Dados / LGPD) -->
+      <div id="abaProtecaodedados" class="aba-secretaria" style="display:none;">
+        <h3>🛡️ Solicitações do Titular (LGPD)</h3>
+        <p class="subtitle">Pedidos de acesso, exclusão, retificação e portabilidade enviados pelos próprios membros pelo "Meu Painel".</p>
+        <div class="barra-lista">
+          <select id="dpoFiltroStatus" onchange="carregarSolicitacoesDPO()">
+            <option value="">Todos os status</option>
+            <option value="PENDENTE">Pendente</option>
+            <option value="EM_ANALISE">Em análise</option>
+            <option value="ATENDIDA">Atendida</option>
+            <option value="NEGADA">Negada</option>
+          </select>
+        </div>
+        <div class="rolagem-tabela">
+          <div id="resultadoListaSolicitacoesDPO"></div>
+        </div>
+
+        <hr />
+        <h3>Políticas de Retenção</h3>
+        <p class="subtitle">Referência de quanto tempo cada categoria de dado fica guardada e por quê — usada ao responder um pedido de exclusão. Não apaga nada sozinha. (Editar exige também a permissão "Pessoas".)</p>
+        <div id="politicasRetencaoConteudo"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

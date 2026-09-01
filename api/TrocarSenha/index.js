@@ -4,6 +4,7 @@
 // POST /api/auth/senha   body: { novaSenha }
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
+const { registrarAuditoria } = require("../shared/auditoria");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
@@ -23,6 +24,9 @@ module.exports = async function (context, req) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não encontrei seu acesso à Secretaria." } };
     return;
   }
+
+  // Nunca grava a senha (nem hash) no AuditLog — só o fato de que ela mudou.
+  await registrarAuditoria({ tabela: "Lideranca", registroId: usuario.membroId, acao: "Trocou a própria senha", usuarioId: usuario.membroId });
 
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Senha alterada." } };
 };

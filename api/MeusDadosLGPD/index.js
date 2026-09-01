@@ -1,0 +1,78 @@
+// MeusDadosLGPD (público — "Meu Painel", auto-atendimento por matrícula)
+// Direito de acesso e portabilidade (LGPD Art. 18, I e V): devolve, num único
+// pacote, todos os dados pessoais que o sistema guarda daquela matrícula.
+// GET /api/lgpd/meus-dados/{matricula}
+const { getPool, sql } = require("../shared/db");
+const { registrarAuditoria } = require("../shared/auditoria");
+
+module.exports = async function (context, req) {
+  const matricula = context.bindingData.matricula;
+  if (!matricula) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
+    return;
+  }
+
+  const pool = await getPool();
+  const membroResult = await pool.request().input("mat", sql.Int, matricula).query(`
+    SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, c.Nome AS congregacao,
+           m.Status AS status, CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
+           CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao, m.DizimistaFiel AS dizimistaFiel,
+           m.SituacaoMembro AS situacaoMembro, d.Nome AS departamento, m.CargoMinisterial AS cargoMinisterial,
+           m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco, e.Nome AS extensao,
+           CONVERT(varchar(33), m.CriadoEm, 126) AS criadoEm
+    FROM MembroReferencia m
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    LEFT JOIN Departamentos d ON d.DepartamentoId = m.DepartamentoId
+    LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
+    WHERE m.MembroId = @mat`);
+  const membro = membroResult.recordset[0];
+  if (!membro) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+    return;
+  }
+
+  const [lideranca, assentos, processos, vinculos, consentimentos, solicitacoes] = await Promise.all([
+    pool.request().input("mat", sql.Int, matricula).query(`
+      SELECT p.Nome AS papel, l.EscopoTipo AS escopoTipo, CONVERT(varchar(33), l.CriadoEm, 126) AS desde
+      FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId WHERE l.MembroId = @mat`),
+    pool.request().input("mat", sql.Int, matricula).query(`
+      SELECT o.Nome AS orgao, a.CargoOuFuncao AS cargoOuFuncao, CONVERT(varchar(10), a.DataInicio, 120) AS dataInicio,
+             CONVERT(varchar(10), a.DataFim, 120) AS dataFim
+      FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId WHERE a.MembroId = @mat`),
+    pool.request().input("mat", sql.Int, matricula).query(`
+      SELECT o.Nome AS orgaoResponsavel, p.Motivo AS motivo, CONVERT(varchar(10), p.DataAbertura, 120) AS dataAbertura,
+             p.Status AS status, p.Resultado AS resultado, p.DiasSancao AS diasSancao,
+             CONVERT(varchar(10), p.DataTerminoPrevisao, 120) AS dataTerminoPrevisao
+      FROM ProcessosDisciplinares p JOIN Orgaos o ON o.OrgaoId = p.OrgaoResponsavelId WHERE p.MembroId = @mat`),
+    pool.request().input("mat", sql.Int, matricula).query(`
+      SELECT m2.Nome AS parente, t.RotuloDireto AS vinculo
+      FROM VinculosFamiliares v
+      JOIN MembroReferencia m2 ON m2.MembroId = v.MembroParenteId
+      JOIN TiposVinculoFamiliar t ON t.TipoVinculoId = v.TipoVinculoId
+      WHERE v.MembroId = @mat`),
+    pool.request().input("mat", sql.Int, matricula).query(`
+      SELECT Tipo AS tipo, Concedido AS concedido, BaseLegal AS baseLegal, CONVERT(varchar(33), DataRegistro, 126) AS dataRegistro
+      FROM ConsentimentosLGPD WHERE MembroId = @mat ORDER BY DataRegistro DESC`),
+    pool.request().input("mat", sql.Int, matricula).query(`
+      SELECT Tipo AS tipo, Status AS status, CONVERT(varchar(33), DataSolicitacao, 126) AS dataSolicitacao
+      FROM SolicitacoesTitularLGPD WHERE MembroId = @mat ORDER BY DataSolicitacao DESC`)
+  ]);
+
+  await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
+
+  context.res = {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+    body: {
+      sucesso: true,
+      geradoEm: new Date().toISOString(),
+      membro,
+      liderancas: lideranca.recordset,
+      assentos: assentos.recordset,
+      processosDisciplinares: processos.recordset,
+      vinculosFamiliares: vinculos.recordset,
+      consentimentos: consentimentos.recordset,
+      solicitacoesLgpd: solicitacoes.recordset
+    }
+  };
+};

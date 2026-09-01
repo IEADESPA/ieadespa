@@ -9,6 +9,7 @@
 // 5. Não pode registrar presença duplicada na mesma sessão
 const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
+const { registrarAuditoria } = require("../shared/auditoria");
 
 module.exports = async function (context, req) {
   const { matricula, senha } = req.body || {};
@@ -58,6 +59,11 @@ module.exports = async function (context, req) {
 
   await pool.request().input("sessaoId", sql.Int, sessaoAberta.sessaoId).input("mat", sql.Int, matricula)
     .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente) VALUES (@sessaoId, @mat, 1)`);
+
+  await registrarAuditoria({
+    tabela: "Presencas", registroId: Number(sessaoAberta.sessaoId), acao: "Registrou presença (Portaria)",
+    usuarioId: Number(matricula), dadosDepois: { sessaoId: sessaoAberta.sessaoId, membroId: membro.membroId }
+  });
 
   context.res = {
     status: 200,

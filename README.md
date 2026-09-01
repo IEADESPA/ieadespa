@@ -194,9 +194,32 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v0.3 — Auditoria e trilha de dados
 
-- [ ] `AuditLog` em toda alteração (quem mudou o quê e quando, dados antes/depois).
-- [ ] Consentimento LGPD + retenção + direito de acesso/exclusão do titular.
-- [ ] Encarregado de Dados (papel no sistema).
+- [x] `AuditLog` em toda alteração (quem mudou o quê e quando, dados antes/depois).
+      — ✅ fechadas as últimas lacunas: `RegistrarPresenca`, `SolicitarJustificativa` e
+      `TrocarSenha` (nunca grava a senha/hash, só o fato da troca) agora auditam;
+      `ListarAuditoria` tinha um buraco real (endpoint sem checagem de permissão nenhuma)
+      — agora exige a permissão `auditoria` e devolve o nome de quem fez a ação. Nova aba
+      **Auditoria** no painel (mesma permissão) lista a trilha com filtro por tabela/usuário.
+- [x] Consentimento LGPD + retenção + direito de acesso/exclusão do titular.
+      — ✅ `ConsentimentosLGPD` (trilha append-only por tipo de dado — hoje só
+      `DADOS_CONTATO`, pronta pra v1.7 dados sensíveis) com toggle no "Meu Painel".
+      `SolicitacoesTitularLGPD` cobre os 4 direitos do Art. 18 (acesso/exclusão/
+      retificação/portabilidade): o titular abre o pedido pelo próprio painel
+      (`MinhasSolicitacoesLGPD`) e acompanha o status. Direito de acesso/portabilidade
+      via `MeusDadosLGPD` (pacote único com cadastro, liderança, assentos, processos
+      disciplinares, vínculos familiares e consentimentos — audita o próprio acesso).
+      Direito de exclusão via `ExecutarExclusaoLGPD`: **não é DELETE de verdade** (o
+      Regimento depende do MembroId em Assentos/Processos/Consagrações, e a seção 2.4
+      já veda apagar dados reais) — anonimiza telefone/e-mail/endereço (dados coletados
+      por consentimento) com base legal em obrigação legal/exercício regular de
+      direitos (LGPD Art. 16) para o que fica. Catálogo `PoliticasRetencao` (mesmo
+      espírito do `Prazos` da v0.1: referência informativa, sem expurgo automático).
+- [x] Encarregado de Dados (papel no sistema).
+      — ✅ nova permissão `protecaodedados` + papel pronto "Encarregado de Dados"
+      (`auditoria,protecaodedados`) via `GestaoCatalogos`/`Papeis`, sem mudança de
+      código (o sistema de permissões já era 100% orientado a dado). Nova aba
+      **Proteção de Dados**: lista as solicitações do titular (responder/negar/
+      executar exclusão) e o catálogo de Políticas de Retenção.
 
 ### FASE 1 — Membresia (ciclo de vida do membro)
 

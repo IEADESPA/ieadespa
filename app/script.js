@@ -206,7 +206,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "assembleia", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "assembleia", "pessoas", "funcoes", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "auditoria", "protecaodedados", "documentos"];
 
 function aplicarPermissoesNoMenu() {
   NOMES_ABAS.forEach(nome => {
@@ -239,6 +239,8 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
+  if (aba === "auditoria") carregarAuditoria();
+  if (aba === "protecaodedados") { carregarSolicitacoesDPO(); montarPoliticasRetencao(); }
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -250,7 +252,7 @@ const TITULOS_MODULOS = {
   pessoas: "Pessoas", congregacoes: "Congregações", funcoes: "Funções",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
-  documentos: "Documentos"
+  auditoria: "Auditoria", protecaodedados: "Proteção de Dados", documentos: "Documentos"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -401,10 +403,17 @@ const CATALOGOS_CFG = {
   orgaosLocais: { titulo: "Órgãos Locais (JAI/JEA/CRA/TER/CEQ/Distrito)", idField: "orgaoLocalId", campos: [["sigla", "Sigla (JAI/JEA/CRA/TER/CEQ/DISTRITO)"], ["nome", "Nome"], ["nivel", "Nível (1-5)"], ["referenciaId", "Id da Congregação/Área/Região/Quadrante/Distrito"]] },
   cargosMinisteriais: { titulo: "Cargos Ministeriais (escada — Art. 71)", idField: "cargoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["ordem", "Ordem na escada"]] },
   prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] },
-  tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] }
+  tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] },
+  politicasRetencao: { titulo: "Políticas de Retenção (LGPD)", idField: "politicaId", campos: [["categoria", "Categoria"], ["baseLegal", "Base legal"], ["diasRetencao", "Dias (vazio = indeterminado)"]] }
 };
 const ESTRUTURA_ORDEM = ["congregacoes", "areas", "regioes", "quadrantes", "distritos", "extensoes", "orgaosLocais"];
 const CATALOGOS_ORDEM = ["situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar"];
+const POLITICAS_RETENCAO_ORDEM = ["politicasRetencao"];
+
+function montarPoliticasRetencao() {
+  document.getElementById("politicasRetencaoConteudo").innerHTML = POLITICAS_RETENCAO_ORDEM.map(k => secaoCatalogo(k)).join("");
+  POLITICAS_RETENCAO_ORDEM.forEach(k => { carregarOpcoesPai(k); carregarCatalogoLista(k); });
+}
 const CATALOGOS_PAGINA = 15;
 let catalogoCache = {};
 let catalogoPagina = {};
@@ -1845,6 +1854,9 @@ async function carregarPainelPessoal(matricula) {
 
   html += "</tbody></table>";
   container.innerHTML = html;
+
+  carregarConsentimentoLGPD(matricula);
+  carregarMinhasSolicitacoesLGPD(matricula);
 }
 
 async function solicitarJustificativaAcao(matricula, sessaoId) {
@@ -1859,4 +1871,195 @@ async function solicitarJustificativaAcao(matricula, sessaoId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarPainelPessoal();
+}
+
+// ==================== LGPD: auto-atendimento (Meu Painel) ====================
+function badgeStatusLgpd(status) {
+  const classes = { PENDENTE: "badge-licenca", EM_ANALISE: "badge-licenca", ATENDIDA: "badge-ativo", NEGADA: "badge-desligado" };
+  const rotulos = { PENDENTE: "Pendente", EM_ANALISE: "Em análise", ATENDIDA: "Atendida", NEGADA: "Negada" };
+  return `<span class="badge-status ${classes[status] || ""}">${rotulos[status] || status}</span>`;
+}
+
+async function carregarConsentimentoLGPD(matricula) {
+  matricula = matricula || authMatricula;
+  const chk = document.getElementById("consentimentoDadosContato");
+  const msg = document.getElementById("resultadoConsentimentoLGPD");
+  if (!matricula || !chk) return;
+  const res = await fetch(`${API_BASE}/lgpd/consentimento/${matricula}`);
+  const data = await res.json();
+  if (!data.sucesso) return;
+  const atual = (data.consentimentos || []).find(c => c.tipo === "DADOS_CONTATO");
+  chk.checked = !!(atual && atual.concedido);
+  msg.textContent = atual ? `Última atualização: ${new Date(atual.dataRegistro).toLocaleString("pt-BR")}` : "Ainda não registrado.";
+}
+
+async function salvarConsentimentoLGPD() {
+  const matricula = authMatricula;
+  const chk = document.getElementById("consentimentoDadosContato");
+  if (!matricula) return;
+  const res = await fetch(`${API_BASE}/lgpd/consentimento/${matricula}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipo: "DADOS_CONTATO", concedido: chk.checked })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarConsentimentoLGPD(matricula);
+}
+
+let meusDadosLgpdCarregados = false;
+async function alternarMeusDadosLGPD() {
+  const caixa = document.getElementById("cxMeusDadosLGPD");
+  const abrindo = caixa.style.display === "none";
+  caixa.style.display = abrindo ? "block" : "none";
+  if (!abrindo || meusDadosLgpdCarregados || !authMatricula) return;
+
+  const res = await fetch(`${API_BASE}/lgpd/meus-dados/${authMatricula}`);
+  const data = await res.json();
+  if (!data.sucesso) { caixa.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  meusDadosLgpdCarregados = true;
+
+  caixa.innerHTML = `
+    <div class="cartao-perfil">
+      <p class="linha-perfil"><strong>Cadastro:</strong> ${data.membro.nome} · ${data.membro.telefone || "sem telefone"} · ${data.membro.email || "sem e-mail"} · ${data.membro.endereco || "sem endereço"}</p>
+      <p class="linha-perfil"><strong>Acessos (liderança):</strong> ${data.liderancas.map(l => l.papel).join(", ") || "nenhum"}</p>
+      <p class="linha-perfil"><strong>Assentos:</strong> ${data.assentos.length} · <strong>Processos disciplinares:</strong> ${data.processosDisciplinares.length} · <strong>Vínculos familiares:</strong> ${data.vinculosFamiliares.length}</p>
+    </div>
+    <p class="subtitle">Cópia completa (portabilidade — copie/salve o texto abaixo se precisar):</p>
+    <textarea readonly rows="10" style="width:100%; font-family: monospace; font-size:12px;">${JSON.stringify(data, null, 2)}</textarea>`;
+}
+
+async function criarSolicitacaoLGPD() {
+  const matricula = authMatricula;
+  const tipo = document.getElementById("solicitacaoLgpdTipo").value;
+  const descricao = document.getElementById("solicitacaoLgpdDescricao").value;
+  if (!matricula) return;
+  const res = await fetch(`${API_BASE}/lgpd/solicitacoes/${matricula}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipo, descricao })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("solicitacaoLgpdDescricao").value = "";
+    carregarMinhasSolicitacoesLGPD(matricula);
+  }
+}
+
+async function carregarMinhasSolicitacoesLGPD(matricula) {
+  matricula = matricula || authMatricula;
+  const container = document.getElementById("resultadoListaSolicitacoesLGPD");
+  if (!matricula || !container) return;
+  const res = await fetch(`${API_BASE}/lgpd/solicitacoes/${matricula}`);
+  const data = await res.json();
+  if (!data.sucesso || data.solicitacoes.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma solicitação enviada ainda.</p>";
+    return;
+  }
+  let html = "<table class='tabela-frequencia'><thead><tr><th>Tipo</th><th>Data</th><th>Status</th><th>Resposta</th></tr></thead><tbody>";
+  data.solicitacoes.forEach(s => {
+    html += `<tr>
+      <td>${s.tipo}</td>
+      <td>${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</td>
+      <td>${badgeStatusLgpd(s.status)}</td>
+      <td>${s.respostaTexto || "-"}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+// ==================== ABA: AUDITORIA ====================
+async function carregarAuditoria() {
+  const tabela = document.getElementById("auditoriaFiltroTabela").value.trim();
+  const usuarioId = document.getElementById("auditoriaFiltroUsuario").value.trim();
+  const params = new URLSearchParams();
+  if (tabela) params.set("tabela", tabela);
+  if (usuarioId) params.set("usuarioId", usuarioId);
+
+  const res = await fetchProtegido(`${API_BASE}/auditoria?${params.toString()}`);
+  const registros = await res.json();
+  const container = document.getElementById("resultadoListaAuditoria");
+  if (!Array.isArray(registros) || registros.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum registro encontrado.</p>";
+    return;
+  }
+  let html = "<table class='tabela-frequencia'><thead><tr><th>Quando</th><th>Tabela</th><th>Registro</th><th>Ação</th><th>Quem</th></tr></thead><tbody>";
+  registros.forEach(a => {
+    html += `<tr>
+      <td>${new Date(a.dataHora).toLocaleString("pt-BR")}</td>
+      <td>${a.tabela}</td>
+      <td>${a.registroId ?? "-"}</td>
+      <td>${a.acao}</td>
+      <td>${a.usuarioNome ? `${a.usuarioNome} (${a.usuarioId})` : (a.usuarioId ?? "-")}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+// ==================== ABA: PROTEÇÃO DE DADOS (Encarregado de Dados) ====================
+async function carregarSolicitacoesDPO() {
+  const status = document.getElementById("dpoFiltroStatus").value;
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+
+  const res = await fetchProtegido(`${API_BASE}/lgpd/dpo/solicitacoes?${params.toString()}`);
+  const registros = await res.json();
+  const container = document.getElementById("resultadoListaSolicitacoesDPO");
+  if (!Array.isArray(registros) || registros.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma solicitação encontrada.</p>";
+    return;
+  }
+  let html = "<table class='tabela-frequencia'><thead><tr><th>Matrícula</th><th>Nome</th><th>Tipo</th><th>Descrição</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead><tbody>";
+  registros.forEach(s => {
+    let acoes = "";
+    if (s.status === "PENDENTE" || s.status === "EM_ANALISE") {
+      if (s.tipo === "EXCLUSAO") {
+        acoes = `<button class="btn-link" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'EM_ANALISE')">Em análise</button>
+                 <button class="btn-link" onclick="executarExclusaoDPO(${s.solicitacaoId})">Executar exclusão</button>
+                 <button class="btn-link btn-link-perigo" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'NEGADA')">Negar</button>`;
+      } else {
+        acoes = `<button class="btn-link" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'EM_ANALISE')">Em análise</button>
+                 <button class="btn-link" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'ATENDIDA')">Atender</button>
+                 <button class="btn-link btn-link-perigo" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'NEGADA')">Negar</button>`;
+      }
+    }
+    html += `<tr>
+      <td>${s.membroId}</td>
+      <td>${s.nome}</td>
+      <td>${s.tipo}</td>
+      <td>${s.descricao || "-"}</td>
+      <td>${badgeStatusLgpd(s.status)}</td>
+      <td>${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</td>
+      <td class="acoes-inline">${acoes}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function responderSolicitacaoDPO(id, status) {
+  let respostaTexto = null;
+  if (status === "ATENDIDA" || status === "NEGADA") {
+    respostaTexto = await pedirTexto(status === "NEGADA" ? "Motivo da negativa" : "Resposta ao titular", "Explique a decisão");
+    if (respostaTexto === null) return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/lgpd/dpo/solicitacoes/${id}/responder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, respostaTexto })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarSolicitacoesDPO();
+}
+
+async function executarExclusaoDPO(id) {
+  if (!(await confirmarAcao("Executar a exclusão? Isso apaga o telefone, e-mail e endereço do titular permanentemente (dados cadastrais e de processos são mantidos por obrigação legal).", "Executar exclusão"))) return;
+  const res = await fetchProtegido(`${API_BASE}/lgpd/dpo/solicitacoes/${id}/excluir`, { method: "POST" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarSolicitacoesDPO();
 }

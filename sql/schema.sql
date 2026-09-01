@@ -377,3 +377,44 @@ CREATE TABLE VinculosFamiliares (
     CONSTRAINT CK_VinculosFamiliares_NaoAutoVinculo CHECK (MembroId <> MembroParenteId)
 );
 CREATE UNIQUE INDEX UQ_VinculosFamiliares_Par ON VinculosFamiliares(MembroId, MembroParenteId, TipoVinculoId);
+
+-- ============================================================
+-- Auditoria e trilha de dados (v0.3) — Encarregado de Dados (papel), trilha de
+-- consentimento LGPD (append-only por tipo de dado) e solicitações do titular
+-- (Art. 18 LGPD: acesso, exclusão, retificação, portabilidade). Catálogo
+-- `PoliticasRetencao` é informativo, no mesmo espírito de `Prazos` (v0.1) —
+-- não roda expurgo automático.
+-- ============================================================
+INSERT INTO Funcionalidades (Chave, Nome) VALUES ('protecaodedados', 'Proteção de Dados (LGPD)');
+INSERT INTO Papeis (Nome, Nivel, Permissoes) VALUES ('Encarregado de Dados', 'GLOBAL', 'auditoria,protecaodedados');
+
+CREATE TABLE ConsentimentosLGPD (
+    ConsentimentoId INT IDENTITY PRIMARY KEY,
+    MembroId        INT NOT NULL REFERENCES MembroReferencia(MembroId),
+    Tipo            NVARCHAR(40) NOT NULL DEFAULT 'DADOS_CONTATO',
+    Concedido       BIT NOT NULL,
+    BaseLegal       NVARCHAR(40) NOT NULL DEFAULT 'CONSENTIMENTO',
+    Observacao      NVARCHAR(300) NULL,
+    RegistradoPor   INT NULL REFERENCES MembroReferencia(MembroId),
+    DataRegistro    DATETIME2 DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE SolicitacoesTitularLGPD (
+    SolicitacaoId   INT IDENTITY PRIMARY KEY,
+    MembroId        INT NOT NULL REFERENCES MembroReferencia(MembroId),
+    Tipo            NVARCHAR(30) NOT NULL,     -- ACESSO / EXCLUSAO / RETIFICACAO / PORTABILIDADE
+    Descricao       NVARCHAR(500) NULL,
+    Status          NVARCHAR(20) NOT NULL DEFAULT 'PENDENTE',
+    DataSolicitacao DATETIME2 DEFAULT SYSUTCDATETIME(),
+    DataResposta    DATETIME2 NULL,
+    RespostaTexto   NVARCHAR(500) NULL,
+    AtendidoPor     INT NULL REFERENCES MembroReferencia(MembroId)
+);
+
+CREATE TABLE PoliticasRetencao (
+    PoliticaId   INT IDENTITY PRIMARY KEY,
+    Categoria    NVARCHAR(60) NOT NULL,
+    BaseLegal    NVARCHAR(300) NOT NULL,
+    DiasRetencao INT NULL,
+    Ativo        BIT NOT NULL DEFAULT 1
+);

@@ -77,6 +77,7 @@
           <button class="btn-aba ativo" id="btnAbaMeupainel" onclick="mostrarAbaSecretaria('meupainel')"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
           <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
           <button class="btn-aba" id="btnAbaPessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
+          <button class="btn-aba" id="btnAbaCartas" onclick="mostrarAbaSecretaria('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
           <button class="btn-aba" id="btnAbaOrgaos" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
           <button class="btn-aba" id="btnAbaEstrutura" onclick="mostrarAbaSecretaria('estrutura')"><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
           <button class="btn-aba" id="btnAbaCatalogos" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
@@ -131,6 +132,16 @@
 
         <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarMeusDadosLGPD()">📄 Ver meus dados</button>
         <div id="cxMeusDadosLGPD" style="display:none; margin-top:12px;"></div>
+
+        <hr />
+        <h3>📨 Cartas de Trânsito</h3>
+        <p class="subtitle">Solicite você mesmo (somente pela sua matrícula). A <strong>Carta de Mudança</strong> desliga você do rol e, após 30 dias, seus dados pessoais são minimizados (Reg. Art. 132 §2º).</p>
+        <div class="barra-lista">
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="solicitarCarta('RECOMENDACAO')">✉️ Carta de Recomendação</button>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="solicitarCarta('MUDANCA')">📤 Carta de Mudança</button>
+        </div>
+        <p id="resultadoSolicitacaoCarta" class="subtitle"></p>
+        <div id="cxMinhasCartas"></div>
 
         <hr />
         <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Minhas solicitações</h4>
@@ -253,12 +264,7 @@
           </div>
           <div class="input-group">
             <label>Status:</label>
-            <select id="pessoaStatus">
-              <option value="ATIVO">ATIVO</option>
-              <option value="LICENÇA">LICENÇA</option>
-              <option value="INATIVO">INATIVO</option>
-              <option value="DESLIGADO">DESLIGADO</option>
-            </select>
+            <select id="pessoaStatus"></select>
           </div>
           <div class="input-group">
             <label>Data de Nascimento:</label>
@@ -267,6 +273,41 @@
           <div class="input-group">
             <label>Data de Admissão (batismo/recepção):</label>
             <input type="date" id="pessoaDataAdmissao" />
+          </div>
+          <div class="input-group">
+            <label>Forma de Admissão (Art. 6º §1º):</label>
+            <select id="pessoaFormaAdmissao">
+              <option value="">Não informado</option>
+              <option value="BATISMO">Batismo nas águas</option>
+              <option value="CARTA_MUDANCA">Carta de Mudança</option>
+              <option value="RECONCILIACAO">Reconciliação</option>
+              <option value="ACLAMACAO">Aclamação</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Data do Batismo nas águas:</label>
+            <input type="date" id="pessoaDataBatismo" />
+          </div>
+          <div class="input-group">
+            <label>Origem (procedência):</label>
+            <input type="text" id="pessoaOrigem" placeholder="Ex: evangelismo local, retorno à comunhão" />
+          </div>
+          <div class="input-group">
+            <label>Igreja Anterior (se Carta de Mudança):</label>
+            <input type="text" id="pessoaIgrejaAnterior" placeholder="Ex: Igreja/ministério de origem" />
+          </div>
+          <p class="subtitle" style="margin:16px 0 4px;">Rito Público de Recebimento (Regimento Art. 130 — leitura do nome e apresentação à igreja):</p>
+          <div class="input-group">
+            <label>Data do rito público:</label>
+            <input type="date" id="pessoaDataRitoRecebimento" />
+          </div>
+          <div class="input-group">
+            <label>Nome lido no ato:</label>
+            <input type="text" id="pessoaNomeLidoRito" placeholder="Nome como foi lido à igreja" />
+          </div>
+          <div class="input-group">
+            <label>Ministrante (quem apresentou/orou):</label>
+            <input type="text" id="pessoaMinistranteRito" placeholder="Ex: Pastor/Dirigente que declarou recebido" />
           </div>
           <div class="input-group">
             <label>Situação:</label>
@@ -329,6 +370,19 @@
           <div id="resultadoListaPessoas"></div>
         </div>
         <div class="paginacao" id="pessoasPaginacao"></div>
+      </div>
+
+      <!-- ABA: CARTAS DE TRÂNSITO -->
+      <div id="abaCartas" class="aba-secretaria" style="display:none;">
+        <div class="barra-lista">
+          <h3 style="margin:0;">Cartas de Trânsito</h3>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="processarSaidasCartas()">⚙️ Processar saídas (30 dias)</button>
+        </div>
+        <p class="subtitle">Carta de Recomendação (viagem/visita, sem perder vínculo) · Carta de Mudança (desligamento) · Atestado de Trânsito Supletivo (CEI). A minimização de 30 dias é aplicada sob demanda.</p>
+        <p id="resultadoCartas" class="subtitle"></p>
+        <div class="rolagem-tabela">
+          <div id="resultadoListaCartas"></div>
+        </div>
       </div>
 
       <!-- ABA: ÓRGÃOS -->

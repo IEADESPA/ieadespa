@@ -27,6 +27,15 @@ CREATE TABLE MembroReferencia (
     Status                NVARCHAR(20) NOT NULL DEFAULT 'ATIVO', -- ATIVO / LICENÇA / INATIVO / DESLIGADO
     DataNascimento      DATE NULL,                 -- para capacidade eleitoral (Art. 23, §§1º/2º)
     DataAdmissao        DATE NULL,                 -- Período de Integração de 90 dias (Art. 6º §2º) e Interstício de Fidelidade de 1 ano (Art. 23 §2º, I)
+    DataBatismo         DATE NULL,                 -- batismo nas águas (Art. 6º §1º, I)
+    FormaAdmissao       NVARCHAR(30) NULL,         -- BATISMO / CARTA_MUDANCA / RECONCILIACAO / ACLAMACAO (Art. 6º §1º)
+    Origem              NVARCHAR(150) NULL,        -- procedência geral da admissão
+    IgrejaAnterior      NVARCHAR(150) NULL,        -- igreja anterior (Carta de Mudança)
+    DataRitoRecebimento DATE NULL,                 -- rito público de recebimento (Reg. Art. 130)
+    NomeLidoRito        NVARCHAR(200) NULL,        -- leitura do nome no rito (Reg. Art. 130, II)
+    MinistranteRito     NVARCHAR(150) NULL,        -- Pastor/Dirigente que apresentou e orou (Reg. Art. 130, II)
+    DataSaida           DATE NULL,                 -- data da saída (Registro Histórico Mínimo — Reg. Art. 132 §2º II)
+    MotivoSaida         NVARCHAR(200) NULL,        -- motivo da saída (Registro Histórico Mínimo)
     DizimistaFiel       BIT NULL,                  -- elegibilidade p/ Diretoria e Conselho Fiscal (Art. 23 §2º, I)
     CriadoEm            DATETIME2 DEFAULT SYSUTCDATETIME()
 );
@@ -282,6 +291,18 @@ INSERT INTO SituacoesMembro (Sigla, Nome) VALUES
     ('EM_COMUNHAO','Membro em Comunhão'),
     ('SEM_COMUNHAO','Membro sem Comunhão');
 
+CREATE TABLE StatusMembro (
+    StatusId INT IDENTITY PRIMARY KEY,
+    Sigla    NVARCHAR(30) NOT NULL,
+    Nome     NVARCHAR(100) NOT NULL,
+    Ativa    BIT NOT NULL DEFAULT 1
+);
+INSERT INTO StatusMembro (Sigla, Nome) VALUES
+    ('ATIVO','ATIVO'),
+    ('LICENÇA','LICENÇA'),
+    ('INATIVO','INATIVO'),
+    ('DESLIGADO','DESLIGADO');
+
 CREATE TABLE CargosMinisteriais (
     CargoId INT IDENTITY PRIMARY KEY,
     Sigla   NVARCHAR(30) NOT NULL,
@@ -377,6 +398,26 @@ CREATE TABLE VinculosFamiliares (
     CONSTRAINT CK_VinculosFamiliares_NaoAutoVinculo CHECK (MembroId <> MembroParenteId)
 );
 CREATE UNIQUE INDEX UQ_VinculosFamiliares_Par ON VinculosFamiliares(MembroId, MembroParenteId, TipoVinculoId);
+
+-- ============================================================
+-- Cartas de Trânsito (v1.4 — Regimento Art. 130/131/132)
+-- ============================================================
+CREATE TABLE CartasTransito (
+    CartaId            INT IDENTITY PRIMARY KEY,
+    MembroId           INT NOT NULL REFERENCES MembroReferencia(MembroId),
+    Tipo               NVARCHAR(30) NOT NULL,          -- RECOMENDACAO / MUDANCA / ATESTADO_SUPLETIVO
+    Status             NVARCHAR(30) NOT NULL DEFAULT 'SOLICITADA',
+    Destino            NVARCHAR(150) NULL,
+    MotivoSaida        NVARCHAR(200) NULL,
+    DeclaracaoCiencia  NVARCHAR(500) NULL,
+    DataSolicitacao    DATETIME2 DEFAULT SYSUTCDATETIME(),
+    DataConfirmacao    DATETIME2 NULL,
+    DataEmissao        DATE NULL,
+    DataValidade       DATE NULL,
+    SolicitadoPor      INT NULL REFERENCES MembroReferencia(MembroId),
+    EmitidoPor         INT NULL REFERENCES MembroReferencia(MembroId),
+    CriadoEm           DATETIME2 DEFAULT SYSUTCDATETIME()
+);
 
 -- ============================================================
 -- Auditoria e trilha de dados (v0.3) — Encarregado de Dados (papel), trilha de

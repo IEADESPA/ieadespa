@@ -62,9 +62,22 @@ function calcularCapacidadeEleitoral(membro, hoje) {
       elegivelDiretoriaConselhoFiscal: false,
       elegivelCEIouDepartamentos: false,
       elegivelFuncaoAuxiliar: emComunhao && idade !== null && idade >= 16,
-      motivo: "dados incompletos (falta data de nascimento e/ou data de admissão)"
+      motivo: "dados incompletos (falta data de nascimento e/ou data de admissão)",
+      emPeriodoIntegracao: false,
+      diasIntegracao: null,
+      diasRestantesIntegracao: null
     };
   }
+
+  // v1.2 — Período de Integração e Zelo Institucional (Art. 6º §2º): 90 dias a partir
+  // da admissão/recepção. Durante esse prazo o membro não vota nem é votado (restrições
+  // aplicadas logo abaixo via capacidadeAtiva) — a integração é um estado CALCULADO e
+  // exibido, nunca uma marcação manual (mesmo princípio do Art. 7º §1º).
+  const DIAS_INTEGRACAO = 90;
+  const emPeriodoIntegracao =
+    emComunhao && diasAdmissao >= 0 && diasAdmissao < DIAS_INTEGRACAO;
+  const diasIntegracao = diasAdmissao;
+  const diasRestantesIntegracao = emPeriodoIntegracao ? DIAS_INTEGRACAO - diasAdmissao : null;
 
   // Art. 23 §1º — Capacidade Ativa: direito de votar.
   const capacidadeAtiva =
@@ -96,6 +109,9 @@ function calcularCapacidadeEleitoral(membro, hoje) {
     elegivelDiretoriaConselhoFiscal,
     elegivelCEIouDepartamentos,
     elegivelFuncaoAuxiliar,
+    emPeriodoIntegracao,
+    diasIntegracao,
+    diasRestantesIntegracao,
     motivo: null
   };
 }

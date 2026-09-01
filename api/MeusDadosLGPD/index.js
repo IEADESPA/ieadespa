@@ -16,7 +16,12 @@ module.exports = async function (context, req) {
   const membroResult = await pool.request().input("mat", sql.Int, matricula).query(`
     SELECT m.MembroId AS membroId, m.Nome AS nome, m.Funcao AS funcao, c.Nome AS congregacao,
            m.Status AS status, CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
-           CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao, m.DizimistaFiel AS dizimistaFiel,
+           CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
+           CONVERT(varchar(10), m.DataBatismo, 120) AS dataBatismo,
+           m.FormaAdmissao AS formaAdmissao, m.Origem AS origem, m.IgrejaAnterior AS igrejaAnterior,
+           CONVERT(varchar(10), m.DataRitoRecebimento, 120) AS dataRitoRecebimento,
+           m.NomeLidoRito AS nomeLidoRito, m.MinistranteRito AS ministranteRito,
+           m.DizimistaFiel AS dizimistaFiel,
            m.SituacaoMembro AS situacaoMembro, d.Nome AS departamento, m.CargoMinisterial AS cargoMinisterial,
            m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco, e.Nome AS extensao,
            CONVERT(varchar(33), m.CriadoEm, 126) AS criadoEm

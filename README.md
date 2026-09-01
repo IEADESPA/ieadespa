@@ -313,27 +313,47 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v1.1 — Admissão de membros (Art. 6º)
 
-- [ ] Registro de admissão por: batismo, carta de mudança, reconciliação, aclamação.
-- [ ] Campos: data de admissão/batismo, forma de admissão, origem (igreja anterior).
-- [ ] Rito público de recebimento (leitura do nome, apresentação à igreja).
+- [x] Registro de admissão por: batismo, carta de mudança, reconciliação, aclamação.
+      — ✅ migração 015 + `GestaoPessoas`: `FormaAdmissao` (lista fixa do Art. 6º §1º)
+      no cadastro e na coluna "Forma Admissão" da listagem.
+- [x] Campos: data de admissão/batismo, forma de admissão, origem (igreja anterior).
+      — ✅ `DataAdmissao` (já existia), `DataBatismo`, `Origem` e `IgrejaAnterior`.
+- [x] Rito público de recebimento (leitura do nome, apresentação à igreja).
+      — ✅ `DataRitoRecebimento`, `NomeLidoRito` e `MinistranteRito` (Reg. Art. 130).
 
 #### v1.2 — Período de Integração (90 dias)
 
-- [ ] Marcação automática do início do Período de Integração (90 dias, Art. 6º §2º).
-- [ ] Restrições automáticas durante a integração: sem votar/ser votado, sem cargo.
-- [ ] Alerta de fim de integração (transição automática para Membro em Comunhão).
+- [x] Marcação automática do início do Período de Integração (90 dias, Art. 6º §2º).
+      — ✅ `shared/estatuto.js` calcula `emPeriodoIntegracao` / `diasRestantesIntegracao`
+      e a lista de Pessoas mostra o aviso "⏳ Xd p/ votar" ao lado da categoria.
+- [x] Restrições automáticas durante a integração: sem votar/ser votado.
+      — ✅ `capacidadeAtiva` exige ≥90 dias (votar) e as elegibilidades passivas partem
+      dela. Obs.: a trava de "sem cargo" durante a integração ainda NÃO está implementada
+      (fica para a v1.6/v8, que já tratam cargo/escada).
+- [x] Alerta de fim de integração (transição automática para Capacidade Eleitoral Ativa).
+      — ✅ o batismo já torna a pessoa "Membro em Comunhão" de imediato (Art. 7º II); os
+      90 dias de integração apenas liberam o voto/ser votado (Art. 6º §2º/§3º). Vencido o
+      prazo, o aviso "⏳ Xd p/ votar" some e a categoria passa a "Capacidade Eleitoral Ativa".
 
 #### v1.3 — Categorias e elegibilidade (Art. 7º e 23)
 
-- [ ] Cálculo automático das 4 categorias (Congregado / Comunhão / Ativa / Elegível).
-- [ ] Elegibilidade ativa (votar): ≥18 + 90 dias + livre de disciplina.
-- [ ] Elegibilidade passiva (ser votado): +1 ano + dizimista (Diretoria/CF); ≥18 (Lideranças/CEI); ≥16 (local).
-- [ ] Atualização cadastral pela Secretaria (sem novo ato de admissão).
+- [x] Cálculo automático das 4 categorias (Congregado / Comunhão / Ativa / Elegível).
+      — ✅ `shared/estatuto.js` (`calcularCapacidadeEleitoral`) + `badgeCategoria()`.
+- [x] Elegibilidade ativa (votar): ≥18 + 90 dias + livre de disciplina.
+- [x] Elegibilidade passiva (ser votado): +1 ano + dizimista (Diretoria/CF); ≥18 (Lideranças/CEI); ≥16 (local).
+- [x] Atualização cadastral pela Secretaria (sem novo ato de admissão).
+      — ✅ já é o fluxo normal da tela de Pessoas (não gera novo ato de admissão).
 
 #### v1.4 — Trânsito eclesiástico e cartas (Regimento Art. 131)
 
-- [ ] Carta de Recomendação (validade 30 dias, prorrogação por visto).
-- [ ] Carta de Mudança (transferência) + recebimento de carta de outra igreja.
+- [x] Carta de Recomendação (validade 30 dias, prorrogação por visto).
+      — ✅ auto-atendimento no Meu Painel + emissão pela Secretaria (validade calculada
+      de 30 dias) + modelo imprimível (salvar como PDF no navegador).
+- [x] Carta de Mudança (desligamento) — solicitação própria + "declaração de ciência"
+      digital (Reg. Art. 131 §3º, II) + minimização automática sob demanda após 30 dias
+      (Reg. Art. 132 §2º: mantém matrícula/nome/data de admissão/batismo) + cancelamento
+      por readmissão ("o relógio zera"). Migração 017 + `SolicitarCarta`/`GestaoCartas`.
+- [ ] Recebimento de carta de outra igreja (admissão por carta — vínculo com a v1.1).
 - [ ] Atestado de Trânsito Supletivo (emitido pelo CEI em caso de recusa).
 - [ ] Competência de emissão: Dirigente + Secretário Local (vedada à Mesa Diretora).
 
@@ -349,6 +369,9 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 - [ ] Transição de situação (EM_COMUNHAO / SEM_COMUNHAO / CONGREGADO) + status
       administrativo (ATIVO/LICENÇA/INATIVO/DESLIGADO/FALECIDO).
+      — Nota: o **Status** já virou catálogo configurável (migração 016 — `StatusMembro`
+      via `GestaoCatalogos`, seletor do cadastro de Pessoas). Falta aqui a transição
+      automática de situação e o status FALECIDO (v1.5).
 - [ ] Suspensão de direitos durante disciplina (voto/ser votado/cargos).
 - [ ] Histórico completo do membro (linha do tempo de situações).
 

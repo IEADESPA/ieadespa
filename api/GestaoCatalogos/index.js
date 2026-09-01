@@ -15,6 +15,10 @@ const CATALOGOS = {
     tabela: "SituacoesMembro", chave: "SituacaoId", idField: "situacaoId",
     campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(100), ativa: sql.Bit }
   },
+  statuses: {
+    tabela: "StatusMembro", chave: "StatusId", idField: "statusId",
+    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(100), ativa: sql.Bit }
+  },
   departamentos: {
     tabela: "Departamentos", chave: "DepartamentoId", idField: "departamentoId",
     campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), numero: sql.Int, ativo: sql.Bit }

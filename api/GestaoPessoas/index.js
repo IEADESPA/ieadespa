@@ -20,6 +20,10 @@ const SELECT_MEMBRO = `
          c.Nome AS congregacao, m.Status AS status,
          CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
          CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
+         CONVERT(varchar(10), m.DataBatismo, 120) AS dataBatismo,
+         m.FormaAdmissao AS formaAdmissao, m.Origem AS origem, m.IgrejaAnterior AS igrejaAnterior,
+         CONVERT(varchar(10), m.DataRitoRecebimento, 120) AS dataRitoRecebimento,
+         m.NomeLidoRito AS nomeLidoRito, m.MinistranteRito AS ministranteRito,
          m.DizimistaFiel AS dizimistaFiel, m.SituacaoMembro AS situacaoMembro, m.DepartamentoId AS departamentoId,
          m.CargoMinisterial AS cargoMinisterial, m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco,
          m.ExtensaoId AS extensaoId, e.Nome AS extensao
@@ -60,7 +64,9 @@ module.exports = async function (context, req) {
   if (method === "POST") {
     const {
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
-      situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId
+      situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
+      dataBatismo, formaAdmissao, origem, igrejaAnterior,
+      dataRitoRecebimento, nomeLidoRito, ministranteRito
     } = req.body || {};
     if (!membroId || !nome) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
@@ -95,6 +101,14 @@ module.exports = async function (context, req) {
       }
     }
 
+    // Formas de admissão fixas do Estatuto Art. 6º §1º — regra jurídica, não catálogo
+    // editável por tela (mesmo espírito de shared/estatuto.js).
+    const FORMAS_ADMISSAO = ["BATISMO", "CARTA_MUDANCA", "RECONCILIACAO", "ACLAMACAO"];
+    if (formaAdmissao && !FORMAS_ADMISSAO.includes(formaAdmissao)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: `Forma de admissão inválida. Use uma de: ${FORMAS_ADMISSAO.join(", ")}.` } };
+      return;
+    }
+
     const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
     const existia = existente.recordset.length > 0;
     const situacaoFinal = situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO");
@@ -113,7 +127,14 @@ module.exports = async function (context, req) {
       .input("telefone", sql.NVarChar(20), telefone || null)
       .input("email", sql.NVarChar(150), email || null)
       .input("endereco", sql.NVarChar(300), endereco || null)
-      .input("extensaoId", sql.Int, extensaoId || null);
+      .input("extensaoId", sql.Int, extensaoId || null)
+      .input("dataBatismo", sql.Date, dataBatismo || null)
+      .input("formaAdmissao", sql.NVarChar(30), formaAdmissao || null)
+      .input("origem", sql.NVarChar(150), origem || null)
+      .input("igrejaAnterior", sql.NVarChar(150), igrejaAnterior || null)
+      .input("dataRitoRecebimento", sql.Date, dataRitoRecebimento || null)
+      .input("nomeLidoRito", sql.NVarChar(200), nomeLidoRito || null)
+      .input("ministranteRito", sql.NVarChar(150), ministranteRito || null);
 
     if (existia) {
       // Funcao não entra aqui de propósito: é campo histórico gerido só pela
@@ -123,12 +144,15 @@ module.exports = async function (context, req) {
         UPDATE MembroReferencia SET Nome = @nome, CongregacaoId = @congregacaoId, Status = @status,
                DataNascimento = @dataNascimento, DataAdmissao = @dataAdmissao, DizimistaFiel = @dizimistaFiel,
                SituacaoMembro = @situacaoMembro, DepartamentoId = @departamentoId, CargoMinisterial = @cargoMinisterial,
-               Telefone = @telefone, Email = @email, Endereco = @endereco, ExtensaoId = @extensaoId
+               Telefone = @telefone, Email = @email, Endereco = @endereco, ExtensaoId = @extensaoId,
+               DataBatismo = @dataBatismo, FormaAdmissao = @formaAdmissao, Origem = @origem,
+               IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
+               NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito
         WHERE MembroId = @id`);
     } else {
       await request.query(`
-        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId)
-        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId)`);
+        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito)
+        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito)`);
     }
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
@@ -144,7 +168,7 @@ module.exports = async function (context, req) {
       registroId: Number(membroId),
       acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
       usuarioId: usuario.membroId,
-      dadosDepois: { nome, cargoMinisterial, congregacaoId, status }
+      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao }
     });
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: existia ? "✅ Pessoa atualizada." : "✅ Pessoa cadastrada.", membro } };

@@ -205,7 +205,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "auditoria", "protecaodedados", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "auditoria", "protecaodedados", "documentos"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -213,7 +213,7 @@ const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "orgaos", "estrutura", "
 // reunioes/assembleia/cli — a aba única de Reuniões reflete isso).
 const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
-  congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"]
+  congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"]
 };
 function permissoesDaAba(nome) {
   return ABA_PERMISSOES_ALT[nome] || [nome];
@@ -239,8 +239,10 @@ function mostrarAbaSecretaria(aba) {
     if (btn) btn.classList.toggle("ativo", nome === aba);
   });
   document.getElementById("tituloModulo").textContent = TITULOS_MODULOS[aba] || "Governança";
+  if (aba === "meupainel") carregarMinhasCartas();
   if (aba === "reunioes") { carregarOpcoesOrgaosReuniao().then(carregarReunioes); carregarElegiveisAssembleia(); }
   if (aba === "pessoas") { carregarOpcoesFormPessoa(); carregarPessoas(); }
+  if (aba === "cartas") { carregarCartas(); processarSaidasCartas(); }
   if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
   if (aba === "estrutura") montarEstrutura();
   if (aba === "catalogos") montarCatalogos();
@@ -257,7 +259,7 @@ function alternarSidebar() {
 }
 const TITULOS_MODULOS = {
   meupainel: "Meu Painel", reunioes: "Reuniões",
-  pessoas: "Pessoas", congregacoes: "Congregações",
+  pessoas: "Pessoas", cartas: "Cartas de Trânsito", congregacoes: "Congregações",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", documentos: "Documentos"
@@ -351,7 +353,15 @@ function badgeCategoria(capacidade) {
     "Congregado": "badge-inativo",
     "Dados incompletos": "badge-licenca"
   };
-  return `<span class="badge-status ${cores[c.categoria] || "badge-licenca"}">${c.categoria || "-"}</span>`;
+  let html = `<span class="badge-status ${cores[c.categoria] || "badge-licenca"}">${c.categoria || "-"}</span>`;
+  // v1.2 — a categoria NÃO muda com a integração: o batismo já torna a pessoa
+  // "Membro em Comunhão" (Art. 7º II). Os 90 dias apenas restringem votar/ser votado,
+  // então o período aparece como um aviso à parte, sem substituir a categoria.
+  if (c.emPeriodoIntegracao) {
+    const restantes = c.diasRestantesIntegracao != null ? c.diasRestantesIntegracao : 0;
+    html += ` <span class="badge-status badge-licenca" title="Período de Integração — Art. 6º §2º">⏳ ${restantes}d p/ votar</span>`;
+  }
+  return html;
 }
 
 async function carregarOrgaos() {
@@ -506,6 +516,7 @@ const CATALOGOS_CFG = {
   distritos: { titulo: "Distritos (Nível 5)", idField: "distritoId", campos: [["nome", "Nome do Distrito"]] },
   extensoes: { titulo: "Extensões da Tenda (Nível 0)", idField: "extensaoId", campos: [["nome", "Nome da Extensão"]], pai: { campo: "congregacaoMaeId", rotulo: "Congregação-Mãe", origem: "congregacoes" } },
   situacoes: { titulo: "Situações de Membro", idField: "situacaoId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
+  statuses: { titulo: "Status do Membro", idField: "statusId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
   departamentos: { titulo: "Departamentos", idField: "departamentoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["numero", "Número"]] },
   tiposConsagracao: {
     titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId",
@@ -527,7 +538,7 @@ const CATALOGOS_CFG = {
 // pra cima: Extensão da Tenda primeiro, Distrito por último. Órgãos Locais
 // (JAI/JEA/CRA/TER/CEQ/Distrito) saiu daqui — é órgão, mora na aba Órgãos.
 const ESTRUTURA_ORDEM = ["extensoes", "congregacoes", "areas", "regioes", "quadrantes", "distritos"];
-const CATALOGOS_ORDEM = ["situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar"];
+const CATALOGOS_ORDEM = ["statuses", "situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar"];
 const POLITICAS_RETENCAO_ORDEM = ["politicasRetencao"];
 const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
 
@@ -988,17 +999,29 @@ async function marcarPresencaManual(sessaoId, membroId, presente) {
 }
 
 // ---- SECRETARIA / ABA PESSOAS ----
+// Fallback defensivo: se o catálogo de status ainda não existir no banco (migração
+// 016 não rodou), o formulário continua usável com os status semeados.
+const STATUS_DEFAULT = [
+  { sigla: "ATIVO", nome: "ATIVO", ativa: true },
+  { sigla: "LICENÇA", nome: "LICENÇA", ativa: true },
+  { sigla: "INATIVO", nome: "INATIVO", ativa: true },
+  { sigla: "DESLIGADO", nome: "DESLIGADO", ativa: true }
+];
+
 async function carregarOpcoesFormPessoa() {
-  const [resCong, resDepto, resCargo, resExt] = await Promise.all([
+  const [resCong, resDepto, resCargo, resExt, resStatus] = await Promise.all([
     fetchProtegido(`${API_BASE}/congregacoes`),
     fetch(`${API_BASE}/catalogos/departamentos`),
     fetch(`${API_BASE}/catalogos/cargosMinisteriais`),
-    fetch(`${API_BASE}/catalogos/extensoes`)
+    fetch(`${API_BASE}/catalogos/extensoes`),
+    fetch(`${API_BASE}/catalogos/statuses`)
   ]);
   const congregacoes = await resCong.json();
   const departamentos = await resDepto.json();
   const cargos = await resCargo.json();
   const extensoes = await resExt.json();
+  const statusesRaw = await resStatus.json();
+  const statuses = Array.isArray(statusesRaw) ? statusesRaw : STATUS_DEFAULT;
 
   const selectCong = document.getElementById("pessoaCongregacao");
   selectCong.innerHTML = congregacoes.filter(c => c.ativa).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
@@ -1015,6 +1038,11 @@ async function carregarOpcoesFormPessoa() {
   const selectCargo = document.getElementById("pessoaCargoMinisterial");
   selectCargo.innerHTML = `<option value="">Não informado</option>` +
     cargos.filter(c => c.ativo).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(c => `<option value="${c.sigla}">${c.nome}</option>`).join("");
+
+  const selectStatus = document.getElementById("pessoaStatus");
+  selectStatus.innerHTML = statuses
+    .filter(s => s.ativa !== false)
+    .map(s => `<option value="${s.sigla}">${s.nome}</option>`).join("");
 }
 
 async function salvarPessoa() {
@@ -1024,6 +1052,13 @@ async function salvarPessoa() {
   const status = document.getElementById("pessoaStatus").value;
   const dataNascimento = document.getElementById("pessoaDataNascimento").value || null;
   const dataAdmissao = document.getElementById("pessoaDataAdmissao").value || null;
+  const formaAdmissao = document.getElementById("pessoaFormaAdmissao").value || null;
+  const dataBatismo = document.getElementById("pessoaDataBatismo").value || null;
+  const origem = document.getElementById("pessoaOrigem").value.trim() || null;
+  const igrejaAnterior = document.getElementById("pessoaIgrejaAnterior").value.trim() || null;
+  const dataRitoRecebimento = document.getElementById("pessoaDataRitoRecebimento").value || null;
+  const nomeLidoRito = document.getElementById("pessoaNomeLidoRito").value.trim() || null;
+  const ministranteRito = document.getElementById("pessoaMinistranteRito").value.trim() || null;
   const situacaoMembro = document.getElementById("pessoaSituacao").value;
   const dizimistaSelect = document.getElementById("pessoaDizimista").value;
   const dizimistaFiel = dizimistaSelect === "" ? null : dizimistaSelect === "true";
@@ -1045,7 +1080,8 @@ async function salvarPessoa() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
-      departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId
+      departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
+      formaAdmissao, dataBatismo, origem, igrejaAnterior, dataRitoRecebimento, nomeLidoRito, ministranteRito
     })
   });
   const data = await res.json();
@@ -1085,6 +1121,16 @@ function aplicarFiltroPessoas() {
   renderizarPessoas();
 }
 
+function labelFormaAdmissao(codigo) {
+  const mapa = {
+    BATISMO: "Batismo",
+    CARTA_MUDANCA: "Carta de Mudança",
+    RECONCILIACAO: "Reconciliação",
+    ACLAMACAO: "Aclamação"
+  };
+  return mapa[codigo] || "-";
+}
+
 function renderizarPessoas() {
   const container = document.getElementById("resultadoListaPessoas");
   const total = pessoasFiltradas.length;
@@ -1094,7 +1140,7 @@ function renderizarPessoas() {
   const pagina = pessoasFiltradas.slice(inicio, inicio + TAM_PAGINA);
 
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Matrícula</th><th>Nome</th><th>Idade</th><th>Categoria</th><th>Função</th><th>Cargo Ministerial</th><th>Congregação</th><th>Status</th><th class="acoes-inline"></th>
+    <th>Matrícula</th><th>Nome</th><th>Idade</th><th>Categoria</th><th>Forma Admissão</th><th>Função</th><th>Cargo Ministerial</th><th>Congregação</th><th>Status</th><th class="acoes-inline"></th>
   </tr></thead><tbody>`;
 
   pagina.forEach(p => {
@@ -1103,6 +1149,7 @@ function renderizarPessoas() {
       <td>${p.nome}</td>
       <td>${idadeDe(p.dataNascimento) ?? "-"}</td>
       <td>${badgeCategoria(p.capacidade)}</td>
+      <td>${labelFormaAdmissao(p.formaAdmissao)}</td>
       <td>${p.funcao || "-"}</td>
       <td>${p.cargoMinisterial || "-"}</td>
       <td>${p.congregacao || "-"}</td>
@@ -1138,6 +1185,13 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaCongregacao").value = pessoa.congregacaoId != null ? String(pessoa.congregacaoId) : "";
   document.getElementById("pessoaDataNascimento").value = pessoa.dataNascimento || "";
   document.getElementById("pessoaDataAdmissao").value = pessoa.dataAdmissao || "";
+  document.getElementById("pessoaFormaAdmissao").value = pessoa.formaAdmissao || "";
+  document.getElementById("pessoaDataBatismo").value = pessoa.dataBatismo || "";
+  document.getElementById("pessoaOrigem").value = pessoa.origem || "";
+  document.getElementById("pessoaIgrejaAnterior").value = pessoa.igrejaAnterior || "";
+  document.getElementById("pessoaDataRitoRecebimento").value = pessoa.dataRitoRecebimento || "";
+  document.getElementById("pessoaNomeLidoRito").value = pessoa.nomeLidoRito || "";
+  document.getElementById("pessoaMinistranteRito").value = pessoa.ministranteRito || "";
   document.getElementById("pessoaSituacao").value = pessoa.situacaoMembro || "EM_COMUNHAO";
   document.getElementById("pessoaDizimista").value = pessoa.dizimistaFiel == null ? "" : String(pessoa.dizimistaFiel);
   document.getElementById("pessoaDepartamento").value = pessoa.departamentoId != null ? String(pessoa.departamentoId) : "";
@@ -1162,6 +1216,149 @@ async function desligarPessoa(membroId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarPessoas();
+}
+
+// ---- CARTAS DE TRÂNSITO (v1.4 — Reg. Art. 131) ----
+const ROTULO_CARTA = { RECOMENDACAO: "Recomendação", MUDANCA: "Mudança", ATESTADO_SUPLETIVO: "Atestado Supletivo" };
+
+async function carregarMinhasCartas() {
+  const caixa = document.getElementById("cxMinhasCartas");
+  if (!caixa || !authMatricula) return;
+  const res = await fetch(`${API_BASE}/cartas/minhas?matricula=${authMatricula}`);
+  const cartas = await res.json();
+  if (!Array.isArray(cartas) || cartas.length === 0) {
+    caixa.innerHTML = `<p class="subtitle">Nenhuma carta solicitada ainda.</p>`;
+    return;
+  }
+  caixa.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Status</th><th>Pedido</th><th>Validade</th><th></th></tr></thead><tbody>` +
+    cartas.map(c => `<tr>
+      <td>${ROTULO_CARTA[c.tipo] || c.tipo}</td>
+      <td>${c.status}</td>
+      <td>${c.dataPedido || "-"}</td>
+      <td>${c.dataValidade || "-"}</td>
+      <td class="acoes-inline">${c.tipo === "MUDANCA" && c.status === "SOLICITADA" ? `<button class="btn-link" onclick="confirmarCartaPendente()">Confirmar</button>` : ""}</td>
+    </tr>`).join("") + "</tbody></table>";
+}
+
+async function solicitarCarta(tipo) {
+  if (!authMatricula) { avisarResultado({ mensagem: "Faça login com sua matrícula." }); return; }
+  const msg = document.getElementById("resultadoSolicitacaoCarta");
+  const matricula = Number(authMatricula);
+  const headers = { "Content-Type": "application/json" };
+
+  if (tipo === "MUDANCA") {
+    const ok = await confirmarAcao(
+      "⚠️ A Carta de Mudança desliga você do rol de membros da IEADESPA. Após 30 dias, seus dados pessoais serão minimizados (mantendo apenas matrícula, nome, data de admissão e batismo — Reg. Art. 132 §2º). Confirma a solicitação?",
+      "Confirmar desligamento"
+    );
+    if (!ok) return;
+    await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo }) });
+    const res2 = await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo, confirmar: true }) });
+    const data2 = await res2.json();
+    msg.textContent = data2.mensagem;
+    carregarMinhasCartas();
+    return;
+  }
+
+  const res = await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo }) });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  carregarMinhasCartas();
+}
+
+async function confirmarCartaPendente() {
+  if (!authMatricula) return;
+  const ok = await confirmarAcao("Confirmar esta solicitação de Carta de Mudança (declaração de ciência do desligamento)?", "Confirmar");
+  if (!ok) return;
+  const res = await fetch(`${API_BASE}/cartas/minhas`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ matricula: Number(authMatricula), tipo: "MUDANCA", confirmar: true })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  carregarMinhasCartas();
+}
+let cartasCache = [];
+async function carregarCartas() {
+  const res = await fetchProtegido(`${API_BASE}/cartas`);
+  cartasCache = await res.json();
+  renderizarCartas();
+}
+
+function renderizarCartas() {
+  const container = document.getElementById("resultadoListaCartas");
+  const cores = { SOLICITADA: "badge-licenca", CONFIRMADA: "badge-licenca", EMITIDA: "badge-ativo", CANCELADA: "badge-desligado", CONCLUIDA: "badge-inativo" };
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>ID</th><th>Membro</th><th>Tipo</th><th>Status</th><th>Destino</th><th>Pedido</th><th>Validade</th><th class="acoes-inline"></th>
+  </tr></thead><tbody>`;
+  cartasCache.forEach(c => {
+    html += `<tr>
+      <td>${c.cartaId}</td>
+      <td>${c.nome} (${c.membroId})</td>
+      <td>${ROTULO_CARTA[c.tipo] || c.tipo}</td>
+      <td><span class="badge-status ${cores[c.status] || ""}">${c.status}</span></td>
+      <td>${c.destino || "-"}</td>
+      <td>${c.dataPedido || "-"}</td>
+      <td>${c.dataValidade || "-"}</td>
+      <td class="acoes-inline">
+        ${["SOLICITADA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" onclick="emitirCarta(${c.cartaId})">Emitir</button>` : ""}
+        ${["SOLICITADA", "CONFIRMADA", "EMITIDA"].includes(c.status) ? `<button class="btn-link btn-link-perigo" onclick="cancelarCarta(${c.cartaId})">Cancelar</button>` : ""}
+        <button class="btn-link" onclick="imprimirCarta(${c.cartaId})">🖨️ Imprimir</button>
+      </td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function emitirCarta(cartaId) {
+  const res = await fetchProtegido(`${API_BASE}/cartas/emitir`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cartaId }) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarCartas();
+}
+
+async function cancelarCarta(cartaId) {
+  if (!(await confirmarAcao("Cancelar esta carta?", "Cancelar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/cartas/cancelar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cartaId }) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarCartas();
+}
+
+async function processarSaidasCartas() {
+  const res = await fetchProtegido(`${API_BASE}/cartas/processar`, { method: "POST" });
+  const data = await res.json();
+  const el = document.getElementById("resultadoCartas");
+  if (el && data && data.sucesso) el.textContent = data.mensagem;
+  carregarCartas();
+}
+
+function imprimirCarta(cartaId) {
+  const c = (cartasCache || []).find(x => x.cartaId === cartaId);
+  if (!c) return;
+  const rotulo = ROTULO_CARTA[c.tipo] || c.tipo;
+  const w = window.open("", "_blank", "width=760,height=900");
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${rotulo}</title>
+  <style>
+    body{font-family:Georgia,serif;color:#111;padding:48px;}
+    .carta{max-width:640px;margin:auto;}
+    .cab{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:24px;}
+    h1{font-size:18px;margin:0 0 4px;} h2{font-size:22px;margin:8px 0;}
+    .sub{font-size:12px;color:#555;} p{line-height:1.6;} .decl{font-style:italic;border:1px solid #999;padding:12px;margin:16px 0;}
+    .rodape{margin-top:32px;display:flex;justify-content:space-between;font-size:12px;}
+  </style></head><body><div class="carta">
+    <div class="cab"><h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS</h1><div class="sub">Santarém — Pará</div></div>
+    <h2>${rotulo}</h2>
+    <p>Por meio desta, certificamos que <strong>${c.nome}</strong> (matrícula ${c.membroId})${c.congregacao ? ", da " + c.congregacao : ""}, ${c.tipo === "MUDANCA" ? "se desliga do rol de membros" : "está em plena comunhão"} da IEADESPA.</p>
+    ${c.destino ? `<p><strong>Destino:</strong> ${c.destino}</p>` : ""}
+    ${c.declaracaoCiencia ? `<p class="decl">${c.declaracaoCiencia}</p>` : ""}
+    <p><strong>Emitida em:</strong> ${c.dataEmissao || "____ / ____ / ______"} &nbsp;·&nbsp; <strong>Validade:</strong> ${c.dataValidade || (c.tipo === "RECOMENDACAO" ? "30 dias a partir da emissão" : "—")}</p>
+    <div class="rodape"><div>__________________________<br>Dirigente / Secretário Local</div><div>__________________________<br>Data</div></div>
+  </div></body></html>`);
+  w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
 }
 
 // ---- Vínculos Familiares (seção dentro do cadastro de uma Pessoa) ----

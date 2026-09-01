@@ -3,13 +3,19 @@
 // POST   /api/orgaos             -> cria/atualiza órgão (permissão "pessoas")
 // DELETE /api/orgaos/{orgaoId}   -> exclui órgão (permissão "pessoas")
 const auth = require("../shared/auth");
-const mockDb = require("../shared/mockDb");
+const { getPool, sql } = require("../shared/db");
+
+const SELECT_ORGAO = `SELECT OrgaoId AS orgaoId, Sigla AS sigla, Nome AS nome,
+       QuorumMinimoPct AS quorumMinimoPct, QuorumDeliberativoPct AS quorumDeliberativoPct,
+       FaltasParaPerdaAssento AS faltasParaPerdaAssento FROM Orgaos`;
 
 module.exports = async function (context, req) {
   const method = (req.method || "GET").toUpperCase();
+  const pool = await getPool();
 
   if (method === "GET") {
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: mockDb.listarOrgaos() };
+    const result = await pool.request().query(`${SELECT_ORGAO} ORDER BY OrgaoId`);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
     return;
   }
 
@@ -22,13 +28,35 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe sigla e nome do órgão." } };
       return;
     }
-    const dados = { sigla, nome, quorumMinimoPct, quorumDeliberativoPct, faltasParaPerdaAssento };
-    const orgao = orgaoId ? mockDb.atualizarOrgao(orgaoId, dados) : mockDb.criarOrgao(dados);
-    if (!orgao) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Órgão não encontrado." } };
-      return;
+
+    if (orgaoId) {
+      const upd = await pool.request()
+        .input("id", sql.Int, orgaoId)
+        .input("sigla", sql.NVarChar(30), sigla)
+        .input("nome", sql.NVarChar(200), nome)
+        .input("qmin", sql.Decimal(5, 2), quorumMinimoPct != null ? quorumMinimoPct : null)
+        .input("qdel", sql.Decimal(5, 2), quorumDeliberativoPct != null ? quorumDeliberativoPct : null)
+        .input("faltas", sql.Int, faltasParaPerdaAssento != null ? faltasParaPerdaAssento : null)
+        .query(`UPDATE Orgaos SET Sigla=@sigla, Nome=@nome, QuorumMinimoPct=@qmin,
+                QuorumDeliberativoPct=@qdel, FaltasParaPerdaAssento=@faltas WHERE OrgaoId=@id`);
+      if (upd.rowsAffected[0] === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Órgão não encontrado." } };
+        return;
+      }
+    } else {
+      await pool.request()
+        .input("sigla", sql.NVarChar(30), sigla)
+        .input("nome", sql.NVarChar(200), nome)
+        .input("qmin", sql.Decimal(5, 2), quorumMinimoPct != null ? quorumMinimoPct : null)
+        .input("qdel", sql.Decimal(5, 2), quorumDeliberativoPct != null ? quorumDeliberativoPct : null)
+        .input("faltas", sql.Int, faltasParaPerdaAssento != null ? faltasParaPerdaAssento : null)
+        .query(`INSERT INTO Orgaos (Sigla, Nome, QuorumMinimoPct, QuorumDeliberativoPct, FaltasParaPerdaAssento)
+                VALUES (@sigla, @nome, @qmin, @qdel, @faltas)`);
     }
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Órgão salvo.", orgao } };
+
+    const result = await pool.request().input("sigla", sql.NVarChar(30), sigla)
+      .query(`${SELECT_ORGAO} WHERE Sigla = @sigla ORDER BY OrgaoId DESC`);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Órgão salvo.", orgao: result.recordset[0] } };
     return;
   }
 
@@ -38,7 +66,8 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o órgão na rota: /api/orgaos/{orgaoId}" } };
       return;
     }
-    const ok = mockDb.excluirOrgao(orgaoId);
+    const del = await pool.request().input("id", sql.Int, orgaoId).query(`DELETE FROM Orgaos WHERE OrgaoId = @id`);
+    const ok = del.rowsAffected[0] > 0;
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: ok, mensagem: ok ? "✅ Órgão excluído." : "Órgão não encontrado." } };
     return;
   }

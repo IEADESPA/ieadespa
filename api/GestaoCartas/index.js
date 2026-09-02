@@ -23,10 +23,14 @@ const SELECT_LISTA = `
          c.DeclaracaoCiencia AS declaracaoCiencia,
          CONVERT(varchar(10), c.DataEmissao, 120) AS dataEmissao,
          CONVERT(varchar(10), c.DataValidade, 120) AS dataValidade,
-         CONVERT(varchar(10), ISNULL(c.DataConfirmacao, c.DataSolicitacao), 120) AS dataPedido
+         CONVERT(varchar(10), ISNULL(c.DataConfirmacao, c.DataSolicitacao), 120) AS dataPedido,
+         CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
+         COALESCE(cm.Nome, m.Funcao) AS funcao, m.CargoMinisterial AS cargoMinisterial,
+         m.SituacaoMembro AS situacaoMembro, m.EstadoCivil AS estadoCivil, m.Status AS statusMembro
   FROM CartasTransito c
   JOIN MembroReferencia m ON m.MembroId = c.MembroId
-  LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId`;
+  LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
+  LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial`;
 
 function dataISO(data) {
   if (!data) return null;

@@ -1060,6 +1060,7 @@ async function salvarPessoa() {
   const nomeLidoRito = document.getElementById("pessoaNomeLidoRito").value.trim() || null;
   const ministranteRito = document.getElementById("pessoaMinistranteRito").value.trim() || null;
   const situacaoMembro = document.getElementById("pessoaSituacao").value;
+  const estadoCivil = document.getElementById("pessoaEstadoCivil").value || null;
   const dizimistaSelect = document.getElementById("pessoaDizimista").value;
   const dizimistaFiel = dizimistaSelect === "" ? null : dizimistaSelect === "true";
   const departamentoId = document.getElementById("pessoaDepartamento").value || null;
@@ -1081,7 +1082,8 @@ async function salvarPessoa() {
     body: JSON.stringify({
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
       departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
-      formaAdmissao, dataBatismo, origem, igrejaAnterior, dataRitoRecebimento, nomeLidoRito, ministranteRito
+      formaAdmissao, dataBatismo, origem, igrejaAnterior, dataRitoRecebimento, nomeLidoRito, ministranteRito,
+      estadoCivil
     })
   });
   const data = await res.json();
@@ -1193,6 +1195,7 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaNomeLidoRito").value = pessoa.nomeLidoRito || "";
   document.getElementById("pessoaMinistranteRito").value = pessoa.ministranteRito || "";
   document.getElementById("pessoaSituacao").value = pessoa.situacaoMembro || "EM_COMUNHAO";
+  document.getElementById("pessoaEstadoCivil").value = pessoa.estadoCivil || "";
   document.getElementById("pessoaDizimista").value = pessoa.dizimistaFiel == null ? "" : String(pessoa.dizimistaFiel);
   document.getElementById("pessoaDepartamento").value = pessoa.departamentoId != null ? String(pessoa.departamentoId) : "";
   document.getElementById("pessoaCargoMinisterial").value = pessoa.cargoMinisterial || "";
@@ -1335,27 +1338,68 @@ async function processarSaidasCartas() {
   carregarCartas();
 }
 
+const LABEL_SITUACAO_CARTA = {
+  EM_COMUNHAO: "Comunhão",
+  SEM_COMUNHAO: "Paz",
+  CONGREGADO: "Observação",
+  NOVO_CONVERTIDO: "Observação"
+};
+const LABEL_ESTADO_CIVIL = {
+  SOLTEIRO: "Solteiro(a)", CASADO: "Casado(a)", VIUVO: "Viúvo(a)",
+  DIVORCIADO: "Divorciado(a)", UNIAO_ESTAVEL: "União Estável"
+};
+const LABEL_CARGO_MINISTERIAL = {
+  AUXILIAR: "Auxiliar", MISSIONARIO: "Missionário(a)", DIACONO: "Diácono",
+  PRESBITERO: "Presbítero", EVANGELISTA: "Evangelista", PASTOR: "Pastor"
+};
+
+// Marca "( )" -> "(X)" na opção escolhida, mantendo as demais em branco — mesmo
+// espírito de múltipla escolha do modelo em papel usado nas congregações.
+function marcarOpcao(rotulo, marcado) {
+  return `(${marcado ? "X" : "&nbsp;"}) ${rotulo}`;
+}
+
 function imprimirCarta(cartaId) {
   const c = (cartasCache || []).find(x => x.cartaId === cartaId);
   if (!c) return;
   const rotulo = ROTULO_CARTA[c.tipo] || c.tipo;
+  const ehCongregado = c.situacaoMembro === "CONGREGADO";
+  const situacaoRotulo = LABEL_SITUACAO_CARTA[c.situacaoMembro] || "Comunhão";
+  const hoje = new Date();
+  const dataEmissaoFmt = c.dataEmissao ? c.dataEmissao.split("-").reverse().join("/") : `____ / ____ / ${hoje.getFullYear()}`;
   const w = window.open("", "_blank", "width=760,height=900");
   w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${rotulo}</title>
   <style>
-    body{font-family:Georgia,serif;color:#111;padding:48px;}
-    .carta{max-width:640px;margin:auto;}
-    .cab{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:24px;}
-    h1{font-size:18px;margin:0 0 4px;} h2{font-size:22px;margin:8px 0;}
-    .sub{font-size:12px;color:#555;} p{line-height:1.6;} .decl{font-style:italic;border:1px solid #999;padding:12px;margin:16px 0;}
-    .rodape{margin-top:32px;display:flex;justify-content:space-between;font-size:12px;}
+    body{font-family:Georgia,serif;color:#111;padding:40px;}
+    .carta{max-width:680px;margin:auto;}
+    .cab{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:20px;}
+    h1{font-size:17px;margin:0 0 4px;} h2{font-size:18px;margin:4px 0 20px;text-align:right;}
+    .sub{font-size:12px;color:#555;} p{line-height:1.7;margin:8px 0;}
+    .linha{display:flex;gap:24px;flex-wrap:wrap;margin:10px 0;}
+    .linha span{white-space:nowrap;}
+    .decl{font-style:italic;border:1px solid #999;padding:10px;margin:14px 0;font-size:14px;}
+    .obs{border-top:1px solid #ccc;padding-top:8px;margin-top:16px;font-size:13px;}
+    .rodape{margin-top:44px;display:flex;justify-content:space-around;font-size:12px;text-align:center;}
+    .rodape div{border-top:1px solid #111;padding-top:4px;width:220px;}
+    .validade{margin-top:20px;font-size:11px;color:#555;text-align:center;}
   </style></head><body><div class="carta">
-    <div class="cab"><h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS</h1><div class="sub">Santarém — Pará</div></div>
-    <h2>${rotulo}</h2>
-    <p>Por meio desta, certificamos que <strong>${c.nome}</strong> (matrícula ${c.membroId})${c.congregacao ? ", da " + c.congregacao : ""}, ${c.tipo === "MUDANCA" ? "se desliga do rol de membros" : "está em plena comunhão"} da IEADESPA.</p>
-    ${c.destino ? `<p><strong>Destino:</strong> ${c.destino}</p>` : ""}
+    <div class="cab"><h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS</h1><div class="sub">Ministério do SETA em Parauapebas — PA · IEADESPA</div></div>
+    <h2>${marcarOpcao("CARTA DE RECOMENDAÇÃO", c.tipo === "RECOMENDACAO")}${"&nbsp;&nbsp;"}${marcarOpcao("CARTA DE MUDANÇA", c.tipo === "MUDANCA")}${"&nbsp;&nbsp;"}${marcarOpcao("ATESTADO SUPLETIVO", c.tipo === "ATESTADO_SUPLETIVO")}</h2>
+    <p>Parauapebas, PA, ${dataEmissaoFmt}.</p>
+    <p>Saudações no SENHOR JESUS.</p>
+    <p>Apresentamos à Igreja em <strong>${c.destino || "______________________"}</strong> o(a) portador(a) desta carta o(a) Sr(a). <strong>${c.nome}</strong> (Cartão de Membro nº ${c.membroId}).</p>
+    <div class="linha"><span>${marcarOpcao("Membro", !ehCongregado)}</span><span>${marcarOpcao("Congregado", ehCongregado)}</span></div>
+    <p>Nesta Igreja desde ${c.dataAdmissao ? c.dataAdmissao.split("-").reverse().join("/") : "____/____/______"}, por se achar em: <strong>${situacaoRotulo}</strong>.</p>
+    <p>Nós o(a) recomendamos que recebais no Senhor, como usam os Santos.</p>
+    <div class="linha">
+      <span><strong>Função:</strong> ${c.funcao || "—"}</span>
+      <span><strong>Cargo:</strong> ${LABEL_CARGO_MINISTERIAL[c.cargoMinisterial] || "—"}</span>
+      <span><strong>Estado Civil:</strong> ${LABEL_ESTADO_CIVIL[c.estadoCivil] || "—"}</span>
+    </div>
     ${c.declaracaoCiencia ? `<p class="decl">${c.declaracaoCiencia}</p>` : ""}
-    <p><strong>Emitida em:</strong> ${c.dataEmissao || "____ / ____ / ______"} &nbsp;·&nbsp; <strong>Validade:</strong> ${c.dataValidade || (c.tipo === "RECOMENDACAO" ? "30 dias a partir da emissão" : "—")}</p>
-    <div class="rodape"><div>__________________________<br>Dirigente / Secretário Local</div><div>__________________________<br>Data</div></div>
+    ${(c.motivoSaida || c.destino) ? `<p class="obs"><strong>OBS:</strong> ${c.motivoSaida || ""}</p>` : ""}
+    <div class="rodape"><div>Pastor Congregacional</div><div>Secretário Local(a)</div></div>
+    <p class="validade">${c.dataValidade ? `VALIDADE: até ${c.dataValidade.split("-").reverse().join("/")}` : (c.tipo === "MUDANCA" ? "" : "VALIDADE: 30 dias a partir da data de emissão")}</p>
   </div></body></html>`);
   w.document.close();
   setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);

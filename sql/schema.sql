@@ -419,6 +419,10 @@ CREATE TABLE CartasTransito (
     CriadoEm           DATETIME2 DEFAULT SYSUTCDATETIME()
 );
 
+-- Estado Civil (v1.4 — modelo impresso da Carta de Trânsito, migração 018)
+ALTER TABLE MembroReferencia ADD
+    EstadoCivil NVARCHAR(20) NULL; -- SOLTEIRO / CASADO / VIUVO / DIVORCIADO / UNIAO_ESTAVEL
+
 -- ============================================================
 -- Auditoria e trilha de dados (v0.3) — Encarregado de Dados (papel), trilha de
 -- consentimento LGPD (append-only por tipo de dado) e solicitações do titular

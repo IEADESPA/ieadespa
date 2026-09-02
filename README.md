@@ -353,9 +353,21 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       digital (Reg. Art. 131 §3º, II) + minimização automática sob demanda após 30 dias
       (Reg. Art. 132 §2º: mantém matrícula/nome/data de admissão/batismo) + cancelamento
       por readmissão ("o relógio zera"). Migração 017 + `SolicitarCarta`/`GestaoCartas`.
-- [ ] Recebimento de carta de outra igreja (admissão por carta — vínculo com a v1.1).
-- [ ] Atestado de Trânsito Supletivo (emitido pelo CEI em caso de recusa).
-- [ ] Competência de emissão: Dirigente + Secretário Local (vedada à Mesa Diretora).
+- [x] Modelo impresso da carta (cabeçalho, tipo, situação em comunhão/paz/observação,
+      função, cargo, estado civil, cartão de membro nº, validade) — baseado no modelo
+      físico em uso nas congregações. Migração 018 (`EstadoCivil` em `MembroReferencia`)
+      + `imprimirCarta()` em `app/script.js`.
+- [x] Recebimento de carta de outra igreja — não é um fluxo à parte: já é a Admissão por
+      Carta da v1.1 (`FormaAdmissao = CARTA_MUDANCA`, com `IgrejaAnterior`/`Origem`
+      preenchidos). Data de admissão/batismo do membro independe de ele ter trazido ou
+      não a carta física.
+- [x] Atestado de Trânsito Supletivo (Reg. Art. 131 §2º, III) — como o próprio membro já
+      solicita direto pelo sistema, sai emitido na hora (`SolicitarCarta`, tipo
+      `ATESTADO_SUPLETIVO`), sem depender do CEI ou de a igreja de origem ter a carta.
+- [x] Competência de emissão — não se aplica ao autoatendimento: como é o próprio membro
+      quem pede, direto no sistema, não há Dirigente/Secretário/Mesa Diretora a
+      intermediar (mesmo racional já usado na Carta de Mudança). A tela de Secretaria
+      (`GestaoCartas`) continua disponível como canal alternativo de emissão manual.
 
 #### v1.5 — Perda de membresia (Art. 11)
 

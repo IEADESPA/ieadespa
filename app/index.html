@@ -135,10 +135,11 @@
 
         <hr />
         <h3>📨 Cartas de Trânsito</h3>
-        <p class="subtitle">Solicite você mesmo (somente pela sua matrícula). A <strong>Carta de Mudança</strong> desliga você do rol e, após 30 dias, seus dados pessoais são minimizados (Reg. Art. 132 §2º).</p>
+        <p class="subtitle">Solicite você mesmo (somente pela sua matrícula). A <strong>Carta de Mudança</strong> desliga você do rol e, após 30 dias, seus dados pessoais são minimizados (Reg. Art. 132 §2º). O <strong>Atestado de Trânsito Supletivo</strong> (Reg. Art. 131 §2º, III) é emitido na hora, sem depender de outra igreja.</p>
         <div class="barra-lista">
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="solicitarCarta('RECOMENDACAO')">✉️ Carta de Recomendação</button>
           <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="solicitarCarta('MUDANCA')">📤 Carta de Mudança</button>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="solicitarCarta('ATESTADO_SUPLETIVO')">📄 Atestado de Trânsito Supletivo</button>
         </div>
         <p id="resultadoSolicitacaoCarta" class="subtitle"></p>
         <div id="cxMinhasCartas"></div>
@@ -315,6 +316,17 @@
               <option value="EM_COMUNHAO">Membro em Comunhão</option>
               <option value="SEM_COMUNHAO">Membro sem Comunhão</option>
               <option value="CONGREGADO">Congregado</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Estado Civil:</label>
+            <select id="pessoaEstadoCivil">
+              <option value="">Não informado</option>
+              <option value="SOLTEIRO">Solteiro(a)</option>
+              <option value="CASADO">Casado(a)</option>
+              <option value="VIUVO">Viúvo(a)</option>
+              <option value="DIVORCIADO">Divorciado(a)</option>
+              <option value="UNIAO_ESTAVEL">União Estável</option>
             </select>
           </div>
           <div class="input-group">

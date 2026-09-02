@@ -26,7 +26,7 @@ const SELECT_MEMBRO = `
          m.NomeLidoRito AS nomeLidoRito, m.MinistranteRito AS ministranteRito,
          m.DizimistaFiel AS dizimistaFiel, m.SituacaoMembro AS situacaoMembro, m.DepartamentoId AS departamentoId,
          m.CargoMinisterial AS cargoMinisterial, m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco,
-         m.ExtensaoId AS extensaoId, e.Nome AS extensao
+         m.ExtensaoId AS extensaoId, e.Nome AS extensao, m.EstadoCivil AS estadoCivil
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
   LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
@@ -66,7 +66,7 @@ module.exports = async function (context, req) {
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
       situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       dataBatismo, formaAdmissao, origem, igrejaAnterior,
-      dataRitoRecebimento, nomeLidoRito, ministranteRito
+      dataRitoRecebimento, nomeLidoRito, ministranteRito, estadoCivil
     } = req.body || {};
     if (!membroId || !nome) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
@@ -109,6 +109,14 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // Estado Civil: só entra no modelo impresso da Carta de Trânsito (Reg. Art. 131),
+    // não é regra jurídica — catálogo fixo simples.
+    const ESTADOS_CIVIS = ["SOLTEIRO", "CASADO", "VIUVO", "DIVORCIADO", "UNIAO_ESTAVEL"];
+    if (estadoCivil && !ESTADOS_CIVIS.includes(estadoCivil)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: `Estado civil inválido. Use um de: ${ESTADOS_CIVIS.join(", ")}.` } };
+      return;
+    }
+
     const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
     const existia = existente.recordset.length > 0;
     const situacaoFinal = situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO");
@@ -134,7 +142,8 @@ module.exports = async function (context, req) {
       .input("igrejaAnterior", sql.NVarChar(150), igrejaAnterior || null)
       .input("dataRitoRecebimento", sql.Date, dataRitoRecebimento || null)
       .input("nomeLidoRito", sql.NVarChar(200), nomeLidoRito || null)
-      .input("ministranteRito", sql.NVarChar(150), ministranteRito || null);
+      .input("ministranteRito", sql.NVarChar(150), ministranteRito || null)
+      .input("estadoCivil", sql.NVarChar(20), estadoCivil || null);
 
     if (existia) {
       // Funcao não entra aqui de propósito: é campo histórico gerido só pela
@@ -147,12 +156,12 @@ module.exports = async function (context, req) {
                Telefone = @telefone, Email = @email, Endereco = @endereco, ExtensaoId = @extensaoId,
                DataBatismo = @dataBatismo, FormaAdmissao = @formaAdmissao, Origem = @origem,
                IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
-               NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito
+               NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil
         WHERE MembroId = @id`);
     } else {
       await request.query(`
-        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito)
-        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito)`);
+        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil)
+        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil)`);
     }
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);

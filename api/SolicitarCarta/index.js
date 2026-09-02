@@ -1,7 +1,8 @@
 // SolicitarCarta — auto-atendimento (Meu Painel): o PRÓPRIO membro solicita a
-// Carta de Recomendação ou de Mudança pela própria matrícula (Reg. Art. 131).
-// Ninguém pode solicitar no lugar de outra pessoa — a matrícula é a identidade
-// do solicitante (mesmo modelo de auto-atendimento do MeusDadosLGPD).
+// Carta de Recomendação, de Mudança ou o Atestado de Trânsito Supletivo pela
+// própria matrícula (Reg. Art. 131). Ninguém pode solicitar no lugar de outra
+// pessoa — a matrícula é a identidade do solicitante (mesmo modelo de
+// autoatendimento do MeusDadosLGPD).
 //
 // GET  /api/cartas/minhas?matricula=123        -> lista as cartas do próprio membro
 // POST /api/cartas/minhas                      -> body: { matricula, tipo, destino?, motivoSaida?, confirmar? }
@@ -10,11 +11,24 @@
 // 2º (confirmar=true) grava a "declaração de ciência" digital e avança para
 // CONFIRMADA — a partir daí corre o prazo de 30 dias para a minimização (Reg.
 // Art. 132 §2º). A Carta de Recomendação não tem esse passo (não é desligamento).
+//
+// O Atestado de Trânsito Supletivo (Reg. Art. 131 §2º, III) normalmente é
+// emitido pelo CEI quando a igreja de origem se recusa a passar a carta — mas
+// como aqui é o próprio membro que pede, direto no sistema, não existe
+// "competência de emissão" a intermediar: sai direto como EMITIDA, com
+// validade de 30 dias, igual à Carta de Recomendação.
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 
-const TIPOS = ["RECOMENDACAO", "MUDANCA"];
+const TIPOS = ["RECOMENDACAO", "MUDANCA", "ATESTADO_SUPLETIVO"];
 const STATUS_ATIVOS = ["SOLICITADA", "CONFIRMADA", "EMITIDA"];
+
+function dataISO(data) {
+  const d = new Date(data);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
 
 const SELECT_CARTA = `
   SELECT c.CartaId AS cartaId, c.Tipo AS tipo, c.Status AS status, c.Destino AS destino,
@@ -47,7 +61,7 @@ module.exports = async function (context, req) {
 
   const { matricula, tipo, destino, motivoSaida, confirmar } = req.body || {};
   if (!matricula || !tipo || !TIPOS.includes(tipo)) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe matricula e tipo válido (RECOMENDACAO ou MUDANCA)." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: `Informe matricula e tipo válido (${TIPOS.join(", ")}).` } };
     return;
   }
 
@@ -83,6 +97,27 @@ module.exports = async function (context, req) {
 
   if (cartaAtiva) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Você já tem uma solicitação em andamento deste tipo de carta." } };
+    return;
+  }
+
+  if (tipo === "ATESTADO_SUPLETIVO") {
+    const hoje = new Date();
+    const validade = dataISO(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 30));
+    const declaracao = `Eu, ${nome}, solicito o Atestado de Trânsito Supletivo diretamente pelo sistema (Reg. Art. 131 §2º, III), por não dispor da carta da igreja de origem.`;
+    const result = await pool.request()
+      .input("membroId", sql.Int, matricula)
+      .input("destino", sql.NVarChar(150), destino || null)
+      .input("motivoSaida", sql.NVarChar(200), motivoSaida || null)
+      .input("solicitadoPor", sql.Int, matricula)
+      .input("declaracao", sql.NVarChar(500), declaracao)
+      .input("hoje", sql.Date, dataISO(hoje))
+      .input("validade", sql.Date, validade)
+      .query(`INSERT INTO CartasTransito (MembroId, Tipo, Destino, MotivoSaida, SolicitadoPor, EmitidoPor, DeclaracaoCiencia, Status, DataConfirmacao, DataEmissao, DataValidade)
+              OUTPUT INSERTED.CartaId
+              VALUES (@membroId, 'ATESTADO_SUPLETIVO', @destino, @motivoSaida, @solicitadoPor, @solicitadoPor, @declaracao, 'EMITIDA', SYSUTCDATETIME(), @hoje, @validade)`);
+    const cartaId = result.recordset[0].CartaId;
+    await registrarAuditoria({ tabela: "CartasTransito", registroId: Number(cartaId), acao: "Emitiu Atestado de Trânsito Supletivo (autoatendimento)", usuarioId: Number(matricula), dadosDepois: { tipo, destino, validade } });
+    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Atestado emitido — já vale para trânsito.", cartaId } };
     return;
   }
 

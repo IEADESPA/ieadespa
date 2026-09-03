@@ -301,7 +301,8 @@ INSERT INTO StatusMembro (Sigla, Nome) VALUES
     ('ATIVO','ATIVO'),
     ('LICENÇA','LICENÇA'),
     ('INATIVO','INATIVO'),
-    ('DESLIGADO','DESLIGADO');
+    ('DESLIGADO','DESLIGADO'),
+    ('FALECIDO','Falecido'); -- v1.5 (migração 019)
 
 CREATE TABLE CargosMinisteriais (
     CargoId INT IDENTITY PRIMARY KEY,
@@ -422,6 +423,27 @@ CREATE TABLE CartasTransito (
 -- Estado Civil (v1.4 — modelo impresso da Carta de Trânsito, migração 018)
 ALTER TABLE MembroReferencia ADD
     EstadoCivil NVARCHAR(20) NULL; -- SOLTEIRO / CASADO / VIUVO / DIVORCIADO / UNIAO_ESTAVEL
+
+-- ============================================================
+-- Perda de Membresia (v1.5 — Regimento Art. 11, migração 019)
+-- ============================================================
+ALTER TABLE MembroReferencia ADD
+    DataAfastamento DATE NULL; -- lançada manualmente pela Secretaria (início do Abandono Material)
+
+CREATE TABLE ProcedimentosAbandono (
+    ProcedimentoId    INT IDENTITY PRIMARY KEY,
+    MembroId          INT NOT NULL REFERENCES MembroReferencia(MembroId),
+    Status            NVARCHAR(30) NOT NULL DEFAULT 'NOTIFICADO', -- NOTIFICADO / HOMOLOGADO / ARQUIVADO
+    DataNotificacao   DATE NOT NULL,
+    DataEdital        DATE NULL,
+    PrazoDias         INT NOT NULL DEFAULT 15,
+    DataHomologacao   DATE NULL,
+    HomologadoPor     INT NULL REFERENCES MembroReferencia(MembroId),
+    RecursoInterposto BIT NOT NULL DEFAULT 0,
+    DataRecurso       DATE NULL,
+    ResultadoRecurso  NVARCHAR(30) NULL,                          -- PENDENTE / MANTIDO / REVERTIDO
+    CriadoEm          DATETIME2 DEFAULT SYSUTCDATETIME()
+);
 
 -- ============================================================
 -- Auditoria e trilha de dados (v0.3) — Encarregado de Dados (papel), trilha de

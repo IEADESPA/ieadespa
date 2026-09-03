@@ -153,6 +153,13 @@ jobs:
           path: 'sql/migrations/018_estado_civil_atestado_supletivo.sql'
           action: 'Script'
 
+      - name: Executar Migração SQL 019
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/019_perda_membresia.sql'
+          action: 'Script'
+
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1

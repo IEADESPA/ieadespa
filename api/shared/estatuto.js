@@ -149,11 +149,35 @@ function avaliarQuorumInstalacao(orgaoSigla, totalPresentes, totalUniverso) {
   };
 }
 
+// Art. 11 — Abandono Eclesiástico Material: 90 dias sem comunhão a partir da data em
+// que a Secretaria constata o afastamento (lançamento manual — não há como inferir
+// isso automaticamente sem um registro de presença/contato mais amplo do que existe
+// hoje). Só conta enquanto o membro estiver marcado SEM_COMUNHAO; se ele voltar a
+// comparecer, quem zera `dataAfastamento` é a própria edição da Pessoa.
+const DIAS_ABANDONO_MATERIAL = 90;
+const DIAS_PRAZO_DEFESA_ABANDONO = 15; // prazo do procedimento sumário de constatação
+const DIAS_RECURSO_ASSEMBLEIA = 30;    // recurso à Assembleia, sem efeito suspensivo
+
+function diasEmAfastamento(membro, hoje) {
+  if (membro.situacaoMembro !== "SEM_COMUNHAO" || !membro.dataAfastamento) return null;
+  return diasDesde(membro.dataAfastamento, hoje);
+}
+
+function elegivelAbandonoMaterial(membro, hoje) {
+  const dias = diasEmAfastamento(membro, hoje);
+  return dias !== null && dias >= DIAS_ABANDONO_MATERIAL;
+}
+
 module.exports = {
   idadeEm,
   diasDesde,
   estaSobDisciplina,
   calcularCapacidadeEleitoral,
   regraQuorumInstalacao,
-  avaliarQuorumInstalacao
+  avaliarQuorumInstalacao,
+  DIAS_ABANDONO_MATERIAL,
+  DIAS_PRAZO_DEFESA_ABANDONO,
+  DIAS_RECURSO_ASSEMBLEIA,
+  diasEmAfastamento,
+  elegivelAbandonoMaterial
 };

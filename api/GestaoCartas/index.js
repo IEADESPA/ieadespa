@@ -14,6 +14,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
+const vacancia = require("../shared/vacancia");
 
 const DIAS_MINIMIZACAO = 30;
 
@@ -120,6 +121,10 @@ module.exports = async function (context, req) {
           .query(`UPDATE CartasTransito SET Status = 'CANCELADA' WHERE CartaId = @id`);
         canceladas++;
       } else if (dias !== null && dias >= DIAS_MINIMIZACAO) {
+        // Fecha Assentos/Liderança (v1.5) antes de minimizar — a minimização abaixo já
+        // zera Cargo Ministerial/Departamento/Função na própria linha do membro, mas
+        // não tocava em Assentos/Lideranca, que ficavam órfãos.
+        await vacancia.encerrarVinculos(pool, sql, c.MembroId, c.MotivoSaida || "Carta de Mudança");
         await pool.request()
           .input("id", sql.Int, c.MembroId)
           .input("dataSaida", sql.Date, c.dataBase)

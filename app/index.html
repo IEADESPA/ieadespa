@@ -84,6 +84,7 @@
           <button class="btn-aba" id="btnAbaPermissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
           <button class="btn-aba" id="btnAbaConsagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
           <button class="btn-aba" id="btnAbaDisciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
+          <button class="btn-aba" id="btnAbaAbandono" onclick="mostrarAbaSecretaria('abandono')"><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
           <button class="btn-aba" id="btnAbaAuditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
           <button class="btn-aba" id="btnAbaProtecaodedados" onclick="mostrarAbaSecretaria('protecaodedados')"><span class="icone">🛡️</span><span class="rotulo">Proteção de Dados</span></button>
           <button class="btn-aba" id="btnAbaDocumentos" onclick="mostrarAbaSecretaria('documentos')"><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
@@ -335,6 +336,22 @@
               <option value="">Não informado</option>
               <option value="true">Sim</option>
               <option value="false">Não</option>
+            </select>
+          </div>
+          <p class="subtitle" style="margin:16px 0 4px;">Perda de Membresia (Reg. Art. 11 — v1.5): preencha se a pessoa se afastou ou saiu.</p>
+          <div class="input-group">
+            <label>Data do Afastamento (início da contagem do Abandono Material, 90 dias):</label>
+            <input type="date" id="pessoaDataAfastamento" />
+          </div>
+          <div class="input-group">
+            <label>Causa da Saída (se o Status for Desligado/Falecido):</label>
+            <select id="pessoaMotivoSaida">
+              <option value="">Não se aplica</option>
+              <option value="FALECIMENTO">Falecimento</option>
+              <option value="DESLIGAMENTO">Desligamento</option>
+              <option value="CARTA_MUDANCA">Carta de Mudança</option>
+              <option value="EXCLUSAO">Exclusão</option>
+              <option value="ABANDONO_MATERIAL">Abandono Material</option>
             </select>
           </div>
           <p class="subtitle" style="margin:16px 0 4px;">Dados de contato (LGPD — coleta mínima, uso restrito a quem tem permissão de Pessoas):</p>
@@ -596,6 +613,23 @@
         <hr />
         <h3>Processos Ativos</h3>
         <div id="resultadoListaDisciplina"></div>
+      </div>
+
+      <!-- ABA: PERDA DE MEMBRESIA -->
+      <div id="abaAbandono" class="aba-secretaria" style="display:none;">
+        <h3>Radar de Abandono Material (Reg. Art. 11)</h3>
+        <p class="subtitle">Membros Sem Comunhão com Data de Afastamento lançada na ficha
+          (aba Pessoas). Depois de 90 dias, fica liberado abrir o procedimento sumário de
+          constatação — notificação seguida de 15 dias de prazo de defesa antes da CLI
+          poder homologar a perda de membresia.</p>
+        <div id="resultadoRadarAbandono"></div>
+
+        <hr />
+        <h3>Procedimentos</h3>
+        <p class="subtitle">Notificação e edital ficam registrados aqui mesmo (o sistema
+          não envia e-mail/SMS). Recurso à Assembleia não tem efeito suspensivo — a perda
+          já vale a partir da homologação.</p>
+        <div id="resultadoListaAbandono"></div>
       </div>
 
       <!-- ABA: AUDITORIA -->

@@ -9,6 +9,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const vacancia = require("../shared/vacancia");
 
 const RESULTADOS_VALIDOS = ["ARQUIVADO", "SANCAO", "EXCLUSAO"];
 
@@ -68,13 +69,13 @@ module.exports = async function (context, req) {
           DataConclusao = CAST(SYSUTCDATETIME() AS DATE)
         WHERE ProcessoId = @id`);
 
-    // Exclusão sempre implica perda de tudo (Regimento) — fecha os Assentos ativos.
-    // Os demais resultados (SANCAO) exigem saber o nível de pena pra decidir se há
-    // perda de mandato (Disciplina Rigorosa) ou só afastamento temporário (Suspensão
-    // Temporária) — isso depende do catálogo TiposPenalidade, que é v3.4.
+    // Exclusão sempre implica perda de tudo (Regimento) — encerra Assentos, Liderança
+    // e Cargo Ministerial/Departamento (shared/vacancia.js, v1.5). Os demais resultados
+    // (SANCAO) exigem saber o nível de pena pra decidir se há perda de mandato
+    // (Disciplina Rigorosa) ou só afastamento temporário (Suspensão Temporária) — isso
+    // depende do catálogo TiposPenalidade, que é v3.4.
     if (resultado === "EXCLUSAO") {
-      await pool.request().input("membroId", sql.Int, atual.MembroId)
-        .query(`UPDATE Assentos SET DataFim = CAST(SYSUTCDATETIME() AS DATE), MotivoEncerramento = 'DISCIPLINA' WHERE MembroId = @membroId AND DataFim IS NULL`);
+      await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
     }
 
     await registrarAuditoria({

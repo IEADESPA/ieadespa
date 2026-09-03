@@ -8,6 +8,15 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
+const vacancia = require("../shared/vacancia");
+
+// Causas de saída fixas (Reg. Art. 11 — Perda de Membresia, v1.5) — regra jurídica,
+// não catálogo editável por tela (mesmo espírito de FORMAS_ADMISSAO/ESTADOS_CIVIS).
+const CAUSAS_SAIDA = ["FALECIMENTO", "DESLIGAMENTO", "CARTA_MUDANCA", "EXCLUSAO", "ABANDONO_MATERIAL"];
+
+// Status que encerram a membresia de vez — entrar num desses (vindo de outro status)
+// dispara a vacância automática de Assentos/Liderança/Cargo (shared/vacancia.js).
+const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
 
 // "funcao" no retorno é só de exibição: prioriza o nome do Cargo Ministerial
 // (catálogo fechado, com escada — Art. 71) e cai pro texto livre antigo só se
@@ -26,7 +35,9 @@ const SELECT_MEMBRO = `
          m.NomeLidoRito AS nomeLidoRito, m.MinistranteRito AS ministranteRito,
          m.DizimistaFiel AS dizimistaFiel, m.SituacaoMembro AS situacaoMembro, m.DepartamentoId AS departamentoId,
          m.CargoMinisterial AS cargoMinisterial, m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco,
-         m.ExtensaoId AS extensaoId, e.Nome AS extensao, m.EstadoCivil AS estadoCivil
+         m.ExtensaoId AS extensaoId, e.Nome AS extensao, m.EstadoCivil AS estadoCivil,
+         CONVERT(varchar(10), m.DataAfastamento, 120) AS dataAfastamento,
+         CONVERT(varchar(10), m.DataSaida, 120) AS dataSaida, m.MotivoSaida AS motivoSaida
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
   LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
@@ -66,7 +77,8 @@ module.exports = async function (context, req) {
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
       situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       dataBatismo, formaAdmissao, origem, igrejaAnterior,
-      dataRitoRecebimento, nomeLidoRito, ministranteRito, estadoCivil
+      dataRitoRecebimento, nomeLidoRito, ministranteRito, estadoCivil,
+      dataAfastamento, motivoSaida, dataSaida
     } = req.body || {};
     if (!membroId || !nome) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
@@ -117,15 +129,32 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+    // Causa de saída (Reg. Art. 11 — v1.5): mesmo padrão de validação de FORMAS_ADMISSAO.
+    if (motivoSaida && !CAUSAS_SAIDA.includes(motivoSaida)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: `Causa de saída inválida. Use uma de: ${CAUSAS_SAIDA.join(", ")}.` } };
+      return;
+    }
+
+    const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, Status FROM MembroReferencia WHERE MembroId = @id`);
     const existia = existente.recordset.length > 0;
-    const situacaoFinal = situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO");
+    const statusAnterior = existia ? existente.recordset[0].Status : null;
+    const statusFinal = status || "ATIVO";
+    // Entrar num status terminal (vindo de outro) dispara a perda de membresia de
+    // verdade: força Sem Comunhão, registra a data de saída (se não vier informada) e
+    // encerra Assentos/Liderança/Cargo — mesmo racional já usado em GestaoCartas/processar
+    // e na exclusão disciplinar, agora coberto também no fluxo manual de edição da Pessoa.
+    const entrandoEmStatusTerminal = STATUS_TERMINAIS.includes(statusFinal) && statusAnterior !== statusFinal;
+    const hojeISO = new Date().toISOString().slice(0, 10);
+    const situacaoFinal = entrandoEmStatusTerminal
+      ? "SEM_COMUNHAO"
+      : (situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
+    const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaida || hojeISO) : (dataSaida || null);
 
     const request = pool.request()
       .input("id", sql.Int, membroId)
       .input("nome", sql.NVarChar(200), nome)
       .input("congregacaoId", sql.Int, congregacaoId || null)
-      .input("status", sql.NVarChar(20), status || "ATIVO")
+      .input("status", sql.NVarChar(20), statusFinal)
       .input("dataNascimento", sql.Date, dataNascimento || null)
       .input("dataAdmissao", sql.Date, dataAdmissao || null)
       .input("dizimistaFiel", sql.Bit, dizimistaFiel === undefined ? null : dizimistaFiel)
@@ -143,7 +172,10 @@ module.exports = async function (context, req) {
       .input("dataRitoRecebimento", sql.Date, dataRitoRecebimento || null)
       .input("nomeLidoRito", sql.NVarChar(200), nomeLidoRito || null)
       .input("ministranteRito", sql.NVarChar(150), ministranteRito || null)
-      .input("estadoCivil", sql.NVarChar(20), estadoCivil || null);
+      .input("estadoCivil", sql.NVarChar(20), estadoCivil || null)
+      .input("dataAfastamento", sql.Date, dataAfastamento || null)
+      .input("dataSaida", sql.Date, dataSaidaFinal)
+      .input("motivoSaida", sql.NVarChar(200), motivoSaida || null);
 
     if (existia) {
       // Funcao não entra aqui de propósito: é campo histórico gerido só pela
@@ -156,12 +188,17 @@ module.exports = async function (context, req) {
                Telefone = @telefone, Email = @email, Endereco = @endereco, ExtensaoId = @extensaoId,
                DataBatismo = @dataBatismo, FormaAdmissao = @formaAdmissao, Origem = @origem,
                IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
-               NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil
+               NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil,
+               DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida
         WHERE MembroId = @id`);
     } else {
       await request.query(`
-        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil)
-        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil)`);
+        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida)
+        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida)`);
+    }
+
+    if (entrandoEmStatusTerminal) {
+      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaida || statusFinal);
     }
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
@@ -190,11 +227,17 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota: /api/pessoas/{membroId}" } };
       return;
     }
-    const upd = await pool.request().input("id", sql.Int, membroIdRota).query(`UPDATE MembroReferencia SET Status = 'DESLIGADO' WHERE MembroId = @id`);
+    const upd = await pool.request().input("id", sql.Int, membroIdRota)
+      .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO',
+              DataSaida = ISNULL(DataSaida, CAST(SYSUTCDATETIME() AS DATE))
+              WHERE MembroId = @id AND Status <> 'DESLIGADO'`);
     if (upd.rowsAffected[0] === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada (ou já estava desligada)." } };
       return;
     }
+    // Vacância automática (v1.5): fecha Assentos/Liderança/Cargo — mesmo helper
+    // usado no procedimento de abandono e na exclusão disciplinar.
+    await vacancia.encerrarVinculos(pool, sql, membroIdRota, "DESLIGAMENTO");
     await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(membroIdRota), acao: "Desligou pessoa", usuarioId: usuario.membroId });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Pessoa desligada." } };
     return;

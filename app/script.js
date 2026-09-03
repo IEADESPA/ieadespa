@@ -205,7 +205,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "auditoria", "protecaodedados", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "abandono", "auditoria", "protecaodedados", "documentos"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -213,7 +213,8 @@ const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "est
 // reunioes/assembleia/cli — a aba única de Reuniões reflete isso).
 const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
-  congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"]
+  congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"],
+  abandono: ["disciplina"]
 };
 function permissoesDaAba(nome) {
   return ABA_PERMISSOES_ALT[nome] || [nome];
@@ -249,6 +250,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
+  if (aba === "abandono") { carregarRadarAbandono(); carregarProcedimentosAbandono(); }
   if (aba === "auditoria") carregarAuditoria();
   if (aba === "protecaodedados") { carregarSolicitacoesDPO(); montarPoliticasRetencao(); }
 }
@@ -262,6 +264,7 @@ const TITULOS_MODULOS = {
   pessoas: "Pessoas", cartas: "Cartas de Trânsito", congregacoes: "Congregações",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
+  abandono: "Perda de Membresia",
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", documentos: "Documentos"
 };
 
@@ -329,7 +332,7 @@ function statusFrequencia(item) {
   return "Falta";
 }
 function badgeStatusPessoa(status) {
-  const classes = { ATIVO: "badge-ativo", "LICENÇA": "badge-licenca", INATIVO: "badge-inativo", DESLIGADO: "badge-desligado" };
+  const classes = { ATIVO: "badge-ativo", "LICENÇA": "badge-licenca", INATIVO: "badge-inativo", DESLIGADO: "badge-desligado", FALECIDO: "badge-desligado" };
   return `<span class="badge-status ${classes[status] || ""}">${status}</span>`;
 }
 
@@ -1061,6 +1064,8 @@ async function salvarPessoa() {
   const ministranteRito = document.getElementById("pessoaMinistranteRito").value.trim() || null;
   const situacaoMembro = document.getElementById("pessoaSituacao").value;
   const estadoCivil = document.getElementById("pessoaEstadoCivil").value || null;
+  const dataAfastamento = document.getElementById("pessoaDataAfastamento").value || null;
+  const motivoSaida = document.getElementById("pessoaMotivoSaida").value || null;
   const dizimistaSelect = document.getElementById("pessoaDizimista").value;
   const dizimistaFiel = dizimistaSelect === "" ? null : dizimistaSelect === "true";
   const departamentoId = document.getElementById("pessoaDepartamento").value || null;
@@ -1083,7 +1088,7 @@ async function salvarPessoa() {
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
       departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       formaAdmissao, dataBatismo, origem, igrejaAnterior, dataRitoRecebimento, nomeLidoRito, ministranteRito,
-      estadoCivil
+      estadoCivil, dataAfastamento, motivoSaida
     })
   });
   const data = await res.json();
@@ -1196,6 +1201,8 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaMinistranteRito").value = pessoa.ministranteRito || "";
   document.getElementById("pessoaSituacao").value = pessoa.situacaoMembro || "EM_COMUNHAO";
   document.getElementById("pessoaEstadoCivil").value = pessoa.estadoCivil || "";
+  document.getElementById("pessoaDataAfastamento").value = pessoa.dataAfastamento || "";
+  document.getElementById("pessoaMotivoSaida").value = pessoa.motivoSaida || "";
   document.getElementById("pessoaDizimista").value = pessoa.dizimistaFiel == null ? "" : String(pessoa.dizimistaFiel);
   document.getElementById("pessoaDepartamento").value = pessoa.departamentoId != null ? String(pessoa.departamentoId) : "";
   document.getElementById("pessoaCargoMinisterial").value = pessoa.cargoMinisterial || "";
@@ -2029,6 +2036,103 @@ async function ajustarPrazoProcessoAcao(processoId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarProcessosDisciplinares();
+}
+
+// ---- ABA PERDA DE MEMBRESIA: Abandono Eclesiástico Material (v1.5 — Reg. Art. 11) ----
+async function carregarRadarAbandono() {
+  const container = document.getElementById("resultadoRadarAbandono");
+  const res = await fetchProtegido(`${API_BASE}/radar-abandono`);
+  const membros = await res.json();
+
+  if (!Array.isArray(membros) || membros.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum membro Sem Comunhão com Data de Afastamento lançada.</p>";
+    return;
+  }
+
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr>
+    <th>Nome</th><th>Congregação</th><th>Afastado desde</th><th>Dias</th><th></th>
+  </tr></thead><tbody>` +
+    membros.map(m => `<tr>
+      <td>${m.nome}</td>
+      <td>${m.congregacao || "-"}</td>
+      <td>${m.dataAfastamento || "-"}</td>
+      <td>${m.diasAfastado ?? "-"}</td>
+      <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" onclick="abrirProcedimentoAbandonoAcao(${m.membroId})">Abrir Procedimento</button>` : "aguardando 90 dias"}</td>
+    </tr>`).join("") + "</tbody></table>";
+}
+
+async function abrirProcedimentoAbandonoAcao(membroId) {
+  if (!(await confirmarAcao("Abrir o procedimento sumário de constatação de Abandono Material para este membro? Ele passa a contar o prazo de defesa de 15 dias.", "Abrir Procedimento"))) return;
+  const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarRadarAbandono(); carregarProcedimentosAbandono(); }
+}
+
+const ROTULO_STATUS_ABANDONO = { NOTIFICADO: "Notificado (em prazo de defesa)", HOMOLOGADO: "Homologado (perda efetivada)", ARQUIVADO: "Arquivado" };
+function badgeStatusAbandono(status) {
+  const cores = { NOTIFICADO: "badge-licenca", HOMOLOGADO: "badge-desligado", ARQUIVADO: "badge-ativo" };
+  return `<span class="badge-status ${cores[status] || ""}">${ROTULO_STATUS_ABANDONO[status] || status}</span>`;
+}
+
+async function carregarProcedimentosAbandono() {
+  const container = document.getElementById("resultadoListaAbandono");
+  const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono`);
+  const procedimentos = await res.json();
+
+  if (!Array.isArray(procedimentos) || procedimentos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum procedimento aberto.</p>";
+    return;
+  }
+
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr>
+    <th>Nome</th><th>Status</th><th>Notificado em</th><th>Recurso</th><th></th>
+  </tr></thead><tbody>` +
+    procedimentos.map(p => `<tr>
+      <td>${p.nome}</td>
+      <td>${badgeStatusAbandono(p.status)}${p.status === "NOTIFICADO" && p.prazoVencido ? " ⏰ prazo vencido" : ""}</td>
+      <td>${p.dataNotificacao || "-"}</td>
+      <td>${p.recursoInterposto ? `${p.resultadoRecurso || "PENDENTE"} (${p.dataRecurso || "-"})` : "-"}</td>
+      <td class="acoes-inline">
+        ${p.status === "NOTIFICADO" ? `<button class="btn-link" onclick="homologarProcedimentoAbandonoAcao(${p.procedimentoId})">Homologar</button>` : ""}
+        ${p.status === "NOTIFICADO" ? `<button class="btn-link" onclick="arquivarProcedimentoAbandonoAcao(${p.procedimentoId})">Arquivar</button>` : ""}
+        ${p.status === "HOMOLOGADO" && !p.recursoInterposto ? `<button class="btn-link" onclick="registrarRecursoAbandonoAcao(${p.procedimentoId})">Registrar Recurso</button>` : ""}
+      </td>
+    </tr>`).join("") + "</tbody></table>";
+}
+
+async function homologarProcedimentoAbandonoAcao(procedimentoId) {
+  if (!(await confirmarAcao("Homologar a constatação de Abandono Material? A membresia é encerrada de verdade (desligamento, assento/liderança/cargo encerrados).", "Homologar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono/${procedimentoId}/evoluir`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "HOMOLOGAR" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarProcedimentosAbandono(); carregarRadarAbandono(); }
+}
+
+async function arquivarProcedimentoAbandonoAcao(procedimentoId) {
+  if (!(await confirmarAcao("Arquivar este procedimento (o membro voltou a comparecer)?", "Arquivar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono/${procedimentoId}/evoluir`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "ARQUIVAR" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarProcedimentosAbandono();
+}
+
+async function registrarRecursoAbandonoAcao(procedimentoId) {
+  if (!(await confirmarAcao("Registrar o Recurso à Assembleia para este procedimento? (sem efeito suspensivo — a perda de membresia já vale)", "Registrar Recurso"))) return;
+  const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono/${procedimentoId}/evoluir`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "RECURSO" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarProcedimentosAbandono();
 }
 
 // ---- ABA MEU PAINEL: minha frequência (mesma consulta pública de sempre, só por matrícula) ----

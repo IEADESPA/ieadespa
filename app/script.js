@@ -1224,22 +1224,27 @@ async function desligarPessoa(membroId) {
 // ---- CARTAS DE TRÂNSITO (v1.4 — Reg. Art. 131) ----
 const ROTULO_CARTA = { RECOMENDACAO: "Recomendação", MUDANCA: "Mudança", ATESTADO_SUPLETIVO: "Atestado Supletivo" };
 
+let minhasCartasCache = [];
 async function carregarMinhasCartas() {
   const caixa = document.getElementById("cxMinhasCartas");
   if (!caixa || !authMatricula) return;
   const res = await fetch(`${API_BASE}/cartas/minhas?matricula=${authMatricula}`);
   const cartas = await res.json();
-  if (!Array.isArray(cartas) || cartas.length === 0) {
+  minhasCartasCache = Array.isArray(cartas) ? cartas : [];
+  if (minhasCartasCache.length === 0) {
     caixa.innerHTML = `<p class="subtitle">Nenhuma carta solicitada ainda.</p>`;
     return;
   }
   caixa.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Status</th><th>Pedido</th><th>Validade</th><th></th></tr></thead><tbody>` +
-    cartas.map(c => `<tr>
+    minhasCartasCache.map(c => `<tr>
       <td>${ROTULO_CARTA[c.tipo] || c.tipo}</td>
       <td>${c.status}</td>
       <td>${c.dataPedido || "-"}</td>
       <td>${c.dataValidade || "-"}</td>
-      <td class="acoes-inline">${c.tipo === "MUDANCA" && c.status === "SOLICITADA" ? `<button class="btn-link" onclick="confirmarCartaPendente()">Confirmar</button>` : ""}</td>
+      <td class="acoes-inline">
+        ${c.tipo === "MUDANCA" && c.status === "SOLICITADA" ? `<button class="btn-link" onclick="confirmarCartaPendente()">Confirmar</button>` : ""}
+        ${c.status !== "SOLICITADA" ? `<button class="btn-link" onclick="imprimirMinhaCarta(${c.cartaId})">🖨️ Imprimir</button>` : ""}
+      </td>
     </tr>`).join("") + "</tbody></table>";
 }
 
@@ -1361,7 +1366,15 @@ function marcarOpcao(rotulo, marcado) {
 
 function imprimirCarta(cartaId) {
   const c = (cartasCache || []).find(x => x.cartaId === cartaId);
-  if (!c) return;
+  if (c) renderizarImpressaoCarta(c);
+}
+
+function imprimirMinhaCarta(cartaId) {
+  const c = (minhasCartasCache || []).find(x => x.cartaId === cartaId);
+  if (c) renderizarImpressaoCarta(c);
+}
+
+function renderizarImpressaoCarta(c) {
   const rotulo = ROTULO_CARTA[c.tipo] || c.tipo;
   const ehCongregado = c.situacaoMembro === "CONGREGADO";
   const situacaoRotulo = LABEL_SITUACAO_CARTA[c.situacaoMembro] || "Comunhão";

@@ -347,8 +347,9 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 #### v1.4 — Trânsito eclesiástico e cartas (Regimento Art. 131)
 
 - [x] Carta de Recomendação (validade 30 dias, prorrogação por visto).
-      — ✅ auto-atendimento no Meu Painel + emissão pela Secretaria (validade calculada
-      de 30 dias) + modelo imprimível (salvar como PDF no navegador).
+      — ✅ auto-atendimento no Meu Painel, emitida na hora (sem intermediação da
+      Secretaria — mesmo racional das demais cartas de autoatendimento), uma por vez
+      enquanto a anterior não vencer, + modelo imprimível (salvar como PDF no navegador).
 - [x] Carta de Mudança (desligamento) — solicitação própria + "declaração de ciência"
       digital (Reg. Art. 131 §3º, II) + minimização automática sob demanda após 30 dias
       (Reg. Art. 132 §2º: mantém matrícula/nome/data de admissão/batismo) + cancelamento

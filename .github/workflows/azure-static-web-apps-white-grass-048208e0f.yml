@@ -20,12 +20,19 @@ jobs:
           submodules: true
           lfs: false
           
+      # Com retry: é a 1ª conexão do job, e o Azure SQL Serverless pode estar
+      # pausado por inatividade (login error 40613, "not currently available").
+      # As demais migrações rodam logo em seguida com o banco já "acordado".
       - name: Executar Migração SQL 001
-        uses: azure/sql-action@v2
+        uses: Wandalen/wretry.action@v3
         with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/001_esquema_inicial_idempotente.sql'
-          action: 'Script'
+          action: azure/sql-action@v2
+          attempt_limit: 5
+          attempt_delay: 20000
+          with: |
+            connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+            path: 'sql/migrations/001_esquema_inicial_idempotente.sql'
+            action: 'Script'
 
       - name: Executar Migração SQL 002
         uses: azure/sql-action@v2
@@ -137,6 +144,13 @@ jobs:
         with:
           connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
           path: 'sql/migrations/017_cartas_transito.sql'
+          action: 'Script'
+
+      - name: Executar Migração SQL 018
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/018_estado_civil_atestado_supletivo.sql'
           action: 'Script'
 
       - name: Build And Deploy

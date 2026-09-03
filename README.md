@@ -399,13 +399,30 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v1.6 — Situação e status do membro
 
-- [ ] Transição de situação (EM_COMUNHAO / SEM_COMUNHAO / CONGREGADO) + status
-      administrativo (ATIVO/LICENÇA/INATIVO/DESLIGADO/FALECIDO).
-      — Nota: o **Status** já virou catálogo configurável (migração 016 — `StatusMembro`
-      via `GestaoCatalogos`, seletor do cadastro de Pessoas). Falta aqui a transição
-      automática de situação e o status FALECIDO (v1.5).
-- [ ] Suspensão de direitos durante disciplina (voto/ser votado/cargos).
-- [ ] Histórico completo do membro (linha do tempo de situações).
+- [x] Situação (`EM_COMUNHAO`/`SEM_COMUNHAO`/`CONGREGADO`) e Status
+      (`ATIVO`/`LICENÇA`/`INATIVO`/`DESLIGADO`/`FALECIDO`) já são catálogos configuráveis
+      (migrações 016/019, via `GestaoCatalogos`). `GestaoPessoas` passou a validar
+      `situacaoMembro` contra o catálogo (antes era texto livre, sem checagem nenhuma).
+      A transição automática ligada à duração exata de uma sanção disciplinar (voltar
+      sozinho a Em Comunhão quando a sanção vence) fica para uma versão futura de
+      Disciplina — é um mecanismo de suspender-e-restaurar mais complexo, fora do
+      recorte desta fase.
+- [x] Suspensão de direitos durante disciplina/Sem Comunhão — antes só a Assembleia
+      Geral filtrava (`shared/universo.js`); agora **todos os órgãos** (CLI, Diretoria,
+      Conselho Fiscal, CEI, demais) tiram automaticamente da lista de presença/quórum
+      quem está Sem Comunhão ou sob processo disciplinar ativo. Não fecha
+      Assento/Liderança (isso é `shared/vacancia.js`, reservado a saída definitiva) — é
+      um filtro de leitura: a pessoa reaparece sozinha assim que a Situação volta.
+      Congregado ganhou trilha própria: `AbrirProcessoDisciplinar` rejeita abrir
+      processo contra um Congregado.
+- [x] Histórico completo do membro — Linha do Tempo na ficha da Pessoa
+      (`HistoricoMembro`), agregando por leitura o que já existe (admissão,
+      consagrações, cartas, disciplina/abandono mascarados por sigilo) + tabela nova
+      `MarcosMembro` para eventos sem outro lugar no sistema (conversão,
+      ministério/igreja anterior, batismo no Espírito Santo). Corrigir um marco já
+      lançado exige justificativa e é restrito ao primeiro uso real de `Papeis.Nivel`
+      no código — `auth.exigirNivelGlobal` — e gera um novo registro de Auditoria (a
+      Auditoria em si nunca é editável/apagável). Migração 021.
 
 #### v1.7 — Cadastro ampliado (dados sensíveis/LGPD)
 

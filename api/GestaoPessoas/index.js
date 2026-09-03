@@ -135,6 +135,17 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // Situação do membro (v1.6): validada por consulta ao catálogo (SituacoesMembro é
+    // editável por tela via GestaoCatalogos, diferente de FORMAS_ADMISSAO/CAUSAS_SAIDA,
+    // que são regra jurídica fixa) — hoje era texto livre, sem checagem nenhuma.
+    if (situacaoMembro) {
+      const sit = await pool.request().input("sigla", sql.NVarChar(30), situacaoMembro).query(`SELECT TOP 1 1 AS x FROM SituacoesMembro WHERE Sigla = @sigla`);
+      if (sit.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Situação "${situacaoMembro}" não está cadastrada no catálogo.` } };
+        return;
+      }
+    }
+
     const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, Status FROM MembroReferencia WHERE MembroId = @id`);
     const existia = existente.recordset.length > 0;
     const statusAnterior = existia ? existente.recordset[0].Status : null;

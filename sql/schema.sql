@@ -471,6 +471,26 @@ CREATE TABLE TentativasContatoAbandono (
 );
 
 -- ============================================================
+-- Situação e Status do Membro (v1.6 — migração 021): Linha do Tempo do Membro.
+-- Eventos já estruturados (admissão, consagrações, cartas, disciplina, abandono)
+-- são lidos por agregação, sem duplicar dado — só os marcos abaixo, que hoje não
+-- existem em nenhuma tabela, ganham registro próprio.
+-- ============================================================
+CREATE TABLE MarcosMembro (
+    MarcoId         INT IDENTITY PRIMARY KEY,
+    MembroId        INT NOT NULL REFERENCES MembroReferencia(MembroId),
+    Tipo            NVARCHAR(30) NOT NULL, -- CONVERSAO / MINISTERIO_ANTERIOR / BATISMO_ESPIRITO_SANTO / OUTRO
+    Descricao       NVARCHAR(500) NOT NULL,
+    DataMarco       DATE NULL,
+    DataAproximada  BIT NOT NULL DEFAULT 0,
+    Justificativa   NVARCHAR(300) NULL,
+    CriadoPor       INT NULL REFERENCES MembroReferencia(MembroId),
+    AtualizadoPor   INT NULL REFERENCES MembroReferencia(MembroId),
+    CriadoEm        DATETIME2 DEFAULT SYSUTCDATETIME(),
+    AtualizadoEm    DATETIME2 NULL
+);
+
+-- ============================================================
 -- Auditoria e trilha de dados (v0.3) — Encarregado de Dados (papel), trilha de
 -- consentimento LGPD (append-only por tipo de dado) e solicitações do titular
 -- (Art. 18 LGPD: acesso, exclusão, retificação, portabilidade). Catálogo

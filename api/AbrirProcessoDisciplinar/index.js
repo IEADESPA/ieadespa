@@ -30,9 +30,15 @@ module.exports = async function (context, req) {
   }
 
   const pool = await getPool();
-  const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+  const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`);
   if (membro.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada. Cadastre a pessoa antes." } };
+    return;
+  }
+  // Congregado é uma trilha à parte (v1.6): não tem os vínculos plenos de membresia
+  // que justificam processo disciplinar — se houver algo a tratar, é na admissão.
+  if (membro.recordset[0].SituacaoMembro === "CONGREGADO") {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Não é possível abrir processo disciplinar contra um Congregado." } };
     return;
   }
   const orgao = await pool.request().input("id", sql.Int, orgaoResponsavelId).query(`SELECT OrgaoId FROM Orgaos WHERE OrgaoId = @id`);

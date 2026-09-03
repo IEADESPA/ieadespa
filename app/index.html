@@ -382,6 +382,27 @@
           <div id="resultadoListaVinculosFamiliares"></div>
         </div>
 
+        <div id="blocoHistoricoMembro" class="cartao-perfil" style="display:none; margin:16px 0;">
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Linha do Tempo — <span id="historicoMembroNome"></span></h4>
+          <div id="resultadoHistoricoMembro"></div>
+          <hr />
+          <p class="subtitle" style="margin:16px 0 4px;">Registrar Marco (conversão, ministério/igreja anterior, batismo no
+            Espírito Santo — eventos que não têm outro lugar no sistema):</p>
+          <div class="barra-lista">
+            <select id="marcoTipo">
+              <option value="CONVERSAO">Conversão</option>
+              <option value="MINISTERIO_ANTERIOR">Ministério/Igreja anterior</option>
+              <option value="BATISMO_ESPIRITO_SANTO">Batismo no Espírito Santo</option>
+              <option value="OUTRO">Outro</option>
+            </select>
+            <input type="text" id="marcoDescricao" placeholder="Descrição" style="min-width:220px;" />
+            <input type="date" id="marcoData" />
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="marcoDataAproximada" /> Data aproximada</label>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarMarcoMembroAcao()">➕ Registrar</button>
+          </div>
+          <p id="resultadoMarcoMembro"></p>
+        </div>
+
         <hr />
         <div class="barra-lista">
           <input type="text" id="pessoasBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroPessoas()" />

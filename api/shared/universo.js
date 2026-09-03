@@ -12,16 +12,29 @@
 //   de verdade, em vez de "todo mundo ATIVO". Enquanto nenhuma cadeira estiver
 //   cadastrada pra esse órgão, cai no padrão de sempre (todo mundo ATIVO —
 //   ex: uma reunião aberta a todos os obreiros, sem composição fechada).
+//
+// v1.6 — Suspensão automática de direitos (Art. 11/23): Sem Comunhão ou sob
+// processo disciplinar ativo tira a pessoa do universo de QUALQUER órgão, não
+// só da Assembleia Geral. Não fecha Assento/Liderança (isso é shared/vacancia.js,
+// reservado pra saída definitiva) — é só um filtro de leitura: assim que a
+// Situação voltar a Em Comunhão, a pessoa reaparece sozinha, sem precisar
+// recriar nada.
 const { sql } = require("./db");
 const estatuto = require("./estatuto");
 const disciplina = require("./disciplina");
 
+function emComunhaoAtiva(membro, idsSobDisciplina) {
+  return membro.situacaoMembro !== "SEM_COMUNHAO" && !idsSobDisciplina.has(membro.membroId);
+}
+
 async function universoDoOrgao(pool, orgao) {
+  const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
+
   if (!orgao) {
     const result = await pool.request().query(
-      `SELECT MembroId AS membroId, Nome AS nome FROM MembroReferencia WHERE Status = 'ATIVO'`
+      `SELECT MembroId AS membroId, Nome AS nome, SituacaoMembro AS situacaoMembro FROM MembroReferencia WHERE Status = 'ATIVO'`
     );
-    return result.recordset;
+    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
   }
 
   if (orgao.sigla === "ASSEMBLEIA_GERAL") {
@@ -36,14 +49,13 @@ async function universoDoOrgao(pool, orgao) {
     `);
     // Sempre real, nunca mascarado — mesma razão de GestaoElegiveisAssembleia: este é
     // o universo de quem realmente pode votar, não uma tela de exibição.
-    const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
     const comFlag = result.recordset.map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }));
     return comFlag.filter(m => estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva);
   }
 
   if (orgao.sigla === "CLI") {
     const porOrdenacao = await pool.request().query(`
-      SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao
+      SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro
       FROM MembroReferencia m
       LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
       WHERE m.Status = 'ATIVO' AND m.CargoMinisterial IN ('PRESBITERO', 'EVANGELISTA', 'PASTOR')
@@ -61,7 +73,7 @@ async function universoDoOrgao(pool, orgao) {
     // de novo aqui. Cadastra uma vez, na Diretoria (por exemplo), e ela já conta
     // nas reuniões da Diretoria E na composição da CLI.
     const porFuncao = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId).query(`
-      SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao
+      SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro
       FROM Assentos a
       JOIN MembroReferencia m ON m.MembroId = a.MembroId
       LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
@@ -72,26 +84,28 @@ async function universoDoOrgao(pool, orgao) {
           OR a.OrgaoId IN (SELECT OrgaoId FROM Orgaos WHERE Sigla IN ('DIRETORIA_EXECUTIVA', 'CONSELHO_FISCAL', 'CEI'))
         )
     `);
-    return porOrdenacao.recordset.concat(porFuncao.recordset.filter(m => !idsPorOrdenacao.has(m.membroId)));
+    const universo = porOrdenacao.recordset.concat(porFuncao.recordset.filter(m => !idsPorOrdenacao.has(m.membroId)));
+    return universo.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
   }
 
   const porAssento = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId).query(`
-    SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao
+    SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro
     FROM Assentos a
     JOIN MembroReferencia m ON m.MembroId = a.MembroId
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
     WHERE a.OrgaoId = @orgaoId AND a.DataFim IS NULL
       AND (a.DataTerminoPrevisao IS NULL OR a.DataTerminoPrevisao >= CAST(SYSUTCDATETIME() AS DATE))
   `);
-  if (porAssento.recordset.length > 0) return porAssento.recordset;
+  const universoAssento = porAssento.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
+  if (universoAssento.length > 0) return universoAssento;
 
   const result = await pool.request().query(`
-    SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao
+    SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro
     FROM MembroReferencia m
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
     WHERE m.Status = 'ATIVO'
   `);
-  return result.recordset;
+  return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
 }
 
 module.exports = { universoDoOrgao };

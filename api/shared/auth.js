@@ -129,4 +129,20 @@ function estaNoEscopo(usuario, congregacaoNome) {
   return usuario.escopoCongregacoes.includes(congregacaoNome);
 }
 
-module.exports = { hashSenha, verificarSenha, criarSessao, encerrarSessao, getSessao, exigirLogin, exigirPermissao, exigirAlgumaPermissao, estaNoEscopo };
+// Uso: const usuario = exigirNivelGlobal(req, context); if (!usuario) return;
+// Papeis.Nivel (GLOBAL/CONGREGACAO/AREA) existe desde a migração 002, mas nunca tinha
+// sido checado em código (era só rótulo de exibição em GestaoLideranca) — v1.6 é a
+// primeira ação restrita de verdade a esse nível: corrigir um Marco já lançado na
+// Linha do Tempo do membro. Sessões emitidas antes desta mudança não têm `nivel` no
+// token (precisam relogar).
+function exigirNivelGlobal(req, context) {
+  const usuario = exigirLogin(req, context);
+  if (!usuario) return null;
+  if (usuario.nivel !== "GLOBAL") {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Ação restrita a papéis de nível Global." } };
+    return null;
+  }
+  return usuario;
+}
+
+module.exports = { hashSenha, verificarSenha, criarSessao, encerrarSessao, getSessao, exigirLogin, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo };

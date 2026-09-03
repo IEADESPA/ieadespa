@@ -65,26 +65,31 @@ let authToken = sessionStorage.getItem("authToken") || null;
 let authNome = sessionStorage.getItem("authNome") || null;
 let authPermissoes = JSON.parse(sessionStorage.getItem("authPermissoes") || "[]");
 let authMatricula = sessionStorage.getItem("authMatricula") || null;
+let authNivel = sessionStorage.getItem("authNivel") || null;
 
-function salvarSessao(token, nome, permissoes, matricula) {
+function salvarSessao(token, nome, permissoes, matricula, nivel) {
   authToken = token;
   authNome = nome;
   authPermissoes = permissoes || [];
   authMatricula = matricula != null ? String(matricula) : authMatricula;
+  authNivel = nivel || null;
   sessionStorage.setItem("authToken", token);
   sessionStorage.setItem("authNome", nome || "");
   sessionStorage.setItem("authPermissoes", JSON.stringify(authPermissoes));
   if (authMatricula != null) sessionStorage.setItem("authMatricula", authMatricula);
+  if (authNivel) sessionStorage.setItem("authNivel", authNivel);
 }
 function limparSessao() {
   authToken = null;
   authNome = null;
   authPermissoes = [];
   authMatricula = null;
+  authNivel = null;
   sessionStorage.removeItem("authToken");
   sessionStorage.removeItem("authNome");
   sessionStorage.removeItem("authPermissoes");
   sessionStorage.removeItem("authMatricula");
+  sessionStorage.removeItem("authNivel");
 }
 
 // fetch com o header de autenticação da Secretaria; se a sessão expirou (401)
@@ -156,7 +161,7 @@ async function acessarPainel() {
       msg.textContent = data.mensagem;
       return;
     }
-    salvarSessao(data.token, data.nome, data.permissoes, matricula);
+    salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel);
   } else {
     limparSessao();
     authMatricula = String(matricula);
@@ -1164,6 +1169,7 @@ function renderizarPessoas() {
       <td>${badgeStatusPessoa(p.status)}</td>
       <td class="acoes-inline">
         <button class="btn-link" onclick="editarPessoa(${p.membroId})">Editar</button>
+        <button class="btn-link" onclick="verHistoricoMembro(${p.membroId})">🕒 Histórico</button>
         ${p.status !== "DESLIGADO" ? `<button class="btn-link btn-link-perigo" onclick="desligarPessoa(${p.membroId})">Desligar</button>` : ""}
       </td>
     </tr>`;
@@ -1485,6 +1491,127 @@ async function removerVinculoFamiliar(vinculoId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarVinculosFamiliares(window._membroFamiliaAtual);
+}
+
+// ---- Linha do Tempo do Membro (v1.6): agrega eventos já existentes + Marcos manuais ----
+window._membroHistoricoAtual = null;
+let marcosCacheAtual = [];
+
+const ROTULO_TIPO_MARCO = { CONVERSAO: "Conversão", MINISTERIO_ANTERIOR: "Ministério/Igreja anterior", BATISMO_ESPIRITO_SANTO: "Batismo no Espírito Santo", OUTRO: "Outro" };
+
+async function verHistoricoMembro(membroId) {
+  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
+  window._membroHistoricoAtual = membroId;
+  document.getElementById("historicoMembroNome").textContent = pessoa ? pessoa.nome : `matrícula ${membroId}`;
+  document.getElementById("blocoHistoricoMembro").style.display = "block";
+  document.getElementById("blocoHistoricoMembro").scrollIntoView({ behavior: "smooth", block: "start" });
+  await carregarHistoricoMembro(membroId);
+}
+
+async function carregarHistoricoMembro(membroId) {
+  const container = document.getElementById("resultadoHistoricoMembro");
+  const [resHistorico, resMarcos] = await Promise.all([
+    fetchProtegido(`${API_BASE}/pessoas/${membroId}/historico`),
+    fetchProtegido(`${API_BASE}/marcos-membro?membroId=${membroId}`)
+  ]);
+  const historico = await resHistorico.json();
+  const marcos = await resMarcos.json();
+  marcosCacheAtual = Array.isArray(marcos) ? marcos : [];
+  const eventos = historico.eventos || [];
+
+  if (eventos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum evento registrado ainda.</p>";
+    return;
+  }
+
+  container.innerHTML = `<ul class="linha-tempo">` + eventos.map(e => {
+    const podeCorrigir = e.marcoId != null && authNivel === "GLOBAL";
+    return `<li>
+      <strong>${e.data || "data não informada"}</strong> — ${e.titulo}
+      ${e.descricao ? `<br><span class="subtitle">${e.descricao}</span>` : ""}
+      ${podeCorrigir ? ` <button class="btn-link" onclick="corrigirMarcoMembroAcao(${e.marcoId})">Corrigir</button>` : ""}
+    </li>`;
+  }).join("") + "</ul>";
+}
+
+async function registrarMarcoMembroAcao() {
+  const membroId = window._membroHistoricoAtual;
+  const tipo = document.getElementById("marcoTipo").value;
+  const descricao = document.getElementById("marcoDescricao").value.trim();
+  const dataMarco = document.getElementById("marcoData").value || null;
+  const dataAproximada = document.getElementById("marcoDataAproximada").checked;
+  const msg = document.getElementById("resultadoMarcoMembro");
+  if (!membroId || !descricao) {
+    msg.textContent = "Informe a descrição do marco.";
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/marcos-membro`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, tipo, descricao, dataMarco, dataAproximada })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("marcoDescricao").value = "";
+    document.getElementById("marcoData").value = "";
+    document.getElementById("marcoDataAproximada").checked = false;
+    carregarHistoricoMembro(membroId);
+  }
+}
+
+// Correção de um Marco já lançado — restrita a nível Global, sempre com
+// justificativa (mesmo padrão de pedirAjustePrazo() do módulo de disciplina).
+function pedirCorrecaoMarco(marco) {
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Corrigir marco: ${ROTULO_TIPO_MARCO[marco.tipo] || marco.tipo}</h3>
+      <div class="input-group">
+        <label>Descrição:</label>
+        <input type="text" id="modalDescricao" value="${(marco.descricao || "").replace(/"/g, "&quot;")}" />
+      </div>
+      <div class="input-group">
+        <label>Data:</label>
+        <input type="date" id="modalData" value="${marco.dataMarco || ""}" />
+      </div>
+      <div class="input-group">
+        <label>Justificativa (obrigatória — fica registrada na auditoria):</label>
+        <textarea id="modalJustificativa" rows="3"></textarea>
+      </div>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar" id="modalConfirmar">Corrigir</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    document.getElementById("modalConfirmar").onclick = () => {
+      const descricao = document.getElementById("modalDescricao").value.trim();
+      const dataMarco = document.getElementById("modalData").value || null;
+      const justificativa = document.getElementById("modalJustificativa").value.trim();
+      fecharModal();
+      resolve({ descricao, dataMarco, justificativa });
+    };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
+async function corrigirMarcoMembroAcao(marcoId) {
+  const marco = marcosCacheAtual.find(m => m.marcoId === marcoId);
+  if (!marco) return;
+  const dados = await pedirCorrecaoMarco(marco);
+  if (!dados) return;
+  if (!dados.justificativa) {
+    mostrarToast("Justificativa é obrigatória para corrigir um marco.", "erro");
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/marcos-membro/${marcoId}/editar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarHistoricoMembro(window._membroHistoricoAtual);
 }
 
 // ---- SECRETARIA / ABA CONGREGAÇÕES ----

@@ -16,7 +16,7 @@ module.exports = async function (context, req) {
   const pool = await getPool();
   const result = await pool.request().input("mat", sql.Int, matricula).query(`
     SELECT l.MembroId AS membroId, l.EscopoTipo AS escopoTipo, l.EscopoId AS escopoId, l.SenhaHash AS senhaHash,
-           p.Nome AS papelNome, p.Permissoes AS permissoesStr, m.Nome AS nome
+           p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr, m.Nome AS nome
     FROM Lideranca l
     JOIN Papeis p ON p.PapelId = l.PapelId
     JOIN MembroReferencia m ON m.MembroId = l.MembroId
@@ -40,6 +40,7 @@ module.exports = async function (context, req) {
     membroId: lideranca.membroId,
     nome: lideranca.nome,
     tipo: lideranca.papelNome,
+    nivel: lideranca.papelNivel,
     escopoCongregacoes: escopo,
     escopoExtensaoNome,
     permissoes
@@ -53,6 +54,7 @@ module.exports = async function (context, req) {
       token,
       nome: lideranca.nome,
       tipo: lideranca.papelNome,
+      nivel: lideranca.papelNivel,
       escopo,
       permissoes
     }

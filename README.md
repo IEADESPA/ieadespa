@@ -372,11 +372,26 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v1.5 — Perda de membresia (Art. 11)
 
-- [ ] Registro de causas: falecimento, desligamento, carta de mudança, exclusão.
-- [ ] Abandono Eclesiástico Material (90 dias sem comunhão) e Digital (90 dias incomunicável).
-- [ ] Procedimento sumário de constatação: notificação, edital, prazo 15 dias, homologação CLI.
-- [ ] Recurso à Assembleia (30 dias, sem efeito suspensivo).
-- [ ] Vacância automática de cargos/funções/assentos ao perder a membresia.
+- [x] Registro de causas: falecimento, desligamento, carta de mudança, exclusão, abandono
+      material — catálogo fechado (`CAUSAS_SAIDA` em `GestaoPessoas`, mesmo padrão de
+      `FORMAS_ADMISSAO`) + novo status `FALECIDO` (`StatusMembro`). Migração 019.
+- [x] Abandono Eclesiástico Material (90 dias sem comunhão, `DataAfastamento` lançada
+      manualmente pela Secretaria na ficha da Pessoa) + Radar de Abandono
+      (`RadarAbandono`) + procedimento sumário de constatação: notificação (registro
+      datado, sem e-mail/SMS) → 15 dias de prazo de defesa → homologação pela CLI
+      (`AbrirProcedimentoAbandono`/`EvoluirProcedimentoAbandono`).
+      — [ ] Abandono Digital (90 dias incomunicável) fica para depois: falta infraestrutura
+      de registro de tentativa de contato.
+- [x] Recurso à Assembleia (30 dias, sem efeito suspensivo) — registrado no procedimento
+      de abandono (`acao: 'RECURSO'`); a perda já vale desde a homologação, e o resultado
+      real da Assembleia é lançado manualmente depois (não integra com o módulo de
+      votação ainda).
+- [x] Vacância automática de cargos/funções/assentos ao perder a membresia —
+      `shared/vacancia.js` generaliza o fechamento de Assentos que só existia isolado na
+      exclusão disciplinar, estendendo também para Liderança e Cargo
+      Ministerial/Departamento, reaproveitado pelos 3 fluxos de saída (exclusão
+      disciplinar, Carta de Mudança, desligamento manual/edição de Pessoa) e pelo
+      procedimento de abandono.
 
 #### v1.6 — Situação e status do membro
 

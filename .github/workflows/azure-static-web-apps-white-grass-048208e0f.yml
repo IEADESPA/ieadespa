@@ -160,6 +160,13 @@ jobs:
           path: 'sql/migrations/019_perda_membresia.sql'
           action: 'Script'
 
+      - name: Executar Migração SQL 020
+        uses: azure/sql-action@v2
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: 'sql/migrations/020_abandono_digital.sql'
+          action: 'Script'
+
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1

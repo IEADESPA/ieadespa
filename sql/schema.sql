@@ -442,7 +442,32 @@ CREATE TABLE ProcedimentosAbandono (
     RecursoInterposto BIT NOT NULL DEFAULT 0,
     DataRecurso       DATE NULL,
     ResultadoRecurso  NVARCHAR(30) NULL,                          -- PENDENTE / MANTIDO / REVERTIDO
-    CriadoEm          DATETIME2 DEFAULT SYSUTCDATETIME()
+    CriadoEm          DATETIME2 DEFAULT SYSUTCDATETIME(),
+    Tipo              NVARCHAR(20) NOT NULL DEFAULT 'MATERIAL'     -- MATERIAL / DIGITAL (migração 020)
+);
+
+-- ============================================================
+-- Abandono Eclesiástico Digital (v1.5 — Estatuto Art. 11 V e Art. 12, migração 020)
+-- ============================================================
+CREATE TABLE CanaisOficiaisComunicacao (
+    CanalId INT IDENTITY PRIMARY KEY,
+    Sigla   NVARCHAR(30) NOT NULL,
+    Nome    NVARCHAR(150) NOT NULL,
+    Ativo   BIT NOT NULL DEFAULT 1
+);
+INSERT INTO CanaisOficiaisComunicacao (Sigla, Nome) VALUES
+    ('WHATSAPP_INSTITUCIONAL', 'WhatsApp institucional da Secretaria'),
+    ('EMAIL_OFICIAL', 'E-mail oficial da IEADESPA'),
+    ('SISTEMA', 'Sistema/Meu Painel');
+
+CREATE TABLE TentativasContatoAbandono (
+    TentativaId   INT IDENTITY PRIMARY KEY,
+    MembroId      INT NOT NULL REFERENCES MembroReferencia(MembroId),
+    CanalId       INT NOT NULL REFERENCES CanaisOficiaisComunicacao(CanalId),
+    DataTentativa DATE NOT NULL,
+    Observacao    NVARCHAR(300) NULL,
+    RegistradoPor INT NULL REFERENCES MembroReferencia(MembroId),
+    CriadoEm      DATETIME2 DEFAULT SYSUTCDATETIME()
 );
 
 -- ============================================================

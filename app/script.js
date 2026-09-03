@@ -250,7 +250,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
-  if (aba === "abandono") { carregarRadarAbandono(); carregarProcedimentosAbandono(); }
+  if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
   if (aba === "auditoria") carregarAuditoria();
   if (aba === "protecaodedados") { carregarSolicitacoesDPO(); montarPoliticasRetencao(); }
 }
@@ -535,13 +535,14 @@ const CATALOGOS_CFG = {
   cargosMinisteriais: { titulo: "Cargos Ministeriais (escada — Art. 71)", idField: "cargoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["ordem", "Ordem na escada"]] },
   prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] },
   tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] },
-  politicasRetencao: { titulo: "Políticas de Retenção (LGPD)", idField: "politicaId", campos: [["categoria", "Categoria"], ["baseLegal", "Base legal"], ["diasRetencao", "Dias (vazio = indeterminado)"]] }
+  politicasRetencao: { titulo: "Políticas de Retenção (LGPD)", idField: "politicaId", campos: [["categoria", "Categoria"], ["baseLegal", "Base legal"], ["diasRetencao", "Dias (vazio = indeterminado)"]] },
+  canaisOficiais: { titulo: "Canais Oficiais de Comunicação (Art. 12)", idField: "canalId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] }
 };
 // Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
 // pra cima: Extensão da Tenda primeiro, Distrito por último. Órgãos Locais
 // (JAI/JEA/CRA/TER/CEQ/Distrito) saiu daqui — é órgão, mora na aba Órgãos.
 const ESTRUTURA_ORDEM = ["extensoes", "congregacoes", "areas", "regioes", "quadrantes", "distritos"];
-const CATALOGOS_ORDEM = ["statuses", "situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar"];
+const CATALOGOS_ORDEM = ["statuses", "situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar", "canaisOficiais"];
 const POLITICAS_RETENCAO_ORDEM = ["politicasRetencao"];
 const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
 
@@ -2057,20 +2058,24 @@ async function carregarRadarAbandono() {
       <td>${m.congregacao || "-"}</td>
       <td>${m.dataAfastamento || "-"}</td>
       <td>${m.diasAfastado ?? "-"}</td>
-      <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" onclick="abrirProcedimentoAbandonoAcao(${m.membroId})">Abrir Procedimento</button>` : "aguardando 90 dias"}</td>
+      <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" onclick="abrirProcedimentoAbandonoAcao(${m.membroId}, 'MATERIAL')">Abrir Procedimento</button>` : "aguardando 90 dias"}</td>
     </tr>`).join("") + "</tbody></table>";
 }
 
-async function abrirProcedimentoAbandonoAcao(membroId) {
-  if (!(await confirmarAcao("Abrir o procedimento sumário de constatação de Abandono Material para este membro? Ele passa a contar o prazo de defesa de 15 dias.", "Abrir Procedimento"))) return;
+const ROTULO_TIPO_ABANDONO = { MATERIAL: "Material", DIGITAL: "Digital" };
+
+async function abrirProcedimentoAbandonoAcao(membroId, tipo) {
+  tipo = tipo || "MATERIAL";
+  const rotulo = ROTULO_TIPO_ABANDONO[tipo] || tipo;
+  if (!(await confirmarAcao(`Abrir o procedimento sumário de constatação de Abandono ${rotulo} para este membro? Ele passa a contar o prazo de defesa de 15 dias.`, "Abrir Procedimento"))) return;
   const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId })
+    body: JSON.stringify({ membroId, tipo })
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) { carregarRadarAbandono(); carregarProcedimentosAbandono(); }
+  if (data.sucesso) { carregarRadarAbandono(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
 }
 
 const ROTULO_STATUS_ABANDONO = { NOTIFICADO: "Notificado (em prazo de defesa)", HOMOLOGADO: "Homologado (perda efetivada)", ARQUIVADO: "Arquivado" };
@@ -2090,10 +2095,11 @@ async function carregarProcedimentosAbandono() {
   }
 
   container.innerHTML = `<table class="tabela-frequencia"><thead><tr>
-    <th>Nome</th><th>Status</th><th>Notificado em</th><th>Recurso</th><th></th>
+    <th>Nome</th><th>Tipo</th><th>Status</th><th>Notificado em</th><th>Recurso</th><th></th>
   </tr></thead><tbody>` +
     procedimentos.map(p => `<tr>
       <td>${p.nome}</td>
+      <td>${ROTULO_TIPO_ABANDONO[p.tipo] || p.tipo}</td>
       <td>${badgeStatusAbandono(p.status)}${p.status === "NOTIFICADO" && p.prazoVencido ? " ⏰ prazo vencido" : ""}</td>
       <td>${p.dataNotificacao || "-"}</td>
       <td>${p.recursoInterposto ? `${p.resultadoRecurso || "PENDENTE"} (${p.dataRecurso || "-"})` : "-"}</td>
@@ -2105,8 +2111,87 @@ async function carregarProcedimentosAbandono() {
     </tr>`).join("") + "</tbody></table>";
 }
 
+// ---- Abandono Digital (Art. 12 §2º): canais + tentativas de contato + radar próprio ----
+async function carregarOpcoesTentativaContato() {
+  const select = document.getElementById("tentativaCanal");
+  if (!select) return;
+  const res = await fetch(`${API_BASE}/catalogos/canaisOficiais`);
+  const canais = await res.json();
+  select.innerHTML = (Array.isArray(canais) ? canais : []).filter(c => c.ativo !== false).map(c => `<option value="${c.canalId}">${c.nome}</option>`).join("");
+}
+
+async function registrarTentativaContatoAcao() {
+  const membroId = document.getElementById("tentativaMatricula").value;
+  const canalId = document.getElementById("tentativaCanal").value;
+  const dataTentativa = document.getElementById("tentativaData").value || null;
+  const observacao = document.getElementById("tentativaObservacao").value.trim() || null;
+  const msg = document.getElementById("resultadoTentativaContato");
+  if (!membroId || !canalId) {
+    msg.textContent = "Informe matrícula e canal.";
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/tentativas-contato`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, canalId, dataTentativa, observacao })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("tentativaObservacao").value = "";
+    carregarTentativasContatoLista(membroId);
+    carregarRadarAbandonoDigital();
+  }
+}
+
+async function carregarTentativasContatoLista(membroId) {
+  const container = document.getElementById("resultadoTentativasContato");
+  if (!container || !membroId) return;
+  const res = await fetchProtegido(`${API_BASE}/tentativas-contato?membroId=${membroId}`);
+  const data = await res.json();
+  const tentativas = data.tentativas || [];
+  const e = data.elegibilidade || {};
+
+  const resumo = `<p class="subtitle">${e.canaisDistintos ?? 0}/2 canais distintos` +
+    (e.diasDesdePrimeira != null ? `, ${e.diasDesdePrimeira}/90 dias desde a 1ª tentativa` : "") +
+    ` — ${e.elegivel ? "✅ elegível para abrir o procedimento" : "ainda não elegível"}.</p>`;
+
+  if (tentativas.length === 0) {
+    container.innerHTML = resumo + "<p class='subtitle'>Nenhuma tentativa registrada para esta matrícula.</p>";
+    return;
+  }
+
+  container.innerHTML = resumo + `<table class="tabela-frequencia"><thead><tr>
+    <th>Canal</th><th>Data</th><th>Observação</th>
+  </tr></thead><tbody>` +
+    tentativas.map(t => `<tr><td>${t.canal}</td><td>${t.dataTentativa}</td><td>${t.observacao || "-"}</td></tr>`).join("") + "</tbody></table>";
+}
+
+async function carregarRadarAbandonoDigital() {
+  const container = document.getElementById("resultadoRadarAbandonoDigital");
+  if (!container) return;
+  const res = await fetchProtegido(`${API_BASE}/radar-abandono-digital`);
+  const membros = await res.json();
+
+  if (!Array.isArray(membros) || membros.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum membro com tentativa de contato registrada.</p>";
+    return;
+  }
+
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr>
+    <th>Nome</th><th>Congregação</th><th>Canais distintos</th><th>Dias desde a 1ª tentativa</th><th></th>
+  </tr></thead><tbody>` +
+    membros.map(m => `<tr>
+      <td>${m.nome}</td>
+      <td>${m.congregacao || "-"}</td>
+      <td>${m.canaisDistintos}/2</td>
+      <td>${m.diasDesdePrimeira ?? "-"}</td>
+      <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" onclick="abrirProcedimentoAbandonoAcao(${m.membroId}, 'DIGITAL')">Abrir Procedimento</button>` : "requisitos incompletos"}</td>
+    </tr>`).join("") + "</tbody></table>";
+}
+
 async function homologarProcedimentoAbandonoAcao(procedimentoId) {
-  if (!(await confirmarAcao("Homologar a constatação de Abandono Material? A membresia é encerrada de verdade (desligamento, assento/liderança/cargo encerrados).", "Homologar"))) return;
+  if (!(await confirmarAcao("Homologar a constatação de abandono? A membresia é encerrada de verdade (desligamento, assento/liderança/cargo encerrados).", "Homologar"))) return;
   const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono/${procedimentoId}/evoluir`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "HOMOLOGAR" })
   });

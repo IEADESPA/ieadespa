@@ -12,7 +12,7 @@ const vacancia = require("../shared/vacancia");
 
 // Causas de saída fixas (Reg. Art. 11 — Perda de Membresia, v1.5) — regra jurídica,
 // não catálogo editável por tela (mesmo espírito de FORMAS_ADMISSAO/ESTADOS_CIVIS).
-const CAUSAS_SAIDA = ["FALECIMENTO", "DESLIGAMENTO", "CARTA_MUDANCA", "EXCLUSAO", "ABANDONO_MATERIAL"];
+const CAUSAS_SAIDA = ["FALECIMENTO", "DESLIGAMENTO", "CARTA_MUDANCA", "EXCLUSAO", "ABANDONO_MATERIAL", "ABANDONO_DIGITAL"];
 
 // Status que encerram a membresia de vez — entrar num desses (vindo de outro status)
 // dispara a vacância automática de Assentos/Liderança/Cargo (shared/vacancia.js).

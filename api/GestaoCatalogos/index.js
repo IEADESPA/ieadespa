@@ -83,6 +83,10 @@ const CATALOGOS = {
   politicasRetencao: {
     tabela: "PoliticasRetencao", chave: "PoliticaId", idField: "politicaId",
     campos: { categoria: sql.NVarChar(60), baseLegal: sql.NVarChar(300), diasRetencao: sql.Int, ativo: sql.Bit }
+  },
+  canaisOficiais: {
+    tabela: "CanaisOficiaisComunicacao", chave: "CanalId", idField: "canalId",
+    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), ativo: sql.Bit }
   }
 };
 

@@ -373,15 +373,19 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 #### v1.5 — Perda de membresia (Art. 11)
 
 - [x] Registro de causas: falecimento, desligamento, carta de mudança, exclusão, abandono
-      material — catálogo fechado (`CAUSAS_SAIDA` em `GestaoPessoas`, mesmo padrão de
-      `FORMAS_ADMISSAO`) + novo status `FALECIDO` (`StatusMembro`). Migração 019.
+      material/digital — catálogo fechado (`CAUSAS_SAIDA` em `GestaoPessoas`, mesmo
+      padrão de `FORMAS_ADMISSAO`) + novo status `FALECIDO` (`StatusMembro`). Migração 019.
 - [x] Abandono Eclesiástico Material (90 dias sem comunhão, `DataAfastamento` lançada
       manualmente pela Secretaria na ficha da Pessoa) + Radar de Abandono
       (`RadarAbandono`) + procedimento sumário de constatação: notificação (registro
       datado, sem e-mail/SMS) → 15 dias de prazo de defesa → homologação pela CLI
       (`AbrirProcedimentoAbandono`/`EvoluirProcedimentoAbandono`).
-      — [ ] Abandono Digital (90 dias incomunicável) fica para depois: falta infraestrutura
-      de registro de tentativa de contato.
+- [x] Abandono Eclesiástico Digital (Art. 11, V e Art. 12) — catálogo de Canais Oficiais
+      de Comunicação (`canaisOficiais`, vedado canal pessoal de dirigente/obreiro) +
+      registro de Tentativas de Contato (`TentativasContatoAbandono`, Art. 12 §2º: pelo
+      menos 2 tentativas por canais distintos, sob pena de nulidade) + Radar próprio
+      (`RadarAbandonoDigital`). Os 90 dias contam da 1ª tentativa registrada. Reaproveita
+      o mesmo procedimento sumário do Material (`ProcedimentosAbandono.Tipo`). Migração 020.
 - [x] Recurso à Assembleia (30 dias, sem efeito suspensivo) — registrado no procedimento
       de abandono (`acao: 'RECURSO'`); a perda já vale desde a homologação, e o resultado
       real da Assembleia é lançado manualmente depois (não integra com o módulo de

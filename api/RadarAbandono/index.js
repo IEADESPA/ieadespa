@@ -22,7 +22,7 @@ module.exports = async function (context, req) {
     WHERE m.SituacaoMembro = 'SEM_COMUNHAO' AND m.DataAfastamento IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM ProcedimentosAbandono pa
-        WHERE pa.MembroId = m.MembroId AND pa.Status IN ('NOTIFICADO', 'HOMOLOGADO')
+        WHERE pa.MembroId = m.MembroId AND pa.Tipo = 'MATERIAL' AND pa.Status IN ('NOTIFICADO', 'HOMOLOGADO')
       )
   `);
 

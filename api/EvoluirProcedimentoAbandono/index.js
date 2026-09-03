@@ -1,5 +1,5 @@
 // EvoluirProcedimentoAbandono
-// Três ações sobre um procedimento de Abandono Material já aberto (Reg. Art. 11):
+// Três ações sobre um procedimento de Abandono (Material ou Digital) já aberto (Reg. Art. 11):
 //   HOMOLOGAR -> só depois de vencido o prazo de defesa (15 dias da notificação); a CLI
 //                homologa a constatação e a perda de membresia passa a valer de verdade
 //                (Status='DESLIGADO', vacância automática — shared/vacancia.js).
@@ -29,7 +29,7 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const atualResult = await pool.request().input("id", sql.Int, procedimentoId)
-    .query(`SELECT MembroId, Status, DataNotificacao, PrazoDias, DataHomologacao FROM ProcedimentosAbandono WHERE ProcedimentoId = @id`);
+    .query(`SELECT MembroId, Tipo, Status, DataNotificacao, PrazoDias, DataHomologacao FROM ProcedimentosAbandono WHERE ProcedimentoId = @id`);
   const atual = atualResult.recordset[0];
   if (!atual) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Procedimento não encontrado." } };
@@ -56,19 +56,21 @@ module.exports = async function (context, req) {
       .input("homologadoPor", sql.Int, usuario.membroId)
       .query(`UPDATE ProcedimentosAbandono SET Status = 'HOMOLOGADO', DataHomologacao = CAST(SYSUTCDATETIME() AS DATE), HomologadoPor = @homologadoPor WHERE ProcedimentoId = @id`);
 
+    const motivoSaida = atual.Tipo === "DIGITAL" ? "ABANDONO_DIGITAL" : "ABANDONO_MATERIAL";
     await pool.request()
       .input("id", sql.Int, atual.MembroId)
+      .input("motivoSaida", sql.NVarChar(200), motivoSaida)
       .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO',
-              MotivoSaida = 'ABANDONO_MATERIAL', DataSaida = CAST(SYSUTCDATETIME() AS DATE)
+              MotivoSaida = @motivoSaida, DataSaida = CAST(SYSUTCDATETIME() AS DATE)
               WHERE MembroId = @id`);
-    await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "ABANDONO_MATERIAL");
+    await vacancia.encerrarVinculos(pool, sql, atual.MembroId, motivoSaida);
 
     await registrarAuditoria({
       tabela: "ProcedimentosAbandono",
       registroId: Number(procedimentoId),
-      acao: "Homologou Abandono Material — perda de membresia",
+      acao: `Homologou Abandono ${atual.Tipo === "DIGITAL" ? "Digital" : "Material"} — perda de membresia`,
       usuarioId: usuario.membroId,
-      dadosDepois: { membroId: atual.MembroId }
+      dadosDepois: { membroId: atual.MembroId, motivoSaida }
     });
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Abandono homologado — membresia encerrada." } };
@@ -82,7 +84,7 @@ module.exports = async function (context, req) {
       return;
     }
     await pool.request().input("id", sql.Int, procedimentoId).query(`UPDATE ProcedimentosAbandono SET Status = 'ARQUIVADO' WHERE ProcedimentoId = @id`);
-    await registrarAuditoria({ tabela: "ProcedimentosAbandono", registroId: Number(procedimentoId), acao: "Arquivou procedimento de Abandono Material", usuarioId: usuario.membroId });
+    await registrarAuditoria({ tabela: "ProcedimentosAbandono", registroId: Number(procedimentoId), acao: `Arquivou procedimento de Abandono ${atual.Tipo === "DIGITAL" ? "Digital" : "Material"}`, usuarioId: usuario.membroId });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Procedimento arquivado." } };
     return;
   }

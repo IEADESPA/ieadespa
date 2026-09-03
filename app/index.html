@@ -352,6 +352,7 @@
               <option value="CARTA_MUDANCA">Carta de Mudança</option>
               <option value="EXCLUSAO">Exclusão</option>
               <option value="ABANDONO_MATERIAL">Abandono Material</option>
+              <option value="ABANDONO_DIGITAL">Abandono Digital</option>
             </select>
           </div>
           <p class="subtitle" style="margin:16px 0 4px;">Dados de contato (LGPD — coleta mínima, uso restrito a quem tem permissão de Pessoas):</p>
@@ -623,6 +624,38 @@
           constatação — notificação seguida de 15 dias de prazo de defesa antes da CLI
           poder homologar a perda de membresia.</p>
         <div id="resultadoRadarAbandono"></div>
+
+        <hr />
+        <h3>Tentativas de Contato — Abandono Digital (Art. 12 §2º)</h3>
+        <p class="subtitle">A lei exige pelo menos 2 tentativas de contato por canais
+          distintos (cadastrados em Catálogos → Canais Oficiais de Comunicação) antes de
+          poder abrir o procedimento — sob pena de nulidade. Os 90 dias contam a partir
+          da 1ª tentativa registrada.</p>
+        <form onsubmit="event.preventDefault(); registrarTentativaContatoAcao();">
+          <div class="input-group">
+            <label>Matrícula:</label>
+            <input type="number" id="tentativaMatricula" placeholder="Ex: 15" />
+          </div>
+          <div class="input-group">
+            <label>Canal:</label>
+            <select id="tentativaCanal"></select>
+          </div>
+          <div class="input-group">
+            <label>Data da tentativa:</label>
+            <input type="date" id="tentativaData" />
+          </div>
+          <div class="input-group">
+            <label>Observação:</label>
+            <input type="text" id="tentativaObservacao" placeholder="Ex: sem resposta ao contato" />
+          </div>
+          <button class="btn-confirmar" type="submit">📵 Registrar Tentativa</button>
+        </form>
+        <p id="resultadoTentativaContato"></p>
+        <div id="resultadoTentativasContato"></div>
+
+        <hr />
+        <h3>Radar de Abandono Digital (Art. 11, V)</h3>
+        <div id="resultadoRadarAbandonoDigital"></div>
 
         <hr />
         <h3>Procedimentos</h3>

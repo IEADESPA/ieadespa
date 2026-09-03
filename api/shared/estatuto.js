@@ -168,6 +168,14 @@ function elegivelAbandonoMaterial(membro, hoje) {
   return dias !== null && dias >= DIAS_ABANDONO_MATERIAL;
 }
 
+// Art. 12 §2º — Abandono Eclesiástico Digital: pressupõe pelo menos 2 tentativas de
+// contato por canais distintos, contadas a partir de quando o membro se tornou
+// incomunicável. Os 90 dias (Art. 11, V) contam da 1ª tentativa registrada — a
+// contagem em si depende do histórico de tentativas (tabela TentativasContatoAbandono),
+// por isso vive em shared/abandonoDigital.js (precisa de banco), não aqui.
+const MIN_TENTATIVAS_CONTATO_DIGITAL = 2;
+const DIAS_ABANDONO_DIGITAL = 90;
+
 module.exports = {
   idadeEm,
   diasDesde,
@@ -179,5 +187,7 @@ module.exports = {
   DIAS_PRAZO_DEFESA_ABANDONO,
   DIAS_RECURSO_ASSEMBLEIA,
   diasEmAfastamento,
-  elegivelAbandonoMaterial
+  elegivelAbandonoMaterial,
+  MIN_TENTATIVAS_CONTATO_DIGITAL,
+  DIAS_ABANDONO_DIGITAL
 };

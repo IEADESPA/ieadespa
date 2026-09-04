@@ -458,6 +458,20 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [ ] Importação de planilha Excel (matrícula + nome + situação + dados básicos).
 - [ ] Function `ImportarPessoas` (rota pessoas/importar).
 - [ ] Exportação de rol de membros (filtros por congregação/área/situação/categoria).
+
+#### v1.9 — Registros especiais do membro
+
+*(Gap identificado em varredura Estatuto/Regimento completa, ainda não implementado)*
+
+- [ ] Registro de Casamentos ministrados pela igreja (Reg. Art. 83): celebrante,
+      modalidade, data de habilitação civil (validade de 90 dias, vedado celebrar
+      nos últimos 5 dias), confirmação de registro em cartório — hoje só o batismo
+      tem rastro (`DataBatismo`), casamento não tem lugar nenhum.
+- [ ] Licença Eclesiástica automática por candidatura política (Reg. Art. 157 §2º):
+      obreiro candidato entra em licença 90 dias antes do pleito, perde o púlpito;
+      Diretoria decide o retorno pós-eleição — status específico, distinto do
+      `LICENÇA` genérico já existente em `StatusMembro` (v1.6).
+
 ### FASE 2 — Governança (órgãos e deliberações)
 
 #### v2.1 — Assembleia Geral (sessão e quórum)
@@ -558,6 +572,27 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [ ] Geração de Ata (PDF) a partir de uma Sessão encerrada.
 - [ ] Alerta de prazo de registro em cartório (Art. 75: 30 dias ata, 45 dias protocolo).
 - [ ] Registro do Regimento no RTD (Art. 161) para conservação.
+- [ ] Motor de Termos/modelos com preenchimento e assinatura eletrônica *(gap da
+      varredura)*: hoje cada termo formal exigido pelo Regimento (Posse do Dirigente
+      — Art. 117, Compromisso de Gestão — Art. 57, Adesão ao Voluntariado, etc.) não
+      tem gerador — só a referência de blob genérica acima.
+
+#### v2.10 — Transição de gestão *(gap da varredura)*
+
+- [ ] Comitê de Recepção e Consulta Pastoral (Reg. Art. 42): entrevista de indicados
+      da Convenção em vacância presidencial.
+- [ ] Relatório de Transição obrigatório (Reg. Art. 42-A): inventário de bens, senhas
+      bancárias/sistemas, obras em andamento, pendências jurídicas — ao fim de
+      mandato ou transferência de liderança.
+
+#### v2.11 — Correspondência oficial e ciclo normativo *(gap da varredura)*
+
+- [ ] Ofícios/Representações formais à Convenção (CIADSETA) com protocolo, data de
+      envio e prazo de resposta — hoje prazos que decidem sucessão presidencial
+      (Art. 18 §II: 90 dias; Art. 32 §§2-3: 90 dias; Art. 75 §4: 15 dias) não têm
+      onde ser controlados.
+- [ ] Ciclo de revisão do Regimento a cada 4 anos, no 1º ano de gestão, por Comissão
+      de Revisão designada pela CLI (Reg. Art. 162-B).
 
 ### FASE 3 — Disciplina e Ética
 
@@ -617,6 +652,33 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [ ] Carência administrativa após o fim da pena.
 - [ ] Prova de Reintegração Ética pela AFM (aprovação reativa credencial).
 - [ ] Histórico disciplinar no perfil do membro.
+
+#### v3.6 — Escada territorial de instâncias (JAI/JEA/TER/CEQ/CDE) *(maior gap da varredura)*
+
+`OrgaosLocais` (v0.1) hoje só cataloga esses níveis como nomes/hierarquia — nenhuma
+das competências abaixo tem processo ou tela ainda:
+- [ ] JAI (Reg. Art. 108): 1ª instância disciplinar local — advertência/suspensão de
+      cargo local até 90 dias; recurso em 5 dias à JEA. Intervenção do Geral (Art. 108-A).
+- [ ] JEA (Reg. Art. 122-123): 2ª instância — recursos contra a JAI + processa
+      originariamente infrações de Obreiros Oficiais (Diáconos/Presbíteros) da Área.
+- [ ] JUC (Reg. Art. 124-A): auditoria intermediária de Área (balancetes, notas fiscais).
+- [ ] CRA/TER/CRAF (Reg. Art. 126-B/C/D): CRA é executivo regional; **TER é 3ª
+      instância disciplinar**, único órgão regional que pode votar Exclusão/
+      Destituição (com homologação do CEI); CRAF é o braço fiscal regional (Selo de
+      Regularidade Trimestral, bloqueio de Área inadimplente).
+- [ ] CEQ/CAQ (Reg. Art. 126-H/I): colegiado estratégico de Quadrante + câmara de
+      arbitragem para conflito entre lideranças regionais.
+- [ ] CDE (Reg. Art. 126-L/M/N): conselho eclesiástico distrital — autonomia quase
+      total (processos/balanços não sobem à Sede, só consolidado anual + dízimo
+      institucional 10%, já previsto na v9.3).
+
+#### v3.7 — Ouvidoria Eclesiástica *(gap da varredura)*
+
+- [ ] Canal permanente, sigiloso e opcionalmente anônimo de denúncias (Reg. Art. 104),
+      vinculado ao NIF/CEI e independente da Diretoria.
+- [ ] Proteção formal ao denunciante + estabilidade do ouvidor durante apuração.
+- [ ] Regras próprias de LGPD: acesso restrito, anonimização pós-processo.
+
 ### FASE 4 — Financeiro e Patrimônio
 
 #### v4.1 — Tesouraria e Caixa Único
@@ -625,6 +687,8 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       (Reg. Art. 133-C).
 - [ ] Lançamentos de entrada/saída com categoria e comprovante.
 - [ ] Conciliação bancária mensal.
+- [ ] Teto de acumulação de caixa local = 10 salários-mínimos, com recolhimento
+      automático do excedente (Reg. Art. 119) *(gap da varredura)*.
 
 #### v4.2 — Ofertas, dízimos e arrecadação
 
@@ -650,6 +714,9 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [ ] Teto de Alçada Patrimonial (acima → Assembleia; abaixo → CLI).
 - [ ] Blindagem patrimonial: assinatura conjunta, quarentena de 12 meses.
 - [ ] Registro de escrituras, títulos, alvarás, veículos, contratos (2º/3º Secretários).
+- [ ] Casa Pastoral como ativo com regra de ocupação (Reg. Art. 115): uso exclusivo do
+      Dirigente titular, vedada cessão a terceiros, destituição automática por uso
+      irregular/"gato" de luz-água *(gap da varredura)*.
 
 #### v4.6 — NIF e Compliance
 
@@ -662,12 +729,38 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 - [ ] Auditoria em 3 níveis (interna, NIF, externa).
 - [ ] Parecer mensal do Conselho Fiscal (aprova/rejeita contas).
 - [ ] Bloqueio de repasses por falta de prestação de contas.
+- [ ] Prazo fatal de prestação de contas — dia 1º útil do mês, tolerância até dia 5,
+      "Ata de Pendência" automática por falta de comprovante de água/luz (Reg. Art. 120)
+      *(gap da varredura)*.
 
 #### v4.8 — Repasses e dízimo institucional
 
 - [ ] Repasses obrigatórios de congregações/departamentos para a Matriz.
 - [ ] Dízimo institucional de 10% (Distrito) para a Sede Geral.
 - [ ] Alerta de atraso de repasse (infração de intervenção).
+
+#### v4.9 — Seguros institucionais *(gap da varredura)*
+
+- [ ] Apólice obrigatória para Templo Sede e grandes eventos (Reg. Art. 65-A):
+      cobertura mínima incêndio/danos elétricos/RC.
+- [ ] Seguro de Responsabilidade Civil para administradores (Reg. Art. 42-A).
+- [ ] Registro de apólices, vigências e coberturas.
+
+#### v4.10 — Anexo de Parâmetros Monetários *(gap da varredura)*
+
+- [ ] Catálogo de valores monetários fixos (tetos, taxas, valores de referência) com
+      correção automática a cada 12 meses por IPCA/salário-mínimo (Reg. Art. 65) —
+      mesmo espírito do catálogo `Prazos` já existente (v0.1), só que para dinheiro.
+- [ ] "Anexo Único" mantido pela Secretaria Geral, com número/data da Resolução
+      Normativa da CLI que fixou/atualizou cada valor (Reg. Art. 162-C §§1-2).
+
+#### v4.11 — Cessão de templo a terceiros *(gap da varredura)*
+
+- [ ] Autorização de cessão do templo para casamentos/eventos de terceiros (Reg. Art.
+      156) — não é conflito de agenda (já resolvido em v7.2), é processo de
+      autorização + cobrança + responsabilização civil.
+- [ ] Taxa de Zeladoria (ressarcimento de custos, não aluguel).
+- [ ] Termo de Responsabilidade por danos + aprovação prévia de lista musical.
 
 ### FASE 5 — Departamentos e Relatórios
 
@@ -778,6 +871,21 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 - [ ] Escala de rodízio voluntário (limpeza, portaria, louvor).
 - [ ] Termo de Adesão ao Serviço Voluntário (Lei 9.608/98).
 - [ ] Remoção da escala por perda de confiança (sem vínculo trabalhista).
+
+#### v7.6 — Setores Técnicos (voluntariado profissional) *(gap da varredura)*
+
+Distinto da escala de rodízio comum acima — são 20 áreas de voluntariado
+especializado (Reg. Art. 48-52): Jurídico, Engenharia, Saúde, TI, Comunicação,
+Assistência Social Técnica, Contabilidade, Gastronomia, Segurança, Música/
+Sonoplastia, Transporte, Meio Ambiente, Capelania, Empreendedorismo, Cultura,
+História/Acervo, RP/Cerimonial, Libras, Beleza/Estética, Educação/Pedagogia.
+
+- [ ] Catálogo de Setores Técnicos + Termo de Adesão específico (Reg. Art. 49).
+- [ ] Prerrogativas de intervenção cautelar (ex: interditar templo com risco elétrico,
+      remover post oficial).
+- [ ] Verificação de antecedentes criminais/cíveis (Reg. Art. 133 §5º) na investidura
+      em cargo de liderança/confiança ou trabalho com menores — "Termo de Vistoria"
+      com data, hash do documento apresentado, parecer e assinatura do responsável.
 
 ### FASE 8 — Ministerial (AFM)
 

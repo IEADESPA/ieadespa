@@ -104,7 +104,7 @@
         <div id="cartaoPerfilPessoal"></div>
         <div id="cartaoMeusOrgaos"></div>
         <div id="resumoStatsPessoal"></div>
-        <div id="resultadoPainelPessoal"></div>
+        <div class="rolagem-tabela"><div id="resultadoPainelPessoal"></div></div>
 
         <!-- Só aparece pra quem logou com senha (tem acesso à Secretaria) -->
         <div id="cxTrocarSenha" style="display:none; margin-top:24px;">
@@ -159,7 +159,7 @@
             <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">📨 Enviar pedido</button>
           </div>
         </form>
-        <div id="resultadoListaSolicitacoesLGPD"></div>
+        <div class="rolagem-tabela"><div id="resultadoListaSolicitacoesLGPD"></div></div>
       </div>
 
       <!-- ABA: REUNIÕES (motor único de sessão, qualquer órgão) -->
@@ -198,14 +198,14 @@
             <option value="">Todos os órgãos</option>
           </select>
         </div>
-        <div id="resultadoListaReunioes"></div>
+        <div class="rolagem-tabela"><div id="resultadoListaReunioes"></div></div>
 
         <hr />
 
         <div id="blocoFrequencia" style="display:none;">
           <h3>Lista de Frequência — <span id="tituloFrequencia"></span></h3>
           <div id="resumoQuorum" class="resumo-quorum"></div>
-          <div id="resultadoFrequencia"></div>
+          <div class="rolagem-tabela"><div id="resultadoFrequencia"></div></div>
         </div>
 
         <hr />
@@ -382,7 +382,7 @@
             </label>
             <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarVinculoFamiliar()">➕ Adicionar Vínculo</button>
           </div>
-          <div id="resultadoListaVinculosFamiliares"></div>
+          <div class="rolagem-tabela"><div id="resultadoListaVinculosFamiliares"></div></div>
         </div>
 
         <div id="blocoFotoMembro" class="cartao-perfil" style="display:none; margin:16px 0;">
@@ -401,7 +401,7 @@
 
         <div id="blocoHistoricoMembro" class="cartao-perfil" style="display:none; margin:16px 0;">
           <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Linha do Tempo — <span id="historicoMembroNome"></span></h4>
-          <div id="resultadoHistoricoMembro"></div>
+          <div class="rolagem-tabela"><div id="resultadoHistoricoMembro"></div></div>
           <hr />
           <p class="subtitle" style="margin:16px 0 4px;">Registrar Marco (conversão, ministério/igreja anterior, batismo no
             Espírito Santo — eventos que não têm outro lugar no sistema):</p>
@@ -621,7 +621,7 @@
 
         <hr />
         <h3>Esteira Ativa</h3>
-        <div id="resultadoListaConsagracoes"></div>
+        <div class="rolagem-tabela"><div id="resultadoListaConsagracoes"></div></div>
       </div>
 
       <!-- ABA: PROCESSO DISCIPLINAR -->
@@ -651,7 +651,7 @@
 
         <hr />
         <h3>Processos Ativos</h3>
-        <div id="resultadoListaDisciplina"></div>
+        <div class="rolagem-tabela"><div id="resultadoListaDisciplina"></div></div>
       </div>
 
       <!-- ABA: PERDA DE MEMBRESIA -->
@@ -661,7 +661,7 @@
           (aba Pessoas). Depois de 90 dias, fica liberado abrir o procedimento sumário de
           constatação — notificação seguida de 15 dias de prazo de defesa antes da CLI
           poder homologar a perda de membresia.</p>
-        <div id="resultadoRadarAbandono"></div>
+        <div class="rolagem-tabela"><div id="resultadoRadarAbandono"></div></div>
 
         <hr />
         <h3>Tentativas de Contato — Abandono Digital (Art. 12 §2º)</h3>
@@ -689,18 +689,18 @@
           <button class="btn-confirmar" type="submit">📵 Registrar Tentativa</button>
         </form>
         <p id="resultadoTentativaContato"></p>
-        <div id="resultadoTentativasContato"></div>
+        <div class="rolagem-tabela"><div id="resultadoTentativasContato"></div></div>
 
         <hr />
         <h3>Radar de Abandono Digital (Art. 11, V)</h3>
-        <div id="resultadoRadarAbandonoDigital"></div>
+        <div class="rolagem-tabela"><div id="resultadoRadarAbandonoDigital"></div></div>
 
         <hr />
         <h3>Procedimentos</h3>
         <p class="subtitle">Notificação e edital ficam registrados aqui mesmo (o sistema
           não envia e-mail/SMS). Recurso à Assembleia não tem efeito suspensivo — a perda
           já vale a partir da homologação.</p>
-        <div id="resultadoListaAbandono"></div>
+        <div class="rolagem-tabela"><div id="resultadoListaAbandono"></div></div>
       </div>
 
       <!-- ABA: AUDITORIA -->

@@ -823,7 +823,40 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 - [ ] Ativação de Distrito (nível 5) com autonomia financeira + dízimo institucional 10%.
 - [ ] Blindagem contra desvinculação (intervenção imediata).
 
-## 4. Modelo de dados (referência)
+### FASE 10 — Experiência, Design e Performance
+
+Pacote à parte, pra depois de todo o resto do sistema estar pronto — faz mais sentido
+investir em polimento visual/performance quando as telas já estiverem todas
+construídas, em vez de redesenhar no meio do caminho. Avaliado nesta fase: adotar um
+motor tipo **Astro** — descartado (Astro é pra sites majoritariamente estáticos com
+ilhas pontuais de interatividade; este sistema é um painel CRUD dinâmico o tempo
+todo — trocar de motor seria reescrever a aplicação sem ganho real). O caminho é
+melhorar o que já existe (HTML/CSS/JS puro), não trocar de arquitetura.
+
+#### v10.1 — Redesign visual
+
+- [ ] Trocar os emojis do menu lateral e dos botões por uma biblioteca de ícones de
+      verdade (ex: Lucide/Feather via CDN) — hoje são 13 abas com emoji puro
+      (⚖️🏛️👤👥 etc.), o que passa impressão datada/amadora.
+- [ ] Revisão de paleta, tipografia e espaçamento (`app/style.css`) inspirada em
+      painéis institucionais modernos — sem framework novo, é refinamento de CSS.
+
+#### v10.2 — Performance e cache (com análise de custo/benefício)
+
+- [ ] Hoje cada troca de aba sempre rebusca tudo do zero, sem cache no navegador —
+      por isso a lentidão varia (não é a tela que é "mal feita", é a consulta por
+      trás que pesa mais em algumas abas, ex: Congregações). Introduzir cache leve
+      no front só pro que realmente não muda a cada clique.
+- [ ] **Decisão em aberto**: cache tem que ser dosado — não é "cachear tudo". Definir
+      o que entra (catálogos que raramente mudam) e o que fica de fora (listas que
+      mudam com frequência), pra não virar um cache pesado/desatualizado.
+- [ ] Revisar pontualmente as consultas mais pesadas no backend (ex: Congregações).
+
+#### v10.3 — Responsividade mobile
+
+- [ ] Tabelas hoje cortam no celular sem rolagem horizontal (funcionam no notebook,
+      não no telefone) — adicionar `overflow-x: auto` nos contêineres de tabela e
+      revisar o layout geral em telas pequenas.
 
 - **Núcleo:** `Congregacoes`, `Funcoes`, `MembroReferencia`, `Orgaos`, `Mandatos`,
   `Assentos`, `Sessoes`, `Presencas`, `ProcessosDisciplinares`, `Matriculas_AFM`,

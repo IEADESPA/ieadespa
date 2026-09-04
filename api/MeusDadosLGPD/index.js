@@ -24,6 +24,7 @@ module.exports = async function (context, req) {
            m.DizimistaFiel AS dizimistaFiel,
            m.SituacaoMembro AS situacaoMembro, d.Nome AS departamento, m.CargoMinisterial AS cargoMinisterial,
            m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco, e.Nome AS extensao,
+           m.FotoUrl AS fotoUrl,
            CONVERT(varchar(33), m.CriadoEm, 126) AS criadoEm
     FROM MembroReferencia m
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
@@ -50,7 +51,7 @@ module.exports = async function (context, req) {
              CONVERT(varchar(10), p.DataTerminoPrevisao, 120) AS dataTerminoPrevisao
       FROM ProcessosDisciplinares p JOIN Orgaos o ON o.OrgaoId = p.OrgaoResponsavelId WHERE p.MembroId = @mat`),
     pool.request().input("mat", sql.Int, matricula).query(`
-      SELECT m2.Nome AS parente, t.RotuloDireto AS vinculo
+      SELECT m2.Nome AS parente, t.RotuloDireto AS vinculo, v.ResponsavelLegal AS responsavelLegal
       FROM VinculosFamiliares v
       JOIN MembroReferencia m2 ON m2.MembroId = v.MembroParenteId
       JOIN TiposVinculoFamiliar t ON t.TipoVinculoId = v.TipoVinculoId

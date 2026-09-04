@@ -400,6 +400,12 @@ CREATE TABLE VinculosFamiliares (
 );
 CREATE UNIQUE INDEX UQ_VinculosFamiliares_Par ON VinculosFamiliares(MembroId, MembroParenteId, TipoVinculoId);
 
+-- Responsável Legal (v1.7 — cadastro de menores, migração 022): flag no próprio
+-- vínculo já existente, em vez de tabela nova. MembroParenteId é o responsável
+-- quando este bit está ligado.
+ALTER TABLE VinculosFamiliares ADD
+    ResponsavelLegal BIT NOT NULL DEFAULT 0;
+
 -- ============================================================
 -- Cartas de Trânsito (v1.4 — Regimento Art. 130/131/132)
 -- ============================================================
@@ -489,6 +495,15 @@ CREATE TABLE MarcosMembro (
     CriadoEm        DATETIME2 DEFAULT SYSUTCDATETIME(),
     AtualizadoEm    DATETIME2 NULL
 );
+
+-- ============================================================
+-- Cadastro Ampliado (v1.7 — migração 022): Foto do membro, com consentimento como
+-- trava real (ver api/UploadFotoMembro) — armazenada em Azure Blob Storage, aqui só
+-- guarda a URL. Responsável Legal já foi adicionado acima, junto de VinculosFamiliares.
+-- Dados de saúde (PSC) e Profissão ficaram fora do escopo — ver README v1.7.
+-- ============================================================
+ALTER TABLE MembroReferencia ADD
+    FotoUrl NVARCHAR(500) NULL;
 
 -- ============================================================
 -- Auditoria e trilha de dados (v0.3) — Encarregado de Dados (papel), trilha de

@@ -37,7 +37,8 @@ const SELECT_MEMBRO = `
          m.CargoMinisterial AS cargoMinisterial, m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco,
          m.ExtensaoId AS extensaoId, e.Nome AS extensao, m.EstadoCivil AS estadoCivil,
          CONVERT(varchar(10), m.DataAfastamento, 120) AS dataAfastamento,
-         CONVERT(varchar(10), m.DataSaida, 120) AS dataSaida, m.MotivoSaida AS motivoSaida
+         CONVERT(varchar(10), m.DataSaida, 120) AS dataSaida, m.MotivoSaida AS motivoSaida,
+         m.FotoUrl AS fotoUrl
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
   LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
@@ -66,7 +67,11 @@ module.exports = async function (context, req) {
       // só quem tem exatamente essa Extensão vinculada entra na lista.
       .filter(m => !usuario.escopoExtensaoNome || m.extensao === usuario.escopoExtensaoNome)
       .map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }))
-      .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }));
+      .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }))
+      .map(m => {
+        const idade = estatuto.idadeEm(m.dataNascimento);
+        return Object.assign({}, m, { menorDeIdade: idade !== null && idade < 18 });
+      });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: membros };
     return;
   }
@@ -219,6 +224,8 @@ module.exports = async function (context, req) {
       membro.processoDisciplinarAtivo = idsSobDisciplina.has(membro.membroId);
     }
     membro.capacidade = estatuto.calcularCapacidadeEleitoral(membro);
+    const idadeMembro = estatuto.idadeEm(membro.dataNascimento);
+    membro.menorDeIdade = idadeMembro !== null && idadeMembro < 18;
 
     await registrarAuditoria({
       tabela: "MembroReferencia",

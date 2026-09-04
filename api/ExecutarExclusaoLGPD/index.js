@@ -11,6 +11,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const storage = require("../shared/storage");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "protecaodedados");
@@ -40,10 +41,16 @@ module.exports = async function (context, req) {
   }
 
   const membroAntes = await pool.request().input("mat", sql.Int, solicitacao.MembroId)
-    .query(`SELECT Telefone, Email, Endereco FROM MembroReferencia WHERE MembroId = @mat`);
+    .query(`SELECT Telefone, Email, Endereco, FotoUrl FROM MembroReferencia WHERE MembroId = @mat`);
 
   await pool.request().input("mat", sql.Int, solicitacao.MembroId)
-    .query(`UPDATE MembroReferencia SET Telefone = NULL, Email = NULL, Endereco = NULL WHERE MembroId = @mat`);
+    .query(`UPDATE MembroReferencia SET Telefone = NULL, Email = NULL, Endereco = NULL, FotoUrl = NULL WHERE MembroId = @mat`);
+
+  // Best-effort — o dado principal (FotoUrl) já foi zerado no SQL independentemente
+  // do resultado da chamada ao Storage.
+  if (membroAntes.recordset[0] && membroAntes.recordset[0].FotoUrl) {
+    await storage.excluirFoto(solicitacao.MembroId);
+  }
 
   await pool.request()
     .input("mat", sql.Int, solicitacao.MembroId)
@@ -51,7 +58,13 @@ module.exports = async function (context, req) {
     .query(`INSERT INTO ConsentimentosLGPD (MembroId, Tipo, Concedido, BaseLegal, Observacao, RegistradoPor)
             VALUES (@mat, 'DADOS_CONTATO', 0, 'OBRIGACAO_LEGAL', 'Revogado automaticamente pela execução do direito de exclusão.', @registradoPor)`);
 
-  const resposta = respostaTexto || "Dados de contato (telefone/e-mail/endereço) anonimizados. Dados cadastrais e de processos são mantidos por obrigação legal e exercício regular de direitos (LGPD Art. 16).";
+  await pool.request()
+    .input("mat", sql.Int, solicitacao.MembroId)
+    .input("registradoPor", sql.Int, usuario.membroId)
+    .query(`INSERT INTO ConsentimentosLGPD (MembroId, Tipo, Concedido, BaseLegal, Observacao, RegistradoPor)
+            VALUES (@mat, 'FOTO', 0, 'OBRIGACAO_LEGAL', 'Revogado automaticamente pela execução do direito de exclusão.', @registradoPor)`);
+
+  const resposta = respostaTexto || "Dados de contato (telefone/e-mail/endereço) e foto anonimizados. Dados cadastrais e de processos são mantidos por obrigação legal e exercício regular de direitos (LGPD Art. 16).";
   await pool.request()
     .input("id", sql.Int, id)
     .input("respostaTexto", sql.NVarChar(500), resposta)
@@ -60,13 +73,13 @@ module.exports = async function (context, req) {
             DataResposta = SYSUTCDATETIME(), AtendidoPor = @atendidoPor WHERE SolicitacaoId = @id`);
 
   await registrarAuditoria({
-    tabela: "MembroReferencia", registroId: solicitacao.MembroId, acao: "Executou exclusão LGPD (anonimizou dados de contato)",
-    usuarioId: usuario.membroId, dadosAntes: membroAntes.recordset[0], dadosDepois: { telefone: null, email: null, endereco: null }
+    tabela: "MembroReferencia", registroId: solicitacao.MembroId, acao: "Executou exclusão LGPD (anonimizou dados de contato e foto)",
+    usuarioId: usuario.membroId, dadosAntes: membroAntes.recordset[0], dadosDepois: { telefone: null, email: null, endereco: null, fotoUrl: null }
   });
   await registrarAuditoria({
     tabela: "SolicitacoesTitularLGPD", registroId: Number(id), acao: "Atendeu solicitação de exclusão LGPD",
     usuarioId: usuario.membroId, dadosDepois: { status: "ATENDIDA" }
   });
 
-  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Exclusão executada: dados de contato anonimizados." } };
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Exclusão executada: dados de contato e foto anonimizados." } };
 };

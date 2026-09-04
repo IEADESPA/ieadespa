@@ -28,7 +28,11 @@ module.exports = async function (context, req) {
                CASE WHEN v.MembroId = @membroId THEN v.MembroParenteId ELSE v.MembroId END AS outraPessoaId,
                m2.Nome AS outraPessoaNome,
                t.Codigo AS tipoCodigo,
-               CASE WHEN v.MembroId = @membroId THEN t.RotuloDireto ELSE COALESCE(t.RotuloInverso, t.RotuloDireto) END AS rotulo
+               CASE WHEN v.MembroId = @membroId THEN t.RotuloDireto ELSE COALESCE(t.RotuloInverso, t.RotuloDireto) END AS rotulo,
+               -- ResponsavelLegal sempre significa "MembroParenteId responde por MembroId".
+               -- Vendo da perspectiva de @membroId: se ele é o MembroId da linha, a outra
+               -- pessoa (MembroParenteId) é responsável por ele quando o bit está ligado.
+               CASE WHEN v.MembroId = @membroId THEN v.ResponsavelLegal ELSE 0 END AS outraPessoaEhResponsavel
         FROM VinculosFamiliares v
         JOIN TiposVinculoFamiliar t ON t.TipoVinculoId = v.TipoVinculoId
         JOIN MembroReferencia m2 ON m2.MembroId = CASE WHEN v.MembroId = @membroId THEN v.MembroParenteId ELSE v.MembroId END
@@ -40,7 +44,7 @@ module.exports = async function (context, req) {
     const result = await pool.request().query(`
       SELECT v.VinculoId AS vinculoId, v.MembroId AS membroId, m1.Nome AS nome,
              v.MembroParenteId AS membroParenteId, m2.Nome AS parenteNome,
-             t.Codigo AS tipoCodigo, t.RotuloDireto AS rotulo
+             t.Codigo AS tipoCodigo, t.RotuloDireto AS rotulo, v.ResponsavelLegal AS responsavelLegal
       FROM VinculosFamiliares v
       JOIN TiposVinculoFamiliar t ON t.TipoVinculoId = v.TipoVinculoId
       JOIN MembroReferencia m1 ON m1.MembroId = v.MembroId
@@ -52,7 +56,7 @@ module.exports = async function (context, req) {
 
   // ---- POST: criar vínculo ----
   if (method === "POST") {
-    const { membroId, membroParenteId, tipoVinculoId } = req.body || {};
+    const { membroId, membroParenteId, tipoVinculoId, responsavelLegal } = req.body || {};
     if (!membroId || !membroParenteId || !tipoVinculoId) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, membroParenteId, tipoVinculoId." } };
       return;
@@ -83,11 +87,12 @@ module.exports = async function (context, req) {
       .input("membroId", sql.Int, membroId)
       .input("membroParenteId", sql.Int, membroParenteId)
       .input("tipoVinculoId", sql.Int, tipoVinculoId)
+      .input("responsavelLegal", sql.Bit, responsavelLegal === true)
       .input("criadoPor", sql.Int, usuario.membroId)
       .query(`
-        INSERT INTO VinculosFamiliares (MembroId, MembroParenteId, TipoVinculoId, CriadoPor)
+        INSERT INTO VinculosFamiliares (MembroId, MembroParenteId, TipoVinculoId, ResponsavelLegal, CriadoPor)
         OUTPUT INSERTED.VinculoId
-        VALUES (@membroId, @membroParenteId, @tipoVinculoId, @criadoPor)`);
+        VALUES (@membroId, @membroParenteId, @tipoVinculoId, @responsavelLegal, @criadoPor)`);
     const vinculoId = result.recordset[0].VinculoId;
 
     await registrarAuditoria({
@@ -95,7 +100,7 @@ module.exports = async function (context, req) {
       registroId: vinculoId,
       acao: "Criou vínculo familiar",
       usuarioId: usuario.membroId,
-      dadosDepois: { membroId, membroParenteId, tipoVinculoId }
+      dadosDepois: { membroId, membroParenteId, tipoVinculoId, responsavelLegal: responsavelLegal === true }
     });
 
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Vínculo familiar cadastrado.", vinculoId } };

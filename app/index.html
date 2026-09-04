@@ -377,9 +377,26 @@
           <div class="barra-lista">
             <select id="vinculoTipo"></select>
             <input type="number" id="vinculoMatriculaParente" placeholder="Matrícula da outra pessoa" style="min-width:180px;" />
+            <label style="display:flex;align-items:center;gap:4px;">
+              <input type="checkbox" id="vinculoResponsavelLegal" /> A outra pessoa é Responsável Legal (menor de idade)
+            </label>
             <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarVinculoFamiliar()">➕ Adicionar Vínculo</button>
           </div>
           <div id="resultadoListaVinculosFamiliares"></div>
+        </div>
+
+        <div id="blocoFotoMembro" class="cartao-perfil" style="display:none; margin:16px 0;">
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Foto de <span id="fotoMembroNome"></span></h4>
+          <p class="subtitle" style="margin:0 0 8px;">Dado sensível (LGPD) — o consentimento precisa estar concedido antes de
+            fazer o upload. Não é registro paralelo como telefone/e-mail: sem consentimento, o sistema bloqueia.</p>
+          <div id="fotoMembroPreview" style="margin:0 0 10px;"></div>
+          <p id="fotoMembroStatusConsentimento" class="subtitle"></p>
+          <div class="barra-lista">
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="concederConsentimentoFotoAcao()">✅ Conceder Consentimento de Foto</button>
+            <input type="file" id="fotoMembroArquivo" accept="image/png,image/jpeg,image/webp" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarFotoMembroAcao()">📷 Enviar Foto</button>
+          </div>
+          <p id="resultadoFotoMembro"></p>
         </div>
 
         <div id="blocoHistoricoMembro" class="cartao-perfil" style="display:none; margin:16px 0;">

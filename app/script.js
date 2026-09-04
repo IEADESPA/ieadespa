@@ -1160,7 +1160,7 @@ function renderizarPessoas() {
     html += `<tr>
       <td>${p.membroId}</td>
       <td>${p.nome}</td>
-      <td>${idadeDe(p.dataNascimento) ?? "-"}</td>
+      <td>${idadeDe(p.dataNascimento) ?? "-"}${p.menorDeIdade ? ' <span class="badge-status badge-licenca">menor</span>' : ""}</td>
       <td>${badgeCategoria(p.capacidade)}</td>
       <td>${labelFormaAdmissao(p.formaAdmissao)}</td>
       <td>${p.funcao || "-"}</td>
@@ -1170,6 +1170,7 @@ function renderizarPessoas() {
       <td class="acoes-inline">
         <button class="btn-link" onclick="editarPessoa(${p.membroId})">Editar</button>
         <button class="btn-link" onclick="verHistoricoMembro(${p.membroId})">🕒 Histórico</button>
+        <button class="btn-link" onclick="verFotoMembro(${p.membroId})">📷 Foto</button>
         ${p.status !== "DESLIGADO" ? `<button class="btn-link btn-link-perigo" onclick="desligarPessoa(${p.membroId})">Desligar</button>` : ""}
       </td>
     </tr>`;
@@ -1456,7 +1457,7 @@ async function carregarVinculosFamiliares(membroId) {
   vinculos.forEach(v => {
     html += `<tr>
       <td>${v.rotulo}</td>
-      <td>${v.outraPessoaNome} (${v.outraPessoaId})</td>
+      <td>${v.outraPessoaNome} (${v.outraPessoaId})${v.outraPessoaEhResponsavel ? ' <span class="badge-status badge-ativo">Responsável Legal</span>' : ""}</td>
       <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="removerVinculoFamiliar(${v.vinculoId})">Remover</button></td>
     </tr>`;
   });
@@ -1468,6 +1469,7 @@ async function salvarVinculoFamiliar() {
   const membroId = window._membroFamiliaAtual;
   const tipoVinculoId = document.getElementById("vinculoTipo").value;
   const membroParenteId = document.getElementById("vinculoMatriculaParente").value;
+  const responsavelLegal = document.getElementById("vinculoResponsavelLegal").checked;
   if (!membroId || !tipoVinculoId || !membroParenteId) {
     mostrarToast("Informe o tipo de vínculo e a matrícula da outra pessoa.", "erro");
     return;
@@ -1475,12 +1477,13 @@ async function salvarVinculoFamiliar() {
   const res = await fetchProtegido(`${API_BASE}/vinculos-familiares`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, membroParenteId, tipoVinculoId })
+    body: JSON.stringify({ membroId, membroParenteId, tipoVinculoId, responsavelLegal })
   });
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) {
     document.getElementById("vinculoMatriculaParente").value = "";
+    document.getElementById("vinculoResponsavelLegal").checked = false;
     carregarVinculosFamiliares(membroId);
   }
 }
@@ -1612,6 +1615,75 @@ async function corrigirMarcoMembroAcao(marcoId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarHistoricoMembro(window._membroHistoricoAtual);
+}
+
+// ---- Foto do Membro (v1.7) — consentimento é trava real, não registro paralelo ----
+window._membroFotoAtual = null;
+
+async function verFotoMembro(membroId) {
+  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
+  window._membroFotoAtual = membroId;
+  document.getElementById("fotoMembroNome").textContent = pessoa ? pessoa.nome : `matrícula ${membroId}`;
+  document.getElementById("blocoFotoMembro").style.display = "block";
+  document.getElementById("blocoFotoMembro").scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("resultadoFotoMembro").textContent = "";
+
+  const preview = document.getElementById("fotoMembroPreview");
+  preview.innerHTML = pessoa && pessoa.fotoUrl ? `<img src="${pessoa.fotoUrl}" alt="Foto" style="max-width:160px;border-radius:8px;" />` : "<span class='subtitle'>Sem foto cadastrada.</span>";
+
+  const res = await fetch(`${API_BASE}/lgpd/consentimento/${membroId}`);
+  const data = await res.json();
+  const fotoConsentimento = (data.consentimentos || []).find(c => c.tipo === "FOTO");
+  const statusEl = document.getElementById("fotoMembroStatusConsentimento");
+  statusEl.textContent = fotoConsentimento && fotoConsentimento.concedido
+    ? `✅ Consentimento de Foto concedido em ${fotoConsentimento.dataRegistro}.`
+    : "⚠️ Sem consentimento de Foto concedido — o upload será bloqueado até conceder.";
+}
+
+async function concederConsentimentoFotoAcao() {
+  const membroId = window._membroFotoAtual;
+  if (!membroId) return;
+  const res = await fetch(`${API_BASE}/lgpd/consentimento/${membroId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipo: "FOTO", concedido: true, baseLegal: "CONSENTIMENTO" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) verFotoMembro(membroId);
+}
+
+function lerArquivoComoBase64(arquivo) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result).split(",")[1] || "");
+    leitor.onerror = reject;
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+async function enviarFotoMembroAcao() {
+  const membroId = window._membroFotoAtual;
+  const input = document.getElementById("fotoMembroArquivo");
+  const msg = document.getElementById("resultadoFotoMembro");
+  if (!membroId || !input.files[0]) {
+    msg.textContent = "Escolha um arquivo de imagem.";
+    return;
+  }
+  const arquivo = input.files[0];
+  const fotoBase64 = await lerArquivoComoBase64(arquivo);
+  const res = await fetchProtegido(`${API_BASE}/pessoas/${membroId}/foto`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fotoBase64, mimeType: arquivo.type })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    input.value = "";
+    carregarPessoas();
+    verFotoMembro(membroId);
+  }
 }
 
 // ---- SECRETARIA / ABA CONGREGAÇÕES ----

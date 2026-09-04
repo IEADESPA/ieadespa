@@ -36,19 +36,23 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const { tipo, concedido, observacao, baseLegal } = req.body || {};
+    const { tipo, concedido, observacao, baseLegal, registradoPor } = req.body || {};
     if (concedido === undefined || concedido === null) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe concedido (true/false)." } };
       return;
     }
     const tipoFinal = tipo || TIPO_PADRAO;
+    // registradoPor normalmente é a própria matrícula, mas um responsável legal pode
+    // registrar o consentimento em nome de um menor (v1.7) que ainda não acessa o
+    // Meu Painel sozinho — sem validação cruzada rígida contra VinculosFamiliares
+    // nesta rodada: quem tem acesso físico ao Painel já está com a matrícula da criança.
     await pool.request()
       .input("mat", sql.Int, matricula)
       .input("tipo", sql.NVarChar(40), tipoFinal)
       .input("concedido", sql.Bit, concedido)
       .input("baseLegal", sql.NVarChar(40), baseLegal || "CONSENTIMENTO")
       .input("observacao", sql.NVarChar(300), observacao || null)
-      .input("registradoPor", sql.Int, matricula)
+      .input("registradoPor", sql.Int, registradoPor || matricula)
       .query(`INSERT INTO ConsentimentosLGPD (MembroId, Tipo, Concedido, BaseLegal, Observacao, RegistradoPor)
               VALUES (@mat, @tipo, @concedido, @baseLegal, @observacao, @registradoPor)`);
 

@@ -426,10 +426,32 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v1.7 — Cadastro ampliado (dados sensíveis/LGPD)
 
-- [ ] Dados pessoais: contato, endereço, estado civil, profissão, foto (opcional).
-- [ ] Dados de menores (12–17 anos) com responsável legal.
-- [ ] Dados de saúde (PSC) com sigilo reforçado.
-- [ ] Vínculos: departamento(s), congregação, cargo ministerial, função.
+- [x] Dados pessoais: contato/endereço/estado civil já existiam (v0.2/v1.4). **Foto**
+      (opcional) é novidade — diferente do padrão de Telefone/E-mail/Endereço (onde o
+      consentimento é só registro paralelo), a Foto exige **consentimento concedido
+      como trava real**: `UploadFotoMembro` rejeita o upload sem um registro
+      `ConsentimentosLGPD.Tipo='FOTO'` concedido. Armazenada em Azure Blob Storage
+      (`shared/storage.js`), não em base64 na tabela — pensando em escala (centenas/
+      milhares de membros). **Profissão ficou fora do escopo** (decisão do usuário:
+      sem necessidade real hoje — o que não é necessário, não se coleta).
+- [x] Dados de menores — ampliado de "12-17" pro recorte real, **0-17** (crianças
+      também são congregados de fato). Reaproveita `VinculosFamiliares` (sem tabela
+      nova): ganhou o flag `ResponsavelLegal`. `menorDeIdade` é calculado a partir da
+      Data de Nascimento (`estatuto.idadeEm`), nunca marcação manual — mesmo espírito
+      do resto de `estatuto.js`.
+- [x] **"Dados de saúde (PSC)" saiu do escopo** — achado da pesquisa: PSC é o
+      Programa de Saúde Congregacional (Regimento Art. 127-129), uma avaliação
+      institucional da *congregação* (já roteirizada à parte na FASE 7/v7.1,
+      `PSCAvaliacoes`/`SinaisVitais`), não dado de saúde individual. O Regimento só
+      cita "diagnósticos de saúde" numa cláusula genérica de sigilo, sem mandar
+      coletar nada — sem base normativa para criar um cadastro de saúde de pessoa.
+- [x] Vínculos: departamento(s)/congregação/cargo/função — **sem mudança de código**.
+      Os 4 Departamentos (crianças/jovens/senhoras/homens) são categorias
+      demográficas, 1 por pessoa por natureza (confirmado com o usuário). O "plural"
+      do roadmap era sobre ministérios de serviço (louvor, mídia, missões etc.), que
+      já têm solução pronta: qualquer um com permissão `"pessoas"` cria um Órgão novo
+      (`GetOrgaos`) e uma pessoa já pode ter Assento em vários Órgãos ao mesmo tempo
+      (`Assentos` já é N:N).
 
 #### v1.8 — Importação e exportação
 

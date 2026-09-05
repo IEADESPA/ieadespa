@@ -34,7 +34,7 @@ module.exports = async function (context, req) {
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, fotoUrl: membro.recordset[0].FotoUrl, consentimentoConcedido: concedido }
+      body: { sucesso: true, fotoUrl: storage.urlComSas(membro.recordset[0].FotoUrl), consentimentoConcedido: concedido }
     };
     return;
   }
@@ -92,7 +92,7 @@ module.exports = async function (context, req) {
       dadosDepois: { fotoUrl: url }
     });
 
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Foto atualizada.", fotoUrl: url } };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Foto atualizada.", fotoUrl: storage.urlComSas(url) } };
     return;
   }
 

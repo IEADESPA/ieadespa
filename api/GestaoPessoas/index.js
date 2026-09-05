@@ -9,6 +9,7 @@ const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
 const vacancia = require("../shared/vacancia");
+const storage = require("../shared/storage");
 
 // Causas de saída fixas (Reg. Art. 11 — Perda de Membresia, v1.5) — regra jurídica,
 // não catálogo editável por tela (mesmo espírito de FORMAS_ADMISSAO/ESTADOS_CIVIS).
@@ -71,7 +72,11 @@ module.exports = async function (context, req) {
       .map(m => {
         const idade = estatuto.idadeEm(m.dataNascimento);
         return Object.assign({}, m, { menorDeIdade: idade !== null && idade < 18 });
-      });
+      })
+      // O container do Blob Storage é privado (LGPD — ver shared/storage.js): a
+      // URL crua salva no banco não abre sozinha, precisa de um link assinado
+      // (SAS) gerado na hora, com validade curta.
+      .map(m => Object.assign({}, m, { fotoUrl: storage.urlComSas(m.fotoUrl) }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: membros };
     return;
   }
@@ -226,6 +231,7 @@ module.exports = async function (context, req) {
     membro.capacidade = estatuto.calcularCapacidadeEleitoral(membro);
     const idadeMembro = estatuto.idadeEm(membro.dataNascimento);
     membro.menorDeIdade = idadeMembro !== null && idadeMembro < 18;
+    membro.fotoUrl = storage.urlComSas(membro.fotoUrl);
 
     await registrarAuditoria({
       tabela: "MembroReferencia",

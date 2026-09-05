@@ -81,5 +81,5 @@ module.exports = async function (context, req) {
     dadosDepois: { fotoUrl: url }
   });
 
-  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Foto atualizada.", fotoUrl: url } };
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Foto atualizada.", fotoUrl: storage.urlComSas(url) } };
 };

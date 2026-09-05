@@ -7,6 +7,7 @@
 // GET /api/lgpd/meus-dados/{matricula}
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
+const storage = require("../shared/storage");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -53,6 +54,10 @@ module.exports = async function (context, req) {
     };
     return;
   }
+
+  // Container privado (LGPD — shared/storage.js): URL crua não abre sozinha,
+  // precisa de link assinado (SAS) de validade curta, gerado na hora.
+  membro.fotoUrl = storage.urlComSas(membro.fotoUrl);
 
   const [lideranca, assentos, processos, vinculos, consentimentos, solicitacoes, casamentos, licencasCandidatura] = await Promise.all([
     pool.request().input("mat", sql.Int, matricula).query(`

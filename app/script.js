@@ -479,7 +479,7 @@ function mostrarAbaSecretaria(aba) {
     return;
   }
   document.getElementById("tituloModulo").textContent = TITULOS_MODULOS[aba] || "Governança";
-  if (aba === "reunioes") { carregarOpcoesOrgaosReuniao().then(carregarReunioes); carregarElegiveisAssembleia(); }
+  if (aba === "reunioes") { montarSubmenuReunioes(); carregarElegiveisAssembleia(); }
   if (aba === "pessoas") { carregarOpcoesFormPessoa().then(() => mostrarSubAbaPessoas(subAbaPessoasAtual)); carregarPessoas(); }
   if (aba === "cartas") { carregarCartas(); processarSaidasCartas(); }
   if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
@@ -953,14 +953,42 @@ async function excluirDadosFicticios() {
 
 let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar a tela após encerrar/justificar
 
-// Popula os dois seletores de órgão da aba (abrir reunião + filtrar a lista) a
-// partir do catálogo de Órgãos — a mesma tela agora abre reunião de qualquer um.
-async function carregarOpcoesOrgaosReuniao() {
+// Submenu de Reuniões — gerado em runtime a partir do catálogo de Órgãos
+// (nunca hardcoded): se um órgão for renomeado ou excluído na aba Órgãos, o
+// submenu reflete isso na próxima vez que a aba Reuniões for aberta. O mesmo
+// bloco de conteúdo é reaproveitado pra qualquer órgão selecionado — só o
+// bloco de Elegíveis (exclusivo da Assembleia Geral) muda de visibilidade.
+async function montarSubmenuReunioes() {
   const res = await fetchProtegido(`${API_BASE}/orgaos`);
   const orgaos = await res.json();
-  const opcoes = orgaos.map(o => `<option value="${o.orgaoId}">${o.nome}</option>`).join("");
-  document.getElementById("reuniaoOrgao").innerHTML = opcoes;
-  document.getElementById("reunioesFiltroOrgao").innerHTML = `<option value="">Todos os órgãos</option>` + opcoes;
+  window._orgaosReunioesCache = orgaos;
+
+  const container = document.getElementById("submenuReunioes");
+  container.innerHTML = orgaos.map(o => `
+    <button class="btn-subaba" id="btnSubReunioes${o.orgaoId}" onclick="selecionarOrgaoReunioes(${o.orgaoId})">
+      <span class="icone">🏛️</span><span class="rotulo">${o.nome}</span>
+    </button>`).join("");
+
+  if (orgaos.length === 0) return;
+  const aindaExiste = orgaos.some(o => o.orgaoId === window._orgaoAtualReunioes);
+  selecionarOrgaoReunioes(aindaExiste ? window._orgaoAtualReunioes : orgaos[0].orgaoId);
+}
+
+function selecionarOrgaoReunioes(orgaoId) {
+  const orgaos = window._orgaosReunioesCache || [];
+  const orgao = orgaos.find(o => o.orgaoId === orgaoId);
+  if (!orgao) return;
+
+  window._orgaoAtualReunioes = orgaoId;
+  document.getElementById("reuniaoOrgao").value = orgaoId;
+  document.getElementById("reunioesOrgaoNome").textContent = orgao.nome;
+  document.getElementById("blocoElegiveisAssembleia").style.display = orgao.sigla === "ASSEMBLEIA_GERAL" ? "block" : "none";
+  orgaos.forEach(o => {
+    const btn = document.getElementById(`btnSubReunioes${o.orgaoId}`);
+    if (btn) btn.classList.toggle("ativo", o.orgaoId === orgaoId);
+  });
+
+  carregarReunioes();
 }
 
 async function abrirReuniao() {
@@ -1001,7 +1029,7 @@ async function encerrarReuniaoAcao(sessaoId) {
 
 async function carregarReunioes() {
   const container = document.getElementById("resultadoListaReunioes");
-  const orgaoId = document.getElementById("reunioesFiltroOrgao").value;
+  const orgaoId = document.getElementById("reuniaoOrgao").value;
   const res = await fetchProtegido(`${API_BASE}/reunioes${orgaoId ? `?orgaoId=${orgaoId}` : ""}`);
   const reunioes = await res.json();
 

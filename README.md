@@ -552,41 +552,52 @@ dado que a Secretaria realmente usa pra algo. Quatro categorias:
 
 #### v2.0 — Submenu por órgão na aba Reuniões (pré-requisito de navegação)
 
-**Bloqueante**: precisa ser feito antes de qualquer conteúdo de órgão desta fase
-(v2.1 em diante) — do contrário cada órgão novo (CLI, Diretoria, Conselho Fiscal,
-CEI) vai se acumular na mesma tela genérica de "Reuniões", piorando exatamente o
-problema que o submenu de "Meu Painel" (v1.9) já resolveu ali. Mesma lógica,
-aplicada agora à aba Reuniões.
+**Bloqueante**: precisava ser feito antes de qualquer conteúdo de órgão desta
+fase (v2.1 em diante) — do contrário cada órgão novo (CLI, Diretoria, Conselho
+Fiscal, CEI) ia se acumular na mesma tela genérica de "Reuniões", piorando
+exatamente o problema que o submenu de "Meu Painel" (v1.9) já resolveu ali.
+Mesma lógica, aplicada agora à aba Reuniões.
 
-**Contexto**: hoje `abrirReuniao()`/`carregarReunioes()` tratam qualquer órgão
-igual, com um único `<select>` genérico pra escolher — e o bloco de "Elegíveis da
-Assembleia Geral" (import de planilha) fica solto no fim da aba, sem relação
-visual com o órgão dele. **Escopo confirmado**: só os 5 órgãos estatutários já
-cadastrados (tabela `Orgaos`, seed da migração 001 — `ASSEMBLEIA_GERAL`, `CLI`,
+**Escopo confirmado**: só os 5 órgãos estatutários já cadastrados (tabela
+`Orgaos`, seed da migração 001 — `ASSEMBLEIA_GERAL`, `CLI`,
 `DIRETORIA_EXECUTIVA`, `CEI`, `CONSELHO_FISCAL`). A escala de órgãos locais/
 regionais/de área (potencialmente centenas, um por Congregação/Área/Região) fica
 **fora** deste item — incerta, registrada como pergunta em aberto pra outra hora,
 não é compromisso.
 
-100% front-end — `GET /api/reunioes?orgaoId=` e `POST /api/reunioes/abrir` já
-aceitam `orgaoId`, nenhuma mudança de backend nem de migração é necessária.
+**Decisão de arquitetura (importante pra qualquer módulo futuro por órgão)**: a
+tabela `Orgaos` já tem CRUD completo (`api/GetOrgaos`, aba "Órgãos" da Secretaria
+— Editar/Excluir de verdade). Ou seja, o submenu **não podia** ser 5 blocos
+fixos no HTML — se alguém editasse ou excluísse um órgão ali, o submenu de
+Reuniões ficaria desatualizado ou quebrado. Por isso o submenu é **gerado
+inteiramente em runtime** a partir de `GET /api/orgaos` (`montarSubmenuReunioes`,
+chamado toda vez que a aba Reuniões é aberta) — nenhuma sigla, nome ou
+quantidade de órgão fica hardcoded em lugar nenhum do front-end. Um único bloco
+de conteúdo (`abaReunioes`) é reaproveitado e reconfigurado por
+`selecionarOrgaoReunioes(orgaoId)` a cada troca de órgão no submenu, em vez de 5
+sub-abas duplicadas — mais simples de manter e já serve de modelo pros módulos
+por órgão das próximas versões (v2.3+ Composição/Atas/Deliberações): mesmo
+padrão de submenu dinâmico, conteúdo próprio de cada tela.
 
-- [ ] Sidebar: submenu (`.submenu-aba`/`.btn-subaba`, mesmo mecanismo criado em
-      v1.9 pro Meu Painel) embaixo do botão "Reuniões", com 5 sub-itens — Assembleia
-      Geral, CLI, Diretoria Executiva, Conselho Fiscal, CEI.
-- [ ] `app/index.html`: `abaReunioes` dividida em 5 sub-abas (uma por órgão) — cada
-      uma com o formulário "Abrir Reunião" já fixo naquele órgão (sem `<select>` de
-      órgão) e a lista de reuniões só daquele órgão (sem o filtro
-      `reunioesFiltroOrgao`, que deixa de existir). `blocoFrequencia` continua único
-      e compartilhado entre as 5, fora dos sub-blocos.
-- [ ] O bloco de Elegíveis da Assembleia Geral (import de planilha + lista), hoje
-      solto no fim da aba, passa a viver dentro do submenu Assembleia Geral.
-- [ ] `app/script.js`: `orgaoIdPorSigla` resolvido em runtime via `GET /api/orgaos`
-      (usa a `sigla` que a API já devolve — nunca hardcoded, robusto a qualquer
-      ordem de `OrgaoId`). `mostrarSubAbaReunioes(sub)` (mesmo padrão de
-      `mostrarSubAbaMeupainel`), `abrirReuniao(sub)`/`carregarReunioes(sub)`
-      parametrizadas por órgão (uma implementação só, reaproveitada pelos 4 órgãos
-      de formato idêntico — CLI/Diretoria/Fiscal/CEI).
+100% front-end — `GET /api/reunioes?orgaoId=` e `POST /api/reunioes/abrir` já
+aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessária.
+
+- [x] Sidebar: submenu (`.submenu-aba`/`.btn-subaba`, mesmo mecanismo do v1.9)
+      embaixo do botão "Reuniões", com um botão por órgão — montado em runtime,
+      não fixo.
+- [x] `app/index.html`: `abaReunioes` com um único formulário "Abrir Reunião" e
+      uma única lista de reuniões, ambos escopados ao órgão do submenu via
+      `<input type="hidden" id="reuniaoOrgao">` (sem `<select>` de órgão, sem o
+      filtro `reunioesFiltroOrgao`, que deixou de existir). `blocoFrequencia`
+      continua único e compartilhado.
+- [x] O bloco de Elegíveis da Assembleia Geral (import de planilha + lista) passa
+      a ficar dentro de `#blocoElegiveisAssembleia`, mostrado só quando o órgão
+      selecionado tem `sigla === "ASSEMBLEIA_GERAL"`.
+- [x] `app/script.js`: `montarSubmenuReunioes()` busca `GET /api/orgaos` e gera um
+      `.btn-subaba` por órgão; `selecionarOrgaoReunioes(orgaoId)` troca o órgão em
+      foco (nome no título, visibilidade do bloco de Elegíveis, estado `.ativo`
+      dos botões) e recarrega a lista — uma implementação só, reaproveitada por
+      qualquer quantidade de órgãos que existir na tabela no momento.
 
 #### v2.1 — Assembleia Geral (sessão e quórum)
 

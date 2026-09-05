@@ -81,6 +81,10 @@
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
           </div>
           <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
+          <!-- Gerado em runtime por montarSubmenuReunioes() a partir de GET /api/orgaos —
+               nunca hardcoded: se um órgão for renomeado/excluído na aba Órgãos, o
+               submenu reflete na próxima vez que a aba Reuniões for aberta. -->
+          <div class="submenu-aba" id="submenuReunioes"></div>
           <button class="btn-aba" id="btnAbaPessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
           <div class="submenu-aba" id="submenuPessoas">
             <button class="btn-subaba ativo" id="btnSubPessoasCadastrar" onclick="mostrarSubAbaPessoas('cadastrar')"><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
@@ -289,21 +293,21 @@
         </div>
       </div>
 
-      <!-- ABA: REUNIÕES (motor único de sessão, qualquer órgão) -->
+      <!-- ABA: REUNIÕES (motor único de sessão, qualquer órgão) — o órgão em foco vem
+           do submenu (#submenuReunioes, gerado em runtime a partir de /api/orgaos),
+           não de um <select> nem de sub-abas fixas: um único bloco é reaproveitado
+           e reconfigurado por selecionarOrgaoReunioes() a cada troca. -->
       <div id="abaReunioes" class="aba-secretaria" style="display:none;">
-        <h3>Abrir Reunião</h3>
+        <input type="hidden" id="reuniaoOrgao" />
+
+        <h3>Abrir Reunião — <span id="reunioesOrgaoNome">…</span></h3>
         <p class="subtitle">
-          Escolha o órgão — a mesma tela abre reunião de qualquer um deles (Assembleia,
-          CLI, Diretoria...). A Assembleia Geral é exclusiva: enquanto ela está aberta,
-          nenhuma outra reunião pode abrir, e ela não abre se já houver outra em
-          andamento. Os demais órgãos só travam contra si mesmos — dá pra ter, por
-          exemplo, CLI e Conselho Fiscal reunidos ao mesmo tempo.
+          A Assembleia Geral é exclusiva: enquanto ela está aberta, nenhuma outra
+          reunião pode abrir, e ela não abre se já houver outra em andamento. Os
+          demais órgãos só travam contra si mesmos — dá pra ter, por exemplo, CLI e
+          Conselho Fiscal reunidos ao mesmo tempo.
         </p>
         <form onsubmit="event.preventDefault(); abrirReuniao();">
-          <div class="input-group">
-            <label>Órgão:</label>
-            <select id="reuniaoOrgao"></select>
-          </div>
           <div class="input-group">
             <label>Descrição da reunião:</label>
             <input type="text" id="descricaoReuniao" placeholder="Ex: Reunião Administrativa de Agosto" />
@@ -320,11 +324,6 @@
         <hr />
 
         <h3>Reuniões</h3>
-        <div class="barra-lista">
-          <select id="reunioesFiltroOrgao" onchange="carregarReunioes()">
-            <option value="">Todos os órgãos</option>
-          </select>
-        </div>
         <div class="rolagem-tabela"><div id="resultadoListaReunioes"></div></div>
 
         <hr />
@@ -335,32 +334,36 @@
           <div class="rolagem-tabela"><div id="resultadoFrequencia"></div></div>
         </div>
 
-        <hr />
+        <!-- Só existe conteúdo (elegíveis pra votar) pra Assembleia Geral — escondido
+             pros demais órgãos por selecionarOrgaoReunioes() checando a sigla. -->
+        <div id="blocoElegiveisAssembleia" style="display:none;">
+          <hr />
 
-        <h3>Elegíveis da Assembleia Geral</h3>
-        <p class="subtitle">
-          Importe uma planilha Excel (.xlsx) com as colunas <strong>Matrícula</strong> e
-          <strong>Nome</strong>: cadastra quem ainda não existe e atualiza o nome de quem já
-          existe. A elegibilidade pra votar é sempre calculada automaticamente pelo Estatuto
-          (idade, tempo de admissão e dízimo) — não depende desta importação.
-        </p>
-        <div class="input-group">
-          <input type="file" id="arquivoExcelAssembleia" accept=".xlsx,.xls" />
-        </div>
-        <button class="btn-confirmar" type="button" onclick="importarExcelAssembleiaGeral()">📥 Importar Lista de Elegíveis</button>
-        <p id="resultadoImportacaoAssembleia"></p>
+          <h3>Elegíveis da Assembleia Geral</h3>
+          <p class="subtitle">
+            Importe uma planilha Excel (.xlsx) com as colunas <strong>Matrícula</strong> e
+            <strong>Nome</strong>: cadastra quem ainda não existe e atualiza o nome de quem já
+            existe. A elegibilidade pra votar é sempre calculada automaticamente pelo Estatuto
+            (idade, tempo de admissão e dízimo) — não depende desta importação.
+          </p>
+          <div class="input-group">
+            <input type="file" id="arquivoExcelAssembleia" accept=".xlsx,.xls" />
+          </div>
+          <button class="btn-confirmar" type="button" onclick="importarExcelAssembleiaGeral()">📥 Importar Lista de Elegíveis</button>
+          <p id="resultadoImportacaoAssembleia"></p>
 
-        <hr />
+          <hr />
 
-        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Elegíveis Atuais</h4>
-        <div class="barra-lista">
-          <input type="text" id="assembleiaBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroElegiveis()" />
-          <span id="assembleiaInfo" class="subtitle" style="margin:0;"></span>
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Elegíveis Atuais</h4>
+          <div class="barra-lista">
+            <input type="text" id="assembleiaBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroElegiveis()" />
+            <span id="assembleiaInfo" class="subtitle" style="margin:0;"></span>
+          </div>
+          <div class="rolagem-tabela">
+            <div id="resultadoListaElegiveisAssembleia"></div>
+          </div>
+          <div class="paginacao" id="assembleiaPaginacao"></div>
         </div>
-        <div class="rolagem-tabela">
-          <div id="resultadoListaElegiveisAssembleia"></div>
-        </div>
-        <div class="paginacao" id="assembleiaPaginacao"></div>
       </div>
 
       <!-- ABA: PESSOAS -->

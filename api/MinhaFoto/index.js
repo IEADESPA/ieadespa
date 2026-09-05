@@ -69,7 +69,18 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const url = await storage.salvarFoto(matricula, buffer, mimeType);
+    let url;
+    try {
+      url = await storage.salvarFoto(matricula, buffer, mimeType);
+    } catch (erro) {
+      // Sem isso, uma falha aqui (ex: AZURE_STORAGE_CONNECTION_STRING ausente/
+      // inválida no Function App) sobe sem tratamento e o Azure Functions devolve
+      // um 500 de corpo vazio — o navegador não consegue nem mostrar mensagem
+      // nenhuma (JSON.parse quebra em cima de resposta vazia).
+      context.log.error("Falha ao salvar no Azure Blob Storage:", erro.message);
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Falha ao salvar a foto no armazenamento. Avise a equipe técnica: " + erro.message } };
+      return;
+    }
     await pool.request().input("id", sql.Int, matricula).input("url", sql.NVarChar(500), url)
       .query(`UPDATE MembroReferencia SET FotoUrl = @url WHERE MembroId = @id`);
 

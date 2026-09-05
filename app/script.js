@@ -3034,18 +3034,33 @@ async function alternarMeusDadosLGPD() {
   caixa.innerHTML = `
     <div class="cartao-perfil">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Cadastrais</h4>
+      ${m.fotoUrl ? `<img src="${m.fotoUrl}" alt="Foto" style="max-width:120px;border-radius:8px;margin-bottom:8px;" />` : ""}
       ${linhaLgpd("Nome", m.nome)}
       ${linhaLgpd("Congregação", m.congregacao)}
+      ${linhaLgpd("Extensão da Tenda", m.extensao)}
       ${linhaLgpd("Status", m.status)}
       ${linhaLgpd("Situação", m.situacaoMembro)}
       ${linhaLgpd("Data de Nascimento", m.dataNascimento, "data")}
       ${linhaLgpd("Data de Admissão", m.dataAdmissao, "data")}
       ${linhaLgpd("Forma de Admissão", m.formaAdmissao)}
+      ${linhaLgpd("Origem/Procedência", m.origem)}
+      ${linhaLgpd("Igreja Anterior", m.igrejaAnterior)}
       ${linhaLgpd("Data do Batismo", m.dataBatismo, "data")}
+      ${linhaLgpd("Data do Rito de Recebimento", m.dataRitoRecebimento, "data")}
+      ${linhaLgpd("Nome Lido no Rito", m.nomeLidoRito)}
+      ${linhaLgpd("Ministrante do Rito", m.ministranteRito)}
       ${linhaLgpd("Telefone", m.telefone)}
       ${linhaLgpd("E-mail", m.email)}
       ${linhaLgpd("Endereço", m.endereco)}
       ${linhaLgpd("Cadastrado em", m.criadoEm, "dataHora")}
+    </div>
+
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Ministeriais</h4>
+      ${linhaLgpd("Função", m.funcao)}
+      ${linhaLgpd("Cargo Ministerial", m.cargoMinisterial)}
+      ${linhaLgpd("Departamento", m.departamento)}
+      ${linhaLgpd("Dizimista Fiel", m.dizimistaFiel, "bit")}
     </div>
 
     <div class="cartao-perfil" style="margin-top:12px;">

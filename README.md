@@ -491,6 +491,44 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 ### FASE 2 — Governança (órgãos e deliberações)
 
+#### v2.0 — Submenu por órgão na aba Reuniões (pré-requisito de navegação)
+
+**Bloqueante**: precisa ser feito antes de qualquer conteúdo de órgão desta fase
+(v2.1 em diante) — do contrário cada órgão novo (CLI, Diretoria, Conselho Fiscal,
+CEI) vai se acumular na mesma tela genérica de "Reuniões", piorando exatamente o
+problema que o submenu de "Meu Painel" (v1.9) já resolveu ali. Mesma lógica,
+aplicada agora à aba Reuniões.
+
+**Contexto**: hoje `abrirReuniao()`/`carregarReunioes()` tratam qualquer órgão
+igual, com um único `<select>` genérico pra escolher — e o bloco de "Elegíveis da
+Assembleia Geral" (import de planilha) fica solto no fim da aba, sem relação
+visual com o órgão dele. **Escopo confirmado**: só os 5 órgãos estatutários já
+cadastrados (tabela `Orgaos`, seed da migração 001 — `ASSEMBLEIA_GERAL`, `CLI`,
+`DIRETORIA_EXECUTIVA`, `CEI`, `CONSELHO_FISCAL`). A escala de órgãos locais/
+regionais/de área (potencialmente centenas, um por Congregação/Área/Região) fica
+**fora** deste item — incerta, registrada como pergunta em aberto pra outra hora,
+não é compromisso.
+
+100% front-end — `GET /api/reunioes?orgaoId=` e `POST /api/reunioes/abrir` já
+aceitam `orgaoId`, nenhuma mudança de backend nem de migração é necessária.
+
+- [ ] Sidebar: submenu (`.submenu-aba`/`.btn-subaba`, mesmo mecanismo criado em
+      v1.9 pro Meu Painel) embaixo do botão "Reuniões", com 5 sub-itens — Assembleia
+      Geral, CLI, Diretoria Executiva, Conselho Fiscal, CEI.
+- [ ] `app/index.html`: `abaReunioes` dividida em 5 sub-abas (uma por órgão) — cada
+      uma com o formulário "Abrir Reunião" já fixo naquele órgão (sem `<select>` de
+      órgão) e a lista de reuniões só daquele órgão (sem o filtro
+      `reunioesFiltroOrgao`, que deixa de existir). `blocoFrequencia` continua único
+      e compartilhado entre as 5, fora dos sub-blocos.
+- [ ] O bloco de Elegíveis da Assembleia Geral (import de planilha + lista), hoje
+      solto no fim da aba, passa a viver dentro do submenu Assembleia Geral.
+- [ ] `app/script.js`: `orgaoIdPorSigla` resolvido em runtime via `GET /api/orgaos`
+      (usa a `sigla` que a API já devolve — nunca hardcoded, robusto a qualquer
+      ordem de `OrgaoId`). `mostrarSubAbaReunioes(sub)` (mesmo padrão de
+      `mostrarSubAbaMeupainel`), `abrirReuniao(sub)`/`carregarReunioes(sub)`
+      parametrizadas por órgão (uma implementação só, reaproveitada pelos 4 órgãos
+      de formato idêntico — CLI/Diretoria/Fiscal/CEI).
+
 #### v2.1 — Assembleia Geral (sessão e quórum)
 
 - [x] ✅ Motor de sessão + quórum de instalação em 2 estágios (Art. 21).

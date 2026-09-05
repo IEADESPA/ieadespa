@@ -514,9 +514,36 @@ detalhe) — confirmado como prática consolidada de mercado.
       Secretaria.
 - [ ] *(Fora desta rodada, próxima versão)* Fluxo de autoedição com aprovação:
       o próprio membro edita alguns dos seus dados (não só a foto) e a Secretaria
-      só confirma, em vez de digitar tudo do zero — fila de pedidos de edição +
-      tela de aprovação. Ainda não desenhado (que campos entram, quem aprova,
-      como fica o histórico da mudança).
+      só confirma quando precisar, em vez de digitar tudo do zero. Princípio geral
+      (definido em conversa com o usuário): só vale coletar/pedir o dado que a
+      Secretaria realmente usa pra algo — "dados cumprimentados" (sem uso real)
+      não entram. Quatro categorias de campo, cada uma com uma regra diferente:
+      - **Nunca editável, nem por ninguém casualmente** (dado único — corrige só
+        em caso de erro registrado, não é fluxo normal): Matrícula (`MembroId`),
+        Nome. *(CPF entraria aqui também, se um dia o sistema passar a coletar —
+        hoje não coleta.)*
+      - **Controlado só pelos fluxos formais do próprio sistema** (não é campo de
+        formulário livre pra ninguém digitar direto — muda só através do
+        processo certo): Status e Situação (mudam via Perda de Membresia/
+        Disciplina/Licença por Candidatura — v1.5/v1.6/v1.9), Cargo Ministerial/
+        Função (muda só via Consagrações — Art. 71, "passar pela Academia").
+      - **Membro edita direto, sem aprovação nenhuma** (baixo risco, dado que só
+        o próprio membro sabe de verdade, e o volume não compensaria revisão
+        manual — mesmo racional já usado pra Foto, v1.10): Endereço, Telefone,
+        E-mail, Estado Civil, Vínculos Familiares (o membro cadastra os próprios
+        parentes).
+      - **Membro sugere, Secretaria aprova antes de valer** (dado que entra em
+        cálculo ou registro formal — errado tem consequência real, ex: `estatuto.js`
+        usa Data de Nascimento/Admissão pra capacidade eleitoral): categoria
+        confirmada em conceito, mas **quais campos exatos entram aqui ainda não
+        foi decidido** — candidatos a avaliar quando for desenhar de verdade: Data
+        de Nascimento, Data de Admissão, Data de Batismo, Forma de Admissão,
+        Origem, Igreja Anterior, dados do Rito de Recebimento.
+      Ainda em aberto pra quando for desenhado: como fica a fila de pedidos
+      pendentes, quem tem permissão de aprovar, e como o histórico da mudança
+      (antes/depois, quem pediu, quem aprovou) fica registrado — provavelmente
+      reaproveitando o padrão de auditoria (`registrarAuditoria`) já usado em
+      todo o sistema.
 
 ### FASE 2 — Governança (órgãos e deliberações)
 

@@ -421,6 +421,17 @@
         </div>
 
         <hr />
+        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Importar Pessoas (planilha)</h4>
+        <p class="subtitle" style="margin:0 0 8px;">Só Matrícula, Nome e Situação — o restante continua sendo preenchido
+          manualmente no cadastro individual acima.</p>
+        <div class="barra-lista">
+          <input type="file" id="arquivoExcelPessoas" accept=".xlsx,.xls" />
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="baixarModeloPessoas()">📄 Baixar modelo</button>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="prepararImportacaoPessoas()">📥 Importar Pessoas</button>
+        </div>
+        <p id="resultadoImportacaoPessoas"></p>
+
+        <hr />
         <div class="barra-lista">
           <input type="text" id="pessoasBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroPessoas()" />
           <select id="pessoasFiltroCategoria" onchange="aplicarFiltroPessoas()">
@@ -432,6 +443,13 @@
             <option value="Congregado">Congregado</option>
             <option value="Dados incompletos">Dados incompletos</option>
           </select>
+          <select id="pessoasFiltroCongregacao" onchange="aplicarFiltroPessoas()">
+            <option value="">Todas as congregações</option>
+          </select>
+          <select id="pessoasFiltroSituacao" onchange="aplicarFiltroPessoas()">
+            <option value="">Todas as situações</option>
+          </select>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirModalExportarPessoas()">📤 Exportar</button>
           <span id="pessoasInfo" class="subtitle" style="margin:0;"></span>
         </div>
         <div class="rolagem-tabela">

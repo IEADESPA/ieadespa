@@ -1018,12 +1018,13 @@ const STATUS_DEFAULT = [
 ];
 
 async function carregarOpcoesFormPessoa() {
-  const [resCong, resDepto, resCargo, resExt, resStatus] = await Promise.all([
+  const [resCong, resDepto, resCargo, resExt, resStatus, resSituacoes] = await Promise.all([
     fetchProtegido(`${API_BASE}/congregacoes`),
     fetch(`${API_BASE}/catalogos/departamentos`),
     fetch(`${API_BASE}/catalogos/cargosMinisteriais`),
     fetch(`${API_BASE}/catalogos/extensoes`),
-    fetch(`${API_BASE}/catalogos/statuses`)
+    fetch(`${API_BASE}/catalogos/statuses`),
+    fetch(`${API_BASE}/catalogos/situacoes`)
   ]);
   const congregacoes = await resCong.json();
   const departamentos = await resDepto.json();
@@ -1031,9 +1032,22 @@ async function carregarOpcoesFormPessoa() {
   const extensoes = await resExt.json();
   const statusesRaw = await resStatus.json();
   const statuses = Array.isArray(statusesRaw) ? statusesRaw : STATUS_DEFAULT;
+  const situacoesRaw = await resSituacoes.json();
+  const situacoes = Array.isArray(situacoesRaw) ? situacoesRaw : [];
 
   const selectCong = document.getElementById("pessoaCongregacao");
   selectCong.innerHTML = congregacoes.filter(c => c.ativa).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+
+  const selectFiltroCong = document.getElementById("pessoasFiltroCongregacao");
+  if (selectFiltroCong) {
+    selectFiltroCong.innerHTML = `<option value="">Todas as congregações</option>` +
+      congregacoes.map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+  }
+  const selectFiltroSituacao = document.getElementById("pessoasFiltroSituacao");
+  if (selectFiltroSituacao) {
+    selectFiltroSituacao.innerHTML = `<option value="">Todas as situações</option>` +
+      situacoes.filter(s => s.ativa !== false).map(s => `<option value="${s.sigla}">${s.nome}</option>`).join("");
+  }
 
   const selectExt = document.getElementById("pessoaExtensao");
   const nomeCongPorId = Object.fromEntries(congregacoes.map(c => [String(c.congregacaoId), c.nome]));
@@ -1124,14 +1138,260 @@ async function carregarPessoas() {
 function aplicarFiltroPessoas() {
   const busca = (document.getElementById("pessoasBusca").value || "").toLowerCase();
   const catFiltro = document.getElementById("pessoasFiltroCategoria").value;
+  const congFiltro = document.getElementById("pessoasFiltroCongregacao")?.value || "";
+  const situacaoFiltro = document.getElementById("pessoasFiltroSituacao")?.value || "";
   const todas = window._pessoasCache || [];
   pessoasFiltradas = todas.filter(p => {
     const nomeOk = !busca || p.nome.toLowerCase().includes(busca) || String(p.membroId).includes(busca);
     const catOk = !catFiltro || (p.capacidade && p.capacidade.categoria === catFiltro);
-    return nomeOk && catOk;
+    const congOk = !congFiltro || String(p.congregacaoId) === congFiltro;
+    const situacaoOk = !situacaoFiltro || p.situacaoMembro === situacaoFiltro;
+    return nomeOk && catOk && congOk && situacaoOk;
   });
   paginaAtualPessoas = 1;
   renderizarPessoas();
+}
+
+// ---- IMPORTAÇÃO/EXPORTAÇÃO DE PESSOAS (v1.8) ----
+
+function baixarModeloPessoas() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["Matrícula", "Nome", "Situação"],
+    [15, "Maria da Silva", "EM_COMUNHAO"]
+  ]);
+  XLSX.utils.book_append_sheet(wb, ws, "Modelo");
+  XLSX.writeFile(wb, "modelo-importacao-pessoas.xlsx");
+}
+
+// Levenshtein normalizado (0 a 1, 1 = idênticos) — sem dependência nova, só pra
+// sinalizar possível duplicata por nome parecido (ex: erro de digitação) mesmo
+// com matrícula diferente. Não bloqueia nada sozinho, só marca pra revisão.
+function similaridadeNomes(a, b) {
+  const s1 = (a || "").trim().toLowerCase();
+  const s2 = (b || "").trim().toLowerCase();
+  if (!s1 || !s2) return 0;
+  if (s1 === s2) return 1;
+  const m = s1.length, n = s2.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = s1[i - 1] === s2[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  const distancia = dp[m][n];
+  return 1 - distancia / Math.max(m, n);
+}
+
+let importacaoPessoasLinhas = [];
+
+async function prepararImportacaoPessoas() {
+  const input = document.getElementById("arquivoExcelPessoas");
+  const msg = document.getElementById("resultadoImportacaoPessoas");
+  const arquivo = input.files[0];
+  if (!arquivo) {
+    msg.textContent = "Selecione um arquivo .xlsx antes de importar.";
+    return;
+  }
+
+  const buffer = await arquivo.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const primeiraAba = workbook.SheetNames[0];
+  const linhasBrutas = XLSX.utils.sheet_to_json(workbook.Sheets[primeiraAba], { defval: "" });
+
+  const existentes = window._pessoasCache || [];
+
+  const linhas = linhasBrutas
+    .map(linha => {
+      const chaves = Object.keys(linha);
+      const chaveMatricula = chaves.find(k => /matr[ií]cula/i.test(k));
+      const chaveNome = chaves.find(k => /nome/i.test(k));
+      const chaveSituacao = chaves.find(k => /situa[cç][aã]o/i.test(k));
+      return {
+        membroId: chaveMatricula ? Number(linha[chaveMatricula]) : null,
+        nome: chaveNome ? String(linha[chaveNome]).trim() : "",
+        situacaoMembro: chaveSituacao ? String(linha[chaveSituacao]).trim() : ""
+      };
+    })
+    .filter(l => l.membroId && l.nome)
+    .map(l => {
+      const duplicataMatricula = existentes.find(p => p.membroId === l.membroId);
+      if (duplicataMatricula) {
+        return Object.assign({}, l, {
+          status: "DUPLICATA_MATRICULA",
+          conflito: duplicataMatricula,
+          decisao: "MANTER" // "MANTER" (ignora a linha da planilha) ou "ATUALIZAR"
+        });
+      }
+      let melhorSimilaridade = 0;
+      let melhorMatch = null;
+      for (const p of existentes) {
+        const sim = similaridadeNomes(l.nome, p.nome);
+        if (sim > melhorSimilaridade) { melhorSimilaridade = sim; melhorMatch = p; }
+      }
+      if (melhorSimilaridade >= 0.9) {
+        return Object.assign({}, l, {
+          status: "POSSIVEL_DUPLICATA_NOME",
+          conflito: melhorMatch,
+          similaridade: melhorSimilaridade,
+          decisao: "IGNORAR" // "IGNORAR" ou "IMPORTAR"
+        });
+      }
+      return Object.assign({}, l, { status: "NOVO", decisao: "IMPORTAR" });
+    });
+
+  if (linhas.length === 0) {
+    msg.textContent = "Não encontrei colunas de Matrícula e Nome na planilha.";
+    return;
+  }
+
+  importacaoPessoasLinhas = linhas;
+  msg.textContent = "";
+  abrirModalRevisaoImportacaoPessoas();
+}
+
+function abrirModalRevisaoImportacaoPessoas() {
+  const caixa = document.getElementById("modalCaixa");
+  const linhasHtml = importacaoPessoasLinhas.map((l, i) => {
+    if (l.status === "DUPLICATA_MATRICULA") {
+      return `<tr>
+        <td>${l.membroId}</td><td>${l.nome}</td><td>${l.situacaoMembro || "-"}</td>
+        <td>Matrícula já existe: <strong>${l.conflito.nome}</strong></td>
+        <td>
+          <select onchange="importacaoPessoasLinhas[${i}].decisao = this.value">
+            <option value="MANTER" ${l.decisao === "MANTER" ? "selected" : ""}>Manter o que já está (ignorar)</option>
+            <option value="ATUALIZAR" ${l.decisao === "ATUALIZAR" ? "selected" : ""}>Atualizar pessoa existente</option>
+          </select>
+        </td>
+      </tr>`;
+    }
+    if (l.status === "POSSIVEL_DUPLICATA_NOME") {
+      return `<tr>
+        <td>${l.membroId}</td><td>${l.nome}</td><td>${l.situacaoMembro || "-"}</td>
+        <td>Nome ${Math.round(l.similaridade * 100)}% parecido com <strong>${l.conflito.nome}</strong> (matrícula ${l.conflito.membroId})</td>
+        <td>
+          <select onchange="importacaoPessoasLinhas[${i}].decisao = this.value">
+            <option value="IGNORAR" ${l.decisao === "IGNORAR" ? "selected" : ""}>Ignorar esta linha</option>
+            <option value="IMPORTAR" ${l.decisao === "IMPORTAR" ? "selected" : ""}>Importar mesmo assim (é pessoa nova)</option>
+          </select>
+        </td>
+      </tr>`;
+    }
+    return `<tr>
+      <td>${l.membroId}</td><td>${l.nome}</td><td>${l.situacaoMembro || "-"}</td>
+      <td>Novo</td><td>-</td>
+    </tr>`;
+  }).join("");
+
+  caixa.innerHTML = `
+    <h3>Revisar Importação (${importacaoPessoasLinhas.length} linha(s))</h3>
+    <p class="subtitle">Confira as linhas sinalizadas antes de confirmar. Linhas "Novo" já estão marcadas pra importar.</p>
+    <div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr>
+      <th>Matrícula</th><th>Nome</th><th>Situação</th><th>Conflito</th><th>Decisão</th>
+    </tr></thead><tbody>${linhasHtml}</tbody></table></div>
+    <div class="modal-acoes">
+      <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+      <button class="btn-confirmar" id="modalConfirmar">Confirmar Importação</button>
+    </div>`;
+  document.getElementById("modalOverlay").classList.remove("escondido");
+  document.getElementById("modalConfirmar").onclick = () => confirmarImportacaoPessoas();
+  document.getElementById("modalCancelar").onclick = () => { fecharModal(); importacaoPessoasLinhas = []; };
+}
+
+async function confirmarImportacaoPessoas() {
+  const payload = importacaoPessoasLinhas
+    .filter(l => l.decisao === "IMPORTAR" || l.decisao === "ATUALIZAR")
+    .map(l => ({
+      membroId: l.membroId,
+      nome: l.nome,
+      situacaoMembro: l.situacaoMembro || null,
+      sobrescrever: l.status === "DUPLICATA_MATRICULA" && l.decisao === "ATUALIZAR"
+    }));
+
+  fecharModal();
+  const msg = document.getElementById("resultadoImportacaoPessoas");
+  if (payload.length === 0) {
+    msg.textContent = "Nenhuma linha selecionada pra importar.";
+    importacaoPessoasLinhas = [];
+    return;
+  }
+
+  const res = await fetchProtegido(`${API_BASE}/pessoas/importar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ linhas: payload })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.sucesso
+    ? `Criados: ${data.resumo.criados} · Atualizados: ${data.resumo.atualizados} · Ignorados: ${data.resumo.ignorados}`
+    : "";
+  document.getElementById("arquivoExcelPessoas").value = "";
+  importacaoPessoasLinhas = [];
+  if (data.sucesso) carregarPessoas();
+}
+
+const COLUNAS_EXPORT_PESSOAS = [
+  { chave: "membroId", rotulo: "Matrícula", padrao: true },
+  { chave: "nome", rotulo: "Nome", padrao: true },
+  { chave: "idade", rotulo: "Idade", padrao: false, valor: p => idadeDe(p.dataNascimento) ?? "" },
+  { chave: "categoria", rotulo: "Categoria", padrao: false, valor: p => (p.capacidade && p.capacidade.categoria) || "" },
+  { chave: "formaAdmissao", rotulo: "Forma de Admissão", padrao: false, valor: p => labelFormaAdmissao(p.formaAdmissao) },
+  { chave: "funcao", rotulo: "Função", padrao: false },
+  { chave: "cargoMinisterial", rotulo: "Cargo Ministerial", padrao: false },
+  { chave: "congregacao", rotulo: "Congregação", padrao: true },
+  { chave: "status", rotulo: "Status", padrao: true },
+  { chave: "situacaoMembro", rotulo: "Situação", padrao: true },
+  { chave: "telefone", rotulo: "Telefone", padrao: false },
+  { chave: "email", rotulo: "E-mail", padrao: false },
+  { chave: "endereco", rotulo: "Endereço", padrao: false },
+  { chave: "dataNascimento", rotulo: "Data de Nascimento", padrao: false },
+  { chave: "dataAdmissao", rotulo: "Data de Admissão", padrao: false }
+];
+
+function abrirModalExportarPessoas() {
+  const caixa = document.getElementById("modalCaixa");
+  const checkboxesHtml = COLUNAS_EXPORT_PESSOAS.map(c => `
+    <label style="display:flex;align-items:center;gap:6px;margin:4px 0;">
+      <input type="checkbox" id="exportCol_${c.chave}" ${c.padrao ? "checked" : ""} /> ${c.rotulo}
+    </label>`).join("");
+
+  caixa.innerHTML = `
+    <h3>Exportar Pessoas (${pessoasFiltradas.length} registro(s) na lista filtrada)</h3>
+    <p class="subtitle">Escolha as colunas que devem entrar na planilha.</p>
+    <div style="max-height:300px;overflow-y:auto;">${checkboxesHtml}</div>
+    <div class="modal-acoes">
+      <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+      <button class="btn-confirmar" id="modalConfirmar">📤 Gerar Planilha</button>
+    </div>`;
+  document.getElementById("modalOverlay").classList.remove("escondido");
+  document.getElementById("modalConfirmar").onclick = () => exportarPessoasAcao();
+  document.getElementById("modalCancelar").onclick = () => fecharModal();
+}
+
+function exportarPessoasAcao() {
+  const colunasSelecionadas = COLUNAS_EXPORT_PESSOAS.filter(c => document.getElementById(`exportCol_${c.chave}`).checked);
+  if (colunasSelecionadas.length === 0) {
+    mostrarToast("Selecione ao menos uma coluna.", "erro");
+    return;
+  }
+
+  const linhas = pessoasFiltradas.map(p => {
+    const linha = {};
+    colunasSelecionadas.forEach(c => {
+      linha[c.rotulo] = c.valor ? c.valor(p) : (p[c.chave] ?? "");
+    });
+    return linha;
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(linhas);
+  XLSX.utils.book_append_sheet(wb, ws, "Pessoas");
+  XLSX.writeFile(wb, "rol-de-membros.xlsx");
+  fecharModal();
 }
 
 function labelFormaAdmissao(codigo) {

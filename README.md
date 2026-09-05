@@ -455,9 +455,15 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v1.8 — Importação e exportação
 
-- [ ] Importação de planilha Excel (matrícula + nome + situação + dados básicos).
-- [ ] Function `ImportarPessoas` (rota pessoas/importar).
-- [ ] Exportação de rol de membros (filtros por congregação/área/situação/categoria).
+- [x] Importação de planilha Excel (matrícula + nome + situação — parsing 100% no
+      navegador via SheetJS, com tela de revisão de duplicatas por matrícula exata
+      e por similaridade de nome ≥90%, decisão linha a linha pelo operador).
+- [x] Function `ImportarPessoas` (rota `pessoas/importar`).
+- [x] Botão "Baixar modelo" (.xlsx de exemplo gerado no navegador).
+- [x] Filtros novos na lista de Pessoas: Congregação e Situação (client-side).
+- [x] Exportação de rol de membros com seleção de colunas (checkboxes), 100% no
+      navegador, a partir da lista já filtrada (busca + categoria + congregação +
+      situação).
 
 #### v1.9 — Registros especiais do membro
 

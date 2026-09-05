@@ -271,12 +271,12 @@ async function enviarMinhaFotoAcao() {
     msg.textContent = "Escolha um arquivo de imagem.";
     return;
   }
-  const arquivo = input.files[0];
-  const fotoBase64 = await lerArquivoComoBase64(arquivo);
+  const recorte = await abrirRecorteFoto(input.files[0]);
+  if (!recorte) return;
   const res = await fetch(`${API_BASE}/minha-foto/${authMatricula}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fotoBase64, mimeType: arquivo.type })
+    body: JSON.stringify({ fotoBase64: recorte.base64, mimeType: recorte.mimeType })
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
@@ -2132,14 +2132,95 @@ async function concederConsentimentoFotoAcao() {
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFotoMembro(membroId);
+  if (data.sucesso) carregarAbaFoto(membroId);
 }
 
-function lerArquivoComoBase64(arquivo) {
-  return new Promise((resolve, reject) => {
+// Recorte de foto (v1.10.1) — arrasta pra posicionar + zoom, sempre exporta um
+// quadrado (JPEG). Sem lib nova: canvas puro, mesmo espírito "sem build step"
+// do resto do front-end. Circular só na pré-visualização (guia pro rosto);
+// o arquivo salvo é quadrado (mais compatível como avatar em qualquer lugar).
+// Promise<{base64, mimeType}|null> — null se cancelou.
+function abrirRecorteFoto(arquivo) {
+  const TAMANHO_SAIDA = 480;
+  const VIEW = 280;
+  return new Promise((resolve) => {
     const leitor = new FileReader();
-    leitor.onload = () => resolve(String(leitor.result).split(",")[1] || "");
-    leitor.onerror = reject;
+    leitor.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const caixa = document.getElementById("modalCaixa");
+        caixa.innerHTML = `
+          <h3>Ajustar foto</h3>
+          <p class="subtitle">Arraste pra posicionar e use o zoom pra focar no rosto — evite foto de corpo inteiro.</p>
+          <div id="recorteArea" style="position:relative; width:${VIEW}px; height:${VIEW}px; margin:0 auto; overflow:hidden; border-radius:50%; border:3px solid var(--cor-secundaria); cursor:grab; touch-action:none;">
+            <canvas id="recorteCanvas" width="${VIEW}" height="${VIEW}"></canvas>
+          </div>
+          <div class="input-group" style="margin-top:14px;">
+            <label>Zoom:</label>
+            <input type="range" id="recorteZoom" min="1" max="3" step="0.01" value="1" style="width:100%;" />
+          </div>
+          <div class="modal-acoes">
+            <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+            <button class="btn-confirmar" id="modalConfirmar">✅ Usar esta foto</button>
+          </div>`;
+        document.getElementById("modalOverlay").classList.remove("escondido");
+
+        const canvas = document.getElementById("recorteCanvas");
+        const ctx = canvas.getContext("2d");
+        const escalaBase = Math.max(VIEW / img.width, VIEW / img.height);
+        let zoom = 1;
+        let offsetX = 0, offsetY = 0;
+        let arrastando = false, inicioX = 0, inicioY = 0;
+
+        function desenhar() {
+          const escala = escalaBase * zoom;
+          const w = img.width * escala, h = img.height * escala;
+          ctx.clearRect(0, 0, VIEW, VIEW);
+          ctx.drawImage(img, VIEW / 2 - w / 2 + offsetX, VIEW / 2 - h / 2 + offsetY, w, h);
+        }
+        desenhar();
+
+        const area = document.getElementById("recorteArea");
+        const comecar = (x, y) => { arrastando = true; inicioX = x - offsetX; inicioY = y - offsetY; area.style.cursor = "grabbing"; };
+        const mover = (x, y) => { if (arrastando) { offsetX = x - inicioX; offsetY = y - inicioY; desenhar(); } };
+        const terminar = () => { arrastando = false; area.style.cursor = "grab"; };
+
+        area.addEventListener("mousedown", e => comecar(e.offsetX, e.offsetY));
+        area.addEventListener("mousemove", e => mover(e.offsetX, e.offsetY));
+        window.addEventListener("mouseup", terminar);
+        area.addEventListener("touchstart", e => {
+          const t = e.touches[0], r = area.getBoundingClientRect();
+          comecar(t.clientX - r.left, t.clientY - r.top);
+        }, { passive: true });
+        area.addEventListener("touchmove", e => {
+          const t = e.touches[0], r = area.getBoundingClientRect();
+          mover(t.clientX - r.left, t.clientY - r.top);
+        }, { passive: true });
+        area.addEventListener("touchend", terminar);
+
+        document.getElementById("recorteZoom").oninput = e => { zoom = Number(e.target.value); desenhar(); };
+
+        document.getElementById("modalConfirmar").onclick = () => {
+          const saida = document.createElement("canvas");
+          saida.width = TAMANHO_SAIDA;
+          saida.height = TAMANHO_SAIDA;
+          const fatorSaida = TAMANHO_SAIDA / VIEW;
+          const escala = escalaBase * zoom * fatorSaida;
+          const w = img.width * escala, h = img.height * escala;
+          saida.getContext("2d").drawImage(
+            img,
+            TAMANHO_SAIDA / 2 - w / 2 + offsetX * fatorSaida,
+            TAMANHO_SAIDA / 2 - h / 2 + offsetY * fatorSaida,
+            w, h
+          );
+          const base64 = saida.toDataURL("image/jpeg", 0.9).split(",")[1];
+          fecharModal();
+          resolve({ base64, mimeType: "image/jpeg" });
+        };
+        document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+      };
+      img.src = leitor.result;
+    };
     leitor.readAsDataURL(arquivo);
   });
 }
@@ -2152,19 +2233,19 @@ async function enviarFotoMembroAcao() {
     msg.textContent = "Escolha um arquivo de imagem.";
     return;
   }
-  const arquivo = input.files[0];
-  const fotoBase64 = await lerArquivoComoBase64(arquivo);
+  const recorte = await abrirRecorteFoto(input.files[0]);
+  if (!recorte) return;
   const res = await fetchProtegido(`${API_BASE}/pessoas/${membroId}/foto`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fotoBase64, mimeType: arquivo.type })
+    body: JSON.stringify({ fotoBase64: recorte.base64, mimeType: recorte.mimeType })
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
   if (data.sucesso) {
     input.value = "";
-    carregarPessoas();
-    verFotoMembro(membroId);
+    await carregarPessoas();
+    carregarAbaFoto(membroId);
   }
 }
 

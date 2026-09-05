@@ -305,7 +305,7 @@
              a sessão é iniciada, quando a data chegar. Os outros 4 órgãos não têm
              essa exigência estatutária — continuam abrindo na hora, sem convocação. -->
         <div id="blocoConvocarAssembleia" style="display:none;">
-          <h3>📋 Convocar Assembleia Geral</h3>
+          <h3 id="convocacaoTitulo">📋 Convocar Assembleia Geral</h3>
           <p class="subtitle">
             O Edital precisa ser publicado com antecedência mínima: 10 dias pra AGO,
             5 dias pra AGE de assuntos gerais, 15 dias pra AGE de reforma estatutária,
@@ -337,7 +337,8 @@
               <label>Senha para a Portaria (no dia):</label>
               <input type="text" id="convocacaoSenhaAcesso" placeholder="Ex: 1234" />
             </div>
-            <button class="btn-confirmar" type="submit">📋 Convocar</button>
+            <button class="btn-confirmar" id="convocacaoBotaoSalvar" type="submit">📋 Convocar</button>
+            <button class="btn-confirmar btn-secundario" id="convocacaoBotaoCancelarEdicao" type="button" style="display:none;" onclick="cancelarEdicaoConvocacaoAcao()">Cancelar edição</button>
           </form>
           <p id="resultadoConvocacao"></p>
 

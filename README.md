@@ -628,10 +628,24 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
       `hoje >= DataPrevista`). Front-end: bloco "📋 Convocar Assembleia" +
       "Convocações Pendentes" (com contagem regressiva), visível só quando o
       órgão selecionado no submenu de Reuniões é a Assembleia Geral.
-- [ ] Convocação independente da Presidência (1/5 dos membros, CLI, CF ou CEI) —
-      fora de escopo do v2.1: exige um fluxo de requerimento/assinaturas com
-      contagem de adesão (recurso raro, usado só quando a Presidência se
-      recusa/omite — Art. 20 §3º/§4º); fica pra rodada própria.
+- [x] Editar/Cancelar convocação pendente — enquanto `Status='CONVOCADA'` (antes
+      de Iniciada), dá pra corrigir tipo/data/pauta/meios/senha ou cancelar de
+      vez (`POST`/`DELETE /api/assembleia/convocar/{sessaoId}`). Depois de
+      Iniciada (`ABERTA`) não mexe mais aqui — vira reunião de verdade, com o
+      "Encerrar" de sempre (inalterado, `EncerrarReuniao`) aparecendo assim que
+      abre, igual a antes.
+- **Convocação Independente da Presidência (1/5 dos membros, CLI, CF ou CEI —
+      Art. 20 §3º/§4º): decidido deixar FORA do sistema, de propósito.** É um
+      recurso raro, usado só quando a Presidência se recusa ou fica omissa —
+      cenário que normalmente já implica crise/conflito interno, onde não dá
+      pra contar com todo mundo tendo acesso ao sistema no mesmo dia. Nesse
+      caso a lista de adesão (assinaturas) é feita em papel, fora do sistema;
+      o sistema só entra depois, se for preciso contestar a contagem de
+      quórum/votantes contra o que já está calculado aqui. Construir isso no
+      sistema também multiplicaria opções de convocação sem necessidade real —
+      as pautas que justificariam uma AGE especial já têm órgão próprio pra
+      tratar (CLI, Conselho Fiscal, CEI); só compensa convocar Assembleia
+      quando for competência privativa dela mesma (Art. 18 — ver v2.2).
 
 #### v2.2 — Assembleia Geral (pautas especiais)
 

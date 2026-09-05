@@ -1001,11 +1001,11 @@ async function carregarConvocacoesPendentes() {
   const container = document.getElementById("resultadoConvocacoesPendentes");
   const res = await fetchProtegido(`${API_BASE}/assembleia/convocar`);
   const convocacoes = await res.json();
+  window._convocacoesPendentesCache = convocacoes;
   if (!Array.isArray(convocacoes) || convocacoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma convocação pendente.</p>";
     return;
   }
-  const TITULOS_TIPO_SESSAO = { AGO: "AGO", AGE_GERAL: "AGE (assuntos gerais)", AGE_ESPECIAL: "AGE (reforma/destituição/eleição)" };
   container.innerHTML = convocacoes.map(c => {
     const podeIniciar = c.diasParaPrevista <= 0;
     const contagem = c.diasParaPrevista > 0 ? `faltam ${c.diasParaPrevista} dia(s)` : (c.diasParaPrevista === 0 ? "é hoje" : "data já passou");
@@ -1013,8 +1013,58 @@ async function carregarConvocacoesPendentes() {
       <strong>${TITULOS_TIPO_SESSAO[c.tipoSessao] || c.tipoSessao}</strong> — prevista para ${c.dataPrevista} (${contagem})<br/>
       <span class="subtitle">Pauta: ${c.pauta}</span><br/>
       <button class="btn-confirmar" style="width:auto;margin-top:6px;" ${podeIniciar ? "" : "disabled"} onclick="iniciarSessaoConvocadaAcao(${c.sessaoId})">▶️ Iniciar Sessão</button>
+      <button class="btn-link" style="margin-left:10px;" onclick="editarConvocacaoAcao(${c.sessaoId})">✏️ Editar</button>
+      <button class="btn-link btn-link-perigo" onclick="excluirConvocacaoAcao(${c.sessaoId})">🗑️ Cancelar</button>
     </div>`;
   }).join("");
+}
+
+const TITULOS_TIPO_SESSAO = { AGO: "AGO", AGE_GERAL: "AGE (assuntos gerais)", AGE_ESPECIAL: "AGE (reforma/destituição/eleição)" };
+
+// Reaproveita o mesmo formulário pra criar e editar — window._convocacaoEditandoId
+// diz qual convocação (se alguma) está sendo editada; null = criando uma nova.
+window._convocacaoEditandoId = null;
+
+function preencherFormConvocacao(c) {
+  document.getElementById("convocacaoTipoSessao").value = c.tipoSessao;
+  document.getElementById("convocacaoDataPrevista").value = c.dataPrevista;
+  document.getElementById("convocacaoPauta").value = c.pauta;
+  document.getElementById("convocacaoMeiosDivulgacao").value = c.meiosDivulgacao || "";
+  document.getElementById("convocacaoSenhaAcesso").value = "";
+}
+
+function editarConvocacaoAcao(sessaoId) {
+  const c = (window._convocacoesPendentesCache || []).find(x => x.sessaoId === sessaoId);
+  if (!c) return;
+  window._convocacaoEditandoId = sessaoId;
+  preencherFormConvocacao(c);
+  document.getElementById("convocacaoBotaoSalvar").textContent = "✏️ Salvar Edição";
+  document.getElementById("convocacaoBotaoCancelarEdicao").style.display = "inline-block";
+  document.getElementById("convocacaoTitulo").textContent = "📋 Editar Convocação";
+}
+
+function cancelarEdicaoConvocacaoAcao() {
+  window._convocacaoEditandoId = null;
+  document.getElementById("convocacaoTipoSessao").value = "AGO";
+  document.getElementById("convocacaoDataPrevista").value = "";
+  document.getElementById("convocacaoPauta").value = "";
+  document.getElementById("convocacaoMeiosDivulgacao").value = "";
+  document.getElementById("convocacaoSenhaAcesso").value = "";
+  document.getElementById("convocacaoBotaoSalvar").textContent = "📋 Convocar";
+  document.getElementById("convocacaoBotaoCancelarEdicao").style.display = "none";
+  document.getElementById("convocacaoTitulo").textContent = "📋 Convocar Assembleia Geral";
+}
+
+async function excluirConvocacaoAcao(sessaoId) {
+  if (!(await confirmarAcao("Tem certeza que deseja cancelar esta convocação?", "Cancelar"))) return;
+
+  const res = await fetchProtegido(`${API_BASE}/assembleia/convocar/${sessaoId}`, { method: "DELETE" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    if (window._convocacaoEditandoId === sessaoId) cancelarEdicaoConvocacaoAcao();
+    carregarConvocacoesPendentes();
+  }
 }
 
 async function convocarAssembleiaAcao() {
@@ -1025,7 +1075,9 @@ async function convocarAssembleiaAcao() {
   const senhaAcesso = document.getElementById("convocacaoSenhaAcesso").value;
   if (!dataPrevista || !pauta || !senhaAcesso) { mostrarToast("Preencha data prevista, pauta e senha.", "erro"); return; }
 
-  const res = await fetchProtegido(`${API_BASE}/assembleia/convocar`, {
+  const editandoId = window._convocacaoEditandoId;
+  const url = editandoId ? `${API_BASE}/assembleia/convocar/${editandoId}` : `${API_BASE}/assembleia/convocar`;
+  const res = await fetchProtegido(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tipoSessao, dataPrevista, pauta, meiosDivulgacao, senhaAcesso })
@@ -1033,10 +1085,13 @@ async function convocarAssembleiaAcao() {
   const data = await res.json();
   document.getElementById("resultadoConvocacao").textContent = data.mensagem;
   if (data.sucesso) {
-    document.getElementById("convocacaoDataPrevista").value = "";
-    document.getElementById("convocacaoPauta").value = "";
-    document.getElementById("convocacaoMeiosDivulgacao").value = "";
-    document.getElementById("convocacaoSenhaAcesso").value = "";
+    if (editandoId) cancelarEdicaoConvocacaoAcao();
+    else {
+      document.getElementById("convocacaoDataPrevista").value = "";
+      document.getElementById("convocacaoPauta").value = "";
+      document.getElementById("convocacaoMeiosDivulgacao").value = "";
+      document.getElementById("convocacaoSenhaAcesso").value = "";
+    }
     carregarConvocacoesPendentes();
   }
 }

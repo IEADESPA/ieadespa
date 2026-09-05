@@ -9,6 +9,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
+const { fotoConsentimentoConcedido } = require("../shared/consentimentoFoto");
 
 const MIME_PERMITIDOS = ["image/jpeg", "image/png", "image/webp"];
 const TAMANHO_MAXIMO_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -35,12 +36,12 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // Consentimento como trava real (v1.7) — só o estado MAIS RECENTE conta (registro
-  // append-only: uma revogação depois de um "sim" tem que valer).
-  const consentimento = await pool.request().input("id", sql.Int, membroId).query(`
-    SELECT TOP 1 Concedido FROM ConsentimentosLGPD WHERE MembroId = @id AND Tipo = 'FOTO' ORDER BY ConsentimentoId DESC
-  `);
-  if (!consentimento.recordset[0] || !consentimento.recordset[0].Concedido) {
+  // Consentimento como trava real (v1.7) — aceita FOTO ou DADOS_CONTATO (ver
+  // shared/consentimentoFoto.js — bug real da v1.10: o autoatendimento só tem a
+  // caixa de DADOS_CONTATO na tela, então travar só em FOTO deixava o upload
+  // impossível mesmo com o consentimento concedido).
+  const concedido = await fotoConsentimentoConcedido(pool, sql, membroId);
+  if (!concedido) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Registre o consentimento de Foto (LGPD) antes de fazer o upload." } };
     return;
   }

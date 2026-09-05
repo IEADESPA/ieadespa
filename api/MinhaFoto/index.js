@@ -5,20 +5,15 @@
 // GestaoConsentimentoLGPD (só a matrícula da sessão, sem exigir permissão).
 // GET  /api/minha-foto/{matricula} -> { fotoUrl, consentimentoConcedido }
 // POST /api/minha-foto/{matricula} -> body: { fotoBase64, mimeType } (mesma trava
-//      de consentimento ConsentimentosLGPD Tipo='FOTO' que UploadFotoMembro já usa)
+//      de consentimento de UploadFotoMembro — aceita FOTO ou DADOS_CONTATO,
+//      ver shared/consentimentoFoto.js)
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
+const { fotoConsentimentoConcedido } = require("../shared/consentimentoFoto");
 
 const MIME_PERMITIDOS = ["image/jpeg", "image/png", "image/webp"];
 const TAMANHO_MAXIMO_BYTES = 5 * 1024 * 1024; // 5 MB
-
-async function consentimentoFotoConcedido(pool, matricula) {
-  const consentimento = await pool.request().input("id", sql.Int, matricula).query(`
-    SELECT TOP 1 Concedido FROM ConsentimentosLGPD WHERE MembroId = @id AND Tipo = 'FOTO' ORDER BY ConsentimentoId DESC
-  `);
-  return !!(consentimento.recordset[0] && consentimento.recordset[0].Concedido);
-}
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -35,7 +30,7 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "GET") {
-    const concedido = await consentimentoFotoConcedido(pool, matricula);
+    const concedido = await fotoConsentimentoConcedido(pool, sql, matricula);
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -56,7 +51,7 @@ module.exports = async function (context, req) {
     }
 
     // Mesma trava real de UploadFotoMembro (v1.7) — só o estado mais recente conta.
-    const concedido = await consentimentoFotoConcedido(pool, matricula);
+    const concedido = await fotoConsentimentoConcedido(pool, sql, matricula);
     if (!concedido) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Conceda o consentimento de Foto antes de fazer o upload." } };
       return;

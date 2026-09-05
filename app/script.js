@@ -279,6 +279,7 @@ async function enviarMinhaFotoAcao() {
     body: JSON.stringify({ fotoBase64: recorte.base64, mimeType: recorte.mimeType })
   });
   const data = await res.json();
+  avisarResultado(data); // toast — falha (ex: sem consentimento) não pode passar batido só num texto discreto
   msg.textContent = data.mensagem;
   if (data.sucesso) {
     input.value = "";
@@ -2249,6 +2250,7 @@ async function enviarFotoMembroAcao() {
     body: JSON.stringify({ fotoBase64: recorte.base64, mimeType: recorte.mimeType })
   });
   const data = await res.json();
+  avisarResultado(data);
   msg.textContent = data.mensagem;
   if (data.sucesso) {
     input.value = "";

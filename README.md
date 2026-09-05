@@ -512,38 +512,41 @@ detalhe) — confirmado como prática consolidada de mercado.
       Painel. Novo bloco em "Meus Dados (LGPD)", mesma trava real de
       consentimento (`ConsentimentosLGPD` Tipo='FOTO') que já existia do lado
       Secretaria.
-- [ ] *(Fora desta rodada, próxima versão)* Fluxo de autoedição com aprovação:
-      o próprio membro edita alguns dos seus dados (não só a foto) e a Secretaria
-      só confirma quando precisar, em vez de digitar tudo do zero. Princípio geral
-      (definido em conversa com o usuário): só vale coletar/pedir o dado que a
-      Secretaria realmente usa pra algo — "dados cumprimentados" (sem uso real)
-      não entram. Quatro categorias de campo, cada uma com uma regra diferente:
-      - **Nunca editável, nem por ninguém casualmente** (dado único — corrige só
-        em caso de erro registrado, não é fluxo normal): Matrícula (`MembroId`),
-        Nome. *(CPF entraria aqui também, se um dia o sistema passar a coletar —
-        hoje não coleta.)*
-      - **Controlado só pelos fluxos formais do próprio sistema** (não é campo de
-        formulário livre pra ninguém digitar direto — muda só através do
-        processo certo): Status e Situação (mudam via Perda de Membresia/
-        Disciplina/Licença por Candidatura — v1.5/v1.6/v1.9), Cargo Ministerial/
-        Função (muda só via Consagrações — Art. 71, "passar pela Academia").
-      - **Membro edita direto, sem aprovação nenhuma** (baixo risco, dado que só
-        o próprio membro sabe de verdade, e o volume não compensaria revisão
-        manual — mesmo racional já usado pra Foto, v1.10): Endereço, Telefone,
-        E-mail, Estado Civil, Vínculos Familiares (o membro cadastra os próprios
-        parentes).
-      - **Membro sugere, Secretaria aprova antes de valer** (dado que entra em
-        cálculo ou registro formal — errado tem consequência real, ex: `estatuto.js`
-        usa Data de Nascimento/Admissão pra capacidade eleitoral): categoria
-        confirmada em conceito, mas **quais campos exatos entram aqui ainda não
-        foi decidido** — candidatos a avaliar quando for desenhar de verdade: Data
-        de Nascimento, Data de Admissão, Data de Batismo, Forma de Admissão,
-        Origem, Igreja Anterior, dados do Rito de Recebimento.
-      Ainda em aberto pra quando for desenhado: como fica a fila de pedidos
-      pendentes, quem tem permissão de aprovar, e como o histórico da mudança
-      (antes/depois, quem pediu, quem aprovou) fica registrado — provavelmente
-      reaproveitando o padrão de auditoria (`registrarAuditoria`) já usado em
-      todo o sistema.
+#### v1.11 — Autoedição de dados + Fila de Aprovações
+
+Fecha o item que tinha ficado documentado (não implementado) na v1.10, seguindo
+a classificação de campos definida em conversa com o usuário: só vale pedir o
+dado que a Secretaria realmente usa pra algo. Quatro categorias:
+
+- **Nunca editável** (dado único, corrige só em caso de erro registrado):
+  Matrícula, Nome. *(CPF entraria aqui também, se um dia o sistema passar a
+  coletar — hoje não coleta.)*
+- **Controlado só pelos fluxos formais do sistema** (não é campo de formulário
+  livre): Status/Situação (Disciplina/Perda de Membresia/Licença por
+  Candidatura), Cargo Ministerial/Função (só via Consagrações).
+- **Membro edita direto, sem aprovação** — implementado agora:
+- [x] Telefone/E-mail/Endereço/Estado Civil (`api/AtualizarMeusDados`) — bloco
+      "✏️ Atualizar meus dados" no Meu Painel (Meu Perfil).
+- [x] Vínculos Familiares (`api/MeusVinculosFamiliares`, novo) — mesma validação
+      de `GestaoVinculosFamiliares` extraída pra `shared/vinculosFamiliares.js`
+      e reaproveitada pelos dois; o membro cadastra os próprios parentes.
+- **Membro sugere, Secretaria aprova antes de valer** (campos que entram em
+  cálculo/registro formal — `shared/estatuto.js` usa Data de Nascimento/
+  Admissão pra capacidade eleitoral): Data de Nascimento, Data de Admissão,
+  Data de Batismo, Forma de Admissão, Origem, Igreja Anterior, Data/Nome/
+  Ministrante do Rito de Recebimento (fixo em código,
+  `shared/camposEdicaoPessoa.js`) — implementado agora:
+- [x] `api/SolicitarEdicaoPessoa` (novo): o membro propõe (Meu Painel → Meu
+      Perfil → "📨 Solicitar correção de dados"), guarda valor atual + valor
+      proposto por campo (`SolicitacoesEdicaoPessoa`/`SolicitacoesEdicaoCampos`,
+      migração 024).
+- [x] **Fila de Aprovações** (`api/GestaoFilaAprovacoes`, novo submenu em
+      Pessoas): cada campo é aprovado ou rejeitado separadamente, ou tudo de
+      uma vez ("Aprovar tudo") — só o que for aprovado muda em
+      `MembroReferencia`; cada decisão gera um registro próprio na Auditoria
+      (`registrarAuditoria`, append-only, sem mudar isso).
+- [x] Filtro por data (De/Até) na aba Auditoria — o backend (`ListarAuditoria`)
+      já aceitava, só faltava o campo em tela.
 
 ### FASE 2 — Governança (órgãos e deliberações)
 

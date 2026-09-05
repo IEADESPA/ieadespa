@@ -250,6 +250,12 @@ function mostrarSubAbaMeupainel(sub) {
   document.getElementById("tituloModulo").textContent = `Meu Painel — ${TITULOS_SUB_MEUPAINEL[sub]}`;
   if (sub === "cartas") carregarMinhasCartas();
   if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); carregarMinhaFoto(); }
+  if (sub === "perfil") {
+    carregarMeusDadosForm();
+    carregarOpcoesMeuVinculoTipo();
+    carregarMeusVinculos();
+    carregarMinhasSolicitacoesEdicao();
+  }
 }
 
 // ---- MINHA FOTO (v1.10 — autoatendimento, dentro de Meus Dados (LGPD)) ----
@@ -285,6 +291,178 @@ async function enviarMinhaFotoAcao() {
     input.value = "";
     carregarMinhaFoto();
   }
+}
+
+// ---- ATUALIZAR MEUS DADOS (v1.11 — campos editáveis direto, sem aprovação) ----
+const ROTULO_ESTADO_CIVIL_MEUPAINEL = { SOLTEIRO: "Solteiro(a)", CASADO: "Casado(a)", VIUVO: "Viúvo(a)", DIVORCIADO: "Divorciado(a)", UNIAO_ESTAVEL: "União Estável" };
+const ROTULO_FORMA_ADMISSAO_MEUPAINEL = { BATISMO: "Batismo nas águas", CARTA_MUDANCA: "Carta de Mudança", RECONCILIACAO: "Reconciliação", ACLAMACAO: "Aclamação" };
+
+async function carregarMeusDadosForm() {
+  if (!authMatricula) return;
+  const res = await fetch(`${API_BASE}/meus-dados/${authMatricula}`);
+  const data = await res.json();
+  if (!data.sucesso) return;
+  const d = data.dados;
+  document.getElementById("meuTelefone").value = d.telefone || "";
+  document.getElementById("meuEmail").value = d.email || "";
+  document.getElementById("meuEndereco").value = d.endereco || "";
+  document.getElementById("meuEstadoCivil").value = d.estadoCivil || "";
+
+  const partes = [
+    `Nascimento: ${d.dataNascimento || "-"}`,
+    `Admissão: ${d.dataAdmissao || "-"}`,
+    `Batismo: ${d.dataBatismo || "-"}`,
+    `Forma de Admissão: ${ROTULO_FORMA_ADMISSAO_MEUPAINEL[d.formaAdmissao] || "-"}`,
+    `Origem: ${d.origem || "-"}`,
+    `Igreja Anterior: ${d.igrejaAnterior || "-"}`,
+    `Rito: ${d.dataRitoRecebimento || "-"}`
+  ];
+  document.getElementById("dadosAtuaisReferencia").textContent = "Como está hoje — " + partes.join(" · ");
+}
+
+async function salvarMeusDadosAcao() {
+  if (!authMatricula) return;
+  const msg = document.getElementById("resultadoMeusDados");
+  const telefone = document.getElementById("meuTelefone").value.trim();
+  const email = document.getElementById("meuEmail").value.trim();
+  const endereco = document.getElementById("meuEndereco").value.trim();
+  const estadoCivil = document.getElementById("meuEstadoCivil").value;
+
+  const res = await fetch(`${API_BASE}/meus-dados/${authMatricula}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ telefone, email, endereco, estadoCivil })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem;
+}
+
+// ---- MEUS VÍNCULOS FAMILIARES (v1.11 — autoatendimento) ----
+async function carregarOpcoesMeuVinculoTipo() {
+  const select = document.getElementById("meuVinculoTipo");
+  const res = await fetch(`${API_BASE}/catalogos/tiposVinculoFamiliar`);
+  const tipos = await res.json();
+  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.tipoVinculoId}">${t.rotuloDireto}</option>`).join("");
+}
+
+async function carregarMeusVinculos() {
+  if (!authMatricula) return;
+  const container = document.getElementById("resultadoListaMeusVinculos");
+  const res = await fetch(`${API_BASE}/meus-vinculos/${authMatricula}`);
+  const vinculos = await res.json();
+  if (!Array.isArray(vinculos) || vinculos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum vínculo familiar cadastrado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Parentesco</th><th>Pessoa</th><th></th></tr></thead><tbody>`;
+  vinculos.forEach(v => {
+    html += `<tr>
+      <td>${v.rotulo}</td>
+      <td>${v.outraPessoaNome} (${v.outraPessoaId})${v.outraPessoaEhResponsavel ? ' <span class="badge-status badge-ativo">Responsável Legal</span>' : ""}</td>
+      <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="removerMeuVinculoAcao(${v.vinculoId})">Remover</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarMeuVinculoAcao() {
+  if (!authMatricula) return;
+  const tipoVinculoId = document.getElementById("meuVinculoTipo").value;
+  const membroParenteId = document.getElementById("meuVinculoMatriculaParente").value;
+  const responsavelLegal = document.getElementById("meuVinculoResponsavelLegal").checked;
+  if (!tipoVinculoId || !membroParenteId) {
+    mostrarToast("Informe o tipo de vínculo e a matrícula da outra pessoa.", "erro");
+    return;
+  }
+  const res = await fetch(`${API_BASE}/meus-vinculos/${authMatricula}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroParenteId, tipoVinculoId, responsavelLegal })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("meuVinculoMatriculaParente").value = "";
+    document.getElementById("meuVinculoResponsavelLegal").checked = false;
+    carregarMeusVinculos();
+  }
+}
+
+async function removerMeuVinculoAcao(vinculoId) {
+  if (!(await confirmarAcao("Remover este vínculo familiar?", "Remover"))) return;
+  const res = await fetch(`${API_BASE}/meus-vinculos/${authMatricula}/${vinculoId}`, { method: "DELETE" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarMeusVinculos();
+}
+
+// ---- SOLICITAR EDIÇÃO SUJEITA A APROVAÇÃO (v1.11) ----
+const ROTULO_STATUS_SOLICITACAO_EDICAO = { PENDENTE: "Pendente", APROVADO: "Aprovado", REJEITADO: "Rejeitado" };
+
+async function enviarSolicitacaoEdicaoAcao() {
+  if (!authMatricula) return;
+  const msg = document.getElementById("resultadoSolicitacaoEdicao");
+  const campos = {};
+  const lerSeInformado = (id, chave) => {
+    const valor = document.getElementById(id).value;
+    if (valor) campos[chave] = valor.trim ? valor.trim() : valor;
+  };
+  lerSeInformado("solEdicaoDataNascimento", "dataNascimento");
+  lerSeInformado("solEdicaoDataAdmissao", "dataAdmissao");
+  lerSeInformado("solEdicaoDataBatismo", "dataBatismo");
+  lerSeInformado("solEdicaoFormaAdmissao", "formaAdmissao");
+  lerSeInformado("solEdicaoOrigem", "origem");
+  lerSeInformado("solEdicaoIgrejaAnterior", "igrejaAnterior");
+  lerSeInformado("solEdicaoDataRitoRecebimento", "dataRitoRecebimento");
+  lerSeInformado("solEdicaoNomeLidoRito", "nomeLidoRito");
+  lerSeInformado("solEdicaoMinistranteRito", "ministranteRito");
+
+  if (Object.keys(campos).length === 0) {
+    msg.textContent = "Preencha ao menos um campo pra solicitar correção.";
+    return;
+  }
+
+  const res = await fetch(`${API_BASE}/solicitacoes-edicao/${authMatricula}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ campos })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    ["solEdicaoDataNascimento", "solEdicaoDataAdmissao", "solEdicaoDataBatismo", "solEdicaoFormaAdmissao",
+      "solEdicaoOrigem", "solEdicaoIgrejaAnterior", "solEdicaoDataRitoRecebimento", "solEdicaoNomeLidoRito", "solEdicaoMinistranteRito"
+    ].forEach(id => { document.getElementById(id).value = ""; });
+    carregarMinhasSolicitacoesEdicao();
+  }
+}
+
+async function carregarMinhasSolicitacoesEdicao() {
+  if (!authMatricula) return;
+  const container = document.getElementById("resultadoListaSolicitacoesEdicao");
+  const res = await fetch(`${API_BASE}/solicitacoes-edicao/${authMatricula}`);
+  const solicitacoes = await res.json();
+  if (!Array.isArray(solicitacoes) || solicitacoes.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma solicitação enviada ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Campo</th><th>Valor Anterior</th><th>Valor Proposto</th><th>Status</th></tr></thead><tbody>`;
+  solicitacoes.forEach(s => {
+    s.campos.forEach((c, i) => {
+      html += `<tr>
+        ${i === 0 ? `<td rowspan="${s.campos.length}">${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</td>` : ""}
+        <td>${c.nomeCampo}</td>
+        <td>${c.valorAnterior || "-"}</td>
+        <td>${c.valorProposto}</td>
+        <td>${ROTULO_STATUS_SOLICITACAO_EDICAO[c.status] || c.status}</td>
+      </tr>`;
+    });
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
 }
 
 function mostrarAbaSecretaria(aba) {
@@ -1229,18 +1407,23 @@ function moverFormPessoaPara(slotId) {
   document.getElementById(slotId).appendChild(bloco);
 }
 
+const TITULOS_SUB_PESSOAS = { cadastrar: "Cadastrar Pessoa", buscar: "Buscar Pessoas", aprovacoes: "Fila de Aprovações" };
+
 function mostrarSubAbaPessoas(sub) {
   subAbaPessoasAtual = sub;
   document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
   document.getElementById("subPessoasBuscar").style.display = sub === "buscar" ? "block" : "none";
+  document.getElementById("subPessoasAprovacoes").style.display = sub === "aprovacoes" ? "block" : "none";
   document.getElementById("subPessoasPerfil").style.display = "none";
   document.getElementById("btnSubPessoasCadastrar").classList.toggle("ativo", sub === "cadastrar");
   document.getElementById("btnSubPessoasBuscar").classList.toggle("ativo", sub === "buscar");
-  document.getElementById("tituloModulo").textContent = sub === "cadastrar" ? "Pessoas — Cadastrar Pessoa" : "Pessoas — Buscar Pessoas";
+  document.getElementById("btnSubPessoasAprovacoes").classList.toggle("ativo", sub === "aprovacoes");
+  document.getElementById("tituloModulo").textContent = `Pessoas — ${TITULOS_SUB_PESSOAS[sub]}`;
   if (sub === "cadastrar") {
     moverFormPessoaPara("slotFormPessoaCadastrar");
     limparFormPessoa();
   }
+  if (sub === "aprovacoes") carregarFilaAprovacoes();
 }
 
 function voltarBuscaPessoas() {
@@ -2424,6 +2607,68 @@ async function registrarRetornoLicencaAcao(licencaId) {
   }
 }
 
+// ---- FILA DE APROVAÇÕES (v1.11 — pedidos de autoedição sujeitos a aprovação) ----
+let filaAprovacoesCache = [];
+
+async function carregarFilaAprovacoes() {
+  const container = document.getElementById("resultadoFilaAprovacoes");
+  const res = await fetchProtegido(`${API_BASE}/fila-aprovacoes`);
+  const solicitacoes = await res.json();
+  filaAprovacoesCache = Array.isArray(solicitacoes) ? solicitacoes : [];
+
+  if (filaAprovacoesCache.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum pedido pendente no momento.</p>";
+    return;
+  }
+
+  container.innerHTML = filaAprovacoesCache.map(s => `
+    <div class="cartao-perfil" style="margin-bottom:16px;">
+      <div class="barra-lista" style="justify-content:space-between;">
+        <h4 style="margin:0; color: var(--cor-primaria);">${s.nome} (matrícula ${s.membroId}) — ${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</h4>
+        <button class="btn-confirmar" style="width:auto;margin:0;" onclick="aprovarTodaSolicitacaoAcao(${s.solicitacaoId})">✅ Aprovar tudo</button>
+      </div>
+      <div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr>
+        <th>Campo</th><th>Valor Atual</th><th>Valor Proposto</th><th></th>
+      </tr></thead><tbody>
+        ${s.campos.map(c => `<tr>
+          <td>${c.rotulo}</td>
+          <td>${c.valorAnterior || "-"}</td>
+          <td><strong>${c.valorProposto}</strong></td>
+          <td class="acoes-inline">
+            <button class="btn-link" onclick="decidirCampoFilaAcao(${s.solicitacaoId}, ${c.campoId}, 'APROVADO')">Aprovar</button>
+            <button class="btn-link btn-link-perigo" onclick="decidirCampoFilaAcao(${s.solicitacaoId}, ${c.campoId}, 'REJEITADO')">Rejeitar</button>
+          </td>
+        </tr>`).join("")}
+      </tbody></table></div>
+    </div>`).join("");
+}
+
+async function decidirCampoFilaAcao(solicitacaoId, campoId, decisao) {
+  const res = await fetchProtegido(`${API_BASE}/fila-aprovacoes/${solicitacaoId}/decidir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decisoes: [{ campoId, decisao }] })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarFilaAprovacoes();
+}
+
+async function aprovarTodaSolicitacaoAcao(solicitacaoId) {
+  if (!(await confirmarAcao("Aprovar todos os campos pendentes desta solicitação?", "Aprovar tudo"))) return;
+  const solicitacao = filaAprovacoesCache.find(s => s.solicitacaoId === solicitacaoId);
+  if (!solicitacao) return;
+  const decisoes = solicitacao.campos.filter(c => c.status === "PENDENTE").map(c => ({ campoId: c.campoId, decisao: "APROVADO" }));
+  const res = await fetchProtegido(`${API_BASE}/fila-aprovacoes/${solicitacaoId}/decidir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decisoes })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarFilaAprovacoes();
+}
+
 // ---- SECRETARIA / ABA CONGREGAÇÕES ----
 let congregacaoEditandoId = null;
 
@@ -3415,9 +3660,13 @@ async function carregarMinhasSolicitacoesLGPD(matricula) {
 async function carregarAuditoria() {
   const tabela = document.getElementById("auditoriaFiltroTabela").value.trim();
   const usuarioId = document.getElementById("auditoriaFiltroUsuario").value.trim();
+  const de = document.getElementById("auditoriaFiltroDe").value;
+  const ate = document.getElementById("auditoriaFiltroAte").value;
   const params = new URLSearchParams();
   if (tabela) params.set("tabela", tabela);
   if (usuarioId) params.set("usuarioId", usuarioId);
+  if (de) params.set("de", `${de}T00:00:00`);
+  if (ate) params.set("ate", `${ate}T23:59:59`);
 
   const res = await fetchProtegido(`${API_BASE}/auditoria?${params.toString()}`);
   const registros = await res.json();

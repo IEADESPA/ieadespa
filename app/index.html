@@ -85,6 +85,7 @@
           <div class="submenu-aba" id="submenuPessoas">
             <button class="btn-subaba ativo" id="btnSubPessoasCadastrar" onclick="mostrarSubAbaPessoas('cadastrar')"><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
             <button class="btn-subaba" id="btnSubPessoasBuscar" onclick="mostrarSubAbaPessoas('buscar')"><span class="icone">🔍</span><span class="rotulo">Buscar Pessoas</span></button>
+            <button class="btn-subaba" id="btnSubPessoasAprovacoes" onclick="mostrarSubAbaPessoas('aprovacoes')"><span class="icone">📋</span><span class="rotulo">Fila de Aprovações</span></button>
           </div>
           <button class="btn-aba" id="btnAbaCartas" onclick="mostrarAbaSecretaria('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
           <button class="btn-aba" id="btnAbaOrgaos" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
@@ -133,6 +134,102 @@
             </form>
             <p id="resultadoTrocaSenha"></p>
           </div>
+
+          <hr />
+          <h3>✏️ Atualizar meus dados</h3>
+          <p class="subtitle">Dados que você pode corrigir sozinho, sem precisar da Secretaria — baixo risco,
+            ninguém mais sabe isso melhor do que você.</p>
+          <div class="input-group">
+            <label>Telefone/WhatsApp:</label>
+            <input type="tel" id="meuTelefone" placeholder="Ex: (11) 91234-5678" />
+          </div>
+          <div class="input-group">
+            <label>E-mail:</label>
+            <input type="email" id="meuEmail" placeholder="Ex: nome@exemplo.com" />
+          </div>
+          <div class="input-group">
+            <label>Endereço:</label>
+            <input type="text" id="meuEndereco" placeholder="Rua, número, bairro, cidade" />
+          </div>
+          <div class="input-group">
+            <label>Estado Civil:</label>
+            <select id="meuEstadoCivil">
+              <option value="">Não informado</option>
+              <option value="SOLTEIRO">Solteiro(a)</option>
+              <option value="CASADO">Casado(a)</option>
+              <option value="VIUVO">Viúvo(a)</option>
+              <option value="DIVORCIADO">Divorciado(a)</option>
+              <option value="UNIAO_ESTAVEL">União Estável</option>
+            </select>
+          </div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarMeusDadosAcao()">💾 Salvar</button>
+          <p id="resultadoMeusDados" class="subtitle"></p>
+
+          <hr />
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">👪 Meus Vínculos Familiares</h4>
+          <p class="subtitle" style="margin:0 0 8px;">Cadastre você mesmo quem é da sua família no sistema.</p>
+          <div class="barra-lista">
+            <select id="meuVinculoTipo"></select>
+            <input type="number" id="meuVinculoMatriculaParente" placeholder="Matrícula da outra pessoa" style="min-width:180px;" />
+            <label style="display:flex;align-items:center;gap:4px;">
+              <input type="checkbox" id="meuVinculoResponsavelLegal" /> A outra pessoa é meu Responsável Legal
+            </label>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarMeuVinculoAcao()">➕ Adicionar Vínculo</button>
+          </div>
+          <div class="rolagem-tabela"><div id="resultadoListaMeusVinculos"></div></div>
+
+          <hr />
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">📨 Solicitar correção de dados (sujeito a aprovação)</h4>
+          <p class="subtitle" style="margin:0 0 8px;">Esses dados entram em cálculos e registros formais — preencha só o que
+            precisa corrigir; a Secretaria confirma antes de valer.</p>
+          <p id="dadosAtuaisReferencia" class="subtitle" style="margin:0 0 10px;"></p>
+          <div class="input-group">
+            <label>Data de Nascimento:</label>
+            <input type="date" id="solEdicaoDataNascimento" />
+          </div>
+          <div class="input-group">
+            <label>Data de Admissão:</label>
+            <input type="date" id="solEdicaoDataAdmissao" />
+          </div>
+          <div class="input-group">
+            <label>Data do Batismo:</label>
+            <input type="date" id="solEdicaoDataBatismo" />
+          </div>
+          <div class="input-group">
+            <label>Forma de Admissão:</label>
+            <select id="solEdicaoFormaAdmissao">
+              <option value="">Não alterar</option>
+              <option value="BATISMO">Batismo nas águas</option>
+              <option value="CARTA_MUDANCA">Carta de Mudança</option>
+              <option value="RECONCILIACAO">Reconciliação</option>
+              <option value="ACLAMACAO">Aclamação</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Origem/Procedência:</label>
+            <input type="text" id="solEdicaoOrigem" placeholder="Deixe em branco pra não alterar" />
+          </div>
+          <div class="input-group">
+            <label>Igreja Anterior:</label>
+            <input type="text" id="solEdicaoIgrejaAnterior" placeholder="Deixe em branco pra não alterar" />
+          </div>
+          <div class="input-group">
+            <label>Data do Rito de Recebimento:</label>
+            <input type="date" id="solEdicaoDataRitoRecebimento" />
+          </div>
+          <div class="input-group">
+            <label>Nome Lido no Rito:</label>
+            <input type="text" id="solEdicaoNomeLidoRito" placeholder="Deixe em branco pra não alterar" />
+          </div>
+          <div class="input-group">
+            <label>Ministrante do Rito:</label>
+            <input type="text" id="solEdicaoMinistranteRito" placeholder="Deixe em branco pra não alterar" />
+          </div>
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="enviarSolicitacaoEdicaoAcao()">📨 Enviar pra aprovação</button>
+          <p id="resultadoSolicitacaoEdicao" class="subtitle"></p>
+
+          <h4 style="margin:16px 0 10px; color: var(--cor-primaria);">Minhas solicitações de edição</h4>
+          <div class="rolagem-tabela"><div id="resultadoListaSolicitacoesEdicao"></div></div>
         </div>
 
         <!-- SUB-ABA: MEUS DADOS (LGPD) -->
@@ -451,6 +548,14 @@
             <div id="resultadoListaPessoas"></div>
           </div>
           <div class="paginacao" id="pessoasPaginacao"></div>
+        </div>
+
+        <!-- SUB-ABA: FILA DE APROVAÇÕES (v1.11 — pedidos de autoedição sujeitos a aprovação) -->
+        <div id="subPessoasAprovacoes" class="sub-aba-secretaria" style="display:none;">
+          <h3>📋 Fila de Aprovações</h3>
+          <p class="subtitle">Pedidos de correção que o próprio membro enviou pelo Meu Painel — cada campo pode
+            ser aprovado ou rejeitado separadamente, ou tudo de uma vez.</p>
+          <div id="resultadoFilaAprovacoes"></div>
         </div>
 
         <!-- PERFIL DA PESSOA — não é sub-aba do submenu lateral, é uma visão
@@ -839,6 +944,8 @@
         <div class="barra-lista">
           <input type="text" id="auditoriaFiltroTabela" placeholder="Filtrar por tabela (ex: MembroReferencia)" />
           <input type="number" id="auditoriaFiltroUsuario" placeholder="Matrícula do usuário" />
+          <label>De: <input type="date" id="auditoriaFiltroDe" /></label>
+          <label>Até: <input type="date" id="auditoriaFiltroAte" /></label>
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarAuditoria()">🔍 Filtrar</button>
         </div>
         <div class="rolagem-tabela">

@@ -979,16 +979,83 @@ function selecionarOrgaoReunioes(orgaoId) {
   const orgao = orgaos.find(o => o.orgaoId === orgaoId);
   if (!orgao) return;
 
+  const ehAssembleia = orgao.sigla === "ASSEMBLEIA_GERAL";
   window._orgaoAtualReunioes = orgaoId;
   document.getElementById("reuniaoOrgao").value = orgaoId;
   document.getElementById("reunioesOrgaoNome").textContent = orgao.nome;
-  document.getElementById("blocoElegiveisAssembleia").style.display = orgao.sigla === "ASSEMBLEIA_GERAL" ? "block" : "none";
+  document.getElementById("blocoElegiveisAssembleia").style.display = ehAssembleia ? "block" : "none";
+  // Assembleia Geral não abre na hora (Art. 20) — troca o formulário instantâneo
+  // pelo par Convocar (com antecedência) / Iniciar (no dia previsto).
+  document.getElementById("blocoConvocarAssembleia").style.display = ehAssembleia ? "block" : "none";
+  document.getElementById("blocoAbrirReuniaoSimples").style.display = ehAssembleia ? "none" : "block";
   orgaos.forEach(o => {
     const btn = document.getElementById(`btnSubReunioes${o.orgaoId}`);
     if (btn) btn.classList.toggle("ativo", o.orgaoId === orgaoId);
   });
 
+  if (ehAssembleia) carregarConvocacoesPendentes();
   carregarReunioes();
+}
+
+async function carregarConvocacoesPendentes() {
+  const container = document.getElementById("resultadoConvocacoesPendentes");
+  const res = await fetchProtegido(`${API_BASE}/assembleia/convocar`);
+  const convocacoes = await res.json();
+  if (!Array.isArray(convocacoes) || convocacoes.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma convocação pendente.</p>";
+    return;
+  }
+  const TITULOS_TIPO_SESSAO = { AGO: "AGO", AGE_GERAL: "AGE (assuntos gerais)", AGE_ESPECIAL: "AGE (reforma/destituição/eleição)" };
+  container.innerHTML = convocacoes.map(c => {
+    const podeIniciar = c.diasParaPrevista <= 0;
+    const contagem = c.diasParaPrevista > 0 ? `faltam ${c.diasParaPrevista} dia(s)` : (c.diasParaPrevista === 0 ? "é hoje" : "data já passou");
+    return `<div class="cartao-convocacao" style="border:1px solid #e5e5e5;border-radius:8px;padding:10px;margin-bottom:8px;">
+      <strong>${TITULOS_TIPO_SESSAO[c.tipoSessao] || c.tipoSessao}</strong> — prevista para ${c.dataPrevista} (${contagem})<br/>
+      <span class="subtitle">Pauta: ${c.pauta}</span><br/>
+      <button class="btn-confirmar" style="width:auto;margin-top:6px;" ${podeIniciar ? "" : "disabled"} onclick="iniciarSessaoConvocadaAcao(${c.sessaoId})">▶️ Iniciar Sessão</button>
+    </div>`;
+  }).join("");
+}
+
+async function convocarAssembleiaAcao() {
+  const tipoSessao = document.getElementById("convocacaoTipoSessao").value;
+  const dataPrevista = document.getElementById("convocacaoDataPrevista").value;
+  const pauta = document.getElementById("convocacaoPauta").value;
+  const meiosDivulgacao = document.getElementById("convocacaoMeiosDivulgacao").value;
+  const senhaAcesso = document.getElementById("convocacaoSenhaAcesso").value;
+  if (!dataPrevista || !pauta || !senhaAcesso) { mostrarToast("Preencha data prevista, pauta e senha.", "erro"); return; }
+
+  const res = await fetchProtegido(`${API_BASE}/assembleia/convocar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipoSessao, dataPrevista, pauta, meiosDivulgacao, senhaAcesso })
+  });
+  const data = await res.json();
+  document.getElementById("resultadoConvocacao").textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("convocacaoDataPrevista").value = "";
+    document.getElementById("convocacaoPauta").value = "";
+    document.getElementById("convocacaoMeiosDivulgacao").value = "";
+    document.getElementById("convocacaoSenhaAcesso").value = "";
+    carregarConvocacoesPendentes();
+  }
+}
+
+async function iniciarSessaoConvocadaAcao(sessaoId) {
+  const senhaAcesso = await pedirTexto("Senha para a Portaria", "Ex: 1234");
+  if (senhaAcesso === null) return;
+
+  const res = await fetchProtegido(`${API_BASE}/reunioes/abrir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessaoId, senhaAcesso })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    carregarConvocacoesPendentes();
+    carregarReunioes();
+  }
 }
 
 async function abrirReuniao() {

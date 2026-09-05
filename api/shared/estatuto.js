@@ -176,6 +176,39 @@ function elegivelAbandonoMaterial(membro, hoje) {
 const MIN_TENTATIVAS_CONTATO_DIGITAL = 2;
 const DIAS_ABANDONO_DIGITAL = 90;
 
+// Art. 17 (classificação AGO/AGE) e Art. 20 §2º (prazos mínimos de antecedência
+// do Edital de Convocação). Regra jurídica vira função, não dado editável por
+// tela — mesmo espírito de regraQuorumInstalacao logo acima.
+const PRAZOS_CONVOCACAO_DIAS = { AGO: 10, AGE_GERAL: 5, AGE_ESPECIAL: 15 };
+
+function validarConvocacaoAssembleia({ tipoSessao, dataPrevista, hoje }) {
+  if (!PRAZOS_CONVOCACAO_DIAS[tipoSessao]) {
+    return { valido: false, mensagem: `Tipo de sessão inválido. Use um de: ${Object.keys(PRAZOS_CONVOCACAO_DIAS).join(", ")}.` };
+  }
+  const prevista = parseData(dataPrevista);
+  if (!prevista) {
+    return { valido: false, mensagem: "Informe uma data prevista válida." };
+  }
+
+  // Art. 17, I — AGO é anual e obrigatoriamente em dezembro.
+  if (tipoSessao === "AGO" && prevista.getMonth() !== 11) {
+    return { valido: false, mensagem: "A Assembleia Geral Ordinária (AGO) só pode ser realizada em dezembro (Art. 17, I)." };
+  }
+
+  const agora = hoje ? parseData(hoje) || new Date(hoje) : new Date();
+  const diffDias = Math.floor((prevista.getTime() - agora.getTime()) / (1000 * 60 * 60 * 24));
+  const prazoMinimoDias = PRAZOS_CONVOCACAO_DIAS[tipoSessao];
+  if (diffDias < prazoMinimoDias) {
+    return {
+      valido: false,
+      prazoMinimoDias,
+      mensagem: `Antecedência mínima do Edital pra ${tipoSessao} é de ${prazoMinimoDias} dias (Art. 20, §2º) — a data prevista precisa ser daqui a pelo menos ${prazoMinimoDias} dias.`
+    };
+  }
+
+  return { valido: true, mensagem: null, prazoMinimoDias };
+}
+
 module.exports = {
   idadeEm,
   diasDesde,
@@ -189,5 +222,7 @@ module.exports = {
   diasEmAfastamento,
   elegivelAbandonoMaterial,
   MIN_TENTATIVAS_CONTATO_DIGITAL,
-  DIAS_ABANDONO_DIGITAL
+  DIAS_ABANDONO_DIGITAL,
+  PRAZOS_CONVOCACAO_DIAS,
+  validarConvocacaoAssembleia
 };

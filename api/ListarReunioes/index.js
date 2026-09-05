@@ -24,7 +24,7 @@ module.exports = async function (context, req) {
     FROM Sessoes s
     JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
     LEFT JOIN Presencas p ON p.SessaoId = s.SessaoId
-    WHERE 1=1`;
+    WHERE s.Status <> 'CONVOCADA'`; // convocações pendentes da Assembleia aparecem só em ConvocarAssembleia, não aqui
   if (orgaoId) {
     query += ` AND s.OrgaoId = @orgaoId`;
     request.input("orgaoId", sql.Int, orgaoId);

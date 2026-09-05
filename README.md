@@ -606,11 +606,32 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
       prioridade por escopo em vez de trava global — Assembleia exclusiva, demais
       órgãos só travam contra si mesmos) e ganhou a gestão de `Assentos` (cadeira
       institucional) que faltava pra composição mista da CLI funcionar. Ver seção 2.5.
-- [ ] Classificação AGO (dezembro) / AGE (a qualquer tempo) (Art. 17).
-- [ ] Lista de votantes calculada (capacidade ativa — Art. 23 §1º).
-- [ ] Registro de presença (check-in por matrícula) + acesso restrito (Art. 22).
-- [ ] Convocação por Edital com prazos (10/5/15 dias — Art. 20).
-- [ ] Convocação independente da Presidência (1/5 dos membros, CLI, CF ou CEI).
+- [x] Lista de votantes calculada (capacidade ativa — Art. 23 §1º) — já era
+      calculada, nunca marcada: `GET /api/assembleia/elegiveis`
+      (`GestaoElegiveisAssembleia`), exibida em "Elegíveis Atuais". Nunca é
+      marcação manual (Art. 7º §1º) — recalculada a cada leitura a partir de
+      idade/admissão/dízimo/disciplina (`shared/estatuto.js`).
+- [x] Registro de presença (check-in por matrícula) + acesso restrito (Art. 22) —
+      `RegistrarPresenca` só aceita check-in de quem está no `universoDoOrgao`
+      (capacidade ativa + livre de disciplina), então quem não tem direito
+      simplesmente não consegue registrar presença.
+- [x] Classificação AGO (dezembro) / AGE (a qualquer tempo) (Art. 17) + Convocação
+      por Edital com prazos (10/5/15 dias — Art. 20) — v2.1: `Sessoes` ganhou
+      `DataConvocacao`/`DataPrevista`/`Pauta`/`MeiosDivulgacao` (migração 025) e
+      um novo status `CONVOCADA`, anterior a `ABERTA`. `shared/estatuto.js` ganhou
+      `validarConvocacaoAssembleia` (AGO só em dezembro; prazo mínimo por tipo —
+      `PRAZOS_CONVOCACAO_DIAS`). Fluxo em 2 passos, só pra Assembleia Geral (os
+      outros 4 órgãos continuam abrindo reunião na hora, sem essa exigência):
+      **Convocar** (`api/ConvocarAssembleia`, `POST /api/assembleia/convocar`,
+      já com antecedência) → **Iniciar** (`api/AbrirReuniao` aceita `sessaoId`
+      de uma convocação pendente em vez de `descricao`, só libera quando
+      `hoje >= DataPrevista`). Front-end: bloco "📋 Convocar Assembleia" +
+      "Convocações Pendentes" (com contagem regressiva), visível só quando o
+      órgão selecionado no submenu de Reuniões é a Assembleia Geral.
+- [ ] Convocação independente da Presidência (1/5 dos membros, CLI, CF ou CEI) —
+      fora de escopo do v2.1: exige um fluxo de requerimento/assinaturas com
+      contagem de adesão (recurso raro, usado só quando a Presidência se
+      recusa/omite — Art. 20 §3º/§4º); fica pra rodada própria.
 
 #### v2.2 — Assembleia Geral (pautas especiais)
 

@@ -300,24 +300,75 @@
       <div id="abaReunioes" class="aba-secretaria" style="display:none;">
         <input type="hidden" id="reuniaoOrgao" />
 
-        <h3>Abrir Reunião — <span id="reunioesOrgaoNome">…</span></h3>
-        <p class="subtitle">
-          A Assembleia Geral é exclusiva: enquanto ela está aberta, nenhuma outra
-          reunião pode abrir, e ela não abre se já houver outra em andamento. Os
-          demais órgãos só travam contra si mesmos — dá pra ter, por exemplo, CLI e
-          Conselho Fiscal reunidos ao mesmo tempo.
-        </p>
-        <form onsubmit="event.preventDefault(); abrirReuniao();">
-          <div class="input-group">
-            <label>Descrição da reunião:</label>
-            <input type="text" id="descricaoReuniao" placeholder="Ex: Reunião Administrativa de Agosto" />
-          </div>
-          <div class="input-group">
-            <label>Senha para a Portaria:</label>
-            <input type="text" id="senhaNovaReuniao" placeholder="Ex: 1234" />
-          </div>
-          <button class="btn-confirmar" type="submit">▶️ Abrir Reunião</button>
-        </form>
+        <!-- Assembleia Geral não abre na hora (Art. 20 — precisa de Edital com
+             antecedência mínima): convoca-se agora, com data futura, e só depois
+             a sessão é iniciada, quando a data chegar. Os outros 4 órgãos não têm
+             essa exigência estatutária — continuam abrindo na hora, sem convocação. -->
+        <div id="blocoConvocarAssembleia" style="display:none;">
+          <h3>📋 Convocar Assembleia Geral</h3>
+          <p class="subtitle">
+            O Edital precisa ser publicado com antecedência mínima: 10 dias pra AGO,
+            5 dias pra AGE de assuntos gerais, 15 dias pra AGE de reforma estatutária,
+            destituição ou eleição (Art. 20, §2º). A AGO só pode ser marcada pra dezembro
+            (Art. 17, I).
+          </p>
+          <form onsubmit="event.preventDefault(); convocarAssembleiaAcao();">
+            <div class="input-group">
+              <label>Classificação:</label>
+              <select id="convocacaoTipoSessao">
+                <option value="AGO">Assembleia Geral Ordinária (AGO) — dezembro, 10 dias de antecedência</option>
+                <option value="AGE_GERAL">Assembleia Geral Extraordinária (AGE) — assuntos gerais, 5 dias</option>
+                <option value="AGE_ESPECIAL">AGE — reforma estatutária, destituição ou eleição, 15 dias</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Data prevista:</label>
+              <input type="date" id="convocacaoDataPrevista" />
+            </div>
+            <div class="input-group">
+              <label>Pauta (Ordem do Dia):</label>
+              <textarea id="convocacaoPauta" rows="3" placeholder="Ex: Eleição da Diretoria Executiva e do Conselho Fiscal"></textarea>
+            </div>
+            <div class="input-group">
+              <label>Meios de divulgação:</label>
+              <input type="text" id="convocacaoMeiosDivulgacao" placeholder="Ex: Edital afixado na Sede, cultos oficiais e grupo do WhatsApp" />
+            </div>
+            <div class="input-group">
+              <label>Senha para a Portaria (no dia):</label>
+              <input type="text" id="convocacaoSenhaAcesso" placeholder="Ex: 1234" />
+            </div>
+            <button class="btn-confirmar" type="submit">📋 Convocar</button>
+          </form>
+          <p id="resultadoConvocacao"></p>
+
+          <hr />
+
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Convocações Pendentes</h4>
+          <div id="resultadoConvocacoesPendentes"></div>
+
+          <hr />
+        </div>
+
+        <div id="blocoAbrirReuniaoSimples">
+          <h3>Abrir Reunião — <span id="reunioesOrgaoNome">…</span></h3>
+          <p class="subtitle">
+            A Assembleia Geral é exclusiva: enquanto ela está aberta, nenhuma outra
+            reunião pode abrir, e ela não abre se já houver outra em andamento. Os
+            demais órgãos só travam contra si mesmos — dá pra ter, por exemplo, CLI e
+            Conselho Fiscal reunidos ao mesmo tempo.
+          </p>
+          <form onsubmit="event.preventDefault(); abrirReuniao();">
+            <div class="input-group">
+              <label>Descrição da reunião:</label>
+              <input type="text" id="descricaoReuniao" placeholder="Ex: Reunião Administrativa de Agosto" />
+            </div>
+            <div class="input-group">
+              <label>Senha para a Portaria:</label>
+              <input type="text" id="senhaNovaReuniao" placeholder="Ex: 1234" />
+            </div>
+            <button class="btn-confirmar" type="submit">▶️ Abrir Reunião</button>
+          </form>
+        </div>
 
         <p id="resultadoSecretaria"></p>
 

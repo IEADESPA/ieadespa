@@ -467,16 +467,27 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
 #### v1.9 — Registros especiais do membro
 
-*(Gap identificado em varredura Estatuto/Regimento completa, ainda não implementado)*
+*(Gap identificado em varredura Estatuto/Regimento completa)*
 
-- [ ] Registro de Casamentos ministrados pela igreja (Reg. Art. 83): celebrante,
+- [x] Registro de Casamentos ministrados pela igreja (Reg. Art. 83): celebrante,
       modalidade, data de habilitação civil (validade de 90 dias, vedado celebrar
-      nos últimos 5 dias), confirmação de registro em cartório — hoje só o batismo
-      tem rastro (`DataBatismo`), casamento não tem lugar nenhum.
-- [ ] Licença Eclesiástica automática por candidatura política (Reg. Art. 157 §2º):
-      obreiro candidato entra em licença 90 dias antes do pleito, perde o púlpito;
-      Diretoria decide o retorno pós-eleição — status específico, distinto do
-      `LICENÇA` genérico já existente em `StatusMembro` (v1.6).
+      nos últimos 5 dias — avisa, não bloqueia, por ser registro histórico),
+      confirmação de registro em cartório — hoje só o batismo tinha rastro
+      (`DataBatismo`); cônjuge por matrícula (se membro) ou nome livre.
+- [x] Licença Eclesiástica automática por candidatura política (Reg. Art. 157 §2º):
+      obreiro candidato entra em licença 90 dias antes do pleito, perde o púlpito
+      (Assentos/Liderança/Cargo encerrados via `shared/vacancia.js`); Diretoria
+      decide o retorno pós-eleição — status específico `LICENCA_CANDIDATURA`,
+      distinto do `LICENÇA` genérico já existente em `StatusMembro` (v1.6).
+- [x] "Meus Dados" (LGPD, autoatendimento): trava real de consentimento (mesmo
+      padrão da Foto, v1.7) — o consentimento `DADOS_CONTATO` foi generalizado
+      pra cobrir "dados sensíveis" em geral, não só contato, e passou a travar
+      a visualização completa. Exibição reescrita: nada de `JSON.stringify` cru,
+      cartões com rótulos em português e datas formatadas.
+- [x] Submenu em "Meu Painel" (pré-requisito de UX): dividido em 3 sub-abas na
+      barra lateral (Meu Perfil / Meus Dados (LGPD) / Cartas de Trânsito) —
+      mecanismo (`.submenu-aba`/`.btn-subaba`) genérico, pronto pra reaproveitar
+      em Órgãos quando crescer do mesmo jeito.
 
 ### FASE 2 — Governança (órgãos e deliberações)
 

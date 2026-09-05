@@ -75,6 +75,11 @@
         </div>
         <nav class="abas-secretaria" id="navAbasSecretaria">
           <button class="btn-aba ativo" id="btnAbaMeupainel" onclick="mostrarAbaSecretaria('meupainel')"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
+          <div class="submenu-aba" id="submenuMeupainel">
+            <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" onclick="mostrarSubAbaMeupainel('perfil')"><span class="icone">👤</span><span class="rotulo">Meu Perfil</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelLgpd" onclick="mostrarSubAbaMeupainel('lgpd')"><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
+          </div>
           <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
           <button class="btn-aba" id="btnAbaPessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
           <button class="btn-aba" id="btnAbaCartas" onclick="mostrarAbaSecretaria('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
@@ -99,67 +104,77 @@
           <h2 id="tituloModulo">Meu Painel</h2>
         </div>
 
-      <!-- ABA: MEU PAINEL (sempre visível, todo mundo tem) -->
+      <!-- ABA: MEU PAINEL (sempre visível, todo mundo tem) — dividida em 3 sub-abas
+           (submenu na barra lateral, ver #submenuMeupainel) pra não virar uma página
+           só, cada vez mais comprida, conforme o autoatendimento cresce. -->
       <div id="abaMeupainel" class="aba-secretaria">
-        <div id="cartaoPerfilPessoal"></div>
-        <div id="cartaoMeusOrgaos"></div>
-        <div id="resumoStatsPessoal"></div>
-        <div class="rolagem-tabela"><div id="resultadoPainelPessoal"></div></div>
 
-        <!-- Só aparece pra quem logou com senha (tem acesso à Secretaria) -->
-        <div id="cxTrocarSenha" style="display:none; margin-top:24px;">
-          <hr />
-          <h3>🔑 Trocar minha senha</h3>
-          <form onsubmit="event.preventDefault(); trocarMinhaSenha();">
-            <div class="input-group">
-              <label>Nova senha:</label>
-              <input type="password" id="novaSenhaPessoal" placeholder="Digite a nova senha" autocomplete="new-password" />
-            </div>
-            <button class="btn-confirmar" type="submit">Salvar nova senha</button>
-          </form>
-          <p id="resultadoTrocaSenha"></p>
-        </div>
+        <!-- SUB-ABA: MEU PERFIL -->
+        <div id="subMeupainelPerfil" class="sub-aba-secretaria">
+          <div id="cartaoPerfilPessoal"></div>
+          <div id="cartaoMeusOrgaos"></div>
+          <div id="resumoStatsPessoal"></div>
+          <div class="rolagem-tabela"><div id="resultadoPainelPessoal"></div></div>
 
-        <hr />
-        <h3>🔒 Meus Dados (LGPD)</h3>
-        <p class="subtitle">Seus direitos como titular dos dados (LGPD Art. 18): acessar tudo que
-          temos sobre você, controlar o consentimento dos seus dados de contato e pedir
-          acesso, exclusão, retificação ou portabilidade.</p>
-
-        <div class="input-group">
-          <label><input type="checkbox" id="consentimentoDadosContato" onchange="salvarConsentimentoLGPD()" /> Autorizo o uso do meu telefone, e-mail e endereço pela Secretaria</label>
-        </div>
-        <p id="resultadoConsentimentoLGPD" class="subtitle"></p>
-
-        <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarMeusDadosLGPD()">📄 Ver meus dados</button>
-        <div id="cxMeusDadosLGPD" style="display:none; margin-top:12px;"></div>
-
-        <hr />
-        <h3>📨 Cartas de Trânsito</h3>
-        <p class="subtitle">Solicite você mesmo (somente pela sua matrícula). <strong>Carta de Recomendação</strong> e <strong>Atestado de Trânsito Supletivo</strong> (Reg. Art. 131 §1º e §2º, III) saem emitidos na hora — validade de 30 dias, um por vez. A <strong>Carta de Mudança</strong> desliga você do rol e, após 30 dias, seus dados pessoais são minimizados (Reg. Art. 132 §2º).</p>
-        <div class="barra-lista">
-          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="solicitarCarta('RECOMENDACAO')">✉️ Carta de Recomendação</button>
-          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="solicitarCarta('MUDANCA')">📤 Carta de Mudança</button>
-          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="solicitarCarta('ATESTADO_SUPLETIVO')">📄 Atestado de Trânsito Supletivo</button>
-        </div>
-        <p id="resultadoSolicitacaoCarta" class="subtitle"></p>
-        <div id="cxMinhasCartas"></div>
-
-        <hr />
-        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Minhas solicitações</h4>
-        <form onsubmit="event.preventDefault(); criarSolicitacaoLGPD();">
-          <div class="barra-lista">
-            <select id="solicitacaoLgpdTipo">
-              <option value="ACESSO">Acesso aos meus dados</option>
-              <option value="RETIFICACAO">Retificação (corrigir dado errado)</option>
-              <option value="PORTABILIDADE">Portabilidade (exportar meus dados)</option>
-              <option value="EXCLUSAO">Exclusão dos meus dados de contato</option>
-            </select>
-            <input type="text" id="solicitacaoLgpdDescricao" placeholder="Detalhe seu pedido (opcional)" style="min-width:220px;" />
-            <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">📨 Enviar pedido</button>
+          <!-- Só aparece pra quem logou com senha (tem acesso à Secretaria) -->
+          <div id="cxTrocarSenha" style="display:none; margin-top:24px;">
+            <hr />
+            <h3>🔑 Trocar minha senha</h3>
+            <form onsubmit="event.preventDefault(); trocarMinhaSenha();">
+              <div class="input-group">
+                <label>Nova senha:</label>
+                <input type="password" id="novaSenhaPessoal" placeholder="Digite a nova senha" autocomplete="new-password" />
+              </div>
+              <button class="btn-confirmar" type="submit">Salvar nova senha</button>
+            </form>
+            <p id="resultadoTrocaSenha"></p>
           </div>
-        </form>
-        <div class="rolagem-tabela"><div id="resultadoListaSolicitacoesLGPD"></div></div>
+        </div>
+
+        <!-- SUB-ABA: MEUS DADOS (LGPD) -->
+        <div id="subMeupainelLgpd" class="sub-aba-secretaria" style="display:none;">
+          <h3>🔒 Meus Dados (LGPD)</h3>
+          <p class="subtitle">Seus direitos como titular dos dados (LGPD Art. 18): acessar tudo que
+            temos sobre você, controlar o consentimento dos seus dados sensíveis e pedir
+            acesso, exclusão, retificação ou portabilidade.</p>
+
+          <div class="input-group">
+            <label><input type="checkbox" id="consentimentoDadosContato" onchange="salvarConsentimentoLGPD()" /> Autorizo o uso e a minha própria visualização dos meus dados pessoais (contato, foto e demais dados sensíveis) pelo sistema</label>
+          </div>
+          <p id="resultadoConsentimentoLGPD" class="subtitle"></p>
+
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarMeusDadosLGPD()">📄 Ver meus dados</button>
+          <div id="cxMeusDadosLGPD" style="display:none; margin-top:12px;"></div>
+
+          <hr />
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Minhas solicitações</h4>
+          <form onsubmit="event.preventDefault(); criarSolicitacaoLGPD();">
+            <div class="barra-lista">
+              <select id="solicitacaoLgpdTipo">
+                <option value="ACESSO">Acesso aos meus dados</option>
+                <option value="RETIFICACAO">Retificação (corrigir dado errado)</option>
+                <option value="PORTABILIDADE">Portabilidade (exportar meus dados)</option>
+                <option value="EXCLUSAO">Exclusão dos meus dados de contato</option>
+              </select>
+              <input type="text" id="solicitacaoLgpdDescricao" placeholder="Detalhe seu pedido (opcional)" style="min-width:220px;" />
+              <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">📨 Enviar pedido</button>
+            </div>
+          </form>
+          <div class="rolagem-tabela"><div id="resultadoListaSolicitacoesLGPD"></div></div>
+        </div>
+
+        <!-- SUB-ABA: CARTAS DE TRÂNSITO -->
+        <div id="subMeupainelCartas" class="sub-aba-secretaria" style="display:none;">
+          <h3>📨 Cartas de Trânsito</h3>
+          <p class="subtitle">Solicite você mesmo (somente pela sua matrícula). <strong>Carta de Recomendação</strong> e <strong>Atestado de Trânsito Supletivo</strong> (Reg. Art. 131 §1º e §2º, III) saem emitidos na hora — validade de 30 dias, um por vez. A <strong>Carta de Mudança</strong> desliga você do rol e, após 30 dias, seus dados pessoais são minimizados (Reg. Art. 132 §2º).</p>
+          <div class="barra-lista">
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="solicitarCarta('RECOMENDACAO')">✉️ Carta de Recomendação</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="solicitarCarta('MUDANCA')">📤 Carta de Mudança</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="solicitarCarta('ATESTADO_SUPLETIVO')">📄 Atestado de Trânsito Supletivo</button>
+          </div>
+          <p id="resultadoSolicitacaoCarta" class="subtitle"></p>
+          <div id="cxMinhasCartas"></div>
+        </div>
       </div>
 
       <!-- ABA: REUNIÕES (motor único de sessão, qualquer órgão) -->
@@ -418,6 +433,47 @@
             <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarMarcoMembroAcao()">➕ Registrar</button>
           </div>
           <p id="resultadoMarcoMembro"></p>
+        </div>
+
+        <div id="blocoCasamentos" class="cartao-perfil" style="display:none; margin:16px 0;">
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Casamentos de <span id="casamentoMembroNome"></span></h4>
+          <p class="subtitle" style="margin:0 0 8px;">Reg. Art. 83 — celebrante, modalidade e habilitação civil (validade de
+            90 dias, vedado celebrar nos últimos 5 dias).</p>
+          <div class="rolagem-tabela"><div id="resultadoListaCasamentos"></div></div>
+          <hr />
+          <div class="barra-lista">
+            <input type="number" id="casamentoConjugeMatricula" placeholder="Matrícula do cônjuge (se for membro)" style="min-width:220px;" />
+            <input type="text" id="casamentoConjugeNome" placeholder="Nome do cônjuge (se não for membro)" style="min-width:220px;" />
+          </div>
+          <div class="barra-lista">
+            <input type="text" id="casamentoCelebrante" placeholder="Celebrante" style="min-width:180px;" />
+            <select id="casamentoModalidade">
+              <option value="CIVIL_E_RELIGIOSO">Civil e Religioso</option>
+              <option value="SOMENTE_RELIGIOSO">Somente Religioso</option>
+            </select>
+          </div>
+          <div class="barra-lista">
+            <label>Habilitação civil: <input type="date" id="casamentoDataHabilitacao" /></label>
+            <label>Data do casamento: <input type="date" id="casamentoData" /></label>
+            <label style="display:flex;align-items:center;gap:4px;">
+              <input type="checkbox" id="casamentoRegistradoCartorio" /> Já registrado em cartório
+            </label>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarCasamento()">➕ Registrar Casamento</button>
+          </div>
+          <p id="resultadoCasamento"></p>
+        </div>
+
+        <div id="blocoLicencasCandidatura" class="cartao-perfil" style="display:none; margin:16px 0;">
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Licença por Candidatura de <span id="licencaMembroNome"></span></h4>
+          <p class="subtitle" style="margin:0 0 8px;">Reg. Art. 157 §2º — licença automática 90 dias antes do pleito (perde o
+            púlpito); o retorno depende da Diretoria decidir depois da eleição.</p>
+          <div class="rolagem-tabela"><div id="resultadoListaLicencasCandidatura"></div></div>
+          <hr />
+          <div class="barra-lista">
+            <label>Data do pleito: <input type="date" id="licencaDataPleito" /></label>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarLicencaCandidatura()">➕ Registrar Licença</button>
+          </div>
+          <p id="resultadoLicencaCandidatura"></p>
         </div>
 
         <hr />

@@ -235,6 +235,23 @@ function aplicarPermissoesNoMenu() {
   mostrarAbaSecretaria("meupainel");
 }
 
+// Sub-abas de "Meu Painel" (v1.9) — evita empilhar tudo (perfil, LGPD, cartas) numa
+// página só, cada vez mais comprida conforme o autoatendimento ganha mais funções.
+const SUB_ABAS_MEUPAINEL = ["perfil", "lgpd", "cartas"];
+const TITULOS_SUB_MEUPAINEL = { perfil: "Meu Perfil", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito" };
+let subAbaMeupainelAtual = "perfil";
+
+function mostrarSubAbaMeupainel(sub) {
+  subAbaMeupainelAtual = sub;
+  SUB_ABAS_MEUPAINEL.forEach(nome => {
+    document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
+    document.getElementById(`btnSubMeupainel${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
+  });
+  document.getElementById("tituloModulo").textContent = `Meu Painel — ${TITULOS_SUB_MEUPAINEL[sub]}`;
+  if (sub === "cartas") carregarMinhasCartas();
+  if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); }
+}
+
 function mostrarAbaSecretaria(aba) {
   NOMES_ABAS.forEach(nome => {
     const podeVer = nome === "meupainel" || nome === "documentos" || permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
@@ -244,8 +261,11 @@ function mostrarAbaSecretaria(aba) {
     const btn = document.getElementById(`btnAba${capitalize(nome)}`);
     if (btn) btn.classList.toggle("ativo", nome === aba);
   });
+  if (aba === "meupainel") {
+    mostrarSubAbaMeupainel(subAbaMeupainelAtual);
+    return;
+  }
   document.getElementById("tituloModulo").textContent = TITULOS_MODULOS[aba] || "Governança";
-  if (aba === "meupainel") carregarMinhasCartas();
   if (aba === "reunioes") { carregarOpcoesOrgaosReuniao().then(carregarReunioes); carregarElegiveisAssembleia(); }
   if (aba === "pessoas") { carregarOpcoesFormPessoa(); carregarPessoas(); }
   if (aba === "cartas") { carregarCartas(); processarSaidasCartas(); }
@@ -1431,6 +1451,8 @@ function renderizarPessoas() {
         <button class="btn-link" onclick="editarPessoa(${p.membroId})">Editar</button>
         <button class="btn-link" onclick="verHistoricoMembro(${p.membroId})">🕒 Histórico</button>
         <button class="btn-link" onclick="verFotoMembro(${p.membroId})">📷 Foto</button>
+        <button class="btn-link" onclick="verCasamentosMembro(${p.membroId})">💍 Casamentos</button>
+        <button class="btn-link" onclick="verLicencasCandidaturaMembro(${p.membroId})">🗳️ Licença Candidatura</button>
         ${p.status !== "DESLIGADO" ? `<button class="btn-link btn-link-perigo" onclick="desligarPessoa(${p.membroId})">Desligar</button>` : ""}
       </td>
     </tr>`;
@@ -1943,6 +1965,183 @@ async function enviarFotoMembroAcao() {
     input.value = "";
     carregarPessoas();
     verFotoMembro(membroId);
+  }
+}
+
+// ---- CASAMENTOS (v1.9 — Reg. Art. 83) ----
+const ROTULO_MODALIDADE_CASAMENTO = { CIVIL_E_RELIGIOSO: "Civil e Religioso", SOMENTE_RELIGIOSO: "Somente Religioso" };
+
+async function verCasamentosMembro(membroId) {
+  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
+  window._membroCasamentosAtual = membroId;
+  document.getElementById("casamentoMembroNome").textContent = pessoa ? pessoa.nome : `matrícula ${membroId}`;
+  document.getElementById("blocoCasamentos").style.display = "block";
+  document.getElementById("blocoCasamentos").scrollIntoView({ behavior: "smooth", block: "start" });
+  await carregarCasamentos(membroId);
+}
+
+async function carregarCasamentos(membroId) {
+  const container = document.getElementById("resultadoListaCasamentos");
+  const res = await fetchProtegido(`${API_BASE}/casamentos?membroId=${membroId}`);
+  const casamentos = await res.json();
+  if (!Array.isArray(casamentos) || casamentos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum casamento registrado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Cônjuge</th><th>Modalidade</th><th>Celebrante</th><th>Data</th><th>Cartório</th><th></th>
+  </tr></thead><tbody>`;
+  casamentos.forEach(c => {
+    html += `<tr>
+      <td>${c.nomeMembroConjuge || c.nomeConjuge || "-"}</td>
+      <td>${ROTULO_MODALIDADE_CASAMENTO[c.modalidade] || c.modalidade}</td>
+      <td>${c.celebrante || "-"}</td>
+      <td>${c.dataCasamento || "-"}</td>
+      <td>${c.registradoCartorio ? "✅ Sim" : "Não"}</td>
+      <td><button class="btn-link btn-link-perigo" onclick="excluirCasamentoAcao(${c.casamentoId})">Excluir</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarCasamento() {
+  const membroId = window._membroCasamentosAtual;
+  const msg = document.getElementById("resultadoCasamento");
+  if (!membroId) return;
+
+  const membroConjugeId = document.getElementById("casamentoConjugeMatricula").value || null;
+  const nomeConjuge = document.getElementById("casamentoConjugeNome").value.trim() || null;
+  const celebrante = document.getElementById("casamentoCelebrante").value.trim() || null;
+  const modalidade = document.getElementById("casamentoModalidade").value;
+  const dataHabilitacaoCivil = document.getElementById("casamentoDataHabilitacao").value || null;
+  const dataCasamento = document.getElementById("casamentoData").value;
+  const registradoCartorio = document.getElementById("casamentoRegistradoCartorio").checked;
+
+  if (!dataCasamento) { msg.textContent = "Informe a data do casamento."; return; }
+  if (!membroConjugeId && !nomeConjuge) { msg.textContent = "Informe o cônjuge: matrícula ou nome."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/casamentos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, membroConjugeId, nomeConjuge, celebrante, modalidade, dataHabilitacaoCivil, dataCasamento, registradoCartorio })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.aviso || "";
+  if (data.sucesso) {
+    document.getElementById("casamentoConjugeMatricula").value = "";
+    document.getElementById("casamentoConjugeNome").value = "";
+    document.getElementById("casamentoCelebrante").value = "";
+    document.getElementById("casamentoDataHabilitacao").value = "";
+    document.getElementById("casamentoData").value = "";
+    document.getElementById("casamentoRegistradoCartorio").checked = false;
+    carregarCasamentos(membroId);
+  }
+}
+
+async function excluirCasamentoAcao(casamentoId) {
+  if (!(await confirmarAcao("Confirma excluir este registro de casamento? (correção de lançamento)", "Excluir"))) return;
+  const res = await fetchProtegido(`${API_BASE}/casamentos/${casamentoId}`, { method: "DELETE" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarCasamentos(window._membroCasamentosAtual);
+}
+
+// ---- LICENÇA POR CANDIDATURA (v1.9 — Reg. Art. 157 §2º) ----
+const ROTULO_STATUS_LICENCA = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou" };
+
+async function verLicencasCandidaturaMembro(membroId) {
+  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
+  window._membroLicencasAtual = membroId;
+  document.getElementById("licencaMembroNome").textContent = pessoa ? pessoa.nome : `matrícula ${membroId}`;
+  document.getElementById("blocoLicencasCandidatura").style.display = "block";
+  document.getElementById("blocoLicencasCandidatura").scrollIntoView({ behavior: "smooth", block: "start" });
+  await carregarLicencasCandidatura(membroId);
+}
+
+async function carregarLicencasCandidatura(membroId) {
+  const container = document.getElementById("resultadoListaLicencasCandidatura");
+  const res = await fetchProtegido(`${API_BASE}/licencas-candidatura?membroId=${membroId}`);
+  const licencas = await res.json();
+  if (!Array.isArray(licencas) || licencas.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma licença por candidatura registrada ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Pleito</th><th>Início da Licença</th><th>Status</th><th></th>
+  </tr></thead><tbody>`;
+  licencas.forEach(l => {
+    html += `<tr>
+      <td>${l.dataPleito || "-"}</td>
+      <td>${l.dataInicioLicenca || "-"}</td>
+      <td>${ROTULO_STATUS_LICENCA[l.status] || l.status}</td>
+      <td>${l.status === "EM_LICENCA" ? `<button class="btn-link" onclick="registrarRetornoLicencaAcao(${l.licencaId})">Registrar retorno</button>` : "-"}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarLicencaCandidatura() {
+  const membroId = window._membroLicencasAtual;
+  const msg = document.getElementById("resultadoLicencaCandidatura");
+  if (!membroId) return;
+
+  const dataPleito = document.getElementById("licencaDataPleito").value;
+  if (!dataPleito) { msg.textContent = "Informe a data do pleito."; return; }
+
+  if (!(await confirmarAcao("Confirma registrar a licença por candidatura? A pessoa perde Assentos/Liderança/Cargo até a Diretoria decidir o retorno.", "Registrar Licença"))) return;
+
+  const res = await fetchProtegido(`${API_BASE}/licencas-candidatura`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, dataPleito })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("licencaDataPleito").value = "";
+    carregarLicencasCandidatura(membroId);
+    carregarPessoas();
+  }
+}
+
+// Promise<boolean|null> — true = retornou, false = não retornou, null = cancelou.
+function pedirDecisaoRetornoLicenca() {
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Registrar retorno da Licença por Candidatura</h3>
+      <p class="subtitle">Decisão da Diretoria após o pleito. Se retornou, o status do membro volta pra ATIVO
+        (Cargo/Assentos precisam ser reatribuídos manualmente). Se não retornou, o status do membro não muda
+        sozinho — o próximo passo (ex: desligamento) fica por conta de quem está operando.</p>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar btn-perigo" id="modalNaoRetornou">Não retornou</button>
+        <button class="btn-confirmar" id="modalRetornou">Retornou</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    document.getElementById("modalRetornou").onclick = () => { fecharModal(); resolve(true); };
+    document.getElementById("modalNaoRetornou").onclick = () => { fecharModal(); resolve(false); };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
+async function registrarRetornoLicencaAcao(licencaId) {
+  const retornou = await pedirDecisaoRetornoLicenca();
+  if (retornou === null) return;
+
+  const res = await fetchProtegido(`${API_BASE}/licencas-candidatura/${licencaId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ retornou })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    carregarLicencasCandidatura(window._membroLicencasAtual);
+    carregarPessoas();
   }
 }
 
@@ -2792,26 +2991,89 @@ async function salvarConsentimentoLGPD() {
   if (data.sucesso) carregarConsentimentoLGPD(matricula);
 }
 
-let meusDadosLgpdCarregados = false;
+// Formata um valor de "Meus Dados" pra exibição — nunca null/vazio cru, nunca
+// chave de código aparecendo em tela. Datas em ISO (YYYY-MM-DD ou timestamp)
+// viram pt-BR; o resto some com "-" quando vazio.
+function formatarValorLgpd(valor, tipo) {
+  if (valor === null || valor === undefined || valor === "") return "-";
+  if (tipo === "data") {
+    const d = new Date(valor);
+    return isNaN(d) ? "-" : d.toLocaleDateString("pt-BR");
+  }
+  if (tipo === "dataHora") {
+    const d = new Date(valor);
+    return isNaN(d) ? "-" : d.toLocaleString("pt-BR");
+  }
+  if (tipo === "bit") return valor ? "Sim" : "Não";
+  return String(valor);
+}
+
+function linhaLgpd(rotulo, valor, tipo) {
+  return `<p class="linha-perfil"><strong>${rotulo}:</strong> ${formatarValorLgpd(valor, tipo)}</p>`;
+}
+
 async function alternarMeusDadosLGPD() {
   const caixa = document.getElementById("cxMeusDadosLGPD");
   const abrindo = caixa.style.display === "none";
   caixa.style.display = abrindo ? "block" : "none";
-  if (!abrindo || meusDadosLgpdCarregados || !authMatricula) return;
+  if (!abrindo) return;
 
   const res = await fetch(`${API_BASE}/lgpd/meus-dados/${authMatricula}`);
   const data = await res.json();
+
+  if (data.precisaConsentimento) {
+    caixa.innerHTML = `<p class="subtitle">🔒 ${data.mensagem}</p>`;
+    return;
+  }
   if (!data.sucesso) { caixa.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
-  meusDadosLgpdCarregados = true;
+
+  const m = data.membro;
+  const ROTULO_MODALIDADE = { CIVIL_E_RELIGIOSO: "Civil e Religioso", SOMENTE_RELIGIOSO: "Somente Religioso" };
+  const ROTULO_STATUS_LIC = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou" };
 
   caixa.innerHTML = `
     <div class="cartao-perfil">
-      <p class="linha-perfil"><strong>Cadastro:</strong> ${data.membro.nome} · ${data.membro.telefone || "sem telefone"} · ${data.membro.email || "sem e-mail"} · ${data.membro.endereco || "sem endereço"}</p>
-      <p class="linha-perfil"><strong>Acessos (liderança):</strong> ${data.liderancas.map(l => l.papel).join(", ") || "nenhum"}</p>
-      <p class="linha-perfil"><strong>Assentos:</strong> ${data.assentos.length} · <strong>Processos disciplinares:</strong> ${data.processosDisciplinares.length} · <strong>Vínculos familiares:</strong> ${data.vinculosFamiliares.length}</p>
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Cadastrais</h4>
+      ${linhaLgpd("Nome", m.nome)}
+      ${linhaLgpd("Congregação", m.congregacao)}
+      ${linhaLgpd("Status", m.status)}
+      ${linhaLgpd("Situação", m.situacaoMembro)}
+      ${linhaLgpd("Data de Nascimento", m.dataNascimento, "data")}
+      ${linhaLgpd("Data de Admissão", m.dataAdmissao, "data")}
+      ${linhaLgpd("Forma de Admissão", m.formaAdmissao)}
+      ${linhaLgpd("Data do Batismo", m.dataBatismo, "data")}
+      ${linhaLgpd("Telefone", m.telefone)}
+      ${linhaLgpd("E-mail", m.email)}
+      ${linhaLgpd("Endereço", m.endereco)}
+      ${linhaLgpd("Cadastrado em", m.criadoEm, "dataHora")}
     </div>
-    <p class="subtitle">Cópia completa (portabilidade — copie/salve o texto abaixo se precisar):</p>
-    <textarea readonly rows="10" style="width:100%; font-family: monospace; font-size:12px;">${JSON.stringify(data, null, 2)}</textarea>`;
+
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Acessos e Vínculos</h4>
+      ${linhaLgpd("Acessos (liderança)", data.liderancas.map(l => l.papel).join(", "))}
+      ${linhaLgpd("Assentos em órgãos", data.assentos.map(a => `${a.orgao}${a.cargoOuFuncao ? " — " + a.cargoOuFuncao : ""}`).join(", "))}
+      ${linhaLgpd("Vínculos familiares", data.vinculosFamiliares.map(v => `${v.parente} (${v.vinculo})`).join(", "))}
+      ${linhaLgpd("Processos disciplinares", data.processosDisciplinares.length ? `${data.processosDisciplinares.length} registrado(s)` : null)}
+    </div>
+
+    ${data.casamentos.length ? `
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Casamentos</h4>
+      ${data.casamentos.map(c => `<p class="linha-perfil">${formatarValorLgpd(c.dataCasamento, "data")} · ${c.conjuge || "-"} · ${ROTULO_MODALIDADE[c.modalidade] || c.modalidade}</p>`).join("")}
+    </div>` : ""}
+
+    ${data.licencasCandidatura.length ? `
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Licenças por Candidatura</h4>
+      ${data.licencasCandidatura.map(l => `<p class="linha-perfil">Pleito em ${formatarValorLgpd(l.dataPleito, "data")} · ${ROTULO_STATUS_LIC[l.status] || l.status}</p>`).join("")}
+    </div>` : ""}
+
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Consentimentos LGPD</h4>
+      ${data.consentimentos.map(c => `<p class="linha-perfil">${c.tipo} — ${c.concedido ? "✅ Concedido" : "❌ Revogado"} em ${formatarValorLgpd(c.dataRegistro, "dataHora")}</p>`).join("") || "<p class='subtitle'>Nenhum registrado.</p>"}
+    </div>
+
+    <p class="subtitle" style="margin-top:12px;">Gerado em ${formatarValorLgpd(data.geradoEm, "dataHora")}. Precisa de uma cópia formal? Use "Enviar pedido" abaixo com o tipo "Portabilidade".</p>`;
 }
 
 async function criarSolicitacaoLGPD() {

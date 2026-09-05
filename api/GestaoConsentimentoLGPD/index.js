@@ -3,6 +3,9 @@
 // GET  /api/lgpd/consentimento/{matricula}  -> estado atual (mais recente) por Tipo
 // POST /api/lgpd/consentimento/{matricula}  -> body: { tipo?, concedido, observacao? }
 //      Grava um novo evento (trilha append-only: nunca sobrescreve o anterior).
+// v1.9: o Tipo padrão (DADOS_CONTATO) foi generalizado — não é mais só "usar meu
+// telefone/e-mail", virou a trava de "ver todos os meus dados sensíveis" também
+// (ver MeusDadosLGPD). Mesmo registro, só o rótulo em tela mudou.
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 

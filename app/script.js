@@ -2145,8 +2145,16 @@ function abrirRecorteFoto(arquivo) {
   const VIEW = 280;
   return new Promise((resolve) => {
     const leitor = new FileReader();
+    leitor.onerror = () => {
+      mostrarToast("Não consegui ler essa imagem. Tente outra foto.", "erro");
+      resolve(null);
+    };
     leitor.onload = () => {
       const img = new Image();
+      img.onerror = () => {
+        mostrarToast("Esse arquivo não é uma imagem válida (ou o formato não é suportado). Tente outra foto.", "erro");
+        resolve(null);
+      };
       img.onload = () => {
         const caixa = document.getElementById("modalCaixa");
         caixa.innerHTML = `

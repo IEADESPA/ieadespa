@@ -156,7 +156,7 @@
             fazer o upload.</p>
           <div id="minhaFotoPreview" style="margin:0 0 10px;"></div>
           <div class="barra-lista">
-            <input type="file" id="minhaFotoArquivo" accept="image/png,image/jpeg,image/webp" capture="user" />
+            <input type="file" id="minhaFotoArquivo" accept="image/*" capture />
             <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarMinhaFotoAcao()">📷 Enviar Foto</button>
           </div>
           <p id="resultadoMinhaFoto" class="subtitle"></p>
@@ -510,7 +510,7 @@
             <p id="fotoMembroStatusConsentimento" class="subtitle"></p>
             <div class="barra-lista">
               <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="concederConsentimentoFotoAcao()">✅ Conceder Consentimento de Foto</button>
-              <input type="file" id="fotoMembroArquivo" accept="image/png,image/jpeg,image/webp" capture="environment" />
+              <input type="file" id="fotoMembroArquivo" accept="image/*" capture />
               <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarFotoMembroAcao()">📷 Enviar Foto</button>
             </div>
             <p id="resultadoFotoMembro"></p>

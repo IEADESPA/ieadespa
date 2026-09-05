@@ -181,7 +181,7 @@ const DIAS_ABANDONO_DIGITAL = 90;
 // tela — mesmo espírito de regraQuorumInstalacao logo acima.
 const PRAZOS_CONVOCACAO_DIAS = { AGO: 10, AGE_GERAL: 5, AGE_ESPECIAL: 15 };
 
-function validarConvocacaoAssembleia({ tipoSessao, dataPrevista, hoje }) {
+function validarConvocacaoAssembleia({ tipoSessao, dataPrevista, hoje, prazoMinimoDias: prazoForcado }) {
   if (!PRAZOS_CONVOCACAO_DIAS[tipoSessao]) {
     return { valido: false, mensagem: `Tipo de sessão inválido. Use um de: ${Object.keys(PRAZOS_CONVOCACAO_DIAS).join(", ")}.` };
   }
@@ -197,16 +197,116 @@ function validarConvocacaoAssembleia({ tipoSessao, dataPrevista, hoje }) {
 
   const agora = hoje ? parseData(hoje) || new Date(hoje) : new Date();
   const diffDias = Math.floor((prevista.getTime() - agora.getTime()) / (1000 * 60 * 60 * 24));
-  const prazoMinimoDias = PRAZOS_CONVOCACAO_DIAS[tipoSessao];
+  // prazoForcado vem de derivarClassificacaoAssembleia quando alguma matéria selecionada
+  // exige o prazo especial de 15 dias (Art. 20 §2º, III) mesmo em cima de uma AGO/AGE_GERAL.
+  const prazoMinimoDias = prazoForcado != null ? prazoForcado : PRAZOS_CONVOCACAO_DIAS[tipoSessao];
   if (diffDias < prazoMinimoDias) {
     return {
       valido: false,
       prazoMinimoDias,
-      mensagem: `Antecedência mínima do Edital pra ${tipoSessao} é de ${prazoMinimoDias} dias (Art. 20, §2º) — a data prevista precisa ser daqui a pelo menos ${prazoMinimoDias} dias.`
+      mensagem: `Antecedência mínima do Edital é de ${prazoMinimoDias} dias (Art. 20, §2º) — a data prevista precisa ser daqui a pelo menos ${prazoMinimoDias} dias.`
     };
   }
 
   return { valido: true, mensagem: null, prazoMinimoDias };
+}
+
+// Art. 18 — competências privativas da Assembleia Geral. Cada matéria carrega
+// DUAS regras independentes (o Estatuto trata prazo e quórum em artigos
+// diferentes, com critérios diferentes — não dá pra derivar um do outro):
+// - prazoEspecial: exige os 15 dias do Art. 20 §2º, III (reforma estatutária,
+//   destituição OU ELEIÇÃO — os 3 citados nominalmente ali).
+// - quorumTipo: GERAL (Art. 21, I — inclui eleição, contas e ratificação de
+//   atos, 2 estágios) ou REFORMA_DESTITUICAO (Art. 21, II — só reforma
+//   estatutária e destituição, 3 estágios com reconvocação).
+// Convocar a Assembleia exige escolher pelo menos 1 matéria daqui — não dá
+// pra convocar "pra qualquer assunto": ou é competência privativa de verdade,
+// ou não compensa convocar a Assembleia (os outros órgãos já têm alçada).
+const MATERIAS_PRIVATIVAS_ASSEMBLEIA = {
+  ELEICAO_DIRETORIA_CONSELHO_FISCAL: { rotulo: "Eleger a Diretoria Executiva e o Conselho Fiscal (Art. 18, I)", prazoEspecial: true, quorumTipo: "GERAL" },
+  DESTITUICAO: { rotulo: "Destituir administrador, conselheiro ou ocupante de cargo/função (Art. 18, II)", prazoEspecial: true, quorumTipo: "REFORMA_DESTITUICAO" },
+  REFORMA_ESTATUTARIA: { rotulo: "Reformar o Estatuto (Art. 18, III)", prazoEspecial: true, quorumTipo: "REFORMA_DESTITUICAO" },
+  APROVACAO_CONTAS: { rotulo: "Aprovar contas e balanço patrimonial (Art. 18, IV)", prazoEspecial: false, quorumTipo: "GERAL" },
+  ALIENACAO_IMOVEL: { rotulo: "Autorizar alienação/oneração de imóvel acima do Teto de Alçada (Art. 18, V)", prazoEspecial: false, quorumTipo: "GERAL" },
+  HOMOLOGACAO_PASTOR_PRESIDENTE: { rotulo: "Homologar e eleger o Pastor Presidente (Art. 18, VI)", prazoEspecial: true, quorumTipo: "GERAL" },
+  RATIFICACAO_CLI: { rotulo: "Ratificar/retificar deliberação da CLI (Art. 18, VII)", prazoEspecial: false, quorumTipo: "GERAL" }
+};
+
+// Reforma do Núcleo Fundamental (Art. 70/71 — nome da igreja, vínculo com o
+// SETA) não é matéria própria: é um agravante de REFORMA_ESTATUTARIA que troca
+// o quórum de 3 estágios pelo Rito de Reforma Dificultada (90% dos presentes).
+function derivarClassificacaoAssembleia({ materias, reformaNucleoFundamental, ehAnual }) {
+  const codigos = Array.isArray(materias) ? materias : [];
+  if (codigos.length === 0) {
+    return { valido: false, mensagem: "Selecione ao menos uma matéria (competência privativa, Art. 18) pra convocar a Assembleia." };
+  }
+  const invalida = codigos.find(c => !MATERIAS_PRIVATIVAS_ASSEMBLEIA[c]);
+  if (invalida) {
+    return { valido: false, mensagem: `Matéria inválida: ${invalida}.` };
+  }
+  if (reformaNucleoFundamental && !codigos.includes("REFORMA_ESTATUTARIA")) {
+    return { valido: false, mensagem: "\"Envolve o Núcleo Fundamental\" só se aplica junto com \"Reformar o Estatuto\" (Art. 70/71)." };
+  }
+
+  const exigePrazoEspecial = codigos.some(c => MATERIAS_PRIVATIVAS_ASSEMBLEIA[c].prazoEspecial);
+  const exigeReformaDestituicao = codigos.some(c => MATERIAS_PRIVATIVAS_ASSEMBLEIA[c].quorumTipo === "REFORMA_DESTITUICAO");
+
+  const quorumTipo = reformaNucleoFundamental ? "REFORMA_DIFICULTADA" : (exigeReformaDestituicao ? "REFORMA_DESTITUICAO" : "GERAL");
+  const tipoSessao = ehAnual ? "AGO" : (exigePrazoEspecial ? "AGE_ESPECIAL" : "AGE_GERAL");
+  // AGO respeita seu próprio mínimo de 10 dias, mas se a pauta também exige o
+  // prazo especial de 15 (Art. 20 §2º, III), esse maior prevalece mesmo em AGO.
+  const prazoMinimoDias = exigePrazoEspecial ? 15 : PRAZOS_CONVOCACAO_DIAS[tipoSessao];
+
+  return { valido: true, tipoSessao, quorumTipo, prazoMinimoDias };
+}
+
+// Art. 21, II — reforma estatutária e destituição de administradores: 3
+// estágios (não os 2 de matéria geral). Mesmo espírito de avaliarQuorumInstalacao:
+// não automatiza a passagem de tempo entre convocações (quem preside decide isso
+// ao vivo) — só informa os 2 patamares (maioria absoluta / 1/3) de uma vez, pra
+// quem estiver conduzindo a sessão ler e decidir. `ehReconvocacao` (a própria
+// sessão tem VinculadaSessaoId) já dispensa os dois patamares — Art. 21, II, "c"
+// instala com qualquer número de presentes.
+function avaliarQuorumReformaDestituicao(totalPresentes, totalUniverso, ehReconvocacao) {
+  if (ehReconvocacao) {
+    return {
+      quorumAtingido: totalPresentes > 0,
+      mensagem: "Reconvocação (Art. 21, II, \"c\"): instala com qualquer número de presentes."
+    };
+  }
+
+  const maioriaAbsolutaNecessaria = Math.floor(totalUniverso / 2) + 1;
+  const umTercoNecessario = Math.ceil(totalUniverso / 3);
+  const maioriaAtingida = totalUniverso > 0 && totalPresentes >= maioriaAbsolutaNecessaria;
+  if (maioriaAtingida) {
+    return {
+      quorumAtingido: true, maioriaAbsolutaNecessaria,
+      mensagem: "Quórum de maioria absoluta atingido em 1ª convocação (reforma/destituição)."
+    };
+  }
+
+  const umTercoAtingido = totalUniverso > 0 && totalPresentes >= umTercoNecessario;
+  return {
+    quorumAtingido: umTercoAtingido, maioriaAbsolutaNecessaria, umTercoNecessario,
+    mensagem: umTercoAtingido
+      ? `Não atingiu maioria absoluta (${maioriaAbsolutaNecessaria} de ${totalUniverso}), mas atingiu 1/3 (${umTercoNecessario}) — válido em 2ª convocação, 30 minutos depois.`
+      : `Não atingiu maioria absoluta nem 1/3 (${umTercoNecessario} de ${totalUniverso} necessários em 2ª convocação) — só resta reconvocar, com antecedência mínima de 15 dias (Art. 21, II, "c"), uma única vez.`
+  };
+}
+
+// Art. 71 §1º — Rito de Reforma Dificultada (Núcleo Fundamental). O sistema não
+// tem recurso de votação em lugar nenhum (nada regista "sim"/"não" por pessoa),
+// então isso é só informativo: quantos votos favoráveis equivalem a 90% dos
+// presentes. Unanimidade prévia da CLI e homologação da Convenção são
+// pré/pós-requisitos fora do alcance deste sistema.
+function avaliarQuorumReformaDificultada(totalPresentes) {
+  const votosNecessarios = Math.ceil(totalPresentes * 0.9);
+  return {
+    votosNecessarios,
+    totalPresentes,
+    mensagem: `Rito de Reforma Dificultada (Art. 71 §1º): exige aprovação de ${votosNecessarios} de ${totalPresentes} presentes (90%), ` +
+      `além de unanimidade prévia da CLI e homologação formal da CIADSETA-PARÁ — registre essas duas por fora, o sistema não as acompanha.`
+  };
 }
 
 module.exports = {
@@ -224,5 +324,9 @@ module.exports = {
   MIN_TENTATIVAS_CONTATO_DIGITAL,
   DIAS_ABANDONO_DIGITAL,
   PRAZOS_CONVOCACAO_DIAS,
-  validarConvocacaoAssembleia
+  validarConvocacaoAssembleia,
+  MATERIAS_PRIVATIVAS_ASSEMBLEIA,
+  derivarClassificacaoAssembleia,
+  avaliarQuorumReformaDestituicao,
+  avaliarQuorumReformaDificultada
 };

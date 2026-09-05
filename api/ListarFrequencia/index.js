@@ -22,7 +22,8 @@ module.exports = async function (context, req) {
   const pool = await getPool();
   const sessaoResult = await pool.request().input("id", sql.Int, sessaoId).query(`
     SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, Descricao AS descricao,
-           CONVERT(varchar(10), DataSessao, 120) AS dataSessao, Status AS status
+           CONVERT(varchar(10), DataSessao, 120) AS dataSessao, Status AS status,
+           QuorumTipo AS quorumTipo, VinculadaSessaoId AS vinculadaSessaoId, Materias AS materias
     FROM Sessoes WHERE SessaoId = @id`);
   const sessao = sessaoResult.recordset[0];
   if (!sessao) {
@@ -54,29 +55,40 @@ module.exports = async function (context, req) {
   const totalPresentesGeral = presencasResult.recordset.filter(f => f.presente).length;
   const percentualPresenca = totalAtivos > 0 ? Math.round((totalPresentesGeral / totalAtivos) * 100) : 0;
 
-  // Assembleia Geral e CLI usam o quórum de instalação em 2 estágios do Estatuto (maioria
-  // absoluta em 1ª convocação, qualquer número 30 min depois em 2ª — ver estatuto.js). Os
-  // demais órgãos ainda usam o percentual fixo genérico (QuorumMinimoPct), enquanto não têm
-  // regra própria definida.
-  const quorumEstatuto = orgao ? estatuto.avaliarQuorumInstalacao(orgao.sigla, totalPresentesGeral, totalAtivos) : null;
-  const quorum = quorumEstatuto
-    ? {
-        totalAtivos,
-        totalPresentes: totalPresentesGeral,
-        percentualPresenca,
-        quorumMinimoPct: null,
-        quorumAtingido: quorumEstatuto.maioriaAbsolutaAtingida,
-        maioriaAbsolutaNecessaria: quorumEstatuto.maioriaAbsolutaNecessaria,
-        mensagemQuorum: quorumEstatuto.mensagem
-      }
-    : {
-        totalAtivos,
-        totalPresentes: totalPresentesGeral,
-        percentualPresenca,
-        quorumMinimoPct: orgao ? orgao.quorumMinimoPct : null,
-        quorumAtingido: orgao && orgao.quorumMinimoPct != null ? percentualPresenca >= orgao.quorumMinimoPct : null,
-        mensagemQuorum: null
-      };
+  // v2.2 — o quórum aplicável agora vem do QuorumTipo gravado na própria sessão
+  // (derivado das matérias na convocação — ver ConvocarAssembleia/estatuto.js),
+  // não mais implícito só pelo órgão. REFORMA_DESTITUICAO (Art. 21, II) e
+  // REFORMA_DIFICULTADA (Art. 71 §1º) só existem pra Assembleia Geral; CLI e os
+  // demais órgãos continuam sempre em GERAL (2 estágios, ou percentual fixo
+  // genérico enquanto não tiverem regra própria).
+  let quorum;
+  if (sessao.quorumTipo === "REFORMA_DESTITUICAO") {
+    const r = estatuto.avaliarQuorumReformaDestituicao(totalPresentesGeral, totalAtivos, !!sessao.vinculadaSessaoId);
+    quorum = { totalAtivos, totalPresentes: totalPresentesGeral, percentualPresenca, quorumMinimoPct: null, ...r, mensagemQuorum: r.mensagem };
+  } else if (sessao.quorumTipo === "REFORMA_DIFICULTADA") {
+    const r = estatuto.avaliarQuorumReformaDificultada(totalPresentesGeral);
+    quorum = { totalAtivos, totalPresentes: totalPresentesGeral, percentualPresenca, quorumMinimoPct: null, quorumAtingido: null, ...r, mensagemQuorum: r.mensagem };
+  } else {
+    const quorumEstatuto = orgao ? estatuto.avaliarQuorumInstalacao(orgao.sigla, totalPresentesGeral, totalAtivos) : null;
+    quorum = quorumEstatuto
+      ? {
+          totalAtivos,
+          totalPresentes: totalPresentesGeral,
+          percentualPresenca,
+          quorumMinimoPct: null,
+          quorumAtingido: quorumEstatuto.maioriaAbsolutaAtingida,
+          maioriaAbsolutaNecessaria: quorumEstatuto.maioriaAbsolutaNecessaria,
+          mensagemQuorum: quorumEstatuto.mensagem
+        }
+      : {
+          totalAtivos,
+          totalPresentes: totalPresentesGeral,
+          percentualPresenca,
+          quorumMinimoPct: orgao ? orgao.quorumMinimoPct : null,
+          quorumAtingido: orgao && orgao.quorumMinimoPct != null ? percentualPresenca >= orgao.quorumMinimoPct : null,
+          mensagemQuorum: null
+        };
+  }
 
   context.res = {
     status: 200,

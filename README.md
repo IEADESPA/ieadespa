@@ -649,11 +649,30 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
 
 #### v2.2 — Assembleia Geral (pautas especiais)
 
-- [ ] Quórum de reforma estatutária/destituição (Art. 21 II: 1/3 em 2ª convocação + reconvocação).
-- [ ] Competências privativas (Art. 18): eleger, destituir, reformar, aprovar contas,
-      autorizar alienação, homologar Pastor Presidente, ratificar CLI.
-- [ ] Regime de Ratificação Posterior (Art. 19) + dissenso formalizado (1/5).
-- [ ] Controle de acesso: vedado a estranhos, suspensos e em transferência (Reg. Art. 142).
+- [x] Competências privativas (Art. 18): eleger, destituir, reformar, aprovar contas,
+      autorizar alienação, homologar Pastor Presidente, ratificar CLI — quem convoca
+      escolhe as **matérias** (`shared/estatuto.js`, `MATERIAS_PRIVATIVAS_ASSEMBLEIA`),
+      não mais o tipo/prazo/quórum direto: `derivarClassificacaoAssembleia` calcula
+      `tipoSessao`/`quorumTipo`/prazo mínimo a partir delas — fecha a brecha de
+      convocar "AGE Especial" pra assunto que não é competência privativa de
+      verdade (os outros órgãos já têm alçada pra tudo o mais).
+- [x] Quórum de reforma estatutária/destituição (Art. 21 II: 1/3 em 2ª convocação +
+      reconvocação em 15 dias) — `estatuto.avaliarQuorumReformaDestituicao`, aplicado
+      quando `quorumTipo='REFORMA_DESTITUICAO'`. Reconvocação (Art. 21, II, "c") via
+      `VinculadaSessaoId` (migração 001, só passou a ser usado agora), permitida uma
+      única vez, botão "🔁 Reconvocar" na tela de frequência de uma sessão ENCERRADA
+      sem quórum. Reforma do Núcleo Fundamental (Art. 70/71) é a mesma matéria com a
+      flag `reformaNucleoFundamental`, e usa `quorumTipo='REFORMA_DIFICULTADA'`
+      (90% dos presentes) — só informativo, já que o sistema não tem recurso de
+      votação em lugar nenhum (não há como "verificar" o resultado, só calcular
+      quantos votos favoráveis 90% representa).
+- [x] Controle de acesso: vedado a estranhos, suspensos e em transferência (Reg.
+      Art. 142) — "estranhos"/suspensos já eram cobertos (`universoDoOrgao` só
+      inclui quem tem capacidade eleitoral ativa). Faltava quem já tem Carta de
+      Mudança **emitida** mas ainda não recebido em outra igreja (Art. 142, III):
+      `shared/universo.js` (`membrosComCartaMudancaEmitida`) exclui esses membros
+      da lista de votantes e do check-in, reaproveitado também por
+      `GestaoElegiveisAssembleia` (que tinha sua própria query, divergente até aqui).
 
 #### v2.3 — CLI (composição e sessões)
 
@@ -661,7 +680,12 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
       função (Diretoria, CF, CEI, Dirigentes).
 - [ ] Assentos da CLI (cadeira cativa + por função).
 - [ ] Sessão mensal (último domingo) com quórum 2 estágios (Art. 24).
-- [ ] Deliberações por maioria simples + impedimento de voto (Art. 25).
+- [ ] Deliberações por maioria simples + impedimento de voto (Art. 25) — **inclui**
+      o Regime de Ratificação Posterior (Art. 19) + dissenso formalizado (1/5):
+      decidido deixar de fora do v2.2 de propósito (conversado com o usuário) porque
+      só faz sentido quando a CLI tiver aqui o próprio registro de deliberação —
+      construir uma tabela solta antes disso seria descartável depois, ou nunca
+      chegar a ser integrada de verdade. Nasce **junto** com este item, não depois.
 - [ ] Voto de Minerva + poder de veto presidencial.
 - [ ] Sigilo corporativo (Art. 26) + comunicado administrativo pós-sessão.
 - [ ] Comparecimento obrigatório: 3 faltas = exclusão automática (Art. 27).

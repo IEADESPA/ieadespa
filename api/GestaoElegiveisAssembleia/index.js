@@ -13,6 +13,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
+const { membrosComCartaMudancaEmitida } = require("../shared/universo");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "assembleia");
@@ -36,9 +37,10 @@ module.exports = async function (context, req) {
     // pode votar, não uma tela de exibição — mascarar aqui reabriria o voto de quem
     // está sob disciplina (ver mascaramento equivalente, mas só de exibição, em GestaoPessoas).
     const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
+    const idsCartaMudanca = await membrosComCartaMudancaEmitida(pool);
     const comFlag = result.recordset.map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }));
     const elegiveis = comFlag
-      .filter(m => estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva)
+      .filter(m => !idsCartaMudanca.has(m.membroId) && estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva)
       .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: elegiveis };
     return;

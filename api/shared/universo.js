@@ -27,6 +27,17 @@ function emComunhaoAtiva(membro, idsSobDisciplina) {
   return membro.situacaoMembro !== "SEM_COMUNHAO" && !idsSobDisciplina.has(membro.membroId);
 }
 
+// Reg. Art. 142, III — vedado à Assembleia quem já tem Carta de Mudança
+// EMITIDA (trânsito eclesiástico em curso), mesmo ainda não recebido em outra
+// igreja. Reaproveitada por GestaoElegiveisAssembleia (que monta a própria
+// query, não passa por universoDoOrgao) pra não divergir da lista real.
+async function membrosComCartaMudancaEmitida(pool) {
+  const result = await pool.request().query(
+    `SELECT DISTINCT MembroId AS membroId FROM CartasTransito WHERE Tipo = 'MUDANCA' AND Status = 'EMITIDA'`
+  );
+  return new Set(result.recordset.map(r => r.membroId));
+}
+
 async function universoDoOrgao(pool, orgao) {
   const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
 
@@ -49,8 +60,9 @@ async function universoDoOrgao(pool, orgao) {
     `);
     // Sempre real, nunca mascarado — mesma razão de GestaoElegiveisAssembleia: este é
     // o universo de quem realmente pode votar, não uma tela de exibição.
+    const idsCartaMudanca = await membrosComCartaMudancaEmitida(pool);
     const comFlag = result.recordset.map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }));
-    return comFlag.filter(m => estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva);
+    return comFlag.filter(m => !idsCartaMudanca.has(m.membroId) && estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva);
   }
 
   if (orgao.sigla === "CLI") {
@@ -108,4 +120,4 @@ async function universoDoOrgao(pool, orgao) {
   return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
 }
 
-module.exports = { universoDoOrgao };
+module.exports = { universoDoOrgao, membrosComCartaMudancaEmitida };

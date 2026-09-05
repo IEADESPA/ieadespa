@@ -1009,8 +1009,11 @@ async function carregarConvocacoesPendentes() {
   container.innerHTML = convocacoes.map(c => {
     const podeIniciar = c.diasParaPrevista <= 0;
     const contagem = c.diasParaPrevista > 0 ? `faltam ${c.diasParaPrevista} dia(s)` : (c.diasParaPrevista === 0 ? "é hoje" : "data já passou");
+    const materiasRotulo = (c.materias || "").split(",").filter(Boolean)
+      .map(cod => (ROTULOS_MATERIAS[cod] || cod)).join("; ");
     return `<div class="cartao-convocacao" style="border:1px solid #e5e5e5;border-radius:8px;padding:10px;margin-bottom:8px;">
       <strong>${TITULOS_TIPO_SESSAO[c.tipoSessao] || c.tipoSessao}</strong> — prevista para ${c.dataPrevista} (${contagem})<br/>
+      <span class="subtitle">Matérias: ${materiasRotulo}${c.reformaNucleoFundamental ? " (Núcleo Fundamental)" : ""}</span><br/>
       <span class="subtitle">Pauta: ${c.pauta}</span><br/>
       <button class="btn-confirmar" style="width:auto;margin-top:6px;" ${podeIniciar ? "" : "disabled"} onclick="iniciarSessaoConvocadaAcao(${c.sessaoId})">▶️ Iniciar Sessão</button>
       <button class="btn-link" style="margin-left:10px;" onclick="editarConvocacaoAcao(${c.sessaoId})">✏️ Editar</button>
@@ -1019,14 +1022,33 @@ async function carregarConvocacoesPendentes() {
   }).join("");
 }
 
-const TITULOS_TIPO_SESSAO = { AGO: "AGO", AGE_GERAL: "AGE (assuntos gerais)", AGE_ESPECIAL: "AGE (reforma/destituição/eleição)" };
+const TITULOS_TIPO_SESSAO = { AGO: "AGO", AGE_GERAL: "AGE (assuntos gerais)", AGE_ESPECIAL: "AGE Especial" };
+const ROTULOS_MATERIAS = {
+  ELEICAO_DIRETORIA_CONSELHO_FISCAL: "Eleição da Diretoria/Conselho Fiscal",
+  DESTITUICAO: "Destituição",
+  REFORMA_ESTATUTARIA: "Reforma do Estatuto",
+  APROVACAO_CONTAS: "Aprovação de contas",
+  ALIENACAO_IMOVEL: "Alienação de imóvel",
+  HOMOLOGACAO_PASTOR_PRESIDENTE: "Homologação do Pastor Presidente",
+  RATIFICACAO_CLI: "Ratificação de deliberação da CLI"
+};
+
+function atualizarNucleoFundamentalVisivel() {
+  const reformaMarcada = document.getElementById("convocacaoMateriaReforma").checked;
+  document.getElementById("convocacaoLabelNucleoFundamental").hidden = !reformaMarcada;
+  if (!reformaMarcada) document.getElementById("convocacaoNucleoFundamental").checked = false;
+}
 
 // Reaproveita o mesmo formulário pra criar e editar — window._convocacaoEditandoId
 // diz qual convocação (se alguma) está sendo editada; null = criando uma nova.
 window._convocacaoEditandoId = null;
 
 function preencherFormConvocacao(c) {
-  document.getElementById("convocacaoTipoSessao").value = c.tipoSessao;
+  document.getElementById("convocacaoEhAnual").checked = c.tipoSessao === "AGO";
+  const materias = (c.materias || "").split(",").filter(Boolean);
+  document.querySelectorAll(".convocacao-materia").forEach(chk => { chk.checked = materias.includes(chk.value); });
+  atualizarNucleoFundamentalVisivel();
+  document.getElementById("convocacaoNucleoFundamental").checked = !!c.reformaNucleoFundamental;
   document.getElementById("convocacaoDataPrevista").value = c.dataPrevista;
   document.getElementById("convocacaoPauta").value = c.pauta;
   document.getElementById("convocacaoMeiosDivulgacao").value = c.meiosDivulgacao || "";
@@ -1045,7 +1067,10 @@ function editarConvocacaoAcao(sessaoId) {
 
 function cancelarEdicaoConvocacaoAcao() {
   window._convocacaoEditandoId = null;
-  document.getElementById("convocacaoTipoSessao").value = "AGO";
+  window._convocacaoVinculadaId = null;
+  document.getElementById("convocacaoEhAnual").checked = false;
+  document.querySelectorAll(".convocacao-materia").forEach(chk => { chk.checked = false; });
+  atualizarNucleoFundamentalVisivel();
   document.getElementById("convocacaoDataPrevista").value = "";
   document.getElementById("convocacaoPauta").value = "";
   document.getElementById("convocacaoMeiosDivulgacao").value = "";
@@ -1068,11 +1093,14 @@ async function excluirConvocacaoAcao(sessaoId) {
 }
 
 async function convocarAssembleiaAcao() {
-  const tipoSessao = document.getElementById("convocacaoTipoSessao").value;
+  const ehAnual = document.getElementById("convocacaoEhAnual").checked;
+  const materias = Array.from(document.querySelectorAll(".convocacao-materia:checked")).map(chk => chk.value);
+  const reformaNucleoFundamental = document.getElementById("convocacaoNucleoFundamental").checked;
   const dataPrevista = document.getElementById("convocacaoDataPrevista").value;
   const pauta = document.getElementById("convocacaoPauta").value;
   const meiosDivulgacao = document.getElementById("convocacaoMeiosDivulgacao").value;
   const senhaAcesso = document.getElementById("convocacaoSenhaAcesso").value;
+  if (materias.length === 0) { mostrarToast("Marque ao menos uma matéria (Art. 18).", "erro"); return; }
   if (!dataPrevista || !pauta || !senhaAcesso) { mostrarToast("Preencha data prevista, pauta e senha.", "erro"); return; }
 
   const editandoId = window._convocacaoEditandoId;
@@ -1080,13 +1108,14 @@ async function convocarAssembleiaAcao() {
   const res = await fetchProtegido(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tipoSessao, dataPrevista, pauta, meiosDivulgacao, senhaAcesso })
+    body: JSON.stringify({ materias, reformaNucleoFundamental, ehAnual, dataPrevista, pauta, meiosDivulgacao, senhaAcesso, vinculadaSessaoId: window._convocacaoVinculadaId || null })
   });
   const data = await res.json();
   document.getElementById("resultadoConvocacao").textContent = data.mensagem;
   if (data.sucesso) {
     if (editandoId) cancelarEdicaoConvocacaoAcao();
     else {
+      window._convocacaoVinculadaId = null;
       document.getElementById("convocacaoDataPrevista").value = "";
       document.getElementById("convocacaoPauta").value = "";
       document.getElementById("convocacaoMeiosDivulgacao").value = "";
@@ -1094,6 +1123,18 @@ async function convocarAssembleiaAcao() {
     }
     carregarConvocacoesPendentes();
   }
+}
+
+// Reconvocação (Art. 21, II, "c") — abre o formulário de convocar já marcado
+// com a mesma matéria de reforma/destituição, ligando à sessão que não bateu
+// quórum via vinculadaSessaoId (só liberado 1 vez, validado no back-end).
+function reconvocarAssembleiaAcao(sessaoId, materiasCsv) {
+  cancelarEdicaoConvocacaoAcao();
+  window._convocacaoVinculadaId = sessaoId;
+  const materias = (materiasCsv || "").split(",").filter(Boolean);
+  document.querySelectorAll(".convocacao-materia").forEach(chk => { chk.checked = materias.includes(chk.value); });
+  document.getElementById("convocacaoTitulo").textContent = "📋 Reconvocar (Art. 21, II, \"c\")";
+  mostrarToast("Preencha a nova data (mín. 15 dias) e envie — isso reconvoca a sessão anterior.", "sucesso");
 }
 
 async function iniciarSessaoConvocadaAcao(sessaoId) {
@@ -1303,7 +1344,22 @@ async function verFrequencia(sessaoId, descricao) {
     const q = data.quorum;
     const situacao = q.quorumAtingido === null ? "" : (q.quorumAtingido ? " — QUÓRUM ATINGIDO ✅" : " — quórum não atingido");
     resumo.textContent = `${q.totalPresentes} de ${q.totalAtivos} esperados presentes (${q.percentualPresenca}%)` +
-      (q.quorumMinimoPct != null ? `, mínimo exigido ${q.quorumMinimoPct}%${situacao}` : "");
+      (q.quorumMinimoPct != null ? `, mínimo exigido ${q.quorumMinimoPct}%` : "") +
+      (q.mensagemQuorum ? ` — ${q.mensagemQuorum}` : situacao);
+  }
+
+  // v2.2 — reforma/destituição que não bateu quórum (nem no 2º estágio) pode
+  // ser reconvocada 1 única vez (Art. 21, II, "c") — só some da lista depois
+  // que a nova convocação vinculada é criada (validado no back-end).
+  const podeReconvocar = data.sessao && data.sessao.status === "ENCERRADA" &&
+    data.sessao.quorumTipo === "REFORMA_DESTITUICAO" && !data.sessao.vinculadaSessaoId &&
+    data.quorum && data.quorum.quorumAtingido === false;
+  const botaoReconvocar = document.getElementById("botaoReconvocarAssembleia");
+  if (botaoReconvocar) {
+    botaoReconvocar.style.display = podeReconvocar ? "inline-block" : "none";
+    if (podeReconvocar) {
+      botaoReconvocar.onclick = () => reconvocarAssembleiaAcao(sessaoId, data.sessao.materias);
+    }
   }
 
   let html = `<table class="tabela-frequencia"><thead><tr>

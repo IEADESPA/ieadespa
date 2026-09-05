@@ -307,19 +307,25 @@
         <div id="blocoConvocarAssembleia" style="display:none;">
           <h3 id="convocacaoTitulo">📋 Convocar Assembleia Geral</h3>
           <p class="subtitle">
-            O Edital precisa ser publicado com antecedência mínima: 10 dias pra AGO,
-            5 dias pra AGE de assuntos gerais, 15 dias pra AGE de reforma estatutária,
-            destituição ou eleição (Art. 20, §2º). A AGO só pode ser marcada pra dezembro
-            (Art. 17, I).
+            A Assembleia só pode ser convocada pra competência privativa dela (Art. 18) —
+            marque pelo menos uma matéria. O prazo mínimo do Edital e o quórum de
+            instalação são calculados automaticamente a partir das matérias escolhidas,
+            não é preciso (nem dá) escolher isso direto.
           </p>
           <form onsubmit="event.preventDefault(); convocarAssembleiaAcao();">
             <div class="input-group">
-              <label>Classificação:</label>
-              <select id="convocacaoTipoSessao">
-                <option value="AGO">Assembleia Geral Ordinária (AGO) — dezembro, 10 dias de antecedência</option>
-                <option value="AGE_GERAL">Assembleia Geral Extraordinária (AGE) — assuntos gerais, 5 dias</option>
-                <option value="AGE_ESPECIAL">AGE — reforma estatutária, destituição ou eleição, 15 dias</option>
-              </select>
+              <label><input type="checkbox" id="convocacaoEhAnual" style="width:auto;" /> É a Assembleia Ordinária anual (AGO, dezembro)?</label>
+            </div>
+            <div class="input-group">
+              <label>Matérias (Art. 18 — marque ao menos uma):</label>
+              <label style="display:block;font-weight:400;"><input type="checkbox" class="convocacao-materia" value="ELEICAO_DIRETORIA_CONSELHO_FISCAL" style="width:auto;" /> Eleger a Diretoria Executiva e o Conselho Fiscal (15 dias)</label>
+              <label style="display:block;font-weight:400;"><input type="checkbox" class="convocacao-materia" value="DESTITUICAO" style="width:auto;" /> Destituir administrador/cargo (15 dias, quórum de reforma/destituição)</label>
+              <label style="display:block;font-weight:400;"><input type="checkbox" class="convocacao-materia" value="REFORMA_ESTATUTARIA" id="convocacaoMateriaReforma" style="width:auto;" onchange="atualizarNucleoFundamentalVisivel()" /> Reformar o Estatuto (15 dias, quórum de reforma/destituição)</label>
+              <label style="display:block;font-weight:400;margin-left:20px;" id="convocacaoLabelNucleoFundamental" hidden><input type="checkbox" id="convocacaoNucleoFundamental" style="width:auto;" /> — envolve o Núcleo Fundamental (Art. 70/71, Rito de Reforma Dificultada — 90%)</label>
+              <label style="display:block;font-weight:400;"><input type="checkbox" class="convocacao-materia" value="APROVACAO_CONTAS" style="width:auto;" /> Aprovar contas e balanço patrimonial</label>
+              <label style="display:block;font-weight:400;"><input type="checkbox" class="convocacao-materia" value="ALIENACAO_IMOVEL" style="width:auto;" /> Autorizar alienação/oneração de imóvel acima do Teto de Alçada</label>
+              <label style="display:block;font-weight:400;"><input type="checkbox" class="convocacao-materia" value="HOMOLOGACAO_PASTOR_PRESIDENTE" style="width:auto;" /> Homologar e eleger o Pastor Presidente (15 dias)</label>
+              <label style="display:block;font-weight:400;"><input type="checkbox" class="convocacao-materia" value="RATIFICACAO_CLI" style="width:auto;" /> Ratificar/retificar deliberação da CLI</label>
             </div>
             <div class="input-group">
               <label>Data prevista:</label>
@@ -383,6 +389,7 @@
         <div id="blocoFrequencia" style="display:none;">
           <h3>Lista de Frequência — <span id="tituloFrequencia"></span></h3>
           <div id="resumoQuorum" class="resumo-quorum"></div>
+          <button class="btn-confirmar" id="botaoReconvocarAssembleia" style="width:auto;display:none;">🔁 Reconvocar (Art. 21, II, "c")</button>
           <div class="rolagem-tabela"><div id="resultadoFrequencia"></div></div>
         </div>
 

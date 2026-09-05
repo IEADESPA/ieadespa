@@ -19,174 +19,27 @@ jobs:
         with:
           submodules: true
           lfs: false
-          
-      # Com retry: é a 1ª conexão do job, e o Azure SQL Serverless pode estar
-      # pausado por inatividade (login error 40613, "not currently available").
-      # As demais migrações rodam logo em seguida com o banco já "acordado".
-      - name: Executar Migração SQL 001
-        uses: Wandalen/wretry.action@v3
-        with:
-          action: azure/sql-action@v2
-          attempt_limit: 5
-          attempt_delay: 20000
-          with: |
-            connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-            path: 'sql/migrations/001_esquema_inicial_idempotente.sql'
-            action: 'Script'
 
-      - name: Executar Migração SQL 002
-        uses: azure/sql-action@v2
+      - uses: actions/setup-node@v4
         with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/002_papeis_funcionalidades_lideranca.sql'
-          action: 'Script'
+          node-version: '20'
 
-      - name: Executar Migração SQL 003
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/003_lideranca_legado_opcional.sql'
-          action: 'Script'
+      - name: Instalar dependências da API (pro runner de migrações)
+        working-directory: api
+        run: npm ci
 
-      - name: Executar Migração SQL 004
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/004_hierarquia_vinculos_pai.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 005
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/005_seed_admin_inicial.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 006
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/006_catalogo_tipos_consagracao.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 007
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/007_seed_orgaos_locais.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 008
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/008_perfil_membro_contato_prazos.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 009
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/009_membro_extensao_tenda.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 010
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/010_processo_disciplinar_nucleo.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 011
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/011_vinculo_familiar.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 012
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/012_lgpd_auditoria_encarregado.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 013
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/013_cargo_ministerial_fonte_unica.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 014
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/014_assentos_prazo_e_conflito_reuniao.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 015
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/015_admissao_membros.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 016
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/016_catalogo_status_membro.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 017
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/017_cartas_transito.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 018
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/018_estado_civil_atestado_supletivo.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 019
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/019_perda_membresia.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 020
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/020_abandono_digital.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 021
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/021_situacao_status_membro.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 022
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/022_cadastro_ampliado.sql'
-          action: 'Script'
-
-      - name: Executar Migração SQL 023
-        uses: azure/sql-action@v2
-        with:
-          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-          path: 'sql/migrations/023_registros_especiais_membro.sql'
-          action: 'Script'
+      # Um único step, uma única conexão, todas as migrações de sql/migrations/
+      # em ordem (api/scripts/executar-migracoes.js) — antes eram 23 steps
+      # separados, cada um pagando o custo fixo de ligar/conectar/desligar de
+      # novo, mesmo com cada migração sendo idempotente e rápida por si só. Isso
+      # não muda a regra de nunca editar uma migração antiga — só como elas são
+      # executadas. Tem retry embutido pro Azure SQL Serverless acordar (mesmo
+      # motivo do wretry que só cobria a migração 001 antes).
+      - name: Executar Migrações SQL
+        working-directory: api
+        env:
+          SQL_CONNECTION_STRING: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+        run: node scripts/executar-migracoes.js
 
       - name: Build And Deploy
         id: builddeploy

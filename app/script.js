@@ -1672,12 +1672,18 @@ function renderizarPessoas() {
   // Tabela enxuta de propósito (v1.10) — o resto (idade, categoria, forma de
   // admissão, função, cargo ministerial...) mora no Perfil, aba Dados. Uma
   // pessoa por tela não pode quebrar o notebook por causa de coluna demais.
+  // Miniatura da foto direto na lista (pedido explícito) — assim dá pra ver de
+  // várias pessoas de uma vez, sem precisar entrar perfil por perfil.
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Matrícula</th><th>Nome</th><th>Congregação</th><th>Status</th><th>Situação</th><th class="acoes-inline"></th>
+    <th></th><th>Matrícula</th><th>Nome</th><th>Congregação</th><th>Status</th><th>Situação</th><th class="acoes-inline"></th>
   </tr></thead><tbody>`;
 
   pagina.forEach(p => {
+    const miniatura = p.fotoUrl
+      ? `<img src="${p.fotoUrl}" alt="Foto de ${p.nome}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;" />`
+      : `<span style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#e5e5e5;color:#888;font-size:0.75rem;">?</span>`;
     html += `<tr>
+      <td>${miniatura}</td>
       <td>${p.membroId}</td>
       <td>${p.nome}</td>
       <td>${p.congregacao || "-"}</td>

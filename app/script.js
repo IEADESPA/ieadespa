@@ -249,7 +249,41 @@ function mostrarSubAbaMeupainel(sub) {
   });
   document.getElementById("tituloModulo").textContent = `Meu Painel — ${TITULOS_SUB_MEUPAINEL[sub]}`;
   if (sub === "cartas") carregarMinhasCartas();
-  if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); }
+  if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); carregarMinhaFoto(); }
+}
+
+// ---- MINHA FOTO (v1.10 — autoatendimento, dentro de Meus Dados (LGPD)) ----
+async function carregarMinhaFoto() {
+  const preview = document.getElementById("minhaFotoPreview");
+  if (!authMatricula || !preview) return;
+  const res = await fetch(`${API_BASE}/minha-foto/${authMatricula}`);
+  const data = await res.json();
+  if (!data.sucesso) { preview.innerHTML = ""; return; }
+  preview.innerHTML = data.fotoUrl
+    ? `<img src="${data.fotoUrl}" alt="Minha foto" style="max-width:160px;border-radius:8px;" />`
+    : "<span class='subtitle'>Você ainda não tem foto cadastrada.</span>";
+}
+
+async function enviarMinhaFotoAcao() {
+  const input = document.getElementById("minhaFotoArquivo");
+  const msg = document.getElementById("resultadoMinhaFoto");
+  if (!authMatricula || !input.files[0]) {
+    msg.textContent = "Escolha um arquivo de imagem.";
+    return;
+  }
+  const arquivo = input.files[0];
+  const fotoBase64 = await lerArquivoComoBase64(arquivo);
+  const res = await fetch(`${API_BASE}/minha-foto/${authMatricula}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fotoBase64, mimeType: arquivo.type })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    input.value = "";
+    carregarMinhaFoto();
+  }
 }
 
 function mostrarAbaSecretaria(aba) {
@@ -267,7 +301,7 @@ function mostrarAbaSecretaria(aba) {
   }
   document.getElementById("tituloModulo").textContent = TITULOS_MODULOS[aba] || "Governança";
   if (aba === "reunioes") { carregarOpcoesOrgaosReuniao().then(carregarReunioes); carregarElegiveisAssembleia(); }
-  if (aba === "pessoas") { carregarOpcoesFormPessoa(); carregarPessoas(); }
+  if (aba === "pessoas") { carregarOpcoesFormPessoa().then(() => mostrarSubAbaPessoas(subAbaPessoasAtual)); carregarPessoas(); }
   if (aba === "cartas") { carregarCartas(); processarSaidasCartas(); }
   if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
   if (aba === "estrutura") montarEstrutura();
@@ -1055,6 +1089,10 @@ async function carregarOpcoesFormPessoa() {
   const situacoesRaw = await resSituacoes.json();
   const situacoes = Array.isArray(situacoesRaw) ? situacoesRaw : [];
 
+  // Cacheados pra resolver nome (não só sigla/id) na aba Dados do Perfil.
+  window._departamentosCache = departamentos;
+  window._cargosCache = cargos;
+
   const selectCong = document.getElementById("pessoaCongregacao");
   selectCong.innerHTML = congregacoes.filter(c => c.ativa).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
 
@@ -1133,16 +1171,214 @@ async function salvarPessoa() {
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
-  if (data.sucesso) {
-    document.getElementById("pessoaMatricula").value = "";
-    document.getElementById("pessoaNome").value = "";
-    document.getElementById("pessoaTelefone").value = "";
-    document.getElementById("pessoaEmail").value = "";
-    document.getElementById("pessoaEndereco").value = "";
-    document.getElementById("blocoVinculosFamiliares").style.display = "none";
-    window._membroFamiliaAtual = null;
-    carregarPessoas();
+  if (!data.sucesso) return;
+
+  await carregarPessoas();
+
+  // Editando dentro do Perfil (aba Editar) — mantém onde está, só atualiza o
+  // cabeçalho. Cadastrando pessoa nova — limpa o formulário e oferece o Perfil.
+  const emPerfil = document.getElementById("subPessoasPerfil").style.display !== "none";
+  if (emPerfil) {
+    const pessoa = (window._pessoasCache || []).find(p => p.membroId === Number(membroId));
+    if (pessoa) {
+      document.getElementById("perfilPessoaNome").textContent = pessoa.nome;
+      document.getElementById("perfilPessoaSubtitulo").textContent = `Matrícula ${pessoa.membroId} · ${pessoa.congregacao || "sem congregação"}`;
+    }
+  } else {
+    const idSalvo = Number(membroId);
+    const mensagemSucesso = data.mensagem;
+    limparFormPessoa(); // limpa inclusive resultadoPessoa/linkPerfilAposCadastro — restaura os dois abaixo
+    msg.textContent = mensagemSucesso;
+    document.getElementById("linkPerfilAposCadastro").innerHTML =
+      `<button class="btn-link" onclick="abrirPerfilPessoa(${idSalvo})">→ Ver perfil desta pessoa</button>`;
   }
+}
+
+// ---- NAVEGAÇÃO DA ABA PESSOAS (v1.10 — submenu Cadastrar/Buscar + Perfil) ----
+
+let subAbaPessoasAtual = "cadastrar";
+
+function limparFormPessoa() {
+  ["pessoaMatricula", "pessoaNome", "pessoaOrigem", "pessoaIgrejaAnterior", "pessoaNomeLidoRito",
+    "pessoaMinistranteRito", "pessoaTelefone", "pessoaEmail", "pessoaEndereco"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  ["pessoaDataNascimento", "pessoaDataAdmissao", "pessoaDataBatismo", "pessoaDataRitoRecebimento",
+    "pessoaDataAfastamento"].forEach(id => { document.getElementById(id).value = ""; });
+  document.getElementById("pessoaCargoMinisterial").value = "";
+  document.getElementById("pessoaCongregacao").selectedIndex = 0;
+  document.getElementById("pessoaDepartamento").value = "";
+  document.getElementById("pessoaExtensao").value = "";
+  document.getElementById("pessoaStatus").selectedIndex = 0;
+  document.getElementById("pessoaFormaAdmissao").value = "";
+  document.getElementById("pessoaSituacao").value = "EM_COMUNHAO";
+  document.getElementById("pessoaEstadoCivil").value = "";
+  document.getElementById("pessoaDizimista").value = "";
+  document.getElementById("pessoaMotivoSaida").value = "";
+  document.getElementById("resultadoPessoa").textContent = "";
+  document.getElementById("linkPerfilAposCadastro").innerHTML = "";
+}
+
+// O <form> de cadastro/edição é um único elemento no DOM — move (não clona) entre
+// o slot de "Cadastrar" e o slot de "Editar" (dentro do Perfil) conforme o
+// contexto, pra não duplicar ~25 campos com ids repetidos.
+function moverFormPessoaPara(slotId) {
+  const bloco = document.getElementById("blocoFormPessoa");
+  bloco.style.display = "block";
+  document.getElementById(slotId).appendChild(bloco);
+}
+
+function mostrarSubAbaPessoas(sub) {
+  subAbaPessoasAtual = sub;
+  document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
+  document.getElementById("subPessoasBuscar").style.display = sub === "buscar" ? "block" : "none";
+  document.getElementById("subPessoasPerfil").style.display = "none";
+  document.getElementById("btnSubPessoasCadastrar").classList.toggle("ativo", sub === "cadastrar");
+  document.getElementById("btnSubPessoasBuscar").classList.toggle("ativo", sub === "buscar");
+  document.getElementById("tituloModulo").textContent = sub === "cadastrar" ? "Pessoas — Cadastrar Pessoa" : "Pessoas — Buscar Pessoas";
+  if (sub === "cadastrar") {
+    moverFormPessoaPara("slotFormPessoaCadastrar");
+    limparFormPessoa();
+  }
+}
+
+function voltarBuscaPessoas() {
+  mostrarSubAbaPessoas("buscar");
+}
+
+function abrirPerfilPessoa(membroId) {
+  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
+  if (!pessoa) return;
+
+  // Mesma pessoa alimenta todas as abas do Perfil — substitui os `_membroXAtual`
+  // soltos que cada bloco (Foto/Histórico/Casamentos/Licença/Vínculos) já usava.
+  window._membroPerfilAtual = membroId;
+  window._membroFotoAtual = membroId;
+  window._membroHistoricoAtual = membroId;
+  window._membroCasamentosAtual = membroId;
+  window._membroLicencasAtual = membroId;
+  window._membroFamiliaAtual = membroId;
+
+  document.getElementById("subPessoasCadastrar").style.display = "none";
+  document.getElementById("subPessoasBuscar").style.display = "none";
+  document.getElementById("subPessoasPerfil").style.display = "block";
+  document.getElementById("btnSubPessoasCadastrar").classList.remove("ativo");
+  document.getElementById("btnSubPessoasBuscar").classList.add("ativo");
+  document.getElementById("perfilPessoaNome").textContent = pessoa.nome;
+  document.getElementById("perfilPessoaSubtitulo").textContent = `Matrícula ${pessoa.membroId} · ${pessoa.congregacao || "sem congregação"}`;
+  document.getElementById("btnDesligarPerfil").style.display = pessoa.status === "DESLIGADO" ? "none" : "inline-block";
+  document.getElementById("tituloModulo").textContent = `Pessoas — Perfil de ${pessoa.nome}`;
+  mostrarAbaPerfil("dados");
+}
+
+const ABAS_PERFIL = ["dados", "editar", "historico", "foto", "casamentos", "licenca", "vinculos"];
+
+function mostrarAbaPerfil(aba) {
+  const membroId = window._membroPerfilAtual;
+  ABAS_PERFIL.forEach(a => {
+    document.getElementById(`tabPerfil${capitalize(a)}`).style.display = a === aba ? "block" : "none";
+    document.getElementById(`btnTabPerfil${capitalize(a)}`).classList.toggle("ativo", a === aba);
+  });
+  if (aba === "dados") renderizarDadosPerfil(membroId);
+  if (aba === "editar") {
+    moverFormPessoaPara("slotFormPessoaEditar");
+    document.getElementById("linkPerfilAposCadastro").innerHTML = "";
+    document.getElementById("resultadoPessoa").textContent = "";
+    editarPessoa(membroId);
+  }
+  if (aba === "historico") carregarHistoricoMembro(membroId);
+  if (aba === "foto") carregarAbaFoto(membroId);
+  if (aba === "casamentos") carregarCasamentos(membroId);
+  if (aba === "licenca") carregarLicencasCandidatura(membroId);
+  if (aba === "vinculos") carregarAbaVinculos(membroId);
+}
+
+function nomeDepartamentoPorId(id) {
+  if (id == null) return null;
+  const d = (window._departamentosCache || []).find(x => String(x.departamentoId) === String(id));
+  return d ? d.nome : null;
+}
+function nomeCargoPorSigla(sigla) {
+  if (!sigla) return null;
+  const c = (window._cargosCache || []).find(x => x.sigla === sigla);
+  return c ? c.nome : sigla;
+}
+const ROTULO_ESTADO_CIVIL = { SOLTEIRO: "Solteiro(a)", CASADO: "Casado(a)", VIUVO: "Viúvo(a)", DIVORCIADO: "Divorciado(a)", UNIAO_ESTAVEL: "União Estável" };
+
+// Leitura formatada de tudo que o sistema tem da pessoa — reaproveita
+// linhaLgpd/formatarValorLgpd (criadas pra "Meus Dados" LGPD): rótulo em
+// português, datas formatadas, "-" no lugar de null. Nada de JSON, nada de
+// coluna de banco aparecendo em tela.
+function renderizarDadosPerfil(membroId) {
+  const p = (window._pessoasCache || []).find(x => x.membroId === membroId);
+  const container = document.getElementById("tabPerfilDados");
+  if (!p) { container.innerHTML = "<p class='subtitle'>Pessoa não encontrada.</p>"; return; }
+
+  const saidaHtml = (p.status === "DESLIGADO" || p.status === "FALECIDO" || p.motivoSaida) ? `
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Perda de Membresia</h4>
+      ${linhaLgpd("Data do Afastamento", p.dataAfastamento, "data")}
+      ${linhaLgpd("Data da Saída", p.dataSaida, "data")}
+      ${linhaLgpd("Causa da Saída", p.motivoSaida)}
+    </div>` : "";
+
+  container.innerHTML = `
+    <div class="cartao-perfil">
+      ${p.fotoUrl ? `<img src="${p.fotoUrl}" alt="Foto" style="max-width:120px;border-radius:8px;margin-bottom:8px;" />` : ""}
+      ${linhaLgpd("Nome", p.nome)}
+      ${linhaLgpd("Congregação", p.congregacao)}
+      ${linhaLgpd("Extensão da Tenda", p.extensao)}
+      ${linhaLgpd("Status", p.status)}
+      ${linhaLgpd("Situação", p.situacaoMembro)}
+      ${linhaLgpd("Categoria", p.capacidade && p.capacidade.categoria)}
+      ${linhaLgpd("Data de Nascimento", p.dataNascimento, "data")}
+      ${linhaLgpd("Data de Admissão", p.dataAdmissao, "data")}
+      ${linhaLgpd("Forma de Admissão", labelFormaAdmissao(p.formaAdmissao))}
+      ${linhaLgpd("Origem/Procedência", p.origem)}
+      ${linhaLgpd("Igreja Anterior", p.igrejaAnterior)}
+      ${linhaLgpd("Data do Batismo", p.dataBatismo, "data")}
+      ${linhaLgpd("Data do Rito de Recebimento", p.dataRitoRecebimento, "data")}
+      ${linhaLgpd("Nome Lido no Rito", p.nomeLidoRito)}
+      ${linhaLgpd("Ministrante do Rito", p.ministranteRito)}
+      ${linhaLgpd("Estado Civil", ROTULO_ESTADO_CIVIL[p.estadoCivil])}
+      ${linhaLgpd("Telefone", p.telefone)}
+      ${linhaLgpd("E-mail", p.email)}
+      ${linhaLgpd("Endereço", p.endereco)}
+    </div>
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Ministeriais</h4>
+      ${linhaLgpd("Função", p.funcao)}
+      ${linhaLgpd("Cargo Ministerial", nomeCargoPorSigla(p.cargoMinisterial))}
+      ${linhaLgpd("Departamento", nomeDepartamentoPorId(p.departamentoId))}
+      ${linhaLgpd("Dizimista Fiel", p.dizimistaFiel, "bit")}
+    </div>
+    ${saidaHtml}`;
+}
+
+// Substitui a antiga verFotoMembro() — mesma lógica, só sem controlar
+// mostrar/esconder bloco nem rolar tela (isso agora é mostrarAbaPerfil()).
+function carregarAbaFoto(membroId) {
+  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
+  document.getElementById("resultadoFotoMembro").textContent = "";
+  const preview = document.getElementById("fotoMembroPreview");
+  preview.innerHTML = pessoa && pessoa.fotoUrl
+    ? `<img src="${pessoa.fotoUrl}" alt="Foto" style="max-width:160px;border-radius:8px;" />`
+    : "<span class='subtitle'>Sem foto cadastrada.</span>";
+
+  fetch(`${API_BASE}/lgpd/consentimento/${membroId}`).then(r => r.json()).then(data => {
+    const fotoConsentimento = (data.consentimentos || []).find(c => c.tipo === "FOTO");
+    const statusEl = document.getElementById("fotoMembroStatusConsentimento");
+    statusEl.textContent = fotoConsentimento && fotoConsentimento.concedido
+      ? `✅ Consentimento de Foto concedido em ${fotoConsentimento.dataRegistro}.`
+      : "⚠️ Sem consentimento de Foto concedido — o upload será bloqueado até conceder.";
+  });
+}
+
+// Substitui a antiga editarPessoa()'s auto-show de vínculos — agora é sua
+// própria aba, carregada só quando clicada.
+function carregarAbaVinculos(membroId) {
+  carregarOpcoesTipoVinculo();
+  carregarVinculosFamiliares(membroId);
 }
 
 const TAM_PAGINA = 20;
@@ -1432,28 +1668,22 @@ function renderizarPessoas() {
   const inicio = (paginaAtualPessoas - 1) * TAM_PAGINA;
   const pagina = pessoasFiltradas.slice(inicio, inicio + TAM_PAGINA);
 
+  // Tabela enxuta de propósito (v1.10) — o resto (idade, categoria, forma de
+  // admissão, função, cargo ministerial...) mora no Perfil, aba Dados. Uma
+  // pessoa por tela não pode quebrar o notebook por causa de coluna demais.
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Matrícula</th><th>Nome</th><th>Idade</th><th>Categoria</th><th>Forma Admissão</th><th>Função</th><th>Cargo Ministerial</th><th>Congregação</th><th>Status</th><th class="acoes-inline"></th>
+    <th>Matrícula</th><th>Nome</th><th>Congregação</th><th>Status</th><th>Situação</th><th class="acoes-inline"></th>
   </tr></thead><tbody>`;
 
   pagina.forEach(p => {
     html += `<tr>
       <td>${p.membroId}</td>
       <td>${p.nome}</td>
-      <td>${idadeDe(p.dataNascimento) ?? "-"}${p.menorDeIdade ? ' <span class="badge-status badge-licenca">menor</span>' : ""}</td>
-      <td>${badgeCategoria(p.capacidade)}</td>
-      <td>${labelFormaAdmissao(p.formaAdmissao)}</td>
-      <td>${p.funcao || "-"}</td>
-      <td>${p.cargoMinisterial || "-"}</td>
       <td>${p.congregacao || "-"}</td>
       <td>${badgeStatusPessoa(p.status)}</td>
+      <td>${p.situacaoMembro || "-"}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarPessoa(${p.membroId})">Editar</button>
-        <button class="btn-link" onclick="verHistoricoMembro(${p.membroId})">🕒 Histórico</button>
-        <button class="btn-link" onclick="verFotoMembro(${p.membroId})">📷 Foto</button>
-        <button class="btn-link" onclick="verCasamentosMembro(${p.membroId})">💍 Casamentos</button>
-        <button class="btn-link" onclick="verLicencasCandidaturaMembro(${p.membroId})">🗳️ Licença Candidatura</button>
-        ${p.status !== "DESLIGADO" ? `<button class="btn-link btn-link-perigo" onclick="desligarPessoa(${p.membroId})">Desligar</button>` : ""}
+        <button class="btn-link" onclick="abrirPerfilPessoa(${p.membroId})">👁️ Ver Perfil</button>
       </td>
     </tr>`;
   });
@@ -1500,13 +1730,6 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaEmail").value = pessoa.email || "";
   document.getElementById("pessoaEndereco").value = pessoa.endereco || "";
   document.getElementById("pessoaExtensao").value = pessoa.extensaoId != null ? String(pessoa.extensaoId) : "";
-  document.getElementById("pessoaMatricula").scrollIntoView({ behavior: "smooth", block: "start" });
-
-  window._membroFamiliaAtual = pessoa.membroId;
-  document.getElementById("vinculoFamiliaNome").textContent = pessoa.nome;
-  document.getElementById("blocoVinculosFamiliares").style.display = "block";
-  carregarOpcoesTipoVinculo();
-  carregarVinculosFamiliares(pessoa.membroId);
 }
 
 async function desligarPessoa(membroId) {
@@ -1515,7 +1738,15 @@ async function desligarPessoa(membroId) {
   const res = await fetchProtegido(`${API_BASE}/pessoas/${membroId}`, { method: "DELETE" });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) carregarPessoas();
+  if (data.sucesso) await carregarPessoas();
+  return data.sucesso;
+}
+
+async function desligarPessoaPerfilAcao() {
+  const membroId = window._membroPerfilAtual;
+  if (!membroId) return;
+  const ok = await desligarPessoa(membroId);
+  if (ok) abrirPerfilPessoa(membroId);
 }
 
 // ---- CARTAS DE TRÂNSITO (v1.4 — Reg. Art. 131) ----
@@ -1784,15 +2015,6 @@ let marcosCacheAtual = [];
 
 const ROTULO_TIPO_MARCO = { CONVERSAO: "Conversão", MINISTERIO_ANTERIOR: "Ministério/Igreja anterior", BATISMO_ESPIRITO_SANTO: "Batismo no Espírito Santo", OUTRO: "Outro" };
 
-async function verHistoricoMembro(membroId) {
-  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
-  window._membroHistoricoAtual = membroId;
-  document.getElementById("historicoMembroNome").textContent = pessoa ? pessoa.nome : `matrícula ${membroId}`;
-  document.getElementById("blocoHistoricoMembro").style.display = "block";
-  document.getElementById("blocoHistoricoMembro").scrollIntoView({ behavior: "smooth", block: "start" });
-  await carregarHistoricoMembro(membroId);
-}
-
 async function carregarHistoricoMembro(membroId) {
   const container = document.getElementById("resultadoHistoricoMembro");
   const [resHistorico, resMarcos] = await Promise.all([
@@ -1900,28 +2122,6 @@ async function corrigirMarcoMembroAcao(marcoId) {
 }
 
 // ---- Foto do Membro (v1.7) — consentimento é trava real, não registro paralelo ----
-window._membroFotoAtual = null;
-
-async function verFotoMembro(membroId) {
-  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
-  window._membroFotoAtual = membroId;
-  document.getElementById("fotoMembroNome").textContent = pessoa ? pessoa.nome : `matrícula ${membroId}`;
-  document.getElementById("blocoFotoMembro").style.display = "block";
-  document.getElementById("blocoFotoMembro").scrollIntoView({ behavior: "smooth", block: "start" });
-  document.getElementById("resultadoFotoMembro").textContent = "";
-
-  const preview = document.getElementById("fotoMembroPreview");
-  preview.innerHTML = pessoa && pessoa.fotoUrl ? `<img src="${pessoa.fotoUrl}" alt="Foto" style="max-width:160px;border-radius:8px;" />` : "<span class='subtitle'>Sem foto cadastrada.</span>";
-
-  const res = await fetch(`${API_BASE}/lgpd/consentimento/${membroId}`);
-  const data = await res.json();
-  const fotoConsentimento = (data.consentimentos || []).find(c => c.tipo === "FOTO");
-  const statusEl = document.getElementById("fotoMembroStatusConsentimento");
-  statusEl.textContent = fotoConsentimento && fotoConsentimento.concedido
-    ? `✅ Consentimento de Foto concedido em ${fotoConsentimento.dataRegistro}.`
-    : "⚠️ Sem consentimento de Foto concedido — o upload será bloqueado até conceder.";
-}
-
 async function concederConsentimentoFotoAcao() {
   const membroId = window._membroFotoAtual;
   if (!membroId) return;
@@ -1970,15 +2170,6 @@ async function enviarFotoMembroAcao() {
 
 // ---- CASAMENTOS (v1.9 — Reg. Art. 83) ----
 const ROTULO_MODALIDADE_CASAMENTO = { CIVIL_E_RELIGIOSO: "Civil e Religioso", SOMENTE_RELIGIOSO: "Somente Religioso" };
-
-async function verCasamentosMembro(membroId) {
-  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
-  window._membroCasamentosAtual = membroId;
-  document.getElementById("casamentoMembroNome").textContent = pessoa ? pessoa.nome : `matrícula ${membroId}`;
-  document.getElementById("blocoCasamentos").style.display = "block";
-  document.getElementById("blocoCasamentos").scrollIntoView({ behavior: "smooth", block: "start" });
-  await carregarCasamentos(membroId);
-}
 
 async function carregarCasamentos(membroId) {
   const container = document.getElementById("resultadoListaCasamentos");
@@ -2050,15 +2241,6 @@ async function excluirCasamentoAcao(casamentoId) {
 
 // ---- LICENÇA POR CANDIDATURA (v1.9 — Reg. Art. 157 §2º) ----
 const ROTULO_STATUS_LICENCA = { EM_LICENCA: "Em licença", RETORNOU: "Retornou", NAO_RETORNOU: "Não retornou" };
-
-async function verLicencasCandidaturaMembro(membroId) {
-  const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
-  window._membroLicencasAtual = membroId;
-  document.getElementById("licencaMembroNome").textContent = pessoa ? pessoa.nome : `matrícula ${membroId}`;
-  document.getElementById("blocoLicencasCandidatura").style.display = "block";
-  document.getElementById("blocoLicencasCandidatura").scrollIntoView({ behavior: "smooth", block: "start" });
-  await carregarLicencasCandidatura(membroId);
-}
 
 async function carregarLicencasCandidatura(membroId) {
   const container = document.getElementById("resultadoListaLicencasCandidatura");

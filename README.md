@@ -489,6 +489,35 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       mecanismo (`.submenu-aba`/`.btn-subaba`) genérico, pronto pra reaproveitar
       em Órgãos quando crescer do mesmo jeito.
 
+#### v1.10 — Reforma da aba Pessoas + autoatendimento de Foto
+
+A aba Pessoas foi a primeira construída (FASE 0) e nunca tinha recebido o mesmo
+tratamento de navegação de "Meu Painel" (v1.9): abrir "Pessoas" mostrava de cara
+um formulário de ~25 campos antes da lista, e cada linha tinha 5 botões soltos
+(Editar/Histórico/Foto/Casamentos/Licença) numa tabela larga que quebrava até em
+notebook. Padrão de UI adotado — **master-detail** (lista enxuta + visão de
+detalhe) — confirmado como prática consolidada de mercado.
+
+- [x] Submenu lateral com 2 sub-abas: **Cadastrar Pessoa** (formulário em branco)
+      e **Buscar Pessoas** (filtros + import/export, v1.8 + lista enxuta —
+      Matrícula/Nome/Congregação/Status/Situação, uma única ação "Ver Perfil").
+- [x] **Perfil da Pessoa** (aberto a partir de "Ver Perfil"): abas horizontais —
+      Dados (leitura formatada, reaproveita `linhaLgpd`/`formatarValorLgpd` da
+      v1.9), Editar, Histórico, Foto, Casamentos, Licença Candidatura, Vínculos
+      Familiares — consolida os 5 botões soltos que existiam antes. "Desligar"
+      vira ação fixa no cabeçalho do Perfil, fora das abas.
+- [x] Autoatendimento de Foto (`api/MinhaFoto`, novo): até aqui só a Secretaria
+      conseguia subir a foto do membro (`UploadFotoMembro`, permissão `"pessoas"`)
+      — o próprio membro não tinha onde ver/trocar a própria foto pelo Meu
+      Painel. Novo bloco em "Meus Dados (LGPD)", mesma trava real de
+      consentimento (`ConsentimentosLGPD` Tipo='FOTO') que já existia do lado
+      Secretaria.
+- [ ] *(Fora desta rodada, próxima versão)* Fluxo de autoedição com aprovação:
+      o próprio membro edita alguns dos seus dados (não só a foto) e a Secretaria
+      só confirma, em vez de digitar tudo do zero — fila de pedidos de edição +
+      tela de aprovação. Ainda não desenhado (que campos entram, quem aprova,
+      como fica o histórico da mudança).
+
 ### FASE 2 — Governança (órgãos e deliberações)
 
 #### v2.0 — Submenu por órgão na aba Reuniões (pré-requisito de navegação)

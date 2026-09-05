@@ -82,6 +82,10 @@
           </div>
           <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
           <button class="btn-aba" id="btnAbaPessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
+          <div class="submenu-aba" id="submenuPessoas">
+            <button class="btn-subaba ativo" id="btnSubPessoasCadastrar" onclick="mostrarSubAbaPessoas('cadastrar')"><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
+            <button class="btn-subaba" id="btnSubPessoasBuscar" onclick="mostrarSubAbaPessoas('buscar')"><span class="icone">🔍</span><span class="rotulo">Buscar Pessoas</span></button>
+          </div>
           <button class="btn-aba" id="btnAbaCartas" onclick="mostrarAbaSecretaria('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
           <button class="btn-aba" id="btnAbaOrgaos" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
           <button class="btn-aba" id="btnAbaEstrutura" onclick="mostrarAbaSecretaria('estrutura')"><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
@@ -145,6 +149,17 @@
 
           <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarMeusDadosLGPD()">📄 Ver meus dados</button>
           <div id="cxMeusDadosLGPD" style="display:none; margin-top:12px;"></div>
+
+          <hr />
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">📷 Minha Foto</h4>
+          <p class="subtitle" style="margin:0 0 8px;">Dado sensível (LGPD) — precisa do consentimento acima concedido antes de
+            fazer o upload.</p>
+          <div id="minhaFotoPreview" style="margin:0 0 10px;"></div>
+          <div class="barra-lista">
+            <input type="file" id="minhaFotoArquivo" accept="image/png,image/jpeg,image/webp" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarMinhaFotoAcao()">📷 Enviar Foto</button>
+          </div>
+          <p id="resultadoMinhaFoto" class="subtitle"></p>
 
           <hr />
           <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Minhas solicitações</h4>
@@ -253,265 +268,305 @@
 
       <!-- ABA: PESSOAS -->
       <div id="abaPessoas" class="aba-secretaria" style="display:none;">
-        <h3>Cadastrar / Editar Pessoa</h3>
-        <form onsubmit="event.preventDefault(); salvarPessoa();">
-          <div class="input-group">
-            <label>Matrícula:</label>
-            <input type="number" id="pessoaMatricula" placeholder="Ex: 15" />
-          </div>
-          <div class="input-group">
-            <label>Nome completo:</label>
-            <input type="text" id="pessoaNome" placeholder="Ex: Maria da Silva" />
-          </div>
-          <div class="input-group">
-            <label>Cargo Ministerial (escada — Art. 71):</label>
-            <select id="pessoaCargoMinisterial"><option value="">Não informado</option></select>
-          </div>
-          <div class="input-group">
-            <label>Congregação:</label>
-            <select id="pessoaCongregacao"></select>
-          </div>
-          <div class="input-group">
-            <label>Departamento de afiliação:</label>
-            <select id="pessoaDepartamento"><option value="">Não informado</option></select>
-          </div>
-          <div class="input-group">
-            <label>Extensão da Tenda (se houver):</label>
-            <select id="pessoaExtensao"><option value="">Não se aplica (fica só na Congregação)</option></select>
-          </div>
-          <div class="input-group">
-            <label>Status:</label>
-            <select id="pessoaStatus"></select>
-          </div>
-          <div class="input-group">
-            <label>Data de Nascimento:</label>
-            <input type="date" id="pessoaDataNascimento" />
-          </div>
-          <div class="input-group">
-            <label>Data de Admissão (batismo/recepção):</label>
-            <input type="date" id="pessoaDataAdmissao" />
-          </div>
-          <div class="input-group">
-            <label>Forma de Admissão (Art. 6º §1º):</label>
-            <select id="pessoaFormaAdmissao">
-              <option value="">Não informado</option>
-              <option value="BATISMO">Batismo nas águas</option>
-              <option value="CARTA_MUDANCA">Carta de Mudança</option>
-              <option value="RECONCILIACAO">Reconciliação</option>
-              <option value="ACLAMACAO">Aclamação</option>
-            </select>
-          </div>
-          <div class="input-group">
-            <label>Data do Batismo nas águas:</label>
-            <input type="date" id="pessoaDataBatismo" />
-          </div>
-          <div class="input-group">
-            <label>Origem (procedência):</label>
-            <input type="text" id="pessoaOrigem" placeholder="Ex: evangelismo local, retorno à comunhão" />
-          </div>
-          <div class="input-group">
-            <label>Igreja Anterior (se Carta de Mudança):</label>
-            <input type="text" id="pessoaIgrejaAnterior" placeholder="Ex: Igreja/ministério de origem" />
-          </div>
-          <p class="subtitle" style="margin:16px 0 4px;">Rito Público de Recebimento (Regimento Art. 130 — leitura do nome e apresentação à igreja):</p>
-          <div class="input-group">
-            <label>Data do rito público:</label>
-            <input type="date" id="pessoaDataRitoRecebimento" />
-          </div>
-          <div class="input-group">
-            <label>Nome lido no ato:</label>
-            <input type="text" id="pessoaNomeLidoRito" placeholder="Nome como foi lido à igreja" />
-          </div>
-          <div class="input-group">
-            <label>Ministrante (quem apresentou/orou):</label>
-            <input type="text" id="pessoaMinistranteRito" placeholder="Ex: Pastor/Dirigente que declarou recebido" />
-          </div>
-          <div class="input-group">
-            <label>Situação:</label>
-            <select id="pessoaSituacao">
-              <option value="EM_COMUNHAO">Membro em Comunhão</option>
-              <option value="SEM_COMUNHAO">Membro sem Comunhão</option>
-              <option value="CONGREGADO">Congregado</option>
-            </select>
-          </div>
-          <div class="input-group">
-            <label>Estado Civil:</label>
-            <select id="pessoaEstadoCivil">
-              <option value="">Não informado</option>
-              <option value="SOLTEIRO">Solteiro(a)</option>
-              <option value="CASADO">Casado(a)</option>
-              <option value="VIUVO">Viúvo(a)</option>
-              <option value="DIVORCIADO">Divorciado(a)</option>
-              <option value="UNIAO_ESTAVEL">União Estável</option>
-            </select>
-          </div>
-          <div class="input-group">
-            <label>Dizimista Fiel (só o Geral pode afirmar):</label>
-            <select id="pessoaDizimista">
-              <option value="">Não informado</option>
-              <option value="true">Sim</option>
-              <option value="false">Não</option>
-            </select>
-          </div>
-          <p class="subtitle" style="margin:16px 0 4px;">Perda de Membresia (Reg. Art. 11 — v1.5): preencha se a pessoa se afastou ou saiu.</p>
-          <div class="input-group">
-            <label>Data do Afastamento (início da contagem do Abandono Material, 90 dias):</label>
-            <input type="date" id="pessoaDataAfastamento" />
-          </div>
-          <div class="input-group">
-            <label>Causa da Saída (se o Status for Desligado/Falecido):</label>
-            <select id="pessoaMotivoSaida">
-              <option value="">Não se aplica</option>
-              <option value="FALECIMENTO">Falecimento</option>
-              <option value="DESLIGAMENTO">Desligamento</option>
-              <option value="CARTA_MUDANCA">Carta de Mudança</option>
-              <option value="EXCLUSAO">Exclusão</option>
-              <option value="ABANDONO_MATERIAL">Abandono Material</option>
-              <option value="ABANDONO_DIGITAL">Abandono Digital</option>
-            </select>
-          </div>
-          <p class="subtitle" style="margin:16px 0 4px;">Dados de contato (LGPD — coleta mínima, uso restrito a quem tem permissão de Pessoas):</p>
-          <div class="input-group">
-            <label>Telefone/WhatsApp:</label>
-            <input type="tel" id="pessoaTelefone" placeholder="Ex: (11) 91234-5678" />
-          </div>
-          <div class="input-group">
-            <label>E-mail:</label>
-            <input type="email" id="pessoaEmail" placeholder="Ex: nome@exemplo.com" />
-          </div>
-          <div class="input-group">
-            <label>Endereço:</label>
-            <input type="text" id="pessoaEndereco" placeholder="Rua, número, bairro, cidade" />
-          </div>
-          <button class="btn-confirmar" type="submit">💾 Salvar Pessoa</button>
-        </form>
-        <p id="resultadoPessoa"></p>
 
-        <div id="blocoVinculosFamiliares" class="cartao-perfil" style="display:none; margin:16px 0;">
-          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Vínculos Familiares de <span id="vinculoFamiliaNome"></span></h4>
-          <div class="barra-lista">
-            <select id="vinculoTipo"></select>
-            <input type="number" id="vinculoMatriculaParente" placeholder="Matrícula da outra pessoa" style="min-width:180px;" />
-            <label style="display:flex;align-items:center;gap:4px;">
-              <input type="checkbox" id="vinculoResponsavelLegal" /> A outra pessoa é Responsável Legal (menor de idade)
-            </label>
-            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarVinculoFamiliar()">➕ Adicionar Vínculo</button>
-          </div>
-          <div class="rolagem-tabela"><div id="resultadoListaVinculosFamiliares"></div></div>
+        <!-- Formulário de cadastro/edição — um único elemento no DOM, movido entre
+             o slot de Cadastrar e o slot de Editar (aba Perfil) via JS, pra não
+             duplicar ~25 campos com ids repetidos. Ver moverFormPessoaPara(). -->
+        <div id="blocoFormPessoa" style="display:none;">
+          <form onsubmit="event.preventDefault(); salvarPessoa();">
+            <div class="input-group">
+              <label>Matrícula:</label>
+              <input type="number" id="pessoaMatricula" placeholder="Ex: 15" />
+            </div>
+            <div class="input-group">
+              <label>Nome completo:</label>
+              <input type="text" id="pessoaNome" placeholder="Ex: Maria da Silva" />
+            </div>
+            <div class="input-group">
+              <label>Cargo Ministerial (escada — Art. 71):</label>
+              <select id="pessoaCargoMinisterial"><option value="">Não informado</option></select>
+            </div>
+            <div class="input-group">
+              <label>Congregação:</label>
+              <select id="pessoaCongregacao"></select>
+            </div>
+            <div class="input-group">
+              <label>Departamento de afiliação:</label>
+              <select id="pessoaDepartamento"><option value="">Não informado</option></select>
+            </div>
+            <div class="input-group">
+              <label>Extensão da Tenda (se houver):</label>
+              <select id="pessoaExtensao"><option value="">Não se aplica (fica só na Congregação)</option></select>
+            </div>
+            <div class="input-group">
+              <label>Status:</label>
+              <select id="pessoaStatus"></select>
+            </div>
+            <div class="input-group">
+              <label>Data de Nascimento:</label>
+              <input type="date" id="pessoaDataNascimento" />
+            </div>
+            <div class="input-group">
+              <label>Data de Admissão (batismo/recepção):</label>
+              <input type="date" id="pessoaDataAdmissao" />
+            </div>
+            <div class="input-group">
+              <label>Forma de Admissão (Art. 6º §1º):</label>
+              <select id="pessoaFormaAdmissao">
+                <option value="">Não informado</option>
+                <option value="BATISMO">Batismo nas águas</option>
+                <option value="CARTA_MUDANCA">Carta de Mudança</option>
+                <option value="RECONCILIACAO">Reconciliação</option>
+                <option value="ACLAMACAO">Aclamação</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Data do Batismo nas águas:</label>
+              <input type="date" id="pessoaDataBatismo" />
+            </div>
+            <div class="input-group">
+              <label>Origem (procedência):</label>
+              <input type="text" id="pessoaOrigem" placeholder="Ex: evangelismo local, retorno à comunhão" />
+            </div>
+            <div class="input-group">
+              <label>Igreja Anterior (se Carta de Mudança):</label>
+              <input type="text" id="pessoaIgrejaAnterior" placeholder="Ex: Igreja/ministério de origem" />
+            </div>
+            <p class="subtitle" style="margin:16px 0 4px;">Rito Público de Recebimento (Regimento Art. 130 — leitura do nome e apresentação à igreja):</p>
+            <div class="input-group">
+              <label>Data do rito público:</label>
+              <input type="date" id="pessoaDataRitoRecebimento" />
+            </div>
+            <div class="input-group">
+              <label>Nome lido no ato:</label>
+              <input type="text" id="pessoaNomeLidoRito" placeholder="Nome como foi lido à igreja" />
+            </div>
+            <div class="input-group">
+              <label>Ministrante (quem apresentou/orou):</label>
+              <input type="text" id="pessoaMinistranteRito" placeholder="Ex: Pastor/Dirigente que declarou recebido" />
+            </div>
+            <div class="input-group">
+              <label>Situação:</label>
+              <select id="pessoaSituacao">
+                <option value="EM_COMUNHAO">Membro em Comunhão</option>
+                <option value="SEM_COMUNHAO">Membro sem Comunhão</option>
+                <option value="CONGREGADO">Congregado</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Estado Civil:</label>
+              <select id="pessoaEstadoCivil">
+                <option value="">Não informado</option>
+                <option value="SOLTEIRO">Solteiro(a)</option>
+                <option value="CASADO">Casado(a)</option>
+                <option value="VIUVO">Viúvo(a)</option>
+                <option value="DIVORCIADO">Divorciado(a)</option>
+                <option value="UNIAO_ESTAVEL">União Estável</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Dizimista Fiel (só o Geral pode afirmar):</label>
+              <select id="pessoaDizimista">
+                <option value="">Não informado</option>
+                <option value="true">Sim</option>
+                <option value="false">Não</option>
+              </select>
+            </div>
+            <p class="subtitle" style="margin:16px 0 4px;">Perda de Membresia (Reg. Art. 11 — v1.5): preencha se a pessoa se afastou ou saiu.</p>
+            <div class="input-group">
+              <label>Data do Afastamento (início da contagem do Abandono Material, 90 dias):</label>
+              <input type="date" id="pessoaDataAfastamento" />
+            </div>
+            <div class="input-group">
+              <label>Causa da Saída (se o Status for Desligado/Falecido):</label>
+              <select id="pessoaMotivoSaida">
+                <option value="">Não se aplica</option>
+                <option value="FALECIMENTO">Falecimento</option>
+                <option value="DESLIGAMENTO">Desligamento</option>
+                <option value="CARTA_MUDANCA">Carta de Mudança</option>
+                <option value="EXCLUSAO">Exclusão</option>
+                <option value="ABANDONO_MATERIAL">Abandono Material</option>
+                <option value="ABANDONO_DIGITAL">Abandono Digital</option>
+              </select>
+            </div>
+            <p class="subtitle" style="margin:16px 0 4px;">Dados de contato (LGPD — coleta mínima, uso restrito a quem tem permissão de Pessoas):</p>
+            <div class="input-group">
+              <label>Telefone/WhatsApp:</label>
+              <input type="tel" id="pessoaTelefone" placeholder="Ex: (11) 91234-5678" />
+            </div>
+            <div class="input-group">
+              <label>E-mail:</label>
+              <input type="email" id="pessoaEmail" placeholder="Ex: nome@exemplo.com" />
+            </div>
+            <div class="input-group">
+              <label>Endereço:</label>
+              <input type="text" id="pessoaEndereco" placeholder="Rua, número, bairro, cidade" />
+            </div>
+            <button class="btn-confirmar" type="submit">💾 Salvar Pessoa</button>
+          </form>
+          <p id="resultadoPessoa"></p>
+          <p id="linkPerfilAposCadastro"></p>
         </div>
 
-        <div id="blocoFotoMembro" class="cartao-perfil" style="display:none; margin:16px 0;">
-          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Foto de <span id="fotoMembroNome"></span></h4>
-          <p class="subtitle" style="margin:0 0 8px;">Dado sensível (LGPD) — o consentimento precisa estar concedido antes de
-            fazer o upload. Não é registro paralelo como telefone/e-mail: sem consentimento, o sistema bloqueia.</p>
-          <div id="fotoMembroPreview" style="margin:0 0 10px;"></div>
-          <p id="fotoMembroStatusConsentimento" class="subtitle"></p>
-          <div class="barra-lista">
-            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="concederConsentimentoFotoAcao()">✅ Conceder Consentimento de Foto</button>
-            <input type="file" id="fotoMembroArquivo" accept="image/png,image/jpeg,image/webp" />
-            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarFotoMembroAcao()">📷 Enviar Foto</button>
-          </div>
-          <p id="resultadoFotoMembro"></p>
+        <!-- SUB-ABA: CADASTRAR PESSOA -->
+        <div id="subPessoasCadastrar" class="sub-aba-secretaria">
+          <h3>Cadastrar Pessoa</h3>
+          <div id="slotFormPessoaCadastrar"></div>
         </div>
 
-        <div id="blocoHistoricoMembro" class="cartao-perfil" style="display:none; margin:16px 0;">
-          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Linha do Tempo — <span id="historicoMembroNome"></span></h4>
-          <div class="rolagem-tabela"><div id="resultadoHistoricoMembro"></div></div>
-          <hr />
-          <p class="subtitle" style="margin:16px 0 4px;">Registrar Marco (conversão, ministério/igreja anterior, batismo no
-            Espírito Santo — eventos que não têm outro lugar no sistema):</p>
+        <!-- SUB-ABA: BUSCAR PESSOAS -->
+        <div id="subPessoasBuscar" class="sub-aba-secretaria" style="display:none;">
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Importar Pessoas (planilha)</h4>
+          <p class="subtitle" style="margin:0 0 8px;">Só Matrícula, Nome e Situação — o restante continua sendo preenchido
+            manualmente no cadastro individual.</p>
           <div class="barra-lista">
-            <select id="marcoTipo">
-              <option value="CONVERSAO">Conversão</option>
-              <option value="MINISTERIO_ANTERIOR">Ministério/Igreja anterior</option>
-              <option value="BATISMO_ESPIRITO_SANTO">Batismo no Espírito Santo</option>
-              <option value="OUTRO">Outro</option>
-            </select>
-            <input type="text" id="marcoDescricao" placeholder="Descrição" style="min-width:220px;" />
-            <input type="date" id="marcoData" />
-            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="marcoDataAproximada" /> Data aproximada</label>
-            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarMarcoMembroAcao()">➕ Registrar</button>
+            <input type="file" id="arquivoExcelPessoas" accept=".xlsx,.xls" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="baixarModeloPessoas()">📄 Baixar modelo</button>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="prepararImportacaoPessoas()">📥 Importar Pessoas</button>
           </div>
-          <p id="resultadoMarcoMembro"></p>
-        </div>
+          <p id="resultadoImportacaoPessoas"></p>
 
-        <div id="blocoCasamentos" class="cartao-perfil" style="display:none; margin:16px 0;">
-          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Casamentos de <span id="casamentoMembroNome"></span></h4>
-          <p class="subtitle" style="margin:0 0 8px;">Reg. Art. 83 — celebrante, modalidade e habilitação civil (validade de
-            90 dias, vedado celebrar nos últimos 5 dias).</p>
-          <div class="rolagem-tabela"><div id="resultadoListaCasamentos"></div></div>
           <hr />
           <div class="barra-lista">
-            <input type="number" id="casamentoConjugeMatricula" placeholder="Matrícula do cônjuge (se for membro)" style="min-width:220px;" />
-            <input type="text" id="casamentoConjugeNome" placeholder="Nome do cônjuge (se não for membro)" style="min-width:220px;" />
-          </div>
-          <div class="barra-lista">
-            <input type="text" id="casamentoCelebrante" placeholder="Celebrante" style="min-width:180px;" />
-            <select id="casamentoModalidade">
-              <option value="CIVIL_E_RELIGIOSO">Civil e Religioso</option>
-              <option value="SOMENTE_RELIGIOSO">Somente Religioso</option>
+            <input type="text" id="pessoasBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroPessoas()" />
+            <select id="pessoasFiltroCategoria" onchange="aplicarFiltroPessoas()">
+              <option value="">Todas as categorias</option>
+              <option value="Membro Elegível">Membro Elegível</option>
+              <option value="Capacidade Eleitoral Ativa">Capacidade Eleitoral Ativa</option>
+              <option value="Membro em Comunhão">Membro em Comunhão</option>
+              <option value="Sem comunhão">Sem comunhão</option>
+              <option value="Congregado">Congregado</option>
+              <option value="Dados incompletos">Dados incompletos</option>
             </select>
+            <select id="pessoasFiltroCongregacao" onchange="aplicarFiltroPessoas()">
+              <option value="">Todas as congregações</option>
+            </select>
+            <select id="pessoasFiltroSituacao" onchange="aplicarFiltroPessoas()">
+              <option value="">Todas as situações</option>
+            </select>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirModalExportarPessoas()">📤 Exportar</button>
+            <span id="pessoasInfo" class="subtitle" style="margin:0;"></span>
           </div>
-          <div class="barra-lista">
-            <label>Habilitação civil: <input type="date" id="casamentoDataHabilitacao" /></label>
-            <label>Data do casamento: <input type="date" id="casamentoData" /></label>
-            <label style="display:flex;align-items:center;gap:4px;">
-              <input type="checkbox" id="casamentoRegistradoCartorio" /> Já registrado em cartório
-            </label>
-            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarCasamento()">➕ Registrar Casamento</button>
+          <div class="rolagem-tabela">
+            <div id="resultadoListaPessoas"></div>
           </div>
-          <p id="resultadoCasamento"></p>
+          <div class="paginacao" id="pessoasPaginacao"></div>
         </div>
 
-        <div id="blocoLicencasCandidatura" class="cartao-perfil" style="display:none; margin:16px 0;">
-          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Licença por Candidatura de <span id="licencaMembroNome"></span></h4>
-          <p class="subtitle" style="margin:0 0 8px;">Reg. Art. 157 §2º — licença automática 90 dias antes do pleito (perde o
-            púlpito); o retorno depende da Diretoria decidir depois da eleição.</p>
-          <div class="rolagem-tabela"><div id="resultadoListaLicencasCandidatura"></div></div>
-          <hr />
-          <div class="barra-lista">
-            <label>Data do pleito: <input type="date" id="licencaDataPleito" /></label>
-            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarLicencaCandidatura()">➕ Registrar Licença</button>
+        <!-- PERFIL DA PESSOA — não é sub-aba do submenu lateral, é uma visão
+             contextual aberta a partir de "Ver Perfil" (Buscar) ou do link pós-cadastro. -->
+        <div id="subPessoasPerfil" class="sub-aba-secretaria" style="display:none;">
+          <button class="btn-link" onclick="voltarBuscaPessoas()">← Voltar à busca</button>
+          <div class="cartao-perfil" style="margin:12px 0;">
+            <div class="barra-lista" style="justify-content:space-between;">
+              <div>
+                <h3 id="perfilPessoaNome" style="margin:0 0 4px;"></h3>
+                <p class="subtitle" id="perfilPessoaSubtitulo" style="margin:0;"></p>
+              </div>
+              <button class="btn-confirmar btn-perigo" style="width:auto;margin:0;" id="btnDesligarPerfil" onclick="desligarPessoaPerfilAcao()">🚫 Desligar</button>
+            </div>
           </div>
-          <p id="resultadoLicencaCandidatura"></p>
-        </div>
 
-        <hr />
-        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Importar Pessoas (planilha)</h4>
-        <p class="subtitle" style="margin:0 0 8px;">Só Matrícula, Nome e Situação — o restante continua sendo preenchido
-          manualmente no cadastro individual acima.</p>
-        <div class="barra-lista">
-          <input type="file" id="arquivoExcelPessoas" accept=".xlsx,.xls" />
-          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="baixarModeloPessoas()">📄 Baixar modelo</button>
-          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="prepararImportacaoPessoas()">📥 Importar Pessoas</button>
-        </div>
-        <p id="resultadoImportacaoPessoas"></p>
+          <div class="tabs-perfil" id="tabsPerfil">
+            <button class="btn-tab-perfil ativo" id="btnTabPerfilDados" onclick="mostrarAbaPerfil('dados')">📋 Dados</button>
+            <button class="btn-tab-perfil" id="btnTabPerfilEditar" onclick="mostrarAbaPerfil('editar')">✏️ Editar</button>
+            <button class="btn-tab-perfil" id="btnTabPerfilHistorico" onclick="mostrarAbaPerfil('historico')">🕒 Histórico</button>
+            <button class="btn-tab-perfil" id="btnTabPerfilFoto" onclick="mostrarAbaPerfil('foto')">📷 Foto</button>
+            <button class="btn-tab-perfil" id="btnTabPerfilCasamentos" onclick="mostrarAbaPerfil('casamentos')">💍 Casamentos</button>
+            <button class="btn-tab-perfil" id="btnTabPerfilLicenca" onclick="mostrarAbaPerfil('licenca')">🗳️ Licença Candidatura</button>
+            <button class="btn-tab-perfil" id="btnTabPerfilVinculos" onclick="mostrarAbaPerfil('vinculos')">👪 Vínculos Familiares</button>
+          </div>
 
-        <hr />
-        <div class="barra-lista">
-          <input type="text" id="pessoasBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroPessoas()" />
-          <select id="pessoasFiltroCategoria" onchange="aplicarFiltroPessoas()">
-            <option value="">Todas as categorias</option>
-            <option value="Membro Elegível">Membro Elegível</option>
-            <option value="Capacidade Eleitoral Ativa">Capacidade Eleitoral Ativa</option>
-            <option value="Membro em Comunhão">Membro em Comunhão</option>
-            <option value="Sem comunhão">Sem comunhão</option>
-            <option value="Congregado">Congregado</option>
-            <option value="Dados incompletos">Dados incompletos</option>
-          </select>
-          <select id="pessoasFiltroCongregacao" onchange="aplicarFiltroPessoas()">
-            <option value="">Todas as congregações</option>
-          </select>
-          <select id="pessoasFiltroSituacao" onchange="aplicarFiltroPessoas()">
-            <option value="">Todas as situações</option>
-          </select>
-          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirModalExportarPessoas()">📤 Exportar</button>
-          <span id="pessoasInfo" class="subtitle" style="margin:0;"></span>
+          <div id="tabPerfilDados" class="tab-conteudo-perfil"></div>
+
+          <div id="tabPerfilEditar" class="tab-conteudo-perfil" style="display:none;">
+            <div id="slotFormPessoaEditar"></div>
+          </div>
+
+          <div id="tabPerfilHistorico" class="tab-conteudo-perfil" style="display:none;">
+            <div class="rolagem-tabela"><div id="resultadoHistoricoMembro"></div></div>
+            <hr />
+            <p class="subtitle" style="margin:16px 0 4px;">Registrar Marco (conversão, ministério/igreja anterior, batismo no
+              Espírito Santo — eventos que não têm outro lugar no sistema):</p>
+            <div class="barra-lista">
+              <select id="marcoTipo">
+                <option value="CONVERSAO">Conversão</option>
+                <option value="MINISTERIO_ANTERIOR">Ministério/Igreja anterior</option>
+                <option value="BATISMO_ESPIRITO_SANTO">Batismo no Espírito Santo</option>
+                <option value="OUTRO">Outro</option>
+              </select>
+              <input type="text" id="marcoDescricao" placeholder="Descrição" style="min-width:220px;" />
+              <input type="date" id="marcoData" />
+              <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="marcoDataAproximada" /> Data aproximada</label>
+              <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarMarcoMembroAcao()">➕ Registrar</button>
+            </div>
+            <p id="resultadoMarcoMembro"></p>
+          </div>
+
+          <div id="tabPerfilFoto" class="tab-conteudo-perfil" style="display:none;">
+            <p class="subtitle" style="margin:0 0 8px;">Dado sensível (LGPD) — o consentimento precisa estar concedido antes de
+              fazer o upload. Não é registro paralelo como telefone/e-mail: sem consentimento, o sistema bloqueia.</p>
+            <div id="fotoMembroPreview" style="margin:0 0 10px;"></div>
+            <p id="fotoMembroStatusConsentimento" class="subtitle"></p>
+            <div class="barra-lista">
+              <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="concederConsentimentoFotoAcao()">✅ Conceder Consentimento de Foto</button>
+              <input type="file" id="fotoMembroArquivo" accept="image/png,image/jpeg,image/webp" />
+              <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarFotoMembroAcao()">📷 Enviar Foto</button>
+            </div>
+            <p id="resultadoFotoMembro"></p>
+          </div>
+
+          <div id="tabPerfilCasamentos" class="tab-conteudo-perfil" style="display:none;">
+            <p class="subtitle" style="margin:0 0 8px;">Reg. Art. 83 — celebrante, modalidade e habilitação civil (validade de
+              90 dias, vedado celebrar nos últimos 5 dias).</p>
+            <div class="rolagem-tabela"><div id="resultadoListaCasamentos"></div></div>
+            <hr />
+            <div class="barra-lista">
+              <input type="number" id="casamentoConjugeMatricula" placeholder="Matrícula do cônjuge (se for membro)" style="min-width:220px;" />
+              <input type="text" id="casamentoConjugeNome" placeholder="Nome do cônjuge (se não for membro)" style="min-width:220px;" />
+            </div>
+            <div class="barra-lista">
+              <input type="text" id="casamentoCelebrante" placeholder="Celebrante" style="min-width:180px;" />
+              <select id="casamentoModalidade">
+                <option value="CIVIL_E_RELIGIOSO">Civil e Religioso</option>
+                <option value="SOMENTE_RELIGIOSO">Somente Religioso</option>
+              </select>
+            </div>
+            <div class="barra-lista">
+              <label>Habilitação civil: <input type="date" id="casamentoDataHabilitacao" /></label>
+              <label>Data do casamento: <input type="date" id="casamentoData" /></label>
+              <label style="display:flex;align-items:center;gap:4px;">
+                <input type="checkbox" id="casamentoRegistradoCartorio" /> Já registrado em cartório
+              </label>
+              <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarCasamento()">➕ Registrar Casamento</button>
+            </div>
+            <p id="resultadoCasamento"></p>
+          </div>
+
+          <div id="tabPerfilLicenca" class="tab-conteudo-perfil" style="display:none;">
+            <p class="subtitle" style="margin:0 0 8px;">Reg. Art. 157 §2º — licença automática 90 dias antes do pleito (perde o
+              púlpito); o retorno depende da Diretoria decidir depois da eleição.</p>
+            <div class="rolagem-tabela"><div id="resultadoListaLicencasCandidatura"></div></div>
+            <hr />
+            <div class="barra-lista">
+              <label>Data do pleito: <input type="date" id="licencaDataPleito" /></label>
+              <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarLicencaCandidatura()">➕ Registrar Licença</button>
+            </div>
+            <p id="resultadoLicencaCandidatura"></p>
+          </div>
+
+          <div id="tabPerfilVinculos" class="tab-conteudo-perfil" style="display:none;">
+            <div class="barra-lista">
+              <select id="vinculoTipo"></select>
+              <input type="number" id="vinculoMatriculaParente" placeholder="Matrícula da outra pessoa" style="min-width:180px;" />
+              <label style="display:flex;align-items:center;gap:4px;">
+                <input type="checkbox" id="vinculoResponsavelLegal" /> A outra pessoa é Responsável Legal (menor de idade)
+              </label>
+              <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarVinculoFamiliar()">➕ Adicionar Vínculo</button>
+            </div>
+            <div class="rolagem-tabela"><div id="resultadoListaVinculosFamiliares"></div></div>
+          </div>
         </div>
-        <div class="rolagem-tabela">
-          <div id="resultadoListaPessoas"></div>
-        </div>
-        <div class="paginacao" id="pessoasPaginacao"></div>
       </div>
 
       <!-- ABA: CARTAS DE TRÂNSITO -->

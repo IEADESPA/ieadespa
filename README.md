@@ -753,19 +753,13 @@ sistema já tem — as outras 2 dependem de peça que ainda não existe.
       membros ativos, `api/GestaoComissoes` (`POST /api/comissoes/ccj`,
       `.../encerrar`). Tela dentro do submenu CLI de Reuniões, junto de
       Composição/Assentos (mesmo "tudo da CLI na tela dela" do v2.3).
-CDER (Art. 22) e CME (Art. 23) **não ficam aqui** — cada uma já está
-registrada como item próprio no lugar onde nasce de verdade: CDER em `v8.1`
-(precisa do Reitor da AFM) e CME em `v9.2` (precisa do cargo "Secretário de
-Missões"). Não é pra voltar em v2.4 pra conferir — quando chegar a hora
-dessas versões, o item já está lá.
-
-- [ ] Parecer das comissões em 15 dias, regime de urgência 2/3, derrubada/
-      manutenção de veto (Art. 24-25 do Regimento): bloqueado — depende de um
-      sistema de "Projetos/Proposições" (protocolo, tramitação, prazo) que não
-      existe ainda; construir o prazo sem a tramitação por baixo não tem em
-      que se apoiar. Natureza parecida com o que foi descartado nas
-      deliberações da CLI (v2.3), mas aqui não é descarte — só falta a peça
-      de baixo antes de valer a pena.
+CDER (Art. 22), CME (Art. 23) e o Parecer das comissões em 15 dias (Art.
+24-25 do Regimento) **não ficam aqui** — cada um já está registrado como item
+próprio no lugar onde nasce de verdade: CDER em `v8.1` (precisa do Reitor da
+AFM), CME em `v9.2` (precisa do cargo "Secretário de Missões") e o Parecer
+das comissões em `v2.8` (precisa do modelo `Pautas`, que nasce ali). Não é
+pra voltar em v2.4 pra conferir — quando chegar a hora dessas versões, o item
+já está lá. **v2.4 está fechado** com isso.
 
 #### v2.5 — Diretoria Executiva
 
@@ -811,6 +805,16 @@ dessas versões, o item já está lá.
 - [ ] Fluxo de candidatura usando `elegivelDiretoriaConselhoFiscal` / `elegivelCEIouDepartamentos`.
 - [ ] Eleição completa de Diretoria Executiva e Conselho Fiscal.
 - [ ] Pautas de reforma estatutária / destituição com rito de 3 estágios.
+- [ ] **Tramitação de Projetos e Parecer das Comissões** (Regimento, Art. 24-25 —
+      vinha adiada de v2.4): etapa que antecede a `Pauta` acima, não é item
+      solto — todo projeto protocolado é despachado pra CCJ e pra comissão
+      temática (`shared/comissoes.js`), que têm 15 dias pra emitir parecer
+      (favorável/contrário/regime de urgência 2/3); só depois disso o projeto
+      vira uma `Pauta` apta a entrar em votação. Modelo: `Projetos` (protocolo,
+      autor, texto, status) + `PareceresComissao` (ProjetoId, Sigla, parecer,
+      data, prazo calculado na leitura — mesmo padrão de `ProcessosDisciplinares`).
+      Derrubada/manutenção de veto presidencial sobre resolução aprovada
+      também nasce aqui, depois da apuração.
 
 #### v2.9 — Documentos, Atas e Registro
 

@@ -749,14 +749,12 @@ sistema já tem — as outras 2 dependem de peça que ainda não existe.
       membros ativos, `api/GestaoComissoes` (`POST /api/comissoes/ccj`,
       `.../encerrar`). Tela dentro do submenu CLI de Reuniões, junto de
       Composição/Assentos (mesmo "tudo da CLI na tela dela" do v2.3).
-- [ ] **CDER** — Comissão de Doutrina e Educação Religiosa (Art. 22):
-      bloqueada — composição exige o Reitor da AFM (Academia de Formação
-      Ministerial), que só existe a partir de `v8.1` (FASE 8). Constrói
-      junto com aquela versão.
-- [ ] **CME** — Comissão de Missões e Expansão Estratégica (Art. 23):
-      bloqueada — composição cita "Secretário de Missões", cargo que não
-      existe em nenhum catálogo hoje. Melhor encaixe é `FASE 9`/`v9.2`
-      Expansão, onde Missões de fato vai ser modelado.
+CDER (Art. 22) e CME (Art. 23) **não ficam aqui** — cada uma já está
+registrada como item próprio no lugar onde nasce de verdade: CDER em `v8.1`
+(precisa do Reitor da AFM) e CME em `v9.2` (precisa do cargo "Secretário de
+Missões"). Não é pra voltar em v2.4 pra conferir — quando chegar a hora
+dessas versões, o item já está lá.
+
 - [ ] Parecer das comissões em 15 dias, regime de urgência 2/3, derrubada/
       manutenção de veto (Art. 24-25 do Regimento): bloqueado — depende de um
       sistema de "Projetos/Proposições" (protocolo, tramitação, prazo) que não
@@ -1167,6 +1165,11 @@ AFM" (Art. 69) pra não contar errado a cada 3 meses.
 - [ ] Matrícula obrigatória de oficiais (Auxiliares→Pastores/Missionários).
 - [ ] Matrícula Ativa × Inativa (desmatriculado perde licença de oficiar).
 - [ ] Níveis de escolaridade: Básico, Médio, Avançado, Bacharel Livre.
+- [ ] **CDER** — Comissão de Doutrina e Educação Religiosa (Regimento, Art. 22):
+      Reitor da AFM + 2 mestres de teologia da CLI. Vinha adiada de v2.4
+      (Comissões Permanentes) porque dependia do Reitor, que nasce aqui —
+      construir junto com o cadastro de Reitor deste item, reaproveitando
+      `shared/comissoes.js` (mesmo padrão de CFO/CEP: calculada quando dá).
 
 #### v8.2 — Escada ministerial e ascensão
 
@@ -1197,6 +1200,11 @@ AFM" (Art. 69) pra não contar errado a cada 3 meses.
 
 - [ ] Abertura de Extensão da Tenda (nível 0) por congregação-mãe.
 - [ ] Emancipação de Extensão → Congregação (CLI).
+- [ ] **CME** — Comissão de Missões e Expansão Estratégica (Regimento, Art.
+      23): Secretário de Missões + Pastores de Área. Vinha adiada de v2.4
+      (Comissões Permanentes) porque dependia do cargo "Secretário de
+      Missões", que precisa nascer aqui (Pastor de Área já existe — só falta
+      esse cargo). Reaproveita `shared/comissoes.js`, mesmo padrão de CFO/CEP.
 
 #### v9.3 — Distrito e macroexpansão
 

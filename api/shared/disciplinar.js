@@ -36,7 +36,7 @@ async function anexarInfracoesEPrazo(pool, sql, processos) {
   const idsValidos = ids.map(Number).filter(Number.isInteger);
   const infracoesResult = idsValidos.length
     ? await pool.request().query(`
-        SELECT pi.ProcessoId AS processoId, ti.InfracaoId AS infracaoId, ti.Codigo AS codigo, ti.Nome AS nome
+        SELECT pi.ProcessoId AS processoId, ti.InfracaoId AS infracaoId, ti.Codigo AS codigo, ti.Nome AS nome, ti.Gravidade AS gravidade
         FROM ProcessoInfracoes pi JOIN TiposInfracao ti ON ti.InfracaoId = pi.InfracaoId
         WHERE pi.ProcessoId IN (${idsValidos.join(",")})
       `)
@@ -44,7 +44,7 @@ async function anexarInfracoesEPrazo(pool, sql, processos) {
   const infracoesPorProcesso = new Map();
   for (const row of infracoesResult.recordset) {
     if (!infracoesPorProcesso.has(row.processoId)) infracoesPorProcesso.set(row.processoId, []);
-    infracoesPorProcesso.get(row.processoId).push({ infracaoId: row.infracaoId, codigo: row.codigo, nome: row.nome });
+    infracoesPorProcesso.get(row.processoId).push({ infracaoId: row.infracaoId, codigo: row.codigo, nome: row.nome, gravidade: row.gravidade });
   }
 
   const hoje = new Date().toISOString().slice(0, 10);

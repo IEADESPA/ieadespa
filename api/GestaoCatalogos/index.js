@@ -90,7 +90,7 @@ const CATALOGOS = {
   },
   tiposInfracao: {
     tabela: "TiposInfracao", chave: "InfracaoId", idField: "infracaoId",
-    campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(200), referenciaRegimento: sql.NVarChar(40), ativo: sql.Bit },
+    campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(200), referenciaRegimento: sql.NVarChar(40), gravidade: sql.NVarChar(20), ativo: sql.Bit },
     permissao: "disciplina"
   }
 };

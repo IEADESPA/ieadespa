@@ -1191,11 +1191,24 @@ infrações (Art. 96-99), que substitui o texto livre isolado.
 #### v3.3 — Código Penal Eclesiástico (graduação e infrações financeiras)
 
 O catálogo `TiposInfracao` em si já foi construído no v3.2 (puxado para
-frente). O que sobra aqui:
+frente) — esta versão só termina de qualificá-lo.
 
-- [ ] Graduação de infrações: leves, médias, graves e gravíssimas.
-- [ ] Infrações de intervenção (Reg. Art. 144): gastos de energia/água, atraso de repasse,
-      despesas pessoais, ausência de notas fiscais.
+- [x] Graduação de infrações: `TiposInfracao` ganhou a coluna `Gravidade`
+      (LEVE/MEDIA/GRAVE/GRAVISSIMA, migração
+      `037_infracoes_gravidade.sql`), preenchida a partir do texto do
+      próprio Regimento (chapéu de cada artigo: Art. 97 e 98 são
+      "infrações de natureza gravíssima" por inteiro; Art. 96 tem piso
+      GRAVE, com GRAVISSIMA nos incisos que citam Exclusão Sumária/crime
+      hediondo; Art. 99 é "advertência, suspensão ou destituição", piso
+      mais baixo). Editável depois pela tela de catálogo (permissão
+      `disciplina`) — é dado de referência, não fórmula fixa. Exibida como
+      badge na abertura de processo (por infração) e na listagem (a mais
+      grave entre as citadas no processo).
+- [x] Infrações de intervenção (Reg. Art. 144): as 4 hipóteses ("gatos" de
+      energia/água, atraso de repasse, despesas pessoais, ausência de nota
+      fiscal) entraram no mesmo catálogo `TiposInfracao` (`ART144-*`), com
+      gravidade GRAVE nas 3 primeiras e MEDIA na última — mesmo molde, sem
+      tabela nova.
 
 #### v3.4 — Julgamento e sanções
 

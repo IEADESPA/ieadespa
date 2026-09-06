@@ -848,7 +848,13 @@ const CATALOGOS_CFG = {
   tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] },
   politicasRetencao: { titulo: "Políticas de Retenção (LGPD)", idField: "politicaId", campos: [["categoria", "Categoria"], ["baseLegal", "Base legal"], ["diasRetencao", "Dias (vazio = indeterminado)"]] },
   canaisOficiais: { titulo: "Canais Oficiais de Comunicação (Art. 12)", idField: "canalId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
-  tiposInfracao: { titulo: "Infrações Disciplinares (Art. 96-99)", idField: "infracaoId", campos: [["codigo", "Código (ex: ART96-I)"], ["nome", "Nome"], ["referenciaRegimento", "Referência (ex: Art. 96, I)"]] }
+  tiposInfracao: {
+    titulo: "Infrações Disciplinares (Art. 96-99, 144)", idField: "infracaoId",
+    campos: [
+      ["codigo", "Código (ex: ART96-I)"], ["nome", "Nome"], ["referenciaRegimento", "Referência (ex: Art. 96, I)"],
+      ["gravidade", "Gravidade", [["LEVE", "Leve"], ["MEDIA", "Média"], ["GRAVE", "Grave"], ["GRAVISSIMA", "Gravíssima"]]]
+    ]
+  }
 };
 // Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
 // pra cima: Extensão da Tenda primeiro, Distrito por último. Órgãos Locais
@@ -4204,10 +4210,11 @@ async function carregarOpcoesFormDisciplina() {
 
   const infRes = await fetch(`${API_BASE}/catalogos/tiposInfracao`);
   const infracoes = await infRes.json();
+  window._catalogoInfracoes = Array.isArray(infracoes) ? infracoes : [];
   const lista = document.getElementById("listaInfracoesAbertura");
-  lista.innerHTML = (Array.isArray(infracoes) ? infracoes : [])
+  lista.innerHTML = window._catalogoInfracoes
     .filter(i => i.ativo !== false)
-    .map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-abertura" value="${i.infracaoId}" style="width:auto;" /> ${i.nome} <span class="subtitle">(${i.referenciaRegimento || i.codigo})</span></label>`)
+    .map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-abertura" value="${i.infracaoId}" style="width:auto;" /> ${i.nome} <span class="subtitle">(${i.referenciaRegimento || i.codigo} — ${badgeGravidade(i.gravidade)})</span></label>`)
     .join("") || "<p class='subtitle'>Nenhuma infração cadastrada no catálogo.</p>";
 
   document.getElementById("catalogoTiposInfracaoConteudo").innerHTML = secaoCatalogo("tiposInfracao");
@@ -4251,6 +4258,13 @@ const ROTULO_SITUACAO_DISCIPLINA = {
 };
 
 const ROTULO_CANAL_CITACAO = { WHATSAPP: "WhatsApp", CARTA_REGISTRADA: "Carta Registrada" };
+const ROTULO_GRAVIDADE = { LEVE: "Leve", MEDIA: "Média", GRAVE: "Grave", GRAVISSIMA: "Gravíssima" };
+const ORDEM_GRAVIDADE = ["LEVE", "MEDIA", "GRAVE", "GRAVISSIMA"];
+const CORES_GRAVIDADE = { LEVE: "badge-ativo", MEDIA: "badge-licenca", GRAVE: "badge-licenca", GRAVISSIMA: "badge-desligado" };
+function badgeGravidade(gravidade) {
+  if (!gravidade) return "";
+  return `<span class="badge-status ${CORES_GRAVIDADE[gravidade] || ""}">${ROTULO_GRAVIDADE[gravidade] || gravidade}</span>`;
+}
 
 function badgeSituacaoDisciplina(situacao) {
   const cores = {
@@ -4278,7 +4292,12 @@ async function carregarProcessosDisciplinares() {
     const podeAfastar = p.status === "EM_ANDAMENTO";
     const podeJulgar = p.status === "EM_ANDAMENTO" || p.status === "AFASTAMENTO_CAUTELAR";
     const podeAjustarPrazo = p.situacaoEfetiva === "CUMPRINDO_SANCAO" || p.situacaoEfetiva === "PRAZO_INDETERMINADO";
+    const maisGrave = (p.infracoes || []).reduce((atual, i) => {
+      if (!i.gravidade) return atual;
+      return !atual || ORDEM_GRAVIDADE.indexOf(i.gravidade) > ORDEM_GRAVIDADE.indexOf(atual) ? i.gravidade : atual;
+    }, null);
     const infracoesTexto = (p.infracoes || []).map(i => i.nome).join(", ") || "-";
+    const infracoesComGravidade = infracoesTexto === "-" ? "-" : `${infracoesTexto} ${badgeGravidade(maisGrave)}`;
     const citacaoTexto = p.dataCitacao ? `${p.dataCitacao} (${ROTULO_CANAL_CITACAO[p.canalCitacao] || p.canalCitacao})` : "-";
     const defesaTexto = p.defesaProtocolada
       ? `Protocolada em ${p.dataDefesa}`
@@ -4286,7 +4305,7 @@ async function carregarProcessosDisciplinares() {
     html += `<tr>
       <td>${p.nome}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${p.defensorNome}</span>` : ""}</td>
       <td>${p.orgaoSigla}</td>
-      <td>${infracoesTexto}</td>
+      <td>${infracoesComGravidade}</td>
       <td>${p.relatorNome || "-"}</td>
       <td>${citacaoTexto}</td>
       <td>${defesaTexto}</td>

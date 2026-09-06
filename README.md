@@ -888,8 +888,45 @@ já está lá. **v2.4 está fechado** com isso.
       (louvor, adoração, coreografias, grupos de teatro, serviço voluntário
       etc.) não são modelados — são todos atividades derivadas de um dos 8
       Departamentos/Secretarias acima, não entidades de governança próprias.
-- [ ] Pastores de Área e Áreas Estratégicas (Art. 48).
-- [ ] Termo de Compromisso de Gestão do Dirigente (Art. 57).
+- [x] Pastores de Área e Áreas Estratégicas (Art. 48). **Já coberto pela
+      infraestrutura existente, sem código novo**: "Áreas Estratégicas" do
+      Art. 48 é a própria `Areas` (Nível 2 da Governança Escalonada, já
+      cadastrada desde o v0.1); "Pastor de Área" já é um Papel
+      (`Nivel = 'AREA'`) desde a migração 002, concedido pela mesma tela de
+      Permissões de sempre. **Importante — não generaliza pros níveis
+      acima**: conferido no Regimento (Art. 104-B e seguintes) que Região
+      (Nível 3) é geridas por um colegiado (CRA + TER), não por um "Pastor de
+      Região" — o próprio Regimento diz que "Dirigentes de congregação comum
+      não têm assento no CRA, sendo representados pelos seus Pastores de
+      Área". Quadrante (Nível 4) é presidido por um Vice-Presidente dentro do
+      CEQ, também colegiado, e ainda "nível de ativação futura". Essas
+      estruturas (CRA/TER/CEQ) não existem no sistema — ficam pra FASE 9
+      (Expansão), não são Art. 48 e não usam o padrão "Pastor de X". Também
+      confirmado que Pastor de Área **não** ganha assento automático na CLI —
+      o Art. 15 §1º, II é uma lista fechada que não o inclui (diferente de
+      Dirigente de Congregação/Líder Geral, itens 1 e 2 acima).
+- [x] Termo de Compromisso de Gestão do Dirigente (Art. 57). Implementado
+      como bloqueio real de acesso, não um registro decorativo — mesmo
+      espírito do consentimento de LGPD (`GestaoConsentimentoLGPD`, do "Meu
+      Painel"), mas travando de fato: `shared/termos.js` cataloga os termos
+      (texto + versão); `TermosAssinados` (migração 031) grava quem assinou
+      qual versão de qual termo. `auth.exigirLogin` — ponto único já usado por
+      `exigirPermissao`/`exigirAlgumaPermissao`/`exigirNivelGlobal`, ou seja,
+      toda rota protegida do sistema — barra com 403 se sobrar termo
+      pendente; `GestaoTermos` (rota `termos/{tipo?}`) usa
+      `exigirLoginIgnorandoTermos` de propósito, pra não travar a própria
+      assinatura, e devolve um token novo já sem o pendente ao assinar.
+      **Dois termos, não um só** (ampliado a pedido do usuário na mesma
+      conversa): "Termo de Compromisso de Gestão e Fidelidade Doutrinária"
+      (Art. 57 do Estatuto) só pra quem tem papel `Nivel = 'CONGREGACAO'`
+      (Dirigente); "Termo de Confidencialidade e Sigilo de Dados" (Regimento
+      Art. 132 + Lei 13.709/18) pra **todo mundo** que loga na Secretaria,
+      citando a infração disciplinar já catalogada ("Violação de Dados,
+      Sigilo e Uso Indevido de Imagem"). `VersaoTermo` existe justamente pra
+      permitir editar o texto manualmente depois (o usuário pediu isso): mudar
+      a versão em `shared/termos.js` faz quem já assinou a antiga voltar a
+      ficar pendente, sem apagar o histórico de assinaturas anteriores (prova
+      documental, Art. 57 §2º).
 - [ ] Autonomia de arrecadação/gasto dos departamentos (Art. 49).
 
 #### v2.8 — Votação e Eleições

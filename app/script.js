@@ -107,7 +107,13 @@ async function fetchProtegido(url, opts = {}) {
     throw new Error("Sessão expirada");
   }
   if (res.status === 403) {
-    mostrarToast("Você não tem permissão para essa ação.", "erro");
+    const data = await res.clone().json().catch(() => null);
+    if (data && data.termosPendentes && data.termosPendentes.length > 0) {
+      mostrarToast("Assine os termos pendentes para continuar.", "erro");
+      mostrarModalTermos(data.termosPendentes);
+    } else {
+      mostrarToast("Você não tem permissão para essa ação.", "erro");
+    }
   }
   return res;
 }
@@ -162,14 +168,77 @@ async function acessarPainel() {
       return;
     }
     salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel);
+    document.getElementById("senhaPainel").value = "";
+    msg.textContent = "";
+    if (data.termosPendentes && data.termosPendentes.length > 0) {
+      await mostrarModalTermos(data.termosPendentes);
+      return;
+    }
   } else {
     limparSessao();
     authMatricula = String(matricula);
+    document.getElementById("senhaPainel").value = "";
+    msg.textContent = "";
   }
 
-  document.getElementById("senhaPainel").value = "";
-  msg.textContent = "";
   await abrirPainelConteudo(matricula);
+}
+
+// ---- Termos de Compromisso/Confidencialidade (v2.7) — bloqueio real, ver
+// api/shared/auth.js exigirLogin. Reaproveita o modal genérico (#modalOverlay/
+// #modalCaixa) sem botão de cancelar — só sai assinando.
+let filaTermosPendentes = [];
+let catalogoTermosCache = null;
+
+async function mostrarModalTermos(tipos) {
+  filaTermosPendentes = tipos.slice();
+  await renderizarProximoTermo();
+}
+
+async function renderizarProximoTermo() {
+  if (filaTermosPendentes.length === 0) {
+    fecharModal();
+    await abrirPainelConteudo(authMatricula);
+    return;
+  }
+  if (!catalogoTermosCache) {
+    const res = await fetchProtegido(`${API_BASE}/termos`);
+    const data = await res.json();
+    catalogoTermosCache = data.termos || {};
+  }
+  const tipo = filaTermosPendentes[0];
+  const termo = catalogoTermosCache[tipo];
+  const caixa = document.getElementById("modalCaixa");
+  caixa.innerHTML = `
+    <h3>${termo ? termo.titulo : tipo}</h3>
+    <div style="max-height:300px; overflow-y:auto; border:1px solid var(--cor-borda, #ccc); padding:10px; margin-bottom:12px; text-align:justify;">
+      ${termo ? termo.texto : ""}
+    </div>
+    <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <input type="checkbox" id="checkTermoLido" /> Li e concordo com os termos acima.
+    </label>
+    <div class="modal-acoes">
+      <button class="btn-confirmar" id="modalConfirmar" disabled>✅ Assinar e continuar</button>
+    </div>
+  `;
+  document.getElementById("modalOverlay").classList.remove("escondido");
+  const checkbox = document.getElementById("checkTermoLido");
+  const botao = document.getElementById("modalConfirmar");
+  checkbox.onchange = () => { botao.disabled = !checkbox.checked; };
+  botao.onclick = () => assinarTermoAtual(tipo);
+}
+
+async function assinarTermoAtual(tipo) {
+  const res = await fetchProtegido(`${API_BASE}/termos/${tipo}`, { method: "POST" });
+  const data = await res.json();
+  if (!data.sucesso) {
+    mostrarToast(data.mensagem || "Erro ao assinar o termo.", "erro");
+    return;
+  }
+  authToken = data.token;
+  sessionStorage.setItem("authToken", authToken);
+  filaTermosPendentes.shift();
+  await renderizarProximoTermo();
 }
 
 async function abrirPainelConteudo(matricula) {

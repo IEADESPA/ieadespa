@@ -81,12 +81,32 @@ function extrairToken(req) {
   return tipo === "Bearer" ? token : null;
 }
 
-// Uso: const usuario = exigirLogin(req, context); if (!usuario) return;
-function exigirLogin(req, context) {
+// Mesmo corpo que exigirLogin tinha antes dos Termos (v2.7) — usada só pelo
+// endpoint de assinatura (GestaoTermos), que não pode ficar preso atrás do
+// próprio bloqueio que ele existe pra resolver.
+function exigirLoginIgnorandoTermos(req, context) {
   const token = extrairToken(req);
   const sessao = token ? getSessao(token) : null;
   if (!sessao) {
     context.res = { status: 401, body: { sucesso: false, mensagem: "Faça login para continuar." } };
+    return null;
+  }
+  return sessao;
+}
+
+// Uso: const usuario = exigirLogin(req, context); if (!usuario) return;
+// Termos de Compromisso/Confidencialidade (v2.7) pendentes bloqueiam aqui —
+// ponto único usado por exigirPermissao/exigirAlgumaPermissao/
+// exigirNivelGlobal, então toda rota protegida do sistema já barra sozinha,
+// sem precisar checar termo por endpoint.
+function exigirLogin(req, context) {
+  const sessao = exigirLoginIgnorandoTermos(req, context);
+  if (!sessao) return null;
+  if (sessao.termosPendentes && sessao.termosPendentes.length > 0) {
+    context.res = {
+      status: 403,
+      body: { sucesso: false, mensagem: "Assine os termos pendentes para continuar.", termosPendentes: sessao.termosPendentes }
+    };
     return null;
   }
   return sessao;
@@ -145,4 +165,4 @@ function exigirNivelGlobal(req, context) {
   return usuario;
 }
 
-module.exports = { hashSenha, verificarSenha, criarSessao, encerrarSessao, getSessao, exigirLogin, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo };
+module.exports = { hashSenha, verificarSenha, criarSessao, encerrarSessao, getSessao, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo };

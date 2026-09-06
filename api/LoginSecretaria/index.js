@@ -4,6 +4,7 @@
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const { resolverEscopoCongregacoes, resolverNomeExtensao } = require("../shared/escopo");
+const { termosPendentes } = require("../shared/termos");
 
 module.exports = async function (context, req) {
   const { matricula, senha } = req.body || {};
@@ -43,6 +44,7 @@ module.exports = async function (context, req) {
   const escopo = await resolverEscopoCongregacoes(pool, lideranca.escopoTipo, lideranca.escopoId);
   const escopoExtensaoNome = await resolverNomeExtensao(pool, lideranca.escopoTipo, lideranca.escopoId);
   const permissoes = lideranca.permissoesStr ? lideranca.permissoesStr.split(",").map(p => p.trim()).filter(Boolean) : [];
+  const pendentes = await termosPendentes(pool, sql, lideranca.membroId, lideranca.papelNivel);
 
   const token = auth.criarSessao({
     membroId: lideranca.membroId,
@@ -51,7 +53,8 @@ module.exports = async function (context, req) {
     nivel: lideranca.papelNivel,
     escopoCongregacoes: escopo,
     escopoExtensaoNome,
-    permissoes
+    permissoes,
+    termosPendentes: pendentes
   });
 
   context.res = {
@@ -64,7 +67,8 @@ module.exports = async function (context, req) {
       tipo: lideranca.papelNome,
       nivel: lideranca.papelNivel,
       escopo,
-      permissoes
+      permissoes,
+      termosPendentes: pendentes
     }
   };
 };

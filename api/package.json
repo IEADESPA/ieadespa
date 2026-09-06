@@ -2,6 +2,7 @@
   "name": "governanca-ieadespa-api",
   "version": "1.0.0",
   "description": "Backend de governança (CLI, CEI, NIF, AFM) - Azure Functions",
+  "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=20.0.0"
   },

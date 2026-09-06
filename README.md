@@ -1,5 +1,9 @@
 # Sistema de Governança IEADESPA (Sistema Integrado Único)
 
+> **Licença:** este repositório é público só pra fins de transparência e consulta —
+> **não é software livre/open source**. Uso, cópia, modificação ou reaproveitamento
+> (comercial ou não) exigem autorização prévia e expressa da IEADESPA. Ver [`LICENSE`](LICENSE).
+
 > **Realidade jurídica:** Estatuto 2026 (oficial) + Regimento Interno 2026 (entregue).
 > O Regimento regulamenta o Estatuto e adiciona: Governança Escalonada em 6 níveis
 > (Extensão da Tenda → Congregação → Área → Região/Subsede → Quadrante → Distrito →

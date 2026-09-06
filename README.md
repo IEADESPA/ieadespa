@@ -1050,22 +1050,37 @@ e manteve só o que é real:
   (nome, congregação, data) e o resto preenchido à mão, e o PDF assinado
   sobe depois pelo item Documentos acima (`Tipo=TERMO_POSSE`).
 
-#### v2.10 — Transição de gestão *(gap da varredura)*
+#### v2.10/v2.11 — descontinuadas como versões próprias
 
-- [ ] Comitê de Recepção e Consulta Pastoral (Reg. Art. 42): entrevista de indicados
-      da Convenção em vacância presidencial.
-- [ ] Relatório de Transição obrigatório (Reg. Art. 42-A): inventário de bens, senhas
-      bancárias/sistemas, obras em andamento, pendências jurídicas — ao fim de
-      mandato ou transferência de liderança.
+**v2.10 "Transição de gestão" e v2.11 "Correspondência oficial e ciclo
+normativo" saíram do roadmap como versões separadas** — eram itens de uma
+varredura automática do texto legal (marcados *"gap da varredura"*, nunca
+foram pedido do usuário), e a análise mostrou que **tudo que é real neles já
+é coberto pelo catálogo de Documentos (v2.9)**, sem precisar de tabela,
+endpoint ou tela nova:
 
-#### v2.11 — Correspondência oficial e ciclo normativo *(gap da varredura)*
+- [x] Art. 42 (Comitê de Recepção e Consulta Pastoral): só acontece em
+      vacância presidencial rara, é uma entrevista + parecer subjetivo — não
+      tem o que computar. O parecer final vira só mais um Documento
+      (`Tipo=PARECER_COMPATIBILIDADE`).
+- [x] Art. 42-A §1º (Relatório de Transição): inventário de bens, senhas,
+      obras em andamento — é um documento entregue na troca de liderança,
+      vira `Tipo=RELATORIO_TRANSICAO`.
+- [x] Ofícios/Representações à Convenção: os prazos que isso deveria
+      controlar (Art. 18 §II, Art. 32 §§2-3, Art. 75 §4) **já estavam
+      calculados** desde o v2.5 (`calcularSucessaoPresidencial`) e o v2.9
+      (prazo de cartório) — o ofício em si vira `Tipo=OFICIO`.
+- [x] Art. 162-B (ciclo de revisão do Regimento a cada 4 anos): o resultado
+      da revisão também é só um Documento (`Tipo=REGIMENTO`, já existia).
+      Usuário decidiu **não** construir lembrete automático pra esse ciclo —
+      a Secretaria confere manualmente quando for a hora.
+- Art. 42-A §2º (Mentoria de Liderança via AFM) e a condução do próprio
+  Comitê de Recepção (entrevista) **ficam fora do sistema por natureza** —
+  são processos pastorais/institucionais, não dado nem tela.
 
-- [ ] Ofícios/Representações formais à Convenção (CIADSETA) com protocolo, data de
-      envio e prazo de resposta — hoje prazos que decidem sucessão presidencial
-      (Art. 18 §II: 90 dias; Art. 32 §§2-3: 90 dias; Art. 75 §4: 15 dias) não têm
-      onde ser controlados.
-- [ ] Ciclo de revisão do Regimento a cada 4 anos, no 1º ano de gestão, por Comissão
-      de Revisão designada pela CLI (Reg. Art. 162-B).
+Os 3 novos tipos (`PARECER_COMPATIBILIDADE`, `RELATORIO_TRANSICAO`,
+`OFICIO`) foram só mais 3 opções no dropdown que já existe em Arquivos —
+zero código de back-end novo.
 
 ### FASE 3 — Disciplina e Ética
 

@@ -4049,7 +4049,11 @@ async function salvarDocumentoAcao() {
   }
 }
 
-const ROTULO_TIPO_DOCUMENTO = { ATA: "Ata", TERMO_POSSE: "Termo de Posse", MEMORANDO: "Memorando", PARECER: "Parecer", REGIMENTO: "Regimento (alteração)", OUTRO: "Outro" };
+const ROTULO_TIPO_DOCUMENTO = {
+  ATA: "Ata", TERMO_POSSE: "Termo de Posse", MEMORANDO: "Memorando", PARECER: "Parecer",
+  PARECER_COMPATIBILIDADE: "Parecer de Compatibilidade Ministerial", RELATORIO_TRANSICAO: "Relatório de Transição",
+  OFICIO: "Ofício/Representação", REGIMENTO: "Regimento (alteração)", OUTRO: "Outro"
+};
 
 async function carregarDocumentos() {
   const container = document.getElementById("resultadoListaDocumentos");

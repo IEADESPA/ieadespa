@@ -416,6 +416,43 @@
           </div>
           <div class="paginacao" id="assembleiaPaginacao"></div>
         </div>
+
+        <!-- Só existe conteúdo (composição + assentos) pra CLI — escondido pros
+             demais órgãos por selecionarOrgaoReunioes() checando a sigla. -->
+        <div id="blocoComposicaoCLI" style="display:none;">
+          <hr />
+
+          <h3>Composição da CLI</h3>
+          <p class="subtitle">
+            Calculada automaticamente (Art. 15) — quem tem Ordenação (Pastor, Evangelista,
+            Presbítero) entra sozinho; quem entra por Função já é titular da Diretoria,
+            Conselho Fiscal, CEI (herdado — não recadastre aqui) ou tem cadeira aberta
+            direto na CLI abaixo (Dirigente de Congregação, Líder Geral).
+          </p>
+          <div class="rolagem-tabela"><div id="resultadoComposicaoCLI"></div></div>
+
+          <hr />
+
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Assentos da CLI</h4>
+          <p class="subtitle">
+            Só as cadeiras que se abrem direto aqui (Art. 15 §1º, II, "d"/"e") — titulares
+            da Diretoria/Conselho Fiscal/CEI são cadastrados nos órgãos deles próprios (aba
+            Órgãos) e entram automaticamente por herança, sem duplicar.
+          </p>
+          <form onsubmit="event.preventDefault(); salvarAssentoCLI();">
+            <div class="barra-lista">
+              <input type="number" id="assentoCLIMatricula" placeholder="Matrícula" style="min-width:120px;" />
+              <select id="assentoCLIFuncao">
+                <option value="Dirigente de Congregação">Dirigente de Congregação</option>
+                <option value="Líder Geral de Departamento/Secretaria">Líder Geral de Departamento/Secretaria</option>
+              </select>
+              <input type="number" id="assentoCLIDuracaoMeses" placeholder="Duração em meses (opcional)" style="min-width:220px;" />
+              <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar Cadeira</button>
+            </div>
+          </form>
+          <p id="resultadoAssentoCLI"></p>
+          <div class="rolagem-tabela"><div id="resultadoListaAssentosCLI"></div></div>
+        </div>
       </div>
 
       <!-- ABA: PESSOAS -->

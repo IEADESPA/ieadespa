@@ -38,6 +38,52 @@ async function membrosComCartaMudancaEmitida(pool) {
   return new Set(result.recordset.map(r => r.membroId));
 }
 
+// Composição mista da CLI (Art. 15) — usada pelo universo (quórum/presença)
+// E pela tela de Composição da CLI (v2.3), por isso devolve enriquecido (como
+// cada um entra) em vez de só {membroId, nome}. Cadeira com mandato vencido
+// (DataTerminoPrevisao no passado) para de contar assim que vence, mesmo sem
+// alguém ter formalmente encerrado a cadeira (ver GestaoAssentos — "vencimento
+// calculado na leitura").
+//
+// Composição por Função entra na CLI de duas formas: (a) cadeira aberta DIRETO
+// na CLI (Dirigente de Congregação, Líder Geral — não têm órgão próprio) ou
+// (b) cadeira em Diretoria/Conselho Fiscal/CEI — quem já é Presidente/
+// Tesoureiro/Conselheiro/etc. naqueles órgãos entra na CLI automaticamente por
+// causa do cargo, sem precisar cadastrar a MESMA pessoa de novo aqui.
+async function composicaoCLI(pool, orgaoIdCLI) {
+  const porOrdenacao = await pool.request().query(`
+    SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro,
+           m.CargoMinisterial AS cargoMinisterial
+    FROM MembroReferencia m
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    WHERE m.Status = 'ATIVO' AND m.CargoMinisterial IN ('PRESBITERO', 'EVANGELISTA', 'PASTOR')
+  `);
+  const idsPorOrdenacao = new Set(porOrdenacao.recordset.map(m => m.membroId));
+  const comOrdenacao = porOrdenacao.recordset.map(m => Object.assign({}, m, {
+    viaOrdenacao: true, viaFuncao: false, cargoOuFuncao: null, orgaoOrigemNome: null
+  }));
+
+  const porFuncao = await pool.request().input("orgaoId", sql.Int, orgaoIdCLI).query(`
+    SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro,
+           a.CargoOuFuncao AS cargoOuFuncao, o2.Nome AS orgaoOrigemNome, o2.OrgaoId AS orgaoOrigemId
+    FROM Assentos a
+    JOIN MembroReferencia m ON m.MembroId = a.MembroId
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    JOIN Orgaos o2 ON o2.OrgaoId = a.OrgaoId
+    WHERE a.DataFim IS NULL
+      AND (a.DataTerminoPrevisao IS NULL OR a.DataTerminoPrevisao >= CAST(SYSUTCDATETIME() AS DATE))
+      AND (
+        a.OrgaoId = @orgaoId
+        OR a.OrgaoId IN (SELECT OrgaoId FROM Orgaos WHERE Sigla IN ('DIRETORIA_EXECUTIVA', 'CONSELHO_FISCAL', 'CEI'))
+      )
+  `);
+  const comFuncao = porFuncao.recordset
+    .filter(m => !idsPorOrdenacao.has(m.membroId))
+    .map(m => Object.assign({}, m, { viaOrdenacao: false, viaFuncao: true, cargoMinisterial: null }));
+
+  return comOrdenacao.concat(comFuncao);
+}
+
 async function universoDoOrgao(pool, orgao) {
   const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
 
@@ -66,38 +112,8 @@ async function universoDoOrgao(pool, orgao) {
   }
 
   if (orgao.sigla === "CLI") {
-    const porOrdenacao = await pool.request().query(`
-      SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro
-      FROM MembroReferencia m
-      LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
-      WHERE m.Status = 'ATIVO' AND m.CargoMinisterial IN ('PRESBITERO', 'EVANGELISTA', 'PASTOR')
-    `);
-    const idsPorOrdenacao = new Set(porOrdenacao.recordset.map(m => m.membroId));
-    // Cadeira com mandato vencido (DataTerminoPrevisao no passado) para de contar
-    // pro universo assim que vence, mesmo sem alguém ter formalmente encerrado a
-    // cadeira (ver GestaoAssentos — "vencimento calculado na leitura").
-    //
-    // Composição por Função (Art. 15) entra na CLI de duas formas: (a) cadeira
-    // aberta DIRETO na CLI (Dirigente de Congregação, Líder Geral — não têm
-    // órgão próprio) ou (b) cadeira em Diretoria/Conselho Fiscal/CEI — quem já
-    // é Presidente/Tesoureiro/Conselheiro/etc. naqueles órgãos entra na CLI
-    // automaticamente por causa do cargo, sem precisar cadastrar a MESMA pessoa
-    // de novo aqui. Cadastra uma vez, na Diretoria (por exemplo), e ela já conta
-    // nas reuniões da Diretoria E na composição da CLI.
-    const porFuncao = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId).query(`
-      SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro
-      FROM Assentos a
-      JOIN MembroReferencia m ON m.MembroId = a.MembroId
-      LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
-      WHERE a.DataFim IS NULL
-        AND (a.DataTerminoPrevisao IS NULL OR a.DataTerminoPrevisao >= CAST(SYSUTCDATETIME() AS DATE))
-        AND (
-          a.OrgaoId = @orgaoId
-          OR a.OrgaoId IN (SELECT OrgaoId FROM Orgaos WHERE Sigla IN ('DIRETORIA_EXECUTIVA', 'CONSELHO_FISCAL', 'CEI'))
-        )
-    `);
-    const universo = porOrdenacao.recordset.concat(porFuncao.recordset.filter(m => !idsPorOrdenacao.has(m.membroId)));
-    return universo.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
+    const composicao = await composicaoCLI(pool, orgao.orgaoId);
+    return composicao.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
   }
 
   const porAssento = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId).query(`
@@ -120,4 +136,4 @@ async function universoDoOrgao(pool, orgao) {
   return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
 }
 
-module.exports = { universoDoOrgao, membrosComCartaMudancaEmitida };
+module.exports = { universoDoOrgao, membrosComCartaMudancaEmitida, composicaoCLI };

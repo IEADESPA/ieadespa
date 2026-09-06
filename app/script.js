@@ -980,10 +980,12 @@ function selecionarOrgaoReunioes(orgaoId) {
   if (!orgao) return;
 
   const ehAssembleia = orgao.sigla === "ASSEMBLEIA_GERAL";
+  const ehCLI = orgao.sigla === "CLI";
   window._orgaoAtualReunioes = orgaoId;
   document.getElementById("reuniaoOrgao").value = orgaoId;
   document.getElementById("reunioesOrgaoNome").textContent = orgao.nome;
   document.getElementById("blocoElegiveisAssembleia").style.display = ehAssembleia ? "block" : "none";
+  document.getElementById("blocoComposicaoCLI").style.display = ehCLI ? "block" : "none";
   // Assembleia Geral não abre na hora (Art. 20) — troca o formulário instantâneo
   // pelo par Convocar (com antecedência) / Iniciar (no dia previsto).
   document.getElementById("blocoConvocarAssembleia").style.display = ehAssembleia ? "block" : "none";
@@ -994,7 +996,103 @@ function selecionarOrgaoReunioes(orgaoId) {
   });
 
   if (ehAssembleia) carregarConvocacoesPendentes();
+  if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); }
   carregarReunioes();
+}
+
+function orgaoIdCLI() {
+  const orgao = (window._orgaosReunioesCache || []).find(o => o.sigla === "CLI");
+  return orgao ? orgao.orgaoId : null;
+}
+
+async function carregarComposicaoCLI() {
+  const container = document.getElementById("resultadoComposicaoCLI");
+  const res = await fetchProtegido(`${API_BASE}/cli/composicao`);
+  const composicao = await res.json();
+  if (!Array.isArray(composicao) || composicao.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Ninguém compõe a CLI ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Matrícula</th><th>Nome</th><th>Congregação</th><th>Como entra</th><th>Situação</th>
+  </tr></thead><tbody>`;
+  composicao.forEach(m => {
+    let comoEntra;
+    if (m.viaOrdenacao) comoEntra = `Ordenação (${nomeCargoPorSigla(m.cargoMinisterial)})`;
+    else if (m.orgaoOrigemNome && m.orgaoOrigemNome !== "Câmara de Liderança Institucional") comoEntra = `Função (${m.cargoOuFuncao || "-"}, herdado da ${m.orgaoOrigemNome})`;
+    else comoEntra = `Função (${m.cargoOuFuncao || "-"})`;
+    const situacao = m.processoDisciplinarAtivo ? "Sob disciplina (não conta)" : (!m.emComunhao ? "Sem comunhão (não conta)" : "Ativo");
+    html += `<tr>
+      <td>${m.membroId}</td>
+      <td>${m.nome}</td>
+      <td>${m.congregacao || "-"}</td>
+      <td>${comoEntra}</td>
+      <td>${situacao}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function carregarAssentosCLI() {
+  const container = document.getElementById("resultadoListaAssentosCLI");
+  const orgaoId = orgaoIdCLI();
+  if (!orgaoId) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos?orgaoId=${orgaoId}`);
+  const assentos = await res.json();
+  if (!Array.isArray(assentos) || assentos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma cadeira aberta direto na CLI ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Matrícula</th><th>Nome</th><th>Cargo/Função</th><th>Desde</th><th>Até</th><th>Situação</th><th></th>
+  </tr></thead><tbody>`;
+  assentos.forEach(a => {
+    html += `<tr>
+      <td>${a.membroId}</td>
+      <td>${a.nome}</td>
+      <td>${a.cargoOuFuncao || "-"}</td>
+      <td>${a.dataInicio}</td>
+      <td>${a.dataTerminoPrevisao || "sem prazo"}</td>
+      <td>${badgeSituacaoAssento(a.situacaoEfetiva)}</td>
+      <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="encerrarAssentoCLIAcao(${a.assentoId})">Encerrar</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarAssentoCLI() {
+  const orgaoId = orgaoIdCLI();
+  const membroId = document.getElementById("assentoCLIMatricula").value;
+  const cargoOuFuncao = document.getElementById("assentoCLIFuncao").value;
+  const duracaoMeses = document.getElementById("assentoCLIDuracaoMeses").value || null;
+  const msg = document.getElementById("resultadoAssentoCLI");
+  if (!orgaoId || !membroId) { msg.textContent = "Informe a matrícula."; return; }
+  const res = await fetchProtegido(`${API_BASE}/assentos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, orgaoId, tipoAssento: "FUNCAO", cargoOuFuncao, duracaoMeses })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("assentoCLIMatricula").value = "";
+    document.getElementById("assentoCLIDuracaoMeses").value = "";
+    carregarAssentosCLI();
+    carregarComposicaoCLI();
+  }
+}
+
+async function encerrarAssentoCLIAcao(assentoId) {
+  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarAssentosCLI(); carregarComposicaoCLI(); }
 }
 
 async function carregarConvocacoesPendentes() {

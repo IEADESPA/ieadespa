@@ -681,10 +681,27 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
 
 #### v2.3 — CLI (composição e sessões)
 
-- [ ] Composição mista (Art. 15): ordenação (Pastores, Evangelistas, Presbíteros) +
-      função (Diretoria, CF, CEI, Dirigentes).
-- [ ] Assentos da CLI (cadeira cativa + por função).
-- [ ] Sessão mensal (último domingo) com quórum 2 estágios (Art. 24).
+- [x] Composição mista (Art. 15): ordenação (Pastores, Evangelistas, Presbíteros) +
+      função (Diretoria, CF, CEI, Dirigentes) — a lógica (`shared/universo.js`,
+      `composicaoCLI`) já existia desde o v0.3 (usada só pro cálculo de quórum);
+      v2.3 deu a ela uma tela própria, dentro do submenu CLI da aba Reuniões
+      (mesmo lugar que a Assembleia já usa) — `GET /api/cli/composicao`
+      (`api/ComposicaoCLI`) mostra como cada um entra (Ordenação/Função, e se
+      Função foi herdada de Diretoria/Conselho Fiscal/CEI), sempre real, nunca
+      mascarado (mesmo princípio de Elegíveis da Assembleia).
+- [x] Assentos da CLI (cadeira cativa + por função) — reaproveita
+      `api/GestaoAssentos` (já genérico, nenhuma mudança de backend), só com
+      front-end próprio restrito às 2 cadeiras que se abrem DIRETO na CLI
+      (Art. 15 §1º, II, "d"/"e" — Dirigente de Congregação, Líder Geral de
+      Departamento/Secretaria — um `<select>` fechado, não texto livre);
+      titulares de Diretoria/Conselho Fiscal/CEI continuam cadastrados nos
+      órgãos deles (aba Órgãos, campo livre, inalterado) e entram na CLI por
+      herança automática, sem duplicar cadastro.
+- [x] Sessão mensal com quórum 2 estágios (Art. 24) — já rodava desde o v0.3
+      (`estatuto.avaliarQuorumInstalacao`, `ORGAOS_COM_QUORUM_DOIS_ESTAGIOS`
+      inclui CLI); "último domingo do mês" não é validado como trava (não tem
+      convocação formal pra CLI como a Assembleia tem — abre na hora), fica
+      como calendário/rotina, não bloqueio de sistema.
 - [ ] Deliberações por maioria simples + impedimento de voto (Art. 25) — **inclui**
       o Regime de Ratificação Posterior (Art. 19) + dissenso formalizado (1/5):
       decidido deixar de fora do v2.2 de propósito (conversado com o usuário) porque

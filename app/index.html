@@ -98,6 +98,7 @@
           <button class="btn-aba" id="btnAbaPermissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
           <button class="btn-aba" id="btnAbaConsagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
           <button class="btn-aba" id="btnAbaEnquetes" onclick="mostrarAbaSecretaria('enquetes')"><span class="icone">🗳️</span><span class="rotulo">Enquetes</span></button>
+          <button class="btn-aba" id="btnAbaArquivos" onclick="mostrarAbaSecretaria('arquivos')"><span class="icone">📁</span><span class="rotulo">Arquivos</span></button>
           <button class="btn-aba" id="btnAbaDisciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
           <button class="btn-aba" id="btnAbaAbandono" onclick="mostrarAbaSecretaria('abandono')"><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
           <button class="btn-aba" id="btnAbaAuditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
@@ -1165,6 +1166,51 @@
         <hr />
         <h3>Enquetes</h3>
         <div class="rolagem-tabela"><div id="resultadoListaEnquetes"></div></div>
+      </div>
+
+      <!-- ABA: ARQUIVOS / DOCUMENTOS INSTITUCIONAIS (v2.9) -->
+      <div id="abaArquivos" class="aba-secretaria" style="display:none;">
+        <h3>Registrar Documento</h3>
+        <p class="subtitle">Catálogo de referências — o sistema não gera nem edita atas/termos. Suba aqui o arquivo já pronto (assinado fora do sistema, se for o caso: Word → PDF → ITI/GOV.BR).</p>
+        <form onsubmit="event.preventDefault(); salvarDocumentoAcao();">
+          <div class="barra-lista">
+            <select id="documentoTipo">
+              <option value="ATA">Ata</option>
+              <option value="TERMO_POSSE">Termo de Posse</option>
+              <option value="MEMORANDO">Memorando</option>
+              <option value="PARECER">Parecer</option>
+              <option value="REGIMENTO">Regimento (alteração)</option>
+              <option value="OUTRO">Outro</option>
+            </select>
+            <select id="documentoOrgao"></select>
+            <input type="number" id="documentoReferenciaId" placeholder="Id da Sessão (se for Ata)" style="min-width:180px;" />
+          </div>
+          <div class="input-group">
+            <label>Descrição (opcional):</label>
+            <input type="text" id="documentoDescricao" placeholder="Ex: Ata da reunião de agosto/2027" />
+          </div>
+          <div class="input-group">
+            <label>Arquivo (PDF, JPG ou PNG, até 15 MB):</label>
+            <input type="file" id="documentoArquivo" accept="application/pdf,image/jpeg,image/png" />
+          </div>
+          <button class="btn-confirmar" type="submit">📎 Registrar</button>
+        </form>
+        <p id="resultadoDocumento"></p>
+
+        <hr />
+        <h3>Documentos Registrados</h3>
+        <div class="barra-lista">
+          <select id="documentoFiltroTipo" onchange="carregarDocumentos()">
+            <option value="">Todos os tipos</option>
+            <option value="ATA">Ata</option>
+            <option value="TERMO_POSSE">Termo de Posse</option>
+            <option value="MEMORANDO">Memorando</option>
+            <option value="PARECER">Parecer</option>
+            <option value="REGIMENTO">Regimento (alteração)</option>
+            <option value="OUTRO">Outro</option>
+          </select>
+        </div>
+        <div class="rolagem-tabela"><div id="resultadoListaDocumentos"></div></div>
       </div>
 
       <!-- ABA: PROCESSO DISCIPLINAR -->

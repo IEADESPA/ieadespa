@@ -1005,16 +1005,50 @@ problema:
   conversa — registrado aqui pra quando chegar a hora, sem precisar
   redesenhar.
 
-#### v2.9 — Documentos, Atas e Registro
+#### v2.9 — Documentos e Alerta de Registro
 
-- [ ] Function de Documentos (registrar referência/URL de blob, tipo, órgão).
-- [ ] Geração de Ata (PDF) a partir de uma Sessão encerrada.
-- [ ] Alerta de prazo de registro em cartório (Art. 75: 30 dias ata, 45 dias protocolo).
-- [ ] Registro do Regimento no RTD (Art. 161) para conservação.
-- [ ] Motor de Termos/modelos com preenchimento e assinatura eletrônica *(gap da
-      varredura)*: hoje cada termo formal exigido pelo Regimento (Posse do Dirigente
-      — Art. 117, Compromisso de Gestão — Art. 57, Adesão ao Voluntariado, etc.) não
-      tem gerador — só a referência de blob genérica acima.
+**Reformulado a pedido do usuário** — cortou o que não faz sentido construir
+e manteve só o que é real:
+
+- [x] **Function de Documentos** (`api/GestaoDocumentos`, tabela `Documentos`
+      já existia desde a migração 001, nunca tinha endpoint): catálogo de
+      **referências** a arquivos que já existem (ata já assinada fora do
+      sistema, termo escaneado, memorando, parecer) — nunca edita conteúdo.
+      Upload vai pro Azure Blob Storage, container `documentos-institucionais`
+      (privado + URL assinada de 1h — mesmo padrão de `shared/storage.js` já
+      usado pra foto de membro desde o v1.7, agora generalizado pra qualquer
+      container sem mudar o comportamento da foto). Tipos: Ata, Termo de
+      Posse, Memorando, Parecer, Regimento (alteração), Outro.
+- [x] **Alerta de prazo de registro em cartório** (Art. 75: 30 dias pro
+      Secretário lavrar+entregar a ata, 45 dias pro Presidente protocolar) —
+      parte do mesmo endpoint: quando o Documento é `Tipo=ATA` e o
+      `ReferenciaId` aponta pra uma `Sessao` real, calcula na leitura
+      (`estatuto.diasDesde`, mesmo padrão de `ProcessosDisciplinares`) e
+      acende aviso visual quando vencido.
+- **Geração de Ata (PDF) — descartada permanentemente.** Mesmo racional já
+  usado pra descartar deliberação de plenário da CLI (v2.3) e derrubada de
+  veto (v2.8): não existe editor de texto no sistema, e montar um mecanismo
+  de assinatura eletrônica de verdade (nível ICP-Brasil/GOV.BR) seria peso
+  desnecessário pro caso de uso. O fluxo real já resolve sozinho: o
+  Secretário escreve a ata fora do sistema (Word), exporta PDF, assina no
+  ITI/GOV.BR, e só DEPOIS sobe o arquivo pronto pelo item acima.
+- **Registro do Regimento no RTD (Art. 161) — não é isso que o sistema faz.**
+  O registro em si é um ato cartorial externo, fora do alcance de qualquer
+  software. O que o sistema faz é catalogar cada alteração/versão do
+  Regimento como mais um Documento (`Tipo=REGIMENTO`) — reaproveita o item
+  acima, não é feature nova, e não finge fazer um registro que não faz.
+- **Motor de Termos/modelos — não é mais gap, já foi construído no v2.7**
+  (Termo de Compromisso de Gestão + Termo de Confidencialidade,
+  `shared/termos.js`, bloqueio real via `auth.exigirLogin`). Falta só
+  **Termo de Posse (Art. 117, Regimento)**: tem texto oficial fixo
+  ("transcrição obrigatória") com CPF do Dirigente e CNPJ da Igreja, que o
+  sistema não guarda (decisão deliberada de não duplicar dado sensível — ver
+  v0.1/v1.7). Diferente dos outros dois termos (aceite digital simples), esse
+  exige assinatura física de verdade. **Usuário decidiu deixar de fora por
+  enquanto** — sem gerar modelo nenhum pra isso agora; quando for retomado,
+  o caminho natural é gerar um rascunho com os campos que o sistema sabe
+  (nome, congregação, data) e o resto preenchido à mão, e o PDF assinado
+  sobe depois pelo item Documentos acima (`Tipo=TERMO_POSSE`).
 
 #### v2.10 — Transição de gestão *(gap da varredura)*
 

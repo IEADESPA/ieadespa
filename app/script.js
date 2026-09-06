@@ -279,7 +279,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "disciplina", "abandono", "auditoria", "protecaodedados", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "documentos"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -289,7 +289,8 @@ const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
   congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"],
   abandono: ["disciplina"],
-  enquetes: ["reunioes", "assembleia"]
+  enquetes: ["reunioes", "assembleia"],
+  arquivos: ["reunioes", "assembleia", "cli"]
 };
 function permissoesDaAba(nome) {
   return ABA_PERMISSOES_ALT[nome] || [nome];
@@ -558,6 +559,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
   if (aba === "enquetes") carregarEnquetes();
+  if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
   if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
   if (aba === "auditoria") carregarAuditoria();
@@ -4003,6 +4005,94 @@ async function encerrarEnqueteAcao(enqueteId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarEnquetes();
+}
+
+// ---- SECRETARIA / ABA ARQUIVOS (v2.9) — catálogo de referências, sem editor ----
+async function carregarOpcoesFormDocumentos() {
+  const res = await fetch(`${API_BASE}/orgaos`);
+  const orgaos = await res.json();
+  document.getElementById("documentoOrgao").innerHTML = `<option value="">Sem órgão específico</option>` +
+    orgaos.map(o => `<option value="${o.orgaoId}">${o.nome}</option>`).join("");
+}
+
+function lerArquivoComoBase64(arquivo) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result).split(",")[1] || "");
+    leitor.onerror = reject;
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+async function salvarDocumentoAcao() {
+  const tipo = document.getElementById("documentoTipo").value;
+  const orgaoId = document.getElementById("documentoOrgao").value || undefined;
+  const referenciaId = document.getElementById("documentoReferenciaId").value || undefined;
+  const descricao = document.getElementById("documentoDescricao").value.trim();
+  const arquivo = document.getElementById("documentoArquivo").files[0];
+  const msg = document.getElementById("resultadoDocumento");
+  if (!arquivo) { msg.textContent = "Selecione um arquivo."; return; }
+
+  const arquivoBase64 = await lerArquivoComoBase64(arquivo);
+  const res = await fetchProtegido(`${API_BASE}/documentos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipo, orgaoId, referenciaId, descricao: descricao || undefined, arquivoBase64, mimeType: arquivo.type })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("documentoReferenciaId").value = "";
+    document.getElementById("documentoDescricao").value = "";
+    document.getElementById("documentoArquivo").value = "";
+    carregarDocumentos();
+  }
+}
+
+const ROTULO_TIPO_DOCUMENTO = { ATA: "Ata", TERMO_POSSE: "Termo de Posse", MEMORANDO: "Memorando", PARECER: "Parecer", REGIMENTO: "Regimento (alteração)", OUTRO: "Outro" };
+
+async function carregarDocumentos() {
+  const container = document.getElementById("resultadoListaDocumentos");
+  const tipo = document.getElementById("documentoFiltroTipo").value;
+  const res = await fetchProtegido(`${API_BASE}/documentos${tipo ? `?tipo=${tipo}` : ""}`);
+  const documentos = await res.json();
+  if (!Array.isArray(documentos) || documentos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum documento registrado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Tipo</th><th>Descrição</th><th>Órgão</th><th>Registrado por</th><th>Data</th><th>Prazo</th><th></th>
+  </tr></thead><tbody>`;
+  documentos.forEach(d => {
+    let prazoHtml = "-";
+    if (d.tipo === "ATA" && d.diasDesdeSessao != null) {
+      if (d.prazoCartorioVencido) prazoHtml = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de cartório vencido (${d.diasDesdeSessao}d)</span>`;
+      else if (d.prazoLavraturaVencido) prazoHtml = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de lavratura vencido (${d.diasDesdeSessao}d)</span>`;
+      else prazoHtml = `✅ Em dia (${d.diasDesdeSessao}d)`;
+    }
+    html += `<tr>
+      <td>${ROTULO_TIPO_DOCUMENTO[d.tipo] || d.tipo}</td>
+      <td>${d.descricao || "-"}</td>
+      <td>${d.orgaoNome || "-"}</td>
+      <td>${d.registradoPorNome || "-"}</td>
+      <td>${d.criadoEm ? d.criadoEm.slice(0, 10) : "-"}</td>
+      <td>${prazoHtml}</td>
+      <td class="acoes-inline">
+        <a class="btn-link" href="${d.urlAssinada}" target="_blank" rel="noopener">Abrir</a>
+        <button class="btn-link btn-link-perigo" onclick="excluirDocumentoAcao(${d.documentoId})">Excluir</button>
+      </td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function excluirDocumentoAcao(id) {
+  if (!(await confirmarAcao("Excluir este registro? O arquivo permanece no armazenamento, só o catálogo é removido.", "Excluir"))) return;
+  const res = await fetchProtegido(`${API_BASE}/documentos/${id}`, { method: "DELETE" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarDocumentos();
 }
 
 // ---- SECRETARIA / ABA PROCESSO DISCIPLINAR ----

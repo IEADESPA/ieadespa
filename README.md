@@ -850,15 +850,29 @@ já está lá. **v2.4 está fechado** com isso.
       leitura, mesmo padrão do resto do sistema). "Líder Geral de
       Departamento/Secretaria" (mesmo comentário do código) continua
       dependendo de Assento manual — só resolve quando o item abaixo existir.
-- [ ] Catálogo de Departamentos Gerais e Secretarias Adjuntas (Art. 47).
-      **Nota (v0.3):** os 8 `Departamentos` seedados na v0.1 são todos demográficos
-      (UCADESPA/UMADESPA/USADESPA/UHADESPA por faixa etária/gênero, EBD, Família) —
-      mas `SEMIADESPA` (Missões) e `ACAO_DA_FE` (Ação Social) são conceitualmente
-      **transversais** (atravessam todas as idades, não um grupo específico), mais
-      parecidos com a "Secretaria Adjunta" do Art. 47 do que com um Departamento.
-      Fica registrado aqui pra quando esta versão desenhar `Departamentos` vs.
-      `SecretariasAdjuntas`: decidir se é uma coluna `Tipo` no catálogo existente
-      ou uma tabela nova — e se `SEMIADESPA`/`ACAO_DA_FE` migram de categoria.
+- [x] Catálogo de Departamentos Gerais e Secretarias Adjuntas (Art. 47).
+      Resolvido com **coluna `Tipo`** no catálogo existente (migração 030),
+      não uma tabela nova: `UCADESPA/UMADESPA/USADESPA/UHADESPA` = `DEPARTAMENTO`
+      (por faixa etária/gênero), `EBD/FAMILIA/SEMIADESPA/ACAO_DA_FE` =
+      `SECRETARIA_ADJUNTA` (transversal). Aparece agrupado em dois `<optgroup>`
+      no cadastro de pessoa e como campo `select` na tela de Catálogos
+      (`GestaoCatalogos`, CRUD genérico — nenhum handler novo).
+      **Líder Geral de Departamento/Secretaria**: novo papel (`Papeis.Nivel =
+      'DEPARTAMENTO'`) concedido pela mesma tela de Permissões já usada pra
+      todo o resto da Governança Escalonada desde o v0.1 (Global/Distrito/
+      Quadrante/Região/Área/Congregação/Extensão — linha 223 deste README) —
+      só acrescenta `DEPARTAMENTO` como mais um escopo válido
+      (`ESCOPO_TIPOS_VALIDOS`/`ESCOPO_NIVEIS`), não cria mecanismo paralelo.
+      Ganha assento automático na CLI pelo mesmo caminho do Dirigente de
+      Congregação (v2.7 item 1): `composicaoCLI` (`shared/universo.js`) lê
+      direto da `Lideranca` por `Papeis.Nivel`, sem Assento manual — resolve
+      de vez a pendência "Líder Geral" citada desde os v2.5/v2.6. Contato do
+      Líder Geral já está coberto pelo Telefone/E-mail do cadastro de pessoa
+      (migração 008), nenhum campo novo precisou ser criado.
+      **Fora de escopo, por decisão deliberada:** ministérios internos
+      (louvor, adoração, coreografias, grupos de teatro, serviço voluntário
+      etc.) não são modelados — são todos atividades derivadas de um dos 8
+      Departamentos/Secretarias acima, não entidades de governança próprias.
 - [ ] Pastores de Área e Áreas Estratégicas (Art. 48).
 - [ ] Termo de Compromisso de Gestão do Dirigente (Art. 57).
 - [ ] Autonomia de arrecadação/gasto dos departamentos (Art. 49).

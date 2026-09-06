@@ -758,7 +758,7 @@ const CATALOGOS_CFG = {
   extensoes: { titulo: "Extensões da Tenda (Nível 0)", idField: "extensaoId", campos: [["nome", "Nome da Extensão"]], pai: { campo: "congregacaoMaeId", rotulo: "Congregação-Mãe", origem: "congregacoes" } },
   situacoes: { titulo: "Situações de Membro", idField: "situacaoId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
   statuses: { titulo: "Status do Membro", idField: "statusId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
-  departamentos: { titulo: "Departamentos", idField: "departamentoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["numero", "Número"]] },
+  departamentos: { titulo: "Departamentos", idField: "departamentoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["numero", "Número"], ["tipo", "Tipo", [["DEPARTAMENTO", "Departamento"], ["SECRETARIA_ADJUNTA", "Secretaria Adjunta"]]]] },
   tiposConsagracao: {
     titulo: "Tipos de Proposta (Consagrações)", idField: "tipoConsagracaoId",
     campos: [
@@ -1863,8 +1863,13 @@ async function carregarOpcoesFormPessoa() {
     extensoes.filter(e => e.ativa).map(e => `<option value="${e.extensaoId}">${e.nome} (${nomeCongPorId[String(e.congregacaoMaeId)] || "?"})</option>`).join("");
 
   const selectDepto = document.getElementById("pessoaDepartamento");
+  const deptosAtivos = departamentos.filter(d => d.ativo);
+  const opcaoDepto = d => `<option value="${d.departamentoId}">${d.nome}</option>`;
+  const grupoDepto = (rotulo, itens) => itens.length ? `<optgroup label="${rotulo}">${itens.map(opcaoDepto).join("")}</optgroup>` : "";
   selectDepto.innerHTML = `<option value="">Não informado</option>` +
-    departamentos.filter(d => d.ativo).map(d => `<option value="${d.departamentoId}">${d.nome}</option>`).join("");
+    grupoDepto("Departamentos", deptosAtivos.filter(d => d.tipo === "DEPARTAMENTO")) +
+    grupoDepto("Secretarias Adjuntas", deptosAtivos.filter(d => d.tipo === "SECRETARIA_ADJUNTA")) +
+    grupoDepto("Outros", deptosAtivos.filter(d => d.tipo !== "DEPARTAMENTO" && d.tipo !== "SECRETARIA_ADJUNTA"));
 
   const selectCargo = document.getElementById("pessoaCargoMinisterial");
   selectCargo.innerHTML = `<option value="">Não informado</option>` +
@@ -3356,7 +3361,8 @@ const ESCOPO_NIVEIS = {
   AREA: { origem: "areas", idField: "areaId" },
   REGIAO: { origem: "regioes", idField: "regiaoId" },
   QUADRANTE: { origem: "quadrantes", idField: "quadranteId" },
-  DISTRITO: { origem: "distritos", idField: "distritoId" }
+  DISTRITO: { origem: "distritos", idField: "distritoId" },
+  DEPARTAMENTO: { origem: "departamentos", idField: "departamentoId" }
 };
 
 function montarCheckboxesPapeis() {

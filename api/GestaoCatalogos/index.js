@@ -21,7 +21,7 @@ const CATALOGOS = {
   },
   departamentos: {
     tabela: "Departamentos", chave: "DepartamentoId", idField: "departamentoId",
-    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), numero: sql.Int, ativo: sql.Bit }
+    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), numero: sql.Int, tipo: sql.NVarChar(30), ativo: sql.Bit }
   },
   areas: {
     tabela: "Areas", chave: "AreaId", idField: "areaId",

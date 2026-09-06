@@ -14,7 +14,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 
 // Níveis da Governança Escalonada aceitos como escopo de acesso.
-const ESCOPO_TIPOS_VALIDOS = ["GLOBAL", "EXTENSAO", "CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO"];
+const ESCOPO_TIPOS_VALIDOS = ["GLOBAL", "EXTENSAO", "CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO", "DEPARTAMENTO"];
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "permissoes");

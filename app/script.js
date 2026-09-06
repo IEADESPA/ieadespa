@@ -1280,51 +1280,6 @@ function mudarPaginaElegiveis(delta) {
   renderizarElegiveis();
 }
 
-async function importarExcelAssembleiaGeral() {
-  const input = document.getElementById("arquivoExcelAssembleia");
-  const msg = document.getElementById("resultadoImportacaoAssembleia");
-  const arquivo = input.files[0];
-  if (!arquivo) {
-    msg.textContent = "Selecione um arquivo .xlsx antes de importar.";
-    return;
-  }
-
-  const buffer = await arquivo.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const primeiraAba = workbook.SheetNames[0];
-  const linhasBrutas = XLSX.utils.sheet_to_json(workbook.Sheets[primeiraAba], { defval: "" });
-
-  const linhas = linhasBrutas
-    .map(linha => {
-      const chaves = Object.keys(linha);
-      const chaveMatricula = chaves.find(k => /matr[ií]cula/i.test(k));
-      const chaveNome = chaves.find(k => /nome/i.test(k));
-      return {
-        matricula: chaveMatricula ? linha[chaveMatricula] : null,
-        nome: chaveNome ? String(linha[chaveNome]).trim() : ""
-      };
-    })
-    .filter(l => l.matricula && l.nome);
-
-  if (linhas.length === 0) {
-    msg.textContent = "Não encontrei colunas de Matrícula e Nome na planilha.";
-    return;
-  }
-
-  const res = await fetchProtegido(`${API_BASE}/assembleia/elegiveis/importar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ linhas })
-  });
-  const data = await res.json();
-  avisarResultado(data);
-  msg.textContent = data.sucesso
-    ? `Incluídos: ${data.resumo.incluidos} · Atualizados: ${data.resumo.atualizados}`
-    : "";
-  input.value = "";
-  if (data.sucesso) carregarElegiveisAssembleia();
-}
-
 async function verFrequencia(sessaoId, descricao) {
   sessaoFrequenciaAberta = { sessaoId, descricao };
   document.getElementById("blocoFrequencia").style.display = "block";

@@ -590,9 +590,14 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
       `<input type="hidden" id="reuniaoOrgao">` (sem `<select>` de órgão, sem o
       filtro `reunioesFiltroOrgao`, que deixou de existir). `blocoFrequencia`
       continua único e compartilhado.
-- [x] O bloco de Elegíveis da Assembleia Geral (import de planilha + lista) passa
-      a ficar dentro de `#blocoElegiveisAssembleia`, mostrado só quando o órgão
-      selecionado tem `sigla === "ASSEMBLEIA_GERAL"`.
+- [x] O bloco de Elegíveis da Assembleia Geral (lista) passa a ficar dentro de
+      `#blocoElegiveisAssembleia`, mostrado só quando o órgão selecionado tem
+      `sigla === "ASSEMBLEIA_GERAL"`. A importação por planilha que existia aqui
+      foi **removida no v2.2**: duplicava o mesmo upsert de matrícula+nome que
+      "Importar Pessoas" (aba Pessoas, `api/ImportarPessoas`) já faz — dois
+      lugares divergentes pra cadastrar a mesma gente. Só sobrou a listagem
+      (calculada, `GET /api/assembleia/elegiveis`); pra incluir/atualizar gente
+      em lote, usa-se exclusivamente a aba Pessoas.
 - [x] `app/script.js`: `montarSubmenuReunioes()` busca `GET /api/orgaos` e gera um
       `.btn-subaba` por órgão; `selecionarOrgaoReunioes(orgaoId)` troca o órgão em
       foco (nome no título, visibilidade do bloco de Elegíveis, estado `.ativo`

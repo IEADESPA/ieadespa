@@ -400,18 +400,11 @@
 
           <h3>Elegíveis da Assembleia Geral</h3>
           <p class="subtitle">
-            Importe uma planilha Excel (.xlsx) com as colunas <strong>Matrícula</strong> e
-            <strong>Nome</strong>: cadastra quem ainda não existe e atualiza o nome de quem já
-            existe. A elegibilidade pra votar é sempre calculada automaticamente pelo Estatuto
-            (idade, tempo de admissão e dízimo) — não depende desta importação.
+            A elegibilidade pra votar é sempre calculada automaticamente pelo Estatuto
+            (idade, tempo de admissão e dízimo) a partir do cadastro de Pessoas — pra
+            incluir/atualizar gente em lote, use "Importar Pessoas (planilha)" na
+            aba Pessoas, não existe importação própria aqui.
           </p>
-          <div class="input-group">
-            <input type="file" id="arquivoExcelAssembleia" accept=".xlsx,.xls" />
-          </div>
-          <button class="btn-confirmar" type="button" onclick="importarExcelAssembleiaGeral()">📥 Importar Lista de Elegíveis</button>
-          <p id="resultadoImportacaoAssembleia"></p>
-
-          <hr />
 
           <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Elegíveis Atuais</h4>
           <div class="barra-lista">

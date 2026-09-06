@@ -279,7 +279,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "disciplina", "abandono", "auditoria", "protecaodedados", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "disciplina", "abandono", "auditoria", "protecaodedados", "documentos"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -288,7 +288,8 @@ const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "est
 const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
   congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"],
-  abandono: ["disciplina"]
+  abandono: ["disciplina"],
+  enquetes: ["reunioes", "assembleia"]
 };
 function permissoesDaAba(nome) {
   return ABA_PERMISSOES_ALT[nome] || [nome];
@@ -556,6 +557,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "catalogos") montarCatalogos();
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
+  if (aba === "enquetes") carregarEnquetes();
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
   if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
   if (aba === "auditoria") carregarAuditoria();
@@ -1069,7 +1071,7 @@ function selecionarOrgaoReunioes(orgaoId) {
   });
 
   if (ehAssembleia) carregarConvocacoesPendentes();
-  if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); }
+  if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); carregarProjetos(); }
   if (ehDiretoria) { carregarAssentosDiretoria(); carregarSucessaoPresidencial(); }
   if (ehConselhoFiscal) { carregarAssentosConselhoFiscal(); carregarMedidasCautelares(); }
   carregarReunioes();
@@ -1223,6 +1225,78 @@ async function removerMembroCCJ(comissaoMembroId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarComissoes();
+}
+
+// ---- Projetos e Parecer de Comissões (v2.8, Parte B — Art. 24-25) ----
+async function salvarProjeto() {
+  const autorMembroId = document.getElementById("projetoAutorMatricula").value;
+  const titulo = document.getElementById("projetoTitulo").value.trim();
+  const texto = document.getElementById("projetoTexto").value.trim();
+  const comissaoTematica = document.getElementById("projetoComissaoTematica").value;
+  const msg = document.getElementById("resultadoProjeto");
+  if (!autorMembroId || !titulo || !texto) { msg.textContent = "Informe matrícula do autor, título e texto."; return; }
+  const res = await fetchProtegido(`${API_BASE}/projetos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ autorMembroId, titulo, texto, comissaoTematica })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("projetoAutorMatricula").value = "";
+    document.getElementById("projetoTitulo").value = "";
+    document.getElementById("projetoTexto").value = "";
+    carregarProjetos();
+  }
+}
+
+const ROTULO_STATUS_PROJETO = { EM_PARECER: "Em parecer", APTO_VOTACAO: "Apto para votação", ARQUIVADO: "Arquivado" };
+
+async function carregarProjetos() {
+  const container = document.getElementById("resultadoListaProjetos");
+  const res = await fetchProtegido(`${API_BASE}/projetos`);
+  const projetos = await res.json();
+  if (!Array.isArray(projetos) || projetos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum projeto protocolado ainda.</p>";
+    return;
+  }
+  let html = "";
+  projetos.forEach(p => {
+    const pareceresHtml = (p.pareceres || []).map(par => {
+      const rotulo = par.parecer ? `${par.parecer === "FAVORAVEL" ? "✅" : "❌"} ${par.parecer} (${par.dataEmissao})` : "⏳ pendente";
+      const botoes = !par.parecer ? `
+        <button class="btn-link" onclick="emitirParecerAcao(${p.projetoId}, '${par.sigla}', 'FAVORAVEL')">Favorável</button>
+        <button class="btn-link btn-link-perigo" onclick="emitirParecerAcao(${p.projetoId}, '${par.sigla}', 'CONTRARIO')">Contrário</button>` : "";
+      return `<li>${par.sigla}: ${rotulo} ${botoes}</li>`;
+    }).join("");
+    html += `<div class="cartao-perfil" style="margin-bottom:12px;">
+      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${p.protocolo} — ${p.titulo}</h4>
+      <p class="subtitle">Autor: ${p.autorNome} · Protocolado em ${p.dataProtocolo} · Status: ${ROTULO_STATUS_PROJETO[p.status] || p.status}${p.regimeUrgencia ? " (regime de urgência)" : ""}</p>
+      <p>${p.texto}</p>
+      <ul>${pareceresHtml}</ul>
+      ${p.prazoVencido ? `<p class="subtitle" style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de 15 dias do parecer vencido (${p.diasDesdeProtocolo} dias desde o protocolo).</p>` : ""}
+      ${p.status === "EM_PARECER" && !p.regimeUrgencia ? `<button class="btn-link" onclick="marcarUrgenciaAcao(${p.projetoId})">Marcar regime de urgência</button>` : ""}
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+async function emitirParecerAcao(projetoId, sigla, parecer) {
+  if (!(await confirmarAcao(`Confirma o parecer ${parecer} da comissão ${sigla}?`, "Confirmar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/projetos/${projetoId}/parecer/${sigla}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ parecer })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarProjetos();
+}
+
+async function marcarUrgenciaAcao(projetoId) {
+  if (!(await confirmarAcao("Confirma que o Plenário aprovou regime de urgência (2/3) pra este projeto?", "Confirmar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/projetos/${projetoId}/urgencia`, { method: "POST" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarProjetos();
 }
 
 // Art. 29 — espelha shared/diretoria.js::CARGOS_DIRETORIA (fonte de verdade
@@ -3759,6 +3833,126 @@ async function reprovarConsagracaoAcao(id) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarConsagracoes();
+}
+
+// ---- SECRETARIA / ABA ENQUETES (v2.8) ----
+function onChangeTipoEnquete() {
+  const ehOpcoes = document.getElementById("enqueteTipo").value === "OPCOES";
+  document.getElementById("grupoOpcoesEnquete").style.display = ehOpcoes ? "block" : "none";
+  if (!ehOpcoes) {
+    document.getElementById("enqueteVinculante").checked = false;
+    onChangeVinculanteEnquete();
+  }
+}
+
+function onChangePublicoEnquete() {
+  const ehCustom = document.getElementById("enquetePublicoTipo").value === "LISTA_CUSTOM";
+  document.getElementById("grupoPublicoCustomEnquete").style.display = ehCustom ? "block" : "none";
+}
+
+function onChangeVinculanteEnquete() {
+  document.getElementById("enqueteQuorumTipo").style.display = document.getElementById("enqueteVinculante").checked ? "inline-block" : "none";
+}
+
+async function salvarEnquete() {
+  const titulo = document.getElementById("enqueteTitulo").value.trim();
+  const descricao = document.getElementById("enqueteDescricao").value.trim();
+  const tipo = document.getElementById("enqueteTipo").value;
+  const visibilidade = document.getElementById("enqueteVisibilidade").value;
+  const publicoTipo = document.getElementById("enquetePublicoTipo").value;
+  const vinculante = document.getElementById("enqueteVinculante").checked;
+  const quorumTipo = document.getElementById("enqueteQuorumTipo").value;
+  const opcoes = document.getElementById("enqueteOpcoes").value.split("\n").map(o => o.trim()).filter(Boolean);
+  const publicoMembroIds = (document.getElementById("enquetePublicoMatriculas").value.match(/\d+/g) || []).map(Number);
+  const msg = document.getElementById("resultadoEnquete");
+  if (!titulo) { msg.textContent = "Informe o título."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/enquetes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      titulo, descricao: descricao || undefined, tipo, visibilidade, publicoTipo,
+      opcoes: tipo === "OPCOES" ? opcoes : undefined,
+      publicoMembroIds: publicoTipo === "LISTA_CUSTOM" ? publicoMembroIds : undefined,
+      vinculante, quorumTipo: vinculante ? quorumTipo : undefined
+    })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("enqueteTitulo").value = "";
+    document.getElementById("enqueteDescricao").value = "";
+    document.getElementById("enqueteOpcoes").value = "";
+    document.getElementById("enquetePublicoMatriculas").value = "";
+    document.getElementById("enqueteVinculante").checked = false;
+    onChangeVinculanteEnquete();
+    carregarEnquetes();
+  }
+}
+
+const ROTULO_VISIBILIDADE_ENQUETE = { PUBLICA: "Pública", SECRETA: "Secreta" };
+const ROTULO_QUORUM_ENQUETE = { MAIORIA_SIMPLES: "Maioria simples", DOIS_TERCOS: "Dois terços", NOVENTA_POR_CENTO: "90%" };
+
+async function carregarEnquetes() {
+  const container = document.getElementById("resultadoListaEnquetes");
+  const res = await fetchProtegido(`${API_BASE}/enquetes`);
+  const enquetes = await res.json();
+  if (!Array.isArray(enquetes) || enquetes.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma enquete criada ainda.</p>";
+    return;
+  }
+  let html = "";
+  enquetes.forEach(e => {
+    const opcoesHtml = (e.opcoes || []).map(o => `<li>${o.texto}: <strong>${o.votos}</strong> voto(s)</li>`).join("");
+    const participantesHtml = (e.participantes || []).map(p => p.nome).join(", ") || "ninguém ainda";
+    const resultadoHtml = e.status === "ENCERRADA" && e.vinculante
+      ? `<p><strong>${e.resultadoAprovado ? "✅ Aprovado" : "❌ Não aprovado"}</strong> (${ROTULO_QUORUM_ENQUETE[e.quorumTipo] || e.quorumTipo})</p>`
+      : "";
+    const detalhePublico = e.visibilidade === "PUBLICA" && Array.isArray(e.votos)
+      ? `<p class="subtitle">Quem votou o quê: ${e.votos.map(v => `${v.nome} → ${v.textoResposta || (e.opcoes.find(o => o.opcaoId === v.opcaoId) || {}).texto || "-"}`).join("; ") || "ninguém ainda"}</p>`
+      : "";
+    html += `<div class="cartao-perfil" style="margin-bottom:12px;">
+      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${e.titulo} ${e.vinculante ? "🔒 vinculante" : ""}</h4>
+      <p class="subtitle">${e.descricao || ""}</p>
+      <p class="subtitle">Visibilidade: ${ROTULO_VISIBILIDADE_ENQUETE[e.visibilidade] || e.visibilidade} · Status: ${e.status} · Total de votos: ${e.totalVotos}</p>
+      ${e.tipo === "OPCOES" ? `<ul>${opcoesHtml}</ul>` : ""}
+      <p class="subtitle">Participaram: ${participantesHtml}</p>
+      ${resultadoHtml}
+      ${detalhePublico}
+      ${e.status === "ABERTA" ? `
+        <div class="barra-lista">
+          <input type="number" id="votoMatricula_${e.enqueteId}" placeholder="Sua matrícula" style="min-width:120px;" />
+          ${e.tipo === "OPCOES"
+            ? `<select id="votoOpcao_${e.enqueteId}">${(e.opcoes || []).map(o => `<option value="${o.opcaoId}">${o.texto}</option>`).join("")}</select>`
+            : `<input type="text" id="votoTexto_${e.enqueteId}" placeholder="Sua resposta" style="min-width:200px;" />`}
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="votarEnqueteAcao(${e.enqueteId}, '${e.tipo}')">Votar</button>
+          <button class="btn-link btn-link-perigo" onclick="encerrarEnqueteAcao(${e.enqueteId})">Encerrar</button>
+        </div>` : ""}
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+async function votarEnqueteAcao(enqueteId, tipo) {
+  const membroId = document.getElementById(`votoMatricula_${enqueteId}`).value;
+  if (!membroId) { mostrarToast("Informe a matrícula.", "erro"); return; }
+  const body = tipo === "OPCOES"
+    ? { membroId, opcaoId: document.getElementById(`votoOpcao_${enqueteId}`).value }
+    : { membroId, textoResposta: document.getElementById(`votoTexto_${enqueteId}`).value.trim() };
+  const res = await fetch(`${API_BASE}/enquetes/${enqueteId}/votar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarEnquetes();
+}
+
+async function encerrarEnqueteAcao(enqueteId) {
+  if (!(await confirmarAcao("Encerrar esta enquete? Não dá pra reabrir.", "Encerrar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/enquetes/${enqueteId}/encerrar`, { method: "POST" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarEnquetes();
 }
 
 // ---- SECRETARIA / ABA PROCESSO DISCIPLINAR ----

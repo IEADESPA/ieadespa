@@ -933,23 +933,66 @@ já está lá. **v2.4 está fechado** com isso.
       depois de FASE 4 (Financeiro) e de v5.2 (Relatórios departamentais) —
       **v2.7 está fechado** com isso.
 
-#### v2.8 — Votação e Eleições
+#### v2.8 — Enquetes e Tramitação de Projetos/Pareceres
 
-- [ ] Modelo de dados: `Pautas` (SessaoId, Descricao, Tipo) + `Votos` (PautaId, MembroId, Escolha).
-- [ ] Apuração com quórum de aprovação (maioria simples / supermaiorias).
-- [ ] Fluxo de candidatura usando `elegivelDiretoriaConselhoFiscal` / `elegivelCEIouDepartamentos`.
-- [ ] Eleição completa de Diretoria Executiva e Conselho Fiscal.
-- [ ] Pautas de reforma estatutária / destituição com rito de 3 estágios.
-- [ ] **Tramitação de Projetos e Parecer das Comissões** (Regimento, Art. 24-25 —
-      vinha adiada de v2.4): etapa que antecede a `Pauta` acima, não é item
-      solto — todo projeto protocolado é despachado pra CCJ e pra comissão
-      temática (`shared/comissoes.js`), que têm 15 dias pra emitir parecer
-      (favorável/contrário/regime de urgência 2/3); só depois disso o projeto
-      vira uma `Pauta` apta a entrar em votação. Modelo: `Projetos` (protocolo,
-      autor, texto, status) + `PareceresComissao` (ProjetoId, Sigla, parecer,
-      data, prazo calculado na leitura — mesmo padrão de `ProcessosDisciplinares`).
-      Derrubada/manutenção de veto presidencial sobre resolução aprovada
-      também nasce aqui, depois da apuração.
+**Reformulado por completo** — o escopo original ("Pautas/Votos", eleição
+formal de Diretoria/Conselho Fiscal com apuração ao vivo) esbarrava no mesmo
+problema já resolvido no v2.3 pro CLI: deliberações de plenário (Art. 25,
+maioria simples) foram **descartadas permanentemente** ali porque "numa
+reunião real as decisões são tomadas informalmente... ninguém vai abrir o
+site no meio de uma reunião pra fazer esse lançamento". Investigação +
+conversa com o usuário levaram a um formato diferente, que evita esse
+problema:
+
+- [x] **Enquetes** (`Enquetes`/`OpcoesEnquete`/`PublicoEnqueteCustom`/
+      `VotosEnquete`, migração 032; `api/GestaoEnquetes`; `shared/enquetes.js`):
+      pra pautas que nascem e se resolvem **fora** de uma sessão formal (ex:
+      escolha do Tema do Ano, votação de camiseta de festa) — cada uma tem
+      **tipo** (Opções ou Texto livre), **visibilidade** (Pública — aparece
+      quem votou o quê, tipo lista de inscrição; ou Secreta — só contagem
+      agregada + quem participou, nunca o quê cada um escolheu, pra evitar
+      retaliação) e **público** (todos os membros ativos, reaproveitando
+      `universoDoOrgao`, ou uma lista customizada de matrículas). 1 voto por
+      pessoa (`UNIQUE` em `VotosEnquete`); `MembroId` sempre é gravado
+      internamente (antifraude), mesmo nas secretas — só a API de leitura
+      nunca expõe o vínculo voto↔pessoa nesse caso.
+- [x] **Vinculante**: mesma engine, com uma flag extra pra quando a eleição/
+      reforma da Assembleia (Art. 18) for realmente contestada — o usuário
+      foi claro que isso não é o padrão ("quando todo mundo já sabe o
+      resultado, abrir o site é perda de tempo, não tem prova maior que o
+      olho de quem tá lá presente"), só entra em jogo no cenário polêmico.
+      `QuorumTipo` (Maioria simples / Dois terços / 90% — Art. 71, Núcleo
+      Fundamental) + `avaliarAprovacaoEnquete` (`shared/estatuto.js`) calcula
+      `ResultadoAprovado` de verdade ao encerrar — diferente de
+      `avaliarQuorumReformaDificultada` (v2.2), que era só informativo porque
+      nada registrava voto por pessoa; agora registra.
+- [x] **Tramitação de Projetos e Parecer das Comissões** (Regimento, Art.
+      24-25 — vinha adiada do v2.4): etapa que antecede uma Enquete
+      vinculante. `Projetos`/`PareceresComissao` (migração 033;
+      `api/GestaoProjetos`): todo projeto protocolado já nasce despachado pra
+      CCJ + a comissão temática escolhida (CFO ou CEP), que têm 15 dias
+      (calculado na leitura, mesmo padrão de `ProcessosDisciplinares`) pra
+      emitir parecer — reaproveita `shared/comissoes.js` pra validar que só
+      quem é da comissão certa emite o parecer dela. Regime de urgência (Art.
+      24 §2º, 2/3 do Plenário) é só **registro** do que já foi decidido
+      fisicamente — mesmo racional do "descartado" no v2.3, o sistema não
+      verifica votos de plenário ao vivo.
+- **"Derrubada de veto presidencial" (item do escopo original) não existe —
+  corrigido na varredura**: o Regimento (Art. 25, Parágrafo Único) diz
+  explicitamente que o veto do Pastor Presidente sobre resolução da CLI **é
+  definitivo, sem mecanismo de derrubada**. Não há o que construir; a matéria
+  vetada só pode ser reapresentada com nova redação (novo `Projeto`, mesmo
+  modelo acima) ou submetida à Assembleia Geral quando for competência dela.
+- **Eleição completa de Diretoria Executiva/Conselho Fiscal e fluxo de
+  candidatura** (`elegivelDiretoriaConselhoFiscal`/`elegivelCEIouDepartamentos`,
+  já calculados desde o v0.1) usam a mesma Enquete vinculante acima quando
+  precisar — não é um modelo `Pautas`/`Votos` à parte; não há item adicional
+  de código aqui.
+- **Compatibilidade futura, não construída agora**: a mesma engine de
+  Enquetes (tipo Texto livre, público Lista customizada) já serve de base
+  pras entrevistas personalizadas de Consagração citadas pelo usuário nesta
+  conversa — registrado aqui pra quando chegar a hora, sem precisar
+  redesenhar.
 
 #### v2.9 — Documentos, Atas e Registro
 

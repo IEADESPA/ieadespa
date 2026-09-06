@@ -309,6 +309,33 @@ function avaliarQuorumReformaDificultada(totalPresentes) {
   };
 }
 
+// v2.8 — Enquetes: diferente de avaliarQuorumReformaDificultada acima (que
+// era só informativo, porque nada registrava voto por pessoa), Enquetes
+// vinculantes REALMENTE contam voto individual (VotosEnquete), então dá pra
+// calcular aprovação de verdade. Calculado sobre quem efetivamente votou
+// (totalVotos), não sobre o universo elegível total — mesmo princípio de
+// "quórum de aprovação" de uma deliberação (quem se absteve/não votou não
+// entra no denominador).
+const QUORUM_APROVACAO_ENQUETE = { MAIORIA_SIMPLES: 0.5, DOIS_TERCOS: 2 / 3, NOVENTA_POR_CENTO: 0.9 };
+function avaliarAprovacaoEnquete(totalVotos, votosOpcaoMaisVotada, quorumTipo) {
+  const fracaoNecessaria = QUORUM_APROVACAO_ENQUETE[quorumTipo];
+  if (fracaoNecessaria === undefined) {
+    return { aprovado: false, mensagem: `QuorumTipo desconhecido: ${quorumTipo}.` };
+  }
+  if (totalVotos === 0) {
+    return { aprovado: false, mensagem: "Nenhum voto registrado — não há como apurar." };
+  }
+  const aprovado = quorumTipo === "MAIORIA_SIMPLES"
+    ? votosOpcaoMaisVotada > totalVotos / 2
+    : votosOpcaoMaisVotada >= Math.ceil(totalVotos * fracaoNecessaria);
+  return {
+    aprovado, totalVotos, votosOpcaoMaisVotada,
+    mensagem: aprovado
+      ? `Aprovado: ${votosOpcaoMaisVotada} de ${totalVotos} votos (${quorumTipo}).`
+      : `Não aprovado: ${votosOpcaoMaisVotada} de ${totalVotos} votos não atinge ${quorumTipo}.`
+  };
+}
+
 module.exports = {
   idadeEm,
   diasDesde,
@@ -328,5 +355,6 @@ module.exports = {
   MATERIAS_PRIVATIVAS_ASSEMBLEIA,
   derivarClassificacaoAssembleia,
   avaliarQuorumReformaDestituicao,
-  avaliarQuorumReformaDificultada
+  avaliarQuorumReformaDificultada,
+  avaliarAprovacaoEnquete
 };

@@ -97,6 +97,7 @@
           <button class="btn-aba" id="btnAbaCatalogos" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
           <button class="btn-aba" id="btnAbaPermissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
           <button class="btn-aba" id="btnAbaConsagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
+          <button class="btn-aba" id="btnAbaEnquetes" onclick="mostrarAbaSecretaria('enquetes')"><span class="icone">🗳️</span><span class="rotulo">Enquetes</span></button>
           <button class="btn-aba" id="btnAbaDisciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
           <button class="btn-aba" id="btnAbaAbandono" onclick="mostrarAbaSecretaria('abandono')"><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
           <button class="btn-aba" id="btnAbaAuditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
@@ -478,6 +479,32 @@
           <h5 style="margin:16px 0 6px;">Comissão de Ética Parlamentar e Decoro (CEP)</h5>
           <p class="subtitle">Calculada — membros do CEI.</p>
           <div class="rolagem-tabela"><div id="resultadoListaCEP"></div></div>
+
+          <hr />
+
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">📄 Projetos e Parecer de Comissões (Art. 24-25)</h4>
+          <p class="subtitle">
+            Todo projeto protocolado vai pra CCJ e pra comissão temática, que têm 15 dias
+            pra emitir parecer. Sem parecer, não entra em votação — salvo regime de
+            urgência (2/3 do Plenário, registrado aqui como já decidido fisicamente).
+          </p>
+          <form onsubmit="event.preventDefault(); salvarProjeto();">
+            <div class="barra-lista">
+              <input type="number" id="projetoAutorMatricula" placeholder="Matrícula do autor" style="min-width:160px;" />
+              <input type="text" id="projetoTitulo" placeholder="Título do projeto" style="min-width:220px;" />
+              <select id="projetoComissaoTematica">
+                <option value="CFO">Comissão de Finanças e Orçamento (CFO)</option>
+                <option value="CEP">Comissão de Ética Parlamentar e Decoro (CEP)</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Texto do projeto:</label>
+              <textarea id="projetoTexto" rows="3"></textarea>
+            </div>
+            <button class="btn-confirmar" type="submit">📩 Protocolar</button>
+          </form>
+          <p id="resultadoProjeto"></p>
+          <div class="rolagem-tabela"><div id="resultadoListaProjetos"></div></div>
         </div>
 
         <!-- Só existe conteúdo (composição + sucessão) pra Diretoria Executiva —
@@ -1089,6 +1116,58 @@
         <hr />
         <h3>Esteira Ativa</h3>
         <div class="rolagem-tabela"><div id="resultadoListaConsagracoes"></div></div>
+      </div>
+
+      <!-- ABA: ENQUETES (v2.8) -->
+      <div id="abaEnquetes" class="aba-secretaria" style="display:none;">
+        <h3>Criar Enquete</h3>
+        <p class="subtitle">Pra pautas que se resolvem fora de uma sessão formal (ex: Tema do Ano, camiseta de festa). Marque "Vinculante" só quando for uma eleição/reforma da Assembleia realmente contestada — não é o padrão.</p>
+        <form onsubmit="event.preventDefault(); salvarEnquete();">
+          <div class="input-group">
+            <label>Título:</label>
+            <input type="text" id="enqueteTitulo" placeholder="Ex: Tema do Ano 2027" />
+          </div>
+          <div class="input-group">
+            <label>Descrição (opcional):</label>
+            <textarea id="enqueteDescricao" rows="2"></textarea>
+          </div>
+          <div class="barra-lista">
+            <select id="enqueteTipo" onchange="onChangeTipoEnquete()">
+              <option value="OPCOES">Tipo: Opções (escolher entre alternativas)</option>
+              <option value="TEXTO_LIVRE">Tipo: Texto livre (sugestão aberta)</option>
+            </select>
+            <select id="enqueteVisibilidade">
+              <option value="SECRETA">Visibilidade: Secreta (só contagem, ninguém sabe o voto de quem)</option>
+              <option value="PUBLICA">Visibilidade: Pública (aparece quem votou o quê)</option>
+            </select>
+            <select id="enquetePublicoTipo" onchange="onChangePublicoEnquete()">
+              <option value="TODOS_ATIVOS">Público: Todos os membros ativos</option>
+              <option value="LISTA_CUSTOM">Público: Lista customizada de matrículas</option>
+            </select>
+          </div>
+          <div class="input-group" id="grupoOpcoesEnquete">
+            <label>Opções (uma por linha, mínimo 2):</label>
+            <textarea id="enqueteOpcoes" rows="3" placeholder="Opção 1&#10;Opção 2"></textarea>
+          </div>
+          <div class="input-group" id="grupoPublicoCustomEnquete" style="display:none;">
+            <label>Matrículas do público (separadas por vírgula/espaço):</label>
+            <textarea id="enquetePublicoMatriculas" rows="2"></textarea>
+          </div>
+          <div class="barra-lista">
+            <label class="opcao-checkbox"><input type="checkbox" id="enqueteVinculante" onchange="onChangeVinculanteEnquete()" /> Vinculante (eleição/reforma contestada)</label>
+            <select id="enqueteQuorumTipo" style="display:none;">
+              <option value="MAIORIA_SIMPLES">Quórum: Maioria simples (&gt;50%)</option>
+              <option value="DOIS_TERCOS">Quórum: Dois terços</option>
+              <option value="NOVENTA_POR_CENTO">Quórum: 90% (Núcleo Fundamental — Art. 71)</option>
+            </select>
+          </div>
+          <button class="btn-confirmar" type="submit">🗳️ Criar Enquete</button>
+        </form>
+        <p id="resultadoEnquete"></p>
+
+        <hr />
+        <h3>Enquetes</h3>
+        <div class="rolagem-tabela"><div id="resultadoListaEnquetes"></div></div>
       </div>
 
       <!-- ABA: PROCESSO DISCIPLINAR -->

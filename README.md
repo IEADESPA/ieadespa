@@ -927,7 +927,11 @@ já está lá. **v2.4 está fechado** com isso.
       a versão em `shared/termos.js` faz quem já assinou a antiga voltar a
       ficar pendente, sem apagar o histórico de assinaturas anteriores (prova
       documental, Art. 57 §2º).
-- [ ] Autonomia de arrecadação/gasto dos departamentos (Art. 49).
+- [ ] ~~Autonomia de arrecadação/gasto dos departamentos (Art. 49)~~ — não dá
+      pra construir sem aba Financeira. Movido de verdade pra `v5.4`
+      (Tesouraria central por departamento), que já é sobre isso e já vem
+      depois de FASE 4 (Financeiro) e de v5.2 (Relatórios departamentais) —
+      **v2.7 está fechado** com isso.
 
 #### v2.8 — Votação e Eleições
 
@@ -1184,6 +1188,16 @@ das competências abaixo tem processo ou tela ainda:
 - [ ] `PerfisRateio` configuráveis (integral/percentual/mensalidade/variável).
 - [ ] Rateio local/geral linha a linha.
 - [ ] Saldo transportado mês a mês.
+- [ ] **Autonomia de arrecadação/gasto dos departamentos** (Estatuto, Art. 49)
+      — vinha adiada de `v2.7` (item 5): Departamentos/Áreas/Congregações
+      podem gerir recursos internos ("caixas de departamento") pra custear
+      suas próprias atividades, com a vedação expressa do Art. 49, I (nenhum
+      órgão de apoio, Pastor de Área ou Dirigente pode contrair dívida,
+      assinar contrato ou assumir obrigação jurídica em nome da IEADESPA sem
+      autorização por escrito do Pastor Presidente e do 1º Secretário). Só
+      faz sentido depois que `TesourariasDepartamento`/`Despesas` (acima)
+      existirem de verdade — não tem como controlar autonomia de caixa sem
+      caixa.
 
 #### v5.5 — Integração automática EBD + 4 departamentos
 

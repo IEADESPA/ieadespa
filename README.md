@@ -1119,12 +1119,11 @@ eleva ao papel de Corte Suprema do Regimento.
       §3º, I) — `GestaoAssentos` estendido de `orgaoSigla ===
       "CONSELHO_FISCAL"` para incluir `"CEI"`, reaproveitando
       `shared/parentesco.js::existeParentescoAte2Grau` sem mudar a função.
-- [ ] Indicação pelo Pastor Presidente + sabatina/homologação pela CLI
-      (maioria simples) e destituição por 2/3 da CLI (Art. 89): **sem
-      mecanismo novo** — quando o caso for contestado, reaproveita as
-      Enquetes vinculantes do v2.8 (`quorumTipo: MAIORIA_SIMPLES` ou
-      `DOIS_TERCOS`, `OrgaoId` = CLI); se for aclamação óbvia, mesmo
-      raciocínio do v2.8: não vale a pena digitalizar.
+- **Descartado**: indicação pelo Pastor Presidente + sabatina/homologação
+  pela CLI e destituição por 2/3 (Art. 89) — não tem como colocar no sistema
+  "o Presidente indicou e foi sabatinado pela CLI"; se o Assento existe no
+  sistema é porque isso já aconteceu fora dele. Não é um evento verificável
+  nem registrável de forma útil — fica de fora.
 - **Descartado/fora de escopo, com nota**: incompatibilidade com Mesa
   Diretora/Vice de Quadrante/Superintendente Regional (Art. 90 §1º) — esses
   cargos não são rastreados em lugar nenhum do sistema (só Diretoria

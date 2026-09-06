@@ -1,0 +1,13 @@
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get", "post"],
+      "route": "comissoes/{sigla?}/{id?}/{acao?}"
+    },
+    { "type": "http", "direction": "out", "name": "res" }
+  ]
+}

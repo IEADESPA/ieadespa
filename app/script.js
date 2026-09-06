@@ -996,7 +996,7 @@ function selecionarOrgaoReunioes(orgaoId) {
   });
 
   if (ehAssembleia) carregarConvocacoesPendentes();
-  if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); }
+  if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); }
   carregarReunioes();
 }
 
@@ -1093,6 +1093,61 @@ async function encerrarAssentoCLIAcao(assentoId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) { carregarAssentosCLI(); carregarComposicaoCLI(); }
+}
+
+function tabelaComissaoCalculada(lista, comAcaoRemover) {
+  if (!Array.isArray(lista) || lista.length === 0) return "<p class='subtitle'>Ninguém compõe essa comissão ainda.</p>";
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Matrícula</th><th>Nome</th>${comAcaoRemover ? "<th>Desde</th><th></th>" : "<th>Cargo/Origem</th>"}
+  </tr></thead><tbody>`;
+  lista.forEach(m => {
+    html += `<tr>
+      <td>${m.membroId}</td>
+      <td>${m.nome}</td>
+      ${comAcaoRemover
+        ? `<td>${m.dataInicio}</td><td><button class="btn-link btn-link-perigo" onclick="removerMembroCCJ(${m.comissaoMembroId})">Remover</button></td>`
+        : `<td>${m.cargoOuFuncao || "-"}${m.origemSigla ? ` (${m.origemSigla})` : ""}</td>`}
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  return html;
+}
+
+async function carregarComissoes() {
+  const res = await fetchProtegido(`${API_BASE}/comissoes`);
+  const data = await res.json();
+  window._ccjCache = data.CCJ || [];
+  document.getElementById("resultadoListaCCJ").innerHTML = tabelaComissaoCalculada(data.CCJ, true);
+  document.getElementById("resultadoListaCFO").innerHTML = tabelaComissaoCalculada(data.CFO, false);
+  document.getElementById("resultadoListaCEP").innerHTML = tabelaComissaoCalculada(data.CEP, false);
+}
+
+async function adicionarMembroCCJ() {
+  const membroId = document.getElementById("ccjMatricula").value;
+  const msg = document.getElementById("resultadoCCJ");
+  if (!membroId) { msg.textContent = "Informe a matrícula."; return; }
+  const res = await fetchProtegido(`${API_BASE}/comissoes/ccj`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("ccjMatricula").value = "";
+    carregarComissoes();
+  }
+}
+
+async function removerMembroCCJ(comissaoMembroId) {
+  if (!(await confirmarAcao("Remover este membro da CCJ?", "Remover"))) return;
+  const res = await fetchProtegido(`${API_BASE}/comissoes/ccj/${comissaoMembroId}/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarComissoes();
 }
 
 async function carregarConvocacoesPendentes() {

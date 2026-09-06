@@ -452,6 +452,32 @@
           </form>
           <p id="resultadoAssentoCLI"></p>
           <div class="rolagem-tabela"><div id="resultadoListaAssentosCLI"></div></div>
+
+          <hr />
+
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">📋 Comissões Permanentes</h4>
+          <p class="subtitle">
+            Órgãos técnicos de análise prévia (Regimento, Art. 18-23) — CFO e CEP são
+            calculadas automaticamente; CCJ é eleita pelo Plenário, máximo 3 membros.
+          </p>
+
+          <h5 style="margin:10px 0 6px;">Comissão de Constituição, Justiça e Redação (CCJ)</h5>
+          <form onsubmit="event.preventDefault(); adicionarMembroCCJ();">
+            <div class="barra-lista">
+              <input type="number" id="ccjMatricula" placeholder="Matrícula" style="min-width:120px;" />
+              <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar</button>
+            </div>
+          </form>
+          <p id="resultadoCCJ"></p>
+          <div class="rolagem-tabela"><div id="resultadoListaCCJ"></div></div>
+
+          <h5 style="margin:16px 0 6px;">Comissão de Finanças e Orçamento (CFO)</h5>
+          <p class="subtitle">Calculada — titulares do Conselho Fiscal + 1º/2º Tesoureiro da Diretoria.</p>
+          <div class="rolagem-tabela"><div id="resultadoListaCFO"></div></div>
+
+          <h5 style="margin:16px 0 6px;">Comissão de Ética Parlamentar e Decoro (CEP)</h5>
+          <p class="subtitle">Calculada — membros do CEI.</p>
+          <div class="rolagem-tabela"><div id="resultadoListaCEP"></div></div>
         </div>
       </div>
 

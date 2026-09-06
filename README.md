@@ -731,11 +731,39 @@ que a AFM nascer, e teria que ser refeito.
       ambos nascerem, essa soma entre órgãos "fundidos" precisa entrar no desenho.
 - [ ] Verificação de perda de assento por faltas.
 
-#### v2.4 — CLI (comissões e planejamento)
+#### v2.4 — CLI (Comissões Permanentes)
 
-- [ ] Comissões Permanentes: CCJ + comissões temáticas (Regimento).
-- [ ] Parecer das comissões em 15 dias (regime de urgência 2/3).
-- [ ] Planejamento estratégico PDQ (aprovação, remanejamento 20%, cláusula de barreira).
+Das 5 comissões do Regimento (Art. 19-23), 3 já dão pra fazer com o que o
+sistema já tem — as outras 2 dependem de peça que ainda não existe.
+
+- [x] **CFO** — Comissão de Finanças e Orçamento (Art. 20): calculada
+      automaticamente (titulares do Conselho Fiscal + 1º/2º Tesoureiro da
+      Diretoria, via `Assentos` — `shared/comissoes.js`, `composicaoCFO`),
+      sem cadastro manual.
+- [x] **CEP** — Comissão de Ética Parlamentar e Decoro (Art. 21): calculada
+      automaticamente (membros do CEI, via `Assentos` —
+      `composicaoCEP`), sem cadastro manual.
+- [x] **CCJ** — Comissão de Constituição, Justiça e Redação (Art. 19): única
+      com cadastro manual de verdade (eleita pelo Plenário, não deriva de
+      nenhum outro dado) — tabela `ComissaoMembros` (migração 028), máximo 3
+      membros ativos, `api/GestaoComissoes` (`POST /api/comissoes/ccj`,
+      `.../encerrar`). Tela dentro do submenu CLI de Reuniões, junto de
+      Composição/Assentos (mesmo "tudo da CLI na tela dela" do v2.3).
+- [ ] **CDER** — Comissão de Doutrina e Educação Religiosa (Art. 22):
+      bloqueada — composição exige o Reitor da AFM (Academia de Formação
+      Ministerial), que só existe a partir de `v8.1` (FASE 8). Constrói
+      junto com aquela versão.
+- [ ] **CME** — Comissão de Missões e Expansão Estratégica (Art. 23):
+      bloqueada — composição cita "Secretário de Missões", cargo que não
+      existe em nenhum catálogo hoje. Melhor encaixe é `FASE 9`/`v9.2`
+      Expansão, onde Missões de fato vai ser modelado.
+- [ ] Parecer das comissões em 15 dias, regime de urgência 2/3, derrubada/
+      manutenção de veto (Art. 24-25 do Regimento): bloqueado — depende de um
+      sistema de "Projetos/Proposições" (protocolo, tramitação, prazo) que não
+      existe ainda; construir o prazo sem a tramitação por baixo não tem em
+      que se apoiar. Natureza parecida com o que foi descartado nas
+      deliberações da CLI (v2.3), mas aqui não é descarte — só falta a peça
+      de baixo antes de valer a pena.
 
 #### v2.5 — Diretoria Executiva
 
@@ -915,8 +943,16 @@ das competências abaixo tem processo ou tela ainda:
 #### v4.3 — Orçamento anual e PDQ
 
 - [ ] Orçamento Anual e Balanço Patrimonial consolidado (1º Tesoureiro — Art. 36 §1º).
-- [ ] Planejamento estratégico PDQ com metas e 3 eixos.
-- [ ] Remanejamento de até 20% + cláusula de barreira (CLI).
+- [ ] Planejamento estratégico PDQ com metas e 3 eixos (Regimento, Art. 26-29).
+- [ ] Fundo de Execução Estratégica: dotação obrigatória de 10% da arrecadação
+      líquida (Art. 27), com suspensão excepcional pelo Pastor Presidente.
+- [ ] Remanejamento de até 20% + cláusula de barreira acima disso (CLI) — Art. 28.
+- [ ] Comissão de Acompanhamento de Projetos / PMO Eclesiástico (Art. 30):
+      monitora cronograma físico/financeiro do PDQ, reporta trimestralmente à
+      CLI — natural que nasça junto com o PDQ, é o mesmo dado.
+- [ ] Relatório de Progresso do PDQ na AGO (Art. 29) + Relatório de
+      Justificativa Técnica quando as metas não forem cumpridas (sem virar
+      infração disciplinar — Art. 29 §1º).
 
 #### v4.4 — Prebenda e sustento pastoral
 

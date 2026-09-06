@@ -157,6 +157,20 @@ function avaliarElegibilidadeCEI(dados) {
   };
 }
 
+// Art. 101 — prazo de defesa prévia do Processo Disciplinar: 5 dias corridos
+// a partir da citação. Vencido sem defesa protocolada = revelia (julgamento
+// com presunção dos fatos, se houver prova mínima) — calculado na leitura,
+// nunca marcação manual.
+const DIAS_PRAZO_DEFESA_DISCIPLINAR = 5;
+
+function avaliarPrazoDefesa(dataCitacao, defesaProtocolada, hoje) {
+  if (!dataCitacao) return { diasDesdeCitacao: null, prazoVencido: false, emRevelia: false };
+  const diasDesdeCitacao = diasDesde(dataCitacao, hoje);
+  const prazoVencido = diasDesdeCitacao !== null && diasDesdeCitacao > DIAS_PRAZO_DEFESA_DISCIPLINAR;
+  const emRevelia = prazoVencido && !defesaProtocolada;
+  return { diasDesdeCitacao, prazoVencido, emRevelia };
+}
+
 // Art. 21 (Assembleia Geral, matérias gerais/AGO) e Art. 24 (CLI) compartilham o mesmo formato
 // de instalação em 2 estágios: 1ª convocação = maioria absoluta; 2ª convocação, 30 minutos
 // depois = qualquer número de presentes. Fora do escopo aqui: quórum de reforma estatutária/
@@ -398,5 +412,7 @@ module.exports = {
   avaliarQuorumReformaDestituicao,
   avaliarQuorumReformaDificultada,
   avaliarAprovacaoEnquete,
-  avaliarElegibilidadeCEI
+  avaliarElegibilidadeCEI,
+  DIAS_PRAZO_DEFESA_DISCIPLINAR,
+  avaliarPrazoDefesa
 };

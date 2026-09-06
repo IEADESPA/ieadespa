@@ -1,31 +1,22 @@
 // AbrirProcessoDisciplinar
-// Núcleo mínimo (v0.2) — abre um processo vinculado a um membro, com motivo em texto
-// livre (o catálogo de infrações do Regimento, Art. 96-99, é v3.3). Exige a permissão
-// "disciplina" (já cadastrada em Funcionalidades desde a migração 002).
-// POST /api/processos-disciplinares -> body: { membroId, orgaoResponsavelId, motivo, dataAbertura?, sigiloso? }
+// v3.2 — abre um processo vinculado a um membro, citando 1+ infrações do
+// catálogo estruturado `TiposInfracao` (Art. 96-99); `motivo` agora é só o
+// detalhamento complementar em texto livre do caso, não mais o único campo.
+// Exige a permissão "disciplina" (já cadastrada em Funcionalidades desde a
+// migração 002).
+// POST /api/processos-disciplinares -> body: { membroId, orgaoResponsavelId, infracoesIds: number[], motivo?, dataAbertura?, sigiloso? }
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-
-const SELECT_PROCESSO = `
-  SELECT p.ProcessoId AS processoId, p.MembroId AS membroId, m.Nome AS nome,
-         p.OrgaoResponsavelId AS orgaoResponsavelId, o.Sigla AS orgaoSigla,
-         p.Motivo AS motivo, CONVERT(varchar(10), p.DataAbertura, 120) AS dataAbertura,
-         p.Status AS status, p.Sigiloso AS sigiloso,
-         CONVERT(varchar(10), p.DataConclusao, 120) AS dataConclusao,
-         p.Resultado AS resultado, p.DiasSancao AS diasSancao,
-         CONVERT(varchar(10), p.DataTerminoPrevisao, 120) AS dataTerminoPrevisao
-  FROM ProcessosDisciplinares p
-  JOIN MembroReferencia m ON m.MembroId = p.MembroId
-  JOIN Orgaos o ON o.OrgaoId = p.OrgaoResponsavelId`;
+const { selectProcessoComInfracoes } = require("../shared/disciplinar");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
   if (!usuario) return;
 
-  const { membroId, orgaoResponsavelId, motivo, dataAbertura, sigiloso } = req.body || {};
-  if (!membroId || !orgaoResponsavelId || !motivo) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, orgaoResponsavelId, motivo." } };
+  const { membroId, orgaoResponsavelId, infracoesIds, motivo, dataAbertura, sigiloso } = req.body || {};
+  if (!membroId || !orgaoResponsavelId || !Array.isArray(infracoesIds) || infracoesIds.length === 0) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, orgaoResponsavelId, infracoesIds (pelo menos 1)." } };
     return;
   }
 
@@ -47,10 +38,19 @@ module.exports = async function (context, req) {
     return;
   }
 
+  const idsInfracoes = infracoesIds.map(Number).filter(Number.isInteger);
+  const infracoesValidas = await pool.request().query(`
+    SELECT InfracaoId FROM TiposInfracao WHERE Ativo = 1 AND InfracaoId IN (${idsInfracoes.length ? idsInfracoes.join(",") : "0"})
+  `);
+  if (infracoesValidas.recordset.length !== idsInfracoes.length) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Uma ou mais infrações informadas são inválidas ou estão inativas no catálogo." } };
+    return;
+  }
+
   const result = await pool.request()
     .input("membroId", sql.Int, membroId)
     .input("orgaoResponsavelId", sql.Int, orgaoResponsavelId)
-    .input("motivo", sql.NVarChar(500), motivo)
+    .input("motivo", sql.NVarChar(500), motivo || null)
     .input("dataAbertura", sql.Date, dataAbertura || null)
     .input("sigiloso", sql.Bit, sigiloso === undefined ? true : sigiloso)
     .query(`
@@ -60,15 +60,19 @@ module.exports = async function (context, req) {
     `);
   const processoId = result.recordset[0].ProcessoId;
 
-  const processoResult = await pool.request().input("id", sql.Int, processoId).query(`${SELECT_PROCESSO} WHERE p.ProcessoId = @id`);
-  const processo = processoResult.recordset[0];
+  for (const infracaoId of idsInfracoes) {
+    await pool.request().input("processoId", sql.Int, processoId).input("infracaoId", sql.Int, infracaoId)
+      .query(`INSERT INTO ProcessoInfracoes (ProcessoId, InfracaoId) VALUES (@processoId, @infracaoId)`);
+  }
+
+  const processo = await selectProcessoComInfracoes(pool, sql, processoId);
 
   await registrarAuditoria({
     tabela: "ProcessosDisciplinares",
     registroId: processoId,
     acao: "Abriu processo disciplinar",
     usuarioId: usuario.membroId,
-    dadosDepois: { membroId, orgaoResponsavelId, motivo }
+    dadosDepois: { membroId, orgaoResponsavelId, motivo: motivo || null, infracoesIds: idsInfracoes }
   });
 
   context.res = {

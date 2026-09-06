@@ -38,15 +38,18 @@ async function vizinhos(pool, sql, membroIds) {
 }
 
 // idsAlvo: Set<number> — retorna { encontrado, comMembroId } se existir
-// caminho de até PROFUNDIDADE_MAXIMA arestas entre membroId e algum de idsAlvo.
-async function existeParentescoAte2Grau(pool, sql, membroId, idsAlvo) {
+// caminho de até `profundidadeMaxima` arestas entre membroId e algum de
+// idsAlvo (default 2, Art. 43 §3º/Estatuto Art. 38 §2º — Conselho Fiscal e
+// CEI). v3.2 passa 3 pra suspeição de relator de Processo Disciplinar
+// (Regimento Art. 91).
+async function existeParentescoAte2Grau(pool, sql, membroId, idsAlvo, profundidadeMaxima = PROFUNDIDADE_MAXIMA) {
   const origem = Number(membroId);
   if (idsAlvo.has(origem)) return { encontrado: true, comMembroId: origem };
 
   let fronteira = new Set([origem]);
   const visitados = new Set([origem]);
 
-  for (let profundidade = 1; profundidade <= PROFUNDIDADE_MAXIMA; profundidade++) {
+  for (let profundidade = 1; profundidade <= profundidadeMaxima; profundidade++) {
     const adjacencias = await vizinhos(pool, sql, fronteira);
     const proximaFronteira = new Set();
     for (const nodo of fronteira) {

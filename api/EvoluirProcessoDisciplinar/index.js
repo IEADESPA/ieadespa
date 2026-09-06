@@ -1,29 +1,25 @@
 // EvoluirProcessoDisciplinar
-// Núcleo mínimo (v0.2). Duas ações (não é uma esteira linear de 1 next-state, porque
-// julgar e ajustar prazo são operações distintas com validações próprias):
-//   JULGAR         -> { resultado: 'ARQUIVADO'|'SANCAO'|'EXCLUSAO', diasSancao? }
-//   AJUSTAR_PRAZO  -> { novoDiasSancao? , prazoIndeterminado?, justificativa } (justificativa obrigatória)
-// Exige a permissão "disciplina". Status intermediário AFASTAMENTO_CAUTELAR e reabertura
-// de processo já julgado ficam fora deste núcleo (v3.2).
+// v3.2 — o rito do Regimento (Art. 100-103) por cima do núcleo v0.2. Ações
+// (não é uma esteira linear de 1 next-state — cada uma é uma operação
+// distinta com validação própria):
+//   DESIGNAR_RELATOR -> { relatorMembroId } (Art. 91 — suspeição por parentesco/congregação é só aviso, não bloqueia)
+//   CITAR            -> { canalCitacao: 'WHATSAPP'|'CARTA_REGISTRADA', dataCitacao? } (Art. 101 — só registro)
+//   AFASTAR          -> {} (Art. 100 — Status vira AFASTAMENTO_CAUTELAR)
+//   REGISTRAR_DEFESA -> { dataDefesa? } (exige citação prévia)
+//   DESIGNAR_DEFENSOR-> { defensorNome } (Art. 102 — texto livre, pode ser advogado externo)
+//   JULGAR           -> { resultado: 'ARQUIVADO'|'SANCAO'|'EXCLUSAO', diasSancao? }
+//   AJUSTAR_PRAZO    -> { novoDiasSancao?, prazoIndeterminado?, justificativa } (justificativa obrigatória)
+// Exige a permissão "disciplina".
 // POST /api/processos-disciplinares/{processoId}/evoluir
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const vacancia = require("../shared/vacancia");
+const { existeParentescoAte2Grau } = require("../shared/parentesco");
+const { selectProcessoComInfracoes } = require("../shared/disciplinar");
 
 const RESULTADOS_VALIDOS = ["ARQUIVADO", "SANCAO", "EXCLUSAO"];
-
-const SELECT_PROCESSO = `
-  SELECT p.ProcessoId AS processoId, p.MembroId AS membroId, m.Nome AS nome,
-         p.OrgaoResponsavelId AS orgaoResponsavelId, o.Sigla AS orgaoSigla,
-         p.Motivo AS motivo, CONVERT(varchar(10), p.DataAbertura, 120) AS dataAbertura,
-         p.Status AS status, p.Sigiloso AS sigiloso,
-         CONVERT(varchar(10), p.DataConclusao, 120) AS dataConclusao,
-         p.Resultado AS resultado, p.DiasSancao AS diasSancao,
-         CONVERT(varchar(10), p.DataTerminoPrevisao, 120) AS dataTerminoPrevisao
-  FROM ProcessosDisciplinares p
-  JOIN MembroReferencia m ON m.MembroId = p.MembroId
-  JOIN Orgaos o ON o.OrgaoId = p.OrgaoResponsavelId`;
+const CANAIS_CITACAO_VALIDOS = ["WHATSAPP", "CARTA_REGISTRADA"];
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
@@ -32,16 +28,109 @@ module.exports = async function (context, req) {
   const processoId = context.bindingData.processoId;
   const { acao } = req.body || {};
   if (!processoId || !acao) {
-    context.res = { status: 400, body: { erro: "Informe processoId na rota e 'acao' no corpo (JULGAR ou AJUSTAR_PRAZO)." } };
+    context.res = { status: 400, body: { erro: "Informe processoId na rota e 'acao' no corpo." } };
     return;
   }
 
   const pool = await getPool();
   const atualResult = await pool.request().input("id", sql.Int, processoId)
-    .query(`SELECT MembroId, Status, Resultado, DiasSancao, DataAbertura, DataTerminoPrevisao FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
+    .query(`SELECT MembroId, Status, Resultado, DiasSancao, DataAbertura, DataTerminoPrevisao, DataCitacao FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
   const atual = atualResult.recordset[0];
   if (!atual) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Processo não encontrado." } };
+    return;
+  }
+
+  // ---- DESIGNAR_RELATOR: suspeição por parentesco (até 3º grau, Art. 91) ou
+  // mesma congregação é só AVISO — quem decide continua sendo o órgão julgador.
+  if (acao === "DESIGNAR_RELATOR") {
+    const { relatorMembroId } = req.body || {};
+    if (!relatorMembroId) {
+      context.res = { status: 400, body: { erro: "Informe 'relatorMembroId'." } };
+      return;
+    }
+    const parentesco = await existeParentescoAte2Grau(pool, sql, relatorMembroId, new Set([Number(atual.MembroId)]), 3);
+    const mesmaCongregacaoResult = await pool.request()
+      .input("relatorId", sql.Int, relatorMembroId).input("reuId", sql.Int, atual.MembroId)
+      .query(`SELECT (SELECT CongregacaoId FROM MembroReferencia WHERE MembroId = @relatorId) AS relatorCong,
+                     (SELECT CongregacaoId FROM MembroReferencia WHERE MembroId = @reuId) AS reuCong`);
+    const { relatorCong, reuCong } = mesmaCongregacaoResult.recordset[0];
+    const mesmaCongregacao = relatorCong !== null && relatorCong === reuCong;
+
+    await pool.request().input("id", sql.Int, processoId).input("relatorId", sql.Int, relatorMembroId)
+      .query(`UPDATE ProcessosDisciplinares SET RelatorMembroId = @relatorId WHERE ProcessoId = @id`);
+    await registrarAuditoria({
+      tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: "Designou relator",
+      usuarioId: usuario.membroId, dadosDepois: { relatorMembroId }
+    });
+
+    const avisos = [];
+    if (parentesco.encontrado) avisos.push(`Parentesco até 3º grau com o réu (matrícula ${parentesco.comMembroId}) — considere impedimento (Art. 91).`);
+    if (mesmaCongregacao) avisos.push("Relator é da mesma congregação do réu — considere impedimento (Art. 91).");
+
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Relator designado.", avisos, processo } };
+    return;
+  }
+
+  // ---- CITAR: só registro (Art. 101) — o envio real acontece fora do sistema.
+  if (acao === "CITAR") {
+    const { canalCitacao, dataCitacao } = req.body || {};
+    if (!CANAIS_CITACAO_VALIDOS.includes(canalCitacao)) {
+      context.res = { status: 400, body: { erro: `Informe 'canalCitacao' válido: ${CANAIS_CITACAO_VALIDOS.join(" ou ")}.` } };
+      return;
+    }
+    await pool.request().input("id", sql.Int, processoId).input("canal", sql.NVarChar(30), canalCitacao).input("data", sql.Date, dataCitacao || null)
+      .query(`UPDATE ProcessosDisciplinares SET CanalCitacao = @canal, DataCitacao = COALESCE(@data, CAST(SYSUTCDATETIME() AS DATE)) WHERE ProcessoId = @id`);
+    await registrarAuditoria({
+      tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: "Registrou citação",
+      usuarioId: usuario.membroId, dadosDepois: { canalCitacao, dataCitacao: dataCitacao || null }
+    });
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Citação registrada.", processo } };
+    return;
+  }
+
+  // ---- AFASTAR: afastamento cautelar (Art. 100), estado intermediário.
+  if (acao === "AFASTAR") {
+    if (atual.Status !== "EM_ANDAMENTO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Só é possível afastar cautelarmente um processo Em Andamento." } };
+      return;
+    }
+    await pool.request().input("id", sql.Int, processoId).query(`UPDATE ProcessosDisciplinares SET Status = 'AFASTAMENTO_CAUTELAR' WHERE ProcessoId = @id`);
+    await registrarAuditoria({ tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: "Afastamento cautelar", usuarioId: usuario.membroId, dadosDepois: { status: "AFASTAMENTO_CAUTELAR" } });
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Afastamento cautelar registrado.", processo } };
+    return;
+  }
+
+  // ---- REGISTRAR_DEFESA: exige citação prévia.
+  if (acao === "REGISTRAR_DEFESA") {
+    if (!atual.DataCitacao) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Registre a citação antes de registrar a defesa." } };
+      return;
+    }
+    const { dataDefesa } = req.body || {};
+    await pool.request().input("id", sql.Int, processoId).input("data", sql.Date, dataDefesa || null)
+      .query(`UPDATE ProcessosDisciplinares SET DefesaProtocolada = 1, DataDefesa = COALESCE(@data, CAST(SYSUTCDATETIME() AS DATE)) WHERE ProcessoId = @id`);
+    await registrarAuditoria({ tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: "Registrou defesa", usuarioId: usuario.membroId, dadosDepois: { dataDefesa: dataDefesa || null } });
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Defesa registrada.", processo } };
+    return;
+  }
+
+  // ---- DESIGNAR_DEFENSOR: texto livre (Art. 102) — pode ser defensor eclesiástico ou advogado externo, não cadastrado no sistema.
+  if (acao === "DESIGNAR_DEFENSOR") {
+    const { defensorNome } = req.body || {};
+    if (!defensorNome || !String(defensorNome).trim()) {
+      context.res = { status: 400, body: { erro: "Informe 'defensorNome'." } };
+      return;
+    }
+    await pool.request().input("id", sql.Int, processoId).input("nome", sql.NVarChar(200), String(defensorNome).trim())
+      .query(`UPDATE ProcessosDisciplinares SET DefensorNome = @nome WHERE ProcessoId = @id`);
+    await registrarAuditoria({ tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: "Designou defensor", usuarioId: usuario.membroId, dadosDepois: { defensorNome: String(defensorNome).trim() } });
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Defensor designado.", processo } };
     return;
   }
 
@@ -86,11 +175,11 @@ module.exports = async function (context, req) {
       dadosDepois: { resultado, diasSancao: diasSancaoFinal }
     });
 
-    const processoResult = await pool.request().input("id", sql.Int, processoId).query(`${SELECT_PROCESSO} WHERE p.ProcessoId = @id`);
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: "✅ Processo julgado.", processo: processoResult.recordset[0] }
+      body: { sucesso: true, mensagem: "✅ Processo julgado.", processo }
     };
     return;
   }
@@ -131,14 +220,14 @@ module.exports = async function (context, req) {
       dadosDepois: { diasSancao: diasFinal, justificativa: String(justificativa).trim() }
     });
 
-    const processoResult = await pool.request().input("id", sql.Int, processoId).query(`${SELECT_PROCESSO} WHERE p.ProcessoId = @id`);
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: "✅ Prazo ajustado.", processo: processoResult.recordset[0] }
+      body: { sucesso: true, mensagem: "✅ Prazo ajustado.", processo }
     };
     return;
   }
 
-  context.res = { status: 400, body: { erro: "Ação inválida. Use 'JULGAR' ou 'AJUSTAR_PRAZO'." } };
+  context.res = { status: 400, body: { erro: "Ação inválida. Use DESIGNAR_RELATOR, CITAR, AFASTAR, REGISTRAR_DEFESA, DESIGNAR_DEFENSOR, JULGAR ou AJUSTAR_PRAZO." } };
 };

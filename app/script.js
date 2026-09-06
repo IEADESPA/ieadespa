@@ -847,7 +847,8 @@ const CATALOGOS_CFG = {
   prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] },
   tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] },
   politicasRetencao: { titulo: "Políticas de Retenção (LGPD)", idField: "politicaId", campos: [["categoria", "Categoria"], ["baseLegal", "Base legal"], ["diasRetencao", "Dias (vazio = indeterminado)"]] },
-  canaisOficiais: { titulo: "Canais Oficiais de Comunicação (Art. 12)", idField: "canalId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] }
+  canaisOficiais: { titulo: "Canais Oficiais de Comunicação (Art. 12)", idField: "canalId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
+  tiposInfracao: { titulo: "Infrações Disciplinares (Art. 96-99)", idField: "infracaoId", campos: [["codigo", "Código (ex: ART96-I)"], ["nome", "Nome"], ["referenciaRegimento", "Referência (ex: Art. 96, I)"]] }
 };
 // Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
 // pra cima: Extensão da Tenda primeiro, Distrito por último. Órgãos Locais
@@ -4194,12 +4195,23 @@ async function excluirDocumentoAcao(id) {
 }
 
 // ---- SECRETARIA / ABA PROCESSO DISCIPLINAR ----
-// Núcleo mínimo (v0.2): abrir + julgar + ajustar prazo. Catálogo de infrações/
-// penalidades e rito completo (citação, defesa, revelia, recurso) ficam pra FASE 3.
+// v3.2: abrir (com catálogo de infrações) + rito (relator, citação, afastamento
+// cautelar, defesa/revelia, defensor) + julgar + ajustar prazo.
 async function carregarOpcoesFormDisciplina() {
   const res = await fetch(`${API_BASE}/orgaos`);
   const orgaos = await res.json();
   document.getElementById("disciplinaOrgao").innerHTML = orgaos.map(o => `<option value="${o.orgaoId}">${o.sigla}</option>`).join("");
+
+  const infRes = await fetch(`${API_BASE}/catalogos/tiposInfracao`);
+  const infracoes = await infRes.json();
+  const lista = document.getElementById("listaInfracoesAbertura");
+  lista.innerHTML = (Array.isArray(infracoes) ? infracoes : [])
+    .filter(i => i.ativo !== false)
+    .map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-abertura" value="${i.infracaoId}" style="width:auto;" /> ${i.nome} <span class="subtitle">(${i.referenciaRegimento || i.codigo})</span></label>`)
+    .join("") || "<p class='subtitle'>Nenhuma infração cadastrada no catálogo.</p>";
+
+  document.getElementById("catalogoTiposInfracaoConteudo").innerHTML = secaoCatalogo("tiposInfracao");
+  carregarCatalogoLista("tiposInfracao");
 }
 
 async function salvarProcessoDisciplinar() {
@@ -4207,27 +4219,30 @@ async function salvarProcessoDisciplinar() {
   const orgaoResponsavelId = document.getElementById("disciplinaOrgao").value;
   const motivo = document.getElementById("disciplinaMotivo").value.trim();
   const sigiloso = document.getElementById("disciplinaSigiloso").checked;
+  const infracoesIds = Array.from(document.querySelectorAll(".chk-infracao-abertura:checked")).map(el => Number(el.value));
   const msg = document.getElementById("resultadoDisciplina");
-  if (!membroId || !orgaoResponsavelId || !motivo) {
-    msg.textContent = "Informe matrícula, órgão e motivo.";
+  if (!membroId || !orgaoResponsavelId || infracoesIds.length === 0) {
+    msg.textContent = "Informe matrícula, órgão e ao menos 1 infração.";
     return;
   }
   const res = await fetchProtegido(`${API_BASE}/processos-disciplinares`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, orgaoResponsavelId, motivo, sigiloso })
+    body: JSON.stringify({ membroId, orgaoResponsavelId, infracoesIds, motivo: motivo || null, sigiloso })
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
   if (data.sucesso) {
     document.getElementById("disciplinaMatricula").value = "";
     document.getElementById("disciplinaMotivo").value = "";
+    document.querySelectorAll(".chk-infracao-abertura:checked").forEach(el => { el.checked = false; });
     carregarProcessosDisciplinares();
   }
 }
 
 const ROTULO_SITUACAO_DISCIPLINA = {
   EM_ANDAMENTO: "Em andamento",
+  AFASTAMENTO_CAUTELAR: "Afastamento cautelar",
   CUMPRINDO_SANCAO: "Cumprindo sanção",
   PRAZO_INDETERMINADO: "Sanção — prazo indeterminado",
   CUMPRIDO: "Sanção cumprida",
@@ -4235,9 +4250,11 @@ const ROTULO_SITUACAO_DISCIPLINA = {
   EXCLUIDO: "Excluído"
 };
 
+const ROTULO_CANAL_CITACAO = { WHATSAPP: "WhatsApp", CARTA_REGISTRADA: "Carta Registrada" };
+
 function badgeSituacaoDisciplina(situacao) {
   const cores = {
-    EM_ANDAMENTO: "badge-licenca", CUMPRINDO_SANCAO: "badge-licenca", PRAZO_INDETERMINADO: "badge-licenca",
+    EM_ANDAMENTO: "badge-licenca", AFASTAMENTO_CAUTELAR: "badge-licenca", CUMPRINDO_SANCAO: "badge-licenca", PRAZO_INDETERMINADO: "badge-licenca",
     CUMPRIDO: "badge-ativo", ARQUIVADO: "badge-ativo", EXCLUIDO: "badge-desligado"
   };
   return `<span class="badge-status ${cores[situacao] || ""}">${ROTULO_SITUACAO_DISCIPLINA[situacao] || situacao}</span>`;
@@ -4254,19 +4271,33 @@ async function carregarProcessosDisciplinares() {
   }
 
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Nome</th><th>Órgão</th><th>Motivo</th><th>Situação</th><th>Dias restantes</th><th></th>
+    <th>Nome</th><th>Órgão</th><th>Infrações</th><th>Relator</th><th>Citação</th><th>Defesa</th><th>Situação</th><th>Dias restantes</th><th></th>
   </tr></thead><tbody>`;
 
   processos.forEach(p => {
-    const podeJulgar = p.status === "EM_ANDAMENTO";
+    const podeAfastar = p.status === "EM_ANDAMENTO";
+    const podeJulgar = p.status === "EM_ANDAMENTO" || p.status === "AFASTAMENTO_CAUTELAR";
     const podeAjustarPrazo = p.situacaoEfetiva === "CUMPRINDO_SANCAO" || p.situacaoEfetiva === "PRAZO_INDETERMINADO";
+    const infracoesTexto = (p.infracoes || []).map(i => i.nome).join(", ") || "-";
+    const citacaoTexto = p.dataCitacao ? `${p.dataCitacao} (${ROTULO_CANAL_CITACAO[p.canalCitacao] || p.canalCitacao})` : "-";
+    const defesaTexto = p.defesaProtocolada
+      ? `Protocolada em ${p.dataDefesa}`
+      : (p.prazoDefesa && p.prazoDefesa.emRevelia ? "<span class='badge-status badge-desligado'>Revelia</span>" : (p.dataCitacao ? "Aguardando" : "-"));
     html += `<tr>
-      <td>${p.nome}${p.sigiloso ? " 🔒" : ""}</td>
+      <td>${p.nome}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${p.defensorNome}</span>` : ""}</td>
       <td>${p.orgaoSigla}</td>
-      <td>${p.motivo || "-"}</td>
+      <td>${infracoesTexto}</td>
+      <td>${p.relatorNome || "-"}</td>
+      <td>${citacaoTexto}</td>
+      <td>${defesaTexto}</td>
       <td>${badgeSituacaoDisciplina(p.situacaoEfetiva)}</td>
       <td>${p.diasRestantes ?? "-"}</td>
       <td class="acoes-inline">
+        ${p.status !== "JULGADO" ? `<button class="btn-link" onclick="designarRelatorAcao(${p.processoId})">Relator</button>` : ""}
+        ${p.status !== "JULGADO" && !p.dataCitacao ? `<button class="btn-link" onclick="citarAcao(${p.processoId})">Citar</button>` : ""}
+        ${podeAfastar ? `<button class="btn-link" onclick="afastarCautelarAcao(${p.processoId})">Afastar</button>` : ""}
+        ${p.status !== "JULGADO" && p.dataCitacao && !p.defesaProtocolada ? `<button class="btn-link" onclick="registrarDefesaAcao(${p.processoId})">Registrar Defesa</button>` : ""}
+        ${p.status !== "JULGADO" ? `<button class="btn-link" onclick="designarDefensorAcao(${p.processoId})">Defensor</button>` : ""}
         ${podeJulgar ? `<button class="btn-link" onclick="julgarProcessoAcao(${p.processoId})">Julgar</button>` : ""}
         ${podeAjustarPrazo ? `<button class="btn-link" onclick="ajustarPrazoProcessoAcao(${p.processoId})">Ajustar Prazo</button>` : ""}
       </td>
@@ -4275,6 +4306,71 @@ async function carregarProcessosDisciplinares() {
 
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+async function evoluirProcessoAcao(processoId, corpo, mensagemErro) {
+  const res = await fetchProtegido(`${API_BASE}/processos-disciplinares/${processoId}/evoluir`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.avisos && data.avisos.length) data.avisos.forEach(a => mostrarToast(a, "erro"));
+  if (data.sucesso) carregarProcessosDisciplinares();
+  return data;
+}
+
+async function designarRelatorAcao(processoId) {
+  const relatorMembroId = await pedirTexto("Designar relator", "Matrícula do relator");
+  if (!relatorMembroId) return;
+  await evoluirProcessoAcao(processoId, { acao: "DESIGNAR_RELATOR", relatorMembroId });
+}
+
+function pedirCitacao() {
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Registrar citação (Art. 101)</h3>
+      <div class="input-group">
+        <label>Canal:</label>
+        <select id="modalCanalCitacao">
+          <option value="WHATSAPP">WhatsApp</option>
+          <option value="CARTA_REGISTRADA">Carta Registrada</option>
+        </select>
+      </div>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar" id="modalConfirmar">Registrar</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    document.getElementById("modalConfirmar").onclick = () => {
+      const canalCitacao = document.getElementById("modalCanalCitacao").value;
+      fecharModal();
+      resolve({ canalCitacao });
+    };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
+async function citarAcao(processoId) {
+  const dados = await pedirCitacao();
+  if (!dados) return;
+  await evoluirProcessoAcao(processoId, { acao: "CITAR", canalCitacao: dados.canalCitacao });
+}
+
+async function afastarCautelarAcao(processoId) {
+  if (!(await confirmarAcao("Afastar cautelarmente esta pessoa das funções (Art. 100)?", "Afastar"))) return;
+  await evoluirProcessoAcao(processoId, { acao: "AFASTAR" });
+}
+
+async function registrarDefesaAcao(processoId) {
+  if (!(await confirmarAcao("Registrar que a defesa foi protocolada?", "Registrar"))) return;
+  await evoluirProcessoAcao(processoId, { acao: "REGISTRAR_DEFESA" });
+}
+
+async function designarDefensorAcao(processoId) {
+  const defensorNome = await pedirTexto("Designar defensor (Art. 102)", "Nome do defensor eclesiástico ou advogado");
+  if (!defensorNome) return;
+  await evoluirProcessoAcao(processoId, { acao: "DESIGNAR_DEFENSOR", defensorNome });
 }
 
 // Modal customizado (mesmo padrão de pedirTexto/confirmarAcao) — Promise<{resultado, diasSancao}|null>.

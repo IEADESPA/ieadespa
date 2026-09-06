@@ -87,6 +87,11 @@ const CATALOGOS = {
   canaisOficiais: {
     tabela: "CanaisOficiaisComunicacao", chave: "CanalId", idField: "canalId",
     campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), ativo: sql.Bit }
+  },
+  tiposInfracao: {
+    tabela: "TiposInfracao", chave: "InfracaoId", idField: "infracaoId",
+    campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(200), referenciaRegimento: sql.NVarChar(40), ativo: sql.Bit },
+    permissao: "disciplina"
   }
 };
 
@@ -173,7 +178,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const usuario = auth.exigirPermissao(req, context, "pessoas");
+  const usuario = auth.exigirPermissao(req, context, config.permissao || "pessoas");
   if (!usuario) return;
 
   if (method === "POST") {

@@ -1246,8 +1246,8 @@
       <!-- ABA: PROCESSO DISCIPLINAR -->
       <div id="abaDisciplina" class="aba-secretaria" style="display:none;">
         <h3>Abrir Processo Disciplinar</h3>
-        <p class="subtitle">Núcleo mínimo (v0.2): catálogo de infrações/penalidades e o
-          rito completo (citação, defesa, revelia, recurso) ficam para a FASE 3.</p>
+        <p class="subtitle">Rito do Regimento (Art. 100-103) sobre o núcleo v0.2: citação,
+          afastamento cautelar, defesa/revelia e defensor — abaixo do formulário.</p>
         <form onsubmit="event.preventDefault(); salvarProcessoDisciplinar();">
           <div class="input-group">
             <label>Matrícula da pessoa:</label>
@@ -1258,8 +1258,12 @@
             <select id="disciplinaOrgao"></select>
           </div>
           <div class="input-group">
-            <label>Motivo:</label>
-            <textarea id="disciplinaMotivo" rows="2" placeholder="O que aconteceu"></textarea>
+            <label>Infrações (Art. 96-99) — selecione 1 ou mais:</label>
+            <div class="rolagem-tabela" style="max-height:220px;"><div id="listaInfracoesAbertura"></div></div>
+          </div>
+          <div class="input-group">
+            <label>Detalhamento (opcional):</label>
+            <textarea id="disciplinaMotivo" rows="2" placeholder="Detalhes complementares do caso"></textarea>
           </div>
           <div class="input-group">
             <label><input type="checkbox" id="disciplinaSigiloso" checked /> Sigiloso</label>
@@ -1271,6 +1275,13 @@
         <hr />
         <h3>Processos Ativos</h3>
         <div class="rolagem-tabela"><div id="resultadoListaDisciplina"></div></div>
+
+        <hr />
+        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Catálogo de Infrações (Art. 96-99)</h4>
+        <p class="subtitle">⚠️ O Regimento Interno está em processo de reestruturação (itens hoje
+          em letra viram artigo numerado) — revise a referência de cada infração abaixo quando a
+          nova numeração for publicada.</p>
+        <div id="catalogoTiposInfracaoConteudo"></div>
       </div>
 
       <!-- ABA: PERDA DE MEMBRESIA -->

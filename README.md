@@ -1138,27 +1138,63 @@ eleva ao papel de Corte Suprema do Regimento.
   estrutural que já existe (`ProcessosDisciplinares.Sigiloso`, default 1)
   é tudo que cabe aqui.
 
-#### v3.2 — Processo disciplinar (abertura, citação, defesa)
+#### v3.2 — Processo disciplinar (abertura, citação, defesa) + catálogo de infrações
 
-- [ ] Abertura de processo (denúncia, partes, relator) — o núcleo (`AbrirProcessoDisciplinar`,
-      `EvoluirProcessoDisciplinar`, `ProcessosDisciplinares`) já existe desde a v0.2;
-      aqui entra a instrução formal por cima disso.
-- [ ] Citação por WhatsApp (riscos azuis) ou Carta Registrada/testemunhas (Reg. Art. 101).
-- [ ] Prazo de defesa prévia: 5 dias corridos + até 3 testemunhas.
-- [ ] Revelia: julgamento à revelia com presunção dos fatos (se houver prova mínima).
-- [ ] Defensor eclesiástico ou advogado constituído (Art. 102).
-- [ ] Esteira ganha o status intermediário `AFASTAMENTO_CAUTELAR` (a v0.2 só tem
-      EM_ANDAMENTO → JULGADO direto).
+O núcleo (`AbrirProcessoDisciplinar`, `EvoluirProcessoDisciplinar`,
+`ProcessosDisciplinares`) já existia desde a v0.2, com `Motivo` em texto
+livre. Esta versão sobrepõe o rito do Regimento (Art. 100-103) e — puxado
+para frente do v3.3, por pedido direto do usuário ("a pessoa tem que dizer
+o que a pessoa infringiu, uma ou mais opções") — o catálogo estruturado de
+infrações (Art. 96-99), que substitui o texto livre isolado.
 
-#### v3.3 — Código Penal Eclesiástico (infrações)
+- [x] Catálogo `TiposInfracao` (Art. 96-99, as 52 infrações dos 4 artigos,
+      migração `036_processo_disciplinar_rito.sql`) via `GestaoCatalogos`
+      (que ganhou permissão configurável por catálogo — `permissao:
+      "disciplina"` neste, os demais continuam em `pessoas`, sem mudança de
+      comportamento). Abertura de processo agora exige `infracoesIds`
+      (1 ou mais, tabela `ProcessoInfracoes`) — `motivo` vira detalhamento
+      complementar opcional, não mais o único campo.
+      **Aviso sobre reforma do Regimento**: o texto das infrações não muda,
+      mas a estrutura (itens em letra viram artigo numerado) está sendo
+      reformulada — o sistema não detecta isso sozinho (o Regimento é um
+      `.txt` estático), então a tela do catálogo traz um aviso fixo pedindo
+      revisão manual da coluna `ReferenciaRegimento` quando a nova numeração
+      sair. Sem lembrete automático — não tem como o sistema saber quando
+      o texto novo é publicado.
+- [x] Abertura de processo (partes + infrações) — "denúncia" formal e
+      designação de "partes" no sentido processual completo não são
+      rastreadas (só quem abre e contra quem); relator, sim, é designado.
+- [x] Designação de relator (`DESIGNAR_RELATOR`) — suspeição por parentesco
+      até 3º grau (Art. 91) ou mesma congregação é **só aviso**, não
+      bloqueia (é discricionário do órgão julgador, mesmo padrão informativo
+      da elegibilidade do CEI, v3.1). `shared/parentesco.js::
+      existeParentescoAte2Grau` ganhou parâmetro opcional de profundidade
+      (default 2, usado aqui com 3) — as 2 chamadas existentes (Conselho
+      Fiscal, CEI) continuam em 2º grau, sem mudança de comportamento.
+- [x] Citação por WhatsApp ou Carta Registrada (Reg. Art. 101) — só
+      registro (`DataCitacao`/`CanalCitacao`); o envio real acontece fora do
+      sistema. Testemunhas (até 3) não são rastreadas — texto livre, se
+      necessário, cabe no detalhamento do caso.
+- [x] Prazo de defesa prévia: 5 dias corridos a partir da citação
+      (`estatuto.js::avaliarPrazoDefesa`, calculado na leitura). Revelia
+      (`emRevelia`) = prazo vencido sem `REGISTRAR_DEFESA` — exibida como
+      badge, o julgamento com presunção dos fatos continua sendo decisão de
+      quem julga, não automática.
+- [x] Defensor eclesiástico ou advogado constituído (Art. 102) —
+      `DESIGNAR_DEFENSOR`, texto livre (`DefensorNome`), já que pode ser
+      alguém não cadastrado no sistema (advogado externo).
+- [x] Esteira ganha o status intermediário `AFASTAMENTO_CAUTELAR`
+      (`AFASTAR`, Art. 100) — `JULGAR` já aceitava qualquer status ≠
+      `JULGADO`, então passou a funcionar a partir desse estado sem
+      qualquer mudança de lógica.
+
+#### v3.3 — Código Penal Eclesiástico (graduação e infrações financeiras)
+
+O catálogo `TiposInfracao` em si já foi construído no v3.2 (puxado para
+frente). O que sobra aqui:
 
 - [ ] Graduação de infrações: leves, médias, graves e gravíssimas.
-- [ ] Catálogo `TiposInfracao` (Art. 96-99 do Regimento, ~50 incisos — conduta, doutrina,
-      financeiro, sigilo, rebelião), via `GestaoCatalogos`, substituindo o campo de
-      motivo em texto livre da v0.2. Nesse ponto vale ampliar `GestaoCatalogos` pra
-      aceitar permissão configurável por catálogo (hoje só aceita a permissão fixa
-      `pessoas`), pra restringir esse catálogo à permissão `disciplina`.
-- [ ] Infrações de intervenção (Reg. Art. 144): gatos de energia/água, atraso de repasse,
+- [ ] Infrações de intervenção (Reg. Art. 144): gastos de energia/água, atraso de repasse,
       despesas pessoais, ausência de notas fiscais.
 
 #### v3.4 — Julgamento e sanções

@@ -45,11 +45,15 @@ async function membrosComCartaMudancaEmitida(pool) {
 // alguém ter formalmente encerrado a cadeira (ver GestaoAssentos — "vencimento
 // calculado na leitura").
 //
-// Composição por Função entra na CLI de duas formas: (a) cadeira aberta DIRETO
-// na CLI (Dirigente de Congregação, Líder Geral — não têm órgão próprio) ou
-// (b) cadeira em Diretoria/Conselho Fiscal/CEI — quem já é Presidente/
-// Tesoureiro/Conselheiro/etc. naqueles órgãos entra na CLI automaticamente por
-// causa do cargo, sem precisar cadastrar a MESMA pessoa de novo aqui.
+// Composição por Função entra na CLI de três formas: (a) cadeira aberta DIRETO
+// na CLI (Líder Geral de Departamento/Secretaria — ainda manual, v2.7 item 2
+// não construído) ou (b) cadeira em Diretoria/Conselho Fiscal/CEI — quem já é
+// Presidente/Tesoureiro/Conselheiro/etc. naqueles órgãos entra na CLI
+// automaticamente por causa do cargo, sem precisar cadastrar a MESMA pessoa
+// de novo aqui — ou (c) Dirigente de Congregação (v2.7 item 1): calculado
+// direto da Lideranca (Papeis.Nivel = 'CONGREGACAO'), não é um Assento —
+// a Secretaria já mantém quem é dirigente de cada congregação pra dar acesso
+// de login, então a CLI só lê essa mesma fonte, sem recadastro.
 async function composicaoCLI(pool, orgaoIdCLI) {
   const porOrdenacao = await pool.request().query(`
     SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro,
@@ -80,8 +84,29 @@ async function composicaoCLI(pool, orgaoIdCLI) {
   const comFuncao = porFuncao.recordset
     .filter(m => !idsPorOrdenacao.has(m.membroId))
     .map(m => Object.assign({}, m, { viaOrdenacao: false, viaFuncao: true, cargoMinisterial: null }));
+  const idsPorFuncao = new Set(comFuncao.map(m => m.membroId));
 
-  return comOrdenacao.concat(comFuncao);
+  // Dirigente de Congregação (e qualquer papel futuro do mesmo nível de
+  // escopo) entra na CLI calculado a partir da própria Lideranca — não
+  // precisa de um segundo cadastro (Assento) além do acesso que a Secretaria
+  // já concede pra essa pessoa gerenciar a congregação dela. Usa
+  // Papeis.Nivel (classificador estrutural de escopo, não o nome do papel)
+  // pra não depender de string de redação.
+  const porLiderancaCongregacao = await pool.request().query(`
+    SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, cg.Nome AS congregacao,
+           m.SituacaoMembro AS situacaoMembro, p.Nome AS cargoOuFuncao,
+           NULL AS orgaoOrigemNome, NULL AS orgaoOrigemId
+    FROM Lideranca l
+    JOIN Papeis p ON p.PapelId = l.PapelId
+    JOIN MembroReferencia m ON m.MembroId = l.MembroId
+    LEFT JOIN Congregacoes cg ON cg.CongregacaoId = l.EscopoId
+    WHERE p.Nivel = 'CONGREGACAO' AND l.EscopoTipo = 'CONGREGACAO'
+  `);
+  const comDirigencia = porLiderancaCongregacao.recordset
+    .filter(m => !idsPorOrdenacao.has(m.membroId) && !idsPorFuncao.has(m.membroId))
+    .map(m => Object.assign({}, m, { viaOrdenacao: false, viaFuncao: true, cargoMinisterial: null }));
+
+  return comOrdenacao.concat(comFuncao).concat(comDirigencia);
 }
 
 async function universoDoOrgao(pool, orgao) {

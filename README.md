@@ -840,7 +840,16 @@ já está lá. **v2.4 está fechado** com isso.
 
 #### v2.7 — Órgãos de Apoio, Departamentos e Congregações
 
-- [ ] Dirigente de Congregação como Assento tipo FUNCAO ligado à CLI.
+- [x] Dirigente de Congregação como Assento tipo FUNCAO ligado à CLI.
+      **Sem cadastro manual**: em vez de um Assento próprio, `composicaoCLI`
+      (`api/shared/universo.js`) calcula direto de `Lideranca` (join
+      `Papeis.Nivel = 'CONGREGACAO'`) — a Secretaria já mantém quem é
+      dirigente de cada congregação pra dar acesso de login a ela; a CLI só
+      lê essa mesma fonte. Escala sozinho de 30 pra 80 congregações sem
+      recadastro nenhum, e reflete troca de dirigente na hora (calculado na
+      leitura, mesmo padrão do resto do sistema). "Líder Geral de
+      Departamento/Secretaria" (mesmo comentário do código) continua
+      dependendo de Assento manual — só resolve quando o item abaixo existir.
 - [ ] Catálogo de Departamentos Gerais e Secretarias Adjuntas (Art. 47).
       **Nota (v0.3):** os 8 `Departamentos` seedados na v0.1 são todos demográficos
       (UCADESPA/UMADESPA/USADESPA/UHADESPA por faixa etária/gênero, EBD, Família) —

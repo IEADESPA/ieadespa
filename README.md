@@ -225,6 +225,21 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       (migração 009 — `MembroReferencia.ExtensaoId`; escopo `EXTENSAO` resolvido em
       `shared/escopo.js` e restrito de verdade em `GestaoPessoas`, que filtra pela Extensão
       exata, não só pela Congregação-Mãe).
+      **Mandato com prazo + concessão em lote:** `Lideranca.AtivoAte` (já existia desde a
+      migração 001, usado só pela Medida Cautelar do v2.6) passa a representar também fim
+      de mandato normal — `POST /api/lideranca` ganha `duracaoMeses` opcional (mesmo padrão
+      de `duracaoMeses`/`DataTerminoPrevisao` de `Assentos`), calculando `AtivoAte` = hoje +
+      N meses; sem duracaoMeses, não mexe (não pode apagar sem querer uma suspensão em
+      andamento). Vencimento é calculado na leitura, igual o resto do sistema. Novo
+      `POST /api/lideranca/lote` concede o mesmo papel a várias matrículas de uma vez com
+      senha inicial única (cada um troca depois): no escopo Congregação, resolve a
+      congregação de cada pessoa automaticamente por `MembroReferencia.CongregacaoId` se
+      não vier um escopo fixo — pensado pro caso real de cadastrar vários Secretários
+      Locais (um por congregação) numa tacada só, sem crescer artificialmente o trabalho
+      manual conforme mais igrejas entram no sistema.
+      **Correção:** `composicaoCLI` (`shared/universo.js`) não filtrava `AtivoAte` na
+      Lideranca — um Dirigente/Líder Geral com mandato vencido continuava aparecendo na
+      composição da CLI mesmo já sem conseguir logar; corrigido.
 - [x] ✅ Documentos de Governança (Estatuto 2026 + Regimento Interno 2026) publicados em
       `app/documentos/` e acessíveis a qualquer usuário logado pela aba **Documentos**.
 

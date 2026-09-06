@@ -94,7 +94,10 @@ async function composicaoCLI(pool, orgaoIdCLI) {
   // congregação/departamento dela. Usa Papeis.Nivel (classificador
   // estrutural de escopo, não o nome do papel) pra não depender de string de
   // redação. Só um dos dois LEFT JOINs casa por linha (o EscopoTipo da
-  // própria Lideranca decide qual).
+  // própria Lideranca decide qual). Mandato com prazo (Lideranca.AtivoAte,
+  // GestaoLideranca) vence calculado na leitura, igual DataTerminoPrevisao
+  // de Assentos — sem isso, quem já perdeu o acesso de login continuaria
+  // aparecendo na composição da CLI.
   const porLiderancaEscopo = await pool.request().query(`
     SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome,
            COALESCE(cg.Nome, dep.Nome) AS congregacao,
@@ -105,8 +108,11 @@ async function composicaoCLI(pool, orgaoIdCLI) {
     JOIN MembroReferencia m ON m.MembroId = l.MembroId
     LEFT JOIN Congregacoes cg ON l.EscopoTipo = 'CONGREGACAO' AND cg.CongregacaoId = l.EscopoId
     LEFT JOIN Departamentos dep ON l.EscopoTipo = 'DEPARTAMENTO' AND dep.DepartamentoId = l.EscopoId
-    WHERE (p.Nivel = 'CONGREGACAO' AND l.EscopoTipo = 'CONGREGACAO')
-       OR (p.Nivel = 'DEPARTAMENTO' AND l.EscopoTipo = 'DEPARTAMENTO')
+    WHERE (
+      (p.Nivel = 'CONGREGACAO' AND l.EscopoTipo = 'CONGREGACAO')
+      OR (p.Nivel = 'DEPARTAMENTO' AND l.EscopoTipo = 'DEPARTAMENTO')
+    )
+    AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
   `);
   const comLiderancaPorEscopo = porLiderancaEscopo.recordset
     .filter(m => !idsPorOrdenacao.has(m.membroId) && !idsPorFuncao.has(m.membroId))

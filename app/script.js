@@ -3347,6 +3347,7 @@ async function carregarOpcoesEscopoPermissao() {
   const papeis = await pres.json();
 
   document.getElementById("permissaoPapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${p.nome}</option>`).join("");
+  document.getElementById("lotePapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${p.nome}</option>`).join("");
 
   montarCheckboxesPapeis();
   carregarPapeis();
@@ -3443,18 +3444,69 @@ async function salvarPermissao() {
   const escopoTipo = document.getElementById("permissaoEscopoTipo").value;
   const escopoId = escopoTipo === "GLOBAL" ? null : document.getElementById("permissaoEscopoId").value;
   const senha = document.getElementById("permissaoSenha").value;
+  const duracaoMeses = document.getElementById("permissaoDuracaoMeses").value || undefined;
   const msg = document.getElementById("resultadoPermissao");
   if (!membroId || !papelId) { msg.textContent = "Informe matrícula e papel."; return; }
   const res = await fetchProtegido(`${API_BASE}/lideranca`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, papelId, escopoTipo, escopoId, senha: senha || undefined })
+    body: JSON.stringify({ membroId, papelId, escopoTipo, escopoId, senha: senha || undefined, duracaoMeses })
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
   if (data.sucesso) {
     document.getElementById("permissaoMatricula").value = "";
     document.getElementById("permissaoSenha").value = "";
+    document.getElementById("permissaoDuracaoMeses").value = "";
+    carregarPermissoes();
+  }
+}
+
+function onChangeEscopoTipoLote() {
+  const tipo = document.getElementById("loteEscopoTipo").value;
+  const select = document.getElementById("loteEscopoId");
+  const nivel = ESCOPO_NIVEIS[tipo];
+  if (!nivel) {
+    select.style.display = "none";
+    select.innerHTML = "";
+    return;
+  }
+  fetch(`${API_BASE}/catalogos/${nivel.origem}`).then(r => r.json()).then(itens => {
+    const ativos = itens.filter(x => x.ativa !== false && x.ativo !== false);
+    const semEscopoFixo = tipo === "CONGREGACAO" ? `<option value="">Cada matrícula usa a própria congregação</option>` : "";
+    select.innerHTML = semEscopoFixo + ativos.map(x => `<option value="${x[nivel.idField]}">${x.nome}</option>`).join("");
+    select.style.display = "inline-block";
+  });
+}
+
+async function salvarPermissaoLote() {
+  const membroIds = (document.getElementById("loteMatriculas").value.match(/\d+/g) || []).map(Number);
+  const papelId = document.getElementById("lotePapel").value;
+  const escopoTipo = document.getElementById("loteEscopoTipo").value;
+  const escopoIdBruto = escopoTipo === "GLOBAL" ? "" : document.getElementById("loteEscopoId").value;
+  const escopoId = escopoIdBruto || null;
+  const senha = document.getElementById("loteSenha").value;
+  const duracaoMeses = document.getElementById("loteDuracaoMeses").value || undefined;
+  const container = document.getElementById("resultadoPermissaoLote");
+  if (membroIds.length === 0 || !papelId) { container.textContent = "Informe ao menos uma matrícula e o papel."; return; }
+  if (!senha) { container.textContent = "Informe a senha inicial."; return; }
+  const res = await fetchProtegido(`${API_BASE}/lideranca/lote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroIds, papelId, escopoTipo, escopoId, senha, duracaoMeses })
+  });
+  const data = await res.json();
+  if (!data.sucesso) { container.textContent = data.mensagem || "Erro ao processar o lote."; return; }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Resultado</th></tr></thead><tbody>`;
+  data.resultados.forEach(r => {
+    html += `<tr><td>${r.membroId}</td><td>${r.sucesso ? "✅" : "❌"} ${r.mensagem}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+  if (data.resultados.some(r => r.sucesso)) {
+    document.getElementById("loteMatriculas").value = "";
+    document.getElementById("loteSenha").value = "";
+    document.getElementById("loteDuracaoMeses").value = "";
     carregarPermissoes();
   }
 }

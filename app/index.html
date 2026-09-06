@@ -1028,11 +1028,41 @@
             </select>
             <select id="permissaoEscopoId" style="display:none;"></select>
             <input type="password" id="permissaoSenha" placeholder="Senha (deixe em branco pra manter a atual)" autocomplete="new-password" style="min-width:220px;" />
+            <input type="number" id="permissaoDuracaoMeses" placeholder="Duração do mandato (meses, opcional)" min="1" style="min-width:220px;" />
             <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">💾 Salvar Acesso</button>
           </div>
         </form>
         <p id="resultadoPermissao"></p>
         <div class="rolagem-tabela"><div id="resultadoListaPermissoes"></div></div>
+
+        <hr />
+
+        <h3>Conceder em lote</h3>
+        <p class="subtitle">Cadastra o mesmo papel pra várias matrículas de uma vez, com uma senha inicial única (cada um troca depois em "Meu Painel"). No escopo Congregação, deixando o campo de congregação em branco, cada matrícula usa a própria congregação já cadastrada.</p>
+        <form onsubmit="event.preventDefault(); salvarPermissaoLote();">
+          <div class="input-group">
+            <label>Matrículas (separadas por vírgula, espaço ou quebra de linha):</label>
+            <textarea id="loteMatriculas" rows="3" placeholder="Ex: 101, 102, 103"></textarea>
+          </div>
+          <div class="barra-lista">
+            <select id="lotePapel"></select>
+            <select id="loteEscopoTipo" onchange="onChangeEscopoTipoLote()">
+              <option value="GLOBAL">Escopo: Global</option>
+              <option value="DISTRITO">Escopo: Distrito</option>
+              <option value="QUADRANTE">Escopo: Quadrante</option>
+              <option value="REGIAO">Escopo: Região/Subsede</option>
+              <option value="AREA">Escopo: Área</option>
+              <option value="CONGREGACAO">Escopo: Congregação (cada um usa a própria, se deixar em branco)</option>
+              <option value="EXTENSAO">Escopo: Extensão da Tenda</option>
+              <option value="DEPARTAMENTO">Escopo: Departamento/Secretaria</option>
+            </select>
+            <select id="loteEscopoId" style="display:none;"></select>
+            <input type="password" id="loteSenha" placeholder="Senha inicial única" autocomplete="new-password" style="min-width:200px;" />
+            <input type="number" id="loteDuracaoMeses" placeholder="Duração do mandato (meses, opcional)" min="1" style="min-width:220px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">📥 Conceder em Lote</button>
+          </div>
+        </form>
+        <div id="resultadoPermissaoLote"></div>
       </div>
 
       <!-- ABA: CONSAGRAÇÕES -->

@@ -1132,10 +1132,6 @@
             <textarea id="enqueteDescricao" rows="2"></textarea>
           </div>
           <div class="barra-lista">
-            <select id="enqueteTipo" onchange="onChangeTipoEnquete()">
-              <option value="OPCOES">Tipo: Opções (escolher entre alternativas)</option>
-              <option value="TEXTO_LIVRE">Tipo: Texto livre (sugestão aberta)</option>
-            </select>
             <select id="enqueteVisibilidade">
               <option value="SECRETA">Visibilidade: Secreta (só contagem, ninguém sabe o voto de quem)</option>
               <option value="PUBLICA">Visibilidade: Pública (aparece quem votou o quê)</option>
@@ -1145,9 +1141,10 @@
               <option value="LISTA_CUSTOM">Público: Lista customizada de matrículas</option>
             </select>
           </div>
-          <div class="input-group" id="grupoOpcoesEnquete">
-            <label>Opções (uma por linha, mínimo 2):</label>
-            <textarea id="enqueteOpcoes" rows="3" placeholder="Opção 1&#10;Opção 2"></textarea>
+          <div class="input-group">
+            <label>Perguntas (um formulário pode ter várias — ex: inscrição de seminário):</label>
+            <div id="listaPerguntasEnquete"></div>
+            <button type="button" class="btn-link" onclick="adicionarBlocoPerguntaEnquete()">➕ Adicionar pergunta</button>
           </div>
           <div class="input-group" id="grupoPublicoCustomEnquete" style="display:none;">
             <label>Matrículas do público (separadas por vírgula/espaço):</label>

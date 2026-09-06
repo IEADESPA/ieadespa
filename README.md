@@ -944,28 +944,39 @@ site no meio de uma reunião pra fazer esse lançamento". Investigação +
 conversa com o usuário levaram a um formato diferente, que evita esse
 problema:
 
-- [x] **Enquetes** (`Enquetes`/`OpcoesEnquete`/`PublicoEnqueteCustom`/
-      `VotosEnquete`, migração 032; `api/GestaoEnquetes`; `shared/enquetes.js`):
-      pra pautas que nascem e se resolvem **fora** de uma sessão formal (ex:
-      escolha do Tema do Ano, votação de camiseta de festa) — cada uma tem
-      **tipo** (Opções ou Texto livre), **visibilidade** (Pública — aparece
-      quem votou o quê, tipo lista de inscrição; ou Secreta — só contagem
-      agregada + quem participou, nunca o quê cada um escolheu, pra evitar
-      retaliação) e **público** (todos os membros ativos, reaproveitando
-      `universoDoOrgao`, ou uma lista customizada de matrículas). 1 voto por
-      pessoa (`UNIQUE` em `VotosEnquete`); `MembroId` sempre é gravado
-      internamente (antifraude), mesmo nas secretas — só a API de leitura
-      nunca expõe o vínculo voto↔pessoa nesse caso.
+- [x] **Enquetes** (`Enquetes`/`PerguntasEnquete`/`OpcoesEnquete`/
+      `PublicoEnqueteCustom`/`RespostasEnquete`, migração 034 — substitui a
+      032 original, que era só 1 pergunta por enquete; ver nota abaixo;
+      `api/GestaoEnquetes`; `shared/enquetes.js`): pra pautas que nascem e se
+      resolvem **fora** de uma sessão formal (ex: escolha do Tema do Ano,
+      votação de camiseta de festa, inscrição de seminário). **Formulário
+      com várias perguntas** (tipo Google Forms) — uma Enquete pode ter N
+      Perguntas, cada uma com seu próprio tipo (Opções ou Texto livre);
+      responder é atômico: manda as respostas de todas as perguntas numa
+      chamada só, nada é gravado se faltar alguma. **Visibilidade** (Pública
+      — aparece quem respondeu o quê, tipo lista de inscrição; ou Secreta —
+      só contagem agregada + quem participou, nunca o quê cada um escolheu,
+      pra evitar retaliação) e **público** (todos os membros ativos,
+      reaproveitando `universoDoOrgao`, ou uma lista customizada de
+      matrículas) continuam no nível do formulário, não da pergunta. 1
+      resposta por pergunta por pessoa (`UNIQUE` em `RespostasEnquete`);
+      `MembroId` sempre é gravado internamente (antifraude), mesmo nas
+      secretas — só a API de leitura nunca expõe o vínculo resposta↔pessoa
+      nesse caso. **Nota da migração 034**: dropou e recriou as tabelas da
+      032 (criadas minutos antes, sem dado real de igreja ainda) pra ir
+      direto pro modelo de 2 níveis, em vez de migração incremental de nada.
 - [x] **Vinculante**: mesma engine, com uma flag extra pra quando a eleição/
       reforma da Assembleia (Art. 18) for realmente contestada — o usuário
       foi claro que isso não é o padrão ("quando todo mundo já sabe o
       resultado, abrir o site é perda de tempo, não tem prova maior que o
       olho de quem tá lá presente"), só entra em jogo no cenário polêmico.
-      `QuorumTipo` (Maioria simples / Dois terços / 90% — Art. 71, Núcleo
-      Fundamental) + `avaliarAprovacaoEnquete` (`shared/estatuto.js`) calcula
-      `ResultadoAprovado` de verdade ao encerrar — diferente de
-      `avaliarQuorumReformaDificultada` (v2.2), que era só informativo porque
-      nada registrava voto por pessoa; agora registra.
+      Só faz sentido pra formulário de **exatamente 1 pergunta**, tipo
+      Opções — validado na criação. `QuorumTipo` (Maioria simples / Dois
+      terços / 90% — Art. 71, Núcleo Fundamental) + `avaliarAprovacaoEnquete`
+      (`shared/estatuto.js`) calcula `ResultadoAprovado` de verdade ao
+      encerrar — diferente de `avaliarQuorumReformaDificultada` (v2.2), que
+      era só informativo porque nada registrava voto por pessoa; agora
+      registra.
 - [x] **Tramitação de Projetos e Parecer das Comissões** (Regimento, Art.
       24-25 — vinha adiada do v2.4): etapa que antecede uma Enquete
       vinculante. `Projetos`/`PareceresComissao` (migração 033;

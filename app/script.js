@@ -3835,14 +3835,39 @@ async function reprovarConsagracaoAcao(id) {
   if (data.sucesso) carregarConsagracoes();
 }
 
-// ---- SECRETARIA / ABA ENQUETES (v2.8) ----
-function onChangeTipoEnquete() {
-  const ehOpcoes = document.getElementById("enqueteTipo").value === "OPCOES";
-  document.getElementById("grupoOpcoesEnquete").style.display = ehOpcoes ? "block" : "none";
-  if (!ehOpcoes) {
-    document.getElementById("enqueteVinculante").checked = false;
-    onChangeVinculanteEnquete();
-  }
+// ---- SECRETARIA / ABA ENQUETES (v2.8) — formulário com várias perguntas ----
+let contadorBlocoPerguntaEnquete = 0;
+
+function adicionarBlocoPerguntaEnquete() {
+  const id = ++contadorBlocoPerguntaEnquete;
+  const div = document.createElement("div");
+  div.className = "cartao-perfil";
+  div.style.margin = "8px 0";
+  div.id = `blocoPerguntaEnquete_${id}`;
+  div.innerHTML = `
+    <div class="barra-lista">
+      <input type="text" id="perguntaTitulo_${id}" placeholder="Título da pergunta" style="min-width:220px;" />
+      <select id="perguntaTipo_${id}" onchange="onChangeTipoPerguntaEnquete(${id})">
+        <option value="OPCOES">Tipo: Opções</option>
+        <option value="TEXTO_LIVRE">Tipo: Texto livre</option>
+      </select>
+      <button type="button" class="btn-link btn-link-perigo" onclick="removerBlocoPerguntaEnquete(${id})">Remover</button>
+    </div>
+    <div class="input-group" id="grupoOpcoesPergunta_${id}">
+      <textarea id="perguntaOpcoes_${id}" rows="2" placeholder="Uma opção por linha (mínimo 2)"></textarea>
+    </div>
+  `;
+  document.getElementById("listaPerguntasEnquete").appendChild(div);
+}
+
+function removerBlocoPerguntaEnquete(id) {
+  const el = document.getElementById(`blocoPerguntaEnquete_${id}`);
+  if (el) el.remove();
+}
+
+function onChangeTipoPerguntaEnquete(id) {
+  const ehOpcoes = document.getElementById(`perguntaTipo_${id}`).value === "OPCOES";
+  document.getElementById(`grupoOpcoesPergunta_${id}`).style.display = ehOpcoes ? "block" : "none";
 }
 
 function onChangePublicoEnquete() {
@@ -3854,25 +3879,37 @@ function onChangeVinculanteEnquete() {
   document.getElementById("enqueteQuorumTipo").style.display = document.getElementById("enqueteVinculante").checked ? "inline-block" : "none";
 }
 
+function lerBlocosPerguntaEnquete() {
+  const blocos = Array.from(document.querySelectorAll("#listaPerguntasEnquete > div"));
+  return blocos.map(bloco => {
+    const id = bloco.id.replace("blocoPerguntaEnquete_", "");
+    const titulo = document.getElementById(`perguntaTitulo_${id}`).value.trim();
+    const tipo = document.getElementById(`perguntaTipo_${id}`).value;
+    const opcoes = tipo === "OPCOES"
+      ? document.getElementById(`perguntaOpcoes_${id}`).value.split("\n").map(o => o.trim()).filter(Boolean)
+      : undefined;
+    return { titulo, tipo, opcoes };
+  });
+}
+
 async function salvarEnquete() {
   const titulo = document.getElementById("enqueteTitulo").value.trim();
   const descricao = document.getElementById("enqueteDescricao").value.trim();
-  const tipo = document.getElementById("enqueteTipo").value;
   const visibilidade = document.getElementById("enqueteVisibilidade").value;
   const publicoTipo = document.getElementById("enquetePublicoTipo").value;
   const vinculante = document.getElementById("enqueteVinculante").checked;
   const quorumTipo = document.getElementById("enqueteQuorumTipo").value;
-  const opcoes = document.getElementById("enqueteOpcoes").value.split("\n").map(o => o.trim()).filter(Boolean);
+  const perguntas = lerBlocosPerguntaEnquete();
   const publicoMembroIds = (document.getElementById("enquetePublicoMatriculas").value.match(/\d+/g) || []).map(Number);
   const msg = document.getElementById("resultadoEnquete");
   if (!titulo) { msg.textContent = "Informe o título."; return; }
+  if (perguntas.length === 0) { msg.textContent = "Adicione ao menos 1 pergunta."; return; }
 
   const res = await fetchProtegido(`${API_BASE}/enquetes`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      titulo, descricao: descricao || undefined, tipo, visibilidade, publicoTipo,
-      opcoes: tipo === "OPCOES" ? opcoes : undefined,
+      titulo, descricao: descricao || undefined, visibilidade, publicoTipo, perguntas,
       publicoMembroIds: publicoTipo === "LISTA_CUSTOM" ? publicoMembroIds : undefined,
       vinculante, quorumTipo: vinculante ? quorumTipo : undefined
     })
@@ -3882,9 +3919,9 @@ async function salvarEnquete() {
   if (data.sucesso) {
     document.getElementById("enqueteTitulo").value = "";
     document.getElementById("enqueteDescricao").value = "";
-    document.getElementById("enqueteOpcoes").value = "";
     document.getElementById("enquetePublicoMatriculas").value = "";
     document.getElementById("enqueteVinculante").checked = false;
+    document.getElementById("listaPerguntasEnquete").innerHTML = "";
     onChangeVinculanteEnquete();
     carregarEnquetes();
   }
@@ -3892,6 +3929,12 @@ async function salvarEnquete() {
 
 const ROTULO_VISIBILIDADE_ENQUETE = { PUBLICA: "Pública", SECRETA: "Secreta" };
 const ROTULO_QUORUM_ENQUETE = { MAIORIA_SIMPLES: "Maioria simples", DOIS_TERCOS: "Dois terços", NOVENTA_POR_CENTO: "90%" };
+
+function campoRespostaPergunta(enqueteId, pergunta) {
+  return pergunta.tipo === "OPCOES"
+    ? `<select id="votoResposta_${enqueteId}_${pergunta.perguntaId}">${(pergunta.opcoes || []).map(o => `<option value="${o.opcaoId}">${o.texto}</option>`).join("")}</select>`
+    : `<input type="text" id="votoResposta_${enqueteId}_${pergunta.perguntaId}" placeholder="Sua resposta" style="min-width:200px;" />`;
+}
 
 async function carregarEnquetes() {
   const container = document.getElementById("resultadoListaEnquetes");
@@ -3903,29 +3946,33 @@ async function carregarEnquetes() {
   }
   let html = "";
   enquetes.forEach(e => {
-    const opcoesHtml = (e.opcoes || []).map(o => `<li>${o.texto}: <strong>${o.votos}</strong> voto(s)</li>`).join("");
     const participantesHtml = (e.participantes || []).map(p => p.nome).join(", ") || "ninguém ainda";
     const resultadoHtml = e.status === "ENCERRADA" && e.vinculante
       ? `<p><strong>${e.resultadoAprovado ? "✅ Aprovado" : "❌ Não aprovado"}</strong> (${ROTULO_QUORUM_ENQUETE[e.quorumTipo] || e.quorumTipo})</p>`
       : "";
-    const detalhePublico = e.visibilidade === "PUBLICA" && Array.isArray(e.votos)
-      ? `<p class="subtitle">Quem votou o quê: ${e.votos.map(v => `${v.nome} → ${v.textoResposta || (e.opcoes.find(o => o.opcaoId === v.opcaoId) || {}).texto || "-"}`).join("; ") || "ninguém ainda"}</p>`
-      : "";
+    const perguntasHtml = (e.perguntas || []).map(p => {
+      const opcoesHtml = (p.opcoes || []).map(o => `<li>${o.texto}: <strong>${o.votos}</strong> resposta(s)</li>`).join("");
+      const detalhePublico = e.visibilidade === "PUBLICA" && Array.isArray(p.respostas)
+        ? `<p class="subtitle">Quem respondeu: ${p.respostas.map(r => `${r.nome} → ${r.textoResposta || (p.opcoes.find(o => o.opcaoId === r.opcaoId) || {}).texto || "-"}`).join("; ") || "ninguém ainda"}</p>`
+        : "";
+      const campoVoto = e.status === "ABERTA" ? `<div>${campoRespostaPergunta(e.enqueteId, p)}</div>` : "";
+      return `<li style="margin-bottom:8px;"><strong>${p.titulo}</strong> (${p.totalRespostas} resposta(s))
+        ${p.tipo === "OPCOES" ? `<ul>${opcoesHtml}</ul>` : ""}
+        ${detalhePublico}
+        ${campoVoto}
+      </li>`;
+    }).join("");
     html += `<div class="cartao-perfil" style="margin-bottom:12px;">
       <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${e.titulo} ${e.vinculante ? "🔒 vinculante" : ""}</h4>
       <p class="subtitle">${e.descricao || ""}</p>
-      <p class="subtitle">Visibilidade: ${ROTULO_VISIBILIDADE_ENQUETE[e.visibilidade] || e.visibilidade} · Status: ${e.status} · Total de votos: ${e.totalVotos}</p>
-      ${e.tipo === "OPCOES" ? `<ul>${opcoesHtml}</ul>` : ""}
+      <p class="subtitle">Visibilidade: ${ROTULO_VISIBILIDADE_ENQUETE[e.visibilidade] || e.visibilidade} · Status: ${e.status} · Participantes: ${e.totalVotos}</p>
+      <ul>${perguntasHtml}</ul>
       <p class="subtitle">Participaram: ${participantesHtml}</p>
       ${resultadoHtml}
-      ${detalhePublico}
       ${e.status === "ABERTA" ? `
         <div class="barra-lista">
           <input type="number" id="votoMatricula_${e.enqueteId}" placeholder="Sua matrícula" style="min-width:120px;" />
-          ${e.tipo === "OPCOES"
-            ? `<select id="votoOpcao_${e.enqueteId}">${(e.opcoes || []).map(o => `<option value="${o.opcaoId}">${o.texto}</option>`).join("")}</select>`
-            : `<input type="text" id="votoTexto_${e.enqueteId}" placeholder="Sua resposta" style="min-width:200px;" />`}
-          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="votarEnqueteAcao(${e.enqueteId}, '${e.tipo}')">Votar</button>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="votarEnqueteAcao(${e.enqueteId})">Enviar respostas</button>
           <button class="btn-link btn-link-perigo" onclick="encerrarEnqueteAcao(${e.enqueteId})">Encerrar</button>
         </div>` : ""}
     </div>`;
@@ -3933,14 +3980,17 @@ async function carregarEnquetes() {
   container.innerHTML = html;
 }
 
-async function votarEnqueteAcao(enqueteId, tipo) {
+async function votarEnqueteAcao(enqueteId) {
   const membroId = document.getElementById(`votoMatricula_${enqueteId}`).value;
   if (!membroId) { mostrarToast("Informe a matrícula.", "erro"); return; }
-  const body = tipo === "OPCOES"
-    ? { membroId, opcaoId: document.getElementById(`votoOpcao_${enqueteId}`).value }
-    : { membroId, textoResposta: document.getElementById(`votoTexto_${enqueteId}`).value.trim() };
+  const camposResposta = document.querySelectorAll(`[id^="votoResposta_${enqueteId}_"]`);
+  const respostas = Array.from(camposResposta).map(campo => {
+    const perguntaId = Number(campo.id.split("_")[2]);
+    const ehSelect = campo.tagName === "SELECT";
+    return ehSelect ? { perguntaId, opcaoId: campo.value } : { perguntaId, textoResposta: campo.value.trim() };
+  });
   const res = await fetch(`${API_BASE}/enquetes/${enqueteId}/votar`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId, respostas })
   });
   const data = await res.json();
   avisarResultado(data);

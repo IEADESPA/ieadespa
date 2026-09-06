@@ -9,7 +9,7 @@
     "start": "func start"
   },
   "dependencies": {
-    "mssql": "^10.0.1",
-    "@azure/storage-blob": "^12.24.0"
+    "mssql": "^12.7.0",
+    "@azure/storage-blob": "^12.33.0"
   }
 }

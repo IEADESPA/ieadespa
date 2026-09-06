@@ -75,6 +75,32 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // Trava de segurança: nunca deixa "suspender acesso ao sistema" tirar a
+    // última pessoa com a permissão "permissoes" (quem gerencia acesso/senha
+    // de todo mundo) — senão ninguém mais consegue nem desfazer a própria
+    // medida. Precisa sobrar pelo menos 1 outra pessoa com essa permissão,
+    // ativa (AtivoAte nulo ou no futuro), antes de suspender esta.
+    if (suspenderAcessoSistema) {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const outrosComPermissao = await pool.request()
+        .input("membroId", sql.Int, membroId)
+        .input("hoje", sql.Date, hoje)
+        .query(`
+          SELECT COUNT(*) AS total
+          FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
+          WHERE l.MembroId <> @membroId
+            AND (l.AtivoAte IS NULL OR l.AtivoAte >= @hoje)
+            AND (',' + p.Permissoes + ',') LIKE '%,permissoes,%'
+        `);
+      if (outrosComPermissao.recordset[0].total === 0) {
+        context.res = {
+          status: 200,
+          body: { sucesso: false, mensagem: "Não é possível suspender o acesso ao sistema desta pessoa: ela é a única com a permissão \"permissoes\" ativa — ninguém mais conseguiria gerenciar acesso/senha depois. Conceda a permissão a outra pessoa antes de aplicar essa medida." }
+        };
+        return;
+      }
+    }
+
     const result = await pool.request()
       .input("membroId", sql.Int, membroId)
       .input("motivo", sql.NVarChar(1000), motivo)

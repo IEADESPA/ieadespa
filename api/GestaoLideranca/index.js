@@ -119,6 +119,27 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { erro: "Informe o membroId na rota: /api/lideranca/{membroId}" } };
       return;
     }
+
+    // Mesma trava de segurança do GestaoMedidasCautelares: nunca deixa zerar
+    // quem tem a permissão "permissoes" — senão ninguém mais gerencia acesso
+    // de ninguém depois.
+    const outrosComPermissao = await pool.request().input("id", sql.Int, membroIdRota).query(`
+      SELECT COUNT(*) AS total
+      FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
+      WHERE l.MembroId <> @id AND (',' + p.Permissoes + ',') LIKE '%,permissoes,%'
+    `);
+    const estaRemovendoPermissoes = await pool.request().input("id", sql.Int, membroIdRota).query(`
+      SELECT 1 FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
+      WHERE l.MembroId = @id AND (',' + p.Permissoes + ',') LIKE '%,permissoes,%'
+    `);
+    if (estaRemovendoPermissoes.recordset.length > 0 && outrosComPermissao.recordset[0].total === 0) {
+      context.res = {
+        status: 200,
+        body: { sucesso: false, mensagem: "Não é possível remover: essa pessoa é a única com a permissão \"permissoes\" — ninguém mais conseguiria gerenciar acesso depois. Conceda a permissão a outra pessoa antes." }
+      };
+      return;
+    }
+
     const del = await pool.request().input("id", sql.Int, membroIdRota).query(`DELETE FROM Lideranca WHERE MembroId = @id`);
     if (del.rowsAffected[0] === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta pessoa não tem liderança registrada." } };

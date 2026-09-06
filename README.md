@@ -827,6 +827,12 @@ já está lá. **v2.4 está fechado** com isso.
       automática — o sistema não tem como mexer em banco nem em fechadura.
       Prazo de 30 dias pro relatório de auditoria (§2º) calculado na leitura,
       mesmo padrão de Abandono/Cartas/Disciplina.
+      **Trava de segurança (achada pelo usuário, corrigida)**: "suspender
+      acesso ao sistema" nunca pode tirar a última pessoa com a permissão
+      `"permissoes"` — senão ninguém mais consegue gerenciar acesso/senha de
+      ninguém depois, nem desfazer a própria medida. Mesma trava aplicada em
+      `api/GestaoLideranca` (remover liderança), gap que já existia antes do
+      v2.6 e foi corrigido junto.
 - Fiscalização contábil (Reg. Art. 145: balancetes, talões, parecer mensal,
   ata própria) **não fica aqui** — depende de dados financeiros que ainda não
   existem (FASE 4); vira item de verdade em `v4.1` (Tesouraria), não

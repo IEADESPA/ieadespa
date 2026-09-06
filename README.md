@@ -296,8 +296,9 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       + seção de cadastro dentro da tela de uma Pessoa. **Diluído:** o helper de cálculo
       de grau de parentesco (grafo/BFS entre duas pessoas) e a Function de consulta só
       nascem quando tiverem um consumidor de verdade — v2.6 (vedação de nepotismo no
-      Conselho Fiscal, Art. 43 §3º) e v3.1 (impedimento de conselheiro do CEI, Art. 91) —
-      construídos em cima da tabela que esta versão já deixa pronta.
+      Conselho Fiscal, Art. 43 §3º) e v3.1 (vedação de nepotismo na posse do
+      CEI, Estatuto Art. 38 §2º) — construídos em cima da tabela que esta
+      versão já deixa pronta.
 
 #### v0.3 — Auditoria e trilha de dados
 
@@ -1086,15 +1087,57 @@ zero código de back-end novo.
 
 #### v3.1 — CEI (Corte Suprema Eclesiástica)
 
-- [ ] Composição: 7 titulares + 2 suplentes (Reg. Art. 88).
-- [ ] Requisitos: Oficial Superior (Evangelista/Pastor) ou Presbítero 5+ anos + formação
-      teológica AFM ou Direito + reputação ilibada (10 anos).
-- [ ] Indicação pelo Pastor Presidente + sabatina/homologação pela CLI (Art. 89).
-- [ ] Mandato 2 anos + destituição só por 2/3 da CLI (estabilidade).
-- [ ] Incompatibilidade: vedado acúmulo com Mesa Diretora/Vice de Quadrante/Superintendente (Art. 90).
-- [ ] Impedimento/suspeição: parente (3º grau, via `shared/parentesco.js` — v2.6), mesma
-      congregação, inimizade/amizade íntima (Art. 91).
-- [ ] Segredo de Justiça Eclesiástica (Art. 92): rito fechado, sem gravação.
+O CEI já existia como Órgão cadastrado (usado desde o v2.5 em incompatibilidade
+e composição da CLI) — faltava a tela própria e o catálogo de cargos que o
+eleva ao papel de Corte Suprema do Regimento.
+
+- [x] Composição: 7 titulares + 2 suplentes (Reg. Art. 88 §1º) —
+      `CARGOS_CEI` em `shared/diretoria.js`, mesmo padrão "1 titular por
+      cargo fixo" do Conselho Fiscal, tela própria dentro do submenu Reuniões.
+- [x] Requisitos (Art. 88 §2º) — **checagem informativa**, não trava a
+      criação do assento: `shared/estatuto.js::avaliarElegibilidadeCEI` +
+      `shared/cei.js` (busca os dados) + endpoint
+      `GET /api/elegibilidade-cei/{membroId}`. Calculado de dado real, nunca
+      cadastro manual: Oficial Superior = `MembroReferencia.CargoMinisterial`
+      IN (PASTOR, EVANGELISTA); Presbítero 5+ anos = tempo desde a
+      `Consagracoes` concluída "a Presbítero"; formação teológica avançada =
+      `Matriculas_AFM` (nível AVANÇADO/BACHAREL + Certificado de Habilitação);
+      reputação ilibada = sem `ProcessosDisciplinares` com sanção/exclusão
+      nos últimos 10 anos. **Formação secular em Direito não é rastreada em
+      lugar nenhum do sistema** — vira aviso ("confirme manualmente"), não
+      reprovação automática; por isso o botão "Checar elegibilidade" só
+      orienta o Pastor Presidente na indicação (Art. 89 §1º), quem decide
+      continua sendo ele.
+- [x] Mandato 2 anos (Art. 89 §3º) — reaproveita `Assentos.duracaoMeses`
+      (mecanismo já existente desde o v2.5/v2.6), campo pré-preenchido com
+      `24` na tela.
+- [x] Incompatibilidade com Diretoria/Conselho Fiscal (Art. 38 §3º, II) — já
+      funcionava genericamente desde o v2.5 (`ORGAOS_INCOMPATIVEIS` já
+      incluía CEI); nada de novo aqui.
+- [x] Vedação de nepotismo até 2º grau com a Diretoria Executiva na hora da
+      posse (Estatuto Art. 38 §2º — mesma regra do Conselho Fiscal, Art. 43
+      §3º, I) — `GestaoAssentos` estendido de `orgaoSigla ===
+      "CONSELHO_FISCAL"` para incluir `"CEI"`, reaproveitando
+      `shared/parentesco.js::existeParentescoAte2Grau` sem mudar a função.
+- [ ] Indicação pelo Pastor Presidente + sabatina/homologação pela CLI
+      (maioria simples) e destituição por 2/3 da CLI (Art. 89): **sem
+      mecanismo novo** — quando o caso for contestado, reaproveita as
+      Enquetes vinculantes do v2.8 (`quorumTipo: MAIORIA_SIMPLES` ou
+      `DOIS_TERCOS`, `OrgaoId` = CLI); se for aclamação óbvia, mesmo
+      raciocínio do v2.8: não vale a pena digitalizar.
+- **Descartado/fora de escopo, com nota**: incompatibilidade com Mesa
+  Diretora/Vice de Quadrante/Superintendente Regional (Art. 90 §1º) — esses
+  cargos não são rastreados em lugar nenhum do sistema (só Diretoria
+  Executiva/Conselho Fiscal/CEI existem como Órgãos com Assento). Impedimento
+  por parentesco até 3º grau (Art. 91) **não é a mesma coisa** que a vedação
+  de posse acima: é uma recusa/suspeição *por caso* (o réu ser parente do
+  conselheiro que vai relatar aquele processo específico), e o sistema ainda
+  não tem designação de relator de processo disciplinar para pendurar essa
+  checagem — fica pro v3.2 (Processo disciplinar), se fizer sentido lá.
+  Segredo de Justiça Eclesiástica (Art. 92, rito fechado sem gravação):
+  decisão do usuário — não dá para modelar isso no sistema; o sigilo
+  estrutural que já existe (`ProcessosDisciplinares.Sigiloso`, default 1)
+  é tudo que cabe aqui.
 
 #### v3.2 — Processo disciplinar (abertura, citação, defesa)
 

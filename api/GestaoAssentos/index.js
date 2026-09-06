@@ -123,11 +123,12 @@ module.exports = async function (context, req) {
       }
     }
 
-    // Art. 43 §3º, I — vedação de nepotismo: parentesco até 2º grau com
-    // membros ativos da Diretoria Executiva não pode ocupar Conselho Fiscal.
-    // (Só a metade "Diretoria" é verificável — "Tesoureiros de Departamentos"
-    // não é um cargo rastreado em lugar nenhum do sistema hoje.)
-    if (orgaoSigla === "CONSELHO_FISCAL") {
+    // Art. 43 §3º, I (Conselho Fiscal) / Estatuto Art. 38 §2º (CEI) — vedação
+    // de nepotismo: parentesco até 2º grau com membros ativos da Diretoria
+    // Executiva não pode ocupar Conselho Fiscal nem CEI. (Só a metade
+    // "Diretoria" é verificável — "Tesoureiros de Departamentos" não é um
+    // cargo rastreado em lugar nenhum do sistema hoje.)
+    if (["CONSELHO_FISCAL", "CEI"].includes(orgaoSigla)) {
       const diretoriaAtual = await pool.request().query(`
         SELECT a.MembroId AS membroId FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId
         WHERE o.Sigla = 'DIRETORIA_EXECUTIVA' AND a.DataFim IS NULL
@@ -135,9 +136,10 @@ module.exports = async function (context, req) {
       const idsDiretoria = new Set(diretoriaAtual.recordset.map(r => r.membroId));
       const parentesco = await existeParentescoAte2Grau(pool, sql, membroId, idsDiretoria);
       if (parentesco.encontrado) {
+        const artigo = orgaoSigla === "CEI" ? "Estatuto Art. 38 §2º" : "Art. 43 §3º, I";
         context.res = {
           status: 200,
-          body: { sucesso: false, mensagem: `Não é possível: essa pessoa tem parentesco até 2º grau com um membro ativo da Diretoria Executiva (matrícula ${parentesco.comMembroId}) — vedado pelo Art. 43 §3º, I.` }
+          body: { sucesso: false, mensagem: `Não é possível: essa pessoa tem parentesco até 2º grau com um membro ativo da Diretoria Executiva (matrícula ${parentesco.comMembroId}) — vedado pelo ${artigo}.` }
         };
         return;
       }

@@ -591,6 +591,33 @@
           <p id="resultadoCautelar"></p>
           <div class="rolagem-tabela"><div id="resultadoListaCautelares"></div></div>
         </div>
+
+        <!-- CEI/Corte Suprema Eclesiástica (v3.1) — mesmo padrão do Conselho
+             Fiscal acima, escondido pros demais órgãos. -->
+        <div id="blocoCEI" style="display:none;">
+          <hr />
+
+          <h3>Composição do CEI (Corte Suprema Eclesiástica)</h3>
+          <p class="subtitle">
+            7 titulares + 2 suplentes, mandato de 2 anos (Reg. Art. 88-89) — 1 titular
+            ativo por cargo. Vedado acumular com Diretoria ou Conselho Fiscal (Art. 38 §3º, II)
+            e vedado parentesco até 2º grau com a Diretoria Executiva (Estatuto Art. 38 §2º).
+            Requisitos do Art. 88 §2º (Oficial Superior/Presbítero 5+ anos, formação, reputação
+            ilibada) são só orientativos — confira antes de conceder o assento.
+          </p>
+          <form onsubmit="event.preventDefault(); salvarAssentoCEI();">
+            <div class="barra-lista">
+              <input type="number" id="assentoCEIMatricula" placeholder="Matrícula" style="min-width:120px;" />
+              <select id="assentoCEICargo"></select>
+              <input type="number" id="assentoCEIDuracaoMeses" value="24" placeholder="Duração em meses" style="min-width:160px;" />
+              <button type="button" onclick="checarElegibilidadeCEIAcao();">🔎 Checar elegibilidade</button>
+              <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar</button>
+            </div>
+          </form>
+          <p id="resultadoElegibilidadeCEI"></p>
+          <p id="resultadoAssentoCEI"></p>
+          <div class="rolagem-tabela"><div id="resultadoListaCEI"></div></div>
+        </div>
       </div>
 
       <!-- ABA: PESSOAS -->

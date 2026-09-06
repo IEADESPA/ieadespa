@@ -116,6 +116,47 @@ function calcularCapacidadeEleitoral(membro, hoje) {
   };
 }
 
+// Art. 88 §2º (Regimento) — requisitos do CEI/Corte Suprema Eclesiástica.
+// A formação em Direito não é rastreada em lugar nenhum do sistema (só o AFM
+// é), então a checagem sai INFORMATIVA (orienta a indicação do Presidente,
+// Art. 89 §1º), nunca bloqueia sozinha a criação do Assento — mesmo espírito
+// do RegimeUrgencia em Projetos (v2.8): registrado, não travado, quando a
+// verificação plena não é possível.
+function avaliarElegibilidadeCEI(dados) {
+  const {
+    cargoMinisterial,
+    anosDesdeConsagracaoPresbitero,
+    afmAvancadoComCertificado,
+    disciplinaRigorosaUltimos10Anos
+  } = dados || {};
+
+  const oficialSuperior = cargoMinisterial === "PASTOR" || cargoMinisterial === "EVANGELISTA";
+  const presbiteroComTempo =
+    cargoMinisterial === "PRESBITERO" &&
+    anosDesdeConsagracaoPresbitero !== null && anosDesdeConsagracaoPresbitero !== undefined &&
+    anosDesdeConsagracaoPresbitero >= 5;
+  const cargoElegivel = oficialSuperior || presbiteroComTempo;
+
+  const formacaoVerificavelOk = afmAvancadoComCertificado === true;
+  const motivoFormacao = formacaoVerificavelOk
+    ? null
+    : "Sem AFM avançado + Certificado de Habilitação Ministerial registrado — confirme manualmente se a pessoa possui formação secular em Direito (não verificável pelo sistema).";
+
+  const reputacaoIlibada = !disciplinaRigorosaUltimos10Anos;
+
+  return {
+    cargoElegivel,
+    motivoCargo: cargoElegivel
+      ? null
+      : "Não atende Art. 88 §2º, I: precisa ser Oficial Superior (Evangelista/Pastor) ou Presbítero com 5+ anos ininterruptos de ministério ativo.",
+    formacaoVerificavelOk,
+    motivoFormacao,
+    reputacaoIlibada,
+    motivoReputacao: reputacaoIlibada ? null : "Possui processo disciplinar com sanção/exclusão nos últimos 10 anos (Art. 88 §2º, III).",
+    elegivelInformativo: cargoElegivel && reputacaoIlibada
+  };
+}
+
 // Art. 21 (Assembleia Geral, matérias gerais/AGO) e Art. 24 (CLI) compartilham o mesmo formato
 // de instalação em 2 estágios: 1ª convocação = maioria absoluta; 2ª convocação, 30 minutos
 // depois = qualquer número de presentes. Fora do escopo aqui: quórum de reforma estatutária/
@@ -356,5 +397,6 @@ module.exports = {
   derivarClassificacaoAssembleia,
   avaliarQuorumReformaDestituicao,
   avaliarQuorumReformaDificultada,
-  avaliarAprovacaoEnquete
+  avaliarAprovacaoEnquete,
+  avaliarElegibilidadeCEI
 };

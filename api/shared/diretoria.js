@@ -31,11 +31,25 @@ const CARGOS_CONSELHO_FISCAL = {
   SUPLENTE_3: { rotulo: "3º Suplente" }
 };
 
+// Art. 88 §1º — 7 titulares + 2 suplentes, tratamento "Conselheiro Superior".
+const CARGOS_CEI = {
+  TITULAR_1: { rotulo: "1º Conselheiro Titular" },
+  TITULAR_2: { rotulo: "2º Conselheiro Titular" },
+  TITULAR_3: { rotulo: "3º Conselheiro Titular" },
+  TITULAR_4: { rotulo: "4º Conselheiro Titular" },
+  TITULAR_5: { rotulo: "5º Conselheiro Titular" },
+  TITULAR_6: { rotulo: "6º Conselheiro Titular" },
+  TITULAR_7: { rotulo: "7º Conselheiro Titular" },
+  SUPLENTE_1: { rotulo: "1º Conselheiro Suplente" },
+  SUPLENTE_2: { rotulo: "2º Conselheiro Suplente" }
+};
+
 // Catálogo de cargos fixos por órgão — usado genericamente em GestaoAssentos
 // pra validar cargoOuFuncao e o cap de 1 ocupante ativo por cargo.
 const CATALOGOS_CARGOS_POR_ORGAO = {
   DIRETORIA_EXECUTIVA: CARGOS_DIRETORIA,
-  CONSELHO_FISCAL: CARGOS_CONSELHO_FISCAL
+  CONSELHO_FISCAL: CARGOS_CONSELHO_FISCAL,
+  CEI: CARGOS_CEI
 };
 
 // Art. 38 §3º, II — "é vedado o acúmulo de cargos entre o CEI, a Diretoria
@@ -137,6 +151,7 @@ async function calcularSucessaoPresidencial(pool, sql, orgaoIdDiretoria, orgaoId
 module.exports = {
   CARGOS_DIRETORIA,
   CARGOS_CONSELHO_FISCAL,
+  CARGOS_CEI,
   CATALOGOS_CARGOS_POR_ORGAO,
   ORGAOS_INCOMPATIVEIS,
   validarIncompatibilidadeExecutiva,

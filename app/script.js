@@ -1056,6 +1056,7 @@ function selecionarOrgaoReunioes(orgaoId) {
   const ehCLI = orgao.sigla === "CLI";
   const ehDiretoria = orgao.sigla === "DIRETORIA_EXECUTIVA";
   const ehConselhoFiscal = orgao.sigla === "CONSELHO_FISCAL";
+  const ehCEI = orgao.sigla === "CEI";
   window._orgaoAtualReunioes = orgaoId;
   document.getElementById("reuniaoOrgao").value = orgaoId;
   document.getElementById("reunioesOrgaoNome").textContent = orgao.nome;
@@ -1063,6 +1064,7 @@ function selecionarOrgaoReunioes(orgaoId) {
   document.getElementById("blocoComposicaoCLI").style.display = ehCLI ? "block" : "none";
   document.getElementById("blocoDiretoria").style.display = ehDiretoria ? "block" : "none";
   document.getElementById("blocoConselhoFiscal").style.display = ehConselhoFiscal ? "block" : "none";
+  document.getElementById("blocoCEI").style.display = ehCEI ? "block" : "none";
   // Assembleia Geral não abre na hora (Art. 20) — troca o formulário instantâneo
   // pelo par Convocar (com antecedência) / Iniciar (no dia previsto).
   document.getElementById("blocoConvocarAssembleia").style.display = ehAssembleia ? "block" : "none";
@@ -1076,6 +1078,7 @@ function selecionarOrgaoReunioes(orgaoId) {
   if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); carregarProjetos(); }
   if (ehDiretoria) { carregarAssentosDiretoria(); carregarSucessaoPresidencial(); }
   if (ehConselhoFiscal) { carregarAssentosConselhoFiscal(); carregarMedidasCautelares(); }
+  if (ehCEI) carregarAssentosCEI();
   carregarReunioes();
 }
 
@@ -1478,6 +1481,97 @@ async function encerrarAssentoConselhoFiscalAcao(assentoId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarAssentosConselhoFiscal();
+}
+
+// Art. 88 §1º — espelha shared/diretoria.js::CARGOS_CEI.
+const CARGOS_CEI = {
+  TITULAR_1: "1º Conselheiro Titular", TITULAR_2: "2º Conselheiro Titular", TITULAR_3: "3º Conselheiro Titular",
+  TITULAR_4: "4º Conselheiro Titular", TITULAR_5: "5º Conselheiro Titular", TITULAR_6: "6º Conselheiro Titular",
+  TITULAR_7: "7º Conselheiro Titular", SUPLENTE_1: "1º Conselheiro Suplente", SUPLENTE_2: "2º Conselheiro Suplente"
+};
+
+function orgaoIdCEI() {
+  const orgao = (window._orgaosReunioesCache || []).find(o => o.sigla === "CEI");
+  return orgao ? orgao.orgaoId : null;
+}
+
+async function carregarAssentosCEI() {
+  const select = document.getElementById("assentoCEICargo");
+  if (select && !select.dataset.preenchido) {
+    select.innerHTML = Object.entries(CARGOS_CEI).map(([sigla, rotulo]) => `<option value="${sigla}">${rotulo}</option>`).join("");
+    select.dataset.preenchido = "1";
+  }
+
+  const container = document.getElementById("resultadoListaCEI");
+  const orgaoId = orgaoIdCEI();
+  if (!orgaoId) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos?orgaoId=${orgaoId}`);
+  const assentos = await res.json();
+
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Cargo</th><th>Matrícula</th><th>Nome</th><th>Desde</th><th>Até</th><th>Situação</th><th></th>
+  </tr></thead><tbody>`;
+  Object.entries(CARGOS_CEI).forEach(([sigla, rotulo]) => {
+    const a = Array.isArray(assentos) ? assentos.find(x => x.cargoOuFuncao === sigla) : null;
+    html += `<tr>
+      <td>${rotulo}</td>
+      <td>${a ? a.membroId : "-"}</td>
+      <td>${a ? a.nome : "<span class='subtitle'>vago</span>"}</td>
+      <td>${a ? a.dataInicio : "-"}</td>
+      <td>${a ? (a.dataTerminoPrevisao || "sem prazo") : "-"}</td>
+      <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
+      <td>${a ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoCEIAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function checarElegibilidadeCEIAcao() {
+  const membroId = document.getElementById("assentoCEIMatricula").value;
+  const msg = document.getElementById("resultadoElegibilidadeCEI");
+  if (!membroId) { msg.textContent = "Informe a matrícula antes de checar."; return; }
+  const res = await fetchProtegido(`${API_BASE}/elegibilidade-cei/${membroId}`);
+  const data = await res.json();
+  if (!data.sucesso) { msg.textContent = data.mensagem || "Não foi possível checar."; return; }
+  const itens = [
+    data.cargoElegivel ? "✅ Cargo ministerial (Oficial Superior ou Presbítero 5+ anos)" : `⚠️ ${data.motivoCargo}`,
+    data.formacaoVerificavelOk ? "✅ Formação teológica avançada (AFM + CHM)" : `⚠️ ${data.motivoFormacao}`,
+    data.reputacaoIlibada ? "✅ Reputação ilibada (sem sanção/exclusão nos últimos 10 anos)" : `⚠️ ${data.motivoReputacao}`
+  ];
+  msg.innerHTML = itens.map(i => `<div>${i}</div>`).join("");
+}
+
+async function salvarAssentoCEI() {
+  const orgaoId = orgaoIdCEI();
+  const membroId = document.getElementById("assentoCEIMatricula").value;
+  const cargoOuFuncao = document.getElementById("assentoCEICargo").value;
+  const duracaoMeses = document.getElementById("assentoCEIDuracaoMeses").value || null;
+  const msg = document.getElementById("resultadoAssentoCEI");
+  if (!orgaoId || !membroId) { msg.textContent = "Informe a matrícula."; return; }
+  const res = await fetchProtegido(`${API_BASE}/assentos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, orgaoId, tipoAssento: "FUNCAO", cargoOuFuncao, duracaoMeses })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("assentoCEIMatricula").value = "";
+    document.getElementById("resultadoElegibilidadeCEI").innerHTML = "";
+    carregarAssentosCEI();
+  }
+}
+
+async function encerrarAssentoCEIAcao(assentoId) {
+  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarAssentosCEI();
 }
 
 async function carregarMedidasCautelares() {

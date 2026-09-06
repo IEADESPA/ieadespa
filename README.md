@@ -702,15 +702,25 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
       inclui CLI); "último domingo do mês" não é validado como trava (não tem
       convocação formal pra CLI como a Assembleia tem — abre na hora), fica
       como calendário/rotina, não bloqueio de sistema.
-- [ ] Deliberações por maioria simples + impedimento de voto (Art. 25) — **inclui**
-      o Regime de Ratificação Posterior (Art. 19) + dissenso formalizado (1/5):
-      decidido deixar de fora do v2.2 de propósito (conversado com o usuário) porque
-      só faz sentido quando a CLI tiver aqui o próprio registro de deliberação —
-      construir uma tabela solta antes disso seria descartável depois, ou nunca
-      chegar a ser integrada de verdade. Nasce **junto** com este item, não depois.
-- [ ] Voto de Minerva + poder de veto presidencial.
-- [ ] Sigilo corporativo (Art. 26) + comunicado administrativo pós-sessão.
-- [ ] Comparecimento obrigatório: 3 faltas = exclusão automática (Art. 27).
+**Descartado de propósito, permanentemente** (conversado com o usuário — não é
+"depois", é fora do sistema pra sempre): Deliberações por maioria simples
+(Art. 25), Ratificação Posterior (Art. 19), Voto de Minerva/veto presidencial
+(Art. 25 §§1º/2º) e Sigilo Corporativo (Art. 26). Motivo: numa reunião real,
+as decisões são tomadas informalmente ("levantem a mão", "unanimidade", "maioria
+e pronto") — não tem como o sistema registrar isso com fidelidade sem alguém
+digitar voto a voto depois, e ninguém vai abrir o site no meio de uma reunião de
+igreja pra fazer esse lançamento. Mesmo racional já usado pra descartar a
+Convocação Independente da Presidência (v2.1). Fica só no Regimento/prática,
+sem tentativa de espelhar no sistema.
+
+**Comparecimento obrigatório: 3 faltas consecutivas = exclusão automática
+(Art. 27) — movido pra logo antes da FASE 8**, ver `v7.9` abaixo. Motivo:
+Art. 69 do Regimento diz que a cada 3 meses o domingo da reunião da CLI vira
+"Sessão da AFM" em vez de reunião comum — contar faltas certo exige saber
+quais sessões da CLI também são sessões da AFM, e a AFM é o módulo inteiro da
+FASE 8. Decidido (conversado com o usuário) implementar isso **junto** com a
+AFM, não antes — construir a contagem de faltas agora ficaria errado assim
+que a AFM nascer, e teria que ser refeito.
       **Nota (v0.3):** conversa com o usuário levantou que existe (ou vai existir) um
       órgão "Academia" que se alterna com a CLI a cada 3 meses pra treinar
       Presbíteros/Evangelistas/Pastores, e as faltas dos dois deveriam **somar** pro
@@ -1092,6 +1102,26 @@ História/Acervo, RP/Cerimonial, Libras, Beleza/Estética, Educação/Pedagogia.
 - [ ] Verificação de antecedentes criminais/cíveis (Reg. Art. 133 §5º) na investidura
       em cargo de liderança/confiança ou trabalho com menores — "Termo de Vistoria"
       com data, hash do documento apresentado, parecer e assinatura do responsável.
+
+#### v7.9 — CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)
+
+Movido de v2.3 de propósito — ver nota lá. Constrói **junto** com v8.1 (AFM),
+não antes: precisa primeiro saber marcar uma sessão da CLI como "integrada com
+AFM" (Art. 69) pra não contar errado a cada 3 meses.
+
+- [ ] 3 faltas consecutivas sem justificativa aceita nas reuniões da CLI
+      (excluindo as integradas com AFM) = perda automática do assento (Art. 27
+      §1º) — calculado a partir de `Presencas`, igual mandato vencido de
+      Assento (nunca marcação manual). Quem entra por Ordenação (Pastor/
+      Evangelista/Presbítero) precisa de um jeito de sair da composição da CLI
+      sem perder o `CargoMinisterial` (são coisas diferentes: perder assento
+      na Câmara ≠ deixar de ser Pastor); quem entra por Função já sai
+      naturalmente encerrando o Assento (mecanismo já existe).
+- [ ] Art. 27 §2º: se a exclusão for de quem está na CLI por cargo eletivo da
+      Diretoria Executiva ou Conselho Fiscal, a CLI aprecia e, sendo o caso,
+      convoca AGE de destituição em até 30 dias (matéria "Destituição", já
+      existente desde v2.2) — o sistema só aponta pro fluxo existente, não
+      automatiza a convocação.
 
 ### FASE 8 — Ministerial (AFM)
 

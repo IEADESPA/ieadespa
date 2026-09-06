@@ -763,13 +763,37 @@ já está lá. **v2.4 está fechado** com isso.
 
 #### v2.5 — Diretoria Executiva
 
-- [ ] Composição (Art. 29): Presidente, 4 Vice-Presidentes, 3 Secretários, 2 Tesoureiros.
-- [ ] Mandato 2 anos (Art. 30): eleição na AGO de dezembro, posse 1º/jan.
-- [ ] Assinatura conjunta (Art. 31): financeiro (Presidente + 1º Tesoureiro) e
-      administrativo (Presidente + 1º Secretário).
-- [ ] Vacância/sucessão presidencial (Art. 32): 1º→4º Vice, depois CEI.
-- [ ] Atribuições do Presidente (Art. 33), Secretários (Art. 35), Tesoureiros (Art. 36).
-- [ ] Livre nomeação/exoneração de cargos não eletivos (Art. 37).
+- [x] Composição (Art. 29): os 10 cargos (Presidente, 4 Vice-Presidentes, 3
+      Secretários, 2 Tesoureiros) são fixos — `shared/diretoria.js`
+      (`CARGOS_DIRETORIA`), 1 titular ativo por cargo, validado em
+      `api/GestaoAssentos`. Tela própria dentro do submenu Diretoria Executiva
+      de Reuniões, mesmo padrão "tudo do órgão na tela dele" do v2.3/v2.4.
+- [x] Mandato 2 anos (Art. 30): reaproveita `Assentos.duracaoMeses` (já
+      calculava `DataTerminoPrevisao` na leitura desde o v0.3) — formulário
+      da Diretoria já vem com 24 meses padrão, posse em qualquer data que a
+      Secretaria informar.
+- [x] Incompatibilidade Diretoria/Conselho Fiscal/CEI (Art. 38 §3º, II — "é
+      vedado o acúmulo de cargos entre" os 3): `validarIncompatibilidadeExecutiva`,
+      chamada em `GestaoAssentos` sempre que o órgão alvo for um desses 3 —
+      bloqueia a criação do assento, com mensagem citando o artigo.
+- [x] Vacância/sucessão presidencial (Art. 32): calculada
+      (`calcularSucessaoPresidencial`) — quando o Assento do Presidente é
+      encerrado, acha o Vice-Presidente ativo de menor ordem (1º→4º) ou, sem
+      nenhum, o membro mais antigo do CEI; conta os prazos do Art. 32 §2º/§3º
+      (90 dias indicação CIADSETA + 30 dias AGE) a partir da data de
+      encerramento — mesmo princípio de prazo calculado na leitura já usado
+      em Abandono/Disciplina/Cartas. `GET /api/diretoria/sucessao`
+      (`api/SucessaoPresidencial`), só leitura — o sistema não convoca nada
+      sozinho, só avisa.
+- **Fora de escopo por natureza, não "adiado"** (conversado com o usuário):
+  - Assinatura Conjunta (Art. 31) — acontece no banco/no papel; o sistema não
+    tem como verificar quem assinou o quê de verdade.
+  - Atribuições do Presidente/Secretários/Tesoureiros (Art. 33/35/36) — é
+    texto descritivo do que cada cargo faz na vida real, não uma
+    funcionalidade — fica só como referência no Estatuto, não vira código.
+- [x] Livre nomeação/exoneração de cargos não eletivos (Art. 37) — já coberta
+      por `Assentos` (criar/encerrar) + permissão `GLOBAL` já existentes;
+      nada novo construído aqui.
 
 #### v2.6 — Conselho Fiscal
 

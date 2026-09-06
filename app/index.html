@@ -479,6 +479,36 @@
           <p class="subtitle">Calculada — membros do CEI.</p>
           <div class="rolagem-tabela"><div id="resultadoListaCEP"></div></div>
         </div>
+
+        <!-- Só existe conteúdo (composição + sucessão) pra Diretoria Executiva —
+             escondido pros demais órgãos por selecionarOrgaoReunioes() checando a sigla. -->
+        <div id="blocoDiretoria" style="display:none;">
+          <hr />
+
+          <h3>Composição da Diretoria Executiva</h3>
+          <p class="subtitle">
+            Os 10 cargos são de preenchimento obrigatório (Art. 29) — 1 titular ativo por
+            cargo. É vedado acumular com assento no Conselho Fiscal ou no CEI (Art. 38 §3º, II).
+          </p>
+          <form onsubmit="event.preventDefault(); salvarAssentoDiretoria();">
+            <div class="barra-lista">
+              <input type="number" id="assentoDiretoriaMatricula" placeholder="Matrícula" style="min-width:120px;" />
+              <select id="assentoDiretoriaCargo"></select>
+              <input type="number" id="assentoDiretoriaDuracaoMeses" value="24" placeholder="Duração em meses" style="min-width:160px;" />
+              <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar</button>
+            </div>
+          </form>
+          <p id="resultadoAssentoDiretoria"></p>
+          <div class="rolagem-tabela"><div id="resultadoListaDiretoria"></div></div>
+
+          <hr />
+
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Linha de Sucessão Presidencial</h4>
+          <p class="subtitle">
+            Calculada (Art. 32) — só informativo, o sistema não convoca nada sozinho.
+          </p>
+          <div id="resultadoSucessaoPresidencial"></div>
+        </div>
       </div>
 
       <!-- ABA: PESSOAS -->

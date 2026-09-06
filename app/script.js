@@ -981,11 +981,13 @@ function selecionarOrgaoReunioes(orgaoId) {
 
   const ehAssembleia = orgao.sigla === "ASSEMBLEIA_GERAL";
   const ehCLI = orgao.sigla === "CLI";
+  const ehDiretoria = orgao.sigla === "DIRETORIA_EXECUTIVA";
   window._orgaoAtualReunioes = orgaoId;
   document.getElementById("reuniaoOrgao").value = orgaoId;
   document.getElementById("reunioesOrgaoNome").textContent = orgao.nome;
   document.getElementById("blocoElegiveisAssembleia").style.display = ehAssembleia ? "block" : "none";
   document.getElementById("blocoComposicaoCLI").style.display = ehCLI ? "block" : "none";
+  document.getElementById("blocoDiretoria").style.display = ehDiretoria ? "block" : "none";
   // Assembleia Geral não abre na hora (Art. 20) — troca o formulário instantâneo
   // pelo par Convocar (com antecedência) / Iniciar (no dia previsto).
   document.getElementById("blocoConvocarAssembleia").style.display = ehAssembleia ? "block" : "none";
@@ -997,6 +999,7 @@ function selecionarOrgaoReunioes(orgaoId) {
 
   if (ehAssembleia) carregarConvocacoesPendentes();
   if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); }
+  if (ehDiretoria) { carregarAssentosDiretoria(); carregarSucessaoPresidencial(); }
   carregarReunioes();
 }
 
@@ -1148,6 +1151,111 @@ async function removerMembroCCJ(comissaoMembroId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarComissoes();
+}
+
+// Art. 29 — espelha shared/diretoria.js::CARGOS_DIRETORIA (fonte de verdade
+// do cálculo continua no back-end; isso aqui é só rótulo de exibição).
+const CARGOS_DIRETORIA = {
+  PRESIDENTE: "Presidente",
+  VICE_PRESIDENTE_1: "1º Vice-Presidente",
+  VICE_PRESIDENTE_2: "2º Vice-Presidente",
+  VICE_PRESIDENTE_3: "3º Vice-Presidente",
+  VICE_PRESIDENTE_4: "4º Vice-Presidente",
+  SECRETARIO_1: "1º Secretário",
+  SECRETARIO_2: "2º Secretário",
+  SECRETARIO_3: "3º Secretário",
+  TESOUREIRO_1: "1º Tesoureiro",
+  TESOUREIRO_2: "2º Tesoureiro"
+};
+
+function orgaoIdDiretoria() {
+  const orgao = (window._orgaosReunioesCache || []).find(o => o.sigla === "DIRETORIA_EXECUTIVA");
+  return orgao ? orgao.orgaoId : null;
+}
+
+async function carregarAssentosDiretoria() {
+  const select = document.getElementById("assentoDiretoriaCargo");
+  if (select && !select.dataset.preenchido) {
+    select.innerHTML = Object.entries(CARGOS_DIRETORIA).map(([sigla, rotulo]) => `<option value="${sigla}">${rotulo}</option>`).join("");
+    select.dataset.preenchido = "1";
+  }
+
+  const container = document.getElementById("resultadoListaDiretoria");
+  const orgaoId = orgaoIdDiretoria();
+  if (!orgaoId) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos?orgaoId=${orgaoId}`);
+  const assentos = await res.json();
+
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Cargo</th><th>Matrícula</th><th>Nome</th><th>Desde</th><th>Até</th><th>Situação</th><th></th>
+  </tr></thead><tbody>`;
+  Object.entries(CARGOS_DIRETORIA).forEach(([sigla, rotulo]) => {
+    const a = Array.isArray(assentos) ? assentos.find(x => x.cargoOuFuncao === sigla) : null;
+    html += `<tr>
+      <td>${rotulo}</td>
+      <td>${a ? a.membroId : "-"}</td>
+      <td>${a ? a.nome : "<span class='subtitle'>vago</span>"}</td>
+      <td>${a ? a.dataInicio : "-"}</td>
+      <td>${a ? (a.dataTerminoPrevisao || "sem prazo") : "-"}</td>
+      <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
+      <td>${a ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoDiretoriaAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarAssentoDiretoria() {
+  const orgaoId = orgaoIdDiretoria();
+  const membroId = document.getElementById("assentoDiretoriaMatricula").value;
+  const cargoOuFuncao = document.getElementById("assentoDiretoriaCargo").value;
+  const duracaoMeses = document.getElementById("assentoDiretoriaDuracaoMeses").value || null;
+  const msg = document.getElementById("resultadoAssentoDiretoria");
+  if (!orgaoId || !membroId) { msg.textContent = "Informe a matrícula."; return; }
+  const res = await fetchProtegido(`${API_BASE}/assentos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, orgaoId, tipoAssento: "FUNCAO", cargoOuFuncao, duracaoMeses })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("assentoDiretoriaMatricula").value = "";
+    carregarAssentosDiretoria();
+    carregarSucessaoPresidencial();
+  }
+}
+
+async function encerrarAssentoDiretoriaAcao(assentoId) {
+  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarAssentosDiretoria(); carregarSucessaoPresidencial(); }
+}
+
+async function carregarSucessaoPresidencial() {
+  const container = document.getElementById("resultadoSucessaoPresidencial");
+  const res = await fetchProtegido(`${API_BASE}/diretoria/sucessao`);
+  const s = await res.json();
+  if (!s.sucesso) { container.textContent = s.mensagem || ""; return; }
+
+  if (!s.vago) {
+    container.innerHTML = `<p>✅ Presidente em exercício: <strong>${s.presidente.nome}</strong> (matrícula ${s.presidente.membroId}).</p>`;
+    return;
+  }
+
+  const origem = s.interino ? (s.interino.viaCEI ? "via CEI (Art. 32, nenhum Vice-Presidente ativo)" : "próximo na linha sucessória") : "ninguém disponível (nem Vice-Presidente, nem CEI)";
+  let html = `<p>⚠️ Presidência vaga desde <strong>${s.dataVacancia}</strong> (${s.diasDesdeVacancia} dia(s)).</p>`;
+  html += `<p>Interino: <strong>${s.interino ? s.interino.nome : "-"}</strong> — ${origem}.</p>`;
+  html += `<p>${s.prazoIndicacaoCiadseta.vencido ? "🔴" : "🟡"} Prazo de indicação da CIADSETA (90 dias, Art. 32 §2º): ${s.prazoIndicacaoCiadseta.vencido ? "VENCIDO" : "em curso"}.</p>`;
+  if (s.prazoAge) {
+    html += `<p>${s.prazoAge.vencido ? "🔴" : "🟡"} Prazo de convocação de AGE pela CLI (+30 dias, Art. 32 §3º): ${s.prazoAge.vencido ? "VENCIDO — CLI deve convocar Assembleia" : "em curso"}.</p>`;
+  }
+  container.innerHTML = html;
 }
 
 async function carregarConvocacoesPendentes() {

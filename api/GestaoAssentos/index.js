@@ -17,6 +17,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { CARGOS_DIRETORIA, ORGAOS_INCOMPATIVEIS, validarIncompatibilidadeExecutiva, cargoJaOcupado } = require("../shared/diretoria");
 
 const TIPOS_VALIDOS = ["ORDENACAO", "FUNCAO"];
 
@@ -91,11 +92,34 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
       return;
     }
-    const orgao = await pool.request().input("id", sql.Int, orgaoId).query(`SELECT OrgaoId FROM Orgaos WHERE OrgaoId = @id`);
+    const orgao = await pool.request().input("id", sql.Int, orgaoId).query(`SELECT OrgaoId, Sigla FROM Orgaos WHERE OrgaoId = @id`);
     if (orgao.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Órgão inválido." } };
       return;
     }
+    const orgaoSigla = orgao.recordset[0].Sigla;
+
+    // Art. 38 §3º, II — incompatibilidade Diretoria/Conselho Fiscal/CEI.
+    if (ORGAOS_INCOMPATIVEIS.includes(orgaoSigla)) {
+      const incompat = await validarIncompatibilidadeExecutiva(pool, sql, membroId, orgaoSigla);
+      if (incompat.bloqueado) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: incompat.mensagem } };
+        return;
+      }
+    }
+
+    // Art. 29 — os 10 cargos da Diretoria são fixos, 1 ocupante ativo por vez.
+    if (orgaoSigla === "DIRETORIA_EXECUTIVA") {
+      if (!cargoOuFuncao || !CARGOS_DIRETORIA[cargoOuFuncao]) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Cargo inválido. Use um de: ${Object.keys(CARGOS_DIRETORIA).join(", ")}.` } };
+        return;
+      }
+      if (await cargoJaOcupado(pool, sql, orgaoId, cargoOuFuncao)) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Já existe alguém ocupando ${CARGOS_DIRETORIA[cargoOuFuncao].rotulo} (Art. 29 — 1 titular por cargo).` } };
+        return;
+      }
+    }
+
     const result = await pool.request()
       .input("membroId", sql.Int, membroId)
       .input("orgaoId", sql.Int, orgaoId)

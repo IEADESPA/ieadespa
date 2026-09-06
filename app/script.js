@@ -3469,12 +3469,35 @@ async function carregarPermissoes() {
       <td>${(l.permissoes || []).join(", ") || "-"}</td>
       <td class="acoes-inline">
         <button class="btn-link" onclick="editarPermissao(${l.membroId})">Editar</button>
+        <button class="btn-link" onclick="redefinirSenhaLideranca(${l.membroId})">🔑 Redefinir senha</button>
         <button class="btn-link btn-link-perigo" onclick="removerPermissao(${l.membroId})">Remover</button>
       </td>
     </tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// Reseta só a senha, sem mexer em papel/escopo — pra quando a pessoa esqueceu
+// e não consegue mais logar sozinha (self-service exige estar logado, então
+// não serve nesse caso). Reaproveita o mesmo POST /api/lideranca de sempre,
+// só reenviando o papel/escopo que já existiam junto com a senha nova.
+async function redefinirSenhaLideranca(membroId) {
+  const res = await fetchProtegido(`${API_BASE}/lideranca`);
+  const liderancas = await res.json();
+  const l = liderancas.find(x => String(x.membroId) === String(membroId));
+  if (!l) return;
+
+  const novaSenha = await pedirTexto(`Nova senha para ${l.nome}`, "Ex: 1234");
+  if (!novaSenha) return;
+
+  const confirmacao = await fetchProtegido(`${API_BASE}/lideranca`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId: l.membroId, papelId: l.papelId, escopoTipo: l.escopoTipo, escopoId: l.escopoId, senha: novaSenha })
+  });
+  const data = await confirmacao.json();
+  avisarResultado(data.sucesso ? { sucesso: true, mensagem: `✅ Senha de ${l.nome} redefinida.` } : data);
 }
 
 // Pré-preenche o formulário de cima com uma liderança já existente — permite

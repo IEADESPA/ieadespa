@@ -982,12 +982,14 @@ function selecionarOrgaoReunioes(orgaoId) {
   const ehAssembleia = orgao.sigla === "ASSEMBLEIA_GERAL";
   const ehCLI = orgao.sigla === "CLI";
   const ehDiretoria = orgao.sigla === "DIRETORIA_EXECUTIVA";
+  const ehConselhoFiscal = orgao.sigla === "CONSELHO_FISCAL";
   window._orgaoAtualReunioes = orgaoId;
   document.getElementById("reuniaoOrgao").value = orgaoId;
   document.getElementById("reunioesOrgaoNome").textContent = orgao.nome;
   document.getElementById("blocoElegiveisAssembleia").style.display = ehAssembleia ? "block" : "none";
   document.getElementById("blocoComposicaoCLI").style.display = ehCLI ? "block" : "none";
   document.getElementById("blocoDiretoria").style.display = ehDiretoria ? "block" : "none";
+  document.getElementById("blocoConselhoFiscal").style.display = ehConselhoFiscal ? "block" : "none";
   // Assembleia Geral não abre na hora (Art. 20) — troca o formulário instantâneo
   // pelo par Convocar (com antecedência) / Iniciar (no dia previsto).
   document.getElementById("blocoConvocarAssembleia").style.display = ehAssembleia ? "block" : "none";
@@ -1000,6 +1002,7 @@ function selecionarOrgaoReunioes(orgaoId) {
   if (ehAssembleia) carregarConvocacoesPendentes();
   if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); }
   if (ehDiretoria) { carregarAssentosDiretoria(); carregarSucessaoPresidencial(); }
+  if (ehConselhoFiscal) { carregarAssentosConselhoFiscal(); carregarMedidasCautelares(); }
   carregarReunioes();
 }
 
@@ -1256,6 +1259,152 @@ async function carregarSucessaoPresidencial() {
     html += `<p>${s.prazoAge.vencido ? "🔴" : "🟡"} Prazo de convocação de AGE pela CLI (+30 dias, Art. 32 §3º): ${s.prazoAge.vencido ? "VENCIDO — CLI deve convocar Assembleia" : "em curso"}.</p>`;
   }
   container.innerHTML = html;
+}
+
+// Art. 43 §1º — espelha shared/diretoria.js::CARGOS_CONSELHO_FISCAL.
+const CARGOS_CONSELHO_FISCAL = {
+  TITULAR_1: "1º Titular", TITULAR_2: "2º Titular", TITULAR_3: "3º Titular",
+  SUPLENTE_1: "1º Suplente", SUPLENTE_2: "2º Suplente", SUPLENTE_3: "3º Suplente"
+};
+
+function orgaoIdConselhoFiscal() {
+  const orgao = (window._orgaosReunioesCache || []).find(o => o.sigla === "CONSELHO_FISCAL");
+  return orgao ? orgao.orgaoId : null;
+}
+
+async function carregarAssentosConselhoFiscal() {
+  const select = document.getElementById("assentoCFCargo");
+  if (select && !select.dataset.preenchido) {
+    select.innerHTML = Object.entries(CARGOS_CONSELHO_FISCAL).map(([sigla, rotulo]) => `<option value="${sigla}">${rotulo}</option>`).join("");
+    select.dataset.preenchido = "1";
+  }
+
+  const container = document.getElementById("resultadoListaConselhoFiscal");
+  const orgaoId = orgaoIdConselhoFiscal();
+  if (!orgaoId) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos?orgaoId=${orgaoId}`);
+  const assentos = await res.json();
+
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Cargo</th><th>Matrícula</th><th>Nome</th><th>Desde</th><th>Até</th><th>Situação</th><th></th>
+  </tr></thead><tbody>`;
+  Object.entries(CARGOS_CONSELHO_FISCAL).forEach(([sigla, rotulo]) => {
+    const a = Array.isArray(assentos) ? assentos.find(x => x.cargoOuFuncao === sigla) : null;
+    html += `<tr>
+      <td>${rotulo}</td>
+      <td>${a ? a.membroId : "-"}</td>
+      <td>${a ? a.nome : "<span class='subtitle'>vago</span>"}</td>
+      <td>${a ? a.dataInicio : "-"}</td>
+      <td>${a ? (a.dataTerminoPrevisao || "sem prazo") : "-"}</td>
+      <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
+      <td>${a ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoConselhoFiscalAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarAssentoConselhoFiscal() {
+  const orgaoId = orgaoIdConselhoFiscal();
+  const membroId = document.getElementById("assentoCFMatricula").value;
+  const cargoOuFuncao = document.getElementById("assentoCFCargo").value;
+  const duracaoMeses = document.getElementById("assentoCFDuracaoMeses").value || null;
+  const msg = document.getElementById("resultadoAssentoCF");
+  if (!orgaoId || !membroId) { msg.textContent = "Informe a matrícula."; return; }
+  const res = await fetchProtegido(`${API_BASE}/assentos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, orgaoId, tipoAssento: "FUNCAO", cargoOuFuncao, duracaoMeses })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("assentoCFMatricula").value = "";
+    carregarAssentosConselhoFiscal();
+  }
+}
+
+async function encerrarAssentoConselhoFiscalAcao(assentoId) {
+  if (!(await confirmarAcao("Encerrar esta cadeira?", "Encerrar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/assentos/${assentoId}/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarAssentosConselhoFiscal();
+}
+
+async function carregarMedidasCautelares() {
+  const container = document.getElementById("resultadoListaCautelares");
+  const res = await fetchProtegido(`${API_BASE}/medidas-cautelares`);
+  const medidas = await res.json();
+  if (!Array.isArray(medidas) || medidas.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma medida cautelar aplicada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Matrícula</th><th>Nome</th><th>Motivo</th><th>Restrições</th><th>Aplicada em</th><th>Relatório (30 dias)</th><th></th>
+  </tr></thead><tbody>`;
+  medidas.forEach(m => {
+    const restricoes = [
+      m.suspenderAcessoSistema ? "Acesso ao sistema" : null,
+      m.suspensaoContasBancarias ? "Contas bancárias" : null,
+      m.suspensaoChavesFisicas ? "Chaves físicas" : null
+    ].filter(Boolean).join(", ") || "-";
+    const relatorio = m.dataConclusaoRelatorio
+      ? `Concluído em ${m.dataConclusaoRelatorio}`
+      : (m.prazoRelatorioVencido ? `🔴 VENCIDO (${m.diasDesdeAplicacao} dias)` : `🟡 em curso (${m.diasDesdeAplicacao}/${m.diasPrazoRelatorio} dias)`);
+    html += `<tr>
+      <td>${m.membroId}</td>
+      <td>${m.nome}</td>
+      <td>${m.motivo}</td>
+      <td>${restricoes}</td>
+      <td>${m.dataAplicacao}</td>
+      <td>${relatorio}</td>
+      <td>${!m.dataConclusaoRelatorio ? `<button class="btn-link" onclick="concluirRelatorioCautelarAcao(${m.medidaId})">Concluir relatório</button>` : ""}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function aplicarMedidaCautelarAcao() {
+  const membroId = document.getElementById("cautelarMatricula").value;
+  const motivo = document.getElementById("cautelarMotivo").value;
+  const suspenderAcessoSistema = document.getElementById("cautelarSuspenderAcesso").checked;
+  const suspensaoContasBancarias = document.getElementById("cautelarSuspenderBancaria").checked;
+  const suspensaoChavesFisicas = document.getElementById("cautelarSuspenderChaves").checked;
+  const msg = document.getElementById("resultadoCautelar");
+  if (!membroId || !motivo) { msg.textContent = "Informe matrícula e motivo."; return; }
+  if (!(await confirmarAcao("Aplicar Medida Cautelar de Proteção Patrimonial pra essa pessoa?", "Aplicar"))) return;
+
+  const res = await fetchProtegido(`${API_BASE}/medidas-cautelares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, motivo, suspenderAcessoSistema, suspensaoContasBancarias, suspensaoChavesFisicas })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("cautelarMatricula").value = "";
+    document.getElementById("cautelarMotivo").value = "";
+    document.getElementById("cautelarSuspenderAcesso").checked = false;
+    document.getElementById("cautelarSuspenderBancaria").checked = false;
+    document.getElementById("cautelarSuspenderChaves").checked = false;
+    carregarMedidasCautelares();
+  }
+}
+
+async function concluirRelatorioCautelarAcao(medidaId) {
+  if (!(await confirmarAcao("Concluir o relatório e registrar a representação à CLI?", "Concluir"))) return;
+  const res = await fetchProtegido(`${API_BASE}/medidas-cautelares/${medidaId}/concluir-relatorio`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarMedidasCautelares();
 }
 
 async function carregarConvocacoesPendentes() {

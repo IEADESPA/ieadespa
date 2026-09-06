@@ -797,14 +797,40 @@ já está lá. **v2.4 está fechado** com isso.
 
 #### v2.6 — Conselho Fiscal
 
-- [ ] Assentos: 3 titulares + 3 suplentes, mandato = Diretoria (Art. 43).
-- [ ] Sessão mensal (3º domingo) reaproveitando o motor de sessão (Art. 46).
-- [ ] Vedação de nepotismo na eleição (Art. 43 §3º, parentesco até 2º grau) — usa a
-      tabela `VinculosFamiliares` (v0.2); é aqui que nasce `shared/parentesco.js`
-      (grafo/BFS pra calcular caminho entre duas pessoas) e a Function de consulta —
-      não faz sentido construir esse motor antes de ter um primeiro consumidor real.
-- [ ] Medidas cautelares de proteção patrimonial (Art. 45).
-- [ ] Fiscalização contábil (Reg. Art. 145): balancetes, talões, parecer mensal, ata própria.
+- [x] Assentos: 3 titulares + 3 suplentes, mandato = Diretoria (Art. 43) —
+      `shared/diretoria.js` generalizado (`CARGOS_CONSELHO_FISCAL`,
+      `CATALOGOS_CARGOS_POR_ORGAO`), mesmo padrão "1 titular por cargo fixo"
+      da Diretoria (v2.5), validado em `api/GestaoAssentos`. Incompatibilidade
+      com Diretoria/CEI (Art. 38 §3º, II) já cobria `CONSELHO_FISCAL` desde o
+      v2.5, nada novo ali. Tela própria dentro do submenu Conselho Fiscal de
+      Reuniões.
+- [x] Sessão mensal (Art. 46) — já funciona pelo motor genérico de Reuniões
+      desde o v2.0; "preferencialmente no terceiro domingo" não virou trava
+      de dia (mesmo raciocínio já usado pra CLI, Art. 24) — não é obrigatório
+      ser exatamente esse dia, então não bloqueia.
+- [x] Vedação de nepotismo (Art. 43 §3º, I — parentesco até 2º grau) —
+      **`shared/parentesco.js` nasceu aqui**, como estava planejado desde o
+      v0.2 ("não faz sentido construir antes de ter um primeiro consumidor
+      real"): BFS profundidade 2 sobre `VinculosFamiliares` (que só tem 4
+      tipos, todos já até 2º grau — cobre também combinações derivadas, tipo
+      avô/neto ou cunhado). Validado em `GestaoAssentos` contra a Diretoria
+      Executiva ativa. **Limitação documentada**: a vedação também cita
+      "Tesoureiros de Departamentos", mas esse cargo não é rastreado em
+      lugar nenhum do sistema hoje — só a parte da Diretoria é verificável.
+- [x] Medidas cautelares de proteção patrimonial (Art. 45) — só a parte que o
+      sistema controla de verdade: registra a decisão (sempre) e **executa**
+      a suspensão do próprio acesso ao sistema (`api/GestaoMedidasCautelares`,
+      migração 029) — reaproveita `Lideranca.AtivoAte`, coluna que já existia
+      desde a migração 001 mas nunca era checada em lugar nenhum (`api/
+      LoginSecretaria` corrigido). Contas bancárias e chaves físicas (§1º, I
+      e III) ficam só como registro histórico da decisão, não uma ação
+      automática — o sistema não tem como mexer em banco nem em fechadura.
+      Prazo de 30 dias pro relatório de auditoria (§2º) calculado na leitura,
+      mesmo padrão de Abandono/Cartas/Disciplina.
+- Fiscalização contábil (Reg. Art. 145: balancetes, talões, parecer mensal,
+  ata própria) **não fica aqui** — depende de dados financeiros que ainda não
+  existem (FASE 4); vira item de verdade em `v4.1` (Tesouraria), não
+  pendência solta.
 
 #### v2.7 — Órgãos de Apoio, Departamentos e Congregações
 
@@ -963,6 +989,9 @@ das competências abaixo tem processo ou tela ainda:
 - [ ] Conciliação bancária mensal.
 - [ ] Teto de acumulação de caixa local = 10 salários-mínimos, com recolhimento
       automático do excedente (Reg. Art. 119) *(gap da varredura)*.
+- [ ] Fiscalização contábil do Conselho Fiscal (Reg. Art. 145 — vinha adiada
+      de v2.6): balancetes, talões, parecer mensal à CLI, ata própria —
+      depende dos Lançamentos acima existirem primeiro, nasce junto.
 
 #### v4.2 — Ofertas, dízimos e arrecadação
 

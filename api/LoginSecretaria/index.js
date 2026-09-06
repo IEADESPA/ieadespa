@@ -16,6 +16,7 @@ module.exports = async function (context, req) {
   const pool = await getPool();
   const result = await pool.request().input("mat", sql.Int, matricula).query(`
     SELECT l.MembroId AS membroId, l.EscopoTipo AS escopoTipo, l.EscopoId AS escopoId, l.SenhaHash AS senhaHash,
+           CONVERT(varchar(10), l.AtivoAte, 120) AS ativoAte,
            p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr, m.Nome AS nome
     FROM Lideranca l
     JOIN Papeis p ON p.PapelId = l.PapelId
@@ -29,6 +30,13 @@ module.exports = async function (context, req) {
   }
   if (!auth.verificarSenha(senha, lideranca.senhaHash)) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Senha incorreta." } };
+    return;
+  }
+  // Art. 45 §1º, I — Medida Cautelar de suspensão de acesso ao sistema
+  // (GestaoMedidasCautelares grava AtivoAte = hoje na hora que aplica).
+  const hoje = new Date().toISOString().slice(0, 10);
+  if (lideranca.ativoAte && lideranca.ativoAte < hoje) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Acesso suspenso — procure a Secretaria Geral." } };
     return;
   }
 

@@ -20,6 +20,24 @@ const CARGOS_DIRETORIA = {
   TESOUREIRO_2: { rotulo: "2º Tesoureiro", ordemSucessao: null }
 };
 
+// Art. 43 §1º — 3 titulares + até 3 suplentes, mandato coincide com o da
+// Diretoria. Mesmo padrão "1 titular por cargo fixo" da Diretoria.
+const CARGOS_CONSELHO_FISCAL = {
+  TITULAR_1: { rotulo: "1º Titular" },
+  TITULAR_2: { rotulo: "2º Titular" },
+  TITULAR_3: { rotulo: "3º Titular" },
+  SUPLENTE_1: { rotulo: "1º Suplente" },
+  SUPLENTE_2: { rotulo: "2º Suplente" },
+  SUPLENTE_3: { rotulo: "3º Suplente" }
+};
+
+// Catálogo de cargos fixos por órgão — usado genericamente em GestaoAssentos
+// pra validar cargoOuFuncao e o cap de 1 ocupante ativo por cargo.
+const CATALOGOS_CARGOS_POR_ORGAO = {
+  DIRETORIA_EXECUTIVA: CARGOS_DIRETORIA,
+  CONSELHO_FISCAL: CARGOS_CONSELHO_FISCAL
+};
+
 // Art. 38 §3º, II — "é vedado o acúmulo de cargos entre o CEI, a Diretoria
 // Executiva e o Conselho Fiscal". Incompatibilidade de 3 vias, só entre
 // esses 3 — nenhum outro órgão é afetado.
@@ -118,6 +136,8 @@ async function calcularSucessaoPresidencial(pool, sql, orgaoIdDiretoria, orgaoId
 
 module.exports = {
   CARGOS_DIRETORIA,
+  CARGOS_CONSELHO_FISCAL,
+  CATALOGOS_CARGOS_POR_ORGAO,
   ORGAOS_INCOMPATIVEIS,
   validarIncompatibilidadeExecutiva,
   cargoJaOcupado,

@@ -17,7 +17,8 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-const { CARGOS_DIRETORIA, ORGAOS_INCOMPATIVEIS, validarIncompatibilidadeExecutiva, cargoJaOcupado } = require("../shared/diretoria");
+const { CATALOGOS_CARGOS_POR_ORGAO, ORGAOS_INCOMPATIVEIS, validarIncompatibilidadeExecutiva, cargoJaOcupado } = require("../shared/diretoria");
+const { existeParentescoAte2Grau } = require("../shared/parentesco");
 
 const TIPOS_VALIDOS = ["ORDENACAO", "FUNCAO"];
 
@@ -108,14 +109,36 @@ module.exports = async function (context, req) {
       }
     }
 
-    // Art. 29 — os 10 cargos da Diretoria são fixos, 1 ocupante ativo por vez.
-    if (orgaoSigla === "DIRETORIA_EXECUTIVA") {
-      if (!cargoOuFuncao || !CARGOS_DIRETORIA[cargoOuFuncao]) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: `Cargo inválido. Use um de: ${Object.keys(CARGOS_DIRETORIA).join(", ")}.` } };
+    // Art. 29 (Diretoria) / Art. 43 §1º (Conselho Fiscal) — cargos fixos,
+    // 1 ocupante ativo por vez cada.
+    const catalogoCargos = CATALOGOS_CARGOS_POR_ORGAO[orgaoSigla];
+    if (catalogoCargos) {
+      if (!cargoOuFuncao || !catalogoCargos[cargoOuFuncao]) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Cargo inválido. Use um de: ${Object.keys(catalogoCargos).join(", ")}.` } };
         return;
       }
       if (await cargoJaOcupado(pool, sql, orgaoId, cargoOuFuncao)) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: `Já existe alguém ocupando ${CARGOS_DIRETORIA[cargoOuFuncao].rotulo} (Art. 29 — 1 titular por cargo).` } };
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Já existe alguém ocupando ${catalogoCargos[cargoOuFuncao].rotulo} (1 titular por cargo).` } };
+        return;
+      }
+    }
+
+    // Art. 43 §3º, I — vedação de nepotismo: parentesco até 2º grau com
+    // membros ativos da Diretoria Executiva não pode ocupar Conselho Fiscal.
+    // (Só a metade "Diretoria" é verificável — "Tesoureiros de Departamentos"
+    // não é um cargo rastreado em lugar nenhum do sistema hoje.)
+    if (orgaoSigla === "CONSELHO_FISCAL") {
+      const diretoriaAtual = await pool.request().query(`
+        SELECT a.MembroId AS membroId FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId
+        WHERE o.Sigla = 'DIRETORIA_EXECUTIVA' AND a.DataFim IS NULL
+      `);
+      const idsDiretoria = new Set(diretoriaAtual.recordset.map(r => r.membroId));
+      const parentesco = await existeParentescoAte2Grau(pool, sql, membroId, idsDiretoria);
+      if (parentesco.encontrado) {
+        context.res = {
+          status: 200,
+          body: { sucesso: false, mensagem: `Não é possível: essa pessoa tem parentesco até 2º grau com um membro ativo da Diretoria Executiva (matrícula ${parentesco.comMembroId}) — vedado pelo Art. 43 §3º, I.` }
+        };
         return;
       }
     }

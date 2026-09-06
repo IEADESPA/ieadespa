@@ -509,6 +509,60 @@
           </p>
           <div id="resultadoSucessaoPresidencial"></div>
         </div>
+
+        <!-- Só existe conteúdo (composição + medidas cautelares) pro Conselho Fiscal —
+             escondido pros demais órgãos por selecionarOrgaoReunioes() checando a sigla. -->
+        <div id="blocoConselhoFiscal" style="display:none;">
+          <hr />
+
+          <h3>Composição do Conselho Fiscal</h3>
+          <p class="subtitle">
+            3 titulares + até 3 suplentes, mandato coincidente com a Diretoria (Art. 43 §1º)
+            — 1 titular ativo por cargo. Vedado acumular com Diretoria ou CEI (Art. 38 §3º, II)
+            e vedado parentesco até 2º grau com a Diretoria Executiva (Art. 43 §3º, I).
+          </p>
+          <form onsubmit="event.preventDefault(); salvarAssentoConselhoFiscal();">
+            <div class="barra-lista">
+              <input type="number" id="assentoCFMatricula" placeholder="Matrícula" style="min-width:120px;" />
+              <select id="assentoCFCargo"></select>
+              <input type="number" id="assentoCFDuracaoMeses" value="24" placeholder="Duração em meses" style="min-width:160px;" />
+              <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar</button>
+            </div>
+          </form>
+          <p id="resultadoAssentoCF"></p>
+          <div class="rolagem-tabela"><div id="resultadoListaConselhoFiscal"></div></div>
+
+          <hr />
+
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Medidas Cautelares de Proteção Patrimonial (Art. 45)</h4>
+          <p class="subtitle">
+            Só o que o sistema controla de verdade vira ação (suspender o acesso da pessoa ao
+            próprio sistema); contas bancárias e chaves físicas ficam só como registro da decisão.
+            Prazo de 30 dias (§2º) pra concluir o relatório e representar à CLI.
+          </p>
+          <form onsubmit="event.preventDefault(); aplicarMedidaCautelarAcao();">
+            <div class="input-group">
+              <label>Matrícula:</label>
+              <input type="number" id="cautelarMatricula" placeholder="Ex: 15" />
+            </div>
+            <div class="input-group">
+              <label>Motivo (decisão fundamentada):</label>
+              <textarea id="cautelarMotivo" rows="3" placeholder="Descreva os indícios que fundamentam a medida"></textarea>
+            </div>
+            <div class="input-group">
+              <label><input type="checkbox" id="cautelarSuspenderAcesso" style="width:auto;" /> Suspender acesso ao sistema (§1º, II)</label>
+            </div>
+            <div class="input-group">
+              <label><input type="checkbox" id="cautelarSuspenderBancaria" style="width:auto;" /> Suspender contas bancárias/senhas financeiras (§1º, I) — só registro</label>
+            </div>
+            <div class="input-group">
+              <label><input type="checkbox" id="cautelarSuspenderChaves" style="width:auto;" /> Suspender chaves de cofres/tesourarias (§1º, III) — só registro</label>
+            </div>
+            <button class="btn-confirmar" type="submit">⚠️ Aplicar Medida Cautelar</button>
+          </form>
+          <p id="resultadoCautelar"></p>
+          <div class="rolagem-tabela"><div id="resultadoListaCautelares"></div></div>
+        </div>
       </div>
 
       <!-- ABA: PESSOAS -->

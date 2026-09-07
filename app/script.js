@@ -299,7 +299,10 @@ function permissoesDaAba(nome) {
 function aplicarPermissoesNoMenu() {
   NOMES_ABAS.forEach(nome => {
     if (nome === "meupainel" || nome === "documentos" || nome === "ouvidoria") return;
+    // "reunioes" (v4.2.3) não tem mais botão próprio — a escolha de órgão
+    // agora é a porta de entrada dos módulos Órgãos Centrais/Regionais.
     const btn = document.getElementById(`btnAba${capitalize(nome)}`);
+    if (!btn) return;
     const pode = permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
     btn.style.display = pode ? "inline-block" : "none";
   });
@@ -326,11 +329,20 @@ function aplicarPermissoesNoMenu() {
 // mistura Departamentos com Congregações/Áreas/Regiões — separar isso é o
 // que vai permitir um card "Departamentos" e um card "Territórios" cada um
 // só com o que é dele, em vez dos dois dentro de "Estrutura & Territórios".
+// v4.2.3 — "escolher o órgão" virou porta de entrada de dois módulos
+// próprios (pedido explícito: "separar de uma vez por todas" — órgãos
+// gerais/únicos vs. órgãos regionais/territoriais, porque uma pessoa pode
+// pertencer a vários pelo caminho até a Sede, cada nível com sua própria
+// gente). Os dois abrem o mesmo conteúdo de sempre (#abaReunioes) — só muda
+// por onde se chega e qual lista de órgãos aparece (ver
+// montarSubmenuOrgaosCentrais/Regionais).
 const MODULOS = {
   financeiro: { titulo: "Financeiro", icone: "💰", abaEntrada: "financeiro", abas: ["financeiro"] },
   membresia: { titulo: "Pessoas & Membresia", icone: "👥", abaEntrada: "pessoas", abas: ["pessoas", "cartas", "abandono"] },
   territorio: { titulo: "Estrutura & Territórios", icone: "🗺️", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
-  eclesiastica: { titulo: "Reuniões & Vida Eclesiástica", icone: "📅", abaEntrada: "reunioes", abas: ["reunioes", "consagracoes", "enquetes", "arquivos"] },
+  orgaosCentrais: { titulo: "Órgãos Centrais", icone: "🏛️", abaEntrada: "reunioes", abas: ["reunioes"] },
+  orgaosRegionais: { titulo: "Órgãos Regionais", icone: "🧭", abaEntrada: "reunioes", abas: ["reunioes"] },
+  eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "enquetes", "arquivos"] },
   disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
@@ -1023,7 +1035,10 @@ function mostrarAbaSecretaria(aba) {
     return;
   }
   document.getElementById("tituloModulo").textContent = TITULOS_MODULOS[aba] || "Governança";
-  if (aba === "reunioes") { montarSubmenuReunioes(); carregarElegiveisAssembleia(); }
+  if (aba === "reunioes") {
+    if (moduloAtual === "orgaosRegionais") montarSubmenuOrgaosRegionais(); else montarSubmenuOrgaosCentrais();
+    carregarElegiveisAssembleia();
+  }
   if (aba === "pessoas") { carregarOpcoesFormPessoa().then(() => mostrarSubAbaPessoas(subAbaPessoasAtual)); carregarPessoas(); }
   if (aba === "cartas") { carregarCartas(); processarSaidasCartas(); }
   if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
@@ -1521,27 +1536,40 @@ let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar 
 // composta (`central:5`/`local:12`, mesmo padrão do form de Processo
 // Disciplinar) — nenhum bloco de UI novo: território cai no formulário
 // genérico de reunião simples, igual qualquer órgão sem composição especial.
-async function montarSubmenuReunioes() {
-  const res = await fetchProtegido(`${API_BASE}/orgaos`);
-  const orgaos = (await res.json()).map(o => Object.assign({}, o, { chave: `central:${o.orgaoId}` }));
-  // v4.2.2 — meus-orgaos-locais (não catalogos/orgaosLocais): escopado por
-  // quem está logado, senão um Pastor de Área via a lista de TODAS as JAIs
-  // da denominação em vez de só as da própria área.
-  const locaisRes = await fetchProtegido(`${API_BASE}/meus-orgaos-locais`);
-  const locais = (await locaisRes.json())
-    .map(o => Object.assign({}, o, { chave: `local:${o.orgaoLocalId}`, nome: `${o.sigla} — ${o.nome}` }));
-  const todos = orgaos.concat(locais);
-  window._orgaosReunioesCache = todos;
-
-  const container = document.getElementById("submenuReunioes");
-  container.innerHTML = todos.map(o => `
-    <button class="btn-subaba" id="btnSubReunioes${o.chave.replace(":", "_")}" onclick="selecionarOrgaoReunioes('${o.chave}')">
+// v4.2.3 — separado em dois módulos (pedido explícito): Órgãos Centrais
+// (únicos na denominação) e Órgãos Regionais (territoriais, escopados por
+// MeusOrgaosLocais). Ambos escrevem no MESMO window._orgaosReunioesCache —
+// não precisa de dois nomes, porque só um dos dois módulos está aberto por
+// vez (mostrarAbaSecretaria('reunioes') só é chamado a partir de um deles).
+function renderizarListaOrgaosModulo(containerId, lista) {
+  document.getElementById(containerId).innerHTML = lista.map(o => `
+    <button class="btn-aba" id="btnSubReunioes${o.chave.replace(":", "_")}" onclick="selecionarOrgaoReunioes('${o.chave}')">
       <span class="icone">🏛️</span><span class="rotulo">${o.nome}</span>
     </button>`).join("");
+}
 
-  if (todos.length === 0) return;
-  const aindaExiste = todos.some(o => o.chave === window._orgaoAtualReunioes);
-  selecionarOrgaoReunioes(aindaExiste ? window._orgaoAtualReunioes : todos[0].chave);
+async function montarSubmenuOrgaosCentrais() {
+  const res = await fetchProtegido(`${API_BASE}/orgaos`);
+  const orgaos = (await res.json()).map(o => Object.assign({}, o, { chave: `central:${o.orgaoId}` }));
+  window._orgaosReunioesCache = orgaos;
+  renderizarListaOrgaosModulo("submenuOrgaosCentrais", orgaos);
+  if (orgaos.length === 0) return;
+  const aindaExiste = orgaos.some(o => o.chave === window._orgaoAtualReunioes);
+  selecionarOrgaoReunioes(aindaExiste ? window._orgaoAtualReunioes : orgaos[0].chave);
+}
+
+// meus-orgaos-locais (não catalogos/orgaosLocais): escopado por quem está
+// logado, senão um Pastor de Área via a lista de TODAS as JAIs da
+// denominação em vez de só as da própria área (v4.2.2).
+async function montarSubmenuOrgaosRegionais() {
+  const res = await fetchProtegido(`${API_BASE}/meus-orgaos-locais`);
+  const locais = (await res.json())
+    .map(o => Object.assign({}, o, { chave: `local:${o.orgaoLocalId}`, nome: `${o.sigla} — ${o.nome}` }));
+  window._orgaosReunioesCache = locais;
+  renderizarListaOrgaosModulo("submenuOrgaosRegionais", locais);
+  if (locais.length === 0) return;
+  const aindaExiste = locais.some(o => o.chave === window._orgaoAtualReunioes);
+  selecionarOrgaoReunioes(aindaExiste ? window._orgaoAtualReunioes : locais[0].chave);
 }
 
 function selecionarOrgaoReunioes(chave) {

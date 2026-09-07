@@ -302,6 +302,11 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
    via CSS de irmão adjacente — sem JS de abrir/fechar, só reaproveita a mesma
    classe .ativo que mostrarAbaSecretaria() já alterna no botão principal. */
 .submenu-aba { display: none; flex-direction: column; gap: 2px; margin: 2px 0 4px 14px; }
+/* Órgãos Centrais/Regionais (v4.2.3): módulo cujo conteúdo inteiro é a
+   escolha do órgão — sem um botão "pai" pra abrir/fechar (diferente do
+   padrão .btn-aba + .submenu-aba de sempre), então usa .btn-aba direto,
+   sem indentação de submenu. */
+.lista-orgaos-modulo { display: flex; flex-direction: column; gap: 4px; }
 .btn-aba.ativo + .submenu-aba { display: flex; }
 .sidebar.recolhido .submenu-aba { display: none !important; }
 .btn-subaba {

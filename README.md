@@ -247,7 +247,18 @@ abrindo um mini-sistema à parte com nav própria, mesmo login por trás).
   motor de escopo de sempre (`Lideranca.EscopoTipo/EscopoId` →
   `escopo.resolverEscopoCongregacoes`) — cada pessoa só vê os órgãos
   territoriais dentro do próprio escopo; se sobrar só um, a seleção
-  automática de sempre (`montarSubmenuReunioes`) já leva direto pra ele.
+  automática de sempre já leva direto pra ele.
+- **Órgãos Centrais e Órgãos Regionais como módulos separados** (v4.2.3,
+  pedido explícito: "separar de uma vez por todas" — uma pessoa pode
+  pertencer a vários órgãos subindo a hierarquia até a Sede, cada nível com
+  gente diferente, então "escolher o órgão" merecia sua própria porta de
+  entrada em vez de ficar dentro de "Reuniões"). Os dois módulos abrem o
+  mesmo conteúdo de sempre (`#abaReunioes`, `selecionarOrgaoReunioes`) — só
+  muda por onde se chega e qual lista aparece: Órgãos Centrais usa
+  `GET /api/orgaos` (Assembleia/CLI/Diretoria/Conselho Fiscal/CEI, únicos na
+  denominação); Órgãos Regionais usa `GET /api/meus-orgaos-locais`
+  (territoriais, já escopados por pessoa — item acima). Nenhuma lógica de
+  reunião foi reescrita, só o ponto de entrada.
 
 ## 3. Plano de versões (mega sistema, fase a fase)
 

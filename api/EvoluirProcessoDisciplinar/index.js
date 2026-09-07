@@ -7,8 +7,9 @@
 //   AFASTAR          -> {} (Art. 100 — Status vira AFASTAMENTO_CAUTELAR)
 //   REGISTRAR_DEFESA -> { dataDefesa? } (exige citação prévia)
 //   DESIGNAR_DEFENSOR-> { defensorNome } (Art. 102 — texto livre, pode ser advogado externo)
-//   JULGAR           -> { resultado: 'ARQUIVADO'|'SANCAO'|'EXCLUSAO', diasSancao? }
+//   JULGAR           -> { resultado: 'ARQUIVADO'|'SANCAO'|'EXCLUSAO', penalidadeId? (obrigatório se SANCAO), diasSancao? }
 //   AJUSTAR_PRAZO    -> { novoDiasSancao?, prazoIndeterminado?, justificativa } (justificativa obrigatória)
+//   REGISTRAR_PROVA_REINTEGRACAO -> { resultadoProva: 'APROVADO'|'REPROVADO', dataProva? } (Art. 77 — só p/ Disciplina Rigorosa já julgada)
 // Exige a permissão "disciplina".
 // POST /api/processos-disciplinares/{processoId}/evoluir
 const auth = require("../shared/auth");
@@ -34,7 +35,7 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const atualResult = await pool.request().input("id", sql.Int, processoId)
-    .query(`SELECT MembroId, Status, Resultado, DiasSancao, DataAbertura, DataTerminoPrevisao, DataCitacao FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
+    .query(`SELECT MembroId, Status, Resultado, DiasSancao, DataAbertura, DataTerminoPrevisao, DataCitacao, PenalidadeId FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
   const atual = atualResult.recordset[0];
   if (!atual) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Processo não encontrado." } };
@@ -134,6 +135,35 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // ---- REGISTRAR_PROVA_REINTEGRACAO: Art. 77 — só cabe pra quem já foi
+  // julgado com Disciplina Rigorosa (perda de mandato sem prazo fixo de
+  // dias); Suspensão Temporária já retoma sozinha quando os dias terminam.
+  if (acao === "REGISTRAR_PROVA_REINTEGRACAO") {
+    if (atual.Status !== "JULGADO" || atual.Resultado !== "SANCAO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Só é possível registrar Prova de Reintegração de um processo julgado com resultado SANCAO." } };
+      return;
+    }
+    const penalidadeAtual = await pool.request().input("id", sql.Int, atual.PenalidadeId || 0).query(`SELECT Codigo FROM TiposPenalidade WHERE PenalidadeId = @id`);
+    if (!penalidadeAtual.recordset[0] || penalidadeAtual.recordset[0].Codigo !== "DISCIPLINA_RIGOROSA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Prova de Reintegração Ética só se aplica a Disciplina Rigorosa." } };
+      return;
+    }
+    const { resultadoProva, dataProva } = req.body || {};
+    if (!["APROVADO", "REPROVADO"].includes(resultadoProva)) {
+      context.res = { status: 400, body: { erro: "Informe 'resultadoProva' válido: APROVADO ou REPROVADO." } };
+      return;
+    }
+    await pool.request().input("id", sql.Int, processoId).input("resultado", sql.NVarChar(20), resultadoProva).input("data", sql.Date, dataProva || null)
+      .query(`UPDATE ProcessosDisciplinares SET ResultadoProvaReintegracao = @resultado, DataProvaReintegracao = COALESCE(@data, CAST(SYSUTCDATETIME() AS DATE)) WHERE ProcessoId = @id`);
+    await registrarAuditoria({
+      tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: "Registrou Prova de Reintegração Ética",
+      usuarioId: usuario.membroId, dadosDepois: { resultadoProva, dataProva: dataProva || null }
+    });
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Prova de Reintegração registrada.", processo } };
+    return;
+  }
+
   // ---- JULGAR: encerra a fase de instrução com um resultado ----
   if (acao === "JULGAR") {
     if (atual.Status === "JULGADO") {
@@ -141,38 +171,65 @@ module.exports = async function (context, req) {
       return;
     }
     const { resultado, diasSancao } = req.body || {};
+    let { penalidadeId } = req.body || {};
     if (!RESULTADOS_VALIDOS.includes(resultado)) {
       context.res = { status: 400, body: { erro: "Informe 'resultado' válido: ARQUIVADO, SANCAO ou EXCLUSAO." } };
       return;
     }
+
+    // Art. 95 §2º — nível de pena explícito via catálogo TiposPenalidade.
+    // EXCLUSAO resolve sozinha a penalidade correspondente (Codigo='EXCLUSAO');
+    // SANCAO exige escolher entre as demais (não pode ser a de código EXCLUSAO).
+    let penalidadeCodigo = null;
+    if (resultado === "EXCLUSAO") {
+      const penalidadeExclusao = await pool.request().query(`SELECT PenalidadeId, Codigo FROM TiposPenalidade WHERE Codigo = 'EXCLUSAO'`);
+      penalidadeId = penalidadeExclusao.recordset[0] ? penalidadeExclusao.recordset[0].PenalidadeId : null;
+      penalidadeCodigo = "EXCLUSAO";
+    } else if (resultado === "SANCAO") {
+      if (!penalidadeId) {
+        context.res = { status: 400, body: { erro: "Informe 'penalidadeId' (Advertência, Suspensão Temporária ou Disciplina Rigorosa)." } };
+        return;
+      }
+      const penalidadeResult = await pool.request().input("id", sql.Int, penalidadeId)
+        .query(`SELECT Codigo FROM TiposPenalidade WHERE PenalidadeId = @id AND Ativo = 1`);
+      if (penalidadeResult.recordset.length === 0 || penalidadeResult.recordset[0].Codigo === "EXCLUSAO") {
+        context.res = { status: 400, body: { erro: "Penalidade inválida para SANCAO." } };
+        return;
+      }
+      penalidadeCodigo = penalidadeResult.recordset[0].Codigo;
+    } else {
+      penalidadeId = null;
+    }
+
     const diasSancaoFinal = resultado === "SANCAO" && diasSancao ? Number(diasSancao) : null;
 
     await pool.request()
       .input("id", sql.Int, processoId)
       .input("resultado", sql.NVarChar(30), resultado)
       .input("diasSancao", sql.Int, diasSancaoFinal)
+      .input("penalidadeId", sql.Int, penalidadeId || null)
       .query(`
         UPDATE ProcessosDisciplinares SET
-          Status = 'JULGADO', Resultado = @resultado, DiasSancao = @diasSancao,
+          Status = 'JULGADO', Resultado = @resultado, DiasSancao = @diasSancao, PenalidadeId = @penalidadeId,
           DataTerminoPrevisao = CASE WHEN @diasSancao IS NOT NULL THEN DATEADD(day, @diasSancao, DataAbertura) ELSE NULL END,
           DataConclusao = CAST(SYSUTCDATETIME() AS DATE)
         WHERE ProcessoId = @id`);
 
-    // Exclusão sempre implica perda de tudo (Regimento) — encerra Assentos, Liderança
-    // e Cargo Ministerial/Departamento (shared/vacancia.js, v1.5). Os demais resultados
-    // (SANCAO) exigem saber o nível de pena pra decidir se há perda de mandato
-    // (Disciplina Rigorosa) ou só afastamento temporário (Suspensão Temporária) — isso
-    // depende do catálogo TiposPenalidade, que é v3.4.
-    if (resultado === "EXCLUSAO") {
+    // Exclusão e Disciplina Rigorosa implicam perda de mandato (Art. 95 §2º,
+    // III-IV) — encerram Assentos, Liderança e Cargo Ministerial/Departamento
+    // (shared/vacancia.js). Advertência e Suspensão Temporária não perdem o
+    // mandato — só ficam sem capacidade eleitoral enquanto durar a sanção
+    // (shared/disciplina.js), sem tocar em Assentos/Liderança.
+    if (resultado === "EXCLUSAO" || penalidadeCodigo === "DISCIPLINA_RIGOROSA") {
       await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
     }
 
     await registrarAuditoria({
       tabela: "ProcessosDisciplinares",
       registroId: Number(processoId),
-      acao: `Julgou processo: ${resultado}`,
+      acao: `Julgou processo: ${resultado}${penalidadeCodigo ? ` (${penalidadeCodigo})` : ""}`,
       usuarioId: usuario.membroId,
-      dadosDepois: { resultado, diasSancao: diasSancaoFinal }
+      dadosDepois: { resultado, penalidadeId: penalidadeId || null, diasSancao: diasSancaoFinal }
     });
 
     const processo = await selectProcessoComInfracoes(pool, sql, processoId);
@@ -229,5 +286,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 400, body: { erro: "Ação inválida. Use DESIGNAR_RELATOR, CITAR, AFASTAR, REGISTRAR_DEFESA, DESIGNAR_DEFENSOR, JULGAR ou AJUSTAR_PRAZO." } };
+  context.res = { status: 400, body: { erro: "Ação inválida. Use DESIGNAR_RELATOR, CITAR, AFASTAR, REGISTRAR_DEFESA, DESIGNAR_DEFENSOR, JULGAR, AJUSTAR_PRAZO ou REGISTRAR_PROVA_REINTEGRACAO." } };
 };

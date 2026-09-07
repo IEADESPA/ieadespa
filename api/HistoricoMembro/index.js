@@ -83,14 +83,18 @@ module.exports = async function (context, req) {
 
   if (usuario.permissoes.includes("disciplina")) {
     const processos = await pool.request().input("id", sql.Int, membroId).query(`
-      SELECT CONVERT(varchar(10), DataAbertura, 120) AS DataAbertura,
-             CONVERT(varchar(10), DataConclusao, 120) AS DataConclusao, Status, Resultado
-      FROM ProcessosDisciplinares WHERE MembroId = @id
+      SELECT CONVERT(varchar(10), p.DataAbertura, 120) AS DataAbertura,
+             CONVERT(varchar(10), p.DataConclusao, 120) AS DataConclusao, p.Status AS Status, p.Resultado AS Resultado,
+             p.DiasSancao AS DiasSancao, tp.Nome AS PenalidadeNome
+      FROM ProcessosDisciplinares p
+      LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = p.PenalidadeId
+      WHERE p.MembroId = @id
     `);
     for (const p of processos.recordset) {
       eventos.push({ data: p.DataAbertura, tipo: "DISCIPLINA_ABERTURA", titulo: "Processo disciplinar aberto", descricao: null });
       if (p.DataConclusao) {
-        eventos.push({ data: p.DataConclusao, tipo: "DISCIPLINA_CONCLUSAO", titulo: `Processo disciplinar concluído: ${p.Resultado}`, descricao: null });
+        const penalidade = p.PenalidadeNome ? ` — ${p.PenalidadeNome}${p.DiasSancao ? ` (${p.DiasSancao} dias)` : ""}` : "";
+        eventos.push({ data: p.DataConclusao, tipo: "DISCIPLINA_CONCLUSAO", titulo: `Processo disciplinar concluído: ${p.Resultado}${penalidade}`, descricao: null });
       }
     }
 

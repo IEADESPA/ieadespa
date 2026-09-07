@@ -5,7 +5,7 @@
 // GET /api/processos-disciplinares?status=&membroId=&incluirEncerrados=1
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
-const { anexarInfracoesEPrazo } = require("../shared/disciplinar");
+const { SELECT_PROCESSO_BASE, anexarInfracoesEPrazo, redigirSeSigiloso } = require("../shared/disciplinar");
 
 function situacaoEfetiva(p, hoje) {
   if (p.status === "AFASTAMENTO_CAUTELAR") return "AFASTAMENTO_CAUTELAR";
@@ -39,25 +39,7 @@ module.exports = async function (context, req) {
   if (membroId) { request.input("membroId", sql.Int, membroId); condicoes.push("p.MembroId = @membroId"); }
   const where = condicoes.length ? `WHERE ${condicoes.join(" AND ")}` : "";
 
-  const result = await request.query(`
-    SELECT p.ProcessoId AS processoId, p.MembroId AS membroId, m.Nome AS nome,
-           p.OrgaoResponsavelId AS orgaoResponsavelId, o.Sigla AS orgaoSigla,
-           p.Motivo AS motivo, CONVERT(varchar(10), p.DataAbertura, 120) AS dataAbertura,
-           p.Status AS status, p.Sigiloso AS sigiloso,
-           CONVERT(varchar(10), p.DataConclusao, 120) AS dataConclusao,
-           p.Resultado AS resultado, p.DiasSancao AS diasSancao,
-           CONVERT(varchar(10), p.DataTerminoPrevisao, 120) AS dataTerminoPrevisao,
-           p.RelatorMembroId AS relatorMembroId, relator.Nome AS relatorNome,
-           CONVERT(varchar(10), p.DataCitacao, 120) AS dataCitacao, p.CanalCitacao AS canalCitacao,
-           p.DefesaProtocolada AS defesaProtocolada, CONVERT(varchar(10), p.DataDefesa, 120) AS dataDefesa,
-           p.DefensorNome AS defensorNome
-    FROM ProcessosDisciplinares p
-    JOIN MembroReferencia m ON m.MembroId = p.MembroId
-    JOIN Orgaos o ON o.OrgaoId = p.OrgaoResponsavelId
-    LEFT JOIN MembroReferencia relator ON relator.MembroId = p.RelatorMembroId
-    ${where}
-    ORDER BY p.DataAbertura DESC
-  `);
+  const result = await request.query(`${SELECT_PROCESSO_BASE} ${where} ORDER BY p.DataAbertura DESC`);
 
   const hoje = new Date().toISOString().slice(0, 10);
   let processos = result.recordset.map(p => Object.assign({}, p, {
@@ -65,6 +47,7 @@ module.exports = async function (context, req) {
     diasRestantes: diasRestantes(p, hoje)
   }));
   processos = await anexarInfracoesEPrazo(pool, sql, processos);
+  processos = redigirSeSigiloso(processos, usuario);
 
   if (!incluirEncerrados) {
     processos = processos.filter(p => SITUACOES_ATIVAS.includes(p.situacaoEfetiva));

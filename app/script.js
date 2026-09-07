@@ -854,6 +854,10 @@ const CATALOGOS_CFG = {
       ["codigo", "Código (ex: ART96-I)"], ["nome", "Nome"], ["referenciaRegimento", "Referência (ex: Art. 96, I)"],
       ["gravidade", "Gravidade", [["LEVE", "Leve"], ["MEDIA", "Média"], ["GRAVE", "Grave"], ["GRAVISSIMA", "Gravíssima"]]]
     ]
+  },
+  tiposPenalidade: {
+    titulo: "Penalidades (Art. 95 §2º)", idField: "penalidadeId",
+    campos: [["codigo", "Código (ex: ADVERTENCIA)"], ["nome", "Nome"], ["referenciaRegimento", "Referência (ex: Art. 95 §2º, I)"]]
   }
 };
 // Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
@@ -4219,6 +4223,9 @@ async function carregarOpcoesFormDisciplina() {
 
   document.getElementById("catalogoTiposInfracaoConteudo").innerHTML = secaoCatalogo("tiposInfracao");
   carregarCatalogoLista("tiposInfracao");
+
+  document.getElementById("catalogoTiposPenalidadeConteudo").innerHTML = secaoCatalogo("tiposPenalidade");
+  carregarCatalogoLista("tiposPenalidade");
 }
 
 async function salvarProcessoDisciplinar() {
@@ -4285,30 +4292,40 @@ async function carregarProcessosDisciplinares() {
   }
 
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Nome</th><th>Órgão</th><th>Infrações</th><th>Relator</th><th>Citação</th><th>Defesa</th><th>Situação</th><th>Dias restantes</th><th></th>
+    <th>Nome</th><th>Órgão</th><th>Infrações</th><th>Relator</th><th>Citação</th><th>Defesa</th><th>Penalidade</th><th>Situação</th><th>Dias restantes</th><th></th>
   </tr></thead><tbody>`;
 
   processos.forEach(p => {
     const podeAfastar = p.status === "EM_ANDAMENTO";
     const podeJulgar = p.status === "EM_ANDAMENTO" || p.status === "AFASTAMENTO_CAUTELAR";
     const podeAjustarPrazo = p.situacaoEfetiva === "CUMPRINDO_SANCAO" || p.situacaoEfetiva === "PRAZO_INDETERMINADO";
-    const maisGrave = (p.infracoes || []).reduce((atual, i) => {
-      if (!i.gravidade) return atual;
-      return !atual || ORDEM_GRAVIDADE.indexOf(i.gravidade) > ORDEM_GRAVIDADE.indexOf(atual) ? i.gravidade : atual;
-    }, null);
-    const infracoesTexto = (p.infracoes || []).map(i => i.nome).join(", ") || "-";
-    const infracoesComGravidade = infracoesTexto === "-" ? "-" : `${infracoesTexto} ${badgeGravidade(maisGrave)}`;
+    const infracoesTexto = p.detalhesRestritos
+      ? `<span class="subtitle">🔒 Sigiloso — ${p.quantidadeInfracoes ?? "?"} infração(ões), detalhes restritos ao CEI/relator</span>`
+      : (() => {
+          const maisGrave = (p.infracoes || []).reduce((atual, i) => {
+            if (!i.gravidade) return atual;
+            return !atual || ORDEM_GRAVIDADE.indexOf(i.gravidade) > ORDEM_GRAVIDADE.indexOf(atual) ? i.gravidade : atual;
+          }, null);
+          const texto = (p.infracoes || []).map(i => i.nome).join(", ") || "-";
+          return texto === "-" ? "-" : `${texto} ${badgeGravidade(maisGrave)}`;
+        })();
     const citacaoTexto = p.dataCitacao ? `${p.dataCitacao} (${ROTULO_CANAL_CITACAO[p.canalCitacao] || p.canalCitacao})` : "-";
     const defesaTexto = p.defesaProtocolada
       ? `Protocolada em ${p.dataDefesa}`
       : (p.prazoDefesa && p.prazoDefesa.emRevelia ? "<span class='badge-status badge-desligado'>Revelia</span>" : (p.dataCitacao ? "Aguardando" : "-"));
+    const podeRegistrarProva = p.emCarenciaAdministrativa;
+    let penalidadeTexto = p.penalidadeNome || "-";
+    if (p.emCarenciaAdministrativa) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Em Carência Administrativa</span>";
+    else if (p.resultadoProvaReintegracao) penalidadeTexto += `<br /><span class="subtitle">Prova de Reintegração: ${p.resultadoProvaReintegracao}</span>`;
     html += `<tr>
-      <td>${p.nome}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${p.defensorNome}</span>` : ""}</td>
+      <td>${p.nome}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${p.defensorNome}</span>` : ""}
+        ${p.envolveMinistro ? `<br /><span class="subtitle">⚠️ Envolve ministro — jurisdição dupla (também CIADSETA-PARÁ, fora do sistema), Art. 103 §1º, II</span>` : ""}</td>
       <td>${p.orgaoSigla}</td>
-      <td>${infracoesComGravidade}</td>
+      <td>${infracoesTexto}</td>
       <td>${p.relatorNome || "-"}</td>
       <td>${citacaoTexto}</td>
       <td>${defesaTexto}</td>
+      <td>${penalidadeTexto}</td>
       <td>${badgeSituacaoDisciplina(p.situacaoEfetiva)}</td>
       <td>${p.diasRestantes ?? "-"}</td>
       <td class="acoes-inline">
@@ -4319,6 +4336,7 @@ async function carregarProcessosDisciplinares() {
         ${p.status !== "JULGADO" ? `<button class="btn-link" onclick="designarDefensorAcao(${p.processoId})">Defensor</button>` : ""}
         ${podeJulgar ? `<button class="btn-link" onclick="julgarProcessoAcao(${p.processoId})">Julgar</button>` : ""}
         ${podeAjustarPrazo ? `<button class="btn-link" onclick="ajustarPrazoProcessoAcao(${p.processoId})">Ajustar Prazo</button>` : ""}
+        ${podeRegistrarProva ? `<button class="btn-link" onclick="registrarProvaReintegracaoAcao(${p.processoId})">Prova de Reintegração</button>` : ""}
       </td>
     </tr>`;
   });
@@ -4392,8 +4410,43 @@ async function designarDefensorAcao(processoId) {
   await evoluirProcessoAcao(processoId, { acao: "DESIGNAR_DEFENSOR", defensorNome });
 }
 
+function pedirProvaReintegracao() {
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Prova de Reintegração Ética (Art. 77)</h3>
+      <div class="input-group">
+        <label>Resultado:</label>
+        <select id="modalResultadoProva">
+          <option value="APROVADO">Aprovado — credencial reativada</option>
+          <option value="REPROVADO">Reprovado — nova tentativa na próxima trimestral</option>
+        </select>
+      </div>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar" id="modalConfirmar">Registrar</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    document.getElementById("modalConfirmar").onclick = () => {
+      const resultadoProva = document.getElementById("modalResultadoProva").value;
+      fecharModal();
+      resolve({ resultadoProva });
+    };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
+async function registrarProvaReintegracaoAcao(processoId) {
+  const dados = await pedirProvaReintegracao();
+  if (!dados) return;
+  await evoluirProcessoAcao(processoId, { acao: "REGISTRAR_PROVA_REINTEGRACAO", resultadoProva: dados.resultadoProva });
+}
+
 // Modal customizado (mesmo padrão de pedirTexto/confirmarAcao) — Promise<{resultado, diasSancao}|null>.
-function pedirJulgamento() {
+async function pedirJulgamento() {
+  const penRes = await fetch(`${API_BASE}/catalogos/tiposPenalidade`);
+  const penalidades = (await penRes.json()).filter(p => p.ativo !== false && p.codigo !== "EXCLUSAO");
+
   return new Promise(resolve => {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
@@ -4402,9 +4455,13 @@ function pedirJulgamento() {
         <label>Resultado:</label>
         <select id="modalResultado">
           <option value="ARQUIVADO">Arquivado (sem sanção)</option>
-          <option value="SANCAO">Sanção (dias de suspensão)</option>
+          <option value="SANCAO">Sanção</option>
           <option value="EXCLUSAO">Exclusão</option>
         </select>
+      </div>
+      <div class="input-group" id="modalGrupoPenalidade">
+        <label>Penalidade (Art. 95 §2º):</label>
+        <select id="modalPenalidade">${penalidades.map(p => `<option value="${p.penalidadeId}">${p.nome}</option>`).join("")}</select>
       </div>
       <div class="input-group" id="modalGrupoDias">
         <label>Dias de sanção (deixe em branco para prazo indeterminado):</label>
@@ -4417,14 +4474,21 @@ function pedirJulgamento() {
     document.getElementById("modalOverlay").classList.remove("escondido");
     const selectResultado = document.getElementById("modalResultado");
     const grupoDias = document.getElementById("modalGrupoDias");
-    const atualizarVisibilidade = () => { grupoDias.style.display = selectResultado.value === "SANCAO" ? "block" : "none"; };
+    const grupoPenalidade = document.getElementById("modalGrupoPenalidade");
+    const atualizarVisibilidade = () => {
+      const ehSancao = selectResultado.value === "SANCAO";
+      grupoDias.style.display = ehSancao ? "block" : "none";
+      grupoPenalidade.style.display = ehSancao ? "block" : "none";
+    };
     selectResultado.addEventListener("change", atualizarVisibilidade);
     atualizarVisibilidade();
     document.getElementById("modalConfirmar").onclick = () => {
       const resultado = selectResultado.value;
+      if (resultado === "SANCAO" && penalidades.length === 0) { mostrarToast("Cadastre ao menos 1 penalidade no catálogo antes de julgar.", "erro"); return; }
+      const penalidadeId = resultado === "SANCAO" ? document.getElementById("modalPenalidade").value : null;
       const diasSancao = document.getElementById("modalDiasSancao").value || null;
       fecharModal();
-      resolve({ resultado, diasSancao });
+      resolve({ resultado, penalidadeId, diasSancao });
     };
     document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
   });
@@ -4465,7 +4529,7 @@ async function julgarProcessoAcao(processoId) {
   const res = await fetchProtegido(`${API_BASE}/processos-disciplinares/${processoId}/evoluir`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ acao: "JULGAR", resultado: dados.resultado, diasSancao: dados.diasSancao })
+    body: JSON.stringify({ acao: "JULGAR", resultado: dados.resultado, penalidadeId: dados.penalidadeId, diasSancao: dados.diasSancao })
   });
   const data = await res.json();
   avisarResultado(data);

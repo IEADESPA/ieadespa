@@ -1212,25 +1212,58 @@ frente) — esta versão só termina de qualificá-lo.
 
 #### v3.4 — Julgamento e sanções
 
-- [ ] Julgamento pelo CEI (jurisdição dupla para ministros: CEI + CIADSETA).
-- [ ] Catálogo `TiposPenalidade` (Art. 95 §2º: Advertência / Suspensão Temporária /
-      Disciplina Rigorosa / Exclusão), via `GestaoCatalogos` — substitui o Resultado
-      genérico (ARQUIVADO/SANCAO/EXCLUSAO) da v0.2 por um nível de pena explícito.
-- [ ] Vacância automática de `Assentos` por nível de pena (Disciplina Rigorosa/Exclusão
-      = perda de mandato; Suspensão Temporária = afastamento sem perder o mandato) — a
-      v0.2 só fecha `Assentos` automaticamente no caso inequívoco de EXCLUSAO.
+- [x] Catálogo `TiposPenalidade` (Art. 95 §2º: Advertência / Suspensão Temporária /
+      Disciplina Rigorosa / Exclusão), via `GestaoCatalogos` (migração
+      `038_penalidades_reintegracao.sql`). JULGAR com resultado SANCAO agora exige
+      escolher a penalidade (EXCLUSAO resolve a sua sozinha, pelo `Codigo`).
+- [x] Vacância automática de `Assentos`/`Lideranca`/Cargo Ministerial por nível de
+      pena (`shared/vacancia.js::encerrarVinculos`) — antes só disparava em EXCLUSAO;
+      agora também dispara quando a penalidade escolhida é Disciplina Rigorosa (Art.
+      95 §2º, III — perda definitiva de mandato). Advertência e Suspensão Temporária
+      não tocam em Assentos.
 - [x] Suspensão automática de voto/ser votado/cargos durante sanção — já em v0.2
-      (`estaSobDisciplina()`, mascarado por permissão).
+      (`estaSobDisciplina()`, mascarado por permissão), **refinado** em
+      `shared/disciplina.js`: Advertência nunca suspende (Art. 95 §2º, I — não impede
+      Ceia); Disciplina Rigorosa fica suspenso indefinidamente até a Prova de
+      Reintegração ser aprovada, ignorando `DataTerminoPrevisao` (Art. 77 — sem prazo
+      fixo); demais casos continuam pela data.
+  - **Bug corrigido junto** (achado durante a investigação, não pedido original):
+    `CONDICAO_SQL_ATIVO` não incluía `Status = 'AFASTAMENTO_CAUTELAR'` (status que o
+    v3.2 introduziu) — alguém afastado cautelarmente continuava contando como
+    capacidade eleitoral ativa. Corrigido.
 - [x] Término automático da sanção (dias) → retorno à comunhão — já em v0.2 (calculado
       na leitura, sem job/timer).
-- [ ] Sigilo do processo com efeito funcional real (hoje, v0.2, `Sigiloso` é só metadado
-      informativo — quem tem a permissão `disciplina` vê tudo) + permissão `cei`.
+- [x] Sigilo do processo com efeito funcional real — nova permissão `cei` (seedada
+      nas mesmas 2 roles globais que já tinham `disciplina` desde o início). Quem não
+      tem `cei` e não é o relator designado do processo só vê que ele existe (nome,
+      órgão, situação, prazos); motivo, infrações, relator e defensor somem da
+      listagem (`shared/disciplinar.js::redigirSeSigiloso`), substituídos só pela
+      contagem de infrações.
+- [x] Julgamento pelo CEI (jurisdição dupla para ministros, Art. 103 §1º, II): CIADSETA
+      é a Convenção Estadual, entidade **externa**, sem representação nenhuma no
+      sistema — não tem como processar/homologar nada dela aqui. Vira só um aviso
+      informativo (`envolveMinistro`, calculado de `CargoMinisterial`) exibido na
+      listagem quando o réu é Pastor/Evangelista, mesmo padrão já usado pra outras
+      referências à CIADSETA (v3.1, sucessão presidencial v1.5).
 
 #### v3.5 — Reabilitação e retorno (Art. 77 Regimento)
 
-- [ ] Carência administrativa após o fim da pena.
-- [ ] Prova de Reintegração Ética pela AFM (aprovação reativa credencial).
-- [ ] Histórico disciplinar no perfil do membro.
+- [x] Prova de Reintegração Ética (Art. 77 §2º) — nova ação
+      `REGISTRAR_PROVA_REINTEGRACAO` (Aprovado/Reprovado), só cabível para quem foi
+      julgado com Disciplina Rigorosa (a única penalidade sem prazo fixo de dias —
+      Suspensão Temporária já retoma sozinha quando os dias terminam). Enquanto não
+      aprovada, a pessoa fica marcada `emCarenciaAdministrativa` (badge na tela) e
+      continua sob disciplina (ver v3.4).
+- [x] Carência administrativa após o fim da pena — **reaproveita o mecanismo de 90
+      dias de integração já existente desde o v1.2** (`DIAS_INTEGRACAO`,
+      `estatuto.js`): não precisou de código novo. O "retorno" de função em si (dar de
+      volta Cargo Ministerial/Assento) continua sendo recadastro manual normal — o
+      sistema não guarda snapshot do cargo anterior pra restaurar sozinho
+      (`vacancia.js` só zera).
+- [x] Histórico disciplinar no perfil do membro — já existia parcialmente desde o v1.6
+      (`api/HistoricoMembro`, evento `DISCIPLINA_CONCLUSAO`, atrás da mesma permissão
+      `disciplina`); só faltava a granularidade — agora mostra também a penalidade e
+      os dias de sanção.
 
 #### v3.6 — Escada territorial de instâncias (JAI/JEA/TER/CEQ/CDE) *(maior gap da varredura)*
 

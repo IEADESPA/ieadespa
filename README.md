@@ -1584,14 +1584,51 @@ contábil formal do Conselho Fiscal (Reg. Art. 145). Também fica para depois
 `MembroReferencia.DizimistaFiel` a partir do histórico de lançamentos, em
 vez do bit editado manualmente hoje.
 
+##### v4.1.3 — Centro de Custo (caixa único de verdade)
+
+Correção de modelo a partir de como a tesouraria funciona hoje de fato
+(confirmado com o usuário): existe **uma única conta bancária** pra toda a
+denominação — qualquer congregação deposita direto nela, não existe "a
+congregação manda 60% pra Geral" como movimentação bancária real (o
+dinheiro já está todo no mesmo lugar desde o depósito). O que existe é a
+Tesouraria Geral conferindo o fechamento e **liberando** o saldo virtual
+de 40% (Centro de Custo Local) pra congregação poder gastar.
+
+- [x] `RegistrarRepasseTesouraria` agora exige nível **GLOBAL**
+      (`auth.exigirNivelGlobal`-equivalente) — antes qualquer um com
+      `financeiro` no escopo da própria congregação podia "se autoliberar",
+      o que não faz sentido nesse modelo (quem confere e libera é sempre a
+      Geral, nunca o próprio local).
+- [x] Linguagem da UI corrigida pra refletir a direção certa: "Registrar
+      repasse" virou "Tesouraria Geral: conferir e liberar"; status
+      `REPASSADO`/`FECHADO` aparecem como "Saldo liberado" / "Aguardando
+      liberação da Tesouraria Geral".
+- [x] `ListarFechamentosTesouraria` ganhou os agregados de Centro de Custo:
+      `centroCustoGeral` (liberado vs. pendente de conferência) e
+      `porCongregacao` (saldo liberado vs. pendente de liberação por
+      congregação) — visão na sub-aba Consolidado.
+- **Decisão explícita — não fazer ainda:** quando um dia existirem contas
+  bancárias por congregação (Regimento Art. 140 — CNPJ de filial), a
+  liberação vira movimentação real entre contas e o endpoint muda; até lá
+  é liberação de saldo dentro do caixa único, sem transferência de verdade.
+- **Auditoria formal do Conselho Fiscal adiada de propósito** (decisão
+  explícita — não compensa investir agora): a conferência da Geral hoje é
+  simples (conferir e liberar); o fluxo completo de auditoria financeira
+  (aceitar/rejeitar relatório, parecer formal) só faz sentido depois do
+  módulo financeiro completo, incluindo **saídas** — fica pra mais adiante,
+  junto com Fiscalização do Conselho Fiscal (Art. 145).
+
 #### v4.2 — Ofertas, dízimos e arrecadação
 
 - [x] Registro de mapas de dízimos/ofertas por congregação, com numeração
       sequencial de "talão" — entregue em v4.1 (`LancamentosTesouraria`,
       Termo nº), já que não fazia sentido separar do fechamento/rateio.
-- [ ] Controle de recebimento/conferência/auditoria dos relatórios
-      financeiros pelo 2º Tesoureiro (Art. 36 §2º/41 II — auditoria in loco
-      comparando o mapa com o dinheiro entregue).
+- **Descartado (decisão explícita, 2026):** conferência/auditoria in loco
+  pelo 2º Tesoureiro (Art. 36 §2º/41 II) — a visita física comparando o
+  mapa físico com o dinheiro entregue deixa de fazer sentido com a
+  conferência digital da Geral (v4.1.3, acima); o 2º Tesoureiro participa
+  dessa conferência pelo próprio sistema, não presa a uma tarefa manual
+  separada.
 
 #### v4.3 — Orçamento anual e PDQ
 

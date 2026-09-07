@@ -762,28 +762,38 @@ async function carregarResumoFechamento() {
       ${linhaValor("Aluguel", f.valorAluguel)}
       ${linhaValor("Lote", f.valorLote)}
       ${linhaValor("Total Final", f.totalFinal)}
-      ${linhaValor(`Retenção Local (${f.percentualRetencaoLocal}%)`, f.valorRetidoLocal)}
-      ${linhaValor(`Repasse Tesouraria Geral (${(100 - f.percentualRetencaoLocal).toFixed(2)}%)`, f.valorRepasseGeral)}
+      ${linhaValor(`Centro de Custo Local (${f.percentualRetencaoLocal}%)`, f.valorRetidoLocal)}
+      ${linhaValor(`Centro de Custo Geral (${(100 - f.percentualRetencaoLocal).toFixed(2)}%)`, f.valorRepasseGeral)}
     </tbody>
   </table>
-  <p class="subtitle">Status: <span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : ""}">${f.status}</span>${f.dataRepasse ? ` — repassado em ${new Date(f.dataRepasse).toLocaleDateString("pt-BR")}${f.formaRepasse ? ` via ${f.formaRepasse}` : ""}` : ""}</p>`;
+  <!-- v4.1.3 — hoje existe uma única conta bancária pra toda a
+       denominação: não há "envio" físico da congregação pra Geral, os 40%
+       ficam retidos como saldo virtual (Centro de Custo Local) até a
+       Tesouraria Geral conferir o fechamento e liberar. -->
+  <p class="subtitle">Situação: <span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : "badge-licenca"}">${f.status === "REPASSADO" ? "Saldo liberado pela Tesouraria Geral" : "Aguardando liberação da Tesouraria Geral"}</span>${f.dataRepasse ? ` — liberado em ${new Date(f.dataRepasse).toLocaleDateString("pt-BR")}${f.formaRepasse ? ` via ${f.formaRepasse}` : ""}` : ""}</p>`;
 
   if (f.status !== "REPASSADO") {
-    html += `
-      <div class="input-group">
-        <label>Forma do repasse:</label>
-        <select id="financeiroFormaRepasse">
-          <option value="PIX">PIX</option>
-          <option value="DEPOSITO">Depósito bancário</option>
-          <option value="DINHEIRO">Dinheiro (entregue em mãos)</option>
-        </select>
-      </div>
-      <div class="input-group">
-        <label>Comprovante do repasse (opcional):</label>
-        <input type="file" id="financeiroComprovanteRepasse" accept="image/jpeg,image/png,application/pdf" />
-      </div>
-      <button class="btn-confirmar" style="width:auto;" onclick="registrarRepasseTesourariaAcao(${congregacaoId}, '${mesReferencia}')">✅ Registrar repasse</button>
-      <p id="resultadoRepasse" class="subtitle"></p>`;
+    if (authNivel === "GLOBAL") {
+      html += `
+        <hr />
+        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">✅ Tesouraria Geral: conferir e liberar</h4>
+        <div class="input-group">
+          <label>Forma do repasse (se já houver movimentação real registrada):</label>
+          <select id="financeiroFormaRepasse">
+            <option value="PIX">PIX</option>
+            <option value="DEPOSITO">Depósito bancário</option>
+            <option value="DINHEIRO">Dinheiro (entregue em mãos)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Comprovante (opcional):</label>
+          <input type="file" id="financeiroComprovanteRepasse" accept="image/jpeg,image/png,application/pdf" />
+        </div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarRepasseTesourariaAcao(${congregacaoId}, '${mesReferencia}')">✅ Conferir e liberar saldo local</button>
+        <p id="resultadoRepasse" class="subtitle"></p>`;
+    } else {
+      html += `<p class="subtitle">Só a Tesouraria Geral pode conferir e liberar este saldo.</p>`;
+    }
   }
   container.innerHTML = html;
 }
@@ -884,15 +894,37 @@ async function carregarConsolidadoTesouraria() {
     container.innerHTML = "<p class='subtitle'>Nenhum fechamento no seu escopo para este período.</p>";
     return;
   }
+  // v4.1.3 — Centro de Custo: conta única pra toda a denominação, então
+  // "liberado" (Status=REPASSADO) é o que a Geral já conferiu e cada
+  // congregação já pode gastar; "pendente" ainda está no caixa único
+  // esperando conferência.
   let html = `<p class="subtitle"><strong>Total Recebido (escopo):</strong> R$ ${data.consolidado.totalRecebido.toFixed(2)} ·
-    <strong>Retido Local:</strong> R$ ${data.consolidado.valorRetidoLocal.toFixed(2)} ·
-    <strong>Repasse Geral:</strong> R$ ${data.consolidado.valorRepasseGeral.toFixed(2)}</p>
-    <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Total Final</th><th>Repasse Geral</th><th>Status</th></tr></thead><tbody>`;
+    <strong>Centro de Custo Local (total):</strong> R$ ${data.consolidado.valorRetidoLocal.toFixed(2)} ·
+    <strong>Centro de Custo Geral (total):</strong> R$ ${data.consolidado.valorRepasseGeral.toFixed(2)}</p>`;
+
+  if (data.centroCustoGeral) {
+    html += `<div class="cartao-perfil">
+      <p class="linha-perfil"><strong>🏛️ Centro de Custo Geral</strong></p>
+      <p class="linha-perfil">Liberado (disponível): R$ ${data.centroCustoGeral.liberado.toFixed(2)}</p>
+      <p class="linha-perfil">Pendente de conferência: R$ ${data.centroCustoGeral.pendente.toFixed(2)}</p>
+    </div>`;
+  }
+  if (data.porCongregacao && data.porCongregacao.length > 0) {
+    html += `<h4 style="margin:16px 0 10px; color: var(--cor-primaria);">📍 Centro de Custo Local (por congregação)</h4>
+      <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Saldo Liberado</th><th>Pendente de Liberação</th></tr></thead><tbody>`;
+    data.porCongregacao.forEach(c => {
+      html += `<tr><td>${c.congregacaoNome}</td><td>R$ ${c.saldoLiberado.toFixed(2)}</td><td>R$ ${c.saldoPendente.toFixed(2)}</td></tr>`;
+    });
+    html += "</tbody></table>";
+  }
+
+  html += `<h4 style="margin:16px 0 10px; color: var(--cor-primaria);">Fechamentos do período</h4>
+    <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Total Final</th><th>Centro de Custo Geral</th><th>Situação</th></tr></thead><tbody>`;
   fechamentos.forEach(f => {
     html += `<tr>
       <td>${f.congregacaoNome}</td><td>${f.mesReferencia}</td>
       <td>R$ ${Number(f.totalFinal).toFixed(2)}</td><td>R$ ${Number(f.valorRepasseGeral).toFixed(2)}</td>
-      <td><span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : ""}">${f.status}</span></td>
+      <td><span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : "badge-licenca"}">${f.status === "REPASSADO" ? "Liberado" : "Pendente"}</span></td>
     </tr>`;
   });
   html += "</tbody></table>";

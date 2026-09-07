@@ -435,7 +435,7 @@ async function carregarMinhasContribuicoes() {
   contribuicoes.forEach(c => {
     html += `<tr>
       <td>${c.mesReferencia}</td><td>${c.termoNumero}</td><td>${c.congregacaoNome}</td>
-      <td>${c.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td><td>R$ ${Number(c.valor).toFixed(2)}</td>
+      <td>${rotuloTipoLancamento(c.tipo)}</td><td>R$ ${Number(c.valor).toFixed(2)}</td>
       <td>${c.formaPagamento}</td>
       <td>${c.status === "CANCELADO" ? "<span class='badge-status badge-desligado'>Cancelado</span>" : "<span class='badge-status badge-ativo'>Ativo</span>"}</td>
     </tr>`;
@@ -540,6 +540,15 @@ function arquivoParaBase64(arquivo) {
   });
 }
 
+// "Outra entrada" (bazar, campanha, evento) é dinheiro institucional, não
+// de uma pessoa — troca dizimista/nome avulso por uma descrição livre.
+function alternarCamposTipoLancamento() {
+  const ehOutra = document.getElementById("financeiroLancTipo").value === "OUTRA";
+  document.getElementById("cxDizimistaLancamento").style.display = ehOutra ? "none" : "block";
+  document.getElementById("cxNomeAvulsoLancamento").style.display = ehOutra ? "none" : "block";
+  document.getElementById("cxDescricaoLancamento").style.display = ehOutra ? "block" : "none";
+}
+
 async function salvarLancamentoTesourariaAcao() {
   const msg = document.getElementById("resultadoLancamentoTesouraria");
   const congregacaoId = document.getElementById("financeiroLancCongregacao").value;
@@ -547,13 +556,22 @@ async function salvarLancamentoTesourariaAcao() {
   const dizimistaId = document.getElementById("financeiroLancDizimista").value;
   const nomeAvulso = document.getElementById("financeiroLancNomeAvulso").value.trim();
   const tipo = document.getElementById("financeiroLancTipo").value;
+  const descricao = document.getElementById("financeiroLancDescricao").value.trim();
   const valor = document.getElementById("financeiroLancValor").value;
   const formaPagamento = document.getElementById("financeiroLancForma").value;
   const valorPix = document.getElementById("financeiroLancValorPix").value;
   const arquivoComprovante = document.getElementById("financeiroLancComprovante").files[0];
 
-  if (!congregacaoId || !mesReferencia || !valor || (!dizimistaId && !nomeAvulso)) {
-    msg.textContent = "Preencha congregação, mês, valor e o dizimista (cadastrado ou nome avulso).";
+  if (!congregacaoId || !mesReferencia || !valor) {
+    msg.textContent = "Preencha congregação, mês e valor.";
+    return;
+  }
+  if (tipo === "OUTRA" && !descricao) {
+    msg.textContent = "Descreva a origem desta entrada.";
+    return;
+  }
+  if (tipo !== "OUTRA" && !dizimistaId && !nomeAvulso) {
+    msg.textContent = "Informe o dizimista (cadastrado ou nome avulso).";
     return;
   }
   if (formaPagamento === "MISTO" && !valorPix) {
@@ -562,7 +580,8 @@ async function salvarLancamentoTesourariaAcao() {
   }
 
   const body = { congregacaoId, mesReferencia, tipo, valor, formaPagamento };
-  if (dizimistaId) body.dizimistaId = dizimistaId; else body.nomeAvulso = nomeAvulso;
+  if (tipo === "OUTRA") body.descricao = descricao;
+  else if (dizimistaId) body.dizimistaId = dizimistaId; else body.nomeAvulso = nomeAvulso;
   if (formaPagamento === "MISTO") body.valorPix = valorPix;
   if (arquivoComprovante) {
     body.comprovanteBase64 = await arquivoParaBase64(arquivoComprovante);
@@ -575,11 +594,16 @@ async function salvarLancamentoTesourariaAcao() {
   msg.textContent = data.mensagem;
   if (data.sucesso) {
     document.getElementById("financeiroLancNomeAvulso").value = "";
+    document.getElementById("financeiroLancDescricao").value = "";
     document.getElementById("financeiroLancValor").value = "";
     document.getElementById("financeiroLancValorPix").value = "";
     document.getElementById("financeiroLancComprovante").value = "";
     carregarLancamentosTesouraria();
   }
+}
+
+function rotuloTipoLancamento(tipo) {
+  return tipo === "DIZIMO" ? "Dízimo" : tipo === "OFERTA" ? "Oferta" : "Outra entrada";
 }
 
 async function carregarLancamentosTesouraria() {
@@ -593,7 +617,7 @@ async function carregarLancamentosTesouraria() {
     container.innerHTML = "<p class='subtitle'>Nenhum lançamento neste mês ainda.</p>";
     return;
   }
-  let html = `<table class="tabela-frequencia"><thead><tr><th></th><th>Termo</th><th>Nome</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Situação</th><th>Contabilização</th><th></th></tr></thead><tbody>`;
+  let html = `<table class="tabela-frequencia"><thead><tr><th></th><th>Termo</th><th>Nome/Descrição</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Situação</th><th>Aprovação</th><th>Contabilização</th><th></th></tr></thead><tbody>`;
   lancamentos.forEach(l => {
     const formaTexto = l.formaPagamento === "MISTO"
       ? `Misto (PIX R$ ${Number(l.valorPix).toFixed(2)} + dinheiro R$ ${(Number(l.valor) - Number(l.valorPix)).toFixed(2)})`
@@ -610,6 +634,17 @@ async function carregarLancamentosTesouraria() {
     const contabilizacaoTag = l.contabilizado
       ? `<span class="badge-status badge-ativo">Contabilizado</span>`
       : `<span class="badge-status badge-licenca">Pendente de fechamento</span>`;
+    // v4.1.4 — "Outra entrada" exige aprovação da Tesouraria Geral antes de
+    // contar; Dízimo/Oferta não passam por isso (NAO_APLICAVEL).
+    const APROVACAO_ROTULO = { NAO_APLICAVEL: "—", PENDENTE: "Pendente", APROVADO: "Aprovada", REJEITADO: "Rejeitada" };
+    const APROVACAO_BADGE = { NAO_APLICAVEL: "", PENDENTE: "badge-licenca", APROVADO: "badge-ativo", REJEITADO: "badge-desligado" };
+    let aprovacaoTag = l.statusAprovacao === "NAO_APLICAVEL" ? "—"
+      : `<span class="badge-status ${APROVACAO_BADGE[l.statusAprovacao]}">${APROVACAO_ROTULO[l.statusAprovacao]}</span>`;
+    if (l.statusAprovacao === "REJEITADO" && l.motivoRejeicao) aprovacaoTag += `<br /><small>${l.motivoRejeicao}</small>`;
+    if (l.statusAprovacao === "PENDENTE" && authNivel === "GLOBAL" && !l.fechamentoId) {
+      aprovacaoTag += `<br /><button class="btn-link" onclick="aprovarEntradaTesourariaAcao(${l.lancamentoId}, ${l.termoNumero}, true)">Aprovar</button>
+        <button class="btn-link btn-link-perigo" onclick="aprovarEntradaTesourariaAcao(${l.lancamentoId}, ${l.termoNumero}, false)">Rejeitar</button>`;
+    }
     const podeConciliar = !l.fechamentoId && l.status === "ATIVO" && l.comprovantePendente && ["PIX", "MISTO"].includes(l.formaPagamento);
     const valorPixParcela = l.formaPagamento === "MISTO" ? l.valorPix : l.valor;
     let acoes = "";
@@ -622,11 +657,12 @@ async function carregarLancamentosTesouraria() {
     html += `<tr>
       <td>${podeConciliar ? `<input type="checkbox" class="chk-conciliar-pix" value="${l.lancamentoId}" data-valor="${valorPixParcela}" onchange="recalcularTotalConciliacaoPix()" />` : ""}</td>
       <td>${l.termoNumero}</td>
-      <td>${l.dizimistaNome || l.nomeAvulso}</td>
-      <td>${l.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td>
+      <td>${l.dizimistaNome || l.nomeAvulso || l.descricao}</td>
+      <td>${rotuloTipoLancamento(l.tipo)}</td>
       <td>R$ ${Number(l.valor).toFixed(2)}</td>
       <td>${formaTexto}${comprovanteTag}</td>
       <td>${statusTag}</td>
+      <td>${aprovacaoTag}</td>
       <td>${contabilizacaoTag}</td>
       <td class="acoes-inline">${acoes}</td>
     </tr>`;
@@ -715,6 +751,30 @@ async function cancelarLancamentoTesourariaAcao(lancamentoId, termoNumero) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarLancamentosTesouraria();
+}
+
+// v4.1.4 — só a Tesouraria Geral aprova/rejeita "Outra entrada" (mesmo
+// princípio de RegistrarRepasseTesouraria: quem confere nunca é quem lançou).
+async function aprovarEntradaTesourariaAcao(lancamentoId, termoNumero, aprovar) {
+  let motivoRejeicao = null;
+  if (!aprovar) {
+    motivoRejeicao = await pedirTexto(`Motivo da rejeição do Termo nº ${termoNumero}`, "Ex: sem comprovante suficiente");
+    if (motivoRejeicao === null) return;
+    if (!motivoRejeicao.trim()) { mostrarToast("Informe o motivo da rejeição.", "erro"); return; }
+  } else if (!(await confirmarAcao(`Aprovar a entrada do Termo nº ${termoNumero}?`, "Aprovar"))) {
+    return;
+  }
+  const body = { aprovar };
+  if (motivoRejeicao) body.motivoRejeicao = motivoRejeicao;
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-aprovacao/${lancamentoId}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    if (subAbaFinanceiroAtual === "consolidado") carregarConsolidadoTesouraria();
+    else carregarLancamentosTesouraria();
+  }
 }
 
 async function anexarComprovanteTesourariaAcao(lancamentoId) {
@@ -846,7 +906,7 @@ async function gerarRelatorioTesourariaAcao(modo) {
       html += `<tr style="opacity:.6;"><td>${l.termoNumero}</td><td colspan="${modo === "mural" ? 2 : 4}"><em>CANCELADO — ${l.motivoCancelamento || "sem motivo registrado"}</em></td></tr>`;
       return;
     }
-    html += `<tr><td>${l.termoNumero}</td><td>${l.nome}</td><td>${l.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td>${modo === "mural" ? "" : `<td>R$ ${Number(l.valor).toFixed(2)}</td><td>${l.formaPagamento}</td>`}</tr>`;
+    html += `<tr><td>${l.termoNumero}</td><td>${l.nome}</td><td>${rotuloTipoLancamento(l.tipo)}</td>${modo === "mural" ? "" : `<td>R$ ${Number(l.valor).toFixed(2)}</td><td>${l.formaPagamento}</td>`}</tr>`;
   });
   html += "</tbody></table>";
   if (data.fechamento) {
@@ -887,18 +947,42 @@ async function carregarConsolidadoTesouraria() {
   const mesReferencia = document.getElementById("financeiroConsolidadoMes").value;
   const container = document.getElementById("resultadoConsolidadoTesouraria");
   const qs = mesReferencia ? `?mesReferencia=${mesReferencia}` : "";
-  const res = await fetchProtegido(`${API_BASE}/tesouraria-fechamentos${qs}`);
-  const data = await res.json();
+  const [resFechamentos, resPendentes] = await Promise.all([
+    fetchProtegido(`${API_BASE}/tesouraria-fechamentos${qs}`),
+    fetchProtegido(`${API_BASE}/tesouraria-lancamentos?statusAprovacao=PENDENTE`)
+  ]);
+  const data = await resFechamentos.json();
+  const pendentes = await resPendentes.json();
   const fechamentos = data.fechamentos || [];
+
+  // v4.1.4 — "Outra entrada" pendente de aprovação, cross-congregação (é
+  // pra isso que serve o Consolidado: a Geral vê tudo do escopo dela num
+  // lugar só, sem precisar abrir Lançamentos congregação por congregação).
+  let htmlPendentes = "";
+  if (Array.isArray(pendentes) && pendentes.length > 0) {
+    htmlPendentes = `<h4 style="margin:0 0 10px; color: var(--cor-primaria);">⏳ Entradas Extras Pendentes de Aprovação</h4>
+      <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Termo</th><th>Descrição</th><th>Valor</th><th>Forma</th><th></th></tr></thead><tbody>`;
+    pendentes.forEach(l => {
+      htmlPendentes += `<tr>
+        <td>${l.congregacaoNome}</td><td>${l.termoNumero}</td><td>${l.descricao || ""}</td>
+        <td>R$ ${Number(l.valor).toFixed(2)}</td><td>${l.formaPagamento}${l.comprovanteUrl ? ` <a href="${l.comprovanteUrl}" target="_blank" rel="noopener">📎</a>` : ""}</td>
+        <td class="acoes-inline">${authNivel === "GLOBAL" ? `
+          <button class="btn-link" onclick="aprovarEntradaTesourariaAcao(${l.lancamentoId}, ${l.termoNumero}, true)">Aprovar</button>
+          <button class="btn-link btn-link-perigo" onclick="aprovarEntradaTesourariaAcao(${l.lancamentoId}, ${l.termoNumero}, false)">Rejeitar</button>` : ""}</td>
+      </tr>`;
+    });
+    htmlPendentes += "</tbody></table><hr />";
+  }
+
   if (fechamentos.length === 0) {
-    container.innerHTML = "<p class='subtitle'>Nenhum fechamento no seu escopo para este período.</p>";
+    container.innerHTML = htmlPendentes || "<p class='subtitle'>Nenhum fechamento no seu escopo para este período.</p>";
     return;
   }
   // v4.1.3 — Centro de Custo: conta única pra toda a denominação, então
   // "liberado" (Status=REPASSADO) é o que a Geral já conferiu e cada
   // congregação já pode gastar; "pendente" ainda está no caixa único
   // esperando conferência.
-  let html = `<p class="subtitle"><strong>Total Recebido (escopo):</strong> R$ ${data.consolidado.totalRecebido.toFixed(2)} ·
+  let html = htmlPendentes + `<p class="subtitle"><strong>Total Recebido (escopo):</strong> R$ ${data.consolidado.totalRecebido.toFixed(2)} ·
     <strong>Centro de Custo Local (total):</strong> R$ ${data.consolidado.valorRetidoLocal.toFixed(2)} ·
     <strong>Centro de Custo Geral (total):</strong> R$ ${data.consolidado.valorRepasseGeral.toFixed(2)}</p>`;
 

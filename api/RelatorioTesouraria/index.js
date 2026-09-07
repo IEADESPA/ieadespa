@@ -30,7 +30,7 @@ module.exports = async function (context, req) {
   const lancamentosResult = await pool.request()
     .input("congregacaoId", sql.Int, congregacaoId).input("mesReferencia", sql.Char(7), mesReferencia)
     .query(`
-      SELECT l.TermoNumero AS termoNumero, ISNULL(d.Nome, l.NomeAvulso) AS nome, l.Tipo AS tipo, l.Valor AS valor,
+      SELECT l.TermoNumero AS termoNumero, ISNULL(d.Nome, ISNULL(l.NomeAvulso, l.Descricao)) AS nome, l.Tipo AS tipo, l.Valor AS valor,
              l.FormaPagamento AS formaPagamento, l.Status AS status, l.MotivoCancelamento AS motivoCancelamento
       FROM LancamentosTesouraria l
       LEFT JOIN Dizimistas d ON d.DizimistaId = l.DizimistaId

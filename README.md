@@ -1618,6 +1618,34 @@ de 40% (Centro de Custo Local) pra congregação poder gastar.
   módulo financeiro completo, incluindo **saídas** — fica pra mais adiante,
   junto com Fiscalização do Conselho Fiscal (Art. 145).
 
+##### v4.1.4 — Outras entradas (bazar, campanha, evento)
+
+Pedido explícito: a congregação não vive só de dízimo/oferta — pode ter
+outras fontes (ex: venda de canjica). Diferente de Dízimo/Oferta, que só
+passam pelo crivo mensal do Fechamento, essa entrada é dinheiro fora do
+fluxo regular e exige **aprovação individual da Tesouraria Geral antes de
+contar** — controle mais apertado, não mais frouxo.
+
+- [x] `Tipo = 'OUTRA'` + `Descricao` livre (não é lançamento de uma pessoa
+      específica — dizimista/nome avulso vira opcional, a descrição é
+      obrigatória).
+- [x] Nasce com `StatusAprovacao = 'PENDENTE'`; só conta no
+      `FecharMesTesouraria` depois de `APROVADO` — o fechamento do mês fica
+      **bloqueado** enquanto houver uma "Outra Entrada" pendente daquele
+      mês (evita ela ficar presa num fechamento já travado sem nunca ter
+      sido decidida).
+- [x] `AprovarEntradaTesouraria` — aprovar/rejeitar exige nível GLOBAL
+      (mesmo princípio de `RegistrarRepasseTesouraria`: quem confere nunca é
+      quem lançou); rejeição exige motivo, fica visível (mesmo espírito do
+      cancelamento — nunca se apaga, só se marca).
+- [x] Sub-aba Consolidado ganhou uma lista "Entradas Extras Pendentes de
+      Aprovação" cross-congregação (dentro do escopo de quem está vendo) —
+      a Geral revisa tudo num lugar só, sem abrir Lançamentos congregação
+      por congregação.
+- **Sem notificação por e-mail/SMS** (decisão de escopo — isso puxaria uma
+  integração nova): a visibilidade é pela lista de pendências, que já
+  cumpre o mesmo papel prático.
+
 #### v4.2 — Ofertas, dízimos e arrecadação
 
 - [x] Registro de mapas de dízimos/ofertas por congregação, com numeração

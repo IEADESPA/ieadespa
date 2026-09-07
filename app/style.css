@@ -268,6 +268,15 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .btn-aba:hover { background: rgba(255,255,255,.10); }
 .btn-aba.ativo { background: var(--cor-secundaria); color: #fff; font-weight: 600; }
 .btn-aba .icone { font-size: 1.1rem; }
+/* Bug corrigido: botão com nome longo (ex: órgão territorial "JAI — Junta de
+   Articulação Institucional — [Congregação]") estourava pra fora da caixa
+   em vez de truncar — .btn-aba/.btn-subaba tem white-space:nowrap mas sem
+   overflow:hidden, então o texto (com o fundo dourado do estado .ativo)
+   vazava visualmente pra fora do botão/da barra lateral. min-width:0 deixa
+   o rótulo encolher (senão o flexbox nunca corta um filho com texto
+   nowrap) e text-overflow corta com reticências. */
+.btn-aba, .btn-subaba { overflow: hidden; }
+.btn-aba .rotulo, .btn-subaba .rotulo { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 /* Financeiro (v4.1): módulo próprio, separado visualmente do resto do painel
    (dinheiro real, não é "mais uma aba de chamada") — mesmo mecanismo de aba,
    mas com destaque dourado e um divisor antes/depois pra nunca se confundir

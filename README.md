@@ -1664,11 +1664,115 @@ uma precisa ser uma categoria com nome próprio, não um "outros".
   vir a ter um centro de custo próprio no futuro, mas isso é história pra
   mais adiante.
 
+### Arquitetura financeira de referência (pesquisa de mercado, 2026)
+
+Pedido explícito do usuário: pesquisar como sistemas financeiros de
+verdade (ERP de grandes empresas + os melhores softwares de contabilidade
+para igrejas/terceiro setor) organizam entradas, saídas, rateio e
+auditoria, e usar isso pra deixar o plano da FASE 4 robusto o bastante
+pra aguentar tudo que vem depois — sem precisar refazer a base mais
+adiante. Síntese da pesquisa e como ela se aplica aqui:
+
+- **Fund Accounting (contabilidade por fundos)** é o padrão-ouro pra
+  igrejas/ONGs — dinheiro é sempre rotulado **restrito** (só pode ser
+  gasto numa finalidade específica, ex: uma oferta de congresso) ou
+  **livre** (uso geral). Isso **valida** a arquitetura já construída:
+  Centro de Custo Local/Geral (v4.1.3) já é, na prática, uma fund
+  accounting de dois fundos. Falta um passo natural: marcar cada
+  `CategoriasEntrada` (v4.1.5) como restrita ou livre, pra quando as
+  **saídas** existirem o sistema já saber travar gasto de "Entrada de
+  Congresso" em algo que não seja o congresso. *(NetSuite, GivingArc,
+  AlignMint — fund accounting; ChurchTrac, Aplos, Sage — contabilidade
+  de igreja)*
+- **Chart of Accounts (Plano de Contas)** é a espinha dorsal de qualquer
+  ERP financeiro — cada lançamento aponta pra uma conta contábil
+  hierárquica (Receita > Dízimos > ...; Despesa > Manutenção > Aluguel).
+  Hoje o sistema tem `CategoriasEntrada` (bom pro dia a dia), mas não tem
+  um Plano de Contas formal por trás — sem ele não dá pra gerar Balanço
+  Patrimonial/DRE de verdade (já previstos em v4.3/v4.5). **Recomendação:
+  entra como fundação da v4.2** (abaixo), antes do Orçamento (v4.3)
+  precisar dele. *(NetSuite, Priority, Codejig — ERP finance module)*
+- **Cost allocation methods**: o rateio 40/60 (Art. 118) já é exatamente
+  um "simplified allocation method" — percentual fixo, aplicado de forma
+  consistente. A pesquisa confirma que **mudar o método no meio do
+  caminho é o erro mais comum** (perde comparabilidade histórica) — reforça
+  por que `PercentualRetencaoLocal` é editável por congregação, mas nunca
+  reescreve fechamentos já feitos (já é assim). *(BPM, CFO Selections,
+  Onetribe — cost allocation)*
+- **Accounts Payable (Contas a Pagar) com aprovação em múltiplos níveis**
+  é o modelo padrão de saídas em qualquer ERP: solicitação → validação
+  (documentação/nota fiscal) → aprovação por alçada de valor (quanto
+  maior o valor, mais aprovadores) → pagamento → trilha de auditoria. Isso
+  **é literalmente o que o Regimento já pede** (Teto de Alçada Patrimonial
+  v4.5, 3 cotações v4.6, parecer do Conselho Fiscal v4.7) — só nunca tinha
+  sido nomeado como um módulo de Saídas único. Vira a **v4.1.6**, abaixo.
+  *(Ramp, ApprovalMax, Settle — AP approval workflow)*
+- **Accounts Receivable (Contas a Receber)** — dinheiro **esperado**, ainda
+  não recebido (ex: um boleto de aluguel de terceiro, uma promessa de
+  campanha) — é um conceito real e comum em ERPs, distinto de "dinheiro
+  que já entrou" (o que o sistema trata hoje). Vira a **v4.1.7**, abaixo —
+  mencionado pelo usuário como pesquisa, mas com valor real pro caixa
+  único (saber o que ainda vai entrar, não só o que já entrou).
+- **Orçado vs. Realizado (budget variance)** — todo ERP financeiro
+  compara o orçamento contra o executado, por categoria/centro de custo,
+  pra virar decisão (não só relatório). Reforça o v4.3 (Orçamento Anual):
+  quando existir, precisa nascer com o comparativo contra as
+  `CategoriasEntrada`/Centro de Custo já existentes, não uma peça isolada.
+- **Dashboards em tempo real, auditoria e trilha completa** — já são
+  princípios dominantes deste sistema desde a FASE 0 (`AuditLog`,
+  "calculado na leitura"); a pesquisa confirma que é exatamente isso que
+  separa um sistema financeiro sério de uma planilha, então nenhuma
+  mudança de rumo aqui — só reforço de que já estamos alinhados.
+
+**Conclusão prática:** a arquitetura de Centro de Custo + Categorias de
+Entrada (v4.1.x) já segue o padrão certo (fund accounting simplificado).
+O que falta pra "competir" com um sistema financeiro de verdade não é
+reconstruir a base — é **completar o outro lado da mesma moeda (saídas/
+contas a pagar/contas a receber)** e **formalizar um Plano de Contas**
+por trás das categorias já existentes. As duas novas versões abaixo
+(v4.1.6 e v4.1.7) e o ajuste na v4.2 cobrem exatamente isso.
+
+##### v4.1.6 — Saídas: Contas a Pagar *(planejado, pesquisa de mercado)*
+
+- [ ] `CategoriasSaida` — catálogo espelhado de `CategoriasEntrada` (mesmo
+      padrão configurável), cada categoria marcada com o Centro de Custo
+      que a autoriza (Local/Geral) e, se a entrada de origem for
+      restrita (Fundo Restrito, ver acima), só libera gasto na mesma
+      finalidade.
+- [ ] Solicitação de pagamento → documentação obrigatória (nota fiscal/
+      recibo, Reg. Art. 120 §2º) → aprovação por **alçada de valor**
+      (quanto maior o valor, mais aprovadores — mesmo espírito do Teto de
+      Alçada Patrimonial já previsto em v4.5, mas pra despesa corrente,
+      não só patrimônio) → pagamento → comprovante.
+- [ ] 3 cotações obrigatórias acima de um valor de referência (Reg. Art.
+      62, já previsto em v4.6) — nasce junto com Saídas, é o mesmo dado.
+- [ ] Saldo do Centro de Custo (Local/Geral) só pode ser debitado até o
+      limite do que já foi liberado (v4.1.3) — nunca fica negativo.
+
+##### v4.1.7 — Contas a Receber *(planejado, pesquisa de mercado)*
+
+- [ ] Registro de valor **esperado, ainda não recebido** (ex: acordo de
+      parcelamento, boleto emitido pra terceiro) — Status Previsto/
+      Recebido/Vencido, sem contar no Centro de Custo até virar um
+      `LancamentoTesouraria` de verdade (não duplica, só antecipa a
+      visibilidade).
+- [ ] Alerta de vencimento — mesmo princípio "calculado na leitura" de
+      sempre (dias até o vencimento, nunca marcação manual de "atrasado").
+
 #### v4.2 — Ofertas, dízimos e arrecadação
 
 - [x] Registro de mapas de dízimos/ofertas por congregação, com numeração
       sequencial de "talão" — entregue em v4.1 (`LancamentosTesouraria`,
       Termo nº), já que não fazia sentido separar do fechamento/rateio.
+- [ ] **Plano de Contas** (pesquisa de mercado, ver acima) — catálogo
+      hierárquico de contas contábeis (Receita/Despesa/Ativo/Passivo, com
+      sub-níveis) por trás de `CategoriasEntrada`/`CategoriasSaida`; é a
+      peça que falta pra gerar Balanço Patrimonial/DRE de verdade em v4.3/
+      v4.5, em vez de só somatórios soltos.
+- [ ] `CategoriasEntrada.TipoFundo` (`RESTRITO` | `LIVRE`) — fund
+      accounting (pesquisa de mercado, ver acima): uma entrada de
+      Congresso/Revista tem finalidade específica; quando as Saídas
+      existirem (v4.1.6), só deixa gastar naquilo.
 - **Descartado (decisão explícita, 2026):** conferência/auditoria in loco
   pelo 2º Tesoureiro (Art. 36 §2º/41 II) — a visita física comparando o
   mapa físico com o dinheiro entregue deixa de fazer sentido com a

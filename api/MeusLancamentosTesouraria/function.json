@@ -5,8 +5,8 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": ["get", "post", "put", "delete"],
-      "route": "tesouraria-lancamentos/{id?}"
+      "methods": ["get"],
+      "route": "meus-lancamentos-tesouraria/{matricula}"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

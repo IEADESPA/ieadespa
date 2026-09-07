@@ -1419,8 +1419,8 @@ do resto do sistema.
       planilha; aceita nome avulso pra quem não é dizimista cadastrado.
 - [x] Lançamentos de entrada (`LancamentosTesouraria`) com Termo nº
       sequencial e contínuo por congregação, tipo (Dízimo/Oferta), forma de
-      pagamento (Dinheiro/PIX — PIX exige comprovante), travados assim que
-      o mês fecha.
+      pagamento (Dinheiro/PIX/Misto — ver v4.1.1), travados assim que o mês
+      fecha.
 - [x] Fechamento mensal (`FechamentosTesouraria`): Total Recebido − Aluguel
       − Lote = Total Final, rateado pelo percentual de retenção local
       (Art. 118, editável por congregação em `GestaoParametrosTesouraria` —
@@ -1433,6 +1433,33 @@ do resto do sistema.
 - [x] Perfis territoriais de acesso (Tesoureiro Local/Área/Região/
       Quadrante/Distrito — Geral já existia) + visão consolidada com
       drill-down por congregação dentro do escopo de cada um.
+
+##### v4.1.1 — Flexibilidade real (a partir do processo físico de verdade)
+
+Ajustes feitos a partir de como o bloco de dízimo funciona na prática, pra
+não travar o Tesoureiro em situações reais que a v4.1 ainda não previa:
+
+- [x] Comprovante de PIX/Misto agora é opcional na hora do lançamento —
+      pode chegar depois (`PUT /tesouraria-lancamentos/{id}` anexa), fica
+      marcado como "comprovante pendente" até lá. Antes exigia na hora, o
+      que travava o fluxo quando a pessoa manda o comprovante só depois.
+- [x] Pagamento misto (parte em dinheiro, parte em PIX no mesmo
+      lançamento) — `FormaPagamento = 'MISTO'` + `ValorPix` (o restante do
+      valor é considerado dinheiro).
+- [x] Cancelamento nunca mais é exclusão — vira um cancelamento motivado
+      que preserva o Termo nº e aparece no relatório como "CANCELADO —
+      motivo", igual à folha arrancada do bloco físico (a numeração nunca
+      pode simplesmente sumir, senão não bate com o talão original).
+- [x] Transparência no "Meu Painel": quem é dizimista vinculado a um
+      cadastro de membro vê o próprio histórico de contribuições
+      (`MeusLancamentosTesouraria`, mesmo padrão de autoatendimento por
+      matrícula de `MeusDadosLGPD`/`MinhaFoto` — pedido explícito do
+      usuário por transparência).
+- [x] Confirmado (já funcionava desde a v4.1, sem precisar de mudança):
+      dizimista não precisa ser membro cadastrado — `Dizimistas.MembroId`
+      é opcional, e o lançamento aceita nome avulso pra quem nunca foi
+      cadastrado (visitante, cônjuge não-membro etc.) — "só crentes podem
+      dizimar" não é "só membros podem dizimar".
 
 **Descartado desta versão (não é esquecimento — vira v4.1.2, depende dos
 dados desta versão já existirem):** saldo virtual por órgão/departamento

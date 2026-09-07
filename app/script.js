@@ -326,7 +326,34 @@ function mostrarSubAbaMeupainel(sub) {
     carregarOpcoesMeuVinculoTipo();
     carregarMeusVinculos();
     carregarMinhasSolicitacoesEdicao();
+    carregarMinhasContribuicoes();
   }
+}
+
+// ---- MINHAS CONTRIBUIÇÕES (v4.1.1) — transparência: se a matrícula estiver
+// vinculada a um cadastro de Dizimista, mostra o histórico de lançamentos.
+async function carregarMinhasContribuicoes() {
+  if (!authMatricula) return;
+  const cx = document.getElementById("cxMinhasContribuicoes");
+  const container = document.getElementById("resultadoMinhasContribuicoes");
+  const res = await fetch(`${API_BASE}/meus-lancamentos-tesouraria/${authMatricula}`);
+  const contribuicoes = await res.json();
+  if (!Array.isArray(contribuicoes) || contribuicoes.length === 0) {
+    cx.style.display = "none";
+    return;
+  }
+  cx.style.display = "block";
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Termo</th><th>Congregação</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Status</th></tr></thead><tbody>`;
+  contribuicoes.forEach(c => {
+    html += `<tr>
+      <td>${c.mesReferencia}</td><td>${c.termoNumero}</td><td>${c.congregacaoNome}</td>
+      <td>${c.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td><td>R$ ${Number(c.valor).toFixed(2)}</td>
+      <td>${c.formaPagamento}</td>
+      <td>${c.status === "CANCELADO" ? "<span class='badge-status badge-desligado'>Cancelado</span>" : "<span class='badge-status badge-ativo'>Ativo</span>"}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
@@ -411,7 +438,8 @@ async function salvarDizimistaAcao() {
 
 function alternarComprovanteLancamento() {
   const forma = document.getElementById("financeiroLancForma").value;
-  document.getElementById("cxComprovanteLancamento").style.display = forma === "PIX" ? "block" : "none";
+  document.getElementById("cxComprovanteLancamento").style.display = forma === "PIX" || forma === "MISTO" ? "block" : "none";
+  document.getElementById("cxValorPixLancamento").style.display = forma === "MISTO" ? "block" : "none";
 }
 
 function arquivoParaBase64(arquivo) {
@@ -432,19 +460,21 @@ async function salvarLancamentoTesourariaAcao() {
   const tipo = document.getElementById("financeiroLancTipo").value;
   const valor = document.getElementById("financeiroLancValor").value;
   const formaPagamento = document.getElementById("financeiroLancForma").value;
+  const valorPix = document.getElementById("financeiroLancValorPix").value;
   const arquivoComprovante = document.getElementById("financeiroLancComprovante").files[0];
 
   if (!congregacaoId || !mesReferencia || !valor || (!dizimistaId && !nomeAvulso)) {
     msg.textContent = "Preencha congregação, mês, valor e o dizimista (cadastrado ou nome avulso).";
     return;
   }
-  if (formaPagamento === "PIX" && !arquivoComprovante) {
-    msg.textContent = "Lançamento via PIX exige o comprovante.";
+  if (formaPagamento === "MISTO" && !valorPix) {
+    msg.textContent = "Em pagamento misto, informe o valor pago via PIX.";
     return;
   }
 
   const body = { congregacaoId, mesReferencia, tipo, valor, formaPagamento };
   if (dizimistaId) body.dizimistaId = dizimistaId; else body.nomeAvulso = nomeAvulso;
+  if (formaPagamento === "MISTO") body.valorPix = valorPix;
   if (arquivoComprovante) {
     body.comprovanteBase64 = await arquivoParaBase64(arquivoComprovante);
     body.mimeType = arquivoComprovante.type;
@@ -457,6 +487,7 @@ async function salvarLancamentoTesourariaAcao() {
   if (data.sucesso) {
     document.getElementById("financeiroLancNomeAvulso").value = "";
     document.getElementById("financeiroLancValor").value = "";
+    document.getElementById("financeiroLancValorPix").value = "";
     document.getElementById("financeiroLancComprovante").value = "";
     carregarLancamentosTesouraria();
   }
@@ -473,27 +504,66 @@ async function carregarLancamentosTesouraria() {
     container.innerHTML = "<p class='subtitle'>Nenhum lançamento neste mês ainda.</p>";
     return;
   }
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Termo</th><th>Nome</th><th>Tipo</th><th>Valor</th><th>Forma</th><th></th></tr></thead><tbody>`;
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Termo</th><th>Nome</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Status</th><th></th></tr></thead><tbody>`;
   lancamentos.forEach(l => {
+    const formaTexto = l.formaPagamento === "MISTO"
+      ? `Misto (PIX R$ ${Number(l.valorPix).toFixed(2)} + dinheiro R$ ${(Number(l.valor) - Number(l.valorPix)).toFixed(2)})`
+      : l.formaPagamento;
+    const comprovanteTag = l.comprovanteUrl
+      ? ` <a href="${l.comprovanteUrl}" target="_blank" rel="noopener">📎</a>`
+      : (l.comprovantePendente ? ` <span class="badge-status badge-licenca">⚠️ comprovante pendente</span>` : "");
+    const statusTag = l.status === "CANCELADO"
+      ? `<span class="badge-status badge-desligado">CANCELADO</span><br /><small>${l.motivoCancelamento || ""}</small>`
+      : `<span class="badge-status badge-ativo">Ativo</span>`;
+    let acoes = "";
+    if (!l.fechamentoId && l.status === "ATIVO") {
+      acoes = `<button class="btn-link btn-link-perigo" onclick="cancelarLancamentoTesourariaAcao(${l.lancamentoId}, ${l.termoNumero})">Cancelar</button>`;
+      if (l.comprovantePendente) {
+        acoes += ` <button class="btn-link" onclick="anexarComprovanteTesourariaAcao(${l.lancamentoId})">Anexar comprovante</button>`;
+      }
+    }
     html += `<tr>
       <td>${l.termoNumero}</td>
       <td>${l.dizimistaNome || l.nomeAvulso}</td>
       <td>${l.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td>
       <td>R$ ${Number(l.valor).toFixed(2)}</td>
-      <td>${l.formaPagamento}${l.comprovanteUrl ? ` <a href="${l.comprovanteUrl}" target="_blank" rel="noopener">📎</a>` : ""}</td>
-      <td class="acoes-inline">${l.fechamentoId ? "" : `<button class="btn-link btn-link-perigo" onclick="excluirLancamentoTesourariaAcao(${l.lancamentoId})">Excluir</button>`}</td>
+      <td>${formaTexto}${comprovanteTag}</td>
+      <td>${statusTag}</td>
+      <td class="acoes-inline">${acoes}</td>
     </tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
 }
 
-async function excluirLancamentoTesourariaAcao(lancamentoId) {
-  if (!(await confirmarAcao("Excluir este lançamento?", "Excluir"))) return;
-  const res = await fetchProtegido(`${API_BASE}/tesouraria-lancamentos/${lancamentoId}`, { method: "DELETE" });
+async function cancelarLancamentoTesourariaAcao(lancamentoId, termoNumero) {
+  const motivo = await pedirTexto(`Motivo do cancelamento do Termo nº ${termoNumero}`, "Ex: valor digitado errado, folha arrancada do bloco");
+  if (motivo === null) return;
+  if (!motivo.trim()) { mostrarToast("Informe o motivo do cancelamento.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-lancamentos/${lancamentoId}`, {
+    method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo })
+  });
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarLancamentosTesouraria();
+}
+
+async function anexarComprovanteTesourariaAcao(lancamentoId) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/jpeg,image/png,application/pdf";
+  input.onchange = async () => {
+    const arquivo = input.files[0];
+    if (!arquivo) return;
+    const body = { comprovanteBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type };
+    const res = await fetchProtegido(`${API_BASE}/tesouraria-lancamentos/${lancamentoId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    avisarResultado(data);
+    if (data.sucesso) carregarLancamentosTesouraria();
+  };
+  input.click();
 }
 
 async function carregarResumoFechamento() {
@@ -583,6 +653,12 @@ async function gerarRelatorioTesourariaAcao(modo) {
   let html = `<h4>${data.congregacaoNome} — ${data.mesReferencia} (${modo === "mural" ? "versão mural, sem valores" : "versão completa"})</h4>
     <table class="tabela-frequencia"><thead><tr><th>Termo</th><th>Nome</th><th>Tipo</th>${modo === "mural" ? "" : "<th>Valor</th><th>Forma</th>"}</tr></thead><tbody>`;
   data.lancamentos.forEach(l => {
+    // Cancelado (folha arrancada do bloco físico) nunca some da numeração —
+    // continua aparecendo no relatório, marcado como tal, com o motivo.
+    if (l.status === "CANCELADO") {
+      html += `<tr style="opacity:.6;"><td>${l.termoNumero}</td><td colspan="${modo === "mural" ? 2 : 4}"><em>CANCELADO — ${l.motivoCancelamento || "sem motivo registrado"}</em></td></tr>`;
+      return;
+    }
     html += `<tr><td>${l.termoNumero}</td><td>${l.nome}</td><td>${l.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td>${modo === "mural" ? "" : `<td>R$ ${Number(l.valor).toFixed(2)}</td><td>${l.formaPagamento}</td>`}</tr>`;
   });
   html += "</tbody></table>";

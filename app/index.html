@@ -141,6 +141,19 @@
           <div id="resumoStatsPessoal"></div>
           <div class="rolagem-tabela"><div id="resultadoPainelPessoal"></div></div>
 
+          <!-- MINHAS CONTRIBUIÇÕES (v4.1.1) — transparência: se a matrícula
+               estiver vinculada a um cadastro de Dizimista em alguma
+               congregação, mostra o histórico do que foi lançado em seu
+               nome. Fica em branco/some sozinho pra quem nunca foi
+               vinculado como dizimista (silencioso, não é obrigatório). -->
+          <div id="cxMinhasContribuicoes" style="display:none; margin-top:24px;">
+            <hr />
+            <h3>💰 Minhas Contribuições</h3>
+            <p class="subtitle">Registro do que foi lançado em seu nome na tesouraria — mesmo
+              número de termo usado no bloco de dízimo, pra você conferir.</p>
+            <div class="rolagem-tabela"><div id="resultadoMinhasContribuicoes"></div></div>
+          </div>
+
           <!-- Só aparece pra quem logou com senha (tem acesso à Secretaria) -->
           <div id="cxTrocarSenha" style="display:none; margin-top:24px;">
             <hr />
@@ -1482,10 +1495,15 @@
             <select id="financeiroLancForma" onchange="alternarComprovanteLancamento()">
               <option value="DINHEIRO">Dinheiro</option>
               <option value="PIX">PIX</option>
+              <option value="MISTO">Misto (parte dinheiro, parte PIX)</option>
             </select>
           </div>
+          <div class="input-group" id="cxValorPixLancamento" style="display:none;">
+            <label>Valor pago via PIX (o restante do valor é considerado dinheiro):</label>
+            <input type="number" id="financeiroLancValorPix" step="0.01" min="0.01" placeholder="Ex: 50.00" />
+          </div>
           <div class="input-group" id="cxComprovanteLancamento" style="display:none;">
-            <label>Comprovante do PIX (obrigatório):</label>
+            <label>Comprovante do PIX (pode anexar agora ou depois, na lista abaixo):</label>
             <input type="file" id="financeiroLancComprovante" accept="image/jpeg,image/png,application/pdf" />
           </div>
           <button class="btn-confirmar" style="width:auto;" onclick="salvarLancamentoTesourariaAcao()">💾 Registrar lançamento</button>

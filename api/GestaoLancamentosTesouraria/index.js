@@ -1,13 +1,21 @@
-// GestaoLancamentosTesouraria (v4.1)
+// GestaoLancamentosTesouraria (v4.1 + v4.1.1)
 // O "bloco de dízimo" digital: cada lançamento é uma entrada de dízimo ou
 // oferta, com Termo nº gerado pelo servidor (nunca digitado à mão — shared/
 // tesouraria.js::proximoNumeroTermo, sequencial contínuo por congregação).
-// PIX exige comprovante (mesmo padrão de upload de GestaoDocumentos); em
-// dinheiro não há como validar tecnicamente, fica na palavra registrada.
-// GET    /api/tesouraria-lancamentos?congregacaoId=&mesReferencia=
-// POST   /api/tesouraria-lancamentos -> { congregacaoId, dizimistaId?, nomeAvulso?,
-//         tipo, valor, formaPagamento, comprovanteBase64?, mimeType?, mesReferencia }
-// DELETE /api/tesouraria-lancamentos/{id} -> só antes do fechamento do mês
+// v4.1.1 (flexibilidade real, a partir de como o processo funciona na
+// prática):
+//  - PIX/Misto podem ser lançados sem comprovante na hora (chega depois via
+//    PUT) — fica marcado como "comprovantePendente" até anexar.
+//  - "Misto": parte em dinheiro + parte em PIX no mesmo lançamento
+//    (ValorPix é a parte em PIX; o restante de Valor é em dinheiro).
+//  - Nunca se exclui um lançamento (equivalente a rasurar o bloco físico) —
+//    DELETE virou "cancelar com motivo": preserva o Termo nº e aparece no
+//    relatório como CANCELADO, igual à folha arrancada do bloco físico.
+// GET   /api/tesouraria-lancamentos?congregacaoId=&mesReferencia=
+// POST  /api/tesouraria-lancamentos -> { congregacaoId, dizimistaId?, nomeAvulso?,
+//        tipo, valor, formaPagamento, valorPix?, comprovanteBase64?, mimeType?, mesReferencia }
+// PUT   /api/tesouraria-lancamentos/{id} -> { comprovanteBase64, mimeType } (anexa/troca comprovante, só antes do fechamento)
+// DELETE /api/tesouraria-lancamentos/{id} -> { motivo } (cancela, preserva o Termo nº — só antes do fechamento)
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
@@ -15,10 +23,24 @@ const storage = require("../shared/storage");
 const tesouraria = require("../shared/tesouraria");
 
 const TIPOS = ["DIZIMO", "OFERTA"];
-const FORMAS = ["DINHEIRO", "PIX"];
+const FORMAS = ["DINHEIRO", "PIX", "MISTO"];
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
 const REGEX_MES = /^\d{4}-\d{2}$/;
+
+function validarEProcessarComprovante(comprovanteBase64, mimeType) {
+  if (!MIME_PERMITIDOS.includes(mimeType)) {
+    return { erro: `Formato de comprovante inválido. Use um de: ${MIME_PERMITIDOS.join(", ")}.` };
+  }
+  let buffer;
+  try { buffer = Buffer.from(comprovanteBase64, "base64"); } catch (e) {
+    return { erro: "comprovanteBase64 inválido." };
+  }
+  if (buffer.length === 0 || buffer.length > TAMANHO_MAXIMO_BYTES) {
+    return { erro: "Comprovante vazio ou maior que 15 MB." };
+  }
+  return { buffer };
+}
 
 module.exports = async function (context, req) {
   const id = context.bindingData.id;
@@ -42,7 +64,8 @@ module.exports = async function (context, req) {
       SELECT l.LancamentoId AS lancamentoId, l.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
              l.DizimistaId AS dizimistaId, d.Nome AS dizimistaNome, l.NomeAvulso AS nomeAvulso,
              l.TermoNumero AS termoNumero, l.Tipo AS tipo, l.Valor AS valor, l.FormaPagamento AS formaPagamento,
-             l.ComprovanteUrl AS comprovanteUrl, l.MesReferencia AS mesReferencia, l.FechamentoId AS fechamentoId,
+             l.ValorPix AS valorPix, l.ComprovanteUrl AS comprovanteUrl, l.MesReferencia AS mesReferencia,
+             l.FechamentoId AS fechamentoId, l.Status AS status, l.MotivoCancelamento AS motivoCancelamento,
              CONVERT(varchar(33), l.CriadoEm, 126) AS criadoEm
       FROM LancamentosTesouraria l
       JOIN Congregacoes c ON c.CongregacaoId = l.CongregacaoId
@@ -52,13 +75,16 @@ module.exports = async function (context, req) {
     `);
     const lancamentos = result.recordset
       .filter(l => auth.estaNoEscopo(usuario, l.congregacaoNome))
-      .map(l => Object.assign({}, l, { comprovanteUrl: l.comprovanteUrl ? storage.urlDocumentoComSas(l.comprovanteUrl) : null }));
+      .map(l => Object.assign({}, l, {
+        comprovanteUrl: l.comprovanteUrl ? storage.urlDocumentoComSas(l.comprovanteUrl) : null,
+        comprovantePendente: l.status === "ATIVO" && ["PIX", "MISTO"].includes(l.formaPagamento) && !l.comprovanteUrl
+      }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: lancamentos };
     return;
   }
 
   if (req.method === "POST") {
-    const { congregacaoId, dizimistaId, nomeAvulso, tipo, valor, formaPagamento, comprovanteBase64, mimeType, mesReferencia } = req.body || {};
+    const { congregacaoId, dizimistaId, nomeAvulso, tipo, valor, formaPagamento, valorPix, comprovanteBase64, mimeType, mesReferencia } = req.body || {};
     if (!congregacaoId || !tipo || !valor || !formaPagamento || !mesReferencia) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: congregacaoId, tipo, valor, formaPagamento, mesReferencia." } };
       return;
@@ -83,6 +109,14 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Valor deve ser maior que zero." } };
       return;
     }
+    let valorPixFinal = null;
+    if (formaPagamento === "MISTO") {
+      if (valorPix == null || Number(valorPix) <= 0 || Number(valorPix) >= Number(valor)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Em pagamento misto, informe valorPix maior que zero e menor que o valor total (o restante é considerado dinheiro)." } };
+        return;
+      }
+      valorPixFinal = valorPix;
+    }
 
     const congNome = await nomeCongregacao(congregacaoId);
     if (!congNome || !auth.estaNoEscopo(usuario, congNome)) {
@@ -98,30 +132,22 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // Comprovante é opcional na hora do lançamento (PIX/Misto podem chegar
+    // sem foto ainda — fica "pendente" até alguém anexar via PUT). Só valida
+    // de verdade quando algo foi de fato enviado.
     let comprovanteUrl = null;
-    if (formaPagamento === "PIX") {
-      if (!comprovanteBase64 || !mimeType) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: "Lançamento via PIX exige comprovante (comprovanteBase64 + mimeType)." } };
+    if (comprovanteBase64) {
+      if (!mimeType) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o mimeType do comprovante." } };
         return;
       }
-      if (!MIME_PERMITIDOS.includes(mimeType)) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: `Formato de comprovante inválido. Use um de: ${MIME_PERMITIDOS.join(", ")}.` } };
-        return;
-      }
-      let buffer;
-      try { buffer = Buffer.from(comprovanteBase64, "base64"); } catch (e) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: "comprovanteBase64 inválido." } };
-        return;
-      }
-      if (buffer.length === 0 || buffer.length > TAMANHO_MAXIMO_BYTES) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: "Comprovante vazio ou maior que 15 MB." } };
-        return;
-      }
+      const { erro, buffer } = validarEProcessarComprovante(comprovanteBase64, mimeType);
+      if (erro) { context.res = { status: 400, body: { sucesso: false, mensagem: erro } }; return; }
       try {
         comprovanteUrl = await storage.salvarDocumento(buffer, mimeType);
-      } catch (erro) {
-        context.log.error("Falha ao salvar comprovante no Blob Storage:", erro.message);
-        context.res = { status: 200, body: { sucesso: false, mensagem: "Falha ao salvar o comprovante. Avise a equipe técnica: " + erro.message } };
+      } catch (erroUpload) {
+        context.log.error("Falha ao salvar comprovante no Blob Storage:", erroUpload.message);
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Falha ao salvar o comprovante. Avise a equipe técnica: " + erroUpload.message } };
         return;
       }
     }
@@ -135,26 +161,33 @@ module.exports = async function (context, req) {
       .input("tipo", sql.NVarChar(20), tipo)
       .input("valor", sql.Decimal(10, 2), valor)
       .input("formaPagamento", sql.NVarChar(20), formaPagamento)
+      .input("valorPix", sql.Decimal(10, 2), valorPixFinal)
       .input("comprovanteUrl", sql.NVarChar(500), comprovanteUrl)
       .input("mesReferencia", sql.Char(7), mesReferencia)
       .input("registradoPor", sql.Int, usuario.membroId)
       .query(`INSERT INTO LancamentosTesouraria
-                (CongregacaoId, DizimistaId, NomeAvulso, TermoNumero, Tipo, Valor, FormaPagamento, ComprovanteUrl, MesReferencia, RegistradoPor)
+                (CongregacaoId, DizimistaId, NomeAvulso, TermoNumero, Tipo, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor)
               OUTPUT INSERTED.LancamentoId
-              VALUES (@congregacaoId, @dizimistaId, @nomeAvulso, @termoNumero, @tipo, @valor, @formaPagamento, @comprovanteUrl, @mesReferencia, @registradoPor)`);
+              VALUES (@congregacaoId, @dizimistaId, @nomeAvulso, @termoNumero, @tipo, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor)`);
     const lancamentoId = criado.recordset[0].LancamentoId;
 
     await registrarAuditoria({
       tabela: "LancamentosTesouraria", registroId: lancamentoId, acao: "Lançou entrada de tesouraria", usuarioId: usuario.membroId,
-      dadosDepois: { congregacaoId, tipo, valor, formaPagamento, mesReferencia, termoNumero }
+      dadosDepois: { congregacaoId, tipo, valor, formaPagamento, valorPix: valorPixFinal, mesReferencia, termoNumero, comComprovante: !!comprovanteUrl }
     });
-    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Lançamento nº ${termoNumero} registrado.`, lancamentoId, termoNumero } };
+    const avisoPendente = !comprovanteUrl && ["PIX", "MISTO"].includes(formaPagamento) ? " (comprovante pendente — anexe assim que possível)" : "";
+    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Lançamento nº ${termoNumero} registrado.${avisoPendente}`, lancamentoId, termoNumero } };
     return;
   }
 
-  if (req.method === "DELETE") {
+  if (req.method === "PUT") {
     if (!id) {
       context.res = { status: 400, body: { erro: "Informe o id na rota: /api/tesouraria-lancamentos/{id}" } };
+      return;
+    }
+    const { comprovanteBase64, mimeType } = req.body || {};
+    if (!comprovanteBase64 || !mimeType) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe comprovanteBase64 e mimeType." } };
       return;
     }
     const atual = await pool.request().input("id", sql.Int, id).query(`
@@ -170,14 +203,65 @@ module.exports = async function (context, req) {
       return;
     }
     if (registro.FechamentoId) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Este lançamento já está dentro de um mês fechado — não pode mais ser excluído." } };
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este lançamento já está dentro de um mês fechado — não é mais possível anexar comprovante." } };
       return;
     }
-    await pool.request().input("id", sql.Int, id).query(`DELETE FROM LancamentosTesouraria WHERE LancamentoId = @id`);
+    const { erro, buffer } = validarEProcessarComprovante(comprovanteBase64, mimeType);
+    if (erro) { context.res = { status: 400, body: { sucesso: false, mensagem: erro } }; return; }
+    let comprovanteUrl;
+    try {
+      comprovanteUrl = await storage.salvarDocumento(buffer, mimeType);
+    } catch (erroUpload) {
+      context.log.error("Falha ao salvar comprovante no Blob Storage:", erroUpload.message);
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Falha ao salvar o comprovante. Avise a equipe técnica: " + erroUpload.message } };
+      return;
+    }
+    await pool.request().input("id", sql.Int, id).input("comprovanteUrl", sql.NVarChar(500), comprovanteUrl)
+      .query(`UPDATE LancamentosTesouraria SET ComprovanteUrl = @comprovanteUrl WHERE LancamentoId = @id`);
     await registrarAuditoria({
-      tabela: "LancamentosTesouraria", registroId: Number(id), acao: "Excluiu lançamento de tesouraria (antes do fechamento)", usuarioId: usuario.membroId, dadosAntes: registro
+      tabela: "LancamentosTesouraria", registroId: Number(id), acao: "Anexou comprovante ao lançamento", usuarioId: usuario.membroId
     });
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Lançamento excluído." } };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Comprovante anexado." } };
+    return;
+  }
+
+  if (req.method === "DELETE") {
+    if (!id) {
+      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/tesouraria-lancamentos/{id}" } };
+      return;
+    }
+    const { motivo } = req.body || {};
+    if (!motivo || !motivo.trim()) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o motivo do cancelamento (igual à anotação na folha arrancada do bloco físico)." } };
+      return;
+    }
+    const atual = await pool.request().input("id", sql.Int, id).query(`
+      SELECT l.*, c.Nome AS congregacaoNome FROM LancamentosTesouraria l JOIN Congregacoes c ON c.CongregacaoId = l.CongregacaoId WHERE l.LancamentoId = @id
+    `);
+    if (atual.recordset.length === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Lançamento não encontrado." } };
+      return;
+    }
+    const registro = atual.recordset[0];
+    if (!auth.estaNoEscopo(usuario, registro.congregacaoNome)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
+      return;
+    }
+    if (registro.FechamentoId) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este lançamento já está dentro de um mês fechado — não pode mais ser cancelado (corrija com um lançamento de ajuste)." } };
+      return;
+    }
+    if (registro.Status === "CANCELADO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este lançamento já está cancelado." } };
+      return;
+    }
+    await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), motivo.trim()).input("canceladoPor", sql.Int, usuario.membroId)
+      .query(`UPDATE LancamentosTesouraria SET Status = 'CANCELADO', MotivoCancelamento = @motivo, CanceladoPor = @canceladoPor, CanceladoEm = SYSUTCDATETIME() WHERE LancamentoId = @id`);
+    await registrarAuditoria({
+      tabela: "LancamentosTesouraria", registroId: Number(id), acao: "Cancelou lançamento (folha arrancada do bloco)", usuarioId: usuario.membroId,
+      dadosAntes: registro, dadosDepois: { motivo }
+    });
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Lançamento nº ${registro.TermoNumero} cancelado — vai aparecer no relatório como cancelado.` } };
     return;
   }
 

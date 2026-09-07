@@ -43,12 +43,14 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // Só lançamentos ATIVOS entram na soma — um cancelado (folha arrancada do
+  // bloco) preserva o Termo nº pro relatório, mas não conta no total.
   const soma = await pool.request()
     .input("congregacaoId", sql.Int, congregacaoId).input("mesReferencia", sql.Char(7), mesReferencia)
-    .query(`SELECT ISNULL(SUM(Valor), 0) AS total, COUNT(*) AS quantidade FROM LancamentosTesouraria WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia`);
+    .query(`SELECT ISNULL(SUM(Valor), 0) AS total, COUNT(*) AS quantidade FROM LancamentosTesouraria WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia AND Status = 'ATIVO'`);
   const { total: totalRecebido, quantidade } = soma.recordset[0];
   if (quantidade === 0) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Não há lançamentos neste mês para fechar." } };
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Não há lançamentos ativos neste mês para fechar." } };
     return;
   }
 

@@ -1884,6 +1884,99 @@ empenho, não só orçado-vs-realizado.
       processados, quais falharam) — atualiza status automaticamente, sem
       conferência manual um por um.
 
+**Terceira rodada de pesquisa (pedido explícito — "não tenha dor de
+pesquisar", sem se limitar a fontes brasileiras): o achado desta rodada
+com mais potencial de diferenciar o sistema de qualquer concorrente:**
+
+- **Trilha de auditoria inviolável (hash chain / tamper-evident log)** —
+  técnica usada em sistemas financeiros/bancários sérios pra provar
+  matematicamente que um registro de auditoria nunca foi alterado: cada
+  linha do `AuditLog` carrega um hash calculado a partir dos próprios
+  dados **mais o hash da linha anterior** — se alguém tentar editar ou
+  apagar um registro antigo direto no banco (por fora do sistema), a
+  corrente de hashes quebra e fica matematicamente detectável, sem
+  precisar de blockchain de verdade (é só encadeamento criptográfico,
+  leve, roda em qualquer banco relacional). Isso é **exatamente** o tipo
+  de coisa que "nenhuma igreja tem" (eco da fala do usuário na v3.7,
+  sobre a Ouvidoria) — aqui pro financeiro é ainda mais forte: prova
+  contra qualquer acusação de que alguém adulterou o histórico do
+  dinheiro. Vira a **v4.1.10**, abaixo — e vale considerar estender pro
+  `AuditLog` inteiro do sistema (todas as fases), não só financeiro,
+  quando chegar a hora. *(pesquisa técnica geral sobre tamper-evident
+  logs, hash chains, Merkle trees — aplicação bancária/contábil)*
+- **COSO Internal Control Framework** — a referência mundial de controles
+  internos (usada por auditores em qualquer país), com 5 componentes:
+  Ambiente de Controle, Avaliação de Riscos, Atividades de Controle,
+  Informação e Comunicação, e Monitoramento. Serve de **checklist pra
+  saber se a FASE 4 está completa de verdade**: Ambiente de Controle
+  (segregação de funções, 2.7) ✅, Atividades de Controle (aprovação por
+  alçada, 3 cotações, trilha de auditoria) ✅, Informação e Comunicação
+  (Centro de Custo, Consolidado) ✅ — o que ainda falta mapear pra depois:
+  Avaliação de Riscos formal (um processo periódico de identificar onde o
+  sistema financeiro está mais vulnerável) e Monitoramento independente
+  (é o próprio papel do Conselho Fiscal/NIF, v4.6/v4.7, mas vale nomear a
+  ligação). Não vira uma versão nova — é a lente pra revisar todas as
+  outras quando a hora chegar. *(COSO.org, Diligent, Pathlock, Cherry
+  Bekaert — internal control framework)*
+- **Indicadores financeiros de saúde institucional (KPIs de terceiro
+  setor)** — três métricas padrão que qualquer conselho de ONG/igreja
+  séria acompanha: **Meses de Reserva de Caixa** (quantos meses de
+  despesa o caixa cobriria — já ecoa o Fundo de Reserva do Art. 64, 3
+  meses); **Índice de Aplicação em Atividades-Fim** (% do gasto total em
+  programas/atividades-fim vs. administrativo — referência de mercado:
+  70-80% é saudável, abaixo de 65% é sinal de alerta) — isso se conecta
+  direto com a classificação funcional de despesas da ITG 2002 (v4.1.8);
+  e **Liquidez** (capacidade de cobrir compromissos de curto prazo). Um
+  painel desses pro CLI/Diretoria/Conselho Fiscal vira a **v4.1.11**,
+  abaixo — tudo calculado na leitura a partir dos dados que já vão existir
+  (Centro de Custo, Fechamentos, Saídas), nunca digitado à mão.
+  *(Sage, JMCO, Warren Averett, GivingArc — nonprofit financial ratios)*
+- **Open Finance Brasil (Banco Central) — conciliação bancária automática
+  de verdade** — API regulada pelo Banco Central (42 milhões de consentimentos
+  ativos, 1.3 bilhão de chamadas/mês em 2026) que permite importar o
+  extrato bancário real direto no sistema, sem upload manual de
+  comprovante — o sistema cruza automaticamente cada lançamento com o
+  extrato de verdade e só aponta o que não bate, em vez de exigir
+  conferência manual (a conciliação de PIX em lote da v4.1.2 vira
+  desnecessária: o extrato real substitui o comprovante individual). Como
+  hoje existe **uma única conta bancária pra toda a denominação**
+  (confirmado, v4.1.3), essa integração pode valer a pena mais cedo do
+  que se imaginava — não precisa esperar contas bancárias por
+  congregação. Vira a **v4.1.12**, abaixo. *(TecnoSpeed, Pluggy, Openi,
+  Paytime — Open Finance Brasil, regulado pelo Banco Central e compatível
+  com LGPD)*
+
+##### v4.1.10 — Trilha de Auditoria Inviolável (hash chain) *(planejado, pesquisa de mercado)*
+
+- [ ] `AuditLog.HashRegistro` — hash (SHA-256) calculado sobre os dados do
+      próprio registro + o hash do registro anterior da mesma tabela;
+      qualquer alteração/exclusão feita por fora do sistema (direto no
+      banco) quebra a corrente de forma matematicamente detectável.
+- [ ] Rotina de verificação de integridade (recalcula a corrente inteira e
+      aponta onde ela quebrou, se quebrar) — disponível pro Conselho
+      Fiscal/NIF (v4.6/v4.7) como evidência de que o histórico financeiro
+      nunca foi adulterado.
+
+##### v4.1.11 — Painel de Indicadores Financeiros *(planejado, pesquisa de mercado)*
+
+- [ ] Meses de Reserva de Caixa (Centro de Custo Geral ÷ média de saídas
+      mensais) — referência direta do Fundo de Reserva, Art. 64 (meta de
+      3 meses).
+- [ ] Índice de Aplicação em Atividades-Fim (% do gasto em programas vs.
+      administrativo, via classificação funcional da ITG 2002 — v4.1.8).
+- [ ] Índice de Liquidez (capacidade de cobrir compromissos de curto
+      prazo) — painel pro CLI/Diretoria/Conselho Fiscal, calculado na
+      leitura a partir dos dados de Centro de Custo/Saídas já existentes.
+
+##### v4.1.12 — Conciliação Bancária Automática (Open Finance Brasil) *(planejado, pesquisa de mercado)*
+
+- [ ] Integração via Open Finance (API regulada pelo Banco Central) pra
+      importar o extrato real da conta bancária única (v4.1.3) direto no
+      sistema — substitui a conciliação manual/em lote (v4.1.2) por
+      cruzamento automático contra o extrato de verdade.
+- [ ] Alerta só do que não bate (divergência real) — não precisa mais
+      conferir lançamento por lançamento contra recibo.
+
 #### v4.2 — Ofertas, dízimos e arrecadação
 
 - [x] Registro de mapas de dízimos/ofertas por congregação, com numeração

@@ -445,10 +445,10 @@ async function carregarMinhasContribuicoes() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês",
-  relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", dizimistas: "Dizimistas do Mês",
+  fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
 let _congregacoesFinanceiroCache = null;
@@ -462,6 +462,7 @@ let _categoriasEntradaCache = null;
 // neste array, mesmo espírito do objeto MODULOS do painel principal.
 const SUBMODULOS_FINANCEIRO = [
   { chave: "entradas", titulo: "Entradas", icone: "📝", subAba: "lancamentos", pronto: true },
+  { chave: "planocontas", titulo: "Plano de Contas", icone: "📚", subAba: "planocontas", pronto: true },
   { chave: "saidas", titulo: "Saídas (Contas a Pagar)", icone: "💸", pronto: false },
   { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", pronto: false },
   { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
@@ -491,6 +492,7 @@ function mostrarSubAbaFinanceiro(sub) {
   });
   document.getElementById("tituloModulo").textContent = `Financeiro — ${TITULOS_SUB_FINANCEIRO[sub]}`;
   if (sub === "visaogeral") { montarGradeSubmodulosFinanceiro(); return; }
+  if (sub === "planocontas") { montarCatalogosFinanceiro(); return; }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
     if (sub === "dizimistas") carregarDizimistasMes();
@@ -1543,6 +1545,18 @@ const CATALOGOS_CFG = {
   tiposPenalidade: {
     titulo: "Penalidades (Art. 95 §2º)", idField: "penalidadeId",
     campos: [["codigo", "Código (ex: ADVERTENCIA)"], ["nome", "Nome"], ["referenciaRegimento", "Referência (ex: Art. 95 §2º, I)"]]
+  },
+  planoContas: {
+    titulo: "Plano de Contas", idField: "contaId",
+    campos: [["codigo", "Código (ex: 4.1.1)"], ["nome", "Nome da Conta"],
+      ["tipo", "Tipo", [["ATIVO", "Ativo"], ["PASSIVO", "Passivo"], ["PATRIMONIO_LIQUIDO", "Patrimônio Líquido"], ["RECEITA", "Receita"], ["DESPESA", "Despesa"]]]],
+    pai: { campo: "contaPaiId", rotulo: "Conta Pai", origem: "planoContas" }
+  },
+  categoriasEntrada: {
+    titulo: "Categorias de Entrada", idField: "categoriaId",
+    campos: [["codigo", "Código (ex: DIZIMO)"], ["nome", "Nome"],
+      ["tipoFundo", "Tipo de Fundo", [["LIVRE", "Livre"], ["RESTRITO", "Restrito"]]]],
+    pai: { campo: "contaContabilId", rotulo: "Conta Contábil", origem: "planoContas" }
   }
 };
 // Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
@@ -1552,6 +1566,11 @@ const ESTRUTURA_ORDEM = ["extensoes", "congregacoes", "areas", "regioes", "quadr
 const CATALOGOS_ORDEM = ["statuses", "situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar", "canaisOficiais"];
 const POLITICAS_RETENCAO_ORDEM = ["politicasRetencao"];
 const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
+// v4.2 — Plano de Contas primeiro, Categorias de Entrada depois (a segunda
+// referencia a primeira via "pai") — moram dentro do Financeiro, não na
+// aba genérica de Catálogos (princípio já estabelecido: cada módulo
+// configura o que é exclusivo dele).
+const CATALOGOS_FINANCEIRO_ORDEM = ["planoContas", "categoriasEntrada"];
 
 function montarPoliticasRetencao() {
   document.getElementById("politicasRetencaoConteudo").innerHTML = POLITICAS_RETENCAO_ORDEM.map(k => secaoCatalogo(k)).join("");
@@ -1560,6 +1579,13 @@ function montarPoliticasRetencao() {
 function montarOrgaosLocais() {
   document.getElementById("orgaosLocaisConteudo").innerHTML = ORGAOS_LOCAIS_ORDEM.map(k => secaoCatalogo(k)).join("");
   ORGAOS_LOCAIS_ORDEM.forEach(k => { carregarOpcoesPai(k); carregarCatalogoLista(k); });
+}
+function montarCatalogosFinanceiro() {
+  document.getElementById("catalogosFinanceiroConteudo").innerHTML = CATALOGOS_FINANCEIRO_ORDEM.map(k => secaoCatalogo(k)).join("");
+  CATALOGOS_FINANCEIRO_ORDEM.forEach(k => { carregarOpcoesPai(k); carregarCatalogoLista(k); });
+  // Cache local usado pelo formulário de lançamento — precisa recarregar
+  // depois de qualquer alteração em Categorias de Entrada.
+  _categoriasEntradaCache = null;
 }
 const CATALOGOS_PAGINA = 15;
 let catalogoCache = {};

@@ -1761,15 +1761,24 @@ existir antes do Orçamento (v4.8) e das Demonstrações (v4.9).
 - [x] Registro de mapas de dízimos/ofertas por congregação, com numeração
       sequencial de "talão" — entregue em v4.1 (`LancamentosTesouraria`,
       Termo nº), já que não fazia sentido separar do fechamento/rateio.
-- [ ] **Plano de Contas** — catálogo hierárquico de contas contábeis
-      (Receita/Despesa/Ativo/Passivo, com sub-níveis) por trás de
-      `CategoriasEntrada`/`CategoriasSaida` (v4.5) — estruturado desde o
-      início pra alimentar as demonstrações da ITG 2002 (v4.9), não uma
-      lista de categorias soltas.
-- [ ] `CategoriasEntrada.TipoFundo` (`RESTRITO` | `LIVRE`) — fund
-      accounting: uma entrada de Congresso/Revista/Campanha (v4.4) tem
-      finalidade específica; a Saída (v4.5) correspondente só libera
-      gasto na mesma finalidade quando a entrada de origem for restrita.
+- [x] **Plano de Contas** (`PlanoContas`) — catálogo hierárquico
+      configurável (auto-referenciado, mesmo motor genérico de catálogo já
+      usado em Congregações/Áreas — `pai.origem` apontando pra si mesmo)
+      por trás de `CategoriasEntrada` (`CategoriasSaida` entra em v4.5) —
+      semeado com uma estrutura mínima real (Ativo/Passivo/Patrimônio
+      Líquido/Receita/Despesa, com sub-níveis) já compatível com as
+      demonstrações da ITG 2002 (v4.9), não uma lista de categorias
+      soltas. Tela própria dentro de Financeiro → Plano de Contas (não na
+      aba genérica de Catálogos — é configuração exclusiva do módulo).
+- [x] `CategoriasEntrada.TipoFundo` (`RESTRITO` | `LIVRE`) — fund
+      accounting: Revista/Congresso já nascem `RESTRITO` (finalidade
+      específica); Dízimo/Oferta/Departamento/Secretaria são `LIVRE`. A
+      Saída (v4.5) correspondente só vai liberar gasto na mesma
+      finalidade quando a entrada de origem for restrita.
+- [x] **Correção de bug**: a tela de "Categorias de Entrada" nunca tinha
+      sido de fato construída no front-end (v4.1.5 só criou o catálogo no
+      backend) — o aviso "cadastre em Catálogos" no formulário de
+      lançamento apontava pra um lugar que não existia. Corrigido junto.
 - **Descartado (decisão explícita, 2026):** conferência/auditoria in loco
   pelo 2º Tesoureiro (Art. 36 §2º/41 II) — a visita física comparando o
   mapa físico com o dinheiro entregue deixa de fazer sentido com a

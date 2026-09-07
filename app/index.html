@@ -100,6 +100,7 @@
             <div class="submenu-aba" id="submenuFinanceiro">
               <button class="btn-subaba ativo" id="btnSubFinanceiroVisaogeral" onclick="mostrarSubAbaFinanceiro('visaogeral')"><span class="icone">🧭</span><span class="rotulo">Visão Geral</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroLancamentos" onclick="mostrarSubAbaFinanceiro('lancamentos')"><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroPlanocontas" onclick="mostrarSubAbaFinanceiro('planocontas')"><span class="icone">📚</span><span class="rotulo">Plano de Contas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -1592,7 +1593,7 @@
             <label>Categoria da entrada:</label>
             <select id="financeiroLancTipo"></select>
             <p class="subtitle" style="margin:4px 0 0;">Precisa de outra categoria? Cadastre em
-              Estrutura &amp; Territórios → Catálogos → Categorias de Entrada.</p>
+              Financeiro → Plano de Contas.</p>
           </div>
           <div class="input-group">
             <label>Dizimista cadastrado:</label>
@@ -1655,6 +1656,21 @@
 
           <hr />
           <div class="rolagem-tabela"><div id="resultadoLancamentosTesouraria"></div></div>
+        </div>
+
+        <!-- SUB-ABA: PLANO DE CONTAS (v4.2) — fundação contábil de que as
+             próximas versões da FASE 4 dependem (Saídas, Orçamento,
+             Demonstrações ITG 2002). Reaproveita o mesmo motor genérico de
+             catálogo (secaoCatalogo) já usado em Estrutura/Catálogos —
+             mora aqui dentro do Financeiro, não lá, porque é configuração
+             exclusiva deste módulo. -->
+        <div id="subFinanceiroPlanocontas" class="sub-aba-secretaria" style="display:none;">
+          <h3>📚 Plano de Contas</h3>
+          <p class="subtitle">Hierarquia de contas contábeis (Ativo/Passivo/Patrimônio Líquido/
+            Receita/Despesa) por trás das Categorias de Entrada. Cada categoria usada nos
+            lançamentos aponta pra uma conta aqui, e diz se é Fundo Restrito (finalidade
+            específica) ou Livre.</p>
+          <div id="catalogosFinanceiroConteudo"></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

@@ -100,7 +100,12 @@ const CATALOGOS = {
   },
   categoriasEntrada: {
     tabela: "CategoriasEntrada", chave: "CategoriaId", idField: "categoriaId",
-    campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(150), ativa: sql.Bit },
+    campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(150), tipoFundo: sql.NVarChar(20), contaContabilId: sql.Int, ativa: sql.Bit },
+    permissao: "financeiro"
+  },
+  planoContas: {
+    tabela: "PlanoContas", chave: "ContaId", idField: "contaId",
+    campos: { codigo: sql.NVarChar(20), nome: sql.NVarChar(200), tipo: sql.NVarChar(20), contaPaiId: sql.Int, ativa: sql.Bit },
     permissao: "financeiro"
   }
 };

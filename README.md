@@ -1618,33 +1618,51 @@ de 40% (Centro de Custo Local) pra congregação poder gastar.
   módulo financeiro completo, incluindo **saídas** — fica pra mais adiante,
   junto com Fiscalização do Conselho Fiscal (Art. 145).
 
-##### v4.1.4 — Outras entradas (bazar, campanha, evento)
+##### v4.1.4 — Categorias de Entrada (revertida e substituída pela v4.1.5)
 
-Pedido explícito: a congregação não vive só de dízimo/oferta — pode ter
-outras fontes (ex: venda de canjica). Diferente de Dízimo/Oferta, que só
-passam pelo crivo mensal do Fechamento, essa entrada é dinheiro fora do
-fluxo regular e exige **aprovação individual da Tesouraria Geral antes de
-contar** — controle mais apertado, não mais frouxo.
+Tentativa inicial: um `Tipo = 'OUTRA'` genérico com aprovação individual da
+Geral. **Corrigido a partir de feedback direto do usuário** — ver v4.1.5.
 
-- [x] `Tipo = 'OUTRA'` + `Descricao` livre (não é lançamento de uma pessoa
-      específica — dizimista/nome avulso vira opcional, a descrição é
-      obrigatória).
-- [x] Nasce com `StatusAprovacao = 'PENDENTE'`; só conta no
-      `FecharMesTesouraria` depois de `APROVADO` — o fechamento do mês fica
-      **bloqueado** enquanto houver uma "Outra Entrada" pendente daquele
-      mês (evita ela ficar presa num fechamento já travado sem nunca ter
-      sido decidida).
-- [x] `AprovarEntradaTesouraria` — aprovar/rejeitar exige nível GLOBAL
-      (mesmo princípio de `RegistrarRepasseTesouraria`: quem confere nunca é
-      quem lançou); rejeição exige motivo, fica visível (mesmo espírito do
-      cancelamento — nunca se apaga, só se marca).
-- [x] Sub-aba Consolidado ganhou uma lista "Entradas Extras Pendentes de
-      Aprovação" cross-congregação (dentro do escopo de quem está vendo) —
-      a Geral revisa tudo num lugar só, sem abrir Lançamentos congregação
-      por congregação.
-- **Sem notificação por e-mail/SMS** (decisão de escopo — isso puxaria uma
-  integração nova): a visibilidade é pela lista de pendências, que já
-  cumpre o mesmo papel prático.
+##### v4.1.5 — Categorias de Entrada nomeadas (correção de rumo)
+
+Não existe "outras entradas" genérica — pedido explícito, com justificativa
+de compliance: um balde sem categoria nomeada é exatamente o tipo de
+rubrica que esconde lavagem de dinheiro. A congregação tem várias fontes
+de entrada reais e nomeadas (dízimo, oferta, entrada de departamento,
+oferta de culto de departamento, secretaria, revista, congresso...) — cada
+uma precisa ser uma categoria com nome próprio, não um "outros".
+
+- [x] `CategoriasEntrada` — catálogo configurável (via `GestaoCatalogos`,
+      mesmo padrão de Departamentos/Congregações — dá pra cadastrar mais
+      categorias em Catálogos, sem mexer em código). `LancamentosTesouraria.Tipo`
+      passa a ser o `Codigo` de uma categoria em vez de um enum fixo no
+      código. Seed inicial: Dízimo, Oferta, Entrada de Departamento, Oferta
+      de Culto do Departamento, Entrada de Secretaria, Entrada de Revista,
+      Entrada de Congresso.
+- [x] Todas as categorias passam pelo **mesmo fluxo** (lançamento →
+      fechamento mensal → rateio 40/60 → liberação da Geral) — **sem**
+      aprovação individual extra por categoria; a supervisão é o fechamento
+      + liberação de sempre (v4.1.3), que já olha o mês inteiro.
+- [x] `Descricao` (nota livre) fica disponível pra **qualquer** categoria,
+      não só uma — e pelo menos um entre dizimista/nome avulso/descrição é
+      sempre obrigatório (nunca existe uma entrada sem procedência
+      identificada, é exatamente esse buraco que gera risco de compliance).
+- **Revertido desta versão:** `Tipo='OUTRA'`, `StatusAprovacao`,
+  `AprovarEntradaTesouraria` (removido) — não fazem mais sentido com a
+  categorização nomeada.
+- **Fechamentos mensais já são "automáticos"** por design desde a v4.1: o
+  rateio 40/60 (Centro de Custo Local/Geral) é sempre **calculado a partir
+  dos lançamentos**, nunca digitado — não existe "lançar de novo" o
+  resultado de um fechamento.
+- **Fora do escopo desta versão, registrado pra não esquecer:** um módulo
+  de "contas a receber" (registrar um boleto/valor esperado antes de
+  receber de fato) foi mencionado como ideia de pesquisa, mas não é uma
+  entrada de dinheiro real — vira, se fizer sentido, uma peça própria
+  depois que o essencial de entradas estiver maduro. Centro de Custo por
+  Área/Região também não existe hoje (essas unidades não guardam dinheiro
+  próprio, são coordenação) — só Local e Geral, como já é; Distrito pode
+  vir a ter um centro de custo próprio no futuro, mas isso é história pra
+  mais adiante.
 
 #### v4.2 — Ofertas, dízimos e arrecadação
 

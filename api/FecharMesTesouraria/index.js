@@ -43,28 +43,15 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // v4.1.4 — não dá pra fechar o mês com uma "Outra Entrada" ainda pendente
-  // de aprovação: uma vez fechado, o lançamento trava (FechamentoId), e uma
-  // aprovação feita depois ficaria presa sem nunca contar em fechamento
-  // nenhum. Mais simples e seguro exigir que resolva (aprova ou rejeita)
-  // antes de fechar.
-  const pendentes = await pool.request()
-    .input("congregacaoId", sql.Int, congregacaoId).input("mesReferencia", sql.Char(7), mesReferencia)
-    .query(`SELECT COUNT(*) AS quantidade FROM LancamentosTesouraria WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia AND Status = 'ATIVO' AND StatusAprovacao = 'PENDENTE'`);
-  if (pendentes.recordset[0].quantidade > 0) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: `Há ${pendentes.recordset[0].quantidade} entrada(s) extra(s) aguardando aprovação da Tesouraria Geral — resolva antes de fechar o mês.` } };
-    return;
-  }
-
-  // Só lançamentos ATIVOS e (Dízimo/Oferta OU já aprovados) entram na soma —
-  // um cancelado (folha arrancada do bloco) preserva o Termo nº pro
-  // relatório, mas não conta no total; uma "Outra Entrada" rejeitada também
-  // não conta (mas fica visível, mesmo espírito de CANCELADO).
+  // Só lançamentos ATIVOS entram na soma — um cancelado (folha arrancada do
+  // bloco) preserva o Termo nº pro relatório, mas não conta no total.
+  // Categoria não importa aqui: Dízimo, Oferta, Entrada de Departamento,
+  // Revista, Congresso etc. entram todas do mesmo jeito (CategoriasEntrada,
+  // v4.1.5) — a supervisão é este próprio fechamento + a liberação da Geral.
   const soma = await pool.request()
     .input("congregacaoId", sql.Int, congregacaoId).input("mesReferencia", sql.Char(7), mesReferencia)
     .query(`SELECT ISNULL(SUM(Valor), 0) AS total, COUNT(*) AS quantidade FROM LancamentosTesouraria
-            WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia AND Status = 'ATIVO'
-              AND StatusAprovacao IN ('NAO_APLICAVEL', 'APROVADO')`);
+            WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia AND Status = 'ATIVO'`);
   const { total: totalRecebido, quantidade } = soma.recordset[0];
   if (quantidade === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não há lançamentos ativos neste mês para fechar." } };

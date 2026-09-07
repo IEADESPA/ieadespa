@@ -1,6 +1,6 @@
-// GestaoLancamentosTesouraria (v4.1 + v4.1.1 + v4.1.4)
-// O "bloco de dízimo" digital: cada lançamento é uma entrada de dízimo ou
-// oferta, com Termo nº gerado pelo servidor (nunca digitado à mão — shared/
+// GestaoLancamentosTesouraria (v4.1 + v4.1.1 + v4.1.5)
+// O "bloco de dízimo" digital: cada lançamento é uma entrada categorizada,
+// com Termo nº gerado pelo servidor (nunca digitado à mão — shared/
 // tesouraria.js::proximoNumeroTermo, sequencial contínuo por congregação).
 // v4.1.1 (flexibilidade real, a partir de como o processo funciona na
 // prática):
@@ -11,14 +11,18 @@
 //  - Nunca se exclui um lançamento (equivalente a rasurar o bloco físico) —
 //    DELETE virou "cancelar com motivo": preserva o Termo nº e aparece no
 //    relatório como CANCELADO, igual à folha arrancada do bloco físico.
-// v4.1.4 — a congregação pode ter outras fontes de entrada além de Dízimo/
-// Oferta (bazar, venda de campanha, evento — "Tipo=OUTRA" + Descricao livre).
-// Diferente de Dízimo/Oferta, toda entrada OUTRA nasce com
-// StatusAprovacao='PENDENTE' e só entra no fechamento depois que a
-// Tesouraria Geral aprova (AprovarEntradaTesouraria) — é dinheiro fora do
-// fluxo regular, o controle é mais apertado, não mais frouxo. Dízimo/Oferta
-// nascem 'NAO_APLICAVEL' (seguem só o crivo mensal de sempre).
-// GET   /api/tesouraria-lancamentos?congregacaoId=&mesReferencia=&statusAprovacao=
+// v4.1.5 — correção de rumo (feedback direto): não existe "outras entradas"
+// genérica (risco de compliance — um balde sem categoria nomeada é
+// exatamente o tipo de rubrica que esconde lavagem de dinheiro). "Tipo"
+// agora é o Codigo de um catálogo configurável (CategoriasEntrada, via
+// GestaoCatalogos — mesmo padrão de Departamentos/Congregações), com
+// Dízimo/Oferta/Entrada de Departamento/Secretaria/Revista/Congresso etc.
+// já semeados — todas passam pelo MESMO fluxo (sem aprovação individual
+// extra: a supervisão é o fechamento mensal + liberação da Geral de
+// sempre). "Descrição" vira opcional pra qualquer categoria (nota livre),
+// e dizimista/nome avulso OU descrição — pelo menos um dos dois precisa
+// identificar a origem, pra nunca existir uma entrada sem procedência.
+// GET   /api/tesouraria-lancamentos?congregacaoId=&mesReferencia=
 // POST  /api/tesouraria-lancamentos -> { congregacaoId, dizimistaId?, nomeAvulso?,
 //        tipo, descricao?, valor, formaPagamento, valorPix?, comprovanteBase64?, mimeType?, mesReferencia }
 // PUT   /api/tesouraria-lancamentos/{id} -> { comprovanteBase64, mimeType } (anexa/troca comprovante, só antes do fechamento)
@@ -29,7 +33,6 @@ const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const tesouraria = require("../shared/tesouraria");
 
-const TIPOS = ["DIZIMO", "OFERTA", "OUTRA"];
 const FORMAS = ["DINHEIRO", "PIX", "MISTO"];
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
@@ -61,24 +64,24 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "GET") {
-    const { congregacaoId, mesReferencia, statusAprovacao } = req.query || {};
+    const { congregacaoId, mesReferencia } = req.query || {};
     const request = pool.request();
     let where = "1=1";
     if (congregacaoId) { request.input("congregacaoId", sql.Int, congregacaoId); where += " AND l.CongregacaoId = @congregacaoId"; }
     if (mesReferencia) { request.input("mesReferencia", sql.Char(7), mesReferencia); where += " AND l.MesReferencia = @mesReferencia"; }
-    if (statusAprovacao) { request.input("statusAprovacao", sql.NVarChar(20), statusAprovacao); where += " AND l.StatusAprovacao = @statusAprovacao"; }
 
     const result = await request.query(`
       SELECT l.LancamentoId AS lancamentoId, l.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
              l.DizimistaId AS dizimistaId, d.Nome AS dizimistaNome, l.NomeAvulso AS nomeAvulso,
-             l.TermoNumero AS termoNumero, l.Tipo AS tipo, l.Descricao AS descricao, l.Valor AS valor,
-             l.FormaPagamento AS formaPagamento, l.ValorPix AS valorPix, l.ComprovanteUrl AS comprovanteUrl,
-             l.MesReferencia AS mesReferencia, l.FechamentoId AS fechamentoId, l.ConciliacaoId AS conciliacaoId,
-             l.Status AS status, l.MotivoCancelamento AS motivoCancelamento, l.StatusAprovacao AS statusAprovacao,
-             l.MotivoRejeicao AS motivoRejeicao, CONVERT(varchar(33), l.CriadoEm, 126) AS criadoEm
+             l.TermoNumero AS termoNumero, l.Tipo AS tipo, cat.Nome AS categoriaNome, l.Descricao AS descricao,
+             l.Valor AS valor, l.FormaPagamento AS formaPagamento, l.ValorPix AS valorPix,
+             l.ComprovanteUrl AS comprovanteUrl, l.MesReferencia AS mesReferencia, l.FechamentoId AS fechamentoId,
+             l.ConciliacaoId AS conciliacaoId, l.Status AS status, l.MotivoCancelamento AS motivoCancelamento,
+             CONVERT(varchar(33), l.CriadoEm, 126) AS criadoEm
       FROM LancamentosTesouraria l
       JOIN Congregacoes c ON c.CongregacaoId = l.CongregacaoId
       LEFT JOIN Dizimistas d ON d.DizimistaId = l.DizimistaId
+      LEFT JOIN CategoriasEntrada cat ON cat.Codigo = l.Tipo
       WHERE ${where}
       ORDER BY l.TermoNumero DESC
     `);
@@ -101,19 +104,17 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: congregacaoId, tipo, valor, formaPagamento, mesReferencia." } };
       return;
     }
-    if (!TIPOS.includes(tipo)) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: `Tipo inválido. Use um de: ${TIPOS.join(", ")}.` } };
+    const categoria = await pool.request().input("codigo", sql.NVarChar(30), tipo)
+      .query(`SELECT Nome FROM CategoriasEntrada WHERE Codigo = @codigo AND Ativa = 1`);
+    if (categoria.recordset.length === 0) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Categoria de entrada inválida ou inativa. Cadastre-a em Catálogos → Categorias de Entrada." } };
       return;
     }
-    // "Outra entrada" (bazar, campanha, evento) é dinheiro institucional,
-    // não de uma pessoa específica — pede descrição em vez de dizimista.
-    if (tipo === "OUTRA") {
-      if (!descricao || !descricao.trim()) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: "Descreva a origem desta entrada (ex: Venda de Canjica — Departamento de Jovens)." } };
-        return;
-      }
-    } else if (!dizimistaId && !nomeAvulso) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o dizimista cadastrado ou um nome avulso." } };
+    // Pelo menos um precisa identificar a origem do dinheiro — nunca uma
+    // entrada sem procedência (é exatamente esse buraco que vira risco de
+    // compliance/AML).
+    if (!dizimistaId && !nomeAvulso && (!descricao || !descricao.trim())) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o dizimista, um nome avulso, ou ao menos uma descrição da origem." } };
       return;
     }
     if (!FORMAS.includes(formaPagamento)) {
@@ -171,26 +172,24 @@ module.exports = async function (context, req) {
       }
     }
 
-    const statusAprovacaoInicial = tipo === "OUTRA" ? "PENDENTE" : "NAO_APLICAVEL";
     const termoNumero = await tesouraria.proximoNumeroTermo(pool, sql, congregacaoId);
     const criado = await pool.request()
       .input("congregacaoId", sql.Int, congregacaoId)
       .input("dizimistaId", sql.Int, dizimistaId || null)
       .input("nomeAvulso", sql.NVarChar(200), dizimistaId ? null : (nomeAvulso || null))
       .input("termoNumero", sql.Int, termoNumero)
-      .input("tipo", sql.NVarChar(20), tipo)
-      .input("descricao", sql.NVarChar(300), tipo === "OUTRA" ? descricao.trim() : null)
+      .input("tipo", sql.NVarChar(30), tipo)
+      .input("descricao", sql.NVarChar(300), descricao ? descricao.trim() : null)
       .input("valor", sql.Decimal(10, 2), valor)
       .input("formaPagamento", sql.NVarChar(20), formaPagamento)
       .input("valorPix", sql.Decimal(10, 2), valorPixFinal)
       .input("comprovanteUrl", sql.NVarChar(500), comprovanteUrl)
       .input("mesReferencia", sql.Char(7), mesReferencia)
       .input("registradoPor", sql.Int, usuario.membroId)
-      .input("statusAprovacao", sql.NVarChar(20), statusAprovacaoInicial)
       .query(`INSERT INTO LancamentosTesouraria
-                (CongregacaoId, DizimistaId, NomeAvulso, TermoNumero, Tipo, Descricao, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor, StatusAprovacao)
+                (CongregacaoId, DizimistaId, NomeAvulso, TermoNumero, Tipo, Descricao, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor)
               OUTPUT INSERTED.LancamentoId
-              VALUES (@congregacaoId, @dizimistaId, @nomeAvulso, @termoNumero, @tipo, @descricao, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor, @statusAprovacao)`);
+              VALUES (@congregacaoId, @dizimistaId, @nomeAvulso, @termoNumero, @tipo, @descricao, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor)`);
     const lancamentoId = criado.recordset[0].LancamentoId;
 
     await registrarAuditoria({
@@ -198,8 +197,7 @@ module.exports = async function (context, req) {
       dadosDepois: { congregacaoId, tipo, descricao: descricao || null, valor, formaPagamento, valorPix: valorPixFinal, mesReferencia, termoNumero, comComprovante: !!comprovanteUrl }
     });
     const avisoPendente = !comprovanteUrl && ["PIX", "MISTO"].includes(formaPagamento) ? " (comprovante pendente — anexe assim que possível)" : "";
-    const avisoAprovacao = tipo === "OUTRA" ? " Aguardando aprovação da Tesouraria Geral — só entra no fechamento depois de aprovado." : "";
-    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Lançamento nº ${termoNumero} registrado.${avisoPendente}${avisoAprovacao}`, lancamentoId, termoNumero } };
+    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Lançamento nº ${termoNumero} registrado.${avisoPendente}`, lancamentoId, termoNumero } };
     return;
   }
 

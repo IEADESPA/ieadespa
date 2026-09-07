@@ -1575,25 +1575,22 @@
           <hr />
           <h4 style="margin:0 0 10px; color: var(--cor-primaria);">➕ Novo lançamento</h4>
           <div class="input-group">
-            <label>Tipo:</label>
-            <select id="financeiroLancTipo" onchange="alternarCamposTipoLancamento()">
-              <option value="DIZIMO">Dízimo</option>
-              <option value="OFERTA">Oferta</option>
-              <option value="OUTRA">Outra entrada (bazar, campanha, evento...)</option>
-            </select>
+            <label>Categoria da entrada:</label>
+            <select id="financeiroLancTipo"></select>
+            <p class="subtitle" style="margin:4px 0 0;">Precisa de outra categoria? Cadastre em
+              Estrutura &amp; Territórios → Catálogos → Categorias de Entrada.</p>
           </div>
-          <div class="input-group" id="cxDizimistaLancamento">
+          <div class="input-group">
             <label>Dizimista cadastrado:</label>
             <select id="financeiroLancDizimista"><option value="">— Nome avulso (abaixo) —</option></select>
           </div>
-          <div class="input-group" id="cxNomeAvulsoLancamento">
+          <div class="input-group">
             <label>Ou nome avulso (visitante/não cadastrado):</label>
             <input type="text" id="financeiroLancNomeAvulso" placeholder="Nome de quem contribuiu" />
           </div>
-          <div class="input-group" id="cxDescricaoLancamento" style="display:none;">
-            <label>Descrição (obrigatória para "Outra entrada"):</label>
-            <input type="text" id="financeiroLancDescricao" placeholder="Ex: Venda de Canjica — Departamento de Jovens" />
-            <p class="subtitle" style="margin:4px 0 0;">Precisa de aprovação da Tesouraria Geral antes de contar no fechamento.</p>
+          <div class="input-group">
+            <label>Descrição/observação (opcional, ou obrigatória se não houver dizimista/nome avulso):</label>
+            <input type="text" id="financeiroLancDescricao" placeholder="Ex: Venda de revistas — turma de adultos" />
           </div>
           <div class="input-group">
             <label>Valor (R$):</label>

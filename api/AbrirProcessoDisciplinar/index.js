@@ -11,6 +11,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { selectProcessoComInfracoes, validarOrgaoProcesso } = require("../shared/disciplinar");
+const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
@@ -37,6 +38,12 @@ module.exports = async function (context, req) {
   const orgao = await validarOrgaoProcesso(pool, sql, { orgaoResponsavelId, orgaoLocalId });
   if (!orgao.valido) {
     context.res = { status: 200, body: { sucesso: false, mensagem: orgao.mensagem } };
+    return;
+  }
+  // v3.6.2 — só quem é membro daquele órgão territorial (Lideranca Papel+
+  // Escopo, ou GLOBAL) pode abrir processo nele.
+  if (orgao.orgaoLocalId && !(await membroAutorizadoNoOrgaoLocal(pool, sql, usuario.membroId, orgao.orgaoLocalId))) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Você não tem vínculo com este órgão territorial." } };
     return;
   }
 

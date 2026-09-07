@@ -1042,25 +1042,35 @@ let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar 
 // submenu reflete isso na próxima vez que a aba Reuniões for aberta. O mesmo
 // bloco de conteúdo é reaproveitado pra qualquer órgão selecionado — só o
 // bloco de Elegíveis (exclusivo da Assembleia Geral) muda de visibilidade.
+// v3.6.2 — o submenu junta os 5 órgãos centrais com as JAI/JEA/TER/CRA/CRAF/
+// CEQ/CAQ/CDE/JUC territoriais (OrgaosLocais). Cada item ganha uma chave
+// composta (`central:5`/`local:12`, mesmo padrão do form de Processo
+// Disciplinar) — nenhum bloco de UI novo: território cai no formulário
+// genérico de reunião simples, igual qualquer órgão sem composição especial.
 async function montarSubmenuReunioes() {
   const res = await fetchProtegido(`${API_BASE}/orgaos`);
-  const orgaos = await res.json();
-  window._orgaosReunioesCache = orgaos;
+  const orgaos = (await res.json()).map(o => Object.assign({}, o, { chave: `central:${o.orgaoId}` }));
+  const locaisRes = await fetchProtegido(`${API_BASE}/catalogos/orgaosLocais`);
+  const locais = (await locaisRes.json())
+    .filter(o => o.ativo !== false)
+    .map(o => Object.assign({}, o, { chave: `local:${o.orgaoLocalId}`, nome: `${o.sigla} — ${o.nome}` }));
+  const todos = orgaos.concat(locais);
+  window._orgaosReunioesCache = todos;
 
   const container = document.getElementById("submenuReunioes");
-  container.innerHTML = orgaos.map(o => `
-    <button class="btn-subaba" id="btnSubReunioes${o.orgaoId}" onclick="selecionarOrgaoReunioes(${o.orgaoId})">
+  container.innerHTML = todos.map(o => `
+    <button class="btn-subaba" id="btnSubReunioes${o.chave.replace(":", "_")}" onclick="selecionarOrgaoReunioes('${o.chave}')">
       <span class="icone">🏛️</span><span class="rotulo">${o.nome}</span>
     </button>`).join("");
 
-  if (orgaos.length === 0) return;
-  const aindaExiste = orgaos.some(o => o.orgaoId === window._orgaoAtualReunioes);
-  selecionarOrgaoReunioes(aindaExiste ? window._orgaoAtualReunioes : orgaos[0].orgaoId);
+  if (todos.length === 0) return;
+  const aindaExiste = todos.some(o => o.chave === window._orgaoAtualReunioes);
+  selecionarOrgaoReunioes(aindaExiste ? window._orgaoAtualReunioes : todos[0].chave);
 }
 
-function selecionarOrgaoReunioes(orgaoId) {
+function selecionarOrgaoReunioes(chave) {
   const orgaos = window._orgaosReunioesCache || [];
-  const orgao = orgaos.find(o => o.orgaoId === orgaoId);
+  const orgao = orgaos.find(o => o.chave === chave);
   if (!orgao) return;
 
   const ehAssembleia = orgao.sigla === "ASSEMBLEIA_GERAL";
@@ -1068,8 +1078,8 @@ function selecionarOrgaoReunioes(orgaoId) {
   const ehDiretoria = orgao.sigla === "DIRETORIA_EXECUTIVA";
   const ehConselhoFiscal = orgao.sigla === "CONSELHO_FISCAL";
   const ehCEI = orgao.sigla === "CEI";
-  window._orgaoAtualReunioes = orgaoId;
-  document.getElementById("reuniaoOrgao").value = orgaoId;
+  window._orgaoAtualReunioes = chave;
+  document.getElementById("reuniaoOrgao").value = chave;
   document.getElementById("reunioesOrgaoNome").textContent = orgao.nome;
   document.getElementById("blocoElegiveisAssembleia").style.display = ehAssembleia ? "block" : "none";
   document.getElementById("blocoComposicaoCLI").style.display = ehCLI ? "block" : "none";
@@ -1081,8 +1091,8 @@ function selecionarOrgaoReunioes(orgaoId) {
   document.getElementById("blocoConvocarAssembleia").style.display = ehAssembleia ? "block" : "none";
   document.getElementById("blocoAbrirReuniaoSimples").style.display = ehAssembleia ? "none" : "block";
   orgaos.forEach(o => {
-    const btn = document.getElementById(`btnSubReunioes${o.orgaoId}`);
-    if (btn) btn.classList.toggle("ativo", o.orgaoId === orgaoId);
+    const btn = document.getElementById(`btnSubReunioes${o.chave.replace(":", "_")}`);
+    if (btn) btn.classList.toggle("ativo", o.chave === chave);
   });
 
   if (ehAssembleia) carregarConvocacoesPendentes();
@@ -1815,15 +1825,17 @@ async function iniciarSessaoConvocadaAcao(sessaoId) {
 }
 
 async function abrirReuniao() {
-  const orgaoId = document.getElementById("reuniaoOrgao").value;
+  const chave = document.getElementById("reuniaoOrgao").value;
   const descricao = document.getElementById("descricaoReuniao").value;
   const senhaAcesso = document.getElementById("senhaNovaReuniao").value;
-  if (!orgaoId || !descricao || !senhaAcesso) { mostrarToast("Escolha o órgão e preencha descrição e senha.", "erro"); return; }
+  if (!chave || !descricao || !senhaAcesso) { mostrarToast("Escolha o órgão e preencha descrição e senha.", "erro"); return; }
+  const [tipo, id] = chave.split(":");
+  const body = tipo === "local" ? { orgaoLocalId: id, descricao, senhaAcesso } : { orgaoId: id, descricao, senhaAcesso };
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/abrir`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orgaoId, descricao, senhaAcesso })
+    body: JSON.stringify(body)
   });
   const data = await res.json();
   document.getElementById("resultadoSecretaria").textContent = data.mensagem;
@@ -1852,8 +1864,10 @@ async function encerrarReuniaoAcao(sessaoId) {
 
 async function carregarReunioes() {
   const container = document.getElementById("resultadoListaReunioes");
-  const orgaoId = document.getElementById("reuniaoOrgao").value;
-  const res = await fetchProtegido(`${API_BASE}/reunioes${orgaoId ? `?orgaoId=${orgaoId}` : ""}`);
+  const chave = document.getElementById("reuniaoOrgao").value;
+  const [tipo, id] = (chave || "").split(":");
+  const query = tipo === "local" ? `?orgaoLocalId=${id}` : (tipo === "central" ? `?orgaoId=${id}` : "");
+  const res = await fetchProtegido(`${API_BASE}/reunioes${query}`);
   const reunioes = await res.json();
 
   if (reunioes.length === 0) {

@@ -9,6 +9,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
+const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -24,7 +25,7 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const sessaoResult = await pool.request().input("id", sql.Int, sessaoId)
-    .query(`SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, Status AS status FROM Sessoes WHERE SessaoId = @id`);
+    .query(`SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, OrgaoLocalId AS orgaoLocalId, Status AS status FROM Sessoes WHERE SessaoId = @id`);
   const sessao = sessaoResult.recordset[0];
   if (!sessao) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Reunião não encontrada." } };
@@ -34,11 +35,18 @@ module.exports = async function (context, req) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Esta reunião já está encerrada." } };
     return;
   }
+  if (sessao.orgaoLocalId && !(await membroAutorizadoNoOrgaoLocal(pool, sql, usuarioId, sessao.orgaoLocalId))) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Você não tem vínculo com o órgão territorial desta reunião." } };
+    return;
+  }
 
   await pool.request().input("id", sql.Int, sessaoId).query(`UPDATE Sessoes SET Status = 'ENCERRADA' WHERE SessaoId = @id`);
 
-  const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId)
-    .query(`SELECT OrgaoId AS orgaoId, Sigla AS sigla FROM Orgaos WHERE OrgaoId = @id`);
+  const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId).input("idLocal", sql.Int, sessao.orgaoLocalId).query(`
+    SELECT o.OrgaoId AS orgaoId, o.Sigla AS sigla, NULL AS orgaoLocalId, NULL AS nivel, NULL AS referenciaId FROM Orgaos o WHERE o.OrgaoId = @id
+    UNION ALL
+    SELECT NULL, ol.Sigla, ol.OrgaoLocalId, ol.Nivel, ol.ReferenciaId FROM OrgaosLocais ol WHERE ol.OrgaoLocalId = @idLocal
+  `);
   const orgao = orgaoResult.recordset[0] || null;
 
   const presencasResult = await pool.request().input("id", sql.Int, sessaoId)

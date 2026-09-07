@@ -22,6 +22,7 @@
 const { sql } = require("./db");
 const estatuto = require("./estatuto");
 const disciplina = require("./disciplina");
+const escopo = require("./escopo");
 
 function emComunhaoAtiva(membro, idsSobDisciplina) {
   return membro.situacaoMembro !== "SEM_COMUNHAO" && !idsSobDisciplina.has(membro.membroId);
@@ -151,6 +152,30 @@ async function universoDoOrgao(pool, orgao) {
   if (orgao.sigla === "CLI") {
     const composicao = await composicaoCLI(pool, orgao.orgaoId);
     return composicao.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
+  }
+
+  // v3.6.2 — órgão territorial (OrgaosLocais): nunca tem Assento (Assentos só
+  // referencia Orgaos), então pula direto pro fallback — mas ESCOPADO pela
+  // hierarquia territorial (resolverEscopoCongregacoes), nunca "todo mundo
+  // ATIVO do sistema inteiro" (senão uma reunião da JAI de 1 congregação
+  // computaria falta pra denominação toda).
+  if (orgao.orgaoLocalId) {
+    const escopoTipo = escopo.NIVEL_PARA_ESCOPO_TIPO[orgao.nivel];
+    const nomesOuTodas = await escopo.resolverEscopoCongregacoes(pool, escopoTipo, orgao.referenciaId);
+    const request = pool.request();
+    let where = "m.Status = 'ATIVO'";
+    if (nomesOuTodas !== "TODAS") {
+      if (nomesOuTodas.length === 0) return [];
+      const nomesValidos = nomesOuTodas.map((n, i) => { request.input(`n${i}`, sql.NVarChar(150), n); return `@n${i}`; });
+      where += ` AND c.Nome IN (${nomesValidos.join(",")})`;
+    }
+    const result = await request.query(`
+      SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro
+      FROM MembroReferencia m
+      LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+      WHERE ${where}
+    `);
+    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
   }
 
   const porAssento = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId).query(`

@@ -3,6 +3,7 @@
 // ListarProcessosDisciplinares — evita duplicar a mesma query+agregação de
 // infrações em 3 arquivos.
 const estatuto = require("./estatuto");
+const escopo = require("./escopo");
 
 // Art. 103 §1º, II — ministros ordenados (Pastor/Evangelista) respondem
 // duplamente: localmente ao CEI e, na credencial, ao Conselho de Ética da
@@ -112,24 +113,24 @@ function redigirSeSigiloso(processos, usuario) {
 
 // Valida o órgão de um processo (central OU territorial, exatamente 1) e
 // resolve a Sigla — usado por AbrirProcessoDisciplinar e por RECORRER
-// (EvoluirProcessoDisciplinar), evitando duplicar a mesma checagem.
+// (EvoluirProcessoDisciplinar), evitando duplicar a mesma checagem. Por
+// baixo reaproveita shared/escopo.js::resolverOrgao (v3.6.2), só
+// acrescentando a restrição de sigla (só JAI/JEA/TER julgam disciplina).
 async function validarOrgaoProcesso(pool, sql, { orgaoResponsavelId, orgaoLocalId }) {
-  if ((orgaoResponsavelId && orgaoLocalId) || (!orgaoResponsavelId && !orgaoLocalId)) {
-    return { valido: false, mensagem: "Informe exatamente um órgão: orgaoResponsavelId (central) ou orgaoLocalId (territorial)." };
+  const resolvido = await escopo.resolverOrgao(pool, sql, { orgaoId: orgaoResponsavelId, orgaoLocalId });
+  if (!resolvido.valido) {
+    return { valido: false, mensagem: resolvido.mensagem.replace("orgaoId", "orgaoResponsavelId") };
   }
-  if (orgaoResponsavelId) {
-    const orgao = await pool.request().input("id", sql.Int, orgaoResponsavelId).query(`SELECT Sigla FROM Orgaos WHERE OrgaoId = @id`);
-    if (orgao.recordset.length === 0) return { valido: false, mensagem: "Órgão responsável inválido." };
-    return { valido: true, orgaoResponsavelId, orgaoLocalId: null, sigla: orgao.recordset[0].Sigla };
+  if (resolvido.orgaoLocalId && !SIGLAS_DISCIPLINARES_LOCAIS.includes(resolvido.sigla)) {
+    return { valido: false, mensagem: `Só JAI, JEA ou TER podem julgar processo disciplinar (informado: ${resolvido.sigla}).` };
   }
-  const orgaoLocal = await pool.request().input("id", sql.Int, orgaoLocalId).query(`SELECT Sigla, Nivel, Ativo FROM OrgaosLocais WHERE OrgaoLocalId = @id`);
-  if (orgaoLocal.recordset.length === 0 || !orgaoLocal.recordset[0].Ativo) {
-    return { valido: false, mensagem: "Órgão territorial inválido ou inativo." };
-  }
-  if (!SIGLAS_DISCIPLINARES_LOCAIS.includes(orgaoLocal.recordset[0].Sigla)) {
-    return { valido: false, mensagem: `Só JAI, JEA ou TER podem julgar processo disciplinar (informado: ${orgaoLocal.recordset[0].Sigla}).` };
-  }
-  return { valido: true, orgaoResponsavelId: null, orgaoLocalId, sigla: orgaoLocal.recordset[0].Sigla, nivel: orgaoLocal.recordset[0].Nivel };
+  return {
+    valido: true,
+    orgaoResponsavelId: resolvido.orgaoId,
+    orgaoLocalId: resolvido.orgaoLocalId,
+    sigla: resolvido.sigla,
+    nivel: resolvido.nivel
+  };
 }
 
 module.exports = {

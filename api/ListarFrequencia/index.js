@@ -21,7 +21,7 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const sessaoResult = await pool.request().input("id", sql.Int, sessaoId).query(`
-    SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, Descricao AS descricao,
+    SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, OrgaoLocalId AS orgaoLocalId, Descricao AS descricao,
            CONVERT(varchar(10), DataSessao, 120) AS dataSessao, Status AS status,
            QuorumTipo AS quorumTipo, VinculadaSessaoId AS vinculadaSessaoId, Materias AS materias
     FROM Sessoes WHERE SessaoId = @id`);
@@ -45,9 +45,11 @@ module.exports = async function (context, req) {
     .filter(item => auth.estaNoEscopo(usuario, item.congregacao))
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
-  const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId).query(
-    `SELECT OrgaoId AS orgaoId, Sigla AS sigla, QuorumMinimoPct AS quorumMinimoPct FROM Orgaos WHERE OrgaoId = @id`
-  );
+  const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId).input("idLocal", sql.Int, sessao.orgaoLocalId).query(`
+    SELECT o.OrgaoId AS orgaoId, o.Sigla AS sigla, o.QuorumMinimoPct AS quorumMinimoPct, NULL AS orgaoLocalId, NULL AS nivel, NULL AS referenciaId FROM Orgaos o WHERE o.OrgaoId = @id
+    UNION ALL
+    SELECT NULL, ol.Sigla, NULL, ol.OrgaoLocalId, ol.Nivel, ol.ReferenciaId FROM OrgaosLocais ol WHERE ol.OrgaoLocalId = @idLocal
+  `);
   const orgao = orgaoResult.recordset[0] || null;
 
   const universo = await universoDoOrgao(pool, orgao);

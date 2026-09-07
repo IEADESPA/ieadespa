@@ -24,9 +24,11 @@ module.exports = async function (context, req) {
   const pool = await getPool();
 
   const abertasResult = await pool.request().query(`
-    SELECT s.SessaoId AS sessaoId, s.OrgaoId AS orgaoId, s.Descricao AS descricao, s.SenhaAcesso AS senhaAcesso,
-           o.Sigla AS orgaoSigla, o.Nome AS orgaoNome
-    FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
+    SELECT s.SessaoId AS sessaoId, s.OrgaoId AS orgaoId, s.OrgaoLocalId AS orgaoLocalId, s.Descricao AS descricao, s.SenhaAcesso AS senhaAcesso,
+           COALESCE(o.Sigla, ol.Sigla) AS orgaoSigla, COALESCE(o.Nome, ol.Nome) AS orgaoNome, ol.Nivel AS nivel, ol.ReferenciaId AS referenciaId
+    FROM Sessoes s
+    LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
+    LEFT JOIN OrgaosLocais ol ON ol.OrgaoLocalId = s.OrgaoLocalId
     WHERE s.Status = 'ABERTA'`);
   if (abertasResult.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Nenhuma reunião aberta no momento." } };
@@ -51,7 +53,7 @@ module.exports = async function (context, req) {
   let algumJaRegistrado = false;
   const elegiveis = [];
   for (const sessao of candidatasSenha) {
-    const universo = await universoDoOrgao(pool, { orgaoId: sessao.orgaoId, sigla: sessao.orgaoSigla });
+    const universo = await universoDoOrgao(pool, { orgaoId: sessao.orgaoId, orgaoLocalId: sessao.orgaoLocalId, sigla: sessao.orgaoSigla, nivel: sessao.nivel, referenciaId: sessao.referenciaId });
     if (!universo.some(m => String(m.membroId) === String(membro.membroId))) continue;
     algumNoUniverso = true;
     const jaRegistrado = await pool.request().input("sessaoId", sql.Int, sessao.sessaoId).input("mat", sql.Int, matricula)

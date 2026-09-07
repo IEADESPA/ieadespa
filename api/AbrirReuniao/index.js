@@ -18,12 +18,17 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
+const { resolverOrgao, membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
+
+function chaveOrgao(row) {
+  return row.orgaoId ? `central:${row.orgaoId}` : `local:${row.orgaoLocalId}`;
+}
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
-  const { orgaoId, descricao, senhaAcesso, sessaoId: sessaoConvocadaId } = req.body || {};
+  const { orgaoId, orgaoLocalId, descricao, senhaAcesso, sessaoId: sessaoConvocadaId } = req.body || {};
   const usuarioId = usuario.membroId;
 
   const pool = await getPool();
@@ -71,19 +76,26 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (!orgaoId || !descricao || !senhaAcesso) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: orgaoId, descricao, senhaAcesso." } };
+  if ((!orgaoId && !orgaoLocalId) || !descricao || !senhaAcesso) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: órgão (central ou territorial), descricao, senhaAcesso." } };
     return;
   }
 
-  const orgaoResult = await pool.request().input("id", sql.Int, orgaoId).query(`SELECT OrgaoId AS orgaoId, Sigla AS sigla, Nome AS nome FROM Orgaos WHERE OrgaoId = @id`);
-  const orgao = orgaoResult.recordset[0];
-  if (!orgao) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Órgão inválido." } };
+  const resolvido = await resolverOrgao(pool, sql, { orgaoId, orgaoLocalId });
+  if (!resolvido.valido) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: resolvido.mensagem } };
     return;
   }
+  const orgao = { orgaoId: resolvido.orgaoId, orgaoLocalId: resolvido.orgaoLocalId, sigla: resolvido.sigla, nome: resolvido.nome, nivel: resolvido.nivel, referenciaId: resolvido.referenciaId };
   if (orgao.sigla === "ASSEMBLEIA_GERAL") {
     context.res = { status: 200, body: { sucesso: false, mensagem: "A Assembleia Geral precisa ser convocada com antecedência (Edital) antes de ser iniciada — use \"Convocar Assembleia\"." } };
+    return;
+  }
+  // v3.6.2 — só quem tem Lideranca (Papel+Escopo) vinculada àquele órgão
+  // territorial pode abrir reunião nele (ou GLOBAL) — não é mais só ter a
+  // permissão genérica "reunioes".
+  if (orgao.orgaoLocalId && !(await membroAutorizadoNoOrgaoLocal(pool, sql, usuarioId, orgao.orgaoLocalId))) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: `Você não tem vínculo com o órgão territorial ${orgao.nome}.` } };
     return;
   }
 
@@ -98,19 +110,20 @@ module.exports = async function (context, req) {
   // A partir daqui orgao.sigla nunca é ASSEMBLEIA_GERAL (tratada acima, via
   // convocação) — trava só por sobreposição real de pessoas entre órgãos.
   const abertasResult = await pool.request().query(`
-    SELECT s.OrgaoId AS orgaoId, o.Sigla AS sigla, o.Nome AS nome
-    FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
+    SELECT s.OrgaoId AS orgaoId, s.OrgaoLocalId AS orgaoLocalId, COALESCE(o.Sigla, ol.Sigla) AS sigla, COALESCE(o.Nome, ol.Nome) AS nome,
+           ol.Nivel AS nivel, ol.ReferenciaId AS referenciaId
+    FROM Sessoes s
+    LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
+    LEFT JOIN OrgaosLocais ol ON ol.OrgaoLocalId = s.OrgaoLocalId
     WHERE s.Status = 'ABERTA'`);
   if (abertasResult.recordset.length > 0) {
     const universoNovo = await universoDoOrgao(pool, orgao);
     const idsNovo = new Set(universoNovo.map(m => m.membroId));
     for (const sessaoAberta of abertasResult.recordset) {
-      const universoExistente = sessaoAberta.orgaoId === orgao.orgaoId
-        ? universoNovo
-        : await universoDoOrgao(pool, sessaoAberta);
+      const mesmoOrgao = chaveOrgao(sessaoAberta) === chaveOrgao(orgao);
+      const universoExistente = mesmoOrgao ? universoNovo : await universoDoOrgao(pool, sessaoAberta);
       const conflito = universoExistente.find(m => idsNovo.has(m.membroId));
       if (conflito) {
-        const mesmoOrgao = sessaoAberta.orgaoId === orgao.orgaoId;
         context.res = {
           status: 200,
           body: {
@@ -126,13 +139,14 @@ module.exports = async function (context, req) {
   }
 
   const result = await pool.request()
-    .input("orgaoId", sql.Int, orgaoId)
+    .input("orgaoId", sql.Int, orgao.orgaoId)
+    .input("orgaoLocalId", sql.Int, orgao.orgaoLocalId)
     .input("descricao", sql.NVarChar(200), descricao)
     .input("senha", sql.NVarChar(50), senhaAcesso)
     .query(`
-      INSERT INTO Sessoes (OrgaoId, Descricao, DataSessao, Status, SenhaAcesso)
+      INSERT INTO Sessoes (OrgaoId, OrgaoLocalId, Descricao, DataSessao, Status, SenhaAcesso)
       OUTPUT INSERTED.SessaoId
-      VALUES (@orgaoId, @descricao, CAST(SYSUTCDATETIME() AS DATE), 'ABERTA', @senha)
+      VALUES (@orgaoId, @orgaoLocalId, @descricao, CAST(SYSUTCDATETIME() AS DATE), 'ABERTA', @senha)
     `);
   const sessaoId = result.recordset[0].SessaoId;
 
@@ -141,7 +155,7 @@ module.exports = async function (context, req) {
     registroId: sessaoId,
     acao: "Abriu reunião",
     usuarioId,
-    dadosDepois: { descricao, orgaoId, orgaoSigla: orgao.sigla }
+    dadosDepois: { descricao, orgaoId: orgao.orgaoId, orgaoLocalId: orgao.orgaoLocalId, orgaoSigla: orgao.sigla }
   });
 
   context.res = {

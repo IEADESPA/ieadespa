@@ -1308,6 +1308,35 @@ Disciplinar (v3.2-v3.5): a escada **disciplinar** territorial.
       antes dessa mudança. Cadastro manual do catálogo `orgaosLocais`
       continua existindo, mas só serve pra ajustar Nome/Ativo depois —
       nunca mais pra criar o vínculo em si.
+- [x] **Quem é membro de cada órgão territorial + Reuniões territoriais** —
+      reaproveita 100% o mecanismo Papel+Escopo (`Lideranca`) que já dava
+      acesso a Dirigente de Congregação/Pastor de Área. Migração
+      `041_orgaos_territoriais_papeis_reunioes.sql` seeda Papéis novos
+      (Membro da JAI/JEA/JUC/CRA/TER/CRAF/CEQ/CAQ/CDE, `Nivel` = o
+      `EscopoTipo` esperado). `shared/escopo.js` ganhou
+      `membroAutorizadoNoOrgaoLocal` (sobe a cadeia territorial —
+      Congregação→Área→Região→Quadrante→Distrito — e autoriza quem tem
+      Lideranca `GLOBAL` ou de qualquer nível ancestral: um Pastor de Área
+      autoriza tanto a JEA/JUC da própria Área quanto a JAI de qualquer
+      Congregação dela) e `resolverOrgao` (generaliza
+      `shared/disciplinar.js::validarOrgaoProcesso`, agora reaproveitado
+      por Reuniões também). Fecha um buraco de segurança real: antes,
+      qualquer um com a permissão `disciplina` podia julgar/agir em
+      QUALQUER JAI/JEA/TER, mesmo sem vínculo algum com aquele território —
+      agora `AbrirProcessoDisciplinar`/`EvoluirProcessoDisciplinar`
+      (exceto `HOMOLOGAR_EXCLUSAO`, que é gate do CEI) e
+      `AbrirReuniao`/`EncerrarReuniao` exigem esse vínculo quando o órgão é
+      territorial.
+      `Sessoes` ganhou `OrgaoLocalId` (mesmo padrão dual de
+      `ProcessosDisciplinares`) — `AbrirReuniao`/`EncerrarReuniao`/
+      `ListarReunioes`/`RegistrarPresenca`/`ListarFrequencia` generalizados.
+      **Achado durante a implementação**: `shared/universo.js::universoDoOrgao`
+      tinha um fallback perigoso pra território — sem `Assento` cadastrado
+      (que nunca existe pra `OrgaosLocais`, já que `Assentos` só referencia
+      `Orgaos`), caía pra "todo mundo ATIVO do sistema inteiro". Corrigido
+      pra um fallback **escopado** (reaproveita
+      `resolverEscopoCongregacoes`) — reunião de uma JAI pequena só computa
+      falta pra quem é daquela congregação, nunca da denominação inteira.
 - **Descartado, por decisão do usuário e falta de reaproveitamento de
   código**: competência administrativa/estratégica de JEA/CRA/CEQ/CDE
   (calendários, orçamento, planejamento territorial — gestão de rotina que

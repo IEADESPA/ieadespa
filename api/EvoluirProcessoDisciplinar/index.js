@@ -20,6 +20,7 @@ const { getPool, sql } = require("../shared/db");
 const vacancia = require("../shared/vacancia");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
 const { selectProcessoComInfracoes, validarOrgaoProcesso, SIGLAS_QUE_PODEM_RECORRER } = require("../shared/disciplinar");
+const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 
 const RESULTADOS_VALIDOS = ["ARQUIVADO", "SANCAO", "EXCLUSAO"];
 const CANAIS_CITACAO_VALIDOS = ["WHATSAPP", "CARTA_REGISTRADA"];
@@ -48,6 +49,15 @@ module.exports = async function (context, req) {
   // v3.6 — resolve a Sigla do órgão (central ou territorial) deste processo,
   // usada nas restrições de competência por instância (JAI/JEA/TER).
   const orgaoAtual = await validarOrgaoProcesso(pool, sql, { orgaoResponsavelId: atual.OrgaoResponsavelId, orgaoLocalId: atual.OrgaoLocalId });
+
+  // v3.6.2 — só quem é membro daquele órgão territorial (Lideranca Papel+
+  // Escopo, ou GLOBAL) pode agir no processo. HOMOLOGAR_EXCLUSAO fica de
+  // fora: é o CEI (permissão "cei") que homologa, não o órgão territorial.
+  if (orgaoAtual.orgaoLocalId && acao !== "HOMOLOGAR_EXCLUSAO" &&
+      !(await membroAutorizadoNoOrgaoLocal(pool, sql, usuario.membroId, orgaoAtual.orgaoLocalId))) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Você não tem vínculo com este órgão territorial." } };
+    return;
+  }
 
   // ---- DESIGNAR_RELATOR: suspeição por parentesco (até 3º grau, Art. 91) ou
   // mesma congregação é só AVISO — quem decide continua sendo o órgão julgador.

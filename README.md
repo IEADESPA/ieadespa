@@ -221,6 +221,33 @@ abrindo um mini-sistema à parte com nav própria, mesmo login por trás).
   possivelmente sua própria barra lateral com itens que mudam conforme o
   papel da pessoa ali dentro (ex: Professor vê "Alunos"/"Aulas", aluno vê
   outra coisa), sem mexer em nada dos módulos já existentes.
+- **Configuração é sempre do próprio módulo, nunca centralizada** (decisão
+  explícita, 2026): não existe (e não vai existir) um painel único de
+  "Configurações" dentro de Administração de Acesso reunindo parâmetros de
+  todo o sistema. Cada módulo é dono da própria configuração — o Financeiro
+  já segue esse padrão (`GestaoParametrosTesouraria`, sub-aba "Parâmetros"
+  dentro dele mesmo, não em outro lugar). Quando um módulo Departamentos
+  existir de verdade, o cadastro/config de departamento mora dentro dele;
+  outros módulos que precisarem desse dado só o consultam via API, sem
+  duplicar. "Administração de Acesso" continua só cuidando de Papéis/
+  Escopos/Permissões (o que já é hoje).
+- **Meu Painel também fatiado** (v4.2.2): "Meu Perfil" parou de acumular
+  tudo numa página só — virou 4 sub-abas (Perfil = resumo/dashboard; Meus
+  Dados Cadastrais = editar telefone/e-mail/endereço + trocar senha +
+  solicitar correção; Vínculos Familiares; Minhas Contribuições), mais LGPD
+  e Cartas que já existiam. Mesmo princípio de sempre: mais fatiado, mais
+  fácil de navegar conforme cresce.
+- **Órgãos territoriais escopados por pessoa** (v4.2.2, correção de um
+  problema de escala achado em teste real): o submenu de Reuniões usava
+  `GET /api/catalogos/orgaosLocais`, que devolve TODA JAI/JEA/TER/... do
+  sistema inteiro sem filtrar por quem está logado — um Pastor de Área via
+  a lista inteira da denominação em vez de só as próprias ~4 congregações,
+  e o problema só cresce conforme mais congregações existirem. Criado
+  `MeusOrgaosLocais` (`api/MeusOrgaosLocais`), que filtra usando o mesmo
+  motor de escopo de sempre (`Lideranca.EscopoTipo/EscopoId` →
+  `escopo.resolverEscopoCongregacoes`) — cada pessoa só vê os órgãos
+  territoriais dentro do próprio escopo; se sobrar só um, a seleção
+  automática de sempre (`montarSubmenuReunioes`) já leva direto pra ele.
 
 ## 3. Plano de versões (mega sistema, fase a fase)
 

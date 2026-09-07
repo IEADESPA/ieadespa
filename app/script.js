@@ -378,8 +378,15 @@ function sairDoModulo() {
 
 // Sub-abas de "Meu Painel" (v1.9) — evita empilhar tudo (perfil, LGPD, cartas) numa
 // página só, cada vez mais comprida conforme o autoatendimento ganha mais funções.
-const SUB_ABAS_MEUPAINEL = ["perfil", "lgpd", "cartas"];
-const TITULOS_SUB_MEUPAINEL = { perfil: "Meu Perfil", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito" };
+// v4.2.2 — "Meu Perfil" fatiado em mais submenus de autoatendimento (pedido
+// explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
+// Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
+// tudo empilhado numa página só cada vez mais comprida.
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas"];
+const TITULOS_SUB_MEUPAINEL = {
+  perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
+  contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito"
+};
 let subAbaMeupainelAtual = "perfil";
 
 function mostrarSubAbaMeupainel(sub) {
@@ -391,13 +398,9 @@ function mostrarSubAbaMeupainel(sub) {
   document.getElementById("tituloModulo").textContent = `Meu Painel — ${TITULOS_SUB_MEUPAINEL[sub]}`;
   if (sub === "cartas") carregarMinhasCartas();
   if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); carregarMinhaFoto(); }
-  if (sub === "perfil") {
-    carregarMeusDadosForm();
-    carregarOpcoesMeuVinculoTipo();
-    carregarMeusVinculos();
-    carregarMinhasSolicitacoesEdicao();
-    carregarMinhasContribuicoes();
-  }
+  if (sub === "dados") { carregarMeusDadosForm(); carregarMinhasSolicitacoesEdicao(); }
+  if (sub === "vinculos") { carregarOpcoesMeuVinculoTipo(); carregarMeusVinculos(); }
+  if (sub === "contribuicoes") carregarMinhasContribuicoes();
 }
 
 // ---- MINHAS CONTRIBUIÇÕES (v4.1.1) — transparência: se a matrícula estiver
@@ -405,14 +408,17 @@ function mostrarSubAbaMeupainel(sub) {
 async function carregarMinhasContribuicoes() {
   if (!authMatricula) return;
   const cx = document.getElementById("cxMinhasContribuicoes");
+  const aviso = document.getElementById("semContribuicoesAviso");
   const container = document.getElementById("resultadoMinhasContribuicoes");
   const res = await fetch(`${API_BASE}/meus-lancamentos-tesouraria/${authMatricula}`);
   const contribuicoes = await res.json();
   if (!Array.isArray(contribuicoes) || contribuicoes.length === 0) {
     cx.style.display = "none";
+    aviso.style.display = "block";
     return;
   }
   cx.style.display = "block";
+  aviso.style.display = "none";
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Termo</th><th>Congregação</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Status</th></tr></thead><tbody>`;
   contribuicoes.forEach(c => {
     html += `<tr>
@@ -1518,9 +1524,11 @@ let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar 
 async function montarSubmenuReunioes() {
   const res = await fetchProtegido(`${API_BASE}/orgaos`);
   const orgaos = (await res.json()).map(o => Object.assign({}, o, { chave: `central:${o.orgaoId}` }));
-  const locaisRes = await fetchProtegido(`${API_BASE}/catalogos/orgaosLocais`);
+  // v4.2.2 — meus-orgaos-locais (não catalogos/orgaosLocais): escopado por
+  // quem está logado, senão um Pastor de Área via a lista de TODAS as JAIs
+  // da denominação em vez de só as da própria área.
+  const locaisRes = await fetchProtegido(`${API_BASE}/meus-orgaos-locais`);
   const locais = (await locaisRes.json())
-    .filter(o => o.ativo !== false)
     .map(o => Object.assign({}, o, { chave: `local:${o.orgaoLocalId}`, nome: `${o.sigla} — ${o.nome}` }));
   const todos = orgaos.concat(locais);
   window._orgaosReunioesCache = todos;

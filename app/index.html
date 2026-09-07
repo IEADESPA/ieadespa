@@ -82,6 +82,9 @@
           <button class="btn-aba ativo" id="btnAbaMeupainel" onclick="sairDoModulo()"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
           <div class="submenu-aba" id="submenuMeupainel">
             <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" onclick="mostrarSubAbaMeupainel('perfil')"><span class="icone">👤</span><span class="rotulo">Meu Perfil</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelDados" onclick="mostrarSubAbaMeupainel('dados')"><span class="icone">✏️</span><span class="rotulo">Meus Dados Cadastrais</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelVinculos" onclick="mostrarSubAbaMeupainel('vinculos')"><span class="icone">👪</span><span class="rotulo">Vínculos Familiares</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelContribuicoes" onclick="mostrarSubAbaMeupainel('contribuicoes')"><span class="icone">💰</span><span class="rotulo">Minhas Contribuições</span></button>
             <button class="btn-subaba" id="btnSubMeupainelLgpd" onclick="mostrarSubAbaMeupainel('lgpd')"><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
           </div>
@@ -212,17 +215,14 @@
                congregação, mostra o histórico do que foi lançado em seu
                nome. Fica em branco/some sozinho pra quem nunca foi
                vinculado como dizimista (silencioso, não é obrigatório). -->
-          <div id="cxMinhasContribuicoes" style="display:none; margin-top:24px;">
-            <hr />
-            <h3>💰 Minhas Contribuições</h3>
-            <p class="subtitle">Registro do que foi lançado em seu nome na tesouraria — mesmo
-              número de termo usado no bloco de dízimo, pra você conferir.</p>
-            <div class="rolagem-tabela"><div id="resultadoMinhasContribuicoes"></div></div>
-          </div>
+        </div>
+
+        <!-- SUB-ABA: MEUS DADOS CADASTRAIS (v4.2.2 — fatiado de "Meu Perfil",
+             pedido explícito: mais submenus de autoatendimento). -->
+        <div id="subMeupainelDados" class="sub-aba-secretaria" style="display:none;">
 
           <!-- Só aparece pra quem logou com senha (tem acesso à Secretaria) -->
-          <div id="cxTrocarSenha" style="display:none; margin-top:24px;">
-            <hr />
+          <div id="cxTrocarSenha" style="display:none;">
             <h3>🔑 Trocar minha senha</h3>
             <form onsubmit="event.preventDefault(); trocarMinhaSenha();">
               <div class="input-group">
@@ -232,9 +232,9 @@
               <button class="btn-confirmar" type="submit">Salvar nova senha</button>
             </form>
             <p id="resultadoTrocaSenha"></p>
+            <hr />
           </div>
 
-          <hr />
           <h3>✏️ Atualizar meus dados</h3>
           <p class="subtitle">Dados que você pode corrigir sozinho, sem precisar da Secretaria — baixo risco,
             ninguém mais sabe isso melhor do que você.</p>
@@ -263,19 +263,6 @@
           </div>
           <button class="btn-confirmar" style="width:auto;" onclick="salvarMeusDadosAcao()">💾 Salvar</button>
           <p id="resultadoMeusDados" class="subtitle"></p>
-
-          <hr />
-          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">👪 Meus Vínculos Familiares</h4>
-          <p class="subtitle" style="margin:0 0 8px;">Cadastre você mesmo quem é da sua família no sistema.</p>
-          <div class="barra-lista">
-            <select id="meuVinculoTipo"></select>
-            <input type="number" id="meuVinculoMatriculaParente" placeholder="Matrícula da outra pessoa" style="min-width:180px;" />
-            <label style="display:flex;align-items:center;gap:4px;">
-              <input type="checkbox" id="meuVinculoResponsavelLegal" /> A outra pessoa é meu Responsável Legal
-            </label>
-            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarMeuVinculoAcao()">➕ Adicionar Vínculo</button>
-          </div>
-          <div class="rolagem-tabela"><div id="resultadoListaMeusVinculos"></div></div>
 
           <hr />
           <h4 style="margin:0 0 10px; color: var(--cor-primaria);">📨 Solicitar correção de dados (sujeito a aprovação)</h4>
@@ -329,6 +316,34 @@
 
           <h4 style="margin:16px 0 10px; color: var(--cor-primaria);">Minhas solicitações de edição</h4>
           <div class="rolagem-tabela"><div id="resultadoListaSolicitacoesEdicao"></div></div>
+        </div>
+
+        <!-- SUB-ABA: VÍNCULOS FAMILIARES (v4.2.2 — fatiado de "Meu Perfil") -->
+        <div id="subMeupainelVinculos" class="sub-aba-secretaria" style="display:none;">
+          <h3>👪 Meus Vínculos Familiares</h3>
+          <p class="subtitle">Cadastre você mesmo quem é da sua família no sistema.</p>
+          <div class="barra-lista">
+            <select id="meuVinculoTipo"></select>
+            <input type="number" id="meuVinculoMatriculaParente" placeholder="Matrícula da outra pessoa" style="min-width:180px;" />
+            <label style="display:flex;align-items:center;gap:4px;">
+              <input type="checkbox" id="meuVinculoResponsavelLegal" /> A outra pessoa é meu Responsável Legal
+            </label>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarMeuVinculoAcao()">➕ Adicionar Vínculo</button>
+          </div>
+          <div class="rolagem-tabela"><div id="resultadoListaMeusVinculos"></div></div>
+        </div>
+
+        <!-- SUB-ABA: MINHAS CONTRIBUIÇÕES (v4.2.2 — fatiado de "Meu Perfil";
+             continua opcional/silenciosa pra quem nunca foi dizimista). -->
+        <div id="subMeupainelContribuicoes" class="sub-aba-secretaria" style="display:none;">
+          <div id="cxMinhasContribuicoes">
+            <h3>💰 Minhas Contribuições</h3>
+            <p class="subtitle">Registro do que foi lançado em seu nome na tesouraria — mesmo
+              número de termo usado no bloco de dízimo, pra você conferir.</p>
+            <div class="rolagem-tabela"><div id="resultadoMinhasContribuicoes"></div></div>
+          </div>
+          <p id="semContribuicoesAviso" class="subtitle" style="display:none;">Você ainda não está
+            vinculado como dizimista em nenhuma congregação.</p>
         </div>
 
         <!-- SUB-ABA: MEUS DADOS (LGPD) -->

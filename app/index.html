@@ -80,6 +80,19 @@
             <button class="btn-subaba" id="btnSubMeupainelLgpd" onclick="mostrarSubAbaMeupainel('lgpd')"><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
           </div>
+          <!-- FINANCEIRO (v4.1): módulo próprio, separado do resto das abas por
+               ser dinheiro real — mesmo login/permissões, só com destaque visual
+               e todo o fluxo de tesouraria dentro de um único lugar. -->
+          <hr class="divisor-sidebar" />
+          <button class="btn-aba btn-aba-destaque" id="btnAbaFinanceiro" onclick="mostrarAbaSecretaria('financeiro')"><span class="icone">💰</span><span class="rotulo">Financeiro</span></button>
+          <div class="submenu-aba" id="submenuFinanceiro">
+            <button class="btn-subaba ativo" id="btnSubFinanceiroLancamentos" onclick="mostrarSubAbaFinanceiro('lancamentos')"><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
+            <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
+            <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
+            <button class="btn-subaba" id="btnSubFinanceiroParametros" onclick="mostrarSubAbaFinanceiro('parametros')"><span class="icone">⚙️</span><span class="rotulo">Parâmetros</span></button>
+            <button class="btn-subaba" id="btnSubFinanceiroConsolidado" onclick="mostrarSubAbaFinanceiro('consolidado')"><span class="icone">📊</span><span class="rotulo">Consolidado</span></button>
+          </div>
+          <hr class="divisor-sidebar" />
           <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
           <!-- Gerado em runtime por montarSubmenuReunioes() a partir de GET /api/orgaos —
                nunca hardcoded: se um órgão for renomeado/excluído na aba Órgãos, o
@@ -1423,6 +1436,148 @@
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->
+      <!-- ABA: FINANCEIRO (v4.1) — Tesouraria Local e Repasses (Art. 118).
+           Painel próprio (ver sidebar): 5 sub-abas, mesmo padrão de submenu
+           de Meu Painel. Todo cálculo (rateio 40/60, totais) é sempre
+           derivado dos lançamentos, nunca digitado à mão. -->
+      <div id="abaFinanceiro" class="aba-secretaria" style="display:none;">
+
+        <!-- SUB-ABA: LANÇAMENTOS -->
+        <div id="subFinanceiroLancamentos" class="sub-aba-secretaria">
+          <h3>📝 Lançamentos de Entrada</h3>
+          <p class="subtitle">O "bloco de dízimo" digital — cada lançamento recebe um número de
+            termo gerado automaticamente pelo sistema, sequencial e contínuo por congregação.</p>
+          <div class="input-group">
+            <label>Congregação:</label>
+            <select id="financeiroLancCongregacao" onchange="carregarOpcoesDizimistas(); carregarLancamentosTesouraria();"></select>
+          </div>
+          <div class="input-group">
+            <label>Mês de referência:</label>
+            <input type="month" id="financeiroLancMes" onchange="carregarLancamentosTesouraria()" />
+          </div>
+
+          <hr />
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">➕ Novo lançamento</h4>
+          <div class="input-group">
+            <label>Dizimista cadastrado:</label>
+            <select id="financeiroLancDizimista"><option value="">— Nome avulso (abaixo) —</option></select>
+          </div>
+          <div class="input-group">
+            <label>Ou nome avulso (visitante/não cadastrado):</label>
+            <input type="text" id="financeiroLancNomeAvulso" placeholder="Nome de quem contribuiu" />
+          </div>
+          <div class="input-group">
+            <label>Tipo:</label>
+            <select id="financeiroLancTipo">
+              <option value="DIZIMO">Dízimo</option>
+              <option value="OFERTA">Oferta</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Valor (R$):</label>
+            <input type="number" id="financeiroLancValor" step="0.01" min="0.01" placeholder="Ex: 160.00" />
+          </div>
+          <div class="input-group">
+            <label>Forma de pagamento:</label>
+            <select id="financeiroLancForma" onchange="alternarComprovanteLancamento()">
+              <option value="DINHEIRO">Dinheiro</option>
+              <option value="PIX">PIX</option>
+            </select>
+          </div>
+          <div class="input-group" id="cxComprovanteLancamento" style="display:none;">
+            <label>Comprovante do PIX (obrigatório):</label>
+            <input type="file" id="financeiroLancComprovante" accept="image/jpeg,image/png,application/pdf" />
+          </div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarLancamentoTesourariaAcao()">💾 Registrar lançamento</button>
+          <p id="resultadoLancamentoTesouraria" class="subtitle"></p>
+
+          <hr />
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">👤 Cadastrar dizimista</h4>
+          <div class="barra-lista">
+            <input type="text" id="financeiroNovoDizimistaNome" placeholder="Nome do dizimista" />
+            <button class="btn-confirmar" style="width:auto;" onclick="salvarDizimistaAcao()">➕ Cadastrar</button>
+          </div>
+          <p id="resultadoDizimista" class="subtitle"></p>
+
+          <hr />
+          <div class="rolagem-tabela"><div id="resultadoLancamentosTesouraria"></div></div>
+        </div>
+
+        <!-- SUB-ABA: FECHAMENTO DO MÊS -->
+        <div id="subFinanceiroFechamento" class="sub-aba-secretaria" style="display:none;">
+          <h3>🔒 Fechamento do Mês</h3>
+          <p class="subtitle">Totais sempre calculados a partir dos lançamentos — nunca digitados
+            à mão. Uma vez fechado, o mês não aceita mais lançamentos (Art. 118).</p>
+          <div class="input-group">
+            <label>Congregação:</label>
+            <select id="financeiroFechCongregacao" onchange="carregarResumoFechamento()"></select>
+          </div>
+          <div class="input-group">
+            <label>Mês de referência:</label>
+            <input type="month" id="financeiroFechMes" onchange="carregarResumoFechamento()" />
+          </div>
+          <div id="resultadoResumoFechamento"></div>
+        </div>
+
+        <!-- SUB-ABA: RELATÓRIO -->
+        <div id="subFinanceiroRelatorio" class="sub-aba-secretaria" style="display:none;">
+          <h3>🖨️ Relatório Financeiro Mensal</h3>
+          <p class="subtitle">Duas versões: completa (uso interno, com os valores por dizimista) e
+            versão mural (sem os valores individuais, pra afixar publicamente).</p>
+          <div class="input-group">
+            <label>Congregação:</label>
+            <select id="financeiroRelCongregacao"></select>
+          </div>
+          <div class="input-group">
+            <label>Mês de referência:</label>
+            <input type="month" id="financeiroRelMes" />
+          </div>
+          <div class="barra-lista">
+            <button class="btn-confirmar" style="width:auto;" onclick="gerarRelatorioTesourariaAcao('completo')">📄 Gerar versão completa</button>
+            <button class="btn-confirmar" style="width:auto;" onclick="gerarRelatorioTesourariaAcao('mural')">📌 Gerar versão mural</button>
+          </div>
+          <div id="resultadoRelatorioTesouraria"></div>
+        </div>
+
+        <!-- SUB-ABA: PARÂMETROS -->
+        <div id="subFinanceiroParametros" class="sub-aba-secretaria" style="display:none;">
+          <h3>⚙️ Parâmetros Financeiros da Congregação</h3>
+          <p class="subtitle">Aluguel e lote variam por local; o percentual de retenção local
+            reflete o Art. 118 (hoje 40%), mas fica editável caso a Assembleia mude a regra.</p>
+          <div class="input-group">
+            <label>Congregação:</label>
+            <select id="financeiroParamCongregacao" onchange="carregarParametrosTesouraria()"></select>
+          </div>
+          <div class="input-group">
+            <label>Aluguel mensal (R$):</label>
+            <input type="number" id="financeiroParamAluguel" step="0.01" min="0" />
+          </div>
+          <div class="input-group">
+            <label>Lote mensal (R$):</label>
+            <input type="number" id="financeiroParamLote" step="0.01" min="0" />
+          </div>
+          <div class="input-group">
+            <label>Percentual de retenção local (%):</label>
+            <input type="number" id="financeiroParamPercentual" step="0.01" min="0" max="100" />
+          </div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarParametrosTesourariaAcao()">💾 Salvar parâmetros</button>
+          <p id="resultadoParametrosTesouraria" class="subtitle"></p>
+        </div>
+
+        <!-- SUB-ABA: CONSOLIDADO (Área/Região/Distrito/Geral — drill-down por congregação) -->
+        <div id="subFinanceiroConsolidado" class="sub-aba-secretaria" style="display:none;">
+          <h3>📊 Consolidado</h3>
+          <p class="subtitle">Fechamentos e repasses de todas as congregações dentro do seu
+            escopo de atuação (território ou geral) — calculado, nunca digitado.</p>
+          <div class="input-group">
+            <label>Mês de referência:</label>
+            <input type="month" id="financeiroConsolidadoMes" onchange="carregarConsolidadoTesouraria()" />
+          </div>
+          <div id="resultadoConsolidadoTesouraria"></div>
+        </div>
+
+      </div>
+
       <div id="abaDocumentos" class="aba-secretaria" style="display:none;">
         <h3>Documentos de Governança</h3>
         <p class="subtitle">Realidade jurídica: Estatuto 2026 (oficial) + Regimento Interno 2026

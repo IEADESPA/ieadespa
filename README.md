@@ -1395,23 +1395,64 @@ Disciplinar (v3.2-v3.5): a escada **disciplinar** territorial.
 
 ### FASE 4 — Financeiro e Patrimônio
 
-#### v4.1 — Tesouraria e Caixa Único
+#### v4.1 — Tesouraria Local e Repasses (Entradas)
 
-- [ ] Caixa único da igreja (conta bancária única) com saldo virtual por órgão/departamento
-      (Reg. Art. 133-C).
-- [ ] Lançamentos de entrada/saída com categoria e comprovante.
-- [ ] Conciliação bancária mensal.
-- [ ] Teto de acumulação de caixa local = 10 salários-mínimos, com recolhimento
-      automático do excedente (Reg. Art. 119) *(gap da varredura)*.
-- [ ] Fiscalização contábil do Conselho Fiscal (Reg. Art. 145 — vinha adiada
-      de v2.6): balancetes, talões, parecer mensal à CLI, ata própria —
-      depende dos Lançamentos acima existirem primeiro, nasce junto.
+Digitaliza o "bloco de dízimo" físico + a folha de fechamento mensal
+impressa hoje (planilha Excel): lançamentos de dízimo/oferta por
+congregação com Termo nº gerado pelo servidor (nunca digitado à mão),
+comprovante obrigatório em PIX, fechamento mensal com o rateio do
+**Art. 118 sempre calculado na leitura** (40% retenção local / 60% repasse
+à Tesouraria Geral, deduzindo antes aluguel e lote — validado batendo com
+um relatório real de congregação), registro do repasse com comprovante, e
+relatório em duas versões (completa, e versão "mural" sem os valores por
+dizimista — mesmo padrão de redação condicional usado em Ouvidoria/
+Disciplina). Perfis de acesso territoriais completos desde já — Tesoureiro
+Local/Área/Região/Quadrante/Distrito/Geral, todos usando o mesmo motor
+Papel×Escopo×Permissão já existente (nenhuma tela nova de "dar acesso":
+são só mais Papéis na tela de Lideranca de sempre) — cada um enxerga
+automaticamente as congregações do seu território, com consolidado e
+drill-down. Módulo com entrada própria e destacada no painel (não misturado
+na lista comum de abas), por lidar com dinheiro real — mesmo login/sessão
+do resto do sistema.
+
+- [x] Cadastro de dizimistas por congregação (`Dizimistas`) — substitui a
+      planilha; aceita nome avulso pra quem não é dizimista cadastrado.
+- [x] Lançamentos de entrada (`LancamentosTesouraria`) com Termo nº
+      sequencial e contínuo por congregação, tipo (Dízimo/Oferta), forma de
+      pagamento (Dinheiro/PIX — PIX exige comprovante), travados assim que
+      o mês fecha.
+- [x] Fechamento mensal (`FechamentosTesouraria`): Total Recebido − Aluguel
+      − Lote = Total Final, rateado pelo percentual de retenção local
+      (Art. 118, editável por congregação em `GestaoParametrosTesouraria` —
+      hoje 40/60, mas não hardcoded caso a Assembleia mude a regra).
+      Imutável após criado (correção via novo lançamento auditado, não
+      reescrita de histórico).
+- [x] Registro do repasse à Tesouraria Geral com comprovante opcional.
+- [x] Relatório completo (uso interno) e relatório "mural" (sem os valores
+      por dizimista, pra afixar publicamente).
+- [x] Perfis territoriais de acesso (Tesoureiro Local/Área/Região/
+      Quadrante/Distrito — Geral já existia) + visão consolidada com
+      drill-down por congregação dentro do escopo de cada um.
+
+**Descartado desta versão (não é esquecimento — vira v4.1.2, depende dos
+dados desta versão já existirem):** saldo virtual por órgão/departamento
+(Reg. Art. 133-C — fase seguinte trata só Tesouraria Geral + Congregações,
+não departamentos como UMADESPA/EBD), lançamentos de **saída**, conciliação
+bancária mensal, teto de acumulação de caixa local de 10 salários-mínimos
+com recolhimento automático do excedente (Reg. Art. 119), fiscalização
+contábil formal do Conselho Fiscal (Reg. Art. 145). Também fica para depois
+(precisa de meses de dados reais primeiro): recálculo automático de
+`MembroReferencia.DizimistaFiel` a partir do histórico de lançamentos, em
+vez do bit editado manualmente hoje.
 
 #### v4.2 — Ofertas, dízimos e arrecadação
 
-- [ ] Registro de mapas de dízimos/ofertas por congregação (2º Tesoureiro — Art. 36 §2º).
-- [ ] Controle de recebimento/conferência/auditoria dos relatórios financeiros.
-- [ ] Recibos e numeração sequencial de talões.
+- [x] Registro de mapas de dízimos/ofertas por congregação, com numeração
+      sequencial de "talão" — entregue em v4.1 (`LancamentosTesouraria`,
+      Termo nº), já que não fazia sentido separar do fechamento/rateio.
+- [ ] Controle de recebimento/conferência/auditoria dos relatórios
+      financeiros pelo 2º Tesoureiro (Art. 36 §2º/41 II — auditoria in loco
+      comparando o mapa com o dinheiro entregue).
 
 #### v4.3 — Orçamento anual e PDQ
 

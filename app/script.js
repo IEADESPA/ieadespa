@@ -279,7 +279,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -327,6 +327,323 @@ function mostrarSubAbaMeupainel(sub) {
     carregarMeusVinculos();
     carregarMinhasSolicitacoesEdicao();
   }
+}
+
+// ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
+const SUB_ABAS_FINANCEIRO = ["lancamentos", "fechamento", "relatorio", "parametros", "consolidado"];
+const TITULOS_SUB_FINANCEIRO = {
+  lancamentos: "Lançamentos", fechamento: "Fechamento do Mês", relatorio: "Relatório",
+  parametros: "Parâmetros", consolidado: "Consolidado"
+};
+let subAbaFinanceiroAtual = "lancamentos";
+let _congregacoesFinanceiroCache = null;
+
+function mostrarSubAbaFinanceiro(sub) {
+  subAbaFinanceiroAtual = sub;
+  SUB_ABAS_FINANCEIRO.forEach(nome => {
+    document.getElementById(`subFinanceiro${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
+    document.getElementById(`btnSubFinanceiro${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
+  });
+  document.getElementById("tituloModulo").textContent = `Financeiro — ${TITULOS_SUB_FINANCEIRO[sub]}`;
+  carregarOpcoesCongregacoesFinanceiro().then(() => {
+    if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
+    if (sub === "fechamento") carregarResumoFechamento();
+    if (sub === "parametros") carregarParametrosTesouraria();
+    if (sub === "consolidado") carregarConsolidadoTesouraria();
+  });
+}
+
+function mesAtualFinanceiro() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Lista de congregações reaproveitada nos 4 seletores da aba (Lançamentos,
+// Fechamento, Relatório, Parâmetros) — cacheada na sessão pra não repetir a
+// mesma consulta a cada troca de sub-aba.
+async function carregarOpcoesCongregacoesFinanceiro() {
+  if (!_congregacoesFinanceiroCache) {
+    const res = await fetch(`${API_BASE}/catalogos/congregacoes`);
+    _congregacoesFinanceiroCache = await res.json();
+  }
+  const opcoes = _congregacoesFinanceiroCache
+    .filter(c => c.ativa !== false)
+    .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao"].forEach(id => {
+    const select = document.getElementById(id);
+    if (select && !select.dataset.montado) {
+      select.innerHTML = opcoes;
+      select.dataset.montado = "1";
+    }
+  });
+  ["financeiroLancMes", "financeiroFechMes", "financeiroRelMes", "financeiroConsolidadoMes"].forEach(id => {
+    const input = document.getElementById(id);
+    if (input && !input.value) input.value = mesAtualFinanceiro();
+  });
+}
+
+async function carregarOpcoesDizimistas() {
+  const congregacaoId = document.getElementById("financeiroLancCongregacao").value;
+  const select = document.getElementById("financeiroLancDizimista");
+  if (!congregacaoId) { select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>`; return; }
+  const res = await fetchProtegido(`${API_BASE}/dizimistas?congregacaoId=${congregacaoId}`);
+  const dizimistas = await res.json();
+  select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>` +
+    (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${d.nome}</option>`).join("") : "");
+}
+
+async function salvarDizimistaAcao() {
+  const congregacaoId = document.getElementById("financeiroLancCongregacao").value;
+  const nome = document.getElementById("financeiroNovoDizimistaNome").value.trim();
+  const msg = document.getElementById("resultadoDizimista");
+  if (!congregacaoId || !nome) { msg.textContent = "Escolha a congregação e informe o nome."; return; }
+  const res = await fetchProtegido(`${API_BASE}/dizimistas`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ congregacaoId, nome })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("financeiroNovoDizimistaNome").value = "";
+    carregarOpcoesDizimistas();
+  }
+}
+
+function alternarComprovanteLancamento() {
+  const forma = document.getElementById("financeiroLancForma").value;
+  document.getElementById("cxComprovanteLancamento").style.display = forma === "PIX" ? "block" : "none";
+}
+
+function arquivoParaBase64(arquivo) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result).split(",")[1]);
+    leitor.onerror = reject;
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+async function salvarLancamentoTesourariaAcao() {
+  const msg = document.getElementById("resultadoLancamentoTesouraria");
+  const congregacaoId = document.getElementById("financeiroLancCongregacao").value;
+  const mesReferencia = document.getElementById("financeiroLancMes").value;
+  const dizimistaId = document.getElementById("financeiroLancDizimista").value;
+  const nomeAvulso = document.getElementById("financeiroLancNomeAvulso").value.trim();
+  const tipo = document.getElementById("financeiroLancTipo").value;
+  const valor = document.getElementById("financeiroLancValor").value;
+  const formaPagamento = document.getElementById("financeiroLancForma").value;
+  const arquivoComprovante = document.getElementById("financeiroLancComprovante").files[0];
+
+  if (!congregacaoId || !mesReferencia || !valor || (!dizimistaId && !nomeAvulso)) {
+    msg.textContent = "Preencha congregação, mês, valor e o dizimista (cadastrado ou nome avulso).";
+    return;
+  }
+  if (formaPagamento === "PIX" && !arquivoComprovante) {
+    msg.textContent = "Lançamento via PIX exige o comprovante.";
+    return;
+  }
+
+  const body = { congregacaoId, mesReferencia, tipo, valor, formaPagamento };
+  if (dizimistaId) body.dizimistaId = dizimistaId; else body.nomeAvulso = nomeAvulso;
+  if (arquivoComprovante) {
+    body.comprovanteBase64 = await arquivoParaBase64(arquivoComprovante);
+    body.mimeType = arquivoComprovante.type;
+  }
+
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-lancamentos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("financeiroLancNomeAvulso").value = "";
+    document.getElementById("financeiroLancValor").value = "";
+    document.getElementById("financeiroLancComprovante").value = "";
+    carregarLancamentosTesouraria();
+  }
+}
+
+async function carregarLancamentosTesouraria() {
+  const congregacaoId = document.getElementById("financeiroLancCongregacao").value;
+  const mesReferencia = document.getElementById("financeiroLancMes").value;
+  const container = document.getElementById("resultadoLancamentosTesouraria");
+  if (!congregacaoId || !mesReferencia) { container.innerHTML = ""; return; }
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-lancamentos?congregacaoId=${congregacaoId}&mesReferencia=${mesReferencia}`);
+  const lancamentos = await res.json();
+  if (!Array.isArray(lancamentos) || lancamentos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum lançamento neste mês ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Termo</th><th>Nome</th><th>Tipo</th><th>Valor</th><th>Forma</th><th></th></tr></thead><tbody>`;
+  lancamentos.forEach(l => {
+    html += `<tr>
+      <td>${l.termoNumero}</td>
+      <td>${l.dizimistaNome || l.nomeAvulso}</td>
+      <td>${l.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td>
+      <td>R$ ${Number(l.valor).toFixed(2)}</td>
+      <td>${l.formaPagamento}${l.comprovanteUrl ? ` <a href="${l.comprovanteUrl}" target="_blank" rel="noopener">📎</a>` : ""}</td>
+      <td class="acoes-inline">${l.fechamentoId ? "" : `<button class="btn-link btn-link-perigo" onclick="excluirLancamentoTesourariaAcao(${l.lancamentoId})">Excluir</button>`}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function excluirLancamentoTesourariaAcao(lancamentoId) {
+  if (!(await confirmarAcao("Excluir este lançamento?", "Excluir"))) return;
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-lancamentos/${lancamentoId}`, { method: "DELETE" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarLancamentosTesouraria();
+}
+
+async function carregarResumoFechamento() {
+  const congregacaoId = document.getElementById("financeiroFechCongregacao").value;
+  const mesReferencia = document.getElementById("financeiroFechMes").value;
+  const container = document.getElementById("resultadoResumoFechamento");
+  if (!congregacaoId || !mesReferencia) { container.innerHTML = ""; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-relatorio?congregacaoId=${congregacaoId}&mesReferencia=${mesReferencia}`);
+  const data = await res.json();
+  if (!data.sucesso) { container.innerHTML = `<p class="subtitle">${data.mensagem || "Erro ao carregar."}</p>`; return; }
+
+  const f = data.fechamento;
+  const linhaValor = (rotulo, valor) => `<tr><td>${rotulo}</td><td>R$ ${Number(valor).toFixed(2)}</td></tr>`;
+
+  if (!f) {
+    container.innerHTML = `
+      <p class="subtitle">Mês ainda aberto — ${data.lancamentos.length} lançamento(s) registrado(s).</p>
+      <button class="btn-confirmar" style="width:auto;" onclick="fecharMesTesourariaAcao(${congregacaoId}, '${mesReferencia}')">🔒 Fechar mês</button>
+      <p id="resultadoFecharMes" class="subtitle"></p>`;
+    return;
+  }
+
+  let html = `<table class="tabela-frequencia">
+    <tbody>
+      ${linhaValor("Total Recebido", f.totalRecebido)}
+      ${linhaValor("Aluguel", f.valorAluguel)}
+      ${linhaValor("Lote", f.valorLote)}
+      ${linhaValor("Total Final", f.totalFinal)}
+      ${linhaValor(`Retenção Local (${f.percentualRetencaoLocal}%)`, f.valorRetidoLocal)}
+      ${linhaValor(`Repasse Tesouraria Geral (${(100 - f.percentualRetencaoLocal).toFixed(2)}%)`, f.valorRepasseGeral)}
+    </tbody>
+  </table>
+  <p class="subtitle">Status: <span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : ""}">${f.status}</span>${f.dataRepasse ? ` — repassado em ${new Date(f.dataRepasse).toLocaleDateString("pt-BR")}` : ""}</p>`;
+
+  if (f.status !== "REPASSADO") {
+    html += `
+      <div class="input-group">
+        <label>Comprovante do repasse (opcional):</label>
+        <input type="file" id="financeiroComprovanteRepasse" accept="image/jpeg,image/png,application/pdf" />
+      </div>
+      <button class="btn-confirmar" style="width:auto;" onclick="registrarRepasseTesourariaAcao(${congregacaoId}, '${mesReferencia}')">✅ Registrar repasse</button>
+      <p id="resultadoRepasse" class="subtitle"></p>`;
+  }
+  container.innerHTML = html;
+}
+
+async function fecharMesTesourariaAcao(congregacaoId, mesReferencia) {
+  if (!(await confirmarAcao("Fechar este mês? Não será mais possível lançar entradas nele.", "Fechar mês"))) return;
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-fechamento`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ congregacaoId, mesReferencia })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarResumoFechamento();
+  else { const el = document.getElementById("resultadoFecharMes"); if (el) el.textContent = data.mensagem; }
+}
+
+async function registrarRepasseTesourariaAcao(congregacaoId, mesReferencia) {
+  // Precisa buscar o fechamentoId de novo — RelatorioTesouraria não devolve
+  // o id (só os dados do fechamento), então lê direto do consolidado.
+  const resFechamentos = await fetchProtegido(`${API_BASE}/tesouraria-fechamentos?mesReferencia=${mesReferencia}`);
+  const dataFechamentos = await resFechamentos.json();
+  const alvo = (dataFechamentos.fechamentos || []).find(f => f.congregacaoId === Number(congregacaoId));
+  if (!alvo) { mostrarToast("Fechamento não encontrado.", "erro"); return; }
+
+  const arquivo = document.getElementById("financeiroComprovanteRepasse").files[0];
+  const body = {};
+  if (arquivo) { body.comprovanteBase64 = await arquivoParaBase64(arquivo); body.mimeType = arquivo.type; }
+
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-repasse/${alvo.fechamentoId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarResumoFechamento();
+}
+
+async function gerarRelatorioTesourariaAcao(modo) {
+  const congregacaoId = document.getElementById("financeiroRelCongregacao").value;
+  const mesReferencia = document.getElementById("financeiroRelMes").value;
+  const container = document.getElementById("resultadoRelatorioTesouraria");
+  if (!congregacaoId || !mesReferencia) { mostrarToast("Escolha a congregação e o mês.", "erro"); return; }
+
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-relatorio?congregacaoId=${congregacaoId}&mesReferencia=${mesReferencia}&modo=${modo}`);
+  const data = await res.json();
+  if (!data.sucesso) { container.innerHTML = `<p class="subtitle">${data.mensagem || "Erro ao gerar relatório."}</p>`; return; }
+
+  let html = `<h4>${data.congregacaoNome} — ${data.mesReferencia} (${modo === "mural" ? "versão mural, sem valores" : "versão completa"})</h4>
+    <table class="tabela-frequencia"><thead><tr><th>Termo</th><th>Nome</th><th>Tipo</th>${modo === "mural" ? "" : "<th>Valor</th><th>Forma</th>"}</tr></thead><tbody>`;
+  data.lancamentos.forEach(l => {
+    html += `<tr><td>${l.termoNumero}</td><td>${l.nome}</td><td>${l.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td>${modo === "mural" ? "" : `<td>R$ ${Number(l.valor).toFixed(2)}</td><td>${l.formaPagamento}</td>`}</tr>`;
+  });
+  html += "</tbody></table>";
+  if (data.fechamento) {
+    const f = data.fechamento;
+    html += `<p class="subtitle">Total Recebido: R$ ${Number(f.totalRecebido).toFixed(2)} · Total Final: R$ ${Number(f.totalFinal).toFixed(2)} ·
+      Repasse Geral: R$ ${Number(f.valorRepasseGeral).toFixed(2)}</p>`;
+  }
+  container.innerHTML = html;
+}
+
+async function carregarParametrosTesouraria() {
+  const congregacaoId = document.getElementById("financeiroParamCongregacao").value;
+  if (!congregacaoId) return;
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-parametros/${congregacaoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) return;
+  document.getElementById("financeiroParamAluguel").value = data.valorAluguelMensal || "";
+  document.getElementById("financeiroParamLote").value = data.valorLoteMensal || "";
+  document.getElementById("financeiroParamPercentual").value = data.percentualRetencaoLocal;
+}
+
+async function salvarParametrosTesourariaAcao() {
+  const congregacaoId = document.getElementById("financeiroParamCongregacao").value;
+  const msg = document.getElementById("resultadoParametrosTesouraria");
+  if (!congregacaoId) { msg.textContent = "Escolha a congregação."; return; }
+  const body = {
+    valorAluguelMensal: document.getElementById("financeiroParamAluguel").value || null,
+    valorLoteMensal: document.getElementById("financeiroParamLote").value || null,
+    percentualRetencaoLocal: document.getElementById("financeiroParamPercentual").value
+  };
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-parametros/${congregacaoId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem;
+}
+
+async function carregarConsolidadoTesouraria() {
+  const mesReferencia = document.getElementById("financeiroConsolidadoMes").value;
+  const container = document.getElementById("resultadoConsolidadoTesouraria");
+  const qs = mesReferencia ? `?mesReferencia=${mesReferencia}` : "";
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-fechamentos${qs}`);
+  const data = await res.json();
+  const fechamentos = data.fechamentos || [];
+  if (fechamentos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum fechamento no seu escopo para este período.</p>";
+    return;
+  }
+  let html = `<p class="subtitle"><strong>Total Recebido (escopo):</strong> R$ ${data.consolidado.totalRecebido.toFixed(2)} ·
+    <strong>Retido Local:</strong> R$ ${data.consolidado.valorRetidoLocal.toFixed(2)} ·
+    <strong>Repasse Geral:</strong> R$ ${data.consolidado.valorRepasseGeral.toFixed(2)}</p>
+    <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Total Final</th><th>Repasse Geral</th><th>Status</th></tr></thead><tbody>`;
+  fechamentos.forEach(f => {
+    html += `<tr>
+      <td>${f.congregacaoNome}</td><td>${f.mesReferencia}</td>
+      <td>R$ ${Number(f.totalFinal).toFixed(2)}</td><td>R$ ${Number(f.valorRepasseGeral).toFixed(2)}</td>
+      <td><span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : ""}">${f.status}</span></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
 }
 
 // ---- MINHA FOTO (v1.10 — autoatendimento, dentro de Meus Dados (LGPD)) ----
@@ -549,6 +866,10 @@ function mostrarAbaSecretaria(aba) {
     mostrarSubAbaMeupainel(subAbaMeupainelAtual);
     return;
   }
+  if (aba === "financeiro") {
+    mostrarSubAbaFinanceiro(subAbaFinanceiroAtual);
+    return;
+  }
   document.getElementById("tituloModulo").textContent = TITULOS_MODULOS[aba] || "Governança";
   if (aba === "reunioes") { montarSubmenuReunioes(); carregarElegiveisAssembleia(); }
   if (aba === "pessoas") { carregarOpcoesFormPessoa().then(() => mostrarSubAbaPessoas(subAbaPessoasAtual)); carregarPessoas(); }
@@ -572,7 +893,7 @@ function alternarSidebar() {
   document.getElementById("sidebar").classList.toggle("recolhido");
 }
 const TITULOS_MODULOS = {
-  meupainel: "Meu Painel", reunioes: "Reuniões",
+  meupainel: "Meu Painel", financeiro: "Financeiro", reunioes: "Reuniões",
   pessoas: "Pessoas", cartas: "Cartas de Trânsito", congregacoes: "Congregações",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",

@@ -1707,7 +1707,15 @@ diretamente "isso é tudo, ou tem mais?": sim, tinha mais, duas peças
 voltadas ao doador (doação online/recorrente, campanhas com meta) e duas
 peças de projeção/patrimônio (fluxo de caixa projetado, depreciação de
 ativo fixo) que plataformas de ponta como Pushpay/Tithe.ly e ERPs como
-MIP/Nonprofit+ têm e que não estavam aqui ainda.
+MIP/Nonprofit+ têm e que não estavam aqui ainda. Uma quinta rodada
+respondeu "eu quero o pico, não porte médio": o que separa um ERP de
+porte médio de um sistema de nível corporativo/bancário de verdade —
+ancoragem externa da trilha de auditoria (à prova até de um administrador
+com controle total do próprio sistema), monitoramento contínuo de
+controles em vez de auditoria por amostragem, revisão periódica de
+acessos, o princípio dos quatro olhos de verdade (dois aprovadores
+independentes, não só hierarquia), orçamento contínuo (rolling forecast)
+e gestão de investimentos/tesouraria avançada.
 
 **Conclusão da pesquisa:** a arquitetura já construída em v4.1-v4.1.5
 (Centro de Custo Local/Geral + Categorias de Entrada) segue exatamente o
@@ -1738,6 +1746,12 @@ existe em cima de normas e controles reconhecidos:
 | KPIs de saúde financeira (meses de reserva, aplicação em atividades-fim, liquidez) | Sage, JMCO, Warren Averett, GivingArc | v4.12 |
 | Open Finance Brasil (conciliação automática) | TecnoSpeed, Pluggy, Openi, Paytime | v4.13 |
 | COAF/PLD-FT (Lei 9.613/98) — comunicação de operação suspeita, **obrigação legal** | AtlasGov, CFC, Compliance Brazil, VAAS | v4.12 |
+| Ancoragem externa de timestamp (RFC 3161) — trilha inviolável até contra admin do próprio sistema | pesquisa técnica (blockchain anchoring) | v4.12 |
+| Continuous Controls Monitoring (SOX 404) — controle monitorado o tempo todo, não só por amostragem | CloudEagle, Pathlock, Exabeam | v4.12 |
+| Revisão periódica de acessos (access recertification) | TechPrescient, Pathlock | v4.12 |
+| Princípio dos Quatro Olhos (dual control) — dois aprovadores independentes, não hierarquia | AICO, Hyperbots, SAP Community | v4.12 |
+| Rolling forecast (orçamento contínuo, driver-based) | Cube, Prophix, Vena | v4.8 |
+| Treasury Management System — gestão de investimentos, liquidez com margem de confiança | Gartner, Trovata, GTreasury | v4.14 |
 
 #### v4.2 — Plano de Contas e Fundo Restrito/Livre
 
@@ -1861,6 +1875,13 @@ dei" pra "poder dar direto pelo sistema".
       assumidos — ajuda a decidir o timing de uma campanha (v4.4) ou de
       uma compra grande, em vez de descobrir o aperto de caixa depois que
       já aconteceu.
+- [ ] **Orçamento contínuo (rolling forecast)** — pesquisa de mercado
+      (nível "pico", não porte médio): em vez de um orçamento anual fixo
+      revisado só uma vez por ano, o sistema reprojeta os próximos 12
+      meses todo mês, ajustando pelo realizado — o mesmo espírito
+      "calculado na leitura" de sempre, aplicado à projeção, não só ao
+      histórico. *(Cube, Prophix, Vena — FP&A driver-based rolling
+      forecast)*
 - [ ] Planejamento estratégico PDQ com metas e 3 eixos (Regimento, Art. 26-29).
 - [ ] Fundo de Execução Estratégica: dotação obrigatória de 10% da arrecadação
       líquida (Art. 27), com suspensão excepcional pelo Pastor Presidente.
@@ -1913,7 +1934,7 @@ dei" pra "poder dar direto pelo sistema".
       Dirigente titular, vedada cessão a terceiros, destituição automática por uso
       irregular/"gato" de luz-água *(gap da varredura)*.
 
-#### v4.12 — Auditoria, Compliance e Indicadores
+#### v4.12 — Auditoria, Compliance e Indicadores (nível enterprise/"pico")
 
 Versão que reúne tudo que é *revisão* do que as versões anteriores já
 produziram — não cria dado novo, olha pro que já existe com mais rigor.
@@ -1922,15 +1943,51 @@ Avaliação de Riscos, Atividades de Controle, Informação e Comunicação,
 Monitoramento) serve de checklist pra confirmar que a FASE 4 está
 completa: Ambiente de Controle (segregação de funções, 2.7) e Atividades
 de Controle (alçada, 3 cotações, trilha de auditoria) já vêm de v4.5;
-falta o resto, formalizado aqui.
+falta o resto, formalizado aqui. **Quinta rodada de pesquisa** (pedido
+explícito — "eu quero o pico, não porte médio"): o que separa um ERP de
+porte médio de um sistema de nível corporativo/bancário de verdade não é
+ter os controles — é ter esses 4 refinamentos que a maioria nem das
+grandes empresas implementa direito:
 
-- [ ] **Trilha de Auditoria Inviolável** — `AuditLog.HashRegistro`: hash
-      (SHA-256) calculado sobre os dados do próprio registro + o hash do
-      registro anterior da mesma tabela; qualquer alteração/exclusão feita
-      por fora do sistema quebra a corrente de forma matematicamente
-      detectável. Rotina de verificação de integridade disponível pro
-      Conselho Fiscal/NIF. Vale considerar estender pro `AuditLog` inteiro
-      do sistema (todas as fases), não só financeiro, quando chegar a hora.
+- [ ] **Trilha de Auditoria Inviolável com Ancoragem Externa** —
+      `AuditLog.HashRegistro`: hash (SHA-256) calculado sobre os dados do
+      próprio registro + o hash do registro anterior da mesma tabela
+      (como já previsto); **nível pico**: periodicamente, o hash mais
+      recente da corrente é ancorado fora do sistema (carimbo de tempo
+      RFC 3161 de uma autoridade externa, ou publicação do hash num
+      registro público) — isso prova a integridade até contra um cenário
+      em que alguém tivesse controle total do servidor e do banco (o
+      hash interno sozinho não protegeria contra isso; a ancoragem
+      externa sim). É o tipo de controle que nem todo ERP caro tem.
+      *(pesquisa técnica — RFC 3161, blockchain anchoring, tamper-evident
+      audit trails)*
+- [ ] **Monitoramento Contínuo de Controles (Continuous Controls
+      Monitoring)** — em vez de auditoria por amostragem periódica (só no
+      fechamento do mês), verificações automáticas rodando o tempo todo:
+      todo pagamento fora do padrão histórico, toda tentativa de ação
+      fora do escopo, todo Fornecedor com dado bancário alterado recém
+      gera alerta na hora, não só quando alguém for auditar depois. É
+      exatamente o padrão que reguladores financeiros internacionais
+      (PCAOB/SEC, via SOX 404) cobram de empresas auditadas — controle
+      continuamente monitorado, não só testado uma vez por ano.
+      *(CloudEagle, Pathlock, Exabeam — SOX 404 continuous controls
+      monitoring)*
+- [ ] **Revisão Periódica de Acessos (Access Recertification)** — a
+      segregação de funções (2.7) garante quem pode fazer o quê no
+      momento em que o acesso é concedido; nível pico exige also
+      **reconfirmar periodicamente** (ex: trimestral) que cada Tesoureiro/
+      pessoa com permissão `financeiro` ainda precisa daquele acesso —
+      CLI/Conselho Fiscal recertifica, ou o acesso expira automaticamente.
+      Evita o problema real mais comum em auditorias grandes: gente que
+      trocou de função mas nunca teve o acesso antigo revogado.
+      *(TechPrescient, Pathlock — SOX user access review)*
+- [ ] **Princípio dos Quatro Olhos, de verdade (dual control)** — diferente
+      da alçada por valor (v4.5, onde um aprovador de cargo mais alto já
+      resolve): acima de um valor crítico de referência, exige **duas
+      pessoas independentes** aprovando (não um substituindo o outro por
+      hierarquia) — o padrão usado por bancos/tesourarias corporativas
+      pros pagamentos de maior risco. *(AICO, Hyperbots, SAP Community —
+      four-eyes principle / dual control)*
 - [ ] NIF (Núcleo de Inteligência Financeira) — análise de risco e alertas
       (Avaliação de Riscos do COSO, formalizada).
 - [ ] **Comunicação de Operações Suspeitas (COS)** — pesquisa de mercado
@@ -1969,7 +2026,33 @@ falta o resto, formalizado aqui.
 - [ ] Alerta só do que não bate (divergência real) — não precisa mais
       conferir lançamento por lançamento contra recibo.
 
-#### v4.14 — Repasses institucionais
+#### v4.14 — Gestão de Investimentos e Tesouraria Avançada (nível enterprise/"pico")
+
+Peça que faltava pra fechar o nível "pico": o Regimento já prevê Política
+de Investimentos (Art. 64, Fundo de Reserva — 0,2% das entradas líquidas,
+autorização da CLI) e o Painel de Indicadores (v4.12) já cobra "Meses de
+Reserva", mas não existia onde **gerir de fato** onde esse dinheiro está
+aplicado.
+
+- [ ] Registro de aplicações financeiras (CDB, poupança, fundos) do Fundo
+      de Reserva — instituição, valor aplicado, taxa/prazo, liquidez
+      (quando pode ser resgatado), rentabilidade acumulada.
+- [ ] **Gestão de Portfólio de Investimentos** — visão consolidada de
+      onde está aplicada a reserva, com o mesmo princípio "calculado na
+      leitura" (rentabilidade e prazos vêm do registro, nunca digitados
+      à mão no relatório).
+- [ ] **Previsão de Liquidez com margem de confiança** — evolução do
+      Fluxo de Caixa Projetado (v4.8): em vez de um número único, uma
+      faixa (otimista/conservador) baseada na variação histórica real das
+      entradas — decisão de resgatar uma aplicação antecipadamente fica
+      mais informada. *(Gartner, Trovata, GTreasury — treasury management
+      systems, liquidity forecasting)*
+- **Fora do escopo — não se aplica hoje:** cash pooling / conta
+  centralizadora entre múltiplas contas bancárias — só faz sentido quando
+  existirem contas por congregação (Art. 140, ver nota da v4.1.3); hoje é
+  uma conta só, não tem o que agrupar.
+
+#### v4.15 — Repasses institucionais
 
 - [ ] Repasses obrigatórios de congregações/departamentos para a Matriz —
       mesma engine de Entradas/Saídas (v4.1-v4.5), aplicada à relação
@@ -1977,14 +2060,14 @@ falta o resto, formalizado aqui.
 - [ ] Dízimo institucional de 10% (Distrito) para a Sede Geral.
 - [ ] Alerta de atraso de repasse (infração de intervenção).
 
-#### v4.15 — Seguros institucionais *(gap da varredura)*
+#### v4.16 — Seguros institucionais *(gap da varredura)*
 
 - [ ] Apólice obrigatória para Templo Sede e grandes eventos (Reg. Art. 65-A):
       cobertura mínima incêndio/danos elétricos/RC.
 - [ ] Seguro de Responsabilidade Civil para administradores (Reg. Art. 42-A).
 - [ ] Registro de apólices, vigências e coberturas.
 
-#### v4.16 — Anexo de Parâmetros Monetários *(gap da varredura)*
+#### v4.17 — Anexo de Parâmetros Monetários *(gap da varredura)*
 
 - [ ] Catálogo de valores monetários fixos (tetos, taxas, valores de referência) com
       correção automática a cada 12 meses por IPCA/salário-mínimo (Reg. Art. 65) —
@@ -1992,7 +2075,7 @@ falta o resto, formalizado aqui.
 - [ ] "Anexo Único" mantido pela Secretaria Geral, com número/data da Resolução
       Normativa da CLI que fixou/atualizou cada valor (Reg. Art. 162-C §§1-2).
 
-#### v4.17 — Cessão de templo a terceiros *(gap da varredura)*
+#### v4.18 — Cessão de templo a terceiros *(gap da varredura)*
 
 - [ ] Autorização de cessão do templo para casamentos/eventos de terceiros (Reg. Art.
       156) — não é conflito de agenda (já resolvido em v7.2), é processo de

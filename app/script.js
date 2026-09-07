@@ -279,7 +279,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "documentos"];
+const NOMES_ABAS = ["meupainel", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -298,7 +298,7 @@ function permissoesDaAba(nome) {
 
 function aplicarPermissoesNoMenu() {
   NOMES_ABAS.forEach(nome => {
-    if (nome === "meupainel" || nome === "documentos") return;
+    if (nome === "meupainel" || nome === "documentos" || nome === "ouvidoria") return;
     const btn = document.getElementById(`btnAba${capitalize(nome)}`);
     const pode = permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
     btn.style.display = pode ? "inline-block" : "none";
@@ -538,7 +538,7 @@ async function carregarMinhasSolicitacoesEdicao() {
 
 function mostrarAbaSecretaria(aba) {
   NOMES_ABAS.forEach(nome => {
-    const podeVer = nome === "meupainel" || nome === "documentos" || permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
+    const podeVer = nome === "meupainel" || nome === "documentos" || nome === "ouvidoria" || permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
     const divAba = document.getElementById(`aba${capitalize(nome)}`);
     const mostrar = nome === aba && podeVer;
     divAba.style.display = mostrar ? "block" : "none";
@@ -564,6 +564,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
   if (aba === "auditoria") carregarAuditoria();
   if (aba === "protecaodedados") { carregarSolicitacoesDPO(); montarPoliticasRetencao(); }
+  if (aba === "ouvidoria") carregarPainelOuvidoria();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -576,7 +577,7 @@ const TITULOS_MODULOS = {
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
   abandono: "Perda de Membresia",
-  auditoria: "Auditoria", protecaodedados: "Proteção de Dados", documentos: "Documentos"
+  auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -5167,4 +5168,168 @@ async function executarExclusaoDPO(id) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarSolicitacoesDPO();
+}
+
+// ---- ABA OUVIDORIA (v3.7 — Art. 104) ----
+// Abrir denúncia/sugestão é aberto a qualquer pessoa logada (sem checar
+// permissão) — só o painel de apuração abaixo é restrito a "ouvidoria".
+async function salvarDenunciaOuvidoria() {
+  const tipo = document.getElementById("ouvidoriaTipo").value;
+  const denunciadoMembroId = document.getElementById("ouvidoriaDenunciado").value || null;
+  const relato = document.getElementById("ouvidoriaRelato").value.trim();
+  const anonima = document.getElementById("ouvidoriaAnonima").checked;
+  const msg = document.getElementById("resultadoOuvidoria");
+  if (!relato) { msg.textContent = "Descreva o relato antes de enviar."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/ouvidoria`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipo, denunciadoMembroId, relato, anonima })
+  });
+  const data = await res.json();
+  if (data.sucesso) {
+    msg.innerHTML = `✅ Denúncia registrada. <strong>Guarde este protocolo, é a única forma de acompanhar:</strong><br /><span style="font-size:1.2em;">${data.protocolo}</span>`;
+    document.getElementById("ouvidoriaDenunciado").value = "";
+    document.getElementById("ouvidoriaRelato").value = "";
+    document.getElementById("ouvidoriaAnonima").checked = false;
+  } else {
+    msg.textContent = data.mensagem || "Não foi possível registrar a denúncia.";
+  }
+}
+
+async function consultarProtocoloOuvidoriaAcao() {
+  const protocolo = document.getElementById("consultaProtocolo").value.trim();
+  const msg = document.getElementById("resultadoConsultaProtocolo");
+  if (!protocolo) { msg.textContent = "Informe o protocolo."; return; }
+  const res = await fetch(`${API_BASE}/ouvidoria-protocolo/${encodeURIComponent(protocolo)}`);
+  const data = await res.json();
+  msg.textContent = data.sucesso ? `Status: ${ROTULO_STATUS_OUVIDORIA[data.status] || data.status} (protocolado em ${data.dataProtocolo})` : (data.mensagem || "Protocolo não encontrado.");
+}
+
+const ROTULO_TIPO_OUVIDORIA = {
+  INFRACAO_ETICA: "Infração Ética", ASSEDIO: "Assédio", DESVIO_FINANCEIRO: "Desvio Financeiro",
+  ABUSO_AUTORIDADE: "Abuso de Autoridade", SUGESTAO: "Sugestão de Melhoria"
+};
+const ROTULO_STATUS_OUVIDORIA = {
+  RECEBIDA: "Recebida", EM_APURACAO: "Em apuração", ENCAMINHADA_PROCESSO: "Encaminhada para processo",
+  ARQUIVADA: "Arquivada", CONCLUIDA: "Concluída"
+};
+
+// O painel só é montado/carregado se a pessoa tiver a permissão "ouvidoria"
+// — sem isso, a aba mostra só o formulário público de abrir denúncia.
+async function carregarPainelOuvidoria() {
+  const container = document.getElementById("painelOuvidoriaConteudo");
+  if (!authPermissoes.includes("ouvidoria")) { container.innerHTML = ""; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/ouvidoria`);
+  const denuncias = await res.json();
+  if (!Array.isArray(denuncias)) { container.innerHTML = ""; return; }
+
+  let html = `<hr /><h4 style="margin:0 0 10px; color: var(--cor-primaria);">Painel da Ouvidoria (CEI/NIF)</h4>
+    <div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr>
+      <th>Protocolo</th><th>Tipo</th><th>Denunciante</th><th>Denunciado</th><th>Relato</th><th>Ouvidor</th><th>Status</th><th></th>
+    </tr></thead><tbody>`;
+  denuncias.forEach(d => {
+    const podeAnonimizar = authPermissoes.includes("protecaodedados") && !d.dadosAnonimizados && ["ARQUIVADA", "CONCLUIDA"].includes(d.status);
+    html += `<tr>
+      <td>${d.protocolo}</td>
+      <td>${ROTULO_TIPO_OUVIDORIA[d.tipo] || d.tipo}</td>
+      <td>${d.anonima ? "<span class='subtitle'>Anônima</span>" : (d.denuncianteNome || "-")}</td>
+      <td>${d.denunciadoNome || "-"}${d.denunciadoEhDiretoria ? " ⚠️" : ""}</td>
+      <td style="max-width:260px;">${d.relato || ""}</td>
+      <td>${d.ouvidorNome || "-"}</td>
+      <td>${ROTULO_STATUS_OUVIDORIA[d.status] || d.status}</td>
+      <td class="acoes-inline">
+        ${d.status === "RECEBIDA" ? `<button class="btn-link" onclick="atribuirOuvidorAcao(${d.denunciaId})">Atribuir Ouvidor</button>` : ""}
+        ${d.denunciadoMembroId && d.status !== "ENCAMINHADA_PROCESSO" ? `<button class="btn-link" onclick="encaminharProcessoOuvidoriaAcao(${d.denunciaId})">Encaminhar p/ Processo</button>` : ""}
+        ${!["ARQUIVADA", "CONCLUIDA", "ENCAMINHADA_PROCESSO"].includes(d.status) ? `<button class="btn-link" onclick="arquivarOuvidoriaAcao(${d.denunciaId})">Arquivar</button>
+        <button class="btn-link" onclick="concluirOuvidoriaAcao(${d.denunciaId})">Concluir</button>` : ""}
+        ${podeAnonimizar ? `<button class="btn-link btn-link-perigo" onclick="anonimizarOuvidoriaAcao(${d.denunciaId})">Anonimizar</button>` : ""}
+      </td>
+    </tr>`;
+  });
+  html += "</tbody></table></div>";
+  container.innerHTML = html;
+}
+
+async function evoluirOuvidoriaAcao(denunciaId, corpo) {
+  const res = await fetchProtegido(`${API_BASE}/ouvidoria/${denunciaId}/evoluir`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarPainelOuvidoria();
+  return data;
+}
+
+async function atribuirOuvidorAcao(denunciaId) {
+  const ouvidorMembroId = await pedirTexto("Atribuir Ouvidor", "Matrícula do Ouvidor responsável");
+  if (!ouvidorMembroId) return;
+  await evoluirOuvidoriaAcao(denunciaId, { acao: "ATRIBUIR_OUVIDOR", ouvidorMembroId });
+}
+
+async function arquivarOuvidoriaAcao(denunciaId) {
+  const justificativa = await pedirTexto("Arquivar denúncia", "Justificativa (obrigatória)");
+  if (!justificativa) return;
+  await evoluirOuvidoriaAcao(denunciaId, { acao: "ARQUIVAR", justificativa });
+}
+
+async function concluirOuvidoriaAcao(denunciaId) {
+  const justificativa = await pedirTexto("Concluir denúncia", "Justificativa (obrigatória)");
+  if (!justificativa) return;
+  await evoluirOuvidoriaAcao(denunciaId, { acao: "CONCLUIR", justificativa });
+}
+
+async function anonimizarOuvidoriaAcao(denunciaId) {
+  if (!(await confirmarAcao("Anonimizar esta denúncia? O relato e a identidade do denunciante são apagados permanentemente (Art. 104 §9º).", "Anonimizar"))) return;
+  await evoluirOuvidoriaAcao(denunciaId, { acao: "ANONIMIZAR" });
+}
+
+// Reaproveita o mesmo seletor de órgão central/territorial e catálogo de
+// infrações já usados na abertura de Processo Disciplinar (v3.2/v3.6).
+function pedirEncaminhamentoProcesso(orgaos, locais, infracoes) {
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Encaminhar para Processo Disciplinar</h3>
+      <div class="input-group">
+        <label>Órgão:</label>
+        <select id="modalOrgaoEncaminhar">
+          ${orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("")}
+          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${o.nome}</option>`).join("")}
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Infrações (Art. 96-99) — selecione 1 ou mais:</label>
+        <div class="rolagem-tabela" style="max-height:180px;">
+          ${infracoes.filter(i => i.ativo !== false).map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-ouvidoria" value="${i.infracaoId}" style="width:auto;" /> ${i.nome}</label>`).join("")}
+        </div>
+      </div>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar" id="modalConfirmar">Encaminhar</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    document.getElementById("modalConfirmar").onclick = () => {
+      const [tipo, id] = document.getElementById("modalOrgaoEncaminhar").value.split(":");
+      const infracoesIds = Array.from(document.querySelectorAll(".chk-infracao-ouvidoria:checked")).map(el => Number(el.value));
+      fecharModal();
+      resolve({ orgaoResponsavelId: tipo === "central" ? id : null, orgaoLocalId: tipo === "local" ? id : null, infracoesIds });
+    };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
+async function encaminharProcessoOuvidoriaAcao(denunciaId) {
+  const [orgaosRes, locaisRes, infracoesRes] = await Promise.all([
+    fetch(`${API_BASE}/orgaos`), fetch(`${API_BASE}/catalogos/orgaosLocais`), fetch(`${API_BASE}/catalogos/tiposInfracao`)
+  ]);
+  const orgaos = await orgaosRes.json();
+  const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JAI", "JEA", "TER"].includes(o.sigla));
+  const infracoes = await infracoesRes.json();
+
+  const dados = await pedirEncaminhamentoProcesso(orgaos, locais, infracoes);
+  if (!dados) return;
+  if (dados.infracoesIds.length === 0) { mostrarToast("Selecione pelo menos 1 infração.", "erro"); return; }
+  await evoluirOuvidoriaAcao(denunciaId, { acao: "ENCAMINHAR_PROCESSO", ...dados });
 }

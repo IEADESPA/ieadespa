@@ -103,6 +103,7 @@
           <button class="btn-aba" id="btnAbaAbandono" onclick="mostrarAbaSecretaria('abandono')"><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
           <button class="btn-aba" id="btnAbaAuditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
           <button class="btn-aba" id="btnAbaProtecaodedados" onclick="mostrarAbaSecretaria('protecaodedados')"><span class="icone">🛡️</span><span class="rotulo">Proteção de Dados</span></button>
+          <button class="btn-aba" id="btnAbaOuvidoria" onclick="mostrarAbaSecretaria('ouvidoria')"><span class="icone">📢</span><span class="rotulo">Ouvidoria</span></button>
           <button class="btn-aba" id="btnAbaDocumentos" onclick="mostrarAbaSecretaria('documentos')"><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
         </nav>
         <div class="sidebar-rodape">
@@ -1374,6 +1375,51 @@
         <h3>Políticas de Retenção</h3>
         <p class="subtitle">Referência de quanto tempo cada categoria de dado fica guardada e por quê — usada ao responder um pedido de exclusão. Não apaga nada sozinha. (Editar exige também a permissão "Pessoas".)</p>
         <div id="politicasRetencaoConteudo"></div>
+      </div>
+
+      <!-- ABA: OUVIDORIA (Art. 104) — o formulário de abrir denúncia/sugestão
+           fica visível a qualquer pessoa logada; o painel de apuração só
+           carrega/aparece pra quem tem a permissão "ouvidoria" (JS). -->
+      <div id="abaOuvidoria" class="aba-secretaria" style="display:none;">
+        <h3>📢 Ouvidoria Eclesiástica</h3>
+        <p class="subtitle">Canal permanente e sigiloso para denúncias éticas, assédio, desvio
+          financeiro, abuso de autoridade ou sugestões (Art. 104). Você pode denunciar de forma
+          anônima — nesse caso o sistema não grava quem enviou.</p>
+        <form onsubmit="event.preventDefault(); salvarDenunciaOuvidoria();">
+          <div class="input-group">
+            <label>Tipo:</label>
+            <select id="ouvidoriaTipo">
+              <option value="INFRACAO_ETICA">Infração Ética</option>
+              <option value="ASSEDIO">Assédio</option>
+              <option value="DESVIO_FINANCEIRO">Desvio Financeiro</option>
+              <option value="ABUSO_AUTORIDADE">Abuso de Autoridade</option>
+              <option value="SUGESTAO">Sugestão de Melhoria</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Matrícula do denunciado (opcional):</label>
+            <input type="number" id="ouvidoriaDenunciado" placeholder="Deixe em branco se for sugestão ou não souber" />
+          </div>
+          <div class="input-group">
+            <label>Relato:</label>
+            <textarea id="ouvidoriaRelato" rows="5" placeholder="Descreva o ocorrido"></textarea>
+          </div>
+          <div class="input-group">
+            <label><input type="checkbox" id="ouvidoriaAnonima" style="width:auto;" /> Enviar de forma anônima (o sistema não vai gravar quem enviou)</label>
+          </div>
+          <button class="btn-confirmar" type="submit">📢 Enviar</button>
+        </form>
+        <p id="resultadoOuvidoria"></p>
+
+        <hr />
+        <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Consultar meu protocolo</h4>
+        <div class="barra-lista">
+          <input type="text" id="consultaProtocolo" placeholder="Ex: OUV-2026-00001-a1b2" style="min-width:220px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="consultarProtocoloOuvidoriaAcao();">🔍 Consultar</button>
+        </div>
+        <p id="resultadoConsultaProtocolo"></p>
+
+        <div id="painelOuvidoriaConteudo"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

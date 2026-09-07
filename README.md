@@ -1348,12 +1348,50 @@ Disciplinar (v3.2-v3.5): a escada **disciplinar** territorial.
   aqui os órgãos nascem junto com a unidade territorial, não por atingir um
   número mínimo; permanece descartado, sem reaproveitamento de código.
 
-#### v3.7 — Ouvidoria Eclesiástica *(gap da varredura)*
+#### v3.7 — Ouvidoria Eclesiástica
 
-- [ ] Canal permanente, sigiloso e opcionalmente anônimo de denúncias (Reg. Art. 104),
-      vinculado ao NIF/CEI e independente da Diretoria.
-- [ ] Proteção formal ao denunciante + estabilidade do ouvidor durante apuração.
-- [ ] Regras próprias de LGPD: acesso restrito, anonimização pós-processo.
+- [x] Canal permanente de denúncias/sugestões (Art. 104 caput) — nova tabela
+      `DenunciasOuvidoria` + aba própria (`abaOuvidoria`), aberta a
+      **qualquer pessoa logada** (não exige nenhuma permissão específica
+      pra abrir denúncia, "acessível a toda a membresia"). Tipos: Infração
+      Ética/Assédio/Desvio Financeiro/Abuso de Autoridade/Sugestão.
+- [x] Anonimato técnico de verdade (Art. 104 §2º) — quando `anonima=true`,
+      `DenuncianteMembroId` **nunca é gravado** (nem passado pra
+      auditoria) — não é mascarado na leitura como o sigilo do processo
+      disciplinar, o dado simplesmente não existe no banco.
+- [x] Protocolo de acompanhamento — gerado na abertura
+      (`shared/ouvidoria.js::gerarProtocolo`, sequencial + sufixo
+      aleatório), devolvido só naquele momento; consulta pública **sem
+      login** (`GET /api/ouvidoria-protocolo/{protocolo}`, só devolve
+      status/tipo/data, nunca relato ou identidade) — é a única forma de
+      um denunciante anônimo acompanhar depois.
+- [x] Vinculada ao NIF (nome atual do Conselho Fiscal, Art. 53 — mesma
+      sigla `CONSELHO_FISCAL` já existente, sem sigla nova) + CEI — nova
+      permissão `ouvidoria` pra quem opera o canal (papel de Ouvidor
+      designado, Art. 104 §6º admite oficial interno ou empresa externa,
+      por isso não é automático por Assento).
+- [x] Restrição de acesso quando a Diretoria é parte denunciada (Art. 104
+      §8º) — `shared/ouvidoria.js::redigirDenuncias` **remove a linha
+      inteira** da listagem (não só redige campo) quando quem está vendo
+      também tem Assento ativo na Diretoria Executiva e o denunciado
+      também tem.
+- [x] Encaminhamento pra Processo Disciplinar formal — ação
+      `ENCAMINHAR_PROCESSO` reaproveita `shared/disciplinar.js::criarProcessoDisciplinar`
+      (extraída de `AbrirProcessoDisciplinar` pra não duplicar validação),
+      incluindo a mesma checagem de vínculo territorial (v3.6.2) quando o
+      destino é uma JAI/JEA/TER.
+- [x] Anonimização pós-conclusão (Art. 104 §9º) — ação `ANONIMIZAR`, exige
+      a permissão `protecaodedados` (Encarregado de Dados, mesmo papel do
+      LGPD já existente), só permitida em denúncia `ARQUIVADA`/`CONCLUIDA`
+      — apaga `Relato`/`DenuncianteMembroId`, mantém tipo/datas/vínculo
+      com o processo (rastro estatístico).
+- **Descartado — são regras jurídicas, não mecanismo de código**: proteção
+  legal contra retaliação (§4º) e infração gravíssima por quebra de sigilo
+  (§5º) — o sistema não tem como "proteger" alguém de retaliação social/
+  eclesiástica; estabilidade do Ouvidor durante apuração contra a Diretoria
+  (§6º/§7º) — não há como o sistema impedir uma destituição real feita
+  fora dele; gestão externa terceirizada (§3º) — sem integração com
+  plataforma/auditoria externa.
 
 ### FASE 4 — Financeiro e Patrimônio
 

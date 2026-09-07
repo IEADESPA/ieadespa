@@ -4,6 +4,7 @@
 // infrações em 3 arquivos.
 const estatuto = require("./estatuto");
 const escopo = require("./escopo");
+const { registrarAuditoria } = require("./auditoria");
 
 // Art. 103 §1º, II — ministros ordenados (Pastor/Evangelista) respondem
 // duplamente: localmente ao CEI e, na credencial, ao Conselho de Ética da
@@ -133,7 +134,72 @@ async function validarOrgaoProcesso(pool, sql, { orgaoResponsavelId, orgaoLocalI
   };
 }
 
+// Cria um Processo Disciplinar (validação de órgão/infrações + INSERT +
+// ProcessoInfracoes + auditoria) — extraído de `AbrirProcessoDisciplinar`
+// (v3.7) pra ser reaproveitado também por `EvoluirDenunciaOuvidoria`
+// (ação ENCAMINHAR_PROCESSO), sem duplicar a validação. Nunca lança —
+// sempre devolve { sucesso, mensagem, processo? }.
+async function criarProcessoDisciplinar(pool, sql, dados, usuarioId) {
+  const { membroId, orgaoResponsavelId, orgaoLocalId, infracoesIds, motivo, dataAbertura, sigiloso } = dados;
+  if (!membroId || !Array.isArray(infracoesIds) || infracoesIds.length === 0) {
+    return { sucesso: false, mensagem: "Campos obrigatórios: membroId, órgão (central ou territorial), infracoesIds (pelo menos 1)." };
+  }
+
+  const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`);
+  if (membro.recordset.length === 0) {
+    return { sucesso: false, mensagem: "Matrícula não encontrada. Cadastre a pessoa antes." };
+  }
+  // Congregado é uma trilha à parte (v1.6): não tem os vínculos plenos de membresia
+  // que justificam processo disciplinar — se houver algo a tratar, é na admissão.
+  if (membro.recordset[0].SituacaoMembro === "CONGREGADO") {
+    return { sucesso: false, mensagem: "Não é possível abrir processo disciplinar contra um Congregado." };
+  }
+  const orgao = await validarOrgaoProcesso(pool, sql, { orgaoResponsavelId, orgaoLocalId });
+  if (!orgao.valido) {
+    return { sucesso: false, mensagem: orgao.mensagem };
+  }
+
+  const idsInfracoes = infracoesIds.map(Number).filter(Number.isInteger);
+  const infracoesValidas = await pool.request().query(`
+    SELECT InfracaoId FROM TiposInfracao WHERE Ativo = 1 AND InfracaoId IN (${idsInfracoes.length ? idsInfracoes.join(",") : "0"})
+  `);
+  if (infracoesValidas.recordset.length !== idsInfracoes.length) {
+    return { sucesso: false, mensagem: "Uma ou mais infrações informadas são inválidas ou estão inativas no catálogo." };
+  }
+
+  const result = await pool.request()
+    .input("membroId", sql.Int, membroId)
+    .input("orgaoResponsavelId", sql.Int, orgao.orgaoResponsavelId)
+    .input("orgaoLocalId", sql.Int, orgao.orgaoLocalId)
+    .input("motivo", sql.NVarChar(500), motivo || null)
+    .input("dataAbertura", sql.Date, dataAbertura || null)
+    .input("sigiloso", sql.Bit, sigiloso === undefined ? true : sigiloso)
+    .query(`
+      INSERT INTO ProcessosDisciplinares (MembroId, OrgaoResponsavelId, OrgaoLocalId, Motivo, DataAbertura, Status, Sigiloso)
+      OUTPUT INSERTED.ProcessoId
+      VALUES (@membroId, @orgaoResponsavelId, @orgaoLocalId, @motivo, COALESCE(@dataAbertura, CAST(SYSUTCDATETIME() AS DATE)), 'EM_ANDAMENTO', @sigiloso)
+    `);
+  const processoId = result.recordset[0].ProcessoId;
+
+  for (const infracaoId of idsInfracoes) {
+    await pool.request().input("processoId", sql.Int, processoId).input("infracaoId", sql.Int, infracaoId)
+      .query(`INSERT INTO ProcessoInfracoes (ProcessoId, InfracaoId) VALUES (@processoId, @infracaoId)`);
+  }
+
+  const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+
+  await registrarAuditoria({
+    tabela: "ProcessosDisciplinares",
+    registroId: processoId,
+    acao: "Abriu processo disciplinar",
+    usuarioId,
+    dadosDepois: { membroId, orgaoResponsavelId: orgao.orgaoResponsavelId, orgaoLocalId: orgao.orgaoLocalId, motivo: motivo || null, infracoesIds: idsInfracoes }
+  });
+
+  return { sucesso: true, mensagem: "✅ Processo disciplinar aberto.", processo, processoId };
+}
+
 module.exports = {
   SELECT_PROCESSO_BASE, selectProcessoComInfracoes, anexarInfracoesEPrazo, redigirSeSigiloso,
-  SIGLAS_DISCIPLINARES_LOCAIS, SIGLAS_QUE_PODEM_RECORRER, validarOrgaoProcesso
+  SIGLAS_DISCIPLINARES_LOCAIS, SIGLAS_QUE_PODEM_RECORRER, validarOrgaoProcesso, criarProcessoDisciplinar
 };

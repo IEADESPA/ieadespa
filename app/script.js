@@ -303,6 +303,65 @@ function aplicarPermissoesNoMenu() {
     const pode = permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
     btn.style.display = pode ? "inline-block" : "none";
   });
+  montarGradeModulos();
+  sairDoModulo();
+}
+
+// ---- NAVEGAÇÃO POR MÓDULOS (v4.2) ----
+// Padrão "portal de serviços" (tipo Desenvolve Cidade): Meu Painel é sempre
+// o "Painel Principal"/home. Escolher um módulo troca a barra lateral
+// inteira pela navegação daquele módulo (o resto some), com um botão de
+// volta. Cada módulo é só um agrupamento das abas que já existiam — a
+// permissão de cada aba dentro dele continua sendo checada normalmente
+// (aplicarPermissoesNoMenu), então dentro de um módulo a pessoa só vê o
+// que já podia ver antes. Preparado pra crescer (ex: EBD) sem reestruturar
+// nada — só adiciona uma entrada aqui.
+const MODULOS = {
+  financeiro: { titulo: "Financeiro", icone: "💰", abas: ["financeiro"], abaEntrada: "financeiro" },
+  governanca: {
+    titulo: "Secretaria / Governança", icone: "🏛️", abaEntrada: "reunioes",
+    abas: ["reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes",
+      "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos"]
+  }
+};
+let moduloAtual = null;
+
+function podeAcessarAba(nome) {
+  return nome === "documentos" || nome === "ouvidoria" || permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
+}
+
+function podeAcessarModulo(chave) {
+  return MODULOS[chave].abas.some(podeAcessarAba);
+}
+
+function montarGradeModulos() {
+  const grade = document.getElementById("gradeModulos");
+  const chaves = Object.keys(MODULOS).filter(podeAcessarModulo);
+  if (chaves.length === 0) {
+    grade.innerHTML = "<p class='subtitle'>Nenhum módulo disponível pro seu perfil de acesso.</p>";
+    return;
+  }
+  grade.innerHTML = chaves.map(chave => {
+    const m = MODULOS[chave];
+    return `<div class="card-modulo" onclick="entrarModulo('${chave}')">
+      <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span>
+    </div>`;
+  }).join("");
+}
+
+function entrarModulo(chave) {
+  moduloAtual = chave;
+  document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
+  document.getElementById(`grupoModulo${capitalize(chave)}`).style.display = "block";
+  document.getElementById("btnVoltarModulo").style.display = "flex";
+  const primeiraAbaPermitida = MODULOS[chave].abas.find(podeAcessarAba) || MODULOS[chave].abaEntrada;
+  mostrarAbaSecretaria(primeiraAbaPermitida);
+}
+
+function sairDoModulo() {
+  moduloAtual = null;
+  document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
+  document.getElementById("btnVoltarModulo").style.display = "none";
   mostrarAbaSecretaria("meupainel");
 }
 

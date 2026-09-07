@@ -276,6 +276,18 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .btn-aba-destaque { border: 1px solid var(--cor-secundaria); color: var(--cor-secundaria-hover); background: rgba(201,162,39,.12); }
 .btn-aba-destaque:hover { background: rgba(201,162,39,.22); }
 .btn-aba-destaque.ativo { background: var(--cor-secundaria); color: #fff; }
+
+/* Grade de módulos (v4.2) — "portal de serviços": cards que levam pra dentro
+   de um módulo (a barra lateral toda vira a navegação daquele módulo). */
+.grade-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-bottom: 8px; }
+.card-modulo {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio);
+  padding: 20px 12px; cursor: pointer; text-align: center; font-weight: 600; color: var(--cor-texto);
+  transition: box-shadow .15s, transform .15s;
+}
+.card-modulo:hover { box-shadow: var(--sombra); transform: translateY(-2px); }
+.card-modulo .icone-modulo { font-size: 2rem; }
 /* Submenu (v1.9): lista de sub-abas embaixo de uma aba principal (ex: Meu Painel),
    pra abas que já cresceram demais pra caber numa página só. Some/aparece sozinho
    via CSS de irmão adjacente — sem JS de abrir/fechar, só reaproveita a mesma

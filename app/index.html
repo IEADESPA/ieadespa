@@ -74,50 +74,65 @@
           <button class="btn-icon" onclick="alternarSidebar()" title="Recolher/Expandir menu">☰</button>
         </div>
         <nav class="abas-secretaria" id="navAbasSecretaria">
-          <button class="btn-aba ativo" id="btnAbaMeupainel" onclick="mostrarAbaSecretaria('meupainel')"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
+          <!-- v4.2 — Navegação por módulos (padrão "portal de serviços", tipo
+               Desenvolve Cidade): Meu Painel é o único item sempre fixo (é o
+               "Painel Principal"/home). Escolher um módulo (cards dentro de
+               Meu Painel, ver montarGradeModulos()) troca a barra lateral
+               inteira pela navegação daquele módulo só — o resto some. -->
+          <button class="btn-aba ativo" id="btnAbaMeupainel" onclick="sairDoModulo()"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
           <div class="submenu-aba" id="submenuMeupainel">
             <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" onclick="mostrarSubAbaMeupainel('perfil')"><span class="icone">👤</span><span class="rotulo">Meu Perfil</span></button>
             <button class="btn-subaba" id="btnSubMeupainelLgpd" onclick="mostrarSubAbaMeupainel('lgpd')"><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
           </div>
-          <!-- FINANCEIRO (v4.1): módulo próprio, separado do resto das abas por
-               ser dinheiro real — mesmo login/permissões, só com destaque visual
-               e todo o fluxo de tesouraria dentro de um único lugar. -->
-          <hr class="divisor-sidebar" />
-          <button class="btn-aba btn-aba-destaque" id="btnAbaFinanceiro" onclick="mostrarAbaSecretaria('financeiro')"><span class="icone">💰</span><span class="rotulo">Financeiro</span></button>
-          <div class="submenu-aba" id="submenuFinanceiro">
-            <button class="btn-subaba ativo" id="btnSubFinanceiroLancamentos" onclick="mostrarSubAbaFinanceiro('lancamentos')"><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
-            <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
-            <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
-            <button class="btn-subaba" id="btnSubFinanceiroParametros" onclick="mostrarSubAbaFinanceiro('parametros')"><span class="icone">⚙️</span><span class="rotulo">Parâmetros</span></button>
-            <button class="btn-subaba" id="btnSubFinanceiroConsolidado" onclick="mostrarSubAbaFinanceiro('consolidado')"><span class="icone">📊</span><span class="rotulo">Consolidado</span></button>
+
+          <button class="btn-aba btn-aba-destaque" id="btnVoltarModulo" onclick="sairDoModulo()" style="display:none;">
+            <span class="icone">←</span><span class="rotulo">Painel Principal</span>
+          </button>
+
+          <!-- MÓDULO: FINANCEIRO (v4.1) -->
+          <div class="grupo-modulo" id="grupoModuloFinanceiro" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaFinanceiro" onclick="mostrarAbaSecretaria('financeiro')"><span class="icone">💰</span><span class="rotulo">Financeiro</span></button>
+            <div class="submenu-aba" id="submenuFinanceiro">
+              <button class="btn-subaba ativo" id="btnSubFinanceiroLancamentos" onclick="mostrarSubAbaFinanceiro('lancamentos')"><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroParametros" onclick="mostrarSubAbaFinanceiro('parametros')"><span class="icone">⚙️</span><span class="rotulo">Parâmetros</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroConsolidado" onclick="mostrarSubAbaFinanceiro('consolidado')"><span class="icone">📊</span><span class="rotulo">Consolidado</span></button>
+            </div>
           </div>
-          <hr class="divisor-sidebar" />
-          <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
-          <!-- Gerado em runtime por montarSubmenuReunioes() a partir de GET /api/orgaos —
-               nunca hardcoded: se um órgão for renomeado/excluído na aba Órgãos, o
-               submenu reflete na próxima vez que a aba Reuniões for aberta. -->
-          <div class="submenu-aba" id="submenuReunioes"></div>
-          <button class="btn-aba" id="btnAbaPessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
-          <div class="submenu-aba" id="submenuPessoas">
-            <button class="btn-subaba ativo" id="btnSubPessoasCadastrar" onclick="mostrarSubAbaPessoas('cadastrar')"><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
-            <button class="btn-subaba" id="btnSubPessoasBuscar" onclick="mostrarSubAbaPessoas('buscar')"><span class="icone">🔍</span><span class="rotulo">Buscar Pessoas</span></button>
-            <button class="btn-subaba" id="btnSubPessoasAprovacoes" onclick="mostrarSubAbaPessoas('aprovacoes')"><span class="icone">📋</span><span class="rotulo">Fila de Aprovações</span></button>
+
+          <!-- MÓDULO: SECRETARIA / GOVERNANÇA (tudo que existia antes do
+               conceito de módulos — agora agrupado como um módulo só). -->
+          <div class="grupo-modulo" id="grupoModuloGovernanca" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaReunioes" onclick="mostrarAbaSecretaria('reunioes')"><span class="icone">📅</span><span class="rotulo">Reuniões</span></button>
+            <!-- Gerado em runtime por montarSubmenuReunioes() a partir de GET /api/orgaos —
+                 nunca hardcoded: se um órgão for renomeado/excluído na aba Órgãos, o
+                 submenu reflete na próxima vez que a aba Reuniões for aberta. -->
+            <div class="submenu-aba" id="submenuReunioes"></div>
+            <button class="btn-aba" id="btnAbaPessoas" onclick="mostrarAbaSecretaria('pessoas')"><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
+            <div class="submenu-aba" id="submenuPessoas">
+              <button class="btn-subaba ativo" id="btnSubPessoasCadastrar" onclick="mostrarSubAbaPessoas('cadastrar')"><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
+              <button class="btn-subaba" id="btnSubPessoasBuscar" onclick="mostrarSubAbaPessoas('buscar')"><span class="icone">🔍</span><span class="rotulo">Buscar Pessoas</span></button>
+              <button class="btn-subaba" id="btnSubPessoasAprovacoes" onclick="mostrarSubAbaPessoas('aprovacoes')"><span class="icone">📋</span><span class="rotulo">Fila de Aprovações</span></button>
+            </div>
+            <button class="btn-aba" id="btnAbaCartas" onclick="mostrarAbaSecretaria('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
+            <button class="btn-aba" id="btnAbaOrgaos" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
+            <button class="btn-aba" id="btnAbaEstrutura" onclick="mostrarAbaSecretaria('estrutura')"><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
+            <button class="btn-aba" id="btnAbaCatalogos" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
+            <button class="btn-aba" id="btnAbaPermissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
+            <button class="btn-aba" id="btnAbaConsagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
+            <button class="btn-aba" id="btnAbaEnquetes" onclick="mostrarAbaSecretaria('enquetes')"><span class="icone">🗳️</span><span class="rotulo">Enquetes</span></button>
+            <button class="btn-aba" id="btnAbaArquivos" onclick="mostrarAbaSecretaria('arquivos')"><span class="icone">📁</span><span class="rotulo">Arquivos</span></button>
+            <button class="btn-aba" id="btnAbaDisciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
+            <button class="btn-aba" id="btnAbaAbandono" onclick="mostrarAbaSecretaria('abandono')"><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
+            <button class="btn-aba" id="btnAbaAuditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
+            <button class="btn-aba" id="btnAbaProtecaodedados" onclick="mostrarAbaSecretaria('protecaodedados')"><span class="icone">🛡️</span><span class="rotulo">Proteção de Dados</span></button>
+            <button class="btn-aba" id="btnAbaOuvidoria" onclick="mostrarAbaSecretaria('ouvidoria')"><span class="icone">📢</span><span class="rotulo">Ouvidoria</span></button>
+            <button class="btn-aba" id="btnAbaDocumentos" onclick="mostrarAbaSecretaria('documentos')"><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
           </div>
-          <button class="btn-aba" id="btnAbaCartas" onclick="mostrarAbaSecretaria('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
-          <button class="btn-aba" id="btnAbaOrgaos" onclick="mostrarAbaSecretaria('orgaos')"><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
-          <button class="btn-aba" id="btnAbaEstrutura" onclick="mostrarAbaSecretaria('estrutura')"><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
-          <button class="btn-aba" id="btnAbaCatalogos" onclick="mostrarAbaSecretaria('catalogos')"><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
-          <button class="btn-aba" id="btnAbaPermissoes" onclick="mostrarAbaSecretaria('permissoes')"><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
-          <button class="btn-aba" id="btnAbaConsagracoes" onclick="mostrarAbaSecretaria('consagracoes')"><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
-          <button class="btn-aba" id="btnAbaEnquetes" onclick="mostrarAbaSecretaria('enquetes')"><span class="icone">🗳️</span><span class="rotulo">Enquetes</span></button>
-          <button class="btn-aba" id="btnAbaArquivos" onclick="mostrarAbaSecretaria('arquivos')"><span class="icone">📁</span><span class="rotulo">Arquivos</span></button>
-          <button class="btn-aba" id="btnAbaDisciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
-          <button class="btn-aba" id="btnAbaAbandono" onclick="mostrarAbaSecretaria('abandono')"><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
-          <button class="btn-aba" id="btnAbaAuditoria" onclick="mostrarAbaSecretaria('auditoria')"><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
-          <button class="btn-aba" id="btnAbaProtecaodedados" onclick="mostrarAbaSecretaria('protecaodedados')"><span class="icone">🛡️</span><span class="rotulo">Proteção de Dados</span></button>
-          <button class="btn-aba" id="btnAbaOuvidoria" onclick="mostrarAbaSecretaria('ouvidoria')"><span class="icone">📢</span><span class="rotulo">Ouvidoria</span></button>
-          <button class="btn-aba" id="btnAbaDocumentos" onclick="mostrarAbaSecretaria('documentos')"><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
         </nav>
         <div class="sidebar-rodape">
           <span id="nomeLogado" class="nome-logado"></span>
@@ -136,6 +151,14 @@
 
         <!-- SUB-ABA: MEU PERFIL -->
         <div id="subMeupainelPerfil" class="sub-aba-secretaria">
+
+          <!-- v4.2 — Grade de módulos (padrão "portal de serviços"): primeira
+               coisa que a pessoa vê. Cada card só aparece se ela tiver
+               permissão em algo daquele módulo (montarGradeModulos()). -->
+          <h3 style="margin-top:0;">🧩 Módulos</h3>
+          <div class="grade-modulos" id="gradeModulos"></div>
+          <hr />
+
           <div id="cartaoPerfilPessoal"></div>
           <div id="cartaoMeusOrgaos"></div>
           <div id="resumoStatsPessoal"></div>

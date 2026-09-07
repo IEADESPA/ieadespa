@@ -1295,16 +1295,29 @@ Disciplinar (v3.2-v3.5): a escada **disciplinar** territorial.
       Assentos/Liderança/Cargo Ministerial) após **homologação do CEI**
       (Art. 94, II) — nova ação `HOMOLOGAR_EXCLUSAO`, exige a permissão
       `cei` (v3.4). Até homologar, fica com badge "Aguardando homologação".
+- [x] **Criação automática dos órgãos territoriais** — o usuário corrigiu o
+      método logo depois de ver a v3.6: não é pra cadastrar `OrgaosLocais`
+      manualmente, é pra CRIAR SOZINHO junto com a unidade territorial.
+      `api/GestaoCatalogos/index.js::criarOrgaosAutomaticos` dispara ao
+      criar uma Área, Região, Quadrante ou Distrito (via `POST /api/catalogos/
+      {areas,regioes,quadrantes,distritos}`) e já insere os órgãos daquele
+      nível vinculados por `Nivel+ReferenciaId`: Área → JEA + JUC; Região →
+      CRA + TER + CRAF; Quadrante → CEQ + CAQ; Distrito → CDE (Congregação →
+      JAI já funcionava assim desde a migração 007). Migração
+      `040_orgaos_locais_automaticos.sql` faz o backfill de quem já existia
+      antes dessa mudança. Cadastro manual do catálogo `orgaosLocais`
+      continua existindo, mas só serve pra ajustar Nome/Ativo depois —
+      nunca mais pra criar o vínculo em si.
 - **Descartado, por decisão do usuário e falta de reaproveitamento de
   código**: competência administrativa/estratégica de JEA/CRA/CEQ/CDE
   (calendários, orçamento, planejamento territorial — gestão de rotina que
   já acontece fora do sistema); auditoria financeira JUC/CRAF (malote de
   contas, Selo de Regularidade Trimestral — feature à parte, sem
   reaproveitamento, só faz sentido com uma aba financeira territorial de
-  verdade); ativação automática por contagem de congregações/áreas (Art.
-  104-C — continua cadastro manual via `/api/catalogos/orgaosLocais`, que
-  agora aceita todas as siglas do Regimento: JAI/JEA/JUC/CRA/TER/CRAF/CEQ/
-  CAQ/CDE, não só as 6 do rótulo antigo).
+  verdade); ativação automática por CONTAGEM (Art. 104-C — ex: só ativar
+  Área ao atingir 3 congregações) — diferente da criação automática acima,
+  aqui os órgãos nascem junto com a unidade territorial, não por atingir um
+  número mínimo; permanece descartado, sem reaproveitamento de código.
 
 #### v3.7 — Ouvidoria Eclesiástica *(gap da varredura)*
 

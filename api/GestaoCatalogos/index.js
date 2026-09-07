@@ -100,6 +100,50 @@ const CATALOGOS = {
   }
 };
 
+// v3.6.1 — criar uma unidade territorial já cria os órgãos daquele nível,
+// vinculados por Nivel+ReferenciaId (nunca cadastro manual separado; manual
+// só serve depois pra ajustar Nome/Ativo do órgão já criado). Congregação
+// já tinha isso via migração 007 (só JAI) — aqui generaliza pros demais 4
+// níveis e pros órgãos que faltavam em Área/Região/Quadrante.
+const ORGAOS_AUTOMATICOS_POR_CATALOGO = {
+  congregacoes: { nivel: 1, idField: "congregacaoId", orgaos: [
+    { sigla: "JAI", nome: "Junta de Articulação Institucional" }
+  ] },
+  areas: { nivel: 2, idField: "areaId", orgaos: [
+    { sigla: "JEA", nome: "Junta Executiva de Área" },
+    { sigla: "JUC", nome: "Junta de Contas de Área" }
+  ] },
+  regioes: { nivel: 3, idField: "regiaoId", orgaos: [
+    { sigla: "CRA", nome: "Conselho Regional de Administração" },
+    { sigla: "TER", nome: "Tribunal Eclesiástico Regional" },
+    { sigla: "CRAF", nome: "Conselho Regional de Auditoria e Fiscalização" }
+  ] },
+  quadrantes: { nivel: 4, idField: "quadranteId", orgaos: [
+    { sigla: "CEQ", nome: "Colegiado Estratégico de Quadrante" },
+    { sigla: "CAQ", nome: "Câmara de Arbitragem do Quadrante" }
+  ] },
+  distritos: { nivel: 5, idField: "distritoId", orgaos: [
+    { sigla: "CDE", nome: "Conselho Distrital Eclesiástico" }
+  ] }
+};
+
+async function criarOrgaosAutomaticos(pool, catalogoNome, registro) {
+  const cfg = ORGAOS_AUTOMATICOS_POR_CATALOGO[catalogoNome];
+  if (!cfg) return;
+  const referenciaId = registro[cfg.idField];
+  for (const orgao of cfg.orgaos) {
+    await pool.request()
+      .input("sigla", sql.NVarChar(30), orgao.sigla)
+      .input("nome", sql.NVarChar(200), `${orgao.nome} — ${registro.nome}`)
+      .input("nivel", sql.Int, cfg.nivel)
+      .input("referenciaId", sql.Int, referenciaId)
+      .query(`
+        IF NOT EXISTS (SELECT 1 FROM OrgaosLocais WHERE Nivel = @nivel AND ReferenciaId = @referenciaId AND Sigla = @sigla)
+          INSERT INTO OrgaosLocais (Sigla, Nome, Nivel, ReferenciaId, Ativo) VALUES (@sigla, @nome, @nivel, @referenciaId, 1)
+      `);
+  }
+}
+
 function coluna(campo) {
   return campo.charAt(0).toUpperCase() + campo.slice(1);
 }
@@ -203,6 +247,7 @@ module.exports = async function (context, req) {
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro atualizado.", registro } };
     } else {
       const registro = await criar(pool, config, dados);
+      await criarOrgaosAutomaticos(pool, catalogoNome, registro);
       await registrarAuditoria({
         tabela: config.tabela, registroId: registro[config.idField], acao: "Criou registro",
         usuarioId: usuario.membroId, dadosDepois: registro

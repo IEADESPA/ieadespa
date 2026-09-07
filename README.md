@@ -1677,6 +1677,20 @@ uma precisa ser uma categoria com nome próprio, não um "outros".
   vir a ter um centro de custo próprio no futuro, mas isso é história pra
   mais adiante.
 
+##### v4.1.6 — Navegação por sub-módulos (pedido explícito)
+
+Financeiro parou de abrir direto num formulário de "cadastrar dízimo" —
+quem clica precisa entender logo de cara o que está procurando. Nova
+sub-aba "Visão Geral" (`SUBMODULOS_FINANCEIRO`, `app/script.js`) vira a
+porta de entrada: uma grade de cards, um por sub-módulo financeiro do
+roadmap (README, FASE 4) — "Entradas" já funciona (leva pro que já existe
+desde v4.1); os demais (Saídas, Orçamento, Patrimônio, Doações Online,
+Auditoria) aparecem visíveis, mas marcados "Em breve" e desabilitados —
+mostra o caminho sem fingir que já foi construído. Crescer aqui, quando
+cada peça do roadmap for implementada, é só marcar `pronto: true` no
+array — mesmo espírito do objeto `MODULOS` do painel principal (seção
+2.6), um nível mais fundo.
+
 ### Referência de pesquisa (mercado + norma legal, 2026)
 
 Pedido explícito do usuário: pesquisar sem se limitar a fontes
@@ -1723,6 +1737,7 @@ existe em cima de normas e controles reconhecidos:
 | COSO Internal Control Framework (lente de revisão, não vira versão) | COSO.org, Diligent, Pathlock, Cherry Bekaert | v4.12 |
 | KPIs de saúde financeira (meses de reserva, aplicação em atividades-fim, liquidez) | Sage, JMCO, Warren Averett, GivingArc | v4.12 |
 | Open Finance Brasil (conciliação automática) | TecnoSpeed, Pluggy, Openi, Paytime | v4.13 |
+| COAF/PLD-FT (Lei 9.613/98) — comunicação de operação suspeita, **obrigação legal** | AtlasGov, CFC, Compliance Brazil, VAAS | v4.12 |
 
 #### v4.2 — Plano de Contas e Fundo Restrito/Livre
 
@@ -1918,6 +1933,15 @@ falta o resto, formalizado aqui.
       do sistema (todas as fases), não só financeiro, quando chegar a hora.
 - [ ] NIF (Núcleo de Inteligência Financeira) — análise de risco e alertas
       (Avaliação de Riscos do COSO, formalizada).
+- [ ] **Comunicação de Operações Suspeitas (COS)** — pesquisa de mercado
+      (Lei 9.613/1998): comunicar operação suspeita de lavagem de
+      dinheiro/financiamento ao terrorismo ao COAF é obrigação legal, não
+      boa prática, com prazo de 24h. O NIF (linha acima) é, na prática, o
+      "COAF interno" da igreja — ganha um fluxo de sinalização (valor
+      atípico, fracionamento pra fugir de alçada, fornecedor sem histórico
+      recebendo valor alto) que, se confirmado, vira o registro formal que
+      subsidia a comunicação externa. *(AtlasGov, CFC, Compliance Brazil,
+      VAAS — COAF/PLD-FT)*
 - [ ] Auditoria em 3 níveis (interna, NIF, externa).
 - [ ] Parecer mensal do Conselho Fiscal (aprova/rejeita contas) — depende
       de Entradas+Saídas maduras (v4.1-v4.5); adiado de propósito até aqui

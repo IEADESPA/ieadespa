@@ -445,14 +445,43 @@ async function carregarMinhasContribuicoes() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["lancamentos", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  lancamentos: "Lançamentos", dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório",
-  parametros: "Parâmetros", consolidado: "Consolidado"
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês",
+  relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
-let subAbaFinanceiroAtual = "lancamentos";
+let subAbaFinanceiroAtual = "visaogeral";
 let _congregacoesFinanceiroCache = null;
 let _categoriasEntradaCache = null;
+
+// v4.1.6 — sub-módulos do Financeiro (pedido explícito: quem clica em
+// Financeiro precisa saber logo de cara o que está procurando, não cair
+// direto num formulário de cadastrar dízimo). Hoje só "Entradas" existe de
+// verdade (v4.1-v4.1.5); os demais refletem o roadmap da FASE 4 (README)
+// e aparecem como "em breve" — crescer aqui é só adicionar uma entrada
+// neste array, mesmo espírito do objeto MODULOS do painel principal.
+const SUBMODULOS_FINANCEIRO = [
+  { chave: "entradas", titulo: "Entradas", icone: "📝", subAba: "lancamentos", pronto: true },
+  { chave: "saidas", titulo: "Saídas (Contas a Pagar)", icone: "💸", pronto: false },
+  { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", pronto: false },
+  { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
+  { chave: "doacoes", titulo: "Doações Online", icone: "💳", pronto: false },
+  { chave: "auditoria", titulo: "Auditoria e Compliance", icone: "🕵️", pronto: false }
+];
+
+function montarGradeSubmodulosFinanceiro() {
+  const grade = document.getElementById("gradeSubmodulosFinanceiro");
+  grade.innerHTML = SUBMODULOS_FINANCEIRO.map(m => {
+    if (!m.pronto) {
+      return `<div class="card-modulo card-modulo-embreve" title="Ainda não construído — ver plano da FASE 4 no README">
+        <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span><span class="tag-pendente">Em breve</span>
+      </div>`;
+    }
+    return `<div class="card-modulo" onclick="mostrarSubAbaFinanceiro('${m.subAba}')">
+      <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span>
+    </div>`;
+  }).join("");
+}
 
 function mostrarSubAbaFinanceiro(sub) {
   subAbaFinanceiroAtual = sub;
@@ -461,6 +490,7 @@ function mostrarSubAbaFinanceiro(sub) {
     document.getElementById(`btnSubFinanceiro${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
   });
   document.getElementById("tituloModulo").textContent = `Financeiro — ${TITULOS_SUB_FINANCEIRO[sub]}`;
+  if (sub === "visaogeral") { montarGradeSubmodulosFinanceiro(); return; }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
     if (sub === "dizimistas") carregarDizimistasMes();

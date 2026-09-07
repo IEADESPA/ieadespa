@@ -297,6 +297,10 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 }
 .card-modulo:hover { box-shadow: var(--sombra); transform: translateY(-2px); }
 .card-modulo .icone-modulo { font-size: 2rem; }
+/* Sub-módulos financeiros ainda não construídos (v4.1.6) — visíveis no
+   roadmap dentro do próprio painel, mas sem fingir que já existem. */
+.card-modulo-embreve { cursor: default; opacity: .55; }
+.card-modulo-embreve:hover { box-shadow: none; transform: none; }
 /* Submenu (v1.9): lista de sub-abas embaixo de uma aba principal (ex: Meu Painel),
    pra abas que já cresceram demais pra caber numa página só. Some/aparece sozinho
    via CSS de irmão adjacente — sem JS de abrir/fechar, só reaproveita a mesma

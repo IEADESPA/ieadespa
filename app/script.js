@@ -445,9 +445,9 @@ async function carregarMinhasContribuicoes() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["lancamentos", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["lancamentos", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  lancamentos: "Lançamentos", fechamento: "Fechamento do Mês", relatorio: "Relatório",
+  lancamentos: "Lançamentos", dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório",
   parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "lancamentos";
@@ -462,6 +462,7 @@ function mostrarSubAbaFinanceiro(sub) {
   document.getElementById("tituloModulo").textContent = `Financeiro — ${TITULOS_SUB_FINANCEIRO[sub]}`;
   carregarOpcoesCongregacoesFinanceiro().then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
+    if (sub === "dizimistas") carregarDizimistasMes();
     if (sub === "fechamento") carregarResumoFechamento();
     if (sub === "parametros") carregarParametrosTesouraria();
     if (sub === "consolidado") carregarConsolidadoTesouraria();
@@ -484,14 +485,14 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
       select.dataset.montado = "1";
     }
   });
-  ["financeiroLancMes", "financeiroFechMes", "financeiroRelMes", "financeiroConsolidadoMes"].forEach(id => {
+  ["financeiroLancMes", "financeiroFechMes", "financeiroRelMes", "financeiroConsolidadoMes", "financeiroDizMes"].forEach(id => {
     const input = document.getElementById(id);
     if (input && !input.value) input.value = mesAtualFinanceiro();
   });
@@ -592,17 +593,25 @@ async function carregarLancamentosTesouraria() {
     container.innerHTML = "<p class='subtitle'>Nenhum lançamento neste mês ainda.</p>";
     return;
   }
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Termo</th><th>Nome</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Status</th><th></th></tr></thead><tbody>`;
+  let html = `<table class="tabela-frequencia"><thead><tr><th></th><th>Termo</th><th>Nome</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Situação</th><th>Contabilização</th><th></th></tr></thead><tbody>`;
   lancamentos.forEach(l => {
     const formaTexto = l.formaPagamento === "MISTO"
       ? `Misto (PIX R$ ${Number(l.valorPix).toFixed(2)} + dinheiro R$ ${(Number(l.valor) - Number(l.valorPix)).toFixed(2)})`
       : l.formaPagamento;
     const comprovanteTag = l.comprovanteUrl
       ? ` <a href="${l.comprovanteUrl}" target="_blank" rel="noopener">📎</a>`
-      : (l.comprovantePendente ? ` <span class="badge-status badge-licenca">⚠️ comprovante pendente</span>` : "");
+      : (l.conciliacaoId ? ` <span class="badge-status badge-ativo">conciliado em lote</span>`
+        : (l.comprovantePendente ? ` <span class="badge-status badge-licenca">⚠️ comprovante pendente</span>` : ""));
     const statusTag = l.status === "CANCELADO"
       ? `<span class="badge-status badge-desligado">CANCELADO</span><br /><small>${l.motivoCancelamento || ""}</small>`
       : `<span class="badge-status badge-ativo">Ativo</span>`;
+    // v4.1.2 — "contabilizado" (dentro de um Fechamento) vs "pendente" (mês
+    // ainda aberto) era invisível antes; pedido explícito pra deixar claro.
+    const contabilizacaoTag = l.contabilizado
+      ? `<span class="badge-status badge-ativo">Contabilizado</span>`
+      : `<span class="badge-status badge-licenca">Pendente de fechamento</span>`;
+    const podeConciliar = !l.fechamentoId && l.status === "ATIVO" && l.comprovantePendente && ["PIX", "MISTO"].includes(l.formaPagamento);
+    const valorPixParcela = l.formaPagamento === "MISTO" ? l.valorPix : l.valor;
     let acoes = "";
     if (!l.fechamentoId && l.status === "ATIVO") {
       acoes = `<button class="btn-link btn-link-perigo" onclick="cancelarLancamentoTesourariaAcao(${l.lancamentoId}, ${l.termoNumero})">Cancelar</button>`;
@@ -611,16 +620,88 @@ async function carregarLancamentosTesouraria() {
       }
     }
     html += `<tr>
+      <td>${podeConciliar ? `<input type="checkbox" class="chk-conciliar-pix" value="${l.lancamentoId}" data-valor="${valorPixParcela}" onchange="recalcularTotalConciliacaoPix()" />` : ""}</td>
       <td>${l.termoNumero}</td>
       <td>${l.dizimistaNome || l.nomeAvulso}</td>
       <td>${l.tipo === "DIZIMO" ? "Dízimo" : "Oferta"}</td>
       <td>R$ ${Number(l.valor).toFixed(2)}</td>
       <td>${formaTexto}${comprovanteTag}</td>
       <td>${statusTag}</td>
+      <td>${contabilizacaoTag}</td>
       <td class="acoes-inline">${acoes}</td>
     </tr>`;
   });
   html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+// Soma automática do valor total sugerido no extrato, conforme os PIX
+// selecionados pra conciliação em lote — evita ter que somar de cabeça.
+function recalcularTotalConciliacaoPix() {
+  const marcados = document.querySelectorAll(".chk-conciliar-pix:checked");
+  const total = Array.from(marcados).reduce((soma, chk) => soma + Number(chk.dataset.valor), 0);
+  const campo = document.getElementById("financeiroConciliacaoValorTotal");
+  if (marcados.length > 0) campo.value = total.toFixed(2);
+}
+
+async function conciliarPixSelecionadosAcao() {
+  const congregacaoId = document.getElementById("financeiroLancCongregacao").value;
+  const mesReferencia = document.getElementById("financeiroLancMes").value;
+  const msg = document.getElementById("resultadoConciliacaoPix");
+  const marcados = Array.from(document.querySelectorAll(".chk-conciliar-pix:checked")).map(chk => Number(chk.value));
+  const valorTotal = document.getElementById("financeiroConciliacaoValorTotal").value;
+  const arquivo = document.getElementById("financeiroConciliacaoComprovante").files[0];
+
+  if (marcados.length === 0) { msg.textContent = "Marque ao menos um lançamento pendente."; return; }
+  if (!valorTotal || !arquivo) { msg.textContent = "Informe o valor total e anexe o extrato/comprovante."; return; }
+
+  const body = {
+    congregacaoId, mesReferencia, lancamentoIds: marcados, valorTotal,
+    comprovanteBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type
+  };
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-conciliacao`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("financeiroConciliacaoValorTotal").value = "";
+    document.getElementById("financeiroConciliacaoComprovante").value = "";
+    carregarLancamentosTesouraria();
+  }
+}
+
+// ---- DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem ainda não ----
+async function carregarDizimistasMes() {
+  const congregacaoId = document.getElementById("financeiroDizCongregacao").value;
+  const mesReferencia = document.getElementById("financeiroDizMes").value;
+  const container = document.getElementById("resultadoDizimistasMes");
+  if (!congregacaoId || !mesReferencia) { container.innerHTML = ""; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-dizimistas-mes?congregacaoId=${congregacaoId}&mesReferencia=${mesReferencia}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+
+  let html = `<p class="subtitle"><strong>${data.totalContribuiram} de ${data.totalDizimistas}</strong> dizimistas cadastrados já contribuíram este mês.</p>
+    <table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Contribuiu?</th><th>Total no mês</th></tr></thead><tbody>`;
+  data.dizimistas.forEach(d => {
+    html += `<tr>
+      <td>${d.nome}</td>
+      <td>${d.contribuiu ? "<span class='badge-status badge-ativo'>Sim</span>" : "<span class='badge-status badge-inativo'>Ainda não</span>"}</td>
+      <td>R$ ${Number(d.totalContribuido).toFixed(2)}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+
+  if (data.avulsos.length > 0) {
+    html += `<h4 style="margin:16px 0 10px; color: var(--cor-primaria);">Contribuições avulsas (sem cadastro de dizimista)</h4>
+      <table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Total no mês</th></tr></thead><tbody>`;
+    data.avulsos.forEach(a => {
+      html += `<tr><td>${a.nome}</td><td>R$ ${Number(a.totalContribuido).toFixed(2)}</td></tr>`;
+    });
+    html += "</tbody></table>";
+  }
   container.innerHTML = html;
 }
 
@@ -685,10 +766,18 @@ async function carregarResumoFechamento() {
       ${linhaValor(`Repasse Tesouraria Geral (${(100 - f.percentualRetencaoLocal).toFixed(2)}%)`, f.valorRepasseGeral)}
     </tbody>
   </table>
-  <p class="subtitle">Status: <span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : ""}">${f.status}</span>${f.dataRepasse ? ` — repassado em ${new Date(f.dataRepasse).toLocaleDateString("pt-BR")}` : ""}</p>`;
+  <p class="subtitle">Status: <span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : ""}">${f.status}</span>${f.dataRepasse ? ` — repassado em ${new Date(f.dataRepasse).toLocaleDateString("pt-BR")}${f.formaRepasse ? ` via ${f.formaRepasse}` : ""}` : ""}</p>`;
 
   if (f.status !== "REPASSADO") {
     html += `
+      <div class="input-group">
+        <label>Forma do repasse:</label>
+        <select id="financeiroFormaRepasse">
+          <option value="PIX">PIX</option>
+          <option value="DEPOSITO">Depósito bancário</option>
+          <option value="DINHEIRO">Dinheiro (entregue em mãos)</option>
+        </select>
+      </div>
       <div class="input-group">
         <label>Comprovante do repasse (opcional):</label>
         <input type="file" id="financeiroComprovanteRepasse" accept="image/jpeg,image/png,application/pdf" />
@@ -719,7 +808,7 @@ async function registrarRepasseTesourariaAcao(congregacaoId, mesReferencia) {
   if (!alvo) { mostrarToast("Fechamento não encontrado.", "erro"); return; }
 
   const arquivo = document.getElementById("financeiroComprovanteRepasse").files[0];
-  const body = {};
+  const body = { formaRepasse: document.getElementById("financeiroFormaRepasse").value };
   if (arquivo) { body.comprovanteBase64 = await arquivoParaBase64(arquivo); body.mimeType = arquivo.type; }
 
   const res = await fetchProtegido(`${API_BASE}/tesouraria-repasse/${alvo.fechamentoId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

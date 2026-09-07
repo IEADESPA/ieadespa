@@ -99,6 +99,7 @@
             <button class="btn-aba" id="btnAbaFinanceiro" onclick="mostrarAbaSecretaria('financeiro')"><span class="icone">💰</span><span class="rotulo">Financeiro</span></button>
             <div class="submenu-aba" id="submenuFinanceiro">
               <button class="btn-subaba ativo" id="btnSubFinanceiroLancamentos" onclick="mostrarSubAbaFinanceiro('lancamentos')"><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroParametros" onclick="mostrarSubAbaFinanceiro('parametros')"><span class="icone">⚙️</span><span class="rotulo">Parâmetros</span></button>
@@ -1620,7 +1621,40 @@
           <p id="resultadoDizimista" class="subtitle"></p>
 
           <hr />
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">🧾 Conciliar PIX em lote</h4>
+          <p class="subtitle" style="margin:0 0 8px;">Marque os PIX/Misto com comprovante pendente (⚠️ na
+            tabela abaixo) e anexe UM extrato bancário só, cobrindo a soma deles — mais rápido do que
+            anexar recibo por recibo.</p>
+          <div class="input-group">
+            <label>Valor total do extrato (R$):</label>
+            <input type="number" id="financeiroConciliacaoValorTotal" step="0.01" min="0.01" placeholder="Soma dos selecionados" />
+          </div>
+          <div class="input-group">
+            <label>Extrato/comprovante:</label>
+            <input type="file" id="financeiroConciliacaoComprovante" accept="image/jpeg,image/png,application/pdf" />
+          </div>
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="conciliarPixSelecionadosAcao()">🧾 Conciliar selecionados</button>
+          <p id="resultadoConciliacaoPix" class="subtitle"></p>
+
+          <hr />
           <div class="rolagem-tabela"><div id="resultadoLancamentosTesouraria"></div></div>
+        </div>
+
+        <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem
+             ainda não, além dos avulsos que contribuíram sem cadastro. -->
+        <div id="subFinanceiroDizimistas" class="sub-aba-secretaria" style="display:none;">
+          <h3>👥 Dizimistas do Mês</h3>
+          <p class="subtitle">Quem já contribuiu neste mês e quem ainda não, dentre os dizimistas
+            cadastrados desta congregação.</p>
+          <div class="input-group">
+            <label>Congregação:</label>
+            <select id="financeiroDizCongregacao" onchange="carregarDizimistasMes()"></select>
+          </div>
+          <div class="input-group">
+            <label>Mês de referência:</label>
+            <input type="month" id="financeiroDizMes" onchange="carregarDizimistasMes()" />
+          </div>
+          <div id="resultadoDizimistasMes"></div>
         </div>
 
         <!-- SUB-ABA: FECHAMENTO DO MÊS -->

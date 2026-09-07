@@ -65,8 +65,8 @@ module.exports = async function (context, req) {
              l.DizimistaId AS dizimistaId, d.Nome AS dizimistaNome, l.NomeAvulso AS nomeAvulso,
              l.TermoNumero AS termoNumero, l.Tipo AS tipo, l.Valor AS valor, l.FormaPagamento AS formaPagamento,
              l.ValorPix AS valorPix, l.ComprovanteUrl AS comprovanteUrl, l.MesReferencia AS mesReferencia,
-             l.FechamentoId AS fechamentoId, l.Status AS status, l.MotivoCancelamento AS motivoCancelamento,
-             CONVERT(varchar(33), l.CriadoEm, 126) AS criadoEm
+             l.FechamentoId AS fechamentoId, l.ConciliacaoId AS conciliacaoId, l.Status AS status,
+             l.MotivoCancelamento AS motivoCancelamento, CONVERT(varchar(33), l.CriadoEm, 126) AS criadoEm
       FROM LancamentosTesouraria l
       JOIN Congregacoes c ON c.CongregacaoId = l.CongregacaoId
       LEFT JOIN Dizimistas d ON d.DizimistaId = l.DizimistaId
@@ -77,7 +77,10 @@ module.exports = async function (context, req) {
       .filter(l => auth.estaNoEscopo(usuario, l.congregacaoNome))
       .map(l => Object.assign({}, l, {
         comprovanteUrl: l.comprovanteUrl ? storage.urlDocumentoComSas(l.comprovanteUrl) : null,
-        comprovantePendente: l.status === "ATIVO" && ["PIX", "MISTO"].includes(l.formaPagamento) && !l.comprovanteUrl
+        // "pendente" só se não tem comprovante próprio NEM foi coberto por
+        // uma conciliação em lote (ConciliarPixTesouraria) — v4.1.2.
+        comprovantePendente: l.status === "ATIVO" && ["PIX", "MISTO"].includes(l.formaPagamento) && !l.comprovanteUrl && !l.conciliacaoId,
+        contabilizado: !!l.fechamentoId
       }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: lancamentos };
     return;

@@ -4,7 +4,7 @@
 // GestaoDocumentos). Só permitido em fechamentos ainda não repassados;
 // depois disso o fechamento é imutável (erro se corrige com auditoria, não
 // reescrevendo histórico).
-// POST /api/tesouraria-repasse/{fechamentoId} -> { comprovanteBase64?, mimeType? }
+// POST /api/tesouraria-repasse/{fechamentoId} -> { formaRepasse, comprovanteBase64?, mimeType? }
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
@@ -12,6 +12,7 @@ const storage = require("../shared/storage");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
+const FORMAS_REPASSE = ["PIX", "DEPOSITO", "DINHEIRO"];
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "financeiro");
@@ -41,7 +42,11 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const { comprovanteBase64, mimeType } = req.body || {};
+  const { formaRepasse, comprovanteBase64, mimeType } = req.body || {};
+  if (formaRepasse && !FORMAS_REPASSE.includes(formaRepasse)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: `formaRepasse inválida. Use um de: ${FORMAS_REPASSE.join(", ")}.` } };
+    return;
+  }
   let comprovanteRepasseUrl = null;
   if (comprovanteBase64) {
     if (!mimeType || !MIME_PERMITIDOS.includes(mimeType)) {
@@ -68,14 +73,15 @@ module.exports = async function (context, req) {
 
   await pool.request()
     .input("id", sql.Int, fechamentoId)
+    .input("formaRepasse", sql.NVarChar(20), formaRepasse || null)
     .input("comprovanteRepasseUrl", sql.NVarChar(500), comprovanteRepasseUrl)
     .input("repassadoPor", sql.Int, usuario.membroId)
-    .query(`UPDATE FechamentosTesouraria SET Status = 'REPASSADO', DataRepasse = SYSUTCDATETIME(),
+    .query(`UPDATE FechamentosTesouraria SET Status = 'REPASSADO', DataRepasse = SYSUTCDATETIME(), FormaRepasse = @formaRepasse,
               ComprovanteRepasseUrl = @comprovanteRepasseUrl, RepassadoPor = @repassadoPor WHERE FechamentoId = @id`);
 
   await registrarAuditoria({
     tabela: "FechamentosTesouraria", registroId: Number(fechamentoId), acao: "Registrou repasse à Tesouraria Geral", usuarioId: usuario.membroId,
-    dadosDepois: { valorRepasseGeral: fechamento.ValorRepasseGeral, comComprovante: !!comprovanteRepasseUrl }
+    dadosDepois: { valorRepasseGeral: fechamento.ValorRepasseGeral, formaRepasse: formaRepasse || null, comComprovante: !!comprovanteRepasseUrl }
   });
 
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Repasse registrado." } };

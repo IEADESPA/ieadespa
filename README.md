@@ -1546,11 +1546,38 @@ não travar o Tesoureiro em situações reais que a v4.1 ainda não previa:
       cadastrado (visitante, cônjuge não-membro etc.) — "só crentes podem
       dizimar" não é "só membros podem dizimar".
 
-**Descartado desta versão (não é esquecimento — vira v4.1.2, depende dos
-dados desta versão já existirem):** saldo virtual por órgão/departamento
+##### v4.1.2 — Visualização e conciliação (feedback de uso real)
+
+O v4.1/v4.1.1 tratava bem o *registro* da entrada, mas faltava a parte de
+*acompanhamento* — a reação direta ao usar na prática foi "está muito cru".
+Três lacunas concretas corrigidas:
+
+- [x] **Lista de Dizimistas do Mês** (`RelatorioDizimistasMes`, sub-aba
+      própria) — antes só existia a lista de LANÇAMENTOS (por termo); agora
+      existe a lista de PESSOAS, cruzando o cadastro de dizimistas com quem
+      já contribuiu no mês e quem ainda não (mais os avulsos que
+      contribuíram sem estar cadastrados).
+- [x] **Status de contabilização visível** — o dado já existia (um
+      lançamento só entra num Fechamento quando o mês fecha), só não
+      aparecia na tela. Agora toda linha mostra "Contabilizado" ou
+      "Pendente de fechamento" claramente.
+- [x] **Conciliação de PIX em lote** (`ConciliarPixTesouraria`,
+      `ConciliacoesTesouraria`) — exigir 1 comprovante por PIX travava a
+      agilidade real: agora dá pra marcar vários PIX/Misto pendentes e
+      anexar UM extrato bancário só cobrindo a soma, em vez de abrir recibo
+      por recibo. Continua podendo anexar comprovante individual quando faz
+      mais sentido (não substitui, complementa).
+- [x] **Forma do repasse à Tesouraria Geral** (`FechamentosTesouraria.FormaRepasse`)
+      — o próprio repasse de 60% pode ser em PIX, depósito ou dinheiro
+      entregue em mãos; antes só registrava que o repasse aconteceu, não
+      como.
+
+**Descartado desta versão (não é esquecimento — vira v4.1.3, depende dos
+dados destas versões já existirem):** saldo virtual por órgão/departamento
 (Reg. Art. 133-C — fase seguinte trata só Tesouraria Geral + Congregações,
 não departamentos como UMADESPA/EBD), lançamentos de **saída**, conciliação
-bancária mensal, teto de acumulação de caixa local de 10 salários-mínimos
+bancária mensal *do total do caixa* (a conciliação desta versão é só de
+PIX, ver acima), teto de acumulação de caixa local de 10 salários-mínimos
 com recolhimento automático do excedente (Reg. Art. 119), fiscalização
 contábil formal do Conselho Fiscal (Reg. Art. 145). Também fica para depois
 (precisa de meses de dados reais primeiro): recálculo automático de

@@ -55,7 +55,7 @@ module.exports = async function (context, req) {
       fechamento: f ? {
         totalRecebido: f.TotalRecebido, valorAluguel: f.ValorAluguel, valorLote: f.ValorLote, totalFinal: f.TotalFinal,
         percentualRetencaoLocal: f.PercentualRetencaoLocal, valorRetidoLocal: f.ValorRetidoLocal, valorRepasseGeral: f.ValorRepasseGeral,
-        status: f.Status, dataRepasse: f.DataRepasse
+        status: f.Status, dataRepasse: f.DataRepasse, formaRepasse: f.FormaRepasse
       } : null
     }
   };

@@ -2,21 +2,23 @@
 // v3.2 — abre um processo vinculado a um membro, citando 1+ infrações do
 // catálogo estruturado `TiposInfracao` (Art. 96-99); `motivo` agora é só o
 // detalhamento complementar em texto livre do caso, não mais o único campo.
+// v3.6 — órgão responsável pode ser um dos 5 órgãos centrais OU uma JAI/JEA/TER
+// territorial (escada disciplinar, `shared/disciplinar.js::validarOrgaoProcesso`).
 // Exige a permissão "disciplina" (já cadastrada em Funcionalidades desde a
 // migração 002).
-// POST /api/processos-disciplinares -> body: { membroId, orgaoResponsavelId, infracoesIds: number[], motivo?, dataAbertura?, sigiloso? }
+// POST /api/processos-disciplinares -> body: { membroId, orgaoResponsavelId?, orgaoLocalId?, infracoesIds: number[], motivo?, dataAbertura?, sigiloso? }
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-const { selectProcessoComInfracoes } = require("../shared/disciplinar");
+const { selectProcessoComInfracoes, validarOrgaoProcesso } = require("../shared/disciplinar");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
   if (!usuario) return;
 
-  const { membroId, orgaoResponsavelId, infracoesIds, motivo, dataAbertura, sigiloso } = req.body || {};
-  if (!membroId || !orgaoResponsavelId || !Array.isArray(infracoesIds) || infracoesIds.length === 0) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, orgaoResponsavelId, infracoesIds (pelo menos 1)." } };
+  const { membroId, orgaoResponsavelId, orgaoLocalId, infracoesIds, motivo, dataAbertura, sigiloso } = req.body || {};
+  if (!membroId || !Array.isArray(infracoesIds) || infracoesIds.length === 0) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, órgão (central ou territorial), infracoesIds (pelo menos 1)." } };
     return;
   }
 
@@ -32,9 +34,9 @@ module.exports = async function (context, req) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não é possível abrir processo disciplinar contra um Congregado." } };
     return;
   }
-  const orgao = await pool.request().input("id", sql.Int, orgaoResponsavelId).query(`SELECT OrgaoId FROM Orgaos WHERE OrgaoId = @id`);
-  if (orgao.recordset.length === 0) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Órgão responsável inválido." } };
+  const orgao = await validarOrgaoProcesso(pool, sql, { orgaoResponsavelId, orgaoLocalId });
+  if (!orgao.valido) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: orgao.mensagem } };
     return;
   }
 
@@ -49,14 +51,15 @@ module.exports = async function (context, req) {
 
   const result = await pool.request()
     .input("membroId", sql.Int, membroId)
-    .input("orgaoResponsavelId", sql.Int, orgaoResponsavelId)
+    .input("orgaoResponsavelId", sql.Int, orgao.orgaoResponsavelId)
+    .input("orgaoLocalId", sql.Int, orgao.orgaoLocalId)
     .input("motivo", sql.NVarChar(500), motivo || null)
     .input("dataAbertura", sql.Date, dataAbertura || null)
     .input("sigiloso", sql.Bit, sigiloso === undefined ? true : sigiloso)
     .query(`
-      INSERT INTO ProcessosDisciplinares (MembroId, OrgaoResponsavelId, Motivo, DataAbertura, Status, Sigiloso)
+      INSERT INTO ProcessosDisciplinares (MembroId, OrgaoResponsavelId, OrgaoLocalId, Motivo, DataAbertura, Status, Sigiloso)
       OUTPUT INSERTED.ProcessoId
-      VALUES (@membroId, @orgaoResponsavelId, @motivo, COALESCE(@dataAbertura, CAST(SYSUTCDATETIME() AS DATE)), 'EM_ANDAMENTO', @sigiloso)
+      VALUES (@membroId, @orgaoResponsavelId, @orgaoLocalId, @motivo, COALESCE(@dataAbertura, CAST(SYSUTCDATETIME() AS DATE)), 'EM_ANDAMENTO', @sigiloso)
     `);
   const processoId = result.recordset[0].ProcessoId;
 
@@ -72,7 +75,7 @@ module.exports = async function (context, req) {
     registroId: processoId,
     acao: "Abriu processo disciplinar",
     usuarioId: usuario.membroId,
-    dadosDepois: { membroId, orgaoResponsavelId, motivo: motivo || null, infracoesIds: idsInfracoes }
+    dadosDepois: { membroId, orgaoResponsavelId: orgao.orgaoResponsavelId, orgaoLocalId: orgao.orgaoLocalId, motivo: motivo || null, infracoesIds: idsInfracoes }
   });
 
   context.res = {

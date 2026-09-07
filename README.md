@@ -1265,24 +1265,46 @@ frente) — esta versão só termina de qualificá-lo.
       `disciplina`); só faltava a granularidade — agora mostra também a penalidade e
       os dias de sanção.
 
-#### v3.6 — Escada territorial de instâncias (JAI/JEA/TER/CEQ/CDE) *(maior gap da varredura)*
+#### v3.6 — Escada territorial de instâncias (JAI/JEA/TER)
 
-`OrgaosLocais` (v0.1) hoje só cataloga esses níveis como nomes/hierarquia — nenhuma
-das competências abaixo tem processo ou tela ainda:
-- [ ] JAI (Reg. Art. 108): 1ª instância disciplinar local — advertência/suspensão de
-      cargo local até 90 dias; recurso em 5 dias à JEA. Intervenção do Geral (Art. 108-A).
-- [ ] JEA (Reg. Art. 122-123): 2ª instância — recursos contra a JAI + processa
-      originariamente infrações de Obreiros Oficiais (Diáconos/Presbíteros) da Área.
-- [ ] JUC (Reg. Art. 124-A): auditoria intermediária de Área (balancetes, notas fiscais).
-- [ ] CRA/TER/CRAF (Reg. Art. 126-B/C/D): CRA é executivo regional; **TER é 3ª
-      instância disciplinar**, único órgão regional que pode votar Exclusão/
-      Destituição (com homologação do CEI); CRAF é o braço fiscal regional (Selo de
-      Regularidade Trimestral, bloqueio de Área inadimplente).
-- [ ] CEQ/CAQ (Reg. Art. 126-H/I): colegiado estratégico de Quadrante + câmara de
-      arbitragem para conflito entre lideranças regionais.
-- [ ] CDE (Reg. Art. 126-L/M/N): conselho eclesiástico distrital — autonomia quase
-      total (processos/balanços não sobem à Sede, só consolidado anual + dízimo
-      institucional 10%, já previsto na v9.3).
+`OrgaosLocais` (v0.1) era só um catálogo solto — nenhuma tabela referenciava
+(`ProcessosDisciplinares.OrgaoResponsavelId` só apontava pros 5 órgãos
+centrais). Escopo definido pelo usuário: não dá pra construir processo/tela
+pra cada um dos ~9 órgãos territoriais do Regimento (composição, quórum,
+agenda, malote de contas...) sem reaproveitar nada do que já existe — então
+esta versão focou só na peça que reaproveita 100% do motor de Processo
+Disciplinar (v3.2-v3.5): a escada **disciplinar** territorial.
+
+- [x] Corrigido o nome do JAI semeado na migração 007 (estava "Junta
+      Administrativa da Igreja" — o Regimento, Art. 105, chama de **Junta de
+      Articulação Institucional**).
+- [x] `ProcessosDisciplinares` aceita órgão territorial (`OrgaoLocalId`,
+      `OrgaosLocais`) como alternativa aos 5 órgãos centrais (exatamente 1
+      dos dois preenchido) — abrir processo numa JAI/JEA/TER específica.
+- [x] **JAI** (Art. 108): só pode julgar Arquivado/Advertência/Suspensão
+      Temporária até 90 dias — tentar Exclusão/Disciplina Rigorosa é
+      bloqueado, orientando recurso.
+- [x] **JEA** (Art. 122-123): mesma trava de competência que a JAI (não
+      pode finalizar Exclusão/Disciplina Rigorosa — precisa encaminhar).
+- [x] **Recurso JAI→JEA / JEA→TER** (Art. 108 §3º/123, prazo de 5 dias
+      corridos da conclusão, calculado na leitura): nova ação `RECORRER` —
+      cria um processo **novo** na instância superior (nunca reabre o
+      original), copiando as mesmas infrações; original vira `EM_RECURSO`.
+- [x] **TER** (Art. 126-C): 3ª e última instância territorial, pode votar
+      Exclusão/Disciplina Rigorosa, mas só produz efeito (vacância de
+      Assentos/Liderança/Cargo Ministerial) após **homologação do CEI**
+      (Art. 94, II) — nova ação `HOMOLOGAR_EXCLUSAO`, exige a permissão
+      `cei` (v3.4). Até homologar, fica com badge "Aguardando homologação".
+- **Descartado, por decisão do usuário e falta de reaproveitamento de
+  código**: competência administrativa/estratégica de JEA/CRA/CEQ/CDE
+  (calendários, orçamento, planejamento territorial — gestão de rotina que
+  já acontece fora do sistema); auditoria financeira JUC/CRAF (malote de
+  contas, Selo de Regularidade Trimestral — feature à parte, sem
+  reaproveitamento, só faz sentido com uma aba financeira territorial de
+  verdade); ativação automática por contagem de congregações/áreas (Art.
+  104-C — continua cadastro manual via `/api/catalogos/orgaosLocais`, que
+  agora aceita todas as siglas do Regimento: JAI/JEA/JUC/CRA/TER/CRAF/CEQ/
+  CAQ/CDE, não só as 6 do rótulo antigo).
 
 #### v3.7 — Ouvidoria Eclesiástica *(gap da varredura)*
 

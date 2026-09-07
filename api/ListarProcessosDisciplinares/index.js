@@ -10,6 +10,7 @@ const { SELECT_PROCESSO_BASE, anexarInfracoesEPrazo, redigirSeSigiloso } = requi
 function situacaoEfetiva(p, hoje) {
   if (p.status === "AFASTAMENTO_CAUTELAR") return "AFASTAMENTO_CAUTELAR";
   if (p.status === "EM_ANDAMENTO") return "EM_ANDAMENTO";
+  if (p.status === "EM_RECURSO") return "EM_RECURSO";
   if (p.resultado === "ARQUIVADO") return "ARQUIVADO";
   if (p.resultado === "EXCLUSAO") return "EXCLUIDO";
   if (p.resultado === "SANCAO") {
@@ -19,7 +20,7 @@ function situacaoEfetiva(p, hoje) {
   return p.status;
 }
 
-const SITUACOES_ATIVAS = ["EM_ANDAMENTO", "AFASTAMENTO_CAUTELAR", "EXCLUIDO", "PRAZO_INDETERMINADO", "CUMPRINDO_SANCAO"];
+const SITUACOES_ATIVAS = ["EM_ANDAMENTO", "AFASTAMENTO_CAUTELAR", "EM_RECURSO", "EXCLUIDO", "PRAZO_INDETERMINADO", "CUMPRINDO_SANCAO"];
 
 function diasRestantes(p, hoje) {
   if (!p.dataTerminoPrevisao) return null;

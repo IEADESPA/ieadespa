@@ -68,10 +68,13 @@ module.exports = async function (context, req) {
              CONVERT(varchar(10), a.DataFim, 120) AS dataFim
       FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId WHERE a.MembroId = @mat`),
     pool.request().input("mat", sql.Int, matricula).query(`
-      SELECT o.Nome AS orgaoResponsavel, p.Motivo AS motivo, CONVERT(varchar(10), p.DataAbertura, 120) AS dataAbertura,
+      SELECT COALESCE(o.Nome, ol.Nome) AS orgaoResponsavel, p.Motivo AS motivo, CONVERT(varchar(10), p.DataAbertura, 120) AS dataAbertura,
              p.Status AS status, p.Resultado AS resultado, p.DiasSancao AS diasSancao,
              CONVERT(varchar(10), p.DataTerminoPrevisao, 120) AS dataTerminoPrevisao
-      FROM ProcessosDisciplinares p JOIN Orgaos o ON o.OrgaoId = p.OrgaoResponsavelId WHERE p.MembroId = @mat`),
+      FROM ProcessosDisciplinares p
+      LEFT JOIN Orgaos o ON o.OrgaoId = p.OrgaoResponsavelId
+      LEFT JOIN OrgaosLocais ol ON ol.OrgaoLocalId = p.OrgaoLocalId
+      WHERE p.MembroId = @mat`),
     pool.request().input("mat", sql.Int, matricula).query(`
       SELECT m2.Nome AS parente, t.RotuloDireto AS vinculo, v.ResponsavelLegal AS responsavelLegal
       FROM VinculosFamiliares v

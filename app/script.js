@@ -842,7 +842,7 @@ const CATALOGOS_CFG = {
       ], true]
     ]
   },
-  orgaosLocais: { titulo: "Órgãos Locais (JAI/JEA/CRA/TER/CEQ/Distrito)", idField: "orgaoLocalId", campos: [["sigla", "Sigla (JAI/JEA/CRA/TER/CEQ/DISTRITO)"], ["nome", "Nome"], ["nivel", "Nível (1-5)"], ["referenciaId", "Id da Congregação/Área/Região/Quadrante/Distrito"]] },
+  orgaosLocais: { titulo: "Órgãos Locais (JAI/JEA/JUC/CRA/TER/CRAF/CEQ/CAQ/CDE)", idField: "orgaoLocalId", campos: [["sigla", "Sigla (JAI/JEA/JUC/CRA/TER/CRAF/CEQ/CAQ/CDE)"], ["nome", "Nome"], ["nivel", "Nível (1-5)"], ["referenciaId", "Id da Congregação/Área/Região/Quadrante/Distrito"]] },
   cargosMinisteriais: { titulo: "Cargos Ministeriais (escada — Art. 71)", idField: "cargoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["ordem", "Ordem na escada"]] },
   prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] },
   tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] },
@@ -4207,10 +4207,18 @@ async function excluirDocumentoAcao(id) {
 // ---- SECRETARIA / ABA PROCESSO DISCIPLINAR ----
 // v3.2: abrir (com catálogo de infrações) + rito (relator, citação, afastamento
 // cautelar, defesa/revelia, defensor) + julgar + ajustar prazo.
+// v3.6 — escada territorial: o select de órgão junta os 5 órgãos centrais
+// (Orgaos) com as JAI/JEA/TER territoriais cadastradas em OrgaosLocais. O
+// value carrega um prefixo (central:ID / local:ID) que salvarProcessoDisciplinar()
+// decompõe em orgaoResponsavelId/orgaoLocalId.
 async function carregarOpcoesFormDisciplina() {
   const res = await fetch(`${API_BASE}/orgaos`);
   const orgaos = await res.json();
-  document.getElementById("disciplinaOrgao").innerHTML = orgaos.map(o => `<option value="${o.orgaoId}">${o.sigla}</option>`).join("");
+  const locaisRes = await fetch(`${API_BASE}/catalogos/orgaosLocais`);
+  const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JAI", "JEA", "TER"].includes(o.sigla));
+  document.getElementById("disciplinaOrgao").innerHTML =
+    orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("") +
+    locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${o.nome}</option>`).join("");
 
   const infRes = await fetch(`${API_BASE}/catalogos/tiposInfracao`);
   const infracoes = await infRes.json();
@@ -4230,19 +4238,22 @@ async function carregarOpcoesFormDisciplina() {
 
 async function salvarProcessoDisciplinar() {
   const membroId = document.getElementById("disciplinaMatricula").value;
-  const orgaoResponsavelId = document.getElementById("disciplinaOrgao").value;
+  const orgaoValor = document.getElementById("disciplinaOrgao").value;
+  const [orgaoTipo, orgaoId] = orgaoValor.split(":");
   const motivo = document.getElementById("disciplinaMotivo").value.trim();
   const sigiloso = document.getElementById("disciplinaSigiloso").checked;
   const infracoesIds = Array.from(document.querySelectorAll(".chk-infracao-abertura:checked")).map(el => Number(el.value));
   const msg = document.getElementById("resultadoDisciplina");
-  if (!membroId || !orgaoResponsavelId || infracoesIds.length === 0) {
+  if (!membroId || !orgaoValor || infracoesIds.length === 0) {
     msg.textContent = "Informe matrícula, órgão e ao menos 1 infração.";
     return;
   }
+  const body = { membroId, infracoesIds, motivo: motivo || null, sigiloso };
+  if (orgaoTipo === "central") body.orgaoResponsavelId = orgaoId; else body.orgaoLocalId = orgaoId;
   const res = await fetchProtegido(`${API_BASE}/processos-disciplinares`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, orgaoResponsavelId, infracoesIds, motivo: motivo || null, sigiloso })
+    body: JSON.stringify(body)
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
@@ -4257,6 +4268,7 @@ async function salvarProcessoDisciplinar() {
 const ROTULO_SITUACAO_DISCIPLINA = {
   EM_ANDAMENTO: "Em andamento",
   AFASTAMENTO_CAUTELAR: "Afastamento cautelar",
+  EM_RECURSO: "Em recurso",
   CUMPRINDO_SANCAO: "Cumprindo sanção",
   PRAZO_INDETERMINADO: "Sanção — prazo indeterminado",
   CUMPRIDO: "Sanção cumprida",
@@ -4275,7 +4287,7 @@ function badgeGravidade(gravidade) {
 
 function badgeSituacaoDisciplina(situacao) {
   const cores = {
-    EM_ANDAMENTO: "badge-licenca", AFASTAMENTO_CAUTELAR: "badge-licenca", CUMPRINDO_SANCAO: "badge-licenca", PRAZO_INDETERMINADO: "badge-licenca",
+    EM_ANDAMENTO: "badge-licenca", AFASTAMENTO_CAUTELAR: "badge-licenca", EM_RECURSO: "badge-licenca", CUMPRINDO_SANCAO: "badge-licenca", PRAZO_INDETERMINADO: "badge-licenca",
     CUMPRIDO: "badge-ativo", ARQUIVADO: "badge-ativo", EXCLUIDO: "badge-desligado"
   };
   return `<span class="badge-status ${cores[situacao] || ""}">${ROTULO_SITUACAO_DISCIPLINA[situacao] || situacao}</span>`;
@@ -4314,13 +4326,17 @@ async function carregarProcessosDisciplinares() {
       ? `Protocolada em ${p.dataDefesa}`
       : (p.prazoDefesa && p.prazoDefesa.emRevelia ? "<span class='badge-status badge-desligado'>Revelia</span>" : (p.dataCitacao ? "Aguardando" : "-"));
     const podeRegistrarProva = p.emCarenciaAdministrativa;
+    const podeRecorrer = p.podeRecorrer && !p.prazoRecursoVencido;
+    const podeHomologar = p.homologadoPeloCei === false && authPermissoes.includes("cei");
     let penalidadeTexto = p.penalidadeNome || "-";
     if (p.emCarenciaAdministrativa) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Em Carência Administrativa</span>";
     else if (p.resultadoProvaReintegracao) penalidadeTexto += `<br /><span class="subtitle">Prova de Reintegração: ${p.resultadoProvaReintegracao}</span>`;
+    if (p.homologadoPeloCei === false) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Aguardando homologação do CEI</span>";
+    else if (p.homologadoPeloCei === true) penalidadeTexto += "<br /><span class='subtitle'>Homologado pelo CEI</span>";
     html += `<tr>
       <td>${p.nome}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${p.defensorNome}</span>` : ""}
         ${p.envolveMinistro ? `<br /><span class="subtitle">⚠️ Envolve ministro — jurisdição dupla (também CIADSETA-PARÁ, fora do sistema), Art. 103 §1º, II</span>` : ""}</td>
-      <td>${p.orgaoSigla}</td>
+      <td>${p.orgaoSigla}${p.orgaoLocalId ? `<br /><span class="subtitle">${p.orgaoNome}</span>` : ""}</td>
       <td>${infracoesTexto}</td>
       <td>${p.relatorNome || "-"}</td>
       <td>${citacaoTexto}</td>
@@ -4337,6 +4353,8 @@ async function carregarProcessosDisciplinares() {
         ${podeJulgar ? `<button class="btn-link" onclick="julgarProcessoAcao(${p.processoId})">Julgar</button>` : ""}
         ${podeAjustarPrazo ? `<button class="btn-link" onclick="ajustarPrazoProcessoAcao(${p.processoId})">Ajustar Prazo</button>` : ""}
         ${podeRegistrarProva ? `<button class="btn-link" onclick="registrarProvaReintegracaoAcao(${p.processoId})">Prova de Reintegração</button>` : ""}
+        ${podeRecorrer ? `<button class="btn-link" onclick="recorrerAcao(${p.processoId})">Recorrer</button>` : ""}
+        ${podeHomologar ? `<button class="btn-link" onclick="homologarExclusaoAcao(${p.processoId})">Homologar</button>` : ""}
       </td>
     </tr>`;
   });
@@ -4440,6 +4458,57 @@ async function registrarProvaReintegracaoAcao(processoId) {
   const dados = await pedirProvaReintegracao();
   if (!dados) return;
   await evoluirProcessoAcao(processoId, { acao: "REGISTRAR_PROVA_REINTEGRACAO", resultadoProva: dados.resultadoProva });
+}
+
+// v3.6 — recurso de JAI/JEA (Art. 108 §3º/123): destino é a instância
+// territorial imediatamente superior (cadastrada em OrgaosLocais) ou um
+// órgão central (tipicamente CEI).
+function pedirRecurso() {
+  return new Promise(async resolve => {
+    const orgaosRes = await fetch(`${API_BASE}/orgaos`);
+    const orgaos = await orgaosRes.json();
+    const locaisRes = await fetch(`${API_BASE}/catalogos/orgaosLocais`);
+    const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JEA", "TER"].includes(o.sigla));
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Recorrer para instância superior</h3>
+      <div class="input-group">
+        <label>Destino:</label>
+        <select id="modalOrgaoDestino">
+          ${orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("")}
+          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${o.nome}</option>`).join("")}
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Justificativa (obrigatória):</label>
+        <textarea id="modalJustificativaRecurso" rows="3"></textarea>
+      </div>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar" id="modalConfirmar">Recorrer</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    document.getElementById("modalConfirmar").onclick = () => {
+      const [orgaoDestinoTipo, orgaoDestinoId] = document.getElementById("modalOrgaoDestino").value.split(":");
+      const justificativa = document.getElementById("modalJustificativaRecurso").value.trim();
+      fecharModal();
+      resolve({ orgaoDestinoTipo: orgaoDestinoTipo === "central" ? "CENTRAL" : "LOCAL", orgaoDestinoId, justificativa });
+    };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
+async function recorrerAcao(processoId) {
+  const dados = await pedirRecurso();
+  if (!dados) return;
+  if (!dados.justificativa) { mostrarToast("Justificativa é obrigatória para recorrer.", "erro"); return; }
+  await evoluirProcessoAcao(processoId, { acao: "RECORRER", ...dados });
+}
+
+async function homologarExclusaoAcao(processoId) {
+  const homologado = await confirmarAcao("Homologar esta Exclusão/Disciplina Rigorosa? Isso encerra Assentos/Liderança/Cargo Ministerial da pessoa (Art. 94, II).", "Homologar");
+  if (!homologado) return;
+  await evoluirProcessoAcao(processoId, { acao: "HOMOLOGAR_EXCLUSAO", homologado: true });
 }
 
 // Modal customizado (mesmo padrão de pedirTexto/confirmarAcao) — Promise<{resultado, diasSancao}|null>.

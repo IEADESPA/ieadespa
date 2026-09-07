@@ -10,14 +10,16 @@
 //   JULGAR           -> { resultado: 'ARQUIVADO'|'SANCAO'|'EXCLUSAO', penalidadeId? (obrigatório se SANCAO), diasSancao? }
 //   AJUSTAR_PRAZO    -> { novoDiasSancao?, prazoIndeterminado?, justificativa } (justificativa obrigatória)
 //   REGISTRAR_PROVA_REINTEGRACAO -> { resultadoProva: 'APROVADO'|'REPROVADO', dataProva? } (Art. 77 — só p/ Disciplina Rigorosa já julgada)
-// Exige a permissão "disciplina".
+//   RECORRER         -> { orgaoDestinoTipo: 'CENTRAL'|'LOCAL', orgaoDestinoId, justificativa } (v3.6 — JAI/JEA, Art. 108 §3º/123)
+//   HOMOLOGAR_EXCLUSAO -> { homologado: true|false } (v3.6 — Exclusão/Disciplina Rigorosa votada por TER, Art. 94 II, exige permissão "cei")
+// Exige a permissão "disciplina" (HOMOLOGAR_EXCLUSAO exige também "cei").
 // POST /api/processos-disciplinares/{processoId}/evoluir
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const vacancia = require("../shared/vacancia");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
-const { selectProcessoComInfracoes } = require("../shared/disciplinar");
+const { selectProcessoComInfracoes, validarOrgaoProcesso, SIGLAS_QUE_PODEM_RECORRER } = require("../shared/disciplinar");
 
 const RESULTADOS_VALIDOS = ["ARQUIVADO", "SANCAO", "EXCLUSAO"];
 const CANAIS_CITACAO_VALIDOS = ["WHATSAPP", "CARTA_REGISTRADA"];
@@ -35,12 +37,17 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const atualResult = await pool.request().input("id", sql.Int, processoId)
-    .query(`SELECT MembroId, Status, Resultado, DiasSancao, DataAbertura, DataTerminoPrevisao, DataCitacao, PenalidadeId FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
+    .query(`SELECT MembroId, Status, Resultado, DiasSancao, DataAbertura, DataTerminoPrevisao, DataCitacao, PenalidadeId,
+                   OrgaoResponsavelId, OrgaoLocalId, HomologadoPeloCEI
+            FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
   const atual = atualResult.recordset[0];
   if (!atual) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Processo não encontrado." } };
     return;
   }
+  // v3.6 — resolve a Sigla do órgão (central ou territorial) deste processo,
+  // usada nas restrições de competência por instância (JAI/JEA/TER).
+  const orgaoAtual = await validarOrgaoProcesso(pool, sql, { orgaoResponsavelId: atual.OrgaoResponsavelId, orgaoLocalId: atual.OrgaoLocalId });
 
   // ---- DESIGNAR_RELATOR: suspeição por parentesco (até 3º grau, Art. 91) ou
   // mesma congregação é só AVISO — quem decide continua sendo o órgão julgador.
@@ -164,6 +171,100 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // ---- RECORRER (v3.6): JAI/JEA já julgadas — cria um processo NOVO na
+  // instância superior (nunca reabre o mesmo registro), copiando as mesmas
+  // infrações. Prazo de 5 dias corridos da conclusão (Art. 108 §3º/123).
+  if (acao === "RECORRER") {
+    if (atual.Status !== "JULGADO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Só é possível recorrer de um processo já julgado." } };
+      return;
+    }
+    if (!SIGLAS_QUE_PODEM_RECORRER.includes(orgaoAtual.sigla)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Recurso só cabe de JAI ou JEA." } };
+      return;
+    }
+    const { orgaoDestinoTipo, orgaoDestinoId, justificativa } = req.body || {};
+    if (!justificativa || !String(justificativa).trim()) {
+      context.res = { status: 400, body: { erro: "Justificativa é obrigatória para recorrer." } };
+      return;
+    }
+    const destino = orgaoDestinoTipo === "CENTRAL"
+      ? await validarOrgaoProcesso(pool, sql, { orgaoResponsavelId: orgaoDestinoId })
+      : await validarOrgaoProcesso(pool, sql, { orgaoLocalId: orgaoDestinoId });
+    if (!destino.valido) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: destino.mensagem } };
+      return;
+    }
+    // Central (ex: CEI) sempre serve de destino; territorial precisa ser
+    // exatamente 1 nível acima (JAI Nível 1 -> JEA Nível 2; JEA Nível 2 -> TER Nível 3).
+    if (destino.orgaoLocalId) {
+      const origemNivel = await pool.request().input("id", sql.Int, atual.OrgaoLocalId).query(`SELECT Nivel FROM OrgaosLocais WHERE OrgaoLocalId = @id`);
+      const nivelOrigem = origemNivel.recordset[0] ? origemNivel.recordset[0].Nivel : null;
+      if (nivelOrigem === null || destino.nivel !== nivelOrigem + 1) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "O destino do recurso precisa ser a instância territorial imediatamente superior." } };
+        return;
+      }
+    }
+
+    const infracoesAtuais = await pool.request().input("id", sql.Int, processoId).query(`SELECT InfracaoId FROM ProcessoInfracoes WHERE ProcessoId = @id`);
+
+    const novoResult = await pool.request()
+      .input("membroId", sql.Int, atual.MembroId)
+      .input("orgaoResponsavelId", sql.Int, destino.orgaoResponsavelId)
+      .input("orgaoLocalId", sql.Int, destino.orgaoLocalId)
+      .input("motivo", sql.NVarChar(500), `Recurso do processo #${processoId}: ${String(justificativa).trim()}`)
+      .input("origemId", sql.Int, processoId)
+      .query(`
+        INSERT INTO ProcessosDisciplinares (MembroId, OrgaoResponsavelId, OrgaoLocalId, Motivo, DataAbertura, Status, Sigiloso, ProcessoOrigemId)
+        OUTPUT INSERTED.ProcessoId
+        VALUES (@membroId, @orgaoResponsavelId, @orgaoLocalId, @motivo, CAST(SYSUTCDATETIME() AS DATE), 'EM_ANDAMENTO', 1, @origemId)
+      `);
+    const novoProcessoId = novoResult.recordset[0].ProcessoId;
+    for (const row of infracoesAtuais.recordset) {
+      await pool.request().input("processoId", sql.Int, novoProcessoId).input("infracaoId", sql.Int, row.InfracaoId)
+        .query(`INSERT INTO ProcessoInfracoes (ProcessoId, InfracaoId) VALUES (@processoId, @infracaoId)`);
+    }
+    await pool.request().input("id", sql.Int, processoId).query(`UPDATE ProcessosDisciplinares SET Status = 'EM_RECURSO' WHERE ProcessoId = @id`);
+
+    await registrarAuditoria({
+      tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: `Recorreu para novo processo #${novoProcessoId}`,
+      usuarioId: usuario.membroId, dadosDepois: { novoProcessoId, orgaoDestinoTipo, orgaoDestinoId, justificativa: String(justificativa).trim() }
+    });
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Recurso registrado — novo processo #${novoProcessoId}.`, novoProcessoId, processo } };
+    return;
+  }
+
+  // ---- HOMOLOGAR_EXCLUSAO (v3.6): Exclusão/Disciplina Rigorosa votada pelo
+  // TER só produz efeito (vacância) após homologação do CEI (Art. 94, II).
+  if (acao === "HOMOLOGAR_EXCLUSAO") {
+    if (!usuario.permissoes || !usuario.permissoes.includes("cei")) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Requer a permissão 'cei'." } };
+      return;
+    }
+    if (atual.HomologadoPeloCEI !== false && atual.HomologadoPeloCEI !== 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo não está pendente de homologação." } };
+      return;
+    }
+    const { homologado } = req.body || {};
+    if (typeof homologado !== "boolean") {
+      context.res = { status: 400, body: { erro: "Informe 'homologado' (true ou false)." } };
+      return;
+    }
+    await pool.request().input("id", sql.Int, processoId).input("valor", sql.Bit, homologado)
+      .query(`UPDATE ProcessosDisciplinares SET HomologadoPeloCEI = @valor WHERE ProcessoId = @id`);
+    if (homologado) {
+      await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
+    }
+    await registrarAuditoria({
+      tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: homologado ? "Homologou exclusão/disciplina rigorosa (CEI)" : "Não homologou (CEI)",
+      usuarioId: usuario.membroId, dadosDepois: { homologado }
+    });
+    const processo = await selectProcessoComInfracoes(pool, sql, processoId);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: homologado ? "✅ Homologado — vínculos encerrados." : "Registrado como não homologado.", processo } };
+    return;
+  }
+
   // ---- JULGAR: encerra a fase de instrução com um resultado ----
   if (acao === "JULGAR") {
     if (atual.Status === "JULGADO") {
@@ -201,16 +302,37 @@ module.exports = async function (context, req) {
       penalidadeId = null;
     }
 
+    // Art. 108 §2º / 123, III — JAI e JEA não podem votar Exclusão nem
+    // Disciplina Rigorosa (saem da alçada territorial); Art. 108 — JAI tem
+    // teto de 90 dias de suspensão.
+    const implicaVacancia = resultado === "EXCLUSAO" || penalidadeCodigo === "DISCIPLINA_RIGOROSA";
+    if (implicaVacancia && ["JAI", "JEA"].includes(orgaoAtual.sigla)) {
+      context.res = {
+        status: 200,
+        body: { sucesso: false, mensagem: `${orgaoAtual.sigla} não pode votar Exclusão/Disciplina Rigorosa (Art. 108 §2º/123, III) — julgue com Advertência/Suspensão Temporária ou use 'RECORRER' para a instância superior.` }
+      };
+      return;
+    }
+    if (orgaoAtual.sigla === "JAI" && diasSancao && Number(diasSancao) > 90) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "JAI só pode aplicar suspensão de até 90 dias (Art. 108)." } };
+      return;
+    }
+
     const diasSancaoFinal = resultado === "SANCAO" && diasSancao ? Number(diasSancao) : null;
+    // TER pode votar Exclusão/Disciplina Rigorosa, mas só produz efeito após
+    // homologação do CEI (Art. 94, II / 126-C) — a vacância fica pendente.
+    const pendenteDeHomologacao = implicaVacancia && orgaoAtual.sigla === "TER";
 
     await pool.request()
       .input("id", sql.Int, processoId)
       .input("resultado", sql.NVarChar(30), resultado)
       .input("diasSancao", sql.Int, diasSancaoFinal)
       .input("penalidadeId", sql.Int, penalidadeId || null)
+      .input("homologadoPeloCei", sql.Bit, pendenteDeHomologacao ? 0 : null)
       .query(`
         UPDATE ProcessosDisciplinares SET
           Status = 'JULGADO', Resultado = @resultado, DiasSancao = @diasSancao, PenalidadeId = @penalidadeId,
+          HomologadoPeloCEI = @homologadoPeloCei,
           DataTerminoPrevisao = CASE WHEN @diasSancao IS NOT NULL THEN DATEADD(day, @diasSancao, DataAbertura) ELSE NULL END,
           DataConclusao = CAST(SYSUTCDATETIME() AS DATE)
         WHERE ProcessoId = @id`);
@@ -219,8 +341,9 @@ module.exports = async function (context, req) {
     // III-IV) — encerram Assentos, Liderança e Cargo Ministerial/Departamento
     // (shared/vacancia.js). Advertência e Suspensão Temporária não perdem o
     // mandato — só ficam sem capacidade eleitoral enquanto durar a sanção
-    // (shared/disciplina.js), sem tocar em Assentos/Liderança.
-    if (resultado === "EXCLUSAO" || penalidadeCodigo === "DISCIPLINA_RIGOROSA") {
+    // (shared/disciplina.js), sem tocar em Assentos/Liderança. Quando o
+    // julgamento é do TER, a vacância só acontece na homologação do CEI.
+    if (implicaVacancia && !pendenteDeHomologacao) {
       await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
     }
 
@@ -229,7 +352,7 @@ module.exports = async function (context, req) {
       registroId: Number(processoId),
       acao: `Julgou processo: ${resultado}${penalidadeCodigo ? ` (${penalidadeCodigo})` : ""}`,
       usuarioId: usuario.membroId,
-      dadosDepois: { resultado, penalidadeId: penalidadeId || null, diasSancao: diasSancaoFinal }
+      dadosDepois: { resultado, penalidadeId: penalidadeId || null, diasSancao: diasSancaoFinal, pendenteDeHomologacao }
     });
 
     const processo = await selectProcessoComInfracoes(pool, sql, processoId);

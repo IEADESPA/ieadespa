@@ -32,6 +32,10 @@ configurável e orientado a processo. Os 3 repositórios viram um sistema único
    cadastro manual, sem integração automática).
 5. **Hierarquia única** para governança, EBD e relatórios.
 6. **Configurabilidade total** (seção 2.1).
+7. **Navegação por módulos** (seção 2.6) — o app não é uma lista plana de
+   abas; é um "portal de serviços" (padrão tipo Desenvolve Cidade): um
+   Painel Principal com cards, cada card levando a um módulo com sua
+   própria navegação.
 
 ## 2. Fundamentos permanentes (valem para todas as fases)
 
@@ -174,6 +178,49 @@ essa engine ainda: `Sessoes.OrgaoId` só referencia `Orgaos` (os 6 órgãos úni
 Art. 13), não `OrgaosLocais`. Reunião de junta local fica pra quando houver um
 consumidor real (nenhuma fase do roteiro pede isso ainda).
 
+
+### 2.6 Navegação por módulos (padrão "portal de serviços")
+
+O painel não é mais uma barra lateral com uma lista plana crescente de abas.
+É um portal (referência explícita do usuário: o portal municipal
+"Desenvolve Cidade" — Painel Principal com cards de serviço, cada um
+abrindo um mini-sistema à parte com nav própria, mesmo login por trás).
+
+- **Meu Painel é o único item sempre fixo** ("Painel Principal"/home). Nele,
+  logo no topo do perfil, fica a grade de cards (`montarGradeModulos()`,
+  `app/script.js`).
+- Cada módulo é descrito uma vez no objeto `MODULOS` (`app/script.js`):
+  `{ titulo, icone, abaEntrada, abas: [...] }`. Um card só aparece se a
+  pessoa tiver permissão em pelo menos uma aba daquele módulo
+  (`podeAcessarModulo`).
+- Clicar num card (`entrarModulo(chave)`) troca a barra lateral **inteira**
+  pela navegação daquele módulo só (`.grupo-modulo` correspondente) — o
+  resto some — com um botão fixo "← Painel Principal" (`sairDoModulo()`)
+  pra voltar. Cada módulo reaproveita exatamente as mesmas abas e as mesmas
+  permissões já existentes; nenhuma tela nova nasce só por causa da
+  modularização em si.
+- **Fracionar ao máximo é intencional** (pedido explícito, 2026): o antigo
+  módulo único "Secretaria/Governança" foi dividido em `membresia`,
+  `territorio`, `eclesiastica`, `disciplina`, `conformidade` e `acesso`
+  (mais `financeiro`, à parte desde a v4.1) — quanto mais fino o módulo,
+  mais fácil no futuro dar acesso a alguém só naquele pedaço específico
+  (ex: um secretário de departamento, um pastor de área) sem precisar da
+  permissão ampla "Pessoas" nem sobrecarregar a tela de Permissões com uma
+  lista enorme de opções que não se aplicam a ele.
+- **Fatiamento pendente, de propósito não feito ainda:** a aba "Catálogos"
+  hoje mistura Departamentos com Congregações/Áreas/Regiões/Distritos num
+  único lugar (por isso ainda mora dentro do módulo `territorio`). Separar
+  isso em telas dedicadas por assunto é o que vai permitir um card
+  "Departamentos" (pro secretário departamental) e um card "Territórios"
+  (pro pastor de área), cada um só com o que é dele — não fica esquecido,
+  é o próximo passo real de fatiamento quando alguém precisar de fato desse
+  acesso mais fino.
+- **Preparado pra crescer:** um novo sistema inteiro (ex: EBD/`chamada-ebd`,
+  fundamentos permanentes item 5) vira só mais uma entrada em `MODULOS`,
+  com sua própria nav interna e — quando fizer sentido pelo tamanho —
+  possivelmente sua própria barra lateral com itens que mudam conforme o
+  papel da pessoa ali dentro (ex: Professor vê "Alunos"/"Aulas", aluno vê
+  outra coisa), sem mexer em nada dos módulos já existentes.
 
 ## 3. Plano de versões (mega sistema, fase a fase)
 

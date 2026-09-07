@@ -316,13 +316,24 @@ function aplicarPermissoesNoMenu() {
 // (aplicarPermissoesNoMenu), então dentro de um módulo a pessoa só vê o
 // que já podia ver antes. Preparado pra crescer (ex: EBD) sem reestruturar
 // nada — só adiciona uma entrada aqui.
+// v4.2.1 — o antigo módulo único "Secretaria/Governança" foi fatiado em
+// módulos temáticos menores (pedido explícito: quanto mais fino, mais fácil
+// no futuro dar acesso a alguém só naquele pedaço — ex: secretário de
+// departamento, pastor de área — sem precisar da permissão ampla "Pessoas"
+// nem sobrecarregar a tela de Permissões). Ainda são as MESMAS abas de
+// sempre, só reagrupadas; a permissão de cada aba continua igual. Próximo
+// fatiamento de verdade (fora do escopo de hoje): a própria aba "Catálogos"
+// mistura Departamentos com Congregações/Áreas/Regiões — separar isso é o
+// que vai permitir um card "Departamentos" e um card "Territórios" cada um
+// só com o que é dele, em vez dos dois dentro de "Estrutura & Territórios".
 const MODULOS = {
-  financeiro: { titulo: "Financeiro", icone: "💰", abas: ["financeiro"], abaEntrada: "financeiro" },
-  governanca: {
-    titulo: "Secretaria / Governança", icone: "🏛️", abaEntrada: "reunioes",
-    abas: ["reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes",
-      "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos"]
-  }
+  financeiro: { titulo: "Financeiro", icone: "💰", abaEntrada: "financeiro", abas: ["financeiro"] },
+  membresia: { titulo: "Pessoas & Membresia", icone: "👥", abaEntrada: "pessoas", abas: ["pessoas", "cartas", "abandono"] },
+  territorio: { titulo: "Estrutura & Territórios", icone: "🗺️", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
+  eclesiastica: { titulo: "Reuniões & Vida Eclesiástica", icone: "📅", abaEntrada: "reunioes", abas: ["reunioes", "consagracoes", "enquetes", "arquivos"] },
+  disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria"] },
+  conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
+  acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
 let moduloAtual = null;
 

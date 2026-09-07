@@ -269,7 +269,7 @@ Local lança, só a Tesouraria Geral confere e libera o saldo) — mas uma
 pesquisa de mercado (FASE 4) confirmou que essa é a proteção nº1 contra
 fraude financeira em organizações sem fins lucrativos, então vira
 princípio nomeado e citável, a ser aplicado em toda peça financeira nova
-(Fornecedores, Contas a Pagar — v4.1.6): quem cadastra ou edita um
+(Fornecedores, Contas a Pagar — v4.3): quem cadastra ou edita um
 Fornecedor nunca aprova pagamento a ele; quem registra uma Saída nunca
 aprova a própria Saída.
 
@@ -1677,179 +1677,101 @@ uma precisa ser uma categoria com nome próprio, não um "outros".
   vir a ter um centro de custo próprio no futuro, mas isso é história pra
   mais adiante.
 
-### Arquitetura financeira de referência (pesquisa de mercado, 2026)
+### Referência de pesquisa (mercado + norma legal, 2026)
 
-Pedido explícito do usuário: pesquisar como sistemas financeiros de
-verdade (ERP de grandes empresas + os melhores softwares de contabilidade
-para igrejas/terceiro setor) organizam entradas, saídas, rateio e
-auditoria, e usar isso pra deixar o plano da FASE 4 robusto o bastante
-pra aguentar tudo que vem depois — sem precisar refazer a base mais
-adiante. Síntese da pesquisa e como ela se aplica aqui:
+Pedido explícito do usuário: pesquisar sem se limitar a fontes
+brasileiras ("não tenha dor de pesquisar") como sistemas financeiros de
+verdade — ERP de grandes empresas, os melhores softwares de contabilidade
+pra igreja/terceiro setor, e a norma contábil brasileira que rege
+entidades sem fins lucrativos — organizam entradas, saídas, rateio e
+auditoria, e usar isso pra reescrever o plano da FASE 4 inteiro numa
+sequência única, sem duplicação, em ordem de dependência ("o que fazer
+ponto a ponto pra não ter erro"). O que segue nesta seção é o resultado
+dessa mesclagem: tudo que já vinha do Regimento + tudo que a pesquisa
+trouxe, keyword por keyword.
 
-- **Fund Accounting (contabilidade por fundos)** é o padrão-ouro pra
-  igrejas/ONGs — dinheiro é sempre rotulado **restrito** (só pode ser
-  gasto numa finalidade específica, ex: uma oferta de congresso) ou
-  **livre** (uso geral). Isso **valida** a arquitetura já construída:
-  Centro de Custo Local/Geral (v4.1.3) já é, na prática, uma fund
-  accounting de dois fundos. Falta um passo natural: marcar cada
-  `CategoriasEntrada` (v4.1.5) como restrita ou livre, pra quando as
-  **saídas** existirem o sistema já saber travar gasto de "Entrada de
-  Congresso" em algo que não seja o congresso. *(NetSuite, GivingArc,
-  AlignMint — fund accounting; ChurchTrac, Aplos, Sage — contabilidade
-  de igreja)*
-- **Chart of Accounts (Plano de Contas)** é a espinha dorsal de qualquer
-  ERP financeiro — cada lançamento aponta pra uma conta contábil
-  hierárquica (Receita > Dízimos > ...; Despesa > Manutenção > Aluguel).
-  Hoje o sistema tem `CategoriasEntrada` (bom pro dia a dia), mas não tem
-  um Plano de Contas formal por trás — sem ele não dá pra gerar Balanço
-  Patrimonial/DRE de verdade (já previstos em v4.3/v4.5). **Recomendação:
-  entra como fundação da v4.2** (abaixo), antes do Orçamento (v4.3)
-  precisar dele. *(NetSuite, Priority, Codejig — ERP finance module)*
-- **Cost allocation methods**: o rateio 40/60 (Art. 118) já é exatamente
-  um "simplified allocation method" — percentual fixo, aplicado de forma
-  consistente. A pesquisa confirma que **mudar o método no meio do
-  caminho é o erro mais comum** (perde comparabilidade histórica) — reforça
-  por que `PercentualRetencaoLocal` é editável por congregação, mas nunca
-  reescreve fechamentos já feitos (já é assim). *(BPM, CFO Selections,
-  Onetribe — cost allocation)*
-- **Accounts Payable (Contas a Pagar) com aprovação em múltiplos níveis**
-  é o modelo padrão de saídas em qualquer ERP: solicitação → validação
-  (documentação/nota fiscal) → aprovação por alçada de valor (quanto
-  maior o valor, mais aprovadores) → pagamento → trilha de auditoria. Isso
-  **é literalmente o que o Regimento já pede** (Teto de Alçada Patrimonial
-  v4.5, 3 cotações v4.6, parecer do Conselho Fiscal v4.7) — só nunca tinha
-  sido nomeado como um módulo de Saídas único. Vira a **v4.1.6**, abaixo.
-  *(Ramp, ApprovalMax, Settle — AP approval workflow)*
-- **Accounts Receivable (Contas a Receber)** — dinheiro **esperado**, ainda
-  não recebido (ex: um boleto de aluguel de terceiro, uma promessa de
-  campanha) — é um conceito real e comum em ERPs, distinto de "dinheiro
-  que já entrou" (o que o sistema trata hoje). Vira a **v4.1.7**, abaixo —
-  mencionado pelo usuário como pesquisa, mas com valor real pro caixa
-  único (saber o que ainda vai entrar, não só o que já entrou).
-- **Orçado vs. Realizado (budget variance)** — todo ERP financeiro
-  compara o orçamento contra o executado, por categoria/centro de custo,
-  pra virar decisão (não só relatório). Reforça o v4.3 (Orçamento Anual):
-  quando existir, precisa nascer com o comparativo contra as
-  `CategoriasEntrada`/Centro de Custo já existentes, não uma peça isolada.
-- **Dashboards em tempo real, auditoria e trilha completa** — já são
-  princípios dominantes deste sistema desde a FASE 0 (`AuditLog`,
-  "calculado na leitura"); a pesquisa confirma que é exatamente isso que
-  separa um sistema financeiro sério de uma planilha, então nenhuma
-  mudança de rumo aqui — só reforço de que já estamos alinhados.
+**Conclusão da pesquisa:** a arquitetura já construída em v4.1-v4.1.5
+(Centro de Custo Local/Geral + Categorias de Entrada) segue exatamente o
+padrão de **fund accounting simplificado** — não precisa reconstruir a
+base. O que faltava pra "competir" com um sistema financeiro de verdade
+é completar o outro lado da mesma moeda (Saídas) e formalizar o que já
+existe em cima de normas e controles reconhecidos:
 
-**Segunda rodada de pesquisa (pedido explícito — "tem muita coisa que
-você pode colocar aí"), com achados novos e mais específicos:**
+| Achado | Fonte | Onde entra no plano |
+|---|---|---|
+| Fund Accounting (fundo restrito/livre) | NetSuite, GivingArc, AlignMint, ChurchTrac, Aplos, Sage | v4.2 |
+| Chart of Accounts (Plano de Contas) | NetSuite, Priority, Codejig | v4.2 |
+| ITG 2002 (CFC, Res. 1.409/12) — **norma legal brasileira obrigatória** | CFC, CRCSC | v4.2, v4.7 |
+| Cost allocation methods (valida o rateio 40/60 já existente) | BPM, CFO Selections, Onetribe | já implementado (v4.1) |
+| Accounts Payable + segregação de funções (maker-checker) | Ramp, ApprovalMax, Settle, PBMares, Council of Nonprofits | v4.3, seção 2.7 |
+| Vendor Master Data (Cadastro de Fornecedores) | NetSuite, Eftsure, Corpay, Xelix | v4.3 |
+| Fundo Fixo de Caixa (petty cash) | Aplos, Harvard Financial Policy | v4.3 |
+| Accounts Receivable (Contas a Receber) | conceito geral de ERP | v4.4 |
+| CNAB 240/400 (Febraban) — remessa bancária em lote | Febraban, Banco do Brasil, Sicredi | v4.5 |
+| Orçado vs. Realizado + Empenho (encumbrance) | PLANERGY, Bill.com, AlignMint, Grain Ledger | v4.6 |
+| Hash chain / trilha de auditoria inviolável | pesquisa técnica geral (tamper-evident logs) | v4.10 |
+| COSO Internal Control Framework (lente de revisão, não vira versão) | COSO.org, Diligent, Pathlock, Cherry Bekaert | v4.10 |
+| KPIs de saúde financeira (meses de reserva, aplicação em atividades-fim, liquidez) | Sage, JMCO, Warren Averett, GivingArc | v4.10 |
+| Open Finance Brasil (conciliação automática) | TecnoSpeed, Pluggy, Openi, Paytime | v4.11 |
 
-- **ITG 2002 (CFC, Resolução 1.409/12) — não é "boa prática", é norma
-  contábil obrigatória por lei** pra entidades sem finalidade de lucros no
-  Brasil (associações religiosas incluídas). Exige regime de
-  **competência** (não caixa — reconhece receita/despesa quando ocorre,
-  não só quando o dinheiro entra/sai), demonstrações contábeis específicas
-  (Balanço Patrimonial, Demonstração do Resultado do Período, Mutações do
-  Patrimônio Líquido, Fluxo de Caixa, Notas Explicativas) e classificação
-  de despesas — isso **eleva o Plano de Contas** (já adicionado na v4.2,
-  acima) de "boa ideia" pra **requisito legal**: a estrutura do Plano de
-  Contas precisa nascer compatível com o que a ITG 2002 exige nas
-  demonstrações, não just uma lista de categorias soltas. *(CFC, CRCSC —
-  ITG 2002)*
-- **Segregação de funções (Segregation of Duties / "maker-checker")** —
-  achado mais importante desta rodada: a pesquisa é unânime que a causa
-  nº1 de fraude financeira em ONGs é uma mesma pessoa poder **criar E
-  aprovar** a mesma transação (ou cadastrar um fornecedor E aprovar
-  pagamento a ele). Isso já é um princípio informal deste sistema (Geral
-  confere/libera o que o Local lançou, v4.1.3) — a pesquisa confirma que
-  vale a pena **nomear isso como princípio formal** e aplicar em toda
-  peça financeira nova: quem cadastra/edita um Fornecedor nunca pode ser
-  quem aprova pagamento a ele; quem lança uma Saída nunca aprova a
-  própria Saída. Vira item explícito da v4.1.6, abaixo, e um novo
-  princípio na seção 2 (Fundamentos permanentes). *(PBMares, Council of
-  Nonprofits, Warady & Davis, Brymar CPA — segregation of duties)*
-- **Cadastro de Fornecedores (Vendor Master Data)** — infraestrutura que
-  faltava no plano original de Contas a Pagar: sem um cadastro próprio de
-  fornecedor (CNPJ/CPF, dados bancários), não tem como pagar ninguém. A
-  pesquisa aponta o vetor de fraude mais comum: alguém troca os dados
-  bancários de um fornecedor cadastrado pra redirecionar o pagamento — por
-  isso a **trilha de auditoria sobre mudança de dados bancários** precisa
-  ser mais rígida que a trilha comum (quem mudou, quando, e travar
-  pagamento até confirmação). Também évita pagamento duplicado (nome de
-  fornecedor escrito de forma diferente duas vezes vira duas contas
-  "diferentes" sem perceber). Vira item da v4.1.6. *(NetSuite, Eftsure,
-  Corpay, Xelix — vendor master data / duplicate payments)*
-- **CNAB 240/400 (Febraban) — remessa bancária em lote** — achado
-  especificamente brasileiro, de altíssimo valor prático: em vez de pagar
-  fornecedor por fornecedor manualmente (ou anotar de novo em outro
-  lugar), o sistema gera **um arquivo só** que qualquer banco brasileiro
-  aceita pra processar dezenas de pagamentos de uma vez (é literalmente a
-  resposta pro "não ter que lançar de novo e ter erro" que motivou a
-  pesquisa) — usado por praticamente toda empresa de porte médio no
-  Brasil pra pagar fornecedores/folha em lote. Vira a **v4.1.9**, abaixo.
-  *(Febraban/CNAB, Banco do Brasil, Sicredi — CNAB 240)*
-- **Fundo Fixo de Caixa (Petty Cash)** — pequena reserva de dinheiro local
-  pra despesas miúdas e urgentes (materiais de limpeza, um lanche, um
-  reparo pequeno) que não compensa levar pro fluxo completo de aprovação
-  por alçada — com custodiante responsável, teto de valor, e reposição
-  mediante prestação de contas dos recibos. Resolve uma lacuna real: nem
-  toda saída de congregação é grande o bastante pra passar pela alçada
-  cheia. Vira item da v4.1.6. *(Aplos, Harvard Financial Policy,
-  FreeChurchAccounting — petty cash)*
-- **Empenho / Encumbrance (orçamento comprometido)** — reservar o valor no
-  orçamento no momento em que o compromisso é assumido (contrato/pedido
-  aprovado), **antes** do pagamento sair de fato — evita o erro clássico
-  de achar que o orçamento está livre quando na verdade já está todo
-  comprometido em coisas ainda não pagas. Isso já ecoa o que o Regimento
-  pede pro PDQ (remanejamento com cláusula de barreira, Art. 28) — só
-  faltava nomear o mecanismo. Reforça a v4.3 (Orçamento Anual), abaixo.
-  *(PLANERGY, Bill.com, AlignMint, Grain Ledger — encumbrance accounting)*
+#### v4.2 — Plano de Contas e Fundo Restrito/Livre
 
-**Conclusão prática (atualizada):** a arquitetura de Centro de Custo +
-Categorias de Entrada (v4.1.x) já segue o padrão certo (fund accounting
-simplificado) — isso não muda. O que a segunda rodada de pesquisa
-acrescenta de novo: (1) o Plano de Contas agora é requisito **legal**
-(ITG 2002), não só boa prática; (2) segregação de funções vira princípio
-formal, não só um comportamento informal que já existe; (3) Contas a
-Pagar (v4.1.6) precisa nascer com Cadastro de Fornecedores + fundo fixo
-de caixa, não só o fluxo de aprovação; (4) uma versão nova inteira
-(v4.1.9, CNAB) resolve o problema original de "lançar de novo e ter
-erro" só que do lado de pagamentos; (5) o Orçamento (v4.3) precisa de
-empenho, não só orçado-vs-realizado.
+Fundação contábil que todas as versões seguintes dependem — precisa
+existir antes do Orçamento (v4.6) e das Demonstrações (v4.7).
 
-##### v4.1.6 — Saídas: Contas a Pagar *(planejado, pesquisa de mercado)*
+- [x] Registro de mapas de dízimos/ofertas por congregação, com numeração
+      sequencial de "talão" — entregue em v4.1 (`LancamentosTesouraria`,
+      Termo nº), já que não fazia sentido separar do fechamento/rateio.
+- [ ] **Plano de Contas** — catálogo hierárquico de contas contábeis
+      (Receita/Despesa/Ativo/Passivo, com sub-níveis) por trás de
+      `CategoriasEntrada`/`CategoriasSaida` (v4.3) — estruturado desde o
+      início pra alimentar as demonstrações da ITG 2002 (v4.7), não uma
+      lista de categorias soltas.
+- [ ] `CategoriasEntrada.TipoFundo` (`RESTRITO` | `LIVRE`) — fund
+      accounting: uma entrada de Congresso/Revista tem finalidade
+      específica; a Saída (v4.3) correspondente só libera gasto na mesma
+      finalidade quando a entrada de origem for restrita.
+- **Descartado (decisão explícita, 2026):** conferência/auditoria in loco
+  pelo 2º Tesoureiro (Art. 36 §2º/41 II) — a visita física comparando o
+  mapa físico com o dinheiro entregue deixa de fazer sentido com a
+  conferência digital da Geral (v4.1.3); o 2º Tesoureiro participa dessa
+  conferência pelo próprio sistema, não presa a uma tarefa manual
+  separada.
+
+#### v4.3 — Saídas: Contas a Pagar
 
 - [ ] `CategoriasSaida` — catálogo espelhado de `CategoriasEntrada` (mesmo
       padrão configurável), cada categoria marcada com o Centro de Custo
       que a autoriza (Local/Geral) e, se a entrada de origem for
-      restrita (Fundo Restrito, ver acima), só libera gasto na mesma
-      finalidade.
+      restrita (`TipoFundo`, v4.2), só libera gasto na mesma finalidade.
 - [ ] `Fornecedores` — cadastro próprio (CNPJ/CPF, dados bancários),
       pré-requisito pra pagar qualquer um. **Mudança de dados bancários
       exige trilha de auditoria reforçada** (quem mudou, quando) e trava o
       próximo pagamento até confirmação — é o vetor de fraude nº1 segundo
-      a pesquisa (alguém troca a conta do fornecedor pra redirecionar o
-      dinheiro). Verificação de nome/CNPJ duplicado antes de cadastrar de
-      novo (evita "Fornecedor LTDA" e "Fornecedor Ltda" virarem dois
-      cadastros diferentes).
-- [ ] **Segregação de funções, formalizada:** quem cadastra/edita um
-      Fornecedor nunca pode ser quem aprova pagamento a ele; quem
-      registra uma Saída nunca aprova a própria Saída — mesmo princípio
-      já usado em Tesouraria (Geral confere o que o Local lançou, v4.1.3),
-      agora nomeado e aplicado em toda peça nova de Saídas.
+      a pesquisa. Verificação de nome/CNPJ duplicado antes de cadastrar de
+      novo.
+- [ ] **Segregação de funções** (princípio 2.7, formalizado por pesquisa
+      de mercado): quem cadastra/edita um Fornecedor nunca aprova
+      pagamento a ele; quem registra uma Saída nunca aprova a própria
+      Saída — mesmo princípio já usado em Tesouraria (Geral confere o que
+      o Local lançou, v4.1.3), agora nomeado e aplicado aqui.
 - [ ] Solicitação de pagamento → documentação obrigatória (nota fiscal/
       recibo, Reg. Art. 120 §2º) → aprovação por **alçada de valor**
-      (quanto maior o valor, mais aprovadores — mesmo espírito do Teto de
-      Alçada Patrimonial já previsto em v4.5, mas pra despesa corrente,
-      não só patrimônio) → pagamento → comprovante.
+      (quanto maior o valor, mais aprovadores — o mesmo motor de alçada
+      reaproveitado depois pelo Teto de Alçada Patrimonial, v4.9) →
+      pagamento → comprovante.
 - [ ] Verificação de pagamento duplicado (mesmo fornecedor + mesmo valor +
       janela de tempo curta) antes de autorizar — alerta, não bloqueio
-      automático (pode ser legítimo, mas precisa de um olhar a mais).
+      automático.
 - [ ] 3 cotações obrigatórias acima de um valor de referência (Reg. Art.
-      62, já previsto em v4.6) — nasce junto com Saídas, é o mesmo dado.
+      62) + vedação de despesa sem nota fiscal.
 - [ ] Saldo do Centro de Custo (Local/Geral) só pode ser debitado até o
       limite do que já foi liberado (v4.1.3) — nunca fica negativo.
 - [ ] **Fundo Fixo de Caixa** (petty cash) por congregação — teto de
       valor, custodiante responsável, despesas miúdas sem precisar da
       alçada cheia, reposição mediante prestação de contas dos recibos.
 
-##### v4.1.7 — Contas a Receber *(planejado, pesquisa de mercado)*
+#### v4.4 — Contas a Receber
 
 - [ ] Registro de valor **esperado, ainda não recebido** (ex: acordo de
       parcelamento, boleto emitido pra terceiro) — Status Previsto/
@@ -1859,157 +1781,24 @@ empenho, não só orçado-vs-realizado.
 - [ ] Alerta de vencimento — mesmo princípio "calculado na leitura" de
       sempre (dias até o vencimento, nunca marcação manual de "atrasado").
 
-##### v4.1.8 — Conformidade Legal Contábil (ITG 2002) *(planejado, pesquisa de mercado)*
-
-- [ ] Plano de Contas (v4.2) estruturado desde o início pra alimentar as
-      demonstrações exigidas por lei pra entidades sem finalidade de
-      lucros (CFC, Resolução 1.409/12 — ITG 2002): Balanço Patrimonial,
-      Demonstração do Resultado do Período, Mutações do Patrimônio
-      Líquido, Fluxo de Caixa, Notas Explicativas.
-- [ ] Regime de **competência** nas demonstrações formais (reconhece
-      quando o fato ocorre, não só quando o dinheiro entra/sai) — o
-      registro do dia a dia (`LancamentosTesouraria`) continua em regime
-      de caixa (é assim que o Tesoureiro Local vive), a conversão pra
-      competência acontece na geração das demonstrações formais, não
-      reescrevendo o lançamento original.
-
-##### v4.1.9 — Remessa Bancária (CNAB 240/400) *(planejado, pesquisa de mercado)*
+#### v4.5 — Remessa Bancária (CNAB 240/400)
 
 - [ ] Geração de arquivo de remessa bancária (padrão Febraban CNAB 240)
-      pra pagar vários fornecedores/prebendas de uma vez só — sobe um
-      arquivo no banco em vez de fazer PIX/TED um por um, mesmo problema
-      de "lançar de novo e ter erro" que motivou a pesquisa, só que do
-      lado das saídas.
+      pra pagar vários fornecedores/prebendas (v4.8) de uma vez só — sobe
+      um arquivo no banco em vez de PIX/TED um por um.
 - [ ] Leitura do arquivo de retorno do banco (quais pagamentos foram
-      processados, quais falharam) — atualiza status automaticamente, sem
-      conferência manual um por um.
+      processados, quais falharam) — atualiza status automaticamente.
 
-**Terceira rodada de pesquisa (pedido explícito — "não tenha dor de
-pesquisar", sem se limitar a fontes brasileiras): o achado desta rodada
-com mais potencial de diferenciar o sistema de qualquer concorrente:**
-
-- **Trilha de auditoria inviolável (hash chain / tamper-evident log)** —
-  técnica usada em sistemas financeiros/bancários sérios pra provar
-  matematicamente que um registro de auditoria nunca foi alterado: cada
-  linha do `AuditLog` carrega um hash calculado a partir dos próprios
-  dados **mais o hash da linha anterior** — se alguém tentar editar ou
-  apagar um registro antigo direto no banco (por fora do sistema), a
-  corrente de hashes quebra e fica matematicamente detectável, sem
-  precisar de blockchain de verdade (é só encadeamento criptográfico,
-  leve, roda em qualquer banco relacional). Isso é **exatamente** o tipo
-  de coisa que "nenhuma igreja tem" (eco da fala do usuário na v3.7,
-  sobre a Ouvidoria) — aqui pro financeiro é ainda mais forte: prova
-  contra qualquer acusação de que alguém adulterou o histórico do
-  dinheiro. Vira a **v4.1.10**, abaixo — e vale considerar estender pro
-  `AuditLog` inteiro do sistema (todas as fases), não só financeiro,
-  quando chegar a hora. *(pesquisa técnica geral sobre tamper-evident
-  logs, hash chains, Merkle trees — aplicação bancária/contábil)*
-- **COSO Internal Control Framework** — a referência mundial de controles
-  internos (usada por auditores em qualquer país), com 5 componentes:
-  Ambiente de Controle, Avaliação de Riscos, Atividades de Controle,
-  Informação e Comunicação, e Monitoramento. Serve de **checklist pra
-  saber se a FASE 4 está completa de verdade**: Ambiente de Controle
-  (segregação de funções, 2.7) ✅, Atividades de Controle (aprovação por
-  alçada, 3 cotações, trilha de auditoria) ✅, Informação e Comunicação
-  (Centro de Custo, Consolidado) ✅ — o que ainda falta mapear pra depois:
-  Avaliação de Riscos formal (um processo periódico de identificar onde o
-  sistema financeiro está mais vulnerável) e Monitoramento independente
-  (é o próprio papel do Conselho Fiscal/NIF, v4.6/v4.7, mas vale nomear a
-  ligação). Não vira uma versão nova — é a lente pra revisar todas as
-  outras quando a hora chegar. *(COSO.org, Diligent, Pathlock, Cherry
-  Bekaert — internal control framework)*
-- **Indicadores financeiros de saúde institucional (KPIs de terceiro
-  setor)** — três métricas padrão que qualquer conselho de ONG/igreja
-  séria acompanha: **Meses de Reserva de Caixa** (quantos meses de
-  despesa o caixa cobriria — já ecoa o Fundo de Reserva do Art. 64, 3
-  meses); **Índice de Aplicação em Atividades-Fim** (% do gasto total em
-  programas/atividades-fim vs. administrativo — referência de mercado:
-  70-80% é saudável, abaixo de 65% é sinal de alerta) — isso se conecta
-  direto com a classificação funcional de despesas da ITG 2002 (v4.1.8);
-  e **Liquidez** (capacidade de cobrir compromissos de curto prazo). Um
-  painel desses pro CLI/Diretoria/Conselho Fiscal vira a **v4.1.11**,
-  abaixo — tudo calculado na leitura a partir dos dados que já vão existir
-  (Centro de Custo, Fechamentos, Saídas), nunca digitado à mão.
-  *(Sage, JMCO, Warren Averett, GivingArc — nonprofit financial ratios)*
-- **Open Finance Brasil (Banco Central) — conciliação bancária automática
-  de verdade** — API regulada pelo Banco Central (42 milhões de consentimentos
-  ativos, 1.3 bilhão de chamadas/mês em 2026) que permite importar o
-  extrato bancário real direto no sistema, sem upload manual de
-  comprovante — o sistema cruza automaticamente cada lançamento com o
-  extrato de verdade e só aponta o que não bate, em vez de exigir
-  conferência manual (a conciliação de PIX em lote da v4.1.2 vira
-  desnecessária: o extrato real substitui o comprovante individual). Como
-  hoje existe **uma única conta bancária pra toda a denominação**
-  (confirmado, v4.1.3), essa integração pode valer a pena mais cedo do
-  que se imaginava — não precisa esperar contas bancárias por
-  congregação. Vira a **v4.1.12**, abaixo. *(TecnoSpeed, Pluggy, Openi,
-  Paytime — Open Finance Brasil, regulado pelo Banco Central e compatível
-  com LGPD)*
-
-##### v4.1.10 — Trilha de Auditoria Inviolável (hash chain) *(planejado, pesquisa de mercado)*
-
-- [ ] `AuditLog.HashRegistro` — hash (SHA-256) calculado sobre os dados do
-      próprio registro + o hash do registro anterior da mesma tabela;
-      qualquer alteração/exclusão feita por fora do sistema (direto no
-      banco) quebra a corrente de forma matematicamente detectável.
-- [ ] Rotina de verificação de integridade (recalcula a corrente inteira e
-      aponta onde ela quebrou, se quebrar) — disponível pro Conselho
-      Fiscal/NIF (v4.6/v4.7) como evidência de que o histórico financeiro
-      nunca foi adulterado.
-
-##### v4.1.11 — Painel de Indicadores Financeiros *(planejado, pesquisa de mercado)*
-
-- [ ] Meses de Reserva de Caixa (Centro de Custo Geral ÷ média de saídas
-      mensais) — referência direta do Fundo de Reserva, Art. 64 (meta de
-      3 meses).
-- [ ] Índice de Aplicação em Atividades-Fim (% do gasto em programas vs.
-      administrativo, via classificação funcional da ITG 2002 — v4.1.8).
-- [ ] Índice de Liquidez (capacidade de cobrir compromissos de curto
-      prazo) — painel pro CLI/Diretoria/Conselho Fiscal, calculado na
-      leitura a partir dos dados de Centro de Custo/Saídas já existentes.
-
-##### v4.1.12 — Conciliação Bancária Automática (Open Finance Brasil) *(planejado, pesquisa de mercado)*
-
-- [ ] Integração via Open Finance (API regulada pelo Banco Central) pra
-      importar o extrato real da conta bancária única (v4.1.3) direto no
-      sistema — substitui a conciliação manual/em lote (v4.1.2) por
-      cruzamento automático contra o extrato de verdade.
-- [ ] Alerta só do que não bate (divergência real) — não precisa mais
-      conferir lançamento por lançamento contra recibo.
-
-#### v4.2 — Ofertas, dízimos e arrecadação
-
-- [x] Registro de mapas de dízimos/ofertas por congregação, com numeração
-      sequencial de "talão" — entregue em v4.1 (`LancamentosTesouraria`,
-      Termo nº), já que não fazia sentido separar do fechamento/rateio.
-- [ ] **Plano de Contas** (pesquisa de mercado, ver acima) — catálogo
-      hierárquico de contas contábeis (Receita/Despesa/Ativo/Passivo, com
-      sub-níveis) por trás de `CategoriasEntrada`/`CategoriasSaida`; é a
-      peça que falta pra gerar Balanço Patrimonial/DRE de verdade em v4.3/
-      v4.5, em vez de só somatórios soltos.
-- [ ] `CategoriasEntrada.TipoFundo` (`RESTRITO` | `LIVRE`) — fund
-      accounting (pesquisa de mercado, ver acima): uma entrada de
-      Congresso/Revista tem finalidade específica; quando as Saídas
-      existirem (v4.1.6), só deixa gastar naquilo.
-- **Descartado (decisão explícita, 2026):** conferência/auditoria in loco
-  pelo 2º Tesoureiro (Art. 36 §2º/41 II) — a visita física comparando o
-  mapa físico com o dinheiro entregue deixa de fazer sentido com a
-  conferência digital da Geral (v4.1.3, acima); o 2º Tesoureiro participa
-  dessa conferência pelo próprio sistema, não presa a uma tarefa manual
-  separada.
-
-#### v4.3 — Orçamento anual e PDQ
+#### v4.6 — Orçamento Anual, PDQ e Empenho
 
 - [ ] Orçamento Anual e Balanço Patrimonial consolidado (1º Tesoureiro —
-      Art. 36 §1º), estruturado a partir do Plano de Contas (v4.2) pra já
-      nascer compatível com as demonstrações da ITG 2002 (v4.1.8).
-- [ ] **Orçado vs. Realizado** por categoria/Centro de Custo (pesquisa de
-      mercado) — comparativo automático contra `CategoriasEntrada`/
-      `CategoriasSaida` já existentes, pra virar decisão, não só relatório.
-- [ ] **Empenho** (encumbrance, pesquisa de mercado) — reservar o valor no
-      orçamento no momento em que o compromisso é assumido (contrato/
-      pedido aprovado em v4.1.6), antes do pagamento sair de fato — evita
-      achar que o orçamento está livre quando já está comprometido.
+      Art. 36 §1º), estruturado a partir do Plano de Contas (v4.2).
+- [ ] **Orçado vs. Realizado** por categoria/Centro de Custo — comparativo
+      automático contra `CategoriasEntrada`/`CategoriasSaida` já
+      existentes, pra virar decisão, não só relatório.
+- [ ] **Empenho** (encumbrance) — reservar o valor no orçamento no
+      momento em que o compromisso é assumido (contrato/pedido aprovado
+      em v4.3), antes do pagamento sair de fato.
 - [ ] Planejamento estratégico PDQ com metas e 3 eixos (Regimento, Art. 26-29).
 - [ ] Fundo de Execução Estratégica: dotação obrigatória de 10% da arrecadação
       líquida (Art. 27), com suspensão excepcional pelo Pastor Presidente.
@@ -2021,51 +1810,106 @@ com mais potencial de diferenciar o sistema de qualquer concorrente:**
       Justificativa Técnica quando as metas não forem cumpridas (sem virar
       infração disciplinar — Art. 29 §1º).
 
-#### v4.4 — Prebenda e sustento pastoral
+#### v4.7 — Demonstrações Contábeis (ITG 2002)
 
-- [ ] Prebenda (natureza alimentar, sem vínculo CLT) — Reg. Art. 134.
+- [ ] Demonstrações exigidas por lei pra entidades sem finalidade de
+      lucros (CFC, Resolução 1.409/12 — ITG 2002), geradas a partir do
+      Plano de Contas (v4.2): Balanço Patrimonial, Demonstração do
+      Resultado do Período, Mutações do Patrimônio Líquido, Fluxo de
+      Caixa, Notas Explicativas.
+- [ ] Regime de **competência** nas demonstrações formais (reconhece
+      quando o fato ocorre, não só quando o dinheiro entra/sai) — o
+      registro do dia a dia (`LancamentosTesouraria`) continua em regime
+      de caixa (é assim que o Tesoureiro Local vive); a conversão pra
+      competência acontece na geração das demonstrações, não reescrevendo
+      o lançamento original.
+- [ ] Classificação funcional de despesas (atividades-fim vs.
+      administrativa) — alimenta o Índice de Aplicação em Atividades-Fim
+      (v4.10).
+
+#### v4.8 — Prebenda e sustento pastoral
+
+- [ ] Prebenda (natureza alimentar, sem vínculo CLT) — Reg. Art. 134,
+      tratada como categoria de Saída (v4.3) com regras próprias.
 - [ ] Retenções tributárias/previdenciárias obrigatórias.
 - [ ] Vedação à "pejotização" do ministério.
+- [ ] Pagamento em lote de prebendas via remessa bancária (v4.5).
 
-#### v4.5 — Patrimônio e alçadas
+#### v4.9 — Patrimônio e Alçadas
 
 - [ ] Inventário físico anual de bens (dezembro) — Reg. Art. 63.
-- [ ] Teto de Alçada Patrimonial (acima → Assembleia; abaixo → CLI).
+- [ ] Teto de Alçada Patrimonial (acima → Assembleia; abaixo → CLI) —
+      reaproveita o mesmo motor de alçada por valor construído em Saídas
+      (v4.3), não um mecanismo novo.
 - [ ] Blindagem patrimonial: assinatura conjunta, quarentena de 12 meses.
 - [ ] Registro de escrituras, títulos, alvarás, veículos, contratos (2º/3º Secretários).
 - [ ] Casa Pastoral como ativo com regra de ocupação (Reg. Art. 115): uso exclusivo do
       Dirigente titular, vedada cessão a terceiros, destituição automática por uso
       irregular/"gato" de luz-água *(gap da varredura)*.
 
-#### v4.6 — NIF e Compliance
+#### v4.10 — Auditoria, Compliance e Indicadores
 
-- [ ] NIF (Núcleo de Inteligência Financeira) — análise de risco e alertas.
-- [ ] Compliance de compras (3 cotações, fornecedores) e transparência ativa.
-- [ ] Vedação de despesas sem nota fiscal.
+Versão que reúne tudo que é *revisão* do que as versões anteriores já
+produziram — não cria dado novo, olha pro que já existe com mais rigor.
+**COSO Internal Control Framework** (5 componentes: Ambiente de Controle,
+Avaliação de Riscos, Atividades de Controle, Informação e Comunicação,
+Monitoramento) serve de checklist pra confirmar que a FASE 4 está
+completa: Ambiente de Controle (segregação de funções, 2.7) e Atividades
+de Controle (alçada, 3 cotações, trilha de auditoria) já vêm de v4.3;
+falta o resto, formalizado aqui.
 
-#### v4.7 — Auditoria e prestação de contas
-
+- [ ] **Trilha de Auditoria Inviolável** — `AuditLog.HashRegistro`: hash
+      (SHA-256) calculado sobre os dados do próprio registro + o hash do
+      registro anterior da mesma tabela; qualquer alteração/exclusão feita
+      por fora do sistema quebra a corrente de forma matematicamente
+      detectável. Rotina de verificação de integridade disponível pro
+      Conselho Fiscal/NIF. Vale considerar estender pro `AuditLog` inteiro
+      do sistema (todas as fases), não só financeiro, quando chegar a hora.
+- [ ] NIF (Núcleo de Inteligência Financeira) — análise de risco e alertas
+      (Avaliação de Riscos do COSO, formalizada).
 - [ ] Auditoria em 3 níveis (interna, NIF, externa).
-- [ ] Parecer mensal do Conselho Fiscal (aprova/rejeita contas).
-- [ ] Bloqueio de repasses por falta de prestação de contas.
+- [ ] Parecer mensal do Conselho Fiscal (aprova/rejeita contas) — depende
+      de Entradas+Saídas maduras (v4.1-v4.3); adiado de propósito até aqui
+      (decisão explícita, v4.1.3) porque não compensava investir em
+      auditoria sem o outro lado da moeda (Saídas) existir.
+- [ ] Bloqueio de repasses/liberação por falta de prestação de contas.
 - [ ] Prazo fatal de prestação de contas — dia 1º útil do mês, tolerância até dia 5,
       "Ata de Pendência" automática por falta de comprovante de água/luz (Reg. Art. 120)
       *(gap da varredura)*.
+- [ ] **Painel de Indicadores Financeiros** — Meses de Reserva de Caixa
+      (Centro de Custo Geral ÷ média de saídas mensais, referência do
+      Fundo de Reserva Art. 64, meta de 3 meses); Índice de Aplicação em
+      Atividades-Fim (% do gasto em programas vs. administrativo, via
+      classificação funcional da ITG 2002, v4.7 — referência de mercado:
+      70-80% saudável); Índice de Liquidez — painel pro CLI/Diretoria/
+      Conselho Fiscal, calculado na leitura, nunca digitado à mão.
 
-#### v4.8 — Repasses e dízimo institucional
+#### v4.11 — Conciliação Bancária Automática (Open Finance Brasil)
 
-- [ ] Repasses obrigatórios de congregações/departamentos para a Matriz.
+- [ ] Integração via Open Finance (API regulada pelo Banco Central) pra
+      importar o extrato real da conta bancária única (v4.1.3) direto no
+      sistema — substitui a conciliação manual/em lote (v4.1.2) por
+      cruzamento automático contra o extrato de verdade. Viável desde já
+      (conta única), não precisa esperar contas bancárias por congregação.
+- [ ] Alerta só do que não bate (divergência real) — não precisa mais
+      conferir lançamento por lançamento contra recibo.
+
+#### v4.12 — Repasses institucionais
+
+- [ ] Repasses obrigatórios de congregações/departamentos para a Matriz —
+      mesma engine de Entradas/Saídas (v4.1-v4.3), aplicada à relação
+      hierárquica Distrito → Sede.
 - [ ] Dízimo institucional de 10% (Distrito) para a Sede Geral.
 - [ ] Alerta de atraso de repasse (infração de intervenção).
 
-#### v4.9 — Seguros institucionais *(gap da varredura)*
+#### v4.13 — Seguros institucionais *(gap da varredura)*
 
 - [ ] Apólice obrigatória para Templo Sede e grandes eventos (Reg. Art. 65-A):
       cobertura mínima incêndio/danos elétricos/RC.
 - [ ] Seguro de Responsabilidade Civil para administradores (Reg. Art. 42-A).
 - [ ] Registro de apólices, vigências e coberturas.
 
-#### v4.10 — Anexo de Parâmetros Monetários *(gap da varredura)*
+#### v4.14 — Anexo de Parâmetros Monetários *(gap da varredura)*
 
 - [ ] Catálogo de valores monetários fixos (tetos, taxas, valores de referência) com
       correção automática a cada 12 meses por IPCA/salário-mínimo (Reg. Art. 65) —
@@ -2073,11 +1917,11 @@ com mais potencial de diferenciar o sistema de qualquer concorrente:**
 - [ ] "Anexo Único" mantido pela Secretaria Geral, com número/data da Resolução
       Normativa da CLI que fixou/atualizou cada valor (Reg. Art. 162-C §§1-2).
 
-#### v4.11 — Cessão de templo a terceiros *(gap da varredura)*
+#### v4.15 — Cessão de templo a terceiros *(gap da varredura)*
 
 - [ ] Autorização de cessão do templo para casamentos/eventos de terceiros (Reg. Art.
       156) — não é conflito de agenda (já resolvido em v7.2), é processo de
-      autorização + cobrança + responsabilização civil.
+      autorização + cobrança (via Contas a Receber, v4.4) + responsabilização civil.
 - [ ] Taxa de Zeladoria (ressarcimento de custos, não aluguel).
 - [ ] Termo de Responsabilidade por danos + aprovação prévia de lista musical.
 

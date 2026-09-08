@@ -359,14 +359,36 @@
         <!-- SUB-ABA: MINHAS CONTRIBUIÇÕES (v4.2.2 — fatiado de "Meu Perfil";
              continua opcional/silenciosa pra quem nunca foi dizimista). -->
         <div id="subMeupainelContribuicoes" class="sub-aba-secretaria" style="display:none;">
+          <h3>🙋 Registrar que dei um dízimo/oferta</h3>
+          <p class="subtitle">Não é um pagamento pelo sistema — é só o registro de algo que você já
+            fez (dinheiro ou PIX diretamente com a congregação). O Tesoureiro Local confirma
+            depois de ver o dinheiro/PIX cair; só na confirmação é gerado o número do termo
+            (o mesmo do bloco de dízimo físico), que passa a ser sua prova permanente aqui no sistema.</p>
+          <div class="barra-lista">
+            <select id="autolancTipo"></select>
+            <input type="number" id="autolancValor" placeholder="Valor (R$)" min="0.01" step="0.01" style="max-width:140px;" />
+            <select id="autolancForma">
+              <option value="DINHEIRO">Dinheiro</option>
+              <option value="PIX">PIX</option>
+              <option value="MISTO">Misto</option>
+            </select>
+            <input type="number" id="autolancValorPix" placeholder="Parte em PIX (se misto)" min="0.01" step="0.01" style="max-width:170px;display:none;" />
+            <input type="month" id="autolancMes" style="max-width:150px;" />
+          </div>
+          <div class="input-group">
+            <input type="text" id="autolancDescricao" placeholder="Descrição (opcional)" />
+          </div>
+          <button class="btn-confirmar" style="width:auto;margin:0 0 16px;" onclick="registrarAutolancamentoAcao()">➕ Registrar</button>
+          <p id="resultadoAutolancamento" class="subtitle"></p>
+
           <div id="cxMinhasContribuicoes">
             <h3>💰 Minhas Contribuições</h3>
             <p class="subtitle">Registro do que foi lançado em seu nome na tesouraria — mesmo
               número de termo usado no bloco de dízimo, pra você conferir.</p>
             <div class="rolagem-tabela"><div id="resultadoMinhasContribuicoes"></div></div>
           </div>
-          <p id="semContribuicoesAviso" class="subtitle" style="display:none;">Você ainda não está
-            vinculado como dizimista em nenhuma congregação.</p>
+          <p id="semContribuicoesAviso" class="subtitle" style="display:none;">Você ainda não tem
+            nenhuma contribuição registrada.</p>
         </div>
 
         <!-- SUB-ABA: MEUS DADOS (LGPD) -->

@@ -22,6 +22,16 @@
 // sempre). "Descrição" vira opcional pra qualquer categoria (nota livre),
 // e dizimista/nome avulso OU descrição — pelo menos um dos dois precisa
 // identificar a origem, pra nunca existir uma entrada sem procedência.
+// v4.3 — Autolançamento do dizimista (AutolancamentoTesouraria, rota
+// pública por matrícula) com confirmação do Tesoureiro Local
+// (ConfirmarAutolancamentoTesouraria). Sem gateway de pagamento — o
+// dizimista só REGISTRA que deu (Origem='AUTOLANCAMENTO',
+// StatusConfirmacao='PENDENTE', TermoNumero NULL); o Termo nº só nasce na
+// confirmação, pra nunca ficar "furado" por algo não recebido de fato. Um
+// autolançamento CONFIRMADO é o comprovante do dizimista (visível em
+// Minhas Contribuições) e o DELETE abaixo o protege pra sempre contra
+// cancelamento — lançamentos de origem TESOUREIRO continuam com o
+// cancelamento-com-motivo de sempre (v4.1.1), sem mudança de comportamento.
 // GET   /api/tesouraria-lancamentos?congregacaoId=&mesReferencia=
 // POST  /api/tesouraria-lancamentos -> { congregacaoId, dizimistaId?, nomeAvulso?,
 //        tipo, descricao?, valor, formaPagamento, valorPix?, comprovanteBase64?, mimeType?, mesReferencia }
@@ -64,11 +74,12 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "GET") {
-    const { congregacaoId, mesReferencia } = req.query || {};
+    const { congregacaoId, mesReferencia, statusConfirmacao } = req.query || {};
     const request = pool.request();
     let where = "1=1";
     if (congregacaoId) { request.input("congregacaoId", sql.Int, congregacaoId); where += " AND l.CongregacaoId = @congregacaoId"; }
     if (mesReferencia) { request.input("mesReferencia", sql.Char(7), mesReferencia); where += " AND l.MesReferencia = @mesReferencia"; }
+    if (statusConfirmacao) { request.input("statusConfirmacao", sql.NVarChar(20), statusConfirmacao); where += " AND l.StatusConfirmacao = @statusConfirmacao"; }
 
     const result = await request.query(`
       SELECT l.LancamentoId AS lancamentoId, l.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
@@ -77,13 +88,14 @@ module.exports = async function (context, req) {
              l.Valor AS valor, l.FormaPagamento AS formaPagamento, l.ValorPix AS valorPix,
              l.ComprovanteUrl AS comprovanteUrl, l.MesReferencia AS mesReferencia, l.FechamentoId AS fechamentoId,
              l.ConciliacaoId AS conciliacaoId, l.Status AS status, l.MotivoCancelamento AS motivoCancelamento,
+             l.Origem AS origem, l.StatusConfirmacao AS statusConfirmacao, l.MotivoRejeicaoConfirmacao AS motivoRejeicaoConfirmacao,
              CONVERT(varchar(33), l.CriadoEm, 126) AS criadoEm
       FROM LancamentosTesouraria l
       JOIN Congregacoes c ON c.CongregacaoId = l.CongregacaoId
       LEFT JOIN Dizimistas d ON d.DizimistaId = l.DizimistaId
       LEFT JOIN CategoriasEntrada cat ON cat.Codigo = l.Tipo
       WHERE ${where}
-      ORDER BY l.TermoNumero DESC
+      ORDER BY ISNULL(l.TermoNumero, 999999999) DESC, l.LancamentoId DESC
     `);
     const lancamentos = result.recordset
       .filter(l => auth.estaNoEscopo(usuario, l.congregacaoNome))
@@ -274,6 +286,10 @@ module.exports = async function (context, req) {
     }
     if (registro.Status === "CANCELADO") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este lançamento já está cancelado." } };
+      return;
+    }
+    if (registro.Origem === "AUTOLANCAMENTO" && registro.StatusConfirmacao === "CONFIRMADO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este lançamento já foi confirmado pelo tesoureiro — é o comprovante do dizimista (equivalente à folhinha do bloco físico) e não pode mais ser cancelado ou excluído." } };
       return;
     }
     await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), motivo.trim()).input("canceladoPor", sql.Int, usuario.membroId)

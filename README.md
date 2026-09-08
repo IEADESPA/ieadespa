@@ -1731,7 +1731,7 @@ existe em cima de normas e controles reconhecidos:
 | Chart of Accounts (Plano de Contas) | NetSuite, Priority, Codejig | v4.2 |
 | ITG 2002 (CFC, Res. 1.409/12) — **norma legal brasileira obrigatória** | CFC, CRCSC | v4.2, v4.9 |
 | Cost allocation methods (valida o rateio 40/60 já existente) | BPM, CFO Selections, Onetribe | já implementado (v4.1) |
-| Doação online, recorrente e comprovante anual | Pushpay, Tithe.ly | v4.3 |
+| Doação online/recorrente (Pushpay, Tithe.ly) — **descartada** (sem gateway de pagamento); redesenhada como autolançamento + confirmação do Tesoureiro | Pushpay, Tithe.ly | v4.3 |
 | Campanhas de arrecadação com meta (pledge campaigns) | Tithe.ly | v4.4 |
 | Accounts Payable + segregação de funções (maker-checker) | Ramp, ApprovalMax, Settle, PBMares, Council of Nonprofits | v4.5, seção 2.7 |
 | Vendor Master Data (Cadastro de Fornecedores) | NetSuite, Eftsure, Corpay, Xelix | v4.5 |
@@ -1786,24 +1786,53 @@ existir antes do Orçamento (v4.8) e das Demonstrações (v4.9).
   conferência pelo próprio sistema, não presa a uma tarefa manual
   separada.
 
-#### v4.3 — Doação Online, Recorrente e Comprovante Anual
+#### v4.3 — Autolançamento do Dizimista com Confirmação do Tesoureiro
 
-Pergunta direta do usuário ("tem mais coisa que pode ser feita?") — sim:
-todo software de ponta pra igreja (Pushpay, Tithe.ly) tem essa peça e
-ainda não existia aqui. Extensão natural do autoatendimento do dizimista
-já entregue em v4.1.1 (`MeusLancamentosTesouraria`) — de "ver o que já
-dei" pra "poder dar direto pelo sistema".
+Pergunta direta do usuário ("tem mais coisa que pode ser feita?") levou à
+proposta original de doação via PIX/cartão direto pelo Meu Painel — **mas
+o próprio usuário barrou essa ideia**: a igreja não vai instalar/operar um
+sistema de gerenciamento de pagamentos (gateway). Redesenhada em cima de
+como o processo físico já funciona hoje: o bloco de dízimo é numerado
+(Termo nº), e essa numeração é a prova que o dizimista guarda — mesmo que
+alguém apague o registro no sistema (por mais que haja auditoria), a folha
+física continua existindo enquanto a pessoa a guardar. O objetivo desta
+versão é dar ao dizimista o equivalente digital dessa prova, sem nunca
+processar pagamento nenhum:
 
-- [ ] Doação via PIX/cartão direto pelo Meu Painel do membro — vira um
-      `LancamentoTesouraria` automático (mesmo `TermoNumero` sequencial de
-      sempre), sem o Tesoureiro precisar digitar de novo o que a pessoa já
-      fez sozinha.
-- [ ] Doação recorrente agendada (ex: "R$200/mês automaticamente") — o
-      próprio dizimista configura, cancela ou pausa a qualquer momento.
-- [ ] **Comprovante Anual de Contribuições** (gerado automaticamente,
-      calculado na leitura a partir do histórico do ano) — documento que
-      o dizimista pode baixar pra uso próprio; recurso citado
-      explicitamente como básico em qualquer plataforma de doação séria.
+- [x] **Autolançamento** (`AutolancamentoTesouraria`, rota pública por
+      matrícula, mesmo padrão de auto-atendimento de
+      `MeusLancamentosTesouraria`/`MeusDadosLGPD`) — o dizimista REGISTRA
+      que já deu um dízimo/oferta (dinheiro ou PIX, fora do sistema; o
+      sistema não processa nada) escolhendo categoria, valor, forma e mês.
+      Nasce com `Origem='AUTOLANCAMENTO'`, `StatusConfirmacao='PENDENTE'`
+      e **sem** Termo nº (`TermoNumero` agora é `NULL`-ável).
+- [x] **Confirmação do Tesoureiro Local** (`ConfirmarAutolancamentoTesouraria`)
+      — o Tesoureiro só confirma depois de efetivamente ver o
+      dinheiro/PIX cair. **O Termo nº só é gerado nesse instante**
+      (`shared/tesouraria.js::proximoNumeroTermo`), nunca no
+      autolançamento em si — assim nenhum número de termo fica "furado"
+      por algo que a pessoa disse que deu mas nunca chegou a ser
+      confirmado. Rejeitar registra `MotivoRejeicaoConfirmacao` sem gerar
+      termo.
+- [x] **Comprovante = o próprio registro confirmado, sem gerar arquivo
+      separado** (ajuste pedido explicitamente pelo usuário): uma vez
+      `CONFIRMADO`, o lançamento aparece em Minhas Contribuições e o
+      `DELETE` de `GestaoLancamentosTesouraria` passa a recusar
+      permanentemente cancelá-lo — é o equivalente digital da folhinha do
+      bloco físico, que nunca desaparece enquanto existir. Lançamentos de
+      origem `TESOUREIRO` (digitados direto pelo Tesoureiro) continuam
+      com o cancelamento-com-motivo de sempre (v4.1.1), sem mudança.
+- [x] `FecharMesTesouraria` passa a exigir toda pendência de autolançamento
+      resolvida (confirmada ou rejeitada) antes de fechar o mês, e soma
+      só o que está `StatusConfirmacao='CONFIRMADO'` — dinheiro que
+      ninguém confirmou ter recebido não entra no rateio 40/60.
+- **Descartado (decisão explícita do usuário, 2026):** doação via PIX/
+  cartão processada pelo próprio sistema e doação recorrente agendada —
+  isso exigiria integrar um gateway de pagamento, o que a igreja decidiu
+  não fazer. O Comprovante Anual de Contribuições (documento anual para
+  uso do dizimista, calculado na leitura a partir do histórico já
+  confirmado) segue como ideia válida e pode voltar como uma versão
+  futura, sem depender de gateway nenhum.
 
 #### v4.4 — Campanhas de Arrecadação com Meta
 

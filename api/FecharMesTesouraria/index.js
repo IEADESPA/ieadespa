@@ -43,15 +43,28 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // Só lançamentos ATIVOS entram na soma — um cancelado (folha arrancada do
-  // bloco) preserva o Termo nº pro relatório, mas não conta no total.
+  // v4.3: um autolançamento do dizimista ainda PENDENTE de confirmação do
+  // Tesoureiro não pode travar o mês nem entrar no total sem confirmação —
+  // fecha o mês só depois de toda pendência resolvida (confirmada ou rejeitada).
+  const pendentes = await pool.request()
+    .input("congregacaoId", sql.Int, congregacaoId).input("mesReferencia", sql.Char(7), mesReferencia)
+    .query(`SELECT COUNT(*) AS quantidade FROM LancamentosTesouraria
+            WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia AND StatusConfirmacao = 'PENDENTE'`);
+  if (pendentes.recordset[0].quantidade > 0) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Há autolançamento(s) de dizimista aguardando confirmação neste mês — confirme ou rejeite antes de fechar." } };
+    return;
+  }
+
+  // Só lançamentos ATIVOS e CONFIRMADOS entram na soma — um cancelado (folha
+  // arrancada do bloco) preserva o Termo nº pro relatório, mas não conta no
+  // total; um autolançamento rejeitado nunca chegou a ser recebido de fato.
   // Categoria não importa aqui: Dízimo, Oferta, Entrada de Departamento,
   // Revista, Congresso etc. entram todas do mesmo jeito (CategoriasEntrada,
   // v4.1.5) — a supervisão é este próprio fechamento + a liberação da Geral.
   const soma = await pool.request()
     .input("congregacaoId", sql.Int, congregacaoId).input("mesReferencia", sql.Char(7), mesReferencia)
     .query(`SELECT ISNULL(SUM(Valor), 0) AS total, COUNT(*) AS quantidade FROM LancamentosTesouraria
-            WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia AND Status = 'ATIVO'`);
+            WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia AND Status = 'ATIVO' AND StatusConfirmacao = 'CONFIRMADO'`);
   const { total: totalRecebido, quantidade } = soma.recordset[0];
   if (quantidade === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não há lançamentos ativos neste mês para fechar." } };

@@ -148,6 +148,7 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .badge-status.badge-licenca { background-color: var(--cor-primaria); }
 .badge-status.badge-inativo { background-color: #8a93a1; }
 .badge-status.badge-desligado { background-color: var(--cor-erro); }
+.badge-status.badge-pendente { background-color: #B8860B; }
 
 .tag-pendente {
   display: inline-block; background: var(--cor-secundaria-suave); color: #7A6110;

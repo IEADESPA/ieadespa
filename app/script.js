@@ -412,11 +412,22 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); carregarMinhaFoto(); }
   if (sub === "dados") { carregarMeusDadosForm(); carregarMinhasSolicitacoesEdicao(); }
   if (sub === "vinculos") { carregarOpcoesMeuVinculoTipo(); carregarMeusVinculos(); }
-  if (sub === "contribuicoes") carregarMinhasContribuicoes();
+  if (sub === "contribuicoes") { carregarOpcoesCategoriasEntrada(); prepararFormAutolancamento(); carregarMinhasContribuicoes(); }
 }
 
 // ---- MINHAS CONTRIBUIÇÕES (v4.1.1) — transparência: se a matrícula estiver
 // vinculada a um cadastro de Dizimista, mostra o histórico de lançamentos.
+// v4.3: cada linha também mostra se é um autolançamento aguardando
+// confirmação do Tesoureiro (sem Termo nº ainda) ou já confirmado/rejeitado.
+function badgeStatusContribuicao(c) {
+  if (c.status === "CANCELADO") return "<span class='badge-status badge-desligado'>Cancelado</span>";
+  if (c.origem === "AUTOLANCAMENTO") {
+    if (c.statusConfirmacao === "PENDENTE") return "<span class='badge-status badge-pendente'>Aguardando confirmação</span>";
+    if (c.statusConfirmacao === "REJEITADO") return `<span class='badge-status badge-desligado' title="${c.motivoRejeicaoConfirmacao || ''}">Rejeitado</span>`;
+  }
+  return "<span class='badge-status badge-ativo'>Confirmado</span>";
+}
+
 async function carregarMinhasContribuicoes() {
   if (!authMatricula) return;
   const cx = document.getElementById("cxMinhasContribuicoes");
@@ -434,14 +445,57 @@ async function carregarMinhasContribuicoes() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Termo</th><th>Congregação</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Status</th></tr></thead><tbody>`;
   contribuicoes.forEach(c => {
     html += `<tr>
-      <td>${c.mesReferencia}</td><td>${c.termoNumero}</td><td>${c.congregacaoNome}</td>
+      <td>${c.mesReferencia}</td><td>${c.termoNumero || "—"}</td><td>${c.congregacaoNome}</td>
       <td>${rotuloTipoLancamento(c.tipo)}</td><td>R$ ${Number(c.valor).toFixed(2)}</td>
       <td>${c.formaPagamento}</td>
-      <td>${c.status === "CANCELADO" ? "<span class='badge-status badge-desligado'>Cancelado</span>" : "<span class='badge-status badge-ativo'>Ativo</span>"}</td>
+      <td>${badgeStatusContribuicao(c)}</td>
     </tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// ---- AUTOLANÇAMENTO DO DIZIMISTA (v4.3) — não é pagamento pelo sistema,
+// é só o registro de algo já feito fora dele; o Tesoureiro Local confirma
+// depois de ver o dinheiro/PIX cair, e só aí nasce o Termo nº.
+function prepararFormAutolancamento() {
+  const mes = document.getElementById("autolancMes");
+  if (mes && !mes.value) mes.value = mesAtualFinanceiro();
+  const forma = document.getElementById("autolancForma");
+  const valorPix = document.getElementById("autolancValorPix");
+  if (forma && !forma.dataset.montado) {
+    forma.addEventListener("change", () => {
+      valorPix.style.display = forma.value === "MISTO" ? "inline-block" : "none";
+    });
+    forma.dataset.montado = "1";
+  }
+}
+
+async function registrarAutolancamentoAcao() {
+  const tipo = document.getElementById("autolancTipo").value;
+  const valor = document.getElementById("autolancValor").value;
+  const formaPagamento = document.getElementById("autolancForma").value;
+  const valorPix = document.getElementById("autolancValorPix").value;
+  const mesReferencia = document.getElementById("autolancMes").value;
+  const descricao = document.getElementById("autolancDescricao").value;
+  const resultado = document.getElementById("resultadoAutolancamento");
+  if (!valor || !mesReferencia) {
+    resultado.textContent = "Informe o valor e o mês.";
+    return;
+  }
+  const body = { tipo, valor: Number(valor), formaPagamento, mesReferencia, descricao: descricao || undefined };
+  if (formaPagamento === "MISTO") body.valorPix = Number(valorPix);
+  const res = await fetch(`${API_BASE}/autolancamento-tesouraria/${authMatricula}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const dados = await res.json();
+  resultado.textContent = dados.mensagem;
+  if (dados.sucesso) {
+    document.getElementById("autolancValor").value = "";
+    document.getElementById("autolancValorPix").value = "";
+    document.getElementById("autolancDescricao").value = "";
+    carregarMinhasContribuicoes();
+  }
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
@@ -510,12 +564,14 @@ async function carregarOpcoesCategoriasEntrada() {
     const res = await fetch(`${API_BASE}/catalogos/categoriasEntrada`);
     _categoriasEntradaCache = await res.json();
   }
-  const select = document.getElementById("financeiroLancTipo");
-  if (select && !select.dataset.montado) {
-    select.innerHTML = _categoriasEntradaCache.filter(c => c.ativa !== false)
-      .map(c => `<option value="${c.codigo}">${c.nome}</option>`).join("");
-    select.dataset.montado = "1";
-  }
+  ["financeiroLancTipo", "autolancTipo"].forEach(idSelect => {
+    const select = document.getElementById(idSelect);
+    if (select && !select.dataset.montado) {
+      select.innerHTML = _categoriasEntradaCache.filter(c => c.ativa !== false)
+        .map(c => `<option value="${c.codigo}">${c.nome}</option>`).join("");
+      select.dataset.montado = "1";
+    }
+  });
 }
 
 function nomeCategoriaEntrada(codigo) {
@@ -674,20 +730,34 @@ async function carregarLancamentosTesouraria() {
       ? ` <a href="${l.comprovanteUrl}" target="_blank" rel="noopener">📎</a>`
       : (l.conciliacaoId ? ` <span class="badge-status badge-ativo">conciliado em lote</span>`
         : (l.comprovantePendente ? ` <span class="badge-status badge-licenca">⚠️ comprovante pendente</span>` : ""));
-    const statusTag = l.status === "CANCELADO"
-      ? `<span class="badge-status badge-desligado">CANCELADO</span><br /><small>${l.motivoCancelamento || ""}</small>`
-      : `<span class="badge-status badge-ativo">Ativo</span>`;
+    // v4.3 — autolançamento do dizimista aguardando confirmação do
+    // Tesoureiro nunca tem Termo nº ainda (só nasce na confirmação).
+    let statusTag;
+    if (l.status === "CANCELADO") {
+      statusTag = `<span class="badge-status badge-desligado">CANCELADO</span><br /><small>${l.motivoCancelamento || ""}</small>`;
+    } else if (l.origem === "AUTOLANCAMENTO" && l.statusConfirmacao === "PENDENTE") {
+      statusTag = `<span class="badge-status badge-pendente">Autolançamento — aguardando confirmação</span>`;
+    } else if (l.origem === "AUTOLANCAMENTO" && l.statusConfirmacao === "REJEITADO") {
+      statusTag = `<span class="badge-status badge-desligado">Autolançamento rejeitado</span><br /><small>${l.motivoRejeicaoConfirmacao || ""}</small>`;
+    } else if (l.origem === "AUTOLANCAMENTO") {
+      statusTag = `<span class="badge-status badge-ativo">Confirmado (comprovante do dizimista)</span>`;
+    } else {
+      statusTag = `<span class="badge-status badge-ativo">Ativo</span>`;
+    }
     // v4.1.2 — "contabilizado" (dentro de um Fechamento) vs "pendente" (mês
     // ainda aberto) era invisível antes; pedido explícito pra deixar claro.
     const contabilizacaoTag = l.contabilizado
       ? `<span class="badge-status badge-ativo">Contabilizado</span>`
       : `<span class="badge-status badge-licenca">Pendente de fechamento</span>`;
-    // v4.1.4 — "Outra entrada" exige aprovação da Tesouraria Geral antes de
-    // contar; Dízimo/Oferta não passam por isso (NAO_APLICAVEL).
     const podeConciliar = !l.fechamentoId && l.status === "ATIVO" && l.comprovantePendente && ["PIX", "MISTO"].includes(l.formaPagamento);
     const valorPixParcela = l.formaPagamento === "MISTO" ? l.valorPix : l.valor;
+    const pendenteConfirmacao = l.origem === "AUTOLANCAMENTO" && l.statusConfirmacao === "PENDENTE";
+    const confirmadoAutolancamento = l.origem === "AUTOLANCAMENTO" && l.statusConfirmacao === "CONFIRMADO";
     let acoes = "";
-    if (!l.fechamentoId && l.status === "ATIVO") {
+    if (pendenteConfirmacao && l.status === "ATIVO") {
+      acoes = `<button class="btn-link" onclick="confirmarAutolancamentoAcao(${l.lancamentoId}, 'CONFIRMAR')">✅ Confirmar</button>
+        <button class="btn-link btn-link-perigo" onclick="confirmarAutolancamentoAcao(${l.lancamentoId}, 'REJEITAR')">Rejeitar</button>`;
+    } else if (!l.fechamentoId && l.status === "ATIVO" && !confirmadoAutolancamento) {
       acoes = `<button class="btn-link btn-link-perigo" onclick="cancelarLancamentoTesourariaAcao(${l.lancamentoId}, ${l.termoNumero})">Cancelar</button>`;
       if (l.comprovantePendente) {
         acoes += ` <button class="btn-link" onclick="anexarComprovanteTesourariaAcao(${l.lancamentoId})">Anexar comprovante</button>`;
@@ -695,7 +765,7 @@ async function carregarLancamentosTesouraria() {
     }
     html += `<tr>
       <td>${podeConciliar ? `<input type="checkbox" class="chk-conciliar-pix" value="${l.lancamentoId}" data-valor="${valorPixParcela}" onchange="recalcularTotalConciliacaoPix()" />` : ""}</td>
-      <td>${l.termoNumero}</td>
+      <td>${l.termoNumero || "—"}</td>
       <td>${l.dizimistaNome || l.nomeAvulso || l.descricao}</td>
       <td>${rotuloTipoLancamento(l)}</td>
       <td>R$ ${Number(l.valor).toFixed(2)}</td>
@@ -785,6 +855,23 @@ async function cancelarLancamentoTesourariaAcao(lancamentoId, termoNumero) {
   if (!motivo.trim()) { mostrarToast("Informe o motivo do cancelamento.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/tesouraria-lancamentos/${lancamentoId}`, {
     method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarLancamentosTesouraria();
+}
+
+// v4.3 — o Tesoureiro Local confirma (viu o dinheiro/PIX cair) ou rejeita
+// um autolançamento do dizimista. O Termo nº só é gerado na confirmação.
+async function confirmarAutolancamentoAcao(lancamentoId, acaoConfirmacao) {
+  let motivo;
+  if (acaoConfirmacao === "REJEITAR") {
+    motivo = await pedirTexto("Motivo da rejeição", "Ex: valor não confere com o recebido");
+    if (motivo === null) return;
+    if (!motivo.trim()) { mostrarToast("Informe o motivo da rejeição.", "erro"); return; }
+  }
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-autolancamento-confirmar/${lancamentoId}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: acaoConfirmacao, motivo })
   });
   const data = await res.json();
   avisarResultado(data);

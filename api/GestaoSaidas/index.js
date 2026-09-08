@@ -1,4 +1,5 @@
-// GestaoSaidas (v4.5, primeira parte)
+// GestaoSaidas (v4.5, primeira parte; segunda parte adiciona duplicidade
+// e 3 cotações)
 // Solicitação de Pagamento → documentação obrigatória (nota fiscal, Reg.
 // Art. 120 §2º) → aprovação por ALÇADA DE VALOR (AlcadasAprovacao: quanto
 // maior o valor, mais aprovadores distintos e de nível territorial mais
@@ -14,9 +15,18 @@
 // Cancelamento nunca é exclusão (mesmo princípio de v4.1.1) — mas uma
 // Saída já PAGA não pode ser cancelada (dinheiro já saiu; corrige-se com
 // um lançamento de ajuste auditado, não reescrevendo histórico).
+// v4.5 (segunda parte):
+//  - "possivelDuplicidade" é CALCULADO NA LEITURA (mesmo fornecedor +
+//    mesmo valor + janela de 7 dias, status ainda ativo) — vira um alerta
+//    visível pra quem aprova, nunca um bloqueio automático (pode ser uma
+//    parcela legítima repetida).
+//  - Acima do valor de referência configurável (ParametrosSaida), a
+//    solicitação exige 3 cotações anexadas (Reg. Art. 62) — sem isso nem
+//    entra no sistema.
 // GET  /api/saidas?congregacaoId=&status= -> lista dentro do escopo do usuário
-// GET  /api/saidas/{id} -> detalhe + aprovações já registradas
-// POST /api/saidas -> { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId?, documentoFiscalBase64, mimeType }
+// GET  /api/saidas/{id} -> detalhe + aprovações + cotações já registradas
+// POST /api/saidas -> { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId?,
+//        documentoFiscalBase64, mimeType, cotacoes?: [{fornecedorNome, valor, documentoBase64, mimeType}] }
 // PUT  /api/saidas/{id} -> { acao: 'APROVAR'|'REJEITAR'|'PAGAR'|'CANCELAR', motivo?, comprovanteBase64?, mimeType? }
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
@@ -62,7 +72,13 @@ module.exports = async function (context, req) {
            s.Status AS status, s.SolicitadoPor AS solicitadoPor, ms.Nome AS solicitadoPorNome,
            CONVERT(varchar(33), s.SolicitadoEm, 126) AS solicitadoEm, s.MotivoRejeicao AS motivoRejeicao,
            s.PagoPor AS pagoPor, CONVERT(varchar(33), s.PagoEm, 126) AS pagoEm,
-           s.MotivoCancelamento AS motivoCancelamento
+           s.MotivoCancelamento AS motivoCancelamento,
+           CASE WHEN EXISTS (
+             SELECT 1 FROM SaidasTesouraria s2
+             WHERE s2.SaidaId <> s.SaidaId AND s2.FornecedorId = s.FornecedorId AND s2.Valor = s.Valor
+               AND s2.Status NOT IN ('REJEITADA', 'CANCELADA')
+               AND ABS(DATEDIFF(DAY, s2.SolicitadoEm, s.SolicitadoEm)) <= 7
+           ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS possivelDuplicidade
     FROM SaidasTesouraria s
     JOIN Congregacoes c ON c.CongregacaoId = s.CongregacaoId
     JOIN Fornecedores f ON f.FornecedorId = s.FornecedorId
@@ -78,7 +94,10 @@ module.exports = async function (context, req) {
     if (congregacaoId) { request.input("congregacaoId", sql.Int, congregacaoId); where += " AND s.CongregacaoId = @congregacaoId"; }
     if (status) { request.input("status", sql.NVarChar(20), status); where += " AND s.Status = @status"; }
     const result = await request.query(`${SELECT_BASE} WHERE ${where} ORDER BY s.SolicitadoEm DESC`);
-    const saidas = result.recordset.filter(s => auth.estaNoEscopo(usuario, s.congregacaoNome));
+    const saidas = result.recordset.filter(s => auth.estaNoEscopo(usuario, s.congregacaoNome)).map(s => Object.assign({}, s, {
+      documentoFiscalUrl: storage.urlDocumentoComSas(s.documentoFiscalUrl),
+      comprovantePagamentoUrl: s.comprovantePagamentoUrl ? storage.urlDocumentoComSas(s.comprovantePagamentoUrl) : null
+    }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: saidas };
     return;
   }
@@ -100,10 +119,17 @@ module.exports = async function (context, req) {
       SELECT a.AprovadoPor AS aprovadoPor, m.Nome AS aprovadoPorNome, CONVERT(varchar(33), a.AprovadoEm, 126) AS aprovadoEm
       FROM SaidaAprovacoes a JOIN MembroReferencia m ON m.MembroId = a.AprovadoPor WHERE a.SaidaId = @id
     `);
+    const cotacoes = await pool.request().input("id", sql.Int, id).query(`
+      SELECT CotacaoId AS cotacaoId, FornecedorNome AS fornecedorNome, Valor AS valor, DocumentoUrl AS documentoUrl
+      FROM SaidaCotacoes WHERE SaidaId = @id ORDER BY Valor
+    `);
     context.res = {
       status: 200, headers: { "Content-Type": "application/json" },
       body: Object.assign({}, saida, {
+        documentoFiscalUrl: storage.urlDocumentoComSas(saida.documentoFiscalUrl),
+        comprovantePagamentoUrl: saida.comprovantePagamentoUrl ? storage.urlDocumentoComSas(saida.comprovantePagamentoUrl) : null,
         aprovacoes: aprovacoes.recordset,
+        cotacoes: cotacoes.recordset.map(c => Object.assign({}, c, { documentoUrl: storage.urlDocumentoComSas(c.documentoUrl) })),
         alcada: alcada.recordset[0] ? { nivelMinimoAprovador: alcada.recordset[0].NivelMinimoAprovador, quantidadeAprovadores: alcada.recordset[0].QuantidadeAprovadores } : null
       })
     };
@@ -111,7 +137,7 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId, documentoFiscalBase64, mimeType } = req.body || {};
+    const { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId, documentoFiscalBase64, mimeType, cotacoes } = req.body || {};
     if (!congregacaoId || !fornecedorId || !tipo || !descricao || !descricao.trim() || !valor) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: congregacaoId, fornecedorId, tipo, descricao, valor." } };
       return;
@@ -122,6 +148,15 @@ module.exports = async function (context, req) {
     }
     if (!documentoFiscalBase64 || !mimeType) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Anexe a nota fiscal/recibo — documentação obrigatória desde a solicitação (Reg. Art. 120 §2º)." } };
+      return;
+    }
+    // v4.5 (segunda parte) — acima do valor de referência (configurável,
+    // Reg. Art. 62), a solicitação exige 3 cotações já anexadas.
+    const parametros = await pool.request().query(`SELECT ValorReferenciaCotacoes FROM ParametrosSaida WHERE ParametroId = 1`);
+    const valorReferencia = parametros.recordset[0] ? Number(parametros.recordset[0].ValorReferenciaCotacoes) : Infinity;
+    const cotacoesValidas = Array.isArray(cotacoes) ? cotacoes.filter(c => c && c.fornecedorNome && c.valor && c.documentoBase64 && c.mimeType) : [];
+    if (Number(valor) >= valorReferencia && cotacoesValidas.length < 3) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: `Valores a partir de R$ ${valorReferencia.toFixed(2)} exigem 3 cotações anexadas (Reg. Art. 62) — anexe pelo menos 3.` } };
       return;
     }
     const congNome = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id`);
@@ -165,6 +200,17 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // Verificação de pagamento duplicado (mesmo fornecedor + mesmo valor +
+    // janela de 7 dias) — ALERTA, nunca bloqueio automático (pode ser uma
+    // parcela legítima repetida, ex: aluguel mensal igual todo mês).
+    const duplicidade = await pool.request().input("fornecedorId", sql.Int, fornecedorId).input("valor", sql.Decimal(10, 2), valor)
+      .query(`SELECT COUNT(*) AS total FROM SaidasTesouraria
+              WHERE FornecedorId = @fornecedorId AND Valor = @valor AND Status NOT IN ('REJEITADA', 'CANCELADA')
+                AND SolicitadoEm >= DATEADD(DAY, -7, SYSUTCDATETIME())`);
+    const avisoDuplicidade = duplicidade.recordset[0].total > 0
+      ? " ⚠️ Atenção: já existe outra solicitação para este mesmo fornecedor e valor nos últimos 7 dias — confira antes de aprovar, pode ser pagamento em duplicidade."
+      : "";
+
     const { erro, url } = await validarEUpload(documentoFiscalBase64, mimeType, context);
     if (erro) { context.res = { status: 400, body: { sucesso: false, mensagem: erro } }; return; }
 
@@ -182,11 +228,19 @@ module.exports = async function (context, req) {
               VALUES (@congregacaoId, @fornecedorId, @tipo, @descricao, @valor, @campanhaId, @documentoFiscalUrl, @solicitadoPor)`);
     const saidaId = criada.recordset[0].SaidaId;
 
+    for (const cot of cotacoesValidas) {
+      const uploadCotacao = await validarEUpload(cot.documentoBase64, cot.mimeType, context);
+      if (uploadCotacao.erro) continue; // não derruba a solicitação já criada por uma cotação com arquivo ruim
+      await pool.request().input("saidaId", sql.Int, saidaId).input("fornecedorNome", sql.NVarChar(200), cot.fornecedorNome)
+        .input("valor", sql.Decimal(10, 2), cot.valor).input("documentoUrl", sql.NVarChar(500), uploadCotacao.url)
+        .query(`INSERT INTO SaidaCotacoes (SaidaId, FornecedorNome, Valor, DocumentoUrl) VALUES (@saidaId, @fornecedorNome, @valor, @documentoUrl)`);
+    }
+
     await registrarAuditoria({
       tabela: "SaidasTesouraria", registroId: saidaId, acao: "Solicitou pagamento", usuarioId: usuario.membroId,
-      dadosDepois: { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId: campanhaId || null }
+      dadosDepois: { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId: campanhaId || null, totalCotacoes: cotacoesValidas.length }
     });
-    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Solicitação de pagamento registrada — aguardando aprovação.", saidaId } };
+    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Solicitação de pagamento registrada — aguardando aprovação.${avisoDuplicidade}`, saidaId } };
     return;
   }
 

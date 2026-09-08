@@ -550,8 +550,8 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "planocontas") { montarCatalogosFinanceiro(); return; }
   if (sub === "campanhas") { carregarOpcoesCongregacoesFinanceiro().then(carregarCampanhas); return; }
   if (sub === "saidas") {
-    Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasSaida(), carregarOpcoesFornecedoresSaida(), carregarOpcoesCampanhasSaida()])
-      .then(() => { carregarFornecedores(); carregarSaidas(); });
+    Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasSaida(), carregarOpcoesFornecedoresSaida(), carregarOpcoesCampanhasSaida(), carregarValorReferenciaCotacoes()])
+      .then(() => { carregarFornecedores(); carregarSaidas(); carregarFundosFixos(); });
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -602,7 +602,7 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
@@ -968,6 +968,64 @@ function alternarFormNovaSaida() {
   form.style.display = form.style.display === "none" ? "block" : "none";
 }
 
+// v4.5 (segunda parte) — valor de referência (Reg. Art. 62) a partir do
+// qual uma solicitação exige 3 cotações anexadas. Configurável, nunca
+// hardcoded — carregado de /api/parametros-saida.
+let _valorReferenciaCotacoes = null;
+
+async function carregarValorReferenciaCotacoes() {
+  const res = await fetchProtegido(`${API_BASE}/parametros-saida`);
+  const data = await res.json();
+  _valorReferenciaCotacoes = Number(data.valorReferenciaCotacoes);
+  const texto = document.getElementById("valorReferenciaCotacoesTexto");
+  if (texto) texto.textContent = _valorReferenciaCotacoes.toFixed(2);
+}
+
+function alternarEdicaoValorReferenciaCotacoes() {
+  const input = document.getElementById("novoValorReferenciaCotacoes");
+  const btn = document.getElementById("btnEditarValorReferencia");
+  if (input.style.display === "none") {
+    input.value = _valorReferenciaCotacoes;
+    input.style.display = "inline-block";
+    btn.textContent = "salvar";
+  } else {
+    salvarValorReferenciaCotacoesAcao();
+  }
+}
+
+async function salvarValorReferenciaCotacoesAcao() {
+  const input = document.getElementById("novoValorReferenciaCotacoes");
+  const valor = input.value;
+  if (!valor || Number(valor) <= 0) { mostrarToast("Informe um valor maior que zero.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/parametros-saida`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valorReferenciaCotacoes: Number(valor) })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    input.style.display = "none";
+    document.getElementById("btnEditarValorReferencia").textContent = "editar";
+    carregarValorReferenciaCotacoes();
+  }
+}
+
+function alternarCotacoesSaida() {
+  const valor = Number(document.getElementById("saidaValor").value || 0);
+  const container = document.getElementById("cotacoesSaidaContainer");
+  const linhas = document.getElementById("cotacoesSaidaLinhas");
+  const exige = _valorReferenciaCotacoes != null && valor >= _valorReferenciaCotacoes;
+  container.style.display = exige ? "block" : "none";
+  if (exige && !linhas.dataset.montado) {
+    linhas.innerHTML = [1, 2, 3].map(n => `
+      <div class="barra-lista">
+        <input type="text" id="cotacaoFornecedorNome_${n}" placeholder="Fornecedor da cotação ${n}" />
+        <input type="number" id="cotacaoValor_${n}" placeholder="Valor (R$)" min="0.01" step="0.01" style="max-width:140px;" />
+        <input type="file" id="cotacaoDocumento_${n}" accept="image/jpeg,image/png,application/pdf" />
+      </div>`).join("");
+    linhas.dataset.montado = "1";
+  }
+}
+
 async function solicitarSaidaAcao() {
   const congregacaoId = document.getElementById("saidaCongregacao").value;
   const fornecedorId = document.getElementById("saidaFornecedor").value;
@@ -987,10 +1045,26 @@ async function solicitarSaidaAcao() {
     return;
   }
 
+  let cotacoes;
+  if (_valorReferenciaCotacoes != null && Number(valor) >= _valorReferenciaCotacoes) {
+    cotacoes = [];
+    for (const n of [1, 2, 3]) {
+      const nome = document.getElementById(`cotacaoFornecedorNome_${n}`).value.trim();
+      const valorCotacao = document.getElementById(`cotacaoValor_${n}`).value;
+      const arquivoCotacao = document.getElementById(`cotacaoDocumento_${n}`).files[0];
+      if (!nome || !valorCotacao || !arquivoCotacao) {
+        resultado.textContent = `Preencha as 3 cotações completas (faltou a cotação ${n}).`;
+        return;
+      }
+      cotacoes.push({ fornecedorNome: nome, valor: Number(valorCotacao), documentoBase64: await arquivoParaBase64(arquivoCotacao), mimeType: arquivoCotacao.type });
+    }
+  }
+
   const body = {
     congregacaoId, fornecedorId, tipo, descricao, valor: Number(valor),
     campanhaId: (categoria && categoria.tipoFundo === "RESTRITO") ? campanhaId : undefined,
-    documentoFiscalBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type
+    documentoFiscalBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type,
+    cotacoes
   };
   const res = await fetchProtegido(`${API_BASE}/saidas`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
@@ -1002,6 +1076,9 @@ async function solicitarSaidaAcao() {
     document.getElementById("saidaDescricao").value = "";
     document.getElementById("saidaValor").value = "";
     document.getElementById("saidaDocumentoFiscal").value = "";
+    document.getElementById("cotacoesSaidaContainer").style.display = "none";
+    document.getElementById("cotacoesSaidaLinhas").innerHTML = "";
+    document.getElementById("cotacoesSaidaLinhas").dataset.montado = "";
     document.getElementById("formNovaSaida").style.display = "none";
     carregarSaidas();
   }
@@ -1029,7 +1106,7 @@ async function carregarSaidas() {
   saidas.forEach(s => {
     html += `<tr>
       <td>${s.congregacaoNome}</td><td>${s.fornecedorNome}</td><td>${s.categoriaNome}</td>
-      <td>R$ ${Number(s.valor).toFixed(2)}</td><td>${badgeStatusSaida(s.status)}</td>
+      <td>R$ ${Number(s.valor).toFixed(2)}${s.possivelDuplicidade ? " ⚠️" : ""}</td><td>${badgeStatusSaida(s.status)}</td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheSaidaAcao(${s.saidaId})">Ver detalhe</button></td>
     </tr>`;
   });
@@ -1048,6 +1125,14 @@ async function verDetalheSaidaAcao(saidaId) {
     <p class="subtitle">Solicitado por ${s.solicitadoPorNome} em ${new Date(s.solicitadoEm).toLocaleString("pt-BR")}</p>
     <p class="subtitle"><a href="${s.documentoFiscalUrl}" target="_blank" rel="noopener">📎 Nota fiscal / recibo</a>${s.comprovantePagamentoUrl ? ` — <a href="${s.comprovantePagamentoUrl}" target="_blank" rel="noopener">📎 Comprovante de pagamento</a>` : ""}</p>`;
 
+  if (s.possivelDuplicidade) {
+    html += `<p class="subtitle">⚠️ <strong>Possível duplicidade</strong> — já existe outra solicitação com o mesmo fornecedor e valor nos últimos 7 dias. Confira antes de aprovar.</p>`;
+  }
+  if (Array.isArray(s.cotacoes) && s.cotacoes.length > 0) {
+    html += `<p class="subtitle">Cotações anexadas (Reg. Art. 62):</p><ul>` +
+      s.cotacoes.map(c => `<li>${c.fornecedorNome} — R$ ${Number(c.valor).toFixed(2)} — <a href="${c.documentoUrl}" target="_blank" rel="noopener">📎 ver</a></li>`).join("") +
+      `</ul>`;
+  }
   if (s.motivoRejeicao) html += `<p class="subtitle">Motivo da rejeição: ${s.motivoRejeicao}</p>`;
   if (s.motivoCancelamento) html += `<p class="subtitle">Motivo do cancelamento: ${s.motivoCancelamento}</p>`;
 
@@ -1113,6 +1198,127 @@ async function cancelarSaidaAcao(saidaId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) { carregarSaidas(); verDetalheSaidaAcao(saidaId); }
+}
+
+// ---- FUNDO FIXO DE CAIXA (v4.5, segunda parte) — petty cash: teto de
+// valor + custodiante responsável, saldo sempre calculado (reposições
+// menos despesas), nunca marcado manualmente.
+function alternarFormNovoFundoFixo() {
+  const form = document.getElementById("formNovoFundoFixo");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function criarFundoFixoAcao() {
+  const congregacaoId = document.getElementById("fundoFixoCongregacao").value;
+  const valorTeto = document.getElementById("fundoFixoValorTeto").value;
+  const custodiantePor = document.getElementById("fundoFixoCustodianteMatricula").value;
+  const resultado = document.getElementById("resultadoNovoFundoFixo");
+  if (!congregacaoId || !valorTeto || !custodiantePor) {
+    resultado.textContent = "Preencha congregação, teto e matrícula do custodiante.";
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/fundos-fixos`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ congregacaoId, valorTeto: Number(valorTeto), custodiantePor: Number(custodiantePor) })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("fundoFixoValorTeto").value = "";
+    document.getElementById("fundoFixoCustodianteMatricula").value = "";
+    document.getElementById("formNovoFundoFixo").style.display = "none";
+    carregarFundosFixos();
+  }
+}
+
+async function carregarFundosFixos() {
+  const container = document.getElementById("resultadoFundosFixos");
+  const res = await fetchProtegido(`${API_BASE}/fundos-fixos`);
+  const fundos = await res.json();
+  if (!Array.isArray(fundos) || fundos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum Fundo Fixo de Caixa cadastrado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Custodiante</th><th>Teto</th><th>Saldo atual</th><th>Status</th><th></th></tr></thead><tbody>`;
+  fundos.forEach(f => {
+    html += `<tr>
+      <td>${f.congregacaoNome}</td><td>${f.custodianteNome}</td>
+      <td>R$ ${Number(f.valorTeto).toFixed(2)}</td><td>R$ ${Number(f.saldoAtual).toFixed(2)}</td>
+      <td><span class="badge-status ${f.status === "ATIVO" ? "badge-ativo" : "badge-inativo"}">${f.status}</span></td>
+      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheFundoFixoAcao(${f.fundoId})">Ver detalhe</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function verDetalheFundoFixoAcao(fundoId) {
+  const container = document.getElementById("detalheFundoFixo");
+  const res = await fetchProtegido(`${API_BASE}/fundos-fixos/${fundoId}`);
+  const f = await res.json();
+  if (f.sucesso === false) { container.innerHTML = `<p class="subtitle">${f.mensagem}</p>`; return; }
+
+  const resMov = await fetchProtegido(`${API_BASE}/fundos-fixos/${fundoId}/movimentos`);
+  const movimentos = await resMov.json();
+
+  let html = `<hr /><h4>${f.congregacaoNome} — custodiante: ${f.custodianteNome}</h4>
+    <p class="subtitle">Teto: R$ ${Number(f.valorTeto).toFixed(2)} — Saldo atual: R$ ${Number(f.saldoAtual).toFixed(2)}</p>`;
+
+  if (f.status === "ATIVO") {
+    html += `
+      <div class="barra-lista">
+        <select id="fundoFixoMovTipo_${fundoId}">
+          <option value="DESPESA">Despesa</option>
+          <option value="REPOSICAO">Reposição</option>
+        </select>
+        <input type="number" id="fundoFixoMovValor_${fundoId}" placeholder="Valor (R$)" min="0.01" step="0.01" style="max-width:140px;" />
+      </div>
+      <div class="input-group">
+        <input type="text" id="fundoFixoMovDescricao_${fundoId}" placeholder="Descrição" />
+      </div>
+      <div class="input-group">
+        <label>Recibo / comprovante (obrigatório):</label>
+        <input type="file" id="fundoFixoMovDocumento_${fundoId}" accept="image/jpeg,image/png,application/pdf" />
+      </div>
+      <button class="btn-confirmar" style="width:auto;" onclick="registrarMovimentoFundoFixoAcao(${fundoId})">Registrar Movimento</button>
+      <p id="resultadoMovimentoFundoFixo_${fundoId}" class="subtitle"></p>`;
+  }
+
+  html += `<h4 style="margin:16px 0 8px; color: var(--cor-primaria);">Histórico</h4>`;
+  if (!Array.isArray(movimentos) || movimentos.length === 0) {
+    html += "<p class='subtitle'>Nenhum movimento registrado ainda.</p>";
+  } else {
+    html += `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Valor</th><th>Descrição</th><th>Registrado por</th><th></th></tr></thead><tbody>`;
+    movimentos.forEach(m => {
+      html += `<tr>
+        <td>${m.tipo === "DESPESA" ? "Despesa" : "Reposição"}</td><td>R$ ${Number(m.valor).toFixed(2)}</td>
+        <td>${m.descricao}</td><td>${m.registradoPorNome}</td>
+        <td><a href="${m.documentoUrl}" target="_blank" rel="noopener">📎</a></td>
+      </tr>`;
+    });
+    html += "</tbody></table>";
+  }
+  container.innerHTML = html;
+}
+
+async function registrarMovimentoFundoFixoAcao(fundoId) {
+  const tipo = document.getElementById(`fundoFixoMovTipo_${fundoId}`).value;
+  const valor = document.getElementById(`fundoFixoMovValor_${fundoId}`).value;
+  const descricao = document.getElementById(`fundoFixoMovDescricao_${fundoId}`).value.trim();
+  const arquivo = document.getElementById(`fundoFixoMovDocumento_${fundoId}`).files[0];
+  const resultado = document.getElementById(`resultadoMovimentoFundoFixo_${fundoId}`);
+  if (!valor || !descricao || !arquivo) {
+    resultado.textContent = "Preencha o valor, a descrição, e anexe o recibo/comprovante.";
+    return;
+  }
+  const body = { tipo, valor: Number(valor), descricao, documentoBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type };
+  const res = await fetchProtegido(`${API_BASE}/fundos-fixos/${fundoId}/movimentos`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) { verDetalheFundoFixoAcao(fundoId); carregarFundosFixos(); }
 }
 
 async function carregarOpcoesDizimistas() {

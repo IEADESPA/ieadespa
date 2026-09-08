@@ -66,4 +66,18 @@ async function saldoRestanteCampanha(pool, sql, campanhaId) {
   return round2(arrecadado.recordset[0].total - comprometido.recordset[0].total);
 }
 
-module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha };
+// v4.5 (segunda parte) — saldo de um Fundo Fixo de Caixa (petty cash):
+// sempre CALCULADO NA LEITURA (soma de reposições menos soma de
+// despesas), nunca uma coluna própria marcada manualmente.
+async function saldoFundoFixo(pool, sql, fundoId) {
+  const result = await pool.request().input("fundoId", sql.Int, fundoId).query(`
+    SELECT
+      ISNULL(SUM(CASE WHEN Tipo = 'REPOSICAO' THEN Valor ELSE 0 END), 0) AS totalReposicoes,
+      ISNULL(SUM(CASE WHEN Tipo = 'DESPESA' THEN Valor ELSE 0 END), 0) AS totalDespesas
+    FROM FundoFixoMovimentos WHERE FundoId = @fundoId
+  `);
+  const { totalReposicoes, totalDespesas } = result.recordset[0];
+  return round2(totalReposicoes - totalDespesas);
+}
+
+module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo };

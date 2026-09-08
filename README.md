@@ -1901,11 +1901,12 @@ ela) — o que diferencia um sorteio de uma arrecadação comum são os
 
 Escopo grande demais pra uma entrega só (pedido explícito do usuário: dividir
 em duas partes de três itens cada, "senão fica muito grande e pode deixar de
-fazer algo que teria que ser feito"). Primeira parte entregue agora — a
-fundação (categorias, fornecedores, e o fluxo completo de solicitação →
-aprovação → pagamento com os dois controles que já não podiam esperar:
-segregação de funções e saldo nunca negativo). Segunda parte (verificação de
-duplicidade, 3 cotações, Fundo Fixo de Caixa) fica pra próxima rodada.
+fazer algo que teria que ser feito"). v4.5 inteira já entregue, em duas
+rodadas: primeira parte — a fundação (categorias, fornecedores, e o fluxo
+completo de solicitação → aprovação → pagamento com os dois controles que já
+não podiam esperar: segregação de funções e saldo nunca negativo); segunda
+parte — os três controles complementares (duplicidade, 3 cotações, Fundo
+Fixo de Caixa).
 
 ##### Primeira parte (entregue)
 
@@ -1945,17 +1946,29 @@ duplicidade, 3 cotações, Fundo Fixo de Caixa) fica pra próxima rodada.
       marcação manual. Cancelamento nunca é exclusão (mesmo princípio de
       v4.1.1) — mas uma Saída já paga não pode mais ser cancelada.
 
-##### Segunda parte (próxima rodada)
+##### Segunda parte (entregue)
 
-- [ ] Verificação de pagamento duplicado (mesmo fornecedor + mesmo valor +
-      janela de tempo curta) antes de autorizar — alerta, não bloqueio
-      automático.
-- [ ] 3 cotações obrigatórias acima de um valor de referência (Reg. Art.
-      62) + vedação de despesa sem nota fiscal (documentação obrigatória
-      já entrou na primeira parte; falta o requisito das 3 cotações).
-- [ ] **Fundo Fixo de Caixa** (petty cash) por congregação — teto de
-      valor, custodiante responsável, despesas miúdas sem precisar da
-      alçada cheia, reposição mediante prestação de contas dos recibos.
+- [x] **Verificação de pagamento duplicado** — mesmo fornecedor + mesmo
+      valor + janela de 7 dias, status ainda ativo. **Calculado na
+      leitura** (`possivelDuplicidade`, subquery correlacionada no
+      próprio `GestaoSaidas`), nunca uma marcação manual — vira um alerta
+      visível pra quem aprova (lista e detalhe), nunca bloqueio
+      automático (pode ser uma parcela legítima repetida, ex: aluguel
+      mensal).
+- [x] **3 cotações obrigatórias acima de um valor de referência** (Reg.
+      Art. 62) — valor configurável (`ParametrosSaida`, tela em
+      Financeiro → Saídas, nunca hardcoded); acima dele, a solicitação
+      não entra no sistema sem 3 cotações anexadas (fornecedor, valor e
+      documento de cada uma).
+- [x] **Fundo Fixo de Caixa** (petty cash) por congregação
+      (`FundosFixosCaixa`/`FundoFixoMovimentos`) — teto de valor e
+      custodiante responsável definidos por quem tem nível Global; uso do
+      dia a dia (despesa miúda ou reposição) feito pelo custodiante local,
+      sem precisar da alçada cheia de uma Saída normal. Saldo sempre
+      **calculado na leitura** (reposições menos despesas,
+      `shared/tesouraria.js::saldoFundoFixo`) — despesa nunca deixa o
+      saldo negativo, reposição nunca deixa passar do teto. Documento
+      (recibo/comprovante) obrigatório em todo movimento.
 
 #### v4.6 — Contas a Receber
 

@@ -1779,6 +1779,11 @@
           <p class="subtitle">Documentação obrigatória desde a solicitação (nota fiscal/recibo).
             Aprovação segue a alçada de valor configurada (Financeiro → Plano de Contas → Alçadas
             de Aprovação) — quem solicita nunca aprova a própria solicitação.</p>
+          <p class="subtitle">Valor de referência pra exigir 3 cotações (Reg. Art. 62):
+            R$ <span id="valorReferenciaCotacoesTexto">—</span>
+            <input type="number" id="novoValorReferenciaCotacoes" min="0.01" step="0.01" style="max-width:130px; display:none;" />
+            <button class="btn-link" onclick="alternarEdicaoValorReferenciaCotacoes()" id="btnEditarValorReferencia">editar</button>
+          </p>
           <div class="barra-lista">
             <select id="saidaFiltroCongregacao"></select>
             <select id="saidaFiltroStatus" onchange="carregarSaidas()">
@@ -1802,12 +1807,16 @@
               <input type="text" id="saidaDescricao" placeholder="Descrição da despesa" />
             </div>
             <div class="barra-lista">
-              <input type="number" id="saidaValor" placeholder="Valor (R$)" min="0.01" step="0.01" style="max-width:150px;" />
+              <input type="number" id="saidaValor" placeholder="Valor (R$)" min="0.01" step="0.01" style="max-width:150px;" oninput="alternarCotacoesSaida()" />
               <select id="saidaCampanha" style="display:none;"></select>
             </div>
             <div class="input-group">
               <label>Nota fiscal / recibo (obrigatório):</label>
               <input type="file" id="saidaDocumentoFiscal" accept="image/jpeg,image/png,application/pdf" />
+            </div>
+            <div id="cotacoesSaidaContainer" style="display:none;">
+              <p class="subtitle">⚠️ Valor acima da referência — anexe 3 cotações (Reg. Art. 62):</p>
+              <div id="cotacoesSaidaLinhas"></div>
             </div>
             <button class="btn-confirmar" style="width:auto;" onclick="solicitarSaidaAcao()">Solicitar Pagamento</button>
             <p id="resultadoNovaSaida" class="subtitle"></p>
@@ -1815,6 +1824,25 @@
 
           <div class="rolagem-tabela"><div id="resultadoSaidas"></div></div>
           <div id="detalheSaida" style="margin-top:18px;"></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h3>🪙 Fundo Fixo de Caixa</h3>
+          <p class="subtitle">Teto de valor + custodiante responsável, pra despesa miúda sem
+            precisar da alçada cheia de uma Solicitação de Pagamento normal. Saldo é sempre
+            calculado (reposições menos despesas), nunca marcado manualmente.</p>
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarFormNovoFundoFixo()">➕ Novo Fundo Fixo</button>
+          <div id="formNovoFundoFixo" style="display:none; margin-top:14px;">
+            <div class="barra-lista">
+              <select id="fundoFixoCongregacao"></select>
+              <input type="number" id="fundoFixoValorTeto" placeholder="Teto (R$)" min="0.01" step="0.01" style="max-width:150px;" />
+              <input type="number" id="fundoFixoCustodianteMatricula" placeholder="Matrícula do custodiante" style="max-width:180px;" />
+            </div>
+            <button class="btn-confirmar" style="width:auto;" onclick="criarFundoFixoAcao()">Criar Fundo Fixo</button>
+            <p id="resultadoNovoFundoFixo" class="subtitle"></p>
+          </div>
+          <div class="rolagem-tabela"><div id="resultadoFundosFixos"></div></div>
+          <div id="detalheFundoFixo" style="margin-top:18px;"></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

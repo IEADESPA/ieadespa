@@ -1841,9 +1841,7 @@ congregação (ex: Congregação A meta R$1.000, Congregação B meta R$500,
 visão geral da meta total somando todas) — e sorteios (números da sorte)
 como parte da mesma funcionalidade, totalmente integrados.
 
-- [x] **Campanhas** (`Campanhas`) com objetivo declarado, prazo, e Tipo
-      (`ARRECADACAO` | `SORTEIO`) — mesma base de dados pros dois; um
-      sorteio é uma campanha com preço de número fixo (`PrecoNumeroSorteio`).
+- [x] **Campanhas** (`Campanhas`) com objetivo declarado e prazo.
 - [x] **Meta personalizada por congregação** (`CampanhaMetas`, ex:
       Congregação A R$1.000, Congregação B R$500) — a meta geral e o total
       arrecadado (por congregação e no total) são **calculados na leitura**
@@ -1856,25 +1854,48 @@ como parte da mesma funcionalidade, totalmente integrados.
       contábil 4.2.3, mesmo princípio de Revista/Congresso, v4.2) — o
       dinheiro arrecadado só poderá ser gasto na finalidade da campanha
       quando as Saídas (v4.5) existirem.
-- [x] **Sorteio integrado**: vender um número (`VenderNumeroSorteio`) gera
-      um `LancamentoTesouraria` normal — mesmo Termo nº de sempre — e
-      registra o número sequencial da sorte (`CampanhaSorteioNumeros`,
-      gerado pelo servidor, nunca digitado à mão, mesmo princípio do Termo
-      nº). **Sortear** (`SortearCampanha`) escolhe um número entre os
-      vendidos e grava o resultado de forma permanente (não existe
-      "sortear de novo"); restrito a nível Global — quem sorteia nunca é
-      quem vendeu os números localmente (segregação de funções, seção 2.7).
-- [x] Contribuição de campanha também pode vir por lançamento comum do
-      Tesoureiro ou por autolançamento do dizimista (v4.3) — ambos aceitam
+- [x] Contribuição de campanha pode vir por lançamento comum do Tesoureiro
+      ou por autolançamento do dizimista (v4.3) — ambos aceitam
       `campanhaId` opcional, validando que a campanha existe e está ATIVA.
 - [x] Encerrar/cancelar uma campanha é mudança de `Status`, nunca exclusão
-      (mesmo princípio de v4.1.1) — quem já contribuiu ou comprou número
-      continua com o registro preservado.
+      (mesmo princípio de v4.1.1) — quem já contribuiu continua com o
+      registro preservado.
 - **Adiado pra quando fizer sentido:** divulgação do progresso em versão
   "mural" (redação condicional sem expor quem doou quanto) — pode
   reaproveitar o mesmo padrão já usado no relatório de tesouraria (v4.1),
   mas não foi pedido agora; a visão de progresso hoje vive dentro de
   Financeiro → Campanhas.
+
+##### v4.4.1 — Sorteio vira derivado da campanha, não um Tipo dela (correção de rumo)
+
+Feedback direto do usuário depois de ver o v4.4 inicial: os cupons de um
+sorteio são **físicos**, confeccionados numa gráfica, e vendidos pra
+**qualquer pessoa** (não só membro/dizimista cadastrado no sistema) — não
+fazia sentido o sistema controlar um número individual de cupom nem fazer
+o "sorteio" sozinho (`VenderNumeroSorteio`/`SortearCampanha`, removidos).
+Redesenhado como o usuário descreveu: o sorteio é um **derivado** de uma
+campanha (uma campanha pode ter zero, um ou vários sorteios ligados a
+ela) — o que diferencia um sorteio de uma arrecadação comum são os
+**prêmios**, não a existência de um número controlado pelo sistema.
+
+- [x] `Sorteios` — tabela própria, `CampanhaId` como pai (não mais
+      `Campanhas.Tipo`), com nome, descrição, preço do cupom (só
+      informativo, não gera lançamento individual), data prevista e
+      status (`ATIVO` | `REALIZADO` | `CANCELADO`).
+- [x] `SorteioPremios` — um ou mais prêmios por sorteio (1º prêmio, 2º
+      prêmio...), cada um com o nome de quem ganhou preenchido **depois**
+      que o sorteio físico acontece (gráfica/evento, fora do sistema) —
+      é dado histórico registrado manualmente, não calculado.
+- [x] O dinheiro arrecadado com a venda dos cupons continua entrando pela
+      Tesouraria normal (lançamento com o `CampanhaId` da campanha-mãe,
+      valor em lote conforme a prestação de contas de quem vendeu),
+      sem vínculo a um comprador ou número individual.
+- [x] Criar sorteio e registrar prêmio/ganhador é restrito a nível Global
+      (mesmo princípio de `GestaoCampanhas`).
+- **Removido do v4.4 inicial**: `CampanhaSorteioNumeros` (pool de números
+  controlado pelo sistema), `VenderNumeroSorteio` e `SortearCampanha`
+  (sorteio automático) — não fazem sentido pra cupom físico vendido ao
+  público em geral.
 
 #### v4.5 — Saídas: Contas a Pagar
 

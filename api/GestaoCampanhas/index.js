@@ -1,27 +1,30 @@
-// GestaoCampanhas (v4.4)
-// Campanhas de Arrecadação com Meta (ex: "Reforma do Templo") e Sorteios
-// integrados como um tipo de campanha (Tipo=SORTEIO) — mesma base de dados,
-// mesmo cálculo de progresso. Meta pode ser personalizada por congregação
-// (CampanhaMetas: Congregação A R$1.000, Congregação B R$500) — a meta
-// geral e o total arrecadado são sempre CALCULADOS NA LEITURA (soma das
-// metas / soma dos LancamentosTesouraria vinculados via CampanhaId),
-// nunca digitados à mão. Toda campanha nasce com fundo RESTRITO
-// (CategoriasEntrada 'CAMPANHA', v4.2) — mesmo princípio de Revista/
-// Congresso. Criar/encerrar/cancelar campanha e sortear são restritos a
-// nível GLOBAL (é uma iniciativa que atravessa congregações — mesmo
-// princípio de RegistrarRepasseTesouraria).
+// GestaoCampanhas (v4.4; v4.4.1 remove o modelo de "Tipo=SORTEIO" com
+// número individual vendido pelo sistema — ver GestaoSorteios)
+// Campanhas de Arrecadação com Meta (ex: "Reforma do Templo"). Meta pode
+// ser personalizada por congregação (CampanhaMetas: Congregação A
+// R$1.000, Congregação B R$500) — a meta geral e o total arrecadado são
+// sempre CALCULADOS NA LEITURA (soma das metas / soma dos
+// LancamentosTesouraria vinculados via CampanhaId), nunca digitados à
+// mão. Toda campanha nasce com fundo RESTRITO (CategoriasEntrada
+// 'CAMPANHA', v4.2) — mesmo princípio de Revista/Congresso. Criar/
+// encerrar/cancelar campanha é restrito a nível GLOBAL (é uma iniciativa
+// que atravessa congregações — mesmo princípio de RegistrarRepasseTesouraria).
+// Um Sorteio (GestaoSorteios) é um derivado opcional de uma campanha —
+// não um Tipo dela: os cupons são físicos (impressos em gráfica, vendidos
+// a qualquer pessoa, não só dizimista cadastrado), o sistema não controla
+// número individual, só os prêmios e o resultado (registrado manualmente
+// depois do sorteio físico acontecer).
 // Cancelamento nunca é exclusão (mesmo princípio de v4.1.1): uma campanha
 // vira Status=CANCELADA, nunca é apagada — quem já contribuiu continua
-// com o lançamento e o número de sorteio preservados.
+// com o lançamento preservado.
 // GET  /api/campanhas -> lista com progresso calculado
-// GET  /api/campanhas/{id} -> detalhe (metas por congregação + números de sorteio)
-// POST /api/campanhas -> { nome, descricao?, tipo, dataInicio, dataFim?, precoNumeroSorteio?, metas: [{congregacaoId, metaValor}] }
+// GET  /api/campanhas/{id} -> detalhe (metas por congregação + sorteios derivados)
+// POST /api/campanhas -> { nome, descricao?, dataInicio, dataFim?, metas: [{congregacaoId, metaValor}] }
 // PUT  /api/campanhas/{id} -> { nome?, descricao?, dataFim?, status?, metas? }
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 
-const TIPOS = ["ARRECADACAO", "SORTEIO"];
 const STATUS = ["ATIVA", "ENCERRADA", "CANCELADA"];
 
 function exigirFinanceiroGlobal(req, context) {
@@ -42,12 +45,12 @@ module.exports = async function (context, req) {
 
   if (req.method === "GET" && !id) {
     const result = await pool.request().query(`
-      SELECT c.CampanhaId AS campanhaId, c.Nome AS nome, c.Descricao AS descricao, c.Tipo AS tipo,
+      SELECT c.CampanhaId AS campanhaId, c.Nome AS nome, c.Descricao AS descricao,
              CONVERT(varchar(10), c.DataInicio, 120) AS dataInicio, CONVERT(varchar(10), c.DataFim, 120) AS dataFim,
-             c.Status AS status, c.PrecoNumeroSorteio AS precoNumeroSorteio, c.NumeroVencedor AS numeroVencedor,
+             c.Status AS status,
              ISNULL((SELECT SUM(MetaValor) FROM CampanhaMetas WHERE CampanhaId = c.CampanhaId), 0) AS metaTotal,
              ISNULL((SELECT SUM(Valor) FROM LancamentosTesouraria WHERE CampanhaId = c.CampanhaId AND Status = 'ATIVO' AND StatusConfirmacao = 'CONFIRMADO'), 0) AS totalArrecadado,
-             (SELECT COUNT(*) FROM CampanhaSorteioNumeros WHERE CampanhaId = c.CampanhaId) AS numerosVendidos
+             (SELECT COUNT(*) FROM Sorteios WHERE CampanhaId = c.CampanhaId) AS totalSorteios
       FROM Campanhas c
       ORDER BY c.Status ASC, c.CriadoEm DESC
     `);
@@ -57,10 +60,9 @@ module.exports = async function (context, req) {
 
   if (req.method === "GET" && id) {
     const campanha = await pool.request().input("id", sql.Int, id).query(`
-      SELECT CampanhaId AS campanhaId, Nome AS nome, Descricao AS descricao, Tipo AS tipo,
+      SELECT CampanhaId AS campanhaId, Nome AS nome, Descricao AS descricao,
              CONVERT(varchar(10), DataInicio, 120) AS dataInicio, CONVERT(varchar(10), DataFim, 120) AS dataFim,
-             Status AS status, PrecoNumeroSorteio AS precoNumeroSorteio, NumeroVencedor AS numeroVencedor,
-             CONVERT(varchar(33), SorteadoEm, 126) AS sorteadoEm
+             Status AS status
       FROM Campanhas WHERE CampanhaId = @id
     `);
     if (campanha.recordset.length === 0) {
@@ -74,15 +76,14 @@ module.exports = async function (context, req) {
       WHERE cm.CampanhaId = @id
       ORDER BY co.Nome
     `);
-    const numeros = await pool.request().input("id", sql.Int, id).query(`
-      SELECT n.Numero AS numero, n.Sorteado AS sorteado, ISNULL(d.Nome, n.NomeAvulso) AS nome, CONVERT(varchar(10), n.CriadoEm, 120) AS dataVenda
-      FROM CampanhaSorteioNumeros n LEFT JOIN Dizimistas d ON d.DizimistaId = n.DizimistaId
-      WHERE n.CampanhaId = @id
-      ORDER BY n.Numero
+    const sorteios = await pool.request().input("id", sql.Int, id).query(`
+      SELECT SorteioId AS sorteioId, Nome AS nome, Descricao AS descricao, PrecoCupom AS precoCupom,
+             CONVERT(varchar(10), DataSorteio, 120) AS dataSorteio, Status AS status
+      FROM Sorteios WHERE CampanhaId = @id ORDER BY CriadoEm DESC
     `);
     context.res = {
       status: 200, headers: { "Content-Type": "application/json" },
-      body: Object.assign({}, campanha.recordset[0], { metas: metas.recordset, numerosSorteio: numeros.recordset })
+      body: Object.assign({}, campanha.recordset[0], { metas: metas.recordset, sorteios: sorteios.recordset })
     };
     return;
   }
@@ -90,17 +91,9 @@ module.exports = async function (context, req) {
   if (req.method === "POST") {
     const usuarioGlobal = exigirFinanceiroGlobal(req, context);
     if (!usuarioGlobal) return;
-    const { nome, descricao, tipo, dataInicio, dataFim, precoNumeroSorteio, metas } = req.body || {};
-    if (!nome || !nome.trim() || !tipo || !dataInicio) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: nome, tipo, dataInicio." } };
-      return;
-    }
-    if (!TIPOS.includes(tipo)) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: `Tipo inválido. Use um de: ${TIPOS.join(", ")}.` } };
-      return;
-    }
-    if (tipo === "SORTEIO" && (!precoNumeroSorteio || Number(precoNumeroSorteio) <= 0)) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Campanha de sorteio exige precoNumeroSorteio maior que zero." } };
+    const { nome, descricao, dataInicio, dataFim, metas } = req.body || {};
+    if (!nome || !nome.trim() || !dataInicio) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: nome, dataInicio." } };
       return;
     }
     if (!Array.isArray(metas) || metas.length === 0) {
@@ -122,14 +115,12 @@ module.exports = async function (context, req) {
     const criada = await pool.request()
       .input("nome", sql.NVarChar(200), nome.trim())
       .input("descricao", sql.NVarChar(500), descricao ? descricao.trim() : null)
-      .input("tipo", sql.NVarChar(20), tipo)
       .input("dataInicio", sql.Date, dataInicio)
       .input("dataFim", sql.Date, dataFim || null)
-      .input("precoNumeroSorteio", sql.Decimal(10, 2), tipo === "SORTEIO" ? precoNumeroSorteio : null)
       .input("criadoPor", sql.Int, usuarioGlobal.membroId)
-      .query(`INSERT INTO Campanhas (Nome, Descricao, Tipo, DataInicio, DataFim, PrecoNumeroSorteio, CriadoPor)
+      .query(`INSERT INTO Campanhas (Nome, Descricao, DataInicio, DataFim, CriadoPor)
               OUTPUT INSERTED.CampanhaId
-              VALUES (@nome, @descricao, @tipo, @dataInicio, @dataFim, @precoNumeroSorteio, @criadoPor)`);
+              VALUES (@nome, @descricao, @dataInicio, @dataFim, @criadoPor)`);
     const campanhaId = criada.recordset[0].CampanhaId;
 
     for (const m of metas) {
@@ -139,7 +130,7 @@ module.exports = async function (context, req) {
 
     await registrarAuditoria({
       tabela: "Campanhas", registroId: campanhaId, acao: "Criou campanha", usuarioId: usuarioGlobal.membroId,
-      dadosDepois: { nome, tipo, dataInicio, dataFim, precoNumeroSorteio, metas }
+      dadosDepois: { nome, dataInicio, dataFim, metas }
     });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Campanha criada.", campanhaId } };
     return;

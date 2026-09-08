@@ -5,8 +5,8 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": ["post"],
-      "route": "campanhas/{campanhaId}/numeros-sorteio"
+      "methods": ["get", "post", "put"],
+      "route": "campanhas/{campanhaId}/sorteios/{id?}"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

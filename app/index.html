@@ -1697,25 +1697,23 @@
         </div>
 
         <!-- SUB-ABA: CAMPANHAS DE ARRECADAÇÃO (v4.4) — meta geral calculada
-             na leitura a partir de metas personalizadas por congregação;
-             Sorteio é só um Tipo de campanha, mesma base de dados. -->
+             na leitura a partir de metas personalizadas por congregação.
+             Sorteio (v4.4.1) é um derivado opcional de uma campanha, não um
+             Tipo dela: cupom é físico (gráfica, vendido a qualquer pessoa),
+             o sistema só guarda os prêmios e o resultado. -->
         <div id="subFinanceiroCampanhas" class="sub-aba-secretaria" style="display:none;">
           <h3>🎯 Campanhas de Arrecadação</h3>
           <p class="subtitle">Campanhas com meta (ex: Reforma do Templo) — cada congregação pode
             ter sua própria meta, e a meta geral e o total arrecadado são sempre calculados a
-            partir dos lançamentos vinculados. Sorteio é um tipo de campanha: cada número vendido
-            vira um lançamento normal (com Termo nº) e entra na mesma conta restrita.</p>
+            partir dos lançamentos vinculados. Um sorteio pode ser derivado de uma campanha
+            (cupom físico, vendido a qualquer pessoa — o sistema só guarda os prêmios e quem
+            ganhou depois do sorteio acontecer).</p>
 
           <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarFormNovaCampanha()">➕ Nova Campanha</button>
 
           <div id="formNovaCampanha" style="display:none; margin-top:14px;">
             <div class="barra-lista">
               <input type="text" id="campanhaNome" placeholder="Nome da campanha (ex: Reforma do Templo)" style="min-width:260px;" />
-              <select id="campanhaTipo" onchange="alternarCampoPrecoSorteio()">
-                <option value="ARRECADACAO">Arrecadação com meta</option>
-                <option value="SORTEIO">Sorteio</option>
-              </select>
-              <input type="number" id="campanhaPrecoSorteio" placeholder="Preço do número (R$)" min="0.01" step="0.01" style="max-width:170px; display:none;" />
             </div>
             <div class="input-group">
               <input type="text" id="campanhaDescricao" placeholder="Descrição (opcional)" />

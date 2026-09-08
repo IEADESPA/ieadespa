@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas",
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -518,7 +518,7 @@ const SUBMODULOS_FINANCEIRO = [
   { chave: "entradas", titulo: "Entradas", icone: "📝", subAba: "lancamentos", pronto: true },
   { chave: "planocontas", titulo: "Plano de Contas", icone: "📚", subAba: "planocontas", pronto: true },
   { chave: "campanhas", titulo: "Campanhas", icone: "🎯", subAba: "campanhas", pronto: true },
-  { chave: "saidas", titulo: "Saídas (Contas a Pagar)", icone: "💸", pronto: false },
+  { chave: "saidas", titulo: "Saídas (Contas a Pagar)", icone: "💸", subAba: "saidas", pronto: true },
   { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", pronto: false },
   { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
   { chave: "doacoes", titulo: "Doações Online", icone: "💳", pronto: false },
@@ -549,6 +549,11 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "visaogeral") { montarGradeSubmodulosFinanceiro(); return; }
   if (sub === "planocontas") { montarCatalogosFinanceiro(); return; }
   if (sub === "campanhas") { carregarOpcoesCongregacoesFinanceiro().then(carregarCampanhas); return; }
+  if (sub === "saidas") {
+    Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasSaida(), carregarOpcoesFornecedoresSaida(), carregarOpcoesCampanhasSaida()])
+      .then(() => { carregarFornecedores(); carregarSaidas(); });
+    return;
+  }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
     if (sub === "dizimistas") carregarDizimistasMes();
@@ -597,13 +602,19 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
       select.dataset.montado = "1";
     }
   });
+  const filtroCongSaida = document.getElementById("saidaFiltroCongregacao");
+  if (filtroCongSaida && !filtroCongSaida.dataset.montado) {
+    filtroCongSaida.innerHTML = `<option value="">Todas as congregações</option>` + opcoes;
+    filtroCongSaida.dataset.montado = "1";
+    filtroCongSaida.addEventListener("change", carregarSaidas);
+  }
   ["financeiroLancMes", "financeiroFechMes", "financeiroRelMes", "financeiroConsolidadoMes", "financeiroDizMes"].forEach(id => {
     const input = document.getElementById(id);
     if (input && !input.value) input.value = mesAtualFinanceiro();
@@ -846,6 +857,262 @@ async function atualizarStatusCampanhaAcao(campanhaId, status) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) { carregarCampanhas(); verDetalheCampanhaAcao(campanhaId); }
+}
+
+// ---- SAÍDAS: CONTAS A PAGAR (v4.5, primeira parte) — Fornecedores +
+// Solicitação de Pagamento → aprovação por alçada de valor → pagamento,
+// com segregação de funções e saldo do Centro de Custo nunca negativo.
+let _categoriasSaidaCache = null;
+let _fornecedoresSaidaCache = null;
+let _campanhasSaidaCache = null;
+
+async function carregarOpcoesCategoriasSaida() {
+  const res = await fetch(`${API_BASE}/catalogos/categoriasSaida`);
+  _categoriasSaidaCache = await res.json();
+  const select = document.getElementById("saidaTipo");
+  if (select) {
+    select.innerHTML = _categoriasSaidaCache.filter(c => c.ativa !== false)
+      .map(c => `<option value="${c.codigo}">${c.nome} (${c.centroCusto === "GERAL" ? "Geral" : "Local"}${c.tipoFundo === "RESTRITO" ? " — restrito" : ""})</option>`).join("");
+  }
+}
+
+async function carregarOpcoesFornecedoresSaida() {
+  const res = await fetchProtegido(`${API_BASE}/fornecedores`);
+  _fornecedoresSaidaCache = await res.json();
+  const select = document.getElementById("saidaFornecedor");
+  if (select) {
+    select.innerHTML = (Array.isArray(_fornecedoresSaidaCache) ? _fornecedoresSaidaCache : [])
+      .filter(f => f.ativo !== false)
+      .map(f => `<option value="${f.fornecedorId}">${f.nome}${!f.dadosBancariosConfirmados ? " ⚠️ dados bancários pendentes" : ""}</option>`).join("");
+  }
+}
+
+async function carregarOpcoesCampanhasSaida() {
+  const res = await fetchProtegido(`${API_BASE}/campanhas`);
+  const campanhas = await res.json();
+  _campanhasSaidaCache = Array.isArray(campanhas) ? campanhas.filter(c => c.status === "ATIVA") : [];
+  const select = document.getElementById("saidaCampanha");
+  if (select) select.innerHTML = _campanhasSaidaCache.map(c => `<option value="${c.campanhaId}">${c.nome}</option>`).join("");
+}
+
+function alternarCampoCampanhaSaida() {
+  const tipo = document.getElementById("saidaTipo").value;
+  const categoria = (_categoriasSaidaCache || []).find(c => c.codigo === tipo);
+  document.getElementById("saidaCampanha").style.display = categoria && categoria.tipoFundo === "RESTRITO" ? "inline-block" : "none";
+}
+
+function alternarFormNovoFornecedor() {
+  const form = document.getElementById("formNovoFornecedor");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function salvarFornecedorAcao() {
+  const nome = document.getElementById("fornecedorNome").value.trim();
+  const cpfCnpj = document.getElementById("fornecedorCpfCnpj").value.trim();
+  const tipo = document.getElementById("fornecedorTipo").value;
+  const telefone = document.getElementById("fornecedorTelefone").value.trim();
+  const email = document.getElementById("fornecedorEmail").value.trim();
+  const banco = document.getElementById("fornecedorBanco").value.trim();
+  const agencia = document.getElementById("fornecedorAgencia").value.trim();
+  const conta = document.getElementById("fornecedorConta").value.trim();
+  const tipoConta = document.getElementById("fornecedorTipoConta").value;
+  const chavePix = document.getElementById("fornecedorChavePix").value.trim();
+  const resultado = document.getElementById("resultadoFornecedor");
+  if (!nome || !cpfCnpj) { resultado.textContent = "Informe o nome e o CPF/CNPJ."; return; }
+
+  const body = { nome, cpfCnpj, tipo, telefone: telefone || undefined, email: email || undefined, banco: banco || undefined, agencia: agencia || undefined, conta: conta || undefined, tipoConta: tipoConta || undefined, chavePix: chavePix || undefined };
+  const res = await fetchProtegido(`${API_BASE}/fornecedores`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    ["fornecedorNome", "fornecedorCpfCnpj", "fornecedorTelefone", "fornecedorEmail", "fornecedorBanco", "fornecedorAgencia", "fornecedorConta", "fornecedorChavePix"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("formNovoFornecedor").style.display = "none";
+    document.getElementById("saidaFornecedor").dataset.montado = "";
+    carregarOpcoesFornecedoresSaida();
+    carregarFornecedores();
+  }
+}
+
+async function carregarFornecedores() {
+  const container = document.getElementById("resultadoFornecedores");
+  const res = await fetchProtegido(`${API_BASE}/fornecedores`);
+  const fornecedores = await res.json();
+  if (!Array.isArray(fornecedores) || fornecedores.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum fornecedor cadastrado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CPF/CNPJ</th><th>Dados bancários</th><th></th></tr></thead><tbody>`;
+  fornecedores.forEach(f => {
+    html += `<tr>
+      <td>${f.nome}</td><td>${f.cpfCnpj}</td>
+      <td>${f.dadosBancariosConfirmados ? "<span class='badge-status badge-ativo'>Confirmados</span>" : "<span class='badge-status badge-pendente'>⚠️ Pendente de confirmação</span>"}</td>
+      <td>${!f.dadosBancariosConfirmados ? `<button class="btn-link" onclick="confirmarDadosBancariosFornecedorAcao(${f.fornecedorId})">Confirmar</button>` : ""}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function confirmarDadosBancariosFornecedorAcao(fornecedorId) {
+  const res = await fetchProtegido(`${API_BASE}/fornecedores/${fornecedorId}/confirmar-dados-bancarios`, { method: "POST" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarFornecedores(); carregarOpcoesFornecedoresSaida(); }
+}
+
+function alternarFormNovaSaida() {
+  const form = document.getElementById("formNovaSaida");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function solicitarSaidaAcao() {
+  const congregacaoId = document.getElementById("saidaCongregacao").value;
+  const fornecedorId = document.getElementById("saidaFornecedor").value;
+  const tipo = document.getElementById("saidaTipo").value;
+  const descricao = document.getElementById("saidaDescricao").value.trim();
+  const valor = document.getElementById("saidaValor").value;
+  const campanhaId = document.getElementById("saidaCampanha").value;
+  const arquivo = document.getElementById("saidaDocumentoFiscal").files[0];
+  const resultado = document.getElementById("resultadoNovaSaida");
+  if (!congregacaoId || !fornecedorId || !tipo || !descricao || !valor || !arquivo) {
+    resultado.textContent = "Preencha todos os campos e anexe a nota fiscal/recibo.";
+    return;
+  }
+  const categoria = (_categoriasSaidaCache || []).find(c => c.codigo === tipo);
+  if (categoria && categoria.tipoFundo === "RESTRITO" && !campanhaId) {
+    resultado.textContent = "Esta categoria é de fundo restrito — escolha a campanha de origem.";
+    return;
+  }
+
+  const body = {
+    congregacaoId, fornecedorId, tipo, descricao, valor: Number(valor),
+    campanhaId: (categoria && categoria.tipoFundo === "RESTRITO") ? campanhaId : undefined,
+    documentoFiscalBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type
+  };
+  const res = await fetchProtegido(`${API_BASE}/saidas`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("saidaDescricao").value = "";
+    document.getElementById("saidaValor").value = "";
+    document.getElementById("saidaDocumentoFiscal").value = "";
+    document.getElementById("formNovaSaida").style.display = "none";
+    carregarSaidas();
+  }
+}
+
+function badgeStatusSaida(status) {
+  const mapa = { PENDENTE: "badge-pendente", APROVADA: "badge-licenca", PAGA: "badge-ativo", REJEITADA: "badge-desligado", CANCELADA: "badge-desligado" };
+  return `<span class="badge-status ${mapa[status] || "badge-inativo"}">${status}</span>`;
+}
+
+async function carregarSaidas() {
+  const congregacaoId = document.getElementById("saidaFiltroCongregacao").value;
+  const status = document.getElementById("saidaFiltroStatus").value;
+  const container = document.getElementById("resultadoSaidas");
+  const params = new URLSearchParams();
+  if (congregacaoId) params.set("congregacaoId", congregacaoId);
+  if (status) params.set("status", status);
+  const res = await fetchProtegido(`${API_BASE}/saidas?${params.toString()}`);
+  const saidas = await res.json();
+  if (!Array.isArray(saidas) || saidas.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma solicitação de pagamento encontrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Fornecedor</th><th>Categoria</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>`;
+  saidas.forEach(s => {
+    html += `<tr>
+      <td>${s.congregacaoNome}</td><td>${s.fornecedorNome}</td><td>${s.categoriaNome}</td>
+      <td>R$ ${Number(s.valor).toFixed(2)}</td><td>${badgeStatusSaida(s.status)}</td>
+      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheSaidaAcao(${s.saidaId})">Ver detalhe</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function verDetalheSaidaAcao(saidaId) {
+  const container = document.getElementById("detalheSaida");
+  const res = await fetchProtegido(`${API_BASE}/saidas/${saidaId}`);
+  const s = await res.json();
+  if (s.sucesso === false) { container.innerHTML = `<p class="subtitle">${s.mensagem}</p>`; return; }
+
+  let html = `<hr /><h4>${s.fornecedorNome} — R$ ${Number(s.valor).toFixed(2)} ${badgeStatusSaida(s.status)}</h4>
+    <p class="subtitle">${s.descricao}${s.campanhaNome ? ` — campanha: ${s.campanhaNome}` : ""}</p>
+    <p class="subtitle">Solicitado por ${s.solicitadoPorNome} em ${new Date(s.solicitadoEm).toLocaleString("pt-BR")}</p>
+    <p class="subtitle"><a href="${s.documentoFiscalUrl}" target="_blank" rel="noopener">📎 Nota fiscal / recibo</a>${s.comprovantePagamentoUrl ? ` — <a href="${s.comprovantePagamentoUrl}" target="_blank" rel="noopener">📎 Comprovante de pagamento</a>` : ""}</p>`;
+
+  if (s.motivoRejeicao) html += `<p class="subtitle">Motivo da rejeição: ${s.motivoRejeicao}</p>`;
+  if (s.motivoCancelamento) html += `<p class="subtitle">Motivo do cancelamento: ${s.motivoCancelamento}</p>`;
+
+  if (s.status === "PENDENTE" && s.alcada) {
+    html += `<p class="subtitle">Alçada exigida: nível ${s.alcada.nivelMinimoAprovador} ou superior, ${s.alcada.quantidadeAprovadores} aprovador(es) distinto(s) — ${s.aprovacoes.length} já aprovou(aram): ${s.aprovacoes.map(a => a.aprovadoPorNome).join(", ") || "ninguém ainda"}.</p>
+      <button class="btn-link" onclick="aprovarSaidaAcao(${saidaId})">✅ Aprovar</button>
+      <button class="btn-link btn-link-perigo" onclick="rejeitarSaidaAcao(${saidaId})">Rejeitar</button>`;
+  }
+  if (s.status === "APROVADA") {
+    html += `
+      <div class="input-group">
+        <label>Comprovante de pagamento:</label>
+        <input type="file" id="comprovantePagamentoSaida_${saidaId}" accept="image/jpeg,image/png,application/pdf" />
+      </div>
+      <button class="btn-confirmar" style="width:auto;" onclick="pagarSaidaAcao(${saidaId})">💰 Registrar pagamento</button>`;
+  }
+  if (["PENDENTE", "APROVADA"].includes(s.status)) {
+    html += ` <button class="btn-link btn-link-perigo" onclick="cancelarSaidaAcao(${saidaId})">Cancelar</button>`;
+  }
+  container.innerHTML = html;
+}
+
+async function aprovarSaidaAcao(saidaId) {
+  const res = await fetchProtegido(`${API_BASE}/saidas/${saidaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "APROVAR" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarSaidas(); verDetalheSaidaAcao(saidaId); }
+}
+
+async function rejeitarSaidaAcao(saidaId) {
+  const motivo = await pedirTexto("Motivo da rejeição", "Ex: documentação insuficiente");
+  if (motivo === null) return;
+  if (!motivo.trim()) { mostrarToast("Informe o motivo da rejeição.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/saidas/${saidaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "REJEITAR", motivo })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarSaidas(); verDetalheSaidaAcao(saidaId); }
+}
+
+async function pagarSaidaAcao(saidaId) {
+  const arquivo = document.getElementById(`comprovantePagamentoSaida_${saidaId}`).files[0];
+  if (!arquivo) { mostrarToast("Anexe o comprovante de pagamento.", "erro"); return; }
+  const body = { acao: "PAGAR", comprovanteBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type };
+  const res = await fetchProtegido(`${API_BASE}/saidas/${saidaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarSaidas(); verDetalheSaidaAcao(saidaId); }
+}
+
+async function cancelarSaidaAcao(saidaId) {
+  const motivo = await pedirTexto("Motivo do cancelamento", "Ex: pagamento não é mais necessário");
+  if (motivo === null) return;
+  if (!motivo.trim()) { mostrarToast("Informe o motivo do cancelamento.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/saidas/${saidaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "CANCELAR", motivo })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarSaidas(); verDetalheSaidaAcao(saidaId); }
 }
 
 async function carregarOpcoesDizimistas() {
@@ -1884,6 +2151,22 @@ const CATALOGOS_CFG = {
     campos: [["codigo", "Código (ex: DIZIMO)"], ["nome", "Nome"],
       ["tipoFundo", "Tipo de Fundo", [["LIVRE", "Livre"], ["RESTRITO", "Restrito"]]]],
     pai: { campo: "contaContabilId", rotulo: "Conta Contábil", origem: "planoContas" }
+  },
+  categoriasSaida: {
+    titulo: "Categorias de Saída", idField: "categoriaId",
+    campos: [["codigo", "Código (ex: MANUTENCAO)"], ["nome", "Nome"],
+      ["centroCusto", "Centro de Custo", [["LOCAL", "Local (congregação)"], ["GERAL", "Geral (denominação)"]]],
+      ["tipoFundo", "Tipo de Fundo", [["LIVRE", "Livre"], ["RESTRITO", "Restrito (exige vincular a uma Campanha)"]]]],
+    pai: { campo: "contaContabilId", rotulo: "Conta Contábil", origem: "planoContas" }
+  },
+  alcadasAprovacao: {
+    titulo: "Alçadas de Aprovação (Saídas)", idField: "alcadaId",
+    campos: [["valorMinimo", "Valor mínimo da faixa (R$)"],
+      ["nivelMinimoAprovador", "Nível mínimo do aprovador", [
+        ["CONGREGACAO", "Congregação"], ["AREA", "Área"], ["REGIAO", "Região"],
+        ["QUADRANTE", "Quadrante"], ["DISTRITO", "Distrito"], ["GLOBAL", "Geral"]
+      ]],
+      ["quantidadeAprovadores", "Quantidade de aprovadores distintos exigida"]]
   }
 };
 // Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
@@ -1897,7 +2180,7 @@ const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
 // referencia a primeira via "pai") — moram dentro do Financeiro, não na
 // aba genérica de Catálogos (princípio já estabelecido: cada módulo
 // configura o que é exclusivo dele).
-const CATALOGOS_FINANCEIRO_ORDEM = ["planoContas", "categoriasEntrada"];
+const CATALOGOS_FINANCEIRO_ORDEM = ["planoContas", "categoriasEntrada", "categoriasSaida", "alcadasAprovacao"];
 
 function montarPoliticasRetencao() {
   document.getElementById("politicasRetencaoConteudo").innerHTML = POLITICAS_RETENCAO_ORDEM.map(k => secaoCatalogo(k)).join("");

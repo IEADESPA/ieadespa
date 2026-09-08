@@ -107,6 +107,16 @@ const CATALOGOS = {
     tabela: "PlanoContas", chave: "ContaId", idField: "contaId",
     campos: { codigo: sql.NVarChar(20), nome: sql.NVarChar(200), tipo: sql.NVarChar(20), contaPaiId: sql.Int, ativa: sql.Bit },
     permissao: "financeiro"
+  },
+  categoriasSaida: {
+    tabela: "CategoriasSaida", chave: "CategoriaId", idField: "categoriaId",
+    campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(150), centroCusto: sql.NVarChar(20), tipoFundo: sql.NVarChar(20), contaContabilId: sql.Int, ativa: sql.Bit },
+    permissao: "financeiro"
+  },
+  alcadasAprovacao: {
+    tabela: "AlcadasAprovacao", chave: "AlcadaId", idField: "alcadaId",
+    campos: { valorMinimo: sql.Decimal(10, 2), nivelMinimoAprovador: sql.NVarChar(20), quantidadeAprovadores: sql.Int },
+    permissao: "financeiro"
   }
 };
 

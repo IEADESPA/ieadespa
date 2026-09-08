@@ -149,6 +149,16 @@ function estaNoEscopo(usuario, congregacaoNome) {
   return usuario.escopoCongregacoes.includes(congregacaoNome);
 }
 
+// v4.5 — alçada de valor (Saídas): quanto maior o valor, mais "largo"
+// precisa ser o nível de quem aprova. Não existia nenhuma comparação de
+// amplitude entre níveis territoriais no sistema (só igualdade exata,
+// como em exigirNivelGlobal) — esse ranking é novo, construído só pra essa
+// necessidade, sem mexer em login/sessão.
+const RANKING_NIVEL = { CONGREGACAO: 1, AREA: 2, REGIAO: 3, QUADRANTE: 4, DISTRITO: 5, GLOBAL: 6 };
+function nivelAtingeMinimo(nivelUsuario, nivelMinimo) {
+  return (RANKING_NIVEL[nivelUsuario] || 0) >= (RANKING_NIVEL[nivelMinimo] || 0);
+}
+
 // Uso: const usuario = exigirNivelGlobal(req, context); if (!usuario) return;
 // Papeis.Nivel (GLOBAL/CONGREGACAO/AREA) existe desde a migração 002, mas nunca tinha
 // sido checado em código (era só rótulo de exibição em GestaoLideranca) — v1.6 é a
@@ -165,4 +175,4 @@ function exigirNivelGlobal(req, context) {
   return usuario;
 }
 
-module.exports = { hashSenha, verificarSenha, criarSessao, encerrarSessao, getSessao, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo };
+module.exports = { hashSenha, verificarSenha, criarSessao, encerrarSessao, getSessao, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, nivelAtingeMinimo };

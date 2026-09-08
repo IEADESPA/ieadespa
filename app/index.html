@@ -102,6 +102,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroLancamentos" onclick="mostrarSubAbaFinanceiro('lancamentos')"><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPlanocontas" onclick="mostrarSubAbaFinanceiro('planocontas')"><span class="icone">📚</span><span class="rotulo">Plano de Contas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroCampanhas" onclick="mostrarSubAbaFinanceiro('campanhas')"><span class="icone">🎯</span><span class="rotulo">Campanhas</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroSaidas" onclick="mostrarSubAbaFinanceiro('saidas')"><span class="icone">💸</span><span class="rotulo">Saídas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -1731,6 +1732,89 @@
 
           <div class="rolagem-tabela"><div id="resultadoCampanhas"></div></div>
           <div id="detalheCampanha" style="margin-top:18px;"></div>
+        </div>
+
+        <!-- SUB-ABA: SAÍDAS — CONTAS A PAGAR (v4.5, primeira parte) —
+             Fornecedores + Solicitação → Aprovação por alçada → Pagamento,
+             com segregação de funções e saldo do Centro de Custo nunca
+             ficando negativo. -->
+        <div id="subFinanceiroSaidas" class="sub-aba-secretaria" style="display:none;">
+          <h3>🏢 Fornecedores</h3>
+          <p class="subtitle">Cadastro obrigatório antes de pagar qualquer um. Mudar dado bancário
+            trava pagamento até outra pessoa confirmar a mudança (proteção contra fraude).</p>
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarFormNovoFornecedor()">➕ Novo Fornecedor</button>
+          <div id="formNovoFornecedor" style="display:none; margin-top:14px;">
+            <div class="barra-lista">
+              <input type="text" id="fornecedorNome" placeholder="Nome / Razão Social" style="min-width:220px;" />
+              <input type="text" id="fornecedorCpfCnpj" placeholder="CPF ou CNPJ" style="max-width:180px;" />
+              <select id="fornecedorTipo">
+                <option value="PJ">Pessoa Jurídica</option>
+                <option value="PF">Pessoa Física</option>
+              </select>
+            </div>
+            <div class="barra-lista">
+              <input type="text" id="fornecedorTelefone" placeholder="Telefone (opcional)" />
+              <input type="email" id="fornecedorEmail" placeholder="E-mail (opcional)" />
+            </div>
+            <h4 style="margin:10px 0 6px; color: var(--cor-primaria);">Dados bancários (opcional na criação)</h4>
+            <div class="barra-lista">
+              <input type="text" id="fornecedorBanco" placeholder="Banco" />
+              <input type="text" id="fornecedorAgencia" placeholder="Agência" style="max-width:120px;" />
+              <input type="text" id="fornecedorConta" placeholder="Conta" style="max-width:150px;" />
+              <select id="fornecedorTipoConta">
+                <option value="">Tipo de conta</option>
+                <option value="CORRENTE">Corrente</option>
+                <option value="POUPANCA">Poupança</option>
+              </select>
+              <input type="text" id="fornecedorChavePix" placeholder="Chave PIX" />
+            </div>
+            <button class="btn-confirmar" style="width:auto;" onclick="salvarFornecedorAcao()">Salvar Fornecedor</button>
+            <p id="resultadoFornecedor" class="subtitle"></p>
+          </div>
+          <div class="rolagem-tabela"><div id="resultadoFornecedores"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h3>💸 Solicitações de Pagamento</h3>
+          <p class="subtitle">Documentação obrigatória desde a solicitação (nota fiscal/recibo).
+            Aprovação segue a alçada de valor configurada (Financeiro → Plano de Contas → Alçadas
+            de Aprovação) — quem solicita nunca aprova a própria solicitação.</p>
+          <div class="barra-lista">
+            <select id="saidaFiltroCongregacao"></select>
+            <select id="saidaFiltroStatus" onchange="carregarSaidas()">
+              <option value="">Todos os status</option>
+              <option value="PENDENTE">Pendente</option>
+              <option value="APROVADA">Aprovada</option>
+              <option value="REJEITADA">Rejeitada</option>
+              <option value="PAGA">Paga</option>
+              <option value="CANCELADA">Cancelada</option>
+            </select>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="alternarFormNovaSaida()">➕ Nova Solicitação</button>
+          </div>
+
+          <div id="formNovaSaida" style="display:none; margin-top:14px;">
+            <div class="barra-lista">
+              <select id="saidaCongregacao"></select>
+              <select id="saidaFornecedor"></select>
+              <select id="saidaTipo" onchange="alternarCampoCampanhaSaida()"></select>
+            </div>
+            <div class="input-group">
+              <input type="text" id="saidaDescricao" placeholder="Descrição da despesa" />
+            </div>
+            <div class="barra-lista">
+              <input type="number" id="saidaValor" placeholder="Valor (R$)" min="0.01" step="0.01" style="max-width:150px;" />
+              <select id="saidaCampanha" style="display:none;"></select>
+            </div>
+            <div class="input-group">
+              <label>Nota fiscal / recibo (obrigatório):</label>
+              <input type="file" id="saidaDocumentoFiscal" accept="image/jpeg,image/png,application/pdf" />
+            </div>
+            <button class="btn-confirmar" style="width:auto;" onclick="solicitarSaidaAcao()">Solicitar Pagamento</button>
+            <p id="resultadoNovaSaida" class="subtitle"></p>
+          </div>
+
+          <div class="rolagem-tabela"><div id="resultadoSaidas"></div></div>
+          <div id="detalheSaida" style="margin-top:18px;"></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

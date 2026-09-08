@@ -33,4 +33,37 @@ function redigirParaMural(lancamentos) {
   });
 }
 
-module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2 };
+// v4.5 — saldo disponível de um Centro de Custo (Local de uma congregação
+// específica, ou Geral consolidado de toda a denominação) pra Saídas: o
+// que já foi liberado pela Tesouraria Geral (v4.1.3) menos o que já foi
+// efetivamente pago. Nunca fica negativo — é o próprio endpoint de
+// pagamento que barra, não uma marcação manual.
+async function saldoCentroCusto(pool, sql, centroCusto, congregacaoId) {
+  const liberado = centroCusto === "GERAL"
+    ? await pool.request().query(`SELECT ISNULL(SUM(ValorRepasseGeral), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO'`)
+    : await pool.request().input("congregacaoId", sql.Int, congregacaoId)
+        .query(`SELECT ISNULL(SUM(ValorRetidoLocal), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO' AND CongregacaoId = @congregacaoId`);
+  const pagoRequest = pool.request().input("centroCusto", sql.NVarChar(20), centroCusto);
+  if (centroCusto !== "GERAL") pagoRequest.input("congregacaoId", sql.Int, congregacaoId);
+  const pago = await pagoRequest.query(`
+    SELECT ISNULL(SUM(s.Valor), 0) AS total FROM SaidasTesouraria s
+    JOIN CategoriasSaida cs ON cs.Codigo = s.Tipo
+    WHERE s.Status = 'PAGA' AND cs.CentroCusto = @centroCusto
+    ${centroCusto !== "GERAL" ? "AND s.CongregacaoId = @congregacaoId" : ""}
+  `);
+  return round2(liberado.recordset[0].total - pago.recordset[0].total);
+}
+
+// Saldo restante de uma campanha (fundo restrito, v4.2/v4.4): o que já foi
+// confirmado como arrecadado menos o que já está aprovado ou pago em
+// Saídas vinculadas a ela — nunca deixa gastar além do que a campanha
+// arrecadou, mesmo que várias solicitações estejam em aprovação ao mesmo tempo.
+async function saldoRestanteCampanha(pool, sql, campanhaId) {
+  const arrecadado = await pool.request().input("campanhaId", sql.Int, campanhaId)
+    .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM LancamentosTesouraria WHERE CampanhaId = @campanhaId AND Status = 'ATIVO' AND StatusConfirmacao = 'CONFIRMADO'`);
+  const comprometido = await pool.request().input("campanhaId", sql.Int, campanhaId)
+    .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM SaidasTesouraria WHERE CampanhaId = @campanhaId AND Status IN ('APROVADA', 'PAGA')`);
+  return round2(arrecadado.recordset[0].total - comprometido.recordset[0].total);
+}
+
+module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha };

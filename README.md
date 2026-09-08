@@ -1899,33 +1899,60 @@ ela) — o que diferencia um sorteio de uma arrecadação comum são os
 
 #### v4.5 — Saídas: Contas a Pagar
 
-- [ ] `CategoriasSaida` — catálogo espelhado de `CategoriasEntrada` (mesmo
-      padrão configurável), cada categoria marcada com o Centro de Custo
-      que a autoriza (Local/Geral) e, se a entrada de origem for
-      restrita (`TipoFundo`, v4.2), só libera gasto na mesma finalidade.
-- [ ] `Fornecedores` — cadastro próprio (CNPJ/CPF, dados bancários),
-      pré-requisito pra pagar qualquer um. **Mudança de dados bancários
-      exige trilha de auditoria reforçada** (quem mudou, quando) e trava o
-      próximo pagamento até confirmação — é o vetor de fraude nº1 segundo
-      a pesquisa. Verificação de nome/CNPJ duplicado antes de cadastrar de
-      novo.
-- [ ] **Segregação de funções** (princípio 2.7, formalizado por pesquisa
-      de mercado): quem cadastra/edita um Fornecedor nunca aprova
-      pagamento a ele; quem registra uma Saída nunca aprova a própria
-      Saída — mesmo princípio já usado em Tesouraria (Geral confere o que
-      o Local lançou, v4.1.3), agora nomeado e aplicado aqui.
-- [ ] Solicitação de pagamento → documentação obrigatória (nota fiscal/
-      recibo, Reg. Art. 120 §2º) → aprovação por **alçada de valor**
-      (quanto maior o valor, mais aprovadores — o mesmo motor de alçada
-      reaproveitado depois pelo Teto de Alçada Patrimonial, v4.11) →
-      pagamento → comprovante.
+Escopo grande demais pra uma entrega só (pedido explícito do usuário: dividir
+em duas partes de três itens cada, "senão fica muito grande e pode deixar de
+fazer algo que teria que ser feito"). Primeira parte entregue agora — a
+fundação (categorias, fornecedores, e o fluxo completo de solicitação →
+aprovação → pagamento com os dois controles que já não podiam esperar:
+segregação de funções e saldo nunca negativo). Segunda parte (verificação de
+duplicidade, 3 cotações, Fundo Fixo de Caixa) fica pra próxima rodada.
+
+##### Primeira parte (entregue)
+
+- [x] `CategoriasSaida` — catálogo espelhado de `CategoriasEntrada` (mesmo
+      motor genérico de catálogo, tela dentro de Financeiro → Plano de
+      Contas → Categorias de Saída), cada categoria marcada com o Centro
+      de Custo que autoriza o gasto (`LOCAL` de uma congregação, ou
+      `GERAL` consolidado, v4.1.3) e um `TipoFundo` (`LIVRE`|`RESTRITO`,
+      espelha v4.2) — categoria restrita **exige** vincular a Saída a uma
+      Campanha (v4.4) de origem e trava o gasto no que ela já arrecadou
+      de fato (`shared/tesouraria.js::saldoRestanteCampanha`) — fecha o
+      ciclo prometido em v4.2 ("a Saída correspondente só libera gasto na
+      mesma finalidade").
+- [x] `Fornecedores` — cadastro próprio (CNPJ/CPF, dados bancários),
+      pré-requisito pra pagar qualquer um (`GestaoFornecedores`).
+      Verificação de CPF/CNPJ duplicado (bloqueia) e nome parecido
+      (avisa, não bloqueia). **Mudança de dados bancários desconfirma
+      automaticamente** (`DadosBancariosConfirmados=0`) e trava qualquer
+      pagamento a esse fornecedor até **outra pessoa** confirmar
+      (`ConfirmarDadosBancariosFornecedor` — quem alterou nunca pode
+      confirmar a própria alteração) — é o vetor de fraude nº1 segundo a
+      pesquisa (trocar a chave PIX de um fornecedor real pra desviar um
+      pagamento já aprovado).
+- [x] Fluxo completo em `GestaoSaidas` (`SaidasTesouraria`): Solicitação
+      (documentação obrigatória — nota fiscal/recibo, Reg. Art. 120 §2º,
+      exigida desde a solicitação, não só no pagamento) → **aprovação por
+      alçada de valor** (`AlcadasAprovacao`, configurável — quanto maior
+      o valor da faixa, mais aprovadores distintos e de nível territorial
+      mais alto exigidos; ranking de amplitude territorial novo em
+      `shared/auth.js::nivelAtingeMinimo`, não existia nenhuma comparação
+      de nível antes, só igualdade exata) → pagamento (comprovante
+      obrigatório) → registro permanente. **Segregação de funções**
+      (princípio 2.7): quem solicita nunca aprova/rejeita a própria
+      solicitação — checado no próprio endpoint. **Saldo do Centro de
+      Custo nunca fica negativo**: o pagamento é bloqueado se faltar
+      saldo liberado (`shared/tesouraria.js::saldoCentroCusto`), não uma
+      marcação manual. Cancelamento nunca é exclusão (mesmo princípio de
+      v4.1.1) — mas uma Saída já paga não pode mais ser cancelada.
+
+##### Segunda parte (próxima rodada)
+
 - [ ] Verificação de pagamento duplicado (mesmo fornecedor + mesmo valor +
       janela de tempo curta) antes de autorizar — alerta, não bloqueio
       automático.
 - [ ] 3 cotações obrigatórias acima de um valor de referência (Reg. Art.
-      62) + vedação de despesa sem nota fiscal.
-- [ ] Saldo do Centro de Custo (Local/Geral) só pode ser debitado até o
-      limite do que já foi liberado (v4.1.3) — nunca fica negativo.
+      62) + vedação de despesa sem nota fiscal (documentação obrigatória
+      já entrou na primeira parte; falta o requisito das 3 cotações).
 - [ ] **Fundo Fixo de Caixa** (petty cash) por congregação — teto de
       valor, custodiante responsável, despesas miúdas sem precisar da
       alçada cheia, reposição mediante prestação de contas dos recibos.

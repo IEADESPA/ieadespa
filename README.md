@@ -1834,17 +1834,47 @@ processar pagamento nenhum:
   confirmado) segue como ideia válida e pode voltar como uma versão
   futura, sem depender de gateway nenhum.
 
-#### v4.4 — Campanhas de Arrecadação com Meta
+#### v4.4 — Campanhas de Arrecadação com Meta e Sorteios
 
-- [ ] Campanha com objetivo declarado (ex: "Reforma do Templo — Meta
-      R$500.000"), prazo, e barra de progresso calculada na leitura a
-      partir dos `LancamentosTesouraria` vinculados a ela.
-- [ ] Campanha sempre nasce com `TipoFundo = RESTRITO` (v4.2) — o dinheiro
-      arrecadado só pode ser gasto na finalidade da campanha, quando as
-      Saídas (v4.5) existirem.
-- [ ] Divulgação do progresso — reaproveita o mesmo padrão de redação
-      condicional já usado no relatório "mural" (v4.1), pra poder afixar
-      publicamente sem expor quem doou quanto.
+Pedido explícito do usuário: campanhas com meta personalizada por
+congregação (ex: Congregação A meta R$1.000, Congregação B meta R$500,
+visão geral da meta total somando todas) — e sorteios (números da sorte)
+como parte da mesma funcionalidade, totalmente integrados.
+
+- [x] **Campanhas** (`Campanhas`) com objetivo declarado, prazo, e Tipo
+      (`ARRECADACAO` | `SORTEIO`) — mesma base de dados pros dois; um
+      sorteio é uma campanha com preço de número fixo (`PrecoNumeroSorteio`).
+- [x] **Meta personalizada por congregação** (`CampanhaMetas`, ex:
+      Congregação A R$1.000, Congregação B R$500) — a meta geral e o total
+      arrecadado (por congregação e no total) são **calculados na leitura**
+      a partir das metas cadastradas e dos `LancamentosTesouraria`
+      vinculados via `CampanhaId`, nunca digitados à mão. Progresso exibido
+      com barra visual, tanto no total geral quanto no detalhe por
+      congregação.
+- [x] Toda campanha nasce com fundo **RESTRITO** — categoria de entrada
+      própria (`CategoriasEntrada.Codigo = 'CAMPANHA'`, ligada à conta
+      contábil 4.2.3, mesmo princípio de Revista/Congresso, v4.2) — o
+      dinheiro arrecadado só poderá ser gasto na finalidade da campanha
+      quando as Saídas (v4.5) existirem.
+- [x] **Sorteio integrado**: vender um número (`VenderNumeroSorteio`) gera
+      um `LancamentoTesouraria` normal — mesmo Termo nº de sempre — e
+      registra o número sequencial da sorte (`CampanhaSorteioNumeros`,
+      gerado pelo servidor, nunca digitado à mão, mesmo princípio do Termo
+      nº). **Sortear** (`SortearCampanha`) escolhe um número entre os
+      vendidos e grava o resultado de forma permanente (não existe
+      "sortear de novo"); restrito a nível Global — quem sorteia nunca é
+      quem vendeu os números localmente (segregação de funções, seção 2.7).
+- [x] Contribuição de campanha também pode vir por lançamento comum do
+      Tesoureiro ou por autolançamento do dizimista (v4.3) — ambos aceitam
+      `campanhaId` opcional, validando que a campanha existe e está ATIVA.
+- [x] Encerrar/cancelar uma campanha é mudança de `Status`, nunca exclusão
+      (mesmo princípio de v4.1.1) — quem já contribuiu ou comprou número
+      continua com o registro preservado.
+- **Adiado pra quando fizer sentido:** divulgação do progresso em versão
+  "mural" (redação condicional sem expor quem doou quanto) — pode
+  reaproveitar o mesmo padrão já usado no relatório de tesouraria (v4.1),
+  mas não foi pedido agora; a visão de progresso hoje vive dentro de
+  Financeiro → Campanhas.
 
 #### v4.5 — Saídas: Contas a Pagar
 

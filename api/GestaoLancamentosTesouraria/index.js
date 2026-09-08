@@ -89,11 +89,13 @@ module.exports = async function (context, req) {
              l.ComprovanteUrl AS comprovanteUrl, l.MesReferencia AS mesReferencia, l.FechamentoId AS fechamentoId,
              l.ConciliacaoId AS conciliacaoId, l.Status AS status, l.MotivoCancelamento AS motivoCancelamento,
              l.Origem AS origem, l.StatusConfirmacao AS statusConfirmacao, l.MotivoRejeicaoConfirmacao AS motivoRejeicaoConfirmacao,
+             l.CampanhaId AS campanhaId, camp.Nome AS campanhaNome,
              CONVERT(varchar(33), l.CriadoEm, 126) AS criadoEm
       FROM LancamentosTesouraria l
       JOIN Congregacoes c ON c.CongregacaoId = l.CongregacaoId
       LEFT JOIN Dizimistas d ON d.DizimistaId = l.DizimistaId
       LEFT JOIN CategoriasEntrada cat ON cat.Codigo = l.Tipo
+      LEFT JOIN Campanhas camp ON camp.CampanhaId = l.CampanhaId
       WHERE ${where}
       ORDER BY ISNULL(l.TermoNumero, 999999999) DESC, l.LancamentoId DESC
     `);
@@ -111,10 +113,17 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const { congregacaoId, dizimistaId, nomeAvulso, tipo, descricao, valor, formaPagamento, valorPix, comprovanteBase64, mimeType, mesReferencia } = req.body || {};
+    const { congregacaoId, dizimistaId, nomeAvulso, tipo, descricao, valor, formaPagamento, valorPix, comprovanteBase64, mimeType, mesReferencia, campanhaId } = req.body || {};
     if (!congregacaoId || !tipo || !valor || !formaPagamento || !mesReferencia) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: congregacaoId, tipo, valor, formaPagamento, mesReferencia." } };
       return;
+    }
+    if (campanhaId) {
+      const campanha = await pool.request().input("id", sql.Int, campanhaId).query(`SELECT Status FROM Campanhas WHERE CampanhaId = @id`);
+      if (campanha.recordset.length === 0 || campanha.recordset[0].Status !== "ATIVA") {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Campanha inválida ou não está ativa." } };
+        return;
+      }
     }
     const categoria = await pool.request().input("codigo", sql.NVarChar(30), tipo)
       .query(`SELECT Nome FROM CategoriasEntrada WHERE Codigo = @codigo AND Ativa = 1`);
@@ -198,10 +207,11 @@ module.exports = async function (context, req) {
       .input("comprovanteUrl", sql.NVarChar(500), comprovanteUrl)
       .input("mesReferencia", sql.Char(7), mesReferencia)
       .input("registradoPor", sql.Int, usuario.membroId)
+      .input("campanhaId", sql.Int, campanhaId || null)
       .query(`INSERT INTO LancamentosTesouraria
-                (CongregacaoId, DizimistaId, NomeAvulso, TermoNumero, Tipo, Descricao, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor)
+                (CongregacaoId, DizimistaId, NomeAvulso, TermoNumero, Tipo, Descricao, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor, CampanhaId)
               OUTPUT INSERTED.LancamentoId
-              VALUES (@congregacaoId, @dizimistaId, @nomeAvulso, @termoNumero, @tipo, @descricao, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor)`);
+              VALUES (@congregacaoId, @dizimistaId, @nomeAvulso, @termoNumero, @tipo, @descricao, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor, @campanhaId)`);
     const lancamentoId = criado.recordset[0].LancamentoId;
 
     await registrarAuditoria({

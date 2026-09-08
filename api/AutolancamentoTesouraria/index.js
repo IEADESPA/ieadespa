@@ -25,7 +25,7 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
     return;
   }
-  const { tipo, descricao, valor, formaPagamento, valorPix, mesReferencia, comprovanteBase64, mimeType } = req.body || {};
+  const { tipo, descricao, valor, formaPagamento, valorPix, mesReferencia, comprovanteBase64, mimeType, campanhaId } = req.body || {};
   if (!tipo || !valor || !formaPagamento || !mesReferencia) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: tipo, valor, formaPagamento, mesReferencia." } };
     return;
@@ -67,6 +67,13 @@ module.exports = async function (context, req) {
   if (categoria.recordset.length === 0) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Categoria de entrada inválida ou inativa." } };
     return;
+  }
+  if (campanhaId) {
+    const campanha = await pool.request().input("id", sql.Int, campanhaId).query(`SELECT Status FROM Campanhas WHERE CampanhaId = @id`);
+    if (campanha.recordset.length === 0 || campanha.recordset[0].Status !== "ATIVA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Campanha inválida ou não está ativa." } };
+      return;
+    }
   }
 
   const fechado = await pool.request()
@@ -112,10 +119,11 @@ module.exports = async function (context, req) {
     .input("comprovanteUrl", sql.NVarChar(500), comprovanteUrl)
     .input("mesReferencia", sql.Char(7), mesReferencia)
     .input("registradoPor", sql.Int, matricula)
+    .input("campanhaId", sql.Int, campanhaId || null)
     .query(`INSERT INTO LancamentosTesouraria
-              (CongregacaoId, DizimistaId, TermoNumero, Tipo, Descricao, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor, Origem, StatusConfirmacao)
+              (CongregacaoId, DizimistaId, TermoNumero, Tipo, Descricao, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor, Origem, StatusConfirmacao, CampanhaId)
             OUTPUT INSERTED.LancamentoId
-            VALUES (@congregacaoId, @dizimistaId, NULL, @tipo, @descricao, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor, 'AUTOLANCAMENTO', 'PENDENTE')`);
+            VALUES (@congregacaoId, @dizimistaId, NULL, @tipo, @descricao, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor, 'AUTOLANCAMENTO', 'PENDENTE', @campanhaId)`);
   const lancamentoId = criado.recordset[0].LancamentoId;
 
   await registrarAuditoria({

@@ -499,10 +499,10 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", dizimistas: "Dizimistas do Mês",
-  fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas",
+  dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
 let _congregacoesFinanceiroCache = null;
@@ -517,6 +517,7 @@ let _categoriasEntradaCache = null;
 const SUBMODULOS_FINANCEIRO = [
   { chave: "entradas", titulo: "Entradas", icone: "📝", subAba: "lancamentos", pronto: true },
   { chave: "planocontas", titulo: "Plano de Contas", icone: "📚", subAba: "planocontas", pronto: true },
+  { chave: "campanhas", titulo: "Campanhas", icone: "🎯", subAba: "campanhas", pronto: true },
   { chave: "saidas", titulo: "Saídas (Contas a Pagar)", icone: "💸", pronto: false },
   { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", pronto: false },
   { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
@@ -547,6 +548,7 @@ function mostrarSubAbaFinanceiro(sub) {
   document.getElementById("tituloModulo").textContent = `Financeiro — ${TITULOS_SUB_FINANCEIRO[sub]}`;
   if (sub === "visaogeral") { montarGradeSubmodulosFinanceiro(); return; }
   if (sub === "planocontas") { montarCatalogosFinanceiro(); return; }
+  if (sub === "campanhas") { carregarOpcoesCongregacoesFinanceiro().then(carregarCampanhas); return; }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
     if (sub === "dizimistas") carregarDizimistasMes();
@@ -606,6 +608,221 @@ async function carregarOpcoesCongregacoesFinanceiro() {
     const input = document.getElementById(id);
     if (input && !input.value) input.value = mesAtualFinanceiro();
   });
+}
+
+// ---- CAMPANHAS DE ARRECADAÇÃO E SORTEIOS (v4.4) — meta geral sempre
+// calculada na leitura a partir das metas por congregação (personalizadas,
+// uma pode ter meta diferente da outra) e dos lançamentos vinculados via
+// CampanhaId. Sorteio é só um Tipo de campanha, mesma base. Criar/encerrar/
+// cancelar/sortear é restrito a nível Global (auth.js já barra no backend;
+// aqui só escondemos os botões pra quem não tem esse nível).
+function alternarCampoPrecoSorteio() {
+  const tipo = document.getElementById("campanhaTipo").value;
+  document.getElementById("campanhaPrecoSorteio").style.display = tipo === "SORTEIO" ? "inline-block" : "none";
+}
+
+function alternarFormNovaCampanha() {
+  const form = document.getElementById("formNovaCampanha");
+  const abrindo = form.style.display === "none";
+  form.style.display = abrindo ? "block" : "none";
+  if (abrindo) montarMetasBuilderCampanha();
+}
+
+function montarMetasBuilderCampanha() {
+  const container = document.getElementById("metasBuilderCampanha");
+  const congregacoes = (_congregacoesFinanceiroCache || []).filter(c => c.ativa !== false);
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr><th></th><th>Congregação</th><th>Meta (R$)</th></tr></thead><tbody>
+    ${congregacoes.map(c => `<tr>
+      <td><input type="checkbox" class="chk-meta-campanha" value="${c.congregacaoId}" /></td>
+      <td>${c.nome}</td>
+      <td><input type="number" class="valor-meta-campanha" min="0.01" step="0.01" style="max-width:130px;" placeholder="0,00" /></td>
+    </tr>`).join("")}
+  </tbody></table>`;
+}
+
+async function criarCampanhaAcao() {
+  const nome = document.getElementById("campanhaNome").value.trim();
+  const tipo = document.getElementById("campanhaTipo").value;
+  const precoNumeroSorteio = document.getElementById("campanhaPrecoSorteio").value;
+  const descricao = document.getElementById("campanhaDescricao").value.trim();
+  const dataInicio = document.getElementById("campanhaDataInicio").value;
+  const dataFim = document.getElementById("campanhaDataFim").value;
+  const resultado = document.getElementById("resultadoNovaCampanha");
+  if (!nome || !dataInicio) { resultado.textContent = "Informe o nome e a data de início."; return; }
+  if (tipo === "SORTEIO" && !precoNumeroSorteio) { resultado.textContent = "Informe o preço do número do sorteio."; return; }
+
+  const metas = [];
+  document.querySelectorAll(".chk-meta-campanha:checked").forEach(chk => {
+    const linha = chk.closest("tr");
+    const valorMeta = linha.querySelector(".valor-meta-campanha").value;
+    if (valorMeta && Number(valorMeta) > 0) metas.push({ congregacaoId: Number(chk.value), metaValor: Number(valorMeta) });
+  });
+  if (metas.length === 0) { resultado.textContent = "Marque ao menos uma congregação e informe a meta dela."; return; }
+
+  const body = { nome, tipo, dataInicio, dataFim: dataFim || undefined, descricao: descricao || undefined, metas };
+  if (tipo === "SORTEIO") body.precoNumeroSorteio = Number(precoNumeroSorteio);
+
+  const res = await fetchProtegido(`${API_BASE}/campanhas`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("campanhaNome").value = "";
+    document.getElementById("campanhaDescricao").value = "";
+    document.getElementById("campanhaPrecoSorteio").value = "";
+    document.getElementById("formNovaCampanha").style.display = "none";
+    carregarCampanhas();
+  }
+}
+
+function barraProgressoCampanha(totalArrecadado, metaTotal) {
+  const percentual = metaTotal > 0 ? Math.min(100, (totalArrecadado / metaTotal) * 100) : 0;
+  return `<div style="background:#e4e4e4; border-radius:8px; overflow:hidden; height:16px; width:100%; max-width:260px;">
+    <div style="background: var(--cor-primaria); height:100%; width:${percentual.toFixed(1)}%;"></div>
+  </div>
+  <small>R$ ${Number(totalArrecadado).toFixed(2)} de R$ ${Number(metaTotal).toFixed(2)} (${percentual.toFixed(1)}%)</small>`;
+}
+
+async function carregarCampanhas() {
+  const container = document.getElementById("resultadoCampanhas");
+  const res = await fetchProtegido(`${API_BASE}/campanhas`);
+  const campanhas = await res.json();
+  if (!Array.isArray(campanhas) || campanhas.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma campanha cadastrada ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Tipo</th><th>Progresso</th><th>Status</th><th></th></tr></thead><tbody>`;
+  campanhas.forEach(c => {
+    const statusClasse = c.status === "ATIVA" ? "badge-ativo" : (c.status === "ENCERRADA" ? "badge-licenca" : "badge-desligado");
+    html += `<tr>
+      <td>${c.nome}${c.tipo === "SORTEIO" ? ` <small>(${c.numerosVendidos} número(s) vendido(s))</small>` : ""}</td>
+      <td>${c.tipo === "SORTEIO" ? "🎟️ Sorteio" : "🎯 Arrecadação"}</td>
+      <td>${barraProgressoCampanha(c.totalArrecadado, c.metaTotal)}</td>
+      <td><span class="badge-status ${statusClasse}">${c.status}</span>${c.numeroVencedor != null ? `<br /><small>Vencedor: nº ${c.numeroVencedor}</small>` : ""}</td>
+      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheCampanhaAcao(${c.campanhaId})">Ver detalhe</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function verDetalheCampanhaAcao(campanhaId) {
+  const container = document.getElementById("detalheCampanha");
+  const res = await fetchProtegido(`${API_BASE}/campanhas/${campanhaId}`);
+  const c = await res.json();
+  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${c.mensagem}</p>`; return; }
+
+  let html = `<hr /><h3>${c.nome}</h3>`;
+  if (c.descricao) html += `<p class="subtitle">${c.descricao}</p>`;
+  html += `<p class="subtitle">Período: ${c.dataInicio}${c.dataFim ? ` até ${c.dataFim}` : " (sem data de fim)"} — Status: <span class="badge-status ${c.status === "ATIVA" ? "badge-ativo" : (c.status === "ENCERRADA" ? "badge-licenca" : "badge-desligado")}">${c.status}</span></p>`;
+
+  html += `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Meta</th><th>Arrecadado</th></tr></thead><tbody>`;
+  c.metas.forEach(m => {
+    html += `<tr><td>${m.congregacaoNome}</td><td>R$ ${Number(m.metaValor).toFixed(2)}</td><td>R$ ${Number(m.totalArrecadado).toFixed(2)}</td></tr>`;
+  });
+  html += "</tbody></table>";
+
+  if (authNivel === "GLOBAL" && c.status === "ATIVA") {
+    html += `<button class="btn-link btn-link-perigo" onclick="atualizarStatusCampanhaAcao(${campanhaId}, 'ENCERRADA')">🔒 Encerrar campanha</button>
+      <button class="btn-link btn-link-perigo" onclick="atualizarStatusCampanhaAcao(${campanhaId}, 'CANCELADA')">Cancelar campanha</button>`;
+  }
+
+  if (c.tipo === "SORTEIO") {
+    html += `<h4 style="margin:16px 0 8px; color: var(--cor-primaria);">🎟️ Números vendidos (${c.numerosSorteio.length})</h4>`;
+    if (c.numeroVencedor != null) {
+      html += `<p class="subtitle"><strong>🎉 Número sorteado: ${c.numeroVencedor}</strong> (em ${c.sorteadoEm ? new Date(c.sorteadoEm).toLocaleString("pt-BR") : ""})</p>`;
+    }
+    html += `<table class="tabela-frequencia"><thead><tr><th>Número</th><th>Nome</th><th>Data</th></tr></thead><tbody>`;
+    c.numerosSorteio.forEach(n => {
+      html += `<tr><td>${n.numero}${n.sorteado ? " 🏆" : ""}</td><td>${n.nome || "—"}</td><td>${n.dataVenda}</td></tr>`;
+    });
+    html += "</tbody></table>";
+
+    if (c.status === "ATIVA") {
+      html += `
+        <h4 style="margin:16px 0 8px; color: var(--cor-primaria);">Vender número</h4>
+        <div class="barra-lista">
+          <select id="sorteioCongregacao" onchange="carregarOpcoesDizimistasSorteio(${campanhaId})">${(_congregacoesFinanceiroCache || []).filter(x => x.ativa !== false).map(x => `<option value="${x.congregacaoId}">${x.nome}</option>`).join("")}</select>
+          <select id="sorteioDizimista"><option value="">— Nome avulso (abaixo) —</option></select>
+          <input type="text" id="sorteioNomeAvulso" placeholder="Nome avulso (se não for dizimista cadastrado)" />
+        </div>
+        <div class="barra-lista">
+          <select id="sorteioForma">
+            <option value="DINHEIRO">Dinheiro</option>
+            <option value="PIX">PIX</option>
+            <option value="MISTO">Misto</option>
+          </select>
+          <input type="number" id="sorteioValorPix" placeholder="Parte em PIX (se misto)" min="0.01" step="0.01" style="max-width:170px;" />
+          <input type="month" id="sorteioMes" value="${mesAtualFinanceiro()}" style="max-width:150px;" />
+        </div>
+        <button class="btn-confirmar" style="width:auto;margin:0;" onclick="venderNumeroSorteioAcao(${campanhaId})">➕ Vender número (R$ ${Number(c.precoNumeroSorteio).toFixed(2)})</button>
+        <p id="resultadoVendaSorteio" class="subtitle"></p>`;
+      if (authNivel === "GLOBAL") {
+        html += `<button class="btn-link btn-link-perigo" onclick="sortearCampanhaAcao(${campanhaId})">🎉 Sortear agora</button>`;
+      }
+    }
+  }
+  container.innerHTML = html;
+  if (c.tipo === "SORTEIO" && c.status === "ATIVA") carregarOpcoesDizimistasSorteio(campanhaId);
+}
+
+async function carregarOpcoesDizimistasSorteio() {
+  const congregacaoId = document.getElementById("sorteioCongregacao").value;
+  const select = document.getElementById("sorteioDizimista");
+  if (!congregacaoId) { select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>`; return; }
+  const res = await fetchProtegido(`${API_BASE}/dizimistas?congregacaoId=${congregacaoId}`);
+  const dizimistas = await res.json();
+  select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>` +
+    (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${d.nome}</option>`).join("") : "");
+}
+
+async function venderNumeroSorteioAcao(campanhaId) {
+  const congregacaoId = document.getElementById("sorteioCongregacao").value;
+  const dizimistaId = document.getElementById("sorteioDizimista").value;
+  const nomeAvulso = document.getElementById("sorteioNomeAvulso").value.trim();
+  const formaPagamento = document.getElementById("sorteioForma").value;
+  const valorPix = document.getElementById("sorteioValorPix").value;
+  const mesReferencia = document.getElementById("sorteioMes").value;
+  const resultado = document.getElementById("resultadoVendaSorteio");
+  if (!congregacaoId || (!dizimistaId && !nomeAvulso) || !mesReferencia) {
+    resultado.textContent = "Escolha a congregação, o dizimista ou nome avulso, e o mês.";
+    return;
+  }
+  const body = { congregacaoId, dizimistaId: dizimistaId || undefined, nomeAvulso: dizimistaId ? undefined : nomeAvulso, formaPagamento, mesReferencia };
+  if (formaPagamento === "MISTO") body.valorPix = Number(valorPix);
+  const res = await fetchProtegido(`${API_BASE}/campanhas/${campanhaId}/numeros-sorteio`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("sorteioNomeAvulso").value = "";
+    verDetalheCampanhaAcao(campanhaId);
+  }
+}
+
+async function sortearCampanhaAcao(campanhaId) {
+  const confirmar = await pedirTexto("Digite CONFIRMAR para sortear (ação definitiva, não pode ser refeita)", "CONFIRMAR");
+  if (confirmar === null || confirmar.trim().toUpperCase() !== "CONFIRMAR") return;
+  const res = await fetchProtegido(`${API_BASE}/campanhas/${campanhaId}/sortear`, { method: "POST" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) verDetalheCampanhaAcao(campanhaId);
+}
+
+async function atualizarStatusCampanhaAcao(campanhaId, status) {
+  const acaoTexto = status === "ENCERRADA" ? "encerrar" : "cancelar";
+  const motivo = await pedirTexto(`Confirma ${acaoTexto} esta campanha?`, "Digite qualquer texto para confirmar");
+  if (motivo === null) return;
+  const res = await fetchProtegido(`${API_BASE}/campanhas/${campanhaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarCampanhas(); verDetalheCampanhaAcao(campanhaId); }
 }
 
 async function carregarOpcoesDizimistas() {

@@ -101,6 +101,7 @@
               <button class="btn-subaba ativo" id="btnSubFinanceiroVisaogeral" onclick="mostrarSubAbaFinanceiro('visaogeral')"><span class="icone">🧭</span><span class="rotulo">Visão Geral</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroLancamentos" onclick="mostrarSubAbaFinanceiro('lancamentos')"><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPlanocontas" onclick="mostrarSubAbaFinanceiro('planocontas')"><span class="icone">📚</span><span class="rotulo">Plano de Contas</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroCampanhas" onclick="mostrarSubAbaFinanceiro('campanhas')"><span class="icone">🎯</span><span class="rotulo">Campanhas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -1693,6 +1694,45 @@
             lançamentos aponta pra uma conta aqui, e diz se é Fundo Restrito (finalidade
             específica) ou Livre.</p>
           <div id="catalogosFinanceiroConteudo"></div>
+        </div>
+
+        <!-- SUB-ABA: CAMPANHAS DE ARRECADAÇÃO (v4.4) — meta geral calculada
+             na leitura a partir de metas personalizadas por congregação;
+             Sorteio é só um Tipo de campanha, mesma base de dados. -->
+        <div id="subFinanceiroCampanhas" class="sub-aba-secretaria" style="display:none;">
+          <h3>🎯 Campanhas de Arrecadação</h3>
+          <p class="subtitle">Campanhas com meta (ex: Reforma do Templo) — cada congregação pode
+            ter sua própria meta, e a meta geral e o total arrecadado são sempre calculados a
+            partir dos lançamentos vinculados. Sorteio é um tipo de campanha: cada número vendido
+            vira um lançamento normal (com Termo nº) e entra na mesma conta restrita.</p>
+
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarFormNovaCampanha()">➕ Nova Campanha</button>
+
+          <div id="formNovaCampanha" style="display:none; margin-top:14px;">
+            <div class="barra-lista">
+              <input type="text" id="campanhaNome" placeholder="Nome da campanha (ex: Reforma do Templo)" style="min-width:260px;" />
+              <select id="campanhaTipo" onchange="alternarCampoPrecoSorteio()">
+                <option value="ARRECADACAO">Arrecadação com meta</option>
+                <option value="SORTEIO">Sorteio</option>
+              </select>
+              <input type="number" id="campanhaPrecoSorteio" placeholder="Preço do número (R$)" min="0.01" step="0.01" style="max-width:170px; display:none;" />
+            </div>
+            <div class="input-group">
+              <input type="text" id="campanhaDescricao" placeholder="Descrição (opcional)" />
+            </div>
+            <div class="barra-lista">
+              <label style="display:flex;align-items:center;gap:6px;">Início: <input type="date" id="campanhaDataInicio" /></label>
+              <label style="display:flex;align-items:center;gap:6px;">Fim (opcional): <input type="date" id="campanhaDataFim" /></label>
+            </div>
+            <h4 style="margin:14px 0 8px; color: var(--cor-primaria);">Meta por congregação</h4>
+            <p class="subtitle">Marque as congregações participantes e informe a meta de cada uma — a meta geral é a soma.</p>
+            <div class="rolagem-tabela"><div id="metasBuilderCampanha"></div></div>
+            <button class="btn-confirmar" style="width:auto;margin-top:10px;" onclick="criarCampanhaAcao()">Criar Campanha</button>
+            <p id="resultadoNovaCampanha" class="subtitle"></p>
+          </div>
+
+          <div class="rolagem-tabela"><div id="resultadoCampanhas"></div></div>
+          <div id="detalheCampanha" style="margin-top:18px;"></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

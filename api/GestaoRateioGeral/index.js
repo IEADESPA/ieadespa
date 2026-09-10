@@ -30,8 +30,8 @@ function exigirFinanceiroGlobal(req, context) {
   return usuario;
 }
 
-async function buscarPendentes(pool) {
-  const result = await pool.request().query(`
+async function buscarPendentes(executor) {
+  const result = await executor().query(`
     SELECT f.FechamentoId AS fechamentoId, f.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
            f.MesReferencia AS mesReferencia, f.ValorRepasseGeral AS valor,
            CONVERT(varchar(10), f.DataRepasse, 120) AS dataRepasse,
@@ -52,7 +52,7 @@ module.exports = async function (context, req) {
   const pool = await getPool();
 
   if (req.method === "GET" && id === "pendentes") {
-    const itens = await buscarPendentes(pool);
+    const itens = await buscarPendentes(() => pool.request());
     const totalBase = round2(itens.reduce((soma, i) => soma + Number(i.valor), 0));
     const destinos = await pool.request().query(`SELECT * FROM RateioGeralDestinos WHERE Ativo = 1 ORDER BY DestinoId`);
     const previsao = destinos.recordset.map(d => ({ codigo: d.Codigo, nome: d.Nome, percentual: d.Percentual, valor: round2(totalBase * Number(d.Percentual) / 100) }));
@@ -104,55 +104,79 @@ module.exports = async function (context, req) {
     const hoje = new Date();
     const mesReferencia = (req.body && req.body.mesReferencia) || `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
 
-    const itens = await buscarPendentes(pool);
-    if (itens.length === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Nada pendente no malote — todos os repasses liberados já foram rateados." } };
-      return;
-    }
-    const totalBase = round2(itens.reduce((soma, i) => soma + Number(i.valor), 0));
-    const destinos = await pool.request().query(`SELECT * FROM RateioGeralDestinos WHERE Ativo = 1 ORDER BY DestinoId`);
+    // Tudo dentro de UMA transação — ou fecha por completo (rateio + valores
+    // por destino + todos os itens do malote), ou não fecha nada. sp_getapplock
+    // serializa fechamentos concorrentes (dois cliques quase juntos não podem
+    // gerar dois rateios disputando os mesmos repasses pendentes) — sem isso,
+    // a UNIQUE em RateioGeralItens.FechamentoId ainda impediria duplicar um
+    // repasse em dois rateios, mas deixaria pra trás um RateioGeralId "quebrado"
+    // (criado, mas com itens faltando) se a segunda chamada topasse com a
+    // trava no meio do caminho.
+    const transaction = new sql.Transaction(pool);
+    const r = () => new sql.Request(transaction);
+    await transaction.begin();
+    try {
+      await r().input("recurso", sql.NVarChar(50), "RateioGeral").query(
+        `EXEC sp_getapplock @Resource = @recurso, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000`
+      );
 
-    const criado = await pool.request()
-      .input("mesReferencia", sql.Char(7), mesReferencia).input("totalBase", sql.Decimal(12, 2), totalBase)
-      .input("totalItens", sql.Int, itens.length).input("fechadoPor", sql.Int, usuarioGlobal.membroId)
-      .query(`INSERT INTO RateiosGerais (MesReferencia, TotalBase, ValorTesouroGeral, TotalItens, FechadoPor)
-              OUTPUT INSERTED.RateioGeralId VALUES (@mesReferencia, @totalBase, 0, @totalItens, @fechadoPor)`);
-    const rateioGeralId = criado.recordset[0].RateioGeralId;
-
-    let somaDestinos = 0;
-    const valoresPorDestino = [];
-    for (const d of destinos.recordset) {
-      const valor = round2(totalBase * Number(d.Percentual) / 100);
-      somaDestinos = round2(somaDestinos + valor);
-      valoresPorDestino.push({ codigo: d.Codigo, nome: d.Nome, percentual: d.Percentual, valor });
-      await pool.request().input("rateioGeralId", sql.Int, rateioGeralId).input("destinoCodigo", sql.NVarChar(30), d.Codigo)
-        .input("destinoNome", sql.NVarChar(150), d.Nome).input("percentual", sql.Decimal(5, 2), d.Percentual).input("valor", sql.Decimal(12, 2), valor)
-        .query(`INSERT INTO RateioGeralValores (RateioGeralId, DestinoCodigo, DestinoNome, Percentual, Valor) VALUES (@rateioGeralId, @destinoCodigo, @destinoNome, @percentual, @valor)`);
-    }
-    const valorTesouroGeral = round2(totalBase - somaDestinos);
-    await pool.request().input("id", sql.Int, rateioGeralId).input("valor", sql.Decimal(12, 2), valorTesouroGeral)
-      .query(`UPDATE RateiosGerais SET ValorTesouroGeral = @valor WHERE RateioGeralId = @id`);
-
-    for (const item of itens) {
-      await pool.request().input("rateioGeralId", sql.Int, rateioGeralId).input("fechamentoId", sql.Int, item.fechamentoId)
-        .input("congregacaoId", sql.Int, item.congregacaoId).input("mesReferenciaCongregacao", sql.Char(7), item.mesReferencia)
-        .input("valor", sql.Decimal(12, 2), item.valor)
-        .query(`INSERT INTO RateioGeralItens (RateioGeralId, FechamentoId, CongregacaoId, MesReferenciaCongregacao, Valor)
-                VALUES (@rateioGeralId, @fechamentoId, @congregacaoId, @mesReferenciaCongregacao, @valor)`);
-    }
-
-    await registrarAuditoria({
-      tabela: "RateiosGerais", registroId: rateioGeralId, acao: "Fechou Rateio Geral (malote)", usuarioId: usuarioGlobal.membroId,
-      dadosDepois: { mesReferencia, totalBase, totalItens: itens.length, valoresPorDestino, valorTesouroGeral }
-    });
-    context.res = {
-      status: 201, headers: { "Content-Type": "application/json" },
-      body: {
-        sucesso: true,
-        mensagem: `✅ Rateio Geral de ${mesReferencia} fechado — ${itens.length} repasse(s) de ${new Set(itens.map(i => i.congregacaoId)).size} congregação(ões), total R$ ${totalBase.toFixed(2)}.`,
-        rateioGeralId, totalBase, valoresPorDestino, valorTesouroGeral
+      const itens = await buscarPendentes(r);
+      if (itens.length === 0) {
+        await transaction.rollback();
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Nada pendente no malote — todos os repasses liberados já foram rateados." } };
+        return;
       }
-    };
+      const totalBase = round2(itens.reduce((soma, i) => soma + Number(i.valor), 0));
+      const destinos = await r().query(`SELECT * FROM RateioGeralDestinos WHERE Ativo = 1 ORDER BY DestinoId`);
+
+      const criado = await r()
+        .input("mesReferencia", sql.Char(7), mesReferencia).input("totalBase", sql.Decimal(12, 2), totalBase)
+        .input("totalItens", sql.Int, itens.length).input("fechadoPor", sql.Int, usuarioGlobal.membroId)
+        .query(`INSERT INTO RateiosGerais (MesReferencia, TotalBase, ValorTesouroGeral, TotalItens, FechadoPor)
+                OUTPUT INSERTED.RateioGeralId VALUES (@mesReferencia, @totalBase, 0, @totalItens, @fechadoPor)`);
+      const rateioGeralId = criado.recordset[0].RateioGeralId;
+
+      let somaDestinos = 0;
+      const valoresPorDestino = [];
+      for (const d of destinos.recordset) {
+        const valor = round2(totalBase * Number(d.Percentual) / 100);
+        somaDestinos = round2(somaDestinos + valor);
+        valoresPorDestino.push({ codigo: d.Codigo, nome: d.Nome, percentual: d.Percentual, valor });
+        await r().input("rateioGeralId", sql.Int, rateioGeralId).input("destinoCodigo", sql.NVarChar(30), d.Codigo)
+          .input("destinoNome", sql.NVarChar(150), d.Nome).input("percentual", sql.Decimal(5, 2), d.Percentual).input("valor", sql.Decimal(12, 2), valor)
+          .query(`INSERT INTO RateioGeralValores (RateioGeralId, DestinoCodigo, DestinoNome, Percentual, Valor) VALUES (@rateioGeralId, @destinoCodigo, @destinoNome, @percentual, @valor)`);
+      }
+      const valorTesouroGeral = round2(totalBase - somaDestinos);
+      await r().input("id", sql.Int, rateioGeralId).input("valor", sql.Decimal(12, 2), valorTesouroGeral)
+        .query(`UPDATE RateiosGerais SET ValorTesouroGeral = @valor WHERE RateioGeralId = @id`);
+
+      for (const item of itens) {
+        await r().input("rateioGeralId", sql.Int, rateioGeralId).input("fechamentoId", sql.Int, item.fechamentoId)
+          .input("congregacaoId", sql.Int, item.congregacaoId).input("mesReferenciaCongregacao", sql.Char(7), item.mesReferencia)
+          .input("valor", sql.Decimal(12, 2), item.valor)
+          .query(`INSERT INTO RateioGeralItens (RateioGeralId, FechamentoId, CongregacaoId, MesReferenciaCongregacao, Valor)
+                  VALUES (@rateioGeralId, @fechamentoId, @congregacaoId, @mesReferenciaCongregacao, @valor)`);
+      }
+
+      await transaction.commit();
+
+      await registrarAuditoria({
+        tabela: "RateiosGerais", registroId: rateioGeralId, acao: "Fechou Rateio Geral (malote)", usuarioId: usuarioGlobal.membroId,
+        dadosDepois: { mesReferencia, totalBase, totalItens: itens.length, valoresPorDestino, valorTesouroGeral }
+      });
+      context.res = {
+        status: 201, headers: { "Content-Type": "application/json" },
+        body: {
+          sucesso: true,
+          mensagem: `✅ Rateio Geral de ${mesReferencia} fechado — ${itens.length} repasse(s) de ${new Set(itens.map(i => i.congregacaoId)).size} congregação(ões), total R$ ${totalBase.toFixed(2)}.`,
+          rateioGeralId, totalBase, valoresPorDestino, valorTesouroGeral
+        }
+      };
+    } catch (erro) {
+      try { await transaction.rollback(); } catch (e2) { /* já pode ter sido revertida */ }
+      context.log.error("Falha ao fechar Rateio Geral:", erro.message);
+      context.res = { status: 500, body: { sucesso: false, mensagem: "Falha ao fechar o Rateio Geral — nada foi alterado. Avise a equipe técnica: " + erro.message } };
+    }
     return;
   }
 };

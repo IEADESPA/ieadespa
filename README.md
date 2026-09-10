@@ -2181,6 +2181,39 @@ pra saber quanto realmente existe de Prebenda disponível.
   todo o histórico de repasses já liberados) antes de qualquer nova Saída
   Geral — é a reconciliação retroativa que este controle interno exige.
 
+##### Confirmado com o usuário e corrigido depois de revisão
+
+O usuário descreveu com precisão o comportamento esperado e pediu
+confirmação — verificado linha por linha do código antes de confirmar
+(não só por inspeção visual, checagem adversarial de verdade):
+1. Um repasse fechado (`RegistrarRepasseTesouraria`) só vira dinheiro
+   gastável pro Tesouro Geral **depois** que alguém aciona o fechamento
+   do Rateio Geral — antes disso, fica só "pendente", sem contar em
+   nenhum Centro de Custo. **Confirmado.**
+2. Um novo repasse da mesma congregação, chegado depois que um Rateio
+   Geral anterior já foi fechado, aparece isolado como pendente pro
+   **próximo** fechamento — nunca se mistura com o que já foi rateado.
+   **Confirmado** — é exatamente o que a cláusula `NOT EXISTS` contra
+   `RateioGeralItens` garante, por `FechamentoId` individual.
+
+Essa mesma verificação encontrou uma **race condition real**: o fechamento
+do Rateio Geral não rodava em transação — dois fechamentos disparados
+quase ao mesmo tempo (ex: duplo clique) podiam gerar um `RateioGeralId`
+"quebrado" (criado, mas com itens faltando, sem violar a UNIQUE que só
+protege contra duplicar o mesmo repasse). **Corrigido**: o fechamento
+inteiro agora roda dentro de uma transação SQL, com `sp_getapplock`
+serializando fechamentos concorrentes — ou fecha por completo (rateio +
+valores por destino + todos os itens), ou não fecha nada.
+
+##### Novo: Situação do Tesouro em Tempo Real
+
+Pedido direto do usuário — "o sonho do Pastor Presidente": saber, a
+qualquer momento do mês (não só no fechamento), quanto tem em cada
+Centro de Custo. `RelatorioSituacaoTesouro` — um painel único mostrando
+Tesouro Geral, Convenção, Prebenda Pastoral, Fundo PDQ, o total pendente
+no malote, e o saldo Local de cada congregação, tudo calculado na leitura
+a cada abertura da tela (nunca uma foto salva que envelhece).
+
 ##### Falta pra completar a v4.10 (próxima rodada)
 
 - [ ] Prebenda (natureza alimentar, sem vínculo CLT) como categoria de

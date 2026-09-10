@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -550,6 +550,7 @@ function mostrarSubAbaFinanceiro(sub) {
   });
   document.getElementById("tituloModulo").textContent = `Financeiro — ${TITULOS_SUB_FINANCEIRO[sub]}`;
   if (sub === "visaogeral") { montarGradeSubmodulosFinanceiro(); return; }
+  if (sub === "situacaotesouro") { carregarSituacaoTesouroAcao(); return; }
   if (sub === "planocontas") { montarCatalogosFinanceiro(); return; }
   if (sub === "campanhas") { carregarOpcoesCongregacoesFinanceiro().then(carregarCampanhas); return; }
   if (sub === "saidas") {
@@ -2047,6 +2048,42 @@ async function salvarNotasExplicativasAcao() {
   const data = await res.json();
   avisarResultado(data);
   resultado.textContent = data.mensagem;
+}
+
+// ---- SITUAÇÃO DO TESOURO EM TEMPO REAL (v4.10, fundação) — quanto cada
+// Centro de Custo tem AGORA, sem esperar o fechamento do mês. Tudo
+// calculado na leitura a cada chamada.
+async function carregarSituacaoTesouroAcao() {
+  const container = document.getElementById("resultadoSituacaoTesouro");
+  container.innerHTML = "<p class='subtitle'>Carregando…</p>";
+  const res = await fetchProtegido(`${API_BASE}/situacao-tesouro`);
+  const d = await res.json();
+  if (d.sucesso === false) { container.innerHTML = `<p class="subtitle">${d.mensagem}</p>`; return; }
+
+  const card = (titulo, valor, cor) => `<div style="flex:1; min-width:180px; border:1px solid #e0e0e0; border-radius:8px; padding:14px; background:${cor || "#fff"};">
+    <div class="subtitle" style="margin:0 0 6px;">${titulo}</div>
+    <div style="font-size:1.4rem; font-weight:700;">R$ ${Number(valor).toFixed(2)}</div>
+  </div>`;
+
+  let html = `<div style="display:flex; flex-wrap:wrap; gap:12px;">
+    ${card("Tesouro Geral (gastável)", d.tesouroGeral, "#eef7ee")}
+    ${card("Convenção", d.convencao)}
+    ${card("Prebenda Pastoral", d.prebendaPastoral)}
+    ${card("Fundo PDQ", d.pdq)}
+    ${card("Local consolidado (todas congregações)", d.totalLocalConsolidado)}
+    ${card("Pendente no malote (não rateado ainda)", d.malotePendente.totalBase, "#fff7e6")}
+  </div>`;
+  if (d.malotePendente.totalItens > 0) {
+    html += `<p class="subtitle" style="margin-top:8px;">⚠️ ${d.malotePendente.totalItens} repasse(s) aguardando o próximo fechamento do Rateio Geral — esse valor ainda não está em nenhum Centro de Custo gastável.</p>`;
+  }
+
+  html += `<h4 style="margin:18px 0 8px; color: var(--cor-primaria);">Saldo Local por congregação</h4>
+    <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Saldo Local</th></tr></thead><tbody>`;
+  d.porCongregacao.forEach(c => {
+    html += `<tr><td>${c.congregacaoNome}</td><td>R$ ${Number(c.saldoLocal).toFixed(2)}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
 }
 
 // ---- RATEIO GERAL: MALOTE DOS 60% (v4.10, fundação) — controle interno

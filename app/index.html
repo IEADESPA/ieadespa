@@ -99,6 +99,7 @@
             <button class="btn-aba" id="btnAbaFinanceiro" onclick="mostrarAbaSecretaria('financeiro')"><span class="icone">💰</span><span class="rotulo">Financeiro</span></button>
             <div class="submenu-aba" id="submenuFinanceiro">
               <button class="btn-subaba ativo" id="btnSubFinanceiroVisaogeral" onclick="mostrarSubAbaFinanceiro('visaogeral')"><span class="icone">🧭</span><span class="rotulo">Visão Geral</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroSituacaoTesouro" onclick="mostrarSubAbaFinanceiro('situacaotesouro')"><span class="icone">💎</span><span class="rotulo">Situação do Tesouro</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroLancamentos" onclick="mostrarSubAbaFinanceiro('lancamentos')"><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPlanocontas" onclick="mostrarSubAbaFinanceiro('planocontas')"><span class="icone">📚</span><span class="rotulo">Plano de Contas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroCampanhas" onclick="mostrarSubAbaFinanceiro('campanhas')"><span class="icone">🎯</span><span class="rotulo">Campanhas</span></button>
@@ -1600,6 +1601,17 @@
           <h3>🧭 Financeiro — Visão Geral</h3>
           <p class="subtitle">Escolha o que você quer fazer.</p>
           <div class="grade-modulos" id="gradeSubmodulosFinanceiro"></div>
+        </div>
+
+        <!-- SUB-ABA: SITUAÇÃO DO TESOURO (v4.10, fundação) — quanto cada
+             Centro de Custo tem AGORA, sem esperar o fim do mês. Tudo
+             calculado na leitura (shared/tesouraria.js::saldoCentroCusto). -->
+        <div id="subFinanceiroSituacaotesouro" class="sub-aba-secretaria" style="display:none;">
+          <h3>💎 Situação do Tesouro em Tempo Real</h3>
+          <p class="subtitle">Quanto tem em cada Centro de Custo agora, sem esperar o fechamento do
+            mês — atualizado toda vez que a tela é aberta.</p>
+          <button class="btn-link" onclick="carregarSituacaoTesouroAcao()">🔄 Atualizar</button>
+          <div id="resultadoSituacaoTesouro" style="margin-top:14px;"></div>
         </div>
 
         <!-- SUB-ABA: LANÇAMENTOS -->

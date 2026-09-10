@@ -148,6 +148,20 @@ async function calcularSucessaoPresidencial(pool, sql, orgaoIdDiretoria, orgaoId
   };
 }
 
+// v4.8 (segunda parte) — verifica se `membroId` é de fato o Presidente
+// (Pastor Presidente) em exercício, checando o Assento real na Diretoria
+// Executiva (não uma permissão genérica) — usado pra suspender/reativar o
+// Fundo de Execução Estratégica do PDQ (Art. 27), ação "excepcional" que
+// só o próprio Presidente pode tomar.
+async function ehPresidenteAtual(pool, sql, membroId) {
+  const orgao = await pool.request().query(`SELECT TOP 1 OrgaoId FROM Orgaos WHERE Sigla = 'DIRETORIA_EXECUTIVA'`);
+  if (!orgao.recordset[0]) return false;
+  const result = await pool.request().input("orgaoId", sql.Int, orgao.recordset[0].OrgaoId).input("membroId", sql.Int, membroId).query(`
+    SELECT TOP 1 AssentoId FROM Assentos WHERE OrgaoId = @orgaoId AND CargoOuFuncao = 'PRESIDENTE' AND MembroId = @membroId AND DataFim IS NULL
+  `);
+  return result.recordset.length > 0;
+}
+
 module.exports = {
   CARGOS_DIRETORIA,
   CARGOS_CONSELHO_FISCAL,
@@ -156,5 +170,6 @@ module.exports = {
   ORGAOS_INCOMPATIVEIS,
   validarIncompatibilidadeExecutiva,
   cargoJaOcupado,
-  calcularSucessaoPresidencial
+  calcularSucessaoPresidencial,
+  ehPresidenteAtual
 };

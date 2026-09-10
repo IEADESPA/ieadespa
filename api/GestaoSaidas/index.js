@@ -189,6 +189,13 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Esta categoria é de fundo livre — não vincule a uma campanha (isso é só pra categorias restritas)." } };
       return;
     }
+    if (cat.CentroCusto === "PDQ") {
+      const suspensao = await tesouraria.suspensaoAtivaFundoPdq(pool, sql);
+      if (suspensao) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: `O Fundo de Execução Estratégica (PDQ) está suspenso pelo Pastor Presidente desde ${new Date(suspensao.SuspensoEm).toLocaleDateString("pt-BR")} — motivo: ${suspensao.MotivoSuspensao}.` } };
+        return;
+      }
+    }
 
     const fornecedor = await pool.request().input("id", sql.Int, fornecedorId).query(`SELECT * FROM Fornecedores WHERE FornecedorId = @id`);
     if (fornecedor.recordset.length === 0 || !fornecedor.recordset[0].Ativo) {
@@ -350,9 +357,16 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Os dados bancários deste fornecedor mudaram e ainda não foram confirmados — não é possível pagar agora." } };
         return;
       }
+      if (registro.centroCusto === "PDQ") {
+        const suspensao = await tesouraria.suspensaoAtivaFundoPdq(pool, sql);
+        if (suspensao) {
+          context.res = { status: 200, body: { sucesso: false, mensagem: `O Fundo de Execução Estratégica (PDQ) está suspenso pelo Pastor Presidente desde ${new Date(suspensao.SuspensoEm).toLocaleDateString("pt-BR")} — não é possível pagar agora.` } };
+          return;
+        }
+      }
       const saldoDisponivel = await tesouraria.saldoCentroCusto(pool, sql, registro.centroCusto, registro.CongregacaoId);
       if (Number(registro.Valor) > saldoDisponivel) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: `Saldo insuficiente no Centro de Custo ${registro.centroCusto === "GERAL" ? "Geral" : "Local"} (disponível: R$ ${saldoDisponivel.toFixed(2)}).` } };
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Saldo insuficiente no Centro de Custo ${registro.centroCusto === "GERAL" ? "Geral" : registro.centroCusto === "PDQ" ? "PDQ" : "Local"} (disponível: R$ ${saldoDisponivel.toFixed(2)}).` } };
         return;
       }
       if (registro.CampanhaId) {

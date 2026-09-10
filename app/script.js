@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento",
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -521,6 +521,7 @@ const SUBMODULOS_FINANCEIRO = [
   { chave: "saidas", titulo: "Saídas (Contas a Pagar)", icone: "💸", subAba: "saidas", pronto: true },
   { chave: "receber", titulo: "Contas a Receber", icone: "📆", subAba: "receber", pronto: true },
   { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", subAba: "orcamento", pronto: true },
+  { chave: "pdq", titulo: "PDQ (Planejamento Diretor Quadrienal)", icone: "🧭", subAba: "pdq", pronto: true },
   { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
   { chave: "doacoes", titulo: "Doações Online", icone: "💳", pronto: false },
   { chave: "auditoria", titulo: "Auditoria e Compliance", icone: "🕵️", pronto: false }
@@ -563,6 +564,12 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "orcamento") {
     Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada(), carregarOpcoesCategoriasSaida()])
       .then(() => { carregarOrcamentos(); alternarCongregacaoFluxoCaixa(); });
+    return;
+  }
+  if (sub === "pdq") {
+    carregarPlanosPdq();
+    carregarFundoExecucaoPdq();
+    carregarComissoes();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -1596,6 +1603,336 @@ async function carregarFluxoCaixaProjetadoAcao() {
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// ---- PDQ: PLANEJAMENTO DIRETOR QUADRIENAL (v4.8, segunda parte) — plano
+// com 3 eixos, metas por eixo, projetos por meta (cronograma físico/
+// financeiro, atraso calculado sozinho), remanejamento com cláusula de
+// barreira (Art. 28) e Fundo de Execução Estratégica (Art. 27).
+let _pdqPlanoDetalheCache = null;
+
+function alternarFormNovoPlanoPdq() {
+  const form = document.getElementById("formNovoPlanoPdq");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function criarPlanoPdqAcao() {
+  const anoInicio = document.getElementById("pdqAnoInicio").value;
+  const anoFim = document.getElementById("pdqAnoFim").value;
+  const titulo = document.getElementById("pdqTitulo").value.trim();
+  const eixos = [1, 2, 3].map(n => ({ nome: document.getElementById(`pdqEixo${n}`).value.trim() }));
+  const resultado = document.getElementById("resultadoNovoPlanoPdq");
+  if (!anoInicio || !anoFim || !titulo || eixos.some(e => !e.nome)) {
+    resultado.textContent = "Preencha o período, o título e os 3 eixos.";
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/pdq-planos`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ anoInicio: Number(anoInicio), anoFim: Number(anoFim), titulo, eixos })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    ["pdqAnoInicio", "pdqAnoFim", "pdqTitulo", "pdqEixo1", "pdqEixo2", "pdqEixo3"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("formNovoPlanoPdq").style.display = "none";
+    carregarPlanosPdq();
+  }
+}
+
+async function carregarPlanosPdq() {
+  const container = document.getElementById("resultadoPlanosPdq");
+  const res = await fetchProtegido(`${API_BASE}/pdq-planos`);
+  const planos = await res.json();
+  if (!Array.isArray(planos) || planos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum Plano PDQ cadastrado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Período</th><th>Título</th><th>Eixos</th><th>Metas</th><th>Status</th><th></th></tr></thead><tbody>`;
+  planos.forEach(p => {
+    html += `<tr>
+      <td>${p.anoInicio}-${p.anoFim}</td><td>${p.titulo}</td><td>${p.totalEixos}</td><td>${p.totalMetas}</td>
+      <td><span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : (p.status === "ENCERRADO" ? "badge-inativo" : "badge-licenca")}">${p.status}</span></td>
+      <td class="acoes-inline"><button class="btn-link" onclick="verDetalhePlanoPdqAcao(${p.planoId})">Ver detalhe</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+function badgeStatusPdqMeta(status) {
+  const mapa = { EM_ANDAMENTO: "badge-licenca", CUMPRIDA: "badge-ativo", NAO_CUMPRIDA: "badge-desligado" };
+  return `<span class="badge-status ${mapa[status]}">${status.replace("_", " ")}</span>`;
+}
+
+async function verDetalhePlanoPdqAcao(planoId) {
+  const container = document.getElementById("detalhePlanoPdq");
+  const res = await fetchProtegido(`${API_BASE}/pdq-planos/${planoId}`);
+  const p = await res.json();
+  if (p.sucesso === false) { container.innerHTML = `<p class="subtitle">${p.mensagem}</p>`; return; }
+  _pdqPlanoDetalheCache = p;
+
+  let html = `<hr /><h4>${p.titulo} (${p.anoInicio}-${p.anoFim}) — <span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : "badge-inativo"}">${p.status}</span></h4>`;
+  if (p.status !== "ENCERRADO") {
+    html += `<select id="pdqStatusPlano_${planoId}">
+        <option value="EM_ELABORACAO" ${p.status === "EM_ELABORACAO" ? "selected" : ""}>Em elaboração</option>
+        <option value="VIGENTE" ${p.status === "VIGENTE" ? "selected" : ""}>Vigente</option>
+        <option value="ENCERRADO">Encerrado</option>
+      </select>
+      <button class="btn-link" onclick="atualizarStatusPlanoPdqAcao(${planoId})">Salvar status</button>
+      <button class="btn-link" onclick="verRelatorioProgressoPdqAcao(${planoId})">📊 Relatório de Progresso (AGO)</button>`;
+  }
+  html += `<div id="resultadoRelatorioProgressoPdq" style="margin:10px 0;"></div>`;
+
+  p.eixos.forEach(eixo => {
+    html += `<div style="border:1px solid #e0e0e0; border-radius:8px; padding:12px; margin-top:12px;">
+      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">📍 ${eixo.nome}</h4>`;
+    eixo.metas.forEach(meta => {
+      html += `<div style="margin:10px 0 10px 14px; padding-left:10px; border-left:3px solid #ddd;">
+        <strong>${meta.descricao}</strong> ${badgeStatusPdqMeta(meta.status)} ${meta.indicador ? `<br /><small>Indicador: ${meta.indicador}</small>` : ""} <small>— prazo ${meta.prazoAno}</small>
+        ${meta.justificativaTecnica ? `<br /><small>Justificativa: ${meta.justificativaTecnica}</small>` : ""}
+        <div class="barra-lista" style="margin-top:6px;">
+          <select id="pdqStatusMeta_${meta.metaId}">
+            <option value="EM_ANDAMENTO" ${meta.status === "EM_ANDAMENTO" ? "selected" : ""}>Em andamento</option>
+            <option value="CUMPRIDA" ${meta.status === "CUMPRIDA" ? "selected" : ""}>Cumprida</option>
+            <option value="NAO_CUMPRIDA" ${meta.status === "NAO_CUMPRIDA" ? "selected" : ""}>Não cumprida</option>
+          </select>
+          <button class="btn-link" onclick="atualizarStatusMetaPdqAcao(${meta.metaId})">Salvar</button>
+        </div>`;
+      meta.projetos.forEach(proj => {
+        html += `<div style="margin:8px 0 8px 14px; padding:8px; background:#f7f7f7; border-radius:6px;">
+          <strong>${proj.nome}</strong> — R$ ${Number(proj.orcamentoPrevisto).toFixed(2)}
+          <span class="badge-status ${proj.status === "CONCLUIDO" ? "badge-ativo" : (proj.status === "CANCELADO" ? "badge-inativo" : "badge-licenca")}">${proj.status}</span>
+          ${proj.atrasado ? "<span class='badge-status badge-desligado'>ATRASADO</span>" : ""}
+          <br /><small>${proj.cronogramaInicio} até ${proj.cronogramaFim}</small>
+          <div class="barra-lista" style="margin-top:4px;">
+            <select id="pdqStatusProjeto_${proj.projetoId}">
+              <option value="PLANEJADO" ${proj.status === "PLANEJADO" ? "selected" : ""}>Planejado</option>
+              <option value="EM_EXECUCAO" ${proj.status === "EM_EXECUCAO" ? "selected" : ""}>Em execução</option>
+              <option value="CONCLUIDO" ${proj.status === "CONCLUIDO" ? "selected" : ""}>Concluído</option>
+              <option value="CANCELADO" ${proj.status === "CANCELADO" ? "selected" : ""}>Cancelado</option>
+            </select>
+            <button class="btn-link" onclick="atualizarStatusProjetoPdqAcao(${proj.projetoId})">Salvar</button>
+            <button class="btn-link" onclick="solicitarRemanejamentoPdqAcao(${proj.projetoId})">↔️ Remanejar orçamento</button>
+          </div>
+        </div>`;
+      });
+      html += `<button class="btn-link" onclick="alternarFormNovoProjetoPdq(${meta.metaId})">➕ Novo projeto nesta meta</button>
+        <div id="formNovoProjetoPdq_${meta.metaId}" style="display:none; margin:6px 0 6px 14px;">
+          <div class="barra-lista">
+            <input type="text" id="pdqProjetoNome_${meta.metaId}" placeholder="Nome do projeto" />
+            <input type="number" id="pdqProjetoOrcamento_${meta.metaId}" placeholder="Orçamento previsto (R$)" min="0.01" step="0.01" style="max-width:170px;" />
+          </div>
+          <div class="barra-lista">
+            <input type="date" id="pdqProjetoInicio_${meta.metaId}" />
+            <input type="date" id="pdqProjetoFim_${meta.metaId}" />
+          </div>
+          <button class="btn-confirmar" style="width:auto;" onclick="criarProjetoPdqAcao(${meta.metaId})">Criar Projeto</button>
+          <p id="resultadoNovoProjetoPdq_${meta.metaId}" class="subtitle"></p>
+        </div>`;
+      html += `</div>`;
+    });
+    html += `<button class="btn-link" onclick="alternarFormNovaMetaPdq(${eixo.eixoId})">➕ Nova meta neste eixo</button>
+      <div id="formNovaMetaPdq_${eixo.eixoId}" style="display:none; margin:6px 0;">
+        <div class="input-group"><input type="text" id="pdqMetaDescricao_${eixo.eixoId}" placeholder="Descrição da meta" /></div>
+        <div class="barra-lista">
+          <input type="text" id="pdqMetaIndicador_${eixo.eixoId}" placeholder="Indicador (opcional)" />
+          <input type="number" id="pdqMetaPrazoAno_${eixo.eixoId}" placeholder="Ano prazo" style="max-width:130px;" />
+        </div>
+        <button class="btn-confirmar" style="width:auto;" onclick="criarMetaPdqAcao(${eixo.eixoId})">Criar Meta</button>
+        <p id="resultadoNovaMetaPdq_${eixo.eixoId}" class="subtitle"></p>
+      </div>`;
+    html += `</div>`;
+  });
+
+  html += `<div id="resultadoRemanejamentosPdq" style="margin-top:14px;"></div>`;
+  container.innerHTML = html;
+}
+
+async function atualizarStatusPlanoPdqAcao(planoId) {
+  const status = document.getElementById(`pdqStatusPlano_${planoId}`).value;
+  const res = await fetchProtegido(`${API_BASE}/pdq-planos/${planoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarPlanosPdq(); verDetalhePlanoPdqAcao(planoId); }
+}
+
+function alternarFormNovaMetaPdq(eixoId) {
+  const form = document.getElementById(`formNovaMetaPdq_${eixoId}`);
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function criarMetaPdqAcao(eixoId) {
+  const descricao = document.getElementById(`pdqMetaDescricao_${eixoId}`).value.trim();
+  const indicador = document.getElementById(`pdqMetaIndicador_${eixoId}`).value.trim();
+  const prazoAno = document.getElementById(`pdqMetaPrazoAno_${eixoId}`).value;
+  const resultado = document.getElementById(`resultadoNovaMetaPdq_${eixoId}`);
+  if (!descricao || !prazoAno) { resultado.textContent = "Informe a descrição e o ano prazo."; return; }
+  const res = await fetchProtegido(`${API_BASE}/pdq-metas`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eixoId, descricao, indicador: indicador || undefined, prazoAno: Number(prazoAno) })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) verDetalhePlanoPdqAcao(_pdqPlanoDetalheCache.planoId);
+}
+
+async function atualizarStatusMetaPdqAcao(metaId) {
+  const status = document.getElementById(`pdqStatusMeta_${metaId}`).value;
+  let justificativaTecnica;
+  if (status === "NAO_CUMPRIDA") {
+    justificativaTecnica = await pedirTexto("Justificativa técnica (Art. 29 §1º) — obrigatória", "Por que a meta não foi cumprida?");
+    if (justificativaTecnica === null || !justificativaTecnica.trim()) { mostrarToast("Justificativa técnica é obrigatória pra marcar como não cumprida.", "erro"); return; }
+  }
+  const res = await fetchProtegido(`${API_BASE}/pdq-metas/${metaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, justificativaTecnica })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) verDetalhePlanoPdqAcao(_pdqPlanoDetalheCache.planoId);
+}
+
+function alternarFormNovoProjetoPdq(metaId) {
+  const form = document.getElementById(`formNovoProjetoPdq_${metaId}`);
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function criarProjetoPdqAcao(metaId) {
+  const nome = document.getElementById(`pdqProjetoNome_${metaId}`).value.trim();
+  const orcamentoPrevisto = document.getElementById(`pdqProjetoOrcamento_${metaId}`).value;
+  const cronogramaInicio = document.getElementById(`pdqProjetoInicio_${metaId}`).value;
+  const cronogramaFim = document.getElementById(`pdqProjetoFim_${metaId}`).value;
+  const resultado = document.getElementById(`resultadoNovoProjetoPdq_${metaId}`);
+  if (!nome || !orcamentoPrevisto || !cronogramaInicio || !cronogramaFim) {
+    resultado.textContent = "Preencha nome, orçamento e o cronograma completo.";
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/pdq-projetos`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ metaId, nome, orcamentoPrevisto: Number(orcamentoPrevisto), cronogramaInicio, cronogramaFim })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) verDetalhePlanoPdqAcao(_pdqPlanoDetalheCache.planoId);
+}
+
+async function atualizarStatusProjetoPdqAcao(projetoId) {
+  const status = document.getElementById(`pdqStatusProjeto_${projetoId}`).value;
+  const res = await fetchProtegido(`${API_BASE}/pdq-projetos/${projetoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) verDetalhePlanoPdqAcao(_pdqPlanoDetalheCache.planoId);
+}
+
+function listaTodosProjetosPdq() {
+  if (!_pdqPlanoDetalheCache) return [];
+  const lista = [];
+  _pdqPlanoDetalheCache.eixos.forEach(eixo => eixo.metas.forEach(meta => meta.projetos.forEach(proj => lista.push(proj))));
+  return lista;
+}
+
+async function solicitarRemanejamentoPdqAcao(projetoOrigemId) {
+  const projetos = listaTodosProjetosPdq().filter(p => p.projetoId !== projetoOrigemId);
+  if (projetos.length === 0) { mostrarToast("Não há outro projeto no plano pra remanejar.", "erro"); return; }
+  const nomesDisponiveis = projetos.map(p => `${p.projetoId} — ${p.nome}`).join("\n");
+  const destinoTexto = await pedirTexto(`ID do projeto de destino:\n${nomesDisponiveis}`, "Digite o número do ID");
+  if (destinoTexto === null) return;
+  const projetoDestinoId = parseInt(destinoTexto, 10);
+  if (!projetos.some(p => p.projetoId === projetoDestinoId)) { mostrarToast("ID de destino inválido.", "erro"); return; }
+  const valorTexto = await pedirTexto("Valor a remanejar (R$)", "Ex: 500.00");
+  if (valorTexto === null) return;
+  const valor = Number(valorTexto);
+  if (!valor || valor <= 0) { mostrarToast("Valor inválido.", "erro"); return; }
+
+  const res = await fetchProtegido(`${API_BASE}/pdq-remanejamentos`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projetoOrigemId, projetoDestinoId, valor })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso && data.status === "PENDENTE_CLI") {
+    const container = document.getElementById("resultadoRemanejamentosPdq");
+    container.innerHTML = `<p class="subtitle">${data.mensagem}</p>
+      <button class="btn-link" onclick="homologarRemanejamentoPdqAcao(${data.remanejamentoId})">✅ Homologar (CLI)</button>
+      <button class="btn-link btn-link-perigo" onclick="rejeitarRemanejamentoPdqAcao(${data.remanejamentoId})">Rejeitar (CLI)</button>`;
+  } else if (data.sucesso) {
+    verDetalhePlanoPdqAcao(_pdqPlanoDetalheCache.planoId);
+  }
+}
+
+async function homologarRemanejamentoPdqAcao(remanejamentoId) {
+  const res = await fetchProtegido(`${API_BASE}/pdq-remanejamentos/${remanejamentoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "HOMOLOGAR" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) verDetalhePlanoPdqAcao(_pdqPlanoDetalheCache.planoId);
+}
+
+async function rejeitarRemanejamentoPdqAcao(remanejamentoId) {
+  const motivo = await pedirTexto("Motivo da rejeição (CLI)", "Ex: sem justificativa suficiente");
+  if (motivo === null || !motivo.trim()) return;
+  const res = await fetchProtegido(`${API_BASE}/pdq-remanejamentos/${remanejamentoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "REJEITAR", motivo })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) verDetalhePlanoPdqAcao(_pdqPlanoDetalheCache.planoId);
+}
+
+async function verRelatorioProgressoPdqAcao(planoId) {
+  const container = document.getElementById("resultadoRelatorioProgressoPdq");
+  const res = await fetchProtegido(`${API_BASE}/pdq-relatorio-progresso/${planoId}`);
+  const r = await res.json();
+  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${r.mensagem}</p>`; return; }
+  let html = `<div style="border:1px solid var(--cor-primaria); border-radius:8px; padding:10px;">
+    <strong>Progresso geral: ${r.percentualCumprimentoGeral}%</strong> (${r.totalCumpridas} de ${r.totalMetas} metas cumpridas)<br />`;
+  r.eixos.forEach(e => {
+    html += `${e.nome}: ${e.percentualCumprimento}% (${e.metasCumpridas} cumprida(s), ${e.metasNaoCumpridas} não cumprida(s), ${e.metasEmAndamento} em andamento) —
+      orçado em projetos: R$ ${Number(e.totalOrcadoProjetos).toFixed(2)}${e.projetosAtrasados.length > 0 ? ` — ⚠️ ${e.projetosAtrasados.length} projeto(s) atrasado(s)` : ""}<br />`;
+  });
+  html += "</div>";
+  container.innerHTML = html;
+}
+
+async function carregarFundoExecucaoPdq() {
+  const container = document.getElementById("resultadoFundoExecucaoPdq");
+  const res = await fetchProtegido(`${API_BASE}/pdq-fundo-execucao`);
+  const f = await res.json();
+  let html = `<p class="subtitle">Dotação: ${f.percentualDotacao}% da arrecadação líquida da Geral — saldo disponível: <strong>R$ ${Number(f.saldoDisponivel).toFixed(2)}</strong></p>`;
+  if (f.suspenso) {
+    html += `<p class="subtitle">⚠️ <strong>Suspenso</strong> desde ${new Date(f.suspensao.suspensoEm).toLocaleDateString("pt-BR")} — motivo: ${f.suspensao.motivoSuspensao}</p>`;
+  }
+  container.innerHTML = html;
+}
+
+async function suspenderFundoPdqAcao() {
+  const motivo = document.getElementById("fundoPdqMotivo").value.trim();
+  const resultado = document.getElementById("resultadoAcaoFundoPdq");
+  if (!motivo) { resultado.textContent = "Informe o motivo."; return; }
+  const res = await fetchProtegido(`${API_BASE}/pdq-fundo-execucao`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "SUSPENDER", motivo })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) { document.getElementById("fundoPdqMotivo").value = ""; carregarFundoExecucaoPdq(); }
+}
+
+async function reativarFundoPdqAcao() {
+  const motivo = document.getElementById("fundoPdqMotivo").value.trim();
+  const resultado = document.getElementById("resultadoAcaoFundoPdq");
+  if (!motivo) { resultado.textContent = "Informe o motivo."; return; }
+  const res = await fetchProtegido(`${API_BASE}/pdq-fundo-execucao`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "REATIVAR", motivo })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) { document.getElementById("fundoPdqMotivo").value = ""; carregarFundoExecucaoPdq(); }
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não
@@ -3171,17 +3508,19 @@ async function encerrarAssentoCLIAcao(assentoId) {
   if (data.sucesso) { carregarAssentosCLI(); carregarComposicaoCLI(); }
 }
 
-function tabelaComissaoCalculada(lista, comAcaoRemover) {
+// siglaCadastroManual: 'ccj'/'pmo' pras comissões de cadastro manual
+// (mostra "Remover"), false/undefined pras calculadas (CFO/CEP, só leitura).
+function tabelaComissaoCalculada(lista, siglaCadastroManual) {
   if (!Array.isArray(lista) || lista.length === 0) return "<p class='subtitle'>Ninguém compõe essa comissão ainda.</p>";
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Matrícula</th><th>Nome</th>${comAcaoRemover ? "<th>Desde</th><th></th>" : "<th>Cargo/Origem</th>"}
+    <th>Matrícula</th><th>Nome</th>${siglaCadastroManual ? "<th>Desde</th><th></th>" : "<th>Cargo/Origem</th>"}
   </tr></thead><tbody>`;
   lista.forEach(m => {
     html += `<tr>
       <td>${m.membroId}</td>
       <td>${m.nome}</td>
-      ${comAcaoRemover
-        ? `<td>${m.dataInicio}</td><td><button class="btn-link btn-link-perigo" onclick="removerMembroCCJ(${m.comissaoMembroId})">Remover</button></td>`
+      ${siglaCadastroManual
+        ? `<td>${m.dataInicio}</td><td><button class="btn-link btn-link-perigo" onclick="removerMembroComissaoAcao('${siglaCadastroManual}', ${m.comissaoMembroId})">Remover</button></td>`
         : `<td>${m.cargoOuFuncao || "-"}${m.origemSigla ? ` (${m.origemSigla})` : ""}</td>`}
     </tr>`;
   });
@@ -3189,13 +3528,25 @@ function tabelaComissaoCalculada(lista, comAcaoRemover) {
   return html;
 }
 
+async function removerMembroComissaoAcao(sigla, comissaoMembroId) {
+  if (!(await confirmarAcao(`Remover este membro da ${sigla.toUpperCase()}?`, "Remover"))) return;
+  const res = await fetchProtegido(`${API_BASE}/comissoes/${sigla}/${comissaoMembroId}/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarComissoes();
+}
+
 async function carregarComissoes() {
   const res = await fetchProtegido(`${API_BASE}/comissoes`);
   const data = await res.json();
   window._ccjCache = data.CCJ || [];
-  document.getElementById("resultadoListaCCJ").innerHTML = tabelaComissaoCalculada(data.CCJ, true);
-  document.getElementById("resultadoListaCFO").innerHTML = tabelaComissaoCalculada(data.CFO, false);
-  document.getElementById("resultadoListaCEP").innerHTML = tabelaComissaoCalculada(data.CEP, false);
+  if (document.getElementById("resultadoListaCCJ")) document.getElementById("resultadoListaCCJ").innerHTML = tabelaComissaoCalculada(data.CCJ, "ccj");
+  if (document.getElementById("resultadoListaCFO")) document.getElementById("resultadoListaCFO").innerHTML = tabelaComissaoCalculada(data.CFO, false);
+  if (document.getElementById("resultadoListaCEP")) document.getElementById("resultadoListaCEP").innerHTML = tabelaComissaoCalculada(data.CEP, false);
+  // v4.8 (segunda parte) — PMO reaproveita a mesma tabela de exibição da CCJ.
+  if (document.getElementById("resultadoListaPMO")) document.getElementById("resultadoListaPMO").innerHTML = tabelaComissaoCalculada(data.PMO, "pmo");
 }
 
 async function adicionarMembroCCJ() {
@@ -3216,14 +3567,22 @@ async function adicionarMembroCCJ() {
   }
 }
 
-async function removerMembroCCJ(comissaoMembroId) {
-  if (!(await confirmarAcao("Remover este membro da CCJ?", "Remover"))) return;
-  const res = await fetchProtegido(`${API_BASE}/comissoes/ccj/${comissaoMembroId}/encerrar`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+// v4.8 (segunda parte) — Comissão de Acompanhamento de Projetos / PMO
+// Eclesiástico (Art. 30), mesmo padrão de cadastro manual da CCJ.
+async function adicionarMembroPMO() {
+  const membroId = document.getElementById("pmoMatricula").value;
+  const msg = document.getElementById("resultadoPMO");
+  if (!membroId) { msg.textContent = "Informe a matrícula."; return; }
+  const res = await fetchProtegido(`${API_BASE}/comissoes/pmo`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId })
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) carregarComissoes();
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("pmoMatricula").value = "";
+    carregarComissoes();
+  }
 }
 
 // ---- Projetos e Parecer de Comissões (v2.8, Parte B — Art. 24-25) ----

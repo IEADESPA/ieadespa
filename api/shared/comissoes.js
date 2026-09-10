@@ -4,6 +4,7 @@
 // marcação manual quando dá pra derivar de outro dado real). CCJ é a única
 // eleita pelo Plenário (Art. 19, I) — não deriva de nada, precisa de
 // ComissaoMembros (migração 028).
+const { sql } = require("./db");
 
 // Art. 20 — Comissão de Finanças e Orçamento: titulares do Conselho Fiscal +
 // 1º/2º Tesoureiro da Diretoria Executiva. "Tesoureiro" ainda é texto livre em
@@ -52,4 +53,20 @@ async function composicaoCCJ(pool) {
   return result.recordset;
 }
 
-module.exports = { composicaoCFO, composicaoCEP, composicaoCCJ };
+// v4.8 (segunda parte) — mesmo padrão de cadastro manual da CCJ,
+// generalizado por sigla: usado pela Comissão de Acompanhamento de
+// Projetos / PMO Eclesiástico (Art. 30), sigla 'PMO', reaproveitando a
+// mesma tabela ComissaoMembros (sem criar uma tabela nova por comissão).
+async function composicaoPorSiglaEleita(pool, sigla) {
+  const result = await pool.request().input("sigla", sql.NVarChar(10), sigla).query(`
+    SELECT c.ComissaoMembroId AS comissaoMembroId, m.MembroId AS membroId, m.Nome AS nome,
+           CONVERT(varchar(10), c.DataInicio, 120) AS dataInicio
+    FROM ComissaoMembros c
+    JOIN MembroReferencia m ON m.MembroId = c.MembroId
+    WHERE c.Sigla = @sigla AND c.DataFim IS NULL
+    ORDER BY c.DataInicio
+  `);
+  return result.recordset;
+}
+
+module.exports = { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita };

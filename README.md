@@ -2051,18 +2051,46 @@ segunda parte (PDQ) fica pra próxima rodada.
       foi realizado desde a última vez — não precisou de um mecanismo de
       revisão periódica separado.
 
-##### Segunda parte (próxima rodada) — governança do PDQ
+##### Segunda parte (entregue) — governança do PDQ
 
-- [ ] Planejamento estratégico PDQ com metas e 3 eixos (Regimento, Art. 26-29).
-- [ ] Fundo de Execução Estratégica: dotação obrigatória de 10% da arrecadação
-      líquida (Art. 27), com suspensão excepcional pelo Pastor Presidente.
-- [ ] Remanejamento de até 20% + cláusula de barreira acima disso (CLI) — Art. 28.
-- [ ] Comissão de Acompanhamento de Projetos / PMO Eclesiástico (Art. 30):
-      monitora cronograma físico/financeiro do PDQ, reporta trimestralmente à
-      CLI — natural que nasça junto com o PDQ, é o mesmo dado.
-- [ ] Relatório de Progresso do PDQ na AGO (Art. 29) + Relatório de
-      Justificativa Técnica quando as metas não forem cumpridas (sem virar
-      infração disciplinar — Art. 29 §1º).
+- [x] **Planejamento estratégico PDQ** (`PdqPlanos`/`PdqEixos`/`PdqMetas`/
+      `PdqProjetos`, `GestaoPdqPlanos`/`GestaoPdqMetas`/`GestaoPdqProjetos`)
+      — plano com **exatamente 3 eixos** (validado no endpoint, Art.
+      26-29), metas por eixo, projetos por meta com cronograma físico
+      (datas) e financeiro (orçamento previsto). **Atraso é calculado na
+      leitura** (hoje passou do fim do cronograma e o projeto não foi
+      concluído), nunca marcado à mão. Criar/editar é matéria da CLI
+      (permissão `"cli"` já existente, mesma usada em
+      `GestaoProjetos`/`SucessaoPresidencial` — não um novo conceito).
+- [x] **Fundo de Execução Estratégica** (`GestaoFundoExecucaoPdq`) —
+      dotação obrigatória de 10% da arrecadação líquida que a Geral já
+      recebeu (Art. 27), tratada como um terceiro Centro de Custo
+      (`shared/tesouraria.js::saldoCentroCusto`, `centroCusto='PDQ'`) ao
+      lado de Local/Geral (v4.1.3) — sempre calculada na leitura, nunca um
+      saldo próprio gravado. **Suspensão excepcional só pelo Pastor
+      Presidente de verdade**: `shared/diretoria.js::ehPresidenteAtual`
+      verifica o Assento real na Diretoria Executiva (cargo `PRESIDENTE`,
+      sem `DataFim`) — não uma permissão genérica como "financeiro" ou
+      nível Global, que qualquer Tesoureiro Geral teria. Enquanto
+      suspenso, `GestaoSaidas` bloqueia qualquer nova solicitação ou
+      pagamento contra esse fundo.
+- [x] **Remanejamento com cláusula de barreira** (`GestaoRemanejamentoPdq`,
+      Art. 28) — até 20% do orçamento do projeto de origem é aprovado
+      automaticamente e já ajusta os dois orçamentos na hora; acima disso
+      fica `PENDENTE_CLI` até alguém com permissão `"cli"` e nível Global
+      homologar — só aí o ajuste é de fato aplicado.
+- [x] **Comissão de Acompanhamento de Projetos / PMO Eclesiástico** (Art.
+      30) — `GestaoComissoes` generalizado (não era possível cadastrar
+      nenhuma sigla além da CCJ) pra aceitar a sigla `PMO`, reaproveitando
+      a mesma tabela `ComissaoMembros` sem criar estrutura nova.
+- [x] **Relatório de Progresso do PDQ** (`RelatorioProgressoPdq`) — usado
+      tanto pra apresentação na AGO (Art. 29) quanto pelo PMO pra reportar
+      trimestralmente à CLI (mesmo dado, dois usos): percentual de
+      cumprimento por eixo e geral, projetos atrasados, tudo calculado na
+      leitura. **Relatório de Justificativa Técnica** (Art. 29 §1º) não
+      virou tela própria — é o campo `JustificativaTecnica`, obrigatório
+      no próprio endpoint quando uma meta é marcada `NAO_CUMPRIDA`, sem
+      acionar nenhum fluxo disciplinar automático.
 
 #### v4.9 — Demonstrações Contábeis (ITG 2002)
 

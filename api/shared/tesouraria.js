@@ -33,25 +33,48 @@ function redigirParaMural(lancamentos) {
   });
 }
 
+// Percentual de dotação obrigatória do Fundo de Execução Estratégica
+// (PDQ, Art. 27) sobre o que a Geral efetivamente recebeu — nunca
+// hardcoded em outro lugar além daqui.
+const PERCENTUAL_FUNDO_EXECUCAO_PDQ = 10;
+
 // v4.5 — saldo disponível de um Centro de Custo (Local de uma congregação
-// específica, ou Geral consolidado de toda a denominação) pra Saídas: o
-// que já foi liberado pela Tesouraria Geral (v4.1.3) menos o que já foi
-// efetivamente pago. Nunca fica negativo — é o próprio endpoint de
-// pagamento que barra, não uma marcação manual.
+// específica, Geral consolidado, ou o Fundo de Execução Estratégica do
+// PDQ — v4.8 segunda parte) pra Saídas: o que já foi liberado/dotado
+// menos o que já foi efetivamente pago. Nunca fica negativo — é o
+// próprio endpoint de pagamento que barra, não uma marcação manual.
 async function saldoCentroCusto(pool, sql, centroCusto, congregacaoId) {
-  const liberado = centroCusto === "GERAL"
-    ? await pool.request().query(`SELECT ISNULL(SUM(ValorRepasseGeral), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO'`)
-    : await pool.request().input("congregacaoId", sql.Int, congregacaoId)
-        .query(`SELECT ISNULL(SUM(ValorRetidoLocal), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO' AND CongregacaoId = @congregacaoId`);
+  let liberado;
+  if (centroCusto === "GERAL") {
+    liberado = await pool.request().query(`SELECT ISNULL(SUM(ValorRepasseGeral), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO'`);
+  } else if (centroCusto === "PDQ") {
+    // Dotação obrigatória de 10% da arrecadação líquida que a Geral já
+    // recebeu (Art. 27) — não é um saldo à parte, é uma fatia reservada
+    // dentro do próprio caixa único (v4.1.3).
+    const repasse = await pool.request().query(`SELECT ISNULL(SUM(ValorRepasseGeral), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO'`);
+    liberado = { recordset: [{ total: round2(Number(repasse.recordset[0].total) * PERCENTUAL_FUNDO_EXECUCAO_PDQ / 100) }] };
+  } else {
+    liberado = await pool.request().input("congregacaoId", sql.Int, congregacaoId)
+      .query(`SELECT ISNULL(SUM(ValorRetidoLocal), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO' AND CongregacaoId = @congregacaoId`);
+  }
   const pagoRequest = pool.request().input("centroCusto", sql.NVarChar(20), centroCusto);
-  if (centroCusto !== "GERAL") pagoRequest.input("congregacaoId", sql.Int, congregacaoId);
+  if (centroCusto === "LOCAL") pagoRequest.input("congregacaoId", sql.Int, congregacaoId);
   const pago = await pagoRequest.query(`
     SELECT ISNULL(SUM(s.Valor), 0) AS total FROM SaidasTesouraria s
     JOIN CategoriasSaida cs ON cs.Codigo = s.Tipo
     WHERE s.Status = 'PAGA' AND cs.CentroCusto = @centroCusto
-    ${centroCusto !== "GERAL" ? "AND s.CongregacaoId = @congregacaoId" : ""}
+    ${centroCusto === "LOCAL" ? "AND s.CongregacaoId = @congregacaoId" : ""}
   `);
   return round2(liberado.recordset[0].total - pago.recordset[0].total);
+}
+
+// v4.8 (segunda parte) — o Fundo de Execução Estratégica pode ser
+// suspenso excepcionalmente pelo Pastor Presidente (Art. 27); enquanto
+// suspenso, nenhuma nova Saída pode debitar dele (checado em
+// GestaoSaidas). Suspensão ativa é a última linha sem ReativadoEm.
+async function suspensaoAtivaFundoPdq(pool, sql) {
+  const result = await pool.request().query(`SELECT TOP 1 * FROM PdqFundoSuspensoes WHERE ReativadoEm IS NULL ORDER BY SuspensaoId DESC`);
+  return result.recordset[0] || null;
 }
 
 // Saldo restante de uma campanha (fundo restrito, v4.2/v4.4): o que já foi
@@ -136,4 +159,4 @@ async function projetarFluxoCaixa(pool, sql, centroCusto, congregacaoId, meses) 
   return { saldoAtual, entradaMediaMensal, saidaMediaMensal, totalEmpenhadoAberto, projecao };
 }
 
-module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo, projetarFluxoCaixa };
+module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo, projetarFluxoCaixa, suspensaoAtivaFundoPdq, PERCENTUAL_FUNDO_EXECUCAO_PDQ };

@@ -105,6 +105,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroSaidas" onclick="mostrarSubAbaFinanceiro('saidas')"><span class="icone">💸</span><span class="rotulo">Saídas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroReceber" onclick="mostrarSubAbaFinanceiro('receber')"><span class="icone">📆</span><span class="rotulo">Contas a Receber</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroOrcamento" onclick="mostrarSubAbaFinanceiro('orcamento')"><span class="icone">📐</span><span class="rotulo">Orçamento</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroPdq" onclick="mostrarSubAbaFinanceiro('pdq')"><span class="icone">🧭</span><span class="rotulo">PDQ</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -1968,6 +1969,62 @@
             <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarFluxoCaixaProjetadoAcao()">Projetar</button>
           </div>
           <div class="rolagem-tabela"><div id="resultadoFluxoCaixaProjetado"></div></div>
+        </div>
+
+        <!-- SUB-ABA: PDQ (v4.8, segunda parte) — Planejamento Diretor
+             Quadrienal (Art. 26-30): plano com 3 eixos, metas por eixo,
+             projetos por meta, remanejamento com cláusula de barreira,
+             Fundo de Execução Estratégica e Comissão de Acompanhamento
+             (PMO). -->
+        <div id="subFinanceiroPdq" class="sub-aba-secretaria" style="display:none;">
+          <h3>🧭 Planejamento Diretor Quadrienal (PDQ)</h3>
+          <p class="subtitle">Plano estratégico de 4 anos, sempre com 3 eixos (Regimento Art.
+            26-29). Metas e projetos ficam dentro de cada eixo; status de atraso é calculado
+            sozinho a partir do cronograma.</p>
+
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarFormNovoPlanoPdq()">➕ Novo Plano PDQ</button>
+          <div id="formNovoPlanoPdq" style="display:none; margin-top:14px;">
+            <div class="barra-lista">
+              <input type="number" id="pdqAnoInicio" placeholder="Ano início" style="max-width:130px;" />
+              <input type="number" id="pdqAnoFim" placeholder="Ano fim" style="max-width:130px;" />
+              <input type="text" id="pdqTitulo" placeholder="Título do plano" style="min-width:220px;" />
+            </div>
+            <h4 style="margin:10px 0 6px; color: var(--cor-primaria);">Os 3 eixos estratégicos</h4>
+            <div class="barra-lista"><input type="text" id="pdqEixo1" placeholder="Nome do 1º eixo" /></div>
+            <div class="barra-lista"><input type="text" id="pdqEixo2" placeholder="Nome do 2º eixo" /></div>
+            <div class="barra-lista"><input type="text" id="pdqEixo3" placeholder="Nome do 3º eixo" /></div>
+            <button class="btn-confirmar" style="width:auto;margin-top:8px;" onclick="criarPlanoPdqAcao()">Criar Plano</button>
+            <p id="resultadoNovoPlanoPdq" class="subtitle"></p>
+          </div>
+
+          <div class="rolagem-tabela"><div id="resultadoPlanosPdq"></div></div>
+          <div id="detalhePlanoPdq" style="margin-top:18px;"></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h3>💰 Fundo de Execução Estratégica</h3>
+          <p class="subtitle">Dotação obrigatória de 10% da arrecadação líquida da Geral (Art.
+            27) — calculado sozinho, nunca um saldo digitado. Suspender/reativar é ação
+            excepcional e pessoal do Pastor Presidente.</p>
+          <div id="resultadoFundoExecucaoPdq"></div>
+          <div class="barra-lista" style="margin-top:8px;">
+            <input type="text" id="fundoPdqMotivo" placeholder="Motivo (obrigatório)" style="min-width:260px;" />
+            <button class="btn-link btn-link-perigo" onclick="suspenderFundoPdqAcao()">Suspender</button>
+            <button class="btn-link" onclick="reativarFundoPdqAcao()">Reativar</button>
+          </div>
+          <p id="resultadoAcaoFundoPdq" class="subtitle"></p>
+
+          <hr style="margin:24px 0;" />
+
+          <h3>🗂️ Comissão de Acompanhamento de Projetos (PMO)</h3>
+          <p class="subtitle">Monitora o cronograma físico/financeiro do PDQ e reporta
+            trimestralmente à CLI (Art. 30).</p>
+          <div class="barra-lista">
+            <input type="number" id="pmoMatricula" placeholder="Matrícula" style="max-width:180px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="adicionarMembroPMO()">➕ Adicionar</button>
+          </div>
+          <p id="resultadoPMO" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoListaPMO"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

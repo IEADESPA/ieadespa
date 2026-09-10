@@ -552,7 +552,7 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "campanhas") { carregarOpcoesCongregacoesFinanceiro().then(carregarCampanhas); return; }
   if (sub === "saidas") {
     Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasSaida(), carregarOpcoesFornecedoresSaida(), carregarOpcoesCampanhasSaida(), carregarValorReferenciaCotacoes()])
-      .then(() => { carregarFornecedores(); carregarSaidas(); carregarFundosFixos(); });
+      .then(() => { carregarFornecedores(); carregarSaidas(); carregarFundosFixos(); carregarDadosBancariosInstituicao(); carregarRemessas(); });
     return;
   }
   if (sub === "receber") {
@@ -1334,6 +1334,128 @@ async function registrarMovimentoFundoFixoAcao(fundoId) {
   avisarResultado(data);
   resultado.textContent = data.mensagem;
   if (data.sucesso) { verDetalheFundoFixoAcao(fundoId); carregarFundosFixos(); }
+}
+
+// ---- REMESSA BANCÁRIA CNAB 240 (v4.7) — gera um único arquivo pra pagar
+// várias Saídas já aprovadas de uma vez; a leitura do arquivo de retorno
+// confirma o pagamento automaticamente (ou marca falha, sem travar as
+// demais). Gerar remessa e processar retorno são restritos a nível Global.
+function alternarFormDadosBancariosInstituicao() {
+  const form = document.getElementById("formDadosBancariosInstituicao");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function carregarDadosBancariosInstituicao() {
+  const res = await fetchProtegido(`${API_BASE}/dados-bancarios-instituicao`);
+  const d = await res.json();
+  document.getElementById("instRazaoSocial").value = d.razaoSocial || "";
+  document.getElementById("instCnpj").value = d.cnpj || "";
+  document.getElementById("instCodigoBanco").value = d.codigoBanco || "";
+  document.getElementById("instNomeBanco").value = d.nomeBanco || "";
+  document.getElementById("instAgencia").value = d.agencia || "";
+  document.getElementById("instDigitoAgencia").value = d.digitoAgencia || "";
+  document.getElementById("instConta").value = d.conta || "";
+  document.getElementById("instDigitoConta").value = d.digitoConta || "";
+  document.getElementById("instCodigoConvenio").value = d.codigoConvenio || "";
+}
+
+async function salvarDadosBancariosInstituicaoAcao() {
+  const body = {
+    razaoSocial: document.getElementById("instRazaoSocial").value.trim(),
+    cnpj: document.getElementById("instCnpj").value.trim(),
+    codigoBanco: document.getElementById("instCodigoBanco").value.trim(),
+    nomeBanco: document.getElementById("instNomeBanco").value.trim(),
+    agencia: document.getElementById("instAgencia").value.trim(),
+    digitoAgencia: document.getElementById("instDigitoAgencia").value.trim(),
+    conta: document.getElementById("instConta").value.trim(),
+    digitoConta: document.getElementById("instDigitoConta").value.trim(),
+    codigoConvenio: document.getElementById("instCodigoConvenio").value.trim()
+  };
+  const res = await fetchProtegido(`${API_BASE}/dados-bancarios-instituicao`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  document.getElementById("resultadoDadosBancariosInstituicao").textContent = data.mensagem;
+}
+
+async function gerarRemessaBancariaAcao() {
+  const resultado = document.getElementById("resultadoNovaRemessa");
+  const res = await fetchProtegido(`${API_BASE}/remessas-bancarias`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) carregarRemessas();
+}
+
+function badgeStatusRemessa(status) {
+  return `<span class="badge-status ${status === "PROCESSADA" ? "badge-ativo" : "badge-licenca"}">${status}</span>`;
+}
+
+async function carregarRemessas() {
+  const container = document.getElementById("resultadoRemessas");
+  const res = await fetchProtegido(`${API_BASE}/remessas-bancarias`);
+  const remessas = await res.json();
+  if (!Array.isArray(remessas) || remessas.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma remessa gerada ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nº</th><th>Registros</th><th>Valor Total</th><th>Status</th><th></th></tr></thead><tbody>`;
+  remessas.forEach(r => {
+    html += `<tr>
+      <td>${r.numeroSequencial}</td><td>${r.totalRegistros}</td><td>R$ ${Number(r.valorTotal).toFixed(2)}</td>
+      <td>${badgeStatusRemessa(r.status)}</td>
+      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheRemessaAcao(${r.remessaId})">Ver detalhe</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function verDetalheRemessaAcao(remessaId) {
+  const container = document.getElementById("detalheRemessa");
+  const res = await fetchProtegido(`${API_BASE}/remessas-bancarias/${remessaId}`);
+  const r = await res.json();
+  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${r.mensagem}</p>`; return; }
+
+  let html = `<hr /><h4>Remessa nº ${r.numeroSequencial} ${badgeStatusRemessa(r.status)}</h4>
+    <p class="subtitle">R$ ${Number(r.valorTotal).toFixed(2)} em ${r.totalRegistros} pagamento(s) —
+      <a href="${r.arquivoUrl}" target="_blank" rel="noopener">📎 baixar arquivo de remessa</a>
+      ${r.arquivoRetornoUrl ? ` — <a href="${r.arquivoRetornoUrl}" target="_blank" rel="noopener">📎 arquivo de retorno</a>` : ""}</p>
+    <table class="tabela-frequencia"><thead><tr><th>Fornecedor</th><th>Valor</th><th>Status</th></tr></thead><tbody>`;
+  r.itens.forEach(i => {
+    const mapa = { PENDENTE: "badge-licenca", PROCESSADO: "badge-ativo", FALHOU: "badge-desligado" };
+    html += `<tr><td>${i.fornecedorNome}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
+      <td><span class="badge-status ${mapa[i.status]}">${i.status}</span>${i.motivoFalha ? `<br /><small>${i.motivoFalha}</small>` : ""}</td></tr>`;
+  });
+  html += "</tbody></table>";
+
+  if (r.status === "GERADA") {
+    html += `
+      <h4 style="margin:16px 0 8px; color: var(--cor-primaria);">Processar retorno do banco</h4>
+      <div class="input-group">
+        <input type="file" id="arquivoRetornoRemessa_${remessaId}" />
+      </div>
+      <button class="btn-confirmar" style="width:auto;" onclick="processarRetornoRemessaAcao(${remessaId})">Processar Retorno</button>
+      <p id="resultadoRetornoRemessa_${remessaId}" class="subtitle"></p>`;
+  }
+  container.innerHTML = html;
+}
+
+async function processarRetornoRemessaAcao(remessaId) {
+  const arquivo = document.getElementById(`arquivoRetornoRemessa_${remessaId}`).files[0];
+  const resultado = document.getElementById(`resultadoRetornoRemessa_${remessaId}`);
+  if (!arquivo) { resultado.textContent = "Anexe o arquivo de retorno recebido do banco."; return; }
+  const body = { arquivoRetornoBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type || "text/plain" };
+  const res = await fetchProtegido(`${API_BASE}/remessas-bancarias/${remessaId}/retorno`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) { verDetalheRemessaAcao(remessaId); carregarRemessas(); carregarSaidas(); }
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

@@ -1987,11 +1987,28 @@ Fixo de Caixa).
 
 #### v4.7 — Remessa Bancária (CNAB 240/400)
 
-- [ ] Geração de arquivo de remessa bancária (padrão Febraban CNAB 240)
-      pra pagar vários fornecedores/prebendas (v4.10) de uma vez só — sobe
-      um arquivo no banco em vez de PIX/TED um por um.
-- [ ] Leitura do arquivo de retorno do banco (quais pagamentos foram
-      processados, quais falharam) — atualiza status automaticamente.
+- [x] Geração de arquivo de remessa bancária (`shared/cnab240.js`,
+      `GestaoRemessasBancarias`, layout estrutural do padrão Febraban
+      CNAB 240 — os campos essenciais estão de verdade: banco, valor,
+      favorecido, número de documento pra casar o retorno; como todo
+      CNAB 240 exige homologação prévia com o banco específico
+      contratado, este é o ponto de partida técnico correto, não um
+      arquivo já homologado com nenhum banco) pra pagar várias Saídas já
+      **APROVADAS** de uma vez só — sobe um arquivo no banco em vez de
+      PIX/TED um por um. Só entra fornecedor com dados bancários
+      confirmados e completos (v4.5). Dados bancários da própria
+      denominação em `DadosBancariosInstituicao`, nunca hardcoded,
+      editáveis só por nível Global.
+- [x] Leitura do arquivo de retorno do banco (`ProcessarRetornoRemessa`,
+      `shared/cnab240.js::parsearRetornoCnab240`) — pagamento confirmado
+      vira `SaidasTesouraria.Status = 'PAGA'` automaticamente (mesmo
+      efeito de pagar uma por uma, sem repetir o trabalho); rejeitado
+      pelo banco fica `FALHOU` com o código de ocorrência, e a Saída
+      volta a ficar disponível pra entrar numa remessa nova ou ser paga
+      manualmente. Gerar remessa e processar retorno restritos a nível
+      Global (move dinheiro de várias congregações de uma vez, mesmo
+      princípio de `RegistrarRepasseTesouraria`). Número sequencial do
+      arquivo nunca reinicia — mesmo princípio do Termo nº.
 
 #### v4.8 — Orçamento Anual, PDQ, Empenho e Fluxo de Caixa Projetado
 

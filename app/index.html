@@ -1844,6 +1844,41 @@
           </div>
           <div class="rolagem-tabela"><div id="resultadoFundosFixos"></div></div>
           <div id="detalheFundoFixo" style="margin-top:18px;"></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h3>🏦 Remessa Bancária (CNAB 240)</h3>
+          <p class="subtitle">Gera um único arquivo pra pagar várias solicitações já aprovadas de
+            uma vez (sobe no banco em vez de PIX/TED um por um). Layout estrutural do padrão
+            FEBRABAN — precisa ser homologado com o banco contratado antes do primeiro uso real.</p>
+
+          <button class="btn-link" onclick="alternarFormDadosBancariosInstituicao()">⚙️ Dados bancários da instituição</button>
+          <div id="formDadosBancariosInstituicao" style="display:none; margin-top:10px;">
+            <div class="barra-lista">
+              <input type="text" id="instRazaoSocial" placeholder="Razão social" style="min-width:220px;" />
+              <input type="text" id="instCnpj" placeholder="CNPJ" style="max-width:160px;" />
+            </div>
+            <div class="barra-lista">
+              <input type="text" id="instCodigoBanco" placeholder="Código do banco (3 dígitos)" style="max-width:170px;" />
+              <input type="text" id="instNomeBanco" placeholder="Nome do banco" />
+            </div>
+            <div class="barra-lista">
+              <input type="text" id="instAgencia" placeholder="Agência" style="max-width:120px;" />
+              <input type="text" id="instDigitoAgencia" placeholder="Dígito" style="max-width:80px;" />
+              <input type="text" id="instConta" placeholder="Conta" style="max-width:150px;" />
+              <input type="text" id="instDigitoConta" placeholder="Dígito" style="max-width:80px;" />
+              <input type="text" id="instCodigoConvenio" placeholder="Código do convênio" />
+            </div>
+            <button class="btn-confirmar" style="width:auto;" onclick="salvarDadosBancariosInstituicaoAcao()">Salvar</button>
+            <p id="resultadoDadosBancariosInstituicao" class="subtitle"></p>
+          </div>
+
+          <div style="margin-top:14px;">
+            <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="gerarRemessaBancariaAcao()">➕ Gerar Remessa com Solicitações Aprovadas</button>
+          </div>
+          <p id="resultadoNovaRemessa" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoRemessas"></div></div>
+          <div id="detalheRemessa" style="margin-top:18px;"></div>
         </div>
 
         <!-- SUB-ABA: CONTAS A RECEBER (v4.6) — valor esperado, ainda não

@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber",
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -520,7 +520,7 @@ const SUBMODULOS_FINANCEIRO = [
   { chave: "campanhas", titulo: "Campanhas", icone: "🎯", subAba: "campanhas", pronto: true },
   { chave: "saidas", titulo: "Saídas (Contas a Pagar)", icone: "💸", subAba: "saidas", pronto: true },
   { chave: "receber", titulo: "Contas a Receber", icone: "📆", subAba: "receber", pronto: true },
-  { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", pronto: false },
+  { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", subAba: "orcamento", pronto: true },
   { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
   { chave: "doacoes", titulo: "Doações Online", icone: "💳", pronto: false },
   { chave: "auditoria", titulo: "Auditoria e Compliance", icone: "🕵️", pronto: false }
@@ -558,6 +558,11 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "receber") {
     Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada(), carregarOpcoesCampanhasSaida()])
       .then(() => carregarContasReceber());
+    return;
+  }
+  if (sub === "orcamento") {
+    Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada(), carregarOpcoesCategoriasSaida()])
+      .then(() => { carregarOrcamentos(); alternarCongregacaoFluxoCaixa(); });
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -608,7 +613,7 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
@@ -1456,6 +1461,141 @@ async function processarRetornoRemessaAcao(remessaId) {
   avisarResultado(data);
   resultado.textContent = data.mensagem;
   if (data.sucesso) { verDetalheRemessaAcao(remessaId); carregarRemessas(); carregarSaidas(); }
+}
+
+// ---- ORÇAMENTO ANUAL, ORÇADO VS REALIZADO E FLUXO DE CAIXA PROJETADO
+// (v4.8, primeira parte) — Empenhado/Realizado sempre calculados na
+// leitura a partir das Saídas/Lançamentos de verdade, nunca digitados à
+// mão. Balanço Patrimonial fica pra v4.9 (Demonstrações Contábeis).
+function alternarFormNovoOrcamento() {
+  const form = document.getElementById("formNovoOrcamento");
+  const abrindo = form.style.display === "none";
+  form.style.display = abrindo ? "block" : "none";
+  if (abrindo) montarBuilderLinhasOrcamento();
+}
+
+function montarBuilderLinhasOrcamento() {
+  const entradas = (_categoriasEntradaCache || []).filter(c => c.ativa !== false);
+  const saidas = (_categoriasSaidaCache || []).filter(c => c.ativa !== false);
+  const linha = c => `<tr>
+      <td><input type="checkbox" class="chk-linha-orcamento" data-tipo="${c._tipo}" value="${c.codigo}" /></td>
+      <td>${c.nome}</td>
+      <td><input type="number" class="valor-linha-orcamento" min="0.01" step="0.01" style="max-width:130px;" placeholder="0,00" /></td>
+    </tr>`;
+  entradas.forEach(c => c._tipo = "ENTRADA");
+  saidas.forEach(c => c._tipo = "SAIDA");
+  document.getElementById("orcamentoLinhasEntrada").innerHTML = `<table class="tabela-frequencia"><thead><tr><th></th><th>Categoria</th><th>Valor Orçado (R$)</th></tr></thead><tbody>${entradas.map(linha).join("")}</tbody></table>`;
+  document.getElementById("orcamentoLinhasSaida").innerHTML = `<table class="tabela-frequencia"><thead><tr><th></th><th>Categoria</th><th>Valor Orçado (R$)</th></tr></thead><tbody>${saidas.map(linha).join("")}</tbody></table>`;
+}
+
+async function criarOrcamentoAcao() {
+  const ano = document.getElementById("orcamentoAno").value;
+  const resultado = document.getElementById("resultadoNovoOrcamento");
+  if (!ano) { resultado.textContent = "Informe o ano."; return; }
+  const linhas = [];
+  document.querySelectorAll(".chk-linha-orcamento:checked").forEach(chk => {
+    const valor = chk.closest("tr").querySelector(".valor-linha-orcamento").value;
+    if (valor && Number(valor) > 0) linhas.push({ tipoMovimento: chk.dataset.tipo, categoriaCodigo: chk.value, valorOrcado: Number(valor) });
+  });
+  if (linhas.length === 0) { resultado.textContent = "Marque ao menos uma categoria e informe o valor orçado."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/orcamentos`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ano: Number(ano), linhas })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("orcamentoAno").value = "";
+    document.getElementById("formNovoOrcamento").style.display = "none";
+    carregarOrcamentos();
+  }
+}
+
+async function carregarOrcamentos() {
+  const container = document.getElementById("resultadoOrcamentos");
+  const res = await fetchProtegido(`${API_BASE}/orcamentos`);
+  const orcamentos = await res.json();
+  if (!Array.isArray(orcamentos) || orcamentos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum orçamento anual cadastrado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Ano</th><th>Orçado (Entradas)</th><th>Orçado (Saídas)</th><th>Status</th><th></th></tr></thead><tbody>`;
+  orcamentos.forEach(o => {
+    html += `<tr>
+      <td>${o.ano}</td><td>R$ ${Number(o.totalOrcadoEntrada).toFixed(2)}</td><td>R$ ${Number(o.totalOrcadoSaida).toFixed(2)}</td>
+      <td><span class="badge-status ${o.status === "ABERTO" ? "badge-ativo" : "badge-inativo"}">${o.status}</span></td>
+      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheOrcamentoAcao(${o.orcamentoId})">Ver detalhe</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function verDetalheOrcamentoAcao(orcamentoId) {
+  const container = document.getElementById("detalheOrcamento");
+  const res = await fetchProtegido(`${API_BASE}/orcamentos/${orcamentoId}`);
+  const o = await res.json();
+  if (o.sucesso === false) { container.innerHTML = `<p class="subtitle">${o.mensagem}</p>`; return; }
+
+  let html = `<hr /><h4>Orçamento ${o.ano} — <span class="badge-status ${o.status === "ABERTO" ? "badge-ativo" : "badge-inativo"}">${o.status}</span></h4>`;
+  if (authNivel === "GLOBAL" && o.status === "ABERTO") {
+    html += `<button class="btn-link btn-link-perigo" onclick="encerrarOrcamentoAcao(${orcamentoId})">🔒 Encerrar orçamento</button>`;
+  }
+  html += `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Categoria</th><th>Orçado</th><th>Empenhado</th><th>Realizado</th></tr></thead><tbody>`;
+  o.linhas.forEach(l => {
+    html += `<tr>
+      <td>${l.tipoMovimento === "ENTRADA" ? "Entrada" : "Saída"}</td><td>${l.categoriaNome || l.categoriaCodigo}</td>
+      <td>R$ ${Number(l.valorOrcado).toFixed(2)}</td><td>${l.empenhado != null ? "R$ " + Number(l.empenhado).toFixed(2) : "—"}</td>
+      <td>R$ ${Number(l.realizado).toFixed(2)}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function encerrarOrcamentoAcao(orcamentoId) {
+  const motivo = await pedirTexto("Confirma encerrar este orçamento?", "Digite qualquer texto para confirmar");
+  if (motivo === null) return;
+  const res = await fetchProtegido(`${API_BASE}/orcamentos/${orcamentoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "ENCERRADO" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarOrcamentos(); verDetalheOrcamentoAcao(orcamentoId); }
+}
+
+function alternarCongregacaoFluxoCaixa() {
+  const centroCusto = document.getElementById("fluxoCentroCusto").value;
+  document.getElementById("fluxoCongregacao").style.display = centroCusto === "LOCAL" ? "inline-block" : "none";
+}
+
+async function carregarFluxoCaixaProjetadoAcao() {
+  const centroCusto = document.getElementById("fluxoCentroCusto").value;
+  const congregacaoId = document.getElementById("fluxoCongregacao").value;
+  const meses = document.getElementById("fluxoMeses").value || 6;
+  const container = document.getElementById("resultadoFluxoCaixaProjetado");
+  const params = new URLSearchParams({ centroCusto, meses });
+  if (centroCusto === "LOCAL") {
+    if (!congregacaoId) { container.innerHTML = "<p class='subtitle'>Escolha a congregação.</p>"; return; }
+    params.set("congregacaoId", congregacaoId);
+  }
+  const res = await fetchProtegido(`${API_BASE}/fluxo-caixa-projetado?${params.toString()}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+
+  let html = `<p class="subtitle">Saldo atual: R$ ${Number(data.saldoAtual).toFixed(2)} — entrada média mensal: R$ ${Number(data.entradaMediaMensal).toFixed(2)}
+    — saída média mensal: R$ ${Number(data.saidaMediaMensal).toFixed(2)} — empenhado em aberto: R$ ${Number(data.totalEmpenhadoAberto).toFixed(2)}</p>
+    <table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Entrada Projetada</th><th>Saída Projetada</th><th>Empenho</th><th>Saldo Projetado</th></tr></thead><tbody>`;
+  data.projecao.forEach(p => {
+    html += `<tr>
+      <td>${p.mesReferencia}</td><td>R$ ${Number(p.entradaProjetada).toFixed(2)}</td><td>R$ ${Number(p.saidaProjetada).toFixed(2)}</td>
+      <td>R$ ${Number(p.empenhoAberto).toFixed(2)}</td>
+      <td style="${p.saldoProjetado < 0 ? "color: var(--cor-erro); font-weight:600;" : ""}">R$ ${Number(p.saldoProjetado).toFixed(2)}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

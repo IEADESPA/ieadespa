@@ -2012,27 +2012,47 @@ Fixo de Caixa).
 
 #### v4.8 — Orçamento Anual, PDQ, Empenho e Fluxo de Caixa Projetado
 
-- [ ] Orçamento Anual e Balanço Patrimonial consolidado (1º Tesoureiro —
-      Art. 36 §1º), estruturado a partir do Plano de Contas (v4.2).
-- [ ] **Orçado vs. Realizado** por categoria/Centro de Custo — comparativo
-      automático contra `CategoriasEntrada`/`CategoriasSaida` já
-      existentes, pra virar decisão, não só relatório.
-- [ ] **Empenho** (encumbrance) — reservar o valor no orçamento no
-      momento em que o compromisso é assumido (contrato/pedido aprovado
-      em v4.5), antes do pagamento sair de fato.
-- [ ] **Fluxo de Caixa Projetado** — estimativa do saldo futuro do Centro
-      de Custo, calculada a partir do histórico de entradas (sazonalidade
-      de dízimo/campanhas) + saídas recorrentes conhecidas + empenhos já
-      assumidos — ajuda a decidir o timing de uma campanha (v4.4) ou de
-      uma compra grande, em vez de descobrir o aperto de caixa depois que
-      já aconteceu.
-- [ ] **Orçamento contínuo (rolling forecast)** — pesquisa de mercado
-      (nível "pico", não porte médio): em vez de um orçamento anual fixo
-      revisado só uma vez por ano, o sistema reprojeta os próximos 12
-      meses todo mês, ajustando pelo realizado — o mesmo espírito
-      "calculado na leitura" de sempre, aplicado à projeção, não só ao
-      histórico. *(Cube, Prophix, Vena — FP&A driver-based rolling
-      forecast)*
+Escopo grande demais pra uma entrega só (pedido explícito do usuário: "tem
+quatro tipos de situações... da pra fazer de uma vez, mas parte em algumas
+partes"). Os quatro temas do roadmap original se agrupam naturalmente em
+dois blocos independentes: o **motor orçamentário financeiro** (Orçamento
+Anual, Orçado vs Realizado, Empenho, Fluxo de Caixa Projetado) e a
+**governança do PDQ** (Planejamento Diretor Quadrienal — metas
+estratégicas, Fundo de Execução, remanejamento, comissão de
+acompanhamento). Primeira parte entregue agora é o motor financeiro;
+segunda parte (PDQ) fica pra próxima rodada.
+
+##### Primeira parte (entregue) — motor orçamentário financeiro
+
+- [x] **Orçamento Anual** (`OrcamentosAnuais`/`OrcamentoLinhas`, 1º
+      Tesoureiro — Art. 36 §1º) — uma linha por categoria de entrada/saída
+      já existente (`CategoriasEntrada`/`CategoriasSaida`, v4.2/v4.5), com
+      o valor orçado pro ano. Criar/editar restrito a nível Global.
+      **Balanço Patrimonial consolidado** (também citado no roadmap
+      original) foi escopado pra v4.9 (Demonstrações Contábeis ITG 2002)
+      — é uma demonstração contábil de verdade, não parte do orçamento em
+      si; mantém esta versão focada no motor orçamentário.
+- [x] **Orçado vs. Realizado** por categoria — comparativo calculado na
+      leitura a cada consulta do orçamento, comparando o valor orçado
+      contra os `LancamentosTesouraria`/`SaidasTesouraria` reais do ano.
+- [x] **Empenho** (encumbrance) — não virou tabela própria: é CALCULADO
+      NA LEITURA a partir das Saídas já **aprovadas mas ainda não pagas**
+      (v4.5) — reserva de fato o valor no orçamento a partir do momento
+      em que o compromisso é assumido, antes do pagamento sair, sem
+      duplicar lançamento nenhum (mesmo princípio "calculado na leitura,
+      nunca marcação manual" de sempre).
+- [x] **Fluxo de Caixa Projetado** (`RelatorioFluxoCaixaProjetado`,
+      `shared/tesouraria.js::projetarFluxoCaixa`) — estimativa do saldo
+      futuro de um Centro de Custo (Local ou Geral) a partir da média das
+      entradas/saídas dos últimos 3 meses + o que já está empenhado em
+      aberto. **Rolling forecast** embutido de graça: como é sempre
+      recalculado do zero a cada consulta (nunca uma projeção salva),
+      toda vez que a tela é aberta já é uma reprojeção ajustada pelo que
+      foi realizado desde a última vez — não precisou de um mecanismo de
+      revisão periódica separado.
+
+##### Segunda parte (próxima rodada) — governança do PDQ
+
 - [ ] Planejamento estratégico PDQ com metas e 3 eixos (Regimento, Art. 26-29).
 - [ ] Fundo de Execução Estratégica: dotação obrigatória de 10% da arrecadação
       líquida (Art. 27), com suspensão excepcional pelo Pastor Presidente.

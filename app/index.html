@@ -104,6 +104,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroCampanhas" onclick="mostrarSubAbaFinanceiro('campanhas')"><span class="icone">🎯</span><span class="rotulo">Campanhas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroSaidas" onclick="mostrarSubAbaFinanceiro('saidas')"><span class="icone">💸</span><span class="rotulo">Saídas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroReceber" onclick="mostrarSubAbaFinanceiro('receber')"><span class="icone">📆</span><span class="rotulo">Contas a Receber</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroOrcamento" onclick="mostrarSubAbaFinanceiro('orcamento')"><span class="icone">📐</span><span class="rotulo">Orçamento</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -1923,6 +1924,50 @@
           </div>
           <div class="rolagem-tabela"><div id="resultadoContasReceber"></div></div>
           <div id="detalheContaReceber" style="margin-top:18px;"></div>
+        </div>
+
+        <!-- SUB-ABA: ORÇAMENTO (v4.8, primeira parte) — Orçamento Anual,
+             Orçado vs Realizado, Empenho (calculado, não marcado à mão) e
+             Fluxo de Caixa Projetado. Balanço Patrimonial fica pra v4.9
+             (Demonstrações Contábeis). -->
+        <div id="subFinanceiroOrcamento" class="sub-aba-secretaria" style="display:none;">
+          <h3>📐 Orçamento Anual</h3>
+          <p class="subtitle">Uma linha por categoria de entrada/saída, com o valor orçado pro ano
+            (1º Tesoureiro, Art. 36 §1º). Empenhado e Realizado são sempre calculados a partir dos
+            lançamentos e saídas de verdade — nunca digitados à mão.</p>
+
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarFormNovoOrcamento()">➕ Novo Orçamento Anual</button>
+          <div id="formNovoOrcamento" style="display:none; margin-top:14px;">
+            <div class="input-group">
+              <input type="number" id="orcamentoAno" placeholder="Ano (ex: 2027)" style="max-width:150px;" />
+            </div>
+            <h4 style="margin:10px 0 6px; color: var(--cor-primaria);">Entradas</h4>
+            <div class="rolagem-tabela"><div id="orcamentoLinhasEntrada"></div></div>
+            <h4 style="margin:10px 0 6px; color: var(--cor-primaria);">Saídas</h4>
+            <div class="rolagem-tabela"><div id="orcamentoLinhasSaida"></div></div>
+            <button class="btn-confirmar" style="width:auto;margin-top:10px;" onclick="criarOrcamentoAcao()">Criar Orçamento</button>
+            <p id="resultadoNovoOrcamento" class="subtitle"></p>
+          </div>
+
+          <div class="rolagem-tabela"><div id="resultadoOrcamentos"></div></div>
+          <div id="detalheOrcamento" style="margin-top:18px;"></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h3>📈 Fluxo de Caixa Projetado</h3>
+          <p class="subtitle">Estimativa do saldo futuro do Centro de Custo, a partir do histórico
+            recente e do que já está empenhado — recalculado do zero toda vez que você abre esta
+            tela (é um "rolling forecast" por natureza).</p>
+          <div class="barra-lista">
+            <select id="fluxoCentroCusto" onchange="alternarCongregacaoFluxoCaixa()">
+              <option value="LOCAL">Local (uma congregação)</option>
+              <option value="GERAL">Geral (consolidado)</option>
+            </select>
+            <select id="fluxoCongregacao"></select>
+            <input type="number" id="fluxoMeses" value="6" min="1" max="12" style="max-width:100px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarFluxoCaixaProjetadoAcao()">Projetar</button>
+          </div>
+          <div class="rolagem-tabela"><div id="resultadoFluxoCaixaProjetado"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

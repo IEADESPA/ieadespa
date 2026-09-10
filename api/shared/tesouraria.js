@@ -80,4 +80,60 @@ async function saldoFundoFixo(pool, sql, fundoId) {
   return round2(totalReposicoes - totalDespesas);
 }
 
-module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo };
+// v4.8 (primeira parte) — Fluxo de Caixa Projetado: estimativa do saldo
+// futuro de um Centro de Custo, a partir do histórico recente de
+// entradas/saídas + o que já está empenhado (Saídas aprovadas, ainda não
+// pagas). SEMPRE CALCULADO NA LEITURA, a cada chamada — é por isso que já
+// nasce sendo um "rolling forecast" (reprojeta do zero toda vez que é
+// aberto, ajustando sozinho pelo que já foi realizado desde a última
+// vez), sem precisar de um mecanismo de revisão periódica separado.
+async function projetarFluxoCaixa(pool, sql, centroCusto, congregacaoId, meses) {
+  const saldoAtual = await saldoCentroCusto(pool, sql, centroCusto, congregacaoId);
+
+  const entradaRequest = pool.request();
+  let entradaWhere = "Status = 'REPASSADO'";
+  if (centroCusto !== "GERAL") { entradaRequest.input("congregacaoId", sql.Int, congregacaoId); entradaWhere += " AND CongregacaoId = @congregacaoId"; }
+  const colunaEntrada = centroCusto === "GERAL" ? "ValorRepasseGeral" : "ValorRetidoLocal";
+  const entradas = await entradaRequest.query(`
+    SELECT TOP 3 MesReferencia, SUM(${colunaEntrada}) AS total FROM FechamentosTesouraria
+    WHERE ${entradaWhere} GROUP BY MesReferencia ORDER BY MesReferencia DESC
+  `);
+  const entradaMediaMensal = entradas.recordset.length > 0
+    ? round2(entradas.recordset.reduce((soma, r) => soma + Number(r.total), 0) / entradas.recordset.length)
+    : 0;
+
+  const saidaRequest = pool.request().input("centroCusto", sql.NVarChar(20), centroCusto);
+  let saidaWhere = "s.Status = 'PAGA' AND cs.CentroCusto = @centroCusto";
+  if (centroCusto !== "GERAL") { saidaRequest.input("congregacaoId", sql.Int, congregacaoId); saidaWhere += " AND s.CongregacaoId = @congregacaoId"; }
+  const saidas = await saidaRequest.query(`
+    SELECT TOP 3 CONVERT(varchar(7), s.PagoEm, 120) AS mes, SUM(s.Valor) AS total FROM SaidasTesouraria s
+    JOIN CategoriasSaida cs ON cs.Codigo = s.Tipo
+    WHERE ${saidaWhere} GROUP BY CONVERT(varchar(7), s.PagoEm, 120) ORDER BY mes DESC
+  `);
+  const saidaMediaMensal = saidas.recordset.length > 0
+    ? round2(saidas.recordset.reduce((soma, r) => soma + Number(r.total), 0) / saidas.recordset.length)
+    : 0;
+
+  const empenhoRequest = pool.request().input("centroCusto", sql.NVarChar(20), centroCusto);
+  let empenhoWhere = "s.Status = 'APROVADA' AND cs.CentroCusto = @centroCusto";
+  if (centroCusto !== "GERAL") { empenhoRequest.input("congregacaoId", sql.Int, congregacaoId); empenhoWhere += " AND s.CongregacaoId = @congregacaoId"; }
+  const empenhos = await empenhoRequest.query(`
+    SELECT ISNULL(SUM(s.Valor), 0) AS total FROM SaidasTesouraria s JOIN CategoriasSaida cs ON cs.Codigo = s.Tipo WHERE ${empenhoWhere}
+  `);
+  const totalEmpenhadoAberto = Number(empenhos.recordset[0].total);
+
+  const hoje = new Date();
+  const projecao = [];
+  let saldoAcumulado = saldoAtual;
+  for (let i = 1; i <= meses; i++) {
+    const data = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+    const mesReferencia = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
+    const empenhoDoMes = i === 1 ? totalEmpenhadoAberto : 0;
+    saldoAcumulado = round2(saldoAcumulado + entradaMediaMensal - saidaMediaMensal - empenhoDoMes);
+    projecao.push({ mesReferencia, entradaProjetada: entradaMediaMensal, saidaProjetada: saidaMediaMensal, empenhoAberto: empenhoDoMes, saldoProjetado: saldoAcumulado });
+  }
+
+  return { saldoAtual, entradaMediaMensal, saidaMediaMensal, totalEmpenhadoAberto, projecao };
+}
+
+module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo, projetarFluxoCaixa };

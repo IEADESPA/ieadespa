@@ -2067,7 +2067,12 @@ segunda parte (PDQ) fica pra próxima rodada.
       recebeu (Art. 27), tratada como um terceiro Centro de Custo
       (`shared/tesouraria.js::saldoCentroCusto`, `centroCusto='PDQ'`) ao
       lado de Local/Geral (v4.1.3) — sempre calculada na leitura, nunca um
-      saldo próprio gravado. **Suspensão excepcional só pelo Pastor
+      saldo próprio gravado. **Atualizado em v4.10**: o percentual de 10%
+      deixou de ser calculado isoladamente sobre o repasse bruto e passou
+      a ser um destino do Rateio Geral (o "malote", junto com Convenção e
+      Prebenda Pastoral) — mesmo comportamento externo, cálculo agora
+      coordenado com as demais fatias da mesma caixa única. **Suspensão
+      excepcional só pelo Pastor
       Presidente de verdade**: `shared/diretoria.js::ehPresidenteAtual`
       verifica o Assento real na Diretoria Executiva (cargo `PRESIDENTE`,
       sem `DataFim`) — não uma permissão genérica como "financeiro" ou
@@ -2126,8 +2131,63 @@ segunda parte (PDQ) fica pra próxima rodada.
 
 #### v4.10 — Prebenda e sustento pastoral
 
-- [ ] Prebenda (natureza alimentar, sem vínculo CLT) — Reg. Art. 134,
-      tratada como categoria de Saída (v4.5) com regras próprias.
+Pedido explícito do usuário, com um detalhe operacional que mudou a arquitetura:
+antes de pagar qualquer Prebenda, era preciso resolver de onde esse dinheiro
+vem de verdade. Os 60% que a Tesouraria Local repassa (Art. 118, v4.1) não
+chegam todos juntos — cada congregação libera no próprio ritmo (semanal,
+mensal, às vezes atrasada vários meses) — e sobre esse total acumulado
+("o malote") incide um SEGUNDO rateio, que não existia até aqui: 10% pra
+Convenção (Fundo Convencional), 30% pra Prebenda Pastoral, e o resto vira
+Tesouro Geral de fato gastável. Sem controlar esse malote — sem garantir
+que um repasse já dividido nunca entra de novo em outra divisão — não dá
+pra saber quanto realmente existe de Prebenda disponível.
+
+##### Fundação entregue: Rateio Geral (o "malote")
+
+- [x] **Segunda camada de rateio sobre os 60%** (`RateioGeralDestinos`
+      configurável, `GestaoRateioGeral`) — Convenção 10%, Prebenda
+      Pastoral 30%, Fundo PDQ 10% (migrado da v4.8, que calculava sua
+      fatia isolada sobre o repasse bruto sem coordenar com as demais —
+      unificado aqui num só mecanismo pra não haver duas fatias
+      concorrentes reivindicando a mesma caixa única, v4.1.3). O restante
+      (hoje 50%) é sempre o Tesouro Geral, calculado como resíduo.
+      "O que é do presidente" e "dízimo do pastor", citados como itens a
+      entender a partir deste malote, **não viraram destinos com
+      percentual próprio nesta entrega** — nenhum percentual concreto foi
+      informado pra eles; basta cadastrar uma nova linha em
+      `RateioGeralDestinos` (Financeiro → Plano de Contas → Destinos do
+      Rateio Geral) quando o percentual for definido.
+- [x] **O malote em si**: cada repasse liberado de uma congregação
+      (`FechamentosTesouraria` com `Status='REPASSADO'`) fica visível como
+      "pendente de rateio" (`GET /rateio-geral/pendentes`, com o atraso em
+      meses calculado na leitura) até a Tesouraria Geral fechar o Rateio
+      Geral do mês — que processa TUDO que está pendente de uma vez,
+      não importa de qual mês ou congregação seja cada repasse.
+- [x] **Regra de ouro, garantida pelo banco de dados**: um repasse só
+      entra em UM Rateio Geral — nunca dois. Não é só checagem de
+      aplicação: `RateioGeralItens.FechamentoId` é `UNIQUE`, o SQL Server
+      recusa fisicamente a duplicidade. "O que já foi rateado não pode
+      misturar com o que ainda não foi" — literalmente impossível de
+      violar mesmo por erro de código futuro.
+- [x] **Centro de Custo Geral corrigido**: antes, `GERAL` liberava o
+      repasse bruto direto pra gasto; agora só libera o que sobrou depois
+      do Rateio Geral (`RateiosGerais.ValorTesouroGeral`) — Convenção,
+      Prebenda e PDQ passam a ser Centros de Custo próprios
+      (`CategoriasSaida.CentroCusto`), pagáveis como Saídas normais
+      (v4.5) assim que o Rateio Geral os libera.
+- **Atenção operacional pra quando isso for pra produção**: como o saldo
+  `GERAL` passou a depender do Rateio Geral em vez do repasse bruto, é
+  preciso rodar o primeiro "Fechar Rateio Geral" (que varre e concilia
+  todo o histórico de repasses já liberados) antes de qualquer nova Saída
+  Geral — é a reconciliação retroativa que este controle interno exige.
+
+##### Falta pra completar a v4.10 (próxima rodada)
+
+- [ ] Prebenda (natureza alimentar, sem vínculo CLT) como categoria de
+      Saída com regras próprias — a categoria e o Centro de Custo já
+      existem (`CategoriasSaida.Codigo = 'PREBENDA_PASTORAL'`); falta o
+      cadastro do prebendado (dados do pastor, valor mensal de referência)
+      e a geração recorrente mensal.
 - [ ] Retenções tributárias/previdenciárias obrigatórias.
 - [ ] Vedação à "pejotização" do ministério.
 - [ ] Pagamento em lote de prebendas via remessa bancária (v4.7).

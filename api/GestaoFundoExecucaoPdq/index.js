@@ -1,7 +1,9 @@
-// GestaoFundoExecucaoPdq (v4.8, segunda parte)
+// GestaoFundoExecucaoPdq (v4.8, segunda parte; v4.10 passa a receber sua
+// fatia pelo Rateio Geral/malote, junto com Convenção e Prebenda Pastoral)
 // Fundo de Execução Estratégica do PDQ (Art. 27) — dotação obrigatória de
-// 10% da arrecadação líquida que a Geral já recebeu, sempre CALCULADA NA
-// LEITURA (shared/tesouraria.js::saldoCentroCusto, centroCusto='PDQ'),
+// um percentual configurável (RateioGeralDestinos, Codigo='PDQ') sobre o
+// que a Tesouraria Geral fecha no Rateio Geral mensal, sempre CALCULADA
+// NA LEITURA (shared/tesouraria.js::saldoCentroCusto, centroCusto='PDQ'),
 // nunca um saldo gravado à parte. Suspender/reativar é uma ação
 // EXCEPCIONAL e pessoal do Pastor Presidente — verificado contra o
 // Assento de verdade na Diretoria Executiva
@@ -23,10 +25,11 @@ module.exports = async function (context, req) {
   if (req.method === "GET") {
     const saldo = await tesouraria.saldoCentroCusto(pool, sql, "PDQ", null);
     const suspensao = await tesouraria.suspensaoAtivaFundoPdq(pool, sql);
+    const destino = await pool.request().query(`SELECT Percentual FROM RateioGeralDestinos WHERE Codigo = 'PDQ'`);
     context.res = {
       status: 200, headers: { "Content-Type": "application/json" },
       body: {
-        percentualDotacao: tesouraria.PERCENTUAL_FUNDO_EXECUCAO_PDQ, saldoDisponivel: saldo,
+        percentualDotacao: destino.recordset[0] ? destino.recordset[0].Percentual : null, saldoDisponivel: saldo,
         suspenso: !!suspensao,
         suspensao: suspensao ? { motivoSuspensao: suspensao.MotivoSuspensao, suspensoEm: suspensao.SuspensoEm } : null
       }

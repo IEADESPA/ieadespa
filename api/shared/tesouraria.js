@@ -33,26 +33,31 @@ function redigirParaMural(lancamentos) {
   });
 }
 
-// Percentual de dotação obrigatória do Fundo de Execução Estratégica
-// (PDQ, Art. 27) sobre o que a Geral efetivamente recebeu — nunca
-// hardcoded em outro lugar além daqui.
-const PERCENTUAL_FUNDO_EXECUCAO_PDQ = 10;
+// v4.10 (fundação) — os "destinos" percentuais do Rateio Geral (Convenção,
+// Prebenda Pastoral, Fundo PDQ) são Centros de Custo cujo dinheiro só
+// existe depois que a Tesouraria Geral fecha o Rateio Geral do mês
+// (malote — ver shared/rateioGeral.js). Antes disso, o repasse liberado
+// fica só "pendente de rateio", não gastável em nenhum desses três.
+const DESTINOS_RATEIO_GERAL = ["CONVENCAO", "PREBENDA_PASTORAL", "PDQ"];
 
-// v4.5 — saldo disponível de um Centro de Custo (Local de uma congregação
-// específica, Geral consolidado, ou o Fundo de Execução Estratégica do
-// PDQ — v4.8 segunda parte) pra Saídas: o que já foi liberado/dotado
-// menos o que já foi efetivamente pago. Nunca fica negativo — é o
-// próprio endpoint de pagamento que barra, não uma marcação manual.
+// v4.5 (LOCAL/GERAL) + v4.8 (PDQ) + v4.10 (CONVENCAO/PREBENDA_PASTORAL) —
+// saldo disponível de um Centro de Custo pra Saídas: o que já foi
+// liberado/dotado menos o que já foi efetivamente pago. Nunca fica
+// negativo — é o próprio endpoint de pagamento que barra, não uma
+// marcação manual.
+// v4.10: GERAL deixou de ser o repasse bruto (ValorRepasseGeral) — agora
+// é só o que sobrou depois do Rateio Geral (Convenção/Prebenda/PDQ já
+// descontados, RateiosGerais.ValorTesouroGeral). Repasse liberado mas
+// ainda não incluído num Rateio Geral fechado não é gastável em nada
+// ainda — é exatamente o controle interno pedido ("o que já foi rateado
+// não pode misturar com o que ainda não foi").
 async function saldoCentroCusto(pool, sql, centroCusto, congregacaoId) {
   let liberado;
   if (centroCusto === "GERAL") {
-    liberado = await pool.request().query(`SELECT ISNULL(SUM(ValorRepasseGeral), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO'`);
-  } else if (centroCusto === "PDQ") {
-    // Dotação obrigatória de 10% da arrecadação líquida que a Geral já
-    // recebeu (Art. 27) — não é um saldo à parte, é uma fatia reservada
-    // dentro do próprio caixa único (v4.1.3).
-    const repasse = await pool.request().query(`SELECT ISNULL(SUM(ValorRepasseGeral), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO'`);
-    liberado = { recordset: [{ total: round2(Number(repasse.recordset[0].total) * PERCENTUAL_FUNDO_EXECUCAO_PDQ / 100) }] };
+    liberado = await pool.request().query(`SELECT ISNULL(SUM(ValorTesouroGeral), 0) AS total FROM RateiosGerais`);
+  } else if (DESTINOS_RATEIO_GERAL.includes(centroCusto)) {
+    liberado = await pool.request().input("codigo", sql.NVarChar(30), centroCusto)
+      .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM RateioGeralValores WHERE DestinoCodigo = @codigo`);
   } else {
     liberado = await pool.request().input("congregacaoId", sql.Int, congregacaoId)
       .query(`SELECT ISNULL(SUM(ValorRetidoLocal), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO' AND CongregacaoId = @congregacaoId`);
@@ -113,21 +118,28 @@ async function saldoFundoFixo(pool, sql, fundoId) {
 async function projetarFluxoCaixa(pool, sql, centroCusto, congregacaoId, meses) {
   const saldoAtual = await saldoCentroCusto(pool, sql, centroCusto, congregacaoId);
 
-  const entradaRequest = pool.request();
-  let entradaWhere = "Status = 'REPASSADO'";
-  if (centroCusto !== "GERAL") { entradaRequest.input("congregacaoId", sql.Int, congregacaoId); entradaWhere += " AND CongregacaoId = @congregacaoId"; }
-  const colunaEntrada = centroCusto === "GERAL" ? "ValorRepasseGeral" : "ValorRetidoLocal";
-  const entradas = await entradaRequest.query(`
-    SELECT TOP 3 MesReferencia, SUM(${colunaEntrada}) AS total FROM FechamentosTesouraria
-    WHERE ${entradaWhere} GROUP BY MesReferencia ORDER BY MesReferencia DESC
-  `);
+  let entradas;
+  if (centroCusto === "GERAL") {
+    entradas = await pool.request().query(`SELECT TOP 3 MesReferencia, SUM(ValorTesouroGeral) AS total FROM RateiosGerais GROUP BY MesReferencia ORDER BY MesReferencia DESC`);
+  } else if (DESTINOS_RATEIO_GERAL.includes(centroCusto)) {
+    entradas = await pool.request().input("codigo", sql.NVarChar(30), centroCusto).query(`
+      SELECT TOP 3 rg.MesReferencia, SUM(rv.Valor) AS total FROM RateioGeralValores rv JOIN RateiosGerais rg ON rg.RateioGeralId = rv.RateioGeralId
+      WHERE rv.DestinoCodigo = @codigo GROUP BY rg.MesReferencia ORDER BY rg.MesReferencia DESC
+    `);
+  } else {
+    entradas = await pool.request().input("congregacaoId", sql.Int, congregacaoId).query(`
+      SELECT TOP 3 MesReferencia, SUM(ValorRetidoLocal) AS total FROM FechamentosTesouraria
+      WHERE Status = 'REPASSADO' AND CongregacaoId = @congregacaoId GROUP BY MesReferencia ORDER BY MesReferencia DESC
+    `);
+  }
   const entradaMediaMensal = entradas.recordset.length > 0
     ? round2(entradas.recordset.reduce((soma, r) => soma + Number(r.total), 0) / entradas.recordset.length)
     : 0;
 
+  const centroSemCongregacao = centroCusto === "GERAL" || DESTINOS_RATEIO_GERAL.includes(centroCusto);
   const saidaRequest = pool.request().input("centroCusto", sql.NVarChar(20), centroCusto);
   let saidaWhere = "s.Status = 'PAGA' AND cs.CentroCusto = @centroCusto";
-  if (centroCusto !== "GERAL") { saidaRequest.input("congregacaoId", sql.Int, congregacaoId); saidaWhere += " AND s.CongregacaoId = @congregacaoId"; }
+  if (!centroSemCongregacao) { saidaRequest.input("congregacaoId", sql.Int, congregacaoId); saidaWhere += " AND s.CongregacaoId = @congregacaoId"; }
   const saidas = await saidaRequest.query(`
     SELECT TOP 3 CONVERT(varchar(7), s.PagoEm, 120) AS mes, SUM(s.Valor) AS total FROM SaidasTesouraria s
     JOIN CategoriasSaida cs ON cs.Codigo = s.Tipo
@@ -139,7 +151,7 @@ async function projetarFluxoCaixa(pool, sql, centroCusto, congregacaoId, meses) 
 
   const empenhoRequest = pool.request().input("centroCusto", sql.NVarChar(20), centroCusto);
   let empenhoWhere = "s.Status = 'APROVADA' AND cs.CentroCusto = @centroCusto";
-  if (centroCusto !== "GERAL") { empenhoRequest.input("congregacaoId", sql.Int, congregacaoId); empenhoWhere += " AND s.CongregacaoId = @congregacaoId"; }
+  if (!centroSemCongregacao) { empenhoRequest.input("congregacaoId", sql.Int, congregacaoId); empenhoWhere += " AND s.CongregacaoId = @congregacaoId"; }
   const empenhos = await empenhoRequest.query(`
     SELECT ISNULL(SUM(s.Valor), 0) AS total FROM SaidasTesouraria s JOIN CategoriasSaida cs ON cs.Codigo = s.Tipo WHERE ${empenhoWhere}
   `);
@@ -159,4 +171,4 @@ async function projetarFluxoCaixa(pool, sql, centroCusto, congregacaoId, meses) 
   return { saldoAtual, entradaMediaMensal, saidaMediaMensal, totalEmpenhadoAberto, projecao };
 }
 
-module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo, projetarFluxoCaixa, suspensaoAtivaFundoPdq, PERCENTUAL_FUNDO_EXECUCAO_PDQ };
+module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo, projetarFluxoCaixa, suspensaoAtivaFundoPdq, DESTINOS_RATEIO_GERAL };

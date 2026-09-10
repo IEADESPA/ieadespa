@@ -107,6 +107,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroOrcamento" onclick="mostrarSubAbaFinanceiro('orcamento')"><span class="icone">📐</span><span class="rotulo">Orçamento</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPdq" onclick="mostrarSubAbaFinanceiro('pdq')"><span class="icone">🧭</span><span class="rotulo">PDQ</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDemonstracoes" onclick="mostrarSubAbaFinanceiro('demonstracoes')"><span class="icone">📑</span><span class="rotulo">Demonstrações</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroRateioGeral" onclick="mostrarSubAbaFinanceiro('rateiogeral')"><span class="icone">📬</span><span class="rotulo">Rateio Geral</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2063,6 +2064,32 @@
           <textarea id="notasExplicativasTexto" rows="6" style="width:100%; margin-top:8px;" placeholder="Critérios contábeis adotados, eventos relevantes do exercício, etc."></textarea>
           <button class="btn-confirmar" style="width:auto;margin-top:8px;" onclick="salvarNotasExplicativasAcao()">Salvar Notas</button>
           <p id="resultadoNotasExplicativas" class="subtitle"></p>
+        </div>
+
+        <!-- SUB-ABA: RATEIO GERAL (v4.10, fundação) — o "malote": controle
+             interno dos repasses de 60% já liberados mas ainda não
+             divididos entre Convenção/Prebenda Pastoral/Fundo PDQ/Tesouro
+             Geral. Cada congregação reporta em ritmo próprio (semanal,
+             mensal, atrasada) — o malote acumula até a Tesouraria Geral
+             fechar o Rateio Geral do mês. -->
+        <div id="subFinanceiroRateiogeral" class="sub-aba-secretaria" style="display:none;">
+          <h3>📬 Rateio Geral — Malote dos 60%</h3>
+          <p class="subtitle">Cada congregação libera seu repasse de 60% em ritmo próprio — semanal,
+            mensal, às vezes atrasado vários meses. Este malote acumula tudo que já foi liberado e
+            ainda não foi dividido entre Convenção, Prebenda Pastoral, Fundo PDQ e Tesouro Geral.
+            Um repasse que já entrou num Rateio Geral nunca entra em outro — o banco de dados
+            impede fisicamente a duplicidade.</p>
+
+          <h4 style="color: var(--cor-primaria);">Pendente de rateio agora</h4>
+          <div id="resultadoMalotePendente"></div>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin-top:10px;" onclick="fecharRateioGeralAcao()">🔒 Fechar Rateio Geral do Mês</button>
+          <p id="resultadoFecharRateioGeral" class="subtitle"></p>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Histórico de Rateios Gerais</h4>
+          <div class="rolagem-tabela"><div id="resultadoRateiosGerais"></div></div>
+          <div id="detalheRateioGeral" style="margin-top:18px;"></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

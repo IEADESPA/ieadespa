@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis",
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -575,6 +575,11 @@ function mostrarSubAbaFinanceiro(sub) {
   }
   if (sub === "demonstracoes") {
     alternarCamposDemonstracao();
+    return;
+  }
+  if (sub === "rateiogeral") {
+    carregarMalotePendenteAcao();
+    carregarRateiosGeraisAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2044,6 +2049,82 @@ async function salvarNotasExplicativasAcao() {
   resultado.textContent = data.mensagem;
 }
 
+// ---- RATEIO GERAL: MALOTE DOS 60% (v4.10, fundação) — controle interno
+// dos repasses liberados de cada congregação (semanal, mensal, atrasado)
+// até a Tesouraria Geral fechar o Rateio Geral do mês, dividindo entre
+// Convenção/Prebenda Pastoral/Fundo PDQ/Tesouro Geral. Um repasse só
+// entra em UM Rateio Geral — nunca dois.
+async function carregarMalotePendenteAcao() {
+  const container = document.getElementById("resultadoMalotePendente");
+  const res = await fetchProtegido(`${API_BASE}/rateio-geral/pendentes`);
+  const d = await res.json();
+  if (!d.totalItens || d.totalItens === 0) {
+    container.innerHTML = "<p class='subtitle'>Nada pendente no malote — todos os repasses liberados já foram rateados.</p>";
+    return;
+  }
+  let html = `<p class="subtitle"><strong>${d.totalItens} repasse(s)</strong> pendente(s), total <strong>R$ ${Number(d.totalBase).toFixed(2)}</strong>. Previsão se fechar agora:</p>
+    <table class="tabela-frequencia"><thead><tr><th>Destino</th><th>%</th><th>Valor previsto</th></tr></thead><tbody>`;
+  d.previsaoDestinos.forEach(p => html += `<tr><td>${p.nome}</td><td>${p.percentual}%</td><td>R$ ${Number(p.valor).toFixed(2)}</td></tr>`);
+  html += `<tr><td><strong>Tesouro Geral (resto)</strong></td><td></td><td><strong>R$ ${Number(d.previsaoTesouroGeral).toFixed(2)}</strong></td></tr></tbody></table>`;
+
+  html += `<h4 style="margin:14px 0 6px; color: var(--cor-primaria);">Repasses no malote</h4>
+    <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Valor</th><th>Atraso</th></tr></thead><tbody>`;
+  d.itens.forEach(i => {
+    html += `<tr><td>${i.congregacaoNome}</td><td>${i.mesReferencia}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
+      <td>${i.mesesAtraso > 0 ? `<span class="badge-status badge-pendente">${i.mesesAtraso} mês(es)</span>` : "—"}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function fecharRateioGeralAcao() {
+  const resultado = document.getElementById("resultadoFecharRateioGeral");
+  if (!(await confirmarAcao("Fechar o Rateio Geral com tudo que está pendente no malote agora? Essa ação não pode ser desfeita.", "Fechar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/rateio-geral`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) { carregarMalotePendenteAcao(); carregarRateiosGeraisAcao(); }
+}
+
+async function carregarRateiosGeraisAcao() {
+  const container = document.getElementById("resultadoRateiosGerais");
+  const res = await fetchProtegido(`${API_BASE}/rateio-geral`);
+  const rateios = await res.json();
+  if (!Array.isArray(rateios) || rateios.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum Rateio Geral fechado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Repasses</th><th>Total Base</th><th>Tesouro Geral</th><th></th></tr></thead><tbody>`;
+  rateios.forEach(r => {
+    html += `<tr><td>${r.mesReferencia}</td><td>${r.totalItens}</td><td>R$ ${Number(r.totalBase).toFixed(2)}</td><td>R$ ${Number(r.valorTesouroGeral).toFixed(2)}</td>
+      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheRateioGeralAcao(${r.rateioGeralId})">Ver detalhe</button></td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function verDetalheRateioGeralAcao(rateioGeralId) {
+  const container = document.getElementById("detalheRateioGeral");
+  const res = await fetchProtegido(`${API_BASE}/rateio-geral/${rateioGeralId}`);
+  const r = await res.json();
+  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${r.mensagem}</p>`; return; }
+
+  let html = `<hr /><h4>Rateio Geral de ${r.mesReferencia}</h4>
+    <p class="subtitle">Total base: R$ ${Number(r.totalBase).toFixed(2)} — ${r.totalItens} repasse(s)</p>
+    <table class="tabela-frequencia"><thead><tr><th>Destino</th><th>%</th><th>Valor</th></tr></thead><tbody>`;
+  r.valores.forEach(v => html += `<tr><td>${v.destinoNome}</td><td>${v.percentual}%</td><td>R$ ${Number(v.valor).toFixed(2)}</td></tr>`);
+  html += `<tr><td><strong>Tesouro Geral (resto)</strong></td><td></td><td><strong>R$ ${Number(r.valorTesouroGeral).toFixed(2)}</strong></td></tr></tbody></table>`;
+
+  html += `<h4 style="margin:14px 0 6px; color: var(--cor-primaria);">Repasses incluídos</h4>
+    <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Valor</th></tr></thead><tbody>`;
+  r.itens.forEach(i => html += `<tr><td>${i.congregacaoNome}</td><td>${i.mesReferenciaCongregacao}</td><td>R$ ${Number(i.valor).toFixed(2)}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não
 // conta no Centro de Custo até a confirmação virar um LancamentoTesouraria
 // de verdade. "Vencido" é calculado na leitura, nunca marcado à mão.
@@ -3251,6 +3332,10 @@ const CATALOGOS_CFG = {
         ["QUADRANTE", "Quadrante"], ["DISTRITO", "Distrito"], ["GLOBAL", "Geral"]
       ]],
       ["quantidadeAprovadores", "Quantidade de aprovadores distintos exigida"]]
+  },
+  rateioGeralDestinos: {
+    titulo: "Destinos do Rateio Geral (malote dos 60%)", idField: "destinoId",
+    campos: [["codigo", "Código (ex: CONVENCAO)"], ["nome", "Nome"], ["percentual", "Percentual sobre o total do malote (%)"]]
   }
 };
 // Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
@@ -3264,7 +3349,7 @@ const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
 // referencia a primeira via "pai") — moram dentro do Financeiro, não na
 // aba genérica de Catálogos (princípio já estabelecido: cada módulo
 // configura o que é exclusivo dele).
-const CATALOGOS_FINANCEIRO_ORDEM = ["planoContas", "categoriasEntrada", "categoriasSaida", "alcadasAprovacao"];
+const CATALOGOS_FINANCEIRO_ORDEM = ["planoContas", "categoriasEntrada", "categoriasSaida", "alcadasAprovacao", "rateioGeralDestinos"];
 
 function montarPoliticasRetencao() {
   document.getElementById("politicasRetencaoConteudo").innerHTML = POLITICAS_RETENCAO_ORDEM.map(k => secaoCatalogo(k)).join("");

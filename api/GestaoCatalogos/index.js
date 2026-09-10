@@ -117,6 +117,11 @@ const CATALOGOS = {
     tabela: "AlcadasAprovacao", chave: "AlcadaId", idField: "alcadaId",
     campos: { valorMinimo: sql.Decimal(10, 2), nivelMinimoAprovador: sql.NVarChar(20), quantidadeAprovadores: sql.Int },
     permissao: "financeiro"
+  },
+  rateioGeralDestinos: {
+    tabela: "RateioGeralDestinos", chave: "DestinoId", idField: "destinoId",
+    campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(150), percentual: sql.Decimal(5, 2), ativo: sql.Bit },
+    permissao: "financeiro"
   }
 };
 

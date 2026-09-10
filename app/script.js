@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ",
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -522,6 +522,7 @@ const SUBMODULOS_FINANCEIRO = [
   { chave: "receber", titulo: "Contas a Receber", icone: "📆", subAba: "receber", pronto: true },
   { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", subAba: "orcamento", pronto: true },
   { chave: "pdq", titulo: "PDQ (Planejamento Diretor Quadrienal)", icone: "🧭", subAba: "pdq", pronto: true },
+  { chave: "demonstracoes", titulo: "Demonstrações Contábeis (ITG 2002)", icone: "📑", subAba: "demonstracoes", pronto: true },
   { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
   { chave: "doacoes", titulo: "Doações Online", icone: "💳", pronto: false },
   { chave: "auditoria", titulo: "Auditoria e Compliance", icone: "🕵️", pronto: false }
@@ -570,6 +571,10 @@ function mostrarSubAbaFinanceiro(sub) {
     carregarPlanosPdq();
     carregarFundoExecucaoPdq();
     carregarComissoes();
+    return;
+  }
+  if (sub === "demonstracoes") {
+    alternarCamposDemonstracao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -1935,6 +1940,110 @@ async function reativarFundoPdqAcao() {
   if (data.sucesso) { document.getElementById("fundoPdqMotivo").value = ""; carregarFundoExecucaoPdq(); }
 }
 
+// ---- DEMONSTRAÇÕES CONTÁBEIS (v4.9, ITG 2002) — Balanço Patrimonial,
+// DRP (regime de competência), Mutações do PL e Fluxo de Caixa, todos
+// calculados na leitura; Notas Explicativas é o único texto editável.
+function alternarCamposDemonstracao() {
+  const tipo = document.getElementById("demonstracaoTipo").value;
+  document.getElementById("demonstracaoDataCorte").style.display = tipo === "balanco" ? "inline-block" : "none";
+  document.getElementById("demonstracaoDataInicio").style.display = tipo === "balanco" ? "none" : "inline-block";
+  document.getElementById("demonstracaoDataFim").style.display = tipo === "balanco" ? "none" : "inline-block";
+}
+
+async function gerarDemonstracaoAcao() {
+  const tipo = document.getElementById("demonstracaoTipo").value;
+  const container = document.getElementById("resultadoDemonstracao");
+  const params = new URLSearchParams({ tipo });
+  if (tipo === "balanco") {
+    const dataCorte = document.getElementById("demonstracaoDataCorte").value;
+    if (!dataCorte) { container.innerHTML = "<p class='subtitle'>Escolha a data de corte.</p>"; return; }
+    params.set("dataCorte", dataCorte);
+  } else {
+    const dataInicio = document.getElementById("demonstracaoDataInicio").value;
+    const dataFim = document.getElementById("demonstracaoDataFim").value;
+    if (!dataInicio || !dataFim) { container.innerHTML = "<p class='subtitle'>Escolha o período (início e fim).</p>"; return; }
+    params.set("dataInicio", dataInicio);
+    params.set("dataFim", dataFim);
+  }
+  const res = await fetchProtegido(`${API_BASE}/demonstracoes-contabeis?${params.toString()}`);
+  const d = await res.json();
+  if (d.sucesso === false) { container.innerHTML = `<p class="subtitle">${d.mensagem}</p>`; return; }
+
+  if (tipo === "balanco") {
+    container.innerHTML = `<h4>Balanço Patrimonial em ${d.dataCorte ? new Date(d.dataCorte).toLocaleDateString("pt-BR") : ""}</h4>
+      <table class="tabela-frequencia"><tbody>
+        <tr><td colspan="2"><strong>ATIVO</strong></td></tr>
+        <tr><td>Caixa e Equivalentes</td><td>R$ ${Number(d.ativo.caixaEEquivalentes).toFixed(2)}</td></tr>
+        <tr><td>Contas a Receber</td><td>R$ ${Number(d.ativo.contasAReceber).toFixed(2)}</td></tr>
+        <tr><td><strong>Total do Ativo</strong></td><td><strong>R$ ${Number(d.ativo.total).toFixed(2)}</strong></td></tr>
+        <tr><td colspan="2"><strong>PASSIVO</strong></td></tr>
+        <tr><td>Contas a Pagar</td><td>R$ ${Number(d.passivo.contasAPagar).toFixed(2)}</td></tr>
+        <tr><td><strong>Total do Passivo</strong></td><td><strong>R$ ${Number(d.passivo.total).toFixed(2)}</strong></td></tr>
+        <tr><td><strong>Patrimônio Líquido</strong></td><td><strong>R$ ${Number(d.patrimonioLiquido).toFixed(2)}</strong></td></tr>
+      </tbody></table>`;
+    return;
+  }
+
+  if (tipo === "drp") {
+    let html = `<h4>Demonstração do Resultado do Período (${d.dataInicio.slice(0, 10)} a ${d.dataFim.slice(0, 10)})</h4>
+      <table class="tabela-frequencia"><thead><tr><th>Categoria</th><th>Valor</th></tr></thead><tbody>
+        <tr><td colspan="2"><strong>RECEITAS</strong></td></tr>`;
+    d.receitas.forEach(r => html += `<tr><td>${r.categoriaNome || r.categoriaCodigo}</td><td>R$ ${Number(r.total).toFixed(2)}</td></tr>`);
+    html += `<tr><td><strong>Total de Receitas</strong></td><td><strong>R$ ${Number(d.totalReceitas).toFixed(2)}</strong></td></tr>
+      <tr><td colspan="2"><strong>DESPESAS</strong></td></tr>`;
+    d.despesas.forEach(dd => html += `<tr><td>${dd.categoriaNome} ${dd.classificacaoFuncional === "ADMINISTRATIVA" ? "(administrativa)" : "(atividade-fim)"}</td><td>R$ ${Number(dd.total).toFixed(2)}</td></tr>`);
+    html += `<tr><td><strong>Total de Despesas</strong></td><td><strong>R$ ${Number(d.totalDespesas).toFixed(2)}</strong></td></tr>
+      <tr><td>— das quais atividades-fim</td><td>R$ ${Number(d.classificacaoFuncional.atividadesFim).toFixed(2)}</td></tr>
+      <tr><td>— das quais administrativas</td><td>R$ ${Number(d.classificacaoFuncional.administrativas).toFixed(2)}</td></tr>
+      <tr><td><strong>${d.resultadoDoPeriodo >= 0 ? "Superávit" : "Déficit"} do Período</strong></td><td><strong>R$ ${Number(d.resultadoDoPeriodo).toFixed(2)}</strong></td></tr>
+      </tbody></table>`;
+    container.innerHTML = html;
+    return;
+  }
+
+  if (tipo === "mutacoes") {
+    container.innerHTML = `<h4>Mutações do Patrimônio Líquido (${d.dataInicio.slice(0, 10)} a ${d.dataFim.slice(0, 10)})</h4>
+      <table class="tabela-frequencia"><tbody>
+        <tr><td>Patrimônio Líquido Inicial</td><td>R$ ${Number(d.patrimonioLiquidoInicial).toFixed(2)}</td></tr>
+        <tr><td>(+/-) Resultado do Período</td><td>R$ ${Number(d.resultadoDoPeriodo).toFixed(2)}</td></tr>
+        <tr><td><strong>Patrimônio Líquido Final</strong></td><td><strong>R$ ${Number(d.patrimonioLiquidoFinal).toFixed(2)}</strong></td></tr>
+      </tbody></table>`;
+    return;
+  }
+
+  if (tipo === "fluxocaixa") {
+    container.innerHTML = `<h4>Fluxo de Caixa (${d.dataInicio.slice(0, 10)} a ${d.dataFim.slice(0, 10)})</h4>
+      <table class="tabela-frequencia"><tbody>
+        <tr><td>Saldo Inicial de Caixa</td><td>R$ ${Number(d.saldoInicial).toFixed(2)}</td></tr>
+        <tr><td>Entradas Operacionais</td><td>R$ ${Number(d.entradasOperacionais).toFixed(2)}</td></tr>
+        <tr><td>Saídas Operacionais</td><td>R$ ${Number(d.saidasOperacionais).toFixed(2)}</td></tr>
+        <tr><td>Variação Líquida</td><td>R$ ${Number(d.variacaoLiquida).toFixed(2)}</td></tr>
+        <tr><td><strong>Saldo Final de Caixa</strong></td><td><strong>R$ ${Number(d.saldoFinal).toFixed(2)}</strong></td></tr>
+      </tbody></table>`;
+  }
+}
+
+async function carregarNotasExplicativasAcao() {
+  const ano = document.getElementById("notasExplicativasAno").value;
+  if (!ano) { mostrarToast("Informe o ano.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/notas-explicativas/${ano}`);
+  const data = await res.json();
+  document.getElementById("notasExplicativasTexto").value = data.texto || "";
+}
+
+async function salvarNotasExplicativasAcao() {
+  const ano = document.getElementById("notasExplicativasAno").value;
+  const texto = document.getElementById("notasExplicativasTexto").value;
+  const resultado = document.getElementById("resultadoNotasExplicativas");
+  if (!ano) { resultado.textContent = "Informe o ano."; return; }
+  const res = await fetchProtegido(`${API_BASE}/notas-explicativas/${ano}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+}
+
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não
 // conta no Centro de Custo até a confirmação virar um LancamentoTesouraria
 // de verdade. "Vencido" é calculado na leitura, nunca marcado à mão.
@@ -3129,8 +3238,9 @@ const CATALOGOS_CFG = {
   categoriasSaida: {
     titulo: "Categorias de Saída", idField: "categoriaId",
     campos: [["codigo", "Código (ex: MANUTENCAO)"], ["nome", "Nome"],
-      ["centroCusto", "Centro de Custo", [["LOCAL", "Local (congregação)"], ["GERAL", "Geral (denominação)"]]],
-      ["tipoFundo", "Tipo de Fundo", [["LIVRE", "Livre"], ["RESTRITO", "Restrito (exige vincular a uma Campanha)"]]]],
+      ["centroCusto", "Centro de Custo", [["LOCAL", "Local (congregação)"], ["GERAL", "Geral (denominação)"], ["PDQ", "Fundo de Execução Estratégica (PDQ)"]]],
+      ["tipoFundo", "Tipo de Fundo", [["LIVRE", "Livre"], ["RESTRITO", "Restrito (exige vincular a uma Campanha)"]]],
+      ["classificacaoFuncional", "Classificação Funcional (ITG 2002)", [["ATIVIDADES_FIM", "Atividades-Fim"], ["ADMINISTRATIVA", "Administrativa"]]]],
     pai: { campo: "contaContabilId", rotulo: "Conta Contábil", origem: "planoContas" }
   },
   alcadasAprovacao: {

@@ -106,6 +106,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroReceber" onclick="mostrarSubAbaFinanceiro('receber')"><span class="icone">📆</span><span class="rotulo">Contas a Receber</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroOrcamento" onclick="mostrarSubAbaFinanceiro('orcamento')"><span class="icone">📐</span><span class="rotulo">Orçamento</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPdq" onclick="mostrarSubAbaFinanceiro('pdq')"><span class="icone">🧭</span><span class="rotulo">PDQ</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroDemonstracoes" onclick="mostrarSubAbaFinanceiro('demonstracoes')"><span class="icone">📑</span><span class="rotulo">Demonstrações</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2025,6 +2026,43 @@
           </div>
           <p id="resultadoPMO" class="subtitle"></p>
           <div class="rolagem-tabela"><div id="resultadoListaPMO"></div></div>
+        </div>
+
+        <!-- SUB-ABA: DEMONSTRAÇÕES CONTÁBEIS (v4.9, ITG 2002) — Balanço
+             Patrimonial, DRP, Mutações do PL e Fluxo de Caixa, todos
+             calculados na leitura; Notas Explicativas é o único texto
+             qualitativo editável. Consolidado da denominação inteira —
+             só nível Global. -->
+        <div id="subFinanceiroDemonstracoes" class="sub-aba-secretaria" style="display:none;">
+          <h3>📑 Demonstrações Contábeis (ITG 2002)</h3>
+          <p class="subtitle">Balanço Patrimonial, Demonstração do Resultado do Período (regime de
+            competência), Mutações do Patrimônio Líquido e Fluxo de Caixa — todos calculados a
+            partir do Plano de Contas, sempre consolidados de toda a denominação (conta única).</p>
+
+          <div class="barra-lista">
+            <select id="demonstracaoTipo" onchange="alternarCamposDemonstracao()">
+              <option value="balanco">Balanço Patrimonial</option>
+              <option value="drp">Demonstração do Resultado do Período</option>
+              <option value="mutacoes">Mutações do Patrimônio Líquido</option>
+              <option value="fluxocaixa">Fluxo de Caixa</option>
+            </select>
+            <input type="date" id="demonstracaoDataCorte" />
+            <input type="date" id="demonstracaoDataInicio" style="display:none;" />
+            <input type="date" id="demonstracaoDataFim" style="display:none;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="gerarDemonstracaoAcao()">Gerar</button>
+          </div>
+          <div id="resultadoDemonstracao" style="margin-top:14px;"></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h3>📝 Notas Explicativas</h3>
+          <div class="barra-lista">
+            <input type="number" id="notasExplicativasAno" placeholder="Ano" style="max-width:130px;" />
+            <button class="btn-link" onclick="carregarNotasExplicativasAcao()">Carregar</button>
+          </div>
+          <textarea id="notasExplicativasTexto" rows="6" style="width:100%; margin-top:8px;" placeholder="Critérios contábeis adotados, eventos relevantes do exercício, etc."></textarea>
+          <button class="btn-confirmar" style="width:auto;margin-top:8px;" onclick="salvarNotasExplicativasAcao()">Salvar Notas</button>
+          <p id="resultadoNotasExplicativas" class="subtitle"></p>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

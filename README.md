@@ -2094,20 +2094,35 @@ segunda parte (PDQ) fica pra próxima rodada.
 
 #### v4.9 — Demonstrações Contábeis (ITG 2002)
 
-- [ ] Demonstrações exigidas por lei pra entidades sem finalidade de
+- [x] Demonstrações exigidas por lei pra entidades sem finalidade de
       lucros (CFC, Resolução 1.409/12 — ITG 2002), geradas a partir do
-      Plano de Contas (v4.2): Balanço Patrimonial, Demonstração do
-      Resultado do Período, Mutações do Patrimônio Líquido, Fluxo de
-      Caixa, Notas Explicativas.
-- [ ] Regime de **competência** nas demonstrações formais (reconhece
+      Plano de Contas (v4.2): **Balanço Patrimonial**, **Demonstração do
+      Resultado do Período**, **Mutações do Patrimônio Líquido** e
+      **Fluxo de Caixa** (`shared/demonstracoes.js`,
+      `RelatorioDemonstracoesContabeis`) — todas CALCULADAS NA LEITURA a
+      partir de `LancamentosTesouraria`/`SaidasTesouraria`/
+      `ContasAReceber`, nenhuma tabela nova de "saldo contábil": o
+      **Patrimônio Líquido é sempre o residual** (Ativo Total menos
+      Passivo Total, definição contábil), nunca um número gravado à
+      parte — por isso Mutações do PL e Balanço nunca podem divergir
+      entre si (mesma base de cálculo). **Notas Explicativas**
+      (`GestaoNotasExplicativas`) é o único texto qualitativo humano, uma
+      entrada por ano. Consolidado de toda a denominação (conta única,
+      v4.1.3) — restrito a nível Global.
+- [x] Regime de **competência** nas demonstrações formais (reconhece
       quando o fato ocorre, não só quando o dinheiro entra/sai) — o
       registro do dia a dia (`LancamentosTesouraria`) continua em regime
       de caixa (é assim que o Tesoureiro Local vive); a conversão pra
-      competência acontece na geração das demonstrações, não reescrevendo
-      o lançamento original.
-- [ ] Classificação funcional de despesas (atividades-fim vs.
-      administrativa) — alimenta o Índice de Aplicação em Atividades-Fim
-      (v4.12).
+      competência acontece só na geração das demonstrações: receita
+      inclui `ContasAReceber` ainda não recebidas (v4.6, sem contar duas
+      vezes quando uma confirmação já virou lançamento), despesa inclui
+      Saídas já aprovadas mas ainda não pagas (v4.5/v4.8 "empenho") — o
+      Fluxo de Caixa é a única demonstração que continua em regime de
+      caixa de propósito (é literalmente o que ele mede).
+- [x] **Classificação funcional de despesas** (`CategoriasSaida.ClassificacaoFuncional`,
+      `ATIVIDADES_FIM` | `ADMINISTRATIVA`) — aparece como subtotal na
+      Demonstração do Resultado do Período; alimenta o Índice de
+      Aplicação em Atividades-Fim (v4.12, futuro).
 
 #### v4.10 — Prebenda e sustento pastoral
 

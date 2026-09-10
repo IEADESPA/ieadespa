@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas",
+  visaogeral: "Visão Geral", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -519,6 +519,7 @@ const SUBMODULOS_FINANCEIRO = [
   { chave: "planocontas", titulo: "Plano de Contas", icone: "📚", subAba: "planocontas", pronto: true },
   { chave: "campanhas", titulo: "Campanhas", icone: "🎯", subAba: "campanhas", pronto: true },
   { chave: "saidas", titulo: "Saídas (Contas a Pagar)", icone: "💸", subAba: "saidas", pronto: true },
+  { chave: "receber", titulo: "Contas a Receber", icone: "📆", subAba: "receber", pronto: true },
   { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", pronto: false },
   { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
   { chave: "doacoes", titulo: "Doações Online", icone: "💳", pronto: false },
@@ -554,6 +555,11 @@ function mostrarSubAbaFinanceiro(sub) {
       .then(() => { carregarFornecedores(); carregarSaidas(); carregarFundosFixos(); });
     return;
   }
+  if (sub === "receber") {
+    Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada(), carregarOpcoesCampanhasSaida()])
+      .then(() => carregarContasReceber());
+    return;
+  }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
     if (sub === "dizimistas") carregarDizimistasMes();
@@ -571,7 +577,7 @@ async function carregarOpcoesCategoriasEntrada() {
     const res = await fetch(`${API_BASE}/catalogos/categoriasEntrada`);
     _categoriasEntradaCache = await res.json();
   }
-  ["financeiroLancTipo", "autolancTipo"].forEach(idSelect => {
+  ["financeiroLancTipo", "autolancTipo", "receberTipo"].forEach(idSelect => {
     const select = document.getElementById(idSelect);
     if (select && !select.dataset.montado) {
       select.innerHTML = _categoriasEntradaCache.filter(c => c.ativa !== false)
@@ -602,7 +608,7 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
@@ -614,6 +620,12 @@ async function carregarOpcoesCongregacoesFinanceiro() {
     filtroCongSaida.innerHTML = `<option value="">Todas as congregações</option>` + opcoes;
     filtroCongSaida.dataset.montado = "1";
     filtroCongSaida.addEventListener("change", carregarSaidas);
+  }
+  const filtroCongReceber = document.getElementById("receberFiltroCongregacao");
+  if (filtroCongReceber && !filtroCongReceber.dataset.montado) {
+    filtroCongReceber.innerHTML = `<option value="">Todas as congregações</option>` + opcoes;
+    filtroCongReceber.dataset.montado = "1";
+    filtroCongReceber.addEventListener("change", carregarContasReceber);
   }
   ["financeiroLancMes", "financeiroFechMes", "financeiroRelMes", "financeiroConsolidadoMes", "financeiroDizMes"].forEach(id => {
     const input = document.getElementById(id);
@@ -891,8 +903,11 @@ async function carregarOpcoesCampanhasSaida() {
   const res = await fetchProtegido(`${API_BASE}/campanhas`);
   const campanhas = await res.json();
   _campanhasSaidaCache = Array.isArray(campanhas) ? campanhas.filter(c => c.status === "ATIVA") : [];
+  const opcoes = _campanhasSaidaCache.map(c => `<option value="${c.campanhaId}">${c.nome}</option>`).join("");
   const select = document.getElementById("saidaCampanha");
-  if (select) select.innerHTML = _campanhasSaidaCache.map(c => `<option value="${c.campanhaId}">${c.nome}</option>`).join("");
+  if (select) select.innerHTML = opcoes;
+  const selectReceber = document.getElementById("receberCampanha");
+  if (selectReceber) selectReceber.innerHTML = `<option value="">— Sem campanha —</option>` + opcoes;
 }
 
 function alternarCampoCampanhaSaida() {
@@ -1319,6 +1334,160 @@ async function registrarMovimentoFundoFixoAcao(fundoId) {
   avisarResultado(data);
   resultado.textContent = data.mensagem;
   if (data.sucesso) { verDetalheFundoFixoAcao(fundoId); carregarFundosFixos(); }
+}
+
+// ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não
+// conta no Centro de Custo até a confirmação virar um LancamentoTesouraria
+// de verdade. "Vencido" é calculado na leitura, nunca marcado à mão.
+function alternarFormNovaContaReceber() {
+  const form = document.getElementById("formNovaContaReceber");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+}
+
+async function carregarOpcoesDizimistasReceber() {
+  const congregacaoId = document.getElementById("receberCongregacao").value;
+  const select = document.getElementById("receberDizimista");
+  if (!congregacaoId) { select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>`; return; }
+  const res = await fetchProtegido(`${API_BASE}/dizimistas?congregacaoId=${congregacaoId}`);
+  const dizimistas = await res.json();
+  select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>` +
+    (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${d.nome}</option>`).join("") : "");
+}
+
+async function salvarContaReceberAcao() {
+  const congregacaoId = document.getElementById("receberCongregacao").value;
+  const dizimistaId = document.getElementById("receberDizimista").value;
+  const nomeAvulso = document.getElementById("receberNomeAvulso").value.trim();
+  const tipo = document.getElementById("receberTipo").value;
+  const valor = document.getElementById("receberValor").value;
+  const dataVencimento = document.getElementById("receberDataVencimento").value;
+  const campanhaId = document.getElementById("receberCampanha").value;
+  const descricao = document.getElementById("receberDescricao").value.trim();
+  const resultado = document.getElementById("resultadoNovaContaReceber");
+  if (!congregacaoId || !tipo || !valor || !dataVencimento) {
+    resultado.textContent = "Preencha congregação, categoria, valor e data de vencimento.";
+    return;
+  }
+  const body = {
+    congregacaoId, dizimistaId: dizimistaId || undefined, nomeAvulso: dizimistaId ? undefined : (nomeAvulso || undefined),
+    tipo, descricao: descricao || undefined, valor: Number(valor), dataVencimento, campanhaId: campanhaId || undefined
+  };
+  const res = await fetchProtegido(`${API_BASE}/contas-receber`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("receberNomeAvulso").value = "";
+    document.getElementById("receberValor").value = "";
+    document.getElementById("receberDataVencimento").value = "";
+    document.getElementById("receberDescricao").value = "";
+    document.getElementById("formNovaContaReceber").style.display = "none";
+    carregarContasReceber();
+  }
+}
+
+function badgeStatusContaReceber(status) {
+  const mapa = { PREVISTO: "badge-licenca", VENCIDO: "badge-pendente", RECEBIDO: "badge-ativo", CANCELADO: "badge-desligado" };
+  return `<span class="badge-status ${mapa[status] || "badge-inativo"}">${status}</span>`;
+}
+
+async function carregarContasReceber() {
+  const congregacaoId = document.getElementById("receberFiltroCongregacao").value;
+  const status = document.getElementById("receberFiltroStatus").value;
+  const container = document.getElementById("resultadoContasReceber");
+  const params = new URLSearchParams();
+  if (congregacaoId) params.set("congregacaoId", congregacaoId);
+  if (status) params.set("status", status);
+  const res = await fetchProtegido(`${API_BASE}/contas-receber?${params.toString()}`);
+  const contas = await res.json();
+  if (!Array.isArray(contas) || contas.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma conta a receber encontrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Nome/Descrição</th><th>Categoria</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr></thead><tbody>`;
+  contas.forEach(c => {
+    html += `<tr>
+      <td>${c.congregacaoNome}</td><td>${c.dizimistaNome || c.nomeAvulso || c.descricao || "—"}</td><td>${c.categoriaNome || c.tipo}</td>
+      <td>R$ ${Number(c.valor).toFixed(2)}</td><td>${c.dataVencimento}</td><td>${badgeStatusContaReceber(c.status)}</td>
+      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheContaReceberAcao(${c.contaReceberId})">Ver detalhe</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function verDetalheContaReceberAcao(contaReceberId) {
+  const container = document.getElementById("detalheContaReceber");
+  const res = await fetchProtegido(`${API_BASE}/contas-receber/${contaReceberId}`);
+  const c = await res.json();
+  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${c.mensagem}</p>`; return; }
+
+  let html = `<hr /><h4>${c.dizimistaNome || c.nomeAvulso || c.descricao || "—"} — R$ ${Number(c.valor).toFixed(2)} ${badgeStatusContaReceber(c.status)}</h4>
+    <p class="subtitle">${c.categoriaNome} — vencimento ${c.dataVencimento}${c.campanhaNome ? ` — campanha: ${c.campanhaNome}` : ""}</p>`;
+  if (c.diasParaVencimento < 0 && c.status !== "RECEBIDO" && c.status !== "CANCELADO") {
+    html += `<p class="subtitle">⚠️ Vencida há ${Math.abs(c.diasParaVencimento)} dia(s).</p>`;
+  } else if (c.status === "PREVISTO") {
+    html += `<p class="subtitle">Faltam ${c.diasParaVencimento} dia(s) pro vencimento.</p>`;
+  }
+  if (c.motivoCancelamento) html += `<p class="subtitle">Motivo do cancelamento: ${c.motivoCancelamento}</p>`;
+
+  if (c.status === "PREVISTO" || c.status === "VENCIDO") {
+    html += `
+      <h4 style="margin:16px 0 8px; color: var(--cor-primaria);">Confirmar recebimento</h4>
+      <div class="barra-lista">
+        <select id="receberConfirmarForma_${contaReceberId}">
+          <option value="DINHEIRO">Dinheiro</option>
+          <option value="PIX">PIX</option>
+          <option value="MISTO">Misto</option>
+        </select>
+        <input type="number" id="receberConfirmarValorPix_${contaReceberId}" placeholder="Parte em PIX (se misto)" min="0.01" step="0.01" style="max-width:170px;" />
+        <input type="month" id="receberConfirmarMes_${contaReceberId}" value="${mesAtualFinanceiro()}" style="max-width:150px;" />
+      </div>
+      <div class="input-group">
+        <label>Comprovante (opcional):</label>
+        <input type="file" id="receberConfirmarComprovante_${contaReceberId}" accept="image/jpeg,image/png,application/pdf" />
+      </div>
+      <button class="btn-confirmar" style="width:auto;" onclick="confirmarContaReceberAcao(${contaReceberId})">✅ Confirmar Recebimento</button>
+      <button class="btn-link btn-link-perigo" onclick="cancelarContaReceberAcao(${contaReceberId})">Cancelar</button>
+      <p id="resultadoConfirmarContaReceber_${contaReceberId}" class="subtitle"></p>`;
+  }
+  if (c.lancamentoId) {
+    html += `<p class="subtitle">Virou o lançamento nº ${c.lancamentoId} na Tesouraria.</p>`;
+  }
+  container.innerHTML = html;
+}
+
+async function confirmarContaReceberAcao(contaReceberId) {
+  const formaPagamento = document.getElementById(`receberConfirmarForma_${contaReceberId}`).value;
+  const valorPix = document.getElementById(`receberConfirmarValorPix_${contaReceberId}`).value;
+  const mesReferencia = document.getElementById(`receberConfirmarMes_${contaReceberId}`).value;
+  const arquivo = document.getElementById(`receberConfirmarComprovante_${contaReceberId}`).files[0];
+  const resultado = document.getElementById(`resultadoConfirmarContaReceber_${contaReceberId}`);
+  if (!mesReferencia) { resultado.textContent = "Informe o mês de referência."; return; }
+  const body = { acao: "CONFIRMAR", formaPagamento, mesReferencia };
+  if (formaPagamento === "MISTO") body.valorPix = Number(valorPix);
+  if (arquivo) { body.comprovanteBase64 = await arquivoParaBase64(arquivo); body.mimeType = arquivo.type; }
+  const res = await fetchProtegido(`${API_BASE}/contas-receber/${contaReceberId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) { carregarContasReceber(); verDetalheContaReceberAcao(contaReceberId); }
+}
+
+async function cancelarContaReceberAcao(contaReceberId) {
+  const motivo = await pedirTexto("Motivo do cancelamento", "Ex: acordo desfeito");
+  if (motivo === null) return;
+  if (!motivo.trim()) { mostrarToast("Informe o motivo do cancelamento.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/contas-receber/${contaReceberId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "CANCELAR", motivo })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarContasReceber(); verDetalheContaReceberAcao(contaReceberId); }
 }
 
 async function carregarOpcoesDizimistas() {

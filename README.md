@@ -1972,13 +1972,18 @@ Fixo de Caixa).
 
 #### v4.6 — Contas a Receber
 
-- [ ] Registro de valor **esperado, ainda não recebido** (ex: acordo de
-      parcelamento, boleto emitido pra terceiro) — Status Previsto/
-      Recebido/Vencido, sem contar no Centro de Custo até virar um
-      `LancamentoTesouraria` de verdade (não duplica, só antecipa a
-      visibilidade).
-- [ ] Alerta de vencimento — mesmo princípio "calculado na leitura" de
-      sempre (dias até o vencimento, nunca marcação manual de "atrasado").
+- [x] Registro de valor **esperado, ainda não recebido** (ex: acordo de
+      parcelamento, boleto emitido pra terceiro) — `ContasAReceber`, sem
+      contar no Centro de Custo (v4.1.3) enquanto não for confirmado.
+      **Confirmar** (`GestaoContasReceber`, ação `CONFIRMAR`) gera um
+      `LancamentoTesouraria` de verdade — mesmo Termo nº sequencial de
+      sempre, mesma checagem de mês fechado — não duplica dinheiro, só
+      antecipa a visibilidade de "isso ainda vai entrar".
+- [x] **Status calculado na leitura**: `Status` gravado é só
+      `PREVISTO`/`RECEBIDO`/`CANCELADO` — `VENCIDO` nunca é marcado à
+      mão, é derivado comparando a data de vencimento com hoje
+      (`diasParaVencimento`), mesmo princípio "calculado na leitura" de
+      sempre. Cancelamento nunca é exclusão (mesmo princípio de v4.1.1).
 
 #### v4.7 — Remessa Bancária (CNAB 240/400)
 

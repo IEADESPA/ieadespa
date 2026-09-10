@@ -103,6 +103,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroPlanocontas" onclick="mostrarSubAbaFinanceiro('planocontas')"><span class="icone">📚</span><span class="rotulo">Plano de Contas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroCampanhas" onclick="mostrarSubAbaFinanceiro('campanhas')"><span class="icone">🎯</span><span class="rotulo">Campanhas</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroSaidas" onclick="mostrarSubAbaFinanceiro('saidas')"><span class="icone">💸</span><span class="rotulo">Saídas</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroReceber" onclick="mostrarSubAbaFinanceiro('receber')"><span class="icone">📆</span><span class="rotulo">Contas a Receber</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -1843,6 +1844,50 @@
           </div>
           <div class="rolagem-tabela"><div id="resultadoFundosFixos"></div></div>
           <div id="detalheFundoFixo" style="margin-top:18px;"></div>
+        </div>
+
+        <!-- SUB-ABA: CONTAS A RECEBER (v4.6) — valor esperado, ainda não
+             recebido; não conta no Centro de Custo até virar um lançamento
+             de verdade na confirmação. Vencido é calculado na leitura. -->
+        <div id="subFinanceiroReceber" class="sub-aba-secretaria" style="display:none;">
+          <h3>📆 Contas a Receber</h3>
+          <p class="subtitle">Registro do que ainda vai entrar (acordo de parcelamento, boleto
+            emitido pra terceiro) — não conta no Centro de Custo enquanto não for confirmado.
+            "Vencido" é calculado sozinho a partir da data de vencimento.</p>
+
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarFormNovaContaReceber()">➕ Nova Conta a Receber</button>
+
+          <div id="formNovaContaReceber" style="display:none; margin-top:14px;">
+            <div class="barra-lista">
+              <select id="receberCongregacao" onchange="carregarOpcoesDizimistasReceber()"></select>
+              <select id="receberDizimista"><option value="">— Nome avulso (abaixo) —</option></select>
+              <input type="text" id="receberNomeAvulso" placeholder="Nome avulso (se não for dizimista cadastrado)" />
+            </div>
+            <div class="barra-lista">
+              <select id="receberTipo"></select>
+              <input type="number" id="receberValor" placeholder="Valor (R$)" min="0.01" step="0.01" style="max-width:150px;" />
+              <input type="date" id="receberDataVencimento" />
+              <select id="receberCampanha"><option value="">— Sem campanha —</option></select>
+            </div>
+            <div class="input-group">
+              <input type="text" id="receberDescricao" placeholder="Descrição (opcional)" />
+            </div>
+            <button class="btn-confirmar" style="width:auto;" onclick="salvarContaReceberAcao()">Registrar</button>
+            <p id="resultadoNovaContaReceber" class="subtitle"></p>
+          </div>
+
+          <div class="barra-lista">
+            <select id="receberFiltroCongregacao"></select>
+            <select id="receberFiltroStatus" onchange="carregarContasReceber()">
+              <option value="">Todos os status</option>
+              <option value="PREVISTO">Previsto</option>
+              <option value="VENCIDO">Vencido</option>
+              <option value="RECEBIDO">Recebido</option>
+              <option value="CANCELADO">Cancelado</option>
+            </select>
+          </div>
+          <div class="rolagem-tabela"><div id="resultadoContasReceber"></div></div>
+          <div id="detalheContaReceber" style="margin-top:18px;"></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

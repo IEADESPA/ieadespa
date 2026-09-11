@@ -178,7 +178,6 @@ essa engine ainda: `Sessoes.OrgaoId` só referencia `Orgaos` (os 6 órgãos úni
 Art. 13), não `OrgaosLocais`. Reunião de junta local fica pra quando houver um
 consumidor real (nenhuma fase do roteiro pede isso ainda).
 
-
 ### 2.6 Navegação por módulos (padrão "portal de serviços")
 
 O painel não é mais uma barra lateral com uma lista plana crescente de abas.
@@ -617,14 +616,6 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       barra lateral (Meu Perfil / Meus Dados (LGPD) / Cartas de Trânsito) —
       mecanismo (`.submenu-aba`/`.btn-subaba`) genérico, pronto pra reaproveitar
       em Órgãos quando crescer do mesmo jeito.
-- [ ] **Apresentação de Crianças** *(gap da varredura normativa, 7ª rodada)* —
-      mesmo lugar de Casamentos (é o outro rito de família previsto), Reg. Art. 82:
-      registro do ato (oficiante, pais, modalidade **solene ou reservada**), com
-      **aptidão calculada**: impedimento por união estável sem certidão ou por
-      disciplina em curso dos pais (§2º, I), preferência de **até 90 dias de
-      vida** e **vedação acima de 1 ano completo** (§3º, I-II). Ato reservado
-      **não gera certificado** (§2º, II, "b") — a regra fica no sistema, não na
-      lembrança de quem emite.
 
 #### v1.10 — Reforma da aba Pessoas + autoatendimento de Foto
 
@@ -684,41 +675,6 @@ dado que a Secretaria realmente usa pra algo. Quatro categorias:
       (`registrarAuditoria`, append-only, sem mudar isso).
 - [x] Filtro por data (De/Até) na aba Auditoria — o backend (`ListarAuditoria`)
       já aceitava, só faltava o campo em tela.
-
-#### v1.12 — Esteira de Batismo *(gap da varredura normativa, 7ª rodada)*
-
-> **O Regimento cita este sistema nominalmente.** O Art. 80 §2º, V condiciona a
-> aptidão ao batismo ao preenchimento de "formulário eletrônico com caixa de
-> aceite do Estatuto e do Regimento" no **"Sistema Oficial de Gestão da
-> IEADESPA"**. De todos os dispositivos varridos, este é o único que não apenas
-> pode ser atendido pelo sistema — ele **exige** que o sistema exista. E é
-> justamente a peça que nunca foi construída: hoje o batismo só aparece como
-> `DataBatismo` preenchida **depois**, sem nenhum processo antes.
-
-A FASE 1 tratou admissão (v1.1), integração (v1.2), categorias (v1.3), trânsito
-(v1.4) e perda (v1.5) — mas o **ato que produz o membro** ficou de fora.
-
-- [ ] **Turma de batismo** (Art. 80 §1º — ato centralizado no Campo, com
-      oficiantes designados): data, local aprovado, autorização da Mesa,
-      oficiantes. Calendário semestral de **maio e outubro** (§3º, I), com local
-      aprovado e **vedação de rio/represa** (§3º, II-III) validada no cadastro.
-- [ ] **Checklist de aptidão calculado, não digitado** (Art. 80 §2º):
-      (I) idade mínima de 12 anos — já sai de `DataNascimento` via
-      `shared/estatuto.js`; (II) **certidão de casamento civil obrigatória para
-      candidatos coabitantes** — cruza com `EstadoCivil` (v1.4) e `Casamentos`
-      (v1.9); (III) parecer de vida pregressa; (IV) **conclusão do Curso de
-      Discipulado** — verificada na trilha de formação (v6.9/v8.5), não no
-      "eu sei que ele fez".
-- [ ] **Aceite eletrônico do Estatuto e do Regimento** (§2º, V) com data, versão
-      do documento aceito e hash — é a prova documental do vínculo associativo, e
-      é o que o Art. 80 manda registrar. Reaproveita `TermosAssinados`, que já
-      existe desde a migração 031.
-- [ ] Efetivação: concluído o batismo, o candidato vira **Membro em Comunhão**
-      automaticamente (Art. 7º, II — regra que `estatuto.js` já implementa) e
-      `DataBatismo`/`FormaAdmissao` são preenchidas pelo próprio fluxo, sem
-      digitação posterior.
-- [ ] Candidato que não é aprovado permanece na fila para a turma seguinte, com o
-      motivo registrado — sem precisar recomeçar o cadastro.
 
 ### FASE 2 — Governança (órgãos e deliberações)
 
@@ -823,42 +779,6 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
       as pautas que justificariam uma AGE especial já têm órgão próprio pra
       tratar (CLI, Conselho Fiscal, CEI); só compensa convocar Assembleia
       quando for competência privativa dela mesma (Art. 18 — ver v2.2).
-
-**Expansão (FASE B / varredura normativa) — Credenciamento de Assembleia.**
-Hoje o `RegistrarPresenca` já barra quem não está no `universoDoOrgao`, o que
-resolve o caso central. Mas o Regimento Art. 142-143 descreve um **controle de
-porta** mais fino, que o sistema ainda não modela, e que na prática é feito
-por uma pessoa conferindo lista impressa na entrada:
-
-- [ ] **Lista de impedidos, calculada e com motivo legível.** Art. 142-143
-      arrola quem não entra: não-membro, membro sob disciplina em curso, e
-      **quem já teve carta de mudança expedida** (deixou de pertencer àquela
-      congregação, mesmo que ainda não tenha sido recebido na nova). O último
-      caso é o que mais escapa hoje, porque a carta de mudança é um evento que
-      o sistema já registra (v1.x) mas que não entra na conta de elegibilidade.
-      Continua o princípio de sempre: **não existe marcação "impedido"** — o
-      endpoint devolve, pra cada nome recusado, *qual* artigo o recusou, para a
-      mesa poder responder ao interessado na hora sem abrir o processo dele.
-- [ ] **Mesa de credenciamento com trilha.** Registrar quem operou o
-      credenciamento, o horário de cada check-in e as recusas (com motivo) —
-      hoje a recusa simplesmente não deixa rastro, o que é ruim justamente no
-      caso em que alguém contesta depois ("eu estava lá e não me deixaram
-      entrar"). É o que a literatura de governança deliberativa chama de
-      *credentials report*: em Robert's Rules of Order (11ª/12ª ed., EUA, a
-      referência procedimental mais usada no mundo para assembleias), a
-      **Credentials Committee** apresenta ao plenário, antes de qualquer
-      votação, o número de credenciados — e é **esse relatório aprovado**, não
-      a lista de presença bruta, que fixa a base de cálculo do quórum.
-      Aqui o equivalente é: o sistema emite o *relatório de credenciamento*
-      no momento da instalação, e ele congela a base sobre a qual as maiorias
-      dos Art. 21 e 23 §1º são calculadas.
-- [ ] **Procuração / representação — decidir explicitamente que não existe.**
-      Vale registrar por escrito no próprio sistema (mensagem na tela de
-      credenciamento) que voto por procuração não é admitido, porque é a
-      dúvida número um em assembleia de associação. Base: o voto em assembleia
-      associativa é personalíssimo salvo previsão estatutária expressa
-      (CC art. 59 e o regime de deliberação dos arts. 44-61), e o Estatuto
-      aqui não prevê. Sem isso escrito, a mesa improvisa caso a caso.
 
 #### v2.2 — Assembleia Geral (pautas especiais)
 
@@ -1122,50 +1042,6 @@ já está lá. **v2.4 está fechado** com isso.
       depois de FASE 4 (Financeiro) e de v5.2 (Relatórios departamentais) —
       **v2.7 está fechado** com isso.
 
-**Reaberto pela varredura normativa (FASE B).** O fechamento acima continua
-correto quanto ao que ele decidiu (departamentos, autonomia financeira → v5.4).
-Mas a varredura encontrou **dois órgãos de apoio que o Regimento cria e que o
-sistema simplesmente não tem** — não é refinamento do que existe, é órgão
-faltando no cadastro:
-
-- [ ] **Conselho Consultivo Técnico (Reg. Art. 31)** — 3 a 5 membros, com a
-      função de emitir **Parecer de Viabilidade** antes de ato de alto impacto
-      patrimonial (aquisição/alienação de imóvel de alto valor, contratação de
-      empréstimo). Duas coisas o tornam diferente dos órgãos já cadastrados:
-      1. **Vedação de parentesco com a Diretoria Executiva** — o sistema já sabe
-         validar isso: `shared/estatuto.js` já tem a checagem de parentesco
-         usada na elegibilidade do Conselho Fiscal. É reaproveitar, não criar.
-      2. **O parecer é pré-condição de um ato financeiro**, então ele precisa
-         *travar* alguma coisa pra valer. O gancho natural já existe: a FASE 4
-         tem o fluxo de aprovação de Saída/Empenho (v4.5/v4.8) — acima de um
-         limite parametrizável, a Saída fica bloqueada enquanto não houver
-         Parecer de Viabilidade vinculado. Sem esse travamento, vira mais um
-         documento decorativo (o mesmo erro que a v2.9 evitou com as atas).
-      Referência externa que confirma o desenho: o padrão internacional de
-      *conflict of interest policy* para entidades religiosas — a **ECFA**
-      (Evangelical Council for Financial Accountability, EUA) exige, no seu
-      Standard 6, que transações com partes relacionadas sejam aprovadas por
-      maioria de membros **desinteressados**, e o IRS Form 990 (Schedule L /
-      Part VI) pergunta expressamente se a entidade mantém política escrita de
-      conflito de interesses. No Brasil, o mesmo princípio aparece no Código
-      das Melhores Práticas do **IBGC** (independência do conselho e abstenção
-      do conselheiro em matéria de interesse próprio). O Art. 31 é a versão
-      eclesiástica disso — e é exatamente o tipo de regra que só funciona se
-      quem está impedido for calculado, não declarado.
-- [ ] **Colégio de Dirigentes Congregacionais (Reg. Art. 151 §2º)** — instância
-      consultiva que reúne os Dirigentes de Congregação. Já temos todo o
-      insumo: `Lideranca` sabe quem é Dirigente de cada congregação, e o motor
-      de Reuniões é órgão-agnóstico desde a v0.3. O que falta é a sigla de
-      órgão + a regra de composição **automática** (entra/sai conforme a
-      pessoa assume ou deixa a congregação), em vez de uma lista de Assentos
-      mantida à mão — mesma lógica de composição calculada já usada na CLI.
-      Por ser consultivo, não vota deliberação vinculante: produz
-      recomendação, que tramita como Parecer pela v2.8 já existente.
-- [ ] **Efeito colateral bom:** com esses dois cadastrados, o painel de órgãos
-      passa a refletir o organograma **completo** do Regimento. Hoje ele
-      reflete só a parte que foi implementada, o que dá a falsa impressão de
-      que o resto não existe institucionalmente.
-
 #### v2.8 — Enquetes e Tramitação de Projetos/Pareceres
 
 **Reformulado por completo** — o escopo original ("Pautas/Votos", eleição
@@ -1282,56 +1158,6 @@ e manteve só o que é real:
   o caminho natural é gerar um rascunho com os campos que o sistema sabe
   (nome, congregação, data) e o resto preenchido à mão, e o PDF assinado
   sobe depois pelo item Documentos acima (`Tipo=TERMO_POSSE`).
-
-**Expansão (FASE B) — Consolidação normativa e Texto Mestre (Art. 162 §§2º-4º
-e Art. 162-B).** Este é, provavelmente, o gap mais silencioso de todo o
-sistema. O Regimento **manda** manter um Texto Mestre consolidado e impõe
-prazo; hoje o sistema guarda "alterações do Regimento" como documentos
-soltos (`Tipo=REGIMENTO`), o que significa que, para saber a regra vigente
-hoje, alguém precisa ler a versão original **mais** todas as atas de alteração
-posteriores, em ordem — exatamente o problema que a consolidação existe para
-eliminar. E o sistema inteiro (v1.x elegibilidade, v3.x prazos disciplinares,
-v4.x percentuais) é construído em cima de artigos que podem ter mudado.
-
-- [ ] **Texto Mestre com vigência (versão consolidada).** Cada alteração
-      aprovada gera uma nova versão consolidada do Regimento, com data de
-      início de vigência e ponteiro para a ata que a produziu. Não é editor de
-      texto (a v2.9 já descartou isso, e com razão): é **versionamento do
-      arquivo** + a ficha de vigência ao redor dele. A consulta que precisa
-      existir é "qual era o texto vigente na data X" — sem ela, um processo
-      disciplinar de 2024 julgado hoje corre o risco de ser medido por regra
-      de 2026, o que é retroatividade pura.
-- [ ] **Alerta de prazo de 48h** (Art. 162 §2º: Texto Mestre atualizado em
-      48 horas após o registro da ata de alteração). Reaproveita tal e qual o
-      mecanismo de alerta de cartório que já está nesta mesma v2.9
-      (`estatuto.diasDesde`, calculado na leitura) — é o mesmo padrão, outro
-      prazo. Custo de implementação quase zero; o valor é que o prazo deixa de
-      depender de alguém lembrar.
-- [ ] **Nota de vigência automática e regra dos 30%** (Art. 162 §§3º-4º):
-      alteração que atinge mais de 30% do texto exige registro integral, não
-      apenas averbação da alteração. O sistema não mede diff de texto jurídico
-      com confiança suficiente pra decidir isso sozinho — mas **pode** alertar:
-      registrar quantos artigos foram tocados em relação ao total e acender o
-      aviso quando passar do limiar, deixando a decisão com o Secretário. É
-      assistência técnica, não automação cega (mesmo critério da v4.x para
-      classificações fiscais).
-- [ ] **Revisão sistêmica quadrienal (Art. 162-B).** A cada 4 anos há revisão
-      obrigatória do arcabouço normativo. Vira um item de calendário
-      institucional com antecedência (mesmo motor da v7.2), não um lembrete
-      manual — é justamente o tipo de prazo longo que ninguém lembra sem
-      sistema.
-- **Referências que confirmam o desenho.** No Brasil, a LC 95/1998 (com a
-  LC 107/2001) trata de técnica legislativa e **consolidação** — o conceito de
-  manter texto consolidado em vez de obrigar o leitor a somar alterações é
-  exatamente o do seu art. 13-14; o Decreto 9.191/2017 aplica isso no
-  Executivo federal. Fora do Brasil, o padrão maduro é *point-in-time law*:
-  o **legislation.gov.uk** (Reino Unido) publica cada lei em versão "as
-  amended" com data de vigência e permite consultar o texto tal como estava em
-  qualquer data passada; nos EUA, o **eCFR** faz o mesmo para regulamentos
-  federais. No direito canônico católico há séculos se usa o *textus
-  consolidatus* pela mesma razão. O que o Art. 162 pede não é uma
-  excentricidade regimental — é a prática consolidada de quem administra
-  normas que mudam.
 
 #### v2.10/v2.11 — descontinuadas como versões próprias
 
@@ -1674,81 +1500,6 @@ Disciplinar (v3.2-v3.5): a escada **disciplinar** territorial.
   (§6º/§7º) — não há como o sistema impedir uma destituição real feita
   fora dele; gestão externa terceirizada (§3º) — sem integração com
   plataforma/auditoria externa.
-
-#### v3.8 — Mediação e Arbitragem Eclesiástica (nova, Reg. Art. 161-A)
-
-A FASE 3 inteira foi construída em cima de uma premissa: conflito interno vira
-**processo disciplinar**. Isso está certo para falta ética/doutrinária, mas a
-varredura normativa mostrou que o Regimento prevê uma via que o sistema não
-tem — e que atende um tipo de conflito **diferente**: disputa patrimonial ou
-administrativa entre partes (congregação × sede, dirigente × departamento,
-obreiro × igreja sobre valores). Aí não há "réu" nem sanção; há duas partes
-querendo uma decisão. Hoje esse caso ou é forçado dentro do processo
-disciplinar (que o distorce, porque cria acusado onde não há acusação) ou sai
-do sistema e vai direto pro Judiciário.
-
-- [ ] **Câmara de Mediação — a etapa que resolve a maioria dos casos.**
-      Instauração por qualquer das partes, indicação de mediador da lista
-      cadastrada (com impedimento calculado: parentesco, vínculo com a
-      congregação envolvida, participação prévia no caso), sessões com registro
-      de comparecimento e **termo de acordo** ao final. O acordo é o produto:
-      registrado, assinado (reaproveita `TermosAssinados` da v2.7) e, quando
-      envolve valor, vinculado à Saída/Receita correspondente na FASE 4 — senão
-      vira papel sem efeito. Prazo de encerramento com alerta calculado, mesmo
-      padrão dos prazos disciplinares.
-- [ ] **Arbitragem — só quando a mediação falha.** Painel de árbitros,
-      compromisso arbitral assinado pelas partes, sentença arbitral registrada.
-      A sequência importa e deve ser **travada pelo sistema**: não se abre
-      arbitragem sem mediação encerrada sem acordo. É o desenho do próprio
-      Art. 161-A e também o da lei.
-- [ ] **Cláusula compromissória no ciclo de vida do membro/dirigente.** Para a
-      via ser realmente obrigatória, a adesão precisa existir **antes** do
-      conflito. O gancho natural é o Termo de Compromisso de Gestão (v2.7) e o
-      aceite do Estatuto na esteira de batismo (v1.12) — é ali que a cláusula
-      é aceita e fica provada com data e versão. Sem isso, "via obrigatória" é
-      só uma frase no Regimento.
-- [ ] **Encaminhamento cruzado com a FASE 3 existente.** Se, durante a
-      mediação, aparecer fato que configure infração ética, o caso **bifurca**:
-      segue a mediação patrimonial e abre processo disciplinar separado
-      (reaproveita `shared/disciplinar.js::criarProcessoDisciplinar`, mesma
-      ponte que a Ouvidoria v3.7 já usa). São coisas distintas e devem correr
-      distintas — misturar as duas é o erro que se quer evitar.
-- [ ] **Interface com a Ouvidoria (v3.7).** A Ouvidoria hoje só sabe encaminhar
-      pra processo disciplinar. Ganha uma segunda saída: `ENCAMINHAR_MEDIACAO`,
-      para o relato que é conflito, não denúncia.
-
-**Base jurídica e referências.** No Brasil a arbitragem é regida pela
-**Lei 9.307/1996** (alterada pela Lei 13.129/2015): a sentença arbitral produz
-os mesmos efeitos de sentença judicial e **não depende de homologação**
-(art. 18, art. 31), e é título executivo judicial (CPC art. 515, VII) — ou
-seja, é via real, não simbólica, desde que limitada a **direitos patrimoniais
-disponíveis** (art. 1º), que é exatamente o recorte do Art. 161-A. A mediação
-tem lei própria, **Lei 13.140/2015**, e o CPC art. 3º §§2º-3º impõe ao Estado
-o estímulo à autocomposição. Duas cautelas que o sistema deve refletir no
-texto das telas: matéria de direito indisponível (trabalhista subordinada,
-questão de família, crime) **não** é arbitrável, e cláusula compromissória em
-relação de consumo ou de adesão tem restrição (Lei 9.307 art. 4º §2º;
-CDC art. 51, VII) — por isso a adesão deve ser aceite expresso e datado, não
-presumida.
-
-Fora do Brasil, esse é um campo maduro e a IEADESPA não está inventando nada:
-nos EUA, a **Peacemaker Ministries** publica há décadas as *Rules of Procedure
-for Christian Conciliation*, um regulamento completo de mediação/arbitragem
-cristã cujos laudos são rotineiramente executados pelas cortes estaduais sob o
-*Federal Arbitration Act*; a jurisprudência americana, desde **Watson v. Jones**
-(1871) e **Serbian Eastern Orthodox Diocese v. Milivojevich** (1976), aplica a
-*ecclesiastical abstention doctrine* — o Judiciário se recusa a rever decisão
-interna de igreja em matéria de governança, o que torna a instância interna
-**a** instância. No Reino Unido, tribunais religiosos operam como arbitragem
-sob o *Arbitration Act 1996*. O fundamento teológico do instituto é
-1 Coríntios 6:1-8 e Mateus 18:15-17 (resolver entre irmãos antes de recorrer a
-tribunal externo) — o Art. 161-A é a tradução regimental disso.
-
-**Por que vale a pena construir:** dos módulos desta fase, é o que tem a maior
-razão entre valor institucional e esforço técnico. Reaproveita quase tudo que
-já existe (motor de prazos, impedimento calculado, termos assinados, ponte com
-disciplinar, ponte com financeiro) e cobre o único tipo de conflito que hoje
-não tem lugar nenhum no sistema.
 
 ### FASE 4 — Financeiro e Patrimônio
 
@@ -2865,8 +2616,8 @@ manda o sistema existir, e essa peça nunca foi construída.
 
 | Gap normativo | Base | Onde entra |
 |---|---|---|
-| **Esteira de Batismo** — turma, aptidão cumulativa (idade 12+, certidão de casamento p/ coabitantes, vida pregressa, Curso de Discipulado) e **aceite eletrônico do Estatuto no sistema** | Reg. Art. 80 §§1º-3º | v1.12 (nova) |
-| Registro de Apresentação de Crianças — impedimentos (união estável sem certidão, disciplina em curso), janela de idade (preferência 90 dias, **vedado acima de 1 ano**), ato reservado não gera certificado | Reg. Art. 82 §§2º-3º | v1.9 (expandida) |
+| **Esteira de Batismo** — turma, aptidão cumulativa (idade 12+, certidão de casamento p/ coabitantes, vida pregressa, Curso de Discipulado) e **aceite eletrônico do Estatuto no sistema** | Reg. Art. 80 §§1º-3º | vB.11 (nova) |
+| Registro de Apresentação de Crianças — impedimentos (união estável sem certidão, disciplina em curso), janela de idade (preferência 90 dias, **vedado acima de 1 ano**), ato reservado não gera certificado | Reg. Art. 82 §§2º-3º | vB.12 (nova) |
 | **Motor do Calendário Oficial** — 5 níveis de precedência, prazo fatal **15/jan**, "Direito Adquirido Temporal" por ordem de chegada, vedadas 2 festas de Nível 4 na mesma Área no mesmo fim de semana, indeferimento por "Esgotamento de Pauta" | Reg. Art. 154 §§1º-4º | v7.2 (expandida) |
 | Ciclo Mensal de Governança e Santa Ceia — datas fixas (Conselho Fiscal 3º domingo, CLI último domingo), Ceia Geral em maio/outubro com **fechamento obrigatório de todas as congregações**, AGE da CLI com 48h | Reg. Art. 154-A, 81 §1º, 147 §2º | v7.2 (expandida) |
 | **Balancete não entregue bloqueia liberação de recurso** do departamento — saldo virtual individualizado em conta única | Reg. Art. 133-C §§1º-2º; Art. 152 | v5.4 (expandida) |
@@ -2876,11 +2627,11 @@ manda o sistema existir, e essa peça nunca foi construída.
 | **Obras e licenciamento** — AVCB + Alvará/Habite-se como requisito, **vedada inauguração de templo clandestino**, regras de placa, eficiência energética | Reg. Art. 87 §§1º-3º; Art. 162-A §2º | v4.24 (nova) |
 | **Regra das 24 Horas** — omissão do administrador de canal torna a Igreja corresponsável; senhas pertencem à Secretaria Geral (troca imediata na sucessão); "Área Cega"; grupos satélites | Reg. Art. 160 §§1º-5º; Art. 160-A | v7.3 (expandida) |
 | Política de Porta-Voz Único — regime de crise com vedação de manifestação dos demais líderes | Reg. Art. 161-B §§1º-2º | v7.15 (nova) |
-| **Mediação e Arbitragem Eclesiástica** — via obrigatória antes do Judiciário em conflito patrimonial/administrativo | Reg. Art. 161-A (Lei 9.307/96) | v3.8 (nova) |
+| **Mediação e Arbitragem Eclesiástica** — via obrigatória antes do Judiciário em conflito patrimonial/administrativo | Reg. Art. 161-A (Lei 9.307/96) | vB.16 (nova) |
 | Intervenção em Entidade Vinculada — **ratificação da CLI em 15 dias sob pena de perder eficácia**; formação legal exigida do gestor | Reg. Art. 47-A §§1º-2º; Art. 153 | v9.1 (expandida) |
-| Conselho Consultivo Técnico (Parecer de Viabilidade antes de imóvel de alto valor/empréstimo, **vedado parentesco com a Diretoria**) e Colégio de Dirigentes Congregacionais | Reg. Art. 31; Art. 151 §2º | v2.7 (expandida) |
-| Consolidação normativa — Texto Mestre atualizado em **48h** após registro da ata, nota de vigência, registro integral quando alterações passam de **30%**, revisão sistêmica a cada 4 anos | Reg. Art. 162 §§2º-4º; Art. 162-B | v2.9 (expandida) |
-| Controle de acesso à Assembleia (impedidos: não-membros, disciplinados, **quem já tem carta de mudança expedida**) + justificativa de falta com motivos vedados (escala/evento de departamento não justifica) | Reg. Art. 142-143; Art. 149 §§1º-2º | v2.1 e v7.9 (expandidas) |
+| Conselho Consultivo Técnico (Parecer de Viabilidade antes de imóvel de alto valor/empréstimo, **vedado parentesco com a Diretoria**) e Colégio de Dirigentes Congregacionais | Reg. Art. 31; Art. 151 §2º | vB.14 (nova) |
+| Consolidação normativa — Texto Mestre atualizado em **48h** após registro da ata, nota de vigência, registro integral quando alterações passam de **30%**, revisão sistêmica a cada 4 anos | Reg. Art. 162 §§2º-4º; Art. 162-B | vB.15 (nova) |
+| Controle de acesso à Assembleia (impedidos: não-membros, disciplinados, **quem já tem carta de mudança expedida**) + justificativa de falta com motivos vedados (escala/evento de departamento não justifica) | Reg. Art. 142-143; Art. 149 §§1º-2º | vB.13 e v7.9 (expandidas) |
 
 **Conclusão da pesquisa.** O sistema tem hoje 113 endpoints, 95 tabelas e 59
 migrações — e **nenhum teste automatizado**, nenhum mecanismo de notificação
@@ -2901,10 +2652,15 @@ carregar. Daí a FASE B abaixo, inserida de propósito entre a FASE 4 e a FASE 5
 > fases 0-3 — que foram concluídas, mas não esgotadas — e constrói o que ficou
 > faltando, além do que só agora se percebeu que falta.
 
-Esta fase não entrega módulo de negócio novo: entrega **infraestrutura que todas
-as outras fases vão usar**. Fazer as fases 5-11 sem ela significa repetir 7 vezes
-o mesmo trabalho (cada módulo inventando sua própria notificação, seu próprio
-fluxo de aprovação, seu próprio relatório).
+A fase tem duas metades. **vB.1 a vB.10** são infraestrutura pura — não entregam
+módulo de negócio novo, entregam a **base que todas as outras fases vão usar**
+(fazer as fases 5-11 sem isso significa repetir 7 vezes o mesmo trabalho: cada
+módulo inventando sua própria notificação, seu próprio fluxo de aprovação, seu
+próprio relatório). **vB.11 a vB.16** são o retrofit propriamente dito: conteúdo
+de negócio que pertence às fases 0-3, mas que só pode entrar aqui — essas fases
+já foram entregues e fechadas, então gaps descobertos depois (varredura
+normativa, 7ª rodada) não voltam pra dentro delas, entram como versão nova da
+FASE B, sempre citando de qual fase/versão original é o retrofit.
 
 #### vB.1 — Rede de segurança técnica (o sistema não tem nenhuma)
 
@@ -3008,7 +2764,7 @@ comum não entra num painel de secretaria — ele entra no celular.
       redigitação, não o fluxo de assinatura.
 - [ ] Assinatura eletrônica **interna** com trilha (quem assinou, quando, hash)
       reaproveitando `TermosAssinados` — para termos e aceites internos
-      (voluntariado, políticas, aceite do Estatuto na v1.12), **nunca** como
+      (voluntariado, políticas, aceite do Estatuto na vB.11), **nunca** como
       substituto de assinatura de ata com fé pública, que continua no GOV.BR.
 - [ ] Arquivo institucional com tabela de temporalidade — conversa direto com
       `PoliticasRetencao` (v0.3), que hoje é só catálogo informativo.
@@ -3065,6 +2821,270 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
       sub-abas; quem chega hoje não tem nenhum caminho explicado.
 - [ ] Mensagens de erro em linguagem de secretaria, não de programador (padrão já
       seguido no financeiro — generalizar para o resto).
+
+
+#### vB.11 — Esteira de Batismo *(retrofit da FASE 1, gap da varredura normativa)*
+
+> **O Regimento cita este sistema nominalmente.** O Art. 80 §2º, V condiciona a
+> aptidão ao batismo ao preenchimento de "formulário eletrônico com caixa de
+> aceite do Estatuto e do Regimento" no **"Sistema Oficial de Gestão da
+> IEADESPA"**. De todos os dispositivos varridos, este é o único que não apenas
+> pode ser atendido pelo sistema — ele **exige** que o sistema exista. E é
+> justamente a peça que nunca foi construída: hoje o batismo só aparece como
+> `DataBatismo` preenchida **depois**, sem nenhum processo antes.
+
+A FASE 1 tratou admissão (v1.1), integração (v1.2), categorias (v1.3), trânsito
+(v1.4) e perda (v1.5) — mas o **ato que produz o membro** ficou de fora. Fica
+aqui na FASE B, e não dentro da FASE 1 já entregue, porque a FASE 1 está
+fechada — é retrofit, não reabertura.
+
+- [ ] **Turma de batismo** (Art. 80 §1º — ato centralizado no Campo, com
+      oficiantes designados): data, local aprovado, autorização da Mesa,
+      oficiantes. Calendário semestral de **maio e outubro** (§3º, I), com local
+      aprovado e **vedação de rio/represa** (§3º, II-III) validada no cadastro.
+- [ ] **Checklist de aptidão calculado, não digitado** (Art. 80 §2º):
+      (I) idade mínima de 12 anos — já sai de `DataNascimento` via
+      `shared/estatuto.js`; (II) **certidão de casamento civil obrigatória para
+      candidatos coabitantes** — cruza com `EstadoCivil` (v1.4) e `Casamentos`
+      (v1.9); (III) parecer de vida pregressa; (IV) **conclusão do Curso de
+      Discipulado** — verificada na trilha de formação (v6.9/v8.5), não no
+      "eu sei que ele fez".
+- [ ] **Aceite eletrônico do Estatuto e do Regimento** (§2º, V) com data, versão
+      do documento aceito e hash — é a prova documental do vínculo associativo, e
+      é o que o Art. 80 manda registrar. Reaproveita `TermosAssinados`, que já
+      existe desde a migração 031.
+- [ ] Efetivação: concluído o batismo, o candidato vira **Membro em Comunhão**
+      automaticamente (Art. 7º, II — regra que `estatuto.js` já implementa) e
+      `DataBatismo`/`FormaAdmissao` são preenchidas pelo próprio fluxo, sem
+      digitação posterior.
+- [ ] Candidato que não é aprovado permanece na fila para a turma seguinte, com o
+      motivo registrado — sem precisar recomeçar o cadastro.
+
+#### vB.12 — Apresentação de Crianças *(retrofit da FASE 1, gap da varredura normativa)*
+
+Mesmo lugar de Casamentos na FASE 1 original (é o outro rito de família
+previsto pelo Regimento, e a v1.9 base já cobre Casamentos) — mas a FASE 1 já
+está fechada, então o ato entra aqui como retrofit, não como reabertura.
+
+- [ ] **Registro de Apresentação de Crianças** (Reg. Art. 82): oficiante, pais,
+      modalidade **solene ou reservada**, com **aptidão calculada**:
+      impedimento por união estável sem certidão ou por disciplina em curso dos
+      pais (§2º, I), preferência de **até 90 dias de vida** e **vedação acima
+      de 1 ano completo** (§3º, I-II). Ato reservado **não gera certificado**
+      (§2º, II, "b") — a regra fica no sistema, não na lembrança de quem emite.
+
+#### vB.13 — Credenciamento de Assembleia *(retrofit da v2.1, Reg. Art. 142-143)*
+
+A v2.1 base já tem `RegistrarPresenca` barrando quem não está no
+`universoDoOrgao`, o que resolve o caso central — mas essa versão está
+fechada, então o refinamento fica aqui. O Regimento Art. 142-143 descreve um
+**controle de porta** mais fino, que o sistema ainda não modela, e que na
+prática é feito por uma pessoa conferindo lista impressa na entrada:
+
+- [ ] **Lista de impedidos, calculada e com motivo legível.** Art. 142-143
+      arrola quem não entra: não-membro, membro sob disciplina em curso, e
+      **quem já teve carta de mudança expedida** (deixou de pertencer àquela
+      congregação, mesmo que ainda não tenha sido recebido na nova). O último
+      caso é o que mais escapa hoje, porque a carta de mudança é um evento que
+      o sistema já registra (v1.x) mas que não entra na conta de elegibilidade.
+      Continua o princípio de sempre: **não existe marcação "impedido"** — o
+      endpoint devolve, pra cada nome recusado, *qual* artigo o recusou, para a
+      mesa poder responder ao interessado na hora sem abrir o processo dele.
+- [ ] **Mesa de credenciamento com trilha.** Registrar quem operou o
+      credenciamento, o horário de cada check-in e as recusas (com motivo) —
+      hoje a recusa simplesmente não deixa rastro, o que é ruim justamente no
+      caso em que alguém contesta depois ("eu estava lá e não me deixaram
+      entrar"). É o que a literatura de governança deliberativa chama de
+      *credentials report*: em Robert's Rules of Order (11ª/12ª ed., EUA, a
+      referência procedimental mais usada no mundo para assembleias), a
+      **Credentials Committee** apresenta ao plenário, antes de qualquer
+      votação, o número de credenciados — e é **esse relatório aprovado**, não
+      a lista de presença bruta, que fixa a base de cálculo do quórum.
+      Aqui o equivalente é: o sistema emite o *relatório de credenciamento*
+      no momento da instalação, e ele congela a base sobre a qual as maiorias
+      dos Art. 21 e 23 §1º são calculadas.
+- [ ] **Procuração / representação — decidir explicitamente que não existe.**
+      Vale registrar por escrito no próprio sistema (mensagem na tela de
+      credenciamento) que voto por procuração não é admitido, porque é a
+      dúvida número um em assembleia de associação. Base: o voto em assembleia
+      associativa é personalíssimo salvo previsão estatutária expressa
+      (CC art. 59 e o regime de deliberação dos arts. 44-61), e o Estatuto
+      aqui não prevê. Sem isso escrito, a mesa improvisa caso a caso.
+
+#### vB.14 — Conselho Consultivo Técnico e Colégio de Dirigentes *(retrofit da v2.7, Reg. Art. 31 e Art. 151 §2º)*
+
+A v2.7 base fechou tratando departamentos e autonomia financeira
+(→ v5.4) — decisão que continua correta e não é revista aqui. Mas a
+varredura normativa encontrou **dois órgãos de apoio que o Regimento cria e
+que o sistema simplesmente não tem** — não é refinamento do que existe, é
+órgão faltando no cadastro, então entra como item novo da FASE B:
+
+- [ ] **Conselho Consultivo Técnico (Reg. Art. 31)** — 3 a 5 membros, com a
+      função de emitir **Parecer de Viabilidade** antes de ato de alto impacto
+      patrimonial (aquisição/alienação de imóvel de alto valor, contratação de
+      empréstimo). Duas coisas o tornam diferente dos órgãos já cadastrados:
+      1. **Vedação de parentesco com a Diretoria Executiva** — o sistema já sabe
+         validar isso: `shared/estatuto.js` já tem a checagem de parentesco
+         usada na elegibilidade do Conselho Fiscal. É reaproveitar, não criar.
+      2. **O parecer é pré-condição de um ato financeiro**, então ele precisa
+         *travar* alguma coisa pra valer. O gancho natural já existe: a FASE 4
+         tem o fluxo de aprovação de Saída/Empenho (v4.5/v4.8) — acima de um
+         limite parametrizável, a Saída fica bloqueada enquanto não houver
+         Parecer de Viabilidade vinculado. Sem esse travamento, vira mais um
+         documento decorativo (o mesmo erro que a v2.9 evitou com as atas).
+      Referência externa que confirma o desenho: o padrão internacional de
+      *conflict of interest policy* para entidades religiosas — a **ECFA**
+      (Evangelical Council for Financial Accountability, EUA) exige, no seu
+      Standard 6, que transações com partes relacionadas sejam aprovadas por
+      maioria de membros **desinteressados**, e o IRS Form 990 (Schedule L /
+      Part VI) pergunta expressamente se a entidade mantém política escrita de
+      conflito de interesses. No Brasil, o mesmo princípio aparece no Código
+      das Melhores Práticas do **IBGC** (independência do conselho e abstenção
+      do conselheiro em matéria de interesse próprio). O Art. 31 é a versão
+      eclesiástica disso — e é exatamente o tipo de regra que só funciona se
+      quem está impedido for calculado, não declarado.
+- [ ] **Colégio de Dirigentes Congregacionais (Reg. Art. 151 §2º)** — instância
+      consultiva que reúne os Dirigentes de Congregação. Já temos todo o
+      insumo: `Lideranca` sabe quem é Dirigente de cada congregação, e o motor
+      de Reuniões é órgão-agnóstico desde a v0.3. O que falta é a sigla de
+      órgão + a regra de composição **automática** (entra/sai conforme a
+      pessoa assume ou deixa a congregação), em vez de uma lista de Assentos
+      mantida à mão — mesma lógica de composição calculada já usada na CLI.
+      Por ser consultivo, não vota deliberação vinculante: produz
+      recomendação, que tramita como Parecer pela v2.8 já existente.
+- [ ] **Efeito colateral bom:** com esses dois cadastrados, o painel de órgãos
+      passa a refletir o organograma **completo** do Regimento. Hoje ele
+      reflete só a parte que foi implementada, o que dá a falsa impressão de
+      que o resto não existe institucionalmente.
+
+#### vB.15 — Consolidação Normativa e Texto Mestre *(retrofit da v2.9, Reg. Art. 162 §§2º-4º e Art. 162-B)*
+
+Este é, provavelmente, o gap mais silencioso de todo o sistema. O Regimento
+**manda** manter um Texto Mestre consolidado e impõe prazo (Art. 162 §§2º-4º
+e Art. 162-B); hoje o sistema guarda "alterações do Regimento" como
+documentos soltos (`Tipo=REGIMENTO`, catalogados pela v2.9 base, que
+continua correta no que já entrega), o que significa que, para saber a regra
+vigente hoje, alguém precisa ler a versão original **mais** todas as atas de
+alteração posteriores, em ordem — exatamente o problema que a consolidação
+existe para eliminar. E o sistema inteiro (v1.x elegibilidade, v3.x prazos
+disciplinares, v4.x percentuais) é construído em cima de artigos que podem
+ter mudado.
+
+- [ ] **Texto Mestre com vigência (versão consolidada).** Cada alteração
+      aprovada gera uma nova versão consolidada do Regimento, com data de
+      início de vigência e ponteiro para a ata que a produziu. Não é editor de
+      texto (a v2.9 base já descartou isso, e com razão): é **versionamento do
+      arquivo** + a ficha de vigência ao redor dele. A consulta que precisa
+      existir é "qual era o texto vigente na data X" — sem ela, um processo
+      disciplinar de 2024 julgado hoje corre o risco de ser medido por regra
+      de 2026, o que é retroatividade pura.
+- [ ] **Alerta de prazo de 48h** (Art. 162 §2º: Texto Mestre atualizado em
+      48 horas após o registro da ata de alteração). Reaproveita tal e qual o
+      mecanismo de alerta de cartório que já está na v2.9 base
+      (`estatuto.diasDesde`, calculado na leitura) — é o mesmo padrão, outro
+      prazo. Custo de implementação quase zero; o valor é que o prazo deixa de
+      depender de alguém lembrar.
+- [ ] **Nota de vigência automática e regra dos 30%** (Art. 162 §§3º-4º):
+      alteração que atinge mais de 30% do texto exige registro integral, não
+      apenas averbação da alteração. O sistema não mede diff de texto jurídico
+      com confiança suficiente pra decidir isso sozinho — mas **pode** alertar:
+      registrar quantos artigos foram tocados em relação ao total e acender o
+      aviso quando passar do limiar, deixando a decisão com o Secretário. É
+      assistência técnica, não automação cega (mesmo critério da v4.x para
+      classificações fiscais).
+- [ ] **Revisão sistêmica quadrienal (Art. 162-B).** A cada 4 anos há revisão
+      obrigatória do arcabouço normativo. Vira um item de calendário
+      institucional com antecedência (mesmo motor da v7.2), não um lembrete
+      manual — é justamente o tipo de prazo longo que ninguém lembra sem
+      sistema.
+- **Referências que confirmam o desenho.** No Brasil, a LC 95/1998 (com a
+  LC 107/2001) trata de técnica legislativa e **consolidação** — o conceito de
+  manter texto consolidado em vez de obrigar o leitor a somar alterações é
+  exatamente o do seu art. 13-14; o Decreto 9.191/2017 aplica isso no
+  Executivo federal. Fora do Brasil, o padrão maduro é *point-in-time law*:
+  o **legislation.gov.uk** (Reino Unido) publica cada lei em versão "as
+  amended" com data de vigência e permite consultar o texto tal como estava em
+  qualquer data passada; nos EUA, o **eCFR** faz o mesmo para regulamentos
+  federais. No direito canônico católico há séculos se usa o *textus
+  consolidatus* pela mesma razão. O que o Art. 162 pede não é uma
+  excentricidade regimental — é a prática consolidada de quem administra
+  normas que mudam.
+
+#### vB.16 — Mediação e Arbitragem Eclesiástica *(retrofit/complemento da FASE 3, Reg. Art. 161-A)*
+
+A FASE 3 inteira foi construída em cima de uma premissa: conflito interno vira
+**processo disciplinar**. Isso está certo para falta ética/doutrinária, mas a
+varredura normativa mostrou que o Regimento prevê uma via que o sistema não
+tem — e que atende um tipo de conflito **diferente**: disputa patrimonial ou
+administrativa entre partes (congregação × sede, dirigente × departamento,
+obreiro × igreja sobre valores). Aí não há "réu" nem sanção; há duas partes
+querendo uma decisão. Hoje esse caso ou é forçado dentro do processo
+disciplinar (que o distorce, porque cria acusado onde não há acusação) ou sai
+do sistema e vai direto pro Judiciário. A FASE 3 está fechada, então essa via
+entra como módulo novo da FASE B, não como reabertura dela.
+
+- [ ] **Câmara de Mediação — a etapa que resolve a maioria dos casos.**
+      Instauração por qualquer das partes, indicação de mediador da lista
+      cadastrada (com impedimento calculado: parentesco, vínculo com a
+      congregação envolvida, participação prévia no caso), sessões com registro
+      de comparecimento e **termo de acordo** ao final. O acordo é o produto:
+      registrado, assinado (reaproveita `TermosAssinados` da v2.7) e, quando
+      envolve valor, vinculado à Saída/Receita correspondente na FASE 4 — senão
+      vira papel sem efeito. Prazo de encerramento com alerta calculado, mesmo
+      padrão dos prazos disciplinares.
+- [ ] **Arbitragem — só quando a mediação falha.** Painel de árbitros,
+      compromisso arbitral assinado pelas partes, sentença arbitral registrada.
+      A sequência importa e deve ser **travada pelo sistema**: não se abre
+      arbitragem sem mediação encerrada sem acordo. É o desenho do próprio
+      Art. 161-A e também o da lei.
+- [ ] **Cláusula compromissória no ciclo de vida do membro/dirigente.** Para a
+      via ser realmente obrigatória, a adesão precisa existir **antes** do
+      conflito. O gancho natural é o Termo de Compromisso de Gestão (v2.7) e o
+      aceite do Estatuto na esteira de batismo (vB.11) — é ali que a cláusula
+      é aceita e fica provada com data e versão. Sem isso, "via obrigatória" é
+      só uma frase no Regimento.
+- [ ] **Encaminhamento cruzado com a FASE 3 existente.** Se, durante a
+      mediação, aparecer fato que configure infração ética, o caso **bifurca**:
+      segue a mediação patrimonial e abre processo disciplinar separado
+      (reaproveita `shared/disciplinar.js::criarProcessoDisciplinar`, mesma
+      ponte que a Ouvidoria v3.7 já usa). São coisas distintas e devem correr
+      distintas — misturar as duas é o erro que se quer evitar.
+- [ ] **Interface com a Ouvidoria (v3.7).** A Ouvidoria hoje só sabe encaminhar
+      pra processo disciplinar. Ganha uma segunda saída: `ENCAMINHAR_MEDIACAO`,
+      para o relato que é conflito, não denúncia.
+
+**Base jurídica e referências.** No Brasil a arbitragem é regida pela
+**Lei 9.307/1996** (alterada pela Lei 13.129/2015): a sentença arbitral produz
+os mesmos efeitos de sentença judicial e **não depende de homologação**
+(art. 18, art. 31), e é título executivo judicial (CPC art. 515, VII) — ou
+seja, é via real, não simbólica, desde que limitada a **direitos patrimoniais
+disponíveis** (art. 1º), que é exatamente o recorte do Art. 161-A. A mediação
+tem lei própria, **Lei 13.140/2015**, e o CPC art. 3º §§2º-3º impõe ao Estado
+o estímulo à autocomposição. Duas cautelas que o sistema deve refletir no
+texto das telas: matéria de direito indisponível (trabalhista subordinada,
+questão de família, crime) **não** é arbitrável, e cláusula compromissória em
+relação de consumo ou de adesão tem restrição (Lei 9.307 art. 4º §2º;
+CDC art. 51, VII) — por isso a adesão deve ser aceite expresso e datado, não
+presumida.
+
+Fora do Brasil, esse é um campo maduro e a IEADESPA não está inventando nada:
+nos EUA, a **Peacemaker Ministries** publica há décadas as *Rules of Procedure
+for Christian Conciliation*, um regulamento completo de mediação/arbitragem
+cristã cujos laudos são rotineiramente executados pelas cortes estaduais sob o
+*Federal Arbitration Act*; a jurisprudência americana, desde **Watson v. Jones**
+(1871) e **Serbian Eastern Orthodox Diocese v. Milivojevich** (1976), aplica a
+*ecclesiastical abstention doctrine* — o Judiciário se recusa a rever decisão
+interna de igreja em matéria de governança, o que torna a instância interna
+**a** instância. No Reino Unido, tribunais religiosos operam como arbitragem
+sob o *Arbitration Act 1996*. O fundamento teológico do instituto é
+1 Coríntios 6:1-8 e Mateus 18:15-17 (resolver entre irmãos antes de recorrer a
+tribunal externo) — o Art. 161-A é a tradução regimental disso.
+
+**Por que vale a pena construir:** dos módulos desta fase, é o que tem a maior
+razão entre valor institucional e esforço técnico. Reaproveita quase tudo que
+já existe (motor de prazos, impedimento calculado, termos assinados, ponte com
+disciplinar, ponte com financeiro) e cobre o único tipo de conflito que hoje
+não tem lugar nenhum no sistema.
 
 ### FASE 5 — Departamentos e Relatórios
 
@@ -3646,7 +3666,7 @@ departamento, primeiro serviço voluntário.
       assimilação trava — e ele é invisível hoje.
 - [ ] Conclusão de etapa disparando o próximo passo na fila de acompanhamento
       (v7.11), em vez de depender de alguém lembrar.
-- [ ] Integração com a esteira de batismo (v1.12) e com as trilhas de formação
+- [ ] Integração com a esteira de batismo (vB.11) e com as trilhas de formação
       (v6.9). *(Rock RMS Steps)*
 
 #### v8.6 — Educação continuada e requisito verificável de promoção *(7ª rodada)*

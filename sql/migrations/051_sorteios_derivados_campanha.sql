@@ -71,8 +71,25 @@ GO
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.Campanhas') AND name = N'NumeroVencedor')
     ALTER TABLE dbo.Campanhas DROP COLUMN NumeroVencedor;
 GO
+-- SorteadoPor tem FK pra MembroReferencia (REFERENCES inline na criação —
+-- migração 050) — nome de constraint auto-gerado pelo SQL Server, não
+-- previsível, então precisa de SQL dinâmico igual ao default constraint do
+-- Tipo acima. Sem isso o DROP COLUMN falha com "one or more objects access
+-- this column" (erro real que travou todo deploy desde 08/09 — a partir
+-- daqui esta migração nunca tinha completado, e por isso as migrações
+-- 052-059 também nunca tinham rodado em produção).
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.Campanhas') AND name = N'SorteadoPor')
+BEGIN
+    DECLARE @nomeFk NVARCHAR(200);
+    SELECT @nomeFk = fk.name
+        FROM sys.foreign_keys fk
+        JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+        JOIN sys.columns c ON c.object_id = fkc.parent_object_id AND c.column_id = fkc.parent_column_id
+        WHERE fk.parent_object_id = OBJECT_ID(N'dbo.Campanhas') AND c.name = 'SorteadoPor';
+    IF @nomeFk IS NOT NULL
+        EXEC('ALTER TABLE dbo.Campanhas DROP CONSTRAINT ' + @nomeFk);
     ALTER TABLE dbo.Campanhas DROP COLUMN SorteadoPor;
+END
 GO
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.Campanhas') AND name = N'SorteadoEm')
     ALTER TABLE dbo.Campanhas DROP COLUMN SorteadoEm;

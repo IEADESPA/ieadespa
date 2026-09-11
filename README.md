@@ -231,13 +231,14 @@ abrindo um mini-sistema à parte com nav própria, mesmo login por trás).
   outros módulos que precisarem desse dado só o consultam via API, sem
   duplicar. "Administração de Acesso" continua só cuidando de Papéis/
   Escopos/Permissões (o que já é hoje).
-- **Meu Painel também fatiado** (v4.2.2): "Meu Perfil" parou de acumular
+- **Meu Painel também fatiado** (refatoração de navegação feita durante a FASE 4 —
+  ver nota de numeração no fim desta seção): "Meu Perfil" parou de acumular
   tudo numa página só — virou 4 sub-abas (Perfil = resumo/dashboard; Meus
   Dados Cadastrais = editar telefone/e-mail/endereço + trocar senha +
   solicitar correção; Vínculos Familiares; Minhas Contribuições), mais LGPD
   e Cartas que já existiam. Mesmo princípio de sempre: mais fatiado, mais
   fácil de navegar conforme cresce.
-- **Órgãos territoriais escopados por pessoa** (v4.2.2, correção de um
+- **Órgãos territoriais escopados por pessoa** (mesma refatoração, correção de um
   problema de escala achado em teste real): o submenu de Reuniões usava
   `GET /api/catalogos/orgaosLocais`, que devolve TODA JAI/JEA/TER/... do
   sistema inteiro sem filtrar por quem está logado — um Pastor de Área via
@@ -248,7 +249,8 @@ abrindo um mini-sistema à parte com nav própria, mesmo login por trás).
   `escopo.resolverEscopoCongregacoes`) — cada pessoa só vê os órgãos
   territoriais dentro do próprio escopo; se sobrar só um, a seleção
   automática de sempre já leva direto pra ele.
-- **Órgãos Centrais e Órgãos Regionais como módulos separados** (v4.2.3,
+- **Órgãos Centrais e Órgãos Regionais como módulos separados** (mesma
+  refatoração;
   pedido explícito: "separar de uma vez por todas" — uma pessoa pode
   pertencer a vários órgãos subindo a hierarquia até a Sede, cada nível com
   gente diferente, então "escolher o órgão" merecia sua própria porta de
@@ -259,6 +261,15 @@ abrindo um mini-sistema à parte com nav própria, mesmo login por trás).
   denominação); Órgãos Regionais usa `GET /api/meus-orgaos-locais`
   (territoriais, já escopados por pessoa — item acima). Nenhuma lógica de
   reunião foi reescrita, só o ponto de entrada.
+
+> **Nota de numeração (corrigida na 7ª rodada).** As três refatorações acima
+> foram rotuladas no passado como "v4.2.2" e "v4.2.3" só porque aconteceram
+> *durante* o período em que a FASE 4 estava sendo construída — mas elas não
+> são sub-versões da v4.2 (que é "Plano de Contas e Fundo Restrito/Livre",
+> financeiro puro). Quem procurasse "v4.2.2" no plano de versões não acharia
+> nada. Os rótulos foram removidos: mudança de navegação transversal não recebe
+> número de versão de um módulo de negócio — quando precisar de versão própria,
+> entra na FASE 10 (Experiência, Design e Performance).
 
 ### 2.7 Segregação de funções (princípio financeiro, formalizado por pesquisa de mercado)
 
@@ -606,6 +617,14 @@ departamentos → EBD → saúde/comunicação → ministerial → expansão.
       barra lateral (Meu Perfil / Meus Dados (LGPD) / Cartas de Trânsito) —
       mecanismo (`.submenu-aba`/`.btn-subaba`) genérico, pronto pra reaproveitar
       em Órgãos quando crescer do mesmo jeito.
+- [ ] **Apresentação de Crianças** *(gap da varredura normativa, 7ª rodada)* —
+      mesmo lugar de Casamentos (é o outro rito de família previsto), Reg. Art. 82:
+      registro do ato (oficiante, pais, modalidade **solene ou reservada**), com
+      **aptidão calculada**: impedimento por união estável sem certidão ou por
+      disciplina em curso dos pais (§2º, I), preferência de **até 90 dias de
+      vida** e **vedação acima de 1 ano completo** (§3º, I-II). Ato reservado
+      **não gera certificado** (§2º, II, "b") — a regra fica no sistema, não na
+      lembrança de quem emite.
 
 #### v1.10 — Reforma da aba Pessoas + autoatendimento de Foto
 
@@ -665,6 +684,41 @@ dado que a Secretaria realmente usa pra algo. Quatro categorias:
       (`registrarAuditoria`, append-only, sem mudar isso).
 - [x] Filtro por data (De/Até) na aba Auditoria — o backend (`ListarAuditoria`)
       já aceitava, só faltava o campo em tela.
+
+#### v1.12 — Esteira de Batismo *(gap da varredura normativa, 7ª rodada)*
+
+> **O Regimento cita este sistema nominalmente.** O Art. 80 §2º, V condiciona a
+> aptidão ao batismo ao preenchimento de "formulário eletrônico com caixa de
+> aceite do Estatuto e do Regimento" no **"Sistema Oficial de Gestão da
+> IEADESPA"**. De todos os dispositivos varridos, este é o único que não apenas
+> pode ser atendido pelo sistema — ele **exige** que o sistema exista. E é
+> justamente a peça que nunca foi construída: hoje o batismo só aparece como
+> `DataBatismo` preenchida **depois**, sem nenhum processo antes.
+
+A FASE 1 tratou admissão (v1.1), integração (v1.2), categorias (v1.3), trânsito
+(v1.4) e perda (v1.5) — mas o **ato que produz o membro** ficou de fora.
+
+- [ ] **Turma de batismo** (Art. 80 §1º — ato centralizado no Campo, com
+      oficiantes designados): data, local aprovado, autorização da Mesa,
+      oficiantes. Calendário semestral de **maio e outubro** (§3º, I), com local
+      aprovado e **vedação de rio/represa** (§3º, II-III) validada no cadastro.
+- [ ] **Checklist de aptidão calculado, não digitado** (Art. 80 §2º):
+      (I) idade mínima de 12 anos — já sai de `DataNascimento` via
+      `shared/estatuto.js`; (II) **certidão de casamento civil obrigatória para
+      candidatos coabitantes** — cruza com `EstadoCivil` (v1.4) e `Casamentos`
+      (v1.9); (III) parecer de vida pregressa; (IV) **conclusão do Curso de
+      Discipulado** — verificada na trilha de formação (v6.9/v8.5), não no
+      "eu sei que ele fez".
+- [ ] **Aceite eletrônico do Estatuto e do Regimento** (§2º, V) com data, versão
+      do documento aceito e hash — é a prova documental do vínculo associativo, e
+      é o que o Art. 80 manda registrar. Reaproveita `TermosAssinados`, que já
+      existe desde a migração 031.
+- [ ] Efetivação: concluído o batismo, o candidato vira **Membro em Comunhão**
+      automaticamente (Art. 7º, II — regra que `estatuto.js` já implementa) e
+      `DataBatismo`/`FormaAdmissao` são preenchidas pelo próprio fluxo, sem
+      digitação posterior.
+- [ ] Candidato que não é aprovado permanece na fila para a turma seguinte, com o
+      motivo registrado — sem precisar recomeçar o cadastro.
 
 ### FASE 2 — Governança (órgãos e deliberações)
 
@@ -769,6 +823,42 @@ aceitavam `orgaoId`, nenhuma mudança de backend nem de migração foi necessár
       as pautas que justificariam uma AGE especial já têm órgão próprio pra
       tratar (CLI, Conselho Fiscal, CEI); só compensa convocar Assembleia
       quando for competência privativa dela mesma (Art. 18 — ver v2.2).
+
+**Expansão (FASE B / varredura normativa) — Credenciamento de Assembleia.**
+Hoje o `RegistrarPresenca` já barra quem não está no `universoDoOrgao`, o que
+resolve o caso central. Mas o Regimento Art. 142-143 descreve um **controle de
+porta** mais fino, que o sistema ainda não modela, e que na prática é feito
+por uma pessoa conferindo lista impressa na entrada:
+
+- [ ] **Lista de impedidos, calculada e com motivo legível.** Art. 142-143
+      arrola quem não entra: não-membro, membro sob disciplina em curso, e
+      **quem já teve carta de mudança expedida** (deixou de pertencer àquela
+      congregação, mesmo que ainda não tenha sido recebido na nova). O último
+      caso é o que mais escapa hoje, porque a carta de mudança é um evento que
+      o sistema já registra (v1.x) mas que não entra na conta de elegibilidade.
+      Continua o princípio de sempre: **não existe marcação "impedido"** — o
+      endpoint devolve, pra cada nome recusado, *qual* artigo o recusou, para a
+      mesa poder responder ao interessado na hora sem abrir o processo dele.
+- [ ] **Mesa de credenciamento com trilha.** Registrar quem operou o
+      credenciamento, o horário de cada check-in e as recusas (com motivo) —
+      hoje a recusa simplesmente não deixa rastro, o que é ruim justamente no
+      caso em que alguém contesta depois ("eu estava lá e não me deixaram
+      entrar"). É o que a literatura de governança deliberativa chama de
+      *credentials report*: em Robert's Rules of Order (11ª/12ª ed., EUA, a
+      referência procedimental mais usada no mundo para assembleias), a
+      **Credentials Committee** apresenta ao plenário, antes de qualquer
+      votação, o número de credenciados — e é **esse relatório aprovado**, não
+      a lista de presença bruta, que fixa a base de cálculo do quórum.
+      Aqui o equivalente é: o sistema emite o *relatório de credenciamento*
+      no momento da instalação, e ele congela a base sobre a qual as maiorias
+      dos Art. 21 e 23 §1º são calculadas.
+- [ ] **Procuração / representação — decidir explicitamente que não existe.**
+      Vale registrar por escrito no próprio sistema (mensagem na tela de
+      credenciamento) que voto por procuração não é admitido, porque é a
+      dúvida número um em assembleia de associação. Base: o voto em assembleia
+      associativa é personalíssimo salvo previsão estatutária expressa
+      (CC art. 59 e o regime de deliberação dos arts. 44-61), e o Estatuto
+      aqui não prevê. Sem isso escrito, a mesa improvisa caso a caso.
 
 #### v2.2 — Assembleia Geral (pautas especiais)
 
@@ -1032,6 +1122,50 @@ já está lá. **v2.4 está fechado** com isso.
       depois de FASE 4 (Financeiro) e de v5.2 (Relatórios departamentais) —
       **v2.7 está fechado** com isso.
 
+**Reaberto pela varredura normativa (FASE B).** O fechamento acima continua
+correto quanto ao que ele decidiu (departamentos, autonomia financeira → v5.4).
+Mas a varredura encontrou **dois órgãos de apoio que o Regimento cria e que o
+sistema simplesmente não tem** — não é refinamento do que existe, é órgão
+faltando no cadastro:
+
+- [ ] **Conselho Consultivo Técnico (Reg. Art. 31)** — 3 a 5 membros, com a
+      função de emitir **Parecer de Viabilidade** antes de ato de alto impacto
+      patrimonial (aquisição/alienação de imóvel de alto valor, contratação de
+      empréstimo). Duas coisas o tornam diferente dos órgãos já cadastrados:
+      1. **Vedação de parentesco com a Diretoria Executiva** — o sistema já sabe
+         validar isso: `shared/estatuto.js` já tem a checagem de parentesco
+         usada na elegibilidade do Conselho Fiscal. É reaproveitar, não criar.
+      2. **O parecer é pré-condição de um ato financeiro**, então ele precisa
+         *travar* alguma coisa pra valer. O gancho natural já existe: a FASE 4
+         tem o fluxo de aprovação de Saída/Empenho (v4.5/v4.8) — acima de um
+         limite parametrizável, a Saída fica bloqueada enquanto não houver
+         Parecer de Viabilidade vinculado. Sem esse travamento, vira mais um
+         documento decorativo (o mesmo erro que a v2.9 evitou com as atas).
+      Referência externa que confirma o desenho: o padrão internacional de
+      *conflict of interest policy* para entidades religiosas — a **ECFA**
+      (Evangelical Council for Financial Accountability, EUA) exige, no seu
+      Standard 6, que transações com partes relacionadas sejam aprovadas por
+      maioria de membros **desinteressados**, e o IRS Form 990 (Schedule L /
+      Part VI) pergunta expressamente se a entidade mantém política escrita de
+      conflito de interesses. No Brasil, o mesmo princípio aparece no Código
+      das Melhores Práticas do **IBGC** (independência do conselho e abstenção
+      do conselheiro em matéria de interesse próprio). O Art. 31 é a versão
+      eclesiástica disso — e é exatamente o tipo de regra que só funciona se
+      quem está impedido for calculado, não declarado.
+- [ ] **Colégio de Dirigentes Congregacionais (Reg. Art. 151 §2º)** — instância
+      consultiva que reúne os Dirigentes de Congregação. Já temos todo o
+      insumo: `Lideranca` sabe quem é Dirigente de cada congregação, e o motor
+      de Reuniões é órgão-agnóstico desde a v0.3. O que falta é a sigla de
+      órgão + a regra de composição **automática** (entra/sai conforme a
+      pessoa assume ou deixa a congregação), em vez de uma lista de Assentos
+      mantida à mão — mesma lógica de composição calculada já usada na CLI.
+      Por ser consultivo, não vota deliberação vinculante: produz
+      recomendação, que tramita como Parecer pela v2.8 já existente.
+- [ ] **Efeito colateral bom:** com esses dois cadastrados, o painel de órgãos
+      passa a refletir o organograma **completo** do Regimento. Hoje ele
+      reflete só a parte que foi implementada, o que dá a falsa impressão de
+      que o resto não existe institucionalmente.
+
 #### v2.8 — Enquetes e Tramitação de Projetos/Pareceres
 
 **Reformulado por completo** — o escopo original ("Pautas/Votos", eleição
@@ -1148,6 +1282,56 @@ e manteve só o que é real:
   o caminho natural é gerar um rascunho com os campos que o sistema sabe
   (nome, congregação, data) e o resto preenchido à mão, e o PDF assinado
   sobe depois pelo item Documentos acima (`Tipo=TERMO_POSSE`).
+
+**Expansão (FASE B) — Consolidação normativa e Texto Mestre (Art. 162 §§2º-4º
+e Art. 162-B).** Este é, provavelmente, o gap mais silencioso de todo o
+sistema. O Regimento **manda** manter um Texto Mestre consolidado e impõe
+prazo; hoje o sistema guarda "alterações do Regimento" como documentos
+soltos (`Tipo=REGIMENTO`), o que significa que, para saber a regra vigente
+hoje, alguém precisa ler a versão original **mais** todas as atas de alteração
+posteriores, em ordem — exatamente o problema que a consolidação existe para
+eliminar. E o sistema inteiro (v1.x elegibilidade, v3.x prazos disciplinares,
+v4.x percentuais) é construído em cima de artigos que podem ter mudado.
+
+- [ ] **Texto Mestre com vigência (versão consolidada).** Cada alteração
+      aprovada gera uma nova versão consolidada do Regimento, com data de
+      início de vigência e ponteiro para a ata que a produziu. Não é editor de
+      texto (a v2.9 já descartou isso, e com razão): é **versionamento do
+      arquivo** + a ficha de vigência ao redor dele. A consulta que precisa
+      existir é "qual era o texto vigente na data X" — sem ela, um processo
+      disciplinar de 2024 julgado hoje corre o risco de ser medido por regra
+      de 2026, o que é retroatividade pura.
+- [ ] **Alerta de prazo de 48h** (Art. 162 §2º: Texto Mestre atualizado em
+      48 horas após o registro da ata de alteração). Reaproveita tal e qual o
+      mecanismo de alerta de cartório que já está nesta mesma v2.9
+      (`estatuto.diasDesde`, calculado na leitura) — é o mesmo padrão, outro
+      prazo. Custo de implementação quase zero; o valor é que o prazo deixa de
+      depender de alguém lembrar.
+- [ ] **Nota de vigência automática e regra dos 30%** (Art. 162 §§3º-4º):
+      alteração que atinge mais de 30% do texto exige registro integral, não
+      apenas averbação da alteração. O sistema não mede diff de texto jurídico
+      com confiança suficiente pra decidir isso sozinho — mas **pode** alertar:
+      registrar quantos artigos foram tocados em relação ao total e acender o
+      aviso quando passar do limiar, deixando a decisão com o Secretário. É
+      assistência técnica, não automação cega (mesmo critério da v4.x para
+      classificações fiscais).
+- [ ] **Revisão sistêmica quadrienal (Art. 162-B).** A cada 4 anos há revisão
+      obrigatória do arcabouço normativo. Vira um item de calendário
+      institucional com antecedência (mesmo motor da v7.2), não um lembrete
+      manual — é justamente o tipo de prazo longo que ninguém lembra sem
+      sistema.
+- **Referências que confirmam o desenho.** No Brasil, a LC 95/1998 (com a
+  LC 107/2001) trata de técnica legislativa e **consolidação** — o conceito de
+  manter texto consolidado em vez de obrigar o leitor a somar alterações é
+  exatamente o do seu art. 13-14; o Decreto 9.191/2017 aplica isso no
+  Executivo federal. Fora do Brasil, o padrão maduro é *point-in-time law*:
+  o **legislation.gov.uk** (Reino Unido) publica cada lei em versão "as
+  amended" com data de vigência e permite consultar o texto tal como estava em
+  qualquer data passada; nos EUA, o **eCFR** faz o mesmo para regulamentos
+  federais. No direito canônico católico há séculos se usa o *textus
+  consolidatus* pela mesma razão. O que o Art. 162 pede não é uma
+  excentricidade regimental — é a prática consolidada de quem administra
+  normas que mudam.
 
 #### v2.10/v2.11 — descontinuadas como versões próprias
 
@@ -1490,6 +1674,81 @@ Disciplinar (v3.2-v3.5): a escada **disciplinar** territorial.
   (§6º/§7º) — não há como o sistema impedir uma destituição real feita
   fora dele; gestão externa terceirizada (§3º) — sem integração com
   plataforma/auditoria externa.
+
+#### v3.8 — Mediação e Arbitragem Eclesiástica (nova, Reg. Art. 161-A)
+
+A FASE 3 inteira foi construída em cima de uma premissa: conflito interno vira
+**processo disciplinar**. Isso está certo para falta ética/doutrinária, mas a
+varredura normativa mostrou que o Regimento prevê uma via que o sistema não
+tem — e que atende um tipo de conflito **diferente**: disputa patrimonial ou
+administrativa entre partes (congregação × sede, dirigente × departamento,
+obreiro × igreja sobre valores). Aí não há "réu" nem sanção; há duas partes
+querendo uma decisão. Hoje esse caso ou é forçado dentro do processo
+disciplinar (que o distorce, porque cria acusado onde não há acusação) ou sai
+do sistema e vai direto pro Judiciário.
+
+- [ ] **Câmara de Mediação — a etapa que resolve a maioria dos casos.**
+      Instauração por qualquer das partes, indicação de mediador da lista
+      cadastrada (com impedimento calculado: parentesco, vínculo com a
+      congregação envolvida, participação prévia no caso), sessões com registro
+      de comparecimento e **termo de acordo** ao final. O acordo é o produto:
+      registrado, assinado (reaproveita `TermosAssinados` da v2.7) e, quando
+      envolve valor, vinculado à Saída/Receita correspondente na FASE 4 — senão
+      vira papel sem efeito. Prazo de encerramento com alerta calculado, mesmo
+      padrão dos prazos disciplinares.
+- [ ] **Arbitragem — só quando a mediação falha.** Painel de árbitros,
+      compromisso arbitral assinado pelas partes, sentença arbitral registrada.
+      A sequência importa e deve ser **travada pelo sistema**: não se abre
+      arbitragem sem mediação encerrada sem acordo. É o desenho do próprio
+      Art. 161-A e também o da lei.
+- [ ] **Cláusula compromissória no ciclo de vida do membro/dirigente.** Para a
+      via ser realmente obrigatória, a adesão precisa existir **antes** do
+      conflito. O gancho natural é o Termo de Compromisso de Gestão (v2.7) e o
+      aceite do Estatuto na esteira de batismo (v1.12) — é ali que a cláusula
+      é aceita e fica provada com data e versão. Sem isso, "via obrigatória" é
+      só uma frase no Regimento.
+- [ ] **Encaminhamento cruzado com a FASE 3 existente.** Se, durante a
+      mediação, aparecer fato que configure infração ética, o caso **bifurca**:
+      segue a mediação patrimonial e abre processo disciplinar separado
+      (reaproveita `shared/disciplinar.js::criarProcessoDisciplinar`, mesma
+      ponte que a Ouvidoria v3.7 já usa). São coisas distintas e devem correr
+      distintas — misturar as duas é o erro que se quer evitar.
+- [ ] **Interface com a Ouvidoria (v3.7).** A Ouvidoria hoje só sabe encaminhar
+      pra processo disciplinar. Ganha uma segunda saída: `ENCAMINHAR_MEDIACAO`,
+      para o relato que é conflito, não denúncia.
+
+**Base jurídica e referências.** No Brasil a arbitragem é regida pela
+**Lei 9.307/1996** (alterada pela Lei 13.129/2015): a sentença arbitral produz
+os mesmos efeitos de sentença judicial e **não depende de homologação**
+(art. 18, art. 31), e é título executivo judicial (CPC art. 515, VII) — ou
+seja, é via real, não simbólica, desde que limitada a **direitos patrimoniais
+disponíveis** (art. 1º), que é exatamente o recorte do Art. 161-A. A mediação
+tem lei própria, **Lei 13.140/2015**, e o CPC art. 3º §§2º-3º impõe ao Estado
+o estímulo à autocomposição. Duas cautelas que o sistema deve refletir no
+texto das telas: matéria de direito indisponível (trabalhista subordinada,
+questão de família, crime) **não** é arbitrável, e cláusula compromissória em
+relação de consumo ou de adesão tem restrição (Lei 9.307 art. 4º §2º;
+CDC art. 51, VII) — por isso a adesão deve ser aceite expresso e datado, não
+presumida.
+
+Fora do Brasil, esse é um campo maduro e a IEADESPA não está inventando nada:
+nos EUA, a **Peacemaker Ministries** publica há décadas as *Rules of Procedure
+for Christian Conciliation*, um regulamento completo de mediação/arbitragem
+cristã cujos laudos são rotineiramente executados pelas cortes estaduais sob o
+*Federal Arbitration Act*; a jurisprudência americana, desde **Watson v. Jones**
+(1871) e **Serbian Eastern Orthodox Diocese v. Milivojevich** (1976), aplica a
+*ecclesiastical abstention doctrine* — o Judiciário se recusa a rever decisão
+interna de igreja em matéria de governança, o que torna a instância interna
+**a** instância. No Reino Unido, tribunais religiosos operam como arbitragem
+sob o *Arbitration Act 1996*. O fundamento teológico do instituto é
+1 Coríntios 6:1-8 e Mateus 18:15-17 (resolver entre irmãos antes de recorrer a
+tribunal externo) — o Art. 161-A é a tradução regimental disso.
+
+**Por que vale a pena construir:** dos módulos desta fase, é o que tem a maior
+razão entre valor institucional e esforço técnico. Reaproveita quase tudo que
+já existe (motor de prazos, impedimento calculado, termos assinados, ponte com
+disciplinar, ponte com financeiro) e cobre o único tipo de conflito que hoje
+não tem lugar nenhum no sistema.
 
 ### FASE 4 — Financeiro e Patrimônio
 
@@ -2214,16 +2473,34 @@ Tesouro Geral, Convenção, Prebenda Pastoral, Fundo PDQ, o total pendente
 no malote, e o saldo Local de cada congregação, tudo calculado na leitura
 a cada abertura da tela (nunca uma foto salva que envelhece).
 
-##### Falta pra completar a v4.10 (próxima rodada)
+##### Falta pra completar a v4.10 (próxima rodada) — detalhado pela 7ª rodada
 
 - [ ] Prebenda (natureza alimentar, sem vínculo CLT) como categoria de
       Saída com regras próprias — a categoria e o Centro de Custo já
       existem (`CategoriasSaida.Codigo = 'PREBENDA_PASTORAL'`); falta o
       cadastro do prebendado (dados do pastor, valor mensal de referência)
       e a geração recorrente mensal.
-- [ ] Retenções tributárias/previdenciárias obrigatórias.
-- [ ] Vedação à "pejotização" do ministério.
+- [ ] **Ato de designação ministerial + valor fixado em deliberação de órgão
+      colegiado**, com a ata vinculada ao registro. Isso não é burocracia: é
+      exatamente o que sustenta juridicamente que a prebenda **não é
+      contraprestação por trabalho**. *(Lei 8.212/91 art. 22 §§13-14, redação da
+      Lei 13.137/2015; Lei 14.647/2023 afirmou na CLT a inexistência de vínculo
+      entre entidade religiosa e seus ministros)*
+- [ ] **Alerta de risco de descaracterização de vínculo** — se o sistema começar a
+      registrar jornada, subordinação ou controle de horário do ministro, ele
+      próprio avisa: esses são justamente os elementos que a Justiça do Trabalho
+      usa pra reconhecer vínculo empregatício, e o risco é da igreja.
+- [ ] Retenções tributárias/previdenciárias corretas — a igreja **não recolhe os
+      20% patronais** sobre prebenda (não é remuneração), o ministro é
+      **contribuinte individual** e recolhe a própria contribuição; mas a prebenda
+      **é tributável pelo IRPF**, com retenção na fonte e informe anual (v4.19).
+      Errar isso nos dois sentidos custa caro: recolher o que não deve é perda
+      de recurso; não reter IRRF é passivo fiscal.
+- [ ] Vedação à "pejotização" do ministério — bloqueio de cadastro de ministro
+      como fornecedor PJ (v4.5) prestando serviço ministerial.
 - [ ] Pagamento em lote de prebendas via remessa bancária (v4.7).
+- [ ] Auxílios e ajudas de custo distintos da prebenda (moradia, transporte,
+      saúde), cada um com sua natureza fiscal — hoje tudo cairia na mesma rubrica.
 
 #### v4.11 — Patrimônio, Alçadas e Depreciação
 
@@ -2390,6 +2667,405 @@ aplicado.
 - [ ] Taxa de Zeladoria (ressarcimento de custos, não aluguel).
 - [ ] Termo de Responsabilidade por danos + aprovação prévia de lista musical.
 
+#### v4.19 — Obrigações Acessórias Fiscais *(7ª rodada — risco de multa imediato)*
+
+Achado que muda o patamar de risco do módulo financeiro: a igreja é **imune, não
+dispensada**. Imunidade tributária afasta o *imposto*, não a *obrigação
+acessória* — e a multa por não entregar existe mesmo sem haver imposto a pagar.
+O sistema hoje produz toda a contabilidade (v4.9) e não acompanha nenhuma entrega.
+
+- [ ] **ECF (Escrituração Contábil Fiscal)** — obrigatória mesmo sendo imune;
+      prazo: último dia útil de julho do ano seguinte; **multa mínima de R$ 500/mês**
+      para imunes/isentas, mais 0,25%/mês sobre a receita (teto 10%).
+      *(IN RFB 2.004/2021, art. 1º)*
+- [ ] **ECD (Escrituração Contábil Digital)** — obrigatória para imune/isenta que
+      recebeu **mais de R$ 1.200.000,00** no ano (dízimos + ofertas + doações +
+      convênios). Com dezenas de congregações, a IEADESPA provavelmente já cruza
+      esse limite. **Medidor em tempo real no painel do Tesoureiro** ("receita do
+      exercício vs. gatilho de R$ 1,2 mi"), com alerta ao ultrapassar — o pior
+      cenário é descobrir em julho do ano seguinte. *(IN RFB 1.420/2015, art. 3º-A)*
+- [ ] **eSocial + DCTFWeb** — obrigatórios mesmo sem nenhum empregado CLT, porque
+      o ministro de confissão religiosa entra como categoria **781** (rubrica
+      **3525** — côngruas/prebendas), gerando o DARF do IRRF. Conecta direto com a
+      v4.10. *(Lei 8.212/91, art. 22 §§13-14)*
+- [ ] **EFD-Reinf série R-4000** — substituiu a DIRF (extinta para fatos geradores
+      a partir de 2025); toda retenção feita pela igreja (serviços de PJ, aluguel
+      pago a pessoa física, autônomos) vai até o **dia 15 do mês seguinte**.
+      Amarra no Contas a Pagar (v4.5): campo de retenção por natureza de rendimento.
+- [ ] **Calendário de obrigações por CNPJ** com status (pendente/transmitida/
+      recibo anexado), alerta em D-60/D-30/D-7 e **cofre de recibos de entrega** —
+      o recibo é a única prova de que a obrigação foi cumprida.
+- [ ] Informe anual de rendimentos para ministros e prestadores, gerado do próprio
+      sistema.
+
+#### v4.20 — Painel de Imunidade Tributária *(7ª rodada)*
+
+A imunidade dos templos (CF Art. 150, VI, "b") **não é automática nem
+permanente**: o CTN Art. 14 a condiciona a três requisitos, e a pesquisa mostra
+que a perda, na prática, quase nunca vem de desvio de dinheiro — vem de
+**desorganização formal** (livro sem escrituração, pagamento a dirigente sem
+rubrica, recurso aplicado fora do País sem registro).
+
+- [ ] **Semáforo dos 3 requisitos do CTN Art. 14**, calculado na leitura:
+      (I) não distribuir patrimônio/renda — detector de pagamento a dirigente,
+      pastor ou parente sem rubrica válida, cruzando com `VinculosFamiliares`;
+      (II) aplicar integralmente os recursos no País — rastreio de remessa a
+      missões/entidades no exterior; (III) escrituração em livros revestidos de
+      formalidade — % de lançamentos com comprovante anexado.
+- [ ] **Dossiê de defesa fiscal exportável** — pacote único (demonstrações da
+      v4.9 + balancetes + comprovantes + atas de aprovação de contas) para
+      responder a fiscalização sem garimpar papel por semanas.
+- [ ] Alerta de conflito de interesses: pagamento a fornecedor que é parente de
+      quem aprovou (reaproveita a segregação de funções da seção 2.7 + vínculos
+      familiares, dois mecanismos que já existem e nunca foram cruzados).
+- [ ] **Reforma tributária (LC 214/2025)**: a imunidade vale para as operações
+      que a igreja realiza, **não para as aquisições** — IBS/CBS embutido na
+      compra é custo não recuperável. Campo de tributo na entrada e relatório de
+      carga tributária embutida, para o orçamento (v4.8) não subestimar custo.
+
+#### v4.21 — Receitas acessórias e imóveis *(7ª rodada)*
+
+- [ ] Rubrica de **receita acessória** (bazar, estacionamento, cessão de salão,
+      cantina de evento) com **vínculo obrigatório a uma aplicação finalística** —
+      a Súmula Vinculante 52 mantém a imunidade do imóvel alugado *desde que* o
+      valor seja aplicado nas atividades essenciais, e quem tem que provar isso é
+      a igreja. Relatório "origem → destino" por imóvel/evento.
+- [ ] **Cadastro de imóveis** com situação de imunidade por tributo (IPTU/ITBI),
+      número do processo de reconhecimento na prefeitura, vigência e alerta de
+      renovação — hoje o patrimônio (v4.11) prevê escritura, não situação fiscal.
+- [ ] Conexão com a v4.18 (cessão de templo): toda cessão onerosa nasce como
+      receita acessória, já amarrada à finalidade.
+
+#### v4.22 — Doações, Integridade e PLD-FT *(7ª rodada)*
+
+- [ ] **Política de doações aprovada em ata** + registro de doações de alto valor
+      com identificação do doador acima de um limite definido — o ponto sensível
+      para PLD-FT em organização religiosa é a movimentação **em espécie**.
+      *(Lei 9.613/98; GAFI Recomendação 8 trata OSFL como setor de risco)*
+- [ ] Alerta de doação atípica (valor fora do padrão, fracionamento, doador sem
+      histórico) alimentando o NIF já previsto na v4.12 — o NIF vira o "COAF
+      interno" com dado de entrada real, não só de saída.
+- [ ] **Programa de integridade** (Lei 12.846/2013 alcança associações e
+      fundações; Decreto 11.129/2022 define os parâmetros): código de conduta com
+      aceite registrado, canal de denúncia (a Ouvidoria da v3.7 já existe —
+      falta declará-la formalmente como canal do programa), **due diligence de
+      fornecedor** antes do cadastro (v4.5) e declaração de conflito de interesses
+      por dirigente, renovada por mandato.
+- [ ] Recibo de doação padronizado e numerado pelo protocolo único (vB.4).
+
+#### v4.23 — Frota de veículos *(gap da varredura normativa)*
+
+O Regimento trata frota com nível de detalhe que hoje não tem onde morar no
+sistema — inclusive transferindo responsabilidade pessoal ao condutor.
+
+- [ ] Cadastro de frota com **identificação visual obrigatória** (Art. 155 §1º, II).
+- [ ] **Termo de Autorização de Condução por missão específica**, com validação de
+      CNH vigente do condutor — sem termo válido, o veículo não sai (Art. 155 §2º, I).
+- [ ] **Livro de retirada de chaves** (data/hora, condutor, missão, retorno) — é
+      esse registro que sustenta a regra do §2º, II: **multa e pontos são
+      transferidos a quem retirou o veículo**, e franquia/conserto por imprudência
+      corre por conta do condutor (§2º, III).
+- [ ] Custeio de combustível **só mediante nota fiscal com o CNPJ da Igreja**, e
+      apenas para o veículo presidencial (Art. 155 §3º, I) — as vedações de
+      reembolso dos incisos II-III viram bloqueio no Contas a Pagar (v4.5),
+      não aviso.
+- [ ] Manutenção preventiva, licenciamento e seguro por veículo, com alerta de
+      vencimento (conecta com a v4.16).
+
+#### v4.24 — Obras, licenciamento e inauguração de templos *(gap da varredura normativa)*
+
+- [ ] Ficha de obra por congregação com marcos (pedra fundamental, Art. 87 §1º),
+      orçamento (amarrado ao Contas a Pagar e à alçada patrimonial da v4.11) e
+      cronograma físico-financeiro (mesmo motor de projetos do PDQ, v4.8).
+- [ ] **Trava de "apto a inaugurar"**: sem **AVCB** (Corpo de Bombeiros) e
+      **Alvará/Habite-se** anexados e vigentes, o sistema não marca a inauguração —
+      o Regimento veda inaugurar templo clandestino (Art. 87 §2º, I). Não é aviso:
+      é bloqueio, porque a consequência é interdição e responsabilização pessoal.
+- [ ] Regras de placa de inauguração (nomes obrigatórios; **vedado nome de doador
+      ou político**, Art. 87 §3º) como checklist verificável antes da liberação.
+- [ ] Requisito de eficiência energética em obra nova (Art. 162-A §2º).
+- [ ] Vencimento de licenças por imóvel com alerta — AVCB vence, e templo com AVCB
+      vencido não pode receber culto.
+
+### Referência de pesquisa (7ª rodada, 2026) — expansão das Fases 5-11 e consolidação da base
+
+Pedido explícito do usuário depois de fechar a v4.10: *"faça uma análise nesse
+arquivo, pra saber se está tudo ok, expandindo o mais possível o que se pede em
+cada fase, tentando trazer coisas novas pra ser literalmente um sistema auxiliar
+de membros, auxiliar técnico para processos administrativos... pode criar mais
+versões se for o caso... pesquisa, trazendo referências tanto nacionais como
+estrangeiras"*.
+
+**Diagnóstico que motivou esta rodada.** A FASE 4 recebeu seis rodadas de
+pesquisa e tem ~900 linhas para 18 versões; as FASES 5 a 11 somadas tinham ~270
+linhas para 31 versões — bullets de uma linha, sem fonte, sem justificativa, sem
+base normativa. Não é que estivessem erradas: estavam **rasas em comparação**.
+As FASES 0 a 3 estão com 139 itens concluídos e 2 pendentes (ambos remanejados de
+propósito) — ou seja, foram *fechadas*, não *esgotadas*: várias coisas que hoje
+sabemos que fazem falta nunca entraram lá porque ninguém tinha parado pra
+perguntar o que faltava.
+
+Quatro frentes de pesquisa de mercado (internacional + nacional) mais uma nova
+varredura do Regimento Interno alimentaram esta expansão. **Achado mais grave da
+rodada:** existe uma obrigação legal brasileira **vigente desde 12/01/2024** que o
+sistema não cobre de forma nenhuma (Lei 14.811/2024 — certidão de antecedentes
+semestral de todo voluntário que atua com menores) e outra com **multa por
+omissão** (ECA Art. 245). Isso virou a FASE 7 reescrita, não um bullet solto.
+
+| Achado | Fonte | Onde entra |
+|---|---|---|
+| **Certidão de antecedentes de voluntário com menores, renovação semestral** — obrigação legal vigente | Lei 14.811/2024 (art. 59-A do ECA) | v7.7 (nova) |
+| **Comunicação obrigatória de suspeita de maus-tratos ao Conselho Tutelar** — multa de 3 a 20 salários por omissão | ECA Art. 13 e 245 | v7.8 (nova) |
+| Escuta protegida — igreja acolhe e encaminha, **não** inquire (não revitimizar) | Lei 13.431/2017 | v7.8 (nova) |
+| Consentimento específico e destacado para dados de menores | LGPD Art. 14 | v7.7 (nova) |
+| Check-in/check-out infantil com código de retirada e cadeia de custódia | Planning Center Check-Ins, FellowshipOne, ChurchSuite | v7.10 (nova) |
+| Regra dos dois adultos + proporção adulto/criança como **bloqueio de escala** | Church Answers, Adventist Risk, MinistrySafe | v7.7 (nova) |
+| Triagem estruturada de voluntário (aplicação → referências → entrevista → antecedentes → treinamento) | MinistrySafe 5-Part Safety System, Praesidium Safety Equation | v5.7 (nova) |
+| Registro de incidentes separado da disciplina + afastamento cautelar automático | Praesidium, Royal Commission (10 Child Safe Standards), Dallas Charter/USCCB | v7.8 (nova) |
+| **ECF obrigatória mesmo sendo imune** — multa mínima R$ 500/mês | IN RFB 2.004/2021 | v4.19 (nova) |
+| **ECD obrigatória acima de R$ 1,2 mi/ano** de receitas | IN RFB 1.420/2015 art. 3º-A | v4.19 (nova) |
+| eSocial (categoria 781, rubrica 3525) + DCTFWeb mesmo sem empregados CLT | Lei 8.212/91 art. 22 §§13-14 | v4.19 / v4.10 |
+| EFD-Reinf série R-4000 substituiu a DIRF (extinta em 2025) | IN RFB / EFD-Reinf | v4.19 (nova) |
+| **Imunidade se perde por desorganização formal**, não por desvio — escrituração é requisito | CF Art. 150 VI "b" §4º; CTN Art. 14 | v4.20 (nova) |
+| Receita acessória (bazar, aluguel de salão) só é imune se aplicada nas finalidades essenciais | Súmula Vinculante 52; RE 578.562 | v4.21 (nova) |
+| Ministro: sem vínculo, sem INSS patronal, **com IRPF** e risco de descaracterização | Lei 13.137/2015; Lei 14.647/2023 | v4.10 (expandida) |
+| **LGPD dispensa consentimento** para organização religiosa tratar dado de membro | LGPD Art. 11, II, "a" | vB.8 (nova) |
+| PLD-FT: doação em espécie acima de limite exige identificação do doador | Lei 9.613/98; GAFI Recomendação 8 | v4.22 (nova) |
+| Lei Anticorrupção alcança associações/fundações (programa de integridade) | Lei 12.846/2013; Decreto 11.129/2022 | v4.22 (nova) |
+| Motor de workflow/automação genérico (gatilho → ação → status) substitui 20 features pontuais | Rock RMS, Clearstream, Planning Center Workflows | vB.3 (nova) |
+| Filas de acompanhamento com **dono e SLA** ("quem está cuidando de quem") | Rock RMS Connections, MinistryPlatform Care Cases, CCB process queues | v7.11 (nova) |
+| Detecção de afastamento por **desvio do próprio padrão** da pessoa (não regra fixa) | CDM+ Missing Analysis, Tithely | v7.11 (nova) |
+| Portal/app do membro com self-service real (escalas, inscrições, cadastro, filhos) | Church Center (Planning Center), My ChurchSuite | vB.5 (nova) |
+| Escala com auto-scheduler, bloqueio de indisponibilidade e **troca entre voluntários** | Planning Center Services, ChurchSuite Rotas | v5.6 (nova) |
+| Trilhas de discipulado ("Steps") como entidade de primeira classe, com funil | Rock RMS Steps | v8.5 (nova) |
+| LMS interno + educação continuada como pré-requisito de promoção ministerial | Rock RMS LMS, Lifeway Ministry Grid, RightNow Media | v8.6 (nova) |
+| Seminário precisa de **SIS** (histórico escolar, CH, aproveitamento), não de LMS | Classter, Populi | v8.7 (nova) |
+| Caderneta digital da EBD com os campos da CPAD (presentes, visitantes, bíblias, revistas, oferta) | eScriptura, Domus EBD, CPAD Escola Dominical | v6.8 (nova) |
+| Scorecard de saúde por **razões**, não valores absolutos (compara igreja de 80 com a de 900) | The Unstuck Group, Carey Nieuwhof, Lifeway Research | v12.1 (nova fase) |
+| Benchmark entre congregações **anonimizado por percentil** (reduz política interna) | Gloo + Barna ChurchPulse | v12.2 (nova fase) |
+| Engagement score e previsão de evasão cruzando contribuição + presença + participação | Pushpay Insights, ChurchTechToday 2026 | v12.1 (nova fase) |
+| Consentimento de comunicação **por canal E por categoria**, com opt-out granular | Meta/WhatsApp Business API, Infobip, SocialHub (LGPD) | v7.12 (nova) |
+| Inscrição paga + credenciamento por QR + lotação em tempo real | Tithely Events, ChMeetings | v7.13 (nova) |
+| Dashboard de campo missionário com relatório atrasado **bloqueando repasse** | MissionaryConnect, Missions21 | v9.4 (nova) |
+| Notas pastorais com nível de sigilo por papel + versão anonimizada para boletim | CareNote, Notebird Integrity Shield, TouchPoint | v7.11 (nova) |
+| Group finder geográfico — mapa mostra onde há membro sem congregação próxima | Churchteams, GroupVitals | v9.5 (nova) |
+
+#### Varredura normativa (Estatuto + Regimento, 2ª passada)
+
+A primeira varredura do texto legal produziu 7 gaps (marcados *"gap da varredura"*
+nas v4.16-v4.18, v7.6 e outras). Esta segunda passada, agora com foco nas fases
+5-11 — justamente as menos detalhadas — achou **16 dispositivos que criam
+obrigação, prazo ou procedimento e não tinham nenhuma versão correspondente**.
+
+O achado mais forte: **o Regimento cita nominalmente este sistema**. O Art. 80
+§2º, V exige, como condição de aptidão ao batismo, o preenchimento de "formulário
+eletrônico com caixa de aceite do Estatuto e do Regimento" no *"Sistema Oficial de
+Gestão da IEADESPA"*. Não é o sistema que decidiu cobrir a norma — é a norma que
+manda o sistema existir, e essa peça nunca foi construída.
+
+| Gap normativo | Base | Onde entra |
+|---|---|---|
+| **Esteira de Batismo** — turma, aptidão cumulativa (idade 12+, certidão de casamento p/ coabitantes, vida pregressa, Curso de Discipulado) e **aceite eletrônico do Estatuto no sistema** | Reg. Art. 80 §§1º-3º | v1.12 (nova) |
+| Registro de Apresentação de Crianças — impedimentos (união estável sem certidão, disciplina em curso), janela de idade (preferência 90 dias, **vedado acima de 1 ano**), ato reservado não gera certificado | Reg. Art. 82 §§2º-3º | v1.9 (expandida) |
+| **Motor do Calendário Oficial** — 5 níveis de precedência, prazo fatal **15/jan**, "Direito Adquirido Temporal" por ordem de chegada, vedadas 2 festas de Nível 4 na mesma Área no mesmo fim de semana, indeferimento por "Esgotamento de Pauta" | Reg. Art. 154 §§1º-4º | v7.2 (expandida) |
+| Ciclo Mensal de Governança e Santa Ceia — datas fixas (Conselho Fiscal 3º domingo, CLI último domingo), Ceia Geral em maio/outubro com **fechamento obrigatório de todas as congregações**, AGE da CLI com 48h | Reg. Art. 154-A, 81 §1º, 147 §2º | v7.2 (expandida) |
+| **Balancete não entregue bloqueia liberação de recurso** do departamento — saldo virtual individualizado em conta única | Reg. Art. 133-C §§1º-2º; Art. 152 | v5.4 (expandida) |
+| **Frota de veículos** — Termo de Autorização de Condução por missão, CNH válida, controle de chaves, multa/pontos transferidos ao condutor, combustível só com NF no CNPJ da Igreja | Reg. Art. 155 §§1º-3º | v4.23 (nova) |
+| **Identidade Visual Anual** — sugestões 01-15/nov, triagem, votação 22-30/nov, escolha até 31/12, **vedado repetir tema desde 2006**, fornecedor único, pedido do Dirigente = dívida irrevogável | Reg. Art. 159 §§1º-7º | v7.14 (nova) |
+| Assistência Social (Ação da Fé) — programas "sempre mediante cadastro socioeconômico" + triagem por Assistente Social credenciado | Reg. Art. 46; Art. 52, VII | v5.9 (nova) |
+| **Obras e licenciamento** — AVCB + Alvará/Habite-se como requisito, **vedada inauguração de templo clandestino**, regras de placa, eficiência energética | Reg. Art. 87 §§1º-3º; Art. 162-A §2º | v4.24 (nova) |
+| **Regra das 24 Horas** — omissão do administrador de canal torna a Igreja corresponsável; senhas pertencem à Secretaria Geral (troca imediata na sucessão); "Área Cega"; grupos satélites | Reg. Art. 160 §§1º-5º; Art. 160-A | v7.3 (expandida) |
+| Política de Porta-Voz Único — regime de crise com vedação de manifestação dos demais líderes | Reg. Art. 161-B §§1º-2º | v7.15 (nova) |
+| **Mediação e Arbitragem Eclesiástica** — via obrigatória antes do Judiciário em conflito patrimonial/administrativo | Reg. Art. 161-A (Lei 9.307/96) | v3.8 (nova) |
+| Intervenção em Entidade Vinculada — **ratificação da CLI em 15 dias sob pena de perder eficácia**; formação legal exigida do gestor | Reg. Art. 47-A §§1º-2º; Art. 153 | v9.1 (expandida) |
+| Conselho Consultivo Técnico (Parecer de Viabilidade antes de imóvel de alto valor/empréstimo, **vedado parentesco com a Diretoria**) e Colégio de Dirigentes Congregacionais | Reg. Art. 31; Art. 151 §2º | v2.7 (expandida) |
+| Consolidação normativa — Texto Mestre atualizado em **48h** após registro da ata, nota de vigência, registro integral quando alterações passam de **30%**, revisão sistêmica a cada 4 anos | Reg. Art. 162 §§2º-4º; Art. 162-B | v2.9 (expandida) |
+| Controle de acesso à Assembleia (impedidos: não-membros, disciplinados, **quem já tem carta de mudança expedida**) + justificativa de falta com motivos vedados (escala/evento de departamento não justifica) | Reg. Art. 142-143; Art. 149 §§1º-2º | v2.1 e v7.9 (expandidas) |
+
+**Conclusão da pesquisa.** O sistema tem hoje 113 endpoints, 95 tabelas e 59
+migrações — e **nenhum teste automatizado**, nenhum mecanismo de notificação
+(nada no sistema avisa ninguém de nada; tudo é "calculado na leitura", mas a
+pessoa precisa abrir a tela certa pra descobrir), nenhuma busca global, nenhum
+motor de workflow reaproveitável, e um `app/script.js` de 7.898 linhas em arquivo
+único. Isso não é dívida técnica pontual: é a **base** que as fases 5-11 vão
+carregar. Daí a FASE B abaixo, inserida de propósito entre a FASE 4 e a FASE 5.
+
+### FASE B — Consolidação da Base (retrofit das Fases 0-3)
+
+> **Sobre o nome.** O pedido foi *"criar depois da fase quatro e antes da cinco
+> uma fase, digamos, quatro ponto cinco"*. O nome "FASE 4.5" colidiria de frente
+> com a **v4.5** (Saídas: Contas a Pagar), que já foi entregue e está referenciada
+> em dezenas de pontos do código e deste documento — "v4.5.1" seria ambíguo com
+> "primeira parte da v4.5". Por isso: **FASE B** (de *Base*), posicionada
+> fisicamente aqui, entre a FASE 4 e a FASE 5. Faz o que foi pedido: volta nas
+> fases 0-3 — que foram concluídas, mas não esgotadas — e constrói o que ficou
+> faltando, além do que só agora se percebeu que falta.
+
+Esta fase não entrega módulo de negócio novo: entrega **infraestrutura que todas
+as outras fases vão usar**. Fazer as fases 5-11 sem ela significa repetir 7 vezes
+o mesmo trabalho (cada módulo inventando sua própria notificação, seu próprio
+fluxo de aprovação, seu próprio relatório).
+
+#### vB.1 — Rede de segurança técnica (o sistema não tem nenhuma)
+
+Achado da varredura de código: 113 endpoints, 95 tabelas, ~10 mil linhas de
+front — e **zero testes**. Um sistema que movimenta o dinheiro real de uma
+denominação inteira, com regras como "o repasse já rateado não pode entrar em
+outro rateio", depende hoje de conferência manual pra saber se continua correto
+depois de cada mudança.
+
+- [ ] **Testes automatizados das regras de dinheiro primeiro** (não cobertura
+      total — as regras que, se quebrarem, perdem dinheiro de verdade):
+      `calcularFechamento` (rateio 40/60), `saldoCentroCusto` (todos os centros),
+      `saldoRestanteCampanha`, `projetarFluxoCaixa`, o malote do Rateio Geral
+      (um repasse nunca em dois rateios), alçada de aprovação, e as demonstrações
+      da v4.9 (o Balanço tem que fechar: Ativo − Passivo = PL).
+- [ ] **Testes de regra estatutária** — `shared/estatuto.js` (capacidade
+      eleitoral, interstício, quórum de 2 estágios) é o coração jurídico do
+      sistema: um erro ali invalida eleição, não só relatório.
+- [ ] Ambiente de homologação separado do de produção (hoje há um só) + massa de
+      dados fictícia para testar sem tocar em dado real de membro.
+- [ ] Rotina de backup/restore **testada de verdade** (backup que nunca foi
+      restaurado não é backup) + procedimento escrito de recuperação de desastre.
+- [ ] Observabilidade mínima: log estruturado de erro, alerta quando uma Function
+      começa a falhar — hoje só se descobre quando alguém reclama que a tela quebrou.
+
+#### vB.2 — Motor de notificações (hoje o sistema é 100% mudo)
+
+O princípio "calculado na leitura, nunca marcação manual" resolveu a correção do
+dado — mas criou um efeito colateral: **a informação certa existe e ninguém é
+avisado**. Carta de recomendação vencendo, mandato de assento expirando, meta do
+PDQ com prazo estourando, repasse parado no malote, prestação de contas atrasada,
+certidão de voluntário vencida — tudo isso o sistema *sabe* e não conta a ninguém.
+
+- [ ] Tabela única de notificações + central de avisos no painel (sino), com
+      leitura/arquivamento — nenhuma tela nova por módulo, todos publicam na mesma.
+- [ ] Regras de notificação declarativas (evento ou prazo → público-alvo →
+      canal), configuráveis como catálogo, nunca hardcoded módulo a módulo.
+- [ ] Digest por perfil (o Tesoureiro Geral não precisa de 40 avisos soltos:
+      precisa de um resumo do que trava o fechamento).
+- [ ] Canal externo real: e-mail e **WhatsApp Business API** (no Brasil, e-mail
+      sozinho não chega em membro de congregação) — com consentimento por canal
+      e categoria (ver v7.12), respeitando opt-out.
+
+#### vB.3 — Motor de workflow genérico (parar de recodar o mesmo fluxo)
+
+Hoje cada fluxo de aprovação foi escrito à mão: fila de aprovações de edição
+cadastral (v1.11), tramitação de projeto e parecer (v2.8), processo disciplinar
+(v3.2-v3.4), procedimento de abandono (v1.5), solicitação de pagamento com alçada
+(v4.5), remanejamento do PDQ (v4.8), confirmação de autolançamento (v4.3). São
+sete implementações do mesmo conceito — o oitavo módulo vai escrever a oitava.
+
+- [ ] Motor único: tipo de fluxo → etapas → responsável por etapa (por papel ou
+      escopo territorial) → prazo/SLA → ação de saída (aprovar/rejeitar/devolver).
+- [ ] Escalonamento automático pela hierarquia territorial já existente quando o
+      SLA estoura (Congregação → Área → Região) — o escalonamento vira dado, não código.
+- [ ] Painel único de "o que está comigo" e "o que está atrasado", por pessoa.
+- [ ] **Sem migrar os 7 fluxos existentes de uma vez** — eles funcionam. O motor
+      nasce servindo os fluxos novos (fases 5-11); migração dos antigos só se e
+      quando houver ganho real, um por vez.
+
+#### vB.4 — Busca global, protocolo único e anexos
+
+- [ ] Busca global no topo do painel (pessoa, processo, documento, lançamento,
+      fornecedor, projeto) respeitando o escopo de quem procura — hoje é preciso
+      saber de antemão em qual das 17 abas o dado mora.
+- [ ] **Protocolo institucional único** — hoje cada módulo inventa sua numeração
+      (Termo nº da tesouraria, protocolo da ouvidoria, protocolo de projeto).
+      Um gerador central com máscara por tipo (`OUV-2026-0001`, `DISC-2026-0007`)
+      dá rastreabilidade cruzada e acaba com colisão entre módulos.
+- [ ] Anexos genéricos: qualquer registro de qualquer módulo aceita documento,
+      com o mesmo controle de acesso do registro-pai (hoje só alguns módulos têm).
+
+#### vB.5 — Portal do membro (PWA) e autoatendimento de verdade
+
+"Meu Painel" já existe, mas é uma aba dentro do sistema administrativo. O membro
+comum não entra num painel de secretaria — ele entra no celular.
+
+- [ ] PWA instalável (a seção 6.7 já registra a ideia — aqui ela vira versão):
+      ícone na tela inicial, funciona em conexão ruim, notificação push.
+- [ ] Self-service ampliado: minhas escalas (aceitar/recusar/**trocar** com outro
+      voluntário), minhas inscrições em eventos, meus filhos (check-in), minha
+      trilha de discipulado, meus certificados, minhas contribuições, minhas cartas.
+- [ ] Login simplificado pro membro comum (hoje o acesso é pensado pra quem tem
+      papel de liderança) — sem senha complexa de sistema administrativo.
+
+#### vB.6 — Documento institucional: geração, assinatura e arquivo
+
+- [ ] Geração de PDF no servidor para **os documentos que o sistema já emite**
+      (cartas de trânsito, certificados, recibos, relatórios) — hoje é "salvar
+      como PDF no navegador", que sai diferente em cada máquina e não serve como
+      documento institucional padronizado.
+- [ ] **Minuta de ata pré-preenchida — não a ata final.** A v2.9 descartou
+      permanentemente a "geração de Ata (PDF)" por um motivo que continua válido:
+      não há editor de texto no sistema, e assinatura de nível ICP-Brasil/GOV.BR
+      seria peso desnecessário. **Essa decisão fica de pé.** O que falta é mais
+      modesto e não conflita: presença, quórum, pautas, resultado de votação e
+      deliberação **já estão no banco** e hoje são redigitados à mão no Word.
+      O sistema exporta uma minuta com esses dados (`.docx`/texto) para o
+      Secretário **partir dela** e seguir exatamente o fluxo atual — escreve,
+      exporta PDF, assina no GOV.BR e sobe pronto pela v2.9. Elimina a
+      redigitação, não o fluxo de assinatura.
+- [ ] Assinatura eletrônica **interna** com trilha (quem assinou, quando, hash)
+      reaproveitando `TermosAssinados` — para termos e aceites internos
+      (voluntariado, políticas, aceite do Estatuto na v1.12), **nunca** como
+      substituto de assinatura de ata com fé pública, que continua no GOV.BR.
+- [ ] Arquivo institucional com tabela de temporalidade — conversa direto com
+      `PoliticasRetencao` (v0.3), que hoje é só catálogo informativo.
+
+#### vB.7 — Painel inicial por perfil (dashboard)
+
+- [ ] Hoje o sistema abre numa lista de módulos; deveria abrir no que **aquela
+      pessoa** precisa decidir hoje: pendências, prazos vencendo, indicadores do
+      escopo dela (Dirigente vê a congregação; Pastor de Área vê as dele;
+      Tesoureiro Geral vê o malote e o caixa).
+- [ ] Blocos reaproveitáveis, alimentados pelos cálculos que já existem — sem
+      recalcular nada novo, só reunir.
+
+#### vB.8 — LGPD: corrigir a base legal e fechar as lacunas
+
+Achado da pesquisa jurídica: o sistema pede **consentimento** para tratar dados de
+membro, mas a LGPD (Art. 11, II, "a") **dispensa o consentimento** justamente para
+organização religiosa tratar dado de pessoa com vínculo regular. Usar base legal
+errada é um problema real: cria obrigação que a lei não impõe (e que trava o
+sistema quando a pessoa não consente) e desprotege o que a lei de fato exige —
+**a vedação de compartilhamento com terceiros**, que hoje não tem trava nenhuma.
+
+- [ ] Revisar a base legal por finalidade: o que é Art. 11 II "a" (membro, sem
+      consentimento), o que continua exigindo consentimento (foto, imagem,
+      comunicação de marketing) — `ConsentimentosLGPD` continua, com papel correto.
+- [ ] **Bloqueio técnico de compartilhamento externo** do rol de membros e
+      trilha de quem exportou o quê (a exportação da v1.8 hoje é livre).
+- [ ] ROPA (Registro de Operações de Tratamento) gerado do próprio sistema, e
+      RIPD para os tratamentos de risco (foto, dado de menor, nota pastoral,
+      dado de saúde em evento).
+- [ ] Retenção que **executa** (hoje `PoliticasRetencao` é informativa) —
+      com a mesma regra de ouro de sempre: nunca apagar dado que o Regimento
+      exige preservar; o que vence é minimizado, não destruído.
+
+#### vB.9 — Acesso: delegação, sessão e revisão periódica
+
+- [ ] **Delegação temporária** ("vou viajar, o 2º Secretário responde por mim"),
+      com prazo e trilha — hoje a saída é emprestar a senha, que destrói a
+      auditoria (a ação fica registrada na pessoa errada).
+- [ ] Correção do achado da v4.5: quando uma pessoa tem mais de um papel de
+      liderança, o login escolhe um deles sem critério definido (`LoginSecretaria`
+      não ordena) — precisa escolher o de maior amplitude, ou deixar a pessoa
+      alternar o papel ativo.
+- [ ] Revisão periódica de acessos (a v4.12 já prevê para o financeiro) estendida
+      a todos os papéis: acesso que ninguém reconfirma, expira.
+- [ ] Trilha de sessão: último acesso, dispositivo, encerrar sessão remota.
+
+#### vB.10 — Acessibilidade, inclusão e primeiro uso
+
+- [ ] Acessibilidade real (WCAG 2.1 AA): contraste, navegação por teclado, leitor
+      de tela, tamanho de fonte — há membros idosos e com deficiência visual na
+      congregação, e há um Setor Técnico de Libras previsto no Regimento (Art. 48-52).
+- [ ] Ajuda contextual e primeiro uso guiado — o sistema tem 17 abas e dezenas de
+      sub-abas; quem chega hoje não tem nenhum caminho explicado.
+- [ ] Mensagens de erro em linguagem de secretaria, não de programador (padrão já
+      seguido no financeiro — generalizar para o resto).
+
 ### FASE 5 — Departamentos e Relatórios
 
 #### v5.1 — Catálogo de departamentos
@@ -2430,11 +3106,94 @@ aplicado.
       faz sentido depois que `TesourariasDepartamento`/`Despesas` (acima)
       existirem de verdade — não tem como controlar autonomia de caixa sem
       caixa.
+- [ ] **Saldo virtual individualizado dentro da conta única** (Reg. Art. 133-C
+      §1º) — mesmo mecanismo de Centro de Custo já provado na v4.1.3/v4.10:
+      o departamento tem saldo próprio sem ter conta bancária própria.
+- [ ] **Bloqueio automático por balancete não entregue** (Reg. Art. 133-C §2º):
+      *"a não apresentação do balancete mensal bloqueia imediatamente a liberação
+      de novos recursos"*. É bloqueio, não alerta — e é calculado na leitura
+      (o mês anterior fechou sem balancete → a liberação trava sozinha), nunca
+      marcação manual de alguém "lembrar de bloquear". Conecta com a v4.12
+      (bloqueio de repasse por falta de prestação de contas): é a mesma regra,
+      um nível abaixo.
+- [ ] Despesa vinculada à finalidade específica do grupo (Reg. Art. 152, I-II) —
+      dinheiro de departamento não custeia atividade de outro.
 
 #### v5.5 — Integração automática EBD + 4 departamentos
 
 - [ ] EBD alimenta o depto 07 (presenças, matriculados, visitantes, bíblias, revistas, ofertas).
 - [ ] UCADESPA/UMADESPA/USADESPA/UHADESPA puxam afiliados + situação de comunhão.
+
+#### v5.6 — Escalas de serviço com auto-escalador *(7ª rodada)*
+
+A v7.5 já prevê "escala de rodízio voluntário". A pesquisa de mercado mostrou que
+o que transforma escala em ferramenta útil não é a grade — é o que acontece
+**quando alguém não pode**: hoje, em qualquer congregação, isso vira corrente de
+WhatsApp e o secretário refazendo tudo na mão.
+
+- [ ] **Indisponibilidade declarada pelo voluntário** (viagem, trabalho, período)
+      — a escala nunca sugere quem já se declarou indisponível.
+- [ ] **Troca entre voluntários** pedida pelo próprio voluntário, com aprovação do
+      líder da equipe — tira o secretário do meio da negociação.
+- [ ] Auto-escalador por "quem serviu por último" + frequência preferida
+      ("uma vez por mês"), detectando **conflito entre equipes** (a mesma pessoa
+      escalada em louvor e recepção no mesmo culto).
+- [ ] Convite em cadeia: recusou, o sistema convida o próximo automaticamente.
+- [ ] Publicação da escala e confirmação de recebimento — quem não confirmou
+      até X dias vira pendência do líder.
+      *(referência: Planning Center Services; ChurchSuite Rotas)*
+
+#### v5.7 — Triagem e habilitação de voluntários *(7ª rodada — pré-requisito da FASE 7)*
+
+Hoje o voluntariado é "assinar o termo da Lei 9.608/98 e entrar na escala"
+(v7.5). O padrão internacional de proteção institucional é uma **esteira
+sequencial** — e ela é pré-requisito de tudo que envolve menores (v7.7).
+
+- [ ] Esteira de habilitação com etapas obrigatórias **sequenciais** (não dá pra
+      pular): ficha de inscrição → referências internas → entrevista registrada →
+      antecedentes (v7.7) → treinamento (v7.7) → termo assinado → **apto**.
+      Status por voluntário: apto / pendente / inapto / vencido.
+      *(MinistrySafe 5-Part Safety System; Praesidium Safety Equation)*
+- [ ] **Regra dos 6 meses**: tempo mínimo de membresia/frequência antes de servir
+      em ministério com menores — calculado a partir da data de admissão ou de
+      recebimento da carta, nunca digitado. *(Adventist Risk Management)*
+- [ ] Cadastro de equipes/ministérios de serviço por congregação, com papéis
+      marcados como **"contato com menores"** — é essa marcação que dispara todas
+      as exigências reforçadas da v7.7.
+- [ ] Desligamento de voluntário com motivo e registro — inclusive "remoção da
+      escala por perda de confiança" (v7.5), sem virar sanção disciplinar.
+
+#### v5.8 — Relatório departamental: consolidação e série histórica *(7ª rodada)*
+
+A v5.2/v5.3 monta e aprova o relatório. Falta o que se faz **com ele depois**.
+
+- [ ] Consolidação automática por Área/Região/Quadrante/Distrito e Campo — hoje o
+      Líder Geral somaria relatório por relatório na mão.
+- [ ] Série histórica por campo do formulário (o mesmo campo, mês a mês, ano a
+      ano) — é isso que permite ver tendência, não só o número do mês.
+- [ ] Comparativo entre congregações do mesmo porte (alimenta a FASE 12).
+- [ ] Reabertura de relatório fechado só pelo Presidente/Secretário Geral, com
+      justificativa auditada (a v5.3 já prevê a retificação — falta a trilha).
+
+#### v5.9 — Assistência Social (Ação da Fé) *(gap da varredura normativa)*
+
+O Regimento condiciona a ação social a cadastro e triagem técnica — e isso não
+tinha nenhuma versão. É também o módulo com o dado mais sensível do sistema
+inteiro (situação socioeconômica de família assistida).
+
+- [ ] **Cadastro socioeconômico do beneficiário** — o Art. 46 exige que os
+      programas assistenciais aconteçam *"sempre mediante cadastro
+      socioeconômico"*. Dado sensível: acesso restrito por papel, base legal
+      registrada (vB.8) e retenção própria.
+- [ ] **Triagem e parecer técnico por Assistente Social credenciado** (Art. 52,
+      VII) — o parecer é do profissional, registrado e assinado, não uma decisão
+      informal de quem está no balcão.
+- [ ] Registro de entregas/benefícios concedidos (cesta, auxílio, medicamento),
+      com histórico por família e controle de recorrência.
+- [ ] Isenção de taxa de cessão de templo quando o uso é ação social
+      (Art. 156 §3º, III) — conecta com a v4.18/v4.21.
+- [ ] Prestação de contas do programa social, separada do caixa comum — insumo
+      direto pra eventual CEBAS/parceria pública (v9.6).
 ### FASE 6 — EBD (Escola Bíblica Dominical)
 
 Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
@@ -2476,6 +3235,48 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 - [ ] Ofertas + lançamentos manuais por congregação.
 - [ ] Integração com a tesouraria central (FASE 4).
 
+#### v6.8 — Caderneta digital no padrão que a EBD já usa *(7ª rodada)*
+
+Achado de adoção, não de funcionalidade: o secretário de EBD da Assembleia já
+preenche há décadas uma caderneta com campos padronizados (CPAD). Reproduzir
+**exatamente esses campos** elimina resistência — a pessoa reconhece a tela — e
+dá, pela primeira vez, série histórica comparável entre congregações.
+
+- [ ] Classe por faixa etária com professor e revista/trimestre vigente —
+      espelhando a caderneta física: **matriculados, presentes, ausentes,
+      visitantes, Bíblias, revistas e oferta** por domingo.
+- [ ] Fechamento trimestral automático + **Relatório do Superintendente**
+      consolidado por congregação/Área (hoje somado à mão).
+- [ ] Aluno não-membro (visitante frequente, criança de família não congregada)
+      sem forçar matrícula de membresia — hoje o aluno é vínculo de
+      `MembroReferencia`, o que exclui exatamente quem a EBD mais quer alcançar.
+- [ ] Migração/importação das cadernetas antigas em planilha, se houver.
+      *(referência: eScriptura, Domus EBD, CPAD Escola Dominical)*
+
+#### v6.9 — Trilhas de formação e certificação verificável *(7ª rodada)*
+
+- [ ] **Trilha por papel** (professor de EBD, diácono, tesoureiro local,
+      dirigente, secretário): módulos, pré-requisitos, progresso individual.
+- [ ] Conclusão de trilha como **pré-requisito verificado** nos fluxos que já
+      existem — consagração (v8.3), nomeação de liderança (v0.1), habilitação de
+      voluntário (v5.7). Deixa de ser "a gente sabe que fulano fez o curso".
+- [ ] Certificado com **QR de verificação pública** — qualquer pessoa confere a
+      autenticidade sem login, mesmo mecanismo da credencial ministerial (v8.4).
+- [ ] Educação continuada com validade: certificado vence, e o vencimento
+      aparece como pendência (não bloqueia culto, mas bloqueia escala onde a
+      norma exigir). *(referência: Lifeway Ministry Grid, RightNow Media, Rock RMS LMS)*
+
+#### v6.10 — Sala de aula assistida e material *(7ª rodada)*
+
+- [ ] Chamada pelo celular do professor, offline-first (a sala de EBD muitas
+      vezes não tem sinal) — sincroniza quando volta a conexão.
+- [ ] Plano de aula e material de apoio por lição, publicado pelo
+      Superintendente e visível ao professor no mesmo lugar da chamada.
+- [ ] Alerta de aluno ausente há N domingos direto pro professor — a evasão na
+      EBD é o primeiro sinal de afastamento (conecta com v7.11).
+- [ ] Pedido de revistas calculado a partir da matrícula real por classe
+      (v6.6 prevê o pedido; aqui ele deixa de ser chute do superintendente).
+
 ### FASE 7 — Saúde, Eventos e Comunicação
 
 #### v7.1 — PSC (Programa de Saúde Congregacional)
@@ -2493,11 +3294,63 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 - [ ] Conflito de datas: nível superior cancela/absorve o inferior.
 - [ ] Fluxo de aprovação do calendário (planejamento → CLI).
 
+**Expandido pela varredura normativa (7ª rodada).** O Art. 154 não descreve
+"evitar conflito de datas": descreve um **algoritmo de agendamento completo**,
+com prazo fatal, critério de desempate e hipótese de indeferimento. Do jeito que
+estava, a versão cobria talvez um quinto do que a norma manda.
+
+- [ ] **Prazo fatal de 15 de janeiro** para propostas de evento (Art. 154 §2º, I),
+      com alerta antecipado — depois disso, entra só por exceção.
+- [ ] **5 níveis de precedência** (Art. 154 §1º): o nível superior prevalece
+      automaticamente; o inferior é remarcado ou absorvido, sem negociação manual.
+- [ ] **Direito Adquirido Temporal** (Art. 154 §2º, IV) — empate entre eventos do
+      mesmo nível resolve por **ordem de chegada da proposta**, o que exige
+      carimbo de data/hora imutável em cada proposta. É o mecanismo que evita a
+      disputa política ("marquei primeiro").
+- [ ] **Trava de simultaneidade por Área** (Art. 154 §3º, II): vedadas duas festas
+      de Nível 4 na mesma Área no mesmo fim de semana — validação automática.
+- [ ] **Bloqueio total de campo** nas datas dos 2 Congressos Unificados (§4º) e
+      status próprio de **"indeferido por Esgotamento de Pauta"** — o sistema
+      precisa saber dizer "não cabe mais", com fundamento.
+- [ ] Homologação pela CLI na primeira reunião do ano (§2º, III), gerando o
+      Calendário Oficial publicado.
+- [ ] **Ciclo Mensal de Governança gerado automaticamente** (Art. 154-A): as
+      sessões ordinárias do ano já nascem na agenda — Conselho Fiscal/NIF no 3º
+      domingo (14h-17h), CEI na semana anterior à Câmara, CLI no último domingo
+      (14h-17h). Hoje cada secretário marca na mão, e esquecer é quebrar quórum.
+- [ ] **Santa Ceia** (Art. 81 §1º): Ceia Local no último domingo do mês; **Ceia
+      Geral em maio e outubro com fechamento obrigatório de todas as
+      congregações** — nessas datas o sistema bloqueia agendamento local
+      concorrente. Ausência injustificada de Dirigente na Ceia Geral é fato
+      registrável (Art. 81 §1º, III, "b").
+- [ ] Convocação de AGE da CLI com antecedência mínima de **48 horas**
+      (Art. 147 §2º) — validada no ato da convocação, não conferida depois.
+
 #### v7.3 — Canais oficiais e comunicação
 
 - [ ] Registro de Canais Oficiais de Comunicação (Art. 12 Estatuto).
 - [ ] Grupos oficiais + grupos focados (política, bazar, teologia, geracional).
 - [ ] Blindagem digital: vedação de política no púlpito (Lei 9.504/97).
+
+**Expandido pela varredura normativa (7ª rodada).** O Art. 160 transforma
+administração de canal em **responsabilidade jurídica solidária** da Igreja — o
+registro do canal, sozinho, não cobre nada disso.
+
+- [ ] **Regra das 24 Horas** (Art. 160 §1º, I-II): conteúdo irregular não removido
+      em 24h torna a Igreja **corresponsável**. O sistema registra a denúncia
+      interna do conteúdo, dispara o relógio, notifica o administrador responsável
+      e guarda a prova da remoção — é a diferença entre responder "removemos em
+      3 horas, aqui está o registro" e não ter o que dizer.
+- [ ] **Administrador formal por canal**, com termo de dever de moderação aceito —
+      hoje "quem administra o grupo" é conhecimento informal.
+- [ ] **Senhas pertencem à Secretaria Geral** (Art. 160 §4º, I): troca obrigatória
+      e registrada na sucessão de liderança. Quando um Dirigente é substituído
+      (fluxo que já existe em `Assentos`/`Lideranca`), o sistema gera a pendência
+      de troca de senha dos canais daquela congregação.
+- [ ] Mapeamento de **"Área Cega"** (§2º, II) — congregação sem canal oficial
+      registrado, que é justamente onde a comunicação institucional não chega.
+- [ ] Grupos satélites (Art. 160-A) e proteção de menores em canais (§5º) —
+      conecta com a v7.7 (vedação de mensagem privada de adulto para menor).
 
 #### v7.4 — Eventos e congressos
 
@@ -2524,6 +3377,89 @@ História/Acervo, RP/Cerimonial, Libras, Beleza/Estética, Educação/Pedagogia.
 - [ ] Verificação de antecedentes criminais/cíveis (Reg. Art. 133 §5º) na investidura
       em cargo de liderança/confiança ou trabalho com menores — "Termo de Vistoria"
       com data, hash do documento apresentado, parecer e assinatura do responsável.
+      **Atenção:** este item era a única menção a antecedentes no roadmap inteiro e
+      está *incompleto diante da lei* — a Lei 14.811/2024 exige bem mais do que
+      verificar na investidura. Ver v7.7, que substitui e amplia este item.
+
+#### v7.7 — Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*
+
+> **Este é o achado mais grave de toda a 7ª rodada.** A **Lei 14.811/2024**
+> inseriu o **art. 59-A no ECA** e está em vigor desde **12/01/2024**, sem
+> vacatio: entidades públicas e privadas que desenvolvem atividades com crianças
+> e adolescentes devem **exigir e manter atualizada** ficha cadastral e
+> **certidão de antecedentes criminais de todos os colaboradores, incluindo
+> voluntários**, com **atualização semestral**. Igreja com EBD infantil, coral de
+> crianças, departamento infantil e eventos com menores está inteiramente dentro
+> do alcance. O sistema hoje não tem nada disso — e a exposição não é teórica:
+> é responsabilização institucional e pessoal dos dirigentes.
+
+*(Numeração: as versões v7.7 e v7.8 existiam como lacuna no documento — o
+roadmap pulava de v7.6 para v7.9 sem nota. A lacuna foi preenchida com o tema
+que mais fazia falta.)*
+
+- [ ] **Habilitação para Ministério Infantojuvenil** por voluntário: ficha
+      cadastral + certidão de antecedentes (federal/PF e estadual/TJ) anexada,
+      com `data_emissao` e **validade automática de 180 dias**.
+- [ ] **Bloqueio de escala por habilitação vencida** — não é alerta: quem está
+      com certidão vencida sai automaticamente das escalas de ministério com
+      menores e não pode ser escalado. Alertas em D-60/D-30/D-15 antes de vencer
+      (a renovação leva dias para sair; avisar no dia do vencimento é inútil).
+- [ ] **Treinamento obrigatório de proteção** com validade e renovação periódica
+      (padrão internacional: 2 a 3 anos), também bloqueante — conecta com a
+      trilha de formação (v6.9). *(MinistrySafe; Church of England safeguarding)*
+- [ ] **Regra dos dois adultos** (*two-adult rule*) validada na escala: nenhuma
+      sala com menores publica escala com **um adulto sozinho**, e a proporção
+      adulto/criança mínima por faixa etária é verificada antes de publicar.
+      *(Church Answers; padrão consolidado em seguradoras de igrejas nos EUA)*
+- [ ] **Regra dos 6 meses** de frequência antes de servir com menores (v5.7) —
+      calculada, não digitada.
+- [ ] **Política de comunicação eletrônica com menores**: vedada mensagem privada
+      1:1 entre adulto e menor; canais de grupo exigem segundo adulto e
+      responsável com acesso. Aceite da política registrado por voluntário
+      (conecta com a Regra das 24 Horas, v7.3).
+- [ ] **Consentimento específico e destacado do responsável** (LGPD Art. 14) para
+      dados de menor — uso de imagem, alergia/condição de saúde para o crachá —
+      versionado e revogável.
+- [ ] **Painel de conformidade por congregação**: quantos voluntários aptos,
+      quantos vencendo, quantos bloqueados — o Dirigente precisa ver isso antes
+      de o problema existir, e a Secretaria Geral precisa ver o campo inteiro.
+- [ ] Adapter preparado (sem depender dele) para o futuro cadastro nacional de
+      condenados por crimes contra menores — hoje ainda é projeto de lei, não
+      obrigação vigente; o campo fica pronto sem criar dependência.
+
+#### v7.8 — Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*
+
+Fluxo **deliberadamente separado da disciplina eclesiástica** (FASE 3) e da
+Ouvidoria (v3.7). Não é a mesma coisa: processo disciplinar apura falta contra a
+igreja; aqui o dever é **externo e legal** — comunicar ao Estado. Tratar suspeita
+de maus-tratos como assunto interno é exatamente o erro que gerou as maiores
+crises institucionais em denominações no mundo inteiro.
+
+- [ ] **Notificação obrigatória ao Conselho Tutelar** diante de **suspeita** (não
+      exige certeza, não cabe à igreja investigar): ECA **Art. 13**, com **multa
+      de 3 a 20 salários de referência pela omissão, dobrada na reincidência**
+      (ECA Art. 245). Fluxo com **SLA curto (24h)**, relógio regressivo visível ao
+      Dirigente e à Secretaria Geral, campos de órgão notificado (Conselho
+      Tutelar/MP/Polícia), protocolo e anexo do ofício.
+- [ ] **Encerramento bloqueado sem comprovante da comunicação externa** — o caso
+      não fecha no sistema enquanto não houver prova de que o Estado foi avisado.
+- [ ] **Escuta protegida** (Lei 13.431/2017): a igreja **acolhe e encaminha, não
+      inquire**. O formulário não tem campo de "inquirição"; exibe o roteiro
+      correto (acolher → registrar o relato espontâneo, na íntegra e sem
+      interpretação → encaminhar) e restringe a leitura do relato a papéis
+      específicos. Repetir a entrevista é revitimizar — e o sistema tem que
+      ajudar a não fazer isso.
+- [ ] **Afastamento cautelar automático** do envolvido de toda escala com menores
+      no momento do registro — medida protetiva, **não** punição antecipada, e
+      registrada como tal (a v2.6/`MedidasCautelares` já tem o mecanismo).
+- [ ] Registro de incidentes em três níveis: quase-acidente, quebra de política e
+      alegação — porque o padrão internacional mostra que o que antecede o caso
+      grave é a sequência de pequenas quebras que ninguém registrou.
+- [ ] Comitê de revisão com participação **não-clerical** e relatório anual de
+      conformidade por congregação. *(Praesidium; Royal Commission — 10 Child
+      Safe Standards; Dallas Charter/USCCB)*
+- [ ] Canal de denúncia acessível também à criança/adolescente, em linguagem
+      adequada — a Ouvidoria (v3.7) hoje é desenhada para adulto.
 
 #### v7.9 — CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)
 
@@ -2544,6 +3480,123 @@ AFM" (Art. 69) pra não contar errado a cada 3 meses.
       convoca AGE de destituição em até 30 dias (matéria "Destituição", já
       existente desde v2.2) — o sistema só aponta pro fluxo existente, não
       automatiza a convocação.
+- [ ] **Taxonomia fechada de justificativa de falta** (Art. 149 §2º, gap da
+      varredura): só fator externo justifica — **escala ou evento de departamento
+      não é justificativa válida**. Catálogo com os motivos vedados bloqueados na
+      própria tela, não conferidos depois por alguém que talvez não conheça o §2º.
+
+#### v7.10 — Check-in infantil com cadeia de custódia *(7ª rodada)*
+
+Peça operacional que sustenta na prática a v7.7: sem controle de entrega e
+retirada, a política de proteção é só documento.
+
+- [ ] Check-in por família com **etiqueta de segurança**: código aleatório por
+      criança, impresso na etiqueta e no recibo do responsável, **obrigatório na
+      retirada** — quem não tem o código não retira, ainda que seja conhecido.
+- [ ] Lista de **pessoas autorizadas a retirar** por criança (reaproveita
+      `VinculosFamiliares` e o flag `ResponsavelLegal`, v1.7 — já existe) e alerta
+      de retirada divergente.
+- [ ] Alergia/condição de saúde impressa na etiqueta (com o consentimento da
+      v7.7) e contagem de lotação por sala em tempo real — a proporção
+      adulto/criança deixa de ser estimativa.
+- [ ] Registro de horário e de **quem entregou e quem retirou** — é a prova
+      auditável que protege a igreja e a família.
+- [ ] Bloqueio de voluntário sem habilitação vigente (v7.7) na sala, no ato do
+      check-in. *(Planning Center Check-Ins; FellowshipOne; ChurchSuite)*
+
+#### v7.11 — Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*
+
+Hoje o sistema registra o que **aconteceu** (disciplina, abandono, carta). Não
+registra o que alguém **precisa fazer por alguém** — e é justamente aí que as
+pessoas se perdem sem que ninguém perceba a tempo.
+
+- [ ] **Fila de acompanhamento com dono e SLA**: visitante, novo convertido,
+      membro afastado, pedido de visita, pedido de oração, pós-internação.
+      Cada item tem responsável nomeado e prazo; vencido, escala pela hierarquia
+      territorial que já existe (Dirigente → Pastor de Área → Região).
+      *(Rock RMS Connections; MinistryPlatform Care Cases; CCB process queues)*
+- [ ] **Detecção de afastamento por desvio do próprio padrão** — não regra fixa
+      global ("faltou 3 cultos"), e sim comparação com o histórico **daquela
+      pessoa**: quem vinha 4x por mês e caiu para 1 é sinal; quem sempre veio 1x
+      não é. Abre item na fila antes de virar caso de abandono (v1.5).
+      *(CDM+ Missing Analysis)*
+- [ ] **Notas pastorais com nível de confidencialidade** (pública / liderança
+      local / somente pastor), log de acesso auditável e **versão anonimizada
+      automática** para boletim de oração ("um irmão da congregação X"). Dado de
+      saúde e aconselhamento é dado sensível — vazamento aqui destrói confiança e
+      gera passivo. *(CareNote; Notebird; TouchPoint)*
+- [ ] Pedidos de oração com moderação antes de publicar e **sinalização de risco**
+      (menção a autolesão/violência) escalando imediatamente para o pastor, fora
+      da fila normal.
+
+#### v7.12 — Comunicação: consentimento granular e envio segmentado *(7ª rodada)*
+
+A vB.2 constrói o motor de notificação. Esta versão trata da parte jurídica e da
+segmentação — no Brasil, WhatsApp sem opt-in registrado é risco de LGPD e de
+bloqueio pela própria Meta.
+
+- [ ] **Consentimento por canal E por categoria** (WhatsApp/SMS/e-mail/push ×
+      convocação oficial/evento/devocional/financeiro), com origem, data, e o
+      **texto exato aceito**. O detalhe que importa: o membro pode sair de
+      "eventos" e continuar recebendo **convocação oficial de assembleia** — que
+      é obrigação estatutária de comunicação, não marketing.
+- [ ] Opt-out automático por palavra-chave (SAIR/STOP) com log, e bloqueio de
+      envio sem consentimento vigente.
+- [ ] Templates versionados e aprovados (exigência da API oficial do WhatsApp
+      Business). *(Meta/WhatsApp Business API; Infobip; SocialHub)*
+- [ ] **Segmentação dinâmica por consulta viva**, não lista estática: "diáconos do
+      Setor 3", "professores de EBD com trilha vencida", "dizimistas inativos há
+      90 dias", "voluntários com certidão vencendo em 30 dias". Cada módulo novo
+      vira audiência sem ninguém montar lista na mão.
+- [ ] Registro de entrega/leitura e relatório de alcance — saber se a convocação
+      oficial de fato chegou é questão de validade do ato, não de curiosidade.
+
+#### v7.13 — Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*
+
+- [ ] Lotes de inscrição (preço, vagas, público-alvo), com pagamento conciliado
+      no financeiro que já existe (v4.6 Contas a Receber).
+- [ ] **Credenciamento por QR** no dia, com contagem de lotação por sala/ala e
+      relatório de no-show — insumo real para dimensionar o próximo evento.
+- [ ] Crachá com campos configuráveis por tipo de participante.
+- [ ] Para congressos denominacionais: **blocos de hospedagem e transporte por
+      congregação**, com lista de embarque gerada do mesmo cadastro — hoje isso é
+      planilha paralela por congregação, refeita todo ano.
+- [ ] Isenção/cortesia registrada com quem autorizou (conecta com v4.21: evento
+      com receita é receita acessória e precisa de destinação finalística).
+      *(Tithely Events; ChMeetings)*
+
+#### v7.14 — Identidade Visual Anual *(gap da varredura normativa)*
+
+O Art. 159 descreve um processo participativo com calendário rígido, critério de
+originalidade e consequência financeira — nada disso tem onde existir hoje.
+
+- [ ] **Calendário do processo** (Art. 159 §1º): sugestões de 01 a 15/nov →
+      triagem de 16 a 21/nov → votação de 22 a 30/nov → arte em dezembro (3
+      cores) → escolha final até 31/12 por maioria simples. Cada etapa com
+      abertura e fechamento automáticos.
+- [ ] **Antiduplicidade desde 2006**: vedado repetir tema já usado — exige o
+      histórico completo cadastrado, e a validação acontece na triagem, não
+      depois da arte pronta.
+- [ ] Coleta de sugestões e votação reaproveitando o módulo de **Enquetes**
+      (v2.8), que já existe e já resolve público-alvo e apuração.
+- [ ] **Pedido de uniforme do Dirigente = compromisso financeiro irrevogável da
+      congregação** (§7º): o pedido vira automaticamente conta a pagar da
+      congregação (v4.5), com fornecedor único (§2º, vedada produção local).
+      É a regra que mais gera conflito hoje — e ela fica explícita na tela do
+      pedido, antes de confirmar.
+
+#### v7.15 — Gestão de crise e porta-voz único *(gap da varredura normativa)*
+
+- [ ] **Sinalizador institucional de "crise ativa"** (Art. 161-B §§1º-2º) com
+      designação formal do Porta-Voz Único e aviso automático a **todos** os
+      líderes sobre a vedação de manifestação individual enquanto durar o regime.
+- [ ] Registro de manifestações autorizadas e centralização das demandas de
+      imprensa — quem falou o quê, quando e com autorização de quem.
+- [ ] Plano de emergência por congregação (evacuação, contatos), **registro de
+      simulados** (data, participantes) e checklist de vistoria predial —
+      conecta com AVCB (v4.24) e seguros (v4.16).
+      *(Brotherhood Mutual — violence response plan e disaster plan)*
+- [ ] Equipe de segurança por congregação com composição registrada.
 
 ### FASE 8 — Ministerial (AFM)
 
@@ -2577,12 +3630,70 @@ AFM" (Art. 69) pra não contar errado a cada 3 meses.
 - [ ] Validação de status Ativo/Inativo via QR Code em tempo real.
 - [ ] Emissão centralizada na Secretaria Geral (anti-fraude).
 
+#### v8.5 — Trilha de discipulado como entidade de primeira classe *(7ª rodada)*
+
+A escada ministerial (v8.2) cobre do Auxiliar pra cima. Falta o percurso que vem
+**antes** e que hoje só existe na memória do pastor: conversão, batismo com
+Espírito Santo, curso de novos convertidos, primeira participação em
+departamento, primeiro serviço voluntário.
+
+- [ ] Catálogo de **tipos de marco** configurável (único vs. repetível,
+      pré-requisitos), com marcos datados no perfil — a tabela `MarcosMembro`
+      (v1.6) já existe e hoje é usada só para eventos avulsos; aqui ela vira
+      trilha estruturada.
+- [ ] **Funil por congregação**: quantos pararam entre "convertido" e "batizado",
+      entre "batizado" e "primeiro serviço". É o número que mostra onde a
+      assimilação trava — e ele é invisível hoje.
+- [ ] Conclusão de etapa disparando o próximo passo na fila de acompanhamento
+      (v7.11), em vez de depender de alguém lembrar.
+- [ ] Integração com a esteira de batismo (v1.12) e com as trilhas de formação
+      (v6.9). *(Rock RMS Steps)*
+
+#### v8.6 — Educação continuada e requisito verificável de promoção *(7ª rodada)*
+
+- [ ] Carga horária mínima periódica por cargo ministerial para manter a
+      credencial ativa — padrão consolidado em denominações internacionais, e
+      que dá sentido prático à AFM (v8.1) além da formação inicial.
+- [ ] **Pré-requisito verificado automaticamente** no fluxo de consagração
+      (v8.3): o veto técnico da AFM (v8.2) deixa de depender de conferência
+      manual de certificado em papel.
+- [ ] Histórico de formação no perfil, com certificados verificáveis (v6.9).
+- [ ] Alerta de credencial em risco por educação continuada vencida — antes de
+      expirar, não depois.
+
+#### v8.7 — Seminário como sistema acadêmico, não como curso online *(7ª rodada)*
+
+Achado de pesquisa que muda o desenho: formação ministerial séria precisa de
+**SIS** (histórico escolar), não de LMS. Curso online entrega vídeo e quiz;
+seminário precisa entregar **declaração, histórico e aproveitamento** — que é o
+que a Convenção e outras instituições vão pedir.
+
+- [ ] Estrutura acadêmica: curso → disciplina (carga horária, pré-requisito) →
+      turma → matrícula → nota e frequência → **histórico escolar**.
+- [ ] Emissão de declaração de matrícula, histórico e diploma.
+- [ ] **Aproveitamento de disciplina** cursada em outra instituição, com parecer
+      registrado de quem aprovou — hoje isso é decisão informal do Reitor.
+- [ ] Corpo docente com titulação registrada (conecta com a CDER, v8.1).
+      *(Classter; Populi — SIS para seminários)*
+
 ### FASE 9 — Entidades Vinculadas e Expansão
 
 #### v9.1 — Entidades vinculadas
 
 - [ ] Cadastro de entidades (hospitais, escolas, ONGs com CNPJ próprio — Art. 64-68).
 - [ ] Vínculo com a IEADESPA e controle de participação.
+
+**Expandido pela varredura normativa (7ª rodada):**
+
+- [ ] **Intervenção com prazo fatal de ratificação** (Art. 47-A §§1º-2º): a
+      intervenção em entidade vinculada precisa ser **ratificada pela CLI em 15
+      dias, sob pena de perder a eficácia**. Contador com caducidade automática —
+      é o tipo de prazo que, perdido, derruba o ato inteiro.
+- [ ] **Requisito legal de formação do gestor** (Art. 153): pedagogia para
+      escolas, gestão hospitalar/medicina para hospitais — validado no cadastro
+      da entidade, não descoberto numa fiscalização.
+- [ ] Prestação de contas da entidade vinculada à CLI, com periodicidade e alerta
+      de atraso (mesmo mecanismo da v5.4).
 
 #### v9.2 — Expansão (Extensões e novas congregações)
 
@@ -2598,6 +3709,51 @@ AFM" (Art. 69) pra não contar errado a cada 3 meses.
 
 - [ ] Ativação de Distrito (nível 5) com autonomia financeira + dízimo institucional 10%.
 - [ ] Blindagem contra desvinculação (intervenção imediata).
+
+#### v9.4 — Missões: campos, missionários e prestação de contas *(7ª rodada)*
+
+O risco real em missões não é falta de recurso — é **sustento enviado sem
+relatório recebido**, que é exatamente o que a Assembleia cobra e ninguém
+consegue responder com número.
+
+- [ ] Cadastro de campo missionário (local, status, congregação mantenedora) e de
+      missionário sustentado, com valor mensal amarrado ao Contas a Pagar (v4.5) e
+      ao Rateio Geral (v4.10).
+- [ ] **Relatório de campo com periodicidade obrigatória** (batismos, atividades,
+      pedidos) — e **relatório atrasado sinaliza/suspende o repasse**, mesma
+      lógica do balancete departamental (v5.4). Não é punição: é a condição que a
+      própria prestação de contas à Assembleia exige.
+- [ ] Painel de missões alimentado pelos mesmos dados, sem redigitação — inclusive
+      para exibição pública/mural.
+- [ ] Conexão com a CME (Comissão de Missões e Expansão, v9.2).
+      *(MissionaryConnect; Missions21)*
+
+#### v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
+
+- [ ] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
+      insumo direto e objetivo para abertura de Extensão da Tenda (v9.2), em vez
+      de decidir por percepção.
+- [ ] Densidade de membresia por região e distância média até a congregação de
+      vínculo.
+- [ ] Simulação de emancipação: quais Extensões já atendem os critérios para virar
+      Congregação, calculado a partir dos dados que já existem (membresia, PSC da
+      v7.1, arrecadação da FASE 4). *(Churchteams; GroupVitals — group finder)*
+
+#### v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
+
+Só se aplica se a igreja mantiver ação assistencial estruturada (v5.9) — mas se
+mantiver, há um regime jurídico próprio que hoje não tem nenhuma cobertura.
+
+- [ ] **Contabilidade segregada por parceria/convênio** (exigência do MROSC,
+      Lei 13.019/2014) — centro de custo carimbado por termo de fomento ou
+      colaboração, reaproveitando o motor de Centro de Custo da FASE 4.
+- [ ] Prestação de contas no formato MROSC: relatório de execução do objeto +
+      execução financeira, com prazos e alertas.
+- [ ] Controle de vigência e renovação de certificações (**CEBAS** — LC 187/2021;
+      Utilidade Pública Federal/Estadual/Municipal; inscrição no CMAS/CNEAS),
+      com alerta antecipado — certificação vencida derruba benefício fiscal.
+- [ ] Requisitos cumulativos do CEBAS monitorados de forma contínua, não
+      conferidos só na hora de renovar.
 
 ### FASE 10 — Experiência, Design e Performance
 
@@ -2634,6 +3790,35 @@ melhorar o que já existe (HTML/CSS/JS puro), não trocar de arquitetura.
       não no telefone) — adicionar `overflow-x: auto` nos contêineres de tabela e
       revisar o layout geral em telas pequenas.
 
+#### v10.4 — Modularização do front-end *(7ª rodada — dívida técnica real)*
+
+Achado da varredura de código: `app/script.js` tem **7.898 linhas em arquivo
+único** e `app/index.html`, 2.215. Todo módulo novo das fases 5-11 vai empilhar
+ali. Não é questão de estética — é que a partir de certo ponto o arquivo fica
+arriscado de editar: uma chave a menos derruba o painel inteiro, e o navegador
+carrega tudo a cada acesso.
+
+- [ ] Quebrar `script.js` por módulo (membresia, governança, disciplina,
+      financeiro, EBD...), carregados sob demanda — sem trocar de framework
+      (decisão da FASE 10 continua valendo: melhorar o que existe, não reescrever).
+- [ ] Mesmo tratamento no `index.html`: o markup de cada módulo em arquivo
+      próprio, montado na navegação.
+- [ ] Padronizar o que já se repete de fato no código (tabela com filtro,
+      formulário mestre-detalhe, badge de status) em funções reaproveitáveis —
+      hoje cada módulo reescreve a sua versão.
+- [ ] **Fazer isso antes da FASE 5**, não depois: é mais barato modularizar 8 mil
+      linhas do que 20 mil.
+
+#### v10.5 — Impressão institucional e exportação padronizada *(7ª rodada)*
+
+- [ ] Todo relatório do sistema com versão impressa padronizada (cabeçalho
+      institucional, identificação de quem emitiu, data/hora e protocolo da vB.4)
+      — hoje cada tela resolve do seu jeito, e documento de igreja circula
+      impresso.
+- [ ] Exportação em planilha padronizada em todos os módulos (hoje só Pessoas
+      tem, v1.8), sempre respeitando o escopo de quem exporta e registrando a
+      exportação (vB.8).
+
 ### FASE 11 — Sistema Campal (multi-campo)
 
 **Especulativa/opcional** — registrada aqui só como opção de futuro distante, depois
@@ -2666,26 +3851,122 @@ propósito sem resposta ainda, é cedo pra decidir:
       planilha solta, se tanto) — que caminho de importação inicial faz sentido pra
       quem está começando do zero.
 
+### FASE 12 — Inteligência, Indicadores e Benchmarking
+
+Fase nova (7ª rodada). Só faz sentido **depois** que as fases 5-9 estiverem
+gerando dado — mas entra no roadmap agora porque muda decisões de modelagem lá
+atrás: se ninguém souber que vamos comparar congregações, os dados nascem sem os
+campos que tornam a comparação possível.
+
+**Por que isso é um diferencial real e não "mais um dashboard":** nenhum ChMS
+internacional tem a hierarquia territorial (Congregação → Área → Região →
+Quadrante → Distrito) que este sistema já modelou desde a v0.1, e nenhum deles
+tem o nível de detalhe financeiro da FASE 4. A combinação das duas coisas permite
+uma análise que os produtos de referência não conseguem entregar.
+
+#### v12.1 — Indicadores de saúde por congregação
+
+- [ ] **Métricas em razão, não em valor absoluto** — é o que permite comparar uma
+      congregação de 80 membros com uma de 900 de forma justa: % de membros em
+      classe de EBD ou grupo, % servindo como voluntário, % que contribuiu ao
+      menos uma vez no trimestre, contribuição por frequentador, taxa de retenção
+      de visitante. *(The Unstuck Group; Carey Nieuwhof; Lifeway Research)*
+- [ ] **Indicador antecedente**: crescimento de voluntários costuma anteceder
+      crescimento de contribuição em 6 a 12 meses — é o alerta que chega cedo o
+      bastante para agir, diferente do caixa, que avisa quando já aconteceu.
+- [ ] Série trimestral com tendência, não foto do mês.
+- [ ] Conecta com o PSC (v7.1): os 5 Sinais Vitais deixam de ser avaliação
+      declaratória anual e passam a ter lastro em dado real do sistema.
+
+#### v12.2 — Benchmarking interno anonimizado
+
+- [ ] Cada Dirigente vê a **própria** congregação em detalhe e as demais **apenas
+      como percentil** — a comparação continua útil e para de alimentar disputa
+      política interna, que é o motivo pelo qual comparação entre igrejas
+      normalmente fracassa. *(Gloo + Barna ChurchPulse)*
+- [ ] Ranking por Área/Região para quem tem escopo territorial (Pastor de Área vê
+      as suas congregações nominalmente — é a função dele).
+- [ ] Recorte por porte, não só por território: comparar com pares do mesmo
+      tamanho, não com a Sede.
+
+#### v12.3 — Engajamento e alerta precoce de evasão
+
+- [ ] **Score de engajamento** por membro cruzando o que o sistema já tem:
+      presença (FASE 2/6), contribuição (FASE 4), participação em departamento
+      (FASE 5), serviço voluntário (v5.7), participação em assembleia.
+- [ ] Alerta de queda **relativa ao próprio padrão** da pessoa (v7.11), abrindo
+      item na fila de cuidado pastoral antes de virar caso de Abandono (v1.5) —
+      transforma a perda de membro de constatação administrativa em sinal
+      antecipado. *(Pushpay Insights)*
+- [ ] Estritamente interno e restrito por papel: é informação pastoral sensível,
+      não ranking de membro. Sem exposição ao próprio membro, sem uso disciplinar.
+
+#### v12.4 — Painel executivo denominacional
+
+- [ ] Visão de Campo para Presidente/CLI/Diretoria: crescimento, saúde
+      financeira, conformidade (v7.7, v5.4, v4.19) e execução do PDQ (v4.8) num
+      só lugar.
+- [ ] **Semáforo de conformidade por congregação** — quem está com balancete,
+      habilitação de voluntário, AVCB, prestação de contas e relatório
+      departamental em dia. Uma linha por congregação, três cores.
+- [ ] Exportação do conjunto para a prestação de contas anual da Assembleia
+      (Art. 36 §1º), reaproveitando as demonstrações da v4.9.
+
 ## 4. Modelo de dados (referência)
 
-- **Núcleo:** `Congregacoes`, `Funcoes`, `MembroReferencia`, `Orgaos`, `Mandatos`,
-  `Assentos`, `Sessoes`, `Presencas`, `ProcessosDisciplinares`, `Matriculas_AFM`,
-  `Documentos`, `AuditLog`, `Lideranca`, `Consagracoes`.
-- **Hierarquia:** `Areas`, `Regioes`, `Quadrantes`, `Distritos`, `ExtensoesTenda`,
-  `VinculoCongregacaoArea`, `OrgaosLocais`.
-- **Membro:** `SituacoesMembro`, `CargosMinisteriais`, `Departamentos` + colunas em
-  `MembroReferencia` (SituacaoMembro, DepartamentoId, CargoMinisterial, VinculoFamiliar).
-- **Governança:** `Pautas`, `Votos`, `Documentos`, `VinculoFamiliar`.
-- **Financeiro:** `LancamentosFinanceiros`, `Tesourarias`, `Orcamentos`, `Repasses`,
-  `InventarioPatrimonial`, `NIFAlertas`.
-- **EBD:** `Turmas`, `TurmaProfessor`, `Licoes`, `Chamadas`, `PresencasAluno`,
-  `Atividades`, `Perguntas`, `Alternativas`, `Respostas`, `Conquistas`, `Certificados`,
-  `Revistas`, `PedidosRevista`, `PedidoRevistaItem`, `PagamentoRevista`, `ScoreConfig`.
-- **Relatórios:** `TiposDepartamento`, `Departamentos`, `SchemasRelatorio`,
-  `CamposFormulario`, `PerfisRateio`, `RelatoriosMensais`, `ValoresCampoRelatorio`,
-  `ContribuintesMensalidade`, `TesourariasDepartamento`, `DespesasTesouraria`.
-- **Saúde/Comunicação:** `PSCAvaliacoes`, `SinaisVitais`, `Eventos`, `CalendarioOficial`,
-  `CanaisOficiais`, `EscalasVoluntariado`.
+> **Corrigido na 7ª rodada de pesquisa/varredura.** Esta seção estava
+> desatualizada e — pior — *ficcional*: listava tabelas que nunca chegaram a
+> existir (`LancamentosFinanceiros`, `Tesourarias`, `Repasses`,
+> `InventarioPatrimonial`, `NIFAlertas`, `Pautas`, `Votos`, `VinculoFamiliar`)
+> misturadas com nomes reais, e omitia as **95 tabelas** de fato criadas nas
+> 59 migrações. O que está abaixo é o estado real do banco, conferido contra
+> `sql/migrations/`. **Regra nova:** toda migração que cria tabela atualiza esta
+> seção no mesmo commit — documentação que mente é pior que documentação que falta.
+
+**Já existem (95 tabelas, migrações 001-059):**
+
+- **Núcleo e identidade:** `MembroReferencia`, `Congregacoes`, `Funcoes`, `Orgaos`,
+  `Mandatos`, `Assentos`, `Sessoes`, `Presencas`, `Lideranca`, `Consagracoes`,
+  `Matriculas_AFM`, `Documentos`, `AuditLog`.
+- **Hierarquia territorial:** `Areas`, `Regioes`, `Quadrantes`, `Distritos`,
+  `ExtensoesTenda`, `VinculoCongregacaoArea`, `OrgaosLocais`.
+- **Catálogos de membresia:** `SituacoesMembro`, `StatusMembro`, `CargosMinisteriais`,
+  `Departamentos`, `TiposConsagracao`, `Prazos`, `TiposVinculoFamiliar`,
+  `CanaisOficiaisComunicacao`.
+- **Ciclo de vida do membro:** `CartasTransito`, `ProcedimentosAbandono`,
+  `TentativasContatoAbandono`, `MarcosMembro`, `Casamentos`, `LicencasCandidatura`,
+  `VinculosFamiliares`, `SolicitacoesEdicaoPessoa`, `SolicitacoesEdicaoCampos`.
+- **Acesso e permissões:** `Papeis`, `Funcionalidades`.
+- **LGPD:** `ConsentimentosLGPD`, `SolicitacoesTitularLGPD`, `PoliticasRetencao`,
+  `TermosAssinados`.
+- **Governança e deliberação:** `Enquetes`, `PerguntasEnquete`, `OpcoesEnquete`,
+  `RespostasEnquete`, `VotosEnquete`, `PublicoEnqueteCustom`, `Projetos`,
+  `PareceresComissao`, `ComissaoMembros`.
+- **Disciplina e ética:** `ProcessosDisciplinares`, `TiposInfracao`, `ProcessoInfracoes`,
+  `TiposPenalidade`, `MedidasCautelares`, `DenunciasOuvidoria`.
+- **Tesouraria (entradas):** `Dizimistas`, `LancamentosTesouraria`,
+  `FechamentosTesouraria`, `ConciliacoesTesouraria`, `CategoriasEntrada`,
+  `ContasAReceber`.
+- **Contabilidade:** `PlanoContas`, `NotasExplicativas`.
+- **Campanhas e sorteios:** `Campanhas`, `CampanhaMetas`, `Sorteios`, `SorteioPremios`.
+- **Saídas (contas a pagar):** `CategoriasSaida`, `Fornecedores`, `SaidasTesouraria`,
+  `SaidaAprovacoes`, `SaidaCotacoes`, `AlcadasAprovacao`, `ParametrosSaida`,
+  `FundosFixosCaixa`, `FundoFixoMovimentos`.
+- **Bancário:** `DadosBancariosInstituicao`, `RemessasBancarias`, `RemessaItens`.
+- **Orçamento e PDQ:** `OrcamentosAnuais`, `OrcamentoLinhas`, `PdqPlanos`, `PdqEixos`,
+  `PdqMetas`, `PdqProjetos`, `PdqRemanejamentos`, `PdqFundoSuspensoes`.
+- **Rateio Geral (malote dos 60%):** `RateioGeralDestinos`, `RateiosGerais`,
+  `RateioGeralValores`, `RateioGeralItens`.
+
+**Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
+implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,
+`Licoes`, `Trilhas`, `Modulos`, `Certificados`), departamentos
+(`SchemasRelatorio`, `CamposFormulario`, `RelatoriosMensais`, `PerfisRateio`,
+`TesourariasDepartamento`), saúde congregacional (`PSCAvaliacoes`, `SinaisVitais`),
+eventos (`Eventos`, `Inscricoes`, `Credenciamentos`), proteção de menores
+(`HabilitacoesMinisterioInfantil`, `CheckinsInfantis`, `Incidentes`), comunicação
+(`ConsentimentosComunicacao`, `Mensagens`), missões (`CamposMissionarios`,
+`RelatoriosCampo`), obrigações fiscais (`ObrigacoesAcessorias`).
 
 ## 5. Migração dos subsistemas (passo a passo)
 

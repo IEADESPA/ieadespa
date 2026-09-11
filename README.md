@@ -289,6 +289,64 @@ Cada fase agrupa versões; cada versão é um conjunto de processos com checklis
 A ordem segue o ciclo: fundamentos → membro → governança → disciplina → financeiro →
 departamentos → EBD → saúde/comunicação → ministerial → expansão.
 
+### Convenção a partir da v4.10 — Travas de Revisão
+
+> **Pedido do usuário, motivado por dois bugs reais desta mesma sessão.** A
+> migração 051 travou **todo** deploy por 3 dias sem que ninguém percebesse
+> (uma FK esquecida antes de um `DROP COLUMN`), e um único `id` de botão
+> escrito diferente do que o JavaScript gerava derrubou o painel Financeiro
+> **inteiro**. Nenhum dos dois era um erro de lógica de negócio — eram
+> pequenos descuidos que passaram batido por não existir um ponto formal de
+> "parar e olhar pra trás". Como este roadmap vai atravessar várias sessões
+> e possivelmente **modelos de IA diferentes, com capacidades diferentes de
+> atenção a detalhe**, esse tipo de descuido tende a se repetir e a
+> acumular — uma bola de neve de dívida técnica silenciosa.
+
+A partir da v4.10 (inclusive), toda fase ganha pontos de parada obrigatórios
+chamados **Trava de Revisão**. Não são versão de negócio — não têm
+checklist de feature nova. São um checkpoint cujo único trabalho é auditar
+tudo que foi entregue desde a trava anterior (ou desde o início da fase, na
+primeira) e **corrigir o que passou batido antes de seguir em frente**.
+
+**Quantidade por fase**: no mínimo **2** — uma aproximadamente na metade da
+fase, outra ao final. Fases maiores ou com versões mais críticas (dinheiro
+real, dado de menor, obrigação legal com multa) ganham **3 ou 4**, espaçadas
+conforme o tamanho da fase — nunca menos que 2. FASE 4, a partir daqui, e
+FASE 7, por concentrarem risco financeiro e legal, ganham 3 cada; FASE B, por
+ser tão extensa quanto as duas juntas, também ganha 3.
+
+**Nome, nunca número de versão**: uma trava não usa a numeração `vX.Y` das
+versões de negócio — mesmo motivo que fez a FASE B virar "FASE B" em vez de
+"FASE 4.5", pra nunca colidir com uma versão existente ou futura. Convenção:
+`🔒 Trava de Revisão {fase}-{letra}` (ex: `4-A`, `4-B`, `4-C`; `B-A`, `B-B`...).
+
+**As mesmas 5 perguntas, sempre** (tiradas direto do que quebrou nesta sessão):
+
+1. **Todo código novo desde a trava anterior roda de ponta a ponta contra o
+   ambiente real?** Toda migração SQL aplica sem erro contra o schema de
+   produção — não "parece idempotente", **testar de verdade**; toda rota
+   nova responde; front-end e back-end usam exatamente os mesmos nomes de
+   rota e parâmetro (a causa exata da migração 051).
+2. **Toda tela nova abre e mostra dado de verdade?** Clicar em cada botão e
+   sub-aba criados desde a última trava, um por um — não só o primeiro da
+   lista. Todo `id` de botão/`div` bate com o que o JavaScript gera; nenhum
+   `getElementById` retorna `null` (a causa exata do bug do Financeiro).
+3. **README e código continuam narrando a mesma coisa?** Nenhuma versão
+   marcada `[x]` sem o endpoint/tabela/tela existir de verdade; nenhuma
+   referência cruzada (`vX.Y`) apontando pra versão que não existe mais.
+4. **O que ficou pra trás foi de fato corrigido, não só anotado?** Bug
+   conhecido, gambiarra, "depois eu arrumo" — a trava é o lugar de voltar e
+   corrigir, nunca de empurrar de novo pra frente.
+5. **Deploy real, de ponta a ponta, aconteceu?** Não "o código compila":
+   commit, push, CI executando as migrações reais contra o Azure SQL, e
+   deploy confirmado no ar (mesmo processo de monitoramento já em uso nesta
+   sessão — `gh run watch` até o resultado final).
+
+Uma trava só fecha (`[x]`) com as 5 perguntas respondidas "sim" **e** o
+deploy confirmado. Enquanto uma trava estiver aberta, não se avança pra
+próxima versão de negócio — é o próprio mecanismo que evita a bola de neve,
+funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
+
 ### FASE 0 — Fundamentos
 
 #### v0.1 — Base configurável
@@ -2395,6 +2453,17 @@ aplicado.
 - [ ] Dízimo institucional de 10% (Distrito) para a Sede Geral.
 - [ ] Alerta de atraso de repasse (infração de intervenção).
 
+#### 🔒 Trava de Revisão 4-A — antes de avançar para a v4.16
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v4.11 a v4.15 pelas 5 perguntas do checklist — Patrimônio/Alçadas/
+Depreciação, Auditoria/Compliance, Conciliação Bancária, Investimentos e
+Repasses institucionais mexem todos com **dinheiro real e trilha de
+auditoria**, então nenhuma das 5 perguntas é opcional aqui: código rodando
+de ponta a ponta contra o Azure SQL real, toda tela clicada uma a uma,
+README e código narrando a mesma coisa, dívida técnica zerada, deploy
+confirmado no ar. Só fecha `[x]` com as 5 respondidas "sim".
+
 #### v4.16 — Seguros institucionais *(gap da varredura)*
 
 - [ ] Apólice obrigatória para Templo Sede e grandes eventos (Reg. Art. 65-A):
@@ -2473,6 +2542,15 @@ rubrica, recurso aplicado fora do País sem registro).
       que a igreja realiza, **não para as aquisições** — IBS/CBS embutido na
       compra é custo não recuperável. Campo de tributo na entrada e relatório de
       carga tributária embutida, para o orçamento (v4.8) não subestimar custo.
+
+#### 🔒 Trava de Revisão 4-B — antes de avançar para a v4.21
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v4.16 a v4.20 pelas 5 perguntas do checklist — atenção especial à
+v4.19 (Obrigações Acessórias Fiscais, risco de multa mensal imediato) e à
+v4.20 (Painel de Imunidade Tributária): um erro de cálculo aqui não é só bug
+de tela, é risco fiscal real pra igreja. Confirmar deploy de ponta a ponta
+antes de seguir.
 
 #### v4.21 — Receitas acessórias e imóveis *(7ª rodada)*
 
@@ -2641,6 +2719,16 @@ motor de workflow reaproveitável, e um `app/script.js` de 7.898 linhas em arqui
 único. Isso não é dívida técnica pontual: é a **base** que as fases 5-11 vão
 carregar. Daí a FASE B abaixo, inserida de propósito entre a FASE 4 e a FASE 5.
 
+#### 🔒 Trava de Revisão 4-C — antes de encerrar a FASE 4 e avançar para a FASE B
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v4.21 a v4.24 pelas 5 perguntas do checklist, e faz uma varredura
+final na FASE 4 **inteira** (v4.1 a v4.24) antes de fechar: os 60/40 do
+Art. 118, o Rateio Geral (malote), o PDQ, as demonstrações contábeis e o
+CNAB 240 continuam batendo depois de todas as versões adicionadas por
+cima? Esse é o motivo de existir uma trava final, não só uma no meio —
+fase financeira não fecha com pendência de consistência.
+
 ### FASE B — Consolidação da Base (retrofit das Fases 0-3)
 
 > **Sobre o nome.** O pedido foi *"criar depois da fase quatro e antes da cinco
@@ -2746,6 +2834,14 @@ comum não entra num painel de secretaria — ele entra no celular.
 - [ ] Login simplificado pro membro comum (hoje o acesso é pensado pra quem tem
       papel de liderança) — sem senha complexa de sistema administrativo.
 
+#### 🔒 Trava de Revisão B-A — antes de avançar para a vB.6
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita vB.1 a vB.5 pelas 5 perguntas do checklist. Atenção redobrada na
+vB.1 (rede de segurança técnica/testes): se os testes automatizados desta
+trava em diante não estiverem rodando de verdade, as travas seguintes
+perdem a principal ferramenta que teriam pra detectar regressão sozinhas.
+
 #### vB.6 — Documento institucional: geração, assinatura e arquivo
 
 - [ ] Geração de PDF no servidor para **os documentos que o sistema já emite**
@@ -2822,6 +2918,16 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
 - [ ] Mensagens de erro em linguagem de secretaria, não de programador (padrão já
       seguido no financeiro — generalizar para o resto).
 
+
+#### 🔒 Trava de Revisão B-B — antes de avançar para a vB.11
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita vB.6 a vB.10 pelas 5 perguntas do checklist. Marca também a fronteira
+dentro da própria FASE B: vB.1-vB.10 são infraestrutura pura (não têm
+módulo de negócio pra "usar" na prática ainda); vB.11 em diante são retrofit
+de negócio das fases 0-3. Antes de atravessar essa fronteira, confirmar que
+a infraestrutura (notificação, workflow, busca, PWA) está de pé de verdade
+— as versões de retrofit vão se apoiar nela.
 
 #### vB.11 — Esteira de Batismo *(retrofit da FASE 1, gap da varredura normativa)*
 
@@ -3086,6 +3192,15 @@ já existe (motor de prazos, impedimento calculado, termos assinados, ponte com
 disciplinar, ponte com financeiro) e cobre o único tipo de conflito que hoje
 não tem lugar nenhum no sistema.
 
+#### 🔒 Trava de Revisão B-C — antes de encerrar a FASE B e avançar para a FASE 5
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita vB.11 a vB.16 pelas 5 perguntas do checklist, e faz uma varredura
+final na FASE B **inteira** (vB.1 a vB.16): a Esteira de Batismo (vB.11) e a
+Mediação/Arbitragem (vB.16) citam mecanismos que vêm da metade de
+infraestrutura (`TermosAssinados`, motor de notificação, motor de workflow)
+— confirmar que essas pontes realmente existem no código, não só no texto.
+
 ### FASE 5 — Departamentos e Relatórios
 
 #### v5.1 — Catálogo de departamentos
@@ -3143,6 +3258,11 @@ não tem lugar nenhum no sistema.
 
 - [ ] EBD alimenta o depto 07 (presenças, matriculados, visitantes, bíblias, revistas, ofertas).
 - [ ] UCADESPA/UMADESPA/USADESPA/UHADESPA puxam afiliados + situação de comunhão.
+
+#### 🔒 Trava de Revisão 5-A — antes de avançar para a v5.6
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v5.1 a v5.5 pelas 5 perguntas do checklist.
 
 #### v5.6 — Escalas de serviço com auto-escalador *(7ª rodada)*
 
@@ -3214,6 +3334,14 @@ inteiro (situação socioeconômica de família assistida).
       (Art. 156 §3º, III) — conecta com a v4.18/v4.21.
 - [ ] Prestação de contas do programa social, separada do caixa comum — insumo
       direto pra eventual CEBAS/parceria pública (v9.6).
+#### 🔒 Trava de Revisão 5-B — antes de encerrar a FASE 5 e avançar para a FASE 6
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v5.6 a v5.9 pelas 5 perguntas do checklist, e faz uma varredura final
+na FASE 5 inteira antes de fechar — v5.4 (Tesouraria central por
+departamento) depende do que a FASE 4/FASE B já entregaram; confirmar que a
+integração continua de pé.
+
 ### FASE 6 — EBD (Escola Bíblica Dominical)
 
 Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
@@ -3254,6 +3382,11 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 
 - [ ] Ofertas + lançamentos manuais por congregação.
 - [ ] Integração com a tesouraria central (FASE 4).
+
+#### 🔒 Trava de Revisão 6-A — antes de avançar para a v6.8
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v6.1 a v6.7 pelas 5 perguntas do checklist.
 
 #### v6.8 — Caderneta digital no padrão que a EBD já usa *(7ª rodada)*
 
@@ -3296,6 +3429,12 @@ dá, pela primeira vez, série histórica comparável entre congregações.
       EBD é o primeiro sinal de afastamento (conecta com v7.11).
 - [ ] Pedido de revistas calculado a partir da matrícula real por classe
       (v6.6 prevê o pedido; aqui ele deixa de ser chute do superintendente).
+
+#### 🔒 Trava de Revisão 6-B — antes de encerrar a FASE 6 e avançar para a FASE 7
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v6.8 a v6.10 pelas 5 perguntas do checklist, e faz uma varredura
+final na FASE 6 inteira antes de fechar.
 
 ### FASE 7 — Saúde, Eventos e Comunicação
 
@@ -3382,6 +3521,11 @@ registro do canal, sozinho, não cobre nada disso.
 - [ ] Escala de rodízio voluntário (limpeza, portaria, louvor).
 - [ ] Termo de Adesão ao Serviço Voluntário (Lei 9.608/98).
 - [ ] Remoção da escala por perda de confiança (sem vínculo trabalhista).
+
+#### 🔒 Trava de Revisão 7-A — antes de avançar para a v7.6
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v7.1 a v7.5 pelas 5 perguntas do checklist.
 
 #### v7.6 — Setores Técnicos (voluntariado profissional) *(gap da varredura)*
 
@@ -3524,6 +3668,17 @@ retirada, a política de proteção é só documento.
 - [ ] Bloqueio de voluntário sem habilitação vigente (v7.7) na sala, no ato do
       check-in. *(Planning Center Check-Ins; FellowshipOne; ChurchSuite)*
 
+#### 🔒 Trava de Revisão 7-B — antes de avançar para a v7.11
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v7.7 a v7.10 pelas 5 perguntas do checklist — **atenção máxima**: a
+v7.7 (habilitação para ministério com menores, Lei 14.811/2024) e a v7.8
+(notificação obrigatória de suspeita de maus-tratos, ECA Art. 13/245)
+tratam de obrigação legal já vigente, com multa por omissão, e de dado de
+criança. Um bug de tela aqui não é só inconveniente — pode significar
+voluntário sem antecedente verificado atuando com menor, ou suspeita não
+notificada. Testar cada fluxo manualmente, não só confiar no "parece certo".
+
 #### v7.11 — Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*
 
 Hoje o sistema registra o que **aconteceu** (disciplina, abandono, carta). Não
@@ -3618,6 +3773,16 @@ originalidade e consequência financeira — nada disso tem onde existir hoje.
       *(Brotherhood Mutual — violence response plan e disaster plan)*
 - [ ] Equipe de segurança por congregação com composição registrada.
 
+#### 🔒 Trava de Revisão 7-C — antes de encerrar a FASE 7 e avançar para a FASE 8
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v7.11 a v7.15 pelas 5 perguntas do checklist, e faz uma varredura
+final na FASE 7 **inteira** antes de fechar — com atenção redobrada, de
+novo, nos fluxos de proteção de menores (v7.7/v7.8/v7.10) e no consentimento
+de comunicação granular (v7.12): são os pontos da fase com maior exposição
+legal, e é aqui que qualquer regressão neles precisa ser pega antes de
+seguir pra Ministerial.
+
 ### FASE 8 — Ministerial (AFM)
 
 #### v8.1 — AFM (Academia de Formação Ministerial)
@@ -3649,6 +3814,11 @@ originalidade e consequência financeira — nada disso tem onde existir hoje.
 - [ ] Identidade Eclesiástica digital (Art. 76 Regimento).
 - [ ] Validação de status Ativo/Inativo via QR Code em tempo real.
 - [ ] Emissão centralizada na Secretaria Geral (anti-fraude).
+
+#### 🔒 Trava de Revisão 8-A — antes de avançar para a v8.5
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v8.1 a v8.4 pelas 5 perguntas do checklist.
 
 #### v8.5 — Trilha de discipulado como entidade de primeira classe *(7ª rodada)*
 
@@ -3696,6 +3866,12 @@ que a Convenção e outras instituições vão pedir.
 - [ ] Corpo docente com titulação registrada (conecta com a CDER, v8.1).
       *(Classter; Populi — SIS para seminários)*
 
+#### 🔒 Trava de Revisão 8-B — antes de encerrar a FASE 8 e avançar para a FASE 9
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v8.5 a v8.7 pelas 5 perguntas do checklist, e faz uma varredura final
+na FASE 8 inteira antes de fechar.
+
 ### FASE 9 — Entidades Vinculadas e Expansão
 
 #### v9.1 — Entidades vinculadas
@@ -3729,6 +3905,11 @@ que a Convenção e outras instituições vão pedir.
 
 - [ ] Ativação de Distrito (nível 5) com autonomia financeira + dízimo institucional 10%.
 - [ ] Blindagem contra desvinculação (intervenção imediata).
+
+#### 🔒 Trava de Revisão 9-A — antes de avançar para a v9.4
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v9.1 a v9.3 pelas 5 perguntas do checklist.
 
 #### v9.4 — Missões: campos, missionários e prestação de contas *(7ª rodada)*
 
@@ -3775,6 +3956,13 @@ mantiver, há um regime jurídico próprio que hoje não tem nenhuma cobertura.
 - [ ] Requisitos cumulativos do CEBAS monitorados de forma contínua, não
       conferidos só na hora de renovar.
 
+#### 🔒 Trava de Revisão 9-B — antes de encerrar a FASE 9 e avançar para a FASE 10
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v9.4 a v9.6 pelas 5 perguntas do checklist, e faz uma varredura final
+na FASE 9 inteira antes de fechar — v9.6 (CEBAS/MROSC) lida com parceria
+pública, então consistência de dado aqui tem peso extra.
+
 ### FASE 10 — Experiência, Design e Performance
 
 Pacote à parte, pra depois de todo o resto do sistema estar pronto — faz mais sentido
@@ -3810,6 +3998,11 @@ melhorar o que já existe (HTML/CSS/JS puro), não trocar de arquitetura.
       não no telefone) — adicionar `overflow-x: auto` nos contêineres de tabela e
       revisar o layout geral em telas pequenas.
 
+#### 🔒 Trava de Revisão 10-A — antes de avançar para a v10.4
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v10.1 a v10.3 pelas 5 perguntas do checklist.
+
 #### v10.4 — Modularização do front-end *(7ª rodada — dívida técnica real)*
 
 Achado da varredura de código: `app/script.js` tem **7.898 linhas em arquivo
@@ -3838,6 +4031,21 @@ carrega tudo a cada acesso.
 - [ ] Exportação em planilha padronizada em todos os módulos (hoje só Pessoas
       tem, v1.8), sempre respeitando o escopo de quem exporta e registrando a
       exportação (vB.8).
+
+#### 🔒 Trava de Revisão 10-B — antes de encerrar a FASE 10
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v10.4 e v10.5 pelas 5 perguntas do checklist, e faz uma varredura
+final na FASE 10 inteira — v10.4 é modularização do próprio `script.js`
+(hoje um arquivo único de milhares de linhas), então o próprio risco de
+regressão desta versão é o motivo de existir a trava: dividir o arquivo sem
+quebrar nenhuma tela das fases 0-9 exige justamente o item 2 do checklist
+(clicar em cada tela, uma por uma) feito por inteiro, não por amostragem.
+
+**Nota sobre a FASE 11**: ela é especulativa/opcional (ver abertura da fase)
+e não tem roadmap de versões comprometido — por isso não recebe Trava de
+Revisão. Se um dia for desenhada de verdade, ganha as suas próprias travas
+na mesma hora em que ganhar suas próprias versões `v11.X`.
 
 ### FASE 11 — Sistema Campal (multi-campo)
 
@@ -3909,6 +4117,11 @@ uma análise que os produtos de referência não conseguem entregar.
 - [ ] Recorte por porte, não só por território: comparar com pares do mesmo
       tamanho, não com a Sede.
 
+#### 🔒 Trava de Revisão 12-A — antes de avançar para a v12.3
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v12.1 e v12.2 pelas 5 perguntas do checklist.
+
 #### v12.3 — Engajamento e alerta precoce de evasão
 
 - [ ] **Score de engajamento** por membro cruzando o que o sistema já tem:
@@ -3931,6 +4144,16 @@ uma análise que os produtos de referência não conseguem entregar.
       departamental em dia. Uma linha por congregação, três cores.
 - [ ] Exportação do conjunto para a prestação de contas anual da Assembleia
       (Art. 36 §1º), reaproveitando as demonstrações da v4.9.
+
+#### 🔒 Trava de Revisão 12-B — antes de encerrar a FASE 12 (e o roadmap comprometido até aqui)
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Audita v12.3 e v12.4 pelas 5 perguntas do checklist, e faz uma varredura
+final na FASE 12 inteira — o Painel Executivo (v12.4) cita números de quase
+toda fase anterior (v4.8, v4.19, v5.4, v7.7), então é o lugar onde qualquer
+inconsistência acumulada nas fases 4 a 10 fica mais visível: se um número
+aqui não bate com o módulo de origem, é sinal de que uma trava anterior
+deixou passar algo.
 
 ## 4. Modelo de dados (referência)
 

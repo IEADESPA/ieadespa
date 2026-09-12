@@ -111,6 +111,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroRateiogeral" onclick="mostrarSubAbaFinanceiro('rateiogeral')"><span class="icone">📬</span><span class="rotulo">Rateio Geral</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPrebenda" onclick="mostrarSubAbaFinanceiro('prebenda')"><span class="icone">⛪</span><span class="rotulo">Prebenda</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPatrimonio" onclick="mostrarSubAbaFinanceiro('patrimonio')"><span class="icone">🏛️</span><span class="rotulo">Patrimônio</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroFrota" onclick="mostrarSubAbaFinanceiro('frota')"><span class="icone">🚗</span><span class="rotulo">Frota</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroConciliacao" onclick="mostrarSubAbaFinanceiro('conciliacao')"><span class="icone">🏦</span><span class="rotulo">Conciliação Bancária</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroInvestimentos" onclick="mostrarSubAbaFinanceiro('investimentos')"><span class="icone">📈</span><span class="rotulo">Investimentos</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRepasses" onclick="mostrarSubAbaFinanceiro('repasses')"><span class="icone">🏛️</span><span class="rotulo">Repasses Institucionais</span></button>
@@ -1990,6 +1991,13 @@
               <label>Nota fiscal / recibo (obrigatório):</label>
               <input type="file" id="saidaDocumentoFiscal" accept="image/jpeg,image/png,application/pdf" />
             </div>
+            <div id="saidaCombustivelCampos" style="display:none;">
+              <p class="subtitle">⛽ Combustível é exclusivo do veículo presidencial, com nota fiscal no CNPJ da Igreja (Art. 155 §3º).</p>
+              <div class="input-group"><label>Veículo (bemId):</label><input type="number" id="saidaCombustivelBemId" /></div>
+              <div class="input-group">
+                <label><input type="checkbox" id="saidaCombustivelNotaFiscalCnpj" /> Confirmo que a nota fiscal foi emitida no CNPJ da Igreja</label>
+              </div>
+            </div>
             <div id="cotacoesSaidaContainer" style="display:none;">
               <p class="subtitle">⚠️ Valor acima da referência — anexe 3 cotações (Reg. Art. 62):</p>
               <div id="cotacoesSaidaLinhas"></div>
@@ -2382,6 +2390,51 @@
           <button class="btn-confirmar" style="width:auto;" onclick="salvarOcupacaoCasaPastoralAcao()">🏠 Registrar ocupação</button>
           <p id="resultadoCasaPastoralAcao" class="subtitle"></p>
           <div class="rolagem-tabela"><div id="resultadoCasaPastoral"></div></div>
+        </div>
+
+        <!-- SUB-ABA: FROTA DE VEÍCULOS (v4.23) -->
+        <div id="subFinanceiroFrota" class="sub-aba-secretaria" style="display:none;">
+          <h3>🚗 Frota de Veículos</h3>
+          <p class="subtitle">Regimento Art. 155: identificação visual obrigatória, termo de autorização de
+            condução por missão (CNH vigente), livro de retirada de chaves (multa/pontos transferidos ao
+            condutor) e combustível só para o veículo presidencial, com nota fiscal no CNPJ da Igreja.</p>
+
+          <h4 style="color: var(--cor-primaria);">⚠️ Alertas (licenciamento, seguro, manutenção)</h4>
+          <div class="rolagem-tabela"><div id="resultadoAlertasFrota"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Veículos (Patrimônio → Tipo Veículo)</h4>
+          <div class="rolagem-tabela"><div id="resultadoFrota"></div></div>
+          <p class="subtitle">Cadastre o veículo em Patrimônio (Tipo = Veículo) e depois complete os dados de frota aqui:</p>
+          <div class="input-group"><label>Veículo (bemId):</label><input type="number" id="frotaBemId" /></div>
+          <div class="input-group"><label>Placa:</label><input type="text" id="frotaPlaca" /></div>
+          <div class="input-group"><label>Identificação visual (foto, obrigatória):</label><input type="file" id="frotaIdentificacaoVisual" accept="application/pdf,image/jpeg,image/png" /></div>
+          <div class="input-group"><label>Veículo presidencial?</label><select id="frotaPresidencial"><option value="0">Não</option><option value="1">Sim</option></select></div>
+          <div class="input-group"><label>Licenciamento (vencimento):</label><input type="date" id="frotaLicenciamento" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarFrotaAcao()">💾 Salvar dados de frota</button>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Termo de Autorização de Condução</h4>
+          <div class="input-group"><label>Veículo (bemId):</label><input type="number" id="termoBemId" /></div>
+          <div class="input-group"><label>Condutor (matrícula):</label><input type="number" id="termoCondutorId" /></div>
+          <div class="input-group"><label>CNH nº:</label><input type="text" id="termoCnhNumero" /></div>
+          <div class="input-group"><label>CNH válida até:</label><input type="date" id="termoCnhValidade" /></div>
+          <div class="input-group"><label>Missão:</label><input type="text" id="termoMissao" /></div>
+          <div class="input-group"><label>Início:</label><input type="date" id="termoInicio" /></div>
+          <div class="input-group"><label>Fim previsto:</label><input type="date" id="termoFim" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="registrarTermoConducaoAcao()">📝 Emitir termo</button>
+          <div class="rolagem-tabela"><div id="resultadoTermosConducao"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Livro de Retirada de Chaves</h4>
+          <div class="input-group"><label>Termo de autorização (id):</label><input type="number" id="retiradaTermoId" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="registrarRetiradaChaveAcao()">🔑 Retirar chave</button>
+          <div class="rolagem-tabela"><div id="resultadoRetiradasChave"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Manutenção</h4>
+          <div class="input-group"><label>Veículo (bemId):</label><input type="number" id="manutencaoBemId" /></div>
+          <div class="input-group"><label>Tipo:</label><select id="manutencaoTipo"><option value="PREVENTIVA">Preventiva</option><option value="CORRETIVA">Corretiva</option></select></div>
+          <div class="input-group"><label>Data agendada:</label><input type="date" id="manutencaoData" /></div>
+          <div class="input-group"><label>Descrição:</label><input type="text" id="manutencaoDescricao" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="registrarManutencaoVeiculoAcao()">🔧 Agendar</button>
+          <div class="rolagem-tabela"><div id="resultadoManutencoesVeiculo"></div></div>
         </div>
 
         <!-- SUB-ABA: CONCILIAÇÃO BANCÁRIA (v4.13) — importação de extrato -->

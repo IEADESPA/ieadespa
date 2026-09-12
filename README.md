@@ -2707,20 +2707,34 @@ que a perda, na prática, quase nunca vem de desvio de dinheiro — vem de
 
 O Regimento trata frota com nível de detalhe que hoje não tem onde morar no
 sistema — inclusive transferindo responsabilidade pessoal ao condutor.
+`VeiculosFrota` + `TermosAutorizacaoConducao` + `RetiradasChave` +
+`ManutencoesVeiculo` + `GestaoFrota` + `GestaoTermosConducao` +
+`GestaoRetiradasChave` + `GestaoManutencaoVeiculo` (migração 073). Veículo
+continua sendo `BensPatrimoniais` Tipo = VEICULO (v4.11) — estas tabelas só
+guardam o que é específico de frota.
 
-- [ ] Cadastro de frota com **identificação visual obrigatória** (Art. 155 §1º, II).
-- [ ] **Termo de Autorização de Condução por missão específica**, com validação de
-      CNH vigente do condutor — sem termo válido, o veículo não sai (Art. 155 §2º, I).
-- [ ] **Livro de retirada de chaves** (data/hora, condutor, missão, retorno) — é
-      esse registro que sustenta a regra do §2º, II: **multa e pontos são
-      transferidos a quem retirou o veículo**, e franquia/conserto por imprudência
-      corre por conta do condutor (§2º, III).
-- [ ] Custeio de combustível **só mediante nota fiscal com o CNPJ da Igreja**, e
-      apenas para o veículo presidencial (Art. 155 §3º, I) — as vedações de
-      reembolso dos incisos II-III viram bloqueio no Contas a Pagar (v4.5),
-      não aviso.
-- [ ] Manutenção preventiva, licenciamento e seguro por veículo, com alerta de
-      vencimento (conecta com a v4.16).
+- [x] Cadastro de frota com **identificação visual obrigatória** (Art. 155 §1º,
+      II) — `GestaoFrota` marca `identificacaoVisualPendente` enquanto a foto
+      não é anexada.
+- [x] **Termo de Autorização de Condução por missão específica**, com validação
+      de CNH vigente do condutor — a emissão já recusa CNH que vence antes do
+      fim previsto da missão; sem termo `ATIVO` e dentro da janela da missão,
+      o veículo não sai (checado de fato na retirada de chave, não só um
+      aviso) (Art. 155 §2º, I).
+- [x] **Livro de retirada de chaves** (`RetiradasChave`: data/hora, condutor,
+      missão, retorno) — `MultaTransferidaCondutor` (default verdadeiro) e
+      `CustoConsertoImprudenciaValor` sustentam a transferência de
+      responsabilidade ao condutor que retirou o veículo (Art. 155 §2º, II-III).
+- [x] Custeio de combustível **só mediante nota fiscal com o CNPJ da Igreja**, e
+      apenas para o veículo presidencial (Art. 155 §3º, I) — vira **bloqueio
+      real** no `GestaoSaidas` (v4.5): categoria `COMBUSTIVEL` exige `bemId` de
+      um veículo com `EhVeiculoPresidencial = 1` e a confirmação estrutural de
+      nota fiscal no CNPJ da Igreja, senão a solicitação é recusada (Art. 155
+      §3º, II-III).
+- [x] Manutenção preventiva, licenciamento e seguro por veículo, com alerta de
+      vencimento consolidado — `GET /api/manutencoes-veiculo/alertas` junta
+      `VeiculosFrota.LicenciamentoVencimento`, a apólice vigente por `BemId`
+      (v4.16, `ApolicesSeguro`) e a próxima manutenção agendada num único painel.
 
 #### v4.24 — Obras, licenciamento e inauguração de templos *(gap da varredura normativa)*
 

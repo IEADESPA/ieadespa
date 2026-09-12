@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "imunidade", "receitasacessorias", "imoveis", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "frota", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "imunidade", "receitasacessorias", "imoveis", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo", obrigacoes: "Obrigações Fiscais", imunidade: "Imunidade Tributária",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", frota: "Frota", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo", obrigacoes: "Obrigações Fiscais", imunidade: "Imunidade Tributária",
   receitasacessorias: "Receitas Acessórias", imoveis: "Imóveis (Situação Fiscal)",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
@@ -601,6 +601,14 @@ function mostrarSubAbaFinanceiro(sub) {
     carregarDocumentosBensAcao();
     carregarInventariosAcao();
     carregarOcupacoesCasaPastoralAcao();
+    return;
+  }
+  if (sub === "frota") {
+    carregarFrotaAcao();
+    carregarTermosConducaoAcao();
+    carregarRetiradasChaveAcao();
+    carregarManutencoesVeiculoAcao();
+    carregarAlertasFrotaAcao();
     return;
   }
   if (sub === "conciliacao") {
@@ -1002,6 +1010,8 @@ function alternarCampoCampanhaSaida() {
   const tipo = document.getElementById("saidaTipo").value;
   const categoria = (_categoriasSaidaCache || []).find(c => c.codigo === tipo);
   document.getElementById("saidaCampanha").style.display = categoria && categoria.tipoFundo === "RESTRITO" ? "inline-block" : "none";
+  const campoCombustivel = document.getElementById("saidaCombustivelCampos");
+  if (campoCombustivel) campoCombustivel.style.display = tipo === "COMBUSTIVEL" ? "block" : "none";
 }
 
 function alternarFormNovoFornecedor() {
@@ -1163,11 +1173,21 @@ async function solicitarSaidaAcao() {
     }
   }
 
+  if (tipo === "COMBUSTIVEL") {
+    const bemIdCombustivel = document.getElementById("saidaCombustivelBemId").value;
+    const notaFiscalConfirmada = document.getElementById("saidaCombustivelNotaFiscalCnpj").checked;
+    if (!bemIdCombustivel || !notaFiscalConfirmada) {
+      resultado.textContent = "Combustível exige o veículo (bemId) e a confirmação de que a nota fiscal saiu no CNPJ da Igreja (Art. 155 §3º).";
+      return;
+    }
+  }
   const body = {
     congregacaoId, fornecedorId, tipo, descricao, valor: Number(valor),
     campanhaId: (categoria && categoria.tipoFundo === "RESTRITO") ? campanhaId : undefined,
     documentoFiscalBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type,
-    cotacoes
+    cotacoes,
+    bemId: tipo === "COMBUSTIVEL" ? document.getElementById("saidaCombustivelBemId").value : undefined,
+    notaFiscalCnpjIgrejaConfirmado: tipo === "COMBUSTIVEL" ? document.getElementById("saidaCombustivelNotaFiscalCnpj").checked : undefined
   };
   const res = await fetchProtegido(`${API_BASE}/saidas`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
@@ -2553,6 +2573,165 @@ async function salvarOcupacaoCasaPastoralAcao() {
   avisarResultado(data);
   resultado.textContent = data.mensagem;
   if (data.sucesso) carregarOcupacoesCasaPastoralAcao();
+}
+
+// ---- FROTA DE VEÍCULOS (v4.23) ----
+async function carregarAlertasFrotaAcao() {
+  const container = document.getElementById("resultadoAlertasFrota");
+  const res = await fetchProtegido(`${API_BASE}/manutencoes-veiculo/alertas`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum alerta no momento. ✅</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Licenciamento</th><th>Seguro</th><th>Próx. manutenção</th></tr></thead><tbody>`;
+  lista.forEach(a => {
+    html += `<tr><td>${a.bemDescricao}</td>
+      <td>${a.licenciamentoAlerta ? "⚠️ " : ""}${a.licenciamentoVencimento || "não informado"}</td>
+      <td>${a.seguroAlerta ? "⚠️ " : ""}${a.seguroVencimento || "sem apólice ativa"}</td>
+      <td>${a.manutencaoAlerta ? "⚠️ " : ""}${a.proximaManutencaoAgendada || "-"}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function carregarFrotaAcao() {
+  const container = document.getElementById("resultadoFrota");
+  const res = await fetchProtegido(`${API_BASE}/frota`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum veículo cadastrado no Patrimônio (Tipo = Veículo).</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Placa</th><th>Identificação visual</th><th>Presidencial</th><th>Licenciamento</th></tr></thead><tbody>`;
+  lista.forEach(v => {
+    html += `<tr><td>${v.descricao}</td><td>${v.placa || "-"}</td><td>${v.identificacaoVisualPendente ? "⚠️ pendente" : "✅"}</td>
+      <td>${v.ehVeiculoPresidencial ? "✅" : "-"}</td><td>${v.licenciamentoVencimento || "-"} (${v.licenciamentoSituacao})</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarFrotaAcao() {
+  const bemId = document.getElementById("frotaBemId").value;
+  if (!bemId) { alert("Informe o bemId do veículo."); return; }
+  const arquivo = document.getElementById("frotaIdentificacaoVisual").files[0];
+  const body = {
+    placa: document.getElementById("frotaPlaca").value,
+    ehVeiculoPresidencial: document.getElementById("frotaPresidencial").value === "1",
+    licenciamentoVencimento: document.getElementById("frotaLicenciamento").value || null
+  };
+  if (arquivo) { body.identificacaoVisualBase64 = await arquivoParaBase64(arquivo); body.mimeType = arquivo.type; }
+  const res = await fetchProtegido(`${API_BASE}/frota/${bemId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) { carregarFrotaAcao(); carregarAlertasFrotaAcao(); }
+}
+
+async function carregarTermosConducaoAcao() {
+  const container = document.getElementById("resultadoTermosConducao");
+  const res = await fetchProtegido(`${API_BASE}/termos-conducao`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum termo emitido.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Veículo</th><th>Condutor</th><th>Missão</th><th>Período</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(t => html += `<tr><td>${t.TermoId}</td><td>${t.bemDescricao}</td><td>${t.condutorNome}</td><td>${t.MissaoDescricao}</td><td>${t.DataInicioMissao} a ${t.DataFimPrevista}</td><td>${t.Status}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarTermoConducaoAcao() {
+  const body = {
+    bemId: document.getElementById("termoBemId").value,
+    condutorMembroId: document.getElementById("termoCondutorId").value,
+    cnhNumero: document.getElementById("termoCnhNumero").value,
+    cnhValidade: document.getElementById("termoCnhValidade").value,
+    missaoDescricao: document.getElementById("termoMissao").value,
+    dataInicioMissao: document.getElementById("termoInicio").value,
+    dataFimPrevista: document.getElementById("termoFim").value
+  };
+  const res = await fetchProtegido(`${API_BASE}/termos-conducao`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) {
+    document.getElementById("termoMissao").value = "";
+    carregarTermosConducaoAcao();
+  }
+}
+
+async function carregarRetiradasChaveAcao() {
+  const container = document.getElementById("resultadoRetiradasChave");
+  const res = await fetchProtegido(`${API_BASE}/retiradas-chave`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma retirada registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Veículo</th><th>Condutor</th><th>Retirada</th><th>Devolução</th><th>Ação</th></tr></thead><tbody>`;
+  lista.forEach(r => {
+    html += `<tr><td>${r.RetiradaId}</td><td>${r.bemDescricao}</td><td>${r.condutorNome}</td><td>${new Date(r.DataHoraRetirada).toLocaleString("pt-BR")}</td><td>${r.DataHoraDevolucao ? new Date(r.DataHoraDevolucao).toLocaleString("pt-BR") : "-"}</td>
+      <td>${r.DataHoraDevolucao ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDevolucaoChaveAcao(${r.RetiradaId})">Devolver</button>`}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarRetiradaChaveAcao() {
+  const body = { termoAutorizacaoId: document.getElementById("retiradaTermoId").value };
+  const res = await fetchProtegido(`${API_BASE}/retiradas-chave`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) { document.getElementById("retiradaTermoId").value = ""; carregarRetiradasChaveAcao(); }
+}
+
+async function registrarDevolucaoChaveAcao(retiradaId) {
+  const custo = prompt("Custo de conserto por imprudência do condutor, se houver (R$, opcional):", "");
+  const body = { custoConsertoImprudenciaValor: custo ? Number(custo) : null };
+  const res = await fetchProtegido(`${API_BASE}/retiradas-chave/${retiradaId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) carregarRetiradasChaveAcao();
+}
+
+async function carregarManutencoesVeiculoAcao() {
+  const container = document.getElementById("resultadoManutencoesVeiculo");
+  const res = await fetchProtegido(`${API_BASE}/manutencoes-veiculo`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma manutenção registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Tipo</th><th>Agendada</th><th>Realizada</th><th>Ação</th></tr></thead><tbody>`;
+  lista.forEach(m => {
+    html += `<tr><td>${m.bemDescricao}</td><td>${m.TipoManutencao}</td><td>${m.DataAgendada}</td><td>${m.DataRealizada || "-"}</td>
+      <td>${m.DataRealizada ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="concluirManutencaoVeiculoAcao(${m.ManutencaoId})">Concluir</button>`}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarManutencaoVeiculoAcao() {
+  const body = {
+    bemId: document.getElementById("manutencaoBemId").value,
+    tipoManutencao: document.getElementById("manutencaoTipo").value,
+    dataAgendada: document.getElementById("manutencaoData").value,
+    descricao: document.getElementById("manutencaoDescricao").value
+  };
+  const res = await fetchProtegido(`${API_BASE}/manutencoes-veiculo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) { document.getElementById("manutencaoDescricao").value = ""; carregarManutencoesVeiculoAcao(); }
+}
+
+async function concluirManutencaoVeiculoAcao(manutencaoId) {
+  const dataRealizada = prompt("Data de realização (AAAA-MM-DD):", new Date().toISOString().slice(0, 10));
+  if (!dataRealizada) return;
+  const res = await fetchProtegido(`${API_BASE}/manutencoes-veiculo/${manutencaoId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataRealizada }) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) { carregarManutencoesVeiculoAcao(); carregarAlertasFrotaAcao(); }
 }
 
 // ---- CONCILIAÇÃO BANCÁRIA (v4.13; trilha CAIXA_FISICO sem upload — Trava de Revisão 4-A) ----

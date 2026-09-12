@@ -138,7 +138,7 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId, documentoFiscalBase64, mimeType, cotacoes } = req.body || {};
+    const { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId, documentoFiscalBase64, mimeType, cotacoes, bemId, notaFiscalCnpjIgrejaConfirmado } = req.body || {};
     if (!congregacaoId || !fornecedorId || !tipo || !descricao || !descricao.trim() || !valor) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: congregacaoId, fornecedorId, tipo, descricao, valor." } };
       return;
@@ -197,6 +197,28 @@ module.exports = async function (context, req) {
         return;
       }
     }
+    // v4.23 (Art. 155 §3º): combustível só custeado para o veículo
+    // presidencial, e só com nota fiscal confirmada no CNPJ da Igreja
+    // (não reembolso pessoal) — bloqueio real, não aviso.
+    if (tipo === "COMBUSTIVEL") {
+      if (!bemId) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Custeio de combustível exige o veículo (bemId) vinculado — Art. 155 §3º, I." } };
+        return;
+      }
+      const veiculo = await pool.request().input("bemId", sql.Int, bemId)
+        .query(`SELECT v.EhVeiculoPresidencial FROM VeiculosFrota v JOIN BensPatrimoniais b ON b.BemId = v.BemId WHERE v.BemId = @bemId AND b.Tipo = 'VEICULO'`);
+      if (veiculo.recordset.length === 0 || !veiculo.recordset[0].EhVeiculoPresidencial) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Custeio de combustível é exclusivo do veículo presidencial (Art. 155 §3º, I) — este veículo não está cadastrado como tal." } };
+        return;
+      }
+      if (!notaFiscalCnpjIgrejaConfirmado) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Confirme que a nota fiscal foi emitida no CNPJ da Igreja — vedado reembolso de combustível pago pelo condutor (Art. 155 §3º, II-III)." } };
+        return;
+      }
+    } else if (bemId) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "bemId só se aplica à categoria COMBUSTIVEL." } };
+      return;
+    }
 
     const fornecedor = await pool.request().input("id", sql.Int, fornecedorId).query(`SELECT * FROM Fornecedores WHERE FornecedorId = @id`);
     if (fornecedor.recordset.length === 0 || !fornecedor.recordset[0].Ativo) {
@@ -231,9 +253,11 @@ module.exports = async function (context, req) {
       .input("campanhaId", sql.Int, campanhaId || null)
       .input("documentoFiscalUrl", sql.NVarChar(500), url)
       .input("solicitadoPor", sql.Int, usuario.membroId)
-      .query(`INSERT INTO SaidasTesouraria (CongregacaoId, FornecedorId, Tipo, Descricao, Valor, CampanhaId, DocumentoFiscalUrl, SolicitadoPor)
+      .input("bemId", sql.Int, bemId || null)
+      .input("notaFiscalCnpj", sql.Bit, notaFiscalCnpjIgrejaConfirmado ? 1 : (bemId ? 1 : null))
+      .query(`INSERT INTO SaidasTesouraria (CongregacaoId, FornecedorId, Tipo, Descricao, Valor, CampanhaId, DocumentoFiscalUrl, SolicitadoPor, BemId, NotaFiscalCnpjIgrejaConfirmado)
               OUTPUT INSERTED.SaidaId
-              VALUES (@congregacaoId, @fornecedorId, @tipo, @descricao, @valor, @campanhaId, @documentoFiscalUrl, @solicitadoPor)`);
+              VALUES (@congregacaoId, @fornecedorId, @tipo, @descricao, @valor, @campanhaId, @documentoFiscalUrl, @solicitadoPor, @bemId, @notaFiscalCnpj)`);
     const saidaId = criada.recordset[0].SaidaId;
 
     for (const cot of cotacoesValidas) {

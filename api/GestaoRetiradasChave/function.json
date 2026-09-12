@@ -1,0 +1,13 @@
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get", "post", "put"],
+      "route": "retiradas-chave/{id?}"
+    },
+    { "type": "http", "direction": "out", "name": "res" }
+  ]
+}

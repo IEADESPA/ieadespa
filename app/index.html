@@ -111,6 +111,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroRateiogeral" onclick="mostrarSubAbaFinanceiro('rateiogeral')"><span class="icone">📬</span><span class="rotulo">Rateio Geral</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPrebenda" onclick="mostrarSubAbaFinanceiro('prebenda')"><span class="icone">⛪</span><span class="rotulo">Prebenda</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPatrimonio" onclick="mostrarSubAbaFinanceiro('patrimonio')"><span class="icone">🏛️</span><span class="rotulo">Patrimônio</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroConciliacao" onclick="mostrarSubAbaFinanceiro('conciliacao')"><span class="icone">🏦</span><span class="rotulo">Conciliação Bancária</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2245,6 +2246,25 @@
           <button class="btn-confirmar" style="width:auto;" onclick="salvarOcupacaoCasaPastoralAcao()">🏠 Registrar ocupação</button>
           <p id="resultadoCasaPastoralAcao" class="subtitle"></p>
           <div class="rolagem-tabela"><div id="resultadoCasaPastoral"></div></div>
+        </div>
+
+        <!-- SUB-ABA: CONCILIAÇÃO BANCÁRIA (v4.13) — importação de extrato -->
+        <div id="subFinanceiroConciliacao" class="sub-aba-secretaria" style="display:none;">
+          <h3>🏦 Conciliação Bancária por Importação de Extrato</h3>
+          <p class="subtitle">Sem Open Finance pago: baixe o extrato no internet banking (OFX/CSV, de graça)
+            e suba aqui — o sistema cruza automaticamente contra Entradas/Saídas e aponta só o que não bate.
+            Dinheiro vivo (espécie) fica na trilha do cofre, não no banco.</p>
+
+          <h4 style="color: var(--cor-primaria);">Importar extrato</h4>
+          <div class="input-group"><label>Fonte:</label><select id="conciliacaoFonte"></select></div>
+          <div class="input-group"><label>Mês de referência:</label><input type="month" id="conciliacaoMes" /></div>
+          <div class="input-group"><label>Arquivo (OFX/CSV):</label><input type="file" id="conciliacaoArquivo" accept=".ofx,.csv,text/plain,text/csv,application/octet-stream" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="importarExtratoAcao()">📥 Importar e conciliar</button>
+          <p id="resultadoConciliacao" class="subtitle"></p>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Conciliações</h4>
+          <div class="rolagem-tabela"><div id="resultadoConciliacoes"></div></div>
+          <div id="detalheConciliacao" style="margin-top:14px;"></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

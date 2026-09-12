@@ -2401,15 +2401,25 @@ resto do COSO formalizado no sistema (`shared/compliance.js`, `GestaoCompliance`
       Atividades-Fim (meta 70-80%, ITG 2002) e Índice de Liquidez — calculados
       na leitura, nunca digitados à mão.
 
-#### v4.13 — Conciliação Bancária Automática (Open Finance Brasil)
+#### v4.13 — Conciliação Bancária por Importação de Extrato
 
-- [ ] Integração via Open Finance (API regulada pelo Banco Central) pra
-      importar o extrato real da conta bancária única (v4.1.3) direto no
-      sistema — substitui a conciliação manual/em lote (v4.1.2) por
-      cruzamento automático contra o extrato de verdade. Viável desde já
-      (conta única), não precisa esperar contas bancárias por congregação.
-- [ ] Alerta só do que não bate (divergência real) — não precisa mais
-      conferir lançamento por lançamento contra recibo.
+Decisão de custo (confirmada com o usuário): **não** integrar via Open Finance
+(API paga/regulada, com tarifa de adesão e consumo). Em vez disso, a Tesouraria
+importa o extrato que o próprio banco já entrega **de graça** no internet banking
+(OFX/CSV) e o sistema cruza automaticamente contra Entradas/Saídas — de graça e
+funcionando com qualquer banco. `shared/conciliação.js` (parser OFX/CSV) +
+`GestaoConciliacaoBancaria`.
+
+- [x] Importação de extrato (OFX/CSV) da conta única (v4.1.3) — `ExtratosBancarios`/
+      `ExtratoLinhas`, com o arquivo original guardado como prova documental.
+- [x] Cruzamento automático contra `LancamentosTesouraria` (entradas) e
+      `SaidasTesouraria` (saídas) — casa por valor + data; `ConciliacoesBancarias`
+      + `ConciliacaoDivergencias`.
+- [x] Alerta só do que não bate — "só no banco" e "só no sistema" viram
+      divergências pra resolver, em vez de conferir lançamento por lançamento.
+- [x] Duas trilhas: `CONTA_BANCARIA` (extrato) e `CAIXA_FISICO` (cofre) — dinheiro
+      vivo não passa pelo banco, então concilia contra o Fundo Fixo de Caixa
+      (v4.5), não contra o extrato. `FontesCaixa` já nasce com as duas.
 
 #### v4.14 — Gestão de Investimentos e Tesouraria Avançada (nível enterprise/"pico")
 

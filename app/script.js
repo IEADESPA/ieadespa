@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -600,6 +600,11 @@ function mostrarSubAbaFinanceiro(sub) {
     carregarDocumentosBensAcao();
     carregarInventariosAcao();
     carregarOcupacoesCasaPastoralAcao();
+    return;
+  }
+  if (sub === "conciliacao") {
+    carregarFontesCaixaAcao();
+    carregarConciliacoesAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2507,6 +2512,66 @@ async function salvarOcupacaoCasaPastoralAcao() {
   avisarResultado(data);
   resultado.textContent = data.mensagem;
   if (data.sucesso) carregarOcupacoesCasaPastoralAcao();
+}
+
+// ---- CONCILIAÇÃO BANCÁRIA (v4.13) ----
+async function carregarFontesCaixaAcao() {
+  const select = document.getElementById("conciliacaoFonte");
+  const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/fontes`);
+  const lista = await res.json();
+  select.innerHTML = (Array.isArray(lista) ? lista.map(f => `<option value="${f.fonteId}">${f.nome}</option>`).join("") : "");
+}
+
+async function carregarConciliacoesAcao() {
+  const container = document.getElementById("resultadoConciliacoes");
+  const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma conciliação ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Fonte</th><th>Mês</th><th>Status</th><th>Batidas</th><th>Divergências</th><th></th></tr></thead><tbody>`;
+  lista.forEach(c => html += `<tr><td>${c.fonteNome}</td><td>${c.mesReferencia}</td><td>${c.status}</td><td>R$ ${Number(c.totalBatidas).toFixed(2)}</td><td>${c.divergenciasPendentes}</td><td><button class="btn-link" onclick="verDetalheConciliacaoAcao(${c.conciliacaoId})">Ver</button></td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function importarExtratoAcao() {
+  const fonteId = document.getElementById("conciliacaoFonte").value;
+  const mesReferencia = document.getElementById("conciliacaoMes").value;
+  const arquivo = document.getElementById("conciliacaoArquivo").files[0];
+  const resultado = document.getElementById("resultadoConciliacao");
+  if (!fonteId || !mesReferencia || !arquivo) { resultado.textContent = "Informe fonte, mês e arquivo (OFX/CSV)."; return; }
+  const body = { fonteId: Number(fonteId), mesReferencia, arquivoBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type || "text/plain" };
+  const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/extratos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  resultado.textContent = d.mensagem;
+  carregarConciliacoesAcao();
+}
+
+async function verDetalheConciliacaoAcao(conciliacaoId) {
+  const container = document.getElementById("detalheConciliacao");
+  const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/${conciliacaoId}`);
+  const c = await res.json();
+  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${c.mensagem}</p>`; return; }
+  const divs = c.divergencias || [];
+  let html = `<hr /><h4>Conciliação de ${c.mesReferencia} (${c.fonteNome}) — ${c.status}</h4>`;
+  html += `<p class="subtitle">Extrato R$ ${Number(c.TotalExtrato).toFixed(2)} · Sistema R$ ${Number(c.TotalSistema).toFixed(2)} · Batidas R$ ${Number(c.TotalBatidas).toFixed(2)}</p>`;
+  if (divs.length === 0) { html += "<p class='subtitle'>Sem divergências pendentes. ✅</p>"; }
+  else {
+    html += `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Valor</th><th>Referência</th><th></th></tr></thead><tbody>`;
+    divs.forEach(d => html += `<tr><td>${d.tipo === "SO_BANCO" ? "Só no banco" : "Só no sistema"}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${d.referencia || "-"}</td>${d.status === "PENDENTE" ? `<td><button class="btn-link" onclick="resolverDivergenciaAcao(${d.divergenciaId})">Resolver</button></td>` : "<td></td>"}</tr>`);
+    html += "</tbody></table>";
+  }
+  container.innerHTML = html;
+}
+
+async function resolverDivergenciaAcao(divergenciaId) {
+  const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/divergencias`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ divergenciaId, acao: "RESOLVER" }) });
+  const d = await res.json();
+  avisarResultado(d);
+  carregarConciliacoesAcao();
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

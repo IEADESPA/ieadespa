@@ -2738,18 +2738,29 @@ guardam o que é específico de frota.
 
 #### v4.24 — Obras, licenciamento e inauguração de templos *(gap da varredura normativa)*
 
-- [ ] Ficha de obra por congregação com marcos (pedra fundamental, Art. 87 §1º),
-      orçamento (amarrado ao Contas a Pagar e à alçada patrimonial da v4.11) e
-      cronograma físico-financeiro (mesmo motor de projetos do PDQ, v4.8).
-- [ ] **Trava de "apto a inaugurar"**: sem **AVCB** (Corpo de Bombeiros) e
-      **Alvará/Habite-se** anexados e vigentes, o sistema não marca a inauguração —
-      o Regimento veda inaugurar templo clandestino (Art. 87 §2º, I). Não é aviso:
-      é bloqueio, porque a consequência é interdição e responsabilização pessoal.
-- [ ] Regras de placa de inauguração (nomes obrigatórios; **vedado nome de doador
-      ou político**, Art. 87 §3º) como checklist verificável antes da liberação.
-- [ ] Requisito de eficiência energética em obra nova (Art. 162-A §2º).
-- [ ] Vencimento de licenças por imóvel com alerta — AVCB vence, e templo com AVCB
-      vencido não pode receber culto.
+`ObrasTemplo` + `ObraMarcos` + `GestaoObras` + `GestaoObraMarcos`; AVCB e
+Alvará/Habite-se entram em `ImoveisSituacaoFiscal` (v4.21, migração 074).
+
+- [x] Ficha de obra por congregação com marcos (pedra fundamental, Art. 87 §1º),
+      orçamento e cronograma físico-financeiro (mesmo espírito do motor de
+      projetos do PDQ, v4.8) — `ObraMarcos.SaidaId` amarra o marco a uma Saída
+      já lançada (v4.5) quando o gasto real vira pagamento de verdade.
+- [x] **Trava de "apto a inaugurar"**: `PUT /api/obras/{id}` com `acao:
+      'INAUGURAR'` é uma recusa real (não aviso) sem **AVCB** e
+      **Alvará/Habite-se** vigentes (lidos de `ImoveisSituacaoFiscal` pelo
+      `BemId` da obra) — Art. 87 §2º, I.
+- [x] Regras de placa de inauguração como checklist verificável: a inauguração
+      só libera com `PlacaNomesConfirmados` e
+      `PlacaSemDoadorPoliticoConfirmado` (Art. 87 §3º) confirmados antes.
+- [x] Requisito de eficiência energética em obra nova (Art. 162-A §2º):
+      `EficienciaEnergeticaConfirmada` obrigatório quando `EhObraNova = 1`,
+      checado na mesma trava de inauguração.
+- [x] Vencimento de licenças por imóvel com alerta — `GestaoImoveis` generaliza
+      a vigência já usada para IPTU (v4.21) também para AVCB e Alvará,
+      calculada na leitura. **Ressalva de honestidade**: "AVCB vencido não pode
+      receber culto" é hoje só um **alerta** (`impedidoReceberCulto`) — o
+      sistema não tem uma agenda de culto pra travar de fato; quem trava de
+      verdade é a inauguração acima.
 
 ### Referência de pesquisa (7ª rodada, 2026) — expansão das Fases 5-11 e consolidação da base
 

@@ -122,6 +122,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroImunidade" onclick="mostrarSubAbaFinanceiro('imunidade')"><span class="icone">🛡️</span><span class="rotulo">Imunidade Tributária</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroReceitasacessorias" onclick="mostrarSubAbaFinanceiro('receitasacessorias')"><span class="icone">🎪</span><span class="rotulo">Receitas Acessórias</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroImoveis" onclick="mostrarSubAbaFinanceiro('imoveis')"><span class="icone">🏘️</span><span class="rotulo">Imóveis</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroObras" onclick="mostrarSubAbaFinanceiro('obras')"><span class="icone">🏗️</span><span class="rotulo">Obras</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2658,10 +2659,62 @@
 
         <!-- SUB-ABA: IMÓVEIS - SITUAÇÃO FISCAL (v4.21) -->
         <div id="subFinanceiroImoveis" class="sub-aba-secretaria" style="display:none;">
-          <h3>🏘️ Imóveis — Situação Fiscal</h3>
-          <p class="subtitle">IPTU/ITBI por imóvel (Tipo = IMOVEL no Patrimônio, v4.11): processo de reconhecimento
-            de imunidade, vigência e alerta de renovação.</p>
+          <h3>🏘️ Imóveis — Situação Fiscal e Licenciamento</h3>
+          <p class="subtitle">IPTU/ITBI e, desde a v4.24, AVCB/Alvará-Habite-se por imóvel (Tipo = IMOVEL no
+            Patrimônio, v4.11): processo, vigência e alerta de renovação. AVCB/Alvará vigentes são pré-requisito
+            real para inaugurar obra (aba Obras) — AVCB vencido também sinaliza aqui como alerta de culto.</p>
           <div class="rolagem-tabela"><div id="resultadoImoveis"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Cadastrar/atualizar situação de um imóvel</h4>
+          <div class="input-group"><label>Imóvel (bemId):</label><input type="number" id="imovelBemId" /></div>
+          <div class="barra-lista">
+            <div class="input-group"><label>IPTU status:</label>
+              <select id="imovelIptuStatus"><option value="EM_ANALISE">Em análise</option><option value="ISENTO">Isento</option><option value="NEGADO">Negado</option></select>
+            </div>
+            <div class="input-group"><label>IPTU nº processo:</label><input type="text" id="imovelIptuProcesso" /></div>
+            <div class="input-group"><label>IPTU vigência (fim):</label><input type="date" id="imovelIptuFim" /></div>
+          </div>
+          <div class="barra-lista">
+            <div class="input-group"><label>AVCB nº:</label><input type="text" id="imovelAvcbNumero" /></div>
+            <div class="input-group"><label>AVCB vigência (fim):</label><input type="date" id="imovelAvcbFim" /></div>
+            <div class="input-group"><label>AVCB documento:</label><input type="file" id="imovelAvcbDocumento" accept="application/pdf,image/jpeg,image/png" /></div>
+          </div>
+          <div class="barra-lista">
+            <div class="input-group"><label>Alvará/Habite-se nº:</label><input type="text" id="imovelAlvaraNumero" /></div>
+            <div class="input-group"><label>Alvará vigência (fim):</label><input type="date" id="imovelAlvaraFim" /></div>
+            <div class="input-group"><label>Alvará documento:</label><input type="file" id="imovelAlvaraDocumento" accept="application/pdf,image/jpeg,image/png" /></div>
+          </div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarImovelAcao()">💾 Salvar</button>
+        </div>
+
+        <!-- SUB-ABA: OBRAS (v4.24) -->
+        <div id="subFinanceiroObras" class="sub-aba-secretaria" style="display:none;">
+          <h3>🏗️ Obras, Licenciamento e Inauguração de Templos</h3>
+          <p class="subtitle">Art. 87: pedra fundamental, orçamento e cronograma físico-financeiro. A
+            inauguração é uma <strong>trava real</strong> — sem AVCB e Alvará/Habite-se vigentes (aba Imóveis),
+            checklist de placa e (obra nova) eficiência energética confirmados, o sistema recusa.</p>
+
+          <h4 style="color: var(--cor-primaria);">Nova ficha de obra</h4>
+          <div class="input-group"><label>Congregação:</label><select id="obraCongregacao"></select></div>
+          <div class="input-group"><label>Imóvel resultante (bemId, opcional):</label><input type="number" id="obraBemId" /></div>
+          <div class="input-group"><label>Título:</label><input type="text" id="obraTitulo" /></div>
+          <div class="input-group"><label>É obra nova?</label><select id="obraNova"><option value="1">Sim</option><option value="0">Não (reforma/ampliação)</option></select></div>
+          <div class="input-group"><label>Orçamento previsto:</label><input type="number" step="0.01" id="obraOrcamento" /></div>
+          <div class="input-group"><label>Início previsto:</label><input type="date" id="obraInicio" /></div>
+          <div class="input-group"><label>Fim previsto:</label><input type="date" id="obraFim" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="registrarObraAcao()">🏗️ Abrir ficha de obra</button>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Obras</h4>
+          <div class="rolagem-tabela"><div id="resultadoObras"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Cronograma físico-financeiro (marco)</h4>
+          <div class="input-group"><label>Obra (id):</label><input type="number" id="marcoObraId" /></div>
+          <div class="input-group"><label>Descrição:</label><input type="text" id="obraMarcoDescricao" /></div>
+          <div class="input-group"><label>Data prevista:</label><input type="date" id="obraMarcoData" /></div>
+          <div class="input-group"><label>% físico previsto:</label><input type="number" step="0.01" id="marcoPercentual" /></div>
+          <div class="input-group"><label>Valor previsto:</label><input type="number" step="0.01" id="marcoValor" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="registrarObraMarcoAcao()">📍 Criar marco</button>
+          <div class="rolagem-tabela"><div id="resultadoObraMarcos"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

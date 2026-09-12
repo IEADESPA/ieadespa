@@ -499,10 +499,10 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "frota", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "imunidade", "receitasacessorias", "imoveis", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "frota", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "imunidade", "receitasacessorias", "imoveis", "obras", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
   visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", frota: "Frota", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo", obrigacoes: "Obrigações Fiscais", imunidade: "Imunidade Tributária",
-  receitasacessorias: "Receitas Acessórias", imoveis: "Imóveis (Situação Fiscal)",
+  receitasacessorias: "Receitas Acessórias", imoveis: "Imóveis (Situação Fiscal)", obras: "Obras",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -656,6 +656,11 @@ function mostrarSubAbaFinanceiro(sub) {
     carregarImoveisAcao();
     return;
   }
+  if (sub === "obras") {
+    carregarOpcoesCongregacoesFinanceiro();
+    carregarObrasAcao();
+    return;
+  }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
     if (sub === "dizimistas") carregarDizimistasMes();
@@ -704,7 +709,7 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao", "casaCongregacao", "invCongregacao", "cessaoCongregacao", "doacaoCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao", "casaCongregacao", "invCongregacao", "cessaoCongregacao", "doacaoCongregacao", "obraCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
@@ -3246,12 +3251,116 @@ async function carregarImoveisAcao() {
     container.innerHTML = "<p class='subtitle'>Nenhum imóvel cadastrado no Patrimônio (v4.11, Tipo = IMOVEL).</p>";
     return;
   }
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Imóvel</th><th>IPTU</th><th>Vigência IPTU</th><th>ITBI</th><th>Alerta</th></tr></thead><tbody>`;
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Imóvel</th><th>IPTU</th><th>AVCB</th><th>Alvará/Habite-se</th><th>Alerta</th></tr></thead><tbody>`;
   lista.forEach(i => {
-    html += `<tr><td>${i.descricao}</td><td>${i.iptuStatus || "-"}</td><td>${i.iptuVigenciaFim || "-"} (${i.vigenciaIptu})</td><td>${i.itbiStatus || "-"}</td><td>${i.alertaRenovacao ? "⚠️ renovar" : "✅"}</td></tr>`;
+    html += `<tr><td>${i.descricao} (bemId ${i.bemId})</td><td>${i.iptuStatus || "-"} — ${i.iptuVigenciaFim || "-"} (${i.vigenciaIptu})</td>
+      <td>${i.avcbVigenciaFim || "-"} (${i.vigenciaAvcb})</td><td>${i.alvaraVigenciaFim || "-"} (${i.vigenciaAlvara})</td>
+      <td>${i.alertaRenovacao ? "⚠️ renovar" : "✅"}${i.impedidoReceberCulto ? "<br>⚠️ AVCB vencido (alerta)" : ""}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+async function salvarImovelAcao() {
+  const bemId = document.getElementById("imovelBemId").value;
+  if (!bemId) { alert("Informe o bemId do imóvel."); return; }
+  const body = {
+    iptuStatus: document.getElementById("imovelIptuStatus").value,
+    iptuNumeroProcesso: document.getElementById("imovelIptuProcesso").value || null,
+    iptuVigenciaFim: document.getElementById("imovelIptuFim").value || null,
+    avcbNumero: document.getElementById("imovelAvcbNumero").value || null,
+    avcbVigenciaFim: document.getElementById("imovelAvcbFim").value || null,
+    alvaraNumero: document.getElementById("imovelAlvaraNumero").value || null,
+    alvaraVigenciaFim: document.getElementById("imovelAlvaraFim").value || null
+  };
+  const arquivoAvcb = document.getElementById("imovelAvcbDocumento").files[0];
+  const arquivoAlvara = document.getElementById("imovelAlvaraDocumento").files[0];
+  if (arquivoAvcb) { body.avcbDocumentoBase64 = await arquivoParaBase64(arquivoAvcb); body.mimeType = arquivoAvcb.type; }
+  if (arquivoAlvara) { body.alvaraDocumentoBase64 = await arquivoParaBase64(arquivoAlvara); body.mimeType = arquivoAlvara.type; }
+  const res = await fetchProtegido(`${API_BASE}/imoveis/${bemId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) carregarImoveisAcao();
+}
+
+// ---- OBRAS, LICENCIAMENTO E INAUGURAÇÃO DE TEMPLOS (v4.24) ----
+async function carregarObrasAcao() {
+  const container = document.getElementById("resultadoObras");
+  const res = await fetchProtegido(`${API_BASE}/obras`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma obra cadastrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Título</th><th>Congregação</th><th>Status</th><th>Ações</th></tr></thead><tbody>`;
+  lista.forEach(o => {
+    html += `<tr><td>${o.ObraId}</td><td>${o.Titulo}</td><td>${o.congregacaoNome}</td><td>${o.Status}</td>
+      <td>
+        ${!o.DataPedraFundamental ? `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'MARCAR_PEDRA_FUNDAMENTAL')">Pedra fundamental</button>` : ""}
+        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'CONFIRMAR_PLACA')">Confirmar placa</button>
+        ${o.EhObraNova ? `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'CONFIRMAR_EFICIENCIA_ENERGETICA')">Confirmar eficiência energética</button>` : ""}
+        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'INAUGURAR')">🏁 Inaugurar</button>
+      </td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarObraAcao() {
+  const body = {
+    congregacaoId: document.getElementById("obraCongregacao").value,
+    bemId: document.getElementById("obraBemId").value || null,
+    titulo: document.getElementById("obraTitulo").value,
+    ehObraNova: document.getElementById("obraNova").value === "1",
+    orcamentoPrevisto: document.getElementById("obraOrcamento").value,
+    dataInicioPrevista: document.getElementById("obraInicio").value,
+    dataFimPrevista: document.getElementById("obraFim").value
+  };
+  const res = await fetchProtegido(`${API_BASE}/obras`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) { document.getElementById("obraTitulo").value = ""; carregarObrasAcao(); }
+}
+
+async function acaoObra(obraId, acao) {
+  let body = { acao };
+  if (acao === "MARCAR_PEDRA_FUNDAMENTAL") {
+    const data = prompt("Data da pedra fundamental (AAAA-MM-DD):", new Date().toISOString().slice(0, 10));
+    if (!data) return;
+    body.dataPedraFundamental = data;
+  }
+  if (acao === "CONFIRMAR_PLACA") {
+    if (!confirm("Confirma que os nomes obrigatórios estão na placa e que NÃO há nome de doador/político (Art. 87 §3º)?")) return;
+    body.nomesConfirmados = true;
+    body.semDoadorPoliticoConfirmado = true;
+  }
+  const res = await fetchProtegido(`${API_BASE}/obras/${obraId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) carregarObrasAcao();
+}
+
+async function registrarObraMarcoAcao() {
+  const body = {
+    obraId: document.getElementById("marcoObraId").value,
+    descricao: document.getElementById("obraMarcoDescricao").value,
+    dataPrevista: document.getElementById("obraMarcoData").value,
+    percentualFisicoPrevisto: document.getElementById("marcoPercentual").value,
+    valorPrevisto: document.getElementById("marcoValor").value
+  };
+  const res = await fetchProtegido(`${API_BASE}/obra-marcos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) {
+    document.getElementById("obraMarcoDescricao").value = "";
+    const res2 = await fetchProtegido(`${API_BASE}/obra-marcos?obraId=${body.obraId}`);
+    const marcos = await res2.json();
+    const container = document.getElementById("resultadoObraMarcos");
+    let html = `<table class="tabela-frequencia"><thead><tr><th>Descrição</th><th>Prevista</th><th>% Previsto</th><th>% Realizado</th><th>Valor previsto</th></tr></thead><tbody>`;
+    (Array.isArray(marcos) ? marcos : []).forEach(m => html += `<tr><td>${m.Descricao}</td><td>${m.DataPrevista}</td><td>${m.PercentualFisicoPrevisto}%</td><td>${m.PercentualFisicoRealizado}%</td><td>R$ ${Number(m.ValorPrevisto).toFixed(2)}</td></tr>`);
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  }
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

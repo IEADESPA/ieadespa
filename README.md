@@ -2330,19 +2330,32 @@ Ciclo de verdade do sustento pastoral, fechando a v4.10 além do malote
 
 #### v4.11 — Patrimônio, Alçadas e Depreciação
 
-- [ ] Inventário físico anual de bens (dezembro) — Reg. Art. 63.
-- [ ] Teto de Alçada Patrimonial (acima → Assembleia; abaixo → CLI) —
-      reaproveita o mesmo motor de alçada por valor construído em Saídas
-      (v4.5), não um mecanismo novo.
-- [ ] Blindagem patrimonial: assinatura conjunta, quarentena de 12 meses.
-- [ ] Registro de escrituras, títulos, alvarás, veículos, contratos (2º/3º Secretários).
-- [ ] **Depreciação de ativo fixo** (método linear, padrão pra entidades
-      sem fins lucrativos) — cada bem do inventário ganha vida útil e
-      valor residual; a depreciação mensal calculada na leitura alimenta
-      o Balanço Patrimonial (v4.9), nunca lançada à mão.
-- [ ] Casa Pastoral como ativo com regra de ocupação (Reg. Art. 115): uso exclusivo do
-      Dirigente titular, vedada cessão a terceiros, destituição automática por uso
-      irregular/"gato" de luz-água *(gap da varredura)*.
+Novo módulo em Financeiro → **Patrimônio**. Tudo calculado na leitura
+(`shared/patrimonio.js`), nunca saldo de depreciação gravado à parte:
+
+- [x] Inventário físico anual de bens (`InventariosAnuais`/`InventarioItens`,
+      `GestaoInventarios`) — cada congregação/departamento abre o inventário
+      de dezembro (Reg. Art. 59) e lança cada bem com estado de conservação
+      e presença física; bens em `BensPatrimoniais` (`GestaoBensPatrimoniais`).
+- [x] Teto de Alçada Patrimonial (`GestaoAlienacoesBens`) — **5% do PL** apurado
+      no último balanço (calculado na leitura via `shared/demonstracoes.js`,
+      reaproveitando a base da v4.9). Até o teto (e sem ser Templo Sede) →
+      aprovação da CLI; acima do teto OU Templo Sede → **Assembleia Geral**
+      (Art. 58 §1º do Estatuto, I e II).
+- [x] Blindagem patrimonial — quarentena de 12 meses (`QuarentenasPatrimoniais`,
+      Art. 58 §7º) trava alienação de imóvel; a alienação autorizada pela
+      Assembleia exige a **ata vinculada** (assinatura coletiva, Art. 31).
+- [x] Registro de escrituras, títulos, alvarás, veículos, contratos
+      (`BensDocumentos`, `GestaoDocumentosBens`) sob guarda dos 2º/3º Secretários
+      (`ResponsavelCargo = SECRETARIO_2 | SECRETARIO_3`).
+- [x] **Depreciação de ativo fixo** (método linear) — cada bem tem vida útil e
+      valor residual; a depreciação acumulada e o valor contábil líquido são
+      calculados na leitura e alimentam o **Ativo Imobilizado** do Balanço
+      Patrimonial (v4.9, `shared/demonstracoes.js`), nunca lançados à mão.
+- [x] Casa Pastoral como ativo com regra de ocupação (`CasaPastoralOcupacoes`,
+      `GestaoCasaPastoral`, Reg. Art. 115): uso exclusivo do Dirigente Titular,
+      vedada cessão a terceiros, destituição automática por uso irregular/"gato"
+      de luz-água *(gap da varredura)*.
 
 #### v4.12 — Auditoria, Compliance e Indicadores (nível enterprise/"pico")
 

@@ -110,6 +110,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroDemonstracoes" onclick="mostrarSubAbaFinanceiro('demonstracoes')"><span class="icone">📑</span><span class="rotulo">Demonstrações</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRateiogeral" onclick="mostrarSubAbaFinanceiro('rateiogeral')"><span class="icone">📬</span><span class="rotulo">Rateio Geral</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPrebenda" onclick="mostrarSubAbaFinanceiro('prebenda')"><span class="icone">⛪</span><span class="rotulo">Prebenda</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroPatrimonio" onclick="mostrarSubAbaFinanceiro('patrimonio')"><span class="icone">🏛️</span><span class="rotulo">Patrimônio</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2163,6 +2164,67 @@
           <button class="btn-confirmar" style="width:auto;" onclick="salvarAuxilioCustoAcao()">💾 Cadastrar auxílio</button>
           <p id="resultadoAuxilioCusto" class="subtitle"></p>
           <div class="rolagem-tabela"><div id="resultadoAuxiliosCusto"></div></div>
+        </div>
+
+        <!-- SUB-ABA: PATRIMÔNIO (v4.11) — Patrimônio, Alçadas e Depreciação -->
+        <div id="subFinanceiroPatrimonio" class="sub-aba-secretaria" style="display:none;">
+          <h3>🏛️ Patrimônio, Alçadas e Depreciação</h3>
+          <p class="subtitle">Bens em nome da Matriz (Art. 58 do Estatuto), inventário anual (dezembro),
+            teto de alçada patrimonial (5% do PL), depreciação linear calculada na leitura e Casa Pastoral
+            com regra de ocupação (Reg. Art. 115).</p>
+
+          <h4 style="color: var(--cor-primaria);">Bens Patrimoniais</h4>
+          <div class="input-group"><label>Tipo:</label><select id="bemTipo"><option value="IMOVEL">Imóvel</option><option value="VEICULO">Veículo</option><option value="EQUIPAMENTO">Equipamento</option><option value="MOVEL">Móvel</option><option value="CASA_PASTORAL">Casa Pastoral</option><option value="OUTROS">Outros</option></select></div>
+          <div class="input-group"><label>Descrição:</label><input type="text" id="bemDescricao" /></div>
+          <div class="input-group"><label>Valor de aquisição (R$):</label><input type="number" id="bemValorAquisicao" step="0.01" min="0" /></div>
+          <div class="input-group"><label>Data de aquisição:</label><input type="date" id="bemDataAquisicao" /></div>
+          <div class="input-group"><label>Vida útil (meses):</label><input type="number" id="bemVidaUtil" min="0" /></div>
+          <div class="input-group"><label>Valor residual (R$):</label><input type="number" id="bemValorResidual" step="0.01" min="0" /></div>
+          <label><input type="checkbox" id="bemEhTemploSede" /> É o Templo Sede (alçada vai pra Assembleia)</label>
+          <button class="btn-confirmar" style="width:auto;margin-top:8px;" onclick="salvarBemPatrimonialAcao()">💾 Cadastrar bem</button>
+          <p id="resultadoBem" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoBensPatrimoniais"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Alienação de Bens (Alçada Patrimonial)</h4>
+          <div class="input-group"><label>Bem:</label><select id="alienacaoBemId"></select></div>
+          <div class="input-group"><label>Valor proposto (R$):</label><input type="number" id="alienacaoValorProposto" step="0.01" min="0" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="proporAlienacaoAcao()">📤 Propor alienação</button>
+          <p id="resultadoAlienacao" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoAlienacoes"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Documentos (escrituras, títulos, alvarás, veículos, contratos)</h4>
+          <div class="input-group"><label>Bem (opcional):</label><select id="docBemId"></select></div>
+          <div class="input-group"><label>Tipo:</label><select id="docTipoDocumento"><option value="ESCRITURA">Escritura</option><option value="TITULO">Título</option><option value="ALVARA">Alvará</option><option value="VEICULO">Veículo</option><option value="CONTRATO">Contrato</option><option value="IPTU">IPTU</option><option value="OUTROS">Outros</option></select></div>
+          <div class="input-group"><label>Descrição:</label><input type="text" id="docDescricao" /></div>
+          <div class="input-group"><label>Responsável:</label><select id="docResponsavelCargo"><option value="SECRETARIO_2">2º Secretário</option><option value="SECRETARIO_3">3º Secretário</option></select></div>
+          <div class="input-group"><label>Arquivo (PDF/imagem):</label><input type="file" id="docArquivo" accept="application/pdf,image/jpeg,image/png" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarDocumentoBemAcao()">📎 Registrar documento</button>
+          <p id="resultadoDocumentoBem" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoDocumentosBens"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Inventário Anual</h4>
+          <div class="input-group"><label>Ano:</label><input type="number" id="invAnoReferencia" /></div>
+          <div class="input-group"><label>Congregação (vazio = Sede):</label><select id="invCongregacao"><option value="">— Sede/consolidado —</option></select></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="abrirInventarioAcao()">🗂️ Abrir inventário</button>
+          <p id="resultadoInventario" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoInventarios"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Casa Pastoral (Reg. Art. 115)</h4>
+          <div class="input-group"><label>Casa Pastoral (bem):</label><select id="casaBemId"></select></div>
+          <div class="input-group"><label>Congregação:</label><select id="casaCongregacao"></select></div>
+          <div class="input-group"><label>Dirigente titular (matrícula):</label><input type="number" id="casaOcupanteMembroId" /></div>
+          <div class="input-group"><label>Início:</label><input type="date" id="casaDataInicio" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarOcupacaoCasaPastoralAcao()">🏠 Registrar ocupação</button>
+          <p id="resultadoCasaPastoralAcao" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoCasaPastoral"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

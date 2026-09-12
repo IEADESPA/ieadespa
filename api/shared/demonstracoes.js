@@ -9,6 +9,7 @@
 // (é assim que o Tesoureiro Local vive, v4.1), a conversão pra regime de
 // COMPETÊNCIA acontece só aqui, na geração das demonstrações formais.
 const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const patrimonio = require("./patrimonio");
 
 // Caixa e Equivalentes consolidado (toda a denominação, conta única —
 // v4.1.3): tudo que já entrou de verdade menos tudo que já saiu de
@@ -52,12 +53,15 @@ async function calcularBalancoPatrimonial(pool, sql, dataCorte) {
   const caixa = await caixaConsolidadoAteData(pool, sql, dataCorte);
   const contasReceber = await contasAReceberAtivoAteData(pool, sql, dataCorte);
   const contasPagar = await contasAPagarPassivoAteData(pool, sql, dataCorte);
-  const ativoTotal = round2(caixa + contasReceber);
+  // v4.11 — Ativo Imobilizado (bens do inventário) líquido de depreciação,
+  // calculado na leitura (método linear), alimenta o Balanço Patrimonial.
+  const imobilizado = await patrimonio.imobilizadoLiquido(pool, sql, dataCorte);
+  const ativoTotal = round2(caixa + contasReceber + imobilizado);
   const passivoTotal = round2(contasPagar);
   const patrimonioLiquido = round2(ativoTotal - passivoTotal);
   return {
     dataCorte,
-    ativo: { caixaEEquivalentes: caixa, contasAReceber: contasReceber, total: ativoTotal },
+    ativo: { caixaEEquivalentes: caixa, contasAReceber: contasReceber, imobilizadoLiquido: imobilizado, total: ativoTotal },
     passivo: { contasAPagar: contasPagar, total: passivoTotal },
     patrimonioLiquido
   };

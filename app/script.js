@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -523,7 +523,7 @@ const SUBMODULOS_FINANCEIRO = [
   { chave: "orcamento", titulo: "Orçamento e Planejamento", icone: "📐", subAba: "orcamento", pronto: true },
   { chave: "pdq", titulo: "PDQ (Planejamento Diretor Quadrienal)", icone: "🧭", subAba: "pdq", pronto: true },
   { chave: "demonstracoes", titulo: "Demonstrações Contábeis (ITG 2002)", icone: "📑", subAba: "demonstracoes", pronto: true },
-  { chave: "patrimonio", titulo: "Patrimônio", icone: "🏛️", pronto: false },
+  { chave: "patrimonio", titulo: "Patrimônio, Alçadas e Depreciação", icone: "🏛️", subAba: "patrimonio", pronto: true },
   { chave: "doacoes", titulo: "Doações Online", icone: "💳", pronto: false },
   { chave: "auditoria", titulo: "Auditoria e Compliance", icone: "🕵️", pronto: false }
 ];
@@ -593,6 +593,15 @@ function mostrarSubAbaFinanceiro(sub) {
     carregarAuxiliosCustoAcao();
     return;
   }
+  if (sub === "patrimonio") {
+    carregarOpcoesCongregacoesFinanceiro();
+    carregarBensPatrimoniaisAcao();
+    carregarAlienacoesBensAcao();
+    carregarDocumentosBensAcao();
+    carregarInventariosAcao();
+    carregarOcupacoesCasaPastoralAcao();
+    return;
+  }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
     if (sub === "dizimistas") carregarDizimistasMes();
@@ -641,7 +650,7 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao", "casaCongregacao", "invCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
@@ -2345,6 +2354,159 @@ async function salvarAuxilioCustoAcao() {
   avisarResultado(data);
   resultado.textContent = data.mensagem;
   if (data.sucesso) carregarAuxiliosCustoAcao();
+}
+
+// ---- PATRIMÔNIO (v4.11) ----
+async function carregarOpcoesBens() {
+  const res = await fetchProtegido(`${API_BASE}/bens-patrimoniais`);
+  const lista = await res.json();
+  const opcoes = `<option value="">— Selecione —</option>` + (Array.isArray(lista) ? lista.map(b => `<option value="${b.bemId}">${b.descricao}</option>`).join("") : "");
+  ["alienacaoBemId", "docBemId", "casaBemId"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = opcoes; });
+}
+
+async function carregarBensPatrimoniaisAcao() {
+  const container = document.getElementById("resultadoBensPatrimoniais");
+  const res = await fetchProtegido(`${API_BASE}/bens-patrimoniais`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum bem cadastrado.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Tipo</th><th>Valor original</th><th>Aquisição</th><th>Líquido</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(b => html += `<tr><td>${b.descricao}</td><td>${b.tipo}</td><td>R$ ${Number(b.valorAquisicao).toFixed(2)}</td><td>${b.dataAquisicao.slice(0, 10)}</td><td>R$ ${Number(b.valorContabilLiquido).toFixed(2)}</td><td>${b.status}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+  carregarOpcoesBens();
+}
+
+async function salvarBemPatrimonialAcao() {
+  const tipo = document.getElementById("bemTipo").value;
+  const descricao = document.getElementById("bemDescricao").value.trim();
+  const valorAquisicao = document.getElementById("bemValorAquisicao").value;
+  const dataAquisicao = document.getElementById("bemDataAquisicao").value;
+  const vidaUtilMeses = document.getElementById("bemVidaUtil").value;
+  const valorResidual = document.getElementById("bemValorResidual").value;
+  const ehTemploSede = document.getElementById("bemEhTemploSede").checked;
+  const resultado = document.getElementById("resultadoBem");
+  if (!tipo || !descricao || !valorAquisicao || !dataAquisicao) { resultado.textContent = "Preencha tipo, descrição, valor e data."; return; }
+  const body = { tipo, descricao, valorAquisicao: Number(valorAquisicao), dataAquisicao, vidaUtilMeses: vidaUtilMeses ? Number(vidaUtilMeses) : undefined, valorResidual: valorResidual ? Number(valorResidual) : undefined, ehTemploSede };
+  const res = await fetchProtegido(`${API_BASE}/bens-patrimoniais`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) carregarBensPatrimoniaisAcao();
+}
+
+async function carregarAlienacoesBensAcao() {
+  const container = document.getElementById("resultadoAlienacoes");
+  const res = await fetchProtegido(`${API_BASE}/alienacoes-bens`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma alienação registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Valor proposto</th><th>Alçada</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(a => html += `<tr><td>${a.bemDescricao}</td><td>R$ ${Number(a.ValorProposto).toFixed(2)}</td><td>${a.AprovacaoNecessaria}</td><td>${a.Status}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function proporAlienacaoAcao() {
+  const bemId = document.getElementById("alienacaoBemId").value;
+  const valorProposto = document.getElementById("alienacaoValorProposto").value;
+  const resultado = document.getElementById("resultadoAlienacao");
+  if (!bemId || !valorProposto) { resultado.textContent = "Informe o bem e o valor proposto."; return; }
+  const res = await fetchProtegido(`${API_BASE}/alienacoes-bens`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bemId: Number(bemId), valorProposto: Number(valorProposto) }) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) carregarAlienacoesBensAcao();
+}
+
+async function carregarDocumentosBensAcao() {
+  const container = document.getElementById("resultadoDocumentosBens");
+  const res = await fetchProtegido(`${API_BASE}/bens-documentos`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum documento patrimonial registrado.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Descrição</th><th>Responsável</th></tr></thead><tbody>`;
+  lista.forEach(d => html += `<tr><td>${d.tipoDocumento}</td><td>${d.descricao}</td><td>${d.responsavelCargo}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarDocumentoBemAcao() {
+  const bemId = document.getElementById("docBemId").value;
+  const tipoDocumento = document.getElementById("docTipoDocumento").value;
+  const descricao = document.getElementById("docDescricao").value.trim();
+  const responsavelCargo = document.getElementById("docResponsavelCargo").value;
+  const arquivo = document.getElementById("docArquivo").files[0];
+  const resultado = document.getElementById("resultadoDocumentoBem");
+  if (!tipoDocumento || !descricao || !responsavelCargo || !arquivo) { resultado.textContent = "Preencha todos os campos e anexe o documento."; return; }
+  const body = { bemId: bemId ? Number(bemId) : undefined, tipoDocumento, descricao, responsavelCargo, documentoBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type };
+  const res = await fetchProtegido(`${API_BASE}/bens-documentos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) carregarDocumentosBensAcao();
+}
+
+async function carregarInventariosAcao() {
+  const container = document.getElementById("resultadoInventarios");
+  const res = await fetchProtegido(`${API_BASE}/inventarios`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum inventário aberto.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Ano</th><th>Escopo</th><th>Itens</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(i => html += `<tr><td>${i.anoReferencia}</td><td>${i.congregacaoNome || "Sede"}</td><td>${i.totalItens}</td><td>${i.status}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function abrirInventarioAcao() {
+  const anoReferencia = document.getElementById("invAnoReferencia").value;
+  const congregacaoId = document.getElementById("invCongregacao").value;
+  const resultado = document.getElementById("resultadoInventario");
+  if (!anoReferencia) { resultado.textContent = "Informe o ano."; return; }
+  const body = { anoReferencia: Number(anoReferencia), congregacaoId: congregacaoId ? Number(congregacaoId) : undefined };
+  const res = await fetchProtegido(`${API_BASE}/inventarios`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) carregarInventariosAcao();
+}
+
+async function carregarOcupacoesCasaPastoralAcao() {
+  const container = document.getElementById("resultadoCasaPastoral");
+  const res = await fetchProtegido(`${API_BASE}/casa-pastoral`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma ocupação de Casa Pastoral registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Casa</th><th>Dirigente</th><th>Congregação</th><th>Início</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(o => html += `<tr><td>${o.casaDescricao}</td><td>${o.ocupanteNome}</td><td>${o.congregacaoNome}</td><td>${o.dataInicio.slice(0, 10)}</td><td>${o.status}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarOcupacaoCasaPastoralAcao() {
+  const bemId = document.getElementById("casaBemId").value;
+  const congregacaoId = document.getElementById("casaCongregacao").value;
+  const ocupanteMembroId = document.getElementById("casaOcupanteMembroId").value;
+  const dataInicio = document.getElementById("casaDataInicio").value;
+  const resultado = document.getElementById("resultadoCasaPastoralAcao");
+  if (!bemId || !congregacaoId || !ocupanteMembroId || !dataInicio) { resultado.textContent = "Preencha todos os campos."; return; }
+  const body = { bemId: Number(bemId), congregacaoId: Number(congregacaoId), ocupanteMembroId: Number(ocupanteMembroId), dataInicio };
+  const res = await fetchProtegido(`${API_BASE}/casa-pastoral`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) carregarOcupacoesCasaPastoralAcao();
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

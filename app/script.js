@@ -696,7 +696,7 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao", "casaCongregacao", "invCongregacao", "cessaoCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao", "casaCongregacao", "invCongregacao", "cessaoCongregacao", "doacaoCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
@@ -3960,6 +3960,8 @@ function mostrarAbaSecretaria(aba) {
     carregarAuditoria(); carregarIndicadoresAcao(); carregarAlertasComplianceAcao(); carregarCongregacoesPrestacaoAcao(); carregarPrestacoesContasAcao();
     carregarRecertificacoesAcao(); verificarCadeiaAuditoriaAcao(); carregarAncoragensAcao(); carregarAuditoriasNiveisAcao();
     carregarPareceresConselhoAcao(); carregarSinalizacoesNifAcao(); carregarComunicacoesCoafAcao();
+    carregarOpcoesCongregacoesFinanceiro();
+    carregarDoacoesAcao(); carregarPoliticasAcao(); carregarDueDiligenceAcao(); carregarConflitosInteresseAcao();
   }
   if (aba === "protecaodedados") { carregarSolicitacoesDPO(); montarPoliticasRetencao(); }
   if (aba === "ouvidoria") carregarPainelOuvidoria();
@@ -8903,6 +8905,151 @@ async function carregarComunicacoesCoafAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Sinalização</th><th>Protocolo</th><th>Prazo 24h</th><th>Observação</th><th>Quando</th></tr></thead><tbody>`;
   lista.forEach(c => html += `<tr><td>#${c.sinalizacaoId}</td><td>${c.protocolo || "-"}</td><td>${c.dentroPrazo24h ? "✅ Dentro do prazo" : "⚠️ Fora do prazo"}</td><td>${c.observacao || "-"}</td><td>${new Date(c.dataComunicacao).toLocaleString("pt-BR")}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+// ---- DOAÇÕES E PROGRAMA DE INTEGRIDADE (v4.22) ----
+async function registrarDoacaoAcao() {
+  const body = {
+    congregacaoId: document.getElementById("doacaoCongregacao").value || null,
+    valor: document.getElementById("doacaoValor").value,
+    formaPagamento: document.getElementById("doacaoFormaPagamento").value,
+    dataRecebimento: document.getElementById("doacaoData").value,
+    doadorNome: document.getElementById("doacaoDoadorNome").value || null,
+    doadorCpfCnpj: document.getElementById("doacaoDoadorCpfCnpj").value || null
+  };
+  const res = await fetchProtegido(`${API_BASE}/doacoes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) {
+    document.getElementById("doacaoValor").value = "";
+    document.getElementById("doacaoDoadorNome").value = "";
+    document.getElementById("doacaoDoadorCpfCnpj").value = "";
+    carregarDoacoesAcao();
+    carregarSinalizacoesNifAcao();
+  }
+}
+
+async function carregarDoacoesAcao() {
+  const container = document.getElementById("resultadoDoacoes");
+  const res = await fetchProtegido(`${API_BASE}/doacoes`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma doação registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Recibo</th><th>Data</th><th>Valor</th><th>Forma</th><th>Doador</th></tr></thead><tbody>`;
+  lista.forEach(d => {
+    const doador = d.identificacaoObrigatoria ? `${d.doadorNome || "⚠️ não identificado"} (${d.doadorCpfCnpj || "-"})` : (d.doadorNome || "-");
+    html += `<tr><td>${d.numeroRecibo}</td><td>${d.dataRecebimento}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${d.formaPagamento}</td><td>${doador}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarPoliticaAcao() {
+  const body = {
+    tipo: document.getElementById("politicaTipo").value,
+    titulo: document.getElementById("politicaTitulo").value,
+    ataReferencia: document.getElementById("politicaAta").value,
+    dataAprovacao: document.getElementById("politicaData").value
+  };
+  const res = await fetchProtegido(`${API_BASE}/integridade/politicas`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) { document.getElementById("politicaTitulo").value = ""; document.getElementById("politicaAta").value = ""; carregarPoliticasAcao(); }
+}
+
+async function carregarPoliticasAcao() {
+  const container = document.getElementById("resultadoPoliticas");
+  const res = await fetchProtegido(`${API_BASE}/integridade/politicas`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma política aprovada ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Tipo</th><th>Título</th><th>Ata</th><th>Aprovação</th><th>Vigente</th></tr></thead><tbody>`;
+  lista.forEach(p => html += `<tr><td>${p.PoliticaId}</td><td>${p.Tipo}</td><td>${p.Titulo}</td><td>${p.AtaReferencia}</td><td>${p.DataAprovacao}</td><td>${p.Vigente ? "✅" : "-"}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarAceiteAcao() {
+  const body = { membroId: document.getElementById("aceiteMembroId").value, politicaId: document.getElementById("aceitePoliticaId").value };
+  const res = await fetchProtegido(`${API_BASE}/integridade/aceites`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) {
+    document.getElementById("aceiteMembroId").value = "";
+    document.getElementById("aceitePoliticaId").value = "";
+    const res2 = await fetchProtegido(`${API_BASE}/integridade/aceites`);
+    const lista = await res2.json();
+    const container = document.getElementById("resultadoAceites");
+    let html = `<table class="tabela-frequencia"><thead><tr><th>Membro</th><th>Política</th><th>Data</th></tr></thead><tbody>`;
+    (Array.isArray(lista) ? lista : []).forEach(a => html += `<tr><td>${a.membroNome}</td><td>${a.politicaTitulo}</td><td>${new Date(a.DataAceite).toLocaleString("pt-BR")}</td></tr>`);
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  }
+}
+
+async function carregarDueDiligenceAcao() {
+  const container = document.getElementById("resultadoDueDiligence");
+  const res = await fetchProtegido(`${API_BASE}/integridade/due-diligence`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum fornecedor cadastrado.</p>";
+    return;
+  }
+  const cores = { APROVADO: "✅", REPROVADO: "⛔", PENDENTE: "⏳" };
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Fornecedor</th><th>Status</th><th>Observação</th><th>Ação</th></tr></thead><tbody>`;
+  lista.forEach(f => {
+    html += `<tr><td>${f.fornecedorNome}</td><td>${cores[f.Status] || "⏳"} ${f.Status || "PENDENTE"}</td><td>${f.Observacao || "-"}</td>
+      <td>
+        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDueDiligenceAcao(${f.FornecedorId}, 'APROVADO')">Aprovar</button>
+        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDueDiligenceAcao(${f.FornecedorId}, 'REPROVADO')">Reprovar</button>
+      </td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarDueDiligenceAcao(fornecedorId, status) {
+  const observacao = prompt(`Observação da due diligence (${status}):`, "") || null;
+  const res = await fetchProtegido(`${API_BASE}/integridade/due-diligence`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fornecedorId, status, observacao }) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) carregarDueDiligenceAcao();
+}
+
+async function registrarConflitoInteresseAcao() {
+  const body = {
+    membroId: document.getElementById("conflitoMembroId").value,
+    mandatoReferencia: document.getElementById("conflitoMandato").value,
+    temConflito: document.getElementById("conflitoTem").value === "1",
+    descricaoConflito: document.getElementById("conflitoDescricao").value || null
+  };
+  const res = await fetchProtegido(`${API_BASE}/integridade/conflitos-interesse`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) {
+    document.getElementById("conflitoMembroId").value = "";
+    document.getElementById("conflitoMandato").value = "";
+    document.getElementById("conflitoDescricao").value = "";
+    carregarConflitosInteresseAcao();
+  }
+}
+
+async function carregarConflitosInteresseAcao() {
+  const container = document.getElementById("resultadoConflitosInteresse");
+  const res = await fetchProtegido(`${API_BASE}/integridade/conflitos-interesse`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma declaração registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Dirigente</th><th>Mandato</th><th>Conflito?</th><th>Descrição</th></tr></thead><tbody>`;
+  lista.forEach(c => html += `<tr><td>${c.membroNome}</td><td>${c.MandatoReferencia}</td><td>${c.TemConflito ? "⚠️ Sim" : "✅ Não"}</td><td>${c.DescricaoConflito || "-"}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }

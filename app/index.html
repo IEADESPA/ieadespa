@@ -1615,6 +1615,63 @@
 
         <h4 style="color: var(--cor-primaria);margin-top:18px;">Comunicações ao COAF</h4>
         <div class="rolagem-tabela"><div id="resultadoComunicacoesCoaf"></div></div>
+
+        <hr style="margin:24px 0;" />
+        <h4 style="color: var(--cor-primaria);">🎁 Doações (v4.22 — PLD-FT)</h4>
+        <p class="subtitle">Lei 9.613/1998 — o ponto sensível é a movimentação em espécie. Acima do limite de
+          identificação (catálogo de valores monetários, v4.17), doador precisa ser identificado; doação em
+          espécie acima do limite, ou fracionada, gera sinalização automática no NIF acima.</p>
+        <div class="input-group"><label>Congregação (opcional):</label><select id="doacaoCongregacao"></select></div>
+        <div class="input-group"><label>Valor:</label><input type="number" step="0.01" id="doacaoValor" /></div>
+        <div class="input-group"><label>Forma de pagamento:</label>
+          <select id="doacaoFormaPagamento">
+            <option value="PIX">PIX</option>
+            <option value="TRANSFERENCIA">Transferência</option>
+            <option value="ESPECIE">Espécie</option>
+            <option value="CHEQUE">Cheque</option>
+            <option value="OUTROS">Outros</option>
+          </select>
+        </div>
+        <div class="input-group"><label>Data de recebimento:</label><input type="date" id="doacaoData" /></div>
+        <div class="input-group"><label>Nome do doador (obrigatório acima do limite):</label><input type="text" id="doacaoDoadorNome" /></div>
+        <div class="input-group"><label>CPF/CNPJ do doador (obrigatório acima do limite):</label><input type="text" id="doacaoDoadorCpfCnpj" /></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarDoacaoAcao()">💾 Registrar doação</button>
+        <div class="rolagem-tabela"><div id="resultadoDoacoes"></div></div>
+
+        <h4 style="color: var(--cor-primaria);margin-top:18px;">🛡️ Programa de Integridade (v4.22)</h4>
+        <p class="subtitle">Lei 12.846/2013 + Decreto 11.129/2022. Canal de denúncia: Ouvidoria (v3.7) — não duplicado aqui.</p>
+
+        <h5>Política de Doações e Código de Conduta (aprovados em ata)</h5>
+        <div class="input-group"><label>Tipo:</label>
+          <select id="politicaTipo">
+            <option value="CODIGO_CONDUTA">Código de Conduta</option>
+            <option value="DOACOES">Política de Doações</option>
+          </select>
+        </div>
+        <div class="input-group"><label>Título:</label><input type="text" id="politicaTitulo" /></div>
+        <div class="input-group"><label>Referência da ata (obrigatório):</label><input type="text" id="politicaAta" placeholder="ex: Ata CLI 12/2026" /></div>
+        <div class="input-group"><label>Data de aprovação:</label><input type="date" id="politicaData" /></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarPoliticaAcao()">📜 Aprovar política</button>
+        <div class="rolagem-tabela"><div id="resultadoPoliticas"></div></div>
+
+        <h5 style="margin-top:14px;">Aceite individual do Código de Conduta</h5>
+        <div class="input-group"><label>Matrícula do membro:</label><input type="number" id="aceiteMembroId" /></div>
+        <div class="input-group"><label>Política (id):</label><input type="number" id="aceitePoliticaId" /></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarAceiteAcao()">✍️ Registrar aceite</button>
+        <div class="rolagem-tabela"><div id="resultadoAceites"></div></div>
+
+        <h5 style="margin-top:14px;">Due Diligence de Fornecedor</h5>
+        <div class="rolagem-tabela"><div id="resultadoDueDiligence"></div></div>
+
+        <h5 style="margin-top:14px;">Declaração de Conflito de Interesses (por dirigente/mandato)</h5>
+        <div class="input-group"><label>Matrícula do dirigente:</label><input type="number" id="conflitoMembroId" /></div>
+        <div class="input-group"><label>Mandato:</label><input type="text" id="conflitoMandato" placeholder="ex: 2026-2028" /></div>
+        <div class="input-group"><label>Possui conflito de interesses?</label>
+          <select id="conflitoTem"><option value="0">Não</option><option value="1">Sim</option></select>
+        </div>
+        <div class="input-group"><label>Descrição (obrigatório se houver conflito):</label><textarea id="conflitoDescricao" rows="2"></textarea></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarConflitoInteresseAcao()">📝 Registrar declaração</button>
+        <div class="rolagem-tabela"><div id="resultadoConflitosInteresse"></div></div>
       </div>
 
       <!-- ABA: PROTEÇÃO DE DADOS (Encarregado de Dados / LGPD) -->

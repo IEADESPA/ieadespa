@@ -2673,20 +2673,35 @@ que a perda, na prática, quase nunca vem de desvio de dinheiro — vem de
 
 #### v4.22 — Doações, Integridade e PLD-FT *(7ª rodada)*
 
-- [ ] **Política de doações aprovada em ata** + registro de doações de alto valor
-      com identificação do doador acima de um limite definido — o ponto sensível
-      para PLD-FT em organização religiosa é a movimentação **em espécie**.
-      *(Lei 9.613/98; GAFI Recomendação 8 trata OSFL como setor de risco)*
-- [ ] Alerta de doação atípica (valor fora do padrão, fracionamento, doador sem
-      histórico) alimentando o NIF já previsto na v4.12 — o NIF vira o "COAF
+`Doacoes` + `PoliticasInstitucionais` + `CodigoCondutaAceites` +
+`FornecedoresDueDiligence` + `DeclaracoesConflitoInteresse` +
+`GestaoDoacoes` + `GestaoIntegridade` (migração 072).
+
+- [x] **Política de doações aprovada em ata** + registro de doações de alto valor
+      com identificação do doador acima de um limite definido — o limite
+      (`LIMITE_IDENTIFICACAO_DOADOR`) entra no catálogo de valores monetários
+      (v4.17), corrigível junto com os demais tetos, nunca hardcoded; acima
+      dele, `doadorNome`/`doadorCpfCnpj` são obrigatórios. O ponto sensível
+      para PLD-FT em organização religiosa é a movimentação **em espécie**
+      *(Lei 9.613/98; GAFI Recomendação 8 trata OSFL como setor de risco)*.
+- [x] Alerta de doação atípica (valor em espécie acima do limite, ou
+      fracionamento — mesmo doador, mesmo mês, soma acima do limite em
+      parcelas individualmente menores) alimentando o NIF já previsto na
+      v4.12 (`NifSinalizacoes` ganhou `DoacaoId`) — o NIF vira o "COAF
       interno" com dado de entrada real, não só de saída.
-- [ ] **Programa de integridade** (Lei 12.846/2013 alcança associações e
-      fundações; Decreto 11.129/2022 define os parâmetros): código de conduta com
-      aceite registrado, canal de denúncia (a Ouvidoria da v3.7 já existe —
-      falta declará-la formalmente como canal do programa), **due diligence de
-      fornecedor** antes do cadastro (v4.5) e declaração de conflito de interesses
-      por dirigente, renovada por mandato.
-- [ ] Recibo de doação padronizado e numerado pelo protocolo único (vB.4).
+- [x] **Programa de integridade** (Lei 12.846/2013 alcança associações e
+      fundações; Decreto 11.129/2022 define os parâmetros): código de conduta
+      com aceite individual registrado (`CodigoCondutaAceites`), canal de
+      denúncia declarado formalmente como a Ouvidoria já existente (v3.7,
+      `GET /api/integridade/canal-denuncia`, sem duplicar mecanismo),
+      **due diligence de fornecedor** antes do cadastro (v4.5) virar apto a
+      pagamento (`FornecedoresDueDiligence`) e declaração de conflito de
+      interesses por dirigente, renovada por mandato
+      (`DeclaracoesConflitoInteresse`, única por `MembroId` + `MandatoReferencia`).
+- [x] Recibo de doação padronizado e numerado — protocolo local
+      `DOA-{ano}-{sequencial}` por enquanto; será substituído pelo protocolo
+      único da vB.4 quando essa fase existir, sem quebrar os números já
+      emitidos (dependência futura documentada, não implementada aqui).
 
 #### v4.23 — Frota de veículos *(gap da varredura normativa)*
 

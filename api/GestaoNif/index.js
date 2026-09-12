@@ -26,9 +26,11 @@ module.exports = async function (context, req) {
   if (req.method === "GET" && recurso === "sinalizacoes") {
     const result = await pool.request().query(`
       SELECT s.SinalizacaoId AS sinalizacaoId, s.Tipo AS tipo, s.Descricao AS descricao, s.SaidaId AS saidaId,
-             s.FornecedorId AS fornecedorId, f.Nome AS fornecedorNome, s.Status AS status,
+             s.FornecedorId AS fornecedorId, f.Nome AS fornecedorNome, s.DoacaoId AS doacaoId,
+             d.NumeroRecibo AS doacaoNumeroRecibo, d.DoadorNome AS doacaoDoadorNome, s.Status AS status,
              CONVERT(varchar(33), s.CriadoEm, 126) AS criadoEm
       FROM NifSinalizacoes s LEFT JOIN Fornecedores f ON f.FornecedorId = s.FornecedorId
+      LEFT JOIN Doacoes d ON d.DoacaoId = s.DoacaoId
       ORDER BY s.Status, s.CriadoEm DESC
     `);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
@@ -36,14 +38,14 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && recurso === "sinalizacoes") {
-    const { tipo, descricao, saidaId, fornecedorId } = req.body || {};
+    const { tipo, descricao, saidaId, fornecedorId, doacaoId } = req.body || {};
     if (!tipo || !TIPOS.includes(tipo) || !descricao || !descricao.trim()) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: tipo (${TIPOS.join("|")}), descricao.` } };
       return;
     }
     const criada = await pool.request().input("tipo", sql.NVarChar(30), tipo).input("descricao", sql.NVarChar(500), descricao.trim())
-      .input("saidaId", sql.Int, saidaId || null).input("fornecedorId", sql.Int, fornecedorId || null).input("por", sql.Int, usuario.membroId)
-      .query(`INSERT INTO NifSinalizacoes (Tipo, Descricao, SaidaId, FornecedorId, RegistradoPor) OUTPUT INSERTED.SinalizacaoId VALUES (@tipo, @descricao, @saidaId, @fornecedorId, @por)`);
+      .input("saidaId", sql.Int, saidaId || null).input("fornecedorId", sql.Int, fornecedorId || null).input("doacaoId", sql.Int, doacaoId || null).input("por", sql.Int, usuario.membroId)
+      .query(`INSERT INTO NifSinalizacoes (Tipo, Descricao, SaidaId, FornecedorId, DoacaoId, RegistradoPor) OUTPUT INSERTED.SinalizacaoId VALUES (@tipo, @descricao, @saidaId, @fornecedorId, @doacaoId, @por)`);
     await registrarAuditoria({
       tabela: "NifSinalizacoes", registroId: criada.recordset[0].SinalizacaoId, acao: "Registrou sinalização NIF", usuarioId: usuario.membroId,
       dadosDepois: { tipo, descricao }

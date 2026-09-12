@@ -117,6 +117,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroSeguros" onclick="mostrarSubAbaFinanceiro('seguros')"><span class="icone">🛡️</span><span class="rotulo">Seguros Institucionais</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroParametrosmonetarios" onclick="mostrarSubAbaFinanceiro('parametrosmonetarios')"><span class="icone">💰</span><span class="rotulo">Parâmetros Monetários</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroCessoes" onclick="mostrarSubAbaFinanceiro('cessoes')"><span class="icone">⛪</span><span class="rotulo">Cessão de Templo</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroObrigacoes" onclick="mostrarSubAbaFinanceiro('obrigacoes')"><span class="icone">🧾</span><span class="rotulo">Obrigações Fiscais</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2454,6 +2455,39 @@
 
           <h4 style="color: var(--cor-primaria);margin-top:18px;">Cessões</h4>
           <div class="rolagem-tabela"><div id="resultadoCessoes"></div></div>
+        </div>
+
+        <!-- SUB-ABA: OBRIGAÇÕES FISCAIS (v4.19) -->
+        <div id="subFinanceiroObrigacoes" class="sub-aba-secretaria" style="display:none;">
+          <h3>🧾 Obrigações Acessórias Fiscais</h3>
+          <p class="subtitle">A igreja é imune, não dispensada: ECF, ECD, eSocial/DCTFWeb e EFD-Reinf
+            precisam ser entregues mesmo sem imposto a pagar (multa existe mesmo assim).</p>
+
+          <h4 style="color: var(--cor-primaria);">Medidor ECD (gatilho R$ 1,2 mi/ano)</h4>
+          <button class="btn-confirmar" style="width:auto;" onclick="carregarMedidorEcdAcao()">📊 Calcular</button>
+          <div id="resultadoMedidorEcd"></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Calendário de obrigações</h4>
+          <div class="input-group"><label>Tipo:</label><select id="obrigacaoTipo"><option value="ECF">ECF</option><option value="ECD">ECD</option><option value="ESOCIAL">eSocial</option><option value="DCTFWEB">DCTFWeb</option><option value="EFD_REINF">EFD-Reinf</option><option value="INFORME_RENDIMENTOS">Informe de Rendimentos</option></select></div>
+          <div class="input-group"><label>Ano:</label><input type="number" id="obrigacaoAno" /></div>
+          <div class="input-group"><label>CNPJ:</label><input type="text" id="obrigacaoCnpj" /></div>
+          <div class="input-group"><label>Prazo de entrega:</label><input type="date" id="obrigacaoPrazo" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarObrigacaoFiscalAcao()">💾 Registrar obrigação</button>
+          <p id="resultadoObrigacao" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoObrigacoes"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Retenções na fonte (EFD-Reinf R-4000)</h4>
+          <div class="input-group"><label>Natureza:</label><select id="retencaoNatureza"><option value="SERVICO_PJ">Serviço PJ</option><option value="ALUGUEL_PF">Aluguel PF</option><option value="AUTONOMO">Autônomo</option><option value="IRRF_PREBENDA">IRRF Prebenda</option><option value="OUTROS">Outros</option></select></div>
+          <div class="input-group"><label>Competência (AAAA-MM):</label><input type="month" id="retencaoCompetencia" /></div>
+          <div class="input-group"><label>Valor base (R$):</label><input type="number" id="retencaoBase" step="0.01" min="0" /></div>
+          <div class="input-group"><label>Valor retido (R$):</label><input type="number" id="retencaoRetido" step="0.01" min="0" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarRetencaoAcao()">💾 Registrar retenção</button>
+          <div class="rolagem-tabela"><div id="resultadoRetencoes"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Informe de Rendimentos</h4>
+          <div class="input-group"><label>Ano:</label><input type="number" id="informeAno" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="carregarInformeRendimentosAcao()">📄 Gerar informe</button>
+          <div class="rolagem-tabela"><div id="resultadoInformeRendimentos"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

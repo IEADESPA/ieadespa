@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo", obrigacoes: "Obrigações Fiscais",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -628,6 +628,10 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "cessoes") {
     carregarOpcoesCongregacoesFinanceiro();
     carregarCessoesTemploAcao();
+    return;
+  }
+  if (sub === "obrigacoes") {
+    carregarObrigacoesFiscaisAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2850,6 +2854,87 @@ async function salvarCessaoTemploAcao() {
   avisarResultado(d);
   resultado.textContent = d.mensagem;
   if (d.sucesso) carregarCessoesTemploAcao();
+}
+
+// ---- OBRIGAÇÕES FISCAIS (v4.19) ----
+async function carregarObrigacoesFiscaisAcao() {
+  const container = document.getElementById("resultadoObrigacoes");
+  const res = await fetchProtegido(`${API_BASE}/obrigacoes-fiscais`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma obrigação registrada.</p>";
+  } else {
+    let html = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Ano</th><th>Prazo</th><th>Status</th><th>Alerta</th></tr></thead><tbody>`;
+    lista.forEach(o => html += `<tr><td>${o.Tipo}</td><td>${o.AnoReferencia}</td><td>${o.PrazoEntrega.slice(0, 10)}</td><td>${o.Status}${o.vencida ? " (vencida)" : ""}</td><td>${o.alerta || "-"}</td></tr>`);
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  }
+
+  const containerRet = document.getElementById("resultadoRetencoes");
+  const resR = await fetchProtegido(`${API_BASE}/obrigacoes-fiscais/retencoes`);
+  const ret = await resR.json();
+  if (!Array.isArray(ret) || ret.length === 0) {
+    containerRet.innerHTML = "<p class='subtitle'>Nenhuma retenção registrada.</p>";
+  } else {
+    let html = `<table class="tabela-frequencia"><thead><tr><th>Natureza</th><th>Competência</th><th>Base</th><th>Retido</th><th>Status</th></tr></thead><tbody>`;
+    ret.forEach(r => html += `<tr><td>${r.NaturezaRendimento}</td><td>${r.Competencia}</td><td>R$ ${Number(r.ValorBase).toFixed(2)}</td><td>R$ ${Number(r.ValorRetido).toFixed(2)}</td><td>${r.Status}</td></tr>`);
+    html += "</tbody></table>";
+    containerRet.innerHTML = html;
+  }
+}
+
+async function carregarMedidorEcdAcao() {
+  const container = document.getElementById("resultadoMedidorEcd");
+  const res = await fetchProtegido(`${API_BASE}/obrigacoes-fiscais/medidor-ecd`);
+  const d = await res.json();
+  container.innerHTML = `<p class="subtitle">Receita ${d.ano}: R$ ${Number(d.receitaExercicio).toFixed(2)} · Gatilho ECD: R$ ${Number(d.gatilhoEcd).toFixed(2)} · ${d.percentual}%${d.ultrapassou ? " ⚠️ ECD obrigatória!" : ""}</p>`;
+}
+
+async function salvarObrigacaoFiscalAcao() {
+  const tipo = document.getElementById("obrigacaoTipo").value;
+  const anoReferencia = document.getElementById("obrigacaoAno").value;
+  const cnpj = document.getElementById("obrigacaoCnpj").value.trim();
+  const prazoEntrega = document.getElementById("obrigacaoPrazo").value;
+  const resultado = document.getElementById("resultadoObrigacao");
+  if (!anoReferencia || !cnpj || !prazoEntrega) { resultado.textContent = "Preencha ano, CNPJ e prazo."; return; }
+  const body = { tipo, anoReferencia: Number(anoReferencia), cnpj, prazoEntrega };
+  const res = await fetchProtegido(`${API_BASE}/obrigacoes-fiscais`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  resultado.textContent = d.mensagem;
+  if (d.sucesso) carregarObrigacoesFiscaisAcao();
+}
+
+async function salvarRetencaoAcao() {
+  const naturezaRendimento = document.getElementById("retencaoNatureza").value;
+  const competencia = document.getElementById("retencaoCompetencia").value;
+  const valorBase = document.getElementById("retencaoBase").value;
+  const valorRetido = document.getElementById("retencaoRetido").value;
+  if (!competencia || !valorBase || !valorRetido) { mostrarToast("Preencha competência, base e retido.", "erro"); return; }
+  const body = { naturezaRendimento, competencia, valorBase: Number(valorBase), valorRetido: Number(valorRetido) };
+  const res = await fetchProtegido(`${API_BASE}/obrigacoes-fiscais/retencoes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  carregarObrigacoesFiscaisAcao();
+}
+
+async function carregarInformeRendimentosAcao() {
+  const ano = document.getElementById("informeAno").value || new Date().getFullYear();
+  const container = document.getElementById("resultadoInformeRendimentos");
+  const res = await fetchProtegido(`${API_BASE}/informes-rendimentos/${ano}`);
+  const d = await res.json();
+  let html = `<p class="subtitle">Informe de Rendimentos ${d.anoReferencia} — Ministros: ${d.ministros.length} · Prestadores: ${d.prestadores.length}</p>`;
+  if (d.ministros.length > 0) {
+    html += `<h5>Ministros</h5><table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CPF</th><th>Total</th><th>IRRF</th></tr></thead><tbody>`;
+    d.ministros.forEach(m => html += `<tr><td>${m.nome}</td><td>${m.cpfCnpj}</td><td>R$ ${Number(m.valorTotal).toFixed(2)}</td><td>R$ ${Number(m.irrfRetido).toFixed(2)}</td></tr>`);
+    html += "</tbody></table>";
+  }
+  if (d.prestadores.length > 0) {
+    html += `<h5>Prestadores</h5><table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CPF/CNPJ</th><th>Total</th></tr></thead><tbody>`;
+    d.prestadores.forEach(p => html += `<tr><td>${p.nome}</td><td>${p.cpfCnpj}</td><td>R$ ${Number(p.valorTotal).toFixed(2)}</td></tr>`);
+    html += "</tbody></table>";
+  }
+  container.innerHTML = html;
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

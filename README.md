@@ -2561,31 +2561,26 @@ aplicado. `shared/investimentos.js` + `GestaoInvestimentos` + `GestaoCashPooling
 Achado que muda o patamar de risco do módulo financeiro: a igreja é **imune, não
 dispensada**. Imunidade tributária afasta o *imposto*, não a *obrigação
 acessória* — e a multa por não entregar existe mesmo sem haver imposto a pagar.
-O sistema hoje produz toda a contabilidade (v4.9) e não acompanha nenhuma entrega.
+`ObrigacoesFiscais` + `RetencoesFonte` + `GestaoObrigacoesFiscais` +
+`RelatorioInformeRendimentos`.
 
-- [ ] **ECF (Escrituração Contábil Fiscal)** — obrigatória mesmo sendo imune;
-      prazo: último dia útil de julho do ano seguinte; **multa mínima de R$ 500/mês**
-      para imunes/isentas, mais 0,25%/mês sobre a receita (teto 10%).
-      *(IN RFB 2.004/2021, art. 1º)*
-- [ ] **ECD (Escrituração Contábil Digital)** — obrigatória para imune/isenta que
-      recebeu **mais de R$ 1.200.000,00** no ano (dízimos + ofertas + doações +
-      convênios). Com dezenas de congregações, a IEADESPA provavelmente já cruza
-      esse limite. **Medidor em tempo real no painel do Tesoureiro** ("receita do
-      exercício vs. gatilho de R$ 1,2 mi"), com alerta ao ultrapassar — o pior
-      cenário é descobrir em julho do ano seguinte. *(IN RFB 1.420/2015, art. 3º-A)*
-- [ ] **eSocial + DCTFWeb** — obrigatórios mesmo sem nenhum empregado CLT, porque
-      o ministro de confissão religiosa entra como categoria **781** (rubrica
-      **3525** — côngruas/prebendas), gerando o DARF do IRRF. Conecta direto com a
-      v4.10. *(Lei 8.212/91, art. 22 §§13-14)*
-- [ ] **EFD-Reinf série R-4000** — substituiu a DIRF (extinta para fatos geradores
-      a partir de 2025); toda retenção feita pela igreja (serviços de PJ, aluguel
-      pago a pessoa física, autônomos) vai até o **dia 15 do mês seguinte**.
-      Amarra no Contas a Pagar (v4.5): campo de retenção por natureza de rendimento.
-- [ ] **Calendário de obrigações por CNPJ** com status (pendente/transmitida/
-      recibo anexado), alerta em D-60/D-30/D-7 e **cofre de recibos de entrega** —
-      o recibo é a única prova de que a obrigação foi cumprida.
-- [ ] Informe anual de rendimentos para ministros e prestadores, gerado do próprio
-      sistema.
+- [x] **ECF (Escrituração Contábil Fiscal)** — obrigação no calendário (prazo
+      último dia útil de julho do ano seguinte; multa mínima R$ 500/mês —
+      IN RFB 2.004/2021).
+- [x] **ECD (Escrituração Contábil Digital)** — `GET /obrigacoes-fiscais/medidor-ecd`
+      mostra a receita do exercício vs. gatilho de **R$ 1,2 mi** em tempo real
+      (IN RFB 1.420/2015 art. 3º-A), com alerta ao ultrapassar.
+- [x] **eSocial + DCTFWeb** — obrigações no calendário (categoria 781 / rubrica
+      3525 — prebendas; DARF do IRRF conectado à v4.10).
+- [x] **EFD-Reinf R-4000** — `RetencoesFonte` por natureza de rendimento
+      (SERVICO_PJ | ALUGUEL_PF | AUTONOMO | IRRF_PREBENDA), competência e
+      recolhimento (dia 15 do mês seguinte).
+- [x] **Calendário de obrigações por CNPJ** — status (PENDENTE/TRANSMITIDA),
+      alerta D-60/D-30/D-7 e vencida calculados na leitura, e **cofre de recibos**
+      (`ReciboUrl` ao transmitir).
+- [x] Informe anual de rendimentos para ministros e prestadores —
+      `GET /api/informes-rendimentos/{ano}`, gerado do próprio sistema (IRRF das
+      prebendas v4.10 + pagamentos a prestadores v4.5).
 
 #### v4.20 — Painel de Imunidade Tributária *(7ª rodada)*
 

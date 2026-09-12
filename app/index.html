@@ -113,6 +113,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroPatrimonio" onclick="mostrarSubAbaFinanceiro('patrimonio')"><span class="icone">🏛️</span><span class="rotulo">Patrimônio</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroConciliacao" onclick="mostrarSubAbaFinanceiro('conciliacao')"><span class="icone">🏦</span><span class="rotulo">Conciliação Bancária</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroInvestimentos" onclick="mostrarSubAbaFinanceiro('investimentos')"><span class="icone">📈</span><span class="rotulo">Investimentos</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroRepasses" onclick="mostrarSubAbaFinanceiro('repasses')"><span class="icone">🏛️</span><span class="rotulo">Repasses Institucionais</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2293,6 +2294,29 @@
 
           <h4 style="color: var(--cor-primaria);margin-top:18px;">Cash Pooling (posição consolidada)</h4>
           <div class="rolagem-tabela"><div id="resultadoCashPooling"></div></div>
+        </div>
+
+        <!-- SUB-ABA: REPASSES INSTITUCIONAIS (v4.15) — dízimo institucional -->
+        <div id="subFinanceiroRepasses" class="sub-aba-secretaria" style="display:none;">
+          <h3>🏛️ Repasses Institucionais</h3>
+          <p class="subtitle">Dízimo institucional (Art. 126-N, I): 10% da arrecadação líquida consolidada
+            do Distrito (ou congregação/departamento) para a Sede Geral. Atraso de repasse é infração de
+            intervenção (Art. 144, II).</p>
+
+          <h4 style="color: var(--cor-primaria);">Registrar repasse</h4>
+          <div class="input-group"><label>Origem (tipo):</label><select id="repasseOrigemTipo"><option value="CONGREGACAO">Congregação</option><option value="DEPARTAMENTO">Departamento</option><option value="DISTRITO">Distrito</option></select></div>
+          <div class="input-group"><label>Origem (id):</label><input type="number" id="repasseOrigemId" /></div>
+          <div class="input-group"><label>Nome da origem:</label><input type="text" id="repasseOrigemNome" /></div>
+          <div class="input-group"><label>Mês de referência:</label><input type="month" id="repasseMes" /></div>
+          <div class="input-group"><label>Arrecadação líquida (R$):</label><input type="number" id="repasseArrecadado" step="0.01" min="0" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="registrarRepasseInstitucionalAcao()">💾 Registrar repasse</button>
+          <p id="resultadoRepasse" class="subtitle"></p>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Repasses</h4>
+          <div class="rolagem-tabela"><div id="resultadoRepasses"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">⚠️ Atrasados (infração de intervenção)</h4>
+          <div class="rolagem-tabela"><div id="resultadoRepassesAtrasados"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

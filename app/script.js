@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -611,6 +611,10 @@ function mostrarSubAbaFinanceiro(sub) {
     carregarPortfolioAcao();
     carregarLiquidezAcao();
     carregarCashPoolingAcao();
+    return;
+  }
+  if (sub === "repasses") {
+    carregarRepassesInstitucionaisAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2637,6 +2641,56 @@ async function carregarCashPoolingAcao() {
     <tr><td><strong>Posição consolidada (pool)</strong></td><td><strong>R$ ${Number(d.posicaoTotal).toFixed(2)}</strong></td></tr>
     <tr><td>Rentabilidade acumulada</td><td>R$ ${Number(d.rentabilidadeAcumulada).toFixed(2)}</td></tr>
   </tbody></table>`;
+}
+
+// ---- REPASSES INSTITUCIONAIS (v4.15) ----
+async function carregarRepassesInstitucionaisAcao() {
+  const container = document.getElementById("resultadoRepasses");
+  const res = await fetchProtegido(`${API_BASE}/repasses-institucionais`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum repasse registrado.</p>";
+  } else {
+    let html = `<table class="tabela-frequencia"><thead><tr><th>Origem</th><th>Mês</th><th>Arrecadado</th><th>%</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>`;
+    lista.forEach(r => html += `<tr><td>${r.origemNome}</td><td>${r.mesReferencia}</td><td>R$ ${Number(r.valorArrecadadoLiquido).toFixed(2)}</td><td>${r.percentual}%</td><td>R$ ${Number(r.valorRepasse).toFixed(2)}</td><td>${r.status}${r.atrasado ? " ⚠️" : ""}</td>${r.status === "PENDENTE" ? `<td><button class="btn-link" onclick="confirmarRepasseAcao(${r.repasseId})">Repassar</button></td>` : "<td></td>"}</tr>`);
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  }
+
+  const containerAtraso = document.getElementById("resultadoRepassesAtrasados");
+  const resA = await fetchProtegido(`${API_BASE}/repasses-institucionais/alertas`);
+  const atrasados = await resA.json();
+  if (!Array.isArray(atrasados) || atrasados.length === 0) {
+    containerAtraso.innerHTML = "<p class='subtitle'>Nenhum repasse atrasado. ✅</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Origem</th><th>Mês</th><th>Valor</th></tr></thead><tbody>`;
+  atrasados.forEach(r => html += `<tr><td>${r.origemNome}</td><td>${r.mesReferencia}</td><td>R$ ${Number(r.valorRepasse).toFixed(2)}</td></tr>`);
+  html += "</tbody></table>";
+  containerAtraso.innerHTML = html;
+}
+
+async function registrarRepasseInstitucionalAcao() {
+  const origemTipo = document.getElementById("repasseOrigemTipo").value;
+  const origemId = document.getElementById("repasseOrigemId").value;
+  const origemNome = document.getElementById("repasseOrigemNome").value.trim();
+  const mesReferencia = document.getElementById("repasseMes").value;
+  const valorArrecadadoLiquido = document.getElementById("repasseArrecadado").value;
+  const resultado = document.getElementById("resultadoRepasse");
+  if (!origemId || !origemNome || !mesReferencia || !valorArrecadadoLiquido) { resultado.textContent = "Preencha todos os campos."; return; }
+  const body = { origemTipo, origemId: Number(origemId), origemNome, mesReferencia, valorArrecadadoLiquido: Number(valorArrecadadoLiquido) };
+  const res = await fetchProtegido(`${API_BASE}/repasses-institucionais`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  resultado.textContent = d.mensagem;
+  if (d.sucesso) carregarRepassesInstitucionaisAcao();
+}
+
+async function confirmarRepasseAcao(repasseId) {
+  const res = await fetchProtegido(`${API_BASE}/repasses-institucionais`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ repasseId, acao: "REPASSAR" }) });
+  const d = await res.json();
+  avisarResultado(d);
+  carregarRepassesInstitucionaisAcao();
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

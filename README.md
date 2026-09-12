@@ -2449,11 +2449,17 @@ aplicado. `shared/investimentos.js` + `GestaoInvestimentos` + `GestaoCashPooling
 
 #### v4.15 — Repasses institucionais
 
-- [ ] Repasses obrigatórios de congregações/departamentos para a Matriz —
-      mesma engine de Entradas/Saídas (v4.1-v4.5), aplicada à relação
-      hierárquica Distrito → Sede.
-- [ ] Dízimo institucional de 10% (Distrito) para a Sede Geral.
-- [ ] Alerta de atraso de repasse (infração de intervenção).
+`RepassesInstitucionais` + `GestaoRepassesInstitucionais` + `shared/repassesInstitucionais.js`:
+
+- [x] Repasses obrigatórios de congregações/departamentos/distritos para a
+      Matriz — registro por origem (`CONGREGACAO | DEPARTAMENTO | DISTRITO`) +
+      mês, com o valor devido calculado na leitura.
+- [x] Dízimo institucional de 10% (Art. 126-N, I) para a Sede Geral —
+      `ParametrosRepasseInstitucional.PercentualDizimoInstitucional` (10%,
+      configurável), aplicado sobre a arrecadação líquida consolidada.
+- [x] Alerta de atraso de repasse — `GET /repasses-institucionais/alertas`
+      calcula na leitura o que está pendente além da tolerância (padrão dia 5);
+      atraso de repasse é infração de intervenção (Art. 144, II).
 
 #### 🔒 Trava de Revisão 4-A — antes de avançar para a v4.16
 

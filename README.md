@@ -2607,12 +2607,40 @@ que a perda, na prática, quase nunca vem de desvio de dinheiro — vem de
 
 #### 🔒 Trava de Revisão 4-B — antes de avançar para a v4.21
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v4.16 a v4.20 pelas 5 perguntas do checklist — atenção especial à
-v4.19 (Obrigações Acessórias Fiscais, risco de multa mensal imediato) e à
-v4.20 (Painel de Imunidade Tributária): um erro de cálculo aqui não é só bug
-de tela, é risco fiscal real pra igreja. Confirmar deploy de ponta a ponta
-antes de seguir.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditou v4.16 a v4.20 pelas 5 perguntas do checklist —
+      atenção especial à v4.19 (Obrigações Acessórias Fiscais, risco de multa
+      mensal imediato) e à v4.20 (Painel de Imunidade Tributária).
+
+  **1. Código roda de ponta a ponta contra o ambiente real?** Sim — as 5
+  migrações (066 a 070) rodaram com sucesso contra o Azure SQL real via CI
+  (`Executar Migrações SQL`); as 134 functions sobem sem erro no
+  `func start` local; toda rota nova (`seguros/{recurso?}`,
+  `parametros-monetarios/{recurso?}`, `cessoes-templo/{id?}`,
+  `obrigacoes-fiscais/{recurso?}`, `informes-rendimentos/{ano?}`,
+  `imunidade-tributaria`, `dossie-fiscal/{ano?}`) usa exatamente o mesmo
+  nome no `fetch` do front-end e no `route` do `function.json`.
+
+  **2. Toda tela nova abre e mostra dado de verdade?** Sim — as 5 sub-abas
+  (Seguros, Parâmetros Monetários, Cessões, Obrigações, Imunidade) têm botão,
+  `div` e todo `getElementById` referenciado pelo `script.js` batendo
+  exatamente (case-sensitive) com o `id` correspondente no `index.html`;
+  nenhum órfão dos dois lados.
+
+  **3. README e código continuam narrando a mesma coisa?** Sim — toda tabela/
+  endpoint citado nos blocos de v4.16 a v4.20 existe de fato (migrações 066-070
+  e functions correspondentes); nenhuma referência cruzada (`vX.Y`) solta.
+
+  **4. O que ficou pra trás foi corrigido, não só anotado?** Nada pendente
+  encontrado — sem `TODO`/`FIXME`/gambiarra nos arquivos destas 5 versões.
+
+  **5. Deploy real de ponta a ponta aconteceu?** Sim, com uma ressalva: o
+  primeiro deploy da v4.20 falhou no Azure (`Failed to deploy the Azure
+  Functions`, sem detalhe adicional) — investigado e confirmado como falha
+  transitória de infraestrutura, não bug de código (mesmo código, mesmo
+  commit, o *rerun* subiu limpo, com as migrações e as 134 functions no ar).
+  Fica registrado porque, com 134 functions e crescendo, um deploy falho
+  sem causa clara merece checar de novo na próxima trava se virou padrão.
 
 #### v4.21 — Receitas acessórias e imóveis *(7ª rodada)*
 

@@ -2,7 +2,6 @@ node_modules/
 api/node_modules/
 api/local.settings.json
 .env
-.vscode/
 
 # Segredos de DEV (SOPS + Age): a chave PRIVADA nunca entra no repo. O arquivo
 # CRIPTOGRAFADO (api/local.settings.enc.json) É versionado de propósito.

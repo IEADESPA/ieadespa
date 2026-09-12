@@ -8,11 +8,15 @@
   },
   "scripts": {
     "start": "func start",
+    "test": "jest",
     "secrets:decrypt": "sops -d --output local.settings.json local.settings.enc.json",
     "secrets:encrypt": "sops -e --input-type json --output-type json --output local.settings.enc.json local.settings.json"
   },
   "dependencies": {
-    "mssql": "^12.7.0",
-    "@azure/storage-blob": "^12.33.0"
+    "@azure/storage-blob": "^12.33.0",
+    "mssql": "^12.7.0"
+  },
+  "devDependencies": {
+    "jest": "^30.5.1"
   }
 }

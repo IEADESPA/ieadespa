@@ -28,6 +28,15 @@ jobs:
         working-directory: api
         run: npm ci
 
+      # vB.1 — testes das regras de dinheiro/estatuto primeiro (Jest, sem
+      # banco real: shared/tesouraria.js, shared/demonstracoes.js,
+      # shared/estatuto.js). Roda ANTES da migração/deploy — se uma regra de
+      # dinheiro quebrar, o pipeline para aqui, não depois de já ter mexido
+      # no banco de produção.
+      - name: Rodar testes automatizados (regras de dinheiro e de estatuto)
+        working-directory: api
+        run: npm test
+
       # Um único step, uma única conexão, todas as migrações de sql/migrations/
       # em ordem (api/scripts/executar-migracoes.js) — antes eram 23 steps
       # separados, cada um pagando o custo fixo de ligar/conectar/desligar de

@@ -2926,21 +2926,60 @@ denominação inteira, com regras como "o repasse já rateado não pode entrar e
 outro rateio", depende hoje de conferência manual pra saber se continua correto
 depois de cada mudança.
 
-- [ ] **Testes automatizados das regras de dinheiro primeiro** (não cobertura
+- [x] **Testes automatizados das regras de dinheiro primeiro** (não cobertura
       total — as regras que, se quebrarem, perdem dinheiro de verdade):
-      `calcularFechamento` (rateio 40/60), `saldoCentroCusto` (todos os centros),
-      `saldoRestanteCampanha`, `projetarFluxoCaixa`, o malote do Rateio Geral
-      (um repasse nunca em dois rateios), alçada de aprovação, e as demonstrações
-      da v4.9 (o Balanço tem que fechar: Ativo − Passivo = PL).
-- [ ] **Testes de regra estatutária** — `shared/estatuto.js` (capacidade
-      eleitoral, interstício, quórum de 2 estágios) é o coração jurídico do
-      sistema: um erro ali invalida eleição, não só relatório.
+      Jest (`api/package.json` — `npm test`), 32 testes em
+      `api/shared/__tests__/`: `calcularFechamento` (rateio 40/60, dedução de
+      aluguel/lote antes do rateio, percentual configurável), `saldoCentroCusto`
+      (LOCAL/GERAL/destinos do Rateio Geral), `saldoRestanteCampanha`,
+      `projetarFluxoCaixa` (empenho só pesa no 1º mês projetado), e as
+      demonstrações da v4.9 (Balanço: Ativo − Passivo = PL sempre residual;
+      DRP soma Doações/Receitas Acessórias corrigidas na Trava 4-C; Fluxo de
+      Caixa). Mock de `pool`/`sql` sem banco real (`__tests__/testUtils.js`) —
+      testa a composição da lógica em JS, não a cláusula SQL em si (isso pede
+      um banco de homologação de verdade, item pendente abaixo). Rodado no CI
+      **antes** da migração/deploy (o pipeline para se uma regra de dinheiro
+      quebrar, antes de mexer no banco de produção).
+      **Não coberto ainda** (fica pra quando existir ambiente de
+      homologação): o malote do Rateio Geral (constraint no banco, não em
+      JS) e a segregação de funções da alçada de aprovação (checada inline
+      em `GestaoSaidas`/`GestaoLancamentosTesouraria`, precisa de Function
+      real rodando) — são testes de integração, não unitários.
+- [x] **Testes de regra estatutária** — `api/shared/__tests__/estatuto.test.js`:
+      capacidade eleitoral (Art. 23 — maioridade, 90 dias de admissão, 365
+      dias + dizimista fiel pra cargo eletivo, disciplina ativa derruba
+      capacidade, dado incompleto nunca assume elegibilidade), Período de
+      Integração (Art. 6º §2º), quórum de 2 estágios (maioria absoluta =
+      `floor(universo/2)+1`, nunca metade exata) e Abandono Material (Art. 11).
 - [ ] Ambiente de homologação separado do de produção (hoje há um só) + massa de
       dados fictícia para testar sem tocar em dado real de membro.
 - [ ] Rotina de backup/restore **testada de verdade** (backup que nunca foi
       restaurado não é backup) + procedimento escrito de recuperação de desastre.
 - [ ] Observabilidade mínima: log estruturado de erro, alerta quando uma Function
       começa a falhar — hoje só se descobre quando alguém reclama que a tela quebrou.
+
+  **Sobre os 3 itens acima, ainda pendentes**: exigem criar recursos novos
+  no Azure (um 2º banco/Static Web App para homologação, Azure Monitor
+  para alertas) — algo que tem custo recorrente e precisa da assinatura
+  Azure real do usuário, à qual esta sessão não tem acesso (`az` exige
+  `az login` interativo, que não roda num ambiente não interativo).
+  Estimativa de custo mensal incremental, com a Azure SQL Serverless que
+  já é usada hoje (auto-pause reduz o custo quando ocioso):
+  - **Banco de homologação** (Azure SQL Serverless, Basic/GP, auto-pause):
+    ~R$ 25-100/mês, variando com o quanto fica ativo.
+  - **Static Web App de homologação**: R$ 0 se ficar no plano Free (mesmo
+    plano já usado em produção).
+  - **Application Insights / alertas** (Azure Monitor): primeiros 5 GB/mês
+    de log grátis; acima disso ~US$ 2,30/GB. Regra de alerta + notificação
+    por e-mail: praticamente grátis neste volume.
+  - **Backup/restore**: o backup automático do Azure SQL já é incluso (sem
+    custo extra); testar uma restauração de verdade (restaurar pra um
+    banco temporário, validar, apagar) tem custo transitório desprezível.
+  - **Total estimado**: ~R$ 30-100/mês, dominado pelo 2º banco.
+
+  Próximo passo pra desbloquear: rodar `az login` numa sessão interativa
+  (ou aprovar a criação dos recursos pelo Portal Azure) — a partir daí uma
+  sessão futura pode rodar os comandos `az` de criação com esse acesso.
 
 #### vB.2 — Motor de notificações (hoje o sistema é 100% mudo)
 

@@ -115,6 +115,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroInvestimentos" onclick="mostrarSubAbaFinanceiro('investimentos')"><span class="icone">📈</span><span class="rotulo">Investimentos</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRepasses" onclick="mostrarSubAbaFinanceiro('repasses')"><span class="icone">🏛️</span><span class="rotulo">Repasses Institucionais</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroSeguros" onclick="mostrarSubAbaFinanceiro('seguros')"><span class="icone">🛡️</span><span class="rotulo">Seguros Institucionais</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroParametrosmonetarios" onclick="mostrarSubAbaFinanceiro('parametrosmonetarios')"><span class="icone">💰</span><span class="rotulo">Parâmetros Monetários</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2412,6 +2413,26 @@
 
           <h4 style="color: var(--cor-primaria);margin-top:18px;">⚠️ Alertas</h4>
           <div class="rolagem-tabela"><div id="resultadoAlertasSeguros"></div></div>
+        </div>
+
+        <!-- SUB-ABA: PARÂMETROS MONETÁRIOS (v4.17) — Anexo Único -->
+        <div id="subFinanceiroParametrosmonetarios" class="sub-aba-secretaria" style="display:none;">
+          <h3>💰 Parâmetros Monetários (Anexo Único)</h3>
+          <p class="subtitle">Valores monetários fixos (tetos, taxas, referências) corrigidos a cada 12 meses por
+            IPCA/salário-mínimo (Art. 65), fixados por Resolução Normativa da CLI (Art. 162-C §§1-2).</p>
+
+          <h4 style="color: var(--cor-primaria);">Registrar valor</h4>
+          <div class="input-group"><label>Sigla:</label><input type="text" id="valorMonetarioSigla" /></div>
+          <div class="input-group"><label>Nome:</label><input type="text" id="valorMonetarioNome" /></div>
+          <div class="input-group"><label>Valor:</label><input type="number" id="valorMonetarioValor" step="0.01" /></div>
+          <div class="input-group"><label>Unidade:</label><select id="valorMonetarioUnidade"><option value="R$">R$</option><option value="%">%</option><option value="OUTRO">Outro</option></select></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarValorMonetarioAcao()">💾 Registrar valor</button>
+          <p id="resultadoValorMonetario" class="subtitle"></p>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Valores (com correção)</h4>
+          <div class="input-group"><label>Correção (% IPCA/salário-mínimo):</label><input type="number" id="valorMonetarioPercentual" step="0.01" min="0" /></div>
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="corrigirTodosValoresAcao()">🔁 Corrigir todos</button>
+          <div class="rolagem-tabela"><div id="resultadoValoresMonetarios"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

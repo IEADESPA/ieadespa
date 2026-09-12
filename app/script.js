@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -619,6 +619,10 @@ function mostrarSubAbaFinanceiro(sub) {
   }
   if (sub === "seguros") {
     carregarSegurosAcao();
+    return;
+  }
+  if (sub === "parametrosmonetarios") {
+    carregarParametrosMonetariosAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2770,6 +2774,45 @@ async function salvarApoliceAcao() {
   avisarResultado(d);
   resultado.textContent = d.mensagem;
   if (d.sucesso) carregarSegurosAcao();
+}
+
+// ---- PARÂMETROS MONETÁRIOS (v4.17) ----
+async function carregarParametrosMonetariosAcao() {
+  const container = document.getElementById("resultadoValoresMonetarios");
+  const res = await fetchProtegido(`${API_BASE}/parametros-monetarios`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum valor cadastrado.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Sigla</th><th>Nome</th><th>Valor</th><th>Indexador</th><th>Última correção</th><th>Próxima</th><th></th></tr></thead><tbody>`;
+  lista.forEach(v => html += `<tr><td>${v.sigla}</td><td>${v.nome}</td><td>${v.unidade === "%" ? v.valor + "%" : "R$ " + Number(v.valor).toFixed(2)}</td><td>${v.indexador}</td><td>${v.dataUltimaCorrecao}</td><td>${v.correcaoVencida ? "⚠️ vencida" : (v.proximaCorrecao || "-")}</td><td>${v.resolucaoNumero ? `Res. ${v.resolucaoNumero}` : ""}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarValorMonetarioAcao() {
+  const sigla = document.getElementById("valorMonetarioSigla").value.trim();
+  const nome = document.getElementById("valorMonetarioNome").value.trim();
+  const valor = document.getElementById("valorMonetarioValor").value;
+  const unidade = document.getElementById("valorMonetarioUnidade").value;
+  const resultado = document.getElementById("resultadoValorMonetario");
+  if (!sigla || !nome || !valor) { resultado.textContent = "Preencha sigla, nome e valor."; return; }
+  const body = { sigla, nome, valor: Number(valor), unidade };
+  const res = await fetchProtegido(`${API_BASE}/parametros-monetarios`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  resultado.textContent = d.mensagem;
+  if (d.sucesso) carregarParametrosMonetariosAcao();
+}
+
+async function corrigirTodosValoresAcao() {
+  const percentual = document.getElementById("valorMonetarioPercentual").value;
+  if (!percentual || Number(percentual) <= 0) { mostrarToast("Informe o percentual de correção.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/parametros-monetarios/corrigir-todos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ percentual: Number(percentual) }) });
+  const d = await res.json();
+  avisarResultado(d);
+  carregarParametrosMonetariosAcao();
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

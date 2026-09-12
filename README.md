@@ -2532,11 +2532,15 @@ aplicado. `shared/investimentos.js` + `GestaoInvestimentos` + `GestaoCashPooling
 
 #### v4.17 — Anexo de Parâmetros Monetários *(gap da varredura)*
 
-- [ ] Catálogo de valores monetários fixos (tetos, taxas, valores de referência) com
+`ValoresMonetarios` + `ResolucoesNormativas` + `GestaoParametrosMonetarios`:
+
+- [x] Catálogo de valores monetários fixos (tetos, taxas, valores de referência) com
       correção automática a cada 12 meses por IPCA/salário-mínimo (Reg. Art. 65) —
-      mesmo espírito do catálogo `Prazos` já existente (v0.1), só que para dinheiro.
-- [ ] "Anexo Único" mantido pela Secretaria Geral, com número/data da Resolução
-      Normativa da CLI que fixou/atualizou cada valor (Reg. Art. 162-C §§1-2).
+      mesmo espírito do catálogo `Prazos` (v0.1); `proximaCorrecao`/`correcaoVencida`
+      calculados na leitura, e correção em lote via `POST /parametros-monetarios/corrigir-todos`.
+- [x] "Anexo Único" mantido pela Secretaria Geral (`GET /parametros-monetarios/anexo`),
+      com número/data da Resolução Normativa da CLI que fixou/atualizou cada valor
+      (Reg. Art. 162-C §§1-2).
 
 #### v4.18 — Cessão de templo a terceiros *(gap da varredura)*
 

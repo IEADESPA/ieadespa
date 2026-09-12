@@ -1,0 +1,14 @@
+# SOPS + Age — segredos de DEV criptografados no repo público.
+#
+# O arquivo criptografado (ex.: api/local.settings.enc.json) VAI pro repo;
+# a chave PRIVADA fica fora dele, em %APPDATA%\sops\age\keys.txt (cada
+# máquina tem a sua). Aqui ficam só as chaves PÚBLICAS.
+#
+# Para adicionar outra máquina:
+#   1) nela, rode `age-keygen -o "$env:APPDATA\sops\age\keys.txt"` e anote a
+#      "public key" (começa com age1...);
+#   2) adicione essa chave na lista `age` abaixo;
+#   3) rode `sops updatekeys api/local.settings.enc.json`.
+creation_rules:
+  - path_regex: (local\.settings\.json|\.env)$
+    age: age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn

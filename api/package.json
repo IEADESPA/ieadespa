@@ -7,7 +7,9 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "func start"
+    "start": "func start",
+    "secrets:decrypt": "sops -d --output local.settings.json local.settings.enc.json",
+    "secrets:encrypt": "sops -e --input-type json --output-type json --output local.settings.enc.json local.settings.json"
   },
   "dependencies": {
     "mssql": "^12.7.0",

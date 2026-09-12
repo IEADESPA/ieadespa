@@ -16,6 +16,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const prebenda = require("../shared/prebenda");
 
 const TIPOS = ["PF", "PJ"];
 const CAMPOS_BANCARIOS = ["banco", "agencia", "conta", "tipoConta", "chavePix"];
@@ -60,6 +61,16 @@ module.exports = async function (context, req) {
     if (!TIPOS.includes(tipo)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `Tipo inválido. Use um de: ${TIPOS.join(", ")}.` } };
       return;
+    }
+    // Vedação à "pejotização" (v4.10 — item 5): ministro com prebenda não
+    // pode ser cadastrado como fornecedor PJ prestando serviço ministerial.
+    // A relação é eclesiástica, regida pela ata de posse (Reg. Art. 134-A §1º).
+    if (tipo === "PJ") {
+      const ministro = await prebenda.prebendadoComCpf(pool, sql, cpfCnpj);
+      if (ministro) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Vedação à pejotização (Reg. Art. 134-A §1º): este CPF pertence a um ministro com prebenda — ele não pode ser cadastrado como fornecedor PJ prestando serviço ministerial." } };
+        return;
+      }
     }
     const existente = await pool.request().input("cpfCnpj", sql.VarChar(18), cpfCnpj.trim()).query(`SELECT FornecedorId FROM Fornecedores WHERE CpfCnpj = @cpfCnpj`);
     if (existente.recordset.length > 0) {

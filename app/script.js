@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -581,6 +581,16 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "rateiogeral") {
     carregarMalotePendenteAcao();
     carregarRateiosGeraisAcao();
+    return;
+  }
+  if (sub === "prebenda") {
+    carregarAtosDesignacaoAcao();
+    carregarPrebendadosAcao();
+    carregarOpcoesFornecedoresPrebenda();
+    carregarOpcoesPrebendadosSelecao();
+    carregarFolhaPrebendaAcao();
+    carregarRiscosVinculoAcao();
+    carregarAuxiliosCustoAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2160,6 +2170,181 @@ async function verDetalheRateioGeralAcao(rateioGeralId) {
   r.itens.forEach(i => html += `<tr><td>${i.congregacaoNome}</td><td>${i.mesReferenciaCongregacao}</td><td>R$ ${Number(i.valor).toFixed(2)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// ---- PREBENDA E SUSTENTO PASTORAL (v4.10, fechamento) ----
+async function carregarAtosDesignacaoAcao() {
+  const container = document.getElementById("resultadoAtosDesignacao");
+  const res = await fetchProtegido(`${API_BASE}/atos-designacao`);
+  const atos = await res.json();
+  const select = document.getElementById("prebendaAtoId");
+  select.innerHTML = `<option value="">— Sem ato vinculado —</option>`;
+  if (!Array.isArray(atos) || atos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum ato de designação registrado.</p>";
+    return;
+  }
+  atos.forEach(a => select.innerHTML += `<option value="${a.atoDesignacaoId}">${a.numeroAto} — ${a.nomeMinistro} (R$ ${Number(a.valorMensal).toFixed(2)})</option>`);
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nº</th><th>Ministro</th><th>Órgão</th><th>Data</th><th>Valor</th></tr></thead><tbody>`;
+  atos.forEach(a => html += `<tr><td>${a.numeroAto}</td><td>${a.nomeMinistro}</td><td>${a.orgaoColegiado}</td><td>${a.dataDeliberacao.slice(0, 10)}</td><td>R$ ${Number(a.valorMensal).toFixed(2)}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarAtoDesignacaoAcao() {
+  const membroId = document.getElementById("prebendaAtoMembroId").value;
+  const numeroAto = document.getElementById("prebendaAtoNumero").value.trim();
+  const orgaoColegiado = document.getElementById("prebendaAtoOrgao").value.trim();
+  const dataDeliberacao = document.getElementById("prebendaAtoData").value;
+  const valorMensal = document.getElementById("prebendaAtoValor").value;
+  const arquivo = document.getElementById("prebendaAtoAta").files[0];
+  const resultado = document.getElementById("resultadoAtoDesignacao");
+  if (!membroId || !numeroAto || !orgaoColegiado || !dataDeliberacao || !valorMensal || !arquivo) {
+    resultado.textContent = "Preencha todos os campos e anexe a ata.";
+    return;
+  }
+  const body = { membroId: Number(membroId), numeroAto, orgaoColegiado, dataDeliberacao, valorMensal: Number(valorMensal), ataBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type };
+  const res = await fetchProtegido(`${API_BASE}/atos-designacao`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) carregarAtosDesignacaoAcao();
+}
+
+async function carregarOpcoesFornecedoresPrebenda() {
+  const select = document.getElementById("prebendaFornecedorId");
+  const res = await fetchProtegido(`${API_BASE}/fornecedores`);
+  const fornecedores = await res.json();
+  select.innerHTML = `<option value="">— Selecione (PF) —</option>` +
+    (Array.isArray(fornecedores) ? fornecedores.filter(f => f.tipo === "PF").map(f => `<option value="${f.fornecedorId}">${f.nome}</option>`).join("") : "");
+}
+
+async function carregarPrebendadosAcao() {
+  const container = document.getElementById("resultadoPrebendados");
+  const res = await fetchProtegido(`${API_BASE}/prebendados`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum prebendado cadastrado.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>CPF</th><th>Valor</th><th>Início</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(p => html += `<tr><td>${p.nome}</td><td>${p.cpf}</td><td>R$ ${Number(p.valorMensalReferencia).toFixed(2)}</td><td>${p.dataInicio.slice(0, 10)}</td><td>${p.status}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function carregarOpcoesPrebendadosSelecao() {
+  const res = await fetchProtegido(`${API_BASE}/prebendados`);
+  const lista = await res.json();
+  const risco = document.getElementById("prebendaRiscoPrebendado");
+  const aux = document.getElementById("prebendaAuxPrebendado");
+  const opcoes = `<option value="">— Selecione —</option>` + (Array.isArray(lista) ? lista.map(p => `<option value="${p.prebendadoId}">${p.nome}</option>`).join("") : "");
+  risco.innerHTML = opcoes;
+  aux.innerHTML = opcoes;
+}
+
+async function salvarPrebendadoAcao() {
+  const membroId = document.getElementById("prebendaMembroId").value;
+  const fornecedorId = document.getElementById("prebendaFornecedorId").value;
+  const cpf = document.getElementById("prebendaCpf").value.trim();
+  const valorMensalReferencia = document.getElementById("prebendaValor").value;
+  const dataInicio = document.getElementById("prebendaDataInicio").value;
+  const atoDesignacaoId = document.getElementById("prebendaAtoId").value;
+  const resultado = document.getElementById("resultadoPrebendado");
+  if (!membroId || !fornecedorId || !cpf || !valorMensalReferencia || !dataInicio) {
+    resultado.textContent = "Preencha todos os campos.";
+    return;
+  }
+  const body = { membroId: Number(membroId), fornecedorId: Number(fornecedorId), cpf, valorMensalReferencia: Number(valorMensalReferencia), dataInicio, atoDesignacaoId: atoDesignacaoId ? Number(atoDesignacaoId) : undefined };
+  const res = await fetchProtegido(`${API_BASE}/prebendados`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) { carregarPrebendadosAcao(); carregarOpcoesPrebendadosSelecao(); }
+}
+
+async function carregarFolhaPrebendaAcao() {
+  const container = document.getElementById("resultadoPrebendas");
+  const res = await fetchProtegido(`${API_BASE}/prebendas`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma folha gerada ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Ministro</th><th>Bruto</th><th>IRRF</th><th>Líquido</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(g => html += `<tr><td>${g.mesReferencia}</td><td>${g.nome}</td><td>R$ ${Number(g.valorBruto).toFixed(2)}</td><td>R$ ${Number(g.irrfRetido).toFixed(2)}</td><td>R$ ${Number(g.valorLiquido).toFixed(2)}</td><td>${g.status}${g.alertaRisco ? " ⚠️" : ""}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function gerarFolhaPrebendaAcao() {
+  const mesReferencia = document.getElementById("prebendaMes").value;
+  const resultado = document.getElementById("resultadoFolhaPrebenda");
+  const body = mesReferencia ? { mesReferencia } : {};
+  const res = await fetchProtegido(`${API_BASE}/prebendas`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  carregarFolhaPrebendaAcao();
+}
+
+async function carregarRiscosVinculoAcao() {
+  const container = document.getElementById("resultadoRiscosVinculo");
+  const res = await fetchProtegido(`${API_BASE}/prebendas/alertas-risco`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum alerta de risco ativo. ✅</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody>`;
+  lista.forEach(r => html += `<tr><td>${r.nome}</td><td>${r.tipoRisco}</td><td>${r.descricao}</td><td><button class="btn-link" onclick="resolverRiscoVinculoAcao(${r.riscoVinculoId})">Resolver</button></td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarRiscoVinculoAcao() {
+  const prebendadoId = document.getElementById("prebendaRiscoPrebendado").value;
+  const tipoRisco = document.getElementById("prebendaRiscoTipo").value;
+  const descricao = document.getElementById("prebendaRiscoDescricao").value.trim();
+  if (!prebendadoId || !descricao) { mostrarToast("Informe prebendado e descrição.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/prebendas/riscos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prebendadoId: Number(prebendadoId), tipoRisco, descricao }) });
+  const data = await res.json();
+  avisarResultado(data);
+  carregarRiscosVinculoAcao();
+}
+
+async function resolverRiscoVinculoAcao(riscoId) {
+  const res = await fetchProtegido(`${API_BASE}/prebendas/riscos`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ riscoId, acao: "RESOLVER" }) });
+  const data = await res.json();
+  avisarResultado(data);
+  carregarRiscosVinculoAcao();
+}
+
+async function carregarAuxiliosCustoAcao() {
+  const container = document.getElementById("resultadoAuxiliosCusto");
+  const res = await fetchProtegido(`${API_BASE}/auxilios-custo`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum auxílio/ajuda de custo cadastrado.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Tipo</th><th>Natureza</th><th>Valor</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(a => html += `<tr><td>${a.nome}</td><td>${a.tipo}</td><td>${a.naturezaFiscal}</td><td>R$ ${Number(a.valorMensal).toFixed(2)}</td><td>${a.status}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarAuxilioCustoAcao() {
+  const prebendadoId = document.getElementById("prebendaAuxPrebendado").value;
+  const tipo = document.getElementById("prebendaAuxTipo").value;
+  const naturezaFiscal = document.getElementById("prebendaAuxNatureza").value;
+  const valorMensal = document.getElementById("prebendaAuxValor").value;
+  const resultado = document.getElementById("resultadoAuxilioCusto");
+  if (!prebendadoId || !valorMensal) { resultado.textContent = "Informe prebendado e valor."; return; }
+  const res = await fetchProtegido(`${API_BASE}/auxilios-custo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prebendadoId: Number(prebendadoId), tipo, naturezaFiscal, valorMensal: Number(valorMensal) }) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) carregarAuxiliosCustoAcao();
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

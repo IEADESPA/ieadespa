@@ -2282,34 +2282,51 @@ Tesouro Geral, Convenção, Prebenda Pastoral, Fundo PDQ, o total pendente
 no malote, e o saldo Local de cada congregação, tudo calculado na leitura
 a cada abertura da tela (nunca uma foto salva que envelhece).
 
-##### Falta pra completar a v4.10 (próxima rodada) — detalhado pela 7ª rodada
+##### Entregue (7ª rodada de fechamento) — os 7 itens que faltavam
 
-- [ ] Prebenda (natureza alimentar, sem vínculo CLT) como categoria de
+Ciclo de verdade do sustento pastoral, fechando a v4.10 além do malote
+(059). Novo módulo em Financeiro → **Prebenda** (nível Global):
+
+- [x] Prebenda (natureza alimentar, sem vínculo CLT) como categoria de
       Saída com regras próprias — a categoria e o Centro de Custo já
-      existem (`CategoriasSaida.Codigo = 'PREBENDA_PASTORAL'`); falta o
-      cadastro do prebendado (dados do pastor, valor mensal de referência)
-      e a geração recorrente mensal.
-- [ ] **Ato de designação ministerial + valor fixado em deliberação de órgão
-      colegiado**, com a ata vinculada ao registro. Isso não é burocracia: é
-      exatamente o que sustenta juridicamente que a prebenda **não é
-      contraprestação por trabalho**. *(Lei 8.212/91 art. 22 §§13-14, redação da
-      Lei 13.137/2015; Lei 14.647/2023 afirmou na CLT a inexistência de vínculo
-      entre entidade religiosa e seus ministros)*
-- [ ] **Alerta de risco de descaracterização de vínculo** — se o sistema começar a
-      registrar jornada, subordinação ou controle de horário do ministro, ele
-      próprio avisa: esses são justamente os elementos que a Justiça do Trabalho
-      usa pra reconhecer vínculo empregatício, e o risco é da igreja.
-- [ ] Retenções tributárias/previdenciárias corretas — a igreja **não recolhe os
+      existiam (`CategoriasSaida.Codigo = 'PREBENDA_PASTORAL'`, migração
+      059); agora existe o **cadastro do prebendado** (`Prebendados` —
+      dados do ministro via `MembroReferencia`, CPF, fornecedor PF por
+      onde o pagamento sai, valor mensal de referência) e a **geração
+      recorrente mensal** (`PrebendaGeracoes`, `GestaoPrebendas`), com a
+      Saída correspondente criada já APROVADA — pré-autorizada pela
+      deliberação, não pela alçada comum de v4.5.
+- [x] **Ato de designação ministerial + valor fixado em deliberação de órgão
+      colegiado** (`AtosDesignacao`, `GestaoAtosDesignacao`), com a ata
+      vinculada ao registro. Não é burocracia: é exatamente o que sustenta
+      juridicamente que a prebenda **não é contraprestação por trabalho** —
+      a geração mensal só libera prebenda de prebendado com ato (e ata)
+      vinculado. *(Lei 8.212/91 art. 22 §§13-14, redação da Lei 13.137/2015;
+      Lei 14.647/2023 afirmou na CLT a inexistência de vínculo entre entidade
+      religiosa e seus ministros)*
+- [x] **Alerta de risco de descaracterização de vínculo** (`PrebendaRiscosVinculo`)
+      — se o sistema registrar jornada, subordinação ou controle de horário do
+      ministro, ele próprio avisa (na geração e no painel de alertas): são
+      justamente os elementos que a Justiça do Trabalho usa pra reconhecer
+      vínculo empregatício, e o risco é da igreja.
+- [x] Retenções tributárias/previdenciárias corretas — a igreja **não recolhe os
       20% patronais** sobre prebenda (não é remuneração), o ministro é
-      **contribuinte individual** e recolhe a própria contribuição; mas a prebenda
-      **é tributável pelo IRPF**, com retenção na fonte e informe anual (v4.19).
-      Errar isso nos dois sentidos custa caro: recolher o que não deve é perda
-      de recurso; não reter IRRF é passivo fiscal.
-- [ ] Vedação à "pejotização" do ministério — bloqueio de cadastro de ministro
-      como fornecedor PJ (v4.5) prestando serviço ministerial.
-- [ ] Pagamento em lote de prebendas via remessa bancária (v4.7).
-- [ ] Auxílios e ajudas de custo distintos da prebenda (moradia, transporte,
-      saúde), cada um com sua natureza fiscal — hoje tudo cairia na mesma rubrica.
+      **contribuinte individual** e recolhe a própria contribuição; a prebenda
+      **é tributável pelo IRPF**, com **IRRF na fonte** calculado pela tabela
+      progressiva configurável (`FaixasIrrf`) — o líquido pago ao ministro é
+      `bruto − IRRF`, e o IRRF retido fica gravado na geração pra compor o
+      informe anual (v4.19). Errar isso nos dois sentidos custa caro: recolher
+      o que não deve é perda de recurso; não reter IRRF é passivo fiscal.
+- [x] Vedação à "pejotização" do ministério — `GestaoFornecedores` bloqueia o
+      cadastro de ministro com prebenda como fornecedor PJ (v4.5) prestando
+      serviço ministerial (Reg. Art. 134-A §1º).
+- [x] Pagamento em lote de prebendas via remessa bancária (v4.7) — as Saídas de
+      prebenda nascem APROVADAS e entram direto na remessa; `ProcessarRetornoRemessa`
+      marca a geração como PAGA quando o banco confirma.
+- [x] Auxílios e ajudas de custo distintos da prebenda (`AuxiliosAjudaCusto`,
+      `GestaoAuxiliosCusto` — moradia, transporte, saúde), cada um com sua
+      natureza fiscal (`INDENIZATORIA` | `ISENTA` | `TRIBUTAVEL_IRPF`) e
+      categoria de Saída própria — nada mais cai na mesma rubrica.
 
 #### v4.11 — Patrimônio, Alçadas e Depreciação
 

@@ -75,6 +75,11 @@ module.exports = async function (context, req) {
       await pool.request().input("saidaId", sql.Int, r.saidaId).input("pagoPor", sql.Int, usuario.membroId).input("comprovanteUrl", sql.NVarChar(500), arquivoRetornoUrl)
         .query(`UPDATE SaidasTesouraria SET Status = 'PAGA', PagoPor = @pagoPor, PagoEm = SYSUTCDATETIME(), ComprovantePagamentoUrl = @comprovanteUrl
                 WHERE SaidaId = @saidaId AND Status = 'APROVADA'`);
+      // v4.10 — se esta Saída era uma prebenda (folha mensal), a geração
+      // acompanha o pagamento: o IRRF retido já está registrado nela pra
+      // compor o Informe Anual de Rendimentos (v4.19).
+      await pool.request().input("saidaId", sql.Int, r.saidaId)
+        .query(`UPDATE PrebendaGeracoes SET Status = 'PAGA' WHERE SaidaId = @saidaId AND Status = 'GERADA'`);
       await pool.request().input("id", sql.Int, item.recordset[0].RemessaItemId)
         .query(`UPDATE RemessaItens SET Status = 'PROCESSADO', ProcessadoEm = SYSUTCDATETIME() WHERE RemessaItemId = @id`);
       confirmados++;

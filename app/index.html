@@ -109,6 +109,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroPdq" onclick="mostrarSubAbaFinanceiro('pdq')"><span class="icone">🧭</span><span class="rotulo">PDQ</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDemonstracoes" onclick="mostrarSubAbaFinanceiro('demonstracoes')"><span class="icone">📑</span><span class="rotulo">Demonstrações</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRateiogeral" onclick="mostrarSubAbaFinanceiro('rateiogeral')"><span class="icone">📬</span><span class="rotulo">Rateio Geral</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroPrebenda" onclick="mostrarSubAbaFinanceiro('prebenda')"><span class="icone">⛪</span><span class="rotulo">Prebenda</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2102,6 +2103,66 @@
           <h4 style="color: var(--cor-primaria);">Histórico de Rateios Gerais</h4>
           <div class="rolagem-tabela"><div id="resultadoRateiosGerais"></div></div>
           <div id="detalheRateioGeral" style="margin-top:18px;"></div>
+        </div>
+
+        <!-- SUB-ABA: PREBENDA (v4.10, fechamento) — sustento pastoral -->
+        <div id="subFinanceiroPrebenda" class="sub-aba-secretaria" style="display:none;">
+          <h3>⛪ Prebenda e Sustento Pastoral</h3>
+          <p class="subtitle">Natureza alimentar, sem vínculo CLT. O valor vem de deliberação de órgão
+            colegiado (ata vinculada), o IRRF é retido na fonte (sem cota patronal de 20% — o ministro é
+            contribuinte individual) e o pagamento sai em lote pela remessa bancária.</p>
+
+          <h4 style="color: var(--cor-primaria);">Atos de Designação Ministerial</h4>
+          <div class="input-group"><label>Ministro (matrícula):</label><input type="number" id="prebendaAtoMembroId" /></div>
+          <div class="input-group"><label>Nº do ato:</label><input type="text" id="prebendaAtoNumero" /></div>
+          <div class="input-group"><label>Órgão colegiado (ex: CLI):</label><input type="text" id="prebendaAtoOrgao" /></div>
+          <div class="input-group"><label>Data da deliberação:</label><input type="date" id="prebendaAtoData" /></div>
+          <div class="input-group"><label>Valor mensal fixado (R$):</label><input type="number" id="prebendaAtoValor" step="0.01" min="0" /></div>
+          <div class="input-group"><label>Ata (PDF/imagem):</label><input type="file" id="prebendaAtoAta" accept="application/pdf,image/jpeg,image/png" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarAtoDesignacaoAcao()">📎 Registrar ato</button>
+          <p id="resultadoAtoDesignacao" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoAtosDesignacao"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Prebendados</h4>
+          <div class="input-group"><label>Ministro (matrícula):</label><input type="number" id="prebendaMembroId" /></div>
+          <div class="input-group"><label>Fornecedor PF:</label><select id="prebendaFornecedorId"></select></div>
+          <div class="input-group"><label>CPF do ministro:</label><input type="text" id="prebendaCpf" /></div>
+          <div class="input-group"><label>Valor mensal de referência (R$):</label><input type="number" id="prebendaValor" step="0.01" min="0" /></div>
+          <div class="input-group"><label>Início:</label><input type="date" id="prebendaDataInicio" /></div>
+          <div class="input-group"><label>Ato de designação (opcional):</label><select id="prebendaAtoId"></select></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarPrebendadoAcao()">💾 Cadastrar prebendado</button>
+          <p id="resultadoPrebendado" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoPrebendados"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Folha Mensal (geração recorrente)</h4>
+          <div class="input-group"><label>Mês de referência:</label><input type="month" id="prebendaMes" /></div>
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="gerarFolhaPrebendaAcao()">🔄 Gerar folha do mês</button>
+          <p id="resultadoFolhaPrebenda" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoPrebendas"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Alertas de Risco de Descaracterização de Vínculo</h4>
+          <div class="input-group"><label>Prebendado:</label><select id="prebendaRiscoPrebendado"></select></div>
+          <div class="input-group"><label>Tipo:</label><select id="prebendaRiscoTipo"><option value="JORNADA">Jornada</option><option value="SUBORDINACAO">Subordinação</option><option value="CONTROLE_HORARIO">Controle de horário</option></select></div>
+          <div class="input-group"><label>Descrição:</label><input type="text" id="prebendaRiscoDescricao" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="registrarRiscoVinculoAcao()">⚠️ Registrar risco</button>
+          <div class="rolagem-tabela"><div id="resultadoRiscosVinculo"></div></div>
+
+          <hr style="margin:24px 0;" />
+
+          <h4 style="color: var(--cor-primaria);">Auxílios e Ajudas de Custo</h4>
+          <div class="input-group"><label>Prebendado:</label><select id="prebendaAuxPrebendado"></select></div>
+          <div class="input-group"><label>Tipo:</label><select id="prebendaAuxTipo"><option value="MORADIA">Moradia</option><option value="TRANSPORTE">Transporte</option><option value="SAUDE">Saúde</option><option value="OUTROS">Outros</option></select></div>
+          <div class="input-group"><label>Natureza fiscal:</label><select id="prebendaAuxNatureza"><option value="INDENIZATORIA">Indenizatória</option><option value="ISENTA">Isenta</option><option value="TRIBUTAVEL_IRPF">Tributável (IRPF)</option></select></div>
+          <div class="input-group"><label>Valor mensal (R$):</label><input type="number" id="prebendaAuxValor" step="0.01" min="0" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarAuxilioCustoAcao()">💾 Cadastrar auxílio</button>
+          <p id="resultadoAuxilioCusto" class="subtitle"></p>
+          <div class="rolagem-tabela"><div id="resultadoAuxiliosCusto"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

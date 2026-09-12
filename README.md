@@ -2359,85 +2359,47 @@ Novo módulo em Financeiro → **Patrimônio**. Tudo calculado na leitura
 
 #### v4.12 — Auditoria, Compliance e Indicadores (nível enterprise/"pico")
 
-Versão que reúne tudo que é *revisão* do que as versões anteriores já
-produziram — não cria dado novo, olha pro que já existe com mais rigor.
-**COSO Internal Control Framework** (5 componentes: Ambiente de Controle,
-Avaliação de Riscos, Atividades de Controle, Informação e Comunicação,
-Monitoramento) serve de checklist pra confirmar que a FASE 4 está
-completa: Ambiente de Controle (segregação de funções, 2.7) e Atividades
-de Controle (alçada, 3 cotações, trilha de auditoria) já vêm de v4.5;
-falta o resto, formalizado aqui. **Quinta rodada de pesquisa** (pedido
-explícito — "eu quero o pico, não porte médio"): o que separa um ERP de
-porte médio de um sistema de nível corporativo/bancário de verdade não é
-ter os controles — é ter esses 4 refinamentos que a maioria nem das
-grandes empresas implementa direito:
+Nível "pico" entregue — os 4 refinamentos de ERP corporativo/bancário + o
+resto do COSO formalizado no sistema (`shared/compliance.js`, `GestaoCompliance`,
+`GestaoAuditoria`, `GestaoNif`, `GestaoPrestacoesContas`, `RelatorioIndicadoresFinanceiros`):
 
-- [ ] **Trilha de Auditoria Inviolável com Ancoragem Externa** —
-      `AuditLog.HashRegistro`: hash (SHA-256) calculado sobre os dados do
-      próprio registro + o hash do registro anterior da mesma tabela
-      (como já previsto); **nível pico**: periodicamente, o hash mais
-      recente da corrente é ancorado fora do sistema (carimbo de tempo
-      RFC 3161 de uma autoridade externa, ou publicação do hash num
-      registro público) — isso prova a integridade até contra um cenário
-      em que alguém tivesse controle total do servidor e do banco (o
-      hash interno sozinho não protegeria contra isso; a ancoragem
-      externa sim). É o tipo de controle que nem todo ERP caro tem.
-      *(pesquisa técnica — RFC 3161, blockchain anchoring, tamper-evident
-      audit trails)*
-- [ ] **Monitoramento Contínuo de Controles (Continuous Controls
-      Monitoring)** — em vez de auditoria por amostragem periódica (só no
-      fechamento do mês), verificações automáticas rodando o tempo todo:
-      todo pagamento fora do padrão histórico, toda tentativa de ação
-      fora do escopo, todo Fornecedor com dado bancário alterado recém
-      gera alerta na hora, não só quando alguém for auditar depois. É
-      exatamente o padrão que reguladores financeiros internacionais
-      (PCAOB/SEC, via SOX 404) cobram de empresas auditadas — controle
-      continuamente monitorado, não só testado uma vez por ano.
-      *(CloudEagle, Pathlock, Exabeam — SOX 404 continuous controls
-      monitoring)*
-- [ ] **Revisão Periódica de Acessos (Access Recertification)** — a
-      segregação de funções (2.7) garante quem pode fazer o quê no
-      momento em que o acesso é concedido; nível pico exige also
-      **reconfirmar periodicamente** (ex: trimestral) que cada Tesoureiro/
-      pessoa com permissão `financeiro` ainda precisa daquele acesso —
-      CLI/Conselho Fiscal recertifica, ou o acesso expira automaticamente.
-      Evita o problema real mais comum em auditorias grandes: gente que
-      trocou de função mas nunca teve o acesso antigo revogado.
-      *(TechPrescient, Pathlock — SOX user access review)*
-- [ ] **Princípio dos Quatro Olhos, de verdade (dual control)** — diferente
-      da alçada por valor (v4.5, onde um aprovador de cargo mais alto já
-      resolve): acima de um valor crítico de referência, exige **duas
-      pessoas independentes** aprovando (não um substituindo o outro por
-      hierarquia) — o padrão usado por bancos/tesourarias corporativas
-      pros pagamentos de maior risco. *(AICO, Hyperbots, SAP Community —
-      four-eyes principle / dual control)*
-- [ ] NIF (Núcleo de Inteligência Financeira) — análise de risco e alertas
-      (Avaliação de Riscos do COSO, formalizada).
-- [ ] **Comunicação de Operações Suspeitas (COS)** — pesquisa de mercado
-      (Lei 9.613/1998): comunicar operação suspeita de lavagem de
-      dinheiro/financiamento ao terrorismo ao COAF é obrigação legal, não
-      boa prática, com prazo de 24h. O NIF (linha acima) é, na prática, o
-      "COAF interno" da igreja — ganha um fluxo de sinalização (valor
-      atípico, fracionamento pra fugir de alçada, fornecedor sem histórico
-      recebendo valor alto) que, se confirmado, vira o registro formal que
-      subsidia a comunicação externa. *(AtlasGov, CFC, Compliance Brazil,
-      VAAS — COAF/PLD-FT)*
-- [ ] Auditoria em 3 níveis (interna, NIF, externa).
-- [ ] Parecer mensal do Conselho Fiscal (aprova/rejeita contas) — depende
-      de Entradas+Saídas maduras (v4.1-v4.5); adiado de propósito até aqui
-      (decisão explícita, v4.1.3) porque não compensava investir em
-      auditoria sem o outro lado da moeda (Saídas) existir.
-- [ ] Bloqueio de repasses/liberação por falta de prestação de contas.
-- [ ] Prazo fatal de prestação de contas — dia 1º útil do mês, tolerância até dia 5,
-      "Ata de Pendência" automática por falta de comprovante de água/luz (Reg. Art. 120)
-      *(gap da varredura)*.
-- [ ] **Painel de Indicadores Financeiros** — Meses de Reserva de Caixa
-      (Centro de Custo Geral ÷ média de saídas mensais, referência do
-      Fundo de Reserva Art. 64, meta de 3 meses); Índice de Aplicação em
-      Atividades-Fim (% do gasto em programas vs. administrativo, via
-      classificação funcional da ITG 2002, v4.9 — referência de mercado:
-      70-80% saudável); Índice de Liquidez — painel pro CLI/Diretoria/
-      Conselho Fiscal, calculado na leitura, nunca digitado à mão.
+- [x] **Trilha de Auditoria Inviolável com Ancoragem Externa** —
+      `AuditLog.HashRegistro` (SHA-256 em cadeia: dados do registro + hash do
+      registro anterior da mesma tabela, em `shared/auditoria.js`) e
+      `AuditoriaAncoragens` + `GET /api/auditoria/cadeia` (verificação de
+      integridade) + `POST /api/auditoria/ancoragens` (ancoragem externa —
+      RFC 3161 ou registro público). *(RFC 3161, blockchain anchoring,
+      tamper-evident audit trails)*
+- [x] **Monitoramento Contínuo de Controles (CCM)** — `AlertasCompliance` e
+      `GET /api/compliance/alertas` varre na hora: dado bancário alterado
+      sem confirmação, fracionamento pra fugir de alçada, fornecedor sem
+      histórico recebendo valor alto. *(SOX 404 continuous controls monitoring)*
+- [x] **Revisão Periódica de Acessos (Access Recertification)** —
+      `RecertificacoesAcesso` + `/api/compliance/recertificacoes`: recertifica
+      (ou expira) periodicamente (padrão trimestral) cada pessoa com permissão
+      `financeiro`. *(SOX user access review)*
+- [x] **Princípio dos Quatro Olhos (dual control)** — `ParametrosCompliance.
+      ValorCriticoQuatroOlhos`; `GestaoSaidas` passa a exigir **duas
+      aprovações independentes** acima do valor crítico (mesmo que a alçada
+      peça 1). *(four-eyes principle / dual control)*
+- [x] NIF (Núcleo de Inteligência Financeira) — `NifSinalizacoes` +
+      `/api/nif/sinalizacoes` (Avaliação de Riscos do COSO formalizada).
+- [x] **Comunicação de Operações Suspeitas (COS/COAF)** — `ComunicacoesCoaf` +
+      `/api/nif/comunicacoes` (Lei 9.613/1998, prazo de 24h calculado na
+      leitura; só comunica sinalização CONFIRMADA pelo NIF).
+- [x] Auditoria em 3 níveis — `AuditoriasNiveis` + `/api/auditoria/niveis`
+      (INTERNA | NIF | EXTERNA).
+- [x] Parecer mensal do Conselho Fiscal — `PareceresConselhoFiscal` +
+      `/api/auditoria/pareceres` (APROVADO/REJEITADO, com documento).
+- [x] Bloqueio de repasses por falta de prestação de contas — `PrestacoesContas.
+      BloqueioRepasse` (`GestaoPrestacoesContas`).
+- [x] Prazo fatal de prestação de contas — dia 1º útil, tolerância dia 5;
+      **Ata de Pendência automática** + bloqueio quando falta comprovante de
+      água/luz (Reg. Art. 120 §3º) *(gap da varredura)*.
+- [x] **Painel de Indicadores Financeiros** — `/api/indicadores-financeiros`:
+      Meses de Reserva de Caixa (meta 3, Art. 64), Índice de Aplicação em
+      Atividades-Fim (meta 70-80%, ITG 2002) e Índice de Liquidez — calculados
+      na leitura, nunca digitados à mão.
 
 #### v4.13 — Conciliação Bancária Automática (Open Finance Brasil)
 

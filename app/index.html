@@ -1515,6 +1515,26 @@
         <div class="rolagem-tabela">
           <div id="resultadoListaAuditoria"></div>
         </div>
+
+        <hr style="margin:24px 0;" />
+        <h3>🕵️ Compliance e Indicadores (v4.12)</h3>
+
+        <h4 style="color: var(--cor-primaria);">Painel de Indicadores Financeiros</h4>
+        <button class="btn-confirmar" style="width:auto;" onclick="carregarIndicadoresAcao()">📊 Calcular indicadores</button>
+        <div class="rolagem-tabela"><div id="resultadoIndicadores"></div></div>
+
+        <h4 style="color: var(--cor-primaria);margin-top:18px;">Alertas de Monitoramento Contínuo (CCM)</h4>
+        <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="carregarAlertasComplianceAcao()">🔁 Varrer agora</button>
+        <div class="rolagem-tabela"><div id="resultadoAlertasCompliance"></div></div>
+
+        <h4 style="color: var(--cor-primaria);margin-top:18px;">Prestação de Contas (Reg. Art. 120)</h4>
+        <div class="input-group"><label>Congregação:</label><select id="prestacaoCongregacao"></select></div>
+        <div class="input-group"><label>Mês de referência:</label><input type="month" id="prestacaoMes" /></div>
+        <div class="input-group"><label>Comprovante de água:</label><input type="file" id="prestacaoAgua" accept="application/pdf,image/jpeg,image/png" /></div>
+        <div class="input-group"><label>Comprovante de luz:</label><input type="file" id="prestacaoLuz" accept="application/pdf,image/jpeg,image/png" /></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarPrestacaoContasAcao()">📥 Registrar prestação</button>
+        <p id="resultadoPrestacao" class="subtitle"></p>
+        <div class="rolagem-tabela"><div id="resultadoPrestacoesContas"></div></div>
       </div>
 
       <!-- ABA: PROTEÇÃO DE DADOS (Encarregado de Dados / LGPD) -->

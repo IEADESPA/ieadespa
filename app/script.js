@@ -3390,7 +3390,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
   if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
-  if (aba === "auditoria") carregarAuditoria();
+  if (aba === "auditoria") { carregarAuditoria(); carregarIndicadoresAcao(); carregarAlertasComplianceAcao(); carregarCongregacoesPrestacaoAcao(); carregarPrestacoesContasAcao(); }
   if (aba === "protecaodedados") { carregarSolicitacoesDPO(); montarPoliticasRetencao(); }
   if (aba === "ouvidoria") carregarPainelOuvidoria();
 }
@@ -8011,6 +8011,82 @@ async function carregarAuditoria() {
       <td>${a.usuarioNome ? `${a.usuarioNome} (${a.usuarioId})` : (a.usuarioId ?? "-")}</td>
     </tr>`;
   });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+// ==================== ABA: AUDITORIA — COMPLIANCE E INDICADORES (v4.12) ====================
+async function carregarIndicadoresAcao() {
+  const container = document.getElementById("resultadoIndicadores");
+  const res = await fetchProtegido(`${API_BASE}/indicadores-financeiros`);
+  const d = await res.json();
+  const alvoAtividadesFim = d.indiceAplicacaoAtividadesFim >= 70 && d.indiceAplicacaoAtividadesFim <= 80;
+  const alvoReserva = d.mesesReservaCaixa >= 3;
+  container.innerHTML = `<table class="tabela-frequencia"><tbody>
+    <tr><td>Meses de Reserva de Caixa (meta 3)</td><td>${Number(d.mesesReservaCaixa).toFixed(2)}${alvoReserva ? " ✅" : " ⚠️"}</td></tr>
+    <tr><td>Índice de Aplicação em Atividades-Fim (meta 70-80%)</td><td>${Number(d.indiceAplicacaoAtividadesFim).toFixed(2)}%${alvoAtividadesFim ? " ✅" : " ⚠️"}</td></tr>
+    <tr><td>Índice de Liquidez</td><td>${Number(d.indiceLiquidez).toFixed(2)}</td></tr>
+    <tr><td>Ativo Total / Passivo Total</td><td>R$ ${Number(d.ativoTotal).toFixed(2)} / R$ ${Number(d.passivoTotal).toFixed(2)}</td></tr>
+    <tr><td>Patrimônio Líquido</td><td>R$ ${Number(d.patrimonioLiquido).toFixed(2)}</td></tr>
+  </tbody></table>`;
+}
+
+async function carregarAlertasComplianceAcao() {
+  const container = document.getElementById("resultadoAlertasCompliance");
+  const res = await fetchProtegido(`${API_BASE}/compliance/alertas`);
+  const d = await res.json();
+  const lista = d.alertas || [];
+  if (lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum alerta ativo. ✅</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Severidade</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody>`;
+  lista.forEach(a => html += `<tr><td>${a.severidade}</td><td>${a.tipo}</td><td>${a.descricao}</td><td><button class="btn-link" onclick="resolverAlertaComplianceAcao(${a.alertaId})">Resolver</button></td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function resolverAlertaComplianceAcao(alertaId) {
+  const res = await fetchProtegido(`${API_BASE}/compliance/alertas`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ alertaId, acao: "RESOLVER" }) });
+  const d = await res.json();
+  avisarResultado(d);
+  carregarAlertasComplianceAcao();
+}
+
+async function carregarCongregacoesPrestacaoAcao() {
+  const select = document.getElementById("prestacaoCongregacao");
+  const res = await fetchProtegido(`${API_BASE}/catalogos/congregacoes`);
+  const lista = await res.json();
+  select.innerHTML = (Array.isArray(lista) ? lista.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("") : "");
+}
+
+async function registrarPrestacaoContasAcao() {
+  const congregacaoId = document.getElementById("prestacaoCongregacao").value;
+  const mesReferencia = document.getElementById("prestacaoMes").value;
+  const agua = document.getElementById("prestacaoAgua").files[0];
+  const luz = document.getElementById("prestacaoLuz").files[0];
+  const resultado = document.getElementById("resultadoPrestacao");
+  if (!congregacaoId || !mesReferencia) { resultado.textContent = "Informe congregação e mês."; return; }
+  const body = { congregacaoId: Number(congregacaoId), mesReferencia };
+  if (agua) { body.comprovanteAguaBase64 = await arquivoParaBase64(agua); body.mimeTypeAgua = agua.type; }
+  if (luz) { body.comprovanteLuzBase64 = await arquivoParaBase64(luz); body.mimeTypeLuz = luz.type; }
+  const res = await fetchProtegido(`${API_BASE}/prestacoes-contas`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  resultado.textContent = d.mensagem;
+  carregarPrestacoesContasAcao();
+}
+
+async function carregarPrestacoesContasAcao() {
+  const container = document.getElementById("resultadoPrestacoesContas");
+  const res = await fetchProtegido(`${API_BASE}/prestacoes-contas`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma prestação registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Água</th><th>Luz</th><th>Status</th><th>Repasse</th></tr></thead><tbody>`;
+  lista.forEach(p => html += `<tr><td>${p.congregacaoNome}</td><td>${p.mesReferencia}</td><td>${p.temAgua ? "✅" : "❌"}</td><td>${p.temLuz ? "✅" : "❌"}</td><td>${p.status}</td><td>${p.bloqueioRepasse ? "🔒 bloqueado" : "liberado"}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }

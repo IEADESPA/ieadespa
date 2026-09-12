@@ -33,6 +33,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const tesouraria = require("../shared/tesouraria");
+const compliance = require("../shared/compliance");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
@@ -303,18 +304,25 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: `Esta faixa de valor exige aprovador de nível ${tier.NivelMinimoAprovador} ou superior.` } };
         return;
       }
+      // v4.12 — Princípio dos Quatro Olhos (dual control): acima do valor
+      // crítico configurável, exige DUAS pessoas independentes aprovando
+      // (não um substituindo o outro por hierarquia), mesmo que a alçada
+      // por valor peça apenas 1.
+      const criticoQuatroOlhos = await compliance.valorCriticoQuatroOlhos(pool, sql);
+      const acimaCritico = Number(registro.Valor) >= criticoQuatroOlhos;
+      const exigido = Math.max(Number(tier.QuantidadeAprovadores), acimaCritico ? 2 : 1);
       await pool.request().input("saidaId", sql.Int, id).input("membroId", sql.Int, usuario.membroId)
         .query(`INSERT INTO SaidaAprovacoes (SaidaId, AprovadoPor) VALUES (@saidaId, @membroId)`);
       const contagem = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS total FROM SaidaAprovacoes WHERE SaidaId = @id`);
       const totalAprovacoes = contagem.recordset[0].total;
-      let mensagem = `✅ Aprovação registrada (${totalAprovacoes} de ${tier.QuantidadeAprovadores} exigida(s)).`;
-      if (totalAprovacoes >= tier.QuantidadeAprovadores) {
+      let mensagem = `✅ Aprovação registrada (${totalAprovacoes} de ${exigido} exigida(s)${acimaCritico ? " — quatro olhos" : ""}).`;
+      if (totalAprovacoes >= exigido) {
         await pool.request().input("id", sql.Int, id).query(`UPDATE SaidasTesouraria SET Status = 'APROVADA' WHERE SaidaId = @id`);
         mensagem = "✅ Última aprovação necessária registrada — solicitação APROVADA, pronta pra pagamento.";
       }
       await registrarAuditoria({
         tabela: "SaidasTesouraria", registroId: Number(id), acao: "Aprovou solicitação de pagamento", usuarioId: usuario.membroId,
-        dadosDepois: { totalAprovacoes, exigido: tier.QuantidadeAprovadores }
+        dadosDepois: { totalAprovacoes, exigido, quatroOlhos: acimaCritico }
       });
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem } };
       return;

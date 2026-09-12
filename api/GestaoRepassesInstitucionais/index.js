@@ -36,13 +36,23 @@ module.exports = async function (context, req) {
   if (req.method === "PUT" && recurso === "parametros") {
     const { percentualDizimoInstitucional, diasTolerancia } = req.body || {};
     const antes = await repasses.parametros(pool, sql);
+    const percentual = percentualDizimoInstitucional !== undefined ? percentualDizimoInstitucional : antes.PercentualDizimoInstitucional;
+    const dias = diasTolerancia !== undefined ? diasTolerancia : antes.DiasTolerancia;
+    if (percentual < 0 || percentual > 100) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "percentualDizimoInstitucional deve estar entre 0 e 100." } };
+      return;
+    }
+    if (!Number.isInteger(Number(dias)) || dias < 0 || dias > 28) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "diasTolerancia deve ser um número inteiro entre 0 e 28." } };
+      return;
+    }
     await pool.request()
-      .input("percentual", sql.Decimal(5, 2), percentualDizimoInstitucional !== undefined ? percentualDizimoInstitucional : antes.PercentualDizimoInstitucional)
-      .input("dias", sql.Int, diasTolerancia !== undefined ? diasTolerancia : antes.DiasTolerancia)
+      .input("percentual", sql.Decimal(5, 2), percentual)
+      .input("dias", sql.Int, dias)
       .query(`UPDATE ParametrosRepasseInstitucional SET PercentualDizimoInstitucional = @percentual, DiasTolerancia = @dias WHERE ParametroId = 1`);
     await registrarAuditoria({
       tabela: "ParametrosRepasseInstitucional", registroId: 1, acao: "Atualizou parâmetros de repasse institucional", usuarioId: usuario.membroId,
-      dadosAntes: antes, dadosDepois: { percentualDizimoInstitucional, diasTolerancia }
+      dadosAntes: antes, dadosDepois: { percentualDizimoInstitucional: percentual, diasTolerancia: dias }
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Parâmetros atualizados." } };
     return;
@@ -77,17 +87,33 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST" && !recurso) {
     const { origemTipo, origemId, origemNome, mesReferencia, valorArrecadadoLiquido } = req.body || {};
-    if (!origemTipo || !ORIGENS.includes(origemTipo) || !origemId || !origemNome || !mesReferencia || !valorArrecadadoLiquido) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: origemTipo (${ORIGENS.join("|")}), origemId, origemNome, mesReferencia, valorArrecadadoLiquido.` } };
+    if (!origemTipo || !ORIGENS.includes(origemTipo) || !origemId || !origemNome || !mesReferencia) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: origemTipo (${ORIGENS.join("|")}), origemId, origemNome, mesReferencia${origemTipo === "CONGREGACAO" ? "" : ", valorArrecadadoLiquido"}.` } };
       return;
     }
-    if (Number(valorArrecadadoLiquido) <= 0) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "valorArrecadadoLiquido deve ser maior que zero." } };
-      return;
+    // Trava de Revisão 4-A: para CONGREGACAO a arrecadação líquida vem do
+    // fechamento mensal real da Tesouraria Local (nunca digitada — evita
+    // divergência entre o valor reportado à Sede e o valor do fechamento).
+    // DEPARTAMENTO/DISTRITO não têm fechamento eletrônico próprio ainda,
+    // então continuam com digitação manual.
+    let valorArrecadadoLiquidoFinal;
+    if (origemTipo === "CONGREGACAO") {
+      const arrecadacaoFechamento = await repasses.arrecadacaoLiquidaFechamento(pool, sql, origemId, mesReferencia);
+      if (arrecadacaoFechamento === null) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Mês ainda não fechado na Tesouraria Local para esta congregação — feche o mês antes de registrar o repasse institucional." } };
+        return;
+      }
+      valorArrecadadoLiquidoFinal = arrecadacaoFechamento;
+    } else {
+      if (!valorArrecadadoLiquido || Number(valorArrecadadoLiquido) <= 0) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "valorArrecadadoLiquido deve ser maior que zero." } };
+        return;
+      }
+      valorArrecadadoLiquidoFinal = Number(valorArrecadadoLiquido);
     }
     const p = await repasses.parametros(pool, sql);
     const percentual = Number(p.PercentualDizimoInstitucional);
-    const valorRepasse = repasses.calcularValorRepasse(valorArrecadadoLiquido, percentual);
+    const valorRepasse = repasses.calcularValorRepasse(valorArrecadadoLiquidoFinal, percentual);
     const existente = await pool.request().input("tipo", sql.NVarChar(20), origemTipo).input("origem", sql.Int, origemId).input("mes", sql.Char(7), mesReferencia)
       .query(`SELECT RepasseId FROM RepassesInstitucionais WHERE OrigemTipo = @tipo AND OrigemId = @origem AND MesReferencia = @mes`);
     if (existente.recordset.length > 0) {
@@ -96,13 +122,13 @@ module.exports = async function (context, req) {
     }
     const criado = await pool.request().input("tipo", sql.NVarChar(20), origemTipo).input("origem", sql.Int, origemId)
       .input("nome", sql.NVarChar(200), origemNome.trim()).input("mes", sql.Char(7), mesReferencia)
-      .input("arrecadado", sql.Decimal(12, 2), valorArrecadadoLiquido).input("percentual", sql.Decimal(5, 2), percentual)
+      .input("arrecadado", sql.Decimal(12, 2), valorArrecadadoLiquidoFinal).input("percentual", sql.Decimal(5, 2), percentual)
       .input("valor", sql.Decimal(12, 2), valorRepasse).input("por", sql.Int, usuario.membroId)
       .query(`INSERT INTO RepassesInstitucionais (OrigemTipo, OrigemId, OrigemNome, MesReferencia, ValorArrecadadoLiquido, Percentual, ValorRepasse, RegistradoPor)
               OUTPUT INSERTED.RepasseId VALUES (@tipo, @origem, @nome, @mes, @arrecadado, @percentual, @valor, @por)`);
     await registrarAuditoria({
       tabela: "RepassesInstitucionais", registroId: criado.recordset[0].RepasseId, acao: "Registrou repasse institucional", usuarioId: usuario.membroId,
-      dadosDepois: { origemTipo, origemId, origemNome, mesReferencia, valorArrecadadoLiquido, percentual, valorRepasse }
+      dadosDepois: { origemTipo, origemId, origemNome, mesReferencia, valorArrecadadoLiquido: valorArrecadadoLiquidoFinal, percentual, valorRepasse }
     });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Repasse institucional registrado (${percentual}% = R$ ${valorRepasse.toFixed(2)}).`, repasseId: criado.recordset[0].RepasseId } };
     return;

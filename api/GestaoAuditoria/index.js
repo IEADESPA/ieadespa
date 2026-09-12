@@ -135,13 +135,18 @@ module.exports = async function (context, req) {
   if (req.method === "GET" && recurso === "cadeia") {
     const registros = await pool.request().query(`SELECT AuditId, Tabela, RegistroId, Acao, UsuarioId, DadosAntes, DadosDepois, HashRegistro FROM AuditLog ORDER BY AuditId ASC`);
     let integra = true;
-    let anterior = "";
+    // A cadeia é por Tabela (shared/auditoria.js encadeia com o hash anterior
+    // da MESMA tabela) — a verificação precisa manter um "anterior" por
+    // Tabela, não um único acumulador global, senão qualquer intercalação
+    // entre tabelas diferentes (o caso normal) é reportada como quebra falsa.
+    const anteriorPorTabela = {};
     const quebrados = [];
     for (const r of registros.recordset) {
+      const anterior = anteriorPorTabela[r.Tabela] || "";
       const payload = JSON.stringify({ tabela: r.Tabela, registroId: r.RegistroId, acao: r.Acao, usuarioId: r.UsuarioId, dadosAntes: r.DadosAntes, dadosDepois: r.DadosDepois });
       const esperado = sha256(payload + anterior);
       if (r.HashRegistro && r.HashRegistro !== esperado) { integra = false; quebrados.push(r.AuditId); }
-      anterior = r.HashRegistro || "";
+      anteriorPorTabela[r.Tabela] = r.HashRegistro || "";
     }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { integra, total: registros.recordset.length, quebrados } };
     return;

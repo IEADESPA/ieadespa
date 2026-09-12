@@ -84,7 +84,7 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe sinalizacaoId." } };
       return;
     }
-    const sinal = await pool.request().input("id", sql.Int, sinalizacaoId).query(`SELECT CriadoEm, Status FROM NifSinalizacoes WHERE SinalizacaoId = @id`);
+    const sinal = await pool.request().input("id", sql.Int, sinalizacaoId).query(`SELECT CriadoEm, DecididoEm, Status FROM NifSinalizacoes WHERE SinalizacaoId = @id`);
     if (sinal.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Sinalização não encontrada." } };
       return;
@@ -93,7 +93,13 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Só se comunica ao COAF uma sinalização já CONFIRMADA pelo NIF." } };
       return;
     }
-    const horas = Math.abs(Date.now() - new Date(sinal.recordset[0].CriadoEm).getTime()) / 36e5;
+    // O prazo legal de 24h (Lei 9.613/1998) conta a partir do momento em que
+    // o NIF CONFIRMA a suspeita (DecididoEm) — não do registro inicial
+    // (CriadoEm), que pode ter ficado dias em análise como PENDENTE antes
+    // da confirmação. Contar a partir do registro penalizaria uma análise
+    // normal do NIF como se já estivesse fora do prazo.
+    const referencia = sinal.recordset[0].DecididoEm || sinal.recordset[0].CriadoEm;
+    const horas = Math.abs(Date.now() - new Date(referencia).getTime()) / 36e5;
     const dentroPrazo24h = horas <= 24;
     const criada = await pool.request().input("sinal", sql.Int, sinalizacaoId).input("protocolo", sql.NVarChar(50), protocolo || null)
       .input("dentroPrazo", sql.Bit, dentroPrazo24h ? 1 : 0).input("obs", sql.NVarChar(500), observacao || null).input("por", sql.Int, usuario.membroId)

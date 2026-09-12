@@ -1,4 +1,5 @@
-// GestaoPrestacoesContas (v4.12 — itens 9 e 10)
+// GestaoPrestacoesContas (v4.12 — itens 9 e 10; prazo fatal + Ata automática
+// implementados na Trava de Revisão 4-A)
 // Prestação de contas mensal (Reg. Art. 120): comprovantes de água/luz,
 // prazo fatal (1º útil, tolerância dia 5), Ata de Pendência automática e
 // bloqueio de repasse por falta de prestação.
@@ -9,8 +10,40 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
+const { estaEmAtraso, gerarTextoAtaPendencia } = require("../shared/prestacoesContas");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
+
+// Gera a Ata de Pendência (texto simples, mesmo tratamento de "documento" que
+// os comprovantes: sobe pro Blob Storage e guarda só a URL) e materializa a
+// pendência da congregação/mês como um registro real em PrestacoesContas,
+// bloqueando o repasse — reaproveitado tanto para linhas já existentes
+// (submetidas incompletas) quanto para congregações que não registraram nada.
+async function gerarAtaEBloquear(pool, { prestacaoId, congregacaoId, congregacaoNome, mesReferencia, temAgua, temLuz }) {
+  const textoAta = gerarTextoAtaPendencia({ congregacaoNome, mesReferencia, temAgua, temLuz });
+  const ataUrl = await storage.salvarDocumento(Buffer.from(textoAta, "utf-8"), "text/plain");
+
+  if (prestacaoId) {
+    await pool.request().input("id", sql.Int, prestacaoId).input("ata", sql.NVarChar(500), ataUrl)
+      .query(`UPDATE PrestacoesContas SET Status = 'ATA_PENDENCIA', BloqueioRepasse = 1, AtaPendenciaUrl = @ata WHERE PrestacaoId = @id`);
+    await registrarAuditoria({
+      tabela: "PrestacoesContas", registroId: prestacaoId, acao: "Ata de Pendência gerada automaticamente (prazo vencido)",
+      dadosDepois: { congregacaoId, mesReferencia, status: "ATA_PENDENCIA", bloqueioRepasse: true }
+    });
+    return prestacaoId;
+  }
+
+  const criada = await pool.request().input("cong", sql.Int, congregacaoId).input("mes", sql.Char(7), mesReferencia)
+    .input("status", sql.NVarChar(20), "ATA_PENDENCIA").input("ata", sql.NVarChar(500), ataUrl)
+    .query(`INSERT INTO PrestacoesContas (CongregacaoId, MesReferencia, Status, BloqueioRepasse, AtaPendenciaUrl)
+            OUTPUT INSERTED.PrestacaoId VALUES (@cong, @mes, @status, 1, @ata)`);
+  const novoId = criada.recordset[0].PrestacaoId;
+  await registrarAuditoria({
+    tabela: "PrestacoesContas", registroId: novoId, acao: "Ata de Pendência gerada automaticamente (prestação não registrada até o prazo)",
+    dadosDepois: { congregacaoId, mesReferencia, status: "ATA_PENDENCIA", bloqueioRepasse: true }
+  });
+  return novoId;
+}
 
 module.exports = async function (context, req) {
   const id = context.bindingData.id;
@@ -24,9 +57,60 @@ module.exports = async function (context, req) {
 
   if (req.method === "GET" && !id) {
     const { mesReferencia, congregacaoId } = req.query || {};
+    const hoje = new Date();
+
+    if (mesReferencia) {
+      // Com mês de referência informado dá pra calcular o prazo fatal: parte
+      // de TODAS as congregações (LEFT JOIN), não só das que já registraram
+      // algo, senão quem nunca prestou contas simplesmente some da listagem
+      // em vez de aparecer "EM ATRASO".
+      const request = pool.request().input("mes", sql.Char(7), mesReferencia);
+      let where = "1=1";
+      if (congregacaoId) { request.input("cong", sql.Int, congregacaoId); where += " AND c.CongregacaoId = @cong"; }
+      const result = await request.query(`
+        SELECT c.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
+               p.PrestacaoId AS prestacaoId, p.Status AS status, p.BloqueioRepasse AS bloqueioRepasse,
+               CASE WHEN p.ComprovanteAguaUrl IS NOT NULL THEN 1 ELSE 0 END AS temAgua,
+               CASE WHEN p.ComprovanteLuzUrl IS NOT NULL THEN 1 ELSE 0 END AS temLuz
+        FROM Congregacoes c
+        LEFT JOIN PrestacoesContas p ON p.CongregacaoId = c.CongregacaoId AND p.MesReferencia = @mes
+        WHERE ${where} ORDER BY c.Nome
+      `);
+
+      const emAtraso = estaEmAtraso(mesReferencia, hoje);
+      const linhas = [];
+      for (const row of result.recordset) {
+        const jaCompleta = row.status === "COMPLETA";
+        const jaComAta = row.status === "ATA_PENDENCIA";
+        if (!jaCompleta && !jaComAta && emAtraso) {
+          // Transição automática: prazo (com tolerância) estourou e a
+          // prestação continua incompleta/inexistente — gera a Ata de
+          // Pendência e bloqueia o repasse agora, na leitura.
+          const novoId = await gerarAtaEBloquear(pool, {
+            prestacaoId: row.prestacaoId, congregacaoId: row.congregacaoId, congregacaoNome: row.congregacaoNome,
+            mesReferencia, temAgua: !!row.temAgua, temLuz: !!row.temLuz
+          });
+          linhas.push({
+            congregacaoId: row.congregacaoId, congregacaoNome: row.congregacaoNome, mesReferencia,
+            prestacaoId: novoId, status: "ATA_PENDENCIA", bloqueioRepasse: true, emAtraso: true,
+            temAgua: !!row.temAgua, temLuz: !!row.temLuz
+          });
+        } else {
+          linhas.push({
+            congregacaoId: row.congregacaoId, congregacaoNome: row.congregacaoNome, mesReferencia,
+            prestacaoId: row.prestacaoId, status: row.status || "PENDENTE", bloqueioRepasse: !!row.bloqueioRepasse,
+            emAtraso, temAgua: !!row.temAgua, temLuz: !!row.temLuz
+          });
+        }
+      }
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: linhas };
+      return;
+    }
+
+    // Sem mês de referência: listagem geral (histórico), só com o que já foi
+    // registrado — mantém o comportamento original.
     const request = pool.request();
     let where = "1=1";
-    if (mesReferencia) { request.input("mes", sql.Char(7), mesReferencia); where += " AND p.MesReferencia = @mes"; }
     if (congregacaoId) { request.input("cong", sql.Int, congregacaoId); where += " AND p.CongregacaoId = @cong"; }
     const result = await request.query(`
       SELECT p.PrestacaoId AS prestacaoId, p.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
@@ -36,7 +120,8 @@ module.exports = async function (context, req) {
       FROM PrestacoesContas p JOIN Congregacoes c ON c.CongregacaoId = p.CongregacaoId
       WHERE ${where} ORDER BY p.MesReferencia DESC, c.Nome
     `);
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
+    const linhas = result.recordset.map(row => ({ ...row, emAtraso: estaEmAtraso(row.mesReferencia, hoje) }));
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: linhas };
     return;
   }
 
@@ -64,23 +149,43 @@ module.exports = async function (context, req) {
       luzUrl = await storage.salvarDocumento(Buffer.from(comprovanteLuzBase64, "base64"), mimeTypeLuz);
     }
 
-    // Sem os dois comprovantes → Ata de Pendência automática + bloqueio de
-    // repasse (Reg. Art. 120 §3º, II — o "Sinal Vermelho").
-    const completa = aguaUrl && luzUrl;
-    const status = completa ? "COMPLETA" : "ATA_PENDENCIA";
+    const completa = !!(aguaUrl && luzUrl);
+    // Se o prazo (com tolerância até o dia 5) já estourou no momento do
+    // registro, a prestação chega atrasada: qualquer coisa que não seja
+    // "completa" já nasce com Ata de Pendência + bloqueio. Se ainda está
+    // dentro do prazo, fica só como PENDENTE (sem Ata, sem bloqueio) — a
+    // congregação ainda tem até o dia 5 pra regularizar.
+    const emAtraso = estaEmAtraso(mesReferencia, new Date());
+    const geraAtaImediata = !completa && emAtraso;
+    const status = completa ? "COMPLETA" : (geraAtaImediata ? "ATA_PENDENCIA" : "PENDENTE");
+    const bloqueio = completa ? 0 : (geraAtaImediata ? 1 : 0);
+
+    let ataUrl = null;
+    if (geraAtaImediata) {
+      const cong = await pool.request().input("cong", sql.Int, congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @cong`);
+      const congregacaoNome = cong.recordset[0] ? cong.recordset[0].Nome : String(congregacaoId);
+      const textoAta = gerarTextoAtaPendencia({ congregacaoNome, mesReferencia, temAgua: !!aguaUrl, temLuz: !!luzUrl });
+      ataUrl = await storage.salvarDocumento(Buffer.from(textoAta, "utf-8"), "text/plain");
+    }
+
     const criada = await pool.request().input("cong", sql.Int, congregacaoId).input("mes", sql.Char(7), mesReferencia)
       .input("agua", sql.NVarChar(500), aguaUrl).input("luz", sql.NVarChar(500), luzUrl)
-      .input("status", sql.NVarChar(20), status).input("bloqueio", sql.Bit, completa ? 0 : 1).input("por", sql.Int, usuario.membroId)
-      .query(`INSERT INTO PrestacoesContas (CongregacaoId, MesReferencia, ComprovanteAguaUrl, ComprovanteLuzUrl, Status, BloqueioRepasse, RegistradoPor)
-              OUTPUT INSERTED.PrestacaoId VALUES (@cong, @mes, @agua, @luz, @status, @bloqueio, @por)`);
+      .input("status", sql.NVarChar(20), status).input("bloqueio", sql.Bit, bloqueio).input("por", sql.Int, usuario.membroId)
+      .input("ata", sql.NVarChar(500), ataUrl)
+      .query(`INSERT INTO PrestacoesContas (CongregacaoId, MesReferencia, ComprovanteAguaUrl, ComprovanteLuzUrl, Status, BloqueioRepasse, RegistradoPor, AtaPendenciaUrl)
+              OUTPUT INSERTED.PrestacaoId VALUES (@cong, @mes, @agua, @luz, @status, @bloqueio, @por, @ata)`);
     await registrarAuditoria({
-      tabela: "PrestacoesContas", registroId: criada.recordset[0].PrestacaoId, acao: "Registrou prestação de contas", usuarioId: usuario.membroId,
-      dadosDepois: { congregacaoId, mesReferencia, status, bloqueioRepasse: !completa }
+      tabela: "PrestacoesContas", registroId: criada.recordset[0].PrestacaoId,
+      acao: geraAtaImediata ? "Registrou prestação de contas em atraso — Ata de Pendência gerada" : "Registrou prestação de contas",
+      usuarioId: usuario.membroId,
+      dadosDepois: { congregacaoId, mesReferencia, status, bloqueioRepasse: !!bloqueio }
     });
-    context.res = {
-      status: 201, headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: completa ? "✅ Prestação de contas completa." : "⚠️ Prestação recebida SEM comprovantes de água/luz — Ata de Pendência gerada e repasse BLOQUEADO (Reg. Art. 120 §3º)." }
-    };
+
+    let mensagem;
+    if (completa) mensagem = "✅ Prestação de contas completa.";
+    else if (geraAtaImediata) mensagem = "⚠️ Prazo fatal já vencido (tolerância até o dia 5) e comprovante(s) de água/luz ausente(s) — Ata de Pendência gerada e repasse BLOQUEADO (Reg. Art. 120 §3º).";
+    else mensagem = "ℹ️ Prestação registrada incompleta, mas ainda dentro do prazo de tolerância (até o dia 5) — regularize os comprovantes de água/luz antes do vencimento.";
+    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem } };
     return;
   }
 
@@ -102,4 +207,3 @@ module.exports = async function (context, req) {
 
   context.res = { status: 400, body: { sucesso: false, mensagem: "Rota inválida." } };
 };
-

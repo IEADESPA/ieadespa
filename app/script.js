@@ -2524,12 +2524,29 @@ async function salvarOcupacaoCasaPastoralAcao() {
   if (data.sucesso) carregarOcupacoesCasaPastoralAcao();
 }
 
-// ---- CONCILIAÇÃO BANCÁRIA (v4.13) ----
+// ---- CONCILIAÇÃO BANCÁRIA (v4.13; trilha CAIXA_FISICO sem upload — Trava de Revisão 4-A) ----
 async function carregarFontesCaixaAcao() {
   const select = document.getElementById("conciliacaoFonte");
   const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/fontes`);
   const lista = await res.json();
-  select.innerHTML = (Array.isArray(lista) ? lista.map(f => `<option value="${f.fonteId}">${f.nome}</option>`).join("") : "");
+  select.innerHTML = (Array.isArray(lista) ? lista.map(f => `<option value="${f.fonteId}" data-tipo="${f.tipo}">${f.nome}</option>`).join("") : "");
+  if (!select.dataset.listenerTipoAtivo) {
+    select.addEventListener("change", atualizarCampoArquivoConciliacaoAcao);
+    select.dataset.listenerTipoAtivo = "1";
+  }
+  atualizarCampoArquivoConciliacaoAcao();
+}
+
+// Caixa Físico (cofre) concilia direto contra o Fundo Fixo de Caixa — não tem
+// extrato nenhum pra subir, então o campo de arquivo não se aplica a essa trilha.
+function atualizarCampoArquivoConciliacaoAcao() {
+  const select = document.getElementById("conciliacaoFonte");
+  const arquivoInput = document.getElementById("conciliacaoArquivo");
+  if (!select || !arquivoInput) return;
+  const opcao = select.options[select.selectedIndex];
+  const ehCaixaFisico = !!(opcao && opcao.dataset.tipo === "CAIXA_FISICO");
+  const grupo = arquivoInput.closest(".input-group") || arquivoInput.parentElement;
+  if (grupo) grupo.style.display = ehCaixaFisico ? "none" : "";
 }
 
 async function carregarConciliacoesAcao() {
@@ -2547,12 +2564,20 @@ async function carregarConciliacoesAcao() {
 }
 
 async function importarExtratoAcao() {
-  const fonteId = document.getElementById("conciliacaoFonte").value;
+  const select = document.getElementById("conciliacaoFonte");
+  const fonteId = select.value;
   const mesReferencia = document.getElementById("conciliacaoMes").value;
+  const opcao = select.options[select.selectedIndex];
+  const ehCaixaFisico = !!(opcao && opcao.dataset.tipo === "CAIXA_FISICO");
   const arquivo = document.getElementById("conciliacaoArquivo").files[0];
   const resultado = document.getElementById("resultadoConciliacao");
-  if (!fonteId || !mesReferencia || !arquivo) { resultado.textContent = "Informe fonte, mês e arquivo (OFX/CSV)."; return; }
-  const body = { fonteId: Number(fonteId), mesReferencia, arquivoBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type || "text/plain" };
+  if (!fonteId || !mesReferencia || (!ehCaixaFisico && !arquivo)) {
+    resultado.textContent = ehCaixaFisico ? "Informe fonte e mês." : "Informe fonte, mês e arquivo (OFX/CSV).";
+    return;
+  }
+  const body = ehCaixaFisico
+    ? { fonteId: Number(fonteId), mesReferencia }
+    : { fonteId: Number(fonteId), mesReferencia, arquivoBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type || "text/plain" };
   const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/extratos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const d = await res.json();
   avisarResultado(d);
@@ -2567,7 +2592,7 @@ async function verDetalheConciliacaoAcao(conciliacaoId) {
   if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${c.mensagem}</p>`; return; }
   const divs = c.divergencias || [];
   let html = `<hr /><h4>Conciliação de ${c.mesReferencia} (${c.fonteNome}) — ${c.status}</h4>`;
-  html += `<p class="subtitle">Extrato R$ ${Number(c.TotalExtrato).toFixed(2)} · Sistema R$ ${Number(c.TotalSistema).toFixed(2)} · Batidas R$ ${Number(c.TotalBatidas).toFixed(2)}</p>`;
+  html += `<p class="subtitle">Extrato R$ ${Number(c.totalExtrato).toFixed(2)} · Sistema R$ ${Number(c.totalSistema).toFixed(2)} · Batidas R$ ${Number(c.totalBatidas).toFixed(2)}</p>`;
   if (divs.length === 0) { html += "<p class='subtitle'>Sem divergências pendentes. ✅</p>"; }
   else {
     html += `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Valor</th><th>Referência</th><th></th></tr></thead><tbody>`;
@@ -2677,8 +2702,12 @@ async function registrarRepasseInstitucionalAcao() {
   const mesReferencia = document.getElementById("repasseMes").value;
   const valorArrecadadoLiquido = document.getElementById("repasseArrecadado").value;
   const resultado = document.getElementById("resultadoRepasse");
-  if (!origemId || !origemNome || !mesReferencia || !valorArrecadadoLiquido) { resultado.textContent = "Preencha todos os campos."; return; }
-  const body = { origemTipo, origemId: Number(origemId), origemNome, mesReferencia, valorArrecadadoLiquido: Number(valorArrecadadoLiquido) };
+  const ehCongregacao = origemTipo === "CONGREGACAO";
+  if (!origemId || !origemNome || !mesReferencia || (!ehCongregacao && !valorArrecadadoLiquido)) { resultado.textContent = "Preencha todos os campos."; return; }
+  // CONGREGACAO: arrecadação líquida vem do fechamento da Tesouraria Local
+  // (calculada no backend) — nunca envia o valor digitado nesse caso.
+  const body = { origemTipo, origemId: Number(origemId), origemNome, mesReferencia };
+  if (!ehCongregacao) body.valorArrecadadoLiquido = Number(valorArrecadadoLiquido);
   const res = await fetchProtegido(`${API_BASE}/repasses-institucionais`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const d = await res.json();
   avisarResultado(d);
@@ -3574,7 +3603,11 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
   if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
-  if (aba === "auditoria") { carregarAuditoria(); carregarIndicadoresAcao(); carregarAlertasComplianceAcao(); carregarCongregacoesPrestacaoAcao(); carregarPrestacoesContasAcao(); }
+  if (aba === "auditoria") {
+    carregarAuditoria(); carregarIndicadoresAcao(); carregarAlertasComplianceAcao(); carregarCongregacoesPrestacaoAcao(); carregarPrestacoesContasAcao();
+    carregarRecertificacoesAcao(); verificarCadeiaAuditoriaAcao(); carregarAncoragensAcao(); carregarAuditoriasNiveisAcao();
+    carregarPareceresConselhoAcao(); carregarSinalizacoesNifAcao(); carregarComunicacoesCoafAcao();
+  }
   if (aba === "protecaodedados") { carregarSolicitacoesDPO(); montarPoliticasRetencao(); }
   if (aba === "ouvidoria") carregarPainelOuvidoria();
 }
@@ -6961,6 +6994,25 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+// Trava de Revisão 4-A (v4.15.1): para origem CONGREGACAO a arrecadação
+// líquida é calculada no backend a partir do fechamento mensal real da
+// Tesouraria Local — o campo digitado só se aplica a DEPARTAMENTO/DISTRITO,
+// que ainda não têm fechamento eletrônico próprio.
+document.addEventListener("DOMContentLoaded", () => {
+  const selectOrigem = document.getElementById("repasseOrigemTipo");
+  const campoArrecadado = document.getElementById("repasseArrecadado");
+  if (selectOrigem && campoArrecadado) {
+    const grupoArrecadado = campoArrecadado.closest(".input-group") || campoArrecadado.parentElement;
+    const atualizar = () => {
+      const ehCongregacao = selectOrigem.value === "CONGREGACAO";
+      if (grupoArrecadado) grupoArrecadado.style.display = ehCongregacao ? "none" : "";
+      campoArrecadado.disabled = ehCongregacao;
+    };
+    selectOrigem.addEventListener("change", atualizar);
+    atualizar();
+  }
+});
+
 const ROTULO_STATUS_CONSAGRACAO = {
   PROTOCOLADO: "Protocolado",
   EM_ANALISE_CONSELHO: "Em análise no Conselho",
@@ -8271,6 +8323,233 @@ async function carregarPrestacoesContasAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Água</th><th>Luz</th><th>Status</th><th>Repasse</th></tr></thead><tbody>`;
   lista.forEach(p => html += `<tr><td>${p.congregacaoNome}</td><td>${p.mesReferencia}</td><td>${p.temAgua ? "✅" : "❌"}</td><td>${p.temLuz ? "✅" : "❌"}</td><td>${p.status}</td><td>${p.bloqueioRepasse ? "🔒 bloqueado" : "liberado"}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+// ==================== ABA: AUDITORIA — RECERTIFICAÇÃO DE ACESSOS (v4.12) ====================
+async function carregarRecertificacoesAcao() {
+  const container = document.getElementById("resultadoRecertificacoes");
+  const res = await fetchProtegido(`${API_BASE}/compliance/recertificacoes`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma recertificação pendente.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Pessoa</th><th>Papel</th><th>Permissão</th><th>Prazo</th><th>Status</th><th>Ações</th></tr></thead><tbody>`;
+  lista.forEach(r => {
+    let acoes = "-";
+    if (r.status === "PENDENTE") {
+      acoes = `<button class="btn-link" onclick="decidirRecertificacaoAcao(${r.recertificacaoId}, 'CONFIRMAR')">Recertificar</button>
+               <button class="btn-link btn-link-perigo" onclick="decidirRecertificacaoAcao(${r.recertificacaoId}, 'EXPIRAR')">Expirar</button>`;
+    }
+    html += `<tr><td>${r.nome}</td><td>${r.papelNome}</td><td>${r.permissao}</td><td>${new Date(r.prazo).toLocaleDateString("pt-BR")}</td><td>${r.status}</td><td class="acoes-inline">${acoes}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function decidirRecertificacaoAcao(recertificacaoId, acao) {
+  if (acao === "EXPIRAR" && !(await confirmarAcao("Marcar este acesso como expirado (não recertificado)?", "Expirar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/compliance/recertificacoes`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recertificacaoId, acao }) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarRecertificacoesAcao();
+}
+
+// ==================== ABA: AUDITORIA — CADEIA DE HASH E ANCORAGEM EXTERNA (v4.12) ====================
+async function verificarCadeiaAuditoriaAcao() {
+  const msg = document.getElementById("resultadoCadeiaAuditoria");
+  const res = await fetchProtegido(`${API_BASE}/auditoria/cadeia`);
+  const d = await res.json();
+  msg.textContent = d.integra
+    ? `✅ Cadeia íntegra — ${d.total} registro(s) verificado(s).`
+    : `⚠️ Cadeia VIOLADA — registro(s) quebrado(s): ${(d.quebrados || []).join(", ")}.`;
+}
+
+async function carregarAncoragensAcao() {
+  const container = document.getElementById("resultadoAncoragens");
+  const res = await fetchProtegido(`${API_BASE}/auditoria/ancoragens`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma ancoragem externa registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Quando</th><th>Método</th><th>Hash ancorado</th></tr></thead><tbody>`;
+  lista.forEach(a => html += `<tr><td>${new Date(a.criadoEm).toLocaleString("pt-BR")}</td><td>${a.metodo}</td><td style="font-family:monospace;font-size:0.85em;">${a.hashAncorado}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarAncoragemAcao() {
+  const metodo = document.getElementById("ancoragemMetodo").value;
+  const hashAncorado = document.getElementById("ancoragemHash").value.trim();
+  const arquivo = document.getElementById("ancoragemComprovante").files[0];
+  const body = { metodo };
+  if (hashAncorado) body.hashAncorado = hashAncorado;
+  if (arquivo) { body.comprovanteBase64 = await arquivoParaBase64(arquivo); body.mimeType = arquivo.type; }
+  const res = await fetchProtegido(`${API_BASE}/auditoria/ancoragens`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("ancoragemHash").value = "";
+    document.getElementById("ancoragemComprovante").value = "";
+    carregarAncoragensAcao();
+  }
+}
+
+// ==================== ABA: AUDITORIA — AUDITORIA EM 3 NÍVEIS (v4.12) ====================
+async function carregarAuditoriasNiveisAcao() {
+  const container = document.getElementById("resultadoAuditoriasNiveis");
+  const res = await fetchProtegido(`${API_BASE}/auditoria/niveis`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma auditoria registrada.</p>";
+    return;
+  }
+  // Este recurso responde com SELECT * (colunas em PascalCase), diferente
+  // dos demais endpoints do módulo que aliasam pra camelCase.
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nível</th><th>Título</th><th>Ano</th><th>Status</th><th>Conclusão</th></tr></thead><tbody>`;
+  lista.forEach(a => html += `<tr><td>${a.Nivel}</td><td>${a.Titulo}</td><td>${a.AnoReferencia}</td><td>${a.Status}</td><td>${a.Conclusao || "-"}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarAuditoriaNivelAcao() {
+  const nivel = document.getElementById("auditoriaNivelNivel").value;
+  const titulo = document.getElementById("auditoriaNivelTitulo").value.trim();
+  const anoReferencia = document.getElementById("auditoriaNivelAno").value;
+  const conclusao = document.getElementById("auditoriaNivelConclusao").value.trim();
+  const arquivo = document.getElementById("auditoriaNivelDocumento").files[0];
+  if (!titulo || !anoReferencia) { mostrarToast("Informe título e ano de referência.", "erro"); return; }
+  const body = { nivel, titulo, anoReferencia: Number(anoReferencia) };
+  if (conclusao) body.conclusao = conclusao;
+  if (arquivo) { body.documentoBase64 = await arquivoParaBase64(arquivo); body.mimeType = arquivo.type; }
+  const res = await fetchProtegido(`${API_BASE}/auditoria/niveis`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("auditoriaNivelTitulo").value = "";
+    document.getElementById("auditoriaNivelAno").value = "";
+    document.getElementById("auditoriaNivelConclusao").value = "";
+    document.getElementById("auditoriaNivelDocumento").value = "";
+    carregarAuditoriasNiveisAcao();
+  }
+}
+
+// ==================== ABA: AUDITORIA — PARECER MENSAL DO CONSELHO FISCAL (v4.12) ====================
+async function carregarPareceresConselhoAcao() {
+  const container = document.getElementById("resultadoPareceresConselho");
+  const res = await fetchProtegido(`${API_BASE}/auditoria/pareceres`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum parecer registrado.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Decisão</th><th>Justificativa</th><th>Por</th></tr></thead><tbody>`;
+  lista.forEach(p => html += `<tr><td>${p.mesReferencia}</td><td>${p.decisao === "APROVADO" ? "✅ Aprovado" : "❌ Rejeitado"}</td><td>${p.justificativa || "-"}</td><td>${p.parecerPorNome}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarParecerConselhoAcao() {
+  const mesReferencia = document.getElementById("parecerMes").value;
+  const decisao = document.getElementById("parecerDecisao").value;
+  const justificativa = document.getElementById("parecerJustificativa").value.trim();
+  const arquivo = document.getElementById("parecerDocumento").files[0];
+  if (!mesReferencia) { mostrarToast("Informe o mês de referência.", "erro"); return; }
+  const body = { mesReferencia, decisao };
+  if (justificativa) body.justificativa = justificativa;
+  if (arquivo) { body.documentoBase64 = await arquivoParaBase64(arquivo); body.mimeType = arquivo.type; }
+  const res = await fetchProtegido(`${API_BASE}/auditoria/pareceres`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("parecerJustificativa").value = "";
+    document.getElementById("parecerDocumento").value = "";
+    carregarPareceresConselhoAcao();
+  }
+}
+
+// ==================== ABA: AUDITORIA — NIF / COAF (v4.12) ====================
+async function carregarSinalizacoesNifAcao() {
+  const container = document.getElementById("resultadoSinalizacoesNif");
+  const res = await fetchProtegido(`${API_BASE}/nif/sinalizacoes`);
+  const lista = await res.json();
+  if (!Array.isArray(lista)) {
+    container.innerHTML = `<p class='subtitle'>${(lista && lista.mensagem) || "Sem acesso a este recurso (restrito à Tesouraria Geral)."}</p>`;
+    return;
+  }
+  if (lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma sinalização registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Descrição</th><th>Fornecedor</th><th>Status</th><th>Quando</th><th>Ações</th></tr></thead><tbody>`;
+  lista.forEach(s => {
+    let acoes = "-";
+    if (s.status === "PENDENTE") {
+      acoes = `<button class="btn-link" onclick="decidirSinalizacaoNifAcao(${s.sinalizacaoId}, 'CONFIRMAR')">Confirmar</button>
+               <button class="btn-link btn-link-perigo" onclick="decidirSinalizacaoNifAcao(${s.sinalizacaoId}, 'DESCARTAR')">Descartar</button>`;
+    } else if (s.status === "CONFIRMADA") {
+      acoes = `<button class="btn-link" onclick="registrarComunicacaoCoafAcao(${s.sinalizacaoId})">Comunicar ao COAF</button>`;
+    }
+    html += `<tr><td>${s.tipo}</td><td>${s.descricao}</td><td>${s.fornecedorNome || "-"}</td><td>${s.status}</td><td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td><td class="acoes-inline">${acoes}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function registrarSinalizacaoNifAcao() {
+  const tipo = document.getElementById("nifTipo").value;
+  const descricao = document.getElementById("nifDescricao").value.trim();
+  const saidaId = document.getElementById("nifSaidaId").value;
+  const fornecedorId = document.getElementById("nifFornecedorId").value;
+  if (!descricao) { mostrarToast("Descreva o indício de risco.", "erro"); return; }
+  const body = { tipo, descricao };
+  if (saidaId) body.saidaId = Number(saidaId);
+  if (fornecedorId) body.fornecedorId = Number(fornecedorId);
+  const res = await fetchProtegido(`${API_BASE}/nif/sinalizacoes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("nifDescricao").value = "";
+    document.getElementById("nifSaidaId").value = "";
+    document.getElementById("nifFornecedorId").value = "";
+    carregarSinalizacoesNifAcao();
+  }
+}
+
+async function decidirSinalizacaoNifAcao(sinalizacaoId, acao) {
+  if (acao === "DESCARTAR" && !(await confirmarAcao("Descartar esta sinalização de risco?", "Descartar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/nif/sinalizacoes`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sinalizacaoId, acao }) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarSinalizacoesNifAcao(); carregarComunicacoesCoafAcao(); }
+}
+
+async function registrarComunicacaoCoafAcao(sinalizacaoId) {
+  const protocolo = await pedirTexto("Comunicação ao COAF", "Protocolo da comunicação (opcional — se não houver, digite um traço \"-\")");
+  if (protocolo === null) return;
+  const res = await fetchProtegido(`${API_BASE}/nif/comunicacoes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sinalizacaoId, protocolo }) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarComunicacoesCoafAcao(); carregarSinalizacoesNifAcao(); }
+}
+
+async function carregarComunicacoesCoafAcao() {
+  const container = document.getElementById("resultadoComunicacoesCoaf");
+  const res = await fetchProtegido(`${API_BASE}/nif/comunicacoes`);
+  const lista = await res.json();
+  if (!Array.isArray(lista)) {
+    container.innerHTML = `<p class='subtitle'>${(lista && lista.mensagem) || "Sem acesso a este recurso (restrito à Tesouraria Geral)."}</p>`;
+    return;
+  }
+  if (lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma comunicação registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Sinalização</th><th>Protocolo</th><th>Prazo 24h</th><th>Observação</th><th>Quando</th></tr></thead><tbody>`;
+  lista.forEach(c => html += `<tr><td>#${c.sinalizacaoId}</td><td>${c.protocolo || "-"}</td><td>${c.dentroPrazo24h ? "✅ Dentro do prazo" : "⚠️ Fora do prazo"}</td><td>${c.observacao || "-"}</td><td>${new Date(c.dataComunicacao).toLocaleString("pt-BR")}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }

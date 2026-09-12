@@ -2463,14 +2463,57 @@ aplicado. `shared/investimentos.js` + `GestaoInvestimentos` + `GestaoCashPooling
 
 #### 🔒 Trava de Revisão 4-A — antes de avançar para a v4.16
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v4.11 a v4.15 pelas 5 perguntas do checklist — Patrimônio/Alçadas/
-Depreciação, Auditoria/Compliance, Conciliação Bancária, Investimentos e
-Repasses institucionais mexem todos com **dinheiro real e trilha de
-auditoria**, então nenhuma das 5 perguntas é opcional aqui: código rodando
-de ponta a ponta contra o Azure SQL real, toda tela clicada uma a uma,
-README e código narrando a mesma coisa, dívida técnica zerada, deploy
-confirmado no ar. Só fecha `[x]` com as 5 respondidas "sim".
+- [ ] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditou v4.11 a v4.15 pelas 5 perguntas do checklist —
+      Patrimônio/Alçadas/Depreciação, Auditoria/Compliance, Conciliação
+      Bancária, Investimentos e Repasses institucionais mexem todos com
+      **dinheiro real e trilha de auditoria**.
+
+  **Bugs corrigidos (código rodando de ponta a ponta / tela real):**
+  - v4.11: `.slice` num objeto `Date` quebrava a alienação durante
+    quarentena patrimonial (Art. 58 §7º); falta de checagem de escopo em
+    `GestaoBensPatrimoniais` (PUT) e em todas as rotas de
+    `GestaoInventarios` (financeiro de uma congregação editava bem/
+    inventário de outra); item de inventário duplicado estourava a
+    constraint SQL sem tratamento; lançamento de item sem trilha de
+    auditoria.
+  - v4.12: hash do `AuditLog` calculado sobre objeto bruto em vez do JSON
+    gravado (verificação de integridade sempre acusava violação falsa);
+    verificação da cadeia tratava `AuditLog` como cadeia única global em
+    vez de por `Tabela` (quebrava a cada intercalação); colisão de rota
+    entre `GestaoAuditoria` e `ListarAuditoria`/`RegistrarAuditoria`; prazo
+    de 24h do COAF contado a partir do registro em vez da decisão do NIF.
+  - v4.13: parser OFX não reconhecia extratos reais (tags SGML sem
+    fechamento); corte de data cortava 2 dígitos a mais; pagamento `MISTO`
+    nunca conciliava em nenhuma trilha; `Saídas` (nunca pagas em espécie)
+    entrando como candidato falso na trilha do cofre; mismatch de
+    PascalCase/camelCase no detalhe da conciliação.
+  - v4.14: fórmula de previsão de liquidez só descontava o valor empenhado
+    no primeiro mês, inflando as faixas otimista/conservador a partir do
+    segundo mês.
+  - v4.15: off-by-one no cálculo de atraso (marcava atraso já na madrugada
+    do próprio dia de tolerância); faltava validação de faixa nos
+    parâmetros do repasse institucional.
+
+  **Lacunas README×código fechadas (não só anotadas):**
+  - v4.12 ganhou telas para as 5 funcionalidades que só existiam via API
+    (Recertificação de Acessos, Ancoragem externa + verificação da cadeia
+    de hash, Auditoria em 3 níveis, Parecer mensal do Conselho Fiscal,
+    NIF/COAF), dentro da aba Auditoria já existente.
+  - v4.12: prazo fatal de prestação de contas (dia 1º útil, tolerância dia
+    5) implementado de verdade, com Ata de Pendência automática — antes só
+    checava se o comprovante de água/luz tinha sido anexado, sem checar a
+    data (`api/shared/prestacoesContas.js`, novo).
+  - v4.13: trilha `CAIXA_FISICO` da Conciliação Bancária agora concilia de
+    fato contra `FundoFixoMovimentos` (v4.5) em vez de tratar o cofre igual
+    a extrato bancário digitado à mão (migração 066).
+  - v4.15: `valorArrecadadoLiquido` do repasse institucional de
+    `CONGREGACAO` agora vem do `FechamentosTesouraria` real do mês, em vez
+    de digitação manual sujeita a divergência.
+
+  **Pendente para fechar `[x]`**: deploy real de ponta a ponta ainda não
+  confirmado — commit feito, aguardando push/CI (migração 066 rodar contra
+  o Azure SQL real) e confirmação de que o deploy subiu no ar.
 
 #### v4.16 — Seguros institucionais *(gap da varredura)*
 

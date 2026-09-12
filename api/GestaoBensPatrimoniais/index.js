@@ -109,12 +109,19 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { erro: "Informe o id na rota: /api/bens-patrimoniais/{id}" } };
       return;
     }
-    const atual = await pool.request().input("id", sql.Int, id).query(`SELECT * FROM BensPatrimoniais WHERE BemId = @id`);
+    const atual = await pool.request().input("id", sql.Int, id).query(`
+      SELECT b.*, c.Nome AS congregacaoNome FROM BensPatrimoniais b
+      LEFT JOIN Congregacoes c ON c.CongregacaoId = b.CongregacaoId WHERE b.BemId = @id
+    `);
     if (atual.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Bem não encontrado." } };
       return;
     }
     const registro = atual.recordset[0];
+    if (!auth.estaNoEscopo(usuario, registro.congregacaoNome)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
+      return;
+    }
     const { acao, descricao, valorAquisicao, vidaUtilMeses, valorResidual } = req.body || {};
     const novoStatus = acao === "BAIXAR" ? "BAIXADO" : registro.Status;
     const novaDescricao = descricao !== undefined ? descricao.trim() : registro.Descricao;

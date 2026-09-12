@@ -102,10 +102,13 @@ async function previsaoLiquidezComFaixa(pool, sql, meses) {
   const otimista = round2(media + desvio);
   const conservador = round2(Math.max(0, media - desvio));
 
+  // O empenho aberto (Saídas já aprovadas, ainda não pagas) é uma saída de
+  // caixa já comprometida: reduz o saldo a partir do 1º mês e permanece
+  // reduzido nos meses seguintes (mesma lógica cumulativa de
+  // tesouraria.projetarFluxoCaixa — nunca "desaparece" depois do mês 1).
   const projecao = base.projecao.map((p, i) => {
-    const empenho = i === 0 ? base.totalEmpenhadoAberto : 0;
-    const saldoOtimista = round2(base.saldoAtual + (otimista - base.saidaMediaMensal) * (i + 1) - empenho);
-    const saldoConservador = round2(base.saldoAtual + (conservador - base.saidaMediaMensal) * (i + 1) - empenho);
+    const saldoOtimista = round2(base.saldoAtual + (otimista - base.saidaMediaMensal) * (i + 1) - base.totalEmpenhadoAberto);
+    const saldoConservador = round2(base.saldoAtual + (conservador - base.saidaMediaMensal) * (i + 1) - base.totalEmpenhadoAberto);
     return Object.assign({}, p, { saldoOtimista, saldoConservador });
   });
 

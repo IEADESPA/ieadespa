@@ -1,11 +1,17 @@
-// GestaoConciliacaoBancaria (v4.13 — conciliação por importação de extrato)
+// GestaoConciliacaoBancaria (v4.13 — conciliação por importação de extrato;
+// trilha CAIXA_FISICO corrigida na Trava de Revisão 4-A)
 // Sem Open Finance pago: a Tesouraria sobe o extrato (OFX/CSV) que o banco
 // entrega de graça no internet banking e o sistema cruza automaticamente
 // contra Entradas/Saídas, apontando só as divergências. Dinheiro vivo fica
-// na trilha CAIXA_FISICO (cofre), não no banco.
+// na trilha CAIXA_FISICO (cofre) — conciliada contra os registros reais do
+// Fundo Fixo de Caixa (FundoFixoMovimentos, v4.5), sem upload de arquivo
+// nenhum: essa trilha nunca teve "extrato" de verdade, é o cofre físico.
 // GET  /api/conciliacao-bancaria/fontes -> fontes de caixa
 // GET  /api/conciliacao-bancaria/extratos -> extratos importados
-// POST /api/conciliacao-bancaria/extratos -> { fonteId, mesReferencia, arquivoBase64, mimeType }
+// POST /api/conciliacao-bancaria/extratos -> { fonteId, mesReferencia, arquivoBase64?, mimeType? }
+//   (arquivoBase64/mimeType obrigatórios só para fonte CONTA_BANCARIA; para
+//   CAIXA_FISICO basta fonteId + mesReferencia — concilia direto contra
+//   FundoFixoMovimentos do período)
 // GET  /api/conciliacao-bancaria?mesReferencia=&fonteId= -> conciliações
 // GET  /api/conciliacao-bancaria/{id} -> detalhe + divergências
 // PUT  /api/conciliacao-bancaria/divergencias -> { divergenciaId, acao: 'RESOLVER' }
@@ -44,7 +50,81 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST" && recurso === "extratos") {
     const { fonteId, mesReferencia, arquivoBase64, mimeType } = req.body || {};
-    if (!fonteId || !mesReferencia || !arquivoBase64) {
+    if (!fonteId || !mesReferencia) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: fonteId, mesReferencia." } };
+      return;
+    }
+    const fonteRow = await pool.request().input("id", sql.Int, fonteId).query(`SELECT Tipo FROM FontesCaixa WHERE FonteId = @id AND Ativa = 1`);
+    if (fonteRow.recordset.length === 0) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Fonte de caixa não encontrada ou inativa." } };
+      return;
+    }
+    const ehCaixaFisico = fonteRow.recordset[0].Tipo === "CAIXA_FISICO";
+
+    // Dinheiro vivo (caixa físico/cofre) não tem "extrato" nenhum pra subir — o
+    // registro eletrônico já existe em FundoFixoMovimentos (v4.5). Antes desta
+    // correção (Trava de Revisão 4-A), essa trilha exigia um extrato digitado à
+    // mão e nunca tocava FundoFixoMovimentos.
+    if (ehCaixaFisico) {
+      const resultado = await conciliacao.conciliarFundoFixo(pool, sql, fonteId, mesReferencia);
+      if (resultado.totalRegistros === 0) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Nenhum movimento do Fundo Fixo de Caixa encontrado nesse mês de referência." } };
+        return;
+      }
+      const divergente = resultado.soFundo.length > 0 || resultado.soSistema.length > 0;
+
+      const existente = await pool.request().input("fonte", sql.Int, fonteId).input("mes", sql.Char(7), mesReferencia)
+        .query(`SELECT ConciliacaoId FROM ConciliacoesBancarias WHERE FonteId = @fonte AND MesReferencia = @mes`);
+      let conciliacaoId;
+      if (existente.recordset.length === 0) {
+        const criada = await pool.request().input("fonte", sql.Int, fonteId).input("mes", sql.Char(7), mesReferencia)
+          .input("extrato", sql.Decimal(12, 2), resultado.totalExtrato).input("sistema", sql.Decimal(12, 2), resultado.totalSistema)
+          .query(`INSERT INTO ConciliacoesBancarias (FonteId, MesReferencia, TotalExtrato, TotalSistema, TotalBatidas) OUTPUT INSERTED.ConciliacaoId VALUES (@fonte, @mes, @extrato, @sistema, 0)`);
+        conciliacaoId = criada.recordset[0].ConciliacaoId;
+      } else {
+        conciliacaoId = existente.recordset[0].ConciliacaoId;
+        await pool.request().input("id", sql.Int, conciliacaoId).query(`DELETE FROM ConciliacaoDivergencias WHERE ConciliacaoId = @id`);
+      }
+
+      let totalBatidas = 0;
+      for (const b of resultado.batidas) totalBatidas += Math.abs(Number(b.valor));
+      for (const d of resultado.soFundo) {
+        await pool.request().input("conc", sql.Int, conciliacaoId).input("tipo", sql.NVarChar(20), "SO_BANCO")
+          .input("valor", sql.Decimal(12, 2), d.valor).input("ref", sql.NVarChar(300), d.referencia || null).input("mov", sql.Int, d.movimentoFundoId || null)
+          .query(`INSERT INTO ConciliacaoDivergencias (ConciliacaoId, Tipo, Valor, Referencia, MovimentoFundoId) VALUES (@conc, @tipo, @valor, @ref, @mov)`);
+      }
+      for (const d of resultado.soSistema) {
+        await pool.request().input("conc", sql.Int, conciliacaoId).input("tipo", sql.NVarChar(20), "SO_SISTEMA")
+          .input("valor", sql.Decimal(12, 2), d.valor).input("ref", sql.NVarChar(300), d.referencia || null)
+          .input("lanc", sql.Int, d.tipo === "ENTRADA" ? d.id : null).input("saida", sql.Int, d.tipo === "SAIDA" ? d.id : null)
+          .query(`INSERT INTO ConciliacaoDivergencias (ConciliacaoId, Tipo, Valor, Referencia, LancamentoId, SaidaId) VALUES (@conc, @tipo, @valor, @ref, @lanc, @saida)`);
+      }
+
+      await pool.request().input("id", sql.Int, conciliacaoId)
+        .input("status", sql.NVarChar(20), divergente ? "DIVERGENTE" : "BATIDO")
+        .input("extrato", sql.Decimal(12, 2), resultado.totalExtrato).input("sistema", sql.Decimal(12, 2), resultado.totalSistema)
+        .input("batidas", sql.Decimal(12, 2), conciliacao.round2(totalBatidas))
+        .query(`UPDATE ConciliacoesBancarias SET Status = @status, TotalExtrato = @extrato, TotalSistema = @sistema, TotalBatidas = @batidas WHERE ConciliacaoId = @id`);
+
+      await registrarAuditoria({
+        tabela: "FundoFixoMovimentos", registroId: conciliacaoId, acao: "Conciliou Caixa Físico contra o Fundo Fixo de Caixa", usuarioId: usuario.membroId,
+        dadosDepois: { fonteId, mesReferencia, totalRegistros: resultado.totalRegistros, batidas: resultado.batidas.length, soFundo: resultado.soFundo.length, soSistema: resultado.soSistema.length }
+      });
+
+      context.res = {
+        status: 201, headers: { "Content-Type": "application/json" },
+        body: {
+          sucesso: true, conciliacaoId,
+          mensagem: divergente
+            ? `⚠️ Fundo Fixo conciliado (${resultado.totalRegistros} movimento(s)) — ${resultado.batidas.length} batida(s), ${resultado.soFundo.length} só no cofre, ${resultado.soSistema.length} só no sistema.`
+            : `✅ Fundo Fixo conciliado e tudo bateu — ${resultado.batidas.length} movimentação(ões) conciliada(s).`,
+          resumo: { totalBatidas: resultado.batidas.length, soBanco: resultado.soFundo.length, soSistema: resultado.soSistema.length, totalExtrato: resultado.totalExtrato, totalSistema: resultado.totalSistema }
+        }
+      };
+      return;
+    }
+
+    if (!arquivoBase64) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: fonteId, mesReferencia, arquivoBase64." } };
       return;
     }
@@ -161,7 +241,11 @@ module.exports = async function (context, req) {
       return;
     }
     const conc = await pool.request().input("id", sql.Int, id).query(`
-      SELECT c.*, f.Nome AS fonteNome FROM ConciliacoesBancarias c JOIN FontesCaixa f ON f.FonteId = c.FonteId WHERE c.ConciliacaoId = @id
+      SELECT c.ConciliacaoId AS conciliacaoId, c.FonteId AS fonteId, c.MesReferencia AS mesReferencia, c.Status AS status,
+             c.TotalExtrato AS totalExtrato, c.TotalSistema AS totalSistema, c.TotalBatidas AS totalBatidas,
+             c.ConcluidoPor AS concluidoPor, CONVERT(varchar(33), c.CriadoEm, 126) AS criadoEm,
+             CONVERT(varchar(33), c.ConcluidoEm, 126) AS concluidoEm, f.Nome AS fonteNome
+      FROM ConciliacoesBancarias c JOIN FontesCaixa f ON f.FonteId = c.FonteId WHERE c.ConciliacaoId = @id
     `);
     if (conc.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Conciliação não encontrada." } };

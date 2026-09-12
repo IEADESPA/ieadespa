@@ -92,7 +92,7 @@ module.exports = async function (context, req) {
     if (b.Tipo === "IMOVEL" || b.Tipo === "CASA_PASTORAL") {
       const quarentena = await patrimonio.quarentenaPatrimonialAtiva(pool, sql);
       if (quarentena) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: `Quarentena patrimonial ativa (Art. 58 §7º) até ${quarentena.dataFim.slice(0, 10)} — alienação de imóvel está vedada neste período. Motivo: ${quarentena.motivo}` } };
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Quarentena patrimonial ativa (Art. 58 §7º) até ${new Date(quarentena.dataFim).toISOString().slice(0, 10)} — alienação de imóvel está vedada neste período. Motivo: ${quarentena.motivo}` } };
         return;
       }
     }

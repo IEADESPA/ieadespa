@@ -31,7 +31,8 @@ module.exports = async function (context, req) {
       FROM InventariosAnuais i LEFT JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId
       WHERE ${where} ORDER BY i.AnoReferencia DESC
     `);
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
+    const inventarios = result.recordset.filter(i => auth.estaNoEscopo(usuario, i.congregacaoNome));
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: inventarios };
     return;
   }
 
@@ -42,6 +43,10 @@ module.exports = async function (context, req) {
     `);
     if (inventario.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Inventário não encontrado." } };
+      return;
+    }
+    if (!auth.estaNoEscopo(usuario, inventario.recordset[0].congregacaoNome)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
       return;
     }
     const itens = await pool.request().input("id", sql.Int, id).query(`
@@ -57,6 +62,16 @@ module.exports = async function (context, req) {
     const { anoReferencia, congregacaoId } = req.body || {};
     if (!anoReferencia) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o anoReferencia." } };
+      return;
+    }
+    if (congregacaoId) {
+      const cong = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id`);
+      if (cong.recordset.length === 0 || !auth.estaNoEscopo(usuario, cong.recordset[0].Nome)) {
+        context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
+        return;
+      }
+    } else if (usuario.escopoCongregacoes && usuario.escopoCongregacoes !== "TODAS") {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Inventário consolidado da Sede é restrito a nível Global." } };
       return;
     }
     const existente = await pool.request().input("ano", sql.Int, anoReferencia).input("cong", sql.Int, congregacaoId || null)
@@ -85,20 +100,50 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `estadoConservacao inválido. Use um de: ${ESTADOS.join(", ")}.` } };
       return;
     }
-    const inv = await pool.request().input("id", sql.Int, id).query(`SELECT Status FROM InventariosAnuais WHERE InventarioId = @id`);
+    const inv = await pool.request().input("id", sql.Int, id).query(`
+      SELECT i.Status, c.Nome AS congregacaoNome FROM InventariosAnuais i
+      LEFT JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId WHERE i.InventarioId = @id
+    `);
     if (inv.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Inventário não encontrado." } };
+      return;
+    }
+    if (!auth.estaNoEscopo(usuario, inv.recordset[0].congregacaoNome)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
       return;
     }
     if (inv.recordset[0].Status !== "ABERTO") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este inventário já foi concluído." } };
       return;
     }
-    await pool.request().input("inv", sql.Int, id).input("bemId", sql.Int, bemId)
+    // UQ_InventarioItem_Bem impede duplicar o mesmo bem no mesmo inventário —
+    // se o item já foi lançado, corrige o lançamento existente em vez de
+    // deixar estourar a violação de constraint.
+    const existente = await pool.request().input("inv", sql.Int, id).input("bemId", sql.Int, bemId)
+      .query(`SELECT InventarioItemId FROM InventarioItens WHERE InventarioId = @inv AND BemId = @bemId`);
+    let inventarioItemId;
+    if (existente.recordset.length > 0) {
+      inventarioItemId = existente.recordset[0].InventarioItemId;
+      await pool.request().input("id", sql.Int, inventarioItemId)
+        .input("estado", sql.NVarChar(30), estadoConservacao).input("presente", sql.Bit, presente === false ? 0 : 1)
+        .input("obs", sql.NVarChar(300), observacao || null)
+        .query(`UPDATE InventarioItens SET EstadoConservacao = @estado, Presente = @presente, Observacao = @obs WHERE InventarioItemId = @id`);
+      await registrarAuditoria({
+        tabela: "InventarioItens", registroId: inventarioItemId, acao: "Corrigiu item lançado no inventário anual", usuarioId: usuario.membroId,
+        dadosDepois: { inventarioId: Number(id), bemId, estadoConservacao, presente: presente !== false }
+      });
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Item do inventário atualizado." } };
+      return;
+    }
+    const itemCriado = await pool.request().input("inv", sql.Int, id).input("bemId", sql.Int, bemId)
       .input("estado", sql.NVarChar(30), estadoConservacao).input("presente", sql.Bit, presente === false ? 0 : 1)
       .input("obs", sql.NVarChar(300), observacao || null)
       .query(`INSERT INTO InventarioItens (InventarioId, BemId, EstadoConservacao, Presente, Observacao)
-              VALUES (@inv, @bemId, @estado, @presente, @obs)`);
+              OUTPUT INSERTED.InventarioItemId VALUES (@inv, @bemId, @estado, @presente, @obs)`);
+    await registrarAuditoria({
+      tabela: "InventarioItens", registroId: itemCriado.recordset[0].InventarioItemId, acao: "Lançou item no inventário anual", usuarioId: usuario.membroId,
+      dadosDepois: { inventarioId: Number(id), bemId, estadoConservacao, presente: presente !== false }
+    });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Item lançado no inventário." } };
     return;
   }
@@ -107,6 +152,18 @@ module.exports = async function (context, req) {
     const { acao } = req.body || {};
     if (acao !== "CONCLUIR") {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida — use 'CONCLUIR'." } };
+      return;
+    }
+    const atual = await pool.request().input("id", sql.Int, id).query(`
+      SELECT c.Nome AS congregacaoNome FROM InventariosAnuais i
+      LEFT JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId WHERE i.InventarioId = @id
+    `);
+    if (atual.recordset.length === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Inventário não encontrado." } };
+      return;
+    }
+    if (!auth.estaNoEscopo(usuario, atual.recordset[0].congregacaoNome)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
       return;
     }
     await pool.request().input("id", sql.Int, id).query(`UPDATE InventariosAnuais SET Status = 'CONCLUIDO' WHERE InventarioId = @id`);

@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["get", "post"],
-      "route": "auditoria/{recurso?}"
+      "route": "auditoria/{recurso}"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

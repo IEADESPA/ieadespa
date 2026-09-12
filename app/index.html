@@ -1538,6 +1538,76 @@
         <button class="btn-confirmar" style="width:auto;" onclick="registrarPrestacaoContasAcao()">📥 Registrar prestação</button>
         <p id="resultadoPrestacao" class="subtitle"></p>
         <div class="rolagem-tabela"><div id="resultadoPrestacoesContas"></div></div>
+
+        <hr style="margin:24px 0;" />
+        <h4 style="color: var(--cor-primaria);">Recertificação de Acessos (permissão "financeiro")</h4>
+        <p class="subtitle">Pessoas com a permissão "financeiro" cujo acesso precisa ser reconfirmado periodicamente, ou já venceu o prazo.</p>
+        <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="carregarRecertificacoesAcao()">🔄 Atualizar lista</button>
+        <div class="rolagem-tabela"><div id="resultadoRecertificacoes"></div></div>
+
+        <hr style="margin:24px 0;" />
+        <h4 style="color: var(--cor-primaria);">Integridade da Trilha e Ancoragem Externa</h4>
+        <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="verificarCadeiaAuditoriaAcao()">🔗 Verificar cadeia de hash</button>
+        <p id="resultadoCadeiaAuditoria" class="subtitle"></p>
+        <div class="input-group"><label>Método:</label>
+          <select id="ancoragemMetodo">
+            <option value="RFC3161">RFC 3161 (carimbo do tempo)</option>
+            <option value="REGISTRO_PUBLICO">Registro Público</option>
+          </select>
+        </div>
+        <div class="input-group"><label>Hash a ancorar (opcional):</label><input type="text" id="ancoragemHash" placeholder="deixe em branco para usar o hash mais recente da trilha" /></div>
+        <div class="input-group"><label>Comprovante (opcional):</label><input type="file" id="ancoragemComprovante" accept="application/pdf,image/jpeg,image/png" /></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarAncoragemAcao()">⚓ Ancorar externamente</button>
+        <div class="rolagem-tabela"><div id="resultadoAncoragens"></div></div>
+
+        <hr style="margin:24px 0;" />
+        <h4 style="color: var(--cor-primaria);">Auditoria em 3 Níveis (Interna | NIF | Externa)</h4>
+        <div class="input-group"><label>Nível:</label>
+          <select id="auditoriaNivelNivel">
+            <option value="INTERNA">Interna</option>
+            <option value="NIF">NIF</option>
+            <option value="EXTERNA">Externa</option>
+          </select>
+        </div>
+        <div class="input-group"><label>Título:</label><input type="text" id="auditoriaNivelTitulo" placeholder="ex: Auditoria contábil anual" /></div>
+        <div class="input-group"><label>Ano de referência:</label><input type="number" id="auditoriaNivelAno" placeholder="2026" /></div>
+        <div class="input-group"><label>Conclusão (opcional):</label><textarea id="auditoriaNivelConclusao" rows="2"></textarea></div>
+        <div class="input-group"><label>Documento (opcional):</label><input type="file" id="auditoriaNivelDocumento" accept="application/pdf,image/jpeg,image/png" /></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarAuditoriaNivelAcao()">📋 Registrar auditoria</button>
+        <div class="rolagem-tabela"><div id="resultadoAuditoriasNiveis"></div></div>
+
+        <hr style="margin:24px 0;" />
+        <h4 style="color: var(--cor-primaria);">Parecer Mensal do Conselho Fiscal</h4>
+        <div class="input-group"><label>Mês de referência:</label><input type="month" id="parecerMes" /></div>
+        <div class="input-group"><label>Decisão:</label>
+          <select id="parecerDecisao">
+            <option value="APROVADO">Aprovado</option>
+            <option value="REJEITADO">Rejeitado</option>
+          </select>
+        </div>
+        <div class="input-group"><label>Justificativa (opcional):</label><textarea id="parecerJustificativa" rows="2"></textarea></div>
+        <div class="input-group"><label>Documento (opcional):</label><input type="file" id="parecerDocumento" accept="application/pdf,image/jpeg,image/png" /></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarParecerConselhoAcao()">🖋️ Emitir parecer</button>
+        <div class="rolagem-tabela"><div id="resultadoPareceresConselho"></div></div>
+
+        <hr style="margin:24px 0;" />
+        <h4 style="color: var(--cor-primaria);">NIF — Sinalizações de Risco e Comunicação ao COAF</h4>
+        <p class="subtitle">Restrito a papéis de nível Global (Tesouraria Geral) — Lei 9.613/1998, prazo de 24h para comunicação após confirmação.</p>
+        <div class="input-group"><label>Tipo:</label>
+          <select id="nifTipo">
+            <option value="VALOR_ATIPICO">Valor Atípico</option>
+            <option value="FRACIONAMENTO">Fracionamento</option>
+            <option value="FORNECEDOR_SEM_HISTORICO">Fornecedor sem Histórico</option>
+          </select>
+        </div>
+        <div class="input-group"><label>Descrição:</label><textarea id="nifDescricao" rows="2" placeholder="Descreva o indício de risco identificado"></textarea></div>
+        <div class="input-group"><label>Saída de tesouraria relacionada (opcional):</label><input type="number" id="nifSaidaId" placeholder="ID da saída" /></div>
+        <div class="input-group"><label>Fornecedor relacionado (opcional):</label><input type="number" id="nifFornecedorId" placeholder="ID do fornecedor" /></div>
+        <button class="btn-confirmar" style="width:auto;" onclick="registrarSinalizacaoNifAcao()">⚠️ Registrar sinalização</button>
+        <div class="rolagem-tabela"><div id="resultadoSinalizacoesNif"></div></div>
+
+        <h4 style="color: var(--cor-primaria);margin-top:18px;">Comunicações ao COAF</h4>
+        <div class="rolagem-tabela"><div id="resultadoComunicacoesCoaf"></div></div>
       </div>
 
       <!-- ABA: PROTEÇÃO DE DADOS (Encarregado de Dados / LGPD) -->

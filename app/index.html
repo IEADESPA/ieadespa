@@ -118,6 +118,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroParametrosmonetarios" onclick="mostrarSubAbaFinanceiro('parametrosmonetarios')"><span class="icone">💰</span><span class="rotulo">Parâmetros Monetários</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroCessoes" onclick="mostrarSubAbaFinanceiro('cessoes')"><span class="icone">⛪</span><span class="rotulo">Cessão de Templo</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroObrigacoes" onclick="mostrarSubAbaFinanceiro('obrigacoes')"><span class="icone">🧾</span><span class="rotulo">Obrigações Fiscais</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroImunidade" onclick="mostrarSubAbaFinanceiro('imunidade')"><span class="icone">🛡️</span><span class="rotulo">Imunidade Tributária</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2488,6 +2489,28 @@
           <div class="input-group"><label>Ano:</label><input type="number" id="informeAno" /></div>
           <button class="btn-confirmar" style="width:auto;" onclick="carregarInformeRendimentosAcao()">📄 Gerar informe</button>
           <div class="rolagem-tabela"><div id="resultadoInformeRendimentos"></div></div>
+        </div>
+
+        <!-- SUB-ABA: IMUNIDADE TRIBUTÁRIA (v4.20) -->
+        <div id="subFinanceiroImunidade" class="sub-aba-secretaria" style="display:none;">
+          <h3>🛡️ Painel de Imunidade Tributária</h3>
+          <p class="subtitle">A imunidade (CF Art. 150, VI, "b") depende dos 3 requisitos do CTN Art. 14.
+            Semáforo calculado na leitura: distribuição de renda, recursos no País e escrituração formal.</p>
+
+          <h4 style="color: var(--cor-primaria);">Semáforo dos 3 requisitos (CTN Art. 14)</h4>
+          <button class="btn-confirmar" style="width:auto;" onclick="carregarImunidadeTributariaAcao()">🔄 Recalcular</button>
+          <div id="resultadoSemaforo"></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">⚠️ Conflito de interesses</h4>
+          <div class="rolagem-tabela"><div id="resultadoConflitos"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Carga tributária embutida (LC 214/2025)</h4>
+          <div class="rolagem-tabela"><div id="resultadoCarga"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Dossiê de defesa fiscal</h4>
+          <div class="input-group"><label>Ano:</label><input type="number" id="dossieAno" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="carregarDossieFiscalAcao()">📦 Montar dossiê</button>
+          <div id="resultadoDossie"></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

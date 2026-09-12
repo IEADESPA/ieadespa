@@ -2587,25 +2587,23 @@ acessória* — e a multa por não entregar existe mesmo sem haver imposto a pag
 A imunidade dos templos (CF Art. 150, VI, "b") **não é automática nem
 permanente**: o CTN Art. 14 a condiciona a três requisitos, e a pesquisa mostra
 que a perda, na prática, quase nunca vem de desvio de dinheiro — vem de
-**desorganização formal** (livro sem escrituração, pagamento a dirigente sem
-rubrica, recurso aplicado fora do País sem registro).
+**desorganização formal**. `shared/imunidade.js` + `RelatorioImunidadeTributaria`
++ `RelatorioDossieFiscal`.
 
-- [ ] **Semáforo dos 3 requisitos do CTN Art. 14**, calculado na leitura:
-      (I) não distribuir patrimônio/renda — detector de pagamento a dirigente,
-      pastor ou parente sem rubrica válida, cruzando com `VinculosFamiliares`;
-      (II) aplicar integralmente os recursos no País — rastreio de remessa a
-      missões/entidades no exterior; (III) escrituração em livros revestidos de
-      formalidade — % de lançamentos com comprovante anexado.
-- [ ] **Dossiê de defesa fiscal exportável** — pacote único (demonstrações da
-      v4.9 + balancetes + comprovantes + atas de aprovação de contas) para
-      responder a fiscalização sem garimpar papel por semanas.
-- [ ] Alerta de conflito de interesses: pagamento a fornecedor que é parente de
-      quem aprovou (reaproveita a segregação de funções da seção 2.7 + vínculos
-      familiares, dois mecanismos que já existem e nunca foram cruzados).
-- [ ] **Reforma tributária (LC 214/2025)**: a imunidade vale para as operações
-      que a igreja realiza, **não para as aquisições** — IBS/CBS embutido na
-      compra é custo não recuperável. Campo de tributo na entrada e relatório de
-      carga tributária embutida, para o orçamento (v4.8) não subestimar custo.
+- [x] **Semáforo dos 3 requisitos do CTN Art. 14**, calculado na leitura:
+      (I) não distribuir patrimônio/renda — pagamentos a ministros (CPF casa com
+      `Prebendados`) fora de rubrica válida; (II) aplicar recursos integralmente
+      no País — `Fornecedores.Estrangeiro`; (III) escrituração formal — % de
+      lançamentos com comprovante anexado.
+- [x] **Dossiê de defesa fiscal exportável** — `GET /api/dossie-fiscal/{ano}`:
+      pacote único (demonstrações v4.9 + balancetes + comprovantes + atas de
+      aprovação de contas).
+- [x] Alerta de conflito de interesses — pagamento a ministro aprovado por
+      parente (cruza `SaidaAprovacoes` + `VinculosFamiliares`, dois mecanismos
+      que já existiam e nunca foram cruzados).
+- [x] **Reforma tributária (LC 214/2025)** — `SaidasTesouraria.TributosEmbutidos`
+      (IBS/CBS na aquisição, custo não recuperável) e relatório de carga tributária
+      embutida no painel, pro orçamento (v4.8) não subestimar custo.
 
 #### 🔒 Trava de Revisão 4-B — antes de avançar para a v4.21
 

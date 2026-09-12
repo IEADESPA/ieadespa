@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "imunidade", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo", obrigacoes: "Obrigações Fiscais",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo", obrigacoes: "Obrigações Fiscais", imunidade: "Imunidade Tributária",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -632,6 +632,10 @@ function mostrarSubAbaFinanceiro(sub) {
   }
   if (sub === "obrigacoes") {
     carregarObrigacoesFiscaisAcao();
+    return;
+  }
+  if (sub === "imunidade") {
+    carregarImunidadeTributariaAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2934,6 +2938,58 @@ async function carregarInformeRendimentosAcao() {
     d.prestadores.forEach(p => html += `<tr><td>${p.nome}</td><td>${p.cpfCnpj}</td><td>R$ ${Number(p.valorTotal).toFixed(2)}</td></tr>`);
     html += "</tbody></table>";
   }
+  container.innerHTML = html;
+}
+
+// ---- IMUNIDADE TRIBUTÁRIA (v4.20) ----
+async function carregarImunidadeTributariaAcao() {
+  const res = await fetchProtegido(`${API_BASE}/imunidade-tributaria`);
+  const d = await res.json();
+
+  const sem = d.semaforo || {};
+  const cores = { VERDE: "🟢", ATENCAO: "🟡" };
+  const semaforo = document.getElementById("resultadoSemaforo");
+  let html = `<p class="subtitle">Semáforo geral: ${cores[sem.semaforoGeral] || "⚪"} ${sem.semaforoGeral}</p>`;
+  [sem.requisitoI, sem.requisitoII, sem.requisitoIII].forEach(r => {
+    if (!r) return;
+    html += `<p><strong>${r.ok ? "✅" : "⚠️"} ${r.rotulo}</strong>`;
+    if (r.rotulo.indexOf("distribuir") !== -1) html += ` — ${r.pagamentosAMinistros} pagamento(s) a ministros, ${r.foraRubrica.length} fora de rubrica`;
+    if (r.rotulo.indexOf("País") !== -1) html += ` — ${r.remessasExterior.length} remessa(s) ao exterior`;
+    if (r.rotulo.indexOf("Escrituração") !== -1) html += ` — ${r.pctComprovante}% com comprovante`;
+    html += "</p>";
+  });
+  semaforo.innerHTML = html;
+
+  const conflitos = d.conflitosInteresse || [];
+  const containerC = document.getElementById("resultadoConflitos");
+  if (conflitos.length === 0) {
+    containerC.innerHTML = "<p class='subtitle'>Nenhum conflito detectado. ✅</p>";
+  } else {
+    let h = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Aprovador</th><th>Fornecedor</th><th>Valor</th></tr></thead><tbody>`;
+    conflitos.forEach(c => h += `<tr><td>${c.ministro}</td><td>${c.aprovadorNome}</td><td>${c.fornecedor}</td><td>R$ ${Number(c.valor).toFixed(2)}</td></tr>`);
+    h += "</tbody></table>";
+    containerC.innerHTML = h;
+  }
+
+  const carga = d.cargaTributaria || {};
+  document.getElementById("resultadoCarga").innerHTML =
+    `<p class="subtitle">Compras ${carga.ano}: R$ ${Number(carga.totalCompras || 0).toFixed(2)} · Tributos embutidos: R$ ${Number(carga.totalTributosEmbutidos || 0).toFixed(2)} (${carga.pctCargaEmbutida || 0}%)</p>`;
+}
+
+async function carregarDossieFiscalAcao() {
+  const ano = document.getElementById("dossieAno").value || new Date().getFullYear();
+  const container = document.getElementById("resultadoDossie");
+  const res = await fetchProtegido(`${API_BASE}/dossie-fiscal/${ano}`);
+  const d = await res.json();
+  const demonstracoes = d.demonstracoes || {};
+  let html = `<p class="subtitle">Dossiê fiscal ${d.anoReferencia} — pacote de defesa</p>`;
+  html += `<ul>`;
+  if (demonstracoes.balanco) html += `<li>Balanço Patrimonial: Ativo R$ ${Number(demonstracoes.balanco.ativo.total).toFixed(2)} · PL R$ ${Number(demonstracoes.balanco.patrimonioLiquido).toFixed(2)}</li>`;
+  if (demonstracoes.drp) html += `<li>Resultado do Período: R$ ${Number(demonstracoes.drp.resultadoDoPeriodo).toFixed(2)}</li>`;
+  html += `<li>Balancetes: ${(d.balancetes || []).length} fechamento(s)</li>`;
+  html += `<li>Comprovantes: ${(d.comprovantes || []).length} documento(s)</li>`;
+  html += `<li>Atas de aprovação: ${(d.atasAprovacaoContas || []).length} parecer(es)</li>`;
+  html += `</ul>`;
   container.innerHTML = html;
 }
 

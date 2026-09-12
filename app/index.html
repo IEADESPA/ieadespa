@@ -114,6 +114,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroConciliacao" onclick="mostrarSubAbaFinanceiro('conciliacao')"><span class="icone">🏦</span><span class="rotulo">Conciliação Bancária</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroInvestimentos" onclick="mostrarSubAbaFinanceiro('investimentos')"><span class="icone">📈</span><span class="rotulo">Investimentos</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRepasses" onclick="mostrarSubAbaFinanceiro('repasses')"><span class="icone">🏛️</span><span class="rotulo">Repasses Institucionais</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroSeguros" onclick="mostrarSubAbaFinanceiro('seguros')"><span class="icone">🛡️</span><span class="rotulo">Seguros Institucionais</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2387,6 +2388,30 @@
 
           <h4 style="color: var(--cor-primaria);margin-top:18px;">⚠️ Atrasados (infração de intervenção)</h4>
           <div class="rolagem-tabela"><div id="resultadoRepassesAtrasados"></div></div>
+        </div>
+
+        <!-- SUB-ABA: SEGUROS INSTITUCIONAIS (v4.16) -->
+        <div id="subFinanceiroSeguros" class="sub-aba-secretaria" style="display:none;">
+          <h3>🛡️ Seguros Institucionais</h3>
+          <p class="subtitle">Apólice obrigatória para Templo Sede e grandes eventos (Art. 65-A: incêndio,
+            danos elétricos e RC) e Seguro de RC para Administradores (Art. 42-A).</p>
+
+          <h4 style="color: var(--cor-primaria);">Registrar apólice</h4>
+          <div class="input-group"><label>Tipo:</label><select id="seguroTipo"><option value="TEMPLO_SEDE">Templo Sede</option><option value="GRANDE_EVENTO">Grande Evento</option><option value="RC_ADMINISTRADORES">RC Administradores</option><option value="OUTROS">Outros</option></select></div>
+          <div class="input-group"><label>Seguradora:</label><input type="text" id="seguroSeguradora" /></div>
+          <div class="input-group"><label>Nº da apólice:</label><input type="text" id="seguroNumero" /></div>
+          <div class="input-group"><label>Início:</label><input type="date" id="seguroInicio" /></div>
+          <div class="input-group"><label>Fim (vigência):</label><input type="date" id="seguroFim" /></div>
+          <div class="input-group"><label>Coberturas (separadas por vírgula):</label><input type="text" id="seguroCoberturas" value="INCENDIO, DANOS_ELETRICOS, RC" /></div>
+          <div class="input-group"><label>Prêmio (R$):</label><input type="number" id="seguroPremio" step="0.01" min="0" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarApoliceAcao()">💾 Registrar apólice</button>
+          <p id="resultadoApolice" class="subtitle"></p>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Apólices</h4>
+          <div class="rolagem-tabela"><div id="resultadoApolices"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">⚠️ Alertas</h4>
+          <div class="rolagem-tabela"><div id="resultadoAlertasSeguros"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

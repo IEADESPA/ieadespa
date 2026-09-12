@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -615,6 +615,10 @@ function mostrarSubAbaFinanceiro(sub) {
   }
   if (sub === "repasses") {
     carregarRepassesInstitucionaisAcao();
+    return;
+  }
+  if (sub === "seguros") {
+    carregarSegurosAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2720,6 +2724,52 @@ async function confirmarRepasseAcao(repasseId) {
   const d = await res.json();
   avisarResultado(d);
   carregarRepassesInstitucionaisAcao();
+}
+
+// ---- SEGUROS INSTITUCIONAIS (v4.16) ----
+async function carregarSegurosAcao() {
+  const container = document.getElementById("resultadoApolices");
+  const res = await fetchProtegido(`${API_BASE}/seguros`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma apólice registrada.</p>";
+  } else {
+    let html = `<table class="tabela-frequencia"><thead><tr><th>Seguradora</th><th>Nº</th><th>Tipo</th><th>Vigência</th><th>Coberturas</th></tr></thead><tbody>`;
+    lista.forEach(a => html += `<tr><td>${a.Seguradora}</td><td>${a.NumeroApolice}</td><td>${a.Tipo}</td><td>${a.vigencia}</td><td>${a.Coberturas}</td></tr>`);
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  }
+
+  const containerAlerta = document.getElementById("resultadoAlertasSeguros");
+  const resA = await fetchProtegido(`${API_BASE}/seguros/alertas`);
+  const d = await resA.json();
+  let html = "";
+  if (d.temploSedeSemCobertura) html += `<p class="subtitle">${d.mensagemTemploSede}</p>`;
+  if (Array.isArray(d.vencidas) && d.vencidas.length > 0) {
+    html += `<table class="tabela-frequencia"><thead><tr><th>Seguradora</th><th>Nº</th><th>Tipo</th><th>Fim</th></tr></thead><tbody>`;
+    d.vencidas.forEach(a => html += `<tr><td>${a.Seguradora}</td><td>${a.NumeroApolice}</td><td>${a.Tipo}</td><td>${a.DataFim.slice(0, 10)}</td></tr>`);
+    html += "</tbody></table>";
+  }
+  if (!html) html = "<p class='subtitle'>Tudo em dia. ✅</p>";
+  containerAlerta.innerHTML = html;
+}
+
+async function salvarApoliceAcao() {
+  const tipo = document.getElementById("seguroTipo").value;
+  const seguradora = document.getElementById("seguroSeguradora").value.trim();
+  const numeroApolice = document.getElementById("seguroNumero").value.trim();
+  const dataInicio = document.getElementById("seguroInicio").value;
+  const dataFim = document.getElementById("seguroFim").value;
+  const coberturas = document.getElementById("seguroCoberturas").value.split(",").map(c => c.trim().toUpperCase()).filter(Boolean);
+  const valorPremio = document.getElementById("seguroPremio").value;
+  const resultado = document.getElementById("resultadoApolice");
+  if (!tipo || !seguradora || !numeroApolice || !dataInicio || !dataFim) { resultado.textContent = "Preencha todos os campos."; return; }
+  const body = { tipo, seguradora, numeroApolice, dataInicio, dataFim, coberturas, valorPremio: valorPremio ? Number(valorPremio) : undefined };
+  const res = await fetchProtegido(`${API_BASE}/seguros`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  resultado.textContent = d.mensagem;
+  if (d.sucesso) carregarSegurosAcao();
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

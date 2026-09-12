@@ -2517,10 +2517,18 @@ aplicado. `shared/investimentos.js` + `GestaoInvestimentos` + `GestaoCashPooling
 
 #### v4.16 — Seguros institucionais *(gap da varredura)*
 
-- [ ] Apólice obrigatória para Templo Sede e grandes eventos (Reg. Art. 65-A):
-      cobertura mínima incêndio/danos elétricos/RC.
-- [ ] Seguro de Responsabilidade Civil para administradores (Reg. Art. 42-A).
-- [ ] Registro de apólices, vigências e coberturas.
+`ApolicesSeguro` + `GestaoSeguros`:
+
+- [x] Apólice obrigatória para Templo Sede e grandes eventos (Reg. Art. 65-A) —
+      o cadastro valida a cobertura mínima `INCENDIO, DANOS_ELETRICOS, RC` e o
+      `GET /seguros/alertas` aponta quando falta apólice vigente (negligência
+      grave da gestão, §2º).
+- [x] Seguro de Responsabilidade Civil para administradores (Reg. Art. 42-A) —
+      tipo `RC_ADMINISTRADORES`, sem cobertura para dolo/fraude/ato ilícito
+      (documentado no campo de observação).
+- [x] Registro de apólices, vigências e coberturas — seguradora, número, início/
+      fim, coberturas, prêmio, documento anexado; vigência (`VIGENTE | VENCIDA |
+      A_VENCER | CANCELADA`) calculada na leitura.
 
 #### v4.17 — Anexo de Parâmetros Monetários *(gap da varredura)*
 

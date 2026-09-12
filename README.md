@@ -2977,9 +2977,13 @@ depois de cada mudança.
     banco temporário, validar, apagar) tem custo transitório desprezível.
   - **Total estimado**: ~R$ 30-100/mês, dominado pelo 2º banco.
 
-  Próximo passo pra desbloquear: rodar `az login` numa sessão interativa
-  (ou aprovar a criação dos recursos pelo Portal Azure) — a partir daí uma
-  sessão futura pode rodar os comandos `az` de criação com esse acesso.
+  **Esta máquina não tem acesso à conta Azure** (o `az login` precisa
+  rodar numa sessão interativa, e nenhum administrador logou aqui). Quem
+  tem a credencial é a outra máquina — o runbook completo, com todos os
+  comandos `az` prontos pra rodar de lá (ambiente de homologação
+  reaproveitando o preview grátis do Static Web App, teste de
+  backup/restore, Application Insights + alerta), está em
+  [`HOMOLOGACAO.md`](./HOMOLOGACAO.md).
 
 #### vB.2 — Motor de notificações (hoje o sistema é 100% mudo)
 

@@ -10,5 +10,7 @@
 #   2) adicione essa chave na lista `age` abaixo;
 #   3) rode `sops updatekeys api/local.settings.enc.json`.
 creation_rules:
-  - path_regex: (local\.settings\.json|\.env)$
-    age: age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn
+  - path_regex: (local\.settings(\.enc)?\.json|\.env)$
+    age: >-
+      age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn,
+      age19tqsftnfz90s3tdp0sqnuu0wzza232xxpjeyhphwpdhkq7e8w3uqg0y4z4

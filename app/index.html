@@ -116,6 +116,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroRepasses" onclick="mostrarSubAbaFinanceiro('repasses')"><span class="icone">🏛️</span><span class="rotulo">Repasses Institucionais</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroSeguros" onclick="mostrarSubAbaFinanceiro('seguros')"><span class="icone">🛡️</span><span class="rotulo">Seguros Institucionais</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroParametrosmonetarios" onclick="mostrarSubAbaFinanceiro('parametrosmonetarios')"><span class="icone">💰</span><span class="rotulo">Parâmetros Monetários</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroCessoes" onclick="mostrarSubAbaFinanceiro('cessoes')"><span class="icone">⛪</span><span class="rotulo">Cessão de Templo</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2433,6 +2434,26 @@
           <div class="input-group"><label>Correção (% IPCA/salário-mínimo):</label><input type="number" id="valorMonetarioPercentual" step="0.01" min="0" /></div>
           <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="corrigirTodosValoresAcao()">🔁 Corrigir todos</button>
           <div class="rolagem-tabela"><div id="resultadoValoresMonetarios"></div></div>
+        </div>
+
+        <!-- SUB-ABA: CESSÃO DE TEMPLO (v4.18) -->
+        <div id="subFinanceiroCessoes" class="sub-aba-secretaria" style="display:none;">
+          <h3>⛪ Cessão de Templo a Terceiros</h3>
+          <p class="subtitle">Eventos da comunidade (casamentos, velórios, eventos sociais) como concessão precária
+            (Art. 156): aprovação da Diretoria, censura musical, Taxa de Zeladoria e Termo de Responsabilidade.</p>
+
+          <h4 style="color: var(--cor-primaria);">Registrar solicitação</h4>
+          <div class="input-group"><label>Congregação (templo):</label><select id="cessaoCongregacao"></select></div>
+          <div class="input-group"><label>Solicitante:</label><input type="text" id="cessaoSolicitante" /></div>
+          <div class="input-group"><label>Tipo de evento:</label><select id="cessaoTipoEvento"><option value="CASAMENTO">Casamento</option><option value="VELORIO">Velório</option><option value="EVENTO_SOCIAL">Evento Social</option><option value="OUTROS">Outros</option></select></div>
+          <div class="input-group"><label>Data do evento:</label><input type="date" id="cessaoDataEvento" /></div>
+          <div class="input-group"><label>Taxa de Zeladoria (R$):</label><input type="number" id="cessaoTaxa" step="0.01" min="0" /></div>
+          <div class="input-group"><label>Lista musical aprovada:</label><input type="checkbox" id="cessaoListaMusical" /></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarCessaoTemploAcao()">💾 Registrar solicitação</button>
+          <p id="resultadoCessao" class="subtitle"></p>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Cessões</h4>
+          <div class="rolagem-tabela"><div id="resultadoCessoes"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

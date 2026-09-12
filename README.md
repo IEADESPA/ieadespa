@@ -2544,11 +2544,17 @@ aplicado. `shared/investimentos.js` + `GestaoInvestimentos` + `GestaoCashPooling
 
 #### v4.18 — Cessão de templo a terceiros *(gap da varredura)*
 
-- [ ] Autorização de cessão do templo para casamentos/eventos de terceiros (Reg. Art.
-      156) — não é conflito de agenda (já resolvido em v7.2), é processo de
-      autorização + cobrança (via Contas a Receber, v4.6) + responsabilização civil.
-- [ ] Taxa de Zeladoria (ressarcimento de custos, não aluguel).
-- [ ] Termo de Responsabilidade por danos + aprovação prévia de lista musical.
+`CessoesTemplo` + `GestaoCessoesTemplo`:
+
+- [x] Autorização de cessão do templo para casamentos/eventos de terceiros
+      (Reg. Art. 156) — processo de autorização pela Diretoria + cobrança (vira
+      `ContasAReceber`, v4.6) + responsabilização civil.
+- [x] Taxa de Zeladoria (ressarcimento de custos, não aluguel) — `TaxaZeladoria`
+      + `IsencaoTaxa` (isenção social, §2º III); ao autorizar, gera a Conta a
+      Receber da taxa.
+- [x] Termo de Responsabilidade por danos (`TermoResponsabilidadeUrl`, §4º II)
+      + aprovação prévia da lista musical (`ListaMusicalAprovada`, §1º I) — a
+      autorização só sai com os dois.
 
 #### v4.19 — Obrigações Acessórias Fiscais *(7ª rodada — risco de multa imediato)*
 

@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -625,6 +625,11 @@ function mostrarSubAbaFinanceiro(sub) {
     carregarParametrosMonetariosAcao();
     return;
   }
+  if (sub === "cessoes") {
+    carregarOpcoesCongregacoesFinanceiro();
+    carregarCessoesTemploAcao();
+    return;
+  }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
     if (sub === "lancamentos") { carregarOpcoesDizimistas(); carregarLancamentosTesouraria(); }
     if (sub === "dizimistas") carregarDizimistasMes();
@@ -673,7 +678,7 @@ async function carregarOpcoesCongregacoesFinanceiro() {
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
     .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
-  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao", "casaCongregacao", "invCongregacao"].forEach(id => {
+  ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao", "casaCongregacao", "invCongregacao", "cessaoCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
       select.innerHTML = opcoes;
@@ -2813,6 +2818,38 @@ async function corrigirTodosValoresAcao() {
   const d = await res.json();
   avisarResultado(d);
   carregarParametrosMonetariosAcao();
+}
+
+// ---- CESSÃO DE TEMPLO (v4.18) ----
+async function carregarCessoesTemploAcao() {
+  const container = document.getElementById("resultadoCessoes");
+  const res = await fetchProtegido(`${API_BASE}/cessoes-templo`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma cessão registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Solicitante</th><th>Tipo</th><th>Data</th><th>Taxa</th><th>Lista</th><th>Status</th></tr></thead><tbody>`;
+  lista.forEach(c => html += `<tr><td>${c.solicitanteNome}</td><td>${c.tipoEvento}</td><td>${c.dataEvento.slice(0, 10)}</td><td>${c.isencaoTaxa ? "isento" : "R$ " + Number(c.taxaZeladoria).toFixed(2)}</td><td>${c.listaMusicalAprovada ? "✅" : "❌"}</td><td>${c.status}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarCessaoTemploAcao() {
+  const congregacaoId = document.getElementById("cessaoCongregacao").value;
+  const solicitanteNome = document.getElementById("cessaoSolicitante").value.trim();
+  const tipoEvento = document.getElementById("cessaoTipoEvento").value;
+  const dataEvento = document.getElementById("cessaoDataEvento").value;
+  const taxaZeladoria = document.getElementById("cessaoTaxa").value;
+  const listaMusicalAprovada = document.getElementById("cessaoListaMusical").checked;
+  const resultado = document.getElementById("resultadoCessao");
+  if (!congregacaoId || !solicitanteNome || !dataEvento) { resultado.textContent = "Preencha congregação, solicitante e data."; return; }
+  const body = { congregacaoId: Number(congregacaoId), solicitanteNome, tipoEvento, dataEvento, taxaZeladoria: Number(taxaZeladoria || 0), listaMusicalAprovada };
+  const res = await fetchProtegido(`${API_BASE}/cessoes-templo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  resultado.textContent = d.mensagem;
+  if (d.sucesso) carregarCessoesTemploAcao();
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

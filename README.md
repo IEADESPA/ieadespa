@@ -2867,13 +2867,35 @@ carregar. Daí a FASE B abaixo, inserida de propósito entre a FASE 4 e a FASE 5
 
 #### 🔒 Trava de Revisão 4-C — antes de encerrar a FASE 4 e avançar para a FASE B
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v4.21 a v4.24 pelas 5 perguntas do checklist, e faz uma varredura
-final na FASE 4 **inteira** (v4.1 a v4.24) antes de fechar: os 60/40 do
-Art. 118, o Rateio Geral (malote), o PDQ, as demonstrações contábeis e o
-CNAB 240 continuam batendo depois de todas as versões adicionadas por
-cima? Esse é o motivo de existir uma trava final, não só uma no meio —
-fase financeira não fecha com pendência de consistência.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditou v4.21 a v4.24 pelas 5 perguntas do checklist e fez
+      uma varredura final na FASE 4 **inteira** (v4.1 a v4.24).
+
+  **1-2-3-4 (v4.21 a v4.24): limpo.** README×código coerente em todas as 4
+  versões (toda tabela/rota citada existe de fato); nenhuma tela nova
+  órfã (todo `id` de `script.js` bate com `index.html`, inclusive o
+  cuidado de renomear os campos de marco da obra —
+  `obraMarcoDescricao`/`obraMarcoData` — pra não colidir com os campos de
+  marco do PDQ já existentes); sem `TODO`/gambiarra deixada pra trás.
+  Deploy de ponta a ponta confirmado a cada push (CI verde).
+
+  **5. Varredura final da FASE 4 — achado real, corrigido nesta trava:**
+  Doações (v4.22) e receitas acessórias avulsas (v4.21) são dinheiro que
+  entra de verdade no caixa institucional, mas não estavam sendo somadas
+  nas Demonstrações Contábeis (`shared/demonstracoes.js`, v4.9) — Balanço
+  (Caixa e Equivalentes), DRP e Fluxo de Caixa ficavam subavaliados.
+  **Corrigido**: as três funções agora somam `Doacoes` e `ReceitasAcessorias`
+  (excluindo as que já nascem de uma Cessão de Templo onerosa via
+  `CessaoTemploId` — essas já são contabilizadas pela trilha existente
+  `ContasAReceber` → `LancamentosTesouraria`, e somar de novo contaria o
+  mesmo dinheiro duas vezes). Demais mecanismos financeiros continuam
+  batendo: 60/40 do Art. 118 e Rateio Geral (`shared/tesouraria.js`,
+  `GestaoRateioGeral`) usam `SUM` com colunas nomeadas, não tocados pelas
+  colunas novas de v4.21-v4.24; PDQ e CNAB 240 (`GestaoRemessasBancarias`)
+  não referenciam nenhuma tabela alterada nesta rodada. Corrigido também um
+  comentário desatualizado em `shared/tesouraria.js` (apontava pra um
+  módulo `shared/rateioGeral.js` que nunca existiu — o Rateio Geral sempre
+  viveu em `GestaoRateioGeral`).
 
 ### FASE B — Consolidação da Base (retrofit das Fases 0-3)
 

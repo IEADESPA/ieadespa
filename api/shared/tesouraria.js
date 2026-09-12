@@ -36,7 +36,7 @@ function redigirParaMural(lancamentos) {
 // v4.10 (fundação) — os "destinos" percentuais do Rateio Geral (Convenção,
 // Prebenda Pastoral, Fundo PDQ) são Centros de Custo cujo dinheiro só
 // existe depois que a Tesouraria Geral fecha o Rateio Geral do mês
-// (malote — ver shared/rateioGeral.js). Antes disso, o repasse liberado
+// (malote — ver api/GestaoRateioGeral/index.js). Antes disso, o repasse liberado
 // fica só "pendente de rateio", não gastável em nenhum desses três.
 const DESTINOS_RATEIO_GERAL = ["CONVENCAO", "PREBENDA_PASTORAL", "PDQ"];
 

@@ -11,16 +11,32 @@
 const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 const patrimonio = require("./patrimonio");
 
+// Trava 4-C (v4.21/v4.22): Doações e Receitas Acessórias são dinheiro real
+// que já entra no caixa institucional no momento do registro — precisam
+// somar aqui, senão o Caixa/DRP fica subavaliado. Receita acessória com
+// CessaoTemploId já é contabilizada pela trilha existente (ContasAReceber
+// Tipo=CESSAO_TEMPLO -> confirmação vira LancamentosTesouraria, já somado
+// acima): excluída aqui pra não contar o mesmo dinheiro duas vezes.
+async function entradasDoacoesEReceitasAcessorias(pool, sql, dataInicio, dataFim) {
+  const doacoes = await pool.request().input("inicio", sql.DateTime2, dataInicio).input("fim", sql.DateTime2, dataFim)
+    .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM Doacoes WHERE DataRecebimento BETWEEN @inicio AND @fim`);
+  const receitasAcessorias = await pool.request().input("inicio", sql.DateTime2, dataInicio).input("fim", sql.DateTime2, dataFim)
+    .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM ReceitasAcessorias WHERE CessaoTemploId IS NULL AND DataRecebimento BETWEEN @inicio AND @fim`);
+  return round2(Number(doacoes.recordset[0].total) + Number(receitasAcessorias.recordset[0].total));
+}
+
 // Caixa e Equivalentes consolidado (toda a denominação, conta única —
 // v4.1.3): tudo que já entrou de verdade menos tudo que já saiu de
 // verdade, até a data de corte. Regime de CAIXA (é literalmente o que
 // "caixa" significa no Balanço).
 async function caixaConsolidadoAteData(pool, sql, dataCorte) {
+  const inicioDosTempos = new Date(0);
   const entradas = await pool.request().input("data", sql.DateTime2, dataCorte)
     .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM LancamentosTesouraria WHERE Status = 'ATIVO' AND StatusConfirmacao = 'CONFIRMADO' AND CriadoEm <= @data`);
+  const outrasEntradas = await entradasDoacoesEReceitasAcessorias(pool, sql, inicioDosTempos, dataCorte);
   const saidas = await pool.request().input("data", sql.DateTime2, dataCorte)
     .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM SaidasTesouraria WHERE Status = 'PAGA' AND PagoEm <= @data`);
-  return round2(entradas.recordset[0].total - saidas.recordset[0].total);
+  return round2(entradas.recordset[0].total + outrasEntradas - saidas.recordset[0].total);
 }
 
 // Contas a Receber ainda em aberto na data de corte (v4.6) — Ativo
@@ -88,11 +104,28 @@ async function calcularDRP(pool, sql, dataInicio, dataFim) {
     WHERE cr.Status != 'CANCELADO' AND cr.CriadoEm BETWEEN @inicio AND @fim
     GROUP BY cr.Tipo, ce.Nome
   `);
+  // Doações (v4.22) e receitas acessórias avulsas (v4.21, sem CessaoTemploId
+  // — a de cessão já vem por ContasAReceber acima) são dinheiro real que
+  // entra fora da trilha de LancamentosTesouraria/ContasAReceber.
+  const receitasDoacoes = await pool.request().input("inicio", sql.DateTime2, dataInicio).input("fim", sql.DateTime2, dataFim)
+    .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM Doacoes WHERE DataRecebimento BETWEEN @inicio AND @fim`);
+  const receitasAcessoriasPorTipo = await pool.request().input("inicio", sql.DateTime2, dataInicio).input("fim", sql.DateTime2, dataFim).query(`
+    SELECT Tipo AS categoriaCodigo, SUM(Valor) AS total FROM ReceitasAcessorias
+    WHERE CessaoTemploId IS NULL AND DataRecebimento BETWEEN @inicio AND @fim
+    GROUP BY Tipo
+  `);
   const receitasPorCategoria = {};
   [...receitasDiretas.recordset, ...receitasPorContaReceber.recordset].forEach(r => {
     const chave = r.categoriaCodigo;
     if (!receitasPorCategoria[chave]) receitasPorCategoria[chave] = { categoriaCodigo: chave, categoriaNome: r.categoriaNome, total: 0 };
     receitasPorCategoria[chave].total = round2(receitasPorCategoria[chave].total + Number(r.total));
+  });
+  if (Number(receitasDoacoes.recordset[0].total) > 0) {
+    receitasPorCategoria.DOACAO = { categoriaCodigo: "DOACAO", categoriaNome: "Doações", total: round2(Number(receitasDoacoes.recordset[0].total)) };
+  }
+  receitasAcessoriasPorTipo.recordset.forEach(r => {
+    const chave = `RECEITA_ACESSORIA_${r.categoriaCodigo}`;
+    receitasPorCategoria[chave] = { categoriaCodigo: chave, categoriaNome: `Receita acessória — ${r.categoriaCodigo}`, total: round2(Number(r.total)) };
   });
 
   const despesas = await pool.request().input("inicio", sql.DateTime2, dataInicio).input("fim", sql.DateTime2, dataFim).query(`
@@ -143,9 +176,10 @@ async function calcularFluxoCaixa(pool, sql, dataInicio, dataFim) {
   const saldoInicial = await caixaConsolidadoAteData(pool, sql, diaAnterior);
   const entradas = await pool.request().input("inicio", sql.DateTime2, dataInicio).input("fim", sql.DateTime2, dataFim)
     .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM LancamentosTesouraria WHERE Status = 'ATIVO' AND StatusConfirmacao = 'CONFIRMADO' AND CriadoEm BETWEEN @inicio AND @fim`);
+  const outrasEntradas = await entradasDoacoesEReceitasAcessorias(pool, sql, dataInicio, dataFim);
   const saidas = await pool.request().input("inicio", sql.DateTime2, dataInicio).input("fim", sql.DateTime2, dataFim)
     .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM SaidasTesouraria WHERE Status = 'PAGA' AND PagoEm BETWEEN @inicio AND @fim`);
-  const totalEntradas = round2(entradas.recordset[0].total);
+  const totalEntradas = round2(Number(entradas.recordset[0].total) + outrasEntradas);
   const totalSaidas = round2(saidas.recordset[0].total);
   return {
     dataInicio, dataFim, saldoInicial,

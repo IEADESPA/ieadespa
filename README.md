@@ -2644,16 +2644,32 @@ que a perda, na prática, quase nunca vem de desvio de dinheiro — vem de
 
 #### v4.21 — Receitas acessórias e imóveis *(7ª rodada)*
 
-- [ ] Rubrica de **receita acessória** (bazar, estacionamento, cessão de salão,
-      cantina de evento) com **vínculo obrigatório a uma aplicação finalística** —
-      a Súmula Vinculante 52 mantém a imunidade do imóvel alugado *desde que* o
-      valor seja aplicado nas atividades essenciais, e quem tem que provar isso é
-      a igreja. Relatório "origem → destino" por imóvel/evento.
-- [ ] **Cadastro de imóveis** com situação de imunidade por tributo (IPTU/ITBI),
-      número do processo de reconhecimento na prefeitura, vigência e alerta de
-      renovação — hoje o patrimônio (v4.11) prevê escritura, não situação fiscal.
-- [ ] Conexão com a v4.18 (cessão de templo): toda cessão onerosa nasce como
-      receita acessória, já amarrada à finalidade.
+`ReceitasAcessorias` + `ImoveisSituacaoFiscal` + `GestaoReceitasAcessorias` +
+`GestaoImoveis` (migração 071).
+
+- [x] Rubrica de **receita acessória** (`BAZAR | ESTACIONAMENTO | CESSAO_SALAO |
+      CANTINA_EVENTO | OUTROS`) com **vínculo obrigatório a uma aplicação
+      finalística** — `AplicacaoFinalisticaDescricao` é `NOT NULL`, a API
+      recusa o registro sem essa descrição (Súmula Vinculante 52/RE 578.562: a
+      imunidade do imóvel cedido/alugado só se mantém se o valor for aplicado
+      nas atividades essenciais, e o ônus da prova é da igreja). Quando a
+      aplicação já virou uma Saída lançada (v4.5), pode ser vinculada depois
+      (`PUT /api/receitas-acessorias`) como comprovação formal. Relatório
+      "origem → destino" por imóvel/evento — `GET
+      /api/receitas-acessorias/relatorio-origem-destino` agrega arrecadado x
+      comprovado x pendente.
+- [x] **Cadastro de imóveis** com situação de imunidade por tributo (IPTU/ITBI)
+      — `GestaoImoveis` (`GET/POST /api/imoveis/{bemId}`) complementa o
+      patrimônio (v4.11, `BensPatrimoniais` Tipo = IMOVEL), que só previa
+      escritura, não situação fiscal: número do processo de reconhecimento na
+      prefeitura, vigência do IPTU e alerta de renovação (`VIGENTE | A_VENCER
+      | VENCIDA`, calculado na leitura, D-60 como nos demais alertas do
+      sistema) + status do ITBI.
+- [x] Conexão com a v4.18 (cessão de templo): `GestaoCessoesTemplo`, ao
+      autorizar uma cessão onerosa (com Taxa de Zeladoria e sem isenção), além
+      da Conta a Receber já existente, agora também gera automaticamente a
+      `ReceitaAcessoria` (Tipo `CESSAO_SALAO`) com a aplicação finalística já
+      declarada — nunca nasce como entrada de caixa solta.
 
 #### v4.22 — Doações, Integridade e PLD-FT *(7ª rodada)*
 

@@ -109,6 +109,15 @@ module.exports = async function (context, req) {
           .query(`INSERT INTO ContasAReceber (CongregacaoId, NomeAvulso, Tipo, Descricao, Valor, DataVencimento, RegistradoPor)
                   OUTPUT INSERTED.ContaReceberId VALUES (@cong, @nome, @tipo, @descricao, @valor, @venc, @por)`);
         contaReceberId = conta.recordset[0].ContaReceberId;
+        // v4.21: cessão onerosa é receita acessória — nasce já com o destino
+        // declarado (Súmula Vinculante 52), não como entrada de caixa solta.
+        await pool.request().input("cong", sql.Int, registro.CongregacaoId).input("cessaoId", sql.Int, id)
+          .input("evento", sql.NVarChar(300), `${registro.TipoEvento} — ${registro.SolicitanteNome}`)
+          .input("valor", sql.Decimal(12, 2), registro.TaxaZeladoria).input("data", sql.Date, registro.DataEvento)
+          .input("aplicacao", sql.NVarChar(500), "Taxa de Zeladoria — ressarcimento de custos operacionais de manutenção do templo (energia, água, limpeza, segurança), aplicada integralmente nas atividades essenciais da congregação.")
+          .input("por", sql.Int, usuario.membroId)
+          .query(`INSERT INTO ReceitasAcessorias (CongregacaoId, Tipo, CessaoTemploId, EventoDescricao, Valor, DataRecebimento, AplicacaoFinalisticaDescricao, RegistradoPor)
+                  VALUES (@cong, 'CESSAO_SALAO', @cessaoId, @evento, @valor, @data, @aplicacao, @por)`);
       }
       await pool.request().input("id", sql.Int, id).input("aprovadoPor", sql.Int, usuario.membroId).input("conta", sql.Int, contaReceberId)
         .query(`UPDATE CessoesTemplo SET Status = 'AUTORIZADA', AprovadoPor = @aprovadoPor, ContaReceberId = @conta WHERE CessaoId = @id`);

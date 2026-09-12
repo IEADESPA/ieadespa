@@ -499,9 +499,10 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "imunidade", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "cessoes", "obrigacoes", "imunidade", "receitasacessorias", "imoveis", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
   visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos", repasses: "Repasses Institucionais", seguros: "Seguros Institucionais", parametrosmonetarios: "Parâmetros Monetários", cessoes: "Cessão de Templo", obrigacoes: "Obrigações Fiscais", imunidade: "Imunidade Tributária",
+  receitasacessorias: "Receitas Acessórias", imoveis: "Imóveis (Situação Fiscal)",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -636,6 +637,15 @@ function mostrarSubAbaFinanceiro(sub) {
   }
   if (sub === "imunidade") {
     carregarImunidadeTributariaAcao();
+    return;
+  }
+  if (sub === "receitasacessorias") {
+    carregarReceitasAcessoriasAcao();
+    carregarRelatorioOrigemDestinoAcao();
+    return;
+  }
+  if (sub === "imoveis") {
+    carregarImoveisAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2990,6 +3000,78 @@ async function carregarDossieFiscalAcao() {
   html += `<li>Comprovantes: ${(d.comprovantes || []).length} documento(s)</li>`;
   html += `<li>Atas de aprovação: ${(d.atasAprovacaoContas || []).length} parecer(es)</li>`;
   html += `</ul>`;
+  container.innerHTML = html;
+}
+
+// ---- RECEITAS ACESSÓRIAS E IMÓVEIS (v4.21) ----
+async function registrarReceitaAcessoriaAcao() {
+  const body = {
+    tipo: document.getElementById("receitaAcessoriaTipo").value,
+    bemId: document.getElementById("receitaAcessoriaBemId").value || null,
+    eventoDescricao: document.getElementById("receitaAcessoriaEvento").value || null,
+    valor: document.getElementById("receitaAcessoriaValor").value,
+    dataRecebimento: document.getElementById("receitaAcessoriaData").value,
+    aplicacaoFinalisticaDescricao: document.getElementById("receitaAcessoriaAplicacao").value
+  };
+  const res = await fetchProtegido(`${API_BASE}/receitas-acessorias`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  alert(d.mensagem);
+  if (d.sucesso) {
+    document.getElementById("receitaAcessoriaBemId").value = "";
+    document.getElementById("receitaAcessoriaEvento").value = "";
+    document.getElementById("receitaAcessoriaValor").value = "";
+    document.getElementById("receitaAcessoriaData").value = "";
+    document.getElementById("receitaAcessoriaAplicacao").value = "";
+    carregarReceitasAcessoriasAcao();
+    carregarRelatorioOrigemDestinoAcao();
+  }
+}
+
+async function carregarReceitasAcessoriasAcao() {
+  const container = document.getElementById("resultadoReceitasAcessorias");
+  const res = await fetchProtegido(`${API_BASE}/receitas-acessorias`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma receita acessória registrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Tipo</th><th>Imóvel/Evento</th><th>Valor</th><th>Aplicação finalística</th><th>Comprovada</th></tr></thead><tbody>`;
+  lista.forEach(r => {
+    html += `<tr><td>${r.dataRecebimento}</td><td>${r.tipo}</td><td>${r.bemDescricao || r.eventoDescricao || "-"}</td><td>R$ ${Number(r.valor).toFixed(2)}</td><td>${r.aplicacaoFinalisticaDescricao}</td><td>${r.comprovada ? "✅" : "⏳ pendente"}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function carregarRelatorioOrigemDestinoAcao() {
+  const container = document.getElementById("resultadoOrigemDestino");
+  const res = await fetchProtegido(`${API_BASE}/receitas-acessorias/relatorio-origem-destino`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Sem lançamentos ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Imóvel/Evento</th><th>Lançamentos</th><th>Arrecadado</th><th>Comprovado</th><th>Pendente</th></tr></thead><tbody>`;
+  lista.forEach(g => {
+    html += `<tr><td>${g.origemDestino}</td><td>${g.lancamentos}</td><td>R$ ${g.totalArrecadado.toFixed(2)}</td><td>R$ ${g.totalComprovado.toFixed(2)}</td><td>R$ ${g.totalPendente.toFixed(2)}</td></tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function carregarImoveisAcao() {
+  const container = document.getElementById("resultadoImoveis");
+  const res = await fetchProtegido(`${API_BASE}/imoveis`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum imóvel cadastrado no Patrimônio (v4.11, Tipo = IMOVEL).</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Imóvel</th><th>IPTU</th><th>Vigência IPTU</th><th>ITBI</th><th>Alerta</th></tr></thead><tbody>`;
+  lista.forEach(i => {
+    html += `<tr><td>${i.descricao}</td><td>${i.iptuStatus || "-"}</td><td>${i.iptuVigenciaFim || "-"} (${i.vigenciaIptu})</td><td>${i.itbiStatus || "-"}</td><td>${i.alertaRenovacao ? "⚠️ renovar" : "✅"}</td></tr>`;
+  });
+  html += "</tbody></table>";
   container.innerHTML = html;
 }
 

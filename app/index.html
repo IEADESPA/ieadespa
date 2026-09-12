@@ -119,6 +119,8 @@
               <button class="btn-subaba" id="btnSubFinanceiroCessoes" onclick="mostrarSubAbaFinanceiro('cessoes')"><span class="icone">⛪</span><span class="rotulo">Cessão de Templo</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroObrigacoes" onclick="mostrarSubAbaFinanceiro('obrigacoes')"><span class="icone">🧾</span><span class="rotulo">Obrigações Fiscais</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroImunidade" onclick="mostrarSubAbaFinanceiro('imunidade')"><span class="icone">🛡️</span><span class="rotulo">Imunidade Tributária</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroReceitasacessorias" onclick="mostrarSubAbaFinanceiro('receitasacessorias')"><span class="icone">🎪</span><span class="rotulo">Receitas Acessórias</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroImoveis" onclick="mostrarSubAbaFinanceiro('imoveis')"><span class="icone">🏘️</span><span class="rotulo">Imóveis</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2511,6 +2513,45 @@
           <div class="input-group"><label>Ano:</label><input type="number" id="dossieAno" /></div>
           <button class="btn-confirmar" style="width:auto;" onclick="carregarDossieFiscalAcao()">📦 Montar dossiê</button>
           <div id="resultadoDossie"></div>
+        </div>
+
+        <!-- SUB-ABA: RECEITAS ACESSÓRIAS (v4.21) -->
+        <div id="subFinanceiroReceitasacessorias" class="sub-aba-secretaria" style="display:none;">
+          <h3>🎪 Receitas Acessórias</h3>
+          <p class="subtitle">Bazar, estacionamento, cessão de salão, cantina de evento — a Súmula Vinculante 52
+            mantém a imunidade do imóvel *desde que* o valor arrecadado seja aplicado nas atividades essenciais.
+            Toda receita já nasce com o destino declarado.</p>
+
+          <h4 style="color: var(--cor-primaria);">Registrar receita acessória</h4>
+          <div class="input-group"><label>Tipo:</label>
+            <select id="receitaAcessoriaTipo">
+              <option value="BAZAR">Bazar</option>
+              <option value="ESTACIONAMENTO">Estacionamento</option>
+              <option value="CESSAO_SALAO">Cessão de salão</option>
+              <option value="CANTINA_EVENTO">Cantina de evento</option>
+              <option value="OUTROS">Outros</option>
+            </select>
+          </div>
+          <div class="input-group"><label>Imóvel (bemId, opcional):</label><input type="number" id="receitaAcessoriaBemId" /></div>
+          <div class="input-group"><label>Evento/descrição:</label><input type="text" id="receitaAcessoriaEvento" /></div>
+          <div class="input-group"><label>Valor:</label><input type="number" step="0.01" id="receitaAcessoriaValor" /></div>
+          <div class="input-group"><label>Data de recebimento:</label><input type="date" id="receitaAcessoriaData" /></div>
+          <div class="input-group"><label>Aplicação finalística (obrigatório):</label><textarea id="receitaAcessoriaAplicacao" rows="2" placeholder="Para onde o valor é aplicado nas atividades essenciais"></textarea></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="registrarReceitaAcessoriaAcao()">💾 Registrar</button>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Receitas registradas</h4>
+          <div class="rolagem-tabela"><div id="resultadoReceitasAcessorias"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Relatório origem → destino (por imóvel/evento)</h4>
+          <div class="rolagem-tabela"><div id="resultadoOrigemDestino"></div></div>
+        </div>
+
+        <!-- SUB-ABA: IMÓVEIS - SITUAÇÃO FISCAL (v4.21) -->
+        <div id="subFinanceiroImoveis" class="sub-aba-secretaria" style="display:none;">
+          <h3>🏘️ Imóveis — Situação Fiscal</h3>
+          <p class="subtitle">IPTU/ITBI por imóvel (Tipo = IMOVEL no Patrimônio, v4.11): processo de reconhecimento
+            de imunidade, vigência e alerta de renovação.</p>
+          <div class="rolagem-tabela"><div id="resultadoImoveis"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

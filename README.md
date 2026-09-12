@@ -2427,25 +2427,25 @@ Peça que faltava pra fechar o nível "pico": o Regimento já prevê Política
 de Investimentos (Art. 64, Fundo de Reserva — 0,2% das entradas líquidas,
 autorização da CLI) e o Painel de Indicadores (v4.12) já cobra "Meses de
 Reserva", mas não existia onde **gerir de fato** onde esse dinheiro está
-aplicado.
+aplicado. `shared/investimentos.js` + `GestaoInvestimentos` + `GestaoCashPooling`.
 
-- [ ] Registro de aplicações financeiras (CDB, poupança, fundos) do Fundo
-      de Reserva — instituição, valor aplicado, taxa/prazo, liquidez
-      (quando pode ser resgatado), rentabilidade acumulada.
-- [ ] **Gestão de Portfólio de Investimentos** — visão consolidada de
-      onde está aplicada a reserva, com o mesmo princípio "calculado na
-      leitura" (rentabilidade e prazos vêm do registro, nunca digitados
-      à mão no relatório).
-- [ ] **Previsão de Liquidez com margem de confiança** — evolução do
-      Fluxo de Caixa Projetado (v4.8): em vez de um número único, uma
-      faixa (otimista/conservador) baseada na variação histórica real das
-      entradas — decisão de resgatar uma aplicação antecipadamente fica
-      mais informada. *(Gartner, Trovata, GTreasury — treasury management
+- [x] Registro de aplicações financeiras (CDB, poupança, fundos, títulos
+      públicos) do Fundo de Reserva — `AplicacoesFinanceiras` (instituição,
+      valor aplicado, taxa, prazo, liquidez) + `ResgatesAplicacoes`. Vedada
+      renda variável/cripto/alto risco (Reg. Art. 64 §2º).
+- [x] **Gestão de Portfólio de Investimentos** — `GET /api/investimentos`
+      consolida onde está aplicada a reserva: valor atual estimado,
+      rentabilidade acumulada, resgatáveis agora e vencendo em 90 dias — tudo
+      **calculado na leitura**, nunca digitado à mão no relatório.
+- [x] **Previsão de Liquidez com margem de confiança** — `GET
+      /api/investimentos/liquidez`: evolução do Fluxo de Caixa Projetado
+      (v4.8) com **faixa otimista/conservador** baseada no desvio-padrão
+      histórico real das entradas do Tesouro Geral. *(treasury management
       systems, liquidity forecasting)*
-- **Fora do escopo — não se aplica hoje:** cash pooling / conta
-  centralizadora entre múltiplas contas bancárias — só faz sentido quando
-  existirem contas por congregação (Art. 140, ver nota da v4.1.3); hoje é
-  uma conta só, não tem o que agrupar.
+- [x] **Cash pooling** — `FontesCaixa.Centralizadora` + `CashPoolingMovimentos`
+      + `GET /api/cash-pooling`: posição consolidada (caixa GERAL + aplicações)
+      e movimentos de concentração/desconcentração. Hoje é uma conta só + cofre,
+      mas o mecanismo já nasce pronto pra múltiplas contas (Art. 140).
 
 #### v4.15 — Repasses institucionais
 

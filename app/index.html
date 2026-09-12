@@ -112,6 +112,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroPrebenda" onclick="mostrarSubAbaFinanceiro('prebenda')"><span class="icone">⛪</span><span class="rotulo">Prebenda</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroPatrimonio" onclick="mostrarSubAbaFinanceiro('patrimonio')"><span class="icone">🏛️</span><span class="rotulo">Patrimônio</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroConciliacao" onclick="mostrarSubAbaFinanceiro('conciliacao')"><span class="icone">🏦</span><span class="rotulo">Conciliação Bancária</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroInvestimentos" onclick="mostrarSubAbaFinanceiro('investimentos')"><span class="icone">📈</span><span class="rotulo">Investimentos</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroDizimistas" onclick="mostrarSubAbaFinanceiro('dizimistas')"><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroFechamento" onclick="mostrarSubAbaFinanceiro('fechamento')"><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" onclick="mostrarSubAbaFinanceiro('relatorio')"><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
@@ -2265,6 +2266,33 @@
           <h4 style="color: var(--cor-primaria);margin-top:18px;">Conciliações</h4>
           <div class="rolagem-tabela"><div id="resultadoConciliacoes"></div></div>
           <div id="detalheConciliacao" style="margin-top:14px;"></div>
+        </div>
+
+        <!-- SUB-ABA: INVESTIMENTOS (v4.14) — Fundo de Reserva + cash pooling -->
+        <div id="subFinanceiroInvestimentos" class="sub-aba-secretaria" style="display:none;">
+          <h3>📈 Investimentos e Tesouraria Avançada</h3>
+          <p class="subtitle">Fundo de Reserva (Reg. Art. 64) aplicado em baixo risco: CDB, poupança, fundos
+            de renda fixa e títulos públicos — vedada renda variável/cripto. Rentabilidade calculada na leitura.</p>
+
+          <h4 style="color: var(--cor-primaria);">Nova aplicação</h4>
+          <div class="input-group"><label>Tipo:</label><select id="invTipo"><option value="CDB">CDB</option><option value="POUPANCA">Poupança</option><option value="FUNDO_RENDA_FIXA">Fundo de Renda Fixa</option><option value="TITULO_PUBLICO">Título Público</option><option value="OUTROS">Outros</option></select></div>
+          <div class="input-group"><label>Instituição:</label><input type="text" id="invInstituicao" /></div>
+          <div class="input-group"><label>Valor aplicado (R$):</label><input type="number" id="invValor" step="0.01" min="0" /></div>
+          <div class="input-group"><label>Taxa anual (%):</label><input type="number" id="invTaxa" step="0.01" min="0" /></div>
+          <div class="input-group"><label>Data da aplicação:</label><input type="date" id="invDataAplicacao" /></div>
+          <div class="input-group"><label>Vencimento:</label><input type="date" id="invVencimento" /></div>
+          <div class="input-group"><label>Liquidez:</label><select id="invLiquidez"><option value="DIARIA">Diária</option><option value="D30">D+30</option><option value="D90">D+90</option><option value="NO_VENCIMENTO">No vencimento</option></select></div>
+          <button class="btn-confirmar" style="width:auto;" onclick="salvarAplicacaoAcao()">💾 Registrar aplicação</button>
+          <p id="resultadoAplicacao" class="subtitle"></p>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Portfólio do Fundo de Reserva</h4>
+          <div class="rolagem-tabela"><div id="resultadoPortfolio"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Previsão de Liquidez (faixa de confiança)</h4>
+          <div class="rolagem-tabela"><div id="resultadoLiquidez"></div></div>
+
+          <h4 style="color: var(--cor-primaria);margin-top:18px;">Cash Pooling (posição consolidada)</h4>
+          <div class="rolagem-tabela"><div id="resultadoCashPooling"></div></div>
         </div>
 
         <!-- SUB-ABA: DIZIMISTAS DO MÊS (v4.1.2) — quem já contribuiu e quem

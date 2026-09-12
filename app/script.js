@@ -499,9 +499,9 @@ async function registrarAutolancamentoAcao() {
 }
 
 // ---- FINANCEIRO (v4.1) — Tesouraria Local e Repasses ----
-const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
+const SUB_ABAS_FINANCEIRO = ["visaogeral", "situacaotesouro", "lancamentos", "planocontas", "campanhas", "saidas", "receber", "orcamento", "pdq", "demonstracoes", "rateiogeral", "prebenda", "patrimonio", "conciliacao", "investimentos", "dizimistas", "fechamento", "relatorio", "parametros", "consolidado"];
 const TITULOS_SUB_FINANCEIRO = {
-  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária",
+  visaogeral: "Visão Geral", situacaotesouro: "Situação do Tesouro", lancamentos: "Lançamentos", planocontas: "Plano de Contas", campanhas: "Campanhas", saidas: "Saídas", receber: "Contas a Receber", orcamento: "Orçamento", pdq: "PDQ", demonstracoes: "Demonstrações Contábeis", rateiogeral: "Rateio Geral", prebenda: "Prebenda", patrimonio: "Patrimônio", conciliacao: "Conciliação Bancária", investimentos: "Investimentos",
   dizimistas: "Dizimistas do Mês", fechamento: "Fechamento do Mês", relatorio: "Relatório", parametros: "Parâmetros", consolidado: "Consolidado"
 };
 let subAbaFinanceiroAtual = "visaogeral";
@@ -605,6 +605,12 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "conciliacao") {
     carregarFontesCaixaAcao();
     carregarConciliacoesAcao();
+    return;
+  }
+  if (sub === "investimentos") {
+    carregarPortfolioAcao();
+    carregarLiquidezAcao();
+    carregarCashPoolingAcao();
     return;
   }
   Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasEntrada()]).then(() => {
@@ -2572,6 +2578,65 @@ async function resolverDivergenciaAcao(divergenciaId) {
   const d = await res.json();
   avisarResultado(d);
   carregarConciliacoesAcao();
+}
+
+// ---- INVESTIMENTOS E TESOURARIA AVANÇADA (v4.14) ----
+async function salvarAplicacaoAcao() {
+  const tipo = document.getElementById("invTipo").value;
+  const instituicao = document.getElementById("invInstituicao").value.trim();
+  const valorAplicado = document.getElementById("invValor").value;
+  const taxaAnual = document.getElementById("invTaxa").value;
+  const dataAplicacao = document.getElementById("invDataAplicacao").value;
+  const dataVencimento = document.getElementById("invVencimento").value;
+  const liquidez = document.getElementById("invLiquidez").value;
+  const resultado = document.getElementById("resultadoAplicacao");
+  if (!tipo || !instituicao || !valorAplicado || !dataAplicacao) { resultado.textContent = "Preencha tipo, instituição, valor e data."; return; }
+  const body = { tipo, instituicao, valorAplicado: Number(valorAplicado), dataAplicacao, liquidez, taxaAnual: taxaAnual ? Number(taxaAnual) : undefined, dataVencimento: dataVencimento || undefined };
+  const res = await fetchProtegido(`${API_BASE}/investimentos/aplicacoes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const d = await res.json();
+  avisarResultado(d);
+  resultado.textContent = d.mensagem;
+  if (d.sucesso) carregarPortfolioAcao();
+}
+
+async function carregarPortfolioAcao() {
+  const container = document.getElementById("resultadoPortfolio");
+  const res = await fetchProtegido(`${API_BASE}/investimentos`);
+  const p = await res.json();
+  if (!Array.isArray(p.itens) || p.itens.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma aplicação registrada.</p>";
+    return;
+  }
+  let html = `<p class="subtitle">Aplicado R$ ${Number(p.totalAplicado).toFixed(2)} · Resgatado R$ ${Number(p.totalResgatado).toFixed(2)} · Saldo aplicado R$ ${Number(p.saldoAplicado).toFixed(2)} · Valor atual R$ ${Number(p.valorAtualEstimado).toFixed(2)} · Rentabilidade R$ ${Number(p.rentabilidadeAcumulada).toFixed(2)}</p>`;
+  html += `<table class="tabela-frequencia"><thead><tr><th>Instituição</th><th>Tipo</th><th>Valor</th><th>Vencimento</th><th>Liquidez</th><th>Atual</th></tr></thead><tbody>`;
+  p.itens.forEach(i => html += `<tr><td>${i.instituicao}</td><td>${i.tipo}</td><td>R$ ${Number(i.valorAplicado).toFixed(2)}</td><td>${i.dataVencimento ? i.dataVencimento.slice(0, 10) : "-"}</td><td>${i.liquidez}</td><td>R$ ${Number(i.valorAtualEstimado).toFixed(2)}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function carregarLiquidezAcao() {
+  const container = document.getElementById("resultadoLiquidez");
+  const res = await fetchProtegido(`${API_BASE}/investimentos/liquidez?meses=6`);
+  const d = await res.json();
+  let html = `<p class="subtitle">Entrada média R$ ${Number(d.mediaEntradas).toFixed(2)} ± R$ ${Number(d.desvioEntradas).toFixed(2)} (faixa: R$ ${Number(d.entradaConservador).toFixed(2)} a R$ ${Number(d.entradaOtimista).toFixed(2)})</p>`;
+  html += `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Saldo base</th><th>Conservador</th><th>Otimista</th></tr></thead><tbody>`;
+  (d.projecao || []).forEach(p => html += `<tr><td>${p.mesReferencia}</td><td>R$ ${Number(p.saldoProjetado).toFixed(2)}</td><td>R$ ${Number(p.saldoConservador).toFixed(2)}</td><td>R$ ${Number(p.saldoOtimista).toFixed(2)}</td></tr>`);
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function carregarCashPoolingAcao() {
+  const container = document.getElementById("resultadoCashPooling");
+  const res = await fetchProtegido(`${API_BASE}/cash-pooling`);
+  const d = await res.json();
+  const central = d.centralizadora ? `${d.centralizadora.nome}` : "—";
+  container.innerHTML = `<table class="tabela-frequencia"><tbody>
+    <tr><td>Conta centralizadora</td><td>${central}</td></tr>
+    <tr><td>Caixa disponível (Tesouro Geral)</td><td>R$ ${Number(d.caixaDisponivel).toFixed(2)}</td></tr>
+    <tr><td>Total aplicado (Fundo de Reserva)</td><td>R$ ${Number(d.totalAplicado).toFixed(2)}</td></tr>
+    <tr><td><strong>Posição consolidada (pool)</strong></td><td><strong>R$ ${Number(d.posicaoTotal).toFixed(2)}</strong></td></tr>
+    <tr><td>Rentabilidade acumulada</td><td>R$ ${Number(d.rentabilidadeAcumulada).toFixed(2)}</td></tr>
+  </tbody></table>`;
 }
 
 // ---- CONTAS A RECEBER (v4.6) — valor esperado, ainda não recebido; não

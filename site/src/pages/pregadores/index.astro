@@ -1,0 +1,44 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllAuthors, getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const authors = getAllAuthors(allPosts);
+---
+
+<BaseLayout title="Pregadores" description={`Quem prega e ensina em ${siteConfig.name}.`}>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Índice</p>
+        <h1 class="pagehead-title">Pregadores</h1>
+        <p class="pagehead-description">
+          {authors.length} {authors.length === 1 ? "pessoa prega" : "pessoas pregam"} aqui.
+        </p>
+      </header>
+
+      <ul class="grid gap-5">
+        {
+          authors.map((author) => (
+            <li class="border-b border-border pb-5 last:border-b-0">
+              <a href={`/pregador/${author.slug}/`} class="link-title flex items-baseline justify-between gap-4">
+                <span>
+                  <span class="link-title__text block text-xl font-semibold tracking-tight">{author.name}</span>
+                  <span class="mt-1 block text-sm text-muted-foreground">{author.role}</span>
+                </span>
+                <span class="pill shrink-0">
+                  {author.posts.length} {author.posts.length === 1 ? "mensagem" : "mensagens"}
+                </span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>

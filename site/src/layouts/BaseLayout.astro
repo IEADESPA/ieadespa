@@ -1,0 +1,323 @@
+---
+import { ClientRouter } from "astro:transitions";
+import { siteConfig } from "@/config/site";
+import { DIRECTUS_URL } from "@/lib/directus";
+import "@/styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  type?: "website" | "article";
+  noindex?: boolean;
+  prevUrl?: string;
+  nextUrl?: string;
+  structuredData?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const {
+  title = siteConfig.title,
+  description = siteConfig.description,
+  image = siteConfig.socialImage,
+  type = "website",
+  noindex = false,
+  prevUrl,
+  nextUrl,
+  structuredData,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, siteConfig.siteUrl).toString();
+const absoluteImage = new URL(image, siteConfig.siteUrl).toString();
+const pageTitle = title === siteConfig.title ? title : `${title} | ${siteConfig.name}`;
+const defaultStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: siteConfig.name,
+  url: siteConfig.siteUrl,
+  description: siteConfig.description,
+  publisher: {
+    "@type": "Organization",
+    name: siteConfig.authorName,
+    logo: { "@type": "ImageObject", url: `${siteConfig.siteUrl}/logo.png` },
+  },
+};
+const schema = structuredData ?? defaultStructuredData;
+---
+
+<!doctype html>
+<html lang={siteConfig.language} data-theme="light" data-readable="false">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preload" href="/fonts/geist/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preconnect" href={DIRECTUS_URL} />
+    <link rel="dns-prefetch" href={DIRECTUS_URL} />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    {siteConfig.googleSiteVerification && (
+      <meta name="google-site-verification" content={siteConfig.googleSiteVerification} />
+    )}
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/favicon-192.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a1220" media="(prefers-color-scheme: dark)" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="IEADESPA" />
+    <link rel="canonical" href={canonical} />
+    {prevUrl && <link rel="prev" href={new URL(prevUrl, siteConfig.siteUrl).toString()} />}
+    {nextUrl && <link rel="next" href={new URL(nextUrl, siteConfig.siteUrl).toString()} />}
+    <link rel="alternate" type="application/rss+xml" title={`${siteConfig.name} RSS`} href={new URL("/rss.xml", siteConfig.siteUrl).toString()} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <ClientRouter />
+    <meta property="og:locale" content={siteConfig.locale} />
+    <meta property="og:type" content={type} />
+    <meta property="og:site_name" content={siteConfig.name} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={absoluteImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={absoluteImage} />
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(schema)} />
+    <script is:inline>
+      /*
+       * Roda antes do primeiro paint pra aplicar tema/leitura fácil sem
+       * flash. Com o ClientRouter (transição de página, Fase 11) o <html>
+       * de cada navegação chega com os atributos "de fábrica" do HTML
+       * gerado no servidor daquela página (data-theme="light" etc.) — a
+       * troca de página substitui esses atributos pelos da página nova,
+       * por cima do que o clique no botão tinha ajustado. Por isso a
+       * aplicação de tema/leitura e a amarração dos botões viram uma
+       * função só, chamada de novo em "astro:after-swap" (depois de cada
+       * troca), não só uma vez no carregamento inicial.
+       */
+      (() => {
+        const storageKey = "ieadespa-theme";
+        const readableKey = "ieadespa-readable";
+        const root = document.documentElement;
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+        const lerStorage = (key) => {
+          try {
+            return localStorage.getItem(key);
+          } catch {
+            return null;
+          }
+        };
+
+        const salvarStorage = (key, value) => {
+          try {
+            localStorage.setItem(key, value);
+          } catch {}
+        };
+
+        let storedTheme = lerStorage(storageKey);
+        let readable = lerStorage(readableKey) === "true";
+
+        const updateToggles = (theme) => {
+          const isDark = theme === "dark";
+          document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+            button.setAttribute("aria-checked", String(isDark));
+            button.setAttribute("aria-label", isDark ? "Ativar modo claro" : "Ativar modo escuro");
+          });
+        };
+
+        const setTheme = (theme, persist = false) => {
+          root.dataset.theme = theme;
+          if (persist) {
+            storedTheme = theme;
+            salvarStorage(storageKey, theme);
+          }
+          updateToggles(theme);
+        };
+
+        const updateReadableToggles = (isReadable) => {
+          document.querySelectorAll("[data-readable-toggle]").forEach((button) => {
+            button.setAttribute("aria-pressed", String(isReadable));
+            button.setAttribute(
+              "aria-label",
+              isReadable ? "Desativar modo de leitura fácil" : "Ativar modo de leitura fácil",
+            );
+          });
+        };
+
+        const setReadable = (isReadable, persist = false) => {
+          readable = isReadable;
+          root.dataset.readable = String(isReadable);
+          if (persist) salvarStorage(readableKey, String(isReadable));
+          updateReadableToggles(isReadable);
+        };
+
+        const temaPreferido = () =>
+          storedTheme === "light" || storedTheme === "dark" ? storedTheme : systemDark.matches ? "dark" : "light";
+
+        const aplicarEAmarrarBotoes = () => {
+          setTheme(temaPreferido());
+          setReadable(readable);
+
+          document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+            button.addEventListener("click", () => {
+              setTheme(root.dataset.theme === "dark" ? "light" : "dark", true);
+            });
+          });
+          document.querySelectorAll("[data-readable-toggle]").forEach((button) => {
+            button.addEventListener("click", () => {
+              setReadable(!readable, true);
+            });
+          });
+        };
+
+        // Chamada direta: pinta o <html> sem flash antes do <body> existir
+        // (os `querySelectorAll` de botão simplesmente não acham nada ainda).
+        aplicarEAmarrarBotoes();
+        // Primeira carga de verdade: já dá pra amarrar os botões do <body>.
+        document.addEventListener("DOMContentLoaded", aplicarEAmarrarBotoes);
+        // Toda troca de página do ClientRouter: refaz tudo de novo.
+        document.addEventListener("astro:after-swap", aplicarEAmarrarBotoes);
+
+        systemDark.addEventListener("change", (event) => {
+          if (storedTheme === "light" || storedTheme === "dark") return;
+          setTheme(event.matches ? "dark" : "light");
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Pular para o conteúdo</a>
+    <slot />
+    <script is:inline>
+      /*
+       * Transição de página (ClientRouter, ver <ClientRouter /> no <head>)
+       * troca só o <body> em vez de recarregar a página inteira — o que
+       * quer dizer que um setInterval() criado pelo script de uma página
+       * (relógio do painel de recepção, rotação do versículo, sincronização
+       * do check-in) continua rodando escondido depois que a pessoa navega
+       * pra outra página, já que o intervalo em si não morre sozinho só
+       * porque os elementos que ele atualizava saíram do documento. Todo
+       * setInterval de qualquer página deve ser registrado por
+       * `window.ieadespaSetInterval(fn, ms)` em vez do global direto, pra
+       * ser encerrado automaticamente aqui antes de cada troca de página.
+       */
+      window.ieadespaSetInterval = (fn, ms) => {
+        window.__ieadespaIntervalIds ??= [];
+        window.__ieadespaIntervalIds.push(setInterval(fn, ms));
+      };
+      document.addEventListener("astro:before-swap", () => {
+        (window.__ieadespaIntervalIds ?? []).forEach((id) => clearInterval(id));
+        window.__ieadespaIntervalIds = [];
+      });
+    </script>
+    <script is:inline define:vars={{ directusUrl: DIRECTUS_URL }}>
+      /*
+       * Contador de visitas próprio — sem cookie, sem armazenamento no
+       * navegador, sem identificar a pessoa nem segui-la entre visitas.
+       * Só grava caminho da página e, se veio de outro site, o domínio de
+       * origem (nunca a URL completa, que poderia ter termo de busca ou
+       * outro dado da pessoa). Não roda em páginas internas de operação
+       * (painel da equipe, telão da recepção) — não são "visita" de
+       * verdade, e contá-las junto distorceria os números.
+       *
+       * Amarrado em "astro:page-load" (não só chamado direto): esse evento
+       * dispara tanto na carga inicial quanto depois de cada navegação via
+       * ClientRouter (Fase 11) — sem ele, só a primeira página vista na
+       * sessão contaria, porque a troca de página não recarrega o
+       * documento e o Astro não re-executa um `<script>` com o mesmo
+       * conteúdo de novo sozinho.
+       */
+      document.addEventListener("astro:page-load", () => {
+        const path = location.pathname;
+        const internas = ["/painel-eventos", "/painel/", "/checkin"];
+        if (internas.some((prefixo) => path.startsWith(prefixo))) return;
+
+        let referrerDomain = null;
+        try {
+          if (document.referrer && new URL(document.referrer).hostname !== location.hostname) {
+            referrerDomain = new URL(document.referrer).hostname;
+          }
+        } catch {}
+
+        const corpo = JSON.stringify({ path, referrer_domain: referrerDomain });
+        const url = `${directusUrl}/items/pageviews`;
+
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(url, new Blob([corpo], { type: "application/json" }));
+        } else {
+          fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo, keepalive: true }).catch(() => {});
+        }
+      });
+    </script>
+
+    {
+      /*
+       * VLibras (Fase 12) — widget oficial do Governo Federal (LAViD/UFPB)
+       * que traduz o texto da tela pra Libras usando um avatar 3D, sob
+       * demanda (a pessoa abre o painel e escolhe o quê traduzir). É real e
+       * gratuito pra sempre, mas **não é** "site acessível em Libras": só
+       * texto, nunca vídeo/áudio (por isso não ajuda em nada nos vídeos de
+       * mensagem — aí quem resolve de verdade é a legenda em português do
+       * próprio YouTube). Ver nota sobre isso em /privacidade/.
+       *
+       * `transition:persist`: o widget se inicializa uma única vez lendo o
+       * <script src> abaixo; sem isso, a troca de página do ClientRouter
+       * (Fase 11) substituiria essa div por uma cópia nova e "crua" a cada
+       * navegação, apagando o botão já inicializado sem religar nada nele
+       * (o script, sendo idêntico em toda página, não roda de novo
+       * sozinho) — o mesmo tipo de problema já corrigido acima pro tema e
+       * pros `setInterval`. De propósito **sem** a chamada manual
+       * `new window.VLibras.Widget(...)` da documentação: o próprio
+       * `vlibras-plugin.js` já se auto-inicializa sozinho ao carregar,
+       * achando esta div `vw` que já está no HTML — testado que chamar o
+       * construtor manualmente é redundante (o widget já ligou sozinho) e,
+       * pior, arriscado aqui: `vlibras-plugin.js` faz um redirect 302 pra
+       * um CDN antes de responder, e com o `transition:persist` esse
+       * `<script>` deixa de bloquear o parser como um script normal
+       * bloquearia — a chamada manual rodava antes do redirect terminar,
+       * "window.VLibras" ainda `undefined`.
+       */
+    }
+    <div id="vlibras-widget" transition:persist transition:name="vlibras-widget">
+      <div {...{ vw: true }} class="enabled">
+        <div vw-access-button class="active"></div>
+        <div vw-plugin-wrapper>
+          <div class="vw-plugin-top-wrapper"></div>
+        </div>
+      </div>
+      <script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
+    </div>
+    <script is:inline>
+      /*
+       * `vlibras-plugin.js` (acima) não desenha o botão dentro da própria
+       * div `vw` que ele recebeu — na hora que carrega, ele cria um
+       * elemento novo (`#vlibras-access-wrapper`) direto como filho de
+       * `<body>`, do lado de fora da div `#vlibras-widget` marcada
+       * `transition:persist`. Resultado visto testando de verdade: o botão
+       * aparecia na primeira página e sumia pra sempre depois da primeira
+       * navegação — o `transition:persist` só sabe preservar o que já
+       * estava dentro da div marcada, e esse elemento nasce fora dela.
+       * Correção: qualquer coisa que o VLibras criar direto em `<body>` é
+       * movida pra dentro da div persistida assim que aparece — daí ela
+       * passa a fazer parte da mesma subárvore preservada e sobrevive a
+       * todas as trocas de página seguintes.
+       */
+      const vlibrasWrapper = document.getElementById("vlibras-widget");
+      if (vlibrasWrapper) {
+        new MutationObserver((mutations) => {
+          for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+              if (node.nodeType === 1 && node.id?.startsWith("vlibras-") && node.id !== "vlibras-widget") {
+                vlibrasWrapper.appendChild(node);
+              }
+            }
+          }
+        }).observe(document.body, { childList: true });
+      }
+    </script>
+  </body>
+</html>

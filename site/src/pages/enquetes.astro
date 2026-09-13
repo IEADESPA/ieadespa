@@ -1,0 +1,251 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { CONSULTAR_ENQUETE_URL, VOTAR_ENQUETE_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Enquete {
+  id: number;
+  pergunta: string;
+  opcoes: string[];
+  ativa: boolean;
+  encerra_em: string | null;
+  date_created: string;
+}
+
+const allPosts = visiblePosts(await getAllMensagens());
+const enquetes = await fetchItems<Enquete>("enquetes", "sort=-date_created&filter[ativa][_eq]=true");
+---
+
+<BaseLayout
+  title="Enquetes"
+  description="Participe das enquetes da comunidade — entre com a Minha Conta para votar."
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas enquetes-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Opinião pública</p>
+        <h1 class="pagehead-title">Enquetes</h1>
+        <p class="pagehead-description">
+          Participe das enquetes da comunidade. É preciso entrar na{" "}
+          <a href="/minha-conta/" class="underline underline-offset-2">Minha conta</a> pra votar —
+          garante um voto por pessoa.
+        </p>
+      </header>
+
+      {
+        enquetes.length === 0 ? (
+          <div class="gallery-empty mt-8">
+            <p class="text-sm leading-relaxed text-muted-foreground">Nenhuma enquete ativa no momento.</p>
+          </div>
+        ) : (
+          <div class="mt-8 grid gap-6" data-enquetes-lista data-consultar-url={CONSULTAR_ENQUETE_URL} data-votar-url={VOTAR_ENQUETE_URL}>
+            {enquetes.map((enquete) => (
+              <div
+                class="enquete-card"
+                data-enquete-card
+                data-id={enquete.id}
+                data-opcoes={JSON.stringify(enquete.opcoes)}
+                data-encerra-em={enquete.encerra_em ?? ""}
+              >
+                <p class="enquete-pergunta">{enquete.pergunta}</p>
+                <div class="mt-4" data-enquete-corpo>
+                  <p class="text-sm text-muted-foreground">Carregando…</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { contaToken } from "@/lib/contaAuth";
+
+    interface Resultado {
+      jaVotou: boolean;
+      opcaoVotada: number | null;
+      encerrada: boolean;
+      contagens: number[] | null;
+    }
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
+    function resultadosHtml(opcoes: string[], contagens: number[], opcaoVotada: number | null): string {
+      const total = contagens.reduce((soma, c) => soma + c, 0);
+      return `
+        <ul class="enquete-resultados">
+          ${opcoes
+            .map((opcao, indice) => {
+              const count = contagens[indice] ?? 0;
+              const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+              const destaque = indice === opcaoVotada ? " enquete-opcao-votada" : "";
+              return `
+                <li class="enquete-resultado-item${destaque}">
+                  <div class="enquete-resultado-cabecalho">
+                    <span>${escapeHtml(opcao)}${indice === opcaoVotada ? " — seu voto" : ""}</span>
+                    <span>${pct}% (${count})</span>
+                  </div>
+                  <div class="enquete-barra"><div class="enquete-barra-preenchida" style="width:${pct}%"></div></div>
+                </li>
+              `;
+            })
+            .join("")}
+        </ul>
+        <p class="enquete-total">${total} voto${total === 1 ? "" : "s"} no total</p>
+      `;
+    }
+
+    function formularioHtml(opcoes: string[]): string {
+      return `
+        <form class="grid gap-3" data-enquete-form>
+          ${opcoes
+            .map(
+              (opcao, indice) => `
+              <label class="enquete-opcao-label">
+                <input type="radio" name="opcao" value="${indice}" required />
+                <span>${escapeHtml(opcao)}</span>
+              </label>
+            `,
+            )
+            .join("")}
+          <button type="submit" class="btn btn-solid mt-1">Votar</button>
+          <p class="text-sm text-muted-foreground" data-enquete-status></p>
+        </form>
+      `;
+    }
+
+    async function montarCard(card: HTMLElement, consultarUrl: string, votarUrl: string) {
+      const corpo = card.querySelector<HTMLElement>("[data-enquete-corpo]")!;
+      const id = Number(card.dataset.id);
+      const opcoes: string[] = JSON.parse(card.dataset.opcoes || "[]");
+      const encerraEm = card.dataset.encerraEm || "";
+      const encerradaPelaData = encerraEm !== "" && new Date(encerraEm).getTime() <= Date.now();
+      const token = contaToken();
+
+      if (encerradaPelaData) {
+        corpo.innerHTML = `<p class="text-xs text-muted-foreground mb-2">Enquete encerrada</p>`;
+      }
+
+      try {
+        const res = await fetch(consultarUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enqueteId: id, token }),
+        });
+        const json: Resultado = await res.json();
+
+        if (json.jaVotou || json.encerrada) {
+          corpo.innerHTML =
+            (json.encerrada ? `<p class="text-xs text-muted-foreground mb-2">Enquete encerrada</p>` : "") +
+            resultadosHtml(opcoes, json.contagens ?? opcoes.map(() => 0), json.opcaoVotada);
+          return;
+        }
+
+        if (!token) {
+          corpo.innerHTML = `<p class="text-sm text-muted-foreground">
+            <a href="/minha-conta/" class="link-sweep font-semibold text-accent">Entre na Minha conta</a> pra votar e ver o resultado.
+          </p>`;
+          return;
+        }
+
+        corpo.innerHTML = formularioHtml(opcoes);
+        const form = corpo.querySelector<HTMLFormElement>("[data-enquete-form]")!;
+        const status = corpo.querySelector<HTMLElement>("[data-enquete-status]")!;
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const opcaoEscolhida = Number(new FormData(form).get("opcao"));
+          status.textContent = "Enviando…";
+          try {
+            const votoRes = await fetch(votarUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ enqueteId: id, opcao: opcaoEscolhida, token }),
+            });
+            const votoJson = await votoRes.json();
+            if (!votoRes.ok) {
+              status.textContent = votoJson?.erro ?? "Não foi possível registrar seu voto.";
+              return;
+            }
+            corpo.innerHTML = resultadosHtml(opcoes, votoJson.contagens, votoJson.opcaoVotada);
+          } catch {
+            status.textContent = "Não foi possível registrar seu voto agora. Tente novamente em instantes.";
+          }
+        });
+      } catch {
+        corpo.innerHTML = `<p class="text-sm text-muted-foreground">Não foi possível carregar esta enquete agora.</p>`;
+      }
+    }
+
+    const wrap = document.querySelector<HTMLElement>("[data-enquetes-lista]");
+    if (wrap) {
+      const consultarUrl = wrap.dataset.consultarUrl ?? "";
+      const votarUrl = wrap.dataset.votarUrl ?? "";
+      wrap.querySelectorAll<HTMLElement>("[data-enquete-card]").forEach((card) => montarCard(card, consultarUrl, votarUrl));
+    }
+  </script>
+
+  <style is:global>
+    .enquetes-canvas {
+      max-width: 40rem;
+    }
+    .enquete-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem 1.5rem;
+    }
+    .enquete-pergunta {
+      font-weight: 600;
+    }
+    .enquete-opcao-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9375rem;
+    }
+    .enquete-resultados {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 0.6rem;
+    }
+    .enquete-resultado-item.enquete-opcao-votada {
+      font-weight: 600;
+    }
+    .enquete-resultado-cabecalho {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      margin-bottom: 0.25rem;
+    }
+    .enquete-barra {
+      height: 0.5rem;
+      border-radius: var(--radius-full);
+      background: var(--muted);
+      overflow: hidden;
+    }
+    .enquete-barra-preenchida {
+      height: 100%;
+      background: var(--accent);
+    }
+    .enquete-total {
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--muted-foreground);
+    }
+    .gallery-empty {
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-md);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+    }
+  </style>
+</BaseLayout>

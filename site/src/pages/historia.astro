@@ -1,0 +1,384 @@
+---
+import { marked } from "marked";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { directusAssetUrl, fetchItems } from "@/lib/directus";
+
+interface RegistroHistorico {
+  title: string;
+  period: string | null;
+  photo: string | null;
+  body: string;
+  /** Galeria opcional (além da foto principal acima) — vários registros
+   * fotográficos do mesmo marco/época, quando existir mais de um. */
+  fotos: { directus_files_id: string }[];
+}
+
+const allPosts = visiblePosts(await getAllMensagens());
+const registros = await fetchItems<RegistroHistorico>("historia", "sort[]=sort&fields=*,fotos.directus_files_id");
+const registrosComHtml = await Promise.all(
+  registros.map(async (registro, index) => ({
+    ...registro,
+    slug: `marco-${index}`,
+    bodyHtml: await marked.parse(registro.body ?? ""),
+    // Galeria (Fase 20): fotos extras do mesmo marco, além da foto principal
+    // acima — a maioria dos marcos ainda não tem nenhuma (conteúdo, não
+    // técnico, ver README), então isso só aparece quando existir de fato.
+    galeria: (registro.fotos ?? []).map((item) => ({
+      thumb: directusAssetUrl(item.directus_files_id, { width: 300, height: 300, quality: 70, format: "webp", fit: "cover" }),
+      large: directusAssetUrl(item.directus_files_id, { width: 1600, quality: 82, format: "webp" }),
+    })),
+  })),
+);
+---
+
+<BaseLayout
+  title="Nossa história"
+  description={`A história da ${siteConfig.fullName}, da fundação até hoje — fotos, relatos e entrevistas.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Acervo</p>
+        <h1 class="pagehead-title">Nossa história</h1>
+        <p class="pagehead-description">
+          Um registro da caminhada da {siteConfig.name} — fotos de época, relatos e entrevistas
+          de quem viveu cada momento.
+        </p>
+      </header>
+
+      {
+        registrosComHtml.length > 0 ? (
+          <div class="historia-layout" data-historia-layout>
+            <nav class="historia-anos" aria-label="Pular para um ano">
+              <ul>
+                {registrosComHtml.map((registro) => (
+                  <li>
+                    <a href={`#${registro.slug}`} data-ano-link={registro.slug}>
+                      {registro.period ?? registro.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+
+            <ol class="historia-timeline" data-historia-timeline>
+              {registrosComHtml.map((registro) => (
+                <li class="historia-item" id={registro.slug} data-ano-item={registro.slug}>
+                  <span class="historia-dot" aria-hidden="true" />
+                  {registro.period && <p class="eyebrow historia-period">{registro.period}</p>}
+                  <h2 class="text-xl font-semibold tracking-tight">{registro.title}</h2>
+                  {registro.photo && (
+                    <figure class="historia-photo">
+                      <img
+                        src={directusAssetUrl(registro.photo, { width: 1400, quality: 80, format: "webp" })}
+                        alt={registro.title}
+                        loading="lazy"
+                      />
+                    </figure>
+                  )}
+                  <div class="prose mt-4" set:html={registro.bodyHtml} />
+
+                  {registro.galeria.length > 0 && (
+                    <ul class="historia-gallery" aria-label={`Mais fotos de ${registro.title}`}>
+                      {registro.galeria.map((foto) => (
+                        <li>
+                          <button
+                            type="button"
+                            class="historia-gallery-btn"
+                            data-gallery-open
+                            data-src={foto.large}
+                            data-alt={registro.title}
+                          >
+                            <img src={foto.thumb} alt="" loading="lazy" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <div class="gallery-empty">
+            <p class="text-sm leading-relaxed text-muted-foreground">
+              O acervo histórico ainda está sendo montado. Volte em breve.
+            </p>
+          </div>
+        )
+      }
+
+      {
+        registrosComHtml.some((registro) => registro.galeria.length > 0) && (
+          <dialog class="historia-lightbox" data-gallery-lightbox aria-label="Foto ampliada">
+            <button type="button" class="historia-lightbox-close" data-gallery-close aria-label="Fechar">✕</button>
+            <img data-gallery-lightbox-img alt="" />
+          </dialog>
+        )
+      }
+
+      <div class="prose mt-16">
+        <p><a href="/sobre/">&larr; Voltar para Sobre</a></p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline>
+    (() => {
+      // Lightbox da galeria extra de cada marco — mesmo padrão já testado
+      // em /galeria/, só que compartilhado entre todos os marcos da página.
+      const dialog = document.querySelector("[data-gallery-lightbox]");
+      const img = document.querySelector("[data-gallery-lightbox-img]");
+      const closeBtn = document.querySelector("[data-gallery-close]");
+
+      document.querySelectorAll("[data-gallery-open]").forEach((button) => {
+        button.addEventListener("click", () => {
+          if (!dialog || !img) return;
+          img.src = button.dataset.src;
+          img.alt = button.dataset.alt || "";
+          dialog.showModal();
+        });
+      });
+
+      closeBtn?.addEventListener("click", () => dialog?.close());
+      dialog?.addEventListener("click", (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+      dialog?.addEventListener("close", () => {
+        if (img) img.src = "";
+      });
+    })();
+  </script>
+
+  <script is:inline>
+    (() => {
+      const layout = document.querySelector("[data-historia-layout]");
+      if (!layout) return;
+      const links = layout.querySelectorAll("[data-ano-link]");
+      const itens = layout.querySelectorAll("[data-ano-item]");
+      if (!links.length || !itens.length) return;
+
+      const marcarAtivo = (slug) => {
+        links.forEach((link) => link.classList.toggle("is-active", link.dataset.anoLink === slug));
+      };
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const visivel = entries.find((entry) => entry.isIntersecting);
+          if (visivel) marcarAtivo(visivel.target.dataset.anoItem);
+        },
+        { rootMargin: "-20% 0px -70% 0px" },
+      );
+      itens.forEach((item) => observer.observe(item));
+
+      links.forEach((link) => {
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          document.getElementById(link.dataset.anoLink)?.scrollIntoView({ behavior: "smooth", block: "start" });
+          history.replaceState(null, "", `#${link.dataset.anoLink}`);
+        });
+      });
+    })();
+  </script>
+</BaseLayout>
+
+<style>
+  .historia-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-section, 2.5rem);
+  }
+
+  @media (min-width: 64rem) {
+    .historia-layout {
+      grid-template-columns: 9rem minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+
+  .historia-anos {
+    display: none;
+  }
+
+  @media (min-width: 64rem) {
+    .historia-anos {
+      display: block;
+      position: sticky;
+      top: 6rem;
+      max-height: calc(100vh - 8rem);
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      padding-right: 1rem;
+    }
+  }
+
+  .historia-anos ul {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .historia-anos a {
+    display: block;
+    padding: 0.2rem 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .historia-anos a:hover {
+    color: var(--foreground);
+  }
+
+  .historia-anos a.is-active {
+    color: var(--accent-strong);
+    border-left: 2px solid var(--accent);
+    padding-left: 0.6rem;
+    margin-left: -0.62rem;
+  }
+
+  .historia-timeline {
+    display: grid;
+    gap: 3rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    position: relative;
+  }
+
+  .historia-item {
+    position: relative;
+    padding-top: 3rem;
+    padding-left: 1.5rem;
+    border-top: 1px solid var(--border);
+    border-left: 2px solid var(--border);
+    scroll-margin-top: 5.5rem;
+  }
+
+  .historia-item:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .historia-item:last-child {
+    border-left-color: transparent;
+    background: linear-gradient(to bottom, var(--border) 3rem, transparent 3rem);
+    background-size: 2px 100%;
+    background-repeat: no-repeat;
+    border-left: 0;
+    padding-left: calc(1.5rem + 2px);
+  }
+
+  .historia-dot {
+    position: absolute;
+    left: -0.4375rem;
+    top: 3.25rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: var(--radius-full);
+    background: var(--accent);
+    border: 2px solid var(--background);
+  }
+
+  .historia-item:first-child .historia-dot {
+    top: 0.25rem;
+  }
+
+  .historia-period {
+    margin-bottom: 0.4rem;
+  }
+
+  .historia-photo {
+    margin: 1.25rem 0 0;
+  }
+
+  .historia-photo img {
+    width: 100%;
+    max-height: 28rem;
+    /* "contain" em vez de "cover": fotos de época vêm em qualquer proporção
+       (quadradas, verticais...) e aqui nunca é cortada, só encaixada. */
+    object-fit: contain;
+    background: var(--muted);
+    border-radius: var(--radius-md);
+  }
+
+  .historia-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
+    gap: 0.5rem;
+    margin: 1.25rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .historia-gallery-btn {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--muted);
+  }
+
+  .historia-gallery-btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--duration) var(--ease-out);
+  }
+
+  .historia-gallery-btn:hover img,
+  .historia-gallery-btn:focus-visible img {
+    transform: scale(1.06);
+  }
+
+  .historia-lightbox {
+    max-width: min(90vw, 60rem);
+    max-height: 90vh;
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  .historia-lightbox::backdrop {
+    background: rgb(0 0 0 / 75%);
+  }
+
+  .historia-lightbox img {
+    display: block;
+    max-width: 90vw;
+    max-height: 90vh;
+  }
+
+  .historia-lightbox-close {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 55%);
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .gallery-empty {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+  }
+</style>

@@ -1,0 +1,177 @@
+---
+import { marked } from "marked";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import NoticiaCard from "@/components/NoticiaCard.astro";
+import ShareButtons from "@/components/ShareButtons.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { fetchItems } from "@/lib/directus";
+import {
+  byNewest,
+  categoryLabel,
+  formatDate,
+  getAllNoticias,
+  noticiaHref,
+  readingLabel,
+  visibleNoticias,
+  type Noticia,
+} from "@/lib/noticias";
+
+interface Orgao {
+  id: number;
+  slug: string;
+  name: string;
+}
+
+export async function getStaticPaths() {
+  const noticias = visibleNoticias(await getAllNoticias());
+  const orgaos = await fetchItems<Orgao>("ministerios");
+  return noticias.map((noticia) => ({
+    params: { slug: noticia.id },
+    props: { noticia, allNoticias: noticias, orgaos },
+  }));
+}
+
+interface Props {
+  noticia: Noticia;
+  allNoticias: Noticia[];
+  orgaos: Orgao[];
+}
+
+const { noticia, allNoticias, orgaos } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+const bodyHtml = await marked.parse(noticia.body);
+const data = noticia.data;
+const orgaoRelacionado = orgaos.find((orgao) => orgao.id === data.orgaoRelacionado);
+// Prioriza notícias da mesma categoria (como mensagens já fazem por tema);
+// completa com as mais recentes de qualquer categoria só se não houver
+// 3 da mesma categoria.
+const outras = allNoticias.filter((item) => item.id !== noticia.id).sort(byNewest);
+const mesmaCategoria = outras.filter((item) => item.data.category === data.category);
+const others = [...mesmaCategoria, ...outras.filter((item) => item.data.category !== data.category)].slice(0, 3);
+const articleUrl = new URL(noticiaHref(noticia), siteConfig.siteUrl).toString();
+const socialImage = data.cover
+  ? new URL(data.cover, siteConfig.siteUrl).toString()
+  : new URL(siteConfig.socialImage, siteConfig.siteUrl).toString();
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  headline: data.title,
+  description: data.excerpt,
+  image: socialImage,
+  datePublished: data.date.toISOString(),
+  publisher: { "@type": "Organization", name: siteConfig.authorName, logo: { "@type": "ImageObject", url: `${siteConfig.siteUrl}/logo.png` } },
+  mainEntityOfPage: articleUrl,
+};
+---
+
+<BaseLayout
+  title={data.title}
+  description={data.excerpt}
+  image={socialImage}
+  type="article"
+  structuredData={structuredData}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <article>
+      <header class="canvas pt-10 md:pt-14">
+        <Breadcrumbs items={[{ label: "Notícias", href: "/noticias/" }, { label: data.title }]} />
+        <p class="meta post-meta">
+          <span class="pill">{categoryLabel(data.category)}</span>
+          <span class="meta-accent"><time datetime={data.date.toISOString()}>{formatDate(data.date, "long")}</time></span>
+          <span>{readingLabel(noticia)}</span>
+        </p>
+
+        <h1 class="article-title">{data.title}</h1>
+        <p class="article-excerpt">{data.excerpt}</p>
+
+        {data.entrevistado && (
+          <p class="mt-3 text-sm text-muted-foreground">
+            Entrevista com <strong class="text-foreground">{data.entrevistado.nome}</strong>
+            {data.entrevistado.papel && <>, {data.entrevistado.papel}</>}
+          </p>
+        )}
+
+        {orgaoRelacionado && (
+          <p class="mt-5">
+            <a href={`/orgao/${orgaoRelacionado.slug}/`} class="pill">Sobre: {orgaoRelacionado.name}</a>
+          </p>
+        )}
+
+        <div class="mt-8 border-t border-border pt-6">
+          <p class="eyebrow mb-2">Compartilhar</p>
+          <ShareButtons url={articleUrl} title={data.title} />
+        </div>
+      </header>
+
+      {data.cover && (
+        <figure class="article-image inner">
+          <img
+            src={data.cover}
+            srcset={data.coverSrcset}
+            sizes="100vw"
+            alt={data.title}
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+            class="w-full"
+          />
+        </figure>
+      )}
+
+      <div class="prose canvas mt-12" set:html={bodyHtml} />
+    </article>
+
+    {others.length > 0 && (
+      <section class="canvas mt-[var(--space-section)]" aria-labelledby="more-noticias">
+        <h2 id="more-noticias" class="section-title">Mais notícias</h2>
+        <div class="grid gap-7 sm:grid-cols-3">
+          {others.map((item) => <NoticiaCard noticia={item} variant="compact" headingLevel="h3" />)}
+        </div>
+      </section>
+    )}
+  </main>
+  <SiteFooter />
+
+  <style>
+    .post-meta {
+      column-gap: 0.55rem;
+    }
+
+    .article-title {
+      margin: 1.25rem 0 0;
+      font-family: var(--font-display);
+      font-size: var(--text-title-3xl);
+      font-weight: 600;
+      letter-spacing: -0.035em;
+      line-height: 1.02;
+      text-wrap: balance;
+      word-break: break-word;
+    }
+
+    .article-excerpt {
+      margin: 1.25rem 0 0;
+      color: color-mix(in srgb, var(--foreground) 82%, transparent);
+      font-size: var(--text-body-article);
+      line-height: 1.45;
+      text-wrap: pretty;
+    }
+
+    .article-image {
+      margin-top: 3rem;
+      margin-bottom: 0;
+    }
+
+    .article-image :global(img) {
+      aspect-ratio: 16 / 9;
+      max-height: 32rem;
+      width: 100%;
+      object-fit: cover;
+      border-radius: var(--radius-md);
+    }
+  </style>
+</BaseLayout>

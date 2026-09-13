@@ -1,0 +1,455 @@
+---
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { siteConfig } from "@/config/site";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { getAllNoticias, visibleNoticias } from "@/lib/noticias";
+import { congregacaoProgramacao, getAllProgramacao, sedeProgramacao, type ProgramacaoItem } from "@/lib/programacao";
+
+export function getStaticPaths() {
+  return [
+    { params: { local: "sede" }, props: { local: "sede" as const } },
+    { params: { local: "congregacoes" }, props: { local: "congregacoes" as const } },
+  ];
+}
+
+interface Props {
+  local: "sede" | "congregacoes";
+}
+
+const { local } = Astro.props;
+const tituloLocal = local === "sede" ? "Painel da Sede" : "Painel das Congregações";
+
+const allProgramacao = await getAllProgramacao();
+const schedule: ProgramacaoItem[] = local === "sede" ? sedeProgramacao(allProgramacao) : congregacaoProgramacao(allProgramacao);
+
+const latestNoticia = visibleNoticias(await getAllNoticias())[0] ?? null;
+const avisoRecente =
+  latestNoticia && Date.now() - latestNoticia.data.date.getTime() < 14 * 24 * 60 * 60 * 1000 ? latestNoticia.data.title : null;
+
+/* Mesmo padrão do versículo do dia na home: baldes por período (madrugada/
+   manhã/tarde/noite) pra não baixar os ~4,7MB dos 4 juntos de uma vez. */
+type Verse = { r: string; t: string };
+type Periodo = "madrugada" | "manha" | "tarde" | "noite";
+
+function periodoDoHorario(hora: number): Periodo {
+  if (hora < 6) return "madrugada";
+  if (hora < 12) return "manha";
+  if (hora < 18) return "tarde";
+  return "noite";
+}
+
+const epochDays = Math.floor(Date.now() / 86400000);
+const horaBuild = Number(
+  new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", hour: "2-digit", hour12: false }).format(new Date()),
+);
+const periodoBuild = periodoDoHorario(horaBuild);
+const versiculosPath = join(process.cwd(), "public", `versiculos-${periodoBuild}.json`);
+const baldeInicial = JSON.parse(readFileSync(versiculosPath, "utf8")) as Verse[];
+const versiculoInicial = baldeInicial[epochDays % baldeInicial.length];
+---
+
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <title>{tituloLocal} — {siteConfig.name}</title>
+  </head>
+  <body>
+    <div class="painel">
+      <header class="painel-header">
+        <img src="/logo-icon.png" alt="" class="painel-logo" />
+        <div class="painel-titulo">
+          <p class="painel-eyebrow">{tituloLocal}</p>
+          <h1>{siteConfig.name}</h1>
+        </div>
+        <div class="painel-relogio">
+          <p class="painel-hora" data-painel-hora>--:--</p>
+          <p class="painel-data" data-painel-data></p>
+        </div>
+      </header>
+
+      <main class="painel-main">
+        <section class="painel-hoje" aria-label="Programação de hoje">
+          <p class="painel-section-label">Hoje</p>
+          <div class="painel-itens" data-painel-itens>
+            <p class="painel-carregando">Carregando programação…</p>
+          </div>
+        </section>
+
+        <section class="painel-evento-hoje" data-painel-evento-hoje hidden aria-label="Presença ao vivo do evento de hoje">
+          <p class="painel-section-label" data-painel-evento-hoje-titulo></p>
+          <p class="painel-evento-hoje-numero" data-painel-evento-hoje-numero></p>
+        </section>
+
+        {
+          avisoRecente && (
+            <p class="painel-aviso">
+              <span class="painel-aviso-icone" aria-hidden="true">📣</span>
+              {avisoRecente}
+            </p>
+          )
+        }
+
+        <section class="painel-versiculo" aria-label="Versículo do dia">
+          <p class="painel-verse-text" data-verse-text>&ldquo;{versiculoInicial.t}&rdquo;</p>
+          <p class="painel-verse-ref" data-verse-ref>{versiculoInicial.r}</p>
+        </section>
+      </main>
+    </div>
+
+    <script is:inline define:vars={{ itensProgramacao: schedule }}>
+      (() => {
+        const escapeHtml = (value) =>
+          String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+        const diasDeHoje = (data) => {
+          const idx = data.getDay();
+          if (idx === 0) return ["domingo_manha", "domingo_noite"];
+          return [["segunda", "terca", "quarta", "quinta", "sexta", "sabado"][idx - 1]];
+        };
+
+        const ocorrenciaAtual = (data) => {
+          const ano = data.getFullYear();
+          const mes = data.getMonth();
+          const dia = data.getDate();
+          const nth = Math.ceil(dia / 7);
+          const ultimoDiaMes = new Date(ano, mes + 1, 0).getDate();
+          let totalDomingos = 0;
+          for (let d = 1; d <= ultimoDiaMes; d++) {
+            if (new Date(ano, mes, d).getDay() === 0) totalDomingos++;
+          }
+          const isUltimo = nth === totalDomingos;
+          if (isUltimo) return "ultimo";
+          if (nth === 4 && totalDomingos === 5) return "4_se_5";
+          return String(nth);
+        };
+
+        const renderHoje = () => {
+          const container = document.querySelector("[data-painel-itens]");
+          if (!container) return;
+          const agora = new Date();
+          const dias = diasDeHoje(agora);
+          const ocorrencia = ocorrenciaAtual(agora);
+          const itens = itensProgramacao.filter(
+            (item) => dias.includes(item.day) && (!item.occurrence || item.occurrence === ocorrencia),
+          );
+
+          if (!itens.length) {
+            container.innerHTML = `<p class="painel-sem-culto">Sem atividades hoje.</p>`;
+            return;
+          }
+
+          container.innerHTML = itens
+            .map(
+              (item) => `
+                <div class="painel-item">
+                  <span class="painel-item-titulo">${escapeHtml(item.title)}</span>
+                  ${item.time ? `<span class="painel-item-hora">${escapeHtml(item.time)}</span>` : ""}
+                </div>
+              `,
+            )
+            .join("");
+        };
+
+        const renderRelogio = () => {
+          const agora = new Date();
+          const hora = document.querySelector("[data-painel-hora]");
+          const data = document.querySelector("[data-painel-data]");
+          if (hora) hora.textContent = agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+          if (data) {
+            const texto = agora.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+            data.textContent = texto.charAt(0).toUpperCase() + texto.slice(1);
+          }
+        };
+
+        renderHoje();
+        renderRelogio();
+        window.ieadespaSetInterval(renderRelogio, 15000);
+        window.ieadespaSetInterval(renderHoje, 5 * 60 * 1000);
+      })();
+    </script>
+
+    <script is:inline define:vars={{ directusUrl: DIRECTUS_URL }}>
+      (() => {
+        /* "Hoje na igreja": presença ao vivo de um evento especial em
+           andamento hoje — mesma contagem usada no check-in, só reaproveitada
+           aqui pra quem está de olho no telão não precisar abrir outra tela. */
+        const secaoEl = document.querySelector("[data-painel-evento-hoje]");
+        const tituloEl = document.querySelector("[data-painel-evento-hoje-titulo]");
+        const numeroEl = document.querySelector("[data-painel-evento-hoje-numero]");
+        if (!secaoEl || !tituloEl || !numeroEl) return;
+
+        async function atualizarEventoHoje() {
+          try {
+            const hoje = new Date().toISOString().slice(0, 10);
+            const res = await fetch(
+              `${directusUrl}/items/eventos?filter[_and][0][aceita_inscricao][_eq]=true&filter[_and][1][event_date][_lte]=${hoje}&fields=id,title,event_date,end_date,vagas_limite&limit=-1`,
+            );
+            const json = await res.json();
+            const eventos = json.data ?? [];
+            const emAndamento = eventos.find((e) => hoje >= e.event_date && hoje <= (e.end_date || e.event_date));
+            if (!emAndamento) {
+              secaoEl.hidden = true;
+              return;
+            }
+
+            const contagemRes = await fetch(
+              `${directusUrl}/items/inscricoes_eventos?aggregate[count]=id&filter[_and][0][evento][_eq]=${emAndamento.id}&filter[_and][1][presente][_eq]=true`,
+            );
+            const contagemJson = await contagemRes.json();
+            const presentes = Number(contagemJson.data?.[0]?.count?.id ?? 0);
+
+            tituloEl.textContent = `Hoje na igreja — ${emAndamento.title}`;
+            numeroEl.textContent = emAndamento.vagas_limite
+              ? `${presentes} presentes de ${emAndamento.vagas_limite} vagas`
+              : `${presentes} presentes`;
+            secaoEl.hidden = false;
+          } catch {
+            secaoEl.hidden = true;
+          }
+        }
+
+        atualizarEventoHoje();
+        window.ieadespaSetInterval(atualizarEventoHoje, 20000);
+      })();
+    </script>
+
+    <script is:inline>
+      (() => {
+        /* Mesmo mecanismo do versículo do dia na home: troca sozinho a cada
+           6h, sem recarregar a página — importante aqui porque o telão fica
+           ligado o dia inteiro. */
+        const periodoDoHorario = (hora) => {
+          if (hora < 6) return "madrugada";
+          if (hora < 12) return "manha";
+          if (hora < 18) return "tarde";
+          return "noite";
+        };
+
+        const cache = {};
+        const fetchPeriodo = (periodo) => {
+          if (cache[periodo]) return Promise.resolve(cache[periodo]);
+          return fetch(`/versiculos-${periodo}.json`)
+            .then((response) => (response.ok ? response.json() : null))
+            .then((data) => {
+              if (data) cache[periodo] = data;
+              return data;
+            })
+            .catch(() => null);
+        };
+
+        const textEl = document.querySelector("[data-verse-text]");
+        const refEl = document.querySelector("[data-verse-ref]");
+
+        const render = async () => {
+          const balde = await fetchPeriodo(periodoDoHorario(new Date().getHours()));
+          if (!balde || !balde.length) return;
+          const epochDays = Math.floor(Date.now() / 86400000);
+          const verse = balde[epochDays % balde.length];
+          if (textEl) textEl.textContent = `“${verse.t}”`;
+          if (refEl) refEl.textContent = verse.r;
+        };
+
+        render();
+        window.ieadespaSetInterval(render, 5 * 60 * 1000);
+      })();
+    </script>
+
+    <style is:global>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+
+      body {
+        min-height: 100dvh;
+        background: radial-gradient(circle at 20% 0%, #16264a 0%, #0a1220 55%, #060b16 100%);
+        color: #f6f4ec;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        overflow: hidden;
+      }
+
+      .painel {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+        padding: clamp(1.5rem, 3vw, 3rem) clamp(2rem, 5vw, 5rem);
+      }
+
+      .painel-header {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        padding-bottom: clamp(1rem, 2vw, 2rem);
+        border-bottom: 2px solid rgba(217, 179, 79, 0.35);
+      }
+
+      .painel-logo {
+        width: clamp(3.5rem, 5vw, 5rem);
+        height: clamp(3.5rem, 5vw, 5rem);
+        border-radius: 999px;
+        background: #f6f4ec;
+        padding: 0.35rem;
+      }
+
+      .painel-titulo {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .painel-eyebrow {
+        margin: 0 0 0.2rem;
+        color: #d9b34f;
+        font-size: clamp(0.9rem, 1.3vw, 1.15rem);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .painel-titulo h1 {
+        margin: 0;
+        font-size: clamp(1.5rem, 2.6vw, 2.5rem);
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+
+      .painel-relogio {
+        text-align: right;
+        flex-shrink: 0;
+      }
+
+      .painel-hora {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+        font-size: clamp(2rem, 4.5vw, 4rem);
+        font-weight: 800;
+        color: #d9b34f;
+        line-height: 1;
+      }
+
+      .painel-data {
+        margin: 0.25rem 0 0;
+        color: #c7cede;
+        font-size: clamp(0.85rem, 1.3vw, 1.15rem);
+      }
+
+      .painel-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: clamp(1.5rem, 3vw, 3rem);
+        padding: clamp(1.5rem, 3vw, 3rem) 0;
+      }
+
+      .painel-section-label {
+        margin: 0 0 clamp(0.75rem, 1.5vw, 1.5rem);
+        color: #d9b34f;
+        font-size: clamp(1.25rem, 2.4vw, 2rem);
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .painel-itens {
+        display: grid;
+        gap: clamp(0.75rem, 1.5vw, 1.25rem);
+      }
+
+      .painel-item,
+      .painel-sem-culto,
+      .painel-carregando {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        border-radius: 1rem;
+        background: rgba(217, 179, 79, 0.08);
+        border: 1px solid rgba(217, 179, 79, 0.25);
+        padding: clamp(1rem, 2vw, 1.75rem) clamp(1.25rem, 2.5vw, 2rem);
+      }
+
+      .painel-item-titulo {
+        font-size: clamp(1.5rem, 3.2vw, 3rem);
+        font-weight: 700;
+      }
+
+      .painel-item-hora {
+        color: #d9b34f;
+        font-variant-numeric: tabular-nums;
+        font-size: clamp(1.5rem, 3.2vw, 3rem);
+        font-weight: 800;
+      }
+
+      .painel-sem-culto,
+      .painel-carregando {
+        color: #c7cede;
+        font-size: clamp(1.25rem, 2vw, 1.75rem);
+      }
+
+      .painel-evento-hoje {
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.06);
+        padding: clamp(0.85rem, 1.5vw, 1.25rem) clamp(1.25rem, 2.5vw, 2rem);
+      }
+
+      .painel-evento-hoje-numero {
+        margin: 0.35rem 0 0;
+        font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+        font-weight: 700;
+      }
+
+      .painel-aviso {
+        margin: 0;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.06);
+        padding: clamp(0.85rem, 1.5vw, 1.25rem) clamp(1.25rem, 2.5vw, 2rem);
+        font-size: clamp(1.1rem, 1.8vw, 1.5rem);
+        font-weight: 600;
+      }
+
+      .painel-aviso-icone {
+        margin-right: 0.5rem;
+      }
+
+      .painel-versiculo {
+        text-align: center;
+        padding: 0 clamp(1rem, 6vw, 6rem);
+      }
+
+      .painel-verse-text {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-style: italic;
+        font-size: clamp(1.25rem, 2.6vw, 2.25rem);
+        line-height: 1.4;
+        text-wrap: pretty;
+      }
+
+      .painel-verse-ref {
+        margin-top: 0.75rem;
+        color: #d9b34f;
+        font-weight: 700;
+        font-size: clamp(1rem, 1.6vw, 1.35rem);
+      }
+    </style>
+  </body>
+</html>

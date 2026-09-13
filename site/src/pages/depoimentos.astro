@@ -1,0 +1,242 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout
+  title="Depoimentos"
+  description={`O que quem já faz parte da ${siteConfig.name} tem a dizer.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas depoimentos-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Depoimentos</p>
+        <h1 class="pagehead-title">O que a nossa igreja diz</h1>
+        <p class="pagehead-description">
+          Histórias curtas de quem já faz parte da {siteConfig.name}. Deixe a sua, ou leia a de
+          outras pessoas da nossa comunidade.
+        </p>
+      </header>
+
+      <form class="mt-8 grid gap-4 max-w-lg" data-depoimento-form>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="depoimento-texto">Seu depoimento</label>
+          <textarea
+            id="depoimento-texto"
+            name="texto"
+            required
+            rows="4"
+            maxlength="500"
+            class="field"
+            placeholder="Conte, em poucas linhas, o que a igreja representa pra você…"
+          ></textarea>
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="depoimento-nome">Seu nome</label>
+          <input id="depoimento-nome" name="nome" type="text" required maxlength="80" class="field" placeholder="Como você quer aparecer publicado" />
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Diferente do mural de oração, o depoimento é sempre publicado com nome — sem opção de
+          anônimo, pra manter a credibilidade de quem está contando a própria história. Se depois
+          da aprovação você quiser incluir uma foto, fale com a gente pelo{" "}
+          <a href="/contato/" class="underline underline-offset-2">contato</a>.
+        </p>
+
+        <label class="depoimento-consentimento-toggle">
+          <input type="checkbox" id="depoimento-consentimento" required />
+          <span>
+            Autorizo a publicação deste depoimento pela {siteConfig.name} neste site, incluindo meu
+            nome e, se eu enviar depois, uma foto — de forma permanente, sem prazo de expiração
+            automática. Veja como tratamos isso na{" "}
+            <a href="/privacidade/" target="_blank" class="underline underline-offset-2">
+              política de privacidade
+            </a>.
+          </span>
+        </label>
+
+        <!-- Honeypot: campo escondido de gente de verdade (CSS oculta), que
+             bot de spam costuma preencher automaticamente. Se vier
+             preenchido, a gente finge que deu certo e não manda pra frente. -->
+        <div class="depoimento-honeypot" aria-hidden="true">
+          <label for="depoimento-site">Deixe este campo em branco</label>
+          <input type="text" id="depoimento-site" name="site" tabindex="-1" autocomplete="off" />
+        </div>
+
+        <button type="submit" class="btn btn-solid">Enviar depoimento</button>
+        <p class="text-sm" data-depoimento-status role="status" aria-live="polite"></p>
+        <p class="text-xs leading-relaxed text-muted-foreground">
+          Não serão publicados: mensagens ofensivas, discurso de ódio, conteúdo político-partidário,
+          propaganda comercial, spam, ou dado sensível de terceiros. A equipe se reserva o direito
+          de não publicar depoimentos fora desse propósito. Depoimentos normalmente são revisados e
+          publicados em até 2 dias úteis.
+        </p>
+      </form>
+
+      <section class="mt-16" aria-labelledby="depoimentos-lista-heading">
+        <h2 id="depoimentos-lista-heading" class="section-title">Depoimentos da comunidade</h2>
+        <div class="mt-6 grid gap-5 sm:grid-cols-2" data-depoimentos-lista></div>
+        <p class="mt-6 text-sm text-muted-foreground" data-depoimentos-vazio hidden>
+          Nenhum depoimento publicado ainda. Seja o primeiro a compartilhar.
+        </p>
+        <button type="button" class="btn btn-outline mt-8" data-depoimentos-carregar-mais hidden>Carregar mais</button>
+      </section>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline define:vars={{ directusUrl: DIRECTUS_URL }}>
+    (() => {
+      const form = document.querySelector("[data-depoimento-form]");
+      const status = document.querySelector("[data-depoimento-status]");
+      const lista = document.querySelector("[data-depoimentos-lista]");
+      const vazio = document.querySelector("[data-depoimentos-vazio]");
+      const carregarMaisBtn = document.querySelector("[data-depoimentos-carregar-mais]");
+
+      const PAGINA = 12;
+      let offset = 0;
+
+      const escapeHtml = (value) =>
+        String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+      const cardHtml = (item) => {
+        const fotoUrl = item.foto ? `${directusUrl}/assets/${item.foto}?width=160&height=160&fit=cover&format=webp` : null;
+        return `
+        <article class="depoimento-card">
+          ${fotoUrl ? `<img class="depoimento-card-foto" src="${fotoUrl}" alt="" loading="lazy" />` : ""}
+          <p class="depoimento-card-texto">&ldquo;${escapeHtml(item.texto)}&rdquo;</p>
+          <p class="depoimento-card-nome">${escapeHtml(item.nome)}</p>
+        </article>
+      `;
+      };
+
+      async function carregarPagina() {
+        const res = await fetch(
+          `${directusUrl}/items/depoimentos?sort=-date_created&limit=${PAGINA}&offset=${offset}`,
+        );
+        const json = await res.json();
+        const itens = json.data ?? [];
+        itens.forEach((item) => {
+          vazio.hidden = true;
+          lista.insertAdjacentHTML("beforeend", cardHtml(item));
+        });
+        offset += itens.length;
+        carregarMaisBtn.hidden = itens.length < PAGINA;
+        if (offset === 0) vazio.hidden = false;
+      }
+
+      carregarPagina().catch(() => {
+        status.textContent = "Não foi possível carregar os depoimentos agora.";
+      });
+
+      carregarMaisBtn?.addEventListener("click", () => carregarPagina());
+
+      form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const texto = document.getElementById("depoimento-texto").value.trim();
+        const nome = document.getElementById("depoimento-nome").value.trim();
+        const consentimentoLgpd = document.getElementById("depoimento-consentimento").checked;
+        const honeypot = document.getElementById("depoimento-site").value;
+        if (!texto || !nome || !consentimentoLgpd) return;
+
+        // Bot preencheu o campo escondido — finge sucesso sem mandar nada
+        // pro Directus, sem dar nenhuma pista pro bot de que foi barrado.
+        if (honeypot) {
+          form.reset();
+          status.textContent = "Recebido! Seu depoimento será revisado em breve.";
+          return;
+        }
+
+        status.textContent = "Enviando…";
+        try {
+          const res = await fetch(`${directusUrl}/items/depoimentos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ texto, nome, consentimento_lgpd: consentimentoLgpd }),
+          });
+          if (!res.ok) throw new Error("falha ao enviar");
+          form.reset();
+          status.textContent = "Recebido! Seu depoimento será revisado e publicado em até 2 dias úteis.";
+        } catch {
+          status.textContent = "Não foi possível enviar agora. Tente novamente em instantes.";
+        }
+      });
+    })();
+  </script>
+
+  <style>
+    .depoimentos-canvas {
+      max-width: 44rem;
+    }
+
+    .depoimento-consentimento-toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      border-left: 3px solid var(--accent);
+      background: var(--muted);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: var(--muted-foreground);
+      cursor: pointer;
+    }
+
+    .depoimento-consentimento-toggle input {
+      margin-top: 0.2rem;
+      accent-color: var(--accent);
+    }
+
+    /* Escondido pra gente de verdade (some visualmente e do layout), mas
+       ainda presente no HTML e preenchível por bot que não roda CSS. */
+    .depoimento-honeypot {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .depoimento-card {
+      display: grid;
+      gap: 0.75rem;
+      align-content: start;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      background: var(--muted);
+    }
+
+    .depoimento-card-foto {
+      width: 3rem;
+      height: 3rem;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+
+    .depoimento-card-texto {
+      margin: 0;
+      font-family: var(--font-serif);
+      font-style: italic;
+      text-wrap: pretty;
+    }
+
+    .depoimento-card-nome {
+      margin: 0;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--muted-foreground);
+    }
+  </style>
+</BaseLayout>

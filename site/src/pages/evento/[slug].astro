@@ -1,0 +1,943 @@
+---
+import { marked } from "marked";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { COVER_WIDTHS, congregacaoEndereco, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, TELEFONE_HASH_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
+import { hasEventPage } from "@/lib/eventos";
+import { coordenadaDeLinkMaps } from "@/lib/googleMapsLink";
+
+interface Congregacao {
+  id: number;
+  name: string;
+  slug: string;
+  address: string | null;
+  neighborhood: string | null;
+  address_new: string | null;
+  neighborhood_new: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+type TipoPergunta = "texto_curto" | "texto_longo" | "selecao_unica" | "selecao_multipla" | "numero" | "data";
+
+interface Pergunta {
+  id: number;
+  ordem: number | null;
+  label: string;
+  tipo: TipoPergunta;
+  opcoes: string[] | null;
+  obrigatoria: boolean;
+  momento: string;
+}
+
+interface Sessao {
+  id: number;
+  titulo: string;
+  palestrante: string | null;
+  descricao: string | null;
+  dia: string | null;
+  horario_inicio: string | null;
+  horario_fim: string | null;
+  local: string | null;
+  ordem: number | null;
+}
+
+interface Evento {
+  id: number;
+  slug: string;
+  title: string;
+  event_date: string | null;
+  end_date: string | null;
+  time: string | null;
+  end_time: string | null;
+  location: string | null;
+  location_maps_url: string | null;
+  congregacao: Congregacao | null;
+  responsavel: string | null;
+  description: string;
+  body: string | null;
+  cover: string | null;
+  registration_url: string | null;
+  aceita_inscricao: boolean;
+  vagas_limite: number | null;
+  requer_aprovacao: boolean;
+  inscricoes_ate: string | null;
+  inscricoes_encerradas: boolean;
+  faixas_valor: { descricao: string; valor: number }[] | null;
+  permite_inscricao_grupo: boolean;
+}
+
+export async function getStaticPaths() {
+  const events = await fetchItems<Evento>("eventos", "fields=*,congregacao.*");
+  // slug é opcional no Directus (evento recém-criado, ainda sem slug definido)
+  // — sem essa checagem, um evento assim quebraria o build inteiro.
+  return events.filter((event) => event.slug && hasEventPage(event)).map((event) => ({ params: { slug: event.slug }, props: { event } }));
+}
+
+interface Props {
+  event: Evento;
+}
+
+const { event } = Astro.props;
+const bodyHtml = event.body ? await marked.parse(event.body) : "";
+/* timeZone: "UTC" porque as datas vêm do Directus como "AAAA-MM-DD" (um dia
+   de calendário, não um instante) — sem isso, formatar dependeria do fuso
+   horário de onde o build roda, podendo mostrar o dia errado. */
+const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const cover = event.cover ? directusAssetUrl(event.cover, { width: 1600, quality: 80, format: "webp" }) : undefined;
+const coverSrcset = event.cover ? directusAssetSrcset(event.cover, COVER_WIDTHS, { quality: 80, format: "webp" }) : undefined;
+const config = await fetchConfiguracoes();
+
+const timeRange = event.time ? `${event.time}${event.end_time ? ` às ${event.end_time}` : ""}` : null;
+
+// Local do evento: se está vinculado a uma congregação cadastrada, o
+// endereço vem de lá automaticamente; senão, usa o texto avulso em
+// `location` (espaço alugado, sede, etc.).
+const localNome = event.congregacao ? event.congregacao.name : event.location;
+const localEndereco = event.congregacao ? congregacaoEndereco(event.congregacao) : null;
+
+// Fase 24.3 — local avulso (sem congregação) pode vir com um link do Google
+// Maps colado por quem cadastrou, em vez de só o texto do endereço — mais
+// preciso do que geocodificar o texto (que já se mostrou impreciso, ver
+// README). Só se aplica a evento com local próprio, não a congregação.
+const localCoordenada = !event.congregacao && event.location_maps_url
+  ? await coordenadaDeLinkMaps(event.location_maps_url)
+  : null;
+
+// Inscrição fecha por prazo vencido (data pública do evento, sem precisar
+// contar inscrições — não expõe nada da coleção privada) ou por decisão
+// manual da secretaria (vagas esgotadas, por exemplo).
+const inscricaoVencida = event.inscricoes_ate ? new Date(event.inscricoes_ate).getTime() < Date.now() : false;
+const inscricaoAberta = event.aceita_inscricao && !event.inscricoes_encerradas && !inscricaoVencida;
+const inscricaoEncerradaMotivo = event.inscricoes_encerradas ? "encerradas" : inscricaoVencida ? "vencido" : null;
+
+/* Cada evento define suas próprias perguntas — nada fixo (nem "congregação",
+   nem "casal") além de nome/telefone, que todo evento precisa pra
+   identificar quem se inscreveu. Ver perguntas_evento no Directus. */
+const perguntas = inscricaoAberta
+  ? (await fetchItems<Pergunta>("perguntas_evento", `filter[evento][_eq]=${event.id}&sort=ordem`)).filter((p) => p.momento !== "pos_evento")
+  : [];
+
+/* Agenda interna (sessões/palestras) — pra congressos e seminários com
+   várias atrações dentro do mesmo evento. Agrupa por dia só quando fizer
+   sentido (evento de vários dias E pelo menos uma sessão com dia
+   preenchido); senão mostra como uma lista só, na ordem cadastrada. */
+const sessoes = await fetchItems<Sessao>("sessoes_evento", `filter[evento][_eq]=${event.id}&sort=dia,ordem`);
+const eventoTemVariosDias = Boolean(event.event_date && event.end_date && event.end_date !== event.event_date);
+const agrupaPorDia = eventoTemVariosDias && sessoes.some((s) => s.dia);
+
+const gruposAgenda = agrupaPorDia
+  ? Object.values(
+      sessoes.reduce<Record<string, { dia: string | null; itens: Sessao[] }>>((grupos, sessao) => {
+        const chave = sessao.dia ?? "sem-dia";
+        if (!grupos[chave]) grupos[chave] = { dia: sessao.dia, itens: [] };
+        grupos[chave].itens.push(sessao);
+        return grupos;
+      }, {}),
+    )
+  : sessoes.length
+    ? [{ dia: null, itens: sessoes }]
+    : [];
+
+function horarioSessao(s: Sessao) {
+  return [s.horario_inicio, s.horario_fim].filter(Boolean).join(" – ");
+}
+
+/* "19h30" -> "19:30", exigido pelo ISO 8601 do schema.org. Se não bater
+   com o padrão esperado, a hora fica de fora em vez de gerar dado inválido. */
+const timeMatch = event.time ? /^(\d{1,2})h(\d{2})?$/i.exec(event.time.trim()) : null;
+const isoTime = timeMatch ? `T${timeMatch[1].padStart(2, "0")}:${timeMatch[2] ?? "00"}:00` : "";
+const startDate = event.event_date ? `${event.event_date}${isoTime}` : undefined;
+const structuredData = startDate
+  ? {
+      "@context": "https://schema.org",
+      "@type": "Event",
+      name: event.title,
+      description: event.description,
+      startDate,
+      eventStatus: "https://schema.org/EventScheduled",
+      eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+      location: {
+        "@type": "Place",
+        name: localNome || siteConfig.name,
+        address: localEndereco || event.location || enderecoCompleto(config),
+      },
+      image: cover ? [cover] : undefined,
+      organizer: { "@type": "Organization", name: event.responsavel || siteConfig.authorName, url: siteConfig.siteUrl, logo: `${siteConfig.siteUrl}/logo.png` },
+    }
+  : undefined;
+---
+
+<BaseLayout title={event.title} description={event.description} image={cover} structuredData={structuredData}>
+  <SiteHeader posts={visiblePosts(await getAllMensagens())} />
+  <main id="content" class="outer">
+    <article class="canvas">
+      <header class="pagehead">
+        <Breadcrumbs items={[{ label: "Eventos", href: "/eventos/" }, { label: event.title }]} />
+        <p class="eyebrow">Evento</p>
+        <h1 class="pagehead-title">{event.title}</h1>
+        <p class="pagehead-description">{event.description}</p>
+
+        <ul class="mt-6 grid gap-2 text-sm text-muted-foreground">
+          {event.event_date && (
+            <li>
+              <strong class="text-foreground">Data:</strong> {dateFormatter.format(new Date(event.event_date))}
+              {event.end_date && event.end_date !== event.event_date && ` até ${dateFormatter.format(new Date(event.end_date))}`}
+              {timeRange && ` · ${timeRange}`}
+            </li>
+          )}
+          {localNome && (
+            <li>
+              <strong class="text-foreground">Local:</strong> {localNome}
+              {localEndereco && ` — ${localEndereco}`}
+            </li>
+          )}
+          {event.responsavel && <li><strong class="text-foreground">Responsável:</strong> {event.responsavel}</li>}
+        </ul>
+
+        {
+          localCoordenada && (
+            <div class="mt-4 overflow-hidden rounded-[var(--radius-md)] border border-border">
+              <div id="evento-map" style="height:240px" data-evento-map />
+            </div>
+          )
+        }
+
+        <div class="mt-6 flex flex-wrap gap-3">
+          {event.registration_url && (
+            <a href={event.registration_url} target="_blank" rel="noreferrer" class="btn btn-solid">
+              Inscreva-se
+            </a>
+          )}
+          {event.event_date && (
+            <a href={`/evento/${event.slug}.ics`} class="btn btn-outline">
+              Adicionar ao calendário
+            </a>
+          )}
+        </div>
+      </header>
+
+      {cover && (
+        <figure class="article-image inner mt-10">
+          <img
+            src={cover}
+            srcset={coverSrcset}
+            sizes="100vw"
+            alt={event.title}
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+            class="w-full"
+          />
+        </figure>
+      )}
+
+      <div class="prose mt-10" set:html={bodyHtml} />
+
+      {
+        gruposAgenda.length > 0 && (
+          <section class="mt-10" aria-labelledby="agenda-heading">
+            <h2 id="agenda-heading" class="section-title">Programação</h2>
+            <div class="mt-4 grid gap-6">
+              {gruposAgenda.map((grupo) => (
+                <div>
+                  {grupo.dia && <p class="eyebrow">{dateFormatter.format(new Date(grupo.dia))}</p>}
+                  <ul class="mt-2 grid gap-3">
+                    {grupo.itens.map((sessao) => (
+                      <li class="agenda-item">
+                        <div class="flex flex-wrap items-baseline justify-between gap-2">
+                          <p class="font-semibold">{sessao.titulo}</p>
+                          {horarioSessao(sessao) && <span class="pill shrink-0">{horarioSessao(sessao)}</span>}
+                        </div>
+                        {(sessao.palestrante || sessao.local) && (
+                          <p class="mt-1 text-sm text-muted-foreground">
+                            {sessao.palestrante}
+                            {sessao.palestrante && sessao.local && " · "}
+                            {sessao.local}
+                          </p>
+                        )}
+                        {sessao.descricao && <p class="mt-1 text-sm leading-relaxed text-muted-foreground">{sessao.descricao}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>
+        )
+      }
+
+      {
+        event.aceita_inscricao && (
+          <p class="mt-8 text-sm text-muted-foreground">
+            Equipe do evento:{" "}
+            <a href={`/checkin/${event.slug}/`} class="text-accent underline underline-offset-2">
+              abrir check-in de presença
+            </a>
+            {" "}·{" "}
+            <a href={`/qrcode/${event.slug}/`} class="text-accent underline underline-offset-2">
+              gerar meu QR Code
+            </a>
+            {" "}·{" "}
+            <a href={`/cracha/${event.slug}/`} class="text-accent underline underline-offset-2">
+              baixar crachá
+            </a>
+            {" "}· Participou?{" "}
+            <a href={`/certificado/${event.slug}/`} class="text-accent underline underline-offset-2">
+              baixar certificado
+            </a>
+            {" "}·{" "}
+            <a href={`/pesquisa/${event.slug}/`} class="text-accent underline underline-offset-2">
+              responder pesquisa de satisfação
+            </a>
+            {" "}· Não vai mais poder ir?{" "}
+            <a href={`/cancelar-inscricao/${event.slug}/`} class="text-accent underline underline-offset-2">
+              cancelar minha inscrição
+            </a>
+          </p>
+        )
+      }
+
+      {
+        event.aceita_inscricao && (
+          <section class="inscricao-card canvas mt-16" aria-labelledby="inscricao-heading">
+            <h2 id="inscricao-heading" class="section-title">Inscrição</h2>
+
+            <ul class="mt-3 grid gap-1 text-sm text-muted-foreground">
+              {
+                event.vagas_limite && (
+                  <li>
+                    <strong class="text-foreground">Vagas limitadas:</strong> {event.vagas_limite}{" "}
+                    <span data-vagas-restantes role="status" aria-live="polite"></span>
+                  </li>
+                )
+              }
+              {event.inscricoes_ate && (
+                <li><strong class="text-foreground">Inscrições até:</strong> {dateFormatter.format(new Date(event.inscricoes_ate))}</li>
+              )}
+              {event.requer_aprovacao && (
+                <li>
+                  <strong class="text-foreground">Vaga sujeita a aprovação:</strong> sua inscrição
+                  só é confirmada depois que a equipe organizadora analisar e aceitar.
+                </li>
+              )}
+            </ul>
+
+            {
+              event.faixas_valor && event.faixas_valor.length > 0 && (
+                <div class="mt-4 valores-tabela">
+                  <p class="text-sm font-semibold">Valores</p>
+                  <ul class="mt-2 grid gap-1 text-sm text-muted-foreground">
+                    {event.faixas_valor.map((faixa) => (
+                      <li class="flex items-baseline justify-between gap-3">
+                        <span>{faixa.descricao}</span>
+                        <span class="text-foreground font-semibold">
+                          R$ {Number(faixa.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            }
+
+            {inscricaoAberta ? (
+              <form class="mt-6 grid gap-4 max-w-md" data-inscricao-form data-evento-id={event.id}>
+                <div class="grid gap-2">
+                  <label class="text-sm font-semibold" for="inscricao-nome">Nome</label>
+                  <input id="inscricao-nome" name="nome" type="text" autocomplete="name" required class="field" />
+                </div>
+                <div class="grid gap-2">
+                  <label class="text-sm font-semibold" for="inscricao-telefone">Telefone / WhatsApp</label>
+                  <input id="inscricao-telefone" name="telefone" type="tel" autocomplete="tel" required class="field" />
+                </div>
+                <div class="grid gap-2">
+                  <label class="text-sm font-semibold" for="inscricao-email">E-mail (opcional)</label>
+                  <input id="inscricao-email" name="email" type="email" autocomplete="email" class="field" />
+                  <p class="text-xs text-muted-foreground">Só pra te mandar um comprovante da inscrição por e-mail — não é obrigatório.</p>
+                </div>
+
+                {
+                  event.faixas_valor && event.faixas_valor.length > 0 && (
+                    <div class="grid gap-2">
+                      <label class="text-sm font-semibold" for="inscricao-faixa">Faixa de valor</label>
+                      <select id="inscricao-faixa" class="field">
+                        <option value="">Selecione…</option>
+                        {event.faixas_valor.map((faixa) => (
+                          <option value={faixa.valor}>
+                            {faixa.descricao} — R$ {Number(faixa.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                }
+
+                <div data-cupom-bloco>
+                  <button type="button" class="link-sweep text-sm font-semibold text-accent" data-cupom-toggle>
+                    Tem um cupom de desconto?
+                  </button>
+                  <div class="grid gap-2 mt-2" data-cupom-campo hidden>
+                    <input type="text" class="field" placeholder="Código do cupom" data-cupom-input autocapitalize="characters" />
+                    <p class="text-xs text-muted-foreground" data-cupom-status role="status" aria-live="polite"></p>
+                  </div>
+                </div>
+
+                {
+                  event.permite_inscricao_grupo && (
+                    <div class="grid gap-2" data-grupo-bloco>
+                      <label class="flex items-center gap-2 text-sm">
+                        <input type="checkbox" data-grupo-toggle /> Inscrever outras pessoas junto (família, casal, grupo de amigos…)
+                      </label>
+                      <p class="text-xs text-muted-foreground">
+                        Cada pessoa vira uma inscrição própria, com seu próprio código de check-in e certificado.
+                      </p>
+                      <div class="grid gap-2 mt-1" data-grupo-nomes hidden>
+                        <div class="grid gap-2" data-grupo-lista></div>
+                        <button type="button" class="btn btn-outline" data-grupo-adicionar>+ Adicionar pessoa</button>
+                      </div>
+                    </div>
+                  )
+                }
+
+                {
+                  perguntas.map((pergunta) => (
+                    <div class="grid gap-2" data-pergunta-field data-pergunta-id={pergunta.id} data-pergunta-tipo={pergunta.tipo}>
+                      <label class="text-sm font-semibold" for={`pergunta-${pergunta.id}`}>{pergunta.label}</label>
+                      {pergunta.tipo === "texto_longo" ? (
+                        <textarea id={`pergunta-${pergunta.id}`} rows="4" required={pergunta.obrigatoria} class="field resize-y" />
+                      ) : pergunta.tipo === "numero" ? (
+                        <input id={`pergunta-${pergunta.id}`} type="number" required={pergunta.obrigatoria} class="field" />
+                      ) : pergunta.tipo === "data" ? (
+                        <input id={`pergunta-${pergunta.id}`} type="date" required={pergunta.obrigatoria} class="field" />
+                      ) : pergunta.tipo === "selecao_unica" ? (
+                        <select id={`pergunta-${pergunta.id}`} required={pergunta.obrigatoria} class="field">
+                          <option value="">Selecione…</option>
+                          {(pergunta.opcoes ?? []).map((opcao) => <option value={opcao}>{opcao}</option>)}
+                        </select>
+                      ) : pergunta.tipo === "selecao_multipla" ? (
+                        <div class="grid gap-1.5">
+                          {(pergunta.opcoes ?? []).map((opcao) => (
+                            <label class="contact-checkbox">
+                              <input type="checkbox" name={`pergunta-${pergunta.id}-multipla`} value={opcao} />
+                              {opcao}
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <input id={`pergunta-${pergunta.id}`} type="text" required={pergunta.obrigatoria} class="field" />
+                      )}
+                    </div>
+                  ))
+                }
+
+                <div class="flex flex-wrap items-center gap-4">
+                  <button type="submit" class="btn btn-solid">Confirmar inscrição</button>
+                  <p class="text-sm leading-relaxed text-muted-foreground" role="status" aria-live="polite" data-inscricao-status />
+                </div>
+              </form>
+
+              <div class="mt-4" data-lembrete-bloco hidden>
+                <button type="button" class="btn btn-outline" data-lembrete-toggle>Ativar lembrete deste evento</button>
+                <p class="mt-2 text-xs text-muted-foreground">
+                  Você recebe uma notificação do navegador um dia antes do evento — só pra quem se inscreveu.
+                </p>
+              </div>
+            ) : (
+              <p class="mt-6 text-sm leading-relaxed text-muted-foreground">
+                {inscricaoEncerradaMotivo === "vencido" ? "O prazo de inscrição para este evento já encerrou." : "As inscrições para este evento estão encerradas."}
+              </p>
+            )}
+          </section>
+        )
+      }
+
+      <div class="prose mt-16">
+        <p><a href="/eventos/">&larr; Voltar para Eventos</a></p>
+      </div>
+    </article>
+  </main>
+  <SiteFooter />
+
+  {
+    localCoordenada && (
+      <script
+        is:inline
+        define:vars={{
+          googleMapsKey: siteConfig.googleMapsEmbedKey,
+          lat: localCoordenada.lat,
+          lng: localCoordenada.lng,
+          tituloLocal: localNome,
+          mapsLinkHref: event.location_maps_url,
+        }}
+      >
+        window.initEventoMap = function initEventoMap() {
+          const container = document.querySelector("[data-evento-map]");
+          if (!container) return;
+
+          const posicao = { lat: Number(lat), lng: Number(lng) };
+          const map = new google.maps.Map(container, {
+            center: posicao,
+            zoom: 15,
+            disableDefaultUI: false,
+            fullscreenControl: true,
+            streetViewControl: false,
+            mapTypeControl: false,
+          });
+
+          const marker = new google.maps.Marker({
+            position: posicao,
+            map,
+            title: tituloLocal,
+            icon: {
+              path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z",
+              fillColor: "#8f6f1f",
+              fillOpacity: 1,
+              strokeColor: "#6b5417",
+              strokeWeight: 1,
+              scale: 1.8,
+              anchor: new google.maps.Point(12, 22),
+            },
+          });
+
+          if (mapsLinkHref) {
+            const infoWindow = new google.maps.InfoWindow({
+              content: `<div style="font-family: system-ui, sans-serif;"><a href="${mapsLinkHref}" target="_blank" rel="noreferrer" style="font-weight:600;color:#8f6f1f;">Ver rota &rarr;</a></div>`,
+            });
+            marker.addListener("click", () => infoWindow.open(map, marker));
+          }
+        };
+
+        const script = document.createElement("script");
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsKey}&callback=initEventoMap`;
+        script.async = true;
+        document.head.appendChild(script);
+      </script>
+    )
+  }
+
+  {
+    event.aceita_inscricao && inscricaoAberta && (
+      <script
+        is:inline
+        define:vars={{
+          directusUrl: DIRECTUS_URL,
+          telefoneHashUrl: TELEFONE_HASH_URL,
+          enviarConfirmacaoUrl: ENVIAR_CONFIRMACAO_URL,
+          eventoTitulo: event.title,
+          eventoPeriodo: [event.event_date ? dateFormatter.format(new Date(event.event_date)) : null, timeRange].filter(Boolean).join(", "),
+          eventoLocal: localNome,
+          vagasLimite: event.vagas_limite,
+          requerAprovacao: event.requer_aprovacao,
+          vapidPublicKey: "BHjTzvfXIx0DAkcCgfJDNQO5N09SmO0jIPuTP8L6rxnEaITMn95fQH6kHFnbrEJE-Fdroim5bNnaKp5wwowXdak",
+        }}
+      >
+        // Fase 26 — se a pessoa já estiver logada na Minha Conta, pré-preenche
+        // o e-mail (mesma chave usada por `contaAuth.ts`) pra ela não digitar
+        // de novo; continua editável e opcional, igual antes.
+        (() => {
+          const contaEmailSalvo = localStorage.getItem("conta_email");
+          const inputEmail = document.getElementById("inscricao-email");
+          if (contaEmailSalvo && inputEmail && !inputEmail.value) inputEmail.value = contaEmailSalvo;
+        })();
+
+        // Sem caracteres ambíguos (0/O, 1/I/L) — pra ser fácil de digitar de
+        // volta na portaria no dia do evento.
+        const ALFABETO_CODIGO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        function gerarCodigo(tamanho = 6) {
+          const bytes = new Uint8Array(tamanho);
+          crypto.getRandomValues(bytes);
+          return Array.from(bytes, (b) => ALFABETO_CODIGO[b % ALFABETO_CODIGO.length]).join("");
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+          const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+          const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+          const rawData = atob(base64);
+          return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+        }
+
+        async function ativarLembrete(inscricaoId, botao) {
+          const suportado = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+          if (!suportado) {
+            botao.textContent = "Notificações não suportadas neste navegador";
+            botao.disabled = true;
+            return;
+          }
+          botao.disabled = true;
+          try {
+            const permissao = await Notification.requestPermission();
+            if (permissao !== "granted") {
+              botao.textContent = "Permissão não concedida";
+              botao.disabled = false;
+              return;
+            }
+            const registration = await navigator.serviceWorker.register("/sw.js");
+            const subscription = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+            });
+            const json = subscription.toJSON();
+            await fetch(`${directusUrl}/items/inscricoes_eventos/${inscricaoId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ push_endpoint: json.endpoint, push_p256dh: json.keys.p256dh, push_auth: json.keys.auth }),
+            });
+            botao.textContent = "✅ Lembrete ativado!";
+          } catch {
+            botao.textContent = "Não foi possível ativar agora";
+            botao.disabled = false;
+          }
+        }
+
+        async function contarConfirmados(eventoId) {
+          const res = await fetch(
+            // "_eq=false" sozinho não bateria com uma linha onde o campo
+            // nunca foi definido (null) — o "_or" cobre os dois casos, pra
+            // combinar com o mesmo critério usado no painel de inscritos.
+            `${directusUrl}/items/inscricoes_eventos?aggregate[count]=id&filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][_or][0][aguardando_vaga][_eq]=false&filter[_and][1][_or][1][aguardando_vaga][_null]=true`,
+          );
+          const json = await res.json();
+          return Number(json.data?.[0]?.count?.id ?? 0);
+        }
+
+        const vagasRestantesEl = document.querySelector("[data-vagas-restantes]");
+        if (vagasRestantesEl && vagasLimite) {
+          const eventoIdVagas = Number(document.querySelector("[data-inscricao-form]")?.dataset.eventoId);
+          if (eventoIdVagas) {
+            contarConfirmados(eventoIdVagas).then((confirmados) => {
+              const restantes = Math.max(vagasLimite - confirmados, 0);
+              vagasRestantesEl.textContent = restantes > 0 ? `(${restantes} restantes)` : "(esgotadas — lista de espera)";
+            });
+          }
+        }
+
+        // Inscrição em grupo: cada linha vira uma pessoa própria, com seu
+        // próprio código de check-in — só o nome muda, telefone e respostas
+        // às perguntas do evento são compartilhados pelo grupo todo.
+        document.querySelectorAll("[data-cupom-bloco]").forEach((bloco) => {
+          const toggle = bloco.querySelector("[data-cupom-toggle]");
+          const campo = bloco.querySelector("[data-cupom-campo]");
+          toggle?.addEventListener("click", () => {
+            if (campo) campo.hidden = !campo.hidden;
+          });
+        });
+
+        // Desconta uma faixa/valor base (ou 0, se o evento não tem faixa de
+        // valor) segundo um cupom já validado — nunca deixa o valor negativo.
+        function aplicarDesconto(valorBase, cupom) {
+          const base = valorBase ?? 0;
+          if (cupom.tipo === "fixo") return Math.max(0, base - Number(cupom.valor));
+          return Math.max(0, base - (base * Number(cupom.valor)) / 100);
+        }
+
+        async function buscarCupomValido(directusUrl, eventoId, codigo) {
+          const res = await fetch(
+            `${directusUrl}/items/cupons_desconto?filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][codigo][_eq]=${encodeURIComponent(codigo)}`,
+          );
+          const cupom = (await res.json()).data?.[0];
+          if (!cupom) return { erro: "Cupom não encontrado." };
+          if (!cupom.ativo) return { erro: "Esse cupom não está mais ativo." };
+          if (cupom.valido_ate && new Date(`${cupom.valido_ate}T23:59:59`) < new Date()) return { erro: "Esse cupom expirou." };
+          if (cupom.limite_usos !== null && cupom.usos >= cupom.limite_usos) return { erro: "Esse cupom já atingiu o limite de usos." };
+          return { cupom };
+        }
+
+        document.querySelectorAll("[data-grupo-bloco]").forEach((bloco) => {
+          const toggle = bloco.querySelector("[data-grupo-toggle]");
+          const nomesWrap = bloco.querySelector("[data-grupo-nomes]");
+          const lista = bloco.querySelector("[data-grupo-lista]");
+          const adicionarBtn = bloco.querySelector("[data-grupo-adicionar]");
+
+          toggle?.addEventListener("change", () => {
+            if (nomesWrap) nomesWrap.hidden = !toggle.checked;
+            if (toggle.checked && lista && !lista.children.length) adicionarLinhaGrupo();
+          });
+
+          function adicionarLinhaGrupo() {
+            const linha = document.createElement("div");
+            linha.className = "grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center grupo-linha";
+            linha.innerHTML = `
+              <input type="text" class="field" placeholder="Nome da pessoa" data-grupo-nome-input />
+              <button type="button" class="btn btn-outline" data-grupo-remover>Remover</button>
+            `;
+            lista?.appendChild(linha);
+          }
+
+          adicionarBtn?.addEventListener("click", adicionarLinhaGrupo);
+          lista?.addEventListener("click", (event) => {
+            if (event.target.matches("[data-grupo-remover]")) event.target.closest(".grupo-linha")?.remove();
+          });
+        });
+
+        document.querySelectorAll("[data-inscricao-form]").forEach((form) => {
+          form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const status = form.querySelector("[data-inscricao-status]");
+            const button = form.querySelector("button[type=submit]");
+            const data = new FormData(form);
+            const eventoId = Number(form.dataset.eventoId);
+            const faixaEl = form.querySelector("#inscricao-faixa");
+            const valorFaixa = faixaEl?.value ? Number(faixaEl.value) : null;
+            const cupomInput = form.querySelector("[data-cupom-input]");
+            const cupomStatusEl = form.querySelector("[data-cupom-status]");
+            const codigoCupom = cupomInput?.value.trim().toUpperCase();
+
+            // Nome principal + nomes extras do grupo (se a pessoa marcou a
+            // opção e preencheu alguma linha) — cada um vira uma pessoa
+            // própria, com seu próprio código de check-in.
+            const nomesExtras = Array.from(form.querySelectorAll("[data-grupo-nome-input]"))
+              .map((input) => input.value.trim())
+              .filter(Boolean);
+            const nomes = [String(data.get("nome")).trim(), ...nomesExtras];
+
+            if (button) button.disabled = true;
+            if (status) status.textContent = nomes.length > 1 ? "Enviando inscrições…" : "Enviando…";
+            if (cupomStatusEl) cupomStatusEl.textContent = "";
+
+            // Cupom é opcional e discreto — se o código não bater com nada
+            // válido, a inscrição segue sem desconto, sem travar ninguém.
+            let cupom = null;
+            let usosRestantesCupom = Infinity;
+            if (codigoCupom) {
+              const resultado = await buscarCupomValido(directusUrl, eventoId, codigoCupom);
+              if (resultado.cupom) {
+                cupom = resultado.cupom;
+                usosRestantesCupom = cupom.limite_usos === null ? Infinity : cupom.limite_usos - cupom.usos;
+                if (cupomStatusEl) cupomStatusEl.textContent = "✅ Cupom aplicado.";
+              } else if (cupomStatusEl) {
+                cupomStatusEl.textContent = resultado.erro;
+              }
+            }
+
+            try {
+              let confirmados = vagasLimite ? await contarConfirmados(eventoId) : 0;
+
+              // Respostas às perguntas do evento são as mesmas pra todo o
+              // grupo — lidas uma vez, copiadas pra cada pessoa depois.
+              const respostasBase = [];
+              form.querySelectorAll("[data-pergunta-field]").forEach((field) => {
+                const perguntaId = Number(field.dataset.perguntaId);
+                const tipo = field.dataset.perguntaTipo;
+                let valor;
+
+                if (tipo === "selecao_multipla") {
+                  const marcadas = Array.from(field.querySelectorAll("input[type=checkbox]:checked")).map((el) => el.value);
+                  valor = marcadas.join(", ");
+                } else {
+                  const input = field.querySelector("input, textarea, select");
+                  valor = input ? input.value : "";
+                }
+
+                if (valor) respostasBase.push({ pergunta: perguntaId, valor });
+              });
+
+              const resultados = [];
+              // Contador de usos do cupom é gravado pessoa por pessoa, na
+              // hora (não só uma vez no fim) — se a rede cair no meio de um
+              // grupo grande, os usos já aplicados às pessoas já criadas com
+              // sucesso não ficam "esquecidos" sem contar no limite do cupom.
+              let usosAtuaisCupom = cupom?.usos ?? 0;
+
+              // O telefone nunca é gravado em texto puro — vira hash (scrypt,
+              // ver api/src/lib/telefone.js) antes de chegar no Directus, pra
+              // impedir que qualquer leitura da tabela revele telefones de
+              // verdade (ver README, Fase 6). Um grupo inteiro compartilha o
+              // mesmo telefone nesta tela, então o hash é calculado uma vez só.
+              const hashRes = await fetch(telefoneHashUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ telefone: data.get("telefone") }),
+              });
+              if (!hashRes.ok) throw new Error("falha ao proteger telefone");
+              const telefoneHash = (await hashRes.json()).valor;
+
+              const email = String(data.get("email") || "").trim();
+
+              for (const nome of nomes) {
+                const codigo = gerarCodigo();
+                let aguardandoVaga = false;
+                // Curso/escola com aprovação manual (Fase 21): a inscrição
+                // nasce pendente, sem mexer no contador de vagas ainda — só
+                // quando a equipe aprovar (painel-eventos) é que ela entra
+                // ou não na lista de espera, com o mesmo critério abaixo.
+                const pendenteAprovacao = Boolean(requerAprovacao);
+                if (vagasLimite && !pendenteAprovacao) {
+                  aguardandoVaga = confirmados >= vagasLimite;
+                  if (!aguardandoVaga) confirmados += 1;
+                }
+
+                // Desconto aplicado pessoa por pessoa — se o cupom tiver
+                // limite de usos, os primeiros da fila levam o desconto, o
+                // resto paga o valor cheio (mesmo espírito da lista de
+                // espera: não trava a inscrição, só o que ainda cabe).
+                let valorFinal = valorFaixa;
+                let cupomAplicado = null;
+                if (cupom && usosRestantesCupom > 0) {
+                  valorFinal = aplicarDesconto(valorFaixa, cupom);
+                  cupomAplicado = cupom.codigo;
+                  usosRestantesCupom -= 1;
+                }
+
+                const inscricaoRes = await fetch(`${directusUrl}/items/inscricoes_eventos`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    evento: eventoId,
+                    nome,
+                    telefone: telefoneHash,
+                    email: email || null,
+                    codigo,
+                    valor: valorFinal,
+                    cupom_usado: cupomAplicado,
+                    aguardando_vaga: aguardandoVaga,
+                    pendente_aprovacao: pendenteAprovacao,
+                  }),
+                });
+                if (!inscricaoRes.ok) throw new Error("falha ao criar inscrição");
+                const inscricaoJson = await inscricaoRes.json();
+                const inscricaoId = inscricaoJson.data.id;
+
+                await Promise.all(
+                  respostasBase.map((resposta) =>
+                    fetch(`${directusUrl}/items/respostas_inscricao`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ ...resposta, inscricao: inscricaoId }),
+                    }),
+                  ),
+                );
+
+                if (cupomAplicado) {
+                  usosAtuaisCupom += 1;
+                  await fetch(`${directusUrl}/items/cupons_desconto/${cupom.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ usos: usosAtuaisCupom }),
+                  });
+                }
+
+                resultados.push({ nome, codigo, aguardandoVaga, pendenteAprovacao, inscricaoId });
+              }
+
+              if (status) {
+                if (resultados.length === 1) {
+                  const { codigo, aguardandoVaga, pendenteAprovacao } = resultados[0];
+                  status.innerHTML = pendenteAprovacao
+                    ? `Inscrição recebida — aguardando aprovação da equipe organizadora. Seu código é <strong>${codigo}</strong>; guarde-o, você vai precisar dele depois que a inscrição for aceita.`
+                    : aguardandoVaga
+                    ? `Vagas esgotadas no momento — você está na <strong>lista de espera</strong>. Seu código é <strong>${codigo}</strong>; guarde-o, porque se abrir vaga sua inscrição é confirmada automaticamente com esse mesmo código.`
+                    : `Inscrição confirmada! Seu código de check-in é <strong>${codigo}</strong> — anote ou tire um print, você vai usar na entrada do evento.`;
+                } else {
+                  const linhas = resultados
+                    .map(
+                      (r) =>
+                        `${r.nome}: <strong>${r.codigo}</strong>${
+                          r.pendenteAprovacao ? " (aguardando aprovação)" : r.aguardandoVaga ? " (lista de espera)" : ""
+                        }`,
+                    )
+                    .join("<br />");
+                  status.innerHTML = `${resultados.length} pessoas inscritas! Anote o código de cada uma — vai usar na entrada do evento:<br />${linhas}`;
+                }
+              }
+
+              // Confirmação por e-mail (Fase 21): melhor esforço, nunca
+              // bloqueia nem aparece pra quem se inscreveu se falhar — a
+              // inscrição em si já está gravada antes desta chamada.
+              if (email) {
+                fetch(enviarConfirmacaoUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email,
+                    eventoTitulo,
+                    eventoPeriodo,
+                    eventoLocal,
+                    pessoas: resultados.map((r) => ({ nome: r.nome, codigo: r.codigo, aguardandoVaga: r.aguardandoVaga, pendenteAprovacao: r.pendenteAprovacao })),
+                  }),
+                }).catch(() => {});
+              }
+
+              // Lembrete automático só pra quem se inscreveu primeiro (a
+              // pessoa que está na tela) e só se ela já ficou confirmada de
+              // verdade — quem está na lista de espera ou aguardando
+              // aprovação ainda não sabe se vai participar.
+              const principal = resultados[0];
+              if (principal && !principal.aguardandoVaga && !principal.pendenteAprovacao) {
+                const lembreteBloco = document.querySelector("[data-lembrete-bloco]");
+                const lembreteBotao = document.querySelector("[data-lembrete-toggle]");
+                if (lembreteBloco && lembreteBotao) {
+                  lembreteBloco.hidden = false;
+                  lembreteBotao.addEventListener("click", () => ativarLembrete(principal.inscricaoId, lembreteBotao));
+                }
+              }
+
+              form.reset();
+              const grupoNomesWrap = form.querySelector("[data-grupo-nomes]");
+              const grupoLista = form.querySelector("[data-grupo-lista]");
+              if (grupoNomesWrap) grupoNomesWrap.hidden = true;
+              if (grupoLista) grupoLista.innerHTML = "";
+            } catch {
+              if (status) {
+                status.textContent = "Não foi possível confirmar agora. Tente novamente em instantes.";
+              }
+            } finally {
+              if (button) button.disabled = false;
+            }
+          });
+        });
+      </script>
+    )
+  }
+
+  <style>
+    .agenda-item {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 0.9rem 1.1rem;
+    }
+
+    .inscricao-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.75rem 2rem;
+      background: var(--muted);
+    }
+
+    .valores-tabela {
+      border-top: 1px solid var(--border);
+      padding-top: 0.85rem;
+    }
+
+    .contact-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: var(--foreground);
+      font-size: 0.9375rem;
+      cursor: pointer;
+    }
+
+    .contact-checkbox input {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--accent);
+    }
+
+    .article-image {
+      margin-bottom: 0;
+    }
+
+    .article-image :global(img) {
+      aspect-ratio: 16 / 9;
+      max-height: 32rem;
+      width: 100%;
+      object-fit: cover;
+      border-radius: var(--radius-md);
+    }
+  </style>
+</BaseLayout>

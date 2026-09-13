@@ -1,0 +1,184 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { fetchConfiguracoes } from "@/lib/directus";
+import { getAllProgramacao, sedeProgramacaoCompacta } from "@/lib/programacao";
+import { buildPixPayload } from "@/lib/pix";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const heroSchedule = sedeProgramacaoCompacta(await getAllProgramacao());
+const config = await fetchConfiguracoes();
+
+/** Ambas as chaves abaixo pertencem à mesma conta Pix da igreja. */
+const pixKeyEmail = siteConfig.email;
+const pixKeyCnpj = siteConfig.cnpj;
+
+/** QR code gerado a partir da própria chave CNPJ — sem valor fixo, cada
+ * pessoa digita o valor no próprio app do banco ao escanear. */
+const pixPayload = buildPixPayload({
+  chave: pixKeyCnpj.replace(/\D/g, ""),
+  nome: siteConfig.name,
+  cidade: config.address_city,
+});
+---
+
+<BaseLayout
+  title="Doações"
+  description={`Formas de contribuir com dízimos e ofertas na ${siteConfig.name}.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Contribuição</p>
+        <h1 class="pagehead-title">Dízimos e ofertas</h1>
+        <p class="pagehead-description">
+          "Trazei todos os dízimos à casa do tesouro..." (Malaquias 3:10). Sua contribuição sustenta
+          o trabalho da igreja, os órgãos e as ações sociais desenvolvidas na comunidade.
+        </p>
+      </header>
+
+      <div class="grid gap-6 sm:grid-cols-2">
+        <div class="donation-card">
+          <h2 class="text-lg font-semibold tracking-tight">Pix</h2>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Aponte a câmera do app do seu banco pro QR code, ou use "Pix Copia e Cola". Também dá
+            pra contribuir digitando à mão qualquer uma das chaves abaixo — as duas caem na mesma
+            conta.
+          </p>
+
+          <div class="mt-4 pix-qrcode" data-pix-qrcode data-pix-payload={pixPayload} aria-hidden="true"></div>
+
+          <button type="button" class="btn btn-outline btn-block mt-3" data-pix-copiar data-pix-payload={pixPayload}>
+            Copiar código Pix (Copia e Cola)
+          </button>
+
+          <div class="mt-4 grid gap-3">
+            <div>
+              <span class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">CNPJ</span>
+              <p class="pix-key mt-1">{pixKeyCnpj}</p>
+            </div>
+            <div>
+              <span class="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">E-mail</span>
+              <p class="pix-key mt-1">{pixKeyEmail}</p>
+            </div>
+          </div>
+
+          <div class="pix-aviso mt-5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Antes de confirmar</p>
+            <ul class="mt-2 grid gap-1.5 text-sm leading-relaxed text-muted-foreground">
+              <li>Confira se o nome do recebedor exibido no seu app é <strong>{siteConfig.name}</strong> — golpes de Pix clonado costumam trocar a chave por outra.</li>
+              <li>Se possível, indique a finalidade na descrição do Pix (ex.: "Dízimo", "Oferta", "Campanha").</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="donation-card">
+          <h2 class="text-lg font-semibold tracking-tight">Presencial</h2>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Dízimos e ofertas também podem ser entregues durante os cultos, nos horários abaixo.
+          </p>
+          <ul class="mt-4 grid gap-2 text-sm">
+            {
+              heroSchedule.map((service) => (
+                <li>
+                  <span class="font-semibold">{service.label}</span> — {service.title}
+                  {service.time && ` (${service.time})`}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="prose mt-16">
+        <h2>Transparência</h2>
+        <p>
+          Os recursos arrecadados são administrados pela diretoria da igreja e aplicados na
+          manutenção do templo, nos órgãos e em projetos sociais. Veja o resumo em nossa{" "}
+          <a href="/transparencia/">página de transparência</a>.
+        </p>
+
+        <h2>Dúvidas</h2>
+        <p>
+          Fale com a secretaria da igreja pela <a href="/contato/">página de contato</a> para
+          qualquer dúvida sobre como contribuir.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script is:inline>
+  (() => {
+    const qrEl = document.querySelector("[data-pix-qrcode]");
+    if (qrEl && window.qrcode) {
+      const qr = qrcode(0, "M");
+      qr.addData(qrEl.dataset.pixPayload);
+      qr.make();
+      qrEl.innerHTML = qr.createImgTag(
+        6,
+        8,
+        "QR Code Pix para doação. Se preferir, use o botão abaixo para copiar o código Pix e colar no aplicativo do seu banco.",
+      );
+    }
+
+    const copiarBtn = document.querySelector("[data-pix-copiar]");
+    copiarBtn?.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(copiarBtn.dataset.pixPayload);
+        const textoOriginal = copiarBtn.textContent;
+        copiarBtn.textContent = "✅ Copiado!";
+        setTimeout(() => {
+          copiarBtn.textContent = textoOriginal;
+        }, 2500);
+      } catch {
+        copiarBtn.textContent = "Não foi possível copiar — selecione manualmente.";
+      }
+    });
+  })();
+</script>
+
+<style>
+  .donation-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem 1.6rem;
+  }
+
+  .pix-qrcode :global(img) {
+    display: block;
+    margin: 0 auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    padding: 0.5rem;
+  }
+
+  .pix-key {
+    display: inline-block;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.9rem;
+    font-family: var(--font-mono);
+    font-size: 0.9375rem;
+    word-break: break-all;
+  }
+
+  .pix-aviso {
+    border-left: 3px solid var(--accent);
+    background: var(--muted);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+  }
+
+  .pix-aviso ul {
+    padding-left: 1.1rem;
+    list-style: disc;
+  }
+</style>

@@ -1,0 +1,157 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { CONSULTAR_PEDIDOS_CAMISETA_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout
+  title="Meus pedidos de camiseta"
+  description="Confira o andamento do seu pedido de camiseta/uniforme, só com o telefone."
+  noindex
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas meus-pedidos-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Camisetas e uniformes</p>
+        <h1 class="pagehead-title">Meus pedidos</h1>
+        <p class="pagehead-description">
+          Digite o telefone usado no pedido pra ver o tamanho, se já chegou e quanto falta pagar —
+          sem senha nenhuma.
+        </p>
+      </header>
+
+      <form class="mt-8 grid gap-4 max-w-sm" data-consulta-form data-consulta-url={CONSULTAR_PEDIDOS_CAMISETA_URL}>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="consulta-telefone">Telefone / WhatsApp</label>
+          <input id="consulta-telefone" name="telefone" type="tel" autocomplete="tel" required class="field" />
+        </div>
+        <button type="submit" class="btn btn-solid">Consultar</button>
+      </form>
+
+      <div class="mt-8" data-consulta-resultado></div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    interface Item {
+      tamanho: string | null;
+      modelo: string | null;
+      quantidade: number;
+      quantidadePaga: number;
+      quantidadeRetirada: number;
+    }
+
+    interface Pedido {
+      lote: string | null;
+      valorUnitario: number | null;
+      valorPago: number;
+      itens: Item[];
+    }
+
+    const form = document.querySelector<HTMLFormElement>("[data-consulta-form]");
+    if (!form) throw new Error("formulário de consulta ausente");
+
+    const consultaUrl = form.dataset.consultaUrl ?? "";
+    const telefoneInput = document.getElementById("consulta-telefone") as HTMLInputElement;
+    const resultado = document.querySelector<HTMLElement>("[data-consulta-resultado]");
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
+    function totalPedido(p: Pedido): number {
+      return p.itens.reduce((soma, i) => soma + i.quantidade, 0) * (p.valorUnitario ?? 0);
+    }
+
+    function situacaoPagamento(p: Pedido): string {
+      const total = totalPedido(p);
+      if (total <= 0) return "";
+      if (p.valorPago >= total) return "Pago";
+      if (p.valorPago > 0) {
+        return `Pago parcial (R$ ${p.valorPago.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} de R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})`;
+      }
+      return "Fiado — nada pago ainda";
+    }
+
+    function situacaoItem(i: Item): string {
+      if (i.quantidadeRetirada >= i.quantidade) return "Todas as peças já retiradas";
+      if (i.quantidadeRetirada > 0) return `${i.quantidadeRetirada} de ${i.quantidade} já retiradas`;
+      if (i.quantidadePaga > 0) return `${i.quantidadePaga} paga(s), aguardando retirada`;
+      return "Aguardando pagamento";
+    }
+
+    function itemLinhaHtml(i: Item): string {
+      const rotulo = [i.tamanho, i.modelo].filter((v): v is string => Boolean(v)).map(escapeHtml).join(" · ") || "Item";
+      return `<li>${rotulo} — ${i.quantidade}x — ${escapeHtml(situacaoItem(i))}</li>`;
+    }
+
+    function pedidoCardHtml(p: Pedido): string {
+      return `
+        <div class="camiseta-pedido-card">
+          <p class="camiseta-pedido-lote">${escapeHtml(p.lote ?? "Pedido")}</p>
+          <ul class="camiseta-pedido-itens">${p.itens.map(itemLinhaHtml).join("")}</ul>
+          <p class="camiseta-pedido-detalhe">${escapeHtml(situacaoPagamento(p))}</p>
+        </div>
+      `;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!resultado) return;
+      const telefone = telefoneInput.value.trim();
+      if (!telefone) return;
+
+      resultado.innerHTML = `<p class="text-sm text-muted-foreground">Consultando…</p>`;
+
+      try {
+        const res = await fetch(consultaUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telefone }),
+        });
+        const json = await res.json();
+        const pedidos: Pedido[] = json?.pedidos ?? [];
+
+        if (pedidos.length === 0) {
+          resultado.innerHTML = `<p class="text-sm text-muted-foreground">Nenhum pedido encontrado com esse telefone.</p>`;
+          return;
+        }
+
+        resultado.innerHTML = `<div class="grid gap-4 sm:grid-cols-2">${pedidos.map(pedidoCardHtml).join("")}</div>`;
+      } catch {
+        resultado.innerHTML = `<p class="text-sm text-muted-foreground">Não foi possível consultar agora. Tente novamente em instantes.</p>`;
+      }
+    });
+  </script>
+
+  <style is:global>
+    .meus-pedidos-canvas {
+      max-width: 40rem;
+    }
+    .camiseta-pedido-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+    }
+    .camiseta-pedido-lote {
+      font-weight: 600;
+    }
+    .camiseta-pedido-detalhe {
+      margin-top: 0.25rem;
+      font-size: 0.875rem;
+      color: var(--muted-foreground);
+    }
+    .camiseta-pedido-itens {
+      margin: 0.5rem 0 0;
+      padding-left: 1.1rem;
+      font-size: 0.875rem;
+      color: var(--muted-foreground);
+    }
+  </style>
+</BaseLayout>

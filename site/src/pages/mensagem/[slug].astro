@@ -1,0 +1,355 @@
+---
+import { marked } from "marked";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import PostCard from "@/components/PostCard.astro";
+import ShareButtons from "@/components/ShareButtons.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import YoutubeFacade from "@/components/YoutubeFacade.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import {
+  authorSlug,
+  categoryHref,
+  formatDate,
+  getAdjacent,
+  getAllMensagens,
+  getRelated,
+  getSerie,
+  postHref,
+  postSlug,
+  readingLabel,
+  visiblePosts,
+  type Post,
+} from "@/lib/posts";
+
+export async function getStaticPaths() {
+  const allPosts = visiblePosts(await getAllMensagens());
+  return allPosts.map((post) => ({
+    params: { slug: postSlug(post) },
+    props: { post, allPosts },
+  }));
+}
+
+interface Props {
+  post: Post;
+  allPosts: Post[];
+}
+
+const { post, allPosts } = Astro.props;
+const bodyHtml = await marked.parse(post.body);
+const data = post.data;
+const related = getRelated(allPosts, post);
+const serie = getSerie(allPosts, post);
+const { newer, older } = getAdjacent(allPosts, post);
+const authorHref = `/pregador/${authorSlug(data.author.name)}/`;
+const articleUrl = new URL(postHref(post), siteConfig.siteUrl).toString();
+const socialImage = data.cover
+  ? new URL(data.cover, siteConfig.siteUrl).toString()
+  : new URL(siteConfig.socialImage, siteConfig.siteUrl).toString();
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: data.title,
+    description: data.excerpt,
+    image: socialImage,
+    datePublished: data.date.toISOString(),
+    dateModified: (data.updatedDate ?? data.date).toISOString(),
+    author: { "@type": "Person", name: data.author.name },
+    publisher: { "@type": "Organization", name: siteConfig.authorName, logo: { "@type": "ImageObject", url: `${siteConfig.siteUrl}/logo.png` } },
+    mainEntityOfPage: articleUrl,
+  },
+  // Só entra quando já existe um vídeo cadastrado — não dá pra reivindicar
+  // rich result de vídeo pra mensagem que não tem nenhum.
+  ...(data.videoUrl
+    ? [
+        {
+          "@context": "https://schema.org",
+          "@type": "VideoObject",
+          name: data.title,
+          description: data.excerpt,
+          thumbnailUrl: socialImage,
+          uploadDate: data.date.toISOString(),
+          embedUrl: data.videoUrl,
+        },
+      ]
+    : []),
+];
+---
+
+<BaseLayout
+  title={data.title}
+  description={data.excerpt}
+  image={socialImage}
+  type="article"
+  structuredData={structuredData}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <article>
+      <header class="canvas pt-10 md:pt-14">
+        <Breadcrumbs items={[{ label: "Mensagens", href: "/mensagens/" }, { label: data.title }]} />
+        <p class="meta post-meta">
+          <span class="post-meta__byline">
+            Por <a href={authorHref} class="link-sweep post-meta__link">{data.author.name}</a> em{" "}
+            <a href={categoryHref(data.category)} class="link-sweep post-meta__link">{data.category}</a>
+          </span>
+          <span class="post-meta__dates">
+            <span class="meta-accent"><time datetime={data.date.toISOString()}>{formatDate(data.date, "long")}</time></span>
+            <span>{readingLabel(post)}</span>
+          </span>
+        </p>
+
+        <h1 class="article-title">{data.title}</h1>
+        <p class="article-excerpt">{data.excerpt}</p>
+
+        {data.updatedDate && (
+          <p class="meta mt-5">
+            <span>Atualizado em <time datetime={data.updatedDate.toISOString()}>{formatDate(data.updatedDate)}</time></span>
+          </p>
+        )}
+
+        {data.videoUrl && (
+          <div class="mt-6 article-video">
+            <YoutubeFacade url={data.videoUrl} title={`Assistir à pregação — ${data.title}`} />
+          </div>
+        )}
+
+        {serie.length > 1 && (
+          <div class="mt-6 serie-nav">
+            <p class="text-xs font-semibold uppercase tracking-wide serie-nav-eyebrow">
+              Série: {data.serie} · parte {data.serieOrdem} de {serie.length}
+            </p>
+            <ol class="mt-2 grid gap-1.5 text-sm">
+              {serie.map((item) => (
+                <li>
+                  {item.id === post.id ? (
+                    <span class="font-semibold">{item.data.serieOrdem}. {item.data.title} (esta mensagem)</span>
+                  ) : (
+                    <a href={postHref(item)} class="serie-nav-link underline underline-offset-2">
+                      {item.data.serieOrdem}. {item.data.title}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        <div class="mt-8 border-t border-border pt-6">
+          <p class="eyebrow mb-2">Compartilhar</p>
+          <ShareButtons url={articleUrl} title={data.title} />
+        </div>
+      </header>
+
+      {data.cover && (
+        <figure class="article-image inner">
+          <img
+            src={data.cover}
+            srcset={data.coverSrcset}
+            sizes="100vw"
+            alt={data.title}
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+            class="w-full"
+          />
+        </figure>
+      )}
+
+      <div class="prose canvas mt-12" set:html={bodyHtml} />
+
+      {(newer || older) && (
+        <footer class="canvas mt-16 border-t border-border pt-8">
+          <nav class="grid gap-8 sm:grid-cols-2" aria-label="Navegação de mensagens">
+            <div>
+              {older && (
+                <a href={postHref(older)} class="link-title link-nudge">
+                  <span class="eyebrow">
+                    <span class="link-nudge__arrow link-nudge__arrow--prev">&larr;</span> Anterior
+                  </span>
+                  <span class="link-title__text mt-2 block font-semibold leading-snug">{older.data.title}</span>
+                </a>
+              )}
+            </div>
+            <div class="sm:text-right">
+              {newer && (
+                <a href={postHref(newer)} class="link-title link-nudge">
+                  <span class="eyebrow">
+                    Próxima <span class="link-nudge__arrow link-nudge__arrow--next">&rarr;</span>
+                  </span>
+                  <span class="link-title__text mt-2 block font-semibold leading-snug">{newer.data.title}</span>
+                </a>
+              )}
+            </div>
+          </nav>
+        </footer>
+      )}
+    </article>
+
+    {related.length > 0 && (
+      <section class="canvas mt-[var(--space-section)]" aria-labelledby="keep-reading">
+        <h2 id="keep-reading" class="section-title">Continue lendo</h2>
+        <div class="grid gap-7">
+          {related.map((item) => <PostCard post={item} variant="compact" headingLevel="h3" />)}
+        </div>
+      </section>
+    )}
+  </main>
+  <SiteFooter />
+
+  <script is:inline>
+    /* Melhoria progressiva: todo bloco de código no corpo do artigo ganha um
+       botão de copiar, adicionado do lado do cliente para o HTML renderizado
+       permanecer simples. */
+    document.querySelectorAll(".prose pre").forEach((pre, index) => {
+      if (pre.closest(".code-copy-frame")) return;
+
+      const code = pre.querySelector("code");
+      const frame = document.createElement("div");
+      const button = document.createElement("button");
+      const liveRegion = document.createElement("span");
+      const labelId = `code-copy-${index}`;
+
+      frame.className = "code-copy-frame";
+      button.type = "button";
+      button.className = "code-copy-button";
+      button.setAttribute("aria-describedby", labelId);
+      button.textContent = "Copiar";
+      liveRegion.id = labelId;
+      liveRegion.className = "sr-only";
+      liveRegion.setAttribute("aria-live", "polite");
+
+      pre.parentNode?.insertBefore(frame, pre);
+      frame.append(pre, button, liveRegion);
+
+      button.addEventListener("click", async () => {
+        try {
+          if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+          await navigator.clipboard.writeText(code?.textContent ?? pre.textContent ?? "");
+          button.textContent = "Copiado";
+          liveRegion.textContent = "Código copiado";
+        } catch {
+          button.textContent = "Falhou";
+          liveRegion.textContent = "Falha ao copiar";
+        }
+        window.setTimeout(() => {
+          button.textContent = "Copiar";
+        }, 1800);
+      });
+    });
+  </script>
+
+  <style>
+    .serie-nav {
+      border-left: 3px solid var(--accent);
+      background: var(--muted);
+      border-radius: var(--radius-sm);
+      padding: 0.85rem 1.1rem;
+    }
+
+    .serie-nav ol {
+      list-style: none;
+      padding: 0;
+    }
+
+    /* var(--accent) sobre o fundo var(--muted) desta caixa dava 4,27:1
+       (confirmado com axe-core), abaixo do 4.5:1 do WCAG AA — mesmo ajuste
+       já usado no filtro de busca do cabeçalho (--accent-strong chega a
+       5.97:1 nesse mesmo fundo). */
+    .serie-nav-eyebrow {
+      color: var(--accent-strong);
+    }
+
+    .serie-nav-link {
+      color: var(--accent-strong);
+    }
+
+    .post-meta {
+      column-gap: 0.55rem;
+    }
+
+    /* A assinatura é uma frase, não uma lista de itens com pontos, então ela
+       flui como texto inline e mantém o espaçamento normal entre palavras
+       em vez do gap do flex. */
+    .post-meta__byline {
+      display: inline;
+    }
+
+    .post-meta__link {
+      color: var(--foreground);
+    }
+
+    /* Espelha `.meta > *`: o ponto só ocupa sua caixa de 2px dentro de um item flex. */
+    .post-meta__dates > * {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .post-meta__dates > * + *::before {
+      width: 2px;
+      height: 2px;
+      content: "";
+      background: var(--muted-foreground);
+      border-radius: 50%;
+    }
+
+    /* Quando a linha não cabe mais, data e tempo de leitura vão para uma
+       linha própria em vez de ficarem órfãos sob a assinatura. */
+    @media (max-width: 40rem) {
+      .post-meta__dates {
+        flex-basis: 100%;
+      }
+
+      .post-meta__dates::before {
+        display: none;
+      }
+    }
+
+    .article-title {
+      margin: 1.25rem 0 0;
+      font-family: var(--font-display);
+      font-size: var(--text-title-3xl);
+      font-weight: 600;
+      letter-spacing: -0.035em;
+      line-height: 1.02;
+      text-wrap: balance;
+      word-break: break-word;
+    }
+
+    .article-excerpt {
+      margin: 1.25rem 0 0;
+      color: color-mix(in srgb, var(--foreground) 82%, transparent);
+      font-size: var(--text-body-article);
+      line-height: 1.45;
+      text-wrap: pretty;
+    }
+
+    /* Apenas as margens de bloco são definidas aqui: as margens `auto`
+       inline vêm de `.inner` e precisam sobreviver, ou a imagem de destaque
+       larga deixa de centralizar. */
+    .article-image {
+      margin-top: 3rem;
+      margin-bottom: 0;
+    }
+
+    /* Limitada para que uma capa incomumente alta não empurre o primeiro
+       parágrafo do artigo para baixo da dobra. */
+    .article-image :global(img) {
+      aspect-ratio: 16 / 9;
+      max-height: 32rem;
+      width: 100%;
+      object-fit: cover;
+      border-radius: var(--radius-md);
+    }
+
+    .article-image figcaption {
+      max-width: var(--layout-content);
+      margin: 0.75rem auto 0;
+      color: var(--muted-foreground);
+      font-size: 0.8125rem;
+    }
+  </style>
+</BaseLayout>

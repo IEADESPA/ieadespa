@@ -1,0 +1,282 @@
+---
+import NoticiaCard from "@/components/NoticiaCard.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { categoryLabel, getAllNoticias, visibleNoticias } from "@/lib/noticias";
+import { DIRECTUS_URL } from "@/lib/directus";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const noticias = visibleNoticias(await getAllNoticias());
+const categorias = [...new Set(noticias.map((noticia) => noticia.data.category))];
+---
+
+<BaseLayout
+  title="Notícias"
+  description={`Notícias e comunicados institucionais da ${siteConfig.name}.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Fique por dentro</p>
+        <h1 class="pagehead-title">Notícias</h1>
+        <p class="pagehead-description">
+          Comunicados, novidades e cobertura dos acontecimentos da igreja.
+        </p>
+      </header>
+
+      <div class="mt-6">
+        <p class="text-sm text-muted-foreground">
+          Prefere acompanhar por RSS? {" "}
+          <a href="/rss.xml" class="link-sweep text-accent font-semibold">Assine o feed</a> — funciona em
+          qualquer leitor de RSS (Feedly, Inoreader, o próprio navegador com uma extensão), e avisa você
+          sozinho sempre que sair notícia nova, sem precisar voltar aqui pra conferir.
+        </p>
+        <div class="mt-3" data-notify-wrap hidden>
+          <button type="button" class="btn btn-outline" data-notify-toggle>🔔 Avisar quando sair notícia nova</button>
+          <p class="mt-2 text-sm" data-notify-status role="status" aria-live="polite" />
+        </div>
+      </div>
+
+      {
+        noticias.length > 1 && (
+          <div class="noticias-filtros" data-noticias-filtros role="tablist" aria-label="Filtrar por categoria">
+            <button type="button" class="noticias-filtro is-active" data-filter="" role="tab" aria-selected="true">Todas</button>
+            {
+              categorias.map((categoria) => (
+                <button type="button" class="noticias-filtro" data-filter={categoria} role="tab" aria-selected="false">
+                  {categoryLabel(categoria)}
+                </button>
+              ))
+            }
+          </div>
+        )
+      }
+
+      {
+        noticias.length > 0 ? (
+          <div class="noticias-grid" data-noticias-grid>
+            {noticias.map((noticia, index) => (
+              <div data-noticia-categoria={noticia.data.category}>
+                <NoticiaCard noticia={noticia} variant={index === 0 ? "lead" : "feed"} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div class="gallery-empty">
+            <p class="text-sm leading-relaxed text-muted-foreground">Nenhuma notícia publicada ainda.</p>
+          </div>
+        )
+      }
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<script
+  is:inline
+  define:vars={{
+    directusUrl: DIRECTUS_URL,
+    vapidPublicKey: "BHjTzvfXIx0DAkcCgfJDNQO5N09SmO0jIPuTP8L6rxnEaITMn95fQH6kHFnbrEJE-Fdroim5bNnaKp5wwowXdak",
+  }}
+>
+  (() => {
+    const wrap = document.querySelector("[data-notify-wrap]");
+    const toggleBtn = document.querySelector("[data-notify-toggle]");
+    const statusEl = document.querySelector("[data-notify-status]");
+    if (!wrap || !toggleBtn) return;
+
+    const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    if (!supported) return;
+    wrap.hidden = false;
+
+    const ENDPOINT_KEY = "ieadespa-push-endpoint";
+    const PREFS_KEY = "ieadespa-push-prefs";
+    const lerPrefs = () => {
+      try {
+        return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+      } catch {
+        return {};
+      }
+    };
+    const salvarPrefs = (prefs) => {
+      try {
+        localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+      } catch {}
+    };
+    const endpointSalvo = () => {
+      try {
+        return localStorage.getItem(ENDPOINT_KEY);
+      } catch {
+        return null;
+      }
+    };
+
+    const urlBase64ToUint8Array = (base64String) => {
+      const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const rawData = atob(base64);
+      return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+    };
+
+    function atualizarBotao() {
+      const ativo = Boolean(endpointSalvo()) && lerPrefs().noticias === true;
+      toggleBtn.textContent = ativo ? "🔔 Notificações ativadas — cancelar" : "🔔 Avisar quando sair notícia nova";
+      toggleBtn.setAttribute("aria-pressed", String(ativo));
+    }
+    atualizarBotao();
+
+    toggleBtn.addEventListener("click", async () => {
+      toggleBtn.disabled = true;
+      if (statusEl) statusEl.textContent = "";
+      try {
+        const jaAtivo = Boolean(endpointSalvo()) && lerPrefs().noticias === true;
+
+        if (jaAtivo) {
+          const endpoint = endpointSalvo();
+          const prefsRestantes = { ...lerPrefs(), noticias: false };
+          const aindaQuerOutraCoisa = prefsRestantes.eventos || prefsRestantes.mensagens;
+
+          if (endpoint) {
+            await fetch(`${directusUrl}/items/push_subscriptions`, {
+              method: aindaQuerOutraCoisa ? "PATCH" : "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(
+                aindaQuerOutraCoisa
+                  ? { query: { filter: { endpoint: { _eq: endpoint } } }, data: { avisar_noticias: false } }
+                  : { query: { filter: { endpoint: { _eq: endpoint } } } },
+              ),
+            });
+          }
+          if (!aindaQuerOutraCoisa && "serviceWorker" in navigator) {
+            const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+            const subscription = await registration?.pushManager.getSubscription();
+            await subscription?.unsubscribe();
+          }
+          try {
+            if (!aindaQuerOutraCoisa) localStorage.removeItem(ENDPOINT_KEY);
+          } catch {}
+          salvarPrefs(prefsRestantes);
+          if (statusEl) statusEl.textContent = "Aviso de notícia nova cancelado.";
+        } else {
+          const permissao = await Notification.requestPermission();
+          if (permissao !== "granted") {
+            if (statusEl) statusEl.textContent = "Permissão não concedida.";
+            return;
+          }
+
+          const registration = await navigator.serviceWorker.register("/sw.js");
+          const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+          });
+          const json = subscription.toJSON();
+          const endpointAnterior = endpointSalvo();
+
+          await fetch(`${directusUrl}/items/push_subscriptions`, {
+            method: endpointAnterior && endpointAnterior === json.endpoint ? "PATCH" : "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              endpointAnterior && endpointAnterior === json.endpoint
+                ? { query: { filter: { endpoint: { _eq: json.endpoint } } }, data: { avisar_noticias: true, p256dh: json.keys.p256dh, auth: json.keys.auth } }
+                : { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, avisar_noticias: true },
+            ),
+          });
+
+          try {
+            localStorage.setItem(ENDPOINT_KEY, json.endpoint);
+          } catch {}
+          salvarPrefs({ ...lerPrefs(), noticias: true });
+          if (statusEl) statusEl.textContent = "✅ Você vai ser avisado(a) quando sair notícia nova.";
+        }
+
+        atualizarBotao();
+      } catch {
+        if (statusEl) statusEl.textContent = "Não foi possível agora. Tente novamente.";
+      } finally {
+        toggleBtn.disabled = false;
+      }
+    });
+  })();
+</script>
+
+<script is:inline>
+  (() => {
+    const buttons = document.querySelectorAll("[data-noticias-filtros] [data-filter]");
+    const items = document.querySelectorAll("[data-noticias-grid] > [data-noticia-categoria]");
+    if (!buttons.length) return;
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const filtro = button.getAttribute("data-filter") || "";
+        buttons.forEach((other) => {
+          const isActive = other === button;
+          other.classList.toggle("is-active", isActive);
+          other.setAttribute("aria-selected", String(isActive));
+        });
+        items.forEach((item) => {
+          item.hidden = Boolean(filtro) && item.getAttribute("data-noticia-categoria") !== filtro;
+        });
+      });
+    });
+  })();
+</script>
+
+<style>
+  .noticias-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .noticias-filtro {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted-foreground);
+    padding: 0.35rem 0.85rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out);
+  }
+
+  .noticias-filtro:hover {
+    border-color: var(--border-strong);
+    color: var(--foreground);
+  }
+
+  .noticias-filtro.is-active {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent-strong);
+  }
+
+  .noticias-grid {
+    display: grid;
+    gap: 3rem;
+  }
+
+  .noticias-grid > [hidden] {
+    display: none;
+  }
+
+  .noticias-grid > :not(:first-child) {
+    padding-top: 3rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .gallery-empty {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+  }
+</style>

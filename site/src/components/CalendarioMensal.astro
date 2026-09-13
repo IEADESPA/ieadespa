@@ -1,0 +1,273 @@
+---
+interface Props {
+  /** Eventos com data — usados pra marcar os dias no calendário. `href` ausente quando o evento não tem página própria. `endDate` marca todos os dias do intervalo, não só o primeiro. */
+  events: { date: string; endDate?: string | null; title: string; href?: string }[];
+}
+
+const { events } = Astro.props;
+---
+
+<div class="calendario" data-calendario>
+  <div class="calendario-head">
+    <button type="button" class="icon-btn" data-cal-prev aria-label="Mês anterior">
+      <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none">
+        <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+    <select class="calendario-jump" data-cal-jump aria-label="Ir para o mês"></select>
+    <button type="button" class="icon-btn" data-cal-next aria-label="Próximo mês">
+      <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none">
+        <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+  </div>
+
+  <div class="calendario-weekdays">
+    {["D", "S", "T", "Q", "Q", "S", "S"].map((day) => <span>{day}</span>)}
+  </div>
+
+  <div class="calendario-grid" data-cal-grid></div>
+
+  <div class="calendario-details" data-cal-details hidden></div>
+</div>
+
+<script is:inline type="application/json" id="calendario-data" set:html={JSON.stringify(events)} />
+<script is:inline>
+  (() => {
+    const root = document.querySelector("[data-calendario]");
+    if (!root) return;
+
+    const events = JSON.parse(document.getElementById("calendario-data")?.textContent || "[]");
+    const grid = root.querySelector("[data-cal-grid]");
+    const jump = root.querySelector("[data-cal-jump]");
+    const details = root.querySelector("[data-cal-details]");
+    const monthNames = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+    ];
+
+    const escapeHtml = (value) =>
+      String(value).replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character]);
+
+    // Expande eventos de vários dias: um evento com endDate aparece marcado
+    // em todos os dias do intervalo, não só no primeiro.
+    const eventsByDate = events.reduce((map, event) => {
+      const start = new Date(`${event.date}T00:00:00`);
+      const end = event.endDate ? new Date(`${event.endDate}T00:00:00`) : start;
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        (map[key] ??= []).push(event);
+      }
+      return map;
+    }, {});
+
+    // Todos os meses (AAAA-MM) que têm pelo menos um evento — vira as opções
+    // do seletor, então "ir para dezembro" é uma escolha só, não 8 cliques.
+    const monthsWithEvents = Array.from(new Set(Object.keys(eventsByDate).map((key) => key.slice(0, 7)))).sort();
+
+    for (const monthKey of monthsWithEvents) {
+      const [year, month] = monthKey.split("-").map(Number);
+      const option = document.createElement("option");
+      option.value = monthKey;
+      option.textContent = `${monthNames[month - 1]} de ${year}`;
+      jump.appendChild(option);
+    }
+
+    const toKey = (year, month, day) =>
+      `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+    // Começa no mês atual se ele tiver evento; senão, no próximo mês com
+    // evento; senão, no primeiro disponível — nunca num mês vazio à toa.
+    const todayMonthKey = toKey(new Date().getFullYear(), new Date().getMonth(), 1).slice(0, 7);
+    const initialMonthKey =
+      monthsWithEvents.find((key) => key >= todayMonthKey) ?? monthsWithEvents[0] ?? todayMonthKey;
+    const [initialYear, initialMonth] = initialMonthKey.split("-").map(Number);
+    let cursor = new Date(initialYear, initialMonth - 1, 1);
+
+    function render() {
+      const year = cursor.getFullYear();
+      const month = cursor.getMonth();
+      const monthKey = toKey(year, month, 1).slice(0, 7);
+      if (jump.value !== monthKey) jump.value = monthKey;
+
+      const firstWeekday = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const todayKey = toKey(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
+      grid.innerHTML = "";
+      details.hidden = true;
+      details.innerHTML = "";
+
+      for (let i = 0; i < firstWeekday; i++) {
+        grid.appendChild(document.createElement("span"));
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = toKey(year, month, day);
+        const dayEvents = eventsByDate[key];
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "calendario-day";
+        const isToday = key === todayKey;
+        if (isToday) {
+          cell.classList.add("is-today");
+          cell.setAttribute("aria-current", "date");
+        }
+        if (dayEvents) cell.classList.add("has-event");
+
+        // A cor nunca é o único jeito de saber "hoje"/"tem evento" — quem
+        // não distingue bem cor (ou usa leitor de tela) ainda tem essa
+        // informação por texto, mesmo que oculto visualmente.
+        const sufixo = [isToday && "hoje", dayEvents && "tem evento"].filter(Boolean).join(", ");
+        cell.innerHTML = sufixo
+          ? `${day}<span class="sr-only"> (${sufixo})</span>`
+          : String(day);
+
+        if (dayEvents) {
+          cell.addEventListener("click", () => {
+            details.hidden = false;
+            details.innerHTML = dayEvents
+              .map((event) =>
+                event.href
+                  ? `<a href="${escapeHtml(event.href)}" class="calendario-detail-link">${escapeHtml(event.title)}</a>`
+                  : `<span class="calendario-detail-link" style="cursor:default;text-decoration:none">${escapeHtml(event.title)}</span>`,
+              )
+              .join("");
+          });
+        }
+
+        grid.appendChild(cell);
+      }
+
+      // Avisa quem mais estiver na página (a listagem de eventos, por
+      // exemplo) qual mês está em foco agora, pra ficarem sincronizados.
+      window.dispatchEvent(new CustomEvent("calendario-mes", { detail: { year, month, monthKey } }));
+    }
+
+    root.querySelector("[data-cal-prev]")?.addEventListener("click", () => {
+      cursor.setMonth(cursor.getMonth() - 1);
+      render();
+    });
+    root.querySelector("[data-cal-next]")?.addEventListener("click", () => {
+      cursor.setMonth(cursor.getMonth() + 1);
+      render();
+    });
+    jump.addEventListener("change", () => {
+      const [y, m] = jump.value.split("-").map(Number);
+      cursor = new Date(y, m - 1, 1);
+      render();
+    });
+
+    render();
+  })();
+</script>
+
+<style>
+  .calendario {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.4rem;
+  }
+
+  .calendario-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .calendario-jump {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--card);
+    color: var(--foreground);
+    padding: 0.35rem 0.5rem;
+    font-family: var(--font-display);
+    font-weight: 600;
+    text-transform: capitalize;
+    text-align: center;
+  }
+
+  .calendario-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-top: 1rem;
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .calendario-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+  }
+
+  .calendario-day {
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    cursor: default;
+  }
+
+  .calendario-day.is-today {
+    border-width: 2px;
+    border-style: dashed;
+    border-color: var(--border-strong);
+  }
+
+  .calendario-day.has-event {
+    position: relative;
+    cursor: pointer;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* Ponto abaixo do número: sinal de forma, não só de cor, pra quem tem
+     dificuldade de distinguir cor mas ainda enxerga forma/posição. */
+  .calendario-day.has-event::after {
+    content: "";
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    transform: translateX(-50%);
+  }
+
+  .calendario-day.has-event:hover {
+    background: color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+
+  .calendario-details {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+  }
+
+  .calendario-detail-link {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+</style>

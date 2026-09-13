@@ -1,0 +1,265 @@
+---
+import { marked } from "marked";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { authorSlug, getAllAuthors, getAllMensagens, visiblePosts } from "@/lib/posts";
+import { fetchConfiguracoes, fetchItems } from "@/lib/directus";
+import { quebrarEmSecoes } from "@/lib/markdown";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const authors = getAllAuthors(allPosts);
+const config = await fetchConfiguracoes();
+
+interface RegistroHistorico {
+  period: string | null;
+}
+interface Congregacao {
+  id: number;
+}
+interface OrgaoResumo {
+  category: string;
+}
+interface Depoimento {
+  nome: string;
+  texto: string;
+}
+
+const [historico, congregacoes, orgaos, depoimentos] = await Promise.all([
+  fetchItems<RegistroHistorico>("historia"),
+  fetchItems<Congregacao>("congregacoes"),
+  fetchItems<OrgaoResumo>("ministerios"),
+  // A permissão pública de leitura já filtra `aprovado=true` no próprio
+  // Directus (ver /depoimentos/) — não precisa repetir esse filtro aqui.
+  fetchItems<Depoimento>("depoimentos", "sort=-date_created&limit=2"),
+]);
+
+/**
+ * "Prova social" real: nenhum número aqui é inventado — vem do que já está
+ * cadastrado (marco mais antigo da história, congregações reais,
+ * ministérios/departamentos fora da governança). Fica de fora qualquer coisa
+ * que exigiria fabricar fato sobre pessoa real (depoimento, bio) — ver Fase 4
+ * no README sobre o porquê.
+ */
+const anoFundacao = historico
+  .map((registro) => registro.period?.match(/\d{4}/)?.[0])
+  .filter((ano): ano is string => Boolean(ano))
+  .map(Number)
+  .reduce((menor, ano) => Math.min(menor, ano), new Date().getFullYear());
+const anosDeHistoria = new Date().getFullYear() - anoFundacao;
+const numeroCongregacoes = congregacoes.length;
+const numeroMinisterios = orgaos.filter((orgao) => orgao.category !== "governanca").length;
+
+const estatisticas = [
+  anosDeHistoria > 0 && { valor: `${anosDeHistoria}+`, rotulo: "anos de história", href: "/historia/" },
+  numeroCongregacoes > 0 && { valor: `${numeroCongregacoes}`, rotulo: "congregações", href: "/congregacoes/" },
+  numeroMinisterios > 0 && { valor: `${numeroMinisterios}`, rotulo: "ministérios e departamentos", href: "/orgaos/" },
+].filter((item): item is { valor: string; rotulo: string; href: string } => Boolean(item));
+
+const secoesSobre = await Promise.all(
+  quebrarEmSecoes(config.sobre_corpo).map(async (secao) => ({
+    ...secao,
+    html: await marked.parse(secao.corpo),
+  })),
+);
+---
+
+<BaseLayout
+  title="Sobre"
+  description={`Sobre a ${siteConfig.fullName} — nossa história, missão e liderança.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Sobre nós</p>
+        <h1 class="pagehead-title">{siteConfig.name}</h1>
+        <p class="pagehead-description">{config.about}</p>
+      </header>
+
+      {
+        estatisticas.length > 0 && (
+          <div class="sobre-estatisticas" role="list">
+            {estatisticas.map((item) => (
+              <a href={item.href} class="sobre-estatistica link-sweep" role="listitem">
+                <span class="sobre-estatistica-valor">{item.valor}</span>
+                <span class="sobre-estatistica-rotulo">{item.rotulo}</span>
+              </a>
+            ))}
+          </div>
+        )
+      }
+
+      <div class="grid gap-8 mt-2">
+        {
+          secoesSobre.map((secao) =>
+            secao.titulo ? (
+              <section class="sobre-secao" aria-labelledby={`sobre-${secao.titulo}`}>
+                <h2 id={`sobre-${secao.titulo}`} class="section-title">{secao.titulo}</h2>
+                <div class="prose mt-3" set:html={secao.html} />
+              </section>
+            ) : (
+              <div class="prose" set:html={secao.html} />
+            ),
+          )
+        }
+      </div>
+
+      <p class="mt-8">
+        <a href="/historia/" class="link-sweep font-semibold text-accent">Conheça nossa história completa &rarr;</a>
+      </p>
+      <p class="mt-2">
+        <a href="/crencas/" class="link-sweep font-semibold text-accent">Leia nossa declaração de fé completa &rarr;</a>
+      </p>
+
+      <div class="sobre-pendente" aria-label="Vídeo de boas-vindas (a ser adicionado)">
+        <p class="sobre-pendente-rotulo">Vídeo de boas-vindas</p>
+        <p class="sobre-pendente-texto">Vídeo a ser inserido aqui.</p>
+      </div>
+
+      <section class="mt-8" aria-labelledby="sobre-depoimentos-heading">
+        <h2 id="sobre-depoimentos-heading" class="section-title">O que a nossa igreja diz</h2>
+        {
+          depoimentos.length > 0 ? (
+            <div class="grid gap-5 sm:grid-cols-2">
+              {depoimentos.map((item) => (
+                <blockquote class="sobre-depoimento">
+                  <p class="sobre-depoimento-texto">&ldquo;{item.texto}&rdquo;</p>
+                  <footer class="sobre-depoimento-nome">{item.nome}</footer>
+                </blockquote>
+              ))}
+            </div>
+          ) : (
+            <p class="text-sm text-muted-foreground">Ainda não temos depoimentos publicados.</p>
+          )
+        }
+        <p class="mt-4">
+          <a href="/depoimentos/" class="link-sweep font-semibold text-accent">
+            {depoimentos.length > 0 ? "Ver todos os depoimentos" : "Seja o primeiro a deixar o seu"} &rarr;
+          </a>
+        </p>
+      </section>
+
+      <div class="prose mt-16">
+        <h2>Liderança</h2>
+        <p>
+          Aqui embaixo estão só quem já pregou mensagens publicadas no site. Pra conhecer a
+          governança, os departamentos e as secretarias da igreja, veja a página de{" "}
+          <a href="/orgaos/">Órgãos</a>.
+        </p>
+        <ul>
+          {
+            authors.map((author) => (
+              <li>
+                <a href={`/pregador/${authorSlug(author.name)}/`}>{author.name}</a> — {author.role} ({author.posts.length} {author.posts.length === 1 ? "mensagem" : "mensagens"})
+              </li>
+            ))
+          }
+        </ul>
+
+        <h2>Próximos passos</h2>
+        <p>
+          Primeira vez na igreja? Veja a página do <a href="/visitante/">visitante</a> pra saber o
+          que esperar do culto e como chegar. Pra conhecer a prestação de contas da igreja, veja a
+          página de <a href="/transparencia/">transparência</a>.
+        </p>
+
+        <h2>Fale conosco</h2>
+        <p>
+          Dúvidas, pedidos de oração e visitas são bem-vindos através da <a href="/contato/">página de contato</a>.
+        </p>
+        {
+          siteConfig.email && (
+            <p>Você também pode escrever diretamente para <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>.</p>
+          )
+        }
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .sobre-secao {
+    border-left: 3px solid var(--accent);
+    padding-left: 1.25rem;
+  }
+
+  /* Visualmente distinto de propósito (borda tracejada, itálico) — sinaliza
+     que é um espaço reservado esperando conteúdo real, não conteúdo de
+     verdade ainda incompleto. */
+  .sobre-pendente {
+    margin-top: 1.5rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.5rem;
+    text-align: center;
+  }
+
+  .sobre-pendente-rotulo {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  .sobre-pendente-texto {
+    margin-top: 0.35rem;
+    font-style: italic;
+    color: var(--muted-foreground);
+  }
+
+  .sobre-depoimento {
+    margin: 0;
+    border-left: 3px solid var(--accent);
+    background: var(--muted);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.25rem;
+  }
+
+  .sobre-depoimento-texto {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    text-wrap: pretty;
+  }
+
+  .sobre-depoimento-nome {
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+
+  .sobre-estatisticas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+
+  .sobre-estatistica {
+    display: grid;
+    gap: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1rem;
+    text-align: center;
+    color: var(--foreground);
+  }
+
+  .sobre-estatistica-valor {
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .sobre-estatistica-rotulo {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    text-wrap: balance;
+  }
+</style>

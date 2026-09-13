@@ -1,0 +1,81 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Entrar — Gestão de camisetas" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas entrar-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Área restrita</p>
+        <h1 class="pagehead-title">Gestão de camisetas</h1>
+        <p class="pagehead-description">
+          Entre com sua conta do Directus. Essa é a mesma conta usada no painel administrativo do
+          site — nenhuma senha nova é criada aqui.
+        </p>
+      </header>
+
+      <form class="mt-8 grid gap-4 max-w-sm" data-entrar-form data-directus-url={DIRECTUS_URL}>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="entrar-email">E-mail</label>
+          <input id="entrar-email" name="email" type="email" autocomplete="username" required class="field" />
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="entrar-senha">Senha</label>
+          <input id="entrar-senha" name="senha" type="password" autocomplete="current-password" required class="field" />
+        </div>
+        <button type="submit" class="btn btn-solid" data-entrar-submit>Entrar</button>
+        <p class="text-sm" data-entrar-status role="status" aria-live="polite"></p>
+      </form>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    const form = document.querySelector<HTMLFormElement>("[data-entrar-form]");
+    if (!form) throw new Error("formulário de login ausente");
+
+    const directusUrl = form.dataset.directusUrl ?? "";
+    const status = form.querySelector<HTMLElement>("[data-entrar-status]");
+    const submitBtn = form.querySelector<HTMLButtonElement>("[data-entrar-submit]");
+    const emailInput = document.getElementById("entrar-email") as HTMLInputElement;
+    const senhaInput = document.getElementById("entrar-senha") as HTMLInputElement;
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!status || !submitBtn) return;
+
+      submitBtn.disabled = true;
+      status.textContent = "Entrando…";
+
+      try {
+        const res = await fetch(`${directusUrl}/auth/login`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailInput.value.trim(), password: senhaInput.value, mode: "cookie" }),
+        });
+
+        if (!res.ok) {
+          status.textContent = "E-mail ou senha incorretos.";
+          submitBtn.disabled = false;
+          return;
+        }
+
+        const json = await res.json();
+        sessionStorage.setItem("painel_camisetas_token", json.data.access_token);
+        const voltar = new URLSearchParams(window.location.search).get("voltar");
+        window.location.href = voltar && voltar.startsWith("/") ? voltar : "/painel-camisetas/";
+      } catch {
+        status.textContent = "Não foi possível entrar agora. Tente novamente em instantes.";
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</BaseLayout>

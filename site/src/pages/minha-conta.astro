@@ -1,0 +1,280 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { SOLICITAR_CODIGO_CONTA_URL, CONFIRMAR_CODIGO_CONTA_URL, CONSULTAR_MINHA_CONTA_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout
+  title="Minha conta"
+  description="Entre com seu e-mail para ver suas inscrições em eventos e pedidos de camiseta em um só lugar."
+  noindex
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas minha-conta-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Minha conta</p>
+        <h1 class="pagehead-title">Minha conta</h1>
+        <p class="pagehead-description">
+          Entre com seu e-mail pra ver, num só lugar, suas inscrições em eventos e pedidos de
+          camiseta feitos com esse e-mail. Sem senha — só um código de acesso enviado por e-mail.
+        </p>
+      </header>
+
+      <div
+        data-solicitar-url={SOLICITAR_CODIGO_CONTA_URL}
+        data-confirmar-url={CONFIRMAR_CODIGO_CONTA_URL}
+        data-consultar-url={CONSULTAR_MINHA_CONTA_URL}
+      >
+        <form class="mt-8 grid gap-4 max-w-sm" data-form-email>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="conta-email">E-mail</label>
+            <input id="conta-email" name="email" type="email" autocomplete="email" required class="field" />
+          </div>
+          <button type="submit" class="btn btn-solid">Enviar código de acesso</button>
+          <p class="text-sm text-muted-foreground" data-form-email-aviso></p>
+        </form>
+
+        <form class="mt-8 grid gap-4 max-w-sm" data-form-codigo hidden>
+          <p class="text-sm text-muted-foreground">
+            Enviamos um código pro e-mail <strong data-codigo-email></strong>. Confira também a caixa de spam.
+          </p>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="conta-codigo">Código de 6 dígitos</label>
+            <input id="conta-codigo" name="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" required class="field" />
+          </div>
+          <button type="submit" class="btn btn-solid">Entrar</button>
+          <p class="text-sm text-muted-foreground" data-form-codigo-aviso></p>
+        </form>
+
+        <div class="mt-8" data-conta-logada hidden>
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <p class="text-sm text-muted-foreground">
+              Conectado como <strong data-conta-email-logada></strong>
+            </p>
+            <button type="button" class="btn btn-outline" data-btn-sair>Sair</button>
+          </div>
+          <div class="mt-6" data-conta-conteudo></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { contaSalvar, contaToken, contaEmail, contaSair } from "@/lib/contaAuth";
+
+    interface Inscricao {
+      eventoTitulo: string | null;
+      eventoSlug: string | null;
+      eventoData: string | null;
+      codigo: string;
+      pago: boolean;
+      presente: boolean;
+      aguardandoVaga: boolean;
+      pendenteAprovacao: boolean;
+    }
+
+    interface ItemPedido {
+      tamanho: string | null;
+      modelo: string | null;
+      quantidade: number;
+      quantidadePaga: number;
+      quantidadeRetirada: number;
+    }
+
+    interface Pedido {
+      grupo: string | null;
+      valorPago: number;
+      itens: ItemPedido[];
+    }
+
+    const wrap = document.querySelector<HTMLElement>("[data-solicitar-url]");
+    if (!wrap) throw new Error("wrapper da Minha Conta ausente");
+
+    const solicitarUrl = wrap.dataset.solicitarUrl ?? "";
+    const confirmarUrl = wrap.dataset.confirmarUrl ?? "";
+    const consultarUrl = wrap.dataset.consultarUrl ?? "";
+
+    const formEmail = wrap.querySelector<HTMLFormElement>("[data-form-email]")!;
+    const avisoEmail = wrap.querySelector<HTMLElement>("[data-form-email-aviso]")!;
+    const formCodigo = wrap.querySelector<HTMLFormElement>("[data-form-codigo]")!;
+    const avisoCodigo = wrap.querySelector<HTMLElement>("[data-form-codigo-aviso]")!;
+    const codigoEmailSpan = wrap.querySelector<HTMLElement>("[data-codigo-email]")!;
+    const blocoLogado = wrap.querySelector<HTMLElement>("[data-conta-logada]")!;
+    const emailLogadoSpan = wrap.querySelector<HTMLElement>("[data-conta-email-logada]")!;
+    const conteudo = wrap.querySelector<HTMLElement>("[data-conta-conteudo]")!;
+    const btnSair = wrap.querySelector<HTMLButtonElement>("[data-btn-sair]")!;
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
+    function situacaoInscricao(i: Inscricao): string {
+      if (i.pendenteAprovacao) return "Aguardando aprovação da equipe";
+      if (i.aguardandoVaga) return "Lista de espera";
+      if (i.presente) return "Presença confirmada no evento";
+      return i.pago ? "Confirmada" : "Confirmada — pagamento pendente";
+    }
+
+    function inscricaoCardHtml(i: Inscricao): string {
+      const titulo = i.eventoSlug
+        ? `<a href="/evento/${escapeHtml(i.eventoSlug)}/" class="link-sweep font-semibold text-accent">${escapeHtml(i.eventoTitulo ?? "Evento")}</a>`
+        : escapeHtml(i.eventoTitulo ?? "Evento");
+      const data = i.eventoData ? new Date(i.eventoData).toLocaleDateString("pt-BR") : "";
+      return `
+        <div class="minha-conta-card">
+          <p class="minha-conta-card-titulo">${titulo}</p>
+          ${data ? `<p class="minha-conta-card-detalhe">${escapeHtml(data)}</p>` : ""}
+          <p class="minha-conta-card-detalhe">Código: ${escapeHtml(i.codigo)} — ${escapeHtml(situacaoInscricao(i))}</p>
+        </div>
+      `;
+    }
+
+    function totalPedido(p: Pedido): number {
+      return p.itens.reduce((soma, i) => soma + i.quantidade, 0);
+    }
+
+    function situacaoItem(i: ItemPedido): string {
+      if (i.quantidadeRetirada >= i.quantidade) return "já retirada(s)";
+      if (i.quantidadePaga > 0) return "paga(s), aguardando retirada";
+      return "aguardando pagamento";
+    }
+
+    function pedidoCardHtml(p: Pedido): string {
+      const itensTexto = p.itens
+        .map((i) => `${i.quantidade}x ${[i.tamanho, i.modelo].filter(Boolean).join(" · ")} — ${situacaoItem(i)}`)
+        .map(escapeHtml)
+        .join("; ");
+      return `
+        <div class="minha-conta-card">
+          <p class="minha-conta-card-titulo">${escapeHtml(p.grupo ?? "Pedido de camiseta")}</p>
+          <p class="minha-conta-card-detalhe">${totalPedido(p)} peça(s) — ${itensTexto || "sem itens"}</p>
+          <p class="minha-conta-card-detalhe">Valor pago: R$ ${Number(p.valorPago ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+        </div>
+      `;
+    }
+
+    async function carregarConta(token: string, email: string) {
+      formEmail.hidden = true;
+      formCodigo.hidden = true;
+      blocoLogado.hidden = false;
+      emailLogadoSpan.textContent = email;
+      conteudo.innerHTML = `<p class="text-sm text-muted-foreground">Carregando…</p>`;
+
+      try {
+        const res = await fetch(consultarUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        if (!res.ok) {
+          contaSair();
+          location.reload();
+          return;
+        }
+        const json = await res.json();
+        const inscricoes: Inscricao[] = json?.inscricoes ?? [];
+        const pedidos: Pedido[] = json?.pedidos ?? [];
+
+        if (inscricoes.length === 0 && pedidos.length === 0) {
+          conteudo.innerHTML = `<p class="text-sm text-muted-foreground">Nada encontrado ainda com esse e-mail. Assim que você se inscrever em um evento ou pedir uma camiseta usando este e-mail, vai aparecer aqui.</p>`;
+          return;
+        }
+
+        conteudo.innerHTML = `
+          ${inscricoes.length > 0 ? `<h2 class="text-sm font-semibold mb-3">Inscrições em eventos</h2><div class="grid gap-3 sm:grid-cols-2 mb-8">${inscricoes.map(inscricaoCardHtml).join("")}</div>` : ""}
+          ${pedidos.length > 0 ? `<h2 class="text-sm font-semibold mb-3">Pedidos de camiseta</h2><div class="grid gap-3 sm:grid-cols-2">${pedidos.map(pedidoCardHtml).join("")}</div>` : ""}
+        `;
+      } catch {
+        conteudo.innerHTML = `<p class="text-sm text-muted-foreground">Não foi possível carregar agora. Tente novamente em instantes.</p>`;
+      }
+    }
+
+    formEmail.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const email = (document.getElementById("conta-email") as HTMLInputElement).value.trim();
+      if (!email) return;
+
+      avisoEmail.textContent = "Enviando…";
+      try {
+        const res = await fetch(solicitarUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (!res.ok) {
+          avisoEmail.textContent = "Não foi possível enviar o código agora. Tente novamente em instantes.";
+          return;
+        }
+        formEmail.dataset.email = email;
+        codigoEmailSpan.textContent = email;
+        avisoEmail.textContent = "";
+        formEmail.hidden = true;
+        formCodigo.hidden = false;
+      } catch {
+        avisoEmail.textContent = "Não foi possível enviar o código agora. Tente novamente em instantes.";
+      }
+    });
+
+    formCodigo.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const email = formEmail.dataset.email ?? "";
+      const codigo = (document.getElementById("conta-codigo") as HTMLInputElement).value.trim();
+      if (!email || !codigo) return;
+
+      avisoCodigo.textContent = "Verificando…";
+      try {
+        const res = await fetch(confirmarUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, codigo }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          avisoCodigo.textContent = json?.erro ?? "Código inválido ou expirado.";
+          return;
+        }
+        contaSalvar(json.token, json.email);
+        avisoCodigo.textContent = "";
+        await carregarConta(json.token, json.email);
+      } catch {
+        avisoCodigo.textContent = "Não foi possível verificar agora. Tente novamente em instantes.";
+      }
+    });
+
+    btnSair.addEventListener("click", () => {
+      contaSair();
+      location.reload();
+    });
+
+    const tokenExistente = contaToken();
+    const emailExistente = contaEmail();
+    if (tokenExistente && emailExistente) {
+      carregarConta(tokenExistente, emailExistente);
+    }
+  </script>
+
+  <style is:global>
+    .minha-conta-canvas {
+      max-width: 40rem;
+    }
+    .minha-conta-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+    }
+    .minha-conta-card-titulo {
+      font-weight: 600;
+    }
+    .minha-conta-card-detalhe {
+      margin-top: 0.25rem;
+      font-size: 0.875rem;
+      color: var(--muted-foreground);
+    }
+  </style>
+</BaseLayout>

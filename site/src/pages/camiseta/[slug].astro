@@ -1,0 +1,343 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, TELEFONE_HASH_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Lote {
+  id: number;
+  slug: string;
+  nome: string;
+  descricao: string | null;
+  modelos: string[] | null;
+  tamanhos: string[] | null;
+  valor_venda: number | null;
+  pedidos_ate: string | null;
+  evento: { title: string } | null;
+  ministerio: { name: string } | null;
+  pedir_congregacao: boolean;
+}
+
+interface Congregacao {
+  id: number;
+  name: string;
+}
+
+type TipoPergunta = "texto_curto" | "texto_longo" | "selecao_unica" | "selecao_multipla" | "numero" | "data";
+
+interface Pergunta {
+  id: number;
+  ordem: number | null;
+  label: string;
+  tipo: TipoPergunta;
+  opcoes: string[] | null;
+  obrigatoria: boolean;
+}
+
+export async function getStaticPaths() {
+  const grupos = await fetchItems<Lote>(
+    "camiseta_grupos",
+    "filter[ativo][_eq]=true&fields=*,evento.title,ministerio.name",
+  );
+  return grupos.map((lote) => ({ params: { slug: lote.slug }, props: { lote } }));
+}
+
+interface Props {
+  lote: Lote;
+}
+
+const { lote } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+const congregacoes = (await fetchItems<Congregacao>("congregacoes", "fields=id,name&sort=name")).sort((a, b) =>
+  a.name.localeCompare(b.name, "pt-BR"),
+);
+const perguntas = await fetchItems<Pergunta>("perguntas_camiseta", `filter[grupo][_eq]=${lote.id}&sort=ordem`);
+const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+const prazoEncerrado = lote.pedidos_ate ? new Date(lote.pedidos_ate).getTime() < Date.now() : false;
+const tamanhos = lote.tamanhos ?? [];
+const modelos = lote.modelos ?? [];
+---
+
+<BaseLayout title={lote.nome} description={lote.descricao ?? `Faça seu pedido de ${lote.nome}.`}>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas camiseta-canvas" data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow">{lote.evento?.title ?? lote.ministerio?.name ?? "Camiseta/uniforme"}</p>
+        <h1 class="pagehead-title">{lote.nome}</h1>
+        {lote.descricao && <p class="pagehead-description">{lote.descricao}</p>}
+      </header>
+
+      <ul class="mt-6 grid gap-2 text-sm">
+        {lote.valor_venda != null && (
+          <li><strong class="text-foreground">Valor por peça:</strong> R$ {Number(lote.valor_venda).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</li>
+        )}
+        {lote.pedidos_ate && (
+          <li><strong class="text-foreground">Pedidos até:</strong> {dateFormatter.format(new Date(lote.pedidos_ate))}</li>
+        )}
+      </ul>
+
+      {
+        prazoEncerrado ? (
+          <p class="mt-6 text-sm leading-relaxed text-muted-foreground">O prazo para fazer pedido deste lote já encerrou.</p>
+        ) : (
+          <form class="mt-8 grid gap-4 max-w-lg" data-pedido-form data-lote-id={lote.id}>
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="pedido-nome">Nome</label>
+              <input id="pedido-nome" name="nome" type="text" autocomplete="name" required class="field" />
+            </div>
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="pedido-telefone">Telefone / WhatsApp</label>
+              <input id="pedido-telefone" name="telefone" type="tel" autocomplete="tel" required class="field" />
+              <p class="text-xs text-muted-foreground">
+                É só com esse telefone que você confere depois se já chegou e quanto falta pagar —
+                sem senha, em{" "}
+                <a href="/meus-pedidos-camiseta/" class="underline underline-offset-2">Meus pedidos</a>.
+              </p>
+            </div>
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="pedido-email">E-mail (opcional)</label>
+              <input id="pedido-email" name="email" type="email" autocomplete="email" class="field" />
+              <p class="text-xs text-muted-foreground">
+                Se informar, esse pedido aparece junto com o resto na sua{" "}
+                <a href="/minha-conta/" class="underline underline-offset-2">Minha conta</a>.
+              </p>
+            </div>
+            {
+              lote.pedir_congregacao !== false && (
+                <div class="grid gap-2">
+                  <label class="text-sm font-semibold" for="pedido-congregacao">Congregação</label>
+                  <select id="pedido-congregacao" class="field">
+                    <option value="">— Não informar —</option>
+                    {congregacoes.map((c) => <option value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )
+            }
+
+            {
+              perguntas.map((pergunta) => (
+                <div class="grid gap-2" data-pergunta-field data-pergunta-id={pergunta.id} data-pergunta-tipo={pergunta.tipo}>
+                  <label class="text-sm font-semibold" for={`pergunta-${pergunta.id}`}>{pergunta.label}</label>
+                  {pergunta.tipo === "texto_longo" ? (
+                    <textarea id={`pergunta-${pergunta.id}`} rows="4" required={pergunta.obrigatoria} class="field resize-y" />
+                  ) : pergunta.tipo === "numero" ? (
+                    <input id={`pergunta-${pergunta.id}`} type="number" required={pergunta.obrigatoria} class="field" />
+                  ) : pergunta.tipo === "data" ? (
+                    <input id={`pergunta-${pergunta.id}`} type="date" required={pergunta.obrigatoria} class="field" />
+                  ) : pergunta.tipo === "selecao_unica" ? (
+                    <select id={`pergunta-${pergunta.id}`} required={pergunta.obrigatoria} class="field">
+                      <option value="">Selecione…</option>
+                      {(pergunta.opcoes ?? []).map((opcao) => <option value={opcao}>{opcao}</option>)}
+                    </select>
+                  ) : pergunta.tipo === "selecao_multipla" ? (
+                    <div class="grid gap-1.5">
+                      {(pergunta.opcoes ?? []).map((opcao) => (
+                        <label class="contact-checkbox">
+                          <input type="checkbox" name={`pergunta-${pergunta.id}-multipla`} value={opcao} />
+                          {opcao}
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <input id={`pergunta-${pergunta.id}`} type="text" required={pergunta.obrigatoria} class="field" />
+                  )}
+                </div>
+              ))
+            }
+
+            <fieldset class="grid gap-2">
+              <legend class="text-sm font-semibold">Itens do pedido</legend>
+              <div class="grid gap-3" data-itens-lista></div>
+              <button type="button" class="btn btn-outline mt-1" data-item-adicionar>+ Adicionar item</button>
+            </fieldset>
+
+            <p class="text-sm font-semibold" data-pedido-total></p>
+
+            <div class="flex flex-wrap items-center gap-4">
+              <button type="submit" class="btn btn-solid">Fazer pedido</button>
+              <p class="text-sm leading-relaxed text-muted-foreground" role="status" aria-live="polite" data-pedido-status />
+            </div>
+          </form>
+        )
+      }
+
+      <div class="prose mt-16">
+        <p><a href="/camisetas/">&larr; Voltar para Camisetas e uniformes</a></p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  {
+    !prazoEncerrado && (
+      <script
+        is:inline
+        define:vars={{
+          telefoneHashUrl: TELEFONE_HASH_URL,
+          criarPedidoUrl: CRIAR_PEDIDO_CAMISETA_URL,
+          loteId: lote.id,
+          tamanhos,
+          modelos,
+          valorVenda: lote.valor_venda,
+        }}
+      >
+        const form = document.querySelector("[data-pedido-form]");
+        const itensLista = document.querySelector("[data-itens-lista]");
+        const totalEl = document.querySelector("[data-pedido-total]");
+
+        // Fase 26 — pré-preenche com o e-mail da Minha Conta, se já logado.
+        (() => {
+          const contaEmailSalvo = localStorage.getItem("conta_email");
+          const inputEmail = document.getElementById("pedido-email");
+          if (contaEmailSalvo && inputEmail && !inputEmail.value) inputEmail.value = contaEmailSalvo;
+        })();
+
+        function linhaItemHtml() {
+          const tamanhoOpcoes = tamanhos.length
+            ? `<option value="">Tamanho…</option>${tamanhos.map((t) => `<option value="${t}">${t}</option>`).join("")}`
+            : `<option value="">—</option>`;
+          const modeloOpcoes = modelos.length
+            ? `<option value="">Modelo…</option>${modelos.map((m) => `<option value="${m}">${m}</option>`).join("")}`
+            : `<option value="">—</option>`;
+          return `
+            <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center item-linha">
+              <select class="field" data-item-tamanho ${tamanhos.length ? "required" : "disabled"}>${tamanhoOpcoes}</select>
+              <select class="field" data-item-modelo ${modelos.length ? "required" : "disabled"}>${modeloOpcoes}</select>
+              <input type="number" min="1" value="1" class="field item-qtd" data-item-quantidade title="Quantidade" />
+              <button type="button" class="btn btn-outline" data-item-remover>Remover</button>
+            </div>
+          `;
+        }
+
+        function atualizarTotal() {
+          if (!totalEl) return;
+          const linhas = Array.from(document.querySelectorAll(".item-linha"));
+          const totalQtd = linhas.reduce((soma, linha) => soma + (Number(linha.querySelector("[data-item-quantidade]")?.value) || 0), 0);
+          if (valorVenda != null) {
+            const totalValor = totalQtd * Number(valorVenda);
+            totalEl.textContent = totalQtd > 0 ? `Total: ${totalQtd} peça(s) — R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "";
+          } else {
+            totalEl.textContent = totalQtd > 0 ? `Total: ${totalQtd} peça(s)` : "";
+          }
+        }
+
+        itensLista?.insertAdjacentHTML("beforeend", linhaItemHtml());
+
+        document.querySelector("[data-item-adicionar]")?.addEventListener("click", () => {
+          itensLista?.insertAdjacentHTML("beforeend", linhaItemHtml());
+        });
+
+        itensLista?.addEventListener("click", (event) => {
+          if (event.target.matches("[data-item-remover]")) {
+            const linhas = document.querySelectorAll(".item-linha");
+            if (linhas.length > 1) event.target.closest(".item-linha")?.remove();
+            atualizarTotal();
+          }
+        });
+
+        itensLista?.addEventListener("input", atualizarTotal);
+        atualizarTotal();
+
+        form?.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const data = new FormData(form);
+          const button = form.querySelector('button[type="submit"]');
+          const status = form.querySelector("[data-pedido-status]");
+          const congregacaoEl = document.getElementById("pedido-congregacao");
+
+          const itens = Array.from(document.querySelectorAll(".item-linha"))
+            .map((linha) => ({
+              tamanho: linha.querySelector("[data-item-tamanho]")?.value || null,
+              modelo: linha.querySelector("[data-item-modelo]")?.value || null,
+              quantidade: Number(linha.querySelector("[data-item-quantidade]")?.value) || 0,
+            }))
+            .filter((item) => item.quantidade > 0);
+
+          if (itens.length === 0) {
+            if (status) status.textContent = "Adicione pelo menos um item com quantidade.";
+            return;
+          }
+
+          if (button) button.disabled = true;
+          if (status) status.textContent = "Enviando…";
+
+          try {
+            const hashRes = await fetch(telefoneHashUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ telefone: data.get("telefone") }),
+            });
+            if (!hashRes.ok) throw new Error("falha ao proteger telefone");
+            const telefoneHash = (await hashRes.json()).valor;
+
+            // Respostas às perguntas customizadas desta campanha (mesmo padrão
+            // de `respostas_inscricao` em eventos) — coletadas do formulário.
+            const respostas = [];
+            form.querySelectorAll("[data-pergunta-field]").forEach((field) => {
+              const perguntaId = Number(field.dataset.perguntaId);
+              const tipo = field.dataset.perguntaTipo;
+              let valor;
+
+              if (tipo === "selecao_multipla") {
+                const marcadas = Array.from(field.querySelectorAll("input[type=checkbox]:checked")).map((el) => el.value);
+                valor = marcadas.join(", ");
+              } else {
+                const input = field.querySelector("input, textarea, select");
+                valor = input ? input.value : "";
+              }
+
+              if (valor) respostas.push({ pergunta: perguntaId, valor });
+            });
+
+            // Pedido + itens + respostas são criados juntos numa Function só
+            // (`criar-pedido-camiseta`), que também decide sozinha em qual
+            // lote (janela de compra aberta) este pedido entra — a criação
+            // direta pelo navegador foi desativada de propósito, pra ninguém
+            // conseguir escolher o próprio lote nem criar dois lotes "1" ao
+            // mesmo tempo.
+            const pedidoRes = await fetch(criarPedidoUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                grupoId: loteId,
+                nome: String(data.get("nome")).trim(),
+                telefoneHash,
+                email: String(data.get("email") || "").trim() || null,
+                congregacaoId: congregacaoEl && congregacaoEl.value ? Number(congregacaoEl.value) : null,
+                itens,
+                respostas,
+              }),
+            });
+            if (!pedidoRes.ok) throw new Error("falha ao criar pedido");
+
+            if (status) status.textContent = "✅ Pedido registrado! Acompanhe em \"Meus pedidos\", com o seu telefone.";
+            form.reset();
+            document.querySelectorAll(".item-linha").forEach((linha, indice) => { if (indice > 0) linha.remove(); });
+            atualizarTotal();
+          } catch {
+            if (status) status.textContent = "Não foi possível enviar agora. Tente novamente em instantes.";
+            if (button) button.disabled = false;
+          }
+        });
+      </script>
+    )
+  }
+
+  <style is:global>
+    .camiseta-canvas {
+      max-width: 42rem;
+    }
+    .item-linha {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 0.75rem;
+    }
+    .item-qtd {
+      width: 5rem;
+    }
+  </style>
+</BaseLayout>

@@ -1,0 +1,523 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const eventos = await fetchItems<{ id: number; title: string }>("eventos", "fields=id,title&sort=-event_date");
+const ministerios = await fetchItems<{ id: number; name: string }>("ministerios", "fields=id,name&sort=name");
+---
+
+<BaseLayout title="Editar camiseta — Gestão de camisetas" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas" style="max-width: 42rem;" data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow"><a href="/painel-camisetas/" class="text-accent">← Gestão de camisetas</a></p>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 class="pagehead-title" data-painel-titulo>Camiseta</h1>
+          <a href="/painel-camisetas/grupo/pedidos/" class="btn btn-outline" data-link-pedidos hidden>Ver pedidos e lotes de compra</a>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden data-painel-erro class="gallery-empty mt-8">
+        <p class="text-sm text-muted-foreground">Não encontrado.</p>
+      </div>
+
+      <form hidden class="mt-8 grid gap-5 max-w-2xl" data-lote-form>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-nome">Nome</label>
+          <input id="f-nome" class="field" required />
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-slug">Endereço (slug)</label>
+            <input id="f-slug" class="field" placeholder="nome-da-camiseta" />
+          </div>
+          <button type="button" class="btn btn-outline" data-gerar-slug>Gerar do nome</button>
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-descricao">Descrição (aparece na página pública)</label>
+          <textarea id="f-descricao" rows="4" class="field"></textarea>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-evento">Vincular a um evento (opcional)</label>
+            <select id="f-evento" class="field">
+              <option value="">— Nenhum —</option>
+              {eventos.map((e) => <option value={e.id}>{e.title}</option>)}
+            </select>
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-ministerio">Vincular a um ministério (opcional)</label>
+            <select id="f-ministerio" class="field">
+              <option value="">— Nenhum —</option>
+              {ministerios.map((m) => <option value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Uma camiseta pode ter nenhum, um, ou os dois vínculos ao mesmo tempo — ex.: uniforme fixo
+          de um ministério não precisa de evento nenhum; camiseta de uma marcha pode ter só o evento.
+        </p>
+
+        <label class="flex items-start gap-2 text-sm">
+          <input id="f-pedir-congregacao" type="checkbox" class="mt-1" />
+          <span>
+            <strong>Perguntar a congregação no pedido</strong> — desmarque para campanhas que
+            reúnem várias igrejas/ministérios (ex.: uma marcha da cidade toda), onde vincular a uma
+            única congregação não faz sentido.
+          </span>
+        </label>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-tamanhos">Tamanhos (separados por vírgula)</label>
+            <input id="f-tamanhos" class="field" placeholder="PP, P, M, G, GG, XG" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-modelos">Modelos (separados por vírgula)</label>
+            <input id="f-modelos" class="field" placeholder="Masculino, Feminino" />
+          </div>
+        </div>
+        <p class="text-xs text-muted-foreground">Deixe um campo em branco pra não pedir essa escolha no formulário público.</p>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-valor-venda">Valor de venda (aparece ao público)</label>
+          <input id="f-valor-venda" type="number" step="0.01" min="0" class="field" />
+        </div>
+        <p class="text-xs text-muted-foreground">
+          O custo por peça não fica aqui — cada encomenda feita ao fornecedor vira um "lote de
+          compra" próprio (aba Pedidos e lotes de compra), com seu próprio custo, porque o preço
+          pode mudar de uma encomenda pra outra ao longo do ano.
+        </p>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-pedidos-ate">Pedidos até (opcional)</label>
+          <input id="f-pedidos-ate" type="date" class="field" />
+        </div>
+
+        <div class="grid gap-3">
+          <label class="flex items-center gap-2 text-sm">
+            <input id="f-ativo" type="checkbox" /> Ativo (aparece na listagem pública e aceita novo pedido)
+          </label>
+        </div>
+
+        <div class="grid gap-3">
+          <label class="flex items-start gap-2 text-sm">
+            <input id="f-destaque" type="checkbox" class="mt-1" />
+            <span>
+              <strong>Destacar na página inicial</strong> (carrossel) — some sozinho quando "Pedidos
+              até" passar (ou quando "Ativo" for desmarcado, se não tiver prazo definido).
+            </span>
+          </label>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <button type="submit" class="btn btn-solid" data-lote-salvar>Salvar</button>
+          <p class="text-sm" data-lote-status role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="mt-6" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <p class="text-sm font-semibold">Perguntas personalizadas do pedido</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Além de nome, telefone e congregação, o formulário público pode pedir campos extras
+            específicos desta campanha (ex.: bairro, nome da congregação por extenso se não estiver
+            na lista, tamanho de calçado etc.).
+          </p>
+
+          <div class="mt-4 grid gap-3" data-perguntas-lista></div>
+
+          <div class="mt-4 grid gap-3 sm:grid-cols-2" style="border-top: 1px solid var(--border); padding-top: 1rem;">
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="np-label">Nova pergunta</label>
+              <input id="np-label" class="field" placeholder="Ex.: Bairro" />
+            </div>
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="np-tipo">Tipo</label>
+              <select id="np-tipo" class="field">
+                <option value="texto_curto">Texto curto</option>
+                <option value="texto_longo">Texto longo</option>
+                <option value="selecao_unica">Seleção única (uma opção)</option>
+                <option value="selecao_multipla">Seleção múltipla (várias opções)</option>
+                <option value="numero">Número</option>
+                <option value="data">Data</option>
+              </select>
+            </div>
+            <div class="grid gap-2 sm:col-span-2" data-np-opcoes-wrap hidden>
+              <label class="text-sm font-semibold" for="np-opcoes">Opções (uma por linha)</label>
+              <textarea id="np-opcoes" rows="3" class="field"></textarea>
+            </div>
+            <label class="flex items-center gap-2 text-sm">
+              <input id="np-obrigatoria" type="checkbox" /> Obrigatória
+            </label>
+            <div class="flex items-center gap-4">
+              <button type="button" class="btn btn-outline" data-np-adicionar>+ Adicionar pergunta</button>
+              <p class="text-sm" data-np-status role="status" aria-live="polite"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <p class="text-sm font-semibold text-red-700">Excluir</p>
+          <p class="mt-1 text-sm text-muted-foreground">Remove esta camiseta, seus lotes de compra e todos os pedidos ligados a ela. Não pode ser desfeito.</p>
+          <button type="button" class="btn btn-outline mt-3" data-excluir-lote>Excluir</button>
+          <p class="mt-2 text-sm" data-excluir-status role="status" aria-live="polite"></p>
+        </div>
+      </form>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { exigirAutenticacao } from "@/lib/painelAuth";
+
+    const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
+
+    interface Grupo {
+      id: number;
+      nome: string;
+      slug: string | null;
+      descricao: string | null;
+      evento: number | null;
+      ministerio: number | null;
+      tamanhos: string[] | null;
+      modelos: string[] | null;
+      valor_venda: number | null;
+      pedidos_ate: string | null;
+      ativo: boolean;
+      destaque: boolean;
+      pedir_congregacao: boolean;
+    }
+
+    const container = document.querySelector<HTMLElement>("[data-directus-url]");
+    if (!container) throw new Error("contêiner do painel ausente");
+    const directusUrl = container.dataset.directusUrl ?? "";
+
+    const idParam = new URLSearchParams(window.location.search).get("id");
+    const grupoId = idParam ? Number(idParam) : null;
+
+    const carregando = document.querySelector<HTMLElement>("[data-painel-carregando]");
+    const erroEl = document.querySelector<HTMLElement>("[data-painel-erro]");
+    const tituloEl = document.querySelector<HTMLElement>("[data-painel-titulo]");
+    const form = document.querySelector<HTMLFormElement>("[data-lote-form]");
+    const statusEl = document.querySelector<HTMLElement>("[data-lote-status]");
+
+    const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+    const fNome = el<HTMLInputElement>("f-nome");
+    const fSlug = el<HTMLInputElement>("f-slug");
+    const fDescricao = el<HTMLTextAreaElement>("f-descricao");
+    const fEvento = el<HTMLSelectElement>("f-evento");
+    const fMinisterio = el<HTMLSelectElement>("f-ministerio");
+    const fTamanhos = el<HTMLInputElement>("f-tamanhos");
+    const fModelos = el<HTMLInputElement>("f-modelos");
+    const fValorVenda = el<HTMLInputElement>("f-valor-venda");
+    const fPedidosAte = el<HTMLInputElement>("f-pedidos-ate");
+    const fAtivo = el<HTMLInputElement>("f-ativo");
+    const fDestaque = el<HTMLInputElement>("f-destaque");
+    const fPedirCongregacao = el<HTMLInputElement>("f-pedir-congregacao");
+
+    function slugify(texto: string): string {
+      return texto
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    document.querySelector("[data-gerar-slug]")?.addEventListener("click", () => {
+      fSlug.value = slugify(fNome.value);
+    });
+
+    function csvParaLista(valor: string): string[] {
+      return valor
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+    }
+
+    function preencherFormulario(grupo: Grupo) {
+      fNome.value = grupo.nome ?? "";
+      fSlug.value = grupo.slug ?? "";
+      fDescricao.value = grupo.descricao ?? "";
+      fEvento.value = grupo.evento ? String(grupo.evento) : "";
+      fMinisterio.value = grupo.ministerio ? String(grupo.ministerio) : "";
+      fTamanhos.value = (grupo.tamanhos ?? []).join(", ");
+      fModelos.value = (grupo.modelos ?? []).join(", ");
+      fValorVenda.value = grupo.valor_venda != null ? String(grupo.valor_venda) : "";
+      fPedidosAte.value = grupo.pedidos_ate ?? "";
+      fAtivo.checked = Boolean(grupo.ativo);
+      fDestaque.checked = Boolean(grupo.destaque);
+      fPedirCongregacao.checked = grupo.pedir_congregacao !== false;
+    }
+
+    function lerFormulario() {
+      return {
+        nome: fNome.value.trim(),
+        slug: fSlug.value.trim() || slugify(fNome.value),
+        descricao: fDescricao.value.trim() || null,
+        evento: fEvento.value ? Number(fEvento.value) : null,
+        ministerio: fMinisterio.value ? Number(fMinisterio.value) : null,
+        tamanhos: csvParaLista(fTamanhos.value),
+        modelos: csvParaLista(fModelos.value),
+        valor_venda: fValorVenda.value ? Number(fValorVenda.value) : null,
+        pedidos_ate: fPedidosAte.value || null,
+        ativo: fAtivo.checked,
+        destaque: fDestaque.checked,
+        pedir_congregacao: fPedirCongregacao.checked,
+      };
+    }
+
+    async function iniciar() {
+      const tokenObtido = await exigirAutenticacao(directusUrl, AUTH);
+      if (!tokenObtido) return;
+      const token: string = tokenObtido;
+
+      if (!grupoId) {
+        if (carregando) carregando.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        return;
+      }
+
+      const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        if (carregando) carregando.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        return;
+      }
+      const grupo: Grupo = (await res.json()).data;
+
+      if (tituloEl) tituloEl.textContent = grupo.nome;
+      preencherFormulario(grupo);
+
+      const linkPedidos = document.querySelector<HTMLAnchorElement>("[data-link-pedidos]");
+      if (linkPedidos) {
+        linkPedidos.href = `/painel-camisetas/grupo/pedidos/?id=${grupoId}`;
+        linkPedidos.hidden = false;
+      }
+
+      if (carregando) carregando.hidden = true;
+      if (form) form.hidden = false;
+
+      form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (statusEl) statusEl.textContent = "Salvando…";
+        try {
+          const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(lerFormulario()),
+          });
+          if (!res.ok) throw new Error("falha ao salvar");
+          if (statusEl) statusEl.textContent = "✅ Salvo.";
+        } catch {
+          if (statusEl) statusEl.textContent = "Não foi possível salvar agora.";
+        }
+      });
+
+      interface Pergunta {
+        id: number;
+        ordem: number | null;
+        label: string;
+        tipo: string;
+        opcoes: string[] | null;
+        obrigatoria: boolean;
+      }
+
+      const perguntasLista = document.querySelector<HTMLElement>("[data-perguntas-lista]");
+      const npLabel = el<HTMLInputElement>("np-label");
+      const npTipo = el<HTMLSelectElement>("np-tipo");
+      const npOpcoesWrap = document.querySelector<HTMLElement>("[data-np-opcoes-wrap]");
+      const npOpcoes = el<HTMLTextAreaElement>("np-opcoes");
+      const npObrigatoria = el<HTMLInputElement>("np-obrigatoria");
+      const npStatus = document.querySelector<HTMLElement>("[data-np-status]");
+
+      function tipoPrecisaOpcoes(tipo: string) {
+        return tipo === "selecao_unica" || tipo === "selecao_multipla";
+      }
+
+      npTipo.addEventListener("change", () => {
+        if (npOpcoesWrap) npOpcoesWrap.hidden = !tipoPrecisaOpcoes(npTipo.value);
+      });
+
+      function escapeHtml(value: string) {
+        return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+      }
+
+      async function carregarPerguntas() {
+        if (!perguntasLista) return;
+        const res = await fetch(`${directusUrl}/items/perguntas_camiseta?filter[grupo][_eq]=${grupoId}&sort=ordem&limit=-1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const perguntas: Pergunta[] = res.ok ? (await res.json()).data ?? [] : [];
+
+        if (perguntas.length === 0) {
+          perguntasLista.innerHTML = `<p class="text-sm text-muted-foreground">Nenhuma pergunta extra cadastrada ainda.</p>`;
+          return;
+        }
+
+        const rotuloTipo: Record<string, string> = {
+          texto_curto: "Texto curto",
+          texto_longo: "Texto longo",
+          selecao_unica: "Seleção única",
+          selecao_multipla: "Seleção múltipla",
+          numero: "Número",
+          data: "Data",
+        };
+
+        perguntasLista.innerHTML = perguntas
+          .map(
+            (p) => `
+              <div class="pergunta-card-camiseta" data-pergunta-id="${p.id}">
+                <div class="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                  <input type="text" class="field" value="${escapeHtml(p.label)}" data-campo="label" />
+                  <select class="field" data-campo="tipo">
+                    ${Object.entries(rotuloTipo)
+                      .map(([value, label]) => `<option value="${value}" ${value === p.tipo ? "selected" : ""}>${label}</option>`)
+                      .join("")}
+                  </select>
+                  <input type="number" class="field" style="width:5rem" value="${p.ordem ?? 0}" data-campo="ordem" title="Ordem" />
+                </div>
+                <textarea class="field mt-3" rows="2" placeholder="Opções (uma por linha)" data-campo="opcoes" ${
+                  tipoPrecisaOpcoes(p.tipo) ? "" : "hidden"
+                }>${(p.opcoes ?? []).join("\n")}</textarea>
+                <div class="mt-3 flex items-center justify-between gap-3">
+                  <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" data-campo="obrigatoria" ${p.obrigatoria ? "checked" : ""} /> Obrigatória
+                  </label>
+                  <div class="flex gap-3">
+                    <button type="button" class="btn btn-outline" data-salvar-pergunta>Salvar</button>
+                    <button type="button" class="btn btn-outline" data-excluir-pergunta>Excluir</button>
+                  </div>
+                </div>
+              </div>
+            `,
+          )
+          .join("");
+      }
+
+      perguntasLista?.addEventListener("change", (event) => {
+        const target = event.target as HTMLElement;
+        if (!target.matches('[data-campo="tipo"]')) return;
+        const card = target.closest<HTMLElement>("[data-pergunta-id]");
+        const opcoesTextarea = card?.querySelector<HTMLTextAreaElement>('[data-campo="opcoes"]');
+        const valor = (target as HTMLSelectElement).value;
+        if (opcoesTextarea) opcoesTextarea.hidden = !tipoPrecisaOpcoes(valor);
+      });
+
+      perguntasLista?.addEventListener("click", async (event) => {
+        const target = event.target as HTMLElement;
+        const card = target.closest<HTMLElement>("[data-pergunta-id]");
+        if (!card) return;
+        const perguntaId = card.dataset.perguntaId;
+
+        if (target.matches("[data-excluir-pergunta]")) {
+          if (!perguntaId || !confirm("Excluir esta pergunta? Respostas já dadas a ela também somem.")) return;
+          await fetch(`${directusUrl}/items/perguntas_camiseta/${perguntaId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          await carregarPerguntas();
+          return;
+        }
+
+        if (target.matches("[data-salvar-pergunta]")) {
+          const labelInput = card.querySelector<HTMLInputElement>('[data-campo="label"]');
+          const tipoSelect = card.querySelector<HTMLSelectElement>('[data-campo="tipo"]');
+          const ordemInput = card.querySelector<HTMLInputElement>('[data-campo="ordem"]');
+          const opcoesTextarea = card.querySelector<HTMLTextAreaElement>('[data-campo="opcoes"]');
+          const obrigatoriaInput = card.querySelector<HTMLInputElement>('[data-campo="obrigatoria"]');
+          const tipo = tipoSelect?.value ?? "texto_curto";
+          const opcoes = tipoPrecisaOpcoes(tipo)
+            ? opcoesTextarea?.value
+                .split("\n")
+                .map((v) => v.trim())
+                .filter(Boolean)
+            : null;
+
+          target.textContent = "Salvando…";
+          await fetch(`${directusUrl}/items/perguntas_camiseta/${perguntaId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              label: labelInput?.value.trim(),
+              tipo,
+              ordem: ordemInput?.value ? Number(ordemInput.value) : 0,
+              opcoes: opcoes?.length ? opcoes : null,
+              obrigatoria: Boolean(obrigatoriaInput?.checked),
+            }),
+          });
+          target.textContent = "Salvar";
+          await carregarPerguntas();
+        }
+      });
+
+      document.querySelector("[data-np-adicionar]")?.addEventListener("click", async () => {
+        const label = npLabel.value.trim();
+        if (!label) {
+          if (npStatus) npStatus.textContent = "Digite o texto da pergunta.";
+          return;
+        }
+        const tipo = npTipo.value;
+        const opcoes = tipoPrecisaOpcoes(tipo)
+          ? npOpcoes.value
+              .split("\n")
+              .map((v) => v.trim())
+              .filter(Boolean)
+          : null;
+
+        if (npStatus) npStatus.textContent = "Adicionando…";
+        try {
+          const res = await fetch(`${directusUrl}/items/perguntas_camiseta`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ grupo: grupoId, label, tipo, opcoes, obrigatoria: npObrigatoria.checked }),
+          });
+          if (!res.ok) throw new Error("falha ao adicionar");
+          npLabel.value = "";
+          npOpcoes.value = "";
+          npObrigatoria.checked = false;
+          if (npStatus) npStatus.textContent = "✅ Adicionada.";
+          await carregarPerguntas();
+        } catch {
+          if (npStatus) npStatus.textContent = "Não foi possível adicionar agora.";
+        }
+      });
+
+      await carregarPerguntas();
+
+      document.querySelector("[data-excluir-lote]")?.addEventListener("click", async () => {
+        const excluirStatus = document.querySelector<HTMLElement>("[data-excluir-status]");
+        if (!confirm(`Excluir "${grupo.nome}"? Isso apaga os lotes de compra e todos os pedidos ligados a ela. Não pode ser desfeito.`)) return;
+        if (excluirStatus) excluirStatus.textContent = "Excluindo…";
+        try {
+          const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error("falha ao excluir");
+          window.location.href = "/painel-camisetas/";
+        } catch {
+          if (excluirStatus) excluirStatus.textContent = "Não foi possível excluir agora.";
+        }
+      });
+    }
+
+    iniciar();
+  </script>
+
+  <style>
+    .pergunta-card-camiseta {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.1rem 1.25rem;
+    }
+  </style>
+</BaseLayout>

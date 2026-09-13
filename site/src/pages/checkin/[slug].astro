@@ -1,0 +1,584 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Evento {
+  id: number;
+  slug: string;
+  title: string;
+  aceita_inscricao: boolean;
+  event_date: string | null;
+  time: string | null;
+  checkin_libera_minutos_antes: number | null;
+  checkin_liberado_manualmente: boolean;
+  locais_checkin: string[] | null;
+  vagas_limite: number | null;
+}
+
+export async function getStaticPaths() {
+  const events = await fetchItems<Evento>("eventos", "filter[aceita_inscricao][_eq]=true");
+  // slug e opcional no Directus - sem essa checagem, evento sem slug ainda
+  // definido quebraria o build (mesmo bug corrigido em toda pagina por slug).
+  return events.filter((event) => event.slug).map((event) => ({ params: { slug: event.slug }, props: { event } }));
+}
+
+interface Props {
+  event: Evento;
+}
+
+const { event } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title={`Check-in — ${event.title}`} description="Confirme sua presença no evento." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div
+      class="canvas checkin-canvas"
+      data-directus-url={DIRECTUS_URL}
+      data-evento-id={event.id}
+      data-evento-slug={event.slug}
+      data-event-date={event.event_date ?? ""}
+      data-event-time={event.time ?? ""}
+      data-minutos-antes={event.checkin_libera_minutos_antes ?? ""}
+      data-liberado-manualmente={event.checkin_liberado_manualmente ? "1" : ""}
+      data-vagas-limite={event.vagas_limite ?? ""}
+    >
+      <header class="pagehead">
+        <p class="eyebrow">Check-in</p>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 class="pagehead-title">{event.title}</h1>
+          <p class="text-sm text-muted-foreground" data-checkin-usuario-wrap hidden>
+            <span data-checkin-usuario></span> ·{" "}
+            <button type="button" class="link-sweep text-accent font-semibold" data-checkin-sair>Sair</button>
+          </p>
+        </div>
+        <p class="pagehead-description" data-checkin-verificando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden class="gallery-empty mt-8" data-checkin-fechado>
+        <p class="text-sm text-muted-foreground" data-checkin-fechado-texto />
+      </div>
+
+      <div hidden data-checkin-aberto>
+      <div class="mt-6 checkin-resumo">
+        <p class="checkin-resumo-numero" data-checkin-contador>—</p>
+        <p class="text-xs text-muted-foreground" data-checkin-sync-status>Carregando…</p>
+      </div>
+      {
+        event.locais_checkin && event.locais_checkin.length > 0 && (
+          <div class="mt-6 grid gap-2 max-w-sm local-checkin-bloco">
+            <label class="text-sm font-semibold" for="checkin-local">Local deste aparelho (portaria)</label>
+            <select id="checkin-local" class="field" data-checkin-local-select>
+              <option value="">Selecione…</option>
+              {event.locais_checkin.map((local) => <option value={local}>{local}</option>)}
+            </select>
+            <p class="text-xs text-muted-foreground">
+              Escolha uma vez só — fica guardado neste aparelho, e toda confirmação feita por ele
+              já leva essa marcação sozinha.
+            </p>
+          </div>
+        )
+      }
+      <form class="mt-8 grid gap-4 max-w-sm" data-checkin-form data-evento-id={event.id}>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="checkin-codigo">Código de confirmação</label>
+          <input
+            id="checkin-codigo"
+            name="codigo"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            maxlength="6"
+            class="field checkin-codigo-input"
+            placeholder="A3F9K2"
+          />
+        </div>
+        <button type="submit" class="btn btn-solid">Confirmar presença</button>
+      </form>
+
+      <div class="mt-4">
+        <button type="button" class="btn btn-outline" data-qr-abrir>Ler QR Code (câmera)</button>
+        <p class="mt-2 text-xs text-muted-foreground">
+          Peça pra pessoa gerar o QR Code dela em{" "}
+          <a href={`/qrcode/${event.slug}/`} class="text-accent underline underline-offset-2">
+            /qrcode/{event.slug}/
+          </a>{" "}
+          e mostrar a tela — mais rápido que digitar quando a fila é grande.
+        </p>
+        <div class="mt-3 qr-leitor" data-qr-leitor hidden>
+          <video data-qr-video playsinline muted class="qr-video"></video>
+          <canvas data-qr-canvas hidden></canvas>
+          <button type="button" class="btn btn-outline mt-2" data-qr-fechar>Fechar câmera</button>
+        </div>
+      </div>
+
+      <p class="mt-6 text-lg font-semibold" data-checkin-resultado role="status" aria-live="polite" />
+
+      <details class="mt-10">
+        <summary class="cursor-pointer text-sm font-semibold text-accent">Esqueceu o código? Buscar pelo nome</summary>
+        <div class="mt-4 grid gap-3 max-w-sm">
+          <input
+            type="text"
+            class="field"
+            placeholder="Digite seu nome…"
+            data-checkin-busca-nome
+            autocomplete="off"
+          />
+          <div class="grid gap-2" data-checkin-resultados-nome></div>
+        </div>
+      </details>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script>
+    import { exigirAutenticacao, sair } from "@/lib/painelAuth";
+
+    const container = document.querySelector<HTMLElement>("[data-directus-url]");
+    if (!container) throw new Error("contêiner do check-in ausente");
+
+    const directusUrl = container.dataset.directusUrl ?? "";
+    const eventoId = Number(container.dataset.eventoId);
+    const eventoSlug = container.dataset.eventoSlug ?? "";
+    const eventDate = container.dataset.eventDate || null;
+    const eventTime = container.dataset.eventTime || null;
+    const minutosAntes = container.dataset.minutosAntes ? Number(container.dataset.minutosAntes) : null;
+    const liberadoManualmente = container.dataset.liberadoManualmente === "1";
+    const vagasLimite = container.dataset.vagasLimite ? Number(container.dataset.vagasLimite) : null;
+
+    const verificandoEl = document.querySelector<HTMLElement>("[data-checkin-verificando]");
+    const usuarioWrap = document.querySelector<HTMLElement>("[data-checkin-usuario-wrap]");
+    const usuarioEl = document.querySelector<HTMLElement>("[data-checkin-usuario]");
+    const sairBtn = document.querySelector<HTMLButtonElement>("[data-checkin-sair]");
+    sairBtn?.addEventListener("click", () => sair(directusUrl));
+
+    let token = "";
+
+    async function iniciar() {
+      const t = await exigirAutenticacao(directusUrl);
+      if (!t) return; // exigirAutenticacao já redireciona pro login
+      token = t;
+
+      const res = await fetch(`${directusUrl}/users/me?fields=email`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+      if (usuarioWrap) usuarioWrap.hidden = false;
+      if (usuarioEl) usuarioEl.textContent = json.data.email;
+      if (verificandoEl) verificandoEl.textContent = "Digite o código de confirmação pra registrar a presença.";
+
+      rodarCheckin();
+    }
+
+    interface Pessoa {
+      id: number | string;
+      nome: string;
+      codigo?: string;
+      pago: boolean;
+      presente: boolean;
+    }
+
+    interface Pendencia {
+      id: number | string;
+      local_checkin: string | null;
+      observacao_checkin: string | null;
+    }
+
+    function rodarCheckin() {
+      const fechadoEl = document.querySelector<HTMLElement>("[data-checkin-fechado]");
+      const fechadoTextoEl = document.querySelector<HTMLElement>("[data-checkin-fechado-texto]");
+      const abertoEl = document.querySelector<HTMLElement>("[data-checkin-aberto]");
+
+      function checkinAberto() {
+        if (liberadoManualmente) return true;
+        if (!eventDate) return true;
+
+        const timeMatch = eventTime ? /^(\d{1,2})h(\d{2})?$/i.exec(eventTime.trim()) : null;
+        if (!timeMatch) {
+          // Sem horário cadastrado, não dá pra calcular "X minutos antes" —
+          // libera direto a partir da meia-noite do dia do evento, em vez
+          // de abrir na noite anterior por engano.
+          return new Date() >= new Date(`${eventDate}T00:00:00`);
+        }
+        const horaEvento = `T${timeMatch[1].padStart(2, "0")}:${timeMatch[2] ?? "00"}:00`;
+        const abre = new Date(`${eventDate}${horaEvento}`);
+        abre.setMinutes(abre.getMinutes() - (minutosAntes ?? 60));
+        return new Date() >= abre;
+      }
+
+      if (!checkinAberto()) {
+        if (fechadoEl) fechadoEl.hidden = false;
+        if (fechadoTextoEl) {
+          fechadoTextoEl.textContent = eventTime
+            ? `O check-in ainda não abriu — libera ${minutosAntes ?? 60} minutos antes do horário do evento (${eventTime}).`
+            : "O check-in ainda não abriu.";
+        }
+        return;
+      }
+      if (abertoEl) abertoEl.hidden = false;
+
+      const form = document.querySelector<HTMLFormElement>("[data-checkin-form]")!;
+      const resultado = document.querySelector<HTMLElement>("[data-checkin-resultado]")!;
+      const buscaInput = document.querySelector<HTMLInputElement>("[data-checkin-busca-nome]")!;
+      const resultadosNome = document.querySelector<HTMLElement>("[data-checkin-resultados-nome]")!;
+      const localSelect = document.querySelector<HTMLSelectElement>("[data-checkin-local-select]");
+      const contadorEl = document.querySelector<HTMLElement>("[data-checkin-contador]")!;
+      const syncStatusEl = document.querySelector<HTMLElement>("[data-checkin-sync-status]")!;
+
+      const escapeHtml = (value: unknown) =>
+        String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+
+      // O local escolhido fica só no navegador deste aparelho, por evento —
+      // um tablet reaproveitado noutro evento escolhe de novo.
+      const LOCAL_STORAGE_KEY = `ieadespa-checkin-local-${eventoSlug}`;
+      if (localSelect) {
+        try {
+          const salvo = localStorage.getItem(LOCAL_STORAGE_KEY);
+          if (salvo) localSelect.value = salvo;
+        } catch {}
+        localSelect.addEventListener("change", () => {
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, localSelect.value);
+          } catch {}
+        });
+      }
+
+      // --- Lista de inscritos em cache local — é o que permite o check-in
+      // continuar funcionando mesmo sem internet (busca por nome/código cai
+      // aqui quando a rede falha), e também é a fonte do contador de
+      // presença ao vivo, sem precisar abrir a tela de inscritos. ---
+      const ROSTER_KEY = `ieadespa-checkin-roster-${eventoSlug}`;
+      const PENDENCIAS_KEY = `ieadespa-checkin-pendencias-${eventoSlug}`;
+      let roster: Pessoa[] = [];
+
+      function carregarRosterDoCache(): Pessoa[] {
+        try {
+          const salvo = localStorage.getItem(ROSTER_KEY);
+          return salvo ? JSON.parse(salvo) : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function salvarRosterNoCache() {
+        try {
+          localStorage.setItem(ROSTER_KEY, JSON.stringify(roster));
+        } catch {}
+      }
+
+      function lerPendencias(): Pendencia[] {
+        try {
+          return JSON.parse(localStorage.getItem(PENDENCIAS_KEY) || "[]");
+        } catch {
+          return [];
+        }
+      }
+
+      function salvarPendencias(pendencias: Pendencia[]) {
+        try {
+          localStorage.setItem(PENDENCIAS_KEY, JSON.stringify(pendencias));
+        } catch {}
+      }
+
+      function atualizarContador() {
+        if (!contadorEl) return;
+        const presentes = roster.filter((p) => p.presente).length;
+        contadorEl.textContent = vagasLimite ? `${presentes} presentes de ${vagasLimite} vagas` : `${presentes} presentes`;
+      }
+
+      function atualizarSyncStatus() {
+        if (!syncStatusEl) return;
+        const pendencias = lerPendencias();
+        if (!navigator.onLine) {
+          syncStatusEl.textContent = `Sem internet — ${pendencias.length} check-in(s) guardado(s) neste aparelho, sincroniza sozinho quando voltar.`;
+        } else if (pendencias.length > 0) {
+          syncStatusEl.textContent = `Sincronizando ${pendencias.length} check-in(s) pendente(s)…`;
+        } else {
+          syncStatusEl.textContent = "Tudo sincronizado.";
+        }
+      }
+
+      async function carregarRoster() {
+        try {
+          const res = await fetch(
+            `${directusUrl}/items/inscricoes_eventos?filter[evento][_eq]=${eventoId}&fields=id,nome,codigo,pago,presente&limit=-1`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (!res.ok) throw new Error("falha ao buscar lista");
+          const json = await res.json();
+          const fresco: Pessoa[] = json.data ?? [];
+          // Se este aparelho já confirmou alguém (otimista) e a atualização
+          // ainda não chegou no servidor (PATCH lento, ou por sincronizar),
+          // não deixa essa atualização periódica "desconfirmar" a pessoa na
+          // tela — a fonte de verdade local nunca regride, só avança.
+          const confirmadosLocalmente = new Set(roster.filter((p) => p.presente).map((p) => String(p.id)));
+          roster = fresco.map((p) => (confirmadosLocalmente.has(String(p.id)) ? { ...p, presente: true } : p));
+          salvarRosterNoCache();
+        } catch {
+          if (!roster.length) roster = carregarRosterDoCache();
+        }
+        atualizarContador();
+        atualizarSyncStatus();
+      }
+
+      async function sincronizarPendencias() {
+        const pendencias = lerPendencias();
+        if (!pendencias.length) {
+          atualizarSyncStatus();
+          return;
+        }
+        const restantes = [];
+        for (const pendencia of pendencias) {
+          try {
+            const res = await fetch(`${directusUrl}/items/inscricoes_eventos/${pendencia.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                presente: true,
+                local_checkin: pendencia.local_checkin,
+                observacao_checkin: pendencia.observacao_checkin,
+              }),
+            });
+            if (!res.ok) throw new Error("falha ao sincronizar");
+          } catch {
+            restantes.push(pendencia);
+          }
+        }
+        salvarPendencias(restantes);
+        atualizarSyncStatus();
+      }
+
+      carregarRoster();
+      window.ieadespaSetInterval(carregarRoster, 20000);
+      window.ieadespaSetInterval(sincronizarPendencias, 8000);
+      window.addEventListener("online", sincronizarPendencias);
+
+      // Confirma na hora (otimista, sem esperar a rede) — quem está na fila
+      // não pode esperar; a gravação de verdade acontece em segundo plano,
+      // e vira pendência se a rede falhar ou estiver offline, sincronizando
+      // sozinha depois.
+      async function confirmarPresenca(id: number | string, nome: string, pago: boolean) {
+        const jaConfirmado = roster.find((p) => String(p.id) === String(id))?.presente;
+        if (jaConfirmado) {
+          resultado.textContent = `${nome} já estava confirmado — nada mudou.`;
+          return;
+        }
+
+        let observacao = null;
+        if (!pago) {
+          observacao = window.prompt(
+            `${nome} ainda não está marcada como paga. Confirmar a entrada mesmo assim é uma exceção — digite o motivo (ex.: "vai pagar depois") ou cancele.`,
+          );
+          if (observacao === null) {
+            resultado.textContent = `Check-in de ${nome} não confirmado (ainda não pago).`;
+            return;
+          }
+        }
+
+        const localAtual = localSelect?.value || null;
+
+        // Otimista: já marca presente no cache local e mostra sucesso antes
+        // de qualquer resposta de rede.
+        const pessoaRoster = roster.find((p) => String(p.id) === String(id));
+        if (pessoaRoster) pessoaRoster.presente = true;
+        salvarRosterNoCache();
+        atualizarContador();
+        resultado.textContent = observacao
+          ? `✅ ${nome} — presença confirmada (exceção: ${observacao}).`
+          : `✅ ${nome} — presença confirmada!`;
+
+        try {
+          const res = await fetch(`${directusUrl}/items/inscricoes_eventos/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ presente: true, local_checkin: localAtual, observacao_checkin: observacao || null }),
+          });
+          if (!res.ok) throw new Error("falha ao confirmar");
+        } catch {
+          const pendencias = lerPendencias().filter((p) => String(p.id) !== String(id));
+          pendencias.push({ id, local_checkin: localAtual, observacao_checkin: observacao || null });
+          salvarPendencias(pendencias);
+          atualizarSyncStatus();
+          sincronizarPendencias();
+        }
+      }
+
+      function buscarNoRoster(codigo: string) {
+        const alvo = codigo.trim().toUpperCase();
+        return roster.find((p) => (p.codigo ?? "").toUpperCase() === alvo) ?? null;
+      }
+
+      async function confirmarPorCodigo(codigo: string) {
+        resultado.textContent = "Verificando…";
+        try {
+          const res = await fetch(
+            `${directusUrl}/items/inscricoes_eventos?filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][codigo][_eq]=${encodeURIComponent(codigo)}`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (!res.ok) throw new Error("falha na busca");
+          const json = await res.json();
+          const pessoa = json.data?.[0] ?? buscarNoRoster(codigo);
+          if (!pessoa) {
+            resultado.textContent = "Código não encontrado. Confira e tente de novo, ou busque pelo nome abaixo.";
+            return;
+          }
+          await confirmarPresenca(pessoa.id, pessoa.nome, pessoa.pago);
+        } catch {
+          // Sem rede — cai pro que já está guardado neste aparelho.
+          const pessoa = buscarNoRoster(codigo);
+          if (!pessoa) {
+            resultado.textContent = "Sem internet e código não encontrado no que já foi carregado neste aparelho.";
+            return;
+          }
+          await confirmarPresenca(pessoa.id, pessoa.nome, pessoa.pago);
+        }
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const codigo = (document.getElementById("checkin-codigo") as HTMLInputElement).value.trim().toUpperCase();
+        await confirmarPorCodigo(codigo);
+        form.reset();
+      });
+
+      // Leitor de QR Code por câmera — o QR (gerado em /qrcode/<slug>/) carrega
+      // "eventoId:codigo"; decodificado, cai no mesmo fluxo de confirmação que
+      // já existe pro código digitado. Só um jeito mais rápido de usar o
+      // mesmo código, não muda nada da segurança do check-in.
+      const qrAbrirBtn = document.querySelector<HTMLButtonElement>("[data-qr-abrir]");
+      const qrFecharBtn = document.querySelector<HTMLButtonElement>("[data-qr-fechar]");
+      const qrLeitor = document.querySelector<HTMLElement>("[data-qr-leitor]");
+      const qrVideo = document.querySelector<HTMLVideoElement>("[data-qr-video]");
+      const qrCanvas = document.querySelector<HTMLCanvasElement>("[data-qr-canvas]");
+      let qrStream: MediaStream | null = null;
+      let qrAnimId: number | null = null;
+
+      function pararLeituraQr() {
+        if (qrAnimId) cancelAnimationFrame(qrAnimId);
+        qrAnimId = null;
+        if (qrStream) qrStream.getTracks().forEach((track) => track.stop());
+        qrStream = null;
+        if (qrLeitor) qrLeitor.hidden = true;
+      }
+
+      function lerFrameQr() {
+        if (!qrVideo || !qrCanvas || qrVideo.readyState !== qrVideo.HAVE_ENOUGH_DATA) {
+          qrAnimId = requestAnimationFrame(lerFrameQr);
+          return;
+        }
+        const ctx = qrCanvas.getContext("2d");
+        if (!ctx) return;
+        qrCanvas.width = qrVideo.videoWidth;
+        qrCanvas.height = qrVideo.videoHeight;
+        ctx.drawImage(qrVideo, 0, 0, qrCanvas.width, qrCanvas.height);
+        const imageData = ctx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+        const codigo = (window as any).jsQR ? (window as any).jsQR(imageData.data, imageData.width, imageData.height) : null;
+
+        if (codigo) {
+          const [eventoIdLido, codigoLido] = codigo.data.split(":");
+          pararLeituraQr();
+          if (Number(eventoIdLido) !== eventoId) {
+            resultado.textContent = "Esse QR Code é de outro evento.";
+            return;
+          }
+          confirmarPorCodigo((codigoLido ?? "").toUpperCase());
+          return;
+        }
+        qrAnimId = requestAnimationFrame(lerFrameQr);
+      }
+
+      qrAbrirBtn?.addEventListener("click", async () => {
+        if (qrLeitor) qrLeitor.hidden = false;
+        try {
+          qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          if (qrVideo) {
+            qrVideo.srcObject = qrStream;
+            await qrVideo.play();
+          }
+          qrAnimId = requestAnimationFrame(lerFrameQr);
+        } catch {
+          resultado.textContent = "Não foi possível acessar a câmera. Digite o código manualmente.";
+          pararLeituraQr();
+        }
+      });
+
+      qrFecharBtn?.addEventListener("click", pararLeituraQr);
+
+      buscaInput.addEventListener("input", () => {
+        const termo = buscaInput.value.trim().toLowerCase();
+        if (termo.length < 2) {
+          resultadosNome.innerHTML = "";
+          return;
+        }
+
+        const encontrados = roster.filter((p) => p.nome.toLowerCase().includes(termo)).slice(0, 8);
+        resultadosNome.innerHTML = encontrados
+          .map(
+            (p) =>
+              `<button type="button" class="btn btn-outline" data-pessoa-id="${p.id}" data-pessoa-nome="${escapeHtml(p.nome)}" data-pessoa-pago="${p.pago}">${escapeHtml(p.nome)}${p.pago ? "" : " (não pago)"}</button>`,
+          )
+          .join("");
+      });
+
+      resultadosNome.addEventListener("click", async (event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-pessoa-id]");
+        if (!button) return;
+        resultado.textContent = "Confirmando…";
+        try {
+          await confirmarPresenca(button.dataset.pessoaId!, button.dataset.pessoaNome!, button.dataset.pessoaPago === "true");
+          resultadosNome.innerHTML = "";
+          buscaInput.value = "";
+        } catch {
+          resultado.textContent = "Não foi possível confirmar agora. Tente novamente em instantes.";
+        }
+      });
+    }
+
+    iniciar();
+  </script>
+
+  <style>
+    .checkin-canvas {
+      max-width: 40rem;
+    }
+
+    .checkin-resumo {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 0.85rem 1.1rem;
+      background: var(--muted);
+      max-width: 24rem;
+    }
+
+    .checkin-resumo-numero {
+      margin: 0;
+      font-family: var(--font-serif);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent-strong);
+    }
+
+    .checkin-codigo-input {
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 1.5rem;
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+
+    .qr-leitor {
+      max-width: 24rem;
+    }
+
+    .qr-video {
+      width: 100%;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: #000;
+    }
+  </style>
+</BaseLayout>

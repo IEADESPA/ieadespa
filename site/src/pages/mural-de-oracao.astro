@@ -1,0 +1,413 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { DIRECTUS_URL, ORAR_MURAL_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout
+  title="Mural de oração"
+  description="Compartilhe um pedido de oração e ore pelos pedidos de outras pessoas da nossa comunidade."
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas mural-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Mural de oração</p>
+        <h1 class="pagehead-title">Ore com a gente</h1>
+        <p class="pagehead-description">
+          Compartilhe um pedido de oração e ore pelos pedidos de outras pessoas. Os pedidos passam
+          por uma breve moderação antes de aparecer aqui, e ficam visíveis por 90 dias.
+        </p>
+      </header>
+
+      <form class="mt-8 grid gap-4 max-w-lg" data-mural-form>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="mural-texto">Seu pedido de oração</label>
+          <textarea
+            id="mural-texto"
+            name="texto"
+            required
+            rows="4"
+            maxlength="500"
+            class="field"
+            placeholder="Escreva aqui o que você gostaria que orássemos com você…"
+          ></textarea>
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="mural-nome">Seu nome (opcional)</label>
+          <input id="mural-nome" name="nome" type="text" maxlength="80" class="field" placeholder="Deixe em branco para publicar como anônimo" />
+        </div>
+
+        <label class="mural-confidencial-toggle">
+          <input type="checkbox" id="mural-confidencial" name="confidencial" />
+          <span>
+            <strong>Enviar de forma confidencial</strong> — só a equipe pastoral vê, nunca aparece
+            publicado aqui no mural.
+          </span>
+        </label>
+
+        <label class="mural-confidencial-toggle">
+          <input type="checkbox" id="mural-consentimento" required />
+          <span>
+            Autorizo o uso deste pedido de oração (incluindo meu nome, se eu escrever um) pela{" "}
+            {siteConfig.name} para o propósito de intercessão descrito nesta página — dado sobre
+            convicção religiosa é uma categoria especial de dado pessoal, e por isso pede
+            consentimento específico. Veja como tratamos isso na{" "}
+            <a href="/privacidade/" target="_blank" class="underline underline-offset-2">
+              política de privacidade
+            </a>.
+          </span>
+        </label>
+
+        <!-- Honeypot: campo escondido de gente de verdade (CSS oculta), que
+             bot de spam costuma preencher automaticamente. Se vier
+             preenchido, a gente finge que deu certo e não manda pra frente. -->
+        <div class="mural-honeypot" aria-hidden="true">
+          <label for="mural-site">Deixe este campo em branco</label>
+          <input type="text" id="mural-site" name="site" tabindex="-1" autocomplete="off" />
+        </div>
+
+        <button type="submit" class="btn btn-solid">Enviar pedido</button>
+        <p class="text-sm" data-mural-status role="status" aria-live="polite"></p>
+        <p class="text-xs leading-relaxed text-muted-foreground">
+          Não serão publicados: mensagens ofensivas, discurso de ódio, conteúdo político-partidário,
+          propaganda comercial, spam, ou dados sensíveis de terceiros (endereço, telefone, valores).
+          A equipe se reserva o direito de não publicar pedidos fora desse propósito. Pedidos
+          públicos normalmente são revisados e publicados em até 2 dias úteis.
+        </p>
+      </form>
+
+      <section class="mt-16" aria-labelledby="mural-lista-heading">
+        <h2 id="mural-lista-heading" class="section-title">Pedidos da comunidade</h2>
+        <div class="mt-6 grid gap-4" data-mural-lista></div>
+        <p class="mt-6 text-sm text-muted-foreground" data-mural-vazio hidden>
+          Nenhum pedido publicado ainda. Seja o primeiro a compartilhar.
+        </p>
+        <button type="button" class="btn btn-outline mt-8" data-mural-carregar-mais hidden>Carregar mais</button>
+      </section>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline define:vars={{ directusUrl: DIRECTUS_URL, orarMuralUrl: ORAR_MURAL_URL }}>
+    (() => {
+      const form = document.querySelector("[data-mural-form]");
+      const status = document.querySelector("[data-mural-status]");
+      const lista = document.querySelector("[data-mural-lista]");
+      const vazio = document.querySelector("[data-mural-vazio]");
+      const carregarMaisBtn = document.querySelector("[data-mural-carregar-mais]");
+
+      const PAGINA = 20;
+      let offset = 0;
+      let acabou = false;
+      const idsRenderizados = new Set();
+
+      const escapeHtml = (value) =>
+        String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+      const tempoRelativo = (isoDate) => {
+        const diffMs = Date.now() - new Date(isoDate).getTime();
+        const minutos = Math.floor(diffMs / 60000);
+        if (minutos < 1) return "agora há pouco";
+        if (minutos < 60) return `há ${minutos} min`;
+        const horas = Math.floor(minutos / 60);
+        if (horas < 24) return `há ${horas}h`;
+        const dias = Math.floor(horas / 24);
+        return `há ${dias} dia${dias === 1 ? "" : "s"}`;
+      };
+
+      // Guarda por quais pedidos esta pessoa já clicou "orando por você" —
+      // persiste entre visitas (não só durante a sessão atual), então o
+      // mesmo navegador não consegue inflar o contador de um pedido clicando
+      // várias vezes ao longo do tempo.
+      const ORADOS_KEY = "ieadespa-mural-orados";
+      const lerOrados = () => {
+        try {
+          return new Set(JSON.parse(localStorage.getItem(ORADOS_KEY) || "[]"));
+        } catch {
+          return new Set();
+        }
+      };
+      const orados = lerOrados();
+      const marcarOrado = (id) => {
+        orados.add(String(id));
+        try {
+          localStorage.setItem(ORADOS_KEY, JSON.stringify([...orados]));
+        } catch {}
+      };
+
+      const cardHtml = (item) => {
+        const jaOrou = orados.has(String(item.id));
+        return `
+        <article class="mural-card" data-mural-card data-id="${item.id}">
+          <p class="mural-card-texto">${escapeHtml(item.texto)}</p>
+          <footer class="mural-card-footer">
+            <span>${escapeHtml(item.nome?.trim() || "Anônimo")} · <span data-tempo>${tempoRelativo(item.date_created)}</span></span>
+            <button
+              type="button"
+              class="mural-orar-btn"
+              data-orar-btn
+              data-count="${item.orando_count}"
+              ${jaOrou ? "disabled" : ""}
+              aria-pressed="${jaOrou ? "true" : "false"}"
+            >
+              🙏 ${jaOrou ? "Você orou por este pedido" : "Orando por você"} <span data-orar-count role="status" aria-live="polite">(${item.orando_count})</span>
+            </button>
+          </footer>
+        </article>
+      `;
+      };
+
+      const prependCard = (item) => {
+        if (idsRenderizados.has(item.id)) return;
+        idsRenderizados.add(item.id);
+        vazio.hidden = true;
+        lista.insertAdjacentHTML("afterbegin", cardHtml(item));
+      };
+
+      const appendCard = (item) => {
+        if (idsRenderizados.has(item.id)) return;
+        idsRenderizados.add(item.id);
+        vazio.hidden = true;
+        lista.insertAdjacentHTML("beforeend", cardHtml(item));
+      };
+
+      const atualizarContador = (id, count) => {
+        const card = lista.querySelector(`[data-mural-card][data-id="${id}"]`);
+        if (!card) return;
+        const btn = card.querySelector("[data-orar-btn]");
+        const span = card.querySelector("[data-orar-count]");
+        btn.dataset.count = String(count);
+        span.textContent = `(${count})`;
+      };
+
+      async function carregarPagina() {
+        const res = await fetch(
+          `${directusUrl}/items/mural_oracao?sort=-date_created&limit=${PAGINA}&offset=${offset}`,
+        );
+        const json = await res.json();
+        const itens = json.data ?? [];
+        itens.forEach(appendCard);
+        offset += itens.length;
+        acabou = itens.length < PAGINA;
+        carregarMaisBtn.hidden = acabou;
+        if (offset === itens.length && itens.length === 0) vazio.hidden = false;
+      }
+
+      carregarPagina().catch(() => {
+        status.textContent = "Não foi possível carregar o mural agora.";
+      });
+
+      carregarMaisBtn?.addEventListener("click", () => carregarPagina());
+
+      form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const texto = document.getElementById("mural-texto").value.trim();
+        const nome = document.getElementById("mural-nome").value.trim();
+        const confidencial = document.getElementById("mural-confidencial").checked;
+        const consentimentoLgpd = document.getElementById("mural-consentimento").checked;
+        const honeypot = document.getElementById("mural-site").value;
+        if (!texto || !consentimentoLgpd) return;
+
+        // Bot preencheu o campo escondido — finge sucesso sem mandar nada
+        // pro Directus, sem dar nenhuma pista pro bot de que foi barrado.
+        if (honeypot) {
+          form.reset();
+          status.textContent = "Recebido! Seu pedido será revisado em breve.";
+          return;
+        }
+
+        status.textContent = "Enviando…";
+        try {
+          const res = await fetch(`${directusUrl}/items/mural_oracao`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ texto, nome: nome || null, confidencial, consentimento_lgpd: consentimentoLgpd }),
+          });
+          if (!res.ok) throw new Error("falha ao enviar");
+          form.reset();
+          status.textContent = confidencial
+            ? "Recebido! Seu pedido confidencial vai direto pra equipe pastoral, sem ser publicado."
+            : "Recebido! Seu pedido será revisado e publicado em até 2 dias úteis.";
+        } catch {
+          status.textContent = "Não foi possível enviar agora. Tente novamente em instantes.";
+        }
+      });
+
+      lista?.addEventListener("click", async (event) => {
+        const btn = event.target.closest("[data-orar-btn]");
+        if (!btn || btn.disabled) return;
+        const card = btn.closest("[data-mural-card]");
+        const id = card.dataset.id;
+        if (orados.has(String(id))) return; // já orou por este pedido antes, em outra visita
+
+        // Trava assim que clica (não só durante a chamada de rede) — marca
+        // como "já orou" permanentemente neste navegador, então um clique
+        // duplo ou voltar depois na mesma página não conta de novo.
+        marcarOrado(id);
+        btn.disabled = true;
+        btn.setAttribute("aria-pressed", "true");
+        const contadorOtimista = Number(btn.dataset.count) + 1;
+        btn.innerHTML = `🙏 Você orou por este pedido <span data-orar-count role="status" aria-live="polite">(${contadorOtimista})</span>`;
+        btn.dataset.count = String(contadorOtimista);
+        try {
+          // O incremento de verdade é calculado no servidor (ver `orar-mural`,
+          // nunca aceita um número vindo do navegador) — aqui só refletimos o
+          // clique na hora; se o número real vier diferente por tempo real
+          // (outra pessoa orou ao mesmo tempo), o WebSocket corrige sozinho.
+          await fetch(orarMuralUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: Number(id) }),
+          });
+        } catch {
+          // silencioso: o contador local já refletiu o clique, tenta de novo depois via tempo real
+        }
+      });
+
+      // Tempo real: aparecem pedidos recém-aprovados e o contador de "orando"
+      // atualiza sozinho pra quem estiver com a página aberta, via WebSocket
+      // do Directus (usa a mesma permissão pública de leitura da REST API).
+      const conectarTempoReal = () => {
+        let ws;
+        try {
+          const wsUrl = `${directusUrl.replace(/^http/, "ws")}/websocket`;
+          ws = new WebSocket(wsUrl);
+        } catch {
+          return;
+        }
+
+        ws.addEventListener("open", () => {
+          ws.send(
+            JSON.stringify({
+              type: "subscribe",
+              collection: "mural_oracao",
+              query: { fields: ["id", "texto", "nome", "orando_count", "date_created"] },
+            }),
+          );
+        });
+
+        ws.addEventListener("message", (event) => {
+          let msg;
+          try {
+            msg = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+          if (msg.type !== "subscription" || !Array.isArray(msg.data)) return;
+          if (msg.event === "create") {
+            msg.data.forEach(prependCard);
+          } else if (msg.event === "update") {
+            msg.data.forEach((item) => {
+              if (idsRenderizados.has(item.id)) atualizarContador(item.id, item.orando_count);
+              else prependCard(item);
+            });
+          }
+        });
+
+        ws.addEventListener("close", () => {
+          setTimeout(conectarTempoReal, 5000);
+        });
+        ws.addEventListener("error", () => ws.close());
+      };
+
+      conectarTempoReal();
+    })();
+  </script>
+
+  <style>
+    .mural-canvas {
+      max-width: 44rem;
+    }
+
+    .mural-confidencial-toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      border-left: 3px solid var(--accent);
+      background: var(--muted);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: var(--muted-foreground);
+      cursor: pointer;
+    }
+
+    .mural-confidencial-toggle input {
+      margin-top: 0.2rem;
+      accent-color: var(--accent);
+    }
+
+    /* Escondido pra gente de verdade (some visualmente e do layout), mas
+       ainda presente no HTML e preenchível por bot que não roda CSS. */
+    .mural-honeypot {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .mural-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      background: var(--muted);
+    }
+
+    .mural-card-texto {
+      margin: 0;
+      text-wrap: pretty;
+    }
+
+    .mural-card-footer {
+      margin-top: 0.75rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--muted-foreground);
+    }
+
+    .mural-orar-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      background: var(--background);
+      font-weight: 600;
+      font-size: 0.8125rem;
+      color: var(--foreground);
+      cursor: pointer;
+    }
+
+    .mural-orar-btn:hover {
+      background: var(--accent);
+      color: var(--accent-foreground, var(--background));
+    }
+
+    .mural-orar-btn:disabled {
+      cursor: default;
+      opacity: 0.7;
+    }
+
+    .mural-orar-btn:disabled:hover {
+      background: var(--background);
+      color: var(--foreground);
+    }
+  </style>
+</BaseLayout>

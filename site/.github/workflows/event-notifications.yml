@@ -1,0 +1,34 @@
+name: Avisos de eventos (push)
+
+on:
+  schedule:
+    # 11:00 UTC ~= 08:00 em Parauapebas/PA (UTC-3, sem horário de verão).
+    - cron: "0 11 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instala as dependências (web-push + Azure Communication Services Email)
+        run: npm install web-push@3.6.7 @azure/communication-email@1.0.0
+
+      - name: Envia os avisos de eventos de amanhã
+        env:
+          DIRECTUS_URL: https://ieadespa-directus-gae4hfarf4a4ffcf.brazilsouth-01.azurewebsites.net
+          DIRECTUS_ADMIN_TOKEN: ${{ secrets.DIRECTUS_ADMIN_TOKEN }}
+          VAPID_PUBLIC_KEY: BHjTzvfXIx0DAkcCgfJDNQO5N09SmO0jIPuTP8L6rxnEaITMn95fQH6kHFnbrEJE-Fdroim5bNnaKp5wwowXdak
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SITE_URL: https://www.ieadespa.org.br
+          ACS_CONNECTION_STRING: ${{ secrets.ACS_CONNECTION_STRING }}
+        run: node .github/scripts/send-event-reminders.mjs

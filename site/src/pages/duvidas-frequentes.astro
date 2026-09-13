@@ -1,0 +1,99 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllFaq, groupFaqByCategory } from "@/lib/faq";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const groups = groupFaqByCategory(await getAllFaq());
+
+// FAQPage — deixa cada pergunta/resposta elegível pro Google mostrar direto
+// no resultado de busca (rich result de "perguntas frequentes").
+const faqStructuredData = groups.length > 0 && {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: groups.flatMap((group) =>
+    group.items.map((item) => ({
+      "@type": "Question",
+      name: item.pergunta,
+      acceptedAnswer: { "@type": "Answer", text: item.resposta },
+    })),
+  ),
+};
+---
+
+<BaseLayout
+  title="Dúvidas frequentes"
+  description={`Perguntas frequentes sobre visitar, participar e usar o site da ${siteConfig.name}.`}
+  structuredData={faqStructuredData || undefined}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Ajuda</p>
+        <h1 class="pagehead-title">Dúvidas frequentes</h1>
+        <p class="pagehead-description">
+          As perguntas mais comuns de quem está pensando em visitar, participar ou só quer entender
+          como o site funciona — organizadas por assunto.
+        </p>
+      </header>
+
+      <nav class="mt-8 mb-4" aria-label="Ir direto para uma categoria">
+        <ul class="faq-toc">
+          {groups.map((group) => <li><a href={`#${group.categoria}`} class="pill">{group.label}</a></li>)}
+        </ul>
+      </nav>
+
+      {
+        groups.map((group) => (
+          <section class="mt-14" aria-labelledby={`${group.categoria}-heading`} id={group.categoria}>
+            <h2 id={`${group.categoria}-heading`} class="section-title">{group.label}</h2>
+            <div class="grid gap-3">
+              {group.items.map((item) => (
+                <details class="faq-item">
+                  <summary>{item.pergunta}</summary>
+                  <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.resposta}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+        ))
+      }
+
+      <div class="prose mt-16">
+        <h2>Não achou sua pergunta?</h2>
+        <p>
+          Fale com a gente pela <a href="/contato/">página de contato</a> — respondemos com prazer.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .faq-toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .faq-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+  }
+
+  .faq-item summary {
+    cursor: pointer;
+    font-weight: 600;
+    scroll-margin-top: 5rem;
+  }
+
+  .faq-item summary::marker {
+    color: var(--accent);
+  }
+</style>

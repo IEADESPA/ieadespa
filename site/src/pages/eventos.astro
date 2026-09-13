@@ -1,0 +1,698 @@
+---
+import CalendarioMensal from "@/components/CalendarioMensal.astro";
+import ProgramacaoList from "@/components/ProgramacaoList.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { congregacaoEndereco, DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { hasEventPage } from "@/lib/eventos";
+import { coordenadaDeLinkMaps } from "@/lib/googleMapsLink";
+import { getAllProgramacao } from "@/lib/programacao";
+
+interface Congregacao {
+  id: number;
+  name: string;
+  address: string | null;
+  neighborhood: string | null;
+  address_new: string | null;
+  neighborhood_new: string | null;
+  city: string | null;
+  state: string | null;
+  /** Fase 24.8 — preenchido só depois que a liderança da congregação
+   * confirmar (ou ceder) um perfil real no Google Maps (mesma trava da Fase
+   * 24 inteira). Vazio = eventos dessa congregação não entram no mapa. */
+  google_maps_place_query: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+interface Evento {
+  slug: string;
+  title: string;
+  event_date: string | null;
+  end_date: string | null;
+  time: string | null;
+  location: string | null;
+  location_maps_url: string | null;
+  congregacao: Congregacao | null;
+  responsavel: string | null;
+  description: string;
+  body: string | null;
+  registration_url: string | null;
+  aceita_inscricao: boolean;
+}
+
+const allPosts = visiblePosts(await getAllMensagens());
+const events = (await fetchItems<Evento>("eventos", "fields=*,congregacao.*")).sort((a, b) => {
+  const dateA = a.event_date ? new Date(a.event_date).getTime() : Number.POSITIVE_INFINITY;
+  const dateB = b.event_date ? new Date(b.event_date).getTime() : Number.POSITIVE_INFINITY;
+  return dateA - dateB;
+});
+/* timeZone: "UTC" nos três porque as datas vêm do Directus como
+   "AAAA-MM-DD" (um dia de calendário, não um instante) — sem isso, mostrar
+   o dia certo dependeria do fuso horário de onde o build roda. */
+const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const shortDateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", timeZone: "UTC" });
+const monthFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { month: "long", year: "numeric", timeZone: "UTC" });
+
+const eventDateRange = (event: Evento) => {
+  if (!event.event_date) return null;
+  const start = shortDateFormatter.format(new Date(event.event_date));
+  if (!event.end_date || event.end_date === event.event_date) return dateFormatter.format(new Date(event.event_date));
+  const end = dateFormatter.format(new Date(event.end_date));
+  return `${start} a ${end}`;
+};
+
+// Com muitos eventos especiais cadastrados (o calendário anual inteiro),
+// uma lista só ficaria enorme — agrupa por mês e mostra só o mês
+// selecionado no calendário acima, em vez de rolar a página inteira.
+const eventsByMonth = events.reduce<{ month: string; monthKey: string; items: Evento[] }[]>((groups, event) => {
+  const monthKey = event.event_date ? event.event_date.slice(0, 7) : "sem-data";
+  const label = event.event_date ? monthFormatter.format(new Date(event.event_date)) : "Sem data";
+  const last = groups.at(-1);
+  if (last && last.monthKey === monthKey) last.items.push(event);
+  else groups.push({ month: label, monthKey, items: [event] });
+  return groups;
+}, []);
+
+// Mesma lógica do calendário: mostra por padrão o mês atual (se tiver
+// evento) ou o próximo com evento — nunca um mês vazio à toa.
+const todayMonthKey = new Date().toISOString().slice(0, 7);
+const defaultMonthKey =
+  eventsByMonth.find((group) => group.monthKey >= todayMonthKey)?.monthKey ?? eventsByMonth[0]?.monthKey;
+
+/* Fase 24.8 — mapa único com os eventos que já têm coordenada de verdade,
+   filtrado pelo mesmo mês selecionado no calendário acima. Duas fontes
+   possíveis, nessa ordem de checagem: (1) link próprio do evento (Fase
+   24.3, só evento sem congregação) — o caso de hoje; (2) a congregação do
+   evento já ter perfil confirmado (mesmo campo/regra da Sede, Fase 24.1) —
+   ainda não acontece com nenhuma, mas já funciona sozinho assim que a
+   primeira confirmar, sem precisar mexer neste código de novo. */
+interface PontoMapa {
+  monthKey: string;
+  lat: number;
+  lng: number;
+  title: string;
+  href: string | null;
+}
+
+const pontosMapa: PontoMapa[] = (
+  await Promise.all(
+    events
+      .filter((event) => event.event_date)
+      .map(async (event): Promise<PontoMapa | null> => {
+        const monthKey = (event.event_date as string).slice(0, 7);
+        const href = hasEventPage(event) ? `/evento/${event.slug}/` : null;
+
+        if (!event.congregacao && event.location_maps_url) {
+          const coordenada = await coordenadaDeLinkMaps(event.location_maps_url);
+          if (coordenada) return { monthKey, lat: coordenada.lat, lng: coordenada.lng, title: event.title, href };
+        }
+
+        if (event.congregacao?.google_maps_place_query && event.congregacao.lat && event.congregacao.lng) {
+          return { monthKey, lat: Number(event.congregacao.lat), lng: Number(event.congregacao.lng), title: event.title, href };
+        }
+
+        return null;
+      }),
+  )
+).filter((ponto): ponto is PontoMapa => ponto !== null);
+
+const programacao = await getAllProgramacao();
+const instagram = siteConfig.socials.find((social) => social.label === "Instagram");
+
+// Pra quem não quer aviso de TODOS os eventos especiais (útil quando tem
+// evento praticamente todo fim de semana) — filtra por responsável.
+const responsaveisDisponiveis = [...new Set(events.map((e) => e.responsavel).filter((r): r is string => Boolean(r)))].sort((a, b) =>
+  a.localeCompare(b, "pt-BR"),
+);
+---
+
+<BaseLayout title="Eventos" description={`Seminários, campanhas e eventos especiais da ${siteConfig.name}.`}>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Agenda</p>
+        <h1 class="pagehead-title">Eventos e programação</h1>
+        <p class="pagehead-description">
+          A programação semanal de cultos e os eventos especiais da igreja.
+        </p>
+        <p class="mt-6">
+          <a href={siteConfig.youtubeLiveUrl} target="_blank" rel="noreferrer" class="btn btn-outline">
+            Assistir ao vivo
+          </a>
+        </p>
+        <p class="mt-2 text-xs text-muted-foreground">
+          Transmitimos ao vivo apenas eventos especiais (congressos, festas), não os cultos locais.
+          Esse link mostra a transmissão automaticamente quando houver uma no ar.
+        </p>
+      </header>
+
+      {
+        programacao.length > 0 && (
+          <section aria-labelledby="schedule-heading">
+            <div class="flex flex-wrap items-baseline justify-between gap-3">
+              <h2 id="schedule-heading" class="section-title">Programação semanal</h2>
+              <a href="/programacao-semanal.png" target="_blank" class="link-sweep text-sm font-semibold text-accent">
+                Baixar imagem para compartilhar
+              </a>
+            </div>
+            <div class="mt-5">
+              <ProgramacaoList items={programacao} />
+            </div>
+            <p class="mt-4 text-sm text-muted-foreground">
+              Equipe da recepção: abra o <a href="/painel/sede/" class="text-accent underline underline-offset-2">painel da Sede</a>{" "}
+              ou o <a href="/painel/congregacoes/" class="text-accent underline underline-offset-2">painel das Congregações</a> num
+              telão/TV pra mostrar a programação de hoje automaticamente.
+            </p>
+          </section>
+        )
+      }
+
+      <section class="mt-16" aria-labelledby="special-events-heading">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 id="special-events-heading" class="section-title">Eventos especiais</h2>
+          <div class="flex flex-wrap items-baseline gap-4">
+            {events.length > 0 && (
+              <a href="/eventos.ics" class="link-sweep text-sm font-semibold text-accent">Assinar a agenda</a>
+            )}
+            {events.length > 0 && (
+              <a href="/eventos/exportar/" class="link-sweep text-sm font-semibold text-accent">Baixar PDF de eventos</a>
+            )}
+            <div class="notify-wrap" data-notify-wrap hidden>
+              <button type="button" class="link-sweep text-sm font-semibold text-accent" data-notify-toggle>
+                Avisar quando um evento estiver chegando
+              </button>
+              <div class="notify-panel" data-notify-panel hidden>
+                <p class="text-sm font-semibold">Quais eventos você quer receber aviso?</p>
+                {
+                  responsaveisDisponiveis.length > 0 ? (
+                    <>
+                      <label class="flex items-center gap-2 text-sm mt-2">
+                        <input type="radio" name="notify-modo" value="todos" data-notify-modo checked /> Todos os eventos especiais
+                      </label>
+                      <label class="flex items-center gap-2 text-sm mt-1">
+                        <input type="radio" name="notify-modo" value="selecionados" data-notify-modo /> Só de responsáveis específicos
+                      </label>
+                      <div class="mt-2 grid gap-1 notify-responsaveis" data-notify-responsaveis hidden>
+                        {responsaveisDisponiveis.map((r) => (
+                          <label class="flex items-center gap-2 text-sm">
+                            <input type="checkbox" value={r} data-notify-responsavel /> {r}
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p class="text-xs text-muted-foreground mt-1">Você recebe aviso de todos os eventos especiais.</p>
+                  )
+                }
+                <div class="mt-3 flex flex-wrap gap-3">
+                  <button type="button" class="btn btn-solid" data-notify-salvar>Ativar notificações</button>
+                  <button type="button" class="btn btn-outline" data-notify-cancelar hidden>Cancelar notificações</button>
+                </div>
+                <p class="mt-2 text-xs text-muted-foreground" data-notify-status role="status" aria-live="polite" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {
+          events.length > 0 && (
+            <div class="mt-5 max-w-md">
+              <CalendarioMensal
+                events={events
+                  .filter((event) => event.event_date)
+                  .map((event) => ({
+                    date: event.event_date as string,
+                    endDate: event.end_date,
+                    title: event.title,
+                    href: hasEventPage(event) ? `/evento/${event.slug}/` : undefined,
+                  }))}
+              />
+            </div>
+          )
+        }
+
+        {
+          pontosMapa.length > 0 && (
+            <div
+              class="mt-8 overflow-hidden rounded-[var(--radius-md)] border border-border"
+              data-eventos-mapa-wrap
+              data-pontos={JSON.stringify(pontosMapa)}
+              data-default-month={defaultMonthKey}
+              data-maps-key={siteConfig.googleMapsEmbedKey}
+            >
+              <div id="eventos-mapa" style="height:360px" data-eventos-mapa />
+            </div>
+          )
+        }
+
+        {
+          events.length > 0 ? (
+            eventsByMonth.map((group) => (
+              <div class="mt-10" data-month-group={group.monthKey} hidden={group.monthKey !== defaultMonthKey}>
+                <h3 class="eyebrow">{group.month}</h3>
+                <ul class="mt-4 grid gap-4">
+                  {group.items.map((event) => (
+                    <li class="event-card">
+                      <div class="flex flex-wrap items-baseline justify-between gap-3">
+                        <h4 class="text-lg font-semibold tracking-tight">{event.title}</h4>
+                        {event.event_date && (
+                          <span class="pill shrink-0">
+                            {eventDateRange(event)}
+                            {event.time && ` · ${event.time}`}
+                          </span>
+                        )}
+                      </div>
+                      {
+                        (event.congregacao?.name || event.location) && (
+                          <p class="mt-1 text-sm text-muted-foreground">
+                            {event.congregacao ? event.congregacao.name : event.location}
+                            {event.congregacao && ` — ${congregacaoEndereco(event.congregacao)}`}
+                          </p>
+                        )
+                      }
+                      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{event.description}</p>
+                      <div class="mt-3 flex flex-wrap gap-4">
+                        {hasEventPage(event) && (
+                          <a href={`/evento/${event.slug}/`} class="link-sweep text-sm font-semibold text-accent">
+                            {event.aceita_inscricao ? "Ver detalhes e inscrever-se" : "Ver detalhes"}
+                          </a>
+                        )}
+                        {event.registration_url && (
+                          <a href={event.registration_url} target="_blank" rel="noreferrer" class="link-sweep text-sm font-semibold text-accent">Inscreva-se</a>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          ) : (
+            <div class="gallery-empty">
+              <p class="text-sm leading-relaxed text-muted-foreground">Nenhum evento especial cadastrado no momento.</p>
+            </div>
+          )
+        }
+
+        <p class="mt-10 gallery-empty" data-month-empty hidden>
+          <span class="text-sm leading-relaxed text-muted-foreground">Nenhum evento especial nesse mês.</span>
+        </p>
+      </section>
+
+      <script is:inline>
+        (() => {
+          const groups = document.querySelectorAll("[data-month-group]");
+          const empty = document.querySelector("[data-month-empty]");
+          if (!groups.length) return;
+
+          window.addEventListener("calendario-mes", (event) => {
+            const monthKey = event.detail.monthKey;
+            let matched = false;
+            groups.forEach((group) => {
+              const isMatch = group.dataset.monthGroup === monthKey;
+              group.hidden = !isMatch;
+              if (isMatch) matched = true;
+            });
+            if (empty) empty.hidden = matched;
+          });
+        })();
+      </script>
+
+      {
+        pontosMapa.length > 0 && (
+          <script is:inline>
+            (() => {
+              const wrap = document.querySelector("[data-eventos-mapa-wrap]");
+              if (!wrap) return;
+
+              const todosPontos = JSON.parse(wrap.dataset.pontos || "[]");
+              const googleMapsKey = wrap.dataset.mapsKey;
+              let monthKeyAtual = wrap.dataset.defaultMonth;
+              let map = null;
+              let marcadores = [];
+
+              function agruparPorCoordenada(pontos) {
+                const grupos = new Map();
+                pontos.forEach((ponto) => {
+                  const chave = `${ponto.lat.toFixed(5)},${ponto.lng.toFixed(5)}`;
+                  if (!grupos.has(chave)) grupos.set(chave, { lat: ponto.lat, lng: ponto.lng, eventos: [] });
+                  grupos.get(chave).eventos.push(ponto);
+                });
+                return Array.from(grupos.values());
+              }
+
+              function redesenharMarcadores() {
+                if (!map) return;
+                marcadores.forEach((m) => m.setMap(null));
+                marcadores = [];
+
+                const pontosDoMes = todosPontos.filter((p) => p.monthKey === monthKeyAtual);
+                const grupos = agruparPorCoordenada(pontosDoMes);
+                if (!grupos.length) return;
+
+                const bounds = new google.maps.LatLngBounds();
+                grupos.forEach((grupo) => {
+                  const posicao = { lat: grupo.lat, lng: grupo.lng };
+                  bounds.extend(posicao);
+                  const marker = new google.maps.Marker({
+                    position: posicao,
+                    map,
+                    icon: {
+                      path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z",
+                      fillColor: "#8f6f1f",
+                      fillOpacity: 1,
+                      strokeColor: "#6b5417",
+                      strokeWeight: 1,
+                      scale: 1.8,
+                      anchor: new google.maps.Point(12, 22),
+                    },
+                  });
+
+                  const conteudo =
+                    grupo.eventos.length === 1
+                      ? `<div style="font-family: system-ui, sans-serif;">${
+                          grupo.eventos[0].href
+                            ? `<a href="${grupo.eventos[0].href}" style="font-weight:600;color:#8f6f1f;">${grupo.eventos[0].title}</a>`
+                            : grupo.eventos[0].title
+                        }</div>`
+                      : `<div style="font-family: system-ui, sans-serif;"><p style="margin:0 0 6px;font-weight:700;">${grupo.eventos.length} eventos neste local</p><ul style="margin:0;padding-left:1.1rem;">${grupo.eventos
+                          .map(
+                            (e) =>
+                              `<li style="margin-bottom:4px;">${e.href ? `<a href="${e.href}" style="color:#8f6f1f;font-weight:600;">${e.title}</a>` : e.title}</li>`,
+                          )
+                          .join("")}</ul></div>`;
+
+                  const infoWindow = new google.maps.InfoWindow({ content: conteudo });
+                  marker.addListener("click", () => infoWindow.open(map, marker));
+                  marcadores.push(marker);
+                });
+
+                if (grupos.length === 1) {
+                  map.setCenter(grupos[0]);
+                  map.setZoom(14);
+                } else {
+                  map.fitBounds(bounds);
+                }
+              }
+
+              window.initEventosMapa = function initEventosMapa() {
+                const container = document.querySelector("[data-eventos-mapa]");
+                if (!container) return;
+                map = new google.maps.Map(container, {
+                  center: { lat: -6.0888917, lng: -49.8624825 },
+                  zoom: 12,
+                  disableDefaultUI: false,
+                  fullscreenControl: true,
+                  streetViewControl: false,
+                  mapTypeControl: false,
+                });
+                redesenharMarcadores();
+              };
+
+              window.addEventListener("calendario-mes", (event) => {
+                monthKeyAtual = event.detail.monthKey;
+                redesenharMarcadores();
+              });
+
+              const script = document.createElement("script");
+              script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsKey}&callback=initEventosMapa`;
+              script.async = true;
+              document.head.appendChild(script);
+            })();
+          </script>
+        )
+      }
+
+      <script is:inline define:vars={{ directusUrl: DIRECTUS_URL, vapidPublicKey: "BHjTzvfXIx0DAkcCgfJDNQO5N09SmO0jIPuTP8L6rxnEaITMn95fQH6kHFnbrEJE-Fdroim5bNnaKp5wwowXdak" }}>
+        (() => {
+          const wrap = document.querySelector("[data-notify-wrap]");
+          const toggleBtn = document.querySelector("[data-notify-toggle]");
+          const panel = document.querySelector("[data-notify-panel]");
+          const modoInputs = document.querySelectorAll("[data-notify-modo]");
+          const responsaveisBloco = document.querySelector("[data-notify-responsaveis]");
+          const responsavelInputs = document.querySelectorAll("[data-notify-responsavel]");
+          const salvarBtn = document.querySelector("[data-notify-salvar]");
+          const cancelarBtn = document.querySelector("[data-notify-cancelar]");
+          const statusEl = document.querySelector("[data-notify-status]");
+          if (!wrap || !toggleBtn || !panel || !salvarBtn || !cancelarBtn) return;
+
+          const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+          if (!supported) return;
+          wrap.hidden = false;
+
+          const ENDPOINT_KEY = "ieadespa-push-endpoint";
+          const RESPONSAVEIS_KEY = "ieadespa-push-responsaveis";
+          // Preferências das 3 notificações (eventos, mensagens, notícias)
+          // compartilham a mesma inscrição push do navegador — guardadas
+          // juntas aqui pra saber, na hora de cancelar UMA, se ainda sobra
+          // alguma outra ativa (só então cancela a inscrição de verdade;
+          // senão, cancelar aviso de evento apagaria também o de mensagem
+          // nova, sem a pessoa esperar isso).
+          const PREFS_KEY = "ieadespa-push-prefs";
+          const lerPrefs = () => {
+            try {
+              return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+            } catch {
+              return {};
+            }
+          };
+          const salvarPrefs = (prefs) => {
+            try {
+              localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+            } catch {}
+          };
+
+          const urlBase64ToUint8Array = (base64String) => {
+            const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+            const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+            const rawData = atob(base64);
+            return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+          };
+
+          const endpointSalvo = () => {
+            try {
+              return localStorage.getItem(ENDPOINT_KEY);
+            } catch {
+              return null;
+            }
+          };
+
+          const responsaveisSalvos = () => {
+            try {
+              const raw = localStorage.getItem(RESPONSAVEIS_KEY);
+              return raw ? JSON.parse(raw) : null;
+            } catch {
+              return null;
+            }
+          };
+
+          function preencherFormComPreferencias(responsaveis) {
+            if (responsaveis && responsaveis.length && modoInputs.length) {
+              const selecionadosInput = document.querySelector('[data-notify-modo][value="selecionados"]');
+              if (selecionadosInput) selecionadosInput.checked = true;
+              if (responsaveisBloco) responsaveisBloco.hidden = false;
+              responsavelInputs.forEach((input) => {
+                input.checked = responsaveis.includes(input.value);
+              });
+            }
+          }
+
+          function atualizarBotoes() {
+            // O botão fala especificamente de EVENTOS — usa a preferência
+            // própria, não só "existe alguma inscrição push", porque agora
+            // o mesmo navegador pode estar inscrito só em mensagem/notícia,
+            // sem eventos, e o botão precisa refletir isso corretamente.
+            const jaInscrito = Boolean(endpointSalvo()) && lerPrefs().eventos !== false;
+            toggleBtn.textContent = jaInscrito ? "Notificações ativadas — gerenciar" : "Avisar quando um evento estiver chegando";
+            salvarBtn.textContent = jaInscrito ? "Salvar alterações" : "Ativar notificações";
+            cancelarBtn.hidden = !jaInscrito;
+          }
+
+          atualizarBotoes();
+          preencherFormComPreferencias(responsaveisSalvos());
+
+          toggleBtn.addEventListener("click", () => {
+            panel.hidden = !panel.hidden;
+          });
+
+          modoInputs.forEach((input) => {
+            input.addEventListener("change", () => {
+              if (responsaveisBloco) responsaveisBloco.hidden = input.value !== "selecionados" || !input.checked;
+            });
+          });
+
+          function responsaveisEscolhidos() {
+            const modoSelecionados = document.querySelector('[data-notify-modo][value="selecionados"]');
+            if (!modoSelecionados || !modoSelecionados.checked) return null;
+            const marcados = Array.from(responsavelInputs)
+              .filter((input) => input.checked)
+              .map((input) => input.value);
+            return marcados.length ? marcados : null;
+          }
+
+          salvarBtn.addEventListener("click", async () => {
+            salvarBtn.disabled = true;
+            if (statusEl) statusEl.textContent = "";
+            try {
+              const responsaveis = responsaveisEscolhidos();
+              const permissao = await Notification.requestPermission();
+              if (permissao !== "granted") {
+                if (statusEl) statusEl.textContent = "Permissão não concedida.";
+                return;
+              }
+
+              const registration = await navigator.serviceWorker.register("/sw.js");
+              const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+              });
+              const json = subscription.toJSON();
+
+              const endpointAnterior = endpointSalvo();
+              if (endpointAnterior && endpointAnterior === json.endpoint) {
+                // Já tinha inscrição neste navegador — só atualiza a preferência.
+                await fetch(`${directusUrl}/items/push_subscriptions`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    query: { filter: { endpoint: { _eq: json.endpoint } } },
+                    data: { responsaveis, avisar_eventos: true, p256dh: json.keys.p256dh, auth: json.keys.auth },
+                  }),
+                });
+              } else {
+                await fetch(`${directusUrl}/items/push_subscriptions`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    endpoint: json.endpoint,
+                    p256dh: json.keys.p256dh,
+                    auth: json.keys.auth,
+                    responsaveis,
+                    avisar_eventos: true,
+                  }),
+                });
+              }
+
+              try {
+                localStorage.setItem(ENDPOINT_KEY, json.endpoint);
+                localStorage.setItem(RESPONSAVEIS_KEY, JSON.stringify(responsaveis));
+              } catch {}
+              salvarPrefs({ ...lerPrefs(), eventos: true });
+
+              atualizarBotoes();
+              if (statusEl) {
+                statusEl.textContent = responsaveis
+                  ? `✅ Você só recebe aviso de: ${responsaveis.join(", ")}.`
+                  : "✅ Notificações ativadas para todos os eventos especiais.";
+              }
+            } catch {
+              if (statusEl) statusEl.textContent = "Não foi possível ativar agora. Tente novamente.";
+            } finally {
+              salvarBtn.disabled = false;
+            }
+          });
+
+          cancelarBtn.addEventListener("click", async () => {
+            cancelarBtn.disabled = true;
+            try {
+              const endpoint = endpointSalvo();
+              const prefsRestantes = { ...lerPrefs(), eventos: false };
+              // Só cancela a inscrição push do navegador de vez se não sobrar
+              // NENHUMA das 3 preferências ativa — senão, cancelar aviso de
+              // evento apagaria também o aviso de mensagem/notícia nova, que
+              // a pessoa pode ter ativado sem relação nenhuma com este botão.
+              const aindaQuerOutraCoisa = prefsRestantes.mensagens || prefsRestantes.noticias;
+
+              if (endpoint) {
+                await fetch(`${directusUrl}/items/push_subscriptions`, {
+                  method: aindaQuerOutraCoisa ? "PATCH" : "DELETE",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(
+                    aindaQuerOutraCoisa
+                      ? { query: { filter: { endpoint: { _eq: endpoint } } }, data: { avisar_eventos: false, responsaveis: null } }
+                      : { query: { filter: { endpoint: { _eq: endpoint } } } },
+                  ),
+                });
+              }
+
+              if (!aindaQuerOutraCoisa && "serviceWorker" in navigator) {
+                const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+                const subscription = await registration?.pushManager.getSubscription();
+                await subscription?.unsubscribe();
+              }
+
+              try {
+                localStorage.removeItem(RESPONSAVEIS_KEY);
+                if (!aindaQuerOutraCoisa) localStorage.removeItem(ENDPOINT_KEY);
+              } catch {}
+              salvarPrefs(prefsRestantes);
+
+              atualizarBotoes();
+              if (statusEl) statusEl.textContent = "Aviso de eventos cancelado.";
+            } catch {
+              if (statusEl) statusEl.textContent = "Não foi possível cancelar agora. Tente novamente.";
+            } finally {
+              cancelarBtn.disabled = false;
+            }
+          });
+        })();
+      </script>
+
+      <div class="prose mt-16">
+        <h2>Fique por dentro</h2>
+        <p>
+          {instagram && (
+            <>
+              Siga nosso Instagram <a href={instagram.href} target="_blank" rel="noreferrer">@{instagram.href.split("/").filter(Boolean).pop()}</a>{" "}
+            </>
+          )}
+          para avisos de eventos especiais, ou acompanhe as <a href="/noticias/">notícias da igreja</a>.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .event-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem 1.6rem;
+  }
+
+  .notify-wrap {
+    position: relative;
+  }
+
+  .notify-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.5rem);
+    z-index: 10;
+    width: 20rem;
+    max-width: 90vw;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--background);
+    padding: 1rem 1.15rem;
+    box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.12));
+  }
+
+  .notify-responsaveis {
+    max-height: 9rem;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+
+  .gallery-empty {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+  }
+</style>

@@ -1,0 +1,80 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import ProgramacaoList from "@/components/ProgramacaoList.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { getAllProgramacao, sedeProgramacao } from "@/lib/programacao";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const sedeSchedule = sedeProgramacao(await getAllProgramacao());
+---
+
+<BaseLayout
+  title="Kids"
+  description={`O ministério infantil da ${siteConfig.name} — o que esperar para as crianças durante os cultos.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Ministério infantil</p>
+        <h1 class="pagehead-title">Kids</h1>
+        <p class="pagehead-description">
+          Um espaço pensado para as crianças aprenderem sobre Jesus, de um jeito alegre e
+          apropriado para a idade delas, enquanto os pais participam do culto.
+        </p>
+      </header>
+
+      <section class="mt-10" aria-labelledby="kids-quando-heading">
+        <h2 id="kids-quando-heading" class="section-title">Programação da sede</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Confira abaixo os dias e horários de reunião da sede. Em quais desses o Kids atende, e
+          como funciona em cada um, ainda será confirmado com a liderança do ministério — veja o
+          aviso logo abaixo.
+        </p>
+        <div class="mt-4">
+          <ProgramacaoList items={sedeSchedule} showScope={false} />
+        </div>
+      </section>
+
+      <div class="kids-pendente mt-12" aria-label="Detalhes operacionais a serem confirmados">
+        <p class="sobre-pendente-rotulo">Como funciona na prática</p>
+        <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Em quais dias o Kids atende, a faixa etária atendida, o processo de check-in/check-out e
+          a política de segurança específica ainda serão detalhados aqui — nenhuma dessas
+          informações deve ser assumida antes de confirmar com a liderança do Kids. Na sua primeira
+          visita, procure a equipe do Kids na recepção antes do culto: eles explicam como funciona
+          no dia.
+        </p>
+      </div>
+
+      <div class="prose mt-16">
+        <h2>Quer saber mais ou ajudar?</h2>
+        <p>
+          Para conhecer a liderança responsável pelo Kids, veja a página do{" "}
+          <a href="/orgao/departamento-de-criancas/">Departamento de Crianças</a>. Dúvidas antes da
+          sua visita? Fale com a gente pela <a href="/contato/">página de contato</a>.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .kids-pendente {
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.5rem;
+  }
+
+  .sobre-pendente-rotulo {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+</style>

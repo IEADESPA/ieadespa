@@ -1,0 +1,32 @@
+{
+  "name": "IEADESPA — Igreja Evangélica Assembleia de Deus Ministério do Seta",
+  "short_name": "IEADESPA",
+  "description": "Congregações, órgãos, eventos, mensagens e notícias da IEADESPA em Parauapebas/PA.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/favicon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/maskable-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Eventos e programação",
+      "short_name": "Eventos",
+      "description": "Dias e horários de cada culto, eventos especiais e inscrições.",
+      "url": "/eventos/",
+      "icons": [{ "src": "/favicon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Fale conosco",
+      "short_name": "Contato",
+      "description": "Endereço, telefone, e-mail e formulário de contato.",
+      "url": "/contato/",
+      "icons": [{ "src": "/favicon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

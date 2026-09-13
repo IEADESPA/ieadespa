@@ -1,0 +1,35 @@
+name: Avisos de conteúdo novo (push)
+
+on:
+  # Mesmo evento que já dispara o rebuild do site a cada publicação no
+  # Directus (ver Flow "Publicar site (avisar GitHub)") — roda em paralelo,
+  # sem depender do deploy terminar.
+  repository_dispatch:
+    types: [directus-publish]
+  workflow_dispatch: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instala o web-push
+        run: npm install web-push@3.6.7
+
+      - name: Envia avisos de mensagem/notícia nova
+        env:
+          DIRECTUS_URL: https://ieadespa-directus-gae4hfarf4a4ffcf.brazilsouth-01.azurewebsites.net
+          DIRECTUS_ADMIN_TOKEN: ${{ secrets.DIRECTUS_ADMIN_TOKEN }}
+          VAPID_PUBLIC_KEY: BHjTzvfXIx0DAkcCgfJDNQO5N09SmO0jIPuTP8L6rxnEaITMn95fQH6kHFnbrEJE-Fdroim5bNnaKp5wwowXdak
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SITE_URL: https://www.ieadespa.org.br
+        run: node .github/scripts/send-content-notifications.mjs

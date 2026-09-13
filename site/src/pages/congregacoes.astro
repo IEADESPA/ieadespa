@@ -1,0 +1,342 @@
+---
+import MapaCongregacoes from "@/components/MapaCongregacoes.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { enderecoCompleto, fetchConfiguracoes, fetchItems, mapsHref } from "@/lib/directus";
+
+interface Congregacao {
+  id: number;
+  slug: string;
+  name: string;
+  address: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  pastor_name: string | null;
+  schedule: string | null;
+  maps_url: string | null;
+  address_new: string | null;
+  neighborhood_new: string | null;
+  zip: string | null;
+  address_note: string | null;
+  lat: number | null;
+  lng: number | null;
+  google_maps_place_query: string | null;
+}
+
+const allPosts = visiblePosts(await getAllMensagens());
+const congregacoes = await fetchItems<Congregacao>("congregacoes", "sort[]=sort");
+const config = await fetchConfiguracoes();
+const sedeMapsHref = mapsHref(config);
+
+/* Fase 24.9 — "qual está mais perto de você": diferente do mapa Leaflet
+   abaixo (Fase 3, mostra qualquer congregação com lat/lng, coordenada
+   provisória inclusive), aqui o critério é mais rígido, igual ao resto da
+   Fase 24 — só entra quem tem PERFIL CONFIRMADO (`google_maps_place_query`)
+   além da coordenada. Hoje só a Sede tem isso, então o resultado vai
+   sempre apontar pra ela — mas assim que uma congregação confirmar perfil,
+   ela entra na conta sozinha, sem precisar mexer neste código de novo. */
+interface CandidatoProximo {
+  nome: string;
+  lat: number;
+  lng: number;
+  href: string;
+  mapsHref: string;
+}
+
+const candidatosProximos: CandidatoProximo[] = [
+  ...(config.google_maps_place_query && config.lat != null && config.lng != null
+    ? [{ nome: `${siteConfig.name} (Sede)`, lat: Number(config.lat), lng: Number(config.lng), href: "/contato/", mapsHref: sedeMapsHref }]
+    : []),
+  ...congregacoes
+    .filter((c) => c.google_maps_place_query && c.lat != null && c.lng != null)
+    .map((c) => ({ nome: c.name, lat: Number(c.lat), lng: Number(c.lng), href: `/congregacao/${c.slug}/`, mapsHref: c.maps_url ?? "" })),
+];
+
+const pontosMapa = [
+  ...(config.lat != null && config.lng != null
+    ? [{ name: `${siteConfig.name} (Sede)`, lat: config.lat, lng: config.lng, href: "/contato/" }]
+    : []),
+  ...congregacoes
+    .filter((c) => c.lat != null && c.lng != null)
+    .map((c) => ({ name: c.name, lat: c.lat as number, lng: c.lng as number, href: `/congregacao/${c.slug}/` })),
+];
+const congregacoesSemLocalizacao = congregacoes.filter((c) => c.lat == null || c.lng == null);
+---
+
+<BaseLayout
+  title="Congregações"
+  description={`Congregações e pontos de pregação vinculados à ${siteConfig.name}.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Rede de congregações</p>
+        <h1 class="pagehead-title">Congregações</h1>
+        <p class="pagehead-description">
+          A sede e as demais congregações e pontos de pregação da {siteConfig.name} pela região.
+        </p>
+      </header>
+
+      {
+        candidatosProximos.length > 0 && (
+          <div
+            class="mb-10 rounded-[var(--radius-md)] border border-border p-5"
+            data-mais-perto-wrap
+            data-candidatos={JSON.stringify(candidatosProximos)}
+            data-google-maps-key={siteConfig.googleMapsEmbedKey}
+          >
+            <p class="font-semibold">Qual está mais perto de você?</p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Usa a localização do seu navegador e a rota real de carro (não linha reta) — só
+              compara com unidades que já têm perfil confirmado no Google Maps, por isso a lista
+              ainda é curta.
+            </p>
+            <button type="button" class="btn btn-outline mt-3" data-mais-perto-btn>Achar a mais perto de mim</button>
+            <div class="mt-3" data-mais-perto-resultado></div>
+          </div>
+        )
+      }
+
+      {
+        pontosMapa.length > 0 && (
+          <div class="mb-10">
+            <MapaCongregacoes pontos={pontosMapa} />
+            <p class="mt-2 text-xs text-muted-foreground">
+              Mostra só as congregações com localização já cadastrada — a lista vai crescendo com o tempo.
+            </p>
+            {
+              congregacoesSemLocalizacao.length > 0 && (
+                <p class="mt-1 text-xs text-muted-foreground localizacao-pendente">
+                  Localização em cadastro (ainda não aparecem no mapa acima): {" "}
+                  {congregacoesSemLocalizacao.map((c) => c.name).join(", ")}.
+                </p>
+              )
+            }
+          </div>
+        )
+      }
+
+      <ul class="grid gap-6 sm:grid-cols-2">
+        <li class="congregacao-card congregacao-card-sede">
+          <span class="pill mb-2 inline-block">Sede</span>
+          <h2 class="text-lg font-semibold tracking-tight">{siteConfig.name}</h2>
+          <p class="mt-2 text-sm text-muted-foreground">{enderecoCompleto(config)}</p>
+          <div class="mt-3 flex flex-wrap gap-4">
+            <a href={sedeMapsHref} target="_blank" rel="noreferrer" class="link-sweep text-sm font-semibold text-accent">
+              Ver rota no Google Maps
+            </a>
+            <a href="/contato/" class="link-sweep text-sm font-semibold text-accent">Saiba mais</a>
+          </div>
+        </li>
+        {
+          congregacoes.map((congregacao) => (
+            <li class="congregacao-card">
+              <h2 class="text-lg font-semibold tracking-tight">{congregacao.name}</h2>
+              {(congregacao.address || congregacao.neighborhood) && (
+                <p class="mt-2 text-sm text-muted-foreground">
+                  {congregacao.address}
+                  {congregacao.address && congregacao.neighborhood && " — "}
+                  {congregacao.neighborhood}
+                  {(congregacao.city || congregacao.state) && (
+                    <>, {congregacao.city} {congregacao.state && `- ${congregacao.state}`}</>
+                  )}
+                </p>
+              )}
+              {congregacao.address_note && (
+                <p class="mt-1 text-sm italic text-muted-foreground">{congregacao.address_note}</p>
+              )}
+              {(congregacao.address_new || congregacao.neighborhood_new) && (
+                <p class="mt-2 text-xs text-muted-foreground">
+                  Endereço oficial (novo CEP): {congregacao.address_new}
+                  {congregacao.address_new && congregacao.neighborhood_new && " — "}
+                  {congregacao.neighborhood_new}
+                  {congregacao.zip && ` · CEP ${congregacao.zip}`}
+                </p>
+              )}
+              {!congregacao.address_new && !congregacao.neighborhood_new && congregacao.zip && (
+                <p class="mt-2 text-xs text-muted-foreground">CEP {congregacao.zip}</p>
+              )}
+              {congregacao.pastor_name && (
+                <p class="mt-1 text-sm text-muted-foreground">Responsável: {congregacao.pastor_name}</p>
+              )}
+              {congregacao.schedule && (
+                <p class="mt-3 whitespace-pre-line text-sm leading-relaxed">{congregacao.schedule}</p>
+              )}
+              <div class="mt-3 flex flex-wrap gap-4">
+                {congregacao.maps_url && (
+                  <a href={congregacao.maps_url} target="_blank" rel="noreferrer" class="link-sweep text-sm font-semibold text-accent">
+                    Ver rota no Google Maps
+                  </a>
+                )}
+                <a href={`/congregacao/${congregacao.slug}/`} class="link-sweep text-sm font-semibold text-accent">
+                  Saiba mais
+                </a>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+
+      {congregacoes.length === 0 && (
+        <div class="gallery-empty">
+          <p class="text-sm leading-relaxed text-muted-foreground">
+            Nenhuma congregação cadastrada ainda.
+          </p>
+        </div>
+      )}
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline>
+    (() => {
+      const wrap = document.querySelector("[data-mais-perto-wrap]");
+      if (!wrap) return;
+
+      const candidatos = JSON.parse(wrap.dataset.candidatos || "[]");
+      const googleMapsKey = wrap.dataset.googleMapsKey || "";
+      const botao = wrap.querySelector("[data-mais-perto-btn]");
+      const resultado = wrap.querySelector("[data-mais-perto-resultado]");
+
+      // Rota real de carro (Directions API), não linha reta — o usuário
+      // testou e achou a distância em linha reta enganosa (mostrava 2,6 km
+      // pra um trajeto que de carro é uns 3 km). Cada candidato vira uma
+      // chamada de rota, em paralelo; a ordenação usa a distância real de
+      // carro, não a distância "no ar".
+      let scriptCarregado = false;
+      function carregarGoogleMaps() {
+        return new Promise((resolvePromise, rejeitarPromise) => {
+          if (window.google?.maps?.DirectionsService) {
+            resolvePromise();
+            return;
+          }
+          if (scriptCarregado) {
+            const verificar = setInterval(() => {
+              if (window.google?.maps?.DirectionsService) {
+                clearInterval(verificar);
+                resolvePromise();
+              }
+            }, 100);
+            return;
+          }
+          scriptCarregado = true;
+          const script = document.createElement("script");
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsKey}`;
+          script.async = true;
+          script.onload = () => resolvePromise();
+          script.onerror = () => rejeitarPromise(new Error("falha ao carregar Google Maps"));
+          document.head.appendChild(script);
+        });
+      }
+
+      function calcularRota(directionsService, origem, destino) {
+        return new Promise((resolvePromise) => {
+          directionsService.route(
+            { origin: origem, destination: destino, travelMode: google.maps.TravelMode.DRIVING },
+            (resultadoRota, status) => {
+              if (status !== "OK" || !resultadoRota) {
+                resolvePromise(null);
+                return;
+              }
+              const perna = resultadoRota.routes[0]?.legs[0];
+              resolvePromise(perna ? { distanciaMetros: perna.distance?.value ?? Infinity, distanciaTexto: perna.distance?.text, duracaoTexto: perna.duration?.text } : null);
+            },
+          );
+        });
+      }
+
+      botao?.addEventListener("click", async () => {
+        if (!resultado) return;
+
+        if (!navigator.geolocation) {
+          resultado.innerHTML = `<p class="text-sm text-muted-foreground">Seu navegador não permite compartilhar localização.</p>`;
+          return;
+        }
+
+        botao.disabled = true;
+        resultado.innerHTML = `<p class="text-sm text-muted-foreground">Localizando você…</p>`;
+
+        navigator.geolocation.getCurrentPosition(
+          async (posicao) => {
+            const origem = { lat: posicao.coords.latitude, lng: posicao.coords.longitude };
+
+            resultado.innerHTML = `<p class="text-sm text-muted-foreground">Calculando rota até cada unidade…</p>`;
+
+            try {
+              await carregarGoogleMaps();
+              const directionsService = new google.maps.DirectionsService();
+
+              const comRota = await Promise.all(
+                candidatos.map(async (c) => ({ ...c, rota: await calcularRota(directionsService, origem, { lat: c.lat, lng: c.lng }) })),
+              );
+
+              const validos = comRota.filter((c) => c.rota);
+              const semRota = comRota.filter((c) => !c.rota);
+              validos.sort((a, b) => a.rota.distanciaMetros - b.rota.distanciaMetros);
+
+              botao.disabled = false;
+
+              if (validos.length === 0) {
+                resultado.innerHTML = `<p class="text-sm text-muted-foreground">Não foi possível calcular a rota agora. Tente de novo em instantes.</p>`;
+                return;
+              }
+
+              resultado.innerHTML =
+                validos
+                  .map(
+                    (c, indice) => `
+                      <div style="${indice > 0 ? "margin-top:0.5rem;" : ""}">
+                        <p class="text-sm"><strong>${indice + 1}º mais perto:</strong> ${c.nome} — ${c.rota.distanciaTexto} de carro (${c.rota.duracaoTexto})</p>
+                        <p class="text-xs">
+                          <a href="${c.href}" class="link-sweep font-semibold text-accent">Saiba mais</a>
+                          ${c.mapsHref ? ` · <a href="${c.mapsHref}" target="_blank" rel="noreferrer" class="link-sweep font-semibold text-accent">Ver rota</a>` : ""}
+                        </p>
+                      </div>
+                    `,
+                  )
+                  .join("") +
+                (semRota.length > 0
+                  ? `<p class="mt-2 text-xs text-muted-foreground">Não foi possível calcular a rota até: ${semRota.map((c) => c.nome).join(", ")}.</p>`
+                  : "");
+            } catch {
+              botao.disabled = false;
+              resultado.innerHTML = `<p class="text-sm text-muted-foreground">Não foi possível calcular a rota agora. Tente de novo em instantes.</p>`;
+            }
+          },
+          (erro) => {
+            botao.disabled = false;
+            resultado.innerHTML =
+              erro.code === erro.PERMISSION_DENIED
+                ? `<p class="text-sm text-muted-foreground">Você não liberou sua localização.</p>`
+                : `<p class="text-sm text-muted-foreground">Não foi possível pegar sua localização agora.</p>`;
+          },
+          { timeout: 10000 },
+        );
+      });
+    })();
+  </script>
+</BaseLayout>
+
+<style>
+  .congregacao-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem 1.6rem;
+  }
+
+  .congregacao-card-sede {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  }
+
+  .gallery-empty {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+  }
+</style>

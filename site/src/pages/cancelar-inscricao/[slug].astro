@@ -1,0 +1,152 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { CANCELAR_INSCRICAO_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Evento {
+  id: number;
+  slug: string;
+  title: string;
+  aceita_inscricao: boolean;
+}
+
+export async function getStaticPaths() {
+  const events = await fetchItems<Evento>("eventos", "filter[aceita_inscricao][_eq]=true");
+  // slug e opcional no Directus - sem essa checagem, evento sem slug ainda
+  // definido quebraria o build (mesmo bug corrigido em toda pagina por slug).
+  return events.filter((event) => event.slug).map((event) => ({ params: { slug: event.slug }, props: { event } }));
+}
+
+interface Props {
+  event: Evento;
+}
+
+const { event } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title={`Cancelar inscrição — ${event.title}`} description="Cancele sua própria inscrição neste evento." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas cancelar-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Cancelar inscrição</p>
+        <h1 class="pagehead-title">{event.title}</h1>
+        <p class="pagehead-description">
+          Não vai poder vir mais? Cancele sua vaga aqui — se alguém estiver na lista de espera,
+          essa pessoa é confirmada automaticamente no seu lugar.
+        </p>
+      </header>
+
+      <form class="mt-8 grid gap-4 max-w-sm" data-cancelar-form data-evento-id={event.id} data-cancelar-url={CANCELAR_INSCRICAO_URL}>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="cancelar-codigo">Código de confirmação</label>
+          <input
+            id="cancelar-codigo"
+            name="codigo"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            maxlength="6"
+            class="field cancelar-codigo-input"
+            placeholder="A3F9K2"
+          />
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="cancelar-telefone">Telefone usado na inscrição</label>
+          <input
+            id="cancelar-telefone"
+            name="telefone"
+            type="tel"
+            autocomplete="tel"
+            class="field"
+            placeholder="(00) 00000-0000"
+          />
+          <p class="text-xs text-muted-foreground">
+            Confere que a inscrição é mesmo sua — evita que alguém cancele a vaga de outra pessoa
+            só com o código.
+          </p>
+        </div>
+        <button type="submit" class="btn btn-outline cancelar-btn">Cancelar minha inscrição</button>
+        <p class="text-sm" data-cancelar-resultado role="status" aria-live="polite" />
+        <p class="text-xs text-muted-foreground">
+          Não lembra o código?{" "}
+          <a href={`/qrcode/${event.slug}/`} class="underline underline-offset-2">Recupere aqui</a>.
+        </p>
+      </form>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    const form = document.querySelector<HTMLFormElement>("[data-cancelar-form]");
+    if (!form) throw new Error("formulário de cancelamento ausente");
+
+    const eventoId = form.dataset.eventoId;
+    const cancelarUrl = form.dataset.cancelarUrl ?? "";
+    const resultado = document.querySelector<HTMLElement>("[data-cancelar-resultado]");
+    const codigoInput = document.getElementById("cancelar-codigo") as HTMLInputElement;
+    const telefoneInput = document.getElementById("cancelar-telefone") as HTMLInputElement;
+    const botao = form.querySelector<HTMLButtonElement>(".cancelar-btn");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const codigo = codigoInput.value.trim().toUpperCase();
+      const telefone = telefoneInput.value.trim();
+      if (!resultado) return;
+
+      if (!codigo || !telefone) {
+        resultado.textContent = "Preencha o código e o telefone.";
+        return;
+      }
+
+      if (!confirm("Cancelar sua inscrição neste evento? Essa ação não pode ser desfeita.")) return;
+
+      resultado.textContent = "Cancelando…";
+      if (botao) botao.disabled = true;
+
+      try {
+        const res = await fetch(cancelarUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evento: eventoId, codigo, telefone }),
+        });
+        const dados = await res.json();
+
+        if (!dados?.cancelado) {
+          resultado.textContent = "Código ou telefone não conferem. Confira e tente de novo.";
+          if (botao) botao.disabled = false;
+          return;
+        }
+
+        form.reset();
+        // Reabilita o botão (não só no caminho de erro acima) — em
+        // inscrição de grupo, a mesma pessoa pode voltar aqui pra cancelar
+        // a vaga de outro integrante do grupo, com outro código.
+        if (botao) botao.disabled = false;
+        resultado.textContent = dados.promovido
+          ? "✅ Inscrição cancelada. Sua vaga já foi passada pra próxima pessoa da lista de espera."
+          : "✅ Inscrição cancelada.";
+      } catch {
+        resultado.textContent = "Não foi possível cancelar agora. Tente novamente em instantes.";
+        if (botao) botao.disabled = false;
+      }
+    });
+  </script>
+
+  <style>
+    .cancelar-canvas {
+      max-width: 40rem;
+    }
+
+    .cancelar-codigo-input {
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 1.5rem;
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+  </style>
+</BaseLayout>

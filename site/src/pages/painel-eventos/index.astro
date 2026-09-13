@@ -1,0 +1,254 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Gestão de eventos" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas" data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow">Área restrita</p>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 class="pagehead-title">Gestão de eventos</h1>
+          <p class="text-sm text-muted-foreground" data-painel-usuario-wrap hidden>
+            <span data-painel-usuario></span> ·{" "}
+            <button type="button" class="link-sweep text-accent font-semibold" data-painel-sair>Sair</button>
+          </p>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden data-painel-conteudo>
+        <p class="mt-4 text-sm">
+          <a href="/painel-eventos/lgpd/" class="link-sweep font-semibold text-accent">Exclusão de dados pessoais (LGPD) →</a>
+        </p>
+
+        <div class="mt-8 flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="section-title">Eventos com inscrição</h2>
+          <button type="button" class="btn btn-solid" data-painel-novo-evento>+ Novo evento</button>
+        </div>
+
+        <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-painel-eventos-lista>
+          <p class="text-sm text-muted-foreground">Carregando eventos…</p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { exigirAutenticacao, sair } from "@/lib/painelAuth";
+
+    interface EventoResumo {
+      id: number;
+      title: string;
+      event_date: string | null;
+      arquivado: boolean;
+    }
+
+    const container = document.querySelector<HTMLElement>("[data-directus-url]");
+    if (!container) throw new Error("contêiner do painel ausente");
+    const directusUrl = container.dataset.directusUrl ?? "";
+
+    const carregando = document.querySelector<HTMLElement>("[data-painel-carregando]");
+    const conteudo = document.querySelector<HTMLElement>("[data-painel-conteudo]");
+    const usuarioWrap = document.querySelector<HTMLElement>("[data-painel-usuario-wrap]");
+    const usuarioEl = document.querySelector<HTMLElement>("[data-painel-usuario]");
+    const sairBtn = document.querySelector<HTMLButtonElement>("[data-painel-sair]");
+    const listaEl = document.querySelector<HTMLElement>("[data-painel-eventos-lista]");
+    const novoBtn = document.querySelector<HTMLButtonElement>("[data-painel-novo-evento]");
+
+    const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+    let token = "";
+
+    async function carregarEventos() {
+      if (!listaEl) return;
+      const res = await fetch(
+        `${directusUrl}/items/eventos?filter[aceita_inscricao][_eq]=true&fields=id,title,event_date,arquivado&sort=-event_date&limit=-1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const json = await res.json();
+      const eventos: EventoResumo[] = json.data ?? [];
+
+      if (!eventos.length) {
+        listaEl.innerHTML = `<p class="text-sm text-muted-foreground">Nenhum evento com inscrição ainda. Crie o primeiro acima.</p>`;
+        return;
+      }
+
+      listaEl.innerHTML = eventos
+        .map(
+          (evento) => `
+            <div class="painel-evento-card">
+              <a href="/painel-eventos/evento/?id=${evento.id}" class="painel-evento-link">
+                <span class="painel-evento-titulo">${escapeHtml(evento.title)}</span>
+                <span class="painel-evento-data">
+                  ${evento.event_date ? dateFormatter.format(new Date(evento.event_date)) : "Sem data"}
+                  ${evento.arquivado ? " · arquivado" : ""}
+                </span>
+              </a>
+              <button type="button" class="link-sweep text-sm font-semibold text-accent mt-2" data-duplicar data-evento-id="${evento.id}">
+                Duplicar
+              </button>
+            </div>
+          `,
+        )
+        .join("");
+    }
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
+    function slugify(texto: string): string {
+      return texto
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    listaEl?.addEventListener("click", async (event) => {
+      const target = event.target as HTMLElement;
+      const botao = target.closest<HTMLButtonElement>("[data-duplicar]");
+      if (!botao) return;
+      event.preventDefault();
+
+      const eventoId = botao.dataset.eventoId;
+      botao.disabled = true;
+      botao.textContent = "Duplicando…";
+
+      try {
+        const resOriginal = await fetch(`${directusUrl}/items/eventos/${eventoId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const original = (await resOriginal.json()).data;
+
+        const novoTitulo = `${original.title} (cópia)`;
+        const resNovo = await fetch(`${directusUrl}/items/eventos`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: novoTitulo,
+            slug: slugify(novoTitulo),
+            description: original.description,
+            body: original.body,
+            location: original.location,
+            location_maps_url: original.location_maps_url,
+            congregacao: original.congregacao,
+            responsavel: original.responsavel,
+            tipo_responsavel: original.tipo_responsavel,
+            time: original.time,
+            end_time: original.end_time,
+            vagas_limite: original.vagas_limite,
+            faixas_valor: original.faixas_valor,
+            permite_inscricao_grupo: original.permite_inscricao_grupo,
+            // Datas e status ficam em branco — é uma nova edição do evento, com data própria.
+            event_date: null,
+            end_date: null,
+            inscricoes_ate: null,
+            inscricoes_encerradas: false,
+            arquivado: false,
+            aceita_inscricao: true,
+          }),
+        });
+        const novo = (await resNovo.json()).data;
+
+        const resPerguntas = await fetch(`${directusUrl}/items/perguntas_evento?filter[evento][_eq]=${eventoId}&sort=ordem&limit=-1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const perguntas: { label: string; tipo: string; opcoes: string[] | null; obrigatoria: boolean; ordem: number | null }[] =
+          (await resPerguntas.json()).data ?? [];
+
+        for (const pergunta of perguntas) {
+          await fetch(`${directusUrl}/items/perguntas_evento`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ ...pergunta, evento: novo.id }),
+          });
+        }
+
+        window.location.href = `/painel-eventos/evento/?id=${novo.id}`;
+      } catch {
+        botao.disabled = false;
+        botao.textContent = "Duplicar";
+      }
+    });
+
+    novoBtn?.addEventListener("click", async () => {
+      const token = await exigirAutenticacao(directusUrl);
+      if (!token) return;
+      novoBtn.disabled = true;
+      try {
+        const res = await fetch(`${directusUrl}/items/eventos`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "Novo evento", aceita_inscricao: true }),
+        });
+        const json = await res.json();
+        window.location.href = `/painel-eventos/evento/?id=${json.data.id}`;
+      } catch {
+        novoBtn.disabled = false;
+      }
+    });
+
+    sairBtn?.addEventListener("click", () => sair(directusUrl));
+
+    async function iniciar() {
+      const t = await exigirAutenticacao(directusUrl);
+      if (!t) return;
+      token = t;
+
+      const res = await fetch(`${directusUrl}/users/me?fields=email`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+
+      if (carregando) carregando.hidden = true;
+      if (conteudo) conteudo.hidden = false;
+      if (usuarioWrap) usuarioWrap.hidden = false;
+      if (usuarioEl) usuarioEl.textContent = json.data.email;
+
+      await carregarEventos();
+    }
+
+    iniciar();
+  </script>
+
+  <style is:global>
+    .painel-evento-card {
+      display: block;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem 1.4rem;
+      transition: border-color var(--duration-fast) var(--ease-out);
+    }
+
+    .painel-evento-card:hover {
+      border-color: var(--accent);
+    }
+
+    .painel-evento-link {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .painel-evento-titulo {
+      display: block;
+      font-weight: 600;
+      font-size: 1.0625rem;
+    }
+
+    .painel-evento-data {
+      display: block;
+      margin-top: 0.35rem;
+      color: var(--muted-foreground);
+      font-size: 0.8125rem;
+    }
+  </style>
+</BaseLayout>

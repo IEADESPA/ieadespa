@@ -1,0 +1,134 @@
+---
+import { marked } from "marked";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { congregacaoMapsQuery, fetchItems } from "@/lib/directus";
+
+interface Congregacao {
+  slug: string;
+  name: string;
+  address: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  pastor_name: string | null;
+  schedule: string | null;
+  maps_url: string | null;
+  address_new: string | null;
+  neighborhood_new: string | null;
+  zip: string | null;
+  address_note: string | null;
+  historia: string | null;
+}
+
+export async function getStaticPaths() {
+  const congregacoes = await fetchItems<Congregacao>("congregacoes");
+  // slug é opcional no Directus — sem essa checagem, uma congregação sem
+  // slug ainda definido quebraria o build inteiro.
+  return congregacoes
+    .filter((congregacao) => congregacao.slug)
+    .map((congregacao) => ({ params: { slug: congregacao.slug }, props: { congregacao } }));
+}
+
+interface Props {
+  congregacao: Congregacao;
+}
+
+const { congregacao } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+const historiaHtml = congregacao.historia ? await marked.parse(congregacao.historia) : null;
+const mapaQuery = congregacaoMapsQuery(congregacao);
+const mapsEmbedSrc = mapaQuery ? `https://www.google.com/maps?q=${encodeURIComponent(mapaQuery)}&output=embed` : null;
+---
+
+<BaseLayout
+  title={congregacao.name}
+  description={`Endereço, horários e história da ${congregacao.name}, congregação da ${siteConfig.name}.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <Breadcrumbs items={[{ label: "Congregações", href: "/congregacoes/" }, { label: congregacao.name }]} />
+        <p class="eyebrow">Congregação</p>
+        <h1 class="pagehead-title">{congregacao.name}</h1>
+      </header>
+
+      {(congregacao.address || congregacao.neighborhood) && (
+        <p class="text-sm text-muted-foreground">
+          {congregacao.address}
+          {congregacao.address && congregacao.neighborhood && " — "}
+          {congregacao.neighborhood}
+          {(congregacao.city || congregacao.state) && (
+            <>, {congregacao.city} {congregacao.state && `- ${congregacao.state}`}</>
+          )}
+        </p>
+      )}
+
+      {congregacao.address_note && (
+        <p class="mt-1 text-sm italic text-muted-foreground">{congregacao.address_note}</p>
+      )}
+
+      {(congregacao.address_new || congregacao.neighborhood_new) && (
+        <p class="mt-2 text-xs text-muted-foreground">
+          Endereço oficial (novo CEP): {congregacao.address_new}
+          {congregacao.address_new && congregacao.neighborhood_new && " — "}
+          {congregacao.neighborhood_new}
+          {congregacao.zip && ` · CEP ${congregacao.zip}`}
+        </p>
+      )}
+      {!congregacao.address_new && !congregacao.neighborhood_new && congregacao.zip && (
+        <p class="mt-2 text-xs text-muted-foreground">CEP {congregacao.zip}</p>
+      )}
+
+      {congregacao.maps_url && (
+        <a href={congregacao.maps_url} target="_blank" rel="noreferrer" class="mt-4 inline-block link-sweep text-sm font-semibold text-accent">
+          Ver rota no Google Maps
+        </a>
+      )}
+
+      {mapsEmbedSrc && (
+        <div class="mt-4 overflow-hidden rounded-[var(--radius-md)] border border-border">
+          <iframe
+            title={`Mapa com a localização da ${congregacao.name}`}
+            src={mapsEmbedSrc}
+            width="100%"
+            height="280"
+            style="border:0"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+          ></iframe>
+        </div>
+      )}
+
+      {congregacao.pastor_name && (
+        <p class="mt-6 text-sm">
+          <strong>Dirigente:</strong> {congregacao.pastor_name}
+        </p>
+      )}
+
+      {congregacao.schedule && (
+        <div class="mt-2">
+          <p class="text-sm font-semibold">Horários</p>
+          <p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{congregacao.schedule}</p>
+        </div>
+      )}
+
+      {historiaHtml && (
+        <section class="mt-12" aria-labelledby="historia-heading">
+          <h2 id="historia-heading" class="section-title">Nossa história</h2>
+          <div class="prose mt-4" set:html={historiaHtml} />
+        </section>
+      )}
+
+      <div class="prose mt-16">
+        <p><a href="/congregacoes/">&larr; Voltar para Congregações</a></p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>

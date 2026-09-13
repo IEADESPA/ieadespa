@@ -1,0 +1,361 @@
+---
+import type { GetStaticPaths, Page } from "astro";
+import PostCard from "@/components/PostCard.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { DIRECTUS_URL } from "@/lib/directus";
+import {
+  authorSlug,
+  formatDate,
+  getAllAuthors,
+  getAllMensagens,
+  getCategoryList,
+  postHref,
+  readingLabel,
+  visiblePosts,
+  type Post,
+} from "@/lib/posts";
+
+export const getStaticPaths = (async ({ paginate }) => {
+  const posts = visiblePosts(await getAllMensagens());
+  return paginate(posts, { pageSize: 10 });
+}) satisfies GetStaticPaths;
+
+interface Props {
+  page: Page<Post>;
+}
+
+const { page } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+const title = page.currentPage === 1 ? "Mensagens" : `Mensagens - Página ${page.currentPage}`;
+const description = `Todas as mensagens publicadas por ${siteConfig.name}.`;
+const withTrailingSlash = (url: string | undefined) => (url && !url.endsWith("/") ? `${url}/` : url);
+const prevUrl = withTrailingSlash(page.url.prev);
+const nextUrl = withTrailingSlash(page.url.next);
+
+// Filtro combinado (tema + pregador) só faz sentido olhando pro arquivo
+// inteiro, não só pra página atual de 10 — por isso roda em cima de uma
+// lista à parte (JSON leve, só os campos usados no card), sem mexer na
+// paginação de quem não filtra nada.
+const categorias = getCategoryList(allPosts);
+const autores = getAllAuthors(allPosts);
+const todasParaFiltro = allPosts.map((post) => ({
+  href: postHref(post),
+  title: post.data.title,
+  excerpt: post.data.excerpt,
+  category: post.data.category,
+  authorName: post.data.author.name,
+  authorSlug: authorSlug(post.data.author.name),
+  date: formatDate(post.data.date),
+  isoDate: post.data.date.toISOString(),
+  reading: readingLabel(post),
+}));
+---
+
+<BaseLayout title={title} description={description} prevUrl={prevUrl} nextUrl={nextUrl}>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Arquivo</p>
+        <h1 class="pagehead-title">Mensagens</h1>
+        <p class="pagehead-description">
+          {page.total} {page.total === 1 ? "mensagem" : "mensagens"}, mais recentes primeiro. Página {page.currentPage} de {page.lastPage}.
+        </p>
+      </header>
+
+      {
+        page.currentPage === 1 && (
+          <div class="mt-6">
+            <p class="text-sm text-muted-foreground">
+              Prefere acompanhar por RSS? {" "}
+              <a href="/rss.xml" class="link-sweep text-accent font-semibold">Assine o feed</a> — funciona em
+              qualquer leitor de RSS (Feedly, Inoreader, o próprio navegador com uma extensão), e avisa você
+              sozinho sempre que sair mensagem nova, sem precisar voltar aqui pra conferir.
+            </p>
+            <div class="mt-3" data-notify-wrap hidden>
+              <button type="button" class="btn btn-outline" data-notify-toggle>🔔 Avisar quando sair mensagem nova</button>
+              <p class="mt-2 text-sm" data-notify-status role="status" aria-live="polite" />
+            </div>
+          </div>
+        )
+      }
+
+      {
+        (categorias.length > 1 || autores.length > 1) && (
+          <div class="mensagens-filtros" data-mensagens-filtros>
+            {categorias.length > 1 && (
+              <div class="grid gap-1.5">
+                <label class="text-xs font-semibold uppercase tracking-wide text-muted-foreground" for="filtro-tema">Tema</label>
+                <select id="filtro-tema" class="field" data-filtro-tema>
+                  <option value="">Todos os temas</option>
+                  {categorias.map((categoria) => (
+                    <option value={categoria.name}>{categoria.name} ({categoria.count})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {autores.length > 1 && (
+              <div class="grid gap-1.5">
+                <label class="text-xs font-semibold uppercase tracking-wide text-muted-foreground" for="filtro-pregador">Pregador</label>
+                <select id="filtro-pregador" class="field" data-filtro-pregador>
+                  <option value="">Todos os pregadores</option>
+                  {autores.map((author) => (
+                    <option value={authorSlug(author.name)}>{author.name} ({author.posts.length})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )
+      }
+
+      <p class="mt-3 text-sm text-muted-foreground" data-mensagens-filtro-resumo hidden></p>
+
+      <div class="feed" data-mensagens-feed-padrao>
+        {page.data.map((post) => <PostCard post={post} />)}
+      </div>
+
+      <div class="feed" data-mensagens-feed-filtrado hidden></div>
+
+      <nav class="mt-16 flex items-center justify-between gap-4 border-t border-border pt-6" data-mensagens-paginacao aria-label="Paginação do arquivo">
+        {
+          prevUrl ? (
+            <a href={prevUrl} class="nav-link link-nudge">
+              <span class="link-nudge__arrow link-nudge__arrow--prev">&larr;</span> Mais recentes
+            </a>
+          ) : (
+            <span class="nav-link text-muted-foreground">&larr; Mais recentes</span>
+          )
+        }
+        <span class="text-xs tracking-widest text-muted-foreground uppercase">
+          Página {page.currentPage} / {page.lastPage}
+        </span>
+        {
+          nextUrl ? (
+            <a href={nextUrl} class="nav-link link-nudge">
+              Mais antigas <span class="link-nudge__arrow link-nudge__arrow--next">&rarr;</span>
+            </a>
+          ) : (
+            <span class="nav-link text-muted-foreground">Mais antigas &rarr;</span>
+          )
+        }
+      </nav>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline type="application/json" id="mensagens-filtro-data" set:html={JSON.stringify(todasParaFiltro)} />
+  <script is:inline>
+    (() => {
+      const temaSelect = document.querySelector("[data-filtro-tema]");
+      const pregadorSelect = document.querySelector("[data-filtro-pregador]");
+      const feedPadrao = document.querySelector("[data-mensagens-feed-padrao]");
+      const feedFiltrado = document.querySelector("[data-mensagens-feed-filtrado]");
+      const paginacao = document.querySelector("[data-mensagens-paginacao]");
+      const resumo = document.querySelector("[data-mensagens-filtro-resumo]");
+      const dataEl = document.getElementById("mensagens-filtro-data");
+      if (!dataEl || (!temaSelect && !pregadorSelect)) return;
+
+      const todas = JSON.parse(dataEl.textContent || "[]");
+
+      const escapeHtml = (value) =>
+        String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+      function aplicarFiltro() {
+        const tema = temaSelect?.value || "";
+        const pregador = pregadorSelect?.value || "";
+
+        if (!tema && !pregador) {
+          if (feedPadrao) feedPadrao.hidden = false;
+          if (feedFiltrado) feedFiltrado.hidden = true;
+          if (paginacao) paginacao.hidden = false;
+          if (resumo) resumo.hidden = true;
+          return;
+        }
+
+        const encontradas = todas.filter(
+          (post) => (!tema || post.category === tema) && (!pregador || post.authorSlug === pregador),
+        );
+
+        if (feedPadrao) feedPadrao.hidden = true;
+        if (paginacao) paginacao.hidden = true;
+        if (resumo) {
+          resumo.hidden = false;
+          resumo.textContent = `${encontradas.length} ${encontradas.length === 1 ? "mensagem encontrada" : "mensagens encontradas"}.`;
+        }
+        if (feedFiltrado) {
+          feedFiltrado.hidden = false;
+          feedFiltrado.innerHTML = encontradas
+            .map(
+              (post) => `
+                <article class="card card-feed">
+                  <a href="${escapeHtml(post.href)}" class="link-title">
+                    <p class="meta card-toprow">
+                      <span class="meta-accent">${escapeHtml(post.category)}</span>
+                      <span>${escapeHtml(post.authorName)}</span>
+                    </p>
+                    <h2 class="card-title link-title__text">${escapeHtml(post.title)}</h2>
+                    <p class="card-excerpt">${escapeHtml(post.excerpt)}</p>
+                    <p class="meta card-footer">
+                      <time datetime="${escapeHtml(post.isoDate)}">${escapeHtml(post.date)}</time>
+                      <span>${escapeHtml(post.reading)}</span>
+                    </p>
+                  </a>
+                </article>
+              `,
+            )
+            .join("");
+        }
+      }
+
+      temaSelect?.addEventListener("change", aplicarFiltro);
+      pregadorSelect?.addEventListener("change", aplicarFiltro);
+    })();
+  </script>
+
+  {
+    page.currentPage === 1 && (
+      <script
+        is:inline
+        define:vars={{
+          directusUrl: DIRECTUS_URL,
+          vapidPublicKey: "BHjTzvfXIx0DAkcCgfJDNQO5N09SmO0jIPuTP8L6rxnEaITMn95fQH6kHFnbrEJE-Fdroim5bNnaKp5wwowXdak",
+        }}
+      >
+        (() => {
+          const wrap = document.querySelector("[data-notify-wrap]");
+          const toggleBtn = document.querySelector("[data-notify-toggle]");
+          const statusEl = document.querySelector("[data-notify-status]");
+          if (!wrap || !toggleBtn) return;
+
+          const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+          if (!supported) return;
+          wrap.hidden = false;
+
+          const ENDPOINT_KEY = "ieadespa-push-endpoint";
+          const PREFS_KEY = "ieadespa-push-prefs";
+          const lerPrefs = () => {
+            try {
+              return JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+            } catch {
+              return {};
+            }
+          };
+          const salvarPrefs = (prefs) => {
+            try {
+              localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+            } catch {}
+          };
+          const endpointSalvo = () => {
+            try {
+              return localStorage.getItem(ENDPOINT_KEY);
+            } catch {
+              return null;
+            }
+          };
+
+          const urlBase64ToUint8Array = (base64String) => {
+            const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+            const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+            const rawData = atob(base64);
+            return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+          };
+
+          function atualizarBotao() {
+            const ativo = Boolean(endpointSalvo()) && lerPrefs().mensagens === true;
+            toggleBtn.textContent = ativo ? "🔔 Notificações ativadas — cancelar" : "🔔 Avisar quando sair mensagem nova";
+            toggleBtn.setAttribute("aria-pressed", String(ativo));
+          }
+          atualizarBotao();
+
+          toggleBtn.addEventListener("click", async () => {
+            toggleBtn.disabled = true;
+            if (statusEl) statusEl.textContent = "";
+            try {
+              const jaAtivo = Boolean(endpointSalvo()) && lerPrefs().mensagens === true;
+
+              if (jaAtivo) {
+                // Só desativa a preferência de mensagens — só apaga a
+                // inscrição push do navegador de vez se eventos/notícias
+                // também não estiverem ativos (mesmo cuidado do /eventos/).
+                const endpoint = endpointSalvo();
+                const prefsRestantes = { ...lerPrefs(), mensagens: false };
+                const aindaQuerOutraCoisa = prefsRestantes.eventos || prefsRestantes.noticias;
+
+                if (endpoint) {
+                  await fetch(`${directusUrl}/items/push_subscriptions`, {
+                    method: aindaQuerOutraCoisa ? "PATCH" : "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(
+                      aindaQuerOutraCoisa
+                        ? { query: { filter: { endpoint: { _eq: endpoint } } }, data: { avisar_mensagens: false } }
+                        : { query: { filter: { endpoint: { _eq: endpoint } } } },
+                    ),
+                  });
+                }
+                if (!aindaQuerOutraCoisa && "serviceWorker" in navigator) {
+                  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+                  const subscription = await registration?.pushManager.getSubscription();
+                  await subscription?.unsubscribe();
+                }
+                try {
+                  if (!aindaQuerOutraCoisa) localStorage.removeItem(ENDPOINT_KEY);
+                } catch {}
+                salvarPrefs(prefsRestantes);
+                if (statusEl) statusEl.textContent = "Aviso de mensagem nova cancelado.";
+              } else {
+                const permissao = await Notification.requestPermission();
+                if (permissao !== "granted") {
+                  if (statusEl) statusEl.textContent = "Permissão não concedida.";
+                  return;
+                }
+
+                const registration = await navigator.serviceWorker.register("/sw.js");
+                const subscription = await registration.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+                });
+                const json = subscription.toJSON();
+                const endpointAnterior = endpointSalvo();
+
+                await fetch(`${directusUrl}/items/push_subscriptions`, {
+                  method: endpointAnterior && endpointAnterior === json.endpoint ? "PATCH" : "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(
+                    endpointAnterior && endpointAnterior === json.endpoint
+                      ? { query: { filter: { endpoint: { _eq: json.endpoint } } }, data: { avisar_mensagens: true, p256dh: json.keys.p256dh, auth: json.keys.auth } }
+                      : { endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, avisar_mensagens: true },
+                  ),
+                });
+
+                try {
+                  localStorage.setItem(ENDPOINT_KEY, json.endpoint);
+                } catch {}
+                salvarPrefs({ ...lerPrefs(), mensagens: true });
+                if (statusEl) statusEl.textContent = "✅ Você vai ser avisado(a) quando sair mensagem nova.";
+              }
+
+              atualizarBotao();
+            } catch {
+              if (statusEl) statusEl.textContent = "Não foi possível agora. Tente novamente.";
+            } finally {
+              toggleBtn.disabled = false;
+            }
+          });
+        })();
+      </script>
+    )
+  }
+
+  <style is:global>
+    .mensagens-filtros {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+  </style>
+</BaseLayout>

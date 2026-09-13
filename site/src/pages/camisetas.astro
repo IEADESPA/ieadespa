@@ -1,0 +1,126 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Lote {
+  slug: string;
+  nome: string;
+  descricao: string | null;
+  valor_venda: number | null;
+  pedidos_ate: string | null;
+  evento: { title: string } | null;
+  ministerio: { name: string } | null;
+}
+
+const allPosts = visiblePosts(await getAllMensagens());
+const grupos = await fetchItems<Lote>(
+  "camiseta_grupos",
+  "filter[ativo][_eq]=true&fields=slug,nome,descricao,valor_venda,pedidos_ate,evento.title,ministerio.name&sort=-date_created",
+);
+
+const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+---
+
+<BaseLayout title="Camisetas e uniformes" description={`Lotes de camiseta e uniforme abertos na ${siteConfig.name}.`}>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Camisetas e uniformes</p>
+        <h1 class="pagehead-title">Lotes abertos</h1>
+        <p class="pagehead-description">
+          Faça seu pedido de camiseta/uniforme aqui. Depois de pedir, confira o andamento (se já
+          chegou, quanto falta pagar) em{" "}
+          <a href="/meus-pedidos-camiseta/" class="underline underline-offset-2">Meus pedidos</a>,
+          só com o seu telefone.
+        </p>
+      </header>
+
+      <div data-camisetas-wrap>
+        <div hidden={grupos.length > 0} class="gallery-empty mt-8" data-camisetas-vazio>
+          <p class="text-sm text-muted-foreground">Nenhuma camiseta aberta no momento.</p>
+        </div>
+
+        <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-camisetas-grid>
+          {grupos.map((grupo) => (
+            <a href={`/camiseta/${grupo.slug}/`} class="camiseta-lote-card" data-camiseta-card data-pedidos-ate={grupo.pedidos_ate ?? ""}>
+              <span class="camiseta-lote-nome">{grupo.nome}</span>
+              {(grupo.evento || grupo.ministerio) && (
+                <span class="camiseta-lote-vinculo">{grupo.evento?.title ?? grupo.ministerio?.name}</span>
+              )}
+              {grupo.valor_venda != null && (
+                <span class="camiseta-lote-valor">
+                  R$ {Number(grupo.valor_venda).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </span>
+              )}
+              {grupo.pedidos_ate && (
+                <span class="camiseta-lote-prazo">Pedidos até {dateFormatter.format(new Date(grupo.pedidos_ate))}</span>
+              )}
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    // O site é estático e pode passar dias sem rebuildar — por isso o prazo
+    // "pedidos até" é conferido aqui, contra a data de hoje do visitante, em
+    // vez de confiar só no que valia no momento do último build (mesma
+    // técnica já usada no carrossel de destaque, ver README).
+    (() => {
+      const cards = document.querySelectorAll<HTMLElement>("[data-camiseta-card]");
+      const hoje = new Date().toISOString().slice(0, 10);
+      let visiveis = 0;
+
+      cards.forEach((card) => {
+        const prazo = card.dataset.pedidosAte;
+        const venceu = Boolean(prazo && prazo < hoje);
+        card.hidden = venceu;
+        if (!venceu) visiveis += 1;
+      });
+
+      const vazio = document.querySelector<HTMLElement>("[data-camisetas-vazio]");
+      if (vazio) vazio.hidden = visiveis > 0;
+    })();
+  </script>
+
+
+  <style is:global>
+    .camiseta-lote-card {
+      display: block;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem 1.4rem;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color var(--duration-fast) var(--ease-out);
+    }
+    .camiseta-lote-card:hover {
+      border-color: var(--accent);
+    }
+    .camiseta-lote-nome {
+      display: block;
+      font-weight: 600;
+      font-size: 1.0625rem;
+    }
+    .camiseta-lote-vinculo,
+    .camiseta-lote-prazo {
+      display: block;
+      margin-top: 0.35rem;
+      color: var(--muted-foreground);
+      font-size: 0.8125rem;
+    }
+    .camiseta-lote-valor {
+      display: block;
+      margin-top: 0.5rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+  </style>
+</BaseLayout>

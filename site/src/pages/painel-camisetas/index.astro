@@ -1,0 +1,173 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Gestão de camisetas" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas" data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow">Área restrita</p>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 class="pagehead-title">Gestão de camisetas</h1>
+          <p class="text-sm text-muted-foreground" data-painel-usuario-wrap hidden>
+            <span data-painel-usuario></span> ·{" "}
+            <button type="button" class="link-sweep text-accent font-semibold" data-painel-sair>Sair</button>
+          </p>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden data-painel-conteudo>
+        <p class="mt-4 text-sm">
+          <a href="/painel-eventos/lgpd/" class="link-sweep font-semibold text-accent">Exclusão de dados pessoais (LGPD) →</a>
+        </p>
+
+        <div class="mt-8 flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="section-title">Lotes de camiseta/uniforme</h2>
+          <button type="button" class="btn btn-solid" data-painel-novo-grupo>+ Nova camiseta</button>
+        </div>
+        <p class="mt-2 text-sm text-muted-foreground" data-painel-novo-status role="status" aria-live="polite"></p>
+
+        <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-painel-lotes-lista>
+          <p class="text-sm text-muted-foreground">Carregando lotes…</p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { exigirAutenticacao, sair } from "@/lib/painelAuth";
+
+    const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
+
+    interface LoteResumo {
+      id: number;
+      nome: string;
+      ativo: boolean;
+    }
+
+    const container = document.querySelector<HTMLElement>("[data-directus-url]");
+    if (!container) throw new Error("contêiner do painel ausente");
+    const directusUrl = container.dataset.directusUrl ?? "";
+
+    const carregando = document.querySelector<HTMLElement>("[data-painel-carregando]");
+    const conteudo = document.querySelector<HTMLElement>("[data-painel-conteudo]");
+    const usuarioWrap = document.querySelector<HTMLElement>("[data-painel-usuario-wrap]");
+    const usuarioEl = document.querySelector<HTMLElement>("[data-painel-usuario]");
+    const sairBtn = document.querySelector<HTMLButtonElement>("[data-painel-sair]");
+    const listaEl = document.querySelector<HTMLElement>("[data-painel-lotes-lista]");
+    const novoBtn = document.querySelector<HTMLButtonElement>("[data-painel-novo-grupo]");
+
+    let token = "";
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
+    async function carregarLotes() {
+      if (!listaEl) return;
+      const res = await fetch(`${directusUrl}/items/camiseta_grupos?fields=id,nome,ativo&sort=-date_created&limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      const lotes: LoteResumo[] = json.data ?? [];
+
+      if (!lotes.length) {
+        listaEl.innerHTML = `<p class="text-sm text-muted-foreground">Nenhum lote ainda. Crie o primeiro acima.</p>`;
+        return;
+      }
+
+      listaEl.innerHTML = lotes
+        .map(
+          (lote) => `
+            <a href="/painel-camisetas/grupo/?id=${lote.id}" class="painel-evento-card painel-evento-link">
+              <span class="painel-evento-titulo">${escapeHtml(lote.nome)}</span>
+              <span class="painel-evento-data">${lote.ativo ? "Ativo" : "Inativo"}</span>
+            </a>
+          `,
+        )
+        .join("");
+    }
+
+    const novoStatus = document.querySelector<HTMLElement>("[data-painel-novo-status]");
+
+    novoBtn?.addEventListener("click", async () => {
+      const t = await exigirAutenticacao(directusUrl, AUTH);
+      if (!t) return;
+      novoBtn.disabled = true;
+      if (novoStatus) novoStatus.textContent = "Criando…";
+      try {
+        // `slug` é obrigatório e único no Directus — um placeholder com
+        // timestamp garante que a criação nunca falhe por causa dele; a tela
+        // de edição já tem "Gerar do nome" pra trocar por um slug de verdade.
+        const res = await fetch(`${directusUrl}/items/camiseta_grupos`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ nome: "Nova camiseta", slug: `nova-camiseta-${Date.now()}`, ativo: true }),
+        });
+        if (!res.ok) throw new Error("falha ao criar");
+        const json = await res.json();
+        window.location.href = `/painel-camisetas/grupo/?id=${json.data.id}`;
+      } catch {
+        novoBtn.disabled = false;
+        if (novoStatus) novoStatus.textContent = "Não foi possível criar agora. Tente de novo em instantes.";
+      }
+    });
+
+    sairBtn?.addEventListener("click", () => sair(directusUrl, AUTH));
+
+    async function iniciar() {
+      const t = await exigirAutenticacao(directusUrl, AUTH);
+      if (!t) return;
+      token = t;
+
+      const res = await fetch(`${directusUrl}/users/me?fields=email`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json();
+
+      if (carregando) carregando.hidden = true;
+      if (conteudo) conteudo.hidden = false;
+      if (usuarioWrap) usuarioWrap.hidden = false;
+      if (usuarioEl) usuarioEl.textContent = json.data.email;
+
+      await carregarLotes();
+    }
+
+    iniciar();
+  </script>
+
+  <style is:global>
+    .painel-evento-card {
+      display: block;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem 1.4rem;
+      transition: border-color var(--duration-fast) var(--ease-out);
+    }
+    .painel-evento-card:hover {
+      border-color: var(--accent);
+    }
+    .painel-evento-link {
+      text-decoration: none;
+      color: inherit;
+    }
+    .painel-evento-titulo {
+      display: block;
+      font-weight: 600;
+      font-size: 1.0625rem;
+    }
+    .painel-evento-data {
+      display: block;
+      margin-top: 0.35rem;
+      color: var(--muted-foreground);
+      font-size: 0.8125rem;
+    }
+  </style>
+</BaseLayout>

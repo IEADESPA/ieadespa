@@ -1,0 +1,255 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { DIRECTUS_ADMIN_URL, directusAssetUrl, fetchItems } from "@/lib/directus";
+
+interface Relatorio {
+  title: string;
+  period: string;
+  date: string;
+  excerpt: string | null;
+  file: string;
+}
+
+const allPosts = visiblePosts(await getAllMensagens());
+
+/** Publicados pela diretoria através do painel de conteúdo. */
+const reports = (await fetchItems<Relatorio>("relatorios")).sort(
+  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+);
+
+/*
+ * Números públicos de crescimento — só dado agregado, nunca individual:
+ * contagens (quantas congregações, quantos órgãos) e o ano de fundação
+ * (já público, aparece em "Nossa história"). Nenhum dado de membro
+ * específico entra aqui — nome, contato ou qualquer coisa individual
+ * continua fora do site, só no sistema interno de membros.
+ */
+const [congregacoes, orgaos, historico] = await Promise.all([
+  fetchItems<{ id: number; fundacao_ano: number | null }>("congregacoes", "fields=id,fundacao_ano"),
+  fetchItems<{ id: number }>("ministerios", "fields=id"),
+  fetchItems<{ period: string | null }>("historia", "fields=period"),
+]);
+
+const anoFundacao = historico
+  .map((h) => Number.parseInt(h.period ?? "", 10))
+  .filter((year) => Number.isFinite(year))
+  .reduce((min, year) => (min === null || year < min ? year : min), null as number | null);
+
+const anoAtual = new Date().getFullYear();
+const anosDeHistoria = anoFundacao !== null ? anoAtual - anoFundacao : null;
+
+const numeros = [
+  { label: "Congregações", valor: congregacoes.length },
+  { label: "Órgãos e departamentos", valor: orgaos.length },
+  ...(anosDeHistoria !== null ? [{ label: "Anos de história", valor: anosDeHistoria }] : []),
+];
+
+/* Crescimento por ano só aparece quando pelo menos 2 congregações
+   tiverem o campo "fundacao_ano" preenchido no Directus — sem isso não
+   há dado real o suficiente pra montar o gráfico. */
+const anosPreenchidos = congregacoes
+  .map((c) => c.fundacao_ano)
+  .filter((ano): ano is number => typeof ano === "number")
+  .sort((a, b) => a - b);
+
+const crescimentoPorAno =
+  anosPreenchidos.length >= 2
+    ? (() => {
+        const porAno = new Map<number, number>();
+        anosPreenchidos.forEach((ano) => porAno.set(ano, (porAno.get(ano) ?? 0) + 1));
+        let acumulado = 0;
+        return [...porAno.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([ano, novas]) => {
+            acumulado += novas;
+            return { ano, total: acumulado };
+          });
+      })()
+    : null;
+
+const maxCrescimento = crescimentoPorAno ? Math.max(...crescimentoPorAno.map((p) => p.total)) : 0;
+---
+
+<BaseLayout
+  title="Transparência"
+  description={`Diretoria e prestação de contas da ${siteConfig.name}.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Prestação de contas</p>
+        <h1 class="pagehead-title">Transparência</h1>
+        <p class="pagehead-description">
+          Relatórios de prestação de contas à congregação. Para conhecer os diretores executivos,
+          veja o órgão <a href="/orgao/diretoria-executiva/">Diretoria Executiva</a>.
+        </p>
+        <p class="mt-2 text-sm text-muted-foreground">
+          CNPJ: <span class="font-semibold">{siteConfig.cnpj}</span>
+        </p>
+        {
+          reports.length > 0 && (
+            <p class="mt-1 text-sm text-muted-foreground">
+              Último relatório publicado: <strong>{reports[0].title}</strong> ({reports[0].period})
+            </p>
+          )
+        }
+      </header>
+
+      <section class="pb-[var(--space-section)]" aria-labelledby="numeros-heading">
+        <h2 id="numeros-heading" class="section-title">Números da igreja</h2>
+        <p class="text-sm text-muted-foreground">
+          Só dado agregado e já público — nenhuma informação individual de membro entra aqui.
+        </p>
+        <div class="mt-6 grid gap-4 sm:grid-cols-3">
+          {
+            numeros.map((numero) => (
+              <div class="numero-card">
+                <p class="numero-valor">{numero.valor}</p>
+                <p class="numero-label">{numero.label}</p>
+              </div>
+            ))
+          }
+        </div>
+
+        {
+          crescimentoPorAno ? (
+            <div class="mt-8">
+              <h3 class="text-base font-semibold tracking-tight">Crescimento no número de congregações</h3>
+              <ul class="mt-4 grid gap-2">
+                {crescimentoPorAno.map((ponto) => (
+                  <li class="crescimento-linha">
+                    <span class="crescimento-ano">{ponto.ano}</span>
+                    <span class="crescimento-barra-trilho">
+                      <span class="crescimento-barra" style={`width:${(ponto.total / maxCrescimento) * 100}%`} />
+                    </span>
+                    <span class="crescimento-total">{ponto.total}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p class="mt-8 text-sm text-muted-foreground">
+              O gráfico de crescimento por ano aparece aqui assim que o ano de fundação de pelo
+              menos duas congregações estiver cadastrado no Directus.
+            </p>
+          )
+        }
+      </section>
+
+      <section aria-labelledby="reports-heading">
+        <h2 id="reports-heading" class="section-title">Relatórios</h2>
+        {
+          reports.length > 0 ? (
+            <ul class="grid gap-4">
+              {reports.map((report) => (
+                <li class="report-card">
+                  <a href={directusAssetUrl(report.file)} target="_blank" rel="noreferrer" class="link-title flex items-baseline justify-between gap-4">
+                    <span>
+                      <span class="link-title__text block text-base font-semibold tracking-tight">{report.title}</span>
+                      {report.excerpt && (
+                        <span class="mt-1 block text-sm text-muted-foreground">{report.excerpt}</span>
+                      )}
+                    </span>
+                    <span class="pill shrink-0">{report.period}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div class="gallery-empty">
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Nenhum relatório publicado ainda. Assim que a diretoria publicar um relatório de
+                prestação de contas pelo <a href={DIRECTUS_ADMIN_URL}>painel de conteúdo</a>, ele aparecerá
+                aqui.
+              </p>
+            </div>
+          )
+        }
+      </section>
+
+      <div class="prose mt-16">
+        <h2>Dúvidas sobre os relatórios</h2>
+        <p>
+          Membros da igreja podem solicitar mais detalhes sobre a prestação de contas pela{" "}
+          <a href="/contato/">página de contato</a>.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .numero-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.4rem;
+    background: var(--muted);
+  }
+
+  .numero-valor {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+  }
+
+  .numero-label {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+  }
+
+  .crescimento-linha {
+    display: grid;
+    grid-template-columns: 3.5rem 1fr 2.5rem;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .crescimento-ano {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+
+  .crescimento-barra-trilho {
+    display: block;
+    height: 0.6rem;
+    border-radius: var(--radius-full);
+    background: var(--border);
+    overflow: hidden;
+  }
+
+  .crescimento-barra {
+    display: block;
+    height: 100%;
+    border-radius: var(--radius-full);
+    background: var(--accent);
+  }
+
+  .crescimento-total {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .report-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.4rem;
+  }
+
+  .gallery-empty {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+  }
+</style>

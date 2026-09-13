@@ -1,0 +1,121 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { VERIFICAR_INSCRICAO_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Evento {
+  id: number;
+  slug: string;
+  title: string;
+  aceita_inscricao: boolean;
+}
+
+export async function getStaticPaths() {
+  const events = await fetchItems<Evento>("eventos", "filter[aceita_inscricao][_eq]=true");
+  // slug e opcional no Directus - sem essa checagem, evento sem slug ainda
+  // definido quebraria o build (mesmo bug corrigido em toda pagina por slug).
+  return events.filter((event) => event.slug).map((event) => ({ params: { slug: event.slug }, props: { event } }));
+}
+
+interface Props {
+  event: Evento;
+}
+
+const { event } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout
+  title={`Verificar certificado — ${event.title}`}
+  description="Confirme a autenticidade de um certificado emitido para este evento."
+  noindex
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas verificar-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Verificação de certificado</p>
+        <h1 class="pagehead-title">{event.title}</h1>
+        <p class="pagehead-description">
+          Página pública, pra qualquer pessoa ou instituição conferir se um certificado deste
+          evento é autêntico — só o código impresso no certificado, sem precisar de mais nenhum
+          dado de quem participou.
+        </p>
+      </header>
+
+      <form class="mt-8 grid gap-4 max-w-sm" data-verificar-form data-evento-id={event.id} data-verificar-url={VERIFICAR_INSCRICAO_URL}>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="verificar-codigo">Código do certificado</label>
+          <input
+            id="verificar-codigo"
+            name="codigo"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            maxlength="6"
+            class="field verificar-codigo-input"
+            placeholder="A3F9K2"
+          />
+        </div>
+        <button type="submit" class="btn btn-solid">Verificar</button>
+      </form>
+
+      <p class="mt-6 text-lg font-semibold" data-verificar-resultado role="status" aria-live="polite" />
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    const form = document.querySelector<HTMLFormElement>("[data-verificar-form]");
+    if (!form) throw new Error("formulário de verificação ausente");
+
+    const eventoId = form.dataset.eventoId;
+    const verificarUrl = form.dataset.verificarUrl ?? "";
+    const resultado = document.querySelector<HTMLElement>("[data-verificar-resultado]");
+    const codigoInput = document.getElementById("verificar-codigo") as HTMLInputElement;
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const codigo = codigoInput.value.trim().toUpperCase();
+      if (!resultado) return;
+
+      if (!codigo) {
+        resultado.textContent = "Digite o código impresso no certificado.";
+        return;
+      }
+
+      resultado.textContent = "Verificando…";
+
+      try {
+        const res = await fetch(verificarUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evento: eventoId, modo: "verificar_certificado", codigo }),
+        });
+        const dados = await res.json();
+
+        resultado.textContent = dados?.autentico
+          ? `✅ Certificado autêntico — emitido para ${dados.nome}.`
+          : "❌ Não encontramos nenhum certificado com esse código para este evento.";
+      } catch {
+        resultado.textContent = "Não foi possível verificar agora. Tente novamente em instantes.";
+      }
+    });
+  </script>
+
+  <style>
+    .verificar-canvas {
+      max-width: 40rem;
+    }
+
+    .verificar-codigo-input {
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 1.5rem;
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+  </style>
+</BaseLayout>

@@ -1,0 +1,68 @@
+---
+interface Ponto {
+  name: string;
+  lat: number;
+  lng: number;
+  href?: string;
+}
+
+interface Props {
+  pontos: Ponto[];
+}
+
+const { pontos } = Astro.props;
+---
+
+<div id="mapa-congregacoes" class="mapa" data-pontos={JSON.stringify(pontos)}></div>
+
+<script>
+  import L from "leaflet";
+  import "leaflet/dist/leaflet.css";
+  import icon from "leaflet/dist/images/marker-icon.png";
+  import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
+  import iconShadow from "leaflet/dist/images/marker-shadow.png";
+
+  // Corrige um problema conhecido do Leaflet com empacotadores (Vite): os
+  // ícones padrão referenciam caminhos relativos que quebram quando
+  // empacotados, então apontamos explicitamente pros arquivos importados.
+  delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconUrl: icon.src ?? icon,
+    iconRetinaUrl: iconRetina.src ?? iconRetina,
+    shadowUrl: iconShadow.src ?? iconShadow,
+  });
+
+  const el = document.getElementById("mapa-congregacoes");
+  if (el) {
+    const pontos = JSON.parse(el.dataset.pontos || "[]") as { name: string; lat: number; lng: number; href?: string }[];
+
+    if (pontos.length > 0) {
+      const map = L.map(el, { scrollWheelZoom: false }).setView([pontos[0].lat, pontos[0].lng], 12);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map);
+
+      const markers = pontos.map((ponto) => {
+        const popup = ponto.href
+          ? `<a href="${ponto.href}">${ponto.name}</a>`
+          : ponto.name;
+        return L.marker([ponto.lat, ponto.lng]).bindPopup(popup);
+      });
+
+      const group = L.featureGroup(markers).addTo(map);
+      if (pontos.length > 1) map.fitBounds(group.getBounds().pad(0.2));
+    }
+  }
+</script>
+
+<style>
+  .mapa {
+    width: 100%;
+    height: 22rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+</style>

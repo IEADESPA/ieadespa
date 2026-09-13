@@ -1,0 +1,1714 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const congregacoes = (await fetchItems<{ id: number; name: string }>("congregacoes", "fields=id,name&sort=name")).sort((a, b) =>
+  a.name.localeCompare(b.name, "pt-BR"),
+);
+
+// Pra vincular esse evento a uma edição anterior — não precisa ser todo ano,
+// pode pular anos, então é uma lista livre, não uma sugestão automática.
+const eventosParaVincular = await fetchItems<{ id: number; title: string; event_date: string | null }>(
+  "eventos",
+  "fields=id,title,event_date&sort=-event_date",
+);
+
+const tipoResponsavelOpcoes = [
+  { value: "", label: "Sem categoria" },
+  { value: "diretoria", label: "Diretoria" },
+  { value: "conselho", label: "Conselho" },
+  { value: "congregacao", label: "Congregação" },
+  { value: "departamento", label: "Departamento/Ministério" },
+  { value: "area", label: "Área/Regional" },
+];
+
+const tipoPerguntaOpcoes = [
+  { value: "texto_curto", label: "Texto curto" },
+  { value: "texto_longo", label: "Texto longo" },
+  { value: "numero", label: "Número" },
+  { value: "data", label: "Data" },
+  { value: "selecao_unica", label: "Seleção única" },
+  { value: "selecao_multipla", label: "Seleção múltipla" },
+];
+---
+
+<BaseLayout title="Editar evento — Gestão de eventos" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas evento-canvas" data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow"><a href="/painel-eventos/" class="text-accent">← Gestão de eventos</a></p>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 class="pagehead-title" data-painel-titulo>Evento</h1>
+          <div class="flex flex-wrap gap-3">
+            <a href="/painel-eventos/evento/inscritos/" class="btn btn-outline" data-link-inscritos hidden>
+              Ver inscritos
+            </a>
+            <a href="/checkin/" class="btn btn-solid" data-link-checkin hidden>
+              Fazer check-in
+            </a>
+          </div>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden data-painel-erro class="gallery-empty mt-8">
+        <p class="text-sm text-muted-foreground">Evento não encontrado.</p>
+      </div>
+
+      <div hidden class="tab-bar mt-8" data-tabs role="tablist">
+        <button type="button" class="tab-btn is-active" data-tab="dados">Dados do evento</button>
+        <button type="button" class="tab-btn" data-tab="inscricao">Perguntas de inscrição</button>
+        <button type="button" class="tab-btn" data-tab="pesquisa">Pesquisa pós-evento</button>
+        <button type="button" class="tab-btn" data-tab="agenda">Agenda (sessões)</button>
+        <button type="button" class="tab-btn" data-tab="historico">Histórico</button>
+        <button type="button" class="tab-btn" data-tab="cupons">Cupons de desconto</button>
+        <button type="button" class="tab-btn" data-tab="avancado">Encerrar / Excluir</button>
+      </div>
+
+      <div data-tab-panel="dados">
+      <form hidden class="mt-8 grid gap-5 max-w-2xl" data-evento-form>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-title">Título</label>
+          <input id="f-title" class="field" required />
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-slug">Endereço (slug)</label>
+            <input id="f-slug" class="field" placeholder="nome-do-evento" />
+          </div>
+          <button type="button" class="btn btn-outline" data-gerar-slug>Gerar do título</button>
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-description">Resumo curto</label>
+          <input id="f-description" class="field" placeholder="Aparece na listagem e no compartilhamento" />
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-body">Descrição completa (markdown)</label>
+          <textarea id="f-body" rows="6" class="field"></textarea>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-event-date">Data</label>
+            <input id="f-event-date" type="date" class="field" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-end-date">Data final (se for vários dias)</label>
+            <input id="f-end-date" type="date" class="field" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-time">Horário</label>
+            <input id="f-time" class="field" placeholder="19h30" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-end-time">Horário final</label>
+            <input id="f-end-time" class="field" placeholder="22h" />
+          </div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-congregacao">Congregação (se aplicável)</label>
+            <select id="f-congregacao" class="field">
+              <option value="">— Nenhuma (usar local abaixo) —</option>
+              {congregacoes.map((c) => <option value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-location">Local (se não for numa congregação)</label>
+            <input id="f-location" class="field" />
+          </div>
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-location-busca">Buscar local (Fase 24.4 — mais rápido que colar link)</label>
+          <input id="f-location-busca" class="field" placeholder="Digite o nome do lugar…" autocomplete="off" data-places-autocomplete />
+          <p class="text-xs text-muted-foreground">
+            Comece a digitar e escolha um resultado da lista — preenche sozinho o local e o link
+            abaixo, com a coordenada exata do lugar escolhido. Se preferir, ainda dá pra colar o
+            link manualmente.
+          </p>
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-location-maps-url">Link do Google Maps do local (opcional)</label>
+          <input id="f-location-maps-url" class="field" placeholder="https://maps.app.goo.gl/..." />
+          <p class="text-xs text-muted-foreground">
+            No Google Maps, ache o pino certo do local → "Compartilhar" → "Copiar link" → cole
+            aqui. Só digitar o endereço às vezes cai na rua errada — colando o link, o mapa da
+            página do evento usa a coordenada exata que você mesmo conferiu.
+          </p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-responsavel">Responsável (nome/ministério)</label>
+            <input id="f-responsavel" class="field" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-tipo-responsavel">Categoria do responsável</label>
+            <select id="f-tipo-responsavel" class="field">
+              {tipoResponsavelOpcoes.map((o) => <option value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-vagas">Limite de vagas (opcional)</label>
+            <input id="f-vagas" type="number" min="0" class="field" placeholder="Deixe em branco = ilimitado" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-inscricoes-ate">Inscrições até</label>
+            <input id="f-inscricoes-ate" type="date" class="field" />
+          </div>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Com limite preenchido, o formulário público trava de verdade — quem se inscrever depois
+          das vagas esgotarem entra na lista de espera automaticamente. Se você aumentar o limite
+          (ou apagá-lo, deixando ilimitado) e salvar, quem estiver na lista de espera é confirmado
+          sozinho, do mais antigo pro mais novo, até preencher as vagas novas.
+        </p>
+
+        <label class="flex items-start gap-2 text-sm">
+          <input id="f-requer-aprovacao" type="checkbox" class="mt-1" />
+          <span>
+            <strong>Requer aprovação manual</strong> — pra cursos/escolas com pré-requisito: a
+            inscrição não confirma vaga sozinha, fica pendente até alguém da equipe aprovar (aba
+            Inscritos). Combina com o limite de vagas acima — a aprovação só confirma vaga se
+            ainda houver, senão a pessoa aprovada entra na lista de espera.
+          </span>
+        </label>
+
+        <fieldset class="grid gap-2">
+          <legend class="text-sm font-semibold">Faixas de valor (opcional)</legend>
+          <p class="text-xs text-muted-foreground">
+            Aparece na página pública do evento. Se o formulário de inscrição tiver mais de uma
+            faixa cadastrada, a pessoa escolhe uma delas ao se inscrever, e o valor já fica
+            preenchido pra cada pessoa daquela inscrição — não processa pagamento nenhum, só
+            registra o valor combinado. Ex.: "Individual" R$50, "Casal" R$80 (R$40 cada), "Grupo
+            (5 ou mais, por pessoa)" R$30 — use isso pra dar desconto por grupo/quantidade.
+          </p>
+          <div class="grid gap-2" data-faixas-lista></div>
+          <button type="button" class="btn btn-outline mt-1" data-faixa-adicionar>+ Adicionar faixa</button>
+        </fieldset>
+
+        <div class="grid gap-3">
+          <label class="flex items-center gap-2 text-sm">
+            <input id="f-inscricao-grupo" type="checkbox" /> Permitir inscrição em grupo (família, casal, grupos de amigos etc.)
+          </label>
+          <p class="text-xs text-muted-foreground">
+            Com isso ativado, quem se inscrever pode adicionar o nome de outras pessoas na mesma
+            inscrição (cada uma vira uma inscrição própria, com seu próprio código de check-in e
+            certificado) — combine com faixas de valor acima pra dar desconto por grupo.
+          </p>
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-evento-anterior">Edição anterior (opcional)</label>
+          <select id="f-evento-anterior" class="field">
+            <option value="">— Nenhuma (primeira edição, ou evento avulso) —</option>
+            {eventosParaVincular.map((e) => (
+              <option value={e.id}>
+                {e.title}
+                {e.event_date ? ` — ${e.event_date}` : ""}
+              </option>
+            ))}
+          </select>
+          <p class="text-xs text-muted-foreground">
+            Vincule só se esse evento for uma nova edição de algo que já rolou antes (seminário,
+            congresso, etc.) — não precisa ser todo ano, pode pular anos. Habilita a comparação
+            histórica na aba "Histórico".
+          </p>
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-checkin-minutos">Libera o check-in quantos minutos antes do horário?</label>
+          <input id="f-checkin-minutos" type="number" min="0" class="field" placeholder="60" />
+          <p class="text-xs text-muted-foreground">
+            A página pública de check-in fica fechada até essa contagem começar — evita gente
+            confirmando presença horas (ou dias) antes do evento de verdade.
+          </p>
+        </div>
+
+        <div class="grid gap-3">
+          <label class="flex items-center gap-2 text-sm">
+            <input id="f-checkin-manual" type="checkbox" /> Liberar check-in agora (ignora o horário)
+          </label>
+          <p class="text-xs text-muted-foreground">
+            Pra abrir mais cedo do que o automático, se precisar (imprevisto, mudança de horário
+            de última hora etc.).
+          </p>
+        </div>
+
+        <fieldset class="grid gap-2">
+          <legend class="text-sm font-semibold">Locais de check-in (opcional)</legend>
+          <p class="text-xs text-muted-foreground">
+            Se o evento tem mais de uma portaria/entrada, cadastre os nomes aqui — quem for fazer
+            check-in escolhe uma vez qual local aquele aparelho representa (fica guardado só
+            naquele aparelho), e toda confirmação feita dali em diante já leva essa marcação
+            sozinha. Deixe em branco se só existe um jeito de entrar.
+          </p>
+          <div class="grid gap-2" data-locais-checkin-lista></div>
+          <button type="button" class="btn btn-outline mt-1" data-local-checkin-adicionar>+ Adicionar local</button>
+        </fieldset>
+
+        <div class="grid gap-3">
+          <label class="flex items-center gap-2 text-sm">
+            <input id="f-inscricoes-encerradas" type="checkbox" /> Encerrar inscrições manualmente agora
+          </label>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <button type="submit" class="btn btn-solid" data-evento-salvar>Salvar evento</button>
+          <p class="text-sm" data-evento-status role="status" aria-live="polite"></p>
+        </div>
+      </form>
+      </div>
+
+      <div data-tab-panel="inscricao" hidden>
+      <section hidden class="mt-8" data-perguntas-secao-inscricao aria-labelledby="perguntas-heading">
+        <h2 id="perguntas-heading" class="section-title">Perguntas do formulário de inscrição</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Cada evento define suas próprias perguntas — não existe campo fixo além de nome e
+          telefone. Ex.: "Qual sua congregação?", "Vai levar acompanhante?", "Contribuição (R$)".
+        </p>
+
+        <div class="mt-5 grid gap-3" data-perguntas-lista-inscricao></div>
+
+        <div class="mt-6 pergunta-card" data-pergunta-nova-inscricao>
+          <p class="text-sm font-semibold">+ Nova pergunta de inscrição</p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <input type="text" class="field" placeholder="Texto da pergunta" data-novo-label-inscricao />
+            <select class="field" data-novo-tipo-inscricao>
+              {tipoPerguntaOpcoes.map((o) => <option value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <textarea
+            class="field mt-3"
+            rows="2"
+            placeholder="Opções (uma por linha) — só pra seleção única/múltipla"
+            data-novo-opcoes-inscricao
+            hidden
+          ></textarea>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" data-novo-obrigatoria-inscricao /> Obrigatória
+            </label>
+            <button type="button" class="btn btn-outline" data-adicionar-pergunta-inscricao>Adicionar pergunta</button>
+          </div>
+        </div>
+      </section>
+      </div>
+
+      <div data-tab-panel="pesquisa" hidden>
+      <section hidden class="mt-8" data-perguntas-secao-pesquisa aria-labelledby="pesquisa-heading">
+        <h2 id="pesquisa-heading" class="section-title">Pesquisa de satisfação (pós-evento)</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Perguntas feitas só depois do evento, na pesquisa pública (<code>/pesquisa/&lt;slug do evento&gt;/</code>),
+          liberada automaticamente a partir do dia seguinte ao evento — nunca aparecem no formulário de inscrição.
+        </p>
+
+        <div class="mt-5 grid gap-3" data-perguntas-lista-pesquisa></div>
+
+        <div class="mt-6 pergunta-card" data-pergunta-nova-pesquisa>
+          <p class="text-sm font-semibold">+ Nova pergunta da pesquisa</p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <input type="text" class="field" placeholder="Texto da pergunta" data-novo-label-pesquisa />
+            <select class="field" data-novo-tipo-pesquisa>
+              {tipoPerguntaOpcoes.map((o) => <option value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <textarea
+            class="field mt-3"
+            rows="2"
+            placeholder="Opções (uma por linha) — só pra seleção única/múltipla"
+            data-novo-opcoes-pesquisa
+            hidden
+          ></textarea>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" data-novo-obrigatoria-pesquisa /> Obrigatória
+            </label>
+            <button type="button" class="btn btn-outline" data-adicionar-pergunta-pesquisa>Adicionar pergunta</button>
+          </div>
+        </div>
+      </section>
+      </div>
+
+      <div data-tab-panel="agenda" hidden>
+      <section hidden class="mt-8" data-agenda-secao aria-labelledby="agenda-heading">
+        <h2 id="agenda-heading" class="section-title">Agenda interna (sessões/palestras)</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Pra eventos com várias palestras/horários (congressos, seminários) — aparece na página
+          pública do evento como uma programação, abaixo da descrição. Se o evento for de vários
+          dias, preencha o campo "Dia" pra agrupar cada sessão no dia certo; se for de um dia só,
+          pode deixar em branco.
+        </p>
+
+        <div class="mt-5 grid gap-3" data-sessoes-lista></div>
+
+        <div class="mt-6 pergunta-card" data-sessao-nova>
+          <p class="text-sm font-semibold">+ Nova sessão</p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <input type="text" class="field" placeholder="Título da sessão/palestra" data-novo-sessao-titulo />
+            <input type="text" class="field" placeholder="Palestrante (opcional)" data-novo-sessao-palestrante />
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-[auto_1fr_1fr]">
+            <input type="date" class="field" data-novo-sessao-dia title="Dia (só p/ evento de vários dias)" />
+            <input type="text" class="field" placeholder="Horário início (19h30)" data-novo-sessao-inicio />
+            <input type="text" class="field" placeholder="Horário fim (opcional)" data-novo-sessao-fim />
+          </div>
+          <input type="text" class="field mt-3" placeholder="Local (opcional, só se for diferente do local do evento)" data-novo-sessao-local />
+          <textarea class="field mt-3" rows="2" placeholder="Descrição (opcional)" data-novo-sessao-descricao></textarea>
+          <div class="mt-3 flex items-center justify-end gap-3">
+            <button type="button" class="btn btn-outline" data-adicionar-sessao>Adicionar sessão</button>
+          </div>
+        </div>
+      </section>
+      </div>
+
+      <div data-tab-panel="historico" hidden>
+      <section hidden class="mt-8" data-historico-secao aria-labelledby="historico-heading">
+        <h2 id="historico-heading" class="section-title">Histórico entre edições</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Compara esse evento com as edições anteriores vinculadas na aba "Dados do evento" — só
+          aparece número de uma edição depois que ela passa por "Encerrar evento" (é lá que os
+          números finais ficam gravados). Funciona mesmo que as edições não sejam todo ano.
+        </p>
+        <div class="mt-5" data-historico-conteudo></div>
+      </section>
+      </div>
+
+      <div data-tab-panel="cupons" hidden>
+      <section hidden class="mt-8" data-cupons-secao aria-labelledby="cupons-heading">
+        <h2 id="cupons-heading" class="section-title">Cupons de desconto</h2>
+        <p class="mt-2 text-sm text-muted-foreground">
+          Não existe processador de pagamento nenhum — isso aqui só registra que a pessoa ganhou
+          um desconto, pra a equipe saber quanto cobrar de verdade (manualmente) na hora de
+          confirmar o pagamento. Quem se inscrever digita o código no formulário público; não
+          aparece em nenhum lugar em destaque — só quem souber o código consegue usar.
+        </p>
+
+        <div class="mt-5 grid gap-3" data-cupons-lista></div>
+
+        <div class="mt-6 pergunta-card" data-cupom-novo>
+          <p class="text-sm font-semibold">+ Novo cupom</p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <input type="text" class="field" placeholder="Código (ex.: DIRETORIA10)" data-novo-cupom-codigo />
+            <select class="field" data-novo-cupom-tipo>
+              <option value="percentual">Percentual (%)</option>
+              <option value="fixo">Valor fixo (R$)</option>
+            </select>
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <input type="number" step="0.01" min="0" class="field" placeholder="Valor do desconto" data-novo-cupom-valor />
+            <input type="number" min="1" class="field" placeholder="Limite de usos (opcional)" data-novo-cupom-limite />
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <input type="date" class="field" data-novo-cupom-validade title="Válido até (opcional)" />
+            <label class="flex items-center gap-2 text-sm whitespace-nowrap">
+              <input type="checkbox" data-novo-cupom-ativo checked /> Ativo
+            </label>
+          </div>
+          <div class="mt-3 flex items-center justify-end gap-3">
+            <button type="button" class="btn btn-outline" data-adicionar-cupom>Adicionar cupom</button>
+          </div>
+        </div>
+      </section>
+      </div>
+
+      <div data-tab-panel="avancado" hidden>
+      <div hidden class="mt-8 zona-encerrar" data-zona-encerrar>
+        <p class="text-sm font-semibold">Encerrar evento</p>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Baixa um relatório de encerramento em PDF (resumo + fechamento de caixa) e cria um
+          rascunho de notícia (não publicado, pra revisar antes). Nome, código, telefone (guardado
+          como hash — nunca em texto puro, ver README/Fase 6), presença, respostas e valores
+          <strong>continuam guardados pra sempre</strong> — é o que garante que a pessoa consiga
+          baixar o certificado dela a qualquer momento, mesmo anos depois. Não é uma exclusão.
+        </p>
+        <button type="button" class="btn btn-outline mt-3" data-encerrar-evento>Encerrar evento</button>
+        <p class="mt-2 text-sm" data-encerrar-status role="status" aria-live="polite"></p>
+      </div>
+
+      <div hidden class="mt-6 zona-perigo" data-zona-perigo>
+        <p class="text-sm font-semibold text-red-700">Excluir evento</p>
+        <p class="mt-1 text-sm text-muted-foreground">
+          Remove o evento, suas perguntas e todas as inscrições (com respostas). Não pode ser
+          desfeito.
+        </p>
+        <button type="button" class="btn btn-outline btn-excluir-evento mt-3" data-excluir-evento>Excluir evento</button>
+        <p class="mt-2 text-sm" data-excluir-status role="status" aria-live="polite"></p>
+      </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline define:vars={{ googleMapsKey: siteConfig.googleMapsEmbedKey }}>
+    // Fase 24.4 — Places Autocomplete no campo de busca de local: alternativa
+    // mais rápida ao fluxo manual de "achar no Maps, copiar link, colar" já
+    // construído na Fase 24.3 — continua preenchendo os mesmos dois campos
+    // (Local + Link do Maps), só que sozinho, com a coordenada exata do
+    // resultado escolhido (não o texto digitado, evitando o mesmo problema
+    // de imprecisão já visto).
+    window.initPlacesAutocomplete = function initPlacesAutocomplete() {
+      const input = document.querySelector("[data-places-autocomplete]");
+      if (!input || !window.google?.maps?.places) return;
+
+      const autocomplete = new google.maps.places.Autocomplete(input, {
+        fields: ["name", "formatted_address", "geometry"],
+        componentRestrictions: { country: "br" },
+        // Region bias solto em torno de Parauapebas — não trava buscas fora
+        // da cidade (útil pra evento fora da região), só prioriza o que é
+        // perto.
+        bounds: new google.maps.LatLngBounds(
+          { lat: -6.3, lng: -50.15 },
+          { lat: -5.85, lng: -49.65 },
+        ),
+      });
+
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (!place.geometry?.location) return;
+
+        const fLocation = document.getElementById("f-location");
+        const fLocationMapsUrl = document.getElementById("f-location-maps-url");
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+
+        if (fLocation) fLocation.value = place.name || place.formatted_address || "";
+        if (fLocationMapsUrl) fLocationMapsUrl.value = `https://www.google.com/maps/@${lat},${lng},19z`;
+      });
+    };
+
+    const placesScript = document.createElement("script");
+    placesScript.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsKey}&libraries=places&callback=initPlacesAutocomplete`;
+    placesScript.async = true;
+    document.head.appendChild(placesScript);
+  </script>
+
+  <script>
+    import { jsPDF } from "jspdf";
+    import { configurarAcessibilidadePdf } from "@/lib/pdf";
+    import { contarRespostas, desenharGraficoBarrasPDF, graficoBarrasSvg } from "@/lib/graficos";
+    import { exigirAutenticacao } from "@/lib/painelAuth";
+
+    interface Evento {
+      id: number;
+      title: string;
+      slug: string | null;
+      description: string | null;
+      body: string | null;
+      event_date: string | null;
+      end_date: string | null;
+      time: string | null;
+      end_time: string | null;
+      congregacao: number | null;
+      location: string | null;
+      location_maps_url: string | null;
+      responsavel: string | null;
+      tipo_responsavel: string | null;
+      vagas_limite: number | null;
+      inscricoes_ate: string | null;
+      inscricoes_encerradas: boolean;
+      faixas_valor: { descricao: string; valor: number }[] | null;
+      permite_inscricao_grupo: boolean;
+      evento_anterior: number | null;
+      estatisticas_finais: EstatisticasFinais | null;
+      checkin_libera_minutos_antes: number | null;
+      checkin_liberado_manualmente: boolean;
+      locais_checkin: string[] | null;
+      requer_aprovacao: boolean;
+    }
+
+    interface EstatisticasFinais {
+      dataEncerramento: string;
+      totalInscritos: number;
+      presentes: number;
+      taxaComparecimento: number;
+      pagos: number;
+      naoPagos: number;
+      valorArrecadado: number;
+    }
+
+    interface Pergunta {
+      id: number;
+      ordem: number | null;
+      label: string;
+      tipo: string;
+      opcoes: string[] | null;
+      obrigatoria: boolean;
+      momento: string;
+    }
+
+    interface Cupom {
+      id: number;
+      codigo: string;
+      tipo: string;
+      valor: number;
+      limite_usos: number | null;
+      usos: number;
+      valido_ate: string | null;
+      ativo: boolean;
+    }
+
+    interface Sessao {
+      id: number;
+      titulo: string;
+      palestrante: string | null;
+      descricao: string | null;
+      dia: string | null;
+      horario_inicio: string | null;
+      horario_fim: string | null;
+      local: string | null;
+      ordem: number | null;
+    }
+
+    const container = document.querySelector<HTMLElement>("[data-directus-url]");
+    if (!container) throw new Error("contêiner do painel ausente");
+    const directusUrl = container.dataset.directusUrl ?? "";
+
+    const idParam = new URLSearchParams(window.location.search).get("id");
+    const eventoId = idParam ? Number(idParam) : null;
+
+    const carregando = document.querySelector<HTMLElement>("[data-painel-carregando]");
+    const erroEl = document.querySelector<HTMLElement>("[data-painel-erro]");
+    const tituloEl = document.querySelector<HTMLElement>("[data-painel-titulo]");
+    const form = document.querySelector<HTMLFormElement>("[data-evento-form]");
+    const statusEl = document.querySelector<HTMLElement>("[data-evento-status]");
+    const perguntasSecaoInscricao = document.querySelector<HTMLElement>("[data-perguntas-secao-inscricao]");
+    const perguntasSecaoPesquisa = document.querySelector<HTMLElement>("[data-perguntas-secao-pesquisa]");
+    const agendaSecao = document.querySelector<HTMLElement>("[data-agenda-secao]");
+    const sessoesLista = document.querySelector<HTMLElement>("[data-sessoes-lista]");
+    const historicoSecao = document.querySelector<HTMLElement>("[data-historico-secao]");
+    const historicoConteudo = document.querySelector<HTMLElement>("[data-historico-conteudo]");
+    const cuponsSecao = document.querySelector<HTMLElement>("[data-cupons-secao]");
+    const cuponsLista = document.querySelector<HTMLElement>("[data-cupons-lista]");
+    const perguntasListaInscricao = document.querySelector<HTMLElement>("[data-perguntas-lista-inscricao]");
+    const perguntasListaPesquisa = document.querySelector<HTMLElement>("[data-perguntas-lista-pesquisa]");
+
+    const tabsBar = document.querySelector<HTMLElement>("[data-tabs]");
+    const tabBotoes = document.querySelectorAll<HTMLButtonElement>("[data-tab]");
+    const tabPaineis = document.querySelectorAll<HTMLElement>("[data-tab-panel]");
+    tabBotoes.forEach((botao) => {
+      botao.addEventListener("click", () => {
+        tabBotoes.forEach((b) => b.classList.toggle("is-active", b === botao));
+        tabPaineis.forEach((painel) => {
+          painel.hidden = painel.dataset.tabPanel !== botao.dataset.tab;
+        });
+      });
+    });
+
+    const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+    const fTitle = el<HTMLInputElement>("f-title");
+    const fSlug = el<HTMLInputElement>("f-slug");
+    const fDescription = el<HTMLInputElement>("f-description");
+    const fBody = el<HTMLTextAreaElement>("f-body");
+    const fEventDate = el<HTMLInputElement>("f-event-date");
+    const fEndDate = el<HTMLInputElement>("f-end-date");
+    const fTime = el<HTMLInputElement>("f-time");
+    const fEndTime = el<HTMLInputElement>("f-end-time");
+    const fCongregacao = el<HTMLSelectElement>("f-congregacao");
+    const fLocation = el<HTMLInputElement>("f-location");
+    const fLocationMapsUrl = el<HTMLInputElement>("f-location-maps-url");
+    const fResponsavel = el<HTMLInputElement>("f-responsavel");
+    const fTipoResponsavel = el<HTMLSelectElement>("f-tipo-responsavel");
+    const fVagas = el<HTMLInputElement>("f-vagas");
+    const fRequerAprovacao = el<HTMLInputElement>("f-requer-aprovacao");
+    const fInscricoesAte = el<HTMLInputElement>("f-inscricoes-ate");
+    const fInscricoesEncerradas = el<HTMLInputElement>("f-inscricoes-encerradas");
+    const fInscricaoGrupo = el<HTMLInputElement>("f-inscricao-grupo");
+    const fEventoAnterior = el<HTMLSelectElement>("f-evento-anterior");
+    const fCheckinMinutos = el<HTMLInputElement>("f-checkin-minutos");
+    const fCheckinManual = el<HTMLInputElement>("f-checkin-manual");
+
+    function slugify(texto: string): string {
+      return texto
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    document.querySelector("[data-gerar-slug]")?.addEventListener("click", () => {
+      fSlug.value = slugify(fTitle.value);
+    });
+
+    function preencherFormulario(evento: Evento) {
+      fTitle.value = evento.title ?? "";
+      fSlug.value = evento.slug ?? "";
+      fDescription.value = evento.description ?? "";
+      fBody.value = evento.body ?? "";
+      fEventDate.value = evento.event_date ?? "";
+      fEndDate.value = evento.end_date ?? "";
+      fTime.value = evento.time ?? "";
+      fEndTime.value = evento.end_time ?? "";
+      fCongregacao.value = evento.congregacao ? String(evento.congregacao) : "";
+      fLocation.value = evento.location ?? "";
+      fLocationMapsUrl.value = evento.location_maps_url ?? "";
+      fResponsavel.value = evento.responsavel ?? "";
+      fTipoResponsavel.value = evento.tipo_responsavel ?? "";
+      fVagas.value = evento.vagas_limite ? String(evento.vagas_limite) : "";
+      fRequerAprovacao.checked = Boolean(evento.requer_aprovacao);
+      fInscricoesAte.value = evento.inscricoes_ate ?? "";
+      fInscricoesEncerradas.checked = Boolean(evento.inscricoes_encerradas);
+      fInscricaoGrupo.checked = Boolean(evento.permite_inscricao_grupo);
+      fEventoAnterior.value = evento.evento_anterior ? String(evento.evento_anterior) : "";
+      fCheckinMinutos.value = evento.checkin_libera_minutos_antes != null ? String(evento.checkin_libera_minutos_antes) : "60";
+      fCheckinManual.checked = Boolean(evento.checkin_liberado_manualmente);
+      renderizarLocaisCheckin(evento.locais_checkin ?? []);
+      renderizarFaixas(evento.faixas_valor ?? []);
+    }
+
+    function lerFormulario() {
+      return {
+        title: fTitle.value.trim(),
+        slug: fSlug.value.trim() || slugify(fTitle.value),
+        description: fDescription.value.trim() || null,
+        body: fBody.value || null,
+        event_date: fEventDate.value || null,
+        end_date: fEndDate.value || null,
+        time: fTime.value.trim() || null,
+        end_time: fEndTime.value.trim() || null,
+        congregacao: fCongregacao.value ? Number(fCongregacao.value) : null,
+        location: fLocation.value.trim() || null,
+        location_maps_url: fLocationMapsUrl.value.trim() || null,
+        responsavel: fResponsavel.value.trim() || null,
+        tipo_responsavel: fTipoResponsavel.value || null,
+        vagas_limite: fVagas.value ? Number(fVagas.value) : null,
+        requer_aprovacao: fRequerAprovacao.checked,
+        inscricoes_ate: fInscricoesAte.value || null,
+        inscricoes_encerradas: fInscricoesEncerradas.checked,
+        permite_inscricao_grupo: fInscricaoGrupo.checked,
+        evento_anterior: fEventoAnterior.value ? Number(fEventoAnterior.value) : null,
+        checkin_libera_minutos_antes: fCheckinMinutos.value ? Number(fCheckinMinutos.value) : 60,
+        checkin_liberado_manualmente: fCheckinManual.checked,
+        locais_checkin: lerLocaisCheckin(),
+        faixas_valor: lerFaixas(),
+        aceita_inscricao: true,
+      };
+    }
+
+    const faixasListaEl = document.querySelector<HTMLElement>("[data-faixas-lista]");
+
+    function linhaFaixaHtml(descricao: string, valor: string) {
+      return `
+        <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center faixa-linha">
+          <input type="text" class="field" placeholder="Ex.: Casal" value="${descricao.replace(/"/g, "&quot;")}" data-faixa-descricao />
+          <input type="number" step="0.01" class="field faixa-valor" placeholder="R$" value="${valor}" data-faixa-valor />
+          <button type="button" class="btn btn-outline" data-faixa-remover>Remover</button>
+        </div>
+      `;
+    }
+
+    function renderizarFaixas(faixas: { descricao: string; valor: number }[]) {
+      if (!faixasListaEl) return;
+      faixasListaEl.innerHTML = faixas.map((f) => linhaFaixaHtml(f.descricao, String(f.valor ?? ""))).join("");
+    }
+
+    function lerFaixas(): { descricao: string; valor: number }[] {
+      if (!faixasListaEl) return [];
+      return Array.from(faixasListaEl.querySelectorAll<HTMLElement>(".faixa-linha"))
+        .map((linha) => {
+          const descricao = linha.querySelector<HTMLInputElement>("[data-faixa-descricao]")?.value.trim() ?? "";
+          const valor = Number(linha.querySelector<HTMLInputElement>("[data-faixa-valor]")?.value ?? 0);
+          return { descricao, valor };
+        })
+        .filter((f) => f.descricao);
+    }
+
+    document.querySelector("[data-faixa-adicionar]")?.addEventListener("click", () => {
+      if (!faixasListaEl) return;
+      faixasListaEl.insertAdjacentHTML("beforeend", linhaFaixaHtml("", ""));
+    });
+
+    faixasListaEl?.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      if (target.matches("[data-faixa-remover]")) target.closest(".faixa-linha")?.remove();
+    });
+
+    const locaisCheckinListaEl = document.querySelector<HTMLElement>("[data-locais-checkin-lista]");
+
+    function linhaLocalCheckinHtml(nome: string) {
+      return `
+        <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center local-checkin-linha">
+          <input type="text" class="field" placeholder="Ex.: Portaria Leste" value="${nome.replace(/"/g, "&quot;")}" data-local-checkin-nome />
+          <button type="button" class="btn btn-outline" data-local-checkin-remover>Remover</button>
+        </div>
+      `;
+    }
+
+    function renderizarLocaisCheckin(locais: string[]) {
+      if (!locaisCheckinListaEl) return;
+      locaisCheckinListaEl.innerHTML = locais.map(linhaLocalCheckinHtml).join("");
+    }
+
+    function lerLocaisCheckin(): string[] {
+      if (!locaisCheckinListaEl) return [];
+      return Array.from(locaisCheckinListaEl.querySelectorAll<HTMLInputElement>("[data-local-checkin-nome]"))
+        .map((input) => input.value.trim())
+        .filter(Boolean);
+    }
+
+    document.querySelector("[data-local-checkin-adicionar]")?.addEventListener("click", () => {
+      if (!locaisCheckinListaEl) return;
+      locaisCheckinListaEl.insertAdjacentHTML("beforeend", linhaLocalCheckinHtml(""));
+    });
+
+    locaisCheckinListaEl?.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      if (target.matches("[data-local-checkin-remover]")) target.closest(".local-checkin-linha")?.remove();
+    });
+
+    const rotuloTipoPergunta: Record<string, string> = {
+      texto_curto: "Texto curto",
+      texto_longo: "Texto longo",
+      numero: "Número",
+      data: "Data",
+      selecao_unica: "Seleção única",
+      selecao_multipla: "Seleção múltipla",
+    };
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
+    function perguntaCardHtml(p: Pergunta) {
+      return `
+        <div class="pergunta-card" data-pergunta-id="${p.id}">
+          <div class="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+            <input type="text" class="field" value="${escapeHtml(p.label)}" data-campo="label" />
+            <select class="field" data-campo="tipo">
+              ${Object.entries(rotuloTipoPergunta)
+                .map(([value, label]) => `<option value="${value}" ${value === p.tipo ? "selected" : ""}>${label}</option>`)
+                .join("")}
+            </select>
+            <input type="number" class="field ordem-input" value="${p.ordem ?? 0}" data-campo="ordem" title="Ordem" />
+          </div>
+          <textarea class="field mt-3" rows="2" placeholder="Opções (uma por linha)" data-campo="opcoes" ${
+            p.tipo === "selecao_unica" || p.tipo === "selecao_multipla" ? "" : "hidden"
+          }>${(p.opcoes ?? []).join("\n")}</textarea>
+          <div class="mt-3 grid gap-1">
+            <label class="text-xs font-semibold text-muted-foreground">Quando perguntar</label>
+            <select class="field" data-campo="momento">
+              <option value="inscricao" ${p.momento !== "pos_evento" ? "selected" : ""}>Na inscrição</option>
+              <option value="pos_evento" ${p.momento === "pos_evento" ? "selected" : ""}>Depois do evento (pesquisa)</option>
+            </select>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" data-campo="obrigatoria" ${p.obrigatoria ? "checked" : ""} /> Obrigatória
+            </label>
+            <div class="flex gap-3">
+              <button type="button" class="btn btn-outline" data-salvar-pergunta>Salvar</button>
+              <button type="button" class="btn btn-outline" data-excluir-pergunta>Excluir</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function carregarPerguntas(token: string, id: number) {
+      if (!perguntasListaInscricao && !perguntasListaPesquisa) return;
+      const res = await fetch(`${directusUrl}/items/perguntas_evento?filter[evento][_eq]=${id}&sort=ordem&limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      const perguntas: Pergunta[] = json.data ?? [];
+
+      if (perguntasListaInscricao) {
+        perguntasListaInscricao.innerHTML = perguntas
+          .filter((p) => p.momento !== "pos_evento")
+          .map(perguntaCardHtml)
+          .join("");
+      }
+      if (perguntasListaPesquisa) {
+        perguntasListaPesquisa.innerHTML = perguntas
+          .filter((p) => p.momento === "pos_evento")
+          .map(perguntaCardHtml)
+          .join("");
+      }
+    }
+
+    function sessaoCardHtml(s: Sessao) {
+      return `
+        <div class="pergunta-card" data-sessao-id="${s.id}">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <input type="text" class="field" value="${escapeHtml(s.titulo)}" data-campo="titulo" placeholder="Título" />
+            <input type="text" class="field" value="${escapeHtml(s.palestrante ?? "")}" data-campo="palestrante" placeholder="Palestrante" />
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-[auto_1fr_1fr]">
+            <input type="date" class="field" value="${s.dia ?? ""}" data-campo="dia" title="Dia" />
+            <input type="text" class="field" value="${escapeHtml(s.horario_inicio ?? "")}" data-campo="horario_inicio" placeholder="Início" />
+            <input type="text" class="field" value="${escapeHtml(s.horario_fim ?? "")}" data-campo="horario_fim" placeholder="Fim" />
+          </div>
+          <input type="text" class="field mt-3" value="${escapeHtml(s.local ?? "")}" data-campo="local" placeholder="Local (opcional)" />
+          <textarea class="field mt-3" rows="2" placeholder="Descrição" data-campo="descricao">${escapeHtml(s.descricao ?? "")}</textarea>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <input type="number" class="field ordem-input" value="${s.ordem ?? 0}" data-campo="ordem" title="Ordem" />
+            <div class="flex gap-3">
+              <button type="button" class="btn btn-outline" data-salvar-sessao>Salvar</button>
+              <button type="button" class="btn btn-outline" data-excluir-sessao>Excluir</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function carregarSessoes(token: string, id: number) {
+      if (!sessoesLista) return;
+      const res = await fetch(`${directusUrl}/items/sessoes_evento?filter[evento][_eq]=${id}&sort=dia,ordem&limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      const sessoes: Sessao[] = json.data ?? [];
+      sessoesLista.innerHTML = sessoes.map(sessaoCardHtml).join("");
+    }
+
+    function lerCamposSessao(container: ParentNode) {
+      const campo = <T extends HTMLElement>(nome: string) => container.querySelector<T>(`[data-campo="${nome}"]`);
+      return {
+        titulo: campo<HTMLInputElement>("titulo")?.value.trim() ?? "",
+        palestrante: campo<HTMLInputElement>("palestrante")?.value.trim() || null,
+        dia: campo<HTMLInputElement>("dia")?.value || null,
+        horario_inicio: campo<HTMLInputElement>("horario_inicio")?.value.trim() || null,
+        horario_fim: campo<HTMLInputElement>("horario_fim")?.value.trim() || null,
+        local: campo<HTMLInputElement>("local")?.value.trim() || null,
+        descricao: campo<HTMLTextAreaElement>("descricao")?.value.trim() || null,
+        ordem: Number(campo<HTMLInputElement>("ordem")?.value || 0),
+      };
+    }
+
+    function cupomCardHtml(c: Cupom) {
+      const usoLabel = c.limite_usos ? `${c.usos} / ${c.limite_usos} usos` : `${c.usos} usos (sem limite)`;
+      return `
+        <div class="pergunta-card" data-cupom-id="${c.id}">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <input type="text" class="field" value="${escapeHtml(c.codigo)}" data-campo="codigo" placeholder="Código" />
+            <select class="field" data-campo="tipo">
+              <option value="percentual" ${c.tipo === "percentual" ? "selected" : ""}>Percentual (%)</option>
+              <option value="fixo" ${c.tipo === "fixo" ? "selected" : ""}>Valor fixo (R$)</option>
+            </select>
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <input type="number" step="0.01" min="0" class="field" value="${c.valor}" data-campo="valor" placeholder="Valor do desconto" />
+            <input type="number" min="1" class="field" value="${c.limite_usos ?? ""}" data-campo="limite_usos" placeholder="Limite de usos" />
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <input type="date" class="field" value="${c.valido_ate ?? ""}" data-campo="valido_ate" title="Válido até" />
+            <label class="flex items-center gap-2 text-sm whitespace-nowrap">
+              <input type="checkbox" data-campo="ativo" ${c.ativo ? "checked" : ""} /> Ativo
+            </label>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <span class="text-xs text-muted-foreground">${usoLabel}</span>
+            <div class="flex gap-3">
+              <button type="button" class="btn btn-outline" data-salvar-cupom>Salvar</button>
+              <button type="button" class="btn btn-outline" data-excluir-cupom>Excluir</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function carregarCupons(token: string, id: number) {
+      if (!cuponsLista) return;
+      const res = await fetch(`${directusUrl}/items/cupons_desconto?filter[evento][_eq]=${id}&sort=-date_created&limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      const cupons: Cupom[] = json.data ?? [];
+      cuponsLista.innerHTML = cupons.map(cupomCardHtml).join("");
+    }
+
+    function lerCamposCupom(container: ParentNode) {
+      const campo = <T extends HTMLElement>(nome: string) => container.querySelector<T>(`[data-campo="${nome}"]`);
+      return {
+        codigo: campo<HTMLInputElement>("codigo")?.value.trim().toUpperCase() ?? "",
+        tipo: campo<HTMLSelectElement>("tipo")?.value || "percentual",
+        valor: Number(campo<HTMLInputElement>("valor")?.value || 0),
+        limite_usos: campo<HTMLInputElement>("limite_usos")?.value ? Number(campo<HTMLInputElement>("limite_usos")?.value) : null,
+        valido_ate: campo<HTMLInputElement>("valido_ate")?.value || null,
+        ativo: Boolean(campo<HTMLInputElement>("ativo")?.checked),
+      };
+    }
+
+    // Anda pela cadeia de "evento_anterior" (que pode pular anos — não
+    // presume periodicidade nenhuma) até achar o começo ou repetir um id.
+    async function carregarHistorico(token: string, eventoAtual: Evento) {
+      if (!historicoConteudo) return;
+
+      const edicoes: Evento[] = [eventoAtual];
+      const vistos = new Set([eventoAtual.id]);
+      let cursor = eventoAtual.evento_anterior;
+
+      while (cursor && !vistos.has(cursor)) {
+        const res = await fetch(
+          `${directusUrl}/items/eventos/${cursor}?fields=id,title,event_date,evento_anterior,estatisticas_finais`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok) break;
+        const anterior: Evento = (await res.json()).data;
+        edicoes.push(anterior);
+        vistos.add(anterior.id);
+        cursor = anterior.evento_anterior;
+      }
+
+      if (edicoes.length < 2) {
+        historicoConteudo.innerHTML = `<p class="text-sm text-muted-foreground">Nenhuma edição anterior vinculada — use "Edição anterior" na aba "Dados do evento" pra comparar com uma edição passada.</p>`;
+        return;
+      }
+
+      const cronologico = [...edicoes].reverse().filter((e) => e.estatisticas_finais);
+      if (!cronologico.length) {
+        historicoConteudo.innerHTML = `<p class="text-sm text-muted-foreground">${edicoes.length} edições vinculadas, mas nenhuma tem números salvos ainda — eles só aparecem depois que uma edição passa por "Encerrar evento".</p>`;
+        return;
+      }
+
+      const rotulo = (e: Evento) => `${e.title}${e.event_date ? ` (${e.event_date})` : ""}`;
+
+      const tabela = `
+        <div class="overflow-x-auto">
+          <table class="historico-tabela">
+            <thead>
+              <tr><th>Edição</th><th>Inscritos</th><th>Presentes</th><th>Comparecimento</th><th>Arrecadado</th></tr>
+            </thead>
+            <tbody>
+              ${cronologico
+                .map((e) => {
+                  const s = e.estatisticas_finais as EstatisticasFinais;
+                  return `
+                    <tr>
+                      <td>${escapeHtml(rotulo(e))}</td>
+                      <td>${s.totalInscritos}</td>
+                      <td>${s.presentes}</td>
+                      <td>${s.taxaComparecimento}%</td>
+                      <td>R$ ${Number(s.valorArrecadado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  `;
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      const graficoInscritos = graficoBarrasSvg(
+        cronologico.map((e) => ({ rotulo: rotulo(e), total: (e.estatisticas_finais as EstatisticasFinais).totalInscritos })),
+      );
+      const graficoComparecimento = graficoBarrasSvg(
+        cronologico.map((e) => ({ rotulo: rotulo(e), total: (e.estatisticas_finais as EstatisticasFinais).taxaComparecimento })),
+      );
+
+      historicoConteudo.innerHTML = `
+        ${tabela}
+        <div class="mt-6 grid gap-4 sm:grid-cols-2">
+          <div class="grafico-card"><p class="grafico-titulo">Inscritos por edição</p>${graficoInscritos}</div>
+          <div class="grafico-card"><p class="grafico-titulo">Comparecimento (%) por edição</p>${graficoComparecimento}</div>
+        </div>
+      `;
+    }
+
+
+    async function iniciar() {
+      const tokenObtido = await exigirAutenticacao(directusUrl);
+      if (!tokenObtido) return;
+      const token: string = tokenObtido;
+
+      if (!eventoId) {
+        if (carregando) carregando.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        return;
+      }
+      const eventoIdNumero: number = eventoId;
+
+      const res = await fetch(`${directusUrl}/items/eventos/${eventoId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        if (carregando) carregando.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        return;
+      }
+      const json = await res.json();
+      const evento: Evento = json.data;
+
+      if (tituloEl) tituloEl.textContent = evento.title;
+      preencherFormulario(evento);
+
+      const linkInscritos = document.querySelector<HTMLAnchorElement>("[data-link-inscritos]");
+      if (linkInscritos) {
+        linkInscritos.href = `/painel-eventos/evento/inscritos/?id=${eventoId}`;
+        linkInscritos.hidden = false;
+      }
+
+      const linkCheckin = document.querySelector<HTMLAnchorElement>("[data-link-checkin]");
+      if (linkCheckin && evento.slug) {
+        linkCheckin.href = `/checkin/${evento.slug}/`;
+        linkCheckin.hidden = false;
+      }
+
+      // Não faz sentido um evento se vincular a si mesmo.
+      fEventoAnterior.querySelector(`option[value="${eventoIdNumero}"]`)?.remove();
+
+      if (carregando) carregando.hidden = true;
+      if (form) form.hidden = false;
+      if (perguntasSecaoInscricao) perguntasSecaoInscricao.hidden = false;
+      if (perguntasSecaoPesquisa) perguntasSecaoPesquisa.hidden = false;
+      if (agendaSecao) agendaSecao.hidden = false;
+      if (historicoSecao) historicoSecao.hidden = false;
+      if (cuponsSecao) cuponsSecao.hidden = false;
+      if (tabsBar) tabsBar.hidden = false;
+
+      const zonaPerigo = document.querySelector<HTMLElement>("[data-zona-perigo]");
+      if (zonaPerigo) zonaPerigo.hidden = false;
+      const zonaEncerrar = document.querySelector<HTMLElement>("[data-zona-encerrar]");
+      if (zonaEncerrar) zonaEncerrar.hidden = false;
+
+      await carregarPerguntas(token, eventoIdNumero);
+      await carregarSessoes(token, eventoIdNumero);
+      await carregarHistorico(token, evento);
+      await carregarCupons(token, eventoIdNumero);
+
+      document.querySelector("[data-encerrar-evento]")?.addEventListener("click", async () => {
+        const encerrarStatus = document.querySelector<HTMLElement>("[data-encerrar-status]");
+        if (
+          !confirm(
+            `Encerrar "${evento.title}"? Isso baixa o relatório de encerramento e cria um rascunho de notícia. Nada é apagado — nome, código, telefone (hash) e respostas continuam guardados para sempre, pra quem precisar de uma segunda via de certificado/documento no futuro.`,
+          )
+        )
+          return;
+        if (encerrarStatus) encerrarStatus.textContent = "Gerando relatório…";
+
+        try {
+          const resInscritos = await fetch(
+            `${directusUrl}/items/inscricoes_eventos?filter[evento][_eq]=${eventoId}&fields=id,nome,pago,valor,presente&limit=-1`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          const inscritos: { id: number; nome: string; pago: boolean; valor: number | null; presente: boolean }[] =
+            (await resInscritos.json()).data ?? [];
+
+          const totalInscritos = inscritos.length;
+          const presentes = inscritos.filter((i) => i.presente).length;
+          const pagos = inscritos.filter((i) => i.pago);
+          const naoPagos = totalInscritos - pagos.length;
+          const valorArrecadado = pagos.reduce((soma, i) => soma + (Number(i.valor) || 0), 0);
+          const taxaComparecimento = totalInscritos ? Math.round((presentes / totalInscritos) * 100) : 0;
+
+          // --- Gráficos das perguntas de seleção (só proporção agregada, nunca lista de respostas) ---
+          const resPerguntasSelecao = await fetch(
+            `${directusUrl}/items/perguntas_evento?filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][tipo][_in]=selecao_unica,selecao_multipla&sort=ordem&limit=-1`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          const perguntasSelecao: { id: number; label: string; opcoes: string[] | null }[] = (await resPerguntasSelecao.json()).data ?? [];
+
+          let graficos: { titulo: string; contagens: ReturnType<typeof contarRespostas> }[] = [];
+          if (perguntasSelecao.length) {
+            const resRespostas = await fetch(
+              `${directusUrl}/items/respostas_inscricao?filter[inscricao][evento][_eq]=${eventoId}&fields=inscricao,pergunta,valor&limit=-1`,
+              { headers: { Authorization: `Bearer ${token}` } },
+            );
+            const respostas: { inscricao: number; pergunta: number; valor: string }[] = (await resRespostas.json()).data ?? [];
+            const respostasPorInscricao = new Map<number, { pergunta: number; valor: string }[]>();
+            respostas.forEach((r) => {
+              const lista = respostasPorInscricao.get(r.inscricao) ?? [];
+              lista.push(r);
+              respostasPorInscricao.set(r.inscricao, lista);
+            });
+
+            graficos = perguntasSelecao.map((p) => {
+              const valores = inscritos.map((i) => respostasPorInscricao.get(i.id)?.find((r) => r.pergunta === p.id)?.valor);
+              return { titulo: p.label, contagens: contarRespostas(p, valores) };
+            });
+          }
+
+          const periodoEvento = evento.event_date
+            ? evento.end_date && evento.end_date !== evento.event_date
+              ? `${evento.event_date} a ${evento.end_date}`
+              : evento.event_date
+            : "";
+
+          // --- PDF: resumo + fechamento de caixa ---
+          const doc = new jsPDF({ unit: "pt", format: "a4" });
+          configurarAcessibilidadePdf(doc, `Relatório de encerramento — ${evento.title}`);
+          const margem = 56;
+          let y = margem;
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(18);
+          doc.text("Relatório de encerramento", margem, y);
+          y += 22;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(12);
+          doc.setTextColor(90);
+          doc.text(`${evento.title}${periodoEvento ? ` — ${periodoEvento}` : ""}`, margem, y);
+          y += 36;
+          doc.setTextColor(20);
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(13);
+          doc.text("Resumo", margem, y);
+          y += 20;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
+          [
+            `Total de inscritos: ${totalInscritos}`,
+            `Presentes: ${presentes} (${taxaComparecimento}% de comparecimento)`,
+          ].forEach((linha) => {
+            doc.text(linha, margem, y);
+            y += 18;
+          });
+
+          y += 20;
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(13);
+          doc.text("Fechamento de caixa", margem, y);
+          y += 20;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
+          [
+            `Pagos: ${pagos.length}`,
+            `Não pagos: ${naoPagos}`,
+            `Valor total arrecadado: R$ ${valorArrecadado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+          ].forEach((linha) => {
+            doc.text(linha, margem, y);
+            y += 18;
+          });
+
+          const largura = doc.internal.pageSize.getWidth();
+          const alturaPagina = doc.internal.pageSize.getHeight();
+
+          if (graficos.length) {
+            y += 20;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(13);
+            doc.setTextColor(20);
+            doc.text("Gráficos das perguntas", margem, y);
+            y += 22;
+
+            graficos.forEach(({ titulo, contagens }) => {
+              const alturaEstimativa = 16 + contagens.length * 20 + 12;
+              if (y + alturaEstimativa > alturaPagina - margem) {
+                doc.addPage();
+                y = margem;
+              }
+              y = desenharGraficoBarrasPDF(doc, margem, y, largura - margem * 2, titulo, contagens);
+            });
+          }
+
+          if (y > alturaPagina - margem - 60) {
+            doc.addPage();
+            y = margem;
+          }
+          y += 30;
+          const larguraAssinatura = (largura - margem * 2 - 40) / 3;
+          ["Presidente", "Secretário(a)", "Tesoureiro(a)"].forEach((cargo, index) => {
+            const x = margem + index * (larguraAssinatura + 20);
+            doc.line(x, y, x + larguraAssinatura, y);
+            doc.setFontSize(10);
+            doc.text(cargo, x, y + 14);
+          });
+
+          doc.save(`encerramento-${evento.slug ?? eventoId}.pdf`);
+
+          // --- Rascunho de notícia (não publicado) ---
+          if (encerrarStatus) encerrarStatus.textContent = "Criando rascunho de notícia…";
+          const tituloNoticia = `Realizado: ${evento.title}`;
+          await fetch(`${directusUrl}/items/noticias`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: tituloNoticia,
+              slug: slugify(tituloNoticia),
+              excerpt: `${presentes} pessoa${presentes === 1 ? "" : "s"} participaram do evento "${evento.title}".`,
+              category: "eventos",
+              date: evento.event_date ?? new Date().toISOString().slice(0, 10),
+              draft: true,
+              featured: false,
+              body: [
+                `# ${evento.title}`,
+                "",
+                `Realizado ${periodoEvento ? `em ${periodoEvento}` : "recentemente"}${evento.responsavel ? `, promovido por ${evento.responsavel}` : ""}.`,
+                "",
+                `${presentes} pessoa${presentes === 1 ? "" : "s"} confirmaram presença, de um total de ${totalInscritos} inscrito${totalInscritos === 1 ? "" : "s"}.`,
+                "",
+                "_Rascunho gerado automaticamente ao encerrar o evento — revise o texto, adicione fotos e publique quando estiver pronto._",
+              ].join("\n"),
+            }),
+          });
+
+          // --- Guarda um retrato dos números finais — é a base da comparação
+          // histórica entre edições (aba "Histórico"), já que os números
+          // individuais (pago/presente) somem quando o evento for excluído
+          // um dia, mas esse resumo fica gravado no próprio evento. ---
+          const estatisticasFinais: EstatisticasFinais = {
+            dataEncerramento: new Date().toISOString().slice(0, 10),
+            totalInscritos,
+            presentes,
+            taxaComparecimento,
+            pagos: pagos.length,
+            naoPagos,
+            valorArrecadado,
+          };
+          await fetch(`${directusUrl}/items/eventos/${eventoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ estatisticas_finais: estatisticasFinais }),
+          });
+
+          if (encerrarStatus) {
+            encerrarStatus.textContent =
+              "✅ Evento encerrado — relatório baixado, rascunho de notícia criado (revise antes de publicar).";
+          }
+        } catch {
+          if (encerrarStatus) encerrarStatus.textContent = "Não foi possível encerrar agora. Tente novamente.";
+        }
+      });
+
+      document.querySelector("[data-excluir-evento]")?.addEventListener("click", async () => {
+        const excluirStatus = document.querySelector<HTMLElement>("[data-excluir-status]");
+        if (!confirm(`Excluir "${evento.title}" e todas as inscrições? Essa ação não pode ser desfeita.`)) return;
+        if (excluirStatus) excluirStatus.textContent = "Excluindo…";
+
+        try {
+          const inscricoesRes = await fetch(`${directusUrl}/items/inscricoes_eventos?filter[evento][_eq]=${eventoId}&fields=id&limit=-1`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const inscricoesIds: number[] = ((await inscricoesRes.json()).data ?? []).map((i: { id: number }) => i.id);
+
+          if (inscricoesIds.length) {
+            const respostasRes = await fetch(
+              `${directusUrl}/items/respostas_inscricao?filter[inscricao][_in]=${inscricoesIds.join(",")}&fields=id&limit=-1`,
+              { headers: { Authorization: `Bearer ${token}` } },
+            );
+            const respostasIds: number[] = ((await respostasRes.json()).data ?? []).map((r: { id: number }) => r.id);
+            if (respostasIds.length) {
+              await fetch(`${directusUrl}/items/respostas_inscricao`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify(respostasIds),
+              });
+            }
+            await fetch(`${directusUrl}/items/inscricoes_eventos`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify(inscricoesIds),
+            });
+          }
+
+          const perguntasRes = await fetch(`${directusUrl}/items/perguntas_evento?filter[evento][_eq]=${eventoId}&fields=id&limit=-1`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const perguntasIds: number[] = ((await perguntasRes.json()).data ?? []).map((p: { id: number }) => p.id);
+          if (perguntasIds.length) {
+            await fetch(`${directusUrl}/items/perguntas_evento`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              body: JSON.stringify(perguntasIds),
+            });
+          }
+
+          await fetch(`${directusUrl}/items/eventos/${eventoId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          window.location.href = "/painel-eventos/";
+        } catch {
+          if (excluirStatus) excluirStatus.textContent = "Não foi possível excluir agora. Tente novamente.";
+        }
+      });
+
+      form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!statusEl) return;
+        statusEl.textContent = "Salvando…";
+        try {
+          const dadosForm = lerFormulario();
+          const vagasAntes = evento.vagas_limite;
+          const res = await fetch(`${directusUrl}/items/eventos/${eventoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(dadosForm),
+          });
+          if (!res.ok) throw new Error("falha ao salvar");
+          evento.vagas_limite = dadosForm.vagas_limite;
+
+          // Se o limite de vagas aumentou (ou virou ilimitado), promove quem
+          // está na lista de espera — mais antigo primeiro — até preencher
+          // as vagas novas.
+          let promovidos = 0;
+          const limiteNovo = dadosForm.vagas_limite;
+          const abriuMaisVagas = limiteNovo === null || (vagasAntes !== null && limiteNovo > vagasAntes);
+          if (abriuMaisVagas) {
+            const resConfirmados = await fetch(
+              `${directusUrl}/items/inscricoes_eventos?aggregate[count]=id&filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][_or][0][aguardando_vaga][_eq]=false&filter[_and][1][_or][1][aguardando_vaga][_null]=true`,
+              { headers: { Authorization: `Bearer ${token}` } },
+            );
+            const confirmados = Number((await resConfirmados.json()).data?.[0]?.count?.id ?? 0);
+            const vagasNovas = limiteNovo === null ? Infinity : limiteNovo - confirmados;
+
+            if (vagasNovas > 0) {
+              const resEspera = await fetch(
+                `${directusUrl}/items/inscricoes_eventos?filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][aguardando_vaga][_eq]=true&sort=date_created&fields=id&limit=${
+                  vagasNovas === Infinity ? -1 : vagasNovas
+                }`,
+                { headers: { Authorization: `Bearer ${token}` } },
+              );
+              const emEspera: { id: number }[] = (await resEspera.json()).data ?? [];
+              if (emEspera.length) {
+                await fetch(`${directusUrl}/items/inscricoes_eventos`, {
+                  method: "PATCH",
+                  headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ keys: emEspera.map((i) => i.id), data: { aguardando_vaga: false } }),
+                });
+                promovidos = emEspera.length;
+              }
+            }
+          }
+
+          statusEl.textContent = promovidos
+            ? `✅ Evento salvo! ${promovidos} pessoa${promovidos === 1 ? "" : "s"} da lista de espera foi${promovidos === 1 ? "" : "ram"} confirmada${promovidos === 1 ? "" : "s"}.`
+            : "✅ Evento salvo!";
+        } catch {
+          statusEl.textContent = "Não foi possível salvar agora.";
+        }
+      });
+
+      // Cada módulo (perguntas de inscrição / pesquisa pós-evento) tem seu
+      // próprio formulário de "+ Nova pergunta", com o mesmo momento fixo —
+      // essa função configura os dois com o mesmo comportamento.
+      function configurarFormNovaPergunta(sufixo: string, momentoFixo: string) {
+        const tipoEl = document.querySelector<HTMLSelectElement>(`[data-novo-tipo-${sufixo}]`);
+        const opcoesEl = document.querySelector<HTMLTextAreaElement>(`[data-novo-opcoes-${sufixo}]`);
+
+        tipoEl?.addEventListener("change", () => {
+          if (opcoesEl) opcoesEl.hidden = tipoEl.value !== "selecao_unica" && tipoEl.value !== "selecao_multipla";
+        });
+
+        document.querySelector(`[data-adicionar-pergunta-${sufixo}]`)?.addEventListener("click", async () => {
+          const labelEl = document.querySelector<HTMLInputElement>(`[data-novo-label-${sufixo}]`);
+          const obrigatoriaEl = document.querySelector<HTMLInputElement>(`[data-novo-obrigatoria-${sufixo}]`);
+          if (!labelEl?.value.trim()) return;
+
+          const opcoes = opcoesEl?.value
+            .split("\n")
+            .map((linha) => linha.trim())
+            .filter(Boolean);
+
+          await fetch(`${directusUrl}/items/perguntas_evento`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              evento: eventoId,
+              label: labelEl.value.trim(),
+              tipo: tipoEl?.value,
+              opcoes: opcoes?.length ? opcoes : null,
+              obrigatoria: Boolean(obrigatoriaEl?.checked),
+              momento: momentoFixo,
+              ordem: 99,
+            }),
+          });
+
+          labelEl.value = "";
+          if (opcoesEl) opcoesEl.value = "";
+          if (obrigatoriaEl) obrigatoriaEl.checked = false;
+          await carregarPerguntas(token, eventoIdNumero);
+        });
+      }
+
+      configurarFormNovaPergunta("inscricao", "inscricao");
+      configurarFormNovaPergunta("pesquisa", "pos_evento");
+
+      document.querySelector("[data-adicionar-cupom]")?.addEventListener("click", async () => {
+        const bloco = document.querySelector<HTMLElement>("[data-cupom-novo]");
+        const codigoEl = document.querySelector<HTMLInputElement>("[data-novo-cupom-codigo]");
+        if (!bloco || !codigoEl?.value.trim()) return;
+
+        await fetch(`${directusUrl}/items/cupons_desconto`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            evento: eventoIdNumero,
+            codigo: codigoEl.value.trim().toUpperCase(),
+            tipo: document.querySelector<HTMLSelectElement>("[data-novo-cupom-tipo]")?.value || "percentual",
+            valor: Number(document.querySelector<HTMLInputElement>("[data-novo-cupom-valor]")?.value || 0),
+            limite_usos: document.querySelector<HTMLInputElement>("[data-novo-cupom-limite]")?.value
+              ? Number(document.querySelector<HTMLInputElement>("[data-novo-cupom-limite]")?.value)
+              : null,
+            valido_ate: document.querySelector<HTMLInputElement>("[data-novo-cupom-validade]")?.value || null,
+            ativo: Boolean(document.querySelector<HTMLInputElement>("[data-novo-cupom-ativo]")?.checked),
+          }),
+        });
+
+        bloco.querySelectorAll("input[type=text], input[type=number], input[type=date]").forEach((campoEl) => {
+          (campoEl as HTMLInputElement).value = "";
+        });
+        const ativoEl = document.querySelector<HTMLInputElement>("[data-novo-cupom-ativo]");
+        if (ativoEl) ativoEl.checked = true;
+        await carregarCupons(token, eventoIdNumero);
+      });
+
+      cuponsLista?.addEventListener("click", async (event) => {
+        const target = event.target as HTMLElement;
+        const card = target.closest<HTMLElement>("[data-cupom-id]");
+        if (!card) return;
+        const cupomId = card.dataset.cupomId;
+
+        if (target.matches("[data-excluir-cupom]")) {
+          if (!confirm("Excluir esse cupom?")) return;
+          await fetch(`${directusUrl}/items/cupons_desconto/${cupomId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          await carregarCupons(token, eventoIdNumero);
+          return;
+        }
+
+        if (target.matches("[data-salvar-cupom]")) {
+          await fetch(`${directusUrl}/items/cupons_desconto/${cupomId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(lerCamposCupom(card)),
+          });
+          await carregarCupons(token, eventoIdNumero);
+        }
+      });
+
+      document.querySelector("[data-adicionar-sessao]")?.addEventListener("click", async () => {
+        const bloco = document.querySelector<HTMLElement>("[data-sessao-nova]");
+        const titulo = document.querySelector<HTMLInputElement>("[data-novo-sessao-titulo]");
+        if (!bloco || !titulo?.value.trim()) return;
+
+        await fetch(`${directusUrl}/items/sessoes_evento`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            evento: eventoIdNumero,
+            titulo: titulo.value.trim(),
+            palestrante: document.querySelector<HTMLInputElement>("[data-novo-sessao-palestrante]")?.value.trim() || null,
+            dia: document.querySelector<HTMLInputElement>("[data-novo-sessao-dia]")?.value || null,
+            horario_inicio: document.querySelector<HTMLInputElement>("[data-novo-sessao-inicio]")?.value.trim() || null,
+            horario_fim: document.querySelector<HTMLInputElement>("[data-novo-sessao-fim]")?.value.trim() || null,
+            local: document.querySelector<HTMLInputElement>("[data-novo-sessao-local]")?.value.trim() || null,
+            descricao: document.querySelector<HTMLTextAreaElement>("[data-novo-sessao-descricao]")?.value.trim() || null,
+            ordem: 99,
+          }),
+        });
+
+        bloco.querySelectorAll("input, textarea").forEach((campoEl) => {
+          (campoEl as HTMLInputElement | HTMLTextAreaElement).value = "";
+        });
+        await carregarSessoes(token, eventoIdNumero);
+      });
+
+      sessoesLista?.addEventListener("click", async (event) => {
+        const target = event.target as HTMLElement;
+        const card = target.closest<HTMLElement>("[data-sessao-id]");
+        if (!card) return;
+        const sessaoId = card.dataset.sessaoId;
+
+        if (target.matches("[data-excluir-sessao]")) {
+          if (!confirm("Excluir essa sessão da agenda?")) return;
+          await fetch(`${directusUrl}/items/sessoes_evento/${sessaoId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          await carregarSessoes(token, eventoIdNumero);
+          return;
+        }
+
+        if (target.matches("[data-salvar-sessao]")) {
+          await fetch(`${directusUrl}/items/sessoes_evento/${sessaoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(lerCamposSessao(card)),
+          });
+          await carregarSessoes(token, eventoIdNumero);
+        }
+      });
+
+      async function manipularCliquePerguntas(event: Event) {
+        const target = event.target as HTMLElement;
+        const card = target.closest<HTMLElement>("[data-pergunta-id]");
+        if (!card) return;
+        const perguntaId = card.dataset.perguntaId;
+
+        if (target.matches("[data-excluir-pergunta]")) {
+          if (!confirm("Excluir essa pergunta?")) return;
+          await fetch(`${directusUrl}/items/perguntas_evento/${perguntaId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          await carregarPerguntas(token, eventoIdNumero);
+          return;
+        }
+
+        if (target.matches("[data-salvar-pergunta]")) {
+          const labelInput = card.querySelector<HTMLInputElement>('[data-campo="label"]');
+          const tipoSelect = card.querySelector<HTMLSelectElement>('[data-campo="tipo"]');
+          const ordemInput = card.querySelector<HTMLInputElement>('[data-campo="ordem"]');
+          const opcoesTextarea = card.querySelector<HTMLTextAreaElement>('[data-campo="opcoes"]');
+          const obrigatoriaInput = card.querySelector<HTMLInputElement>('[data-campo="obrigatoria"]');
+          const momentoSelect = card.querySelector<HTMLSelectElement>('[data-campo="momento"]');
+
+          const opcoes = opcoesTextarea?.value
+            .split("\n")
+            .map((linha) => linha.trim())
+            .filter(Boolean);
+
+          await fetch(`${directusUrl}/items/perguntas_evento/${perguntaId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              label: labelInput?.value.trim(),
+              tipo: tipoSelect?.value,
+              ordem: ordemInput?.value ? Number(ordemInput.value) : 0,
+              opcoes: opcoes?.length ? opcoes : null,
+              obrigatoria: Boolean(obrigatoriaInput?.checked),
+              momento: momentoSelect?.value || "inscricao",
+            }),
+          });
+          await carregarPerguntas(token, eventoIdNumero);
+        }
+      }
+
+      function manipularMudancaPerguntas(event: Event) {
+        const target = event.target as HTMLElement;
+        if (!target.matches('[data-campo="tipo"]')) return;
+        const card = target.closest<HTMLElement>("[data-pergunta-id]");
+        const opcoesTextarea = card?.querySelector<HTMLTextAreaElement>('[data-campo="opcoes"]');
+        const valor = (target as HTMLSelectElement).value;
+        if (opcoesTextarea) opcoesTextarea.hidden = valor !== "selecao_unica" && valor !== "selecao_multipla";
+      }
+
+      perguntasListaInscricao?.addEventListener("click", manipularCliquePerguntas);
+      perguntasListaPesquisa?.addEventListener("click", manipularCliquePerguntas);
+      perguntasListaInscricao?.addEventListener("change", manipularMudancaPerguntas);
+      perguntasListaPesquisa?.addEventListener("change", manipularMudancaPerguntas);
+    }
+
+    iniciar();
+  </script>
+
+  <style is:global>
+    .historico-tabela {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    .historico-tabela th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 2px solid var(--border);
+      color: var(--muted-foreground);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+
+    .historico-tabela td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .grafico-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      background: var(--background);
+      color: var(--foreground);
+    }
+
+    .grafico-titulo {
+      margin: 0 0 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--accent-strong);
+    }
+
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+
+    .tab-btn {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted-foreground);
+      padding: 0.45rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .tab-btn:hover {
+      border-color: var(--accent);
+    }
+
+    .tab-btn.is-active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--accent-strong);
+    }
+
+    .zona-encerrar {
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      padding: 1.1rem 1.25rem;
+      max-width: 40rem;
+      background: var(--muted);
+    }
+
+    .zona-perigo {
+      border: 1px solid color-mix(in srgb, #b3261e 35%, var(--border));
+      border-radius: var(--radius-md);
+      padding: 1.1rem 1.25rem;
+      max-width: 40rem;
+    }
+
+    .btn-excluir-evento {
+      border-color: #b3261e;
+      color: #b3261e;
+    }
+
+    .btn-excluir-evento:hover {
+      background: color-mix(in srgb, #b3261e 10%, transparent);
+    }
+
+    .evento-canvas {
+      max-width: 48rem;
+    }
+
+    .pergunta-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.1rem 1.25rem;
+    }
+
+    .ordem-input {
+      max-width: 5rem;
+    }
+
+    .faixa-valor {
+      max-width: 7rem;
+    }
+  </style>
+</BaseLayout>

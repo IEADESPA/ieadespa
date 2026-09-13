@@ -1,0 +1,140 @@
+---
+import { youtubeThumbnailUrl, youtubeVideoId } from "@/lib/youtube";
+
+interface Props {
+  url: string;
+  title: string;
+}
+
+const { url, title } = Astro.props;
+const videoId = youtubeVideoId(url);
+---
+
+{
+  videoId ? (
+    /*
+     * "Facade": mostra só a miniatura estática + botão de play — o player
+     * pesado do YouTube (~500KB de JS) só carrega depois que a pessoa clica
+     * de propósito. O link em volta é o link de verdade pro YouTube (funciona
+     * sem JavaScript nenhum, abre numa aba nova); o script troca esse
+     * comportamento por um embed local só quando roda. O wrapper fixo
+     * (`youtube-facade-wrap`) garante a proporção 16:9 tanto pra miniatura
+     * quanto pro `<iframe>` que entra no lugar dela depois.
+     */
+    <div class="youtube-facade-wrap">
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        class="youtube-facade"
+        data-youtube-facade
+        data-video-id={videoId}
+        aria-label={`Assistir vídeo: ${title}`}
+      >
+        <img src={youtubeThumbnailUrl(videoId)} alt="" loading="lazy" />
+        <span class="youtube-facade__play" aria-hidden="true">
+          <span class="youtube-facade__play-badge">
+            <span class="youtube-facade__play-icon" />
+          </span>
+        </span>
+      </a>
+    </div>
+  ) : (
+    // Link nunca reconhecido como YouTube (outro serviço, ou formato novo) —
+    // continua funcionando como um link comum, sem miniatura nenhuma.
+    <a href={url} target="_blank" rel="noreferrer" class="btn btn-outline">
+      {title}
+    </a>
+  )
+}
+
+<script>
+  document.querySelectorAll("[data-youtube-facade]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const videoId = link.getAttribute("data-video-id");
+      const title = link.getAttribute("aria-label") ?? "Vídeo do YouTube";
+      const iframe = document.createElement("iframe");
+      iframe.className = "youtube-facade__iframe";
+      iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`;
+      iframe.title = title;
+      iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+      iframe.allowFullscreen = true;
+      link.replaceWith(iframe);
+    });
+  });
+</script>
+
+<style>
+  .youtube-facade-wrap {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    background: var(--muted);
+  }
+
+  .youtube-facade,
+  .youtube-facade-wrap :global(.youtube-facade__iframe) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .youtube-facade {
+    display: block;
+  }
+
+  .youtube-facade img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .youtube-facade__play {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgb(0 0 0 / 25%);
+    transition: background-color var(--duration) var(--ease-out);
+  }
+
+  /* Triângulo em CSS puro (borda), não SVG — mais simples e sem depender de
+     nenhum comportamento de renderização de `<svg>` entre navegadores. */
+  .youtube-facade__play-badge {
+    display: grid;
+    width: 3.25rem;
+    height: 3.25rem;
+    place-items: center;
+    background: rgb(0 0 0 / 70%);
+    border-radius: 50%;
+    transition: background-color var(--duration) var(--ease-out);
+  }
+
+  .youtube-facade__play-icon {
+    width: 0;
+    height: 0;
+    margin-left: 0.25rem;
+    border-top: 0.7rem solid transparent;
+    border-bottom: 0.7rem solid transparent;
+    border-left: 1.1rem solid #fff;
+  }
+
+  .youtube-facade:hover .youtube-facade__play,
+  .youtube-facade:focus-visible .youtube-facade__play {
+    background: rgb(0 0 0 / 35%);
+  }
+
+  .youtube-facade:hover .youtube-facade__play-badge,
+  .youtube-facade:focus-visible .youtube-facade__play-badge {
+    background: var(--accent);
+  }
+
+  .youtube-facade:hover .youtube-facade__play-icon,
+  .youtube-facade:focus-visible .youtube-facade__play-icon {
+    border-left-color: var(--accent-foreground);
+  }
+</style>

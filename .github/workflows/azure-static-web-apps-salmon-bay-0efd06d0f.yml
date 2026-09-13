@@ -1,13 +1,18 @@
-name: Azure Static Web Apps CI/CD
+name: Site institucional - CI/CD
 
 on:
   push:
     branches:
       - main
+    paths:
+      - "site/**"
+      - ".github/workflows/azure-static-web-apps-salmon-bay-0efd06d0f.yml"
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+    paths:
+      - "site/**"
   # Disparado pelo Directus (via Flow) sempre que alguém publica/edita
   # conteúdo no painel administrativo, para o site buscar os dados novos.
   repository_dispatch:
@@ -32,9 +37,9 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "/" # App source code path
-          api_location: "api" # Api source code path - optional
-          output_location: "dist" # Built app content directory - optional
+          app_location: "/site" # App source code path
+          api_location: "site/api" # Api source code path - optional
+          output_location: "dist" # Built app content directory - optional (relativo a app_location)
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:

@@ -29,11 +29,13 @@ O arquivo `.sops.yaml` lista as chaves públicas (destinatários) que podem abri
 
 ## Estado atual
 
-| Item | Valor |
-| --- | --- |
-| Chave pública desta máquina | `age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn` |
-| Chave privada desta máquina | `%APPDATA%\sops\age\keys.txt` (fora do repositório) |
-| Configuração | `.sops.yaml` |
+| Máquina | Chave pública | Status |
+| --- | --- | --- |
+| Máquina original (esta) | `age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn` | ✅ liberada |
+| Máquina do sistema de governança | `age19tqsftnfz90s3tdp0sqnuu0wzza232xxpjeyhphwpdhkq7e8w3uqg0y4z4` | ✅ liberada em 2026-09-13 — `sops updatekeys` já rodado em `secrets.env` e `api/local.settings.enc.json` |
+
+A chave privada de cada máquina fica em `%APPDATA%\sops\age\keys.txt` (Windows) — nunca sai
+dela. Configuração de recipients em `.sops.yaml`.
 
 ## Pré-requisitos (instalar em cada máquina)
 

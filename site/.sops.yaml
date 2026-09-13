@@ -12,9 +12,13 @@
 creation_rules:
   # Segredos do ambiente raiz: .env.local (texto puro, local) e secrets.env (criptografado).
   - path_regex: (^|/)(\.env\.local|secrets\.env)$
-    age: age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn
+    age: >-
+      age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn,
+      age19tqsftnfz90s3tdp0sqnuu0wzza232xxpjeyhphwpdhkq7e8w3uqg0y4z4
 
   # Segredos das Azure Functions: api/local.settings.json (texto puro, local)
   # e api/local.settings.enc.json (criptografado). Aceita / ou \ como separador.
   - path_regex: '(^|[\\/])api[\\/]local\.settings(\.enc)?\.json$'
-    age: age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn
+    age: >-
+      age1tcc555f5hzy0dv87mkuup56yrghh7c235y2dpfeyy2rqjrv92aaqqtevtn,
+      age19tqsftnfz90s3tdp0sqnuu0wzza232xxpjeyhphwpdhkq7e8w3uqg0y4z4

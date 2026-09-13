@@ -40,3 +40,10 @@ test-results
 *.njsproj
 *.sln
 *.sw?
+
+# SOPS + age — nunca versionar chaves privadas (ficam fora do repositório,
+# em %APPDATA%\sops\age\keys.txt no Windows ou ~/.config/sops/age/keys.txt).
+# O texto puro dos segredos (.env.local) já é ignorado pela regra *.local acima.
+keys.txt
+*.agekey
+age.key

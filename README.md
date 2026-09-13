@@ -2951,39 +2951,29 @@ depois de cada mudança.
       capacidade, dado incompleto nunca assume elegibilidade), Período de
       Integração (Art. 6º §2º), quórum de 2 estágios (maioria absoluta =
       `floor(universo/2)+1`, nunca metade exata) e Abandono Material (Art. 11).
-- [ ] Ambiente de homologação separado do de produção (hoje há um só) + massa de
-      dados fictícia para testar sem tocar em dado real de membro.
-- [ ] Rotina de backup/restore **testada de verdade** (backup que nunca foi
-      restaurado não é backup) + procedimento escrito de recuperação de desastre.
-- [ ] Observabilidade mínima: log estruturado de erro, alerta quando uma Function
-      começa a falhar — hoje só se descobre quando alguém reclama que a tela quebrou.
+- [x] Ambiente de homologação separado do de produção — banco
+      `ieadespa-homolog` (Azure SQL Serverless, mesmo schema da produção via
+      as 74 migrações) + ambiente de preview do Static Web App (PR #1,
+      **permanece aberto de propósito** — ver `HOMOLOG_BRANCH.md`) apontado
+      pra ele. Ainda sem massa de dados fictícia própria (nasceu vazio,
+      só com o schema) — script de seed fica pra uma próxima sessão.
+- [x] Rotina de backup/restore **testada de verdade** — restore real de
+      `app-db-prod` pra um banco temporário em 2026-09-13, contagem de
+      linhas conferida contra a produção (bateu exato), banco de teste
+      apagado depois. Registro completo, e o comando pronto pra repetir o
+      teste, em `HOMOLOGACAO.md`.
+- [x] Observabilidade mínima: Application Insights (`ieadespa-appinsights`)
+      configurado em produção e homologação + regra de alerta
+      (`ieadespa-api-falhas`) disparando e-mail quando `requests/failed`
+      passa de 5 em 15 minutos.
 
-  **Sobre os 3 itens acima, ainda pendentes**: exigem criar recursos novos
-  no Azure (um 2º banco/Static Web App para homologação, Azure Monitor
-  para alertas) — algo que tem custo recorrente e precisa da assinatura
-  Azure real do usuário, à qual esta sessão não tem acesso (`az` exige
-  `az login` interativo, que não roda num ambiente não interativo).
-  Estimativa de custo mensal incremental, com a Azure SQL Serverless que
-  já é usada hoje (auto-pause reduz o custo quando ocioso):
-  - **Banco de homologação** (Azure SQL Serverless, Basic/GP, auto-pause):
-    ~R$ 25-100/mês, variando com o quanto fica ativo.
-  - **Static Web App de homologação**: R$ 0 se ficar no plano Free (mesmo
-    plano já usado em produção).
-  - **Application Insights / alertas** (Azure Monitor): primeiros 5 GB/mês
-    de log grátis; acima disso ~US$ 2,30/GB. Regra de alerta + notificação
-    por e-mail: praticamente grátis neste volume.
-  - **Backup/restore**: o backup automático do Azure SQL já é incluso (sem
-    custo extra); testar uma restauração de verdade (restaurar pra um
-    banco temporário, validar, apagar) tem custo transitório desprezível.
-  - **Total estimado**: ~R$ 30-100/mês, dominado pelo 2º banco.
-
-  **Esta máquina não tem acesso à conta Azure** (o `az login` precisa
-  rodar numa sessão interativa, e nenhum administrador logou aqui). Quem
-  tem a credencial é a outra máquina — o runbook completo, com todos os
-  comandos `az` prontos pra rodar de lá (ambiente de homologação
-  reaproveitando o preview grátis do Static Web App, teste de
-  backup/restore, Application Insights + alerta), está em
-  [`HOMOLOGACAO.md`](./HOMOLOGACAO.md).
+  Executado em 2026-09-13 com acesso real à assinatura Azure (a outra
+  máquina, que tinha a credencial, autenticou via `az login
+  --use-device-code`). Custo mensal recorrente observado na prática: ~R$
+  25-115/mês, dominado pelo banco de homologação — bateu com a estimativa
+  prévia. Detalhes de cada recurso criado, como reproduzir o teste de
+  restore e como manter o ambiente de homologação (não fechar o PR #1!)
+  estão em [`HOMOLOGACAO.md`](./HOMOLOGACAO.md).
 
 #### vB.2 — Motor de notificações (hoje o sistema é 100% mudo)
 

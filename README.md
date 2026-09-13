@@ -3439,16 +3439,24 @@ infraestrutura (`TermosAssinados`, motor de notificação, motor de workflow)
 >   por isso fica pro fim do roadmap (depois da FASE B), não pro meio de outra
 >   fase em andamento.
 >
-> **Quando executar**: o plano abaixo é escrito agora, pra não se perder, mas
-> a execução espera o roadmap chegar aqui (depois da FASE B, antes da FASE 5)
-> — até lá, os dois repositórios continuam sendo trabalhados de forma
-> independente, cada um pelo seu próprio ritmo.
+> **Quando executar — atualizado em 2026-09-13, ordem invertida por decisão
+> do usuário.** O plano original previa esperar o roadmap chegar aqui
+> (depois da FASE B). Motivo da antecipação: os recursos Azure do site
+> (Communication Services/Email, `rg-portal-igreja`) já precisam ser mexidos
+> agora mesmo pra vB.2 (motor de notificações, que reaproveita esse Email
+> Service em vez de criar um novo) — adiar a integração só aumentaria a
+> duplicação entre os dois sistemas nesse meio-tempo. vC.1 (repositório
+> único) começou imediatamente; vC.2-vC.4 seguem quando cada dependência
+> estiver pronta (ex.: os arquivos de segredo do site, hoje só numa outra
+> máquina, fora do Git, ainda precisam ser trazidos e criptografados — mesmo
+> padrão SOPS/Age já usado neste repositório).
 
 #### vC.1 — Repositório único
 
-- [ ] Trazer `github.com/IEADESPA/site` para dentro deste repositório via
+- [x] Trazer `github.com/IEADESPA/site` para dentro deste repositório via
       `git subtree add --prefix=site <url> main` (preserva o histórico
-      inteiro do site, não copia/cola arquivo).
+      inteiro do site, não copia/cola arquivo) — feito em 2026-09-13,
+      histórico completo (214 commits) confirmado em `site/`.
 - [ ] Dois pipelines de CI continuam existindo (build Astro do site, deploy
       Functions/SQL deste sistema) — monorepo não significa um deploy só;
       significa que um PR que mexe nos dois lados (ex.: campo novo de

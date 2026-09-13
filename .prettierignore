@@ -12,3 +12,8 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+# SOPS + age — arquivos de criptografia não devem ser formatados
+secrets.env
+.sops.yaml
+api/local.settings.enc.json

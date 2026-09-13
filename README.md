@@ -2975,6 +2975,157 @@ depois de cada mudança.
   restore e como manter o ambiente de homologação (não fechar o PR #1!)
   estão em [`HOMOLOGACAO.md`](./HOMOLOGACAO.md).
 
+### FASE C — Integração com o Site Institucional
+
+> **Sobre o nome e a posição.** O pedido original foi criar uma fase de
+> integração "antes da FASE 5" — nunca "FASE 4.6" ou similar, pra não colidir
+> com nenhuma `vX.Y` existente. **Atualizado em 2026-09-14**: a fase inteira
+> foi **antecipada pra cá**, fisicamente antes da vB.2, por decisão do
+> usuário — Camisetas e Eventos no site **já funcionam de verdade** (não são
+> mais dado fictício; o lançamento real estava previsto pra semana que vem,
+> só adiado por causa desta própria integração). Não faz sentido trabalhar
+> vB.2 (notificações) antes de terminar de organizar o que já está pronto pra
+> ir ao ar.
+>
+> **O que esta fase resolve.** O site institucional
+> (`github.com/IEADESPA/site`) é um repositório separado — Astro (site
+> estático) + Directus (CMS com Postgres próprio) + uma API própria em
+> Azure Functions — hoje sem nenhum vínculo de dado com este sistema. Achado
+> concreto: `Congregacoes` aqui é um catálogo mínimo de governança
+> (`CongregacaoId`, `Nome`, `Ativa`); o site tem sua própria coleção
+> `congregacoes` no Directus, com perfil público completo (endereço, pastor,
+> horário, mapa, foto) e **nenhum vínculo** com o `CongregacaoId` daqui —
+> criar/renomear/desativar uma congregação hoje exige lembrar de fazer isso
+> duas vezes, em dois sistemas que não se conhecem. Essa é a única
+> duplicação de dado real confirmada até agora.
+>
+> **Distribuição do conteúdo — não fica tudo espremido aqui.** Só o que é
+> genuinamente "mesclagem de repositório/infraestrutura" mora nesta FASE C
+> (vC.1-vC.5 abaixo). Conteúdo de negócio que já tem uma fase própria no
+> roadmap foi movido pra lá, mesmo trabalhando nele agora, fora da ordem
+> numérica — mesma lógica que já vale pra esta fase inteira existir fora de
+> ordem:
+> - **Eventos** → integrado dentro da v7.4 (FASE 7, "Eventos e congressos"),
+>   não aqui.
+> - **Camisetas** → é uma Campanha de arrecadação (v4.4) vendendo um produto
+>   físico — FASE 4 já fechou, então o retrofit entra como vB.17 (abaixo,
+>   fim do bloco de retrofit da FASE B), não aqui.
+> - **Minha Conta** (vC.3, abaixo) fica aqui porque não é módulo de negócio
+>   de nenhuma fase — é login alternativo do site, sem equivalente em
+>   nenhuma fase existente.
+
+#### vC.1 — Repositório único
+
+- [x] Trazer `github.com/IEADESPA/site` para dentro deste repositório via
+      `git subtree add --prefix=site <url> main` (preserva o histórico
+      inteiro do site, não copia/cola arquivo) — feito em 2026-09-13,
+      histórico completo (214 commits) confirmado em `site/`.
+- [x] Dois pipelines de CI continuam existindo (build Astro do site, deploy
+      Functions/SQL deste sistema) — monorepo não significa um deploy só.
+      **Achado real corrigido**: os workflows do site (deploy + 2 avisos por
+      e-mail/push) tinham ficado em `site/.github/workflows/`, invisíveis pro
+      GitHub (só lê `.github/workflows/` da raiz) — mortos desde a fusão.
+      Movidos pra raiz (`azure-static-web-apps-salmon-bay-*.yml`,
+      `site-content-notifications.yml`, `site-event-notifications.yml`),
+      caminhos corrigidos (`app_location: /site`, `api_location: site/api`),
+      cada um com filtro `paths` pra só disparar quando a parte dele muda.
+      `dependabot.yml` do site também movido pra raiz, mesma razão.
+- [x] Decisão explícita por coleção do Directus: o que é puramente editorial
+      (`mensagens`, `noticias`, `galeria`, `depoimentos`, `faq`, `historia`)
+      **continua no Directus, sem mudança** — só o que representa uma entidade
+      que também existe aqui (congregação, e no futuro evento/pessoa) migra.
+- [x] Segredos do site no mesmo esquema SOPS/Age deste repositório
+      (`site/api/local.settings.enc.json`, `site/secrets.env`) — chaves das
+      duas máquinas liberadas nos dois `.sops.yaml` (raiz e `site/`).
+      `.gitattributes` novo força LF nesses arquivos (achado: CRLF de
+      checkout Windows quebrava o parser do SOPS).
+- [x] 4 secrets que faltavam no GitHub deste repositório (só existiam no
+      `IEADESPA/site`) provisionados sem exibir valor: token de deploy da
+      Static Web App do site, `ACS_CONNECTION_STRING`, `DIRECTUS_ADMIN_TOKEN`,
+      e um `VAPID_PRIVATE_KEY` **novo** (o antigo não existia em nenhum
+      arquivo criptografado nem era recuperável de um GitHub Secret —
+      write-only por design; gerado par novo, chave pública trocada nos 6
+      lugares onde estava fixa no código, efeito colateral aceito: quem já
+      tinha se inscrito pra push precisa visitar o site de novo).
+
+#### vC.2 — Congregações como fonte única (primeiro dado realmente compartilhado)
+
+- [ ] Migração idempotente estendendo `Congregacoes` com os campos hoje só no
+      Directus: `Slug`, `Endereco`, `Bairro`, `Cidade`, `Estado`, `NomePastor`,
+      `Horarios`, `MapsUrl`, `Lat`, `Lng`, `GoogleMapsPlaceQuery`.
+- [ ] `api/GestaoCongregacoes` (já `authLevel: anonymous` pra leitura) passa a
+      devolver esses campos.
+- [ ] Site troca a busca de `congregacoes` no Directus (`src/lib/directus.ts`,
+      `congregacoes.astro`, `congregacao/[slug].astro`) por essa API — mesmo
+      ponto do build Astro, só muda a URL de onde o dado vem. Mapa
+      (Leaflet + Google Maps Platform) e o design da página **não mudam**.
+- [ ] Migração de dado único (poucas linhas reais existentes no Directus,
+      casadas por nome, conferidas manualmente) — só depois disso, aposentar a
+      coleção `congregacoes` do Directus.
+
+#### vC.3 — Minha Conta: trava real contra identidade duplicada
+
+- [ ] Sem fusão de login — "Minha Conta" continua sendo e-mail + código só
+      pra quem não tem matrícula (semimembro). Único ajuste real: no momento
+      de criar conta, checar se o telefone/CPF já bate com um
+      `MembroReferencia` ativo (nova rota anônima somente-leitura em `api/`,
+      ex. `GET /api/membros/verificar-contato`, devolve só um booleano); se
+      bater, recusar a criação e orientar a pessoa a usar o acesso de membro.
+
+#### vC.4 — Reaproveitamento de ativos de front-end do site
+
+- [ ] Documentar o que vale a pena reaproveitar no painel único deste sistema
+      quando os módulos correspondentes chegarem: integração de mapas
+      (Leaflet/Google Maps Platform), geração de PDF no navegador (`jsPDF`,
+      usado em certificado/crachá), tokens de design Tailwind do site — evita
+      reconstruir do zero o que já funciona em produção.
+
+#### vC.5 — Um único Function App, um único modelo (normalização técnica)
+
+Achado real: `api/` usa o modelo clássico do Azure Functions (pasta por
+função + `function.json`); `site/api` usa o modelo v4 (`app.http(...)`
+registrado inline, `"main"` no `package.json` apontando um glob). Hoje são
+dois Function Apps completamente separados (duas Static Web Apps); não há
+confirmação de que os dois modelos convivem no mesmo Function App.
+
+- [ ] Reescrever as 15 funções de `site/api/src/functions/*.js` (modelo v4)
+      pro modelo clássico que `api/` já usa (pasta própria + `function.json`)
+      — mecânico, sem mudar comportamento, elimina a pergunta "os dois
+      modelos convivem?" por completo (deixa de existir mais de um modelo).
+- [ ] Validar em homologação (`HOMOLOGACAO.md`) se as duas Static Web Apps
+      (`app-meusite-web`, `site-institucional`) podem apontar pro mesmo
+      `api_location: "api"`, ou se a arquitetura correta é um Function App
+      próprio ("Bring your own Functions") compartilhado pelas duas — decide
+      se `site/api` pode ser apagado de vez ou precisa continuar existindo
+      como *deploy target*.
+- [ ] Só depois da validação: apagar `site/api`, ajustar os workflows. Pasta
+      `site/` fica só com o Astro (`site/src`, `site/public`) — cosmético,
+      renomear ou não é decisão de baixo risco pra essa hora.
+
+##### 🔒 Trava de Revisão C-A — meio da fase, fecha vC.1–vC.2
+
+Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
+Confirma especificamente: o `git subtree` trouxe o histórico real (não um
+`git log` vazio a partir do commit de importação); o site em produção
+continua no ar sem regressão depois da troca de fonte de dado de
+congregação; a coleção `congregacoes` do Directus só é aposentada depois da
+migração de dado conferida linha a linha, nunca antes.
+
+##### 🔒 Trava de Revisão C-B — fim da fase, antes de retomar a FASE B (vB.2 em diante)
+
+Ponto de parada obrigatório. Confirma que vC.3 e vC.4 foram concluídos (não
+silenciosamente esquecidos), que vC.5 realmente eliminou a dualidade de
+modelo (não só documentou a incerteza), e que a integração de Eventos (v7.4)
+e Camisetas (vB.17) — trabalhadas fora de ordem junto com esta fase — estão
+com o `README` e o código coerentes entre si.
+
+### FASE B — Consolidação da Base (continuação, vB.2 em diante)
+
+> A FASE C (acima) foi intercalada aqui de propósito, entre vB.1 e vB.2 —
+> ver a nota "Sobre o nome e a posição" na abertura dela. vB.2 em diante
+> continua sendo FASE B (infraestrutura, vB.1-vB.10; retrofit das Fases 0-3,
+> vB.11-vB.17), não conteúdo da FASE C.
+
 #### vB.2 — Motor de notificações (hoje o sistema é 100% mudo)
 
 O princípio "calculado na leitura, nunca marcação manual" resolveu a correção do
@@ -3393,137 +3544,41 @@ já existe (motor de prazos, impedimento calculado, termos assinados, ponte com
 disciplinar, ponte com financeiro) e cobre o único tipo de conflito que hoje
 não tem lugar nenhum no sistema.
 
+#### vB.17 — Camisetas como Campanha real *(retrofit da v4.4, integração com o site)*
+
+**Trabalhado fora de ordem, junto com a FASE C (2026-09-14)** — o módulo de
+camisetas do site institucional **já funciona de verdade** (lançamento real
+previsto pra semana seguinte a esta versão, só adiado pela própria
+integração) — não é mais dado fictício, como uma varredura de código
+anterior tinha registrado. Hoje `camiseta_grupos`/`camiseta_lotes`/
+`camiseta_pedidos` vivem só no Directus do site, com `congregacao` apontando
+pra cópia própria do Directus (`pedir_congregacao`, opcional) — a mesma
+duplicação de fundo que a vC.2 resolve pra congregação em geral, só que
+aplicada a uma campanha de arrecadação específica (v4.4, `GestaoCampanhas`
+— dinheiro real vendendo produto físico).
+
+- [ ] Quando `congregacao` for informada num pedido de camiseta, gravar o
+      `CongregacaoId` real (API unificada da vC.2) em vez da relação
+      Directus-Directus solta que existe hoje.
+- [ ] Avaliar, com a vC.2 já no ar, se o valor arrecadado (`valor_pago` no
+      Directus) deve virar uma `Campanha`/`ContasAReceber` real aqui (visível
+      no Financeiro, v4.4/v4.6) ou se continua só no Directus por enquanto —
+      decisão a tomar com o volume real de vendas em mãos, não antes.
+- [ ] Perguntas personalizadas por campanha de camiseta (`perguntas_camiseta`)
+      continuam no Directus — são só formulário, sem overlap com nenhuma
+      entidade daqui.
+
 #### 🔒 Trava de Revisão B-C — antes de encerrar a FASE B e avançar para a FASE 5
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita vB.11 a vB.16 pelas 5 perguntas do checklist, e faz uma varredura
-final na FASE B **inteira** (vB.1 a vB.16): a Esteira de Batismo (vB.11) e a
+Audita vB.11 a vB.17 pelas 5 perguntas do checklist, e faz uma varredura
+final na FASE B **inteira** (vB.1 a vB.17): a Esteira de Batismo (vB.11) e a
 Mediação/Arbitragem (vB.16) citam mecanismos que vêm da metade de
 infraestrutura (`TermosAssinados`, motor de notificação, motor de workflow)
 — confirmar que essas pontes realmente existem no código, não só no texto.
-
-### FASE C — Integração com o Site Institucional
-
-> **Sobre o nome e a posição.** Mesmo caso da FASE B: o pedido foi criar uma
-> fase de integração "antes da FASE 5", entre a FASE B e a FASE 5 — nunca
-> "FASE 4.6" ou similar, pra não colidir com nenhuma `vX.Y` existente. Letra,
-> não número, mesma convenção.
->
-> **O que esta fase resolve.** O site institucional
-> (`github.com/IEADESPA/site`) é um repositório separado — Astro (site
-> estático) + Directus (CMS com Postgres próprio) + uma API própria em
-> Azure Functions — hoje sem nenhum vínculo de dado com este sistema. Achado
-> concreto, investigado numa sessão anterior: `Congregacoes` aqui é um
-> catálogo mínimo de governança (`CongregacaoId`, `Nome`, `Ativa`); o site tem
-> sua própria coleção `congregacoes` no Directus, com perfil público completo
-> (endereço, pastor, horário, mapa, foto) e **nenhum vínculo** com o
-> `CongregacaoId` daqui — criar/renomear/desativar uma congregação hoje exige
-> lembrar de fazer isso duas vezes, em dois sistemas que não se conhecem. Essa
-> é a única duplicação de dado real confirmada até agora.
->
-> **O que NÃO é problema, decisões já tomadas (registradas aqui pra não se
-> perder)**:
-> - **"Minha Conta" do site não duplica identidade de membro.** É login
->   (e-mail + código) só pra quem **não tem matrícula** — um "semimembro" com
->   acesso mínimo. Quem é membro usa a identidade deste sistema, não cria
->   conta lá. Não precisa de fusão de login; só uma checagem (vC.3) pra evitar
->   que um membro de verdade crie uma conta paralela por engano.
-> - **Eventos e Camisetas, hoje no site, não têm dado real** — valores e
->   inscrições vistos em auditoria de código são fictícios/de teste; o
->   lançamento real está programado pra 2027. Ou seja, **não há migração de
->   dado real em jogo hoje** nesses dois — a decisão de unificá-los (ou não)
->   com os motores de Sessões/Presenças e Financeiro daqui fica registrada
->   como avaliação a fazer (vC.3), não como retrabalho urgente.
-> - **A maior parte do esforço real desta fase é mesclagem de repositório**
->   (vC.1), não integração de dado — é a parte reconhecidamente mais difícil,
->   por isso fica pro fim do roadmap (depois da FASE B), não pro meio de outra
->   fase em andamento.
->
-> **Quando executar — atualizado em 2026-09-13, ordem invertida por decisão
-> do usuário.** O plano original previa esperar o roadmap chegar aqui
-> (depois da FASE B). Motivo da antecipação: os recursos Azure do site
-> (Communication Services/Email, `rg-portal-igreja`) já precisam ser mexidos
-> agora mesmo pra vB.2 (motor de notificações, que reaproveita esse Email
-> Service em vez de criar um novo) — adiar a integração só aumentaria a
-> duplicação entre os dois sistemas nesse meio-tempo. vC.1 (repositório
-> único) começou imediatamente; vC.2-vC.4 seguem quando cada dependência
-> estiver pronta (ex.: os arquivos de segredo do site, hoje só numa outra
-> máquina, fora do Git, ainda precisam ser trazidos e criptografados — mesmo
-> padrão SOPS/Age já usado neste repositório).
-
-#### vC.1 — Repositório único
-
-- [x] Trazer `github.com/IEADESPA/site` para dentro deste repositório via
-      `git subtree add --prefix=site <url> main` (preserva o histórico
-      inteiro do site, não copia/cola arquivo) — feito em 2026-09-13,
-      histórico completo (214 commits) confirmado em `site/`.
-- [ ] Dois pipelines de CI continuam existindo (build Astro do site, deploy
-      Functions/SQL deste sistema) — monorepo não significa um deploy só;
-      significa que um PR que mexe nos dois lados (ex.: campo novo de
-      congregação) é revisado numa review só, sem sincronizar dois repositórios
-      manualmente.
-- [ ] Decisão explícita por coleção do Directus: o que é puramente editorial
-      (`mensagens`, `noticias`, `galeria`, `depoimentos`, `faq`, `historia`)
-      **continua no Directus, sem mudança** — só o que representa uma entidade
-      que também existe aqui (congregação, e no futuro evento/pessoa) migra.
-
-#### vC.2 — Congregações como fonte única (primeiro dado realmente compartilhado)
-
-- [ ] Migração idempotente estendendo `Congregacoes` com os campos hoje só no
-      Directus: `Slug`, `Endereco`, `Bairro`, `Cidade`, `Estado`, `NomePastor`,
-      `Horarios`, `MapsUrl`, `Lat`, `Lng`, `GoogleMapsPlaceQuery`.
-- [ ] `api/GestaoCongregacoes` (já `authLevel: anonymous` pra leitura) passa a
-      devolver esses campos.
-- [ ] Site troca a busca de `congregacoes` no Directus (`src/lib/directus.ts`,
-      `congregacoes.astro`, `congregacao/[slug].astro`) por essa API — mesmo
-      ponto do build Astro, só muda a URL de onde o dado vem.
-- [ ] Migração de dado único (poucas linhas reais existentes no Directus,
-      casadas por nome, conferidas manualmente) — só depois disso, aposentar a
-      coleção `congregacoes` do Directus.
-- [ ] O mapa (Leaflet + Google Maps Platform) e o design da página do site
-      **não mudam** — só a fonte do dado que os alimenta.
-
-#### vC.3 — Avaliação registrada: o que mais poderia integrar (decisão, não construção)
-
-- [ ] **Eventos**: hoje o site tem um sistema próprio e maduro (inscrição,
-      check-in, certificado, lista de espera) no Directus, conceitualmente
-      diferente do motor de Sessões/Presenças deste sistema (reunião interna
-      de quórum x evento público com inscrição). Avaliar quando chegar aqui:
-      manter os dois propositalmente distintos, com só a `Congregacoes`
-      compartilhada (evento aponta pro `CongregacaoId` de verdade em vez de
-      texto livre), ou unificar de fato — decisão a tomar com o roadmap de
-      Eventos (FASE 7) mais claro, não antes.
-- [ ] **Camisetas**: fica no site como está — é operação própria da tesouraria
-      local de cada campanha, sem entidade equivalente aqui hoje. Reavaliar só
-      se/quando o Financeiro (FASE 4) precisar enxergar esse dinheiro.
-- [ ] **Minha Conta**: sem fusão de login. Único ajuste real — no momento de
-      criar conta, checar se o telefone/CPF já bate com um `MembroReferencia`
-      ativo; se bater, recusar a criação e orientar a pessoa a usar o acesso de
-      membro, evitando identidade duplicada por engano.
-
-#### vC.4 — Reaproveitamento de ativos de front-end do site
-
-- [ ] Antes de mexer em qualquer coisa, documentar o que vale a pena reaproveitar
-      no painel único deste sistema quando os módulos correspondentes
-      chegarem: integração de mapas (Leaflet/Google Maps Platform), geração de
-      PDF no navegador (`jsPDF`, usado em certificado/crachá), tokens de
-      design Tailwind do site — evita reconstruir do zero o que já funciona em
-      produção.
-
-##### 🔒 Trava de Revisão C-A — meio da fase, fecha vC.1–vC.2
-
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Confirma especificamente: o `git subtree` trouxe o histórico real (não um
-`git log` vazio a partir do commit de importação); o site em produção
-continua no ar sem regressão depois da troca de fonte de dado de
-congregação; a coleção `congregacoes` do Directus só é aposentada depois da
-migração de dado conferida linha a linha, nunca antes.
-
-##### 🔒 Trava de Revisão C-B — fim da fase, antes de avançar para a FASE 5
-
-Ponto de parada obrigatório. Confirma que vC.3 ficou de fato registrado como
-decisão (não silenciosamente esquecido) e que vC.4 gerou um documento/lista
-real de ativos a reaproveitar, não uma boa intenção sem registro.
+Confirmar também que vB.17 (Camisetas) só grava `CongregacaoId` real depois
+que a vC.2 (FASE C) estiver de fato concluída — nunca em paralelo com dado
+ainda apontando pro Directus antigo.
 
 ### FASE 5 — Departamentos e Relatórios
 
@@ -3839,6 +3894,22 @@ registro do canal, sozinho, não cobre nada disso.
 
 - [ ] Cadastro de eventos (local/área/geral) + inscrições.
 - [ ] Congresso Unificado de Departamentos.
+
+**Integração com o site institucional (trabalhada fora de ordem, junto com a
+FASE C, 2026-09-14)** — o site já tem um sistema de eventos público próprio
+e maduro (inscrição, lista de espera, check-in, certificado), rodando no
+Directus, **já funcionando de verdade** (não é mais dado fictício). Decisão
+tomada: manter os dois motores **propositalmente distintos** — evento
+público com inscrição (site) não é a mesma coisa que reunião interna de
+quórum de órgão (`AbrirReuniao`/`RegistrarPresenca`/`ListarFrequencia`,
+FASE 0), e forçar os dois a serem uma coisa só distorceria ambos. O único
+ponto real de integração:
+
+- [ ] `eventos.congregacao` (Directus) passa a apontar pro `CongregacaoId`
+      real, via a API unificada de Congregações (vC.2, FASE C) — em vez da
+      relação Directus-Directus solta que existe hoje.
+- [ ] Site continua sendo dono do cadastro de evento/inscrição/certificado —
+      este sistema não duplica isso, só compartilha a fonte de congregação.
 
 #### v7.5 — Escalas e voluntariado
 

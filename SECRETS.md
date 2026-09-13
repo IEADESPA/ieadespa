@@ -5,6 +5,15 @@ connection string do SQL e `AUTH_SECRET`) **nunca** vão em texto puro. Em vez d
 arquivo **criptografado** (`api/local.settings.enc.json`) é versionado, e cada máquina
 descriptografa com a **própria chave privada Age**, que fica fora do repo.
 
+Desde a FASE C (site institucional trazido via `git subtree` pra dentro de `site/`), existem
+**dois** pares de arquivo, cada um com seu próprio `secrets:encrypt`/`secrets:decrypt`, mas as
+**mesmas chaves Age** do `.sops.yaml` (não precisa cadastrar nada duas vezes):
+
+| App | Texto puro (não versionado) | Criptografado (versionado) |
+|---|---|---|
+| Sistema de governança | `api/local.settings.json` | `api/local.settings.enc.json` |
+| Site institucional | `site/api/local.settings.json` | `site/api/local.settings.enc.json` |
+
 ---
 
 ## 1. Como funciona (resumo)
@@ -86,7 +95,8 @@ Esse comando imprime a **public key** (começa com `age1...`). Guarde ela.
 
 ## 6. Usar no dia a dia
 
-Dentro da pasta `api`:
+Dentro da pasta `api` (sistema de governança) **ou** `site/api` (site institucional —
+mesmo comando, mesma chave):
 
 ```powershell
 # 1) descriptografar (gera o local.settings.json, que NÃO é versionado)
@@ -98,7 +108,7 @@ npm run secrets:decrypt
 npm run secrets:encrypt
 ```
 
-Ou direto, sem npm:
+Ou direto, sem npm (troque `api/` por `site/api/` conforme o app):
 
 ```powershell
 sops -d --output api/local.settings.json api/local.settings.enc.json

@@ -45,10 +45,39 @@ const CATALOGOS = {
   },
   congregacoes: {
     tabela: "Congregacoes", chave: "CongregacaoId", idField: "congregacaoId",
-    campos: { nome: sql.NVarChar(150), ativa: sql.Bit, areaId: sql.Int },
+    // Endereço/bairro/cidade/estado/horário/mapa (v075, vC.2): campos que só
+    // existiam soltos na coleção "congregacoes" do Directus (site
+    // institucional) — viram fonte única aqui. NomePastor propositalmente
+    // NÃO é coluna: ver DIRIGENTE_ATUAL_SQL/enriquecerComDirigente abaixo —
+    // quem dirige a congregação hoje já é 100% calculável em Lideranca
+    // (mesmo critério de api/shared/universo.js), guardar de novo aqui
+    // duplicaria dado e dessincronizaria no primeiro dia em que alguém
+    // trocasse de dirigente sem lembrar de atualizar os dois lugares.
+    campos: {
+      nome: sql.NVarChar(150), ativa: sql.Bit, areaId: sql.Int,
+      slug: sql.NVarChar(150), endereco: sql.NVarChar(300), bairro: sql.NVarChar(150),
+      cidade: sql.NVarChar(150), estado: sql.NVarChar(2), horarios: sql.NVarChar(500),
+      mapsUrl: sql.NVarChar(500), lat: sql.Decimal(9, 6), lng: sql.Decimal(9, 6)
+    },
     emUso: async (pool, id) => {
       const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);
       return r.recordset[0].Total > 0;
+    },
+    // Só pra este catálogo: acrescenta o dirigente atual calculado (nunca
+    // marcação manual) em cada item já devolvido por listar().
+    enriquecer: async (pool, itens) => {
+      const result = await pool.request().query(`
+        SELECT l.EscopoId AS congregacaoId, m.Nome AS dirigenteAtual
+        FROM Lideranca l
+        JOIN Papeis p ON p.PapelId = l.PapelId AND p.Nome = 'Dirigente de Congregação'
+        JOIN MembroReferencia m ON m.MembroId = l.MembroId
+        WHERE l.EscopoTipo = 'CONGREGACAO'
+          AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+      `);
+      const porCongregacao = {};
+      result.recordset.forEach(r => { porCongregacao[r.congregacaoId] = r.dirigenteAtual; });
+      itens.forEach(item => { item.dirigenteAtual = porCongregacao[item.congregacaoId] || null; });
+      return itens;
     }
   },
   funcionalidades: {
@@ -192,7 +221,8 @@ async function buscarPorId(pool, config, id) {
 
 async function listar(pool, config) {
   const result = await pool.request().query(`SELECT * FROM ${config.tabela}`);
-  return result.recordset.map(linha => paraJson(config, linha));
+  const itens = result.recordset.map(linha => paraJson(config, linha));
+  return config.enriquecer ? await config.enriquecer(pool, itens) : itens;
 }
 
 async function criar(pool, config, dados) {

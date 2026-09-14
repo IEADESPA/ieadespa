@@ -1,111 +1,57 @@
 // GestaoCongregacoes
-// Catálogo fechado de congregações — resolve o problema de "Templo Central"
-// x "Sede" digitados de formas diferentes pra mesma congregação. Exige a
-// permissão "pessoas" (é dado de apoio ao cadastro de pessoas).
-// GET    /api/congregacoes                    -> lista (inclusive inativas)
-// POST   /api/congregacoes                    -> body: { congregacaoId?, nome } -> cria (sem id) ou renomeia (com id)
-// PUT    /api/congregacoes/{congregacaoId}     -> body: { ativa: true|false } -> reativa ou desativa
-// DELETE /api/congregacoes/{congregacaoId}     -> exclui de verdade (só se ninguém mais usa)
+// Leitura resolvida do catálogo de congregações — usada por quem só precisa
+// consultar (ex: dropdown do cadastro de pessoa). Exige a permissão
+// "pessoas" (é dado de apoio ao cadastro de pessoas). Quem cria/edita/
+// desativa/exclui congregação é api/GestaoCatalogos (catálogo "congregacoes"
+// — é quem também cria o órgão JAI automático de toda congregação nova,
+// ver ORGAOS_AUTOMATICOS_POR_CATALOGO lá); não duplicar essa escrita aqui.
+// Desde a v075 (vC.2) devolve também endereço/bairro/cidade/estado/mapa —
+// campos que não existem em nenhum outro lugar do sistema, trazidos da
+// coleção "congregacoes" do Directus (site institucional) pra virar fonte
+// única. Quem é o dirigente atual NÃO é uma coluna: é calculado na leitura
+// a partir de Lideranca (mesma lógica de api/shared/universo.js na
+// composição da CLI) — ver DIRIGENTE_ATUAL_SQL abaixo. Ler essa lista sem
+// login (site institucional) é feito por api/CongregacoesPublico (só os
+// campos públicos, sem exigir a permissão "pessoas" daqui).
+// GET /api/congregacoes -> lista (inclusive inativas), com dirigenteAtual calculado
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
-const { getPool, sql } = require("../shared/db");
+const { getPool } = require("../shared/db");
+
+// Subconsulta reaproveitada pelo GET: mesmo critério de "quem dirige essa
+// congregação hoje" usado em api/shared/universo.js (composição da CLI) —
+// Papeis.Nome = 'Dirigente de Congregação', escopo batendo e mandato (se
+// houver) ainda não vencido. Nunca gravar isso como coluna: já dessincroniza
+// no primeiro dia em que alguém trocar de dirigente.
+const DIRIGENTE_ATUAL_SQL = `
+  OUTER APPLY (
+    SELECT TOP 1 m.Nome
+    FROM Lideranca l
+    JOIN Papeis p ON p.PapelId = l.PapelId AND p.Nome = 'Dirigente de Congregação'
+    JOIN MembroReferencia m ON m.MembroId = l.MembroId
+    WHERE l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = c.CongregacaoId
+      AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+    ORDER BY l.LiderancaId DESC
+  ) dirigente
+`;
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
 
-  const method = req.method;
-  const idRota = context.bindingData.congregacaoId;
+  if (req.method !== "GET") {
+    context.res = { status: 405, body: { erro: "Método não suportado. Use /api/catalogos/congregacoes para criar/editar/excluir." } };
+    return;
+  }
+
   const pool = await getPool();
-
-  if (method === "GET") {
-    const result = await pool.request().query(
-      `SELECT CongregacaoId AS congregacaoId, Nome AS nome, Ativa AS ativa, AreaId AS areaId
-       FROM Congregacoes ORDER BY Nome`
-    );
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
-    return;
-  }
-
-  if (method === "POST") {
-    const { congregacaoId, nome, areaId } = req.body || {};
-    if (!nome || !nome.trim()) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o nome da congregação." } };
-      return;
-    }
-    const nomeLimpo = nome.trim();
-
-    if (congregacaoId) {
-      const upd = await pool.request()
-        .input("id", sql.Int, congregacaoId)
-        .input("nome", sql.NVarChar(150), nomeLimpo)
-        .input("areaId", sql.Int, areaId || null)
-        .query(`UPDATE Congregacoes SET Nome = @nome, AreaId = @areaId WHERE CongregacaoId = @id`);
-      if (upd.rowsAffected[0] === 0) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
-        return;
-      }
-    } else {
-      await pool.request()
-        .input("nome", sql.NVarChar(150), nomeLimpo)
-        .input("areaId", sql.Int, areaId || null)
-        .query(`INSERT INTO Congregacoes (Nome, AreaId) VALUES (@nome, @areaId)`);
-    }
-
-    const result = await pool.request().input("nome", sql.NVarChar(150), nomeLimpo)
-      .query(`SELECT TOP 1 CongregacaoId AS congregacaoId, Nome AS nome, Ativa AS ativa, AreaId AS areaId
-              FROM Congregacoes WHERE Nome = @nome ORDER BY CongregacaoId DESC`);
-    const congregacao = result.recordset[0];
-
-    await registrarAuditoria({
-      tabela: "Congregacoes",
-      registroId: congregacao.congregacaoId,
-      acao: congregacaoId ? "Renomeou congregação" : "Cadastrou congregação",
-      usuarioId: usuario.membroId,
-      dadosDepois: { nome: nomeLimpo, areaId }
-    });
-
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Congregação salva.", congregacao } };
-    return;
-  }
-
-  if (method === "PUT") {
-    if (!idRota) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o congregacaoId na rota." } };
-      return;
-    }
-    const { ativa } = req.body || {};
-    const upd = await pool.request().input("id", sql.Int, idRota).input("ativa", sql.Bit, !!ativa)
-      .query(`UPDATE Congregacoes SET Ativa = @ativa WHERE CongregacaoId = @id`);
-    if (upd.rowsAffected[0] === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
-      return;
-    }
-    await registrarAuditoria({ tabela: "Congregacoes", registroId: Number(idRota), acao: ativa ? "Reativou congregação" : "Desativou congregação", usuarioId: usuario.membroId });
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: ativa ? "✅ Congregação reativada." : "✅ Congregação desativada." } };
-    return;
-  }
-
-  if (method === "DELETE") {
-    if (!idRota) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o congregacaoId na rota." } };
-      return;
-    }
-    const emUso = await pool.request().input("id", sql.Int, idRota)
-      .query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);
-    if (emUso.recordset[0].Total > 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Não é possível excluir: existem pessoas cadastradas nessa congregação. Desative em vez de excluir." } };
-      return;
-    }
-    const del = await pool.request().input("id", sql.Int, idRota).query(`DELETE FROM Congregacoes WHERE CongregacaoId = @id`);
-    if (del.rowsAffected[0] === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
-      return;
-    }
-    await registrarAuditoria({ tabela: "Congregacoes", registroId: Number(idRota), acao: "Excluiu congregação", usuarioId: usuario.membroId });
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Congregação excluída." } };
-    return;
-  }
-
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  const result = await pool.request().query(
+    `SELECT c.CongregacaoId AS congregacaoId, c.Nome AS nome, c.Ativa AS ativa, c.AreaId AS areaId,
+            c.Slug AS slug, c.Endereco AS endereco, c.Bairro AS bairro, c.Cidade AS cidade, c.Estado AS estado,
+            c.Horarios AS horarios, c.MapsUrl AS mapsUrl, c.Lat AS lat, c.Lng AS lng,
+            dirigente.Nome AS dirigenteAtual
+     FROM Congregacoes c
+     ${DIRIGENTE_ATUAL_SQL}
+     ORDER BY c.Nome`
+  );
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
 };

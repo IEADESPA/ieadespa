@@ -1184,6 +1184,37 @@
       <div id="abaEstrutura" class="aba-secretaria" style="display:none;">
         <h3>Governança Escalonada (Regimento Art. 104)</h3>
         <p class="subtitle">Níveis 0 a 5: Extensão da Tenda → Congregação → Área → Região → Quadrante → Distrito (Sede Geral, nível 6, é sempre única — não tem catálogo). Tudo editável.</p>
+
+        <!-- Congregações (Nível 1) — tela própria, ver vC.2 no README -->
+        <div class="cartao-perfil" style="margin-bottom:16px;">
+          <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Congregações (Nível 1)</h4>
+          <p class="subtitle">Endereço, bairro, cidade, mapa e horários — usados também pelo site institucional. O dirigente atual não é digitado aqui: é calculado a partir de quem já tem o papel "Dirigente de Congregação" concedido em Permissões.</p>
+          <form onsubmit="event.preventDefault(); salvarCongregacaoDetalhe();">
+            <div class="barra-lista">
+              <input type="text" id="congDetNome" placeholder="Nome da congregação" style="min-width:220px;" />
+              <select id="congDetAreaId"><option value="">Sem Área</option></select>
+              <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">💾 Salvar Congregação</button>
+              <button class="btn-link" type="button" onclick="limparFormCongregacaoDetalhe()">Cancelar edição</button>
+            </div>
+            <div class="barra-lista">
+              <input type="text" id="congDetEndereco" placeholder="Endereço (rua, número)" style="min-width:260px;" />
+              <input type="text" id="congDetBairro" placeholder="Bairro" style="min-width:150px;" />
+              <input type="text" id="congDetCidade" placeholder="Cidade" style="min-width:150px;" />
+              <input type="text" id="congDetEstado" placeholder="UF" maxlength="2" style="min-width:60px;" />
+            </div>
+            <div class="barra-lista">
+              <input type="text" id="congDetHorarios" placeholder="Horários dos cultos (ex: Dom 18h, Qui 19h30)" style="min-width:320px;" />
+            </div>
+            <div class="barra-lista">
+              <input type="text" id="congDetMapsUrl" placeholder="Link do Google Maps" style="min-width:320px;" />
+              <input type="text" id="congDetLat" placeholder="Latitude" style="min-width:110px;" />
+              <input type="text" id="congDetLng" placeholder="Longitude" style="min-width:110px;" />
+            </div>
+          </form>
+          <p id="resultadoCongDetalhe"></p>
+          <div class="rolagem-tabela"><div id="listaCongDetalhe"></div></div>
+        </div>
+
         <div id="estruturaConteudo"></div>
       </div>
 

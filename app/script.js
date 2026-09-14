@@ -4585,7 +4585,12 @@ const CATALOGOS_CFG = {
 // Ordem = nível (0 a 5) da Governança Escalonada (Regimento Art. 104), de baixo
 // pra cima: Extensão da Tenda primeiro, Distrito por último. Órgãos Locais
 // (JAI/JEA/CRA/TER/CEQ/Distrito) saiu daqui — é órgão, mora na aba Órgãos.
-const ESTRUTURA_ORDEM = ["extensoes", "congregacoes", "areas", "regioes", "quadrantes", "distritos"];
+// "congregacoes" saiu do editor genérico (vC.2): tem campos demais
+// (endereço/bairro/cidade/mapa) pra caber numa linha de inputs — ganhou tela
+// própria, ver montarCongregacoesDetalhe() logo abaixo. O objeto
+// CATALOGOS_CFG.congregacoes continua existindo só pra "extensoes" (Nível 0)
+// resolver o nome da Congregação-Mãe no dropdown.
+const ESTRUTURA_ORDEM = ["extensoes", "areas", "regioes", "quadrantes", "distritos"];
 const CATALOGOS_ORDEM = ["statuses", "situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar", "canaisOficiais"];
 const POLITICAS_RETENCAO_ORDEM = ["politicasRetencao"];
 const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
@@ -4615,6 +4620,7 @@ let catalogoCache = {};
 let catalogoPagina = {};
 
 function montarEstrutura() {
+  carregarCongregacoesDetalhe();
   document.getElementById("estruturaConteudo").innerHTML = ESTRUTURA_ORDEM.map(k => secaoCatalogo(k)).join("");
   ESTRUTURA_ORDEM.forEach(k => { carregarOpcoesPai(k); carregarCatalogoLista(k); });
 }
@@ -7280,26 +7286,49 @@ async function aprovarTodaSolicitacaoAcao(solicitacaoId) {
   if (data.sucesso) carregarFilaAprovacoes();
 }
 
-// ---- SECRETARIA / ABA CONGREGAÇÕES ----
-let congregacaoEditandoId = null;
+// ---- SECRETARIA / ABA ESTRUTURA / CONGREGAÇÕES (vC.2) ----
+// Tela própria (não usa o editor genérico de catálogos — campos demais pra
+// caber numa linha de inputs): endereço/bairro/cidade/estado/horários/mapa,
+// os mesmos campos que hoje só existem na coleção "congregacoes" do
+// Directus (site institucional). Dirigente atual é só exibido (calculado no
+// backend a partir de quem já tem o papel "Dirigente de Congregação" em
+// Permissões) — não tem input pra ele porque não é editável aqui.
+let congregacaoDetalheEditandoId = null;
 
-async function carregarCongregacoes() {
-  const container = document.getElementById("resultadoListaCongregacoes");
-  const res = await fetchProtegido(`${API_BASE}/congregacoes`);
-  const congregacoes = await res.json();
-  window._congregacoesCache = congregacoes;
+async function carregarCongregacoesDetalhe() {
+  const [resCong, resAreas] = await Promise.all([
+    fetchProtegido(`${API_BASE}/catalogos/congregacoes`),
+    fetch(`${API_BASE}/catalogos/areas`)
+  ]);
+  const congregacoes = await resCong.json();
+  const areas = await resAreas.json();
+  window._congregacoesDetalheCache = congregacoes;
+  window._areasCache = areas;
 
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Status</th><th></th></tr></thead><tbody>`;
+  const selectArea = document.getElementById("congDetAreaId");
+  if (selectArea) selectArea.innerHTML = `<option value="">Sem Área</option>` + areas.map(a => `<option value="${a.areaId}">${a.nome}</option>`).join("");
+
+  const container = document.getElementById("listaCongDetalhe");
+  if (!container) return;
+  if (congregacoes.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma congregação cadastrada.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Nome</th><th>Cidade/UF</th><th>Dirigente atual</th><th>Status</th><th></th>
+  </tr></thead><tbody>`;
   congregacoes.forEach(c => {
     html += `<tr>
       <td>${c.nome}</td>
+      <td>${c.cidade ? `${c.cidade}${c.estado ? "/" + c.estado : ""}` : "—"}</td>
+      <td>${c.dirigenteAtual || "—"}</td>
       <td>${c.ativa ? "Ativa" : "Inativa"}</td>
-      <td>
-        <button class="btn-link" onclick="editarCongregacao(${c.congregacaoId})">Renomear</button>
+      <td class="acoes-inline">
+        <button class="btn-link" onclick="editarCongregacaoDetalhe(${c.congregacaoId})">Editar</button>
         ${c.ativa
-          ? `<button class="btn-link" onclick="desativarCongregacaoAcao(${c.congregacaoId})">Desativar</button>`
-          : `<button class="btn-link" onclick="reativarCongregacaoAcao(${c.congregacaoId})">Reativar</button>`}
-        <button class="btn-link btn-link-perigo" onclick="excluirCongregacaoAcao(${c.congregacaoId})">Excluir</button>
+          ? `<button class="btn-link" onclick="desativarCongregacaoDetalheAcao(${c.congregacaoId})">Desativar</button>`
+          : `<button class="btn-link" onclick="reativarCongregacaoDetalheAcao(${c.congregacaoId})">Reativar</button>`}
+        <button class="btn-link btn-link-perigo" onclick="excluirCongregacaoDetalheAcao(${c.congregacaoId})">Excluir</button>
       </td>
     </tr>`;
   });
@@ -7307,61 +7336,85 @@ async function carregarCongregacoes() {
   container.innerHTML = html;
 }
 
-function editarCongregacao(id) {
-  const c = (window._congregacoesCache || []).find(x => x.congregacaoId === id);
+function editarCongregacaoDetalhe(id) {
+  const c = (window._congregacoesDetalheCache || []).find(x => x.congregacaoId === id);
   if (!c) return;
-  congregacaoEditandoId = id;
-  document.getElementById("congregacaoNome").value = c.nome;
+  congregacaoDetalheEditandoId = id;
+  document.getElementById("congDetNome").value = c.nome || "";
+  document.getElementById("congDetAreaId").value = c.areaId || "";
+  document.getElementById("congDetEndereco").value = c.endereco || "";
+  document.getElementById("congDetBairro").value = c.bairro || "";
+  document.getElementById("congDetCidade").value = c.cidade || "";
+  document.getElementById("congDetEstado").value = c.estado || "";
+  document.getElementById("congDetHorarios").value = c.horarios || "";
+  document.getElementById("congDetMapsUrl").value = c.mapsUrl || "";
+  document.getElementById("congDetLat").value = c.lat ?? "";
+  document.getElementById("congDetLng").value = c.lng ?? "";
+  document.getElementById("congDetNome").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-async function salvarCongregacao() {
-  const nome = document.getElementById("congregacaoNome").value;
-  const msg = document.getElementById("resultadoCongregacao");
-  if (!nome) return;
+function limparFormCongregacaoDetalhe() {
+  congregacaoDetalheEditandoId = null;
+  ["congDetNome", "congDetAreaId", "congDetEndereco", "congDetBairro", "congDetCidade",
+   "congDetEstado", "congDetHorarios", "congDetMapsUrl", "congDetLat", "congDetLng"]
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+}
 
-  const res = await fetchProtegido(`${API_BASE}/congregacoes`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ congregacaoId: congregacaoEditandoId || undefined, nome })
+async function salvarCongregacaoDetalhe() {
+  const nome = document.getElementById("congDetNome").value.trim();
+  const msg = document.getElementById("resultadoCongDetalhe");
+  if (!nome) { msg.textContent = "Informe o nome da congregação."; return; }
+
+  const corpo = {
+    nome,
+    areaId: document.getElementById("congDetAreaId").value || null,
+    endereco: document.getElementById("congDetEndereco").value.trim() || null,
+    bairro: document.getElementById("congDetBairro").value.trim() || null,
+    cidade: document.getElementById("congDetCidade").value.trim() || null,
+    estado: document.getElementById("congDetEstado").value.trim().toUpperCase() || null,
+    horarios: document.getElementById("congDetHorarios").value.trim() || null,
+    mapsUrl: document.getElementById("congDetMapsUrl").value.trim() || null,
+    lat: document.getElementById("congDetLat").value || null,
+    lng: document.getElementById("congDetLng").value || null
+  };
+  if (congregacaoDetalheEditandoId) corpo.id = congregacaoDetalheEditandoId;
+
+  const res = await fetchProtegido(`${API_BASE}/catalogos/congregacoes`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo)
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
   if (data.sucesso) {
-    document.getElementById("congregacaoNome").value = "";
-    congregacaoEditandoId = null;
-    carregarCongregacoes();
+    limparFormCongregacaoDetalhe();
+    carregarCongregacoesDetalhe();
   }
 }
 
-async function desativarCongregacaoAcao(id) {
+async function desativarCongregacaoDetalheAcao(id) {
   if (!(await confirmarAcao("Confirma desativar esta congregação? Ela some das listas de cadastro, mas o histórico continua.", "Desativar"))) return;
-  const res = await fetchProtegido(`${API_BASE}/congregacoes/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ativa: false })
+  const res = await fetchProtegido(`${API_BASE}/catalogos/congregacoes`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ativa: false })
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) carregarCongregacoes();
+  if (data.sucesso) carregarCongregacoesDetalhe();
 }
 
-async function reativarCongregacaoAcao(id) {
-  const res = await fetchProtegido(`${API_BASE}/congregacoes/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ativa: true })
+async function reativarCongregacaoDetalheAcao(id) {
+  const res = await fetchProtegido(`${API_BASE}/catalogos/congregacoes`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ativa: true })
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) carregarCongregacoes();
+  if (data.sucesso) carregarCongregacoesDetalhe();
 }
 
-async function excluirCongregacaoAcao(id) {
+async function excluirCongregacaoDetalheAcao(id) {
   if (!(await confirmarAcao("Confirma EXCLUIR esta congregação? Isso não pode ser desfeito. Só funciona se nenhuma pessoa estiver cadastrada nela.", "Excluir"))) return;
-  const res = await fetchProtegido(`${API_BASE}/congregacoes/${id}`, { method: "DELETE" });
+  const res = await fetchProtegido(`${API_BASE}/catalogos/congregacoes/${id}`, { method: "DELETE" });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) carregarCongregacoes();
+  if (data.sucesso) carregarCongregacoesDetalhe();
 }
 
 // ---- SECRETARIA / ABA PERMISSÕES ----

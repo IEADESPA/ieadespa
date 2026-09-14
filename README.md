@@ -3050,18 +3050,47 @@ depois de cada mudança.
 
 #### vC.2 — Congregações como fonte única (primeiro dado realmente compartilhado)
 
-- [ ] Migração idempotente estendendo `Congregacoes` com os campos hoje só no
-      Directus: `Slug`, `Endereco`, `Bairro`, `Cidade`, `Estado`, `NomePastor`,
-      `Horarios`, `MapsUrl`, `Lat`, `Lng`, `GoogleMapsPlaceQuery`.
-- [ ] `api/GestaoCongregacoes` (já `authLevel: anonymous` pra leitura) passa a
-      devolver esses campos.
+**Correção de rota (13/09):** a primeira redação desta versão previa
+`NomePastor` como coluna gravável em `Congregacoes` — errado. Quem dirige uma
+congregação hoje **já** é 100% calculável em `Lideranca` (papel "Dirigente de
+Congregação", escopo `CONGREGACAO`, mandato via `AtivoAte`), exatamente como
+`api/shared/universo.js` já faz pra montar a composição da CLI. Gravar o nome
+de novo aqui duplicaria dado e dessincronizaria no primeiro dia em que
+alguém trocasse de dirigente — mesmo princípio de "calculado na leitura,
+nunca marcação manual" já usado em todo o resto do sistema. Também ficou
+claro, ao investigar, que **não existia tela de verdade** pra congregação
+(só nome + ativa/inativa) — o gap real era maior que "adicionar campos numa
+migração", por isso essa versão virou a construção de uma tela própria.
+
+- [x] Migração idempotente (`sql/migrations/075_congregacoes_endereco_mapa.sql`)
+      estendendo `Congregacoes` só com os campos que não existem em nenhum
+      outro lugar do sistema e não dá pra calcular: `Slug`, `Endereco`,
+      `Bairro`, `Cidade`, `Estado`, `Horarios`, `MapsUrl`, `Lat`, `Lng`.
+      `NomePastor` propositalmente **não** entra como coluna (ver acima).
+- [x] `api/GestaoCatalogos` (catálogo `congregacoes` — é quem já cria o órgão
+      JAI automático de toda congregação nova) passa a aceitar/devolver esses
+      campos, mais `dirigenteAtual` calculado por um hook `enriquecer` (junta
+      `Lideranca` + `Papeis` + `MembroReferencia`, nunca gravado).
+- [x] `api/GestaoCongregacoes` virou somente leitura (`GET`, devolve os
+      mesmos campos + `dirigenteAtual`) — quem cria/edita/exclui é sempre
+      `GestaoCatalogos`, pra não duplicar caminho de escrita.
+- [x] `api/CongregacoesPublico` (novo, `authLevel: anonymous`): só os campos
+      públicos (sem dado pessoal do dirigente), `Ativa = 1`, com busca por
+      `slug` — é o que o site vai consumir no lugar do Directus.
+- [x] Tela própria em `app/index.html`/`app/script.js` (aba Estrutura,
+      "Congregações — Nível 1"): formulário completo (endereço, bairro,
+      cidade, UF, horários, link do Maps, lat/lng) + tabela com dirigente
+      atual exibido (somente leitura) — substituiu o editor genérico de
+      catálogo (que só tinha nome) e um bloco de funções JS órfãs que nunca
+      chegou a ser ligado a nenhum HTML.
 - [ ] Site troca a busca de `congregacoes` no Directus (`src/lib/directus.ts`,
-      `congregacoes.astro`, `congregacao/[slug].astro`) por essa API — mesmo
-      ponto do build Astro, só muda a URL de onde o dado vem. Mapa
-      (Leaflet + Google Maps Platform) e o design da página **não mudam**.
+      `congregacoes.astro`, `congregacao/[slug].astro`) por
+      `GET /api/congregacoes-publico` — mesmo ponto do build Astro, só muda a
+      URL de onde o dado vem. Mapa (Leaflet + Google Maps Platform) e o
+      design da página **não mudam**.
 - [ ] Migração de dado único (poucas linhas reais existentes no Directus,
-      casadas por nome, conferidas manualmente) — só depois disso, aposentar a
-      coleção `congregacoes` do Directus.
+      casadas por nome, conferidas manualmente, preenchidas na tela nova) —
+      só depois disso, aposentar a coleção `congregacoes` do Directus.
 
 #### vC.3 — Minha Conta: trava real contra identidade duplicada
 

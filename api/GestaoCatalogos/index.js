@@ -53,11 +53,14 @@ const CATALOGOS = {
     // (mesmo critério de api/shared/universo.js), guardar de novo aqui
     // duplicaria dado e dessincronizaria no primeiro dia em que alguém
     // trocasse de dirigente sem lembrar de atualizar os dois lugares.
+    // cep/notaEndereco/googleMapsPlaceQuery vieram na v076, junto com a
+    // migração de dado real do Directus — mesmo motivo dos campos da v075.
     campos: {
       nome: sql.NVarChar(150), ativa: sql.Bit, areaId: sql.Int,
       slug: sql.NVarChar(150), endereco: sql.NVarChar(300), bairro: sql.NVarChar(150),
       cidade: sql.NVarChar(150), estado: sql.NVarChar(2), horarios: sql.NVarChar(500),
-      mapsUrl: sql.NVarChar(500), lat: sql.Decimal(9, 6), lng: sql.Decimal(9, 6)
+      mapsUrl: sql.NVarChar(500), lat: sql.Decimal(9, 6), lng: sql.Decimal(9, 6),
+      cep: sql.NVarChar(10), notaEndereco: sql.NVarChar(300), googleMapsPlaceQuery: sql.NVarChar(300)
     },
     emUso: async (pool, id) => {
       const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);

@@ -11,7 +11,8 @@ const { getPool, sql } = require("../shared/db");
 const SELECT_PUBLICO = `
   SELECT c.CongregacaoId AS congregacaoId, c.Nome AS nome, c.Slug AS slug,
          c.Endereco AS endereco, c.Bairro AS bairro, c.Cidade AS cidade, c.Estado AS estado,
-         c.Horarios AS horarios, c.MapsUrl AS mapsUrl, c.Lat AS lat, c.Lng AS lng,
+         c.Cep AS cep, c.NotaEndereco AS notaEndereco, c.Horarios AS horarios, c.MapsUrl AS mapsUrl,
+         c.Lat AS lat, c.Lng AS lng, c.GoogleMapsPlaceQuery AS googleMapsPlaceQuery,
          dirigente.Nome AS dirigenteAtual
   FROM Congregacoes c
   OUTER APPLY (

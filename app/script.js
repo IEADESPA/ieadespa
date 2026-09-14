@@ -7320,7 +7320,7 @@ async function carregarCongregacoesDetalhe() {
   congregacoes.forEach(c => {
     html += `<tr>
       <td>${c.nome}</td>
-      <td>${c.cidade ? `${c.cidade}${c.estado ? "/" + c.estado : ""}` : "—"}</td>
+      <td>${c.cidade ? `${c.cidade}${c.estado ? "/" + c.estado : ""}${c.cep ? " · " + c.cep : ""}` : "—"}</td>
       <td>${c.dirigenteAtual || "—"}</td>
       <td>${c.ativa ? "Ativa" : "Inativa"}</td>
       <td class="acoes-inline">
@@ -7346,17 +7346,21 @@ function editarCongregacaoDetalhe(id) {
   document.getElementById("congDetBairro").value = c.bairro || "";
   document.getElementById("congDetCidade").value = c.cidade || "";
   document.getElementById("congDetEstado").value = c.estado || "";
+  document.getElementById("congDetCep").value = c.cep || "";
+  document.getElementById("congDetNotaEndereco").value = c.notaEndereco || "";
   document.getElementById("congDetHorarios").value = c.horarios || "";
   document.getElementById("congDetMapsUrl").value = c.mapsUrl || "";
   document.getElementById("congDetLat").value = c.lat ?? "";
   document.getElementById("congDetLng").value = c.lng ?? "";
+  document.getElementById("congDetGoogleMapsPlaceQuery").value = c.googleMapsPlaceQuery || "";
   document.getElementById("congDetNome").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function limparFormCongregacaoDetalhe() {
   congregacaoDetalheEditandoId = null;
   ["congDetNome", "congDetAreaId", "congDetEndereco", "congDetBairro", "congDetCidade",
-   "congDetEstado", "congDetHorarios", "congDetMapsUrl", "congDetLat", "congDetLng"]
+   "congDetEstado", "congDetCep", "congDetNotaEndereco", "congDetHorarios", "congDetMapsUrl",
+   "congDetLat", "congDetLng", "congDetGoogleMapsPlaceQuery"]
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
 }
 
@@ -7372,10 +7376,13 @@ async function salvarCongregacaoDetalhe() {
     bairro: document.getElementById("congDetBairro").value.trim() || null,
     cidade: document.getElementById("congDetCidade").value.trim() || null,
     estado: document.getElementById("congDetEstado").value.trim().toUpperCase() || null,
+    cep: document.getElementById("congDetCep").value.trim() || null,
+    notaEndereco: document.getElementById("congDetNotaEndereco").value.trim() || null,
     horarios: document.getElementById("congDetHorarios").value.trim() || null,
     mapsUrl: document.getElementById("congDetMapsUrl").value.trim() || null,
     lat: document.getElementById("congDetLat").value || null,
-    lng: document.getElementById("congDetLng").value || null
+    lng: document.getElementById("congDetLng").value || null,
+    googleMapsPlaceQuery: document.getElementById("congDetGoogleMapsPlaceQuery").value.trim() || null
   };
   if (congregacaoDetalheEditandoId) corpo.id = congregacaoDetalheEditandoId;
 

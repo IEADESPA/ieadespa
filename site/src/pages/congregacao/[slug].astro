@@ -1,33 +1,15 @@
 ---
-import { marked } from "marked";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
-import { congregacaoMapsQuery, fetchItems } from "@/lib/directus";
-
-interface Congregacao {
-  slug: string;
-  name: string;
-  address: string | null;
-  neighborhood: string | null;
-  city: string | null;
-  state: string | null;
-  pastor_name: string | null;
-  schedule: string | null;
-  maps_url: string | null;
-  address_new: string | null;
-  neighborhood_new: string | null;
-  zip: string | null;
-  address_note: string | null;
-  historia: string | null;
-}
+import { congregacaoMapsQuery, fetchCongregacoesPublicas, type CongregacaoPublica } from "@/lib/congregacoes";
 
 export async function getStaticPaths() {
-  const congregacoes = await fetchItems<Congregacao>("congregacoes");
-  // slug é opcional no Directus — sem essa checagem, uma congregação sem
+  const congregacoes = await fetchCongregacoesPublicas();
+  // slug é opcional no cadastro — sem essa checagem, uma congregação sem
   // slug ainda definido quebraria o build inteiro.
   return congregacoes
     .filter((congregacao) => congregacao.slug)
@@ -35,58 +17,49 @@ export async function getStaticPaths() {
 }
 
 interface Props {
-  congregacao: Congregacao;
+  congregacao: CongregacaoPublica;
 }
 
 const { congregacao } = Astro.props;
 const allPosts = visiblePosts(await getAllMensagens());
-const historiaHtml = congregacao.historia ? await marked.parse(congregacao.historia) : null;
 const mapaQuery = congregacaoMapsQuery(congregacao);
 const mapsEmbedSrc = mapaQuery ? `https://www.google.com/maps?q=${encodeURIComponent(mapaQuery)}&output=embed` : null;
 ---
 
 <BaseLayout
-  title={congregacao.name}
-  description={`Endereço, horários e história da ${congregacao.name}, congregação da ${siteConfig.name}.`}
+  title={congregacao.nome}
+  description={`Endereço e horários da ${congregacao.nome}, congregação da ${siteConfig.name}.`}
 >
   <SiteHeader posts={allPosts} />
   <main id="content" class="outer">
     <div class="canvas">
       <header class="pagehead">
-        <Breadcrumbs items={[{ label: "Congregações", href: "/congregacoes/" }, { label: congregacao.name }]} />
+        <Breadcrumbs items={[{ label: "Congregações", href: "/congregacoes/" }, { label: congregacao.nome }]} />
         <p class="eyebrow">Congregação</p>
-        <h1 class="pagehead-title">{congregacao.name}</h1>
+        <h1 class="pagehead-title">{congregacao.nome}</h1>
       </header>
 
-      {(congregacao.address || congregacao.neighborhood) && (
+      {(congregacao.endereco || congregacao.bairro) && (
         <p class="text-sm text-muted-foreground">
-          {congregacao.address}
-          {congregacao.address && congregacao.neighborhood && " — "}
-          {congregacao.neighborhood}
-          {(congregacao.city || congregacao.state) && (
-            <>, {congregacao.city} {congregacao.state && `- ${congregacao.state}`}</>
+          {congregacao.endereco}
+          {congregacao.endereco && congregacao.bairro && " — "}
+          {congregacao.bairro}
+          {(congregacao.cidade || congregacao.estado) && (
+            <>, {congregacao.cidade} {congregacao.estado && `- ${congregacao.estado}`}</>
           )}
         </p>
       )}
 
-      {congregacao.address_note && (
-        <p class="mt-1 text-sm italic text-muted-foreground">{congregacao.address_note}</p>
+      {congregacao.notaEndereco && (
+        <p class="mt-1 text-sm italic text-muted-foreground">{congregacao.notaEndereco}</p>
       )}
 
-      {(congregacao.address_new || congregacao.neighborhood_new) && (
-        <p class="mt-2 text-xs text-muted-foreground">
-          Endereço oficial (novo CEP): {congregacao.address_new}
-          {congregacao.address_new && congregacao.neighborhood_new && " — "}
-          {congregacao.neighborhood_new}
-          {congregacao.zip && ` · CEP ${congregacao.zip}`}
-        </p>
-      )}
-      {!congregacao.address_new && !congregacao.neighborhood_new && congregacao.zip && (
-        <p class="mt-2 text-xs text-muted-foreground">CEP {congregacao.zip}</p>
+      {congregacao.cep && (
+        <p class="mt-2 text-xs text-muted-foreground">CEP {congregacao.cep}</p>
       )}
 
-      {congregacao.maps_url && (
-        <a href={congregacao.maps_url} target="_blank" rel="noreferrer" class="mt-4 inline-block link-sweep text-sm font-semibold text-accent">
+      {congregacao.mapsUrl && (
+        <a href={congregacao.mapsUrl} target="_blank" rel="noreferrer" class="mt-4 inline-block link-sweep text-sm font-semibold text-accent">
           Ver rota no Google Maps
         </a>
       )}
@@ -94,7 +67,7 @@ const mapsEmbedSrc = mapaQuery ? `https://www.google.com/maps?q=${encodeURICompo
       {mapsEmbedSrc && (
         <div class="mt-4 overflow-hidden rounded-[var(--radius-md)] border border-border">
           <iframe
-            title={`Mapa com a localização da ${congregacao.name}`}
+            title={`Mapa com a localização da ${congregacao.nome}`}
             src={mapsEmbedSrc}
             width="100%"
             height="280"
@@ -105,24 +78,17 @@ const mapsEmbedSrc = mapaQuery ? `https://www.google.com/maps?q=${encodeURICompo
         </div>
       )}
 
-      {congregacao.pastor_name && (
+      {congregacao.dirigenteAtual && (
         <p class="mt-6 text-sm">
-          <strong>Dirigente:</strong> {congregacao.pastor_name}
+          <strong>Dirigente:</strong> {congregacao.dirigenteAtual}
         </p>
       )}
 
-      {congregacao.schedule && (
+      {congregacao.horarios && (
         <div class="mt-2">
           <p class="text-sm font-semibold">Horários</p>
-          <p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{congregacao.schedule}</p>
+          <p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{congregacao.horarios}</p>
         </div>
-      )}
-
-      {historiaHtml && (
-        <section class="mt-12" aria-labelledby="historia-heading">
-          <h2 id="historia-heading" class="section-title">Nossa história</h2>
-          <div class="prose mt-4" set:html={historiaHtml} />
-        </section>
       )}
 
       <div class="prose mt-16">

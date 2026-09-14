@@ -6,27 +6,11 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
-import { congregacaoEndereco, DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { congregacaoEndereco, fetchCongregacoesPublicas, type CongregacaoPublica } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
 import { coordenadaDeLinkMaps } from "@/lib/googleMapsLink";
 import { getAllProgramacao } from "@/lib/programacao";
-
-interface Congregacao {
-  id: number;
-  name: string;
-  address: string | null;
-  neighborhood: string | null;
-  address_new: string | null;
-  neighborhood_new: string | null;
-  city: string | null;
-  state: string | null;
-  /** Fase 24.8 — preenchido só depois que a liderança da congregação
-   * confirmar (ou ceder) um perfil real no Google Maps (mesma trava da Fase
-   * 24 inteira). Vazio = eventos dessa congregação não entram no mapa. */
-  google_maps_place_query: string | null;
-  lat: number | null;
-  lng: number | null;
-}
 
 interface Evento {
   slug: string;
@@ -36,7 +20,9 @@ interface Evento {
   time: string | null;
   location: string | null;
   location_maps_url: string | null;
-  congregacao: Congregacao | null;
+  // Guarda o CongregacaoId do sistema de governança (vC.2) — não é mais
+  // relação do Directus, é só um número; resolvido via congregacoesPorId.
+  congregacao: number | null;
   responsavel: string | null;
   description: string;
   body: string | null;
@@ -45,11 +31,18 @@ interface Evento {
 }
 
 const allPosts = visiblePosts(await getAllMensagens());
-const events = (await fetchItems<Evento>("eventos", "fields=*,congregacao.*")).sort((a, b) => {
+const [events, congregacoesPublicas] = await Promise.all([
+  fetchItems<Evento>("eventos", "fields=*"),
+  fetchCongregacoesPublicas(),
+]);
+events.sort((a, b) => {
   const dateA = a.event_date ? new Date(a.event_date).getTime() : Number.POSITIVE_INFINITY;
   const dateB = b.event_date ? new Date(b.event_date).getTime() : Number.POSITIVE_INFINITY;
   return dateA - dateB;
 });
+const congregacoesPorId = new Map(congregacoesPublicas.map((c) => [c.congregacaoId, c]));
+const congregacaoDoEvento = (event: Evento): CongregacaoPublica | null =>
+  event.congregacao != null ? (congregacoesPorId.get(event.congregacao) ?? null) : null;
 /* timeZone: "UTC" nos três porque as datas vêm do Directus como
    "AAAA-MM-DD" (um dia de calendário, não um instante) — sem isso, mostrar
    o dia certo dependeria do fuso horário de onde o build roda. */
@@ -106,13 +99,15 @@ const pontosMapa: PontoMapa[] = (
         const monthKey = (event.event_date as string).slice(0, 7);
         const href = hasEventPage(event) ? `/evento/${event.slug}/` : null;
 
-        if (!event.congregacao && event.location_maps_url) {
+        const congregacao = congregacaoDoEvento(event);
+
+        if (!congregacao && event.location_maps_url) {
           const coordenada = await coordenadaDeLinkMaps(event.location_maps_url);
           if (coordenada) return { monthKey, lat: coordenada.lat, lng: coordenada.lng, title: event.title, href };
         }
 
-        if (event.congregacao?.google_maps_place_query && event.congregacao.lat && event.congregacao.lng) {
-          return { monthKey, lat: Number(event.congregacao.lat), lng: Number(event.congregacao.lng), title: event.title, href };
+        if (congregacao?.googleMapsPlaceQuery && congregacao.lat && congregacao.lng) {
+          return { monthKey, lat: Number(congregacao.lat), lng: Number(congregacao.lng), title: event.title, href };
         }
 
         return null;
@@ -256,7 +251,9 @@ const responsaveisDisponiveis = [...new Set(events.map((e) => e.responsavel).fil
               <div class="mt-10" data-month-group={group.monthKey} hidden={group.monthKey !== defaultMonthKey}>
                 <h3 class="eyebrow">{group.month}</h3>
                 <ul class="mt-4 grid gap-4">
-                  {group.items.map((event) => (
+                  {group.items.map((event) => {
+                    const congregacao = congregacaoDoEvento(event);
+                    return (
                     <li class="event-card">
                       <div class="flex flex-wrap items-baseline justify-between gap-3">
                         <h4 class="text-lg font-semibold tracking-tight">{event.title}</h4>
@@ -268,10 +265,10 @@ const responsaveisDisponiveis = [...new Set(events.map((e) => e.responsavel).fil
                         )}
                       </div>
                       {
-                        (event.congregacao?.name || event.location) && (
+                        (congregacao?.nome || event.location) && (
                           <p class="mt-1 text-sm text-muted-foreground">
-                            {event.congregacao ? event.congregacao.name : event.location}
-                            {event.congregacao && ` — ${congregacaoEndereco(event.congregacao)}`}
+                            {congregacao ? congregacao.nome : event.location}
+                            {congregacao && ` — ${congregacaoEndereco(congregacao)}`}
                           </p>
                         )
                       }
@@ -287,7 +284,7 @@ const responsaveisDisponiveis = [...new Set(events.map((e) => e.responsavel).fil
                         )}
                       </div>
                     </li>
-                  ))}
+                  );})}
                 </ul>
               </div>
             ))

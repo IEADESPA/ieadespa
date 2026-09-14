@@ -3,15 +3,24 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { DIRECTUS_URL } from "@/lib/directus";
+import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
 const allPosts = visiblePosts(await getAllMensagens());
+
+// Nome das congregações vem do sistema de governança (vC.2), que não libera
+// CORS pra chamada direta do navegador — resolvido aqui em tempo de build
+// e embutido na página como {id: nome}, pro script do navegador só
+// consultar o mapa (mesma técnica de site/src/pages/eventos/exportar.astro).
+const nomesCongregacoes: Record<number, string> = Object.fromEntries(
+  (await fetchCongregacoesPublicas()).map((c) => [c.congregacaoId, c.nome]),
+);
 ---
 
 <BaseLayout title="Pedidos e lotes de compra — Gestão de camisetas" description="Área restrita da equipe." noindex>
   <SiteHeader posts={allPosts} />
   <main id="content" class="outer">
-    <div class="canvas" data-directus-url={DIRECTUS_URL}>
+    <div class="canvas" data-directus-url={DIRECTUS_URL} data-congregacoes={JSON.stringify(nomesCongregacoes)}>
       <header class="pagehead">
         <p class="eyebrow"><a href="/painel-camisetas/" class="text-accent">← Gestão de camisetas</a></p>
         <h1 class="pagehead-title" data-painel-titulo>Pedidos e lotes de compra</h1>
@@ -156,7 +165,9 @@ const allPosts = visiblePosts(await getAllMensagens());
     interface Pedido {
       id: number;
       nome: string;
-      congregacao: { name: string } | null;
+      // CongregacaoId do sistema de governança (vC.2), não mais relação do
+      // Directus — nome resolvido via nomesCongregacoes (ver acima).
+      congregacao: number | null;
       valor_pago: number;
       avulso: boolean;
       lote: number | null;
@@ -205,6 +216,10 @@ const allPosts = visiblePosts(await getAllMensagens());
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
     if (!container) throw new Error("contêiner do painel ausente");
     const directusUrl = container.dataset.directusUrl ?? "";
+    // Idem à técnica de eventos/exportar.astro: nome resolvido em build time
+    // porque o sistema de governança não libera CORS pra chamada direta do
+    // navegador.
+    const nomesCongregacoes: Record<number, string> = JSON.parse(container.dataset.congregacoes || "{}");
 
     const idParam = new URLSearchParams(window.location.search).get("id");
     const grupoId = idParam ? Number(idParam) : null;
@@ -484,7 +499,7 @@ const allPosts = visiblePosts(await getAllMensagens());
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="font-semibold">${escapeHtml(p.nome)} ${p.avulso ? '<span class="badge-avulso">venda avulsa</span>' : ""}</p>
-              <p class="text-xs text-muted-foreground">${escapeHtml(p.congregacao?.name ?? "Congregação não informada")}${loteInfo}</p>
+              <p class="text-xs text-muted-foreground">${escapeHtml((p.congregacao != null ? nomesCongregacoes[p.congregacao] : null) ?? "Congregação não informada")}${loteInfo}</p>
             </div>
             <div class="flex items-center gap-3">
               <label class="text-sm">Pago: R$
@@ -888,7 +903,7 @@ const allPosts = visiblePosts(await getAllMensagens());
       if (tituloEl) tituloEl.textContent = `Pedidos — ${grupo.nome}`;
 
       const resPedidos = await fetch(
-        `${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,nome,valor_pago,avulso,lote,congregacao.name,itens.id,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&sort=nome&limit=-1`,
+        `${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,nome,valor_pago,avulso,lote,congregacao,itens.id,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&sort=nome&limit=-1`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       pedidos = (await resPedidos.json()).data ?? [];

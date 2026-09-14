@@ -5,6 +5,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 import { DIRECTUS_ADMIN_URL, directusAssetUrl, fetchItems } from "@/lib/directus";
+import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 
 interface Relatorio {
   title: string;
@@ -29,7 +30,7 @@ const reports = (await fetchItems<Relatorio>("relatorios")).sort(
  * continua fora do site, só no sistema interno de membros.
  */
 const [congregacoes, orgaos, historico] = await Promise.all([
-  fetchItems<{ id: number; fundacao_ano: number | null }>("congregacoes", "fields=id,fundacao_ano"),
+  fetchCongregacoesPublicas(),
   fetchItems<{ id: number }>("ministerios", "fields=id"),
   fetchItems<{ period: string | null }>("historia", "fields=period"),
 ]);
@@ -52,7 +53,7 @@ const numeros = [
    tiverem o campo "fundacao_ano" preenchido no Directus — sem isso não
    há dado real o suficiente pra montar o gráfico. */
 const anosPreenchidos = congregacoes
-  .map((c) => c.fundacao_ano)
+  .map((c) => c.fundacaoAno)
   .filter((ano): ano is number => typeof ano === "number")
   .sort((a, b) => a - b);
 

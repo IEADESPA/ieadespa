@@ -60,7 +60,8 @@ const CATALOGOS = {
       slug: sql.NVarChar(150), endereco: sql.NVarChar(300), bairro: sql.NVarChar(150),
       cidade: sql.NVarChar(150), estado: sql.NVarChar(2), horarios: sql.NVarChar(500),
       mapsUrl: sql.NVarChar(500), lat: sql.Decimal(9, 6), lng: sql.Decimal(9, 6),
-      cep: sql.NVarChar(10), notaEndereco: sql.NVarChar(300), googleMapsPlaceQuery: sql.NVarChar(300)
+      cep: sql.NVarChar(10), notaEndereco: sql.NVarChar(300), googleMapsPlaceQuery: sql.NVarChar(300),
+      fundacaoAno: sql.SmallInt
     },
     emUso: async (pool, id) => {
       const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);

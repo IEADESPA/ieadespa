@@ -1,4 +1,5 @@
 import { enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
+import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
 import { getAllNoticias, categoryLabel as noticiaCategoryLabel, noticiaHref, visibleNoticias } from "@/lib/noticias";
 import {
@@ -76,15 +77,6 @@ const ORGAO_CATEGORY_LABEL: Record<string, string> = {
   secretarias: "Secretarias",
   servicos: "Serviços",
 };
-
-interface Congregacao {
-  slug: string;
-  name: string;
-  address: string | null;
-  neighborhood: string | null;
-  city: string | null;
-  state: string | null;
-}
 
 interface RegistroHistorico {
   title: string;
@@ -170,7 +162,7 @@ export async function buildSearchIndex(): Promise<SearchItem[]> {
     visiblePosts(await getAllMensagens()),
     visibleNoticias(await getAllNoticias()),
     fetchItems<Orgao>("ministerios"),
-    fetchItems<Congregacao>("congregacoes"),
+    fetchCongregacoesPublicas(),
     fetchItems<RegistroHistorico>("historia"),
     fetchItems<Evento>("eventos"),
     fetchConfiguracoes(),
@@ -201,11 +193,11 @@ export async function buildSearchIndex(): Promise<SearchItem[]> {
   }));
 
   const fromCongregacoes: SearchItem[] = congregacoes.map((congregacao) => ({
-    title: congregacao.name,
-    excerpt: [congregacao.address, congregacao.neighborhood].filter(Boolean).join(" — "),
+    title: congregacao.nome,
+    excerpt: [congregacao.endereco, congregacao.bairro].filter(Boolean).join(" — "),
     href: `/congregacao/${congregacao.slug}/`,
     group: "Congregação",
-    meta: [congregacao.neighborhood, congregacao.city].filter(Boolean).join(", "),
+    meta: [congregacao.bairro, congregacao.cidade].filter(Boolean).join(", "),
   }));
 
   const fromHistoria: SearchItem[] = registrosHistoricos.map((registro) => ({

@@ -7342,6 +7342,7 @@ function editarCongregacaoDetalhe(id) {
   congregacaoDetalheEditandoId = id;
   document.getElementById("congDetNome").value = c.nome || "";
   document.getElementById("congDetAreaId").value = c.areaId || "";
+  document.getElementById("congDetFundacaoAno").value = c.fundacaoAno ?? "";
   document.getElementById("congDetEndereco").value = c.endereco || "";
   document.getElementById("congDetBairro").value = c.bairro || "";
   document.getElementById("congDetCidade").value = c.cidade || "";
@@ -7358,7 +7359,7 @@ function editarCongregacaoDetalhe(id) {
 
 function limparFormCongregacaoDetalhe() {
   congregacaoDetalheEditandoId = null;
-  ["congDetNome", "congDetAreaId", "congDetEndereco", "congDetBairro", "congDetCidade",
+  ["congDetNome", "congDetAreaId", "congDetFundacaoAno", "congDetEndereco", "congDetBairro", "congDetCidade",
    "congDetEstado", "congDetCep", "congDetNotaEndereco", "congDetHorarios", "congDetMapsUrl",
    "congDetLat", "congDetLng", "congDetGoogleMapsPlaceQuery"]
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
@@ -7372,6 +7373,7 @@ async function salvarCongregacaoDetalhe() {
   const corpo = {
     nome,
     areaId: document.getElementById("congDetAreaId").value || null,
+    fundacaoAno: document.getElementById("congDetFundacaoAno").value || null,
     endereco: document.getElementById("congDetEndereco").value.trim() || null,
     bairro: document.getElementById("congDetBairro").value.trim() || null,
     cidade: document.getElementById("congDetCidade").value.trim() || null,

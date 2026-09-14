@@ -4,8 +4,17 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 import { coordenadaDeLinkMaps } from "@/lib/googleMapsLink";
+
+// Nome das congregações vem do sistema de governança (vC.2), que não libera
+// CORS pra chamada direta do navegador — resolvido aqui em tempo de build
+// (mesma técnica já usada logo abaixo pras coordenadas) e embutido na página
+// como {id: nome}, pro script do navegador só consultar o mapa.
+const nomesCongregacoes: Record<number, string> = Object.fromEntries(
+  (await fetchCongregacoesPublicas()).map((c) => [c.congregacaoId, c.nome]),
+);
 
 const allPosts = visiblePosts(await getAllMensagens());
 
@@ -67,6 +76,7 @@ await Promise.all(
         data-exportar-form
         data-directus-url={DIRECTUS_URL}
         data-coordenadas={JSON.stringify(coordenadasPorEvento)}
+        data-congregacoes={JSON.stringify(nomesCongregacoes)}
         data-maps-key={siteConfig.googleMapsEmbedKey}
       >
         <div class="grid gap-2 sm:grid-cols-2">
@@ -159,7 +169,9 @@ await Promise.all(
       location_maps_url: string | null;
       responsavel: string | null;
       tipo_responsavel: string | null;
-      congregacao: { name: string } | null;
+      // CongregacaoId do sistema de governança (vC.2), não mais relação do
+      // Directus — nome resolvido via nomesCongregacoes (ver abaixo).
+      congregacao: number | null;
     }
 
     interface Coordenada {
@@ -175,6 +187,10 @@ await Promise.all(
     // Fase 24.5 — coordenadas já resolvidas em tempo de build (ver frontmatter
     // desta página) — {} se nenhum evento sem congregação tiver link colado.
     const coordenadasPorEvento: Record<number, Coordenada> = JSON.parse(form.dataset.coordenadas || "{}");
+    // Idem, mas pro nome da congregação (vC.2) — resolvido em build time
+    // porque o sistema de governança não libera CORS pra chamada direta
+    // do navegador.
+    const nomesCongregacoes: Record<number, string> = JSON.parse(form.dataset.congregacoes || "{}");
     const deInput = form.querySelector<HTMLInputElement>("[data-exportar-de]")!;
     const ateInput = form.querySelector<HTMLInputElement>("[data-exportar-ate]")!;
     const categoriaInputs = form.querySelectorAll<HTMLInputElement>("[data-exportar-categoria]");
@@ -222,7 +238,7 @@ await Promise.all(
 
     async function carregarEventos() {
       const res = await fetch(
-        `${directusUrl}/items/eventos?fields=id,title,event_date,end_date,time,location,location_maps_url,responsavel,tipo_responsavel,congregacao.name&filter[event_date][_nnull]=true&sort=event_date&limit=-1`,
+        `${directusUrl}/items/eventos?fields=id,title,event_date,end_date,time,location,location_maps_url,responsavel,tipo_responsavel,congregacao&filter[event_date][_nnull]=true&sort=event_date&limit=-1`,
       );
       const json = await res.json();
       eventos = json.data ?? [];
@@ -393,7 +409,7 @@ await Promise.all(
 
       const dataTexto = evento.event_date ? dateFormatter.format(new Date(evento.event_date)) : "--/--";
       const horaTexto = evento.time ?? "";
-      const local = evento.congregacao?.name || evento.location || "—";
+      const local = (evento.congregacao != null ? nomesCongregacoes[evento.congregacao] : null) || evento.location || "—";
       const categoria = rotuloCategoria[evento.tipo_responsavel ?? ""] ?? "—";
 
       const coordenada = coordenadasPorEvento[evento.id];

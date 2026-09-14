@@ -26,6 +26,7 @@ export interface CongregacaoPublica {
   lat: number | null;
   lng: number | null;
   googleMapsPlaceQuery: string | null;
+  fundacaoAno: number | null;
   dirigenteAtual: string | null;
 }
 
@@ -36,10 +37,18 @@ export const congregacaoEndereco = (c: CongregacaoPublica) =>
 
 export const congregacaoMapsQuery = (c: CongregacaoPublica) => congregacaoEndereco(c);
 
+// Cache simples de build (mesmo padrão de search.ts) — várias páginas
+// (eventos, camisetas, busca, sobre, transparência) chamam isso no mesmo
+// build; sem cache seria uma chamada HTTP a mais por página à toa.
+let cache: CongregacaoPublica[] | null = null;
+
 export async function fetchCongregacoesPublicas(): Promise<CongregacaoPublica[]> {
+  if (cache) return cache;
   const res = await fetch(`${SISTEMA_API_URL}/congregacoes-publico`);
   if (!res.ok) return [];
-  return res.json();
+  const itens: CongregacaoPublica[] = await res.json();
+  cache = itens;
+  return itens;
 }
 
 export async function fetchCongregacaoPublicaPorSlug(slug: string): Promise<CongregacaoPublica | null> {

@@ -48,7 +48,7 @@ module.exports = async function (context, req) {
     `SELECT c.CongregacaoId AS congregacaoId, c.Nome AS nome, c.Ativa AS ativa, c.AreaId AS areaId,
             c.Slug AS slug, c.Endereco AS endereco, c.Bairro AS bairro, c.Cidade AS cidade, c.Estado AS estado,
             c.Cep AS cep, c.NotaEndereco AS notaEndereco, c.Horarios AS horarios, c.MapsUrl AS mapsUrl,
-            c.Lat AS lat, c.Lng AS lng, c.GoogleMapsPlaceQuery AS googleMapsPlaceQuery,
+            c.Lat AS lat, c.Lng AS lng, c.GoogleMapsPlaceQuery AS googleMapsPlaceQuery, c.FundacaoAno AS fundacaoAno,
             dirigente.Nome AS dirigenteAtual
      FROM Congregacoes c
      ${DIRIGENTE_ATUAL_SQL}

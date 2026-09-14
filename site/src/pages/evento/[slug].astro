@@ -6,21 +6,10 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
-import { COVER_WIDTHS, congregacaoEndereco, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, TELEFONE_HASH_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
+import { COVER_WIDTHS, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, TELEFONE_HASH_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
+import { congregacaoEndereco, fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
 import { coordenadaDeLinkMaps } from "@/lib/googleMapsLink";
-
-interface Congregacao {
-  id: number;
-  name: string;
-  slug: string;
-  address: string | null;
-  neighborhood: string | null;
-  address_new: string | null;
-  neighborhood_new: string | null;
-  city: string | null;
-  state: string | null;
-}
 
 type TipoPergunta = "texto_curto" | "texto_longo" | "selecao_unica" | "selecao_multipla" | "numero" | "data";
 
@@ -56,7 +45,9 @@ interface Evento {
   end_time: string | null;
   location: string | null;
   location_maps_url: string | null;
-  congregacao: Congregacao | null;
+  // Guarda o CongregacaoId do sistema de governança (vC.2), não mais uma
+  // relação do Directus — resolvido contra fetchCongregacoesPublicas().
+  congregacao: number | null;
   responsavel: string | null;
   description: string;
   body: string | null;
@@ -72,7 +63,7 @@ interface Evento {
 }
 
 export async function getStaticPaths() {
-  const events = await fetchItems<Evento>("eventos", "fields=*,congregacao.*");
+  const events = await fetchItems<Evento>("eventos", "fields=*");
   // slug é opcional no Directus (evento recém-criado, ainda sem slug definido)
   // — sem essa checagem, um evento assim quebraria o build inteiro.
   return events.filter((event) => event.slug && hasEventPage(event)).map((event) => ({ params: { slug: event.slug }, props: { event } }));
@@ -95,16 +86,19 @@ const config = await fetchConfiguracoes();
 const timeRange = event.time ? `${event.time}${event.end_time ? ` às ${event.end_time}` : ""}` : null;
 
 // Local do evento: se está vinculado a uma congregação cadastrada, o
-// endereço vem de lá automaticamente; senão, usa o texto avulso em
-// `location` (espaço alugado, sede, etc.).
-const localNome = event.congregacao ? event.congregacao.name : event.location;
-const localEndereco = event.congregacao ? congregacaoEndereco(event.congregacao) : null;
+// endereço vem de lá automaticamente (do sistema de governança, vC.2);
+// senão, usa o texto avulso em `location` (espaço alugado, sede, etc.).
+const congregacaoDoEvento = event.congregacao != null
+  ? (await fetchCongregacoesPublicas()).find((c) => c.congregacaoId === event.congregacao) ?? null
+  : null;
+const localNome = congregacaoDoEvento ? congregacaoDoEvento.nome : event.location;
+const localEndereco = congregacaoDoEvento ? congregacaoEndereco(congregacaoDoEvento) : null;
 
 // Fase 24.3 — local avulso (sem congregação) pode vir com um link do Google
 // Maps colado por quem cadastrou, em vez de só o texto do endereço — mais
 // preciso do que geocodificar o texto (que já se mostrou impreciso, ver
 // README). Só se aplica a evento com local próprio, não a congregação.
-const localCoordenada = !event.congregacao && event.location_maps_url
+const localCoordenada = !congregacaoDoEvento && event.location_maps_url
   ? await coordenadaDeLinkMaps(event.location_maps_url)
   : null;
 

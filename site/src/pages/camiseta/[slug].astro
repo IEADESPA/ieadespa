@@ -4,6 +4,7 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, TELEFONE_HASH_URL, fetchItems } from "@/lib/directus";
+import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
 interface Lote {
@@ -18,11 +19,6 @@ interface Lote {
   evento: { title: string } | null;
   ministerio: { name: string } | null;
   pedir_congregacao: boolean;
-}
-
-interface Congregacao {
-  id: number;
-  name: string;
 }
 
 type TipoPergunta = "texto_curto" | "texto_longo" | "selecao_unica" | "selecao_multipla" | "numero" | "data";
@@ -50,9 +46,11 @@ interface Props {
 
 const { lote } = Astro.props;
 const allPosts = visiblePosts(await getAllMensagens());
-const congregacoes = (await fetchItems<Congregacao>("congregacoes", "fields=id,name&sort=name")).sort((a, b) =>
-  a.name.localeCompare(b.name, "pt-BR"),
-);
+// Vem do sistema de governança (vC.2), não mais do Directus — o valor
+// gravado em camiseta_pedidos.congregacao passa a ser o CongregacaoId de lá.
+const congregacoes = (await fetchCongregacoesPublicas())
+  .map((c) => ({ id: c.congregacaoId, name: c.nome }))
+  .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 const perguntas = await fetchItems<Pergunta>("perguntas_camiseta", `filter[grupo][_eq]=${lote.id}&sort=ordem`);
 const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 

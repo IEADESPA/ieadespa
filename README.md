@@ -3109,6 +3109,24 @@ migração", por isso essa versão virou a construção de uma tela própria.
       corrigido no mesmo dia. Confirmado nas duas pontas: `GET
       /api/congregacoes-publico` em produção e as páginas reais em
       `www.ieadespa.org.br/congregacoes/` e `/congregacao/{slug}/`.
+**Prova real de que o site lê do sistema, não do Directus (13/09):** dúvida
+legítima — até aqui só tinha a palavra de quem implementou. Teste feito ao
+vivo, em produção, na congregação "Bom Pastor" (`/congregacao/bom-pastor/`):
+gravei uma frase-marca só no campo do **sistema** (`NotaEndereco`) e uma
+frase-marca *diferente* só no **Directus** (`address_note`, mesmo registro).
+Reconstruí o site e conferi a página pública: só a marca do sistema
+apareceu — a do Directus foi ignorada por completo. Prova, não promessa.
+As duas marcas foram removidas depois do teste (nenhuma ficou visível pro
+público). **Como repetir esse teste você mesmo, a qualquer momento, sem
+precisar de mim:**
+1. Abra a tela "Congregações — Nível 1" no sistema (aba Estrutura) e mude
+   algo visível de uma congregação (ex: o campo de horários).
+2. Peça pra reconstruir o site (ou espere a próxima publicação/push) e
+   confira a página pública daquela congregação — se a mudança aparecer lá,
+   é prova de que o site está lendo do sistema.
+3. Se um dia isso parar de bater (mudar no sistema e o site não refletir,
+   ou mudar em algum lugar do Directus e o site refletir), é sinal de
+   regressão — volte a este trecho do README pra saber o que reconferir.
 - [ ] Só depois de acompanhar em produção por um tempo sem regressão,
       aposentar de vez a coleção `congregacoes` do Directus (remover os
       campos estruturais de lá; o painel administrativo do site deixa de

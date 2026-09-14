@@ -3351,10 +3351,26 @@ registrado inline, `"main"` no `package.json` apontando um glob). Hoje são
 dois Function Apps completamente separados (duas Static Web Apps); não há
 confirmação de que os dois modelos convivem no mesmo Function App.
 
-- [ ] Reescrever as 15 funções de `site/api/src/functions/*.js` (modelo v4)
-      pro modelo clássico que `api/` já usa (pasta própria + `function.json`)
-      — mecânico, sem mudar comportamento, elimina a pergunta "os dois
-      modelos convivem?" por completo (deixa de existir mais de um modelo).
+- [x] **Reescritas as 15 funções (14/09)** de `site/api/src/functions/*.js`
+      (modelo v4) pro modelo clássico — uma pasta por função dentro de
+      `site/api/` (`SolicitarCodigoConta/`, `ConfirmarCodigoConta/`, etc.),
+      cada uma com `function.json` + `index.js`, mesmo padrão de `api/`.
+      Regra mecânica aplicada em todas: `request.json()` → `req.body`,
+      `request.query.get(x)` → `req.query.x`, `request.headers.get(x)` →
+      leitura sem diferenciar maiúscula/minúscula (`ipDoPedido`, em
+      `src/lib/rateLimit.js`, ajustado pra isso), `return { jsonBody }` →
+      `context.res = { body }`, `context.error(...)` →
+      `context.log.error(...)`. Único caso especial: `VersiculoImagem`
+      devolve um PNG binário — `context.res.isRaw = true` com o `Buffer`
+      direto em `body` funcionou de primeira, testado e confirmado (PNG
+      1080×1920 válido, gerado localmente). `@azure/functions` e o campo
+      `"main"` (glob) removidos do `package.json` — não fazem sentido no
+      modelo clássico. **Testado de ponta a ponta localmente** (`func
+      start`) antes de mexer em produção: as 15 rotas registradas
+      corretamente, chamada real ao Directus funcionando
+      (`VerificarInscricao`), validação de parâmetros ausentes (400),
+      imagem binária (PNG de verdade, não corrompida) — só depois disso
+      o código foi commitado.
 - [ ] Validar em homologação (`HOMOLOGACAO.md`) se as duas Static Web Apps
       (`app-meusite-web`, `site-institucional`) podem apontar pro mesmo
       `api_location: "api"`, ou se a arquitetura correta é um Function App

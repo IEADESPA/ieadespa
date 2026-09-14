@@ -33,10 +33,20 @@ function permitir(chave) {
   return registro.contagem <= LIMITE;
 }
 
-function ipDoPedido(request) {
-  const encaminhado = request.headers.get("x-forwarded-for");
+// vC.5 — modelo clássico (function.json + module.exports): `req.headers` é
+// um objeto simples, não a interface Headers do modelo v4 (sem `.get()`).
+// Busca sem diferenciar maiúscula/minúscula porque o runtime do Functions
+// não garante uma capitalização fixa.
+function header(req, nome) {
+  if (!req.headers) return undefined;
+  const chave = Object.keys(req.headers).find((k) => k.toLowerCase() === nome.toLowerCase());
+  return chave ? req.headers[chave] : undefined;
+}
+
+function ipDoPedido(req) {
+  const encaminhado = header(req, "x-forwarded-for");
   if (encaminhado) return encaminhado.split(",")[0].trim();
-  return request.headers.get("x-azure-clientip") || "desconhecido";
+  return header(req, "x-azure-clientip") || "desconhecido";
 }
 
 module.exports = { permitir, ipDoPedido };

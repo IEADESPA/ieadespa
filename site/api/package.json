@@ -2,7 +2,6 @@
   "name": "ieadespa-api",
   "version": "1.0.0",
   "private": true,
-  "main": "src/functions/*.js",
   "scripts": {
     "start": "func start",
     "secrets:decrypt": "sops -d --output local.settings.json local.settings.enc.json",
@@ -10,7 +9,6 @@
   },
   "dependencies": {
     "@azure/communication-email": "^1.0.0",
-    "@azure/functions": "^4.5.0",
     "sharp": "^0.35.4"
   }
 }

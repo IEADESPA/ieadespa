@@ -3291,11 +3291,57 @@ direito. **Implementado (14/09):**
 
 #### vC.4 — Reaproveitamento de ativos de front-end do site
 
-- [ ] Documentar o que vale a pena reaproveitar no painel único deste sistema
-      quando os módulos correspondentes chegarem: integração de mapas
-      (Leaflet/Google Maps Platform), geração de PDF no navegador (`jsPDF`,
-      usado em certificado/crachá), tokens de design Tailwind do site — evita
-      reconstruir do zero o que já funciona em produção.
+Levantamento real (14/09) do que existe hoje nos dois lados, não uma lista
+genérica de "boas práticas" — cada item abaixo aponta o arquivo de origem e
+o gatilho concreto pra reaproveitar quando o módulo correspondente chegar
+no `app/`.
+
+- [x] **Mapas.** `site/src/components/MapaCongregacoes.astro` (Leaflet, via
+      CDN, sem chave paga — só desenha marcador/popup a partir de
+      `{name, lat, lng, href}`) já consome exatamente os campos que a vC.2
+      colocou em toda congregação (`Lat`, `Lng`, `MapsUrl`). Hoje o `app/`
+      **não tem nenhuma integração de mapa** apesar de já guardar essas
+      coordenadas — gatilho concreto: quando a Estrutura ganhar uma visão
+      territorial (mapa de congregações por Área/Região, por exemplo),
+      reaproveitar esse mesmo padrão (array de pontos + Leaflet via CDN,
+      já que `app/` é HTML/JS puro, sem bundler — os mesmos `<script>`/
+      `<link>` do CDN que o site já usa, só que soltos na página em vez de
+      importados). `site/src/lib/streetview.ts` (Street View Static API,
+      chave restrita por domínio, resolve cobertura + imagem) e
+      `googleMapsLink.ts` (resolve link curto do Maps em coordenada) são
+      reaproveitáveis do mesmo jeito, se um dia o cadastro de congregação
+      ganhar preview de fachada.
+- [x] **Geração de PDF no navegador.** `site/src/lib/certificado.ts` e
+      `cracha.ts` (jsPDF) desenham documentos com marca própria — mesma
+      paleta ouro/marinho/cinza do site, `pdf.ts` garante metadado mínimo
+      de acessibilidade (`doc.setLanguage("pt-BR")`) em todos. O `app/`
+      **não gera PDF nenhum hoje** — os documentos que precisam ser
+      entregues (Carta de Trânsito, por exemplo) usam `window.print()` de
+      HTML estilizado (`imprimirCarta`/`imprimirMinhaCarta` em
+      `app/script.js`), não um arquivo baixável de verdade. Gatilho
+      concreto: quando existir a necessidade real de um documento
+      baixável (não só imprimível na hora) — certificado de consagração,
+      crachá de evento interno, a própria Carta de Trânsito em PDF —
+      reaproveitar a mesma paleta/estrutura em vez de inventar um layout
+      novo. jsPDF é uma dependência pequena (~200KB), dá pra carregar via
+      CDN no `app/` do mesmo jeito que os outros scripts de terceiro já
+      carregados lá.
+- [x] **Tokens de design.** Achado real ao comparar: os dois lados **já
+      convergiram sozinhos, sem nenhuma fonte compartilhada**, pro mesmo
+      par de cores (azul-marinho + dourado) — coincidência de identidade
+      visual, não coordenação:
+      | | `site/src/styles/global.css` | `app/style.css` |
+      |---|---|---|
+      | Primária (marinho) | `--primary: #0f1f3d` | `--cor-primaria: #0B2545` |
+      | Destaque (dourado) | `--accent: #8f6f1f` (ajustado pra 4.71:1 WCAG AA) | `--cor-secundaria: #C9A227` |
+
+      Não faz sentido fundir os dois arquivos (frameworks diferentes de
+      propósito — Tailwind v4 `@theme` no site, classes escritas à mão no
+      `app/`, e a vC.5 já trata a normalização técnica dos dois lados
+      separadamente). O valor real de documentar isso aqui: da próxima vez
+      que QUALQUER um dos dois lados mudar a cor de marca, esta tabela é o
+      lembrete de atualizar o outro lado também — sem ela, alguém teria
+      que tirar a cor de uma captura de tela pra manter os dois em sintonia.
 
 #### vC.5 — Um único Function App, um único modelo (normalização técnica)
 

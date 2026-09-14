@@ -3127,10 +3127,40 @@ precisar de mim:**
 3. Se um dia isso parar de bater (mudar no sistema e o site não refletir,
    ou mudar em algum lugar do Directus e o site refletir), é sinal de
    regressão — volte a este trecho do README pra saber o que reconferir.
-- [ ] Só depois de acompanhar em produção por um tempo sem regressão,
-      aposentar de vez a coleção `congregacoes` do Directus (remover os
-      campos estruturais de lá; o painel administrativo do site deixa de
-      precisar dela).
+**Correção de critério (13/09):** "esperar um tempo em produção" não era o
+critério certo — era mascarar uma dependência real ainda não resolvida.
+Levantamento completo (pedido explícito) achou que **Eventos** e
+**Camisetas** ainda tinham campo relacional (FK) apontando pra
+`congregacoes` no Directus — apagar a coleção àquela altura quebraria as
+duas, que são reais e estavam perto do lançamento. Dado real checado antes
+de mexer: **0** eventos e **0** pedidos de camiseta tinham esse campo
+preenchido hoje, então nenhuma migração de dado foi necessária — só trocar
+de onde vêm as opções/nomes:
+- [x] Migração 077 (`FundacaoAno`) — último campo achado, usado só por
+      `/transparencia/` (gráfico de crescimento), vazio em todas as 41
+      congregações reais também.
+- [x] `search.ts`, `sobre.astro`, `transparencia.astro`,
+      `camiseta/[slug].astro`, `painel-eventos/evento/index.astro`,
+      `eventos.astro`, `evento/[slug].astro` — todos trocados pra
+      `fetchCongregacoesPublicas()` (build time, sem CORS).
+- [x] `eventos/exportar.astro` e `painel-camisetas/grupo/pedidos.astro` são
+      client-side (rodam no navegador de quem usa o painel) — chamar o
+      sistema direto dali bateria em CORS (confirmado com teste real, sem
+      `Access-Control-Allow-Origin` na resposta). Resolvido com a mesma
+      técnica que `exportar.astro` já usava pras coordenadas do mapa: nome
+      da congregação resolvido em build time e embutido na página como
+      `{id: nome}` — o navegador só consulta esse mapa, nunca chama o
+      sistema.
+- [x] Relação (chave estrangeira) removida de verdade no Directus
+      (`DELETE /relations/eventos/congregacao` e
+      `/relations/camiseta_pedidos/congregacao`) — confirmado depois que
+      não sobrou nenhuma relação apontando pra `congregacoes`
+      (`GET /relations`, filtrado). Site conferido no ar sem regressão
+      (`/eventos/`, `/painel-eventos/evento/`) depois da mudança.
+- [x] **Coleção `congregacoes` do Directus está livre pra ser apagada** —
+      nada mais no site ou no schema depende dela. Apagar de fato fica pra
+      quando o usuário pedir explicitamente (é uma exclusão irreversível,
+      trava de segurança separada desta lista).
 
 #### vC.3 — Minha Conta: trava real contra identidade duplicada
 

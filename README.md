@@ -3188,6 +3188,33 @@ de onde vêm as opções/nomes:
       `/congregacoes/`, `/congregacao/genesis/`, `/eventos/`, `/`. vC.2
       encerrada de verdade — nenhum dado de congregação mora mais fora
       deste sistema.
+- [x] **Achado real depois de "encerrada" (14/09, reportado pelo usuário
+      revisando): a Sede continuava duplicada.** A congregação "Sede" no
+      sistema estava com todo campo de endereço vazio, enquanto o endereço
+      de verdade (incluindo o perfil confirmado do Google Maps, "Igreja
+      AD/SETA Parauapebas - Templo Central") continuava só no singleton
+      `Configuracoes` do Directus — exatamente a duplicação que essa versão
+      inteira existe pra eliminar, só que essa instância específica passou
+      despercebida no primeiro fechamento. Corrigido: dado migrado pra
+      congregação "sede" do sistema (mesmos campos de qualquer outra
+      congregação); `fetchConfiguracoes()` (`site/src/lib/directus.ts`)
+      passa a sobrescrever os campos de endereço/mapa com o que vem de lá
+      antes de devolver — um único ponto central corrige todo mundo que já
+      chamava `enderecoCompleto()`/`mapsHref()` (contato, doações,
+      privacidade, vCard, página inicial, visitante, busca, evento), sem
+      precisar editar cada um. Efeito colateral evitado: como "sede" ganhou
+      slug no sistema, ela sairia duplicada em `/congregacoes/` (card
+      próprio + card genérico) e geraria uma `/congregacao/sede/` redundante
+      com `/contato/` — as três excluídas explicitamente. Conferido em
+      produção: endereço batendo em `/contato/`, `/congregacao/sede/`
+      devolve 404 (não existe mesmo), só 1 card da Sede em `/congregacoes/`.
+      **Fica em aberto, de propósito** (pergunta feita ao usuário, ainda sem
+      resposta): os campos de endereço em `Configuracoes` no Directus
+      continuam existindo, só que não são mais lidos como autoritativos —
+      removê-los de vez de lá é o fechamento simétrico do que já foi feito
+      com a coleção `congregacoes`, mas é mais uma cirurgia de schema num
+      singleton usado por várias outras coisas (tagline, telefone, fotos),
+      por isso não foi feita sem confirmar antes.
 
 #### vC.3 — Minha Conta: trava real contra identidade duplicada
 

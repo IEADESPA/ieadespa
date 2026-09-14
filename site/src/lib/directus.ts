@@ -233,25 +233,14 @@ export const directusAssetSrcset = (
 /** Larguras padrão pras capas de evento/mensagem/notícia — celular, tablet, desktop. */
 export const COVER_WIDTHS = [640, 1024, 1600];
 
-/** Dados institucionais e de contato, editáveis em Directus → Configurações do Site. */
-export interface Configuracoes {
+/** Campos que ainda vêm direto do Directus → Configurações do Site
+ * (conteúdo institucional/editorial, sem duplicação com o sistema). */
+interface ConfiguracoesDirectus {
   tagline: string;
   about: string;
   sobre_corpo: string;
   crencas_corpo: string;
-  address_line: string;
-  address_neighborhood: string;
-  address_city: string;
-  address_state: string;
-  address_zip: string;
-  maps_url: string;
   phone: string;
-  lat: number | null;
-  lng: number | null;
-  /** Fase 24 — texto que identifica o perfil real e confirmado da Sede no
-   * Google Maps (não só o endereço) — ver README. Null enquanto não
-   * confirmado; nesse caso o mapa cai para a busca por endereço de sempre. */
-  google_maps_place_query: string | null;
   /** Fase 24.11 — foto manual da fachada (opcional) e a data em que foi
    * tirada, pra comparar com a data da foto do Street View e usar sempre a
    * mais recente das duas. */
@@ -259,33 +248,48 @@ export interface Configuracoes {
   foto_fachada_data: string | null;
 }
 
+/** Dados institucionais e de contato — endereço/mapa vêm de uma fonte só
+ * (ver fetchConfiguracoes), o resto de Directus → Configurações do Site. */
+export interface Configuracoes extends ConfiguracoesDirectus {
+  address_line: string;
+  address_neighborhood: string;
+  address_city: string;
+  address_state: string;
+  address_zip: string;
+  maps_url: string;
+  lat: number | null;
+  lng: number | null;
+  /** Fase 24 — texto que identifica o perfil real e confirmado da Sede no
+   * Google Maps (não só o endereço) — ver README. Null enquanto não
+   * confirmado; nesse caso o mapa cai para a busca por endereço de sempre. */
+  google_maps_place_query: string | null;
+}
+
 /**
  * Achado real (14/09, vC.2): endereço/mapa da Sede vinha duplicado — um
- * conjunto de campos aqui em Configuracoes (Directus), outro vazio na
+ * conjunto de campos em Configuracoes (Directus), outro vazio na
  * congregação "Sede" do sistema de governança. Mesmo critério do resto da
- * vC.2 (fonte única): o endereço de verdade agora mora só na congregação
- * "Sede" (slug "sede") do sistema; aqui só sobrescreve os campos de
- * endereço/mapa com o que vem de lá antes de devolver — o resto de
- * Configuracoes (tagline, telefone, fotos etc.) continua vindo do Directus
- * normalmente, sem duplicação nenhuma nisso.
+ * vC.2 (fonte única): esses campos saíram de Configuracoes no Directus de
+ * vez (`DELETE /fields/configuracoes/...`, 14/09) — a congregação "sede" do
+ * sistema é a única fonte agora. O resto de Configuracoes (tagline,
+ * telefone, fotos etc.) continua vindo do Directus normalmente.
  */
 export async function fetchConfiguracoes(): Promise<Configuracoes> {
   const [config, sede] = await Promise.all([
-    fetchSingleton<Configuracoes>("configuracoes"),
+    fetchSingleton<ConfiguracoesDirectus>("configuracoes"),
     fetchCongregacaoPublicaPorSlug("sede"),
   ]);
-  if (!sede) return config;
   return {
     ...config,
-    address_line: sede.endereco ?? config.address_line,
-    address_neighborhood: sede.bairro ?? config.address_neighborhood,
-    address_city: sede.cidade ?? config.address_city,
-    address_state: sede.estado ?? config.address_state,
-    address_zip: sede.cep ?? config.address_zip,
-    maps_url: sede.mapsUrl ?? config.maps_url,
-    lat: sede.lat ?? config.lat,
-    lng: sede.lng ?? config.lng,
-    google_maps_place_query: sede.googleMapsPlaceQuery ?? config.google_maps_place_query,
+    address_line: sede?.endereco ?? "",
+    address_neighborhood: sede?.bairro ?? "",
+    address_city: sede?.cidade ?? "",
+    address_state: sede?.estado ?? "",
+    address_zip: sede?.cep ?? "",
+    maps_url: sede?.mapsUrl ?? "",
+    lat: sede?.lat ?? null,
+    lng: sede?.lng ?? null,
+    google_maps_place_query: sede?.googleMapsPlaceQuery ?? null,
   };
 }
 

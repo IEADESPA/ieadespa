@@ -9,7 +9,10 @@ import { enderecoCompleto, fetchConfiguracoes, mapsHref } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 
 const allPosts = visiblePosts(await getAllMensagens());
-const congregacoes = await fetchCongregacoesPublicas();
+// A Sede tem card próprio nesta página (embaixo) — exclui aqui da lista
+// genérica pra não sair duplicada. Ver fetchConfiguracoes (vC.2, 14/09):
+// o endereço dela já vem dessa mesma congregação "sede" do sistema.
+const congregacoes = (await fetchCongregacoesPublicas()).filter((c) => c.slug !== "sede");
 const config = await fetchConfiguracoes();
 const sedeMapsHref = mapsHref(config);
 

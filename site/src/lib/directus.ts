@@ -1,3 +1,5 @@
+import { fetchCongregacaoPublicaPorSlug } from "@/lib/congregacoes";
+
 /**
  * URL pública do Directus. Não é segredo — as coleções usadas aqui têm
  * leitura liberada para o público (política "Public" no Directus), então o
@@ -257,7 +259,35 @@ export interface Configuracoes {
   foto_fachada_data: string | null;
 }
 
-export const fetchConfiguracoes = () => fetchSingleton<Configuracoes>("configuracoes");
+/**
+ * Achado real (14/09, vC.2): endereço/mapa da Sede vinha duplicado — um
+ * conjunto de campos aqui em Configuracoes (Directus), outro vazio na
+ * congregação "Sede" do sistema de governança. Mesmo critério do resto da
+ * vC.2 (fonte única): o endereço de verdade agora mora só na congregação
+ * "Sede" (slug "sede") do sistema; aqui só sobrescreve os campos de
+ * endereço/mapa com o que vem de lá antes de devolver — o resto de
+ * Configuracoes (tagline, telefone, fotos etc.) continua vindo do Directus
+ * normalmente, sem duplicação nenhuma nisso.
+ */
+export async function fetchConfiguracoes(): Promise<Configuracoes> {
+  const [config, sede] = await Promise.all([
+    fetchSingleton<Configuracoes>("configuracoes"),
+    fetchCongregacaoPublicaPorSlug("sede"),
+  ]);
+  if (!sede) return config;
+  return {
+    ...config,
+    address_line: sede.endereco ?? config.address_line,
+    address_neighborhood: sede.bairro ?? config.address_neighborhood,
+    address_city: sede.cidade ?? config.address_city,
+    address_state: sede.estado ?? config.address_state,
+    address_zip: sede.cep ?? config.address_zip,
+    maps_url: sede.mapsUrl ?? config.maps_url,
+    lat: sede.lat ?? config.lat,
+    lng: sede.lng ?? config.lng,
+    google_maps_place_query: sede.googleMapsPlaceQuery ?? config.google_maps_place_query,
+  };
+}
 
 /** Endereço completo, formatado para exibição. */
 export const enderecoCompleto = (c: Configuracoes) =>

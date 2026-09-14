@@ -10,9 +10,11 @@ import { congregacaoMapsQuery, fetchCongregacoesPublicas, type CongregacaoPublic
 export async function getStaticPaths() {
   const congregacoes = await fetchCongregacoesPublicas();
   // slug é opcional no cadastro — sem essa checagem, uma congregação sem
-  // slug ainda definido quebraria o build inteiro.
+  // slug ainda definido quebraria o build inteiro. A Sede (slug "sede") já
+  // tem página própria em /contato/ — não gera /congregacao/sede/ aqui,
+  // senão duplica a mesma informação em dois lugares (vC.2, 14/09).
   return congregacoes
-    .filter((congregacao) => congregacao.slug)
+    .filter((congregacao) => congregacao.slug && congregacao.slug !== "sede")
     .map((congregacao) => ({ params: { slug: congregacao.slug }, props: { congregacao } }));
 }
 

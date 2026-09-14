@@ -192,7 +192,11 @@ export async function buildSearchIndex(): Promise<SearchItem[]> {
     meta: ORGAO_CATEGORY_LABEL[orgao.category] ?? orgao.category,
   }));
 
-  const fromCongregacoes: SearchItem[] = congregacoes.map((congregacao) => ({
+  // Sede (slug "sede") não tem /congregacao/sede/ — a página dela é
+  // /contato/, já cobre a busca por outro caminho (vC.2, 14/09).
+  const fromCongregacoes: SearchItem[] = congregacoes
+    .filter((congregacao) => congregacao.slug !== "sede")
+    .map((congregacao) => ({
     title: congregacao.nome,
     excerpt: [congregacao.endereco, congregacao.bairro].filter(Boolean).join(" — "),
     href: `/congregacao/${congregacao.slug}/`,

@@ -8,6 +8,11 @@
 // GET /api/congregacoes-publico/{slug}   -> uma congregação por slug
 const { getPool, sql } = require("../shared/db");
 
+// O catálogo interno numera pra ordenar a administração ("11 - Nova
+// Jerusalém") — esse número não tem nenhum sentido pro visitante do site,
+// tira aqui antes de devolver.
+const removerPrefixoNumerico = (nome) => nome.replace(/^\d+\s*-\s*/, "");
+
 const SELECT_PUBLICO = `
   SELECT c.CongregacaoId AS congregacaoId, c.Nome AS nome, c.Slug AS slug,
          c.Endereco AS endereco, c.Bairro AS bairro, c.Cidade AS cidade, c.Estado AS estado,
@@ -43,10 +48,16 @@ module.exports = async function (context, req) {
       context.res = { status: 404, body: { erro: "Congregação não encontrada." } };
       return;
     }
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset[0] };
+    const item = result.recordset[0];
+    item.nome = removerPrefixoNumerico(item.nome);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: item };
     return;
   }
 
-  const result = await pool.request().query(`${SELECT_PUBLICO} ORDER BY c.Nome`);
-  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
+  // Ordena por CongregacaoId (ordem real de cadastro), não por Nome — o
+  // Nome começa com o número da administração como texto, então ordem
+  // alfabética colocaria "10 -" antes de "2 -".
+  const result = await pool.request().query(`${SELECT_PUBLICO} ORDER BY c.CongregacaoId`);
+  const itens = result.recordset.map(item => ({ ...item, nome: removerPrefixoNumerico(item.nome) }));
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: itens };
 };

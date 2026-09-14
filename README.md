@@ -3083,14 +3083,36 @@ migração", por isso essa versão virou a construção de uma tela própria.
       atual exibido (somente leitura) — substituiu o editor genérico de
       catálogo (que só tinha nome) e um bloco de funções JS órfãs que nunca
       chegou a ser ligado a nenhum HTML.
-- [ ] Site troca a busca de `congregacoes` no Directus (`src/lib/directus.ts`,
-      `congregacoes.astro`, `congregacao/[slug].astro`) por
-      `GET /api/congregacoes-publico` — mesmo ponto do build Astro, só muda a
-      URL de onde o dado vem. Mapa (Leaflet + Google Maps Platform) e o
-      design da página **não mudam**.
-- [ ] Migração de dado único (poucas linhas reais existentes no Directus,
-      casadas por nome, conferidas manualmente, preenchidas na tela nova) —
-      só depois disso, aposentar a coleção `congregacoes` do Directus.
+- [x] Migração 076 (`sql/migrations/076_congregacoes_campos_restantes_do_site.sql`):
+      mais 3 campos que só apareceram ao desenhar a migração de dado de
+      verdade — `Cep`, `NotaEndereco`, `GoogleMapsPlaceQuery` (perfil
+      confirmado no Google Maps, usado pelo recurso "qual está mais perto de
+      você"). `historia` (texto editorial) e o par endereço antigo/novo (por
+      causa de uma troca de CEP já ocorrida) ficaram de fora de propósito —
+      são artefato do site, não dado estrutural; nenhuma congregação real
+      tinha `historia` preenchida, então nada se perdeu.
+- [x] Site troca a busca de `congregacoes` no Directus por
+      `site/src/lib/congregacoes.ts` → `GET /api/congregacoes-publico`
+      (`congregacoes.astro`, `congregacao/[slug].astro`) — chamada em build
+      time do Astro (SSG, sem adapter), então não existe questão de CORS.
+      Mapa (Leaflet + Google Maps Platform) e o design da página não
+      mudaram, só a origem do dado.
+- [x] Descoberta real ao migrar: o sistema só tinha **2** congregações
+      cadastradas (Sede e Gênesis) contra **41** reais no Directus. Migração
+      de dado feita e conferida linha a linha (script one-off, não versionado
+      — resultado é o que importa): as 39 que faltavam foram criadas no
+      sistema (mesma numeração do site, "3 - Águas Vivas" a "42 - Bom
+      Pastor"), cada uma com o órgão JAI automático, e o endereço da
+      "2 - Gênesis" foi atualizado. `api/CongregacoesPublico` tira o prefixo
+      numérico administrativo (`"11 - Nova Jerusalém"` → `"Nova Jerusalém"`)
+      antes de expor ao público — achado em produção logo depois do deploy,
+      corrigido no mesmo dia. Confirmado nas duas pontas: `GET
+      /api/congregacoes-publico` em produção e as páginas reais em
+      `www.ieadespa.org.br/congregacoes/` e `/congregacao/{slug}/`.
+- [ ] Só depois de acompanhar em produção por um tempo sem regressão,
+      aposentar de vez a coleção `congregacoes` do Directus (remover os
+      campos estruturais de lá; o painel administrativo do site deixa de
+      precisar dela).
 
 #### vC.3 — Minha Conta: trava real contra identidade duplicada
 

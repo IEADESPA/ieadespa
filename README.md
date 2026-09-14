@@ -3047,6 +3047,26 @@ depois de cada mudança.
       write-only por design; gerado par novo, chave pública trocada nos 6
       lugares onde estava fixa no código, efeito colateral aceito: quem já
       tinha se inscrito pra push precisa visitar o site de novo).
+- [x] **Decisão (13/09): `github.com/IEADESPA/site` congela a partir de
+      agora** — nada mais é commitado/pushado pra lá; todo trabalho (site
+      e sistema) passa a acontecer só neste repositório. O repositório
+      antigo **não é apagado** (fica só desatualizado, como referência
+      histórica), diferente da coleção do Directus (essa sim foi apagada,
+      ver vC.2 abaixo). Confirmado que nenhuma automação ainda escrevia
+      nele: sem workflow de subtree-push daqui pra lá, sem webhook
+      configurado no repositório antigo (`gh api repos/IEADESPA/site/hooks`
+      devolveu lista vazia). **Achado real ao checar isso**: o Flow do
+      Directus que avisa o GitHub pra reconstruir o site
+      ("Publicar site (avisar GitHub)") ainda mandava o aviso pro
+      repositório antigo (`api.github.com/repos/IEADESPA/site/dispatches`)
+      — ou seja, publicar conteúdo no Directus não estava disparando build
+      nenhum sozinho, só funcionava até aqui porque os rebuilds recentes
+      foram todos disparados manualmente. Corrigido
+      (`PATCH /operations/{id}`, URL agora aponta pra
+      `IEADESPA/ieadespa`) e testado de verdade: editei um registro de
+      `historia` no Directus e o workflow `Site institucional - CI/CD`
+      disparou sozinho no monorepo (`repository_dispatch`), sem eu
+      acionar nada — confirmado no ar depois.
 
 #### vC.2 — Congregações como fonte única (primeiro dado realmente compartilhado)
 
@@ -3157,10 +3177,17 @@ de onde vêm as opções/nomes:
       não sobrou nenhuma relação apontando pra `congregacoes`
       (`GET /relations`, filtrado). Site conferido no ar sem regressão
       (`/eventos/`, `/painel-eventos/evento/`) depois da mudança.
-- [x] **Coleção `congregacoes` do Directus está livre pra ser apagada** —
-      nada mais no site ou no schema depende dela. Apagar de fato fica pra
-      quando o usuário pedir explicitamente (é uma exclusão irreversível,
-      trava de segurança separada desta lista).
+- [x] **Coleção `congregacoes` do Directus apagada (13/09).** Checagem
+      final antes de apagar: nenhum campo do site, nenhuma relação, nenhum
+      dashboard/panel dependia mais dela — só sobrou um Flow (o que avisa o
+      GitHub pra reconstruir o site) listando `congregacoes` entre as
+      coleções observadas; removida essa entrada primeiro
+      (`PATCH /flows/{id}`), depois `DELETE /collections/congregacoes`
+      (HTTP 204). Confirmado depois: `GET /items/congregacoes` no Directus
+      devolve 403/"não existe", e o site inteiro continua no ar (200) em
+      `/congregacoes/`, `/congregacao/genesis/`, `/eventos/`, `/`. vC.2
+      encerrada de verdade — nenhum dado de congregação mora mais fora
+      deste sistema.
 
 #### vC.3 — Minha Conta: trava real contra identidade duplicada
 

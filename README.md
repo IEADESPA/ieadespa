@@ -3208,13 +3208,19 @@ de onde vêm as opções/nomes:
       com `/contato/` — as três excluídas explicitamente. Conferido em
       produção: endereço batendo em `/contato/`, `/congregacao/sede/`
       devolve 404 (não existe mesmo), só 1 card da Sede em `/congregacoes/`.
-      **Fica em aberto, de propósito** (pergunta feita ao usuário, ainda sem
-      resposta): os campos de endereço em `Configuracoes` no Directus
-      continuam existindo, só que não são mais lidos como autoritativos —
-      removê-los de vez de lá é o fechamento simétrico do que já foi feito
-      com a coleção `congregacoes`, mas é mais uma cirurgia de schema num
-      singleton usado por várias outras coisas (tagline, telefone, fotos),
-      por isso não foi feita sem confirmar antes.
+      **Fechamento simétrico confirmado pelo usuário (14/09):** os 9 campos
+      de endereço/mapa (`address_line`, `address_neighborhood`,
+      `address_city`, `address_state`, `address_zip`, `maps_url`, `lat`,
+      `lng`, `google_maps_place_query`) apagados de vez de `Configuracoes`
+      no Directus (`DELETE /fields/configuracoes/...`, 9x HTTP 204).
+      `site/src/lib/directus.ts` dividido em `ConfiguracoesDirectus` (só o
+      que ainda vem de lá: tagline, telefone, fotos) + `Configuracoes`
+      (formato final que os callers já esperavam, endereço/mapa sempre
+      vindo da congregação "sede" do sistema, sem fallback pro Directus —
+      não tem mais o quê). Conferido em produção: endereço batendo em
+      `/contato/`, exatamente 42 cards em `/congregacoes/` (Sede + 41
+      congregações, nenhum duplicado). Nenhum dado de endereço mora fora
+      deste sistema — nem da Sede, nem de nenhuma congregação.
 
 #### vC.3 — Minha Conta: trava real contra identidade duplicada
 

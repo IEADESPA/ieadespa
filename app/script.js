@@ -6153,7 +6153,49 @@ function renderizarDadosPerfil(membroId) {
       ${linhaLgpd("Departamento", nomeDepartamentoPorId(p.departamentoId))}
       ${linhaLgpd("Dizimista Fiel", p.dizimistaFiel, "bit")}
     </div>
-    ${saidaHtml}`;
+    ${saidaHtml}
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Site institucional (vC.3)</h4>
+      <div id="historicoSiteMembro"><p class="subtitle">Carregando…</p></div>
+    </div>`;
+  carregarHistoricoSiteMembro(membroId);
+}
+
+// vC.3 — o que essa pessoa já fez no site institucional (inscrições em
+// evento, pedidos de camiseta), casado só por e-mail — nunca funde com a
+// conta dela lá (Minha Conta continua existindo e funcionando sozinha,
+// mesmo que ela vire ou deixe de ser membro depois).
+async function carregarHistoricoSiteMembro(membroId) {
+  const container = document.getElementById("historicoSiteMembro");
+  if (!container) return;
+  const res = await fetchProtegido(`${API_BASE}/historico-site-membro?matricula=${membroId}`);
+  const dados = await res.json();
+
+  if (!dados.temEmail) {
+    container.innerHTML = "<p class='subtitle'>Sem e-mail cadastrado — não dá pra cruzar com o site.</p>";
+    return;
+  }
+  if (dados.indisponivel) {
+    container.innerHTML = "<p class='subtitle'>Não foi possível consultar o site agora.</p>";
+    return;
+  }
+  if (dados.inscricoes.length === 0 && dados.pedidos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma inscrição em evento nem pedido de camiseta encontrado pelo e-mail cadastrado.</p>";
+    return;
+  }
+
+  let html = "";
+  if (dados.inscricoes.length > 0) {
+    html += `<p class="subtitle">Inscrições em eventos:</p><ul>` +
+      dados.inscricoes.map(i => `<li>${i.eventoTitulo || "Evento"} ${i.eventoData ? `(${i.eventoData})` : ""} ${i.presente ? "— presença confirmada" : ""}</li>`).join("") +
+      `</ul>`;
+  }
+  if (dados.pedidos.length > 0) {
+    html += `<p class="subtitle">Pedidos de camiseta:</p><ul>` +
+      dados.pedidos.map(p => `<li>${p.grupo || "Camiseta"} — R$ ${Number(p.valorPago || 0).toFixed(2)} pago</li>`).join("") +
+      `</ul>`;
+  }
+  container.innerHTML = html;
 }
 
 // Substitui a antiga verFotoMembro() — mesma lógica, só sem controlar

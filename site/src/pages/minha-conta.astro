@@ -208,7 +208,10 @@ const allPosts = visiblePosts(await getAllMensagens());
           body: JSON.stringify({ email }),
         });
         if (!res.ok) {
-          avisoEmail.textContent = "Não foi possível enviar o código agora. Tente novamente em instantes.";
+          // vC.3 — 409: e-mail já é de um membro ativo, backend já devolve
+          // a orientação certa (usar o acesso de membro em vez de conta nova).
+          const corpo = await res.json().catch(() => null);
+          avisoEmail.textContent = corpo?.erro || "Não foi possível enviar o código agora. Tente novamente em instantes.";
           return;
         }
         formEmail.dataset.email = email;

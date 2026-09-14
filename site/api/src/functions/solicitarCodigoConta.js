@@ -8,6 +8,28 @@ const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
 const ACS_CONNECTION_STRING = process.env.ACS_CONNECTION_STRING;
 const REMETENTE = process.env.ACS_REMETENTE || "DoNotReply@ieadespa.org.br";
+// URL pública do sistema de governança — não é segredo, mesmo padrão de
+// DIRECTUS_URL (ver site/src/lib/congregacoes.ts).
+const SISTEMA_API_URL = "https://app.ieadespa.org.br/api";
+
+/**
+ * vC.3 — antes de criar uma conta NOVA (nunca pra quem já tem conta:
+ * reaproveitar continua funcionando mesmo se a pessoa virou membro depois),
+ * confere se esse e-mail já é de um membro ativo do sistema. Se for, recusa
+ * e orienta a usar o acesso de membro — evita a pessoa criar uma identidade
+ * solta no site quando já devia estar usando o acesso de verdade. Servidor
+ * pra servidor (Azure Function, não o navegador) — sem questão de CORS.
+ */
+async function ehMembroAtivo(email) {
+  try {
+    const res = await fetch(`${SISTEMA_API_URL}/verificar-conta-membro?email=${encodeURIComponent(email)}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.ehMembroAtivo;
+  } catch {
+    return false;
+  }
+}
 
 /*
  * Fase 26 — passo 1 do login sem senha da "Minha Conta": recebe um e-mail,
@@ -57,6 +79,12 @@ app.http("solicitar-codigo-conta", {
     );
     const contaExistente = contaRes.ok ? (await contaRes.json()).data?.[0] : null;
     if (!contaExistente) {
+      if (await ehMembroAtivo(email)) {
+        return {
+          status: 409,
+          jsonBody: { erro: "Este e-mail já é de um membro ativo da IEADESPA — use o acesso de membro (matrícula e senha), não é preciso criar uma conta aqui." },
+        };
+      }
       await fetch(`${DIRECTUS_URL}/items/contas`, { method: "POST", headers, body: JSON.stringify({ email }) });
     }
 

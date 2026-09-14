@@ -3233,12 +3233,31 @@ reais, discutidas com o usuário — cada identidade transita pro outro
 lado num momento diferente da vida da pessoa, e nenhuma pode duplicar:
 
 **Sentido 1 — visitante que cria conta no site e depois vira membro de
-verdade.** Decisão: (a) quando a secretaria cadastra a pessoa como membro,
-buscar (pelo e-mail) o que ela já tinha feito no site — inscrições em
-evento, pedidos de camiseta — e mostrar isso no perfil dela; (b) ao criar
-conta no site, se o e-mail já bate com um membro ativo, avisar e orientar
-a usar o acesso de membro em vez de criar conta solta. **Ainda não
-implementado** — fica para a continuação desta versão.
+verdade (14/09, implementado).**
+- [x] `api/VerificarContaMembro` (novo, anônimo): dado um e-mail, devolve só
+      um booleano (`ehMembroAtivo`) — nunca nome/matrícula/telefone, mesmo
+      padrão de privacidade de `CongregacoesPublico`. Existe só pra checar
+      "esse e-mail já é de alguém", nunca pra confirmar de quem é.
+- [x] `site/api/solicitarCodigoConta.js`: antes de criar uma conta NOVA
+      (quem já tem conta continua igual, mesmo tendo virado membro depois —
+      reaproveitamento intacto), chama essa rota; se o e-mail já é de um
+      membro ativo, recusa (HTTP 409) e orienta a usar o acesso de membro.
+      Servidor pra servidor (Azure Function chamando Azure Function), sem
+      questão de CORS. Se a chamada falhar (sistema fora do ar), não
+      bloqueia — disponibilidade do site não pode depender do sistema
+      interno estar de pé.
+- [x] `site/src/pages/minha-conta.astro`: mostra a mensagem de recusa que
+      vem do backend, em vez do erro genérico de sempre.
+- [x] `api/HistoricoSiteMembro` (novo, autenticado, permissão "pessoas"):
+      dado uma matrícula, busca o e-mail no sistema e, se existir, consulta
+      no Directus (inscrições em eventos + pedidos de camiseta) o que
+      aquela pessoa já fez no site — nunca funde as duas contas, só mostra
+      lado a lado. Sem e-mail cadastrado, ou consulta indisponível, avisa
+      em vez de dar erro.
+- [x] Perfil da pessoa (`app/`, aba "Dados") ganha uma seção "Site
+      institucional" carregando esse histórico.
+- [x] `DIRECTUS_URL`/`DIRECTUS_ADMIN_TOKEN` (já configurados na v. anterior
+      desta versão) reaproveitados aqui — mesma ponte, dois usos.
 
 **Sentido 2 — membro que perde a membresia mas quer continuar com acesso
 ao site.** As duas transições são a mesma decisão, tomada em momentos

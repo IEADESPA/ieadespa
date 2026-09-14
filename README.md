@@ -3224,12 +3224,51 @@ de onde vêm as opções/nomes:
 
 #### vC.3 — Minha Conta: trava real contra identidade duplicada
 
-- [ ] Sem fusão de login — "Minha Conta" continua sendo e-mail + código só
-      pra quem não tem matrícula (semimembro). Único ajuste real: no momento
-      de criar conta, checar se o telefone/CPF já bate com um
-      `MembroReferencia` ativo (nova rota anônima somente-leitura em `api/`,
-      ex. `GET /api/membros/verificar-contato`, devolve só um booleano); se
-      bater, recusar a criação e orientar a pessoa a usar o acesso de membro.
+**Correção de rota (14/09):** a redação original previa checar
+telefone/CPF na criação da conta — não bate com a implementação real:
+"Minha Conta" só pede e-mail (nunca telefone, nunca CPF), e
+`MembroReferencia` nem tem coluna de CPF (só existe numa tabela bem
+diferente, de prebenda pastoral). Investigação levou a duas perguntas
+reais, discutidas com o usuário — cada identidade transita pro outro
+lado num momento diferente da vida da pessoa, e nenhuma pode duplicar:
+
+**Sentido 1 — visitante que cria conta no site e depois vira membro de
+verdade.** Decisão: (a) quando a secretaria cadastra a pessoa como membro,
+buscar (pelo e-mail) o que ela já tinha feito no site — inscrições em
+evento, pedidos de camiseta — e mostrar isso no perfil dela; (b) ao criar
+conta no site, se o e-mail já bate com um membro ativo, avisar e orientar
+a usar o acesso de membro em vez de criar conta solta. **Ainda não
+implementado** — fica para a continuação desta versão.
+
+**Sentido 2 — membro que perde a membresia mas quer continuar com acesso
+ao site.** As duas transições são a mesma decisão, tomada em momentos
+diferentes: hoje isso acontece via **Carta de Mudança** (Reg. Art. 131
+§3º, II) — confirmada, corre um prazo de 30 dias até a minimização (Reg.
+Art. 132 §2º), que zera o e-mail do membro em `MembroReferencia`. Sem
+alternativa, isso cortaria de vez qualquer acesso que a pessoa já tivesse
+(ou viesse a ter) à "Minha Conta" do site — mesmo o e-mail sendo dela por
+direito. **Implementado (14/09):**
+- [x] Migração 078: `CartasTransito.ManterAcessoSite` (booleano).
+- [x] `api/SolicitarCarta`: na confirmação da Carta de Mudança, o próprio
+      membro escolhe (`manterAcessoSite`) se quer manter o acesso. Se sim,
+      **antes** da minimização rodar, `api/shared/directusContas.js`
+      garante uma conta no site pra aquele e-mail — só o e-mail (dado
+      essencial da conta), nunca nome/matrícula/telefone. As duas contas
+      nunca se fundem: a do site continua sendo só e-mail + código, igual
+      pra qualquer visitante, sem nenhum vínculo de volta pra matrícula
+      (a pessoa perde o acesso de membro, mas não perde o acesso ao site).
+      Se não escolher manter, fica exatamente como já era (dados só
+      minimizados).
+- [x] `app/`: as duas telas que confirmam Carta de Mudança
+      (`solicitarCarta`, `confirmarCartaPendente`) ganham essa pergunta.
+      `api/GestaoCartas` (listagem administrativa) e `api/SolicitarCarta`
+      (GET, lista as próprias cartas) devolvem `manterAcessoSite`.
+- [x] Testado de ponta a ponta: `garantirContaSite()` chamado com um
+      e-mail de teste, conferido que só grava `{email}` (nada de nome) no
+      Directus, conta de teste removida depois.
+- [x] `DIRECTUS_URL`/`DIRECTUS_ADMIN_TOKEN` configurados como app setting
+      da Static Web App de governança (`app-meusite-web`) — primeira vez
+      que este lado chama o Directus do site (antes só o inverso existia).
 
 #### vC.4 — Reaproveitamento de ativos de front-end do site
 

@@ -27,7 +27,8 @@ const SELECT_LISTA = `
          CONVERT(varchar(10), ISNULL(c.DataConfirmacao, c.DataSolicitacao), 120) AS dataPedido,
          CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
          COALESCE(cm.Nome, m.Funcao) AS funcao, m.CargoMinisterial AS cargoMinisterial,
-         m.SituacaoMembro AS situacaoMembro, m.EstadoCivil AS estadoCivil, m.Status AS statusMembro
+         m.SituacaoMembro AS situacaoMembro, m.EstadoCivil AS estadoCivil, m.Status AS statusMembro,
+         c.ManterAcessoSite AS manterAcessoSite
   FROM CartasTransito c
   JOIN MembroReferencia m ON m.MembroId = c.MembroId
   LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId

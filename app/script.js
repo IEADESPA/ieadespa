@@ -6595,8 +6595,12 @@ async function solicitarCarta(tipo) {
       "Confirmar desligamento"
     );
     if (!ok) return;
+    const manterAcessoSite = await confirmarAcao(
+      "Você quer manter acesso ao site institucional (Minha Conta, com seu e-mail atual) mesmo depois de desligado? Se sim, garantimos essa conta agora, antes da minimização apagar seu e-mail daqui. Se não, seus dados são só minimizados, como sempre.",
+      "Manter acesso ao site"
+    );
     await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo }) });
-    const res2 = await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo, confirmar: true }) });
+    const res2 = await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo, confirmar: true, manterAcessoSite }) });
     const data2 = await res2.json();
     msg.textContent = data2.mensagem;
     carregarMinhasCartas();
@@ -6613,10 +6617,14 @@ async function confirmarCartaPendente() {
   if (!authMatricula) return;
   const ok = await confirmarAcao("Confirmar esta solicitação de Carta de Mudança (declaração de ciência do desligamento)?", "Confirmar");
   if (!ok) return;
+  const manterAcessoSite = await confirmarAcao(
+    "Você quer manter acesso ao site institucional (Minha Conta, com seu e-mail atual) mesmo depois de desligado? Se sim, garantimos essa conta agora, antes da minimização apagar seu e-mail daqui. Se não, seus dados são só minimizados, como sempre.",
+    "Manter acesso ao site"
+  );
   const res = await fetch(`${API_BASE}/cartas/minhas`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ matricula: Number(authMatricula), tipo: "MUDANCA", confirmar: true })
+    body: JSON.stringify({ matricula: Number(authMatricula), tipo: "MUDANCA", confirmar: true, manterAcessoSite })
   });
   const data = await res.json();
   avisarResultado(data);

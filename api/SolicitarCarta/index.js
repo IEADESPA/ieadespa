@@ -5,12 +5,21 @@
 // autoatendimento do MeusDadosLGPD).
 //
 // GET  /api/cartas/minhas?matricula=123        -> lista as cartas do próprio membro
-// POST /api/cartas/minhas                      -> body: { matricula, tipo, destino?, motivoSaida?, confirmar? }
+// POST /api/cartas/minhas                      -> body: { matricula, tipo, destino?, motivoSaida?, confirmar?, manterAcessoSite? }
 //
 // Carta de Mudança tem 2 passos (Reg. Art. 131 §3º, II): o 1º cria SOLICITADA; o
 // 2º (confirmar=true) grava a "declaração de ciência" digital e avança para
 // CONFIRMADA — a partir daí corre o prazo de 30 dias para a minimização (Reg.
 // Art. 132 §2º). É a única que passa por essa etapa, por ser um desligamento.
+//
+// vC.3 — na confirmação, o próprio membro escolhe (manterAcessoSite) se
+// quer manter acesso ao site institucional (Minha Conta, e-mail + código)
+// mesmo depois de desligado. Se sim, garante aqui uma conta no site pra
+// esse e-mail — só o e-mail, dado essencial da conta (nunca nome/matrícula
+// nem qualquer outro dado do sistema) — antes que a minimização de 30 dias
+// zere o e-mail em MembroReferencia (ver api/GestaoCartas). As duas contas
+// nunca se fundem: a do site continua sendo só e-mail + código, igual pra
+// qualquer visitante, sem nenhum vínculo de volta com a matrícula.
 //
 // Carta de Recomendação e Atestado de Trânsito Supletivo (Reg. Art. 131 §2º,
 // III) saem direto como EMITIDA, com validade de 30 dias: como é o próprio
@@ -18,6 +27,7 @@
 // (Dirigente/Secretário/CEI) a intermediar.
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
+const { garantirContaSite } = require("../shared/directusContas");
 
 const TIPOS = ["RECOMENDACAO", "MUDANCA", "ATESTADO_SUPLETIVO"];
 const EMISSAO_IMEDIATA = ["RECOMENDACAO", "ATESTADO_SUPLETIVO"];
@@ -38,7 +48,8 @@ const SELECT_CARTA = `
          CONVERT(varchar(10), ISNULL(c.DataConfirmacao, c.DataSolicitacao), 120) AS dataPedido,
          CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
          COALESCE(cm.Nome, m.Funcao) AS funcao, m.CargoMinisterial AS cargoMinisterial,
-         m.SituacaoMembro AS situacaoMembro, m.EstadoCivil AS estadoCivil
+         m.SituacaoMembro AS situacaoMembro, m.EstadoCivil AS estadoCivil,
+         c.ManterAcessoSite AS manterAcessoSite
   FROM CartasTransito c
   JOIN MembroReferencia m ON m.MembroId = c.MembroId
   LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
@@ -65,7 +76,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const { matricula, tipo, destino, motivoSaida, confirmar } = req.body || {};
+  const { matricula, tipo, destino, motivoSaida, confirmar, manterAcessoSite } = req.body || {};
   if (!matricula || !tipo || !TIPOS.includes(tipo)) {
     context.res = { status: 400, body: { sucesso: false, mensagem: `Informe matricula e tipo válido (${TIPOS.join(", ")}).` } };
     return;
@@ -73,12 +84,13 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const membro = await pool.request().input("id", sql.Int, matricula)
-    .query(`SELECT MembroId, Nome FROM MembroReferencia WHERE MembroId = @id`);
+    .query(`SELECT MembroId, Nome, Email FROM MembroReferencia WHERE MembroId = @id`);
   if (membro.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
   }
   const nome = membro.recordset[0].Nome;
+  const email = membro.recordset[0].Email;
 
   // Para Recomendação/Atestado Supletivo (emissão imediata, validade de 30 dias),
   // uma carta EMITIDA só bloqueia pedido novo enquanto ainda estiver dentro da
@@ -99,11 +111,26 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Nenhuma solicitação pendente para confirmar." } };
       return;
     }
+    const querManterAcessoSite = tipo === "MUDANCA" && !!manterAcessoSite;
+    let contaSiteGarantida = false;
+    if (querManterAcessoSite && email) {
+      contaSiteGarantida = await garantirContaSite(email);
+    }
     const declaracao = `Eu, ${nome}, solicito minha Carta de Mudança e estou ciente do meu desligamento do rol de membros da IEADESPA.`;
-    await pool.request().input("id", sql.Int, cartaAtiva.CartaId).input("declaracao", sql.NVarChar(500), declaracao)
-      .query(`UPDATE CartasTransito SET Status = 'CONFIRMADA', DeclaracaoCiencia = @declaracao, DataConfirmacao = SYSUTCDATETIME() WHERE CartaId = @id`);
-    await registrarAuditoria({ tabela: "CartasTransito", registroId: Number(cartaAtiva.CartaId), acao: "Confirmou solicitação de carta", usuarioId: Number(matricula), dadosDepois: { tipo, declaracao } });
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Solicitação confirmada.", cartaId: cartaAtiva.CartaId } };
+    await pool.request()
+      .input("id", sql.Int, cartaAtiva.CartaId)
+      .input("declaracao", sql.NVarChar(500), declaracao)
+      .input("manterAcessoSite", sql.Bit, querManterAcessoSite)
+      .query(`UPDATE CartasTransito SET Status = 'CONFIRMADA', DeclaracaoCiencia = @declaracao,
+                DataConfirmacao = SYSUTCDATETIME(), ManterAcessoSite = @manterAcessoSite WHERE CartaId = @id`);
+    await registrarAuditoria({
+      tabela: "CartasTransito", registroId: Number(cartaAtiva.CartaId), acao: "Confirmou solicitação de carta",
+      usuarioId: Number(matricula), dadosDepois: { tipo, declaracao, manterAcessoSite: querManterAcessoSite, contaSiteGarantida }
+    });
+    const mensagem = querManterAcessoSite && !contaSiteGarantida
+      ? "✅ Solicitação confirmada. Não foi possível garantir o acesso ao site agora — tente de novo em Minha Conta, no site, usando o mesmo e-mail."
+      : "✅ Solicitação confirmada.";
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem, cartaId: cartaAtiva.CartaId } };
     return;
   }
 

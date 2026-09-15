@@ -3036,9 +3036,10 @@ depois de cada mudança.
       que também existe aqui (congregação, e no futuro evento/pessoa) migra.
 - [x] Segredos do site no mesmo esquema SOPS/Age deste repositório
       (`site/api/local.settings.enc.json`, `site/secrets.env`) — chaves das
-      duas máquinas liberadas nos dois `.sops.yaml` (raiz e `site/`).
-      `.gitattributes` novo força LF nesses arquivos (achado: CRLF de
-      checkout Windows quebrava o parser do SOPS).
+      duas máquinas liberadas no `.sops.yaml` (**um só, na raiz, desde
+      14/09** — ver item de integração mais abaixo). `.gitattributes` novo
+      força LF nesses arquivos (achado: CRLF de checkout Windows quebrava
+      o parser do SOPS).
 - [x] 4 secrets que faltavam no GitHub deste repositório (só existiam no
       `IEADESPA/site`) provisionados sem exibir valor: token de deploy da
       Static Web App do site, `ACS_CONNECTION_STRING`, `DIRECTUS_ADMIN_TOKEN`,
@@ -3047,6 +3048,35 @@ depois de cada mudança.
       write-only por design; gerado par novo, chave pública trocada nos 6
       lugares onde estava fixa no código, efeito colateral aceito: quem já
       tinha se inscrito pra push precisa visitar o site de novo).
+- [x] **Integração de verdade, não só código no mesmo repositório (14/09).**
+      Achado real reportado pelo usuário: `site/` ainda tinha arquivo
+      duplicado do que já existe na raiz, e lixo de template genérico sem
+      nenhuma relação com a IEADESPA — sintoma de subtree "colado", não
+      "integrado". Levantamento arquivo por arquivo e limpeza:
+      - `site/LICENSE` (idêntico byte a byte ao da raiz) e `site/.sops.yaml`
+        (a regra da raiz já cobria os 3 pares de segredo do repositório
+        inteiro pelo mesmo sufixo de nome de arquivo, mesmas chaves — não
+        precisava de um segundo arquivo) removidos; `SECRETS.md` da raiz
+        passa a documentar os 3 pares (antes só 2 — faltava
+        `site/secrets.env`/`site/.env.local`, que só estava em
+        `site/CRIPTOGRAFIA.md`, também removido).
+      - `site/CHANGELOG.md`, `site/CUSTOMIZATION.md`, `site/preview.webp`,
+        `site/wrangler.jsonc`: sobras do tema Astro genérico ("Monograph")
+        usado como base do site — changelog/guia do tema, não do projeto;
+        screenshot de marketing; config de deploy Cloudflare nunca usada
+        (o site sempre foi Azure Static Web Apps). Removidos.
+      - `site/.github/scripts/*.mjs` (os scripts dos avisos por push/
+        e-mail) movidos pra `site/scripts/` — um `.github` fora da raiz do
+        repositório não tem nenhum significado especial pro GitHub, só
+        confundia (parecia configuração do GitHub, mas eram só scripts
+        Node comuns). Os dois workflows da raiz que apontavam pro caminho
+        antigo, atualizados.
+      - Testado antes de commitar: `sops -d` funcionando nos 3 pares de
+        segredo usando só o `.sops.yaml` da raiz (de dentro de `site/` e
+        de dentro da raiz); `npm run build` do site (119 páginas) sem
+        erro; um dos workflows de aviso disparado manualmente de verdade
+        (`workflow_dispatch`) pra confirmar o caminho novo dos scripts em
+        produção, não só localmente.
 - [x] **Decisão (13/09): `github.com/IEADESPA/site` congela a partir de
       agora** — nada mais é commitado/pushado pra lá; todo trabalho (site
       e sistema) passa a acontecer só neste repositório. O repositório

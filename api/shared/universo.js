@@ -122,6 +122,32 @@ async function composicaoCLI(pool, orgaoIdCLI) {
   return comOrdenacao.concat(comFuncao).concat(comLiderancaPorEscopo);
 }
 
+// Art. 151 §2º — Colégio de Dirigentes Congregacionais: Pastores de Área
+// (Papeis.Nivel = 'AREA') e Dirigentes de Congregação (Papeis.Nivel =
+// 'CONGREGACAO'), composição CALCULADA a partir de Lideranca — mesmo
+// mecanismo de "sem Assento manual" já usado pela CLI (porLiderancaEscopo),
+// só que aqui é a composição INTEIRA do órgão, não um dos três caminhos.
+// É consultivo (não delibera vinculante) — não precisa das camadas de
+// Ordenação/Assento por Função que a CLI tem.
+async function composicaoColegioDirigentes(pool) {
+  const result = await pool.request().query(`
+    SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome,
+           COALESCE(cg.Nome, ar.Nome) AS congregacao, m.SituacaoMembro AS situacaoMembro,
+           p.Nome AS cargoOuFuncao
+    FROM Lideranca l
+    JOIN Papeis p ON p.PapelId = l.PapelId
+    JOIN MembroReferencia m ON m.MembroId = l.MembroId
+    LEFT JOIN Congregacoes cg ON l.EscopoTipo = 'CONGREGACAO' AND cg.CongregacaoId = l.EscopoId
+    LEFT JOIN Areas ar ON l.EscopoTipo = 'AREA' AND ar.AreaId = l.EscopoId
+    WHERE (
+      (p.Nivel = 'CONGREGACAO' AND l.EscopoTipo = 'CONGREGACAO')
+      OR (p.Nivel = 'AREA' AND l.EscopoTipo = 'AREA')
+    )
+    AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+  `);
+  return result.recordset;
+}
+
 async function universoDoOrgao(pool, orgao) {
   const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
 
@@ -151,6 +177,11 @@ async function universoDoOrgao(pool, orgao) {
 
   if (orgao.sigla === "CLI") {
     const composicao = await composicaoCLI(pool, orgao.orgaoId);
+    return composicao.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
+  }
+
+  if (orgao.sigla === "COLEGIO_DIRIGENTES") {
+    const composicao = await composicaoColegioDirigentes(pool);
     return composicao.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
   }
 
@@ -198,4 +229,4 @@ async function universoDoOrgao(pool, orgao) {
   return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
 }
 
-module.exports = { universoDoOrgao, membrosComCartaMudancaEmitida, composicaoCLI };
+module.exports = { universoDoOrgao, membrosComCartaMudancaEmitida, composicaoCLI, composicaoColegioDirigentes };

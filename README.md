@@ -4379,7 +4379,7 @@ varredura normativa encontrou **dois órgãos de apoio que o Regimento cria e
 que o sistema simplesmente não tem** — não é refinamento do que existe, é
 órgão faltando no cadastro, então entra como item novo da FASE B:
 
-- [ ] **Conselho Consultivo Técnico (Reg. Art. 31)** — 3 a 5 membros, com a
+- [x] **Conselho Consultivo Técnico (Reg. Art. 31)** — 3 a 5 membros, com a
       função de emitir **Parecer de Viabilidade** antes de ato de alto impacto
       patrimonial (aquisição/alienação de imóvel de alto valor, contratação de
       empréstimo). Duas coisas o tornam diferente dos órgãos já cadastrados:
@@ -4403,7 +4403,7 @@ que o sistema simplesmente não tem** — não é refinamento do que existe, é
       do conselheiro em matéria de interesse próprio). O Art. 31 é a versão
       eclesiástica disso — e é exatamente o tipo de regra que só funciona se
       quem está impedido for calculado, não declarado.
-- [ ] **Colégio de Dirigentes Congregacionais (Reg. Art. 151 §2º)** — instância
+- [x] **Colégio de Dirigentes Congregacionais (Reg. Art. 151 §2º)** — instância
       consultiva que reúne os Dirigentes de Congregação. Já temos todo o
       insumo: `Lideranca` sabe quem é Dirigente de cada congregação, e o motor
       de Reuniões é órgão-agnóstico desde a v0.3. O que falta é a sigla de
@@ -4412,10 +4412,72 @@ que o sistema simplesmente não tem** — não é refinamento do que existe, é
       mantida à mão — mesma lógica de composição calculada já usada na CLI.
       Por ser consultivo, não vota deliberação vinculante: produz
       recomendação, que tramita como Parecer pela v2.8 já existente.
-- [ ] **Efeito colateral bom:** com esses dois cadastrados, o painel de órgãos
+- [x] **Efeito colateral bom:** com esses dois cadastrados, o painel de órgãos
       passa a refletir o organograma **completo** do Regimento. Hoje ele
       reflete só a parte que foi implementada, o que dá a falsa impressão de
       que o resto não existe institucionalmente.
+
+  Implementado: `sql/migrations/089_conselho_consultivo_colegio_dirigentes.sql`
+  semeia os dois órgãos em `Orgaos` (mesmo padrão idempotente do seed
+  original, Art. 13) e cria `ParametrosParecerViabilidade` (1 linha, mesmo
+  padrão de `ParametrosSaida`) e `PareceresViabilidadeAlienacao`.
+
+  **Conselho Consultivo Técnico**: reaproveita `GestaoAssentos` sem criar
+  API nova — `shared/diretoria.js` ganhou `CARGOS_CONSELHO_CONSULTIVO`
+  (5 vagas nomeadas, mesmo padrão de Diretoria/Conselho Fiscal/CEI) e a
+  vedação de parentesco até 2º grau com a Diretoria Executiva
+  (`shared/parentesco.js::existeParentescoAte2Grau`, zero alteração na
+  função) passou a valer pra esse órgão também — generalizei o `if
+  (["CONSELHO_FISCAL","CEI"].includes(...))` hard-coded de
+  `GestaoAssentos` pra um mapa (`ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA`)
+  que já nasce com os 3 órgãos, em vez de duplicar o bloco.
+
+  **Colégio de Dirigentes Congregacionais**: composição 100% calculada,
+  sem Assento manual — `shared/universo.js::composicaoColegioDirigentes()`
+  (nova, mesmo padrão da `porLiderancaEscopo` que a CLI já usa) reúne
+  `Lideranca` com `Papeis.Nivel IN ('AREA','CONGREGACAO')`, ou seja
+  Pastores de Área e Dirigentes de Congregação, e um novo branch em
+  `universoDoOrgao` (`sigla === "COLEGIO_DIRIGENTES"`) devolve essa
+  composição pro motor de Reuniões (RegistrarPresenca, MinutaAta,
+  credenciamento) — assim que alguém assume/deixa o papel na Lideranca, o
+  universo do órgão já reflete, sem recadastro. **Limitação documentada**:
+  a "recomendação tramitando como Parecer pela v2.8" citada no item
+  original não foi ligada ao `PareceresComissao` real, porque aquela
+  tabela é FK'd a `Projetos` (matéria legislativa) e não tem gancho
+  genérico pra outro tipo de origem — a varredura confirmou isso antes de
+  eu inventar uma ponte que não existe. Na prática, a recomendação do
+  Colégio de Dirigentes tramita pelo mesmo motor de Reuniões/Minuta de Ata
+  que qualquer órgão consultivo já usa (Pauta + seção de Deliberação em
+  branco pro Secretário preencher) — o que falta, se algum dia for preciso
+  formalizar mais, é meta de uma versão futura, não fabricado aqui.
+
+  **Parecer de Viabilidade (Art. 31)**: o único ato de alto impacto
+  patrimonial que o sistema já modela de verdade é alienação de bem
+  (`GestaoAlienacoesBens`, v4.11) — "aquisição de imóvel" e "contratação
+  de empréstimo" **não têm módulo nenhum no sistema hoje** (varredura
+  confirmou zero ocorrência em todo o código): documentado aqui como gap
+  real, não fabricado. `shared/parecerViabilidade.js` trava exatamente
+  onde o ato é real: `GestaoAlienacoesBens` ganhou a ação
+  `PARECER_VIABILIDADE` (só quem tem assento ativo no Conselho Consultivo
+  Técnico pode emitir) e a ação `AUTORIZAR` passou a exigir, acima do
+  valor configurável em `ParametrosParecerViabilidade` (padrão R$
+  50.000,00), um parecer `FAVORAVEL` já vinculado à proposta — sem isso,
+  a autorização fica bloqueada com a mensagem citando o Art. 31, mesmo
+  padrão de bloqueio-com-mensagem já usado pra suspensão do PDQ e saldo
+  insuficiente no mesmo arquivo.
+
+  Frontend: o painel de Órgãos e o submenu central de Reuniões já listam
+  os dois órgãos automaticamente (`GET /api/orgaos` genérico, zero
+  alteração de tela); a tela de Assentos genérica (matrícula + órgão +
+  cargo em texto livre) já aceita o Conselho Consultivo Técnico sem UI
+  dedicada nova (mesmo caminho que outros órgãos menos usados já
+  percorrem). Adicionado: botão "📋 Parecer de Viabilidade (Art. 31)" na
+  lista de Alienações de Bens, visível enquanto a proposta está
+  `PROPOSTA`.
+
+  Testado com `npx jest` (141 testes, incluindo 7 novos de
+  `shared/parecerViabilidade.js`) e `node --check` em todos os arquivos
+  novos/alterados.
 
 #### vB.15 — Consolidação Normativa e Texto Mestre *(retrofit da v2.9, Reg. Art. 162 §§2º-4º e Art. 162-B)*
 

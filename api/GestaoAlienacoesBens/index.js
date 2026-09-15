@@ -18,9 +18,10 @@ const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const demonstracoes = require("../shared/demonstracoes");
 const patrimonio = require("../shared/patrimonio");
+const parecerViabilidade = require("../shared/parecerViabilidade");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
-const ACOES = ["AUTORIZAR", "REJEITAR", "CONCLUIR"];
+const ACOES = ["AUTORIZAR", "REJEITAR", "CONCLUIR", "PARECER_VIABILIDADE"];
 
 function exigirGlobal(req, context) {
   const usuario = auth.exigirPermissao(req, context, "financeiro");
@@ -136,15 +137,42 @@ module.exports = async function (context, req) {
       return;
     }
     const registro = atual.recordset[0];
-    const { acao, ataBase64, mimeType, motivo } = req.body || {};
+    const { acao, ataBase64, mimeType, motivo, decisao, justificativa } = req.body || {};
     if (!ACOES.includes(acao)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `Ação inválida. Use uma de: ${ACOES.join(", ")}.` } };
+      return;
+    }
+
+    if (acao === "PARECER_VIABILIDADE") {
+      // Art. 31 — só membro com assento ativo no Conselho Consultivo
+      // Técnico emite o parecer; não é "qualquer um com permissão financeiro".
+      if (!(await parecerViabilidade.membroNoConselhoConsultivo(pool, usuario.membroId))) {
+        context.res = { status: 403, body: { sucesso: false, mensagem: "Só um membro com assento ativo no Conselho Consultivo Técnico pode emitir Parecer de Viabilidade (Art. 31)." } };
+        return;
+      }
+      if (!["FAVORAVEL", "DESFAVORAVEL"].includes(decisao)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe decisao: FAVORAVEL ou DESFAVORAVEL." } };
+        return;
+      }
+      const parecerId = await parecerViabilidade.registrarParecer(pool, { alienacaoId: Number(id), decisao, justificativa, emitidoPor: usuario.membroId });
+      await registrarAuditoria({
+        tabela: "PareceresViabilidadeAlienacao", registroId: parecerId, acao: `Emitiu Parecer de Viabilidade: ${decisao}`, usuarioId: usuario.membroId,
+        dadosDepois: { alienacaoId: Number(id), decisao }
+      });
+      context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Parecer de Viabilidade registrado.", parecerId } };
       return;
     }
 
     if (acao === "AUTORIZAR") {
       if (registro.Status !== "PROPOSTA") {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Esta proposta não está mais pendente de autorização." } };
+        return;
+      }
+      // Art. 31 — acima do limite configurável, o ato fica bloqueado
+      // enquanto não houver Parecer de Viabilidade FAVORAVEL vinculado.
+      const limite = await parecerViabilidade.limiteParecerViabilidade(pool);
+      if (Number(registro.ValorProposto) >= limite && !(await parecerViabilidade.possuiParecerFavoravel(pool, Number(id)))) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: `Valores a partir de R$ ${limite.toFixed(2)} exigem Parecer de Viabilidade FAVORAVEL do Conselho Consultivo Técnico antes da autorização (Art. 31) — ainda não há um vinculado a esta proposta.` } };
         return;
       }
       let ataUrl = null;

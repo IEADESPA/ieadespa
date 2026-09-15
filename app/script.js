@@ -3108,10 +3108,47 @@ async function carregarAlienacoesBensAcao() {
     container.innerHTML = "<p class='subtitle'>Nenhuma alienação registrada.</p>";
     return;
   }
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Valor proposto</th><th>Alçada</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(a => html += `<tr><td>${a.bemDescricao}</td><td>R$ ${Number(a.ValorProposto).toFixed(2)}</td><td>${a.AprovacaoNecessaria}</td><td>${a.Status}</td></tr>`);
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Valor proposto</th><th>Alçada</th><th>Status</th><th></th></tr></thead><tbody>`;
+  lista.forEach(a => html += `<tr>
+    <td>${a.bemDescricao}</td><td>R$ ${Number(a.ValorProposto).toFixed(2)}</td><td>${a.AprovacaoNecessaria}</td><td>${a.Status}</td>
+    <td>${a.Status === "PROPOSTA" ? `<button class="btn-link" onclick="abrirParecerViabilidadeAcao(${a.AlienacaoId})">📋 Parecer de Viabilidade (Art. 31)</button>` : ""}</td>
+  </tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// vB.14 — Parecer de Viabilidade (Art. 31): pré-condição de alienação de
+// alto valor. Só quem tem assento ativo no Conselho Consultivo Técnico
+// consegue emitir de verdade (o backend recusa quem não tem) — o formulário
+// fica visível pra quem opera Patrimônio pedir pro conselheiro preencher.
+window._alienacaoParecerAtual = null;
+
+function abrirParecerViabilidadeAcao(alienacaoId) {
+  window._alienacaoParecerAtual = alienacaoId;
+  const resultado = document.getElementById("resultadoAlienacao");
+  resultado.innerHTML = `
+    <div class="barra-lista">
+      <select id="parecerViabilidadeDecisao"><option value="FAVORAVEL">Favorável</option><option value="DESFAVORAVEL">Desfavorável</option></select>
+      <input type="text" id="parecerViabilidadeJustificativa" placeholder="Justificativa" style="min-width:260px;" />
+      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="emitirParecerViabilidadeAcao()">Emitir Parecer</button>
+    </div>`;
+}
+
+async function emitirParecerViabilidadeAcao() {
+  const alienacaoId = window._alienacaoParecerAtual;
+  if (!alienacaoId) return;
+  const decisao = document.getElementById("parecerViabilidadeDecisao").value;
+  const justificativa = document.getElementById("parecerViabilidadeJustificativa").value.trim() || null;
+  const res = await fetchProtegido(`${API_BASE}/alienacoes-bens/${alienacaoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ acao: "PARECER_VIABILIDADE", decisao, justificativa })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) {
+    document.getElementById("resultadoAlienacao").textContent = "";
+    carregarAlienacoesBensAcao();
+  }
 }
 
 async function proporAlienacaoAcao() {

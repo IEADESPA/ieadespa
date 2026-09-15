@@ -44,12 +44,36 @@ const CARGOS_CEI = {
   SUPLENTE_2: { rotulo: "2º Conselheiro Suplente" }
 };
 
+// Art. 31 — Conselho Consultivo Técnico: 3 a 5 membros. Diferente dos outros
+// (sem numeração fixa de "1º/2º"), mas o catálogo de 5 vagas segue o mesmo
+// padrão de cargo fixo — o mínimo de 3 não é imposto na criação (o
+// Regimento não diz o que acontece abaixo disso; fica visível no painel
+// como composição incompleta, não como bloqueio de cadastro).
+const CARGOS_CONSELHO_CONSULTIVO = {
+  MEMBRO_1: { rotulo: "Membro 1" },
+  MEMBRO_2: { rotulo: "Membro 2" },
+  MEMBRO_3: { rotulo: "Membro 3" },
+  MEMBRO_4: { rotulo: "Membro 4" },
+  MEMBRO_5: { rotulo: "Membro 5" }
+};
+
 // Catálogo de cargos fixos por órgão — usado genericamente em GestaoAssentos
 // pra validar cargoOuFuncao e o cap de 1 ocupante ativo por cargo.
 const CATALOGOS_CARGOS_POR_ORGAO = {
   DIRETORIA_EXECUTIVA: CARGOS_DIRETORIA,
   CONSELHO_FISCAL: CARGOS_CONSELHO_FISCAL,
-  CEI: CARGOS_CEI
+  CEI: CARGOS_CEI,
+  CONSELHO_CONSULTIVO_TECNICO: CARGOS_CONSELHO_CONSULTIVO
+};
+
+// Vedação de parentesco até 2º grau com a Diretoria Executiva — Conselho
+// Fiscal (Art. 43 §3º, I) e CEI (Estatuto Art. 38 §2º) já tinham essa regra;
+// vB.14 estende o MESMO mecanismo (shared/parentesco.js, sem alteração) pro
+// Conselho Consultivo Técnico (Art. 31) — é reaproveitar, não criar.
+const ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA = {
+  CONSELHO_FISCAL: "Art. 43 §3º, I",
+  CEI: "Estatuto Art. 38 §2º",
+  CONSELHO_CONSULTIVO_TECNICO: "Art. 31"
 };
 
 // Art. 38 §3º, II — "é vedado o acúmulo de cargos entre o CEI, a Diretoria
@@ -166,8 +190,10 @@ module.exports = {
   CARGOS_DIRETORIA,
   CARGOS_CONSELHO_FISCAL,
   CARGOS_CEI,
+  CARGOS_CONSELHO_CONSULTIVO,
   CATALOGOS_CARGOS_POR_ORGAO,
   ORGAOS_INCOMPATIVEIS,
+  ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA,
   validarIncompatibilidadeExecutiva,
   cargoJaOcupado,
   calcularSucessaoPresidencial,

@@ -4322,7 +4322,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
   if (aba === "estrutura") montarEstrutura();
   if (aba === "catalogos") montarCatalogos();
-  if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); }
+  if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); carregarNotificacaoRegras(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
   if (aba === "enquetes") carregarEnquetes();
   if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); }
@@ -7765,6 +7765,48 @@ async function carregarPermissoes() {
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// ---- CATÁLOGO DE REGRAS DE NOTIFICAÇÃO (vB.2 — Motor de notificações) ----
+// Nível Global só: mesma restrição de GestaoNotificacaoRegras no backend.
+async function carregarNotificacaoRegras() {
+  const container = document.getElementById("resultadoListaNotificacaoRegras");
+  const res = await fetchProtegido(`${API_BASE}/notificacao-regras`);
+  const regras = await res.json();
+  if (!Array.isArray(regras)) { container.innerHTML = ""; return; }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Regra</th><th>Categoria</th><th>Público-alvo</th><th>Ativa</th><th>E-mail</th><th></th>
+  </tr></thead><tbody>`;
+  regras.forEach(r => {
+    const alvo = [r.permissaoAlvo, r.nivelAlvo].filter(Boolean).join(" / ") || "-";
+    html += `<tr>
+      <td>${r.titulo}<br><small style="color:var(--cor-texto-suave);">${r.chave}</small></td>
+      <td>${r.categoria}</td>
+      <td>${alvo}</td>
+      <td><input type="checkbox" ${r.ativa ? "checked" : ""} onchange="atualizarNotificacaoRegra('${r.chave}', { ativa: this.checked })" /></td>
+      <td><input type="checkbox" ${r.canalEmail ? "checked" : ""} onchange="atualizarNotificacaoRegra('${r.chave}', { canalEmail: this.checked })" /></td>
+      <td class="acoes-inline">
+        <button class="btn-link" onclick="editarTituloNotificacaoRegra('${r.chave}', '${r.titulo.replace(/'/g, "\\'")}')">Editar título</button>
+      </td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function atualizarNotificacaoRegra(chave, alteracoes) {
+  const res = await fetchProtegido(`${API_BASE}/notificacao-regras/${chave}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(alteracoes)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarNotificacaoRegras();
+}
+
+async function editarTituloNotificacaoRegra(chave, tituloAtual) {
+  const novoTitulo = await pedirTexto("Título da regra (aparece no sino)", "", tituloAtual);
+  if (!novoTitulo || novoTitulo === tituloAtual) return;
+  await atualizarNotificacaoRegra(chave, { titulo: novoTitulo });
 }
 
 // Reseta só a senha, sem mexer em papel/escopo — pra quando a pessoa esqueceu

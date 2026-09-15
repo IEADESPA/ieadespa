@@ -3557,10 +3557,12 @@ novo e reaproveitar o mesmo destinatário/regra, não redesenhar nada.
       exibido) e recriptografado no par local de segredos
       (`api/local.settings.enc.json`) — canal de e-mail pronto pra produção,
       não só código.
-- [ ] Tela de administração do catálogo (`GestaoNotificacaoRegras` já tem
-      API pronta, `app/` ainda não tem aba própria) — hoje só dá pra editar
-      regra via chamada direta à API; entra quando houver demanda real de
-      ajustar regra sem developer.
+- [x] Tela de administração do catálogo (14/09): seção "Regras de
+      notificação" dentro da aba Permissões (`app/index.html`/`script.js`) —
+      mesma restrição de nível Global, mesmo tipo de decisão ("quem recebe o
+      quê do sistema"), por isso não virou aba própria. Toggle direto de
+      ativa/e-mail por regra e edição do título exibido no sino, sem precisar
+      chamar a API na mão.
 
 #### vB.3 — Motor de workflow genérico (parar de recodar o mesmo fluxo)
 

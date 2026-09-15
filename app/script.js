@@ -4872,7 +4872,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "estrutura") montarEstrutura();
   if (aba === "catalogos") montarCatalogos();
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); carregarNotificacaoRegras(); }
-  if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
+  if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); carregarTurmasBatismo(); carregarCandidatosBatismo(); }
   if (aba === "enquetes") carregarEnquetes();
   if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); carregarPoliticasRetencao(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
@@ -8600,6 +8600,146 @@ async function carregarConsagracoes() {
 
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// ---- ESTEIRA DE BATISMO (vB.11 — Regimento Art. 80) ----
+const ROTULO_STATUS_TURMA_BATISMO = { ABERTA: "Aberta", REALIZADA: "Realizada", CANCELADA: "Cancelada" };
+const ROTULO_TIPO_LOCAL_BATISMO = { TEMPLO: "Templo", OUTRO_APROVADO: "Outro local aprovado" };
+
+async function salvarTurmaBatismoAcao() {
+  const dataBatismo = document.getElementById("turmaBatismoData").value;
+  const local = document.getElementById("turmaBatismoLocal").value.trim();
+  const tipoLocal = document.getElementById("turmaBatismoTipoLocal").value;
+  const oficiantesTexto = document.getElementById("turmaBatismoOficiantes").value.trim();
+  const msg = document.getElementById("resultadoTurmaBatismo");
+  if (!dataBatismo || !local) { msg.textContent = "Informe data e local."; return; }
+  const oficiantesMembroIds = oficiantesTexto ? oficiantesTexto.split(",").map(s => s.trim()).filter(Boolean).map(Number) : [];
+
+  const res = await fetchProtegido(`${API_BASE}/turmas-batismo`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataBatismo, local, tipoLocal, oficiantesMembroIds })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("turmaBatismoLocal").value = "";
+    document.getElementById("turmaBatismoOficiantes").value = "";
+    carregarTurmasBatismo();
+  }
+}
+
+async function carregarTurmasBatismo() {
+  const container = document.getElementById("resultadoListaTurmasBatismo");
+  const res = await fetchProtegido(`${API_BASE}/turmas-batismo`);
+  const turmas = await res.json();
+  if (!Array.isArray(turmas) || turmas.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma turma criada ainda.</p>";
+    return;
+  }
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr>
+    <th>Data</th><th>Local</th><th>Mesa</th><th>Candidatos</th><th>Status</th><th></th>
+  </tr></thead><tbody>` + turmas.map(t => `
+    <tr>
+      <td>${new Date(t.dataBatismo).toLocaleDateString("pt-BR")}</td>
+      <td>${t.local} <small>(${ROTULO_TIPO_LOCAL_BATISMO[t.tipoLocal] || t.tipoLocal})</small></td>
+      <td>${t.autorizacaoMesa ? "✅" : "⏳"}</td>
+      <td>${t.totalCandidatos}</td>
+      <td>${ROTULO_STATUS_TURMA_BATISMO[t.status] || t.status}</td>
+      <td class="acoes-inline">
+        ${t.status === "ABERTA" && !t.autorizacaoMesa ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'AUTORIZAR_MESA')">Autorizar Mesa</button>` : ""}
+        ${t.status === "ABERTA" ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'REALIZAR')">Realizar</button>
+        <button class="btn-link btn-link-perigo" onclick="acaoTurmaBatismo(${t.turmaId}, 'CANCELAR')">Cancelar</button>` : ""}
+      </td>
+    </tr>
+  `).join("") + "</tbody></table>";
+}
+
+async function acaoTurmaBatismo(turmaId, acao) {
+  const rotulos = { AUTORIZAR_MESA: "autorizar a Mesa pra", REALIZAR: "REALIZAR o batismo d", CANCELAR: "cancelar" };
+  if (!(await confirmarAcao(`Confirma ${rotulos[acao]}esta turma?`, "Confirmar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/turmas-batismo/${turmaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { carregarTurmasBatismo(); carregarCandidatosBatismo(); }
+}
+
+async function inscreverCandidatoBatismoAcao() {
+  const membroId = document.getElementById("candidatoBatismoMatricula").value;
+  const msg = document.getElementById("resultadoCandidatoBatismo");
+  if (!membroId) { msg.textContent = "Informe a matrícula."; return; }
+  const res = await fetchProtegido(`${API_BASE}/candidatos-batismo`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) { document.getElementById("candidatoBatismoMatricula").value = ""; carregarCandidatosBatismo(); }
+}
+
+function badgeAptidaoBatismo(item) {
+  return `<span title="${item.detalhe}">${item.ok ? "✅" : "⚠️"}</span>`;
+}
+
+async function carregarCandidatosBatismo() {
+  const container = document.getElementById("resultadoListaCandidatosBatismo");
+  const res = await fetchProtegido(`${API_BASE}/candidatos-batismo`);
+  const candidatos = await res.json();
+  if (!Array.isArray(candidatos) || candidatos.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum candidato inscrito ainda.</p>";
+    return;
+  }
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr>
+    <th>Nome</th><th>Idade</th><th>Certidão civil</th><th>Parecer</th><th>Discipulado</th><th>Estatuto</th><th>Status</th><th></th>
+  </tr></thead><tbody>` + candidatos.map(c => `
+    <tr>
+      <td>${c.nome}</td>
+      <td>${badgeAptidaoBatismo(c.aptidao.itens.idadeMinima)}</td>
+      <td>${badgeAptidaoBatismo(c.aptidao.itens.certidaoCivil)}</td>
+      <td>${badgeAptidaoBatismo(c.aptidao.itens.parecerVidaPregressa)} <button class="btn-link" onclick="parecerCandidatoBatismoAcao(${c.candidatoId})">Dar parecer</button></td>
+      <td>${badgeAptidaoBatismo(c.aptidao.itens.discipulado)} <button class="btn-link" onclick="alternarDiscipuladoBatismoAcao(${c.candidatoId}, ${!c.discipuladoConcluidoManual})">${c.discipuladoConcluidoManual ? "Desmarcar" : "Marcar concluído"}</button></td>
+      <td>${c.aceiteTermoAssinadoId ? "✅" : `<button class="btn-link" onclick="acaoCandidatoBatismo(${c.candidatoId}, 'ACEITAR_ESTATUTO')">Registrar aceite</button>`}</td>
+      <td>${c.status}</td>
+      <td class="acoes-inline">
+        ${c.status === "AGUARDANDO_TURMA" ? `<button class="btn-link" onclick="atribuirTurmaBatismoAcao(${c.candidatoId})">Atribuir turma</button>` : ""}
+        ${c.turmaId && c.status === "AGUARDANDO_TURMA" ? `
+          <button class="btn-link" onclick="acaoCandidatoBatismo(${c.candidatoId}, 'APROVAR')">Aprovar</button>
+          <button class="btn-link btn-link-perigo" onclick="reprovarCandidatoBatismoAcao(${c.candidatoId})">Reprovar</button>
+        ` : ""}
+      </td>
+    </tr>
+  `).join("") + "</tbody></table>";
+}
+
+async function acaoCandidatoBatismo(id, acao, corpoExtra) {
+  const res = await fetchProtegido(`${API_BASE}/candidatos-batismo/${id}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ acao }, corpoExtra))
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarCandidatosBatismo();
+}
+
+async function parecerCandidatoBatismoAcao(id) {
+  const favoravel = await confirmarAcao("O parecer de vida pregressa é favorável? (Cancelar = desfavorável)", "Favorável");
+  const observacao = await pedirTexto("Observação do parecer (opcional)", "");
+  await acaoCandidatoBatismo(id, "PARECER", { parecerVidaPregressa: favoravel ? "FAVORAVEL" : "DESFAVORAVEL", observacao });
+}
+
+async function alternarDiscipuladoBatismoAcao(id, concluido) {
+  await acaoCandidatoBatismo(id, "DISCIPULADO_CONCLUIDO", { concluido });
+}
+
+async function atribuirTurmaBatismoAcao(id) {
+  const turmaId = await pedirTexto("Id da turma (veja a tabela de Turmas de Batismo acima)", "Ex: 3");
+  if (!turmaId) return;
+  await acaoCandidatoBatismo(id, "ATRIBUIR_TURMA", { turmaId: Number(turmaId) });
+}
+
+async function reprovarCandidatoBatismoAcao(id) {
+  const motivo = await pedirTexto("Motivo da reprovação (obrigatório)", "");
+  if (!motivo) return;
+  await acaoCandidatoBatismo(id, "REPROVAR", { motivo });
 }
 
 async function avancarConsagracaoAcao(id) {

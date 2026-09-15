@@ -1509,6 +1509,37 @@
         <hr />
         <h3>Esteira Ativa</h3>
         <div class="rolagem-tabela"><div id="resultadoListaConsagracoes"></div></div>
+
+        <hr />
+        <!-- vB.11 — Esteira de Batismo (Regimento Art. 80). Fica aqui (não
+             em aba própria) porque usa a mesma permissão e é o mesmo tipo
+             de processo ministerial das Consagrações. -->
+        <h3>🕊️ Turmas de Batismo</h3>
+        <p class="subtitle">Ato centralizado no Campo — só maio e outubro, nunca em rio/represa (Art. 80 §1º e §3º).</p>
+        <form onsubmit="event.preventDefault(); salvarTurmaBatismoAcao();">
+          <div class="barra-lista">
+            <input type="date" id="turmaBatismoData" />
+            <input type="text" id="turmaBatismoLocal" placeholder="Local (ex: Templo Sede)" style="min-width:220px;" />
+            <select id="turmaBatismoTipoLocal">
+              <option value="TEMPLO">Templo</option>
+              <option value="OUTRO_APROVADO">Outro local aprovado</option>
+            </select>
+            <input type="text" id="turmaBatismoOficiantes" placeholder="Matrículas dos oficiantes (separadas por vírgula)" style="min-width:260px;" />
+          </div>
+          <button class="btn-confirmar" style="width:auto;" type="submit">Criar turma</button>
+        </form>
+        <p id="resultadoTurmaBatismo" class="subtitle"></p>
+        <div class="rolagem-tabela"><div id="resultadoListaTurmasBatismo"></div></div>
+
+        <hr />
+        <h3>Candidatos ao Batismo</h3>
+        <p class="subtitle">Aptidão (Art. 80 §2º) sempre calculada — idade, certidão civil (se união estável), parecer e discipulado.</p>
+        <div class="barra-lista">
+          <input type="number" id="candidatoBatismoMatricula" placeholder="Matrícula do candidato" style="min-width:200px;" />
+          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="inscreverCandidatoBatismoAcao()">Inscrever candidato</button>
+        </div>
+        <p id="resultadoCandidatoBatismo" class="subtitle"></p>
+        <div class="rolagem-tabela"><div id="resultadoListaCandidatosBatismo"></div></div>
       </div>
 
       <!-- ABA: ENQUETES (v2.8) -->

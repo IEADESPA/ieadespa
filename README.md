@@ -4182,27 +4182,49 @@ A FASE 1 tratou admissão (v1.1), integração (v1.2), categorias (v1.3), trâns
 aqui na FASE B, e não dentro da FASE 1 já entregue, porque a FASE 1 está
 fechada — é retrofit, não reabertura.
 
-- [ ] **Turma de batismo** (Art. 80 §1º — ato centralizado no Campo, com
-      oficiantes designados): data, local aprovado, autorização da Mesa,
-      oficiantes. Calendário semestral de **maio e outubro** (§3º, I), com local
-      aprovado e **vedação de rio/represa** (§3º, II-III) validada no cadastro.
-- [ ] **Checklist de aptidão calculado, não digitado** (Art. 80 §2º):
-      (I) idade mínima de 12 anos — já sai de `DataNascimento` via
-      `shared/estatuto.js`; (II) **certidão de casamento civil obrigatória para
-      candidatos coabitantes** — cruza com `EstadoCivil` (v1.4) e `Casamentos`
-      (v1.9); (III) parecer de vida pregressa; (IV) **conclusão do Curso de
-      Discipulado** — verificada na trilha de formação (v6.9/v8.5), não no
-      "eu sei que ele fez".
-- [ ] **Aceite eletrônico do Estatuto e do Regimento** (§2º, V) com data, versão
-      do documento aceito e hash — é a prova documental do vínculo associativo, e
-      é o que o Art. 80 manda registrar. Reaproveita `TermosAssinados`, que já
-      existe desde a migração 031.
-- [ ] Efetivação: concluído o batismo, o candidato vira **Membro em Comunhão**
-      automaticamente (Art. 7º, II — regra que `estatuto.js` já implementa) e
-      `DataBatismo`/`FormaAdmissao` são preenchidas pelo próprio fluxo, sem
-      digitação posterior.
-- [ ] Candidato que não é aprovado permanece na fila para a turma seguinte, com o
-      motivo registrado — sem precisar recomeçar o cadastro.
+- [x] **Turma de batismo** (migração 086, `TurmasBatismo`+`OficiantesBatismo`,
+      `api/GestaoTurmasBatismo`, permissão `consagracoes`): data, local,
+      autorização da Mesa, oficiantes. **Calendário semestral (maio/outubro,
+      §3º I) e vedação de rio/represa (§3º II-III) validados no servidor**
+      (`shared/batismo.js::mesValidoParaTurma`/`localPermitido`), não só
+      documentados — `POST` recusa qualquer outro mês ou `TipoLocal` fora
+      de `TEMPLO`/`OUTRO_APROVADO`.
+- [x] **Checklist de aptidão calculado, não digitado** (Art. 80 §2º,
+      `shared/batismo.js::calcularAptidaoBatismo`, recalculado a cada
+      leitura, nunca um bit salvo): (I) idade mínima 12 anos via
+      `estatuto.js::idadeEm`; (II) certidão de casamento civil — só exigida
+      de quem está `EstadoCivil = 'UNIAO_ESTAVEL'`, cruzando com
+      `Casamentos.Modalidade`/`RegistradoCartorio` (v1.9); (III) parecer de
+      vida pregressa (`FAVORAVEL`/`DESFAVORAVEL`, registrado por quem
+      administra o processo); (IV) conclusão do Curso de Discipulado —
+      **atestação manual até a v6.9 existir de verdade** (trilha de
+      formação como entidade real), documentado no próprio retorno da API
+      (`"Atestado manualmente — a v6.9 vai verificar isso de verdade"`) e
+      registrado como pendência na v6.9 (ver lá) — não fabricado aqui.
+- [x] **Aceite eletrônico do Estatuto e do Regimento** (§2º, V,
+      `shared/batismo.js::registrarAceiteEstatuto`): reaproveita a MESMA
+      tabela/trilha de hash de `TermosAssinados` (vB.6) — texto fixo,
+      versão, `HashConteudo` — mas **fora** do catálogo `shared/termos.js`
+      de propósito: aquele catálogo gate-ia login de Lideranca
+      (`exigirLogin`→`termosPendentes`), e aceite de membresia não pode
+      virar pendência de acesso administrativo pra quem não tem nada a ver
+      com isso.
+- [x] **Efetivação automática** (`shared/batismo.js::efetivarTurma`,
+      chamada quando a turma vira `REALIZADA`): todo candidato `APROVADO`
+      daquela turma vira `SituacaoMembro = 'EM_COMUNHAO'` (Art. 7º, II — a
+      mesma regra que `estatuto.js` já usa em capacidade eleitoral),
+      `DataBatismo`/`FormaAdmissao='BATISMO'` preenchidos pelo próprio
+      fluxo — nenhuma digitação posterior. Realizar exige autorização da
+      Mesa já registrada (Art. 80 §1º), senão recusa com mensagem clara.
+- [x] Candidato reprovado **nunca recomeça o cadastro** — a `UNIQUE
+      (MembroId)` em `CandidatosBatismo` é 1 linha por matrícula pra
+      sempre; reprovar só zera `TurmaId` e volta `Status` a
+      `AGUARDANDO_TURMA`, motivo registrado, pronto pra entrar na turma
+      seguinte. Turma cancelada devolve os `APROVADO` dela pra fila do
+      mesmo jeito.
+- [x] Testado com `npx jest` (116 testes, incluindo 12 novos: os 4 itens de
+      aptidão isolados, as duas vedações do §3º, efetivação só dos
+      aprovados) e `node --check` em todos os arquivos novos.
 
 #### vB.12 — Apresentação de Crianças *(retrofit da FASE 1, gap da varredura normativa)*
 
@@ -4690,6 +4712,12 @@ dá, pela primeira vez, série histórica comparável entre congregações.
 - [ ] Educação continuada com validade: certificado vence, e o vencimento
       aparece como pendência (não bloqueia culto, mas bloqueia escala onde a
       norma exigir). *(referência: Lifeway Ministry Grid, RightNow Media, Rock RMS LMS)*
+- [ ] **Integração com a Esteira de Batismo (vB.11)**: o item IV da aptidão
+      (Art. 80 §2º, conclusão do Curso de Discipulado) hoje é uma atestação
+      MANUAL (`CandidatosBatismo.DiscipuladoConcluidoManual`, marcada por
+      quem administra o processo, sem verificação própria) — quando esta
+      versão existir, `shared/batismo.js::calcularAptidaoBatismo` troca essa
+      leitura por conclusão real de trilha, sem tocar no resto do fluxo.
 
 #### v6.10 — Sala de aula assistida e material *(7ª rodada)*
 

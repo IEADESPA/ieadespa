@@ -58,6 +58,108 @@ function pedirTexto(titulo, placeholder, valorInicial) {
   });
 }
 
+// ---- PWA: instalação + notificação push (vB.5) ----
+let eventoInstalarPwa = null;
+window.addEventListener("beforeinstallprompt", (ev) => {
+  ev.preventDefault();
+  eventoInstalarPwa = ev;
+  const cx = document.getElementById("cxInstalarApp");
+  if (cx) cx.style.display = "block";
+});
+
+async function instalarAppAcao() {
+  if (!eventoInstalarPwa) return;
+  await eventoInstalarPwa.prompt();
+  eventoInstalarPwa = null;
+  document.getElementById("cxInstalarApp").style.display = "none";
+}
+
+function registrarServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("service-worker.js").catch((e) => console.error("Falha ao registrar service worker:", e));
+}
+
+function base64UrlParaUint8Array(base64Url) {
+  const padding = "=".repeat((4 - (base64Url.length % 4)) % 4);
+  const base64 = (base64Url + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const bruto = window.atob(base64);
+  return Uint8Array.from([...bruto].map((c) => c.charCodeAt(0)));
+}
+
+function arrayBufferParaBase64Url(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// Só mostra o botão quando o navegador realmente suporta Push — sem isso
+// ficaria um botão morto pra quem clicasse (ex: Safari iOS mais antigo).
+async function configurarBotaoPush() {
+  const cx = document.getElementById("cxAtivarPush");
+  if (!cx || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  cx.style.display = "block";
+  const registration = await navigator.serviceWorker.ready;
+  const inscricaoAtual = await registration.pushManager.getSubscription();
+  document.getElementById("btnAtivarPush").textContent = inscricaoAtual ? "🔕 Desativar notificação neste dispositivo" : "🔔 Ativar notificação neste dispositivo";
+}
+
+async function alternarPushAcao() {
+  const registration = await navigator.serviceWorker.ready;
+  const inscricaoAtual = await registration.pushManager.getSubscription();
+  if (inscricaoAtual) {
+    await fetchProtegido(`${API_BASE}/push-inscricoes`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: inscricaoAtual.endpoint })
+    });
+    await inscricaoAtual.unsubscribe();
+    mostrarToast("Notificação desativada neste dispositivo.", "sucesso");
+  } else {
+    const res = await fetch(`${API_BASE}/push-inscricoes`);
+    const { vapidPublicKey } = await res.json();
+    if (!vapidPublicKey) { mostrarToast("Notificação push não configurada no servidor.", "erro"); return; }
+    const inscricao = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlParaUint8Array(vapidPublicKey) });
+    await fetchProtegido(`${API_BASE}/push-inscricoes`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: inscricao.endpoint, keys: { p256dh: arrayBufferParaBase64Url(inscricao.getKey("p256dh")), auth: arrayBufferParaBase64Url(inscricao.getKey("auth")) } })
+    });
+    mostrarToast("Notificação ativada neste dispositivo.", "sucesso");
+  }
+  await configurarBotaoPush();
+}
+
+document.addEventListener("DOMContentLoaded", registrarServiceWorker);
+
+// ---- LOGIN SIMPLIFICADO POR CÓDIGO DE E-MAIL (vB.5) ----
+function alternarLoginPorCodigo() {
+  const cx = document.getElementById("cxLoginCodigo");
+  cx.style.display = cx.style.display === "none" ? "block" : "none";
+}
+
+async function solicitarCodigoAcessoAcao() {
+  const matricula = document.getElementById("matriculaPainel").value;
+  const msg = document.getElementById("resultadoLogin");
+  if (!matricula) { msg.textContent = "Informe sua matrícula primeiro."; return; }
+  const res = await fetch(`${API_BASE}/membro/solicitar-codigo`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ matricula })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem;
+  document.getElementById("cxCampoCodigoAcesso").style.display = "block";
+}
+
+async function confirmarCodigoAcessoAcao() {
+  const matricula = document.getElementById("matriculaPainel").value;
+  const codigo = document.getElementById("codigoAcessoInput").value.trim();
+  const msg = document.getElementById("resultadoLogin");
+  if (!codigo) { msg.textContent = "Digite o código recebido."; return; }
+  const res = await fetch(`${API_BASE}/membro/confirmar-codigo`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ matricula, codigo })
+  });
+  const data = await res.json();
+  if (!data.sucesso) { msg.textContent = data.mensagem; return; }
+  salvarSessao(data.token, data.nome, data.permissoes, data.matricula, data.nivel);
+  document.getElementById("codigoAcessoInput").value = "";
+  msg.textContent = "";
+  await abrirPainelConteudo(data.matricula);
+}
+
 // ---- ANEXOS GENÉRICOS (vB.4) — qualquer tela chama abrirModalAnexos(tabela,
 // registroId, titulo) e ganha upload/lista/exclusão, sem reescrever nada.
 // Controle de acesso é resolvido no backend (shared/anexos.js) — aqui só
@@ -338,6 +440,10 @@ async function abrirPainelConteudo(matricula) {
   // vB.4 — busca global: mesma restrição do sino (sem Lideranca, ninguém
   // tem permissão nenhuma pra nenhuma fonte de busca).
   document.getElementById("campoBuscaGlobal").parentElement.style.display = authToken ? "block" : "none";
+  // vB.5 — push é por matrícula autenticada (código por e-mail OU senha de
+  // Lideranca, tanto faz — as duas dão authToken); check-in só com
+  // matrícula (sem token) nunca vê o botão.
+  if (authToken) await configurarBotaoPush();
 }
 
 // ---- BUSCA GLOBAL (vB.4) ----

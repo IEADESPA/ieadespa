@@ -14,6 +14,7 @@
 const { sql } = require("./db");
 const { ancestraisTerritoriais } = require("./escopo");
 const { resolverDestinatariosPorPermissao, criarNotificacao } = require("./notificacoes");
+const { enviarCanaisNotificacao } = require("./notificacaoMotor");
 
 const ORDEM_NIVEIS = ["CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO", "GLOBAL"];
 
@@ -190,16 +191,16 @@ async function escalonarSLAsVencidos(pool) {
     escalonadas++;
 
     const destinatarios = await resolverResponsaveisEtapa(pool, { permissao: instancia.ResponsavelPermissao, nivel: proximo, congregacaoId: instancia.CongregacaoId });
+    const titulo = "Fluxo escalonado até você";
+    const mensagem = `Um fluxo do tipo "${instancia.TipoFluxo}" estourou o prazo na etapa atual e escalonou até seu nível.`;
     for (const dest of destinatarios) {
-      await criarNotificacao(pool, {
-        regraChave: "FLUXO_ESCALONADO",
-        destinatarioMembroId: dest.membroId,
-        titulo: "Fluxo escalonado até você",
-        mensagem: `Um fluxo do tipo "${instancia.TipoFluxo}" estourou o prazo na etapa atual e escalonou até seu nível.`,
-        categoria: "WORKFLOW",
-        referenciaTabela: "FluxoInstancias",
-        referenciaId: instancia.InstanciaId
+      const { criada, notificacaoId } = await criarNotificacao(pool, {
+        regraChave: "FLUXO_ESCALONADO", destinatarioMembroId: dest.membroId, titulo, mensagem,
+        categoria: "WORKFLOW", referenciaTabela: "FluxoInstancias", referenciaId: instancia.InstanciaId
       });
+      // vB.5: dispara e-mail/push de verdade (antes só criava a linha na
+      // central de avisos — a pessoa só saberia se abrisse o sino sozinha).
+      if (criada) await enviarCanaisNotificacao(pool, { regraChave: "FLUXO_ESCALONADO", destinatarioMembroId: dest.membroId, notificacaoId, titulo, mensagem, categoria: "WORKFLOW", email: dest.email });
     }
   }
   return escalonadas;

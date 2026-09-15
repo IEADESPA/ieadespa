@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Governança IEADESPA</title>
+  <!-- vB.5 — PWA instalável -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0B2545" />
+  <link rel="apple-touch-icon" href="icones/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -62,6 +66,20 @@
       </form>
 
       <p id="resultadoLogin"></p>
+
+      <!-- vB.5 — login simplificado sem senha, verificado por e-mail (não é
+           só "digitar a matrícula e pronto" — quem não tem acesso ao e-mail
+           cadastrado não recebe o código). -->
+      <a href="#" class="link-secretaria" onclick="alternarLoginPorCodigo()">📧 Prefere entrar com código por e-mail?</a>
+      <div id="cxLoginCodigo" style="display:none; margin-top:12px;">
+        <p class="subtitle">Enviamos um código de 6 dígitos pro e-mail já cadastrado da sua matrícula (acima).</p>
+        <button class="btn-confirmar btn-secundario" type="button" onclick="solicitarCodigoAcessoAcao()">Enviar código</button>
+        <div class="input-group" id="cxCampoCodigoAcesso" style="display:none; margin-top:10px;">
+          <label>Código recebido por e-mail:</label>
+          <input type="text" id="codigoAcessoInput" inputmode="numeric" maxlength="6" placeholder="000000" />
+          <button class="btn-confirmar" type="button" onclick="confirmarCodigoAcessoAcao()">Confirmar e entrar</button>
+        </div>
+      </div>
 
       <a href="#" class="link-secretaria" onclick="voltarParaCheckin()">← Voltar para a Portaria</a>
     </div>
@@ -264,6 +282,17 @@
 
         <!-- SUB-ABA: MEU PERFIL -->
         <div id="subMeupainelPerfil" class="sub-aba-secretaria">
+
+          <!-- vB.5 — PWA instalável + notificação push. Só aparece quando o
+               navegador realmente suporta (iOS Safari mais antigo, por
+               exemplo, não tem PushManager) — sem isso, o botão ficaria
+               morto pra quem clicasse. -->
+          <div id="cxInstalarApp" style="display:none; margin-bottom:16px;">
+            <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="instalarAppAcao()">📲 Instalar app no celular</button>
+          </div>
+          <div id="cxAtivarPush" style="display:none; margin-bottom:16px;">
+            <button class="btn-confirmar btn-secundario" style="width:auto;" id="btnAtivarPush" onclick="alternarPushAcao()">🔔 Ativar notificação neste dispositivo</button>
+          </div>
 
           <!-- v4.2 — Grade de módulos (padrão "portal de serviços"): primeira
                coisa que a pessoa vê. Cada card só aparece se ela tiver

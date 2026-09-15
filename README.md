@@ -3670,13 +3670,55 @@ sete implementações do mesmo conceito — o oitavo módulo vai escrever a oita
 "Meu Painel" já existe, mas é uma aba dentro do sistema administrativo. O membro
 comum não entra num painel de secretaria — ele entra no celular.
 
-- [ ] PWA instalável (a seção 6.7 já registra a ideia — aqui ela vira versão):
-      ícone na tela inicial, funciona em conexão ruim, notificação push.
-- [ ] Self-service ampliado: minhas escalas (aceitar/recusar/**trocar** com outro
-      voluntário), minhas inscrições em eventos, meus filhos (check-in), minha
-      trilha de discipulado, meus certificados, minhas contribuições, minhas cartas.
-- [ ] Login simplificado pro membro comum (hoje o acesso é pensado pra quem tem
-      papel de liderança) — sem senha complexa de sistema administrativo.
+- [x] **Login simplificado pro membro comum** (migração 082,
+      `api/shared/codigoAcesso.js`, `SolicitarCodigoAcessoMembro` +
+      `ConfirmarCodigoAcessoMembro`): código de 6 dígitos por e-mail, mesmo
+      padrão da "Minha Conta" do site (Fase 26) — só que aqui o destinatário
+      é sempre uma matrícula real de `MembroReferencia`, não uma conta
+      solta. Fecha de caminho um problema que já existia: antes,
+      "autoatendimento" era só digitar um número de matrícula (qualquer
+      um que soubesse o número de outra pessoa "era" ela); agora tem uma
+      opção verificada de verdade, com sessão real (`shared/auth.js::
+      criarSessao`, `permissoes: []` — rotas administrativas continuam
+      batendo 403 sozinhas). Resposta sempre genérica
+      ("se a matrícula existir e tiver e-mail...") pra não vazar quem tem
+      conta só de tentar matrícula em sequência.
+- [x] **PWA instalável** (`app/manifest.json` + `app/service-worker.js`):
+      ícones reais reaproveitados do site (`site/public/favicon-192.png`,
+      `logo.png`, `maskable-icon.png` — mesma identidade visual, não um
+      ícone inventado). Cache do app-shell (HTML/JS/CSS) com
+      network-first-com-fallback — abre mesmo offline/conexão ruim; nunca
+      cacheia `/api/*` de propósito (dado real precisa falhar de verdade
+      sem rede, não devolver informação velha). Botão "Instalar app no
+      celular" (`beforeinstallprompt`) na aba Meu Perfil.
+- [x] **Notificação push** (migração 082, `PushInscricoesMembro` +
+      `CanalPush` em `NotificacaoRegras`): terceiro canal do motor de
+      notificações (vB.2), ao lado do e-mail — WhatsApp continua fora
+      (decisão da vB.2, custo de API paga; push web é gratuito). Par de
+      chaves VAPID gerado e já configurado como App Setting de produção do
+      `app-meusite-web`. `shared/notificacaoMotor.js::enviarCanaisNotificacao`
+      centraliza a decisão de canal num único lugar, usado tanto por
+      `avaliarRegras` (vB.2) quanto por `escalonarSLAsVencidos` (vB.3) —
+      **achado real ao integrar**: o escalonamento de fluxo criava a
+      notificação na central mas nunca disparava e-mail nenhum (gap deixado
+      na vB.3, corrigido aqui de passagem). Inscrição morta (404/410 —
+      desinstalou o app) é removida sozinha na próxima tentativa de envio.
+- [ ] **Self-service ampliado — parcialmente bloqueado, não fabricado**: as
+      duas peças que **já existem** (Minhas Contribuições, v4.1.1; Cartas de
+      Trânsito, vC.3) continuam funcionando, sem mudança. As demais **não
+      têm módulo de negócio por trás ainda**, então não dá pra construir a
+      tela sem inventar dado: **minhas escalas** depende da v7.5 (Escalas e
+      voluntariado, ainda não implementada); **inscrições em eventos** já
+      existe, mas mora no site institucional (Directus, vC.2/v7.4 —
+      decisão explícita de manter os dois motores distintos, não duplicar
+      aqui); **meus filhos (check-in)** e **minha trilha de discipulado**
+      não têm tabela/módulo nenhum no sistema hoje. Cada um entra aqui
+      sozinho, sem versão nova, assim que o módulo de origem existir — a
+      infraestrutura de login/PWA/push desta versão já serve todos eles sem
+      precisar refazer nada.
+- [x] Testado com `npx jest` (72 testes, incluindo 16 novos: código de
+      acesso, canal push, dispatcher único de canais) e `node --check` em
+      todos os arquivos novos e alterados.
 
 #### 🔒 Trava de Revisão B-A — antes de avançar para a vB.6
 

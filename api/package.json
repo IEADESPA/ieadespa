@@ -15,7 +15,8 @@
   "dependencies": {
     "@azure/communication-email": "^1.0.0",
     "@azure/storage-blob": "^12.33.0",
-    "mssql": "^12.7.0"
+    "mssql": "^12.7.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "jest": "^30.5.1"

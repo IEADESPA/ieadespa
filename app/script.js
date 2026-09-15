@@ -4669,7 +4669,7 @@ function mostrarAbaSecretaria(aba) {
     carregarOpcoesCongregacoesFinanceiro();
     carregarDoacoesAcao(); carregarPoliticasAcao(); carregarDueDiligenceAcao(); carregarConflitosInteresseAcao();
   }
-  if (aba === "protecaodedados") { carregarSolicitacoesDPO(); montarPoliticasRetencao(); }
+  if (aba === "protecaodedados") { carregarSolicitacoesDPO(); carregarPoliticasRetencao("resultadoListaPoliticasRetencaoDpo"); carregarRopa(); carregarRipd(); }
   if (aba === "ouvidoria") carregarPainelOuvidoria();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -4953,7 +4953,10 @@ const CATALOGOS_CFG = {
   cargosMinisteriais: { titulo: "Cargos Ministeriais (escada — Art. 71)", idField: "cargoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["ordem", "Ordem na escada"]] },
   prazos: { titulo: "Prazos (Estatuto/Regimento)", idField: "prazoId", campos: [["sigla", "Sigla"], ["nome", "Nome"], ["dias", "Dias"]] },
   tiposVinculoFamiliar: { titulo: "Tipos de Vínculo Familiar", idField: "tipoVinculoId", campos: [["codigo", "Código"], ["rotuloDireto", "Rótulo direto (ex: Pai/Mãe de)"], ["rotuloInverso", "Rótulo inverso (deixe vazio se simétrico)"]] },
-  politicasRetencao: { titulo: "Políticas de Retenção (LGPD)", idField: "politicaId", campos: [["categoria", "Categoria"], ["baseLegal", "Base legal"], ["diasRetencao", "Dias (vazio = indeterminado)"]] },
+  // politicasRetencao removido daqui (vB.8, achado real): esta tela genérica
+  // só exige a permissão "pessoas" (padrão de GestaoCatalogos), aberta demais
+  // pra editar base legal/retenção — a edição de verdade é
+  // GestaoPoliticasRetencao (vB.6), restrita a nível Global.
   canaisOficiais: { titulo: "Canais Oficiais de Comunicação (Art. 12)", idField: "canalId", campos: [["sigla", "Sigla"], ["nome", "Nome"]] },
   tiposInfracao: {
     titulo: "Infrações Disciplinares (Art. 96-99, 144)", idField: "infracaoId",
@@ -5010,7 +5013,6 @@ const CATALOGOS_CFG = {
 // resolver o nome da Congregação-Mãe no dropdown.
 const ESTRUTURA_ORDEM = ["extensoes", "areas", "regioes", "quadrantes", "distritos"];
 const CATALOGOS_ORDEM = ["statuses", "situacoes", "departamentos", "cargosMinisteriais", "tiposConsagracao", "prazos", "tiposVinculoFamiliar", "canaisOficiais"];
-const POLITICAS_RETENCAO_ORDEM = ["politicasRetencao"];
 const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
 // v4.2 — Plano de Contas primeiro, Categorias de Entrada depois (a segunda
 // referencia a primeira via "pai") — moram dentro do Financeiro, não na
@@ -5018,9 +5020,38 @@ const ORGAOS_LOCAIS_ORDEM = ["orgaosLocais"];
 // configura o que é exclusivo dele).
 const CATALOGOS_FINANCEIRO_ORDEM = ["planoContas", "categoriasEntrada", "categoriasSaida", "alcadasAprovacao", "rateioGeralDestinos"];
 
-function montarPoliticasRetencao() {
-  document.getElementById("politicasRetencaoConteudo").innerHTML = POLITICAS_RETENCAO_ORDEM.map(k => secaoCatalogo(k)).join("");
-  POLITICAS_RETENCAO_ORDEM.forEach(k => { carregarOpcoesPai(k); carregarCatalogoLista(k); });
+// vB.8 — ROPA/RIPD: só busca (não edita nada) — mesma permissão
+// "protecaodedados" que o backend já exige (GestaoRopa).
+async function carregarRopa() {
+  const container = document.getElementById("resultadoRopa");
+  const res = await fetchProtegido(`${API_BASE}/lgpd/ropa`);
+  if (!res.ok) { container.innerHTML = "<p class='subtitle'>Sem permissão pra ver o ROPA.</p>"; return; }
+  const registros = await res.json();
+  container.innerHTML = registros.map(r => `
+    <div style="border:1px solid var(--cor-borda); border-radius:8px; padding:12px; margin-bottom:10px;">
+      <strong>${r.finalidade}</strong>
+      <p class="subtitle" style="margin:4px 0;">Titulares: ${r.titulares} — Base legal: ${r.baseLegal}</p>
+      <p class="subtitle" style="margin:4px 0;">Retenção: ${r.retencao}</p>
+      <p class="subtitle" style="margin:4px 0;">Tabelas: ${Object.entries(r.contagens).map(([t, n]) => `${t} (${n})`).join(", ")}</p>
+    </div>
+  `).join("");
+}
+
+async function carregarRipd() {
+  const container = document.getElementById("resultadoRipd");
+  const res = await fetchProtegido(`${API_BASE}/lgpd/ropa/ripd`);
+  if (!res.ok) { container.innerHTML = "<p class='subtitle'>Sem permissão pra ver o RIPD.</p>"; return; }
+  const ripds = await res.json();
+  container.innerHTML = ripds.map(r => `
+    <div style="border:1px solid var(--cor-borda); border-radius:8px; padding:12px; margin-bottom:10px;">
+      <strong>${r.tratamento}</strong>
+      ${r.riscoIdentificado ? `
+        <p class="subtitle" style="margin:4px 0;">Risco: ${r.riscoIdentificado}</p>
+        <p class="subtitle" style="margin:4px 0;">Mitigação: ${r.medidasMitigacao.join("; ")}</p>
+      ` : ""}
+      <p class="subtitle" style="margin:4px 0;">Risco residual: ${r.riscoResidual}</p>
+    </div>
+  `).join("");
 }
 function montarOrgaosLocais() {
   document.getElementById("orgaosLocaisConteudo").innerHTML = ORGAOS_LOCAIS_ORDEM.map(k => secaoCatalogo(k)).join("");
@@ -6872,6 +6903,9 @@ async function confirmarImportacaoPessoas() {
   if (data.sucesso) carregarPessoas();
 }
 
+// vB.8 — `sensivel: true` marca colunas restritas a nível Global em
+// exportação em massa (ver ExportarPessoas) — dado de contato/nascimento
+// em lote é o que a LGPD mais protege contra compartilhamento externo.
 const COLUNAS_EXPORT_PESSOAS = [
   { chave: "membroId", rotulo: "Matrícula", padrao: true },
   { chave: "nome", rotulo: "Nome", padrao: true },
@@ -6883,23 +6917,26 @@ const COLUNAS_EXPORT_PESSOAS = [
   { chave: "congregacao", rotulo: "Congregação", padrao: true },
   { chave: "status", rotulo: "Status", padrao: true },
   { chave: "situacaoMembro", rotulo: "Situação", padrao: true },
-  { chave: "telefone", rotulo: "Telefone", padrao: false },
-  { chave: "email", rotulo: "E-mail", padrao: false },
-  { chave: "endereco", rotulo: "Endereço", padrao: false },
-  { chave: "dataNascimento", rotulo: "Data de Nascimento", padrao: false },
+  { chave: "telefone", rotulo: "Telefone", padrao: false, sensivel: true },
+  { chave: "email", rotulo: "E-mail", padrao: false, sensivel: true },
+  { chave: "endereco", rotulo: "Endereço", padrao: false, sensivel: true },
+  { chave: "dataNascimento", rotulo: "Data de Nascimento", padrao: false, sensivel: true },
   { chave: "dataAdmissao", rotulo: "Data de Admissão", padrao: false }
 ];
 
 function abrirModalExportarPessoas() {
   const caixa = document.getElementById("modalCaixa");
-  const checkboxesHtml = COLUNAS_EXPORT_PESSOAS.map(c => `
+  // vB.8 — quem não é nível Global nem vê a opção de coluna sensível (a
+  // API também recusaria — isso é só não oferecer o que seria negado).
+  const colunasDisponiveis = COLUNAS_EXPORT_PESSOAS.filter(c => !c.sensivel || authNivel === "GLOBAL");
+  const checkboxesHtml = colunasDisponiveis.map(c => `
     <label style="display:flex;align-items:center;gap:6px;margin:4px 0;">
-      <input type="checkbox" id="exportCol_${c.chave}" ${c.padrao ? "checked" : ""} /> ${c.rotulo}
+      <input type="checkbox" id="exportCol_${c.chave}" ${c.padrao ? "checked" : ""} /> ${c.rotulo}${c.sensivel ? " 🔒" : ""}
     </label>`).join("");
 
   caixa.innerHTML = `
     <h3>Exportar Pessoas (${pessoasFiltradas.length} registro(s) na lista filtrada)</h3>
-    <p class="subtitle">Escolha as colunas que devem entrar na planilha.</p>
+    <p class="subtitle">Escolha as colunas que devem entrar na planilha. Toda exportação fica registrada na Auditoria.</p>
     <div style="max-height:300px;overflow-y:auto;">${checkboxesHtml}</div>
     <div class="modal-acoes">
       <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
@@ -6910,12 +6947,24 @@ function abrirModalExportarPessoas() {
   document.getElementById("modalCancelar").onclick = () => fecharModal();
 }
 
-function exportarPessoasAcao() {
-  const colunasSelecionadas = COLUNAS_EXPORT_PESSOAS.filter(c => document.getElementById(`exportCol_${c.chave}`).checked);
+async function exportarPessoasAcao() {
+  const colunasSelecionadas = COLUNAS_EXPORT_PESSOAS.filter(c => document.getElementById(`exportCol_${c.chave}`) && document.getElementById(`exportCol_${c.chave}`).checked);
   if (colunasSelecionadas.length === 0) {
     mostrarToast("Selecione ao menos uma coluna.", "erro");
     return;
   }
+
+  // vB.8 — passa pelo servidor ANTES de gerar o arquivo: registra a
+  // exportação na Auditoria e confere de novo (não só confia no que o
+  // modal já escondeu) se colunas sensíveis exigem nível Global. Não
+  // reconsulta o banco (os dados já estão em `pessoasFiltradas`, já
+  // carregados com o escopo de quem está logado) — só valida e audita.
+  const res = await fetchProtegido(`${API_BASE}/pessoas/exportar`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ colunas: colunasSelecionadas.map(c => c.chave), quantidade: pessoasFiltradas.length })
+  });
+  const data = await res.json();
+  if (!data.sucesso) { avisarResultado(data); return; }
 
   const linhas = pessoasFiltradas.map(p => {
     const linha = {};
@@ -8647,8 +8696,17 @@ async function excluirDocumentoAcao(id) {
 }
 
 // ---- POLÍTICAS DE RETENÇÃO (vB.6 — Arquivo Institucional, nível Global) ----
-async function carregarPoliticasRetencao() {
-  const container = document.getElementById("resultadoListaPoliticasRetencao");
+// vB.8 — achado real: existia uma SEGUNDA tela editando PoliticasRetencao
+// (o catálogo genérico de GestaoCatalogos, aba Proteção de Dados), aberta
+// a qualquer um com a permissão "pessoas" — sem relação com esta tela
+// (vB.6, restrita a nível Global) e sem essa restrição. Corrigido: a
+// entrada 'politicasRetencao' saiu de GestaoCatalogos (única fonte de
+// edição agora é esta, nível Global) e a aba Proteção de Dados passou a
+// chamar esta mesma função, só com o container diferente.
+let idContainerPoliticasRetencaoAtual = "resultadoListaPoliticasRetencao";
+async function carregarPoliticasRetencao(idContainer) {
+  idContainerPoliticasRetencaoAtual = idContainer || idContainerPoliticasRetencaoAtual;
+  const container = document.getElementById(idContainerPoliticasRetencaoAtual);
   if (authNivel !== "GLOBAL") { container.innerHTML = "<p class='subtitle'>Só nível Global administra as políticas de retenção.</p>"; return; }
   const res = await fetchProtegido(`${API_BASE}/politicas-retencao`);
   const politicas = await res.json();
@@ -8676,7 +8734,7 @@ async function atualizarPoliticaRetencao(politicaId, alteracoes) {
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) carregarPoliticasRetencao();
+  if (data.sucesso) carregarPoliticasRetencao(idContainerPoliticasRetencaoAtual);
 }
 
 async function editarDiasRetencaoAcao(politicaId, diasAtual) {
@@ -9432,10 +9490,8 @@ async function alternarMeusDadosLGPD() {
   const res = await fetch(`${API_BASE}/lgpd/meus-dados/${authMatricula}`);
   const data = await res.json();
 
-  if (data.precisaConsentimento) {
-    caixa.innerHTML = `<p class="subtitle">🔒 ${data.mensagem}</p>`;
-    return;
-  }
+  // vB.8 — o direito de acesso (Art. 18) não depende mais de consentimento
+  // nenhum (base legal era errada); só falha se a matrícula não existir.
   if (!data.sucesso) { caixa.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
 
   const m = data.membro;

@@ -3924,17 +3924,66 @@ errada é um problema real: cria obrigação que a lei não impõe (e que trava 
 sistema quando a pessoa não consente) e desprotege o que a lei de fato exige —
 **a vedação de compartilhamento com terceiros**, que hoje não tem trava nenhuma.
 
-- [ ] Revisar a base legal por finalidade: o que é Art. 11 II "a" (membro, sem
-      consentimento), o que continua exigindo consentimento (foto, imagem,
-      comunicação de marketing) — `ConsentimentosLGPD` continua, com papel correto.
-- [ ] **Bloqueio técnico de compartilhamento externo** do rol de membros e
-      trilha de quem exportou o quê (a exportação da v1.8 hoje é livre).
-- [ ] ROPA (Registro de Operações de Tratamento) gerado do próprio sistema, e
-      RIPD para os tratamentos de risco (foto, dado de menor, nota pastoral,
-      dado de saúde em evento).
-- [ ] Retenção que **executa** (hoje `PoliticasRetencao` é informativa) —
-      com a mesma regra de ouro de sempre: nunca apagar dado que o Regimento
-      exige preservar; o que vence é minimizado, não destruído.
+- [x] **Revisada a base legal por finalidade — achado real corrigido**: o
+      direito de acesso do titular (`MeusDadosLGPD`, LGPD Art. 18) estava
+      **travado atrás de um consentimento** desde a v1.9 — "conceda o
+      consentimento antes de ver seus próprios dados", inclusive dados
+      básicos (nome, datas). Base legal errada de propósito duplo: o
+      direito de acesso NUNCA depende de consentimento, e o dado básico de
+      membresia em si é Art. 11, II, "a" (organização religiosa, vínculo
+      regular — dispensa consentimento). Corrigido: `MeusDadosLGPD` não
+      checa mais nenhum consentimento pra devolver o cadastro; o checkbox
+      único que existia (`ConsentimentosLGPD.Tipo='DADOS_CONTATO'`) voltou
+      a significar só o que sempre devia — uso de foto/telefone/e-mail pra
+      contato (`GestaoConsentimentoLGPD`, `app/index.html`, rótulo
+      reescrito). Nada foi liberado além do necessário: Foto continua
+      exigindo consentimento de verdade.
+- [x] **Bloqueio técnico de compartilhamento externo — achado real**: a
+      exportação do rol de membros (v1.8) era **100% client-side**, sem
+      nenhuma chamada ao servidor — zero trilha de auditoria possível,
+      porque nenhum código de back-end rodava. `api/ExportarPessoas` (`POST
+      /api/pessoas/exportar`) vira porta de entrada obrigatória antes de
+      gerar a planilha: registra em `AuditLog` quem exportou, quantas
+      linhas e quais colunas, e **recusa** (403) exportar em massa
+      telefone/e-mail/endereço/data de nascimento pra quem não é nível
+      Global — o modal (`app/`) já nem oferece essas colunas pra quem não
+      tem o nível (defesa em profundidade: cliente não oferece, servidor
+      recusa de novo se tentarem direto).
+- [x] **ROPA + RIPD — não existia nada disso, catálogo novo**
+      (`api/shared/ropa.js`, `api/shared/ripd.js`, `api/GestaoRopa`,
+      permissão `protecaodedados`): curado à mão por atividade de
+      tratamento real (Membresia, Foto, Disciplina, Financeiro,
+      Comunicação, Vínculo Familiar/Menor, Auditoria) — a única parte
+      automática é a contagem real de registros por tabela (nunca
+      desatualiza sozinho sem alguém perceber). RIPD cobre só os
+      tratamentos de risco que **existem de verdade** hoje (Foto, Dado de
+      Menor) — Nota Pastoral e Dado de Saúde em Evento entram como "N/A
+      hoje" (sem tabela, sem sistema — nada fabricado), com nota de que a
+      v7.10 (check-in infantil) já prevê o segundo.
+- [x] **Retenção que executa — primeira política do catálogo a acionar
+      minimização de verdade** (migração 084, `shared/minimizacaoLgpd.js`):
+      a minimização de 30 dias pós-Carta de Mudança (Reg. Art. 132 §2º) já
+      existia desde a v1.5, mas o prazo estava **hardcoded no código**, sem
+      nenhuma relação com `PoliticasRetencao` (que, desde a v0.1, nunca
+      executava nada — só catálogo informativo). Extraída a lógica de
+      `GestaoCartas` pra um módulo reaproveitável; o prazo agora vem da
+      política nova "Dados de Ex-Membro (pós-Carta de Mudança)" (30 dias,
+      com o mesmo fallback de 30 se a política for desativada por engano —
+      nunca destrava um prazo maior sozinho). Mesma regra de ouro de
+      sempre: zera dado operacional (contato, cargo, vínculo territorial),
+      preserva o Registro Histórico Mínimo (nome, matrícula, datas,
+      motivo/data de saída) — nunca apaga o que o Regimento exige manter.
+- [x] **Achado real fora do escopo original, corrigido de passagem**: a aba
+      Proteção de Dados já tinha uma **segunda tela** editando
+      `PoliticasRetencao` — o catálogo genérico de `GestaoCatalogos`,
+      aberto a qualquer um com a permissão "pessoas" (não nível Global).
+      Duas telas, duas permissões diferentes, para a mesma tabela sensível
+      — removida a entrada de `GestaoCatalogos` (front e back), a aba
+      Proteção de Dados passou a chamar a mesma tela nível-Global da vB.6
+      (`carregarPoliticasRetencao`, agora parametrizada por container).
+- [x] Testado com `npx jest` (88 testes, incluindo 5 novos: minimização
+      lê a política real e nunca destrava prazo maior sozinha, contagem
+      real do ROPA) e `node --check` em todos os arquivos alterados.
 
 #### vB.9 — Acesso: delegação, sessão e revisão periódica
 

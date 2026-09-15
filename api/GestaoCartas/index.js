@@ -14,9 +14,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
-const vacancia = require("../shared/vacancia");
-
-const DIAS_MINIMIZACAO = 30;
+const { diasMinimizacaoExMembro, minimizarCamposExMembro } = require("../shared/minimizacaoLgpd");
 
 const SELECT_LISTA = `
   SELECT c.CartaId AS cartaId, c.MembroId AS membroId, m.Nome AS nome, cg.Nome AS congregacao,
@@ -112,6 +110,9 @@ module.exports = async function (context, req) {
       JOIN MembroReferencia m ON m.MembroId = c.MembroId
       WHERE c.Tipo = 'MUDANCA' AND c.Status IN ('CONFIRMADA','EMITIDA')`);
 
+    // vB.8 — o prazo agora vem de PoliticasRetencao (antes era um número
+    // fixo no código, sem nenhuma relação com o catálogo de retenção).
+    const diasMinimizacao = await diasMinimizacaoExMembro(pool);
     let minimizadas = 0;
     let canceladas = 0;
 
@@ -121,24 +122,8 @@ module.exports = async function (context, req) {
         await pool.request().input("id", sql.Int, c.CartaId)
           .query(`UPDATE CartasTransito SET Status = 'CANCELADA' WHERE CartaId = @id`);
         canceladas++;
-      } else if (dias !== null && dias >= DIAS_MINIMIZACAO) {
-        // Fecha Assentos/Liderança (v1.5) antes de minimizar — a minimização abaixo já
-        // zera Cargo Ministerial/Departamento/Função na própria linha do membro, mas
-        // não tocava em Assentos/Lideranca, que ficavam órfãos.
-        await vacancia.encerrarVinculos(pool, sql, c.MembroId, c.MotivoSaida || "Carta de Mudança");
-        await pool.request()
-          .input("id", sql.Int, c.MembroId)
-          .input("dataSaida", sql.Date, c.dataBase)
-          .input("motivo", sql.NVarChar(200), c.MotivoSaida || "Carta de Mudança")
-          .query(`UPDATE MembroReferencia SET
-                  Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO',
-                  Telefone = NULL, Email = NULL, Endereco = NULL,
-                  Funcao = NULL, CargoMinisterial = NULL, DepartamentoId = NULL,
-                  Origem = NULL, IgrejaAnterior = NULL, DataRitoRecebimento = NULL,
-                  NomeLidoRito = NULL, MinistranteRito = NULL, DizimistaFiel = NULL,
-                  CongregacaoId = NULL, ExtensaoId = NULL,
-                  DataSaida = @dataSaida, MotivoSaida = @motivo
-                  WHERE MembroId = @id`);
+      } else if (dias !== null && dias >= diasMinimizacao) {
+        await minimizarCamposExMembro(pool, c.MembroId, { dataSaida: c.dataBase, motivo: c.MotivoSaida });
         await pool.request().input("id", sql.Int, c.CartaId)
           .query(`UPDATE CartasTransito SET Status = 'CONCLUIDA' WHERE CartaId = @id`);
         minimizadas++;

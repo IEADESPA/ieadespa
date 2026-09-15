@@ -478,11 +478,15 @@
         <div id="subMeupainelLgpd" class="sub-aba-secretaria" style="display:none;">
           <h3>🔒 Meus Dados (LGPD)</h3>
           <p class="subtitle">Seus direitos como titular dos dados (LGPD Art. 18): acessar tudo que
-            temos sobre você, controlar o consentimento dos seus dados sensíveis e pedir
-            acesso, exclusão, retificação ou portabilidade.</p>
+            temos sobre você (isso é um direito seu — nunca depende de marcar nada abaixo),
+            controlar o consentimento de foto/contato e pedir acesso, exclusão, retificação
+            ou portabilidade.</p>
 
+          <!-- vB.8 — corrigido: este checkbox NUNCA controlou "ver meus dados"
+               de verdade (isso é direito do titular, Art. 18, sem consentimento
+               nenhum — ver MeusDadosLGPD) — só o uso de foto/contato. -->
           <div class="input-group">
-            <label><input type="checkbox" id="consentimentoDadosContato" onchange="salvarConsentimentoLGPD()" /> Autorizo o uso e a minha própria visualização dos meus dados pessoais (contato, foto e demais dados sensíveis) pelo sistema</label>
+            <label><input type="checkbox" id="consentimentoDadosContato" onchange="salvarConsentimentoLGPD()" /> Autorizo o uso da minha foto e do meu telefone/e-mail para contato pela Secretaria</label>
           </div>
           <p id="resultadoConsentimentoLGPD" class="subtitle"></p>
 
@@ -1840,8 +1844,17 @@
 
         <hr />
         <h3>Políticas de Retenção</h3>
-        <p class="subtitle">Referência de quanto tempo cada categoria de dado fica guardada e por quê — usada ao responder um pedido de exclusão. Não apaga nada sozinha. (Editar exige também a permissão "Pessoas".)</p>
-        <div id="politicasRetencaoConteudo"></div>
+        <p class="subtitle">Referência de quanto tempo cada categoria de dado fica guardada e por quê — usada ao responder um pedido de exclusão. Não apaga nada sozinha (vB.6/vB.8 — algumas categorias já acionam minimização real, ver "Dados de Ex-Membro"). Edição restrita a nível Global.</p>
+        <div class="rolagem-tabela"><div id="resultadoListaPoliticasRetencaoDpo"></div></div>
+
+        <hr />
+        <h3>ROPA — Registro de Operações de Tratamento</h3>
+        <p class="subtitle">Finalidade, base legal e volume real de cada tratamento de dado pessoal do sistema (vB.8). Restrito a quem tem a permissão "Proteção de Dados".</p>
+        <div id="resultadoRopa"></div>
+
+        <hr />
+        <h3>RIPD — Relatório de Impacto (tratamentos de risco)</h3>
+        <div id="resultadoRipd"></div>
       </div>
 
       <!-- ABA: OUVIDORIA (Art. 104) — o formulário de abrir denúncia/sugestão

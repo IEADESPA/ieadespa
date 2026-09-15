@@ -113,10 +113,10 @@ const CATALOGOS = {
     tabela: "TiposVinculoFamiliar", chave: "TipoVinculoId", idField: "tipoVinculoId",
     campos: { codigo: sql.NVarChar(30), rotuloDireto: sql.NVarChar(100), rotuloInverso: sql.NVarChar(100), simetrico: sql.Bit, ativo: sql.Bit }
   },
-  politicasRetencao: {
-    tabela: "PoliticasRetencao", chave: "PoliticaId", idField: "politicaId",
-    campos: { categoria: sql.NVarChar(60), baseLegal: sql.NVarChar(300), diasRetencao: sql.Int, ativo: sql.Bit }
-  },
+  // 'politicasRetencao' removido daqui (vB.8, achado real): este catálogo
+  // genérico só exige a permissão "pessoas" (linha ~289) — aberto demais
+  // pra editar base legal/prazo de retenção de dado pessoal. A edição real
+  // é GestaoPoliticasRetencao (vB.6), restrita a nível Global.
   canaisOficiais: {
     tabela: "CanaisOficiaisComunicacao", chave: "CanalId", idField: "canalId",
     campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), ativo: sql.Bit }

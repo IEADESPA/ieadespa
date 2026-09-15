@@ -3,9 +3,12 @@
 // GET  /api/lgpd/consentimento/{matricula}  -> estado atual (mais recente) por Tipo
 // POST /api/lgpd/consentimento/{matricula}  -> body: { tipo?, concedido, observacao? }
 //      Grava um novo evento (trilha append-only: nunca sobrescreve o anterior).
-// v1.9: o Tipo padrão (DADOS_CONTATO) foi generalizado — não é mais só "usar meu
-// telefone/e-mail", virou a trava de "ver todos os meus dados sensíveis" também
-// (ver MeusDadosLGPD). Mesmo registro, só o rótulo em tela mudou.
+// vB.8 — Correção de base legal: a v1.9 tinha generalizado o Tipo padrão
+// (DADOS_CONTATO) pra também travar "ver os próprios dados" — base legal
+// ERRADA (direito de acesso, Art. 18, nunca depende de consentimento; dado
+// básico de membresia é Art. 11, II, "a", que DISPENSA consentimento).
+// Revertido: DADOS_CONTATO volta a significar só "posso usar seu telefone/
+// e-mail (e foto) pra contato" — MeusDadosLGPD não checa mais nada daqui.
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 

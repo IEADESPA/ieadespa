@@ -3548,11 +3548,15 @@ novo e reaproveitar o mesmo destinatário/regra, não redesenhar nada.
       (suíte inteira, 38 testes incluindo os 6 novos de idempotência/opt-out
       do motor) e `node --check` nos 8 arquivos novos de `api/` e em
       `app/script.js` — sem erro de sintaxe/require.
-- [ ] `ACS_CONNECTION_STRING`/`ACS_REMETENTE` (placeholders já em
-      `api/local.settings.json`, valor real pendente) precisam ser
-      provisionados na Azure Communication Services e configurados como App
-      Setting da Function App de governança antes do canal de e-mail sair do
-      papel em produção — infraestrutura, não código.
+- [x] `ACS_CONNECTION_STRING`/`ACS_REMETENTE` provisionados (14/09): o
+      recurso `servicos` (Azure Communication Services) já existia — mesmo
+      usado pelo site institucional (`site/api/EnviarConfirmacaoInscricao`) —
+      e o domínio `ieadespa.org.br` já estava verificado (`servicos-1`,
+      DKIM/SPF/Domain "Verified"). Configurado como App Setting de produção
+      do `app-meusite-web` (`az staticwebapp appsettings set`, valor nunca
+      exibido) e recriptografado no par local de segredos
+      (`api/local.settings.enc.json`) — canal de e-mail pronto pra produção,
+      não só código.
 - [ ] Tela de administração do catálogo (`GestaoNotificacaoRegras` já tem
       API pronta, `app/` ainda não tem aba própria) — hoje só dá pra editar
       regra via chamada direta à API; entra quando houver demanda real de

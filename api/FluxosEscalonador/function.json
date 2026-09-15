@@ -1,10 +1,13 @@
 {
   "bindings": [
     {
-      "name": "timer",
-      "type": "timerTrigger",
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
       "direction": "in",
-      "schedule": "0 30 10 * * *"
-    }
+      "name": "req",
+      "methods": ["post"],
+      "route": "fluxos-escalonador-interno"
+    },
+    { "type": "http", "direction": "out", "name": "res" }
   ]
 }

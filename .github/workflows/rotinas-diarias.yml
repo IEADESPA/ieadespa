@@ -1,0 +1,37 @@
+name: Rotinas diárias (notificações e escalonamento)
+
+# Substitui os timerTrigger de NotificacoesAgendador/FluxosEscalonador
+# (api/) — Azure Static Web Apps, no modelo gerenciado usado por este
+# projeto (decisão vC.5), só aceita httpTrigger nas Functions internas.
+# Achado real da Trava B-A: o deploy inteiro quebrava com timerTrigger
+# ("invalid trigger of type 'timerTrigger'"). Mesmo padrão de
+# site-event-notifications.yml (schedule + workflow_dispatch), chamando as
+# rotas HTTP protegidas por segredo (api/shared/cronAuth.js).
+
+on:
+  schedule:
+    # 10h00 UTC = 7h00 em Parauapebas/PA (UTC-3, sem horário de verão).
+    - cron: "0 10 * * *"
+    # 10h30 UTC = 7h30 — 30min depois de propósito, mesma razão de sempre:
+    # não competir pelo mesmo pool de conexão no exato mesmo minuto.
+    - cron: "30 10 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  notificacoes:
+    if: github.event.schedule == '0 10 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Avalia as regras de notificação (vB.2)
+        run: |
+          curl -sf -X POST "https://app.ieadespa.org.br/api/notificacoes-agendador-interno" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  fluxos:
+    if: github.event.schedule == '30 10 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Escalona instâncias de fluxo com SLA vencido (vB.3)
+        run: |
+          curl -sf -X POST "https://app.ieadespa.org.br/api/fluxos-escalonador-interno" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

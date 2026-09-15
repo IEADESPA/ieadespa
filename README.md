@@ -2954,7 +2954,7 @@ depois de cada mudança.
 - [x] Ambiente de homologação separado do de produção — banco
       `ieadespa-homolog` (Azure SQL Serverless, mesmo schema da produção via
       as 74 migrações) + ambiente de preview do Static Web App (PR #1,
-      **permanece aberto de propósito** — ver `HOMOLOG_BRANCH.md`) apontado
+      **permanece aberto de propósito** — ver `HOMOLOGACAO.md`) apontado
       pra ele. Ainda sem massa de dados fictícia própria (nasceu vazio,
       só com o schema) — script de seed fica pra uma próxima sessão.
 - [x] Rotina de backup/restore **testada de verdade** — restore real de
@@ -3535,9 +3535,19 @@ novo e reaproveitar o mesmo destinatário/regra, não redesenhar nada.
       esse opt-out (nenhuma das 3 regras semeadas é obrigatória — o modelo
       completo de consentimento por canal×categoria, com base legal e
       keyword de saída, é a v7.12, quando WhatsApp entrar de verdade).
-- [x] `api/NotificacoesAgendador` (timer diário, 10h UTC) roda a avaliação
-      sozinho; `api/AvaliarNotificacoes` (POST, nível Global) força uma rodada
+- [x] `api/NotificacoesAgendador` roda a avaliação sozinho todo dia;
+      `api/AvaliarNotificacoes` (POST, nível Global) força uma rodada
       manual sem esperar o horário — usado pra testar sem esperar 24h.
+      **Correção real (Trava B-A, 15/09): não é mais `timerTrigger`.**
+      Azure Static Web Apps (modelo gerenciado, decisão vC.5) só aceita
+      `httpTrigger` nas Functions internas — a primeira tentativa de deploy
+      desta versão (e da vB.3) quebrou o build inteiro (`invalid trigger of
+      type 'timerTrigger'`), achado só na trava porque vB.2-vB.5 nunca
+      tinham sido enviadas (push) antes disso. Virou `httpTrigger` protegido
+      por segredo (`api/shared/cronAuth.js`, cabeçalho `x-cron-secret` contra
+      `CRON_SECRET`), acionado às 10h UTC por
+      `.github/workflows/rotinas-diarias.yml` — mesmo padrão de
+      `site-event-notifications.yml`.
 - [x] Sino no cabeçalho persistente do painel (`.cabecalho-secretaria`, fora
       de qualquer aba — aparece em todo módulo, não só numa tela): badge com
       não lidas, dropdown com a lista, marcar lida ao abrir, arquivar por
@@ -3588,14 +3598,19 @@ sete implementações do mesmo conceito — o oitavo módulo vai escrever a oita
       territorial sem ancestral resolvido (ex: congregação sem Área)
       retorna ninguém, nunca "todo mundo" (modo seguro).
 - [x] Escalonamento automático (14 testes cobrindo `nivelEfetivo`/
-      `proximoNivel`): `api/FluxosEscalonador` (timer diário, 10h30 UTC)
-      sobe a instância pro próximo nível territorial acima
+      `proximoNivel`): `api/FluxosEscalonador` sobe a instância pro próximo
+      nível territorial acima
       (Congregação→Área→Região→Quadrante→Distrito→Global) quando o SLA da
       etapa estoura, reabre um novo prazo no nível escalonado, e **avisa o
       novo responsável pela mesma central de notificações** (vB.2,
       `FLUXO_ESCALONADO`) — integração entre os dois motores, não uma
       segunda caixa de entrada. Já em GLOBAL não escalona mais (fica
-      "atrasado" mesmo, não gira em círculo).
+      "atrasado" mesmo, não gira em círculo). **Mesma correção real da
+      Trava B-A que o `api/NotificacoesAgendador` da vB.2**: era
+      `timerTrigger` (não suportado pelo modelo gerenciado do Azure Static
+      Web Apps), virou `httpTrigger` às 10h30 UTC por
+      `.github/workflows/rotinas-diarias.yml`, mesmo segredo
+      `api/shared/cronAuth.js`.
 - [x] `api/Fluxos` — painel único "o que está comigo"/"o que está atrasado"
       (`GET /api/fluxos?filtro=comigo|atrasados`): junta toda
       `FluxoInstancias` aberta com a MESMA resolução de responsável usada

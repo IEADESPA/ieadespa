@@ -3746,11 +3746,69 @@ comum não entra num painel de secretaria — ele entra no celular.
 
 #### 🔒 Trava de Revisão B-A — antes de avançar para a vB.6
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita vB.1 a vB.5 pelas 5 perguntas do checklist. Atenção redobrada na
-vB.1 (rede de segurança técnica/testes): se os testes automatizados desta
-trava em diante não estiverem rodando de verdade, as travas seguintes
-perdem a principal ferramenta que teriam pra detectar regressão sozinhas.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditadas vB.1 a vB.5 pelas 5 perguntas do checklist (15/09).
+
+  **1. Todo código novo roda de ponta a ponta contra o ambiente real?**
+  Sim, depois de um achado real (ver pergunta 5). `npx jest` (72 testes,
+  suíte inteira) e `node --check` em todos os arquivos `.js` de `api/` e
+  `app/` sem erro. Migrações 079-082 idempotentes (`IF NOT EXISTS`/
+  `IF OBJECT_ID`) e confirmadas rodando contra o Azure SQL de produção pelo
+  CI. Toda rota nova de vB.2-vB.5 conferida rota a rota entre
+  `function.json` (back-end) e as chamadas `fetch` de `app/script.js`
+  (front-end) — nenhuma divergência de nome.
+
+  **2. Toda tela nova abre e mostra dado de verdade?** Checagem sistemática
+  (todo `getElementById(...)` de `app/script.js` contra todo `id="..."`
+  existente, estático e gerado dinamicamente) achou só 2 candidatos em 762:
+  `caixaSino` (tem fallback por classe `.caixa-sino`, não é bug) e
+  `permissaoEscopoTodas` (id inexistente, sem fallback) — investigado e é
+  código órfão do **commit inicial do projeto** (função `onChangeEscopoTodas`
+  nunca chamada em lugar nenhum), fora do escopo desta trava (não é
+  vB.1-vB.5) e sem efeito em produção por nunca ser executado. Nenhum bug
+  do tipo "Financeiro" (Trava 4-A) encontrado no código novo.
+
+  **3. README e código continuam narrando a mesma coisa?** Auditoria
+  cruzada de vB.1 a vB.5: todas as tabelas citadas (`Notificacoes`,
+  `NotificacaoRegras`, `NotificacaoPreferencias`, `TiposFluxo`,
+  `FluxoEtapas`, `FluxoInstancias`, `FluxoHistorico`, `AnexosGenericos`,
+  `PushInscricoesMembro`, `CartasTransito.ManterAcessoSite`) existem nas
+  migrações 079-082 como descrito; todos os módulos de API/front citados
+  existem e fazem o que o texto diz; todas as referências cruzadas
+  (`v4.16`, `v4.12`, `v4.15`, `v7.12`, `v5.6`, `v7.4`, `v7.5`, `v7.10`,
+  `v2.9`) apontam pra seções que existem de verdade. **Uma referência
+  morta corrigida**: vB.1 citava `HOMOLOG_BRANCH.md` (nunca existiu) em vez
+  de `HOMOLOGACAO.md`.
+
+  **4. O que ficou pra trás foi de fato corrigido, não só anotado?**
+  **Achado real e corrigido nesta trava**: `api/NotificacoesAgendador`
+  (vB.2) e `api/FluxosEscalonador` (vB.3) foram escritos como
+  `timerTrigger` — o Azure Static Web Apps, no modelo gerenciado usado por
+  este projeto (decisão vC.5), só aceita `httpTrigger` nas Functions
+  internas, e quebrava o build inteiro (`invalid trigger of type
+  'timerTrigger'`). Só apareceu agora porque vB.2-vB.5 nunca tinham sido
+  enviadas (push) antes desta trava — ver pergunta 5. Corrigido: as duas
+  viraram `httpTrigger` protegidas por segredo (`api/shared/cronAuth.js`,
+  novo) e acionadas por `.github/workflows/rotinas-diarias.yml` (mesmo
+  padrão de `site-event-notifications.yml`), `CRON_SECRET` provisionado
+  como App Setting de produção e como GitHub Secret. Nenhum outro
+  `timerTrigger`/TODO/gambiarra encontrado no código novo.
+
+  **5. Deploy real, de ponta a ponta, aconteceu?** **Achado real, a
+  principal desta trava**: a branch local estava **9 commits à frente de
+  `origin/main`** — vB.2, vB.3, vB.4 e vB.5 inteiras (`git push` nunca
+  tinha sido feito) nunca passaram por CI nem chegaram perto de produção,
+  apesar de marcadas `[x]`. Corrigido: `git push`, CI rodou os testes e as
+  migrações 079-082 contra o Azure SQL de produção — a primeira rodada
+  falhou no passo "Build And Deploy" pelo motivo da pergunta 4; corrigido,
+  commitado, `git push` de novo, CI verde de ponta a ponta (run
+  `34977871859`, confirmado com `gh run watch`). Testado ao vivo em
+  produção depois do deploy, não só "CI verde": `POST
+  /api/notificacoes-agendador-interno` e `POST
+  /api/fluxos-escalonador-interno` devolvem `401` sem o segredo e `200`
+  com o segredo certo; `gh workflow list` confirma
+  `Rotinas diárias (notificações e escalonamento)` registrado e ativo;
+  `https://app.ieadespa.org.br/` continua no ar (200) sem regressão.
 
 #### vB.6 — Documento institucional: geração, assinatura e arquivo
 

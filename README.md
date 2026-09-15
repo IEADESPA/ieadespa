@@ -4106,13 +4106,66 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
 
 #### 🔒 Trava de Revisão B-B — antes de avançar para a vB.11
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita vB.6 a vB.10 pelas 5 perguntas do checklist. Marca também a fronteira
-dentro da própria FASE B: vB.1-vB.10 são infraestrutura pura (não têm
-módulo de negócio pra "usar" na prática ainda); vB.11 em diante são retrofit
-de negócio das fases 0-3. Antes de atravessar essa fronteira, confirmar que
-a infraestrutura (notificação, workflow, busca, PWA) está de pé de verdade
-— as versões de retrofit vão se apoiar nela.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditadas vB.6 a vB.10 pelas 5 perguntas do checklist
+      (15/09). Marca também a fronteira dentro da própria FASE B:
+      vB.1-vB.10 são infraestrutura pura (não têm módulo de negócio pra
+      "usar" na prática ainda); vB.11 em diante são retrofit de negócio das
+      fases 0-3.
+
+  **1. Todo código novo roda de ponta a ponta contra o ambiente real?**
+  Sim — `npx jest` (104 testes, suíte inteira) e `node --check` em todo
+  `.js` de `api/`/`app/`/`site/` sem erro. Migrações 083-085 idempotentes
+  (`IF NOT EXISTS`) e as 6 rodadas de CI (vB.6 a vB.10 + o commit de
+  correção) confirmadas em `success`, migrações reais rodando contra o
+  Azure SQL de produção a cada uma — nenhuma repetiu o achado da Trava B-A
+  (`grep` confirma **zero** `timerTrigger` em todo `api/`, só
+  `httpTrigger`). Toda rota nova conferida rota a rota entre
+  `function.json` e as chamadas `fetch` de `app/script.js` (`cartas/.../
+  pdf`, `pessoas/exportar`, `delegacoes`, `politicas-retencao`, `lgpd/
+  ropa`, `termos`, `termos-conducao`, `lgpd/meus-dados`, `reunioes/.../
+  minuta`, `painel-inicial`, `minhas-sessoes`) — nenhuma divergência.
+  `shared/pdfInstitucional.js` testado de novo agora, isolado: gera PDF
+  real (`%PDF`, 2010 bytes), não só "não lança exceção".
+
+  **2. Toda tela nova abre e mostra dado de verdade?** Checagem sistemática
+  de `getElementById` (779 chamadas) contra todo `id` existente (989,
+  estático + gerado dinamicamente) — mesmos 2 falsos positivos já
+  investigados na Trava B-A (`caixaSino` com fallback por classe,
+  `permissaoEscopoTodas` órfão do commit inicial, fora do escopo de
+  vB.1-vB.10), **nenhum bug novo**.
+
+  **3. README e código continuam narrando a mesma coisa?** Auditoria
+  cruzada de vB.6 a vB.10: todos os 18 módulos de API citados existem e
+  fazem o que o texto descreve; migrações 083-085 batem campo a campo;
+  todas as referências cruzadas (`v10.5`, `v2.9`, `v1.9`, `v1.8`, `v4.12`,
+  `v4.5`, `v0.1`, `v7.10`) apontam pra seções reais. Atenção especial às 3
+  limitações conscientes documentadas (não bugs escondidos) — todas batem
+  com o código: `VerificarTermoAssinado` (vB.6) não tem nenhuma chamada em
+  `app/` (sem tela mesmo, como o texto diz); `Sessoes.QuorumAtingido`
+  (vB.6) tem **zero** ocorrências de escrita em todo `api/` (coluna morta
+  confirmada); `exigirLogin`/`exigirPermissao` (vB.9,
+  `api/shared/auth.js`) continuam síncronas e nunca consultam
+  `SessoesAtivas` (token só expira sozinho, como o texto assume).
+
+  **4. O que ficou pra trás foi de fato corrigido, não só anotado?** Nenhum
+  `TODO`/`FIXME`/gambiarra novo encontrado no diff de vB.6-vB.10. O achado
+  da Trava B-A (timerTrigger) não se repetiu — toda função nova já nasceu
+  `httpTrigger`. Mass-fix de mensagens de erro da vB.10 (67 arquivos)
+  conferido: só sobram `{ erro: ... }` em `shared/mockDb.js` (helper de
+  teste, não resposta HTTP) e em `shared/cronAuth.js` (rota
+  serviço-a-serviço da Trava B-A, sem toast de usuário — não precisa do
+  formato `mensagem`), nenhum esquecido por engano.
+
+  **5. Deploy real, de ponta a ponta, aconteceu?** Sim, sem achado desta
+  vez — diferente da Trava B-A, a branch já estava sincronizada com
+  `origin/main` no início desta trava (aprendizado aplicado: cada versão
+  de vB.6 a vB.10 foi enviada e implantada na hora, não acumulada).
+  `gh run list` confirma `success` nos 6 commits (`4c5aba4` vB.6,
+  `c0fa50a` vB.7, `3b4170d` vB.8, `e82b6b6` vB.9, `fa3d0be`+`3a09699`
+  vB.10). Testado ao vivo agora: `https://app.ieadespa.org.br/` no ar
+  (200), `GET /api/painel-inicial` sem sessão devolve `401` (rota nova
+  protegida corretamente, sem regressão).
 
 #### vB.11 — Esteira de Batismo *(retrofit da FASE 1, gap da varredura normativa)*
 

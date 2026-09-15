@@ -294,6 +294,16 @@
             <button class="btn-confirmar btn-secundario" style="width:auto;" id="btnAtivarPush" onclick="alternarPushAcao()">🔔 Ativar notificação neste dispositivo</button>
           </div>
 
+          <!-- vB.7 — Painel inicial por perfil: blocos reunidos do que já é
+               calculado em outros módulos (notificações, tarefas, alertas de
+               detector) — nenhum cálculo novo, só reunião. Só aparece pra
+               quem logou de verdade (authToken); some sozinho se não tiver
+               nenhum bloco com valor (nada de "0 em tudo" poluindo a tela). -->
+          <div id="cxPainelInicial" style="display:none; margin-bottom:20px;">
+            <h3 style="margin-top:0;">📊 O que precisa da sua atenção hoje</h3>
+            <div class="grade-modulos" id="gradePainelInicial"></div>
+          </div>
+
           <!-- v4.2 — Grade de módulos (padrão "portal de serviços"): primeira
                coisa que a pessoa vê. Cada card só aparece se ela tiver
                permissão em algo daquele módulo (montarGradeModulos()). -->

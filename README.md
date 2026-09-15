@@ -3890,12 +3890,30 @@ comum não entra num painel de secretaria — ele entra no celular.
 
 #### vB.7 — Painel inicial por perfil (dashboard)
 
-- [ ] Hoje o sistema abre numa lista de módulos; deveria abrir no que **aquela
-      pessoa** precisa decidir hoje: pendências, prazos vencendo, indicadores do
-      escopo dela (Dirigente vê a congregação; Pastor de Área vê as dele;
-      Tesoureiro Geral vê o malote e o caixa).
-- [ ] Blocos reaproveitáveis, alimentados pelos cálculos que já existem — sem
-      recalcular nada novo, só reunir.
+- [x] `api/shared/painelBlocos.js` + `api/PainelInicial` (`GET
+      /api/painel-inicial`): **zero cálculo novo, só reunião** — igual o
+      texto original desta versão já pedia. Blocos "sempre meus" (contagem
+      de notificações não lidas — vB.2 — e minhas tarefas atrasadas —
+      `shared/workflow.js::listarFluxosDoUsuario`, vB.3) mais 3 blocos
+      baseados em detector (Seguros vencendo, Prestação de contas atrasada,
+      Repasse parado no malote — os mesmos 3 de `shared/
+      notificacaoDetectores.js`, vB.2). **A regra de "quem vê o quê" é a
+      MESMA `NotificacaoRegras.PermissaoAlvo`/`NivelAlvo` que decide quem
+      recebe a notificação equivalente** — o painel de alguém mostra
+      exatamente os blocos das notificações que ela receberia, sem uma
+      segunda regra de visibilidade inventada só pro dashboard. Isso já
+      entrega o "cada perfil vê o que importa pra ele" do texto original
+      (Dirigente/Pastor de Área não têm nenhuma regra hoje com
+      `PermissaoAlvo` diferente de `financeiro`+`GLOBAL`, então não veem
+      os 3 blocos de detector — quando um detector novo for registrado
+      pra outro perfil, aparece aqui automaticamente, sem tocar no painel).
+- [x] Bloco de UI (`app/`, sub-aba "Meu Perfil") só aparece quando há algo
+      com valor > 0 — nunca mostra fileira de zeros. Clicar num bloco
+      navega pra tela de origem (`irParaBlocoPainel`) — mesma limitação
+      honesta já registrada na busca global (vB.4): abre a aba/sub-aba
+      certa, não afunila até a linha exata.
+- [x] Testado com `npx jest` (83 testes, incluindo 3 novos: visibilidade
+      de bloco por regra ativa/permissão/nível) e `node --check`.
 
 #### vB.8 — LGPD: corrigir a base legal e fechar as lacunas
 

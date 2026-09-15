@@ -444,6 +444,10 @@ async function abrirPainelConteudo(matricula) {
   // Lideranca, tanto faz — as duas dão authToken); check-in só com
   // matrícula (sem token) nunca vê o botão.
   if (authToken) await configurarBotaoPush();
+  // vB.7 — "Meu Perfil" é a sub-aba visível por padrão ao entrar (nunca
+  // passa por mostrarSubAbaMeupainel('perfil') no login), por isso carrega
+  // direto aqui também, não só na troca de sub-aba.
+  if (authToken) await carregarPainelInicial();
 }
 
 // ---- BUSCA GLOBAL (vB.4) ----
@@ -796,6 +800,34 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "vinculos") { carregarOpcoesMeuVinculoTipo(); carregarMeusVinculos(); }
   if (sub === "contribuicoes") { carregarOpcoesCategoriasEntrada(); prepararFormAutolancamento(); carregarMinhasContribuicoes(); }
   if (sub === "tarefas") filtrarMinhasTarefas(filtroMinhasTarefasAtual);
+  if (sub === "perfil") carregarPainelInicial();
+}
+
+// ---- PAINEL INICIAL POR PERFIL (vB.7) ----
+// "Blocos reaproveitáveis, alimentados pelos cálculos que já existem" —
+// backend só reúne (shared/painelBlocos.js), aqui só exibe.
+async function carregarPainelInicial() {
+  const cx = document.getElementById("cxPainelInicial");
+  if (!authToken) { cx.style.display = "none"; return; }
+  const res = await fetchProtegido(`${API_BASE}/painel-inicial`);
+  const blocos = await res.json();
+  const comValor = Array.isArray(blocos) ? blocos.filter((b) => b.valor > 0) : [];
+  if (comValor.length === 0) { cx.style.display = "none"; return; }
+  cx.style.display = "block";
+  document.getElementById("gradePainelInicial").innerHTML = comValor.map((b) => `
+    <div class="card-modulo" ${b.aba ? `onclick="irParaBlocoPainel('${b.aba}')"` : ""}>
+      <span class="icone-modulo">${b.valor}</span><span>${b.titulo}</span>
+    </div>
+  `).join("");
+}
+
+function irParaBlocoPainel(destino) {
+  const [alvo, sub] = destino.split(":");
+  if (alvo === "meupainel") { mostrarSubAbaMeupainel(sub); return; }
+  const chaveModulo = Object.keys(MODULOS).find((k) => MODULOS[k].abas.includes(alvo));
+  if (chaveModulo) entrarModulo(chaveModulo);
+  mostrarAbaSecretaria(alvo);
+  if (alvo === "financeiro" && sub) mostrarSubAbaFinanceiro(sub);
 }
 
 // ---- MINHAS CONTRIBUIÇÕES (v4.1.1) — transparência: se a matrícula estiver

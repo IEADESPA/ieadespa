@@ -6742,6 +6742,7 @@ function abrirPerfilPessoa(membroId) {
   window._membroFotoAtual = membroId;
   window._membroHistoricoAtual = membroId;
   window._membroCasamentosAtual = membroId;
+  window._membroApresentacoesAtual = membroId;
   window._membroLicencasAtual = membroId;
   window._membroFamiliaAtual = membroId;
 
@@ -6757,7 +6758,7 @@ function abrirPerfilPessoa(membroId) {
   mostrarAbaPerfil("dados");
 }
 
-const ABAS_PERFIL = ["dados", "editar", "historico", "foto", "casamentos", "licenca", "vinculos"];
+const ABAS_PERFIL = ["dados", "editar", "historico", "foto", "casamentos", "apresentacoes", "licenca", "vinculos"];
 
 function mostrarAbaPerfil(aba) {
   const membroId = window._membroPerfilAtual;
@@ -6775,6 +6776,7 @@ function mostrarAbaPerfil(aba) {
   if (aba === "historico") carregarHistoricoMembro(membroId);
   if (aba === "foto") carregarAbaFoto(membroId);
   if (aba === "casamentos") carregarCasamentos(membroId);
+  if (aba === "apresentacoes") carregarApresentacoesCrianca(membroId);
   if (aba === "licenca") carregarLicencasCandidatura(membroId);
   if (aba === "vinculos") carregarAbaVinculos(membroId);
 }
@@ -7910,6 +7912,85 @@ async function excluirCasamentoAcao(casamentoId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarCasamentos(window._membroCasamentosAtual);
+}
+
+// ---- APRESENTAÇÃO DE CRIANÇAS (vB.12 — Reg. Art. 82) ----
+const ROTULO_MODALIDADE_APRESENTACAO = { SOLENE: "Solene", RESERVADA: "Reservada" };
+
+async function carregarApresentacoesCrianca(membroId) {
+  const container = document.getElementById("resultadoListaApresentacoes");
+  const res = await fetchProtegido(`${API_BASE}/apresentacoes-crianca?membroId=${membroId}`);
+  const apresentacoes = await res.json();
+  if (!Array.isArray(apresentacoes) || apresentacoes.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma apresentação de criança registrada ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Criança</th><th>Nascimento</th><th>Modalidade</th><th>Data</th><th>Aptidão</th><th></th>
+  </tr></thead><tbody>`;
+  apresentacoes.forEach(a => {
+    const aptidaoTexto = a.aptidao?.apto ? "✅ Apta" : "⚠️ " + Object.values(a.aptidao?.itens || {}).filter(i => !i.ok).map(i => i.detalhe).join("; ");
+    html += `<tr>
+      <td>${a.nomeCrianca}</td>
+      <td>${a.dataNascimento || "-"}</td>
+      <td>${ROTULO_MODALIDADE_APRESENTACAO[a.modalidade] || a.modalidade}</td>
+      <td>${a.dataApresentacao || "-"}</td>
+      <td>${aptidaoTexto}</td>
+      <td>
+        ${a.geraCertificado ? `<a class="btn-link" href="${API_BASE}/apresentacoes-crianca/${a.apresentacaoId}/pdf" target="_blank">📄 Certificado</a>` : ""}
+        <button class="btn-link btn-link-perigo" onclick="excluirApresentacaoCriancaAcao(${a.apresentacaoId})">Excluir</button>
+      </td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function salvarApresentacaoCrianca() {
+  const membroId = window._membroApresentacoesAtual;
+  const msg = document.getElementById("resultadoApresentacaoCrianca");
+  if (!membroId) return;
+
+  const nomeCrianca = document.getElementById("apresentacaoNomeCrianca").value.trim();
+  const dataNascimento = document.getElementById("apresentacaoDataNascimento").value;
+  const papel = document.getElementById("apresentacaoPapelPerfil").value;
+  const outroPaiMatricula = document.getElementById("apresentacaoOutroPaiMatricula").value || null;
+  const oficiante = document.getElementById("apresentacaoOficiante").value.trim() || null;
+  const modalidade = document.getElementById("apresentacaoModalidade").value;
+  const dataApresentacao = document.getElementById("apresentacaoData").value;
+
+  if (!nomeCrianca || !dataNascimento || !dataApresentacao) {
+    msg.textContent = "Informe nome da criança, data de nascimento e data da apresentação.";
+    return;
+  }
+
+  const membroIdPai = papel === "PAI" ? membroId : outroPaiMatricula;
+  const membroIdMae = papel === "MAE" ? membroId : outroPaiMatricula;
+
+  const res = await fetchProtegido(`${API_BASE}/apresentacoes-crianca`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nomeCrianca, dataNascimento, membroIdPai, membroIdMae, oficiante, modalidade, dataApresentacao })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.aviso || "";
+  if (data.sucesso) {
+    document.getElementById("apresentacaoNomeCrianca").value = "";
+    document.getElementById("apresentacaoDataNascimento").value = "";
+    document.getElementById("apresentacaoOutroPaiMatricula").value = "";
+    document.getElementById("apresentacaoOficiante").value = "";
+    document.getElementById("apresentacaoData").value = "";
+    carregarApresentacoesCrianca(membroId);
+  }
+}
+
+async function excluirApresentacaoCriancaAcao(apresentacaoId) {
+  if (!(await confirmarAcao("Confirma excluir este registro de apresentação? (correção de lançamento)", "Excluir"))) return;
+  const res = await fetchProtegido(`${API_BASE}/apresentacoes-crianca/${apresentacaoId}`, { method: "DELETE" });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarApresentacoesCrianca(window._membroApresentacoesAtual);
 }
 
 // ---- LICENÇA POR CANDIDATURA (v1.9 — Reg. Art. 157 §2º) ----

@@ -1149,6 +1149,7 @@
             <button class="btn-tab-perfil" id="btnTabPerfilHistorico" onclick="mostrarAbaPerfil('historico')">🕒 Histórico</button>
             <button class="btn-tab-perfil" id="btnTabPerfilFoto" onclick="mostrarAbaPerfil('foto')">📷 Foto</button>
             <button class="btn-tab-perfil" id="btnTabPerfilCasamentos" onclick="mostrarAbaPerfil('casamentos')">💍 Casamentos</button>
+            <button class="btn-tab-perfil" id="btnTabPerfilApresentacoes" onclick="mostrarAbaPerfil('apresentacoes')">👶 Apresentação de Filhos</button>
             <button class="btn-tab-perfil" id="btnTabPerfilLicenca" onclick="mostrarAbaPerfil('licenca')">🗳️ Licença Candidatura</button>
             <button class="btn-tab-perfil" id="btnTabPerfilVinculos" onclick="mostrarAbaPerfil('vinculos')">👪 Vínculos Familiares</button>
           </div>
@@ -1217,6 +1218,35 @@
               <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarCasamento()">➕ Registrar Casamento</button>
             </div>
             <p id="resultadoCasamento"></p>
+          </div>
+
+          <div id="tabPerfilApresentacoes" class="tab-conteudo-perfil" style="display:none;">
+            <p class="subtitle" style="margin:0 0 8px;">Reg. Art. 82 — apresentação de filho(a) desta pessoa. Aptidão calculada:
+              impedimento por união estável sem certidão ou disciplina em curso de qualquer um dos pais, preferência de até
+              90 dias de vida e vedação acima de 1 ano completo. Modalidade reservada nunca gera certificado.</p>
+            <div class="rolagem-tabela"><div id="resultadoListaApresentacoes"></div></div>
+            <hr />
+            <div class="barra-lista">
+              <input type="text" id="apresentacaoNomeCrianca" placeholder="Nome da criança" style="min-width:220px;" />
+              <input type="date" id="apresentacaoDataNascimento" />
+              <select id="apresentacaoPapelPerfil">
+                <option value="PAI">Este perfil é o pai</option>
+                <option value="MAE">Este perfil é a mãe</option>
+              </select>
+            </div>
+            <div class="barra-lista">
+              <input type="number" id="apresentacaoOutroPaiMatricula" placeholder="Matrícula do outro pai/mãe (se membro)" style="min-width:240px;" />
+              <input type="text" id="apresentacaoOficiante" placeholder="Oficiante" style="min-width:180px;" />
+              <select id="apresentacaoModalidade">
+                <option value="SOLENE">Solene</option>
+                <option value="RESERVADA">Reservada (não gera certificado)</option>
+              </select>
+            </div>
+            <div class="barra-lista">
+              <label>Data da apresentação: <input type="date" id="apresentacaoData" /></label>
+              <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarApresentacaoCrianca()">➕ Registrar Apresentação</button>
+            </div>
+            <p id="resultadoApresentacaoCrianca"></p>
           </div>
 
           <div id="tabPerfilLicenca" class="tab-conteudo-perfil" style="display:none;">

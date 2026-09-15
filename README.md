@@ -4232,12 +4232,54 @@ Mesmo lugar de Casamentos na FASE 1 original (é o outro rito de família
 previsto pelo Regimento, e a v1.9 base já cobre Casamentos) — mas a FASE 1 já
 está fechada, então o ato entra aqui como retrofit, não como reabertura.
 
-- [ ] **Registro de Apresentação de Crianças** (Reg. Art. 82): oficiante, pais,
+- [x] **Registro de Apresentação de Crianças** (Reg. Art. 82): oficiante, pais,
       modalidade **solene ou reservada**, com **aptidão calculada**:
       impedimento por união estável sem certidão ou por disciplina em curso dos
       pais (§2º, I), preferência de **até 90 dias de vida** e **vedação acima
       de 1 ano completo** (§3º, I-II). Ato reservado **não gera certificado**
       (§2º, II, "b") — a regra fica no sistema, não na lembrança de quem emite.
+
+  Implementado: `sql/migrations/087_apresentacao_criancas.sql` cria
+  `ApresentacoesCrianca` — a criança normalmente NÃO é `MembroReferencia`
+  (é recém-nascida), então **não** reaproveita `VinculosFamiliares` (lá os
+  dois lados são `NOT NULL REFERENCES MembroReferencia`); tabela própria com
+  `MembroIdPai`/`MembroIdMae` opcionais (ao menos um exigido por `CHECK`),
+  mesmo padrão "membro OU nome livre" que `Casamentos` já usa pro cônjuge —
+  aqui simplificado pra FK opcional porque não há um "nome livre" de pai/mãe
+  sem matrícula fazendo sentido pro caso comum (retrofit: cobre o caso real,
+  não documenta hipótese que não ocorre).
+
+  `shared/apresentacaoCriancas.js` — aptidão **calculada na leitura**
+  (nunca marcação manual, mesmo princípio de `shared/batismo.js`):
+  reaproveita `shared/disciplina.js::membrosSobDisciplina()` (disciplina em
+  curso) e `shared/batismo.js::possuiCasamentoCivilRegistrado()` (união
+  estável sem certidão) — nenhuma lógica duplicada, ambas já existiam prontas
+  de v3.4/vB.11. Idade usa `estatuto.js::idadeEm()` (vedação de 1 ano
+  completo, bloqueante) e `estatuto.js::diasDesde()` (janela preferencial de
+  90 dias, só aviso — não bloqueia, mesmo padrão não-bloqueante de
+  `GestaoCasamentos::avisoJanelaHabilitacao()`).
+
+  `GestaoApresentacaoCriancas` (GET/POST/DELETE `/api/apresentacoes-crianca`)
+  — permissão `"pessoas"`, mesmo esqueleto de `GestaoCasamentos`; o POST
+  recalcula a aptidão e **recusa registrar** apresentação já vedada por
+  idade ou impedimento dos pais, mesmo que só a Secretaria esteja lançando
+  (a regra não depende de quem opera lembrar dela). `ApresentacaoCriancaPdf`
+  (GET `/api/apresentacoes-crianca/{id}/pdf`) emite o certificado — **recusa
+  na 1ª linha se a modalidade for RESERVADA** (§2º, II "b" checado em
+  código, não só documentado), protocolo institucional gerado sob demanda
+  (mesmo padrão de `CartaPdf`, nunca antes da 1ª emissão).
+
+  Frontend: nova aba "👶 Apresentação de Filhos" no Perfil da Pessoa, ao
+  lado de "💍 Casamentos" (mesmo lugar do rito de família irmão) — como não
+  existe campo de sexo/gênero em `MembroReferencia` pra inferir automatico
+  se o perfil aberto é o pai ou a mãe, a Secretaria escolhe explicitamente
+  ("Este perfil é o pai/a mãe") e informa a matrícula do outro, se for
+  membro.
+
+  Testado com `npx jest` (127 testes, incluindo 11 novos: modalidade/
+  certificado, os 4 cenários de impedimento dos pais — nenhum, disciplina,
+  união estável sem/com certidão — e os 4 cenários de aptidão por idade/
+  janela preferencial) e `node --check` em todos os arquivos novos.
 
 #### vB.13 — Credenciamento de Assembleia *(retrofit da v2.1, Reg. Art. 142-143)*
 

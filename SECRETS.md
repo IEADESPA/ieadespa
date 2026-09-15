@@ -6,13 +6,24 @@ arquivo **criptografado** (`api/local.settings.enc.json`) é versionado, e cada 
 descriptografa com a **própria chave privada Age**, que fica fora do repo.
 
 Desde a FASE C (site institucional trazido via `git subtree` pra dentro de `site/`), existem
-**dois** pares de arquivo, cada um com seu próprio `secrets:encrypt`/`secrets:decrypt`, mas as
-**mesmas chaves Age** do `.sops.yaml` (não precisa cadastrar nada duas vezes):
+**três** pares de arquivo no total, cada um com seu próprio jeito de descriptografar, mas as
+**mesmas chaves Age** do `.sops.yaml` da raiz (um só, desde 14/09 — não precisa cadastrar nada
+duas vezes nem manter dois arquivos de regra):
 
 | App | Texto puro (não versionado) | Criptografado (versionado) |
 |---|---|---|
 | Sistema de governança | `api/local.settings.json` | `api/local.settings.enc.json` |
-| Site institucional | `site/api/local.settings.json` | `site/api/local.settings.enc.json` |
+| Site institucional (Azure Functions) | `site/api/local.settings.json` | `site/api/local.settings.enc.json` |
+| Site institucional (Directus + Azure) | `site/.env.local` | `site/secrets.env` |
+
+O terceiro par guarda o token do Directus e as credenciais do Azure (subscription, tenant,
+client id/secret) usadas pelos workflows de notificação do site. Descriptografa/recriptografa
+direto com `sops` (não tem `npm run secrets:*` pra esse, é usado pelo CI, não pelo dev local):
+
+```powershell
+sops -d --output site/.env.local site/secrets.env
+sops -e --output site/secrets.env site/.env.local
+```
 
 ---
 
@@ -119,9 +130,12 @@ sops -e --input-type json --output-type json --output api/local.settings.enc.jso
 
 ## 7. Regras de segurança (não pular)
 
-- ✅ Versionar: `api/local.settings.enc.json`, `.sops.yaml`.
-- ❌ **Nunca** versionar: `api/local.settings.json` (texto puro), a chave privada
-  (`keys.txt`), qualquer `.env`.
+- ✅ Versionar: `api/local.settings.enc.json`, `site/api/local.settings.enc.json`,
+  `site/secrets.env`, e o único `.sops.yaml` (raiz — desde 14/09 não existe mais um
+  segundo `.sops.yaml` dentro de `site/`; um arquivo só cobre os três pares acima,
+  o SOPS acha o da raiz sozinho mesmo rodando de dentro de `site/`).
+- ❌ **Nunca** versionar: `api/local.settings.json`, `site/api/local.settings.json`,
+  `site/.env.local` (todos texto puro), a chave privada (`keys.txt`).
 - Se uma chave **vazar**, gere outra e o administrador roda `sops updatekeys` (rotação).
 - Antes de commitar, confira: `git status` não pode listar `local.settings.json` nem
   `keys.txt`.

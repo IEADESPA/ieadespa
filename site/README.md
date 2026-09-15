@@ -57,7 +57,8 @@ chaves de API restritas por domínio recusam `localhost` — ver
 Todo o conteúdo abaixo é editado no [painel do Directus](#painel-administrativo-directus), nunca
 em arquivo deste repositório. O site busca os dados de lá em tempo de build (ou, nos poucos casos
 que precisam disso, em tempo real pelo navegador de quem visita), através de
-[src/lib/directus.ts](./src/lib/directus.ts) e das Functions em [api/src/functions/](./api/src/functions/).
+[src/lib/directus.ts](./src/lib/directus.ts) e das Functions em [api/](./api/) (uma pasta por
+função — modelo clássico do Azure Functions, ver vC.5 no README da raiz).
 
 ### Conteúdo institucional (leitura pública liberada)
 
@@ -84,29 +85,29 @@ que não permite filtro condicional em permissão.
 ### Coleções com dado sensível ou fluxo protegido
 
 Nunca têm leitura pública sem filtro, e a maioria não tem leitura pública nenhuma — o acesso passa
-por uma Azure Function (ver [api/src/functions/](./api/src/functions/)), que confere identidade
+por uma Azure Function (ver [api/](./api/)), que confere identidade
 com o token de administrador do Directus por trás, sem nunca expor esse token nem o dado bruto a
 quem não deveria vê-lo.
 
 | Coleção | Guarda | Como é protegida |
 | --- | --- | --- |
-| `inscricoes_eventos` | Nome, telefone (hash), código, presença, pagamento | Leitura pública mínima (`id`/`evento`/`aguardando_vaga`/`presente`, só para contadores); só eventos dos últimos 90 dias; nome/código exigem check-in autenticado ou a Function `verificarInscricao.js` (código **e** telefone) |
+| `inscricoes_eventos` | Nome, telefone (hash), código, presença, pagamento | Leitura pública mínima (`id`/`evento`/`aguardando_vaga`/`presente`, só para contadores); só eventos dos últimos 90 dias; nome/código exigem check-in autenticado ou a Function `VerificarInscricao/index.js` (código **e** telefone) |
 | `respostas_inscricao` | Resposta a pergunta customizada de um evento | Só cria publicamente |
 | `cupons_desconto` | Código de desconto, limite de usos | Leitura pública por código; atualização pública só do contador de usos |
 | `camiseta_grupos` | Campanha de camiseta/uniforme (nome, valor, prazo) | Leitura pública |
 | `camiseta_lotes` | Janela de compra (número, aberto/fechado) de um grupo | Sem leitura/escrita pública — só a equipe (painel) e a Function de criação de pedido |
 | `camiseta_lote_itens` | Estoque extra + custo por tamanho/modelo de um lote | Sem leitura/escrita pública |
-| `camiseta_pedidos` | Nome, telefone (hash), e-mail opcional, valor pago | Sem criação pública direta — só via `criarPedidoCamiseta.js`; leitura pública só do campo `id`; consulta por telefone via `consultarPedidosCamiseta.js` |
-| `camiseta_itens_pedido` | Item do carrinho (tamanho/modelo/quantidade) | Sem criação pública direta — só via `criarPedidoCamiseta.js` |
+| `camiseta_pedidos` | Nome, telefone (hash), e-mail opcional, valor pago | Sem criação pública direta — só via `CriarPedidoCamiseta/index.js`; leitura pública só do campo `id`; consulta por telefone via `ConsultarPedidosCamiseta/index.js` |
+| `camiseta_itens_pedido` | Item do carrinho (tamanho/modelo/quantidade) | Sem criação pública direta — só via `CriarPedidoCamiseta/index.js` |
 | `perguntas_camiseta` | Pergunta customizada de uma campanha | Leitura pública |
-| `respostas_pedido_camiseta` | Resposta de um pedido a uma pergunta | Sem criação pública direta — só via `criarPedidoCamiseta.js` |
-| `mural_oracao` | Pedido de oração, nome opcional, confidencial | Leitura pública só do que é `aprovado=true`, não confidencial e dos últimos 90 dias; contador `orando_count` só é escrito pela Function `orarMural.js` |
+| `respostas_pedido_camiseta` | Resposta de um pedido a uma pergunta | Sem criação pública direta — só via `CriarPedidoCamiseta/index.js` |
+| `mural_oracao` | Pedido de oração, nome opcional, confidencial | Leitura pública só do que é `aprovado=true`, não confidencial e dos últimos 90 dias; contador `orando_count` só é escrito pela Function `OrarMural/index.js` |
 | `contato_mensagens` | Formulário de contato (inclui LGPD/pedido de oração) | Só cria publicamente, nunca lida |
 | `push_subscriptions` | Inscrição de notificação push | Só cria publicamente; edição usa o próprio endpoint como "senha de posse" |
 | `pageviews` | Caminho da página + domínio de origem + data (sem IP, sem cookie) | Só cria publicamente |
 | `contas` | E-mail da "Minha Conta" | Sem leitura/escrita pública — só via Functions da Minha Conta |
 | `contas_codigos` | Código de login de 6 dígitos (hash SHA-256) | Sem leitura/escrita pública |
-| `enquete_votos` | Voto (enquete + opção + e-mail) | Sem leitura/escrita pública — só via `consultarEnquete.js`/`votarEnquete.js` |
+| `enquete_votos` | Voto (enquete + opção + e-mail) | Sem leitura/escrita pública — só via `ConsultarEnquete/index.js`/`VotarEnquete/index.js` |
 
 O que continua fixo no código (não muda com frequência, editado no VS Code): dados institucionais
 fixos (nome, endereço, horários, CNPJ, redes sociais) em
@@ -201,7 +202,7 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   linhas de tamanho/modelo/quantidade), com pagamento parcial alocado item a item, em ordem de
   criação. Venda avulsa (sem congregação, sem lote — mesmo "AVULSO" da planilha) também é
   suportada.
-- **Criação do pedido é toda feita numa Function** (`api/src/functions/criarPedidoCamiseta.js`,
+- **Criação do pedido é toda feita numa Function** (`api/CriarPedidoCamiseta/index.js`,
   rota `/api/criar-pedido-camiseta`) — não existe mais permissão pública de criar
   `camiseta_pedidos`/`camiseta_itens_pedido`/`respostas_pedido_camiseta` direto no Directus. A
   Function decide sozinha em qual lote o pedido cai (encontra o aberto, ou cria o próximo número
@@ -237,12 +238,12 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
 - **Mural de oração** (`/mural-de-oracao/`) — pedido público com moderação, opção de anônimo e de
   confidencial (nunca aparece publicado), consentimento LGPD explícito (dado sobre convicção
   religiosa é categoria especial), honeypot anti-spam, tempo real via WebSocket do Directus. O
-  contador "orando por você" é incrementado exclusivamente pela Function `orarMural.js` — sempre
+  contador "orando por você" é incrementado exclusivamente pela Function `OrarMural/index.js` — sempre
   +1 a partir do valor real gravado no servidor, nunca um valor vindo do navegador (ver
   [Segurança](#segurança-privacidade-e-decisões-de-arquitetura) sobre o bug que isso corrigiu).
 - **Enquetes** (`/enquetes/`) — opinião pública com voto único por conta: resultado só aparece
   depois de votar (ou quando a enquete encerra), e um voto por e-mail por enquete é garantido pela
-  Function `votarEnquete.js`, nunca por `localStorage` sozinho (facilmente burlável).
+  Function `VotarEnquete/index.js`, nunca por `localStorage` sozinho (facilmente burlável).
 - **Minha Conta** (`/minha-conta/`) — login sem senha (e-mail + código de 6 dígitos enviado por
   e-mail), reunindo num só lugar as inscrições em evento e os pedidos de camiseta feitos com aquele
   e-mail. Sessão é um token assinado (HMAC, `CONTA_TOKEN_SECRET`), guardado em `localStorage`, sem
@@ -383,7 +384,7 @@ prova do consentimento é do controlador (Art. 8º, §2º). Canal de exercício 
 
 **Direito de exclusão (Art. 18) apesar do telefone estar em hash**: o hash não impede a exclusão —
 `/painel-eventos/lgpd/` (equipe autenticada, nunca público) usa a mesma técnica de
-`verificarInscricao.js`/`cancelarInscricao.js` (comparar o telefone digitado contra cada hash
+`VerificarInscricao/index.js`/`CancelarInscricao/index.js` (comparar o telefone digitado contra cada hash
 guardado, sem nunca reverter nenhum) pra localizar e apagar tudo ligado a um telefone — inscrições
 em evento e pedidos de camiseta, com tudo em cascata debaixo deles (respostas, itens). Uso
 esperado: o pedido chega pelo canal de contato, a equipe confirma identidade por fora, e só então

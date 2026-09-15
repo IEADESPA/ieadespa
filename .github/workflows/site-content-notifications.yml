@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            site/.github/scripts
+            site/scripts
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@v4
@@ -32,4 +32,4 @@ jobs:
           VAPID_PUBLIC_KEY: BGhp6vLgCjC9Hb9GyEeu5m_HdshobUuFfe6N9XoDqa4RdPfQQ60CgQVhlMtrs709q-aqUlXr7tVq3WX4z1jyokk
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           SITE_URL: https://www.ieadespa.org.br
-        run: node site/.github/scripts/send-content-notifications.mjs
+        run: node site/scripts/send-content-notifications.mjs

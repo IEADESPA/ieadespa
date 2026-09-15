@@ -233,6 +233,21 @@
       <main class="conteudo">
         <div class="cabecalho-secretaria">
           <h2 id="tituloModulo">Meu Painel</h2>
+          <!-- vB.2 — sino de notificações: fica no cabeçalho persistente
+               (fora de qualquer aba), então aparece em todo módulo, não só
+               numa tela específica. -->
+          <div class="caixa-sino">
+            <button class="btn-sino" id="btnSino" onclick="alternarPainelNotificacoes()" title="Notificações">
+              🔔<span class="badge-sino" id="badgeSino" style="display:none;">0</span>
+            </button>
+            <div class="painel-notificacoes" id="painelNotificacoes" style="display:none;">
+              <div class="painel-notificacoes-topo">
+                <strong>Notificações</strong>
+                <button class="btn-link" onclick="marcarTodasNotificacoesLidas()">Marcar todas como lidas</button>
+              </div>
+              <div id="listaNotificacoes" class="painel-notificacoes-lista"></div>
+            </div>
+          </div>
         </div>
 
       <!-- ABA: MEU PAINEL (sempre visível, todo mundo tem) — dividida em 3 sub-abas

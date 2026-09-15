@@ -3431,20 +3431,55 @@ conviviam no mesmo Function App.
 
 ##### 🔒 Trava de Revisão C-A — meio da fase, fecha vC.1–vC.2
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Confirma especificamente: o `git subtree` trouxe o histórico real (não um
-`git log` vazio a partir do commit de importação); o site em produção
-continua no ar sem regressão depois da troca de fonte de dado de
-congregação; a coleção `congregacoes` do Directus só é aposentada depois da
-migração de dado conferida linha a linha, nunca antes.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditadas vC.1 e vC.2 pelos três critérios específicos desta
+      trava (14/09).
+
+  **1. O `git subtree` trouxe o histórico real?** Sim — `git log --oneline
+  6e76452^2` (segundo pai do merge de importação) devolve 214 commits reais
+  do `IEADESPA/site` (de `feat: FASE C (vC.1)...` até o commit mais antigo do
+  site), não um `git log` vazio a partir do commit de importação.
+
+  **2. O site em produção continua no ar sem regressão?** Sim — testado ao
+  vivo: `/`, `/congregacoes/`, `/congregacao/genesis/`, `/eventos/` e
+  `/contato/` devolvem HTTP 200; `/congregacao/sede/` devolve HTTP 404 de
+  propósito (rota excluída explicitamente na vC.2, pra não duplicar com
+  `/contato/`).
+
+  **3. A coleção `congregacoes` do Directus só foi aposentada depois da
+  migração conferida linha a linha?** Sim — a vC.2 documenta a migração das
+  39 congregações que faltavam (2 → 41 reais), conferida uma a uma, e só
+  depois disso (e depois de zerar as FKs de Eventos/Camisetas) a coleção foi
+  apagada (`DELETE /collections/congregacoes`, confirmado 403 no Directus e
+  200 no site). O achado tardio da Sede duplicada (14/09) também já foi
+  fechado antes desta trava, com o mesmo padrão de conferência.
 
 ##### 🔒 Trava de Revisão C-B — fim da fase, antes de retomar a FASE B (vB.2 em diante)
 
-Ponto de parada obrigatório. Confirma que vC.3 e vC.4 foram concluídos (não
-silenciosamente esquecidos), que vC.5 realmente eliminou a dualidade de
-modelo (não só documentou a incerteza), e que a integração de Eventos (v7.4)
-e Camisetas (vB.17) — trabalhadas fora de ordem junto com esta fase — estão
-com o `README` e o código coerentes entre si.
+- [x] Ponto de parada obrigatório. Auditados os quatro critérios desta trava
+      (14/09).
+
+  **1. vC.3 e vC.4 foram concluídos (não silenciosamente esquecidos)?** Sim —
+  todos os itens de vC.3 (dois sentidos: visitante→membro e membro→Carta de
+  Mudança) e vC.4 (mapas, PDF, tokens de design) estão marcados `[x]` com
+  evidência de teste ponta a ponta descrita em cada um.
+
+  **2. vC.5 realmente eliminou a dualidade de modelo (não só documentou a
+  incerteza)?** Sim — conferido no código, não só no texto: as 15 pastas de
+  `site/api/` (`SolicitarCodigoConta/`, `ConfirmarCodigoConta/`, etc.) têm
+  `function.json` no modelo clássico; `site/api/package.json` não tem mais
+  `"main"` (glob) nem dependência de `@azure/functions`; `site/api/src/`
+  restante só tem `lib/` (utilitários), nenhuma function v4 sobrando. A
+  limitação de infraestrutura (duas Function Apps) continua documentada como
+  permanente, não como pendência.
+
+  **3. A integração de Eventos (v7.4) e Camisetas (vB.17) está coerente entre
+  README e código?** Sim — os dois blocos descrevem o mesmo ponto de
+  integração pendente (`congregacao` gravando `CongregacaoId` real via a API
+  da vC.2, em vez da relação Directus-Directus solta) e ambos marcam esse
+  item como `[ ]` em aberto, não como concluído — conferido que nenhum dos
+  dois lados afirma algo que o outro contradiz, e que nenhum item já feito
+  ficou marcado como pendente por engano.
 
 ### FASE B — Consolidação da Base (continuação, vB.2 em diante)
 
@@ -3461,15 +3496,67 @@ avisado**. Carta de recomendação vencendo, mandato de assento expirando, meta 
 PDQ com prazo estourando, repasse parado no malote, prestação de contas atrasada,
 certidão de voluntário vencida — tudo isso o sistema *sabe* e não conta a ninguém.
 
-- [ ] Tabela única de notificações + central de avisos no painel (sino), com
-      leitura/arquivamento — nenhuma tela nova por módulo, todos publicam na mesma.
-- [ ] Regras de notificação declarativas (evento ou prazo → público-alvo →
-      canal), configuráveis como catálogo, nunca hardcoded módulo a módulo.
-- [ ] Digest por perfil (o Tesoureiro Geral não precisa de 40 avisos soltos:
-      precisa de um resumo do que trava o fechamento).
-- [ ] Canal externo real: e-mail e **WhatsApp Business API** (no Brasil, e-mail
-      sozinho não chega em membro de congregação) — com consentimento por canal
-      e categoria (ver v7.12), respeitando opt-out.
+**Decisão explícita (14/09): sem WhatsApp Business API nesta versão** — é API
+paga por conversa/mensagem, sem orçamento aprovado. O motor não fica bloqueado
+por isso: canal é campo da regra (`NotificacaoRegras.CanalEmail`), não parte do
+desenho da tabela — ligar WhatsApp no futuro é acrescentar uma coluna/canal
+novo e reaproveitar o mesmo destinatário/regra, não redesenhar nada.
+
+- [x] Migração 079 (`Notificacoes` + `NotificacaoRegras` + `NotificacaoPreferencias`):
+      tabela única de notificação por destinatário (`Lida`/`Arquivada` calculados,
+      nunca duas telas por módulo), catálogo declarativo de regras (evento/prazo →
+      público-alvo por permissão+nível → canal) e opt-out por categoria (não por
+      regra individual — ninguém quer configurar regra por regra).
+- [x] `api/shared/notificacoes.js` (motor genérico: resolve destinatário por
+      permissão/nível reaproveitando o mesmo padrão Lideranca+Papeis de
+      `shared/universo.js`/`LoginSecretaria`; `criarNotificacao` é idempotente
+      por `RegraChave + destinatário + referência` — rodar a avaliação de novo
+      sobre o mesmo fato gerador nunca duplica) + `api/shared/notificacaoDetectores.js`
+      (3 regras semeadas, reaproveitando a MESMA leitura que já existia nos
+      "alertas" de cada módulo, sem duplicar a regra de negócio: apólice de
+      seguro vencendo/vencida — v4.16 —, prestação de contas atrasada — v4.12
+      Reg. Art. 120 —, repasse institucional parado — v4.15). Regra nova =
+      1 linha em `NotificacaoRegras` + 1 detector, o motor em si não muda.
+- [x] `api/Notificacoes` (central de avisos do usuário logado — nunca mostra
+      notificação de matrícula alheia): listar (abertas/arquivadas/todas),
+      contagem pro badge do sino, marcar lida/arquivar/desarquivar uma a uma
+      ou todas de uma vez, e `GET .../digest` (agrupado por categoria — o
+      Tesoureiro Geral não precisa rolar 40 linhas soltas pra saber que tem 3
+      pendências em FINANCEIRO). `api/GestaoNotificacaoRegras` (nível Global)
+      edita o catálogo (ativar/desativar regra, ligar/desligar canal de
+      e-mail, editar título).
+- [x] `api/shared/notificacaoEmail.js` (canal real: Azure Communication
+      Email, mesmo SDK/padrão já usado em `site/api/EnviarConfirmacaoInscricao`
+      — best-effort, uma falha de envio nunca derruba a notificação, que já
+      existe na central independente do e-mail ter saído). Consentimento por
+      canal e categoria: `NotificacaoPreferencias` é opt-out (ativo por
+      padrão, cada membro desliga por categoria em `PUT
+      /api/notificacoes/preferencias`); regra com `Obrigatoria = 1` ignoraria
+      esse opt-out (nenhuma das 3 regras semeadas é obrigatória — o modelo
+      completo de consentimento por canal×categoria, com base legal e
+      keyword de saída, é a v7.12, quando WhatsApp entrar de verdade).
+- [x] `api/NotificacoesAgendador` (timer diário, 10h UTC) roda a avaliação
+      sozinho; `api/AvaliarNotificacoes` (POST, nível Global) força uma rodada
+      manual sem esperar o horário — usado pra testar sem esperar 24h.
+- [x] Sino no cabeçalho persistente do painel (`.cabecalho-secretaria`, fora
+      de qualquer aba — aparece em todo módulo, não só numa tela): badge com
+      não lidas, dropdown com a lista, marcar lida ao abrir, arquivar por
+      item, "marcar todas como lidas". Só aparece pra quem tem sessão de
+      Secretaria (`authToken`) — quem entra só com matrícula pro check-in
+      não é destinatário de nada aqui.
+- [x] Testado localmente de ponta a ponta antes de commitar: `npx jest`
+      (suíte inteira, 38 testes incluindo os 6 novos de idempotência/opt-out
+      do motor) e `node --check` nos 8 arquivos novos de `api/` e em
+      `app/script.js` — sem erro de sintaxe/require.
+- [ ] `ACS_CONNECTION_STRING`/`ACS_REMETENTE` (placeholders já em
+      `api/local.settings.json`, valor real pendente) precisam ser
+      provisionados na Azure Communication Services e configurados como App
+      Setting da Function App de governança antes do canal de e-mail sair do
+      papel em produção — infraestrutura, não código.
+- [ ] Tela de administração do catálogo (`GestaoNotificacaoRegras` já tem
+      API pronta, `app/` ainda não tem aba própria) — hoje só dá pra editar
+      regra via chamada direta à API; entra quando houver demanda real de
+      ajustar regra sem developer.
 
 #### vB.3 — Motor de workflow genérico (parar de recodar o mesmo fluxo)
 

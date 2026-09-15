@@ -248,7 +248,91 @@ async function abrirPainelConteudo(matricula) {
   document.getElementById("cxTrocarSenha").style.display = authToken ? "block" : "none";
   aplicarPermissoesNoMenu();
   await carregarPainelPessoal(matricula);
+  // vB.2 — sino de notificações: só existe pra quem entrou com senha (tem
+  // Lideranca/matrícula de destinatário válido); quem entrou só com
+  // matrícula pro check-in não tem authToken, então nem tenta.
+  document.getElementById("btnSino").style.display = authToken ? "inline-block" : "none";
+  if (authToken) await atualizarBadgeNotificacoes();
 }
+
+// ---- SINO DE NOTIFICAÇÕES (vB.2 — Motor de notificações) ----
+async function atualizarBadgeNotificacoes() {
+  try {
+    const res = await fetchProtegido(`${API_BASE}/notificacoes/contagem`);
+    const data = await res.json();
+    const badge = document.getElementById("badgeSino");
+    if (data.naoLidas > 0) {
+      badge.textContent = data.naoLidas > 99 ? "99+" : data.naoLidas;
+      badge.style.display = "inline-block";
+    } else {
+      badge.style.display = "none";
+    }
+  } catch (e) { /* sessão expirada já é tratada em fetchProtegido */ }
+}
+
+async function alternarPainelNotificacoes() {
+  const painel = document.getElementById("painelNotificacoes");
+  const abrindo = painel.style.display === "none";
+  painel.style.display = abrindo ? "block" : "none";
+  if (abrindo) await carregarPainelNotificacoes();
+}
+
+async function carregarPainelNotificacoes() {
+  const container = document.getElementById("listaNotificacoes");
+  container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Carregando...</div>";
+  try {
+    const res = await fetchProtegido(`${API_BASE}/notificacoes?status=abertas`);
+    const lista = await res.json();
+    if (!Array.isArray(lista) || lista.length === 0) {
+      container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Nenhuma notificação por aqui.</div>";
+      return;
+    }
+    container.innerHTML = lista.map(n => `
+      <div class="item-notificacao ${n.lida ? "lida" : ""}" onclick="abrirNotificacao(${n.notificacaoId})">
+        <span class="titulo-notificacao">${n.titulo}</span>
+        <span>${n.mensagem}</span>
+        <div class="rodape-notificacao">
+          <span>${new Date(n.criadaEm).toLocaleString("pt-BR")}</span>
+          <button class="btn-link" onclick="event.stopPropagation(); arquivarNotificacao(${n.notificacaoId})">Arquivar</button>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível carregar.</div>";
+  }
+}
+
+async function abrirNotificacao(id) {
+  await fetchProtegido(`${API_BASE}/notificacoes/${id}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "LER" })
+  });
+  await carregarPainelNotificacoes();
+  await atualizarBadgeNotificacoes();
+}
+
+async function arquivarNotificacao(id) {
+  await fetchProtegido(`${API_BASE}/notificacoes/${id}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "ARQUIVAR" })
+  });
+  await carregarPainelNotificacoes();
+  await atualizarBadgeNotificacoes();
+}
+
+async function marcarTodasNotificacoesLidas() {
+  const res = await fetchProtegido(`${API_BASE}/notificacoes/marcar-todas-lidas`, { method: "PUT" });
+  const data = await res.json();
+  avisarResultado(data);
+  await carregarPainelNotificacoes();
+  await atualizarBadgeNotificacoes();
+}
+
+// Fecha o painel ao clicar fora dele (mesmo padrão de qualquer dropdown).
+document.addEventListener("click", (ev) => {
+  const caixa = document.getElementById("caixaSino") || document.querySelector(".caixa-sino");
+  const painel = document.getElementById("painelNotificacoes");
+  if (!painel || painel.style.display === "none" || !caixa) return;
+  if (!caixa.contains(ev.target)) painel.style.display = "none";
+});
 
 // Self-service: só aparece pra quem logou com senha (tem Lideranca). Não pede
 // a senha atual — a sessão já autenticada é a prova de identidade.

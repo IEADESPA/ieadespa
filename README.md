@@ -3703,19 +3703,28 @@ comum não entra num painel de secretaria — ele entra no celular.
       notificação na central mas nunca disparava e-mail nenhum (gap deixado
       na vB.3, corrigido aqui de passagem). Inscrição morta (404/410 —
       desinstalou o app) é removida sozinha na próxima tentativa de envio.
-- [ ] **Self-service ampliado — parcialmente bloqueado, não fabricado**: as
-      duas peças que **já existem** (Minhas Contribuições, v4.1.1; Cartas de
-      Trânsito, vC.3) continuam funcionando, sem mudança. As demais **não
-      têm módulo de negócio por trás ainda**, então não dá pra construir a
-      tela sem inventar dado: **minhas escalas** depende da v7.5 (Escalas e
-      voluntariado, ainda não implementada); **inscrições em eventos** já
-      existe, mas mora no site institucional (Directus, vC.2/v7.4 —
-      decisão explícita de manter os dois motores distintos, não duplicar
-      aqui); **meus filhos (check-in)** e **minha trilha de discipulado**
-      não têm tabela/módulo nenhum no sistema hoje. Cada um entra aqui
-      sozinho, sem versão nova, assim que o módulo de origem existir — a
-      infraestrutura de login/PWA/push desta versão já serve todos eles sem
-      precisar refazer nada.
+- [ ] **Self-service ampliado — integração encaminhada pra cada fase de
+      origem, não fabricada aqui.** As duas peças que **já existem** (Minhas
+      Contribuições, v4.1.1; Cartas de Trânsito, vC.3) continuam funcionando,
+      sem mudança. As demais não têm módulo de negócio por trás ainda —
+      **cada uma recebeu um item de integração registrado na própria versão
+      de origem**, pra não ficar esquecida e não precisar de portal novo
+      quando chegar a vez:
+      - **Minhas escalas** → item registrado na **v5.6** (auto-escalador,
+        FASE 5) e na **v7.5** (grade básica, FASE 7).
+      - **Inscrições em eventos** → item registrado na **v7.4**/v7.13 (FASE 7)
+        — o motor continua sendo do site (decisão vC.2, não duplicar), o
+        portal só linka pra ele usando a mesma sessão.
+      - **Meus filhos (check-in)** → item registrado na **v7.10** (FASE 7,
+        check-in infantil) — autoatendimento é só consulta pro responsável
+        legal, o check-in físico continua sendo ação de voluntário.
+      - **Minha trilha de discipulado** → não existe módulo nenhum ainda em
+        fase nenhuma; registrado como pendência aberta no fim da **FASE 12**
+        (última fase do roadmap comprometido hoje), pra a futura fase de
+        discipulado nascer já sabendo que precisa disso.
+      Em todos os quatro, a infraestrutura desta versão (login simplificado,
+      PWA, push) já está pronta — quando a fase de origem chegar, é só ligar
+      a tela em "Meu Painel", não é preciso outra versão de portal.
 - [x] Testado com `npx jest` (72 testes, incluindo 16 novos: código de
       acesso, canal push, dispatcher único de canais) e `node --check` em
       todos os arquivos novos e alterados.
@@ -4195,6 +4204,13 @@ WhatsApp e o secretário refazendo tudo na mão.
 - [ ] Publicação da escala e confirmação de recebimento — quem não confirmou
       até X dias vira pendência do líder.
       *(referência: Planning Center Services; ChurchSuite Rotas)*
+- [ ] **Integração com o Portal do Membro (vB.5)**: quando esta versão existir,
+      "aceitar/recusar/trocar com outro voluntário" vira sub-aba de
+      autoatendimento dentro de "Meu Painel" (mesmo padrão de Minhas
+      Contribuições/Cartas de Trânsito), com push/e-mail do motor de
+      notificações (vB.2) avisando convite em cadeia e pendência de
+      confirmação. A vB.5 já deixou a infraestrutura (login simplificado,
+      PWA, push) pronta pra isso sem precisar de versão nova — só ligar aqui.
 
 #### v5.7 — Triagem e habilitação de voluntários *(7ª rodada — pré-requisito da FASE 7)*
 
@@ -4444,12 +4460,22 @@ ponto real de integração:
       relação Directus-Directus solta que existe hoje.
 - [ ] Site continua sendo dono do cadastro de evento/inscrição/certificado —
       este sistema não duplica isso, só compartilha a fonte de congregação.
+- [ ] **Integração com o Portal do Membro (vB.5)**: "minhas inscrições em
+      eventos" no PWA não duplica o motor do site (decisão acima continua
+      de pé) — o portal só **linka/embute** a área de eventos do site
+      (Directus) dentro de "Meu Painel", usando a MESMA sessão verificada da
+      vB.5 (login por código) pra identificar a pessoa sem pedir login de
+      novo. Ver também v7.13, que expande esta versão na 7ª rodada.
 
 #### v7.5 — Escalas e voluntariado
 
 - [ ] Escala de rodízio voluntário (limpeza, portaria, louvor).
 - [ ] Termo de Adesão ao Serviço Voluntário (Lei 9.608/98).
 - [ ] Remoção da escala por perda de confiança (sem vínculo trabalhista).
+- [ ] **Self-service "Minhas Escalas" (vB.5)** — ver o item de integração já
+      registrado na v5.6 (auto-escalador), que é quem cobre
+      aceitar/recusar/trocar de verdade; esta versão só entrega a grade
+      básica primeiro.
 
 #### 🔒 Trava de Revisão 7-A — antes de avançar para a v7.6
 
@@ -4596,6 +4622,12 @@ retirada, a política de proteção é só documento.
       auditável que protege a igreja e a família.
 - [ ] Bloqueio de voluntário sem habilitação vigente (v7.7) na sala, no ato do
       check-in. *(Planning Center Check-Ins; FellowshipOne; ChurchSuite)*
+- [ ] **Integração com o Portal do Membro (vB.5)**: "meus filhos" no
+      autoatendimento é o pai/responsável legal (`VinculosFamiliares`,
+      `ResponsavelLegal`) consultando o histórico de check-in/check-out dos
+      próprios filhos pelo celular — nunca fazendo o check-in ele mesmo (isso
+      continua sendo ação de voluntário na sala, com a etiqueta física). Sub-aba
+      nova em "Meu Painel", mesma infraestrutura de login/PWA da vB.5.
 
 #### 🔒 Trava de Revisão 7-B — antes de avançar para a v7.11
 
@@ -5073,6 +5105,18 @@ Audita v12.1 e v12.2 pelas 5 perguntas do checklist.
       departamental em dia. Uma linha por congregação, três cores.
 - [ ] Exportação do conjunto para a prestação de contas anual da Assembleia
       (Art. 36 §1º), reaproveitando as demonstrações da v4.9.
+
+#### 📌 Pendência entre fases — Trilha de discipulado (self-service, vB.5)
+
+A vB.5 (Portal do Membro) previa "minha trilha de discipulado" no
+autoatendimento — não dá pra construir porque **não existe nenhum módulo de
+discipulado/formação no sistema hoje** (nem tabela, nem tela, em nenhuma
+fase anterior). Fica registrado aqui, na última fase do roadmap
+comprometido até agora, porque não tem outro lugar melhor: se um dia surgir
+uma fase de discipulado/formação de membro, ela nasce **já sabendo** que
+precisa expor isso na área de autoatendimento (mesma infraestrutura de
+login/PWA/push da vB.5, sem versão nova de portal). Até lá, o item
+correspondente na vB.5 continua bloqueado — de propósito, não esquecido.
 
 #### 🔒 Trava de Revisão 12-B — antes de encerrar a FASE 12 (e o roadmap comprometido até aqui)
 

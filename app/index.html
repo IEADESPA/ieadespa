@@ -1703,6 +1703,28 @@
 
         <hr />
 
+        <h3>📖 Texto Mestre Consolidado (Reg. Art. 162)</h3>
+        <p class="subtitle" style="margin:0 0 8px;">Versão consolidada do Regimento — não é editor de texto, é o arquivo
+          inteiro + a data de vigência ao redor dele. "Qual era a regra vigente numa data" é lido daqui, nunca somando
+          alterações soltas.</p>
+        <div id="painelTextoMestreVigente" class="subtitle" style="margin:0 0 8px;"></div>
+        <div id="painelTextoMestrePendencias"></div>
+        <div id="painelTextoMestreRevisaoQuadrienal" class="subtitle" style="margin:8px 0;"></div>
+
+        <div class="barra-lista">
+          <input type="date" id="textoMestreDataVigencia" />
+          <input type="number" id="textoMestreTotalArtigos" placeholder="Total de artigos" style="max-width:140px;" />
+          <input type="number" id="textoMestreArtigosTocados" placeholder="Artigos tocados nesta alteração" style="max-width:200px;" />
+        </div>
+        <div class="barra-lista">
+          <input type="file" id="textoMestreArquivo" accept="application/pdf" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarVersaoTextoMestreAcao()">📖 Registrar Nova Versão Consolidada</button>
+        </div>
+        <p id="resultadoTextoMestre"></p>
+        <div class="rolagem-tabela"><div id="resultadoHistoricoTextoMestre"></div></div>
+
+        <hr />
+
         <!-- vB.6 — catálogo de políticas de retenção (nível Global). Nasce
              com as 5 categorias já seedeadas desde a v0.1 — esta é a
              primeira tela que permite editar prazo/base legal, nunca teve

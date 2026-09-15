@@ -4492,7 +4492,7 @@ existe para eliminar. E o sistema inteiro (v1.x elegibilidade, v3.x prazos
 disciplinares, v4.x percentuais) é construído em cima de artigos que podem
 ter mudado.
 
-- [ ] **Texto Mestre com vigência (versão consolidada).** Cada alteração
+- [x] **Texto Mestre com vigência (versão consolidada).** Cada alteração
       aprovada gera uma nova versão consolidada do Regimento, com data de
       início de vigência e ponteiro para a ata que a produziu. Não é editor de
       texto (a v2.9 base já descartou isso, e com razão): é **versionamento do
@@ -4500,13 +4500,13 @@ ter mudado.
       existir é "qual era o texto vigente na data X" — sem ela, um processo
       disciplinar de 2024 julgado hoje corre o risco de ser medido por regra
       de 2026, o que é retroatividade pura.
-- [ ] **Alerta de prazo de 48h** (Art. 162 §2º: Texto Mestre atualizado em
+- [x] **Alerta de prazo de 48h** (Art. 162 §2º: Texto Mestre atualizado em
       48 horas após o registro da ata de alteração). Reaproveita tal e qual o
       mecanismo de alerta de cartório que já está na v2.9 base
       (`estatuto.diasDesde`, calculado na leitura) — é o mesmo padrão, outro
       prazo. Custo de implementação quase zero; o valor é que o prazo deixa de
       depender de alguém lembrar.
-- [ ] **Nota de vigência automática e regra dos 30%** (Art. 162 §§3º-4º):
+- [x] **Nota de vigência automática e regra dos 30%** (Art. 162 §§3º-4º):
       alteração que atinge mais de 30% do texto exige registro integral, não
       apenas averbação da alteração. O sistema não mede diff de texto jurídico
       com confiança suficiente pra decidir isso sozinho — mas **pode** alertar:
@@ -4514,11 +4514,65 @@ ter mudado.
       aviso quando passar do limiar, deixando a decisão com o Secretário. É
       assistência técnica, não automação cega (mesmo critério da v4.x para
       classificações fiscais).
-- [ ] **Revisão sistêmica quadrienal (Art. 162-B).** A cada 4 anos há revisão
+- [x] **Revisão sistêmica quadrienal (Art. 162-B).** A cada 4 anos há revisão
       obrigatória do arcabouço normativo. Vira um item de calendário
       institucional com antecedência (mesmo motor da v7.2), não um lembrete
       manual — é justamente o tipo de prazo longo que ninguém lembra sem
       sistema.
+
+  Implementado: `sql/migrations/090_texto_mestre_consolidado.sql` cria
+  `TextoMestreVersoes` (arquivo PDF consolidado + vigência + ponteiro
+  opcional pra `Documentos.DocumentoId` — a varredura confirmou que **não
+  existe tabela de ata assinada**: o PDF final de uma ata já vive em
+  `Documentos` com `Tipo='ATA'`, então o ponteiro aponta pra lá, não pra
+  `Sessoes` diretamente) e `ParametrosTextoMestre` (1 linha, baseline da
+  revisão quadrienal — semeada com `NULL` de propósito: nenhuma data
+  histórica foi inventada, a Secretaria define a real na primeira vez que
+  usar a tela).
+
+  `shared/textoMestre.js`: `versaoVigenteEm(pool, data)` responde
+  literalmente "qual era o texto vigente nesta data" (não soma
+  alterações). O prazo de 48h (Art. 162 §2º) reaproveita o **mesmo
+  padrão** de `estatuto.diasDesde` que já dá o alerta de cartório em
+  `GestaoDocumentos` — com uma ressalva documentada, não escondida: o
+  sistema só tem granularidade de dia em todo o resto (`DIAS_LAVRATURA`,
+  `DIAS_CARTORIO`), então 48h vira `DIAS_PRAZO_ATUALIZACAO = 2`, a
+  aproximação mais fiel dentro do padrão existente, não uma hora exata.
+  O gatilho do prazo é o catálogo `Tipo=REGIMENTO` que a v2.9 **já** usa
+  pra guardar alterações — não um tipo novo: qualquer Documento desses
+  ainda sem `TextoMestreVersoes` apontando pra ele, há mais de 2 dias, é
+  pendência. A regra dos 30% (`avaliarLimiar30Porcento`) é só alerta —
+  nunca decide sozinha registro integral x averbação — porque **não
+  existe tabela de artigo/texto estruturado** em lugar nenhum do sistema
+  (confirmado por varredura: zero `ArtigoNumero`/`TextoArtigo`); o
+  Secretário informa `totalArtigos`/`artigosTocados` na hora de registrar
+  a versão, mesmo espírito de "assistência técnica, não automação cega"
+  já usado nas classificações fiscais da FASE 4.
+
+  **Limitação documentada, não fabricada**: a revisão sistêmica quadrienal
+  (Art. 162-B) cita "mesmo motor da v7.2", mas a varredura confirmou que a
+  v7.2 (Calendário Oficial) **ainda não foi construída** — todos os itens
+  daquela versão continuam `[ ]`. Em vez de fabricar uma integração com um
+  motor que não existe, `situacaoRevisaoQuadrienal` é um alerta mínimo e
+  autônomo (mesmo padrão `diasDesde`, com uma antecedência de 180 dias/~6
+  meses como horizonte de planejamento) — quando a v7.2 existir de
+  verdade, essa checagem vira só mais um item nela, sem redesenho.
+
+  `GestaoTextoMestre` (GET público — o Regimento vigente não é sigiloso,
+  mesmo padrão de `GestaoDocumentos`; POST/PUT exigem
+  `["reunioes","assembleia","cli"]`, e definir a baseline da revisão
+  quadrienal exige nível Global): painel único devolvendo vigente-hoje-ou-
+  na-data-pedida, pendências de 48h, situação da revisão quadrienal e o
+  histórico de versões.
+
+  Frontend: painel "📖 Texto Mestre Consolidado" na aba Arquivos, logo
+  abaixo da lista de Documentos — versão vigente com link direto,
+  pendências de 48h em destaque, aviso da revisão quadrienal e formulário
+  de registro de nova versão (data de vigência + PDF + contagem opcional
+  de artigos tocados).
+
+  Testado com `npx jest` (152 testes, incluindo 11 novos de
+  `shared/textoMestre.js`) e `node --check` em todos os arquivos novos.
 - **Referências que confirmam o desenho.** No Brasil, a LC 95/1998 (com a
   LC 107/2001) trata de técnica legislativa e **consolidação** — o conceito de
   manter texto consolidado em vez de obrigar o leitor a somar alterações é

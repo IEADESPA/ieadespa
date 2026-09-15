@@ -4911,7 +4911,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); carregarNotificacaoRegras(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); carregarTurmasBatismo(); carregarCandidatosBatismo(); }
   if (aba === "enquetes") carregarEnquetes();
-  if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); carregarPoliticasRetencao(); }
+  if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); carregarPoliticasRetencao(); carregarTextoMestre(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
   if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
   if (aba === "auditoria") {
@@ -9243,6 +9243,68 @@ async function excluirDocumentoAcao(id) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarDocumentos();
+}
+
+// ---- TEXTO MESTRE CONSOLIDADO (vB.15 — Reg. Art. 162 §§2º-4º e 162-B) ----
+async function carregarTextoMestre() {
+  const res = await fetchProtegido(`${API_BASE}/texto-mestre`);
+  const data = await res.json();
+
+  const vigenteEl = document.getElementById("painelTextoMestreVigente");
+  vigenteEl.innerHTML = data.vigente
+    ? `Versão vigente: nº ${data.vigente.numeroVersao} (desde ${data.vigente.dataVigencia}) — <a href="${data.vigente.urlAssinada}" target="_blank" rel="noopener">abrir PDF</a>`
+    : "⚠️ Nenhuma versão consolidada registrada ainda.";
+
+  const pendEl = document.getElementById("painelTextoMestrePendencias");
+  const vencidas = (data.pendenciasAtualizacao || []).filter(p => p.prazoVencido);
+  pendEl.innerHTML = vencidas.length === 0 ? "" :
+    `<p class="subtitle" style="color:var(--cor-perigo,#c0392b);">⚠️ ${vencidas.length} alteração(ões) do Regimento registrada(s) há mais de 48h sem consolidação no Texto Mestre (Art. 162 §2º): ${vencidas.map(v => v.descricao || `documento #${v.documentoId}`).join(", ")}.</p>`;
+
+  const revEl = document.getElementById("painelTextoMestreRevisaoQuadrienal");
+  const rev = data.revisaoQuadrienal;
+  if (!rev || !rev.definida) {
+    revEl.textContent = "Revisão sistêmica quadrienal (Art. 162-B): data-base ainda não definida.";
+  } else if (rev.vencida) {
+    revEl.innerHTML = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Revisão sistêmica quadrienal (Art. 162-B) vencida desde ${rev.proximaRevisao}.</span>`;
+  } else if (rev.dentroAntecedencia) {
+    revEl.innerHTML = `⚠️ Revisão sistêmica quadrienal (Art. 162-B) prevista para ${rev.proximaRevisao} (${rev.diasRestantes} dia(s)).`;
+  } else {
+    revEl.textContent = `Próxima revisão sistêmica quadrienal (Art. 162-B): ${rev.proximaRevisao}.`;
+  }
+
+  const histEl = document.getElementById("resultadoHistoricoTextoMestre");
+  if (!Array.isArray(data.historico) || data.historico.length === 0) {
+    histEl.innerHTML = "<p class='subtitle'>Nenhuma versão registrada ainda.</p>";
+  } else {
+    histEl.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Versão</th><th>Vigência</th><th>Artigos tocados</th></tr></thead><tbody>` +
+      data.historico.map(v => `<tr><td>nº ${v.numeroVersao}</td><td>${v.dataVigencia}</td><td>${v.artigosTocados != null ? `${v.artigosTocados} de ${v.totalArtigos}` : "-"}</td></tr>`).join("") +
+      `</tbody></table>`;
+  }
+}
+
+async function registrarVersaoTextoMestreAcao() {
+  const dataVigencia = document.getElementById("textoMestreDataVigencia").value;
+  const totalArtigos = document.getElementById("textoMestreTotalArtigos").value || null;
+  const artigosTocados = document.getElementById("textoMestreArtigosTocados").value || null;
+  const arquivo = document.getElementById("textoMestreArquivo").files[0];
+  const resultado = document.getElementById("resultadoTextoMestre");
+  if (!dataVigencia || !arquivo) { resultado.textContent = "Informe a data de vigência e o arquivo PDF consolidado."; return; }
+
+  const body = {
+    dataVigencia, totalArtigos: totalArtigos ? Number(totalArtigos) : undefined, artigosTocados: artigosTocados ? Number(artigosTocados) : undefined,
+    arquivoBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type
+  };
+  const res = await fetchProtegido(`${API_BASE}/texto-mestre`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  avisarResultado(data);
+  resultado.textContent = data.mensagem;
+  if (data.sucesso) {
+    document.getElementById("textoMestreDataVigencia").value = "";
+    document.getElementById("textoMestreTotalArtigos").value = "";
+    document.getElementById("textoMestreArtigosTocados").value = "";
+    document.getElementById("textoMestreArquivo").value = "";
+    carregarTextoMestre();
+  }
 }
 
 // ---- POLÍTICAS DE RETENÇÃO (vB.6 — Arquivo Institucional, nível Global) ----

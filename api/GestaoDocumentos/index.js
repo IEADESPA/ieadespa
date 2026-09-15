@@ -13,6 +13,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const estatuto = require("../shared/estatuto");
+const { calcularStatusRetencao } = require("../shared/retencao");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -35,19 +36,27 @@ module.exports = async function (context, req) {
              d.ReferenciaId AS referenciaId, d.Descricao AS descricao, d.UrlBlob AS urlBlob,
              d.RegistradoPor AS registradoPor, m.Nome AS registradoPorNome,
              CONVERT(varchar(33), d.CriadoEm, 126) AS criadoEm,
-             CONVERT(varchar(10), s.DataSessao, 120) AS dataSessaoReferencia
+             CONVERT(varchar(10), s.DataSessao, 120) AS dataSessaoReferencia,
+             d.Categoria AS categoria, pr.DiasRetencao AS diasRetencaoPolitica
       FROM Documentos d
       LEFT JOIN Orgaos o ON o.OrgaoId = d.OrgaoId
       LEFT JOIN MembroReferencia m ON m.MembroId = d.RegistradoPor
       LEFT JOIN Sessoes s ON d.Tipo = 'ATA' AND s.SessaoId = d.ReferenciaId
+      LEFT JOIN PoliticasRetencao pr ON pr.Categoria = d.Categoria
       WHERE ${where}
       ORDER BY d.CriadoEm DESC
     `);
 
     const hoje = new Date().toISOString().slice(0, 10);
     const documentos = result.recordset.map(doc => {
-      const base = Object.assign({}, doc, { urlAssinada: storage.urlDocumentoComSas(doc.urlBlob) });
+      const base = Object.assign({}, doc, {
+        urlAssinada: storage.urlDocumentoComSas(doc.urlBlob),
+        // vB.6 — arquivo institucional: status calculado na leitura contra
+        // PoliticasRetencao, nunca expurgo automático (decisão da v0.1 continua de pé).
+        statusRetencao: doc.categoria ? calcularStatusRetencao({ diasRetencao: doc.diasRetencaoPolitica, criadoEm: doc.criadoEm }) : null
+      });
       delete base.urlBlob;
+      delete base.diasRetencaoPolitica;
       if (doc.tipo === "ATA" && doc.dataSessaoReferencia) {
         const diasDesdeSessao = estatuto.diasDesde(doc.dataSessaoReferencia, hoje);
         return Object.assign(base, {
@@ -67,7 +76,7 @@ module.exports = async function (context, req) {
   if (!usuario) return;
 
   if (req.method === "POST") {
-    const { tipo, orgaoId, referenciaId, descricao, arquivoBase64, mimeType } = req.body || {};
+    const { tipo, orgaoId, referenciaId, descricao, arquivoBase64, mimeType, categoria } = req.body || {};
     if (!tipo || !arquivoBase64 || !mimeType) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: tipo, arquivoBase64, mimeType." } };
       return;
@@ -97,6 +106,10 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // vB.6 — Ata sempre entra categorizada pra arquivo/temporalidade, mesmo
+    // sem o usuário escolher nada (mesma categoria que a migração 083
+    // aplicou retroativamente às Atas já existentes).
+    const categoriaFinal = categoria || (tipo === "ATA" ? "Atas e Registros de Sessão/Presença" : null);
     const criado = await pool.request()
       .input("tipo", sql.NVarChar(50), tipo)
       .input("orgaoId", sql.Int, orgaoId || null)
@@ -104,8 +117,9 @@ module.exports = async function (context, req) {
       .input("descricao", sql.NVarChar(300), descricao || null)
       .input("urlBlob", sql.NVarChar(500), urlBlob)
       .input("registradoPor", sql.Int, usuario.membroId)
-      .query(`INSERT INTO Documentos (Tipo, OrgaoId, ReferenciaId, Descricao, UrlBlob, RegistradoPor)
-              OUTPUT INSERTED.DocumentoId VALUES (@tipo, @orgaoId, @referenciaId, @descricao, @urlBlob, @registradoPor)`);
+      .input("categoria", sql.NVarChar(60), categoriaFinal)
+      .query(`INSERT INTO Documentos (Tipo, OrgaoId, ReferenciaId, Descricao, UrlBlob, RegistradoPor, Categoria)
+              OUTPUT INSERTED.DocumentoId VALUES (@tipo, @orgaoId, @referenciaId, @descricao, @urlBlob, @registradoPor, @categoria)`);
     const documentoId = criado.recordset[0].DocumentoId;
 
     await registrarAuditoria({

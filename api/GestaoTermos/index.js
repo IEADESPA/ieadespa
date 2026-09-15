@@ -7,7 +7,7 @@
 // única rota que precisa continuar acessível mesmo com termos pendentes —
 // senão ninguém conseguiria assinar o que está bloqueando o próprio acesso.
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, sha256 } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { TERMOS, termosPendentes } = require("../shared/termos");
 
@@ -43,11 +43,18 @@ module.exports = async function (context, req) {
       .input("versao", sql.NVarChar(20), TERMOS[tipo].versao)
       .query(`SELECT 1 FROM TermosAssinados WHERE MembroId = @id AND TipoTermo = @tipo AND VersaoTermo = @versao`);
     if (jaAssinouEssaVersao.recordset.length === 0) {
+      // vB.6 — trilha de integridade: hash do TEXTO do termo no momento da
+      // assinatura. Sem isso, se o catálogo (shared/termos.js) mudasse o
+      // texto sem bump de versão, não haveria como detectar depois — o
+      // hash é o que permite `VerificarTermoAssinado` flagrar essa
+      // divergência (ver a Function nova).
+      const hashConteudo = sha256(TERMOS[tipo].texto);
       await pool.request()
         .input("membroId", sql.Int, usuario.membroId)
         .input("tipo", sql.NVarChar(40), tipo)
         .input("versao", sql.NVarChar(20), TERMOS[tipo].versao)
-        .query(`INSERT INTO TermosAssinados (MembroId, TipoTermo, VersaoTermo) VALUES (@membroId, @tipo, @versao)`);
+        .input("hash", sql.NVarChar(64), hashConteudo)
+        .query(`INSERT INTO TermosAssinados (MembroId, TipoTermo, VersaoTermo, HashConteudo) VALUES (@membroId, @tipo, @versao, @hash)`);
       await registrarAuditoria({
         tabela: "TermosAssinados", registroId: Number(usuario.membroId),
         acao: `Assinou termo ${tipo} (versão ${TERMOS[tipo].versao})`, usuarioId: usuario.membroId

@@ -3812,26 +3812,81 @@ comum não entra num painel de secretaria — ele entra no celular.
 
 #### vB.6 — Documento institucional: geração, assinatura e arquivo
 
-- [ ] Geração de PDF no servidor para **os documentos que o sistema já emite**
-      (cartas de trânsito, certificados, recibos, relatórios) — hoje é "salvar
-      como PDF no navegador", que sai diferente em cada máquina e não serve como
-      documento institucional padronizado.
-- [ ] **Minuta de ata pré-preenchida — não a ata final.** A v2.9 descartou
-      permanentemente a "geração de Ata (PDF)" por um motivo que continua válido:
-      não há editor de texto no sistema, e assinatura de nível ICP-Brasil/GOV.BR
-      seria peso desnecessário. **Essa decisão fica de pé.** O que falta é mais
-      modesto e não conflita: presença, quórum, pautas, resultado de votação e
-      deliberação **já estão no banco** e hoje são redigitados à mão no Word.
-      O sistema exporta uma minuta com esses dados (`.docx`/texto) para o
-      Secretário **partir dela** e seguir exatamente o fluxo atual — escreve,
-      exporta PDF, assina no GOV.BR e sobe pronto pela v2.9. Elimina a
-      redigitação, não o fluxo de assinatura.
-- [ ] Assinatura eletrônica **interna** com trilha (quem assinou, quando, hash)
-      reaproveitando `TermosAssinados` — para termos e aceites internos
-      (voluntariado, políticas, aceite do Estatuto na vB.11), **nunca** como
-      substituto de assinatura de ata com fé pública, que continua no GOV.BR.
-- [ ] Arquivo institucional com tabela de temporalidade — conversa direto com
-      `PoliticasRetencao` (v0.3), que hoje é só catálogo informativo.
+- [x] **Geração de PDF no servidor** (`api/shared/pdfInstitucional.js`,
+      `pdfkit` — sem dependência nova pesada, puro JS): cabeçalho/rodapé
+      institucional padrão (nome oficial, protocolo, emitido em, data/hora —
+      mesmo padrão que o v10.5 já previa pra relatório impresso, essa é a
+      implementação de referência). Ligado de verdade num documento real
+      que o sistema já emite, não só a lib pronta sem uso: `api/CartaPdf`
+      (`GET /api/cartas/{id}/pdf?matricula=...`) reproduz **exatamente** o
+      mesmo conteúdo que `renderizarImpressaoCarta` já imprime via
+      `window.print()` — só que gerado no servidor, sai igual em qualquer
+      máquina. Reaproveita o protocolo institucional único da vB.4
+      (`gerarProtocolo(pool, "CARTA")`, migração 083 — `CartasTransito.
+      Protocolo`), gerado sob demanda na 1ª vez que a carta é baixada em
+      PDF, nunca antes (rascunho nunca "gasta" número).
+- [x] **Minuta de ata pré-preenchida — não a ata final** (`api/MinutaAta`,
+      `.docx` real via `docx`): presença, ausência (com justificativa),
+      quórum e resultado de votação (Enquetes vinculadas à sessão) exportados
+      prontos, com espaço em branco pra "Deliberação" o Secretário preencher
+      — a decisão da v2.9 de nunca gerar a ata final continua de pé, só
+      elimina a redigitação do que já está no banco. **Achado real ao
+      construir**: `Sessoes.QuorumAtingido` (coluna do schema desde a FASE 0)
+      **nunca foi escrito por nenhum código** — nem `EncerrarReuniao` nem
+      nenhuma outra Function grava nela; é coluna morta. A minuta não
+      confia nela: recalcula quórum de verdade a partir de `Presencas` +
+      `shared/universo.js::universoDoOrgao` + `shared/estatuto.js`
+      (`avaliarQuorumInstalacao` pra ASSEMBLEIA_GERAL/CLI,
+      `avaliarQuorumReformaDestituicao` quando a sessão está marcada como
+      reforma de núcleo fundamental) — e só afirma um veredito formal
+      "atingido: sim/não" onde a regra estatutária é conhecida; pros demais
+      órgãos, mostra só os números crus (presentes/universo), sem inventar
+      threshold que a lei não define pra eles.
+- [x] **Assinatura eletrônica interna com trilha** (migração 083,
+      `TermosAssinados.HashConteudo`): hash SHA-256 do texto do termo
+      gravado no momento da assinatura (`api/GestaoTermos`, reaproveitando
+      `shared/auditoria.js::sha256` — sem lib nova). `api/
+      VerificarTermoAssinado` (`shared/assinaturaInterna.js`, lógica pura
+      testada à parte) recomputa o hash do texto ATUAL do catálogo e
+      compara — pega duas coisas que uma trilha sem hash nunca pegaria:
+      catálogo mudou o texto sem trocar `VersaoTermo` (inconsistência real)
+      ou a versão assinada já foi substituída. Assinaturas de antes desta
+      versão ficam `SEM_HASH_ANTIGO` (não dá pra recalcular hash de texto
+      que não foi capturado — reforço daqui pra frente, não retroativo).
+      Continua **nunca** substituindo assinatura de ata com fé pública
+      (ICP-Brasil/GOV.BR) — é só pra termos/aceites internos
+      (voluntariado, políticas, aceite do Estatuto na vB.11). Sem tela
+      própria ainda (API pronta, uso hoje é auditoria/suporte — não existe
+      nenhuma lista de "meus termos assinados" no `app/` pra pendurar um
+      botão "Verificar", então não forcei um).
+- [x] **Arquivo institucional com tabela de temporalidade** (migração 083):
+      `PoliticasRetencao` (v0.1) tinha **zero código consumindo ela** até
+      aqui — nenhum CRUD, nenhuma tela, as 5 linhas seed da migração 012
+      eram as únicas possíveis desde sempre. `api/GestaoPoliticasRetencao`
+      (nível Global) dá CRUD de verdade; `Documentos.Categoria` e
+      `AnexosGenericos.Categoria` (FK por nome, `UNIQUE` nova em
+      `PoliticasRetencao.Categoria`) linkam documento real → política, com
+      `shared/retencao.js::calcularStatusRetencao` computando
+      VIGENTE/VENCIDO/INDETERMINADO **na leitura** — nunca expurgo
+      automático (decisão da v0.1 continua de pé, mesmo espírito do prazo
+      de lavratura/cartório que `GestaoDocumentos` já calculava só pra
+      Ata). Migração já categoriza retroativamente toda Ata existente
+      (`Tipo = 'ATA'` → categoria "Atas e Registros de Sessão/Presença",
+      a mesma que a v0.1 já previa pra isso). Tela de administração das
+      políticas na aba Arquivos/Documentos; seletor de categoria no
+      formulário de Documentos — **`AnexosGenericos` ficou só com suporte
+      de API** (campo `categoria` aceito, `statusRetencao` calculado), sem
+      seletor no modal de anexos ainda (seletor de Documentos já prova o
+      mecanismo ponta a ponta; duplicar pro modal genérico é ganho
+      marginal agora).
+- [x] Testado com `npx jest` (80 testes, incluindo 8 novos: integridade de
+      assinatura interna e status de retenção) e `node --check` em todos os
+      arquivos novos/alterados. O PDF (`shared/pdfInstitucional.js`) e o
+      `.docx` (`MinutaAta`) foram conferidos à parte, fora do jest: geração
+      real de ponta a ponta com dado de exemplo, arquivo salvo em disco e
+      assinatura de bytes verificada (`%PDF` / `PK`, respectivamente) —
+      prova que os dois formatos saem válidos, não só que o código não
+      lança exceção.
 
 #### vB.7 — Painel inicial por perfil (dashboard)
 

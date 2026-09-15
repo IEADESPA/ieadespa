@@ -10,6 +10,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const { permissoesDaTabela } = require("../shared/anexos");
+const { calcularStatusRetencao } = require("../shared/retencao");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 
@@ -31,18 +32,22 @@ module.exports = async function (context, req) {
       return;
     }
     if (!auth.exigirAlgumaPermissao(req, context, permissoes)) return;
-    const result = await pool.request().input("tabela", sql.NVarChar(60), tabela).input("registroId", sql.Int, registroId)
-      .query(`SELECT AnexoId, NomeArquivo, Url, MimeType, CriadoEm FROM AnexosGenericos WHERE Tabela = @tabela AND RegistroId = @registroId ORDER BY CriadoEm DESC`);
+    const result = await pool.request().input("tabela", sql.NVarChar(60), tabela).input("registroId", sql.Int, registroId).query(`
+      SELECT a.AnexoId, a.NomeArquivo, a.Url, a.MimeType, a.CriadoEm, a.Categoria, pr.DiasRetencao AS diasRetencaoPolitica
+      FROM AnexosGenericos a LEFT JOIN PoliticasRetencao pr ON pr.Categoria = a.Categoria
+      WHERE a.Tabela = @tabela AND a.RegistroId = @registroId ORDER BY a.CriadoEm DESC
+    `);
     const lista = result.recordset.map(a => ({
-      anexoId: a.AnexoId, nomeArquivo: a.NomeArquivo, mimeType: a.MimeType, criadoEm: a.CriadoEm,
-      urlAssinada: storage.urlDocumentoComSas(a.Url)
+      anexoId: a.AnexoId, nomeArquivo: a.NomeArquivo, mimeType: a.MimeType, criadoEm: a.CriadoEm, categoria: a.Categoria,
+      urlAssinada: storage.urlDocumentoComSas(a.Url),
+      statusRetencao: a.Categoria ? calcularStatusRetencao({ diasRetencao: a.diasRetencaoPolitica, criadoEm: a.CriadoEm }) : null
     }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: lista };
     return;
   }
 
   if (req.method === "POST" && !id) {
-    const { tabela, registroId, nomeArquivo, mimeType, documentoBase64 } = req.body || {};
+    const { tabela, registroId, nomeArquivo, mimeType, documentoBase64, categoria } = req.body || {};
     if (!tabela || !registroId || !nomeArquivo || !mimeType || !documentoBase64) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe tabela, registroId, nomeArquivo, mimeType e documentoBase64." } };
       return;
@@ -62,8 +67,9 @@ module.exports = async function (context, req) {
       .input("tabela", sql.NVarChar(60), tabela).input("registroId", sql.Int, registroId)
       .input("nomeArquivo", sql.NVarChar(255), nomeArquivo).input("url", sql.NVarChar(500), url)
       .input("mimeType", sql.NVarChar(100), mimeType).input("por", sql.Int, usuario.membroId)
-      .query(`INSERT INTO AnexosGenericos (Tabela, RegistroId, NomeArquivo, Url, MimeType, EnviadoPorMembroId)
-              OUTPUT INSERTED.AnexoId VALUES (@tabela, @registroId, @nomeArquivo, @url, @mimeType, @por)`);
+      .input("categoria", sql.NVarChar(60), categoria || null)
+      .query(`INSERT INTO AnexosGenericos (Tabela, RegistroId, NomeArquivo, Url, MimeType, EnviadoPorMembroId, Categoria)
+              OUTPUT INSERTED.AnexoId VALUES (@tabela, @registroId, @nomeArquivo, @url, @mimeType, @por, @categoria)`);
     const anexoId = inserido.recordset[0].AnexoId;
     await registrarAuditoria({ tabela: "AnexosGenericos", registroId: anexoId, acao: `Anexou documento em ${tabela}#${registroId}`, usuarioId: usuario.membroId, dadosDepois: { tabela, registroId, nomeArquivo } });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Anexo enviado.", anexoId } };

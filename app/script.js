@@ -4627,7 +4627,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); carregarNotificacaoRegras(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); }
   if (aba === "enquetes") carregarEnquetes();
-  if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); }
+  if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); carregarPoliticasRetencao(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
   if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
   if (aba === "auditoria") {
@@ -6009,6 +6009,26 @@ async function abrirReuniao() {
   carregarReunioes();
 }
 
+// vB.6 — minuta de ata (.docx): presença/quórum/enquetes já calculados,
+// pro Secretário partir dela em vez de redigitar tudo no Word.
+async function baixarMinutaAta(sessaoId) {
+  const res = await fetchProtegido(`${API_BASE}/reunioes/${sessaoId}/minuta`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    mostrarToast((data && data.mensagem) || "Não foi possível gerar a minuta.", "erro");
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `minuta-sessao-${sessaoId}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function encerrarReuniaoAcao(sessaoId) {
   if (!(await confirmarAcao("Tem certeza que deseja encerrar esta reunião?", "Encerrar"))) return;
 
@@ -6055,6 +6075,7 @@ async function carregarReunioes() {
       <td>
         <button class="btn-link" onclick="verFrequencia(${r.sessaoId}, '${descricaoEscapada}')">Ver frequência</button>
         ${r.status === "ABERTA" ? `<button class="btn-link" onclick="encerrarReuniaoAcao(${r.sessaoId})">Encerrar</button>` : ""}
+        <button class="btn-link" onclick="baixarMinutaAta(${r.sessaoId})">📝 Minuta (.docx)</button>
       </td>
     </tr>`;
   });
@@ -7007,6 +7028,7 @@ async function carregarMinhasCartas() {
       <td class="acoes-inline">
         ${c.tipo === "MUDANCA" && c.status === "SOLICITADA" ? `<button class="btn-link" onclick="confirmarCartaPendente()">Confirmar</button>` : ""}
         ${c.status !== "SOLICITADA" ? `<button class="btn-link" onclick="imprimirMinhaCarta(${c.cartaId})">🖨️ Imprimir</button>` : ""}
+        ${["EMITIDA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" onclick="baixarPdfCarta(${c.cartaId}, ${c.membroId})">📄 Baixar PDF</button>` : ""}
       </td>
     </tr>`).join("") + "</tbody></table>";
 }
@@ -7084,6 +7106,7 @@ function renderizarCartas() {
         ${["SOLICITADA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" onclick="emitirCarta(${c.cartaId})">Emitir</button>` : ""}
         ${["SOLICITADA", "CONFIRMADA", "EMITIDA"].includes(c.status) ? `<button class="btn-link btn-link-perigo" onclick="cancelarCarta(${c.cartaId})">Cancelar</button>` : ""}
         <button class="btn-link" onclick="imprimirCarta(${c.cartaId})">🖨️ Imprimir</button>
+        ${["EMITIDA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" onclick="baixarPdfCarta(${c.cartaId}, ${c.membroId})">📄 Baixar PDF</button>` : ""}
       </td>
     </tr>`;
   });
@@ -7133,6 +7156,27 @@ const LABEL_CARGO_MINISTERIAL = {
 // espírito de múltipla escolha do modelo em papel usado nas congregações.
 function marcarOpcao(rotulo, marcado) {
   return `(${marcado ? "X" : "&nbsp;"}) ${rotulo}`;
+}
+
+// vB.6 — PDF gerado no servidor (protocolo único + rodapé de emissão),
+// substitui "salvar como PDF" do navegador pra quem precisa de um arquivo
+// de verdade, não só imprimir na hora.
+async function baixarPdfCarta(cartaId, membroId) {
+  const res = await fetch(`${API_BASE}/cartas/${cartaId}/pdf?matricula=${membroId}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    mostrarToast((data && data.mensagem) || "Não foi possível gerar o PDF.", "erro");
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `carta-${cartaId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function imprimirCarta(cartaId) {
@@ -8462,6 +8506,18 @@ async function carregarOpcoesFormDocumentos() {
   const orgaos = await res.json();
   document.getElementById("documentoOrgao").innerHTML = `<option value="">Sem órgão específico</option>` +
     orgaos.map(o => `<option value="${o.orgaoId}">${o.nome}</option>`).join("");
+
+  // vB.6 — categorias de retenção só carregam pra quem tem nível Global
+  // (mesma restrição de GestaoPoliticasRetencao) — quem não tem, o select
+  // fica só com "(nenhuma)" e o documento entra sem categoria mesmo.
+  if (authNivel === "GLOBAL") {
+    const resPol = await fetchProtegido(`${API_BASE}/politicas-retencao`);
+    if (resPol.ok) {
+      const politicas = await resPol.json();
+      document.getElementById("documentoCategoria").innerHTML = `<option value="">(nenhuma)</option>` +
+        politicas.filter(p => p.ativo).map(p => `<option value="${p.categoria}">${p.categoria}</option>`).join("");
+    }
+  }
 }
 
 function lerArquivoComoBase64(arquivo) {
@@ -8478,6 +8534,7 @@ async function salvarDocumentoAcao() {
   const orgaoId = document.getElementById("documentoOrgao").value || undefined;
   const referenciaId = document.getElementById("documentoReferenciaId").value || undefined;
   const descricao = document.getElementById("documentoDescricao").value.trim();
+  const categoria = document.getElementById("documentoCategoria").value || undefined;
   const arquivo = document.getElementById("documentoArquivo").files[0];
   const msg = document.getElementById("resultadoDocumento");
   if (!arquivo) { msg.textContent = "Selecione um arquivo."; return; }
@@ -8486,7 +8543,7 @@ async function salvarDocumentoAcao() {
   const res = await fetchProtegido(`${API_BASE}/documentos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tipo, orgaoId, referenciaId, descricao: descricao || undefined, arquivoBase64, mimeType: arquivo.type })
+    body: JSON.stringify({ tipo, orgaoId, referenciaId, descricao: descricao || undefined, categoria, arquivoBase64, mimeType: arquivo.type })
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
@@ -8496,6 +8553,14 @@ async function salvarDocumentoAcao() {
     document.getElementById("documentoArquivo").value = "";
     carregarDocumentos();
   }
+}
+
+// vB.6 — status calculado na leitura (shared/retencao.js), nunca marcação manual.
+function badgeStatusRetencao(status) {
+  if (!status) return "-";
+  if (status.status === "INDETERMINADO") return "<span class='badge-status'>Indeterminado</span>";
+  if (status.status === "VENCIDO") return `<span class="badge-status badge-desligado">Vencido (${status.vencimentoEm})</span>`;
+  return `<span class="badge-status badge-ativo">Vigente até ${status.vencimentoEm}</span>`;
 }
 
 const ROTULO_TIPO_DOCUMENTO = {
@@ -8514,7 +8579,7 @@ async function carregarDocumentos() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Tipo</th><th>Descrição</th><th>Órgão</th><th>Registrado por</th><th>Data</th><th>Prazo</th><th></th>
+    <th>Tipo</th><th>Descrição</th><th>Órgão</th><th>Registrado por</th><th>Data</th><th>Prazo</th><th>Retenção</th><th></th>
   </tr></thead><tbody>`;
   documentos.forEach(d => {
     let prazoHtml = "-";
@@ -8530,6 +8595,7 @@ async function carregarDocumentos() {
       <td>${d.registradoPorNome || "-"}</td>
       <td>${d.criadoEm ? d.criadoEm.slice(0, 10) : "-"}</td>
       <td>${prazoHtml}</td>
+      <td>${badgeStatusRetencao(d.statusRetencao)}</td>
       <td class="acoes-inline">
         <a class="btn-link" href="${d.urlAssinada}" target="_blank" rel="noopener">Abrir</a>
         <button class="btn-link btn-link-perigo" onclick="excluirDocumentoAcao(${d.documentoId})">Excluir</button>
@@ -8546,6 +8612,50 @@ async function excluirDocumentoAcao(id) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarDocumentos();
+}
+
+// ---- POLÍTICAS DE RETENÇÃO (vB.6 — Arquivo Institucional, nível Global) ----
+async function carregarPoliticasRetencao() {
+  const container = document.getElementById("resultadoListaPoliticasRetencao");
+  if (authNivel !== "GLOBAL") { container.innerHTML = "<p class='subtitle'>Só nível Global administra as políticas de retenção.</p>"; return; }
+  const res = await fetchProtegido(`${API_BASE}/politicas-retencao`);
+  const politicas = await res.json();
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Categoria</th><th>Base Legal</th><th>Dias de retenção</th><th>Ativa</th><th></th>
+  </tr></thead><tbody>`;
+  politicas.forEach(p => {
+    html += `<tr>
+      <td>${p.categoria}</td>
+      <td style="max-width:360px;">${p.baseLegal}</td>
+      <td>${p.diasRetencao != null ? p.diasRetencao : "Indeterminado"}</td>
+      <td><input type="checkbox" ${p.ativo ? "checked" : ""} onchange="atualizarPoliticaRetencao(${p.politicaId}, { ativo: this.checked })" /></td>
+      <td class="acoes-inline">
+        <button class="btn-link" onclick="editarDiasRetencaoAcao(${p.politicaId}, ${p.diasRetencao != null ? p.diasRetencao : "null"})">Editar dias</button>
+      </td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function atualizarPoliticaRetencao(politicaId, alteracoes) {
+  const res = await fetchProtegido(`${API_BASE}/politicas-retencao/${politicaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(alteracoes)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarPoliticasRetencao();
+}
+
+async function editarDiasRetencaoAcao(politicaId, diasAtual) {
+  const novo = await pedirTexto("Dias de retenção (vazio = indeterminado)", "Ex: 1825 (5 anos)", diasAtual != null ? String(diasAtual) : "");
+  if (novo === null) return;
+  const diasRetencao = novo.trim() === "" ? null : Number(novo);
+  if (novo.trim() !== "" && (!Number.isFinite(diasRetencao) || diasRetencao <= 0)) {
+    mostrarToast("Informe um número de dias válido, ou deixe vazio pra indeterminado.", "erro");
+    return;
+  }
+  await atualizarPoliticaRetencao(politicaId, { diasRetencao });
 }
 
 // ---- SECRETARIA / ABA PROCESSO DISCIPLINAR ----

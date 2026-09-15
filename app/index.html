@@ -1511,6 +1511,12 @@
             <label>Descrição (opcional):</label>
             <input type="text" id="documentoDescricao" placeholder="Ex: Ata da reunião de agosto/2027" />
           </div>
+          <!-- vB.6 — categoria de retenção (PoliticasRetencao), opcional. Ata
+               já entra categorizada sozinha no backend, mesmo sem escolher nada aqui. -->
+          <div class="input-group">
+            <label>Categoria de retenção (opcional — ver "Arquivo Institucional" abaixo):</label>
+            <select id="documentoCategoria"><option value="">(nenhuma)</option></select>
+          </div>
           <div class="input-group">
             <label>Arquivo (PDF, JPG ou PNG, até 15 MB):</label>
             <input type="file" id="documentoArquivo" accept="application/pdf,image/jpeg,image/png" />
@@ -1533,6 +1539,19 @@
           </select>
         </div>
         <div class="rolagem-tabela"><div id="resultadoListaDocumentos"></div></div>
+
+        <hr />
+
+        <!-- vB.6 — catálogo de políticas de retenção (nível Global). Nasce
+             com as 5 categorias já seedeadas desde a v0.1 — esta é a
+             primeira tela que permite editar prazo/base legal, nunca teve
+             CRUD antes. -->
+        <h3>Arquivo Institucional — Políticas de Retenção</h3>
+        <p class="subtitle" style="margin-top:-8px;">
+          Categoriza documentos/anexos pra saber há quanto tempo cada um está
+          guardado — nunca apaga nada sozinho (sem expurgo automático).
+        </p>
+        <div class="rolagem-tabela"><div id="resultadoListaPoliticasRetencao"></div></div>
       </div>
 
       <!-- ABA: PROCESSO DISCIPLINAR -->

@@ -87,6 +87,7 @@
             <button class="btn-subaba" id="btnSubMeupainelContribuicoes" onclick="mostrarSubAbaMeupainel('contribuicoes')"><span class="icone">💰</span><span class="rotulo">Minhas Contribuições</span></button>
             <button class="btn-subaba" id="btnSubMeupainelLgpd" onclick="mostrarSubAbaMeupainel('lgpd')"><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
           </div>
 
           <button class="btn-aba btn-aba-destaque" id="btnVoltarModulo" onclick="sairDoModulo()" style="display:none;">
@@ -482,6 +483,20 @@
           </div>
           <p id="resultadoSolicitacaoCarta" class="subtitle"></p>
           <div id="cxMinhasCartas"></div>
+        </div>
+
+        <!-- SUB-ABA: MINHAS TAREFAS (vB.3 — Motor de workflow genérico).
+             Fica vazia até o primeiro fluxo novo (fases 5-11) chamar
+             shared/workflow.js::iniciarFluxo — o painel é o mesmo pra
+             qualquer tipo de fluxo, nenhuma tela nova por módulo. -->
+        <div id="subMeupainelTarefas" class="sub-aba-secretaria" style="display:none;">
+          <h3>✅ Minhas Tarefas</h3>
+          <p class="subtitle">Fluxos de aprovação que estão com você agora, de qualquer módulo — a etapa some daqui assim que você aprova, rejeita ou devolve.</p>
+          <div class="barra-lista">
+            <button class="btn-subaba ativo" id="btnFiltroTarefasComigo" onclick="filtrarMinhasTarefas('comigo')">Comigo</button>
+            <button class="btn-subaba" id="btnFiltroTarefasAtrasadas" onclick="filtrarMinhasTarefas('atrasados')">Atrasadas</button>
+          </div>
+          <div class="rolagem-tabela"><div id="resultadoMinhasTarefas"></div></div>
         </div>
       </div>
 

@@ -302,6 +302,67 @@ async function carregarPainelNotificacoes() {
   }
 }
 
+// ---- MINHAS TAREFAS (vB.3 — Motor de workflow genérico) ----
+// Só existe pra quem logou com senha (tem Lideranca de verdade — sem isso
+// ninguém pode ser "responsável" por etapa nenhuma). Quem entrou só com
+// matrícula pro check-in nunca teve authToken, então nem tenta chamar a API.
+let filtroMinhasTarefasAtual = "comigo";
+function filtrarMinhasTarefas(filtro) {
+  filtroMinhasTarefasAtual = filtro;
+  document.getElementById("btnFiltroTarefasComigo").classList.toggle("ativo", filtro === "comigo");
+  document.getElementById("btnFiltroTarefasAtrasadas").classList.toggle("ativo", filtro === "atrasados");
+  carregarMinhasTarefas(filtro);
+}
+
+async function carregarMinhasTarefas(filtro) {
+  const container = document.getElementById("resultadoMinhasTarefas");
+  if (!authToken) {
+    container.innerHTML = "<p class=\"subtitle\">Disponível só para quem entra com senha (papel de Liderança).</p>";
+    return;
+  }
+  container.innerHTML = "<p class=\"subtitle\">Carregando...</p>";
+  const res = await fetchProtegido(`${API_BASE}/fluxos?filtro=${filtro}`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = `<p class="subtitle">Nenhum fluxo ${filtro === "atrasados" ? "atrasado" : "com você"} no momento.</p>`;
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Fluxo</th><th>Etapa</th><th>Prazo</th><th></th>
+  </tr></thead><tbody>`;
+  lista.forEach(f => {
+    const prazo = new Date(f.prazoEtapaEm).toLocaleDateString("pt-BR");
+    html += `<tr>
+      <td>${f.tipoFluxoNome}${f.escalonadoNivel ? ` <small style="color:var(--cor-texto-suave);">(escalonado)</small>` : ""}</td>
+      <td>${f.etapaNome}</td>
+      <td>${f.atrasado ? `<span class="badge-status badge-desligado">${prazo}</span>` : prazo}</td>
+      <td class="acoes-inline">
+        <button class="btn-link" onclick="acaoMinhaTarefa(${f.instanciaId}, 'APROVAR')">Aprovar</button>
+        <button class="btn-link" onclick="acaoMinhaTarefa(${f.instanciaId}, 'DEVOLVER')">Devolver</button>
+        <button class="btn-link btn-link-perigo" onclick="acaoMinhaTarefa(${f.instanciaId}, 'REJEITAR')">Rejeitar</button>
+      </td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function acaoMinhaTarefa(instanciaId, acao) {
+  const rotulo = { APROVAR: "aprovar", REJEITAR: "rejeitar", DEVOLVER: "devolver" }[acao];
+  const confirmou = await confirmarAcao(`Confirma ${rotulo} este fluxo?`, capitalize(rotulo));
+  if (!confirmou) return;
+  let observacao = null;
+  if (acao !== "APROVAR") {
+    observacao = await pedirTexto(`Motivo de ${rotulo}`, "Opcional, mas ajuda quem for reabrir isso depois.");
+  }
+  const res = await fetchProtegido(`${API_BASE}/fluxos/${instanciaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao, observacao })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarMinhasTarefas(filtroMinhasTarefasAtual);
+}
+
 async function abrirNotificacao(id) {
   await fetchProtegido(`${API_BASE}/notificacoes/${id}`, {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "LER" })
@@ -478,10 +539,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "tarefas"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
-  contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito"
+  contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
+  tarefas: "Minhas Tarefas"
 };
 let subAbaMeupainelAtual = "perfil";
 
@@ -497,6 +559,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "dados") { carregarMeusDadosForm(); carregarMinhasSolicitacoesEdicao(); }
   if (sub === "vinculos") { carregarOpcoesMeuVinculoTipo(); carregarMeusVinculos(); }
   if (sub === "contribuicoes") { carregarOpcoesCategoriasEntrada(); prepararFormAutolancamento(); carregarMinhasContribuicoes(); }
+  if (sub === "tarefas") filtrarMinhasTarefas(filtroMinhasTarefasAtual);
 }
 
 // ---- MINHAS CONTRIBUIÇÕES (v4.1.1) — transparência: se a matrícula estiver

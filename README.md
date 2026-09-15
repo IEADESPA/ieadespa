@@ -3572,14 +3572,51 @@ cadastral (v1.11), tramitação de projeto e parecer (v2.8), processo disciplina
 (v4.5), remanejamento do PDQ (v4.8), confirmação de autolançamento (v4.3). São
 sete implementações do mesmo conceito — o oitavo módulo vai escrever a oitava.
 
-- [ ] Motor único: tipo de fluxo → etapas → responsável por etapa (por papel ou
-      escopo territorial) → prazo/SLA → ação de saída (aprovar/rejeitar/devolver).
-- [ ] Escalonamento automático pela hierarquia territorial já existente quando o
-      SLA estoura (Congregação → Área → Região) — o escalonamento vira dado, não código.
-- [ ] Painel único de "o que está comigo" e "o que está atrasado", por pessoa.
-- [ ] **Sem migrar os 7 fluxos existentes de uma vez** — eles funcionam. O motor
-      nasce servindo os fluxos novos (fases 5-11); migração dos antigos só se e
-      quando houver ganho real, um por vez.
+- [x] Migração 080 (`TiposFluxo` + `FluxoEtapas` + `FluxoInstancias` +
+      `FluxoHistorico`): motor único — tipo de fluxo → etapas → responsável
+      por etapa (`ResponsavelPermissao` + `ResponsavelNivelMinimo`, mesmo
+      padrão declarativo de `NotificacaoRegras` — vB.2) → prazo/SLA
+      (`PrazoDias`) → ação de saída. Catálogo nasce **vazio de propósito**
+      (ver último item).
+- [x] `api/shared/workflow.js`: `iniciarFluxo` (idempotente por
+      `TipoFluxo+ReferenciaTabela+ReferenciaId` — um módulo pode chamar de
+      novo sem medo de abrir instância duplicada), `avancarEtapa`
+      (aprovar avança etapa ou conclui na última; rejeitar/devolver são
+      terminais), e `resolverResponsaveisEtapa` reaproveitando a MESMA
+      hierarquia territorial de `shared/escopo.js`
+      (`ancestraisTerritoriais`) em vez de inventar uma segunda — nível
+      territorial sem ancestral resolvido (ex: congregação sem Área)
+      retorna ninguém, nunca "todo mundo" (modo seguro).
+- [x] Escalonamento automático (14 testes cobrindo `nivelEfetivo`/
+      `proximoNivel`): `api/FluxosEscalonador` (timer diário, 10h30 UTC)
+      sobe a instância pro próximo nível territorial acima
+      (Congregação→Área→Região→Quadrante→Distrito→Global) quando o SLA da
+      etapa estoura, reabre um novo prazo no nível escalonado, e **avisa o
+      novo responsável pela mesma central de notificações** (vB.2,
+      `FLUXO_ESCALONADO`) — integração entre os dois motores, não uma
+      segunda caixa de entrada. Já em GLOBAL não escalona mais (fica
+      "atrasado" mesmo, não gira em círculo).
+- [x] `api/Fluxos` — painel único "o que está comigo"/"o que está atrasado"
+      (`GET /api/fluxos?filtro=comigo|atrasados`): junta toda
+      `FluxoInstancias` aberta com a MESMA resolução de responsável usada
+      pra autorizar a ação (nunca duas regras diferentes pra "ver" e pra
+      "poder agir"). `PUT /api/fluxos/{id}` confere de novo que quem está
+      agindo é responsável pela etapa atual antes de aprovar/rejeitar/devolver
+      — nunca confia só em estar logado. Sub-aba "Minhas Tarefas" dentro de
+      Meu Painel (`app/`) — só aparece funcional pra quem logou com senha
+      (sem Lideranca, ninguém é "responsável" por etapa nenhuma).
+- [x] `api/GestaoFluxoTipos` (nível Global) — cadastra tipo de fluxo + suas
+      etapas de uma vez (o desenho do fluxo é a própria ordem das etapas,
+      não faz sentido editar avulso com instância já rodando) e
+      ativa/desativa o tipo inteiro.
+- [x] **Sem migrar os 7 fluxos existentes** (decisão mantida) — nenhum tipo
+      de fluxo foi semeado na migração 080 de propósito: o catálogo começa
+      vazio, sem tela de administração ainda (não tem o que gerenciar até o
+      primeiro consumidor real existir), e passa a valer quando o primeiro
+      módulo das fases 5-11 chamar `iniciarFluxo`. Testado de ponta a ponta
+      com `npx jest` (14 testes novos: idempotência de `iniciarFluxo`,
+      transições de `avancarEtapa`, escalada territorial nunca pular nível
+      nem girar em círculo) e `node --check` nos arquivos novos.
 
 #### vB.4 — Busca global, protocolo único e anexos
 

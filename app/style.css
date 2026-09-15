@@ -74,10 +74,29 @@ input:focus, select:focus, textarea:focus {
 /* vB.10 — foco visível consistente em qualquer elemento interativo que não
    tenha um estilo de foco próprio (botões/links já usam o padrão do
    navegador, que é suficiente; isso cobre o que sobrar, como os cards de
-   módulo que passaram a ser focáveis por teclado). */
+   módulo que passaram a ser focáveis por teclado). Cor e medidas iguais ao
+   site institucional (site/src/styles/global.css) — mesmo padrão testado,
+   não uma segunda convenção inventada aqui. */
 :focus-visible {
-  outline: 3px solid var(--cor-primaria);
-  outline-offset: 2px;
+  outline: 2px solid var(--cor-secundaria-texto);
+  outline-offset: 3px;
+}
+
+/* vB.10 — Modo de leitura fácil: mesmo mecanismo do site institucional
+   (html[data-readable="true"], site/src/styles/global.css) — já que a
+   maior parte do CSS aqui usa `rem`, subir o tamanho base escala
+   título/texto/espaçamento juntos, sem sobrescrever cada componente à mão.
+   Preferência salva em localStorage (alternarModoLeitura(), app/script.js),
+   nunca no servidor — é ajuste de exibição, não dado do sistema. */
+html[data-readable="true"] {
+  font-size: 20px;
+}
+html[data-readable="true"] body {
+  line-height: 1.7;
+}
+html[data-readable="true"] :focus-visible {
+  outline-width: 3px;
+  outline-offset: 4px;
 }
 .btn-confirmar {
   background-color: var(--cor-primaria); color: white; border: none;
@@ -340,6 +359,12 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
   cursor: pointer; padding: 4px 8px; border-radius: 6px; line-height: 1;
 }
 .btn-icon:hover { background: rgba(255,255,255,.12); }
+/* vB.10 — .btn-icon nasceu pro sidebar escuro (color: white); no cabeçalho
+   claro (fundo --cor-fundo) isso ficaria quase invisível pra texto de
+   verdade (emoji como ❓ não sofre com isso — ignora `color` —, mas "Aa+" é
+   texto puro). */
+#btnModoLeitura { color: var(--cor-primaria); font-weight: 700; font-size: 0.9rem; }
+#btnModoLeitura[aria-pressed="true"] { background: var(--cor-primaria); color: #fff; }
 .abas-secretaria { display: flex; flex-direction: column; gap: 4px; }
 .btn-aba {
   display: flex; align-items: center; gap: 10px; width: 100%;

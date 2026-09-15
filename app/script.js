@@ -155,6 +155,27 @@ function registrarServiceWorker() {
   navigator.serviceWorker.register("service-worker.js").catch((e) => console.error("Falha ao registrar service worker:", e));
 }
 
+// vB.10 — modo de leitura fácil (mesmo mecanismo do site institucional,
+// html[data-readable="true"]) — fonte maior, mais espaçamento, foco mais
+// grosso, tudo escalando junto porque o CSS já usa `rem`. Preferência só no
+// navegador (localStorage), nunca enviada ao servidor.
+function aplicarModoLeitura(ativo) {
+  document.documentElement.dataset.readable = ativo ? "true" : "false";
+  const btn = document.getElementById("btnModoLeitura");
+  if (btn) btn.setAttribute("aria-pressed", ativo ? "true" : "false");
+}
+function alternarModoLeitura() {
+  const ativoAgora = document.documentElement.dataset.readable === "true";
+  const novo = !ativoAgora;
+  aplicarModoLeitura(novo);
+  try { localStorage.setItem("modoLeituraFacil", novo ? "1" : "0"); } catch (e) { /* ok não persistir */ }
+}
+document.addEventListener("DOMContentLoaded", () => {
+  let salvo = null;
+  try { salvo = localStorage.getItem("modoLeituraFacil"); } catch (e) { /* segue sem preferência salva */ }
+  if (salvo === "1") aplicarModoLeitura(true);
+});
+
 function base64UrlParaUint8Array(base64Url) {
   const padding = "=".repeat((4 - (base64Url.length % 4)) % 4);
   const base64 = (base64Url + padding).replace(/-/g, "+").replace(/_/g, "/");

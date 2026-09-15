@@ -4051,12 +4051,23 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
       certificado.ts`), consistência de marca entre os dois. Foco de
       teclado: inputs tinham `outline: none` com só troca de cor de borda
       como substituto (sutil demais) — ganhou anel visível
-      (`box-shadow`) + regra `:focus-visible` genérica. Os 3 pontos que
-      geram `.card-modulo` (cards de módulo, clicáveis por `onclick` num
-      `<div>`) não eram operáveis por teclado — sem `tabindex`, Tab nunca
-      parava neles; ganharam `tabindex="0" role="button"` + `Enter`/`Espaço`
-      via `ativarComTeclado()`. Tamanho de fonte já estava majoritariamente
-      em `rem` (38 ocorrências contra 3 em `px`) — não mexido, já estava OK.
+      (`box-shadow`) + regra `:focus-visible` genérica **igual ao padrão já
+      testado do site institucional** (`site/src/styles/global.css` —
+      `outline: 2px solid var(--accent)`, mesma cor/medida, não uma segunda
+      convenção inventada aqui: achado corrigido depois que o usuário
+      perguntou se o site tinha sido reaproveitado como base — só a cor já
+      tinha sido, o anel de foco não). Os 3 pontos que geram `.card-modulo`
+      (cards de módulo, clicáveis por `onclick` num `<div>`) não eram
+      operáveis por teclado — sem `tabindex`, Tab nunca parava neles;
+      ganharam `tabindex="0" role="button"` + `Enter`/`Espaço` via
+      `ativarComTeclado()`. **Modo de leitura fácil** (`html[data-readable=
+      "true"]`) — mesmo mecanismo do site (fonte base 16px→20px, mais
+      espaçamento entre linhas, foco mais grosso, tudo escalando junto
+      porque o CSS já usa `rem`), com botão "Aa+" no cabeçalho e preferência
+      em `localStorage` — endereça direto "há membros idosos" do texto
+      original desta versão, que a primeira rodada tinha deixado de fora.
+      Tamanho de fonte de base já estava majoritariamente em `rem` (38
+      ocorrências contra 3 em `px`) — não mexido, já estava OK.
       Leitor de tela/Libras: fora do escopo desta rodada (auditoria de
       `aria-*`/rótulos é maior que cabe aqui — ver nota abaixo).
 - [x] **Ajuda contextual e primeiro uso** — não existia nada disso (3

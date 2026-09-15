@@ -702,6 +702,33 @@
 
         <hr />
 
+        <div id="painelCredenciamento" style="display:none;">
+          <h3>🪪 Credenciamento de Assembleia (Reg. Art. 142-143)</h3>
+          <p class="subtitle" id="avisoProcuracaoCredenciamento" style="margin:0 0 8px;"></p>
+
+          <p class="subtitle" style="margin:0 0 4px;"><strong>Impedidos calculados</strong> (não-membro/capacidade eleitoral,
+            disciplina em curso, carta de mudança já emitida):</p>
+          <div class="rolagem-tabela"><div id="listaImpedidosCredenciamento"></div></div>
+
+          <p class="subtitle" style="margin:12px 0 4px;"><strong>Credenciamento pela mesa</strong> (com trilha — quem operou fica
+            registrado na auditoria):</p>
+          <div class="barra-lista">
+            <input type="number" id="credenciamentoMatricula" placeholder="Matrícula" style="min-width:160px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="credenciarMembroAcao()">🪪 Credenciar / Avaliar</button>
+          </div>
+          <p id="resultadoCredenciamento"></p>
+          <div class="rolagem-tabela"><div id="trilhaCredenciamento"></div></div>
+
+          <p class="subtitle" style="margin:12px 0 4px;"><strong>Relatório de credenciamento</strong> (Robert's Rules — gerado uma
+            vez, os totais ficam congelados):</p>
+          <div class="barra-lista">
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="gerarRelatorioCredenciamentoAcao()">📋 Gerar / Ver Relatório</button>
+          </div>
+          <p id="relatorioCredenciamento" class="subtitle"></p>
+        </div>
+
+        <hr />
+
         <div id="blocoFrequencia" style="display:none;">
           <h3>Lista de Frequência — <span id="tituloFrequencia"></span></h3>
           <div id="resumoQuorum" class="resumo-quorum"></div>

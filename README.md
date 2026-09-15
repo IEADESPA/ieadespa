@@ -4289,7 +4289,7 @@ fechada, então o refinamento fica aqui. O Regimento Art. 142-143 descreve um
 **controle de porta** mais fino, que o sistema ainda não modela, e que na
 prática é feito por uma pessoa conferindo lista impressa na entrada:
 
-- [ ] **Lista de impedidos, calculada e com motivo legível.** Art. 142-143
+- [x] **Lista de impedidos, calculada e com motivo legível.** Art. 142-143
       arrola quem não entra: não-membro, membro sob disciplina em curso, e
       **quem já teve carta de mudança expedida** (deixou de pertencer àquela
       congregação, mesmo que ainda não tenha sido recebido na nova). O último
@@ -4298,7 +4298,7 @@ prática é feito por uma pessoa conferindo lista impressa na entrada:
       Continua o princípio de sempre: **não existe marcação "impedido"** — o
       endpoint devolve, pra cada nome recusado, *qual* artigo o recusou, para a
       mesa poder responder ao interessado na hora sem abrir o processo dele.
-- [ ] **Mesa de credenciamento com trilha.** Registrar quem operou o
+- [x] **Mesa de credenciamento com trilha.** Registrar quem operou o
       credenciamento, o horário de cada check-in e as recusas (com motivo) —
       hoje a recusa simplesmente não deixa rastro, o que é ruim justamente no
       caso em que alguém contesta depois ("eu estava lá e não me deixaram
@@ -4311,13 +4311,65 @@ prática é feito por uma pessoa conferindo lista impressa na entrada:
       Aqui o equivalente é: o sistema emite o *relatório de credenciamento*
       no momento da instalação, e ele congela a base sobre a qual as maiorias
       dos Art. 21 e 23 §1º são calculadas.
-- [ ] **Procuração / representação — decidir explicitamente que não existe.**
+- [x] **Procuração / representação — decidir explicitamente que não existe.**
       Vale registrar por escrito no próprio sistema (mensagem na tela de
       credenciamento) que voto por procuração não é admitido, porque é a
       dúvida número um em assembleia de associação. Base: o voto em assembleia
       associativa é personalíssimo salvo previsão estatutária expressa
       (CC art. 59 e o regime de deliberação dos arts. 44-61), e o Estatuto
       aqui não prevê. Sem isso escrito, a mesa improvisa caso a caso.
+
+  Implementado: `sql/migrations/088_credenciamento_assembleia.sql` cria
+  `CredenciamentosAssembleia` (cada tentativa operada pela mesa —
+  credenciado ou recusado, com o artigo, quem operou e quando — o
+  `RegistrarPresenca` de auto-atendimento da v2.1 continua existindo do
+  jeito que está, sem alteração) e `RelatoriosCredenciamento` (1 por
+  sessão, `UNIQUE(SessaoId)`).
+
+  `shared/credenciamento.js` — motivo **sempre calculado**, nunca marcado
+  à mão: reaproveita `shared/disciplina.js::membrosSobDisciplina()`,
+  `shared/universo.js::membrosComCartaMudancaEmitida()` e
+  `shared/estatuto.js::calcularCapacidadeEleitoral()` — as mesmas três
+  peças que `universoDoOrgao` já compõe pro ramo `ASSEMBLEIA_GERAL`,
+  sem duplicar regra nenhuma. Prioridade do motivo: carta de mudança
+  (Art. 142, III) > disciplina em curso (Art. 142, II) > capacidade
+  eleitoral geral/período de integração (Art. 142, I). Por isso o
+  credenciamento formal fica restrito a sessões da Assembleia Geral —
+  essas regras não fazem sentido pra CLI/reuniões territoriais, que têm
+  universo próprio; fora da Assembleia, `RegistrarPresenca` já resolve.
+
+  `GestaoCredenciamento` (GET/POST `/api/credenciamento/{sessaoId}` e
+  POST `/{sessaoId}/relatorio`) — autenticado (`exigirAlgumaPermissao`,
+  não anônimo como `RegistrarPresenca`, porque a trilha só vale alguma
+  coisa se a mesa estiver identificada): lista impedidos calculados,
+  credencia/recusa uma matrícula com trilha completa em
+  `CredenciamentosAssembleia` + `registrarAuditoria`, e credenciamento
+  bem-sucedido também insere em `Presencas` (evitando duplicar se a
+  pessoa já tinha feito auto-atendimento). O relatório é gerado **uma vez
+  e congelado** — mesmo padrão do protocolo de `CartaPdf`/
+  `ApresentacaoCriancaPdf` — pra uma carta de mudança emitida DEPOIS da
+  instalação não reescrever retroativamente a base já fixada.
+
+  **Limitação documentada, não escondida**: o relatório congelado guarda
+  `TotalCredenciados`/`TotalImpedidos` como registro formal (Robert's
+  Rules), mas `MinutaAta` continua recalculando o quórum ao vivo via
+  `universoDoOrgao` + `Presencas` (como já fazia desde a vB.6) — o
+  relatório desta versão não substitui esse cálculo, só formaliza a
+  contagem de entrada na porta. Fazer o quórum de instalação *ler* o
+  relatório congelado em vez de recalcular é um acoplamento maior entre
+  os dois fluxos que ficou fora do escopo desta versão, pra não arriscar
+  o cálculo de quórum já em produção por uma tabela nova.
+
+  Frontend: botão "🪪 Credenciamento" na lista de Reuniões (só aparece pra
+  sessões com `orgaoSigla === "ASSEMBLEIA_GERAL"`), abrindo um painel com
+  o aviso de não-admissão de procuração, a lista de impedidos calculados,
+  o formulário de credenciamento pela mesa (com a trilha visível) e o
+  botão de gerar/ver o relatório congelado.
+
+  Testado com `npx jest` (134 testes, incluindo 7 novos: prioridade dos 3
+  motivos de impedimento, listagem de impedidos filtrando corretamente
+  quem está apto, e o relatório gerando na 1ª chamada e devolvendo
+  congelado na 2ª) e `node --check` em todos os arquivos novos.
 
 #### vB.14 — Conselho Consultivo Técnico e Colégio de Dirigentes *(retrofit da v2.7, Reg. Art. 31 e Art. 151 §2º)*
 

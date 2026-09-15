@@ -6354,12 +6354,89 @@ async function carregarReunioes() {
         <button class="btn-link" onclick="verFrequencia(${r.sessaoId}, '${descricaoEscapada}')">Ver frequência</button>
         ${r.status === "ABERTA" ? `<button class="btn-link" onclick="encerrarReuniaoAcao(${r.sessaoId})">Encerrar</button>` : ""}
         <button class="btn-link" onclick="baixarMinutaAta(${r.sessaoId})">📝 Minuta (.docx)</button>
+        ${r.orgaoSigla === "ASSEMBLEIA_GERAL" ? `<button class="btn-link" onclick="abrirCredenciamentoAssembleia(${r.sessaoId})">🪪 Credenciamento</button>` : ""}
       </td>
     </tr>`;
   });
 
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// ---- Credenciamento de Assembleia (vB.13 — Reg. Art. 142-143) ----
+// Mesa com trilha: RegistrarPresenca (v2.1) continua sendo o auto-atendimento
+// por senha; isto é o fluxo operado pela Secretaria/mesa, que registra
+// credenciamento OU recusa (com o artigo), o que faltava até aqui.
+window._sessaoCredenciamentoAtual = null;
+
+async function abrirCredenciamentoAssembleia(sessaoId) {
+  window._sessaoCredenciamentoAtual = sessaoId;
+  document.getElementById("painelCredenciamento").style.display = "block";
+  document.getElementById("painelCredenciamento").scrollIntoView({ behavior: "smooth" });
+  await carregarCredenciamento();
+}
+
+async function carregarCredenciamento() {
+  const sessaoId = window._sessaoCredenciamentoAtual;
+  if (!sessaoId) return;
+  const res = await fetchProtegido(`${API_BASE}/credenciamento/${sessaoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) {
+    document.getElementById("resultadoCredenciamento").textContent = data.mensagem;
+    return;
+  }
+
+  document.getElementById("avisoProcuracaoCredenciamento").textContent = data.avisoProcuracao;
+
+  const impedidosContainer = document.getElementById("listaImpedidosCredenciamento");
+  if (data.impedidos.length === 0) {
+    impedidosContainer.innerHTML = "<p class='subtitle'>Nenhum impedimento calculado no momento.</p>";
+  } else {
+    impedidosContainer.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Motivo</th></tr></thead><tbody>` +
+      data.impedidos.map(i => `<tr><td>${i.nome}</td><td>${i.motivoArtigo}: ${i.motivoDetalhe}</td></tr>`).join("") +
+      `</tbody></table>`;
+  }
+
+  const trilhaContainer = document.getElementById("trilhaCredenciamento");
+  if (data.credenciamentos.length === 0) {
+    trilhaContainer.innerHTML = "<p class='subtitle'>Nenhum credenciamento operado pela mesa ainda.</p>";
+  } else {
+    trilhaContainer.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Resultado</th><th>Motivo</th><th>Quando</th></tr></thead><tbody>` +
+      data.credenciamentos.map(c => `<tr><td>${c.nome}</td><td>${c.resultado === "CREDENCIADO" ? "✅ Credenciado" : "🚫 Recusado"}</td><td>${c.motivoArtigo ? `${c.motivoArtigo}: ${c.motivoDetalhe}` : "-"}</td><td>${c.criadoEm}</td></tr>`).join("") +
+      `</tbody></table>`;
+  }
+
+  const relatorioContainer = document.getElementById("relatorioCredenciamento");
+  relatorioContainer.textContent = data.relatorio
+    ? `📋 Relatório congelado em ${data.relatorio.geradoEm}: ${data.relatorio.totalCredenciados} credenciados, ${data.relatorio.totalImpedidos} recusados na mesa.`
+    : "Relatório de credenciamento ainda não foi gerado.";
+}
+
+async function credenciarMembroAcao() {
+  const sessaoId = window._sessaoCredenciamentoAtual;
+  const matricula = document.getElementById("credenciamentoMatricula").value;
+  const msg = document.getElementById("resultadoCredenciamento");
+  if (!sessaoId || !matricula) { msg.textContent = "Informe a matrícula."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/credenciamento/${sessaoId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId: matricula })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  document.getElementById("credenciamentoMatricula").value = "";
+  carregarCredenciamento();
+}
+
+async function gerarRelatorioCredenciamentoAcao() {
+  const sessaoId = window._sessaoCredenciamentoAtual;
+  if (!sessaoId) return;
+  if (!(await confirmarAcao("Gerar o relatório de credenciamento? Uma vez gerado, os totais ficam congelados (não recalculam depois).", "Gerar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/credenciamento/${sessaoId}/relatorio`, { method: "POST" });
+  const data = await res.json();
+  avisarResultado(data);
+  carregarCredenciamento();
 }
 
 // ---- Elegíveis da Assembleia Geral (fica sempre disponível na aba Reuniões única) ----

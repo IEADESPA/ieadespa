@@ -106,6 +106,7 @@
             <button class="btn-subaba" id="btnSubMeupainelLgpd" onclick="mostrarSubAbaMeupainel('lgpd')"><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelSeguranca" onclick="mostrarSubAbaMeupainel('seguranca')"><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
 
           <button class="btn-aba btn-aba-destaque" id="btnVoltarModulo" onclick="sairDoModulo()" style="display:none;">
@@ -546,6 +547,39 @@
             <button class="btn-subaba" id="btnFiltroTarefasAtrasadas" onclick="filtrarMinhasTarefas('atrasados')">Atrasadas</button>
           </div>
           <div class="rolagem-tabela"><div id="resultadoMinhasTarefas"></div></div>
+        </div>
+
+        <!-- SUB-ABA: SEGURANÇA (vB.9 — trilha de sessão + delegação temporária) -->
+        <div id="subMeupainelSeguranca" class="sub-aba-secretaria" style="display:none;">
+          <h3>💻 Minhas Sessões</h3>
+          <p class="subtitle">Dispositivos onde você entrou. "Encerrar" marca a sessão como encerrada aqui —
+            se ainda estiver aberta em outro aparelho, sai sozinha em até 12h (limite de validade do login).</p>
+          <div class="rolagem-tabela"><div id="resultadoMinhasSessoes"></div></div>
+
+          <hr />
+          <h3>🤝 Delegação Temporária</h3>
+          <p class="subtitle">"Vou viajar, o 2º Secretário responde por mim" sem emprestar senha —
+            o delegado continua entrando com a própria matrícula; a ação dele continua registrada
+            no nome dele mesmo, nunca no seu.</p>
+          <form onsubmit="event.preventDefault(); criarDelegacaoAcao();">
+            <div class="barra-lista">
+              <select id="delegacaoPapel"></select>
+              <input type="number" id="delegacaoMatricula" placeholder="Matrícula de quem recebe" style="min-width:180px;" />
+              <input type="date" id="delegacaoDataInicio" />
+              <input type="date" id="delegacaoDataFim" />
+            </div>
+            <div class="input-group">
+              <input type="text" id="delegacaoMotivo" placeholder="Motivo (opcional)" />
+            </div>
+            <button class="btn-confirmar" style="width:auto;" type="submit">Delegar</button>
+          </form>
+          <p id="resultadoDelegacao" class="subtitle"></p>
+
+          <h4 style="margin:16px 0 6px; color:var(--cor-primaria);">Delegações que eu concedi</h4>
+          <div class="rolagem-tabela"><div id="resultadoDelegacoesConcedidas"></div></div>
+
+          <h4 style="margin:16px 0 6px; color:var(--cor-primaria);">Delegações que recebi (já somadas à minha sessão)</h4>
+          <div class="rolagem-tabela"><div id="resultadoDelegacoesRecebidas"></div></div>
         </div>
       </div>
 

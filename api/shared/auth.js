@@ -54,12 +54,58 @@ function verificarToken(token) {
   }
 }
 
-function criarSessao(info) {
-  return assinar({ ...info, exp: Date.now() + (1000 * 60 * 60 * 12) }); // 12 horas
+// vB.9 — trilha de sessão: cada sessão nova ganha um SessaoId (sid) próprio,
+// gravado em SessoesAtivas (dispositivo, criação) — usado pela tela "Minhas
+// Sessões" e por encerrarSessao. Limitação real, deliberada: a validação
+// de token (getSessao/exigirLogin) continua 100% síncrona e sem tocar o
+// banco — mudar isso pra checar revogação em toda requisição exigiria
+// tornar exigirLogin assíncrono e re-testar as ~140 Functions que o chamam
+// hoje sem `await`, risco desproporcional aqui. Por isso encerrar uma
+// sessão marca a trilha, mas o token em si só perde validade quando expira
+// sozinho (12h) — ver README vB.9.
+async function criarSessao(pool, sql, info, dispositivoInfo) {
+  const inserida = await pool.request()
+    .input("membroId", sql.Int, info.membroId)
+    .input("dispositivoInfo", sql.NVarChar(300), dispositivoInfo || null)
+    .query(`INSERT INTO SessoesAtivas (MembroId, DispositivoInfo) OUTPUT INSERTED.SessaoId VALUES (@membroId, @dispositivoInfo)`);
+  const sid = inserida.recordset[0].SessaoId;
+  return assinar({ ...info, sid, exp: Date.now() + (1000 * 60 * 60 * 12) }); // 12 horas
 }
 
-function encerrarSessao() {
-  return true; // stateless: descartar o token no cliente já "encerra"
+// Reemite o token com claims atualizadas (ex: termosPendentes depois de
+// assinar um termo) SEM abrir uma sessão rastreada nova — é a mesma sessão
+// de sempre, só o conteúdo do token mudou. `info.sid`, se vier, é
+// preservado; nunca cria linha nova em SessoesAtivas (senão "Minhas
+// Sessões" inflaria a cada refresh de token no meio do uso).
+function reassinarSessao(info) {
+  return assinar({ ...info, exp: Date.now() + (1000 * 60 * 60 * 12) });
+}
+
+async function encerrarSessao(pool, sql, token) {
+  const payload = verificarToken(token);
+  if (!payload || !payload.sid) return true; // token inválido/sem sid (sessão antiga, pré-vB.9) — nada a marcar, não é erro
+  await pool.request().input("id", sql.UniqueIdentifier, payload.sid)
+    .query(`UPDATE SessoesAtivas SET Encerrada = 1, EncerradaEm = SYSUTCDATETIME() WHERE SessaoId = @id`);
+  return true;
+}
+
+async function listarSessoes(pool, sql, membroId) {
+  const result = await pool.request().input("membroId", sql.Int, membroId).query(`
+    SELECT TOP 20 SessaoId AS sessaoId, DispositivoInfo AS dispositivoInfo,
+           CONVERT(varchar(33), CriadoEm, 126) AS criadoEm, Encerrada AS encerrada
+    FROM SessoesAtivas WHERE MembroId = @membroId ORDER BY CriadoEm DESC
+  `);
+  return result.recordset;
+}
+
+// Só o dono da sessão pode encerrá-la — checagem de posse aqui, não deixada
+// pra quem chama.
+async function encerrarSessaoEspecifica(pool, sql, membroId, sessaoId) {
+  const dona = await pool.request().input("id", sql.UniqueIdentifier, sessaoId).query(`SELECT MembroId FROM SessoesAtivas WHERE SessaoId = @id`);
+  if (dona.recordset.length === 0 || dona.recordset[0].MembroId !== membroId) return false;
+  await pool.request().input("id", sql.UniqueIdentifier, sessaoId)
+    .query(`UPDATE SessoesAtivas SET Encerrada = 1, EncerradaEm = SYSUTCDATETIME() WHERE SessaoId = @id`);
+  return true;
 }
 
 function getSessao(token) {
@@ -175,4 +221,4 @@ function exigirNivelGlobal(req, context) {
   return usuario;
 }
 
-module.exports = { hashSenha, verificarSenha, criarSessao, encerrarSessao, getSessao, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, nivelAtingeMinimo };
+module.exports = { hashSenha, verificarSenha, criarSessao, reassinarSessao, encerrarSessao, listarSessoes, encerrarSessaoEspecifica, getSessao, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, nivelAtingeMinimo, RANKING_NIVEL };

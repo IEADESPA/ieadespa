@@ -45,7 +45,7 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "GET" && recurso === "recertificacoes") {
-    await compliance.gerarRecertificacoesFinanceiro(pool, sql);
+    await compliance.gerarRecertificacoesTodasPermissoes(pool, sql);
     await pool.request().query(`UPDATE RecertificacoesAcesso SET Status = 'EXPIRADA' WHERE Status = 'PENDENTE' AND Prazo < CAST(SYSUTCDATETIME() AS DATE)`);
     const result = await pool.request().query(`
       SELECT r.RecertificacaoId AS recertificacaoId, r.MembroId AS membroId, m.Nome AS nome, r.PapelId AS papelId,

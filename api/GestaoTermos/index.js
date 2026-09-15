@@ -63,7 +63,7 @@ module.exports = async function (context, req) {
 
     const pendentes = await termosPendentes(pool, sql, usuario.membroId, usuario.nivel);
     const { termosPendentes: antigo, exp, ...dadosSessao } = usuario;
-    const token = auth.criarSessao(Object.assign({}, dadosSessao, { termosPendentes: pendentes }));
+    const token = auth.reassinarSessao(Object.assign({}, dadosSessao, { termosPendentes: pendentes }));
 
     context.res = {
       status: 200,

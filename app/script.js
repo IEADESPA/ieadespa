@@ -587,6 +587,97 @@ async function carregarMinhasTarefas(filtro) {
   container.innerHTML = html;
 }
 
+// ---- SEGURANÇA: MINHAS SESSÕES + DELEGAÇÃO (vB.9) ----
+async function carregarMinhasSessoes() {
+  const container = document.getElementById("resultadoMinhasSessoes");
+  if (!authToken) { container.innerHTML = "<p class='subtitle'>Disponível só pra quem entrou com sessão autenticada (senha ou código por e-mail).</p>"; return; }
+  const res = await fetchProtegido(`${API_BASE}/minhas-sessoes`);
+  const sessoes = await res.json();
+  if (!Array.isArray(sessoes) || sessoes.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhuma sessão registrada ainda.</p>";
+    return;
+  }
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr>
+    <th>Dispositivo</th><th>Entrou em</th><th>Status</th><th></th>
+  </tr></thead><tbody>` + sessoes.map(s => `
+    <tr>
+      <td style="max-width:320px; overflow-wrap:anywhere;">${s.dispositivoInfo || "—"}</td>
+      <td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td>
+      <td>${s.encerrada ? "<span class='badge-status badge-desligado'>Encerrada</span>" : "<span class='badge-status badge-ativo'>Ativa</span>"}</td>
+      <td class="acoes-inline">${!s.encerrada ? `<button class="btn-link btn-link-perigo" onclick="encerrarSessaoAcao('${s.sessaoId}')">Encerrar</button>` : ""}</td>
+    </tr>
+  `).join("") + "</tbody></table>";
+}
+
+async function encerrarSessaoAcao(sessaoId) {
+  if (!(await confirmarAcao("Encerrar esta sessão? Se ainda estiver aberta em outro aparelho, sai sozinha em até 12h.", "Encerrar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/minhas-sessoes/${sessaoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "ENCERRAR" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarMinhasSessoes();
+}
+
+async function carregarDelegacoes() {
+  if (!authToken) return; // sem papel de Lideranca nenhum, não tem o que delegar/receber
+  const res = await fetchProtegido(`${API_BASE}/delegacoes`);
+  const data = await res.json();
+
+  document.getElementById("delegacaoPapel").innerHTML = data.meusPapeis.map(p =>
+    `<option value="${p.liderancaId}">${p.papelNome} (${p.papelNivel})</option>`
+  ).join("") || "<option value=''>Nenhum papel seu disponível</option>";
+
+  document.getElementById("resultadoDelegacoesConcedidas").innerHTML = data.concedidas.length === 0
+    ? "<p class='subtitle'>Nenhuma.</p>"
+    : `<table class="tabela-frequencia"><thead><tr><th>Papel</th><th>Pra quem</th><th>Até</th><th>Status</th><th></th></tr></thead><tbody>` +
+      data.concedidas.map(d => `
+        <tr>
+          <td>${d.papelNome}</td><td>${d.delegadoNome}</td><td>${new Date(d.dataFim).toLocaleDateString("pt-BR")}</td>
+          <td>${d.status}</td>
+          <td class="acoes-inline">${d.status === "ATIVA" ? `<button class="btn-link btn-link-perigo" onclick="cancelarDelegacaoAcao(${d.delegacaoId})">Cancelar</button>` : ""}</td>
+        </tr>
+      `).join("") + "</tbody></table>";
+
+  document.getElementById("resultadoDelegacoesRecebidas").innerHTML = data.recebidas.length === 0
+    ? "<p class='subtitle'>Nenhuma.</p>"
+    : `<table class="tabela-frequencia"><thead><tr><th>Papel</th><th>De quem</th><th>Até</th><th>Motivo</th></tr></thead><tbody>` +
+      data.recebidas.map(d => `<tr><td>${d.papelNome}</td><td>${d.deleganteNome}</td><td>${new Date(d.dataFim).toLocaleDateString("pt-BR")}</td><td>${d.motivo || "-"}</td></tr>`).join("") +
+      "</tbody></table>";
+}
+
+async function criarDelegacaoAcao() {
+  const liderancaId = document.getElementById("delegacaoPapel").value;
+  const delegadoMembroId = document.getElementById("delegacaoMatricula").value;
+  const dataInicio = document.getElementById("delegacaoDataInicio").value;
+  const dataFim = document.getElementById("delegacaoDataFim").value;
+  const motivo = document.getElementById("delegacaoMotivo").value.trim();
+  const msg = document.getElementById("resultadoDelegacao");
+  if (!liderancaId || !delegadoMembroId || !dataInicio || !dataFim) { msg.textContent = "Preencha papel, matrícula e as duas datas."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/delegacoes`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ liderancaId, delegadoMembroId, dataInicio, dataFim, motivo: motivo || undefined })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("delegacaoMatricula").value = "";
+    document.getElementById("delegacaoMotivo").value = "";
+    carregarDelegacoes();
+  }
+}
+
+async function cancelarDelegacaoAcao(delegacaoId) {
+  if (!(await confirmarAcao("Cancelar esta delegação?", "Cancelar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/delegacoes/${delegacaoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "CANCELAR" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarDelegacoes();
+}
+
 async function acaoMinhaTarefa(instanciaId, acao) {
   const rotulo = { APROVAR: "aprovar", REJEITAR: "rejeitar", DEVOLVER: "devolver" }[acao];
   const confirmou = await confirmarAcao(`Confirma ${rotulo} este fluxo?`, capitalize(rotulo));
@@ -779,11 +870,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "tarefas"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  tarefas: "Minhas Tarefas"
+  tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
 
@@ -801,6 +892,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "contribuicoes") { carregarOpcoesCategoriasEntrada(); prepararFormAutolancamento(); carregarMinhasContribuicoes(); }
   if (sub === "tarefas") filtrarMinhasTarefas(filtroMinhasTarefasAtual);
   if (sub === "perfil") carregarPainelInicial();
+  if (sub === "seguranca") { carregarMinhasSessoes(); carregarDelegacoes(); }
 }
 
 // ---- PAINEL INICIAL POR PERFIL (vB.7) ----

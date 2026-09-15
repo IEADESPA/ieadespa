@@ -33,10 +33,11 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const token = auth.criarSessao({
+  const dispositivoInfo = (req.headers && (req.headers["user-agent"] || req.headers["User-Agent"])) || null;
+  const token = await auth.criarSessao(pool, sql, {
     membroId: membro.MembroId, nome: membro.Nome, tipo: "Membro (autoatendimento)",
     nivel: null, escopoCongregacoes: [], permissoes: [], termosPendentes: []
-  });
+  }, dispositivoInfo);
 
   context.res = {
     status: 200,

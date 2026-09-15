@@ -89,27 +89,32 @@ async function escanearAlertasCompliance(pool, sql) {
   return novos;
 }
 
-// Recertificação de acessos: gera pendências pra todo mundo com permissão
-// `financeiro` (papéis cujo Permissoes contém 'financeiro'), com prazo a
-// partir de hoje + periodicidade configurável.
-async function gerarRecertificacoesFinanceiro(pool, sql) {
+// Recertificação de acessos (vB.9 — generalizada; era só `financeiro` até
+// a v4.12). Gera 1 pendência por (membro, permissão) — nunca por membro só
+// (achado real: o `EXISTS` antigo checava só MembroId, então alguém com 2
+// permissões só nunca tinha uma segunda pendência gerada pra outra) — com
+// prazo a partir de hoje + periodicidade configurável.
+async function gerarRecertificacoesTodasPermissoes(pool, sql) {
   const p = await parametrosCompliance(pool, sql);
   const meses = Number(p.PeriodicidadeRecertificacaoMeses) || 3;
   const alvos = await pool.request().query(`
-    SELECT l.MembroId AS membroId, l.PapelId AS papelId
+    SELECT DISTINCT l.MembroId AS membroId, l.PapelId AS papelId, pa.Permissoes AS permissoesStr
     FROM Lideranca l JOIN Papeis pa ON pa.PapelId = l.PapelId
-    WHERE pa.Permissoes LIKE '%financeiro%'
+    WHERE pa.Permissoes IS NOT NULL AND pa.Permissoes <> ''
   `);
   let criados = 0;
   for (const a of alvos.recordset) {
-    const existe = await pool.request().input("membro", sql.Int, a.membroId)
-      .query(`SELECT 1 FROM RecertificacoesAcesso WHERE MembroId = @membro AND Status = 'PENDENTE'`);
-    if (existe.recordset.length > 0) continue;
-    const prazo = new Date(Date.now() + meses * 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-    await pool.request().input("membro", sql.Int, a.membroId).input("papel", sql.Int, a.papelId)
-      .input("permissao", sql.NVarChar(50), "financeiro").input("prazo", sql.Date, prazo)
-      .query(`INSERT INTO RecertificacoesAcesso (MembroId, PapelId, Permissao, Prazo) VALUES (@membro, @papel, @permissao, @prazo)`);
-    criados++;
+    const permissoes = a.permissoesStr.split(",").map((x) => x.trim()).filter(Boolean);
+    for (const permissao of permissoes) {
+      const existe = await pool.request().input("membro", sql.Int, a.membroId).input("permissao", sql.NVarChar(50), permissao)
+        .query(`SELECT 1 FROM RecertificacoesAcesso WHERE MembroId = @membro AND Permissao = @permissao AND Status = 'PENDENTE'`);
+      if (existe.recordset.length > 0) continue;
+      const prazo = new Date(Date.now() + meses * 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      await pool.request().input("membro", sql.Int, a.membroId).input("papel", sql.Int, a.papelId)
+        .input("permissao", sql.NVarChar(50), permissao).input("prazo", sql.Date, prazo)
+        .query(`INSERT INTO RecertificacoesAcesso (MembroId, PapelId, Permissao, Prazo) VALUES (@membro, @papel, @permissao, @prazo)`);
+      criados++;
+    }
   }
   return criados;
 }
@@ -147,11 +152,31 @@ async function calcularIndicadoresFinanceiros(pool, sql) {
   };
 }
 
+// vB.9 — é isso que faz "acesso que ninguém reconfirma, expira" valer de
+// verdade: antes disso, `RecertificacoesAcesso.Status = 'EXPIRADA'` não
+// tinha NENHUM efeito em lugar nenhum — só ficava marcado num painel de
+// compliance, sem nunca bloquear nada. Chamado do login (não de todo
+// request — esse motor de sessão é stateless de propósito, ver
+// shared/auth.js): a permissão cuja recertificação MAIS RECENTE está
+// EXPIRADA não entra na sessão nova, até alguém confirmar de novo.
+async function permissoesComRecertificacaoExpirada(pool, sql, membroId) {
+  const result = await pool.request().input("membro", sql.Int, membroId).query(`
+    SELECT r.Permissao
+    FROM RecertificacoesAcesso r
+    WHERE r.MembroId = @membro AND r.RecertificacaoId = (
+      SELECT MAX(r2.RecertificacaoId) FROM RecertificacoesAcesso r2
+      WHERE r2.MembroId = r.MembroId AND r2.Permissao = r.Permissao
+    ) AND r.Status = 'EXPIRADA'
+  `);
+  return result.recordset.map((r) => r.Permissao);
+}
+
 module.exports = {
   parametrosCompliance,
   valorCriticoQuatroOlhos,
   escanearAlertasCompliance,
-  gerarRecertificacoesFinanceiro,
+  gerarRecertificacoesTodasPermissoes,
+  permissoesComRecertificacaoExpirada,
   calcularIndicadoresFinanceiros
 };
 

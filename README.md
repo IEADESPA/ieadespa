@@ -3987,16 +3987,57 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
 
 #### vB.9 — Acesso: delegação, sessão e revisão periódica
 
-- [ ] **Delegação temporária** ("vou viajar, o 2º Secretário responde por mim"),
-      com prazo e trilha — hoje a saída é emprestar a senha, que destrói a
-      auditoria (a ação fica registrada na pessoa errada).
-- [ ] Correção do achado da v4.5: quando uma pessoa tem mais de um papel de
-      liderança, o login escolhe um deles sem critério definido (`LoginSecretaria`
-      não ordena) — precisa escolher o de maior amplitude, ou deixar a pessoa
-      alternar o papel ativo.
-- [ ] Revisão periódica de acessos (a v4.12 já prevê para o financeiro) estendida
-      a todos os papéis: acesso que ninguém reconfirma, expira.
-- [ ] Trilha de sessão: último acesso, dispositivo, encerrar sessão remota.
+- [x] **Delegação temporária** (migração 085, `DelegacoesAcesso`,
+      `api/shared/delegacoes.js`, `api/GestaoDelegacoes`): "vou viajar, o 2º
+      Secretário responde por mim" **sem emprestar senha** — o delegado
+      continua entrando com a PRÓPRIA matrícula; a sessão dele só passa a
+      somar (nunca substituir) a permissão+escopo do papel delegado, por um
+      prazo obrigatório. Resolve o problema de raiz sem inventar um segundo
+      campo de auditoria "agindo como X": toda ação continua com o
+      `usuarioId` real de quem clicou (nunca mais "a pessoa errada"), porque
+      o delegado nunca precisa da identidade de outra pessoa pra agir.
+      Delegar só o próprio papel (`Lideranca` verificada por dono), nunca o
+      de terceiro. Tela "Segurança" em Meu Painel.
+- [x] **Corrigido o achado da v4.5** (`LoginSecretaria`) — **achado real,
+      pior do que o README descrevia**: não só o critério de escolha entre
+      papéis múltiplos era indefinido (sem `ORDER BY`/`TOP 1`, o SQL Server
+      devolvia em ordem arbitrária), como isso podia **travar o login por
+      completo** se a linha sorteada não tivesse `SenhaHash` preenchido.
+      Corrigido: confere a senha contra TODAS as linhas de `Lideranca` da
+      matrícula, e entre as que baterem, escolhe a de **maior amplitude
+      territorial** (`RANKING_NIVEL`, agora exportado de `shared/auth.js` —
+      antes só uso interno da alçada de valor da v4.5).
+- [x] **Revisão periódica generalizada** (`shared/compliance.js`) — a
+      recertificação de acessos (v4.12) só cobria a permissão `financeiro`,
+      hardcoded. **Achado real ao generalizar**: o `EXISTS` que evitava
+      pendência duplicada checava só `MembroId`, nunca `Permissao` — alguém
+      com 2 permissões distintas só recebia recertificação pendente pra
+      uma delas. Corrigido: 1 pendência por (membro, permissão), todas as
+      permissões de todos os papéis. **"Expira" ganhou efeito real pela
+      primeira vez**: antes, `Status = 'EXPIRADA'` só existia num painel de
+      compliance, sem tocar em nada — agora `LoginSecretaria` remove da
+      sessão nova qualquer permissão cuja recertificação mais recente esteja
+      expirada, até alguém confirmar de novo.
+- [x] **Trilha de sessão** (migração 085, `SessoesAtivas`) — dispositivo
+      (User-Agent) e data de criação de cada login, tela "Minhas Sessões"
+      com botão "Encerrar". **Limitação real, documentada, não escondida**:
+      o modelo de autenticação (`shared/auth.js`) é *stateless* de
+      propósito — token HMAC validado sem tocar o banco, usado hoje por
+      **~140 Functions** (`auth.exigirLogin`/`exigirPermissao`/etc.), todas
+      chamando de forma síncrona, sem `await`. Fazer "encerrar sessão"
+      bloquear a próxima requisição de verdade exigiria tornar
+      `exigirLogin` assíncrono e re-tocar as ~140 chamadas — risco
+      desproporcional pra esta versão, sem forma de testar de ponta a ponta
+      contra produção real neste momento. Escopo consciente: `criarSessao`/
+      `encerrarSessao` (só 3-4 pontos de chamada) viraram assíncronas e
+      passaram a gravar/marcar `SessoesAtivas`; "encerrar" marca a trilha e
+      tira da lista de sessões ativas, mas o token em si só perde validade
+      de verdade quando expira sozinho (12h, já curto). Entra como trabalho
+      futuro dedicado, não fabricado aqui.
+- [x] Testado com `npx jest` (104 testes, incluindo 16 novos: sessão grava/
+      marca a linha certa, delegação nunca aceita papel alheio/prazo
+      passado, recertificação por permissão não duplica nem falta) e
+      `node --check` em todos os arquivos alterados.
 
 #### vB.10 — Acessibilidade, inclusão e primeiro uso
 

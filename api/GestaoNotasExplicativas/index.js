@@ -14,7 +14,7 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "financeiro");
   if (!usuario) return;
   if (!ano) {
-    context.res = { status: 400, body: { erro: "Informe o ano na rota." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o ano na rota." } };
     return;
   }
   const pool = await getPool();

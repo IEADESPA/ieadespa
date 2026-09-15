@@ -25,7 +25,7 @@ module.exports = async function (context, req) {
     return;
   }
   if (!id) {
-    context.res = { status: 400, body: { erro: "Informe o id na rota: /api/remessas-bancarias/{id}/retorno" } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/remessas-bancarias/{id}/retorno" } };
     return;
   }
   const { arquivoRetornoBase64, mimeType } = req.body || {};

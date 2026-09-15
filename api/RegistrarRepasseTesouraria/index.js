@@ -33,7 +33,7 @@ module.exports = async function (context, req) {
 
   const fechamentoId = context.bindingData.fechamentoId;
   if (!fechamentoId) {
-    context.res = { status: 400, body: { erro: "Informe o fechamentoId na rota." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o fechamentoId na rota." } };
     return;
   }
 

@@ -34,7 +34,7 @@ const SELECT_PUBLICO = `
 
 module.exports = async function (context, req) {
   if (req.method !== "GET") {
-    context.res = { status: 405, body: { erro: "Método não suportado." } };
+    context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
     return;
   }
 
@@ -45,7 +45,7 @@ module.exports = async function (context, req) {
     const result = await pool.request().input("slug", sql.NVarChar(150), slug)
       .query(`${SELECT_PUBLICO} AND c.Slug = @slug`);
     if (result.recordset.length === 0) {
-      context.res = { status: 404, body: { erro: "Congregação não encontrada." } };
+      context.res = { status: 404, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
       return;
     }
     const item = result.recordset[0];

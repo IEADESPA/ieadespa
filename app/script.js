@@ -12,10 +12,86 @@ function mostrarToast(mensagem, tipo) {
     setTimeout(() => toast.remove(), 200);
   }, 4200);
 }
+// vB.10 — acessibilidade: os cards de módulo (.card-modulo) são <div
+// onclick=...>, que por padrão não são operáveis por teclado (sem
+// tabindex/role, Tab nunca para neles, Enter/Espaço não fazem nada). Em vez
+// de reescrever os 3 lugares que os geram como <button> (quebraria o CSS
+// de grade já pronto), cada um ganha tabindex/role="button" e chama isso no
+// keydown — mesmo efeito de clicar, acessível pelo teclado.
+function ativarComTeclado(evento) {
+  if (evento.key === "Enter" || evento.key === " ") {
+    evento.preventDefault();
+    evento.currentTarget.click();
+  }
+}
+
+// ---- AJUDA CONTEXTUAL (vB.10 — primeiro uso) ----
+// Cobertura parcial de propósito: as abas/sub-abas mais comuns primeiro,
+// cresce 1 entrada por vez — sem chave própria, cai no texto genérico
+// (nunca aparece vazio).
+let chaveAjudaAtual = "meupainel";
+const AJUDA_POR_ABA = {
+  "meupainel:perfil": "Sua página inicial: o painel do dia (pendências que precisam de você) e os módulos que você tem permissão de acessar.",
+  "meupainel:dados": "Seus dados cadastrais. Pedidos de correção passam pela Secretaria — não é edição direta.",
+  "meupainel:cartas": "Solicite Carta de Recomendação, Carta de Mudança ou Atestado Supletivo — os dois primeiros saem na hora, o de Mudança tem um segundo passo de confirmação.",
+  "meupainel:tarefas": "Fluxos de aprovação que estão parados esperando por você, de qualquer módulo do sistema.",
+  "meupainel:seguranca": "Veja onde sua conta está logada e, se tiver algum papel de Liderança, delegue temporariamente pra outra pessoa sem precisar emprestar sua senha.",
+  financeiro: "Tesouraria, patrimônio, orçamento e prestação de contas. Use o menu de módulos pra escolher a área específica (lançamentos, saídas, seguros, etc.).",
+  pessoas: "Cadastro de membros — a lista respeita seu escopo (só aparece quem está sob sua responsabilidade territorial).",
+  reunioes: "Abrir/encerrar sessão de qualquer órgão (Assembleia, CLI, Diretoria...), registrar presença e ver o histórico de reuniões.",
+  cartas: "Gestão administrativa das Cartas de Trânsito solicitadas pelos membros — emitir, cancelar, baixar PDF.",
+  orgaos: "Composição e assentos dos órgãos centrais e regionais.",
+  estrutura: "Hierarquia territorial (Área, Região, Quadrante, Distrito) e o cadastro de Congregações.",
+  catalogos: "Catálogos usados em vários módulos (cargos, prazos, status) — mudar aqui afeta o sistema inteiro.",
+  permissoes: "Quem tem acesso à Secretaria, com qual papel e qual escopo territorial.",
+  consagracoes: "Esteira de consagração ministerial — do protocolo até a aprovação final.",
+  enquetes: "Votações internas — secretas ou públicas, vinculantes ou não.",
+  arquivos: "Documentos institucionais (atas, termos, memorandos) e políticas de retenção de dados.",
+  disciplina: "Processos disciplinares — conteúdo sigiloso, visível só a quem tem esta permissão.",
+  abandono: "Radar e procedimento de abandono eclesiástico/digital.",
+  auditoria: "Trilha de auditoria, indicadores de compliance e recertificação periódica de acesso.",
+  protecaodedados: "Solicitações de titular (LGPD), políticas de retenção e o Registro de Operações de Tratamento (ROPA/RIPD)."
+};
+function alternarAjudaContextual() {
+  const painel = document.getElementById("painelAjuda");
+  const abrindo = painel.style.display === "none";
+  painel.style.display = abrindo ? "block" : "none";
+  if (!abrindo) return;
+  const texto = AJUDA_POR_ABA[chaveAjudaAtual] || "Ainda não tem uma dica específica pra esta tela — a documentação completa está no README do projeto.";
+  document.getElementById("conteudoAjudaContextual").textContent = texto;
+}
+document.addEventListener("click", (ev) => {
+  const caixa = document.querySelector(".caixa-ajuda");
+  const painel = document.getElementById("painelAjuda");
+  if (!painel || painel.style.display === "none" || !caixa) return;
+  if (!caixa.contains(ev.target)) painel.style.display = "none";
+});
+
 // Atalho: manda o toast certo a partir de uma resposta { sucesso, mensagem } da API.
 function avisarResultado(data) {
   mostrarToast(data.mensagem, data.sucesso ? "sucesso" : "erro");
 }
+
+// vB.10 — rede de segurança global: qualquer erro que escapou de todo
+// tratamento local (ex: `res.json()` falhando porque o servidor devolveu
+// um erro bruto/não-JSON, ou qualquer exceção não prevista dentro de um
+// `onclick="funcaoAsync()"`) cai aqui, em vez de travar o botão em
+// silêncio sem explicação nenhuma pra quem está usando. Mensagem sempre em
+// linguagem de secretaria; o detalhe técnico só vai pro console, nunca pra
+// tela.
+function avisarErroInesperado(motivo) {
+  console.error("[erro não tratado]", motivo);
+  mostrarToast("Algo deu errado nesta ação. Tente de novo — se continuar, avise a equipe técnica.", "erro");
+}
+// Só `unhandledrejection` (promises rejeitadas sem `.catch` local) — é
+// exatamente o padrão de `onclick="funcaoAsync()"` que domina este arquivo
+// (nenhum tratamento de erro no HTML em si). `window.onerror` genérico
+// fica de fora de propósito: pegaria erro de terceiro (CDN, extensão do
+// navegador) e mostraria um toast confuso por algo fora do nosso controle.
+window.addEventListener("unhandledrejection", (evento) => {
+  if (evento.reason && evento.reason.message === "Sessão expirada") return; // já tratado em fetchProtegido
+  avisarErroInesperado(evento.reason);
+});
 
 function fecharModal() {
   document.getElementById("modalOverlay").classList.add("escondido");
@@ -283,7 +359,16 @@ async function fetchProtegido(url, opts = {}) {
     "x-auth-token": authToken,
     Authorization: "Bearer " + authToken
   });
-  const res = await fetch(url, Object.assign({}, opts, { headers }));
+  // vB.10 — mensagem de secretaria pra quem está sem internet/servidor fora
+  // do ar, em vez do erro técnico do navegador ("Failed to fetch") ficar
+  // silencioso (sem isso, o clique só "não fazia nada").
+  let res;
+  try {
+    res = await fetch(url, Object.assign({}, opts, { headers }));
+  } catch (falhaDeRede) {
+    mostrarToast("Não foi possível conectar ao servidor. Verifique sua internet e tente de novo.", "erro");
+    throw falhaDeRede;
+  }
   if (res.status === 401) {
     limparSessao();
     mostrarToast("Sua sessão expirou. Faça login novamente.", "erro");
@@ -842,7 +927,7 @@ function montarGradeModulos() {
   }
   grade.innerHTML = chaves.map(chave => {
     const m = MODULOS[chave];
-    return `<div class="card-modulo" onclick="entrarModulo('${chave}')">
+    return `<div class="card-modulo" onclick="entrarModulo('${chave}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
       <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span>
     </div>`;
   }).join("");
@@ -880,6 +965,7 @@ let subAbaMeupainelAtual = "perfil";
 
 function mostrarSubAbaMeupainel(sub) {
   subAbaMeupainelAtual = sub;
+  chaveAjudaAtual = `meupainel:${sub}`;
   SUB_ABAS_MEUPAINEL.forEach(nome => {
     document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
     document.getElementById(`btnSubMeupainel${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
@@ -898,16 +984,30 @@ function mostrarSubAbaMeupainel(sub) {
 // ---- PAINEL INICIAL POR PERFIL (vB.7) ----
 // "Blocos reaproveitáveis, alimentados pelos cálculos que já existem" —
 // backend só reúne (shared/painelBlocos.js), aqui só exibe.
+// vB.10 — mostra 1 vez por navegador (localStorage pode falhar em aba
+// anônima/privada — nesse caso só não mostra o banner, não quebra a tela).
+function mostrarPrimeiroAcessoSeNecessario() {
+  try {
+    if (localStorage.getItem("primeiroAcessoVisto")) return;
+    document.getElementById("cxPrimeiroAcesso").style.display = "flex";
+  } catch (e) { /* localStorage indisponível — segue sem o banner */ }
+}
+function fecharPrimeiroAcesso() {
+  document.getElementById("cxPrimeiroAcesso").style.display = "none";
+  try { localStorage.setItem("primeiroAcessoVisto", "1"); } catch (e) { /* ok não persistir */ }
+}
+
 async function carregarPainelInicial() {
   const cx = document.getElementById("cxPainelInicial");
   if (!authToken) { cx.style.display = "none"; return; }
+  mostrarPrimeiroAcessoSeNecessario();
   const res = await fetchProtegido(`${API_BASE}/painel-inicial`);
   const blocos = await res.json();
   const comValor = Array.isArray(blocos) ? blocos.filter((b) => b.valor > 0) : [];
   if (comValor.length === 0) { cx.style.display = "none"; return; }
   cx.style.display = "block";
   document.getElementById("gradePainelInicial").innerHTML = comValor.map((b) => `
-    <div class="card-modulo" ${b.aba ? `onclick="irParaBlocoPainel('${b.aba}')"` : ""}>
+    <div class="card-modulo" ${b.aba ? `onclick="irParaBlocoPainel('${b.aba}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)"` : ""}>
       <span class="icone-modulo">${b.valor}</span><span>${b.titulo}</span>
     </div>
   `).join("");
@@ -1044,7 +1144,7 @@ function montarGradeSubmodulosFinanceiro() {
         <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span><span class="tag-pendente">Em breve</span>
       </div>`;
     }
-    return `<div class="card-modulo" onclick="mostrarSubAbaFinanceiro('${m.subAba}')">
+    return `<div class="card-modulo" onclick="mostrarSubAbaFinanceiro('${m.subAba}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
       <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span>
     </div>`;
   }).join("");
@@ -1052,6 +1152,7 @@ function montarGradeSubmodulosFinanceiro() {
 
 function mostrarSubAbaFinanceiro(sub) {
   subAbaFinanceiroAtual = sub;
+  chaveAjudaAtual = `financeiro:${sub}`;
   SUB_ABAS_FINANCEIRO.forEach(nome => {
     document.getElementById(`subFinanceiro${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
     document.getElementById(`btnSubFinanceiro${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
@@ -4722,6 +4823,7 @@ async function carregarMinhasSolicitacoesEdicao() {
 }
 
 function mostrarAbaSecretaria(aba) {
+  chaveAjudaAtual = aba;
   NOMES_ABAS.forEach(nome => {
     const podeVer = nome === "meupainel" || nome === "documentos" || nome === "ouvidoria" || permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
     const divAba = document.getElementById(`aba${capitalize(nome)}`);

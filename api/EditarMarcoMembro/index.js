@@ -16,11 +16,11 @@ module.exports = async function (context, req) {
   const marcoId = context.bindingData.marcoId;
   const { descricao, dataMarco, dataAproximada, justificativa } = req.body || {};
   if (!marcoId) {
-    context.res = { status: 400, body: { erro: "Informe marcoId na rota." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe marcoId na rota." } };
     return;
   }
   if (!justificativa || !String(justificativa).trim()) {
-    context.res = { status: 400, body: { erro: "Justificativa é obrigatória para corrigir um marco." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Justificativa é obrigatória para corrigir um marco." } };
     return;
   }
 

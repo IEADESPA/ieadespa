@@ -39,7 +39,7 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "financeiro");
   if (!usuario) return;
   if (!campanhaId) {
-    context.res = { status: 400, body: { erro: "Informe o campanhaId na rota." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o campanhaId na rota." } };
     return;
   }
   const pool = await getPool();
@@ -127,7 +127,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "PUT") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/campanhas/{campanhaId}/sorteios/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/campanhas/{campanhaId}/sorteios/{id}" } };
       return;
     }
     const usuarioGlobal = exigirFinanceiroGlobal(req, context);

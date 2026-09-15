@@ -17,13 +17,13 @@ module.exports = async function (context, req) {
   if (!usuario) return;
 
   if (req.method !== "GET") {
-    context.res = { status: 405, body: { erro: "Método não suportado." } };
+    context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
     return;
   }
 
   const matricula = Number((req.query || {}).matricula);
   if (!matricula) {
-    context.res = { status: 400, body: { erro: "Informe a matrícula: ?matricula=123" } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula: ?matricula=123" } };
     return;
   }
 

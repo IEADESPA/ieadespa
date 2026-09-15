@@ -11,13 +11,13 @@ const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
   if (req.method !== "GET") {
-    context.res = { status: 405, body: { erro: "Método não suportado." } };
+    context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
     return;
   }
 
   const email = String((req.query || {}).email || "").trim().toLowerCase();
   if (!email || !email.includes("@")) {
-    context.res = { status: 400, body: { erro: "Informe um e-mail válido." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe um e-mail válido." } };
     return;
   }
 

@@ -50,14 +50,14 @@ const REGEX_MES = /^\d{4}-\d{2}$/;
 
 function validarEProcessarComprovante(comprovanteBase64, mimeType) {
   if (!MIME_PERMITIDOS.includes(mimeType)) {
-    return { erro: `Formato de comprovante inválido. Use um de: ${MIME_PERMITIDOS.join(", ")}.` };
+    return { sucesso: false, mensagem: `Formato de comprovante inválido. Use um de: ${MIME_PERMITIDOS.join(", ")}.` };
   }
   let buffer;
   try { buffer = Buffer.from(comprovanteBase64, "base64"); } catch (e) {
-    return { erro: "comprovanteBase64 inválido." };
+    return { sucesso: false, mensagem: "comprovanteBase64 inválido." };
   }
   if (buffer.length === 0 || buffer.length > TAMANHO_MAXIMO_BYTES) {
-    return { erro: "Comprovante vazio ou maior que 15 MB." };
+    return { sucesso: false, mensagem: "Comprovante vazio ou maior que 15 MB." };
   }
   return { buffer };
 }
@@ -225,7 +225,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "PUT") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/tesouraria-lancamentos/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/tesouraria-lancamentos/{id}" } };
       return;
     }
     const { comprovanteBase64, mimeType } = req.body || {};
@@ -270,7 +270,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "DELETE") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/tesouraria-lancamentos/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/tesouraria-lancamentos/{id}" } };
       return;
     }
     const { motivo } = req.body || {};
@@ -312,5 +312,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

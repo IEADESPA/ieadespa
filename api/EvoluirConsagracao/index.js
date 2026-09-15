@@ -30,7 +30,7 @@ module.exports = async function (context, req) {
   const { acao } = req.body || {};
 
   if (!consagracaoId || !acao) {
-    context.res = { status: 400, body: { erro: "Informe consagracaoId na rota e 'acao' no corpo (AVANCAR ou REPROVAR)." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe consagracaoId na rota e 'acao' no corpo (AVANCAR ou REPROVAR)." } };
     return;
   }
 
@@ -56,7 +56,7 @@ module.exports = async function (context, req) {
   if (acao === "AVANCAR") {
     const novoStatus = PROXIMA_ETAPA_CONSAGRACAO[atual.status];
     if (!novoStatus) {
-      context.res = { status: 400, body: { erro: "Este processo já está em CONCLUIDO." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Este processo já está em CONCLUIDO." } };
       return;
     }
 
@@ -99,5 +99,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 400, body: { erro: "Ação inválida. Use 'AVANCAR' ou 'REPROVAR'." } };
+  context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use 'AVANCAR' ou 'REPROVAR'." } };
 };

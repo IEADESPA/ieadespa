@@ -14,7 +14,7 @@ module.exports = async function (context, req) {
 
   const congregacaoId = context.bindingData.congregacaoId;
   if (!congregacaoId) {
-    context.res = { status: 400, body: { erro: "Informe o congregacaoId na rota." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o congregacaoId na rota." } };
     return;
   }
 
@@ -67,5 +67,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

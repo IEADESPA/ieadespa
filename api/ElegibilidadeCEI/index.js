@@ -14,7 +14,7 @@ module.exports = async function (context, req) {
 
   const membroId = context.bindingData.membroId;
   if (!membroId) {
-    context.res = { status: 400, body: { erro: "Informe o membroId na rota: /api/elegibilidade-cei/{membroId}" } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota: /api/elegibilidade-cei/{membroId}" } };
     return;
   }
 

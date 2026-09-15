@@ -183,7 +183,7 @@ module.exports = async function (context, req) {
   // ---- DELETE: remover ----
   if (method === "DELETE") {
     if (!membroIdRota) {
-      context.res = { status: 400, body: { erro: "Informe o membroId na rota: /api/lideranca/{membroId}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota: /api/lideranca/{membroId}" } };
       return;
     }
 
@@ -217,5 +217,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

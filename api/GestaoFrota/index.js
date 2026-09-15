@@ -81,7 +81,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST") {
     if (!bemId) {
-      context.res = { status: 400, body: { erro: "Informe o bem na rota: /api/frota/{bemId}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o bem na rota: /api/frota/{bemId}" } };
       return;
     }
     const bem = await pool.request().input("bemId", sql.Int, bemId).query(`

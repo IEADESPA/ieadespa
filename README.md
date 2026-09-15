@@ -4041,14 +4041,57 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
 
 #### vB.10 — Acessibilidade, inclusão e primeiro uso
 
-- [ ] Acessibilidade real (WCAG 2.1 AA): contraste, navegação por teclado, leitor
-      de tela, tamanho de fonte — há membros idosos e com deficiência visual na
-      congregação, e há um Setor Técnico de Libras previsto no Regimento (Art. 48-52).
-- [ ] Ajuda contextual e primeiro uso guiado — o sistema tem 17 abas e dezenas de
-      sub-abas; quem chega hoje não tem nenhum caminho explicado.
-- [ ] Mensagens de erro em linguagem de secretaria, não de programador (padrão já
-      seguido no financeiro — generalizar para o resto).
-
+- [x] **Acessibilidade real (WCAG 2.1 AA) — achados reais corrigidos**:
+      `--cor-secundaria`/`--cor-secundaria-hover` (dourado) nunca tinham sido
+      auditados como cor de TEXTO — `.btn-aba-destaque` usava
+      `--cor-secundaria-hover` (`#A6851E`) como `color` num fundo quase
+      branco, ~3:1 de contraste (reprova 4.5:1 da AA). Corrigido com um
+      token novo (`--cor-secundaria-texto: #8f6f1f`) — mesmo valor que o
+      site institucional já usa pro mesmo problema (`site/src/lib/
+      certificado.ts`), consistência de marca entre os dois. Foco de
+      teclado: inputs tinham `outline: none` com só troca de cor de borda
+      como substituto (sutil demais) — ganhou anel visível
+      (`box-shadow`) + regra `:focus-visible` genérica. Os 3 pontos que
+      geram `.card-modulo` (cards de módulo, clicáveis por `onclick` num
+      `<div>`) não eram operáveis por teclado — sem `tabindex`, Tab nunca
+      parava neles; ganharam `tabindex="0" role="button"` + `Enter`/`Espaço`
+      via `ativarComTeclado()`. Tamanho de fonte já estava majoritariamente
+      em `rem` (38 ocorrências contra 3 em `px`) — não mexido, já estava OK.
+      Leitor de tela/Libras: fora do escopo desta rodada (auditoria de
+      `aria-*`/rótulos é maior que cabe aqui — ver nota abaixo).
+- [x] **Ajuda contextual e primeiro uso** — não existia nada disso (3
+      `title=` isolados no sistema inteiro). Botão "❓" fixo no cabeçalho
+      (mesmo padrão do sino/busca — sempre visível, qualquer aba) mostra uma
+      dica específica da tela atual (`AJUDA_POR_ABA`, cobertura parcial de
+      propósito — cresce 1 entrada por vez, nunca aparece vazio: sem entrada
+      própria, cai num texto genérico). Banner de primeiro acesso (some
+      sozinho depois de fechado, via `localStorage`) explica o layout geral
+      (menu por permissão, sino, busca, ajuda) pra quem nunca usou o
+      sistema.
+- [x] **Mensagens de erro em linguagem de secretaria — achado real, escala
+      maior que o esperado**: 68 arquivos (104 ocorrências) usavam
+      `{ erro: "..." }` como corpo de resposta de erro — formato
+      **incompatível** com o que o front-end lê (`data.mensagem`/
+      `data.sucesso`, usado por `avisarResultado`/`mostrarToast` em toda
+      parte). Na prática, quem batesse numa dessas rotas (majoritariamente
+      o fallback de "método/rota não suportado", mas também validações 400
+      reais) via um toast **vazio/undefined** em vez da mensagem certa que
+      já tinha sido escrita — não era falta de mensagem boa, era mensagem
+      boa que nunca chegava a aparecer. Corrigido em massa (mesma chave
+      renomeada, texto preservado, verificado com `node --check` nos 67
+      arquivos + suíte inteira). Além disso: **rede de segurança global**
+      nova no front-end (`app/script.js`) — falha de rede em
+      `fetchProtegido` (sem internet, servidor fora do ar) e qualquer
+      promessa rejeitada sem tratamento local (`window.addEventListener
+      ("unhandledrejection", ...)`) agora mostram um toast em linguagem de
+      secretaria ("Algo deu errado... avise a equipe técnica") em vez de o
+      botão simplesmente não fazer nada. De propósito **sem** um
+      `window.onerror` genérico — pegaria erro de script de terceiro (CDN)
+      e confundiria mais do que ajudaria.
+- [x] Testado com `npx jest` (104 testes, sem regressão — a mudança de
+      formato de erro é mecânica, verificada com `node --check` nos 67
+      arquivos alterados, não com teste novo) e `node --check` em
+      `app/script.js`.
 
 #### 🔒 Trava de Revisão B-B — antes de avançar para a vB.11
 

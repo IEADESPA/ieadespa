@@ -42,7 +42,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "PUT") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/pdq-metas/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/pdq-metas/{id}" } };
       return;
     }
     const { status, justificativaTecnica } = req.body || {};

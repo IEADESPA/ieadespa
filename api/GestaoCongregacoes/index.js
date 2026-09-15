@@ -39,7 +39,7 @@ module.exports = async function (context, req) {
   if (!usuario) return;
 
   if (req.method !== "GET") {
-    context.res = { status: 405, body: { erro: "Método não suportado. Use /api/catalogos/congregacoes para criar/editar/excluir." } };
+    context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado. Use /api/catalogos/congregacoes para criar/editar/excluir." } };
     return;
   }
 

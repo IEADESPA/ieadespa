@@ -67,7 +67,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "DELETE") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/dizimistas/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/dizimistas/{id}" } };
       return;
     }
     const atual = await pool.request().input("id", sql.Int, id).query(`
@@ -89,5 +89,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

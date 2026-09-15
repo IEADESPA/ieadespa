@@ -122,7 +122,7 @@ module.exports = async function (context, req) {
     if (acaoEvoluir === "ATRIBUIR_OUVIDOR") {
       const { ouvidorMembroId } = req.body || {};
       if (!ouvidorMembroId) {
-        context.res = { status: 400, body: { erro: "Informe 'ouvidorMembroId'." } };
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'ouvidorMembroId'." } };
         return;
       }
       await pool.request().input("id", sql.Int, denunciaId).input("ouvidorId", sql.Int, ouvidorMembroId)
@@ -160,7 +160,7 @@ module.exports = async function (context, req) {
     if (acaoEvoluir === "ARQUIVAR" || acaoEvoluir === "CONCLUIR") {
       const { justificativa } = req.body || {};
       if (!justificativa || !String(justificativa).trim()) {
-        context.res = { status: 400, body: { erro: "Justificativa é obrigatória." } };
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Justificativa é obrigatória." } };
         return;
       }
       const novoStatus = acaoEvoluir === "ARQUIVAR" ? "ARQUIVADA" : "CONCLUIDA";
@@ -183,9 +183,9 @@ module.exports = async function (context, req) {
       return;
     }
 
-    context.res = { status: 400, body: { erro: "Ação inválida. Use ATRIBUIR_OUVIDOR, ENCAMINHAR_PROCESSO, ARQUIVAR, CONCLUIR ou ANONIMIZAR." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use ATRIBUIR_OUVIDOR, ENCAMINHAR_PROCESSO, ARQUIVAR, CONCLUIR ou ANONIMIZAR." } };
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método/rota não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
 };

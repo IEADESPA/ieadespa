@@ -32,7 +32,7 @@ module.exports = async function (context, req) {
   const processoId = context.bindingData.processoId;
   const { acao } = req.body || {};
   if (!processoId || !acao) {
-    context.res = { status: 400, body: { erro: "Informe processoId na rota e 'acao' no corpo." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe processoId na rota e 'acao' no corpo." } };
     return;
   }
 
@@ -64,7 +64,7 @@ module.exports = async function (context, req) {
   if (acao === "DESIGNAR_RELATOR") {
     const { relatorMembroId } = req.body || {};
     if (!relatorMembroId) {
-      context.res = { status: 400, body: { erro: "Informe 'relatorMembroId'." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'relatorMembroId'." } };
       return;
     }
     const parentesco = await existeParentescoAte2Grau(pool, sql, relatorMembroId, new Set([Number(atual.MembroId)]), 3);
@@ -95,7 +95,7 @@ module.exports = async function (context, req) {
   if (acao === "CITAR") {
     const { canalCitacao, dataCitacao } = req.body || {};
     if (!CANAIS_CITACAO_VALIDOS.includes(canalCitacao)) {
-      context.res = { status: 400, body: { erro: `Informe 'canalCitacao' válido: ${CANAIS_CITACAO_VALIDOS.join(" ou ")}.` } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: `Informe 'canalCitacao' válido: ${CANAIS_CITACAO_VALIDOS.join(" ou ")}.` } };
       return;
     }
     await pool.request().input("id", sql.Int, processoId).input("canal", sql.NVarChar(30), canalCitacao).input("data", sql.Date, dataCitacao || null)
@@ -141,7 +141,7 @@ module.exports = async function (context, req) {
   if (acao === "DESIGNAR_DEFENSOR") {
     const { defensorNome } = req.body || {};
     if (!defensorNome || !String(defensorNome).trim()) {
-      context.res = { status: 400, body: { erro: "Informe 'defensorNome'." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'defensorNome'." } };
       return;
     }
     await pool.request().input("id", sql.Int, processoId).input("nome", sql.NVarChar(200), String(defensorNome).trim())
@@ -167,7 +167,7 @@ module.exports = async function (context, req) {
     }
     const { resultadoProva, dataProva } = req.body || {};
     if (!["APROVADO", "REPROVADO"].includes(resultadoProva)) {
-      context.res = { status: 400, body: { erro: "Informe 'resultadoProva' válido: APROVADO ou REPROVADO." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'resultadoProva' válido: APROVADO ou REPROVADO." } };
       return;
     }
     await pool.request().input("id", sql.Int, processoId).input("resultado", sql.NVarChar(20), resultadoProva).input("data", sql.Date, dataProva || null)
@@ -195,7 +195,7 @@ module.exports = async function (context, req) {
     }
     const { orgaoDestinoTipo, orgaoDestinoId, justificativa } = req.body || {};
     if (!justificativa || !String(justificativa).trim()) {
-      context.res = { status: 400, body: { erro: "Justificativa é obrigatória para recorrer." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Justificativa é obrigatória para recorrer." } };
       return;
     }
     const destino = orgaoDestinoTipo === "CENTRAL"
@@ -258,7 +258,7 @@ module.exports = async function (context, req) {
     }
     const { homologado } = req.body || {};
     if (typeof homologado !== "boolean") {
-      context.res = { status: 400, body: { erro: "Informe 'homologado' (true ou false)." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'homologado' (true ou false)." } };
       return;
     }
     await pool.request().input("id", sql.Int, processoId).input("valor", sql.Bit, homologado)
@@ -284,7 +284,7 @@ module.exports = async function (context, req) {
     const { resultado, diasSancao } = req.body || {};
     let { penalidadeId } = req.body || {};
     if (!RESULTADOS_VALIDOS.includes(resultado)) {
-      context.res = { status: 400, body: { erro: "Informe 'resultado' válido: ARQUIVADO, SANCAO ou EXCLUSAO." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'resultado' válido: ARQUIVADO, SANCAO ou EXCLUSAO." } };
       return;
     }
 
@@ -298,13 +298,13 @@ module.exports = async function (context, req) {
       penalidadeCodigo = "EXCLUSAO";
     } else if (resultado === "SANCAO") {
       if (!penalidadeId) {
-        context.res = { status: 400, body: { erro: "Informe 'penalidadeId' (Advertência, Suspensão Temporária ou Disciplina Rigorosa)." } };
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'penalidadeId' (Advertência, Suspensão Temporária ou Disciplina Rigorosa)." } };
         return;
       }
       const penalidadeResult = await pool.request().input("id", sql.Int, penalidadeId)
         .query(`SELECT Codigo FROM TiposPenalidade WHERE PenalidadeId = @id AND Ativo = 1`);
       if (penalidadeResult.recordset.length === 0 || penalidadeResult.recordset[0].Codigo === "EXCLUSAO") {
-        context.res = { status: 400, body: { erro: "Penalidade inválida para SANCAO." } };
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Penalidade inválida para SANCAO." } };
         return;
       }
       penalidadeCodigo = penalidadeResult.recordset[0].Codigo;
@@ -383,11 +383,11 @@ module.exports = async function (context, req) {
     }
     const { novoDiasSancao, prazoIndeterminado, justificativa } = req.body || {};
     if (!justificativa || !String(justificativa).trim()) {
-      context.res = { status: 400, body: { erro: "Justificativa é obrigatória para ajustar o prazo de uma sanção." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Justificativa é obrigatória para ajustar o prazo de uma sanção." } };
       return;
     }
     if (!prazoIndeterminado && !novoDiasSancao) {
-      context.res = { status: 400, body: { erro: "Informe 'novoDiasSancao' ou 'prazoIndeterminado'." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'novoDiasSancao' ou 'prazoIndeterminado'." } };
       return;
     }
     const diasFinal = prazoIndeterminado ? null : Number(novoDiasSancao);
@@ -419,5 +419,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 400, body: { erro: "Ação inválida. Use DESIGNAR_RELATOR, CITAR, AFASTAR, REGISTRAR_DEFESA, DESIGNAR_DEFENSOR, JULGAR, AJUSTAR_PRAZO ou REGISTRAR_PROVA_REINTEGRACAO." } };
+  context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use DESIGNAR_RELATOR, CITAR, AFASTAR, REGISTRAR_DEFESA, DESIGNAR_DEFENSOR, JULGAR, AJUSTAR_PRAZO ou REGISTRAR_PROVA_REINTEGRACAO." } };
 };

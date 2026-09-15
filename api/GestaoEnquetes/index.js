@@ -287,5 +287,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método/rota não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
 };

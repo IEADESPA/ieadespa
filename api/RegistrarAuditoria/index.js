@@ -7,7 +7,7 @@ module.exports = async function (context, req) {
   const { tabela, registroId, acao, usuarioId, dadosAntes, dadosDepois } = req.body || {};
 
   if (!tabela || !acao) {
-    context.res = { status: 400, body: { erro: "Campos obrigatórios: tabela, acao" } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: tabela, acao" } };
     return;
   }
 

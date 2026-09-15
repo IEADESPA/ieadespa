@@ -23,7 +23,7 @@ module.exports = async function (context, req) {
   const procedimentoId = context.bindingData.procedimentoId;
   const { acao } = req.body || {};
   if (!procedimentoId || !acao) {
-    context.res = { status: 400, body: { erro: "Informe procedimentoId na rota e 'acao' no corpo (HOMOLOGAR, ARQUIVAR ou RECURSO)." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe procedimentoId na rota e 'acao' no corpo (HOMOLOGAR, ARQUIVAR ou RECURSO)." } };
     return;
   }
 
@@ -102,7 +102,7 @@ module.exports = async function (context, req) {
     }
     const { resultadoRecurso } = req.body || {};
     if (resultadoRecurso && !RESULTADOS_RECURSO_VALIDOS.includes(resultadoRecurso)) {
-      context.res = { status: 400, body: { erro: `resultadoRecurso inválido. Use um de: ${RESULTADOS_RECURSO_VALIDOS.join(", ")}.` } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: `resultadoRecurso inválido. Use um de: ${RESULTADOS_RECURSO_VALIDOS.join(", ")}.` } };
       return;
     }
 
@@ -123,5 +123,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 400, body: { erro: "Ação inválida. Use 'HOMOLOGAR', 'ARQUIVAR' ou 'RECURSO'." } };
+  context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use 'HOMOLOGAR', 'ARQUIVAR' ou 'RECURSO'." } };
 };

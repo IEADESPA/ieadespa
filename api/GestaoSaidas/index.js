@@ -41,21 +41,21 @@ const ACOES = ["APROVAR", "REJEITAR", "PAGAR", "CANCELAR"];
 
 async function validarEUpload(comprovanteBase64, mimeType, context) {
   if (!mimeType || !MIME_PERMITIDOS.includes(mimeType)) {
-    return { erro: `Formato inválido. Use um de: ${MIME_PERMITIDOS.join(", ")}.` };
+    return { sucesso: false, mensagem: `Formato inválido. Use um de: ${MIME_PERMITIDOS.join(", ")}.` };
   }
   let buffer;
   try { buffer = Buffer.from(comprovanteBase64, "base64"); } catch (e) {
-    return { erro: "Arquivo inválido." };
+    return { sucesso: false, mensagem: "Arquivo inválido." };
   }
   if (buffer.length === 0 || buffer.length > TAMANHO_MAXIMO_BYTES) {
-    return { erro: "Arquivo vazio ou maior que 15 MB." };
+    return { sucesso: false, mensagem: "Arquivo vazio ou maior que 15 MB." };
   }
   try {
     const url = await storage.salvarDocumento(buffer, mimeType);
     return { url };
   } catch (erroUpload) {
     context.log.error("Falha ao salvar arquivo no Blob Storage:", erroUpload.message);
-    return { erro: "Falha ao salvar o arquivo. Avise a equipe técnica: " + erroUpload.message };
+    return { sucesso: false, mensagem: "Falha ao salvar o arquivo. Avise a equipe técnica: " + erroUpload.message };
   }
 }
 
@@ -278,7 +278,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "PUT") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/saidas/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/saidas/{id}" } };
       return;
     }
     const { acao, motivo, comprovanteBase64, mimeType } = req.body || {};

@@ -274,6 +274,16 @@
               <div id="listaNotificacoes" class="painel-notificacoes-lista"></div>
             </div>
           </div>
+          <!-- vB.10 — ajuda contextual: mesmo motivo de ficar no cabeçalho
+               fixo (o sistema tem 17 abas e dezenas de sub-abas; quem
+               chega hoje não tem nenhum caminho explicado). -->
+          <div class="caixa-ajuda">
+            <button class="btn-icon" id="btnAjuda" onclick="alternarAjudaContextual()" title="Ajuda desta tela">❓</button>
+            <div class="painel-ajuda" id="painelAjuda" style="display:none;">
+              <div class="painel-notificacoes-topo"><strong>Ajuda</strong></div>
+              <div id="conteudoAjudaContextual" class="painel-notificacoes-lista"></div>
+            </div>
+          </div>
         </div>
 
       <!-- ABA: MEU PAINEL (sempre visível, todo mundo tem) — dividida em 3 sub-abas
@@ -293,6 +303,17 @@
           </div>
           <div id="cxAtivarPush" style="display:none; margin-bottom:16px;">
             <button class="btn-confirmar btn-secundario" style="width:auto;" id="btnAtivarPush" onclick="alternarPushAcao()">🔔 Ativar notificação neste dispositivo</button>
+          </div>
+
+          <!-- vB.10 — banner de primeiro acesso: some sozinho depois de
+               fechado (localStorage), nunca mais aparece no mesmo navegador. -->
+          <div id="cxPrimeiroAcesso" class="banner-primeiro-acesso" style="display:none;">
+            <p>
+              👋 Primeira vez aqui? O menu à esquerda mostra só os módulos que você tem permissão de usar.
+              O sino 🔔 no topo avisa pendências, a busca 🔎 acha pessoa/projeto/fornecedor rápido, e o
+              <strong>❓</strong> no canto explica a tela em que você está.
+            </p>
+            <button class="btn-link" onclick="fecharPrimeiroAcesso()">Entendi, não mostrar de novo</button>
           </div>
 
           <!-- vB.7 — Painel inicial por perfil: blocos reunidos do que já é

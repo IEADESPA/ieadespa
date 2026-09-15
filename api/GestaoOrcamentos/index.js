@@ -130,7 +130,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "PUT") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/orcamentos/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/orcamentos/{id}" } };
       return;
     }
     const usuarioGlobal = exigirFinanceiroGlobal(req, context);

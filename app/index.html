@@ -234,6 +234,12 @@
       <main class="conteudo">
         <div class="cabecalho-secretaria">
           <h2 id="tituloModulo">Meu Painel</h2>
+          <!-- vB.4 — busca global: mesmo motivo de ficar fora de qualquer
+               aba (não é preciso saber de antemão onde o dado mora). -->
+          <div class="caixa-busca-global">
+            <input type="search" id="campoBuscaGlobal" placeholder="🔎 Buscar pessoa, projeto, fornecedor..." oninput="onDigitarBuscaGlobal()" />
+            <div class="painel-busca-global" id="painelBuscaGlobal" style="display:none;"></div>
+          </div>
           <!-- vB.2 — sino de notificações: fica no cabeçalho persistente
                (fora de qualquer aba), então aparece em todo módulo, não só
                numa tela específica. -->

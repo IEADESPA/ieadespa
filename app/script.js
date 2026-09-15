@@ -58,6 +58,88 @@ function pedirTexto(titulo, placeholder, valorInicial) {
   });
 }
 
+// ---- ANEXOS GENÉRICOS (vB.4) — qualquer tela chama abrirModalAnexos(tabela,
+// registroId, titulo) e ganha upload/lista/exclusão, sem reescrever nada.
+// Controle de acesso é resolvido no backend (shared/anexos.js) — aqui só
+// mostra o que a API devolver.
+let anexosModalContexto = null;
+function abrirModalAnexos(tabela, registroId, titulo) {
+  anexosModalContexto = { tabela, registroId, titulo };
+  const caixa = document.getElementById("modalCaixa");
+  caixa.innerHTML = `
+    <h3>📎 Anexos — ${titulo}</h3>
+    <div class="barra-lista">
+      <input type="file" id="anexoArquivo" accept="application/pdf,image/jpeg,image/png" />
+      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarAnexoModal()">Enviar</button>
+    </div>
+    <p id="resultadoAnexoModal" class="subtitle"></p>
+    <div id="listaAnexosModal"></div>
+    <div class="modal-acoes"><button class="btn-confirmar btn-secundario" onclick="fecharModal()">Fechar</button></div>
+  `;
+  document.getElementById("modalOverlay").classList.remove("escondido");
+  carregarAnexosModal();
+}
+
+async function carregarAnexosModal() {
+  const { tabela, registroId } = anexosModalContexto;
+  const container = document.getElementById("listaAnexosModal");
+  if (!container) return; // modal já foi fechado antes da resposta chegar
+  const res = await fetchProtegido(`${API_BASE}/anexos?tabela=${tabela}&registroId=${registroId}`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum anexo ainda.</p>";
+    return;
+  }
+  container.innerHTML = lista.map(a => `
+    <div class="item-notificacao">
+      <a href="${a.urlAssinada}" target="_blank" rel="noopener">${a.nomeArquivo}</a>
+      <div class="rodape-notificacao">
+        <span>${new Date(a.criadoEm).toLocaleDateString("pt-BR")}</span>
+        <button class="btn-link btn-link-perigo" onclick="excluirAnexoModal(${a.anexoId})">Excluir</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function lerArquivoComoBase64(arquivo) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(leitor.result.split(",")[1]);
+    leitor.onerror = reject;
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+async function enviarAnexoModal() {
+  const { tabela, registroId } = anexosModalContexto;
+  const input = document.getElementById("anexoArquivo");
+  const arquivo = input.files[0];
+  const msg = document.getElementById("resultadoAnexoModal");
+  if (!arquivo) { msg.textContent = "Escolha um arquivo primeiro."; return; }
+  const documentoBase64 = await lerArquivoComoBase64(arquivo);
+  const res = await fetchProtegido(`${API_BASE}/anexos`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tabela, registroId, nomeArquivo: arquivo.name, mimeType: arquivo.type, documentoBase64 })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = "";
+  if (data.sucesso) { input.value = ""; carregarAnexosModal(); }
+}
+
+async function excluirAnexoModal(anexoId) {
+  // confirmarAcao usa o MESMO modalCaixa — chamar com o modal de anexos já
+  // aberto substitui o conteúdo dele; por isso reabre o modal de anexos do
+  // zero depois (não dá pra só atualizar a lista, ela não existe mais no DOM).
+  const { tabela, registroId, titulo } = anexosModalContexto;
+  const confirmou = await confirmarAcao("Excluir este anexo?", "Excluir");
+  if (!confirmou) return;
+  const res = await fetchProtegido(`${API_BASE}/anexos/${anexoId}`, { method: "DELETE" });
+  const data = await res.json();
+  avisarResultado(data);
+  abrirModalAnexos(tabela, registroId, titulo);
+}
+
 // ---- estado do Painel único (guardado só no navegador) ----
 // authToken só existe pra quem tem acesso administrativo (Lideranca); a matrícula
 // fica salva sempre, pra popular a aba "Meu Painel" e sobreviver a um F5.
@@ -253,7 +335,55 @@ async function abrirPainelConteudo(matricula) {
   // matrícula pro check-in não tem authToken, então nem tenta.
   document.getElementById("btnSino").style.display = authToken ? "inline-block" : "none";
   if (authToken) await atualizarBadgeNotificacoes();
+  // vB.4 — busca global: mesma restrição do sino (sem Lideranca, ninguém
+  // tem permissão nenhuma pra nenhuma fonte de busca).
+  document.getElementById("campoBuscaGlobal").parentElement.style.display = authToken ? "block" : "none";
 }
+
+// ---- BUSCA GLOBAL (vB.4) ----
+let timeoutBuscaGlobal = null;
+function onDigitarBuscaGlobal() {
+  clearTimeout(timeoutBuscaGlobal);
+  const termo = document.getElementById("campoBuscaGlobal").value.trim();
+  const painel = document.getElementById("painelBuscaGlobal");
+  if (termo.length < 2) { painel.style.display = "none"; return; }
+  timeoutBuscaGlobal = setTimeout(() => executarBuscaGlobal(termo), 300);
+}
+
+async function executarBuscaGlobal(termo) {
+  const painel = document.getElementById("painelBuscaGlobal");
+  painel.style.display = "block";
+  painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Buscando...</div>";
+  try {
+    const res = await fetchProtegido(`${API_BASE}/busca-global?q=${encodeURIComponent(termo)}`);
+    const lista = await res.json();
+    if (!Array.isArray(lista) || lista.length === 0) {
+      painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Nada encontrado.</div>";
+      return;
+    }
+    painel.innerHTML = lista.map(r => `
+      <div class="item-notificacao" onclick="irParaResultadoBusca('${r.aba || ""}')">
+        <span class="titulo-notificacao">${r.titulo}</span>
+        <span>${r.tipo} — ${r.subtitulo || ""}</span>
+      </div>
+    `).join("");
+  } catch (e) {
+    painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível buscar.</div>";
+  }
+}
+
+function irParaResultadoBusca(aba) {
+  document.getElementById("painelBuscaGlobal").style.display = "none";
+  document.getElementById("campoBuscaGlobal").value = "";
+  if (aba) mostrarAbaSecretaria(aba);
+}
+
+document.addEventListener("click", (ev) => {
+  const caixa = document.querySelector(".caixa-busca-global");
+  const painel = document.getElementById("painelBuscaGlobal");
+  if (!painel || painel.style.display === "none" || !caixa) return;
+  if (!caixa.contains(ev.target)) painel.style.display = "none";
+});
 
 // ---- SINO DE NOTIFICAÇÕES (vB.2 — Motor de notificações) ----
 async function atualizarBadgeNotificacoes() {
@@ -1214,7 +1344,10 @@ async function carregarFornecedores() {
     html += `<tr>
       <td>${f.nome}</td><td>${f.cpfCnpj}</td>
       <td>${f.dadosBancariosConfirmados ? "<span class='badge-status badge-ativo'>Confirmados</span>" : "<span class='badge-status badge-pendente'>⚠️ Pendente de confirmação</span>"}</td>
-      <td>${!f.dadosBancariosConfirmados ? `<button class="btn-link" onclick="confirmarDadosBancariosFornecedorAcao(${f.fornecedorId})">Confirmar</button>` : ""}</td>
+      <td class="acoes-inline">
+        ${!f.dadosBancariosConfirmados ? `<button class="btn-link" onclick="confirmarDadosBancariosFornecedorAcao(${f.fornecedorId})">Confirmar</button>` : ""}
+        <button class="btn-link" onclick="abrirModalAnexos('Fornecedores', ${f.fornecedorId}, '${f.nome.replace(/'/g, "\\'")}')">📎 Anexos</button>
+      </td>
     </tr>`;
   });
   html += "</tbody></table>";

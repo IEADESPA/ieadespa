@@ -99,4 +99,16 @@ function urlDocumentoComSas(urlBlob) {
   return gerarUrlComSas(CONTAINER_DOCUMENTOS, urlBlob);
 }
 
-module.exports = { salvarFoto, excluirFoto, urlComSas, salvarDocumento, urlDocumentoComSas };
+// Best-effort (vB.4, AnexosGenericos): excluir a linha do SQL é o que
+// importa pro controle de acesso parar de valer; o blob órfão não é um
+// problema que deva bloquear a exclusão do anexo.
+async function excluirDocumento(urlBlob) {
+  try {
+    const nomeBlob = new URL(urlBlob).pathname.split("/").pop();
+    if (nomeBlob) await getContainerClient(CONTAINER_DOCUMENTOS).getBlockBlobClient(nomeBlob).deleteIfExists();
+  } catch (e) {
+    console.error("Falha ao excluir documento do Blob Storage (ignorado):", e.message);
+  }
+}
+
+module.exports = { salvarFoto, excluirFoto, urlComSas, salvarDocumento, urlDocumentoComSas, excluirDocumento };

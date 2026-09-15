@@ -3,15 +3,20 @@
 // e opcionalmente anônimo, vinculado ao NIF (Conselho Fiscal) + CEI,
 // independente da Diretoria Executiva.
 const crypto = require("crypto");
+const { proximoNumero } = require("./protocolo");
 
 // Protocolo é a única forma de o denunciante (inclusive anônimo) acompanhar
 // depois — sequencial (organização) + sufixo aleatório (dificulta
-// enumeração por quem só vê o formato).
-async function gerarProtocolo(pool, sql) {
+// enumeração por quem só vê o formato). vB.4: o sequencial agora vem do
+// gerador atômico central (shared/protocolo.js) em vez de `SELECT COUNT(*)
+// ... WHERE Protocolo LIKE prefixo%` — aquele padrão tinha corrida real
+// (duas denúncias simultâneas podiam calcular o mesmo COUNT e sair com o
+// mesmo protocolo). Formato final não muda (ninguém que já tem um
+// protocolo OUV-AAAA-NNNNN-xxxx precisa se preocupar).
+async function gerarProtocolo(pool) {
   const ano = new Date().getFullYear();
-  const totalResult = await pool.request().input("prefixo", sql.NVarChar(20), `OUV-${ano}-`)
-    .query(`SELECT COUNT(*) AS total FROM DenunciasOuvidoria WHERE Protocolo LIKE @prefixo + '%'`);
-  const sequencial = String(totalResult.recordset[0].total + 1).padStart(5, "0");
+  const numero = await proximoNumero(pool, "OUV");
+  const sequencial = String(numero).padStart(5, "0");
   const sufixo = crypto.randomBytes(2).toString("hex");
   return `OUV-${ano}-${sequencial}-${sufixo}`;
 }

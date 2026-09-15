@@ -3620,15 +3620,50 @@ sete implementações do mesmo conceito — o oitavo módulo vai escrever a oita
 
 #### vB.4 — Busca global, protocolo único e anexos
 
-- [ ] Busca global no topo do painel (pessoa, processo, documento, lançamento,
-      fornecedor, projeto) respeitando o escopo de quem procura — hoje é preciso
-      saber de antemão em qual das 17 abas o dado mora.
-- [ ] **Protocolo institucional único** — hoje cada módulo inventa sua numeração
-      (Termo nº da tesouraria, protocolo da ouvidoria, protocolo de projeto).
-      Um gerador central com máscara por tipo (`OUV-2026-0001`, `DISC-2026-0007`)
-      dá rastreabilidade cruzada e acaba com colisão entre módulos.
-- [ ] Anexos genéricos: qualquer registro de qualquer módulo aceita documento,
-      com o mesmo controle de acesso do registro-pai (hoje só alguns módulos têm).
+- [x] **Protocolo institucional único** (migração 081,
+      `api/shared/protocolo.js::gerarProtocolo`/`proximoNumero`): sequência
+      atômica por Tipo+Ano (`MERGE ... WITH (HOLDLOCK)`) — substitui de vez
+      o padrão `SELECT COUNT(*) ... WHERE Protocolo LIKE prefixo%` que
+      `shared/ouvidoria.js` e `GestaoProjetos` reinventavam cada um do seu
+      jeito, e que tinha **corrida real**: duas requisições simultâneas
+      podiam calcular o mesmo `COUNT` e gerar protocolo duplicado.
+      `GestaoProjetos` adotou a máscara nova (`PROJ-2026-0001`, protocolos
+      antigos no formato `2026/003` continuam gravados como estão — só os
+      novos mudam). A Ouvidoria (Art. 104) manteve o formato visível
+      (`OUV-2026-00001-xxxx`, sufixo aleatório contra enumeração — sigilo do
+      denunciante) e só trocou a **fonte** do sequencial pra corrigir a
+      corrida, sem mudar nada que o denunciante já tenha guardado. `Termo
+      nº` da tesouraria (`shared/tesouraria.js`) fica de fora de propósito —
+      é numeração contínua por congregação (talão físico), semântica
+      diferente de protocolo por tipo/ano.
+- [x] **Anexos genéricos** (migração 081, `AnexosGenericos` +
+      `api/shared/anexos.js`): catálogo declarativo de qual(is) permissão(ões)
+      controla(m) anexo de cada tabela (`Projetos`, `Fornecedores`,
+      `ProcedimentosAbandono`, `DenunciasOuvidoria`) — sem entrada no mapa,
+      a API recusa (modo seguro). Reaproveita o Blob Storage privado +
+      link assinado que já existia (`shared/storage.js::salvarDocumento`/
+      `urlDocumentoComSas`, v2.9), não inventa um segundo mecanismo de
+      arquivo. `abrirModalAnexos(tabela, registroId, titulo)` no `app/` dá
+      upload/lista/exclusão pra qualquer tela com 1 linha — já ligado na
+      tela de Fornecedores como prova real (não só uma função pronta sem
+      uso). **Processos Disciplinares ficam de fora de propósito** (Art. 45,
+      sigiloso — anexo genérico aumentaria risco de exposição sem
+      necessidade real).
+- [x] Busca global no topo do painel (`api/BuscaGlobal`, campo no
+      `.cabecalho-secretaria`): Pessoa, Fornecedor, Lançamento (por Termo
+      nº), Projeto e Documento (anexo genérico) — cada fonte só entra se o
+      usuário tiver a permissão daquela tela, e Pessoa/Lançamento respeitam
+      o escopo territorial (`auth.estaNoEscopo`, mesmo padrão de
+      `GestaoPessoas`) — nunca "todo mundo" só porque bateu o texto.
+      **Processos Disciplinares e Procedimentos de Abandono ficam de fora**
+      (mesmo motivo dos anexos: sigilo, Art. 45). Clicar num resultado abre
+      a aba correspondente — não afunila ainda até a linha exata dentro da
+      aba (ex: Projeto abre "Reuniões", não já com o órgão CLI
+      selecionado); isso é ganho futuro, não bloqueia o valor de achar "em
+      qual aba" o dado mora.
+- [x] Testado com `npx jest` (56 testes, incluindo 5 novos de `proximoNumero`/
+      `gerarProtocolo`/formato preservado da Ouvidoria) e `node --check` em
+      todos os arquivos novos e alterados.
 
 #### vB.5 — Portal do membro (PWA) e autoatendimento de verdade
 

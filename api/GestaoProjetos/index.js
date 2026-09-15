@@ -15,6 +15,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const { composicaoCCJ, composicaoCFO, composicaoCEP } = require("../shared/comissoes");
+const { gerarProtocolo } = require("../shared/protocolo");
 
 const DIAS_PARECER = 15; // Regimento, Art. 24 §2º
 const COMISSOES_TEMATICAS_VALIDAS = ["CFO", "CEP"];
@@ -134,10 +135,12 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const ano = new Date().getFullYear();
-    const seqResult = await pool.request().input("prefixo", sql.NVarChar(10), `${ano}/`)
-      .query(`SELECT COUNT(*) AS total FROM Projetos WHERE Protocolo LIKE @prefixo + '%'`);
-    const protocolo = `${ano}/${String(seqResult.recordset[0].total + 1).padStart(3, "0")}`;
+    // vB.4: máscara única (PROJ-AAAA-NNNN), gerada pelo sequenciador atômico
+    // central em vez do `SELECT COUNT(*) ... WHERE Protocolo LIKE prefixo%`
+    // que tinha corrida real (dois projetos protocolados ao mesmo tempo
+    // podiam calcular o mesmo COUNT). Protocolos já emitidos no formato
+    // antigo (AAAA/NNN) continuam válidos, gravados como estão.
+    const protocolo = await gerarProtocolo(pool, "PROJ");
 
     const criado = await pool.request()
       .input("protocolo", sql.NVarChar(30), protocolo)

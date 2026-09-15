@@ -57,7 +57,7 @@ module.exports = async function (context, req) {
     }
     const ehAnonima = anonima === true;
 
-    const protocolo = await gerarProtocolo(pool, sql);
+    const protocolo = await gerarProtocolo(pool);
     const result = await pool.request()
       .input("protocolo", sql.NVarChar(30), protocolo)
       .input("tipo", sql.NVarChar(30), tipo)

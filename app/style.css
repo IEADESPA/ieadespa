@@ -122,6 +122,18 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .cabecalho-secretaria .subtitle { margin: 0 10px 0 0; }
 .cabecalho-secretaria > div { display: flex; align-items: center; }
 
+/* vB.4 — busca global (mesmo cabeçalho persistente do sino) */
+.caixa-busca-global { position: relative; flex: 1; max-width: 360px; margin: 0 16px; }
+.caixa-busca-global input {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno);
+  font-family: inherit; font-size: 0.85rem;
+}
+.painel-busca-global {
+  position: absolute; left: 0; top: calc(100% + 6px); width: 100%; max-height: 360px;
+  overflow-y: auto; background: #fff; border: 1px solid var(--cor-borda); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15); z-index: 50;
+}
+
 /* vB.2 — sino de notificações (central de avisos, no cabeçalho persistente) */
 .caixa-sino { position: relative; }
 .btn-sino {

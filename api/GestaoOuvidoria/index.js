@@ -31,7 +31,7 @@ const SELECT_DENUNCIA = `
          CASE WHEN diretoria.AssentoId IS NULL THEN 0 ELSE 1 END AS denunciadoEhDiretoria,
          d.Relato AS relato, CONVERT(varchar(33), d.DataProtocolo, 126) AS dataProtocolo,
          d.Status AS status, d.OuvidorMembroId AS ouvidorMembroId, ouvidor.Nome AS ouvidorNome,
-         d.ProcessoDisciplinarId AS processoDisciplinarId,
+         d.ProcessoDisciplinarId AS processoDisciplinarId, d.MediacaoArbitragemId AS mediacaoArbitragemId,
          CONVERT(varchar(33), d.DataConclusao, 126) AS dataConclusao, d.DadosAnonimizados AS dadosAnonimizados
   FROM DenunciasOuvidoria d
   LEFT JOIN MembroReferencia denunciante ON denunciante.MembroId = d.DenuncianteMembroId
@@ -157,6 +157,40 @@ module.exports = async function (context, req) {
       return;
     }
 
+    if (acaoEvoluir === "ENCAMINHAR_MEDIACAO") {
+      // vB.16 — segunda saída da Ouvidoria: relato que é conflito
+      // patrimonial/administrativo (não infração ética) não devia ser
+      // forçado dentro de processo disciplinar. O denunciado (se houver)
+      // vira Parte B; quem relatou (se não anônimo) vira Parte A.
+      const { assunto, valorEnvolvido, prazoDiasEncerramento } = req.body || {};
+      if (!prazoDiasEncerramento) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe prazoDiasEncerramento." } };
+        return;
+      }
+      const parteAId = atual.Anonima ? null : atual.DenuncianteMembroId;
+      const parteADescricao = atual.Anonima || !parteAId ? "Denunciante (Ouvidoria)" : null;
+      if (!atual.DenunciadoMembroId) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Esta denúncia não tem um denunciado — informe as partes diretamente em Mediação e Arbitragem." } };
+        return;
+      }
+      const criada = await pool.request()
+        .input("assunto", sql.NVarChar(500), assunto || `Encaminhado da Ouvidoria (protocolo ${atual.Protocolo})`)
+        .input("parteAId", sql.Int, parteAId).input("parteADescricao", sql.NVarChar(200), parteADescricao)
+        .input("parteBId", sql.Int, atual.DenunciadoMembroId)
+        .input("valorEnvolvido", sql.Decimal(12, 2), valorEnvolvido || null)
+        .input("prazoDiasEncerramento", sql.Int, prazoDiasEncerramento)
+        .input("instauradoPor", sql.Int, usuario.membroId)
+        .query(`INSERT INTO MediacoesArbitragens (Assunto, ParteAId, ParteADescricao, ParteBId, ValorEnvolvido, PrazoDiasEncerramento, InstauradoPor)
+                OUTPUT INSERTED.MediacaoId
+                VALUES (@assunto, @parteAId, @parteADescricao, @parteBId, @valorEnvolvido, @prazoDiasEncerramento, @instauradoPor)`);
+      const mediacaoId = criada.recordset[0].MediacaoId;
+      await pool.request().input("id", sql.Int, denunciaId).input("mediacaoId", sql.Int, mediacaoId)
+        .query(`UPDATE DenunciasOuvidoria SET Status = 'ENCAMINHADA_MEDIACAO', MediacaoArbitragemId = @mediacaoId WHERE DenunciaId = @id`);
+      await registrarAuditoria({ tabela: "DenunciasOuvidoria", registroId: Number(denunciaId), acao: "Encaminhou pra Mediação/Arbitragem", usuarioId: usuario.membroId, dadosDepois: { mediacaoId } });
+      context.res = { status: 200, body: { sucesso: true, mensagem: "✅ Encaminhado pra Mediação e Arbitragem.", mediacaoId } };
+      return;
+    }
+
     if (acaoEvoluir === "ARQUIVAR" || acaoEvoluir === "CONCLUIR") {
       const { justificativa } = req.body || {};
       if (!justificativa || !String(justificativa).trim()) {
@@ -183,7 +217,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use ATRIBUIR_OUVIDOR, ENCAMINHAR_PROCESSO, ARQUIVAR, CONCLUIR ou ANONIMIZAR." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use ATRIBUIR_OUVIDOR, ENCAMINHAR_PROCESSO, ENCAMINHAR_MEDIACAO, ARQUIVAR, CONCLUIR ou ANONIMIZAR." } };
     return;
   }
 

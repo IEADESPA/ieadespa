@@ -10,6 +10,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria, sha256 } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { TERMOS, termosPendentes } = require("../shared/termos");
+const { registrarAceiteClausulaCompromissoria } = require("../shared/mediacaoArbitragem");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirLoginIgnorandoTermos(req, context);
@@ -59,6 +60,15 @@ module.exports = async function (context, req) {
         tabela: "TermosAssinados", registroId: Number(usuario.membroId),
         acao: `Assinou termo ${tipo} (versão ${TERMOS[tipo].versao})`, usuarioId: usuario.membroId
       });
+
+      // vB.16 (Art. 161-A) — a via de Mediação/Arbitragem só é realmente
+      // obrigatória se a adesão existir ANTES do conflito (Lei 9.307 art.
+      // 4º §2º: aceite expresso e datado, nunca presumido). O Termo de
+      // Compromisso de Gestão (Art. 57) já é o momento em que um Dirigente
+      // assume — é o gancho natural, sem precisar de uma 2ª tela pra isso.
+      if (tipo === "COMPROMISSO_DIRIGENTE") {
+        await registrarAceiteClausulaCompromissoria(pool, usuario.membroId);
+      }
     }
 
     const pendentes = await termosPendentes(pool, sql, usuario.membroId, usuario.nivel);

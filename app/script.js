@@ -861,7 +861,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -925,7 +925,7 @@ const MODULOS = {
   orgaosCentrais: { titulo: "Órgãos Centrais", icone: "🏛️", abaEntrada: "reunioes", abas: ["reunioes"] },
   orgaosRegionais: { titulo: "Órgãos Regionais", icone: "🧭", abaEntrada: "reunioes", abas: ["reunioes"] },
   eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "enquetes", "arquivos"] },
-  disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria"] },
+  disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
@@ -4923,6 +4923,7 @@ function mostrarAbaSecretaria(aba) {
   }
   if (aba === "protecaodedados") { carregarSolicitacoesDPO(); carregarPoliticasRetencao("resultadoListaPoliticasRetencaoDpo"); carregarRopa(); carregarRipd(); }
   if (aba === "ouvidoria") carregarPainelOuvidoria();
+  if (aba === "mediacao") carregarMediacoes();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -4935,7 +4936,8 @@ const TITULOS_MODULOS = {
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
   abandono: "Perda de Membresia",
-  auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos"
+  auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos",
+  mediacao: "Mediação e Arbitragem"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -10829,7 +10831,8 @@ async function carregarPainelOuvidoria() {
       <td class="acoes-inline">
         ${d.status === "RECEBIDA" ? `<button class="btn-link" onclick="atribuirOuvidorAcao(${d.denunciaId})">Atribuir Ouvidor</button>` : ""}
         ${d.denunciadoMembroId && d.status !== "ENCAMINHADA_PROCESSO" ? `<button class="btn-link" onclick="encaminharProcessoOuvidoriaAcao(${d.denunciaId})">Encaminhar p/ Processo</button>` : ""}
-        ${!["ARQUIVADA", "CONCLUIDA", "ENCAMINHADA_PROCESSO"].includes(d.status) ? `<button class="btn-link" onclick="arquivarOuvidoriaAcao(${d.denunciaId})">Arquivar</button>
+        ${d.denunciadoMembroId && d.status !== "ENCAMINHADA_MEDIACAO" ? `<button class="btn-link" onclick="encaminharMediacaoOuvidoriaAcao(${d.denunciaId})">Encaminhar p/ Mediação</button>` : ""}
+        ${!["ARQUIVADA", "CONCLUIDA", "ENCAMINHADA_PROCESSO", "ENCAMINHADA_MEDIACAO"].includes(d.status) ? `<button class="btn-link" onclick="arquivarOuvidoriaAcao(${d.denunciaId})">Arquivar</button>
         <button class="btn-link" onclick="concluirOuvidoriaAcao(${d.denunciaId})">Concluir</button>` : ""}
         ${podeAnonimizar ? `<button class="btn-link btn-link-perigo" onclick="anonimizarOuvidoriaAcao(${d.denunciaId})">Anonimizar</button>` : ""}
       </td>
@@ -10919,4 +10922,201 @@ async function encaminharProcessoOuvidoriaAcao(denunciaId) {
   if (!dados) return;
   if (dados.infracoesIds.length === 0) { mostrarToast("Selecione pelo menos 1 infração.", "erro"); return; }
   await evoluirOuvidoriaAcao(denunciaId, { acao: "ENCAMINHAR_PROCESSO", ...dados });
+}
+
+// vB.16 — segunda saída da Ouvidoria: relato que é conflito
+// patrimonial/administrativo, não infração ética.
+async function encaminharMediacaoOuvidoriaAcao(denunciaId) {
+  const prazoDiasEncerramento = await pedirTexto("Encaminhar para Mediação e Arbitragem", "Prazo de encerramento da mediação (dias)");
+  if (!prazoDiasEncerramento) return;
+  await evoluirOuvidoriaAcao(denunciaId, { acao: "ENCAMINHAR_MEDIACAO", prazoDiasEncerramento: Number(prazoDiasEncerramento) });
+}
+
+// ---- MEDIAÇÃO E ARBITRAGEM (vB.16 — Reg. Art. 161-A) ----
+const ROTULO_STATUS_MEDIACAO = {
+  MEDIACAO_EM_CURSO: "Mediação em curso", MEDIACAO_ACORDO: "Encerrada com acordo",
+  MEDIACAO_SEM_ACORDO: "Encerrada sem acordo", ARBITRAGEM_EM_CURSO: "Arbitragem em curso",
+  ARBITRAGEM_SENTENCA: "Sentença arbitral registrada"
+};
+
+async function instaurarMediacaoAcao() {
+  const assunto = document.getElementById("mediacaoAssunto").value.trim();
+  const parteAId = document.getElementById("mediacaoParteAId").value || null;
+  const parteADescricao = document.getElementById("mediacaoParteADescricao").value.trim() || null;
+  const parteBId = document.getElementById("mediacaoParteBId").value || null;
+  const parteBDescricao = document.getElementById("mediacaoParteBDescricao").value.trim() || null;
+  const valorEnvolvido = document.getElementById("mediacaoValorEnvolvido").value || null;
+  const prazoDiasEncerramento = document.getElementById("mediacaoPrazoDias").value || null;
+  const msg = document.getElementById("resultadoMediacao");
+  if (!assunto || !prazoDiasEncerramento) { msg.textContent = "Informe assunto e prazo de encerramento."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/mediacoes`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assunto, parteAId, parteADescricao, parteBId, parteBDescricao, valorEnvolvido, prazoDiasEncerramento })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    ["mediacaoAssunto", "mediacaoParteAId", "mediacaoParteADescricao", "mediacaoParteBId", "mediacaoParteBDescricao", "mediacaoValorEnvolvido", "mediacaoPrazoDias"]
+      .forEach(id => document.getElementById(id).value = "");
+    carregarMediacoes();
+  }
+}
+
+async function carregarMediacoes() {
+  const container = document.getElementById("resultadoListaMediacoes");
+  if (!authPermissoes.includes("mediacao")) { container.innerHTML = "<p class='subtitle'>Instaure um caso acima — a lista completa exige a permissão 'mediacao'.</p>"; return; }
+  const res = await fetchProtegido(`${API_BASE}/mediacoes`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) {
+    container.innerHTML = "<p class='subtitle'>Nenhum caso registrado ainda.</p>";
+    return;
+  }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>Assunto</th><th>Parte A</th><th>Parte B</th><th>Status</th><th>Prazo</th><th></th>
+  </tr></thead><tbody>`;
+  lista.forEach(m => {
+    html += `<tr>
+      <td>${m.assunto}</td>
+      <td>${m.parteANome || m.parteADescricao || "-"}</td>
+      <td>${m.parteBNome || m.parteBDescricao || "-"}</td>
+      <td>${ROTULO_STATUS_MEDIACAO[m.status] || m.status}</td>
+      <td>${m.prazoVencido ? `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Vencido (${m.diasDesdeInstauracao}d)</span>` : `${m.diasDesdeInstauracao}d de ${m.prazoDiasEncerramento}`}</td>
+      <td><button class="btn-link" onclick="abrirDetalheMediacao(${m.mediacaoId})">Abrir</button></td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function evoluirMediacaoAcao(mediacaoId, corpo) {
+  const res = await fetchProtegido(`${API_BASE}/mediacoes/${mediacaoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo)
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) abrirDetalheMediacao(mediacaoId);
+  return data;
+}
+
+async function abrirDetalheMediacao(mediacaoId) {
+  const container = document.getElementById("painelDetalheMediacao");
+  const res = await fetchProtegido(`${API_BASE}/mediacoes/${mediacaoId}`);
+  const m = await res.json();
+  if (m.sucesso === false) { container.innerHTML = `<p class="subtitle">${m.mensagem}</p>`; return; }
+
+  let acoesHtml = "";
+  if (m.status === "MEDIACAO_EM_CURSO") {
+    acoesHtml += `<div class="barra-lista">
+      <input type="number" id="medDetMediadorId" placeholder="Matrícula do mediador" />
+      <button class="btn-link" onclick="designarMediadorAcao(${mediacaoId})">Designar Mediador</button>
+    </div>
+    <div class="barra-lista">
+      <input type="date" id="medDetSessaoData" />
+      <label><input type="checkbox" id="medDetSessaoA" /> Parte A compareceu</label>
+      <label><input type="checkbox" id="medDetSessaoB" /> Parte B compareceu</label>
+      <input type="text" id="medDetSessaoObs" placeholder="Observações" style="min-width:200px;" />
+      <button class="btn-link" onclick="registrarSessaoMediacaoAcao(${mediacaoId})">Registrar Sessão</button>
+    </div>
+    <div class="barra-lista">
+      <input type="text" id="medDetResumoAcordo" placeholder="Resumo do acordo" style="min-width:220px;" />
+      <input type="number" id="medDetSaidaVinculada" placeholder="Id da Saída vinculada (opcional)" />
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarAcordoMediacaoAcao(${mediacaoId})">✅ Registrar Acordo</button>
+      <button class="btn-link btn-link-perigo" onclick="mediacaoSemAcordoAcao(${mediacaoId})">Encerrar sem acordo</button>
+    </div>`;
+  }
+  if (m.status === "MEDIACAO_SEM_ACORDO") {
+    acoesHtml += `<div class="barra-lista">
+      <input type="number" id="medDetArbitroId" placeholder="Matrícula do árbitro" />
+      <button class="btn-link" onclick="designarArbitroAcao(${mediacaoId})">Designar Árbitro (abrir arbitragem)</button>
+    </div>`;
+  }
+  if (m.status === "ARBITRAGEM_EM_CURSO") {
+    acoesHtml += `<div class="barra-lista">
+      <button class="btn-link" onclick="registrarCompromissoArbitralAcao(${mediacaoId})">Registrar Compromisso Arbitral</button>
+      <input type="file" id="medDetSentencaArquivo" accept="application/pdf,image/jpeg,image/png" />
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarSentencaArbitralAcao(${mediacaoId})">📄 Registrar Sentença</button>
+    </div>`;
+  }
+  const bifurcacaoHtml = !m.processoDisciplinarBifurcadoId ? `
+    <div class="barra-lista">
+      <input type="number" id="medDetBifurcarMembroId" placeholder="Matrícula (quem responde ao processo)" />
+      <button class="btn-link btn-link-perigo" onclick="bifurcarDisciplinarAcao(${mediacaoId})">⚠️ Bifurcar p/ Processo Disciplinar</button>
+    </div>` : `<p class="subtitle">Já bifurcado — processo disciplinar nº ${m.processoDisciplinarBifurcadoId}.</p>`;
+
+  const sessoesHtml = (m.sessoes || []).length === 0 ? "<p class='subtitle'>Nenhuma sessão registrada.</p>" :
+    `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Parte A</th><th>Parte B</th><th>Obs.</th></tr></thead><tbody>` +
+    m.sessoes.map(s => `<tr><td>${s.dataSessao}</td><td>${s.parteACompareceu ? "✅" : "-"}</td><td>${s.parteBCompareceu ? "✅" : "-"}</td><td>${s.observacoes || "-"}</td></tr>`).join("") +
+    `</tbody></table>`;
+
+  container.innerHTML = `
+    <hr />
+    <h4>${m.assunto} — ${ROTULO_STATUS_MEDIACAO[m.status] || m.status}</h4>
+    <p class="subtitle">Parte A: ${m.parteANome || m.parteADescricao || "-"} · Parte B: ${m.parteBNome || m.parteBDescricao || "-"}
+      ${m.mediadorNome ? ` · Mediador: ${m.mediadorNome}` : ""}${m.arbitroNome ? ` · Árbitro: ${m.arbitroNome}` : ""}</p>
+    ${m.sentencaArbitralUrl ? `<p><a class="btn-link" href="${m.sentencaArbitralUrl}" target="_blank" rel="noopener">📄 Ver sentença arbitral</a></p>` : ""}
+    ${acoesHtml}
+    <h5 style="margin:14px 0 6px;">Sessões de mediação</h5>
+    ${sessoesHtml}
+    <h5 style="margin:14px 0 6px;">Encaminhamento cruzado (Art. 91)</h5>
+    ${bifurcacaoHtml}
+    <p id="resultadoDetalheMediacao"></p>`;
+}
+
+async function designarMediadorAcao(mediacaoId) {
+  const mediadorId = document.getElementById("medDetMediadorId").value;
+  if (!mediadorId) return;
+  await evoluirMediacaoAcao(mediacaoId, { acao: "DESIGNAR_MEDIADOR", mediadorId });
+}
+
+async function registrarSessaoMediacaoAcao(mediacaoId) {
+  const dataSessao = document.getElementById("medDetSessaoData").value;
+  const parteACompareceu = document.getElementById("medDetSessaoA").checked;
+  const parteBCompareceu = document.getElementById("medDetSessaoB").checked;
+  const observacoes = document.getElementById("medDetSessaoObs").value.trim() || null;
+  if (!dataSessao) { mostrarToast("Informe a data da sessão.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/mediacoes/${mediacaoId}/sessoes`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataSessao, parteACompareceu, parteBCompareceu, observacoes })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) abrirDetalheMediacao(mediacaoId);
+}
+
+async function registrarAcordoMediacaoAcao(mediacaoId) {
+  const resumoAcordo = document.getElementById("medDetResumoAcordo").value.trim();
+  const saidaVinculadaId = document.getElementById("medDetSaidaVinculada").value || null;
+  if (!resumoAcordo) { mostrarToast("Informe o resumo do acordo.", "erro"); return; }
+  await evoluirMediacaoAcao(mediacaoId, { acao: "REGISTRAR_ACORDO", resumoAcordo, saidaVinculadaId });
+}
+
+async function mediacaoSemAcordoAcao(mediacaoId) {
+  const motivo = await pedirTexto("Encerrar mediação sem acordo", "Motivo");
+  if (!motivo) return;
+  await evoluirMediacaoAcao(mediacaoId, { acao: "MEDIACAO_SEM_ACORDO", motivo });
+}
+
+async function designarArbitroAcao(mediacaoId) {
+  const arbitroId = document.getElementById("medDetArbitroId").value;
+  if (!arbitroId) return;
+  await evoluirMediacaoAcao(mediacaoId, { acao: "DESIGNAR_ARBITRO", arbitroId });
+}
+
+async function registrarCompromissoArbitralAcao(mediacaoId) {
+  await evoluirMediacaoAcao(mediacaoId, { acao: "REGISTRAR_COMPROMISSO_ARBITRAL" });
+}
+
+async function registrarSentencaArbitralAcao(mediacaoId) {
+  const arquivo = document.getElementById("medDetSentencaArquivo").files[0];
+  if (!arquivo) { mostrarToast("Anexe a sentença arbitral.", "erro"); return; }
+  await evoluirMediacaoAcao(mediacaoId, { acao: "REGISTRAR_SENTENCA", sentencaBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type });
+}
+
+async function bifurcarDisciplinarAcao(mediacaoId) {
+  const membroId = document.getElementById("medDetBifurcarMembroId").value;
+  if (!membroId) return;
+  if (!(await confirmarAcao("Bifurcar para Processo Disciplinar? A mediação continua seu curso normalmente, em paralelo.", "Bifurcar"))) return;
+  await evoluirMediacaoAcao(mediacaoId, { acao: "BIFURCAR_DISCIPLINAR", membroId });
 }

@@ -155,6 +155,11 @@ const CATALOGOS = {
     tabela: "RateioGeralDestinos", chave: "DestinoId", idField: "destinoId",
     campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(150), percentual: sql.Decimal(5, 2), ativo: sql.Bit },
     permissao: "financeiro"
+  },
+  mediadoresArbitros: {
+    tabela: "CatalogoMediadoresArbitros", chave: "MediadorArbitroId", idField: "mediadorArbitroId",
+    campos: { membroId: sql.Int, papel: sql.NVarChar(20), ativo: sql.Bit },
+    permissao: "mediacao"
   }
 };
 

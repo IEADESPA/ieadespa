@@ -227,6 +227,7 @@
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaDisciplina" onclick="mostrarAbaSecretaria('disciplina')"><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
             <button class="btn-aba" id="btnAbaOuvidoria" onclick="mostrarAbaSecretaria('ouvidoria')"><span class="icone">📢</span><span class="rotulo">Ouvidoria</span></button>
+            <button class="btn-aba" id="btnAbaMediacao" onclick="mostrarAbaSecretaria('mediacao')"><span class="icone">🤝</span><span class="rotulo">Mediação e Arbitragem</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -2069,6 +2070,36 @@
         <p id="resultadoConsultaProtocolo"></p>
 
         <div id="painelOuvidoriaConteudo"></div>
+      </div>
+
+      <!-- ABA: MEDIAÇÃO E ARBITRAGEM (vB.16 — Reg. Art. 161-A) -->
+      <div id="abaMediacao" class="aba-secretaria" style="display:none;">
+        <h3>🤝 Mediação e Arbitragem Eclesiástica</h3>
+        <p class="subtitle">Disputa patrimonial/administrativa ENTRE PARTES (congregação × sede, dirigente ×
+          departamento, obreiro × igreja sobre valores) — sem réu, sem sanção. A sequência é travada pelo
+          sistema: arbitragem só abre depois da mediação encerrar sem acordo (Art. 161-A; Lei 9.307/1996).</p>
+
+        <h4>Instaurar novo caso</h4>
+        <div class="input-group"><label>Assunto:</label><input type="text" id="mediacaoAssunto" placeholder="Ex: divergência sobre repasse de recursos" /></div>
+        <div class="barra-lista">
+          <input type="number" id="mediacaoParteAId" placeholder="Matrícula Parte A (se membro)" />
+          <input type="text" id="mediacaoParteADescricao" placeholder="Ou descrição da Parte A (ex: Congregação Sede)" style="min-width:220px;" />
+        </div>
+        <div class="barra-lista">
+          <input type="number" id="mediacaoParteBId" placeholder="Matrícula Parte B (se membro)" />
+          <input type="text" id="mediacaoParteBDescricao" placeholder="Ou descrição da Parte B" style="min-width:220px;" />
+        </div>
+        <div class="barra-lista">
+          <input type="number" id="mediacaoValorEnvolvido" placeholder="Valor envolvido (R$, opcional)" />
+          <input type="number" id="mediacaoPrazoDias" placeholder="Prazo de encerramento (dias)" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="instaurarMediacaoAcao()">➕ Instaurar</button>
+        </div>
+        <p id="resultadoMediacao"></p>
+
+        <hr />
+        <h4>Casos</h4>
+        <div class="rolagem-tabela"><div id="resultadoListaMediacoes"></div></div>
+        <div id="painelDetalheMediacao"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

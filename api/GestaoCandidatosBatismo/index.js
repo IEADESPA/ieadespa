@@ -11,6 +11,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { calcularAptidaoBatismo, registrarAceiteEstatuto } = require("../shared/batismo");
+const { registrarAceiteClausulaCompromissoria } = require("../shared/mediacaoArbitragem");
 
 const SELECT_CANDIDATO = `
   SELECT c.CandidatoId AS candidatoId, c.MembroId AS membroId, m.Nome AS nome,
@@ -118,6 +119,10 @@ module.exports = async function (context, req) {
       }
       const termoId = await registrarAceiteEstatuto(pool, candidato.membroId);
       await pool.request().input("id", sql.Int, id).input("termoId", sql.Int, termoId).query(`UPDATE CandidatosBatismo SET AceiteTermoAssinadoId = @termoId WHERE CandidatoId = @id`);
+      // vB.16 (Art. 161-A) — o aceite do Estatuto/Regimento na esteira de
+      // batismo é o outro gancho natural pra cláusula compromissória: é o
+      // momento em que a pessoa vira membro, antes de qualquer conflito existir.
+      await registrarAceiteClausulaCompromissoria(pool, candidato.membroId);
       await registrarAuditoria({ tabela: "CandidatosBatismo", registroId: Number(id), acao: "Registrou aceite eletrônico do Estatuto/Regimento (Art. 80 §2º, V)", usuarioId: usuario.membroId });
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Aceite do Estatuto/Regimento registrado." } };
       return;

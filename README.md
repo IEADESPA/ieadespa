@@ -4599,7 +4599,7 @@ disciplinar (que o distorce, porque cria acusado onde não há acusação) ou sa
 do sistema e vai direto pro Judiciário. A FASE 3 está fechada, então essa via
 entra como módulo novo da FASE B, não como reabertura dela.
 
-- [ ] **Câmara de Mediação — a etapa que resolve a maioria dos casos.**
+- [x] **Câmara de Mediação — a etapa que resolve a maioria dos casos.**
       Instauração por qualquer das partes, indicação de mediador da lista
       cadastrada (com impedimento calculado: parentesco, vínculo com a
       congregação envolvida, participação prévia no caso), sessões com registro
@@ -4608,26 +4608,100 @@ entra como módulo novo da FASE B, não como reabertura dela.
       envolve valor, vinculado à Saída/Receita correspondente na FASE 4 — senão
       vira papel sem efeito. Prazo de encerramento com alerta calculado, mesmo
       padrão dos prazos disciplinares.
-- [ ] **Arbitragem — só quando a mediação falha.** Painel de árbitros,
+- [x] **Arbitragem — só quando a mediação falha.** Painel de árbitros,
       compromisso arbitral assinado pelas partes, sentença arbitral registrada.
       A sequência importa e deve ser **travada pelo sistema**: não se abre
       arbitragem sem mediação encerrada sem acordo. É o desenho do próprio
       Art. 161-A e também o da lei.
-- [ ] **Cláusula compromissória no ciclo de vida do membro/dirigente.** Para a
+- [x] **Cláusula compromissória no ciclo de vida do membro/dirigente.** Para a
       via ser realmente obrigatória, a adesão precisa existir **antes** do
       conflito. O gancho natural é o Termo de Compromisso de Gestão (v2.7) e o
       aceite do Estatuto na esteira de batismo (vB.11) — é ali que a cláusula
       é aceita e fica provada com data e versão. Sem isso, "via obrigatória" é
       só uma frase no Regimento.
-- [ ] **Encaminhamento cruzado com a FASE 3 existente.** Se, durante a
+- [x] **Encaminhamento cruzado com a FASE 3 existente.** Se, durante a
       mediação, aparecer fato que configure infração ética, o caso **bifurca**:
       segue a mediação patrimonial e abre processo disciplinar separado
       (reaproveita `shared/disciplinar.js::criarProcessoDisciplinar`, mesma
       ponte que a Ouvidoria v3.7 já usa). São coisas distintas e devem correr
       distintas — misturar as duas é o erro que se quer evitar.
-- [ ] **Interface com a Ouvidoria (v3.7).** A Ouvidoria hoje só sabe encaminhar
+- [x] **Interface com a Ouvidoria (v3.7).** A Ouvidoria hoje só sabe encaminhar
       pra processo disciplinar. Ganha uma segunda saída: `ENCAMINHAR_MEDIACAO`,
       para o relato que é conflito, não denúncia.
+
+  Implementado: `sql/migrations/091_mediacao_arbitragem.sql` cria
+  `CatalogoMediadoresArbitros` (entra no CRUD genérico de
+  `GestaoCatalogos`, permissão dedicada `"mediacao"` — nova
+  `Funcionalidades`, mesmo padrão de `"ouvidoria"`), `MediacoesArbitragens`
+  (1 linha por caso, `Status` como máquina de estados —
+  `MEDIACAO_EM_CURSO → MEDIACAO_ACORDO | MEDIACAO_SEM_ACORDO →
+  ARBITRAGEM_EM_CURSO → ARBITRAGEM_SENTENCA`) e `SessoesMediacao`
+  (comparecimento por sessão). `DenunciasOuvidoria` ganhou
+  `MediacaoArbitragemId`, mesmo padrão de `ProcessoDisciplinarId` já
+  existente.
+
+  `shared/mediacaoArbitragem.js`: `calcularImpedimento()` verifica, nessa
+  ordem, se o candidato é uma das próprias partes, parentesco até 2º grau
+  (`shared/parentesco.js::existeParentescoAte2Grau`, zero alteração —
+  mesma função já usada por Conselho Fiscal/CEI), vínculo com a mesma
+  congregação de uma das partes, e participação prévia como
+  mediador/árbitro em OUTRO caso envolvendo qualquer uma das mesmas
+  partes — os quatro cálculos que o Art. 161-A pede, nenhum deles uma
+  marcação manual. `avaliarPrazoEncerramento` seguiu o **mesmo padrão**
+  de `avaliarPrazoDefesa` (disciplinar) — com uma decisão documentada, não
+  escondida: como o Regimento (no trecho disponível) não enuncia um número
+  fixo de dias para a mediação encerrar, o prazo é **parametrizado por
+  quem instaura o caso**, e só o cálculo do alerta é fixo; não fabriquei
+  um prazo legal que não estava no texto.
+
+  Cláusula compromissória (`registrarAceiteClausulaCompromissoria`) usa a
+  mesma mecânica de hash/trilha de `TermosAssinados` que
+  `shared/batismo.js::registrarAceiteEstatuto` já usa — `TipoTermo`
+  deliberadamente **fora** do catálogo de `shared/termos.js` (confirmado
+  por varredura: aquele catálogo *gate-ia login* de quem se enquadra no
+  `aplicaA`; a cláusula compromissória não pode virar pendência de login
+  de ninguém). Os dois ganchos reais do ciclo de vida: `GestaoTermos`
+  registra a cláusula automaticamente ao assinar `COMPROMISSO_DIRIGENTE`
+  (Art. 57), e `GestaoCandidatosBatismo` registra ao aceitar o
+  Estatuto/Regimento na esteira de batismo (vB.11, Art. 80 §2º, V) — os
+  exatos dois pontos que o item pedia, sem tela nova.
+
+  `GestaoMediacoesArbitragens` (GET/POST/PUT `/api/mediacoes`) —
+  instaurar é `exigirLogin` (qualquer parte pode abrir, mesmo espírito de
+  "toda a membresia" da Ouvidoria); operar o caso exige `"mediacao"`. A
+  trava real está em `DESIGNAR_ARBITRO`: recusa se `Status !==
+  'MEDIACAO_SEM_ACORDO'`, então não existe caminho de API pra pular a
+  mediação. `REGISTRAR_SENTENCA` faz upload do PDF (mesmo
+  `shared/storage.js` de todo o resto) e cita a Lei 9.307/1996 art. 18/31
+  na própria mensagem de confirmação (produz efeitos de sentença judicial,
+  sem homologação). `BIFURCAR_DISCIPLINAR` chama
+  `criarProcessoDisciplinar` e grava `ProcessoDisciplinarBifurcadoId` —
+  **sem** alterar o `Status` da mediação, porque as duas vias correm em
+  paralelo, não uma substitui a outra.
+
+  **Limitação documentada**: o vínculo "acordo → Saída/Receita
+  correspondente" ficou como um FK simples opcional
+  (`MediacoesArbitragens.SaidaVinculadaId → SaidasTesouraria`), informado
+  por quem registra o acordo — a varredura confirmou que `SaidasTesouraria`
+  não tem um padrão genérico de origem (`OrigemTipo`/`OrigemId`, que
+  existe em `RepassesInstitucionais`) prontos pra reaproveitar sem
+  alterar uma tabela financeira central tocada por todo o resto do
+  sistema; um FK direto e opcional resolve o caso real sem esse risco.
+
+  `GestaoOuvidoria` ganhou a ação `ENCAMINHAR_MEDIACAO` (mesma permissão
+  `"ouvidoria"` de `ENCAMINHAR_PROCESSO`, sem caso especial) — denunciante
+  (se não anônimo) vira Parte A, denunciado vira Parte B.
+
+  Frontend: nova aba "🤝 Mediação e Arbitragem" no módulo Disciplina &
+  Ética (ao lado de Ouvidoria), com instauração, lista de casos com prazo
+  calculado, e painel de detalhe com as ações de cada etapa (mediador,
+  sessões, acordo/sem acordo, árbitro, compromisso arbitral, sentença,
+  bifurcação); botão "Encaminhar p/ Mediação" na Ouvidoria.
+
+  Testado com `npx jest` (162 testes, incluindo 10 novos de
+  `shared/mediacaoArbitragem.js`: os 4 cenários de impedimento em ordem
+  de prioridade, prazo vencido/não vencido, e os 3 tipos de termo
+  assinado) e `node --check` em todos os arquivos novos/alterados.
 
 **Base jurídica e referências.** No Brasil a arbitragem é regida pela
 **Lei 9.307/1996** (alterada pela Lei 13.129/2015): a sentença arbitral produz

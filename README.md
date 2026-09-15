@@ -3343,13 +3343,17 @@ no `app/`.
       lembrete de atualizar o outro lado também — sem ela, alguém teria
       que tirar a cor de uma captura de tela pra manter os dois em sintonia.
 
-#### vC.5 — Um único Function App, um único modelo (normalização técnica)
+#### vC.5 — Um único modelo, dois Function Apps (normalização técnica)
 
-Achado real: `api/` usa o modelo clássico do Azure Functions (pasta por
-função + `function.json`); `site/api` usa o modelo v4 (`app.http(...)`
-registrado inline, `"main"` no `package.json` apontando um glob). Hoje são
-dois Function Apps completamente separados (duas Static Web Apps); não há
-confirmação de que os dois modelos convivem no mesmo Function App.
+**Título corrigido (14/09)** depois de fechar esta versão: a ambição
+original era "um único Function App, um único modelo" — só a segunda
+metade era alcançável (ver checklist abaixo, a Azure não permite duas
+Static Web Apps compartilharem um Function App em nenhum modelo). Achado
+real que deu início a essa versão: `api/` usa o modelo clássico do Azure
+Functions (pasta por função + `function.json`); `site/api` usava o modelo
+v4 (`app.http(...)` registrado inline, `"main"` no `package.json`
+apontando um glob) — dois modelos diferentes, sem confirmação de que
+conviviam no mesmo Function App.
 
 - [x] **Reescritas as 15 funções (14/09)** de `site/api/src/functions/*.js`
       (modelo v4) pro modelo clássico — uma pasta por função dentro de
@@ -3371,15 +3375,29 @@ confirmação de que os dois modelos convivem no mesmo Function App.
       (`VerificarInscricao`), validação de parâmetros ausentes (400),
       imagem binária (PNG de verdade, não corrompida) — só depois disso
       o código foi commitado.
-- [ ] Validar em homologação (`HOMOLOGACAO.md`) se as duas Static Web Apps
-      (`app-meusite-web`, `site-institucional`) podem apontar pro mesmo
-      `api_location: "api"`, ou se a arquitetura correta é um Function App
-      próprio ("Bring your own Functions") compartilhado pelas duas — decide
-      se `site/api` pode ser apagado de vez ou precisa continuar existindo
-      como *deploy target*.
-- [ ] Só depois da validação: apagar `site/api`, ajustar os workflows. Pasta
-      `site/` fica só com o Astro (`site/src`, `site/public`) — cosmético,
-      renomear ou não é decisão de baixo risco pra essa hora.
+- [x] **Resolvido sem precisar testar em homologação (14/09) — é uma
+      limitação documentada da própria plataforma, não uma dúvida de
+      tentativa e erro.** `az staticwebapp backends link --help` (Azure
+      CLI oficial) documenta: *"Only one backend is available to a single
+      static web app. If a backend was previously linked to another
+      static Web App, the auth configuration must first be removed from
+      the backend before linking to a different Static Web App."* — ou
+      seja, mesmo no modelo "Bring your own Functions" (Function App
+      próprio, dedicado), um único Function App só pode estar vinculado a
+      **uma** Static Web App de cada vez; vincular à segunda exigiria
+      desvincular da primeira. E o modelo hoje em uso (`api_location` no
+      próprio `azure-static-web-apps-deploy@v1`) é o modelo **gerenciado**
+      — cria uma Function App interna dedicada a cada Static Web App por
+      natureza, sem opção de compartilhamento nenhuma. **Conclusão
+      definitiva: as duas Static Web Apps (`app-meusite-web`,
+      `site-institucional`) não podem, em nenhum dos dois modelos,
+      compartilhar um único Function App.** `site/api` continua existindo
+      como *deploy target* próprio — não é mais uma dúvida em aberto, é a
+      arquitetura correta e permanente. vC.5 encerra aqui: o modelo já
+      está unificado (mesma técnica clássica dos dois lados, primeiro
+      item desta versão); só a *infraestrutura de deploy* continua sendo
+      duas Function Apps, por limitação real da plataforma, não por
+      escolha.
 
 ##### 🔒 Trava de Revisão C-A — meio da fase, fecha vC.1–vC.2
 

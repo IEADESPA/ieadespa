@@ -4795,15 +4795,108 @@ aplicada a uma campanha de arrecadação específica (v4.4, `GestaoCampanhas`
 
 #### 🔒 Trava de Revisão B-C — antes de encerrar a FASE B e avançar para a FASE 5
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita vB.11 a vB.17 pelas 5 perguntas do checklist, e faz uma varredura
-final na FASE B **inteira** (vB.1 a vB.17): a Esteira de Batismo (vB.11) e a
-Mediação/Arbitragem (vB.16) citam mecanismos que vêm da metade de
-infraestrutura (`TermosAssinados`, motor de notificação, motor de workflow)
-— confirmar que essas pontes realmente existem no código, não só no texto.
-Confirmar também que vB.17 (Camisetas) só grava `CongregacaoId` real depois
-que a vC.2 (FASE C) estiver de fato concluída — nunca em paralelo com dado
-ainda apontando pro Directus antigo.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditadas vB.11 a vB.17 pelas 5 perguntas do checklist
+      (17/09), mais varredura final na FASE B **inteira** (vB.1 a vB.17)
+      antes de fechar a fase. Fecha a FASE B: a partir daqui a FASE 5 pode
+      começar.
+
+  **1. Todo código novo roda de ponta a ponta contra o ambiente real?**
+  Sim — `npx jest` dentro de `api/` (o config vive lá, não na raiz): **24
+  suítes, 162 testes, todos passando**, batendo exatamente com o número que
+  o próprio texto de vB.16 já citava. `node --check` sem erro em todos os
+  arquivos novos/alterados (`shared/batismo.js`, `apresentacaoCriancas.js`,
+  `credenciamento.js`, `parecerViabilidade.js`, `textoMestre.js`,
+  `mediacaoArbitragem.js`, e as 7 rotas `GestaoTurmasBatismo`,
+  `GestaoCandidatosBatismo`, `GestaoApresentacaoCriancas`,
+  `ApresentacaoCriancaPdf`, `GestaoCredenciamento`,
+  `GestaoMediacoesArbitragens`, `GestaoTextoMestre`). Migrações 086-091
+  confirmadas idempotentes de verdade (`IF OBJECT_ID(...) IS NULL` antes de
+  `CREATE TABLE`, guarda equivalente antes de `ALTER TABLE`/seed), não só
+  "parecem". As 7 rotas conferidas nome-a-nome e parâmetro-a-parâmetro entre
+  `function.json` e os `fetch` de `app/script.js` — nenhuma divergência.
+  vB.17 (Camisetas) reconferido no **código de hoje**, não só no commit
+  citado: `site/src/pages/camiseta/[slug].astro`,
+  `site/api/CriarPedidoCamiseta/index.js` e
+  `painel-camisetas/grupo/pedidos.astro` gravam e resolvem `CongregacaoId`
+  real, exatamente como o texto descreve — única nuance registrada, não uma
+  divergência: `CriarPedidoCamiseta` foi movido de modelo de função
+  (`site/api/src/functions/...` → `site/api/CriarPedidoCamiseta/index.js`)
+  pelo commit `bf134ae` (vC.5, "nenhuma regra de negócio mudou", conferido
+  no código: a lógica de `congregacao` é a mesma).
+
+  **2. Toda tela nova abre e mostra dado de verdade?** As 5 telas novas do
+  período (aba "👶 Apresentação de Filhos", botão "🪪 Credenciamento", aba
+  "🤝 Mediação e Arbitragem", painel "📖 Texto Mestre Consolidado", botão
+  "📋 Parecer de Viabilidade") auditadas `id` a `id` entre
+  `getElementById`/`querySelector` e o HTML real — nenhum órfão, nenhum
+  repeat do bug do painel Financeiro que originou esta convenção.
+
+  **3. README e código continuam narrando a mesma coisa?** Toda tabela,
+  arquivo e função citados em vB.11-vB.17 existem exatamente como descrito
+  (`shared/estatuto.js::idadeEm/diasDesde`,
+  `shared/parentesco.js::existeParentescoAte2Grau`,
+  `shared/diretoria.js::CARGOS_CONSELHO_CONSULTIVO`/
+  `ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA`,
+  `shared/universo.js::composicaoColegioDirigentes`/
+  `membrosComCartaMudancaEmitida`,
+  `shared/disciplina.js::membrosSobDisciplina`). Todas as referências
+  cruzadas (`v1.9`, `v6.9`, `vB.6`, `v2.7`, `v2.9`, `v2.1`, `v4.5`, `v4.8`,
+  `v4.11`, `v3.7`, `v7.2`, `v2.8`, `v0.3`, `v3.4`, `v4.1.3`, `v4.10`,
+  `v7.5`) apontam pra seções reais. As limitações "documentadas, não
+  escondidas" seguem verdadeiras hoje: v7.2 inteira ainda `[ ]`;
+  `PareceresComissao` segue FK só a `Projetos`; `SaidasTesouraria` segue
+  sem `OrigemTipo`/`OrigemId` genérico (só `RepassesInstitucionais` tem);
+  ata continua vivendo em `Documentos` (`Tipo='ATA'`), sem tabela própria;
+  `ArtigoNumero`/`TextoArtigo` seguem em **zero** ocorrências em todo o
+  código. Confirmado também que a vC.2 (pré-condição de vB.17) está de
+  fato fechada — Travas C-A e C-B ambas `[x]`, migração de dado conferida
+  linha a linha — e que os 3 arquivos de camiseta não têm mais nenhum
+  resquício de relação Directus-Directus antiga em paralelo.
+
+  **4. O que ficou pra trás foi de fato corrigido, não só anotado?**
+  Nenhum `TODO`/`FIXME`/`HACK` não documentado encontrado em nenhum arquivo
+  novo/alterado de vB.11 a vB.17 (os únicos matches de busca eram a palavra
+  portuguesa "todo/todos", falso positivo). As limitações reais que existem
+  (discipulado atestado manualmente até v6.9, prazo de mediação
+  parametrizado, vínculo acordo→Saída como FK opcional, decisão de
+  campanha de camiseta em vB.17) já estavam documentadas no próprio texto,
+  não escondidas.
+
+  **Pontes de infraestrutura (Esteira de Batismo e Mediação/Arbitragem)
+  confirmadas reais, não só no texto**: `shared/batismo.js::
+  registrarAceiteEstatuto` e `shared/mediacaoArbitragem.js::
+  registrarAceiteClausulaCompromissoria` fazem `INSERT` real em
+  `TermosAssinados` (hash SHA-256 do texto, não simulação); os dois pontos
+  do ciclo de vida citados pelo texto (`GestaoTermos` ao assinar
+  `COMPROMISSO_DIRIGENTE`, `GestaoCandidatosBatismo` ao aceitar o
+  Estatuto/Regimento) chamam essa função de verdade. A ponte com a FASE 3
+  (`criarProcessoDisciplinar`, bifurcação) também é real e compartilhada
+  com a Ouvidoria (v3.7). O texto de vB.16 não afirma integração direta com
+  o motor de notificação (só alerta de prazo calculado na leitura, mesmo
+  padrão dos prazos disciplinares) — não há contradição a corrigir aí.
+
+  **5. Deploy real, de ponta a ponta, aconteceu?** Sim. `gh run list`
+  confirma `success` no workflow "Governança - CI/CD" para os 7 commits de
+  vB.11 a vB.17 (`7cbf1de`, `4e16051`, `1b96fd2`, `3cc2a15`, `68943f9`,
+  `920d569`, `43b030b`). Branch local sincronizada de verdade com
+  `origin/main` (mesmo commit em ambos, não só "parece"). Testado ao vivo:
+  `https://app.ieadespa.org.br/` responde `200`.
+
+  **Observação operacional à parte (fora do escopo de vB.11-vB.17, não
+  bloqueia esta trava)**: o workflow agendado "Rotinas diárias
+  (notificações e escalonamento)" falhou 2 vezes recentes (16/09 e 17/09,
+  job de avaliação de regras de notificação da vB.2, exit code 22) — já
+  rastreado em issue `.github#6`, registrado aqui só pra não passar batido
+  numa trava futura.
+
+  **Varredura final da FASE B inteira (vB.1 a vB.17):** todos os 17
+  cabeçalhos existem; de toda a fase, só 2 itens seguem `- [ ]`, e os dois
+  com justificativa explícita ao lado (não esquecimento): vB.5
+  (self-service ampliado, encaminhado nomeadamente pra v5.6/v7.4/v7.13/
+  v7.10/fim da FASE 12) e vB.17 (decisão de campanha de camiseta virar
+  `Campanha`/`ContasAReceber`, em aberto de propósito até haver volume real
+  de vendas). Nenhum `[x]` fabricado, nenhuma referência cruzada quebrada.
 
 ### FASE 5 — Departamentos e Relatórios
 

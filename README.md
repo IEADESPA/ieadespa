@@ -4900,33 +4900,139 @@ aplicada a uma campanha de arrecadação específica (v4.4, `GestaoCampanhas`
 
 ### FASE 5 — Departamentos e Relatórios
 
+> **Fonte desta fase**: protótipo conceitual `relatorios-departamentos` (React/
+> Vite, sem backend, **liberado pra consulta e reaproveitamento de ideias e
+> código**), com 6 documentos de levantamento (docs/01 a 07) construídos em
+> cima de **planilhas reais em PDF dos 8 departamentos** (algumas preenchidas
+> com dados de exemplo de janeiro/2026). Não é uma spec fabricada — os campos,
+> métodos de rateio e regras de perfil abaixo vêm direto da operação real.
+> O protótipo foi desenhado como sistema **standalone** (própria estrutura
+> Campo→Área→Congregação, próprio login por matrícula manualmente cadastrada,
+> porque "o sistema de gestão de membros não é integrável") — aqui **não
+> vale**: a IEADESPA-mega já TEM essa estrutura, login e cadastro de membros
+> prontos desde a FASE 0/1, então essa parte do protótipo não se aproveita,
+> só a modelagem de departamento/relatório/rateio em cima dela.
+
 #### v5.1 — Catálogo de departamentos
 
-- [ ] 8 tipos fixos (UCADESPA, UMADESPA, USADESPA, UHADESPA, SEMIADESPA, Ação da Fé, EBD, Família).
-- [ ] Cadastro de novos tipos de departamento (futuro).
-- [ ] Vínculo departamento × congregação (toda congregação tem os 8).
+- [x] 8 tipos fixos (UCADESPA, UMADESPA, USADESPA, UHADESPA, SEMIADESPA, Ação da Fé, EBD, Família).
+- [x] Cadastro de novos tipos de departamento (futuro).
+- [x] Vínculo departamento × congregação (toda congregação tem os 8).
+
+  **Confirmado: já entregue pela v2.7 + `GestaoCatalogos`, nenhum código
+  novo necessário.** A varredura contra o protótipo mostrou que o "Fase 0"
+  dele (catálogo fixo de 8 tipos + permitir cadastrar novos) já é exatamente
+  o que a v2.7 (migração 030) e o `GestaoCatalogos` genérico resolvem aqui:
+  `Departamentos` já tem os 8 (`Tipo='DEPARTAMENTO'` para
+  UCADESPA/UMADESPA/USADESPA/UHADESPA, `Tipo='SECRETARIA_ADJUNTA'` para
+  EBD/FAMILIA/SEMIADESPA/ACAO_DA_FE) e já aceita `numero`/`sigla`/`nome`/
+  `tipo`/`ativo` via CRUD genérico (`api/GestaoCatalogos/index.js:22-25`) —
+  cadastrar um 9º tipo já funciona hoje, sem alteração de código.
+  "Vínculo departamento × congregação (toda congregação tem os 8)" **não**
+  vira uma tabela de junção: nenhuma linha física por congregação é criada
+  (evitaria 40 congregações × 8 = 320 linhas sem informação própria) — o
+  vínculo é **implícito por convenção** e só passa a existir de fato quando
+  a v5.2 criar o primeiro `RelatorioDepartamental` daquela congregação+tipo;
+  mesmo espírito de "calculado, não cadastrado" já usado em toda a FASE B.
 
 #### v5.2 — Relatórios departamentais (formulário dinâmico)
 
-- [ ] `SchemaRelatorio` versionado por tipo de departamento.
-- [ ] `CamposFormulario` com grupo (contagem/ações/eventos/integração/financeiro) e
-      comportamento (estado = pré-preenche; fluxo = zera).
-- [ ] Blocos compartilhados Eventos e Integração (estrutura reutilizável).
-- [ ] Lista nominal de contribuintes (mensalidade).
+Campos por departamento levantados das planilhas reais (ver protótipo,
+`docs/04-departamentos-secretarias.md`) — cada um com bloco de **contagem**
+e **ações** próprios, mas **Eventos** (Local/Área/Geral) e **Integração**
+(Conversão/Reconciliação/De Outra Igreja) **idênticos nos 8**, e por isso
+modelados como estrutura compartilhada, não repetida por tipo:
+
+| Nº | Depto | Contagem (resumo) | Financeiro |
+|---|---|---|---|
+| 01 | UCADESPA | Congregados, Visitantes | Mensalidades, Ofertas, Campanhas, Outros |
+| 02 | UMADESPA | Em Comunhão, Sem Comunhão, Congregados | idem |
+| 03 | USADESPA | idem + Matriculadas/Não Matriculada | idem |
+| 04 | UHADESPA | idem + Matriculados/Não Matriculado | idem |
+| 05 | SEMIADESPA | Bíblias/Folhetos distribuídos, Discipulado I/II | Mensalidades (lista nominal extensa), Ofertas, Campanhas |
+| 06 | Ação da Fé | Cestas, KG por item (18 itens rastreados: arroz, feijão, óleo...) | Contribuições, Ofertas, Campanha |
+| 07 | EBD | Presentes/Ausentes/Visitantes, Bíblias, Revistas, **granularidade semanal (1º-5º domingo)** | só Ofertas (sem mensalidade/campanha) |
+| 08 | Família | Famílias Crentes/Não Crentes/Único Membro | Mensalidades, Ofertas, Campanhas, Outros |
+
+- [ ] `SchemaRelatorio` versionado por `TipoDepartamento` (`DepartamentoId`
+      do catálogo v5.1) — muda de campo/rateio no meio do ano sem afetar
+      relatórios já enviados (mesmo princípio de versão vigente já usado no
+      Texto Mestre, vB.15).
+- [ ] `CamposFormulario` com grupo (`contagem`/`acoes`/`eventos`/
+      `integracao`/`financeiro`) e comportamento: `estado` = pré-preenche
+      com o valor do último relatório enviado daquela congregação+depto
+      (o líder só corrige o que mudou, tipo IR pré-preenchido); `fluxo` =
+      sempre começa zerado (é específico do mês).
+- [ ] Blocos **Eventos** e **Integração** como estrutura compartilhada
+      (mesmo schema pros 8 tipos) — a consolidação campal soma através de
+      todos os departamentos, então não pode ser recriada por tipo.
+- [ ] EBD ganha uma sub-estrutura própria: aba semanal (1º ao 5º domingo)
+      com os mesmos campos, que soma no total do mês — único departamento
+      com essa granularidade; rótulo do papel local é "Superintendente
+      Local" em vez de "Líder Local" (mesma permissão, rótulo diferente,
+      guardado no `TipoDepartamento`).
+- [ ] Lista nominal de contribuintes de mensalidade (nome + valor), alimenta
+      o total de Mensalidades do bloco financeiro.
+- [ ] **Decisão de integração**: `Lideranca` ganha uma coluna nova,
+      **`DepartamentoId` (nullable)**, ortogonal ao `EscopoTipo`/`EscopoId`
+      territorial já existente — quando `NULL`, o papel enxerga todos os
+      departamentos daquele escopo (é assim que Dirigente de Congregação e
+      Pastor de Área já funcionam, sem mudança); quando preenchido, restringe
+      o papel a um departamento só. Resolve, com **uma coluna aditiva**, os
+      3 papéis que o protótipo modela e que não existem ainda: **Líder Local**
+      (`EscopoTipo=CONGREGACAO` + `DepartamentoId`), **Líder de Área do
+      departamento** (`EscopoTipo=AREA` + `DepartamentoId`) e reaproveita
+      **Líder Geral** já criado na v2.7 (`EscopoTipo='DEPARTAMENTO'`, campo
+      inteiro) sem alterá-lo.
 
 #### v5.3 — Fluxo de aprovação (2 camadas)
 
-- [ ] Preenchimento pelo Líder Local / Dirigente (última edição vale).
-- [ ] Aprovação de Área (Líder de Área/Pastor de Área) — não edita valores, só aprova/comenta.
-- [ ] Aprovação Geral (Líder Geral) — pode corrigir valores; aprovação definitiva.
-- [ ] Retificação só pelo Presidente/Secretário Geral após fechado.
+- [ ] Preenchimento pelo Líder Local **ou** Dirigente da Congregação
+      (Dirigente pode sobrepor qualquer departamento da própria congregação)
+      — se os dois editarem antes do envio, **a última edição é a que
+      segue** pra revisão (sem mesclar).
+- [ ] Aprovação de Área (Líder de Área do depto, ou Pastor de Área que vê
+      todos) — **só aprova ou comenta, nunca edita valor**; aprovar bloqueia
+      edição do Líder Local (`status = 'aprovado_area'`).
+- [ ] Aprovação Geral (Líder Geral do depto) — **pode corrigir valores
+      diretamente** (não existe upload de comprovante no sistema — decisão
+      deliberada do protótipo, confirmada aqui também — então é o Líder
+      Geral quem bate o relatório contra o caixa real e ajusta); aprovação
+      **definitiva e superior** à de Área (`status = 'aprovado_geral'`).
+- [ ] Retificação só pelo Presidente/Secretário Geral após `aprovado_geral`
+      — única forma de alterar um relatório já fechado.
+- [ ] Envio fora do prazo é permitido, mas marca `atrasado`; cabe ao Líder
+      Geral decidir se entra no fechamento do mês de referência ou rola pro
+      seguinte — campos `estado` não duplicam (só substituem), campos
+      `fluxo` somam no período em que forem de fato integrados.
+- [ ] `HistoricoEdicao` obrigatório em toda edição (quem, o quê, quando, com
+      que papel) — reaproveita `shared/auditoria.js::registrarAuditoria`
+      já usado em todo o resto do sistema, não uma tabela de log nova.
 - [ ] Nenhum relatório é aprovado automaticamente.
 
 #### v5.4 — Tesouraria central por departamento
 
-- [ ] `TesourariasDepartamento` (livro-caixa central) + `Despesas`.
-- [ ] `PerfisRateio` configuráveis (integral/percentual/mensalidade/variável).
-- [ ] Rateio local/geral linha a linha.
+- [ ] `TesourariasDepartamento` (livro-caixa central, 1 por depto/mês):
+      saldo transportado do mês anterior, movimentação geral do mês (soma
+      do "para o geral" de todos os relatórios aprovados), investido local,
+      entrada geral, **suporte para Secretaria Geral** (dedução extra
+      **facultativa por departamento** — a maioria não usa, ex. SEMIADESPA
+      usa — não é fórmula, é opção configurada no perfil de rateio), +
+      `DespesasTesouraria` (lançamentos livres do Líder Geral) → saldo do mês.
+- [ ] `PerfisRateio` por `SchemaRelatorio`, com **5 métodos reais**
+      confirmados nas planilhas (não 4 — o rascunho anterior citava só
+      integral/percentual/mensalidade/variável): **integral geral** (100%
+      sobe), **integral local** (100% fica — caso do EBD hoje), **taxa fixa
+      de mensalidade** (ex. USADESPA), **percentual** (ex. 40% geral na
+      Família) e **variável/manual** (decidido lançamento a lançamento, ex.
+      UHADESPA — não é inconsistência de dado, é o método daquele depto).
+      Cada perfil registra também o **modo de entrada**: `bruto_calculado`
+      (sistema divide o valor informado) ou `líquido_manual` (quem preenche
+      já lança só a parte que sobe, sem o sistema recalcular — confirmado em
+      departamentos que usam percentual, pra simplificar o preenchimento).
+- [ ] Rateio local/geral calculado linha a linha no relatório mensal
+      (camada 1), consolidado na tesouraria do depto (camada 2) — duas
+      camadas financeiras, não uma.
 - [ ] Saldo transportado mês a mês.
 - [ ] **Autonomia de arrecadação/gasto dos departamentos** (Estatuto, Art. 49)
       — vinha adiada de `v2.7` (item 5): Departamentos/Áreas/Congregações
@@ -4939,8 +5045,10 @@ aplicada a uma campanha de arrecadação específica (v4.4, `GestaoCampanhas`
       existirem de verdade — não tem como controlar autonomia de caixa sem
       caixa.
 - [ ] **Saldo virtual individualizado dentro da conta única** (Reg. Art. 133-C
-      §1º) — mesmo mecanismo de Centro de Custo já provado na v4.1.3/v4.10:
-      o departamento tem saldo próprio sem ter conta bancária própria.
+      §1º) — mesmo mecanismo de Centro de Custo já provado na v4.1.3/v4.10
+      (`shared/tesouraria.js::saldoCentroCusto`): o departamento tem saldo
+      próprio sem ter conta bancária própria — reaproveitar a função, não
+      recriar o cálculo.
 - [ ] **Bloqueio automático por balancete não entregue** (Reg. Art. 133-C §2º):
       *"a não apresentação do balancete mensal bloqueia imediatamente a liberação
       de novos recursos"*. É bloqueio, não alerta — e é calculado na leitura
@@ -4953,8 +5061,13 @@ aplicada a uma campanha de arrecadação específica (v4.4, `GestaoCampanhas`
 
 #### v5.5 — Integração automática EBD + 4 departamentos
 
-- [ ] EBD alimenta o depto 07 (presenças, matriculados, visitantes, bíblias, revistas, ofertas).
-- [ ] UCADESPA/UMADESPA/USADESPA/UHADESPA puxam afiliados + situação de comunhão.
+- [ ] EBD alimenta o depto 07 (presenças, matriculados, visitantes, bíblias, revistas, ofertas) —
+      liga com a FASE 6 (`chamada-ebd`) quando ela existir; até lá, o campo
+      07 recebe lançamento manual como os outros 7.
+- [ ] UCADESPA/UMADESPA/USADESPA/UHADESPA puxam afiliados + situação de
+      comunhão direto de `MembroReferencia.DepartamentoId`/`SituacaoMembro`
+      — pré-preenche o bloco de contagem (`estado`) sem o líder local
+      recontar manualmente.
 
 #### 🔒 Trava de Revisão 5-A — antes de avançar para a v5.6
 

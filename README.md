@@ -5095,6 +5095,16 @@ modelados como estrutura compartilhada, não repetida por tipo:
   com nomes de campo diferentes por departamento (Ação da Fé)) e
   `node --check` em todos os arquivos novos/alterados.
 
+  **Verificado ao vivo em produção** (login real, matrícula 1/Presidente):
+  catálogo de departamentos bate 100% com o seed da 092 (IDs 1-8, siglas e
+  `Tipo` exatos). Achado real: a permissão `relatorios_departamentais`
+  **não estava concedida a ninguém** ainda — mesmo padrão de toda permissão
+  nova (nunca é automática). `sql/migrations/093_permissao_relatorios_departamentais.sql`
+  concede a Presidente/Secretário Geral (GLOBAL), aditivo na string CSV de
+  `Papeis.Permissoes`, idempotente. Efeito só no próximo login (o token já
+  emitido continua com a permissão antiga até expirar/relogar — mesmo
+  comportamento de qualquer mudança de permissão no sistema).
+
 #### v5.3 — Fluxo de aprovação (2 camadas)
 
 - [ ] Preenchimento pelo Líder Local **ou** Dirigente da Congregação

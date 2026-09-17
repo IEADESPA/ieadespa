@@ -5103,9 +5103,34 @@ modelados como estrutura compartilhada, não repetida por tipo:
 
 #### v5.5 — Integração automática EBD + 4 departamentos
 
-- [ ] EBD alimenta o depto 07 (presenças, matriculados, visitantes, bíblias, revistas, ofertas) —
-      liga com a FASE 6 (`chamada-ebd`) quando ela existir; até lá, o campo
-      07 recebe lançamento manual como os outros 7.
+**Princípio (vale pra esta versão e pra qualquer fase de trabalho dedicada
+que vier depois, não só EBD): relatório não é trabalho.** A FASE 5 é **sempre**
+a camada de relato/consolidação mensal — existe pra todos os 8, sempre.
+Quando um departamento ganha uma **fase de trabalho** própria (dia a dia,
+operacional — hoje só a EBD tem, na FASE 6; amanhã pode ser Ação da Fé com
+seu módulo de assistência social, reservado mas não construído), essa fase
+não substitui o relatório da v5.2 nem duplica lançamento nela — ela
+**exporta** o consolidado do período pro relatório, que o Líder
+Local/Superintendente só **confirma ou ajusta** (nunca digita do zero o que
+o sistema de trabalho já mediu de verdade). O que a fase de trabalho **não**
+consegue quantificar (ex: uma ação qualitativa, um evento que não tem
+contador automático) continua sendo preenchido manualmente no relatório,
+porque é isso que o relatório é: onde se registra o que existe, venha de
+onde vier.
+
+- [ ] EBD alimenta o depto 07 (presenças, matriculados, visitantes, bíblias,
+      revistas, ofertas) a partir da FASE 6 (`chamada-ebd`) quando ela
+      existir, pré-preenchendo o relatório do mês pro Superintendente Local
+      confirmar/ajustar — nunca digitado do zero enquanto a FASE 6 já mediu.
+      Até a FASE 6 existir, o campo 07 recebe lançamento manual como os
+      outros 7 (é o relatório funcionando sem a fase de trabalho por trás,
+      não um bloqueio).
+- [ ] Financeiro da EBD (v6.7) segue o mesmo princípio: o dia a dia (ofertas
+      lançadas por congregação) mora na FASE 6, perto de onde o trabalho
+      acontece; o consolidado do mês **exporta** pra `TesourariasDepartamento`
+      (v5.4, depto EBD) — é a v5.4, não a v6.7, quem concilia com o Centro de
+      Custo geral da FASE 4, exatamente pelo mesmo caminho que os outros 7
+      departamentos usam.
 - [ ] UCADESPA/UMADESPA/USADESPA/UHADESPA puxam afiliados + situação de
       comunhão direto de `MembroReferencia.DepartamentoId`/`SituacaoMembro`
       — pré-preenche o bloco de contagem (`estado`) sem o líder local
@@ -5309,8 +5334,14 @@ reaproveitados por meia dúzia de módulos diferentes ao longo da FASE B.
 
 #### v6.7 — Financeiro da EBD
 
-- [ ] Ofertas + lançamentos manuais por congregação.
-- [ ] Integração com a tesouraria central (FASE 4).
+- [ ] Ofertas + lançamentos manuais por congregação — dia a dia, aqui na
+      FASE 6, perto de onde o trabalho acontece.
+- [ ] Exporta o consolidado do mês pra `TesourariasDepartamento` (v5.4,
+      depto EBD) — **não** integra direto com a FASE 4: quem concilia com o
+      Centro de Custo geral é a v5.4, mesmo caminho dos outros 7
+      departamentos (ver princípio "relatório não é trabalho" na v5.5). A
+      EBD só chega lá com o financeiro do mês já pronto, em vez de digitado
+      do zero.
 
 #### 🔒 Trava de Revisão 6-A — antes de avançar para a v6.8
 

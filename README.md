@@ -4996,26 +4996,26 @@ modelados como estrutura compartilhada, não repetida por tipo:
 | 07 | EBD | Presentes/Ausentes/Visitantes, Bíblias, Revistas, **granularidade semanal (1º-5º domingo)** | só Ofertas (sem mensalidade/campanha) |
 | 08 | Família | Famílias Crentes/Não Crentes/Único Membro | Mensalidades, Ofertas, Campanhas, Outros |
 
-- [ ] `SchemaRelatorio` versionado por `TipoDepartamento` (`DepartamentoId`
+- [x] `SchemaRelatorio` versionado por `TipoDepartamento` (`DepartamentoId`
       do catálogo v5.1) — muda de campo/rateio no meio do ano sem afetar
       relatórios já enviados (mesmo princípio de versão vigente já usado no
       Texto Mestre, vB.15).
-- [ ] `CamposFormulario` com grupo (`contagem`/`acoes`/`eventos`/
+- [x] `CamposFormulario` com grupo (`contagem`/`acoes`/`eventos`/
       `integracao`/`financeiro`) e comportamento: `estado` = pré-preenche
       com o valor do último relatório enviado daquela congregação+depto
       (o líder só corrige o que mudou, tipo IR pré-preenchido); `fluxo` =
       sempre começa zerado (é específico do mês).
-- [ ] Blocos **Eventos** e **Integração** como estrutura compartilhada
+- [x] Blocos **Eventos** e **Integração** como estrutura compartilhada
       (mesmo schema pros 8 tipos) — a consolidação campal soma através de
       todos os departamentos, então não pode ser recriada por tipo.
-- [ ] EBD ganha uma sub-estrutura própria: aba semanal (1º ao 5º domingo)
+- [x] EBD ganha uma sub-estrutura própria: aba semanal (1º ao 5º domingo)
       com os mesmos campos, que soma no total do mês — único departamento
       com essa granularidade; rótulo do papel local é "Superintendente
       Local" em vez de "Líder Local" (mesma permissão, rótulo diferente,
       guardado no `TipoDepartamento`).
-- [ ] Lista nominal de contribuintes de mensalidade (nome + valor), alimenta
+- [x] Lista nominal de contribuintes de mensalidade (nome + valor), alimenta
       o total de Mensalidades do bloco financeiro.
-- [ ] **Decisão de integração**: `Lideranca` ganha uma coluna nova,
+- [x] **Decisão de integração**: `Lideranca` ganha uma coluna nova,
       **`DepartamentoId` (nullable)**, ortogonal ao `EscopoTipo`/`EscopoId`
       territorial já existente — quando `NULL`, o papel enxerga todos os
       departamentos daquele escopo (é assim que Dirigente de Congregação e
@@ -5026,6 +5026,66 @@ modelados como estrutura compartilhada, não repetida por tipo:
       departamento** (`EscopoTipo=AREA` + `DepartamentoId`) e reaproveita
       **Líder Geral** já criado na v2.7 (`EscopoTipo='DEPARTAMENTO'`, campo
       inteiro) sem alterá-lo.
+
+  Implementado: `sql/migrations/092_relatorios_departamentais.sql` cria
+  `SchemasRelatorioDepartamental` (vigência por `DataVigenciaInicio`/`Fim`,
+  mesmo padrão de versão vigente da vB.15), `CamposFormularioDepartamental`
+  (grupo/comportamento/tipoDado, `PermiteSemanal` **por campo**, não por
+  schema — "o schema tem modo semanal" nunca é digitado à parte, é sempre
+  `campos.some(c => c.permiteSemanal)`, calculado em
+  `shared/relatoriosDepartamentais.js::buscarSchemaVigente`),
+  `RelatoriosDepartamentais` (Eventos/Integração como colunas fixas, não
+  linhas por schema — literalmente a mesma estrutura para os 8),
+  `ValoresCampoRelatorioDepartamental` (EAV só pros campos que variam por
+  depto; `NumeroDomingo` nullable resolve semanal x mensal na mesma tabela)
+  e `ContribuintesMensalidadeDepartamental`. Seed dos 8 departamentos
+  transcrito campo a campo do protótipo (`docs/04-departamentos-secretarias.md`),
+  incluindo os 18 itens de cesta da Ação da Fé.
+
+  **"Total do Local" citado no protótipo ficou de fora, de propósito**: sem
+  a planilha física em mãos pra confirmar quais campos entram exatamente
+  nessa soma por departamento, calcular um número errado seria pior que não
+  calcular nenhum — limitação documentada na própria migração, não
+  fabricada. Os únicos totais calculados no código são identidades
+  aritméticas do nome do próprio campo, sem ambiguidade nenhuma: soma das 5
+  semanas da EBD, e `calcularIndicadoresEbd` (Total de Presença = Presentes
+  + Visitantes; % Presença/Ausência sobre Matriculados).
+
+  `shared/relatoriosDepartamentais.js`: `buscarSchemaVigente`,
+  `buscarValoresParaPrePreencher` (só campos `ESTADO`, do relatório anterior
+  mais recente da mesma congregação+depto), `calcularTotalIntegracao`,
+  `somarValoresSemanais`, `calcularIndicadoresEbd`. `api/GestaoRelatoriosDepartamentais`
+  (`GET`/`POST`/`PUT` `relatorios-departamentais/{id?}/{acao?}`) — escopo
+  duplo em toda rota: `auth.estaNoEscopo` (territorial, já existente) **e**
+  `auth.podeDepartamento` (novo — `usuario.departamentoId` nulo enxerga
+  todos, preenchido restringe a um só). `POST` sem `id` é get-or-create
+  idempotente (mesmo padrão de `gerarOuObterRelatorioCredenciamento`, vB.13);
+  `PUT` só aceita edição enquanto `Status = 'RASCUNHO'` — o resto da máquina
+  de estados (`ENVIADO`/`APROVADO_ÁREA`/`APROVADO_GERAL`/`RETIFICADO`) é
+  escopo da v5.3, não fabricado aqui.
+
+  `LoginSecretaria` passou a incluir `Lideranca.DepartamentoId` na sessão
+  (`usuario.departamentoId`). **Limitação documentada, herdada do próprio
+  desenho de sessão já existente**: como o login escolhe **1 vínculo de
+  Lideranca** por amplitude territorial (`RANKING_NIVEL`, vB.9) quando há
+  mais de um, alguém que seja Líder Local de 2 departamentos na mesma
+  congregação só loga com um deles por vez — mesma regra de sempre, agora só
+  mais visível porque multi-vínculo por departamento tende a ser comum.
+  Redesenhar sessão pra múltiplos vínculos simultâneos fica fora do escopo
+  desta versão.
+
+  Frontend: novo módulo "🗂️ Departamentos e Relatórios" (aba
+  `relatoriosdepto`, permissão `relatorios_departamentais`) — seleciona
+  congregação/departamento/mês/ano, abre o formulário dinâmico (grupos
+  Contagem/Ações/Financeiro gerados a partir do schema, Eventos/Integração
+  fixos, semanal só nos campos EBD marcados, lista de contribuintes só
+  aparece se o schema tiver campo `mensalidades`) e salva o rascunho.
+
+  Testado com `npx jest` (175 testes, incluindo 13 novos de
+  `shared/relatoriosDepartamentais.js`: soma de Integração, soma e
+  indicadores semanais da EBD, filtro de pré-preenchimento por
+  `ESTADO`, e `permiteSemanal` calculado a partir dos campos) e
+  `node --check` em todos os arquivos novos/alterados.
 
 #### v5.3 — Fluxo de aprovação (2 camadas)
 

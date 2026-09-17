@@ -19,6 +19,7 @@ module.exports = async function (context, req) {
   const pool = await getPool();
   const result = await pool.request().input("mat", sql.Int, matricula).query(`
     SELECT l.MembroId AS membroId, l.EscopoTipo AS escopoTipo, l.EscopoId AS escopoId, l.SenhaHash AS senhaHash,
+           l.DepartamentoId AS departamentoId,
            CONVERT(varchar(10), l.AtivoAte, 120) AS ativoAte,
            p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr, m.Nome AS nome
     FROM Lideranca l
@@ -81,6 +82,13 @@ module.exports = async function (context, req) {
     nivel: lideranca.papelNivel,
     escopoCongregacoes: escopoFinal,
     escopoExtensaoNome,
+    // v5.2 — Líder Local/de Área de um departamento específico (Lideranca.
+    // DepartamentoId). NULL = enxerga todos (Dirigente, Pastor de Área, sem
+    // mudança). Mesma limitação de sempre no "escolhe 1 vínculo por login"
+    // acima: alguém com Líder Local em 2 departamentos na mesma congregação
+    // só loga com um por vez, critério de amplitude territorial, não de
+    // departamento — documentado, não escondido.
+    departamentoId: lideranca.departamentoId || null,
     permissoes,
     termosPendentes: pendentes
   }, dispositivoInfo);

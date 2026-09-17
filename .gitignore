@@ -18,3 +18,11 @@ swa2.log
 
 # Banco mock local — não é banco de verdade, só desenvolvimento
 api/data/mockdb.json
+
+# Material de referência conceitual (protótipos externos usados como ideia
+# pra FASE 5/6 — ver README) — nunca vira código do repo, e o .rar da EBD
+# sozinho já passa de 400MB.
+/relatorios-departamentos.rar
+/relatorios-departamentos/
+/chamada-ebd.rar
+/chamada-ebd/

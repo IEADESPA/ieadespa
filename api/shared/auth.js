@@ -195,6 +195,16 @@ function estaNoEscopo(usuario, congregacaoNome) {
   return usuario.escopoCongregacoes.includes(congregacaoNome);
 }
 
+// v5.2 — Lideranca.DepartamentoId (nullable, ortogonal ao EscopoTipo/EscopoId
+// territorial): NULL enxerga todos os departamentos daquele escopo (é assim
+// que Dirigente de Congregação e Pastor de Área já funcionam, sem mudança
+// nenhuma neles); preenchido, restringe o papel a um departamento só (Líder
+// Local, Líder de Área do departamento — papéis novos da v5.2).
+function podeDepartamento(usuario, departamentoId) {
+  if (!usuario.departamentoId) return true;
+  return Number(usuario.departamentoId) === Number(departamentoId);
+}
+
 // v4.5 — alçada de valor (Saídas): quanto maior o valor, mais "largo"
 // precisa ser o nível de quem aprova. Não existia nenhuma comparação de
 // amplitude entre níveis territoriais no sistema (só igualdade exata,
@@ -221,4 +231,4 @@ function exigirNivelGlobal(req, context) {
   return usuario;
 }
 
-module.exports = { hashSenha, verificarSenha, criarSessao, reassinarSessao, encerrarSessao, listarSessoes, encerrarSessaoEspecifica, getSessao, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, nivelAtingeMinimo, RANKING_NIVEL };
+module.exports = { hashSenha, verificarSenha, criarSessao, reassinarSessao, encerrarSessao, listarSessoes, encerrarSessaoEspecifica, getSessao, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, podeDepartamento, nivelAtingeMinimo, RANKING_NIVEL };

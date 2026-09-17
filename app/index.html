@@ -230,6 +230,12 @@
             <button class="btn-aba" id="btnAbaMediacao" onclick="mostrarAbaSecretaria('mediacao')"><span class="icone">🤝</span><span class="rotulo">Mediação e Arbitragem</span></button>
           </div>
 
+          <!-- MÓDULO: DEPARTAMENTOS E RELATÓRIOS (v5.2) -->
+          <div class="grupo-modulo" id="grupoModuloDepartamentos" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaRelatoriosdepto" onclick="mostrarAbaSecretaria('relatoriosdepto')"><span class="icone">🗂️</span><span class="rotulo">Relatórios de Departamentos</span></button>
+          </div>
+
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
           <div class="grupo-modulo" id="grupoModuloConformidade" style="display:none;">
             <hr class="divisor-sidebar" />
@@ -2100,6 +2106,30 @@
         <h4>Casos</h4>
         <div class="rolagem-tabela"><div id="resultadoListaMediacoes"></div></div>
         <div id="painelDetalheMediacao"></div>
+      </div>
+
+      <!-- ABA: RELATÓRIOS DE DEPARTAMENTOS (v5.2 — formulário dinâmico) -->
+      <div id="abaRelatoriosdepto" class="aba-secretaria" style="display:none;">
+        <h3>🗂️ Relatórios de Departamentos e Secretarias</h3>
+        <p class="subtitle">Relatório mensal por congregação — Contagem, Ações, Eventos, Integração e
+          Financeiro. Campos de estado vêm pré-preenchidos do último relatório enviado; você só
+          corrige o que mudou.</p>
+
+        <div class="barra-lista">
+          <select id="rdCongregacao"></select>
+          <select id="rdDepartamento"></select>
+          <select id="rdMes">
+            <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+            <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+            <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+            <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+          </select>
+          <input type="number" id="rdAno" placeholder="Ano" style="max-width:100px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="abrirRelatorioDeptoAcao()">📂 Abrir</button>
+        </div>
+        <p id="resultadoRelatorioDepto"></p>
+
+        <div id="painelRelatorioDepto"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

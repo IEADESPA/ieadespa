@@ -861,7 +861,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -872,7 +872,8 @@ const ABA_PERMISSOES_ALT = {
   congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"],
   abandono: ["disciplina"],
   enquetes: ["reunioes", "assembleia"],
-  arquivos: ["reunioes", "assembleia", "cli"]
+  arquivos: ["reunioes", "assembleia", "cli"],
+  relatoriosdepto: ["relatorios_departamentais"]
 };
 function permissoesDaAba(nome) {
   return ABA_PERMISSOES_ALT[nome] || [nome];
@@ -926,6 +927,7 @@ const MODULOS = {
   orgaosRegionais: { titulo: "Órgãos Regionais", icone: "🧭", abaEntrada: "reunioes", abas: ["reunioes"] },
   eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "enquetes", "arquivos"] },
   disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
+  departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
@@ -4924,6 +4926,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "protecaodedados") { carregarSolicitacoesDPO(); carregarPoliticasRetencao("resultadoListaPoliticasRetencaoDpo"); carregarRopa(); carregarRipd(); }
   if (aba === "ouvidoria") carregarPainelOuvidoria();
   if (aba === "mediacao") carregarMediacoes();
+  if (aba === "relatoriosdepto") carregarOpcoesRelatorioDepto();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -4937,7 +4940,7 @@ const TITULOS_MODULOS = {
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
   abandono: "Perda de Membresia",
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos",
-  mediacao: "Mediação e Arbitragem"
+  mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -11119,4 +11122,154 @@ async function bifurcarDisciplinarAcao(mediacaoId) {
   if (!membroId) return;
   if (!(await confirmarAcao("Bifurcar para Processo Disciplinar? A mediação continua seu curso normalmente, em paralelo.", "Bifurcar"))) return;
   await evoluirMediacaoAcao(mediacaoId, { acao: "BIFURCAR_DISCIPLINAR", membroId });
+}
+
+// ---- RELATÓRIOS DE DEPARTAMENTOS (v5.2 — formulário dinâmico) ----
+const ROTULO_GRUPO_RD = { CONTAGEM: "Contagem", ACOES: "Ações", FINANCEIRO: "Financeiro" };
+const NOMES_DOMINGO_RD = ["1º", "2º", "3º", "4º", "5º"];
+let _rdSchemaAtual = null;
+let _rdRelatorioIdAtual = null;
+
+async function carregarOpcoesRelatorioDepto() {
+  const selCong = document.getElementById("rdCongregacao");
+  const selDep = document.getElementById("rdDepartamento");
+  const inputAno = document.getElementById("rdAno");
+  if (!inputAno.value) inputAno.value = new Date().getFullYear();
+  document.getElementById("rdMes").value = String(new Date().getMonth() + 1);
+
+  if (!selCong.dataset.montado) {
+    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    selCong.dataset.montado = "1";
+  }
+  if (!selDep.dataset.montado) {
+    const deps = await (await fetch(`${API_BASE}/catalogos/departamentos`)).json();
+    selDep.innerHTML = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${d.nome}</option>`).join("");
+    selDep.dataset.montado = "1";
+  }
+}
+
+async function abrirRelatorioDeptoAcao() {
+  const congregacaoId = document.getElementById("rdCongregacao").value;
+  const departamentoId = document.getElementById("rdDepartamento").value;
+  const mesReferencia = document.getElementById("rdMes").value;
+  const anoReferencia = document.getElementById("rdAno").value;
+  const msg = document.getElementById("resultadoRelatorioDepto");
+  if (!congregacaoId || !departamentoId || !anoReferencia) { msg.textContent = "Escolha congregação, departamento e ano."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/relatorios-departamentais`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ congregacaoId, departamentoId, mesReferencia, anoReferencia })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { msg.textContent = data.mensagem; document.getElementById("painelRelatorioDepto").innerHTML = ""; return; }
+  msg.textContent = "";
+  renderizarPainelRelatorioDepto(data);
+}
+
+function campoInputAttrs(campo) {
+  return campo.tipoDado === "MOEDA" ? `type="number" step="0.01" min="0"` : `type="number" step="1" min="0"`;
+}
+
+function renderizarPainelRelatorioDepto(data) {
+  _rdSchemaAtual = data.schema;
+  _rdRelatorioIdAtual = data.relatorioDepartamentalId;
+  const container = document.getElementById("painelRelatorioDepto");
+  const rotuloLocal = data.schema.rotuloPapelLocal || "Líder Local";
+  const temMensalidade = data.schema.campos.some(c => c.nomeCampo === "mensalidades");
+
+  const gruposHtml = ["CONTAGEM", "ACOES", "FINANCEIRO"].map(grupo => {
+    const campos = data.schema.campos.filter(c => c.grupo === grupo);
+    if (campos.length === 0) return "";
+    const linhas = campos.map(c => {
+      if (c.permiteSemanal) {
+        const semanas = data.valoresSemanais[c.nomeCampo] || {};
+        const inputsSemana = NOMES_DOMINGO_RD.map((rotulo, i) => {
+          const n = i + 1;
+          return `<label style="display:inline-block;margin-right:8px;">${rotulo}<br/><input ${campoInputAttrs(c)} id="rdSemana_${c.nomeCampo}_${n}" value="${semanas[n] || 0}" style="width:70px;" /></label>`;
+        }).join("");
+        return `<div class="input-group"><label>${c.rotulo} (total do mês: ${data.valores[c.nomeCampo] || 0})</label><div>${inputsSemana}</div></div>`;
+      }
+      return `<div class="input-group"><label>${c.rotulo}</label><input ${campoInputAttrs(c)} id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
+    }).join("");
+    return `<h4>${ROTULO_GRUPO_RD[grupo]}</h4>${linhas}`;
+  }).join("");
+
+  const eventosHtml = `<h4>Eventos</h4>
+    <div class="input-group"><label>Local</label><input type="number" min="0" id="rdEventoLocal" value="${data.eventos.local}" /></div>
+    <div class="input-group"><label>Área</label><input type="number" min="0" id="rdEventoArea" value="${data.eventos.area}" /></div>
+    <div class="input-group"><label>Geral</label><input type="number" min="0" id="rdEventoGeral" value="${data.eventos.geral}" /></div>`;
+
+  const integracaoHtml = `<h4>Integração</h4>
+    <div class="input-group"><label>Conversão</label><input type="number" min="0" id="rdIntegConversao" value="${data.integracao.conversao}" /></div>
+    <div class="input-group"><label>Reconciliação</label><input type="number" min="0" id="rdIntegReconciliacao" value="${data.integracao.reconciliacao}" /></div>
+    <div class="input-group"><label>De Outra Igreja</label><input type="number" min="0" id="rdIntegDeOutraIgreja" value="${data.integracao.deOutraIgreja}" /></div>
+    <p class="subtitle">Total: ${data.integracao.total}</p>`;
+
+  const contribuintesHtml = temMensalidade ? `<h4>Contribuintes de Mensalidade</h4>
+    <div id="rdListaContribuintes">${(data.contribuintes || []).map(linhaContribuinteRd).join("")}</div>
+    <button type="button" class="btn-link" onclick="adicionarLinhaContribuinteRd()">➕ Adicionar contribuinte</button>` : "";
+
+  container.innerHTML = `
+    <p><strong>${rotuloLocal}:</strong> preenchendo ${data.congregacaoNome} — ${data.departamentoNome} — ${data.mesReferencia}/${data.anoReferencia}
+      (status: ${data.status})</p>
+    ${gruposHtml}
+    ${eventosHtml}
+    ${integracaoHtml}
+    ${contribuintesHtml}
+    <button class="btn-confirmar" onclick="salvarRelatorioDeptoAcao()">💾 Salvar Rascunho</button>
+  `;
+}
+
+function linhaContribuinteRd(c) {
+  return `<div class="barra-lista rd-linha-contribuinte">
+    <input type="text" class="rd-contribuinte-nome" placeholder="Nome" value="${(c && c.nome) || ""}" style="min-width:200px;" />
+    <input type="number" class="rd-contribuinte-valor" step="0.01" min="0" placeholder="Valor" value="${(c && c.valor) || 0}" style="max-width:120px;" />
+    <button type="button" class="btn-link" onclick="this.parentElement.remove()">✕</button>
+  </div>`;
+}
+
+function adicionarLinhaContribuinteRd() {
+  document.getElementById("rdListaContribuintes").insertAdjacentHTML("beforeend", linhaContribuinteRd(null));
+}
+
+async function salvarRelatorioDeptoAcao() {
+  if (!_rdSchemaAtual || !_rdRelatorioIdAtual) return;
+  const valores = {};
+  const valoresSemanais = {};
+  for (const c of _rdSchemaAtual.campos) {
+    if (c.permiteSemanal) {
+      valoresSemanais[c.nomeCampo] = {};
+      for (let n = 1; n <= 5; n++) {
+        const el = document.getElementById(`rdSemana_${c.nomeCampo}_${n}`);
+        if (el) valoresSemanais[c.nomeCampo][n] = Number(el.value) || 0;
+      }
+    } else {
+      const el = document.getElementById(`rdCampo_${c.nomeCampo}`);
+      if (el) valores[c.nomeCampo] = Number(el.value) || 0;
+    }
+  }
+  const eventos = {
+    local: Number(document.getElementById("rdEventoLocal").value) || 0,
+    area: Number(document.getElementById("rdEventoArea").value) || 0,
+    geral: Number(document.getElementById("rdEventoGeral").value) || 0
+  };
+  const integracao = {
+    conversao: Number(document.getElementById("rdIntegConversao").value) || 0,
+    reconciliacao: Number(document.getElementById("rdIntegReconciliacao").value) || 0,
+    deOutraIgreja: Number(document.getElementById("rdIntegDeOutraIgreja").value) || 0
+  };
+  const contribuintes = [...document.querySelectorAll(".rd-linha-contribuinte")].map(linha => ({
+    nome: linha.querySelector(".rd-contribuinte-nome").value.trim(),
+    valor: Number(linha.querySelector(".rd-contribuinte-valor").value) || 0
+  })).filter(c => c.nome);
+
+  const res = await fetchProtegido(`${API_BASE}/relatorios-departamentais/${_rdRelatorioIdAtual}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ valores, valoresSemanais, eventos, integracao, contribuintes })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast("✅ Rascunho salvo.", "sucesso");
+  renderizarPainelRelatorioDepto(data);
 }

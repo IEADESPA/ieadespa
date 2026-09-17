@@ -4749,16 +4749,49 @@ duplicação de fundo que a vC.2 resolve pra congregação em geral, só que
 aplicada a uma campanha de arrecadação específica (v4.4, `GestaoCampanhas`
 — dinheiro real vendendo produto físico).
 
-- [ ] Quando `congregacao` for informada num pedido de camiseta, gravar o
+- [x] Quando `congregacao` for informada num pedido de camiseta, gravar o
       `CongregacaoId` real (API unificada da vC.2) em vez da relação
       Directus-Directus solta que existe hoje.
+
+  Verificado: **já entregue** dentro do próprio commit da vC.2
+  (`2c47af2`, 13/09), junto com a mesma correção aplicada a Eventos —
+  fica registrado aqui porque a vC.2 não tinha marcado essa parte
+  específica do roadmap de camisetas. `site/src/pages/camiseta/[slug].astro`
+  já busca as opções do dropdown via `fetchCongregacoesPublicas()`
+  (sistema, não Directus) e grava `congregacaoId` real no pedido;
+  `site/api/CriarPedidoCamiseta` repassa esse valor pro Directus como
+  `camiseta_pedidos.congregacao` (campo simples, sem relação — a relação
+  Postgres foi removida de verdade, conforme já fechado na própria vC.2);
+  `painel-camisetas/grupo/pedidos.astro` (client-side, evita CORS) resolve
+  o id pro nome via o mesmo mapa `{id: nome}` embutido em build time que
+  `eventos/exportar.astro` já usava. Conferido: `git log` mostra as duas
+  únicas alterações nesses arquivos vindas exatamente desse commit, nada
+  pendente.
 - [ ] Avaliar, com a vC.2 já no ar, se o valor arrecadado (`valor_pago` no
       Directus) deve virar uma `Campanha`/`ContasAReceber` real aqui (visível
       no Financeiro, v4.4/v4.6) ou se continua só no Directus por enquanto —
       decisão a tomar com o volume real de vendas em mãos, não antes.
-- [ ] Perguntas personalizadas por campanha de camiseta (`perguntas_camiseta`)
+
+  **Continua em aberto de propósito.** O próprio item já diz qual é o
+  critério pra decidir — volume real de vendas — e esse critério ainda
+  não foi atingido: o lançamento real do módulo de camisetas do site
+  estava previsto pra semana seguinte à redação deste item (2026-09-14),
+  ou seja, por volta de 21/09; hoje (2026-09-17) ainda é antes disso. Não
+  existe hoje nenhum endpoint público que exponha volume agregado de
+  vendas (`ConsultarPedidosCamiseta` só devolve pedidos batendo com um
+  hash de telefone específico, de propósito — Fase 22, decisão explícita
+  de não expor nada além disso sem o telefone de quem pediu), então
+  forçar essa decisão agora seria decidir sem o dado que o próprio item
+  exige. Fica registrado como pendência real, não fabricado nem
+  silenciosamente fechado.
+- [x] Perguntas personalizadas por campanha de camiseta (`perguntas_camiseta`)
       continuam no Directus — são só formulário, sem overlap com nenhuma
       entidade daqui.
+
+  Confirmado: nenhuma entidade do sistema de governança modela pergunta
+  de formulário — `perguntas_camiseta`/`respostas_pedido_camiseta`
+  seguem exclusivamente no Directus, sem overlap. Decisão de manter como
+  está, reafirmada, não uma tarefa pendente.
 
 #### 🔒 Trava de Revisão B-C — antes de encerrar a FASE B e avançar para a FASE 5
 

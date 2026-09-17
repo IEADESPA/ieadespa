@@ -37,11 +37,21 @@ function somarValoresSemanais(valoresPorDomingo) {
   return [1, 2, 3, 4, 5].reduce((soma, n) => soma + (Number(valoresPorDomingo && valoresPorDomingo[n]) || 0), 0);
 }
 
-// Fórmulas padrão da EBD — só as que são identidade aritmética direta do
-// nome do campo (Total de Presença = Presentes + Visitantes; percentuais
-// sobre Matriculados). "Total do Local" dos outros 7 departamentos fica de
-// fora de propósito: sem a planilha física em mãos pra confirmar quais
-// campos entram na soma, calcular errado seria pior que não calcular.
+// "Total do Local" (bloco Financeiro) = soma de tudo que a congregação
+// arrecadou naquele mês pro departamento (Mensalidades + Ofertas +
+// Contribuições + Campanhas + Outros — os nomes exatos variam por
+// departamento, mas o grupo é sempre "FINANCEIRO"). É a base sobre a qual
+// o rateio (v5.4) calcula o repasse local/geral — por isso soma TODO campo
+// do grupo FINANCEIRO, sem lista fixa de nomes (nenhum departamento fica
+// de fora por usar um nome de campo diferente).
+function calcularValorTotalFinanceiro(camposSchema, valores) {
+  return camposSchema
+    .filter(c => c.grupo === "FINANCEIRO")
+    .reduce((soma, c) => soma + (Number(valores[c.nomeCampo]) || 0), 0);
+}
+
+// Fórmulas padrão da EBD — identidade aritmética direta do nome do campo
+// (Total de Presença = Presentes + Visitantes; percentuais sobre Matriculados).
 function calcularIndicadoresEbd({ alunosPresentes, alunosAusentes, alunosMatriculados, visitantes }) {
   const presentes = Number(alunosPresentes) || 0;
   const ausentes = Number(alunosAusentes) || 0;
@@ -125,6 +135,6 @@ async function buscarValoresParaPrePreencher(pool, { congregacaoId, departamento
 
 module.exports = {
   GRUPOS_VALIDOS, COMPORTAMENTOS_VALIDOS, CAMPOS_EVENTOS, CAMPOS_INTEGRACAO,
-  calcularTotalIntegracao, somarValoresSemanais, calcularIndicadoresEbd,
+  calcularTotalIntegracao, calcularValorTotalFinanceiro, somarValoresSemanais, calcularIndicadoresEbd,
   camposParaPrePreencher, buscarSchemaVigente, buscarValoresParaPrePreencher
 };

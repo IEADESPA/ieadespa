@@ -5042,14 +5042,20 @@ modelados como estrutura compartilhada, não repetida por tipo:
   transcrito campo a campo do protótipo (`docs/04-departamentos-secretarias.md`),
   incluindo os 18 itens de cesta da Ação da Fé.
 
-  **"Total do Local" citado no protótipo ficou de fora, de propósito**: sem
-  a planilha física em mãos pra confirmar quais campos entram exatamente
-  nessa soma por departamento, calcular um número errado seria pior que não
-  calcular nenhum — limitação documentada na própria migração, não
-  fabricada. Os únicos totais calculados no código são identidades
-  aritméticas do nome do próprio campo, sem ambiguidade nenhuma: soma das 5
-  semanas da EBD, e `calcularIndicadoresEbd` (Total de Presença = Presentes
-  + Visitantes; % Presença/Ausência sobre Matriculados).
+  **"Total do Local" (bloco Financeiro), confirmado pelo usuário e
+  implementado**: é a soma de tudo que a congregação arrecadou naquele mês
+  pro departamento (Mensalidades + Ofertas + Contribuições + Campanhas +
+  Outros — nomes variam por departamento, grupo é sempre `FINANCEIRO`) — a
+  base sobre a qual o rateio (v5.4) vai calcular o repasse local/geral.
+  `calcularValorTotalFinanceiro` soma todo campo `FINANCEIRO` do schema, sem
+  lista fixa de nomes (funciona igual pra Ação da Fé, que usa
+  `contribuicoes`/`campanha` no singular, em vez de
+  `mensalidades`/`campanhas`) — exposto no detalhe do relatório
+  (`valorTotalFinanceiro`) e na tela, logo abaixo do bloco Financeiro.
+  Os outros totais calculados no código continuam sendo identidades
+  aritméticas do nome do próprio campo: soma das 5 semanas da EBD, e
+  `calcularIndicadoresEbd` (Total de Presença = Presentes + Visitantes; %
+  Presença/Ausência sobre Matriculados).
 
   `shared/relatoriosDepartamentais.js`: `buscarSchemaVigente`,
   `buscarValoresParaPrePreencher` (só campos `ESTADO`, do relatório anterior
@@ -5081,10 +5087,12 @@ modelados como estrutura compartilhada, não repetida por tipo:
   fixos, semanal só nos campos EBD marcados, lista de contribuintes só
   aparece se o schema tiver campo `mensalidades`) e salva o rascunho.
 
-  Testado com `npx jest` (175 testes, incluindo 13 novos de
+  Testado com `npx jest` (179 testes, incluindo 17 novos de
   `shared/relatoriosDepartamentais.js`: soma de Integração, soma e
   indicadores semanais da EBD, filtro de pré-preenchimento por
-  `ESTADO`, e `permiteSemanal` calculado a partir dos campos) e
+  `ESTADO`, `permiteSemanal` calculado a partir dos campos, e
+  `calcularValorTotalFinanceiro` somando só o grupo FINANCEIRO — inclusive
+  com nomes de campo diferentes por departamento (Ação da Fé)) e
   `node --check` em todos os arquivos novos/alterados.
 
 #### v5.3 — Fluxo de aprovação (2 camadas)

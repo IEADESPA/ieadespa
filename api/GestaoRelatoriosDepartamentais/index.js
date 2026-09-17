@@ -67,6 +67,7 @@ async function montarDetalheRelatorio(pool, linha) {
     ...linha,
     schema: { campos, permiteSemanal, camposEventos: rd.CAMPOS_EVENTOS, camposIntegracao: rd.CAMPOS_INTEGRACAO },
     valores,
+    valorTotalFinanceiro: rd.calcularValorTotalFinanceiro(campos, valores),
     valoresSemanais,
     eventos: { local: linha.eventosLocal, area: linha.eventosArea, geral: linha.eventosGeral },
     integracao: {

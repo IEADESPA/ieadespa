@@ -26,6 +26,32 @@ describe("somarValoresSemanais (EBD)", () => {
   });
 });
 
+describe("calcularValorTotalFinanceiro", () => {
+  const campos = [
+    { nomeCampo: "congregados", grupo: "CONTAGEM" },
+    { nomeCampo: "mensalidades", grupo: "FINANCEIRO" },
+    { nomeCampo: "ofertas", grupo: "FINANCEIRO" },
+    { nomeCampo: "campanhas", grupo: "FINANCEIRO" },
+    { nomeCampo: "outros", grupo: "FINANCEIRO" }
+  ];
+  test("soma todo campo do grupo FINANCEIRO — é a base do rateio local/geral (v5.4)", () => {
+    const valores = { congregados: 999, mensalidades: 200, ofertas: 150, campanhas: 50, outros: 10 };
+    expect(rd.calcularValorTotalFinanceiro(campos, valores)).toBe(410);
+  });
+  test("não soma campos de outro grupo (ex: contagem)", () => {
+    const valores = { congregados: 999, mensalidades: 100, ofertas: 0, campanhas: 0, outros: 0 };
+    expect(rd.calcularValorTotalFinanceiro(campos, valores)).toBe(100);
+  });
+  test("campo financeiro sem valor lançado conta como zero", () => {
+    expect(rd.calcularValorTotalFinanceiro(campos, {})).toBe(0);
+  });
+  test("funciona igual para departamento com nomes de campo diferentes (ex: Ação da Fé)", () => {
+    const camposAcaoDaFe = [{ nomeCampo: "contribuicoes", grupo: "FINANCEIRO" }, { nomeCampo: "ofertas", grupo: "FINANCEIRO" }, { nomeCampo: "campanha", grupo: "FINANCEIRO" }];
+    const valores = { contribuicoes: 300, ofertas: 80, campanha: 20 };
+    expect(rd.calcularValorTotalFinanceiro(camposAcaoDaFe, valores)).toBe(400);
+  });
+});
+
 describe("calcularIndicadoresEbd", () => {
   test("total de presença e percentuais sobre matriculados", () => {
     const r = rd.calcularIndicadoresEbd({ alunosPresentes: 40, alunosAusentes: 10, alunosMatriculados: 50, visitantes: 5 });

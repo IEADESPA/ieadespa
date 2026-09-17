@@ -11192,7 +11192,9 @@ function renderizarPainelRelatorioDepto(data) {
       }
       return `<div class="input-group"><label>${c.rotulo}</label><input ${campoInputAttrs(c)} id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
     }).join("");
-    return `<h4>${ROTULO_GRUPO_RD[grupo]}</h4>${linhas}`;
+    const totalFinanceiro = grupo === "FINANCEIRO"
+      ? `<p class="subtitle"><strong>Valor Total (base do rateio local/geral): R$ ${Number(data.valorTotalFinanceiro || 0).toFixed(2)}</strong></p>` : "";
+    return `<h4>${ROTULO_GRUPO_RD[grupo]}</h4>${linhas}${totalFinanceiro}`;
   }).join("");
 
   const eventosHtml = `<h4>Eventos</h4>

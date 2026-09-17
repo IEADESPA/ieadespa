@@ -4913,6 +4913,48 @@ aplicada a uma campanha de arrecadação específica (v4.4, `GestaoCampanhas`
 > prontos desde a FASE 0/1, então essa parte do protótipo não se aproveita,
 > só a modelagem de departamento/relatório/rateio em cima dela.
 
+**Por que os 8 ficam juntos numa fase só, apesar de serem tão diferentes**:
+o Regimento pede um retrato eclesiástico **consolidado da congregação**
+(total de cultos, de membros, de eventos, de conversões daquele mês) — e
+esse número só existe somando os 8 relatórios. É por isso que Eventos e
+Integração (idênticos nos 8) e o motor de rateio/aprovação são **um só**
+(v5.1-v5.4): fragmentar isso em 8 fases separadas duplicaria a mesma
+engrenagem 8 vezes sem ganhar nada. Mas cada um também tem peculiaridade
+real que o motor genérico não cobre por completo — Missões
+(discipulado/literatura) e principalmente **Ação da Fé** (que já hoje rastreia
+18 itens de cesta básica item a item — dá praticamente pra virar um módulo de
+**assistência social de verdade**: cadastro de famílias atendidas, controle de
+estoque, histórico de entregas) têm identidade própria o bastante pra, no
+futuro, ganharem uma fase dedicada — o mesmo caminho que a EBD já percorreu
+(relatório mensal genérico aqui na v5.2/v5.5, sistema exclusivo na FASE 6).
+Essas fases futuras ficam **reservadas, não fabricadas agora** — entram
+quando o relatório mensal genérico já estiver rodando e mostrar, com dado
+real, que vale o investimento (mesmo critério já usado pra não abrir a v7.2
+antes da hora, ver limitação documentada da vB.15).
+
+**Três módulos dentro do motor único, não três fases**: o catálogo (v5.1) já
+distingue `Tipo='DEPARTAMENTO'` (UCADESPA/UMADESPA/USADESPA/UHADESPA — por
+faixa etária/gênero) de `Tipo='SECRETARIA_ADJUNTA'` (SEMIADESPA/AÇÃO DA
+FÉ/FAMÍLIA — transversais; EBD sai desse grupo porque já tem a FASE 6
+própria) — essa distinção que a v2.7 já fez vira o corte de **menu**
+("Departamentos" / "Secretarias"), não um corte de banco de dados novo: é o
+mesmo `SchemaRelatorio`/`RelatorioDepartamental`, só filtrado por `Tipo` na
+tela. O terceiro módulo, **Consolidado de Campo** (agregação por
+congregação→área→campo, ver v5.5.1), é novo e não existia no rascunho
+original desta fase.
+
+**Financeiro exclusivo, nunca misturado com a FASE 4**: o dinheiro que cada
+departamento/secretaria arrecada e gasta (v5.4) roda numa tela e permissão
+**própria dos líderes/tesoureiros locais e de área daquele departamento** —
+nunca dentro do módulo Financeiro geral (FASE 4), mesmo o valor "pra o geral"
+acabando, na prática, dentro da conta bancária única da igreja. A ponte entre
+os dois mundos é exatamente o que a v4.1.3 já resolveu pro Centro de Custo: o
+saldo de verdade é um só (`shared/tesouraria.js::saldoCentroCusto`), o
+Conselho Fiscal/Tesoureiro Geral sempre tem a última palavra e enxerga tudo
+pra auditoria — mas a **operação do dia a dia** (lançar despesa, ver saldo do
+próprio departamento) é exclusiva de quem responde por aquele departamento,
+sem aparecer misturada nas telas do Financeiro geral.
+
 #### v5.1 — Catálogo de departamentos
 
 - [x] 8 tipos fixos (UCADESPA, UMADESPA, USADESPA, UHADESPA, SEMIADESPA, Ação da Fé, EBD, Família).
@@ -5069,6 +5111,31 @@ modelados como estrutura compartilhada, não repetida por tipo:
       — pré-preenche o bloco de contagem (`estado`) sem o líder local
       recontar manualmente.
 
+##### v5.5.1 — Consolidado de Campo *(módulo novo, pedido do usuário)*
+
+O relatório mensal (v5.2/v5.3) responde "como foi o mês do UCADESPA na
+Congregação X"; falta a pergunta inversa, que é a que o Pastor Presidente e
+o Presidente do Campo realmente fazem: "como está a Congregação X (ou a
+Área Y, ou o Campo inteiro) neste mês, olhando os 8 departamentos juntos?" —
+exatamente o "bater a situação eclesiástica da congregação" que justifica os
+8 estarem na mesma fase.
+
+- [ ] Painel consolidado por **congregação**: os 8 relatórios do mês lado a
+      lado, com os blocos Eventos/Integração **somados** entre departamentos
+      (não só listados) — é o número que o Regimento pede pra retrato
+      eclesiástico da congregação.
+- [ ] Consolidado por **área** (soma de todas as congregações da área) e por
+      **campo** (soma de todas as áreas) — mesma agregação, granularidade
+      maior; reaproveita `resolverEscopoCongregacoes`
+      (`shared/escopo.js`) já usado pra filtrar por nível territorial em todo
+      o resto do sistema.
+- [ ] Indicador de pendência: quais departamentos daquela congregação ainda
+      não enviaram o relatório do mês corrente (calculado, não marcado à
+      mão) — sem isso o consolidado mentiria por omissão num mês incompleto.
+- [ ] Comparativo mês a mês / ano a ano por congregação e por departamento
+      (série histórica), com os dados já estruturados por `CampoFormulario`
+      desde a v5.2 — nenhuma migração de dado histórico solto pra fazer.
+
 #### 🔒 Trava de Revisão 5-A — antes de avançar para a v5.6
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
@@ -5163,6 +5230,18 @@ integração continua de pé.
 
 Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 
+> **Fonte de ideias, não de código**: existe um protótipo `chamada-ebd`,
+> completo e funcional, construído em **Next.js — linguagem/framework
+> banida neste projeto** (bug real de cookies do navegador forçando aba
+> anônima pra testar, decisão tomada nesta mesma sessão). Nenhuma linha de
+> código de lá é copiada — v6.1-v6.10 abaixo são reescritos do zero em
+> Functions + front estático, como já valia antes desta nota. Mas o
+> *desenho* de várias peças (papéis 100% customizáveis por `ordem`, matriz
+> de permissão papel×funcionalidade editável em runtime, motor de
+> conquistas por catálogo configurável) é bom o bastante pra informar os
+> itens abaixo — em especial v6.4, redesenhada como motor genérico por
+> pedido explícito do usuário.
+
 #### v6.1 — Hierarquia e cadastros da EBD
 
 - [ ] Turmas + TurmaProfessor (Campo → Área → Congregação → Turma).
@@ -5181,10 +5260,43 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 - [ ] Atividades (5 tipos de pergunta: múltipla escolha, V/F, ordenar, completar, correspondência).
 - [ ] Respostas dos alunos + gabarito.
 
-#### v6.4 — Conquistas e gamificação
+#### v6.4 — Motor de conquistas e gamificação *(desenhado como genérico desde o início, pedido explícito)*
 
-- [ ] Conquistas (primeira presença, sequência, fidelidade, gabaritos, trimestre perfeito).
-- [ ] Conquistas ocultas/encadeadas + ScoreConfig.
+Diferente do resto da FASE 6, esta versão **não nasce presa à EBD**: o motor
+de regras/catálogo/pontuação é construído module-agnostic desde a primeira
+migração, com a EBD como **primeiro consumidor real**, não o único. A
+decisão evita o retrabalho de generalizar depois — mesmo princípio já usado
+em `shared/estatuto.js`/`shared/parentesco.js`, escritos uma vez e
+reaproveitados por meia dúzia de módulos diferentes ao longo da FASE B.
+
+- [ ] `CatalogoConquistas` (nome, ícone, descrição, `oculta` até desbloquear,
+      `préRequisitos` — progressão em cadeia, não catálogo plano) e
+      `RegrasConquista` com um **tipo de regra genérico** (não hardcoded por
+      módulo): `contagem_evento` (ex: nº de presenças), `sequencia` (ex: N
+      domingos seguidos), `combinacao_exata` (ex: gabaritou + presente +
+      trouxe bíblia no mesmo evento), `marco_unico` (ex: primeira presença),
+      `periodo_perfeito` (ex: trimestre sem falta) — cada regra referencia um
+      **tipo de evento** (`EBD_PRESENCA`, e no futuro
+      `REUNIAO_PRESENCA`/`ESCALA_SERVICO`/`CONTRIBUICAO`, sem alterar o motor
+      pra adicionar um tipo novo, só cadastrar).
+- [ ] `ConquistasDesbloqueadas` por `MembroId` (não por "Aluno" — é a mesma
+      pessoa em `MembroReferencia` de todo o resto do sistema), motor
+      avaliado **na leitura/no lançamento do evento-gatilho**, nunca em job
+      manual.
+- [ ] `ScoreConfig` (pesos por tipo de evento, configurável por Campo) +
+      pontuação unificada por pessoa, usada tanto no painel individual
+      quanto num ranking por escopo (turma/congregação/área).
+- [ ] Painel Admin (`/conquistas` — mesmo espírito do `chamada-ebd`) pra
+      criar/editar catálogo e regras sem alteração de código.
+- [ ] **Primeiro consumidor: EBD** — presença semanal, sequência, gabarito de
+      atividade, trimestre perfeito (v6.2/v6.3) viram `RegrasConquista` reais,
+      não um caso especial do motor.
+- [ ] **Consumidores futuros, só registrados como intenção** (não
+      implementados agora — cada um vira um item pontual numa versão futura
+      quando chegar a vez, só cadastrando regra nova): frequência em
+      Reuniões, confirmação de Escala de Serviço (v5.6), fidelidade de
+      Contribuição. Generalizar o motor agora custa pouco a mais; forçar
+      esses consumidores a existir agora custaria reabrir versões fechadas.
 
 #### v6.5 — Certificados
 

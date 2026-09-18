@@ -59,11 +59,21 @@ async function validarEUpload(comprovanteBase64, mimeType, context) {
   }
 }
 
+// v5.4 — sigla do departamento de quem só tem "tesouraria_departamental"
+// (não "financeiro") — usada por `tesouraria.podeOperarCentroCusto` pra
+// restringir Saídas à categoria do próprio departamento.
+async function siglaDepartamentoDoUsuario(pool, usuario) {
+  if (!usuario.departamentoId) return null;
+  const r = await pool.request().input("id", sql.Int, usuario.departamentoId).query(`SELECT Sigla FROM Departamentos WHERE DepartamentoId = @id`);
+  return r.recordset[0] ? r.recordset[0].Sigla : null;
+}
+
 module.exports = async function (context, req) {
   const id = context.bindingData.id;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = auth.exigirAlgumaPermissao(req, context, ["financeiro", "tesouraria_departamental"]);
   if (!usuario) return;
   const pool = await getPool();
+  const siglaDepartamentoUsuario = usuario.permissoes.includes("financeiro") ? null : await siglaDepartamentoDoUsuario(pool, usuario);
 
   const SELECT_BASE = `
     SELECT s.SaidaId AS saidaId, s.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
@@ -95,7 +105,9 @@ module.exports = async function (context, req) {
     if (congregacaoId) { request.input("congregacaoId", sql.Int, congregacaoId); where += " AND s.CongregacaoId = @congregacaoId"; }
     if (status) { request.input("status", sql.NVarChar(20), status); where += " AND s.Status = @status"; }
     const result = await request.query(`${SELECT_BASE} WHERE ${where} ORDER BY s.SolicitadoEm DESC`);
-    const saidas = result.recordset.filter(s => auth.estaNoEscopo(usuario, s.congregacaoNome)).map(s => Object.assign({}, s, {
+    const saidas = result.recordset
+      .filter(s => auth.estaNoEscopo(usuario, s.congregacaoNome) && tesouraria.podeOperarCentroCusto(usuario, s.centroCusto, siglaDepartamentoUsuario))
+      .map(s => Object.assign({}, s, {
       documentoFiscalUrl: storage.urlDocumentoComSas(s.documentoFiscalUrl),
       comprovantePagamentoUrl: s.comprovantePagamentoUrl ? storage.urlDocumentoComSas(s.comprovantePagamentoUrl) : null
     }));
@@ -110,7 +122,7 @@ module.exports = async function (context, req) {
       return;
     }
     const saida = result.recordset[0];
-    if (!auth.estaNoEscopo(usuario, saida.congregacaoNome)) {
+    if (!auth.estaNoEscopo(usuario, saida.congregacaoNome) || !tesouraria.podeOperarCentroCusto(usuario, saida.centroCusto, siglaDepartamentoUsuario)) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
       return;
     }
@@ -168,6 +180,10 @@ module.exports = async function (context, req) {
     const categoria = await pool.request().input("codigo", sql.NVarChar(30), tipo).query(`SELECT * FROM CategoriasSaida WHERE Codigo = @codigo AND Ativa = 1`);
     if (categoria.recordset.length === 0) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Categoria de saída inválida ou inativa. Cadastre-a em Financeiro → Plano de Contas → Categorias de Saída." } };
+      return;
+    }
+    if (!tesouraria.podeOperarCentroCusto(usuario, categoria.recordset[0].CentroCusto, siglaDepartamentoUsuario)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Você só pode lançar despesa na categoria do seu próprio departamento." } };
       return;
     }
     const cat = categoria.recordset[0];
@@ -297,7 +313,7 @@ module.exports = async function (context, req) {
       return;
     }
     const registro = atual.recordset[0];
-    if (!auth.estaNoEscopo(usuario, registro.congregacaoNome)) {
+    if (!auth.estaNoEscopo(usuario, registro.congregacaoNome) || !tesouraria.podeOperarCentroCusto(usuario, registro.centroCusto, siglaDepartamentoUsuario)) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
       return;
     }

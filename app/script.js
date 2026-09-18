@@ -873,7 +873,12 @@ const ABA_PERMISSOES_ALT = {
   abandono: ["disciplina"],
   enquetes: ["reunioes", "assembleia"],
   arquivos: ["reunioes", "assembleia", "cli"],
-  relatoriosdepto: ["relatorios_departamentais"]
+  relatoriosdepto: ["relatorios_departamentais"],
+  // v5.4 (correção) — quem só tem "tesouraria_departamental" (líder local/
+  // geral de departamento) também acessa Financeiro → Saídas, pra gastar o
+  // saldo do próprio departamento (Centro de Custo DEPTO_<SIGLA>) pelo
+  // mesmo motor auditado de sempre — o backend restringe à categoria certa.
+  financeiro: ["financeiro", "tesouraria_departamental"]
 };
 function permissoesDaAba(nome) {
   return ABA_PERMISSOES_ALT[nome] || [nome];
@@ -2807,6 +2812,20 @@ async function carregarSituacaoTesouroAcao() {
     html += `<tr><td>${c.congregacaoNome}</td><td>R$ ${Number(c.saldoLocal).toFixed(2)}</td></tr>`;
   });
   html += "</tbody></table>";
+
+  // v5.4 (correção) — dinheiro de departamento é discricionário dele
+  // (Art. 49), não se mistura nos cards acima, mas fica visível aqui pro
+  // Conselho Fiscal auditar sem abrir uma tela por departamento.
+  if (Array.isArray(d.porDepartamento) && d.porDepartamento.length > 0) {
+    html += `<h4 style="margin:18px 0 8px; color: var(--cor-primaria);">Departamentos e Secretarias (fundo próprio, Art. 49)</h4>
+      <table class="tabela-frequencia"><thead><tr><th>Departamento</th><th>Saldo Local consolidado</th><th>Saldo Geral (último balancete fechado)</th></tr></thead><tbody>`;
+    d.porDepartamento.forEach(dep => {
+      html += `<tr><td>${dep.nome}</td><td>R$ ${Number(dep.saldoLocalConsolidado).toFixed(2)}</td>
+        <td>${dep.saldoGeralUltimoBalancete === null ? "nunca fechado" : `R$ ${Number(dep.saldoGeralUltimoBalancete).toFixed(2)}`}</td></tr>`;
+    });
+    html += "</tbody></table>";
+  }
+
   container.innerHTML = html;
 }
 
@@ -11450,7 +11469,7 @@ async function renderizarPainelTesourariaDepto(data) {
     <div id="tdEdicaoPerfil"></div>` : "";
 
   const acoesHtml = (authNivel === "DEPARTAMENTO" || authNivel === "GLOBAL") ? `
-    <h4>Lançar Despesa</h4>
+    <h4>Lançar Despesa (fundo geral do departamento, Art. 49)</h4>
     <div class="barra-lista">
       <input type="text" id="tdDespesaDescricao" placeholder="Descrição" style="min-width:220px;" />
       <input type="number" id="tdDespesaValor" step="0.01" min="0" placeholder="Valor" style="max-width:120px;" />
@@ -11458,6 +11477,9 @@ async function renderizarPainelTesourariaDepto(data) {
       <button class="btn-confirmar" style="width:auto;margin:0;" onclick="lancarDespesaTesourariaDeptoAcao()">➕ Lançar</button>
     </div>
     <p id="resultadoDespesaTesourariaDepto"></p>
+    <p class="subtitle">Pra gastar o saldo que ficou LOCAL numa congregação específica (não este fundo
+      geral), use <strong>Financeiro → Saídas</strong> escolhendo a categoria "Despesa Local — [seu
+      departamento]" — mesma aprovação por alçada e trava de saldo de qualquer despesa da igreja.</p>
     ${!data.fechado ? `<button class="btn-confirmar btn-secundario" onclick="fecharMesTesourariaDeptoAcao()">🔒 Fechar Mês (congela o balancete)</button>` : ""}` : "";
 
   container.innerHTML = `${resumoHtml}${perfilHtml}<div id="tdListaDespesas"></div>${acoesHtml}`;

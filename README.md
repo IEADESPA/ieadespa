@@ -5239,16 +5239,60 @@ modelados como estrutura compartilhada, não repetida por tipo:
       desenho: não existe mecanismo nenhum de mover dinheiro entre
       `TesourariasDepartamento` de departamentos diferentes).
 
-  **Correção de rumo, documentada não escondida**: o item acima prometia
-  reaproveitar `shared/tesouraria.js::saldoCentroCusto` literalmente — na
-  implementação isso se mostrou incompatível com a decisão já tomada na
-  abertura da FASE 5 ("financeiro exclusivo, nunca misturado com a FASE 4"):
-  aquela função opera sobre os livros da FASE 4
-  (`RateiosGerais`/`RateioGeralValores`/`SaidasTesouraria`), e plugar
-  departamento ali significaria rotear dinheiro de departamento pelo motor
-  financeiro geral — exatamente o que a decisão de exclusividade proíbe.
-  Reaproveitado o **princípio** (calculado, nunca digitado), implementado em
-  cima das tabelas próprias do departamento.
+  **Correção de rumo em duas rodadas, documentada não escondida.**
+
+  **Rodada 1** (primeira versão desta seção): prometia reaproveitar
+  `shared/tesouraria.js::saldoCentroCusto` literalmente — incompatível com
+  a decisão de "financeiro exclusivo" da abertura da FASE 5, porque aquela
+  função opera sobre os livros da FASE 4. Reaproveitado o princípio, não a
+  função, em tabelas próprias.
+
+  **Rodada 2** (achado do usuário, verificado com pesquisa dedicada em duas
+  partes): tabelas próprias e exclusivas resolvem "quem preenche o
+  relatório", mas criam um problema real de **auditabilidade** — existe
+  **uma única conta bancária real**; dinheiro "para local"/"para geral" de
+  departamento nunca sai fisicamente dela, então precisa aparecer no
+  consolidado que o Conselho Fiscal audita, mesmo com o lançamento do dia a
+  dia continuando exclusivo. Duas pontes construídas, uma para cada lado:
+
+  - **Lado LOCAL (por congregação)**: pesquisa confirmou que o Financeiro
+    geral já tem um "Tesouro Local" **funcional e auditado** (papel
+    "Tesoureiro Local", `GestaoSaidas`/`SaidasTesouraria`/`CategoriasSaida`
+    — alçada de aprovação por valor, segregação de funções, "quatro olhos"
+    acima de valor crítico, trava real de saldo). Reinventar um motor mais
+    fraco só pro departamento seria pior proteção pro mesmo dinheiro real.
+    `sql/migrations/097_ponte_financeira_departamental.sql` cria 8
+    categorias novas (`CentroCusto = 'DEPTO_<SIGLA>'`, `TipoFundo =
+    'RESTRITO'`) e `shared/tesouraria.js::saldoCentroCusto` aprende a somar
+    o saldo desses Centros de Custo a partir de
+    `RelatoriosDepartamentais.ValorParaLocal` (não de `FechamentosTesouraria`,
+    que é a fonte do dízimo/oferta geral, não de departamento).
+    `GestaoSaidas` passa a aceitar também a permissão `tesouraria_departamental`
+    (`shared/tesouraria.js::podeOperarCentroCusto`): quem só tem essa
+    permissão (não `financeiro`) só opera a categoria do próprio
+    departamento — mesmo motor, escopo mais estreito.
+  - **Lado GERAL (campo inteiro)**: **não** vira saldo comum do Tesouro
+    Geral compartilhado — é dinheiro discricionário do próprio departamento
+    (Estatuto Art. 49, autonomia de gestão); misturar no Tesouro Geral
+    tiraria essa autonomia e daria a qualquer Tesoureiro Geral o poder de
+    gastá-lo por uma Saída comum. Também **não** é `RepassesInstitucionais`
+    (v4.15) — aquela tabela é o dízimo institucional de 10% (Art. 126-N),
+    um tributo diferente; usá-la aqui misturaria dois conceitos financeiros
+    distintos (achado confirmado lendo o código: nem o repasse de
+    Departamento/Distrito daquele mecanismo credita em saldo real hoje —
+    lacuna pré-existente da v4.15, não desta versão, registrada mas não
+    corrigida aqui). Continua em `TesourariasDepartamento`/
+    `DespesasTesourariaDepartamento` (já existente) — mas agora **visível
+    no mesmo relatório que a Tesouraria Geral já usa**
+    (`RelatorioSituacaoTesouro`, v4.10): nova seção "Departamentos e
+    Secretarias" com saldo local consolidado (calculado ao vivo) e saldo
+    geral do último balancete fechado, sem precisar abrir 8 telas.
+  - **Rateio agora CONGELA na aprovação geral/retificação**
+    (`RelatoriosDepartamentais.ValorParaGeral/ValorParaLocal`, mesma
+    migração 097): antes era só calculado ao vivo — mudar o perfil de
+    rateio depois mudaria retroativamente relatórios já aprovados, o mesmo
+    tipo de bug que a versão vigente do Texto Mestre (vB.15) já existe pra
+    evitar.
 
   Implementado: `sql/migrations/095_tesouraria_rateio_departamental.sql`
   cria `PerfisRateioDepartamental` (1 por `SchemaRelatorioId`),
@@ -5298,18 +5342,28 @@ modelados como estrutura compartilhada, não repetida por tipo:
   rateio calculado aparece junto ao Valor Total — com campo editável pra
   "quanto vai pro Geral" nos departamentos VARIAVEL_MANUAL.
 
-  Testado com `npx jest` (225 testes, incluindo 22 novos de
-  `shared/tesourariaDepartamental.js`: os 5 métodos de rateio, Art. 49
-  (precisaAutorizacao), cálculo de saldo, e o bloqueio de balancete nos 4
-  cenários — sem atividade prévia, mês anterior à primeira atividade, mês
-  anterior sem fechamento, mês anterior fechado) e `node --check` em todos
-  os arquivos novos/alterados.
+  Testado com `npx jest` (230 testes, incluindo 22 de
+  `shared/tesourariaDepartamental.js` — os 5 métodos de rateio, Art. 49
+  (precisaAutorizacao), cálculo de saldo, bloqueio de balancete nos 4
+  cenários — e mais 5 novos em `shared/tesouraria.js` da rodada 2:
+  `saldoCentroCusto` com Centro de Custo `DEPTO_*`, `centroCustoDepartamental`,
+  e `podeOperarCentroCusto` nos 3 cenários de permissão) e `node --check`
+  em todos os arquivos novos/alterados.
 
   **Verificado ao vivo em produção** (mesmo login já usado nas verificações
   anteriores): catálogo de departamentos e CI confirmados; achado repetido
   da v5.2 — a permissão `tesouraria_departamental` também não nascia
   concedida a ninguém. `sql/migrations/096_permissao_tesouraria_departamental.sql`
   concede a Presidente/Secretário Geral, mesmo padrão aditivo da 093.
+
+  **Rugosidade de UX conhecida, não escondida**: quem só tem
+  `tesouraria_departamental` agora acessa a aba Financeiro → Saídas (pra
+  gastar o saldo Local do próprio departamento), mas o formulário ainda
+  lista todas as categorias de Saída do sistema (o backend recusa
+  corretamente qualquer categoria que não seja a do próprio departamento,
+  então não há brecha de segurança) — filtrar a lista de categorias no
+  front pra mostrar só a do departamento fica como polimento futuro, não
+  fabricado como "pronto" aqui.
 
 #### v5.5 — Integração automática EBD + 4 departamentos
 

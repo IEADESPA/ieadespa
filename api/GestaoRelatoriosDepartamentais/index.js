@@ -24,7 +24,8 @@ const SELECT_RELATORIO_BASE = `
          r.SchemaRelatorioId AS schemaRelatorioId, r.Status AS status, r.Atrasado AS atrasado,
          r.EventosLocal AS eventosLocal, r.EventosArea AS eventosArea, r.EventosGeral AS eventosGeral,
          r.IntegracaoConversao AS integracaoConversao, r.IntegracaoReconciliacao AS integracaoReconciliacao,
-         r.IntegracaoDeOutraIgreja AS integracaoDeOutraIgreja, r.ValorManualParaGeral AS valorManualParaGeral
+         r.IntegracaoDeOutraIgreja AS integracaoDeOutraIgreja, r.ValorManualParaGeral AS valorManualParaGeral,
+         r.ValorParaGeral AS valorParaGeral, r.ValorParaLocal AS valorParaLocal
   FROM RelatoriosDepartamentais r
   JOIN Congregacoes cong ON cong.CongregacaoId = r.CongregacaoId
   JOIN Departamentos dep ON dep.DepartamentoId = r.DepartamentoId`;
@@ -72,20 +73,22 @@ async function montarDetalheRelatorio(pool, linha) {
     WHERE a.RelatorioDepartamentalId = @id ORDER BY a.CriadoEm ASC`);
 
   const valorTotalFinanceiro = rd.calcularValorTotalFinanceiro(campos, valores);
-  // v5.4 — rateio linha a linha, sempre calculado a partir do perfil do
-  // departamento (nunca digitado): mostra pra quem preenche exatamente
-  // quanto vai ficar local e quanto sobe pro geral daquele mês.
+  // v5.4 — rateio linha a linha. Congelado (ValorParaGeral/ValorParaLocal)
+  // desde APROVADO_GERAL/RETIFICADO: é o número oficial que a Tesouraria
+  // usa — nunca recalculado, mesmo que o perfil de rateio mude depois.
+  // Antes disso (RASCUNHO/ENVIADO/APROVADO_AREA) é só prévia ao vivo.
   const perfilRateio = await td.buscarPerfilRateio(pool, linha.departamentoId);
-  const rateio = perfilRateio
-    ? td.calcularRateio(perfilRateio, valorTotalFinanceiro, linha.valorManualParaGeral)
-    : { paraGeral: null, paraLocal: null };
+  const congelado = linha.valorParaGeral !== null && linha.valorParaGeral !== undefined;
+  const rateio = congelado
+    ? { paraGeral: linha.valorParaGeral, paraLocal: linha.valorParaLocal }
+    : (perfilRateio ? td.calcularRateio(perfilRateio, valorTotalFinanceiro, linha.valorManualParaGeral) : { paraGeral: null, paraLocal: null });
 
   return {
     ...linha,
     schema: { campos, permiteSemanal, camposEventos: rd.CAMPOS_EVENTOS, camposIntegracao: rd.CAMPOS_INTEGRACAO },
     valores,
     valorTotalFinanceiro,
-    rateio: { ...rateio, metodo: perfilRateio ? perfilRateio.metodo : null, precisaValorManual: !!perfilRateio && perfilRateio.metodo === "VARIAVEL_MANUAL" },
+    rateio: { ...rateio, congelado, metodo: perfilRateio ? perfilRateio.metodo : null, precisaValorManual: !congelado && !!perfilRateio && perfilRateio.metodo === "VARIAVEL_MANUAL" },
     valoresSemanais,
     eventos: { local: linha.eventosLocal, area: linha.eventosArea, geral: linha.eventosGeral },
     integracao: {
@@ -172,6 +175,45 @@ async function gravarValores(pool, idRota, schemaRelatorioId, { valores, valores
         .query(`INSERT INTO ContribuintesMensalidadeDepartamental (RelatorioDepartamentalId, Nome, Valor, Ordem) VALUES (@relId, @nome, @valor, @ordem)`);
     }
   }
+}
+
+// v5.4 (correção) — congela ValorParaGeral/ValorParaLocal no momento da
+// aprovação geral/retificação, com o perfil de rateio VIGENTE nesse
+// instante. Isso é o que torna o relatório uma fonte confiável pra
+// `shared/tesouraria.js::saldoCentroCusto` (DEPTO_*) e pro fechamento de
+// `TesourariasDepartamento` — mudar o perfil de rateio depois não altera
+// relatórios já aprovados.
+async function congelarRateio(pool, idRota, schemaRelatorioId, departamentoId) {
+  const camposResult = await pool.request().input("schemaId", sql.Int, schemaRelatorioId).query(`
+    SELECT CampoFormularioId AS campoFormularioId, NomeCampo AS nomeCampo, Grupo AS grupo, PermiteSemanal AS permiteSemanal
+    FROM CamposFormularioDepartamental WHERE SchemaRelatorioId = @schemaId`);
+  const campos = camposResult.recordset;
+
+  const valoresResult = await pool.request().input("id", sql.Int, idRota).query(`
+    SELECT c.NomeCampo AS nomeCampo, v.NumeroDomingo AS numeroDomingo, v.Valor AS valor
+    FROM ValoresCampoRelatorioDepartamental v
+    JOIN CamposFormularioDepartamental c ON c.CampoFormularioId = v.CampoFormularioId
+    WHERE v.RelatorioDepartamentalId = @id`);
+  const valores = {};
+  const valoresSemanais = {};
+  for (const v of valoresResult.recordset) {
+    if (v.numeroDomingo == null) valores[v.nomeCampo] = v.valor;
+    else { if (!valoresSemanais[v.nomeCampo]) valoresSemanais[v.nomeCampo] = {}; valoresSemanais[v.nomeCampo][v.numeroDomingo] = v.valor; }
+  }
+  for (const campo of campos) {
+    if (campo.permiteSemanal) valores[campo.nomeCampo] = rd.somarValoresSemanais(valoresSemanais[campo.nomeCampo] || {});
+  }
+
+  const valorTotalFinanceiro = rd.calcularValorTotalFinanceiro(campos, valores);
+  const linhaAtual = await pool.request().input("id", sql.Int, idRota).query(`SELECT ValorManualParaGeral AS valorManualParaGeral FROM RelatoriosDepartamentais WHERE RelatorioDepartamentalId = @id`);
+  const perfil = await td.buscarPerfilRateio(pool, departamentoId);
+  const { paraGeral, paraLocal } = perfil
+    ? td.calcularRateio(perfil, valorTotalFinanceiro, linhaAtual.recordset[0].valorManualParaGeral)
+    : { paraGeral: 0, paraLocal: valorTotalFinanceiro };
+
+  await pool.request().input("id", sql.Int, idRota)
+    .input("paraGeral", sql.Decimal(14, 2), paraGeral).input("paraLocal", sql.Decimal(14, 2), paraLocal === null ? null : paraLocal)
+    .query(`UPDATE RelatoriosDepartamentais SET ValorParaGeral = @paraGeral, ValorParaLocal = @paraLocal, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
 }
 
 async function registrarAprovacao(pool, { relatorioDepartamentalId, nivelAprovador, acao, comentario, membroId }) {
@@ -378,6 +420,16 @@ module.exports = async function (context, req) {
     // local lançou errado).
     if (acao === "CORRIGIR" || acao === "RETIFICAR") {
       await gravarValores(pool, idRota, linha.schemaRelatorioId, req.body || {});
+    }
+
+    // v5.4 (correção) — APROVAR_GERAL/RETIFICAR CONGELAM o rateio
+    // (ValorParaGeral/ValorParaLocal): é o momento em que o relatório se
+    // torna "oficial" pra Tesouraria. Sem congelar, mudar o perfil de
+    // rateio depois mudaria retroativamente o valor de relatórios antigos
+    // — o mesmo tipo de bug que a versão vigente do Texto Mestre (vB.15)
+    // já existe pra evitar.
+    if (acao === "APROVAR_GERAL" || acao === "RETIFICAR") {
+      await congelarRateio(pool, idRota, linha.schemaRelatorioId, linha.departamentoId);
     }
 
     if (acao === "ENVIAR") {

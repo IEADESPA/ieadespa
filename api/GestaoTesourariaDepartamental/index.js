@@ -1,8 +1,13 @@
 // GestaoTesourariaDepartamental (v5.4 — Tesouraria Central por Departamento
 // + Rateio). Fonte: protótipo conceitual `relatorios-departamentos` (ver
-// README FASE 5). Financeiro EXCLUSIVO do departamento — nunca integra com
-// o módulo Financeiro geral (FASE 4); a ponte com a conta real é a
-// auditoria do Conselho Fiscal/Tesoureiro Geral, por fora do motor.
+// README FASE 5). Este é o lado GERAL/campo inteiro (fundo discricionário
+// do próprio departamento, Estatuto Art. 49 — autonomia de gestão): fica
+// exclusivo, não se funde no caixa geral compartilhado da FASE 4, mas
+// aparece no `RelatorioSituacaoTesouro` (v4.10) pra auditoria do Conselho
+// Fiscal/Tesoureiro Geral. O lado LOCAL (por congregação) é diferente:
+// gasta pelo `GestaoSaidas`/`SaidasTesouraria` já existente, com Centro de
+// Custo `DEPTO_<SIGLA>` — reaproveita a mesma alçada/segregação/quatro-
+// olhos que protege qualquer despesa da igreja (migração 097).
 //
 // GET  /api/tesouraria-departamental?departamentoId=&mes=&ano=   -> resumo do mês (ao vivo ou congelado)
 // GET  /api/tesouraria-departamental/perfil?departamentoId=      -> perfil de rateio vigente
@@ -15,32 +20,27 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const td = require("../shared/tesourariaDepartamental");
 
-async function movimentacaoDoMes(pool, departamentoId, mes, ano, perfil) {
-  const relatorios = await pool.request()
-    .input("depId", sql.Int, departamentoId).input("mes", sql.Int, mes).input("ano", sql.Int, ano)
-    .query(`
-      SELECT r.RelatorioDepartamentalId AS relatorioDepartamentalId, r.ValorManualParaGeral AS valorManualParaGeral,
-             ISNULL(SUM(v.Valor), 0) AS valorTotalFinanceiro
-      FROM RelatoriosDepartamentais r
-      JOIN CamposFormularioDepartamental c ON c.SchemaRelatorioId = r.SchemaRelatorioId AND c.Grupo = 'FINANCEIRO'
-      LEFT JOIN ValoresCampoRelatorioDepartamental v ON v.RelatorioDepartamentalId = r.RelatorioDepartamentalId
-        AND v.CampoFormularioId = c.CampoFormularioId AND v.NumeroDomingo IS NULL
-      WHERE r.DepartamentoId = @depId AND r.MesReferencia = @mes AND r.AnoReferencia = @ano
-        AND r.Status IN ('APROVADO_GERAL', 'RETIFICADO')
-      GROUP BY r.RelatorioDepartamentalId, r.ValorManualParaGeral
-    `);
-
-  let movimentacaoGeralMes = 0, investidoLocal = 0, temParaLocalNaoRastreado = false;
-  for (const linha of relatorios.recordset) {
-    const { paraGeral, paraLocal } = td.calcularRateio(perfil, linha.valorTotalFinanceiro, linha.valorManualParaGeral);
-    movimentacaoGeralMes += paraGeral;
-    if (paraLocal === null) temParaLocalNaoRastreado = true; else investidoLocal += paraLocal;
-  }
+// v5.4 (correção) — soma o rateio já CONGELADO (ValorParaGeral/ValorParaLocal,
+// gravado na aprovação geral/retificação, ver GestaoRelatoriosDepartamentais)
+// em vez de recalcular ao vivo com o perfil atual — evita que mudar o
+// perfil de rateio depois altere retroativamente o valor de meses já
+// fechados ou em curso.
+async function movimentacaoDoMes(pool, departamentoId, mes, ano) {
+  const result = await pool.request().input("depId", sql.Int, departamentoId).input("mes", sql.Int, mes).input("ano", sql.Int, ano).query(`
+    SELECT COUNT(*) AS relatoriosContabilizados,
+           ISNULL(SUM(ValorParaGeral), 0) AS movimentacaoGeralMes,
+           ISNULL(SUM(ValorParaLocal), 0) AS investidoLocal,
+           SUM(CASE WHEN ValorParaLocal IS NULL THEN 1 ELSE 0 END) AS relatoriosSemParaLocalRastreado
+    FROM RelatoriosDepartamentais
+    WHERE DepartamentoId = @depId AND MesReferencia = @mes AND AnoReferencia = @ano
+      AND Status IN ('APROVADO_GERAL', 'RETIFICADO') AND ValorParaGeral IS NOT NULL
+  `);
+  const linha = result.recordset[0];
   return {
-    movimentacaoGeralMes: Math.round(movimentacaoGeralMes * 100) / 100,
-    investidoLocal: Math.round(investidoLocal * 100) / 100,
-    temParaLocalNaoRastreado,
-    relatoriosContabilizados: relatorios.recordset.length
+    movimentacaoGeralMes: Number(linha.movimentacaoGeralMes),
+    investidoLocal: Number(linha.investidoLocal),
+    temParaLocalNaoRastreado: linha.relatoriosSemParaLocalRastreado > 0,
+    relatoriosContabilizados: linha.relatoriosContabilizados
   };
 }
 
@@ -202,7 +202,7 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Departamento sem perfil de rateio configurado." } };
       return;
     }
-    const { movimentacaoGeralMes, investidoLocal } = await movimentacaoDoMes(pool, depId, mes, ano, perfil);
+    const { movimentacaoGeralMes, investidoLocal } = await movimentacaoDoMes(pool, depId, mes, ano);
     const totalDespesas = await totalDespesasDoMes(pool, depId, mes, ano);
     const ultimoFechamento = await td.buscarUltimoFechamento(pool, depId, mes, ano);
     const saldoTransportado = ultimoFechamento ? ultimoFechamento.saldoMes : 0;
@@ -256,7 +256,7 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Departamento sem perfil de rateio configurado." } };
       return;
     }
-    const { movimentacaoGeralMes, investidoLocal, temParaLocalNaoRastreado, relatoriosContabilizados } = await movimentacaoDoMes(pool, departamentoId, mes, ano, perfil);
+    const { movimentacaoGeralMes, investidoLocal, temParaLocalNaoRastreado, relatoriosContabilizados } = await movimentacaoDoMes(pool, departamentoId, mes, ano);
     const totalDespesas = await totalDespesasDoMes(pool, departamentoId, mes, ano);
     const ultimoFechamento = await td.buscarUltimoFechamento(pool, departamentoId, mes, ano);
     const saldoTransportado = ultimoFechamento ? ultimoFechamento.saldoMes : 0;

@@ -47,13 +47,40 @@ module.exports = async function (context, req) {
     ORDER BY c.Nome
   `);
 
+  // v5.4 (correção) — dinheiro de departamento é discricionário DELE
+  // (Art. 49), não se funde no Tesouro Geral acima — mas precisa aparecer
+  // NESTE MESMO relatório consolidado, senão o Conselho Fiscal teria que
+  // abrir 8 telas separadas pra auditar. Local: liberado (ValorParaLocal
+  // congelado nos relatórios aprovados) menos pago (mesma SaidasTesouraria
+  // de sempre, Centro de Custo DEPTO_<SIGLA>) — calculado ao vivo, igual
+  // ao resto deste painel. Geral: o último balancete FECHADO
+  // (TesourariasDepartamento) — é o número oficial/auditável, não uma
+  // reconstrução ao vivo (a dedução de suporte à Secretaria Geral só
+  // existe no momento do fechamento mensal).
+  const porDepartamento = await pool.request().query(`
+    SELECT d.DepartamentoId AS departamentoId, d.Sigla AS sigla, d.Nome AS nome,
+           ISNULL((SELECT SUM(r.ValorParaLocal) FROM RelatoriosDepartamentais r
+                    WHERE r.DepartamentoId = d.DepartamentoId AND r.Status IN ('APROVADO_GERAL', 'RETIFICADO') AND r.ValorParaLocal IS NOT NULL), 0)
+           - ISNULL((SELECT SUM(s.Valor) FROM SaidasTesouraria s JOIN CategoriasSaida cs ON cs.Codigo = s.Tipo
+                      WHERE s.Status = 'PAGA' AND cs.CentroCusto = CONCAT('DEPTO_', d.Sigla)), 0) AS saldoLocalConsolidado,
+           (SELECT TOP 1 t.SaldoMes FROM TesourariasDepartamento t WHERE t.DepartamentoId = d.DepartamentoId ORDER BY t.AnoReferencia DESC, t.MesReferencia DESC) AS saldoGeralUltimoBalancete
+    FROM Departamentos d
+    WHERE d.Ativo = 1
+    ORDER BY d.Numero
+  `);
+
   context.res = {
     status: 200, headers: { "Content-Type": "application/json" },
     body: {
       tesouroGeral, convencao, prebendaPastoral, pdq,
       malotePendente: { totalItens: malote.recordset[0].totalItens, totalBase: tesouraria.round2(malote.recordset[0].totalBase) },
       porCongregacao: porCongregacao.recordset.map(c => ({ congregacaoId: c.congregacaoId, congregacaoNome: c.congregacaoNome, saldoLocal: tesouraria.round2(c.saldoLocal) })),
-      totalLocalConsolidado: tesouraria.round2(porCongregacao.recordset.reduce((soma, c) => soma + Number(c.saldoLocal), 0))
+      totalLocalConsolidado: tesouraria.round2(porCongregacao.recordset.reduce((soma, c) => soma + Number(c.saldoLocal), 0)),
+      porDepartamento: porDepartamento.recordset.map(d => ({
+        departamentoId: d.departamentoId, sigla: d.sigla, nome: d.nome,
+        saldoLocalConsolidado: tesouraria.round2(d.saldoLocalConsolidado),
+        saldoGeralUltimoBalancete: d.saldoGeralUltimoBalancete === null ? null : tesouraria.round2(d.saldoGeralUltimoBalancete)
+      }))
     }
   };
 };

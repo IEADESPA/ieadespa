@@ -76,6 +76,48 @@ describe("camposParaPrePreencher", () => {
     const r = rd.camposParaPrePreencher(campos);
     expect(r.map(c => c.nomeCampo)).toEqual(["membrosEmComunhao", "congregados"]);
   });
+
+  // v5.5 — campo automatico nunca herda do mês anterior: é sempre
+  // recalculado ao vivo do cadastro de membros, nunca copiado.
+  test("exclui campos automatico mesmo sendo ESTADO", () => {
+    const campos = [
+      { nomeCampo: "congregados", comportamento: "ESTADO", automatico: true },
+      { nomeCampo: "matriculados", comportamento: "ESTADO", automatico: false }
+    ];
+    const r = rd.camposParaPrePreencher(campos);
+    expect(r.map(c => c.nomeCampo)).toEqual(["matriculados"]);
+  });
+});
+
+describe("contagemAfiliadosDepartamento (v5.5 — integração automática)", () => {
+  test("mapeia SituacoesMembro pros 3 campos de contagem, zerando o que não apareceu", async () => {
+    const { pool, chamadas } = criarPoolFalso([
+      [{ situacaoMembro: "EM_COMUNHAO", total: 40 }, { situacaoMembro: "CONGREGADO", total: 5 }]
+      // SEM_COMUNHAO não apareceu — ninguém naquela situação
+    ]);
+    const valores = await rd.contagemAfiliadosDepartamento(pool, 2, 10);
+    expect(valores).toEqual({ congregados: 5, membrosEmComunhao: 40, membrosSemComunhao: 0 });
+    expect(chamadas[0].inputs.depId).toBe(2);
+    expect(chamadas[0].inputs.congId).toBe(10);
+  });
+
+  test("sem nenhum membro afiliado, os 3 campos vêm zerados (não erro)", async () => {
+    const { pool } = criarPoolFalso([[]]);
+    const valores = await rd.contagemAfiliadosDepartamento(pool, 2, 10);
+    expect(valores).toEqual({ congregados: 0, membrosEmComunhao: 0, membrosSemComunhao: 0 });
+  });
+});
+
+describe("aplicarContagemAutomatica (v5.5)", () => {
+  test("sobrescreve só os campos que o schema realmente tem", () => {
+    const campos = [{ nomeCampo: "congregados" }, { nomeCampo: "casasVisitadas" }]; // sem membrosEmComunhao (caso UCADESPA)
+    const valores = { congregados: 999, casasVisitadas: 3 }; // 999 = valor digitado errado, deve ser substituído
+    const contagemAutomatica = { congregados: 12, membrosEmComunhao: 40, membrosSemComunhao: 8 };
+    const r = rd.aplicarContagemAutomatica(campos, valores, contagemAutomatica);
+    expect(r.congregados).toBe(12); // substituído
+    expect(r.casasVisitadas).toBe(3); // não mexido, não é campo automático
+    expect(r.membrosEmComunhao).toBeUndefined(); // schema (UCADESPA) não tem esse campo — nunca inventa
+  });
 });
 
 describe("buscarSchemaVigente", () => {
@@ -109,6 +151,31 @@ describe("buscarSchemaVigente", () => {
     const { pool } = criarPoolFalso([[]]);
     const schema = await rd.buscarSchemaVigente(pool, 999);
     expect(schema).toBeNull();
+  });
+
+  // v5.5 — só departamentos Tipo='DEPARTAMENTO' (faixa etária/gênero) têm
+  // campos marcados automatico; as secretarias (Tipo='SECRETARIA_ADJUNTA')
+  // nunca têm, mesmo usando um nome de campo coincidente.
+  test("marca automatico=true nos campos de afiliação, só pra Tipo='DEPARTAMENTO'", async () => {
+    const { pool } = criarPoolFalso([
+      [{ schemaRelatorioId: 3, departamentoId: 2, rotuloPapelLocal: "Líder Local", tipoDepartamento: "DEPARTAMENTO" }],
+      [
+        { campoFormularioId: 10, nomeCampo: "membrosEmComunhao", rotulo: "Membros em Comunhão", grupo: "CONTAGEM", comportamento: "ESTADO", tipoDado: "INTEIRO", permiteSemanal: false, ordem: 1 },
+        { campoFormularioId: 11, nomeCampo: "casasVisitadas", rotulo: "Casas Visitadas", grupo: "ACOES", comportamento: "FLUXO", tipoDado: "INTEIRO", permiteSemanal: false, ordem: 2 }
+      ]
+    ]);
+    const schema = await rd.buscarSchemaVigente(pool, 2);
+    expect(schema.campos.find(c => c.nomeCampo === "membrosEmComunhao").automatico).toBe(true);
+    expect(schema.campos.find(c => c.nomeCampo === "casasVisitadas").automatico).toBe(false);
+  });
+
+  test("secretaria (Tipo='SECRETARIA_ADJUNTA') nunca marca automatico, mesmo com nome de campo coincidente", async () => {
+    const { pool } = criarPoolFalso([
+      [{ schemaRelatorioId: 4, departamentoId: 8, rotuloPapelLocal: "Líder Local", tipoDepartamento: "SECRETARIA_ADJUNTA" }],
+      [{ campoFormularioId: 12, nomeCampo: "congregados", rotulo: "Congregados", grupo: "CONTAGEM", comportamento: "ESTADO", tipoDado: "INTEIRO", permiteSemanal: false, ordem: 1 }]
+    ]);
+    const schema = await rd.buscarSchemaVigente(pool, 8);
+    expect(schema.campos[0].automatico).toBe(false);
   });
 });
 

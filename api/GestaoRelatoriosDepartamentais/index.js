@@ -31,12 +31,21 @@ const SELECT_RELATORIO_BASE = `
   JOIN Departamentos dep ON dep.DepartamentoId = r.DepartamentoId`;
 
 async function montarDetalheRelatorio(pool, linha) {
+  const schemaInfoResult = await pool.request().input("schemaId", sql.Int, linha.schemaRelatorioId).query(`
+    SELECT d.Tipo AS tipoDepartamento FROM SchemasRelatorioDepartamental s
+    JOIN Departamentos d ON d.DepartamentoId = s.DepartamentoId WHERE s.SchemaRelatorioId = @schemaId`);
+  const tipoDepartamento = schemaInfoResult.recordset[0] ? schemaInfoResult.recordset[0].tipoDepartamento : null;
+  const camposAutomaticos = tipoDepartamento === "DEPARTAMENTO" ? rd.CAMPOS_AUTOMATICOS_AFILIACAO : {};
+
   const camposResult = await pool.request().input("schemaId", sql.Int, linha.schemaRelatorioId).query(`
     SELECT CampoFormularioId AS campoFormularioId, NomeCampo AS nomeCampo, Rotulo AS rotulo,
            Grupo AS grupo, Comportamento AS comportamento, TipoDado AS tipoDado,
            PermiteSemanal AS permiteSemanal, Ordem AS ordem
     FROM CamposFormularioDepartamental WHERE SchemaRelatorioId = @schemaId ORDER BY Ordem`);
-  const campos = camposResult.recordset.map(c => ({ ...c, permiteSemanal: !!c.permiteSemanal }));
+  const campos = camposResult.recordset.map(c => ({
+    ...c, permiteSemanal: !!c.permiteSemanal,
+    automatico: Object.prototype.hasOwnProperty.call(camposAutomaticos, c.nomeCampo)
+  }));
   const permiteSemanal = campos.some(c => c.permiteSemanal);
 
   const valoresResult = await pool.request().input("id", sql.Int, linha.relatorioDepartamentalId).query(`
@@ -45,7 +54,7 @@ async function montarDetalheRelatorio(pool, linha) {
     JOIN CamposFormularioDepartamental c ON c.CampoFormularioId = v.CampoFormularioId
     WHERE v.RelatorioDepartamentalId = @id`);
 
-  const valores = {};
+  let valores = {};
   const valoresSemanais = {};
   for (const v of valoresResult.recordset) {
     if (v.numeroDomingo == null) {
@@ -59,6 +68,15 @@ async function montarDetalheRelatorio(pool, linha) {
   // nunca um número guardado à parte que possa divergir da soma real.
   for (const campo of campos) {
     if (campo.permiteSemanal) valores[campo.nomeCampo] = rd.somarValoresSemanais(valoresSemanais[campo.nomeCampo] || {});
+  }
+
+  // v5.5 — nos 4 departamentos de faixa etária/gênero, Congregados/Membros
+  // em Comunhão/Membros sem Comunhão NUNCA vêm do que foi digitado — são
+  // sempre a contagem ao vivo do cadastro de membros (shared/
+  // relatoriosDepartamentais.js), pra nunca divergir do cadastro real.
+  if (Object.keys(camposAutomaticos).length > 0) {
+    const contagemAutomatica = await rd.contagemAfiliadosDepartamento(pool, linha.departamentoId, linha.congregacaoId);
+    valores = rd.aplicarContagemAutomatica(campos, valores, contagemAutomatica);
   }
 
   const contribuintesResult = await pool.request().input("id", sql.Int, linha.relatorioDepartamentalId).query(`
@@ -105,6 +123,11 @@ async function montarDetalheRelatorio(pool, linha) {
 // (Líder Local editando o próprio RASCUNHO) quanto pela ação CORRIGIR
 // (Líder Geral ajustando um relatório já ENVIADO/APROVADO_AREA, v5.3).
 async function gravarValores(pool, idRota, schemaRelatorioId, { valores, valoresSemanais, eventos, integracao, contribuintes, valorManualParaGeral }) {
+  const tipoResult = await pool.request().input("schemaId", sql.Int, schemaRelatorioId).query(`
+    SELECT d.Tipo AS tipoDepartamento FROM SchemasRelatorioDepartamental s
+    JOIN Departamentos d ON d.DepartamentoId = s.DepartamentoId WHERE s.SchemaRelatorioId = @schemaId`);
+  const camposAutomaticosGravar = (tipoResult.recordset[0] && tipoResult.recordset[0].tipoDepartamento === "DEPARTAMENTO")
+    ? rd.CAMPOS_AUTOMATICOS_AFILIACAO : {};
   const camposResult = await pool.request().input("schemaId", sql.Int, schemaRelatorioId).query(
     `SELECT CampoFormularioId AS campoFormularioId, NomeCampo AS nomeCampo, PermiteSemanal AS permiteSemanal FROM CamposFormularioDepartamental WHERE SchemaRelatorioId = @schemaId`);
   const camposPorNome = Object.fromEntries(camposResult.recordset.map(c => [c.nomeCampo, c]));
@@ -121,6 +144,12 @@ async function gravarValores(pool, idRota, schemaRelatorioId, { valores, valores
     for (const [nomeCampo, valor] of Object.entries(valores)) {
       const campo = camposPorNome[nomeCampo];
       if (!campo || campo.permiteSemanal) continue; // semanal só grava via valoresSemanais
+      // v5.5 — Congregados/Membros em Comunhão/Membros sem Comunhão (nos 4
+      // deptos de faixa etária/gênero) nunca são gravados como digitados —
+      // são sempre recalculados do cadastro de membros na leitura. Mesmo
+      // que o front mande um valor (não deveria, o campo é readonly lá),
+      // o backend recusa persistir — defesa em profundidade.
+      if (Object.prototype.hasOwnProperty.call(camposAutomaticosGravar, nomeCampo)) continue;
       await pool.request()
         .input("relId", sql.Int, idRota).input("campoId", sql.Int, campo.campoFormularioId).input("valor", sql.Decimal(14, 2), Number(valor) || 0)
         .query(`MERGE ValoresCampoRelatorioDepartamental AS alvo

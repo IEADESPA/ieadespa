@@ -11246,6 +11246,13 @@ function renderizarPainelRelatorioDepto(data) {
         }).join("");
         return `<div class="input-group"><label>${c.rotulo} (total do mês: ${data.valores[c.nomeCampo] || 0})</label><div>${inputsSemana}</div></div>`;
       }
+      // v5.5 — Congregados/Membros em Comunhão/Membros sem Comunhão (nos 4
+      // deptos de faixa etária/gênero) vêm do cadastro de membros — sempre
+      // readonly, nunca reconta à mão (integração automática).
+      if (c.automatico) {
+        return `<div class="input-group"><label>${c.rotulo} <span class="subtitle">(calculado do cadastro de membros)</span></label>
+          <input type="number" readonly id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
+      }
       return `<div class="input-group"><label>${c.rotulo}</label><input ${campoInputAttrs(c, somenteLeitura)} id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
     }).join("");
     const totalFinanceiro = grupo === "FINANCEIRO"

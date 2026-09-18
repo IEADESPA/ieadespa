@@ -5395,10 +5395,41 @@ onde vier.
       (v5.4, depto EBD) — é a v5.4, não a v6.7, quem concilia com o Centro de
       Custo geral da FASE 4, exatamente pelo mesmo caminho que os outros 7
       departamentos usam.
-- [ ] UCADESPA/UMADESPA/USADESPA/UHADESPA puxam afiliados + situação de
+- [x] UCADESPA/UMADESPA/USADESPA/UHADESPA puxam afiliados + situação de
       comunhão direto de `MembroReferencia.DepartamentoId`/`SituacaoMembro`
       — pré-preenche o bloco de contagem (`estado`) sem o líder local
       recontar manualmente.
+
+  Implementado: `shared/relatoriosDepartamentais.js::contagemAfiliadosDepartamento`
+  conta, ao vivo, `MembroReferencia` ativo por `DepartamentoId`+`CongregacaoId`,
+  agrupado por `SituacaoMembro` (mesmo catálogo `SituacoesMembro` usado em
+  todo o resto do sistema: `CONGREGADO`/`EM_COMUNHAO`/`SEM_COMUNHAO`) —
+  mapeado 1:1 pros campos `congregados`/`membrosEmComunhao`/`membrosSemComunhao`
+  já seedados na v5.2. Vale só pros 4 departamentos **Tipo='DEPARTAMENTO'**
+  (faixa etária/gênero) — as 4 secretarias (`SECRETARIA_ADJUNTA`) nunca
+  ganham esse tratamento, mesmo se por acaso usassem um nome de campo
+  coincidente (Família conta famílias, não membros individuais; não faz
+  sentido lá).
+
+  **Vai além de "pré-preenche"**: esses 3 campos nunca são gravados como
+  digitados, nem no rascunho — são recalculados a cada leitura
+  (`GestaoRelatoriosDepartamentais::montarDetalheRelatorio`), e o backend
+  recusa persistir qualquer valor enviado pra eles
+  (`gravarValores`, defesa em profundidade — o front já manda o campo
+  `readonly`). Isso elimina de vez a divergência entre o que o líder local
+  reconta à mão e o cadastro real (pedido explícito do usuário: "pra não
+  ficar editando, pra não ter erro de dados"). Consequência: também não
+  herdam do relatório do mês anterior (`camposParaPrePreencher` os exclui
+  mesmo sendo `ESTADO`) — não tem por quê, o valor de agora é sempre o
+  valor certo.
+
+  Frontend: os 3 campos aparecem com rótulo "(calculado do cadastro de
+  membros)" e input sempre `readonly`, em qualquer status do relatório.
+
+  Testado com `npx jest` (236 testes, incluindo 6 novos: contagem com
+  situação ausente zerando corretamente, `aplicarContagemAutomatica` nunca
+  inventando um campo que o schema não tem, `automatico=true` só em
+  Tipo='DEPARTAMENTO', e exclusão do pré-preenchimento) e `node --check`.
 
 ##### v5.5.1 — Consolidado de Campo *(módulo novo, pedido do usuário)*
 

@@ -67,18 +67,66 @@ function calcularIndicadoresEbd({ alunosPresentes, alunosAusentes, alunosMatricu
 // Campos ESTADO pré-preenchem com o valor do último relatório enviado
 // daquela congregação+departamento (o líder só corrige o que mudou, mesmo
 // espírito de declaração de IR pré-preenchida); campos FLUXO sempre
-// começam zerados, por isso nem entram no resultado aqui.
+// começam zerados, por isso nem entram no resultado aqui. Campos
+// `automatico` (v5.5) também ficam de fora — nunca copiam do mês anterior
+// porque são sempre recalculados ao vivo do cadastro de membros na leitura,
+// nunca herdados de um valor congelado.
 function camposParaPrePreencher(camposSchema) {
-  return camposSchema.filter(c => c.comportamento === "ESTADO");
+  return camposSchema.filter(c => c.comportamento === "ESTADO" && !c.automatico);
+}
+
+// v5.5 — os 4 departamentos por faixa etária/gênero (Tipo='DEPARTAMENTO':
+// UCADESPA/UMADESPA/USADESPA/UHADESPA) têm 3 campos que já existem prontos
+// no cadastro de membros — nunca deveriam ser digitados de novo, senão o
+// líder local reconta à mão e diverge do cadastro real. Mapa nomeCampo ->
+// SituacoesMembro.Sigla (mesmo catálogo usado em todo o resto do sistema).
+const CAMPOS_AUTOMATICOS_AFILIACAO = {
+  congregados: "CONGREGADO",
+  membrosEmComunhao: "EM_COMUNHAO",
+  membrosSemComunhao: "SEM_COMUNHAO"
+};
+
+// Conta, ao vivo, quantos MembroReferencia ativos daquela congregação estão
+// afiliados àquele departamento, por situação — é isso que substitui a
+// digitação manual de "Congregados"/"Membros em Comunhão"/"Membros sem
+// Comunhão" nos 4 departamentos de faixa etária/gênero.
+async function contagemAfiliadosDepartamento(pool, departamentoId, congregacaoId) {
+  const result = await pool.request().input("depId", sql.Int, departamentoId).input("congId", sql.Int, congregacaoId).query(`
+    SELECT SituacaoMembro AS situacaoMembro, COUNT(*) AS total
+    FROM MembroReferencia
+    WHERE DepartamentoId = @depId AND CongregacaoId = @congId AND Status = 'ATIVO'
+    GROUP BY SituacaoMembro
+  `);
+  const porSituacao = {};
+  result.recordset.forEach(r => { porSituacao[r.situacaoMembro] = r.total; });
+  const valores = {};
+  for (const [nomeCampo, situacao] of Object.entries(CAMPOS_AUTOMATICOS_AFILIACAO)) {
+    valores[nomeCampo] = porSituacao[situacao] || 0;
+  }
+  return valores;
+}
+
+// Sobrescreve, nos campos que o próprio schema realmente tem, o valor
+// calculado ao vivo — nunca inventa um campo que o departamento não usa
+// (ex: UCADESPA não tem membrosEmComunhao/membrosSemComunhao, só congregados).
+function aplicarContagemAutomatica(camposSchema, valores, contagemAutomatica) {
+  const resultado = { ...valores };
+  for (const campo of camposSchema) {
+    if (Object.prototype.hasOwnProperty.call(contagemAutomatica, campo.nomeCampo)) {
+      resultado[campo.nomeCampo] = contagemAutomatica[campo.nomeCampo];
+    }
+  }
+  return resultado;
 }
 
 async function buscarSchemaVigente(pool, departamentoId) {
   const schemaResult = await pool.request().input("depId", sql.Int, departamentoId).query(`
-    SELECT TOP 1 SchemaRelatorioId AS schemaRelatorioId, DepartamentoId AS departamentoId,
-           RotuloPapelLocal AS rotuloPapelLocal
-    FROM SchemasRelatorioDepartamental
-    WHERE DepartamentoId = @depId AND DataVigenciaFim IS NULL
-    ORDER BY DataVigenciaInicio DESC
+    SELECT TOP 1 s.SchemaRelatorioId AS schemaRelatorioId, s.DepartamentoId AS departamentoId,
+           s.RotuloPapelLocal AS rotuloPapelLocal, d.Tipo AS tipoDepartamento
+    FROM SchemasRelatorioDepartamental s
+    JOIN Departamentos d ON d.DepartamentoId = s.DepartamentoId
+    WHERE s.DepartamentoId = @depId AND s.DataVigenciaFim IS NULL
+    ORDER BY s.DataVigenciaInicio DESC
   `);
   const schema = schemaResult.recordset[0];
   if (!schema) return null;
@@ -91,7 +139,15 @@ async function buscarSchemaVigente(pool, departamentoId) {
     WHERE SchemaRelatorioId = @schemaId
     ORDER BY Ordem
   `);
-  const campos = camposResult.recordset.map(c => ({ ...c, permiteSemanal: !!c.permiteSemanal }));
+  // v5.5 — só os 4 departamentos de faixa etária/gênero (Tipo='DEPARTAMENTO')
+  // puxam do cadastro de membros; as 4 secretarias transversais continuam
+  // 100% digitadas (não têm o mesmo tipo de campo — ex: Família conta
+  // famílias, não membros individuais).
+  const camposAutomaticos = schema.tipoDepartamento === "DEPARTAMENTO" ? CAMPOS_AUTOMATICOS_AFILIACAO : {};
+  const campos = camposResult.recordset.map(c => ({
+    ...c, permiteSemanal: !!c.permiteSemanal,
+    automatico: Object.prototype.hasOwnProperty.call(camposAutomaticos, c.nomeCampo)
+  }));
   return {
     ...schema,
     // "O schema tem modo semanal" nunca é digitado à parte — é sempre
@@ -206,5 +262,6 @@ module.exports = {
   calcularTotalIntegracao, calcularValorTotalFinanceiro, somarValoresSemanais, calcularIndicadoresEbd,
   camposParaPrePreencher, buscarSchemaVigente, buscarValoresParaPrePreencher,
   STATUS_VALIDOS, NIVEIS_POR_ACAO, nivelAutorizadoParaAcao, resolverTransicao,
-  calcularPrazoEnvio, relatorioEstaAtrasado
+  calcularPrazoEnvio, relatorioEstaAtrasado,
+  CAMPOS_AUTOMATICOS_AFILIACAO, contagemAfiliadosDepartamento, aplicarContagemAutomatica
 };

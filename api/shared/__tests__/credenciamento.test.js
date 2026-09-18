@@ -30,7 +30,17 @@ describe("avaliarCredenciamento (Art. 142-143)", () => {
 
   test("sem capacidade eleitoral (período de integração) é recusado no Art. 142, I", async () => {
     const { pool } = criarPoolFalso([[], []]);
-    const membro = { ...MEMBRO_BASE, dataAdmissao: new Date().toISOString().slice(0, 10) };
+    // Bug real encontrado na v5.3 (CI travou por causa deste teste): usar
+    // `new Date().toISOString()` pra "hoje" pega a data em UTC, mas
+    // shared/estatuto.js::diasDesde trata a string como data LOCAL — perto
+    // da virada da meia-noite, UTC pode já estar "amanhã" enquanto o
+    // relógio local ainda está "hoje", fazendo `dataAdmissao` parecer no
+    // FUTURO (diasAdmissao negativo) e o teste cair no motivo errado.
+    // Corrigido: monta a data de hoje em horário LOCAL, mesmo padrão que
+    // um formulário real usaria (nunca UTC).
+    const agora = new Date();
+    const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+    const membro = { ...MEMBRO_BASE, dataAdmissao: hojeLocal };
     const r = await credenciamento.avaliarCredenciamento(pool, membro);
     expect(r.credenciado).toBe(false);
     expect(r.artigo).toBe("Art. 142, I");

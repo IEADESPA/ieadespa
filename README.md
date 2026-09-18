@@ -5190,14 +5190,14 @@ modelados como estrutura compartilhada, não repetida por tipo:
 
 #### v5.4 — Tesouraria central por departamento
 
-- [ ] `TesourariasDepartamento` (livro-caixa central, 1 por depto/mês):
+- [x] `TesourariasDepartamento` (livro-caixa central, 1 por depto/mês):
       saldo transportado do mês anterior, movimentação geral do mês (soma
       do "para o geral" de todos os relatórios aprovados), investido local,
       entrada geral, **suporte para Secretaria Geral** (dedução extra
       **facultativa por departamento** — a maioria não usa, ex. SEMIADESPA
       usa — não é fórmula, é opção configurada no perfil de rateio), +
       `DespesasTesouraria` (lançamentos livres do Líder Geral) → saldo do mês.
-- [ ] `PerfisRateio` por `SchemaRelatorio`, com **5 métodos reais**
+- [x] `PerfisRateio` por `SchemaRelatorio`, com **5 métodos reais**
       confirmados nas planilhas (não 4 — o rascunho anterior citava só
       integral/percentual/mensalidade/variável): **integral geral** (100%
       sobe), **integral local** (100% fica — caso do EBD hoje), **taxa fixa
@@ -5208,11 +5208,11 @@ modelados como estrutura compartilhada, não repetida por tipo:
       (sistema divide o valor informado) ou `líquido_manual` (quem preenche
       já lança só a parte que sobe, sem o sistema recalcular — confirmado em
       departamentos que usam percentual, pra simplificar o preenchimento).
-- [ ] Rateio local/geral calculado linha a linha no relatório mensal
+- [x] Rateio local/geral calculado linha a linha no relatório mensal
       (camada 1), consolidado na tesouraria do depto (camada 2) — duas
       camadas financeiras, não uma.
-- [ ] Saldo transportado mês a mês.
-- [ ] **Autonomia de arrecadação/gasto dos departamentos** (Estatuto, Art. 49)
+- [x] Saldo transportado mês a mês.
+- [x] **Autonomia de arrecadação/gasto dos departamentos** (Estatuto, Art. 49)
       — vinha adiada de `v2.7` (item 5): Departamentos/Áreas/Congregações
       podem gerir recursos internos ("caixas de departamento") pra custear
       suas próprias atividades, com a vedação expressa do Art. 49, I (nenhum
@@ -5222,20 +5222,88 @@ modelados como estrutura compartilhada, não repetida por tipo:
       faz sentido depois que `TesourariasDepartamento`/`Despesas` (acima)
       existirem de verdade — não tem como controlar autonomia de caixa sem
       caixa.
-- [ ] **Saldo virtual individualizado dentro da conta única** (Reg. Art. 133-C
-      §1º) — mesmo mecanismo de Centro de Custo já provado na v4.1.3/v4.10
-      (`shared/tesouraria.js::saldoCentroCusto`): o departamento tem saldo
-      próprio sem ter conta bancária própria — reaproveitar a função, não
-      recriar o cálculo.
-- [ ] **Bloqueio automático por balancete não entregue** (Reg. Art. 133-C §2º):
+- [x] **Saldo virtual individualizado dentro da conta única** (Reg. Art. 133-C
+      §1º) — mesmo **princípio** de Centro de Custo já provado na v4.1.3/v4.10
+      (saldo = liberado − pago, sempre calculado); **não** reaproveita a
+      função literal `shared/tesouraria.js::saldoCentroCusto` — ver correção
+      de rumo documentada abaixo.
+- [x] **Bloqueio automático por balancete não entregue** (Reg. Art. 133-C §2º):
       *"a não apresentação do balancete mensal bloqueia imediatamente a liberação
       de novos recursos"*. É bloqueio, não alerta — e é calculado na leitura
       (o mês anterior fechou sem balancete → a liberação trava sozinha), nunca
       marcação manual de alguém "lembrar de bloquear". Conecta com a v4.12
       (bloqueio de repasse por falta de prestação de contas): é a mesma regra,
       um nível abaixo.
-- [ ] Despesa vinculada à finalidade específica do grupo (Reg. Art. 152, I-II) —
-      dinheiro de departamento não custeia atividade de outro.
+- [x] Despesa vinculada à finalidade específica do grupo (Reg. Art. 152, I-II) —
+      dinheiro de departamento não custeia atividade de outro (garantido por
+      desenho: não existe mecanismo nenhum de mover dinheiro entre
+      `TesourariasDepartamento` de departamentos diferentes).
+
+  **Correção de rumo, documentada não escondida**: o item acima prometia
+  reaproveitar `shared/tesouraria.js::saldoCentroCusto` literalmente — na
+  implementação isso se mostrou incompatível com a decisão já tomada na
+  abertura da FASE 5 ("financeiro exclusivo, nunca misturado com a FASE 4"):
+  aquela função opera sobre os livros da FASE 4
+  (`RateiosGerais`/`RateioGeralValores`/`SaidasTesouraria`), e plugar
+  departamento ali significaria rotear dinheiro de departamento pelo motor
+  financeiro geral — exatamente o que a decisão de exclusividade proíbe.
+  Reaproveitado o **princípio** (calculado, nunca digitado), implementado em
+  cima das tabelas próprias do departamento.
+
+  Implementado: `sql/migrations/095_tesouraria_rateio_departamental.sql`
+  cria `PerfisRateioDepartamental` (1 por `SchemaRelatorioId`),
+  `ParametrosTesourariaDepartamento` (limite de despesa sem autorização,
+  Art. 49), `TesourariasDepartamento` e `DespesasTesourariaDepartamento`.
+  Seed dos perfis: **4 métodos confirmados na planilha real** (EBD=Integral
+  Local, USADESPA=Mensalidade Fixa, FAMÍLIA=Percentual 40% líquido,
+  UHADESPA=Variável Manual) + SEMIADESPA com suporte confirmado (R$150) mas
+  método base ainda não; **UCADESPA/UMADESPA/AÇÃO DA FÉ nascem com
+  `Confirmado = 0`** — sem a planilha física de cada um em mãos, não dá pra
+  garantir o método real, fica marcado pra quem administra confirmar
+  (decisão documentada, não fabricada).
+
+  `shared/tesourariaDepartamental.js::calcularRateio` — os 5 métodos, sem
+  duplicar fórmula (PERCENTUAL e MENSALIDADE_FIXA usam o mesmo cálculo);
+  `paraLocal` vem `null` (não 0) quando o modo é `líquido_manual` — reportar
+  zero seria fabricar um número que ninguém mediu.
+  `RelatoriosDepartamentais.ValorManualParaGeral` (coluna nova) guarda a
+  decisão do VARIAVEL_MANUAL lançamento a lançamento — o "para local" sai
+  sempre por subtração do Valor Total, nunca os dois digitados separado.
+  `balanceteBloqueado` só bloqueia quando o departamento já tinha atividade
+  antes/no mês anterior e esse mês não foi fechado — departamento sem
+  nenhuma atividade prévia não tem o que "não entregar". `fecharMes`
+  (`api/GestaoTesourariaDepartamental`) segue o mesmo padrão "gerar e
+  congelar" da `RelatoriosCredenciamento` (vB.13): reexecutar devolve o
+  fechamento já existente, nunca recalcula; também recusa fechar fora de
+  ordem (mês anterior sem fechamento).
+
+  Art. 49: `DespesasTesourariaDepartamento.AutorizadoPor` é obrigatório
+  acima do `LimiteDespesaSemAutorizacao` (padrão R$ 1.000, configurável por
+  depto) — a API confere que quem autorizou tem de fato um Papel `Nivel =
+  'GLOBAL'` (Pastor Presidente/1º Secretário), não aceita qualquer matrícula.
+
+  Permissão nova `tesouraria_departamental` (Funcionalidade dedicada, não
+  reaproveita `relatorios_departamentais`): visualização pode ser concedida
+  a qualquer nível (inclusive Líder Local/Área, se quem administra decidir
+  — pedido do usuário: "exclusivo pros líderes e tesoureiros locais e de
+  área"); lançar despesa e fechar mês exigem nível `DEPARTAMENTO`/`GLOBAL`;
+  configurar o perfil de rateio exige `GLOBAL` (docs do protótipo: é sempre
+  o Secretário Geral quem configura, a pedido do Líder Geral — nem o
+  próprio Líder Geral edita direto).
+
+  Frontend: painel "💰 Tesouraria do Departamento" na mesma aba de
+  Relatórios — resumo do mês (aberto, calculado ao vivo, ou fechado,
+  congelado), lista/lançamento de despesas, botão de fechar mês, e edição
+  do perfil de rateio (só GLOBAL). No relatório mensal (v5.2/v5.3), o
+  rateio calculado aparece junto ao Valor Total — com campo editável pra
+  "quanto vai pro Geral" nos departamentos VARIAVEL_MANUAL.
+
+  Testado com `npx jest` (225 testes, incluindo 22 novos de
+  `shared/tesourariaDepartamental.js`: os 5 métodos de rateio, Art. 49
+  (precisaAutorizacao), cálculo de saldo, e o bloqueio de balancete nos 4
+  cenários — sem atividade prévia, mês anterior à primeira atividade, mês
+  anterior sem fechamento, mês anterior fechado) e `node --check` em todos
+  os arquivos novos/alterados.
 
 #### v5.5 — Integração automática EBD + 4 departamentos
 

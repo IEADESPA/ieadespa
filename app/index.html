@@ -2130,6 +2130,25 @@
         <p id="resultadoRelatorioDepto"></p>
 
         <div id="painelRelatorioDepto"></div>
+
+        <hr />
+        <h3>💰 Tesouraria do Departamento (v5.4)</h3>
+        <p class="subtitle">Livro-caixa central do departamento, campo inteiro — saldo transportado,
+          movimentação do mês (soma do "para o geral" dos relatórios aprovados), despesas e saldo.
+          Financeiro exclusivo do departamento: não passa pelo módulo Financeiro geral.</p>
+        <div class="barra-lista">
+          <select id="tdDepartamento"></select>
+          <select id="tdMes">
+            <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+            <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+            <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+            <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+          </select>
+          <input type="number" id="tdAno" placeholder="Ano" style="max-width:100px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="abrirTesourariaDeptoAcao()">📂 Abrir</button>
+        </div>
+        <p id="resultadoTesourariaDepto"></p>
+        <div id="painelTesourariaDepto"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

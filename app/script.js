@@ -11144,9 +11144,16 @@ async function carregarOpcoesRelatorioDepto() {
   }
   if (!selDep.dataset.montado) {
     const deps = await (await fetch(`${API_BASE}/catalogos/departamentos`)).json();
-    selDep.innerHTML = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${d.nome}</option>`).join("");
+    const opcoesDep = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${d.nome}</option>`).join("");
+    selDep.innerHTML = opcoesDep;
     selDep.dataset.montado = "1";
+    const selTdDep = document.getElementById("tdDepartamento");
+    if (selTdDep && !selTdDep.dataset.montado) { selTdDep.innerHTML = opcoesDep; selTdDep.dataset.montado = "1"; }
   }
+  const tdAno = document.getElementById("tdAno");
+  if (tdAno && !tdAno.value) tdAno.value = new Date().getFullYear();
+  const tdMes = document.getElementById("tdMes");
+  if (tdMes) tdMes.value = String(new Date().getMonth() + 1);
 }
 
 async function abrirRelatorioDeptoAcao() {
@@ -11165,6 +11172,21 @@ async function abrirRelatorioDeptoAcao() {
   if (data.sucesso === false) { msg.textContent = data.mensagem; document.getElementById("painelRelatorioDepto").innerHTML = ""; return; }
   msg.textContent = "";
   renderizarPainelRelatorioDepto(data);
+}
+
+// v5.4 — rateio linha a linha, sempre calculado a partir do perfil do
+// departamento (nunca digitado, exceto VARIAVEL_MANUAL — aí quem lança o
+// relatório decide quanto sobe pro geral, e o resto vai pra local por
+// subtração, nunca os dois digitados separado).
+function montarRateioRd(data, somenteLeitura) {
+  const r = data.rateio || {};
+  if (r.precisaValorManual) {
+    return `<div class="input-group"><label>Quanto vai pro Geral neste mês (variável, decidido agora)</label>
+      <input type="number" step="0.01" min="0" ${somenteLeitura ? "readonly" : ""} id="rdValorManualParaGeral" value="${data.valorManualParaGeral || 0}" /></div>
+      <p class="subtitle">Para o Local (resto, calculado): R$ ${Number(r.paraLocal || 0).toFixed(2)}</p>`;
+  }
+  const paraLocalTexto = r.paraLocal === null ? "não rastreado (lançamento já líquido)" : `R$ ${Number(r.paraLocal || 0).toFixed(2)}`;
+  return `<p class="subtitle">Rateio (${r.metodo || "-"}): Para o Geral R$ ${Number(r.paraGeral || 0).toFixed(2)} · Para o Local ${paraLocalTexto}</p>`;
 }
 
 function campoInputAttrs(campo, somenteLeitura) {
@@ -11208,7 +11230,7 @@ function renderizarPainelRelatorioDepto(data) {
       return `<div class="input-group"><label>${c.rotulo}</label><input ${campoInputAttrs(c, somenteLeitura)} id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
     }).join("");
     const totalFinanceiro = grupo === "FINANCEIRO"
-      ? `<p class="subtitle"><strong>Valor Total (base do rateio local/geral): R$ ${Number(data.valorTotalFinanceiro || 0).toFixed(2)}</strong></p>` : "";
+      ? `<p class="subtitle"><strong>Valor Total (base do rateio local/geral): R$ ${Number(data.valorTotalFinanceiro || 0).toFixed(2)}</strong></p>${montarRateioRd(data, somenteLeitura)}` : "";
     return `<h4>${ROTULO_GRUPO_RD[grupo]}</h4>${linhas}${totalFinanceiro}`;
   }).join("");
 
@@ -11357,7 +11379,10 @@ function coletarValoresFormularioRd() {
     nome: linha.querySelector(".rd-contribuinte-nome").value.trim(),
     valor: Number(linha.querySelector(".rd-contribuinte-valor").value) || 0
   })).filter(c => c.nome);
-  return { valores, valoresSemanais, eventos, integracao, contribuintes };
+  const corpo = { valores, valoresSemanais, eventos, integracao, contribuintes };
+  const elValorManual = document.getElementById("rdValorManualParaGeral");
+  if (elValorManual) corpo.valorManualParaGeral = Number(elValorManual.value) || 0;
+  return corpo;
 }
 
 async function salvarRelatorioDeptoAcao() {
@@ -11370,4 +11395,156 @@ async function salvarRelatorioDeptoAcao() {
   if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
   mostrarToast("✅ Rascunho salvo.", "sucesso");
   renderizarPainelRelatorioDepto(data);
+}
+
+// ---- TESOURARIA DO DEPARTAMENTO (v5.4) ----
+let _tdDepartamentoAtual = null, _tdMesAtual = null, _tdAnoAtual = null;
+
+const ROTULO_METODO_RATEIO = {
+  INTEGRAL_GERAL: "Integral (100% Geral)", INTEGRAL_LOCAL: "Integral (100% Local)",
+  MENSALIDADE_FIXA: "Taxa fixa de mensalidade", PERCENTUAL: "Percentual", VARIAVEL_MANUAL: "Variável / manual"
+};
+
+async function abrirTesourariaDeptoAcao() {
+  const departamentoId = document.getElementById("tdDepartamento").value;
+  const mes = document.getElementById("tdMes").value;
+  const ano = document.getElementById("tdAno").value;
+  const msg = document.getElementById("resultadoTesourariaDepto");
+  if (!departamentoId || !ano) { msg.textContent = "Escolha departamento e ano."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-departamental?departamentoId=${departamentoId}&mes=${mes}&ano=${ano}`);
+  const data = await res.json();
+  if (data.sucesso === false) { msg.textContent = data.mensagem; document.getElementById("painelTesourariaDepto").innerHTML = ""; return; }
+  msg.textContent = "";
+  _tdDepartamentoAtual = Number(departamentoId); _tdMesAtual = Number(mes); _tdAnoAtual = Number(ano);
+  await renderizarPainelTesourariaDepto(data);
+}
+
+async function renderizarPainelTesourariaDepto(data) {
+  const container = document.getElementById("painelTesourariaDepto");
+  const perfil = data.perfil || null;
+
+  const avisoBloqueio = data.bloqueado
+    ? `<p class="subtitle" style="color:var(--cor-perigo,#c0392b);">⚠️ Balancete do mês anterior não foi entregue — liberação de novos recursos bloqueada (Reg. Art. 133-C §2º).</p>` : "";
+
+  const resumoHtml = `
+    <p>Status: <strong>${data.fechado ? "Fechado" : "Em aberto (calculado ao vivo)"}</strong></p>
+    ${avisoBloqueio}
+    <table class="tabela-frequencia">
+      <tbody>
+        <tr><td>Saldo transportado</td><td>R$ ${Number(data.saldoTransportado != null ? data.saldoTransportado : data.SaldoTransportado || 0).toFixed(2)}</td></tr>
+        <tr><td>Movimentação Geral do mês</td><td>R$ ${Number(data.movimentacaoGeralMes != null ? data.movimentacaoGeralMes : data.MovimentacaoGeralMes || 0).toFixed(2)}</td></tr>
+        <tr><td>Investido no Local (informativo)</td><td>R$ ${Number(data.investidoLocal != null ? data.investidoLocal : data.InvestidoLocal || 0).toFixed(2)}${data.temParaLocalNaoRastreado ? " (parcial — parte dos relatórios lança já líquido)" : ""}</td></tr>
+        <tr><td>Suporte à Secretaria Geral</td><td>R$ ${Number(data.suporteSecretariaGeral != null ? data.suporteSecretariaGeral : data.SuporteSecretariaGeral || 0).toFixed(2)}</td></tr>
+        <tr><td>Despesas</td><td>R$ ${Number(data.totalDespesas != null ? data.totalDespesas : data.TotalDespesas || 0).toFixed(2)}</td></tr>
+        <tr><td><strong>Saldo do mês</strong></td><td><strong>R$ ${Number(data.saldoMes != null ? data.saldoMes : data.SaldoMes || 0).toFixed(2)}</strong></td></tr>
+      </tbody>
+    </table>`;
+
+  const perfilHtml = perfil ? `
+    <h4>Perfil de Rateio ${perfil.confirmado ? "" : "<span style=\"color:var(--cor-aviso,#b8860b);\">(método a confirmar com a Secretaria Geral)</span>"}</h4>
+    <p class="subtitle">Método: <strong>${ROTULO_METODO_RATEIO[perfil.metodo] || perfil.metodo}</strong>${perfil.percentualGeral != null ? ` (${perfil.percentualGeral}% geral)` : ""} —
+      modo de entrada: ${perfil.modoEntrada === "LIQUIDO_MANUAL" ? "líquido (já lançado só a parte que sobe)" : "bruto (sistema calcula a divisão)"}
+      ${perfil.suporteSecretariaGeralHabilitado ? ` · Suporte à Secretaria Geral: R$ ${Number(perfil.valorSuporteSecretariaGeral || 0).toFixed(2)}` : ""}</p>
+    ${authNivel === "GLOBAL" ? `<button class="btn-link" onclick="abrirEdicaoPerfilRateioAcao()">✏️ Configurar perfil de rateio</button>` : ""}
+    <div id="tdEdicaoPerfil"></div>` : "";
+
+  const acoesHtml = (authNivel === "DEPARTAMENTO" || authNivel === "GLOBAL") ? `
+    <h4>Lançar Despesa</h4>
+    <div class="barra-lista">
+      <input type="text" id="tdDespesaDescricao" placeholder="Descrição" style="min-width:220px;" />
+      <input type="number" id="tdDespesaValor" step="0.01" min="0" placeholder="Valor" style="max-width:120px;" />
+      <input type="number" id="tdDespesaAutorizadoPor" placeholder="Matrícula de quem autorizou (só acima do limite)" style="min-width:220px;" />
+      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="lancarDespesaTesourariaDeptoAcao()">➕ Lançar</button>
+    </div>
+    <p id="resultadoDespesaTesourariaDepto"></p>
+    ${!data.fechado ? `<button class="btn-confirmar btn-secundario" onclick="fecharMesTesourariaDeptoAcao()">🔒 Fechar Mês (congela o balancete)</button>` : ""}` : "";
+
+  container.innerHTML = `${resumoHtml}${perfilHtml}<div id="tdListaDespesas"></div>${acoesHtml}`;
+  await carregarDespesasTesourariaDeptoAcao();
+}
+
+async function carregarDespesasTesourariaDeptoAcao() {
+  const container = document.getElementById("tdListaDespesas");
+  if (!container || !_tdDepartamentoAtual) return;
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-departamental/despesas?departamentoId=${_tdDepartamentoAtual}&mes=${_tdMesAtual}&ano=${_tdAnoAtual}`);
+  const lista = await res.json();
+  if (!Array.isArray(lista) || lista.length === 0) { container.innerHTML = "<p class='subtitle'>Nenhuma despesa lançada neste mês.</p>"; return; }
+  container.innerHTML = `<h4>Despesas do mês</h4><table class="tabela-frequencia"><thead><tr>
+    <th>Descrição</th><th>Valor</th><th>Lançado por</th><th>Autorizado por</th><th>Quando</th></tr></thead><tbody>
+    ${lista.map(d => `<tr><td>${d.descricao}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${d.nomeLancador}</td><td>${d.nomeAutorizador || "-"}</td><td>${new Date(d.criadoEm).toLocaleDateString("pt-BR")}</td></tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function lancarDespesaTesourariaDeptoAcao() {
+  const descricao = document.getElementById("tdDespesaDescricao").value.trim();
+  const valor = document.getElementById("tdDespesaValor").value;
+  const autorizadoPor = document.getElementById("tdDespesaAutorizadoPor").value || null;
+  const msg = document.getElementById("resultadoDespesaTesourariaDepto");
+  if (!descricao || !valor) { msg.textContent = "Informe descrição e valor."; return; }
+
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-departamental/despesas`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ departamentoId: _tdDepartamentoAtual, mesReferencia: _tdMesAtual, anoReferencia: _tdAnoAtual, descricao, valor, autorizadoPor })
+  });
+  const data = await res.json();
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("tdDespesaDescricao").value = "";
+    document.getElementById("tdDespesaValor").value = "";
+    document.getElementById("tdDespesaAutorizadoPor").value = "";
+    await abrirTesourariaDeptoAcao();
+  }
+}
+
+async function fecharMesTesourariaDeptoAcao() {
+  if (!(await confirmarAcao("Fechar o mês congela o balancete — só dá pra reabrir com retificação. Confirmar?", "Fechar mês"))) return;
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-departamental/fechar`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ departamentoId: _tdDepartamentoAtual, mesReferencia: _tdMesAtual, anoReferencia: _tdAnoAtual })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast("✅ Mês fechado.", "sucesso");
+  await abrirTesourariaDeptoAcao();
+}
+
+async function abrirEdicaoPerfilRateioAcao() {
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-departamental/perfil?departamentoId=${_tdDepartamentoAtual}`);
+  const perfil = await res.json();
+  const container = document.getElementById("tdEdicaoPerfil");
+  container.innerHTML = `
+    <div class="input-group"><label>Método</label>
+      <select id="tdPerfilMetodo">
+        ${Object.entries(ROTULO_METODO_RATEIO).map(([v, r]) => `<option value="${v}" ${perfil.metodo === v ? "selected" : ""}>${r}</option>`).join("")}
+      </select>
+    </div>
+    <div class="input-group"><label>Percentual Geral (%, se aplicável)</label><input type="number" step="0.01" min="0" max="100" id="tdPerfilPercentual" value="${perfil.percentualGeral || ""}" /></div>
+    <div class="input-group"><label>Modo de entrada</label>
+      <select id="tdPerfilModoEntrada">
+        <option value="BRUTO_CALCULADO" ${perfil.modoEntrada === "BRUTO_CALCULADO" ? "selected" : ""}>Bruto (sistema calcula)</option>
+        <option value="LIQUIDO_MANUAL" ${perfil.modoEntrada === "LIQUIDO_MANUAL" ? "selected" : ""}>Líquido (já lançado só a parte que sobe)</option>
+      </select>
+    </div>
+    <div class="input-group"><label><input type="checkbox" id="tdPerfilSuporte" style="width:auto;" ${perfil.suporteSecretariaGeralHabilitado ? "checked" : ""}/> Suporte à Secretaria Geral habilitado</label></div>
+    <div class="input-group"><label>Valor do suporte (R$)</label><input type="number" step="0.01" min="0" id="tdPerfilValorSuporte" value="${perfil.valorSuporteSecretariaGeral || ""}" /></div>
+    <button class="btn-confirmar" style="width:auto;" onclick="salvarPerfilRateioAcao()">💾 Salvar Perfil</button>`;
+}
+
+async function salvarPerfilRateioAcao() {
+  const corpo = {
+    departamentoId: _tdDepartamentoAtual,
+    metodo: document.getElementById("tdPerfilMetodo").value,
+    percentualGeral: document.getElementById("tdPerfilPercentual").value || null,
+    modoEntrada: document.getElementById("tdPerfilModoEntrada").value,
+    suporteSecretariaGeralHabilitado: document.getElementById("tdPerfilSuporte").checked,
+    valorSuporteSecretariaGeral: document.getElementById("tdPerfilValorSuporte").value || null
+  };
+  const res = await fetchProtegido(`${API_BASE}/tesouraria-departamental/perfil`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo)
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast("✅ Perfil de rateio atualizado.", "sucesso");
+  await abrirTesourariaDeptoAcao();
 }

@@ -14,6 +14,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const rd = require("../shared/relatoriosDepartamentais");
+const td = require("../shared/tesourariaDepartamental");
 
 const SELECT_RELATORIO_BASE = `
   SELECT r.RelatorioDepartamentalId AS relatorioDepartamentalId, r.CongregacaoId AS congregacaoId,
@@ -23,7 +24,7 @@ const SELECT_RELATORIO_BASE = `
          r.SchemaRelatorioId AS schemaRelatorioId, r.Status AS status, r.Atrasado AS atrasado,
          r.EventosLocal AS eventosLocal, r.EventosArea AS eventosArea, r.EventosGeral AS eventosGeral,
          r.IntegracaoConversao AS integracaoConversao, r.IntegracaoReconciliacao AS integracaoReconciliacao,
-         r.IntegracaoDeOutraIgreja AS integracaoDeOutraIgreja
+         r.IntegracaoDeOutraIgreja AS integracaoDeOutraIgreja, r.ValorManualParaGeral AS valorManualParaGeral
   FROM RelatoriosDepartamentais r
   JOIN Congregacoes cong ON cong.CongregacaoId = r.CongregacaoId
   JOIN Departamentos dep ON dep.DepartamentoId = r.DepartamentoId`;
@@ -70,11 +71,21 @@ async function montarDetalheRelatorio(pool, linha) {
     JOIN MembroReferencia m ON m.MembroId = a.MembroId
     WHERE a.RelatorioDepartamentalId = @id ORDER BY a.CriadoEm ASC`);
 
+  const valorTotalFinanceiro = rd.calcularValorTotalFinanceiro(campos, valores);
+  // v5.4 — rateio linha a linha, sempre calculado a partir do perfil do
+  // departamento (nunca digitado): mostra pra quem preenche exatamente
+  // quanto vai ficar local e quanto sobe pro geral daquele mês.
+  const perfilRateio = await td.buscarPerfilRateio(pool, linha.departamentoId);
+  const rateio = perfilRateio
+    ? td.calcularRateio(perfilRateio, valorTotalFinanceiro, linha.valorManualParaGeral)
+    : { paraGeral: null, paraLocal: null };
+
   return {
     ...linha,
     schema: { campos, permiteSemanal, camposEventos: rd.CAMPOS_EVENTOS, camposIntegracao: rd.CAMPOS_INTEGRACAO },
     valores,
-    valorTotalFinanceiro: rd.calcularValorTotalFinanceiro(campos, valores),
+    valorTotalFinanceiro,
+    rateio: { ...rateio, metodo: perfilRateio ? perfilRateio.metodo : null, precisaValorManual: !!perfilRateio && perfilRateio.metodo === "VARIAVEL_MANUAL" },
     valoresSemanais,
     eventos: { local: linha.eventosLocal, area: linha.eventosArea, geral: linha.eventosGeral },
     integracao: {
@@ -90,10 +101,18 @@ async function montarDetalheRelatorio(pool, linha) {
 // Grava valores/eventos/integração/contribuintes — usado tanto pelo PUT
 // (Líder Local editando o próprio RASCUNHO) quanto pela ação CORRIGIR
 // (Líder Geral ajustando um relatório já ENVIADO/APROVADO_AREA, v5.3).
-async function gravarValores(pool, idRota, schemaRelatorioId, { valores, valoresSemanais, eventos, integracao, contribuintes }) {
+async function gravarValores(pool, idRota, schemaRelatorioId, { valores, valoresSemanais, eventos, integracao, contribuintes, valorManualParaGeral }) {
   const camposResult = await pool.request().input("schemaId", sql.Int, schemaRelatorioId).query(
     `SELECT CampoFormularioId AS campoFormularioId, NomeCampo AS nomeCampo, PermiteSemanal AS permiteSemanal FROM CamposFormularioDepartamental WHERE SchemaRelatorioId = @schemaId`);
   const camposPorNome = Object.fromEntries(camposResult.recordset.map(c => [c.nomeCampo, c]));
+
+  // v5.4 — VARIAVEL_MANUAL: quem lança o relatório decide, naquele mês,
+  // quanto sobe pro geral (o resto vai pra local por subtração, nunca os
+  // dois digitados separado).
+  if (valorManualParaGeral !== undefined) {
+    await pool.request().input("id", sql.Int, idRota).input("valor", sql.Decimal(14, 2), valorManualParaGeral === null ? null : Number(valorManualParaGeral) || 0)
+      .query(`UPDATE RelatoriosDepartamentais SET ValorManualParaGeral = @valor, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
+  }
 
   if (valores && typeof valores === "object") {
     for (const [nomeCampo, valor] of Object.entries(valores)) {

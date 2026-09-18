@@ -5305,6 +5305,12 @@ modelados como estrutura compartilhada, não repetida por tipo:
   anterior sem fechamento, mês anterior fechado) e `node --check` em todos
   os arquivos novos/alterados.
 
+  **Verificado ao vivo em produção** (mesmo login já usado nas verificações
+  anteriores): catálogo de departamentos e CI confirmados; achado repetido
+  da v5.2 — a permissão `tesouraria_departamental` também não nascia
+  concedida a ninguém. `sql/migrations/096_permissao_tesouraria_departamental.sql`
+  concede a Presidente/Secretário Geral, mesmo padrão aditivo da 093.
+
 #### v5.5 — Integração automática EBD + 4 departamentos
 
 **Princípio (vale pra esta versão e pra qualquer fase de trabalho dedicada

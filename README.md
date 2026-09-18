@@ -5440,21 +5440,51 @@ o Presidente do Campo realmente fazem: "como está a Congregação X (ou a
 exatamente o "bater a situação eclesiástica da congregação" que justifica os
 8 estarem na mesma fase.
 
-- [ ] Painel consolidado por **congregação**: os 8 relatórios do mês lado a
+- [x] Painel consolidado por **congregação**: os 8 relatórios do mês lado a
       lado, com os blocos Eventos/Integração **somados** entre departamentos
       (não só listados) — é o número que o Regimento pede pra retrato
       eclesiástico da congregação.
-- [ ] Consolidado por **área** (soma de todas as congregações da área) e por
+- [x] Consolidado por **área** (soma de todas as congregações da área) e por
       **campo** (soma de todas as áreas) — mesma agregação, granularidade
-      maior; reaproveita `resolverEscopoCongregacoes`
-      (`shared/escopo.js`) já usado pra filtrar por nível territorial em todo
-      o resto do sistema.
-- [ ] Indicador de pendência: quais departamentos daquela congregação ainda
+      maior; mesmo princípio de `resolverEscopoCongregacoes`
+      (`shared/escopo.js`), adaptado pra devolver `CongregacaoId` (não nome)
+      porque a agregação aqui é numérica, não territorial-por-nome.
+- [x] Indicador de pendência: quais departamentos daquela congregação ainda
       não enviaram o relatório do mês corrente (calculado, não marcado à
       mão) — sem isso o consolidado mentiria por omissão num mês incompleto.
-- [ ] Comparativo mês a mês / ano a ano por congregação e por departamento
+- [x] Comparativo mês a mês / ano a ano por congregação e por departamento
       (série histórica), com os dados já estruturados por `CampoFormulario`
       desde a v5.2 — nenhuma migração de dado histórico solto pra fazer.
+
+  Implementado: `shared/consolidadoDepartamental.js` — `resolverCongregacoesDoNivel`
+  (congregação/área/campo), `agregarConsolidado` (cruza TODAS as
+  congregações do escopo × os 8 departamentos, mesmo quando não há
+  relatório: aparece como pendência, nunca como zero silencioso) e
+  `historicoConsolidado` (últimos N meses, só relatórios `ENVIADO` ou além
+  — números ainda em rascunho não entram na série histórica). Pendência é
+  calculada (`relatorioEstaPendente`): sem relatório ou ainda `RASCUNHO`
+  conta como pendente, mesmo critério do resto do sistema
+  ("calculado, nunca marcado à mão").
+
+  `api/GestaoConsolidadoDepartamental` (`GET /consolidado-departamentos?nivel=congregacao|area|campo&id=&mes=&ano=&historico=N`)
+  — escopo conferido de verdade: nível `campo` exige `escopoCongregacoes ===
+  'TODAS'` (Presidente/Secretário Geral); `congregacao`/`area` conferem que
+  **toda** congregação do escopo pedido está dentro do que o usuário
+  enxerga, nunca uma amostra "quase toda". Toda lista de IDs vira `IN
+  (@id0,@id1,...)` parametrizado — nunca concatenação de string na query,
+  mesmo vindo de uma consulta interna já confiável.
+
+  Frontend: painel "📊 Consolidado de Campo" na mesma aba de Relatórios —
+  seletor de nível (congregação/área/campo), retrato eclesiástico do mês
+  (totais somados entre departamentos), tabela por departamento com
+  enviados/pendentes, lista de pendências nominal, e histórico dos últimos
+  12 meses.
+
+  Testado com `npx jest` (249 testes, incluindo 13 novos de
+  `shared/consolidadoDepartamental.js`: pendência calculada certa nos 2
+  casos — sem relatório e `RASCUNHO` —, soma só dos não-pendentes, soma
+  ENTRE departamentos diferentes no total geral, e o histórico em ordem
+  cronológica) e `node --check` em todos os arquivos novos.
 
 #### 🔒 Trava de Revisão 5-A — antes de avançar para a v5.6
 

@@ -11158,9 +11158,22 @@ async function carregarOpcoesRelatorioDepto() {
 
   if (!selCong.dataset.montado) {
     const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
-    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    const opcoesCong = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    selCong.innerHTML = opcoesCong;
     selCong.dataset.montado = "1";
+    const selCdCong = document.getElementById("cdCongregacao");
+    if (selCdCong && !selCdCong.dataset.montado) { selCdCong.innerHTML = opcoesCong; selCdCong.dataset.montado = "1"; }
   }
+  const selCdArea = document.getElementById("cdArea");
+  if (selCdArea && !selCdArea.dataset.montado) {
+    const areas = await (await fetch(`${API_BASE}/catalogos/areas`)).json();
+    selCdArea.innerHTML = areas.filter(a => a.ativa !== false).map(a => `<option value="${a.areaId}">${a.nome}</option>`).join("");
+    selCdArea.dataset.montado = "1";
+  }
+  const cdAno = document.getElementById("cdAno");
+  if (cdAno && !cdAno.value) cdAno.value = new Date().getFullYear();
+  const cdMes = document.getElementById("cdMes");
+  if (cdMes) cdMes.value = String(new Date().getMonth() + 1);
   if (!selDep.dataset.montado) {
     const deps = await (await fetch(`${API_BASE}/catalogos/departamentos`)).json();
     const opcoesDep = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${d.nome}</option>`).join("");
@@ -11576,4 +11589,70 @@ async function salvarPerfilRateioAcao() {
   if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
   mostrarToast("✅ Perfil de rateio atualizado.", "sucesso");
   await abrirTesourariaDeptoAcao();
+}
+
+// ---- CONSOLIDADO DE CAMPO (v5.5.1) ----
+function mudarNivelConsolidadoAcao() {
+  const nivel = document.getElementById("cdNivel").value;
+  document.getElementById("cdCongregacao").style.display = nivel === "congregacao" ? "" : "none";
+  document.getElementById("cdArea").style.display = nivel === "area" ? "" : "none";
+}
+
+async function abrirConsolidadoDeptoAcao() {
+  const nivel = document.getElementById("cdNivel").value;
+  const id = nivel === "congregacao" ? document.getElementById("cdCongregacao").value
+    : nivel === "area" ? document.getElementById("cdArea").value : "";
+  const mes = document.getElementById("cdMes").value;
+  const ano = document.getElementById("cdAno").value;
+  const msg = document.getElementById("resultadoConsolidadoDepto");
+  if (nivel !== "campo" && !id) { msg.textContent = "Escolha a congregação/área."; return; }
+  if (!ano) { msg.textContent = "Informe o ano."; return; }
+
+  const params = new URLSearchParams({ nivel, mes, ano, historico: "12" });
+  if (id) params.set("id", id);
+  const res = await fetchProtegido(`${API_BASE}/consolidado-departamentos?${params.toString()}`);
+  const data = await res.json();
+  if (data.sucesso === false) { msg.textContent = data.mensagem; document.getElementById("painelConsolidadoDepto").innerHTML = ""; return; }
+  msg.textContent = "";
+  renderizarPainelConsolidadoDepto(data);
+}
+
+function renderizarPainelConsolidadoDepto(data) {
+  const container = document.getElementById("painelConsolidadoDepto");
+
+  const linhasDepto = data.porDepartamento.map(d => `<tr>
+    <td>${d.nome}</td>
+    <td>${d.totalEnviados}/${d.totalCongregacoes}${d.totalPendentes > 0 ? ` <span style="color:var(--cor-perigo,#c0392b);">(${d.totalPendentes} pendente(s))</span>` : ""}</td>
+    <td>${d.eventosLocal + d.eventosArea + d.eventosGeral}</td>
+    <td>${d.integracaoConversao + d.integracaoReconciliacao + d.integracaoDeOutraIgreja}</td>
+    <td>R$ ${Number(d.valorParaGeral).toFixed(2)}</td>
+    <td>R$ ${Number(d.valorParaLocal).toFixed(2)}</td>
+  </tr>`).join("");
+
+  const totaisHtml = `<p><strong>Retrato eclesiástico do mês:</strong>
+    Eventos: ${data.totais.eventosLocal + data.totais.eventosArea + data.totais.eventosGeral} ·
+    Integração (conversões/reconciliações/de outra igreja): ${data.totais.integracaoConversao + data.totais.integracaoReconciliacao + data.totais.integracaoDeOutraIgreja} ·
+    Para o Geral: R$ ${Number(data.totais.valorParaGeral).toFixed(2)} · Para o Local: R$ ${Number(data.totais.valorParaLocal).toFixed(2)}</p>`;
+
+  const pendenciasHtml = data.pendencias.length > 0 ? `
+    <h4>Pendências (ainda não enviaram)</h4>
+    <table class="tabela-frequencia"><thead><tr><th>Departamento</th><th>Congregação</th><th>Status</th></tr></thead><tbody>
+      ${data.pendencias.map(p => `<tr><td>${p.sigla}</td><td>${p.congregacaoNome}</td><td>${p.status === "NAO_INICIADO" ? "Não iniciado" : "Rascunho"}</td></tr>`).join("")}
+    </tbody></table>` : `<p class="subtitle">✅ Nenhuma pendência — todos os relatórios deste mês já foram enviados.</p>`;
+
+  const historicoHtml = (data.historico && data.historico.length > 0) ? `
+    <h4>Histórico (últimos ${data.historico.length} meses com relatório enviado)</h4>
+    <table class="tabela-frequencia"><thead><tr><th>Mês/Ano</th><th>Eventos</th><th>Integração</th><th>Para o Geral</th><th>Para o Local</th></tr></thead><tbody>
+      ${data.historico.map(h => `<tr><td>${h.mesReferencia}/${h.anoReferencia}</td><td>${h.totalEventos}</td><td>${h.totalIntegracao}</td>
+        <td>R$ ${Number(h.totalParaGeral).toFixed(2)}</td><td>R$ ${Number(h.totalParaLocal).toFixed(2)}</td></tr>`).join("")}
+    </tbody></table>` : "";
+
+  container.innerHTML = `
+    ${totaisHtml}
+    <table class="tabela-frequencia"><thead><tr>
+      <th>Departamento</th><th>Enviados</th><th>Eventos</th><th>Integração</th><th>Para o Geral</th><th>Para o Local</th>
+    </tr></thead><tbody>${linhasDepto}</tbody></table>
+    ${pendenciasHtml}
+    ${historicoHtml}
+  `;
 }

@@ -5488,8 +5488,61 @@ exatamente o "bater a situação eclesiástica da congregação" que justifica o
 
 #### 🔒 Trava de Revisão 5-A — antes de avançar para a v5.6
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v5.1 a v5.5 pelas 5 perguntas do checklist.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditadas v5.1 a v5.5 (+v5.5.1) pelas 5 perguntas do
+      checklist (17/09).
+
+  **1. Todo código novo roda de ponta a ponta contra o ambiente real?**
+  Sim — `npx jest` (249 testes, suíte inteira) e `node --check` em todo
+  `.js` de `api/`/`app/` sem erro. Migrações 092-097 idempotentes e
+  confirmadas rodando contra o Azure SQL de produção (`gh run view --log`
+  mostra as 6 nos passos "Executar Migrações SQL" dos runs que fecharam
+  v5.2/v5.3/v5.4). Zero `timerTrigger` em todo `api/` (achado da Trava B-A
+  não voltou). Toda rota nova (`relatorios-departamentais`,
+  `tesouraria-departamental`, `consolidado-departamentos`) conferida entre
+  `function.json` e as chamadas `fetch` de `app/script.js` — nenhuma
+  divergência.
+
+  **2. Toda tela nova abre e mostra dado de verdade?** Checagem sistemática
+  de `getElementById` (872 chamadas) contra todo `id` existente (1093) —
+  mesmos 2 falsos positivos já investigados nas travas anteriores
+  (`caixaSino`, `permissaoEscopoTodas`, ambos fora do escopo da FASE 5),
+  **nenhum bug novo**.
+
+  **3. README e código continuam narrando a mesma coisa?** Auditoria
+  cruzada da FASE 5 inteira: as 3 correções de rumo documentadas
+  (bug de `resolverEscopoCongregacoes` não tratando `EscopoTipo=
+  'DEPARTAMENTO'`, a ponte `saldoCentroCusto`↔`RelatoriosDepartamentais.
+  ValorParaLocal`, e os 3 campos calculados que `gravarValores` recusa
+  persistir) existem de verdade no código, não só no texto. Referências
+  cruzadas (`v2.7`, `v4.1.3`, `v4.10`, `v4.12`, `v4.15`, `vB.9`, `vB.13`,
+  `vB.15`, `vB.16`, `v7.2`, `v7.5`) apontam pra seções reais. Os 2 itens
+  `[ ]` da v5.5 (EBD alimentando o depto 07 e financeiro via v6.7, ambos
+  dependentes da FASE 6 que ainda não existe) não têm nenhum código
+  fingindo tê-los implementado.
+
+  **4. O que ficou pra trás foi de fato corrigido, não só anotado?** Nenhum
+  `TODO`/`FIXME`/gambiarra novo no diff da FASE 5. **Achado real, mas já
+  resolvido antes desta trava**: o próprio push da v5.3 falhou o CI **duas
+  vezes seguidas** (`4d84616`, `3bea57a`) no passo de testes — não chegou a
+  rodar a migração 094 nem fazer deploy nessas duas tentativas. Causa: um
+  teste flaky em `credenciamento.test.js` dependente do relógio, que por
+  trás escondia um **bug de raiz real** (`estatuto.js::diasDesde` dava -1
+  pra "hoje" antes do meio-dia local) — corrigido no commit seguinte
+  (`c8fa9fb`), e só aí o CI ficou verde e a migração 094 rodou contra
+  produção de verdade (confirmado no log do run). O README de v5.3 já
+  registrava a falha do teste como conhecida; esta trava confirma que a
+  causa raiz foi corrigida, não só a sintoma silenciada, e que nenhuma
+  versão seguinte (v5.4/v5.5) ficou represada atrás disso.
+
+  **5. Deploy real, de ponta a ponta, aconteceu?** Sim. Todos os 11
+  commits de v5.1 a v5.5.1 estão em `origin/main`; `gh run list` confirma
+  `success` em 9 deles e as 2 falhas isoladas da pergunta 4 (ambas sem
+  chegar a mexer no banco, e corrigidas antes de v5.4 começar). Testado ao
+  vivo agora: `https://app.ieadespa.org.br/` no ar (200);
+  `/api/relatorios-departamentais`, `/api/tesouraria-departamental` e
+  `/api/consolidado-departamentos` devolvem `401` sem sessão (rotas novas
+  protegidas, sem regressão).
 
 #### v5.6 — Escalas de serviço com auto-escalador *(7ª rodada)*
 

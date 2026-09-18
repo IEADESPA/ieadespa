@@ -11,6 +11,20 @@ function parseData(data) {
   return new Date(ano, mes - 1, dia, 12, 0, 0);
 }
 
+// v5.3 — bug real encontrado (CI travou publicando a v5.3 por causa disto,
+// vB.13/credenciamento): "hoje" (Date ou string) precisa do MESMO âncora de
+// meio-dia que `parseData` usa pra data-alvo, senão a comparação por
+// diferença de milissegundos em `diasDesde` mistura um lado ancorado (meio-
+// dia) com o outro no horário exato do relógio — antes do meio-dia local,
+// "hoje menos hoje" dava `-1` em vez de `0` (ex: período de integração
+// calculado às 00h "parecia" já ter passado de vencido, ou nem começado,
+// dependendo do sinal). Extrai só a data (ano/mês/dia) de `hoje`, ignora a
+// hora — dias corridos nunca deveriam depender de que horas são agora.
+function normalizarParaMeioDia(momento) {
+  const d = momento instanceof Date ? momento : new Date(`${String(momento).slice(0, 10)}T00:00:00`);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+}
+
 function idadeEm(dataNascimento, hoje) {
   if (!dataNascimento) return null;
   const nascimento = parseData(dataNascimento);
@@ -28,7 +42,7 @@ function diasDesde(data, hoje) {
   if (!data) return null;
   const inicio = parseData(data);
   if (!inicio) return null;
-  const agora = hoje ? new Date(hoje) : new Date();
+  const agora = normalizarParaMeioDia(hoje || new Date());
   const diffMs = agora.getTime() - inicio.getTime();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }

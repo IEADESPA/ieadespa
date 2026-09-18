@@ -101,11 +101,32 @@ describe("idadeEm / diasDesde — funções de data puras (base de tudo acima)",
     expect(estatuto.idadeEm("2000-01-01", "2026-06-15")).toBe(26);
   });
 
-  test("diasDesde conta dias corridos", () => {
-    // "hoje" precisa ser um instante real (mesma convenção de new Date() em
-    // produção) alinhado ao meio-dia que parseData() usa internamente pra
-    // "data" — passar só a string "YYYY-MM-DD" como "hoje" (meia-noite UTC)
-    // introduziria um desalinhamento de fuso que não existe no uso real.
+  test("diasDesde conta dias corridos, com 'hoje' como Date em qualquer hora", () => {
     expect(estatuto.diasDesde("2026-06-01", new Date(2026, 5, 15, 12, 0, 0))).toBe(14);
+  });
+
+  test("diasDesde conta dias corridos, com 'hoje' como string 'YYYY-MM-DD'", () => {
+    expect(estatuto.diasDesde("2026-06-01", "2026-06-15")).toBe(14);
+  });
+
+  // v5.3 — bug real: antes da correção, "hoje menos hoje" dava -1 sempre
+  // que a função rodava antes do meio-dia local (comparava o horário exato
+  // de "agora" contra a data-alvo ancorada ao meio-dia). Isso derrubou o CI
+  // publicando a v5.3 (vB.13/credenciamento calculava período de integração
+  // errado pra quem foi admitido "hoje"). diasDesde de uma data igual a
+  // hoje precisa ser 0 em QUALQUER hora do dia, com ou sem 'hoje' explícito.
+  test("diasDesde de uma data igual a hoje é sempre 0, em qualquer hora do dia (regressão)", () => {
+    for (const hora of [0, 6, 11, 12, 13, 18, 23]) {
+      const hoje = new Date();
+      hoje.setHours(hora, 0, 0, 0);
+      const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+      expect(estatuto.diasDesde(hojeStr, hoje)).toBe(0);
+    }
+  });
+
+  test("diasDesde sem 'hoje' explícito (produção real) também dá 0 pra data de hoje", () => {
+    const agora = new Date();
+    const hojeStr = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+    expect(estatuto.diasDesde(hojeStr)).toBe(0);
   });
 });

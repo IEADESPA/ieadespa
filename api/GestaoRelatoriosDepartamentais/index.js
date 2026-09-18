@@ -1,15 +1,15 @@
-// GestaoRelatoriosDepartamentais (v5.2 — Relatórios Departamentais, formulário
-// dinâmico). Fonte: protótipo conceitual `relatorios-departamentos` (ver
-// README FASE 5). Escopo desta versão: schema + criação de rascunho + edição
-// de valores. Fluxo de aprovação (enviar/aprovar/retificar) fica pra v5.3 —
-// por isso só existe RASCUNHO de verdade aqui (Status nasce assim e só essa
-// versão pode ser editada).
+// GestaoRelatoriosDepartamentais (v5.2 formulário dinâmico + v5.3 fluxo de
+// aprovação). Fonte: protótipo conceitual `relatorios-departamentos` (ver
+// README FASE 5) + pesquisa no Regimento sobre Região/Quadrante/Distrito
+// (delegados via Pastor de Área, sem ação direta — por isso o fluxo real é
+// só 2 camadas: Área → Geral, com retificação por GLOBAL).
 //
 // GET  /api/relatorios-departamentais?departamentoId=&schema=1        -> schema vigente do depto
 // GET  /api/relatorios-departamentais?congregacaoId=&departamentoId=&mes=&ano= -> lista (filtrada por escopo)
-// GET  /api/relatorios-departamentais/{id}                             -> detalhe (schema+valores+eventos+integração+contribuintes)
+// GET  /api/relatorios-departamentais/{id}                             -> detalhe (schema+valores+eventos+integração+contribuintes+trilha)
 // POST /api/relatorios-departamentais                                  -> body: {congregacaoId, departamentoId, mesReferencia, anoReferencia} -> obtém ou cria o rascunho
 // PUT  /api/relatorios-departamentais/{id}                             -> body: {valores?, valoresSemanais?, eventos?, integracao?, contribuintes?} -> só em RASCUNHO
+// POST /api/relatorios-departamentais/{id}/{acao}                      -> acao: enviar | aprovar-area | comentar | corrigir | aprovar-geral | retificar
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
@@ -63,6 +63,13 @@ async function montarDetalheRelatorio(pool, linha) {
     SELECT ContribuinteId AS contribuinteId, Nome AS nome, Valor AS valor, Ordem AS ordem
     FROM ContribuintesMensalidadeDepartamental WHERE RelatorioDepartamentalId = @id ORDER BY Ordem`);
 
+  const trilhaResult = await pool.request().input("id", sql.Int, linha.relatorioDepartamentalId).query(`
+    SELECT a.NivelAprovador AS nivelAprovador, a.Acao AS acao, a.Comentario AS comentario,
+           a.CriadoEm AS criadoEm, m.Nome AS nomeMembro
+    FROM AprovacoesRelatorioDepartamental a
+    JOIN MembroReferencia m ON m.MembroId = a.MembroId
+    WHERE a.RelatorioDepartamentalId = @id ORDER BY a.CriadoEm ASC`);
+
   return {
     ...linha,
     schema: { campos, permiteSemanal, camposEventos: rd.CAMPOS_EVENTOS, camposIntegracao: rd.CAMPOS_INTEGRACAO },
@@ -75,8 +82,86 @@ async function montarDetalheRelatorio(pool, linha) {
       deOutraIgreja: linha.integracaoDeOutraIgreja,
       total: rd.calcularTotalIntegracao({ conversao: linha.integracaoConversao, reconciliacao: linha.integracaoReconciliacao, deOutraIgreja: linha.integracaoDeOutraIgreja })
     },
-    contribuintes: contribuintesResult.recordset
+    contribuintes: contribuintesResult.recordset,
+    trilha: trilhaResult.recordset
   };
+}
+
+// Grava valores/eventos/integração/contribuintes — usado tanto pelo PUT
+// (Líder Local editando o próprio RASCUNHO) quanto pela ação CORRIGIR
+// (Líder Geral ajustando um relatório já ENVIADO/APROVADO_AREA, v5.3).
+async function gravarValores(pool, idRota, schemaRelatorioId, { valores, valoresSemanais, eventos, integracao, contribuintes }) {
+  const camposResult = await pool.request().input("schemaId", sql.Int, schemaRelatorioId).query(
+    `SELECT CampoFormularioId AS campoFormularioId, NomeCampo AS nomeCampo, PermiteSemanal AS permiteSemanal FROM CamposFormularioDepartamental WHERE SchemaRelatorioId = @schemaId`);
+  const camposPorNome = Object.fromEntries(camposResult.recordset.map(c => [c.nomeCampo, c]));
+
+  if (valores && typeof valores === "object") {
+    for (const [nomeCampo, valor] of Object.entries(valores)) {
+      const campo = camposPorNome[nomeCampo];
+      if (!campo || campo.permiteSemanal) continue; // semanal só grava via valoresSemanais
+      await pool.request()
+        .input("relId", sql.Int, idRota).input("campoId", sql.Int, campo.campoFormularioId).input("valor", sql.Decimal(14, 2), Number(valor) || 0)
+        .query(`MERGE ValoresCampoRelatorioDepartamental AS alvo
+                USING (SELECT @relId AS RelatorioDepartamentalId, @campoId AS CampoFormularioId) AS origem
+                ON alvo.RelatorioDepartamentalId = origem.RelatorioDepartamentalId AND alvo.CampoFormularioId = origem.CampoFormularioId AND alvo.NumeroDomingo IS NULL
+                WHEN MATCHED THEN UPDATE SET Valor = @valor
+                WHEN NOT MATCHED THEN INSERT (RelatorioDepartamentalId, CampoFormularioId, NumeroDomingo, Valor) VALUES (@relId, @campoId, NULL, @valor);`);
+    }
+  }
+
+  if (valoresSemanais && typeof valoresSemanais === "object") {
+    for (const [nomeCampo, porDomingo] of Object.entries(valoresSemanais)) {
+      const campo = camposPorNome[nomeCampo];
+      if (!campo || !campo.permiteSemanal) continue;
+      for (const [domingoStr, valor] of Object.entries(porDomingo || {})) {
+        const domingo = Number(domingoStr);
+        if (domingo < 1 || domingo > 5) continue;
+        await pool.request()
+          .input("relId", sql.Int, idRota).input("campoId", sql.Int, campo.campoFormularioId)
+          .input("domingo", sql.Int, domingo).input("valor", sql.Decimal(14, 2), Number(valor) || 0)
+          .query(`MERGE ValoresCampoRelatorioDepartamental AS alvo
+                  USING (SELECT @relId AS RelatorioDepartamentalId, @campoId AS CampoFormularioId, @domingo AS NumeroDomingo) AS origem
+                  ON alvo.RelatorioDepartamentalId = origem.RelatorioDepartamentalId AND alvo.CampoFormularioId = origem.CampoFormularioId AND alvo.NumeroDomingo = origem.NumeroDomingo
+                  WHEN MATCHED THEN UPDATE SET Valor = @valor
+                  WHEN NOT MATCHED THEN INSERT (RelatorioDepartamentalId, CampoFormularioId, NumeroDomingo, Valor) VALUES (@relId, @campoId, @domingo, @valor);`);
+      }
+    }
+  }
+
+  if (eventos && typeof eventos === "object") {
+    await pool.request().input("id", sql.Int, idRota)
+      .input("local", sql.Int, Number(eventos.local) || 0).input("area", sql.Int, Number(eventos.area) || 0).input("geral", sql.Int, Number(eventos.geral) || 0)
+      .query(`UPDATE RelatoriosDepartamentais SET EventosLocal = @local, EventosArea = @area, EventosGeral = @geral, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
+  }
+
+  if (integracao && typeof integracao === "object") {
+    await pool.request().input("id", sql.Int, idRota)
+      .input("conversao", sql.Int, Number(integracao.conversao) || 0)
+      .input("reconciliacao", sql.Int, Number(integracao.reconciliacao) || 0)
+      .input("deOutraIgreja", sql.Int, Number(integracao.deOutraIgreja) || 0)
+      .query(`UPDATE RelatoriosDepartamentais SET IntegracaoConversao = @conversao, IntegracaoReconciliacao = @reconciliacao, IntegracaoDeOutraIgreja = @deOutraIgreja, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
+  }
+
+  if (Array.isArray(contribuintes)) {
+    await pool.request().input("id", sql.Int, idRota).query(`DELETE FROM ContribuintesMensalidadeDepartamental WHERE RelatorioDepartamentalId = @id`);
+    let ordem = 1;
+    for (const c of contribuintes) {
+      if (!c || !c.nome || !String(c.nome).trim()) continue;
+      await pool.request()
+        .input("relId", sql.Int, idRota).input("nome", sql.NVarChar(150), String(c.nome).trim())
+        .input("valor", sql.Decimal(14, 2), Number(c.valor) || 0).input("ordem", sql.Int, ordem++)
+        .query(`INSERT INTO ContribuintesMensalidadeDepartamental (RelatorioDepartamentalId, Nome, Valor, Ordem) VALUES (@relId, @nome, @valor, @ordem)`);
+    }
+  }
+}
+
+async function registrarAprovacao(pool, { relatorioDepartamentalId, nivelAprovador, acao, comentario, membroId }) {
+  await pool.request()
+    .input("relId", sql.Int, relatorioDepartamentalId).input("nivel", sql.NVarChar(20), nivelAprovador)
+    .input("acao", sql.NVarChar(30), acao).input("comentario", sql.NVarChar(1000), comentario || null)
+    .input("membroId", sql.Int, membroId)
+    .query(`INSERT INTO AprovacoesRelatorioDepartamental (RelatorioDepartamentalId, NivelAprovador, Acao, Comentario, MembroId)
+            VALUES (@relId, @nivel, @acao, @comentario, @membroId)`);
 }
 
 module.exports = async function (context, req) {
@@ -219,74 +304,84 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const { valores, valoresSemanais, eventos, integracao, contribuintes } = req.body || {};
-    const camposResult = await pool.request().input("schemaId", sql.Int, linha.schemaRelatorioId).query(
-      `SELECT CampoFormularioId AS campoFormularioId, NomeCampo AS nomeCampo, PermiteSemanal AS permiteSemanal FROM CamposFormularioDepartamental WHERE SchemaRelatorioId = @schemaId`);
-    const camposPorNome = Object.fromEntries(camposResult.recordset.map(c => [c.nomeCampo, c]));
-
-    if (valores && typeof valores === "object") {
-      for (const [nomeCampo, valor] of Object.entries(valores)) {
-        const campo = camposPorNome[nomeCampo];
-        if (!campo || campo.permiteSemanal) continue; // semanal só grava via valoresSemanais
-        await pool.request()
-          .input("relId", sql.Int, idRota).input("campoId", sql.Int, campo.campoFormularioId).input("valor", sql.Decimal(14, 2), Number(valor) || 0)
-          .query(`MERGE ValoresCampoRelatorioDepartamental AS alvo
-                  USING (SELECT @relId AS RelatorioDepartamentalId, @campoId AS CampoFormularioId) AS origem
-                  ON alvo.RelatorioDepartamentalId = origem.RelatorioDepartamentalId AND alvo.CampoFormularioId = origem.CampoFormularioId AND alvo.NumeroDomingo IS NULL
-                  WHEN MATCHED THEN UPDATE SET Valor = @valor
-                  WHEN NOT MATCHED THEN INSERT (RelatorioDepartamentalId, CampoFormularioId, NumeroDomingo, Valor) VALUES (@relId, @campoId, NULL, @valor);`);
-      }
-    }
-
-    if (valoresSemanais && typeof valoresSemanais === "object") {
-      for (const [nomeCampo, porDomingo] of Object.entries(valoresSemanais)) {
-        const campo = camposPorNome[nomeCampo];
-        if (!campo || !campo.permiteSemanal) continue;
-        for (const [domingoStr, valor] of Object.entries(porDomingo || {})) {
-          const domingo = Number(domingoStr);
-          if (domingo < 1 || domingo > 5) continue;
-          await pool.request()
-            .input("relId", sql.Int, idRota).input("campoId", sql.Int, campo.campoFormularioId)
-            .input("domingo", sql.Int, domingo).input("valor", sql.Decimal(14, 2), Number(valor) || 0)
-            .query(`MERGE ValoresCampoRelatorioDepartamental AS alvo
-                    USING (SELECT @relId AS RelatorioDepartamentalId, @campoId AS CampoFormularioId, @domingo AS NumeroDomingo) AS origem
-                    ON alvo.RelatorioDepartamentalId = origem.RelatorioDepartamentalId AND alvo.CampoFormularioId = origem.CampoFormularioId AND alvo.NumeroDomingo = origem.NumeroDomingo
-                    WHEN MATCHED THEN UPDATE SET Valor = @valor
-                    WHEN NOT MATCHED THEN INSERT (RelatorioDepartamentalId, CampoFormularioId, NumeroDomingo, Valor) VALUES (@relId, @campoId, @domingo, @valor);`);
-        }
-      }
-    }
-
-    if (eventos && typeof eventos === "object") {
-      await pool.request().input("id", sql.Int, idRota)
-        .input("local", sql.Int, Number(eventos.local) || 0).input("area", sql.Int, Number(eventos.area) || 0).input("geral", sql.Int, Number(eventos.geral) || 0)
-        .query(`UPDATE RelatoriosDepartamentais SET EventosLocal = @local, EventosArea = @area, EventosGeral = @geral, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
-    }
-
-    if (integracao && typeof integracao === "object") {
-      await pool.request().input("id", sql.Int, idRota)
-        .input("conversao", sql.Int, Number(integracao.conversao) || 0)
-        .input("reconciliacao", sql.Int, Number(integracao.reconciliacao) || 0)
-        .input("deOutraIgreja", sql.Int, Number(integracao.deOutraIgreja) || 0)
-        .query(`UPDATE RelatoriosDepartamentais SET IntegracaoConversao = @conversao, IntegracaoReconciliacao = @reconciliacao, IntegracaoDeOutraIgreja = @deOutraIgreja, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
-    }
-
-    if (Array.isArray(contribuintes)) {
-      await pool.request().input("id", sql.Int, idRota).query(`DELETE FROM ContribuintesMensalidadeDepartamental WHERE RelatorioDepartamentalId = @id`);
-      let ordem = 1;
-      for (const c of contribuintes) {
-        if (!c || !c.nome || !String(c.nome).trim()) continue;
-        await pool.request()
-          .input("relId", sql.Int, idRota).input("nome", sql.NVarChar(150), String(c.nome).trim())
-          .input("valor", sql.Decimal(14, 2), Number(c.valor) || 0).input("ordem", sql.Int, ordem++)
-          .query(`INSERT INTO ContribuintesMensalidadeDepartamental (RelatorioDepartamentalId, Nome, Valor, Ordem) VALUES (@relId, @nome, @valor, @ordem)`);
-      }
-    }
+    await gravarValores(pool, idRota, linha.schemaRelatorioId, req.body || {});
 
     await registrarAuditoria({
       tabela: "RelatoriosDepartamentais", registroId: Number(idRota),
       acao: "Atualizou valores do rascunho de relatório departamental", usuarioId: usuario.membroId,
-      dadosDepois: { valores, valoresSemanais, eventos, integracao, contribuintesCount: Array.isArray(contribuintes) ? contribuintes.length : undefined }
+      dadosDepois: req.body || {}
+    });
+
+    const atualizado = await pool.request().input("id", sql.Int, idRota).query(`${SELECT_RELATORIO_BASE} WHERE r.RelatorioDepartamentalId = @id`);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: await montarDetalheRelatorio(pool, atualizado.recordset[0]) };
+    return;
+  }
+
+  // ---- POST: ações do fluxo de aprovação (v5.3) ----
+  // enviar | aprovar-area | comentar | corrigir | aprovar-geral | retificar
+  if (req.method === "POST" && idRota && context.bindingData.acao) {
+    const acaoRota = String(context.bindingData.acao).toUpperCase().replace(/-/g, "_");
+    const MAPA_ACAO = {
+      ENVIAR: "ENVIAR", APROVAR_AREA: "APROVAR_AREA", COMENTAR: "COMENTAR",
+      CORRIGIR: "CORRIGIR", APROVAR_GERAL: "APROVAR_GERAL", RETIFICAR: "RETIFICAR"
+    };
+    const acao = MAPA_ACAO[acaoRota];
+    if (!acao) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: `Ação inválida: ${context.bindingData.acao}.` } };
+      return;
+    }
+
+    const result = await pool.request().input("id", sql.Int, idRota).query(`${SELECT_RELATORIO_BASE} WHERE r.RelatorioDepartamentalId = @id`);
+    if (result.recordset.length === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Relatório não encontrado." } };
+      return;
+    }
+    const linha = result.recordset[0];
+    if (!auth.estaNoEscopo(usuario, linha.congregacaoNome) || !auth.podeDepartamento(usuario, linha.departamentoId)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
+      return;
+    }
+    if (!rd.nivelAutorizadoParaAcao(acao, usuario.nivel)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: `Seu papel (${usuario.nivel}) não pode executar "${acao}" — fale com quem administra as Permissões.` } };
+      return;
+    }
+    const transicao = rd.resolverTransicao(acao, linha.status);
+    if (!transicao.ok) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: transicao.mensagem } };
+      return;
+    }
+
+    const { comentario } = req.body || {};
+
+    // CORRIGIR e RETIFICAR podem trazer novos valores junto com a ação —
+    // é exatamente o poder que o Líder Geral/Presidente têm (docs/03: não
+    // há comprovante anexado, então é assim que se ajusta o que o líder
+    // local lançou errado).
+    if (acao === "CORRIGIR" || acao === "RETIFICAR") {
+      await gravarValores(pool, idRota, linha.schemaRelatorioId, req.body || {});
+    }
+
+    if (acao === "ENVIAR") {
+      const atrasado = rd.relatorioEstaAtrasado(linha.mesReferencia, linha.anoReferencia, new Date().toISOString().slice(0, 10));
+      await pool.request().input("id", sql.Int, idRota).input("status", sql.NVarChar(20), transicao.novoStatus)
+        .input("atrasado", sql.Bit, atrasado)
+        .query(`UPDATE RelatoriosDepartamentais SET Status = @status, Atrasado = @atrasado, DataEnvio = SYSUTCDATETIME(), AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
+    } else if (transicao.novoStatus !== linha.status) {
+      await pool.request().input("id", sql.Int, idRota).input("status", sql.NVarChar(20), transicao.novoStatus)
+        .query(`UPDATE RelatoriosDepartamentais SET Status = @status, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
+    } else {
+      await pool.request().input("id", sql.Int, idRota)
+        .query(`UPDATE RelatoriosDepartamentais SET AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
+    }
+
+    await registrarAprovacao(pool, {
+      relatorioDepartamentalId: Number(idRota), nivelAprovador: usuario.nivel, acao,
+      comentario, membroId: usuario.membroId
+    });
+    await registrarAuditoria({
+      tabela: "RelatoriosDepartamentais", registroId: Number(idRota),
+      acao: `${acao} (relatório departamental, ${linha.mesReferencia}/${linha.anoReferencia})`,
+      usuarioId: usuario.membroId, dadosAntes: { status: linha.status }, dadosDepois: { status: transicao.novoStatus }
     });
 
     const atualizado = await pool.request().input("id", sql.Int, idRota).query(`${SELECT_RELATORIO_BASE} WHERE r.RelatorioDepartamentalId = @id`);

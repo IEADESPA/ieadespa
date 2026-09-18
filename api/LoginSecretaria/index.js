@@ -88,7 +88,12 @@ module.exports = async function (context, req) {
     // acima: alguém com Líder Local em 2 departamentos na mesma congregação
     // só loga com um por vez, critério de amplitude territorial, não de
     // departamento — documentado, não escondido.
-    departamentoId: lideranca.departamentoId || null,
+    // v5.3 — Líder Geral (v2.7) guarda o departamento de outro jeito
+    // (`EscopoTipo='DEPARTAMENTO'`, `EscopoId`=departamentoId — mecanismo
+    // mais antigo, sem território), não na coluna `DepartamentoId` nova.
+    // Sem este `||`, o Líder Geral logava sem departamento nenhum na sessão
+    // e `auth.podeDepartamento` barrava ele até das próprias aprovações.
+    departamentoId: lideranca.escopoTipo === "DEPARTAMENTO" ? lideranca.escopoId : (lideranca.departamentoId || null),
     permissoes,
     termosPendentes: pendentes
   }, dispositivoInfo);

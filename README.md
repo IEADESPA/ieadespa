@@ -5107,28 +5107,86 @@ modelados como estrutura compartilhada, não repetida por tipo:
 
 #### v5.3 — Fluxo de aprovação (2 camadas)
 
-- [ ] Preenchimento pelo Líder Local **ou** Dirigente da Congregação
+> **Por que só 2 camadas, e não uma por nível territorial**: pesquisa
+> dedicada no Regimento (pedido explícito do usuário, que lembrou que
+> Região/Quadrante/Distrito nem existiam quando a v5.1-v5.2 foram desenhadas)
+> confirmou que Região (CRA+TER) e Quadrante (CEQ) são **colegiados
+> representados por delegação** — o próprio Regimento diz que "Dirigentes
+> de congregação comum não têm assento no CRA, sendo representados pelos
+> seus Pastores de Área" (Art. 104-B, já citado na v2.7) — ou seja, quem age
+> por eles hoje já é o Pastor de Área (nível 2), não um agente próprio da
+> Região agindo direto sobre a congregação/departamento. Distrito é só
+> FASE 9 (macroexpansão). Nenhum texto do Regimento sustenta hoje um ator
+> de Região/Quadrante/Distrito aprovando ou travando relatório
+> departamental — só consolidação/soma agregada (v5.5.1/v5.8), que é papel
+> de leitura, não de aprovação.
+
+- [x] Preenchimento pelo Líder Local **ou** Dirigente da Congregação
       (Dirigente pode sobrepor qualquer departamento da própria congregação)
       — se os dois editarem antes do envio, **a última edição é a que
       segue** pra revisão (sem mesclar).
-- [ ] Aprovação de Área (Líder de Área do depto, ou Pastor de Área que vê
+- [x] Aprovação de Área (Líder de Área do depto, ou Pastor de Área que vê
       todos) — **só aprova ou comenta, nunca edita valor**; aprovar bloqueia
       edição do Líder Local (`status = 'aprovado_area'`).
-- [ ] Aprovação Geral (Líder Geral do depto) — **pode corrigir valores
+- [x] Aprovação Geral (Líder Geral do depto) — **pode corrigir valores
       diretamente** (não existe upload de comprovante no sistema — decisão
       deliberada do protótipo, confirmada aqui também — então é o Líder
       Geral quem bate o relatório contra o caixa real e ajusta); aprovação
       **definitiva e superior** à de Área (`status = 'aprovado_geral'`).
-- [ ] Retificação só pelo Presidente/Secretário Geral após `aprovado_geral`
+- [x] Retificação só pelo Presidente/Secretário Geral após `aprovado_geral`
       — única forma de alterar um relatório já fechado.
-- [ ] Envio fora do prazo é permitido, mas marca `atrasado`; cabe ao Líder
+- [x] Envio fora do prazo é permitido, mas marca `atrasado`; cabe ao Líder
       Geral decidir se entra no fechamento do mês de referência ou rola pro
       seguinte — campos `estado` não duplicam (só substituem), campos
       `fluxo` somam no período em que forem de fato integrados.
-- [ ] `HistoricoEdicao` obrigatório em toda edição (quem, o quê, quando, com
-      que papel) — reaproveita `shared/auditoria.js::registrarAuditoria`
-      já usado em todo o resto do sistema, não uma tabela de log nova.
-- [ ] Nenhum relatório é aprovado automaticamente.
+- [x] Trilha estruturada obrigatória em toda ação (quem, o quê, quando, com
+      que nível) — **pedido explícito do usuário: "profissional, não
+      genérico"** — `AprovacoesRelatorioDepartamental` (migração 094), não
+      só o `AuditLog` genérico (mesmo padrão de `SessoesMediacao`/
+      `CredenciamentosAssembleia`: histórico com comentário é dado de
+      domínio). `NivelAprovador` usa o mesmo vocabulário de
+      `Lideranca.EscopoTipo` e já reserva `REGIAO`/`QUADRANTE`/`DISTRITO`
+      pra quando a FASE 9 os ativar — plugam aqui sem redesenho.
+- [x] Nenhum relatório é aprovado automaticamente.
+
+  Implementado: `sql/migrations/094_aprovacao_relatorios_departamentais.sql`
+  cria `AprovacoesRelatorioDepartamental`. `shared/relatoriosDepartamentais.js`
+  ganhou a máquina de estados pura (`resolverTransicao`, testável sem banco)
+  e `nivelAutorizadoParaAcao` (mapa nível→ações permitidas — `GLOBAL` sempre
+  pode tudo, docs do protótipo: "Presidente/Secretário Geral têm a última
+  palavra"), mais `calcularPrazoEnvio`/`relatorioEstaAtrasado` ("até o mês
+  seguinte", docs/06 do protótipo). `api/GestaoRelatoriosDepartamentais`
+  ganhou `POST /{id}/{acao}` (`enviar`/`aprovar-area`/`comentar`/`corrigir`/
+  `aprovar-geral`/`retificar`) — cada ação confere escopo (território +
+  departamento) **e** nível, calcula a transição, grava valor (quando a
+  ação é `corrigir`/`retificar`) e a trilha, tudo em sequência.
+
+  **Bug real encontrado e corrigido nesta versão** (latente desde a v2.7,
+  só exposto agora que o Líder Geral precisa agir sobre relatórios de
+  qualquer congregação do campo): `shared/escopo.js::resolverEscopoCongregacoes`
+  não tratava `EscopoTipo='DEPARTAMENTO'` (Líder Geral) — caía no `if
+  (!query) return []`, ou seja, resolvia pra **zero congregações** em vez
+  de campo inteiro. Passava despercebido porque o único uso do papel até
+  aqui (assento na CLI) lê `Lideranca` direto, nunca passa por esse
+  resolver. Corrigido: `DEPARTAMENTO` resolve como `GLOBAL` (`'TODAS'`).
+  Também corrigido em `LoginSecretaria`: o Líder Geral guarda o
+  departamento em `EscopoId` (mecanismo da v2.7), não na coluna
+  `DepartamentoId` nova (mecanismo da v5.2) — a sessão agora resolve os
+  dois casos.
+
+  Frontend: painel "Fluxo de Aprovação" com botões condicionados a
+  `authNivel` + status (nunca a única defesa — o backend sempre reconfere),
+  trilha visível em tabela, campos ficam `readonly` fora da janela de quem
+  pode editar naquele status.
+
+  **Verificação em produção**: só até onde dá sem escrever dado fictício —
+  respeitando o combinado (visualizar, nunca editar em produção), não criei
+  nenhum relatório de teste passando pelos 5 status. Verificado por: 199
+  testes unitários (`npx jest`, 1 falha pré-existente e não relacionada em
+  `credenciamento.test.js`, dependente do relógio, confirmada com
+  `git stash` — reportada, não corrigida aqui), `node --check` em todos os
+  arquivos, e deploy real com CI verde (migração 094 rodando contra o Azure
+  SQL de produção).
 
 #### v5.4 — Tesouraria central por departamento
 

@@ -133,8 +133,78 @@ async function buscarValoresParaPrePreencher(pool, { congregacaoId, departamento
   return mapa;
 }
 
+// ============================================================
+// v5.3 — Fluxo de aprovação (2 camadas: Área → Geral, + retificação GLOBAL).
+//
+// Pesquisa no Regimento (ver README FASE 5): Região (CRA+TER) e Quadrante
+// (CEQ) são colegiados representados por DELEGAÇÃO — o Pastor de Área fala
+// por eles (Art. 104-B), não agem direto sobre Congregação/Departamento;
+// Distrito é só FASE 9 (macroexpansão). Por isso o fluxo real é 2 camadas,
+// não mais — mas `NivelAprovador` (migração 094) já usa o mesmo vocabulário
+// de `Lideranca.EscopoTipo`, pronto pra um nível novo (REGIAO/QUADRANTE/
+// DISTRITO) plugar aqui sem redesenho, no dia em que a FASE 9 os ativar.
+// ============================================================
+
+const STATUS_VALIDOS = ["RASCUNHO", "ENVIADO", "APROVADO_AREA", "APROVADO_GERAL", "RETIFICADO"];
+
+// Nível mínimo (mesmo vocabulário de Lideranca.EscopoTipo/Papeis.Nivel) que
+// autoriza cada ação. GLOBAL sempre pode tudo — Presidente/Secretário Geral
+// têm a última palavra sobre qualquer relatório (docs do protótipo, v5.3).
+const NIVEIS_POR_ACAO = {
+  ENVIAR: ["CONGREGACAO", "GLOBAL"],
+  APROVAR_AREA: ["AREA", "GLOBAL"],
+  COMENTAR: ["AREA", "DEPARTAMENTO", "GLOBAL"],
+  CORRIGIR: ["DEPARTAMENTO", "GLOBAL"],
+  APROVAR_GERAL: ["DEPARTAMENTO", "GLOBAL"],
+  RETIFICAR: ["GLOBAL"]
+};
+
+function nivelAutorizadoParaAcao(acao, nivel) {
+  return (NIVEIS_POR_ACAO[acao] || []).includes(nivel);
+}
+
+// Máquina de estados pura — de que status pra que ação é permitida, e pra
+// qual status vai. COMENTAR e CORRIGIR não fecham fase (o relatório pode
+// levar comentário/correção mais de uma vez antes de qualquer aprovação).
+const TRANSICOES_POR_ACAO = {
+  ENVIAR: { de: ["RASCUNHO"], para: "ENVIADO" },
+  APROVAR_AREA: { de: ["ENVIADO"], para: "APROVADO_AREA" },
+  COMENTAR: { de: ["ENVIADO", "APROVADO_AREA"], para: null },
+  CORRIGIR: { de: ["ENVIADO", "APROVADO_AREA"], para: null },
+  APROVAR_GERAL: { de: ["ENVIADO", "APROVADO_AREA"], para: "APROVADO_GERAL" },
+  RETIFICAR: { de: ["APROVADO_GERAL", "RETIFICADO"], para: "RETIFICADO" }
+};
+
+function resolverTransicao(acao, statusAtual) {
+  const regra = TRANSICOES_POR_ACAO[acao];
+  if (!regra) return { ok: false, mensagem: `Ação desconhecida: ${acao}.` };
+  if (!regra.de.includes(statusAtual)) {
+    return { ok: false, mensagem: `Não é possível "${acao}" um relatório com status "${statusAtual}".` };
+  }
+  return { ok: true, novoStatus: regra.para || statusAtual };
+}
+
+// Prazo de envio (docs/06 do protótipo: "tipicamente até o mês seguinte")
+// — último dia do mês seguinte ao mês de referência do relatório.
+function calcularPrazoEnvio(mesReferencia, anoReferencia) {
+  const mesSeguinte = mesReferencia === 12 ? 1 : mesReferencia + 1;
+  const anoSeguinte = mesReferencia === 12 ? anoReferencia + 1 : anoReferencia;
+  const ultimoDia = new Date(anoSeguinte, mesSeguinte, 0).getDate(); // "dia 0" do mês seguinte = último dia dele
+  return `${anoSeguinte}-${String(mesSeguinte).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+}
+
+// Envio fora do prazo é PERMITIDO, só marca atrasado (docs/06) — nunca
+// bloqueia o envio em si.
+function relatorioEstaAtrasado(mesReferencia, anoReferencia, dataEnvio) {
+  const prazo = calcularPrazoEnvio(mesReferencia, anoReferencia);
+  const envio = String(dataEnvio || "").slice(0, 10);
+  return envio > prazo;
+}
+
 module.exports = {
   GRUPOS_VALIDOS, COMPORTAMENTOS_VALIDOS, CAMPOS_EVENTOS, CAMPOS_INTEGRACAO,
   calcularTotalIntegracao, calcularValorTotalFinanceiro, somarValoresSemanais, calcularIndicadoresEbd,
-  camposParaPrePreencher, buscarSchemaVigente, buscarValoresParaPrePreencher
+  camposParaPrePreencher, buscarSchemaVigente, buscarValoresParaPrePreencher,
+  STATUS_VALIDOS, NIVEIS_POR_ACAO, nivelAutorizadoParaAcao, resolverTransicao,
+  calcularPrazoEnvio, relatorioEstaAtrasado
 };

@@ -39,8 +39,17 @@ const QUERY_POR_TIPO = {
 // Retorna "TODAS" (acesso geral) ou um array de nomes de Congregacoes (pode
 // vir vazio, se o nível escolhido não tiver nenhuma congregação embaixo —
 // resultado vazio é o modo seguro: a pessoa não vê ninguém, nunca "todo mundo").
+//
+// v5.3 — bug real encontrado (latente desde a v2.7, só exposto agora que o
+// Líder Geral de Departamento precisa agir sobre relatórios de QUALQUER
+// congregação): EscopoTipo='DEPARTAMENTO' (Líder Geral) não é territorial —
+// por definição vale pro campo inteiro (v2.7, mesmo espírito de "Líder
+// Geral... todo o campo") — mas caía no `if (!query) return []`, ou seja,
+// resolvia pra ZERO congregações. Até agora não dava pra perceber porque o
+// único uso do papel (assento na CLI, composicaoCLI) lê Lideranca direto,
+// nunca passa por aqui. Corrigido: DEPARTAMENTO resolve como GLOBAL.
 async function resolverEscopoCongregacoes(pool, escopoTipo, escopoId) {
-  if (!escopoTipo || escopoTipo === "GLOBAL" || !escopoId) return "TODAS";
+  if (!escopoTipo || escopoTipo === "GLOBAL" || escopoTipo === "DEPARTAMENTO" || !escopoId) return "TODAS";
 
   const query = QUERY_POR_TIPO[escopoTipo];
   if (!query) return [];

@@ -11167,8 +11167,22 @@ async function abrirRelatorioDeptoAcao() {
   renderizarPainelRelatorioDepto(data);
 }
 
-function campoInputAttrs(campo) {
-  return campo.tipoDado === "MOEDA" ? `type="number" step="0.01" min="0"` : `type="number" step="1" min="0"`;
+function campoInputAttrs(campo, somenteLeitura) {
+  const tipo = campo.tipoDado === "MOEDA" ? `type="number" step="0.01" min="0"` : `type="number" step="1" min="0"`;
+  return somenteLeitura ? `${tipo} readonly` : tipo;
+}
+
+// Quem pode editar os campos na tela agora — sempre reconferido pelo
+// backend (isto aqui só evita mostrar um campo "editável" que ia dar 403):
+// RASCUNHO é do Líder Local; ENVIADO/APROVADO_AREA só reabre pro Líder
+// Geral/GLOBAL corrigir (docs/03 — sem comprovante anexado, é assim que se
+// ajusta o que foi lançado errado); depois de APROVADO_GERAL, só GLOBAL
+// retificando.
+function podeEditarValoresRd(status) {
+  if (status === "RASCUNHO") return true;
+  if ((status === "ENVIADO" || status === "APROVADO_AREA") && (authNivel === "DEPARTAMENTO" || authNivel === "GLOBAL")) return true;
+  if ((status === "APROVADO_GERAL" || status === "RETIFICADO") && authNivel === "GLOBAL") return true;
+  return false;
 }
 
 function renderizarPainelRelatorioDepto(data) {
@@ -11177,6 +11191,7 @@ function renderizarPainelRelatorioDepto(data) {
   const container = document.getElementById("painelRelatorioDepto");
   const rotuloLocal = data.schema.rotuloPapelLocal || "Líder Local";
   const temMensalidade = data.schema.campos.some(c => c.nomeCampo === "mensalidades");
+  const somenteLeitura = !podeEditarValoresRd(data.status);
 
   const gruposHtml = ["CONTAGEM", "ACOES", "FINANCEIRO"].map(grupo => {
     const campos = data.schema.campos.filter(c => c.grupo === grupo);
@@ -11186,48 +11201,126 @@ function renderizarPainelRelatorioDepto(data) {
         const semanas = data.valoresSemanais[c.nomeCampo] || {};
         const inputsSemana = NOMES_DOMINGO_RD.map((rotulo, i) => {
           const n = i + 1;
-          return `<label style="display:inline-block;margin-right:8px;">${rotulo}<br/><input ${campoInputAttrs(c)} id="rdSemana_${c.nomeCampo}_${n}" value="${semanas[n] || 0}" style="width:70px;" /></label>`;
+          return `<label style="display:inline-block;margin-right:8px;">${rotulo}<br/><input ${campoInputAttrs(c, somenteLeitura)} id="rdSemana_${c.nomeCampo}_${n}" value="${semanas[n] || 0}" style="width:70px;" /></label>`;
         }).join("");
         return `<div class="input-group"><label>${c.rotulo} (total do mês: ${data.valores[c.nomeCampo] || 0})</label><div>${inputsSemana}</div></div>`;
       }
-      return `<div class="input-group"><label>${c.rotulo}</label><input ${campoInputAttrs(c)} id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
+      return `<div class="input-group"><label>${c.rotulo}</label><input ${campoInputAttrs(c, somenteLeitura)} id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
     }).join("");
     const totalFinanceiro = grupo === "FINANCEIRO"
       ? `<p class="subtitle"><strong>Valor Total (base do rateio local/geral): R$ ${Number(data.valorTotalFinanceiro || 0).toFixed(2)}</strong></p>` : "";
     return `<h4>${ROTULO_GRUPO_RD[grupo]}</h4>${linhas}${totalFinanceiro}`;
   }).join("");
 
+  const roAttr = somenteLeitura ? "readonly" : "";
   const eventosHtml = `<h4>Eventos</h4>
-    <div class="input-group"><label>Local</label><input type="number" min="0" id="rdEventoLocal" value="${data.eventos.local}" /></div>
-    <div class="input-group"><label>Área</label><input type="number" min="0" id="rdEventoArea" value="${data.eventos.area}" /></div>
-    <div class="input-group"><label>Geral</label><input type="number" min="0" id="rdEventoGeral" value="${data.eventos.geral}" /></div>`;
+    <div class="input-group"><label>Local</label><input type="number" min="0" ${roAttr} id="rdEventoLocal" value="${data.eventos.local}" /></div>
+    <div class="input-group"><label>Área</label><input type="number" min="0" ${roAttr} id="rdEventoArea" value="${data.eventos.area}" /></div>
+    <div class="input-group"><label>Geral</label><input type="number" min="0" ${roAttr} id="rdEventoGeral" value="${data.eventos.geral}" /></div>`;
 
   const integracaoHtml = `<h4>Integração</h4>
-    <div class="input-group"><label>Conversão</label><input type="number" min="0" id="rdIntegConversao" value="${data.integracao.conversao}" /></div>
-    <div class="input-group"><label>Reconciliação</label><input type="number" min="0" id="rdIntegReconciliacao" value="${data.integracao.reconciliacao}" /></div>
-    <div class="input-group"><label>De Outra Igreja</label><input type="number" min="0" id="rdIntegDeOutraIgreja" value="${data.integracao.deOutraIgreja}" /></div>
+    <div class="input-group"><label>Conversão</label><input type="number" min="0" ${roAttr} id="rdIntegConversao" value="${data.integracao.conversao}" /></div>
+    <div class="input-group"><label>Reconciliação</label><input type="number" min="0" ${roAttr} id="rdIntegReconciliacao" value="${data.integracao.reconciliacao}" /></div>
+    <div class="input-group"><label>De Outra Igreja</label><input type="number" min="0" ${roAttr} id="rdIntegDeOutraIgreja" value="${data.integracao.deOutraIgreja}" /></div>
     <p class="subtitle">Total: ${data.integracao.total}</p>`;
 
   const contribuintesHtml = temMensalidade ? `<h4>Contribuintes de Mensalidade</h4>
-    <div id="rdListaContribuintes">${(data.contribuintes || []).map(linhaContribuinteRd).join("")}</div>
-    <button type="button" class="btn-link" onclick="adicionarLinhaContribuinteRd()">➕ Adicionar contribuinte</button>` : "";
+    <div id="rdListaContribuintes">${(data.contribuintes || []).map(c => linhaContribuinteRd(c, somenteLeitura)).join("")}</div>
+    ${somenteLeitura ? "" : `<button type="button" class="btn-link" onclick="adicionarLinhaContribuinteRd()">➕ Adicionar contribuinte</button>`}` : "";
 
   container.innerHTML = `
     <p><strong>${rotuloLocal}:</strong> preenchendo ${data.congregacaoNome} — ${data.departamentoNome} — ${data.mesReferencia}/${data.anoReferencia}
-      (status: ${data.status})</p>
+      (status: <strong>${ROTULO_STATUS_RD[data.status] || data.status}</strong>${data.atrasado ? ` — <span style="color:var(--cor-perigo,#c0392b);">⚠️ atrasado</span>` : ""})</p>
     ${gruposHtml}
     ${eventosHtml}
     ${integracaoHtml}
     ${contribuintesHtml}
-    <button class="btn-confirmar" onclick="salvarRelatorioDeptoAcao()">💾 Salvar Rascunho</button>
+    ${montarAcoesFluxoRd(data)}
+    <div id="rdTrilha">${montarTrilhaRd(data.trilha)}</div>
   `;
 }
 
-function linhaContribuinteRd(c) {
+// ---- Fluxo de aprovação (v5.3) — 2 camadas (Área → Geral) + retificação
+// GLOBAL. Pesquisa no Regimento: Região/Quadrante são representados por
+// delegação (Pastor de Área, Art. 104-B), sem ação direta — por isso não
+// aparecem aqui; Distrito é só FASE 9. Os botões só aparecem quando o
+// `authNivel` da sessão já autoriza a ação (o backend sempre confere de
+// novo — isso aqui é só não oferecer um botão que ia dar 403).
+const ROTULO_STATUS_RD = {
+  RASCUNHO: "Rascunho", ENVIADO: "Enviado", APROVADO_AREA: "Aprovado (Área)",
+  APROVADO_GERAL: "Aprovado (Geral) — definitivo", RETIFICADO: "Retificado"
+};
+const ROTULO_ACAO_RD = {
+  ENVIAR: "Enviou", APROVAR_AREA: "Aprovou (Área)", COMENTOU: "Comentou", COMENTAR: "Comentou",
+  CORRIGIR: "Corrigiu valores", APROVAR_GERAL: "Aprovou (Geral)", RETIFICAR: "Retificou"
+};
+
+function montarAcoesFluxoRd(data) {
+  const status = data.status;
+  const botoes = [];
+
+  if (status === "RASCUNHO") {
+    botoes.push(`<button class="btn-confirmar" onclick="salvarRelatorioDeptoAcao()">💾 Salvar Rascunho</button>`);
+    if (authNivel === "CONGREGACAO" || authNivel === "GLOBAL") {
+      botoes.push(`<button class="btn-confirmar btn-secundario" onclick="acaoFluxoRd('enviar')">📤 Enviar</button>`);
+    }
+  }
+
+  if ((status === "ENVIADO" || status === "APROVADO_AREA") && (authNivel === "AREA" || authNivel === "GLOBAL")) {
+    if (status === "ENVIADO") botoes.push(`<button class="btn-confirmar" onclick="acaoFluxoRd('aprovar-area')">✅ Aprovar (Área)</button>`);
+    botoes.push(`<button class="btn-confirmar btn-secundario" onclick="comentarFluxoRdAcao()">💬 Comentar</button>`);
+  }
+
+  if ((status === "ENVIADO" || status === "APROVADO_AREA") && (authNivel === "DEPARTAMENTO" || authNivel === "GLOBAL")) {
+    botoes.push(`<button class="btn-confirmar" onclick="acaoFluxoRd('corrigir')">✏️ Salvar Correção</button>`);
+    botoes.push(`<button class="btn-confirmar btn-secundario" onclick="acaoFluxoRd('aprovar-geral')">✅ Aprovar (Geral) — definitivo</button>`);
+  }
+
+  if ((status === "APROVADO_GERAL" || status === "RETIFICADO") && authNivel === "GLOBAL") {
+    botoes.push(`<button class="btn-confirmar btn-secundario" onclick="acaoFluxoRd('retificar')">🔓 Retificar (edita os campos acima e clique aqui)</button>`);
+  }
+
+  return botoes.length ? `<h4>Fluxo de Aprovação</h4><div class="barra-lista">${botoes.join("")}</div>` : "";
+}
+
+function montarTrilhaRd(trilha) {
+  if (!trilha || trilha.length === 0) return "";
+  const linhas = trilha.map(t => `<tr>
+    <td>${new Date(t.criadoEm).toLocaleString("pt-BR")}</td>
+    <td>${t.nomeMembro}</td>
+    <td>${ROTULO_ACAO_RD[t.acao] || t.acao} (${t.nivelAprovador})</td>
+    <td>${t.comentario || "-"}</td>
+  </tr>`).join("");
+  return `<h4>Trilha</h4><div class="rolagem-tabela"><table class="tabela-frequencia">
+    <thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Comentário</th></tr></thead>
+    <tbody>${linhas}</tbody></table></div>`;
+}
+
+async function comentarFluxoRdAcao() {
+  const comentario = prompt("Comentário pra quem preencheu o relatório:");
+  if (!comentario || !comentario.trim()) return;
+  await acaoFluxoRd("comentar", { comentario: comentario.trim() });
+}
+
+async function acaoFluxoRd(acao, extra) {
+  if (!_rdRelatorioIdAtual) return;
+  const corpo = (acao === "corrigir" || acao === "retificar") ? coletarValoresFormularioRd() : {};
+  Object.assign(corpo, extra || {});
+  const res = await fetchProtegido(`${API_BASE}/relatorios-departamentais/${_rdRelatorioIdAtual}/${acao}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo)
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast("✅ Ação registrada.", "sucesso");
+  renderizarPainelRelatorioDepto(data);
+}
+
+function linhaContribuinteRd(c, somenteLeitura) {
+  const ro = somenteLeitura ? "readonly" : "";
   return `<div class="barra-lista rd-linha-contribuinte">
-    <input type="text" class="rd-contribuinte-nome" placeholder="Nome" value="${(c && c.nome) || ""}" style="min-width:200px;" />
-    <input type="number" class="rd-contribuinte-valor" step="0.01" min="0" placeholder="Valor" value="${(c && c.valor) || 0}" style="max-width:120px;" />
-    <button type="button" class="btn-link" onclick="this.parentElement.remove()">✕</button>
+    <input type="text" class="rd-contribuinte-nome" ${ro} placeholder="Nome" value="${(c && c.nome) || ""}" style="min-width:200px;" />
+    <input type="number" class="rd-contribuinte-valor" step="0.01" min="0" ${ro} placeholder="Valor" value="${(c && c.valor) || 0}" style="max-width:120px;" />
+    ${somenteLeitura ? "" : `<button type="button" class="btn-link" onclick="this.parentElement.remove()">✕</button>`}
   </div>`;
 }
 
@@ -11235,8 +11328,7 @@ function adicionarLinhaContribuinteRd() {
   document.getElementById("rdListaContribuintes").insertAdjacentHTML("beforeend", linhaContribuinteRd(null));
 }
 
-async function salvarRelatorioDeptoAcao() {
-  if (!_rdSchemaAtual || !_rdRelatorioIdAtual) return;
+function coletarValoresFormularioRd() {
   const valores = {};
   const valoresSemanais = {};
   for (const c of _rdSchemaAtual.campos) {
@@ -11265,10 +11357,14 @@ async function salvarRelatorioDeptoAcao() {
     nome: linha.querySelector(".rd-contribuinte-nome").value.trim(),
     valor: Number(linha.querySelector(".rd-contribuinte-valor").value) || 0
   })).filter(c => c.nome);
+  return { valores, valoresSemanais, eventos, integracao, contribuintes };
+}
 
+async function salvarRelatorioDeptoAcao() {
+  if (!_rdSchemaAtual || !_rdRelatorioIdAtual) return;
   const res = await fetchProtegido(`${API_BASE}/relatorios-departamentais/${_rdRelatorioIdAtual}`, {
     method: "PUT", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ valores, valoresSemanais, eventos, integracao, contribuintes })
+    body: JSON.stringify(coletarValoresFormularioRd())
   });
   const data = await res.json();
   if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }

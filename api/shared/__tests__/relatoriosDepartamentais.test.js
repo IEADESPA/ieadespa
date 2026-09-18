@@ -112,6 +112,85 @@ describe("buscarSchemaVigente", () => {
   });
 });
 
+describe("nivelAutorizadoParaAcao (v5.3)", () => {
+  test("GLOBAL sempre autoriza qualquer ação (última palavra do Presidente/Secretário Geral)", () => {
+    for (const acao of Object.keys(rd.NIVEIS_POR_ACAO)) {
+      expect(rd.nivelAutorizadoParaAcao(acao, "GLOBAL")).toBe(true);
+    }
+  });
+  test("CONGREGACAO só pode enviar", () => {
+    expect(rd.nivelAutorizadoParaAcao("ENVIAR", "CONGREGACAO")).toBe(true);
+    expect(rd.nivelAutorizadoParaAcao("APROVAR_AREA", "CONGREGACAO")).toBe(false);
+    expect(rd.nivelAutorizadoParaAcao("RETIFICAR", "CONGREGACAO")).toBe(false);
+  });
+  test("AREA aprova e comenta, mas não corrige nem retifica", () => {
+    expect(rd.nivelAutorizadoParaAcao("APROVAR_AREA", "AREA")).toBe(true);
+    expect(rd.nivelAutorizadoParaAcao("COMENTAR", "AREA")).toBe(true);
+    expect(rd.nivelAutorizadoParaAcao("CORRIGIR", "AREA")).toBe(false);
+    expect(rd.nivelAutorizadoParaAcao("RETIFICAR", "AREA")).toBe(false);
+  });
+  test("DEPARTAMENTO (Líder Geral) corrige e aprova geral, mas não retifica", () => {
+    expect(rd.nivelAutorizadoParaAcao("CORRIGIR", "DEPARTAMENTO")).toBe(true);
+    expect(rd.nivelAutorizadoParaAcao("APROVAR_GERAL", "DEPARTAMENTO")).toBe(true);
+    expect(rd.nivelAutorizadoParaAcao("RETIFICAR", "DEPARTAMENTO")).toBe(false);
+  });
+  test("Região/Quadrante/Distrito não autorizam nada hoje — Regimento não sustenta ação direta (representados por delegação, Art. 104-B)", () => {
+    for (const acao of Object.keys(rd.NIVEIS_POR_ACAO)) {
+      expect(rd.nivelAutorizadoParaAcao(acao, "REGIAO")).toBe(false);
+      expect(rd.nivelAutorizadoParaAcao(acao, "QUADRANTE")).toBe(false);
+      expect(rd.nivelAutorizadoParaAcao(acao, "DISTRITO")).toBe(false);
+    }
+  });
+});
+
+describe("resolverTransicao (máquina de estados, v5.3)", () => {
+  test("fluxo feliz completo: rascunho -> enviado -> aprovado_area -> aprovado_geral -> retificado", () => {
+    expect(rd.resolverTransicao("ENVIAR", "RASCUNHO")).toEqual({ ok: true, novoStatus: "ENVIADO" });
+    expect(rd.resolverTransicao("APROVAR_AREA", "ENVIADO")).toEqual({ ok: true, novoStatus: "APROVADO_AREA" });
+    expect(rd.resolverTransicao("APROVAR_GERAL", "APROVADO_AREA")).toEqual({ ok: true, novoStatus: "APROVADO_GERAL" });
+    expect(rd.resolverTransicao("RETIFICAR", "APROVADO_GERAL")).toEqual({ ok: true, novoStatus: "RETIFICADO" });
+  });
+  test("Líder Geral pode aprovar direto de ENVIADO, pulando a aprovação de Área (superior, docs/06)", () => {
+    expect(rd.resolverTransicao("APROVAR_GERAL", "ENVIADO")).toEqual({ ok: true, novoStatus: "APROVADO_GERAL" });
+  });
+  test("comentar e corrigir não fecham fase (status permanece o mesmo)", () => {
+    expect(rd.resolverTransicao("COMENTAR", "APROVADO_AREA")).toEqual({ ok: true, novoStatus: "APROVADO_AREA" });
+    expect(rd.resolverTransicao("CORRIGIR", "ENVIADO")).toEqual({ ok: true, novoStatus: "ENVIADO" });
+  });
+  test("não deixa enviar de novo um relatório já enviado", () => {
+    const r = rd.resolverTransicao("ENVIAR", "ENVIADO");
+    expect(r.ok).toBe(false);
+  });
+  test("não deixa aprovar_area um rascunho (precisa ter sido enviado primeiro)", () => {
+    const r = rd.resolverTransicao("APROVAR_AREA", "RASCUNHO");
+    expect(r.ok).toBe(false);
+  });
+  test("não deixa retificar antes de aprovado_geral", () => {
+    const r = rd.resolverTransicao("RETIFICAR", "ENVIADO");
+    expect(r.ok).toBe(false);
+  });
+  test("retificação pode ser repetida (retificado -> retificado de novo)", () => {
+    expect(rd.resolverTransicao("RETIFICAR", "RETIFICADO")).toEqual({ ok: true, novoStatus: "RETIFICADO" });
+  });
+});
+
+describe("calcularPrazoEnvio / relatorioEstaAtrasado (v5.3)", () => {
+  test("prazo é o último dia do mês seguinte ao de referência", () => {
+    expect(rd.calcularPrazoEnvio(3, 2026)).toBe("2026-04-30");
+    expect(rd.calcularPrazoEnvio(1, 2026)).toBe("2026-02-28");
+  });
+  test("dezembro vira janeiro do ano seguinte", () => {
+    expect(rd.calcularPrazoEnvio(12, 2026)).toBe("2027-01-31");
+  });
+  test("envio dentro do prazo não fica atrasado", () => {
+    expect(rd.relatorioEstaAtrasado(3, 2026, "2026-04-15")).toBe(false);
+    expect(rd.relatorioEstaAtrasado(3, 2026, "2026-04-30")).toBe(false);
+  });
+  test("envio depois do prazo fica atrasado — mas o envio em si é permitido (docs/06)", () => {
+    expect(rd.relatorioEstaAtrasado(3, 2026, "2026-05-01")).toBe(true);
+  });
+});
+
 describe("buscarValoresParaPrePreencher", () => {
   test("sem relatório anterior, devolve mapa vazio", async () => {
     const { pool } = criarPoolFalso([[]]);

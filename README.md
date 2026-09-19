@@ -6101,9 +6101,80 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 
 #### v6.2 — Chamada e presença
 
-- [ ] Lição aberta/fechada por congregação.
-- [ ] Lançamento de chamada por turma + presenças/ausências/visitantes.
-- [ ] Percentuais de presença/ausência calculados.
+- [x] Lição aberta/fechada por congregação.
+- [x] Lançamento de chamada por turma + presenças/ausências/visitantes.
+- [x] Percentuais de presença/ausência calculados.
+
+  Continua a FASE 6 em cima do v6.1. Migração 102
+  (`sql/migrations/102_ebd_chamada_presenca.sql`) cria duas tabelas:
+  `EbdLicoes` e `EbdChamadas`. `EbdLicoes` (item 1) é a versão
+  **intencionalmente mínima** da Lição — só `CongregacaoId`, `Data` e
+  `Status` (`ABERTA`/`FECHADA`), sem nenhuma coluna de conteúdo (título,
+  texto, referência bíblica). O item "Lições (abrir/fechar) por
+  congregação" reaparece no checklist do v6.3 (ainda não construído) de
+  propósito: é o **mesmo registro** — a v6.3 vai estender esta mesma
+  `EbdLicoes` com tabelas de conteúdo próprias referenciando `LicaoId`
+  (atividades, 5 tipos de pergunta, respostas/gabarito), sem recriar ou
+  migrar nada do que nasce agora. `UNIQUE (CongregacaoId, Data)` garante
+  uma lição por congregação por data — todas as turmas da congregação
+  lançam chamada contra a mesma lição do dia; quem diferencia sala é
+  `EbdChamadas.TurmaId`, não a Lição.
+
+  `EbdChamadas` (itens 2 e 3) grava uma linha por (Lição, Aluno) — visitante
+  **não ganha matrícula falsa** em `EbdAlunos` só para caber no esquema
+  (isso quebraria a garantia de "matrícula única por Membro" da migração
+  101): `AlunoId` fica `NULL` e a própria linha carrega `VisitanteNome`/
+  `VisitanteContato`. `UNIQUE (LicaoId, AlunoId)` garante um registro por
+  aluno por lição — no SQL Server, `NULL` é tratado como distinto numa
+  UNIQUE, então cada visita continua sendo a sua própria linha, sem
+  colidir com as demais. `shared/ebdChamada.js::decidirAcaoRegistroPresenca`
+  decide entre criar ou atualizar (upsert) quando o mesmo aluno é chamado
+  de novo na mesma lição — corrigir uma marcação errada é rotina, então
+  o upsert é sempre permitido (diferente de `podeDesignarProfessor`/v6.1,
+  que recusa duplicar vínculo ativo). Um `CHECK` na migração garante a
+  mesma regra no schema: `PRESENTE`/`AUSENTE` sempre com `AlunoId` e nunca
+  com dado de visitante; `VISITANTE` nunca com `AlunoId` e sempre com nome.
+
+  Percentuais (item 3) são sempre derivados das linhas de `EbdChamadas` —
+  `shared/ebdChamada.js::calcularPercentuais`/`resumirChamada` (funções
+  puras) — nunca um campo digitado, mesmo princípio de "calculado, nunca
+  digitado" já usado na v5.5.1/v5.6/v5.7. O denominador é
+  `presentes + ausentes` (o universo de alunos da turma já chamados);
+  visitante é contado à parte, sem entrar no percentual da turma, porque
+  não é aluno matriculado nela.
+
+  Permissão — decisão explícita, diferente da v6.1: abrir/fechar/reabrir
+  Lição continua atrás de `ebd_gestao` (administração da EBD). Mas
+  **lançar chamada de uma turma não exige `ebd_gestao`**: um professor
+  ativo daquela turma (`EbdTurmaProfessores`, mesma tabela da v6.1) pode
+  lançar a própria chamada sem a permissão ampla — do contrário, cada um
+  dos dezenas de professores de sala precisaria que a Diretoria concedesse
+  gestão completa da EBD só para fazer chamada da própria turma, o que não
+  se sustenta operacionalmente. Quem tem `ebd_gestao` continua podendo
+  lançar chamada de qualquer turma dentro do próprio escopo territorial
+  (cobre licença/ausência do professor titular). Essa checagem
+  (`podeLancarChamadaDaTurma`, em `api/GestaoEbdChamada/index.js`) só
+  reaproveita a tabela `EbdTurmaProfessores` que já existia — nenhuma
+  tabela ou coluna de permissão nova.
+
+  `api/GestaoEbdChamada` (`GET/POST /api/ebd-chamada/{licao|licao/abrir|
+  licao/fechar|licao/reabrir|licoes|roster|presenca|visitante|resumo}`).
+  Frontend: seção "Chamada e presença" adicionada à aba EBD
+  (`app/index.html`/`app/script.js`) — abrir lição do dia por congregação,
+  carregar o roster de uma turma com o status já lançado, marcar presente/
+  ausente por aluno, lançar visitante e ver o resumo com os percentuais
+  calculados ao vivo.
+
+  Testado com `npx jest` (389 testes, 21 novos em
+  `api/shared/__tests__/ebdChamada.test.js`: `podeLancarChamada` nos três
+  casos — sem lição, lição fechada, lição aberta —, `podeFecharLicao`/
+  `podeReabrirLicao`, `validarLancamentoPresenca` cobrindo aluno com dado
+  de visitante colado, visitante com `alunoId`, e os casos válidos de cada
+  status, `decidirAcaoRegistroPresenca` (criar vs. atualizar),
+  `calcularPercentuais` (turma sem lançamento, percentual exato e com
+  arredondamento de uma casa decimal) e `resumirChamada` agregando uma
+  lista de registros) e `node --check` em todos os arquivos novos/
+  alterados.
 
 #### v6.3 — Lições e atividades
 

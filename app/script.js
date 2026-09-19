@@ -4975,7 +4975,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "escalas") carregarOpcoesEscalasAcao();
   if (aba === "habilitacao") carregarOpcoesHabilitacaoAcao();
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
-  if (aba === "ebd") { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); }
+  if (aba === "ebd") { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesChamadaEbdAcao(); }
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -12586,6 +12586,137 @@ async function transferirAlunoEbdAcao() {
   const data = await res.json();
   mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
   if (data.sucesso !== false) carregarDetalheTurmaEbdAcao();
+}
+
+// ---- Chamada e presença (v6.2) ----
+let ebdChamadaLicaoAtual = null;
+
+async function carregarOpcoesChamadaEbdAcao() {
+  const sel = document.getElementById("ebdChamadaCongregacao");
+  if (sel && !sel.dataset.montado) {
+    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    sel.dataset.montado = "1";
+  }
+}
+
+function renderPainelLicaoEbd(licao) {
+  const container = document.getElementById("painelLicaoEbd");
+  if (!licao) { container.innerHTML = "<p class='subtitle'>Nenhuma lição encontrada para esta data — use \"Abrir lição\".</p>"; ebdChamadaLicaoAtual = null; return; }
+  ebdChamadaLicaoAtual = licao;
+  document.getElementById("ebdChamadaLicaoId").value = licao.licaoId;
+  container.innerHTML = `<p class="subtitle">Lição #${licao.licaoId} — ${new Date(licao.data).toLocaleDateString("pt-BR")} — status: <strong>${licao.status}</strong></p>`;
+}
+
+async function buscarLicaoEbdAcao() {
+  const congregacaoId = document.getElementById("ebdChamadaCongregacao").value;
+  const data = document.getElementById("ebdChamadaData").value;
+  if (!congregacaoId || !data) { mostrarToast("Escolha a congregação e a data.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/licao?congregacaoId=${congregacaoId}&data=${data}`);
+  const resData = await res.json();
+  if (resData.sucesso === false) { mostrarToast(resData.mensagem, "erro"); return; }
+  renderPainelLicaoEbd(resData.licao);
+}
+
+async function abrirLicaoEbdAcao() {
+  const congregacaoId = document.getElementById("ebdChamadaCongregacao").value;
+  const data = document.getElementById("ebdChamadaData").value;
+  if (!congregacaoId || !data) { mostrarToast("Escolha a congregação e a data.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/licao/abrir`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ congregacaoId: Number(congregacaoId), data })
+  });
+  const resData = await res.json();
+  mostrarToast(resData.mensagem, resData.sucesso === false ? "erro" : "sucesso");
+  if (resData.sucesso !== false) buscarLicaoEbdAcao();
+}
+
+async function fecharLicaoEbdAcao() {
+  const licaoId = document.getElementById("ebdLicaoIdAcao").value;
+  if (!licaoId) { mostrarToast("Informe o id da lição.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/licao/fechar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ licaoId: Number(licaoId) })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+}
+
+async function reabrirLicaoEbdAcao() {
+  const licaoId = document.getElementById("ebdLicaoIdAcao").value;
+  if (!licaoId) { mostrarToast("Informe o id da lição.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/licao/reabrir`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ licaoId: Number(licaoId) })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+}
+
+async function carregarRosterChamadaEbdAcao() {
+  const licaoId = document.getElementById("ebdChamadaLicaoId").value;
+  const turmaId = document.getElementById("ebdChamadaTurmaId").value;
+  const container = document.getElementById("painelRosterChamadaEbd");
+  if (!licaoId || !turmaId) { container.innerHTML = ""; mostrarToast("Informe o id da lição e o id da turma.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/roster?turmaId=${turmaId}&licaoId=${licaoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.alunos.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Status</th><th>Lançar</th></tr></thead><tbody>
+        ${data.alunos.map(a => `<tr>
+          <td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.status || "-"}</td>
+          <td>
+            <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'PRESENTE')">✅ Presente</button>
+            <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'AUSENTE')">❌ Ausente</button>
+          </td>
+        </tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
+  carregarResumoChamadaEbdAcao();
+}
+
+async function lancarPresencaEbdAcao(alunoId, status) {
+  const licaoId = document.getElementById("ebdChamadaLicaoId").value;
+  const turmaId = document.getElementById("ebdChamadaTurmaId").value;
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/presenca`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ licaoId: Number(licaoId), turmaId: Number(turmaId), alunoId, status })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) { carregarRosterChamadaEbdAcao(); carregarResumoChamadaEbdAcao(); }
+}
+
+async function registrarVisitanteEbdAcao() {
+  const licaoId = document.getElementById("ebdChamadaLicaoId").value;
+  const turmaId = document.getElementById("ebdChamadaTurmaId").value;
+  const visitanteNome = document.getElementById("ebdVisitanteNome").value.trim();
+  const visitanteContato = document.getElementById("ebdVisitanteContato").value.trim();
+  if (!licaoId || !turmaId || !visitanteNome) { mostrarToast("Informe lição, turma e o nome do visitante.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/visitante`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ licaoId: Number(licaoId), turmaId: Number(turmaId), visitanteNome, visitanteContato: visitanteContato || null })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) {
+    document.getElementById("ebdVisitanteNome").value = "";
+    document.getElementById("ebdVisitanteContato").value = "";
+    carregarResumoChamadaEbdAcao();
+  }
+}
+
+async function carregarResumoChamadaEbdAcao() {
+  const licaoId = document.getElementById("ebdChamadaLicaoId").value;
+  const turmaId = document.getElementById("ebdChamadaTurmaId").value;
+  const container = document.getElementById("painelResumoChamadaEbd");
+  if (!licaoId || !turmaId) { container.innerHTML = ""; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/resumo?licaoId=${licaoId}&turmaId=${turmaId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  const r = data.resumo;
+  container.innerHTML = `
+    <p>Presentes: <strong>${r.presentes}</strong> · Ausentes: <strong>${r.ausentes}</strong> · Visitantes: <strong>${r.visitantes}</strong></p>
+    <p>Percentual de presença: <strong>${r.percentualPresenca}%</strong> · Percentual de ausência: <strong>${r.percentualAusencia}%</strong></p>
+  `;
 }
 
 async function carregarVisaoAgrupadaEbdAcao() {

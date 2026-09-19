@@ -2502,6 +2502,53 @@
           <input type="search" id="ebdBuscaAgrupada" placeholder="Buscar por turma ou congregação..." oninput="carregarVisaoAgrupadaEbdAcao()" style="min-width:260px;" />
         </div>
         <div id="painelVisaoAgrupadaEbd"></div>
+
+        <hr />
+        <h3>✅ Chamada e presença (v6.2)</h3>
+        <p class="subtitle">A chamada é lançada por turma, sempre contra a lição do dia daquela congregação.
+          Uma lição <strong>fechada</strong> não aceita mais lançamento — quem administra a EBD ("ebd_gestao")
+          abre/fecha a lição; o professor designado na turma (v6.1) pode lançar a própria chamada mesmo sem
+          essa permissão ampla. Percentuais são sempre calculados a partir da chamada, nunca digitados.</p>
+
+        <h4>Lição do dia</h4>
+        <div class="barra-lista">
+          <select id="ebdChamadaCongregacao"></select>
+          <input type="date" id="ebdChamadaData" style="max-width:160px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="buscarLicaoEbdAcao()">🔍 Buscar lição</button>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirLicaoEbdAcao()">🔓 Abrir lição</button>
+        </div>
+        <div id="painelLicaoEbd"></div>
+
+        <details style="margin:8px 0;">
+          <summary>🔒 Fechar / 🔓 Reabrir lição (id da lição)</summary>
+          <div class="barra-lista">
+            <input type="number" id="ebdLicaoIdAcao" placeholder="Id da lição" style="max-width:140px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="fecharLicaoEbdAcao()">🔒 Fechar</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="reabrirLicaoEbdAcao()">🔓 Reabrir</button>
+          </div>
+        </details>
+
+        <hr />
+        <h4>Lançar chamada da turma</h4>
+        <div class="barra-lista">
+          <input type="number" id="ebdChamadaLicaoId" placeholder="Id da lição" style="max-width:140px;" />
+          <input type="number" id="ebdChamadaTurmaId" placeholder="Id da turma" style="max-width:140px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarRosterChamadaEbdAcao()">📋 Carregar roster</button>
+        </div>
+        <div id="painelRosterChamadaEbd"></div>
+
+        <details style="margin:8px 0;">
+          <summary>🙋 Lançar visitante</summary>
+          <div class="barra-lista">
+            <input type="text" id="ebdVisitanteNome" placeholder="Nome do visitante" style="min-width:200px;" />
+            <input type="text" id="ebdVisitanteContato" placeholder="Contato (opcional)" style="min-width:160px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarVisitanteEbdAcao()">➕ Registrar visitante</button>
+          </div>
+        </details>
+
+        <hr />
+        <h4>Resumo da chamada (percentuais calculados)</h4>
+        <div id="painelResumoChamadaEbd"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

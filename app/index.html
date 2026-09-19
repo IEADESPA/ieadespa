@@ -258,6 +258,15 @@
             <button class="btn-aba" id="btnAbaAssistenciasocial" onclick="mostrarAbaSecretaria('assistenciasocial')"><span class="icone">🤝</span><span class="rotulo">Assistência Social</span></button>
           </div>
 
+          <!-- MÓDULO: EBD — ESCOLA BÍBLICA DOMINICAL (v6.1, abre a FASE 6) —
+               permissão própria "ebd_gestao", nunca concedida por padrão a
+               nenhum papel. Diferente do Departamento cadastral "EBD" usado
+               pelos Relatórios Departamentais (v5.2/v5.5/v5.8). -->
+          <div class="grupo-modulo" id="grupoModuloEbd" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaEbd" onclick="mostrarAbaSecretaria('ebd')"><span class="icone">📖</span><span class="rotulo">EBD</span></button>
+          </div>
+
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
           <div class="grupo-modulo" id="grupoModuloConformidade" style="display:none;">
             <hr class="divisor-sidebar" />
@@ -2423,6 +2432,76 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPrestacaoContasAssistenciaAcao()">📊 Ver</button>
         </div>
         <div id="painelPrestacaoContasAssistencia"></div>
+      </div>
+
+      <!-- ABA: EBD — ESCOLA BÍBLICA DOMINICAL (v6.1, abre a FASE 6) -->
+      <div id="abaEbd" class="aba-secretaria" style="display:none;">
+        <h3>📖 EBD — Turmas, Professores e Alunos</h3>
+        <p class="subtitle">Hierarquia Campo → Área → Congregação → Turma. O "Aluno" não é um cadastro de pessoa
+          à parte — é um vínculo do próprio cadastro de <strong>MembroReferencia</strong> (o mesmo de sempre),
+          com uma matrícula própria da EBD, atribuída uma única vez.</p>
+
+        <h4>Turmas da congregação</h4>
+        <div class="barra-lista">
+          <select id="ebdCongregacao"></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarTurmasEbdAcao()">📂 Abrir</button>
+        </div>
+        <details style="margin:8px 0;">
+          <summary>➕ Cadastrar turma</summary>
+          <div class="barra-lista">
+            <input type="text" id="ebdNovaTurmaNome" placeholder="Nome da turma (ex: Adultos)" style="min-width:200px;" />
+            <input type="text" id="ebdNovaTurmaFaixaEtaria" placeholder="Faixa etária (opcional)" style="max-width:160px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarTurmaEbdAcao()">Salvar</button>
+          </div>
+        </details>
+        <p id="resultadoTurmaEbd" class="subtitle"></p>
+        <div id="painelTurmasEbd"></div>
+
+        <hr />
+        <h4>Detalhe da turma (professores e alunos)</h4>
+        <div class="barra-lista">
+          <input type="number" id="ebdTurmaIdDetalhe" placeholder="Id da turma" style="max-width:140px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarDetalheTurmaEbdAcao()">🔍 Ver Detalhe</button>
+        </div>
+        <div id="painelDetalheTurmaEbd"></div>
+
+        <details style="margin:8px 0;">
+          <summary>👨‍🏫 Designar professor</summary>
+          <div class="barra-lista">
+            <input type="number" id="ebdProfessorTurmaId" placeholder="Id da turma" style="max-width:140px;" />
+            <input type="number" id="ebdProfessorMatricula" placeholder="Matrícula do professor" style="max-width:180px;" />
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="ebdProfessorPrincipal" /> Professor principal</label>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="designarProfessorEbdAcao()">➕ Designar</button>
+          </div>
+        </details>
+
+        <details style="margin:8px 0;">
+          <summary>🎓 Matricular aluno</summary>
+          <p class="subtitle" style="margin:4px 0;">A matrícula é atribuída uma única vez por membro — se ele já
+            tiver, use "Transferir de turma" em vez de matricular de novo.</p>
+          <div class="barra-lista">
+            <input type="number" id="ebdAlunoTurmaId" placeholder="Id da turma" style="max-width:140px;" />
+            <input type="number" id="ebdAlunoMatriculaMembro" placeholder="Matrícula do membro" style="max-width:180px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="matricularAlunoEbdAcao()">🎓 Matricular</button>
+          </div>
+        </details>
+        <p id="resultadoAlunoEbd" class="subtitle"></p>
+
+        <details style="margin:8px 0;">
+          <summary>🔀 Transferir aluno de turma</summary>
+          <div class="barra-lista">
+            <input type="number" id="ebdTransferirMatriculaMembro" placeholder="Matrícula do membro" style="max-width:180px;" />
+            <input type="number" id="ebdTransferirNovaTurmaId" placeholder="Id da nova turma" style="max-width:160px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="transferirAlunoEbdAcao()">🔀 Transferir</button>
+          </div>
+        </details>
+
+        <hr />
+        <h4>Visão agrupada por Área → Congregação (busca)</h4>
+        <div class="barra-lista">
+          <input type="search" id="ebdBuscaAgrupada" placeholder="Buscar por turma ou congregação..." oninput="carregarVisaoAgrupadaEbdAcao()" style="min-width:260px;" />
+        </div>
+        <div id="painelVisaoAgrupadaEbd"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

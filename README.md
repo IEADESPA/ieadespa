@@ -6023,9 +6023,81 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 
 #### v6.1 — Hierarquia e cadastros da EBD
 
-- [ ] Turmas + TurmaProfessor (Campo → Área → Congregação → Turma).
-- [ ] Aluno como vínculo de `MembroReferencia` (matrícula única).
-- [ ] Visão agrupada por Área → Congregação (busca).
+- [x] Turmas + TurmaProfessor (Campo → Área → Congregação → Turma).
+- [x] Aluno como vínculo de `MembroReferencia` (matrícula única).
+- [x] Visão agrupada por Área → Congregação (busca).
+
+  Abre a FASE 6 do zero, em Functions + front estático — nenhuma linha do
+  protótipo `chamada-ebd` (Next.js, banido) foi copiada. Migração 101
+  (`sql/migrations/101_ebd_hierarquia_cadastros.sql`) cria três tabelas:
+  `EbdTurmas` (pertence a uma Congregação — Área/Região/Quadrante/Distrito
+  continuam alcançáveis subindo `Congregacoes.AreaId`, exatamente a mesma
+  cadeia que `shared/escopo.js::QUERY_POR_TIPO` já usa; nenhuma coluna
+  territorial nova), `EbdTurmaProfessores` (N:N Turma×`MembroReferencia`,
+  desligar nunca apaga a linha — só `Ativo = 0`, mesmo padrão de
+  `EscalasEquipeMembros`/v5.6) e `EbdAlunos`. "Turma" aqui não tem nenhuma
+  relação com `TurmasBatismo` (migração 086, esteira de discipulado) —
+  nomes parecidos, domínios diferentes.
+
+  Aluno **não é um cadastro de pessoa novo**: é um vínculo de
+  `MembroReferencia` — o mesmo cadastro usado por batismo, escalas e
+  habilitação de voluntários desde a v0.2/v1.1 — com `UNIQUE (MembroId)`
+  em `EbdAlunos`, então cada membro só pode ter um vínculo de aluno na
+  vida. A matrícula (`Matricula`, formato `EBD-ANO-NNNNNN`) é atribuída
+  **uma única vez**, na primeira matrícula, e persiste através de uma
+  eventual transferência de turma depois (`shared/
+  ebdTurmas.js::transferirAluno` muda só `TurmaId`, nunca a matrícula).
+  Unicidade em dois níveis, mesma defesa em profundidade do resto do
+  sistema: o valor é gerado por `shared/protocolo.js::gerarProtocolo`
+  (sequência atômica `MERGE ... HOLDLOCK`, já usada por Ouvidoria/
+  Disciplina/Projetos — sem reinventar contador nem arriscar duas
+  requisições simultâneas saírem com o mesmo número) e `UNIQUE (Matricula)`
+  barra qualquer duplicidade remanescente no schema. `podeMatricularAluno`
+  recusa nova matrícula pra quem já tem uma, orientando a usar
+  transferência de turma em vez disso — testado nos dois casos (membro
+  sem vínculo e membro já matriculado).
+
+  Visão agrupada por Área → Congregação (item 3) é
+  `shared/ebdTurmas.js::listarTurmasParaVisaoAgrupada` +
+  `agruparPorAreaCongregacao` (função pura, testável sem banco) — o escopo
+  de quem pode ver o quê **não é recalculado aqui**: reaproveita
+  `usuario.escopoCongregacoes`, já resolvido no login por
+  `shared/escopo.js::resolverEscopoCongregacoes` (mesmo valor que todo o
+  resto do sistema usa em `auth.estaNoEscopo`), filtrando a query por
+  `Congregacoes.Nome IN (...)` quando não é `"TODAS"`. A busca
+  (`filtrarBuscaAgrupada`, também pura) casa por nome de turma OU nome de
+  congregação, aplicada sobre o resultado já agrupado — sem outra query.
+
+  Permissão nova `ebd_gestao` (migração 101), **nunca concedida
+  automaticamente a nenhum papel** — mesmo padrão de
+  `habilitacao_voluntarios`/v5.7 e `assistencia_social`/v5.9 — cabe à
+  Diretoria conceder a quem administra a EBD de fato. Decisão explícita:
+  não reaproveitar nenhuma permissão departamental existente
+  (`tesouraria_departamental`), porque aquela é do financeiro do
+  Departamento "EBD" cadastral (`Departamentos.Sigla = 'EBD'`, usado pelos
+  Relatórios Departamentais desde a v5.2/v5.5/v5.8) — um cadastro
+  totalmente diferente do que nasce agora (turma/professor/aluno reais).
+  As duas coisas só vão se encontrar na futura v6.7 (Financeiro da EBD).
+
+  `api/GestaoEbdTurmas` (`GET/POST /api/ebd-turmas/{turmas|professores|
+  professores/encerrar|alunos|alunos/transferir|aluno|visao-agrupada}`),
+  toda rota atrás de `auth.exigirPermissao(req, context, "ebd_gestao")` +
+  checagem de escopo por congregação (`podeAcessarCongregacao`/
+  `podeAcessarTurma`), mesmo padrão de defesa em profundidade do resto do
+  sistema. Frontend: novo módulo "EBD" na barra lateral
+  (`grupoModuloEbd`/aba `ebd`), com cadastro de turma, designação/remoção
+  de professor, matrícula/transferência de aluno e a visão agrupada com
+  busca ao vivo.
+
+  Testado com `npx jest` (368 testes, 17 novos em
+  `api/shared/__tests__/ebdTurmas.test.js`: `validarNovaTurma`,
+  `podeDesignarProfessor` nos três casos — sem vínculo, vínculo encerrado
+  reativável, vínculo já ativo —, `podeMatricularAluno` nos dois casos,
+  `formatarMatricula` no formato exato com zero-padding,
+  `agruparPorAreaCongregacao` com múltiplas congregações por área e
+  congregação sem Área definida, e `filtrarBuscaAgrupada` por turma, por
+  congregação, sem correspondência e case-insensitive) e `node --check`
+  em todos os arquivos novos/alterados.
 
 #### v6.2 — Chamada e presença
 

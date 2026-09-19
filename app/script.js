@@ -861,7 +861,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial", "ebd"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -889,6 +889,10 @@ const ABA_PERMISSOES_ALT = {
   // v5.9 — permissão própria, nunca concedida por padrão (dado mais
   // sensível do sistema: situação socioeconômica de família assistida).
   assistenciasocial: ["assistencia_social"],
+  // v6.1 — abre a FASE 6 (EBD): permissão própria "ebd_gestao", nunca
+  // concedida por padrão — diferente do Departamento cadastral "EBD" que
+  // já existe pros Relatórios Departamentais (v5.2/v5.5/v5.8).
+  ebd: ["ebd_gestao"],
   // v5.4 (correção) — quem só tem "tesouraria_departamental" (líder local/
   // geral de departamento) também acessa Financeiro → Saídas, pra gastar o
   // saldo do próprio departamento (Centro de Custo DEPTO_<SIGLA>) pelo
@@ -951,6 +955,7 @@ const MODULOS = {
   escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },
   habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao"] },
   assistenciasocial: { titulo: "Assistência Social", icone: "🤝", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
+  ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "📖", abaEntrada: "ebd", abas: ["ebd"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
@@ -4970,6 +4975,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "escalas") carregarOpcoesEscalasAcao();
   if (aba === "habilitacao") carregarOpcoesHabilitacaoAcao();
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
+  if (aba === "ebd") { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); }
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -4985,7 +4991,7 @@ const TITULOS_MODULOS = {
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos",
   mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos",
   escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários",
-  assistenciasocial: "Assistência Social"
+  assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -12456,4 +12462,151 @@ async function carregarPrestacaoContasAssistenciaAcao() {
     <p>${Object.entries(data.totalEntregasPorTipo || {}).map(([tipo, qtd]) => `${ROTULO_TIPO_BENEFICIO_AS[tipo] || tipo}: ${qtd}`).join(" · ") || "Nenhuma entrega no período."}</p>
     <p class="subtitle">Fechamento departamental (v5.4, Ação da Fé — separado do caixa comum): ${data.fechamentoMensal ? `Total de despesas R$ ${Number(data.fechamentoMensal.TotalDespesas || 0).toFixed(2)}` : "mês ainda não fechado."}</p>
   `;
+}
+
+// ---- EBD (v6.1 — Hierarquia e cadastros, abre a FASE 6) ----
+
+async function carregarOpcoesEbdAcao() {
+  const selCong = document.getElementById("ebdCongregacao");
+  if (selCong && !selCong.dataset.montado) {
+    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    selCong.dataset.montado = "1";
+  }
+}
+
+async function carregarTurmasEbdAcao() {
+  const congregacaoId = document.getElementById("ebdCongregacao").value;
+  const container = document.getElementById("painelTurmasEbd");
+  if (!congregacaoId) { container.innerHTML = ""; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/turmas?congregacaoId=${congregacaoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.turmas.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Faixa Etária</th><th>Professores</th><th>Alunos</th></tr></thead><tbody>
+        ${data.turmas.map(t => `<tr><td>${t.turmaId}</td><td>${t.nome}</td><td>${t.faixaEtaria || "-"}</td><td>${t.totalProfessores}</td><td>${t.totalAlunos}</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhuma turma cadastrada nesta congregação ainda.</p>";
+}
+
+async function criarTurmaEbdAcao() {
+  const congregacaoId = document.getElementById("ebdCongregacao").value;
+  const nome = document.getElementById("ebdNovaTurmaNome").value.trim();
+  const faixaEtaria = document.getElementById("ebdNovaTurmaFaixaEtaria").value.trim();
+  const msg = document.getElementById("resultadoTurmaEbd");
+  if (!congregacaoId || !nome) { msg.textContent = "Escolha a congregação e informe o nome da turma."; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/turmas`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ congregacaoId: Number(congregacaoId), nome, faixaEtaria: faixaEtaria || null })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast(data.mensagem, "sucesso");
+  document.getElementById("ebdNovaTurmaNome").value = "";
+  document.getElementById("ebdNovaTurmaFaixaEtaria").value = "";
+  carregarTurmasEbdAcao();
+}
+
+async function carregarDetalheTurmaEbdAcao() {
+  const turmaId = document.getElementById("ebdTurmaIdDetalhe").value;
+  const container = document.getElementById("painelDetalheTurmaEbd");
+  if (!turmaId) { container.innerHTML = ""; return; }
+  const [resProf, resAlu] = await Promise.all([
+    fetchProtegido(`${API_BASE}/ebd-turmas/professores?turmaId=${turmaId}`),
+    fetchProtegido(`${API_BASE}/ebd-turmas/alunos?turmaId=${turmaId}`)
+  ]);
+  const dadosProf = await resProf.json();
+  const dadosAlu = await resAlu.json();
+  if (dadosProf.sucesso === false) { container.innerHTML = `<p class="subtitle">${dadosProf.mensagem}</p>`; return; }
+  container.innerHTML = `
+    <h5>Professores</h5>
+    ${dadosProf.professores.length
+      ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Principal</th><th></th></tr></thead><tbody>
+          ${dadosProf.professores.map(p => `<tr><td>${p.membroId}</td><td>${p.membroNome}</td><td>${p.principal ? "Sim" : "Não"}</td>
+            <td><button class="btn-link" onclick="encerrarProfessorEbdAcao(${turmaId}, ${p.membroId})">Remover</button></td></tr>`).join("")}
+        </tbody></table>`
+      : "<p class='subtitle'>Nenhum professor designado.</p>"}
+    <h5>Alunos</h5>
+    ${dadosAlu.sucesso === false ? `<p class="subtitle">${dadosAlu.mensagem}</p>` : (dadosAlu.alunos.length
+      ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula EBD</th><th>Nome</th><th>Matrículado em</th></tr></thead><tbody>
+          ${dadosAlu.alunos.map(a => `<tr><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.matriculadoEm ? new Date(a.matriculadoEm).toLocaleDateString("pt-BR") : "-"}</td></tr>`).join("")}
+        </tbody></table>`
+      : "<p class='subtitle'>Nenhum aluno matriculado.</p>")}
+  `;
+}
+
+async function designarProfessorEbdAcao() {
+  const turmaId = document.getElementById("ebdProfessorTurmaId").value;
+  const membroId = document.getElementById("ebdProfessorMatricula").value;
+  const principal = document.getElementById("ebdProfessorPrincipal").checked;
+  if (!turmaId || !membroId) { mostrarToast("Informe o id da turma e a matrícula do professor.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/professores`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ turmaId: Number(turmaId), membroId: Number(membroId), principal })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarDetalheTurmaEbdAcao();
+}
+
+async function encerrarProfessorEbdAcao(turmaId, membroId) {
+  if (!confirm("Remover este professor da turma?")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/professores/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ turmaId, membroId })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  carregarDetalheTurmaEbdAcao();
+}
+
+async function matricularAlunoEbdAcao() {
+  const turmaId = document.getElementById("ebdAlunoTurmaId").value;
+  const membroId = document.getElementById("ebdAlunoMatriculaMembro").value;
+  const msg = document.getElementById("resultadoAlunoEbd");
+  if (!turmaId || !membroId) { msg.textContent = "Informe o id da turma e a matrícula do membro."; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/alunos`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ turmaId: Number(turmaId), membroId: Number(membroId) })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast(data.mensagem, "sucesso");
+  document.getElementById("ebdAlunoMatriculaMembro").value = "";
+  carregarDetalheTurmaEbdAcao();
+}
+
+async function transferirAlunoEbdAcao() {
+  const membroId = document.getElementById("ebdTransferirMatriculaMembro").value;
+  const novaTurmaId = document.getElementById("ebdTransferirNovaTurmaId").value;
+  if (!membroId || !novaTurmaId) { mostrarToast("Informe a matrícula do membro e o id da nova turma.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/alunos/transferir`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId: Number(membroId), novaTurmaId: Number(novaTurmaId) })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarDetalheTurmaEbdAcao();
+}
+
+async function carregarVisaoAgrupadaEbdAcao() {
+  const busca = document.getElementById("ebdBuscaAgrupada") ? document.getElementById("ebdBuscaAgrupada").value.trim() : "";
+  const container = document.getElementById("painelVisaoAgrupadaEbd");
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/visao-agrupada${busca ? `?busca=${encodeURIComponent(busca)}` : ""}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.areas.length
+    ? data.areas.map(area => `
+        <div class="cartao-area-ebd" style="margin-bottom:14px;">
+          <h5>🗺️ ${area.areaNome}</h5>
+          ${area.congregacoes.map(cong => `
+            <div style="margin-left:14px; margin-bottom:8px;">
+              <strong>⛪ ${cong.congregacaoNome}</strong>
+              <ul style="margin:4px 0 0 20px;">
+                ${cong.turmas.map(t => `<li>${t.nome}${t.faixaEtaria ? ` (${t.faixaEtaria})` : ""} — ${t.totalProfessores} professor(es), ${t.totalAlunos} aluno(s)</li>`).join("")}
+              </ul>
+            </div>
+          `).join("")}
+        </div>
+      `).join("")
+    : "<p class='subtitle'>Nenhuma turma encontrada.</p>";
 }

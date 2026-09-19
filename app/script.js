@@ -12920,6 +12920,125 @@ async function carregarResumoAtividadeTurmaEbdAcao() {
     : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
 }
 
+// ---- Certificados (v6.5 — fecha a FASE 6) ----
+// Mesmo par "PDF de verdade (servidor, pdfkit) + página imprimível
+// (window.print())" de imprimirCarta/baixarPdfCarta (vB.6) — só que aqui a
+// emissão em si já é o evento real (sem rascunho), então a lista já vem
+// pronta pra baixar/imprimir assim que emitida.
+let certificadosCache = [];
+
+async function emitirCertificadoEbdAcao() {
+  const membroId = Number(document.getElementById("certMatricula").value);
+  const titulo = document.getElementById("certTitulo").value.trim();
+  const descricao = document.getElementById("certDescricao").value.trim();
+  const conquistaIdBruto = document.getElementById("certConquistaId").value;
+  const conquistaId = conquistaIdBruto ? Number(conquistaIdBruto) : null;
+  const resultadoEl = document.getElementById("resultadoCertificadoEbd");
+  if (!membroId || !titulo) {
+    resultadoEl.textContent = "Informe a matrícula e o título do certificado.";
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/certificados/emitir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId, titulo, descricao: descricao || null, conquistaId })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultadoEl.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("certTitulo").value = "";
+    document.getElementById("certDescricao").value = "";
+    document.getElementById("certConquistaId").value = "";
+    document.getElementById("certBuscaMatricula").value = membroId;
+    carregarCertificadosEbdAcao();
+  }
+}
+
+async function carregarCertificadosEbdAcao() {
+  const membroId = Number(document.getElementById("certBuscaMatricula").value);
+  const container = document.getElementById("painelCertificadosEbd");
+  if (!membroId) { container.innerHTML = ""; mostrarToast("Informe a matrícula.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/certificados?membroId=${membroId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  certificadosCache = data.certificados || [];
+  renderizarCertificadosEbd();
+}
+
+function renderizarCertificadosEbd() {
+  const container = document.getElementById("painelCertificadosEbd");
+  if (!certificadosCache.length) { container.innerHTML = "<p class='subtitle'>Nenhum certificado emitido para esta matrícula.</p>"; return; }
+  let html = `<table class="tabela-frequencia"><thead><tr>
+    <th>ID</th><th>Título</th><th>Conquista</th><th>Protocolo</th><th>Emitido em</th><th class="acoes-inline"></th>
+  </tr></thead><tbody>`;
+  certificadosCache.forEach(c => {
+    html += `<tr>
+      <td>${c.certificadoId}</td>
+      <td>${c.titulo}</td>
+      <td>${c.conquistaNome || "-"}</td>
+      <td>${c.protocolo}</td>
+      <td>${c.dataEmissao ? new Date(c.dataEmissao).toLocaleDateString("pt-BR") : "-"}</td>
+      <td class="acoes-inline">
+        <button class="btn-link" onclick="imprimirCertificado(${c.certificadoId})">🖨️ Imprimir</button>
+        <button class="btn-link" onclick="baixarPdfCertificado(${c.certificadoId}, ${c.membroId})">📄 Baixar PDF</button>
+      </td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+async function baixarPdfCertificado(certificadoId, membroId) {
+  const res = await fetch(`${API_BASE}/certificados/${certificadoId}/pdf?matricula=${membroId}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    mostrarToast((data && data.mensagem) || "Não foi possível gerar o PDF.", "erro");
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `certificado-${certificadoId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function imprimirCertificado(certificadoId) {
+  const c = (certificadosCache || []).find(x => x.certificadoId === certificadoId);
+  if (c) renderizarImpressaoCertificado(c);
+}
+
+function renderizarImpressaoCertificado(c) {
+  const dataEmissaoFmt = c.dataEmissao ? new Date(c.dataEmissao).toLocaleDateString("pt-BR") : "____/____/______";
+  const w = window.open("", "_blank", "width=760,height=900");
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Certificado</title>
+  <style>
+    body{font-family:Georgia,serif;color:#111;padding:40px;}
+    .certificado{max-width:680px;margin:auto;border:2px solid #d9b34f;padding:32px;}
+    .cab{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:20px;}
+    h1{font-size:17px;margin:0 0 4px;} h2{font-size:22px;margin:8px 0 24px;text-align:center;letter-spacing:2px;}
+    .sub{font-size:12px;color:#555;} p{line-height:1.8;margin:8px 0;font-size:14px;}
+    .desc{font-style:italic;margin:14px 0;}
+    .rodape{margin-top:44px;display:flex;justify-content:space-around;font-size:12px;text-align:center;}
+    .rodape div{border-top:1px solid #111;padding-top:4px;width:220px;}
+    .protocolo{margin-top:24px;font-size:11px;color:#555;text-align:center;}
+  </style></head><body><div class="certificado">
+    <div class="cab"><h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS</h1><div class="sub">Ministério do SETA em Parauapebas — PA · IEADESPA</div></div>
+    <h2>CERTIFICADO</h2>
+    <p>Certificamos que <strong>${c.nome}</strong> (Cartão de Membro nº ${c.membroId}) ${c.titulo}${c.conquistaNome ? `, referente à conquista "${c.conquistaNome}"` : ""}.</p>
+    ${c.descricao ? `<p class="desc">${c.descricao}</p>` : ""}
+    <p>Emitido em ${dataEmissaoFmt}.</p>
+    <div class="rodape"><div>Pastor Congregacional</div><div>Secretário(a) da EBD</div></div>
+    <p class="protocolo">Protocolo ${c.protocolo}</p>
+  </div></body></html>`);
+  w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
+}
+
 async function carregarVisaoAgrupadaEbdAcao() {
   const busca = document.getElementById("ebdBuscaAgrupada") ? document.getElementById("ebdBuscaAgrupada").value.trim() : "";
   const container = document.getElementById("painelVisaoAgrupadaEbd");

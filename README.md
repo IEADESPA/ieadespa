@@ -6368,7 +6368,59 @@ desempate do ranking.
 
 #### v6.5 — Certificados
 
-- [ ] Emissão de certificados + página imprimível.
+- [x] Emissão de certificados + página imprimível.
+
+  Fecha a FASE 6 com a versão mais simples do capítulo — nenhum motor novo,
+  só um CRUD + o par "PDF de verdade + página imprimível" já consagrado por
+  CartasTransito/vB.6 e ApresentacoesCrianca/vB.12. Migração 105
+  (`sql/migrations/105_ebd_certificados.sql`) cria uma única tabela,
+  `CertificadosEmitidos` (MembroId, Título, Descrição/motivo livre,
+  `ConquistaId` nullable, EmitidoPorMembroId, Protocolo, DataEmissao).
+
+  Decisão de projeto (o item do checklist é uma linha só, sem dizer "pra
+  quem" nem "certificado de quê"): "emissão de certificados" foi desenhada
+  **genérica**, não amarrada só à EBD — quem emite (`shared/certificados.js
+  ::emitirCertificado`) escolhe uma matrícula + um título/motivo livre (ex:
+  "Conclusão do Curso de Obreiros", "Participação no Seminário X"), e
+  `ConquistaId` é um vínculo **opcional** de conveniência com o motor de
+  conquistas do v6.4 (`CatalogoConquistas`) — pré-liga o certificado a uma
+  conquista que a pessoa já desbloqueou (ex: "Trimestre Perfeito"), sem
+  nunca exigir esse vínculo. Mesma razão de `shared/protocolo.js`/
+  `shared/estatuto.js` serem primitivas reaproveitáveis por módulos que
+  ainda nem existem: um certificado por qualquer outro motivo, de um futuro
+  módulo fora da EBD, usa a mesma tabela sem qualquer mudança de schema —
+  ao mesmo tempo, nenhum motor de template genérico foi construído (isso
+  seria over-engineering pra um item de checklist de uma linha).
+
+  Diferente de CartasTransito, não há lifecycle de rascunho
+  (SOLICITADA/CONFIRMADA/EMITIDA): emitir um certificado **já é** o evento
+  real, então o protocolo institucional único (`shared/protocolo.js`, tipo
+  `CERT`) é gerado no próprio INSERT, dentro de `emitirCertificado` — nunca
+  sob demanda no primeiro PDF, porque aqui não existe "ainda não é de
+  verdade" antes disso.
+
+  Duas Functions, mesmo naming das duas emissões de PDF anteriores:
+  `GestaoCertificados` (`POST /api/certificados/emitir` e
+  `GET /api/certificados?membroId=`) e `CertificadoPdf`
+  (`GET /api/certificados/{id}/pdf?matricula=`, mesmo modelo de
+  autoatendimento do `CartaPdf` — só a própria matrícula baixa o próprio
+  PDF). Permissão de emissão: **`ebd_gestao`** (v6.1) — a mesma que já fecha
+  turmas/chamada/lições da FASE 6, porque emitir certificado não é
+  autoatendimento (a pessoa não emite pra si mesma); consultar/baixar/
+  imprimir os próprios certificados continua aberto à própria matrícula,
+  mesmo espírito self-service do resto do sistema.
+
+  Frontend: `app/index.html` ganha a seção "🎓 Certificados" dentro da aba
+  EBD (emitir, buscar por matrícula, listar) e `app/script.js` traz o
+  mesmo par de funções de sempre — `baixarPdfCertificado`/
+  `imprimirCertificado` + `renderizarImpressaoCertificado` (janela própria,
+  `window.print()`), no mesmo espírito de `baixarPdfCarta`/`imprimirCarta`.
+
+  12 testes novos em `api/shared/__tests__/certificados.test.js` (476 no
+  total, eram 464) cobrem `validarEmissaoCertificado` (matrícula e título
+  obrigatórios, título até 150 caracteres, descrição/conquista opcionais),
+  `podeAcessarCertificado` (autoatendimento vs. `ebd_gestao`) e
+  `mapearCertificado` (com e sem o vínculo opcional de conquista).
 
 #### v6.6 — Revistas e pedidos
 

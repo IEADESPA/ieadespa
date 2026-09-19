@@ -2647,6 +2647,32 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarResumoAtividadeTurmaEbdAcao()">📊 Carregar resumo</button>
         </div>
         <div id="painelResumoAtividadeEbd"></div>
+
+        <hr />
+        <h3>🎓 Certificados (v6.5)</h3>
+        <p class="subtitle">Fecha a FASE 6 com a versão mais simples do capítulo: emitir um certificado é
+          um cadastro genérico (matrícula + título/motivo livre — serve pra qualquer motivo, não só EBD),
+          com um vínculo <strong>opcional</strong> a uma conquista que a pessoa já desbloqueou (v6.4), só como
+          atalho de preenchimento. Quem emite precisa de "ebd_gestao"; a própria matrícula sempre pode ver e
+          baixar os próprios certificados.</p>
+
+        <h4>Emitir certificado</h4>
+        <div class="barra-lista">
+          <input type="number" id="certMatricula" placeholder="Matrícula do membro" style="max-width:180px;" />
+          <input type="text" id="certTitulo" placeholder="Título (ex: Conclusão do Curso de Obreiros)" style="min-width:260px;" />
+          <input type="number" id="certConquistaId" placeholder="Id da conquista (opcional)" style="max-width:180px;" />
+        </div>
+        <textarea id="certDescricao" placeholder="Descrição/motivo (opcional)" rows="2" style="width:100%;"></textarea>
+        <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="emitirCertificadoEbdAcao()">🎓 Emitir certificado</button>
+        <p id="resultadoCertificadoEbd" class="subtitle"></p>
+
+        <hr />
+        <h4>Certificados de uma matrícula</h4>
+        <div class="barra-lista">
+          <input type="number" id="certBuscaMatricula" placeholder="Matrícula do membro" style="max-width:180px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarCertificadosEbdAcao()">🔍 Ver certificados</button>
+        </div>
+        <div id="painelCertificadosEbd"></div>
       </div>
 
       <!-- ABA: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico, module-

@@ -2549,6 +2549,74 @@
         <hr />
         <h4>Resumo da chamada (percentuais calculados)</h4>
         <div id="painelResumoChamadaEbd"></div>
+
+        <hr />
+        <h3>📖 Lições e atividades (v6.3)</h3>
+        <p class="subtitle">Estende a mesma Lição da chamada (v6.2) com conteúdo pedagógico e uma Atividade de até
+          5 tipos de questão (múltipla escolha, V/F, ordenar, completar, correspondência). Fechar a lição só encerra
+          a chamada — a atividade continua respondível/corrigível depois, como dever de casa. Gabarito é sempre
+          corrigido automaticamente no lançamento, mas pode ser corrigido manualmente a qualquer momento (nenhuma
+          correção automática de texto livre é palavra final).</p>
+
+        <h4>Conteúdo da lição</h4>
+        <div class="barra-lista">
+          <input type="number" id="ebdConteudoLicaoId" placeholder="Id da lição" style="max-width:140px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarConteudoLicaoEbdAcao()">🔍 Carregar</button>
+        </div>
+        <div class="barra-lista">
+          <input type="text" id="ebdConteudoTitulo" placeholder="Título da lição" style="min-width:220px;" />
+          <input type="text" id="ebdConteudoReferencia" placeholder="Referência bíblica (opcional)" style="min-width:200px;" />
+        </div>
+        <textarea id="ebdConteudoTexto" placeholder="Texto/conteúdo da lição (opcional)" rows="3" style="width:100%;"></textarea>
+        <button class="btn-confirmar btn-secundario" style="width:auto;margin:8px 0;" onclick="salvarConteudoLicaoEbdAcao()">💾 Salvar conteúdo</button>
+
+        <hr />
+        <h4>Atividade</h4>
+        <div class="barra-lista">
+          <input type="number" id="ebdAtividadeLicaoId" placeholder="Id da lição" style="max-width:140px;" />
+          <input type="text" id="ebdAtividadeTitulo" placeholder="Título da atividade (opcional)" style="min-width:200px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarAtividadeEbdAcao()">➕ Criar/abrir atividade</button>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarAtividadeEbdAcao()">🔍 Carregar atividade</button>
+        </div>
+        <div id="painelAtividadeEbd"></div>
+
+        <details style="margin:8px 0;">
+          <summary>➕ Adicionar questão</summary>
+          <div class="barra-lista">
+            <input type="number" id="ebdQuestaoAtividadeId" placeholder="Id da atividade" style="max-width:140px;" />
+            <select id="ebdQuestaoTipo" onchange="atualizarFormularioQuestaoEbd()">
+              <option value="MULTIPLA_ESCOLHA">Múltipla escolha</option>
+              <option value="VF">Verdadeiro/Falso</option>
+              <option value="ORDENAR">Ordenar</option>
+              <option value="COMPLETAR">Completar</option>
+              <option value="CORRESPONDENCIA">Correspondência</option>
+            </select>
+            <input type="number" id="ebdQuestaoOrdem" placeholder="Ordem (opcional)" style="max-width:120px;" />
+          </div>
+          <textarea id="ebdQuestaoEnunciado" placeholder="Enunciado da questão" rows="2" style="width:100%;"></textarea>
+          <p class="subtitle" id="ebdQuestaoAjuda"></p>
+          <textarea id="ebdQuestaoOpcoes" placeholder='Opções (JSON) — ex: ["Opção A","Opção B","Opção C"]' rows="2" style="width:100%;"></textarea>
+          <textarea id="ebdQuestaoGabarito" placeholder='Gabarito (JSON) — depende do tipo, ver ajuda acima' rows="2" style="width:100%;"></textarea>
+          <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="adicionarQuestaoEbdAcao()">💾 Salvar questão</button>
+        </details>
+
+        <hr />
+        <h4>Responder / corrigir por aluno</h4>
+        <div class="barra-lista">
+          <input type="number" id="ebdRespostaAtividadeId" placeholder="Id da atividade" style="max-width:140px;" />
+          <input type="number" id="ebdRespostaAlunoId" placeholder="Id do aluno" style="max-width:120px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarRespostasAlunoEbdAcao()">📋 Carregar respostas</button>
+        </div>
+        <div id="painelRespostasAlunoEbd"></div>
+
+        <hr />
+        <h4>Resumo da turma na atividade</h4>
+        <div class="barra-lista">
+          <input type="number" id="ebdResumoAtividadeId" placeholder="Id da atividade" style="max-width:140px;" />
+          <input type="number" id="ebdResumoTurmaId" placeholder="Id da turma" style="max-width:140px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarResumoAtividadeTurmaEbdAcao()">📊 Carregar resumo</button>
+        </div>
+        <div id="painelResumoAtividadeEbd"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

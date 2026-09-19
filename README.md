@@ -6178,9 +6178,88 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
 
 #### v6.3 — Lições e atividades
 
-- [ ] Lições (abrir/fechar) por congregação.
-- [ ] Atividades (5 tipos de pergunta: múltipla escolha, V/F, ordenar, completar, correspondência).
-- [ ] Respostas dos alunos + gabarito.
+- [x] Lições (abrir/fechar) por congregação.
+- [x] Atividades (5 tipos de pergunta: múltipla escolha, V/F, ordenar, completar, correspondência).
+- [x] Respostas dos alunos + gabarito.
+
+  Continua a FASE 6 em cima da v6.2 (`EbdLicoes`/`EbdChamadas`). Migração
+  103 (`sql/migrations/103_ebd_licoes_atividades.sql`) faz exatamente o que
+  a v6.2 anunciou de propósito: estende a MESMA `EbdLicoes` (`ALTER TABLE`
+  guardado por `IF NOT EXISTS` em `sys.columns`, idempotente) com `Titulo`,
+  `Referencia` e `Conteudo`, todos `NULL` — o item "Lições (abrir/fechar)
+  por congregação" reaparece aqui porque é o MESMO registro da v6.2, não
+  uma tabela nova; abrir/fechar continua sendo só a janela de chamada.
+  Em cima disso, duas tabelas novas: `EbdAtividades` (uma Atividade por
+  Lição, `UNIQUE (LicaoId)`, idempotente ao criar — `criarOuBuscarAtividade`
+  devolve a existente em vez de duplicar) e `EbdAtividadeQuestoes` (N
+  questões por Atividade, `Tipo` restrito por `CHECK` aos 5 valores do
+  checklist, `OpcoesJson`/`GabaritoJson` guardando a forma específica de
+  cada tipo — documentada por extenso no preâmbulo de
+  `api/shared/ebdAtividades.js`).
+
+  Os 5 tipos e como cada um é corrigido (`shared/ebdAtividades.js::
+  corrigirQuestao`, dispatcher único): **múltipla escolha** compara o
+  índice escolhido com o índice do gabarito; **V/F** compara booleano
+  estrito (resposta ausente/não booleana é sempre errada, nunca lança
+  erro); **ordenar** compara a lista de itens do aluno com o gabarito
+  posição a posição (mesmo conjunto de itens, ordem estrita — trocar dois
+  itens de lugar já reprova); **correspondência** guarda os pares
+  (`{id, esquerda, direita}`) autorados como o próprio gabarito e o aluno
+  responde com `{esquerdaId, direitaId}` por par — a correção
+  (`corrigirCorrespondencia`) é tudo-ou-nada: cada par precisa aparecer uma
+  única vez com `esquerdaId === direitaId`, cobrindo pareamento cruzado, id
+  duplicado, id desconhecido e resposta incompleta. **Completar** é o único
+  tipo de texto livre — decisão deliberada: o gabarito é uma LISTA de
+  variantes aceitas (não uma string única) e a comparação usa
+  `normalizarTexto` (sem acento, minúsculo, espaços colapsados) contra essa
+  lista — reduz falso-negativo de digitação/acentuação sem virar um
+  julgamento livre de sentido. Por isso o resultado automático de
+  COMPLETAR nunca é tratado como definitivo: toda resposta (de qualquer
+  tipo, não só completar) pode ser corrigida manualmente depois
+  (`corrigirRespostaManual`), e a tela mostra "⏳ pendente" enquanto uma
+  resposta ainda não foi confirmada/corrigida.
+
+  Resposta do aluno é sempre lançada por quem já lança a chamada — o Aluno
+  (v6.1) não tem login próprio no sistema — com upsert por
+  `UNIQUE (QuestaoId, AlunoId)` (mesmo espírito de `EbdChamadas`/v6.2:
+  corrigir um lançamento errado é rotina) e auto-correção imediata contra
+  o gabarito da questão. `calcularNotaAtividade` (pura) agrega os
+  resultados de uma atividade com tipos mistos em
+  `{totalQuestoes, respondidas, corretas, pendentes, percentual}` —
+  não-respondida conta como errada no percentual (nota de prova real),
+  mas `pendentes` distingue "errou" de "ainda não foi corrigida" na tela.
+
+  Permissão — mesma granularidade de `podeLancarChamadaDaTurma`/v6.2:
+  gerenciar o CONTEÚDO da lição/atividade (que é compartilhado por todas as
+  turmas da congregação, como a própria lição) exige `ebd_gestao` no escopo
+  OU ser professor ativo em QUALQUER turma daquela congregação
+  (`ehProfessorAtivoDaCongregacao`, em `api/GestaoEbdAtividades/index.js`);
+  já lançar/corrigir a RESPOSTA de um aluno específico exige ser professor
+  ativo NA TURMA daquele aluno (ou `ebd_gestao`) — mesma granularidade de
+  turma da chamada. Decisão deliberada, documentada na migração 103: a
+  Atividade NÃO fica bloqueada quando a Lição está `FECHADA` — diferente da
+  chamada, cujo lançamento realmente para quando a lição fecha — porque
+  responder/revisar/corrigir a atividade depois (dever de casa) faz
+  sentido continuar mesmo com a chamada daquele domingo já encerrada.
+
+  `api/GestaoEbdAtividades` (`GET/POST /api/ebd-atividades/{licao/conteudo|
+  atividade|questao|resposta|resposta/corrigir|respostas|resumo}`).
+  Frontend: seção "Lições e atividades" adicionada à aba EBD
+  (`app/index.html`/`app/script.js`) — editar título/referência/conteúdo da
+  lição, criar a atividade e adicionar questão por tipo (com texto de ajuda
+  por tipo sobre o formato de opções/gabarito), lançar/corrigir resposta
+  por aluno com o status calculado ao vivo, e ver o resumo de acertos por
+  aluno de uma turma inteira.
+
+  Testado com `npx jest` (428 testes, 39 novos em
+  `api/shared/__tests__/ebdAtividades.test.js`: as 5 regras de
+  `corrigirQuestao` cobrindo caso certo/errado/ausente de cada tipo
+  (incluindo `corrigirCorrespondencia` com pareamento cruzado, id
+  duplicado, id desconhecido e resposta incompleta, e `corrigirCompletar`
+  com variante aceita, variante sem acento, maiúscula/minúscula e resposta
+  vazia), `validarQuestao` nos 5 tipos e `calcularNotaAtividade` agregando
+  uma atividade de tipos mistos com pendente e não respondida) e
+  `node --check` em todos os arquivos novos/alterados.
 
 #### v6.4 — Motor de conquistas e gamificação *(desenhado como genérico desde o início, pedido explícito)*
 

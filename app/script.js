@@ -12719,6 +12719,195 @@ async function carregarResumoChamadaEbdAcao() {
   `;
 }
 
+// ---- Lições e atividades (v6.3) ----
+const AJUDA_QUESTAO_EBD = {
+  MULTIPLA_ESCOLHA: 'Opções: lista de textos, ex: ["Opção A","Opção B"]. Gabarito: índice da opção certa (0 = primeira), ex: 1',
+  VF: 'Opções: não usa (deixe em branco). Gabarito: true ou false',
+  ORDENAR: 'Opções: itens na ordem exibida, ex: ["Passo A","Passo B"]. Gabarito: os mesmos itens na ordem correta',
+  COMPLETAR: 'Opções: não usa (deixe em branco). Gabarito: lista de respostas aceitas, ex: ["graça","graca"]',
+  CORRESPONDENCIA: 'Opções: pares com id, ex: [{"id":1,"esquerda":"Moisés","direita":"Êxodo"}]. Gabarito: os mesmos pares (repita as opções)'
+};
+
+function atualizarFormularioQuestaoEbd() {
+  const tipo = document.getElementById("ebdQuestaoTipo").value;
+  document.getElementById("ebdQuestaoAjuda").textContent = AJUDA_QUESTAO_EBD[tipo] || "";
+}
+
+async function carregarConteudoLicaoEbdAcao() {
+  const licaoId = document.getElementById("ebdConteudoLicaoId").value;
+  if (!licaoId) { mostrarToast("Informe o id da lição.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/licao/conteudo?licaoId=${licaoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  document.getElementById("ebdConteudoTitulo").value = data.licao.titulo || "";
+  document.getElementById("ebdConteudoReferencia").value = data.licao.referencia || "";
+  document.getElementById("ebdConteudoTexto").value = data.licao.conteudo || "";
+}
+
+async function salvarConteudoLicaoEbdAcao() {
+  const licaoId = document.getElementById("ebdConteudoLicaoId").value;
+  if (!licaoId) { mostrarToast("Informe o id da lição.", "erro"); return; }
+  const titulo = document.getElementById("ebdConteudoTitulo").value.trim();
+  const referencia = document.getElementById("ebdConteudoReferencia").value.trim();
+  const conteudo = document.getElementById("ebdConteudoTexto").value.trim();
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/licao/conteudo`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ licaoId: Number(licaoId), titulo: titulo || null, referencia: referencia || null, conteudo: conteudo || null })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+}
+
+function renderPainelAtividadeEbd(atividade) {
+  const container = document.getElementById("painelAtividadeEbd");
+  if (!atividade) { container.innerHTML = "<p class='subtitle'>Nenhuma atividade criada ainda para esta lição.</p>"; return; }
+  container.innerHTML = `
+    <p class="subtitle">Atividade #${atividade.atividadeId}${atividade.titulo ? " — " + atividade.titulo : ""} (${atividade.questoes.length} questão(ões))</p>
+    ${atividade.questoes.length ? `<table class="tabela-frequencia"><thead><tr><th>Ordem</th><th>Tipo</th><th>Enunciado</th></tr></thead><tbody>
+      ${atividade.questoes.map(q => `<tr><td>${q.ordem}</td><td>${q.tipo}</td><td>${q.enunciado}</td></tr>`).join("")}
+    </tbody></table>` : ""}
+  `;
+}
+
+async function criarAtividadeEbdAcao() {
+  const licaoId = document.getElementById("ebdAtividadeLicaoId").value;
+  if (!licaoId) { mostrarToast("Informe o id da lição.", "erro"); return; }
+  const titulo = document.getElementById("ebdAtividadeTitulo").value.trim();
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/atividade`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ licaoId: Number(licaoId), titulo: titulo || null })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarAtividadeEbdAcao();
+}
+
+async function carregarAtividadeEbdAcao() {
+  const licaoId = document.getElementById("ebdAtividadeLicaoId").value;
+  if (!licaoId) { mostrarToast("Informe o id da lição.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/atividade?licaoId=${licaoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  renderPainelAtividadeEbd(data.atividade);
+}
+
+async function adicionarQuestaoEbdAcao() {
+  const atividadeId = document.getElementById("ebdQuestaoAtividadeId").value;
+  const tipo = document.getElementById("ebdQuestaoTipo").value;
+  const enunciado = document.getElementById("ebdQuestaoEnunciado").value.trim();
+  const ordem = document.getElementById("ebdQuestaoOrdem").value;
+  const opcoesTexto = document.getElementById("ebdQuestaoOpcoes").value.trim();
+  const gabaritoTexto = document.getElementById("ebdQuestaoGabarito").value.trim();
+  if (!atividadeId || !enunciado || !gabaritoTexto) { mostrarToast("Informe atividade, enunciado e gabarito.", "erro"); return; }
+  let opcoes = null, gabarito;
+  try {
+    opcoes = opcoesTexto ? JSON.parse(opcoesTexto) : null;
+    gabarito = JSON.parse(gabaritoTexto);
+  } catch {
+    mostrarToast("Opções/gabarito precisam ser JSON válido — veja o texto de ajuda acima.", "erro");
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/questao`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ atividadeId: Number(atividadeId), tipo, enunciado, opcoes, gabarito, ordem: ordem ? Number(ordem) : undefined })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) {
+    document.getElementById("ebdQuestaoEnunciado").value = "";
+    document.getElementById("ebdQuestaoOpcoes").value = "";
+    document.getElementById("ebdQuestaoGabarito").value = "";
+    document.getElementById("ebdAtividadeLicaoId").value && carregarAtividadeEbdAcao();
+  }
+}
+
+function renderRespostaCampoEbd(questao) {
+  if (questao.tipo === "VF") {
+    const marcado = questao.resposta === true ? "true" : questao.resposta === false ? "false" : "";
+    return `<select id="ebdRespostaCampo_${questao.questaoId}"><option value="">-</option><option value="true" ${marcado === "true" ? "selected" : ""}>Verdadeiro</option><option value="false" ${marcado === "false" ? "selected" : ""}>Falso</option></select>`;
+  }
+  const valorAtual = questao.resposta !== null && questao.resposta !== undefined ? JSON.stringify(questao.resposta) : "";
+  return `<input type="text" id="ebdRespostaCampo_${questao.questaoId}" value='${valorAtual.replace(/'/g, "&#39;")}' placeholder="Resposta (JSON quando aplicável)" style="min-width:220px;" />`;
+}
+
+function renderPainelRespostasAlunoEbd(respostas, resumo) {
+  const container = document.getElementById("painelRespostasAlunoEbd");
+  if (!respostas.length) { container.innerHTML = "<p class='subtitle'>Esta atividade ainda não tem questões.</p>"; return; }
+  container.innerHTML = `
+    <p class="subtitle">Nota: <strong>${resumo.corretas}/${resumo.totalQuestoes}</strong> (${resumo.percentual}%) —
+      respondidas: ${resumo.respondidas} · pendentes de revisão: ${resumo.pendentes}</p>
+    <table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Enunciado</th><th>Resposta</th><th>Correção</th><th></th></tr></thead><tbody>
+      ${respostas.map(q => `<tr>
+        <td>${q.tipo}</td><td>${q.enunciado}</td>
+        <td>${renderRespostaCampoEbd(q)}
+          <button class="btn-link" onclick="salvarRespostaEbdAcao(${q.questaoId})">💾</button>
+        </td>
+        <td>${q.respondida ? (q.correta === true ? "✅ Certa" : q.correta === false ? "❌ Errada" : "⏳ Pendente") : "-"} ${q.corrigidoManualmente ? "(manual)" : ""}</td>
+        <td>${q.respondida ? `
+          <button class="btn-link" onclick="corrigirRespostaManualEbdAcao(${q.respostaId}, true)">✔️ Marcar certa</button>
+          <button class="btn-link" onclick="corrigirRespostaManualEbdAcao(${q.respostaId}, false)">✖️ Marcar errada</button>` : ""}
+        </td>
+      </tr>`).join("")}
+    </tbody></table>
+  `;
+}
+
+async function carregarRespostasAlunoEbdAcao() {
+  const atividadeId = document.getElementById("ebdRespostaAtividadeId").value;
+  const alunoId = document.getElementById("ebdRespostaAlunoId").value;
+  const container = document.getElementById("painelRespostasAlunoEbd");
+  if (!atividadeId || !alunoId) { container.innerHTML = ""; mostrarToast("Informe a atividade e o aluno.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/respostas?atividadeId=${atividadeId}&alunoId=${alunoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  renderPainelRespostasAlunoEbd(data.respostas, data.resumo);
+}
+
+async function salvarRespostaEbdAcao(questaoId) {
+  const alunoId = document.getElementById("ebdRespostaAlunoId").value;
+  const campo = document.getElementById(`ebdRespostaCampo_${questaoId}`);
+  if (!alunoId || !campo) return;
+  let resposta = campo.value;
+  if (resposta === "true") resposta = true;
+  else if (resposta === "false") resposta = false;
+  else if (resposta.trim().startsWith("[") || resposta.trim().startsWith("{")) {
+    try { resposta = JSON.parse(resposta); } catch { /* mantém como texto */ }
+  }
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/resposta`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ questaoId, alunoId: Number(alunoId), resposta })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarRespostasAlunoEbdAcao();
+}
+
+async function corrigirRespostaManualEbdAcao(respostaId, correta) {
+  const alunoId = document.getElementById("ebdRespostaAlunoId").value;
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/resposta/corrigir`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ respostaId, correta, alunoId: Number(alunoId) })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarRespostasAlunoEbdAcao();
+}
+
+async function carregarResumoAtividadeTurmaEbdAcao() {
+  const atividadeId = document.getElementById("ebdResumoAtividadeId").value;
+  const turmaId = document.getElementById("ebdResumoTurmaId").value;
+  const container = document.getElementById("painelResumoAtividadeEbd");
+  if (!atividadeId || !turmaId) { container.innerHTML = ""; mostrarToast("Informe a atividade e a turma.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-atividades/resumo?atividadeId=${atividadeId}&turmaId=${turmaId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.resumo.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Corretas</th><th>%</th></tr></thead><tbody>
+        ${data.resumo.map(a => `<tr><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.corretas}/${a.totalQuestoes}</td><td>${a.percentual}%</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
+}
+
 async function carregarVisaoAgrupadaEbdAcao() {
   const busca = document.getElementById("ebdBuscaAgrupada") ? document.getElementById("ebdBuscaAgrupada").value.trim() : "";
   const container = document.getElementById("painelVisaoAgrupadaEbd");

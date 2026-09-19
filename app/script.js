@@ -11190,6 +11190,29 @@ async function carregarOpcoesRelatorioDepto() {
     selCdArea.innerHTML = areas.filter(a => a.ativa !== false).map(a => `<option value="${a.areaId}">${a.nome}</option>`).join("");
     selCdArea.dataset.montado = "1";
   }
+  // v5.8 — Região/Quadrante/Distrito, mesmo padrão de montagem de Área acima.
+  const CD_CATALOGOS_TERRITORIAIS = [
+    { selId: "cdRegiao", rota: "regioes", chave: "regiaoId" },
+    { selId: "cdQuadrante", rota: "quadrantes", chave: "quadranteId" },
+    { selId: "cdDistrito", rota: "distritos", chave: "distritoId" }
+  ];
+  for (const { selId, rota, chave } of CD_CATALOGOS_TERRITORIAIS) {
+    const sel = document.getElementById(selId);
+    if (sel && !sel.dataset.montado) {
+      const itens = await (await fetch(`${API_BASE}/catalogos/${rota}`)).json();
+      // Regioes usa "ativa", Quadrantes/Distritos usa "ativo" (GestaoCatalogos)
+      // — confere os dois pra não incluir inativo por engano nem excluir
+      // ativo por checar o campo errado.
+      sel.innerHTML = itens.filter(i => i.ativa !== false && i.ativo !== false).map(i => `<option value="${i[chave]}">${i.nome}</option>`).join("");
+      sel.dataset.montado = "1";
+    }
+  }
+  const selSerieDep = document.getElementById("cdSerieDepartamento");
+  if (selSerieDep && !selSerieDep.dataset.montado) {
+    const deps = await (await fetch(`${API_BASE}/catalogos/departamentos`)).json();
+    selSerieDep.innerHTML = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${d.nome}</option>`).join("");
+    selSerieDep.dataset.montado = "1";
+  }
   const cdAno = document.getElementById("cdAno");
   if (cdAno && !cdAno.value) cdAno.value = new Date().getFullYear();
   const cdMes = document.getElementById("cdMes");
@@ -11333,7 +11356,7 @@ const ROTULO_STATUS_RD = {
 };
 const ROTULO_ACAO_RD = {
   ENVIAR: "Enviou", APROVAR_AREA: "Aprovou (Área)", COMENTOU: "Comentou", COMENTAR: "Comentou",
-  CORRIGIR: "Corrigiu valores", APROVAR_GERAL: "Aprovou (Geral)", RETIFICAR: "Retificou"
+  CORRIGIR: "Corrigiu valores", APROVAR_GERAL: "Aprovou (Geral)", RETIFICAR: "Retificou", REABRIR: "Reabriu"
 };
 
 function montarAcoesFluxoRd(data) {
@@ -11359,9 +11382,21 @@ function montarAcoesFluxoRd(data) {
 
   if ((status === "APROVADO_GERAL" || status === "RETIFICADO") && authNivel === "GLOBAL") {
     botoes.push(`<button class="btn-confirmar btn-secundario" onclick="acaoFluxoRd('retificar')">🔓 Retificar (edita os campos acima e clique aqui)</button>`);
+    // v5.8 — Reabertura: diferente de Retificar (que corrige o valor sem
+    // reabrir o fluxo), Reabrir devolve o relatório pra Enviado, reentrando
+    // no funil de aprovação inteiro — só Presidente/Secretário Geral (GLOBAL)
+    // e sempre com justificativa (o backend recusa sem ela).
+    botoes.push(`<button class="btn-confirmar btn-perigo" onclick="reabrirRelatorioDeptoAcao()">↩️ Reabrir relatório</button>`);
   }
 
   return botoes.length ? `<h4>Fluxo de Aprovação</h4><div class="barra-lista">${botoes.join("")}</div>` : "";
+}
+
+async function reabrirRelatorioDeptoAcao() {
+  const justificativa = prompt("Justificativa da reabertura (obrigatória — fica na trilha auditada do relatório):");
+  if (justificativa === null) return;
+  if (!justificativa.trim()) { mostrarToast("Informe a justificativa da reabertura.", "erro"); return; }
+  await acaoFluxoRd("reabrir", { justificativa: justificativa.trim() });
 }
 
 function montarTrilhaRd(trilha) {
@@ -11611,17 +11646,22 @@ async function salvarPerfilRateioAcao() {
   await abrirTesourariaDeptoAcao();
 }
 
-// ---- CONSOLIDADO DE CAMPO (v5.5.1) ----
+// ---- CONSOLIDADO DE CAMPO (v5.5.1; Região/Quadrante/Distrito + série por
+// campo + comparativo por porte na v5.8) ----
+const CD_SELECT_POR_NIVEL = {
+  congregacao: "cdCongregacao", area: "cdArea", regiao: "cdRegiao", quadrante: "cdQuadrante", distrito: "cdDistrito"
+};
 function mudarNivelConsolidadoAcao() {
   const nivel = document.getElementById("cdNivel").value;
-  document.getElementById("cdCongregacao").style.display = nivel === "congregacao" ? "" : "none";
-  document.getElementById("cdArea").style.display = nivel === "area" ? "" : "none";
+  for (const [n, selId] of Object.entries(CD_SELECT_POR_NIVEL)) {
+    document.getElementById(selId).style.display = nivel === n ? "" : "none";
+  }
 }
 
 async function abrirConsolidadoDeptoAcao() {
   const nivel = document.getElementById("cdNivel").value;
-  const id = nivel === "congregacao" ? document.getElementById("cdCongregacao").value
-    : nivel === "area" ? document.getElementById("cdArea").value : "";
+  const seletorId = CD_SELECT_POR_NIVEL[nivel];
+  const id = seletorId ? document.getElementById(seletorId).value : "";
   const mes = document.getElementById("cdMes").value;
   const ano = document.getElementById("cdAno").value;
   const msg = document.getElementById("resultadoConsolidadoDepto");
@@ -11675,6 +11715,70 @@ function renderizarPainelConsolidadoDepto(data) {
     ${pendenciasHtml}
     ${historicoHtml}
   `;
+}
+
+// v5.8 (item 2) — série histórica de um único campo do formulário, dentro do
+// mesmo nível/período já escolhido acima (reaproveita cdNivel/id/mes/ano).
+async function abrirSerieHistoricaCampoAcao() {
+  const nivel = document.getElementById("cdNivel").value;
+  const seletorId = CD_SELECT_POR_NIVEL[nivel];
+  const id = seletorId ? document.getElementById(seletorId).value : "";
+  const mes = document.getElementById("cdMes").value;
+  const ano = document.getElementById("cdAno").value;
+  const departamentoId = document.getElementById("cdSerieDepartamento").value;
+  const campo = document.getElementById("cdSerieCampo").value.trim();
+  const quantidade = document.getElementById("cdSerieQuantidade").value || "12";
+  const msg = document.getElementById("resultadoSerieCampo");
+  if (nivel !== "campo" && !id) { msg.textContent = "Escolha a congregação/área/região/quadrante/distrito acima."; return; }
+  if (!ano) { msg.textContent = "Informe o ano acima."; return; }
+  if (!departamentoId || !campo) { msg.textContent = "Escolha o departamento e informe o nome do campo (ex: ofertas)."; return; }
+
+  const params = new URLSearchParams({ nivel, mes, ano, departamentoId, campo, historicoCampo: quantidade });
+  if (id) params.set("id", id);
+  const res = await fetchProtegido(`${API_BASE}/consolidado-departamentos?${params.toString()}`);
+  const data = await res.json();
+  if (data.sucesso === false) { msg.textContent = data.mensagem; document.getElementById("painelSerieCampo").innerHTML = ""; return; }
+  msg.textContent = "";
+  const serie = data.serieCampo || [];
+  const container = document.getElementById("painelSerieCampo");
+  if (serie.length === 0) {
+    container.innerHTML = `<p class="subtitle">Nenhum relatório enviado com esse campo no período.</p>`;
+    return;
+  }
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Mês/Ano</th><th>Total</th><th>Relatórios somados</th></tr></thead><tbody>
+    ${serie.map(p => `<tr><td>${p.mesReferencia}/${p.anoReferencia}</td><td>${Number(p.total).toFixed(2)}</td><td>${p.totalRelatorios}</td></tr>`).join("")}
+  </tbody></table>`;
+}
+
+// v5.8 (item 3) — comparativo entre congregações do mesmo porte, no mesmo
+// nível/mês/ano já escolhidos no Consolidado de Campo acima.
+async function abrirComparativoPorteAcao() {
+  const nivel = document.getElementById("cdNivel").value;
+  const seletorId = CD_SELECT_POR_NIVEL[nivel];
+  const id = seletorId ? document.getElementById(seletorId).value : "";
+  const mes = document.getElementById("cdMes").value;
+  const ano = document.getElementById("cdAno").value;
+  const msg = document.getElementById("resultadoComparativoPorte");
+  if (nivel !== "campo" && !id) { msg.textContent = "Escolha a congregação/área/região/quadrante/distrito acima."; return; }
+  if (!ano) { msg.textContent = "Informe o ano acima."; return; }
+
+  const params = new URLSearchParams({ nivel, mes, ano, porte: "1" });
+  if (id) params.set("id", id);
+  const res = await fetchProtegido(`${API_BASE}/consolidado-departamentos?${params.toString()}`);
+  const data = await res.json();
+  if (data.sucesso === false) { msg.textContent = data.mensagem; document.getElementById("painelComparativoPorte").innerHTML = ""; return; }
+  msg.textContent = "";
+  const grupos = data.porPorte || [];
+  const container = document.getElementById("painelComparativoPorte");
+  const ROTULO_PORTE = { PEQUENA: "Pequena (< 100 membros ativos)", MEDIA: "Média (100–299)", GRANDE: "Grande (300+)" };
+  container.innerHTML = grupos.map(g => `
+    <h4>${ROTULO_PORTE[g.porte] || g.porte} — ${g.totalCongregacoes} congregação(ões)</h4>
+    <p class="subtitle">Médias do grupo: Membros ativos ${g.medias.totalMembrosAtivos} · Eventos ${g.medias.totalEventos} ·
+      Integração ${g.medias.totalIntegracao} · Para o Geral R$ ${g.medias.valorParaGeral.toFixed(2)} · Para o Local R$ ${g.medias.valorParaLocal.toFixed(2)}</p>
+    <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Membros ativos</th><th>Eventos</th><th>Integração</th><th>Para o Geral</th><th>Para o Local</th></tr></thead><tbody>
+      ${g.congregacoes.map(c => `<tr><td>${c.congregacaoNome}</td><td>${c.totalMembrosAtivos}</td><td>${c.totalEventos}</td><td>${c.totalIntegracao}</td>
+        <td>R$ ${Number(c.valorParaGeral).toFixed(2)}</td><td>R$ ${Number(c.valorParaLocal).toFixed(2)}</td></tr>`).join("")}
+    </tbody></table>`).join("") || `<p class="subtitle">Sem dados no período pra comparar.</p>`;
 }
 
 // ---- ESCALAS DE SERVIÇO (v5.6 — auto-escalador) ----

@@ -2203,17 +2203,24 @@
         <div id="painelTesourariaDepto"></div>
 
         <hr />
-        <h3>📊 Consolidado de Campo (v5.5.1)</h3>
-        <p class="subtitle">Os 8 departamentos juntos, por congregação, área ou campo — o retrato
-          eclesiástico do mês (Eventos/Integração somados entre departamentos) e quem ainda não enviou.</p>
+        <h3>📊 Consolidado de Campo (v5.5.1/v5.8)</h3>
+        <p class="subtitle">Os 8 departamentos juntos, por congregação, área, região, quadrante, distrito
+          ou campo — o retrato eclesiástico do mês (Eventos/Integração somados entre departamentos) e
+          quem ainda não enviou.</p>
         <div class="barra-lista">
           <select id="cdNivel" onchange="mudarNivelConsolidadoAcao()">
             <option value="congregacao">Por Congregação</option>
             <option value="area">Por Área</option>
+            <option value="regiao">Por Região</option>
+            <option value="quadrante">Por Quadrante</option>
+            <option value="distrito">Por Distrito</option>
             <option value="campo">Campo Inteiro</option>
           </select>
           <select id="cdCongregacao"></select>
           <select id="cdArea" style="display:none;"></select>
+          <select id="cdRegiao" style="display:none;"></select>
+          <select id="cdQuadrante" style="display:none;"></select>
+          <select id="cdDistrito" style="display:none;"></select>
           <select id="cdMes">
             <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
             <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
@@ -2225,6 +2232,28 @@
         </div>
         <p id="resultadoConsolidadoDepto"></p>
         <div id="painelConsolidadoDepto"></div>
+
+        <h4>Série histórica por campo (v5.8)</h4>
+        <p class="subtitle">O mesmo campo do formulário, mês a mês — dá pra ver tendência, não só o
+          número do mês corrente.</p>
+        <div class="barra-lista">
+          <select id="cdSerieDepartamento"></select>
+          <input type="text" id="cdSerieCampo" placeholder="Nome do campo (ex: ofertas, congregados)" style="max-width:260px;" />
+          <input type="number" id="cdSerieQuantidade" placeholder="Meses" value="12" style="max-width:100px;" />
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirSerieHistoricaCampoAcao()">📈 Ver Série</button>
+        </div>
+        <p id="resultadoSerieCampo"></p>
+        <div id="painelSerieCampo"></div>
+
+        <h4>Comparativo por porte (v5.8)</h4>
+        <p class="subtitle">Congregações do mesmo porte (pequena/média/grande, pela contagem de membros
+          ativos) agrupadas — compare com pares do mesmo tamanho, não com a Sede. Alimenta a FASE 12
+          (Benchmarking).</p>
+        <div class="barra-lista">
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirComparativoPorteAcao()">⚖️ Comparar por Porte</button>
+        </div>
+        <p id="resultadoComparativoPorte"></p>
+        <div id="painelComparativoPorte"></div>
       </div>
 
       <!-- ABA: ESCALAS DE SERVIÇO (v5.6 — auto-escalador) -->

@@ -9,7 +9,8 @@
 // GET  /api/relatorios-departamentais/{id}                             -> detalhe (schema+valores+eventos+integração+contribuintes+trilha)
 // POST /api/relatorios-departamentais                                  -> body: {congregacaoId, departamentoId, mesReferencia, anoReferencia} -> obtém ou cria o rascunho
 // PUT  /api/relatorios-departamentais/{id}                             -> body: {valores?, valoresSemanais?, eventos?, integracao?, contribuintes?} -> só em RASCUNHO
-// POST /api/relatorios-departamentais/{id}/{acao}                      -> acao: enviar | aprovar-area | comentar | corrigir | aprovar-geral | retificar
+// POST /api/relatorios-departamentais/{id}/{acao}                      -> acao: enviar | aprovar-area | comentar | corrigir | aprovar-geral | retificar | reabrir
+//   reabrir (v5.8): só GLOBAL (Presidente/Secretário Geral), body {justificativa} obrigatório
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
@@ -413,7 +414,8 @@ module.exports = async function (context, req) {
     const acaoRota = String(context.bindingData.acao).toUpperCase().replace(/-/g, "_");
     const MAPA_ACAO = {
       ENVIAR: "ENVIAR", APROVAR_AREA: "APROVAR_AREA", COMENTAR: "COMENTAR",
-      CORRIGIR: "CORRIGIR", APROVAR_GERAL: "APROVAR_GERAL", RETIFICAR: "RETIFICAR"
+      CORRIGIR: "CORRIGIR", APROVAR_GERAL: "APROVAR_GERAL", RETIFICAR: "RETIFICAR",
+      REABRIR: "REABRIR"
     };
     const acao = MAPA_ACAO[acaoRota];
     if (!acao) {
@@ -441,7 +443,17 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const { comentario } = req.body || {};
+    const { comentario, justificativa } = req.body || {};
+
+    // v5.8 (item 4) — REABRIR é o único das ações de fechamento com
+    // justificativa OBRIGATÓRIA (RETIFICAR, desde a v5.3, continua com
+    // comentário opcional): reabrir manda o relatório de volta pra ENVIADO,
+    // reentrando no funil de aprovação inteiro — decisão grande demais pra
+    // deixar sem motivo registrado.
+    if (acao === "REABRIR" && !rd.justificativaValida(justificativa)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a justificativa da reabertura." } };
+      return;
+    }
 
     // CORRIGIR e RETIFICAR podem trazer novos valores junto com a ação —
     // é exatamente o poder que o Líder Geral/Presidente têm (docs/03: não
@@ -466,6 +478,14 @@ module.exports = async function (context, req) {
       await pool.request().input("id", sql.Int, idRota).input("status", sql.NVarChar(20), transicao.novoStatus)
         .input("atrasado", sql.Bit, atrasado)
         .query(`UPDATE RelatoriosDepartamentais SET Status = @status, Atrasado = @atrasado, DataEnvio = SYSUTCDATETIME(), AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
+    } else if (acao === "REABRIR") {
+      // v5.8 — reabrir tira o relatório do estado "congelado" (rateio
+      // ValorParaGeral/ValorParaLocal, v5.4): ele volta a ser prévia ao vivo
+      // até passar de novo por APROVAR_GERAL/RETIFICAR, que recongela com o
+      // perfil de rateio vigente na nova aprovação — nunca deixa um valor
+      // "oficial" antigo sobrevivendo junto de um status reaberto.
+      await pool.request().input("id", sql.Int, idRota).input("status", sql.NVarChar(20), transicao.novoStatus)
+        .query(`UPDATE RelatoriosDepartamentais SET Status = @status, ValorParaGeral = NULL, ValorParaLocal = NULL, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
     } else if (transicao.novoStatus !== linha.status) {
       await pool.request().input("id", sql.Int, idRota).input("status", sql.NVarChar(20), transicao.novoStatus)
         .query(`UPDATE RelatoriosDepartamentais SET Status = @status, AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
@@ -474,14 +494,20 @@ module.exports = async function (context, req) {
         .query(`UPDATE RelatoriosDepartamentais SET AtualizadoEm = SYSUTCDATETIME() WHERE RelatorioDepartamentalId = @id`);
     }
 
+    // v5.8 — a justificativa de reabertura vira o `comentario` da trilha
+    // (AprovacoesRelatorioDepartamental, já lida como "trilha" no detalhe do
+    // relatório desde a v5.3) E entra explícita em dadosDepois do AuditLog
+    // (cadeia com hash, v4.12) — não fica só implícita dentro de um texto
+    // livre, fica um campo próprio, fácil de filtrar numa auditoria futura.
     await registrarAprovacao(pool, {
       relatorioDepartamentalId: Number(idRota), nivelAprovador: usuario.nivel, acao,
-      comentario, membroId: usuario.membroId
+      comentario: acao === "REABRIR" ? justificativa : comentario, membroId: usuario.membroId
     });
     await registrarAuditoria({
       tabela: "RelatoriosDepartamentais", registroId: Number(idRota),
       acao: `${acao} (relatório departamental, ${linha.mesReferencia}/${linha.anoReferencia})`,
-      usuarioId: usuario.membroId, dadosAntes: { status: linha.status }, dadosDepois: { status: transicao.novoStatus }
+      usuarioId: usuario.membroId, dadosAntes: { status: linha.status },
+      dadosDepois: acao === "REABRIR" ? { status: transicao.novoStatus, justificativa } : { status: transicao.novoStatus }
     });
 
     const atualizado = await pool.request().input("id", sql.Int, idRota).query(`${SELECT_RELATORIO_BASE} WHERE r.RelatorioDepartamentalId = @id`);

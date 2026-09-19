@@ -5745,13 +5745,111 @@ sequencial** — e ela é pré-requisito de tudo que envolve menores (v7.7).
 
 A v5.2/v5.3 monta e aprova o relatório. Falta o que se faz **com ele depois**.
 
-- [ ] Consolidação automática por Área/Região/Quadrante/Distrito e Campo — hoje o
+- [x] Consolidação automática por Área/Região/Quadrante/Distrito e Campo — hoje o
       Líder Geral somaria relatório por relatório na mão.
-- [ ] Série histórica por campo do formulário (o mesmo campo, mês a mês, ano a
+- [x] Série histórica por campo do formulário (o mesmo campo, mês a mês, ano a
       ano) — é isso que permite ver tendência, não só o número do mês.
-- [ ] Comparativo entre congregações do mesmo porte (alimenta a FASE 12).
-- [ ] Reabertura de relatório fechado só pelo Presidente/Secretário Geral, com
+- [x] Comparativo entre congregações do mesmo porte (alimenta a FASE 12).
+- [x] Reabertura de relatório fechado só pelo Presidente/Secretário Geral, com
       justificativa auditada (a v5.3 já prevê a retificação — falta a trilha).
+
+  A v5.5.1 já resolvia Congregação/Área/Campo (`shared/
+  consolidadoDepartamental.js::resolverCongregacoesDoNivel`) — faltava
+  literalmente Região e Quadrante/Distrito, que existem no schema desde a
+  migração 004 como hierarquia de vínculo pai (Areas→RegiaoId,
+  Regioes→QuadranteId, Quadrantes→DistritoId), não como colunas soltas em
+  `Congregacoes`. `resolverCongregacoesDoNivel` ganhou os 3 subselects que
+  descem essa cadeia — literalmente os mesmos já usados em `shared/
+  escopo.js::QUERY_POR_TIPO` pra resolver escopo de sessão, só devolvendo
+  `CongregacaoId` em vez de `Nome` (agregação é por id). Nenhuma migração
+  nova: a hierarquia territorial já existia inteira, só não tinha os 3
+  últimos níveis plugados no consolidado. `GestaoConsolidadoDepartamental`
+  aceita `nivel=regiao|quadrante|distrito` sem gate extra — o mesmo laço de
+  conferência de escopo que já existia pra `area` (cada congregação
+  resolvida precisa estar dentro do que o usuário enxerga) cobre os 3 níveis
+  novos de graça; só `nivel=campo` continua restrito a quem enxerga
+  `TODAS` (GLOBAL).
+
+  Série histórica por campo é **diferente** de `historicoConsolidado`
+  (v5.5.1, que soma totais agregados mês a mês): `serieHistoricaCampo`
+  segue UM `NomeCampo` de UM departamento através dos meses, somando
+  `ValoresCampoRelatorioDepartamental.Valor` sem filtrar `NumeroDomingo` — a
+  mesma query cobre campo mensal (uma linha só) e campo semanal da EBD
+  (soma das linhas por domingo), sem duplicar lógica de soma semanal que já
+  existe em `rd.somarValoresSemanais`. Exige `departamentoId` porque
+  `NomeCampo` não é chave global (`ofertas`/`outros`/`casasVisitadas` se
+  repetem em vários schemas com sentido próprio em cada um — juntar sem o
+  departamento junto somaria coisas diferentes). "Ano a ano" (mesmo mês em
+  anos diferentes) é só um recorte da mesma série
+  (`filtrarMesmoMesCalendario`), não uma segunda query. Rota:
+  `GET /api/consolidado-departamentos?...&campo=nomeCampo&departamentoId=&historicoCampo=N`.
+
+  Comparativo por porte: "porte" não existia como cadastro em lugar nenhum
+  do sistema (nenhuma planilha do protótipo definia faixa) — em vez de abrir
+  uma tela de classificação manual sem lastro normativo nenhum, `porte` é
+  **derivado ao vivo** da contagem de membros ativos
+  (`MembroReferencia.Status = 'ATIVO'`, a mesma fonte que os 4 departamentos
+  de faixa etária já usam desde a v5.5) via `classificarPorte`. Limiares
+  (PEQUENA < 100, MEDIA < 300, GRANDE ≥ 300) são **julgamento documentado**,
+  sem referência normativa pra faixa "certa" — redondos e ajustáveis em
+  `LIMITES_PORTE` sem migração, se a Diretoria calibrar diferente depois.
+  `compararPorPorte` cruza contagem de membros + totais do mês (todos os 8
+  departamentos somados) por congregação do escopo pedido,
+  `agruparPorPorte` (função pura, testável sem banco) agrupa em
+  PEQUENA/MEDIA/GRANDE com a média de cada campo dentro do grupo — a régua
+  de comparação que a v12.2 (Benchmarking) vai consumir depois; a v5.8 monta
+  o dado agrupado, a v12.2 decide como expor isso ao Dirigente (percentil,
+  não ranking nominal — julgamento que já está escrito na v12.2 e que a
+  v5.8 não antecipa). Rota: `...&porte=1` devolve `porPorte` no mesmo
+  payload do consolidado.
+
+  Reabertura (`REABRIR`, `shared/relatoriosDepartamentais.js`) é uma ação
+  nova no MESMO motor de estados da v5.3 (`NIVEIS_POR_ACAO`/
+  `TRANSICOES_POR_ACAO`), não um mecanismo paralelo — e é **diferente** de
+  Retificar, que continua exatamente como estava: Retificar corrige o valor
+  SEM reabrir o fluxo (o relatório permanece `RETIFICADO`, usado quando o
+  ajuste já é definitivo); Reabrir devolve o relatório de `APROVADO_GERAL`/
+  `RETIFICADO` pra `ENVIADO`, reentrando no funil de aprovação inteiro
+  (Área → Geral) do zero — usado quando o relatório precisa ser reexaminado
+  de verdade. Só `GLOBAL` autoriza (mesmo vocabulário do resto do sistema
+  pra "Presidente/Secretário Geral" — `auth.js::exigirNivelGlobal`,
+  `GestaoTesourariaDepartamental`, `GestaoEscalas`), e é a única ação do
+  fluxo com **justificativa obrigatória**
+  (`justificativaValida` — mesmo padrão sem mínimo de tamanho arbitrário de
+  `habilitacaoVoluntarios.js::validarDesligamento`); as demais ações
+  continuam com comentário opcional. A "trilha" que faltava não é uma
+  tabela nova: reaproveita `AprovacoesRelatorioDepartamental` (v5.3, já lida
+  como "trilha" no detalhe do relatório) — a justificativa vira o
+  `comentario` daquela ação — E entra explícita em `dadosDepois` do
+  `AuditLog` (`shared/auditoria.js::registrarAuditoria`, cadeia com hash
+  desde a v4.12), como campo próprio em vez de escondida dentro de um texto
+  livre. Reabrir também zera `ValorParaGeral`/`ValorParaLocal` (congelados
+  desde a v5.4) — o relatório volta a ser prévia ao vivo até passar de novo
+  por Aprovar Geral/Retificar, que recongela com o perfil de rateio vigente
+  na nova aprovação.
+
+  `api/GestaoConsolidadoDepartamental` (mesma rota da v5.5.1, `GET
+  /api/consolidado-departamentos`) ganhou os parâmetros `campo`/
+  `departamentoId`/`historicoCampo` e `porte`; `api/
+  GestaoRelatoriosDepartamentais` ganhou a ação `reabrir` em `POST
+  /api/relatorios-departamentais/{id}/reabrir` (corpo `{justificativa}`).
+  Frontend: a aba "Consolidado de Campo" ganhou os níveis Região/Quadrante/
+  Distrito no mesmo seletor, mais dois blocos novos ("Série histórica por
+  campo" e "Comparativo por porte"); a tela do relatório departamental
+  ganhou o botão "↩️ Reabrir relatório" ao lado de "🔓 Retificar", com
+  `prompt()` pra justificativa (recusa client-side se vazia, backend recusa
+  de novo — defesa em profundidade, mesmo padrão do resto do sistema).
+
+  Testado com `npx jest` (327 testes, 22 novos: `resolverCongregacoesDoNivel`
+  pros 3 níveis territoriais novos, `classificarPorte` nos limiares exatos e
+  em valor ausente/inválido, `agruparPorPorte` com médias corretas por
+  grupo e lista vazia, `compararPorPorte` cruzando totais+membros e o caso
+  de congregação sem nenhum membro ativo cadastrado, `serieHistoricaCampo`
+  em ordem cronológica e validação de parâmetros obrigatórios,
+  `filtrarMesmoMesCalendario` recortando só o mês pedido através dos anos,
+  a máquina de estados de `REABRIR` nas transições permitidas/recusadas, e
+  `justificativaValida` nos casos vazio/espaço/texto válido) e `node
+  --check` em todos os arquivos novos/alterados.
 
 #### v5.9 — Assistência Social (Ação da Fé) *(gap da varredura normativa)*
 

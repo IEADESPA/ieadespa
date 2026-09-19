@@ -206,13 +206,18 @@ const STATUS_VALIDOS = ["RASCUNHO", "ENVIADO", "APROVADO_AREA", "APROVADO_GERAL"
 // Nível mínimo (mesmo vocabulário de Lideranca.EscopoTipo/Papeis.Nivel) que
 // autoriza cada ação. GLOBAL sempre pode tudo — Presidente/Secretário Geral
 // têm a última palavra sobre qualquer relatório (docs do protótipo, v5.3).
+// v5.8 (item 4) — REABRIR some junto de RETIFICAR: os dois são "poder sobre
+// relatório já fechado", os dois exigem GLOBAL (mesmo vocabulário que o
+// resto do sistema usa pra "Presidente/Secretário Geral" — ver
+// auth.js::exigirNivelGlobal, GestaoTesourariaDepartamental, GestaoEscalas).
 const NIVEIS_POR_ACAO = {
   ENVIAR: ["CONGREGACAO", "GLOBAL"],
   APROVAR_AREA: ["AREA", "GLOBAL"],
   COMENTAR: ["AREA", "DEPARTAMENTO", "GLOBAL"],
   CORRIGIR: ["DEPARTAMENTO", "GLOBAL"],
   APROVAR_GERAL: ["DEPARTAMENTO", "GLOBAL"],
-  RETIFICAR: ["GLOBAL"]
+  RETIFICAR: ["GLOBAL"],
+  REABRIR: ["GLOBAL"]
 };
 
 function nivelAutorizadoParaAcao(acao, nivel) {
@@ -222,13 +227,24 @@ function nivelAutorizadoParaAcao(acao, nivel) {
 // Máquina de estados pura — de que status pra que ação é permitida, e pra
 // qual status vai. COMENTAR e CORRIGIR não fecham fase (o relatório pode
 // levar comentário/correção mais de uma vez antes de qualquer aprovação).
+// REABRIR x RETIFICAR — os dois partem de um relatório já fechado
+// (APROVADO_GERAL/RETIFICADO), mas resolvem problemas diferentes: RETIFICAR
+// corrige o valor SEM reabrir o fluxo (o relatório continua fechado,
+// permanece RETIFICADO — usado quando o ajuste já é definitivo, ex: erro de
+// digitação óbvio); REABRIR devolve o relatório pra ENVIADO, reentrando no
+// funil de aprovação normal (Área -> Geral) do zero — usado quando o
+// relatório precisa ser reexaminado de verdade, não só corrigido num campo.
+// Por isso REABRIR é o único das duas ações que a v5.8 exige com
+// justificativa obrigatória (ver justificativaValida) — RETIFICAR já existia
+// desde a v5.3 com comentário opcional, e continua assim.
 const TRANSICOES_POR_ACAO = {
   ENVIAR: { de: ["RASCUNHO"], para: "ENVIADO" },
   APROVAR_AREA: { de: ["ENVIADO"], para: "APROVADO_AREA" },
   COMENTAR: { de: ["ENVIADO", "APROVADO_AREA"], para: null },
   CORRIGIR: { de: ["ENVIADO", "APROVADO_AREA"], para: null },
   APROVAR_GERAL: { de: ["ENVIADO", "APROVADO_AREA"], para: "APROVADO_GERAL" },
-  RETIFICAR: { de: ["APROVADO_GERAL", "RETIFICADO"], para: "RETIFICADO" }
+  RETIFICAR: { de: ["APROVADO_GERAL", "RETIFICADO"], para: "RETIFICADO" },
+  REABRIR: { de: ["APROVADO_GERAL", "RETIFICADO"], para: "ENVIADO" }
 };
 
 function resolverTransicao(acao, statusAtual) {
@@ -257,11 +273,22 @@ function relatorioEstaAtrasado(mesReferencia, anoReferencia, dataEnvio) {
   return envio > prazo;
 }
 
+// v5.8 (item 4) — validação de forma da justificativa de reabertura, mesmo
+// padrão de shared/habilitacaoVoluntarios.js::validarDesligamento (motivo
+// obrigatório, sem mínimo de tamanho arbitrário): a trilha (v5.3 já grava
+// toda ação em AprovacoesRelatorioDepartamental, lida como "trilha" no
+// detalhe do relatório) só vale a pena auditar se REABRIR não puder ser
+// feito sem explicar por quê — as outras ações do fluxo continuam com
+// comentário opcional, só essa exige.
+function justificativaValida(justificativa) {
+  return !!(justificativa && String(justificativa).trim());
+}
+
 module.exports = {
   GRUPOS_VALIDOS, COMPORTAMENTOS_VALIDOS, CAMPOS_EVENTOS, CAMPOS_INTEGRACAO,
   calcularTotalIntegracao, calcularValorTotalFinanceiro, somarValoresSemanais, calcularIndicadoresEbd,
   camposParaPrePreencher, buscarSchemaVigente, buscarValoresParaPrePreencher,
   STATUS_VALIDOS, NIVEIS_POR_ACAO, nivelAutorizadoParaAcao, resolverTransicao,
-  calcularPrazoEnvio, relatorioEstaAtrasado,
+  calcularPrazoEnvio, relatorioEstaAtrasado, justificativaValida,
   CAMPOS_AUTOMATICOS_AFILIACAO, contagemAfiliadosDepartamento, aplicarContagemAutomatica
 };

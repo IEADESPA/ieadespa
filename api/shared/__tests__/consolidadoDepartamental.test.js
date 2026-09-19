@@ -108,6 +108,143 @@ describe("consolidarPorDepartamento", () => {
   });
 });
 
+// v5.8 — Região/Quadrante/Distrito somam a mesma hierarquia de vínculo pai
+// já usada em shared/escopo.js, só devolvendo id em vez de nome.
+describe("resolverCongregacoesDoNivel (v5.8 — Região/Quadrante/Distrito)", () => {
+  test("regiao consulta congregações via Areas.RegiaoId", async () => {
+    const { pool, chamadas } = criarPoolFalso([[{ CongregacaoId: 21 }, { CongregacaoId: 22 }]]);
+    const ids = await cd.resolverCongregacoesDoNivel(pool, "regiao", 9);
+    expect(ids).toEqual([21, 22]);
+    expect(chamadas[0].inputs.regiaoId).toBe(9);
+  });
+  test("quadrante desce Areas -> Regioes -> Quadrantes", async () => {
+    const { pool, chamadas } = criarPoolFalso([[{ CongregacaoId: 30 }]]);
+    const ids = await cd.resolverCongregacoesDoNivel(pool, "quadrante", 4);
+    expect(ids).toEqual([30]);
+    expect(chamadas[0].inputs.quadranteId).toBe(4);
+  });
+  test("distrito desce a cadeia inteira até Quadrantes.DistritoId", async () => {
+    const { pool, chamadas } = criarPoolFalso([[{ CongregacaoId: 40 }, { CongregacaoId: 41 }]]);
+    const ids = await cd.resolverCongregacoesDoNivel(pool, "distrito", 2);
+    expect(ids).toEqual([40, 41]);
+    expect(chamadas[0].inputs.distritoId).toBe(2);
+  });
+});
+
+describe("classificarPorte (v5.8)", () => {
+  test("abaixo do limiar de PEQUENA fica PEQUENA", () => {
+    expect(cd.classificarPorte(0)).toBe("PEQUENA");
+    expect(cd.classificarPorte(99)).toBe("PEQUENA");
+  });
+  test("entre os limiares fica MEDIA", () => {
+    expect(cd.classificarPorte(100)).toBe("MEDIA");
+    expect(cd.classificarPorte(299)).toBe("MEDIA");
+  });
+  test("no limiar de cima ou acima fica GRANDE", () => {
+    expect(cd.classificarPorte(300)).toBe("GRANDE");
+    expect(cd.classificarPorte(5000)).toBe("GRANDE");
+  });
+  test("valor ausente/inválido não quebra, conta como 0 (PEQUENA)", () => {
+    expect(cd.classificarPorte(null)).toBe("PEQUENA");
+    expect(cd.classificarPorte(undefined)).toBe("PEQUENA");
+  });
+});
+
+describe("agruparPorPorte (v5.8)", () => {
+  test("agrupa por porte e calcula média de cada campo dentro do grupo", () => {
+    const linhas = [
+      { congregacaoId: 1, porte: "PEQUENA", totalMembrosAtivos: 50, totalEventos: 10, totalIntegracao: 2, valorParaGeral: 100, valorParaLocal: 50 },
+      { congregacaoId: 2, porte: "PEQUENA", totalMembrosAtivos: 80, totalEventos: 20, totalIntegracao: 4, valorParaGeral: 200, valorParaLocal: 100 },
+      { congregacaoId: 3, porte: "GRANDE", totalMembrosAtivos: 500, totalEventos: 100, totalIntegracao: 20, valorParaGeral: 1000, valorParaLocal: 500 }
+    ];
+    const grupos = cd.agruparPorPorte(linhas);
+    expect(grupos).toHaveLength(2);
+    const pequena = grupos.find(g => g.porte === "PEQUENA");
+    expect(pequena.totalCongregacoes).toBe(2);
+    expect(pequena.medias.totalEventos).toBe(15); // (10+20)/2
+    expect(pequena.medias.valorParaGeral).toBe(150);
+    const grande = grupos.find(g => g.porte === "GRANDE");
+    expect(grande.totalCongregacoes).toBe(1);
+    expect(grande.medias.totalEventos).toBe(100);
+  });
+  test("lista vazia devolve nenhum grupo", () => {
+    expect(cd.agruparPorPorte([])).toEqual([]);
+  });
+});
+
+describe("compararPorPorte (v5.8)", () => {
+  test("sem congregações no escopo, devolve lista vazia sem consultar o banco", async () => {
+    const { pool, chamadas } = criarPoolFalso([]);
+    const r = await cd.compararPorPorte(pool, [], 3, 2026);
+    expect(r).toEqual([]);
+    expect(chamadas).toHaveLength(0);
+  });
+  test("cruza totais + contagem de membros ativos e classifica por porte", async () => {
+    const { pool } = criarPoolFalso([
+      [
+        { congregacaoId: 10, congregacaoNome: "Sede", totalEventos: 5, totalIntegracao: 1, valorParaGeral: 100, valorParaLocal: 50 },
+        { congregacaoId: 11, congregacaoNome: "Bairro Novo", totalEventos: 2, totalIntegracao: 0, valorParaGeral: 20, valorParaLocal: 10 }
+      ],
+      [
+        { congregacaoId: 10, totalMembrosAtivos: 350 },
+        { congregacaoId: 11, totalMembrosAtivos: 40 }
+      ]
+    ]);
+    const grupos = await cd.compararPorPorte(pool, [10, 11], 3, 2026);
+    const sede = grupos.find(g => g.porte === "GRANDE").congregacoes.find(c => c.congregacaoId === 10);
+    expect(sede.totalMembrosAtivos).toBe(350);
+    const bairro = grupos.find(g => g.porte === "PEQUENA").congregacoes.find(c => c.congregacaoId === 11);
+    expect(bairro.totalMembrosAtivos).toBe(40);
+  });
+  test("congregação sem nenhum membro ativo cadastrado conta como 0 (PEQUENA), não quebra", async () => {
+    const { pool } = criarPoolFalso([
+      [{ congregacaoId: 12, congregacaoNome: "Nova", totalEventos: 0, totalIntegracao: 0, valorParaGeral: 0, valorParaLocal: 0 }],
+      [] // nenhuma linha de contagem de membros pra essa congregação
+    ]);
+    const grupos = await cd.compararPorPorte(pool, [12], 3, 2026);
+    expect(grupos[0].porte).toBe("PEQUENA");
+    expect(grupos[0].congregacoes[0].totalMembrosAtivos).toBe(0);
+  });
+});
+
+describe("serieHistoricaCampo (v5.8)", () => {
+  test("sem congregações, departamento ou campo, devolve vazio sem consultar o banco", async () => {
+    const { pool, chamadas } = criarPoolFalso([]);
+    expect(await cd.serieHistoricaCampo(pool, [], 1, "ofertas", 12)).toEqual([]);
+    expect(await cd.serieHistoricaCampo(pool, [10], null, "ofertas", 12)).toEqual([]);
+    expect(await cd.serieHistoricaCampo(pool, [10], 1, null, 12)).toEqual([]);
+    expect(chamadas).toHaveLength(0);
+  });
+  test("devolve em ordem cronológica (mais antigo primeiro), filtrando por departamento e nome do campo", async () => {
+    const { pool, chamadas } = criarPoolFalso([[
+      { anoReferencia: 2026, mesReferencia: 3, total: 300, totalRelatorios: 3 },
+      { anoReferencia: 2026, mesReferencia: 2, total: 200, totalRelatorios: 2 },
+      { anoReferencia: 2026, mesReferencia: 1, total: 100, totalRelatorios: 1 }
+    ]]);
+    const serie = await cd.serieHistoricaCampo(pool, [10], 5, "ofertas", 12);
+    expect(serie.map(p => p.mesReferencia)).toEqual([1, 2, 3]);
+    expect(chamadas[0].inputs.depId).toBe(5);
+    expect(chamadas[0].inputs.nomeCampo).toBe("ofertas");
+  });
+});
+
+describe("filtrarMesmoMesCalendario (v5.8)", () => {
+  test("recorta só o mês pedido, através dos anos, em ordem crescente", () => {
+    const serie = [
+      { anoReferencia: 2024, mesReferencia: 3, total: 100 },
+      { anoReferencia: 2024, mesReferencia: 4, total: 999 }, // outro mês, deve ficar de fora
+      { anoReferencia: 2026, mesReferencia: 3, total: 300 },
+      { anoReferencia: 2025, mesReferencia: 3, total: 200 }
+    ];
+    const marco = cd.filtrarMesmoMesCalendario(serie, 3);
+    expect(marco.map(p => p.anoReferencia)).toEqual([2024, 2025, 2026]);
+    expect(marco.every(p => p.mesReferencia === 3)).toBe(true);
+  });
+  test("mês sem nenhuma ocorrência devolve lista vazia", () => {
+    expect(cd.filtrarMesmoMesCalendario([{ anoReferencia: 2026, mesReferencia: 5, total: 1 }], 12)).toEqual([]);
+  });
+});
+
 describe("historicoConsolidado", () => {
   test("sem congregações no escopo, devolve lista vazia sem consultar o banco", async () => {
     const { pool, chamadas } = criarPoolFalso([]);

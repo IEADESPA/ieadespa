@@ -274,3 +274,40 @@ describe("buscarValoresParaPrePreencher", () => {
     expect(mapa).toEqual({ congregados: 120, membrosEmComunhao: 80 });
   });
 });
+
+// v5.8 (item 4) — reabertura de relatório fechado, só GLOBAL, com
+// justificativa auditada. RETIFICAR (v5.3) continua intocado.
+describe("REABRIR (v5.8)", () => {
+  test("só GLOBAL autoriza reabrir — mesma exigência de RETIFICAR", () => {
+    expect(rd.nivelAutorizadoParaAcao("REABRIR", "GLOBAL")).toBe(true);
+    expect(rd.nivelAutorizadoParaAcao("REABRIR", "CONGREGACAO")).toBe(false);
+    expect(rd.nivelAutorizadoParaAcao("REABRIR", "AREA")).toBe(false);
+    expect(rd.nivelAutorizadoParaAcao("REABRIR", "DEPARTAMENTO")).toBe(false);
+  });
+  test("reabre um relatório APROVADO_GERAL ou RETIFICADO de volta pra ENVIADO", () => {
+    expect(rd.resolverTransicao("REABRIR", "APROVADO_GERAL")).toEqual({ ok: true, novoStatus: "ENVIADO" });
+    expect(rd.resolverTransicao("REABRIR", "RETIFICADO")).toEqual({ ok: true, novoStatus: "ENVIADO" });
+  });
+  test("não deixa reabrir um relatório que nunca foi fechado", () => {
+    expect(rd.resolverTransicao("REABRIR", "RASCUNHO").ok).toBe(false);
+    expect(rd.resolverTransicao("REABRIR", "ENVIADO").ok).toBe(false);
+    expect(rd.resolverTransicao("REABRIR", "APROVADO_AREA").ok).toBe(false);
+  });
+  test("RETIFICAR continua igual (v5.3) — reabertura não substitui a retificação em lugar nenhum", () => {
+    expect(rd.resolverTransicao("RETIFICAR", "APROVADO_GERAL")).toEqual({ ok: true, novoStatus: "RETIFICADO" });
+    expect(rd.resolverTransicao("RETIFICAR", "RETIFICADO")).toEqual({ ok: true, novoStatus: "RETIFICADO" });
+  });
+});
+
+describe("justificativaValida (v5.8)", () => {
+  test("vazio, nulo, indefinido ou só espaço é inválido", () => {
+    expect(rd.justificativaValida(undefined)).toBe(false);
+    expect(rd.justificativaValida(null)).toBe(false);
+    expect(rd.justificativaValida("")).toBe(false);
+    expect(rd.justificativaValida("   ")).toBe(false);
+  });
+  test("qualquer texto não vazio é válido — sem mínimo de tamanho arbitrário", () => {
+    expect(rd.justificativaValida("erro de digitação confirmado com o líder local")).toBe(true);
+    expect(rd.justificativaValida("ok")).toBe(true);
+  });
+});

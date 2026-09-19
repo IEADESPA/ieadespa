@@ -5653,19 +5653,93 @@ Hoje o voluntariado é "assinar o termo da Lei 9.608/98 e entrar na escala"
 (v7.5). O padrão internacional de proteção institucional é uma **esteira
 sequencial** — e ela é pré-requisito de tudo que envolve menores (v7.7).
 
-- [ ] Esteira de habilitação com etapas obrigatórias **sequenciais** (não dá pra
+- [x] Esteira de habilitação com etapas obrigatórias **sequenciais** (não dá pra
       pular): ficha de inscrição → referências internas → entrevista registrada →
       antecedentes (v7.7) → treinamento (v7.7) → termo assinado → **apto**.
       Status por voluntário: apto / pendente / inapto / vencido.
       *(MinistrySafe 5-Part Safety System; Praesidium Safety Equation)*
-- [ ] **Regra dos 6 meses**: tempo mínimo de membresia/frequência antes de servir
+- [x] **Regra dos 6 meses**: tempo mínimo de membresia/frequência antes de servir
       em ministério com menores — calculado a partir da data de admissão ou de
       recebimento da carta, nunca digitado. *(Adventist Risk Management)*
-- [ ] Cadastro de equipes/ministérios de serviço por congregação, com papéis
+- [x] Cadastro de equipes/ministérios de serviço por congregação, com papéis
       marcados como **"contato com menores"** — é essa marcação que dispara todas
       as exigências reforçadas da v7.7.
-- [ ] Desligamento de voluntário com motivo e registro — inclusive "remoção da
+- [x] Desligamento de voluntário com motivo e registro — inclusive "remoção da
       escala por perda de confiança" (v7.5), sem virar sanção disciplinar.
+
+  Migração 099 (`sql/migrations/099_habilitacao_voluntarios.sql`) cria
+  `VoluntariosHabilitacao` (uma esteira por `MembroId`, reaproveitada entre
+  ciclos — mesmo padrão de `CandidatosBatismo`, v086) e
+  `VoluntariosDesligamentos`, e reaproveita `EscalasEquipes` (v5.6) com um
+  `ALTER` (`ContatoComMenores BIT`) em vez de recriar um cadastro paralelo de
+  equipes/ministérios — a marcação fica no nível da equipe (ex: "Ministério
+  Infantil"), não por papel individual dentro dela.
+
+  Toda a lógica de decisão é pura em `shared/habilitacaoVoluntarios.js`
+  (mesmo formato de `shared/escalas.js`, v5.6): `podeConcluirEtapa` é o
+  núcleo da esteira sequencial (recusa carimbar uma etapa se qualquer
+  anterior ainda estiver em aberto, e recusa recarimbar uma já concluída);
+  `calcularStatusHabilitacao` nunca lê um status digitado — deriva sempre
+  de quais etapas estão carimbadas, de `InaptoEm` (marcação explícita,
+  terminal) e de `AptoValidoAte` comparado com "agora", mesmo espírito de
+  "vencimento calculado na leitura" que a v017 (Cartas de Trânsito) já usa
+  (não é job/timer); `atendeRegraSeisMeses` soma 6 meses a
+  `MembroReferencia.DataAdmissao` — **nenhuma coluna nova foi criada** pra
+  isso, porque `DataAdmissao` já é, desde a v1.1 (migração 015), "a data da
+  ÚLTIMA recepção" (batismo OU carta de mudança, zerada a cada
+  saída/retorno), exatamente o dado que o pedido descreve; e
+  `podeServirComMenores` é o hook de leitura que a v7.7 vai chamar depois
+  (recebe a habilitação, a `DataAdmissao` e a flag `ContatoComMenores` da
+  equipe, e só exige apto + 6 meses quando a equipe está marcada).
+
+  Duas decisões de projeto documentadas na própria migração por não terem
+  definição explícita no pedido: (1) as etapas Antecedentes e Treinamento
+  entram na esteira e bloqueiam a sequência como qualquer outra, mas —
+  igual à v086 tratou "conclusão do Discipulado" como atestação manual até
+  a v6.9 existir — aqui são carimbadas por atestação manual de quem
+  administra, até a v7.7 substituir isso por upload de certidão com
+  validade real; (2) "vencido" precisava de uma janela que o pedido não
+  define — adotados **24 meses** de validade do "apto" a partir da
+  conclusão da esteira, no meio do intervalo de 2 a 3 anos que a própria
+  v7.7 cita como padrão internacional pra treinamento de proteção
+  (MinistrySafe; Church of England safeguarding).
+
+  `api/GestaoHabilitacaoVoluntarios` (`/api/habilitacao-voluntarios/{acao}`)
+  — `equipes-flag` (GET/POST, marca/lista `ContatoComMenores` por equipe),
+  `lista`/`detalhe` (esteiras da congregação, sempre com status
+  recalculado), `iniciar` (abre ou reaproveita a esteira de um voluntário),
+  `concluir-etapa` (valida a sequência antes de gravar), `marcar-inapto`/
+  `reabilitar`, `elegibilidade-menores` (o endpoint que expõe
+  `podeServirComMenores` pronto pra a v7.7 consumir), `desligamento`/
+  `desligamentos` e `minha-habilitacao` (autoatendimento). Permissão
+  própria `habilitacao_voluntarios` (não reaproveita `escalas`: quem
+  administra a grade nem sempre é quem toca referência/entrevista/
+  desligamento) — como toda permissão nova do sistema, não concedida a
+  nenhum papel automaticamente. Desligamento (`shared/
+  habilitacaoVoluntarios.js::registrarDesligamento`) é registro de RH puro
+  — motivo + `TipoMotivo` (incluindo `PERDA_CONFIANCA`), sem nenhuma FK ou
+  referência ao processo disciplinar (FASE 3/CEI); quando marcado
+  "remover da escala", só desativa a linha em
+  `EscalasEquipeMembros` (v5.6), lido mas não reescrito.
+
+  Frontend: módulo "Habilitação de Voluntários" (`app/index.html`/
+  `app/script.js`) com a marcação de equipes por congregação, a esteira
+  por voluntário (status calculado, próxima etapa em destaque, marcar
+  inapto/reabilitar) e o formulário de desligamento. Sub-aba "Minha
+  Habilitação" em "Meu Painel" (mesmo padrão de "Minhas Escalas"), só
+  leitura — quem preenche cada etapa é o painel administrativo, não o
+  próprio voluntário.
+
+  Testado com `npx jest` (305 testes, 32 novos em
+  `shared/habilitacaoVoluntarios.test.js`: a esteira inteira sendo
+  permitida etapa a etapa na ordem certa, toda tentativa de pular etapa
+  recusada com a mensagem certa, recarimbar etapa já concluída recusado,
+  status calculado nos 4 casos — pendente/apto/inapto/vencido — incluindo
+  inapto prevalecendo sobre esteira completa, validade de 24 meses,
+  Regra dos 6 meses no limite exato (inclusive) e sem data de admissão
+  nenhuma, `podeServirComMenores` nos casos de equipe sem a marcação/
+  pendente/apto sem 6 meses/apto e elegível/vencido/inapto, e validação de
+  desligamento) e `node --check` em todos os arquivos novos/alterados.
 
 #### v5.8 — Relatório departamental: consolidação e série histórica *(7ª rodada)*
 

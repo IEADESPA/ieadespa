@@ -106,6 +106,7 @@
             <button class="btn-subaba" id="btnSubMeupainelLgpd" onclick="mostrarSubAbaMeupainel('lgpd')"><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" onclick="mostrarSubAbaMeupainel('minhasescalas')"><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" onclick="mostrarSubAbaMeupainel('minhahabilitacao')"><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" onclick="mostrarSubAbaMeupainel('seguranca')"><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
@@ -241,6 +242,12 @@
           <div class="grupo-modulo" id="grupoModuloEscalas" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaEscalas" onclick="mostrarAbaSecretaria('escalas')"><span class="icone">🗓️</span><span class="rotulo">Escalas de Serviço</span></button>
+          </div>
+
+          <!-- MÓDULO: HABILITAÇÃO DE VOLUNTÁRIOS (v5.7) -->
+          <div class="grupo-modulo" id="grupoModuloHabilitacao" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaHabilitacao" onclick="mostrarAbaSecretaria('habilitacao')"><span class="icone">🛡️</span><span class="rotulo">Habilitação de Voluntários</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -597,6 +604,19 @@
           </div>
           <p id="resultadoIndisponibilidade" class="subtitle"></p>
           <div id="cxMinhasIndisponibilidades"></div>
+        </div>
+
+        <!-- SUB-ABA: MINHA HABILITAÇÃO (v5.7 — Triagem e habilitação de
+             voluntários). Só leitura: acompanha a própria esteira (quais
+             etapas já foram concluídas por quem administra, status
+             calculado) — quem preenche cada etapa continua sendo o painel
+             administrativo, não o próprio voluntário (entrevista,
+             referências etc. são conduzidas por outra pessoa). -->
+        <div id="subMeupainelMinhahabilitacao" class="sub-aba-secretaria" style="display:none;">
+          <h3>🛡️ Minha Habilitação</h3>
+          <p class="subtitle">Acompanhe sua esteira de habilitação como voluntário — ficha de inscrição,
+            referências, entrevista, antecedentes, treinamento e termo assinado, nessa ordem.</p>
+          <div id="resultadoMinhaHabilitacao"></div>
         </div>
 
         <!-- SUB-ABA: MINHAS TAREFAS (vB.3 — Motor de workflow genérico).
@@ -2260,6 +2280,54 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPendenciasConfirmacaoAcao()">🔍 Ver Pendências</button>
         </div>
         <div id="painelPendenciasConfirmacao"></div>
+      </div>
+
+      <!-- ABA: HABILITAÇÃO DE VOLUNTÁRIOS (v5.7 — Triagem e habilitação) -->
+      <div id="abaHabilitacao" class="aba-secretaria" style="display:none;">
+        <h3>🛡️ Habilitação de Voluntários</h3>
+        <p class="subtitle">Esteira sequencial obrigatória — não dá pra pular etapa: ficha de inscrição →
+          referências internas → entrevista registrada → antecedentes → treinamento → termo assinado →
+          <strong>apto</strong>. Status calculado (nunca digitado): apto / pendente / inapto / vencido
+          (o "apto" vale 24 meses). Pré-requisito da futura v7.7 (Habilitação para Ministério com Menores).</p>
+
+        <h4>Equipes/ministérios — marcação "contato com menores"</h4>
+        <p class="subtitle">É essa marcação que vai disparar as exigências reforçadas da v7.7 (bloqueio de
+          escala por habilitação vencida, regra dos dois adultos etc.) — aqui só o cadastro do sinalizador.</p>
+        <div class="barra-lista">
+          <select id="hvCongregacao"></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarEquipesFlagAcao()">📂 Abrir</button>
+        </div>
+        <div id="painelEquipesFlag"></div>
+
+        <hr />
+        <h4>Esteira por voluntário</h4>
+        <div class="barra-lista">
+          <input type="number" id="hvNovoMembroMatricula" placeholder="Matrícula do voluntário" style="max-width:200px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="iniciarHabilitacaoAcao()">➕ Abrir Esteira</button>
+        </div>
+        <p id="resultadoHabilitacao"></p>
+        <div id="painelHabilitacoes"></div>
+        <div id="painelDetalheHabilitacao"></div>
+
+        <hr />
+        <h4>Desligamento de voluntário</h4>
+        <p class="subtitle">Registro de RH, separado do processo disciplinar (CEI) — "perda de confiança" aqui
+          é só mais um motivo, nunca uma sanção.</p>
+        <div class="barra-lista">
+          <input type="number" id="hvDesligarMatricula" placeholder="Matrícula do voluntário" style="max-width:200px;" />
+          <input type="number" id="hvDesligarEquipeId" placeholder="Id da equipe (opcional)" style="max-width:180px;" />
+          <select id="hvDesligarTipo">
+            <option value="OUTRO">Outro</option>
+            <option value="PERDA_CONFIANCA">Perda de confiança</option>
+            <option value="MUDANCA">Mudança</option>
+            <option value="INDISPONIBILIDADE">Indisponibilidade</option>
+            <option value="SAIDA_DA_IGREJA">Saída da igreja</option>
+          </select>
+          <input type="text" id="hvDesligarMotivo" placeholder="Motivo" style="min-width:220px;" />
+          <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="hvDesligarRemoverEscala" /> Remover da escala</label>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarDesligamentoAcao()">🚪 Registrar Desligamento</button>
+        </div>
+        <p id="resultadoDesligamento" class="subtitle"></p>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

@@ -861,7 +861,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -880,6 +880,12 @@ const ABA_PERMISSOES_ALT = {
   // aprovar troca/ver pendência, exatamente como o resto do sistema faz
   // com "nível mais alto cobre o de baixo").
   escalas: ["escalas"],
+  // v5.7 — esteira de habilitação, marcação "contato com menores" e
+  // desligamento de voluntário: permissão própria (não reaproveita
+  // "escalas" porque triagem/habilitação é decisão de outra alçada —
+  // quem administra a grade nem sempre é quem toca o processo de
+  // referência/entrevista/desligamento).
+  habilitacao: ["habilitacao_voluntarios"],
   // v5.4 (correção) — quem só tem "tesouraria_departamental" (líder local/
   // geral de departamento) também acessa Financeiro → Saídas, pra gastar o
   // saldo do próprio departamento (Centro de Custo DEPTO_<SIGLA>) pelo
@@ -940,6 +946,7 @@ const MODULOS = {
   disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
   departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
   escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },
+  habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
@@ -990,11 +997,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  minhasescalas: "Minhas Escalas",
+  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1013,6 +1020,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "vinculos") { carregarOpcoesMeuVinculoTipo(); carregarMeusVinculos(); }
   if (sub === "contribuicoes") { carregarOpcoesCategoriasEntrada(); prepararFormAutolancamento(); carregarMinhasContribuicoes(); }
   if (sub === "minhasescalas") { carregarMinhasEscalasAcao(); carregarMinhasIndisponibilidadesAcao(); }
+  if (sub === "minhahabilitacao") carregarMinhaHabilitacaoAcao();
   if (sub === "tarefas") filtrarMinhasTarefas(filtroMinhasTarefasAtual);
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarDelegacoes(); }
@@ -4956,6 +4964,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "mediacao") carregarMediacoes();
   if (aba === "relatoriosdepto") carregarOpcoesRelatorioDepto();
   if (aba === "escalas") carregarOpcoesEscalasAcao();
+  if (aba === "habilitacao") carregarOpcoesHabilitacaoAcao();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -4970,7 +4979,7 @@ const TITULOS_MODULOS = {
   abandono: "Perda de Membresia",
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos",
   mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos",
-  escalas: "Escalas de Serviço"
+  escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -11924,4 +11933,187 @@ async function carregarMinhasIndisponibilidadesAcao() {
         ${data.indisponibilidades.map(i => `<tr><td>${new Date(i.dataInicio).toLocaleDateString("pt-BR")}</td><td>${new Date(i.dataFim).toLocaleDateString("pt-BR")}</td><td>${i.motivo || ""}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum período de indisponibilidade declarado.</p>";
+}
+
+// ---- HABILITAÇÃO DE VOLUNTÁRIOS (v5.7 — Triagem e habilitação) ----
+const ROTULO_ETAPA_HV = {
+  FICHA_INSCRICAO: "Ficha de inscrição", REFERENCIAS: "Referências internas", ENTREVISTA: "Entrevista registrada",
+  ANTECEDENTES: "Antecedentes (manual até v7.7)", TREINAMENTO: "Treinamento (manual até v7.7)", TERMO: "Termo assinado"
+};
+const ORDEM_ETAPAS_HV = ["FICHA_INSCRICAO", "REFERENCIAS", "ENTREVISTA", "ANTECEDENTES", "TREINAMENTO", "TERMO"];
+const CAMPO_ETAPA_HV = {
+  FICHA_INSCRICAO: "etapaFichaInscricaoEm", REFERENCIAS: "etapaReferenciasEm", ENTREVISTA: "etapaEntrevistaEm",
+  ANTECEDENTES: "etapaAntecedentesEm", TREINAMENTO: "etapaTreinamentoEm", TERMO: "etapaTermoAssinadoEm"
+};
+const ROTULO_STATUS_HV = { APTO: "✅ Apto", PENDENTE: "🟡 Pendente", INAPTO: "⛔ Inapto", VENCIDO: "⏰ Vencido" };
+let _hvCongregacaoAtual = null;
+
+async function carregarOpcoesHabilitacaoAcao() {
+  const selCong = document.getElementById("hvCongregacao");
+  if (selCong && !selCong.dataset.montado) {
+    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    selCong.dataset.montado = "1";
+  }
+}
+
+function montarEsteiraHtml(hab) {
+  return ORDEM_ETAPAS_HV.map(etapa => {
+    const concluida = !!hab[CAMPO_ETAPA_HV[etapa]];
+    return `<span class="tag" style="margin-right:4px;${concluida ? "" : "opacity:.5;"}">${concluida ? "✅" : "⬜"} ${ROTULO_ETAPA_HV[etapa]}</span>`;
+  }).join(" → ");
+}
+
+async function carregarEquipesFlagAcao() {
+  const congregacaoId = document.getElementById("hvCongregacao").value;
+  if (!congregacaoId) return;
+  _hvCongregacaoAtual = congregacaoId;
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/equipes-flag?congregacaoId=${congregacaoId}`);
+  const data = await res.json();
+  const container = document.getElementById("painelEquipesFlag");
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.equipes.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Equipe</th><th>Contato com menores</th><th></th></tr></thead><tbody>
+        ${data.equipes.map(e => `<tr><td>${e.nome}</td><td>${e.contatoComMenores ? "Sim" : "Não"}</td>
+          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="alternarContatoComMenoresAcao(${e.equipeId}, ${!e.contatoComMenores})">
+            ${e.contatoComMenores ? "Desmarcar" : "Marcar como contato com menores"}</button></td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhuma equipe cadastrada nesta congregação ainda (cadastre em Escalas de Serviço).</p>";
+
+  await carregarHabilitacoesAcao();
+}
+
+async function alternarContatoComMenoresAcao(equipeId, novoValor) {
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/equipes-flag`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ equipeId, contatoComMenores: novoValor })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  carregarEquipesFlagAcao();
+}
+
+async function carregarHabilitacoesAcao() {
+  if (!_hvCongregacaoAtual) return;
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/lista?congregacaoId=${_hvCongregacaoAtual}`);
+  const data = await res.json();
+  const container = document.getElementById("painelHabilitacoes");
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.habilitacoes.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Voluntário</th><th>Status</th><th>Esteira</th><th></th></tr></thead><tbody>
+        ${data.habilitacoes.map(h => `<tr><td>${h.membroNome}</td><td>${ROTULO_STATUS_HV[h.statusCalculado] || h.statusCalculado}</td>
+          <td>${montarEsteiraHtml(h)}</td>
+          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirDetalheHabilitacaoAcao(${h.habilitacaoId})">🔍 Abrir</button></td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhuma esteira aberta nesta congregação ainda.</p>";
+}
+
+async function iniciarHabilitacaoAcao() {
+  const membroId = document.getElementById("hvNovoMembroMatricula").value;
+  const congregacaoId = document.getElementById("hvCongregacao").value;
+  const msg = document.getElementById("resultadoHabilitacao");
+  if (!membroId || !congregacaoId) { msg.textContent = "Escolha a congregação e informe a matrícula do voluntário."; return; }
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/iniciar`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId: Number(membroId), congregacaoId: Number(congregacaoId) })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast("✅ Esteira aberta (ou já existente reaproveitada).", "sucesso");
+  document.getElementById("hvNovoMembroMatricula").value = "";
+  carregarHabilitacoesAcao();
+}
+
+async function abrirDetalheHabilitacaoAcao(habilitacaoId) {
+  // A lista já trouxe o necessário pra montar as ações; refazemos a busca
+  // pontual só pra ter o objeto fresco (evita mandar índice desatualizado
+  // depois de concluir uma etapa).
+  const listaRes = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/lista?congregacaoId=${_hvCongregacaoAtual}`);
+  const listaData = await listaRes.json();
+  const hab = listaData.sucesso !== false ? listaData.habilitacoes.find(h => h.habilitacaoId === habilitacaoId) : null;
+  const container = document.getElementById("painelDetalheHabilitacao");
+  if (!hab) { container.innerHTML = "<p class='subtitle'>Esteira não encontrada.</p>"; return; }
+
+  const proxima = hab.proximaEtapa;
+  container.innerHTML = `
+    <h4>${hab.membroNome} — ${ROTULO_STATUS_HV[hab.statusCalculado] || hab.statusCalculado}</h4>
+    <p>${montarEsteiraHtml(hab)}</p>
+    <div class="barra-lista">
+      ${proxima ? `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="concluirEtapaHabilitacaoAcao(${habilitacaoId}, '${proxima}')">✅ Concluir: ${ROTULO_ETAPA_HV[proxima]}</button>` : "<span class='subtitle'>Esteira completa.</span>"}
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="marcarInaptoAcao(${habilitacaoId})">⛔ Marcar Inapto</button>
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="reabilitarHabilitacaoAcao(${habilitacaoId})">↩️ Reabilitar</button>
+    </div>
+    ${hab.inaptoMotivo ? `<p class="subtitle">Motivo da inaptidão: ${hab.inaptoMotivo}</p>` : ""}
+  `;
+}
+
+async function concluirEtapaHabilitacaoAcao(habilitacaoId, etapa) {
+  let observacao = null, entrevistadorId = null;
+  if (etapa === "ENTREVISTA") {
+    entrevistadorId = prompt("Matrícula de quem conduziu a entrevista (opcional):") || null;
+    observacao = prompt("Observações da entrevista (opcional):") || null;
+  } else if (etapa === "REFERENCIAS") {
+    observacao = prompt("Observações sobre as referências colhidas (opcional):") || null;
+  }
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/concluir-etapa`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ habilitacaoId, etapa, observacao, entrevistadorId: entrevistadorId ? Number(entrevistadorId) : null })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  carregarHabilitacoesAcao();
+  abrirDetalheHabilitacaoAcao(habilitacaoId);
+}
+
+async function marcarInaptoAcao(habilitacaoId) {
+  const motivo = prompt("Motivo da inaptidão:");
+  if (!motivo) return;
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/marcar-inapto`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ habilitacaoId, motivo })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  carregarHabilitacoesAcao();
+  abrirDetalheHabilitacaoAcao(habilitacaoId);
+}
+
+async function reabilitarHabilitacaoAcao(habilitacaoId) {
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/reabilitar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ habilitacaoId })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  carregarHabilitacoesAcao();
+  abrirDetalheHabilitacaoAcao(habilitacaoId);
+}
+
+async function registrarDesligamentoAcao() {
+  const membroId = document.getElementById("hvDesligarMatricula").value;
+  const equipeId = document.getElementById("hvDesligarEquipeId").value;
+  const tipoMotivo = document.getElementById("hvDesligarTipo").value;
+  const motivo = document.getElementById("hvDesligarMotivo").value.trim();
+  const removidoDaEscala = document.getElementById("hvDesligarRemoverEscala").checked;
+  const msg = document.getElementById("resultadoDesligamento");
+  if (!membroId || !motivo) { msg.textContent = "Informe a matrícula e o motivo."; return; }
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/desligamento`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membroId: Number(membroId), equipeId: equipeId ? Number(equipeId) : null, tipoMotivo, motivo, removidoDaEscala })
+  });
+  const data = await res.json();
+  msg.textContent = "";
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast(data.mensagem, "sucesso");
+  document.getElementById("hvDesligarMatricula").value = "";
+  document.getElementById("hvDesligarMotivo").value = "";
+}
+
+// ---- "Minha Habilitação" (Meu Painel — autoatendimento, só leitura) ----
+async function carregarMinhaHabilitacaoAcao() {
+  const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/minha-habilitacao`);
+  const data = await res.json();
+  const container = document.getElementById("resultadoMinhaHabilitacao");
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (!data.habilitacao) { container.innerHTML = "<p class='subtitle'>Você ainda não tem uma esteira de habilitação de voluntário aberta.</p>"; return; }
+  const hab = data.habilitacao;
+  container.innerHTML = `<p><strong>Status:</strong> ${ROTULO_STATUS_HV[hab.statusCalculado] || hab.statusCalculado}</p><p>${montarEsteiraHtml(hab)}</p>`;
 }

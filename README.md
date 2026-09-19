@@ -5551,24 +5551,101 @@ o que transforma escala em ferramenta útil não é a grade — é o que acontec
 **quando alguém não pode**: hoje, em qualquer congregação, isso vira corrente de
 WhatsApp e o secretário refazendo tudo na mão.
 
-- [ ] **Indisponibilidade declarada pelo voluntário** (viagem, trabalho, período)
+- [x] **Indisponibilidade declarada pelo voluntário** (viagem, trabalho, período)
       — a escala nunca sugere quem já se declarou indisponível.
-- [ ] **Troca entre voluntários** pedida pelo próprio voluntário, com aprovação do
+- [x] **Troca entre voluntários** pedida pelo próprio voluntário, com aprovação do
       líder da equipe — tira o secretário do meio da negociação.
-- [ ] Auto-escalador por "quem serviu por último" + frequência preferida
+- [x] Auto-escalador por "quem serviu por último" + frequência preferida
       ("uma vez por mês"), detectando **conflito entre equipes** (a mesma pessoa
       escalada em louvor e recepção no mesmo culto).
-- [ ] Convite em cadeia: recusou, o sistema convida o próximo automaticamente.
-- [ ] Publicação da escala e confirmação de recebimento — quem não confirmou
+- [x] Convite em cadeia: recusou, o sistema convida o próximo automaticamente.
+- [x] Publicação da escala e confirmação de recebimento — quem não confirmou
       até X dias vira pendência do líder.
       *(referência: Planning Center Services; ChurchSuite Rotas)*
-- [ ] **Integração com o Portal do Membro (vB.5)**: quando esta versão existir,
+- [x] **Integração com o Portal do Membro (vB.5)**: quando esta versão existir,
       "aceitar/recusar/trocar com outro voluntário" vira sub-aba de
       autoatendimento dentro de "Meu Painel" (mesmo padrão de Minhas
       Contribuições/Cartas de Trânsito), com push/e-mail do motor de
       notificações (vB.2) avisando convite em cadeia e pendência de
       confirmação. A vB.5 já deixou a infraestrutura (login simplificado,
       PWA, push) pronta pra isso sem precisar de versão nova — só ligar aqui.
+
+  Implementado: `shared/escalas.js` — toda a lógica de decisão é pura (sem
+  tocar banco), pra ser testável sem Azure SQL: `estaIndisponivelNaData`
+  (indisponibilidade declarada exclui de verdade), `ordenarCandidatosElegiveis`
+  ("quem serviu por último" + `FrequenciaPreferidaDias`, nunca-serviu vem
+  antes de quem já serviu), `temConflitoEntreEquipes` (mesma pessoa ativa —
+  CONVIDADO/ACEITO/CONFIRMADO — em outra equipe no mesmo `ServicoId`),
+  `autoEscalarServico` (monta a fila de convite em cadeia inteira por
+  equipe, não só o escolhido, já descontando quem outra equipe ocupou no
+  mesmo processo), `proximoConviteAposRecusa` (avança a cadeia pulando quem
+  já recusou), `listarPendenciasConfirmacao` (quem não confirmou até
+  `PrazoConfirmacaoDias` depois de `PublicadaEm`) e `validarTroca` (recusa
+  troca que criaria indisponibilidade ou conflito entre equipes). As
+  funções de banco (`criarEquipe`, `criarServico`, `gravarAlocacao`,
+  `decidirTroca` etc.) são finas de propósito — só orquestram o que a
+  lógica pura já decidiu.
+
+  Migração `098_escalas_servico.sql` — `EscalasEquipes`, `EscalasEquipeMembros`
+  (com `FrequenciaPreferidaDias`), `EscalasServicos` (RASCUNHO/PUBLICADA/
+  CANCELADA), `EscalasAlocacoes` (CONVIDADO/ACEITO/RECUSADO/CONFIRMADO/
+  CANCELADA), `EscalasIndisponibilidades` e `EscalasTrocas`, mais 2 regras
+  novas em `NotificacaoRegras` (`ESCALA_CONVITE_CADEIA`,
+  `ESCALA_CONFIRMACAO_PENDENTE`).
+
+  **Decisão de arquitetura, avaliada e documentada** (não pulada): o motor
+  genérico de workflow (`shared/workflow.js`, vB.3) resolve responsável por
+  permissão + nível territorial (Congregação..Global); aprovação de troca
+  de escala é resolvida pelo **líder da equipe**, uma pessoa concreta
+  amarrada à `EscalasEquipes.LiderMembroId`, não a um nível territorial —
+  forçar isso no motor genérico exigiria inventar um "nível" fictício por
+  equipe, pior que não reusar. `EscalasTrocas` tem seu próprio Status
+  (PENDENTE/APROVADA/RECUSADA); a parte do princípio "não recodar o mesmo
+  fluxo" que de fato se aplica foi reusada: convite em cadeia e pendência
+  de confirmação passam pelo mesmo `shared/notificacaoMotor.js`
+  (vB.2) que todo o resto do sistema usa.
+
+  `api/GestaoEscalas` (`/api/escalas/{acao}`) — `equipes` (GET/POST),
+  `equipes-membros` (GET/POST), `servicos`/`servicos-detalhe` (GET/POST),
+  `auto-escalar` e `publicar` (POST, só quem tem a permissão `escalas` e
+  está dentro do escopo territorial da congregação — mesmo
+  `auth.estaNoEscopo` de sempre), `responder`/`confirmar`/`indisponibilidade`
+  (o próprio voluntário, dono do registro), `trocas`/`trocas-aprovar`
+  (líder da equipe ou quem tem `escalas` — "nível mais alto cobre o de
+  baixo", mesmo princípio de `shared/escopo.js`), `pendencias-confirmacao`
+  e `minhas-alocacoes` (o hook do Portal do Membro). Recusar um convite já
+  dispara a cadeia **na hora** (não espera a rodada diária do avaliador de
+  notificações): calcula o próximo elegível, grava o novo CONVIDADO e chama
+  `enviarCanaisNotificacao` direto — e-mail/push imediato. A pendência de
+  confirmação (quem não confirmou em X dias) tem 2 caminhos: em tempo real
+  na tela do líder (`pendencias-confirmacao`) e, pra quem não abre a tela,
+  a rodada diária do `NotificacoesAgendador` via o detector novo
+  `shared/notificacaoDetectores.js::detectarConfirmacaoEscalaPendente`.
+
+  Frontend: módulo "Escalas de Serviço" (`app/index.html`/`app/script.js`)
+  com telas de Equipes (criar equipe, incluir voluntário + frequência
+  preferida), Serviços (criar, rodar o auto-escalador, publicar, ver
+  alocações), fila de Trocas Pendentes e Pendências de Confirmação (visão
+  do líder). Hook do Portal do Membro (vB.5): sub-aba "Minhas Escalas" em
+  "Meu Painel" (mesmo padrão de Minhas Contribuições/Cartas de Trânsito) —
+  aceitar/recusar convite, confirmar recebimento, pedir troca e declarar
+  indisponibilidade, sem abrir o painel administrativo. Curso corrigido em
+  relação ao plano original: a integração vB.5 não esperou "quando esta
+  versão existir" — a infraestrutura de autoatendimento já estava pronta,
+  então o hook foi ligado nesta mesma versão, como o próprio item já
+  antecipava.
+
+  Testado com `npx jest` (273 testes, incluindo 24 novos de
+  `shared/escalas.js`: indisponibilidade excluindo candidato mesmo sendo o
+  mais elegível por frequência, ordenação certa entre "nunca serviu" e
+  "serviu há mais tempo", conflito entre equipes detectado e **não**
+  disparando por engano em alocação RECUSADA/CANCELADA de outra equipe,
+  auto-escalador evitando escalar a mesma pessoa 2x no mesmo serviço
+  mesmo quando ela seria a mais elegível pras duas equipes, fila de
+  convite em cadeia completa — não só o escolhido —, avanço da cadeia
+  pulando quem já recusou antes, pendência de confirmação calculada certa
+  nas bordas do prazo, e validação de troca recusando indisponibilidade e
+  conflito) e `node --check` em todos os arquivos novos/alterados.
 
 #### v5.7 — Triagem e habilitação de voluntários *(7ª rodada — pré-requisito da FASE 7)*
 

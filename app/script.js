@@ -861,7 +861,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -874,6 +874,12 @@ const ABA_PERMISSOES_ALT = {
   enquetes: ["reunioes", "assembleia"],
   arquivos: ["reunioes", "assembleia", "cli"],
   relatoriosdepto: ["relatorios_departamentais"],
+  // v5.6 — quem administra escalas (Presidente/Secretário Geral) OU um
+  // líder de equipe (a permissão "escalas" larga cobre os dois; o backend
+  // ainda restringe ação por ação a "líder daquela equipe específica" pra
+  // aprovar troca/ver pendência, exatamente como o resto do sistema faz
+  // com "nível mais alto cobre o de baixo").
+  escalas: ["escalas"],
   // v5.4 (correção) — quem só tem "tesouraria_departamental" (líder local/
   // geral de departamento) também acessa Financeiro → Saídas, pra gastar o
   // saldo do próprio departamento (Centro de Custo DEPTO_<SIGLA>) pelo
@@ -933,6 +939,7 @@ const MODULOS = {
   eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "enquetes", "arquivos"] },
   disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
   departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
+  escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
@@ -983,10 +990,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
+  minhasescalas: "Minhas Escalas",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1004,6 +1012,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "dados") { carregarMeusDadosForm(); carregarMinhasSolicitacoesEdicao(); }
   if (sub === "vinculos") { carregarOpcoesMeuVinculoTipo(); carregarMeusVinculos(); }
   if (sub === "contribuicoes") { carregarOpcoesCategoriasEntrada(); prepararFormAutolancamento(); carregarMinhasContribuicoes(); }
+  if (sub === "minhasescalas") { carregarMinhasEscalasAcao(); carregarMinhasIndisponibilidadesAcao(); }
   if (sub === "tarefas") filtrarMinhasTarefas(filtroMinhasTarefasAtual);
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarDelegacoes(); }
@@ -4946,6 +4955,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "ouvidoria") carregarPainelOuvidoria();
   if (aba === "mediacao") carregarMediacoes();
   if (aba === "relatoriosdepto") carregarOpcoesRelatorioDepto();
+  if (aba === "escalas") carregarOpcoesEscalasAcao();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -4959,7 +4969,8 @@ const TITULOS_MODULOS = {
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",
   abandono: "Perda de Membresia",
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos",
-  mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos"
+  mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos",
+  escalas: "Escalas de Serviço"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -11655,4 +11666,262 @@ function renderizarPainelConsolidadoDepto(data) {
     ${pendenciasHtml}
     ${historicoHtml}
   `;
+}
+
+// ---- ESCALAS DE SERVIÇO (v5.6 — auto-escalador) ----
+let _esCongregacaoAtual = null;
+
+async function carregarOpcoesEscalasAcao() {
+  const selCong = document.getElementById("esCongregacao");
+  if (!selCong.dataset.montado) {
+    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    selCong.dataset.montado = "1";
+  }
+}
+
+async function criarEquipeAcao() {
+  const nome = document.getElementById("esNovaEquipeNome").value.trim();
+  const congregacaoId = document.getElementById("esCongregacao").value;
+  const liderMembroId = document.getElementById("esNovaEquipeLider").value;
+  const msg = document.getElementById("resultadoEscalasEquipes");
+  if (!nome || !congregacaoId || !liderMembroId) { msg.textContent = "Informe nome, congregação e matrícula do líder."; return; }
+  const res = await fetchProtegido(`${API_BASE}/escalas/equipes`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nome, congregacaoId: Number(congregacaoId), liderMembroId: Number(liderMembroId) })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast("✅ Equipe criada.", "sucesso");
+  document.getElementById("esNovaEquipeNome").value = "";
+  document.getElementById("esNovaEquipeLider").value = "";
+  carregarEquipesAcao();
+}
+
+async function carregarEquipesAcao() {
+  const congregacaoId = document.getElementById("esCongregacao").value;
+  if (!congregacaoId) return;
+  _esCongregacaoAtual = congregacaoId;
+  const res = await fetchProtegido(`${API_BASE}/escalas/equipes?congregacaoId=${congregacaoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { document.getElementById("resultadoEscalasEquipes").textContent = data.mensagem; return; }
+  document.getElementById("resultadoEscalasEquipes").textContent = "";
+
+  const linhas = data.equipes.map(e => `<tr><td>${e.nome}</td><td>${e.liderNome}</td><td>${e.ativa ? "Ativa" : "Inativa"}</td></tr>`).join("");
+  document.getElementById("painelEquipesEscala").innerHTML = data.equipes.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Equipe</th><th>Líder</th><th>Status</th></tr></thead><tbody>${linhas}</tbody></table>`
+    : "<p class='subtitle'>Nenhuma equipe cadastrada nesta congregação ainda.</p>";
+
+  const opcoesEquipe = data.equipes.map(e => `<option value="${e.equipeId}">${e.nome}</option>`).join("");
+  const selTrocas = document.getElementById("esEquipeTrocas");
+  const selPendencias = document.getElementById("esEquipePendencias");
+  if (selTrocas) selTrocas.innerHTML = opcoesEquipe;
+  if (selPendencias) selPendencias.innerHTML = opcoesEquipe;
+
+  carregarServicosAcao();
+}
+
+async function adicionarMembroEquipeAcao() {
+  const equipeId = document.getElementById("esMembroEquipeId").value;
+  const membroId = document.getElementById("esMembroMatricula").value;
+  const frequenciaPreferidaDias = document.getElementById("esMembroFrequencia").value || 30;
+  const msg = document.getElementById("resultadoEscalasEquipes");
+  if (!equipeId || !membroId) { msg.textContent = "Informe o id da equipe e a matrícula do voluntário."; return; }
+  const res = await fetchProtegido(`${API_BASE}/escalas/equipes-membros`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ equipeId: Number(equipeId), membroId: Number(membroId), frequenciaPreferidaDias: Number(frequenciaPreferidaDias) })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast(data.mensagem, "sucesso");
+  document.getElementById("esMembroMatricula").value = "";
+}
+
+async function criarServicoAcao() {
+  const congregacaoId = document.getElementById("esCongregacao").value;
+  const dataHora = document.getElementById("esNovoServicoData").value;
+  const descricao = document.getElementById("esNovoServicoDescricao").value.trim();
+  const prazoConfirmacaoDias = document.getElementById("esNovoServicoPrazo").value || 3;
+  const msg = document.getElementById("resultadoEscalasServicos");
+  if (!congregacaoId || !dataHora) { msg.textContent = "Escolha a congregação e informe a data/hora."; return; }
+  const res = await fetchProtegido(`${API_BASE}/escalas/servicos`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ congregacaoId: Number(congregacaoId), dataHora, descricao, prazoConfirmacaoDias: Number(prazoConfirmacaoDias) })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast("✅ Serviço criado.", "sucesso");
+  document.getElementById("esNovoServicoDescricao").value = "";
+  carregarServicosAcao();
+}
+
+async function carregarServicosAcao() {
+  if (!_esCongregacaoAtual) return;
+  const res = await fetchProtegido(`${API_BASE}/escalas/servicos?congregacaoId=${_esCongregacaoAtual}`);
+  const data = await res.json();
+  if (data.sucesso === false) return;
+  const linhas = data.servicos.map(s => `<tr>
+    <td>${new Date(s.dataHora).toLocaleString("pt-BR")}</td><td>${s.descricao || ""}</td><td>${s.status}</td>
+    <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirServicoEscalaAcao(${s.servicoId})">🔍 Abrir</button></td>
+  </tr>`).join("");
+  document.getElementById("painelServicosEscala").innerHTML = data.servicos.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Data/Hora</th><th>Descrição</th><th>Status</th><th></th></tr></thead><tbody>${linhas}</tbody></table>`
+    : "<p class='subtitle'>Nenhum serviço cadastrado ainda.</p>";
+}
+
+async function abrirServicoEscalaAcao(servicoId) {
+  const res = await fetchProtegido(`${API_BASE}/escalas/servicos-detalhe?servicoId=${servicoId}`);
+  const data = await res.json();
+  const container = document.getElementById("painelDetalheServicoEscala");
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+
+  const linhasAlocacao = data.alocacoes.map(a => `<tr><td>${a.equipeId}</td><td>${a.membroId}</td><td>${a.status}</td></tr>`).join("");
+  container.innerHTML = `
+    <h4>${data.servico.descricao || "Serviço"} — ${new Date(data.servico.dataHora).toLocaleString("pt-BR")} (${data.servico.status})</h4>
+    <div class="barra-lista">
+      ${data.servico.status === "RASCUNHO" ? `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="autoEscalarAcao(${servicoId})">🤖 Rodar Auto-Escalador</button>` : ""}
+      ${data.servico.status === "RASCUNHO" ? `<button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="publicarEscalaAcao(${servicoId})">📣 Publicar</button>` : ""}
+    </div>
+    <table class="tabela-frequencia"><thead><tr><th>Equipe (id)</th><th>Membro (matrícula)</th><th>Status</th></tr></thead><tbody>${linhasAlocacao || "<tr><td colspan='3'>Nenhuma alocação ainda.</td></tr>"}</tbody></table>`;
+}
+
+async function autoEscalarAcao(servicoId) {
+  const res = await fetchProtegido(`${API_BASE}/escalas/auto-escalar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ servicoId })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast("✅ Auto-escalador rodou — confira a fila de convite por equipe.", "sucesso");
+  abrirServicoEscalaAcao(servicoId);
+}
+
+async function publicarEscalaAcao(servicoId) {
+  const res = await fetchProtegido(`${API_BASE}/escalas/publicar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ servicoId })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  mostrarToast(data.mensagem, "sucesso");
+  carregarServicosAcao();
+  abrirServicoEscalaAcao(servicoId);
+}
+
+async function carregarTrocasPendentesAcao() {
+  const equipeId = document.getElementById("esEquipeTrocas").value;
+  if (!equipeId) return;
+  const res = await fetchProtegido(`${API_BASE}/escalas/trocas?equipeId=${equipeId}`);
+  const data = await res.json();
+  const container = document.getElementById("painelTrocasPendentes");
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.trocas.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Alocação origem</th><th>Destino (matrícula)</th><th>Pedida em</th><th></th></tr></thead><tbody>
+        ${data.trocas.map(t => `<tr><td>${t.alocacaoOrigemId}</td><td>${t.membroDestinoId}</td><td>${new Date(t.criadaEm).toLocaleDateString("pt-BR")}</td>
+          <td><button class="btn-confirmar" style="width:auto;margin:0;" onclick="decidirTrocaAcao(${t.trocaId}, true)">✅ Aprovar</button>
+              <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="decidirTrocaAcao(${t.trocaId}, false)">❌ Recusar</button></td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhuma troca pendente.</p>";
+}
+
+async function decidirTrocaAcao(trocaId, aprovar) {
+  const res = await fetchProtegido(`${API_BASE}/escalas/trocas-aprovar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trocaId, aprovar })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  carregarTrocasPendentesAcao();
+}
+
+async function carregarPendenciasConfirmacaoAcao() {
+  const equipeId = document.getElementById("esEquipePendencias").value;
+  if (!equipeId) return;
+  const res = await fetchProtegido(`${API_BASE}/escalas/pendencias-confirmacao?equipeId=${equipeId}`);
+  const data = await res.json();
+  const container = document.getElementById("painelPendenciasConfirmacao");
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.pendencias.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Alocação</th><th>Membro (matrícula)</th><th>Status</th></tr></thead><tbody>
+        ${data.pendencias.map(p => `<tr><td>${p.alocacaoId}</td><td>${p.membroId}</td><td>${p.status}</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>✅ Ninguém pendente — todos já confirmaram.</p>";
+}
+
+// ---- "Minhas Escalas" (Meu Painel — hook do Portal do Membro, vB.5) ----
+async function carregarMinhasEscalasAcao() {
+  const res = await fetchProtegido(`${API_BASE}/escalas/minhas-alocacoes`);
+  const data = await res.json();
+  const container = document.getElementById("resultadoMinhasEscalas");
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.alocacoes.length === 0) { container.innerHTML = "<p class='subtitle'>Nenhum convite de escala no momento.</p>"; return; }
+
+  container.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Equipe</th><th>Serviço</th><th>Data/Hora</th><th>Status</th><th></th></tr></thead><tbody>
+    ${data.alocacoes.map(a => {
+      let acoes = "";
+      if (a.status === "CONVIDADO") {
+        acoes = `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="responderConviteEscalaAcao(${a.alocacaoId},'ACEITO')">✅ Aceitar</button>
+                 <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="responderConviteEscalaAcao(${a.alocacaoId},'RECUSADO')">❌ Recusar</button>`;
+      } else if (a.status === "ACEITO") {
+        acoes = `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="confirmarRecebimentoEscalaAcao(${a.alocacaoId})">📩 Confirmar recebimento</button>
+                 <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="pedirTrocaEscalaAcao(${a.alocacaoId})">🔄 Pedir troca</button>`;
+      }
+      return `<tr><td>${a.equipeNome}</td><td>${a.descricao || ""}</td><td>${new Date(a.dataHora).toLocaleString("pt-BR")}</td><td>${a.status}</td><td>${acoes}</td></tr>`;
+    }).join("")}
+  </tbody></table>`;
+}
+
+async function responderConviteEscalaAcao(alocacaoId, resposta) {
+  const res = await fetchProtegido(`${API_BASE}/escalas/responder`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ alocacaoId, resposta })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  carregarMinhasEscalasAcao();
+}
+
+async function confirmarRecebimentoEscalaAcao(alocacaoId) {
+  const res = await fetchProtegido(`${API_BASE}/escalas/confirmar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ alocacaoId })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  carregarMinhasEscalasAcao();
+}
+
+async function pedirTrocaEscalaAcao(alocacaoOrigemId) {
+  const membroDestinoId = prompt("Matrícula do voluntário que vai assumir seu posto:");
+  if (!membroDestinoId) return;
+  const res = await fetchProtegido(`${API_BASE}/escalas/trocas`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alocacaoOrigemId, membroDestinoId: Number(membroDestinoId) })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+}
+
+async function declararIndisponibilidadeAcao() {
+  const dataInicio = document.getElementById("meIndisponibilidadeInicio").value;
+  const dataFim = document.getElementById("meIndisponibilidadeFim").value;
+  const motivo = document.getElementById("meIndisponibilidadeMotivo").value.trim();
+  const msg = document.getElementById("resultadoIndisponibilidade");
+  if (!dataInicio || !dataFim) { msg.textContent = "Informe início e fim do período."; return; }
+  const res = await fetchProtegido(`${API_BASE}/escalas/indisponibilidade`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataInicio, dataFim, motivo })
+  });
+  const data = await res.json();
+  if (data.sucesso === false) { msg.textContent = data.mensagem; return; }
+  msg.textContent = "";
+  mostrarToast("✅ Indisponibilidade declarada.", "sucesso");
+  document.getElementById("meIndisponibilidadeMotivo").value = "";
+  carregarMinhasIndisponibilidadesAcao();
+}
+
+async function carregarMinhasIndisponibilidadesAcao() {
+  const res = await fetchProtegido(`${API_BASE}/escalas/indisponibilidade`);
+  const data = await res.json();
+  const container = document.getElementById("cxMinhasIndisponibilidades");
+  if (data.sucesso === false) { container.innerHTML = ""; return; }
+  container.innerHTML = data.indisponibilidades.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Início</th><th>Fim</th><th>Motivo</th></tr></thead><tbody>
+        ${data.indisponibilidades.map(i => `<tr><td>${new Date(i.dataInicio).toLocaleDateString("pt-BR")}</td><td>${new Date(i.dataFim).toLocaleDateString("pt-BR")}</td><td>${i.motivo || ""}</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum período de indisponibilidade declarado.</p>";
 }

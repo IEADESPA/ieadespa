@@ -57,10 +57,35 @@ async function detectarRepasseMaloteParado(pool) {
   }));
 }
 
+// Escalas de Serviço (v5.6) — quem não confirmou recebimento até
+// PrazoConfirmacaoDias depois de a escala publicar vira pendência.
+// CONVIDADO ou ACEITO (mas não CONFIRMADO/RECUSADO/CANCELADO) do lado do
+// serviço já publicado — mesmo critério de shared/escalas.js::
+// listarPendenciasConfirmacao, só que aqui é a rodada diária (cron, vB.2)
+// que varre TODAS as congregações de uma vez pros administradores de
+// escala (PermissaoAlvo 'escalas'); o líder de cada equipe já vê a mesma
+// lista em tempo real na tela "Pendências de Confirmação" (GestaoEscalas).
+async function detectarConfirmacaoEscalaPendente(pool) {
+  const result = await pool.request().query(`
+    SELECT a.AlocacaoId, m.Nome AS membroNome, eq.Nome AS equipeNome, s.Descricao AS servicoDescricao, s.DataHora AS dataHora
+    FROM EscalasAlocacoes a
+    JOIN EscalasServicos s ON s.ServicoId = a.ServicoId
+    JOIN EscalasEquipes eq ON eq.EquipeId = a.EquipeId
+    JOIN MembroReferencia m ON m.MembroId = a.MembroId
+    WHERE s.Status = 'PUBLICADA' AND a.Status IN ('CONVIDADO','ACEITO')
+      AND DATEDIFF(DAY, s.PublicadaEm, SYSUTCDATETIME()) >= s.PrazoConfirmacaoDias
+  `);
+  return result.recordset.map(a => ({
+    referenciaId: a.AlocacaoId,
+    fatoGerador: `${a.membroNome} (equipe ${a.equipeNome}) ainda não confirmou presença no serviço "${a.servicoDescricao || ""}" de ${new Date(a.dataHora).toLocaleDateString("pt-BR")}.`
+  }));
+}
+
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
   PRESTACAO_CONTAS_ATRASADA: { tabela: "PrestacoesContas", detectar: detectarPrestacaoContasAtrasada },
-  REPASSE_MALOTE_PARADO: { tabela: "RepassesInstitucionais", detectar: detectarRepasseMaloteParado }
+  REPASSE_MALOTE_PARADO: { tabela: "RepassesInstitucionais", detectar: detectarRepasseMaloteParado },
+  ESCALA_CONFIRMACAO_PENDENTE: { tabela: "EscalasAlocacoes", detectar: detectarConfirmacaoEscalaPendente }
 };
 
 module.exports = { DETECTORES };

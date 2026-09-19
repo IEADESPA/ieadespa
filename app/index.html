@@ -105,6 +105,7 @@
             <button class="btn-subaba" id="btnSubMeupainelContribuicoes" onclick="mostrarSubAbaMeupainel('contribuicoes')"><span class="icone">💰</span><span class="rotulo">Minhas Contribuições</span></button>
             <button class="btn-subaba" id="btnSubMeupainelLgpd" onclick="mostrarSubAbaMeupainel('lgpd')"><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" onclick="mostrarSubAbaMeupainel('minhasescalas')"><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" onclick="mostrarSubAbaMeupainel('seguranca')"><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
@@ -234,6 +235,12 @@
           <div class="grupo-modulo" id="grupoModuloDepartamentos" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaRelatoriosdepto" onclick="mostrarAbaSecretaria('relatoriosdepto')"><span class="icone">🗂️</span><span class="rotulo">Relatórios de Departamentos</span></button>
+          </div>
+
+          <!-- MÓDULO: ESCALAS DE SERVIÇO (v5.6) -->
+          <div class="grupo-modulo" id="grupoModuloEscalas" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaEscalas" onclick="mostrarAbaSecretaria('escalas')"><span class="icone">🗓️</span><span class="rotulo">Escalas de Serviço</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -565,6 +572,31 @@
           </div>
           <p id="resultadoSolicitacaoCarta" class="subtitle"></p>
           <div id="cxMinhasCartas"></div>
+        </div>
+
+        <!-- SUB-ABA: MINHAS ESCALAS (v5.6 — hook do Portal do Membro, vB.5).
+             Aceitar/recusar/confirmar/declarar indisponibilidade/pedir troca
+             sem abrir o painel administrativo de Escalas — mesmo padrão de
+             Minhas Contribuições/Cartas de Trânsito. A infraestrutura de
+             autoatendimento (login simplificado/PWA/push) já existe desde a
+             vB.5; esta sub-aba é o gancho real, não um placeholder. -->
+        <div id="subMeupainelMinhasescalas" class="sub-aba-secretaria" style="display:none;">
+          <h3>🗓️ Minhas Escalas</h3>
+          <p class="subtitle">Seus convites de serviço — aceite, recuse (o próximo da fila é convidado
+            automaticamente) ou confirme presença depois de aceitar. Declare período de indisponibilidade
+            pra nunca ser sugerido enquanto ele durar.</p>
+          <div id="resultadoMinhasEscalas"></div>
+
+          <hr />
+          <h4>Declarar indisponibilidade</h4>
+          <div class="barra-lista">
+            <input type="date" id="meIndisponibilidadeInicio" />
+            <input type="date" id="meIndisponibilidadeFim" />
+            <input type="text" id="meIndisponibilidadeMotivo" placeholder="Motivo (viagem, trabalho...)" style="min-width:200px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="declararIndisponibilidadeAcao()">🚫 Declarar</button>
+          </div>
+          <p id="resultadoIndisponibilidade" class="subtitle"></p>
+          <div id="cxMinhasIndisponibilidades"></div>
         </div>
 
         <!-- SUB-ABA: MINHAS TAREFAS (vB.3 — Motor de workflow genérico).
@@ -2173,6 +2205,61 @@
         </div>
         <p id="resultadoConsolidadoDepto"></p>
         <div id="painelConsolidadoDepto"></div>
+      </div>
+
+      <!-- ABA: ESCALAS DE SERVIÇO (v5.6 — auto-escalador) -->
+      <div id="abaEscalas" class="aba-secretaria" style="display:none;">
+        <h3>🗓️ Escalas de Serviço</h3>
+        <p class="subtitle">Equipes (louvor, recepção...), serviços, auto-escalador por "quem serviu por
+          último" + frequência preferida (com conflito entre equipes detectado), convite em cadeia quando
+          alguém recusa, publicação e confirmação de recebimento.</p>
+
+        <h4>Equipes</h4>
+        <div class="barra-lista">
+          <select id="esCongregacao"></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarEquipesAcao()">📂 Abrir</button>
+        </div>
+        <div class="barra-lista">
+          <input type="text" id="esNovaEquipeNome" placeholder="Nome da equipe (ex: Louvor)" />
+          <input type="number" id="esNovaEquipeLider" placeholder="Matrícula do líder" style="max-width:160px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarEquipeAcao()">➕ Criar Equipe</button>
+        </div>
+        <p id="resultadoEscalasEquipes"></p>
+        <div id="painelEquipesEscala"></div>
+        <div class="barra-lista">
+          <input type="number" id="esMembroEquipeId" placeholder="Id da equipe" style="max-width:120px;" />
+          <input type="number" id="esMembroMatricula" placeholder="Matrícula do voluntário" style="max-width:180px;" />
+          <input type="number" id="esMembroFrequencia" placeholder="Frequência preferida (dias, ex: 30)" value="30" style="max-width:220px;" />
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="adicionarMembroEquipeAcao()">➕ Incluir Voluntário na Equipe</button>
+        </div>
+
+        <hr />
+        <h4>Serviços</h4>
+        <div class="barra-lista">
+          <input type="datetime-local" id="esNovoServicoData" />
+          <input type="text" id="esNovoServicoDescricao" placeholder="Descrição (ex: Culto de Domingo à Noite)" style="min-width:220px;" />
+          <input type="number" id="esNovoServicoPrazo" placeholder="Prazo confirmação (dias)" value="3" style="max-width:180px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarServicoAcao()">➕ Criar Serviço</button>
+        </div>
+        <p id="resultadoEscalasServicos"></p>
+        <div id="painelServicosEscala"></div>
+        <div id="painelDetalheServicoEscala"></div>
+
+        <hr />
+        <h4>Trocas pendentes de aprovação (líder da equipe)</h4>
+        <div class="barra-lista">
+          <select id="esEquipeTrocas"></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarTrocasPendentesAcao()">🔍 Ver Fila</button>
+        </div>
+        <div id="painelTrocasPendentes"></div>
+
+        <hr />
+        <h4>Pendências de confirmação (líder da equipe)</h4>
+        <div class="barra-lista">
+          <select id="esEquipePendencias"></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPendenciasConfirmacaoAcao()">🔍 Ver Pendências</button>
+        </div>
+        <div id="painelPendenciasConfirmacao"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

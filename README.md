@@ -5950,11 +5950,60 @@ inteiro (situação socioeconômica de família assistida).
   arquivos novos/alterados.
 #### 🔒 Trava de Revisão 5-B — antes de encerrar a FASE 5 e avançar para a FASE 6
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v5.6 a v5.9 pelas 5 perguntas do checklist, e faz uma varredura final
-na FASE 5 inteira antes de fechar — v5.4 (Tesouraria central por
-departamento) depende do que a FASE 4/FASE B já entregaram; confirmar que a
-integração continua de pé.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditadas v5.6 a v5.9 pelas 5 perguntas do checklist
+      (19/09), com varredura final na FASE 5 inteira antes de fechar.
+
+  **1. Todo código novo roda de ponta a ponta contra o ambiente real?**
+  Sim — `npx jest` (351 testes, suíte inteira) e `node --check` em todo
+  `.js` de `api/`/`app/` sem erro. Migrações 098-100 idempotentes e
+  confirmadas rodando contra o Azure SQL de produção (`gh run view --log`
+  do run que fechou v5.9). Zero `timerTrigger` em todo `api/`. Toda rota
+  nova (`escalas`, `habilitacao-voluntarios`, `assistencia-social`, e as
+  extensões de `relatorios-departamentais`/`consolidado-departamentos`)
+  conferida entre `function.json` e `app/script.js` — nenhuma divergência.
+
+  **2. Toda tela nova abre e mostra dado de verdade?** Checagem sistemática
+  de `getElementById` (933 chamadas) contra todo `id` existente (1183) —
+  mesmos 2 falsos positivos já conhecidos (`caixaSino`,
+  `permissaoEscopoTodas`, fora do escopo da FASE 5), **nenhum bug novo**.
+
+  **3. README e código continuam narrando a mesma coisa?** Auditoria
+  cruzada de v5.6 a v5.9: todas as tabelas das migrações 098-100 batem
+  campo a campo; `temConflitoEntreEquipes` (v5.6) só considera
+  CONVIDADO/ACEITO/CONFIRMADO como conflito; `atendeRegraSeisMeses` (v5.7)
+  usa `MembroReferencia.DataAdmissao` sem coluna nova, validade de 24
+  meses confirmada; `REABRIR` (v5.8) é ação distinta de `RETIFICAR` na
+  máquina de estados e zera `ValorParaGeral`/`ValorParaLocal`;
+  `ConsentimentoObtidoEm NOT NULL` (v5.9) confirmado na migração 100, e
+  `podeAssinarParecer` recusa profissional sem credenciamento ativo.
+  Nenhuma das 3 permissões novas (`escalas`, `habilitacao_voluntarios`,
+  `assistencia_social`) tem migração de concessão automática — como o
+  texto promete. Referências cruzadas conferidas (`vB.2`, `vB.5`, `v5.3`,
+  `v5.4`, `v5.5.1`, `v7.5`, `v7.7`, `v9.6`, `v12.2`, migração 004) apontam
+  pra seções/migrações reais.
+
+  **4. O que ficou pra trás foi de fato corrigido, não só anotado?** Nenhum
+  `TODO`/`FIXME`/gambiarra novo no diff de v5.6-v5.9. **Varredura final da
+  FASE 5 inteira** (pedida explicitamente pelo texto desta trava):
+  confirmada a integração v5.4↔FASE 4/FASE B ainda de pé depois de 4
+  versões por cima dela — `shared/tesouraria.js::saldoCentroCusto` continua
+  somando Centro de Custo `DEPTO_*` a partir de
+  `RelatoriosDepartamentais.ValorParaLocal`, `GestaoSaidas` continua
+  chamando `podeOperarCentroCusto` em toda leitura/escrita, e a migração
+  096 (permissão `tesouraria_departamental`) continua concedida a
+  Presidente/Secretário Geral em produção — nada quebrou silenciosamente.
+
+  **5. Deploy real, de ponta a ponta, aconteceu?** Sim — `gh run list`
+  confirma `success` nos 4 commits de v5.6 a v5.9 (`f996283`, `3092f2c`,
+  `8313732`, `a2e8ff2`), nenhuma repetição do problema de CI da v5.3.
+  Testado ao vivo agora: `https://app.ieadespa.org.br/` no ar (200);
+  `/api/escalas`, `/api/habilitacao-voluntarios` e
+  `/api/assistencia-social` devolvem `401` sem sessão.
+
+  **FASE 5 encerrada.** v5.1 a v5.9 (+v5.5.1) entregues, auditadas em 2
+  travas (5-A e 5-B), com deploy real confirmado em cada uma. Avança pra
+  FASE 6.
 
 ### FASE 6 — EBD (Escola Bíblica Dominical)
 

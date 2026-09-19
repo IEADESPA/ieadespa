@@ -2740,6 +2740,60 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarConsolidadoRevistasEbdAcao()">📊 Ver consolidado</button>
         </div>
         <div id="painelConsolidadoRevistasEbd"></div>
+
+        <hr />
+        <h3>💰 Financeiro (v6.7)</h3>
+        <p class="subtitle">Fecha o loop aberto lá na v5.5: o dia a dia do financeiro da EBD (ofertas do
+          culto + lançamentos manuais) mora aqui, na FASE 6 — o consolidado do mês vira <strong>sugestão
+          inicial</strong> do campo "Ofertas" do relatório departamental (FASE 5) assim que o rascunho do
+          mês é aberto, mas continua 100% editável depois (diferente dos campos automáticos da v5.5, que
+          ficam travados — aqui o Superintendente só confirma ou ajusta). Este módulo <strong>não escreve
+          na Tesouraria</strong> — quem concilia com o Centro de Custo geral continua sendo exclusivamente
+          a v5.4, pelo mesmo caminho dos outros 7 departamentos. Por ser dado financeiro, toda ação aqui
+          exige "ebd_gestao" (nunca o professor de turma, diferente de v6.2/v6.6).</p>
+
+        <h4>Oferta da lição (por domingo — ancorada em EbdLicoes)</h4>
+        <div class="barra-lista">
+          <input type="number" id="finOfertaLicaoId" placeholder="Id da lição" style="max-width:140px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarOfertaLicaoEbdAcao()">🔍 Ver oferta desta lição</button>
+        </div>
+        <div class="barra-lista">
+          <input type="number" id="finOfertaValor" placeholder="Valor da oferta (R$)" step="0.01" style="max-width:180px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarOfertaLicaoEbdAcao()">💾 Registrar/ajustar oferta</button>
+        </div>
+        <p id="resultadoOfertaEbd" class="subtitle"></p>
+
+        <hr />
+        <h4>Lançamentos manuais (entradas/saídas fora da oferta do culto)</h4>
+        <div class="barra-lista">
+          <select id="finCongregacao"></select>
+          <input type="number" id="finMes" placeholder="Mês (1-12)" min="1" max="12" style="max-width:120px;" />
+          <input type="number" id="finAno" placeholder="Ano" style="max-width:120px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarLancamentosFinanceiroEbdAcao()">📂 Ver lançamentos do mês</button>
+        </div>
+        <div id="painelLancamentosFinanceiroEbd"></div>
+
+        <details style="margin:8px 0;">
+          <summary>➕ Novo lançamento manual</summary>
+          <div class="barra-lista">
+            <input type="date" id="finNovoData" style="max-width:160px;" />
+            <select id="finNovoTipo">
+              <option value="ENTRADA">Entrada</option>
+              <option value="SAIDA">Saída</option>
+            </select>
+            <input type="number" id="finNovoValor" placeholder="Valor (R$)" step="0.01" style="max-width:160px;" />
+          </div>
+          <textarea id="finNovoDescricao" placeholder="Descrição (ex: compra de material, doação extra)" rows="2" style="width:100%;"></textarea>
+          <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="criarLancamentoFinanceiroEbdAcao()">💾 Registrar lançamento</button>
+        </details>
+        <p id="resultadoLancamentoFinanceiroEbd" class="subtitle"></p>
+
+        <hr />
+        <h4>Consolidado do mês (o número que alimenta o relatório departamental)</h4>
+        <div class="barra-lista">
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarConsolidadoFinanceiroEbdAcao()">📊 Ver consolidado (usa congregação/mês/ano acima)</button>
+        </div>
+        <div id="painelConsolidadoFinanceiroEbd"></div>
       </div>
 
       <!-- ABA: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico, module-

@@ -5389,12 +5389,17 @@ onde vier.
       Até a FASE 6 existir, o campo 07 recebe lançamento manual como os
       outros 7 (é o relatório funcionando sem a fase de trabalho por trás,
       não um bloqueio).
-- [ ] Financeiro da EBD (v6.7) segue o mesmo princípio: o dia a dia (ofertas
+- [x] Financeiro da EBD (v6.7) segue o mesmo princípio: o dia a dia (ofertas
       lançadas por congregação) mora na FASE 6, perto de onde o trabalho
       acontece; o consolidado do mês **exporta** pra `TesourariasDepartamento`
       (v5.4, depto EBD) — é a v5.4, não a v6.7, quem concilia com o Centro de
       Custo geral da FASE 4, exatamente pelo mesmo caminho que os outros 7
       departamentos usam.
+
+  Implementado na v6.7 (`shared/ebdFinanceiro.js`): o consolidado do ledger
+  vira valor de PARTIDA ainda editável do campo `ofertas`, sem nenhuma
+  escrita direta em `TesourariasDepartamento`, exatamente como este item
+  previa.
 - [x] UCADESPA/UMADESPA/USADESPA/UHADESPA puxam afiliados + situação de
       comunhão direto de `MembroReferencia.DepartamentoId`/`SituacaoMembro`
       — pré-preenche o bloco de contagem (`estado`) sem o líder local
@@ -6494,14 +6499,67 @@ desempate do ranking.
 
 #### v6.7 — Financeiro da EBD
 
-- [ ] Ofertas + lançamentos manuais por congregação — dia a dia, aqui na
+- [x] Ofertas + lançamentos manuais por congregação — dia a dia, aqui na
       FASE 6, perto de onde o trabalho acontece.
-- [ ] Exporta o consolidado do mês pra `TesourariasDepartamento` (v5.4,
+- [x] Exporta o consolidado do mês pra `TesourariasDepartamento` (v5.4,
       depto EBD) — **não** integra direto com a FASE 4: quem concilia com o
       Centro de Custo geral é a v5.4, mesmo caminho dos outros 7
       departamentos (ver princípio "relatório não é trabalho" na v5.5). A
       EBD só chega lá com o financeiro do mês já pronto, em vez de digitado
       do zero.
+
+  Implementado: migração 107 (`EbdOfertas` + `EbdLancamentosFinanceiros`) +
+  `shared/ebdFinanceiro.js` (lógica pura — validação, `calcularTotalOfertas`,
+  `calcularTotalLancamentos`, `calcularConsolidadoMensal` — + as funções finas
+  de banco) + `GestaoEbdFinanceiro` (rotas `GET/POST /api/ebd-financeiro/oferta`,
+  `GET/POST/DELETE /api/ebd-financeiro/lancamentos`, `GET
+  /api/ebd-financeiro/consolidado`). Oferta é ancorada em `EbdLicoes` (v6.2,
+  já o "domingo" natural da FASE 6 — no máximo uma por lição); lançamento
+  manual é solto por Congregação+Data (ENTRADA/SAÍDA + descrição livre),
+  cobrindo o que não é a oferta do culto em si.
+
+  **Item 2 nunca escreve em `TesourariasDepartamento`** — o consolidado do
+  mês (ofertas + lançamentos líquidos) só alimenta, como VALOR DE PARTIDA, o
+  campo `ofertas` (FINANCEIRO/FLUXO, migração 092) do relatório
+  departamental do depto EBD, no momento em que o rascunho do mês nasce
+  (`GestaoRelatoriosDepartamentais::POST`, hook em `shared/ebdFinanceiro.js::
+  buscarValorPrePreenchimentoOfertas`); quem concilia esse número com o
+  Centro de Custo geral da FASE 4 continua sendo exclusivamente a v5.4
+  (`congelarRateio`), pelo mesmo caminho que os outros 7 departamentos usam
+  — nenhuma linha nova nesse pipeline.
+
+  **Pré-preenchimento, não trava**: deliberadamente DIFERENTE do mecanismo
+  `CAMPOS_AUTOMATICOS_AFILIACAO` da v5.5 (congregados/membrosEmComunhao/
+  membrosSemComunhao), que é ESTADO e fica travado — recalculado a cada
+  leitura, com `gravarValores` recusando persistir qualquer valor enviado
+  pra ele. O campo `ofertas` é FLUXO, e a própria v5.5 já previa que o
+  Superintendente Local "só confirma ou ajusta" o valor medido pela FASE 6 —
+  por isso o valor do ledger só é copiado UMA VEZ, na criação do rascunho,
+  pelo mesmo caminho de inserção dos campos ESTADO normais; depois disso
+  segue 100% editável por PUT, sem nenhum bloqueio novo em `gravarValores`.
+  Um teste dedicado (`shared/__tests__/ebdFinanceiro.test.js`) confirma que
+  `ofertas` nunca aparece em `CAMPOS_AUTOMATICOS_AFILIACAO` — o único mapa
+  que o guard de `gravarValores` consulta — então nunca é bloqueado como os
+  3 campos automáticos da v5.5.
+
+  **Permissão conservadora**: diferente de v6.2/v6.6 (que liberam o
+  professor da própria turma), toda ação financeira aqui exige sempre
+  "ebd_gestao" dentro do escopo territorial da Congregação — dinheiro de
+  oferta é decisão de nível Congregação (Superintendente Local), não de
+  turma, mesmo espírito cauteloso da v5.9 (Assistência Social) com dado
+  sensível: quando o dado pede mais cuidado, o sistema erra pro lado de
+  restringir mais, não menos.
+
+  Frontend: painel "💰 Financeiro" na aba EBD (`app/index.html`/
+  `app/script.js`) — registrar/ajustar oferta por lição, lançar/excluir
+  lançamento manual por congregação+mês, e ver o consolidado do mês (o
+  mesmo número que vira sugestão no relatório departamental).
+
+  27 testes novos em `shared/__tests__/ebdFinanceiro.test.js` (validação de
+  oferta/lançamento, `calcularConsolidadoMensal`, o hook de
+  pré-preenchimento só disparando pro depto EBD, e a confirmação de que o
+  campo continua gravável) — suíte completa em 527/527 (38 suítes; era
+  500/37 depois da v6.6).
 
 #### 🔒 Trava de Revisão 6-A — antes de avançar para a v6.8
 

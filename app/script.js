@@ -4985,7 +4985,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "escalas") carregarOpcoesEscalasAcao();
   if (aba === "habilitacao") carregarOpcoesHabilitacaoAcao();
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
-  if (aba === "ebd") { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesChamadaEbdAcao(); }
+  if (aba === "ebd") { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesChamadaEbdAcao(); carregarOpcoesFinanceiroEbdAcao(); }
   if (aba === "conquistas") { carregarTiposEventoConquistaAcao(); carregarCatalogoConquistaAdminAcao(); }
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -13197,6 +13197,119 @@ async function carregarConsolidadoRevistasEbdAcao() {
         </div>
       `).join("")
     : "<p class='subtitle'>Nenhum pedido encontrado.</p>";
+}
+
+// ---- Financeiro (v6.7) ----
+// Ofertas ancoradas em EbdLicoes (v6.2) + lançamentos manuais soltos por
+// Congregação+Data. O consolidado do mês vira sugestão INICIAL do campo
+// "Ofertas" do relatório departamental (FASE 5) — continua editável
+// depois (ver README v6.7); este painel nunca escreve na Tesouraria.
+async function carregarOpcoesFinanceiroEbdAcao() {
+  const sel = document.getElementById("finCongregacao");
+  if (sel && !sel.dataset.montado) {
+    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    sel.dataset.montado = "1";
+  }
+}
+
+async function carregarOfertaLicaoEbdAcao() {
+  const licaoId = document.getElementById("finOfertaLicaoId").value;
+  const resultadoEl = document.getElementById("resultadoOfertaEbd");
+  if (!licaoId) { resultadoEl.textContent = "Informe o id da lição."; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/oferta?licaoId=${licaoId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { resultadoEl.textContent = data.mensagem; return; }
+  if (data.oferta) {
+    document.getElementById("finOfertaValor").value = data.oferta.valor;
+    resultadoEl.textContent = `Oferta já registrada: R$ ${Number(data.oferta.valor).toFixed(2)} (pode ajustar e salvar de novo).`;
+  } else {
+    resultadoEl.textContent = "Nenhuma oferta registrada ainda para esta lição.";
+  }
+}
+
+async function registrarOfertaLicaoEbdAcao() {
+  const licaoId = document.getElementById("finOfertaLicaoId").value;
+  const valor = document.getElementById("finOfertaValor").value;
+  const resultadoEl = document.getElementById("resultadoOfertaEbd");
+  if (!licaoId || valor === "") { resultadoEl.textContent = "Informe o id da lição e o valor da oferta."; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/oferta`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ licaoId: Number(licaoId), valor: Number(valor) })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultadoEl.textContent = data.mensagem || "";
+}
+
+async function carregarLancamentosFinanceiroEbdAcao() {
+  const congregacaoId = document.getElementById("finCongregacao").value;
+  const mes = document.getElementById("finMes").value;
+  const ano = document.getElementById("finAno").value;
+  const container = document.getElementById("painelLancamentosFinanceiroEbd");
+  if (!congregacaoId || !mes || !ano) { container.innerHTML = ""; mostrarToast("Escolha a congregação, o mês e o ano.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/lancamentos?congregacaoId=${congregacaoId}&mes=${mes}&ano=${ano}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  const lancamentos = data.lancamentos || [];
+  container.innerHTML = lancamentos.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>
+        ${lancamentos.map(l => `<tr>
+          <td>${new Date(l.data).toLocaleDateString("pt-BR")}</td><td>${l.tipo === "ENTRADA" ? "Entrada" : "Saída"}</td>
+          <td>${l.descricao}</td><td>R$ ${Number(l.valor).toFixed(2)}</td>
+          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;padding:2px 8px;" onclick="excluirLancamentoFinanceiroEbdAcao(${l.lancamentoId})">🗑️</button></td>
+        </tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum lançamento manual neste mês.</p>";
+}
+
+async function criarLancamentoFinanceiroEbdAcao() {
+  const congregacaoId = document.getElementById("finCongregacao").value;
+  const data = document.getElementById("finNovoData").value;
+  const tipo = document.getElementById("finNovoTipo").value;
+  const descricao = document.getElementById("finNovoDescricao").value.trim();
+  const valor = document.getElementById("finNovoValor").value;
+  const resultadoEl = document.getElementById("resultadoLancamentoFinanceiroEbd");
+  if (!congregacaoId || !data || !descricao || valor === "") { resultadoEl.textContent = "Escolha a congregação e informe data, descrição e valor."; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/lancamentos`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ congregacaoId: Number(congregacaoId), data, tipo, descricao, valor: Number(valor) })
+  });
+  const resData = await res.json();
+  avisarResultado(resData);
+  resultadoEl.textContent = resData.mensagem || "";
+  if (resData.sucesso) {
+    document.getElementById("finNovoDescricao").value = "";
+    document.getElementById("finNovoValor").value = "";
+    carregarLancamentosFinanceiroEbdAcao();
+  }
+}
+
+async function excluirLancamentoFinanceiroEbdAcao(lancamentoId) {
+  if (!confirm("Excluir este lançamento manual?")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/lancamentos?id=${lancamentoId}`, { method: "DELETE" });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarLancamentosFinanceiroEbdAcao();
+}
+
+async function carregarConsolidadoFinanceiroEbdAcao() {
+  const congregacaoId = document.getElementById("finCongregacao").value;
+  const mes = document.getElementById("finMes").value;
+  const ano = document.getElementById("finAno").value;
+  const container = document.getElementById("painelConsolidadoFinanceiroEbd");
+  if (!congregacaoId || !mes || !ano) { container.innerHTML = ""; mostrarToast("Escolha a congregação, o mês e o ano.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/consolidado?congregacaoId=${congregacaoId}&mes=${mes}&ano=${ano}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = `<p class="subtitle">
+      Ofertas do culto: <strong>R$ ${Number(data.totalOfertas).toFixed(2)}</strong> (${data.ofertas.length} domingo(s) lançado(s)) ·
+      Entradas manuais: <strong>R$ ${Number(data.totalEntradas).toFixed(2)}</strong> ·
+      Saídas manuais: <strong>R$ ${Number(data.totalSaidas).toFixed(2)}</strong>
+    </p>
+    <p><strong>Consolidado do mês: R$ ${Number(data.consolidado).toFixed(2)}</strong> — é este valor que vira a
+      sugestão inicial do campo "Ofertas" quando o rascunho do relatório departamental (FASE 5) deste mês for
+      aberto (ainda editável lá, se precisar ajustar).</p>`;
 }
 
 async function carregarVisaoAgrupadaEbdAcao() {

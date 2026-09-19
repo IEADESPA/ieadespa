@@ -16,6 +16,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const rd = require("../shared/relatoriosDepartamentais");
 const td = require("../shared/tesourariaDepartamental");
+const ebdFinanceiro = require("../shared/ebdFinanceiro");
 
 const SELECT_RELATORIO_BASE = `
   SELECT r.RelatorioDepartamentalId AS relatorioDepartamentalId, r.CongregacaoId AS congregacaoId,
@@ -358,6 +359,20 @@ module.exports = async function (context, req) {
     // enviado desta congregação+departamento (mesmo espírito de IR
     // pré-preenchido) — campos FLUXO nascem sem linha (0 na leitura).
     const prePreenchido = await rd.buscarValoresParaPrePreencher(pool, { congregacaoId, departamentoId, antesDeMes: mes, antesDeAno: ano });
+
+    // v6.7 — no depto EBD (e só nele), o campo FLUXO `ofertas` não nasce
+    // zerado como nos outros 7: recebe, como sugestão INICIAL, o
+    // consolidado do mês já lançado na FASE 6 (ofertas do culto +
+    // lançamentos manuais, shared/ebdFinanceiro.js). Isso é só o valor de
+    // PARTIDA do rascunho — continua 100% editável depois por PUT normal
+    // (gravarValores nunca soube dessa origem, então não há bloqueio de
+    // gravação aqui, diferente do mecanismo readonly da v5.5
+    // (CAMPOS_AUTOMATICOS_AFILIACAO), que é pra campos ESTADO sempre
+    // certos pelo cadastro — `ofertas` é FLUXO e a v5.5 já previa que o
+    // Superintendente Local "só confirma ou ajusta", nunca fica travado.
+    const valorOfertasEbd = await ebdFinanceiro.buscarValorPrePreenchimentoOfertas(pool, { departamentoId, congregacaoId, mes, ano });
+    if (valorOfertasEbd !== null) prePreenchido.ofertas = valorOfertasEbd;
+
     const camposPorNome = Object.fromEntries(schema.campos.map(c => [c.nomeCampo, c]));
     for (const [nomeCampo, valor] of Object.entries(prePreenchido)) {
       const campo = camposPorNome[nomeCampo];

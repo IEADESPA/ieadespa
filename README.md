@@ -6270,7 +6270,7 @@ decisão evita o retrabalho de generalizar depois — mesmo princípio já usado
 em `shared/estatuto.js`/`shared/parentesco.js`, escritos uma vez e
 reaproveitados por meia dúzia de módulos diferentes ao longo da FASE B.
 
-- [ ] `CatalogoConquistas` (nome, ícone, descrição, `oculta` até desbloquear,
+- [x] `CatalogoConquistas` (nome, ícone, descrição, `oculta` até desbloquear,
       `préRequisitos` — progressão em cadeia, não catálogo plano) e
       `RegrasConquista` com um **tipo de regra genérico** (não hardcoded por
       módulo): `contagem_evento` (ex: nº de presenças), `sequencia` (ex: N
@@ -6280,24 +6280,91 @@ reaproveitados por meia dúzia de módulos diferentes ao longo da FASE B.
       **tipo de evento** (`EBD_PRESENCA`, e no futuro
       `REUNIAO_PRESENCA`/`ESCALA_SERVICO`/`CONTRIBUICAO`, sem alterar o motor
       pra adicionar um tipo novo, só cadastrar).
-- [ ] `ConquistasDesbloqueadas` por `MembroId` (não por "Aluno" — é a mesma
+- [x] `ConquistasDesbloqueadas` por `MembroId` (não por "Aluno" — é a mesma
       pessoa em `MembroReferencia` de todo o resto do sistema), motor
       avaliado **na leitura/no lançamento do evento-gatilho**, nunca em job
       manual.
-- [ ] `ScoreConfig` (pesos por tipo de evento, configurável por Campo) +
+- [x] `ScoreConfig` (pesos por tipo de evento, configurável por Campo) +
       pontuação unificada por pessoa, usada tanto no painel individual
       quanto num ranking por escopo (turma/congregação/área).
-- [ ] Painel Admin (`/conquistas` — mesmo espírito do `chamada-ebd`) pra
+- [x] Painel Admin (`/conquistas` — mesmo espírito do `chamada-ebd`) pra
       criar/editar catálogo e regras sem alteração de código.
-- [ ] **Primeiro consumidor: EBD** — presença semanal, sequência, gabarito de
+- [x] **Primeiro consumidor: EBD** — presença semanal, sequência, gabarito de
       atividade, trimestre perfeito (v6.2/v6.3) viram `RegrasConquista` reais,
       não um caso especial do motor.
-- [ ] **Consumidores futuros, só registrados como intenção** (não
+- [x] **Consumidores futuros, só registrados como intenção** (não
       implementados agora — cada um vira um item pontual numa versão futura
       quando chegar a vez, só cadastrando regra nova): frequência em
       Reuniões, confirmação de Escala de Serviço (v5.6), fidelidade de
       Contribuição. Generalizar o motor agora custa pouco a mais; forçar
       esses consumidores a existir agora custaria reabrir versões fechadas.
+
+Migração 104 (`sql/migrations/104_conquistas_motor.sql`) cria as 6 tabelas
+genéricas — `ConquistaTiposEvento` (registro de tipo de evento, a peça que
+faz "cadastrar, não codificar" ser verdade), `ConquistasEventos` (log de
+ocorrências, ÚNICA fonte que o motor lê), `CatalogoConquistas`,
+`RegrasConquista`, `ConquistasDesbloqueadas` e `ScoreConfig` — e semeia o
+primeiro consumidor real: os tipos `EBD_PRESENCA`/`EBD_ATIVIDADE_RESPOSTA` e
+4 conquistas reais (`Primeira Presença` → `Sequência de Ouro` → `Trimestre
+Perfeito`, em cadeia de pré-requisito, mais `Gabarito Nota Máxima`,
+independente). `api/shared/conquistas.js` é o motor: os 5 avaliadores de
+regra (`avaliarContagemEvento`, `avaliarSequencia`, `avaliarCombinacaoExata`,
+`avaliarMarcoUnico`, `avaliarPeriodoPerfeito`) são funções puras que recebem
+o histórico de eventos do Membro (já filtrado por `TipoEvento`) e a
+`ConfigJson` da regra, e devolvem `true`/`false` sem tocar banco —
+`sequencia` calcula a maior corrida de datas espaçadas por `intervaloDias`
+(7 por padrão, "N domingos seguidos"); `periodo_perfeito` exige um mínimo de
+ocorrências dentro da janela (prova de que "houve expediente" — sem isso,
+ausência total de dado passaria por "perfeito") e zero eventos que combinem
+com `filtroFalha`; `combinacao_exata` exige que TODOS os campos de
+`camposEsperados` estejam no payload do MESMO evento (nunca a soma de dois
+eventos parciais). Pré-requisito é uma corrente linear
+(`PreRequisitoConquistaId`, auto-referência) — só elegível se o pré-requisito
+já estiver desbloqueado para aquele Membro. `oculta` controla só a
+visibilidade na listagem (`visivelNoCatalogo`); a conquista continua sendo
+avaliada normalmente por baixo. `avaliarConquistasParaMembro` é o núcleo:
+exclui do cálculo qualquer `ConquistaId` já presente em
+`ConquistasDesbloqueadas` ANTES de rodar qualquer regra (uma conquista
+desbloqueada nunca é reavaliada em lançamentos futuros) e roda em passadas
+sucessivas até estabilizar, porque desbloquear uma conquista pode liberar
+imediatamente a próxima da cadeia no mesmo instante. `registrarEventoEAvaliar`
+é o entry point único que os módulos consumidores chamam — grava o evento e
+avalia na mesma chamada, nunca em job (zero `timerTrigger`, mesmo princípio
+de `calcularStatusHabilitacao`/v5.7 e das Cartas de Trânsito/v017:
+"calculado, nunca marcação/job manual"). Pontuação (`calcularScoreMembro`)
+soma peso por `TipoEvento` (`ScoreConfig`, com override territorial resolvido
+por `shared/escopo.js::ancestraisTerritoriais`, do nível mais amplo pro mais
+específico) mais o bônus fixo de cada conquista desbloqueada — um evento só
+soma se seu payload não marcar `contaParaScore:false` (convenção genérica,
+sem nome de campo específico de EBD: é assim que `shared/ebdChamada.js`
+loga uma AUSENTE como evento, pra `periodo_perfeito` enxergar a falta, sem
+inflar o placar de quem faltou). Ranking (`listarRanking`/`ordenarRanking`)
+reaproveita `shared/escopo.js::resolverEscopoCongregacoes` pros escopos
+territoriais e resolve "TURMA" à parte (não é nível de `Lideranca`); empate
+é desfeito por (1) mais conquistas desbloqueadas, (2) quem chegou primeiro
+(desbloqueio mais antigo), (3) `MembroId` crescente — nunca "aleatório" entre
+execuções. `api/GestaoConquistas/index.js` expõe tudo por HTTP: administrar
+catálogo/regras/tipos de evento exige a permissão própria
+`conquistas_gestao` (nunca concedida por padrão, mesmo padrão de
+`ebd_gestao`/v6.1); consultar o próprio painel (`GET /conquistas/painel`) e o
+ranking (`GET /conquistas/ranking`) fica aberto a qualquer usuário logado —
+ver o painel de OUTRO Membro exige a permissão de gestão (mesmo espírito de
+"admin gerencia, todo mundo vê o seu" da Habilitação de Voluntários/v5.7).
+No front, o painel pessoal e o ranking geral vivem em "Meu Painel → Minhas
+Conquistas" (`app/index.html`/`app/script.js`), e a administração do
+catálogo numa aba própria "Conquistas" (`conquistas_gestao`). O hook com o
+primeiro consumidor fica em `shared/ebdChamada.js::registrarPresencaAluno`
+(loga `EBD_PRESENCA` a cada presença/ausência lançada — visitante fica de
+fora, não tem `MembroId`) e em `shared/ebdAtividades.js::registrarRespostaAluno`
+(loga `EBD_ATIVIDADE_RESPOSTA` com o percentual corrente da atividade a cada
+resposta lançada/corrigida — a regra `combinacao_exata` de "Gabarito Nota
+Máxima" dispara quando esse percentual chega a 100), os dois fail-soft (uma
+falha do motor de conquistas nunca derruba o lançamento de presença/resposta
+em si, mesmo espírito de `registrarAuditoria`). 36 testes novos em
+`api/shared/__tests__/conquistas.test.js` (464 no total, eram 428) cobrem os
+5 avaliadores de regra isoladamente, a cadeia de pré-requisito, a
+visibilidade oculta/desbloqueada, `calcularScoreMembro` e os 3 níveis de
+desempate do ranking.
 
 #### v6.5 — Certificados
 

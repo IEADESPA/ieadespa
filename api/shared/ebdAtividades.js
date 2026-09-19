@@ -53,6 +53,7 @@
 // depois — mesmo padrão de shared/ebdChamada.js / shared/ebdTurmas.js.
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
+const conquistas = require("./conquistas");
 
 const TIPOS_QUESTAO = {
   MULTIPLA_ESCOLHA: "MULTIPLA_ESCOLHA",
@@ -386,7 +387,39 @@ async function registrarRespostaAluno(pool, { questaoId, alunoId, resposta, regi
     dadosDepois: { questaoId, alunoId, correta }
   });
 
+  await logarEventoConquistaAtividade(pool, { atividadeId: questao.atividadeId, alunoId });
+
   return { sucesso: true, correta, mensagem: "✅ Resposta registrada." };
+}
+
+// v6.4 — hook do motor de conquistas (shared/conquistas.js): a cada resposta
+// lançada/corrigida, recalcula o percentual ATUAL da atividade pro aluno
+// (calcularResumoAluno, já existente desde o v6.3) e loga um evento
+// EBD_ATIVIDADE_RESPOSTA — a regra combinacao_exata de "Gabarito Nota
+// Máxima" (migração 104) só dispara quando esse percentual chega a 100,
+// então logar em toda resposta (não só na última) é seguro e mais simples
+// do que tentar adivinhar "essa foi a última questão". Fail-soft, mesmo
+// espírito do hook em shared/ebdChamada.js — nunca derruba o lançamento.
+async function logarEventoConquistaAtividade(pool, { atividadeId, alunoId }) {
+  try {
+    const contexto = await pool.request().input("atividadeId", sql.Int, atividadeId).input("alunoId", sql.Int, alunoId).query(`
+      SELECT l.Data AS Data, a.MembroId AS MembroId
+      FROM EbdAtividades ativ
+      JOIN EbdLicoes l ON l.LicaoId = ativ.LicaoId
+      JOIN EbdAlunos a ON a.AlunoId = @alunoId
+      WHERE ativ.AtividadeId = @atividadeId
+    `);
+    const row = contexto.recordset[0];
+    if (!row) return;
+    const resumo = await calcularResumoAluno(pool, { atividadeId, alunoId });
+    await conquistas.registrarEventoEAvaliar(pool, {
+      membroId: row.MembroId, tipoEvento: "EBD_ATIVIDADE_RESPOSTA",
+      payload: { atividadeId, percentual: resumo.percentual, respondidas: resumo.respondidas, totalQuestoes: resumo.totalQuestoes },
+      ocorridoEm: row.Data
+    });
+  } catch (e) {
+    console.error("[CONQUISTAS] falha ao avaliar evento EBD_ATIVIDADE_RESPOSTA:", e.message);
+  }
 }
 
 // Correção manual — sempre disponível, qualquer tipo (ver preâmbulo:

@@ -861,7 +861,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial", "ebd"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial", "ebd", "conquistas"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -893,6 +893,14 @@ const ABA_PERMISSOES_ALT = {
   // concedida por padrão — diferente do Departamento cadastral "EBD" que
   // já existe pros Relatórios Departamentais (v5.2/v5.5/v5.8).
   ebd: ["ebd_gestao"],
+  // v6.4 — motor de conquistas genérico (não é EBD-only, ver
+  // shared/conquistas.js): administrar catálogo/regras exige
+  // "conquistas_gestao", nunca concedida por padrão. A aba em si só
+  // aparece pra quem tem essa permissão (é o painel ADMIN); o painel
+  // pessoal/ranking de conquistas fica dentro de "Meu Painel", visível a
+  // qualquer matrícula (mesmo espírito de "admin gerencia, todo mundo vê
+  // o seu" da Habilitação de Voluntários/v5.7).
+  conquistas: ["conquistas_gestao"],
   // v5.4 (correção) — quem só tem "tesouraria_departamental" (líder local/
   // geral de departamento) também acessa Financeiro → Saídas, pra gastar o
   // saldo do próprio departamento (Centro de Custo DEPTO_<SIGLA>) pelo
@@ -956,6 +964,7 @@ const MODULOS = {
   habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao"] },
   assistenciasocial: { titulo: "Assistência Social", icone: "🤝", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
   ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "📖", abaEntrada: "ebd", abas: ["ebd"] },
+  conquistas: { titulo: "Conquistas e Gamificação", icone: "🏆", abaEntrada: "conquistas", abas: ["conquistas"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
@@ -1006,11 +1015,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "minhasconquistas", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação",
+  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", minhasconquistas: "Minhas Conquistas",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1030,6 +1039,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "contribuicoes") { carregarOpcoesCategoriasEntrada(); prepararFormAutolancamento(); carregarMinhasContribuicoes(); }
   if (sub === "minhasescalas") { carregarMinhasEscalasAcao(); carregarMinhasIndisponibilidadesAcao(); }
   if (sub === "minhahabilitacao") carregarMinhaHabilitacaoAcao();
+  if (sub === "minhasconquistas") carregarMinhasConquistasAcao();
   if (sub === "tarefas") filtrarMinhasTarefas(filtroMinhasTarefasAtual);
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarDelegacoes(); }
@@ -4976,6 +4986,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "habilitacao") carregarOpcoesHabilitacaoAcao();
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
   if (aba === "ebd") { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesChamadaEbdAcao(); }
+  if (aba === "conquistas") { carregarTiposEventoConquistaAcao(); carregarCatalogoConquistaAdminAcao(); }
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -4991,7 +5002,8 @@ const TITULOS_MODULOS = {
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos",
   mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos",
   escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários",
-  assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)"
+  assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)",
+  conquistas: "Conquistas e Gamificação"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -12929,4 +12941,156 @@ async function carregarVisaoAgrupadaEbdAcao() {
         </div>
       `).join("")
     : "<p class='subtitle'>Nenhuma turma encontrada.</p>";
+}
+
+// ---- CONQUISTAS E GAMIFICAÇÃO (v6.4) ----
+// Motor genérico (shared/conquistas.js) — EBD é só o primeiro consumidor.
+// Duas telas: administração do catálogo/regras/tipos de evento (aba própria,
+// "conquistas_gestao") e o autoatendimento pessoal/ranking geral, dentro de
+// Meu Painel (aberto a qualquer matrícula, mesmo espírito de "Minhas
+// Escalas"/"Minha Habilitação").
+
+// -- Autoatendimento (Meu Painel → Minhas Conquistas) --
+async function carregarMinhasConquistasAcao() {
+  const container = document.getElementById("resultadoMinhasConquistas");
+  const res = await fetchProtegido(`${API_BASE}/conquistas/painel`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = `
+    <p><strong>Pontuação atual:</strong> ${data.score}</p>
+    <div style="display:flex; flex-wrap:wrap; gap:10px;">
+      ${data.catalogo.map(c => `
+        <div class="cartao-area-ebd" style="min-width:200px; opacity:${c.desbloqueada ? "1" : "0.5"};">
+          <div style="font-size:1.6em;">${c.icone || "🏆"}</div>
+          <strong>${c.nome}</strong>
+          <p class="subtitle">${c.descricao || ""}</p>
+          <p>${c.desbloqueada ? "✅ Desbloqueada" : "🔒 Não desbloqueada"} · +${c.pontosBonus} pts</p>
+        </div>
+      `).join("")}
+    </div>
+  `;
+  carregarRankingConquistasAcao();
+}
+
+async function carregarRankingConquistasAcao() {
+  const container = document.getElementById("resultadoRankingConquistas");
+  const res = await fetchProtegido(`${API_BASE}/conquistas/ranking?escopoTipo=GLOBAL`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.ranking.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>#</th><th>Nome</th><th>Pontuação</th><th>Conquistas</th></tr></thead><tbody>
+        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${r.nome}</td><td>${r.score}</td><td>${r.totalConquistas}</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Ninguém no ranking ainda.</p>";
+}
+
+// -- Administração (aba Conquistas — exige "conquistas_gestao") --
+async function carregarTiposEventoConquistaAcao() {
+  const container = document.getElementById("painelTiposEventoConquista");
+  const res = await fetchProtegido(`${API_BASE}/conquistas/tipos-evento`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.tipos.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Descrição</th><th>Módulo</th></tr></thead><tbody>
+        ${data.tipos.map(t => `<tr><td>${t.tipoEvento}</td><td>${t.descricao || "-"}</td><td>${t.moduloOrigem || "-"}</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum tipo de evento cadastrado ainda.</p>";
+}
+
+async function criarTipoEventoConquistaAcao() {
+  const tipoEvento = document.getElementById("conqNovoTipoEventoCodigo").value.trim();
+  const descricao = document.getElementById("conqNovoTipoEventoDescricao").value.trim();
+  const moduloOrigem = document.getElementById("conqNovoTipoEventoModulo").value.trim();
+  if (!tipoEvento) { mostrarToast("Informe o código do tipo de evento.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/conquistas/tipos-evento`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tipoEvento, descricao, moduloOrigem })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) {
+    document.getElementById("conqNovoTipoEventoCodigo").value = "";
+    document.getElementById("conqNovoTipoEventoDescricao").value = "";
+    document.getElementById("conqNovoTipoEventoModulo").value = "";
+    carregarTiposEventoConquistaAcao();
+  }
+}
+
+async function carregarCatalogoConquistaAdminAcao() {
+  const container = document.getElementById("painelCatalogoConquista");
+  const res = await fetchProtegido(`${API_BASE}/conquistas/catalogo?incluirInativas=true`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.catalogo.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Oculta</th><th>Pré-requisito</th><th>Bônus</th><th>Regras</th></tr></thead><tbody>
+        ${data.catalogo.map(c => `<tr>
+          <td>${c.conquistaId}</td><td>${c.icone || ""} ${c.nome}</td><td>${c.oculta ? "Sim" : "Não"}</td>
+          <td>${c.preRequisitoConquistaId || "-"}</td><td>${c.pontosBonus}</td>
+          <td>${c.regras.map(r => `${r.tipoRegra} (${r.tipoEvento})`).join(", ") || "-"}</td>
+        </tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhuma conquista cadastrada ainda.</p>";
+}
+
+async function criarConquistaAcao() {
+  const nome = document.getElementById("conqNovoNome").value.trim();
+  const icone = document.getElementById("conqNovoIcone").value.trim();
+  const descricao = document.getElementById("conqNovaDescricao").value.trim();
+  const oculta = document.getElementById("conqNovaOculta").checked;
+  const preRequisitoConquistaId = document.getElementById("conqNovoPreRequisitoId").value || null;
+  const pontosBonus = Number(document.getElementById("conqNovosPontosBonus").value || 0);
+  if (!nome) { mostrarToast("Informe o nome da conquista.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/conquistas/catalogo`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nome, icone, descricao, oculta, preRequisitoConquistaId: preRequisitoConquistaId ? Number(preRequisitoConquistaId) : null, pontosBonus })
+  });
+  const data = await res.json();
+  document.getElementById("resultadoNovaConquista").innerHTML = `<p class="subtitle">${data.mensagem}</p>`;
+  if (data.sucesso !== false) {
+    document.getElementById("conqNovoNome").value = "";
+    document.getElementById("conqNovoIcone").value = "";
+    document.getElementById("conqNovaDescricao").value = "";
+    document.getElementById("conqNovaOculta").checked = false;
+    document.getElementById("conqNovoPreRequisitoId").value = "";
+    document.getElementById("conqNovosPontosBonus").value = "";
+    carregarCatalogoConquistaAdminAcao();
+  }
+}
+
+async function criarRegraConquistaAcao() {
+  const conquistaId = Number(document.getElementById("conqRegraConquistaId").value);
+  const tipoRegra = document.getElementById("conqRegraTipo").value;
+  const tipoEvento = document.getElementById("conqRegraTipoEvento").value.trim();
+  const configTexto = document.getElementById("conqRegraConfigJson").value.trim();
+  if (!conquistaId || !tipoEvento) { mostrarToast("Informe o id da conquista e o tipo de evento.", "erro"); return; }
+  let config = {};
+  try { config = configTexto ? JSON.parse(configTexto) : {}; }
+  catch (e) { mostrarToast("Config inválida — não é um JSON válido.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/conquistas/regra`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conquistaId, tipoRegra, tipoEvento, config })
+  });
+  const data = await res.json();
+  document.getElementById("resultadoNovaRegraConquista").innerHTML = `<p class="subtitle">${data.mensagem}</p>`;
+  if (data.sucesso !== false) {
+    document.getElementById("conqRegraConquistaId").value = "";
+    document.getElementById("conqRegraTipoEvento").value = "";
+    document.getElementById("conqRegraConfigJson").value = "";
+    carregarCatalogoConquistaAdminAcao();
+  }
+}
+
+async function carregarRankingConquistaAdminAcao() {
+  const escopoTipo = document.getElementById("conqRankingEscopoTipoAdmin").value;
+  const escopoId = document.getElementById("conqRankingEscopoIdAdmin").value;
+  const container = document.getElementById("painelRankingConquistaAdmin");
+  const qs = `escopoTipo=${escopoTipo}${escopoId ? `&escopoId=${escopoId}` : ""}`;
+  const res = await fetchProtegido(`${API_BASE}/conquistas/ranking?${qs}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.ranking.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>#</th><th>Nome</th><th>Pontuação</th><th>Conquistas</th></tr></thead><tbody>
+        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${r.nome}</td><td>${r.score}</td><td>${r.totalConquistas}</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Ninguém no ranking neste escopo ainda.</p>";
 }

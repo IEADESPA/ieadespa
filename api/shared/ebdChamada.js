@@ -17,6 +17,27 @@
 // (finas) depois — mesmo padrão de shared/ebdTurmas.js / shared/escalas.js.
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
+const conquistas = require("./conquistas");
+
+// v6.4 — hook do motor de conquistas (shared/conquistas.js): loga o evento
+// genérico EBD_PRESENCA e avalia, NA HORA (nunca job), o que o Membro acabou
+// de desbloquear. AUSENTE também vira evento (periodo_perfeito precisa
+// enxergar a falta pra provar que ela NÃO aconteceu num trimestre), mas
+// marcado `contaParaScore:false` pra não inflar a pontuação de quem faltou.
+// Fail-soft (mesmo espírito de registrarAuditoria): uma falha no motor de
+// conquistas nunca pode derrubar o lançamento de presença em si.
+async function logarEventoConquista(pool, { membroId, status, licaoId, data }) {
+  if (!membroId) return; // visitante não tem MembroId — não alimenta o motor
+  try {
+    await conquistas.registrarEventoEAvaliar(pool, {
+      membroId, tipoEvento: "EBD_PRESENCA",
+      payload: { status, licaoId, contaParaScore: status !== STATUS_PRESENCA.AUSENTE },
+      ocorridoEm: data
+    });
+  } catch (e) {
+    console.error("[CONQUISTAS] falha ao avaliar evento EBD_PRESENCA:", e.message);
+  }
+}
 
 const STATUS_LICAO = { ABERTA: "ABERTA", FECHADA: "FECHADA" };
 const STATUS_PRESENCA = { PRESENTE: "PRESENTE", AUSENTE: "AUSENTE", VISITANTE: "VISITANTE" };
@@ -244,7 +265,7 @@ async function registrarPresencaAluno(pool, { licaoId, turmaId, alunoId, status,
     return { sucesso: false, mensagem: "Esta turma não pertence à congregação desta lição." };
   }
 
-  const aluno = await pool.request().input("id", sql.Int, alunoId).query(`SELECT AlunoId, TurmaId FROM EbdAlunos WHERE AlunoId = @id AND Ativo = 1`);
+  const aluno = await pool.request().input("id", sql.Int, alunoId).query(`SELECT AlunoId, TurmaId, MembroId FROM EbdAlunos WHERE AlunoId = @id AND Ativo = 1`);
   if (aluno.recordset.length === 0) return { sucesso: false, mensagem: "Aluno não encontrado ou inativo." };
   if (aluno.recordset[0].TurmaId !== Number(turmaId)) return { sucesso: false, mensagem: "Este aluno não pertence a esta turma." };
 
@@ -269,6 +290,8 @@ async function registrarPresencaAluno(pool, { licaoId, turmaId, alunoId, status,
     tabela: "EbdChamadas", registroId: existente ? existente.chamadaId : null, acao: "PRESENCA_LANCADA",
     usuarioId: registradoPorMembroId, dadosAntes: existente ? { status: existente.status } : null, dadosDepois: { licaoId, turmaId, alunoId, status }
   });
+
+  await logarEventoConquista(pool, { membroId: aluno.recordset[0].MembroId, status, licaoId, data: licao.data });
 
   return { sucesso: true, mensagem: "✅ Presença registrada." };
 }

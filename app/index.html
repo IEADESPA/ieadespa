@@ -107,6 +107,7 @@
             <button class="btn-subaba" id="btnSubMeupainelCartas" onclick="mostrarSubAbaMeupainel('cartas')"><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" onclick="mostrarSubAbaMeupainel('minhasescalas')"><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" onclick="mostrarSubAbaMeupainel('minhahabilitacao')"><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" onclick="mostrarSubAbaMeupainel('minhasconquistas')"><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" onclick="mostrarSubAbaMeupainel('seguranca')"><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
@@ -265,6 +266,16 @@
           <div class="grupo-modulo" id="grupoModuloEbd" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaEbd" onclick="mostrarAbaSecretaria('ebd')"><span class="icone">📖</span><span class="rotulo">EBD</span></button>
+          </div>
+
+          <!-- MÓDULO: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico
+               (shared/conquistas.js), EBD é só o primeiro consumidor.
+               Permissão própria "conquistas_gestao", nunca concedida por
+               padrão. O painel pessoal/ranking geral fica em Meu Painel →
+               Minhas Conquistas, aberto a qualquer matrícula. -->
+          <div class="grupo-modulo" id="grupoModuloConquistas" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaConquistas" onclick="mostrarAbaSecretaria('conquistas')"><span class="icone">🏆</span><span class="rotulo">Conquistas</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -634,6 +645,25 @@
           <p class="subtitle">Acompanhe sua esteira de habilitação como voluntário — ficha de inscrição,
             referências, entrevista, antecedentes, treinamento e termo assinado, nessa ordem.</p>
           <div id="resultadoMinhaHabilitacao"></div>
+        </div>
+
+        <!-- SUB-ABA: MINHAS CONQUISTAS (v6.4 — Motor de conquistas e
+             gamificação). Painel de autoatendimento, aberto a qualquer
+             matrícula (mesmo espírito de "Minhas Escalas"/"Minha
+             Habilitação" acima) — o motor em si (shared/conquistas.js) é
+             genérico e module-agnostic; a EBD é só o primeiro consumidor. -->
+        <div id="subMeupainelMinhasconquistas" class="sub-aba-secretaria" style="display:none;">
+          <h3>🏆 Minhas Conquistas</h3>
+          <p class="subtitle">Pontuação e conquistas desbloqueadas, calculadas a partir dos eventos que
+            você já gerou no sistema (hoje, presença e atividades da EBD — outros módulos podem alimentar
+            o mesmo placar no futuro, sem precisar de uma tela nova).</p>
+          <div id="resultadoMinhasConquistas"></div>
+          <hr />
+          <h4>Ranking geral (todo o Campo)</h4>
+          <p class="subtitle">Ranking por Turma/Congregação/Área também é suportado pela API
+            (GET /api/conquistas/ranking?escopoTipo=&amp;escopoId=) — a tela de Meu Painel mostra o geral;
+            o painel de Conquistas (administração) mostra o ranking recortado por escopo.</p>
+          <div id="resultadoRankingConquistas"></div>
         </div>
 
         <!-- SUB-ABA: MINHAS TAREFAS (vB.3 — Motor de workflow genérico).
@@ -2617,6 +2647,81 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarResumoAtividadeTurmaEbdAcao()">📊 Carregar resumo</button>
         </div>
         <div id="painelResumoAtividadeEbd"></div>
+      </div>
+
+      <!-- ABA: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico, module-
+           agnostic (shared/conquistas.js): catálogo/regras/tipos de evento
+           administrados aqui exigem "conquistas_gestao"; o painel pessoal e
+           o ranking geral ficam em Meu Painel → Minhas Conquistas, abertos
+           a qualquer matrícula. -->
+      <div id="abaConquistas" class="aba-secretaria" style="display:none;">
+        <h3>🏆 Conquistas — Catálogo, Regras e Ranking</h3>
+        <p class="subtitle">Motor genérico de conquistas/pontuação (não é exclusivo da EBD — a EBD é só o
+          primeiro consumidor). Um "tipo de evento" novo (ex: presença em Reuniões, no futuro) é cadastrado
+          aqui como dado, sem precisar mexer em código.</p>
+
+        <h4>Tipos de evento cadastrados</h4>
+        <div id="painelTiposEventoConquista"></div>
+        <div class="barra-lista">
+          <input type="text" id="conqNovoTipoEventoCodigo" placeholder="Código (ex: REUNIAO_PRESENCA)" style="max-width:220px;" />
+          <input type="text" id="conqNovoTipoEventoDescricao" placeholder="Descrição" />
+          <input type="text" id="conqNovoTipoEventoModulo" placeholder="Módulo de origem (ex: REUNIOES)" style="max-width:180px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarTipoEventoConquistaAcao()">➕ Registrar tipo</button>
+        </div>
+
+        <hr />
+        <h4>Catálogo de conquistas</h4>
+        <div id="painelCatalogoConquista"></div>
+
+        <h4>Nova conquista</h4>
+        <div class="barra-lista">
+          <input type="text" id="conqNovoNome" placeholder="Nome" />
+          <input type="text" id="conqNovoIcone" placeholder="Ícone (emoji)" style="max-width:100px;" />
+          <input type="text" id="conqNovaDescricao" placeholder="Descrição" />
+        </div>
+        <div class="barra-lista">
+          <label><input type="checkbox" id="conqNovaOculta" /> Oculta até desbloquear</label>
+          <input type="number" id="conqNovoPreRequisitoId" placeholder="Id do pré-requisito (opcional)" style="max-width:220px;" />
+          <input type="number" id="conqNovosPontosBonus" placeholder="Pontos de bônus" style="max-width:140px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarConquistaAcao()">➕ Criar conquista</button>
+        </div>
+        <div id="resultadoNovaConquista"></div>
+
+        <hr />
+        <h4>Nova regra (tipo genérico)</h4>
+        <div class="barra-lista">
+          <input type="number" id="conqRegraConquistaId" placeholder="Id da conquista" style="max-width:140px;" />
+          <select id="conqRegraTipo">
+            <option value="contagem_evento">contagem_evento</option>
+            <option value="sequencia">sequencia</option>
+            <option value="combinacao_exata">combinacao_exata</option>
+            <option value="marco_unico">marco_unico</option>
+            <option value="periodo_perfeito">periodo_perfeito</option>
+          </select>
+          <input type="text" id="conqRegraTipoEvento" placeholder="Tipo de evento (ex: EBD_PRESENCA)" style="max-width:200px;" />
+        </div>
+        <div class="barra-lista">
+          <input type="text" id="conqRegraConfigJson" placeholder='Config (JSON) — ex: {"minimoOcorrencias":10}' />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarRegraConquistaAcao()">➕ Criar regra</button>
+        </div>
+        <div id="resultadoNovaRegraConquista"></div>
+
+        <hr />
+        <h4>Ranking por escopo</h4>
+        <div class="barra-lista">
+          <select id="conqRankingEscopoTipoAdmin">
+            <option value="GLOBAL">Geral (todo o Campo)</option>
+            <option value="TURMA">Turma</option>
+            <option value="CONGREGACAO">Congregação</option>
+            <option value="AREA">Área</option>
+            <option value="REGIAO">Região</option>
+            <option value="QUADRANTE">Quadrante</option>
+            <option value="DISTRITO">Distrito</option>
+          </select>
+          <input type="number" id="conqRankingEscopoIdAdmin" placeholder="Id do escopo (vazio = geral)" style="max-width:180px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarRankingConquistaAdminAcao()">🏅 Ver ranking</button>
+        </div>
+        <div id="painelRankingConquistaAdmin"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

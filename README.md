@@ -6424,8 +6424,73 @@ desempate do ranking.
 
 #### v6.6 — Revistas e pedidos
 
-- [ ] Catálogo de revistas + pedidos por congregação.
-- [ ] Consolidação + aprovação + pagamentos (pendente/aprovado).
+- [x] Catálogo de revistas + pedidos por congregação.
+- [x] Consolidação + aprovação + pagamentos (pendente/aprovado).
+
+  Migração 106 (`sql/migrations/106_ebd_revistas_pedidos.sql`) cria três
+  tabelas: `EbdCatalogoRevistas` (edições estilo CPAD, por faixa etária e
+  trimestre), `EbdPedidosRevistas` e `EbdPedidosRevistasItens`
+  (quantidade por revista dentro de um pedido). Lógica pura em
+  `shared/ebdRevistas.js`, rota em `api/GestaoEbdRevistas`
+  (`/api/ebd-revistas/...`).
+
+  **Chamada de projeto documentada na migração**: o pedido vive na
+  **Turma** (`EbdPedidosRevistas.TurmaId`), não direto na Congregação,
+  mesmo o texto do checklist dizendo "por congregação". Motivo: a v6.8
+  (ainda não construída) já amarra "revista/trimestre vigente" à classe —
+  é a Turma quem sabe qual edição e quantas unidades precisa, não a
+  congregação como agregado cego. A visão "por congregação" do checklist
+  não foi abandonada: ela é a **consolidação** (item 2), que agrupa os
+  pedidos de todas as Turmas daquela Congregação na leitura
+  (`listarPedidosParaConsolidado` + `consolidarPedidosPorAreaCongregacao`),
+  sem nenhuma coluna redundante — mesmo princípio de "Área não precisa de
+  coluna própria" que a migração 101 já usava (sobe
+  `EbdTurmas.CongregacaoId` → `Congregacoes.AreaId`).
+
+  Preço é **travado no pedido**: cada linha de `EbdPedidosRevistasItens`
+  grava `PrecoUnitarioRegistrado`, cópia do preço do catálogo no momento
+  do pedido — se o preço da edição mudar depois no catálogo, pedidos já
+  feitos não mudam de valor retroativamente (mesmo problema que
+  `shared/protocolo.js`/matrícula já resolvia: gerado uma vez, nunca
+  recalculado). `ValorTotal` nunca é uma coluna própria: é sempre
+  `SUM(Quantidade × PrecoUnitarioRegistrado)`, calculado na leitura
+  (`calcularValorTotalPedido`) — mesmo princípio de "calculado, nunca
+  digitado" do resto da FASE 6.
+
+  A máquina de estados é deliberadamente mínima, só o par que o checklist
+  pede: `Status` (`PENDENTE`/`APROVADO`, aprovação do pedido em si) e
+  `StatusPagamento` (`PENDENTE`/`APROVADO`, independente do primeiro —
+  um pedido pode estar aprovado e ainda não pago). `podeAprovarPedido`
+  recusa aprovar duas vezes e recusa aprovar um pedido sem nenhum item
+  (mesma guarda de `shared/escalas.js::decidirTroca`);
+  `podeRegistrarPagamento` exige `Status = APROVADO` antes de aceitar
+  pagamento (não se paga o que ainda não foi aceito) e recusa registrar
+  pagamento duas vezes. **`StatusPagamento` aqui é só uma marcação** — não
+  gera lançamento financeiro, não cria linha de ledger e não integra com
+  `TesourariasDepartamento` (v5.4): isso é trabalho explícito da v6.7
+  (Financeiro da EBD, ainda não construída), que vai mover dinheiro de
+  verdade. v6.6 só responde "este pedido já foi pago ou não".
+
+  Permissão: reaproveita **"ebd_gestao"** (v6.1), sem permissão nova.
+  Administrar o catálogo, aprovar pedido e marcar pagamento sempre exigem
+  "ebd_gestao" (dentro do escopo territorial de quem decide — nunca o
+  professor que fez o pedido aprova o próprio pedido). Criar/editar os
+  itens do pedido de uma Turma específica (enquanto `PENDENTE`) também é
+  liberado ao **professor ATIVO daquela Turma** (`EbdTurmaProfessores`,
+  v6.1) sem precisar da permissão ampla — mesma granularidade que
+  `GestaoEbdAtividades::ehProfessorAtivoDaTurma` (v6.3) já usa pra
+  conteúdo de lição/resposta de aluno. O catálogo em si não é territorial
+  (uma edição vale pra qualquer congregação), então só listar exige login;
+  cadastrar/alterar exige "ebd_gestao".
+
+  24 testes novos em `api/shared/__tests__/ebdRevistas.test.js` (500 no
+  total, eram 476) cobrem validação de catálogo/itens (trimestre no
+  formato `AAAA-T1`..`T4`, preço não-negativo, revista repetida no mesmo
+  pedido), `calcularValorTotalPedido` (sempre a partir do preço travado no
+  item, nunca do catálogo vigente), a máquina de estados pendente→aprovado
+  do pedido e do pagamento (incluindo as guardas contra aprovar duas
+  vezes, aprovar pedido vazio e pagar antes de aprovar) e a consolidação
+  Área → Congregação → Pedidos (com soma de valor em cada nível).
 
 #### v6.7 — Financeiro da EBD
 

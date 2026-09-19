@@ -13039,6 +13039,166 @@ function renderizarImpressaoCertificado(c) {
   setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
 }
 
+// ---- Revistas e pedidos (v6.6) ----
+// Pedido é por TURMA (ver README v6.6 pra decisão completa); "por
+// congregação" vira consolidação na leitura, agrupando pedidos de todas as
+// turmas daquela congregação. StatusPagamento é só um FLAG (pendente/
+// aprovado) — não é lançamento financeiro (isso é a v6.7).
+let catalogoRevistasCache = [];
+let pedidosTurmaRevistasCache = [];
+
+async function cadastrarRevistaEbdAcao() {
+  const nome = document.getElementById("revNome").value.trim();
+  const faixaEtaria = document.getElementById("revFaixaEtaria").value.trim();
+  const trimestre = document.getElementById("revTrimestre").value.trim();
+  const precoUnitario = document.getElementById("revPreco").value;
+  const resultadoEl = document.getElementById("resultadoRevistaEbd");
+  if (!nome || !trimestre || precoUnitario === "") {
+    resultadoEl.textContent = "Informe nome, trimestre e preço unitário.";
+    return;
+  }
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/catalogo`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nome, faixaEtaria: faixaEtaria || null, trimestre, precoUnitario: Number(precoUnitario) })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultadoEl.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("revNome").value = "";
+    document.getElementById("revFaixaEtaria").value = "";
+    document.getElementById("revPreco").value = "";
+    carregarCatalogoRevistasEbdAcao();
+  }
+}
+
+async function carregarCatalogoRevistasEbdAcao() {
+  const trimestre = document.getElementById("revFiltroTrimestre").value.trim();
+  const container = document.getElementById("painelCatalogoRevistasEbd");
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/catalogo${trimestre ? `?trimestre=${encodeURIComponent(trimestre)}` : ""}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  catalogoRevistasCache = data.catalogo || [];
+  container.innerHTML = catalogoRevistasCache.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>ID</th><th>Nome</th><th>Faixa etária</th><th>Trimestre</th><th>Preço</th><th>Ativa</th></tr></thead><tbody>
+        ${catalogoRevistasCache.map(r => `<tr><td>${r.revistaId}</td><td>${r.nome}</td><td>${r.faixaEtaria || "-"}</td><td>${r.trimestre}</td><td>R$ ${Number(r.precoUnitario).toFixed(2)}</td><td>${r.ativa ? "Sim" : "Não"}</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhuma revista encontrada.</p>";
+}
+
+async function carregarPedidosTurmaEbdAcao() {
+  const turmaId = document.getElementById("pedTurmaId").value;
+  const container = document.getElementById("painelPedidosTurmaEbd");
+  if (!turmaId) { container.innerHTML = ""; mostrarToast("Informe a turma.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos?turmaId=${turmaId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  pedidosTurmaRevistasCache = data.pedidos || [];
+  container.innerHTML = pedidosTurmaRevistasCache.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>ID</th><th>Trimestre</th><th>Status</th><th>Pagamento</th><th>Itens</th><th>Valor total</th></tr></thead><tbody>
+        ${pedidosTurmaRevistasCache.map(p => `<tr>
+          <td>${p.pedidoId}</td><td>${p.trimestre}</td><td>${p.status}</td><td>${p.statusPagamento}</td>
+          <td>${(p.itens || []).map(i => `${i.revistaNome} × ${i.quantidade}`).join(", ") || "-"}</td>
+          <td>R$ ${Number(p.valorTotal).toFixed(2)}</td>
+        </tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum pedido desta turma ainda.</p>";
+}
+
+function lerItensPedidoJson() {
+  const bruto = document.getElementById("pedItensJson").value.trim();
+  if (!bruto) return { erro: "Informe os itens do pedido (JSON)." };
+  try {
+    const itens = JSON.parse(bruto);
+    return { itens };
+  } catch (e) {
+    return { erro: "Itens em formato JSON inválido — confira o exemplo do placeholder." };
+  }
+}
+
+async function criarPedidoRevistaEbdAcao() {
+  const turmaId = document.getElementById("pedNovoTurmaId").value;
+  const trimestre = document.getElementById("pedTrimestre").value.trim();
+  const resultadoEl = document.getElementById("resultadoPedidoRevistaEbd");
+  if (!turmaId || !trimestre) { resultadoEl.textContent = "Informe a turma e o trimestre."; return; }
+  const { itens, erro } = lerItensPedidoJson();
+  if (erro) { resultadoEl.textContent = erro; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ turmaId: Number(turmaId), trimestre, itens })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultadoEl.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("pedTurmaId").value = turmaId;
+    carregarPedidosTurmaEbdAcao();
+  }
+}
+
+async function atualizarItensPedidoRevistaEbdAcao() {
+  const pedidoId = document.getElementById("pedIdParaEditarItens").value;
+  const resultadoEl = document.getElementById("resultadoPedidoRevistaEbd");
+  if (!pedidoId) { resultadoEl.textContent = "Informe o id do pedido a editar."; return; }
+  const { itens, erro } = lerItensPedidoJson();
+  if (erro) { resultadoEl.textContent = erro; return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos/itens`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pedidoId: Number(pedidoId), itens })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  resultadoEl.textContent = data.mensagem || "";
+  if (data.sucesso) carregarPedidosTurmaEbdAcao();
+}
+
+async function aprovarPedidoRevistaEbdAcao() {
+  const pedidoId = document.getElementById("pedIdAcao").value;
+  if (!pedidoId) { mostrarToast("Informe o id do pedido.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos/aprovar`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pedidoId: Number(pedidoId) })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarPedidosTurmaEbdAcao();
+}
+
+async function registrarPagamentoPedidoRevistaEbdAcao() {
+  const pedidoId = document.getElementById("pedIdAcao").value;
+  if (!pedidoId) { mostrarToast("Informe o id do pedido.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos/pagamento`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pedidoId: Number(pedidoId) })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarPedidosTurmaEbdAcao();
+}
+
+async function carregarConsolidadoRevistasEbdAcao() {
+  const trimestre = document.getElementById("pedConsolidadoTrimestre").value.trim();
+  const container = document.getElementById("painelConsolidadoRevistasEbd");
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/consolidado${trimestre ? `?trimestre=${encodeURIComponent(trimestre)}` : ""}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  container.innerHTML = data.areas.length
+    ? data.areas.map(area => `
+        <div class="cartao-area-ebd" style="margin-bottom:14px;">
+          <h5>🗺️ ${area.areaNome} — R$ ${Number(area.valorTotal).toFixed(2)}</h5>
+          ${area.congregacoes.map(cong => `
+            <div style="margin-left:14px; margin-bottom:8px;">
+              <strong>⛪ ${cong.congregacaoNome} — R$ ${Number(cong.valorTotal).toFixed(2)}</strong>
+              <ul style="margin:4px 0 0 20px;">
+                ${cong.pedidos.map(p => `<li>Turma ${p.turmaNome} (${p.trimestre}) — ${p.status} / pagamento ${p.statusPagamento} — R$ ${Number(p.valorTotal).toFixed(2)}</li>`).join("")}
+              </ul>
+            </div>
+          `).join("")}
+        </div>
+      `).join("")
+    : "<p class='subtitle'>Nenhum pedido encontrado.</p>";
+}
+
 async function carregarVisaoAgrupadaEbdAcao() {
   const busca = document.getElementById("ebdBuscaAgrupada") ? document.getElementById("ebdBuscaAgrupada").value.trim() : "";
   const container = document.getElementById("painelVisaoAgrupadaEbd");

@@ -1,0 +1,13 @@
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "methods": ["get", "post"],
+      "route": "ebd-revistas/{acao?}"
+    },
+    { "type": "http", "direction": "out", "name": "res" }
+  ]
+}

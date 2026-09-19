@@ -2673,6 +2673,73 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarCertificadosEbdAcao()">🔍 Ver certificados</button>
         </div>
         <div id="painelCertificadosEbd"></div>
+
+        <hr />
+        <h3>📚 Revistas e pedidos (v6.6)</h3>
+        <p class="subtitle">Pedido por <strong>Turma</strong>, não por congregação — a v6.8 já amarra a revista/
+          trimestre vigente à classe, então é a turma quem sabe quanto pedir; a visão "por congregação" continua
+          existindo como consolidação logo abaixo. Criar/editar o pedido (enquanto pendente) é liberado ao
+          professor da própria turma, sem precisar de "ebd_gestao"; aprovar e marcar pagamento exigem essa
+          permissão. <strong>Pagamento aqui é só uma marcação</strong> (pendente/aprovado) — não é lançamento
+          financeiro nem integra com a Tesouraria: isso é trabalho da v6.7 (Financeiro da EBD).</p>
+
+        <h4>Catálogo de revistas</h4>
+        <details style="margin:8px 0;">
+          <summary>➕ Cadastrar revista no catálogo (exige ebd_gestao)</summary>
+          <div class="barra-lista">
+            <input type="text" id="revNome" placeholder="Nome (ex: Revista do Aluno — Adultos)" style="min-width:240px;" />
+            <input type="text" id="revFaixaEtaria" placeholder="Faixa etária (opcional)" style="max-width:160px;" />
+            <input type="text" id="revTrimestre" placeholder="Trimestre (ex: 2026-T1)" style="max-width:140px;" />
+            <input type="number" id="revPreco" placeholder="Preço unitário (R$)" step="0.01" style="max-width:160px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="cadastrarRevistaEbdAcao()">Salvar</button>
+          </div>
+        </details>
+        <p id="resultadoRevistaEbd" class="subtitle"></p>
+        <div class="barra-lista">
+          <input type="text" id="revFiltroTrimestre" placeholder="Filtrar por trimestre (opcional)" style="max-width:160px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarCatalogoRevistasEbdAcao()">🔍 Ver catálogo</button>
+        </div>
+        <div id="painelCatalogoRevistasEbd"></div>
+
+        <hr />
+        <h4>Pedido da turma</h4>
+        <div class="barra-lista">
+          <input type="number" id="pedTurmaId" placeholder="Id da turma" style="max-width:140px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPedidosTurmaEbdAcao()">📂 Ver pedidos da turma</button>
+        </div>
+        <div id="painelPedidosTurmaEbd"></div>
+
+        <details style="margin:8px 0;">
+          <summary>➕ Novo pedido / ✏️ substituir itens de um pedido pendente</summary>
+          <div class="barra-lista">
+            <input type="number" id="pedNovoTurmaId" placeholder="Id da turma" style="max-width:140px;" />
+            <input type="text" id="pedTrimestre" placeholder="Trimestre (ex: 2026-T1)" style="max-width:140px;" />
+            <input type="number" id="pedIdParaEditarItens" placeholder="Id do pedido (só p/ editar itens)" style="max-width:220px;" />
+          </div>
+          <textarea id="pedItensJson" placeholder='Itens (JSON) — ex: [{"revistaId":1,"quantidade":10},{"revistaId":2,"quantidade":5}]' rows="3" style="width:100%;"></textarea>
+          <div class="barra-lista">
+            <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="criarPedidoRevistaEbdAcao()">💾 Criar pedido</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:8px 0;" onclick="atualizarItensPedidoRevistaEbdAcao()">✏️ Substituir itens (pedido já existente)</button>
+          </div>
+        </details>
+        <p id="resultadoPedidoRevistaEbd" class="subtitle"></p>
+
+        <details style="margin:8px 0;">
+          <summary>✅ Aprovar pedido / 💰 Registrar pagamento (exige ebd_gestao)</summary>
+          <div class="barra-lista">
+            <input type="number" id="pedIdAcao" placeholder="Id do pedido" style="max-width:140px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="aprovarPedidoRevistaEbdAcao()">✅ Aprovar pedido</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarPagamentoPedidoRevistaEbdAcao()">💰 Registrar pagamento</button>
+          </div>
+        </details>
+
+        <hr />
+        <h4>Consolidado — Área → Congregação → Pedidos (exige ebd_gestao)</h4>
+        <div class="barra-lista">
+          <input type="text" id="pedConsolidadoTrimestre" placeholder="Trimestre (opcional, ex: 2026-T1)" style="max-width:180px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarConsolidadoRevistasEbdAcao()">📊 Ver consolidado</button>
+        </div>
+        <div id="painelConsolidadoRevistasEbd"></div>
       </div>
 
       <!-- ABA: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico, module-

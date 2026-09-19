@@ -250,6 +250,14 @@
             <button class="btn-aba" id="btnAbaHabilitacao" onclick="mostrarAbaSecretaria('habilitacao')"><span class="icone">🛡️</span><span class="rotulo">Habilitação de Voluntários</span></button>
           </div>
 
+          <!-- MÓDULO: ASSISTÊNCIA SOCIAL / AÇÃO DA FÉ (v5.9) — permissão
+               própria "assistencia_social", nunca concedida por padrão a
+               nenhum papel (dado mais sensível do sistema). -->
+          <div class="grupo-modulo" id="grupoModuloAssistenciasocial" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaAssistenciasocial" onclick="mostrarAbaSecretaria('assistenciasocial')"><span class="icone">🤝</span><span class="rotulo">Assistência Social</span></button>
+          </div>
+
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
           <div class="grupo-modulo" id="grupoModuloConformidade" style="display:none;">
             <hr class="divisor-sidebar" />
@@ -2357,6 +2365,64 @@
           <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarDesligamentoAcao()">🚪 Registrar Desligamento</button>
         </div>
         <p id="resultadoDesligamento" class="subtitle"></p>
+      </div>
+
+      <!-- ABA: ASSISTÊNCIA SOCIAL / AÇÃO DA FÉ (v5.9) -->
+      <div id="abaAssistenciasocial" class="aba-secretaria" style="display:none;">
+        <h3>🤝 Assistência Social — Ação da Fé</h3>
+        <p class="subtitle">⚠️ Dado mais sensível do sistema (situação socioeconômica de família assistida).
+          Acesso restrito à permissão "Assistência Social" — cadastro sempre mediante consentimento (Art. 46;
+          LGPD Art. 7º, I) e parecer técnico sempre assinado por Assistente Social credenciado (Art. 52, VII).</p>
+
+        <h4>Famílias assistidas</h4>
+        <div class="barra-lista">
+          <select id="asCongregacao"></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarFamiliasAssistenciaAcao()">📂 Abrir</button>
+        </div>
+        <details style="margin:8px 0;">
+          <summary>➕ Cadastrar família</summary>
+          <div class="barra-lista">
+            <input type="text" id="asFamResponsavelNome" placeholder="Nome do(a) responsável" style="min-width:220px;" />
+            <input type="text" id="asFamResponsavelCpf" placeholder="CPF (opcional)" style="max-width:160px;" />
+            <input type="text" id="asFamResponsavelContato" placeholder="Contato (opcional)" style="max-width:180px;" />
+            <input type="text" id="asFamEndereco" placeholder="Endereço (opcional)" style="min-width:220px;" />
+            <input type="number" id="asFamMembroId" placeholder="Matrícula (se responsável for membro)" style="max-width:220px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarFamiliaAssistenciaAcao()">Salvar</button>
+          </div>
+        </details>
+        <p id="resultadoFamiliaAssistencia" class="subtitle"></p>
+        <div id="painelFamiliasAssistencia"></div>
+
+        <hr />
+        <h4>Detalhe da família (cadastro socioeconômico, parecer, entregas e recorrência)</h4>
+        <div class="barra-lista">
+          <input type="number" id="asFamiliaIdDetalhe" placeholder="Id da família" style="max-width:160px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarDetalheFamiliaAssistenciaAcao()">🔍 Ver Detalhe</button>
+        </div>
+        <div id="painelDetalheFamiliaAssistencia"></div>
+
+        <hr />
+        <h4>Assistentes Sociais credenciados (Art. 52, VII)</h4>
+        <p class="subtitle">O parecer só pode ser assinado por quem está ATIVO nesta lista — nunca uma decisão
+          informal de balcão. Credenciar/descredenciar é restrito a nível Global (Diretoria).</p>
+        <div class="barra-lista">
+          <input type="number" id="asCredenciarMatricula" placeholder="Matrícula do profissional" style="max-width:200px;" />
+          <input type="text" id="asCredenciarNumero" placeholder="Nº registro CRESS" style="max-width:180px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="credenciarProfissionalAssistenciaAcao()">✅ Credenciar</button>
+        </div>
+        <p id="resultadoCredenciamentoAssistencia" class="subtitle"></p>
+        <div id="painelProfissionaisAssistencia"></div>
+
+        <hr />
+        <h4>Prestação de contas do programa social (separada do caixa comum)</h4>
+        <p class="subtitle">Agrega a tesouraria departamental da Ação da Fé (v5.4) com as entregas do mês —
+          insumo direto pra uma futura CEBAS/parceria pública (v9.6), sem misturar com o caixa geral.</p>
+        <div class="barra-lista">
+          <input type="number" id="asPrestacaoMes" placeholder="Mês (1-12)" style="max-width:120px;" />
+          <input type="number" id="asPrestacaoAno" placeholder="Ano" style="max-width:120px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPrestacaoContasAssistenciaAcao()">📊 Ver</button>
+        </div>
+        <div id="painelPrestacaoContasAssistencia"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

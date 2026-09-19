@@ -5857,19 +5857,97 @@ O Regimento condiciona a ação social a cadastro e triagem técnica — e isso 
 tinha nenhuma versão. É também o módulo com o dado mais sensível do sistema
 inteiro (situação socioeconômica de família assistida).
 
-- [ ] **Cadastro socioeconômico do beneficiário** — o Art. 46 exige que os
+- [x] **Cadastro socioeconômico do beneficiário** — o Art. 46 exige que os
       programas assistenciais aconteçam *"sempre mediante cadastro
       socioeconômico"*. Dado sensível: acesso restrito por papel, base legal
       registrada (vB.8) e retenção própria.
-- [ ] **Triagem e parecer técnico por Assistente Social credenciado** (Art. 52,
+- [x] **Triagem e parecer técnico por Assistente Social credenciado** (Art. 52,
       VII) — o parecer é do profissional, registrado e assinado, não uma decisão
       informal de quem está no balcão.
-- [ ] Registro de entregas/benefícios concedidos (cesta, auxílio, medicamento),
+- [x] Registro de entregas/benefícios concedidos (cesta, auxílio, medicamento),
       com histórico por família e controle de recorrência.
-- [ ] Isenção de taxa de cessão de templo quando o uso é ação social
+- [x] Isenção de taxa de cessão de templo quando o uso é ação social
       (Art. 156 §3º, III) — conecta com a v4.18/v4.21.
-- [ ] Prestação de contas do programa social, separada do caixa comum — insumo
+- [x] Prestação de contas do programa social, separada do caixa comum — insumo
       direto pra eventual CEBAS/parceria pública (v9.6).
+
+  `AssistenciaSocialFamilias` + `AssistenciaSocialCadastros` +
+  `AssistenciaSocialProfissionais` + `AssistenciaSocialPareceres` +
+  `AssistenciaSocialEntregas` (migração 100) + `shared/assistenciaSocial.js`
+  + `GestaoAssistenciaSocial` (rota `assistencia-social/{acao?}`), atrás de
+  uma permissão própria `assistencia_social` — nunca concedida por padrão a
+  papel nenhum, mesmo achado repetido desde a v5.2/v5.4/v5.7.
+
+  **"Família" não existia como conceito no sistema** — `VinculosFamiliares`
+  (v2.6) é um grafo de parentesco entre MEMBROS, e o público típico da ação
+  social não é membro. Em vez de forçar cadastro de membresia só pra
+  registrar um beneficiário, nasceu uma unidade mínima nova
+  (`AssistenciaSocialFamilias`: responsável, CPF, contato, endereço, com
+  `MembroId` opcional) — julgamento documentado na própria migração, não
+  herdado de nenhuma tabela existente.
+
+  **LGPD (vB.8) integrado de verdade, não decorativo**: como o titular
+  tipicamente não tem vínculo de membresia, o Art. 11, II, "a" (que cobre
+  `MembroReferencia`) não se aplica — a base legal correta, registrada na
+  própria linha do cadastro (mesmo vocabulário de `ConsentimentosLGPD` desde
+  a migração 012: CONSENTIMENTO/OBRIGACAO_LEGAL/LEGITIMO_INTERESSE/
+  EXECUCAO_ESTATUTO), é o Art. 7º, I — por isso `ConsentimentoObtidoEm` é
+  `NOT NULL`: sem consentimento, o cadastro não nasce. Retenção própria
+  cadastrada em `PoliticasRetencao` ("Cadastro Socioeconômico (Assistência
+  Social)", 1.825 dias — mesmo horizonte da prestação de contas do Art. 36),
+  separada da retenção de ex-membro (vB.8/migração 084, outro titular, outro
+  prazo).
+
+  **Parecer nunca é decisão informal de balcão**: `AssistenciaSocialProfissionais`
+  credencia o Assistente Social pelo registro no CRESS (restrito a nível
+  Global, Diretoria); `podeAssinarParecer` é o portão único que
+  `GestaoAssistenciaSocial` chama antes de gravar qualquer parecer —
+  recusa se o `membroId` informado não tiver linha ativa na tabela de
+  credenciamento, e o parecer fica preso ao `ProfissionalId` (nunca a um
+  usuário genérico).
+
+  **Recorrência calculada na leitura, nunca digitada** — mesmo espírito de
+  "status sempre derivado" já usado nas Cartas de Trânsito (v017) e na
+  esteira de habilitação (v5.7): `avaliarRecorrenciaFamilia` conta meses
+  consecutivos com entrega do mesmo tipo de benefício e sinaliza (padrão: 3
+  meses seguidos) sem bloquear nada — decisão de acompanhar o caso continua
+  sendo humana.
+
+  **Isenção de cessão de templo (Art. 156 §3º, III)** reaproveita a MESMA
+  flag `IsencaoTaxa` que a v4.18 já tinha (migração 068) — não nasceu tabela
+  paralela. `CessoesTemplo` ganhou por `ALTER` `FinalidadeAcaoSocial`,
+  `MotivoIsencaoSocial` e `AssistenciaSocialFamiliaId` (migração 100);
+  `validarIsencaoSocial` (chamada em `GestaoCessoesTemplo`) recusa marcar
+  finalidade de ação social sem isenção marcada, e recusa a isenção social
+  sem motivo escrito — nunca isenta "de graça".
+
+  **Prestação de contas separada do caixa comum** não fabricou um segundo
+  livro-caixa: a v5.4 (migração 095) já isolava a tesouraria por
+  departamento do caixa geral, e "Ação da Fé" já é um dos 8 departamentos
+  com essa tesouraria própria. `relatorioPrestacaoContas` só agrega
+  `TesourariasDepartamento`/`DespesasTesourariaDepartamento` (filtradas por
+  `Departamentos.Sigla = 'ACAO_DA_FE'`) com `AssistenciaSocialEntregas` do
+  mês — dado já formatado pra uma futura v9.6 (CEBAS) consumir, sem
+  construir o módulo em si.
+
+  Auditoria de tudo via `registrarAuditoria` (mesmo padrão de v5.7/vB.8):
+  cadastro aberto/encerrado, credenciamento/descredenciamento de
+  profissional, parecer registrado, entrega registrada. Front-end: painel
+  "Assistência Social" (módulo próprio na sidebar, `app/index.html` +
+  `app/script.js`) só aparece pra quem tem a permissão `assistencia_social`
+  — mesmo mecanismo client-side de todo o resto do sistema (o array
+  `authPermissoes` vem assinado do backend no login; o servidor recusa de
+  novo se a rota for chamada direto sem a permissão).
+
+  Testado com `npx jest` (351 testes, 24 novos:
+  `mesesConsecutivosComEntrega`/`avaliarRecorrenciaFamilia` com streak
+  contínuo, streak quebrado por mês faltando, tipos de benefício
+  independentes e limite customizado; `podeAssinarParecer` recusando
+  profissional inexistente/inativo e aceitando ativo; `validarParecer`,
+  `validarCadastroSocioeconomico` (consentimento ausente, núcleo inválido,
+  base legal fora do catálogo), `validarIsencaoSocial` nos 4 cenários do
+  Art. 156 §3º III, e `validarEntrega`) e `node --check` em todos os
+  arquivos novos/alterados.
 #### 🔒 Trava de Revisão 5-B — antes de encerrar a FASE 5 e avançar para a FASE 6
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).

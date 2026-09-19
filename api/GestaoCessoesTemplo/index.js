@@ -10,6 +10,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
+const { validarIsencaoSocial } = require("../shared/assistenciaSocial");
 
 const TIPOS_EVENTO = ["CASAMENTO", "VELORIO", "EVENTO_SOCIAL", "OUTROS"];
 const ACOES = ["AUTORIZAR", "REJEITAR", "CONCLUIR", "CANCELAR"];
@@ -26,7 +27,9 @@ module.exports = async function (context, req) {
       SELECT c.CessaoId AS cessaoId, c.CongregacaoId AS congregacaoId, cg.Nome AS congregacaoNome,
              c.SolicitanteNome AS solicitanteNome, c.TipoEvento AS tipoEvento, c.DataEvento AS dataEvento,
              c.TaxaZeladoria AS taxaZeladoria, c.IsencaoTaxa AS isencaoTaxa, c.ListaMusicalAprovada AS listaMusicalAprovada,
-             c.Status AS status, c.ContaReceberId AS contaReceberId
+             c.Status AS status, c.ContaReceberId AS contaReceberId,
+             c.FinalidadeAcaoSocial AS finalidadeAcaoSocial, c.MotivoIsencaoSocial AS motivoIsencaoSocial,
+             c.AssistenciaSocialFamiliaId AS assistenciaSocialFamiliaId
       FROM CessoesTemplo c JOIN Congregacoes cg ON cg.CongregacaoId = c.CongregacaoId
       ORDER BY c.DataEvento DESC
     `);
@@ -35,13 +38,20 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const { congregacaoId, solicitanteNome, solicitanteContato, tipoEvento, dataEvento, horaInicio, horaFim, taxaZeladoria, isencaoTaxa, listaMusicalAprovada, termoResponsabilidadeBase64, mimeType } = req.body || {};
+    const { congregacaoId, solicitanteNome, solicitanteContato, tipoEvento, dataEvento, horaInicio, horaFim, taxaZeladoria, isencaoTaxa, listaMusicalAprovada, termoResponsabilidadeBase64, mimeType, finalidadeAcaoSocial, motivoIsencaoSocial, assistenciaSocialFamiliaId } = req.body || {};
     if (!congregacaoId || !solicitanteNome || !solicitanteNome.trim() || !tipoEvento || !dataEvento) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: congregacaoId, solicitanteNome, tipoEvento, dataEvento." } };
       return;
     }
     if (!TIPOS_EVENTO.includes(tipoEvento)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `tipoEvento inválido. Use um de: ${TIPOS_EVENTO.join(", ")}.` } };
+      return;
+    }
+    // v5.9 — isenção de taxa por ação social (Art. 156 §3º, III) exige
+    // justificativa registrada; nunca isenta "de graça" (shared/assistenciaSocial.js).
+    const validacaoIsencao = validarIsencaoSocial({ finalidadeAcaoSocial, isencaoTaxa, motivoIsencaoSocial });
+    if (!validacaoIsencao.valido) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: validacaoIsencao.mensagem } };
       return;
     }
     let termoUrl = null;
@@ -57,11 +67,13 @@ module.exports = async function (context, req) {
       .input("data", sql.Date, dataEvento).input("ini", sql.NVarChar(5), horaInicio || null).input("fim", sql.NVarChar(5), horaFim || null)
       .input("taxa", sql.Decimal(10, 2), taxaZeladoria || 0).input("isento", sql.Bit, isencaoTaxa ? 1 : 0)
       .input("lista", sql.Bit, listaMusicalAprovada ? 1 : 0).input("termo", sql.NVarChar(500), termoUrl).input("por", sql.Int, usuario.membroId)
-      .query(`INSERT INTO CessoesTemplo (CongregacaoId, SolicitanteNome, SolicitanteContato, TipoEvento, DataEvento, HoraInicio, HoraFim, TaxaZeladoria, IsencaoTaxa, ListaMusicalAprovada, TermoResponsabilidadeUrl, RegistradoPor)
-              OUTPUT INSERTED.CessaoId VALUES (@cong, @nome, @contato, @tipo, @data, @ini, @fim, @taxa, @isento, @lista, @termo, @por)`);
+      .input("finalidadeSocial", sql.Bit, finalidadeAcaoSocial ? 1 : 0).input("motivoIsencaoSocial", sql.NVarChar(300), motivoIsencaoSocial || null)
+      .input("familiaId", sql.Int, assistenciaSocialFamiliaId || null)
+      .query(`INSERT INTO CessoesTemplo (CongregacaoId, SolicitanteNome, SolicitanteContato, TipoEvento, DataEvento, HoraInicio, HoraFim, TaxaZeladoria, IsencaoTaxa, ListaMusicalAprovada, TermoResponsabilidadeUrl, RegistradoPor, FinalidadeAcaoSocial, MotivoIsencaoSocial, AssistenciaSocialFamiliaId)
+              OUTPUT INSERTED.CessaoId VALUES (@cong, @nome, @contato, @tipo, @data, @ini, @fim, @taxa, @isento, @lista, @termo, @por, @finalidadeSocial, @motivoIsencaoSocial, @familiaId)`);
     await registrarAuditoria({
       tabela: "CessoesTemplo", registroId: criada.recordset[0].CessaoId, acao: "Registrou solicitação de cessão de templo", usuarioId: usuario.membroId,
-      dadosDepois: { congregacaoId, solicitanteNome, tipoEvento, dataEvento, taxaZeladoria }
+      dadosDepois: { congregacaoId, solicitanteNome, tipoEvento, dataEvento, taxaZeladoria, finalidadeAcaoSocial: !!finalidadeAcaoSocial }
     });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Solicitação de cessão registrada — aguardando aprovação da Diretoria.", cessaoId: criada.recordset[0].CessaoId } };
     return;

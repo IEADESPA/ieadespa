@@ -126,14 +126,28 @@ na Function App — contra vários segundos do modo anterior. Custo estimado: �
 US$ 10/mês (dentro do orçamento).
 
 Removido `api_location` do workflow de produção
-(`.github/workflows/azure-static-web-apps-white-grass-048208e0f.yml`) e
-deployado limpo. **Ligação em produção ainda não concluída**: o Azure recusa
-com `Cannot link backend with a preexisting Azure Static Web Apps
-configuration` mesmo depois da limpeza — bug conhecido, sem solução
+(`.github/workflows/azure-static-web-apps-white-grass-048208e0f.yml`, 20/09
+03:55 UTC) e deployado limpo. Ligação do backend novo em produção falhou —
+Azure recusa com `Cannot link backend with a preexisting Azure Static Web
+Apps configuration` mesmo depois da limpeza — bug conhecido, sem solução
 documentada (issue aberta em `Azure/static-web-apps#1197` e `#1540`, sem
-resposta da Microsoft). Produção confirmada 100% funcional durante toda a
-investigação (testado ao vivo), só continua no modo antigo (mais lento) por
-enquanto.
+resposta da Microsoft).
+
+**Incidente real (correção do registro anterior)**: logo após remover
+`api_location`, produção testada ao vivo respondia 200 normalmente — mas isso
+era o runtime antigo do Managed Functions ainda quente/residual, não uma
+confirmação de que continuaria funcionando. Sem `api_location` no deploy E sem
+backend novo linkado, produção ficou **sem nenhuma API funcionando por ~14h**
+(`api/auth/login` → 500 "Backend call failure", achado só ao retomar a
+sessão às 18:04 UTC). Restaurado imediatamente: `api_location: "api"` de volta
+no workflow (commit `f2d5844`, deploy 18:10 UTC), produção confirmada saudável
+de novo em minutos. Lição registrada: **nunca remover a configuração antiga
+antes de confirmar que a nova está realmente linkada e servindo tráfego** —
+o passo devia ter sido feito na ordem inversa (link primeiro, remoção depois),
+ou com um período de monitoramento ativo entre os dois, não deixado
+"pendente" sem alguém observando. Ambiente de homologação continua ligado à
+Function App nova (prova de conceito ainda válida); produção segue no modo
+antigo (mais lento, mas funcional) até o bug do Azure ser contornado.
 
 **Pra retomar**: repetir o `az rest --method put` no `linkedBackends` de
 `app-meusite-web` (endpoint sem `/builds/`, é o ambiente `default`) com o ID de

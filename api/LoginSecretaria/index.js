@@ -56,19 +56,28 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const escopo = await resolverEscopoCongregacoes(pool, lideranca.escopoTipo, lideranca.escopoId);
-  const escopoExtensaoNome = await resolverNomeExtensao(pool, lideranca.escopoTipo, lideranca.escopoId);
   const permissoesProprias = lideranca.permissoesStr ? lideranca.permissoesStr.split(",").map(p => p.trim()).filter(Boolean) : [];
-  const pendentes = await termosPendentes(pool, sql, lideranca.membroId, lideranca.papelNivel);
 
-  // vB.9 — delegação temporária: soma (nunca substitui) o que outra pessoa
-  // te delegou por um prazo, sem precisar emprestar senha de ninguém.
-  const { permissoesExtras, escopoExtra, delegacoesAtivas } = await permissoesEscopoDelegados(pool, sql, lideranca.membroId, hoje);
+  // v10.2 — achado real de medição ao vivo (19/09): login media 3.66s numa
+  // Function fria / 0.82s já quente, e a fatia "quente" era majoritariamente
+  // estas 5 consultas rodando em SÉRIE (await uma a uma) sem nenhuma delas
+  // depender do resultado da anterior — só se combinam depois daqui.
+  // Promise.all corta ~4 idas e vindas ao Azure SQL do caminho mais sensível
+  // a latência do sistema (todo login passa por ele).
+  const [escopo, escopoExtensaoNome, pendentes, delegados, expiradas] = await Promise.all([
+    resolverEscopoCongregacoes(pool, lideranca.escopoTipo, lideranca.escopoId),
+    resolverNomeExtensao(pool, lideranca.escopoTipo, lideranca.escopoId),
+    termosPendentes(pool, sql, lideranca.membroId, lideranca.papelNivel),
+    // vB.9 — delegação temporária: soma (nunca substitui) o que outra pessoa
+    // te delegou por um prazo, sem precisar emprestar senha de ninguém.
+    permissoesEscopoDelegados(pool, sql, lideranca.membroId, hoje),
+    // vB.9 — revisão periódica com efeito real: permissão cuja recertificação
+    // mais recente está EXPIRADA (v4.12, hoje generalizada a todos os papéis)
+    // não entra na sessão nova, até alguém confirmar de novo (GestaoCompliance).
+    permissoesComRecertificacaoExpirada(pool, sql, lideranca.membroId)
+  ]);
+  const { permissoesExtras, escopoExtra, delegacoesAtivas } = delegados;
   const uniao = [...new Set([...permissoesProprias, ...permissoesExtras])];
-  // vB.9 — revisão periódica com efeito real: permissão cuja recertificação
-  // mais recente está EXPIRADA (v4.12, hoje generalizada a todos os papéis)
-  // não entra na sessão nova, até alguém confirmar de novo (GestaoCompliance).
-  const expiradas = await permissoesComRecertificacaoExpirada(pool, sql, lideranca.membroId);
   const permissoes = uniao.filter((p) => !expiradas.includes(p));
   const escopoFinal = (escopo === "TODAS" || escopoExtra === "TODAS") ? "TODAS" : [...new Set([...escopo, ...escopoExtra])];
 

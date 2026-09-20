@@ -64,7 +64,13 @@ jobs:
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: "/app" # App source code path
-          api_location: "api" # Api source code path - optional
+          # api_location removido (19/09): API migrada de "Managed Functions" pra
+          # "Bring Your Own Functions" (func-ieadespa-api, Flex Consumption + 1
+          # instância sempre pronta) -- cold start documentado de Managed Functions
+          # era 15-30s (achado real, bateu com o relato do usuário de 10-15s no
+          # login); BYOF mede 0,2-0,4s direto na Function App / 0,6-0,9s via proxy
+          # do site. O deploy do código da API agora é feito separado (az
+          # functionapp publish), não mais por este workflow.
           output_location: "/" # Built app content directory - optional
           ###### End of Repository/Build Configurations ######
 

@@ -7189,13 +7189,76 @@ ilhas pontuais de interatividade; este sistema é um painel CRUD dinâmico o tem
 todo — trocar de motor seria reescrever a aplicação sem ganho real). O caminho é
 melhorar o que já existe (HTML/CSS/JS puro), não trocar de arquitetura.
 
-#### v10.1 — Redesign visual
+> **Escopo revisto (19/09) — pedido explícito do usuário.** O plano original tratava
+> v10.1 como "refinamento" (ícone + ajuste de paleta). Avaliação honesta do estado
+> atual (`app/style.css`, 474 linhas; `app/index.html`; ~175 tabelas geradas em
+> `app/script.js`): a engenharia de base é sólida — tokens de cor, modo de leitura
+> fácil, foco visível (WCAG, vB.10), toasts/modal, sidebar recolhível, paginação — o
+> problema não é código quebrado, é **resultado visual raso demais pro tamanho do
+> sistema**: ícone é emoji cru em todo lugar, escala tipográfica quase plana (quase
+> tudo entre 0.78rem-0.92rem, sem hierarquia clara de importância), paleta usa só
+> marinho+dourado pra tudo (13 módulos e 60+ sub-telas de FASE 0 a 9 têm a mesma cara
+> visual, sem identidade própria por área), espaçamento sem escala declarada (8/10/
+> 12/14/16/18/20/22/26px todos soltos, ad-hoc, no mesmo arquivo). Resultado: um
+> sistema funcional mas com cara de planilha antiga, não de painel institucional
+> moderno. Por isso v10.1 deixa de ser 1 versão de "refinamento" e vira 4 versões de
+> redesenho de verdade — continua posicionada aqui na FASE 10 (depois do resto do
+> sistema pronto, mesma razão de sempre), mas o escopo agora é reescrever a cara do
+> sistema, tela por tela, não só trocar ícone e cor.
 
-- [ ] Trocar os emojis do menu lateral e dos botões por uma biblioteca de ícones de
-      verdade (ex: Lucide/Feather via CDN) — hoje são 13 abas com emoji puro
-      (⚖️🏛️👤👥 etc.), o que passa impressão datada/amadora.
-- [ ] Revisão de paleta, tipografia e espaçamento (`app/style.css`) inspirada em
-      painéis institucionais modernos — sem framework novo, é refinamento de CSS.
+#### v10.1 — Fundamentos do sistema de design (tokens, tipografia, ícones)
+
+- [ ] Ícones de verdade (Lucide/Feather via CDN) no lugar de todo emoji cru — sidebar
+      (13 módulos), botões de ação, badges de status, cabeçalhos de painel.
+- [ ] Escala tipográfica com hierarquia real (mínimo 5 níveis: título de página,
+      título de seção, dado em destaque, corpo, legenda/metadado) — hoje quase tudo
+      usa o mesmo peso visual.
+- [ ] Paleta expandida com cor de identidade por área/fase (ex: Financeiro, EBD,
+      Disciplinar, Governança cada um com um tom de destaque próprio, sem perder o
+      marinho/dourado institucional como base) — objetivo é dar orientação visual
+      imediata de "em que parte do sistema eu estou", não só o rótulo de texto.
+- [ ] Escala de espaçamento declarada em `:root` (ex: `--esp-1` a `--esp-6`) e
+      substituição gradual dos valores soltos hoje espalhados pelo CSS.
+
+#### v10.1.1 — Redesenho da navegação e da grade de módulos
+
+- [ ] `.card-modulo`/`.grade-modulos` (portal de serviços, v4.2) ganha identidade
+      visual por módulo (cor/ícone coerentes com o token de área da v10.1), não só
+      ícone+texto genérico repetido 13+ vezes.
+- [ ] Sidebar reorganizada por agrupamento lógico (fase/área), não lista plana —
+      revisar `.sidebar`/`.btn-aba`/`.submenu-aba` (`app/style.css`) e a montagem em
+      `app/script.js` juntos, já que hoje a ordem de aba é a ordem de implementação
+      histórica, não a ordem que faz sentido pra quem usa.
+- [ ] Cabeçalho de página consistente (título + contexto/breadcrumb + ação principal
+      da tela) — hoje cada aba monta `.cabecalho-secretaria` do zero, sem padrão de
+      onde fica o quê.
+
+#### v10.1.2 — Redesenho dos componentes recorrentes
+
+- [ ] Tabela (`.tabela-frequencia`, hoje a única classe de tabela do sistema,
+      reaproveitada nas ~175 tabelas geradas em `app/script.js`) revisada pra
+      densidade/hierarquia melhores (zebra, alinhamento por tipo de dado, estado
+      vazio ilustrado em vez de célula em branco).
+- [ ] Formulário padrão (rótulo, campo, erro inline, ajuda contextual) com hierarquia
+      visual clara entre campo obrigatório/opcional/calculado — hoje um campo
+      `readonly` calculado (ex: v5.5) parece visualmente igual a um campo digitável.
+- [ ] Card de detalhe/seção (`.cartao-perfil`, `.resumo-stats`/`.stat-tile`, etc.)
+      unificado num único padrão reaproveitável, no lugar de cada módulo inventar o
+      próprio card.
+- [ ] Badge de status (`.badge-status`, `.tag-pendente`) com paleta e forma
+      consistentes em qualquer módulo que tenha estado (RASCUNHO/PENDENTE/APROVADO/
+      etc. — hoje cada módulo novo tende a reinventar a própria cor de status).
+
+#### v10.1.3 — Aplicação módulo a módulo (varredura completa)
+
+- [ ] Passar os tokens/componentes da v10.1-v10.1.2 por **todas** as telas já
+      construídas (FASE 0 a 9), fase a fase, documentando aqui o antes/depois —
+      não um redesenho "geral" solto, e sim uma varredura rastreável tela por tela,
+      mesmo espírito de qualquer Trava de Revisão deste README (nada fica "meio
+      migrado" sem registro de onde parou).
+- [ ] Auditoria final: nenhuma tela nova (FASE 11 em diante, se vier antes desta
+      trava fechar) pode nascer fora do sistema de design novo — checagem cruzada
+      igual às Travas de Revisão já fazem pra código/dado.
 
 #### v10.2 — Performance e cache (com análise de custo/benefício)
 
@@ -7217,7 +7280,7 @@ melhorar o que já existe (HTML/CSS/JS puro), não trocar de arquitetura.
 #### 🔒 Trava de Revisão 10-A — antes de avançar para a v10.4
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v10.1 a v10.3 pelas 5 perguntas do checklist.
+Audita v10.1 a v10.3 (incluindo v10.1.1-v10.1.3) pelas 5 perguntas do checklist.
 
 #### v10.4 — Modularização do front-end *(7ª rodada — dívida técnica real)*
 

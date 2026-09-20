@@ -64,13 +64,13 @@ jobs:
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: "/app" # App source code path
-          # Migrado pra "Bring Your Own Functions" (func-ieadespa-api) — 20/09.
-          # Achado real: a doc oficial da Microsoft exige api_location como
-          # STRING VAZIA (""), não a remoção da linha, pra de fato desativar o
-          # Managed Functions (tentativa anterior removeu a linha inteira, o
-          # que não teve o mesmo efeito e deixou produção sem API por ~14h —
-          # ver HOMOLOGACAO.md § "Investigação de lentidão e custo").
-          api_location: "" # Api source code path - vazio de propósito (API vive em func-ieadespa-api)
+          # REVERTIDO de novo (20/09, 2a tentativa) — api_location:"" (forma
+          # correta, confirmada pela doc oficial) ainda assim não deixou
+          # ligar func-ieadespa-api em produção (mesmo erro "preexisting
+          # configuration" do Azure) — produção ficou sem API por alguns
+          # minutos até esta reversão. Ver HOMOLOGACAO.md §
+          # "Investigação de lentidão e custo" pro histórico completo.
+          api_location: "api" # Api source code path - optional
           output_location: "/" # Built app content directory - optional
           ###### End of Repository/Build Configurations ######
 

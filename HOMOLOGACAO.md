@@ -149,14 +149,34 @@ ou com um período de monitoramento ativo entre os dois, não deixado
 Function App nova (prova de conceito ainda válida); produção segue no modo
 antigo (mais lento, mas funcional) até o bug do Azure ser contornado.
 
-**Pra retomar**: repetir o `az rest --method put` no `linkedBackends` de
-`app-meusite-web` (endpoint sem `/builds/`, é o ambiente `default`) com o ID de
-`func-ieadespa-api` — se o erro de conflito persistir, considerar abrir chamado
-de suporte com a Microsoft citando as issues acima. O ambiente de homologação
-já está ligado à Function App nova (prova de conceito funcionando) — só
-produção falta.
+**2ª tentativa (20/09, mesma sessão, a pedido do usuário) — mesmo resultado,
+mais evidência de que é do lado do Azure**: achado real antes de tentar de
+novo: a doc oficial da Microsoft (`functions-bring-your-own`) exige
+`api_location: ""` (string vazia) pra desligar Managed Functions de verdade —
+a 1ª tentativa tinha REMOVIDO a linha inteira, o que não é a mesma coisa.
+Corrigido (commit `b628116`, deploy 18:44-18:48 UTC), testado — mesmo assim o
+link falhou com o **mesmo erro exato** (`Cannot link backend with a
+preexisting Azure Static Web Apps configuration`). Produção ficou sem API de
+novo (`api/auth/login` → 500) entre ~18:48 e ~20:51 UTC (**quase 2h** — mais
+longo do que deveria, o teste de saúde não foi repetido com frequência
+suficiente depois do deploy). Revertido de novo (commit `772a8b7`, deploy
+20:51-20:56 UTC), produção confirmada saudável.
+
+**Conclusão desta 2ª tentativa**: usando a configuração EXATA que a
+documentação oficial da Microsoft pede pra esse cenário, o Azure recusou com
+o mesmo erro — isso descarta erro de configuração deste lado como causa. É
+comportamento da própria plataforma Azure Static Web Apps nesta conta/nesta
+combinação específica de recursos, consistente com as issues abertas e sem
+resposta (`Azure/static-web-apps#1197`, `#1540`). **Não tentar de novo contra
+produção sem um caminho genuinamente diferente** (ex: abrir chamado oficial
+de suporte Azure citando as issues, ou recriar o Static Web App do zero já
+com o backend linkado antes de qualquer deploy — ambos fora do escopo de
+"tentar de novo" simples). Cada tentativa tem custo real: a 1ª deixou
+produção ~14h fora do ar, a 2ª ~2h.
+
+Ambiente de homologação continua ligado à Function App nova e funcionando —
+prova de conceito válida, só não é possível replicar em produção por ora.
 
 **Deploy do código da API mudou**: agora é `func azure functionapp publish
-func-ieadespa-api` (de dentro de `api/`), não mais o workflow de CI/CD — até a
-ligação em produção ser concluída, isso só afeta `func-ieadespa-api`
-diretamente (não usado por ninguém em produção ainda).
+func-ieadespa-api` (de dentro de `api/`), não mais o workflow de CI/CD — hoje
+isso só afeta `func-ieadespa-api` diretamente (não usado por produção).

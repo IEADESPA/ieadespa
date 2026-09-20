@@ -7189,56 +7189,90 @@ ilhas pontuais de interatividade; este sistema é um painel CRUD dinâmico o tem
 todo — trocar de motor seria reescrever a aplicação sem ganho real). O caminho é
 melhorar o que já existe (HTML/CSS/JS puro), não trocar de arquitetura.
 
-> **Escopo revisto (19/09) — pedido explícito do usuário.** O plano original tratava
-> v10.1 como "refinamento" (ícone + ajuste de paleta). Avaliação honesta do estado
-> atual (`app/style.css`, 474 linhas; `app/index.html`; ~175 tabelas geradas em
-> `app/script.js`): a engenharia de base é sólida — tokens de cor, modo de leitura
-> fácil, foco visível (WCAG, vB.10), toasts/modal, sidebar recolhível, paginação — o
-> problema não é código quebrado, é **resultado visual raso demais pro tamanho do
-> sistema**: ícone é emoji cru em todo lugar, escala tipográfica quase plana (quase
-> tudo entre 0.78rem-0.92rem, sem hierarquia clara de importância), paleta usa só
-> marinho+dourado pra tudo (13 módulos e 60+ sub-telas de FASE 0 a 9 têm a mesma cara
-> visual, sem identidade própria por área), espaçamento sem escala declarada (8/10/
-> 12/14/16/18/20/22/26px todos soltos, ad-hoc, no mesmo arquivo). Resultado: um
-> sistema funcional mas com cara de planilha antiga, não de painel institucional
-> moderno. Por isso v10.1 deixa de ser 1 versão de "refinamento" e vira 4 versões de
-> redesenho de verdade — continua posicionada aqui na FASE 10 (depois do resto do
-> sistema pronto, mesma razão de sempre), mas o escopo agora é reescrever a cara do
-> sistema, tela por tela, não só trocar ícone e cor.
+> **Escopo revisto (19/09) — pedido explícito do usuário, 2ª rodada.** Primeira
+> revisão (mesma data, mais cedo) já tinha ampliado v10.1 de "refinamento" pra 4
+> versões — o usuário considerou ainda raso ("fichinha") e pediu pesquisa real de
+> mercado, não achismo interno. Feita agora (19/09): números concretos abaixo vêm de
+> 3 fontes — (1) **padrões de dashboard 2026 de Linear/Stripe/Grafana/Vercel**
+> (sidebar 256px, faixa de 4-6 cards de indicador, grid de 12 colunas, estados
+> obrigatórios de carregando/vazio/erro); (2) **shadcn/ui**, o design system mais
+> citado do mercado pra sidebar de painel (estrutura Header/Content agrupado por
+> seção/Footer fixos, item de menu com altura/raio/estado-ativo padronizados,
+> variáveis de tema light/dark); (3) **regras de tipografia de dashboard enterprise**
+> (escala de 7 níveis por proporção matemática ~1.125-1.2, peso/contraste por nível).
+> Mais a referência setorial já usada em v5.6/v5.7 — **ChurchSuite** e **Planning
+> Center** — como parâmetro de "isso é o que profissionaliza visualmente um sistema
+> de gestão eclesiástica". Nenhuma dessas fontes manda trocar de arquitetura (todas
+> são só HTML/CSS/JS por trás) — a decisão da abertura desta fase (não trocar de
+> motor) continua de pé; o que muda é que agora **cada item abaixo tem número, não
+> adjetivo**.
 
 #### v10.1 — Fundamentos do sistema de design (tokens, tipografia, ícones)
 
 - [ ] Ícones de verdade (Lucide/Feather via CDN) no lugar de todo emoji cru — sidebar
       (13 módulos), botões de ação, badges de status, cabeçalhos de painel.
-- [ ] Escala tipográfica com hierarquia real (mínimo 5 níveis: título de página,
-      título de seção, dado em destaque, corpo, legenda/metadado) — hoje quase tudo
-      usa o mesmo peso visual.
+- [ ] Escala tipográfica de **7 níveis**, proporção ~1.125-1.2 (fonte: regras de
+      tipografia enterprise SaaS): H1 24-32px/peso 600 (título de página), H2
+      18-20px/600 (título de seção), H3 15-16px/500 (rótulo de card/painel), Corpo
+      14px/400, Legenda 12px/400, e **dado em destaque** (KPI/valor financeiro) maior
+      que o rótulo ao lado + peso 600+. Fonte da interface continua Inter (já
+      instalada — é exatamente a família humanista que essas regras recomendam,
+      classe "IBM Plex Sans/DM Sans/Figtree/Sora"); valor numérico em tabela
+      financeira ganha fonte monoespaçada (ex: JetBrains Mono via CDN) só pro número,
+      pra alinhar caractere a caractere. Contraste mínimo 4.5:1 corpo / 3:1 texto
+      grande (mesma régua WCAG AA que vB.10 já aplica — não muda, só passa a valer
+      pra cada nível novo da escala).
 - [ ] Paleta expandida com cor de identidade por área/fase (ex: Financeiro, EBD,
       Disciplinar, Governança cada um com um tom de destaque próprio, sem perder o
       marinho/dourado institucional como base) — objetivo é dar orientação visual
       imediata de "em que parte do sistema eu estou", não só o rótulo de texto.
-- [ ] Escala de espaçamento declarada em `:root` (ex: `--esp-1` a `--esp-6`) e
-      substituição gradual dos valores soltos hoje espalhados pelo CSS.
+- [ ] Escala de espaçamento em grid de 8px declarada em `:root` (`--esp-1: 4px` ...
+      `--esp-6: 48px`, por exemplo — grid de 8px é o padrão que sustenta o gutter de
+      24px do item de grid abaixo) e substituição gradual dos valores soltos hoje
+      espalhados pelo CSS (8/10/12/14/16/18/20/22/26px sem escala).
 
 #### v10.1.1 — Redesenho da navegação e da grade de módulos
 
+- [ ] Sidebar reestruturada no padrão shadcn/ui — hoje é uma lista plana de botões;
+      vira: cabeçalho fixo, corpo rolável **agrupado por seção com rótulo** (ex.
+      "Governança", "Financeiro", "EBD" em vez de 13+ botões soltos em sequência
+      histórica de implementação), rodapé fixo (usuário logado) — mesma composição
+      Header/Content-agrupado/Footer do componente de referência.
+  - Item de menu: 36px de altura, 12px de padding horizontal, 8px de raio.
+  - Estado ativo: fundo a 8% de opacidade da cor primária + borda esquerda de 3px —
+    no lugar do preenchimento sólido dourado atual (`.btn-aba.ativo`), mais sóbrio e
+    mais parecido com o que o mercado já validou em produção.
+  - Largura expandida 230px → **256px** (padrão de mercado), colapsada mantém 64px.
 - [ ] `.card-modulo`/`.grade-modulos` (portal de serviços, v4.2) ganha identidade
       visual por módulo (cor/ícone coerentes com o token de área da v10.1), não só
       ícone+texto genérico repetido 13+ vezes.
-- [ ] Sidebar reorganizada por agrupamento lógico (fase/área), não lista plana —
-      revisar `.sidebar`/`.btn-aba`/`.submenu-aba` (`app/style.css`) e a montagem em
-      `app/script.js` juntos, já que hoje a ordem de aba é a ordem de implementação
-      histórica, não a ordem que faz sentido pra quem usa.
 - [ ] Cabeçalho de página consistente (título + contexto/breadcrumb + ação principal
       da tela) — hoje cada aba monta `.cabecalho-secretaria` do zero, sem padrão de
       onde fica o quê.
 
 #### v10.1.2 — Redesenho dos componentes recorrentes
 
-- [ ] Tabela (`.tabela-frequencia`, hoje a única classe de tabela do sistema,
-      reaproveitada nas ~175 tabelas geradas em `app/script.js`) revisada pra
-      densidade/hierarquia melhores (zebra, alinhamento por tipo de dado, estado
-      vazio ilustrado em vez de célula em branco).
+- [ ] **Faixa de indicadores** (KPI) em painéis de resumo (Meu Painel, resumos de
+      módulo) — hoje `.resumo-stats`/`.stat-tile` já existe mas sem padrão de
+      mercado: vira 4-6 cards no máximo, 200-280px cada (`grid-template-columns:
+      repeat(auto-fill, minmax(200px, 1fr))`), número principal em 28-32px alto
+      contraste, comparação (ex. "vs. mês anterior") em 14px cor secundária, no
+      máximo 1 elemento visual de apoio por card (sparkline ou seta de tendência,
+      nunca os dois).
+- [ ] Conteúdo principal migra pra **grid de 12 colunas**, gutter 24px: tabela cheia
+      = `grid-column: 1 / -1`, layout de 2 colunas = `span 7` + `span 5`, 3 cards
+      iguais = `span 4` cada — no lugar do empilhamento vertical solto de hoje.
+- [ ] Tabela (`.tabela-frequencia`, reaproveitada em ~175 tabelas geradas em
+      `app/script.js`) revisada: altura de linha 48-52px (visão confortável) ou
+      36-40px (visão densa, por preferência de tela), cabeçalho fixo (`position:
+      sticky`, fundo sólido, `z-index` acima do conteúdo), alinhamento por tipo de
+      dado (texto à esquerda, número à direita, badge de status centralizado) —
+      hoje tudo alinha à esquerda igual, número incluso.
+- [ ] **3 estados obrigatórios em qualquer lista/tabela** (hoje só existe o estado
+      "com dado" e "vazio" tratados de forma ad-hoc): carregando (skeleton — bloco
+      cinza pulsante do tamanho da linha real, não spinner central bloqueando a
+      tela), vazio (frase + ação sugerida, nunca só uma tabela sem linha nenhuma) e
+      erro (por componente/painel, nunca a tela inteira em branco).
 - [ ] Formulário padrão (rótulo, campo, erro inline, ajuda contextual) com hierarquia
       visual clara entre campo obrigatório/opcional/calculado — hoje um campo
       `readonly` calculado (ex: v5.5) parece visualmente igual a um campo digitável.

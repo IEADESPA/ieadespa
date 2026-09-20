@@ -7305,6 +7305,17 @@ melhorar o que já existe (HTML/CSS/JS puro), não trocar de arquitetura.
       mudam com frequência), pra não virar um cache pesado/desatualizado.
 - [ ] Revisar pontualmente as consultas mais pesadas no backend (ex: Congregações).
 
+> **Adiantado fora de ordem (19-20/09)**: a queixa real de login levando
+> 10-15s não podia esperar a FASE 10 — investigação completa (com acesso real
+> à assinatura Azure) e ações tomadas documentadas em `HOMOLOGACAO.md` §
+> "Investigação de lentidão e custo": Auto-Tuning do SQL desligado (causa real
+> do banco nunca pausar), e migração de "Managed Functions" (cold start
+> documentado de 15-30s) pra "Bring Your Own Functions" com Flex Consumption —
+> validada em homologação, **produção pendente** por um bug conhecido do
+> Azure (issue aberta, sem solução). Este item da v10.2 (cache de front,
+> revisão de consultas) continua de pé — o achado acima foi infraestrutura,
+> não isso aqui.
+
 #### v10.3 — Responsividade mobile
 
 - [ ] Tabelas hoje cortam no celular sem rolagem horizontal (funcionam no notebook,

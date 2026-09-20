@@ -75,3 +75,74 @@ Mesma estimativa de antes se confirmou na prática — nada surpreendeu:
 | Alertas (Action Group + regra) | ~R$ 0 (e-mail, baixo volume) |
 | Teste de restore (banco temporário, apagado em ~40min) | desprezível |
 | **Total recorrente** | **~R$ 25-115/mês** |
+
+---
+
+## Investigação de lentidão e custo (2026-09-20)
+
+Usuário relatou login demorando 10-15s e pediu análise de custo total (teto de
+US$150/mês). Investigação com acesso real à assinatura Azure — achados e ações:
+
+### Achado 1 — banco de produção nunca pausava
+
+`az monitor metrics list` no `app-db-prod` mostrou **72/72 horas com dado nas
+últimas 72h** — o banco (Serverless, auto-pause configurado pra 60min) nunca
+pausou de verdade. Consulta direta ao `sys.dm_exec_sessions` identificou a
+causa: conexões internas do próprio Azure (`AutomaticTuningAgent`,
+`BackupService`, `MetricsDownloader`, `DmvCollector`) reconectando a cada poucos
+minutos, 24h — achado confirmado como comportamento conhecido do Azure
+(Automatic Tuning está na lista oficial de recursos que impedem auto-pause).
+
+**Ação**: Automatic Tuning desligado a nível de servidor (`srv-app-sql`,
+`forceLastGoodPlan`/`createIndex`/`dropIndex`/`maintainIndex` → `Off`). Recurso
+só de performance, sem relação com segurança/LGPD (Auditoria e Threat
+Detection já estavam desligados antes, confirmado, não afetados). Reversível a
+qualquer momento no Portal Azure. Efeito real (banco voltando a pausar de
+madrugada) ainda precisa ser confirmado depois de algumas horas/dias de
+observação.
+
+**Custo real (Cost Management API, mês corrente até 19/09, projetado):**
+
+| Recurso | Projeção mensal |
+|---|---|
+| Banco de produção (`app-db-prod`) | ≈ US$ 118 |
+| Banco de homologação | ≈ US$ 4 |
+| Site institucional + Directus | ≈ US$ 3 |
+| Site principal (SWA + API) | ≈ US$ 3 |
+| **Total (antes desta investigação)** | **≈ US$ 128 de US$ 150** |
+
+### Achado 2 — cold start de 15-30s é do modo "Managed Functions", não do código
+
+O site usa o modo **Managed Functions** do Azure Static Web Apps
+(`api_location: "api"` no workflow) — modo com cold start **documentado pela
+Microsoft em 15-30s**, sem configuração pra mitigar. Confirmado com medição real
+(3,6-8,8s em vários testes ao vivo).
+
+**Ação**: criada Function App separada `func-ieadespa-api` (Flex Consumption, 1
+instância sempre pronta ["Always Ready"], Brazil South — mesma região do SQL),
+modelo "Bring Your Own Functions". Testada em **homologação** (ambiente PR #1):
+login e mais 5 módulos diferentes, 0,6-0,9s via proxy do site / 0,2-0,4s direto
+na Function App — contra vários segundos do modo anterior. Custo estimado: ≈
+US$ 10/mês (dentro do orçamento).
+
+Removido `api_location` do workflow de produção
+(`.github/workflows/azure-static-web-apps-white-grass-048208e0f.yml`) e
+deployado limpo. **Ligação em produção ainda não concluída**: o Azure recusa
+com `Cannot link backend with a preexisting Azure Static Web Apps
+configuration` mesmo depois da limpeza — bug conhecido, sem solução
+documentada (issue aberta em `Azure/static-web-apps#1197` e `#1540`, sem
+resposta da Microsoft). Produção confirmada 100% funcional durante toda a
+investigação (testado ao vivo), só continua no modo antigo (mais lento) por
+enquanto.
+
+**Pra retomar**: repetir o `az rest --method put` no `linkedBackends` de
+`app-meusite-web` (endpoint sem `/builds/`, é o ambiente `default`) com o ID de
+`func-ieadespa-api` — se o erro de conflito persistir, considerar abrir chamado
+de suporte com a Microsoft citando as issues acima. O ambiente de homologação
+já está ligado à Function App nova (prova de conceito funcionando) — só
+produção falta.
+
+**Deploy do código da API mudou**: agora é `func azure functionapp publish
+func-ieadespa-api` (de dentro de `api/`), não mais o workflow de CI/CD — até a
+ligação em produção ser concluída, isso só afeta `func-ieadespa-api`
+diretamente (não usado por ninguém em produção ainda).

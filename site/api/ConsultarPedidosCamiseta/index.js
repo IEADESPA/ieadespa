@@ -64,7 +64,7 @@ module.exports = async function (context, req) {
   const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` };
 
   const pedidosRes = await fetch(
-    `${DIRECTUS_URL}/items/camiseta_pedidos?fields=id,nome,telefone,valor_pago,avulso,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&limit=-1`,
+    `${DIRECTUS_URL}/items/camiseta_pedidos?fields=id,nome,telefone,valor_pago,avulso,separado,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&limit=-1`,
     { headers },
   );
   if (!pedidosRes.ok) {
@@ -96,6 +96,7 @@ module.exports = async function (context, req) {
       lote: p.grupo?.nome ?? null,
       valorTotal,
       valorPago: p.valor_pago,
+      separado: Boolean(p.separado),
       itens: itensComAlocacao.map((i) => ({
         tamanho: i.tamanho,
         modelo: i.modelo,

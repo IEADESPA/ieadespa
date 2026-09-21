@@ -106,6 +106,14 @@ export const ORAR_MURAL_URL = "/api/orar-mural";
 export const CRIAR_PEDIDO_CAMISETA_URL = "/api/criar-pedido-camiseta";
 
 /**
+ * Fase 28 — aviso de "pode retirar" (peça separada, esperando a pessoa vir
+ * buscar). Chamada só pelo painel (`/painel-camisetas/grupo/pedidos/`), no
+ * momento em que a equipe marca um pedido como separado — melhor esforço,
+ * nunca bloqueia a marcação em si (ver `api/EnviarAvisoRetiradaCamiseta/`).
+ */
+export const ENVIAR_AVISO_RETIRADA_CAMISETA_URL = "/api/enviar-aviso-retirada-camiseta";
+
+/**
  * Ferramenta de exercício de direito de exclusão (LGPD, Art. 18) — só a
  * equipe autenticada usa (nunca público). Localiza e apaga tudo que está
  * ligado a um telefone (inscrições em evento, pedidos de camiseta e o que

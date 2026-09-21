@@ -248,9 +248,38 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   e geríveis no painel; nada é apagado por expirar.
 - **Painel de pedidos com os mesmos filtros de eventos**: busca por nome, chips (Todos/Devendo/
   Pago/Com peça a retirar/Já retirado tudo) e um filtro por resposta de uma pergunta personalizada
-  de seleção (ex. filtrar só quem respondeu "Zona Norte"). Sem exportação para Excel/CSV, de
-  propósito — mesmo motivo já documentado para eventos: manter dado pessoal só dentro do painel
-  controlado, não solto circulando em arquivo.
+  de seleção (ex. filtrar só quem respondeu "Zona Norte"). Sem exportação de dado pessoal
+  (nome/telefone) para Excel/CSV, de propósito — mesmo motivo já documentado para eventos: manter
+  dado pessoal só dentro do painel controlado, não solto circulando em arquivo. A exportação em PDF
+  da Fase 28 (abaixo) foge dessa regra de propósito — é só contagem agregada por tamanho/modelo,
+  sem nome nem telefone de ninguém.
+- **Editar item de um pedido já feito** (`/painel-camisetas/grupo/pedidos/`) — trocar tamanho/
+  modelo/quantidade, remover uma linha ou adicionar uma nova a um pedido existente, em vez de só
+  poder excluir o pedido inteiro. Trava de segurança: só libera editar/remover um item enquanto
+  `quantidade_retirada` daquele item for 0 (pra não apagar o registro de uma peça que a pessoa já
+  pegou). Funciona igual com o lote aberto ou fechado — "Vendido/Arrecadado/Pago à malharia" de um
+  lote fechado vêm de um retrato congelado (ver acima), nunca recalculado a partir dos pedidos
+  atuais, então editar aqui corrige só o que a pessoa deve/tem a retirar dali pra frente, sem mudar
+  nenhum número já travado do lote.
+- **Separação e aviso de retirada (Fase 28)** — `camiseta_pedidos.separado`/`separado_em`: a
+  equipe marca um pedido como "separado" quando a peça chega da malharia e é reservada pra aquela
+  pessoa (botão no painel de pedidos, não se aplica a venda avulsa — essa já sai na hora). Quem
+  deixou e-mail recebe um aviso automático (`api/EnviarAvisoRetiradaCamiseta/`, melhor esforço,
+  mesmo padrão do resto do e-mail transacional do site via ACS) com a lista de itens e o local de
+  retirada; texto do e-mail é customizável por campanha (aba "E-mail de retirada" na edição da
+  campanha — assunto e um parágrafo, texto simples, nunca HTML livre). O painel também mostra
+  "Separado há N dia(s), aguardando retirada" pra quem não veio buscar ainda, e o status "✅ Pronto
+  pra retirar!" aparece em `/meus-pedidos-camiseta/` e "Minha conta" mesmo pra quem não deixou
+  e-mail.
+- **Abas na edição da campanha (Fase 28)** — `/painel-camisetas/grupo/` deixou de ser um formulário
+  único e comprido: agora tem 4 abas (Dados da campanha, Perguntas personalizadas, E-mail de
+  retirada, Excluir), mesmo padrão de abas já usado em `/painel-eventos/evento/` (`.tab-bar`/
+  `.tab-btn`, JS de toggle idêntico).
+- **Exportar PDF do consolidado (Fase 28)** — botão "Exportar PDF" no painel de um lote, gera um
+  PDF (tamanho/modelo/pedido pelo sistema/estoque extra/total a encomendar) pra mandar pra
+  malharia, a partir dos mesmos dados já calculados na tela (sem consulta nova) — mesma técnica
+  manual de desenho de tabela em `jsPDF` (sem lib de tabela) já usada em `/eventos/exportar/` e no
+  relatório de encerramento de evento.
 
 ### Comunidade: mural de oração, enquetes e Minha Conta
 

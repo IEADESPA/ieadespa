@@ -51,7 +51,10 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         <div class="mt-6" data-lote-painel>
           <div class="flex flex-wrap items-center justify-between gap-3">
             <h3 class="text-lg font-serif font-bold" data-lote-titulo></h3>
-            <button type="button" class="btn btn-outline" data-fechar-lote hidden>Fechar este lote</button>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline" data-exportar-pdf hidden>Exportar PDF</button>
+              <button type="button" class="btn btn-outline" data-fechar-lote hidden>Fechar este lote</button>
+            </div>
           </div>
           <p class="mt-1 text-sm text-muted-foreground" data-lote-status-texto></p>
 
@@ -143,6 +146,9 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
   <script>
     import { exigirAutenticacao } from "@/lib/painelAuth";
+    import { ENVIAR_AVISO_RETIRADA_CAMISETA_URL } from "@/lib/directus";
+    import { jsPDF } from "jspdf";
+    import { configurarAcessibilidadePdf } from "@/lib/pdf";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -153,6 +159,9 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       precos_tamanho: Record<string, number> | null;
       tamanhos: string[] | null;
       modelos: string[] | null;
+      retirada_local: string | null;
+      email_retirada_assunto: string | null;
+      email_retirada_corpo: string | null;
     }
 
     interface Item {
@@ -166,12 +175,15 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     interface Pedido {
       id: number;
       nome: string;
+      email: string | null;
       // CongregacaoId do sistema de governança (vC.2), não mais relação do
       // Directus — nome resolvido via nomesCongregacoes (ver acima).
       congregacao: number | null;
       valor_pago: number;
       avulso: boolean;
       lote: number | null;
+      separado: boolean;
+      separado_em: string | null;
       itens: Item[];
     }
 
@@ -331,6 +343,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const tituloLoteEl = document.querySelector<HTMLElement>("[data-lote-titulo]");
       const statusTextoEl = document.querySelector<HTMLElement>("[data-lote-status-texto]");
       const fecharBtn = document.querySelector<HTMLButtonElement>("[data-fechar-lote]");
+      const exportarBtn = document.querySelector<HTMLButtonElement>("[data-exportar-pdf]");
       const financeiroEl = document.querySelector<HTMLElement>("[data-lote-financeiro]");
       const consolidadoEl = document.querySelector<HTMLElement>("[data-lote-consolidado]");
 
@@ -340,6 +353,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         if (tituloLoteEl) tituloLoteEl.textContent = "Todos os lotes";
         if (statusTextoEl) statusTextoEl.textContent = "Visão geral, somando todos os lotes já criados.";
         if (fecharBtn) fecharBtn.hidden = true;
+        if (exportarBtn) exportarBtn.hidden = true;
         if (financeiroEl) financeiroEl.hidden = true;
         if (consolidadoEl) consolidadoEl.hidden = true;
         return;
@@ -349,6 +363,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         if (tituloLoteEl) tituloLoteEl.textContent = "Avulso";
         if (statusTextoEl) statusTextoEl.textContent = "Vendas que não passaram por nenhum lote — já saíram de peça em estoque.";
         if (fecharBtn) fecharBtn.hidden = true;
+        if (exportarBtn) exportarBtn.hidden = true;
         if (financeiroEl) financeiroEl.hidden = true;
         if (consolidadoEl) consolidadoEl.hidden = true;
         return;
@@ -364,6 +379,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
             : `Fechado${lote.fechado_em ? " em " + new Date(lote.fechado_em).toLocaleDateString("pt-BR") : ""}.`;
       }
       if (fecharBtn) fecharBtn.hidden = lote.status !== "aberto";
+      if (exportarBtn) exportarBtn.hidden = false;
       if (financeiroEl) financeiroEl.hidden = false;
       if (consolidadoEl) consolidadoEl.hidden = false;
 
@@ -485,6 +501,21 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         .join("");
     }
 
+    /** Mesmos dados de `renderizarConsolidado`, em formato de linhas simples — usado pra exportar o PDF (ver botão "Exportar PDF"). */
+    function calcularConsolidado(loteId: number, congelado: boolean) {
+      const combos = congelado
+        ? loteItens.filter((li) => li.lote === loteId).map((li) => ({ tamanho: li.tamanho, modelo: li.modelo }))
+        : combosDoLote(loteId);
+      combos.sort((a, b) => (a.tamanho ?? "").localeCompare(b.tamanho ?? ""));
+
+      return combos.map(({ tamanho, modelo }) => {
+        const itemExistente = loteItens.find((li) => li.lote === loteId && (li.tamanho ?? null) === (tamanho ?? null) && (li.modelo ?? null) === (modelo ?? null));
+        const pedidoSistema = congelado ? Number(itemExistente?.pedido_congelado ?? 0) : pedidoSistemaPara(loteId, tamanho, modelo);
+        const extra = Number(itemExistente?.estoque_extra ?? 0);
+        return { tamanho: tamanho ?? "—", modelo: modelo ?? "—", pedidoSistema, extra, total: pedidoSistema + extra };
+      });
+    }
+
     /**
      * Editar tamanho/modelo/quantidade ou remover uma linha de item — e
      * adicionar uma nova — só é seguro enquanto nenhuma peça daquela linha
@@ -561,6 +592,11 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       `;
     }
 
+    /** Dias corridos desde uma data ISO — usado pra "Separado há N dia(s)". */
+    function diasDesde(dataIso: string): number {
+      return Math.floor((Date.now() - new Date(dataIso).getTime()) / (1000 * 60 * 60 * 24));
+    }
+
     function pedidoCardHtml(p: Pedido): string {
       const itensHtml = alocarPagamento(p.itens, Number(p.valor_pago))
         .map((item) => itemLinhaHtml(item, item.quantidadePaga))
@@ -571,6 +607,19 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const avisoLoteFechado =
         loteDoPedido?.status === "fechado"
           ? `<p class="camiseta-pedido-aviso">Lote ${loteDoPedido.numero} já fechado — editar itens aqui corrige só o que esta pessoa deve/tem a retirar, sem mudar os números já travados do lote.</p>`
+          : "";
+
+      // Fase 28 — "separado" (peça já chegou da malharia e foi separada pra
+      // essa pessoa) dispara o e-mail de aviso; não se aplica a venda avulsa
+      // (já sai de estoque na hora, não tem "esperar chegar").
+      const separadoAcao = p.avulso
+        ? ""
+        : p.separado
+          ? `<span class="badge-separado">✅ Separado</span>`
+          : `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-marcar-separado>Marcar como separado</button>`;
+      const avisoAguardandoRetirada =
+        !p.avulso && p.separado && !tudoRetirado(p)
+          ? `<p class="camiseta-pedido-aviso camiseta-pedido-aviso-retirada">Separado${p.separado_em ? ` há ${diasDesde(p.separado_em)} dia(s)` : ""}, aguardando retirada.</p>`
           : "";
 
       return `
@@ -585,10 +634,12 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
                 <input type="number" step="0.01" min="0" class="field" style="width:6.5rem" value="${p.valor_pago}" data-campo-valor-pago />
               </label>
               <button type="button" class="link-sweep text-sm font-semibold text-accent" data-salvar-pedido>Salvar</button>
+              ${separadoAcao}
               <button type="button" class="link-sweep text-sm font-semibold" data-excluir-pedido>Excluir</button>
             </div>
           </div>
           ${avisoLoteFechado}
+          ${avisoAguardandoRetirada}
           <ul class="mt-3 grid gap-2">${itensHtml}</ul>
           <button type="button" class="link-sweep text-sm font-semibold text-accent mt-2" data-mostrar-novo-item>+ Adicionar item</button>
           ${novoItemLinhaHtml()}
@@ -707,6 +758,75 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         lote.saldo = saldo;
         atualizarTudo();
       }
+    });
+
+    document.querySelector("[data-exportar-pdf]")?.addEventListener("click", () => {
+      const lote = loteSelecionado();
+      if (!lote) return;
+      const congelado = lote.status === "fechado" && lote.total_vendido != null;
+      const linhas = calcularConsolidado(lote.id, congelado);
+
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const titulo = `Lote ${lote.numero} — ${grupo.nome}`;
+      configurarAcessibilidadePdf(doc, titulo);
+      const margem = 56;
+      let y = margem;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text(titulo, margem, y);
+      y += 20;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(90);
+      doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margem, y);
+      y += 30;
+      doc.setTextColor(20);
+
+      const colunas = [
+        { titulo: "Tamanho", x: margem, largura: 90 },
+        { titulo: "Modelo", x: margem + 90, largura: 150 },
+        { titulo: "Pedido pelo sistema", x: margem + 240, largura: 110 },
+        { titulo: "Estoque extra", x: margem + 350, largura: 90 },
+        { titulo: "Total a encomendar", x: margem + 440, largura: 60 },
+      ];
+      const larguraTabela = colunas.reduce((s, c) => s + c.largura, 0);
+      const alturaPagina = doc.internal.pageSize.getHeight();
+
+      function desenharCabecalho() {
+        doc.setFillColor(240, 236, 224);
+        doc.rect(margem, y, larguraTabela, 20, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        colunas.forEach((c) => doc.text(c.titulo, c.x + 6, y + 14));
+        y += 20;
+      }
+
+      desenharCabecalho();
+      doc.setFont("helvetica", "normal");
+
+      if (linhas.length === 0) {
+        doc.text("Nenhum pedido neste lote.", margem + 6, y + 14);
+        y += 20;
+      }
+
+      linhas.forEach((linha) => {
+        if (y + 20 > alturaPagina - margem) {
+          doc.addPage();
+          y = margem;
+          desenharCabecalho();
+          doc.setFont("helvetica", "normal");
+        }
+        doc.rect(margem, y, larguraTabela, 20);
+        doc.text(String(linha.tamanho), colunas[0].x + 6, y + 14);
+        doc.text(String(linha.modelo), colunas[1].x + 6, y + 14);
+        doc.text(String(linha.pedidoSistema), colunas[2].x + 6, y + 14);
+        doc.text(String(linha.extra), colunas[3].x + 6, y + 14);
+        doc.text(String(linha.total), colunas[4].x + 6, y + 14);
+        y += 20;
+      });
+
+      doc.save(`camisetas-lote-${lote.numero}-${grupo.nome.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`);
     });
 
     document.querySelector("[data-consolidado-corpo]")?.addEventListener("click", async (event) => {
@@ -871,6 +991,42 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         if (res.ok) {
           pedidos = pedidos.filter((p) => p.id !== pedidoId);
           atualizarTudo();
+        }
+      }
+
+      if (target.matches("[data-marcar-separado]")) {
+        const separadoEm = new Date().toISOString();
+        target.textContent = "Salvando…";
+        const res = await fetch(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ separado: true, separado_em: separadoEm }),
+        });
+        if (!res.ok) {
+          target.textContent = "Marcar como separado";
+          return;
+        }
+        pedido.separado = true;
+        pedido.separado_em = separadoEm;
+        atualizarTudo();
+
+        // Aviso por e-mail é melhor esforço — não bloqueia nem desfaz o
+        // "separado" já gravado se o envio falhar (mesmo padrão do resto do
+        // e-mail transacional do site).
+        if (pedido.email) {
+          fetch(ENVIAR_AVISO_RETIRADA_CAMISETA_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: pedido.email,
+              nome: pedido.nome,
+              campanhaNome: grupo.nome,
+              itens: pedido.itens.map((i) => ({ tamanho: i.tamanho, modelo: i.modelo, quantidade: i.quantidade })),
+              retiradaLocal: grupo.retirada_local || null,
+              assunto: grupo.email_retirada_assunto || null,
+              corpo: grupo.email_retirada_corpo || null,
+            }),
+          }).catch(() => {});
         }
       }
 
@@ -1052,7 +1208,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         return;
       }
 
-      const resGrupo = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos`, {
+      const resGrupo = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos,retirada_local,email_retirada_assunto,email_retirada_corpo`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resGrupo.ok) {
@@ -1064,7 +1220,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       if (tituloEl) tituloEl.textContent = `Pedidos — ${grupo.nome}`;
 
       const resPedidos = await fetch(
-        `${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,nome,valor_pago,avulso,lote,congregacao,itens.id,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&sort=nome&limit=-1`,
+        `${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,nome,email,valor_pago,avulso,lote,congregacao,separado,separado_em,itens.id,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&sort=nome&limit=-1`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       pedidos = (await resPedidos.json()).data ?? [];
@@ -1132,5 +1288,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     .camiseta-item-linha { border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
     .camiseta-item-linha:last-child { border-bottom: none; padding-bottom: 0; }
     .camiseta-pedido-aviso { margin-top: 0.5rem; font-size: 0.8125rem; color: var(--muted-foreground); border-left: 2px solid var(--accent); padding-left: 0.6rem; }
+    .camiseta-pedido-aviso-retirada { border-left-color: #b8860b; color: #8a6d1f; font-weight: 600; }
+    .badge-separado { font-size: 0.8125rem; font-weight: 600; color: var(--accent); }
   </style>
 </BaseLayout>

@@ -90,6 +90,7 @@ const allPosts = visiblePosts(await getAllMensagens());
     interface Pedido {
       grupo: string | null;
       valorPago: number;
+      separado: boolean;
       itens: ItemPedido[];
     }
 
@@ -145,14 +146,20 @@ const allPosts = visiblePosts(await getAllMensagens());
       return "aguardando pagamento";
     }
 
+    function tudoRetirado(p: Pedido): boolean {
+      return p.itens.length > 0 && p.itens.every((i) => i.quantidadeRetirada >= i.quantidade);
+    }
+
     function pedidoCardHtml(p: Pedido): string {
       const itensTexto = p.itens
         .map((i) => `${i.quantidade}x ${[i.tamanho, i.modelo].filter(Boolean).join(" · ")} — ${situacaoItem(i)}`)
         .map(escapeHtml)
         .join("; ");
+      const avisoRetirada = p.separado && !tudoRetirado(p) ? `<p class="minha-conta-card-pronto">✅ Pronto pra retirar!</p>` : "";
       return `
         <div class="minha-conta-card">
           <p class="minha-conta-card-titulo">${escapeHtml(p.grupo ?? "Pedido de camiseta")}</p>
+          ${avisoRetirada}
           <p class="minha-conta-card-detalhe">${totalPedido(p)} peça(s) — ${itensTexto || "sem itens"}</p>
           <p class="minha-conta-card-detalhe">Valor pago: R$ ${Number(p.valorPago ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
         </div>
@@ -273,6 +280,12 @@ const allPosts = visiblePosts(await getAllMensagens());
     }
     .minha-conta-card-titulo {
       font-weight: 600;
+    }
+    .minha-conta-card-pronto {
+      margin-top: 0.25rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--accent);
     }
     .minha-conta-card-detalhe {
       margin-top: 0.25rem;

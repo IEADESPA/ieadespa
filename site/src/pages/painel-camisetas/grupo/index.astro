@@ -27,7 +27,15 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         <p class="text-sm text-muted-foreground">Não encontrado.</p>
       </div>
 
+      <div hidden class="tab-bar mt-8" data-tabs role="tablist">
+        <button type="button" class="tab-btn is-active" data-tab="dados">Dados da campanha</button>
+        <button type="button" class="tab-btn" data-tab="perguntas">Perguntas personalizadas</button>
+        <button type="button" class="tab-btn" data-tab="retirada">E-mail de retirada</button>
+        <button type="button" class="tab-btn" data-tab="excluir">Excluir</button>
+      </div>
+
       <form hidden class="mt-8 grid gap-5 max-w-2xl" data-lote-form>
+      <div data-tab-panel="dados">
         <div class="grid gap-2">
           <label class="text-sm font-semibold" for="f-nome">Nome</label>
           <input id="f-nome" class="field" required />
@@ -146,8 +154,10 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
           <button type="submit" class="btn btn-solid" data-lote-salvar>Salvar</button>
           <p class="text-sm" data-lote-status role="status" aria-live="polite"></p>
         </div>
+      </div>
 
-        <div class="mt-6" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+      <div data-tab-panel="perguntas" hidden>
+        <div style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
           <p class="text-sm font-semibold">Perguntas personalizadas do pedido</p>
           <p class="mt-1 text-sm text-muted-foreground">
             Além de nome, telefone e congregação, o formulário público pode pedir campos extras
@@ -186,12 +196,48 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="mt-6" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+      <div data-tab-panel="retirada" hidden>
+        <div class="grid gap-5" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <div>
+            <p class="text-sm font-semibold">Aviso de "pode retirar"</p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Quando a equipe marca um pedido como "separado" (peça já chegou da malharia e foi
+              separada pra essa pessoa), quem deixou e-mail recebe um aviso automático. Os campos
+              abaixo são todos opcionais — em branco, o e-mail sai com um texto padrão.
+            </p>
+          </div>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-retirada-local">Onde/quando retirar</label>
+            <input id="f-retirada-local" class="field" placeholder="Ex.: Secretaria da Sede, seg-sex 9h-17h" />
+          </div>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-email-assunto">Assunto customizado (opcional)</label>
+            <input id="f-email-assunto" class="field" placeholder={`Padrão: "Sua camiseta chegou! — <nome da campanha>"`} />
+          </div>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-email-corpo">Mensagem customizada (opcional)</label>
+            <textarea id="f-email-corpo" rows="3" class="field" placeholder="Texto simples — a lista de itens e o local de retirada são adicionados automaticamente depois desse parágrafo."></textarea>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-solid" data-lote-salvar>Salvar</button>
+            <p class="text-sm" data-lote-status role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+
+      <div data-tab-panel="excluir" hidden>
+        <div style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
           <p class="text-sm font-semibold text-red-700">Excluir</p>
           <p class="mt-1 text-sm text-muted-foreground">Remove esta camiseta, seus lotes de compra e todos os pedidos ligados a ela. Não pode ser desfeito.</p>
           <button type="button" class="btn btn-outline mt-3" data-excluir-lote>Excluir</button>
           <p class="mt-2 text-sm" data-excluir-status role="status" aria-live="polite"></p>
+        </div>
         </div>
       </form>
     </div>
@@ -219,6 +265,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       destaque: boolean;
       pedir_congregacao: boolean;
       limite_uma_por_pessoa: boolean;
+      retirada_local: string | null;
+      email_retirada_assunto: string | null;
+      email_retirada_corpo: string | null;
     }
 
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
@@ -232,7 +281,11 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     const erroEl = document.querySelector<HTMLElement>("[data-painel-erro]");
     const tituloEl = document.querySelector<HTMLElement>("[data-painel-titulo]");
     const form = document.querySelector<HTMLFormElement>("[data-lote-form]");
-    const statusEl = document.querySelector<HTMLElement>("[data-lote-status]");
+    // Duas abas têm botão "Salvar" (Dados e E-mail de retirada — o mesmo
+    // registro, então o mesmo submit serve pros dois); atualiza o status nos
+    // dois lugares, pra funcionar não importa em qual aba a pessoa clicou.
+    const statusEls = document.querySelectorAll<HTMLElement>("[data-lote-status]");
+    const definirStatus = (texto: string) => statusEls.forEach((el) => { el.textContent = texto; });
 
     const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
     const fNome = el<HTMLInputElement>("f-nome");
@@ -248,6 +301,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     const fDestaque = el<HTMLInputElement>("f-destaque");
     const fPedirCongregacao = el<HTMLInputElement>("f-pedir-congregacao");
     const fLimiteUmaPorPessoa = el<HTMLInputElement>("f-limite-uma-por-pessoa");
+    const fRetiradaLocal = el<HTMLInputElement>("f-retirada-local");
+    const fEmailAssunto = el<HTMLInputElement>("f-email-assunto");
+    const fEmailCorpo = el<HTMLTextAreaElement>("f-email-corpo");
     const precosTamanhoWrap = document.querySelector<HTMLElement>("[data-precos-tamanho-wrap]");
     const precosTamanhoLista = document.querySelector<HTMLElement>("[data-precos-tamanho-lista]");
 
@@ -278,6 +334,18 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     }
 
     fTamanhos.addEventListener("input", () => renderizarPrecosTamanho(csvParaLista(fTamanhos.value)));
+
+    // Abas — mesmo padrão já usado em painel-eventos/evento/index.astro.
+    const tabBotoes = document.querySelectorAll<HTMLButtonElement>("[data-tab]");
+    const tabPaineis = document.querySelectorAll<HTMLElement>("[data-tab-panel]");
+    tabBotoes.forEach((botao) => {
+      botao.addEventListener("click", () => {
+        tabBotoes.forEach((b) => b.classList.toggle("is-active", b === botao));
+        tabPaineis.forEach((painel) => {
+          painel.hidden = painel.dataset.tabPanel !== botao.dataset.tab;
+        });
+      });
+    });
 
     function slugify(texto: string): string {
       return texto
@@ -317,6 +385,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       fDestaque.checked = Boolean(grupo.destaque);
       fPedirCongregacao.checked = grupo.pedir_congregacao !== false;
       fLimiteUmaPorPessoa.checked = Boolean(grupo.limite_uma_por_pessoa);
+      fRetiradaLocal.value = grupo.retirada_local ?? "";
+      fEmailAssunto.value = grupo.email_retirada_assunto ?? "";
+      fEmailCorpo.value = grupo.email_retirada_corpo ?? "";
       renderizarPrecosTamanho(grupo.tamanhos ?? []);
       const precos = grupo.precos_tamanho ?? {};
       precosTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-preco-tamanho]").forEach((input) => {
@@ -347,6 +418,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         destaque: fDestaque.checked,
         pedir_congregacao: fPedirCongregacao.checked,
         limite_uma_por_pessoa: fLimiteUmaPorPessoa.checked,
+        retirada_local: fRetiradaLocal.value.trim() || null,
+        email_retirada_assunto: fEmailAssunto.value.trim() || null,
+        email_retirada_corpo: fEmailCorpo.value.trim() || null,
       };
     }
 
@@ -380,10 +454,12 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
 
       if (carregando) carregando.hidden = true;
       if (form) form.hidden = false;
+      const tabsBar = document.querySelector<HTMLElement>("[data-tabs]");
+      if (tabsBar) tabsBar.hidden = false;
 
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
-        if (statusEl) statusEl.textContent = "Salvando…";
+        definirStatus("Salvando…");
         try {
           const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
             method: "PATCH",
@@ -391,9 +467,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
             body: JSON.stringify(lerFormulario()),
           });
           if (!res.ok) throw new Error("falha ao salvar");
-          if (statusEl) statusEl.textContent = "✅ Salvo.";
+          definirStatus("✅ Salvo.");
         } catch {
-          if (statusEl) statusEl.textContent = "Não foi possível salvar agora.";
+          definirStatus("Não foi possível salvar agora.");
         }
       });
 
@@ -589,6 +665,37 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
       padding: 1.1rem 1.25rem;
+    }
+
+    /* Mesmo padrão de abas de painel-eventos/evento/index.astro. */
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+
+    .tab-btn {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted-foreground);
+      padding: 0.45rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .tab-btn:hover {
+      border-color: var(--accent);
+    }
+
+    .tab-btn.is-active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--accent-strong);
     }
   </style>
 </BaseLayout>

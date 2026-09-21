@@ -61,7 +61,7 @@ module.exports = async function (context, req) {
       { headers },
     ),
     fetch(
-      `${DIRECTUS_URL}/items/camiseta_pedidos?${filtroEmail}&fields=id,valor_pago,avulso,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&sort=-id&limit=-1`,
+      `${DIRECTUS_URL}/items/camiseta_pedidos?${filtroEmail}&fields=id,valor_pago,avulso,separado,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&sort=-id&limit=-1`,
       { headers },
     ),
   ]);
@@ -87,6 +87,7 @@ module.exports = async function (context, req) {
     return {
       grupo: p.grupo?.nome ?? null,
       valorPago: p.valor_pago,
+      separado: Boolean(p.separado),
       itens: itensComAlocacao.map((i) => ({
         tamanho: i.tamanho,
         modelo: i.modelo,

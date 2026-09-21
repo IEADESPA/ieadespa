@@ -52,6 +52,7 @@ const allPosts = visiblePosts(await getAllMensagens());
       lote: string | null;
       valorTotal: number;
       valorPago: number;
+      separado: boolean;
       itens: Item[];
     }
 
@@ -89,10 +90,17 @@ const allPosts = visiblePosts(await getAllMensagens());
       return `<li>${rotulo} — ${i.quantidade}x (${preco}) — ${escapeHtml(situacaoItem(i))}</li>`;
     }
 
+    function tudoRetirado(p: Pedido): boolean {
+      return p.itens.length > 0 && p.itens.every((i) => i.quantidadeRetirada >= i.quantidade);
+    }
+
     function pedidoCardHtml(p: Pedido): string {
+      const avisoRetirada =
+        p.separado && !tudoRetirado(p) ? `<p class="camiseta-pedido-pronto">✅ Pronto pra retirar!</p>` : "";
       return `
         <div class="camiseta-pedido-card">
           <p class="camiseta-pedido-lote">${escapeHtml(p.lote ?? "Pedido")}</p>
+          ${avisoRetirada}
           <ul class="camiseta-pedido-itens">${p.itens.map(itemLinhaHtml).join("")}</ul>
           <p class="camiseta-pedido-detalhe">${escapeHtml(situacaoPagamento(p))}</p>
         </div>
@@ -139,6 +147,12 @@ const allPosts = visiblePosts(await getAllMensagens());
     }
     .camiseta-pedido-lote {
       font-weight: 600;
+    }
+    .camiseta-pedido-pronto {
+      margin-top: 0.25rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--accent);
     }
     .camiseta-pedido-detalhe {
       margin-top: 0.25rem;

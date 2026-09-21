@@ -11,6 +11,8 @@ interface Lote {
   nome: string;
   descricao: string | null;
   valor_venda: number | null;
+  precos_tamanho: Record<string, number> | null;
+  tamanhos: string[] | null;
   pedidos_ate: string | null;
   evento: { title: string } | null;
   ministerio: { name: string } | null;
@@ -19,10 +21,34 @@ interface Lote {
 const allPosts = visiblePosts(await getAllMensagens());
 const grupos = await fetchItems<Lote>(
   "camiseta_grupos",
-  "filter[ativo][_eq]=true&fields=slug,nome,descricao,valor_venda,pedidos_ate,evento.title,ministerio.name&sort=-date_created",
+  "filter[ativo][_eq]=true&fields=slug,nome,descricao,valor_venda,precos_tamanho,tamanhos,pedidos_ate,evento.title,ministerio.name&sort=-date_created",
 );
 
 const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+/**
+ * Preço por peça pode variar por tamanho (opcional) — tamanho sem preço
+ * próprio usa `valor_venda` como padrão (ou é grátis, se nem isso estiver
+ * definido). `faixaPreco` resume isso num rótulo só pro card da listagem:
+ * `null` (grátis), um valor único (preço igual pra todo mundo) ou uma faixa
+ * (tamanhos com preços diferentes).
+ */
+function precoTamanho(grupo: Lote, tamanho: string | null): number {
+  const precos = grupo.precos_tamanho ?? {};
+  if (tamanho && precos[tamanho] != null) return Number(precos[tamanho]);
+  return grupo.valor_venda != null ? Number(grupo.valor_venda) : 0;
+}
+
+function faixaPreco(grupo: Lote): { min: number; max: number } | null {
+  const tamanhos = grupo.tamanhos?.length ? grupo.tamanhos : [null];
+  const precos = tamanhos.map((t) => precoTamanho(grupo, t));
+  const min = Math.min(...precos);
+  const max = Math.max(...precos);
+  if (min === 0 && max === 0) return null;
+  return { min, max };
+}
+
+const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 ---
 
 <BaseLayout title="Camisetas e uniformes" description={`Lotes de camiseta e uniforme abertos na ${siteConfig.name}.`}>
@@ -46,22 +72,25 @@ const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "num
         </div>
 
         <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-camisetas-grid>
-          {grupos.map((grupo) => (
-            <a href={`/camiseta/${grupo.slug}/`} class="camiseta-lote-card" data-camiseta-card data-pedidos-ate={grupo.pedidos_ate ?? ""}>
-              <span class="camiseta-lote-nome">{grupo.nome}</span>
-              {(grupo.evento || grupo.ministerio) && (
-                <span class="camiseta-lote-vinculo">{grupo.evento?.title ?? grupo.ministerio?.name}</span>
-              )}
-              {grupo.valor_venda != null && (
-                <span class="camiseta-lote-valor">
-                  R$ {Number(grupo.valor_venda).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </span>
-              )}
-              {grupo.pedidos_ate && (
-                <span class="camiseta-lote-prazo">Pedidos até {dateFormatter.format(new Date(grupo.pedidos_ate))}</span>
-              )}
-            </a>
-          ))}
+          {grupos.map((grupo) => {
+            const faixa = faixaPreco(grupo);
+            return (
+              <a href={`/camiseta/${grupo.slug}/`} class="camiseta-lote-card" data-camiseta-card data-pedidos-ate={grupo.pedidos_ate ?? ""}>
+                <span class="camiseta-lote-nome">{grupo.nome}</span>
+                {(grupo.evento || grupo.ministerio) && (
+                  <span class="camiseta-lote-vinculo">{grupo.evento?.title ?? grupo.ministerio?.name}</span>
+                )}
+                {faixa == null ? (
+                  <span class="camiseta-lote-valor camiseta-lote-gratis">Grátis</span>
+                ) : (
+                  <span class="camiseta-lote-valor">{faixa.min === faixa.max ? brl(faixa.min) : `A partir de ${brl(faixa.min)}`}</span>
+                )}
+                {grupo.pedidos_ate && (
+                  <span class="camiseta-lote-prazo">Pedidos até {dateFormatter.format(new Date(grupo.pedidos_ate))}</span>
+                )}
+              </a>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -121,6 +150,11 @@ const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "num
       margin-top: 0.5rem;
       font-weight: 600;
       color: var(--accent);
+    }
+    .camiseta-lote-gratis {
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
     }
   </style>
 </BaseLayout>

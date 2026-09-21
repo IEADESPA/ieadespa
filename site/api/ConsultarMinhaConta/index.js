@@ -12,11 +12,23 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  * mandado pelo navegador, ou qualquer um poderia consultar a conta alheia só
  * digitando o e-mail de outra pessoa.
  */
-function alocarPagamento(itens, valorPago, valorUnitario) {
-  let restante = valorUnitario > 0 ? valorPago / valorUnitario : 0;
+/**
+ * Preço por peça pode variar por tamanho (`camiseta_grupos.precos_tamanho`,
+ * opcional) — ver a mesma lógica em `ConsultarPedidosCamiseta`.
+ */
+function precoTamanho(grupo, tamanho) {
+  const precos = grupo?.precos_tamanho || {};
+  if (tamanho && precos[tamanho] != null && precos[tamanho] !== "") return Number(precos[tamanho]);
+  return grupo?.valor_venda != null ? Number(grupo.valor_venda) : 0;
+}
+
+function alocarPagamento(itens, valorPago, grupo) {
+  let restante = Number(valorPago) || 0;
   return itens.map((item) => {
-    const quantidadePaga = Math.max(0, Math.min(item.quantidade, Math.floor(restante)));
-    restante -= quantidadePaga;
+    const preco = precoTamanho(grupo, item.tamanho);
+    if (preco <= 0) return { ...item, quantidadePaga: item.quantidade };
+    const quantidadePaga = Math.max(0, Math.min(item.quantidade, Math.floor(restante / preco)));
+    restante -= quantidadePaga * preco;
     return { ...item, quantidadePaga };
   });
 }
@@ -49,7 +61,7 @@ module.exports = async function (context, req) {
       { headers },
     ),
     fetch(
-      `${DIRECTUS_URL}/items/camiseta_pedidos?${filtroEmail}&fields=id,valor_pago,avulso,grupo.nome,grupo.valor_venda&sort=-id&limit=-1`,
+      `${DIRECTUS_URL}/items/camiseta_pedidos?${filtroEmail}&fields=id,valor_pago,avulso,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&sort=-id&limit=-1`,
       { headers },
     ),
   ]);
@@ -71,8 +83,7 @@ module.exports = async function (context, req) {
   }
 
   const pedidosResultado = pedidos.map((p) => {
-    const valorUnitario = Number(p.grupo?.valor_venda ?? 0);
-    const itensComAlocacao = alocarPagamento(itensPorPedido[p.id] || [], Number(p.valor_pago ?? 0), valorUnitario);
+    const itensComAlocacao = alocarPagamento(itensPorPedido[p.id] || [], Number(p.valor_pago ?? 0), p.grupo);
     return {
       grupo: p.grupo?.nome ?? null,
       valorPago: p.valor_pago,

@@ -181,6 +181,25 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
 
 - **`camiseta_grupos`** — a campanha (ex. "Camiseta do aniversário 2026"), com preço de venda e
   prazo.
+- **Camiseta gratuita** — deixar "Valor de venda" em branco (e nenhum tamanho com preço próprio)
+  já torna a campanha inteira grátis; o site mostra "Grátis" explicitamente (cards de
+  `/camisetas/`, página da campanha, "Meus pedidos") em vez de simplesmente omitir o preço.
+- **Preço por tamanho (Fase 27)** — `camiseta_grupos.precos_tamanho` (JSON opcional,
+  `{"M": 20, "G": 40}`) permite um preço diferente por tamanho dentro da mesma campanha; tamanho
+  sem entrada aí usa "Valor de venda" como padrão (ou é grátis, se nem isso estiver definido).
+  Editado no painel (`/painel-camisetas/grupo/`) ao lado de cada tamanho já digitado no campo CSV.
+  Como o preço deixou de ser único por campanha, a alocação de pagamento parcial (`/painel-
+  camisetas/grupo/pedidos/`, `/meus-pedidos-camiseta/`, "Minha conta") passou a caminhar em
+  dinheiro item a item (preço de cada item consumindo o valor pago, em ordem de criação), não mais
+  em "peças equivalentes" a um preço único.
+- **Limite de 1 peça por pessoa (Fase 27)** — `camiseta_grupos.limite_uma_por_pessoa` (opcional,
+  desligado por padrão) trava o carrinho num só item de quantidade 1 no formulário público, e a
+  Function `CriarPedidoCamiseta/index.js` recusa (`409`) um segundo pedido da mesma campanha vindo
+  do mesmo telefone ou e-mail — mesma técnica de comparação por hash de `VerificarInscricao`
+  (telefone nunca é comparado por igualdade direta, sempre com `conferirHash`, já que o hash usa
+  salt aleatório). Por causa disso, o telefone passou a viajar em texto puro até essa Function (não
+  mais pré-hashado no navegador via `/api/telefone-hash`) — mesmo padrão que `VerificarInscricao`/
+  `ConsultarPedidosCamiseta` já usavam, só que agora também na criação do pedido.
 - **`camiseta_lotes`** — janela de compra real (número sequencial + status aberto/fechado),
   seguindo o mesmo modelo já usado há anos na planilha de camisetas da tesouraria: todo pedido
   novo cai sozinho no lote que estiver aberto no momento; quando a equipe fecha o lote

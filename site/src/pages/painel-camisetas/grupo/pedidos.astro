@@ -150,6 +150,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       id: number;
       nome: string;
       valor_venda: number | null;
+      precos_tamanho: Record<string, number> | null;
       tamanhos: string[] | null;
       modelos: string[] | null;
     }
@@ -252,23 +253,39 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     }
     const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
-    function totalItens(p: Pedido): number {
-      return p.itens.reduce((s, i) => s + i.quantidade, 0);
+    /**
+     * Preço por peça pode variar por tamanho (opcional) — tamanho sem preço
+     * próprio usa valor_venda como padrão (ou é grátis, se nem isso estiver
+     * definido). Mesma lógica em /camisetas/, /camiseta/[slug]/ e nas
+     * Functions de consulta.
+     */
+    function precoTamanho(tamanho: string | null): number {
+      const precos = grupo.precos_tamanho ?? {};
+      if (tamanho && precos[tamanho] != null) return Number(precos[tamanho]);
+      return grupo.valor_venda != null ? Number(grupo.valor_venda) : 0;
     }
+
+    /** Aloca o valor pago (dinheiro, não mais "peças equivalentes") entre os itens, em ordem de criação — o primeiro item cadastrado consome pagamento primeiro. Item grátis é sempre considerado pago por inteiro. */
+    function alocarPagamento(itens: Item[], valorPago: number): (Item & { quantidadePaga: number })[] {
+      let restante = valorPago;
+      return itens.map((item) => {
+        const preco = precoTamanho(item.tamanho);
+        if (preco <= 0) return { ...item, quantidadePaga: item.quantidade };
+        const quantidadePaga = Math.max(0, Math.min(item.quantidade, Math.floor(restante / preco)));
+        restante -= quantidadePaga * preco;
+        return { ...item, quantidadePaga };
+      });
+    }
+
     function totalPedido(p: Pedido): number {
-      return totalItens(p) * (grupo.valor_venda ?? 0);
+      return p.itens.reduce((s, i) => s + i.quantidade * precoTamanho(i.tamanho), 0);
     }
     function devendo(p: Pedido): boolean {
       return Number(p.valor_pago) < totalPedido(p);
     }
     function temPendenteRetirada(p: Pedido): boolean {
-      let restante = (grupo.valor_venda ?? 0) > 0 ? Number(p.valor_pago) / Number(grupo.valor_venda) : 0;
-      for (const item of p.itens) {
-        const paga = Math.max(0, Math.min(item.quantidade, Math.floor(restante)));
-        restante -= paga;
-        if (item.quantidade_retirada < paga) return true;
-      }
-      return false;
+      const itensComAlocacao = alocarPagamento(p.itens, Number(p.valor_pago));
+      return itensComAlocacao.some((item) => item.quantidade_retirada < item.quantidadePaga);
     }
     function tudoRetirado(p: Pedido): boolean {
       return p.itens.length > 0 && p.itens.every((item) => item.quantidade_retirada >= item.quantidade);
@@ -470,9 +487,11 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
     function itemLinhaHtml(i: Item, quantidadePaga: number): string {
       const rotulo = [i.tamanho, i.modelo].filter((v): v is string => Boolean(v)).map(escapeHtml).join(" · ") || "Item";
+      const preco = precoTamanho(i.tamanho);
+      const precoTexto = preco > 0 ? brl(preco) : "grátis";
       return `
         <li class="flex flex-wrap items-center gap-3 justify-between" data-item-id="${i.id}">
-          <span>${rotulo} — ${i.quantidade}x (${quantidadePaga} paga${quantidadePaga === 1 ? "" : "s"})</span>
+          <span>${rotulo} — ${i.quantidade}x a ${precoTexto} (${quantidadePaga} paga${quantidadePaga === 1 ? "" : "s"})</span>
           <span class="flex items-center gap-2 text-sm">
             Retiradas:
             <input type="number" min="0" max="${Math.min(i.quantidade, quantidadePaga)}" value="${i.quantidade_retirada}" class="field" style="width:4.5rem" data-campo-retirada />
@@ -483,13 +502,8 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     }
 
     function pedidoCardHtml(p: Pedido): string {
-      let restante = (grupo.valor_venda ?? 0) > 0 ? Number(p.valor_pago) / Number(grupo.valor_venda) : 0;
-      const itensHtml = p.itens
-        .map((item) => {
-          const paga = Math.max(0, Math.min(item.quantidade, Math.floor(restante)));
-          restante -= paga;
-          return itemLinhaHtml(item, paga);
-        })
+      const itensHtml = alocarPagamento(p.itens, Number(p.valor_pago))
+        .map((item) => itemLinhaHtml(item, item.quantidadePaga))
         .join("");
 
       const loteInfo = p.avulso ? "" : p.lote ? ` · lote ${lotes.find((l) => l.id === p.lote)?.numero ?? "?"}` : "";
@@ -891,7 +905,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         return;
       }
 
-      const resGrupo = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,tamanhos,modelos`, {
+      const resGrupo = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resGrupo.ok) {

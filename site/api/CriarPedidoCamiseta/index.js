@@ -1,4 +1,5 @@
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
+const { gerarHash, conferirHash } = require("../src/lib/telefone");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
@@ -16,7 +17,28 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  * evita a corrida de duas pessoas criarem o "lote 1" ao mesmo tempo (só um
  * lugar decide isso) e evita expor a lógica de atribuição de lote no
  * cliente.
+ *
+ * Telefone chega em texto puro (não mais pré-hashado pelo navegador via
+ * `/api/telefone-hash`) — precisa estar em texto aqui mesmo pra poder
+ * comparar contra os pedidos já existentes da campanha (hash usa salt
+ * aleatório, então só dá pra comparar telefone por telefone, nunca por
+ * igualdade direta de hash — mesma técnica de `VerificarInscricao`/
+ * `ConsultarPedidosCamiseta`). O hash pra gravação é calculado aqui mesmo.
  */
+async function pedidoDuplicado(headers, grupoId, telefone, email) {
+  const res = await fetch(
+    `${DIRECTUS_URL}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,telefone,email&limit=-1`,
+    { headers },
+  );
+  if (!res.ok) throw new Error("falha ao conferir pedidos existentes");
+  const existentes = (await res.json()).data || [];
+  const emailNormalizado = email ? String(email).trim().toLowerCase() : null;
+  return existentes.some((p) => {
+    if (conferirHash(telefone, p.telefone)) return true;
+    if (emailNormalizado && p.email && String(p.email).trim().toLowerCase() === emailNormalizado) return true;
+    return false;
+  });
+}
 async function encontrarOuCriarLoteAberto(headers, grupoId) {
   const abertoRes = await fetch(
     `${DIRECTUS_URL}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=-numero&limit=1`,
@@ -57,16 +79,47 @@ module.exports = async function (context, req) {
   const body = req.body || {};
   const grupoId = Number(body.grupoId);
   const nome = String(body.nome || "").trim();
-  const telefoneHash = String(body.telefoneHash || "");
+  const telefone = String(body.telefone || "");
+  const email = body.email ? String(body.email).trim() : null;
   const itens = Array.isArray(body.itens) ? body.itens : [];
   const respostas = Array.isArray(body.respostas) ? body.respostas : [];
 
+  const telefoneHash = gerarHash(telefone);
   if (!Number.isInteger(grupoId) || grupoId <= 0 || !nome || !telefoneHash || itens.length === 0) {
     context.res = { status: 400, body: { erro: "Parâmetros ausentes." } };
     return;
   }
 
+  const totalQuantidade = itens.reduce((soma, item) => soma + (Number(item.quantidade) || 0), 0);
+
   const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}`, "Content-Type": "application/json" };
+
+  const grupoRes = await fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=id,limite_uma_por_pessoa`, { headers });
+  if (!grupoRes.ok) {
+    context.res = { status: 404, body: { erro: "Camiseta não encontrada." } };
+    return;
+  }
+  const grupo = (await grupoRes.json()).data;
+
+  if (grupo.limite_uma_por_pessoa) {
+    if (totalQuantidade > 1) {
+      context.res = { status: 400, body: { erro: "Esta campanha permite só 1 peça por pessoa." } };
+      return;
+    }
+    try {
+      if (await pedidoDuplicado(headers, grupoId, telefone, email)) {
+        context.res = {
+          status: 409,
+          body: { erro: "Você já fez um pedido nesta campanha. Esta campanha permite só 1 peça por pessoa." },
+        };
+        return;
+      }
+    } catch (err) {
+      context.log.error("Falha ao conferir pedido duplicado:", err);
+      context.res = { status: 502, body: { erro: "Falha ao preparar o pedido." } };
+      return;
+    }
+  }
 
   let loteId;
   try {
@@ -85,7 +138,7 @@ module.exports = async function (context, req) {
       lote: loteId,
       nome,
       telefone: telefoneHash,
-      email: body.email || null,
+      email,
       congregacao: body.congregacaoId ? Number(body.congregacaoId) : null,
     }),
   });

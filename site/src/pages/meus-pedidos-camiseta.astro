@@ -43,13 +43,14 @@ const allPosts = visiblePosts(await getAllMensagens());
       tamanho: string | null;
       modelo: string | null;
       quantidade: number;
+      valorUnitario: number;
       quantidadePaga: number;
       quantidadeRetirada: number;
     }
 
     interface Pedido {
       lote: string | null;
-      valorUnitario: number | null;
+      valorTotal: number;
       valorPago: number;
       itens: Item[];
     }
@@ -65,12 +66,8 @@ const allPosts = visiblePosts(await getAllMensagens());
       return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
     }
 
-    function totalPedido(p: Pedido): number {
-      return p.itens.reduce((soma, i) => soma + i.quantidade, 0) * (p.valorUnitario ?? 0);
-    }
-
     function situacaoPagamento(p: Pedido): string {
-      const total = totalPedido(p);
+      const total = p.valorTotal;
       if (total <= 0) return "";
       if (p.valorPago >= total) return "Pago";
       if (p.valorPago > 0) {
@@ -88,7 +85,8 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     function itemLinhaHtml(i: Item): string {
       const rotulo = [i.tamanho, i.modelo].filter((v): v is string => Boolean(v)).map(escapeHtml).join(" · ") || "Item";
-      return `<li>${rotulo} — ${i.quantidade}x — ${escapeHtml(situacaoItem(i))}</li>`;
+      const preco = i.valorUnitario > 0 ? `R$ ${i.valorUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "Grátis";
+      return `<li>${rotulo} — ${i.quantidade}x (${preco}) — ${escapeHtml(situacaoItem(i))}</li>`;
     }
 
     function pedidoCardHtml(p: Pedido): string {

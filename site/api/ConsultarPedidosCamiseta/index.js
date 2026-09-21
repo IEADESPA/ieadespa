@@ -18,12 +18,26 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  * calculada aqui, em ordem de criação dos itens (o primeiro item cadastrado
  * consome pagamento primeiro), pra decidir quantas peças de cada linha já
  * podem ser retiradas.
+ *
+ * Preço por peça pode variar por tamanho (`camiseta_grupos.precos_tamanho`,
+ * opcional) — tamanho sem entrada aí usa `valor_venda` como padrão (ou é
+ * grátis, se nem isso estiver definido). Por isso a alocação caminha em
+ * dinheiro (não mais em "peças equivalentes"), consumindo o valor pago pelo
+ * preço de cada item conforme anda pela lista.
  */
-function alocarPagamento(itens, valorPago, valorUnitario) {
-  let restante = valorUnitario > 0 ? valorPago / valorUnitario : 0;
+function precoTamanho(grupo, tamanho) {
+  const precos = grupo?.precos_tamanho || {};
+  if (tamanho && precos[tamanho] != null && precos[tamanho] !== "") return Number(precos[tamanho]);
+  return grupo?.valor_venda != null ? Number(grupo.valor_venda) : 0;
+}
+
+function alocarPagamento(itens, valorPago, grupo) {
+  let restante = Number(valorPago) || 0;
   return itens.map((item) => {
-    const quantidadePaga = Math.max(0, Math.min(item.quantidade, Math.floor(restante)));
-    restante -= quantidadePaga;
+    const preco = precoTamanho(grupo, item.tamanho);
+    if (preco <= 0) return { ...item, quantidadePaga: item.quantidade };
+    const quantidadePaga = Math.max(0, Math.min(item.quantidade, Math.floor(restante / preco)));
+    restante -= quantidadePaga * preco;
     return { ...item, quantidadePaga };
   });
 }
@@ -50,7 +64,7 @@ module.exports = async function (context, req) {
   const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` };
 
   const pedidosRes = await fetch(
-    `${DIRECTUS_URL}/items/camiseta_pedidos?fields=id,nome,telefone,valor_pago,avulso,grupo.nome,grupo.valor_venda&limit=-1`,
+    `${DIRECTUS_URL}/items/camiseta_pedidos?fields=id,nome,telefone,valor_pago,avulso,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&limit=-1`,
     { headers },
   );
   if (!pedidosRes.ok) {
@@ -75,17 +89,18 @@ module.exports = async function (context, req) {
 
   const resultado = meusPedidos.map((p) => {
     const itensDoPedido = todosItens.filter((i) => i.pedido === p.id);
-    const valorUnitario = Number(p.grupo?.valor_venda ?? 0);
-    const itensComAlocacao = alocarPagamento(itensDoPedido, Number(p.valor_pago ?? 0), valorUnitario);
+    const itensComAlocacao = alocarPagamento(itensDoPedido, Number(p.valor_pago ?? 0), p.grupo);
+    const valorTotal = itensDoPedido.reduce((s, i) => s + i.quantidade * precoTamanho(p.grupo, i.tamanho), 0);
 
     return {
       lote: p.grupo?.nome ?? null,
-      valorUnitario: p.grupo?.valor_venda ?? null,
+      valorTotal,
       valorPago: p.valor_pago,
       itens: itensComAlocacao.map((i) => ({
         tamanho: i.tamanho,
         modelo: i.modelo,
         quantidade: i.quantidade,
+        valorUnitario: precoTamanho(p.grupo, i.tamanho),
         quantidadePaga: i.quantidadePaga,
         quantidadeRetirada: i.quantidade_retirada,
       })),

@@ -89,14 +89,26 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         <p class="text-xs text-muted-foreground">Deixe um campo em branco pra não pedir essa escolha no formulário público.</p>
 
         <div class="grid gap-2">
-          <label class="text-sm font-semibold" for="f-valor-venda">Valor de venda (aparece ao público)</label>
+          <label class="text-sm font-semibold" for="f-valor-venda">Valor de venda padrão (aparece ao público)</label>
           <input id="f-valor-venda" type="number" step="0.01" min="0" class="field" />
         </div>
         <p class="text-xs text-muted-foreground">
-          O custo por peça não fica aqui — cada encomenda feita ao fornecedor vira um "lote de
-          compra" próprio (aba Pedidos e lotes de compra), com seu próprio custo, porque o preço
-          pode mudar de uma encomenda pra outra ao longo do ano.
+          Deixe em branco pra essa camiseta ser <strong>gratuita</strong> (nenhum tamanho abaixo com
+          preço próprio cobra nada). O custo por peça não fica aqui — cada encomenda feita ao
+          fornecedor vira um "lote de compra" próprio (aba Pedidos e lotes de compra), com seu
+          próprio custo, porque o preço pago à malharia pode mudar de uma encomenda pra outra ao
+          longo do ano.
         </p>
+
+        <div class="grid gap-2" data-precos-tamanho-wrap hidden>
+          <label class="text-sm font-semibold">Preço por tamanho (opcional)</label>
+          <p class="text-xs text-muted-foreground">
+            Deixe um tamanho em branco pra ele usar o valor de venda padrão acima. Preencha só os
+            tamanhos que custam diferente (ex.: GG mais caro) — ou todos, se cada um tiver um preço
+            próprio.
+          </p>
+          <div class="grid gap-2" data-precos-tamanho-lista></div>
+        </div>
 
         <div class="grid gap-2">
           <label class="text-sm font-semibold" for="f-pedidos-ate">Pedidos até (opcional)</label>
@@ -106,6 +118,17 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         <div class="grid gap-3">
           <label class="flex items-center gap-2 text-sm">
             <input id="f-ativo" type="checkbox" /> Ativo (aparece na listagem pública e aceita novo pedido)
+          </label>
+        </div>
+
+        <div class="grid gap-3">
+          <label class="flex items-start gap-2 text-sm">
+            <input id="f-limite-uma-por-pessoa" type="checkbox" class="mt-1" />
+            <span>
+              <strong>Limitar a 1 peça por pessoa</strong> — a pessoa só consegue pedir uma unidade
+              no total (nenhum outro tamanho ou modelo, nem repetir o mesmo), travado por telefone e
+              e-mail. Desmarcado por padrão (carrinho livre, como já era).
+            </span>
           </label>
         </div>
 
@@ -190,10 +213,12 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       tamanhos: string[] | null;
       modelos: string[] | null;
       valor_venda: number | null;
+      precos_tamanho: Record<string, number> | null;
       pedidos_ate: string | null;
       ativo: boolean;
       destaque: boolean;
       pedir_congregacao: boolean;
+      limite_uma_por_pessoa: boolean;
     }
 
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
@@ -222,6 +247,37 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     const fAtivo = el<HTMLInputElement>("f-ativo");
     const fDestaque = el<HTMLInputElement>("f-destaque");
     const fPedirCongregacao = el<HTMLInputElement>("f-pedir-congregacao");
+    const fLimiteUmaPorPessoa = el<HTMLInputElement>("f-limite-uma-por-pessoa");
+    const precosTamanhoWrap = document.querySelector<HTMLElement>("[data-precos-tamanho-wrap]");
+    const precosTamanhoLista = document.querySelector<HTMLElement>("[data-precos-tamanho-lista]");
+
+    /**
+     * Preço por tamanho é opcional e digitado ao lado de cada tamanho já
+     * cadastrado no campo CSV acima — reconstrói as linhas sempre que a
+     * lista de tamanhos muda, preservando o que já tiver sido digitado pra
+     * cada tamanho que continuar existindo.
+     */
+    function renderizarPrecosTamanho(tamanhosAtuais: string[]) {
+      if (!precosTamanhoWrap || !precosTamanhoLista) return;
+      const valoresAtuais: Record<string, string> = {};
+      precosTamanhoLista.querySelectorAll<HTMLInputElement>("[data-preco-tamanho]").forEach((input) => {
+        if (input.value) valoresAtuais[input.dataset.precoTamanho ?? ""] = input.value;
+      });
+
+      precosTamanhoWrap.hidden = tamanhosAtuais.length === 0;
+      precosTamanhoLista.innerHTML = tamanhosAtuais
+        .map(
+          (t) => `
+            <label class="grid gap-1 sm:grid-cols-[8rem_1fr] sm:items-center text-sm">
+              <span>${escapeHtml(t)}</span>
+              <input type="number" step="0.01" min="0" class="field" placeholder="Usa o valor padrão" value="${valoresAtuais[t] ?? ""}" data-preco-tamanho="${escapeHtml(t)}" />
+            </label>
+          `,
+        )
+        .join("");
+    }
+
+    fTamanhos.addEventListener("input", () => renderizarPrecosTamanho(csvParaLista(fTamanhos.value)));
 
     function slugify(texto: string): string {
       return texto
@@ -243,6 +299,10 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         .filter(Boolean);
     }
 
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
     function preencherFormulario(grupo: Grupo) {
       fNome.value = grupo.nome ?? "";
       fSlug.value = grupo.slug ?? "";
@@ -256,9 +316,22 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       fAtivo.checked = Boolean(grupo.ativo);
       fDestaque.checked = Boolean(grupo.destaque);
       fPedirCongregacao.checked = grupo.pedir_congregacao !== false;
+      fLimiteUmaPorPessoa.checked = Boolean(grupo.limite_uma_por_pessoa);
+      renderizarPrecosTamanho(grupo.tamanhos ?? []);
+      const precos = grupo.precos_tamanho ?? {};
+      precosTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-preco-tamanho]").forEach((input) => {
+        const tamanho = input.dataset.precoTamanho ?? "";
+        if (precos[tamanho] != null) input.value = String(precos[tamanho]);
+      });
     }
 
     function lerFormulario() {
+      const precosTamanho: Record<string, number> = {};
+      precosTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-preco-tamanho]").forEach((input) => {
+        const tamanho = input.dataset.precoTamanho ?? "";
+        if (tamanho && input.value !== "") precosTamanho[tamanho] = Number(input.value);
+      });
+
       return {
         nome: fNome.value.trim(),
         slug: fSlug.value.trim() || slugify(fNome.value),
@@ -268,10 +341,12 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         tamanhos: csvParaLista(fTamanhos.value),
         modelos: csvParaLista(fModelos.value),
         valor_venda: fValorVenda.value ? Number(fValorVenda.value) : null,
+        precos_tamanho: Object.keys(precosTamanho).length ? precosTamanho : null,
         pedidos_ate: fPedidosAte.value || null,
         ativo: fAtivo.checked,
         destaque: fDestaque.checked,
         pedir_congregacao: fPedirCongregacao.checked,
+        limite_uma_por_pessoa: fLimiteUmaPorPessoa.checked,
       };
     }
 
@@ -346,10 +421,6 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       npTipo.addEventListener("change", () => {
         if (npOpcoesWrap) npOpcoesWrap.hidden = !tipoPrecisaOpcoes(npTipo.value);
       });
-
-      function escapeHtml(value: string) {
-        return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
-      }
 
       async function carregarPerguntas() {
         if (!perguntasLista) return;

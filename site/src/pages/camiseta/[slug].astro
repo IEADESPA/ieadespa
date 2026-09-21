@@ -3,7 +3,7 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
-import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, TELEFONE_HASH_URL, fetchItems } from "@/lib/directus";
+import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
@@ -15,6 +15,8 @@ interface Lote {
   modelos: string[] | null;
   tamanhos: string[] | null;
   valor_venda: number | null;
+  precos_tamanho: Record<string, number> | null;
+  limite_uma_por_pessoa: boolean;
   pedidos_ate: string | null;
   evento: { title: string } | null;
   ministerio: { name: string } | null;
@@ -57,6 +59,19 @@ const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "num
 const prazoEncerrado = lote.pedidos_ate ? new Date(lote.pedidos_ate).getTime() < Date.now() : false;
 const tamanhos = lote.tamanhos ?? [];
 const modelos = lote.modelos ?? [];
+
+/**
+ * Preço por peça pode variar por tamanho (opcional) — tamanho sem preço
+ * próprio usa `valor_venda` como padrão (ou é grátis, se nem isso estiver
+ * definido). Ver a mesma lógica em `/camisetas/` e no painel de pedidos.
+ */
+function precoTamanho(tamanho: string | null): number {
+  const precos = lote.precos_tamanho ?? {};
+  if (tamanho && precos[tamanho] != null) return Number(precos[tamanho]);
+  return lote.valor_venda != null ? Number(lote.valor_venda) : 0;
+}
+const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+const precosPorTamanhoVariam = tamanhos.length > 0 && new Set(tamanhos.map((t) => precoTamanho(t))).size > 1;
 ---
 
 <BaseLayout title={lote.nome} description={lote.descricao ?? `Faça seu pedido de ${lote.nome}.`}>
@@ -70,8 +85,24 @@ const modelos = lote.modelos ?? [];
       </header>
 
       <ul class="mt-6 grid gap-2 text-sm">
-        {lote.valor_venda != null && (
-          <li><strong class="text-foreground">Valor por peça:</strong> R$ {Number(lote.valor_venda).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</li>
+        {precosPorTamanhoVariam ? (
+          <li>
+            <strong class="text-foreground">Valor por peça:</strong>{" "}
+            {tamanhos.map((t, i) => (
+              <>
+                {i > 0 && " · "}
+                {t} — {precoTamanho(t) > 0 ? brl(precoTamanho(t)) : "grátis"}
+              </>
+            ))}
+          </li>
+        ) : (
+          <li>
+            <strong class="text-foreground">Valor por peça:</strong>{" "}
+            {precoTamanho(tamanhos[0] ?? null) > 0 ? brl(precoTamanho(tamanhos[0] ?? null)) : "Grátis"}
+          </li>
+        )}
+        {lote.limite_uma_por_pessoa && (
+          <li><strong class="text-foreground">Limite:</strong> 1 peça por pessoa</li>
         )}
         {lote.pedidos_ate && (
           <li><strong class="text-foreground">Pedidos até:</strong> {dateFormatter.format(new Date(lote.pedidos_ate))}</li>
@@ -175,12 +206,13 @@ const modelos = lote.modelos ?? [];
       <script
         is:inline
         define:vars={{
-          telefoneHashUrl: TELEFONE_HASH_URL,
           criarPedidoUrl: CRIAR_PEDIDO_CAMISETA_URL,
           loteId: lote.id,
           tamanhos,
           modelos,
           valorVenda: lote.valor_venda,
+          precosTamanho: lote.precos_tamanho,
+          limiteUmaPorPessoa: lote.limite_uma_por_pessoa === true,
         }}
       >
         const form = document.querySelector("[data-pedido-form]");
@@ -194,6 +226,22 @@ const modelos = lote.modelos ?? [];
           if (contaEmailSalvo && inputEmail && !inputEmail.value) inputEmail.value = contaEmailSalvo;
         })();
 
+        // Preço por peça pode variar por tamanho (opcional) — tamanho sem
+        // preço próprio usa valorVenda como padrão (ou é grátis, se nem isso
+        // estiver definido). Mesma lógica em /camisetas/ e no painel.
+        function precoTamanho(tamanho) {
+          const precos = precosTamanho || {};
+          if (tamanho && precos[tamanho] != null) return Number(precos[tamanho]);
+          return valorVenda != null ? Number(valorVenda) : 0;
+        }
+
+        // Campanha com "limite de 1 peça por pessoa": só uma linha, sem
+        // botão de adicionar outra nem de remover, e quantidade travada em 1
+        // (o back-end confere isso de novo — este travamento é só de UX).
+        if (limiteUmaPorPessoa) {
+          document.querySelector("[data-item-adicionar]")?.setAttribute("hidden", "");
+        }
+
         function linhaItemHtml() {
           const tamanhoOpcoes = tamanhos.length
             ? `<option value="">Tamanho…</option>${tamanhos.map((t) => `<option value="${t}">${t}</option>`).join("")}`
@@ -201,26 +249,40 @@ const modelos = lote.modelos ?? [];
           const modeloOpcoes = modelos.length
             ? `<option value="">Modelo…</option>${modelos.map((m) => `<option value="${m}">${m}</option>`).join("")}`
             : `<option value="">—</option>`;
+          const quantidadeHtml = limiteUmaPorPessoa
+            ? `<input type="hidden" value="1" data-item-quantidade /><span class="text-sm text-muted-foreground">1 peça</span>`
+            : `<input type="number" min="1" value="1" class="field item-qtd" data-item-quantidade title="Quantidade" />`;
+          const removerHtml = limiteUmaPorPessoa ? "" : `<button type="button" class="btn btn-outline" data-item-remover>Remover</button>`;
           return `
             <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center item-linha">
               <select class="field" data-item-tamanho ${tamanhos.length ? "required" : "disabled"}>${tamanhoOpcoes}</select>
               <select class="field" data-item-modelo ${modelos.length ? "required" : "disabled"}>${modeloOpcoes}</select>
-              <input type="number" min="1" value="1" class="field item-qtd" data-item-quantidade title="Quantidade" />
-              <button type="button" class="btn btn-outline" data-item-remover>Remover</button>
+              ${quantidadeHtml}
+              ${removerHtml}
             </div>
+            <p class="text-xs text-muted-foreground item-linha-preco" data-item-preco></p>
           `;
         }
 
+        function precoLabel(v) {
+          return v > 0 ? `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "grátis";
+        }
+
         function atualizarTotal() {
-          if (!totalEl) return;
           const linhas = Array.from(document.querySelectorAll(".item-linha"));
-          const totalQtd = linhas.reduce((soma, linha) => soma + (Number(linha.querySelector("[data-item-quantidade]")?.value) || 0), 0);
-          if (valorVenda != null) {
-            const totalValor = totalQtd * Number(valorVenda);
-            totalEl.textContent = totalQtd > 0 ? `Total: ${totalQtd} peça(s) — R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "";
-          } else {
-            totalEl.textContent = totalQtd > 0 ? `Total: ${totalQtd} peça(s)` : "";
-          }
+          let totalQtd = 0;
+          let totalValor = 0;
+          linhas.forEach((linha) => {
+            const qtd = Number(linha.querySelector("[data-item-quantidade]")?.value) || 0;
+            const tamanho = linha.querySelector("[data-item-tamanho]")?.value || null;
+            const preco = precoTamanho(tamanho);
+            totalQtd += qtd;
+            totalValor += qtd * preco;
+            const precoEl = linha.nextElementSibling?.matches("[data-item-preco]") ? linha.nextElementSibling : null;
+            if (precoEl) precoEl.textContent = qtd > 0 ? (preco > 0 ? `${precoLabel(preco)}/peça` : "Grátis") : "";
+          });
+          if (!totalEl) return;
+          totalEl.textContent = totalQtd > 0 ? `Total: ${totalQtd} peça(s) — ${precoLabel(totalValor)}` : "";
         }
 
         itensLista?.insertAdjacentHTML("beforeend", linhaItemHtml());
@@ -232,7 +294,10 @@ const modelos = lote.modelos ?? [];
         itensLista?.addEventListener("click", (event) => {
           if (event.target.matches("[data-item-remover]")) {
             const linhas = document.querySelectorAll(".item-linha");
-            if (linhas.length > 1) event.target.closest(".item-linha")?.remove();
+            if (linhas.length > 1) {
+              event.target.closest(".item-linha")?.nextElementSibling?.remove();
+              event.target.closest(".item-linha")?.remove();
+            }
             atualizarTotal();
           }
         });
@@ -264,14 +329,6 @@ const modelos = lote.modelos ?? [];
           if (status) status.textContent = "Enviando…";
 
           try {
-            const hashRes = await fetch(telefoneHashUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ telefone: data.get("telefone") }),
-            });
-            if (!hashRes.ok) throw new Error("falha ao proteger telefone");
-            const telefoneHash = (await hashRes.json()).valor;
-
             // Respostas às perguntas customizadas desta campanha (mesmo padrão
             // de `respostas_inscricao` em eventos) — coletadas do formulário.
             const respostas = [];
@@ -303,21 +360,24 @@ const modelos = lote.modelos ?? [];
               body: JSON.stringify({
                 grupoId: loteId,
                 nome: String(data.get("nome")).trim(),
-                telefoneHash,
+                telefone: String(data.get("telefone") || "").trim(),
                 email: String(data.get("email") || "").trim() || null,
                 congregacaoId: congregacaoEl && congregacaoEl.value ? Number(congregacaoEl.value) : null,
                 itens,
                 respostas,
               }),
             });
-            if (!pedidoRes.ok) throw new Error("falha ao criar pedido");
+            if (!pedidoRes.ok) {
+              const erro = await pedidoRes.json().catch(() => null);
+              throw new Error(erro?.erro || "falha ao criar pedido");
+            }
 
             if (status) status.textContent = "✅ Pedido registrado! Acompanhe em \"Meus pedidos\", com o seu telefone.";
             form.reset();
-            document.querySelectorAll(".item-linha").forEach((linha, indice) => { if (indice > 0) linha.remove(); });
+            document.querySelectorAll(".item-linha, .item-linha-preco").forEach((linha, indice) => { if (indice > 1) linha.remove(); });
             atualizarTotal();
-          } catch {
-            if (status) status.textContent = "Não foi possível enviar agora. Tente novamente em instantes.";
+          } catch (err) {
+            if (status) status.textContent = (err && err.message && err.message !== "falha ao criar pedido") ? err.message : "Não foi possível enviar agora. Tente novamente em instantes.";
             if (button) button.disabled = false;
           }
         });
@@ -336,6 +396,9 @@ const modelos = lote.modelos ?? [];
     }
     .item-qtd {
       width: 5rem;
+    }
+    .item-linha-preco {
+      margin-top: -0.5rem;
     }
   </style>
 </BaseLayout>

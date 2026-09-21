@@ -485,19 +485,79 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         .join("");
     }
 
+    /**
+     * Editar tamanho/modelo/quantidade ou remover uma linha de item — e
+     * adicionar uma nova — só é seguro enquanto nenhuma peça daquela linha
+     * já foi retirada (`quantidade_retirada === 0`). Depois que a pessoa já
+     * pegou a peça, mexer no item apagaria o registro do que ela já recebeu;
+     * por isso a edição fica bloqueada até "Retiradas" voltar pra 0 (raro —
+     * normalmente só acontece se foi lançado errado).
+     *
+     * Isso é seguro tanto com o lote aberto quanto fechado: "Pedido pelo
+     * sistema"/"Vendido"/"Arrecadado" de um lote fechado vêm de um retrato
+     * congelado (`pedido_congelado`, `camiseta_lotes.total_*`), nunca
+     * recalculado a partir dos pedidos atuais — editar aqui corrige só o que
+     * esta pessoa deve/tem a retirar dali pra frente, sem alterar nenhum
+     * número já travado do lote (dinheiro já pago à malharia não muda).
+     */
     function itemLinhaHtml(i: Item, quantidadePaga: number): string {
       const rotulo = [i.tamanho, i.modelo].filter((v): v is string => Boolean(v)).map(escapeHtml).join(" · ") || "Item";
       const preco = precoTamanho(i.tamanho);
       const precoTexto = preco > 0 ? brl(preco) : "grátis";
+      const podeEditar = i.quantidade_retirada === 0;
+
+      const tamanhosDisponiveis = i.tamanho && !(grupo.tamanhos ?? []).includes(i.tamanho) ? [...(grupo.tamanhos ?? []), i.tamanho] : (grupo.tamanhos ?? []);
+      const modelosDisponiveis = i.modelo && !(grupo.modelos ?? []).includes(i.modelo) ? [...(grupo.modelos ?? []), i.modelo] : (grupo.modelos ?? []);
+      const tamanhoOpcoes = tamanhosDisponiveis.length
+        ? tamanhosDisponiveis.map((t) => `<option value="${escapeHtml(t)}" ${t === i.tamanho ? "selected" : ""}>${escapeHtml(t)}</option>`).join("")
+        : `<option value="">—</option>`;
+      const modeloOpcoes = modelosDisponiveis.length
+        ? modelosDisponiveis.map((m) => `<option value="${escapeHtml(m)}" ${m === i.modelo ? "selected" : ""}>${escapeHtml(m)}</option>`).join("")
+        : `<option value="">—</option>`;
+
       return `
-        <li class="flex flex-wrap items-center gap-3 justify-between" data-item-id="${i.id}">
-          <span>${rotulo} — ${i.quantidade}x a ${precoTexto} (${quantidadePaga} paga${quantidadePaga === 1 ? "" : "s"})</span>
-          <span class="flex items-center gap-2 text-sm">
-            Retiradas:
-            <input type="number" min="0" max="${Math.min(i.quantidade, quantidadePaga)}" value="${i.quantidade_retirada}" class="field" style="width:4.5rem" data-campo-retirada />
-            <button type="button" class="link-sweep text-sm font-semibold text-accent" data-salvar-item>Salvar</button>
-          </span>
+        <li class="camiseta-item-linha" data-item-id="${i.id}">
+          <div class="flex flex-wrap items-center gap-3 justify-between">
+            <span>${rotulo} — ${i.quantidade}x a ${precoTexto} (${quantidadePaga} paga${quantidadePaga === 1 ? "" : "s"})</span>
+            <span class="flex flex-wrap items-center gap-2 text-sm">
+              Retiradas:
+              <input type="number" min="0" max="${Math.min(i.quantidade, quantidadePaga)}" value="${i.quantidade_retirada}" class="field" style="width:4.5rem" data-campo-retirada />
+              <button type="button" class="link-sweep text-sm font-semibold text-accent" data-salvar-item>Salvar</button>
+              ${
+                podeEditar
+                  ? `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-editar-item>Editar</button>
+                     <button type="button" class="link-sweep text-sm font-semibold" data-remover-item>Remover</button>`
+                  : `<span class="text-xs text-muted-foreground">já retirado — corrija "Retiradas" pra 0 pra poder editar/remover</span>`
+              }
+            </span>
+          </div>
+          ${
+            podeEditar
+              ? `<div class="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto] sm:items-center" data-item-edicao hidden>
+                   <select class="field" data-campo-tamanho ${tamanhosDisponiveis.length ? "" : "disabled"}>${tamanhoOpcoes}</select>
+                   <select class="field" data-campo-modelo ${modelosDisponiveis.length ? "" : "disabled"}>${modeloOpcoes}</select>
+                   <input type="number" min="1" value="${i.quantidade}" class="field" style="width:5rem" data-campo-quantidade />
+                   <button type="button" class="btn btn-outline" data-salvar-edicao-item>Salvar edição</button>
+                   <button type="button" class="btn btn-outline" data-cancelar-edicao-item>Cancelar</button>
+                 </div>`
+              : ""
+          }
         </li>
+      `;
+    }
+
+    function novoItemLinhaHtml(): string {
+      const tamanhos = grupo.tamanhos ?? [];
+      const modelos = grupo.modelos ?? [];
+      const tamanhoOpcoes = tamanhos.length ? tamanhos.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("") : `<option value="">—</option>`;
+      const modeloOpcoes = modelos.length ? modelos.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("") : `<option value="">—</option>`;
+      return `
+        <div class="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center" data-item-novo hidden>
+          <select class="field" data-campo-tamanho ${tamanhos.length ? "" : "disabled"}>${tamanhoOpcoes}</select>
+          <select class="field" data-campo-modelo ${modelos.length ? "" : "disabled"}>${modeloOpcoes}</select>
+          <input type="number" min="1" value="1" class="field" style="width:5rem" data-campo-quantidade />
+          <button type="button" class="btn btn-outline" data-adicionar-item>Adicionar</button>
+        </div>
       `;
     }
 
@@ -506,7 +566,12 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         .map((item) => itemLinhaHtml(item, item.quantidadePaga))
         .join("");
 
-      const loteInfo = p.avulso ? "" : p.lote ? ` · lote ${lotes.find((l) => l.id === p.lote)?.numero ?? "?"}` : "";
+      const loteDoPedido = !p.avulso && p.lote ? lotes.find((l) => l.id === p.lote) : null;
+      const loteInfo = p.avulso ? "" : p.lote ? ` · lote ${loteDoPedido?.numero ?? "?"}` : "";
+      const avisoLoteFechado =
+        loteDoPedido?.status === "fechado"
+          ? `<p class="camiseta-pedido-aviso">Lote ${loteDoPedido.numero} já fechado — editar itens aqui corrige só o que esta pessoa deve/tem a retirar, sem mudar os números já travados do lote.</p>`
+          : "";
 
       return `
         <div class="camiseta-pedido-painel-card" data-pedido-id="${p.id}">
@@ -523,7 +588,10 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
               <button type="button" class="link-sweep text-sm font-semibold" data-excluir-pedido>Excluir</button>
             </div>
           </div>
+          ${avisoLoteFechado}
           <ul class="mt-3 grid gap-2">${itensHtml}</ul>
+          <button type="button" class="link-sweep text-sm font-semibold text-accent mt-2" data-mostrar-novo-item>+ Adicionar item</button>
+          ${novoItemLinhaHtml()}
         </div>
       `;
     }
@@ -818,7 +886,86 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         if (res.ok) {
           const item = pedido.itens.find((i) => i.id === itemId);
           if (item) item.quantidade_retirada = novaRetirada;
-          renderizarPedidos();
+          atualizarTudo();
+        }
+      }
+
+      if (linhaItem && target.matches("[data-editar-item]")) {
+        linhaItem.querySelector<HTMLElement>("[data-item-edicao]")?.removeAttribute("hidden");
+      }
+
+      if (linhaItem && target.matches("[data-cancelar-edicao-item]")) {
+        linhaItem.querySelector<HTMLElement>("[data-item-edicao]")?.setAttribute("hidden", "");
+      }
+
+      if (linhaItem && target.matches("[data-salvar-edicao-item]")) {
+        const itemId = Number(linhaItem.dataset.itemId);
+        const tamanho = linhaItem.querySelector<HTMLSelectElement>("[data-campo-tamanho]")?.value || null;
+        const modelo = linhaItem.querySelector<HTMLSelectElement>("[data-campo-modelo]")?.value || null;
+        const quantidade = Number(linhaItem.querySelector<HTMLInputElement>("[data-campo-quantidade]")?.value || 0);
+        if (quantidade < 1) {
+          alert('Quantidade precisa ser pelo menos 1 — pra remover o item inteiro, use "Remover".');
+          return;
+        }
+        target.textContent = "Salvando…";
+        const res = await fetch(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ tamanho, modelo, quantidade }),
+        });
+        target.textContent = "Salvar edição";
+        if (res.ok) {
+          const item = pedido.itens.find((i) => i.id === itemId);
+          if (item) {
+            item.tamanho = tamanho;
+            item.modelo = modelo;
+            item.quantidade = quantidade;
+          }
+          atualizarTudo();
+        }
+      }
+
+      if (linhaItem && target.matches("[data-remover-item]")) {
+        const itemId = Number(linhaItem.dataset.itemId);
+        const item = pedido.itens.find((i) => i.id === itemId);
+        if (!item) return;
+        const ultimoItem = pedido.itens.length === 1;
+        const rotulo = [item.tamanho, item.modelo].filter(Boolean).join(" · ") || "item";
+        if (!confirm(`Remover ${rotulo} (${item.quantidade}x) deste pedido?${ultimoItem ? " Esse é o último item — o pedido ficará sem nenhum item." : ""}`)) return;
+
+        const res = await fetch(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return;
+        pedido.itens = pedido.itens.filter((i) => i.id !== itemId);
+
+        if (pedido.itens.length === 0 && confirm(`O pedido de "${pedido.nome}" ficou sem nenhum item. Excluir o pedido inteiro também?`)) {
+          const resExcluir = await fetch(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+          if (resExcluir.ok) pedidos = pedidos.filter((p) => p.id !== pedidoId);
+        }
+        atualizarTudo();
+      }
+
+      if (target.matches("[data-mostrar-novo-item]")) {
+        card.querySelector<HTMLElement>("[data-item-novo]")?.toggleAttribute("hidden");
+      }
+
+      if (target.matches("[data-adicionar-item]")) {
+        const novoWrap = card.querySelector<HTMLElement>("[data-item-novo]");
+        const tamanho = novoWrap?.querySelector<HTMLSelectElement>("[data-campo-tamanho]")?.value || null;
+        const modelo = novoWrap?.querySelector<HTMLSelectElement>("[data-campo-modelo]")?.value || null;
+        const quantidade = Number(novoWrap?.querySelector<HTMLInputElement>("[data-campo-quantidade]")?.value || 0);
+        if (quantidade < 1) return;
+
+        target.textContent = "Adicionando…";
+        const res = await fetch(`${directusUrl}/items/camiseta_itens_pedido`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ pedido: pedidoId, tamanho, modelo, quantidade, quantidade_retirada: 0 }),
+        });
+        target.textContent = "Adicionar";
+        if (res.ok) {
+          const novoItem = (await res.json()).data;
+          pedido.itens.push(novoItem);
+          atualizarTudo();
         }
       }
     });
@@ -982,5 +1129,8 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     .tabela-camiseta th, .tabela-camiseta td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); text-align: left; }
     .camiseta-pedido-painel-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem; }
     .badge-avulso { margin-left: 0.5rem; font-size: 0.6875rem; font-weight: 600; border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: 0.1rem 0.5rem; }
+    .camiseta-item-linha { border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .camiseta-item-linha:last-child { border-bottom: none; padding-bottom: 0; }
+    .camiseta-pedido-aviso { margin-top: 0.5rem; font-size: 0.8125rem; color: var(--muted-foreground); border-left: 2px solid var(--accent); padding-left: 0.6rem; }
   </style>
 </BaseLayout>

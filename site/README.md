@@ -280,6 +280,13 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   malharia, a partir dos mesmos dados já calculados na tela (sem consulta nova) — mesma técnica
   manual de desenho de tabela em `jsPDF` (sem lib de tabela) já usada em `/eventos/exportar/` e no
   relatório de encerramento de evento.
+- **Dashboard consolidado e relatório em PDF (Fase 29)** — `/painel-camisetas/` ganhou números
+  agregados entre todas as campanhas (vendido/arrecadado/pago à malharia/saldo, peças pedidas/
+  separadas aguardando retirada/já retiradas) e uma tabela por campanha, somando um nível acima do
+  que já existia por lote — mesma lógica de congelado-se-fechado/ao-vivo-se-aberto de
+  `grupo/pedidos.astro`, só que agregada por campanha em vez de por lote. Botão "Exportar relatório
+  PDF" gera a mesma coisa em PDF (mesma técnica manual de `jsPDF`) — só números agregados, sem nome
+  nem telefone de ninguém, mesmo critério do PDF de lote.
 
 ### Comunidade: mural de oração, enquetes e Minha Conta
 

@@ -34,6 +34,11 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         <button type="button" class="tab-btn" data-tab="excluir">Excluir</button>
       </div>
 
+      <div hidden class="mt-4 aviso-mudanca-remota" data-aviso-mudanca-remota>
+        <span>Esta campanha foi alterada por outra pessoa nesta tela.</span>
+        <button type="button" class="link-sweep font-semibold" data-recarregar-pagina>Atualizar agora</button>
+      </div>
+
       <form hidden class="mt-8 grid gap-5 max-w-2xl" data-lote-form>
       <div data-tab-panel="dados">
         <div class="grid gap-2">
@@ -424,6 +429,68 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       };
     }
 
+    /**
+     * Sincronização em tempo real (Fase 30) — esta página inteira é um formulário sempre "em
+     * edição" (diferente de `grupo/pedidos.astro`, que tem linhas com botão "Editar" próprio),
+     * então recarregar os campos por baixo da pessoa sem avisar arriscaria apagar o que ela ainda
+     * não salvou. Em vez de reaplicar dados sozinho, só mostra um aviso não-destrutivo quando
+     * `camiseta_grupos` (esta campanha) ou `perguntas_camiseta` (as perguntas dela) mudam em outra
+     * aba — a pessoa decide quando recarregar. Mesmo protocolo de autenticação do WebSocket do
+     * Directus usado em `grupo/pedidos.astro` (ver comentário lá com a fonte oficial).
+     */
+    function iniciarRealtime(accessToken: string) {
+      const aviso = document.querySelector<HTMLElement>("[data-aviso-mudanca-remota]");
+      document.querySelector("[data-recarregar-pagina]")?.addEventListener("click", () => window.location.reload());
+
+      const colecoes = [
+        { uid: "gc0", collection: "camiseta_grupos", query: { filter: { id: { _eq: grupoId } } } },
+        { uid: "gc1", collection: "perguntas_camiseta", query: { filter: { grupo: { _eq: grupoId } } } },
+      ];
+      let ws: WebSocket | null = null;
+      let ativo = true;
+
+      function conectar(token: string) {
+        if (!ativo) return;
+        ws = new WebSocket(`${directusUrl.replace(/^http/, "ws")}/websocket`);
+
+        ws.addEventListener("open", () => ws?.send(JSON.stringify({ type: "auth", access_token: token })));
+
+        ws.addEventListener("message", (event) => {
+          let msg: any;
+          try {
+            msg = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+
+          if (msg.type === "auth") {
+            if (msg.status === "ok") {
+              colecoes.forEach((c) => ws?.send(JSON.stringify({ type: "subscribe", collection: c.collection, query: c.query, uid: c.uid })));
+            } else {
+              console.warn("[camisetas] falha ao autenticar o tempo real:", msg);
+            }
+            return;
+          }
+
+          if (msg.type === "subscription" && msg.event && msg.event !== "init" && aviso) {
+            aviso.hidden = false;
+          }
+        });
+
+        ws.addEventListener("close", () => {
+          if (!ativo) return;
+          setTimeout(async () => {
+            const tokenNovo = await exigirAutenticacao(directusUrl, AUTH);
+            if (tokenNovo && ativo) conectar(tokenNovo);
+          }, 3000);
+        });
+
+        ws.addEventListener("error", () => ws?.close());
+      }
+
+      conectar(accessToken);
+    }
+
     async function iniciar() {
       const tokenObtido = await exigirAutenticacao(directusUrl, AUTH);
       if (!tokenObtido) return;
@@ -639,6 +706,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       });
 
       await carregarPerguntas();
+      iniciarRealtime(token);
 
       document.querySelector("[data-excluir-lote]")?.addEventListener("click", async () => {
         const excluirStatus = document.querySelector<HTMLElement>("[data-excluir-status]");
@@ -665,6 +733,18 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
       padding: 1.1rem 1.25rem;
+    }
+
+    .aviso-mudanca-remota {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      border: 1px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
     }
 
     /* Mesmo padrão de abas de painel-eventos/evento/index.astro. */

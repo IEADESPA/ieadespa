@@ -671,7 +671,32 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       listaEl.innerHTML = filtrados.length ? filtrados.map(pedidoCardHtml).join("") : `<p class="text-sm text-muted-foreground">Nenhum pedido nesse filtro.</p>`;
     }
 
+    let atualizacaoRealtimePendente = false;
+
+    /** Alguma linha de item aberta pra edição, ou o formulário de "+ Adicionar item" aberto — nesses casos um re-render destruiria o que a pessoa está digitando (não salvo ainda). */
+    function algumaEdicaoAberta(): boolean {
+      return !!document.querySelector("[data-item-edicao]:not([hidden])") || !!document.querySelector("[data-item-novo]:not([hidden])");
+    }
+
+    /** Chamada pela sincronização em tempo real: se ninguém está com uma edição aberta, atualiza a tela na hora; senão, adia até a pessoa terminar (ver `liberarAtualizacaoPendenteSeHouver`). */
+    function aplicarAtualizacaoRealtime() {
+      if (algumaEdicaoAberta()) {
+        atualizacaoRealtimePendente = true;
+        return;
+      }
+      atualizarTudo();
+    }
+
+    /** Chamada depois de fechar/cancelar uma edição — aplica uma atualização que ficou esperando. */
+    function liberarAtualizacaoPendenteSeHouver() {
+      if (atualizacaoRealtimePendente && !algumaEdicaoAberta()) {
+        atualizacaoRealtimePendente = false;
+        atualizarTudo();
+      }
+    }
+
     function atualizarTudo() {
+      atualizacaoRealtimePendente = false;
       atualizarStatsGerais();
       renderizarLotesTabs();
       renderizarPainelLote();
@@ -1052,6 +1077,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
       if (linhaItem && target.matches("[data-cancelar-edicao-item]")) {
         linhaItem.querySelector<HTMLElement>("[data-item-edicao]")?.setAttribute("hidden", "");
+        liberarAtualizacaoPendenteSeHouver();
       }
 
       if (linhaItem && target.matches("[data-salvar-edicao-item]")) {
@@ -1102,6 +1128,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
       if (target.matches("[data-mostrar-novo-item]")) {
         card.querySelector<HTMLElement>("[data-item-novo]")?.toggleAttribute("hidden");
+        liberarAtualizacaoPendenteSeHouver();
       }
 
       if (target.matches("[data-adicionar-item]")) {
@@ -1197,6 +1224,123 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       }
     });
 
+    /** Recarrega pedidos/lotes/lote_itens deste grupo — usado no carregamento inicial e a cada notificação em tempo real. */
+    async function carregarDadosPedidos() {
+      const resPedidos = await fetch(
+        `${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,nome,email,valor_pago,avulso,lote,congregacao,separado,separado_em,itens.id,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&sort=nome&limit=-1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      pedidos = (await resPedidos.json()).data ?? [];
+      pedidos.forEach((p) => { if (!p.itens) p.itens = []; });
+
+      const resLotes = await fetch(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=numero&limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      lotes = (await resLotes.json()).data ?? [];
+
+      loteItens = [];
+      if (lotes.length > 0) {
+        const idsLotes = lotes.map((l) => l.id).join(",");
+        const resLoteItens = await fetch(
+          `${directusUrl}/items/camiseta_lote_itens?filter[lote][_in]=${idsLotes}&limit=-1`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        loteItens = (await resLoteItens.json()).data ?? [];
+      }
+    }
+
+    /**
+     * Sincronização em tempo real (Fase 30) — sem isso, cada navegador só via o que a própria
+     * pessoa fazia; se outra pessoa da equipe editasse/excluísse pedido ou desse retirada em outra
+     * aba, esta tela ficava desatualizada até recarregar. Em vez de tentar mesclar cada evento
+     * (create/update/delete) peça por peça no estado local — arriscado de acertar certo em 4
+     * coleções com relação aninhada (item pertence a pedido, pedido pertence a lote) — qualquer
+     * notificação relevante só dispara um recarregamento completo (as mesmas chamadas de
+     * `carregarDadosPedidos`), com um pequeno atraso pra juntar várias mudanças seguidas numa
+     * chamada só. Mais rede do que um merge fino faria, mas o volume aqui é de igreja, não de
+     * loja — a troca vale a pena pela simplicidade/confiabilidade.
+     *
+     * Autenticação do WebSocket do Directus (protocolo confirmado na documentação oficial,
+     * https://directus.io/docs/guides/realtime/authentication — este projeto não tinha nenhuma
+     * conexão realtime autenticada antes, só a pública do mural de oração): depois de abrir a
+     * conexão, manda `{type: "auth", access_token}`; o servidor responde `{type: "auth", status:
+     * "ok"}` antes de aceitar qualquer `subscribe`. Quando o token expira, o servidor fecha a
+     * conexão — o sinal pra pegar um token novo (`exigirAutenticacao` já sabe renovar) e
+     * reconectar, mesmo padrão de retry que o mural de oração já usa.
+     */
+    function iniciarRealtime() {
+      const colecoes = [
+        { uid: "pc0", collection: "camiseta_pedidos", query: { filter: { grupo: { _eq: grupoId } } } },
+        { uid: "pc1", collection: "camiseta_itens_pedido", query: { filter: { pedido: { grupo: { _eq: grupoId } } } } },
+        { uid: "pc2", collection: "camiseta_lotes", query: { filter: { grupo: { _eq: grupoId } } } },
+        { uid: "pc3", collection: "camiseta_lote_itens", query: { filter: { lote: { grupo: { _eq: grupoId } } } } },
+      ];
+      let ws: WebSocket | null = null;
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      let ativo = true;
+
+      function agendarRecarga() {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+          await carregarDadosPedidos();
+          if (typeof visaoAtual === "number" && !lotes.some((l) => l.id === visaoAtual)) {
+            const aberto = lotes.find((l) => l.status === "aberto");
+            visaoAtual = aberto ? aberto.id : lotes.length > 0 ? lotes[lotes.length - 1].id : "todos-os-lotes";
+          }
+          // Se alguém estiver com um item em edição (não salvo ainda), não
+          // derruba a tela por baixo dela — os dados já foram atualizados
+          // em silêncio, o re-render só acontece quando ela terminar.
+          aplicarAtualizacaoRealtime();
+        }, 500);
+      }
+
+      function conectar(accessToken: string) {
+        if (!ativo) return;
+        ws = new WebSocket(`${directusUrl.replace(/^http/, "ws")}/websocket`);
+
+        ws.addEventListener("open", () => {
+          ws?.send(JSON.stringify({ type: "auth", access_token: accessToken }));
+        });
+
+        ws.addEventListener("message", (event) => {
+          let msg: any;
+          try {
+            msg = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+
+          if (msg.type === "auth") {
+            if (msg.status === "ok") {
+              colecoes.forEach((c) => ws?.send(JSON.stringify({ type: "subscribe", collection: c.collection, query: c.query, uid: c.uid })));
+            } else {
+              console.warn("[camisetas] falha ao autenticar o tempo real:", msg);
+            }
+            return;
+          }
+
+          // "init" é o retrato inicial que o próprio subscribe devolve — já temos esses dados via
+          // REST, não precisa recarregar por causa dele.
+          if (msg.type === "subscription" && msg.event && msg.event !== "init") {
+            agendarRecarga();
+          }
+        });
+
+        ws.addEventListener("close", () => {
+          if (!ativo) return;
+          setTimeout(async () => {
+            const tokenNovo = await exigirAutenticacao(directusUrl, AUTH);
+            if (tokenNovo && ativo) conectar(tokenNovo);
+          }, 3000);
+        });
+
+        ws.addEventListener("error", () => ws?.close());
+      }
+
+      conectar(token);
+      return () => { ativo = false; ws?.close(); };
+    }
+
     async function iniciar() {
       const tokenObtido = await exigirAutenticacao(directusUrl, AUTH);
       if (!tokenObtido) return;
@@ -1219,26 +1363,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       grupo = (await resGrupo.json()).data;
       if (tituloEl) tituloEl.textContent = `Pedidos — ${grupo.nome}`;
 
-      const resPedidos = await fetch(
-        `${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,nome,email,valor_pago,avulso,lote,congregacao,separado,separado_em,itens.id,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&sort=nome&limit=-1`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      pedidos = (await resPedidos.json()).data ?? [];
-      pedidos.forEach((p) => { if (!p.itens) p.itens = []; });
-
-      const resLotes = await fetch(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=numero&limit=-1`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      lotes = (await resLotes.json()).data ?? [];
-
-      if (lotes.length > 0) {
-        const idsLotes = lotes.map((l) => l.id).join(",");
-        const resLoteItens = await fetch(
-          `${directusUrl}/items/camiseta_lote_itens?filter[lote][_in]=${idsLotes}&limit=-1`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        loteItens = (await resLoteItens.json()).data ?? [];
-      }
+      await carregarDadosPedidos();
 
       const aberto = lotes.find((l) => l.status === "aberto");
       visaoAtual = aberto ? aberto.id : lotes.length > 0 ? lotes[lotes.length - 1].id : "todos-os-lotes";
@@ -1269,6 +1394,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       renderizarFiltroPergunta();
       atualizarTudo();
       avulsoItensEl?.insertAdjacentHTML("beforeend", linhaItemAvulsoHtml());
+      iniciarRealtime();
     }
 
     iniciar();

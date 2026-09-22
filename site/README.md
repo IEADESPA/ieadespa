@@ -287,6 +287,22 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   `grupo/pedidos.astro`, só que agregada por campanha em vez de por lote. Botão "Exportar relatório
   PDF" gera a mesma coisa em PDF (mesma técnica manual de `jsPDF`) — só números agregados, sem nome
   nem telefone de ninguém, mesmo critério do PDF de lote.
+- **Sincronização em tempo real no painel (Fase 30)** — antes, cada navegador só via o que a
+  própria pessoa fazia; se duas pessoas da equipe mexessem em pedidos/campanhas ao mesmo tempo em
+  abas diferentes, cada uma ficava com a tela desatualizada até recarregar. Primeira conexão
+  realtime **autenticada** deste projeto (o mural de oração já usava `WebSocket` nativo contra
+  `wss://<directus>/websocket`, mas numa coleção pública, sem autenticação — protocolo de auth
+  confirmado na [documentação oficial do Directus](https://directus.io/docs/guides/realtime/authentication):
+  `{type: "auth", access_token}` logo após abrir a conexão, reconecta com token renovado quando o
+  servidor fecha por token expirado). Em `grupo/pedidos.astro`, qualquer mudança relevante
+  (`camiseta_pedidos`/`itens_pedido`/`lotes`/`lote_itens` desta campanha) recarrega e re-renderiza
+  sozinho — decisão deliberada de recarregar tudo em vez de mesclar evento por evento no estado
+  local, mais simples e confiável pro volume de dados de uma igreja; com trava pra não fechar por
+  baixo da pessoa um item que ela esteja editando e ainda não salvou (adia até ela terminar). Em
+  `grupo/index.astro` — página que é o formulário inteiro o tempo todo, diferente da de pedidos —
+  não recarrega os campos sozinho (arriscaria apagar o que não foi salvo ainda): só mostra um
+  aviso "Esta campanha foi alterada por outra pessoa", a pessoa decide quando atualizar. Em
+  `/painel-camisetas/` (lista + dashboard), sem edição em andamento pra proteger, recarrega direto.
 
 ### Comunidade: mural de oração, enquetes e Minha Conta
 

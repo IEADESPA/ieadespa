@@ -429,6 +429,69 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     sairBtn?.addEventListener("click", () => sair(directusUrl, AUTH));
 
+    /**
+     * Sincronização em tempo real (Fase 30) — esta página só lista e soma (não tem edição de
+     * campo em andamento como `grupo/index.astro`), então qualquer mudança relevante só refaz o
+     * carregamento e re-renderiza direto, sem trava de "edição aberta". Mesmo protocolo de
+     * autenticação do WebSocket do Directus usado em `grupo/pedidos.astro` (ver comentário lá com
+     * a fonte oficial).
+     */
+    function iniciarRealtime(accessToken: string) {
+      const colecoes = ["camiseta_grupos", "camiseta_pedidos", "camiseta_itens_pedido", "camiseta_lotes", "camiseta_lote_itens"];
+      let ws: WebSocket | null = null;
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      let ativo = true;
+
+      function agendarRecarga() {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+          await carregarLotes();
+          await carregarDashboard();
+        }, 500);
+      }
+
+      function conectar(token: string) {
+        if (!ativo) return;
+        ws = new WebSocket(`${directusUrl.replace(/^http/, "ws")}/websocket`);
+
+        ws.addEventListener("open", () => ws?.send(JSON.stringify({ type: "auth", access_token: token })));
+
+        ws.addEventListener("message", (event) => {
+          let msg: any;
+          try {
+            msg = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+
+          if (msg.type === "auth") {
+            if (msg.status === "ok") {
+              colecoes.forEach((collection, i) => ws?.send(JSON.stringify({ type: "subscribe", collection, uid: `dc${i}` })));
+            } else {
+              console.warn("[camisetas] falha ao autenticar o tempo real:", msg);
+            }
+            return;
+          }
+
+          if (msg.type === "subscription" && msg.event && msg.event !== "init") {
+            agendarRecarga();
+          }
+        });
+
+        ws.addEventListener("close", () => {
+          if (!ativo) return;
+          setTimeout(async () => {
+            const tokenNovo = await exigirAutenticacao(directusUrl, AUTH);
+            if (tokenNovo && ativo) conectar(tokenNovo);
+          }, 3000);
+        });
+
+        ws.addEventListener("error", () => ws?.close());
+      }
+
+      conectar(accessToken);
+    }
+
     async function iniciar() {
       const t = await exigirAutenticacao(directusUrl, AUTH);
       if (!t) return;
@@ -444,6 +507,7 @@ const allPosts = visiblePosts(await getAllMensagens());
 
       await carregarLotes();
       await carregarDashboard();
+      iniciarRealtime(token);
     }
 
     iniciar();

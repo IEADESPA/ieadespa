@@ -280,29 +280,45 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   malharia, a partir dos mesmos dados já calculados na tela (sem consulta nova) — mesma técnica
   manual de desenho de tabela em `jsPDF` (sem lib de tabela) já usada em `/eventos/exportar/` e no
   relatório de encerramento de evento.
-- **Dashboard consolidado e relatório em PDF (Fase 29)** — `/painel-camisetas/` ganhou números
-  agregados entre todas as campanhas (vendido/arrecadado/pago à malharia/saldo, peças pedidas/
-  separadas aguardando retirada/já retiradas) e uma tabela por campanha, somando um nível acima do
-  que já existia por lote — mesma lógica de congelado-se-fechado/ao-vivo-se-aberto de
-  `grupo/pedidos.astro`, só que agregada por campanha em vez de por lote. Botão "Exportar relatório
-  PDF" gera a mesma coisa em PDF (mesma técnica manual de `jsPDF`) — só números agregados, sem nome
-  nem telefone de ninguém, mesmo critério do PDF de lote.
-- **Sincronização em tempo real no painel (Fase 30)** — antes, cada navegador só via o que a
-  própria pessoa fazia; se duas pessoas da equipe mexessem em pedidos/campanhas ao mesmo tempo em
-  abas diferentes, cada uma ficava com a tela desatualizada até recarregar. Primeira conexão
-  realtime **autenticada** deste projeto (o mural de oração já usava `WebSocket` nativo contra
-  `wss://<directus>/websocket`, mas numa coleção pública, sem autenticação — protocolo de auth
-  confirmado na [documentação oficial do Directus](https://directus.io/docs/guides/realtime/authentication):
+- **Dashboard consolidado e relatório em PDF, por campanha (Fase 29, reposicionado na Fase 31)** —
+  aba "Consolidado" em `grupo/index.astro` (não em `/painel-camisetas/`, que ficou só a listagem —
+  a primeira versão somava todas as campanhas juntas numa página só, decisão do usuário de reverter
+  por achar confuso): vendido/arrecadado/pago à malharia/saldo, peças pedidas/separadas aguardando
+  retirada/já retiradas **desta campanha**, mesma lógica de congelado-se-fechado/ao-vivo-se-aberto
+  de `grupo/pedidos.astro`, um nível acima (soma os lotes da campanha, não só um). Dois gráficos de
+  barra (`site/src/lib/graficos.ts`, `graficoBarrasSvg`/`desenharGraficoBarrasPDF` — o mesmo
+  utilitário genérico já usado no histórico de eventos, não específico de pergunta de pesquisa):
+  "Peças por tamanho" e "Peças por situação" (retiradas/aguardando retirada/ainda não separadas) —
+  só essas duas, porque são frações de um todo (o rótulo do gráfico mostra `total · percentual%`,
+  que só faz sentido pra valores que somam 100% entre si; dinheiro fica só em cards de número).
+  Botão "Exportar relatório PDF" gera a mesma coisa em PDF — só números agregados desta campanha,
+  sem nome nem telefone de ninguém, mesmo critério do PDF de lote.
+- **Sincronização em tempo real no painel (Fase 30, ampliada na Fase 31)** — antes, cada navegador
+  só via o que a própria pessoa fazia; se duas pessoas da equipe mexessem em pedidos/campanhas ao
+  mesmo tempo em abas diferentes, cada uma ficava com a tela desatualizada até recarregar. Primeira
+  conexão realtime **autenticada** deste projeto (o mural de oração já usava `WebSocket` nativo
+  contra `wss://<directus>/websocket`, mas numa coleção pública, sem autenticação — protocolo de
+  auth confirmado na [documentação oficial do Directus](https://directus.io/docs/guides/realtime/authentication):
   `{type: "auth", access_token}` logo após abrir a conexão, reconecta com token renovado quando o
-  servidor fecha por token expirado). Em `grupo/pedidos.astro`, qualquer mudança relevante
-  (`camiseta_pedidos`/`itens_pedido`/`lotes`/`lote_itens` desta campanha) recarrega e re-renderiza
-  sozinho — decisão deliberada de recarregar tudo em vez de mesclar evento por evento no estado
-  local, mais simples e confiável pro volume de dados de uma igreja; com trava pra não fechar por
-  baixo da pessoa um item que ela esteja editando e ainda não salvou (adia até ela terminar). Em
-  `grupo/index.astro` — página que é o formulário inteiro o tempo todo, diferente da de pedidos —
-  não recarrega os campos sozinho (arriscaria apagar o que não foi salvo ainda): só mostra um
-  aviso "Esta campanha foi alterada por outra pessoa", a pessoa decide quando atualizar. Em
-  `/painel-camisetas/` (lista + dashboard), sem edição em andamento pra proteger, recarrega direto.
+  servidor fecha por token expirado; precisou de `WEBSOCKETS_ENABLED=true` nas Application Settings
+  do App Service do Directus — desligado por padrão em instalação própria, nunca tinha sido ligado
+  antes, então o "tempo real" do mural de oração nunca funcionou de verdade até esse dia). Em
+  `grupo/pedidos.astro`, qualquer mudança relevante (`camiseta_pedidos`/`itens_pedido`/`lotes`/
+  `lote_itens` desta campanha) recarrega e re-renderiza sozinho — decisão deliberada de recarregar
+  tudo em vez de mesclar evento por evento no estado local, mais simples e confiável pro volume de
+  dados de uma igreja; com trava pra não fechar por baixo da pessoa um item que ela esteja editando
+  e ainda não salvou (adia até ela terminar). Em `grupo/index.astro` — página que é o formulário
+  inteiro o tempo todo — as coleções que afetam campo de formulário (`camiseta_grupos`/
+  `perguntas_camiseta`) só mostram um aviso "Esta campanha foi alterada por outra pessoa" (a pessoa
+  decide quando recarregar, não arrisca apagar o que não foi salvo); as que só alimentam a aba
+  "Consolidado" (só leitura, Fase 31) recalculam e re-renderizam sozinhas, sem aviso — não há o que
+  perder ali. Em `/painel-camisetas/` (só listagem desde a Fase 31), sem edição em andamento pra
+  proteger, recarrega direto.
+- **Imagem de compartilhamento por campanha (Fase 31)** — `camiseta_grupos.imagem` (mesmo tipo de
+  campo que `eventos.cover`, upload pela aba "Imagem" na edição da campanha) aparece na prévia
+  quando o link de `/camiseta/<slug>/` é compartilhado (WhatsApp, redes sociais), no lugar da logo
+  genérica do site. Se a campanha estiver vinculada a um evento e esse evento tiver imagem própria,
+  a imagem do evento tem prioridade sobre a da campanha.
 
 ### Comunidade: mural de oração, enquetes e Minha Conta
 

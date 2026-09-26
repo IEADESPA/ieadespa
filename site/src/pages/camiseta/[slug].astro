@@ -3,7 +3,7 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
-import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, directusAssetUrl, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
@@ -18,9 +18,10 @@ interface Lote {
   precos_tamanho: Record<string, number> | null;
   limite_uma_por_pessoa: boolean;
   pedidos_ate: string | null;
-  evento: { title: string } | null;
+  evento: { title: string; cover: string | null } | null;
   ministerio: { name: string } | null;
   pedir_congregacao: boolean;
+  imagem: string | null;
 }
 
 type TipoPergunta = "texto_curto" | "texto_longo" | "selecao_unica" | "selecao_multipla" | "numero" | "data";
@@ -37,7 +38,7 @@ interface Pergunta {
 export async function getStaticPaths() {
   const grupos = await fetchItems<Lote>(
     "camiseta_grupos",
-    "filter[ativo][_eq]=true&fields=*,evento.title,ministerio.name",
+    "filter[ativo][_eq]=true&fields=*,evento.title,evento.cover,ministerio.name",
   );
   return grupos.map((lote) => ({ params: { slug: lote.slug }, props: { lote } }));
 }
@@ -72,9 +73,16 @@ function precoTamanho(tamanho: string | null): number {
 }
 const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 const precosPorTamanhoVariam = tamanhos.length > 0 && new Set(tamanhos.map((t) => precoTamanho(t))).size > 1;
+
+// Imagem de compartilhamento (WhatsApp/redes): prioridade pro evento vinculado
+// (se tiver capa própria), senão a imagem da própria campanha, senão cai no
+// padrão do site (BaseLayout já resolve isso sozinho quando `image` não é
+// passada).
+const imagemId = lote.evento?.cover ?? lote.imagem ?? null;
+const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 1600, quality: 80, format: "webp" }) : undefined;
 ---
 
-<BaseLayout title={lote.nome} description={lote.descricao ?? `Faça seu pedido de ${lote.nome}.`}>
+<BaseLayout title={lote.nome} description={lote.descricao ?? `Faça seu pedido de ${lote.nome}.`} image={imagemCompartilhamento}>
   <SiteHeader posts={allPosts} />
   <main id="content" class="outer">
     <div class="canvas camiseta-canvas" data-directus-url={DIRECTUS_URL}>

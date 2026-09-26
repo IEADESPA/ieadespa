@@ -29,35 +29,6 @@ const allPosts = visiblePosts(await getAllMensagens());
           <a href="/painel-eventos/lgpd/" class="link-sweep font-semibold text-accent">Exclusão de dados pessoais (LGPD) →</a>
         </p>
 
-        <div class="mt-8" data-dashboard-wrap hidden>
-          <h2 class="section-title">Dashboard consolidado</h2>
-          <p class="mt-1 text-sm text-muted-foreground">Somando todas as campanhas, ativas e inativas.</p>
-
-          <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="stat-card"><p class="stat-numero" data-dstat="vendido">R$ 0</p><p class="stat-label">Vendido</p></div>
-            <div class="stat-card"><p class="stat-numero" data-dstat="arrecadado">R$ 0</p><p class="stat-label">Arrecadado</p></div>
-            <div class="stat-card"><p class="stat-numero" data-dstat="pago">R$ 0</p><p class="stat-label">Pago à malharia</p></div>
-            <div class="stat-card"><p class="stat-numero" data-dstat="saldo">R$ 0</p><p class="stat-label">Saldo</p></div>
-          </div>
-
-          <div class="mt-4 grid gap-4 sm:grid-cols-3">
-            <div class="stat-card"><p class="stat-numero" data-dstat="pedidas">0</p><p class="stat-label">Peças pedidas</p></div>
-            <div class="stat-card"><p class="stat-numero" data-dstat="aguardando">0</p><p class="stat-label">Separadas, aguardando retirada</p></div>
-            <div class="stat-card"><p class="stat-numero" data-dstat="retiradas">0</p><p class="stat-label">Já retiradas</p></div>
-          </div>
-
-          <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
-            <h3 class="text-sm font-semibold">Por campanha</h3>
-            <button type="button" class="btn btn-outline" data-exportar-relatorio-pdf>Exportar relatório PDF</button>
-          </div>
-          <div class="mt-3 overflow-x-auto">
-            <table class="tabela-camiseta">
-              <thead><tr><th>Campanha</th><th>Vendido</th><th>Arrecadado</th><th>Saldo</th><th>Peças pendentes</th></tr></thead>
-              <tbody data-dashboard-corpo></tbody>
-            </table>
-          </div>
-        </div>
-
         <div class="mt-8 flex flex-wrap items-baseline justify-between gap-3">
           <h2 class="section-title">Lotes de camiseta/uniforme</h2>
           <button type="button" class="btn btn-solid" data-painel-novo-grupo>+ Nova camiseta</button>
@@ -74,8 +45,6 @@ const allPosts = visiblePosts(await getAllMensagens());
 
   <script>
     import { exigirAutenticacao, sair } from "@/lib/painelAuth";
-    import { jsPDF } from "jspdf";
-    import { configurarAcessibilidadePdf } from "@/lib/pdf";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -83,44 +52,6 @@ const allPosts = visiblePosts(await getAllMensagens());
       id: number;
       nome: string;
       ativo: boolean;
-      valor_venda: number | null;
-      precos_tamanho: Record<string, number> | null;
-    }
-
-    interface Pedido {
-      id: number;
-      grupo: number;
-      lote: number | null;
-      valor_pago: number;
-      avulso: boolean;
-      separado: boolean;
-    }
-
-    interface Item {
-      id: number;
-      pedido: number;
-      tamanho: string | null;
-      modelo: string | null;
-      quantidade: number;
-      quantidade_retirada: number;
-    }
-
-    interface Lote {
-      id: number;
-      grupo: number;
-      status: "aberto" | "fechado";
-      total_vendido: number | null;
-      total_arrecadado: number | null;
-      total_pago_malharia: number | null;
-    }
-
-    interface LoteItem {
-      id: number;
-      lote: number;
-      tamanho: string | null;
-      modelo: string | null;
-      estoque_extra: number;
-      custo_unitario: number | null;
     }
 
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
@@ -136,32 +67,25 @@ const allPosts = visiblePosts(await getAllMensagens());
     const novoBtn = document.querySelector<HTMLButtonElement>("[data-painel-novo-grupo]");
 
     let token = "";
-    let grupos: LoteResumo[] = [];
-    let pedidos: Pedido[] = [];
-    let itens: Item[] = [];
-    let lotes: Lote[] = [];
-    let loteItens: LoteItem[] = [];
 
     function escapeHtml(value: string) {
       return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
     }
-    const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
     async function carregarLotes() {
       if (!listaEl) return;
-      const res = await fetch(
-        `${directusUrl}/items/camiseta_grupos?fields=id,nome,ativo,valor_venda,precos_tamanho&sort=-date_created&limit=-1`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const res = await fetch(`${directusUrl}/items/camiseta_grupos?fields=id,nome,ativo&sort=-date_created&limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const json = await res.json();
-      grupos = json.data ?? [];
+      const lotes: LoteResumo[] = json.data ?? [];
 
-      if (!grupos.length) {
+      if (!lotes.length) {
         listaEl.innerHTML = `<p class="text-sm text-muted-foreground">Nenhum lote ainda. Crie o primeiro acima.</p>`;
         return;
       }
 
-      listaEl.innerHTML = grupos
+      listaEl.innerHTML = lotes
         .map(
           (lote) => `
             <a href="/painel-camisetas/grupo/?id=${lote.id}" class="painel-evento-card painel-evento-link">
@@ -172,235 +96,6 @@ const allPosts = visiblePosts(await getAllMensagens());
         )
         .join("");
     }
-
-    /**
-     * Preço por peça pode variar por tamanho (opcional) — mesma lógica já
-     * usada em /camisetas/, /camiseta/[slug]/ e no painel de pedidos.
-     */
-    function precoTamanho(grupo: LoteResumo | undefined, tamanho: string | null): number {
-      if (!grupo) return 0;
-      const precos = grupo.precos_tamanho ?? {};
-      if (tamanho && precos[tamanho] != null) return Number(precos[tamanho]);
-      return grupo.valor_venda != null ? Number(grupo.valor_venda) : 0;
-    }
-
-    function totalPedido(pedido: Pedido): number {
-      const grupo = grupos.find((g) => g.id === pedido.grupo);
-      return itens.filter((i) => i.pedido === pedido.id).reduce((s, i) => s + i.quantidade * precoTamanho(grupo, i.tamanho), 0);
-    }
-
-    /**
-     * "Vendido"/"Arrecadado" de um lote fechado vêm de um retrato congelado
-     * (mesmo critério já usado em `grupo/pedidos.astro` — dinheiro já pago à
-     * malharia não muda mais); lote aberto calcula ao vivo. Aqui só soma um
-     * nível acima (por campanha, não por lote).
-     */
-    function vendidoArrecadadoLote(lote: Lote): { vendido: number; arrecadado: number } {
-      if (lote.status === "fechado" && lote.total_vendido != null) {
-        return { vendido: Number(lote.total_vendido), arrecadado: Number(lote.total_arrecadado ?? 0) };
-      }
-      const pedidosDoLote = pedidos.filter((p) => p.lote === lote.id && !p.avulso);
-      return {
-        vendido: pedidosDoLote.reduce((s, p) => s + totalPedido(p), 0),
-        arrecadado: pedidosDoLote.reduce((s, p) => s + Number(p.valor_pago || 0), 0),
-      };
-    }
-
-    /** "Pago à malharia" de um lote — congelado se fechado, ao vivo (estoque a encomendar × custo) se aberto. */
-    function pagoMalhariaLote(lote: Lote): number {
-      if (lote.status === "fechado" && lote.total_pago_malharia != null) return Number(lote.total_pago_malharia);
-      const pedidosDoLote = pedidos.filter((p) => p.lote === lote.id && !p.avulso);
-      return loteItens
-        .filter((li) => li.lote === lote.id)
-        .reduce((soma, li) => {
-          const pedidoSistema = pedidosDoLote.reduce((s, p) => {
-            const itensCombo = itens.filter(
-              (i) => i.pedido === p.id && (i.tamanho ?? null) === (li.tamanho ?? null) && (i.modelo ?? null) === (li.modelo ?? null),
-            );
-            return s + itensCombo.reduce((s2, i) => s2 + i.quantidade, 0);
-          }, 0);
-          return soma + (pedidoSistema + Number(li.estoque_extra || 0)) * Number(li.custo_unitario || 0);
-        }, 0);
-    }
-
-    function resumoCampanha(grupoId: number) {
-      const lotesDoGrupo = lotes.filter((l) => l.grupo === grupoId);
-      const pedidosAvulso = pedidos.filter((p) => p.grupo === grupoId && p.avulso);
-
-      let vendido = 0;
-      let arrecadado = 0;
-      let pago = 0;
-      for (const lote of lotesDoGrupo) {
-        const va = vendidoArrecadadoLote(lote);
-        vendido += va.vendido;
-        arrecadado += va.arrecadado;
-        pago += pagoMalhariaLote(lote);
-      }
-      for (const p of pedidosAvulso) {
-        vendido += totalPedido(p);
-        arrecadado += Number(p.valor_pago || 0);
-      }
-
-      return { vendido, arrecadado, pago, saldo: arrecadado - pago };
-    }
-
-    function calcularDashboard() {
-      let pecasPedidas = 0;
-      let pecasRetiradas = 0;
-      let pecasAguardando = 0;
-
-      const linhas = grupos.map((grupo) => {
-        const resumo = resumoCampanha(grupo.id);
-        let pendentes = 0;
-        for (const p of pedidos.filter((p) => p.grupo === grupo.id)) {
-          for (const i of itens.filter((i) => i.pedido === p.id)) {
-            pecasPedidas += i.quantidade;
-            pecasRetiradas += Math.min(i.quantidade, i.quantidade_retirada);
-            const pendente = Math.max(0, i.quantidade - i.quantidade_retirada);
-            pendentes += pendente;
-            if (p.separado) pecasAguardando += pendente;
-          }
-        }
-        return { nome: grupo.nome, ...resumo, pendentes };
-      });
-
-      const totais = linhas.reduce(
-        (acc, l) => ({ vendido: acc.vendido + l.vendido, arrecadado: acc.arrecadado + l.arrecadado, pago: acc.pago + l.pago }),
-        { vendido: 0, arrecadado: 0, pago: 0 },
-      );
-
-      return { ...totais, saldo: totais.arrecadado - totais.pago, pecasPedidas, pecasRetiradas, pecasAguardando, linhas };
-    }
-
-    async function carregarDashboard() {
-      const dashboardWrap = document.querySelector<HTMLElement>("[data-dashboard-wrap]");
-      if (!dashboardWrap || grupos.length === 0) return;
-
-      const headers = { Authorization: `Bearer ${token}` };
-      const [resPedidos, resItens, resLotes, resLoteItens] = await Promise.all([
-        fetch(`${directusUrl}/items/camiseta_pedidos?fields=id,grupo,lote,valor_pago,avulso,separado&limit=-1`, { headers }),
-        fetch(`${directusUrl}/items/camiseta_itens_pedido?fields=id,pedido,tamanho,modelo,quantidade,quantidade_retirada&limit=-1`, { headers }),
-        fetch(`${directusUrl}/items/camiseta_lotes?fields=id,grupo,status,total_vendido,total_arrecadado,total_pago_malharia&limit=-1`, { headers }),
-        fetch(`${directusUrl}/items/camiseta_lote_itens?fields=id,lote,tamanho,modelo,estoque_extra,custo_unitario&limit=-1`, { headers }),
-      ]);
-      pedidos = resPedidos.ok ? (await resPedidos.json()).data ?? [] : [];
-      itens = resItens.ok ? (await resItens.json()).data ?? [] : [];
-      lotes = resLotes.ok ? (await resLotes.json()).data ?? [] : [];
-      loteItens = resLoteItens.ok ? (await resLoteItens.json()).data ?? [] : [];
-
-      renderizarDashboard();
-      dashboardWrap.hidden = false;
-    }
-
-    function renderizarDashboard() {
-      const d = calcularDashboard();
-      const dstat = (nome: string) => document.querySelector<HTMLElement>(`[data-dstat="${nome}"]`);
-      const set = (nome: string, texto: string) => { const el = dstat(nome); if (el) el.textContent = texto; };
-      set("vendido", brl(d.vendido));
-      set("arrecadado", brl(d.arrecadado));
-      set("pago", brl(d.pago));
-      set("saldo", brl(d.saldo));
-      set("pedidas", String(d.pecasPedidas));
-      set("aguardando", String(d.pecasAguardando));
-      set("retiradas", String(d.pecasRetiradas));
-
-      const corpo = document.querySelector<HTMLElement>("[data-dashboard-corpo]");
-      if (corpo) {
-        corpo.innerHTML = d.linhas.length
-          ? d.linhas
-              .map(
-                (l) => `
-                  <tr>
-                    <td>${escapeHtml(l.nome)}</td>
-                    <td>${brl(l.vendido)}</td>
-                    <td>${brl(l.arrecadado)}</td>
-                    <td>${brl(l.saldo)}</td>
-                    <td>${l.pendentes}</td>
-                  </tr>
-                `,
-              )
-              .join("")
-          : `<tr><td colspan="5" class="text-sm text-muted-foreground">Nenhuma campanha ainda.</td></tr>`;
-      }
-    }
-
-    document.querySelector("[data-exportar-relatorio-pdf]")?.addEventListener("click", () => {
-      const d = calcularDashboard();
-      const doc = new jsPDF({ unit: "pt", format: "a4" });
-      const titulo = "Relatório consolidado — Camisetas e uniformes";
-      configurarAcessibilidadePdf(doc, titulo);
-      const margem = 56;
-      let y = margem;
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text(titulo, margem, y);
-      y += 20;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(90);
-      doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margem, y);
-      y += 26;
-      doc.setTextColor(20);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text("Resumo geral", margem, y);
-      y += 18;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      [
-        `Vendido: ${brl(d.vendido)}`,
-        `Arrecadado: ${brl(d.arrecadado)}`,
-        `Pago à malharia: ${brl(d.pago)}`,
-        `Saldo: ${brl(d.saldo)}`,
-        `Peças pedidas: ${d.pecasPedidas} · separadas aguardando retirada: ${d.pecasAguardando} · já retiradas: ${d.pecasRetiradas}`,
-      ].forEach((linha) => {
-        doc.text(linha, margem, y);
-        y += 15;
-      });
-
-      y += 16;
-      const colunas = [
-        { titulo: "Campanha", x: margem, largura: 190 },
-        { titulo: "Vendido", x: margem + 190, largura: 90 },
-        { titulo: "Arrecadado", x: margem + 280, largura: 90 },
-        { titulo: "Saldo", x: margem + 370, largura: 70 },
-        { titulo: "Pendentes", x: margem + 440, largura: 60 },
-      ];
-      const larguraTabela = colunas.reduce((s, c) => s + c.largura, 0);
-      const alturaPagina = doc.internal.pageSize.getHeight();
-
-      function desenharCabecalho() {
-        doc.setFillColor(240, 236, 224);
-        doc.rect(margem, y, larguraTabela, 20, "F");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        colunas.forEach((c) => doc.text(c.titulo, c.x + 6, y + 14));
-        y += 20;
-      }
-
-      desenharCabecalho();
-      doc.setFont("helvetica", "normal");
-
-      d.linhas.forEach((linha) => {
-        if (y + 20 > alturaPagina - margem) {
-          doc.addPage();
-          y = margem;
-          desenharCabecalho();
-          doc.setFont("helvetica", "normal");
-        }
-        doc.rect(margem, y, larguraTabela, 20);
-        doc.text(linha.nome, colunas[0].x + 6, y + 14);
-        doc.text(brl(linha.vendido), colunas[1].x + 6, y + 14);
-        doc.text(brl(linha.arrecadado), colunas[2].x + 6, y + 14);
-        doc.text(brl(linha.saldo), colunas[3].x + 6, y + 14);
-        doc.text(String(linha.pendentes), colunas[4].x + 6, y + 14);
-        y += 20;
-      });
-
-      doc.save(`camisetas-relatorio-${new Date().toISOString().slice(0, 10)}.pdf`);
-    });
 
     const novoStatus = document.querySelector<HTMLElement>("[data-painel-novo-status]");
 
@@ -430,24 +125,18 @@ const allPosts = visiblePosts(await getAllMensagens());
     sairBtn?.addEventListener("click", () => sair(directusUrl, AUTH));
 
     /**
-     * Sincronização em tempo real (Fase 30) — esta página só lista e soma (não tem edição de
-     * campo em andamento como `grupo/index.astro`), então qualquer mudança relevante só refaz o
-     * carregamento e re-renderiza direto, sem trava de "edição aberta". Mesmo protocolo de
-     * autenticação do WebSocket do Directus usado em `grupo/pedidos.astro` (ver comentário lá com
-     * a fonte oficial).
+     * Sincronização em tempo real (Fase 30) — esta página só lista campanhas (o dashboard
+     * consolidado por campanha mudou pra dentro de `grupo/index.astro`, Fase 31), então só
+     * precisa saber quando uma campanha é criada/editada/excluída em outra aba.
      */
     function iniciarRealtime(accessToken: string) {
-      const colecoes = ["camiseta_grupos", "camiseta_pedidos", "camiseta_itens_pedido", "camiseta_lotes", "camiseta_lote_itens"];
       let ws: WebSocket | null = null;
       let debounceTimer: ReturnType<typeof setTimeout> | null = null;
       let ativo = true;
 
       function agendarRecarga() {
         if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(async () => {
-          await carregarLotes();
-          await carregarDashboard();
-        }, 500);
+        debounceTimer = setTimeout(() => { carregarLotes(); }, 500);
       }
 
       function conectar(token: string) {
@@ -466,7 +155,7 @@ const allPosts = visiblePosts(await getAllMensagens());
 
           if (msg.type === "auth") {
             if (msg.status === "ok") {
-              colecoes.forEach((collection, i) => ws?.send(JSON.stringify({ type: "subscribe", collection, uid: `dc${i}` })));
+              ws?.send(JSON.stringify({ type: "subscribe", collection: "camiseta_grupos", uid: "lc0" }));
             } else {
               console.warn("[camisetas] falha ao autenticar o tempo real:", msg);
             }
@@ -506,7 +195,6 @@ const allPosts = visiblePosts(await getAllMensagens());
       if (usuarioEl) usuarioEl.textContent = json.data.email;
 
       await carregarLotes();
-      await carregarDashboard();
       iniciarRealtime(token);
     }
 
@@ -539,10 +227,5 @@ const allPosts = visiblePosts(await getAllMensagens());
       color: var(--muted-foreground);
       font-size: 0.8125rem;
     }
-    .stat-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem; }
-    .stat-numero { font-size: 1.5rem; font-weight: 700; }
-    .stat-label { margin-top: 0.25rem; font-size: 0.8125rem; color: var(--muted-foreground); }
-    .tabela-camiseta { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-    .tabela-camiseta th, .tabela-camiseta td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); text-align: left; }
   </style>
 </BaseLayout>

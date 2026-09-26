@@ -6568,8 +6568,104 @@ desempate do ranking.
 
 #### 🔒 Trava de Revisão 6-A — antes de avançar para a v6.8
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v6.1 a v6.7 pelas 5 perguntas do checklist.
+- [ ] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditadas v6.1 a v6.7 pelas 5 perguntas do checklist
+      (26/09). **A trava que mais achou coisa até aqui**: o módulo EBD
+      passou em todos os testes e em todo deploy, mas metade das ações
+      nunca tinha funcionado em produção. Correções no commit `908c895` +
+      migração 108.
+
+  **1. Todo código novo roda de ponta a ponta contra o ambiente real?**
+  **Não era verdade — achado crítico, corrigido.** Toda Function da EBD
+  declarava a rota `xxx/{acao?}`, e `{acao?}` casa **um** segmento só:
+  as 11 ações de dois segmentos que o front chama (`ebd-chamada/licao/
+  abrir|fechar|reabrir`, `ebd-turmas/professores/encerrar`, `ebd-turmas/
+  alunos/transferir`, `ebd-atividades/licao/conteudo`, `ebd-atividades/
+  resposta/corrigir`, `ebd-revistas/pedidos/itens|aprovar|pagamento`)
+  davam 404 antes de chegar no código. Sem abrir lição, a chamada inteira
+  (v6.2), as atividades (v6.3), a oferta (v6.7) e o motor de conquistas
+  (v6.4, que só recebe evento da chamada/atividade) ficaram sem uso real
+  desde que nasceram. Mesmo defeito em `assistencia-social` (v5.9,
+  `cadastro/encerrar`, `profissionais/descredenciar`) — passou pela Trava
+  5-B porque ela só conferiu `401` sem sessão na rota raiz. Corrigido com
+  catch-all `{*acao}` nas 6 Functions. **Lição pra próximas travas: testar
+  cada rota de ação, não só a raiz.** Migrações 101-107 conferidas
+  aplicando contra o Azure SQL em cada deploy desde a v6.1 (idempotência
+  testada de verdade, várias vezes); 108 aplicada no run `36267898600`.
+  Suíte: 533 testes (eram 527; 6 novos em `conquistas.test.js`).
+
+  **2. Toda tela nova abre e mostra dado de verdade?** Checagem
+  sistemática: 1606 `getElementById` literais contra 1228 ids + 70
+  prefixos dinâmicos — só os 2 falsos positivos de sempre (`caixaSino`,
+  `permissaoEscopoTodas`); todo handler inline aponta pra função global.
+  Achados de tela, corrigidos: (a) **o professor não tinha tela** — o
+  backend deixa o professor ativo lançar chamada/resposta/pedido da própria
+  turma sem `ebd_gestao` desde a v6.2, mas a aba EBD só abria com
+  `ebd_gestao`; agora abre em **modo professor** (`GET /api/ebd-turmas/
+  minhas-turmas`, `temPermissaoDaAba`), mostrando só as próprias turmas,
+  chamada, atividades e pedido de revistas — e `GET licao`/`licao/conteudo`/
+  `atividade` passaram a aceitar o professor da congregação, senão quem
+  entra por código de acesso (vB.5, escopo vazio) nunca achava a lição;
+  (b) o campo "Id do aluno" não aparecia em tabela nenhuma — coluna Id nas
+  tabelas de alunos, roster e resumo; (c) datas de coluna `DATE` (lição,
+  lançamento financeiro) apareciam um dia antes (meia-noite UTC em UTC-3);
+  (d) re-salvar uma resposta de texto punha aspas literais e ela virava
+  errada.
+
+  **3. README e código continuam narrando a mesma coisa?** Divergências
+  corrigidas no código: a UNIQUE `(LicaoId, AlunoId)` de `EbdChamadas`
+  aceitava **um único visitante por lição** (o texto da v6.2 dizia que o
+  SQL Server trata `NULL` como distinto numa UNIQUE — não trata; migração
+  108 troca por índice filtrado); `conquistas_gestao` nunca foi semeada em
+  `Funcionalidades`, então não tinha como ser concedida pela tela de
+  Permissões (108 semeia, sem conceder a papel nenhum); **"Sequência de
+  Ouro" e "Trimestre Perfeito" nunca desbloqueariam** — `paraDataLocal`
+  não lia o `Date` que o mssql devolve de coluna `DATE`, e os testes só
+  passavam string (teste novo com `Date`); a correção manual de resposta
+  não disparava o motor, apesar de a v6.4 prometer "lançada/corrigida";
+  o catálogo aberto a qualquer login devolvia as conquistas `oculta`; o
+  certificado aceitava vínculo com conquista não desbloqueada; editar um
+  pedido pendente repreçava tudo pelo catálogo do momento. Corrigidas no
+  texto: v6.2 (visitante), v6.3 ("três tabelas", o "⏳ pendente"), v6.5
+  ("Continua a FASE 6"), notas "ainda não construída" vencidas. Números de
+  teste de v6.1-v6.7 (17/21/39/36/12/24/27; totais 368→527) conferem
+  exatamente com o código. **Fica registrado, não corrigido, por
+  decisão**: `ScoreConfig` não tem tela (só SQL) e a tela de Conquistas só
+  cria — não edita — catálogo/regra (as rotas `catalogo/atualizar` e
+  `regra/desativar` existem); o override territorial de pesos não é usado
+  pelo painel nem pelo ranking.
+
+  **4. O que ficou pra trás foi de fato corrigido, não só anotado?**
+  Nenhum `TODO`/`FIXME`/gambiarra no diff da FASE 6. Corrigidos nesta
+  trava: IDOR em `resposta/corrigir` (conferia permissão contra o
+  `alunoId` informado, sem checar que a resposta era dele);
+  `alunos/transferir` só conferia o escopo da turma de destino (agora a de
+  origem também); pedido de revista deixava cabeçalho órfão quando uma
+  revista era inválida (a UNIQUE `(TurmaId, Trimestre)` passava a barrar a
+  recriação); o pré-preenchimento de ofertas no relatório departamental
+  (v6.7) não era fail-soft; **eventos de conquista acumulavam** — corrigir
+  AUSENTE→PRESENTE deixava a falta antiga bloqueando "Trimestre Perfeito"
+  e cada re-salvamento somava pontos: `ConquistasEventos.ChaveOrigem`
+  (108) torna o evento substituível por fato gerador (`licao:N`,
+  `atividade:N`), sem nome de módulo no motor. Fora da FASE 6, achado na
+  checagem de CI: **o agendador de notificações (vB.2) falhava quase todo
+  dia desde 16/09** (`curl` exit 22 em ~45s, o limite das Functions
+  gerenciadas; o job de fluxos, 30min depois e já aquecido, sempre
+  passava) — `rotinas-diarias.yml` agora aquece API e banco antes, sem
+  repetir a chamada (`criarNotificacao` é consulta-depois-insere, sem
+  índice único: retry paralelo duplicaria aviso). **Decisão do usuário
+  (26/09)**: o ranking de conquistas continua aberto a qualquer login,
+  listando os nomes de todos os alunos (inclusive menores) — intencional,
+  pelo engajamento. `CertificadoPdf` anônimo com id + matrícula segue o
+  mesmo modelo já aceito do `CartaPdf`.
+
+  **5. Deploy real, de ponta a ponta, aconteceu?** Sim — `gh run list`
+  confirma `success` nos 7 commits de v6.1 a v6.7 (`3e607e3`, `888f98f`,
+  `7025bb5`, `bdc1919`, `7ddacd1`, `fec10d1`, `3e5b7f0`) e no das correções
+  (`908c895`, run `36267898600`: 533 testes, migração 108 em 5 batches,
+  "Deployment Complete"). *Pendente para fechar*: conferência ao vivo das
+  rotas de ação (`401` sem sessão em vez de `404`) e o primeiro run do
+  agendador aquecido (27/09, 10h UTC).
 
 #### v6.8 — Caderneta digital no padrão que a EBD já usa *(7ª rodada)*
 

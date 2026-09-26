@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["get", "post"],
-      "route": "conquistas/{acao?}"
+      "route": "conquistas/{*acao}"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

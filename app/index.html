@@ -2466,6 +2466,11 @@
 
       <!-- ABA: EBD — ESCOLA BÍBLICA DOMINICAL (v6.1, abre a FASE 6) -->
       <div id="abaEbd" class="aba-secretaria" style="display:none;">
+        <!-- Trava 6-A: modo professor — quem não tem "ebd_gestao" mas é professor
+             ativo de alguma turma vê só o que o backend já lhe permite
+             (chamada, atividades e pedido de revistas das próprias turmas). -->
+        <div id="painelProfessorEbd" class="ebd-so-professor"></div>
+        <div class="ebd-so-gestao">
         <h3>📖 EBD — Turmas, Professores e Alunos</h3>
         <p class="subtitle">Hierarquia Campo → Área → Congregação → Turma. O "Aluno" não é um cadastro de pessoa
           à parte — é um vínculo do próprio cadastro de <strong>MembroReferencia</strong> (o mesmo de sempre),
@@ -2532,6 +2537,7 @@
           <input type="search" id="ebdBuscaAgrupada" placeholder="Buscar por turma ou congregação..." oninput="carregarVisaoAgrupadaEbdAcao()" style="min-width:260px;" />
         </div>
         <div id="painelVisaoAgrupadaEbd"></div>
+        </div>
 
         <hr />
         <h3>✅ Chamada e presença (v6.2)</h3>
@@ -2545,11 +2551,11 @@
           <select id="ebdChamadaCongregacao"></select>
           <input type="date" id="ebdChamadaData" style="max-width:160px;" />
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="buscarLicaoEbdAcao()">🔍 Buscar lição</button>
-          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirLicaoEbdAcao()">🔓 Abrir lição</button>
+          <button class="btn-confirmar btn-secundario ebd-so-gestao" style="width:auto;margin:0;" onclick="abrirLicaoEbdAcao()">🔓 Abrir lição</button>
         </div>
         <div id="painelLicaoEbd"></div>
 
-        <details style="margin:8px 0;">
+        <details class="ebd-so-gestao" style="margin:8px 0;">
           <summary>🔒 Fechar / 🔓 Reabrir lição (id da lição)</summary>
           <div class="barra-lista">
             <input type="number" id="ebdLicaoIdAcao" placeholder="Id da lição" style="max-width:140px;" />
@@ -2648,6 +2654,7 @@
         </div>
         <div id="painelResumoAtividadeEbd"></div>
 
+        <div class="ebd-so-gestao">
         <hr />
         <h3>🎓 Certificados (v6.5)</h3>
         <p class="subtitle">Fecha a FASE 6 com a versão mais simples do capítulo: emitir um certificado é
@@ -2674,6 +2681,8 @@
         </div>
         <div id="painelCertificadosEbd"></div>
 
+        </div>
+
         <hr />
         <h3>📚 Revistas e pedidos (v6.6)</h3>
         <p class="subtitle">Pedido por <strong>Turma</strong>, não por congregação — a v6.8 já amarra a revista/
@@ -2684,7 +2693,7 @@
           financeiro nem integra com a Tesouraria: isso é trabalho da v6.7 (Financeiro da EBD).</p>
 
         <h4>Catálogo de revistas</h4>
-        <details style="margin:8px 0;">
+        <details class="ebd-so-gestao" style="margin:8px 0;">
           <summary>➕ Cadastrar revista no catálogo (exige ebd_gestao)</summary>
           <div class="barra-lista">
             <input type="text" id="revNome" placeholder="Nome (ex: Revista do Aluno — Adultos)" style="min-width:240px;" />
@@ -2724,7 +2733,7 @@
         </details>
         <p id="resultadoPedidoRevistaEbd" class="subtitle"></p>
 
-        <details style="margin:8px 0;">
+        <details class="ebd-so-gestao" style="margin:8px 0;">
           <summary>✅ Aprovar pedido / 💰 Registrar pagamento (exige ebd_gestao)</summary>
           <div class="barra-lista">
             <input type="number" id="pedIdAcao" placeholder="Id do pedido" style="max-width:140px;" />
@@ -2733,6 +2742,7 @@
           </div>
         </details>
 
+        <div class="ebd-so-gestao">
         <hr />
         <h4>Consolidado — Área → Congregação → Pedidos (exige ebd_gestao)</h4>
         <div class="barra-lista">
@@ -2740,7 +2750,9 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarConsolidadoRevistasEbdAcao()">📊 Ver consolidado</button>
         </div>
         <div id="painelConsolidadoRevistasEbd"></div>
+        </div>
 
+        <div class="ebd-so-gestao">
         <hr />
         <h3>💰 Financeiro (v6.7)</h3>
         <p class="subtitle">Fecha o loop aberto lá na v5.5: o dia a dia do financeiro da EBD (ofertas do
@@ -2794,6 +2806,7 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarConsolidadoFinanceiroEbdAcao()">📊 Ver consolidado (usa congregação/mês/ano acima)</button>
         </div>
         <div id="painelConsolidadoFinanceiroEbd"></div>
+        </div>
       </div>
 
       <!-- ABA: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico, module-

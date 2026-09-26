@@ -415,7 +415,8 @@ async function logarEventoConquistaAtividade(pool, { atividadeId, alunoId }) {
     await conquistas.registrarEventoEAvaliar(pool, {
       membroId: row.MembroId, tipoEvento: "EBD_ATIVIDADE_RESPOSTA",
       payload: { atividadeId, percentual: resumo.percentual, respondidas: resumo.respondidas, totalQuestoes: resumo.totalQuestoes },
-      ocorridoEm: row.Data
+      ocorridoEm: row.Data,
+      chaveOrigem: `atividade:${atividadeId}` // um evento por atividade, sempre com o percentual atual
     });
   } catch (e) {
     console.error("[CONQUISTAS] falha ao avaliar evento EBD_ATIVIDADE_RESPOSTA:", e.message);
@@ -426,10 +427,14 @@ async function logarEventoConquistaAtividade(pool, { atividadeId, alunoId }) {
 // nenhuma auto-correção de texto livre é palavra final; e mesmo os tipos
 // 100% estruturais podem ter uma questão mal cadastrada que precise de
 // ajuste humano pontual).
-async function corrigirRespostaManual(pool, { respostaId, correta, corrigidoPorMembroId }) {
+// Trava 6-A: `alunoId` é obrigatório e precisa ser o dono da resposta — a
+// rota checa permissão contra o alunoId informado, então sem esta
+// conferência bastava informar um aluno da própria turma pra corrigir a
+// resposta de qualquer outro (IDOR).
+async function corrigirRespostaManual(pool, { respostaId, alunoId, correta, corrigidoPorMembroId }) {
   const existente = await pool.request().input("id", sql.Int, respostaId).query(`SELECT * FROM EbdRespostasAlunos WHERE RespostaId = @id`);
   const row = existente.recordset[0];
-  if (!row) return { sucesso: false, mensagem: "Resposta não encontrada." };
+  if (!row || row.AlunoId !== Number(alunoId)) return { sucesso: false, mensagem: "Resposta não encontrada." };
 
   await pool.request()
     .input("id", sql.Int, respostaId).input("correta", sql.Bit, Boolean(correta))
@@ -444,6 +449,12 @@ async function corrigirRespostaManual(pool, { respostaId, correta, corrigidoPorM
     tabela: "EbdRespostasAlunos", registroId: respostaId, acao: "RESPOSTA_CORRIGIDA_MANUAL",
     usuarioId: corrigidoPorMembroId, dadosAntes: { correta: row.Correta }, dadosDepois: { correta: Boolean(correta) }
   });
+
+  // Trava 6-A: a correção manual também muda o percentual da atividade — sem
+  // logar o evento, uma correção que levasse a 100% nunca disparava
+  // "Gabarito Nota Máxima" (o README da v6.4 já prometia "lançada/corrigida").
+  const questao = await buscarQuestaoPorId(pool, row.QuestaoId);
+  if (questao) await logarEventoConquistaAtividade(pool, { atividadeId: questao.atividadeId, alunoId: row.AlunoId });
 
   return { sucesso: true, mensagem: "✅ Correção registrada." };
 }

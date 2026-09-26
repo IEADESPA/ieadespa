@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["get", "post", "put"],
-      "route": "assistencia-social/{acao?}"
+      "route": "assistencia-social/{*acao}"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

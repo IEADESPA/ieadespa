@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["get", "post"],
-      "route": "ebd-turmas/{acao?}"
+      "route": "ebd-turmas/{*acao}"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

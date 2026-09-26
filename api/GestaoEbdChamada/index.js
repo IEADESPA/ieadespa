@@ -84,7 +84,12 @@ module.exports = async function (context, req) {
       const congregacaoId = Number(req.query && req.query.congregacaoId);
       const data = req.query && req.query.data;
       if (!congregacaoId || !data) return erro(context, 400, "Informe congregacaoId e data.");
-      if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+      // Trava 6-A: o professor precisa achar a lição do dia pra lançar a
+      // chamada da própria turma — sem isto, quem entra por código de acesso
+      // (escopo territorial vazio) nunca chegava no licaoId.
+      const podeVer = (await podeAcessarCongregacao(pool, usuario, congregacaoId))
+        || (await ebd.ehProfessorAtivoDaCongregacao(pool, usuario.membroId, congregacaoId));
+      if (!podeVer) return erro(context, 403, "Fora do seu escopo de atuação.");
       const licao = await chamada.buscarLicaoPorCongregacaoData(pool, congregacaoId, data);
       context.res = { status: 200, body: { sucesso: true, licao } };
       return;

@@ -22,6 +22,26 @@ jobs:
     if: github.event.schedule == '0 10 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
+      # Achado real da Trava 6-A: este job falhava quase todo dia (curl exit
+      # 22 depois de ~45s — o limite de tempo das Functions gerenciadas do
+      # Static Web Apps), enquanto o de fluxos, 30min depois e já com tudo
+      # quente, sempre passava. Às 7h a primeira chamada do dia paga o cold
+      # start da API e a retomada do banco Serverless (que volta a pausar de
+      # madrugada desde o desligamento do Automatic Tuning, 20/09). Aquece
+      # antes com uma rota pública que toca o banco — e NÃO repete a chamada
+      # do agendador: criarNotificacao é consulta-depois-insere, sem índice
+      # único, então um retry paralelo a uma execução ainda viva duplicaria
+      # aviso.
+      - name: Aquece a API e o banco
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -sf -o /dev/null -m 60 "https://app.ieadespa.org.br/api/congregacoes-publico"; then
+              echo "API e banco prontos (tentativa $i)"; exit 0
+            fi
+            sleep 20
+          done
+          echo "Aquecimento não respondeu; segue mesmo assim"
+
       - name: Avalia as regras de notificação (vB.2)
         run: |
           curl -sf -X POST "https://app.ieadespa.org.br/api/notificacoes-agendador-interno" \

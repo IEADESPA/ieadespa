@@ -370,8 +370,16 @@ module.exports = async function (context, req) {
     // (CAMPOS_AUTOMATICOS_AFILIACAO), que é pra campos ESTADO sempre
     // certos pelo cadastro — `ofertas` é FLUXO e a v5.5 já previa que o
     // Superintendente Local "só confirma ou ajusta", nunca fica travado.
-    const valorOfertasEbd = await ebdFinanceiro.buscarValorPrePreenchimentoOfertas(pool, { departamentoId, congregacaoId, mes, ano });
-    if (valorOfertasEbd !== null) prePreenchido.ofertas = valorOfertasEbd;
+    // Trava 6-A: fail-soft, mesmo espírito dos hooks de conquistas — o
+    // cabeçalho do rascunho já foi inserido acima, então uma falha aqui
+    // deixava o rascunho sem os demais valores pré-preenchidos, e toda
+    // chamada seguinte devolvia esse rascunho incompleto.
+    try {
+      const valorOfertasEbd = await ebdFinanceiro.buscarValorPrePreenchimentoOfertas(pool, { departamentoId, congregacaoId, mes, ano });
+      if (valorOfertasEbd !== null) prePreenchido.ofertas = valorOfertasEbd;
+    } catch (e) {
+      context.log.error("[RELATORIOS] falha ao sugerir ofertas da EBD (segue sem sugestão):", e.message);
+    }
 
     const camposPorNome = Object.fromEntries(schema.campos.map(c => [c.nomeCampo, c]));
     for (const [nomeCampo, valor] of Object.entries(prePreenchido)) {

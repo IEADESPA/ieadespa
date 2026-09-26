@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["get", "post"],
-      "route": "ebd-atividades/{acao?}"
+      "route": "ebd-atividades/{*acao}"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

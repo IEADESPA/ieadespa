@@ -71,8 +71,22 @@ const TIPOS_REGRA = ["contagem_evento", "sequencia", "combinacao_exata", "marco_
 // Mesmo cuidado de fuso de shared/estatuto.js::parseData — "YYYY-MM-DD"
 // interpretado como data local ao meio-dia, nunca meia-noite (evita erro de
 // 1 dia por fuso quando o valor vem de DATE do SQL Server ou string crua).
+// Trava 6-A: o mssql devolve coluna DATE como objeto Date (meia-noite UTC),
+// não string — String(Date) vira "Sat Sep 19 ...", o parse dava null e
+// `sequencia`/`periodo_perfeito` nunca desbloqueavam em produção (os testes
+// só passavam string). Date à meia-noite UTC exata é valor de coluna DATE:
+// usa o dia UTC (o dia gravado). Qualquer outro Date é um instante ("agora"
+// em avaliarPeriodoPerfeito): usa o dia local.
 function paraDataLocal(valor) {
   if (!valor) return null;
+  if (valor instanceof Date) {
+    if (isNaN(valor.getTime())) return null;
+    const ehDataSql = valor.getUTCHours() === 0 && valor.getUTCMinutes() === 0
+      && valor.getUTCSeconds() === 0 && valor.getUTCMilliseconds() === 0;
+    return ehDataSql
+      ? new Date(valor.getUTCFullYear(), valor.getUTCMonth(), valor.getUTCDate(), 12, 0, 0)
+      : new Date(valor.getFullYear(), valor.getMonth(), valor.getDate(), 12, 0, 0);
+  }
   const [ano, mes, dia] = String(valor).slice(0, 10).split("-").map(Number);
   if (!ano || !mes || !dia) return null;
   return new Date(ano, mes - 1, dia, 12, 0, 0);
@@ -410,16 +424,33 @@ async function buscarHistoricoMembro(pool, membroId) {
   }));
 }
 
-async function registrarEvento(pool, { membroId, tipoEvento, payload, ocorridoEm }) {
-  const result = await pool.request()
+// Trava 6-A: `chaveOrigem` (opcional, genérica — nenhum nome de módulo no
+// motor) identifica o FATO que gerou o evento. Mesmo Membro + TipoEvento +
+// chaveOrigem SUBSTITUI o evento anterior em vez de acumular: sem isso,
+// corrigir uma presença (AUSENTE → PRESENTE) deixava a falta antiga no
+// histórico — bloqueando periodo_perfeito pra sempre — e cada re-salvamento
+// somava pontos de novo. Sem chaveOrigem, continua um log só de inserção.
+async function registrarEvento(pool, { membroId, tipoEvento, payload, ocorridoEm, chaveOrigem }) {
+  const requisicao = () => pool.request()
     .input("membroId", sql.Int, membroId).input("tipoEvento", sql.NVarChar(40), tipoEvento)
     .input("payload", sql.NVarChar(sql.MAX), JSON.stringify(payload || {}))
     .input("ocorridoEm", sql.Date, ocorridoEm || new Date())
-    .query(`
-      INSERT INTO ConquistasEventos (MembroId, TipoEvento, PayloadJson, OcorridoEm)
+    .input("chaveOrigem", sql.NVarChar(100), chaveOrigem || null);
+
+  if (chaveOrigem) {
+    const atualizado = await requisicao().query(`
+      UPDATE ConquistasEventos SET PayloadJson = @payload, OcorridoEm = @ocorridoEm
       OUTPUT INSERTED.EventoId
-      VALUES (@membroId, @tipoEvento, @payload, @ocorridoEm)
+      WHERE MembroId = @membroId AND TipoEvento = @tipoEvento AND ChaveOrigem = @chaveOrigem
     `);
+    if (atualizado.recordset[0]) return atualizado.recordset[0].EventoId;
+  }
+
+  const result = await requisicao().query(`
+    INSERT INTO ConquistasEventos (MembroId, TipoEvento, PayloadJson, OcorridoEm, ChaveOrigem)
+    OUTPUT INSERTED.EventoId
+    VALUES (@membroId, @tipoEvento, @payload, @ocorridoEm, @chaveOrigem)
+  `);
   return result.recordset[0].EventoId;
 }
 
@@ -478,8 +509,8 @@ async function avaliarConquistasParaMembro(pool, membroId, agora) {
 // Entry point único que os módulos consumidores chamam: registra o evento e,
 // na mesma chamada (site do lançamento, nunca em job separado), avalia o
 // que acabou de mudar para aquele Membro.
-async function registrarEventoEAvaliar(pool, { membroId, tipoEvento, payload, ocorridoEm }) {
-  await registrarEvento(pool, { membroId, tipoEvento, payload, ocorridoEm });
+async function registrarEventoEAvaliar(pool, { membroId, tipoEvento, payload, ocorridoEm, chaveOrigem }) {
+  await registrarEvento(pool, { membroId, tipoEvento, payload, ocorridoEm, chaveOrigem });
   return avaliarConquistasParaMembro(pool, membroId);
 }
 

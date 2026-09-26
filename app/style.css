@@ -472,3 +472,8 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .btn-link-perigo { color: var(--cor-erro); }
 .acoes-inline { white-space: nowrap; }
 .grade-permissoes { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 6px; }
+/* Trava 6-A — aba EBD em modo professor (sem "ebd_gestao"): esconde o que
+   só a gestão pode usar; o backend continua barrando sozinho de qualquer jeito. */
+.ebd-so-professor { display: none; }
+#abaEbd.ebd-modo-professor .ebd-so-gestao { display: none; }
+#abaEbd.ebd-modo-professor .ebd-so-professor { display: block; }

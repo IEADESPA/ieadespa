@@ -47,6 +47,16 @@ async function podeAcessarTurma(pool, usuario, turmaId) {
 }
 
 module.exports = async function (context, req) {
+  // Trava 6-A: única rota sem "ebd_gestao" — o professor descobre as
+  // próprias turmas (e o front abre a aba EBD em modo professor).
+  if (context.bindingData.acao === "minhas-turmas" && req.method === "GET") {
+    const logado = auth.exigirLogin(req, context);
+    if (!logado) return;
+    const pool = await getPool();
+    context.res = { status: 200, body: { sucesso: true, turmas: await ebd.listarTurmasDoProfessor(pool, logado.membroId) } };
+    return;
+  }
+
   const usuario = auth.exigirPermissao(req, context, "ebd_gestao");
   if (!usuario) return;
 
@@ -131,6 +141,13 @@ module.exports = async function (context, req) {
       if (!membroId || !novaTurmaId) return erro(context, 400, "Informe membroId e novaTurmaId.");
       const { ok } = await podeAcessarTurma(pool, usuario, novaTurmaId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      // Trava 6-A: escopo também sobre a turma de ORIGEM — só o destino era
+      // conferido, então qualquer gestor puxava aluno de congregação alheia.
+      const alunoAtual = await ebd.buscarAlunoPorMembro(pool, membroId);
+      if (alunoAtual) {
+        const origem = await podeAcessarTurma(pool, usuario, alunoAtual.turmaId);
+        if (!origem.ok) return erro(context, 403, "A turma atual do aluno está fora do seu escopo de atuação.");
+      }
       const resultado = await ebd.transferirAluno(pool, { membroId, novaTurmaId, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;

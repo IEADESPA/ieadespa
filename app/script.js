@@ -347,6 +347,9 @@ let authNome = sessionStorage.getItem("authNome") || null;
 let authPermissoes = JSON.parse(sessionStorage.getItem("authPermissoes") || "[]");
 let authMatricula = sessionStorage.getItem("authMatricula") || null;
 let authNivel = sessionStorage.getItem("authNivel") || null;
+// Trava 6-A: turmas em que a pessoa logada é professor ativo (modo
+// professor da aba EBD) — recarregada a cada abrirPainelConteudo.
+let ebdTurmasProfessor = [];
 
 function salvarSessao(token, nome, permissoes, matricula, nivel) {
   authToken = token;
@@ -364,6 +367,7 @@ function limparSessao() {
   authToken = null;
   authNome = null;
   authPermissoes = [];
+  ebdTurmasProfessor = [];
   authMatricula = null;
   authNivel = null;
   sessionStorage.removeItem("authToken");
@@ -536,6 +540,7 @@ async function abrirPainelConteudo(matricula) {
   document.getElementById("cxPainelConteudo").style.display = "flex";
   document.getElementById("nomeLogado").textContent = authNome ? `Olá, ${authNome}` : "";
   document.getElementById("cxTrocarSenha").style.display = authToken ? "block" : "none";
+  await carregarTurmasProfessorEbd();
   aplicarPermissoesNoMenu();
   await carregarPainelPessoal(matricula);
   // vB.2 — sino de notificações: só existe pra quem entrou com senha (tem
@@ -910,6 +915,22 @@ const ABA_PERMISSOES_ALT = {
 function permissoesDaAba(nome) {
   return ABA_PERMISSOES_ALT[nome] || [nome];
 }
+// Trava 6-A: único ponto que decide se a aba aparece. A aba EBD também abre
+// pro professor ativo de alguma turma sem "ebd_gestao" (modo professor) — o
+// backend já o deixava lançar chamada/resposta/pedido da própria turma desde
+// a v6.2, mas ele nunca via a tela (ebdTurmasProfessor: junto do estado de sessão).
+function temPermissaoDaAba(nome) {
+  if (permissoesDaAba(nome).some(chave => authPermissoes.includes(chave))) return true;
+  return nome === "ebd" && ebdTurmasProfessor.length > 0;
+}
+async function carregarTurmasProfessorEbd() {
+  ebdTurmasProfessor = [];
+  if (!authToken || authPermissoes.includes("ebd_gestao")) return;
+  try {
+    const data = await (await fetchProtegido(`${API_BASE}/ebd-turmas/minhas-turmas`)).json();
+    if (data.sucesso !== false) ebdTurmasProfessor = data.turmas || [];
+  } catch { /* sem a lista, só não mostra o modo professor — não trava o login */ }
+}
 
 function aplicarPermissoesNoMenu() {
   NOMES_ABAS.forEach(nome => {
@@ -918,7 +939,7 @@ function aplicarPermissoesNoMenu() {
     // agora é a porta de entrada dos módulos Órgãos Centrais/Regionais.
     const btn = document.getElementById(`btnAba${capitalize(nome)}`);
     if (!btn) return;
-    const pode = permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
+    const pode = temPermissaoDaAba(nome);
     btn.style.display = pode ? "inline-block" : "none";
   });
   montarGradeModulos();
@@ -971,7 +992,7 @@ const MODULOS = {
 let moduloAtual = null;
 
 function podeAcessarAba(nome) {
-  return nome === "documentos" || nome === "ouvidoria" || permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
+  return nome === "documentos" || nome === "ouvidoria" || temPermissaoDaAba(nome);
 }
 
 function podeAcessarModulo(chave) {
@@ -4940,7 +4961,7 @@ async function carregarMinhasSolicitacoesEdicao() {
 function mostrarAbaSecretaria(aba) {
   chaveAjudaAtual = aba;
   NOMES_ABAS.forEach(nome => {
-    const podeVer = nome === "meupainel" || nome === "documentos" || nome === "ouvidoria" || permissoesDaAba(nome).some(chave => authPermissoes.includes(chave));
+    const podeVer = nome === "meupainel" || nome === "documentos" || nome === "ouvidoria" || temPermissaoDaAba(nome);
     const divAba = document.getElementById(`aba${capitalize(nome)}`);
     const mostrar = nome === aba && podeVer;
     divAba.style.display = mostrar ? "block" : "none";
@@ -4985,7 +5006,13 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "escalas") carregarOpcoesEscalasAcao();
   if (aba === "habilitacao") carregarOpcoesHabilitacaoAcao();
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
-  if (aba === "ebd") { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesChamadaEbdAcao(); carregarOpcoesFinanceiroEbdAcao(); }
+  if (aba === "ebd") {
+    const modoProfessor = !authPermissoes.includes("ebd_gestao");
+    document.getElementById("abaEbd").classList.toggle("ebd-modo-professor", modoProfessor);
+    carregarOpcoesChamadaEbdAcao();
+    if (modoProfessor) renderPainelProfessorEbd();
+    else { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesFinanceiroEbdAcao(); }
+  }
   if (aba === "conquistas") { carregarTiposEventoConquistaAcao(); carregarCatalogoConquistaAdminAcao(); }
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -12540,8 +12567,8 @@ async function carregarDetalheTurmaEbdAcao() {
       : "<p class='subtitle'>Nenhum professor designado.</p>"}
     <h5>Alunos</h5>
     ${dadosAlu.sucesso === false ? `<p class="subtitle">${dadosAlu.mensagem}</p>` : (dadosAlu.alunos.length
-      ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula EBD</th><th>Nome</th><th>Matrículado em</th></tr></thead><tbody>
-          ${dadosAlu.alunos.map(a => `<tr><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.matriculadoEm ? new Date(a.matriculadoEm).toLocaleDateString("pt-BR") : "-"}</td></tr>`).join("")}
+      ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula EBD</th><th>Nome</th><th>Matrículado em</th></tr></thead><tbody>
+          ${dadosAlu.alunos.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.matriculadoEm ? new Date(a.matriculadoEm).toLocaleDateString("pt-BR") : "-"}</td></tr>`).join("")}
         </tbody></table>`
       : "<p class='subtitle'>Nenhum aluno matriculado.</p>")}
   `;
@@ -12600,6 +12627,21 @@ async function transferirAlunoEbdAcao() {
   if (data.sucesso !== false) carregarDetalheTurmaEbdAcao();
 }
 
+// Trava 6-A — modo professor: as próprias turmas (com o Id que os campos da
+// chamada, das atividades e do pedido de revistas pedem).
+function renderPainelProfessorEbd() {
+  const container = document.getElementById("painelProfessorEbd");
+  container.innerHTML = `
+    <h3>📖 EBD — Minhas turmas</h3>
+    <p class="subtitle">Você é professor(a) destas turmas. Aqui você lança a chamada, responde/corrige as
+      atividades dos alunos e faz o pedido de revistas da turma. Abrir/fechar a lição do dia, cadastros,
+      certificados e financeiro ficam com quem administra a EBD.</p>
+    <table class="tabela-frequencia"><thead><tr><th>Id da turma</th><th>Turma</th><th>Faixa etária</th><th>Congregação</th></tr></thead><tbody>
+      ${ebdTurmasProfessor.map(t => `<tr><td>${t.turmaId}</td><td>${t.nome}</td><td>${t.faixaEtaria || "-"}</td><td>${t.congregacaoNome}</td></tr>`).join("")}
+    </tbody></table>
+    <hr />`;
+}
+
 // ---- Chamada e presença (v6.2) ----
 let ebdChamadaLicaoAtual = null;
 
@@ -12617,7 +12659,7 @@ function renderPainelLicaoEbd(licao) {
   if (!licao) { container.innerHTML = "<p class='subtitle'>Nenhuma lição encontrada para esta data — use \"Abrir lição\".</p>"; ebdChamadaLicaoAtual = null; return; }
   ebdChamadaLicaoAtual = licao;
   document.getElementById("ebdChamadaLicaoId").value = licao.licaoId;
-  container.innerHTML = `<p class="subtitle">Lição #${licao.licaoId} — ${new Date(licao.data).toLocaleDateString("pt-BR")} — status: <strong>${licao.status}</strong></p>`;
+  container.innerHTML = `<p class="subtitle">Lição #${licao.licaoId} — ${new Date(licao.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })} — status: <strong>${licao.status}</strong></p>`;
 }
 
 async function buscarLicaoEbdAcao() {
@@ -12672,9 +12714,9 @@ async function carregarRosterChamadaEbdAcao() {
   const data = await res.json();
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
   container.innerHTML = data.alunos.length
-    ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Status</th><th>Lançar</th></tr></thead><tbody>
+    ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula</th><th>Nome</th><th>Status</th><th>Lançar</th></tr></thead><tbody>
         ${data.alunos.map(a => `<tr>
-          <td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.status || "-"}</td>
+          <td>${a.alunoId}</td><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.status || "-"}</td>
           <td>
             <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'PRESENTE')">✅ Presente</button>
             <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'AUSENTE')">❌ Ausente</button>
@@ -12838,7 +12880,11 @@ function renderRespostaCampoEbd(questao) {
     const marcado = questao.resposta === true ? "true" : questao.resposta === false ? "false" : "";
     return `<select id="ebdRespostaCampo_${questao.questaoId}"><option value="">-</option><option value="true" ${marcado === "true" ? "selected" : ""}>Verdadeiro</option><option value="false" ${marcado === "false" ? "selected" : ""}>Falso</option></select>`;
   }
-  const valorAtual = questao.resposta !== null && questao.resposta !== undefined ? JSON.stringify(questao.resposta) : "";
+  // Trava 6-A: texto puro (COMPLETAR, índice digitado) volta como está —
+  // JSON.stringify punha aspas literais no campo e o re-salvamento mandava
+  // "\"graça\"", corrigido como errado. Só lista/objeto vira JSON.
+  const r = questao.resposta;
+  const valorAtual = r === null || r === undefined ? "" : typeof r === "object" ? JSON.stringify(r) : String(r);
   return `<input type="text" id="ebdRespostaCampo_${questao.questaoId}" value='${valorAtual.replace(/'/g, "&#39;")}' placeholder="Resposta (JSON quando aplicável)" style="min-width:220px;" />`;
 }
 
@@ -12914,8 +12960,8 @@ async function carregarResumoAtividadeTurmaEbdAcao() {
   const data = await res.json();
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
   container.innerHTML = data.resumo.length
-    ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Corretas</th><th>%</th></tr></thead><tbody>
-        ${data.resumo.map(a => `<tr><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.corretas}/${a.totalQuestoes}</td><td>${a.percentual}%</td></tr>`).join("")}
+    ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula</th><th>Nome</th><th>Corretas</th><th>%</th></tr></thead><tbody>
+        ${data.resumo.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.corretas}/${a.totalQuestoes}</td><td>${a.percentual}%</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
 }
@@ -13255,7 +13301,7 @@ async function carregarLancamentosFinanceiroEbdAcao() {
   container.innerHTML = lancamentos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>
         ${lancamentos.map(l => `<tr>
-          <td>${new Date(l.data).toLocaleDateString("pt-BR")}</td><td>${l.tipo === "ENTRADA" ? "Entrada" : "Saída"}</td>
+          <td>${new Date(l.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}</td><td>${l.tipo === "ENTRADA" ? "Entrada" : "Saída"}</td>
           <td>${l.descricao}</td><td>R$ ${Number(l.valor).toFixed(2)}</td>
           <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;padding:2px 8px;" onclick="excluirLancamentoFinanceiroEbdAcao(${l.lancamentoId})">🗑️</button></td>
         </tr>`).join("")}

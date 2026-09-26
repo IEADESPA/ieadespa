@@ -6116,7 +6116,7 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
   **intencionalmente mínima** da Lição — só `CongregacaoId`, `Data` e
   `Status` (`ABERTA`/`FECHADA`), sem nenhuma coluna de conteúdo (título,
   texto, referência bíblica). O item "Lições (abrir/fechar) por
-  congregação" reaparece no checklist do v6.3 (ainda não construído) de
+  congregação" reaparece no checklist do v6.3 (construído logo depois) de
   propósito: é o **mesmo registro** — a v6.3 vai estender esta mesma
   `EbdLicoes` com tabelas de conteúdo próprias referenciando `LicaoId`
   (atividades, 5 tipos de pergunta, respostas/gabarito), sem recriar ou
@@ -6130,9 +6130,11 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
   (isso quebraria a garantia de "matrícula única por Membro" da migração
   101): `AlunoId` fica `NULL` e a própria linha carrega `VisitanteNome`/
   `VisitanteContato`. `UNIQUE (LicaoId, AlunoId)` garante um registro por
-  aluno por lição — no SQL Server, `NULL` é tratado como distinto numa
-  UNIQUE, então cada visita continua sendo a sua própria linha, sem
-  colidir com as demais. `shared/ebdChamada.js::decidirAcaoRegistroPresenca`
+  aluno por lição. *(Corrigido na Trava 6-A: a premissa original — "no SQL
+  Server, `NULL` é tratado como distinto numa UNIQUE" — estava errada; a
+  UNIQUE aceitava um único visitante por lição. A migração 108 trocou a
+  constraint por um índice único filtrado `WHERE AlunoId IS NOT NULL`, e só
+  agora cada visita é de fato a sua própria linha.)* `shared/ebdChamada.js::decidirAcaoRegistroPresenca`
   decide entre criar ou atualizar (upsert) quando o mesmo aluno é chamado
   de novo na mesma lição — corrigir uma marcação errada é rotina, então
   o upsert é sempre permitido (diferente de `podeDesignarProfessor`/v6.1,
@@ -6194,7 +6196,7 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
   `Referencia` e `Conteudo`, todos `NULL` — o item "Lições (abrir/fechar)
   por congregação" reaparece aqui porque é o MESMO registro da v6.2, não
   uma tabela nova; abrir/fechar continua sendo só a janela de chamada.
-  Em cima disso, duas tabelas novas: `EbdAtividades` (uma Atividade por
+  Em cima disso, três tabelas novas: `EbdAtividades` (uma Atividade por
   Lição, `UNIQUE (LicaoId)`, idempotente ao criar — `criarOuBuscarAtividade`
   devolve a existente em vez de duplicar) e `EbdAtividadeQuestoes` (N
   questões por Atividade, `Tipo` restrito por `CHECK` aos 5 valores do
@@ -6221,8 +6223,11 @@ Reescrever a EBD dentro do sistema (Functions + front estático), sem Next.js.
   julgamento livre de sentido. Por isso o resultado automático de
   COMPLETAR nunca é tratado como definitivo: toda resposta (de qualquer
   tipo, não só completar) pode ser corrigida manualmente depois
-  (`corrigirRespostaManual`), e a tela mostra "⏳ pendente" enquanto uma
-  resposta ainda não foi confirmada/corrigida.
+  (`corrigirRespostaManual`). *(Precisão da Trava 6-A: a auto-correção
+  grava certo/errado na hora pra todo tipo válido — o "⏳ pendente" da tela
+  só aparece pra tipo desconhecido; a revisão humana é a correção manual,
+  não um estado de espera.)* As respostas ficam numa terceira tabela,
+  `EbdRespostasAlunos`.
 
   Resposta do aluno é sempre lançada por quem já lança a chamada — o Aluno
   (v6.1) não tem login próprio no sistema — com upsert por
@@ -6375,7 +6380,7 @@ desempate do ranking.
 
 - [x] Emissão de certificados + página imprimível.
 
-  Fecha a FASE 6 com a versão mais simples do capítulo — nenhum motor novo,
+  Continua a FASE 6 com a versão mais simples do capítulo — nenhum motor novo,
   só um CRUD + o par "PDF de verdade + página imprimível" já consagrado por
   CartasTransito/vB.6 e ApresentacoesCrianca/vB.12. Migração 105
   (`sql/migrations/105_ebd_certificados.sql`) cria uma única tabela,
@@ -6473,7 +6478,7 @@ desempate do ranking.
   pagamento duas vezes. **`StatusPagamento` aqui é só uma marcação** — não
   gera lançamento financeiro, não cria linha de ledger e não integra com
   `TesourariasDepartamento` (v5.4): isso é trabalho explícito da v6.7
-  (Financeiro da EBD, ainda não construída), que vai mover dinheiro de
+  (Financeiro da EBD, construída logo depois), que move dinheiro de
   verdade. v6.6 só responde "este pedido já foi pago ou não".
 
   Permissão: reaproveita **"ebd_gestao"** (v6.1), sem permissão nova.

@@ -1,6 +1,6 @@
 // shared/certificados.js (v6.5 — Certificados + página imprimível)
 //
-// Fecha a FASE 6 com a versão mais simples do capítulo: CRUD + PDF/print,
+// Continua a FASE 6 com a versão mais simples do capítulo: CRUD + PDF/print,
 // nenhum motor novo. Ver preâmbulo de sql/migrations/105_ebd_certificados.sql
 // para a decisão de escopo completa — resumo: "emissão de certificados" é
 // genérica (qualquer MembroId + Título/Motivo livre), com um vínculo
@@ -78,6 +78,11 @@ async function emitirCertificado(pool, { membroId, titulo, descricao, conquistaI
   if (conquistaId) {
     const conquista = await pool.request().input("id", sql.Int, conquistaId).query(`SELECT ConquistaId FROM CatalogoConquistas WHERE ConquistaId = @id`);
     if (conquista.recordset.length === 0) return { sucesso: false, mensagem: "Conquista informada não encontrada." };
+    // Trava 6-A: o vínculo é com uma conquista que a pessoa JÁ desbloqueou
+    // (README v6.5) — antes só se conferia que ela existia no catálogo.
+    const desbloqueada = await pool.request().input("id", sql.Int, conquistaId).input("membroId", sql.Int, membroId)
+      .query(`SELECT 1 AS ok FROM ConquistasDesbloqueadas WHERE ConquistaId = @id AND MembroId = @membroId`);
+    if (desbloqueada.recordset.length === 0) return { sucesso: false, mensagem: "Este membro ainda não desbloqueou a conquista informada." };
   }
 
   const protocolo = await gerarProtocolo(pool, TIPO_PROTOCOLO_CERTIFICADO);

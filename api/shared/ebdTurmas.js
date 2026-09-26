@@ -166,6 +166,34 @@ async function listarTurmasPorCongregacao(pool, congregacaoId) {
 
 // ---- Professores ----
 
+// Trava 6-A: turmas em que o Membro é professor ATIVO — é o que dá tela ao
+// professor sem "ebd_gestao" (o backend já o deixava lançar chamada/resposta/
+// pedido da própria turma desde a v6.2, mas a aba EBD só abria com a
+// permissão ampla). Serve tanto pra sessão de Lideranca quanto pra de
+// autoatendimento (código de acesso, vB.5), que não tem escopo territorial.
+async function listarTurmasDoProfessor(pool, membroId) {
+  if (!membroId) return [];
+  const result = await pool.request().input("membroId", sql.Int, membroId).query(`
+    SELECT t.*, c.Nome AS CongregacaoNome
+    FROM EbdTurmaProfessores tp
+    JOIN EbdTurmas t ON t.TurmaId = tp.TurmaId
+    JOIN Congregacoes c ON c.CongregacaoId = t.CongregacaoId
+    WHERE tp.MembroId = @membroId AND tp.Ativo = 1 AND t.Ativa = 1
+    ORDER BY c.Nome, t.Nome
+  `);
+  return result.recordset.map(row => ({ ...mapearTurma(row), congregacaoNome: row.CongregacaoNome }));
+}
+
+async function ehProfessorAtivoDaCongregacao(pool, membroId, congregacaoId) {
+  if (!membroId) return false;
+  const r = await pool.request().input("congregacaoId", sql.Int, congregacaoId).input("membroId", sql.Int, membroId).query(`
+    SELECT TOP 1 1 FROM EbdTurmaProfessores tp
+    JOIN EbdTurmas t ON t.TurmaId = tp.TurmaId
+    WHERE t.CongregacaoId = @congregacaoId AND tp.MembroId = @membroId AND tp.Ativo = 1
+  `);
+  return r.recordset.length > 0;
+}
+
 async function buscarVinculoProfessor(pool, turmaId, membroId) {
   const result = await pool.request().input("turmaId", sql.Int, turmaId).input("membroId", sql.Int, membroId).query(`
     SELECT * FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId
@@ -359,5 +387,5 @@ module.exports = {
   criarTurma, buscarTurmaPorId, listarTurmasPorCongregacao,
   buscarVinculoProfessor, designarProfessor, encerrarProfessor, listarProfessoresPorTurma,
   buscarAlunoPorMembro, matricularAluno, transferirAluno, listarAlunosPorTurma,
-  listarTurmasParaVisaoAgrupada
+  listarTurmasParaVisaoAgrupada, listarTurmasDoProfessor, ehProfessorAtivoDaCongregacao
 };

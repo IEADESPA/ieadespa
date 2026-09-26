@@ -147,6 +147,30 @@ describe("periodo_perfeito (trimestre sem falta)", () => {
   });
 });
 
+// Trava 6-A: o mssql devolve coluna DATE (ConquistasEventos.OcorridoEm)
+// como objeto Date à meia-noite UTC, não string — os testes acima só
+// passavam string e deixaram passar que sequencia/periodo_perfeito nunca
+// desbloqueavam com dado real do banco.
+describe("datas vindas do banco (Date, não string)", () => {
+  const dataSql = (iso) => new Date(`${iso}T00:00:00.000Z`);
+
+  test("paraDataLocal lê o dia gravado numa coluna DATE", () => {
+    const d = conquistas.paraDataLocal(dataSql("2026-01-04"));
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 0, 4]);
+    expect(conquistas.diaIndice(dataSql("2026-01-04"))).toBe(conquistas.diaIndice("2026-01-04"));
+  });
+
+  test("sequencia desbloqueia com OcorridoEm vindo como Date", () => {
+    const eventos = [4, 11, 18, 25].map(d => evento("EBD_PRESENCA", dataSql(`2026-01-${String(d).padStart(2, "0")}`), { status: "PRESENTE" }));
+    expect(conquistas.avaliarSequencia(eventos, { filtro: { status: "PRESENTE" }, minimoConsecutivas: 4 })).toBe(true);
+  });
+
+  test("periodo_perfeito desbloqueia com OcorridoEm vindo como Date", () => {
+    const eventos = Array.from({ length: 10 }, (_, i) => evento("EBD_PRESENCA", dataSql(`2026-0${1 + Math.floor(i / 4)}-0${1 + (i % 4) * 2}`), { status: "PRESENTE" }));
+    expect(conquistas.avaliarPeriodoPerfeito(eventos, { filtroFalha: { status: "AUSENTE" }, minimoOcorrenciasNoPeriodo: 10, diasPeriodo: 90 }, new Date(2026, 2, 31, 15, 0, 0))).toBe(true);
+  });
+});
+
 describe("avaliarRegra (dispatcher)", () => {
   test("despacha pro avaliador certo por tipoRegra", () => {
     const eventos = [evento("X", "2026-01-01", { ok: true })];
@@ -253,5 +277,43 @@ describe("validarRegraConfig", () => {
     expect(conquistas.validarRegraConfig({ tipoRegra: "combinacao_exata", tipoEvento: "X", config: { camposEsperados: { a: 1 } } }).valido).toBe(true);
     expect(conquistas.validarRegraConfig({ tipoRegra: "marco_unico", tipoEvento: "X", config: {} }).valido).toBe(true);
     expect(conquistas.validarRegraConfig({ tipoRegra: "periodo_perfeito", tipoEvento: "X", config: { diasPeriodo: 90 } }).valido).toBe(true);
+  });
+});
+
+// Trava 6-A: evento substituível por chaveOrigem (corrigir presença não
+// acumula a falta antiga). Pool falso — só registra as queries.
+describe("registrarEvento com chaveOrigem", () => {
+  function poolFalso(linhasAtualizadas) {
+    const queries = [];
+    const pool = {
+      request() {
+        const req = { input() { return req; }, async query(texto) {
+          queries.push(texto.trim().split(/\s+/)[0]);
+          if (texto.includes("UPDATE")) return { recordset: linhasAtualizadas };
+          return { recordset: [{ EventoId: 99 }] };
+        } };
+        return req;
+      }
+    };
+    return { pool, queries };
+  }
+
+  test("com chaveOrigem já existente, só atualiza (não insere outro evento)", async () => {
+    const { pool, queries } = poolFalso([{ EventoId: 7 }]);
+    const id = await conquistas.registrarEvento(pool, { membroId: 1, tipoEvento: "EBD_PRESENCA", payload: {}, ocorridoEm: "2026-01-04", chaveOrigem: "licao:1" });
+    expect(id).toBe(7);
+    expect(queries).toEqual(["UPDATE"]);
+  });
+
+  test("com chaveOrigem nova, atualiza nada e insere", async () => {
+    const { pool, queries } = poolFalso([]);
+    expect(await conquistas.registrarEvento(pool, { membroId: 1, tipoEvento: "EBD_PRESENCA", payload: {}, ocorridoEm: "2026-01-04", chaveOrigem: "licao:1" })).toBe(99);
+    expect(queries).toEqual(["UPDATE", "INSERT"]);
+  });
+
+  test("sem chaveOrigem, continua log só de inserção", async () => {
+    const { pool, queries } = poolFalso([{ EventoId: 7 }]);
+    expect(await conquistas.registrarEvento(pool, { membroId: 1, tipoEvento: "X", payload: {}, ocorridoEm: "2026-01-04" })).toBe(99);
+    expect(queries).toEqual(["INSERT"]);
   });
 });

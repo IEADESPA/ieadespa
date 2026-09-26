@@ -77,6 +77,14 @@ async function ehProfessorAtivoDaCongregacao(pool, membroId, congregacaoId) {
   return r.recordset.length > 0;
 }
 
+// Trava 6-A: ler conteúdo/atividade da lição — quem tem a congregação no
+// escopo, ou o professor ativo de alguma turma dela (que pode nem ter
+// escopo territorial, se entrou por código de acesso).
+async function podeLerLicao(pool, usuario, congregacaoId) {
+  if (await podeAcessarCongregacao(pool, usuario, congregacaoId)) return true;
+  return ehProfessorAtivoDaCongregacao(pool, usuario.membroId, congregacaoId);
+}
+
 // Gerenciar conteúdo/atividade da lição: ebd_gestao (no escopo) OU
 // professor ativo em alguma turma da mesma congregação da lição.
 async function podeGerenciarLicao(pool, usuario, congregacaoId) {
@@ -112,7 +120,7 @@ module.exports = async function (context, req) {
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await atividades.buscarConteudoLicao(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
-      if (!(await podeAcessarCongregacao(pool, usuario, licao.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!(await podeLerLicao(pool, usuario, licao.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       context.res = { status: 200, body: { sucesso: true, licao } };
       return;
     }
@@ -134,7 +142,7 @@ module.exports = async function (context, req) {
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await chamada.buscarLicaoPorId(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
-      if (!(await podeAcessarCongregacao(pool, usuario, licao.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!(await podeLerLicao(pool, usuario, licao.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const atividade = await atividades.buscarAtividadePorLicao(pool, licaoId);
       context.res = { status: 200, body: { sucesso: true, atividade } };
       return;
@@ -180,7 +188,7 @@ module.exports = async function (context, req) {
       if (!respostaId || !alunoId || correta === undefined) return erro(context, 400, "Informe respostaId, alunoId e correta.");
       const { ok } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
-      const resultado = await atividades.corrigirRespostaManual(pool, { respostaId, correta, corrigidoPorMembroId: usuario.membroId });
+      const resultado = await atividades.corrigirRespostaManual(pool, { respostaId, alunoId, correta, corrigidoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
     }

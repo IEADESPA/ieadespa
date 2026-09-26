@@ -60,7 +60,12 @@ module.exports = async function (context, req) {
 
     if (acao === "catalogo" && metodo === "GET") {
       const incluirInativas = temGestao(usuario) && String(req.query && req.query.incluirInativas) === "true";
-      context.res = { status: 200, body: { sucesso: true, catalogo: await conquistas.listarCatalogoComRegras(pool, { incluirInativas }) } };
+      const catalogo = await conquistas.listarCatalogoComRegras(pool, { incluirInativas });
+      // Trava 6-A: rota aberta a qualquer login — sem este filtro, a conquista
+      // `oculta` (e a regra de como desbloqueá-la) vazava pra todo mundo. A
+      // oculta já desbloqueada continua aparecendo no painel pessoal.
+      const visivel = temGestao(usuario) ? catalogo : catalogo.filter(c => !c.oculta);
+      context.res = { status: 200, body: { sucesso: true, catalogo: visivel } };
       return;
     }
 

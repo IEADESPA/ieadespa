@@ -270,19 +270,45 @@ async function buscarPedidoPorTurmaTrimestre(pool, turmaId, trimestre) {
   return mapearPedido(result.recordset[0]);
 }
 
-// Grava as linhas de itens de um pedido (substitui as anteriores, se
-// houver) — sempre travando o PrecoUnitarioRegistrado no valor VIGENTE do
-// catálogo neste instante (ver migração 106, decisão 2: é um snapshot,
-// nunca mais recalculado depois, mesmo que o catálogo mude de preço).
-async function gravarItensPedido(pool, { pedidoId, itens }) {
-  await pool.request().input("pedidoId", sql.Int, pedidoId).query(`DELETE FROM EbdPedidosRevistasItens WHERE PedidoId = @pedidoId`);
+// Trava 6-A: confere TODAS as revistas antes de gravar qualquer linha — a
+// versão anterior apagava os itens (ou já tinha inserido o cabeçalho do
+// pedido) e só então descobria uma revista inexistente/inativa no meio do
+// loop, deixando pedido vazio ou itens pela metade, e a UNIQUE (TurmaId,
+// Trimestre) passava a barrar a recriação.
+async function resolverRevistasDosItens(pool, itens) {
+  const revistas = new Map();
   for (const item of itens) {
     const revista = await buscarRevistaPorId(pool, item.revistaId);
     if (!revista) return { sucesso: false, mensagem: `Revista ${item.revistaId} não encontrada no catálogo.` };
     if (!revista.ativa) return { sucesso: false, mensagem: `A revista "${revista.nome}" não está mais ativa no catálogo.` };
+    revistas.set(Number(item.revistaId), revista);
+  }
+  return { sucesso: true, revistas };
+}
+
+// Grava as linhas de itens de um pedido (substitui as anteriores, se
+// houver) — travando o PrecoUnitarioRegistrado no valor VIGENTE do
+// catálogo quando a revista entra no pedido (ver migração 106, decisão 2:
+// é um snapshot, nunca mais recalculado depois, mesmo que o catálogo mude
+// de preço). Trava 6-A: editar os itens de um pedido PENDENTE mantém o
+// preço já registrado das revistas que continuam nele — antes, o DELETE +
+// INSERT repreçava tudo pelo catálogo do momento da edição.
+async function gravarItensPedido(pool, { pedidoId, itens }) {
+  const resolvidas = await resolverRevistasDosItens(pool, itens);
+  if (!resolvidas.sucesso) return resolvidas;
+
+  const anteriores = await pool.request().input("pedidoId", sql.Int, pedidoId).query(`
+    SELECT RevistaId, PrecoUnitarioRegistrado FROM EbdPedidosRevistasItens WHERE PedidoId = @pedidoId
+  `);
+  const precoTravado = new Map(anteriores.recordset.map(r => [r.RevistaId, r.PrecoUnitarioRegistrado]));
+
+  await pool.request().input("pedidoId", sql.Int, pedidoId).query(`DELETE FROM EbdPedidosRevistasItens WHERE PedidoId = @pedidoId`);
+  for (const item of itens) {
+    const revistaId = Number(item.revistaId);
+    const preco = precoTravado.has(revistaId) ? precoTravado.get(revistaId) : resolvidas.revistas.get(revistaId).precoUnitario;
     await pool.request()
-      .input("pedidoId", sql.Int, pedidoId).input("revistaId", sql.Int, item.revistaId)
-      .input("quantidade", sql.Int, Number(item.quantidade)).input("preco", sql.Decimal(10, 2), revista.precoUnitario)
+      .input("pedidoId", sql.Int, pedidoId).input("revistaId", sql.Int, revistaId)
+      .input("quantidade", sql.Int, Number(item.quantidade)).input("preco", sql.Decimal(10, 2), preco)
       .query(`INSERT INTO EbdPedidosRevistasItens (PedidoId, RevistaId, Quantidade, PrecoUnitarioRegistrado) VALUES (@pedidoId, @revistaId, @quantidade, @preco)`);
   }
   return { sucesso: true };
@@ -305,6 +331,9 @@ async function criarPedido(pool, { turmaId, trimestre, itens, solicitadoPorMembr
   if (existente) {
     return { sucesso: false, mensagem: "Esta turma já tem um pedido para este trimestre — use a edição de itens em vez de criar um novo." };
   }
+
+  const revistasOk = await resolverRevistasDosItens(pool, itens);
+  if (!revistasOk.sucesso) return revistasOk;
 
   const result = await pool.request()
     .input("turmaId", sql.Int, turmaId).input("trimestre", sql.NVarChar(10), String(trimestre).trim())

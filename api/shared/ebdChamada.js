@@ -32,7 +32,8 @@ async function logarEventoConquista(pool, { membroId, status, licaoId, data }) {
     await conquistas.registrarEventoEAvaliar(pool, {
       membroId, tipoEvento: "EBD_PRESENCA",
       payload: { status, licaoId, contaParaScore: status !== STATUS_PRESENCA.AUSENTE },
-      ocorridoEm: data
+      ocorridoEm: data,
+      chaveOrigem: `licao:${licaoId}` // uma presença por lição: corrigir substitui
     });
   } catch (e) {
     console.error("[CONQUISTAS] falha ao avaliar evento EBD_PRESENCA:", e.message);

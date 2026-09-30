@@ -314,6 +314,21 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   "Consolidado" (só leitura, Fase 31) recalculam e re-renderizam sozinhas, sem aviso — não há o que
   perder ali. Em `/painel-camisetas/` (só listagem desde a Fase 31), sem edição em andamento pra
   proteger, recarrega direto.
+- **Achado real (Fase 32): editar camiseta/evento/FAQ/depoimento/enquete nunca disparava rebuild
+  automático do site** — o Flow do Directus que avisa o GitHub pra publicar (`Publicar site
+  (avisar GitHub)`, `event`, escopo `items.create/update/delete`) tem uma lista fixa de coleções
+  observadas. `camiseta_grupos`/`perguntas_camiseta` nunca estiveram nela desde que camisetas foi
+  construído (Fase 22) — foi assim que a imagem da Fase 31 ficou "presa": salva no Directus,
+  visível no painel, mas nunca chegava ao site público sem um `git push` manual. Auditando o resto
+  do site à procura do mesmo padrão (qualquer coleção lida em tempo de build — frontmatter de
+  `.astro`, não dentro de `<script>` — mas fora da lista do Flow), achou também
+  `perguntas_evento`/`faq`/`depoimentos`/`enquetes` com o mesmo problema. Todas as seis
+  adicionadas de uma vez; a lista completa hoje é: `mensagens`, `relatorios`, `ministerios`,
+  `eventos`, `galeria`, `orgao_membros`, `orgao_categorias`, `configuracoes`, `noticias`,
+  `historia`, `programacao`, `visitantes`, `sessoes_evento`, `camiseta_grupos`,
+  `perguntas_camiseta`, `perguntas_evento`, `faq`, `depoimentos`, `enquetes`. Confirmado
+  funcionando de ponta a ponta: um toque de teste em `camiseta_grupos` disparou o
+  `repository_dispatch` e o deploy sozinho, sem nenhum `git push`.
 - **Imagem de compartilhamento por campanha (Fase 31, corrigida na Fase 32)** —
   `camiseta_grupos.imagem` (mesmo tipo de campo que `eventos.cover`, upload pela aba "Imagem" na
   edição da campanha) aparece na prévia quando o link de `/camiseta/<slug>/` é compartilhado

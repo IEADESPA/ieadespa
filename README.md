@@ -6867,6 +6867,24 @@ dá, pela primeira vez, série histórica comparável entre congregações.
   `getElementById` literal do código novo (112) tem id no HTML e todo
   `onclick` da aba EBD (40) aponta pra função que existe.
 
+  **Verificado contra banco de verdade (30/09).** Os testes unitários só
+  cobrem a lógica pura; o SQL, as constraints e as rotas foram exercitados
+  por um roteiro descartável (**não versionado**: lê credenciais locais) que
+  rodou os módulos e os handlers reais das Functions contra o banco de
+  homologação `ieadespa-homolog`, com dados fictícios removidos no fim.
+  Resultado: as 109 migrações aplicam do zero num banco vazio (a 109 em 10
+  batches) e **98 verificações passaram** — CHECK e índice único filtrado da
+  109, caderneta derivada da chamada, congelamento de matriculados ao fechar a
+  lição, não-membro (matrícula, criança sem responsável recusada, nome
+  repetido, vínculo a membro, encerrar/reativar), relatório com escopo
+  restrito e vazio, fechamento manual/refazer/automático (inclusive
+  idempotência e a carência de 7 dias), importação (tudo ou nada, conflitos,
+  reimportação) e as permissões das rotas (professor da turma, gestor de
+  outro escopo, sem sessão). As funções de renderização do front rodaram num
+  DOM simulado com o JSON exato da API: 24 verificações, incluindo o escape de
+  HTML. Em produção: a 109 foi aplicada pelo deploy do commit `60bb0ab` e as 11
+  rotas novas respondem `401` sem sessão (nenhuma `404`).
+
   **Registrado, não construído, por decisão:**
 
   - Exclusão LGPD do aluno não-membro: o fluxo de exclusão de dados

@@ -20,9 +20,26 @@ swa2.log
 api/data/mockdb.json
 
 # Material de referência conceitual (protótipos externos usados como ideia
-# pra FASE 5/6 — ver README) — nunca vira código do repo, e o .rar da EBD
-# sozinho já passa de 400MB.
+# pra FASE 5/6 — ver README). A versão ENXUTA (só fonte, ~0,7MB) é versionada
+# em referencias/. Aqui ficam só as cópias completas locais (1,6GB com
+# node_modules) e os .rar originais — o da EBD passa de 400MB, acima do limite
+# de 100MB por arquivo do GitHub, então NUNCA sobe.
 /relatorios-departamentos.rar
 /relatorios-departamentos/
 /chamada-ebd.rar
 /chamada-ebd/
+*.rar
+
+# referencias/ só aceita FONTE. Quem rodar um protótipo lá dentro gera estes
+# artefatos (o dev.db do SQLite cai na raiz do protótipo) — nunca versionar.
+referencias/**/node_modules/
+referencias/**/.next/
+referencias/**/dist/
+referencias/**/*.db
+referencias/**/*.db-journal
+referencias/**/.env
+
+# Configuração do Claude Code é por máquina (permissões acumuladas de cada
+# sessão, às vezes com trechos de comando/credencial) — não versionar.
+.claude/settings.json
+.claude/settings.local.json

@@ -1,5 +1,19 @@
 # Sistema de Governança IEADESPA (Sistema Integrado Único)
 
+> ## ⚠️ REGRAS OBRIGATÓRIAS DE TRABALHO
+>
+> 1. **Toda alteração vai para a nuvem — OBRIGATÓRIO.** Terminou qualquer mudança (código,
+>    docs, configuração)? Faça **commit + `git push origin main` na mesma hora**, sem esperar
+>    pedido. O responsável **não consegue ver nada localmente: só enxerga o que está na
+>    nuvem (GitHub)**. Alteração que não foi enviada é alteração que não existe.
+>    - Commit estreito: só os arquivos da tarefa, com `git add` explícito (nunca `git add -A`).
+>    - Depois do push, conferir o deploy (`gh run watch`) e avisar o resultado.
+>    - Se o push for bloqueado, **parar e avisar** — nunca deixar a alteração só na máquina.
+> 2. **Senha e segredo nunca em texto puro no repositório** (este repositório é público) —
+>    nem em código, nem em `.claude/settings*.json`, nem dentro de comando aprovado. Só no
+>    fluxo criptografado SOPS + Age do [`SECRETS.md`](SECRETS.md): descriptografa, edita,
+>    recriptografa e só então sobe.
+
 > **Licença:** este repositório é público só pra fins de transparência e consulta —
 > **não é software livre/open source**. Uso, cópia, modificação ou reaproveitamento
 > (comercial ou não) exigem autorização prévia e expressa da IEADESPA. Ver [`LICENSE`](LICENSE).

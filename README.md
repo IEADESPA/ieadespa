@@ -14,9 +14,13 @@
 >    fluxo criptografado SOPS + Age do [`SECRETS.md`](SECRETS.md): descriptografa, edita,
 >    recriptografa e só então sobe.
 
+<!-- caixas separadas -->
+
 > **Licença:** este repositório é público só pra fins de transparência e consulta —
 > **não é software livre/open source**. Uso, cópia, modificação ou reaproveitamento
 > (comercial ou não) exigem autorização prévia e expressa da IEADESPA. Ver [`LICENSE`](LICENSE).
+
+<!-- caixas separadas -->
 
 > **Realidade jurídica:** Estatuto 2026 (oficial) + Regimento Interno 2026 (entregue).
 > O Regimento regulamenta o Estatuto e adiciona: Governança Escalonada em 6 níveis
@@ -65,7 +69,7 @@ registrada no `AuditLog` (quem mudou o quê e quando).
 ### 2.2 Hierarquia única (Governança Escalonada — Regimento Art. 104-A/B/C)
 
 | Nível | Unidade | Órgão | Ativação |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 0 | Extensão da Tenda | (Congregação-Mãe) | livre |
 | 1 | Congregação | JAI | base |
 | 2 | Área | JEA | ≥ 3 congregações |
@@ -81,7 +85,7 @@ registrada no `AuditLog` (quem mudou o quê e quando).
 Categorias **calculadas** (Estatuto Art. 7º), transição automática:
 
 | Categoria | Requisito | Direito |
-|---|---|---|
+| --- | --- | --- |
 | Congregado | sem batismo | nenhum (fora do rol) |
 | Membro em Comunhão | batizado, ≥12 anos | direitos espirituais |
 | Capacidade Eleitoral Ativa | +18 + 90 dias + livre de disciplina | votar |
@@ -100,6 +104,7 @@ tratados como **dados reais**: nenhuma atualização pode apagá-los, recriá-lo
 "sumir" com eles.
 
 **Migrações (obrigatório):**
+
 - Toda mudança de schema (criar/alterar tabela, coluna, constraint, seed) entra em
   `sql/migrations/NNN_descricao.sql`, **sempre idempotente** (use `IF NOT EXISTS` /
   `IF EXISTS`). **Nunca** `DROP TABLE`/`DROP COLUMN` sem etapa de transição explícita e aprovada.
@@ -111,12 +116,14 @@ tratados como **dados reais**: nenhuma atualização pode apagá-los, recriá-lo
   SQL de verdade, mesmo já estando commitada.
 
 **Código ↔ banco em sincronia:**
+
 - Antes de subir uma versão, o schema precisa refletir a lógica atual do app.
   Não suba código que dependa de tabela/coluna que não existe no banco.
 - As rotas usam `api/shared/db.js` e `SQL_CONNECTION_STRING`; nunca hardcode de
   credenciais e nunca caia no mock em produção.
 
 **Segurança dos dados:**
+
 - `api/local.settings.json` fica no `.gitignore` (nunca versionar senhas/segredos).
 - Produção usa Application Settings (`SQL_CONNECTION_STRING`, `AUTH_SECRET`) +
   Secrets do GitHub (`AZURE_SQL_CONNECTION_STRING`) — nunca valores no repositório.
@@ -669,7 +676,7 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
 
 #### v1.9 — Registros especiais do membro
 
-*(Gap identificado em varredura Estatuto/Regimento completa)*
+(Gap identificado em varredura Estatuto/Regimento completa)
 
 - [x] Registro de Casamentos ministrados pela igreja (Reg. Art. 83): celebrante,
       modalidade, data de habilitação civil (validade de 90 dias, vedado celebrar
@@ -714,6 +721,7 @@ detalhe) — confirmado como prática consolidada de mercado.
       Painel. Novo bloco em "Meus Dados (LGPD)", mesma trava real de
       consentimento (`ConsentimentosLGPD` Tipo='FOTO') que já existia do lado
       Secretaria.
+
 #### v1.11 — Autoedição de dados + Fila de Aprovações
 
 Fecha o item que tinha ficado documentado (não implementado) na v1.10, seguindo
@@ -931,6 +939,7 @@ que a AFM nascer, e teria que ser refeito.
       Não dá pra implementar isso ainda: nem a Academia existe como órgão, nem o
       contador de 3 faltas em si existe (é esse item aqui, ainda `[ ]`). Quando
       ambos nascerem, essa soma entre órgãos "fundidos" precisa entrar no desenho.
+
 - [ ] Verificação de perda de assento por faltas.
 
 #### v2.4 — CLI (Comissões Permanentes)
@@ -1810,7 +1819,7 @@ experiência de ponta (doação online/recorrente), e formalizar o que já
 existe em cima de normas e controles reconhecidos:
 
 | Achado | Fonte | Onde entra no plano |
-|---|---|---|
+| --- | --- | --- |
 | Fund Accounting (fundo restrito/livre) | NetSuite, GivingArc, AlignMint, ChurchTrac, Aplos, Sage | v4.2 |
 | Chart of Accounts (Plano de Contas) | NetSuite, Priority, Codejig | v4.2 |
 | ITG 2002 (CFC, Res. 1.409/12) — **norma legal brasileira obrigatória** | CFC, CRCSC | v4.2, v4.9 |
@@ -2270,6 +2279,7 @@ pra saber quanto realmente existe de Prebenda disponível.
 O usuário descreveu com precisão o comportamento esperado e pediu
 confirmação — verificado linha por linha do código antes de confirmar
 (não só por inspeção visual, checagem adversarial de verdade):
+
 1. Um repasse fechado (`RegistrarRepasseTesouraria`) só vira dinheiro
    gastável pro Tesouro Geral **depois** que alguém aciona o fechamento
    do Rateio Geral — antes disso, fica só "pendente", sem contar em
@@ -2603,8 +2613,8 @@ acessória* — e a multa por não entregar existe mesmo sem haver imposto a pag
 A imunidade dos templos (CF Art. 150, VI, "b") **não é automática nem
 permanente**: o CTN Art. 14 a condiciona a três requisitos, e a pesquisa mostra
 que a perda, na prática, quase nunca vem de desvio de dinheiro — vem de
-**desorganização formal**. `shared/imunidade.js` + `RelatorioImunidadeTributaria`
-+ `RelatorioDossieFiscal`.
+**desorganização formal**. `shared/imunidade.js` + `RelatorioImunidadeTributaria` +
+`RelatorioDossieFiscal`.
 
 - [x] **Semáforo dos 3 requisitos do CTN Art. 14**, calculado na leitura:
       (I) não distribuir patrimônio/renda — pagamentos a ministros (CPF casa com
@@ -2804,7 +2814,7 @@ semestral de todo voluntário que atua com menores) e outra com **multa por
 omissão** (ECA Art. 245). Isso virou a FASE 7 reescrita, não um bullet solto.
 
 | Achado | Fonte | Onde entra |
-|---|---|---|
+| --- | --- | --- |
 | **Certidão de antecedentes de voluntário com menores, renovação semestral** — obrigação legal vigente | Lei 14.811/2024 (art. 59-A do ECA) | v7.7 (nova) |
 | **Comunicação obrigatória de suspeita de maus-tratos ao Conselho Tutelar** — multa de 3 a 20 salários por omissão | ECA Art. 13 e 245 | v7.8 (nova) |
 | Escuta protegida — igreja acolhe e encaminha, **não** inquire (não revitimizar) | Lei 13.431/2017 | v7.8 (nova) |
@@ -2855,7 +2865,7 @@ Gestão da IEADESPA"*. Não é o sistema que decidiu cobrir a norma — é a nor
 manda o sistema existir, e essa peça nunca foi construída.
 
 | Gap normativo | Base | Onde entra |
-|---|---|---|
+| --- | --- | --- |
 | **Esteira de Batismo** — turma, aptidão cumulativa (idade 12+, certidão de casamento p/ coabitantes, vida pregressa, Curso de Discipulado) e **aceite eletrônico do Estatuto no sistema** | Reg. Art. 80 §§1º-3º | vB.11 (nova) |
 | Registro de Apresentação de Crianças — impedimentos (união estável sem certidão, disciplina em curso), janela de idade (preferência 90 dias, **vedado acima de 1 ano**), ato reservado não gera certificado | Reg. Art. 82 §§2º-3º | vB.12 (nova) |
 | **Motor do Calendário Oficial** — 5 níveis de precedência, prazo fatal **15/jan**, "Direito Adquirido Temporal" por ordem de chegada, vedadas 2 festas de Nível 4 na mesma Área no mesmo fim de semana, indeferimento por "Esgotamento de Pauta" | Reg. Art. 154 §§1º-4º | v7.2 (expandida) |
@@ -3021,6 +3031,7 @@ depois de cada mudança.
 > roadmap foi movido pra lá, mesmo trabalhando nele agora, fora da ordem
 > numérica — mesma lógica que já vale pra esta fase inteira existir fora de
 > ordem:
+>
 > - **Eventos** → integrado dentro da v7.4 (FASE 7, "Eventos e congressos"),
 >   não aqui.
 > - **Camisetas** → é uma Campanha de arrecadação (v4.4) vendendo um produto
@@ -3185,6 +3196,7 @@ apareceu — a do Directus foi ignorada por completo. Prova, não promessa.
 As duas marcas foram removidas depois do teste (nenhuma ficou visível pro
 público). **Como repetir esse teste você mesmo, a qualquer momento, sem
 precisar de mim:**
+
 1. Abra a tela "Congregações — Nível 1" no sistema (aba Estrutura) e mude
    algo visível de uma congregação (ex: o campo de horários).
 2. Peça pra reconstruir o site (ou espere a próxima publicação/push) e
@@ -3202,6 +3214,7 @@ duas, que são reais e estavam perto do lançamento. Dado real checado antes
 de mexer: **0** eventos e **0** pedidos de camiseta tinham esse campo
 preenchido hoje, então nenhuma migração de dado foi necessária — só trocar
 de onde vêm as opções/nomes:
+
 - [x] Migração 077 (`FundacaoAno`) — último campo achado, usado só por
       `/transparencia/` (gráfico de crescimento), vazio em todas as 41
       congregações reais também.
@@ -3280,6 +3293,7 @@ lado num momento diferente da vida da pessoa, e nenhuma pode duplicar:
 
 **Sentido 1 — visitante que cria conta no site e depois vira membro de
 verdade (14/09, implementado).**
+
 - [x] `api/VerificarContaMembro` (novo, anônimo): dado um e-mail, devolve só
       um booleano (`ehMembroAtivo`) — nunca nome/matrícula/telefone, mesmo
       padrão de privacidade de `CongregacoesPublico`. Existe só pra checar
@@ -3313,6 +3327,7 @@ Art. 132 §2º), que zera o e-mail do membro em `MembroReferencia`. Sem
 alternativa, isso cortaria de vez qualquer acesso que a pessoa já tivesse
 (ou viesse a ter) à "Minha Conta" do site — mesmo o e-mail sendo dela por
 direito. **Implementado (14/09):**
+
 - [x] Migração 078: `CartasTransito.ManterAcessoSite` (booleano).
 - [x] `api/SolicitarCarta`: na confirmação da Carta de Mudança, o próprio
       membro escolhe (`manterAcessoSite`) se quer manter o acesso. Se sim,
@@ -3381,13 +3396,13 @@ no `app/`.
       | Primária (marinho) | `--primary: #0f1f3d` | `--cor-primaria: #0B2545` |
       | Destaque (dourado) | `--accent: #8f6f1f` (ajustado pra 4.71:1 WCAG AA) | `--cor-secundaria: #C9A227` |
 
-      Não faz sentido fundir os dois arquivos (frameworks diferentes de
-      propósito — Tailwind v4 `@theme` no site, classes escritas à mão no
-      `app/`, e a vC.5 já trata a normalização técnica dos dois lados
-      separadamente). O valor real de documentar isso aqui: da próxima vez
-      que QUALQUER um dos dois lados mudar a cor de marca, esta tabela é o
-      lembrete de atualizar o outro lado também — sem ela, alguém teria
-      que tirar a cor de uma captura de tela pra manter os dois em sintonia.
+  Não faz sentido fundir os dois arquivos (frameworks diferentes de
+  propósito — Tailwind v4 `@theme` no site, classes escritas à mão no
+  `app/`, e a vC.5 já trata a normalização técnica dos dois lados
+  separadamente). O valor real de documentar isso aqui: da próxima vez
+  que QUALQUER um dos dois lados mudar a cor de marca, esta tabela é o
+  lembrete de atualizar o outro lado também — sem ela, alguém teria
+  que tirar a cor de uma captura de tela pra manter os dois em sintonia.
 
 #### vC.5 — Um único modelo, dois Function Apps (normalização técnica)
 
@@ -5002,7 +5017,7 @@ e **ações** próprios, mas **Eventos** (Local/Área/Geral) e **Integração**
 modelados como estrutura compartilhada, não repetida por tipo:
 
 | Nº | Depto | Contagem (resumo) | Financeiro |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 01 | UCADESPA | Congregados, Visitantes | Mensalidades, Ofertas, Campanhas, Outros |
 | 02 | UMADESPA | Em Comunhão, Sem Comunhão, Congregados | idem |
 | 03 | USADESPA | idem + Matriculadas/Não Matriculada | idem |
@@ -5894,8 +5909,8 @@ inteiro (situação socioeconômica de família assistida).
 
   `AssistenciaSocialFamilias` + `AssistenciaSocialCadastros` +
   `AssistenciaSocialProfissionais` + `AssistenciaSocialPareceres` +
-  `AssistenciaSocialEntregas` (migração 100) + `shared/assistenciaSocial.js`
-  + `GestaoAssistenciaSocial` (rota `assistencia-social/{acao?}`), atrás de
+  `AssistenciaSocialEntregas` (migração 100) + `shared/assistenciaSocial.js` +
+  `GestaoAssistenciaSocial` (rota `assistencia-social/{acao?}`), atrás de
   uma permissão própria `assistencia_social` — nunca concedida por padrão a
   papel nenhum, mesmo achado repetido desde a v5.2/v5.4/v5.7.
 
@@ -5969,6 +5984,7 @@ inteiro (situação socioeconômica de família assistida).
   base legal fora do catálogo), `validarIsencaoSocial` nos 4 cenários do
   Art. 156 §3º III, e `validarEntrega`) e `node --check` em todos os
   arquivos novos/alterados.
+
 #### 🔒 Trava de Revisão 5-B — antes de encerrar a FASE 5 e avançar para a FASE 6
 
 - [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
@@ -7504,6 +7520,7 @@ tabelas pensados pra um campo só).
 
 **Perguntas em aberto pra quando (e se) isso for desenhado de verdade** — de
 propósito sem resposta ainda, é cedo pra decidir:
+
 - [ ] Modelo de isolamento entre campos: cada campo com seu próprio banco/instância,
       ou um banco único com todo registro amarrado a um `CampoId`? Tem implicação
       direta em custo, complexidade de deploy e naturalmente em segurança (um campo
@@ -7686,6 +7703,7 @@ toast e confirmações/pedidos de texto via modal (`mostrarToast`, `confirmarAca
 ### 6.2 Painel único / autenticação
 
 Um só acesso (matrícula + senha, tela "Acessar meu Painel"):
+
 - **Só matrícula** (sem senha): abre só a aba **Meu Painel** (perfil, frequência,
   histórico, justificativa).
 - **Matrícula + senha**: se houver registro em `Lideranca`, libera as abas conforme as
@@ -7701,7 +7719,7 @@ semente. Não é banco de verdade (sem transação/backup) — só para desenvol
 
 ### 6.4 Como rodar / deploy Azure
 
-```
+```bash
 npm install -g azure-functions-core-tools@4
 npm install -g @azure/static-web-apps-cli
 cd api && npm install && func start
@@ -7713,7 +7731,7 @@ Deploy: repositório no GitHub → Static Web App no Portal Azure (CI/CD automá
 
 ### 6.5 Estrutura de pastas
 
-```
+```text
 governanca-ieadespa/
 ├── sql/schema.sql          Schema do banco (Azure SQL)
 ├── api/                    Azure Functions (Node.js)
@@ -7728,7 +7746,7 @@ governanca-ieadespa/
 ### 6.6 Módulos adaptados do Google Apps Script
 
 | Function | Rota | Equivalente atual |
-|---|---|---|
+| --- | --- | --- |
 | `RegistrarAuditoria` | `POST /api/auditoria` | `logAuditoria()` |
 | `ListarAuditoria` | `GET /api/auditoria` | aba `tb_Auditoria` |
 | `RadarDisciplinar` | `GET /api/radar-disciplinar` | `abrirPainelRisco()` |

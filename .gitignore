@@ -19,25 +19,27 @@ swa2.log
 # Banco mock local — não é banco de verdade, só desenvolvimento
 api/data/mockdb.json
 
-# Material de referência conceitual (protótipos externos usados como ideia
-# pra FASE 5/6 — ver README). A versão ENXUTA (só fonte, ~0,7MB) é versionada
-# em referencias/. Aqui ficam só as cópias completas locais (1,6GB com
-# node_modules) e os .rar originais — o da EBD passa de 400MB, acima do limite
-# de 100MB por arquivo do GitHub, então NUNCA sobe.
+# Protótipos de referência conceitual (FASE 5/6 — ver REFERENCIAS.md).
+# chamada-ebd/ e relatorios-departamentos/ SÃO versionados, só com o fonte
+# (~0,7MB). O que NÃO sobe é a cópia completa antiga (1,6GB com node_modules)
+# que, em máquinas que extraíram o .rar, fica ANINHADA dentro da pasta de mesmo
+# nome (chamada-ebd/chamada-ebd/), e os .rar — o da EBD passa de 400MB, acima do
+# limite de 100MB por arquivo do GitHub, então NUNCA sobe.
+/chamada-ebd/chamada-ebd/
+/relatorios-departamentos/relatorios-departamentos/
 /relatorios-departamentos.rar
-/relatorios-departamentos/
 /chamada-ebd.rar
-/chamada-ebd/
 *.rar
 
-# referencias/ só aceita FONTE. Quem rodar um protótipo lá dentro gera estes
-# artefatos (o dev.db do SQLite cai na raiz do protótipo) — nunca versionar.
-referencias/**/node_modules/
-referencias/**/.next/
-referencias/**/dist/
-referencias/**/*.db
-referencias/**/*.db-journal
-referencias/**/.env
+# Protótipos só aceitam FONTE. Quem rodar um deles gera estes artefatos (o
+# dev.db do SQLite cai na raiz do protótipo) — nunca versionar.
+/chamada-ebd/**/node_modules/
+/chamada-ebd/**/.next/
+/chamada-ebd/**/*.db
+/chamada-ebd/**/*.db-journal
+/chamada-ebd/**/.env
+/relatorios-departamentos/**/node_modules/
+/relatorios-departamentos/**/dist/
 
 # Configuração do Claude Code é por máquina (permissões acumuladas de cada
 # sessão, às vezes com trechos de comando/credencial) — não versionar.

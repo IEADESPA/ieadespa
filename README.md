@@ -31,7 +31,8 @@ administrativos eclesiásticos**: cada igreja tem gestão própria, então tudo 
 configurável e orientado a processo. Os 3 repositórios viram um sistema único:
 `governanca-ieadespa` (núcleo) + `chamada-ebd` (Fase 6 — EBD) +
 `relatorios-departamentos` (Fase 5 — Relatórios). Os dois protótipos de referência
-(só o fonte, versão enxuta) estão em [`referencias/`](referencias/README.md).
+(só o fonte, versão enxuta) estão na raiz: [`chamada-ebd/`](chamada-ebd/) e
+[`relatorios-departamentos/`](relatorios-departamentos/) — ver [`REFERENCIAS.md`](REFERENCIAS.md).
 
 ## 1. Decisões de arquitetura (fechadas)
 

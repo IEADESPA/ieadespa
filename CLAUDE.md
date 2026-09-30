@@ -21,5 +21,7 @@ arquivo de segredo (`local.settings.json`, `.env*`), **mascare todos os valores*
 
 ## 3. Referências
 
-`referencias/` guarda protótipos antigos só para consulta de ideias: não copiar código
-(Next.js é banido aqui) e não adicionar `.env`, `*.db`, `node_modules` nem `.rar` lá.
+`chamada-ebd/` e `relatorios-departamentos/` (raiz) guardam protótipos antigos só para
+consulta de ideias (ver `REFERENCIAS.md`): não copiar código (Next.js é banido aqui) e não
+adicionar `.env`, `*.db`, `node_modules` nem `.rar` lá. A cópia pesada aninhada
+(`chamada-ebd/chamada-ebd/`) é só local e ignorada — nunca versionar.

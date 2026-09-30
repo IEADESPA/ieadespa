@@ -21,6 +21,7 @@
 const { sql } = require("./db");
 const { gerarProtocolo } = require("./protocolo");
 const { registrarAuditoria } = require("./auditoria");
+const trilhas = require("./trilhas");
 
 const PREFIXO_MATRICULA_EBD = "EBD";
 
@@ -299,6 +300,12 @@ async function designarProfessor(pool, { turmaId, membroId, principal, designado
   const validacao = podeDesignarProfessor(vinculo);
   if (!validacao.permitido) return { sucesso: false, mensagem: validacao.mensagem };
 
+  // v6.9 — formação exigida para lecionar (TrilhaRequisitos, contexto
+  // EBD_PROFESSOR). Sem requisito configurado, nada muda. Quem já leciona não
+  // é afetado: só a designação nova passa por aqui.
+  const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "EBD_PROFESSOR", membroId });
+  if (formacao.bloqueado) return { sucesso: false, mensagem: formacao.mensagemBloqueio };
+
   if (vinculo) {
     await pool.request().input("id", sql.Int, vinculo.turmaProfessorId).input("principal", sql.Bit, !!principal).query(`
       UPDATE EbdTurmaProfessores SET Ativo = 1, Principal = @principal, EncerradoEm = NULL, DesignadoEm = SYSUTCDATETIME() WHERE TurmaProfessorId = @id
@@ -315,7 +322,7 @@ async function designarProfessor(pool, { turmaId, membroId, principal, designado
     usuarioId: designadoPorMembroId, dadosAntes: null, dadosDepois: { turmaId, membroId, principal: !!principal }
   });
 
-  return { sucesso: true, mensagem: "✅ Professor designado." };
+  return { sucesso: true, mensagem: "✅ Professor designado.", alertas: formacao.alertas };
 }
 
 async function encerrarProfessor(pool, { turmaId, membroId, registradoPorMembroId }) {

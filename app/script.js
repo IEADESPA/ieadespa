@@ -35,6 +35,7 @@ const AJUDA_POR_ABA = {
   "meupainel:dados": "Seus dados cadastrais. Pedidos de correção passam pela Secretaria — não é edição direta.",
   "meupainel:cartas": "Solicite Carta de Recomendação, Carta de Mudança ou Atestado Supletivo — os dois primeiros saem na hora, o de Mudança tem um segundo passo de confirmação.",
   "meupainel:tarefas": "Fluxos de aprovação que estão parados esperando por você, de qualquer módulo do sistema.",
+  "meupainel:minhaformacao": "Suas trilhas de formação, o progresso e a validade de cada certificado — com o QR/código pra quem quiser conferir a autenticidade, sem login.",
   "meupainel:seguranca": "Veja onde sua conta está logada e, se tiver algum papel de Liderança, delegue temporariamente pra outra pessoa sem precisar emprestar sua senha.",
   financeiro: "Tesouraria, patrimônio, orçamento e prestação de contas. Use o menu de módulos pra escolher a área específica (lançamentos, saídas, seguros, etc.).",
   pessoas: "Cadastro de membros — a lista respeita seu escopo (só aparece quem está sob sua responsabilidade territorial).",
@@ -50,6 +51,7 @@ const AJUDA_POR_ABA = {
   disciplina: "Processos disciplinares — conteúdo sigiloso, visível só a quem tem esta permissão.",
   abandono: "Radar e procedimento de abandono eclesiástico/digital.",
   auditoria: "Trilha de auditoria, indicadores de compliance e recertificação periódica de acesso.",
+  trilhas: "Trilhas de formação por papel, matrículas, conclusão de módulos, certificados verificáveis e os requisitos de formação exigidos em consagração, nomeação, escala, batismo e EBD.",
   protecaodedados: "Solicitações de titular (LGPD), políticas de retenção e o Registro de Operações de Tratamento (ROPA/RIPD)."
 };
 function alternarAjudaContextual() {
@@ -866,7 +868,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial", "ebd", "conquistas"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial", "ebd", "conquistas", "trilhas"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -906,6 +908,11 @@ const ABA_PERMISSOES_ALT = {
   // qualquer matrícula (mesmo espírito de "admin gerencia, todo mundo vê
   // o seu" da Habilitação de Voluntários/v5.7).
   conquistas: ["conquistas_gestao"],
+  // v6.9 — trilhas de formação e certificado verificável: permissão própria
+  // "trilhas_gestao", nunca concedida por padrão. A formação pessoal fica em
+  // Meu Painel → Minha Formação, aberta a qualquer matrícula. Mexer no
+  // catálogo e nos requisitos ainda exige escopo global (o backend confere).
+  trilhas: ["trilhas_gestao"],
   // v5.4 (correção) — quem só tem "tesouraria_departamental" (líder local/
   // geral de departamento) também acessa Financeiro → Saídas, pra gastar o
   // saldo do próprio departamento (Centro de Custo DEPTO_<SIGLA>) pelo
@@ -986,6 +993,7 @@ const MODULOS = {
   assistenciasocial: { titulo: "Assistência Social", icone: "🤝", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
   ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "📖", abaEntrada: "ebd", abas: ["ebd"] },
   conquistas: { titulo: "Conquistas e Gamificação", icone: "🏆", abaEntrada: "conquistas", abas: ["conquistas"] },
+  trilhas: { titulo: "Formação e Certificação", icone: "🎓", abaEntrada: "trilhas", abas: ["trilhas"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
@@ -1036,11 +1044,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "minhasconquistas", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "minhasconquistas", "minhaformacao", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", minhasconquistas: "Minhas Conquistas",
+  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1061,6 +1069,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "minhasescalas") { carregarMinhasEscalasAcao(); carregarMinhasIndisponibilidadesAcao(); }
   if (sub === "minhahabilitacao") carregarMinhaHabilitacaoAcao();
   if (sub === "minhasconquistas") carregarMinhasConquistasAcao();
+  if (sub === "minhaformacao") carregarMinhaFormacaoAcao();
   if (sub === "tarefas") filtrarMinhasTarefas(filtroMinhasTarefasAtual);
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarDelegacoes(); }
@@ -5014,6 +5023,7 @@ function mostrarAbaSecretaria(aba) {
     else { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesFinanceiroEbdAcao(); carregarOpcoesCadernetaEbdAcao(); }
   }
   if (aba === "conquistas") { carregarTiposEventoConquistaAcao(); carregarCatalogoConquistaAdminAcao(); }
+  if (aba === "trilhas") carregarOpcoesTrilhasAcao();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -5030,7 +5040,7 @@ const TITULOS_MODULOS = {
   mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos",
   escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários",
   assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)",
-  conquistas: "Conquistas e Gamificação"
+  conquistas: "Conquistas e Gamificação", trilhas: "Formação e Certificação"
 };
 
 // ---- PORTARIA: registrar presença (pública, sem login) ----
@@ -13072,24 +13082,66 @@ async function carregarCertificadosEbdAcao() {
 function renderizarCertificadosEbd() {
   const container = document.getElementById("painelCertificadosEbd");
   if (!certificadosCache.length) { container.innerHTML = "<p class='subtitle'>Nenhum certificado emitido para esta matrícula.</p>"; return; }
+  const podeRevogar = authPermissoes.includes("ebd_gestao") || authPermissoes.includes("trilhas_gestao");
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>ID</th><th>Título</th><th>Conquista</th><th>Protocolo</th><th>Emitido em</th><th class="acoes-inline"></th>
+    <th>ID</th><th>Título</th><th>Conquista</th><th>Protocolo</th><th>Emitido em</th><th>Situação</th><th>Código de verificação</th><th class="acoes-inline"></th>
   </tr></thead><tbody>`;
   certificadosCache.forEach(c => {
     html += `<tr>
       <td>${c.certificadoId}</td>
-      <td>${c.titulo}</td>
-      <td>${c.conquistaNome || "-"}</td>
-      <td>${c.protocolo}</td>
+      <td>${escaparHtmlEbd(c.titulo)}</td>
+      <td>${escaparHtmlEbd(c.conquistaNome || "-")}</td>
+      <td>${escaparHtmlEbd(c.protocolo)}</td>
       <td>${c.dataEmissao ? new Date(c.dataEmissao).toLocaleDateString("pt-BR") : "-"}</td>
+      <td>${situacaoCertificadoFormacao(c)}</td>
+      <td>${c.codigoVerificacao ? `<code>${escaparHtmlEbd(c.codigoVerificacao)}</code>` : "-"}</td>
       <td class="acoes-inline">
         <button class="btn-link" onclick="imprimirCertificado(${c.certificadoId})">🖨️ Imprimir</button>
         <button class="btn-link" onclick="baixarPdfCertificado(${c.certificadoId}, ${c.membroId})">📄 Baixar PDF</button>
+        ${c.codigoVerificacao ? `<button class="btn-link" onclick="copiarLinkVerificacaoAcao('${escaparHtmlEbd(c.codigoVerificacao)}')">🔗 Copiar link de verificação</button>` : ""}
+        ${podeRevogar && !c.revogadoEm ? `<button class="btn-link btn-link-perigo" onclick="revogarCertificadoAcao(${c.certificadoId})">⛔ Revogar</button>` : ""}
       </td>
     </tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+// v6.9 — situação do certificado a partir dos campos que a API devolve
+// (calculada aqui só pra exibição; quem decide de verdade é o servidor).
+function situacaoCertificadoFormacao(c) {
+  if (c.revogadoEm) return "⛔ Revogado";
+  if (!c.validoAte) return "🟢 Válido (não vence)";
+  const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
+  const validade = new Date(`${c.validoAte}T12:00:00`);
+  const dias = Math.round((validade - hoje) / 86400000);
+  if (dias < 0) return `🔴 Vencido em ${formatarDataEbd(c.validoAte)}`;
+  if (dias <= 60) return `🟠 Vence em ${dias} dia(s) (${formatarDataEbd(c.validoAte)})`;
+  return `🟢 Válido até ${formatarDataEbd(c.validoAte)}`;
+}
+
+function copiarLinkVerificacaoAcao(codigo) {
+  const url = `${location.origin}/verificar.html?c=${encodeURIComponent(codigo)}`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => mostrarToast("Link de verificação copiado.", "sucesso"), () => prompt("Copie o link de verificação:", url));
+  } else {
+    prompt("Copie o link de verificação:", url);
+  }
+}
+
+async function revogarCertificadoAcao(certificadoId) {
+  const motivo = prompt("Motivo da revogação (não aparece na verificação pública; mínimo 5 caracteres):");
+  if (!motivo) return;
+  if (!confirm("Revogar este certificado? Ele deixa de valer como formação (a verificação pública passa a dizer REVOGADO).")) return;
+  const res = await fetchProtegido(`${API_BASE}/certificados/revogar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ certificadoId, motivo })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) {
+    if (document.getElementById("certBuscaMatricula") && document.getElementById("certBuscaMatricula").value) carregarCertificadosEbdAcao();
+    if (document.getElementById("trilFormMembroId") && document.getElementById("trilFormMembroId").value) carregarFormacaoPessoaAcao();
+  }
 }
 
 async function baixarPdfCertificado(certificadoId, membroId) {
@@ -13117,6 +13169,14 @@ function imprimirCertificado(certificadoId) {
 
 function renderizarImpressaoCertificado(c) {
   const dataEmissaoFmt = c.dataEmissao ? new Date(c.dataEmissao).toLocaleDateString("pt-BR") : "____/____/______";
+  // v6.9 — QR de verificação pública (SVG do servidor, mesma regra do PDF: só a
+  // própria matrícula) + código e endereço em texto, pra quem não puder ler o QR.
+  const urlBase = `${location.origin}/verificar.html`;
+  const urlQr = new URL(`${API_BASE}/certificados/${c.certificadoId}/qr?matricula=${c.membroId}`, location.href).href;
+  const blocoVerificacao = c.codigoVerificacao ? `
+    <div class="verif"><img src="${urlQr}" alt="QR Code de verificação" width="110" height="110" />
+      <div><strong>Verifique a autenticidade deste certificado</strong><br />Aponte a câmera para o QR Code ou acesse<br />
+      <strong>${escaparHtmlEbd(urlBase)}</strong><br />e informe o código: <strong>${escaparHtmlEbd(c.codigoVerificacao)}</strong></div></div>` : "";
   const w = window.open("", "_blank", "width=760,height=900");
   w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Certificado</title>
   <style>
@@ -13129,17 +13189,339 @@ function renderizarImpressaoCertificado(c) {
     .rodape{margin-top:44px;display:flex;justify-content:space-around;font-size:12px;text-align:center;}
     .rodape div{border-top:1px solid #111;padding-top:4px;width:220px;}
     .protocolo{margin-top:24px;font-size:11px;color:#555;text-align:center;}
+    .verif{display:flex;align-items:center;gap:14px;margin-top:28px;font-size:11px;color:#333;border-top:1px dashed #999;padding-top:14px;}
+    .revogado{color:#b3261e;font-weight:bold;text-align:center;margin:0 0 14px;}
   </style></head><body><div class="certificado">
     <div class="cab"><h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS</h1><div class="sub">Ministério do SETA em Parauapebas — PA · IEADESPA</div></div>
     <h2>CERTIFICADO</h2>
-    <p>Certificamos que <strong>${c.nome}</strong> (Cartão de Membro nº ${c.membroId}) ${c.titulo}${c.conquistaNome ? `, referente à conquista "${c.conquistaNome}"` : ""}.</p>
-    ${c.descricao ? `<p class="desc">${c.descricao}</p>` : ""}
-    <p>Emitido em ${dataEmissaoFmt}.</p>
+    ${c.revogadoEm ? `<p class="revogado">CERTIFICADO REVOGADO em ${new Date(c.revogadoEm).toLocaleDateString("pt-BR")} — não tem validade.</p>` : ""}
+    <p>Certificamos que <strong>${escaparHtmlEbd(c.nome)}</strong> (Cartão de Membro nº ${c.membroId}) ${escaparHtmlEbd(c.titulo)}${c.conquistaNome ? `, referente à conquista "${escaparHtmlEbd(c.conquistaNome)}"` : ""}.</p>
+    ${c.descricao ? `<p class="desc">${escaparHtmlEbd(c.descricao)}</p>` : ""}
+    <p>Emitido em ${dataEmissaoFmt}${c.validoAte ? `, válido até ${formatarDataEbd(c.validoAte)}` : ""}.</p>
     <div class="rodape"><div>Pastor Congregacional</div><div>Secretário(a) da EBD</div></div>
-    <p class="protocolo">Protocolo ${c.protocolo}</p>
+    <p class="protocolo">Protocolo ${escaparHtmlEbd(c.protocolo)}</p>
+    ${blocoVerificacao}
   </div></body></html>`);
   w.document.close();
   setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
+}
+
+// ---- Formação e certificação (v6.9) ----
+// Trilhas por papel, matrícula/progresso, certificado verificável e os
+// REQUISITOS que exigem a formação nos fluxos. Toda regra está no servidor
+// (shared/trilhas.js); aqui só se monta a tela. Texto vindo do banco passa
+// por escaparHtmlEbd (v6.8).
+const ROTULO_SITUACAO_TRILHA = {
+  EM_ANDAMENTO: "🟡 Em andamento", VIGENTE: "🟢 Vigente", VENCENDO: "🟠 Vencendo", VENCIDA: "🔴 Vencida",
+  REVOGADA: "⛔ Revogada", CANCELADA: "⚪ Cancelada", NAO_INICIADA: "— Não iniciada"
+};
+let catalogoTrilhasCache = [];
+
+function numeroDoCampo(id) {
+  const campo = document.getElementById(id);
+  const v = campo ? String(campo.value).trim() : "";
+  return v === "" ? null : Number(v);
+}
+
+async function postarTrilhas(acao, corpo) {
+  const res = await fetchProtegido(`${API_BASE}/trilhas/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+  return res.json();
+}
+
+function mostrarResultadoTrilhas(data, idMensagem) {
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  const el = document.getElementById(idMensagem);
+  if (el) el.textContent = data.mensagem || "";
+}
+
+function carregarOpcoesTrilhasAcao() {
+  carregarCatalogoTrilhasAcao();
+  carregarRequisitosTrilhasAcao();
+}
+
+// -- Catálogo --
+async function carregarCatalogoTrilhasAcao() {
+  const container = document.getElementById("painelCatalogoTrilhas");
+  const todas = document.getElementById("trilhasMostrarInativas").checked ? "?todas=1" : "";
+  const res = await fetchProtegido(`${API_BASE}/trilhas/catalogo${todas}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  catalogoTrilhasCache = data.trilhas || [];
+  const nomePorId = new Map(catalogoTrilhasCache.map(t => [t.trilhaId, t.nome]));
+  container.innerHTML = catalogoTrilhasCache.length ? catalogoTrilhasCache.map(t => {
+    const tituloModulo = new Map(t.modulos.map(m => [m.moduloId, m.titulo]));
+    const exige = t.preRequisitosTrilha.length ? t.preRequisitosTrilha.map(id => escaparHtmlEbd(nomePorId.get(id) || `#${id}`)).join(", ") : "nenhuma";
+    return `<div class="cartao-area-ebd" style="margin-bottom:12px;${t.ativa ? "" : "opacity:.6;"}">
+      <h5>🎓 #${t.trilhaId} ${escaparHtmlEbd(t.nome)}${t.ativa ? "" : " (desativada)"}</h5>
+      <p class="subtitle">Papel-alvo: ${escaparHtmlEbd(t.papelAlvo || "—")} · Validade do certificado: ${t.validadeMeses ? `${t.validadeMeses} meses` : "não vence"}
+        · Aviso: ${t.avisoDias} dias · Exige antes: ${exige}</p>
+      ${t.descricao ? `<p class="subtitle">${escaparHtmlEbd(t.descricao)}</p>` : ""}
+      ${t.modulos.length ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Ordem</th><th>Módulo</th><th>Carga (h)</th><th>Obrigatório</th><th>Exige módulo(s)</th></tr></thead><tbody>
+        ${t.modulos.map(m => `<tr style="${m.ativo ? "" : "opacity:.5;"}"><td>${m.moduloId}</td><td>${m.ordem}</td><td>${escaparHtmlEbd(m.titulo)}${m.ativo ? "" : " (desativado)"}</td>
+          <td>${m.cargaHoraria}</td><td>${m.obrigatorio ? "Sim" : "Opcional"}</td>
+          <td>${m.preRequisitos.length ? m.preRequisitos.map(id => escaparHtmlEbd(tituloModulo.get(id) || `#${id}`)).join(", ") : "—"}</td></tr>`).join("")}
+      </tbody></table>` : "<p class='subtitle'>Sem módulos ainda — cadastre ao menos um obrigatório para poder matricular alguém.</p>"}
+    </div>`;
+  }).join("") : "<p class='subtitle'>Nenhuma trilha cadastrada ainda.</p>";
+}
+
+async function criarTrilhaAcao() {
+  const nome = document.getElementById("trilNovaNome").value.trim();
+  if (!nome) { mostrarToast("Informe o nome da trilha.", "erro"); return; }
+  const data = await postarTrilhas("criar", {
+    nome, papelAlvo: document.getElementById("trilNovaPapel").value.trim() || null,
+    validadeMeses: numeroDoCampo("trilNovaValidade"), avisoDias: numeroDoCampo("trilNovaAviso"),
+    descricao: document.getElementById("trilNovaDescricao").value.trim() || null
+  });
+  mostrarResultadoTrilhas(data, "resultadoCatalogoTrilhas");
+  if (data.sucesso !== false) {
+    ["trilNovaNome", "trilNovaPapel", "trilNovaValidade", "trilNovaAviso", "trilNovaDescricao"].forEach(id => { document.getElementById(id).value = ""; });
+    carregarCatalogoTrilhasAcao();
+  }
+}
+
+async function adicionarModuloTrilhaAcao() {
+  const trilhaId = numeroDoCampo("trilModTrilhaId");
+  const titulo = document.getElementById("trilModTitulo").value.trim();
+  if (!trilhaId || !titulo) { mostrarToast("Informe o Id da trilha e o título do módulo.", "erro"); return; }
+  const data = await postarTrilhas("modulos", {
+    trilhaId, titulo, cargaHoraria: numeroDoCampo("trilModCarga"), ordem: numeroDoCampo("trilModOrdem"),
+    obrigatorio: document.getElementById("trilModObrigatorio").checked
+  });
+  mostrarResultadoTrilhas(data, "resultadoCatalogoTrilhas");
+  if (data.sucesso !== false) {
+    ["trilModTitulo", "trilModCarga", "trilModOrdem"].forEach(id => { document.getElementById(id).value = ""; });
+    carregarCatalogoTrilhasAcao();
+  }
+}
+
+async function preRequisitoModuloAcao() {
+  const moduloId = numeroDoCampo("trilPreModuloId"), preRequisitoModuloId = numeroDoCampo("trilPreModuloExigeId");
+  if (!moduloId || !preRequisitoModuloId) { mostrarToast("Informe os dois Ids de módulo.", "erro"); return; }
+  const data = await postarTrilhas("modulos/pre-requisito", { moduloId, preRequisitoModuloId });
+  mostrarResultadoTrilhas(data, "resultadoCatalogoTrilhas");
+  if (data.sucesso !== false) carregarCatalogoTrilhasAcao();
+}
+
+async function preRequisitoTrilhaAcao(remover) {
+  const trilhaId = numeroDoCampo("trilPreTrilhaId"), preRequisitoTrilhaId = numeroDoCampo("trilPreTrilhaExigeId");
+  if (!trilhaId || !preRequisitoTrilhaId) { mostrarToast("Informe os dois Ids de trilha.", "erro"); return; }
+  const data = await postarTrilhas(remover ? "pre-requisito/remover" : "pre-requisito", { trilhaId, preRequisitoTrilhaId });
+  mostrarResultadoTrilhas(data, "resultadoCatalogoTrilhas");
+  if (data.sucesso !== false) carregarCatalogoTrilhasAcao();
+}
+
+async function definirTrilhaAtivaAcao(ativa) {
+  const trilhaId = numeroDoCampo("trilAtivaTrilhaId");
+  if (!trilhaId) { mostrarToast("Informe o Id da trilha.", "erro"); return; }
+  const data = await postarTrilhas("atualizar", { trilhaId, ativa });
+  mostrarResultadoTrilhas(data, "resultadoCatalogoTrilhas");
+  if (data.sucesso !== false) carregarCatalogoTrilhasAcao();
+}
+
+async function definirModuloAtivoAcao(ativo) {
+  const moduloId = numeroDoCampo("trilAtivoModuloId");
+  if (!moduloId) { mostrarToast("Informe o Id do módulo.", "erro"); return; }
+  const data = await postarTrilhas("modulos/atualizar", { moduloId, ativo });
+  mostrarResultadoTrilhas(data, "resultadoCatalogoTrilhas");
+  if (data.sucesso !== false) carregarCatalogoTrilhasAcao();
+}
+
+// -- Matrículas e progresso --
+async function matricularTrilhaAcao() {
+  const trilhaId = numeroDoCampo("trilMatTrilhaId"), membroId = numeroDoCampo("trilMatMembroId");
+  if (!trilhaId || !membroId) { mostrarToast("Informe o Id da trilha e a matrícula do membro.", "erro"); return; }
+  const data = await postarTrilhas("matricular", { trilhaId, membroId });
+  mostrarResultadoTrilhas(data, "resultadoMatriculaTrilha");
+  if (data.sucesso !== false) {
+    document.getElementById("trilFormMembroId").value = membroId;
+    await carregarFormacaoPessoaAcao();
+    abrirMatriculaTrilhaAcao(data.matriculaId);
+  }
+}
+
+async function carregarFormacaoPessoaAcao() {
+  const membroId = numeroDoCampo("trilFormMembroId");
+  const container = document.getElementById("painelFormacaoPessoa");
+  if (!membroId) { container.innerHTML = ""; mostrarToast("Informe a matrícula do membro.", "erro"); return; }
+  const [resF, resC] = await Promise.all([
+    fetchProtegido(`${API_BASE}/trilhas/formacao?membroId=${membroId}`),
+    fetchProtegido(`${API_BASE}/certificados?membroId=${membroId}`)
+  ]);
+  const data = await resF.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  const certs = await resC.json();
+  if (certs.sucesso !== false) certificadosCache = certs.certificados || []; // alimenta imprimirCertificado
+  container.innerHTML = renderFormacaoTabela(data.formacao, { gestao: true });
+}
+
+// Tabela de formação de uma pessoa (vista pela gestão e, sem ações, pela própria pessoa).
+function renderFormacaoTabela(formacao, { gestao }) {
+  if (!formacao.length) return "<p class='subtitle'>Nenhuma trilha iniciada por esta pessoa.</p>";
+  return `<div style="overflow-x:auto;"><table class="tabela-frequencia"><thead><tr>
+    <th>Matrícula</th><th>Trilha</th><th>Situação</th><th>Progresso</th><th>Válido até</th><th>Certificado</th><th></th></tr></thead><tbody>
+    ${formacao.map(f => {
+      const cert = f.certificado;
+      const validade = f.validoAte ? `${formatarDataEbd(f.validoAte)}${f.situacao === "VENCENDO" ? ` (em ${f.diasParaVencer} dia(s))` : ""}` : (f.status === "CONCLUIDA" ? "não vence" : "—");
+      const acoes = gestao ? `
+        <button class="btn-link" onclick="abrirMatriculaTrilhaAcao(${f.matriculaId})">📋 Abrir</button>
+        ${f.status === "EM_ANDAMENTO" ? `<button class="btn-link btn-link-perigo" onclick="cancelarMatriculaTrilhaAcao(${f.matriculaId})">✖ Cancelar</button>` : ""}
+        ${f.status === "CONCLUIDA" && !cert ? `<button class="btn-link" onclick="emitirCertificadoMatriculaAcao(${f.matriculaId})">🎓 Emitir certificado</button>` : ""}
+        ${cert && !cert.revogadoEm ? `<button class="btn-link btn-link-perigo" onclick="revogarCertificadoAcao(${cert.certificadoId})">⛔ Revogar certificado</button>` : ""}` : "";
+      return `<tr>
+        <td>${f.matriculaId}</td><td>${escaparHtmlEbd(f.trilhaNome)}</td><td>${ROTULO_SITUACAO_TRILHA[f.situacao] || f.situacao}</td>
+        <td>${f.obrigatoriosConcluidos}/${f.obrigatoriosTotal}</td><td>${validade}</td>
+        <td>${cert ? `<code>${escaparHtmlEbd(cert.codigoVerificacao || "")}</code>${cert.revogadoEm ? " (revogado)" : ""}` : "—"}</td>
+        <td class="acoes-inline">${acoes}</td></tr>`;
+    }).join("")}
+  </tbody></table></div>`;
+}
+
+async function abrirMatriculaTrilhaAcao(matriculaId) {
+  const container = document.getElementById("painelMatriculaTrilha");
+  const res = await fetchProtegido(`${API_BASE}/trilhas/matricula?matriculaId=${matriculaId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  const m = data.matricula, p = m.progresso;
+  const emAndamento = m.status === "EM_ANDAMENTO";
+  container.innerHTML = `<div class="cartao-area-ebd" style="margin:10px 0;">
+    <h5>📋 Matrícula #${m.matriculaId} — ${escaparHtmlEbd(m.trilha.nome)}</h5>
+    <p>${ROTULO_SITUACAO_TRILHA[m.situacao] || m.status} · ${p.obrigatoriosConcluidos}/${p.obrigatoriosTotal} módulos obrigatórios (${p.percentual}%) ·
+      carga horária ${p.cargaHorariaConcluida}h de ${p.cargaHorariaTotal}h${m.validoAte ? ` · válido até ${formatarDataEbd(m.validoAte)}` : ""}</p>
+    ${emAndamento ? `<div class="barra-lista">
+      <input type="date" id="trilConclData" style="max-width:160px;" title="Data da conclusão (vazio = hoje)" />
+      <input type="text" id="trilConclObs" placeholder="Observação (opcional)" style="min-width:220px;" />
+    </div>` : ""}
+    <table class="tabela-frequencia"><thead><tr><th>Ordem</th><th>Módulo</th><th>Carga (h)</th><th></th><th>Situação</th><th></th></tr></thead><tbody>
+      ${p.modulos.map(mod => `<tr>
+        <td>${mod.ordem}</td><td>${escaparHtmlEbd(mod.titulo)}</td><td>${mod.cargaHoraria}</td><td>${mod.obrigatorio ? "" : "opcional"}</td>
+        <td>${mod.status === "CONCLUIDO" ? "✅ Concluído" : (mod.status === "BLOQUEADO" ? `🔒 Exige: ${mod.bloqueadoPor.map(escaparHtmlEbd).join(", ")}` : "▶️ Disponível")}</td>
+        <td>${emAndamento && mod.status === "DISPONIVEL" ? `<button class="btn-link" onclick="concluirModuloTrilhaAcao(${m.matriculaId}, ${mod.moduloId})">✔ Concluir módulo</button>` : ""}</td>
+      </tr>`).join("")}
+    </tbody></table>
+  </div>`;
+}
+
+async function concluirModuloTrilhaAcao(matriculaId, moduloId) {
+  const campoData = document.getElementById("trilConclData"), campoObs = document.getElementById("trilConclObs");
+  const data = await postarTrilhas("modulos/concluir", {
+    matriculaId, moduloId, data: (campoData && campoData.value) || null, observacao: (campoObs && campoObs.value.trim()) || null
+  });
+  mostrarResultadoTrilhas(data, "resultadoMatriculaTrilha");
+  if (data.sucesso === false) return;
+  if (data.matriculaConcluida && data.codigoVerificacao) {
+    document.getElementById("resultadoMatriculaTrilha").textContent = `${data.mensagem} Código de verificação: ${data.codigoVerificacao}`;
+  }
+  abrirMatriculaTrilhaAcao(matriculaId);
+  if (numeroDoCampo("trilFormMembroId")) carregarFormacaoPessoaAcao();
+}
+
+async function cancelarMatriculaTrilhaAcao(matriculaId) {
+  const motivo = prompt("Motivo do cancelamento (mínimo 5 caracteres):");
+  if (!motivo) return;
+  const data = await postarTrilhas("matricula/cancelar", { matriculaId, motivo });
+  mostrarResultadoTrilhas(data, "resultadoMatriculaTrilha");
+  if (data.sucesso !== false) { document.getElementById("painelMatriculaTrilha").innerHTML = ""; carregarFormacaoPessoaAcao(); }
+}
+
+async function emitirCertificadoMatriculaAcao(matriculaId) {
+  const data = await postarTrilhas("matricula/emitir-certificado", { matriculaId });
+  mostrarResultadoTrilhas(data, "resultadoMatriculaTrilha");
+  if (data.sucesso !== false) carregarFormacaoPessoaAcao();
+}
+
+// -- Requisitos --
+async function carregarRequisitosTrilhasAcao() {
+  const container = document.getElementById("painelRequisitosTrilhas");
+  const res = await fetchProtegido(`${API_BASE}/trilhas/requisitos`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  const sel = document.getElementById("trilReqContexto");
+  if (sel && !sel.dataset.montado) {
+    sel.innerHTML = data.contextos.map(c => `<option value="${c.contexto}">${escaparHtmlEbd(c.rotulo)}</option>`).join("");
+    sel.dataset.montado = "1";
+  }
+  container.innerHTML = data.requisitos.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Onde</th><th>Alvo</th><th>Trilha exigida</th><th>Modo</th><th></th></tr></thead><tbody>
+        ${data.requisitos.map(r => `<tr><td>${r.requisitoId}</td><td>${escaparHtmlEbd(r.contextoRotulo)}</td><td>${escaparHtmlEbd(r.alvoChave || "(todos)")}</td>
+          <td>#${r.trilhaId} ${escaparHtmlEbd(r.trilhaNome)}${r.trilhaAtiva ? "" : " (desativada)"}</td><td>${r.modo === "BLOQUEIA" ? "⛔ Bloqueia" : "⚠️ Só alerta"}</td>
+          <td><button class="btn-link btn-link-perigo" onclick="removerRequisitoTrilhaAcao(${r.requisitoId})">Remover</button></td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum requisito configurado — nenhum fluxo exige formação hoje.</p>";
+}
+
+async function criarRequisitoTrilhaAcao() {
+  const contexto = document.getElementById("trilReqContexto").value;
+  const trilhaId = numeroDoCampo("trilReqTrilhaId");
+  if (!contexto || !trilhaId) { mostrarToast("Escolha onde se aplica e informe o Id da trilha exigida.", "erro"); return; }
+  const data = await postarTrilhas("requisitos", {
+    contexto, alvo: document.getElementById("trilReqAlvo").value.trim(), trilhaId, modo: document.getElementById("trilReqModo").value
+  });
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarRequisitosTrilhasAcao();
+}
+
+async function removerRequisitoTrilhaAcao(requisitoId) {
+  if (!confirm("Remover este requisito? O fluxo volta a não exigir essa formação.")) return;
+  const data = await postarTrilhas("requisitos/remover", { requisitoId });
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarRequisitosTrilhasAcao();
+}
+
+async function conferirRequisitoAcao() {
+  const contexto = document.getElementById("trilReqContexto").value, membroId = numeroDoCampo("trilConfMembroId");
+  const container = document.getElementById("painelConferenciaRequisito");
+  if (!contexto || !membroId) { mostrarToast("Escolha o contexto (acima) e informe a matrícula da pessoa.", "erro"); return; }
+  const alvo = encodeURIComponent(document.getElementById("trilReqAlvo").value.trim());
+  const res = await fetchProtegido(`${API_BASE}/trilhas/requisitos/avaliar?contexto=${contexto}&alvo=${alvo}&membroId=${membroId}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  const a = data.avaliacao;
+  if (!a.temRequisitos) { container.innerHTML = "<p class='subtitle'>Nenhum requisito configurado para este contexto/alvo — a pessoa não precisa de formação específica aqui.</p>"; return; }
+  container.innerHTML = `<p><strong>${a.bloqueado ? "⛔ NÃO cumpre (bloqueia)" : "✅ Cumpre"}</strong></p>
+    <ul>${a.avaliacoes.map(x => `<li>${x.ok ? "✅" : (x.modo === "BLOQUEIA" ? "⛔" : "⚠️")} Trilha "${escaparHtmlEbd(x.trilhaNome)}": ${escaparHtmlEbd(x.detalhe)} <span class="subtitle">(${x.modo === "BLOQUEIA" ? "bloqueia" : "só alerta"})</span></li>`).join("")}</ul>`;
+}
+
+// -- Pendências de validade --
+async function carregarPendenciasTrilhasAcao() {
+  const container = document.getElementById("painelPendenciasTrilhas");
+  const cong = numeroDoCampo("trilPendCongregacao");
+  const res = await fetchProtegido(`${API_BASE}/trilhas/pendencias${cong ? `?congregacaoId=${cong}` : ""}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  container.innerHTML = data.pendencias.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Pessoa</th><th>Congregação</th><th>Trilha</th><th>Válido até</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${data.pendencias.map(p => `<tr><td>${escaparHtmlEbd(p.membroNome)} <span class="subtitle">(#${p.membroId})</span></td><td>${escaparHtmlEbd(p.congregacaoNome || "—")}</td>
+          <td>${escaparHtmlEbd(p.trilhaNome)}</td><td>${formatarDataEbd(p.validoAte)}</td>
+          <td>${p.situacao === "VENCIDA" ? `🔴 Vencida há ${Math.abs(p.diasParaVencer)} dia(s)` : `🟠 Vence em ${p.diasParaVencer} dia(s)`}</td>
+          <td>${p.renovacaoEmAndamento ? "🔄 renovação em andamento" : ""}</td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum certificado vencido ou perto de vencer dentro do seu escopo. ✅</p>";
+}
+
+// -- Minha Formação (autoatendimento, Meu Painel) --
+async function carregarMinhaFormacaoAcao() {
+  const container = document.getElementById("resultadoMinhaFormacao");
+  const [resF, resC] = await Promise.all([fetchProtegido(`${API_BASE}/trilhas/minha-formacao`), fetchProtegido(`${API_BASE}/certificados`)]);
+  const data = await resF.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  const certs = await resC.json();
+  certificadosCache = certs.sucesso === false ? [] : (certs.certificados || []);
+  if (!data.formacao.length) { container.innerHTML = "<p class='subtitle'>Você ainda não iniciou nenhuma trilha de formação.</p>"; return; }
+  container.innerHTML = data.formacao.map(f => {
+    const cert = f.certificado;
+    const vencimento = f.situacao === "VENCENDO" ? `<p style="color:var(--cor-erro);">⚠️ Seu certificado vence em ${f.diasParaVencer} dia(s) (${formatarDataEbd(f.validoAte)}) — procure a Secretaria para renovar a formação.</p>`
+      : (f.situacao === "VENCIDA" ? `<p style="color:var(--cor-erro);">⛔ Este certificado venceu em ${formatarDataEbd(f.validoAte)}. Algumas funções podem exigir a formação vigente — procure a Secretaria para renovar.</p>` : "");
+    return `<div class="cartao-area-ebd" style="margin-bottom:12px;">
+      <h5>🎓 ${escaparHtmlEbd(f.trilhaNome)} <span class="subtitle">(matrícula #${f.matriculaId})</span></h5>
+      <p>${ROTULO_SITUACAO_TRILHA[f.situacao] || f.situacao} · ${f.obrigatoriosConcluidos}/${f.obrigatoriosTotal} módulos obrigatórios${f.validoAte ? ` · válido até ${formatarDataEbd(f.validoAte)}` : (f.status === "CONCLUIDA" ? " · não vence" : "")}</p>
+      ${vencimento}
+      ${cert ? `<p>Certificado <code>${escaparHtmlEbd(cert.codigoVerificacao || "")}</code>${cert.revogadoEm ? " — <strong>revogado</strong>" : ""}</p>
+        <button class="btn-link" onclick="imprimirCertificado(${cert.certificadoId})">🖨️ Imprimir</button>
+        <button class="btn-link" onclick="baixarPdfCertificado(${cert.certificadoId}, ${f.membroId})">📄 Baixar PDF</button>
+        ${cert.codigoVerificacao ? `<button class="btn-link" onclick="copiarLinkVerificacaoAcao('${escaparHtmlEbd(cert.codigoVerificacao)}')">🔗 Copiar link de verificação</button>` : ""}` : ""}
+    </div>`;
+  }).join("");
 }
 
 // ---- Revistas e pedidos (v6.6) ----

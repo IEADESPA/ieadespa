@@ -21,6 +21,7 @@
 // mesmo padrão de shared/escalas.js (v5.6).
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
+const trilhas = require("./trilhas");
 
 // Ordem fixa e obrigatória da esteira. Antecedentes/Treinamento são
 // carimbados por atestação manual até a v7.7 existir de verdade (upload de
@@ -245,6 +246,15 @@ async function concluirEtapa(pool, { habilitacaoId, etapa, registradoPorMembroId
 
   const validacao = podeConcluirEtapa(hab, etapa);
   if (!validacao.permitido) return { sucesso: false, mensagem: validacao.mensagem };
+
+  // v6.9 — o treinamento deixa de ser só "atestação manual" quando há uma
+  // trilha exigida (TrilhaRequisitos, contexto HABILITACAO_TREINAMENTO):
+  // a etapa só é carimbada se a formação estiver vigente. Sem requisito
+  // configurado, continua a atestação manual de sempre.
+  if (etapa === "TREINAMENTO") {
+    const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "HABILITACAO_TREINAMENTO", membroId: hab.membroId });
+    if (formacao.bloqueado) return { sucesso: false, mensagem: formacao.mensagemBloqueio };
+  }
 
   const campo = CAMPO_ETAPA[etapa];
   const agora = new Date();

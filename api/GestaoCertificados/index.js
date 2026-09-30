@@ -24,6 +24,10 @@ function temGestao(usuario) {
   return !!(usuario.permissoes && usuario.permissoes.includes("ebd_gestao"));
 }
 
+function temGestaoFormacao(usuario) {
+  return !!(usuario.permissoes && usuario.permissoes.includes("trilhas_gestao"));
+}
+
 module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
   if (!usuario) return;
@@ -43,12 +47,27 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // v6.9 — revogação (anti-fraude/erro de emissão). Quem emite certificado
+    // (ebd_gestao, v6.5) ou administra trilhas (trilhas_gestao) pode revogar; o
+    // certificado continua existindo e baixável, mas a verificação pública passa
+    // a dizer REVOGADO e a formação deixa de valer como requisito.
+    if (acao === "revogar" && metodo === "POST") {
+      if (!temGestao(usuario) && !temGestaoFormacao(usuario)) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
+      const { certificadoId, motivo } = req.body || {};
+      if (!certificadoId) return erro(context, 400, "Informe certificadoId.");
+      const resultado = await certificados.revogarCertificado(pool, { certificadoId: Number(certificadoId), motivo, revogadoPorMembroId: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
+    }
+
     if (!acao && metodo === "GET") {
       const membroId = Number((req.query && req.query.membroId) || usuario.membroId);
-      if (membroId !== usuario.membroId && !temGestao(usuario)) {
-        return erro(context, 403, "Só é possível ver os certificados de outra pessoa com a permissão de gestão da EBD.");
+      if (membroId !== usuario.membroId && !temGestao(usuario) && !temGestaoFormacao(usuario)) {
+        return erro(context, 403, "Só é possível ver os certificados de outra pessoa com a permissão de gestão da EBD ou da formação.");
       }
-      const lista = await certificados.listarCertificadosMembro(pool, membroId);
+      // O selo de integridade é interno (só serve à verificação pública): a API
+      // diz apenas se existe.
+      const lista = (await certificados.listarCertificadosMembro(pool, membroId)).map(({ hashIntegridade, ...c }) => ({ ...c, temSelo: !!hashIntegridade }));
       context.res = { status: 200, body: { sucesso: true, certificados: lista } };
       return;
     }

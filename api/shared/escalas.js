@@ -11,6 +11,7 @@
 // ser testável sem Azure SQL; as funções que tocam o banco ficam ao final,
 // bem mais finas, só orquestrando o que já foi decidido aqui.
 const { sql } = require("./db");
+const trilhas = require("./trilhas");
 
 const STATUS_ALOCACAO_ATIVOS = ["CONVIDADO", "ACEITO", "CONFIRMADO"];
 
@@ -143,11 +144,21 @@ function validarTroca({ servicoId, equipeId, membroDestinoId, dataServico, indis
 // ---------------------------------------------------------------
 
 async function buscarCandidatosDaEquipe(pool, equipeId, dataServico) {
-  const membros = (await pool.request().input("equipeId", sql.Int, equipeId).query(`
+  const todos = (await pool.request().input("equipeId", sql.Int, equipeId).query(`
     SELECT em.MembroId AS membroId, em.FrequenciaPreferidaDias AS frequenciaPreferidaDias
     FROM EscalasEquipeMembros em
     WHERE em.EquipeId = @equipeId AND em.Ativo = 1
   `)).recordset;
+
+  // v6.9 — "não bloqueia culto, mas bloqueia escala onde a norma exigir":
+  // a equipe pode exigir uma trilha de formação vigente (TrilhaRequisitos,
+  // contexto ESCALA_EQUIPE, alvo = EquipeId, modo BLOQUEIA). Quem não a tem
+  // nem entra na sugestão do auto-escalador nem no convite em cadeia. Sem
+  // requisito configurado, a equipe inteira segue elegível como sempre.
+  const { atendem } = await trilhas.filtrarMembrosQueAtendem(pool, {
+    contexto: "ESCALA_EQUIPE", alvoChave: String(equipeId), membroIds: todos.map(m => m.membroId)
+  });
+  const membros = todos.filter(m => atendem.has(Number(m.membroId)));
 
   const candidatos = [];
   for (const m of membros) {

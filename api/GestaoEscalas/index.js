@@ -29,6 +29,7 @@
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const es = require("../shared/escalas");
+const trilhas = require("../shared/trilhas");
 const { enviarCanaisNotificacao } = require("../shared/notificacaoMotor");
 
 function erro(context, status, mensagem) {
@@ -258,6 +259,9 @@ module.exports = async function (context, req) {
           indisponibilidadesDestino: indisponibilidades, alocacoesDoServico
         });
         if (!validacao.valido) return erro(context, 422, validacao.mensagem);
+        // v6.9 — o destino da troca também precisa atender à formação que a equipe exige.
+        const formacao = await trilhas.filtrarMembrosQueAtendem(pool, { contexto: "ESCALA_EQUIPE", alvoChave: String(alocacao.equipeId), membroIds: [membroDestinoId] });
+        if (formacao.bloqueados.has(Number(membroDestinoId))) return erro(context, 422, formacao.bloqueados.get(Number(membroDestinoId)));
         const trocaId = await es.criarTroca(pool, { alocacaoOrigemId, membroDestinoId, solicitadaPorMembroId: usuario.membroId });
         context.res = { status: 201, body: { sucesso: true, trocaId, mensagem: "✅ Pedido de troca enviado ao líder da equipe." } };
         return;

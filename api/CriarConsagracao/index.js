@@ -4,6 +4,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const trilhas = require("../shared/trilhas");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "consagracoes");
@@ -20,6 +21,15 @@ module.exports = async function (context, req) {
   const membroResult = await pool.request().input("id", sql.Int, membroId).query(`SELECT Funcao FROM MembroReferencia WHERE MembroId = @id`);
   if (membroResult.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada. Cadastre a pessoa antes." } };
+    return;
+  }
+
+  // v6.9 — formação exigida para este tipo de consagração (TrilhaRequisitos,
+  // contexto CONSAGRACAO, alvo = o "Assunto"). Sem requisito configurado,
+  // nada muda; com requisito BLOQUEIA, o processo nem é protocolado.
+  const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "CONSAGRACAO", alvoChave: assunto, membroId });
+  if (formacao.bloqueado) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: formacao.mensagemBloqueio, formacao } };
     return;
   }
 
@@ -56,6 +66,6 @@ module.exports = async function (context, req) {
   context.res = {
     status: 201,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: true, mensagem: "✅ Processo protocolado e enviado para a Secretaria.", consagracao }
+    body: { sucesso: true, mensagem: "✅ Processo protocolado e enviado para a Secretaria.", consagracao, alertasFormacao: formacao.alertas }
   };
 };

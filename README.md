@@ -4230,8 +4230,11 @@ fechada — é retrofit, não reabertura.
       administra o processo); (IV) conclusão do Curso de Discipulado —
       **atestação manual até a v6.9 existir de verdade** (trilha de
       formação como entidade real), documentado no próprio retorno da API
-      (`"Atestado manualmente — a v6.9 vai verificar isso de verdade"`) e
-      registrado como pendência na v6.9 (ver lá) — não fabricado aqui.
+      e registrado como pendência na v6.9 — não fabricado aqui. *(v6.9:
+      entregue — quando uma trilha é configurada como requisito
+      `BATISMO_DISCIPULADO`, o item é verificado pela conclusão real e a
+      atestação manual deixa de valer; sem trilha configurada, continua
+      manual, dito no retorno. Ver v6.9.)*
 - [x] **Aceite eletrônico do Estatuto e do Regimento** (§2º, V,
       `shared/batismo.js::registrarAceiteEstatuto`): reaproveita a MESMA
       tabela/trilha de hash de `TermosAssinados` (vB.6) — texto fixo,
@@ -5734,7 +5737,9 @@ sequencial** — e ela é pré-requisito de tudo que envolve menores (v7.7).
   igual à v086 tratou "conclusão do Discipulado" como atestação manual até
   a v6.9 existir — aqui são carimbadas por atestação manual de quem
   administra, até a v7.7 substituir isso por upload de certidão com
-  validade real; (2) "vencido" precisava de uma janela que o pedido não
+  validade real *(v6.9: o Treinamento já pode ser verificado por trilha —
+  requisito `HABILITACAO_TREINAMENTO`; Antecedentes segue manual até a
+  v7.7)*; (2) "vencido" precisava de uma janela que o pedido não
   define — adotados **24 meses** de validade do "apto" a partir da
   conclusão da esteira, no meio do intervalo de 2 a 3 anos que a própria
   v7.7 cita como padrão internacional pra treinamento de proteção
@@ -6900,22 +6905,189 @@ dá, pela primeira vez, série histórica comparável entre congregações.
 
 #### v6.9 — Trilhas de formação e certificação verificável *(7ª rodada)*
 
-- [ ] **Trilha por papel** (professor de EBD, diácono, tesoureiro local,
+- [x] **Trilha por papel** (professor de EBD, diácono, tesoureiro local,
       dirigente, secretário): módulos, pré-requisitos, progresso individual.
-- [ ] Conclusão de trilha como **pré-requisito verificado** nos fluxos que já
+- [x] Conclusão de trilha como **pré-requisito verificado** nos fluxos que já
       existem — consagração (v8.3), nomeação de liderança (v0.1), habilitação de
       voluntário (v5.7). Deixa de ser "a gente sabe que fulano fez o curso".
-- [ ] Certificado com **QR de verificação pública** — qualquer pessoa confere a
+- [x] Certificado com **QR de verificação pública** — qualquer pessoa confere a
       autenticidade sem login, mesmo mecanismo da credencial ministerial (v8.4).
-- [ ] Educação continuada com validade: certificado vence, e o vencimento
+- [x] Educação continuada com validade: certificado vence, e o vencimento
       aparece como pendência (não bloqueia culto, mas bloqueia escala onde a
       norma exigir). *(referência: Lifeway Ministry Grid, RightNow Media, Rock RMS LMS)*
-- [ ] **Integração com a Esteira de Batismo (vB.11)**: o item IV da aptidão
+- [x] **Integração com a Esteira de Batismo (vB.11)**: o item IV da aptidão
       (Art. 80 §2º, conclusão do Curso de Discipulado) hoje é uma atestação
       MANUAL (`CandidatosBatismo.DiscipuladoConcluidoManual`, marcada por
       quem administra o processo, sem verificação própria) — quando esta
       versão existir, `shared/batismo.js::calcularAptidaoBatismo` troca essa
       leitura por conclusão real de trilha, sem tocar no resto do fluxo.
+
+  Implementado: migração 110 (`sql/migrations/110_trilhas_formacao.sql`),
+  `shared/trilhas.js` (lógica pura + banco), `GestaoTrilhas`
+  (`/api/trilhas/...`), evolução de `shared/certificados.js` (o certificado da
+  v6.5 ganhou código, validade, selo e revogação), `VerificarCertificado`
+  (rota **pública**), `CertificadoQr` e QR no PDF, e os encaixes em seis
+  fluxos. Frontend: aba "Formação" (módulo novo), "Minha Formação" no Meu
+  Painel, a página pública `app/verificar.html` e as telas de certificado da
+  EBD estendidas (código, situação, revogar, QR na impressão).
+
+  **O que é (e o que não é) uma trilha.** `Trilhas` → `TrilhaModulos`, com
+  pré-requisito entre módulos (da mesma trilha e de ordem menor — sem ciclo
+  por construção) e entre trilhas ("Dirigente" exige "Discipulado"; ciclo
+  direto ou indireto é recusado). O papel (`PapelAlvo`) é só um rótulo.
+  **A migração não semeia nenhuma trilha nem módulo**: o conteúdo curricular
+  é decisão da igreja, e inventar um currículo de diácono ou de tesoureiro
+  aqui seria chutar. A entrega é a máquina, vazia e pronta.
+
+  **Progresso é sempre calculado, nunca digitado.** `calcularProgresso`
+  deriva de módulos, pré-requisitos e conclusões: cada módulo é `CONCLUIDO`,
+  `DISPONIVEL` ou `BLOQUEADO` (dizendo qual módulo falta); módulo opcional
+  não conclui a trilha; módulo desativado sai do cálculo e deixa de travar
+  quem dependia dele; trilha sem módulo obrigatório não aceita matrícula.
+  Quem registra a conclusão de um módulo é quem tem a permissão (não existe
+  autoinscrição nem prova online — isso seria um LMS, e a v8.7 já trata o
+  seminário como sistema acadêmico). Ao concluir o **último módulo
+  obrigatório**, a matrícula se conclui **sozinha** (status, data, validade
+  calculada a partir da trilha) e o certificado é emitido, com a carga
+  horária e os módulos na descrição. A matrícula não é única por pessoa e
+  trilha (há renovação); única é a **em andamento** — índice filtrado, a
+  mesma lição da Trava 6-A.
+
+  **Validade e situação (itens 4 e 5 do checklist de educação continuada).**
+  `Trilhas.ValidadeMeses` (vazio = não vence) e `AvisoDias` (padrão 60). A
+  situação — `EM_ANDAMENTO`, `VIGENTE`, `VENCENDO`, `VENCIDA`, `REVOGADA`,
+  `CANCELADA` — é **calculada na leitura**, sem job, como a habilitação de
+  voluntário (v5.7). No próprio dia da validade o certificado ainda vale; no
+  dia seguinte vence; 31/jan + 1 mês dá 28/fev (teto do mês). Vencendo
+  **cumpre o requisito, mas avisa**; vencida, revogada ou cancelada **não
+  cumpre**. Quem renova abre nova matrícula (só dá se a anterior não estiver
+  vigente): vale a melhor matrícula da trilha, e a antiga sai das pendências.
+  O vencimento aparece como pendência em três lugares: a lista
+  "Pendências de validade" (por escopo territorial), o aviso em "Minha
+  Formação" e uma notificação do motor da vB.2 (regra `FORMACAO_VENCENDO`, um
+  detector e uma linha de dado): o aviso "vence em N dias" e o "venceu" são
+  fatos distintos — o segundo usa o id da matrícula **negativo** como chave de
+  deduplicação, já que a deduplicação de `criarNotificacao` deixa passar um
+  aviso por chave.
+
+  **Requisitos: onde a formação é exigida (itens 2 e 4).** `TrilhaRequisitos`
+  diz "esta trilha, vigente, é exigida neste contexto", com modo `BLOQUEIA`
+  (impede) ou `ALERTA` (só avisa — "não bloqueia culto, mas bloqueia escala
+  onde a norma exigir"). **Nasce vazio: enquanto ninguém configurar, nenhum
+  fluxo muda** — e isso foi conferido fluxo a fluxo (cada um passa sem
+  requisito e só então passa a exigir). Seis contextos, um quadro só em vez
+  de uma coluna nova em cada tabela:
+
+  | Contexto | Alvo | Onde é aplicado |
+  | --- | --- | --- |
+  | `CONSAGRACAO` | nome do tipo (o "Assunto") | `CriarConsagracao` e **cada** `AVANCAR` de `EvoluirConsagracao` |
+  | `LIDERANCA` | Id do papel | nomeação, troca de papel e renovação de mandato (individual e em lote) |
+  | `HABILITACAO_TREINAMENTO` | — | etapa TREINAMENTO da habilitação de voluntário (v5.7) |
+  | `BATISMO_DISCIPULADO` | — | item IV da aptidão de batismo (vB.11) |
+  | `ESCALA_EQUIPE` | Id da equipe | sugestão do auto-escalador, convite em cadeia e troca |
+  | `EBD_PROFESSOR` | — | designação de professor de turma |
+
+  Decisões finas: (1) a consagração é **reavaliada a cada avanço**, não só no
+  protocolo — um certificado que vence ou é revogado no meio do processo
+  trava a etapa seguinte (`REPROVAR` nunca é bloqueado); a esteira v8.3 ainda
+  não existe, então o encaixe é na esteira atual (`CriarConsagracao`/
+  `EvoluirConsagracao`), e a v8.3 só precisa chamar o mesmo
+  `avaliarRequisitos`. (2) Na liderança, só trocar a **senha** de quem já tem
+  o mesmo papel **não** reavalia a formação: redefinir senha não pode ficar
+  preso a um certificado vencido. (3) No batismo, com trilha configurada a
+  atestação manual deixa de valer **e** a rota que a grava passa a recusar
+  (ninguém marca algo que o cálculo ignora); sem trilha, segue manual, dito
+  no retorno. (4) Requisito **não é retroativo**: quem já leciona, já é líder
+  ou já está na escala não é removido — a regra vale para a próxima
+  designação, nomeação ou avanço. (5) Escala: quem não cumpre requisito
+  `BLOQUEIA` sai da sugestão e do convite em cadeia; em modo `ALERTA` ninguém
+  sai.
+
+  **Certificado verificável (item 3).** O certificado é o **mesmo** da v6.5
+  (`CertificadosEmitidos`, migração 110 só acrescenta colunas): o manual da
+  EBD também passa a ter código, e os já emitidos ganharam um na migração
+  (hexadecimal de 16 caracteres, sem selo — a verificação os marca
+  `SEM_SELO`). O **código** (16 caracteres de um alfabeto sem I, O, 0 e 1,
+  ~80 bits) é um segredo portador: quem tem o código confere sem login;
+  ninguém lista nem adivinha certificados. O **selo de integridade** é um
+  hash de código, titular, título, data e validade, recalculado a cada
+  verificação: se alguém alterar a validade ou o titular direto no banco, a
+  verificação acusa `INTEGRIDADE_FALHOU` **sem exibir nenhum dado do
+  registro**. A **revogação** (anti-fraude/erro de emissão; exige motivo)
+  mantém o certificado baixável, mas o PDF leva a tarja "REVOGADO" e a
+  verificação diz `REVOGADO`; revogar também tira o valor da formação como
+  requisito. `ebd_gestao` ou `trilhas_gestao` revogam.
+
+  **Verificação pública** (`GET /api/verificacao-certificado/{codigo}` e a
+  página `verificar.html`, que o QR abre): responde `VALIDO`, `VENCIDO`,
+  `REVOGADO`, `INTEGRIDADE_FALHOU` ou `NAO_ENCONTRADO`. **Privacidade:** só o
+  que já está impresso no certificado (nome, título, protocolo, datas) — nunca
+  matrícula, congregação, quem emitiu nem o motivo da revogação. "Não
+  encontrado" e "código de formato inválido" respondem o mesmo 404 (a rota
+  não serve de oráculo de formato); sem cache e sem indexação. A página é
+  autônoma (não carrega o app, sem cookie nem armazenamento local, e só usa
+  `textContent`), e o service worker **não a intercepta** — senão a URL, que
+  carrega o código, ficaria guardada no cache de um aparelho compartilhado.
+  **O mecanismo é definido aqui para a credencial ministerial (v8.4)
+  reaproveitar**: o texto do README falava em "mesmo mecanismo da v8.4", mas
+  a v8.4 ainda não existe, então foi esta versão que o criou (código, selo,
+  `certificadoQr.js` e a rota pública).
+
+  **QR:** matriz calculada pela biblioteca `qrcode` (MIT — nova dependência
+  de `api/`; só o cálculo, nada de PNG) e desenhada em **vetor**, no PDF
+  (pdfkit) e em SVG para a impressão do navegador (`CertificadoQr`, mesmo
+  modelo de autoatendimento do PDF: só a própria matrícula). O QR carrega
+  apenas a URL pública com o código.
+
+  **Permissões.** `trilhas_gestao` (nova, nunca concedida a papel nenhum). Em
+  duas camadas: **catálogo e requisitos** mudam a regra da igreja inteira e
+  exigem **escopo global** (um secretário local com a permissão não cria
+  requisito que trava a consagração de todo mundo); **matricular, registrar
+  conclusão, cancelar, reemitir certificado e ver a formação de alguém** exigem
+  só que a pessoa esteja no escopo de quem age (membro sem congregação só por
+  escopo global). Ler o catálogo e a **própria** formação é aberto a qualquer
+  login.
+
+  Testado com `npx jest`: 62 testes novos (39 em `trilhas.test.js` — catálogo,
+  pré-requisitos sem ciclo, progresso, validade, situação, requisitos —, 20 em
+  `certificadosVerificaveis.test.js` — código, selo, verificação pública,
+  revogação, QR — e 3 no `batismo.test.js`, que também teve os testes antigos
+  ajustados: a aptidão agora consulta os requisitos de trilha) — suíte
+  completa em 656/656 (42 suítes; era 594/40).
+
+  **Verificado contra banco de verdade (30/09).** Mesmo método da v6.8 (roteiro
+  descartável, não versionado, contra `ieadespa-homolog`, dados fictícios
+  removidos no fim): a migração 110 aplica em 21 batches e **153 verificações
+  passaram** — backfill dos certificados antigos pelo próprio arquivo da
+  migração; catálogo e pré-requisitos (inclusive ciclo e escopo global);
+  matrícula, conclusão e emissão automática; **duas requisições simultâneas
+  para o último módulo geram exatamente 1 conclusão e 1 certificado** (e nenhum
+  erro 500); reparo de matrícula concluída sem certificado; verificação pública
+  em todos os estados, incluindo o selo quebrado por adulteração direta na
+  tabela; revogação no meio de uma consagração; vencendo → vencida → renovação
+  (inclusive com o pré-requisito revogado e refeito); pendências e detector de
+  notificação; e **cada um dos seis encaixes, com e sem requisito** (o "sem"
+  prova que nada muda). As funções de renderização do front rodaram num DOM
+  simulado com o JSON da API, junto com a página pública: 59 verificações,
+  incluindo o escape de HTML.
+
+  **Registrado, não construído, por decisão:**
+
+  - Conteúdo curricular: nenhuma trilha é semeada (ver acima).
+  - Não há upload de comprovante nem nota por módulo: a conclusão é um registro
+    de quem tem permissão. A v8.7 trata o lado acadêmico.
+  - A rota pública não tem limite de taxa (não existe utilitário no `api/`, e
+    estado em memória não serve em Functions com várias instâncias); o código de
+    ~80 bits torna a enumeração inviável. Para revisar na Trava 6-B, junto com o
+    custo de consultas anônimas ao banco.
+  - A validade operacional mora na matrícula; o selo protege o que a
+    verificação pública mostra. Quem tem escrita direta no banco pode mexer na
+    matrícula — o mesmo que já vale para o resto do sistema.
+  - A notificação de vencimento vai para quem tem `trilhas_gestao`, sem filtro
+    territorial (como os demais detectores da vB.2); o filtro por escopo está na
+    tela de pendências.
+  - O nome do titular aparece a quem tiver o código (é o que está impresso no
+    papel); retenção e anonimização de certificados entram na Trava 6-B.
 
 #### v6.10 — Sala de aula assistida e material *(7ª rodada)*
 

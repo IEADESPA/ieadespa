@@ -23,6 +23,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const trilhas = require("../shared/trilhas");
 
 // Níveis da Governança Escalonada aceitos como escopo de acesso.
 const ESCOPO_TIPOS_VALIDOS = ["GLOBAL", "EXTENSAO", "CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO", "DEPARTAMENTO"];
@@ -45,10 +46,21 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
   if (papel.recordset.length === 0) {
     return { sucesso: false, mensagem: "Papel inválido." };
   }
-  const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT LiderancaId FROM Lideranca WHERE MembroId = @id`);
+  const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT LiderancaId, PapelId FROM Lideranca WHERE MembroId = @id`);
   const jaTemAcesso = existente.recordset.length > 0;
   if (!jaTemAcesso && !senha) {
     return { sucesso: false, mensagem: "Defina uma senha para o primeiro acesso desta pessoa." };
+  }
+
+  // v6.9 — formação exigida para este papel (TrilhaRequisitos, contexto
+  // LIDERANCA, alvo = PapelId). Vale para nomeação nova, troca de papel e
+  // renovação de mandato (duracaoMeses). NÃO vale para só trocar a senha ou o
+  // escopo de quem já tem o mesmo papel: redefinir senha não pode ficar
+  // preso a um certificado vencido.
+  const mesmoPapel = jaTemAcesso && Number(existente.recordset[0].PapelId) === Number(papelId);
+  if (!mesmoPapel || duracaoMeses) {
+    const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "LIDERANCA", alvoChave: String(papelId), membroId });
+    if (formacao.bloqueado) return { sucesso: false, mensagem: formacao.mensagemBloqueio };
   }
 
   if (jaTemAcesso) {

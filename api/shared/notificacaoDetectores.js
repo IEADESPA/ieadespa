@@ -9,6 +9,7 @@
 // Registrar uma regra nova = 1 linha em NotificacaoRegras (migração) + 1
 // entrada aqui. O motor em si (AvaliarNotificacoes) não muda.
 const { sql } = require("./db");
+const trilhas = require("./trilhas");
 
 // Seguros (v4.16) — mesma janela de 30 dias e mesmo critério de "vencida"
 // que GET /api/seguros/alertas já usa.
@@ -81,11 +82,32 @@ async function detectarConfirmacaoEscalaPendente(pool) {
   }));
 }
 
+// Educação continuada (v6.9) — certificado de trilha vencido ou dentro da
+// janela de aviso da trilha (Trilhas.AvisoDias, padrão 60 dias). Reaproveita
+// a MESMA leitura que a tela de pendências usa (shared/trilhas.js), com
+// escopo "tudo" (a rodada diária varre todas as congregações pra quem tem
+// `trilhas_gestao`). A chave de deduplicação é o id da matrícula: VENCENDO
+// usa o id positivo e VENCIDA o NEGATIVO — assim o aviso "vence em breve" e
+// o aviso "venceu" são dois fatos geradores distintos (a deduplicação de
+// criarNotificacao só deixa passar um aviso por chave).
+async function detectarFormacaoVencendo(pool) {
+  const pendencias = await trilhas.listarPendenciasVencimento(pool);
+  return pendencias
+    .filter(p => !p.renovacaoEmAndamento)
+    .map(p => ({
+      referenciaId: p.situacao === "VENCIDA" ? -p.matriculaId : p.matriculaId,
+      fatoGerador: p.situacao === "VENCIDA"
+        ? `O certificado de ${p.membroNome} na trilha "${p.trilhaNome}" VENCEU em ${trilhas.formatarDataBr(p.validoAte)}${p.congregacaoNome ? ` (${p.congregacaoNome})` : ""}.`
+        : `O certificado de ${p.membroNome} na trilha "${p.trilhaNome}" vence em ${trilhas.formatarDataBr(p.validoAte)} (${p.diasParaVencer} dia(s))${p.congregacaoNome ? ` (${p.congregacaoNome})` : ""}.`
+    }));
+}
+
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
   PRESTACAO_CONTAS_ATRASADA: { tabela: "PrestacoesContas", detectar: detectarPrestacaoContasAtrasada },
   REPASSE_MALOTE_PARADO: { tabela: "RepassesInstitucionais", detectar: detectarRepasseMaloteParado },
-  ESCALA_CONFIRMACAO_PENDENTE: { tabela: "EscalasAlocacoes", detectar: detectarConfirmacaoEscalaPendente }
+  ESCALA_CONFIRMACAO_PENDENTE: { tabela: "EscalasAlocacoes", detectar: detectarConfirmacaoEscalaPendente },
+  FORMACAO_VENCENDO: { tabela: "TrilhaMatriculas", detectar: detectarFormacaoVencendo }
 };
 
 module.exports = { DETECTORES };

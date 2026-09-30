@@ -15,6 +15,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const trilhas = require("../shared/trilhas");
 
 const PROXIMA_ETAPA_CONSAGRACAO = {
   PROTOCOLADO: "EM_ANALISE_CONSELHO",
@@ -57,6 +58,15 @@ module.exports = async function (context, req) {
     const novoStatus = PROXIMA_ETAPA_CONSAGRACAO[atual.status];
     if (!novoStatus) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Este processo já está em CONCLUIDO." } };
+      return;
+    }
+
+    // v6.9 — a formação exigida é reavaliada a CADA avanço, não só no
+    // protocolo: um certificado que venceu ou foi revogado no meio do
+    // processo trava a etapa seguinte. REPROVAR (acima) nunca é bloqueado.
+    const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "CONSAGRACAO", alvoChave: atual.assunto, membroId: atual.membroId });
+    if (formacao.bloqueado) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: formacao.mensagemBloqueio, formacao } };
       return;
     }
 

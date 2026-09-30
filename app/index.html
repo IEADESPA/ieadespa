@@ -108,6 +108,7 @@
             <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" onclick="mostrarSubAbaMeupainel('minhasescalas')"><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" onclick="mostrarSubAbaMeupainel('minhahabilitacao')"><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" onclick="mostrarSubAbaMeupainel('minhasconquistas')"><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" onclick="mostrarSubAbaMeupainel('minhaformacao')"><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" onclick="mostrarSubAbaMeupainel('seguranca')"><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
@@ -276,6 +277,16 @@
           <div class="grupo-modulo" id="grupoModuloConquistas" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaConquistas" onclick="mostrarAbaSecretaria('conquistas')"><span class="icone">🏆</span><span class="rotulo">Conquistas</span></button>
+          </div>
+
+          <!-- MÓDULO: FORMAÇÃO E CERTIFICAÇÃO (v6.9) — trilhas por papel,
+               certificado verificável e formação exigida nos fluxos.
+               Permissão própria "trilhas_gestao", nunca concedida por
+               padrão. A formação pessoal fica em Meu Painel → Minha
+               Formação, aberta a qualquer matrícula. -->
+          <div class="grupo-modulo" id="grupoModuloTrilhas" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaTrilhas" onclick="mostrarAbaSecretaria('trilhas')"><span class="icone">🎓</span><span class="rotulo">Formação</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -645,6 +656,20 @@
           <p class="subtitle">Acompanhe sua esteira de habilitação como voluntário — ficha de inscrição,
             referências, entrevista, antecedentes, treinamento e termo assinado, nessa ordem.</p>
           <div id="resultadoMinhaHabilitacao"></div>
+        </div>
+
+        <!-- SUB-ABA: MINHA FORMAÇÃO (v6.9 — Trilhas de formação e
+             certificação verificável). Autoatendimento, aberto a qualquer
+             matrícula: as próprias trilhas, o progresso, a validade dos
+             certificados e o link/QR de verificação pública. -->
+        <div id="subMeupainelMinhaformacao" class="sub-aba-secretaria" style="display:none;">
+          <h3>🎓 Minha Formação</h3>
+          <p class="subtitle">Suas trilhas de formação: o que você já concluiu, o que está em andamento e
+            <strong>até quando cada certificado vale</strong>. Certificado com validade vence — o aviso aparece
+            aqui antes do vencimento, e algumas funções (nomeação, escala, consagração) podem exigir a
+            formação vigente. Qualquer pessoa confere a autenticidade de um certificado seu, sem login,
+            pelo QR Code ou pelo código impresso nele.</p>
+          <div id="resultadoMinhaFormacao"></div>
         </div>
 
         <!-- SUB-ABA: MINHAS CONQUISTAS (v6.4 — Motor de conquistas e
@@ -2970,6 +2995,126 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarRankingConquistaAdminAcao()">🏅 Ver ranking</button>
         </div>
         <div id="painelRankingConquistaAdmin"></div>
+      </div>
+
+      <!-- ABA: FORMAÇÃO E CERTIFICAÇÃO (v6.9) — administração. Exige
+           "trilhas_gestao". Mexer no catálogo e nos requisitos vale para a
+           igreja inteira (exige escopo global); matricular e registrar
+           conclusão de módulo exigem só o escopo da congregação da pessoa. -->
+      <div id="abaTrilhas" class="aba-secretaria" style="display:none;">
+        <h3>🎓 Formação e certificação</h3>
+        <p class="subtitle">Trilhas por papel (professor de EBD, diácono, tesoureiro local, dirigente,
+          secretário...), com módulos e pré-requisitos. Ao concluir o último módulo obrigatório a matrícula se
+          conclui <strong>sozinha</strong> e o certificado é emitido, com QR de verificação pública e,
+          se a trilha tiver validade, data de vencimento. Em <strong>Requisitos</strong> você define onde uma
+          trilha vigente é exigida (consagração, nomeação, treinamento de voluntário, batismo, escala,
+          professor de EBD) — nasce vazio: enquanto ninguém configurar, nenhum fluxo muda.</p>
+
+        <h4>📚 Catálogo de trilhas</h4>
+        <div class="barra-lista">
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarCatalogoTrilhasAcao()">📂 Ver catálogo</button>
+          <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="trilhasMostrarInativas" onchange="carregarCatalogoTrilhasAcao()" /> incluir desativadas</label>
+        </div>
+        <div id="painelCatalogoTrilhas"></div>
+
+        <details style="margin:8px 0;">
+          <summary>➕ Nova trilha (escopo global)</summary>
+          <div class="barra-lista">
+            <input type="text" id="trilNovaNome" placeholder="Nome (ex: Professor de EBD)" style="min-width:220px;" />
+            <input type="text" id="trilNovaPapel" placeholder="Papel-alvo (ex: PROFESSOR_EBD)" style="min-width:200px;" />
+            <input type="number" id="trilNovaValidade" placeholder="Validade (meses; vazio = não vence)" min="1" max="120" style="max-width:240px;" />
+            <input type="number" id="trilNovaAviso" placeholder="Aviso (dias; padrão 60)" min="0" max="365" style="max-width:180px;" />
+          </div>
+          <textarea id="trilNovaDescricao" placeholder="Descrição (opcional)" rows="2" style="width:100%;"></textarea>
+          <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="criarTrilhaAcao()">💾 Criar trilha</button>
+        </details>
+        <details style="margin:8px 0;">
+          <summary>🧩 Novo módulo de uma trilha (escopo global)</summary>
+          <div class="barra-lista">
+            <input type="number" id="trilModTrilhaId" placeholder="Id da trilha" style="max-width:140px;" />
+            <input type="text" id="trilModTitulo" placeholder="Título do módulo" style="min-width:220px;" />
+            <input type="number" id="trilModCarga" placeholder="Carga horária (h)" step="0.5" min="0" style="max-width:160px;" />
+            <input type="number" id="trilModOrdem" placeholder="Ordem (vazio = no fim)" min="1" style="max-width:170px;" />
+            <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="trilModObrigatorio" checked /> obrigatório</label>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="adicionarModuloTrilhaAcao()">➕ Adicionar módulo</button>
+          </div>
+        </details>
+        <details style="margin:8px 0;">
+          <summary>🔗 Pré-requisitos (módulo→módulo e trilha→trilha)</summary>
+          <p class="subtitle" style="margin:4px 0;">Módulo: o pré-requisito precisa ser da mesma trilha e vir <em>antes</em> (ordem menor).
+            Trilha: só se matricula quem tem a trilha exigida vigente; ciclos são recusados.</p>
+          <div class="barra-lista">
+            <input type="number" id="trilPreModuloId" placeholder="Id do módulo" style="max-width:140px;" />
+            <input type="number" id="trilPreModuloExigeId" placeholder="exige o módulo (Id)" style="max-width:170px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="preRequisitoModuloAcao()">🔗 Módulo exige módulo</button>
+          </div>
+          <div class="barra-lista">
+            <input type="number" id="trilPreTrilhaId" placeholder="Id da trilha" style="max-width:140px;" />
+            <input type="number" id="trilPreTrilhaExigeId" placeholder="exige a trilha (Id)" style="max-width:170px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="preRequisitoTrilhaAcao(false)">🔗 Trilha exige trilha</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="preRequisitoTrilhaAcao(true)">✂️ Remover</button>
+          </div>
+        </details>
+        <details style="margin:8px 0;">
+          <summary>⚙️ Ativar/desativar trilha ou módulo (escopo global)</summary>
+          <div class="barra-lista">
+            <input type="number" id="trilAtivaTrilhaId" placeholder="Id da trilha" style="max-width:140px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="definirTrilhaAtivaAcao(true)">✅ Ativar</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="definirTrilhaAtivaAcao(false)">⛔ Desativar</button>
+          </div>
+          <div class="barra-lista">
+            <input type="number" id="trilAtivoModuloId" placeholder="Id do módulo" style="max-width:140px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="definirModuloAtivoAcao(true)">✅ Ativar módulo</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="definirModuloAtivoAcao(false)">⛔ Desativar módulo</button>
+          </div>
+        </details>
+        <p id="resultadoCatalogoTrilhas" class="subtitle"></p>
+
+        <hr />
+        <h4>🧑‍🎓 Matrículas e progresso</h4>
+        <div class="barra-lista">
+          <input type="number" id="trilMatTrilhaId" placeholder="Id da trilha" style="max-width:140px;" />
+          <input type="number" id="trilMatMembroId" placeholder="Matrícula do membro" style="max-width:180px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="matricularTrilhaAcao()">🎓 Matricular</button>
+        </div>
+        <div class="barra-lista">
+          <input type="number" id="trilFormMembroId" placeholder="Matrícula do membro" style="max-width:180px;" />
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarFormacaoPessoaAcao()">🔍 Ver a formação desta pessoa</button>
+        </div>
+        <div id="painelFormacaoPessoa"></div>
+        <div id="painelMatriculaTrilha"></div>
+        <p id="resultadoMatriculaTrilha" class="subtitle"></p>
+
+        <hr />
+        <h4>📌 Requisitos — onde a formação é exigida</h4>
+        <p class="subtitle" style="margin:4px 0;"><strong>Bloqueia</strong> impede a ação até a pessoa ter a trilha vigente;
+          <strong>Alerta</strong> só avisa (não bloqueia culto). Vencida, revogada ou cancelada não cumpre.
+          Alvo: nome do tipo de consagração (Consagração), Id do papel (Liderança) ou Id da equipe (Escala);
+          deixe em branco nos demais.</p>
+        <div class="barra-lista">
+          <select id="trilReqContexto"></select>
+          <input type="text" id="trilReqAlvo" placeholder="Alvo (se o contexto pedir)" style="min-width:200px;" />
+          <input type="number" id="trilReqTrilhaId" placeholder="Id da trilha exigida" style="max-width:180px;" />
+          <select id="trilReqModo"><option value="BLOQUEIA">Bloqueia</option><option value="ALERTA">Só alerta</option></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="criarRequisitoTrilhaAcao()">📌 Definir requisito</button>
+        </div>
+        <div class="barra-lista">
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarRequisitosTrilhasAcao()">📂 Ver requisitos</button>
+          <input type="number" id="trilConfMembroId" placeholder="Conferir pessoa (matrícula)" style="max-width:220px;" />
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="conferirRequisitoAcao()">🔎 Esta pessoa cumpre o requisito acima?</button>
+        </div>
+        <div id="painelRequisitosTrilhas"></div>
+        <div id="painelConferenciaRequisito"></div>
+
+        <hr />
+        <h4>⏰ Pendências de validade (educação continuada)</h4>
+        <p class="subtitle" style="margin:4px 0;">Certificados vencidos ou dentro da janela de aviso da trilha, dentro do seu escopo.
+          A rotina diária também avisa por notificação quem tem a permissão de formação.</p>
+        <div class="barra-lista">
+          <input type="number" id="trilPendCongregacao" placeholder="Id da congregação (opcional)" style="max-width:220px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPendenciasTrilhasAcao()">⏰ Ver pendências</button>
+        </div>
+        <div id="painelPendenciasTrilhas"></div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

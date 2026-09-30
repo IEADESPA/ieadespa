@@ -12,6 +12,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { calcularAptidaoBatismo, registrarAceiteEstatuto } = require("../shared/batismo");
 const { registrarAceiteClausulaCompromissoria } = require("../shared/mediacaoArbitragem");
+const trilhas = require("../shared/trilhas");
 
 const SELECT_CANDIDATO = `
   SELECT c.CandidatoId AS candidatoId, c.MembroId AS membroId, m.Nome AS nome,
@@ -102,12 +103,21 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "DISCIPULADO_CONCLUIDO") {
+      // v6.9 — com trilha configurada como requisito, a conclusão é VERIFICADA
+      // (shared/batismo.js::calcularAptidaoBatismo); a atestação manual deixa
+      // de valer e de ser aceita, pra ninguém achar que marcou algo que o
+      // cálculo ignora.
+      const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "BATISMO_DISCIPULADO", membroId: candidato.membroId });
+      if (formacao.temRequisitos) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "O discipulado deste fluxo é verificado por trilha de formação — não há atestação manual. Situação atual: " + (formacao.bloqueado ? formacao.mensagemBloqueio : "formação vigente.") } };
+        return;
+      }
       const { concluido } = req.body || {};
       await pool.request().input("id", sql.Int, id).input("concluido", sql.Bit, !!concluido)
         .query(`UPDATE CandidatosBatismo SET DiscipuladoConcluidoManual = @concluido WHERE CandidatoId = @id`);
       context.res = {
         status: 200, headers: { "Content-Type": "application/json" },
-        body: { sucesso: true, mensagem: "✅ Atestação de discipulado registrada (manual — a v6.9 vai verificar isso de verdade)." }
+        body: { sucesso: true, mensagem: "✅ Atestação de discipulado registrada (manual — nenhuma trilha de discipulado está configurada como requisito)." }
       };
       return;
     }

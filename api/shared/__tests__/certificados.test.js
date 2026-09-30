@@ -70,7 +70,9 @@ describe("mapearCertificado (linha do banco -> objeto da API, inclui o vínculo 
     expect(mapeado).toEqual({
       certificadoId: 1, membroId: 42, nome: "Fulano de Tal", titulo: "Conclusão do Curso",
       descricao: "Concluiu o curso com aproveitamento.", conquistaId: null, conquistaNome: null,
-      emitidoPorMembroId: 7, protocolo: "CERT-2026-0001", dataEmissao: "2026-09-19T00:00:00.000Z"
+      emitidoPorMembroId: 7, protocolo: "CERT-2026-0001", dataEmissao: "2026-09-19T00:00:00.000Z",
+      // v6.9 — campos de verificação (todos vazios num certificado antigo sem código)
+      codigoVerificacao: null, validoAte: null, trilhaMatriculaId: null, revogadoEm: null, motivoRevogacao: null, hashIntegridade: null
     });
   });
 

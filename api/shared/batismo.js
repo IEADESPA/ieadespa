@@ -1,12 +1,15 @@
 // shared/batismo.js (vB.11 — Esteira de Batismo, Regimento Art. 80)
 // Aptidão CALCULADA na leitura, nunca marcação manual (mesmo princípio do
-// Art. 7º §1º já usado em todo o resto do sistema) — só o item IV
-// (conclusão do Curso de Discipulado) fica como atestação manual até a
-// v6.9 (trilha de formação como entidade real) existir; documentado no
-// próprio retorno, não escondido atrás de um "ok" genérico.
+// Art. 7º §1º já usado em todo o resto do sistema). O item IV (conclusão do
+// Curso de Discipulado) era atestação manual até a v6.9; agora, quando uma
+// trilha de formação está configurada como requisito (TrilhaRequisitos,
+// contexto BATISMO_DISCIPULADO), o item é VERIFICADO pela conclusão real da
+// trilha. Sem trilha configurada, continua a atestação manual — dita como
+// tal no próprio retorno, não escondida atrás de um "ok" genérico.
 const { sql } = require("./db");
 const estatuto = require("./estatuto");
 const { sha256 } = require("./auditoria");
+const trilhas = require("./trilhas");
 
 const IDADE_MINIMA_BATISMO = 12; // Art. 80 §2º, I
 const MESES_VALIDOS_TURMA = [5, 10]; // maio e outubro, Art. 80 §3º, I
@@ -48,7 +51,11 @@ async function calcularAptidaoBatismo(pool, candidato) {
   const certidaoCivilOk = !precisaCertidaoCivil || (await possuiCasamentoCivilRegistrado(pool, candidato.membroId));
 
   const parecerOk = candidato.parecerVidaPregressa === "FAVORAVEL";
-  const discipuladoOk = !!candidato.discipuladoConcluidoManual;
+  // v6.9 — com trilha configurada, vale a conclusão real (vigente); a
+  // atestação manual só vale quando nenhuma trilha foi configurada.
+  const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "BATISMO_DISCIPULADO", membroId: candidato.membroId });
+  const verificadoPorTrilha = formacao.temRequisitos;
+  const discipuladoOk = verificadoPorTrilha ? !formacao.bloqueado : !!candidato.discipuladoConcluidoManual;
 
   return {
     apto: idadeOk && certidaoCivilOk && parecerOk && discipuladoOk,
@@ -59,7 +66,15 @@ async function calcularAptidaoBatismo(pool, candidato) {
         detalhe: !precisaCertidaoCivil ? "Não se aplica" : (certidaoCivilOk ? "Casamento civil registrado" : "Coabitante (união estável) sem certidão de casamento civil registrada")
       },
       parecerVidaPregressa: { ok: parecerOk, detalhe: candidato.parecerVidaPregressa || "Pendente" },
-      discipulado: { ok: discipuladoOk, detalhe: discipuladoOk ? "Atestado manualmente — a v6.9 vai verificar isso de verdade" : "Pendente" }
+      discipulado: {
+        ok: discipuladoOk,
+        verificadoPorTrilha,
+        detalhe: verificadoPorTrilha
+          ? (discipuladoOk
+              ? "Verificado pela trilha de formação" + (formacao.alertas.length ? ` (atenção: ${formacao.alertas.join("; ")})` : "")
+              : formacao.mensagemBloqueio)
+          : (discipuladoOk ? "Atestado manualmente (nenhuma trilha de discipulado configurada como requisito)" : "Pendente")
+      }
     }
   };
 }

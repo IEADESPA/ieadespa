@@ -27,6 +27,11 @@ self.addEventListener("fetch", (evento) => {
   const url = new URL(evento.request.url);
   if (url.pathname.startsWith("/api/")) return;
   if (evento.request.method !== "GET") return;
+  // v6.9 — a página pública de verificação de certificado nunca passa pelo
+  // cache: a URL carrega o código do certificado, e o cache do aparelho (às
+  // vezes compartilhado) não deve guardá-lo. Também nunca cai no index.html
+  // quando offline: melhor o erro do navegador do que o app no lugar dela.
+  if (url.pathname === "/verificar.html") return;
 
   evento.respondWith(
     fetch(evento.request)

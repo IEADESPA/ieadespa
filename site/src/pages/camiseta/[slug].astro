@@ -92,6 +92,31 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
         {lote.descricao && <p class="pagehead-description">{lote.descricao}</p>}
       </header>
 
+      {
+        (lote.imagem || lote.evento?.cover) && (
+          <div class="mt-6 grid gap-4 sm:grid-cols-2 camiseta-imagens">
+            {lote.imagem && (
+              <img
+                src={directusAssetUrl(lote.imagem, { width: 800, quality: 80, format: "webp" })}
+                alt={`Imagem da campanha ${lote.nome}`}
+                loading="eager"
+                decoding="async"
+                class="camiseta-imagem"
+              />
+            )}
+            {lote.evento?.cover && (
+              <img
+                src={directusAssetUrl(lote.evento.cover, { width: 800, quality: 80, format: "webp" })}
+                alt={`Imagem do evento ${lote.evento.title}`}
+                loading="eager"
+                decoding="async"
+                class="camiseta-imagem"
+              />
+            )}
+          </div>
+        )
+      }
+
       <ul class="mt-6 grid gap-2 text-sm">
         {precosPorTamanhoVariam ? (
           <li>
@@ -396,6 +421,17 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
   <style is:global>
     .camiseta-canvas {
       max-width: 42rem;
+    }
+    .camiseta-imagens {
+      grid-auto-rows: 1fr;
+    }
+    .camiseta-imagem {
+      width: 100%;
+      height: 100%;
+      max-height: 22rem;
+      object-fit: cover;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
     }
     .item-linha {
       border: 1px solid var(--border);

@@ -314,11 +314,14 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   "Consolidado" (só leitura, Fase 31) recalculam e re-renderizam sozinhas, sem aviso — não há o que
   perder ali. Em `/painel-camisetas/` (só listagem desde a Fase 31), sem edição em andamento pra
   proteger, recarrega direto.
-- **Imagem de compartilhamento por campanha (Fase 31)** — `camiseta_grupos.imagem` (mesmo tipo de
-  campo que `eventos.cover`, upload pela aba "Imagem" na edição da campanha) aparece na prévia
-  quando o link de `/camiseta/<slug>/` é compartilhado (WhatsApp, redes sociais), no lugar da logo
-  genérica do site. Se a campanha estiver vinculada a um evento e esse evento tiver imagem própria,
-  a imagem do evento tem prioridade sobre a da campanha.
+- **Imagem de compartilhamento por campanha (Fase 31, corrigida na Fase 32)** —
+  `camiseta_grupos.imagem` (mesmo tipo de campo que `eventos.cover`, upload pela aba "Imagem" na
+  edição da campanha) aparece na prévia quando o link de `/camiseta/<slug>/` é compartilhado
+  (WhatsApp, redes sociais), no lugar da logo genérica do site — e também **visível na própria
+  página pública** (Fase 32; a Fase 31 só tinha resolvido a meta tag invisível de prévia, não a
+  imagem em si na tela). Se a campanha estiver vinculada a um evento, mostra as duas imagens (a da
+  campanha e a do evento) lado a lado na página — a prévia de link (que só tem espaço pra uma)
+  continua com prioridade pro evento.
 
 ### Comunidade: mural de oração, enquetes e Minha Conta
 

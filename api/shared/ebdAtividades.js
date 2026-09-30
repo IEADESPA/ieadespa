@@ -411,6 +411,7 @@ async function logarEventoConquistaAtividade(pool, { atividadeId, alunoId }) {
     `);
     const row = contexto.recordset[0];
     if (!row) return;
+    if (!row.MembroId) return; // v6.8: aluno não-membro não tem MembroId — não alimenta o motor (mesma regra do visitante)
     const resumo = await calcularResumoAluno(pool, { atividadeId, alunoId });
     await conquistas.registrarEventoEAvaliar(pool, {
       membroId: row.MembroId, tipoEvento: "EBD_ATIVIDADE_RESPOSTA",
@@ -487,10 +488,10 @@ async function calcularResumoAluno(pool, { atividadeId, alunoId }) {
 // acompanhamento do professor (mesmo espírito do roster de chamada/v6.2).
 async function listarResumoTurma(pool, { atividadeId, turmaId }) {
   const alunos = await pool.request().input("turmaId", sql.Int, turmaId).query(`
-    SELECT a.AlunoId, a.Matricula, m.Nome AS MembroNome
-    FROM EbdAlunos a JOIN MembroReferencia m ON m.MembroId = a.MembroId
+    SELECT a.AlunoId, a.Matricula, COALESCE(m.Nome, a.NomeNaoMembro) AS MembroNome
+    FROM EbdAlunos a LEFT JOIN MembroReferencia m ON m.MembroId = a.MembroId
     WHERE a.TurmaId = @turmaId AND a.Ativo = 1
-    ORDER BY m.Nome
+    ORDER BY COALESCE(m.Nome, a.NomeNaoMembro)
   `);
   const resultado = [];
   for (const aluno of alunos.recordset) {

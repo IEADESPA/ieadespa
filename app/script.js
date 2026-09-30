@@ -5011,7 +5011,7 @@ function mostrarAbaSecretaria(aba) {
     document.getElementById("abaEbd").classList.toggle("ebd-modo-professor", modoProfessor);
     carregarOpcoesChamadaEbdAcao();
     if (modoProfessor) renderPainelProfessorEbd();
-    else { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesFinanceiroEbdAcao(); }
+    else { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesFinanceiroEbdAcao(); carregarOpcoesCadernetaEbdAcao(); }
   }
   if (aba === "conquistas") { carregarTiposEventoConquistaAcao(); carregarCatalogoConquistaAdminAcao(); }
 }
@@ -12567,8 +12567,10 @@ async function carregarDetalheTurmaEbdAcao() {
       : "<p class='subtitle'>Nenhum professor designado.</p>"}
     <h5>Alunos</h5>
     ${dadosAlu.sucesso === false ? `<p class="subtitle">${dadosAlu.mensagem}</p>` : (dadosAlu.alunos.length
-      ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula EBD</th><th>Nome</th><th>Matrículado em</th></tr></thead><tbody>
-          ${dadosAlu.alunos.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.matriculadoEm ? new Date(a.matriculadoEm).toLocaleDateString("pt-BR") : "-"}</td></tr>`).join("")}
+      ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula EBD</th><th>Nome</th><th>Tipo</th><th>Matrículado em</th></tr></thead><tbody>
+          ${dadosAlu.alunos.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${escaparHtmlEbd(a.membroNome)}</td>
+            <td>${a.naoMembro ? `Não-membro${a.responsavelNome ? ` <span class="subtitle">(resp.: ${escaparHtmlEbd(a.responsavelNome)})</span>` : ""}` : "Membro"}</td>
+            <td>${a.matriculadoEm ? new Date(a.matriculadoEm).toLocaleDateString("pt-BR") : "-"}</td></tr>`).join("")}
         </tbody></table>`
       : "<p class='subtitle'>Nenhum aluno matriculado.</p>")}
   `;
@@ -12616,11 +12618,64 @@ async function matricularAlunoEbdAcao() {
 
 async function transferirAlunoEbdAcao() {
   const membroId = document.getElementById("ebdTransferirMatriculaMembro").value;
+  const alunoId = document.getElementById("ebdTransferirAlunoId").value;
   const novaTurmaId = document.getElementById("ebdTransferirNovaTurmaId").value;
-  if (!membroId || !novaTurmaId) { mostrarToast("Informe a matrícula do membro e o id da nova turma.", "erro"); return; }
+  if ((!membroId && !alunoId) || !novaTurmaId) { mostrarToast("Informe a matrícula do membro (ou o Id do aluno) e o id da nova turma.", "erro"); return; }
+  // v6.8: aluno não-membro só se acha pelo Id do aluno; o membro continua pela matrícula de membro.
+  const corpo = alunoId ? { alunoId: Number(alunoId), novaTurmaId: Number(novaTurmaId) } : { membroId: Number(membroId), novaTurmaId: Number(novaTurmaId) };
   const res = await fetchProtegido(`${API_BASE}/ebd-turmas/alunos/transferir`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo)
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarDetalheTurmaEbdAcao();
+}
+
+// v6.8 — aluno não-membro, vínculo a membro e encerramento de matrícula.
+async function matricularNaoMembroEbdAcao() {
+  const turmaId = document.getElementById("ebdNaoMembroTurmaId").value;
+  const nome = document.getElementById("ebdNaoMembroNome").value.trim();
+  if (!turmaId || !nome) { mostrarToast("Informe o id da turma e o nome do aluno.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/alunos`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId: Number(membroId), novaTurmaId: Number(novaTurmaId) })
+    body: JSON.stringify({
+      turmaId: Number(turmaId),
+      naoMembro: {
+        nome,
+        contato: document.getElementById("ebdNaoMembroContato").value.trim() || null,
+        dataNascimento: document.getElementById("ebdNaoMembroNascimento").value || null,
+        responsavelNome: document.getElementById("ebdNaoMembroResponsavel").value.trim() || null
+      }
+    })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso === false) return;
+  ["ebdNaoMembroNome", "ebdNaoMembroContato", "ebdNaoMembroNascimento", "ebdNaoMembroResponsavel"].forEach(id => { document.getElementById(id).value = ""; });
+  document.getElementById("ebdTurmaIdDetalhe").value = turmaId;
+  carregarDetalheTurmaEbdAcao();
+}
+
+async function vincularAlunoEbdAcao() {
+  const alunoId = document.getElementById("ebdVincularAlunoId").value;
+  const membroId = document.getElementById("ebdVincularMatriculaMembro").value;
+  if (!alunoId || !membroId) { mostrarToast("Informe o Id do aluno e a matrícula do membro.", "erro"); return; }
+  if (!confirm("Vincular este aluno ao cadastro do membro? Nome, contato e nascimento soltos da matrícula deixam de existir (passa a valer o cadastro do membro).")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/alunos/vincular-membro`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alunoId: Number(alunoId), membroId: Number(membroId) })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarDetalheTurmaEbdAcao();
+}
+
+async function encerrarMatriculaEbdAcao() {
+  const alunoId = document.getElementById("ebdVincularAlunoId").value;
+  if (!alunoId) { mostrarToast("Informe o Id do aluno.", "erro"); return; }
+  if (!confirm("Encerrar a matrícula deste aluno? Ele deixa de contar nos matriculados; o histórico de chamada fica.")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/alunos/encerrar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ alunoId: Number(alunoId) })
   });
   const data = await res.json();
   mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
@@ -12659,6 +12714,8 @@ function renderPainelLicaoEbd(licao) {
   if (!licao) { container.innerHTML = "<p class='subtitle'>Nenhuma lição encontrada para esta data — use \"Abrir lição\".</p>"; ebdChamadaLicaoAtual = null; return; }
   ebdChamadaLicaoAtual = licao;
   document.getElementById("ebdChamadaLicaoId").value = licao.licaoId;
+  const campoCaderneta = document.getElementById("cadLicaoId"); // v6.8: a caderneta parte da mesma lição
+  if (campoCaderneta) campoCaderneta.value = licao.licaoId;
   container.innerHTML = `<p class="subtitle">Lição #${licao.licaoId} — ${new Date(licao.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })} — status: <strong>${licao.status}</strong></p>`;
 }
 
@@ -12716,7 +12773,7 @@ async function carregarRosterChamadaEbdAcao() {
   container.innerHTML = data.alunos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula</th><th>Nome</th><th>Status</th><th>Lançar</th></tr></thead><tbody>
         ${data.alunos.map(a => `<tr>
-          <td>${a.alunoId}</td><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.status || "-"}</td>
+          <td>${a.alunoId}</td><td>${a.matricula}</td><td>${escaparHtmlEbd(a.membroNome)}${a.naoMembro ? ' <span class="subtitle">(não-membro)</span>' : ""}</td><td>${a.status || "-"}</td>
           <td>
             <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'PRESENTE')">✅ Presente</button>
             <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'AUSENTE')">❌ Ausente</button>
@@ -13379,6 +13436,221 @@ async function carregarVisaoAgrupadaEbdAcao() {
         </div>
       `).join("")
     : "<p class='subtitle'>Nenhuma turma encontrada.</p>";
+}
+
+// ---- Caderneta digital (v6.8) ----
+// Texto digitado por gente (nome de aluno não-membro, responsável,
+// observação) passa por aqui antes de ir pro innerHTML.
+function escaparHtmlEbd(texto) {
+  return String(texto == null ? "" : texto).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function formatarDataEbd(valor) {
+  if (!valor) return "-";
+  const [a, m, d] = String(valor).slice(0, 10).split("-");
+  return `${d}/${m}/${a}`;
+}
+function formatarMoedaEbd(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function trimestreAtualEbd() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-T${Math.ceil((hoje.getMonth() + 1) / 3)}`;
+}
+
+async function carregarOpcoesCadernetaEbdAcao() {
+  const sel = document.getElementById("cadRelCongregacao");
+  if (sel && !sel.dataset.montado) {
+    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    sel.innerHTML = `<option value="">Todas as congregações do meu escopo</option>`
+      + congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
+    sel.dataset.montado = "1";
+  }
+  const tri = document.getElementById("cadRelTrimestre");
+  if (tri && !tri.value) tri.value = trimestreAtualEbd();
+}
+
+function textoRevistaVigenteEbd(rv) {
+  if (!rv || !rv.origem) return `<span class="subtitle">sem revista definida${rv ? ` (${rv.trimestre})` : ""}</span>`;
+  const nomes = rv.revistas.map(r => `${escaparHtmlEbd(r.nome)}${r.quantidade ? ` ×${r.quantidade}` : ""}`).join(", ");
+  return rv.origem === "PEDIDO" ? nomes : `<span class="subtitle">sugestão do catálogo:</span> ${nomes}`;
+}
+
+function renderLinhasCadernetaEbd(linhas, licaoId, totais) {
+  const corpo = linhas.map(l => {
+    const importada = l.origem === "IMPORTADA";
+    const professores = l.professores.length
+      ? l.professores.map(p => `${escaparHtmlEbd(p.nome)}${p.principal ? " ★" : ""}`).join(", ")
+      : "<span class='subtitle'>sem professor</span>";
+    const campos = importada
+      ? `<td>${l.biblias ?? "-"}</td><td>${l.revistas ?? "-"}</td><td><span class="subtitle">importada · oferta ${formatarMoedaEbd(l.ofertaImportada)}</span></td>`
+      : `<td><input type="number" min="0" id="cadBiblias_${l.turmaId}" value="${l.biblias ?? ""}" style="width:70px;" /></td>
+         <td><input type="number" min="0" id="cadRevistas_${l.turmaId}" value="${l.revistas ?? ""}" style="width:70px;" /></td>
+         <td><input type="text" id="cadObs_${l.turmaId}" value="${escaparHtmlEbd(l.observacao || "")}" placeholder="Observação" maxlength="500" style="width:130px;" />
+             <button class="btn-link" onclick="salvarCadernetaEbdAcao(${licaoId}, ${l.turmaId})">💾 Salvar</button></td>`;
+    return `<tr style="${l.lancada ? "" : "opacity:.6;"}">
+      <td><strong>${escaparHtmlEbd(l.turmaNome)}</strong>${l.faixaEtaria ? `<br><span class="subtitle">${escaparHtmlEbd(l.faixaEtaria)}</span>` : ""}</td>
+      <td>${professores}</td><td>${textoRevistaVigenteEbd(l.revistaVigente)}</td>
+      <td>${l.matriculados}</td><td>${l.presentes}</td><td>${l.ausentes}</td><td>${l.visitantes}</td><td>${l.percentualPresenca}%</td>
+      ${campos}
+      <td>${l.alertas.length ? l.alertas.map(a => `<div class="subtitle">⚠️ ${escaparHtmlEbd(a)}</div>`).join("") : "✅"}</td>
+    </tr>`;
+  }).join("");
+  const rodape = totais
+    ? `<tr style="font-weight:600;"><td colspan="3">Total (${totais.turmasLancadas} classe(s) com lançamento${totais.turmasSemLancamento ? `, ${totais.turmasSemLancamento} sem` : ""})</td>
+        <td>${totais.matriculados}</td><td>${totais.presentes}</td><td>${totais.ausentes}</td><td>${totais.visitantes}</td><td>${totais.percentualPresenca}%</td>
+        <td>${totais.biblias}</td><td>${totais.revistas}</td><td></td><td></td></tr>`
+    : "";
+  return `<div style="overflow-x:auto;"><table class="tabela-frequencia"><thead><tr>
+      <th>Classe</th><th>Professor(es)</th><th>Revista do trimestre</th><th>Matric.</th><th>Pres.</th><th>Aus.</th><th>Vis.</th><th>Freq.</th>
+      <th>Bíblias</th><th>Revistas</th><th>Lançar</th><th>Alertas</th></tr></thead><tbody>${corpo}${rodape}</tbody></table></div>`;
+}
+
+function cabecalhoLicaoCadernetaEbd(licao, parcial) {
+  return `<p class="subtitle">Lição #${licao.licaoId} — ${formatarDataEbd(licao.data)} — ${licao.status}${parcial ? " · <strong>números provisórios (lição aberta)</strong>" : ""}</p>`;
+}
+
+async function carregarCadernetaEbdAcao() {
+  const licaoId = Number(document.getElementById("cadLicaoId").value);
+  const turmaId = Number(document.getElementById("cadTurmaId").value) || null;
+  const container = document.getElementById("painelCadernetaEbd");
+  if (!licaoId) { mostrarToast("Informe o Id da lição.", "erro"); return; }
+  const url = turmaId
+    ? `${API_BASE}/ebd-caderneta/caderneta/turma?licaoId=${licaoId}&turmaId=${turmaId}`
+    : `${API_BASE}/ebd-caderneta/caderneta?licaoId=${licaoId}`;
+  const res = await fetchProtegido(url);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+
+  if (turmaId) {
+    container.innerHTML = data.linha
+      ? cabecalhoLicaoCadernetaEbd(data.licao, data.licao.status !== "FECHADA") + renderLinhasCadernetaEbd([data.linha], licaoId, null)
+      : "<p class='subtitle'>Turma não encontrada nesta congregação.</p>";
+    return;
+  }
+  const cad = data.caderneta;
+  const oferta = cad.ofertaRegistrada == null
+    ? "oferta do dia ainda não registrada (Financeiro, v6.7)"
+    : `oferta do dia ${formatarMoedaEbd(cad.ofertaRegistrada)}`;
+  container.innerHTML = cabecalhoLicaoCadernetaEbd(cad.licao, cad.parcial)
+    + `<p><strong>${cad.trimestre}</strong> · ${oferta} · <strong>total ${formatarMoedaEbd(cad.ofertaTotal)}</strong></p>`
+    + (cad.linhas.length ? renderLinhasCadernetaEbd(cad.linhas, licaoId, cad.totais) : "<p class='subtitle'>Nenhuma turma cadastrada nesta congregação.</p>");
+}
+
+async function salvarCadernetaEbdAcao(licaoId, turmaId) {
+  const lerNumero = (id) => { const v = document.getElementById(id).value.trim(); return v === "" ? null : Number(v); };
+  const res = await fetchProtegido(`${API_BASE}/ebd-caderneta/caderneta/salvar`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      licaoId, turmaId,
+      biblias: lerNumero(`cadBiblias_${turmaId}`), revistas: lerNumero(`cadRevistas_${turmaId}`),
+      observacao: document.getElementById(`cadObs_${turmaId}`).value.trim() || null
+    })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarCadernetaEbdAcao();
+}
+
+// -- Relatório do Superintendente / fechamento trimestral --
+function linhaTotaisRelatorioEbd(rotulo, t, destaque) {
+  return `<tr${destaque ? ' style="font-weight:600;"' : ""}><td>${rotulo}</td><td>${t.domingos}</td><td>${t.matriculadosMedio}</td><td>${t.mediaPresentes}</td>
+    <td>${t.presentes}</td><td>${t.ausentes}</td><td>${t.visitantes}</td><td>${t.biblias}</td><td>${t.revistas}</td><td>${t.percentualPresenca}%</td><td>${formatarMoedaEbd(t.oferta)}</td></tr>`;
+}
+
+function tabelaRelatorioEbd(linhasHtml) {
+  return `<div style="overflow-x:auto;"><table class="tabela-frequencia"><thead><tr>
+    <th></th><th>Domingos</th><th>Matric. (média)</th><th>Presentes (média)</th><th>Presentes (total)</th><th>Ausentes</th><th>Visitantes</th>
+    <th>Bíblias</th><th>Revistas</th><th>Freq. %</th><th>Oferta</th></tr></thead><tbody>${linhasHtml}</tbody></table></div>`;
+}
+
+function renderRelatorioTrimestreEbd(rel) {
+  if (!rel.areas.length) return `<p class="subtitle">Nenhuma chamada ou caderneta lançada em ${rel.trimestre} dentro do seu escopo.</p>`;
+  const cabecalho = `<p><strong>${rel.trimestre}</strong> — ${formatarDataEbd(rel.periodo.inicio)} a ${formatarDataEbd(rel.periodo.fim)}
+    ${rel.parcial ? " · ⏳ trimestre em andamento (parcial)" : " · trimestre encerrado"}</p>`;
+  const areas = rel.areas.map(area => `
+    <div class="cartao-area-ebd" style="margin-bottom:14px;">
+      <h5>🗺️ ${escaparHtmlEbd(area.areaNome)}</h5>
+      ${tabelaRelatorioEbd(linhaTotaisRelatorioEbd("Total da área", area.totais, true))}
+      ${area.congregacoes.map(cong => {
+        const f = cong.fechamento;
+        const situacao = cong.fonte === "FECHAMENTO"
+          ? `🔒 fechado (${f.origem === "AUTOMATICO" ? "automático" : "manual"}, versão ${f.versao}, ${formatarDataEbd(f.refeitoEm || f.fechadoEm)})${f.licoesAbertas > 0 ? ` ⚠️ ${f.licoesAbertas} lição(ões) estavam abertas` : ""}`
+          : "⏳ ao vivo";
+        const botao = cong.fonte === "FECHAMENTO"
+          ? `<button class="btn-link" onclick="fecharTrimestreEbdAcao(${cong.congregacaoId}, '${rel.trimestre}', true)">🔄 Refazer fechamento</button>`
+          : `<button class="btn-link" onclick="fecharTrimestreEbdAcao(${cong.congregacaoId}, '${rel.trimestre}', false)">🔒 Fechar trimestre</button>`;
+        return `<details open style="margin:8px 0 8px 14px;">
+          <summary><strong>⛪ ${escaparHtmlEbd(cong.congregacaoNome)}</strong> — ${situacao} ${botao}</summary>
+          ${tabelaRelatorioEbd(cong.turmas.map(t => linhaTotaisRelatorioEbd(escaparHtmlEbd(t.turmaNome), t.totais, false)).join("") + linhaTotaisRelatorioEbd("Total da congregação", cong.totais, true))}
+        </details>`;
+      }).join("")}
+    </div>`).join("");
+  return cabecalho + areas + `<h5>Total geral</h5>${tabelaRelatorioEbd(linhaTotaisRelatorioEbd("Todas as áreas", rel.totais, true))}`;
+}
+
+async function carregarRelatorioTrimestreEbdAcao() {
+  const trimestre = document.getElementById("cadRelTrimestre").value.trim();
+  const congregacaoId = document.getElementById("cadRelCongregacao").value;
+  const container = document.getElementById("painelRelatorioTrimestreEbd");
+  if (!/^\d{4}-T[1-4]$/.test(trimestre)) { mostrarToast("Informe o trimestre no formato AAAA-T1 a AAAA-T4 (ex: 2026-T3).", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-caderneta/relatorio?trimestre=${trimestre}${congregacaoId ? `&congregacaoId=${congregacaoId}` : ""}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  container.innerHTML = renderRelatorioTrimestreEbd(data.relatorio);
+}
+
+async function fecharTrimestreEbdAcao(congregacaoId, trimestre, refazer) {
+  const pergunta = refazer
+    ? `Refazer o fechamento de ${trimestre}? A foto congelada será substituída pelos números de hoje.`
+    : `Fechar ${trimestre} desta congregação? Os números ficam congelados (dá pra refazer depois, se precisar).`;
+  if (!confirm(pergunta)) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-caderneta/${refazer ? "fechamento/refazer" : "fechamento"}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ congregacaoId, trimestre })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) carregarRelatorioTrimestreEbdAcao();
+}
+
+// -- Importação de cadernetas antigas (CSV) --
+// O Excel em português costuma salvar CSV em Windows-1252: tenta UTF-8
+// estrito e, se o arquivo não for UTF-8 válido, lê como Windows-1252 (senão
+// "Bíblias" e nomes de igreja com acento chegariam quebrados).
+function lerArquivoImportacaoEbdAcao() {
+  const arquivo = document.getElementById("cadImportArquivo").files[0];
+  if (!arquivo) return;
+  const leitor = new FileReader();
+  leitor.onload = () => {
+    let texto;
+    try { texto = new TextDecoder("utf-8", { fatal: true }).decode(leitor.result); }
+    catch { texto = new TextDecoder("windows-1252").decode(leitor.result); }
+    document.getElementById("cadImportCsv").value = texto;
+  };
+  leitor.readAsArrayBuffer(arquivo);
+}
+
+async function importarCadernetasEbdAcao(simular) {
+  const csv = document.getElementById("cadImportCsv").value;
+  const container = document.getElementById("painelImportacaoCadernetaEbd");
+  if (!csv.trim()) { mostrarToast("Cole o conteúdo do CSV ou escolha um arquivo.", "erro"); return; }
+  if (!simular && !confirm("Gravar de verdade estas cadernetas? Faça a simulação antes se ainda não fez.")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-caderneta/importar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv, simular })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  const resumo = `<p class="subtitle"><strong>${escaparHtmlEbd(data.mensagem)}</strong></p>`;
+  if (!data.itens) { container.innerHTML = resumo; return; }
+  const linhas = data.itens.map(i => {
+    const l = i.linha || {};
+    const situacao = i.valido
+      ? `✅ ${i.acao === "ATUALIZAR" ? "substitui importada" : "nova"}${i.avisos.map(a => `<div class="subtitle">⚠️ ${escaparHtmlEbd(a)}</div>`).join("")}`
+      : i.erros.map(e => `<div style="color:var(--cor-erro);">❌ ${escaparHtmlEbd(e)}</div>`).join("") + i.avisos.map(a => `<div class="subtitle">⚠️ ${escaparHtmlEbd(a)}</div>`).join("");
+    return `<tr><td>${i.numero ?? "-"}</td><td>${escaparHtmlEbd(l.congregacao || "-")}</td><td>${formatarDataEbd(l.data)}</td><td>${escaparHtmlEbd(l.turma || "-")}</td>
+      <td>${l.matriculados ?? "-"}/${l.presentes ?? "-"}/${l.ausentes ?? "-"}/${l.visitantes ?? "-"}</td><td>${situacao}</td></tr>`;
+  }).join("");
+  container.innerHTML = resumo + `<div style="overflow-x:auto;"><table class="tabela-frequencia"><thead><tr>
+    <th>Linha</th><th>Igreja</th><th>Domingo</th><th>Classe</th><th>Matric./Pres./Aus./Vis.</th><th>Situação</th></tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
 
 // ---- CONQUISTAS E GAMIFICAÇÃO (v6.4) ----

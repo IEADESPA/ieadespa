@@ -11,7 +11,10 @@
 // 3) EbdAlunos — vínculo de MembroReferencia com matrícula própria da EBD,
 //    NÃO um cadastro de pessoa paralelo (mesmo espírito de
 //    VoluntariosHabilitacao/v5.7: a pessoa já existe, só ganha um registro
-//    de participação a mais).
+//    de participação a mais). Única exceção, desde a v6.8: o aluno
+//    NÃO-MEMBRO (visitante frequente, criança de família não congregada),
+//    que carrega o mínimo de identificação na própria matrícula e pode ser
+//    vinculado a um membro depois, mantendo a mesma matrícula.
 //
 // Lógica de decisão pura (testável sem banco) primeiro, funções de banco
 // (finas) depois — mesmo padrão de shared/escalas.js / habilitacaoVoluntarios.js.
@@ -53,6 +56,88 @@ function podeDesignarProfessor(vinculoExistente) {
 function podeMatricularAluno(vinculoExistente) {
   if (vinculoExistente) {
     return { permitido: false, mensagem: `Este membro já tem matrícula na EBD (${vinculoExistente.matricula}) — use transferência de turma em vez de nova matrícula.` };
+  }
+  return { permitido: true };
+}
+
+// ---- v6.8: aluno NÃO-MEMBRO ----
+//
+// A EBD mais quer alcançar quem ainda não é membro (visitante frequente,
+// criança de família não congregada), e até a v6.7 o aluno era sempre um
+// vínculo de MembroReferencia. Agora a própria matrícula pode carregar o
+// mínimo de identificação (migração 109): nome, contato, nascimento e
+// responsável. Menor de idade exige o nome do responsável (LGPD, Art. 14:
+// dado de criança com consentimento de um responsável).
+const MAIORIDADE_ANOS = 18;
+const IDADE_MAXIMA_ANOS = 110;
+
+function dataIsoValida(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  if (!m) return false;
+  const ano = Number(m[1]), mes = Number(m[2]), dia = Number(m[3]);
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  return d.getUTCFullYear() === ano && d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia;
+}
+
+function idadeEmAnos(nascimentoIso, hojeIso) {
+  const [ny, nm, nd] = nascimentoIso.split("-").map(Number);
+  const [hy, hm, hd] = hojeIso.split("-").map(Number);
+  let idade = hy - ny;
+  if (hm < nm || (hm === nm && hd < nd)) idade--;
+  return idade;
+}
+
+function normalizarNome(nome) {
+  return String(nome == null ? "" : nome).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function validarAlunoNaoMembro({ nome, contato, dataNascimento, responsavelNome } = {}, hojeIso) {
+  const nomeLimpo = String(nome == null ? "" : nome).trim();
+  if (nomeLimpo.length < 3) return { valido: false, mensagem: "Informe o nome completo do aluno (mínimo 3 caracteres)." };
+  if (nomeLimpo.length > 150) return { valido: false, mensagem: "O nome do aluno passa de 150 caracteres." };
+  const contatoLimpo = String(contato == null ? "" : contato).trim();
+  if (contatoLimpo.length > 150) return { valido: false, mensagem: "O contato passa de 150 caracteres." };
+  const responsavelLimpo = String(responsavelNome == null ? "" : responsavelNome).trim();
+  if (responsavelLimpo.length > 150) return { valido: false, mensagem: "O nome do responsável passa de 150 caracteres." };
+
+  let nascimento = null;
+  if (dataNascimento != null && String(dataNascimento).trim() !== "") {
+    nascimento = String(dataNascimento).trim().slice(0, 10);
+    if (!dataIsoValida(nascimento)) return { valido: false, mensagem: "Data de nascimento inválida (use AAAA-MM-DD)." };
+    if (hojeIso && nascimento > hojeIso) return { valido: false, mensagem: "A data de nascimento não pode ser futura." };
+    const idade = hojeIso ? idadeEmAnos(nascimento, hojeIso) : null;
+    if (idade != null && idade > IDADE_MAXIMA_ANOS) return { valido: false, mensagem: "Data de nascimento improvável — confira o ano." };
+    if (idade != null && idade < MAIORIDADE_ANOS && responsavelLimpo.length < 3) {
+      return { valido: false, mensagem: "Aluno menor de 18 anos: informe o nome do responsável." };
+    }
+  }
+
+  return {
+    valido: true,
+    dados: { nome: nomeLimpo, contato: contatoLimpo || null, dataNascimento: nascimento, responsavelNome: responsavelLimpo || null }
+  };
+}
+
+// Evita cadastrar duas vezes a mesma pessoa na mesma turma (secretário
+// digitando o nome de novo no domingo seguinte). Compara sem acento nem
+// maiúscula, contra membros e não-membros ativos da turma.
+function podeMatricularNaoMembro(alunosDaTurma, nome) {
+  const alvo = normalizarNome(nome);
+  const repetido = (alunosDaTurma || []).find(a => normalizarNome(a.membroNome) === alvo);
+  if (repetido) {
+    return { permitido: false, mensagem: `Já existe um aluno chamado "${repetido.membroNome}" nesta turma (matrícula ${repetido.matricula}).` };
+  }
+  return { permitido: true };
+}
+
+// Quando o não-membro vira membro: a MESMA matrícula (e todo o histórico de
+// chamada) passa a apontar pro cadastro do membro. Só vale para aluno que
+// ainda é não-membro, e o membro não pode já ter outra matrícula.
+function podeVincularAMembro(aluno, vinculoDoMembro) {
+  if (!aluno) return { permitido: false, mensagem: "Aluno não encontrado." };
+  if (aluno.membroId) return { permitido: false, mensagem: "Este aluno já está vinculado a um membro." };
+  if (vinculoDoMembro) {
+    return { permitido: false, mensagem: `Este membro já tem matrícula na EBD (${vinculoDoMembro.matricula}) — não dá pra vincular duas matrículas ao mesmo membro.` };
   }
   return { permitido: true };
 }
@@ -262,14 +347,110 @@ async function listarProfessoresPorTurma(pool, turmaId) {
 
 // ---- Alunos ----
 
-async function buscarAlunoPorMembro(pool, membroId) {
-  const result = await pool.request().input("membroId", sql.Int, membroId).query(`SELECT * FROM EbdAlunos WHERE MembroId = @membroId`);
-  const row = result.recordset[0];
+function mapearAluno(row) {
   if (!row) return null;
   return {
     alunoId: row.AlunoId, membroId: row.MembroId, turmaId: row.TurmaId, matricula: row.Matricula,
-    ativo: row.Ativo, matriculadoEm: row.MatriculadoEm
+    ativo: row.Ativo, matriculadoEm: row.MatriculadoEm, naoMembro: row.MembroId == null
   };
+}
+
+async function buscarAlunoPorMembro(pool, membroId) {
+  const result = await pool.request().input("membroId", sql.Int, membroId).query(`SELECT * FROM EbdAlunos WHERE MembroId = @membroId`);
+  return mapearAluno(result.recordset[0]);
+}
+
+async function buscarAlunoPorId(pool, alunoId) {
+  const result = await pool.request().input("id", sql.Int, alunoId).query(`SELECT * FROM EbdAlunos WHERE AlunoId = @id`);
+  return mapearAluno(result.recordset[0]);
+}
+
+function hojeIsoLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Aluno sem cadastro de membro (v6.8). Recebe a matrícula pelo mesmo
+// caminho do aluno-membro (gerarProtocolo, sequência única "EBD-ANO-NNNNNN")
+// — matrícula não distingue quem é membro. O audit guarda só os ids, nunca
+// nome/contato/nascimento: a trilha de auditoria é encadeada por hash e
+// não pode ser corrigida depois, então dado pessoal não entra nela.
+async function matricularAlunoNaoMembro(pool, { nome, contato, dataNascimento, responsavelNome, turmaId, criadoPorMembroId }) {
+  const validacao = validarAlunoNaoMembro({ nome, contato, dataNascimento, responsavelNome }, hojeIsoLocal());
+  if (!validacao.valido) return { sucesso: false, mensagem: validacao.mensagem };
+
+  const turma = await buscarTurmaPorId(pool, turmaId);
+  if (!turma) return { sucesso: false, mensagem: "Turma não encontrada." };
+
+  const naTurma = await listarAlunosPorTurma(pool, turmaId);
+  const repeticao = podeMatricularNaoMembro(naTurma, validacao.dados.nome);
+  if (!repeticao.permitido) return { sucesso: false, mensagem: repeticao.mensagem };
+
+  const d = validacao.dados;
+  const matricula = await gerarProtocolo(pool, PREFIXO_MATRICULA_EBD, { digitos: 6 });
+  const result = await pool.request()
+    .input("turmaId", sql.Int, turmaId).input("matricula", sql.NVarChar(20), matricula)
+    .input("nome", sql.NVarChar(150), d.nome).input("contato", sql.NVarChar(150), d.contato)
+    .input("nascimento", sql.Date, d.dataNascimento).input("responsavel", sql.NVarChar(150), d.responsavelNome)
+    .input("criadoPor", sql.Int, criadoPorMembroId || null)
+    .query(`
+      INSERT INTO EbdAlunos (MembroId, TurmaId, Matricula, NomeNaoMembro, ContatoNaoMembro, DataNascimento, ResponsavelNome, CriadoPorMembroId)
+      OUTPUT INSERTED.AlunoId
+      VALUES (NULL, @turmaId, @matricula, @nome, @contato, @nascimento, @responsavel, @criadoPor)
+    `);
+  const alunoId = result.recordset[0].AlunoId;
+
+  await registrarAuditoria({
+    tabela: "EbdAlunos", registroId: alunoId, acao: "ALUNO_NAO_MEMBRO_MATRICULADO",
+    usuarioId: criadoPorMembroId, dadosAntes: null, dadosDepois: { turmaId, matricula, naoMembro: true }
+  });
+
+  return { sucesso: true, alunoId, matricula, mensagem: `✅ Matrícula ${matricula} criada (aluno não-membro).` };
+}
+
+// O não-membro virou membro: a matrícula e o histórico de chamada
+// continuam os mesmos (AlunoId não muda); os dados soltos da matrícula
+// saem (o cadastro do membro passa a ser a fonte única — CHECK da 109).
+async function vincularAlunoAMembro(pool, { alunoId, membroId, registradoPorMembroId }) {
+  const aluno = await buscarAlunoPorId(pool, alunoId);
+  const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+  if (aluno && membro.recordset.length === 0) return { sucesso: false, mensagem: "Membro não encontrado." };
+  const vinculoDoMembro = await buscarAlunoPorMembro(pool, membroId);
+  const validacao = podeVincularAMembro(aluno, vinculoDoMembro);
+  if (!validacao.permitido) return { sucesso: false, mensagem: validacao.mensagem };
+
+  await pool.request().input("id", sql.Int, alunoId).input("membroId", sql.Int, membroId).query(`
+    UPDATE EbdAlunos
+    SET MembroId = @membroId, NomeNaoMembro = NULL, ContatoNaoMembro = NULL, DataNascimento = NULL, ResponsavelNome = NULL,
+        AtualizadoEm = SYSUTCDATETIME()
+    WHERE AlunoId = @id AND MembroId IS NULL
+  `);
+
+  await registrarAuditoria({
+    tabela: "EbdAlunos", registroId: alunoId, acao: "ALUNO_VINCULADO_A_MEMBRO",
+    usuarioId: registradoPorMembroId, dadosAntes: { naoMembro: true }, dadosDepois: { membroId, matricula: aluno.matricula }
+  });
+
+  return { sucesso: true, mensagem: `✅ Matrícula ${aluno.matricula} vinculada ao cadastro do membro.` };
+}
+
+// A matrícula deixa de contar nos "matriculados" (caderneta) sem apagar
+// nada: chamada e atividades antigas continuam apontando pro AlunoId.
+async function encerrarMatricula(pool, { alunoId, registradoPorMembroId }) {
+  const aluno = await buscarAlunoPorId(pool, alunoId);
+  if (!aluno) return { sucesso: false, mensagem: "Aluno não encontrado." };
+  if (!aluno.ativo) return { sucesso: false, mensagem: "Esta matrícula já está encerrada." };
+
+  await pool.request().input("id", sql.Int, alunoId).query(`
+    UPDATE EbdAlunos SET Ativo = 0, EncerradoEm = SYSUTCDATETIME(), AtualizadoEm = SYSUTCDATETIME() WHERE AlunoId = @id
+  `);
+
+  await registrarAuditoria({
+    tabela: "EbdAlunos", registroId: alunoId, acao: "ALUNO_ENCERRADO",
+    usuarioId: registradoPorMembroId, dadosAntes: { ativo: true }, dadosDepois: { ativo: false }
+  });
+
+  return { sucesso: true, mensagem: `✅ Matrícula ${aluno.matricula} encerrada.` };
 }
 
 // Matrícula gerada UMA VEZ (gerarProtocolo — sequência atômica MERGE...
@@ -310,34 +491,41 @@ async function matricularAluno(pool, { membroId, turmaId, criadoPorMembroId }) {
   return { sucesso: true, alunoId, matricula, mensagem: `✅ Matrícula ${matricula} criada.` };
 }
 
-async function transferirAluno(pool, { membroId, novaTurmaId, registradoPorMembroId }) {
-  const aluno = await buscarAlunoPorMembro(pool, membroId);
-  if (!aluno) return { sucesso: false, mensagem: "Este membro não tem matrícula na EBD." };
+// Identifica o aluno por `alunoId` (serve também para não-membro, que não
+// tem MembroId) ou por `membroId` (o caminho antigo, mantido). Transferir
+// uma matrícula ENCERRADA a reativa na turma de destino — é assim que quem
+// saiu e voltou reaparece, já que a matrícula é única por membro.
+async function transferirAluno(pool, { membroId, alunoId, novaTurmaId, registradoPorMembroId }) {
+  const aluno = alunoId ? await buscarAlunoPorId(pool, alunoId) : await buscarAlunoPorMembro(pool, membroId);
+  if (!aluno) return { sucesso: false, mensagem: alunoId ? "Aluno não encontrado." : "Este membro não tem matrícula na EBD." };
 
   const turma = await buscarTurmaPorId(pool, novaTurmaId);
   if (!turma) return { sucesso: false, mensagem: "Turma de destino não encontrada." };
-  if (aluno.turmaId === novaTurmaId) return { sucesso: false, mensagem: "O aluno já está nesta turma." };
+  const reativando = !aluno.ativo;
+  if (aluno.turmaId === novaTurmaId && !reativando) return { sucesso: false, mensagem: "O aluno já está nesta turma." };
 
   await pool.request().input("id", sql.Int, aluno.alunoId).input("turmaId", sql.Int, novaTurmaId).query(`
-    UPDATE EbdAlunos SET TurmaId = @turmaId, AtualizadoEm = SYSUTCDATETIME() WHERE AlunoId = @id
+    UPDATE EbdAlunos SET TurmaId = @turmaId, Ativo = 1, EncerradoEm = NULL, AtualizadoEm = SYSUTCDATETIME() WHERE AlunoId = @id
   `);
 
   await registrarAuditoria({
-    tabela: "EbdAlunos", registroId: aluno.alunoId, acao: "ALUNO_TRANSFERIDO",
-    usuarioId: registradoPorMembroId, dadosAntes: { turmaId: aluno.turmaId }, dadosDepois: { turmaId: novaTurmaId }
+    tabela: "EbdAlunos", registroId: aluno.alunoId, acao: reativando ? "ALUNO_REATIVADO" : "ALUNO_TRANSFERIDO",
+    usuarioId: registradoPorMembroId, dadosAntes: { turmaId: aluno.turmaId, ativo: aluno.ativo }, dadosDepois: { turmaId: novaTurmaId, ativo: true }
   });
 
-  return { sucesso: true, mensagem: "✅ Aluno transferido de turma." };
+  return { sucesso: true, mensagem: reativando ? "✅ Matrícula reativada na turma." : "✅ Aluno transferido de turma." };
 }
 
 async function listarAlunosPorTurma(pool, turmaId) {
   const result = await pool.request().input("turmaId", sql.Int, turmaId).query(`
-    SELECT a.*, m.Nome AS MembroNome
-    FROM EbdAlunos a JOIN MembroReferencia m ON m.MembroId = a.MembroId
-    WHERE a.TurmaId = @turmaId AND a.Ativo = 1 ORDER BY m.Nome
+    SELECT a.*, COALESCE(m.Nome, a.NomeNaoMembro) AS MembroNome
+    FROM EbdAlunos a LEFT JOIN MembroReferencia m ON m.MembroId = a.MembroId
+    WHERE a.TurmaId = @turmaId AND a.Ativo = 1 ORDER BY COALESCE(m.Nome, a.NomeNaoMembro)
   `);
   return result.recordset.map(row => ({
-    alunoId: row.AlunoId, membroId: row.MembroId, membroNome: row.MembroNome, matricula: row.Matricula, matriculadoEm: row.MatriculadoEm
+    alunoId: row.AlunoId, membroId: row.MembroId, membroNome: row.MembroNome, matricula: row.Matricula, matriculadoEm: row.MatriculadoEm,
+    naoMembro: row.MembroId == null, contato: row.ContatoNaoMembro || null,
+    dataNascimento: row.DataNascimento || null, responsavelNome: row.ResponsavelNome || null
   }));
 }
 
@@ -387,5 +575,8 @@ module.exports = {
   criarTurma, buscarTurmaPorId, listarTurmasPorCongregacao,
   buscarVinculoProfessor, designarProfessor, encerrarProfessor, listarProfessoresPorTurma,
   buscarAlunoPorMembro, matricularAluno, transferirAluno, listarAlunosPorTurma,
-  listarTurmasParaVisaoAgrupada, listarTurmasDoProfessor, ehProfessorAtivoDaCongregacao
+  listarTurmasParaVisaoAgrupada, listarTurmasDoProfessor, ehProfessorAtivoDaCongregacao,
+  // v6.8 — aluno não-membro
+  MAIORIDADE_ANOS, idadeEmAnos, validarAlunoNaoMembro, podeMatricularNaoMembro, podeVincularAMembro,
+  buscarAlunoPorId, matricularAlunoNaoMembro, vincularAlunoAMembro, encerrarMatricula
 };

@@ -6479,7 +6479,7 @@ desempate do ranking.
   **Chamada de projeto documentada na migração**: o pedido vive na
   **Turma** (`EbdPedidosRevistas.TurmaId`), não direto na Congregação,
   mesmo o texto do checklist dizendo "por congregação". Motivo: a v6.8
-  (ainda não construída) já amarra "revista/trimestre vigente" à classe —
+  (construída depois) amarra "revista/trimestre vigente" à classe —
   é a Turma quem sabe qual edição e quantas unidades precisa, não a
   congregação como agregado cego. A visão "por congregação" do checklist
   não foi abandonada: ela é a **consolidação** (item 2), que agrupa os
@@ -6600,9 +6600,10 @@ desempate do ranking.
 
 #### 🔒 Trava de Revisão 6-A — antes de avançar para a v6.8
 
-- [ ] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
       seção 3). Auditadas v6.1 a v6.7 pelas 5 perguntas do checklist
-      (26/09). **A trava que mais achou coisa até aqui**: o módulo EBD
+      (26/09); as duas conferências que ficaram pendentes foram feitas em
+      30/09 (ver item 5). **A trava que mais achou coisa até aqui**: o módulo EBD
       passou em todos os testes e em todo deploy, mas metade das ações
       nunca tinha funcionado em produção. Correções no commit `908c895` +
       migração 108.
@@ -6695,9 +6696,16 @@ desempate do ranking.
   confirma `success` nos 7 commits de v6.1 a v6.7 (`3e607e3`, `888f98f`,
   `7025bb5`, `bdc1919`, `7ddacd1`, `fec10d1`, `3e5b7f0`) e no das correções
   (`908c895`, run `36267898600`: 533 testes, migração 108 em 5 batches,
-  "Deployment Complete"). *Pendente para fechar*: conferência ao vivo das
-  rotas de ação (`401` sem sessão em vez de `404`) e o primeiro run do
-  agendador aquecido (27/09, 10h UTC).
+  "Deployment Complete"). **Pendências fechadas em 30/09**: (a) conferência
+  ao vivo das rotas de ação de dois segmentos contra
+  `app.ieadespa.org.br`, sem sessão — `ebd-chamada/licao/abrir`,
+  `ebd-turmas/professores/encerrar`, `ebd-turmas/alunos/transferir`,
+  `ebd-atividades/licao/conteudo`, `ebd-atividades/resposta/corrigir`,
+  `ebd-revistas/pedidos/aprovar`, `assistencia-social/cadastro/encerrar` e
+  `assistencia-social/profissionais/descredenciar` respondem todas `401`
+  (antes da correção eram `404`); (b) o agendador aquecido rodou com
+  `success` nos dois jobs em 4 dias seguidos (27, 28, 29 e 30/09 — runs
+  `36311923403`/`36313184116` no primeiro).
 
 #### v6.8 — Caderneta digital no padrão que a EBD já usa *(7ª rodada)*
 
@@ -6706,16 +6714,171 @@ preenche há décadas uma caderneta com campos padronizados (CPAD). Reproduzir
 **exatamente esses campos** elimina resistência — a pessoa reconhece a tela — e
 dá, pela primeira vez, série histórica comparável entre congregações.
 
-- [ ] Classe por faixa etária com professor e revista/trimestre vigente —
+- [x] Classe por faixa etária com professor e revista/trimestre vigente —
       espelhando a caderneta física: **matriculados, presentes, ausentes,
       visitantes, Bíblias, revistas e oferta** por domingo.
-- [ ] Fechamento trimestral automático + **Relatório do Superintendente**
+- [x] Fechamento trimestral automático + **Relatório do Superintendente**
       consolidado por congregação/Área (hoje somado à mão).
-- [ ] Aluno não-membro (visitante frequente, criança de família não congregada)
+- [x] Aluno não-membro (visitante frequente, criança de família não congregada)
       sem forçar matrícula de membresia — hoje o aluno é vínculo de
       `MembroReferencia`, o que exclui exatamente quem a EBD mais quer alcançar.
-- [ ] Migração/importação das cadernetas antigas em planilha, se houver.
+- [x] Migração/importação das cadernetas antigas em planilha, se houver.
       *(referência: eScriptura, Domus EBD, CPAD Escola Dominical)*
+
+  Implementado em cima de tudo que a FASE 6 já tinha, sem duplicar dado:
+  migração 109 (`sql/migrations/109_ebd_caderneta_digital.sql`),
+  `shared/ebdCaderneta.js` (lógica pura + banco), `GestaoEbdCaderneta`
+  (`/api/ebd-caderneta/...`), `EbdFechamentoAutomatico` (rotina diária) e,
+  no `shared/ebdTurmas.js`/`GestaoEbdTurmas`, o aluno não-membro. Frontend:
+  seção "📒 Caderneta digital (v6.8)" no fim da aba EBD e três formulários
+  novos na matrícula (não-membro, vincular/encerrar, transferir por Id).
+
+  **Caderneta do domingo (item 1).** `EbdCadernetas` tem uma linha por
+  (Lição × Turma). **Presentes, ausentes e visitantes não são digitados**:
+  continuam derivados da chamada (`EbdChamadas`, v6.2), o mesmo princípio de
+  "calculado, nunca digitado" do resto da FASE 6. O que a chamada não tem e a
+  caderneta de papel tem — **Bíblias e Revistas trazidas** — é a única coisa
+  lançada aqui, e em branco quer dizer "não informado" (`NULL`), nunca 0: a
+  caderneta de papel em branco não prova que ninguém trouxe Bíblia.
+  `ausentes = matriculados − presentes`, a definição do papel (quem não
+  está presente está ausente); a linha também devolve `ausentesMarcados` e
+  `semChamada`, pra o secretário ver quantos alunos ainda faltam marcar. Só
+  entram nos totais as classes que lançaram alguma coisa (chamada ou
+  caderneta) — uma classe que não se reuniu não puxa a média de presença pra
+  baixo. A linha é montada num lugar só (`montarLinhaCaderneta`), então a
+  tela do dia, o relatório e o fechamento nunca discordam, e traz alertas
+  (alunos sem chamada, mais presentes que matriculados, Bíblias ou revistas
+  acima do total de frequentes).
+
+  **Matriculados tem foto, porque a turma do aluno é sobrescrita na
+  transferência** (sem histórico): sem a foto, o passado mudaria a cada
+  aluno que sai. `MatriculadosRegistrado` é gravado ao salvar a caderneta da
+  classe e de novo ao **fechar a lição** (`fecharLicao` chama
+  `congelarMatriculadosDaLicao`, fail-soft — uma falha ali nunca impede
+  fechar a lição). Reabrir e salvar de novo regrava a foto.
+
+  **Decisão: a oferta não é por classe.** A caderneta de papel tem oferta por
+  classe, mas o dinheiro da EBD já tem um lugar só, `EbdOfertas` por lição
+  (v6.7); um segundo número digitado por classe poderia divergir dele. Então
+  a oferta aparece no domingo inteiro (`ofertaRegistrada`), vinda da v6.7, e
+  soma no relatório. A exceção é a caderneta **importada** (item 4), que
+  carrega a oferta do papel como histórico.
+
+  **Revista/trimestre vigente:** trimestres civis (`AAAA-T1` = jan-mar ...
+  `T4` = out-dez, o mesmo formato do catálogo da v6.6), calculados pela data
+  da lição. A revista mostrada é a que a turma **pediu** naquele trimestre
+  (`EbdPedidosRevistas`, v6.6); sem pedido, sugere as edições do catálogo da
+  mesma faixa etária (marcado "sugestão"); sem nada, mostra só o trimestre.
+
+  **Fechamento trimestral e Relatório do Superintendente (item 2).**
+  `EbdFechamentosTrimestrais` guarda a **foto congelada** (JSON) do trimestre
+  de uma congregação, `UNIQUE (CongregacaoId, Trimestre)`. Depois de fechado,
+  o número não muda quando um aluno é transferido ou uma lição é corrigida;
+  `fechamento/refazer` é uma ação explícita, auditada, que incrementa
+  `Versao`. Fechar à mão só é possível depois que o trimestre termina (antes
+  disso existe o relatório parcial). O fechamento **automático** é a rotina
+  diária `EbdFechamentoAutomatico` (`POST /api/ebd-fechamento-interno`, segredo
+  `x-cron-secret`, `shared/cronAuth.js` — timerTrigger continua banido no
+  modelo gerenciado) chamada por um job novo de `rotinas-diarias.yml` às 11h00
+  UTC (8h em Brasília, 30 min depois do último, pelo mesmo motivo dos outros):
+  fecha os **2 trimestres mais recentes já encerrados há mais de 7 dias**
+  (carência pro último domingo ser lançado) das congregações que têm lição e
+  ainda não têm fechamento. **Nunca refaz** um fechamento existente; uma
+  congregação com problema não impede as outras; o que ficou em aberto é
+  registrado (`LicoesAbertas`) e aparece como aviso. É idempotente: se uma
+  rodada estourar o tempo das Functions, a de amanhã continua.
+
+  O relatório (`GET /api/ebd-caderneta/relatorio?trimestre=`) é
+  **Área → Congregação → Turma**, dentro do escopo territorial de quem
+  consulta (`usuario.escopoCongregacoes`). Congregação com fechamento usa a
+  foto (`fonte: FECHAMENTO`); sem fechamento, calcula ao vivo
+  (`fonte: AO_VIVO`) e o relatório fica marcado "parcial" enquanto o
+  trimestre não terminou. As contas: por turma, médias por domingo lançado e
+  percentual de presença = Σ presentes ÷ Σ matriculados (não média de
+  médias); na congregação, "domingos" é o número de lições distintas; área e
+  total geral somam os filhos. A oferta da congregação é `EbdOfertas` do
+  trimestre mais a oferta importada.
+
+  **Aluno não-membro (item 3).** A migração 109 torna `EbdAlunos.MembroId`
+  anulável e dá à própria matrícula o mínimo de identificação (nome, contato,
+  nascimento, responsável). Um `CHECK` garante que a linha é **ou membro ou
+  não-membro**, nunca os dois nem nenhum. **Armadilha já conhecida e evitada:**
+  no SQL Server uma `UNIQUE` comum trata `NULL` como igual a `NULL` — com
+  `MembroId` anulável, a `UQ_EbdAlunos_Membro` aceitaria um único não-membro
+  no banco inteiro (o mesmo erro que a Trava 6-A achou em `EbdChamadas`).
+  Virou índice único **filtrado** (`WHERE MembroId IS NOT NULL`).
+
+  A matrícula sai pela mesma sequência atômica de sempre (`EBD-ANO-NNNNNN`,
+  `gerarProtocolo`). Regras (`validarAlunoNaoMembro`): nome com pelo menos 3
+  caracteres; **menor de 18 anos — pela data de nascimento informada — exige o
+  nome do responsável** (LGPD, Art. 14); data futura ou improvável é
+  recusada; o mesmo nome (sem distinguir acento/maiúscula) na mesma turma é
+  recusado. A trilha de auditoria — encadeada por hash, que não pode ser
+  corrigida depois — guarda só os ids, **nunca nome, contato ou nascimento**.
+  Quando o não-membro vira membro, `alunos/vincular-membro` liga a **mesma
+  matrícula** (e todo o histórico de chamada) ao cadastro do membro e apaga os
+  dados soltos da matrícula; nunca dá pra ter duas matrículas no mesmo membro.
+
+  O não-membro aparece na chamada, nas atividades e na caderneta como qualquer
+  aluno. Não pontua em conquistas (não tem `MembroId`, a mesma regra do
+  visitante) e não entra no ranking por turma. **Achado ao construir:** não
+  existia nenhuma forma de desativar um aluno, então o número de matriculados
+  só cresceria e a caderneta nunca bateria com a realidade. Entraram
+  `alunos/encerrar` (marca `Ativo = 0`, nada é apagado) e a reativação:
+  transferir uma matrícula encerrada a reativa na turma de destino (é assim
+  que quem saiu e voltou reaparece, já que a matrícula é única por membro).
+  A transferência também passou a aceitar `alunoId`, o único jeito de achar um
+  não-membro.
+
+  **Importação das cadernetas antigas (item 4, "se houver").**
+  `POST /api/ebd-caderneta/importar` lê CSV (ou linhas em JSON) com as colunas
+  `Igreja`, `Domingo`, `Classe`, `Matriculados`, `Presentes` (obrigatórias) e
+  `Ausentes`, `Visitantes`, `Bíblias`, `Revistas`, `Oferta` (opcionais); o
+  cabeçalho aceita apelidos, sem acento nem maiúscula; detecta `;`, `,` ou
+  tabulação; datas `AAAA-MM-DD` ou `DD/MM/AAAA`; oferta em formato brasileiro
+  (`1.234,56`). **Simular é o padrão** — gravar exige `simular: false`
+  explícito — e é **tudo ou nada**: qualquer linha com erro e nada entra;
+  quando entra, é numa transação. Congregação e turma são achadas pelo nome e
+  a turma **precisa já existir** (não cria turma sozinho); o escopo de quem
+  importa é conferido por linha. Cria a lição como `FECHADA` se não existir.
+  **Não sobrepõe dado do sistema:** recusa turma que já tem chamada ou
+  caderneta do sistema naquela data, e oferta quando a lição já tem oferta da
+  v6.7 (evita contar dinheiro em dobro); reimportar substitui uma caderneta
+  que já era importada. Cadernetas importadas (`Origem = 'IMPORTADA'`) só têm
+  totais, sem linha por aluno, e não são editáveis pela tela. O front lê o
+  arquivo em UTF-8 e cai pra Windows-1252 se não for UTF-8 válido (o Excel em
+  português salva assim; sem isso "Bíblias" e nomes de igreja chegariam
+  quebrados). **Limite assumido:** o mecanismo foi entregue sem ter visto uma
+  planilha real da igreja — se a disposição de colunas for outra, o ajuste é
+  a tabela de apelidos `ALIAS_COLUNAS` em `shared/ebdCaderneta.js`.
+
+  **Permissão:** nenhuma nova — reaproveita `ebd_gestao` (v6.1). Salvar
+  Bíblias/Revistas de uma classe e ver a linha dela exige `ebd_gestao` (no
+  escopo) **ou ser professor ativo daquela turma**, a mesma granularidade da
+  chamada (v6.2); a caderneta do domingo inteiro, o relatório, o fechamento e
+  a importação exigem `ebd_gestao` dentro do escopo territorial.
+
+  Testado com `npx jest`: 61 testes novos (49 em
+  `shared/__tests__/ebdCaderneta.test.js` — trimestres, linha da caderneta,
+  consolidado, regras do fechamento, CSV —, 12 em
+  `ebdTurmasNaoMembro.test.js` — não-membro, menor de idade, nome repetido,
+  vínculo a membro) — suíte completa em 594/594 (40 suítes; era 533/38).
+  `node --check` em todos os `.js` novos e alterados; no front, todo
+  `getElementById` literal do código novo (112) tem id no HTML e todo
+  `onclick` da aba EBD (40) aponta pra função que existe.
+
+  **Registrado, não construído, por decisão:**
+
+  - Exclusão LGPD do aluno não-membro: o fluxo de exclusão de dados
+    (`ExcluirDados`) não cobre `EbdAlunos` nem para membros; fica para a
+    Trava 6-B, junto da política de retenção.
+  - O texto digitado por gente passa por `escaparHtmlEbd` nas telas novas e
+    nas duas células de nome que a v6.8 tocou (alunos da turma e roster da
+    chamada); o resto da aba EBD ainda monta HTML sem escapar (nome de
+    visitante, de turma etc.) — limpeza geral para a Trava 6-B.
+  - Matriculados de lições fechadas **antes** da v6.8 não têm foto: usam o
+    número atual de alunos ativos até alguém reabrir e salvar a caderneta
+    (ou até o trimestre ser fechado, que congela o resultado).
 
 #### v6.9 — Trilhas de formação e certificação verificável *(7ª rodada)*
 

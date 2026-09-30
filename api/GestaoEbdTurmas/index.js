@@ -19,7 +19,10 @@
 // POST /api/ebd-turmas/professores/encerrar body:{turmaId, membroId}
 // GET  /api/ebd-turmas/alunos?turmaId=
 // POST /api/ebd-turmas/alunos               body:{membroId, turmaId}          -> matrícula (vínculo de MembroReferencia)
-// POST /api/ebd-turmas/alunos/transferir    body:{membroId, novaTurmaId}
+// POST /api/ebd-turmas/alunos               body:{turmaId, naoMembro:{nome, contato?, dataNascimento?, responsavelNome?}} -> matrícula de NÃO-MEMBRO (v6.8)
+// POST /api/ebd-turmas/alunos/transferir    body:{membroId | alunoId, novaTurmaId}   (matrícula encerrada é reativada)
+// POST /api/ebd-turmas/alunos/vincular-membro body:{alunoId, membroId}        -> não-membro que virou membro (v6.8)
+// POST /api/ebd-turmas/alunos/encerrar      body:{alunoId}                    -> encerra a matrícula (v6.8)
 // GET  /api/ebd-turmas/aluno?membroId=                -> vínculo de aluno de um membro específico
 // GET  /api/ebd-turmas/visao-agrupada?busca=          -> Área -> Congregação -> Turmas, dentro do escopo do usuário
 const auth = require("../shared/auth");
@@ -126,7 +129,17 @@ module.exports = async function (context, req) {
         return;
       }
       if (metodo === "POST") {
-        const { membroId, turmaId } = req.body || {};
+        const { membroId, turmaId, naoMembro } = req.body || {};
+        // v6.8 — aluno sem cadastro de membro: body { turmaId, naoMembro: { nome, contato?, dataNascimento?, responsavelNome? } }
+        if (naoMembro) {
+          if (membroId) return erro(context, 400, "Envie membroId OU naoMembro, não os dois.");
+          if (!turmaId) return erro(context, 400, "Informe turmaId.");
+          const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
+          if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+          const resultado = await ebd.matricularAlunoNaoMembro(pool, { ...naoMembro, turmaId, criadoPorMembroId: usuario.membroId });
+          context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
+          return;
+        }
         if (!membroId || !turmaId) return erro(context, 400, "Informe membroId e turmaId.");
         const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
         if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
@@ -137,18 +150,45 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "alunos/transferir" && metodo === "POST") {
-      const { membroId, novaTurmaId } = req.body || {};
-      if (!membroId || !novaTurmaId) return erro(context, 400, "Informe membroId e novaTurmaId.");
+      // v6.8: aceita alunoId (único jeito de achar um não-membro) além do membroId de sempre.
+      const { membroId, alunoId, novaTurmaId } = req.body || {};
+      if ((!membroId && !alunoId) || !novaTurmaId) return erro(context, 400, "Informe alunoId (ou membroId) e novaTurmaId.");
       const { ok } = await podeAcessarTurma(pool, usuario, novaTurmaId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
       // Trava 6-A: escopo também sobre a turma de ORIGEM — só o destino era
       // conferido, então qualquer gestor puxava aluno de congregação alheia.
-      const alunoAtual = await ebd.buscarAlunoPorMembro(pool, membroId);
+      const alunoAtual = alunoId ? await ebd.buscarAlunoPorId(pool, alunoId) : await ebd.buscarAlunoPorMembro(pool, membroId);
       if (alunoAtual) {
         const origem = await podeAcessarTurma(pool, usuario, alunoAtual.turmaId);
         if (!origem.ok) return erro(context, 403, "A turma atual do aluno está fora do seu escopo de atuação.");
       }
-      const resultado = await ebd.transferirAluno(pool, { membroId, novaTurmaId, registradoPorMembroId: usuario.membroId });
+      const resultado = await ebd.transferirAluno(pool, { membroId, alunoId, novaTurmaId, registradoPorMembroId: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
+    }
+
+    // v6.8 — o não-membro virou membro: mesma matrícula, agora ligada ao cadastro do membro.
+    if (acao === "alunos/vincular-membro" && metodo === "POST") {
+      const { alunoId, membroId } = req.body || {};
+      if (!alunoId || !membroId) return erro(context, 400, "Informe alunoId e membroId.");
+      const aluno = await ebd.buscarAlunoPorId(pool, alunoId);
+      if (!aluno) return erro(context, 404, "Aluno não encontrado.");
+      const { ok } = await podeAcessarTurma(pool, usuario, aluno.turmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      const resultado = await ebd.vincularAlunoAMembro(pool, { alunoId, membroId, registradoPorMembroId: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
+    }
+
+    // v6.8 — encerra a matrícula (deixa de contar nos "matriculados" da caderneta; nada é apagado).
+    if (acao === "alunos/encerrar" && metodo === "POST") {
+      const { alunoId } = req.body || {};
+      if (!alunoId) return erro(context, 400, "Informe alunoId.");
+      const aluno = await ebd.buscarAlunoPorId(pool, alunoId);
+      if (!aluno) return erro(context, 404, "Aluno não encontrado.");
+      const { ok } = await podeAcessarTurma(pool, usuario, aluno.turmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      const resultado = await ebd.encerrarMatricula(pool, { alunoId, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
     }

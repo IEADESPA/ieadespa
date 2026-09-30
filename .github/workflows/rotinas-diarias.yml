@@ -15,6 +15,9 @@ on:
     # 10h30 UTC = 7h30 — 30min depois de propósito, mesma razão de sempre:
     # não competir pelo mesmo pool de conexão no exato mesmo minuto.
     - cron: "30 10 * * *"
+    # 11h00 UTC = 8h00 — fechamento trimestral da EBD (v6.8), 30min depois do
+    # último, pelo mesmo motivo.
+    - cron: "0 11 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -54,4 +57,16 @@ jobs:
       - name: Escalona instâncias de fluxo com SLA vencido (vB.3)
         run: |
           curl -sf -X POST "https://app.ieadespa.org.br/api/fluxos-escalonador-interno" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  ebd-fechamento:
+    if: github.event.schedule == '0 11 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      # Idempotente: só fecha o que ainda não tem fechamento e nunca refaz o
+      # que já existe. Se uma rodada estourar o tempo das Functions, a de
+      # amanhã continua de onde parou (o que já foi fechado está gravado).
+      - name: Fecha os trimestres encerrados da EBD (v6.8)
+        run: |
+          curl -sf -X POST "https://app.ieadespa.org.br/api/ebd-fechamento-interno" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

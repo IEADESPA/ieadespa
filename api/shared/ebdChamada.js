@@ -201,6 +201,11 @@ async function fecharLicao(pool, { licaoId, fechadoPorMembroId }) {
     usuarioId: fechadoPorMembroId, dadosAntes: { status: licao.status }, dadosDepois: { status: "FECHADA" }
   });
 
+  // v6.8 — congela o número de matriculados de cada classe (caderneta). Só
+  // carregado aqui dentro: ebdCaderneta.js já importa este módulo no topo, e
+  // um require circular de nível de módulo devolveria um objeto vazio.
+  await require("./ebdCaderneta").congelarMatriculadosDaLicao(pool, licaoId);
+
   return { sucesso: true, mensagem: "✅ Lição fechada." };
 }
 
@@ -334,12 +339,12 @@ async function registrarVisitante(pool, { licaoId, turmaId, visitanteNome, visit
 
 async function listarChamadaPorLicaoTurma(pool, { licaoId, turmaId }) {
   const result = await pool.request().input("licaoId", sql.Int, licaoId).input("turmaId", sql.Int, turmaId).query(`
-    SELECT c.*, m.Nome AS MembroNome, a.Matricula
+    SELECT c.*, COALESCE(m.Nome, a.NomeNaoMembro) AS MembroNome, a.Matricula
     FROM EbdChamadas c
     LEFT JOIN EbdAlunos a ON a.AlunoId = c.AlunoId
     LEFT JOIN MembroReferencia m ON m.MembroId = a.MembroId
     WHERE c.LicaoId = @licaoId AND c.TurmaId = @turmaId
-    ORDER BY c.Status, m.Nome, c.VisitanteNome
+    ORDER BY c.Status, COALESCE(m.Nome, a.NomeNaoMembro), c.VisitanteNome
   `);
   return result.recordset.map(row => ({
     ...mapearChamada(row), membroNome: row.MembroNome, matricula: row.Matricula
@@ -349,17 +354,21 @@ async function listarChamadaPorLicaoTurma(pool, { licaoId, turmaId }) {
 // Roster completo da turma pra esta lição — alunos ativos, cada um com a
 // presença já lançada (ou null se ainda não chamado) — é o que a tela de
 // lançamento usa pra montar a lista com o status atual de cada aluno.
+// v6.8: aluno não-membro (MembroId NULL) entra na mesma lista, com o nome que
+// a própria matrícula guarda — `membroNome` continua sendo o campo que a
+// tela lê.
 async function listarRosterComPresenca(pool, { turmaId, licaoId }) {
   const result = await pool.request().input("turmaId", sql.Int, turmaId).input("licaoId", sql.Int, licaoId).query(`
-    SELECT a.AlunoId, a.Matricula, m.Nome AS MembroNome, c.Status, c.ChamadaId
+    SELECT a.AlunoId, a.Matricula, COALESCE(m.Nome, a.NomeNaoMembro) AS MembroNome,
+           CASE WHEN a.MembroId IS NULL THEN 1 ELSE 0 END AS NaoMembro, c.Status, c.ChamadaId
     FROM EbdAlunos a
-    JOIN MembroReferencia m ON m.MembroId = a.MembroId
+    LEFT JOIN MembroReferencia m ON m.MembroId = a.MembroId
     LEFT JOIN EbdChamadas c ON c.AlunoId = a.AlunoId AND c.LicaoId = @licaoId
     WHERE a.TurmaId = @turmaId AND a.Ativo = 1
-    ORDER BY m.Nome
+    ORDER BY COALESCE(m.Nome, a.NomeNaoMembro)
   `);
   return result.recordset.map(row => ({
-    alunoId: row.AlunoId, matricula: row.Matricula, membroNome: row.MembroNome,
+    alunoId: row.AlunoId, matricula: row.Matricula, membroNome: row.MembroNome, naoMembro: !!row.NaoMembro,
     status: row.Status || null, chamadaId: row.ChamadaId || null
   }));
 }

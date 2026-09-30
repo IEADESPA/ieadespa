@@ -2523,9 +2523,42 @@
         <p id="resultadoAlunoEbd" class="subtitle"></p>
 
         <details style="margin:8px 0;">
+          <summary>🙋 Matricular aluno NÃO-membro (v6.8)</summary>
+          <p class="subtitle" style="margin:4px 0;">Para quem ainda não tem cadastro de membro (visitante frequente,
+            criança de família não congregada). Recebe uma matrícula EBD normal. <strong>Menor de 18 anos: informe
+            o responsável.</strong> Se a pessoa virar membro depois, use "Vincular a membro" — a matrícula e o
+            histórico de chamada continuam os mesmos.</p>
+          <div class="barra-lista">
+            <input type="number" id="ebdNaoMembroTurmaId" placeholder="Id da turma" style="max-width:140px;" />
+            <input type="text" id="ebdNaoMembroNome" placeholder="Nome completo" style="min-width:220px;" />
+            <input type="text" id="ebdNaoMembroContato" placeholder="Contato (opcional)" style="min-width:160px;" />
+          </div>
+          <div class="barra-lista">
+            <label style="display:flex;align-items:center;gap:6px;">Nascimento
+              <input type="date" id="ebdNaoMembroNascimento" style="max-width:160px;" /></label>
+            <input type="text" id="ebdNaoMembroResponsavel" placeholder="Responsável (obrigatório se menor de 18)" style="min-width:260px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="matricularNaoMembroEbdAcao()">🎓 Matricular</button>
+          </div>
+        </details>
+
+        <details style="margin:8px 0;">
+          <summary>🔗 Vincular não-membro a um membro / ⛔ Encerrar matrícula (v6.8)</summary>
+          <p class="subtitle" style="margin:4px 0;">"Encerrar" tira o aluno dos <em>matriculados</em> da caderneta
+            sem apagar nada — a chamada e as atividades antigas continuam no histórico. Transferir um aluno de
+            matrícula encerrada o reativa na turma de destino.</p>
+          <div class="barra-lista">
+            <input type="number" id="ebdVincularAlunoId" placeholder="Id do aluno" style="max-width:140px;" />
+            <input type="number" id="ebdVincularMatriculaMembro" placeholder="Matrícula do membro" style="max-width:180px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="vincularAlunoEbdAcao()">🔗 Vincular a membro</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="encerrarMatriculaEbdAcao()">⛔ Encerrar matrícula (Id do aluno)</button>
+          </div>
+        </details>
+
+        <details style="margin:8px 0;">
           <summary>🔀 Transferir aluno de turma</summary>
           <div class="barra-lista">
             <input type="number" id="ebdTransferirMatriculaMembro" placeholder="Matrícula do membro" style="max-width:180px;" />
+            <input type="number" id="ebdTransferirAlunoId" placeholder="ou Id do aluno (não-membro)" style="max-width:200px;" />
             <input type="number" id="ebdTransferirNovaTurmaId" placeholder="Id da nova turma" style="max-width:160px;" />
             <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="transferirAlunoEbdAcao()">🔀 Transferir</button>
           </div>
@@ -2806,6 +2839,61 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarConsolidadoFinanceiroEbdAcao()">📊 Ver consolidado (usa congregação/mês/ano acima)</button>
         </div>
         <div id="painelConsolidadoFinanceiroEbd"></div>
+        </div>
+
+        <hr />
+        <h3>📒 Caderneta digital (v6.8)</h3>
+        <p class="subtitle">A mesma caderneta de papel da CPAD, por classe e por domingo: <strong>matriculados,
+          presentes, ausentes, visitantes, Bíblias, revistas e oferta</strong>. Presentes, ausentes e visitantes
+          saem da chamada (v6.2) — não se digitam; a oferta é a da v6.7; só <strong>Bíblias</strong> e
+          <strong>Revistas</strong> são lançadas aqui. <em>Ausentes = matriculados − presentes</em>, como no papel.
+          Em branco quer dizer "não informado" (diferente de 0). O professor da turma lança a própria classe; a
+          visão do domingo inteiro e o relatório são de quem administra a EBD ("ebd_gestao").</p>
+
+        <h4>Caderneta do domingo</h4>
+        <div class="barra-lista">
+          <input type="number" id="cadLicaoId" placeholder="Id da lição" style="max-width:140px;" />
+          <input type="number" id="cadTurmaId" placeholder="Id da turma (só a sua classe)" style="max-width:220px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarCadernetaEbdAcao()">📒 Carregar caderneta</button>
+        </div>
+        <p class="subtitle ebd-so-gestao" style="margin:4px 0;">Deixe o Id da turma em branco para ver o domingo
+          inteiro da congregação (todas as classes + totais). Lição aberta = números provisórios.</p>
+        <div id="painelCadernetaEbd"></div>
+
+        <div class="ebd-so-gestao">
+        <hr />
+        <h4>Relatório do Superintendente (por trimestre)</h4>
+        <p class="subtitle" style="margin:4px 0;">Área → Congregação → Turma. Congregação com trimestre
+          <strong>fechado</strong> mostra a foto congelada (não muda se alguém for transferido depois); as demais
+          são calculadas ao vivo e marcadas como parciais. A rotina diária fecha sozinha os trimestres
+          encerrados há mais de 7 dias; aqui você também pode fechar à mão ou refazer.</p>
+        <div class="barra-lista">
+          <input type="text" id="cadRelTrimestre" placeholder="Trimestre (ex: 2026-T3)" style="max-width:180px;" />
+          <select id="cadRelCongregacao"><option value="">Todas as congregações do meu escopo</option></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarRelatorioTrimestreEbdAcao()">📊 Ver relatório</button>
+        </div>
+        <div id="painelRelatorioTrimestreEbd"></div>
+
+        <hr />
+        <h4>Importar cadernetas antigas (CSV)</h4>
+        <p class="subtitle" style="margin:4px 0;">Para trazer o histórico de papel/planilha. Primeira linha =
+          cabeçalho. Obrigatórias: <code>Igreja</code> (congregação), <code>Domingo</code> (AAAA-MM-DD ou
+          DD/MM/AAAA), <code>Classe</code> (turma já cadastrada), <code>Matriculados</code>,
+          <code>Presentes</code>. Opcionais: <code>Ausentes</code>, <code>Visitantes</code>,
+          <code>Bíblias</code>, <code>Revistas</code>, <code>Oferta</code>. Separador ponto-e-vírgula, vírgula ou
+          tabulação (o Excel em português exporta com ponto-e-vírgula). <strong>Sempre confira (simule) antes:</strong>
+          se houver qualquer erro, nada é gravado. Não sobrepõe chamada feita no sistema e não conta oferta em
+          dobro com o financeiro (v6.7).</p>
+        <div class="barra-lista">
+          <input type="file" id="cadImportArquivo" accept=".csv,.txt,text/csv" onchange="lerArquivoImportacaoEbdAcao()" />
+        </div>
+        <textarea id="cadImportCsv" rows="6" style="width:100%;font-family:monospace;"
+          placeholder="Igreja;Domingo;Classe;Matriculados;Presentes;Ausentes;Visitantes;Bíblias;Revistas;Oferta&#10;Sede;20/09/2026;Adultos;20;15;5;3;10;12;150,00"></textarea>
+        <div class="barra-lista">
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="importarCadernetasEbdAcao(true)">🔎 Conferir (simular)</button>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="importarCadernetasEbdAcao(false)">⬇️ Importar de verdade</button>
+        </div>
+        <div id="painelImportacaoCadernetaEbd"></div>
         </div>
       </div>
 

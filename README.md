@@ -7069,7 +7069,13 @@ dá, pela primeira vez, série histórica comparável entre congregações.
   notificação; e **cada um dos seis encaixes, com e sem requisito** (o "sem"
   prova que nada muda). As funções de renderização do front rodaram num DOM
   simulado com o JSON da API, junto com a página pública: 59 verificações,
-  incluindo o escape de HTML.
+  incluindo o escape de HTML. **Em produção:** a 110 foi aplicada pelo deploy
+  do commit `61b8394`; `verificar.html` responde 200; a verificação pública
+  responde o mesmo 404 (`NAO_ENCONTRADO`, `Cache-Control: no-store`,
+  `X-Robots-Tag: noindex`) para código inexistente e de formato inválido — a
+  consulta à coluna nova sem erro confirma a migração —; as 10 rotas
+  protegidas testadas sem sessão respondem `401` (nenhuma `404`) e a rota do
+  QR existe.
 
   **Registrado, não construído, por decisão:**
 

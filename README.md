@@ -8202,6 +8202,19 @@ registro do canal, sozinho, não cobre nada disso.
   contra um servidor falso nos modos com canais, sem canais, resposta antiga e erro
   500, e contra a produção.
 
+  **Em produção (verificado em 01/10/2026).** O deploy do sistema passou com os testes
+  e a migração 115 aplicada no Azure. As 12 rotas `GET` e o `POST` testados em
+  `/api/canais/*` respondem `401` sem sessão; `/api/catalogos/canaisOficiais`
+  responde `404` (a edição saiu do catálogo); `/api/agenda-publica/canais` responde
+  `200` com a lista **vazia** — nenhum canal foi marcado como público ainda. O primeiro
+  deploy do site rodou antes da API nova existir e ficou na versão anterior; um
+  disparo manual do deploy do site (o sincronizador o faria em até 20 minutos)
+  igualou as versões (`2ede5dad7ed05d97` nos dois lados), e a página
+  `/canais-oficiais/` está no ar, com a mensagem de relação em organização e o link
+  no rodapé. **Nenhum canal foi cadastrado em produção:** os três canais antigos
+  aparecem como "cadastro incompleto", e a Secretaria precisa receber a permissão
+  `canais_gestao` (em Permissões) para registrar os canais de verdade.
+
   **A blindagem digital e o púlpito.** O Art. 157 trata de duas coisas: o **púlpito**
   (§§1º a 4º — santinhos, discurso eleitoreiro, comício disfarçado, licença do
   obreiro candidato, sanção ao dirigente) e o **digital** (§5º — grupos oficiais e

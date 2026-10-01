@@ -7619,6 +7619,13 @@ dá, pela primeira vez, série histórica comparável entre congregações.
   layout em si (CSS) não foi visto num navegador** — vale abrir a aba uma vez em
   produção.
 
+  **Em produção (01/10).** Commit `089d336`, run `36865623244`: testes 768/768,
+  **migração 113 executada no Azure SQL em 19 batches** (a primeira execução em
+  Azure SQL de verdade; a 113 levou ~6 s — o passo inteiro leva ~2,5 min porque
+  reexecuta, idempotentes, as 113 migrações) e deploy concluído. Conferido ao vivo, sem
+  sessão: as **21 ações de `/api/psc/*` respondem `401`** (nenhuma `404`, a lição da
+  Trava 6-A) e a página servida já traz a aba `abaPsc`.
+
   **Registrado, não construído, por decisão:**
 
   - A unidade rebaixada continua uma linha de `Congregacoes`, com os membros nela

@@ -140,6 +140,7 @@ const psc = require("./psc");
 const calendarioDb = require("./calendarioDb");
 const canaisDb = require("./canaisDb");
 const eventosDb = require("./eventosDb");
+const voluntariadoDb = require("./voluntariadoDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -176,7 +177,11 @@ const DETECTORES = {
   // Eventos (v7.4): os avisos de organizador designado, convidado para análise/decidido e caixa para conferir saem NA HORA,
   // no ato (por isso não têm detector); aqui ficam a cobrança do convidado sem decisão com o evento perto e o caixa fora do prazo.
   EVENTOS_CONVIDADO_ATRASADO: { tabela: "EventoConvidados", detectar: (pool) => eventosDb.detectarConvidadosAtrasados(pool) },
-  EVENTOS_CAIXA_ENCERRAR: { tabela: "EventoCaixas", detectar: (pool) => eventosDb.detectarCaixasForaDoPrazo(pool) }
+  EVENTOS_CAIXA_ENCERRAR: { tabela: "EventoCaixas", detectar: (pool) => eventosDb.detectarCaixasForaDoPrazo(pool) },
+  // Voluntariado (v7.5): remoção da escala, vaga aberta e rodízio publicado avisam NA HORA, no ato (sem detector); aqui ficam a trava de
+  // habitualidade (Art. 135 §1º, II — quem serve escala após escala numa equipe operacional) e o Termo de Adesão ainda sem registro (Art. 133 §8º).
+  ESCALA_HABITUALIDADE: { tabela: "EscalasEquipes", detectar: (pool) => voluntariadoDb.detectarHabitualidade(pool) },
+  VOLUNTARIADO_TERMO_PENDENTE: { tabela: "VoluntariadoAdesoes", detectar: (pool) => voluntariadoDb.detectarTermosPendentes(pool) }
 };
 
 module.exports = { DETECTORES };

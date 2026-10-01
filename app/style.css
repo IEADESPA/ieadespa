@@ -717,3 +717,53 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .evt-indicador-erro { background: var(--cor-erro-suave); color: var(--cor-erro); }
 .evt-cartao-fixo { border-left: 6px solid var(--cor-primaria); }
 .evt-form-detalhes > summary { cursor: pointer; padding: 4px 0; }
+
+/* v7.5 — Escalas e voluntariado (rodízio, Termo de Adesão, remoção da escala). Prefixo .vol-; só variáveis do tema
+   (e o marrom de texto já usado em .tag-pendente / .psc-aviso), então acompanha qualquer tema. */
+.vol-cartao { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); background: var(--cor-superficie); padding: 12px 14px; margin: 10px 0; overflow-wrap: anywhere; }
+.vol-cartao h4, .vol-cartao h5 { margin: 0 0 6px; color: var(--cor-primaria); }
+.vol-cartao-alerta { border-left: 5px solid var(--cor-secundaria); background: var(--cor-secundaria-suave); }
+.vol-inativo { opacity: .75; }
+.vol-meta { margin: 2px 0 8px; font-size: 0.88rem; color: var(--cor-texto-suave); }
+.vol-sub { margin: 12px 0 4px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--cor-texto-suave); }
+.vol-matricula { font-size: 0.78rem; font-weight: normal; color: var(--cor-texto-suave); }
+.vol-base { font-size: 0.74rem; color: var(--cor-texto-suave); }
+.vol-dica { font-size: 0.8rem; color: var(--cor-texto-suave); flex: 1 1 260px; }
+.vol-campo .vol-dica { display: block; margin-top: 2px; }
+.vol-etiqueta { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.74rem; font-weight: 600; white-space: nowrap; vertical-align: middle; background: var(--cor-primaria-suave); color: var(--cor-primaria); }
+.vol-etiqueta-ok { background: var(--cor-sucesso-suave); color: var(--cor-sucesso); }
+.vol-etiqueta-alerta { background: var(--cor-secundaria-suave); color: #7A6110; }
+.vol-etiqueta-neutra { background: var(--cor-fundo); color: var(--cor-texto-suave); border: 1px solid var(--cor-borda); }
+.vol-aviso { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 10px 0; padding: 10px 14px; font-size: 0.9rem; background: var(--cor-secundaria-suave); color: #7A6110; border-left: 4px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); }
+.vol-erro { margin: 8px 0; padding: 8px 12px; font-size: 0.88rem; background: var(--cor-erro-suave); color: var(--cor-erro); border-left: 4px solid var(--cor-erro); border-radius: var(--raio-pequeno); }
+.vol-selo-ok { display: inline-block; margin: 4px 0 8px; padding: 6px 12px; font-weight: 600; background: var(--cor-sucesso-suave); color: var(--cor-sucesso); border-radius: var(--raio-pequeno); }
+.vol-resultado { margin: 10px 0; padding: 10px 14px; font-size: 0.9rem; background: var(--cor-fundo); border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); overflow-wrap: anywhere; }
+.vol-resultado p { margin: 4px 0; }
+.vol-resumo { margin: 10px 0; padding: 10px 14px; font-size: 0.95rem; background: var(--cor-primaria-suave); color: var(--cor-primaria); border-radius: var(--raio-pequeno); }
+.vol-form { margin: 10px 0; padding: 10px 14px; background: var(--cor-fundo); border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); }
+.vol-form > summary { cursor: pointer; padding: 4px 0; font-weight: 600; }
+.vol-form h5 { margin: 0 0 6px; color: var(--cor-primaria); }
+.vol-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0 14px; margin-top: 8px; }
+.vol-campo { margin-bottom: 10px; }
+.vol-campo label { display: block; margin-bottom: 4px; font-size: 0.85rem; font-weight: 600; color: var(--cor-texto); }
+.vol-campo input, .vol-campo select, .vol-campo textarea { width: 100%; padding: 10px; border: 2px solid var(--cor-borda); border-radius: var(--raio-pequeno); font-size: 16px; font-family: inherit; color: var(--cor-texto); background: var(--cor-superficie); box-sizing: border-box; }
+.vol-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 8px 0; }
+.vol-acoes .vol-numero { width: 90px; min-width: 0; padding: 8px 10px; }
+.vol-inline { font-size: 0.88rem; font-weight: 600; }
+.vol-check { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
+.vol-check input, .barra-lista .vol-check input { width: auto; min-width: 0; margin: 0; padding: 0; }
+.vol-declaracao { align-items: flex-start; margin: 8px 0; line-height: 1.4; }
+.vol-declaracao input { margin-top: 3px; }
+.vol-aceite { margin: 12px 0; font-weight: 600; line-height: 1.4; }
+.vol-termo-itens { margin: 8px 0; padding-left: 22px; font-size: 0.9rem; line-height: 1.5; }
+.vol-termo-itens li { margin-bottom: 8px; }
+.vol-grupo { margin: 8px 0; padding: 8px 12px; background: var(--cor-fundo); border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); }
+.vol-grupo-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.vol-lista { margin: 4px 0; padding-left: 20px; font-size: 0.9rem; }
+.vol-lista li { margin: 3px 0; }
+.vol-adicionar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.vol-adicionar input { width: 140px; min-width: 0; padding: 8px 10px; border: 2px solid var(--cor-borda); border-radius: var(--raio-pequeno); font-size: 16px; font-family: inherit; color: var(--cor-texto); background: var(--cor-superficie); }
+.vol-frase-caixa { margin: 8px 0; }
+.vol-frase { margin: 0 0 8px; padding: 10px 14px; font-size: 0.92rem; line-height: 1.5; color: var(--cor-texto); background: var(--cor-secundaria-suave); border-left: 5px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); user-select: all; }
+.vol-tabela-estreita { min-width: 0; }
+.vol-select-natureza { width: auto; min-width: 160px; padding: 6px 8px; font-size: 0.85rem; }

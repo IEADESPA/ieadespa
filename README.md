@@ -322,9 +322,9 @@ diz em que arquivo ela está e em que pé ela anda.
 
 - **Concluídas:** FASES 0 a 6 e as FASES B (consolidação da base) e C (integração com o site), salvo uns
   poucos itens adiados de propósito, que o índice marca como 🟡.
-- **Em andamento — FASE 7:** v7.1 (PSC), v7.2 (Calendário oficial), v7.3 (Canais oficiais) e v7.4
-  (Eventos e congressos) entregues e no ar. **Próxima: v7.5** (Escalas e voluntariado); depois dela,
-  a 🔒 Trava de Revisão 7-A.
+- **Em andamento — FASE 7:** v7.1 (PSC), v7.2 (Calendário oficial), v7.3 (Canais oficiais), v7.4
+  (Eventos e congressos) e v7.5 (Escalas e voluntariado) entregues. **Próxima: a 🔒 Trava de Revisão 7-A**,
+  que audita a v7.1 a v7.5 antes de seguir para a v7.6.
 - **Planejadas:** FASES 8 a 12.
 
 ### Fases
@@ -340,7 +340,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | C | Integração com o site institucional | concluída | [fase-c-integracao-com-o-site](docs/plano/fase-c-integracao-com-o-site.md) |
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
-| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.4 entregues) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.5 entregues) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
 | 10 | Experiência, design e performance | planejada | [fase-10-experiencia-design-performance](docs/plano/fase-10-experiencia-design-performance.md) |
@@ -477,6 +477,10 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   `CanalLiderancaSnapshot`, `CanalOcorrencias`, `CanalConferencias`, `CongregacaoTransmissao`.
 - **Eventos e congressos (v7.4):** `EventoOrganizadores`, `EventoConvidados`, `EventoCaixas`,
   `EventoCaixaLancamentos`, `EventoCaixaDestinos`.
+- **Escalas e voluntariado (v7.5):** `EscalasRodizios`, `EscalasRodizioGrupos`, `EscalasRodizioGrupoMembros`,
+  `VoluntariadoAdesoes`, `VoluntariadoRatificacoes`. A migração 117 também acrescenta `Natureza` a
+  `EscalasEquipes`, `RodizioId` e `RodizioGrupoId` a `EscalasServicos`, e o efeito sobre as escalas e a
+  reintegração a `VoluntariosDesligamentos`. As equipes, os serviços e as alocações são das migrações 098 e 099.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,

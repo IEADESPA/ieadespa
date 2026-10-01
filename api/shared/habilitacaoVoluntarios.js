@@ -22,6 +22,7 @@
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
 const trilhas = require("./trilhas");
+const voluntariado = require("./voluntariado");
 
 // Ordem fixa e obrigatória da esteira. Antecedentes/Treinamento são
 // carimbados por atestação manual até a v7.7 existir de verdade (upload de
@@ -56,7 +57,8 @@ const MESES_VALIDADE_APTO = 24;
 // ("Regra dos 6 meses").
 const MESES_REGRA_SEIS_MESES = 6;
 
-const TIPOS_MOTIVO_DESLIGAMENTO = ["PERDA_CONFIANCA", "MUDANCA", "INDISPONIBILIDADE", "SAIDA_DA_IGREJA", "OUTRO"];
+// A lista é uma só, na regra pura da v7.5 (a remoção da escala usa os mesmos tipos).
+const TIPOS_MOTIVO_DESLIGAMENTO = voluntariado.TIPOS_MOTIVO_DESLIGAMENTO;
 
 function paraData(valor) {
   return valor instanceof Date ? valor : new Date(valor);
@@ -256,6 +258,13 @@ async function concluirEtapa(pool, { habilitacaoId, etapa, registradoPorMembroId
     if (formacao.bloqueado) return { sucesso: false, mensagem: formacao.mensagemBloqueio };
   }
 
+  // v7.5 — o "termo assinado" deixa de ser um carimbo manual: a etapa só fecha se a adesão existe de verdade (aceite digital com IP/data/hora,
+  // ficha, mensagem ou Lista de Ouro — Reg. Art. 133 §8º; Lei 9.608/98, art. 2º). Carregado sob demanda para não criar ciclo entre os módulos.
+  if (etapa === "TERMO") {
+    const adesao = await require("./voluntariadoDb").buscarAdesao(pool, hab.membroId);
+    if (!adesao) return { sucesso: false, mensagem: "O voluntário ainda não aderiu ao Termo de Adesão (Lei 9.608/98). Peça o aceite em Meu Painel ou registre a ficha, a mensagem ou a Lista de Ouro em Habilitação de Voluntários." };
+  }
+
   const campo = CAMPO_ETAPA[etapa];
   const agora = new Date();
 
@@ -378,36 +387,33 @@ async function listarEquipesComFlag(pool, congregacaoId) {
 
 // ---- Desligamento (RH, separado de disciplina) ----
 
-async function registrarDesligamento(pool, { membroId, equipeId, tipoMotivo, motivo, removidoDaEscala, registradoPorMembroId }) {
+async function registrarDesligamento(pool, { membroId, equipeId, tipoMotivo, motivo, removidoDaEscala, registradoPorMembroId, podeCongregacao = null }) {
   const validacao = validarDesligamento({ motivo, tipoMotivo });
   if (!validacao.valido) return { sucesso: false, mensagem: validacao.mensagem };
+
+  // v7.5 (Reg. Art. 133-D): "remover da escala" passa a ter efeito imediato — cancela as escalas futuras, avisa o voluntário e o líder, e pode ser
+  // desfeito. A implementação é uma só (shared/voluntariadoDb.js::removerDaEscala), sem nenhuma ligação com a disciplina.
+  if (removidoDaEscala) {
+    return require("./voluntariadoDb").removerDaEscala(pool, {
+      dados: { membroId, motivo, tipoMotivo }, equipeId: equipeId || null, podeCongregacao, por: registradoPorMembroId
+    });
+  }
 
   const result = await pool.request()
     .input("membroId", sql.Int, membroId)
     .input("equipeId", sql.Int, equipeId || null)
     .input("tipoMotivo", sql.NVarChar(30), tipoMotivo || "OUTRO")
     .input("motivo", sql.NVarChar(300), motivo)
-    .input("removidoDaEscala", sql.Bit, !!removidoDaEscala)
     .input("registradoPor", sql.Int, registradoPorMembroId)
     .query(`
       INSERT INTO VoluntariosDesligamentos (MembroId, EquipeId, TipoMotivo, Motivo, RemovidoDaEscala, RegistradoPorMembroId)
       OUTPUT INSERTED.DesligamentoId
-      VALUES (@membroId, @equipeId, @tipoMotivo, @motivo, @removidoDaEscala, @registradoPor)
+      VALUES (@membroId, @equipeId, @tipoMotivo, @motivo, 0, @registradoPor)
     `);
-
-  // "Remoção da escala por perda de confiança" (v7.5) — tira o voluntário
-  // da equipe de fato (EscalasEquipeMembros.Ativo = 0), sem tocar em
-  // nenhuma tabela de disciplina/CEI. Só roda quando há EquipeId e foi
-  // pedido explicitamente (removidoDaEscala).
-  if (equipeId && removidoDaEscala) {
-    await pool.request().input("equipeId", sql.Int, equipeId).input("membroId", sql.Int, membroId).query(`
-      UPDATE EscalasEquipeMembros SET Ativo = 0 WHERE EquipeId = @equipeId AND MembroId = @membroId
-    `);
-  }
 
   await registrarAuditoria({
     tabela: "VoluntariosDesligamentos", registroId: result.recordset[0].DesligamentoId, acao: "DESLIGAMENTO_REGISTRADO",
-    usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { membroId, tipoMotivo, motivo, removidoDaEscala: !!removidoDaEscala }
+    usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { membroId, tipoMotivo, motivo, removidoDaEscala: false }
   });
 
   return { sucesso: true, desligamentoId: result.recordset[0].DesligamentoId, mensagem: "✅ Desligamento registrado." };

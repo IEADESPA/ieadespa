@@ -21,7 +21,10 @@
 // POST /api/escalas/responder          body: {alocacaoId, resposta: 'ACEITO'|'RECUSADO'} -> voluntário aceita/recusa (dono da alocação)
 // POST /api/escalas/confirmar          body: {alocacaoId}  -> voluntário confirma recebimento (dono da alocação)
 // GET  /api/escalas/indisponibilidade                        -> minhas indisponibilidades declaradas
-// POST /api/escalas/indisponibilidade  body: {dataInicio, dataFim, motivo}
+// POST /api/escalas/indisponibilidade  body: {dataInicio, dataFim, motivo, liberarEscalas?}  (v7.5: true libera as escalas já marcadas no período,
+//                                      sem penalidade, e avisa o líder — Reg. Art. 133 §7º, II; resposta traz { liberadas, conflitosRestantes })
+// GET  /api/escalas/indisponibilidade-conflitos?dataInicio=&dataFim= -> (v7.5) as minhas escalas que caem no período, antes de declarar
+// Rodízio voluntário, Termo de Adesão, remoção da escala: ver GestaoVoluntariado (v7.5).
 // POST /api/escalas/trocas             body: {alocacaoOrigemId, membroDestinoId} -> pede troca (dono da alocação)
 // GET  /api/escalas/trocas?equipeId=                         -> fila de trocas pendentes (líder da equipe / 'escalas')
 // POST /api/escalas/trocas-aprovar     body: {trocaId, aprovar, observacao}       -> líder da equipe decide
@@ -30,6 +33,9 @@ const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const es = require("../shared/escalas");
 const trilhas = require("../shared/trilhas");
+const cal = require("../shared/calendario");
+const vdb = require("../shared/voluntariadoDb");
+const { isoInstante } = require("../shared/canaisDb");
 const { enviarCanaisNotificacao } = require("../shared/notificacaoMotor");
 
 function erro(context, status, mensagem) {
@@ -101,6 +107,9 @@ module.exports = async function (context, req) {
       if (metodo === "POST") {
         const { membroId, frequenciaPreferidaDias } = req.body || {};
         if (!membroId) return erro(context, 400, "Informe membroId.");
+        // v7.5 (Art. 133-D): quem foi removido da escala desta equipe não volta por outra porta — só pela reintegração.
+        const removido = await vdb.removidoDaEquipe(pool, { membroId: Number(membroId), equipeId });
+        if (removido) return erro(context, 422, vdb.mensagemRemovido(removido, await vdb.nomeDoMembro(pool, Number(membroId))));
         await es.adicionarMembroEquipe(pool, { equipeId, membroId, frequenciaPreferidaDias });
         context.res = { status: 200, body: { sucesso: true, mensagem: "✅ Voluntário incluído na equipe." } };
         return;
@@ -146,6 +155,8 @@ module.exports = async function (context, req) {
       const servico = await es.buscarServico(pool, servicoId);
       if (!servico) return erro(context, 404, "Serviço não encontrado.");
       if (!(await podeGerenciarCongregacao(pool, usuario, servico.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+      // v7.5: o serviço de rodízio já nasce escalado com o grupo da vez; o auto-escalador traria gente de fora do revezamento.
+      if (servico.rodizioId) return erro(context, 422, "Este serviço é de um rodízio voluntário: a escala é do grupo da vez (Regimento Art. 135 §1º), e o auto-escalador não mexe nele.");
 
       const equipes = await es.listarEquipes(pool, servico.congregacaoId);
       const equipesComCandidatos = [];
@@ -196,6 +207,12 @@ module.exports = async function (context, req) {
       // avaliador de regras).
       if (resposta === "RECUSADO") {
         const servico = await es.buscarServico(pool, alocacao.servicoId);
+        // v7.5: no rodízio a vaga não é repassada a quem é de outro grupo — o líder é avisado e decide (recusar é direito, sem penalidade).
+        if (servico.rodizioId) {
+          await vdb.avisarRecusaEmRodizio(pool, { alocacao, servico });
+          context.res = { status: 200, body: { sucesso: true, mensagem: "✅ Resposta registrada. O líder da equipe foi avisado — recusar é um direito seu, sem penalidade." } };
+          return;
+        }
         const candidatos = await es.buscarCandidatosDaEquipe(pool, alocacao.equipeId, servico.dataHora);
         const alocacoesExistentes = await es.buscarAlocacoesAtivasDoServico(pool, alocacao.servicoId);
         const fila = es.ordenarCandidatosElegiveis(candidatos, servico.dataHora)
@@ -228,17 +245,35 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // ---- Indisponibilidade declarada pelo voluntário ----
+    // ---- Indisponibilidade declarada pelo voluntário (afastamento temporário, Reg. Art. 133 §7º, II) ----
+    // v7.5: declarar o afastamento libera, se a pessoa quiser, as escalas já marcadas no período — sem penalidade — e avisa o líder da vaga.
+    if (acao === "indisponibilidade-conflitos" && metodo === "GET") {
+      const dataInicio = String((req.query && req.query.dataInicio) || ""), dataFim = String((req.query && req.query.dataFim) || "");
+      if (!cal.dataIsoValida(dataInicio) || !cal.dataIsoValida(dataFim) || dataFim < dataInicio) return erro(context, 400, "Informe dataInicio e dataFim válidas (AAAA-MM-DD), com o fim depois do início.");
+      const conflitos = await vdb.conflitosDoAfastamento(pool, { membroId: usuario.membroId, dataInicio, dataFim });
+      context.res = { status: 200, body: { sucesso: true, conflitos: conflitos.map(c => ({ alocacaoId: c.alocacaoId, equipeNome: c.equipeNome, descricao: c.descricao, dataHora: isoInstante(c.dataHora), status: c.status })) } };
+      return;
+    }
     if (acao === "indisponibilidade") {
       if (metodo === "GET") {
         context.res = { status: 200, body: { sucesso: true, indisponibilidades: await es.listarIndisponibilidades(pool, usuario.membroId) } };
         return;
       }
       if (metodo === "POST") {
-        const { dataInicio, dataFim, motivo } = req.body || {};
+        const { dataInicio, dataFim, motivo, liberarEscalas } = req.body || {};
         if (!dataInicio || !dataFim) return erro(context, 400, "Informe dataInicio e dataFim.");
+        if (!cal.dataIsoValida(String(dataInicio)) || !cal.dataIsoValida(String(dataFim)) || String(dataFim) < String(dataInicio)) return erro(context, 400, "Datas inválidas: use AAAA-MM-DD, com o fim depois do início.");
         const indisponibilidadeId = await es.criarIndisponibilidade(pool, { membroId: usuario.membroId, dataInicio, dataFim, motivo });
-        context.res = { status: 201, body: { sucesso: true, indisponibilidadeId } };
+        let liberadas = 0;
+        const conflitos = await vdb.conflitosDoAfastamento(pool, { membroId: usuario.membroId, dataInicio: String(dataInicio), dataFim: String(dataFim) });
+        if (liberarEscalas === true && conflitos.length) liberadas = (await vdb.liberarPorAfastamento(pool, { membroId: usuario.membroId, dataInicio: String(dataInicio), dataFim: String(dataFim), por: usuario.membroId })).liberadas;
+        context.res = {
+          status: 201,
+          body: {
+            sucesso: true, indisponibilidadeId, liberadas, conflitosRestantes: conflitos.length - liberadas,
+            mensagem: liberadas ? `✅ Afastamento registrado e ${liberadas} escala(s) liberada(s). O líder foi avisado — é um direito seu, sem penalidade.` : conflitos.length ? `✅ Afastamento registrado, mas você ainda tem ${conflitos.length} escala(s) marcada(s) no período.` : "✅ Indisponibilidade declarada."
+          }
+        };
         return;
       }
     }

@@ -18,6 +18,8 @@
 // POST /api/habilitacao-voluntarios/reabilitar     body:{habilitacaoId}
 // GET  /api/habilitacao-voluntarios/elegibilidade-menores?membroId=&equipeId= -> hook de leitura pra v7.7 (apto + regra dos 6 meses)
 // POST /api/habilitacao-voluntarios/desligamento   body:{membroId, equipeId, tipoMotivo, motivo, removidoDaEscala}
+//        (v7.5: com removidoDaEscala:true tem efeito imediato — cancela as escalas futuras e avisa; ver GestaoVoluntariado "remover-da-escala")
+// A etapa TERMO da esteira só fecha se o voluntário aderiu ao Termo de Adesão (v7.5; ver GestaoVoluntariado).
 // GET  /api/habilitacao-voluntarios/desligamentos?membroId=
 // GET  /api/habilitacao-voluntarios/minha-habilitacao                  -> autoatendimento (Meu Painel): minha própria esteira
 const auth = require("../shared/auth");
@@ -74,6 +76,12 @@ module.exports = async function (context, req) {
     }
 
     // ---- Esteiras da congregação ----
+    // v7.5 (achado da revisão): a lista, o detalhe e a elegibilidade só olhavam o escopo — qualquer pessoa logada com escopo na congregação (ou
+    // qualquer login, no caso da elegibilidade) via o estado da habilitação dos voluntários. Passam a exigir a permissão, como o resto da esteira.
+    if ((acao === "lista" || acao === "detalhe" || acao === "elegibilidade-menores") && metodo === "GET"
+        && !(usuario.permissoes && usuario.permissoes.includes("habilitacao_voluntarios"))) {
+      return erro(context, 403, "Você não tem permissão para isso.");
+    }
     if (acao === "lista" && metodo === "GET") {
       const congregacaoId = Number(req.query && req.query.congregacaoId);
       if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
@@ -159,8 +167,10 @@ module.exports = async function (context, req) {
         const { membroId, equipeId, tipoMotivo, motivo, removidoDaEscala } = req.body || {};
         if (!membroId) return erro(context, 400, "Informe membroId.");
         if (!usuario.permissoes || !usuario.permissoes.includes("habilitacao_voluntarios")) return erro(context, 403, "Você não tem permissão para isso.");
+        // v7.5: remover da escala só alcança as equipes que o escopo de quem remove cobre (antes não havia checagem de escopo).
         const resultado = await hv.registrarDesligamento(pool, {
-          membroId, equipeId, tipoMotivo, motivo, removidoDaEscala, registradoPorMembroId: usuario.membroId
+          membroId, equipeId, tipoMotivo, motivo, removidoDaEscala: removidoDaEscala === true, registradoPorMembroId: usuario.membroId,
+          podeCongregacao: (nome) => auth.estaNoEscopo(usuario, nome)
         });
         context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
         return;

@@ -152,7 +152,7 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 18 bloco(s) · itens 31/85 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 18 bloco(s) · itens 35/85 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -160,7 +160,7 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | v7.2 | [Calendário oficial e agenda unificada](fase-7-saude-eventos-e-comunicacao.md#v72--calendário-oficial-e-agenda-unificada) | ✅ 12/12 |
 | v7.3 | [Canais oficiais e comunicação](fase-7-saude-eventos-e-comunicacao.md#v73--canais-oficiais-e-comunicação) | ✅ 8/8 |
 | v7.4 | [Eventos e congressos](fase-7-saude-eventos-e-comunicacao.md#v74--eventos-e-congressos) | ✅ 5/5 |
-| v7.5 | [Escalas e voluntariado](fase-7-saude-eventos-e-comunicacao.md#v75--escalas-e-voluntariado) | ⬜ 0/4 |
+| v7.5 | [Escalas e voluntariado](fase-7-saude-eventos-e-comunicacao.md#v75--escalas-e-voluntariado) | ✅ 4/4 |
 | 🔒 7-A | [antes de avançar para a v7.6](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-a--antes-de-avançar-para-a-v76) | — |
 | v7.6 | [Setores Técnicos (voluntariado profissional) *(gap da varredura)*](fase-7-saude-eventos-e-comunicacao.md#v76--setores-técnicos-voluntariado-profissional-gap-da-varredura) | ⬜ 0/3 |
 | v7.7 | [Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*](fase-7-saude-eventos-e-comunicacao.md#v77--habilitação-para-ministério-com-menores-7ª-rodada--obrigação-legal-vigente) | ⬜ 0/9 |

@@ -1039,13 +1039,222 @@ ponto real de integração:
 
 ## v7.5 — Escalas e voluntariado
 
-- [ ] Escala de rodízio voluntário (limpeza, portaria, louvor).
-- [ ] Termo de Adesão ao Serviço Voluntário (Lei 9.608/98).
-- [ ] Remoção da escala por perda de confiança (sem vínculo trabalhista).
-- [ ] **Self-service "Minhas Escalas" (vB.5)** — ver o item de integração já
+- [x] Escala de rodízio voluntário (limpeza, portaria, louvor). *(Rodízio por
+      grupos que se alternam, com geração das datas, prévia e a trava de
+      habitualidade — Art. 135 §1º. A grade em si, o auto-escalador, as trocas e o
+      convite em cadeia já eram da v5.6 e não foram refeitos.)*
+- [x] Termo de Adesão ao Serviço Voluntário (Lei 9.608/98). *(Texto versionado com
+      hash, aceite digital com IP, data e hora, ficha física, e-mail/WhatsApp e a
+      ratificação coletiva "Lista de Ouro" — Art. 133 §8º. A etapa "termo assinado"
+      da esteira da v5.7 deixou de ser um carimbo manual.)*
+- [x] Remoção da escala por perda de confiança (sem vínculo trabalhista).
+      *(Efeito imediato, aviso ao voluntário e ao líder, reintegração, sem ligação com
+      a disciplina — Art. 133-D.)*
+- [x] **Self-service "Minhas Escalas" (vB.5)** — ver o item de integração já
       registrado na v5.6 (auto-escalador), que é quem cobre
-      aceitar/recusar/trocar de verdade; esta versão só entrega a grade
-      básica primeiro.
+      aceitar/recusar/trocar de verdade. *(A v5.6 já entregou aceitar, recusar,
+      confirmar, trocar e declarar indisponibilidade; a v7.5 acrescenta o Termo de
+      Adesão, os rodízios do voluntário, o afastamento que libera as escalas já
+      marcadas e a tela do líder da equipe.)*
+
+  Entrega: migração 117 (`sql/migrations/117_escalas_voluntariado.sql`),
+  `shared/voluntariado.js` (a regra, **pura**), `shared/voluntariadoDb.js` (leitura,
+  gravação e decisões), a Function nova `GestaoVoluntariado` (`/api/voluntariado/...`,
+  24 ações), cinco regras no motor de notificações da vB.2, a entrada `VOLUNTARIADO` no
+  ROPA e a política de retenção da categoria. Tocam as telas e rotas que já existiam:
+  `GestaoEscalas` (v5.6), `GestaoHabilitacaoVoluntarios` (v5.7), `shared/escalas.js` e
+  `shared/habilitacaoVoluntarios.js`.
+
+  **O que a v5.6 e a v5.7 já faziam, e o que faltava.** Já existiam: equipes, serviços,
+  alocações, auto-escalador por "quem serviu por último", convite em cadeia, trocas
+  aprovadas pelo líder, indisponibilidade e confirmação (v5.6); e a esteira de
+  habilitação, a regra dos 6 meses e o registro de desligamento (v5.7). Faltava o que o
+  Regimento pede além disso: **revezamento por grupos** para a tarefa braçal
+  (Art. 135), **prova do aceite** do Termo (Art. 133 §8º) — a esteira só tinha um
+  carimbo de quem administra —, **efeito real** na remoção da escala (a marca "remover
+  da escala" só desativava a pessoa na equipe, sem tocar nas escalas já marcadas e, sem
+  o id da equipe, não fazia nada) e o **afastamento** que de fato libera quem já estava
+  escalado (Art. 133 §7º, II).
+
+  **Natureza da equipe.** Cada equipe ganhou uma natureza: liturgia e louvor,
+  zeladoria e limpeza, portaria/recepção/segurança, cantina e cozinha, ou outra. As
+  três do meio (**zeladoria, portaria e cozinha**) são as de serviço braçal e repetitivo,
+  onde o Regimento exige o revezamento e a "habitualidade" vira passivo trabalhista. As
+  equipes que já existiam ficam como "outra": nada é reclassificado sozinho.
+
+  **Rodízio voluntário (Art. 135 §1º).** Um rodízio é de uma equipe, num dia da semana e
+  hora, a cada 1 a 4 semanas, com uma **data de partida** que cai nesse dia. Tem
+  **grupos** (de 2 a 12); cada voluntário está **em um grupo só** do rodízio — "grupos
+  distintos se alternam" — e quem entra num grupo vira membro ativo da equipe, sem perder
+  a frequência preferida que já tinha. **Um rodízio de um grupo só não gera nada**: o
+  sistema recusa e explica. O grupo de cada data sai de uma **conta** (quantas voltas
+  completas desde a data de partida, módulo o número de grupos), não de um ponteiro
+  guardado: gerar de novo, cancelar uma data ou pular um mês **não desalinha** o
+  revezamento. **Gerar** cria os serviços das próximas 1 a 26 semanas (padrão 8) — como
+  **rascunho**, ou já publicados avisando cada convidado —, cada um ligado ao rodízio e
+  ao grupo, e convida os membros do grupo da vez. Quem **declarou indisponibilidade**
+  naquela data, perdeu a formação que a equipe exige (v6.9) ou não está mais ativo na
+  equipe **não é convidado** e aparece numa lista de "vagas sem cobertura", com o motivo.
+  Gerar duas vezes o mesmo período **não duplica** (o banco também impede dois serviços
+  ativos do mesmo rodízio na mesma data; um serviço cancelado libera a data). Há
+  **prévia** sem gravar nada e **cancelar os futuros em rascunho** para ajustar os grupos
+  e gerar de novo. O auto-escalador **não mexe** em serviço de rodízio. **Quem recusa uma
+  escala de rodízio não dispara o convite em cadeia** (que traria alguém de outro grupo):
+  o líder é avisado da vaga e decide.
+
+  **Trava de habitualidade (Art. 135 §1º, II).** Em equipe de zeladoria, portaria ou
+  cozinha, quem está nas **últimas 3 escalas seguidas** é apontado (o limite é o parâmetro
+  `ESCALA_HABITUALIDADE_SEQUENCIA`). A janela vai de 90 dias atrás a 30 dias à frente,
+  para pegar o padrão antes de ele se repetir mais uma vez. Quem folgou na última escala
+  está revezando e não aparece; recusar ou ser cancelado quebra a sequência. A tela diz se
+  a equipe já tem rodízio ("confira os grupos") ou não ("crie um rodízio"), e a rodada
+  diária avisa o líder e quem administra escalas, **uma vez por equipe e por mês** enquanto
+  a situação durar. As equipes de louvor (liturgia) **não são vigiadas**: o Art. 135 trata
+  da conservação do patrimônio e da arrecadação, e o ministério de louvor é contínuo por
+  natureza.
+
+  **Termo de Adesão (Art. 133 §8º; Lei 9.608/98, arts. 1º a 3º).** O texto (oito itens,
+  cada um citando o dispositivo) está no código, com **versão e hash**: natureza gratuita e
+  sem vínculo, objeto, autonomia e direito de recusa (§7º), despesas só com Ordem de
+  Serviço prévia (§4º), sem cachê nem comissão (§3º e Art. 135 §3º), remoção da escala como
+  única consequência (Art. 133-D), ciência de antecedentes e imagem (§§5º e 6º) e a
+  informação de que o IP, a data e a hora são guardados. A frase de aceite é a do
+  Regimento: "Li, aceito as normas estatutárias e concordo com o regime de trabalho
+  voluntário". São **quatro formas de prova**, cada uma com o que a caracteriza — e o
+  banco recusa a forma sem a sua prova:
+  - **Aceite digital** (a própria pessoa, em Meu Painel → Minha Habilitação): guarda
+    versão, **hash do texto**, **IP**, instante exato e data de Brasília. **Sem IP
+    identificável o aceite é recusado** (o Regimento o exige), com a orientação de
+    procurar a Secretaria. O IP não aparece para o voluntário, **nem na trilha de
+    auditoria** (que é imutável e não deve replicar dado pessoal): fica só na tabela da
+    adesão.
+  - **Ficha física** (cláusula de voluntariado na Ficha de Membro, §8º, I) e
+    **e-mail/WhatsApp** com resposta positiva (§8º, II, "c"): a Secretaria registra a data
+    da assinatura/resposta e **onde o documento ou a conversa está arquivado**. A prova é
+    esse documento; o sistema não guarda texto nenhum.
+  - **Lista de Ouro** (§8º, III): a Secretaria, com escopo geral para assembleia e reunião
+    de obreiros, ou da congregação para escala de serviço, registra a ratificação. O
+    sistema entrega a **frase que precisa estar no cabeçalho da lista** (com versão e
+    hash), exige que quem registra **confirme que o cabeçalho a trouxe** e dá adesão a
+    cada signatário: a presença da sessão, quem aceitou ou confirmou a escala (quem
+    recusou não assina) e matrículas avulsas. Quem já aderira não é sobrescrito, e
+    repetir a lista é inofensivo. A adesão guarda a data da lista e a marca de
+    **convalidação do período anterior** (efeito sanador, §8º, III, "b").
+  Há **uma adesão por pessoa**. A prova **não se altera nem se apaga** (gatilho no banco,
+  também para o registro da ratificação). A **etapa "termo" da esteira** (v5.7) só fecha
+  se a adesão existe. A tela da Secretaria mostra, por congregação, quem serve em equipe
+  e **ainda não aderiu** (primeiro na lista) e a rodada diária avisa quem cuida da
+  habilitação, uma vez por congregação e por mês.
+
+  **Remoção da escala e reintegração (Art. 133-D).** "Irmão, você não está mais na escala
+  a partir de hoje": quem **lidera a equipe** (sem precisar de permissão nenhuma) ou
+  quem administra escalas ou a habilitação (no escopo) remove um voluntário de uma
+  equipe ou, sem indicar a equipe, de todas as que alcança. **Na hora**: a pessoa sai da
+  equipe e dos grupos de rodízio dela, as **escalas futuras são canceladas** (o que já
+  aconteceu fica), as trocas pendentes que dependiam delas são recusadas, o voluntário é
+  avisado ("a partir de hoje", sem desconto, multa ou penalidade, **sem o motivo** no
+  texto) e o líder é avisado das vagas. O motivo e o tipo (perda de confiança, mudança,
+  indisponibilidade, saída da igreja, outro) ficam na ficha de RH, **sem nenhuma ligação
+  com a disciplina** — nem chave estrangeira. Ninguém remove a si mesmo. Quem foi removido
+  **não volta por outra porta** (nem por "adicionar à equipe" da v5.6, nem por um grupo de
+  rodízio): só pela **reintegração**, que o líder ou a gestão faz com uma observação; ela
+  devolve a pessoa à equipe e avisa, mas **não restaura as escalas canceladas**. A mesma
+  função atende o botão "remover da escala" do formulário de desligamento da v5.7.
+
+  **Direito de recusa e afastamento (Art. 133 §7º).** Recusar escala não tem consequência
+  alguma: o auto-escalador ordena só por quem serviu há mais tempo, e **não existe coluna
+  de falta, multa ou penalidade** nas alocações. Ao declarar um período de indisponibilidade
+  (afastamento temporário), a pessoa vê antes **quais escalas dela caem naquele
+  período** e escolhe liberá-las: elas são canceladas sem penalidade, o líder é avisado
+  da vaga e as trocas pendentes que dependiam delas caem; as de fora do período e as que
+  **já aconteceram** não são tocadas.
+
+  **A tela.**
+  - **Escalas de Serviço**: coluna "Natureza" nas equipes (com a etiqueta de revezamento
+    obrigatório); seção **Rodízios voluntários** (equipes operacionais ainda sem rodízio,
+    formulário de novo rodízio, cartões com grupos, voluntários, próximas datas, prévia,
+    geração, cancelamento dos futuros e desativação); **Trava de habitualidade**;
+    **Remoções da escala**, com o formulário e a reintegração. O serviço de rodízio vem
+    com etiqueta e sem o botão do auto-escalador.
+  - **Habilitação de Voluntários**: **situação do Termo** por congregação, formulário de
+    ficha/mensagem e a **Ratificação coletiva** com a frase do cabeçalho copiável.
+  - **Meu Painel → Minha Habilitação**: o cartão do Termo, com a caixa de aceite; **Minhas
+    Escalas**: faixa se ainda não aderiu, "Meus rodízios" (grupo e próximas datas), o
+    aviso de que recusar é um direito, o afastamento que pergunta se libera as escalas e,
+    para quem lidera equipe, **"Equipes que eu lidero"** com remover e reintegrar.
+
+  **Avisos (motor da vB.2).** Cinco regras. Saem **na hora**: `ESCALA_ALTERACAO_PARTICIPACAO`
+  (ao voluntário removido ou reintegrado), `ESCALA_VAGA_ABERTA` (ao líder: remoção,
+  recusa em rodízio ou afastamento) e `ESCALA_RODIZIO_ESCALADO` (aos convidados de um
+  rodízio publicado). Na rodada diária: `ESCALA_HABITUALIDADE` e
+  `VOLUNTARIADO_TERMO_PENDENTE`. Nenhuma permissão nova: valem `escalas` e
+  `habilitacao_voluntarios`, que já existiam e **não vêm concedidas a papel nenhum**.
+
+  **Auditoria e integridade.** `ADESAO_REGISTRADA`, `RATIFICACAO_REGISTRADA`,
+  `NATUREZA_DEFINIDA`, `RODIZIO_CRIADO`, `RODIZIO_GERADO`, `RODIZIO_FUTUROS_CANCELADOS`,
+  `RODIZIO_DESATIVADO`, `RODIZIO_REATIVADO`, `GRUPO_CRIADO`, `GRUPO_DESATIVADO`,
+  `MEMBRO_ENTROU_NO_GRUPO`, `MEMBRO_SAIU_DO_GRUPO`, `REMOCAO_DA_ESCALA`,
+  `REINTEGRADO_NA_ESCALA` e `AFASTAMENTO_ESCALAS_LIBERADAS`. O banco garante: cada forma de
+  adesão só com a prova dela, uma adesão por pessoa, adesão e ratificação imutáveis, um
+  grupo só por pessoa e rodízio, nome de grupo ativo único, um serviço ativo por data e
+  rodízio e a natureza dentro do catálogo.
+
+  **Verificação.** 124 testes novos (regra pura e camada de banco com pool simulado); a
+  suíte da API foi de 1002 para **1126**. Um roteiro ponta a ponta de **237 verificações**
+  rodou os três handlers reais contra um SQL Server 2019 recriado do zero com as 117
+  migrações: o aceite digital (inclusive sem IP, com porta no IP e repetido), os
+  gatilhos e os CHECK de cada forma, a ficha e a mensagem, o rodízio de ponta a ponta
+  (grupos, indisponibilidade, geração, idempotência, índice único, publicação, recusa,
+  cancelamento e nova geração), a habitualidade (incluindo o limite configurável), a
+  remoção, a reintegração e a volta por outras portas, o afastamento com troca dentro e
+  fora do período, a Lista de Ouro por assembleia e por escala, a etapa do termo na
+  esteira, os dois avisos periódicos, a auditoria (sem o IP), o ROPA contra as tabelas
+  reais e a migração rodada de novo sobre o banco já migrado. A tela passou por DOM
+  simulado (127 verificações, com texto de ataque em todo campo do servidor), conferência
+  de ids e handlers e checagem de fim de linha. A revisão achou, além do que era da
+  versão: **`lista`, `detalhe` e `elegibilidade-menores` da v5.7 só olhavam o escopo** —
+  qualquer pessoa logada com escopo na congregação (ou, na elegibilidade, qualquer login)
+  via o estado da habilitação dos voluntários; passam a exigir a permissão
+  `habilitacao_voluntarios`. E as telas de escala mostravam a hora do serviço 3 horas
+  antes do que foi marcada (a hora é "de parede", guardada como se fosse UTC); corrigido
+  nas telas de escala.
+
+  **Decisões que o Regimento não fecha (a CLI pode reverter, cada uma é uma linha).**
+  - **O texto do Termo é um rascunho jurídico.** Foi redigido a partir do Art. 133 e da Lei
+    9.608/98 (arts. 1º a 3º); **convém um parecer jurídico antes de pô-lo em uso** — o
+    aceite grava o hash e a versão, então trocar o texto cria a versão 2 sem invalidar quem
+    já aderiu.
+  - **A cessão de imagem, voz e propriedade intelectual (§6º) não é aceita dentro do
+    Termo**: o Termo só dá **ciência** dela. Embutir um consentimento específico num
+    termo de outra finalidade o tornaria frágil (LGPD); o aceite do uso de imagem segue o
+    módulo de consentimento.
+  - **Uma adesão por pessoa e qualquer versão vale.** Texto novo vale para quem adere
+    depois; não há campanha de reaceite.
+  - **Habitualidade: 3 escalas seguidas, só em zeladoria, portaria e cozinha.** O número é
+    parâmetro (`ESCALA_HABITUALIDADE_SEQUENCIA`); o Regimento não fixa um.
+  - **"Voluntário", para a cobertura do Termo, é quem está ativo em equipe de escalas.** Quem
+    coopera sem estar numa equipe não aparece nem recebe aviso; a Lista de Ouro e o aceite
+    em Meu Painel os alcançam.
+  - **Lista de Ouro:** o sistema não vê o papel; **quem registra atesta o cabeçalho**. Para
+    assembleia e reunião de obreiros os signatários vêm da presença lançada no sistema
+    (ou de matrículas avulsas) e o registro é só da gestão com escopo geral.
+  - **A reintegração não restaura escalas canceladas** e a pessoa precisa ser recolocada
+    no grupo do rodízio.
+  - **O motivo da remoção fica na ficha de RH e com o líder da equipe**, nunca no aviso ao
+    voluntário.
+  - **Fora desta versão**, por serem questões do financeiro e não da escala: o reembolso só
+    com Ordem de Serviço escrita prévia (Art. 133 §4º), a vedação da "diarista disfarçada" —
+    pagar valor fixo a uma pessoa só para limpar (Art. 135 §2º) —, a proibição de cachê a
+    membro (§3º) e a de comissão em cantina e bazar (Art. 135 §3º). O Termo informa o
+    voluntário dessas regras, mas **nada no sistema as impede ainda**; o Art. 135 §4º
+    (higiene e proteção do voluntário na cozinha) também fica como orientação.
+  - **Retenção:** adesão (com IP) por 5 anos, para cobrir a prescrição trabalhista; escalas
+    e rodízios como prova do revezamento. **A rotina automática de descarte ainda não
+    existe** (prazo a definir pela CLI/Encarregado). O motivo da indisponibilidade é texto
+    livre e pode revelar saúde: a tela orienta a não detalhar.
+  - **Limites:** o rodízio não se liga à agenda litúrgica (v7.2) — é semanal por dia e
+    hora; o serviço manual (sem rodízio) segue como na v5.6; a tela de escalas continua
+    mostrando matrícula, e não nome, nas alocações do detalhe do serviço.
 
 ## 🔒 Trava de Revisão 7-A — antes de avançar para a v7.6
 

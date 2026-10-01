@@ -207,10 +207,12 @@ async function buscarAlocacoesAtivasDoServico(pool, servicoId) {
 async function listarAlocacoesDoMembro(pool, membroId) {
   const result = await pool.request().input("membroId", sql.Int, membroId).query(`
     SELECT a.AlocacaoId AS alocacaoId, a.Status AS status, a.EquipeId AS equipeId, eq.Nome AS equipeNome,
-           s.ServicoId AS servicoId, s.DataHora AS dataHora, s.Descricao AS descricao, s.Status AS servicoStatus
+           s.ServicoId AS servicoId, s.DataHora AS dataHora, s.Descricao AS descricao, s.Status AS servicoStatus,
+           s.RodizioId AS rodizioId, rg.Nome AS grupoNome
     FROM EscalasAlocacoes a
     JOIN EscalasEquipes eq ON eq.EquipeId = a.EquipeId
     JOIN EscalasServicos s ON s.ServicoId = a.ServicoId
+    LEFT JOIN EscalasRodizioGrupos rg ON rg.GrupoId = s.RodizioGrupoId
     WHERE a.MembroId = @membroId AND a.Status != 'CANCELADA'
     ORDER BY s.DataHora DESC
   `);
@@ -241,7 +243,8 @@ async function criarEquipe(pool, { nome, congregacaoId, liderMembroId }) {
 
 async function buscarEquipe(pool, equipeId) {
   const result = await pool.request().input("id", sql.Int, equipeId).query(`
-    SELECT e.EquipeId AS equipeId, e.Nome AS nome, e.CongregacaoId AS congregacaoId, e.LiderMembroId AS liderMembroId, e.Ativa AS ativa, c.Nome AS congregacaoNome
+    SELECT e.EquipeId AS equipeId, e.Nome AS nome, e.CongregacaoId AS congregacaoId, e.LiderMembroId AS liderMembroId, e.Ativa AS ativa, c.Nome AS congregacaoNome,
+           e.Natureza AS natureza
     FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
     WHERE e.EquipeId = @id
   `);
@@ -250,7 +253,7 @@ async function buscarEquipe(pool, equipeId) {
 
 async function listarEquipes(pool, congregacaoId) {
   const result = await pool.request().input("congregacaoId", sql.Int, congregacaoId).query(`
-    SELECT e.EquipeId AS equipeId, e.Nome AS nome, e.LiderMembroId AS liderMembroId, m.Nome AS liderNome, e.Ativa AS ativa
+    SELECT e.EquipeId AS equipeId, e.Nome AS nome, e.LiderMembroId AS liderMembroId, m.Nome AS liderNome, e.Ativa AS ativa, e.Natureza AS natureza
     FROM EscalasEquipes e JOIN MembroReferencia m ON m.MembroId = e.LiderMembroId
     WHERE e.CongregacaoId = @congregacaoId
     ORDER BY e.Nome
@@ -299,7 +302,8 @@ async function criarServico(pool, { congregacaoId, dataHora, descricao, prazoCon
 async function buscarServico(pool, servicoId) {
   const result = await pool.request().input("id", sql.Int, servicoId).query(`
     SELECT ServicoId AS servicoId, CongregacaoId AS congregacaoId, DataHora AS dataHora, Descricao AS descricao,
-           Status AS status, PublicadaEm AS publicadaEm, PrazoConfirmacaoDias AS prazoConfirmacaoDias
+           Status AS status, PublicadaEm AS publicadaEm, PrazoConfirmacaoDias AS prazoConfirmacaoDias,
+           RodizioId AS rodizioId, RodizioGrupoId AS rodizioGrupoId
     FROM EscalasServicos WHERE ServicoId = @id
   `);
   return result.recordset[0] || null;
@@ -307,7 +311,7 @@ async function buscarServico(pool, servicoId) {
 
 async function listarServicos(pool, congregacaoId) {
   const result = await pool.request().input("congregacaoId", sql.Int, congregacaoId).query(`
-    SELECT ServicoId AS servicoId, DataHora AS dataHora, Descricao AS descricao, Status AS status, PublicadaEm AS publicadaEm
+    SELECT ServicoId AS servicoId, DataHora AS dataHora, Descricao AS descricao, Status AS status, PublicadaEm AS publicadaEm, RodizioId AS rodizioId
     FROM EscalasServicos WHERE CongregacaoId = @congregacaoId
     ORDER BY DataHora DESC
   `);

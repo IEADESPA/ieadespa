@@ -680,21 +680,36 @@
              vB.5; esta sub-aba é o gancho real, não um placeholder. -->
         <div id="subMeupainelMinhasescalas" class="sub-aba-secretaria" style="display:none;">
           <h3>🗓️ Minhas Escalas</h3>
-          <p class="subtitle">Seus convites de serviço — aceite, recuse (o próximo da fila é convidado
-            automaticamente) ou confirme presença depois de aceitar. Declare período de indisponibilidade
-            pra nunca ser sugerido enquanto ele durar.</p>
+          <p class="subtitle">Seus convites de serviço — aceite, recuse ou confirme presença depois de
+            aceitar. Recusar uma escala é um direito seu e não traz penalidade (Regimento Art. 133 §7º).
+            O líder da equipe é avisado da vaga. Declare um período de indisponibilidade para não ser
+            escalado enquanto ele durar.</p>
+          <div id="volAvisoTermo"></div>
           <div id="resultadoMinhasEscalas"></div>
+          <div id="volMeusRodizios"></div>
 
           <hr />
           <h4>Declarar indisponibilidade</h4>
+          <p class="subtitle">Se você já estiver escalado em algum dia desse período, o sistema pergunta se
+            quer liberar essas escalas: o líder é avisado e não há penalidade.</p>
           <div class="barra-lista">
-            <input type="date" id="meIndisponibilidadeInicio" />
-            <input type="date" id="meIndisponibilidadeFim" />
-            <input type="text" id="meIndisponibilidadeMotivo" placeholder="Motivo (viagem, trabalho...)" style="min-width:200px;" />
+            <input type="date" id="meIndisponibilidadeInicio" aria-label="Início do período" />
+            <input type="date" id="meIndisponibilidadeFim" aria-label="Fim do período" />
+            <input type="text" id="meIndisponibilidadeMotivo" placeholder="Motivo (viagem, trabalho… — não detalhe questões de saúde)" style="min-width:200px;" />
             <button class="btn-confirmar" style="width:auto;margin:0;" onclick="declararIndisponibilidadeAcao()">🚫 Declarar</button>
           </div>
           <p id="resultadoIndisponibilidade" class="subtitle"></p>
           <div id="cxMinhasIndisponibilidades"></div>
+
+          <div id="volSecaoLider" hidden>
+            <hr />
+            <h4>Equipes que eu lidero</h4>
+            <p class="subtitle">Remover da escala é a única consequência para quem falta ou perde a confiança
+              ministerial; não é multa nem processo disciplinar (Regimento Art. 133-D). Quem é removido é
+              avisado na hora, e as escalas futuras dele nesta equipe são canceladas.</p>
+            <div id="volResultadoLider"></div>
+            <div id="volEquipesLideradas"></div>
+          </div>
         </div>
 
         <!-- SUB-ABA: MINHA HABILITAÇÃO (v5.7 — Triagem e habilitação de
@@ -702,12 +717,17 @@
              etapas já foram concluídas por quem administra, status
              calculado) — quem preenche cada etapa continua sendo o painel
              administrativo, não o próprio voluntário (entrevista,
-             referências etc. são conduzidas por outra pessoa). -->
+             referências etc. são conduzidas por outra pessoa). A exceção
+             (v7.5) é o cartão do Termo de Adesão ao Serviço Voluntário:
+             a própria pessoa lê e adere, com IP, data e hora. -->
         <div id="subMeupainelMinhahabilitacao" class="sub-aba-secretaria" style="display:none;">
           <h3>🛡️ Minha Habilitação</h3>
           <p class="subtitle">Acompanhe sua esteira de habilitação como voluntário — ficha de inscrição,
-            referências, entrevista, antecedentes, treinamento e termo assinado, nessa ordem.</p>
+            referências, entrevista, antecedentes, treinamento e termo de adesão, nessa ordem. Aqui também
+            fica o Termo de Adesão ao Serviço Voluntário, que você mesmo(a) aceita.</p>
           <div id="resultadoMinhaHabilitacao"></div>
+          <hr />
+          <div id="volTermoMeuPainel"></div>
         </div>
 
         <!-- SUB-ABA: MINHA FORMAÇÃO (v6.9 — Trilhas de formação e
@@ -2544,6 +2564,90 @@
         <div id="painelDetalheServicoEscala"></div>
 
         <hr />
+        <h4>Rodízios voluntários</h4>
+        <p class="subtitle">Grupos distintos se alternam na mesma tarefa, para ninguém servir de forma contínua
+          e habitual (Regimento Art. 135 §1º).</p>
+        <div id="volAvisosSemRodizio"></div>
+        <details class="vol-form" id="volFormRodizio">
+          <summary>➕ Novo rodízio</summary>
+          <div class="vol-grade">
+            <div class="vol-campo">
+              <label for="volRodizioNome">Nome do rodízio</label>
+              <input type="text" id="volRodizioNome" maxlength="100" placeholder="Ex.: Limpeza do templo" />
+            </div>
+            <div class="vol-campo">
+              <label for="volRodizioEquipe">Equipe</label>
+              <select id="volRodizioEquipe"></select>
+            </div>
+            <div class="vol-campo">
+              <label for="volRodizioDia">Dia da semana</label>
+              <select id="volRodizioDia"></select>
+            </div>
+            <div class="vol-campo">
+              <label for="volRodizioHora">Hora</label>
+              <input type="time" id="volRodizioHora" value="08:00" />
+            </div>
+            <div class="vol-campo">
+              <label for="volRodizioIntervalo">Intervalo entre uma escala e a seguinte</label>
+              <select id="volRodizioIntervalo">
+                <option value="1">Toda semana</option>
+                <option value="2">A cada 2 semanas</option>
+                <option value="3">A cada 3 semanas</option>
+                <option value="4">A cada 4 semanas</option>
+              </select>
+            </div>
+            <div class="vol-campo">
+              <label for="volRodizioAncora">Data da primeira escala do primeiro grupo</label>
+              <input type="date" id="volRodizioAncora" />
+              <small class="vol-dica">Precisa cair no dia da semana escolhido.</small>
+            </div>
+          </div>
+          <div class="vol-acoes">
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="volCriarRodizioAcao(this)">➕ Criar rodízio</button>
+          </div>
+        </details>
+        <div id="volResultadoRodizios" class="vol-resultado" hidden></div>
+        <div id="volPainelRodizios"></div>
+
+        <hr />
+        <h4>Trava de habitualidade</h4>
+        <p class="subtitle">Avisa quando alguém serve escala após escala nas equipes de zeladoria, portaria e
+          cozinha, onde o serviço braçal e repetido pode ser tratado como habitual.</p>
+        <div id="volPainelHabitualidade"></div>
+
+        <hr />
+        <h4>Remoções da escala</h4>
+        <p class="subtitle">Remover da escala é a única consequência para quem falta ou perde a confiança
+          ministerial; não é multa nem processo disciplinar (Regimento Art. 133-D). Quem é removido é avisado
+          na hora, e as escalas futuras dele nesta equipe são canceladas.</p>
+        <div class="vol-form">
+          <h5>Remover voluntário da escala</h5>
+          <div class="vol-grade">
+            <div class="vol-campo">
+              <label for="volRemoverMatricula">Matrícula do voluntário</label>
+              <input type="number" id="volRemoverMatricula" min="1" />
+            </div>
+            <div class="vol-campo">
+              <label for="volRemoverEquipe">Equipe</label>
+              <select id="volRemoverEquipe"></select>
+            </div>
+            <div class="vol-campo">
+              <label for="volRemoverTipo">Tipo do motivo</label>
+              <select id="volRemoverTipo"></select>
+            </div>
+            <div class="vol-campo">
+              <label for="volRemoverMotivo">Motivo (de 5 a 300 caracteres)</label>
+              <input type="text" id="volRemoverMotivo" maxlength="300" />
+            </div>
+          </div>
+          <div class="vol-acoes">
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volRemoverDaEscalaAcao(this)">🚪 Remover da escala</button>
+          </div>
+        </div>
+        <div id="volResultadoRemocao"></div>
+        <div id="volPainelRemocoes"></div>
+
+        <hr />
         <h4>Trocas pendentes de aprovação (líder da equipe)</h4>
         <div class="barra-lista">
           <select id="esEquipeTrocas"></select>
@@ -2588,6 +2692,86 @@
         <div id="painelDetalheHabilitacao"></div>
 
         <hr />
+        <h4>Termo de Adesão — situação dos voluntários</h4>
+        <p class="subtitle">O Termo de Adesão ao Serviço Voluntário (Regimento Art. 133 §8º) prova que a pessoa
+          serve por vontade própria, sem vínculo de emprego. A etapa "Termo" da esteira só fecha depois que o
+          voluntário aderir. Quem ainda não aderiu aparece primeiro.</p>
+        <div id="volResumoAdesoes"></div>
+        <div id="volPainelAdesoes"></div>
+        <div class="vol-form">
+          <h5>Registrar ficha física ou confirmação por e-mail/WhatsApp</h5>
+          <p class="subtitle">O aceite digital (com IP, data e hora) a própria pessoa faz em Meu Painel → Minha Habilitação.</p>
+          <div class="vol-grade">
+            <div class="vol-campo">
+              <label for="volAdesaoMatricula">Matrícula do voluntário</label>
+              <input type="number" id="volAdesaoMatricula" min="1" />
+            </div>
+            <div class="vol-campo">
+              <label for="volAdesaoForma">Como a adesão foi dada</label>
+              <select id="volAdesaoForma" onchange="volAlternarFormaAdesaoAcao()"></select>
+            </div>
+            <div class="vol-campo">
+              <label for="volAdesaoData">Data da assinatura ou da resposta</label>
+              <input type="date" id="volAdesaoData" />
+            </div>
+            <div class="vol-campo" id="volAdesaoCampoCanal" hidden>
+              <label for="volAdesaoCanal">Canal</label>
+              <select id="volAdesaoCanal"></select>
+            </div>
+            <div class="vol-campo">
+              <label for="volAdesaoReferencia">Onde está a ficha / onde a conversa foi arquivada</label>
+              <input type="text" id="volAdesaoReferencia" maxlength="200" placeholder="Ex.: Ficha nº 142, pasta Central" />
+            </div>
+          </div>
+          <div class="vol-acoes">
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="volRegistrarAdesaoAcao(this)">✍️ Registrar adesão</button>
+          </div>
+        </div>
+
+        <hr />
+        <h4>Ratificação coletiva (Lista de Ouro)</h4>
+        <p class="subtitle">Para regularizar membros antigos sem termo assinado: a assinatura em lista de
+          presença de Assembleia Geral, Reunião de Obreiros ou Escala de serviço, cujo CABEÇALHO traga a frase
+          abaixo, convalida todo o período anterior (Regimento Art. 133 §8º, III).</p>
+        <div id="volFraseRatificacao"></div>
+        <div class="vol-form">
+          <h5>Registrar uma lista assinada</h5>
+          <div class="vol-grade">
+            <div class="vol-campo">
+              <label for="volRatOrigem">Origem da lista</label>
+              <select id="volRatOrigem" onchange="volAlternarOrigemRatificacaoAcao()"></select>
+            </div>
+            <div class="vol-campo" id="volRatCampoSessao">
+              <label for="volRatSessao">Número da sessão (assembleia ou reunião)</label>
+              <input type="number" id="volRatSessao" min="1" />
+            </div>
+            <div class="vol-campo" id="volRatCampoServico" hidden>
+              <label for="volRatServico">Número do serviço (escala)</label>
+              <input type="number" id="volRatServico" min="1" />
+            </div>
+            <div class="vol-campo">
+              <label for="volRatDescricao">Descrição da lista (de 5 a 200 caracteres)</label>
+              <input type="text" id="volRatDescricao" maxlength="200" placeholder="Ex.: Assembleia Geral Ordinária de 14/03/2026" />
+            </div>
+            <div class="vol-campo">
+              <label for="volRatData">Data da lista</label>
+              <input type="date" id="volRatData" />
+            </div>
+          </div>
+          <div class="vol-campo">
+            <label for="volRatMatriculas">Matrículas avulsas (opcional) — de quem assinou mas não consta no sistema da sessão ou da escala; separe por vírgula ou por linha</label>
+            <textarea id="volRatMatriculas" rows="3" placeholder="Ex.: 1021, 1033, 1048"></textarea>
+          </div>
+          <label class="vol-check vol-declaracao"><input type="checkbox" id="volRatCabecalho" /> Confirmo que o cabeçalho da lista trouxe a menção expressa à ratificação do regime voluntário</label>
+          <div class="vol-acoes">
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="volRatificarAcao(this)">📜 Registrar ratificação</button>
+          </div>
+        </div>
+        <div id="volResultadoRatificacao"></div>
+        <h5>Listas já registradas</h5>
+        <div id="volPainelRatificacoes"></div>
+
+        <hr />
         <h4>Desligamento de voluntário</h4>
         <p class="subtitle">Registro de RH, separado do processo disciplinar (CEI) — "perda de confiança" aqui
           é só mais um motivo, nunca uma sanção.</p>
@@ -2603,6 +2787,7 @@
           </select>
           <input type="text" id="hvDesligarMotivo" placeholder="Motivo" style="min-width:220px;" />
           <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="hvDesligarRemoverEscala" /> Remover da escala</label>
+          <span class="vol-dica">Tem efeito imediato: cancela as escalas futuras do voluntário e avisa ele e o líder. Sem o id da equipe, remove de todas as equipes que o seu escopo alcança.</span>
           <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarDesligamentoAcao()">🚪 Registrar Desligamento</button>
         </div>
         <p id="resultadoDesligamento" class="subtitle"></p>

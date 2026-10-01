@@ -131,13 +131,24 @@ async function detectarAlunoAusenteEbd(pool) {
   return fatos;
 }
 
+// PSC (v7.1) — as quatro regras vêm de shared/psc.js. "Pendente" e "para
+// validar" avisam só quem tem psc_gestao E alcança a congregação (cada fato
+// traz os próprios destinatários); "para homologar" e "reclassificação
+// proposta" vão para quem tem psc_homologacao (a CLI, escopo global). A chave
+// de "pendente" é congregação * 10000 + ano: um aviso por exercício.
+const psc = require("./psc");
+
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
   PRESTACAO_CONTAS_ATRASADA: { tabela: "PrestacoesContas", detectar: detectarPrestacaoContasAtrasada },
   REPASSE_MALOTE_PARADO: { tabela: "RepassesInstitucionais", detectar: detectarRepasseMaloteParado },
   ESCALA_CONFIRMACAO_PENDENTE: { tabela: "EscalasAlocacoes", detectar: detectarConfirmacaoEscalaPendente },
   FORMACAO_VENCENDO: { tabela: "TrilhaMatriculas", detectar: detectarFormacaoVencendo },
-  EBD_ALUNO_AUSENTE: { tabela: "EbdAlertasAusencia", detectar: detectarAlunoAusenteEbd }
+  EBD_ALUNO_AUSENTE: { tabela: "EbdAlertasAusencia", detectar: detectarAlunoAusenteEbd },
+  PSC_AVALIACAO_PENDENTE: { tabela: "PscExercicio", detectar: (pool) => psc.detectarAvaliacoesPendentes(pool) },
+  PSC_PARA_VALIDAR: { tabela: "PscAvaliacoes", detectar: (pool) => psc.detectarAvaliacoesParaValidar(pool) },
+  PSC_PARA_HOMOLOGAR: { tabela: "PscAvaliacoes", detectar: (pool) => psc.detectarAvaliacoesParaHomologar(pool) },
+  PSC_RECLASSIFICACAO_PROPOSTA: { tabela: "PscReclassificacoes", detectar: (pool) => psc.detectarReclassificacoesPropostas(pool) }
 };
 
 module.exports = { DETECTORES };

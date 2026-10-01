@@ -7,6 +7,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const psc = require("../shared/psc");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "financeiro");
@@ -47,6 +48,15 @@ module.exports = async function (context, req) {
   if (req.method === "PUT") {
     const { valorAluguelMensal, valorLoteMensal, percentualRetencaoLocal } = req.body || {};
     const percentual = percentualRetencaoLocal != null ? percentualRetencaoLocal : congregacao.PercentualRetencaoLocal;
+    // v7.1 (PSC, Art. 129 §3º, I) — unidade rebaixada a Extensão da Tenda tem o
+    // caixa recolhido: a retenção local fica travada em 0 até a CLI restabelecer.
+    if (percentualRetencaoLocal != null && Number(percentualRetencaoLocal) !== Number(congregacao.PercentualRetencaoLocal)) {
+      const tutela = await psc.consultarTutela(pool, Number(congregacaoId));
+      if (tutela.sobTutela) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: tutela.mensagem } };
+        return;
+      }
+    }
     if (percentual < 0 || percentual > 100) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "percentualRetencaoLocal deve estar entre 0 e 100." } };
       return;

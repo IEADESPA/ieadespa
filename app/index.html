@@ -291,6 +291,16 @@
             <button class="btn-aba" id="btnAbaTrilhas" onclick="mostrarAbaSecretaria('trilhas')"><span class="icone">🎓</span><span class="rotulo">Formação</span></button>
           </div>
 
+          <!-- MÓDULO: SAÚDE CONGREGACIONAL — PSC (v7.1) — avaliação anual
+               das congregações pelos 5 Sinais Vitais (Escada Bloqueada) e
+               reclassificação compulsória (Regimento Art. 127-129).
+               Permissões próprias "psc_gestao" e "psc_homologacao", nunca
+               concedidas por padrão. -->
+          <div class="grupo-modulo" id="grupoModuloPsc" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaPsc" onclick="mostrarAbaSecretaria('psc')"><span class="icone">🩺</span><span class="rotulo">Saúde Congregacional</span></button>
+          </div>
+
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
           <div class="grupo-modulo" id="grupoModuloConformidade" style="display:none;">
             <hr class="divisor-sidebar" />
@@ -3215,6 +3225,109 @@
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPendenciasTrilhasAcao()">⏰ Ver pendências</button>
         </div>
         <div id="painelPendenciasTrilhas"></div>
+      </div>
+
+      <!-- ABA: SAÚDE CONGREGACIONAL — PSC (v7.1). Exige "psc_gestao" (abrir,
+           preencher, enviar e validar no escopo) e/ou "psc_homologacao" (CLI:
+           homologar, reclassificação, catálogo e parâmetros). Toda regra
+           (Escada Bloqueada, prazo, segregação de funções) está no servidor
+           (shared/psc.js); aqui só se monta a tela. O que o servidor devolve
+           passa por escaparHtmlEbd antes de ir ao innerHTML. -->
+      <div id="abaPsc" class="aba-secretaria" style="display:none;">
+        <h3>🩺 Saúde Congregacional (PSC)</h3>
+        <p class="subtitle">Toda congregação passa por uma <strong>avaliação anual obrigatória</strong> (Regimento
+          Art. 127 a 129), em <strong>5 Sinais Vitais</strong>, cada um com 5 degraus. A escada é
+          <strong>bloqueada</strong>: um degrau só vale se o anterior estiver completo — os degraus acima do primeiro
+          reprovado ficam bloqueados e não precisam ser respondidos. <strong>Em Desenvolvimento</strong> = níveis 1 a 3;
+          <strong>Referência</strong> = níveis 4 e 5. Quem preenche envia, <em>outra pessoa</em> valida e a CLI homologa.
+          Reprovar o Nível 1 por exercícios seguidos leva à <strong>proposta de reclassificação</strong> para Extensão
+          da Tenda, decidida pela CLI.</p>
+
+        <h4>📊 Painel do exercício</h4>
+        <div class="barra-lista">
+          <label for="pscAno">Exercício (ano):</label>
+          <input type="number" id="pscAno" min="2000" max="2200" style="max-width:130px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPainelPscAcao()">🔄 Atualizar</button>
+        </div>
+        <p id="pscPainelPrazo" class="subtitle"></p>
+        <div id="pscPainelResumo" class="psc-chips"></div>
+        <div class="rolagem-tabela"><div id="pscPainelTabela"></div></div>
+        <p id="pscResultadoPainel" class="subtitle" role="status"></p>
+
+        <hr />
+        <h4>📝 Avaliação da congregação</h4>
+        <p id="pscResultadoAvaliacao" class="subtitle" role="status"></p>
+        <div id="pscDetalheAvaliacao"><p class="subtitle">Escolha uma congregação no painel acima (<em>Ver/Preencher</em>) para abrir a avaliação do exercício.</p></div>
+
+        <hr />
+        <h4>⚖️ Reclassificações compulsórias (Art. 129)</h4>
+        <p class="subtitle" style="margin:4px 0;">Nascem sozinhas quando a congregação reprova no Nível 1 por exercícios seguidos
+          (a quantidade fica em <em>Parâmetros</em>) e a avaliação é homologada. Quem decide é a CLI: decretar a
+          Extensão da Tenda, arquivar a proposta ou, depois, restabelecer a autonomia.</p>
+        <div class="barra-lista">
+          <select id="pscFiltroReclass" title="Filtrar por situação">
+            <option value="">Todas as situações</option>
+            <option value="PROPOSTA">Propostas (aguardam a CLI)</option>
+            <option value="DECRETADA">Decretadas</option>
+            <option value="ARQUIVADA">Arquivadas</option>
+            <option value="REVERTIDA">Revertidas (autonomia restabelecida)</option>
+          </select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarReclassificacoesPscAcao()">📂 Ver reclassificações</button>
+        </div>
+        <p id="pscResultadoReclassificacao" class="subtitle" role="status"></p>
+        <div id="pscPainelReclassificacoes"></div>
+
+        <hr />
+        <h4>🕘 Histórico da congregação</h4>
+        <div class="barra-lista">
+          <input type="number" id="pscHistCongregacaoId" placeholder="Id da congregação" style="max-width:200px;" />
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarHistoricoPscAcao()">🔍 Ver histórico</button>
+        </div>
+        <div id="pscHistorico"></div>
+
+        <hr />
+        <details id="pscCatalogoDetalhes" style="margin:8px 0;">
+          <summary><strong>📚 Catálogo de critérios e parâmetros</strong></summary>
+          <p class="subtitle" style="margin:8px 0;">São as alíneas do Art. 128 (um catálogo por Sinal Vital e degrau). <strong>Mudar o
+            catálogo vale só para as avaliações abertas daqui em diante</strong> — as já abertas mantêm os critérios com que nasceram.</p>
+          <p id="pscParametrosResumo" class="subtitle"></p>
+          <div class="barra-lista">
+            <label class="psc-so-homologacao" style="display:none;align-items:center;gap:4px;"><input type="checkbox" id="pscMostrarInativos" onchange="carregarCatalogoPscAcao()" /> incluir inativos</label>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarCatalogoPscAcao()">📂 Recarregar catálogo</button>
+          </div>
+          <div id="pscPainelCatalogo"></div>
+
+          <div class="psc-so-homologacao" style="display:none;">
+            <hr />
+            <h5>➕ Novo critério</h5>
+            <p class="subtitle" style="margin:4px 0;">O código da alínea (ex.: 1.2.c) é gerado pelo sistema.</p>
+            <div class="barra-lista">
+              <select id="pscNovoCriterioSinal" title="Sinal Vital"></select>
+              <select id="pscNovoCriterioNivel" title="Degrau (nível)">
+                <option value="1">Nível 1</option>
+                <option value="2">Nível 2</option>
+                <option value="3">Nível 3</option>
+                <option value="4">Nível 4</option>
+                <option value="5">Nível 5</option>
+              </select>
+            </div>
+            <textarea id="pscNovoCriterioTexto" rows="2" maxlength="600" placeholder="Texto do critério (10 a 600 caracteres)" style="width:100%;"></textarea>
+            <textarea id="pscNovoCriterioOrientacao" rows="2" maxlength="500" placeholder="Orientação / critério de reprovação (opcional, até 500 caracteres)" style="width:100%;margin-top:6px;"></textarea>
+            <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="criarCriterioPscAcao()">💾 Criar critério</button>
+
+            <h5>⚙️ Parâmetros do PSC</h5>
+            <div class="barra-lista">
+              <label for="pscParamPrimeiroExercicio">Primeiro exercício:</label>
+              <input type="number" id="pscParamPrimeiroExercicio" min="2000" max="2200" style="max-width:130px;min-width:110px;" />
+              <label for="pscParamPrazoDias">Prazo de envio (dias depois de 31/12):</label>
+              <input type="number" id="pscParamPrazoDias" min="0" max="365" style="max-width:110px;min-width:90px;" />
+              <label for="pscParamExercicios">Exercícios seguidos para reclassificar:</label>
+              <input type="number" id="pscParamExercicios" min="1" max="10" style="max-width:100px;min-width:80px;" />
+              <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarParametrosPscAcao()">💾 Salvar parâmetros</button>
+            </div>
+          </div>
+          <p id="pscResultadoCatalogo" class="subtitle" role="status"></p>
+        </details>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

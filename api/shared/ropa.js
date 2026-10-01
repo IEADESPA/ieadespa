@@ -87,6 +87,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Indeterminada enquanto o certificado puder ser verificado (prova de formação); a verificação pública mostra só o que está impresso no certificado"
   },
   {
+    chave: "PSC",
+    finalidade: "Avaliação anual de saúde de cada congregação (Programa de Saúde Congregacional, Regimento Art. 127-129) e a reclassificação compulsória que dela decorre (v7.1)",
+    titulares: "Quem preenche, valida e homologa a avaliação; encarregado nomeado na reclassificação",
+    categoriasDados: ["Identificação de quem agiu (matrícula)", "Respostas e evidências (links) sobre a congregação, não sobre pessoas"],
+    baseLegal: "LGPD Art. 7º, IX — legítimo interesse da instituição em avaliar suas unidades; sem dado sensível de membro (o PSC é avaliação da congregação, não cadastro de saúde de pessoa)",
+    tabelasEnvolvidas: ["PscAvaliacoes", "PscRespostas", "PscReclassificacoes"],
+    retencao: "Indeterminada — o histórico dos exercícios é o que sustenta uma reclassificação compulsória (PoliticasRetencao)"
+  },
+  {
     chave: "AUDITORIA",
     finalidade: "Trilha de integridade e compliance (quem fez o quê, quando)",
     titulares: "Quem usa o sistema (Liderança)",

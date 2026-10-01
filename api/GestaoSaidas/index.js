@@ -34,6 +34,7 @@ const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const tesouraria = require("../shared/tesouraria");
 const compliance = require("../shared/compliance");
+const psc = require("../shared/psc");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
@@ -187,6 +188,16 @@ module.exports = async function (context, req) {
       return;
     }
     const cat = categoria.recordset[0];
+    // v7.1 (PSC, Art. 129 §3º, I) — o caixa local de uma Extensão da Tenda
+    // (congregação rebaixada) é recolhido: nada de despesa nova no centro de
+    // custo local nem no departamental dela.
+    if (cat.CentroCusto === "LOCAL" || tesouraria.centroCustoDepartamental(cat.CentroCusto)) {
+      const tutela = await psc.consultarTutela(pool, congregacaoId);
+      if (tutela.sobTutela) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: tutela.mensagem } };
+        return;
+      }
+    }
     if (cat.TipoFundo === "RESTRITO") {
       if (!campanhaId) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Esta categoria é de fundo restrito — informe a campanhaId de origem do dinheiro." } };
@@ -409,6 +420,13 @@ module.exports = async function (context, req) {
         const suspensao = await tesouraria.suspensaoAtivaFundoPdq(pool, sql);
         if (suspensao) {
           context.res = { status: 200, body: { sucesso: false, mensagem: `O Fundo de Execução Estratégica (PDQ) está suspenso pelo Pastor Presidente desde ${new Date(suspensao.SuspensoEm).toLocaleDateString("pt-BR")} — não é possível pagar agora.` } };
+          return;
+        }
+      }
+      if (registro.centroCusto === "LOCAL" || tesouraria.centroCustoDepartamental(registro.centroCusto)) {
+        const tutela = await psc.consultarTutela(pool, registro.CongregacaoId);
+        if (tutela.sobTutela) {
+          context.res = { status: 200, body: { sucesso: false, mensagem: tutela.mensagem } };
           return;
         }
       }

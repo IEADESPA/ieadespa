@@ -651,7 +651,7 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
 - [x] **"Dados de saúde (PSC)" saiu do escopo** — achado da pesquisa: PSC é o
       Programa de Saúde Congregacional (Regimento Art. 127-129), uma avaliação
       institucional da *congregação* (já roteirizada à parte na FASE 7/v7.1,
-      `PSCAvaliacoes`/`SinaisVitais`), não dado de saúde individual. O Regimento só
+      `PscAvaliacoes`/`PscSinaisVitais`), não dado de saúde individual. O Regimento só
       cita "diagnósticos de saúde" numa cláusula genérica de sigilo, sem mandar
       coletar nada — sem base normativa para criar um cadastro de saúde de pessoa.
 - [x] Vínculos: departamento(s)/congregação/cargo/função — **sem mudança de código**.
@@ -7435,12 +7435,206 @@ dá, pela primeira vez, série histórica comparável entre congregações.
 
 #### v7.1 — PSC (Programa de Saúde Congregacional)
 
-- [ ] Avaliação anual obrigatória por congregação (Reg. Art. 127-129).
-- [ ] 5 Sinais Vitais: financeira, estrutura física, espiritual, evangelismo, reprodução.
-- [ ] "Escada Bloqueada" (nível superior exige nível anterior completo).
-- [ ] Classificação: Em Desenvolvimento (N1-3) / Referência (N4-5).
-- [ ] Rebaixamento compulsório: 2 anos reprovado no N1 → vira Extensão da Tenda.
-- [ ] Perda de autonomia (caixa recolhido, diretoria dissolvida) no rebaixamento.
+- [x] Avaliação anual obrigatória por congregação (Reg. Art. 127-129).
+- [x] 5 Sinais Vitais: financeiro, estrutura física, ensino/doutrina,
+      frequência/capital humano e expansão/missionalidade — os nomes do
+      Art. 128 (o rótulo antigo deste item, "espiritual, evangelismo,
+      reprodução", não era o do Regimento).
+- [x] "Escada Bloqueada" (nível superior exige nível anterior completo).
+- [x] Classificação: Em Desenvolvimento (N1-3) / Referência (N4-5).
+- [x] Rebaixamento compulsório: 2 anos reprovado no N1 → vira Extensão da
+      Tenda (o sistema **propõe**, a CLI **decreta** — ver abaixo).
+- [x] Perda de autonomia (caixa recolhido, diretoria dissolvida) no rebaixamento.
+
+  Abre a FASE 7 com: migração 113 (`sql/migrations/113_psc_saude_congregacional.sql`),
+  `shared/psc.js` (a Escada Bloqueada, a esteira e a reclassificação),
+  `shared/pscApuracao.js` (sugestões a partir de dados que o sistema já tem), a
+  Function nova `GestaoPsc` (`/api/psc/...`, 21 ações), quatro regras no motor
+  de notificações da vB.2, duas travas no caixa local (`GestaoSaidas` e
+  `GestaoParametrosTesouraria`), a entrada `PSC` no ROPA e, no front, o módulo
+  "🩺 Saúde Congregacional (PSC)".
+
+  **Catálogo (item 2).** Os 5 Sinais Vitais e as **57 alíneas** do Art. 128
+  (§§1º a 5º, uma linha por alínea) são **semeados** pela migração, mas moram no
+  banco (`PscSinaisVitais`, `PscCriterios`) como catálogo editável — a CLI cria,
+  reescreve e desativa critério sem tocar em código (configurabilidade total,
+  seção 2.1). O "Bloqueio" que o Regimento descreve ("risco elétrico reprova no
+  Nível 1") fica na coluna `Orientacao` da alínea correspondente. Ao ser aberta,
+  cada avaliação **copia** os critérios vigentes para `PscRespostas` (código,
+  texto, orientação): mudar o catálogo depois vale só para as próximas, nunca
+  reescreve uma avaliação já feita.
+
+  **A Escada Bloqueada (itens 3 e 4).** O nível **nunca é digitado**; é calculado
+  das respostas (funções puras em `shared/psc.js`). Em cada Sinal, do degrau 1 ao
+  5: todas as alíneas atendidas = **completo** e sobe; uma alínea não atendida =
+  **reprovado** e a escada para ali; alínea ainda sem resposta = **em aberto**.
+  Os degraus acima do primeiro que parou ficam **bloqueados** e **não precisam
+  ser respondidos** (não valem nada enquanto o de baixo não for vencido; ao
+  vencê-lo, o seguinte destrava). Um degrau cheio acima de um reprovado não conta.
+  Três leituras do Regimento que ele não resolve sozinho, registradas como
+  decisão:
+  - **Nível da congregação = o do Sinal mais fraco.** O Art. 128 define o nível
+    de cada Sinal, mas não diz como juntar os cinco; como a escada é "integral e
+    cumulativa", vale a leitura mais estrita. Muda numa linha
+    (`consolidarSinais`) se a CLI quiser outra regra.
+  - **Reprovada no Nível 1 = qualquer Sinal** com alínea do Nível 1 não atendida
+    (cada Sinal tem o seu "Bloqueio" no Nível 1: §1º, I, a; §2º, I, d; §3º, I,
+    c; §4º, I, c; §5º, I, c).
+  - **Classificação** (Art. 129 §1º): nível 1 a 3 = Congregação em
+    Desenvolvimento; 4 e 5 = Congregação de Referência. Reprovada no Nível 1 não
+    é nenhuma das duas.
+
+  **Esteira e segregação de funções (item 1).** Uma avaliação por congregação e
+  por exercício (ano civil), em quatro etapas feitas por pessoas diferentes
+  (seção 2.7): `RASCUNHO` → `ENVIADA` (quem preencheu) → `VALIDADA` (outra
+  pessoa, no escopo — tipicamente o Pastor de Área; **quem enviou não valida**)
+  → `HOMOLOGADA` (a CLI diploma o exercício; **quem enviou ou validou não
+  homologa**). A segregação vale também para **quem respondeu alguma alínea** (o
+  preparador, ainda que outra pessoa tenha clicado em Enviar, não valida nem
+  homologa) e **nega** quando a sessão não identifica quem age: nunca falha
+  aberta. Devolver volta a rascunho com o motivo (gestão devolve a enviada; só a
+  CLI devolve a validada). A CLI pode **reabrir** uma homologada com motivo —
+  e o resultado oficial é desfeito —, salvo se o exercício sustenta uma
+  reclassificação em andamento. Só na homologação o resultado é **congelado**
+  (`NivelFinal`, `Classificacao`, `ResultadoSinaisJson`). O envio confere a
+  `Versao` das respostas que leu — se alguém gravou uma resposta no meio, ele não
+  passa por cima — e `Ciclo` conta os envios (entra na chave dos avisos, ver
+  abaixo). Duas permissões novas,
+  nunca concedidas por padrão: **`psc_gestao`** (abrir, responder, enviar,
+  validar, no escopo) e **`psc_homologacao`** (homologar, decidir a
+  reclassificação, mexer no catálogo e nos parâmetros — **escopo global**, porque
+  vale para a igreja inteira). Ler (painel, avaliações) exige uma das duas.
+  Evidência de uma alínea é **link `https://`** (conferido no servidor e por um
+  `CHECK` no banco), como o material da EBD: guardar o arquivo aqui seria custo
+  sem ganho.
+
+  **Exercício e prazo.** O exercício é o ano civil. O PSC vale a partir do
+  primeiro exercício obrigatório (**2026**, parâmetro) e não se abre exercício
+  futuro. O envio vence **90 dias depois de 31/12** (parâmetro, 31/03): o painel
+  mostra `em andamento`, `no prazo` ou `atrasado` — e `não se aplica` antes do
+  primeiro exercício e para a unidade já rebaixada a Extensão da Tenda, que não
+  tem avaliação a entregar (o painel concorda com os avisos). Prazo vencido
+  **alerta, não bloqueia** (a norma torna a avaliação obrigatória, não fatal).
+
+  **Apuração assistida.** Ao abrir a avaliação, as alíneas ligadas a uma fonte
+  (`FonteAutomatica`) recebem uma **sugestão**: `CONFERE`, `NAO_CONFERE` (com os
+  números) ou `SEM_DADOS`. Cinco fontes: repasses (1.2.a — fechamentos da
+  tesouraria com repasse confirmado), prestação de contas (1.2.b — meses
+  `COMPLETA`) — ambos só nos meses **já exigíveis**, com **um mês de folga**
+  (o fechamento de setembro acontece em outubro; sem isso a sugestão ficaria
+  vermelha todo começo de mês para quem está em dia) —, lições da EBD (3.1.a —
+  lições **de domingo** × domingos que já passaram; a aula de hoje e a extra de
+  sábado não entram na conta), diário da EBD (3.1.b — lições fechadas) e batismos
+  (5.3.a — batizados no ano ÷ rol ativo em comunhão, mínimo 10% pela razão
+  exata: 9,95% não arredonda para 10%). **Sugestão nunca é resposta**: não conta
+  para a escada e o texto sempre diz o que o sistema **não** enxerga (a qualidade
+  da nota fiscal, o feriado que justificava o domingo sem aula, se o batizado é
+  fruto local ou de Carta de Mudança). Dá para atualizá-las enquanto é rascunho.
+
+  **Reclassificação compulsória (itens 5 e 6, Art. 129 §§2º-3º).** Ao homologar
+  um exercício reprovado no Nível 1, o sistema procura uma janela de **N
+  exercícios seguidos** (parâmetro, padrão 2), todos **homologados** e todos
+  reprovados no Nível 1 — consecutivos de verdade (um ano sem avaliação quebra a
+  sequência) e mesmo se o ano anterior for homologado depois. Achou: abre uma
+  **PROPOSTA** (`PscReclassificacoes`, uma em aberto por congregação — índice
+  único filtrado) e avisa a CLI. **O sistema não rebaixa sozinho** — decisão: o
+  texto diz que a unidade "perde automaticamente" o título, mas os efeitos
+  (caixa, diretoria) são pesados demais para dispararem sem uma pessoa conferir
+  a proposta; a CLI já homologou as duas reprovações, então decidir é um passo
+  curto. A CLI então:
+  - **decreta** (resolução + encarregado + Congregação-Mãe opcional, vazio = tutela
+    da Sede): a congregação passa a `Categoria = 'EXTENSAO_TENDA'` (os membros
+    **não** são movidos), a retenção local vai a **0%** (o caixa é recolhido; o
+    percentual anterior fica guardado), `GestaoSaidas` passa a barrar despesa nova
+    no centro de custo **local e departamental** dela e `GestaoParametrosTesouraria`
+    trava a retenção, `GestaoMovimentosFundoFixo` não deixa mexer no Fundo Fixo da
+    unidade, **todos os mandatos locais** (`Lideranca` com escopo
+    daquela congregação) são encerrados — o encarregado tem de ser membro **ativo e
+    em comunhão** e não pode ser alguém da diretoria dissolvida — e o **saldo
+    local a recolher** é calculado e
+    registrado (não digitado). Tudo numa transação;
+  - **arquiva** a proposta, com o motivo (a congregação segue como está);
+  - **restabelece** a autonomia depois — e só com uma avaliação **homologada, de
+    exercício posterior**, sem reprovação no Nível 1 ("até que a unidade
+    recupere os indicadores mínimos", §3º, II). Categoria, tutela e retenção
+    (a anterior) voltam; **a diretoria não volta sozinha** (nova nomeação ou
+    eleição em Permissões).
+
+  **Avisos (vB.2).** `PSC_AVALIACAO_PENDENTE` (exercício encerrado, prazo vencido,
+  sem envio) e `PSC_PARA_VALIDAR` vão só a quem tem `psc_gestao` **e** alcança a
+  congregação (cada fato traz os destinatários, recurso da v6.10 — o motor, sozinho,
+  avisaria o Pastor de uma Área sobre a congregação de outra); `PSC_PARA_HOMOLOGAR`
+  e `PSC_RECLASSIFICACAO_PROPOSTA` vão a quem tem `psc_homologacao`. A chave
+  de deduplicação do pendente é congregação × 10000 + ano (um aviso por
+  exercício); a de "para validar" e "para homologar" leva o **ciclo** (avaliação ×
+  100 + nº de envios), porque devolvida e reenviada é um fato novo — com o id
+  puro, a deduplicação do motor engoliria o segundo aviso. Cada detector resolve
+  os destinatários de uma congregação uma vez por rodada, e olha no máximo os 5
+  últimos exercícios.
+
+  Testado com `npx jest`: **65 testes novos** em `psc.test.js` (escada,
+  consolidação, prazo, esteira e segregação nos dois sentidos, entradas, gatilho
+  da reclassificação com ano faltando e homologação fora de ordem, decreto,
+  escopo e limite empurrados para o SQL, apuração) — suíte completa em
+  **768/768** (46 suítes; era 703/45). Antes do commit passou por uma revisão
+  independente (`/code-review`, nível alto) que achou 15 pontos, todos tratados:
+  os que mudam o comportamento estão descritos acima (segregação do preparador e
+  fail-closed, ciclo do aviso, versão no envio, Fundo Fixo, encarregado, prazo
+  fora do PSC, domingos, folga de um mês, razão exata, `ativo` booleano de
+  verdade, escopo e limite no SQL, sugestão só em rascunho).
+
+  **Verificado contra banco de verdade (01/10).** A homologação do Azure
+  (`ieadespa-homolog`) recusou o IP desta máquina (firewall), e não abri regra por
+  conta própria; a verificação rodou num **SQL Server 2019 (LocalDB)** com as 113
+  migrações aplicadas do zero e a 113 reaplicada (idempotente; 5 sinais, 57
+  critérios, 4 regras, 2 permissões). Os **handlers reais** (`GestaoPsc`,
+  `GestaoSaidas`, `GestaoParametrosTesouraria`) e o SQL real rodaram por uma ponte
+  descartável, **sobre um banco recriado do zero** (migrações 001 a 113):
+  **197 verificações passaram**, entre elas permissão e escopo
+  (401/403 em cada ação), a escada destravando, as quatro etapas com a
+  segregação nos dois sentidos, devolver/reabrir, o congelamento do resultado, a
+  proposta aberta só no 2º exercício seguido (e não no 1º), o decreto com todos os
+  efeitos (categoria, retenção 0, três mandatos encerrados e nenhum de outra
+  congregação, saldo de R$ 300 a recolher) e as travas do caixa, o arquivamento,
+  o restabelecimento (recusado sem avaliação posterior, aceito com ela), o
+  catálogo editável com a foto das avaliações já abertas, os detectores com
+  destinatário por escopo e **zero falha de auditoria** (a lição da Trava 6-B:
+  `RegistroId` nunca nulo). A primeira execução em Azure SQL de verdade é a do
+  passo de migração do CI.
+
+  **A tela (módulo "🩺 Saúde Congregacional (PSC)").** Painel do exercício (chips,
+  tabela por congregação com status, prazo, os 5 Sinais, resultado, reprovações
+  seguidas "X de N" e as ações), a avaliação com a **escada desenhada degrau a
+  degrau** (✅ completo, ❌ reprovado, 🟡 em aberto, 🔒 bloqueado — alínea de degrau
+  bloqueado aparece esmaecida e sem campo), a sugestão do sistema ao lado de cada
+  alínea, resposta com observação e link de evidência, salvar só o que mudou (em
+  lotes de 200), os botões de cada etapa conforme o estado e a permissão, as
+  reclassificações com decretar/arquivar/restabelecer, o histórico da congregação
+  e o catálogo/parâmetros (a CLI cria, edita e desativa critério). Todo texto do
+  servidor passa por `escaparHtmlEbd`; evidência só vira link se for `https://`.
+  Conferido com o `script.js` inteiro num DOM simulado: **24.740 verificações**,
+  110 atribuições de `innerHTML` varridas, 4.974 handlers `on*` apontando para
+  função que existe, nome com `<img onerror>` só aparece escapado e
+  `javascript:` é recusado, corpos de requisição batendo com o contrato. **O
+  layout em si (CSS) não foi visto num navegador** — vale abrir a aba uma vez em
+  produção.
+
+  **Registrado, não construído, por decisão:**
+
+  - A unidade rebaixada continua uma linha de `Congregacoes`, com os membros nela
+    (`Categoria = 'EXTENSAO_TENDA'`); não vira linha de `ExtensoesTenda` nem tem o
+    rol transferido para a Congregação-Mãe. Mover pessoas é irreversível demais
+    para um efeito automático de decreto.
+  - O saldo local que já existe no momento do decreto **não é transferido**: o
+    sistema o calcula e o registra, e a Tesouraria Geral o recolhe pelo fluxo
+    financeiro de sempre.
+  - Quem tinha sessão aberta continua com ela até o token expirar (12h) — a mesma
+    limitação, deliberada, da vB.9 e das medidas cautelares.
+  - O site institucional (`CongregacoesPublico`) não distingue a categoria: a
+    unidade rebaixada continua listada como congregação até a FASE C ser revisitada.
+  - Não há ranking nem comparativo entre congregações (Art. 129 fala de "níveis
+    reais de eficiência" para direcionar investimentos): a FASE 12 (indicadores)
+    é onde isso entra, em cima do que a homologação já congela.
 
 #### v7.2 — Calendário oficial e agenda unificada
 
@@ -8348,13 +8542,16 @@ deixou passar algo.
   `PdqMetas`, `PdqProjetos`, `PdqRemanejamentos`, `PdqFundoSuspensoes`.
 - **Rateio Geral (malote dos 60%):** `RateioGeralDestinos`, `RateiosGerais`,
   `RateioGeralValores`, `RateioGeralItens`.
+- **Saúde congregacional (PSC, v7.1):** `PscSinaisVitais`, `PscCriterios`,
+  `PscParametros`, `PscAvaliacoes`, `PscRespostas`, `PscReclassificacoes` — e as colunas
+  `Congregacoes.Categoria` (`CONGREGACAO` | `EXTENSAO_TENDA`) e
+  `Congregacoes.TutelaCongregacaoMaeId`.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,
 `Licoes`, `Trilhas`, `Modulos`, `Certificados`), departamentos
 (`SchemasRelatorio`, `CamposFormulario`, `RelatoriosMensais`, `PerfisRateio`,
-`TesourariasDepartamento`), saúde congregacional (`PSCAvaliacoes`, `SinaisVitais`),
-eventos (`Eventos`, `Inscricoes`, `Credenciamentos`), proteção de menores
+`TesourariasDepartamento`), eventos (`Eventos`, `Inscricoes`, `Credenciamentos`), proteção de menores
 (`HabilitacoesMinisterioInfantil`, `CheckinsInfantis`, `Incidentes`), comunicação
 (`ConsentimentosComunicacao`, `Mensagens`), missões (`CamposMissionarios`,
 `RelatoriosCampo`), obrigações fiscais (`ObrigacoesAcessorias`).

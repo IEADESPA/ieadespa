@@ -14,6 +14,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const tesouraria = require("../shared/tesouraria");
+const psc = require("../shared/psc");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
@@ -58,6 +59,13 @@ module.exports = async function (context, req) {
   if (req.method === "POST") {
     if (registroFundo.Status !== "ATIVO") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este Fundo Fixo está encerrado." } };
+      return;
+    }
+    // v7.1 (PSC, Art. 129 §3º, I) — o Fundo Fixo é caixa local: o de uma Extensão da
+    // Tenda (congregação rebaixada) é recolhido, não se movimenta.
+    const tutela = await psc.consultarTutela(pool, registroFundo.CongregacaoId);
+    if (tutela.sobTutela) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: tutela.mensagem } };
       return;
     }
     const { tipo, valor, descricao, documentoBase64, mimeType } = req.body || {};

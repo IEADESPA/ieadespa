@@ -490,3 +490,40 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .selo-pendente-offline { font-size: 0.75rem; color: var(--cor-texto-suave); }
 .plano-aula-ebd { border-left: 3px solid var(--cor-secundaria); padding: 4px 10px; margin: 8px 0; }
 .plano-aula-ebd .roteiro-plano { white-space: pre-wrap; }
+
+/* v7.1 — PSC (Saúde Congregacional). Só variáveis do tema (nada de cor fixa
+   além do marrom já usado em .tag-pendente), então acompanha qualquer tema. */
+.psc-cartao { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); background: var(--cor-superficie); padding: 12px 14px; margin: 10px 0; }
+.psc-cartao h4, .psc-cartao h5 { margin: 0 0 6px; color: var(--cor-primaria); }
+.psc-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.psc-chip, .psc-selo { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; background: var(--cor-primaria-suave); color: var(--cor-primaria); white-space: nowrap; }
+.psc-selo { padding: 2px 8px; font-size: 0.74rem; margin: 1px 2px 1px 0; }
+.psc-ok { background: var(--cor-sucesso-suave); color: var(--cor-sucesso); }
+.psc-alerta-selo { background: var(--cor-secundaria-suave); color: #7A6110; }
+.psc-erro { background: var(--cor-erro-suave); color: var(--cor-erro); }
+.psc-neutro { background: var(--cor-fundo); color: var(--cor-texto-suave); border: 1px solid var(--cor-borda); }
+.psc-alerta { color: var(--cor-erro); font-weight: 700; }
+.psc-aviso { background: var(--cor-secundaria-suave); color: #7A6110; border-left: 4px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); padding: 8px 12px; }
+.psc-legenda { font-size: 0.8rem; color: var(--cor-texto-suave); margin: 6px 0 0; }
+.psc-sinal-mini { display: inline-block; margin: 1px 3px 1px 0; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--cor-borda); font-size: 0.74rem; white-space: nowrap; cursor: help; }
+.psc-sinal-mini.psc-concluido { border-color: var(--cor-sucesso); color: var(--cor-sucesso); }
+.psc-sinal-mini.psc-nivel-zero { border-color: var(--cor-erro); background: var(--cor-erro-suave); color: var(--cor-erro); font-weight: 700; }
+.psc-linha-tempo { list-style: none; padding: 0; margin: 8px 0 0; font-size: 0.86rem; }
+.psc-linha-tempo li { padding: 3px 0 3px 10px; border-left: 3px solid var(--cor-borda); margin-bottom: 4px; }
+.psc-degrau { border-left: 4px solid var(--cor-borda); margin: 8px 0; padding-left: 10px; }
+.psc-degrau > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.psc-degrau-completo { border-left-color: var(--cor-sucesso); }
+.psc-degrau-reprovado { border-left-color: var(--cor-erro); }
+.psc-degrau-incompleto { border-left-color: var(--cor-secundaria); }
+.psc-criterio { padding: 8px 0; border-top: 1px dashed var(--cor-borda); font-size: 0.9rem; }
+.psc-criterio.psc-bloqueada, .psc-inativo { opacity: .55; }
+.psc-orientacao { background: var(--cor-secundaria-suave); color: #7A6110; border-radius: var(--raio-pequeno); padding: 6px 10px; margin: 6px 0; font-size: 0.84rem; }
+.psc-sugestao { font-size: 0.84rem; margin: 6px 0; }
+.psc-sugestao small { color: var(--cor-texto-suave); }
+.psc-campos { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 6px; }
+.psc-campos label { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; cursor: pointer; }
+.psc-campos input[type="text"] { flex: 1 1 240px; width: auto; min-width: 180px; padding: 8px 10px; font-size: 0.9rem; }
+.psc-form-inline { background: var(--cor-fundo); border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 10px 12px; margin-top: 8px; }
+.psc-form-inline input[type="text"], .psc-form-inline input[type="number"], .psc-form-inline textarea { margin-top: 4px; margin-bottom: 6px; padding: 8px 10px; font-size: 0.9rem; }
+.psc-form-inline label { display: block; font-weight: 600; font-size: 0.85rem; margin-top: 6px; }
+.psc-acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }

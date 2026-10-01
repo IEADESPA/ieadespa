@@ -137,6 +137,7 @@ async function detectarAlunoAusenteEbd(pool) {
 // proposta" vão para quem tem psc_homologacao (a CLI, escopo global). A chave
 // de "pendente" é congregação * 10000 + ano: um aviso por exercício.
 const psc = require("./psc");
+const calendarioDb = require("./calendarioDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -148,7 +149,14 @@ const DETECTORES = {
   PSC_AVALIACAO_PENDENTE: { tabela: "PscExercicio", detectar: (pool) => psc.detectarAvaliacoesPendentes(pool) },
   PSC_PARA_VALIDAR: { tabela: "PscAvaliacoes", detectar: (pool) => psc.detectarAvaliacoesParaValidar(pool) },
   PSC_PARA_HOMOLOGAR: { tabela: "PscAvaliacoes", detectar: (pool) => psc.detectarAvaliacoesParaHomologar(pool) },
-  PSC_RECLASSIFICACAO_PROPOSTA: { tabela: "PscReclassificacoes", detectar: (pool) => psc.detectarReclassificacoesPropostas(pool) }
+  PSC_RECLASSIFICACAO_PROPOSTA: { tabela: "PscReclassificacoes", detectar: (pool) => psc.detectarReclassificacoesPropostas(pool) },
+  // Calendário (v7.2): o prazo de 15/jan avisa quem pode propor e ainda não propôs (30 e 7 dias antes);
+  // proposta recusada/absorvida avisa SÓ o proponente; consolidar e homologar vão a quem decide.
+  CALENDARIO_PRAZO_PROPOSTAS: { tabela: "CalendarioAnos", detectar: (pool) => calendarioDb.detectarPrazoPropostas(pool, { janelaDias: 30 }) },
+  CALENDARIO_PRAZO_URGENTE: { tabela: "CalendarioAnos", detectar: (pool) => calendarioDb.detectarPrazoPropostas(pool, { janelaDias: 7 }) },
+  CALENDARIO_PROPOSTA_RECUSADA: { tabela: "CalendarioEventos", detectar: (pool) => calendarioDb.detectarPropostasRecusadas(pool) },
+  CALENDARIO_PARA_CONSOLIDAR: { tabela: "CalendarioAnos", detectar: (pool) => calendarioDb.detectarParaConsolidar(pool) },
+  CALENDARIO_PARA_HOMOLOGAR: { tabela: "CalendarioAnos", detectar: (pool) => calendarioDb.detectarParaHomologar(pool) }
 };
 
 module.exports = { DETECTORES };

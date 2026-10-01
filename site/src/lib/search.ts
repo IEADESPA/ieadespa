@@ -1,3 +1,4 @@
+import { fetchAgendaOficial, mesclarEventos, type EventoSite } from "@/lib/agendaOficial";
 import { enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
@@ -83,16 +84,6 @@ interface RegistroHistorico {
   period: string | null;
 }
 
-interface Evento {
-  slug: string;
-  title: string;
-  event_date: string | null;
-  location: string | null;
-  description: string;
-  body: string | null;
-  aceita_inscricao?: boolean;
-}
-
 /** Páginas institucionais que não vêm de nenhuma coleção do Directus, mas
  * fazem parte da navegação — cobertas aqui pra busca servir de atalho
  * pra qualquer canto do site, não só pra conteúdo. */
@@ -158,15 +149,27 @@ let cachedIndex: SearchItem[] | null = null;
 export async function buildSearchIndex(): Promise<SearchItem[]> {
   if (cachedIndex) return cachedIndex;
 
-  const [posts, noticias, orgaos, congregacoes, registrosHistoricos, eventos, config] = await Promise.all([
+  const [
+    posts,
+    noticias,
+    orgaos,
+    congregacoes,
+    registrosHistoricos,
+    eventosDirectus,
+    agendaOficial,
+    config,
+  ] = await Promise.all([
     visiblePosts(await getAllMensagens()),
     visibleNoticias(await getAllNoticias()),
     fetchItems<Orgao>("ministerios"),
     fetchCongregacoesPublicas(),
     fetchItems<RegistroHistorico>("historia"),
-    fetchItems<Evento>("eventos"),
+    fetchItems<EventoSite>("eventos"),
+    fetchAgendaOficial(),
     fetchConfiguracoes(),
   ]);
+  // Eventos do Directus + calendário oficial do sistema (v7.2); os oficiais sem página própria apontam pra /eventos/.
+  const eventos = mesclarEventos(eventosDirectus, agendaOficial);
 
   const fromPosts: SearchItem[] = posts.map((post) => ({
     title: post.data.title,

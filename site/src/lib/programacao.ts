@@ -1,3 +1,4 @@
+import { fetchAgendaOficial } from "@/lib/agendaOficial";
 import { fetchItems, type Configuracoes } from "@/lib/directus";
 
 export type Dia = "segunda" | "terca" | "quarta" | "quinta" | "sexta" | "sabado" | "domingo_manha" | "domingo_noite";
@@ -48,12 +49,33 @@ export const OCCURRENCE_LABEL: Record<Ocorrencia, string> = {
   ultimo: "Último domingo do mês",
 };
 
-let cached: ProgramacaoItem[] | null = null;
+let cached: Promise<ProgramacaoItem[]> | null = null;
 
-/** Busca a programação semanal institucional. Fonte única — usada em toda página que mostra horário de culto. */
-export async function getAllProgramacao(): Promise<ProgramacaoItem[]> {
-  if (cached) return cached;
-  cached = await fetchItems<ProgramacaoItem>("programacao", "sort[]=sort");
+async function carregarProgramacao(): Promise<ProgramacaoItem[]> {
+  // Fonte oficial: a agenda litúrgica do sistema de governança (v7.2), mesmo
+  // formato de `ProgramacaoItem`.
+  const agenda = await fetchAgendaOficial();
+  if (agenda.disponivel && agenda.liturgia.length > 0) return agenda.liturgia;
+
+  // Rede de segurança de TRANSIÇÃO: com a agenda indisponível (sistema fora do
+  // ar) OU com a liturgia vazia (ex.: o primeiro deploy do site rodou antes da
+  // API nova estar no ar / antes de cadastrarem a grade), cai para a coleção
+  // `programacao` do Directus — o site nunca fica sem horário de culto. Quando
+  // a grade oficial estiver estável em produção, esta coleção pode ser aposentada.
+  console.warn(
+    agenda.disponivel
+      ? "[programacao] liturgia oficial vazia; usando a coleção `programacao` do Directus."
+      : "[programacao] agenda oficial indisponível; usando a coleção `programacao` do Directus.",
+  );
+  return fetchItems<ProgramacaoItem>("programacao", "sort[]=sort");
+}
+
+/**
+ * Busca a programação semanal institucional. Fonte única — usada em toda página que mostra horário de culto.
+ * Guarda a promessa (não o resultado) porque várias páginas pedem ao mesmo tempo durante o build.
+ */
+export function getAllProgramacao(): Promise<ProgramacaoItem[]> {
+  cached ??= carregarProgramacao();
   return cached;
 }
 

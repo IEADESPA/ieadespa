@@ -9,6 +9,7 @@ import { getAllMensagens, visiblePosts } from "@/lib/posts";
 import { COVER_WIDTHS, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, TELEFONE_HASH_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
 import { congregacaoEndereco, fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
+import { aplicarDatasOficiais, fetchAgendaOficial } from "@/lib/agendaOficial";
 import { coordenadaDeLinkMaps } from "@/lib/googleMapsLink";
 
 type TipoPergunta = "texto_curto" | "texto_longo" | "selecao_unica" | "selecao_multipla" | "numero" | "data";
@@ -63,7 +64,8 @@ interface Evento {
 }
 
 export async function getStaticPaths() {
-  const events = await fetchItems<Evento>("eventos", "fields=*");
+  // A data/hora oficial (v7.2) vale também aqui, para a página não contradizer a lista.
+  const events = aplicarDatasOficiais(await fetchItems<Evento>("eventos", "fields=*"), await fetchAgendaOficial());
   // slug é opcional no Directus (evento recém-criado, ainda sem slug definido)
   // — sem essa checagem, um evento assim quebraria o build inteiro.
   return events.filter((event) => event.slug && hasEventPage(event)).map((event) => ({ params: { slug: event.slug }, props: { event } }));

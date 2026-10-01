@@ -17,7 +17,7 @@ algo.
 - **O site público** (`www.ieadespa.org.br`) — este repositório, hospedado no Azure Static Web
   Apps. A cada `git push`, ou a cada publicação/edição/exclusão de conteúdo no Directus, o GitHub
   Actions gera uma nova versão estática e publica em 1-2 minutos (ver
-  [Integração com Azure](#integração-com-azure)).
+  [Infraestrutura Azure](#infraestrutura-azure)).
 - **Uma camada de API própria** (`api/`, Azure Functions, hospedada dentro do mesmo Static Web
   App) — cobre tudo que o site estático sozinho não consegue fazer com segurança: conferir
   telefone/código com hash de verdade, enviar e-mail transacional, impedir voto duplicado em
@@ -149,7 +149,8 @@ com uma plataforma de eventos de verdade, a conclusão foi que só interessa um 
 evento, lançado manualmente no sistema de gestão de membros; e-mail nunca é armazenado por padrão).
 O modelo atual:
 
-- **Evento semanal (culto)** — coleção `programacao`, sem inscrição.
+- **Evento semanal (culto)** — agenda litúrgica do sistema de governança (v7.2; coleção
+  `programacao` do Directus só como fallback, ver abaixo), sem inscrição.
 - **Evento simples** — coleção `eventos`, sem inscrição: data, horário de término, local (texto
   livre ou puxado automaticamente de uma `congregacao` vinculada), responsável. Arquivamento
   automático diário (Flow do Directus, 3h da manhã) some eventos passados da lista principal sem
@@ -174,6 +175,21 @@ O modelo atual:
 - **Notificação push** — aviso geral de eventos chegando (com preferência por responsável) e
   lembrete individual de quem se inscreveu, via Service Worker + VAPID.
 - **Mapas** — ver [Mapas (Google Maps Platform)](#mapas-google-maps-platform).
+
+**Calendário oficial e agenda litúrgica (v7.2).** A grade semanal de cultos e os eventos
+especiais do calendário oficial nascem no sistema de governança e chegam ao site em tempo de
+build, por `GET https://app.ieadespa.org.br/api/agenda-publica/tudo` (sem login; ver
+[src/lib/agendaOficial.ts](./src/lib/agendaOficial.ts)). A grade (`liturgia`) substitui a coleção
+`programacao` do Directus, que sobra só como rede de segurança de transição (usada se a API estiver
+fora do ar ou devolver a grade vazia). Os eventos oficiais são mesclados à lista do Directus em
+`/eventos/`, `/eventos.ics` e na busca (`mesclarEventos`): o **Directus segue dono dos eventos com
+inscrição/página própria** (`/evento/<slug>/`), mas quando o calendário oficial aponta o mesmo
+`slugSite`, data e hora passam a ser as oficiais; os demais eventos oficiais aparecem sem página
+própria, com uma etiqueta do tipo. Se o sistema não responder, o build **não quebra**: o site sai
+com o que o Directus tem. O build publica `/agenda-versao.json` (hash do que foi mostrado) e o
+workflow `.github/workflows/site-agenda-sync.yml` compara com `/api/agenda-publica/versao` a cada
+20 minutos, disparando um novo deploy só quando a versão muda. Para testar o build contra um
+servidor falso, defina `SISTEMA_API_URL`.
 
 ### Camisetas e uniformes
 

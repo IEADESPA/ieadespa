@@ -96,6 +96,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Indeterminada — o histórico dos exercícios é o que sustenta uma reclassificação compulsória (PoliticasRetencao)"
   },
   {
+    chave: "CALENDARIO",
+    finalidade: "Calendário oficial do campo, agenda litúrgica e presença do dirigente na Santa Ceia Geral (Regimento Art. 79, 81, 147, 154 e 154-A) — v7.2",
+    titulares: "Quem propõe e decide as datas (matrícula) e os dirigentes das congregações na Santa Ceia Geral",
+    categoriasDados: ["Identificação de quem propôs, deferiu e homologou (matrícula)", "Presença do dirigente da congregação na Ceia Geral: presente, ausente justificado ou injustificado", "Justificativa livre da ausência (pode citar motivo de saúde)"],
+    baseLegal: "LGPD Art. 7º, IX — legítimo interesse da instituição em organizar a programação; Art. 11, II, \"a\" — organização religiosa, para a justificativa de ausência (que pode ser dado de saúde, visível só à Secretaria e à CLI). O que vai ao site público é só título, data, local e congregação — nenhum nome de pessoa.",
+    tabelasEnvolvidas: ["CalendarioEventos", "CalendarioPresencasDirigente"],
+    retencao: "Calendário: indeterminada — o histórico de anos homologados sustenta o Direito Adquirido Temporal (PoliticasRetencao). Presença na Ceia Geral e justificativa: também sem prazo de descarte por ora (a política da categoria não separa a justificativa) — a CLI deve definir quando anonimizar o texto livre."
+  },
+  {
     chave: "AUDITORIA",
     finalidade: "Trilha de integridade e compliance (quem fez o quê, quando)",
     titulares: "Quem usa o sistema (Liderança)",

@@ -1,0 +1,147 @@
+name: Site - sincronizar agenda oficial
+
+# Por que existe
+# ---------------
+# O site é estático (Astro): o calendário oficial e a agenda litúrgica do sistema de
+# governança (v7.2) entram no site EM TEMPO DE BUILD (site/src/lib/agendaOficial.ts).
+# Quando alguém homologa/edita um evento ou a grade de cultos no sistema, o site só
+# muda se for reconstruído. Este workflow faz isso sozinho, sem rebuild à toa:
+#   1. lê a "versão" (hash de 16 hex do que o site mostra) em /api/agenda-publica/versao;
+#   2. lê a versão que o site publicado diz estar mostrando (/agenda-versao.json);
+#   3. se forem diferentes, dispara o deploy do site (workflow_dispatch).
+#
+# Por que workflow_dispatch: eventos criados com o GITHUB_TOKEN não disparam outros
+# workflows (regra anti-laço do GitHub Actions) — a exceção é justamente
+# workflow_dispatch/repository_dispatch. Um `git push` feito aqui com o token padrão NÃO
+# geraria build; `gh workflow run` (workflow_dispatch) gera. Por isso o workflow do site
+# (azure-static-web-apps-salmon-bay-0efd06d0f.yml) aceita workflow_dispatch.
+#
+# Salvaguardas (sem segredo nenhum: tudo é leitura pública + o token do próprio run):
+#   - sistema fora do ar / sem versão válida -> encerra com sucesso, não dispara build;
+#   - já há deploy do site na fila ou em andamento -> não dispara outro;
+#   - o último deploy do site FALHOU há menos de 60 min -> não dispara (evita laço de build
+#     quebrado; um commit/ajuste no site ou o disparo manual do deploy destravam).
+# Observação: o GitHub pode atrasar execuções agendadas e desliga agendamentos de
+# repositórios públicos sem nenhuma atividade por 60 dias; os commits frequentes mantêm vivo.
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  actions: write # necessário para `gh workflow run`
+  contents: read
+
+# Própria, sem cancelar: uma checagem em andamento termina antes da próxima começar.
+concurrency:
+  group: site-agenda-sync
+  cancel-in-progress: false
+
+jobs:
+  sincronizar:
+    name: Comparar versões e, se preciso, reconstruir o site
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SISTEMA_API_URL: https://app.ieadespa.org.br/api
+      SITE_URL: https://www.ieadespa.org.br
+      WORKFLOW_SITE: azure-static-web-apps-salmon-bay-0efd06d0f.yml
+      # `gh` precisa saber o repositório (o job não faz checkout).
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Comparar a versão da agenda do sistema com a do site
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Versão = 16 caracteres hexadecimais minúsculos.
+          versao_valida() { [[ "${1:-}" =~ ^[0-9a-f]{16}$ ]]; }
+
+          # Extrai o campo `versao` de um JSON; vazio se não houver/der erro.
+          extrair_versao() { printf '%s' "${1:-}" | jq -r '.versao // empty' 2>/dev/null || true; }
+
+          resumo() { echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+
+          # ---- 1) Versão do sistema (até 4 tentativas; 429 e banco serverless acordando) ----
+          versao_sistema=""
+          for tentativa in 1 2 3 4; do
+            resposta="$(curl -fsS --max-time 60 -H 'Accept: application/json' "${SISTEMA_API_URL}/agenda-publica/versao")" || resposta=""
+            candidata="$(extrair_versao "$resposta")"
+            if versao_valida "$candidata"; then
+              versao_sistema="$candidata"
+              break
+            fi
+            echo "Tentativa ${tentativa}/4: sem versão válida do sistema."
+            if [ "$tentativa" -lt 4 ]; then
+              sleep $((tentativa * 15))
+            fi
+          done
+
+          if [ -z "$versao_sistema" ]; then
+            echo "::warning::Sistema sem versão válida (fora do ar ou limite de consultas). Nada a fazer agora; sem build."
+            resumo "Sistema indisponível: nenhuma ação."
+            exit 0
+          fi
+          echo "Versão do sistema: ${versao_sistema}"
+
+          # ---- 2) Versão que o site publicado diz estar mostrando ----
+          # `?x=` + no-cache: evita ler uma cópia antiga do cache/CDN. 404 ou erro = "desconhecida".
+          versao_site="desconhecida"
+          corpo_site="$(curl -fsS --max-time 60 -H 'Cache-Control: no-cache' "${SITE_URL}/agenda-versao.json?x=$(date +%s)")" || corpo_site=""
+          candidata="$(extrair_versao "$corpo_site")"
+          if [ -n "$candidata" ]; then
+            versao_site="$candidata"
+          fi
+          echo "Versão no site: ${versao_site}"
+
+          # ---- 3) Iguais: nada a fazer ----
+          if [ "$versao_sistema" = "$versao_site" ]; then
+            echo "Site já está na versão do sistema. Nada a fazer."
+            resumo "Site em dia (versão ${versao_sistema})."
+            exit 0
+          fi
+          echo "Versões diferentes (sistema ${versao_sistema} x site ${versao_site}): avaliando um novo deploy do site."
+
+          # ---- 4) Salvaguardas antes de disparar ----
+          for estado in queued in_progress; do
+            quantos="$(gh run list --workflow="$WORKFLOW_SITE" --branch main --status "$estado" --limit 20 --json databaseId --jq 'length')"
+            if [ "${quantos:-0}" -gt 0 ]; then
+              echo "Já há ${quantos} deploy(s) do site '${estado}'. Não dispara outro agora."
+              resumo "Não disparou: deploy do site ${estado} (sistema ${versao_sistema}, site ${versao_site})."
+              exit 0
+            fi
+          done
+
+          conclusao="$(gh run list --workflow="$WORKFLOW_SITE" --branch main --status completed --limit 1 --json conclusion --jq '.[0].conclusion // ""')"
+          terminou_em="$(gh run list --workflow="$WORKFLOW_SITE" --branch main --status completed --limit 1 --json updatedAt --jq '.[0].updatedAt // ""')"
+          if [ "$conclusao" = "failure" ] && [ -n "$terminou_em" ]; then
+            idade_min=$(( ( $(date +%s) - $(date -d "$terminou_em" +%s) ) / 60 ))
+            if [ "$idade_min" -lt 60 ]; then
+              echo "::warning::O último deploy do site FALHOU há ${idade_min} min (< 60). Não dispara outro: corrija o build primeiro."
+              resumo "Não disparou: último deploy falhou há ${idade_min} min (sistema ${versao_sistema}, site ${versao_site})."
+              exit 0
+            fi
+          fi
+
+          # Site publicado SEM agenda ("indisponivel") ou sem versão legível ("desconhecida"): um build
+          # novo pode terminar do mesmo jeito (API instável, limite de consultas), e aí o laço de 20 em
+          # 20 minutos reconstruiria o site para sempre. Espera 45 min depois do último deploy,
+          # qualquer que tenha sido o resultado. Versões válidas dos dois lados não precisam disso:
+          # o build seguinte converge para a versão do sistema.
+          if [ "$versao_site" = "indisponivel" ] || [ "$versao_site" = "desconhecida" ]; then
+            if [ -n "$terminou_em" ]; then
+              idade_min=$(( ( $(date +%s) - $(date -d "$terminou_em" +%s) ) / 60 ))
+              if [ "$idade_min" -lt 45 ]; then
+                echo "::warning::Site sem agenda (${versao_site}) e último deploy há ${idade_min} min (< 45). Aguardando para não reconstruir em laço."
+                resumo "Não disparou: site sem agenda (${versao_site}), último deploy há ${idade_min} min (sistema ${versao_sistema})."
+                exit 0
+              fi
+            fi
+          fi
+
+          # ---- 5) Dispara o deploy do site ----
+          echo "Disparando ${WORKFLOW_SITE} em main (workflow_dispatch)."
+          gh workflow run "$WORKFLOW_SITE" --ref main
+          resumo "Deploy do site disparado (sistema ${versao_sistema}, site ${versao_site})."

@@ -7645,41 +7645,283 @@ dá, pela primeira vez, série histórica comparável entre congregações.
 
 #### v7.2 — Calendário oficial e agenda unificada
 
-- [ ] Agenda Litúrgica Oficial (Reg. Art. 79) + Calendário Oficial anual.
-- [ ] Conflito de datas: nível superior cancela/absorve o inferior.
-- [ ] Fluxo de aprovação do calendário (planejamento → CLI).
+- [x] Agenda Litúrgica Oficial (Reg. Art. 79) + Calendário Oficial anual.
+- [x] Conflito de datas: nível superior cancela/absorve o inferior.
+- [x] Fluxo de aprovação do calendário (planejamento → CLI).
 
 **Expandido pela varredura normativa (7ª rodada).** O Art. 154 não descreve
 "evitar conflito de datas": descreve um **algoritmo de agendamento completo**,
 com prazo fatal, critério de desempate e hipótese de indeferimento. Do jeito que
 estava, a versão cobria talvez um quinto do que a norma manda.
 
-- [ ] **Prazo fatal de 15 de janeiro** para propostas de evento (Art. 154 §2º, I),
+- [x] **Prazo fatal de 15 de janeiro** para propostas de evento (Art. 154 §2º, I),
       com alerta antecipado — depois disso, entra só por exceção.
-- [ ] **5 níveis de precedência** (Art. 154 §1º): o nível superior prevalece
+- [x] **5 níveis de precedência** (Art. 154 §1º): o nível superior prevalece
       automaticamente; o inferior é remarcado ou absorvido, sem negociação manual.
-- [ ] **Direito Adquirido Temporal** (Art. 154 §2º, IV) — empate entre eventos do
+- [x] **Direito Adquirido Temporal** (Art. 154 §2º, IV) — empate entre eventos do
       mesmo nível resolve por **ordem de chegada da proposta**, o que exige
       carimbo de data/hora imutável em cada proposta. É o mecanismo que evita a
       disputa política ("marquei primeiro").
-- [ ] **Trava de simultaneidade por Área** (Art. 154 §3º, II): vedadas duas festas
+- [x] **Trava de simultaneidade por Área** (Art. 154 §3º, II): vedadas duas festas
       de Nível 4 na mesma Área no mesmo fim de semana — validação automática.
-- [ ] **Bloqueio total de campo** nas datas dos 2 Congressos Unificados (§4º) e
+- [x] **Bloqueio total de campo** nas datas dos 2 Congressos Unificados (§4º) e
       status próprio de **"indeferido por Esgotamento de Pauta"** — o sistema
       precisa saber dizer "não cabe mais", com fundamento.
-- [ ] Homologação pela CLI na primeira reunião do ano (§2º, III), gerando o
+- [x] Homologação pela CLI na primeira reunião do ano (§2º, III), gerando o
       Calendário Oficial publicado.
-- [ ] **Ciclo Mensal de Governança gerado automaticamente** (Art. 154-A): as
+- [x] **Ciclo Mensal de Governança gerado automaticamente** (Art. 154-A): as
       sessões ordinárias do ano já nascem na agenda — Conselho Fiscal/NIF no 3º
       domingo (14h-17h), CEI na semana anterior à Câmara, CLI no último domingo
       (14h-17h). Hoje cada secretário marca na mão, e esquecer é quebrar quórum.
-- [ ] **Santa Ceia** (Art. 81 §1º): Ceia Local no último domingo do mês; **Ceia
+- [x] **Santa Ceia** (Art. 81 §1º): Ceia Local no último domingo do mês; **Ceia
       Geral em maio e outubro com fechamento obrigatório de todas as
       congregações** — nessas datas o sistema bloqueia agendamento local
       concorrente. Ausência injustificada de Dirigente na Ceia Geral é fato
       registrável (Art. 81 §1º, III, "b").
-- [ ] Convocação de AGE da CLI com antecedência mínima de **48 horas**
+- [x] Convocação de AGE da CLI com antecedência mínima de **48 horas**
       (Art. 147 §2º) — validada no ato da convocação, não conferida depois.
+
+  Entrega: migração 114 (`sql/migrations/114_calendario_oficial.sql`),
+  `shared/calendario.js` (o motor, **puro**: nenhuma consulta ao banco),
+  `shared/calendarioDb.js` (leitura, gravação e decisões), duas Functions novas —
+  `GestaoCalendario` (`/api/calendario/...`, 25 ações com login) e `AgendaPublica`
+  (`/api/agenda-publica/...`, 4 rotas **anônimas** só de leitura, para o site) —,
+  cinco regras no motor de notificações da vB.2, a entrada `CALENDARIO` no ROPA e
+  a política de retenção da categoria.
+
+  **O que o sistema decide sozinho e o que depende de gente.** A hierarquia
+  **não é negociada**: dois eventos que disputam o mesmo dia têm um vencedor
+  calculado (nível, depois o carimbo de chegada), e o perdedor recebe o motivo e o
+  caminho para remarcar. Mas a **consolidação** (aplicar a hierarquia ao ano
+  inteiro depois do 15/jan) é uma ação da Secretaria, e a **homologação** é da
+  CLI, com número da ata. O sistema avisa quem precisa agir e quando
+  (`CALENDARIO_PARA_CONSOLIDAR`, `CALENDARIO_PARA_HOMOLOGAR`); não age no lugar.
+
+  **Os cinco níveis e o catálogo de tipos.** `CalendarioTiposEvento` semeia **25
+  tipos**, cada um com o nível do Art. 154 §1º (nove deles de Nível 1: os dois
+  Congressos Unificados, Santa Ceia Local e Geral, CLI ordinária e extraordinária,
+  Assembleia Geral, Batismo e agenda externa estratégica), onde
+  pode acontecer (campo, Áreas, congregação), se é festividade (entra na trava de
+  Área), se fecha as congregações, a antecedência mínima e se aparece no site. A
+  CLI cria, edita e desativa tipo pelo sistema (`tipos`, `tipos/atualizar`) sem
+  mexer em código; desativar não afeta o que já foi proposto (o evento guarda a
+  foto do nível).
+
+  **Quem propõe o quê (três permissões, nunca concedidas por padrão).**
+  `calendario_proposta` (líderes gerais, supervisores de Área, dirigentes e
+  coordenadores propõem **dentro do próprio escopo**, Níveis 2 a 5; o dirigente
+  de uma congregação só propõe para ela, o pastor de Área para a Área **inteira**
+  dele — não para parte dela nem para outra), `calendario_secretaria` (gera o
+  ciclo, consolida, defere e indefere, propõe o Nível 1, registra presença na
+  Ceia Geral) e `calendario_homologacao` (homologa, decide em caráter excepcional,
+  altera a agenda litúrgica e o catálogo — **escopo global**, porque vale para a
+  igreja toda). Qualquer login **lê** a agenda; a pauta de propostas (com quem
+  propôs e por quê foi indeferido) só aparece a quem tem permissão e dentro do
+  escopo.
+
+  **O algoritmo (Art. 154).** Avaliar uma proposta contra o que já está no
+  calendário dá um de três veredictos (`avaliarProposta`): **LIVRE**,
+  **RECUSADA** (perde para algo que já tem a data) ou **ABSORVE** (é de Nível 1 e
+  leva o dia). Regras, na ordem em que o motor aplica:
+  - **Território.** Um evento ocupa o campo todo, algumas Áreas ou uma congregação;
+    só há choque entre eventos cujos territórios se sobrepõem.
+  - **Nível 1 manda no dia.** Santa Ceia e Congressos **bloqueiam o campo
+    inteiro** naquela data: nenhum evento de nível inferior cabe, e o que já
+    estava marcado é **absorvido**. A Santa Ceia Geral (maio/outubro) e os
+    Congressos **fecham todas as congregações**: nesses dias a grade litúrgica
+    aparece absorvida e as congregações, fechadas.
+  - **Nível menor cede ao maior**, mesmo tendo chegado antes (um Culto de Ensino
+    local perde a data para uma Cruzada Geral).
+  - **Mesmo nível: quem chegou primeiro.** O carimbo `PropostaEm` é gravado pelo
+    servidor e **imutável no banco** (gatilho que recusa o `UPDATE`); a remarcação
+    **herda o carimbo** do pedido original, para quem perdeu a data não perder
+    também a fila.
+  - **Trava de Área.** Duas festividades de Nível 4 na mesma Área no mesmo fim de
+    semana não são aceitas; quem chegou depois cai com o motivo `TRAVA_AREA`.
+    Áreas diferentes podem fazer festa no mesmo fim de semana.
+  - **Direito Adquirido só cede ao Nível 1 e à decisão da CLI.** Um evento
+    **homologado** não é derrubado por outro de nível alto: só um Nível 1 o
+    absorve, ou a CLI, em caráter excepcional, com motivo e resolução
+    (`eventos/absorver`). O absorvido pode ser remarcado e leva o carimbo
+    original.
+  - **Esgotamento de Pauta** (Art. 154): proposta **fora do prazo** que não
+    encontra data livre é indeferida sem direito a recurso e **não se remarca** —
+    a tela nem oferece o botão. Mesmo assim o sistema sugere datas livres futuras
+    para uma proposta nova.
+
+  **Linha do tempo de um ano.** `PLANEJAMENTO` (a Secretaria abre o ano, prazo
+  15/jan; gera o ciclo mensal: **48 eventos** — Ceia, CLI, NIF e CEI × 12) →
+  propostas até 15/jan, todas `PROPOSTO`, sem decisão (a ordem de chegada só vale
+  na consolidação, então ninguém é prejudicado por clicar às 8h ou às 22h) →
+  `CONSOLIDADO` (a Secretaria aplica a hierarquia; os indeferidos são avisados) →
+  `HOMOLOGADO` (a CLI, com a ata, depois de vencido o prazo; tudo o que estava
+  deferido vira **Direito Adquirido**). Depois da homologação, cada proposta é
+  decidida **na hora** (não há mais consolidação): cabe e entra `HOMOLOGADO`, ou
+  não cabe e é indeferida. A consolidação é **idempotente** (rodar de novo não
+  muda nada) e a homologação **exige o prazo vencido**.
+
+  **Ciclo mensal e Santa Ceia (Art. 154-A, 81).** `gerar-ciclo` cria, sem
+  duplicar, as sessões ordinárias do ano: Santa Ceia Local no último domingo de
+  cada mês (Nível 1), Santa Ceia Geral nos últimos domingos de **maio e outubro**,
+  reunião da CLI no último domingo, do Conselho Fiscal/NIF no 3º domingo e da CEI
+  na semana anterior à Câmara. Cada uma nasce com chave de regra única
+  (`RegraChave`, índice filtrado), então regenerar não cria repetição. A **Ceia
+  Geral** tem um registro próprio da **presença do dirigente** de cada
+  congregação (presente / ausente justificado / ausente injustificado, com
+  justificativa e uma linha por congregação); a ausência injustificada é gravada
+  como fato e a tela lembra que ela segue para apuração disciplinar
+  (Art. 81 §1º, III, "b") — o sistema **não pune**, só registra. Não se registra
+  presença em Ceia que ainda não aconteceu.
+
+  **AGE da CLI com 48 horas (Art. 147 §2º).** O tipo "Reunião da CLI
+  extraordinária" exige data, **hora de início** e antecedência de 48 horas no
+  momento da convocação; menos que isso é recusado com a explicação.
+
+  **Agenda Litúrgica (Art. 79).** A grade fixa da igreja (21 regras semeadas:
+  EBD, cultos, círculos de oração, UMADESPA etc.) mora no banco como **regra
+  recorrente** (`AgendaLiturgicaRegras`: dia da semana, ocorrência, escopo Sede /
+  congregações / todas, horário) e é projetada nas datas pelo motor. Mexer nela
+  exige a permissão de homologação **e a resolução da CLI** (Art. 79, parágrafo
+  único) — a resolução é gravada na auditoria. No dia de um Nível 1, a grade é
+  mostrada como **absorvida** e as congregações aparecem como fechadas.
+
+  **Agenda unificada.** `GET agenda` junta, numa linha do tempo, as camadas
+  **OFICIAL** (o calendário), **LITURGIA** (a grade) e **SESSAO** (reuniões
+  internas já agendadas no sistema, só para quem tem permissão de vê-las), com
+  filtro por congregação e janela de até um ano. A Santa Ceia da grade litúrgica
+  não duplica a Ceia oficial: aparece como "coberta" por ela. Quem não tem
+  nenhuma permissão do calendário vê só o que está **homologado**.
+
+  **O que vai para o site.** `AgendaPublica` (`tudo`, `eventos`, `liturgia`,
+  `versao`) é **anônima**, só `GET`, com limite de 60 requisições por minuto por
+  origem e cache de 60 segundos. Só sai o que está `HOMOLOGADO`, é de tipo
+  público e não é reunião interna: **a CLI, o NIF e a CEI nunca vão ao site**, e o
+  pacote não carrega proponente, ata, motivo nem nenhum nome de pessoa — só
+  título, data, hora, local, congregação e nível (o roteiro ponta a ponta confere
+  a lista de chaves devolvidas). O nome da congregação sai sem o prefixo numérico
+  administrativo. A grade litúrgica vai no formato da coleção `programacao` que o
+  site já usa (sem as "noites livres"), para ele não precisar de outro leitor. O
+  pacote leva uma `versao` (hash de 16 caracteres) que muda quando qualquer coisa
+  pública muda; é com ela que o site decide se precisa reconstruir.
+
+  **Como o evento chega ao site (e quanto demora).** O site é estático (Astro):
+  lê `GET /api/agenda-publica/tudo` **uma vez por build** (`site/src/lib/agendaOficial.ts`,
+  três tentativas, 60 s cada; erro 404 ou outro 4xx não é repetido), sem login e
+  sem CORS. Se o sistema estiver fora do ar, o build **não quebra**: o site sai com
+  o que o Directus tem e publica `agenda-versao.json` como `"indisponivel"`.
+  - **Eventos.** Entram na lista de `/eventos/`, no `eventos.ics` (UID estável
+    `agenda-<id>@ieadespa.org.br`), na busca e nos lembretes push de véspera. Se o
+    evento oficial aponta (`slugSite`) um evento do Directus **que tem página ou
+    inscrição**, o Directus continua dono da página e da inscrição e o oficial
+    passa a mandar na **data, data final e hora** (na lista, na página do evento e
+    no `.ics` dele); hora oficial vazia não apaga a do Directus. Sem
+    correspondência, nasce um item `agenda-<id>` sem página própria, com a etiqueta
+    do tipo.
+  - **Grade de cultos.** A programação semanal (home, contato, visitante e a
+    imagem `programacao-semanal.png`) passa a vir da agenda litúrgica do sistema;
+    se ela vier vazia ou indisponível, cai no Directus. A grade semeada segue o
+    Art. 79 e **pode diferir da que estava no Directus**: conferir no site no
+    primeiro deploy.
+  - **Sincronização.** Um workflow agendado (`.github/workflows/site-agenda-sync.yml`,
+    a cada 20 minutos) compara a `versao` do sistema com a que o site publicado
+    diz estar mostrando (`/agenda-versao.json`) e, **só se forem diferentes**,
+    dispara o deploy do site (`workflow_dispatch`, que o `GITHUB_TOKEN` pode
+    acionar). Então um evento homologado ou uma mudança na grade aparece no site em
+    **até ~20 minutos** (mais o tempo do build, ~5 min), sem ninguém mexer no site.
+    Salvaguardas: não dispara com deploy na fila ou em andamento; não dispara se o
+    último deploy falhou há menos de 60 min; e, se o site está publicado sem agenda
+    (`indisponivel`), espera 45 min do último deploy, para uma API instável não
+    gerar um build a cada 20 minutos. O GitHub pode atrasar execuções agendadas e
+    desliga agendamentos de repositório público sem atividade por 60 dias; o
+    disparo manual (`gh workflow run site-agenda-sync.yml`) sempre funciona.
+  - **Limites.** Eventos do Directus que duplicam o que está no calendário oficial
+    **aparecem duas vezes** até o Directus aposentá-los ou o sistema preencher o
+    `slugSite` (não há heurística de título e data de propósito). A coleção
+    `eventos` do Directus continua sendo o dono de eventos **com inscrição**.
+    O script de lembretes já ignorava `avisar_eventos` (quem desativou só esse
+    aviso ainda recebe); com os eventos oficiais o volume sobe.
+
+  **A tela (módulo "📅 Calendário Oficial").** Aba nova no menu, mais uma
+  subaba **"Agenda"** em Meu Painel (para qualquer login, mostrando só o
+  **homologado**). A aba tem sete seções, e cada uma só aparece a quem tem direito:
+  - **Agenda** (todos): mês em grade, com as três camadas juntas (oficial, grade
+    litúrgica, sessões), o dia selecionado em detalhe, o que foi absorvido
+    riscado e as congregações fechadas sinalizadas; cores por nível.
+  - **Propor data** (`calendario_proposta`): o formulário **confere sozinho** a
+    data enquanto se digita (espera 600 ms), mostra o veredito sem gravar e, se
+    não cabe, oferece datas livres clicáveis; tipo de Nível 1 não aparece para
+    quem só pode propor. Remarcar um indeferido abre o mesmo formulário já
+    ligado ao pedido original (e portanto ao carimbo).
+  - **Pauta e detalhe** (quem tem alguma permissão): a lista e a ficha do evento
+    com o motivo, quem prevaleceu e **só as ações que cabem** àquele usuário
+    (editar, cancelar, remarcar, deferir, indeferir, absorver).
+  - **Anos** (Secretaria e CLI): abrir o ano, gerar o ciclo, consolidar (mostra os
+    indeferidos, clicáveis) e homologar com a ata (só a CLI).
+  - **Liturgia e tipos** (só a CLI): a grade e o catálogo, com a resolução
+    obrigatória.
+  - **Ceia Geral** (só a Secretaria): presença do dirigente por congregação.
+  - **Site** (Secretaria e CLI): se a versão publicada no site já é a do sistema.
+
+  A tela **não decide nada**: monta o que o servidor devolve e manda o que a
+  pessoa fez; toda regra (nível, escopo, 48 h, prazo) é do servidor, e os botões
+  só espelham as permissões.
+
+  **Avisos (motor da vB.2).** Cinco regras, todas com destinatário certo:
+  `CALENDARIO_PRAZO_PROPOSTAS` (30 dias antes do 15/jan) e
+  `CALENDARIO_PRAZO_URGENTE` (7 dias) avisam **só quem pode propor e ainda não
+  propôs naquele ano**; `CALENDARIO_PROPOSTA_RECUSADA` avisa **só o proponente**
+  de uma proposta indeferida ou absorvida, lembrando que a remarcação mantém o
+  carimbo; `CALENDARIO_PARA_CONSOLIDAR` (prazo vencido com proposta pendente) vai
+  à Secretaria; `CALENDARIO_PARA_HOMOLOGAR` (ano consolidado) vai à CLI.
+
+  **Auditoria e integridade.** Toda decisão é gravada (`ANO_ABERTO`,
+  `CICLO_GERADO`, `ANO_CONSOLIDADO`, `ANO_HOMOLOGADO`, `EVENTO_PROPOSTO`,
+  `EVENTO_DEFERIDO`, `EVENTO_INDEFERIDO`, `EVENTO_CANCELADO`,
+  `EVENTO_ATUALIZADO`, `EVENTO_ABSORVIDO_NIVEL_1`, `EVENTO_ABSORVIDO_CLI`,
+  `PRESENCA_DIRIGENTE_REGISTRADA`, mudanças da grade e do catálogo). O banco
+  garante o que o código promete: carimbo imutável (gatilho), `CHECK` de término
+  não anterior ao início, chave de regra única e a presença única por congregação
+  e evento.
+
+  **Verificação.** 86 testes novos (motor puro, regras de escopo e catálogo, camada
+  de banco com doubles); a suíte da API foi de 768 para **854**. Além deles, um
+  roteiro ponta a ponta de **205 verificações** rodou os handlers reais contra um
+  SQL Server 2019 recém-criado (migrações 001 a 114): acesso e escopo, ano 2027
+  inteiro (proposta → consolidação → remarcação), ano corrente com Esgotamento de
+  Pauta, homologação, absorção pelo Nível 1 e pela CLI, Ceia Geral, grade
+  litúrgica, catálogo, detectores de aviso, gatilho do carimbo, índice único,
+  limite da rota pública e todas as ações de auditoria, sem nenhuma falha de
+  gravação da trilha. Esse roteiro achou um defeito que os testes unitários não
+  viam: a resposta da consolidação sobrescrevia a contagem de indeferidos pela
+  lista deles; hoje são dois campos (`indeferidos` e `listaIndeferidos`). Os
+  formatos reais das respostas foram capturados dos handlers e conferidos contra
+  tudo o que a tela lê (nenhuma propriedade a mais, nenhuma a menos).
+
+  A **tela** foi exercitada em DOM simulado (14.448 verificações: todas as seções e
+  combinações de permissão, os corpos enviados ao servidor, e texto de ataque
+  `<img onerror>` em quase todos os campos, sem nenhuma injeção de HTML), com
+  conferência de ids e handlers e uma renderização em navegador (Edge sem
+  interface) com API simulada; o teste da PSC segue passando (24.740). O **site**
+  foi construído de ponta a ponta contra um servidor falso (119 páginas; uma só
+  chamada à API por build; `astro check` sem erros) nos caminhos feliz, de
+  servidor fora do ar, de erro 500 e de grade vazia, e o script de lembretes e o
+  sincronizador foram rodados com dublês. **Não foi feita** validação visual
+  com dados reais em produção, só depois do deploy.
+
+  **Decisões que o Regimento não fecha (a CLI pode reverter, cada uma é uma
+  linha).**
+  - **Ceia Geral = último domingo de maio e de outubro.** O Art. 81 diz "maio e
+    outubro" sem dizer o domingo; adotei o mesmo da Ceia Local.
+  - **NIF/Conselho Fiscal como Nível 2, na Sede**; a **CEI, por padrão, na
+    quinta-feira** da semana que antecede o último domingo, 19h30. O Art. 154-A dá
+    a semana, não o dia; a Secretaria pode mover.
+  - **Reuniões internas (CLI, NIF, CEI) são privadas por padrão**: ocupam a
+    agenda interna, mas não vão ao site.
+  - **Direito Adquirido só cede ao Nível 1 e à decisão da CLI** (acima).
+  - **A justificativa de ausência na Ceia Geral é texto livre e pode citar
+    saúde.** Fica visível só à Secretaria e à CLI, mas a política de retenção da
+    categoria não separa esse campo e o prazo de descarte está em aberto: a CLI
+    precisa definir quando anonimizar.
 
 #### v7.3 — Canais oficiais e comunicação
 

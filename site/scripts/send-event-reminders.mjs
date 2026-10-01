@@ -2,7 +2,9 @@
 // Três mecanismos de aviso sobre eventos especiais que acontecem amanhã:
 // 1. Quem ativou o aviso geral em /eventos/ (push_subscriptions) — só de
 //    eventos cujo responsável está na lista de preferência da pessoa, ou
-//    de todos, se ela não restringiu nada.
+//    de todos, se ela não restringiu nada. Os eventos do calendário OFICIAL
+//    (sistema de governança, v7.2) também entram aqui, mas não têm responsável:
+//    só chegam a quem escolheu "Todos os eventos especiais".
 // 2. Quem se inscreveu naquele evento específico e ativou o lembrete na
 //    própria página de inscrição (push_* em inscricoes_eventos) — sempre
 //    só daquele evento, nunca dos outros.
@@ -22,11 +24,104 @@ if (!DIRECTUS_URL || !DIRECTUS_ADMIN_TOKEN || !VAPID_PUBLIC_KEY || !VAPID_PRIVAT
 webpush.setVapidDetails("mailto:seta@ieadespa.org", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 const emailClient = new EmailClient(ACS_CONNECTION_STRING);
 const REMETENTE = "DoNotReply@ieadespa.org.br";
+// Opcional (não é exigida acima): só existe para testar contra um servidor falso.
+const SISTEMA_API_URL = (process.env.SISTEMA_API_URL || "https://app.ieadespa.org.br/api").replace(
+  /\/+$/,
+  "",
+);
 
 function amanhaISO() {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
+}
+
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Eventos públicos e homologados do calendário oficial. TOLERANTE A FALHA: se o
+// sistema não responder (ou responder algo inesperado), devolve [] e o script
+// segue só com o Directus — o aviso de eventos nunca deixa de sair por causa disso.
+// 3 tentativas, 60 s cada (o banco serverless pode estar acordando).
+async function buscarEventosOficiais() {
+  const url = `${SISTEMA_API_URL}/agenda-publica/eventos`;
+  const esperas = [5000, 15000];
+  for (let tentativa = 1; tentativa <= 3; tentativa++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(60000),
+      });
+      if (!res.ok && res.status !== 429 && res.status < 500) {
+        console.warn(
+          `Calendário oficial indisponível (HTTP ${res.status}); seguindo só com o Directus.`,
+        );
+        return [];
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const corpo = await res.json();
+      const lista = Array.isArray(corpo) ? corpo : corpo?.eventos;
+      if (!Array.isArray(lista)) throw new Error("resposta sem a lista de eventos");
+      return lista.filter(
+        (e) => e && typeof e.titulo === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.dataInicio ?? ""),
+      );
+    } catch (err) {
+      if (tentativa < 3) {
+        console.warn(
+          `Calendário oficial: tentativa ${tentativa}/3 falhou (${err.message}); tentando de novo.`,
+        );
+        await esperar(esperas[tentativa - 1]);
+      } else {
+        console.warn(
+          `Calendário oficial indisponível (${err.message}); seguindo só com o Directus.`,
+        );
+      }
+    }
+  }
+  return [];
+}
+
+// Mesma regra de local de site/src/lib/agendaOficial.ts (o script roda sozinho no
+// workflow, sem acesso ao código do site).
+function localOficial(o) {
+  if (o.local) return o.local;
+  if (o.abrangencia === "CAMPO") return "Todo o campo";
+  if (o.abrangencia === "AREAS")
+    return Array.isArray(o.areas) && o.areas.length > 0 ? `Áreas: ${o.areas.join(", ")}` : null;
+  return o.congregacaoNome ?? null;
+}
+
+// Mesma regra do site (mesclarEventos): o calendário oficial é soberano. Evento do
+// Directus apontado por um `slugSite` oficial segue o Directus (página, inscritos),
+// mas com a data/hora oficiais; os demais eventos oficiais viram itens avulsos
+// (sem página, sem inscritos, sem responsável).
+function unirComCalendarioOficial(eventosDirectus, oficiais) {
+  const porSlug = new Map();
+  for (const o of oficiais) if (o.slugSite && !porSlug.has(o.slugSite)) porSlug.set(o.slugSite, o);
+  const casados = new Set();
+
+  const doDirectus = eventosDirectus.map((e) => {
+    const o = e.slug ? porSlug.get(e.slug) : undefined;
+    if (!o) return e;
+    casados.add(o);
+    return { ...e, event_date: o.dataInicio, end_date: o.dataFim ?? null, time: o.hora ?? e.time };
+  });
+
+  const avulsos = oficiais
+    .filter((o) => !casados.has(o))
+    .map((o) => ({
+      id: null,
+      slug: `agenda-${o.id}`,
+      title: o.titulo,
+      event_date: o.dataInicio,
+      end_date: o.dataFim ?? null,
+      time: o.hora ?? null,
+      location: localOficial(o),
+      body: null,
+      responsavel: null,
+      oficial: true,
+    }));
+
+  return { doDirectus, avulsos };
 }
 
 async function enviar(subscriptionKeys, payload) {
@@ -47,18 +142,24 @@ async function main() {
 
   const eventsRes = await fetch(`${DIRECTUS_URL}/items/eventos?limit=-1`);
   if (!eventsRes.ok) throw new Error(`Falha ao buscar eventos: ${eventsRes.status}`);
-  const { data: events } = await eventsRes.json();
+  const { data: eventsDirectus } = await eventsRes.json();
+  const oficiais = await buscarEventosOficiais();
+  const { doDirectus, avulsos } = unirComCalendarioOficial(eventsDirectus, oficiais);
 
   // Cobre eventos de vários dias: "amanhã" pode cair no meio do intervalo,
   // não só no primeiro dia.
-  const matching = events.filter((e) => {
+  const cobreAmanha = (e) => {
     if (!e.event_date) return false;
     const inicio = e.event_date;
     const fim = e.end_date || e.event_date;
     return amanha >= inicio && amanha <= fim;
-  });
+  };
+  // `matching`: eventos do Directus (podem ter inscritos → mecanismos 2 e 3).
+  // `oficiaisAmanha`: eventos só do calendário oficial (só mecanismo 1, sem responsável).
+  const matching = doDirectus.filter(cobreAmanha);
+  const oficiaisAmanha = avulsos.filter(cobreAmanha);
 
-  if (matching.length === 0) {
+  if (matching.length === 0 && oficiaisAmanha.length === 0) {
     console.log(`Nenhum evento em ${amanha} — nada a enviar.`);
     return;
   }
@@ -70,7 +171,9 @@ async function main() {
   if (!subsRes.ok) throw new Error(`Falha ao buscar inscrições gerais: ${subsRes.status}`);
   const { data: subs } = await subsRes.json();
 
-  console.log(`Mecanismo geral: ${matching.length} evento(s), ${subs.length} inscrito(s) em avisos.`);
+  console.log(
+    `Mecanismo geral: ${matching.length} evento(s) do Directus + ${oficiaisAmanha.length} do calendário oficial, ${subs.length} inscrito(s) em avisos.`,
+  );
 
   const expiradasGerais = new Set();
 
@@ -78,7 +181,9 @@ async function main() {
     const subscription = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
     const preferencias = Array.isArray(sub.responsaveis) && sub.responsaveis.length > 0 ? sub.responsaveis : null;
 
-    for (const event of matching) {
+    // Evento oficial tem `responsavel: null`: com preferência por responsável ele
+    // cai no `continue` abaixo — só quem escolheu "Todos" (sem preferência) recebe.
+    for (const event of [...matching, ...oficiaisAmanha]) {
       if (preferencias && !preferencias.includes(event.responsavel)) continue;
 
       const url = event.body ? `${SITE_URL}/evento/${event.slug}/` : `${SITE_URL}/eventos/`;
@@ -99,6 +204,13 @@ async function main() {
       headers: { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` },
     });
     console.log("Removida inscrição geral expirada:", id);
+  }
+
+  // Eventos só do calendário oficial não têm inscrição: sem o que fazer nos mecanismos 2 e 3.
+  if (matching.length === 0) {
+    console.log("Só há eventos do calendário oficial amanhã — sem lembretes por inscrição nem por e-mail.");
+    console.log("Concluído.");
+    return;
   }
 
   // --- Mecanismo 2: lembrete de quem se inscreveu no próprio evento ---

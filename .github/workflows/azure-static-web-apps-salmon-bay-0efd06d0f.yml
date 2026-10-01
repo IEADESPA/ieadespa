@@ -17,10 +17,13 @@ on:
   # conteúdo no painel administrativo, para o site buscar os dados novos.
   repository_dispatch:
     types: [directus-publish]
+  # Disparado à mão ou pelo sincronizador da agenda oficial (site-agenda-sync.yml)
+  # quando o calendário/liturgia do sistema muda.
+  workflow_dispatch: {}
 
 jobs:
   build_and_deploy_job:
-    if: github.event_name == 'push' || github.event_name == 'repository_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name == 'push' || github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:

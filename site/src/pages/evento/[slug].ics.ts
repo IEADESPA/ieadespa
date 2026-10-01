@@ -1,6 +1,7 @@
 import { siteConfig } from "@/config/site";
 import { fetchItems } from "@/lib/directus";
 import { hasEventPage } from "@/lib/eventos";
+import { aplicarDatasOficiais, fetchAgendaOficial } from "@/lib/agendaOficial";
 import { buildIcs } from "@/lib/ics";
 
 interface Evento {
@@ -16,7 +17,8 @@ interface Evento {
 }
 
 export async function getStaticPaths() {
-  const events = await fetchItems<Evento>("eventos");
+  // A data/hora oficial (v7.2) vale também aqui, para o .ics não contradizer a lista.
+  const events = aplicarDatasOficiais(await fetchItems<Evento>("eventos"), await fetchAgendaOficial());
   // slug é opcional no Directus — sem essa checagem, um evento com data mas
   // sem slug ainda definido quebraria o build inteiro (bug real encontrado
   // na Fase 24.5, corrigido aqui e em todo lugar que gera rota por slug).

@@ -111,6 +111,7 @@
             <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" onclick="mostrarSubAbaMeupainel('minhahabilitacao')"><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" onclick="mostrarSubAbaMeupainel('minhasconquistas')"><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" onclick="mostrarSubAbaMeupainel('minhaformacao')"><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelAgenda" onclick="mostrarSubAbaMeupainel('agenda')"><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" onclick="mostrarSubAbaMeupainel('seguranca')"><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
@@ -299,6 +300,19 @@
           <div class="grupo-modulo" id="grupoModuloPsc" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaPsc" onclick="mostrarAbaSecretaria('psc')"><span class="icone">🩺</span><span class="rotulo">Saúde Congregacional</span></button>
+          </div>
+
+          <!-- MÓDULO: CALENDÁRIO OFICIAL (v7.2) — agenda única do Campo
+               (eventos oficiais por nível de prevalência, grade litúrgica e
+               sessões), propostas de data, consolidação, homologação do ano
+               e sincronização com o site (Regimento Art. 79, 81, 147, 154 e
+               154-A). Permissões próprias "calendario_proposta",
+               "calendario_secretaria" e "calendario_homologacao", nunca
+               concedidas por padrão. A agenda em si fica aberta a qualquer
+               login em Meu Painel → Agenda. -->
+          <div class="grupo-modulo" id="grupoModuloCalendario" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaCalendario" onclick="mostrarAbaSecretaria('calendario')"><span class="icone">📅</span><span class="rotulo">Calendário</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -682,6 +696,26 @@
             formação vigente. Qualquer pessoa confere a autenticidade de um certificado seu, sem login,
             pelo QR Code ou pelo código impresso nele.</p>
           <div id="resultadoMinhaFormacao"></div>
+        </div>
+
+        <!-- SUB-ABA: AGENDA (v7.2 — Calendário Oficial e Agenda Unificada).
+             Autoatendimento, aberto a qualquer login (nenhuma permissão): a
+             agenda oficial dos próximos 60 dias (eventos HOMOLOGADOS e grade
+             litúrgica). Mesmas funções de desenho da aba Calendário. -->
+        <div id="subMeupainelAgenda" class="sub-aba-secretaria" style="display:none;">
+          <h3>📅 Agenda</h3>
+          <p class="subtitle">A agenda oficial dos <strong>próximos 60 dias</strong>: os eventos do Calendário
+            Oficial (já homologados) e a grade litúrgica fixa — culto, EBD, Santa Ceia. Quando um evento de
+            <strong>Nível 1</strong> cai no dia, ele absorve as demais atividades (que aparecem riscadas). Escolha
+            a sua congregação para ver só o que alcança ela; a escolha fica lembrada neste navegador.</p>
+          <div class="barra-lista">
+            <label for="calMeuCongregacao">Congregação:</label>
+            <select id="calMeuCongregacao" onchange="calMeuMudouCongregacaoAcao()"><option value="">Todas as congregações</option></select>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarMinhaAgendaCalAcao()">🔄 Atualizar</button>
+          </div>
+          <div id="calMeuLegenda" class="cal-legenda"></div>
+          <p id="calMeuResultado" class="subtitle" role="status"></p>
+          <div id="calMeuAgenda"></div>
         </div>
 
         <!-- SUB-ABA: MINHAS CONQUISTAS (v6.4 — Motor de conquistas e
@@ -3328,6 +3362,304 @@
           </div>
           <p id="pscResultadoCatalogo" class="subtitle" role="status"></p>
         </details>
+      </div>
+
+      <!-- ABA: CALENDÁRIO OFICIAL (v7.2). Exige "calendario_proposta" (propor datas
+           no escopo), "calendario_secretaria" (Secretaria Geral: ciclo mensal,
+           consolidação, deferir/indeferir, Nível 1, presença na Ceia Geral) e/ou
+           "calendario_homologacao" (CLI: homologa o ano, absorve, mexe na agenda
+           litúrgica e nos tipos). Toda regra (precedência por nível, Direito
+           Adquirido, trava de Área, Esgotamento de Pauta) mora no servidor
+           (shared/calendario.js); aqui só se monta a tela. O que o servidor
+           devolve passa por escaparHtmlEbd antes de ir ao innerHTML. A agenda
+           aberta a qualquer login está em Meu Painel → Agenda. -->
+      <div id="abaCalendario" class="aba-secretaria" style="display:none;">
+        <h3>📅 Calendário Oficial</h3>
+        <p class="subtitle">Agenda única do Campo: os <strong>eventos oficiais</strong> (cada um com seu nível de
+          prevalência, Regimento Art. 154 §1º), a <strong>grade litúrgica</strong> fixa (Art. 79) e as sessões dos
+          órgãos. As datas são propostas, <strong>consolidadas</strong> pela Secretaria Geral e
+          <strong>homologadas</strong> pela CLI; depois disso viram Direito Adquirido.</p>
+
+        <div class="cal-pilulas" id="calPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnCalSecaoAgenda" onclick="calMostrarSecaoAcao('agenda')">📅 Agenda</button>
+          <button type="button" class="cal-pilula" id="btnCalSecaoPropor" onclick="calMostrarSecaoAcao('propor')">✍️ Propor data</button>
+          <button type="button" class="cal-pilula" id="btnCalSecaoPauta" onclick="calMostrarSecaoAcao('pauta')">📋 Pauta e detalhe</button>
+          <button type="button" class="cal-pilula" id="btnCalSecaoAnos" onclick="calMostrarSecaoAcao('anos')" style="display:none;">🗂️ Anos</button>
+          <button type="button" class="cal-pilula" id="btnCalSecaoLiturgia" onclick="calMostrarSecaoAcao('liturgia')" style="display:none;">🏛️ Liturgia e tipos (CLI)</button>
+          <button type="button" class="cal-pilula" id="btnCalSecaoPresenca" onclick="calMostrarSecaoAcao('presenca')" style="display:none;">🍞 Ceia Geral</button>
+          <button type="button" class="cal-pilula" id="btnCalSecaoSite" onclick="calMostrarSecaoAcao('site')" style="display:none;">🌐 Site</button>
+        </div>
+
+        <!-- 1. AGENDA: grade mensal + lista do dia -->
+        <div id="calSecaoAgenda" class="cal-secao">
+          <h4>📅 Agenda do mês</h4>
+          <div class="cal-barra-mes">
+            <button type="button" class="btn-confirmar btn-secundario cal-btn-mes" onclick="calMudarMesAcao(-1)" title="Mês anterior" aria-label="Mês anterior">◀</button>
+            <strong id="calMesTitulo" class="cal-mes-titulo" role="status" aria-live="polite"></strong>
+            <button type="button" class="btn-confirmar btn-secundario cal-btn-mes" onclick="calMudarMesAcao(1)" title="Próximo mês" aria-label="Próximo mês">▶</button>
+            <button type="button" class="btn-confirmar btn-secundario cal-btn-mes" onclick="calIrParaHojeAcao()">Hoje</button>
+          </div>
+          <div class="barra-lista">
+            <label for="calFiltroCongregacao">Congregação:</label>
+            <select id="calFiltroCongregacao" onchange="calFiltrosAgendaMudaramAcao()"><option value="">Todas as congregações</option></select>
+            <label class="cal-check"><input type="checkbox" id="calCamadaOficial" checked onchange="calFiltrosAgendaMudaramAcao()" /> Oficial</label>
+            <label class="cal-check"><input type="checkbox" id="calCamadaLiturgia" checked onchange="calFiltrosAgendaMudaramAcao()" /> Liturgia</label>
+            <label class="cal-check" id="calRotuloCamadaSessao" style="display:none;"><input type="checkbox" id="calCamadaSessao" checked onchange="calFiltrosAgendaMudaramAcao()" /> Sessões</label>
+            <label class="cal-check"><input type="checkbox" id="calMostrarPropostas" checked onchange="calRedesenharAgendaAcao()" /> Propostas, deferidos e indeferidos</label>
+          </div>
+          <div id="calLegendaNiveis" class="cal-legenda"></div>
+          <p id="calResultadoAgenda" class="subtitle" role="status"></p>
+          <div id="calGradeMes" class="cal-grade-mes"></div>
+          <div id="calListaDia" class="cal-lista-dia"></div>
+        </div>
+
+        <!-- 2. PROPOR DATA, com pré-checagem ao vivo -->
+        <div id="calSecaoPropor" class="cal-secao" style="display:none;">
+          <h4>✍️ Propor data</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Antes de <strong>15 de janeiro</strong> as propostas esperam a consolidação da
+            Secretaria: vale o <strong>nível</strong> do evento e, no mesmo nível, o <strong>carimbo de data e hora</strong> de
+            chegada. Depois do prazo, a proposta é decidida <strong>na hora</strong> e, se a data não couber, é
+            indeferida por <strong>Esgotamento de Pauta</strong>, sem recurso. A caixa de pré-checagem abaixo mostra, a cada
+            mudança, o que aconteceria com a data — nada é gravado até você enviar.</p>
+          <div class="cal-form">
+            <div class="input-group">
+              <label for="calPropTipo">Tipo de evento</label>
+              <select id="calPropTipo" onchange="calPropTipoMudouAcao()"></select>
+              <p id="calPropTipoInfo" class="psc-legenda"></p>
+            </div>
+            <div class="input-group">
+              <label for="calPropTitulo">Título (3 a 200 caracteres)</label>
+              <input type="text" id="calPropTitulo" maxlength="200" placeholder="Ex.: Congresso de Jovens da Área Norte" />
+            </div>
+            <div class="input-group">
+              <label for="calPropDescricao">Descrição (opcional, até 1000 caracteres)</label>
+              <textarea id="calPropDescricao" rows="2" maxlength="1000" style="width:100%;"></textarea>
+            </div>
+            <div class="cal-form-grade">
+              <div class="input-group"><label for="calPropDataInicio">Data de início</label><input type="date" id="calPropDataInicio" onchange="calPropAgendarVerificacaoAcao()" /></div>
+              <div class="input-group"><label for="calPropDataFim">Data de término (opcional)</label><input type="date" id="calPropDataFim" onchange="calPropAgendarVerificacaoAcao()" /></div>
+              <div class="input-group"><label for="calPropHoraInicio">Hora de início</label><input type="time" id="calPropHoraInicio" onchange="calPropAgendarVerificacaoAcao()" /></div>
+              <div class="input-group"><label for="calPropHoraFim">Hora de término</label><input type="time" id="calPropHoraFim" onchange="calPropAgendarVerificacaoAcao()" /></div>
+            </div>
+            <div class="input-group">
+              <label for="calPropAbrangencia">Abrangência</label>
+              <select id="calPropAbrangencia" onchange="calPropAbrangenciaMudouAcao()"></select>
+            </div>
+            <div class="input-group" id="calPropBlocoCongregacao" style="display:none;">
+              <label for="calPropCongregacao">Congregação</label>
+              <select id="calPropCongregacao" onchange="calPropAgendarVerificacaoAcao()"></select>
+            </div>
+            <div class="input-group" id="calPropBlocoAreas" style="display:none;">
+              <label>Áreas (marque uma ou mais)</label>
+              <div id="calPropAreas" class="cal-areas"></div>
+            </div>
+            <div class="cal-form-grade">
+              <div class="input-group"><label for="calPropLocal">Local (opcional)</label><input type="text" id="calPropLocal" maxlength="200" placeholder="Ex.: Templo Central" /></div>
+              <div class="input-group">
+                <label for="calPropSlug">Identificador no site (opcional)</label>
+                <input type="text" id="calPropSlug" maxlength="150" placeholder="ex.: congresso-jovens-2027" />
+                <p class="psc-legenda">Preencha se já existe uma página/inscrição desse evento no site. Só letras minúsculas, números e hífen.</p>
+              </div>
+            </div>
+            <label class="cal-check"><input type="checkbox" id="calPropPublico" /> Mostrar no site (só aparece depois de homologado)</label>
+            <input type="hidden" id="calPropRemarcacaoDe" value="" />
+            <div id="calPropRemarcacaoAviso"></div>
+          </div>
+
+          <div id="calPropVerificacao" class="cal-verif" role="status" aria-live="polite"></div>
+
+          <div class="psc-acoes">
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="calEnviarPropostaAcao()">📤 Enviar proposta</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="calLimparPropostaAcao()">🧹 Limpar formulário</button>
+          </div>
+          <p id="calPropResultado" class="subtitle" role="status"></p>
+          <div id="calPropRetorno"></div>
+        </div>
+
+        <!-- 3. PAUTA E DETALHE -->
+        <div id="calSecaoPauta" class="cal-secao" style="display:none;">
+          <h4>📋 Pauta de eventos</h4>
+          <div class="barra-lista">
+            <label for="calPautaAno">Ano:</label>
+            <input type="number" id="calPautaAno" min="2000" max="2200" style="max-width:110px;min-width:90px;" />
+            <select id="calPautaStatus" title="Situação">
+              <option value="">Todas as situações</option>
+              <option value="PROPOSTO,DEFERIDO">Em aberto (propostos e deferidos)</option>
+              <option value="PROPOSTO">Propostos (aguardam consolidação)</option>
+              <option value="DEFERIDO">Deferidos (aguardam homologação do ano)</option>
+              <option value="HOMOLOGADO">Homologados (oficiais)</option>
+              <option value="INDEFERIDO">Indeferidos</option>
+              <option value="ABSORVIDO">Absorvidos</option>
+              <option value="CANCELADO">Cancelados</option>
+            </select>
+            <select id="calPautaNivel" title="Nível de prevalência">
+              <option value="">Todos os níveis</option>
+              <option value="1">Nível 1 — Estratégico-Institucional</option>
+              <option value="2">Nível 2 — Geral-Focalizado</option>
+              <option value="3">Nível 3 — Regional-Intermediário</option>
+              <option value="4">Nível 4 — Local-Operacional</option>
+              <option value="5">Nível 5 — Social e Privado</option>
+            </select>
+            <select id="calPautaCongregacao" title="Congregação"><option value="">Todas as congregações</option></select>
+            <label class="cal-check"><input type="checkbox" id="calPautaMeus" /> Só os meus</label>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPautaCalAcao()">🔄 Carregar</button>
+          </div>
+          <p id="calResultadoPauta" class="subtitle" role="status"></p>
+          <div class="rolagem-tabela"><div id="calTabelaPauta"></div></div>
+
+          <hr />
+          <h4>🔎 Detalhe do evento</h4>
+          <p id="calResultadoDetalhe" class="subtitle" role="status"></p>
+          <div id="calDetalheEvento"><p class="subtitle">Escolha um evento na pauta (<em>Abrir</em>) ou na agenda para ver os detalhes.</p></div>
+        </div>
+
+        <!-- 4. SECRETARIA — ANOS (e homologação, para a CLI) -->
+        <div id="calSecaoAnos" class="cal-secao" style="display:none;">
+          <h4>🗂️ Anos do calendário</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Ciclo do ano: <strong>Planejamento</strong> (propostas até 15 de janeiro) →
+            <strong>Consolidado</strong> (a Secretaria aplicou a Tabela de Hierarquia) → <strong>Homologado</strong> (a CLI aprovou: as datas
+            viram Direito Adquirido). O ciclo mensal (Ceia, CLI, Conselho Fiscal e CEI) é gerado pela Secretaria antes de consolidar.</p>
+          <div class="barra-lista" id="calBarraAbrirAno" style="display:none;">
+            <label for="calAnoNovo">Abrir o calendário do ano:</label>
+            <input type="number" id="calAnoNovo" min="2000" max="2200" style="max-width:120px;min-width:90px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="calAbrirAnoAcao()">➕ Abrir ano</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarAnosCalAcao()">🔄 Atualizar</button>
+          </div>
+          <p id="calResultadoAnos" class="subtitle" role="status"></p>
+          <div id="calRetornoAnos"></div>
+          <div class="rolagem-tabela"><div id="calTabelaAnos"></div></div>
+        </div>
+
+        <!-- 5. CLI — AGENDA LITÚRGICA E TIPOS -->
+        <div id="calSecaoLiturgia" class="cal-secao" style="display:none;">
+          <h4>🏛️ Agenda litúrgica oficial</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">É a grade fixa da semana (culto, EBD, Santa Ceia...). Mudança <strong>permanente</strong>
+            na grade depende de <strong>autorização expressa da CLI</strong> (Art. 79, parágrafo único): todo salvar pede a
+            resolução. O site mostra esta grade em alguns minutos.</p>
+          <div class="barra-lista">
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarLiturgiaCalAcao()">🔄 Recarregar regras</button>
+          </div>
+          <p id="calResultadoLiturgia" class="subtitle" role="status"></p>
+          <div class="rolagem-tabela"><div id="calTabelaRegras"></div></div>
+
+          <details id="calFormRegraDetalhes" style="margin:10px 0;">
+            <summary><strong id="calFormRegraTitulo">➕ Nova regra</strong></summary>
+            <div class="cal-form">
+              <input type="hidden" id="calRegraId" value="" />
+              <div class="cal-form-grade">
+                <div class="input-group"><label for="calRegraDia">Dia</label>
+                  <select id="calRegraDia">
+                    <option value="segunda">Segunda-feira</option><option value="terca">Terça-feira</option>
+                    <option value="quarta">Quarta-feira</option><option value="quinta">Quinta-feira</option>
+                    <option value="sexta">Sexta-feira</option><option value="sabado">Sábado</option>
+                    <option value="domingo_manha">Domingo de manhã</option><option value="domingo_noite">Domingo à noite</option>
+                  </select></div>
+                <div class="input-group"><label for="calRegraEscopo">Onde</label>
+                  <select id="calRegraEscopo">
+                    <option value="TODAS">Sede e congregações</option><option value="SEDE">Só a Sede</option><option value="CONGREGACOES">Só as congregações</option>
+                  </select></div>
+                <div class="input-group"><label for="calRegraOcorrencia">Ocorrência</label>
+                  <select id="calRegraOcorrencia">
+                    <option value="">Toda semana</option><option value="1">1º do mês (domingo)</option><option value="2">2º do mês (domingo)</option>
+                    <option value="3">3º do mês (domingo)</option><option value="4_se_5">4º domingo, só em mês de 5 domingos</option>
+                    <option value="ultimo">Último do mês</option>
+                  </select></div>
+                <div class="input-group"><label for="calRegraHora">Hora de início</label><input type="time" id="calRegraHora" /></div>
+                <div class="input-group"><label for="calRegraTipo">Tipo</label>
+                  <select id="calRegraTipo">
+                    <option value="CULTO">Culto</option><option value="EBD">EBD</option><option value="CEIA">Santa Ceia</option>
+                    <option value="FECHADA">Congregações fechadas</option><option value="DESCANSO">Descanso</option><option value="NOITE_LIVRE">Noite livre</option>
+                  </select></div>
+                <div class="input-group"><label for="calRegraDepto">Departamento (sigla, opcional)</label><input type="text" id="calRegraDepto" maxlength="30" placeholder="Ex.: UHADESPA" /></div>
+              </div>
+              <div class="input-group"><label for="calRegraTituloCampo">Título (3 a 200 caracteres)</label><input type="text" id="calRegraTituloCampo" maxlength="200" /></div>
+              <div class="input-group"><label for="calRegraResolucao">Autorização da CLI (resolução, 3 a 150 caracteres)</label><input type="text" id="calRegraResolucao" maxlength="150" placeholder="Ex.: Resolução CLI nº 12/2027" /></div>
+              <div class="psc-acoes">
+                <button class="btn-confirmar" style="width:auto;margin:0;" onclick="calSalvarRegraAcao()">💾 Salvar regra</button>
+                <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="calLimparFormRegraAcao()">✖️ Cancelar edição</button>
+              </div>
+            </div>
+          </details>
+
+          <h5>🌐 Como o site mostra</h5>
+          <p class="psc-legenda" style="margin-top:0;">Só as regras ativas (menos "noite livre") vão para o site, neste formato.</p>
+          <div class="rolagem-tabela"><div id="calPreviaSite"></div></div>
+
+          <hr />
+          <h4>🏷️ Tipos de evento</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">O <strong>nível</strong> do tipo decide quem prevalece no choque de datas. Mudar um tipo vale
+            para as propostas daqui em diante; os eventos já registrados guardam o nível do dia em que foram propostos.</p>
+          <div class="barra-lista">
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="carregarTiposCalAcao()">🔄 Recarregar tipos</button>
+          </div>
+          <p id="calResultadoTipos" class="subtitle" role="status"></p>
+          <div class="rolagem-tabela"><div id="calTabelaTipos"></div></div>
+
+          <details id="calFormTipoDetalhes" style="margin:10px 0;">
+            <summary><strong id="calFormTipoTitulo">➕ Novo tipo</strong></summary>
+            <div class="cal-form">
+              <input type="hidden" id="calTipoId" value="" />
+              <div class="cal-form-grade">
+                <div class="input-group"><label for="calTipoCodigo">Código (3 a 50: letras maiúsculas, números e _)</label><input type="text" id="calTipoCodigo" maxlength="50" placeholder="EX.: CONGRESSO_REGIONAL" /></div>
+                <div class="input-group"><label for="calTipoNome">Nome (3 a 150 caracteres)</label><input type="text" id="calTipoNome" maxlength="150" /></div>
+                <div class="input-group"><label for="calTipoNivel">Nível</label>
+                  <select id="calTipoNivel">
+                    <option value="1">1 — Estratégico-Institucional</option><option value="2">2 — Geral-Focalizado</option>
+                    <option value="3" selected>3 — Regional-Intermediário</option><option value="4">4 — Local-Operacional</option>
+                    <option value="5">5 — Social e Privado</option>
+                  </select></div>
+                <div class="input-group"><label for="calTipoAntecedencia">Antecedência mínima (horas, opcional)</label><input type="number" id="calTipoAntecedencia" min="1" max="720" /></div>
+                <div class="input-group"><label for="calTipoArtigo">Referência (artigo, opcional)</label><input type="text" id="calTipoArtigo" maxlength="80" placeholder="Ex.: Art. 147 §2º" /></div>
+              </div>
+              <div class="input-group">
+                <label>Onde pode acontecer (Nível 1 é sempre o campo todo)</label>
+                <label class="cal-check"><input type="checkbox" id="calTipoAbrCampo" /> Campo todo</label>
+                <label class="cal-check"><input type="checkbox" id="calTipoAbrAreas" /> Uma ou mais Áreas</label>
+                <label class="cal-check"><input type="checkbox" id="calTipoAbrCongregacao" /> Uma congregação</label>
+              </div>
+              <div class="input-group">
+                <label class="cal-check"><input type="checkbox" id="calTipoFecha" /> Fecha as congregações no dia</label>
+                <label class="cal-check"><input type="checkbox" id="calTipoFesta" /> É festividade (trava de Área no Nível 4)</label>
+                <label class="cal-check"><input type="checkbox" id="calTipoPublico" /> Vai para o site por padrão</label>
+                <label class="cal-check"><input type="checkbox" id="calTipoPresenca" /> Registra a presença dos dirigentes</label>
+              </div>
+              <div class="psc-acoes">
+                <button class="btn-confirmar" style="width:auto;margin:0;" onclick="calSalvarTipoAcao()">💾 Salvar tipo</button>
+                <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="calLimparFormTipoAcao()">✖️ Cancelar edição</button>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- 6. CEIA GERAL — PRESENÇA DOS DIRIGENTES -->
+        <div id="calSecaoPresenca" class="cal-secao" style="display:none;">
+          <h4>🍞 Ceia Geral — presença dos dirigentes</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Na Ceia Geral as congregações ficam fechadas e o dirigente de cada uma deve estar presente.
+            <strong>Ausência injustificada é fato passível de apuração disciplinar</strong> (Art. 81 §1º, III, "b"); a
+            justificada exige comprovação (médica ou de trabalho). O registro abre depois que o evento acontece.</p>
+          <div class="barra-lista">
+            <label for="calPresencaAno">Ano:</label>
+            <input type="number" id="calPresencaAno" min="2000" max="2200" style="max-width:110px;min-width:90px;" />
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="calCarregarEventosPresencaAcao()">📂 Listar eventos</button>
+            <select id="calPresencaEvento" title="Evento"></select>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPresencaCalAcao()">🔄 Carregar presenças</button>
+          </div>
+          <p id="calResultadoPresenca" class="subtitle" role="status"></p>
+          <div id="calResumoPresenca" class="psc-chips"></div>
+          <div class="rolagem-tabela"><div id="calTabelaPresenca"></div></div>
+        </div>
+
+        <!-- 7. SITE — SINCRONIZAÇÃO -->
+        <div id="calSecaoSite" class="cal-secao" style="display:none;">
+          <h4>🌐 Sincronização com o site</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Só eventos <strong>HOMOLOGADOS</strong> e marcados como públicos, e a grade litúrgica, vão para o site.
+            O site compara a versão dele com a do sistema e se atualiza sozinho.</p>
+          <div class="barra-lista">
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarSiteStatusCalAcao()">🔍 Conferir agora</button>
+          </div>
+          <p id="calResultadoSite" class="subtitle" role="status"></p>
+          <div id="calSiteCartao"></div>
+        </div>
       </div>
 
       <!-- ABA: DOCUMENTOS (Governança) -->

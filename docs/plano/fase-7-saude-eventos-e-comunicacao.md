@@ -1219,6 +1219,17 @@ ponto real de integração:
   antes do que foi marcada (a hora é "de parede", guardada como se fosse UTC); corrigido
   nas telas de escala.
 
+  **Em produção (verificado em 01/10/2026).** O deploy do sistema passou com os testes e a
+  migração 117 aplicada no Azure. As 9 rotas `GET` e as 6 `POST` testadas em
+  `/api/voluntariado/*`, mais `lista` e `elegibilidade-menores` da habilitação, respondem
+  `401` sem sessão; o `script.js` servido já traz o bloco novo; a agenda pública não mudou
+  (`versao` `2ede5dad7ed05d97`) e o site não foi tocado. **Nada foi cadastrado em
+  produção:** para usar, a Secretaria precisa receber as permissões `escalas` e
+  `habilitacao_voluntarios` (em Permissões) — as duas continuam sem concessão a papel
+  algum; as equipes existentes seguem como "outra" até alguém definir a natureza de
+  zeladoria, portaria e cozinha; e ninguém aderiu ao Termo ainda (os voluntários aderem em
+  Meu Painel, ou a Secretaria registra a ficha ou a Lista de Ouro).
+
   **Decisões que o Regimento não fecha (a CLI pode reverter, cada uma é uma linha).**
   - **O texto do Termo é um rascunho jurídico.** Foi redigido a partir do Art. 133 e da Lei
     9.608/98 (arts. 1º a 3º); **convém um parecer jurídico antes de pô-lo em uso** — o

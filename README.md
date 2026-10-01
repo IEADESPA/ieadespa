@@ -8434,6 +8434,16 @@ ponto real de integração:
   e sem convidados, com resposta antiga, com erro 500 e com texto malicioso, e contra a
   produção.
 
+  **Em produção (verificado em 01/10/2026).** O deploy do sistema passou com os testes
+  e a migração 116 aplicada no Azure. As 7 rotas `GET` e as 2 `POST` testadas em
+  `/api/eventos-gestao/*` respondem `401` sem sessão. `/api/agenda-publica/tudo` já
+  devolve o campo `convidados` em cada evento; como ainda não há evento público
+  homologado, a `versao` não mudou (`2ede5dad7ed05d97`, igual no sistema e no site) e
+  nenhuma reconstrução do site foi necessária. **Nada foi cadastrado em produção:** a
+  Secretaria, o Conselho de Ética e a Presidência precisam receber as permissões
+  `eventos_gestao`, `eventos_etica` e `eventos_presidencia` (em Permissões) antes de o
+  protocolo funcionar de ponta a ponta.
+
   **Decisões que o Regimento não fecha (a CLI pode reverter, cada uma é uma
   linha).**
   - **Nada Consta nos Níveis 1 e 2.** O Art. 111-A fala nos "Congressos das

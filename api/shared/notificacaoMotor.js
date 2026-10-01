@@ -50,10 +50,21 @@ async function avaliarRegras(pool) {
     if (!detector) continue; // regra cadastrada sem detector implementado ainda — fica inerte, não quebra a rodada
     const fatos = await detector.detectar(pool);
     if (fatos.length === 0) continue;
-    const destinatarios = await resolverDestinatariosPorPermissao(pool, { permissao: regra.PermissaoAlvo, nivel: regra.NivelAlvo });
-    if (destinatarios.length === 0) continue;
+    // v6.10 — um fato pode trazer os próprios destinatários (ex.: o aluno
+    // ausente avisa os professores DAQUELA turma, não quem tem uma
+    // permissão). Sem isso, vale a permissão da regra, resolvida uma vez só.
+    let destinatariosDaRegra = null;
 
     for (const fato of fatos) {
+      let destinatarios = fato.destinatarios;
+      if (!Array.isArray(destinatarios)) {
+        if (!destinatariosDaRegra) {
+          destinatariosDaRegra = regra.PermissaoAlvo
+            ? await resolverDestinatariosPorPermissao(pool, { permissao: regra.PermissaoAlvo, nivel: regra.NivelAlvo })
+            : [];
+        }
+        destinatarios = destinatariosDaRegra;
+      }
       for (const dest of destinatarios) {
         const { criada, notificacaoId } = await criarNotificacao(pool, {
           regraChave: regra.Chave,

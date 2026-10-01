@@ -418,6 +418,7 @@ async function fetchProtegido(url, opts = {}) {
 function esconderTodasAsTelas() {
   document.getElementById("telaCheckin").style.display = "none";
   document.getElementById("telaPainel").style.display = "none";
+  document.getElementById("telaChamadaOffline").style.display = "none";
 }
 
 function voltarParaCheckin() {
@@ -561,6 +562,8 @@ async function abrirPainelConteudo(matricula) {
   // passa por mostrarSubAbaMeupainel('perfil') no login), por isso carrega
   // direto aqui também, não só na troca de sub-aba.
   if (authToken) await carregarPainelInicial();
+  // v6.10 — chamada da EBD feita sem internet: envia assim que há sessão.
+  agendarSincronizacaoOfflineEbd();
 }
 
 // ---- BUSCA GLOBAL (vB.4) ----
@@ -5019,8 +5022,9 @@ function mostrarAbaSecretaria(aba) {
     const modoProfessor = !authPermissoes.includes("ebd_gestao");
     document.getElementById("abaEbd").classList.toggle("ebd-modo-professor", modoProfessor);
     carregarOpcoesChamadaEbdAcao();
+    preencherTurmasSalaEbd();
     if (modoProfessor) renderPainelProfessorEbd();
-    else { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesFinanceiroEbdAcao(); carregarOpcoesCadernetaEbdAcao(); }
+    else { carregarOpcoesEbdAcao(); carregarVisaoAgrupadaEbdAcao(); carregarOpcoesFinanceiroEbdAcao(); carregarOpcoesCadernetaEbdAcao(); carregarOpcoesPlanosEbdAcao(); }
   }
   if (aba === "conquistas") { carregarTiposEventoConquistaAcao(); carregarCatalogoConquistaAdminAcao(); }
   if (aba === "trilhas") carregarOpcoesTrilhasAcao();
@@ -12840,6 +12844,565 @@ async function carregarResumoChamadaEbdAcao() {
   `;
 }
 
+// ---- Sala de aula assistida (v6.10) ----
+// Chamada offline-first: o pacote da turma (id + nome dos alunos, lição do dia,
+// planos publicados) e a fila de marcações ficam no localStorage DESTE
+// aparelho — a sessão do painel fica no sessionStorage e não sobrevive ao
+// celular fechar o app, então a tela da chamada offline funciona sem login; o
+// envio é que exige sessão. A fila nunca é apagada sozinha: só sai quando o
+// servidor confirma (ou quando a pessoa descarta de propósito).
+const CHAVE_OFFLINE_EBD = "ebdOffline:v1";
+const DIAS_VALIDADE_PACOTE_OFFLINE_EBD = 30;
+let sincronizandoOfflineEbd = false;
+let temporizadorSyncOfflineEbd = null;
+
+function lerEstadoOfflineEbd() {
+  try {
+    const estado = JSON.parse(localStorage.getItem(CHAVE_OFFLINE_EBD) || "null");
+    if (estado && typeof estado.turmas === "object" && Array.isArray(estado.fila)) return estado;
+  } catch (e) { /* armazenamento bloqueado ou corrompido — começa vazio */ }
+  return { turmas: {}, fila: [], ultimoEnvio: null };
+}
+
+function gravarEstadoOfflineEbd(estado) {
+  try {
+    localStorage.setItem(CHAVE_OFFLINE_EBD, JSON.stringify(estado));
+    return true;
+  } catch (e) {
+    mostrarToast("Não foi possível guardar neste aparelho (armazenamento cheio ou bloqueado).", "erro");
+    return false;
+  }
+}
+
+function dataLocalHojeEbd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function dataIsoEbdValida(valor) {
+  return typeof valor === "string" && /^\d{4}-\d{2}-\d{2}$/.test(valor);
+}
+
+function gerarChaveClienteEbd() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Pacote velho (sem marcação pendente daquela turma) sai do aparelho: a lista
+// de alunos muda, e nome de criança não deve ficar guardado sem uso.
+function limparPacotesVencidosEbd(estado) {
+  const limite = Date.now() - DIAS_VALIDADE_PACOTE_OFFLINE_EBD * 86400000;
+  for (const id of Object.keys(estado.turmas)) {
+    const pacote = estado.turmas[id];
+    const temPendencia = estado.fila.some(item => String(item.turmaId) === id);
+    if (!temPendencia && new Date(pacote.baixadoEm).getTime() < limite) delete estado.turmas[id];
+  }
+  return estado;
+}
+
+function atualizarLinksChamadaOfflineEbd() {
+  const estado = lerEstadoOfflineEbd();
+  const mostrar = Object.keys(estado.turmas).length > 0 || estado.fila.length > 0;
+  document.querySelectorAll(".link-chamada-offline").forEach(link => {
+    link.style.display = mostrar ? "" : "none";
+    link.textContent = estado.fila.length
+      ? `📴 Chamada da EBD sem internet (${estado.fila.length} marcação(ões) aguardando envio)`
+      : "📴 Chamada da EBD sem internet";
+  });
+}
+
+function preencherTurmasSalaEbd() {
+  const sel = document.getElementById("salaTurmaSelect");
+  if (sel) {
+    sel.innerHTML = `<option value="">Escolha a turma...</option>` + ebdTurmasProfessor
+      .map(t => `<option value="${t.turmaId}">${escaparHtmlEbd(t.nome)} — ${escaparHtmlEbd(t.congregacaoNome)}</option>`).join("");
+  }
+  const data = document.getElementById("salaData");
+  if (data && !data.value) data.value = dataLocalHojeEbd();
+  atualizarPainelOfflineEbd();
+}
+
+async function baixarTurmaOfflineEbdAcao() {
+  const turmaId = Number(document.getElementById("salaTurmaId").value);
+  const data = document.getElementById("salaData").value || dataLocalHojeEbd();
+  if (!turmaId) { mostrarToast("Escolha a turma.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-chamada/offline/pacote?turmaId=${turmaId}&data=${encodeURIComponent(data)}`);
+  const resposta = await res.json();
+  if (resposta.sucesso === false) { mostrarToast(resposta.mensagem, "erro"); return; }
+  const estado = limparPacotesVencidosEbd(lerEstadoOfflineEbd());
+  estado.turmas[turmaId] = Object.assign({}, resposta.pacote, { baixadoEm: new Date().toISOString(), baixadoPor: authMatricula });
+  if (!gravarEstadoOfflineEbd(estado)) return;
+  mostrarToast(`✅ Turma baixada: ${resposta.pacote.alunos.length} aluno(s). Já dá para fazer a chamada sem internet.`, "sucesso");
+  atualizarPainelOfflineEbd();
+  atualizarLinksChamadaOfflineEbd();
+}
+
+function removerTurmaOfflineEbdAcao(turmaId) {
+  const estado = lerEstadoOfflineEbd();
+  const pendentes = estado.fila.filter(item => item.turmaId === turmaId).length;
+  if (!confirm(pendentes
+    ? `Esta turma tem ${pendentes} marcação(ões) ainda NÃO enviada(s). Remover apaga também essas marcações. Continuar?`
+    : "Remover esta turma deste aparelho?")) return;
+  delete estado.turmas[turmaId];
+  estado.fila = estado.fila.filter(item => item.turmaId !== turmaId);
+  gravarEstadoOfflineEbd(estado);
+  atualizarPainelOfflineEbd();
+  atualizarLinksChamadaOfflineEbd();
+}
+
+function apagarDadosOfflineEbdAcao() {
+  const estado = lerEstadoOfflineEbd();
+  if (!confirm(estado.fila.length
+    ? `Há ${estado.fila.length} marcação(ões) ainda NÃO enviada(s) — elas serão perdidas. Apagar mesmo todos os dados da EBD deste aparelho?`
+    : "Apagar as turmas da EBD baixadas neste aparelho?")) return;
+  try { localStorage.removeItem(CHAVE_OFFLINE_EBD); } catch (e) { /* nada guardado */ }
+  mostrarToast("Dados da EBD apagados deste aparelho.", "sucesso");
+  atualizarLinksChamadaOfflineEbd();
+  atualizarPainelOfflineEbd();
+  if (document.getElementById("telaChamadaOffline").style.display !== "none") renderChamadaOffline();
+}
+
+function resumoFilaOfflineEbdHtml(estado) {
+  const partes = [];
+  if (estado.fila.length) {
+    const grupos = {};
+    estado.fila.forEach(item => { const k = `${item.turmaId}|${item.data}`; grupos[k] = (grupos[k] || 0) + 1; });
+    partes.push(`<p><strong>${estado.fila.length}</strong> marcação(ões) aguardando envio:</p><ul>`
+      + Object.entries(grupos).map(([k, n]) => {
+        const [turmaId, data] = k.split("|");
+        const pacote = estado.turmas[turmaId];
+        return `<li>${escaparHtmlEbd(pacote ? pacote.turma.nome : `Turma ${turmaId}`)} — ${escaparHtmlEbd(formatarDataEbd(data))}: ${n}
+          <button class="btn-link btn-link-perigo" onclick="descartarGrupoOfflineEbdAcao(${Number(turmaId)}, '${escaparHtmlEbd(data)}')">descartar</button></li>`;
+      }).join("") + "</ul>");
+  } else {
+    partes.push("<p class='subtitle'>Nenhuma marcação aguardando envio.</p>");
+  }
+  if (estado.ultimoEnvio) {
+    partes.push(`<p class="subtitle">Último envio (${escaparHtmlEbd(new Date(estado.ultimoEnvio.em).toLocaleString("pt-BR"))}):</p><ul class="subtitle">`
+      + estado.ultimoEnvio.mensagens.map(m => `<li>${escaparHtmlEbd(m)}</li>`).join("") + "</ul>");
+  }
+  return partes.join("");
+}
+
+function descartarGrupoOfflineEbdAcao(turmaId, data) {
+  if (!confirm("Descartar estas marcações sem enviar? Elas não chegam ao sistema.")) return;
+  const estado = lerEstadoOfflineEbd();
+  estado.fila = estado.fila.filter(item => !(item.turmaId === turmaId && item.data === data));
+  gravarEstadoOfflineEbd(estado);
+  atualizarPainelOfflineEbd();
+  atualizarLinksChamadaOfflineEbd();
+  if (document.getElementById("telaChamadaOffline").style.display !== "none") renderChamadaOffline();
+}
+
+function atualizarPainelOfflineEbd() {
+  const container = document.getElementById("painelSalaOfflineStatus");
+  if (!container) return;
+  const estado = lerEstadoOfflineEbd();
+  const turmas = Object.values(estado.turmas);
+  container.innerHTML = (turmas.length
+    ? `<p class="subtitle">Turmas baixadas neste aparelho:</p><table class="tabela-frequencia"><thead><tr><th>Turma</th><th>Congregação</th><th>Alunos</th><th>Baixada em</th><th></th></tr></thead><tbody>
+        ${turmas.map(p => `<tr><td>${escaparHtmlEbd(p.turma.nome)}</td><td>${escaparHtmlEbd(p.turma.congregacaoNome)}</td><td>${p.alunos.length}</td>
+          <td>${escaparHtmlEbd(new Date(p.baixadoEm).toLocaleString("pt-BR"))}</td>
+          <td><button class="btn-link btn-link-perigo" onclick="removerTurmaOfflineEbdAcao(${Number(p.turma.turmaId)})">remover</button></td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhuma turma baixada neste aparelho ainda.</p>")
+    + resumoFilaOfflineEbdHtml(estado)
+    + (estado.fila.length ? `<button class="btn-confirmar" style="width:auto;margin:4px 0;" onclick="sincronizarChamadaOfflineAcao(true)">🔄 Enviar agora</button>` : "");
+}
+
+// ---- Tela da chamada offline ----
+function abrirTelaChamadaOffline() {
+  const estado = limparPacotesVencidosEbd(lerEstadoOfflineEbd());
+  gravarEstadoOfflineEbd(estado);
+  esconderTodasAsTelas();
+  document.getElementById("telaChamadaOffline").style.display = "flex";
+  const sel = document.getElementById("offlineTurma");
+  const anterior = sel.value;
+  sel.innerHTML = Object.values(estado.turmas)
+    .map(p => `<option value="${Number(p.turma.turmaId)}">${escaparHtmlEbd(p.turma.nome)} — ${escaparHtmlEbd(p.turma.congregacaoNome)}</option>`).join("");
+  if (anterior && estado.turmas[anterior]) sel.value = anterior;
+  const campoData = document.getElementById("offlineData");
+  if (!campoData.value) campoData.value = dataLocalHojeEbd();
+  renderChamadaOffline();
+}
+
+function fecharTelaChamadaOffline() {
+  document.getElementById("telaChamadaOffline").style.display = "none";
+  if (authToken && authMatricula) mostrarTelaPainelInicial();
+  else voltarParaCheckin();
+}
+
+// Status que a tela mostra: o da fila (marcação feita aqui) por cima do que o
+// pacote trouxe do servidor (só se a data for a mesma do pacote).
+function statusAtualOfflineEbd(estado, pacote, data) {
+  const status = {};
+  if (pacote && pacote.data === data) Object.assign(status, pacote.presencas || {});
+  const pendentes = new Set();
+  estado.fila.forEach(item => {
+    if (item.tipo === "PRESENCA" && item.turmaId === pacote.turma.turmaId && item.data === data) {
+      status[item.alunoId] = item.status;
+      pendentes.add(item.alunoId);
+    }
+  });
+  return { status, pendentes };
+}
+
+function renderChamadaOffline() {
+  const estado = lerEstadoOfflineEbd();
+  document.getElementById("offlineEstadoConexao").textContent = navigator.onLine
+    ? (authToken ? "🟢 Com internet — as marcações são enviadas na hora." : "🟢 Com internet — entre no Meu Painel para enviar as marcações.")
+    : "🔴 Sem internet — as marcações ficam guardadas neste aparelho e vão depois.";
+  const turmaId = Number(document.getElementById("offlineTurma").value);
+  const pacote = estado.turmas[turmaId];
+  const roster = document.getElementById("offlineRoster");
+  const resumo = document.getElementById("offlineResumo");
+  const plano = document.getElementById("offlinePlano");
+  document.getElementById("offlineFila").innerHTML = resumoFilaOfflineEbdHtml(estado);
+  if (!pacote) {
+    roster.innerHTML = "<p class='subtitle'>Nenhuma turma baixada neste aparelho. Com internet, entre no Meu Painel → EBD → \"Baixar turma para este aparelho\".</p>";
+    resumo.innerHTML = "";
+    plano.innerHTML = "";
+    return;
+  }
+  const data = document.getElementById("offlineData").value;
+  if (!dataIsoEbdValida(data)) { roster.innerHTML = "<p class='subtitle'>Escolha a data da aula.</p>"; resumo.innerHTML = ""; return; }
+  const { status, pendentes } = statusAtualOfflineEbd(estado, pacote, data);
+  const presentes = pacote.alunos.filter(a => status[a.alunoId] === "PRESENTE").length;
+  const ausentes = pacote.alunos.filter(a => status[a.alunoId] === "AUSENTE").length;
+  const visitantes = estado.fila.filter(i => i.tipo === "VISITANTE" && i.turmaId === turmaId && i.data === data).length;
+  resumo.innerHTML = `<p>✅ ${presentes} · ❌ ${ausentes} · sem marcação ${pacote.alunos.length - presentes - ausentes}${visitantes ? ` · 🙋 ${visitantes} visitante(s) a enviar` : ""}</p>`
+    + (pacote.data !== data ? `<p class="subtitle">A turma foi baixada para ${escaparHtmlEbd(formatarDataEbd(pacote.data))} — as marcações já feitas no sistema não aparecem para esta outra data.</p>` : "");
+  roster.innerHTML = pacote.alunos.length
+    ? `<ul class="lista-chamada-offline">${pacote.alunos.map(a => {
+        const st = status[a.alunoId];
+        return `<li><span class="nome-aluno-offline">${escaparHtmlEbd(a.nome)}${pendentes.has(a.alunoId) ? ' <span class="selo-pendente-offline">(a enviar)</span>' : ""}</span>
+          <button class="btn-presenca-offline${st === "PRESENTE" ? " ativo-presente" : ""}" aria-label="Presente" onclick="marcarPresencaOfflineEbd(${turmaId}, '${data}', ${Number(a.alunoId)}, 'PRESENTE')">✅</button>
+          <button class="btn-presenca-offline${st === "AUSENTE" ? " ativo-ausente" : ""}" aria-label="Ausente" onclick="marcarPresencaOfflineEbd(${turmaId}, '${data}', ${Number(a.alunoId)}, 'AUSENTE')">❌</button></li>`;
+      }).join("")}</ul>`
+    : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
+  plano.innerHTML = pacote.data === data
+    ? renderPlanosAulaEbd(pacote.planos || [])
+    : "<p class='subtitle'>O plano guardado é o da data em que a turma foi baixada.</p>";
+}
+
+function marcarPresencaOfflineEbd(turmaId, data, alunoId, status) {
+  if (!dataIsoEbdValida(data) || (status !== "PRESENTE" && status !== "AUSENTE")) return;
+  const estado = lerEstadoOfflineEbd();
+  estado.fila = estado.fila.filter(item => !(item.tipo === "PRESENCA" && item.turmaId === turmaId && item.data === data && item.alunoId === alunoId));
+  estado.fila.push({ tipo: "PRESENCA", turmaId, data, alunoId, status, marcadoEm: new Date().toISOString() });
+  if (!gravarEstadoOfflineEbd(estado)) return;
+  renderChamadaOffline();
+  atualizarLinksChamadaOfflineEbd();
+  agendarSincronizacaoOfflineEbd();
+}
+
+function adicionarVisitanteOfflineAcao() {
+  const turmaId = Number(document.getElementById("offlineTurma").value);
+  const data = document.getElementById("offlineData").value;
+  const nome = document.getElementById("offlineVisitanteNome").value.trim();
+  const contato = document.getElementById("offlineVisitanteContato").value.trim();
+  if (!turmaId || !dataIsoEbdValida(data)) { mostrarToast("Escolha a turma e a data.", "erro"); return; }
+  if (!nome) { mostrarToast("Informe o nome do visitante.", "erro"); return; }
+  const estado = lerEstadoOfflineEbd();
+  estado.fila.push({ tipo: "VISITANTE", turmaId, data, chaveCliente: gerarChaveClienteEbd(), nome, contato: contato || null, marcadoEm: new Date().toISOString() });
+  if (!gravarEstadoOfflineEbd(estado)) return;
+  document.getElementById("offlineVisitanteNome").value = "";
+  document.getElementById("offlineVisitanteContato").value = "";
+  mostrarToast("Visitante guardado.", "sucesso");
+  renderChamadaOffline();
+  atualizarLinksChamadaOfflineEbd();
+  agendarSincronizacaoOfflineEbd();
+}
+
+function agendarSincronizacaoOfflineEbd() {
+  clearTimeout(temporizadorSyncOfflineEbd);
+  if (!navigator.onLine || !authToken) return;
+  temporizadorSyncOfflineEbd = setTimeout(() => sincronizarChamadaOfflineAcao(false), 1500);
+}
+
+// Envia a fila, um lote por (turma, data). Usa fetch direto (não
+// fetchProtegido): uma sessão expirada aqui não pode derrubar a pessoa da
+// tela da chamada, e a fila tem de continuar guardada.
+async function sincronizarChamadaOfflineAcao(manual) {
+  if (sincronizandoOfflineEbd) return;
+  const inicial = lerEstadoOfflineEbd();
+  if (inicial.fila.length === 0) { if (manual) mostrarToast("Nada aguardando envio.", "sucesso"); return; }
+  if (!navigator.onLine) { if (manual) mostrarToast("Sem internet — as marcações continuam guardadas no aparelho.", "erro"); return; }
+  if (!authToken) { if (manual) mostrarToast("Entre no Meu Painel (com sua matrícula) para enviar — as marcações continuam guardadas.", "erro"); return; }
+
+  sincronizandoOfflineEbd = true;
+  const mensagens = [];
+  const enviados = [];
+  try {
+    const grupos = {};
+    inicial.fila.forEach(item => {
+      const k = `${item.turmaId}|${item.data}`;
+      if (!grupos[k]) grupos[k] = { turmaId: item.turmaId, data: item.data, itens: [] };
+      grupos[k].itens.push(item);
+    });
+    for (const grupo of Object.values(grupos)) {
+      const pacote = inicial.turmas[grupo.turmaId];
+      const rotulo = `${pacote ? pacote.turma.nome : `Turma ${grupo.turmaId}`} (${formatarDataEbd(grupo.data)})`;
+      const corpo = {
+        turmaId: grupo.turmaId, data: grupo.data,
+        registros: grupo.itens.filter(i => i.tipo === "PRESENCA").map(i => ({ alunoId: i.alunoId, status: i.status, marcadoEm: i.marcadoEm })),
+        visitantes: grupo.itens.filter(i => i.tipo === "VISITANTE").map(i => ({ chaveCliente: i.chaveCliente, nome: i.nome, contato: i.contato, marcadoEm: i.marcadoEm }))
+      };
+      let res;
+      try {
+        res = await fetch(`${API_BASE}/ebd-chamada/sincronizar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-auth-token": authToken, Authorization: "Bearer " + authToken },
+          body: JSON.stringify(corpo)
+        });
+      } catch (falhaDeRede) {
+        mensagens.push("A conexão caiu durante o envio — tenta de novo quando a internet voltar.");
+        break;
+      }
+      if (res.status === 401) { mensagens.push("Sua sessão expirou — entre de novo no Meu Painel para enviar."); break; }
+      const resposta = await res.json().catch(() => ({}));
+      if (res.ok && resposta.sucesso) {
+        enviados.push(...grupo.itens);
+        mensagens.push(`${rotulo}: ${resposta.mensagem}`);
+        const nomeDe = id => { const a = pacote && pacote.alunos.find(x => x.alunoId === id); return a ? a.nome : `aluno ${id}`; };
+        (resposta.conflitos || []).forEach(c => mensagens.push(`${rotulo}: ${nomeDe(c.alunoId)} — no sistema está ${c.statusServidor} (corrigido depois da sua marcação ${c.statusAparelho}); valeu o sistema.`));
+        (resposta.rejeitados || []).forEach(r => mensagens.push(`${rotulo}: ${r.alunoId ? nomeDe(r.alunoId) : "visitante"} — recusado: ${r.motivo}`));
+      } else {
+        mensagens.push(`${rotulo}: ${resposta.mensagem || `não enviado (erro ${res.status})`} — continua guardado.`);
+      }
+    }
+  } finally {
+    // Relê o estado: a pessoa pode ter marcado mais alguém durante o envio.
+    // Só sai da fila o item que foi enviado e não mudou desde então.
+    const estado = lerEstadoOfflineEbd();
+    const chaveDe = i => (i.tipo === "VISITANTE" ? `V|${i.chaveCliente}` : `P|${i.turmaId}|${i.data}|${i.alunoId}|${i.marcadoEm}`);
+    const enviadosSet = new Set(enviados.map(chaveDe));
+    estado.fila = estado.fila.filter(i => !enviadosSet.has(chaveDe(i)));
+    if (mensagens.length) estado.ultimoEnvio = { em: new Date().toISOString(), mensagens };
+    gravarEstadoOfflineEbd(estado);
+    sincronizandoOfflineEbd = false;
+    atualizarLinksChamadaOfflineEbd();
+    atualizarPainelOfflineEbd();
+    if (document.getElementById("telaChamadaOffline").style.display !== "none") renderChamadaOffline();
+  }
+  if (enviados.length) mostrarToast(`✅ ${enviados.length} marcação(ões) da EBD enviada(s).`, "sucesso");
+  else if (manual && mensagens.length) mostrarToast(mensagens[mensagens.length - 1], "erro");
+}
+
+window.addEventListener("online", () => {
+  if (document.getElementById("telaChamadaOffline").style.display !== "none") renderChamadaOffline();
+  agendarSincronizacaoOfflineEbd();
+});
+window.addEventListener("offline", () => {
+  if (document.getElementById("telaChamadaOffline").style.display !== "none") renderChamadaOffline();
+});
+document.addEventListener("DOMContentLoaded", () => {
+  atualizarLinksChamadaOfflineEbd();
+  agendarSincronizacaoOfflineEbd();
+});
+
+// ---- Plano de aula (professor) ----
+function linkSeguroEbd(url) {
+  return typeof url === "string" && /^https:\/\//i.test(url) ? url : null;
+}
+
+function renderPlanosAulaEbd(planos) {
+  if (!planos || planos.length === 0) return "<p class='subtitle'>Nenhum plano de aula publicado para esta turma nesta data.</p>";
+  return planos.map(p => `
+    <div class="plano-aula-ebd">
+      <h5>📘 ${escaparHtmlEbd(p.titulo)}${p.referencia ? ` <span class="subtitle">— ${escaparHtmlEbd(p.referencia)}</span>` : ""}</h5>
+      <p class="subtitle">${p.congregacaoId == null ? "Campo inteiro" : escaparHtmlEbd(p.congregacaoNome || "Congregação")}${p.faixaEtaria ? ` · ${escaparHtmlEbd(p.faixaEtaria)}` : " · todas as classes"}</p>
+      ${p.objetivo ? `<p><strong>Objetivo:</strong> ${escaparHtmlEbd(p.objetivo)}</p>` : ""}
+      ${p.roteiro ? `<div class="roteiro-plano">${escaparHtmlEbd(p.roteiro)}</div>` : ""}
+      ${(p.materiais || []).length ? `<ul>${p.materiais.map(m => {
+        const url = linkSeguroEbd(m.url);
+        return `<li>${url ? `<a href="${escaparHtmlEbd(url)}" target="_blank" rel="noopener noreferrer">🔗 ${escaparHtmlEbd(m.titulo)}</a>` : escaparHtmlEbd(m.titulo)}</li>`;
+      }).join("")}</ul>` : ""}
+    </div>`).join("");
+}
+
+async function carregarPlanosTurmaEbdAcao() {
+  const turmaId = Number(document.getElementById("salaTurmaId").value);
+  const data = document.getElementById("salaData").value || dataLocalHojeEbd();
+  const container = document.getElementById("painelPlanosTurmaEbd");
+  if (!turmaId) { mostrarToast("Escolha a turma.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/planos/turma?turmaId=${turmaId}&data=${encodeURIComponent(data)}`);
+  const resposta = await res.json();
+  if (resposta.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(resposta.mensagem)}</p>`; return; }
+  container.innerHTML = renderPlanosAulaEbd(resposta.planos);
+}
+
+async function carregarAusentesEbdAcao() {
+  const turmaId = Number(document.getElementById("salaTurmaId").value);
+  const container = document.getElementById("painelAusentesEbd");
+  if (!turmaId) { mostrarToast("Escolha a turma.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/ausentes?turmaId=${turmaId}`);
+  const resposta = await res.json();
+  if (resposta.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(resposta.mensagem)}</p>`; return; }
+  container.innerHTML = resposta.ausentes.length
+    ? `<p class="subtitle">Sem presença há ${resposta.minimo} domingo(s) seguido(s) ou mais:</p>
+      <table class="tabela-frequencia"><thead><tr><th>Id</th><th>Aluno</th><th>Domingos seguidos</th><th>Falta desde</th><th>Última presença</th></tr></thead><tbody>
+        ${resposta.ausentes.map(a => `<tr><td>${a.alunoId}</td><td>${escaparHtmlEbd(a.nome)}</td><td>${a.domingos}</td>
+          <td>${escaparHtmlEbd(formatarDataEbd(a.faltaDesde))}</td><td>${a.ultimaPresenca ? escaparHtmlEbd(formatarDataEbd(a.ultimaPresenca)) : "nenhuma no último semestre"}</td></tr>`).join("")}
+      </tbody></table>`
+    : `<p class="subtitle">Ninguém com ${resposta.minimo} domingo(s) seguido(s) de ausência. 🙌</p>`;
+}
+
+// ---- Plano de aula (Superintendente) ----
+async function carregarOpcoesPlanosEbdAcao() {
+  const selForm = document.getElementById("planoCongregacao");
+  const selFiltro = document.getElementById("planoFiltroCongregacao");
+  if (selForm && !selForm.dataset.montado) {
+    const congs = (await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json()).filter(c => c.ativa !== false);
+    const opcoes = congs.map(c => `<option value="${Number(c.congregacaoId)}">${escaparHtmlEbd(c.nome)}</option>`).join("");
+    selForm.innerHTML = `<option value="">Campo inteiro (todas as congregações)</option>` + opcoes;
+    selFiltro.innerHTML = `<option value="">Todas do meu escopo</option>` + opcoes;
+    selForm.dataset.montado = "1";
+  }
+  const hoje = dataLocalHojeEbd();
+  if (!document.getElementById("planoFiltroInicio").value) document.getElementById("planoFiltroInicio").value = hoje;
+  if (!document.getElementById("planoFiltroFim").value) {
+    const fim = new Date(); fim.setDate(fim.getDate() + 90);
+    document.getElementById("planoFiltroFim").value = `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, "0")}-${String(fim.getDate()).padStart(2, "0")}`;
+  }
+}
+
+async function carregarPlanosGestaoEbdAcao() {
+  const inicio = document.getElementById("planoFiltroInicio").value;
+  const fim = document.getElementById("planoFiltroFim").value;
+  const congregacaoId = document.getElementById("planoFiltroCongregacao").value;
+  const container = document.getElementById("painelPlanosGestaoEbd");
+  const qs = new URLSearchParams({ dataInicio: inicio, dataFim: fim });
+  if (congregacaoId) qs.set("congregacaoId", congregacaoId);
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/planos?${qs.toString()}`);
+  const resposta = await res.json();
+  if (resposta.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(resposta.mensagem)}</p>`; return; }
+  container.innerHTML = resposta.planos.length
+    ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Data</th><th>Alcance</th><th>Faixa</th><th>Título</th><th>Status</th><th>Material</th><th></th></tr></thead><tbody>
+        ${resposta.planos.map(p => `<tr>
+          <td>${p.planoId}</td><td>${escaparHtmlEbd(formatarDataEbd(p.data))}</td>
+          <td>${p.congregacaoId == null ? "Campo inteiro" : escaparHtmlEbd(p.congregacaoNome)}</td>
+          <td>${p.faixaEtaria ? escaparHtmlEbd(p.faixaEtaria) : "todas"}</td><td>${escaparHtmlEbd(p.titulo)}</td>
+          <td>${p.status === "PUBLICADO" ? "✅ Publicado" : "📝 Rascunho"}</td>
+          <td>${(p.materiais || []).map(m => `${escaparHtmlEbd(m.titulo)} <button class="btn-link btn-link-perigo" onclick="removerMaterialPlanoEbdAcao(${Number(m.materialId)})">×</button>`).join("<br>") || "-"}</td>
+          <td class="acoes-inline">
+            <button class="btn-link" onclick="editarPlanoEbdAcao(${Number(p.planoId)})">editar</button>
+            ${p.status === "PUBLICADO"
+              ? `<button class="btn-link" onclick="publicarPlanoEbdAcao(${Number(p.planoId)}, false)">despublicar</button>`
+              : `<button class="btn-link" onclick="publicarPlanoEbdAcao(${Number(p.planoId)}, true)">publicar</button>`}
+            <button class="btn-link btn-link-perigo" onclick="excluirPlanoEbdAcao(${Number(p.planoId)})">excluir</button>
+          </td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum plano neste período.</p>";
+}
+
+function limparFormPlanoEbd() {
+  ["planoEditandoId", "planoData", "planoFaixa", "planoTitulo", "planoReferencia", "planoObjetivo", "planoRoteiro"].forEach(id => { document.getElementById(id).value = ""; });
+  document.getElementById("planoCongregacao").value = "";
+  ["planoData", "planoCongregacao", "planoFaixa"].forEach(id => { document.getElementById(id).disabled = false; });
+  document.getElementById("tituloFormPlanoEbd").textContent = "➕ Novo plano de aula";
+}
+
+async function editarPlanoEbdAcao(planoId) {
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/plano?planoId=${planoId}`);
+  const resposta = await res.json();
+  if (resposta.sucesso === false) { mostrarToast(resposta.mensagem, "erro"); return; }
+  const p = resposta.plano;
+  document.getElementById("planoEditandoId").value = p.planoId;
+  document.getElementById("planoData").value = p.data;
+  document.getElementById("planoCongregacao").value = p.congregacaoId == null ? "" : String(p.congregacaoId);
+  document.getElementById("planoFaixa").value = p.faixaEtaria || "";
+  document.getElementById("planoTitulo").value = p.titulo;
+  document.getElementById("planoReferencia").value = p.referencia || "";
+  document.getElementById("planoObjetivo").value = p.objetivo || "";
+  document.getElementById("planoRoteiro").value = p.roteiro || "";
+  // Data, alcance e faixa não mudam depois de criado (mudar o alcance = novo plano).
+  ["planoData", "planoCongregacao", "planoFaixa"].forEach(id => { document.getElementById(id).disabled = true; });
+  document.getElementById("tituloFormPlanoEbd").textContent = `✏️ Editando o plano #${p.planoId}`;
+  document.getElementById("detPlanoEbd").open = true;
+  document.getElementById("materialPlanoId").value = p.planoId;
+}
+
+async function salvarPlanoEbdAcao() {
+  const planoId = Number(document.getElementById("planoEditandoId").value) || null;
+  const campos = {
+    titulo: document.getElementById("planoTitulo").value.trim(),
+    referencia: document.getElementById("planoReferencia").value.trim() || null,
+    objetivo: document.getElementById("planoObjetivo").value.trim() || null,
+    roteiro: document.getElementById("planoRoteiro").value.trim() || null
+  };
+  let corpo, rota;
+  if (planoId) {
+    rota = "planos/atualizar";
+    corpo = Object.assign({ planoId }, campos);
+  } else {
+    rota = "planos";
+    corpo = Object.assign({
+      data: document.getElementById("planoData").value,
+      congregacaoId: Number(document.getElementById("planoCongregacao").value) || null,
+      faixaEtaria: document.getElementById("planoFaixa").value.trim() || null
+    }, campos);
+    if (!corpo.data) { mostrarToast("Informe a data (domingo) do plano.", "erro"); return; }
+  }
+  if (!campos.titulo) { mostrarToast("Informe o título.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/${rota}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo)
+  });
+  const resposta = await res.json();
+  mostrarToast(resposta.mensagem, resposta.sucesso === false ? "erro" : "sucesso");
+  if (resposta.sucesso === false) return;
+  if (resposta.planoId) document.getElementById("materialPlanoId").value = resposta.planoId;
+  limparFormPlanoEbd();
+  carregarPlanosGestaoEbdAcao();
+}
+
+async function publicarPlanoEbdAcao(planoId, publicar) {
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/planos/${publicar ? "publicar" : "despublicar"}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planoId })
+  });
+  const resposta = await res.json();
+  mostrarToast(resposta.mensagem, resposta.sucesso === false ? "erro" : "sucesso");
+  if (resposta.sucesso !== false) carregarPlanosGestaoEbdAcao();
+}
+
+async function excluirPlanoEbdAcao(planoId) {
+  if (!confirm("Excluir este plano de aula? Os professores deixam de vê-lo.")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/planos/excluir`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planoId })
+  });
+  const resposta = await res.json();
+  mostrarToast(resposta.mensagem, resposta.sucesso === false ? "erro" : "sucesso");
+  if (resposta.sucesso !== false) carregarPlanosGestaoEbdAcao();
+}
+
+async function adicionarMaterialPlanoEbdAcao() {
+  const planoId = Number(document.getElementById("materialPlanoId").value);
+  const titulo = document.getElementById("materialTitulo").value.trim();
+  const url = document.getElementById("materialUrl").value.trim();
+  if (!planoId || !titulo || !url) { mostrarToast("Informe o id do plano, o título e o link.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/planos/material`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planoId, titulo, url })
+  });
+  const resposta = await res.json();
+  mostrarToast(resposta.mensagem, resposta.sucesso === false ? "erro" : "sucesso");
+  if (resposta.sucesso === false) return;
+  document.getElementById("materialTitulo").value = "";
+  document.getElementById("materialUrl").value = "";
+  carregarPlanosGestaoEbdAcao();
+}
+
+async function removerMaterialPlanoEbdAcao(materialId) {
+  if (!confirm("Remover este material do plano?")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-sala/planos/material/remover`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ materialId })
+  });
+  const resposta = await res.json();
+  mostrarToast(resposta.mensagem, resposta.sucesso === false ? "erro" : "sucesso");
+  if (resposta.sucesso !== false) carregarPlanosGestaoEbdAcao();
+}
+
 // ---- Lições e atividades (v6.3) ----
 const AJUDA_QUESTAO_EBD = {
   MULTIPLA_ESCOLHA: 'Opções: lista de textos, ex: ["Opção A","Opção B"]. Gabarito: índice da opção certa (0 = primeira), ex: 1',
@@ -13580,14 +14143,42 @@ async function carregarPedidosTurmaEbdAcao() {
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
   pedidosTurmaRevistasCache = data.pedidos || [];
   container.innerHTML = pedidosTurmaRevistasCache.length
-    ? `<table class="tabela-frequencia"><thead><tr><th>ID</th><th>Trimestre</th><th>Status</th><th>Pagamento</th><th>Itens</th><th>Valor total</th></tr></thead><tbody>
+    ? `<table class="tabela-frequencia"><thead><tr><th>ID</th><th>Trimestre</th><th>Status</th><th>Pagamento</th><th>Itens</th><th>Pedido x matrícula</th><th>Valor total</th></tr></thead><tbody>
         ${pedidosTurmaRevistasCache.map(p => `<tr>
-          <td>${p.pedidoId}</td><td>${p.trimestre}</td><td>${p.status}</td><td>${p.statusPagamento}</td>
-          <td>${(p.itens || []).map(i => `${i.revistaNome} × ${i.quantidade}`).join(", ") || "-"}</td>
+          <td>${p.pedidoId}</td><td>${escaparHtmlEbd(p.trimestre)}</td><td>${p.status}</td><td>${p.statusPagamento}</td>
+          <td>${(p.itens || []).map(i => `${escaparHtmlEbd(i.revistaNome)} × ${i.quantidade}`).join(", ") || "-"}</td>
+          <td>${textoComparacaoMatriculaEbd(p.comparacaoMatricula)}</td>
           <td>R$ ${Number(p.valorTotal).toFixed(2)}</td>
         </tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum pedido desta turma ainda.</p>";
+}
+
+// v6.10 — pedido x matrícula: compara o total de revistas com a foto de
+// alunos + professores ativos guardada quando o pedido foi criado.
+function textoComparacaoMatriculaEbd(c) {
+  if (!c) return "<span class=\"subtitle\">sem foto da matrícula</span>";
+  if (c.diferenca === 0) return `${c.totalRevistas} revista(s) = ${c.esperado} na matrícula`;
+  return `${c.totalRevistas} revista(s) para ${c.esperado} na matrícula (${c.diferenca > 0 ? "+" : ""}${c.diferenca})`;
+}
+
+async function sugerirPedidoRevistaEbdAcao() {
+  const turmaId = Number(document.getElementById("pedNovoTurmaId").value);
+  const trimestre = document.getElementById("pedTrimestre").value.trim();
+  const container = document.getElementById("painelSugestaoPedidoEbd");
+  if (!turmaId || !trimestre) { mostrarToast("Informe a turma e o trimestre.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos/sugestao?turmaId=${turmaId}&trimestre=${encodeURIComponent(trimestre)}`);
+  const resposta = await res.json();
+  if (resposta.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(resposta.mensagem)}</p>`; return; }
+  if (resposta.itens.length) document.getElementById("pedItensJson").value = JSON.stringify(resposta.itens);
+  if (resposta.pedidoExistenteId) document.getElementById("pedIdParaEditarItens").value = resposta.pedidoExistenteId;
+  container.innerHTML = `
+    <p class="subtitle">Matrícula real: <strong>${resposta.matriculados}</strong> aluno(s) ativo(s) e <strong>${resposta.professores}</strong>
+      professor(es) ativo(s)${resposta.faixaEtaria ? ` — faixa etária "${escaparHtmlEbd(resposta.faixaEtaria)}"` : ""}.</p>
+    ${resposta.detalhes.length ? `<ul>${resposta.detalhes.map(d => `<li>${escaparHtmlEbd(d.nome)}: <strong>${d.quantidade}</strong> (${escaparHtmlEbd(d.base)})</li>`).join("")}</ul>` : ""}
+    ${resposta.avisos.map(a => `<p class="subtitle">⚠️ ${escaparHtmlEbd(a)}</p>`).join("")}
+    ${resposta.pedidoExistenteId ? `<p class="subtitle">Esta turma já tem o pedido #${resposta.pedidoExistenteId} neste trimestre — use "Substituir itens".</p>` : ""}
+    ${resposta.itens.length ? "<p class=\"subtitle\">Itens preenchidos acima — confira e ajuste antes de salvar.</p>" : ""}`;
 }
 
 function lerItensPedidoJson() {
@@ -13675,7 +14266,7 @@ async function carregarConsolidadoRevistasEbdAcao() {
             <div style="margin-left:14px; margin-bottom:8px;">
               <strong>⛪ ${cong.congregacaoNome} — R$ ${Number(cong.valorTotal).toFixed(2)}</strong>
               <ul style="margin:4px 0 0 20px;">
-                ${cong.pedidos.map(p => `<li>Turma ${p.turmaNome} (${p.trimestre}) — ${p.status} / pagamento ${p.statusPagamento} — R$ ${Number(p.valorTotal).toFixed(2)}</li>`).join("")}
+                ${cong.pedidos.map(p => `<li>Turma ${escaparHtmlEbd(p.turmaNome)} (${escaparHtmlEbd(p.trimestre)}) — ${p.status} / pagamento ${p.statusPagamento} — R$ ${Number(p.valorTotal).toFixed(2)} — ${textoComparacaoMatriculaEbd(p.comparacaoMatricula)}</li>`).join("")}
               </ul>
             </div>
           `).join("")}

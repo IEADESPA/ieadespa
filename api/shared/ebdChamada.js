@@ -161,7 +161,9 @@ async function buscarLicaoPorCongregacaoData(pool, congregacaoId, data) {
 // mesmo assim, mas evita a viagem ao banco terminar em erro de constraint
 // em uso normal, quando dois professores da mesma congregação abrem a
 // tela no mesmo domingo).
-async function abrirLicao(pool, { congregacaoId, data, abertoPorMembroId }) {
+// v6.10: `origem` só vai para a auditoria — distingue a lição aberta por quem
+// administra da aberta pela sincronização da chamada offline do professor.
+async function abrirLicao(pool, { congregacaoId, data, abertoPorMembroId, origem }) {
   const existente = await buscarLicaoPorCongregacaoData(pool, congregacaoId, data);
   if (existente) {
     if (existente.status === STATUS_LICAO.ABERTA) return { sucesso: true, licaoId: existente.licaoId, mensagem: "Lição já estava aberta." };
@@ -180,7 +182,7 @@ async function abrirLicao(pool, { congregacaoId, data, abertoPorMembroId }) {
 
   await registrarAuditoria({
     tabela: "EbdLicoes", registroId: licaoId, acao: "LICAO_ABERTA",
-    usuarioId: abertoPorMembroId, dadosAntes: null, dadosDepois: { congregacaoId, data }
+    usuarioId: abertoPorMembroId, dadosAntes: null, dadosDepois: { congregacaoId, data, ...(origem ? { origem } : {}) }
   });
 
   return { sucesso: true, licaoId, mensagem: "✅ Lição aberta." };
@@ -248,7 +250,8 @@ function mapearChamada(row) {
   return {
     chamadaId: row.ChamadaId, licaoId: row.LicaoId, turmaId: row.TurmaId, alunoId: row.AlunoId,
     visitanteNome: row.VisitanteNome, visitanteContato: row.VisitanteContato, status: row.Status,
-    registradoEm: row.RegistradoEm
+    registradoEm: row.RegistradoEm, atualizadoEm: row.AtualizadoEm,
+    marcadoOfflineEm: row.MarcadoOfflineEm || null
   };
 }
 
@@ -257,7 +260,11 @@ function mapearChamada(row) {
 // ABERTA (podeLancarChamada) e a turma pertencer à MESMA congregação da
 // lição (evita lançar chamada de uma turma de outra congregação contra
 // esta lição).
-async function registrarPresencaAluno(pool, { licaoId, turmaId, alunoId, status, registradoPorMembroId }) {
+// v6.10: `marcadoOfflineEm` é a hora em que o professor marcou no aparelho
+// (chamada offline, shared/ebdSalaAula.js). Um lançamento online grava NULL
+// — e é isso que faz uma correção online posterior valer sobre uma marcação
+// offline antiga que chegue atrasada (ver decidirAplicacaoOffline).
+async function registrarPresencaAluno(pool, { licaoId, turmaId, alunoId, status, registradoPorMembroId, marcadoOfflineEm = null }) {
   const validacaoDados = validarLancamentoPresenca({ alunoId, status });
   if (!validacaoDados.valido) return { sucesso: false, mensagem: validacaoDados.mensagem };
 
@@ -279,16 +286,18 @@ async function registrarPresencaAluno(pool, { licaoId, turmaId, alunoId, status,
   const acao = decidirAcaoRegistroPresenca(existente);
 
   if (acao === "ATUALIZAR") {
-    await pool.request().input("id", sql.Int, existente.chamadaId).input("status", sql.NVarChar(10), status).query(`
-      UPDATE EbdChamadas SET Status = @status, AtualizadoEm = SYSUTCDATETIME() WHERE ChamadaId = @id
+    await pool.request().input("id", sql.Int, existente.chamadaId).input("status", sql.NVarChar(10), status)
+      .input("marcado", sql.DateTime2, marcadoOfflineEm || null).query(`
+      UPDATE EbdChamadas SET Status = @status, MarcadoOfflineEm = @marcado, AtualizadoEm = SYSUTCDATETIME() WHERE ChamadaId = @id
     `);
   } else {
     await pool.request()
       .input("licaoId", sql.Int, licaoId).input("turmaId", sql.Int, turmaId).input("alunoId", sql.Int, alunoId)
       .input("status", sql.NVarChar(10), status).input("registradoPor", sql.Int, registradoPorMembroId || null)
+      .input("marcado", sql.DateTime2, marcadoOfflineEm || null)
       .query(`
-        INSERT INTO EbdChamadas (LicaoId, TurmaId, AlunoId, Status, RegistradoPorMembroId)
-        VALUES (@licaoId, @turmaId, @alunoId, @status, @registradoPor)
+        INSERT INTO EbdChamadas (LicaoId, TurmaId, AlunoId, Status, RegistradoPorMembroId, MarcadoOfflineEm)
+        VALUES (@licaoId, @turmaId, @alunoId, @status, @registradoPor, @marcado)
       `);
   }
 
@@ -304,7 +313,10 @@ async function registrarPresencaAluno(pool, { licaoId, turmaId, alunoId, status,
 
 // Visitante: sempre uma linha NOVA (cada visita é sua própria ocorrência —
 // não existe "matrícula de visitante" pra corrigir/atualizar em cima).
-async function registrarVisitante(pool, { licaoId, turmaId, visitanteNome, visitanteContato, registradoPorMembroId }) {
+// v6.10: `chaveCliente` (gerada no aparelho, chamada offline) torna o reenvio
+// da fila idempotente — o índice único filtrado da migração 111 barra o
+// mesmo visitante duas vezes; quem chama trata a violação como "já enviado".
+async function registrarVisitante(pool, { licaoId, turmaId, visitanteNome, visitanteContato, registradoPorMembroId, chaveCliente = null, marcadoOfflineEm = null }) {
   const validacaoDados = validarLancamentoPresenca({ status: STATUS_PRESENCA.VISITANTE, visitanteNome });
   if (!validacaoDados.valido) return { sucesso: false, mensagem: validacaoDados.mensagem };
 
@@ -322,16 +334,20 @@ async function registrarVisitante(pool, { licaoId, turmaId, visitanteNome, visit
     .input("licaoId", sql.Int, licaoId).input("turmaId", sql.Int, turmaId)
     .input("nome", sql.NVarChar(150), visitanteNome.trim()).input("contato", sql.NVarChar(150), visitanteContato || null)
     .input("registradoPor", sql.Int, registradoPorMembroId || null)
+    .input("chave", sql.NVarChar(64), chaveCliente || null).input("marcado", sql.DateTime2, marcadoOfflineEm || null)
     .query(`
-      INSERT INTO EbdChamadas (LicaoId, TurmaId, VisitanteNome, VisitanteContato, Status, RegistradoPorMembroId)
+      INSERT INTO EbdChamadas (LicaoId, TurmaId, VisitanteNome, VisitanteContato, Status, RegistradoPorMembroId, ChaveCliente, MarcadoOfflineEm)
       OUTPUT INSERTED.ChamadaId
-      VALUES (@licaoId, @turmaId, @nome, @contato, 'VISITANTE', @registradoPor)
+      VALUES (@licaoId, @turmaId, @nome, @contato, 'VISITANTE', @registradoPor, @chave, @marcado)
     `);
   const chamadaId = result.recordset[0].ChamadaId;
 
+  // Trava 6-B: só ids na auditoria. A trilha é encadeada por hash e não pode
+  // ser corrigida depois — o nome do visitante (pessoa de fora, sem cadastro)
+  // não entra nela, a mesma regra do aluno não-membro (v6.8).
   await registrarAuditoria({
     tabela: "EbdChamadas", registroId: chamadaId, acao: "VISITANTE_LANCADO",
-    usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { licaoId, turmaId, visitanteNome: visitanteNome.trim() }
+    usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { licaoId, turmaId, ...(chaveCliente ? { origem: "OFFLINE" } : {}) }
   });
 
   return { sucesso: true, chamadaId, mensagem: "✅ Visitante registrado." };

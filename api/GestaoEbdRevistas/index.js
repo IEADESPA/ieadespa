@@ -23,6 +23,7 @@
 // POST /api/ebd-revistas/catalogo   body:{nome, faixaEtaria?, trimestre, precoUnitario}
 // GET  /api/ebd-revistas/pedidos?turmaId=                          -> pedidos de uma turma
 // POST /api/ebd-revistas/pedidos    body:{turmaId, trimestre, itens:[{revistaId,quantidade}]}
+// GET  /api/ebd-revistas/pedidos/sugestao?turmaId=&trimestre=      -> v6.10: itens sugeridos pela matrícula real
 // GET  /api/ebd-revistas/pedido?pedidoId=                          -> detalhe de um pedido (com itens)
 // POST /api/ebd-revistas/pedidos/itens     body:{pedidoId, itens}  -> substitui itens (só enquanto PENDENTE)
 // POST /api/ebd-revistas/pedidos/aprovar   body:{pedidoId}         -> exige ebd_gestao
@@ -112,6 +113,20 @@ module.exports = async function (context, req) {
       if (!(await podeGerenciarPedidoDaTurma(pool, usuario, turma))) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
       const resultado = await revistas.criarPedido(pool, { turmaId, trimestre, itens, solicitadoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
+      return;
+    }
+
+    // v6.10 — sugestão do pedido pela matrícula real (alunos e professores
+    // ativos da turma × catálogo do trimestre na faixa etária da turma).
+    if (acao === "pedidos/sugestao" && metodo === "GET") {
+      const turmaId = Number(req.query && req.query.turmaId);
+      const trimestre = req.query && req.query.trimestre;
+      if (!turmaId || !trimestre) return erro(context, 400, "Informe turmaId e trimestre.");
+      const turma = await ebdTurmas.buscarTurmaPorId(pool, turmaId);
+      if (!turma) return erro(context, 404, "Turma não encontrada.");
+      if (!(await podeGerenciarPedidoDaTurma(pool, usuario, turma))) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const resultado = await revistas.sugerirPedidoDaTurma(pool, { turma, trimestre: String(trimestre).trim() });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
     }
 

@@ -32,7 +32,7 @@ body {
   color: var(--cor-texto);
   margin: 0;
 }
-#telaCheckin, #telaPainel {
+#telaCheckin, #telaPainel, #telaChamadaOffline {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -477,3 +477,16 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .ebd-so-professor { display: none; }
 #abaEbd.ebd-modo-professor .ebd-so-gestao { display: none; }
 #abaEbd.ebd-modo-professor .ebd-so-professor { display: block; }
+/* v6.10 — chamada da EBD sem internet: botões grandes (polegar, celular) e
+   estado de cada aluno visível de longe. */
+.caixa-chamada-offline { max-width: 560px; text-align: left; }
+.caixa-chamada-offline h2 { text-align: center; }
+.lista-chamada-offline { list-style: none; padding: 0; margin: 8px 0; }
+.lista-chamada-offline li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--cor-borda); }
+.lista-chamada-offline .nome-aluno-offline { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.btn-presenca-offline { min-width: 52px; min-height: 44px; font-size: 1.1rem; border-radius: var(--raio-pequeno); border: 2px solid var(--cor-borda); background: var(--cor-superficie); color: var(--cor-texto); cursor: pointer; font-family: inherit; }
+.btn-presenca-offline.ativo-presente { background: var(--cor-sucesso); border-color: var(--cor-sucesso); color: #fff; }
+.btn-presenca-offline.ativo-ausente { background: var(--cor-erro); border-color: var(--cor-erro); color: #fff; }
+.selo-pendente-offline { font-size: 0.75rem; color: var(--cor-texto-suave); }
+.plano-aula-ebd { border-left: 3px solid var(--cor-secundaria); padding: 4px 10px; margin: 8px 0; }
+.plano-aula-ebd .roteiro-plano { white-space: pre-wrap; }

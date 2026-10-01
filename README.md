@@ -7097,14 +7097,164 @@ dá, pela primeira vez, série histórica comparável entre congregações.
 
 #### v6.10 — Sala de aula assistida e material *(7ª rodada)*
 
-- [ ] Chamada pelo celular do professor, offline-first (a sala de EBD muitas
+- [x] Chamada pelo celular do professor, offline-first (a sala de EBD muitas
       vezes não tem sinal) — sincroniza quando volta a conexão.
-- [ ] Plano de aula e material de apoio por lição, publicado pelo
+- [x] Plano de aula e material de apoio por lição, publicado pelo
       Superintendente e visível ao professor no mesmo lugar da chamada.
-- [ ] Alerta de aluno ausente há N domingos direto pro professor — a evasão na
+- [x] Alerta de aluno ausente há N domingos direto pro professor — a evasão na
       EBD é o primeiro sinal de afastamento (conecta com v7.11).
-- [ ] Pedido de revistas calculado a partir da matrícula real por classe
+- [x] Pedido de revistas calculado a partir da matrícula real por classe
       (v6.6 prevê o pedido; aqui ele deixa de ser chute do superintendente).
+
+  Fecha a FASE 6 em cima do que ela já tinha: migração 111
+  (`sql/migrations/111_ebd_sala_assistida.sql`), `shared/ebdSalaAula.js`
+  (lógica pura + banco), a Function nova `GestaoEbdSalaAula`
+  (`/api/ebd-sala/...`), duas ações novas em `GestaoEbdChamada`
+  (`offline/pacote` e `sincronizar`), uma em `GestaoEbdRevistas`
+  (`pedidos/sugestao`), o detector `EBD_ALUNO_AUSENTE` no motor da vB.2 e, no
+  front, a seção "📴 Sala de aula (v6.10)" da aba EBD e uma **tela própria de
+  chamada offline**.
+
+  **Chamada offline (item 1).** Com internet (em casa, na véspera), o professor
+  baixa a turma para o aparelho; o pacote tem **só o id e o nome** de cada aluno
+  ativo — nunca matrícula, contato ou nascimento —, a lição do dia se já existir
+  (com o que já foi marcado) e os planos publicados. No domingo, a tela "📴
+  Chamada da EBD" abre **sem login e sem rede**: a sessão do painel fica no
+  `sessionStorage` e morre quando o celular fecha o app, então o pacote e a fila
+  de marcações moram no `localStorage` daquele aparelho, e a tela aparece como
+  link na Portaria e no login sempre que houver turma baixada. Cada toque em
+  ✅/❌ grava na fila (remarcar o mesmo aluno substitui); visitante entra com uma
+  chave gerada no aparelho. O envio (`POST /api/ebd-chamada/sincronizar`, um lote
+  por turma e domingo) acontece sozinho quando a conexão volta e há sessão, ao
+  entrar no painel, ou no botão "Enviar agora". A fila **nunca se apaga
+  sozinha**: um item só sai quando o servidor confirma — e só se não tiver sido
+  remarcado durante o envio. Pacote sem pendência some depois de 30 dias (nome
+  de criança não fica guardado sem uso), e há um botão para apagar tudo do
+  aparelho.
+
+  As regras do servidor, todas em `shared/ebdSalaAula.js`: a data não pode ser
+  futura nem ter mais de 30 dias (atraso maior vai pela tela normal); "hoje" é o
+  de Brasília (as Functions rodam em UTC). **Sem lição naquele domingo, a
+  sincronização abre a lição** — quem marcou é professor ativo da turma (ou
+  gestor no escopo, a mesma permissão de lançar chamada da v6.2), e abrir a lição
+  só existe para permitir a chamada; a auditoria registra a origem
+  (`SINCRONIZACAO_OFFLINE`). **Lição fechada** devolve o lote inteiro (409) e ele
+  fica guardado até alguém reabrir. **Conflito:** se a presença no servidor foi
+  marcada *depois* da marcação do aparelho e diz outra coisa, vale o servidor —
+  um celular que ficou dias sem rede não desfaz a correção de quem administra; a
+  pessoa vê o aviso. A "hora" do servidor é a da marcação no aparelho
+  (`EbdChamadas.MarcadoOfflineEm`) quando a linha veio de outro celular, senão a
+  da última alteração; um lançamento online zera `MarcadoOfflineEm`. O relógio
+  adiantado do aparelho é limitado ao "agora" do servidor. Reenviar o mesmo lote
+  não duplica: a presença tem chave natural (lição, aluno) e o visitante tem
+  `ChaveCliente`, com **índice único filtrado** (a mesma armadilha do `NULL` que
+  a Trava 6-A achou). Dois envios simultâneos da mesma fila (rede que cai e
+  volta) terminam com uma lição, um visitante e nenhum erro 500. Item ruim
+  (aluno que saiu da turma, status inválido) é recusado sozinho, com o motivo,
+  sem derrubar o resto. Cada presença passa pelo mesmo `registrarPresencaAluno`
+  da v6.2 (auditoria e motor de conquistas incluídos), e o lote ganha uma linha
+  de resumo na auditoria, só com contagens.
+
+  O service worker continua sem cachear `/api/` (a chamada offline não passa por
+  ele); ele mudou em dois pontos: o cache virou `v2`, e só uma navegação cai no
+  `index.html` quando não há rede — antes, um script de CDN sem cache recebia o
+  HTML no lugar.
+
+  **Plano de aula e material (item 2).** `EbdPlanosAula` + `EbdPlanoMateriais`.
+  **Não usa `EbdLicoes`:** a lição nasce por congregação quando alguém abre a
+  chamada, e o plano precisa existir antes do domingo — e, na revista CPAD, é o
+  mesmo para o campo inteiro. Por isso o plano é **por data**, com alcance:
+  congregação (vazia = **campo inteiro**, que exige escopo global para criar,
+  editar ou publicar — o mesmo critério do catálogo de trilhas da v6.9) e faixa
+  etária (vazia = todas as classes; comparada sem acento nem maiúscula, como a
+  "revista vigente" da v6.8). Rascunho → publicado; o professor vê **só o
+  publicado** que se aplica à turma, o mais específico primeiro (congregação +
+  faixa > congregação > faixa > campo), na própria seção da chamada e dentro da
+  tela offline (o pacote leva o plano). Data, alcance e faixa não mudam depois de
+  criado — mudar o alcance é criar outro plano, e isso fecha o atalho de
+  "editar" um plano local para virar do campo. **Material é link `https`**
+  (revista, vídeo, slides), conferido no servidor e por um `CHECK` no banco —
+  `javascript:`, `data:` e `http` em claro nunca entram; o front só monta o link
+  se ele começar com `https://`. Sem upload: o material já mora em algum lugar,
+  e guardar arquivo aqui seria custo de armazenamento sem ganho.
+
+  **Alerta de ausência (item 3).** "Ausente" segue a definição da caderneta
+  (v6.8): num domingo em que a turma teve chamada, quem não está presente está
+  ausente — marcado ausente ou nem marcado. Conta-se do domingo mais recente para
+  trás até a última presença; domingos antes da entrada do aluno na turma não
+  contam (a referência é a data mais recente entre a matrícula e a última
+  alteração dela — a transferência não guarda histórico, e isso evita acusar
+  falta de quem acabou de chegar; o custo, no pior caso, é atrasar o alerta). N
+  vem do catálogo de Prazos (sigla `EBD_AUSENCIA_DOMINGOS`, padrão **3**,
+  editável na tela de Catálogos — nessa linha a coluna "Dias" guarda domingos,
+  dito no próprio nome). Duas saídas: a lista "⚠️ Alunos ausentes" na aba EBD
+  (professor da turma ou gestor no escopo) e o aviso no sino. O motor da vB.2
+  ganhou uma coisa só: **um fato pode trazer os próprios destinatários** — o
+  aviso vai para os **professores ativos daquela turma**, não para quem tem uma
+  permissão (`PermissaoAlvo` NULL; turma sem professor não gera aviso, só aparece
+  na lista). A chave da notificação é a **sequência de faltas**
+  (`EbdAlertasAusencia`, única por aluno e primeira falta): a mesma sequência
+  avisa uma vez, por mais que a rotina diária rode; se o aluno volta e some de
+  novo, avisa de novo. Aluno não-membro entra no alerta como qualquer aluno.
+
+  **Pedido de revistas pela matrícula (item 4).** "💡 Calcular pela matrícula"
+  (`GET /api/ebd-revistas/pedidos/sugestao`) parte dos **alunos ativos e
+  professores ativos** da turma e das revistas ativas do catálogo do trimestre
+  na **mesma faixa etária** da turma: edição do aluno = nº de alunos; edição do
+  professor (nome com "mestre" ou "professor(a)" — o catálogo não tem coluna para
+  isso) = nº de professores; sem edição do professor, o professor entra na conta
+  da do aluno. Preenche os itens, que continuam editáveis, e avisa o que não
+  fecha (turma sem faixa etária, nenhuma revista da faixa, mais de uma edição,
+  turma sem aluno ativo). O pedido passa a guardar a **foto da matrícula** no
+  momento em que é criado (`MatriculadosNoPedido`, `ProfessoresNoPedido` —
+  calculados no servidor, nunca vindos do cliente), e a lista da turma e o
+  consolidado mostram "pedido x matrícula" (ex.: "25 revistas para 20 na
+  matrícula (+5)"). Pedido anterior à v6.10 aparece como "sem foto da matrícula".
+
+  **Permissão:** nenhuma nova — `ebd_gestao` (v6.1) e o professor ativo da turma,
+  como o resto da FASE 6.
+
+  Testado com `npx jest`: 35 testes novos (26 em `ebdSalaAula.test.js` — lote
+  offline, conflito, plano, link seguro, alcance, sequência de ausências —, 7 em
+  `ebdRevistas.test.js` — sugestão pela matrícula — e 2 em
+  `notificacaoMotorDestinatarios.test.js` — destinatários por fato) — suíte
+  completa em 691/691 (44 suítes; era 656/42). `node --check` em todos os `.js`
+  novos e alterados; no front, os 39 `getElementById` literais do código novo
+  têm id no HTML e todo handler inline aponta para função que existe.
+
+  **Verificado contra banco de verdade (30/09).** Mesmo método da v6.8/v6.9
+  (roteiro descartável, não versionado, contra `ieadespa-homolog`, dados
+  fictícios removidos no fim): a 111 aplica em 11 batches e **82 verificações
+  passaram** — pacote offline (só id e nome, `no-store`, permissões);
+  sincronização abrindo a lição, reenvio sem duplicar, conflito com correção
+  online (e a marcação mais nova vencendo), aluno encerrado recusado sozinho,
+  data futura/velha, turma alheia, sem sessão, lição fechada (409 sem gravar
+  nada) e **dois envios simultâneos** (1 lição, 1 visitante, nenhum 500); índice
+  único filtrado e `CHECK` de https no banco; plano de aula com alcance, escopo
+  global, publicação, ordem, material e exclusão; ausência (sequência, N lido de
+  Prazos, detector com destinatário = professor, **uma notificação** mesmo com o
+  motor rodando duas vezes, gestor sem o aviso, presença zerando a sequência);
+  sugestão e foto da matrícula no pedido e no consolidado. As funções do front
+  rodaram com o `script.js` inteiro num DOM simulado: **36 verificações** —
+  tela offline sem login, fila (remarcar substitui; nada sai sem confirmação;
+  409 e 401 mantêm; remarcação durante o envio não se perde), descarte, pacote
+  vencido, escape de HTML em todo nome e título, link `javascript:` recusado.
+
+  **Achado ao verificar, corrigido na Trava 6-B:** a auditoria de uma presença
+  **nova** nunca foi gravada desde a v6.2 — o código passava `RegistroId` nulo, a
+  coluna não aceita, e a falha é engolida de propósito (auditoria é fail-soft).
+
+  **Registrado, não construído, por decisão:**
+
+  - Enviar a fila exige sessão: quem marcou sem login precisa entrar no painel
+    (matrícula + código ou senha) para a chamada chegar. Não existe "token de
+    longa duração só para a chamada" — seria uma credencial a mais guardada no
+    aparelho.
+  - A tela offline mostra o plano guardado com a turma; um link de material
+    precisa de internet para abrir.
+  - O alerta de ausência vai para o sino (e por e-mail, como as outras regras);
+    push fica desligado nesta regra (`CanalPush` padrão 0), porque a mensagem
+    tem o nome do aluno e apareceria na tela bloqueada.
 
 #### 🔒 Trava de Revisão 6-B — antes de encerrar a FASE 6 e avançar para a FASE 7
 

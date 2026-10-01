@@ -42,6 +42,7 @@
       </form>
 
       <a href="#" class="link-secretaria" onclick="mostrarTelaPainelInicial()">📋 Acessar meu Painel</a>
+      <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" onclick="abrirTelaChamadaOffline(); return false;">📴 Chamada da EBD sem internet</a>
     </div>
   </div>
 
@@ -81,6 +82,7 @@
         </div>
       </div>
 
+      <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" onclick="abrirTelaChamadaOffline(); return false;">📴 Chamada da EBD sem internet</a>
       <a href="#" class="link-secretaria" onclick="voltarParaCheckin()">← Voltar para a Portaria</a>
     </div>
 
@@ -2645,6 +2647,87 @@
         <div id="painelResumoChamadaEbd"></div>
 
         <hr />
+        <h3>📴 Sala de aula (v6.10) — chamada sem internet, plano de aula e ausências</h3>
+        <p class="subtitle">A sala de EBD muitas vezes não tem sinal. Com internet (em casa, na véspera), baixe a
+          turma para este aparelho; no domingo, abra a <strong>chamada offline</strong> e marque presente/ausente
+          mesmo sem rede — fica guardado no aparelho e é enviado sozinho quando a conexão voltar (ou no botão
+          "Enviar agora", já logado). Se ainda não houver lição aberta naquele domingo, o envio abre a lição; se
+          ela já tiver sido fechada, as marcações ficam guardadas até alguém reabrir. Se a presença tiver sido
+          corrigida no sistema depois da sua marcação, vale a do sistema. No aparelho ficam só o nome e o número
+          de cada aluno — nada de contato, nascimento ou matrícula.</p>
+
+        <h4>Turma e data</h4>
+        <div class="barra-lista">
+          <select id="salaTurmaSelect" class="ebd-so-professor" onchange="document.getElementById('salaTurmaId').value = this.value"></select>
+          <input type="number" id="salaTurmaId" placeholder="Id da turma" style="max-width:140px;" />
+          <input type="date" id="salaData" style="max-width:160px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="baixarTurmaOfflineEbdAcao()">⬇️ Baixar turma para este aparelho</button>
+          <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirTelaChamadaOffline()">📴 Abrir chamada offline</button>
+        </div>
+        <div id="painelSalaOfflineStatus"></div>
+
+        <h4>📘 Plano de aula da turma</h4>
+        <div class="barra-lista">
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPlanosTurmaEbdAcao()">📘 Ver plano de aula (turma e data acima)</button>
+        </div>
+        <div id="painelPlanosTurmaEbd"></div>
+
+        <h4>⚠️ Alunos ausentes</h4>
+        <p class="subtitle" style="margin:4px 0;">Quem não vem há vários domingos seguidos (nos domingos em que a turma
+          teve chamada). Os professores da turma também recebem um aviso no sino quando isso acontece — a evasão na
+          EBD é o primeiro sinal de afastamento. O número de domingos fica no catálogo de Prazos
+          (EBD_AUSENCIA_DOMINGOS, padrão 3).</p>
+        <div class="barra-lista">
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarAusentesEbdAcao()">⚠️ Ver alunos ausentes (turma acima)</button>
+        </div>
+        <div id="painelAusentesEbd"></div>
+
+        <div class="ebd-so-gestao">
+        <h4>📝 Planos de aula (Superintendente)</h4>
+        <p class="subtitle" style="margin:4px 0;">O plano é por domingo, com alcance: <strong>campo inteiro</strong> (todas
+          as congregações — exige escopo global) ou uma congregação; e todas as classes ou uma faixa etária (igual à da
+          turma). O professor só vê o plano <strong>publicado</strong>, o mais específico primeiro, ao lado da chamada.
+          Material é link (https) — revista, vídeo, slides.</p>
+        <div class="barra-lista">
+          <input type="date" id="planoFiltroInicio" style="max-width:160px;" title="De" />
+          <input type="date" id="planoFiltroFim" style="max-width:160px;" title="Até" />
+          <select id="planoFiltroCongregacao"><option value="">Todas do meu escopo</option></select>
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="carregarPlanosGestaoEbdAcao()">🔍 Ver planos</button>
+        </div>
+        <div id="painelPlanosGestaoEbd"></div>
+
+        <details id="detPlanoEbd" style="margin:8px 0;">
+          <summary id="tituloFormPlanoEbd">➕ Novo plano de aula</summary>
+          <input type="hidden" id="planoEditandoId" />
+          <div class="barra-lista">
+            <input type="date" id="planoData" style="max-width:160px;" title="Domingo" />
+            <select id="planoCongregacao"><option value="">Campo inteiro (todas as congregações)</option></select>
+            <input type="text" id="planoFaixa" placeholder="Faixa etária (vazio = todas)" style="max-width:200px;" />
+          </div>
+          <div class="barra-lista">
+            <input type="text" id="planoTitulo" placeholder="Título da lição" style="min-width:260px;" />
+            <input type="text" id="planoReferencia" placeholder="Texto áureo / leitura (opcional)" style="min-width:220px;" />
+          </div>
+          <textarea id="planoObjetivo" placeholder="Objetivo da aula (opcional)" rows="2" style="width:100%;"></textarea>
+          <textarea id="planoRoteiro" placeholder="Roteiro / plano de aula (opcional)" rows="6" style="width:100%;"></textarea>
+          <div class="barra-lista">
+            <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="salvarPlanoEbdAcao()">💾 Salvar plano</button>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:8px 0;" onclick="limparFormPlanoEbd()">Limpar</button>
+          </div>
+        </details>
+
+        <details style="margin:8px 0;">
+          <summary>🔗 Adicionar material (link) a um plano</summary>
+          <div class="barra-lista">
+            <input type="number" id="materialPlanoId" placeholder="Id do plano" style="max-width:140px;" />
+            <input type="text" id="materialTitulo" placeholder="Título (ex: Slides da lição)" style="min-width:200px;" />
+            <input type="url" id="materialUrl" placeholder="https://..." style="min-width:260px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="adicionarMaterialPlanoEbdAcao()">➕ Adicionar</button>
+          </div>
+        </details>
+        </div>
+
+        <hr />
         <h3>📖 Lições e atividades (v6.3)</h3>
         <p class="subtitle">Estende a mesma Lição da chamada (v6.2) com conteúdo pedagógico e uma Atividade de até
           5 tipos de questão (múltipla escolha, V/F, ordenar, completar, correspondência). Fechar a lição só encerra
@@ -2784,6 +2867,10 @@
             <input type="number" id="pedIdParaEditarItens" placeholder="Id do pedido (só p/ editar itens)" style="max-width:220px;" />
           </div>
           <textarea id="pedItensJson" placeholder='Itens (JSON) — ex: [{"revistaId":1,"quantidade":10},{"revistaId":2,"quantidade":5}]' rows="3" style="width:100%;"></textarea>
+          <div class="barra-lista">
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:8px 0;" onclick="sugerirPedidoRevistaEbdAcao()">💡 Calcular pela matrícula (v6.10)</button>
+          </div>
+          <div id="painelSugestaoPedidoEbd"></div>
           <div class="barra-lista">
             <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="criarPedidoRevistaEbdAcao()">💾 Criar pedido</button>
             <button class="btn-confirmar btn-secundario" style="width:auto;margin:8px 0;" onclick="atualizarItensPedidoRevistaEbdAcao()">✏️ Substituir itens (pedido já existente)</button>
@@ -4193,6 +4280,44 @@
       </div>
 
       </main>
+    </div>
+  </div>
+
+  <!-- v6.10 — CHAMADA DA EBD SEM INTERNET: tela própria, que abre mesmo sem
+       login nem rede (a sessão do painel não sobrevive ao celular fechar o app).
+       Usa só o que foi baixado neste aparelho (nome e número dos alunos); as
+       marcações ficam numa fila local e são enviadas quando houver internet e
+       sessão aberta. -->
+  <div id="telaChamadaOffline" style="display:none;">
+    <div class="caixa-login caixa-chamada-offline">
+      <h2>📴 Chamada da EBD</h2>
+      <p class="subtitle" id="offlineEstadoConexao"></p>
+      <div class="input-group">
+        <label for="offlineTurma">Turma (baixada neste aparelho):</label>
+        <select id="offlineTurma" onchange="renderChamadaOffline()"></select>
+      </div>
+      <div class="input-group">
+        <label for="offlineData">Data da aula:</label>
+        <input type="date" id="offlineData" onchange="renderChamadaOffline()" />
+      </div>
+      <div id="offlineResumo"></div>
+      <div id="offlineRoster"></div>
+      <details style="margin:8px 0;">
+        <summary>🙋 Registrar visitante</summary>
+        <div class="input-group">
+          <input type="text" id="offlineVisitanteNome" placeholder="Nome do visitante" maxlength="150" />
+          <input type="text" id="offlineVisitanteContato" placeholder="Contato (opcional)" maxlength="150" />
+          <button class="btn-confirmar" type="button" onclick="adicionarVisitanteOfflineAcao()">➕ Registrar visitante</button>
+        </div>
+      </details>
+      <details style="margin:8px 0;">
+        <summary>📘 Plano de aula</summary>
+        <div id="offlinePlano"></div>
+      </details>
+      <div id="offlineFila"></div>
+      <button class="btn-confirmar" type="button" onclick="sincronizarChamadaOfflineAcao(true)">🔄 Enviar agora</button>
+      <a href="#" class="link-secretaria" onclick="fecharTelaChamadaOffline(); return false;">← Voltar</a>
+      <a href="#" class="link-secretaria" onclick="apagarDadosOfflineEbdAcao(); return false;">🗑️ Apagar os dados da EBD deste aparelho</a>
     </div>
   </div>
 

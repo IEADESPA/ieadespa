@@ -1,10 +1,11 @@
 // service-worker.js (vB.5 — PWA instalável)
 // Cache do "app shell" (HTML/JS/CSS/ícones) pra abrir mesmo em conexão
 // ruim/offline — o CONTEÚDO (dado real) sempre vem de /api/*, isso aqui
-// nunca cacheia API: sem sincronização offline de dado, só a casca do app
-// carrega sem rede. Também recebe evento de push (shared/notificacaoPush.js
+// nunca cacheia API. A única coisa que funciona sem rede além da casca é a
+// chamada da EBD (v6.10), e ela não passa por aqui: o próprio script.js
+// guarda o pacote da turma e a fila de marcações no localStorage. Também recebe evento de push (shared/notificacaoPush.js
 // no back-end) e mostra a notificação do sistema operacional.
-const CACHE_NOME = "ieadespa-app-shell-v1";
+const CACHE_NOME = "ieadespa-app-shell-v2";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/script.js", "/style.css", "/manifest.json"];
 
 self.addEventListener("install", (evento) => {
@@ -40,7 +41,10 @@ self.addEventListener("fetch", (evento) => {
         caches.open(CACHE_NOME).then((cache) => cache.put(evento.request, copia));
         return resposta;
       })
-      .catch(() => caches.match(evento.request).then((r) => r || caches.match("/index.html")))
+      // v6.10 — só uma NAVEGAÇÃO cai no index.html quando offline; um script ou
+      // folha de estilo de fora (CDN, fontes) sem cache falha de verdade, em vez
+      // de receber HTML no lugar (que virava erro de sintaxe no console).
+      .catch(() => caches.match(evento.request).then((r) => r || (evento.request.mode === "navigate" ? caches.match("/index.html") : Response.error())))
   );
 });
 

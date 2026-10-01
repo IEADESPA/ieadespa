@@ -29,10 +29,14 @@
 // POST /api/ebd-chamada/presenca   body:{licaoId, turmaId, alunoId, status}
 // POST /api/ebd-chamada/visitante  body:{licaoId, turmaId, visitanteNome, visitanteContato?}
 // GET  /api/ebd-chamada/resumo?licaoId=&turmaId=           -> chamada completa (alunos + visitantes) + percentuais calculados
+// v6.10 — chamada offline (mesma permissão do lançamento: gestor no escopo OU professor ativo da turma):
+// GET  /api/ebd-chamada/offline/pacote?turmaId=&data=      -> alunos (id + nome), lição do dia, marcações já feitas e planos publicados
+// POST /api/ebd-chamada/sincronizar  body:{turmaId, data, registros:[{alunoId,status,marcadoEm}], visitantes:[{chaveCliente,nome,contato?,marcadoEm}]}
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const ebd = require("../shared/ebdTurmas");
 const chamada = require("../shared/ebdChamada");
+const salaAula = require("../shared/ebdSalaAula");
 
 function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
@@ -177,6 +181,33 @@ module.exports = async function (context, req) {
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
       const registros = await chamada.listarChamadaPorLicaoTurma(pool, { licaoId, turmaId });
       context.res = { status: 200, body: { sucesso: true, chamada: registros, resumo: chamada.resumirChamada(registros) } };
+      return;
+    }
+
+    // ---- v6.10: chamada offline ----
+    if (acao === "offline/pacote" && metodo === "GET") {
+      const turmaId = Number(req.query && req.query.turmaId);
+      const data = (req.query && req.query.data) || salaAula.hojeBrasilia();
+      if (!turmaId) return erro(context, 400, "Informe turmaId.");
+      if (!salaAula.dataIsoValida(data)) return erro(context, 400, "Data inválida — use AAAA-MM-DD.");
+      const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const turma = await salaAula.buscarTurmaComCongregacao(pool, turmaId);
+      if (!turma || !turma.ativa) return erro(context, 422, "Turma inativa.");
+      context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { sucesso: true, pacote: await salaAula.montarPacoteOffline(pool, { turma, data }) } };
+      return;
+    }
+
+    if (acao === "sincronizar" && metodo === "POST") {
+      const lote = salaAula.validarLoteOffline(req.body || {});
+      if (!lote.valido) return erro(context, 422, lote.mensagem);
+      const { ok } = await podeLancarChamadaDaTurma(pool, usuario, lote.turmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const turma = await salaAula.buscarTurmaComCongregacao(pool, lote.turmaId);
+      if (!turma || !turma.ativa) return erro(context, 422, "Turma inativa.");
+      const resultado = await salaAula.sincronizarChamadaOffline(pool, { lote, turma, membroId: usuario.membroId });
+      // 409 = lição fechada: o aparelho mantém a fila e tenta de novo depois.
+      context.res = { status: resultado.sucesso ? 200 : 409, body: resultado };
       return;
     }
 

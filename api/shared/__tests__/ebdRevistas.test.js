@@ -168,3 +168,59 @@ describe("consolidarPedidosPorAreaCongregacao", () => {
     expect(revistas.consolidarPedidosPorAreaCongregacao([])).toEqual([]);
   });
 });
+
+// v6.10 — pedido calculado a partir da matrícula real.
+describe("sugerirItensPedido (v6.10)", () => {
+  const catalogo = [
+    { revistaId: 1, nome: "Lições Bíblicas — Jovens (Aluno)", faixaEtaria: "Jovens", ativa: true },
+    { revistaId: 2, nome: "Lições Bíblicas — Jovens (Mestre)", faixaEtaria: "jovens", ativa: true },
+    { revistaId: 3, nome: "Lições Bíblicas — Adultos", faixaEtaria: "Adultos", ativa: true },
+    { revistaId: 4, nome: "Revista antiga Jovens", faixaEtaria: "Jovens", ativa: false }
+  ];
+
+  test("ehEdicaoDoProfessor pelo nome (sem acento/maiúscula)", () => {
+    expect(revistas.ehEdicaoDoProfessor("Lições Bíblicas — MESTRE")).toBe(true);
+    expect(revistas.ehEdicaoDoProfessor("Revista da Professora")).toBe(true);
+    expect(revistas.ehEdicaoDoProfessor("Lições Bíblicas — Aluno")).toBe(false);
+    expect(revistas.ehEdicaoDoProfessor("Maestria")).toBe(false);
+  });
+
+  test("edição do aluno = alunos ativos; edição do mestre = professores ativos", () => {
+    const r = revistas.sugerirItensPedido({ matriculados: 18, professores: 2, faixaEtaria: "Jovens", catalogoDoTrimestre: catalogo });
+    expect(r.itens).toEqual([{ revistaId: 1, quantidade: 18 }, { revistaId: 2, quantidade: 2 }]);
+    expect(r.avisos).toEqual([]);
+  });
+
+  test("sem edição do professor no catálogo, o professor entra na conta do aluno", () => {
+    const r = revistas.sugerirItensPedido({ matriculados: 10, professores: 1, faixaEtaria: "adultos", catalogoDoTrimestre: catalogo });
+    expect(r.itens).toEqual([{ revistaId: 3, quantidade: 11 }]);
+  });
+
+  test("revista inativa não entra; turma sem faixa ou sem revista da faixa não sugere nada", () => {
+    expect(revistas.sugerirItensPedido({ matriculados: 5, professores: 1, faixaEtaria: null, catalogoDoTrimestre: catalogo }).itens).toEqual([]);
+    const r = revistas.sugerirItensPedido({ matriculados: 5, professores: 1, faixaEtaria: "Crianças", catalogoDoTrimestre: catalogo });
+    expect(r.itens).toEqual([]);
+    expect(r.avisos[0]).toMatch(/Nenhuma revista/);
+  });
+
+  test("turma sem aluno ativo avisa e não pede revista do aluno", () => {
+    const r = revistas.sugerirItensPedido({ matriculados: 0, professores: 1, faixaEtaria: "Jovens", catalogoDoTrimestre: catalogo });
+    expect(r.itens).toEqual([{ revistaId: 2, quantidade: 1 }]);
+    expect(r.avisos.some(a => /não tem aluno ativo/.test(a))).toBe(true);
+  });
+
+  test("mais de uma edição do aluno: usa a primeira em ordem alfabética e avisa", () => {
+    const r = revistas.sugerirItensPedido({
+      matriculados: 4, professores: 0, faixaEtaria: "Jovens",
+      catalogoDoTrimestre: [...catalogo, { revistaId: 5, nome: "A Revista Jovem", faixaEtaria: "Jovens", ativa: true }]
+    });
+    expect(r.itens[0]).toEqual({ revistaId: 5, quantidade: 4 });
+    expect(r.avisos[0]).toMatch(/2 edições do aluno/);
+  });
+
+  test("compararPedidoComMatricula", () => {
+    expect(revistas.compararPedidoComMatricula({ totalRevistas: 20, matriculadosNoPedido: 18, professoresNoPedido: 2 })).toEqual({ esperado: 20, totalRevistas: 20, diferenca: 0 });
+    expect(revistas.compararPedidoComMatricula({ totalRevistas: 30, matriculadosNoPedido: 18, professoresNoPedido: 2 }).diferenca).toBe(10);
+    expect(revistas.compararPedidoComMatricula({ totalRevistas: 30, matriculadosNoPedido: null })).toBeNull();
+  });
+});

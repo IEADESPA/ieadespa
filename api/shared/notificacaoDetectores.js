@@ -10,6 +10,7 @@
 // entrada aqui. O motor em si (AvaliarNotificacoes) não muda.
 const { sql } = require("./db");
 const trilhas = require("./trilhas");
+const ebdSalaAula = require("./ebdSalaAula");
 
 // Seguros (v4.16) — mesma janela de 30 dias e mesmo critério de "vencida"
 // que GET /api/seguros/alertas já usa.
@@ -102,12 +103,41 @@ async function detectarFormacaoVencendo(pool) {
     }));
 }
 
+// EBD (v6.10) — aluno sem presença há N domingos seguidos (N = Prazos
+// EBD_AUSENCIA_DOMINGOS, padrão 3), pelo mesmo cálculo da tela "Alunos
+// ausentes" (shared/ebdSalaAula.js). Vai DIRETO para os professores ativos da
+// turma (cada fato traz `destinatarios`) — turma sem professor não gera aviso,
+// só aparece na tela. A chave é a sequência de faltas (EbdAlertasAusencia):
+// a mesma sequência avisa uma vez; se o aluno voltar e sumir de novo, avisa
+// de novo.
+async function detectarAlunoAusenteEbd(pool) {
+  const minimo = await ebdSalaAula.lerMinimoDomingosAusencia(pool);
+  const porTurma = await ebdSalaAula.calcularAusenciasPorTurma(pool, { minimo });
+  if (porTurma.length === 0) return [];
+  const professores = await ebdSalaAula.listarProfessoresAtivosPorTurma(pool);
+  const fatos = [];
+  for (const turma of porTurma) {
+    const destinatarios = professores.get(turma.turmaId) || [];
+    if (destinatarios.length === 0) continue;
+    for (const sequencia of turma.sequencias) {
+      const alertaId = await ebdSalaAula.registrarSequenciaAusencia(pool, { turmaId: turma.turmaId, sequencia });
+      fatos.push({
+        referenciaId: alertaId,
+        destinatarios,
+        fatoGerador: ebdSalaAula.textoAlertaAusencia({ ...sequencia, turmaNome: turma.turmaNome, congregacaoNome: turma.congregacaoNome })
+      });
+    }
+  }
+  return fatos;
+}
+
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
   PRESTACAO_CONTAS_ATRASADA: { tabela: "PrestacoesContas", detectar: detectarPrestacaoContasAtrasada },
   REPASSE_MALOTE_PARADO: { tabela: "RepassesInstitucionais", detectar: detectarRepasseMaloteParado },
   ESCALA_CONFIRMACAO_PENDENTE: { tabela: "EscalasAlocacoes", detectar: detectarConfirmacaoEscalaPendente },
-  FORMACAO_VENCENDO: { tabela: "TrilhaMatriculas", detectar: detectarFormacaoVencendo }
+  FORMACAO_VENCENDO: { tabela: "TrilhaMatriculas", detectar: detectarFormacaoVencendo },
+  EBD_ALUNO_AUSENTE: { tabela: "EbdAlertasAusencia", detectar: detectarAlunoAusenteEbd }
 };
 
 module.exports = { DETECTORES };

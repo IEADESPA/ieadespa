@@ -153,7 +153,8 @@ function consolidarPedidosPorAreaCongregacao(pedidos) {
     cong.valorTotal += Number(p.valorTotal) || 0;
     cong.pedidos.push({
       pedidoId: p.pedidoId, turmaId: p.turmaId, turmaNome: p.turmaNome, trimestre: p.trimestre,
-      status: p.status, statusPagamento: p.statusPagamento, valorTotal: Number(p.valorTotal) || 0
+      status: p.status, statusPagamento: p.statusPagamento, valorTotal: Number(p.valorTotal) || 0,
+      totalRevistas: p.totalRevistas != null ? p.totalRevistas : null, comparacaoMatricula: p.comparacaoMatricula || null
     });
   }
 
@@ -161,6 +162,70 @@ function consolidarPedidosPorAreaCongregacao(pedidos) {
     ...area,
     congregacoes: Array.from(area.congregacoes.values()).sort((a, b) => a.congregacaoNome.localeCompare(b.congregacaoNome))
   })).sort((a, b) => a.areaNome.localeCompare(b.areaNome));
+}
+
+// ---- v6.10: pedido calculado a partir da matrícula real ----
+
+function normalizarTextoRevista(valor) {
+  return String(valor == null ? "" : valor).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+// A CPAD vende edição do aluno e edição do professor ("Mestre"). O catálogo
+// não tem coluna para isso — o nome decide: "mestre" ou "professor(a)" no
+// nome é edição do professor.
+function ehEdicaoDoProfessor(nomeRevista) {
+  return /\b(mestre|professor|professora)\b/.test(normalizarTextoRevista(nomeRevista));
+}
+
+// Sugestão do pedido de uma turma (item 4 da v6.10): parte da matrícula real
+// — alunos ATIVOS e professores ATIVOS da turma — e das revistas do catálogo
+// do trimestre com a MESMA faixa etária da turma (mesma regra da "revista
+// vigente" da v6.8). Edição do aluno = nº de alunos; edição do professor =
+// nº de professores; sem edição do professor no catálogo, o professor entra
+// na conta da edição do aluno. É sugestão: o pedido continua editável.
+function sugerirItensPedido({ matriculados = 0, professores = 0, faixaEtaria = null, catalogoDoTrimestre = [] } = {}) {
+  const alvo = normalizarTextoRevista(faixaEtaria);
+  const avisos = [];
+  if (!alvo) {
+    return { itens: [], detalhes: [], avisos: ["A turma não tem faixa etária cadastrada — não dá para achar a revista certa no catálogo; monte o pedido à mão."] };
+  }
+  const daFaixa = catalogoDoTrimestre
+    .filter(r => r.ativa !== false && normalizarTextoRevista(r.faixaEtaria) === alvo)
+    .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+  if (daFaixa.length === 0) {
+    return { itens: [], detalhes: [], avisos: ["Nenhuma revista ativa do catálogo deste trimestre com a mesma faixa etária da turma — cadastre no catálogo ou monte o pedido à mão."] };
+  }
+  const doProfessor = daFaixa.filter(r => ehEdicaoDoProfessor(r.nome));
+  const doAluno = daFaixa.filter(r => !ehEdicaoDoProfessor(r.nome));
+  if (doAluno.length > 1) avisos.push(`Há ${doAluno.length} edições do aluno para esta faixa etária — a sugestão usa "${doAluno[0].nome}"; confira.`);
+  if (doProfessor.length > 1) avisos.push(`Há ${doProfessor.length} edições do professor para esta faixa etária — a sugestão usa "${doProfessor[0].nome}"; confira.`);
+
+  const detalhes = [];
+  if (doAluno.length) {
+    const somaProfessor = doProfessor.length === 0;
+    detalhes.push({
+      revistaId: doAluno[0].revistaId, nome: doAluno[0].nome,
+      quantidade: matriculados + (somaProfessor ? professores : 0),
+      base: somaProfessor ? `${matriculados} aluno(s) ativo(s) + ${professores} professor(es)` : `${matriculados} aluno(s) ativo(s)`
+    });
+  } else {
+    avisos.push("O catálogo só tem edição do professor para esta faixa etária — inclua a do aluno à mão, se houver.");
+  }
+  if (doProfessor.length) {
+    detalhes.push({ revistaId: doProfessor[0].revistaId, nome: doProfessor[0].nome, quantidade: professores, base: `${professores} professor(es) ativo(s)` });
+  }
+  if (matriculados === 0) avisos.push("A turma não tem aluno ativo — confira a matrícula antes de pedir.");
+  const comQuantidade = detalhes.filter(d => d.quantidade > 0);
+  return { itens: comQuantidade.map(d => ({ revistaId: d.revistaId, quantidade: d.quantidade })), detalhes: comQuantidade, avisos };
+}
+
+// Pedido x matrícula da foto do pedido: quantas revistas a mais/a menos do
+// que alunos + professores daquele momento (null quando o pedido é anterior
+// à v6.10 e não tem foto).
+function compararPedidoComMatricula({ totalRevistas, matriculadosNoPedido, professoresNoPedido }) {
+  if (matriculadosNoPedido == null) return null;
+  const esperado = matriculadosNoPedido + (professoresNoPedido || 0);
+  return { esperado, totalRevistas, diferenca: totalRevistas - esperado };
 }
 
 function mapearRevista(row) {
@@ -178,7 +243,9 @@ function mapearPedido(row) {
     status: row.Status, statusPagamento: row.StatusPagamento,
     solicitadoPorMembroId: row.SolicitadoPorMembroId, criadoEm: row.CriadoEm,
     aprovadoPorMembroId: row.AprovadoPorMembroId, aprovadoEm: row.AprovadoEm,
-    pagamentoRegistradoPorMembroId: row.PagamentoRegistradoPorMembroId, pagamentoRegistradoEm: row.PagamentoRegistradoEm
+    pagamentoRegistradoPorMembroId: row.PagamentoRegistradoPorMembroId, pagamentoRegistradoEm: row.PagamentoRegistradoEm,
+    matriculadosNoPedido: row.MatriculadosNoPedido == null ? null : row.MatriculadosNoPedido,
+    professoresNoPedido: row.ProfessoresNoPedido == null ? null : row.ProfessoresNoPedido
   };
 }
 
@@ -335,13 +402,18 @@ async function criarPedido(pool, { turmaId, trimestre, itens, solicitadoPorMembr
   const revistasOk = await resolverRevistasDosItens(pool, itens);
   if (!revistasOk.sucesso) return revistasOk;
 
+  // v6.10 — foto da matrícula no momento do pedido (calculada aqui, nunca
+  // vinda do cliente), para o consolidado comparar pedido x matrícula real.
+  const contagem = await contarMatriculaDaTurma(pool, turmaId);
+
   const result = await pool.request()
     .input("turmaId", sql.Int, turmaId).input("trimestre", sql.NVarChar(10), String(trimestre).trim())
     .input("solicitadoPor", sql.Int, solicitadoPorMembroId || null)
+    .input("matriculados", sql.Int, contagem.matriculados).input("professores", sql.Int, contagem.professores)
     .query(`
-      INSERT INTO EbdPedidosRevistas (TurmaId, Trimestre, SolicitadoPorMembroId)
+      INSERT INTO EbdPedidosRevistas (TurmaId, Trimestre, SolicitadoPorMembroId, MatriculadosNoPedido, ProfessoresNoPedido)
       OUTPUT INSERTED.PedidoId
-      VALUES (@turmaId, @trimestre, @solicitadoPor)
+      VALUES (@turmaId, @trimestre, @solicitadoPor, @matriculados, @professores)
     `);
   const pedidoId = result.recordset[0].PedidoId;
 
@@ -422,8 +494,34 @@ async function listarPedidosPorTurma(pool, turmaId) {
     pedido.itens = await listarItensPedido(pool, pedido.pedidoId);
     pedido.totalItens = pedido.itens.length;
     pedido.valorTotal = calcularValorTotalPedido(pedido.itens);
+    pedido.comparacaoMatricula = compararPedidoComMatricula({
+      totalRevistas: pedido.itens.reduce((s, i) => s + i.quantidade, 0),
+      matriculadosNoPedido: pedido.matriculadosNoPedido, professoresNoPedido: pedido.professoresNoPedido
+    });
   }
   return pedidos;
+}
+
+// ---- v6.10: matrícula real e sugestão ----
+
+async function contarMatriculaDaTurma(pool, turmaId) {
+  const r = await pool.request().input("turmaId", sql.Int, turmaId).query(`
+    SELECT (SELECT COUNT(*) FROM EbdAlunos WHERE TurmaId = @turmaId AND Ativo = 1) AS Matriculados,
+           (SELECT COUNT(*) FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND Ativo = 1) AS Professores
+  `);
+  return { matriculados: r.recordset[0].Matriculados, professores: r.recordset[0].Professores };
+}
+
+async function sugerirPedidoDaTurma(pool, { turma, trimestre }) {
+  if (!trimestreValido(trimestre)) return { sucesso: false, mensagem: "Informe o trimestre no formato AAAA-T1 a AAAA-T4 (ex: 2026-T1)." };
+  const contagem = await contarMatriculaDaTurma(pool, turma.turmaId);
+  const catalogoDoTrimestre = await listarCatalogo(pool, { trimestre, apenasAtivas: true });
+  const sugestao = sugerirItensPedido({ ...contagem, faixaEtaria: turma.faixaEtaria, catalogoDoTrimestre });
+  const pedidoExistente = await buscarPedidoPorTurmaTrimestre(pool, turma.turmaId, trimestre);
+  return {
+    sucesso: true, turmaId: turma.turmaId, trimestre, faixaEtaria: turma.faixaEtaria || null, ...contagem, ...sugestao,
+    pedidoExistenteId: pedidoExistente ? pedidoExistente.pedidoId : null
+  };
 }
 
 // Visão consolidada (item 2 do v6.6) — todos os pedidos de um Trimestre,
@@ -453,6 +551,8 @@ async function listarPedidosParaConsolidado(pool, { trimestre, nomesCongregacoes
   const result = await request.query(`
     SELECT p.PedidoId, p.TurmaId, t.Nome AS TurmaNome, p.Trimestre, p.Status, p.StatusPagamento,
            c.CongregacaoId, c.Nome AS CongregacaoNome, a.AreaId, a.Nome AS AreaNome,
+           p.MatriculadosNoPedido, p.ProfessoresNoPedido,
+           ISNULL((SELECT SUM(i.Quantidade) FROM EbdPedidosRevistasItens i WHERE i.PedidoId = p.PedidoId), 0) AS TotalRevistas,
            ISNULL((SELECT SUM(i.Quantidade * i.PrecoUnitarioRegistrado) FROM EbdPedidosRevistasItens i WHERE i.PedidoId = p.PedidoId), 0) AS ValorTotal
     FROM EbdPedidosRevistas p
     JOIN EbdTurmas t ON t.TurmaId = p.TurmaId
@@ -466,7 +566,11 @@ async function listarPedidosParaConsolidado(pool, { trimestre, nomesCongregacoes
     pedidoId: row.PedidoId, turmaId: row.TurmaId, turmaNome: row.TurmaNome, trimestre: row.Trimestre,
     status: row.Status, statusPagamento: row.StatusPagamento,
     congregacaoId: row.CongregacaoId, congregacaoNome: row.CongregacaoNome,
-    areaId: row.AreaId, areaNome: row.AreaNome, valorTotal: Number(row.ValorTotal)
+    areaId: row.AreaId, areaNome: row.AreaNome, valorTotal: Number(row.ValorTotal),
+    totalRevistas: row.TotalRevistas,
+    comparacaoMatricula: compararPedidoComMatricula({
+      totalRevistas: row.TotalRevistas, matriculadosNoPedido: row.MatriculadosNoPedido, professoresNoPedido: row.ProfessoresNoPedido
+    })
   }));
 }
 
@@ -475,10 +579,12 @@ module.exports = {
   // Lógica pura
   trimestreValido, validarNovaRevista, validarItensPedido, calcularValorTotalPedido,
   podeAprovarPedido, podeRegistrarPagamento, podeEditarItensPedido, consolidarPedidosPorAreaCongregacao,
+  ehEdicaoDoProfessor, sugerirItensPedido, compararPedidoComMatricula,
   mapearRevista, mapearPedido,
   // Banco — catálogo
   criarRevista, buscarRevistaPorId, listarCatalogo,
   // Banco — pedido
   criarPedido, atualizarItensPedido, buscarPedidoPorId, buscarPedidoPorTurmaTrimestre, listarItensPedido,
-  listarPedidosPorTurma, aprovarPedido, registrarPagamentoPedido, listarPedidosParaConsolidado
+  listarPedidosPorTurma, aprovarPedido, registrarPagamentoPedido, listarPedidosParaConsolidado,
+  contarMatriculaDaTurma, sugerirPedidoDaTurma
 };

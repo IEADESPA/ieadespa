@@ -7914,6 +7914,19 @@ estava, a versão cobria talvez um quinto do que a norma manda.
   sincronizador foram rodados com dublês. **Não foi feita** validação visual
   com dados reais em produção, só depois do deploy.
 
+  **Em produção (verificado em 01/10/2026).** O deploy do sistema passou com os
+  testes e a migração 114 aplicada no Azure (a grade litúrgica semeada já sai em
+  `/api/agenda-publica/liturgia`). As 9 rotas `GET /api/calendario/*` testadas
+  respondem `401` sem sessão; `/api/agenda-publica/versao` responde `200` (e `POST`
+  nela, `404`). O primeiro deploy do site rodou **antes** da API existir e
+  publicou `agenda-versao.json` como `indisponivel`, como previsto; o segundo, já
+  com a API no ar, publicou a mesma versão do sistema, e uma execução manual do
+  sincronizador terminou sem reconstruir nada. No mesmo push uma execução
+  duplicada do deploy do site falhou numa corrida de upload ao mesmo ambiente do
+  Azure; a outra publicou normalmente. **Nenhum evento está homologado em
+  produção ainda**, então `eventos` público vem vazio até a Secretaria abrir 2027,
+  gerar o ciclo, consolidar e a CLI homologar.
+
   **Decisões que o Regimento não fecha (a CLI pode reverter, cada uma é uma
   linha).**
   - **Ceia Geral = último domingo de maio e de outubro.** O Art. 81 diz "maio e

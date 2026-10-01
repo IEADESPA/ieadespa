@@ -639,3 +639,46 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
   .cal-mes-titulo { min-width: 0; flex: 1 1 100%; order: -1; }
   .cal-pilula { padding: 7px 12px; font-size: 0.82rem; }
 }
+
+/* v7.3 — Canais Oficiais e Comunicação. Prefixo .cnl-; reaproveita pílulas, formulários, selos (.cal-selo/.cal-st-*) e
+   cartões do Calendário. Só variáveis do tema. */
+.cnl-contadores { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 14px; }
+.cnl-contador { background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.cnl-contador-valor { font-size: 1.6rem; font-weight: 700; color: var(--cor-primaria); line-height: 1.1; }
+.cnl-contador-rotulo { font-size: 0.74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--cor-texto-suave); }
+.cnl-contador-ok { border-color: var(--cor-sucesso); background: var(--cor-sucesso-suave); }
+.cnl-contador-ok .cnl-contador-valor { color: var(--cor-sucesso); }
+.cnl-contador-alerta { border-color: var(--cor-secundaria); background: var(--cor-secundaria-suave); }
+.cnl-contador-alerta .cnl-contador-valor { color: #7A6110; }
+.cnl-contador-erro { border-color: var(--cor-erro); background: var(--cor-erro-suave); }
+.cnl-contador-erro .cnl-contador-valor { color: var(--cor-erro); }
+
+/* contagem regressiva da Regra das 24 Horas e fase da ocorrência */
+.cnl-contagem { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.82rem; font-weight: 700; }
+.cnl-fase-prazo { background: var(--cor-sucesso-suave); color: var(--cor-sucesso); }
+.cnl-fase-urgente { background: var(--cor-secundaria-suave); color: #7A6110; border: 1px solid var(--cor-secundaria); }
+.cnl-fase-vencida { background: var(--cor-erro); color: #fff; }
+.cnl-fase-ok { background: var(--cor-sucesso-suave); color: var(--cor-sucesso); }
+.cnl-fase-fora { background: var(--cor-secundaria-suave); color: #7A6110; }
+.cnl-fase-neutra { background: var(--cor-fundo); color: var(--cor-texto-suave); border: 1px solid var(--cor-borda); }
+.cnl-oc { border-left: 6px solid var(--cor-borda); }
+.cnl-oc-topo { margin-bottom: 6px; }
+.cnl-oc-vencida { border-left-color: var(--cor-erro); background: var(--cor-erro-suave); }
+.cnl-oc-urgente { border-left-color: var(--cor-secundaria); }
+.cnl-oc-no_prazo { border-left-color: var(--cor-sucesso); }
+.cnl-oc-removida_no_prazo { border-left-color: var(--cor-sucesso); }
+.cnl-oc-removida_fora_do_prazo { border-left-color: var(--cor-secundaria); }
+.cnl-linha-oc { margin: 4px 0; font-size: 0.9rem; }
+
+.cnl-aviso-senha { background: var(--cor-erro-suave); color: var(--cor-erro); border: 2px solid var(--cor-erro); border-radius: var(--raio-pequeno); padding: 10px 14px; margin: 8px 0; font-size: 0.92rem; }
+.cnl-aviso-vencida { background: var(--cor-erro); color: #fff; border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 8px 0; }
+.cnl-incompleto { background: var(--cor-secundaria-suave); color: #7A6110; border-left: 4px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); padding: 10px 14px; margin: 8px 0; font-size: 0.9rem; }
+.cnl-modelo { background: var(--cor-fundo); border: 1px dashed var(--cor-borda); border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 8px 0; font-size: 0.88rem; }
+.cnl-modelo p { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cnl-termo { margin: 8px 0; padding-left: 22px; font-size: 0.9rem; line-height: 1.5; }
+.cnl-termo li { margin-bottom: 6px; }
+.cnl-passos { margin: 6px 0; padding-left: 22px; font-size: 0.9rem; line-height: 1.5; }
+.cnl-item-conf { border-top: 1px dashed var(--cor-borda); padding: 6px 0; font-size: 0.9rem; }
+.cal-form-inline input[type="datetime-local"] { margin: 4px 0 8px; padding: 8px 10px; border: 2px solid var(--cor-borda); border-radius: var(--raio-pequeno); font-size: 16px; font-family: inherit; color: var(--cor-texto); max-width: 100%; }
+.cnl-declaracao { align-items: flex-start; line-height: 1.4; margin-top: 8px; }
+.cnl-declaracao input { margin-top: 3px; }

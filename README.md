@@ -589,8 +589,10 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
       (`RadarAbandono`) + procedimento sumário de constatação: notificação (registro
       datado, sem e-mail/SMS) → 15 dias de prazo de defesa → homologação pela CLI
       (`AbrirProcedimentoAbandono`/`EvoluirProcedimentoAbandono`).
-- [x] Abandono Eclesiástico Digital (Art. 11, V e Art. 12) — catálogo de Canais Oficiais
-      de Comunicação (`canaisOficiais`, vedado canal pessoal de dirigente/obreiro) +
+- [x] Abandono Eclesiástico Digital (Art. 11, V e Art. 12) — relação de Canais Oficiais
+      de Comunicação (migração 020; desde a **v7.3** é o registro de canais de
+      `/api/canais`, que **valida** a vedação de canal pessoal de dirigente/obreiro em vez de
+      deixá-la ao julgamento de quem cadastra) +
       registro de Tentativas de Contato (`TentativasContatoAbandono`, Art. 12 §2º: pelo
       menos 2 tentativas por canais distintos, sob pena de nulidade) + Radar próprio
       (`RadarAbandonoDigital`). Os 90 dias contam da 1ª tentativa registrada. Reaproveita
@@ -7944,29 +7946,292 @@ estava, a versão cobria talvez um quinto do que a norma manda.
 
 #### v7.3 — Canais oficiais e comunicação
 
-- [ ] Registro de Canais Oficiais de Comunicação (Art. 12 Estatuto).
-- [ ] Grupos oficiais + grupos focados (política, bazar, teologia, geracional).
-- [ ] Blindagem digital: vedação de política no púlpito (Lei 9.504/97).
+- [x] Registro de Canais Oficiais de Comunicação (Art. 12 Estatuto).
+- [x] Grupos oficiais + grupos focados (política, bazar, teologia, geracional).
+- [x] Blindagem digital (Regimento Art. 157, §5º; Lei 9.504/97) — a parte **digital**; ver a
+      nota sobre o púlpito abaixo.
 
 **Expandido pela varredura normativa (7ª rodada).** O Art. 160 transforma
 administração de canal em **responsabilidade jurídica solidária** da Igreja — o
 registro do canal, sozinho, não cobre nada disso.
 
-- [ ] **Regra das 24 Horas** (Art. 160 §1º, I-II): conteúdo irregular não removido
+- [x] **Regra das 24 Horas** (Art. 160 §1º, I-II): conteúdo irregular não removido
       em 24h torna a Igreja **corresponsável**. O sistema registra a denúncia
       interna do conteúdo, dispara o relógio, notifica o administrador responsável
       e guarda a prova da remoção — é a diferença entre responder "removemos em
       3 horas, aqui está o registro" e não ter o que dizer.
-- [ ] **Administrador formal por canal**, com termo de dever de moderação aceito —
+- [x] **Administrador formal por canal**, com termo de dever de moderação aceito —
       hoje "quem administra o grupo" é conhecimento informal.
-- [ ] **Senhas pertencem à Secretaria Geral** (Art. 160 §4º, I): troca obrigatória
+- [x] **Senhas pertencem à Secretaria Geral** (Art. 160 §4º, I): troca obrigatória
       e registrada na sucessão de liderança. Quando um Dirigente é substituído
       (fluxo que já existe em `Assentos`/`Lideranca`), o sistema gera a pendência
       de troca de senha dos canais daquela congregação.
-- [ ] Mapeamento de **"Área Cega"** (§2º, II) — congregação sem canal oficial
-      registrado, que é justamente onde a comunicação institucional não chega.
-- [ ] Grupos satélites (Art. 160-A) e proteção de menores em canais (§5º) —
-      conecta com a v7.7 (vedação de mensagem privada de adulto para menor).
+- [x] Mapeamento de **canais por congregação** (quem não tem canal próprio) e da
+      **"Área Cega"** (§2º, II) **como o Regimento a define**: a zona do templo sem
+      filmagem. *(O texto anterior desta linha dizia "Área Cega = congregação sem
+      canal registrado"; o Art. 160 §2º, II diz outra coisa, e a v7.3 implementa o
+      que a norma diz. A lacuna de canal por congregação ficou como indicador
+      próprio, "sem canal".)*
+- [x] Grupos satélites (Art. 160-A) e proteção de menores em canais (§5º) — o
+      registro de grupo focado, a marca "inclui crianças e adolescentes" e a categoria
+      de ocorrência de exposição de menores estão prontos; a vedação de mensagem
+      privada de adulto para menor é estrutural e continua na v7.7.
+
+  Entrega: migração 115 (`sql/migrations/115_canais_comunicacao.sql`),
+  `shared/canais.js` (a regra, **pura**), `shared/canaisDb.js` (leitura, gravação e
+  decisões), a Function nova `GestaoCanais` (`/api/canais/...`, 30 ações), a rota
+  pública `/api/agenda-publica/canais`, seis regras no motor de notificações da
+  vB.2, gancho no `GestaoLideranca`, a entrada `CANAIS` no ROPA e a política de
+  retenção da categoria.
+
+  **O registro (Estatuto Art. 12).** A relação de canais já existia como um
+  catálogo mínimo (`CanaisOficiaisComunicacao`: sigla, nome, ativo — migração 020,
+  usado nas tentativas de contato do Abandono Digital). A v7.3 **evolui essa mesma
+  tabela** (a chave `CanalId` e as tentativas já gravadas ficam intactas) e tira a
+  edição do catálogo genérico, que só exigia a permissão "pessoas" e contornaria
+  tudo abaixo. Para registrar um canal:
+  - **Conta pessoal nunca é canal oficial.** O registro exige o **vínculo
+    institucional** (CNPJ, marca ou estrutura da IEADESPA) e a **declaração
+    expressa** de que a conta ou o número não é de titularidade pessoal — gravados
+    com **quem declarou e quando**. Além da declaração, o sistema **confere**: número
+    de telefone ou e-mail que consta como contato pessoal de qualquer membro é
+    recusado (comparação ignora máscara, `+55` e o 9 extra), e a mensagem cita só a
+    matrícula. Perfil de rede social e endereço não têm contato pessoal para
+    comparar: ali vale a declaração e o julgamento da Secretaria (limite
+    declarado).
+  - **Identificador por plataforma.** Número, e-mail, `@perfil` e endereço `https://`
+    são validados e normalizados (YouTube só aceita endereço do YouTube etc.). Em
+    **grupo de WhatsApp registra-se o NOME**, nunca o link de convite (o link deixa
+    qualquer pessoa entrar e o repositório e o site são públicos). Dois canais
+    ativos não repetem o identificador na mesma plataforma (índice único).
+  - **Categorias:** canal institucional, **grupo oficial** (Art. 160 §1º) e **grupo
+    focado** (§6º e Art. 160-A) com o tema obrigatório — cidadania e política;
+    empreendedorismo, bazar e classificados; teológico e debates; geracional; outro.
+    (Os "grupos satélites" do Art. 160-A são os focados de política e de
+    classificados.) **Escopo:** campo, Área, congregação ou departamento. Quem tem
+    `canais_gestao` com escopo local só registra e mantém canal da própria
+    congregação; canal do campo, de uma Área inteira ou de departamento exige
+    escopo global.
+  - **Os três canais antigos** (WhatsApp, e-mail e Sistema) viram institucionais do
+    campo todo, **sem identificador de propósito**: aparecem como "cadastro
+    incompleto" até a Secretaria preencher e declarar a titularidade.
+  - Canal **desativado mantém o histórico** (data de vigência e motivo); não se
+    desativa canal com ocorrência aberta.
+
+  **Administrador formal e Termo de Dever de Moderação (Art. 160 §1º, I).** A
+  Secretaria designa administradores e operadores da conta; só pode ser designado
+  membro **ativo e maior de 18 anos** (quando há data de nascimento) — decisão
+  minha, porque o administrador responde solidariamente. A designação só vale de
+  fato quando a **própria pessoa** aceita o termo: nove compromissos tirados do
+  Regimento (poder de polícia, remoção em até 24 horas, vedações, termo de uso na
+  descrição, senha da Secretaria, postura da conta, proteção de crianças, LGPD). O
+  aceite grava a **versão e o hash do texto** que a pessoa viu; se o texto mudar, a
+  versão sobe e todos aceitam de novo (um teste fixa o hash para ninguém alterar o
+  texto sem subir a versão). Canal sem nenhum administrador com o termo vigente
+  aceito fica **irregular**. O voluntário entra com o código de acesso do membro
+  (sem `Lideranca`) e consegue aceitar o termo e agir nos seus canais.
+
+  **Regra das 24 Horas (Art. 160 §1º, II e §5º).** Qualquer membro logado avisa
+  conteúdo irregular (limite de 10 avisos por pessoa por hora). Tipos:
+  ofensivo/calúnia, pornográfico, fake news/corrente, **propaganda política ou
+  eleitoral**, debate político-partidário, propaganda comercial, exposição de
+  criança ou adolescente, vídeo/live de manifestação espiritual alheia, **rede
+  institucional que seguiu ou curtiu perfil político** (§5º, II) e outro. O aviso
+  grava a hora e o prazo (**+24 h**) numa só instrução, com **gatilho que impede
+  qualquer alteração** da hora, do prazo, do canal, da categoria, do autor e da
+  descrição. Os administradores do canal recebem aviso **na hora** (não esperam a
+  rodada diária); as categorias graves — pornografia, exposição de menor,
+  propaganda política e neutralidade da rede — e o canal **sem administrador** avisam
+  também a gestão. O administrador recebe a **orientação passo a passo**, com a
+  frase do Art. 160 §6º, IV ("leve este assunto para o Grupo Focado específico") e o
+  tema do grupo focado para onde mandar o membro, e registra a **advertência**
+  quando a norma a manda (propaganda política: Art. 157 §5º, I). **A prova da
+  remoção** é o que a Igreja mostra se for cobrada: texto (≥ 10 caracteres),
+  link opcional e hora da remoção (que o administrador pode informar se removeu
+  antes de registrar, nunca antes do aviso nem no futuro; o sistema guarda
+  também a hora do registro). O resultado diz se foi **dentro ou fora do prazo** e
+  em quantas horas. Passadas as 24 horas sem remoção, a ocorrência fica **VENCIDA**
+  ("a Igreja está corresponsável"), o canal fica irregular e a rodada diária avisa
+  administradores e gestão. **Quem avisou não é revelado ao administrador** (evita
+  retaliação); a gestão e a própria pessoa veem. Só a gestão declara uma ocorrência
+  **improcedente**, com motivo — para o administrador não encerrar o relógio por
+  conta própria.
+
+  **Senhas e acessos (Art. 160 §4º, I).** O sistema **nunca guarda senha**: guarda se
+  a custódia é da Secretaria Geral, a data da última troca e as pendências. Uma
+  **pendência de troca** nasce quando (a) quem estava na liderança sai, (b) um
+  administrador ou operador é encerrado, (c) a Secretaria registra suspeita de
+  invasão ou troca de rotina. O prazo é de **2 dias** (parâmetro
+  `CANAIS_TROCA_CREDENCIAL_DIAS`); a ação pedida depende do canal (trocar a senha e
+  desconectar dispositivos; ou, em grupo, rever os administradores e retirar quem
+  saiu). Resolver uma troca encerra de uma vez todas as abertas do mesmo canal e
+  registra a data; o campo de observação avisa para **nunca escrever a senha**. A
+  **sucessão** é detectada comparando quem lidera cada congregação (Dirigente de
+  Congregação), Área (Pastor de Área) e departamento (Líder Geral) com o último
+  estado conhecido, por isso **pega a troca por qualquer caminho** — concessão ou
+  remoção pelo `GestaoLideranca`, fim de mandato, medida cautelar, ajuste direto
+  no banco. Só a **saída** de alguém abre a pendência (quem entra não tira o
+  acesso de ninguém), nos canais daquele escopo **e** nos canais em que a pessoa
+  era administradora. A verificação roda a cada concessão ou remoção de liderança pelo
+  `GestaoLideranca`, a cada leitura do painel (cobertura e trocas) e na rodada diária. **Limite:** a primeira execução só registra o estado
+  atual; saídas anteriores a ela não geram pendência retroativa.
+
+  **Conferência de conformidade.** Cada canal tem seus itens: termo de uso na
+  descrição (grupo oficial), Aviso de Atenção (grupo focado), neutralidade política
+  e postura do operador (redes sociais — não seguir nem curtir candidatos, não
+  discutir nos comentários, não postar selfie: Art. 157 §5º, II e Art. 160 §4º, II),
+  custódia da senha e proteção de crianças (quando o canal as inclui). Todos os
+  itens aplicáveis precisam ser respondidos; um "não" torna a conferência
+  **irregular** (com observação obrigatória) e o canal fica marcado até uma
+  conferência conforme. O prazo entre conferências é de **180 dias** (parâmetro
+  `CANAIS_CONFERENCIA_DIAS`). A situação do canal resume tudo: **regular**,
+  **atenção** ou **irregular**, com a lista de pendências (sem administrador, termo
+  pendente, sem custódia, troca vencida, ocorrência vencida, conferência vencida ou
+  irregular, cadastro incompleto).
+
+  **Transmissão dos cultos e Área Cega (Art. 160 §2º).** Por congregação: se
+  transmite; a data em que a **placa de aviso** ("Este local está sendo filmado e
+  transmitido ao vivo") foi instalada nos acessos — o consentimento tácito do
+  frequentador depende dela (§2º, I); e a **Área Cega** (últimas fileiras ou galeria
+  lateral, sem filmagem), definida com descrição ou justificada ("a estrutura
+  física não permite", como o próprio Regimento prevê). Quem transmite sem placa ou
+  sem Área Cega fica **pendente**; quem não transmite, "não se aplica". O painel de
+  cobertura mostra também as congregações **sem nenhum canal próprio**.
+
+  **Abandono Digital (Estatuto Art. 11, V e Art. 12 §2º).** O registro de tentativa
+  de contato passou a aceitar **só contato individual por canal institucional ativo**
+  (e-mail, telefone ou WhatsApp institucional, o próprio sistema). Grupo, grupo focado
+  e rede social **não contam** como tentativa de contato — antes qualquer linha do
+  catálogo servia. O canal legado sem plataforma continua valendo, para não
+  quebrar o que existe; desativar um canal não apaga as tentativas já registradas.
+
+  **O que vai para o site.** O membro precisa poder conferir o que é oficial — e a
+  caracterização do Abandono Digital depende de os canais serem conhecidos. A rota
+  pública `/api/agenda-publica/canais` (e o campo `canais` de `/tudo`) devolve **só
+  canal ativo, completo e marcado como público**; grupo focado **nunca** vai, e o
+  pacote não carrega administrador, senha, custódia, ocorrência, declaração nem
+  conferência (o roteiro ponta a ponta confere a lista de chaves). A `versao` do
+  site passou a cobrir os canais, então publicar ou despublicar um canal faz o
+  sincronizador reconstruir o site.
+
+  **A tela (módulo "📣 Canais e Comunicação").** Menu novo, só para quem tem
+  `canais_gestao`, com cinco seções:
+  - **Painel:** treze contadores (vermelho para ocorrência vencida e canal sem
+    administrador, âmbar para pendências), os canais com pendência e as
+    congregações sem canal próprio, cada uma com atalho para registrar o canal.
+  - **Canais:** tabela com filtros e o formulário guiado — o rótulo e o exemplo do
+    identificador mudam com a plataforma, o tema só aparece para grupo focado, o
+    seletor muda com o escopo, a **declaração de titularidade institucional é
+    obrigatória** e o aviso "em grupo, guarde o NOME, nunca o link de convite" fica
+    fixo. A recusa do servidor (conta pessoal, identificador repetido) aparece tal
+    qual e o formulário não é limpo. O detalhe mostra as pendências, os
+    administradores (quem aceitou o termo e quando), a conferência (Sim/Não por item)
+    e os botões de copiar o **modelo de Termo de Uso** (grupo oficial) e o **Aviso de
+    Atenção** (grupo focado). Canal legado aparece como "cadastro incompleto", com o
+    atalho "completar cadastro".
+  - **Ocorrências:** cartões com a **contagem regressiva** das 24 horas (no prazo,
+    urgente, VENCIDA em vermelho com "a Igreja está corresponsável", removida no
+    prazo ou fora dele, improcedente), que se atualiza sozinha a cada 30 segundos;
+    detalhe com a orientação passo a passo, o grupo focado sugerido, a frase pronta
+    para copiar e as ações que cabem ao usuário.
+  - **Senhas e acessos:** o aviso "nunca escreva a senha aqui" em destaque no topo e
+    em cada formulário; as pendências de troca (vencida, quem saiu, o que fazer), a
+    resolução, a pendência manual e o botão "Conferir sucessões".
+  - **Transmissão e Área Cega:** tabela por congregação e o formulário do Art. 160 §2º.
+
+  **Meu Painel → Canais** (qualquer login): em "Meus canais", o texto completo do
+  Termo de Dever de Moderação e o botão "Li e aceito" — **só depois do aceite** aparecem
+  as ocorrências abertas do canal (nunca quem avisou), com a contagem regressiva, a
+  orientação e o registro de remoção e de advertência; em "Avisar conteúdo irregular",
+  o formulário (o 429 de excesso de avisos aparece em destaque); em "Meus avisos", o
+  acompanhamento do que a pessoa avisou. **Telas que já existiam:** a edição de canais
+  saiu do menu Catálogos, e o registro de tentativa de contato do Abandono Digital
+  passou a listar só os canais que valem (com o identificador ao lado e o lembrete de
+  que grupo e rede social não contam).
+
+  **No site.** Página nova `/canais-oficiais/` (link no rodapé, em Institucional),
+  gerada no build a partir do campo `canais` do mesmo pacote público, agrupada em
+  todo o campo, por Área, por departamento e por congregação. O texto diz o que o
+  Art. 12 diz: canal oficial é o instituído e mantido em nome da IEADESPA, e contas,
+  números e perfis **pessoais** de pastores, diretores, obreiros ou dirigentes não
+  são canais oficiais — sem afirmar que a lista pública seja a lista exclusiva, porque
+  nem todo canal oficial é marcado como público. O link de cada canal só vira botão
+  se for `https://`, `mailto:` ou `tel:`; qualquer outro vira texto. Com a lista vazia
+  (é o caso hoje: nenhum canal foi marcado como público) a página fala que a
+  relação está sendo organizada e leva à página de contato; com o sistema fora do
+  ar no build, mostra um aviso discreto e o build não quebra.
+
+  **Avisos (motor da vB.2).** Seis regras: `CANAIS_OCORRENCIA_NOVA` (na hora, ao
+  administrador do canal e, nas graves, à gestão — não tem detector porque sai no
+  ato de avisar), `CANAIS_OCORRENCIA_VENCIDA`, `CANAIS_TERMO_PENDENTE` (ao próprio
+  designado, na hora da designação; a rodada diária só repete se a versão do termo
+  subir), `CANAIS_TROCA_CREDENCIAL` (à gestão,
+  na abertura e de novo quando o prazo vence), `CANAIS_SEM_ADMINISTRADOR` e
+  `CANAIS_CONFERENCIA_VENCIDA` (à gestão: o primeiro no máximo uma vez por mês e o
+  segundo uma vez por semestre, por canal).
+
+  **Permissão.** Uma só, `canais_gestao` (nunca concedida por padrão): Secretaria
+  Geral e Comunicação. Sem permissão nenhuma, qualquer login avisa conteúdo e
+  quem administra um canal aceita o termo, vê as ocorrências do próprio canal e
+  registra a remoção.
+
+  **Auditoria e integridade.** Todas as decisões são gravadas (`CANAL_REGISTRADO`,
+  `CANAL_ATUALIZADO`, `CANAL_DESATIVADO`, `CANAL_REATIVADO`, `ADMIN_DESIGNADO`,
+  `ADMIN_ENCERRADO`, `TERMO_ACEITO`, `OCORRENCIA_ABERTA`, `OCORRENCIA_REMOVIDA`,
+  `OCORRENCIA_IMPROCEDENTE`, `OCORRENCIA_ADVERTENCIA`, `TROCA_CREDENCIAL_GERADA`,
+  `TROCA_CREDENCIAL_RESOLVIDA`, `LIDERANCA_SUCESSAO_DETECTADA`, `CANAL_CONFERIDO`,
+  `TRANSMISSAO_REGISTRADA`). O banco garante o que o código promete: relógio da
+  ocorrência imutável (gatilho), plataforma, categoria, tema, vínculo e escopo
+  válidos (`CHECK`), identificador único entre canais ativos, um administrador
+  ativo por canal e pessoa, e o aceite do termo só com versão, hash e hora.
+
+  **Verificação.** 85 testes novos (regra pura e camada de banco com pool simulado);
+  a suíte da API foi de 854 para **939**. Um roteiro ponta a ponta de **211
+  verificações** rodou os handlers reais contra um SQL Server 2019 recém-criado
+  (migrações 001 a 115), incluindo a sucessão pelo `GestaoLideranca` real, o relógio
+  de 24 horas com o gatilho, o Abandono Digital pelo handler real e a rota pública.
+  Ele achou um defeito que nenhum teste unitário via: o `CHECK` do tema do grupo
+  focado deixava passar um grupo **sem** tema, porque `NULL IN (...)` é
+  "desconhecido" e um `CHECK` aceita desconhecido — corrigido na migração. Ao
+  escrever os testes apareceu também um temporizador que a v7.2 deixava solto no
+  status da sincronização com o site (o aviso "Jest did not exit"), agora limpo.
+  A tela foi exercitada em DOM simulado (8.030 verificações, com texto de ataque em
+  quase todo campo e sem nenhuma injeção de HTML), com conferência de ids e de
+  handlers e renderização no Edge sem interface; o formato real das respostas foi
+  capturado dos handlers e comparado com tudo o que a tela lê. O site foi construído
+  contra um servidor falso nos modos com canais, sem canais, resposta antiga e erro
+  500, e contra a produção.
+
+  **A blindagem digital e o púlpito.** O Art. 157 trata de duas coisas: o **púlpito**
+  (§§1º a 4º — santinhos, discurso eleitoreiro, comício disfarçado, licença do
+  obreiro candidato, sanção ao dirigente) e o **digital** (§5º — grupos oficiais e
+  redes institucionais). A v7.3 cobre o **digital**: a categoria de ocorrência
+  "propaganda política", a orientação e a advertência obrigatória, a categoria
+  "rede institucional seguiu ou curtiu perfil político" e o item de neutralidade da
+  conferência. O **púlpito** é conduta presencial: o sistema só entra com a Licença
+  de Candidatura que já existe (v2) e com o Processo Ético, e **não tem como ver o
+  que se diz do púlpito**.
+
+  **Decisões que o Regimento não fecha (a CLI pode reverter, cada uma é uma
+  linha).**
+  - **24 horas é o prazo duro**, embora o texto do §1º, II diga "no menor tempo
+    possível" (as 24 horas estão no título da regra). Constante
+    `PRAZO_REMOCAO_HORAS`.
+  - **Administrador: ativo e maior de 18 anos.** O Regimento não fixa idade.
+  - **Quem avisou fica oculto ao administrador**; o Regimento não trata disso.
+  - **Saída de administrador sempre abre troca de senha**, mesmo que a pessoa nunca
+    tenha tido a senha — melhor sobrar uma pendência do que faltar.
+  - **Grupo focado nunca vai ao site** e **link de convite nunca é guardado**.
+  - **Ocorrências e administradores: 5 anos de retenção**, sem rotina automática de
+    descarte por ora. A descrição livre da ocorrência pode revelar opinião política
+    (dado sensível, tratado como prova de diligência — ROPA, categoria `CANAIS`).
+  - **Aviso de "prazo vencido" sai na rodada diária**: o aviso do prazo no ato é
+    imediato, mas a escalada de uma ocorrência vencida pode chegar até 24 horas
+    depois; o painel mostra a situação ao vivo.
+  - **O que o sistema não faz:** não remove conteúdo do WhatsApp ou do Instagram,
+    não prova que a conta é mesmo da Igreja (confia na declaração e na conferência
+    de contato pessoal) e não impede um administrador de trocar a senha por conta
+    própria — só registra, cobra e prova.
 
 #### v7.4 — Eventos e congressos
 
@@ -8814,6 +9079,13 @@ deixou passar algo.
   `PscParametros`, `PscAvaliacoes`, `PscRespostas`, `PscReclassificacoes` — e as colunas
   `Congregacoes.Categoria` (`CONGREGACAO` | `EXTENSAO_TENDA`) e
   `Congregacoes.TutelaCongregacaoMaeId`.
+- **Calendário oficial (v7.2):** `CalendarioTiposEvento`, `CalendarioTiposCompativeis`,
+  `CalendarioAnos`, `CalendarioEventos`, `CalendarioEventoAreas`, `AgendaLiturgicaRegras`,
+  `CalendarioPresencasDirigente`.
+- **Canais e comunicação (v7.3):** `CanaisOficiaisComunicacao` (existe desde a migração 020;
+  na 115 ganhou plataforma, categoria, tema, identificador, vínculo institucional, escopo,
+  custódia da senha e vigência) e as novas `CanalAdministradores`, `CanalTrocasCredencial`,
+  `CanalLiderancaSnapshot`, `CanalOcorrencias`, `CanalConferencias`, `CongregacaoTransmissao`.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,

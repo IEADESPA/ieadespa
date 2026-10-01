@@ -118,6 +118,12 @@ const STATIC_PAGES: { title: string; excerpt: string; href: string }[] = [
   { title: "Camisetas e uniformes", excerpt: "Lotes de camiseta/uniforme abertos — peça a sua e acompanhe o pedido.", href: "/camisetas/" },
   { title: "Meus pedidos de camiseta", excerpt: "Confira o andamento do seu pedido de camiseta, só com o telefone.", href: "/meus-pedidos-camiseta/" },
   { title: "Transparência", excerpt: "Diretoria e prestação de contas.", href: "/transparencia/" },
+  {
+    title: "Canais oficiais",
+    excerpt:
+      "Contatos, perfis e grupos instituídos em nome da IEADESPA. Contas pessoais não são canais oficiais.",
+    href: "/canais-oficiais/",
+  },
   { title: "Primeira vez aqui?", excerpt: "Informações para quem vai visitar pela primeira vez.", href: "/visitante/" },
   {
     title: "Dúvidas frequentes",

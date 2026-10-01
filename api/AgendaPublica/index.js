@@ -1,15 +1,17 @@
-// AgendaPublica (v7.2) — o calendário oficial e a agenda litúrgica para o SITE.
+// AgendaPublica (v7.2; canais na v7.3) — o calendário oficial, a agenda litúrgica e os canais oficiais para o SITE.
 //
 // Sem login (anonymous): só o que já é público por natureza — eventos HOMOLOGADOS
-// marcados como públicos e a grade semanal do Art. 79. Nada de quem propôs, quem
-// decidiu, estado interno, atas ou motivos de indeferimento. O site é estático (Astro) e chama
+// marcados como públicos, a grade semanal do Art. 79 e (v7.3) os Canais Oficiais marcados como públicos
+// (Estatuto Art. 12: o membro precisa poder conferir o que é oficial). Nada de quem propôs, quem decidiu,
+// estado interno, atas, motivos de indeferimento, administradores, senhas ou ocorrências. O site é estático (Astro) e chama
 // isto em tempo de build, no runner do GitHub Actions (como as congregações, vC.2).
 //
 // A "versão" é um hash do que o site mostra. O sincronizador do GitHub
 // (.github/workflows/site-agenda-sync.yml) compara a versão daqui com a que o site
 // publicou em /agenda-versao.json e, se diferem, manda reconstruir o site.
 //
-// GET /api/agenda-publica/tudo      -> { versao, eventos[], liturgia[] }   (o que o build do site usa)
+// GET /api/agenda-publica/tudo      -> { versao, eventos[], liturgia[], canais[] }   (o que o build do site usa)
+// GET /api/agenda-publica/canais    -> { canais[{id,nome,plataforma,rotuloPlataforma,categoria,identificador,link,escopo,rotuloEscopo,congregacaoNome,areaNome,departamentoNome,descricao}] }
 // GET /api/agenda-publica/eventos   -> { eventos[] }
 // GET /api/agenda-publica/liturgia  -> { liturgia[] }   (formato da coleção `programacao` do Directus)
 // GET /api/agenda-publica/versao    -> { versao }
@@ -30,7 +32,7 @@ async function pacote() {
   if (cache.pacote && agora - cache.em < CACHE_MS) return cache.pacote;
   const pool = await getPool();
   const ctx = await calendarioDb.carregarContextoTerritorial(pool);
-  cache = { em: agora, pacote: await calendarioDb.pacotePublico(pool, ctx) };
+  cache = { em: agora, pacote: await calendarioDb.pacotePublicoCompleto(pool, ctx) };
   return cache.pacote;
 }
 
@@ -48,9 +50,9 @@ module.exports = async function (context, req) {
 
   const acao = context.bindingData.acao || "";
   try {
-    if (acao === "tudo" || acao === "eventos" || acao === "liturgia" || acao === "versao") {
+    if (acao === "tudo" || acao === "eventos" || acao === "liturgia" || acao === "canais" || acao === "versao") {
       const p = await pacote();
-      const corpo = acao === "tudo" ? p : acao === "eventos" ? { eventos: p.eventos } : acao === "liturgia" ? { liturgia: p.liturgia } : { versao: p.versao };
+      const corpo = acao === "tudo" ? p : acao === "eventos" ? { eventos: p.eventos } : acao === "liturgia" ? { liturgia: p.liturgia } : acao === "canais" ? { canais: p.canais } : { versao: p.versao };
       context.res = { status: 200, headers: cabecalhos, body: corpo };
       return;
     }

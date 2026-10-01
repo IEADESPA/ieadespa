@@ -897,8 +897,9 @@ async function liturgiaPublica(pool) {
 
 // A "versão" muda quando muda qualquer coisa que o site mostra. O sincronizador do
 // GitHub compara esta com a que o site publicou e, se diferem, manda reconstruir.
-function calcularVersao(eventos, liturgia) {
-  return crypto.createHash("sha256").update(JSON.stringify({ eventos, liturgia })).digest("hex").slice(0, 16);
+// `canais` (v7.3) entra no hash só quando informado: sem ele o valor é o mesmo de antes da v7.3.
+function calcularVersao(eventos, liturgia, canais) {
+  return crypto.createHash("sha256").update(JSON.stringify({ eventos, liturgia, canais })).digest("hex").slice(0, 16);
 }
 
 async function pacotePublico(pool, ctx, opcoes) {
@@ -906,20 +907,35 @@ async function pacotePublico(pool, ctx, opcoes) {
   return { versao: calcularVersao(eventos, liturgia), eventos, liturgia };
 }
 
+// Tudo o que o site mostra: eventos oficiais, grade litúrgica e (v7.3) os canais oficiais públicos.
+// A versão cobre os três — é a que o sincronizador compara com a que o site publicou.
+async function pacotePublicoCompleto(pool, ctx, opcoes) {
+  const base = await pacotePublico(pool, ctx, opcoes);
+  let canais = [];
+  try {
+    const canaisDb = require("./canaisDb");
+    canais = await canaisDb.canaisPublicos(pool, await canaisDb.carregarContexto(pool));
+  } catch (e) {
+    console.error("[AgendaPublica] canais indisponíveis:", e.message);
+  }
+  return { versao: calcularVersao(base.eventos, base.liturgia, canais), eventos: base.eventos, liturgia: base.liturgia, canais };
+}
+
 // Situação da sincronização com o site: a versão daqui contra a que o site publicou.
 async function statusSincronizacaoSite(pool, ctx, { fetchImpl = globalThis.fetch, siteUrl = process.env.SITE_URL || "https://www.ieadespa.org.br" } = {}) {
-  const { versao } = await pacotePublico(pool, ctx);
+  const { versao } = await pacotePublicoCompleto(pool, ctx);
   let versaoNoSite = null;
   let erro = null;
+  const controle = new AbortController();
+  const timer = setTimeout(() => controle.abort(), 8000);
   try {
-    const controle = new AbortController();
-    const timer = setTimeout(() => controle.abort(), 8000);
     const resp = await fetchImpl(`${siteUrl}/agenda-versao.json?x=${Date.now()}`, { signal: controle.signal, headers: { "Cache-Control": "no-cache" } });
-    clearTimeout(timer);
     if (resp.ok) versaoNoSite = (await resp.json()).versao || null;
     else erro = `O site respondeu ${resp.status}.`;
   } catch (e) {
     erro = "Não foi possível consultar o site agora.";
+  } finally {
+    clearTimeout(timer);
   }
   return { versaoSistema: versao, versaoSite: versaoNoSite, sincronizado: !!versaoNoSite && versaoNoSite === versao, erro, siteUrl };
 }
@@ -1001,6 +1017,6 @@ module.exports = {
   listarPresencasDirigente, registrarPresencaDirigente,
   listarRegrasLiturgicas, criarRegraLiturgica, atualizarRegraLiturgica,
   eventoAlcancaCongregacao, montarAgenda,
-  eventosPublicos, liturgiaPublica, calcularVersao, pacotePublico, statusSincronizacaoSite,
+  eventosPublicos, liturgiaPublica, calcularVersao, pacotePublico, pacotePublicoCompleto, statusSincronizacaoSite,
   detectarPrazoPropostas, detectarPropostasRecusadas, detectarParaConsolidar, detectarParaHomologar
 };

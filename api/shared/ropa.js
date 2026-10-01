@@ -105,6 +105,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Calendário: indeterminada — o histórico de anos homologados sustenta o Direito Adquirido Temporal (PoliticasRetencao). Presença na Ceia Geral e justificativa: também sem prazo de descarte por ora (a política da categoria não separa a justificativa) — a CLI deve definir quando anonimizar o texto livre."
   },
   {
+    chave: "CANAIS",
+    finalidade: "Relação de Canais Oficiais de Comunicação, administradores com Termo de Dever de Moderação, ocorrências de conteúdo irregular (Regra das 24 Horas) e conformidade da transmissão dos cultos (Estatuto Art. 12; Regimento Art. 157 §5º, 160 e 160-A) — v7.3",
+    titulares: "Administradores e operadores de canais; membros que avisam conteúdo irregular; membros citados na descrição de uma ocorrência; quem sai de uma liderança (pendência de troca de senha)",
+    categoriasDados: ["Matrícula de quem administra, avisou, removeu o conteúdo e decidiu", "Aceite do Termo de Dever de Moderação (versão, hash do texto e hora)", "Descrição livre do conteúdo irregular (pode citar nome de membro e revelar opinião política) e link de evidência", "Contato institucional dos canais (número, e-mail, perfil) — nunca contato pessoal, a validação recusa", "Nenhuma senha: o sistema guarda só quem custodia e a data da última troca"],
+    baseLegal: "LGPD Art. 7º, IX — legítimo interesse da instituição em moderar os próprios canais e provar diligência (Marco Civil da Internet; Regimento Art. 160, §1º). A descrição de uma ocorrência pode revelar opinião política (dado sensível): Art. 11, II, \"d\" — exercício regular de direitos, em especial a prova de diligência. Quem avisou não é revelado ao administrador do canal.",
+    tabelasEnvolvidas: ["CanaisOficiaisComunicacao", "CanalAdministradores", "CanalOcorrencias", "CanalTrocasCredencial", "CanalConferencias", "CongregacaoTransmissao"],
+    retencao: "Ocorrências e administradores: 5 anos, por margem sobre a prescrição da reparação civil (PoliticasRetencao); a rotina automática de descarte ainda não existe e o prazo é decisão da CLI/Encarregado. Registro dos canais, conferências e transmissão: enquanto o canal existir; o desativado mantém o histórico (prova das tentativas de contato do Abandono Digital)."
+  },
+  {
     chave: "AUDITORIA",
     finalidade: "Trilha de integridade e compliance (quem fez o quê, quando)",
     titulares: "Quem usa o sistema (Liderança)",

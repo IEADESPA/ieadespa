@@ -192,6 +192,16 @@ workflow `.github/workflows/site-agenda-sync.yml` compara com `/api/agenda-publi
 20 minutos, disparando um novo deploy só quando a versão muda. Para testar o build contra um
 servidor falso, defina `SISTEMA_API_URL`.
 
+**Canais oficiais (v7.3).** A página `/canais-oficiais/` (link no rodapé, em Institucional) lista os
+canais de comunicação instituídos em nome da igreja (Estatuto, Art. 12). Os dados vêm do mesmo
+`GET /api/agenda-publica/tudo` do calendário (campo `canais`), em tempo de build e com a mesma
+`versao`: quando um canal é marcado ou desmarcado como público no sistema, o sincronizador
+reconstrói o site. A lista mostra **só os canais marcados como públicos** no sistema; sem nenhum, a
+página explica que a relação está sendo organizada e aponta a Secretaria, e se a API estiver fora
+do ar no build ela avisa que não foi possível carregar a lista (o build nunca quebra). O `link` de
+cada canal só é aceito se começar com `https://`, `mailto:` ou `tel:`, e nada vindo da API entra
+como HTML.
+
 ### Camisetas e uniformes
 
 Arquitetura em carrinho, com atribuição por congregação e alocação de pagamento parcial:

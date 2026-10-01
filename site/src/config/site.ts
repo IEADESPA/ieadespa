@@ -100,6 +100,7 @@ export const footerNavigation = [
     items: [
       { label: "Dúvidas frequentes", href: "/duvidas-frequentes/" },
       { label: "Transparência", href: "/transparencia/" },
+      { label: "Canais oficiais", href: "/canais-oficiais/" },
       { label: "Pregadores", href: "/pregadores/" },
       { label: "Privacidade", href: "/privacidade/" },
     ],

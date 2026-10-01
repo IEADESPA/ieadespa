@@ -117,10 +117,10 @@ const CATALOGOS = {
   // genérico só exige a permissão "pessoas" (linha ~289) — aberto demais
   // pra editar base legal/prazo de retenção de dado pessoal. A edição real
   // é GestaoPoliticasRetencao (vB.6), restrita a nível Global.
-  canaisOficiais: {
-    tabela: "CanaisOficiaisComunicacao", chave: "CanalId", idField: "canalId",
-    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), ativo: sql.Bit }
-  },
+  // 'canaisOficiais' removido daqui (v7.3): a relação de Canais Oficiais (Estatuto Art. 12) agora tem
+  // validação própria — conta pessoal é recusada, o vínculo institucional é declarado, há administrador
+  // com termo e custódia da senha. Editar pelo catálogo genérico (permissão "pessoas") contornaria tudo
+  // isso. A edição real é GestaoCanais (/api/canais, permissão "canais_gestao").
   tiposInfracao: {
     tabela: "TiposInfracao", chave: "InfracaoId", idField: "infracaoId",
     campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(200), referenciaRegimento: sql.NVarChar(40), gravidade: sql.NVarChar(20), ativo: sql.Bit },

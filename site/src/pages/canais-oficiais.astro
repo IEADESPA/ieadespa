@@ -1,0 +1,240 @@
+---
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { fetchAgendaOficial, type CanalOficial } from "@/lib/agendaOficial";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+
+/* Canais oficiais de comunicação (Estatuto, Art. 12) — vêm do sistema de governança em
+   tempo de build, junto com o calendário (ver src/lib/agendaOficial.ts). O sistema só
+   entrega canais marcados como públicos. Tudo aqui é texto não confiável: só expressões
+   do Astro (que escapam), nunca set:html. O `link` já chega validado (https:, mailto: ou tel:). */
+const agenda = await fetchAgendaOficial();
+const canais = agenda.canais;
+
+interface Grupo {
+  rotulo: string;
+  canais: CanalOficial[];
+}
+
+interface Secao {
+  id: string;
+  titulo: string;
+  /** Agrupa por área / departamento / congregação; "Todo o campo" é um grupo só, sem subtítulo. */
+  subgrupos: boolean;
+  grupos: Grupo[];
+}
+
+const ESCOPOS = [
+  { escopo: "CAMPO", id: "campo", titulo: "Todo o campo", subgrupos: false },
+  { escopo: "AREA", id: "areas", titulo: "Por área", subgrupos: true },
+  { escopo: "DEPARTAMENTO", id: "departamentos", titulo: "Por departamento", subgrupos: true },
+  { escopo: "CONGREGACAO", id: "congregacoes", titulo: "Por congregação", subgrupos: true },
+];
+
+const rotuloDoGrupo = (canal: CanalOficial) =>
+  canal.rotuloEscopo ||
+  canal.areaNome ||
+  canal.departamentoNome ||
+  canal.congregacaoNome ||
+  "";
+
+function agrupar(lista: CanalOficial[]): Grupo[] {
+  const porRotulo = new Map<string, CanalOficial[]>();
+  for (const canal of lista) {
+    const rotulo = rotuloDoGrupo(canal);
+    porRotulo.set(rotulo, [...(porRotulo.get(rotulo) ?? []), canal]);
+  }
+  return [...porRotulo.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, "pt-BR", { numeric: true }))
+    .map(([rotulo, itens]) => ({
+      rotulo,
+      canais: [...itens].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+    }));
+}
+
+const conhecidos = new Set(ESCOPOS.map((e) => e.escopo));
+const secoes: Secao[] = [
+  ...ESCOPOS.map((e) => ({
+    id: e.id,
+    titulo: e.titulo,
+    subgrupos: e.subgrupos,
+    grupos: agrupar(canais.filter((c) => c.escopo === e.escopo)),
+  })),
+  // Rede de segurança: um escopo que o site ainda não conhece não some da lista.
+  {
+    id: "outros",
+    titulo: "Outros canais",
+    subgrupos: true,
+    grupos: agrupar(canais.filter((c) => !conhecidos.has(c.escopo))),
+  },
+].filter((secao) => secao.grupos.length > 0);
+
+const abreEmNovaAba = (link: string) => /^https:/i.test(link);
+---
+
+<BaseLayout
+  title="Canais oficiais"
+  description={`Canais oficiais de comunicação da ${siteConfig.name}: contatos, perfis e grupos instituídos em nome da igreja. Contas pessoais não são canais oficiais.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <Breadcrumbs items={[{ label: "Canais oficiais" }]} />
+        <p class="eyebrow">Comunicação</p>
+        <h1 class="pagehead-title">Canais oficiais da IEADESPA</h1>
+        <p class="pagehead-description">
+          Canal oficial é o instituído e mantido em nome da {siteConfig.name}, vinculado ao CNPJ, à marca ou à
+          estrutura institucional. Os canais públicos estão listados nesta página.
+        </p>
+      </header>
+
+      <aside class="canais-aviso" aria-label="Aviso importante">
+        <p>
+          <strong>Contas, números e perfis pessoais</strong> de pastores, diretores, obreiros ou dirigentes{" "}
+          <strong>não são canais oficiais</strong> (Estatuto, Art. 12).
+        </p>
+        <p>
+          Em caso de dúvida sobre um número ou perfil, confira se ele está nesta página ou fale com a Secretaria pela{" "}
+          <a href="/contato/" class="text-accent underline underline-offset-2">página de contato</a>.
+        </p>
+      </aside>
+
+      {
+        !agenda.disponivel ? (
+          <p class="canais-vazio mt-12" role="status">
+            Não foi possível carregar a lista de canais agora. Tente novamente mais tarde ou fale com a Secretaria pela{" "}
+            <a href="/contato/" class="text-accent underline underline-offset-2">página de contato</a>.
+          </p>
+        ) : secoes.length === 0 ? (
+          <p class="canais-vazio mt-12">
+            Estamos organizando a relação dos canais oficiais. Enquanto isso, o contato é o da Secretaria — fale com
+            a gente pela <a href="/contato/" class="text-accent underline underline-offset-2">página de contato</a>.
+          </p>
+        ) : (
+          secoes.map((secao) => (
+            <section class="mt-14" aria-labelledby={`canais-${secao.id}`}>
+              <h2 id={`canais-${secao.id}`} class="section-title">
+                {secao.titulo}
+              </h2>
+              {secao.grupos.map((grupo) => (
+                <div class="mt-8">
+                  {secao.subgrupos && grupo.rotulo && <h3 class="eyebrow">{grupo.rotulo}</h3>}
+                  <ul class="canais-lista mt-4">
+                    {grupo.canais.map((canal) => (
+                      <li class="canal-card">
+                        <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
+                          <p class="canal-nome">{canal.nome}</p>
+                          <span class="flex flex-wrap gap-2">
+                            <span class="pill shrink-0">{canal.rotuloPlataforma}</span>
+                            {canal.categoria === "GRUPO_OFICIAL" && <span class="pill shrink-0">Grupo oficial</span>}
+                          </span>
+                        </div>
+                        <p class="canal-identificador">{canal.identificador}</p>
+                        {canal.descricao && (
+                          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{canal.descricao}</p>
+                        )}
+                        {canal.link && (
+                          <p class="mt-4">
+                            <a
+                              href={canal.link}
+                              class="btn btn-outline"
+                              target={abreEmNovaAba(canal.link) ? "_blank" : undefined}
+                              rel="noopener noreferrer"
+                              aria-label={`Abrir ${canal.nome} (${canal.rotuloPlataforma})`}
+                            >
+                              Abrir
+                            </a>
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          ))
+        )
+      }
+
+      {
+        secoes.length > 0 && (
+          <div class="prose mt-16">
+            <p>
+              Não encontrou o número ou perfil que procura? Fale com a Secretaria pela <a href="/contato/">página de contato</a>.
+            </p>
+          </div>
+        )
+      }
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .canais-aviso {
+    margin-top: 2rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-md);
+    background: var(--muted);
+    padding: 1.1rem 1.35rem;
+    font-size: 0.9375rem;
+    line-height: 1.6;
+  }
+
+  .canais-aviso p + p {
+    margin-top: 0.5rem;
+  }
+
+  .canais-vazio {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--muted-foreground);
+  }
+
+  .canais-lista {
+    display: grid;
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @media (min-width: 40rem) {
+    .canais-lista {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .canal-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    padding: 1.25rem 1.4rem;
+    min-width: 0;
+  }
+
+  .canal-nome {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .canal-identificador {
+    margin: 0.5rem 0 0;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+</style>

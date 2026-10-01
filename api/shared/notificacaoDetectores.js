@@ -138,6 +138,7 @@ async function detectarAlunoAusenteEbd(pool) {
 // de "pendente" é congregação * 10000 + ano: um aviso por exercício.
 const psc = require("./psc");
 const calendarioDb = require("./calendarioDb");
+const canaisDb = require("./canaisDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -156,7 +157,21 @@ const DETECTORES = {
   CALENDARIO_PRAZO_URGENTE: { tabela: "CalendarioAnos", detectar: (pool) => calendarioDb.detectarPrazoPropostas(pool, { janelaDias: 7 }) },
   CALENDARIO_PROPOSTA_RECUSADA: { tabela: "CalendarioEventos", detectar: (pool) => calendarioDb.detectarPropostasRecusadas(pool) },
   CALENDARIO_PARA_CONSOLIDAR: { tabela: "CalendarioAnos", detectar: (pool) => calendarioDb.detectarParaConsolidar(pool) },
-  CALENDARIO_PARA_HOMOLOGAR: { tabela: "CalendarioAnos", detectar: (pool) => calendarioDb.detectarParaHomologar(pool) }
+  CALENDARIO_PARA_HOMOLOGAR: { tabela: "CalendarioAnos", detectar: (pool) => calendarioDb.detectarParaHomologar(pool) },
+  // Canais (v7.3): o aviso imediato de conteúdo irregular (CANAIS_OCORRENCIA_NOVA) sai na hora, no ato de avisar,
+  // e por isso não tem detector; aqui ficam o prazo vencido, o termo pendente, a troca de senha (que antes confere
+  // quem saiu da liderança), canal sem administrador e conferência vencida.
+  CANAIS_OCORRENCIA_VENCIDA: { tabela: "CanalOcorrencias", detectar: (pool) => canaisDb.detectarOcorrenciasVencidas(pool) },
+  CANAIS_TERMO_PENDENTE: { tabela: "CanalAdministradores", detectar: (pool) => canaisDb.detectarTermosPendentes(pool) },
+  CANAIS_TROCA_CREDENCIAL: {
+    tabela: "CanalTrocasCredencial",
+    detectar: async (pool) => {
+      try { await canaisDb.sincronizarSucessoes(pool); } catch (e) { console.error("[CANAIS] sucessão:", e.message); }
+      return canaisDb.detectarTrocasCredencial(pool);
+    }
+  },
+  CANAIS_SEM_ADMINISTRADOR: { tabela: "CanaisOficiaisComunicacao", detectar: (pool) => canaisDb.detectarSemAdministrador(pool) },
+  CANAIS_CONFERENCIA_VENCIDA: { tabela: "CanaisOficiaisComunicacao", detectar: (pool) => canaisDb.detectarConferenciasVencidas(pool) }
 };
 
 module.exports = { DETECTORES };

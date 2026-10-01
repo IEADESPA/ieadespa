@@ -161,6 +161,8 @@ describe("pacote público para o site", () => {
   test("a versão é estável para o mesmo conteúdo e muda com qualquer diferença", () => {
     const e = [{ id: 1, titulo: "A" }], l = [{ day: "terca", title: "Doutrina" }];
     expect(db.calcularVersao(e, l)).toMatch(/^[0-9a-f]{16}$/);
+    // v7.3: os canais públicos também mudam a versão (e, sem eles, o valor é o de antes).
+    expect(db.calcularVersao(e, l, [{ id: 1, nome: "Instagram" }])).not.toBe(db.calcularVersao(e, l, []));
     expect(db.calcularVersao(e, l)).toBe(db.calcularVersao(e, l));
     expect(db.calcularVersao([{ id: 1, titulo: "B" }], l)).not.toBe(db.calcularVersao(e, l));
     expect(db.calcularVersao(e, [{ day: "terca", title: "Doutrina Geral" }])).not.toBe(db.calcularVersao(e, l));
@@ -182,13 +184,14 @@ describe("pacote público para o site", () => {
 });
 
 describe("sincronização com o site", () => {
-  // eventosPublicos = 3 consultas (eventos, áreas, compatíveis) quando há linha; vazio = 1; liturgia = 1.
-  const pacoteVazio = () => criarPoolFalso([[], []]);
+  // eventosPublicos = 3 consultas (eventos, áreas, compatíveis) quando há linha; vazio = 1; liturgia = 1;
+  // canais públicos (v7.3) = 3 do contexto (congregações, áreas, departamentos) + 1 da lista.
+  const pacoteVazio = () => criarPoolFalso([[], [], [], [], [], []]);
   const ctxVazio = () => ({ areas: new Map(), congregacoes: new Map() });
 
   test("sincronizado quando o site publicou a mesma versão", async () => {
     const { pool } = pacoteVazio();
-    const versao = db.calcularVersao([], []);
+    const versao = db.calcularVersao([], [], []);
     const fetchImpl = async () => ({ ok: true, json: async () => ({ versao }) });
     const r = await db.statusSincronizacaoSite(pool, ctxVazio(), { fetchImpl, siteUrl: "https://site.teste" });
     expect(r).toMatchObject({ versaoSistema: versao, versaoSite: versao, sincronizado: true, erro: null });

@@ -24,6 +24,15 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const trilhas = require("../shared/trilhas");
+const canaisDb = require("../shared/canaisDb");
+
+// v7.3 — quem sai da liderança de uma congregação/Área/departamento obriga a troca de senha dos canais
+// oficiais dele (Regimento Art. 160, §4º, I). Falha aqui nunca derruba a operação de liderança: a próxima
+// leitura do painel de canais e a rodada diária de avisos repetem a conferência.
+async function conferirSucessaoDeCanais(pool, usuarioId) {
+  try { await canaisDb.sincronizarSucessoes(pool, { por: usuarioId }); }
+  catch (e) { console.error("[GestaoLideranca] sucessão de canais:", e.message); }
+}
 
 // Níveis da Governança Escalonada aceitos como escopo de acesso.
 const ESCOPO_TIPOS_VALIDOS = ["GLOBAL", "EXTENSAO", "CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO", "DEPARTAMENTO"];
@@ -181,6 +190,7 @@ module.exports = async function (context, req) {
       resultados.push(Object.assign({ membroId }, resultado));
     }
 
+    await conferirSucessaoDeCanais(pool, usuarioId);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, resultados } };
     return;
   }
@@ -188,6 +198,7 @@ module.exports = async function (context, req) {
   // ---- POST: conceder ou atualizar acesso ----
   if (method === "POST") {
     const resultado = await concederOuAtualizarLideranca(pool, req.body || {}, usuarioId);
+    if (resultado.sucesso) await conferirSucessaoDeCanais(pool, usuarioId);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: resultado };
     return;
   }
@@ -225,6 +236,7 @@ module.exports = async function (context, req) {
       return;
     }
     await registrarAuditoria({ tabela: "Lideranca", registroId: Number(membroIdRota), acao: "Removeu liderança", usuarioId });
+    await conferirSucessaoDeCanais(pool, usuarioId);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Liderança removida." } };
     return;
   }

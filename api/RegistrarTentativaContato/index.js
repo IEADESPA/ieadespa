@@ -7,6 +7,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const canais = require("../shared/canais");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
@@ -24,9 +25,12 @@ module.exports = async function (context, req) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
   }
-  const canal = await pool.request().input("id", sql.Int, canalId).query(`SELECT CanalId FROM CanaisOficiaisComunicacao WHERE CanalId = @id AND Ativo = 1`);
-  if (canal.recordset.length === 0) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Canal Oficial de Comunicação inválido ou inativo." } };
+  // v7.3 — só vale contato individual por canal institucional ativo (e-mail, telefone/WhatsApp institucional,
+  // o próprio sistema). Grupo e rede social não notificam um membro: não contam (Estatuto Art. 12 §2º).
+  const canal = await pool.request().input("id", sql.Int, canalId).query(`SELECT CanalId, Ativo, Plataforma, Categoria FROM CanaisOficiaisComunicacao WHERE CanalId = @id`);
+  const linhaCanal = canal.recordset[0];
+  if (!linhaCanal || !canais.contaParaAbandono({ ativo: !!linhaCanal.Ativo, plataforma: linhaCanal.Plataforma, categoria: linhaCanal.Categoria })) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Canal Oficial de Comunicação inválido, inativo ou que não serve para contato individual (grupos e redes sociais não contam como tentativa de contato)." } };
     return;
   }
 

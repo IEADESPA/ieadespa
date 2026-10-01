@@ -1,6 +1,7 @@
 /**
- * Agenda oficial — v7.2. O calendário oficial (eventos homologados e públicos)
- * e a agenda litúrgica (grade semanal de cultos) nascem no sistema de
+ * Agenda oficial — v7.2 (canais oficiais na v7.3). O calendário oficial (eventos
+ * homologados e públicos), a agenda litúrgica (grade semanal de cultos) e os canais
+ * oficiais de comunicação (marcados como públicos) nascem no sistema de
  * governança; o site só lê. Mesma técnica de `congregacoes.ts`: chamada feita
  * em build time (Astro SSG, sem adapter SSR), no runner do GitHub Actions, sem
  * login e sem CORS.
@@ -55,6 +56,34 @@ export interface EventoOficial {
   origem: "PROPOSTA" | "REGRA";
 }
 
+export type CategoriaCanalOficial = "INSTITUCIONAL" | "GRUPO_OFICIAL";
+
+/**
+ * Canal oficial de comunicação (Estatuto, Art. 12) marcado como público no sistema.
+ * Tudo aqui é texto NÃO CONFIÁVEL: as telas só podem usá-lo como texto (nunca `set:html`).
+ */
+export interface CanalOficial {
+  id: number;
+  nome: string;
+  /** Código da plataforma (ex.: "WHATSAPP"). */
+  plataforma: string;
+  /** Nome para exibir (ex.: "WhatsApp"). */
+  rotuloPlataforma: string;
+  categoria: CategoriaCanalOficial;
+  /** Já formatado: "@perfil", telefone, e-mail, endereço https:// ou NOME do grupo. */
+  identificador: string;
+  /** Só https://, mailto: ou tel: (validado aqui); `null` quando não há link (ex.: grupo). */
+  link: string | null;
+  /** "CAMPO" | "AREA" | "DEPARTAMENTO" | "CONGREGACAO" (outro valor cai em "Outros canais"). */
+  escopo: string;
+  /** "Todo o campo", "Área X", "Congregação Y", "Departamento Z". */
+  rotuloEscopo: string;
+  congregacaoNome: string | null;
+  areaNome: string | null;
+  departamentoNome: string | null;
+  descricao: string | null;
+}
+
 export interface AgendaOficial {
   /** `false` quando o sistema não respondeu (o site segue com o Directus). */
   disponivel: boolean;
@@ -63,6 +92,8 @@ export interface AgendaOficial {
   eventos: EventoOficial[];
   /** Mesmo formato de `ProgramacaoItem`. */
   liturgia: ProgramacaoItem[];
+  /** Canais oficiais públicos; `[]` em resposta antiga sem `canais` ou com a agenda indisponível. */
+  canais: CanalOficial[];
 }
 
 const AGENDA_INDISPONIVEL: AgendaOficial = Object.freeze({
@@ -70,6 +101,7 @@ const AGENDA_INDISPONIVEL: AgendaOficial = Object.freeze({
   versao: "indisponivel",
   eventos: [],
   liturgia: [],
+  canais: [],
 }) as AgendaOficial;
 
 // ---------------------------------------------------------------------------
@@ -130,6 +162,57 @@ function liturgiaValida(valor: unknown): valor is ProgramacaoItem {
   );
 }
 
+const CATEGORIAS_CANAL = new Set(["INSTITUCIONAL", "GRUPO_OFICIAL"]);
+
+const textoOuNulo = (valor: unknown): string | null =>
+  typeof valor === "string" && valor.trim() !== "" ? valor.trim() : null;
+
+/**
+ * Só aceita link que abre com `https://`, `mailto:` ou `tel:` e que o `URL` entende;
+ * qualquer outra coisa (http, javascript:, data:, texto solto...) vira `null` — o canal
+ * continua listado, só sem o botão "Abrir".
+ */
+export function linkSeguro(valor: unknown): string | null {
+  if (typeof valor !== "string") return null;
+  const link = valor.trim();
+  if (!/^(https:\/\/|mailto:|tel:)/i.test(link) || /[\s<>"]/.test(link)) return null;
+  try {
+    new URL(link);
+  } catch {
+    return null;
+  }
+  return link;
+}
+
+/** Normaliza um canal da resposta; `null` se faltar id numérico, nome, plataforma ou identificador. */
+function canalNormalizado(valor: unknown): CanalOficial | null {
+  if (!valor || typeof valor !== "object") return null;
+  const c = valor as Record<string, unknown>;
+  const nome = textoOuNulo(c.nome);
+  const plataforma = textoOuNulo(c.plataforma);
+  const identificador = textoOuNulo(c.identificador);
+  if (typeof c.id !== "number" || !Number.isFinite(c.id) || !nome || !plataforma || !identificador)
+    return null;
+  return {
+    id: c.id,
+    nome,
+    plataforma,
+    rotuloPlataforma: textoOuNulo(c.rotuloPlataforma) ?? plataforma,
+    categoria:
+      typeof c.categoria === "string" && CATEGORIAS_CANAL.has(c.categoria)
+        ? (c.categoria as CategoriaCanalOficial)
+        : "INSTITUCIONAL",
+    identificador,
+    link: linkSeguro(c.link),
+    escopo: typeof c.escopo === "string" ? c.escopo : "",
+    rotuloEscopo: textoOuNulo(c.rotuloEscopo) ?? "",
+    congregacaoNome: textoOuNulo(c.congregacaoNome),
+    areaNome: textoOuNulo(c.areaNome),
+    departamentoNome: textoOuNulo(c.departamentoNome),
+    descricao: textoOuNulo(c.descricao),
+  };
+}
+
 /** Confere o formato da resposta e descarta itens malformados (com aviso), em vez de quebrar as telas. */
 function validarResposta(corpo: unknown): AgendaOficial {
   if (!corpo || typeof corpo !== "object") throw new Error("resposta não é um objeto JSON");
@@ -154,13 +237,23 @@ function validarResposta(corpo: unknown): AgendaOficial {
     .filter(liturgiaValida)
     .map((i) => ({ ...i, occurrence: i.occurrence ?? null, time: i.time ?? null }));
 
-  const descartados = c.eventos.length - eventos.length + (c.liturgia.length - liturgia.length);
+  // Resposta antiga (sem `canais`) ou `canais` malformado => lista vazia, sem derrubar nada.
+  const canaisBrutos = Array.isArray(c.canais) ? c.canais : [];
+  const canais = canaisBrutos
+    .map(canalNormalizado)
+    .filter((canal): canal is CanalOficial => !!canal);
+
+  const descartados =
+    c.eventos.length -
+    eventos.length +
+    (c.liturgia.length - liturgia.length) +
+    (canaisBrutos.length - canais.length);
   if (descartados > 0)
     console.warn(
       `[agenda-oficial] ${descartados} item(ns) da resposta descartado(s) por formato inválido.`,
     );
 
-  return { disponivel: true, versao: c.versao, eventos, liturgia };
+  return { disponivel: true, versao: c.versao, eventos, liturgia, canais };
 }
 
 async function tentarUmaVez(url: string): Promise<AgendaOficial> {
@@ -333,13 +426,13 @@ export function mesclarEventos(eventosDirectus: EventoSite[], agenda: AgendaOfic
  * `slugSite` ganham a data, a data final e a hora oficiais, para a página não
  * contradizer a lista. Não cria itens novos e preserva todos os campos do evento.
  */
-export function aplicarDatasOficiais<T extends Pick<EventoSite, "slug" | "event_date" | "end_date" | "time">>(
-  eventosDirectus: T[],
-  agenda: AgendaOficial,
-): T[] {
+export function aplicarDatasOficiais<
+  T extends Pick<EventoSite, "slug" | "event_date" | "end_date" | "time">,
+>(eventosDirectus: T[], agenda: AgendaOficial): T[] {
   const resultado = eventosDirectus.map((e) => ({ ...e }));
   const porSlug = new Map<string, T>();
-  for (const evento of resultado) if (evento.slug && !porSlug.has(evento.slug)) porSlug.set(evento.slug, evento);
+  for (const evento of resultado)
+    if (evento.slug && !porSlug.has(evento.slug)) porSlug.set(evento.slug, evento);
   const jaCasados = new Set<T>();
 
   for (const oficial of agenda.eventos) {

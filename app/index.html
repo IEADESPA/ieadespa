@@ -112,6 +112,7 @@
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" onclick="mostrarSubAbaMeupainel('minhasconquistas')"><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" onclick="mostrarSubAbaMeupainel('minhaformacao')"><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" onclick="mostrarSubAbaMeupainel('agenda')"><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCanais" onclick="mostrarSubAbaMeupainel('canais')"><span class="icone">📣</span><span class="rotulo">Canais</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" onclick="mostrarSubAbaMeupainel('seguranca')"><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
@@ -313,6 +314,18 @@
           <div class="grupo-modulo" id="grupoModuloCalendario" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaCalendario" onclick="mostrarAbaSecretaria('calendario')"><span class="icone">📅</span><span class="rotulo">Calendário</span></button>
+          </div>
+
+          <!-- MÓDULO: CANAIS E COMUNICAÇÃO (v7.3) — Canais Oficiais da IEADESPA
+               (Estatuto Art. 11, V e Art. 12; Regimento Art. 157 §5º, 160 e
+               160-A): relação vigente de canais, administradores e Termo de
+               Dever de Moderação, Regra das 24 Horas, custódia das senhas e
+               Área Cega. Permissão própria "canais_gestao", nunca concedida
+               por padrão. O Termo e o aviso de conteúdo irregular ficam em
+               Meu Painel → Canais, abertos a qualquer login. -->
+          <div class="grupo-modulo" id="grupoModuloCanais" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaCanais" onclick="mostrarAbaSecretaria('canais')"><span class="icone">📣</span><span class="rotulo">Canais e Comunicação</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -716,6 +729,68 @@
           <div id="calMeuLegenda" class="cal-legenda"></div>
           <p id="calMeuResultado" class="subtitle" role="status"></p>
           <div id="calMeuAgenda"></div>
+        </div>
+
+        <!-- SUB-ABA: CANAIS (v7.3 — Canais Oficiais e Comunicação). Autoatendimento,
+             aberto a qualquer login: quem administra um canal oficial aceita aqui o
+             Termo de Dever de Moderação e trata as ocorrências do SEU canal (Regra
+             das 24 Horas); qualquer pessoa pode avisar conteúdo irregular e acompanhar
+             o que avisou. Toda regra mora no servidor (shared/canais.js). -->
+        <div id="subMeupainelCanais" class="sub-aba-secretaria" style="display:none;">
+          <h3>📣 Canais</h3>
+          <p class="subtitle">Os <strong>Canais Oficiais</strong> da IEADESPA (Estatuto Art. 12; Regimento Art. 160) são ferramenta de
+            trabalho e comunhão. Quem <strong>administra</strong> um canal responde por ele: precisa aceitar o <strong>Termo de Dever de
+            Moderação</strong> e remover o conteúdo irregular em até <strong>24 horas</strong> (Regra das 24 Horas). Qualquer pessoa
+            pode <strong>avisar</strong> um conteúdo irregular.</p>
+
+          <h4>🛡️ Meus canais</h4>
+          <p id="cnlMeuResultado" class="subtitle" role="status"></p>
+          <div id="cnlMeusCanais"></div>
+
+          <h4>⏳ Ocorrências abertas nos meus canais</h4>
+          <p id="cnlMeuResultadoOc" class="subtitle" role="status"></p>
+          <div id="cnlMinhasOcorrenciasAbertas"></div>
+          <div id="cnlDetalheOcorrenciaM"></div>
+          <p id="cnlMeuResultadoAcao" class="subtitle" role="status"></p>
+
+          <hr />
+          <h4>🚩 Avisar conteúdo irregular</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Viu, num canal oficial, algo ofensivo, falso, político-partidário ou que exponha uma
+            criança? Avise aqui: o administrador do canal é avisado na hora e tem 24 horas para remover. Seu nome <strong>não</strong> é
+            mostrado ao administrador.</p>
+          <div class="cal-form">
+            <div class="input-group">
+              <label for="cnlAvisoCanal">Canal onde o conteúdo foi postado</label>
+              <select id="cnlAvisoCanal"><option value="">— escolha o canal —</option></select>
+            </div>
+            <div class="input-group">
+              <label for="cnlAvisoCategoria">Tipo de conteúdo irregular</label>
+              <select id="cnlAvisoCategoria" onchange="cnlAvisoCategoriaMudouAcao()"><option value="">— escolha o tipo —</option></select>
+              <p id="cnlAvisoCategoriaInfo" class="psc-legenda"></p>
+            </div>
+            <div class="input-group">
+              <label for="cnlAvisoDescricao">O que foi postado (10 a 500 caracteres)</label>
+              <textarea id="cnlAvisoDescricao" rows="3" maxlength="500" style="width:100%;" oninput="cnlAvisoContarAcao()"></textarea>
+              <p class="psc-legenda"><span id="cnlAvisoContador">0</span>/500. Descreva o conteúdo e onde está. <strong>Não copie dados pessoais além do necessário</strong> (telefone, endereço, documentos).</p>
+            </div>
+            <div class="input-group">
+              <label for="cnlAvisoLink">Link da evidência (opcional, começa com https://)</label>
+              <input type="text" id="cnlAvisoLink" maxlength="500" placeholder="https://..." />
+            </div>
+          </div>
+          <div class="psc-acoes">
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlEnviarAvisoAcao()">🚩 Enviar aviso</button>
+          </div>
+          <p id="cnlAvisoResultado" class="subtitle" role="status"></p>
+
+          <hr />
+          <h4>📬 Meus avisos</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">O que você já avisou e em que pé está.</p>
+          <div class="barra-lista">
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlCarregarMeusAvisosAcao()">🔄 Atualizar</button>
+          </div>
+          <p id="cnlMeusAvisosResultado" class="subtitle" role="status"></p>
+          <div id="cnlMeusAvisos"></div>
         </div>
 
         <!-- SUB-ABA: MINHAS CONQUISTAS (v6.4 — Motor de conquistas e
@@ -1971,9 +2046,11 @@
         <hr />
         <h3>Tentativas de Contato — Abandono Digital (Art. 12 §2º)</h3>
         <p class="subtitle">A lei exige pelo menos 2 tentativas de contato por canais
-          distintos (cadastrados em Catálogos → Canais Oficiais de Comunicação) antes de
+          distintos (os Canais Oficiais cadastrados em <strong>Canais e Comunicação</strong>) antes de
           poder abrir o procedimento — sob pena de nulidade. Os 90 dias contam a partir
           da 1ª tentativa registrada.</p>
+        <p class="subtitle"><strong>Só vale contato individual institucional</strong> (e-mail, telefone/WhatsApp
+          institucional, o próprio sistema): grupos e redes sociais não contam.</p>
         <form onsubmit="event.preventDefault(); registrarTentativaContatoAcao();">
           <div class="input-group">
             <label>Matrícula:</label>
@@ -3659,6 +3736,219 @@
           </div>
           <p id="calResultadoSite" class="subtitle" role="status"></p>
           <div id="calSiteCartao"></div>
+        </div>
+      </div>
+
+      <!-- ABA: CANAIS E COMUNICAÇÃO (v7.3). Exige "canais_gestao" (Secretaria
+           Geral/Comunicação): registra e mantém a relação de Canais Oficiais,
+           designa administradores, custodia as senhas, confere a conformidade,
+           registra a transmissão dos cultos e decide as ocorrências. Toda regra
+           (o que é canal oficial, Regra das 24 Horas, conformidade, sucessão)
+           mora no servidor (shared/canais.js); aqui só se monta a tela. O que o
+           servidor devolve passa por escaparHtmlEbd antes de ir ao innerHTML. O
+           Termo de Dever de Moderação e o aviso de conteúdo irregular estão em
+           Meu Painel → Canais, abertos a qualquer login. -->
+      <div id="abaCanais" class="aba-secretaria" style="display:none;">
+        <h3>📣 Canais e Comunicação</h3>
+        <p class="subtitle">Só é <strong>Canal Oficial</strong> a conta, o número ou o grupo em nome da IEADESPA (Estatuto Art. 12): conta,
+          número ou perfil <strong>pessoal</strong> de diretor, obreiro ou dirigente <strong>nunca</strong> é canal oficial. A Secretaria Geral
+          mantém a relação vigente, designa quem administra cada canal (que responde por ele e aceita o <strong>Termo de Dever de
+          Moderação</strong>), custodia as senhas e acompanha a <strong>Regra das 24 Horas</strong> (Regimento Art. 160).</p>
+
+        <div class="cal-pilulas cnl-pilulas" id="cnlPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnCnlSecaoPainel" onclick="cnlMostrarSecaoAcao('painel')">📊 Painel</button>
+          <button type="button" class="cal-pilula" id="btnCnlSecaoCanais" onclick="cnlMostrarSecaoAcao('canais')">📣 Canais</button>
+          <button type="button" class="cal-pilula" id="btnCnlSecaoOcorrencias" onclick="cnlMostrarSecaoAcao('ocorrencias')">⏳ Ocorrências (24 h)</button>
+          <button type="button" class="cal-pilula" id="btnCnlSecaoSenhas" onclick="cnlMostrarSecaoAcao('senhas')">🔑 Senhas e acessos</button>
+          <button type="button" class="cal-pilula" id="btnCnlSecaoTransmissao" onclick="cnlMostrarSecaoAcao('transmissao')">🎥 Transmissão e Área Cega</button>
+        </div>
+
+        <!-- a) PAINEL: cobertura -->
+        <div id="cnlSecaoPainel" class="cal-secao">
+          <h4>📊 Painel dos Canais Oficiais</h4>
+          <div class="barra-lista">
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlCarregarPainelAcao()">🔄 Atualizar</button>
+          </div>
+          <p id="cnlResultadoPainel" class="subtitle" role="status"></p>
+          <div id="cnlContadores" class="cnl-contadores"></div>
+          <h5>⚠️ Canais com pendência</h5>
+          <div id="cnlCanaisPendencia"></div>
+          <h5>🏛️ Congregações sem canal próprio</h5>
+          <p class="psc-legenda" style="margin-top:0;">Canal institucional ou grupo oficial da congregação. Grupo focado não conta como canal da congregação.</p>
+          <div id="cnlCongSemCanal"></div>
+        </div>
+
+        <!-- b) CANAIS: relação, cadastro, detalhe -->
+        <div id="cnlSecaoCanais" class="cal-secao" style="display:none;">
+          <h4>📣 Relação de Canais Oficiais</h4>
+          <div class="barra-lista">
+            <select id="cnlFiltroCategoria" title="Categoria" onchange="cnlRedesenharCanaisAcao()"><option value="">Todas as categorias</option></select>
+            <select id="cnlFiltroSituacao" title="Situação" onchange="cnlRedesenharCanaisAcao()">
+              <option value="">Todas as situações</option>
+              <option value="REGULAR">Regular</option>
+              <option value="ATENCAO">Atenção</option>
+              <option value="IRREGULAR">Irregular</option>
+              <option value="INCOMPLETO">Cadastro incompleto</option>
+            </select>
+            <input type="text" id="cnlFiltroBusca" placeholder="Buscar por nome ou identificador" oninput="cnlRedesenharCanaisAcao()" />
+            <label class="cal-check"><input type="checkbox" id="cnlFiltroInativos" onchange="cnlCarregarCanaisAcao()" /> incluir desativados</label>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlCarregarCanaisAcao()">🔄 Recarregar</button>
+          </div>
+          <p id="cnlResultadoCanais" class="subtitle" role="status"></p>
+          <div class="rolagem-tabela"><div id="cnlTabelaCanais"></div></div>
+
+          <details id="cnlFormCanalDetalhes" style="margin:12px 0;">
+            <summary><strong id="cnlFormCanalTitulo">➕ Registrar canal</strong></summary>
+            <p class="psc-aviso" style="margin:8px 0;">Só registre conta, número ou grupo <strong>em nome da IEADESPA</strong> (CNPJ, marca ou estrutura
+              institucional). O servidor recusa conta pessoal. Para <strong>GRUPO</strong>, guarde o <strong>NOME</strong> do grupo, <strong>nunca o link
+              de convite</strong>: o link deixa qualquer pessoa entrar.</p>
+            <div class="cal-form">
+              <input type="hidden" id="cnlCCanalId" value="" />
+              <div class="cal-form-grade">
+                <div class="input-group"><label for="cnlCNome">Nome do canal (3 a 150 caracteres)</label><input type="text" id="cnlCNome" maxlength="150" placeholder="Ex.: Instagram da IEADESPA" /></div>
+                <div class="input-group"><label for="cnlCPlataforma">Plataforma</label><select id="cnlCPlataforma" onchange="cnlCPlataformaMudouAcao()"></select></div>
+                <div class="input-group"><label for="cnlCCategoria">Categoria</label><select id="cnlCCategoria" onchange="cnlCCategoriaMudouAcao()"></select></div>
+                <div class="input-group" id="cnlCBlocoTema" style="display:none;"><label for="cnlCTema">Tema do grupo focado (obrigatório)</label><select id="cnlCTema"></select></div>
+              </div>
+              <div class="input-group">
+                <label for="cnlCIdentificador" id="cnlCIdentRotulo">Identificador do canal</label>
+                <input type="text" id="cnlCIdentificador" maxlength="300" />
+                <p id="cnlCIdentAjuda" class="psc-legenda"></p>
+              </div>
+              <div class="cal-form-grade">
+                <div class="input-group"><label for="cnlCEscopo">Escopo</label><select id="cnlCEscopo" onchange="cnlCEscopoMudouAcao()"></select></div>
+                <div class="input-group" id="cnlCBlocoCongregacao" style="display:none;"><label for="cnlCCongregacao">Congregação</label><select id="cnlCCongregacao"></select></div>
+                <div class="input-group" id="cnlCBlocoArea" style="display:none;"><label for="cnlCArea">Área</label><select id="cnlCArea"></select></div>
+                <div class="input-group" id="cnlCBlocoDepto" style="display:none;"><label for="cnlCDepto">Departamento</label><select id="cnlCDepto"></select></div>
+                <div class="input-group"><label for="cnlCVinculo">Vínculo institucional</label><select id="cnlCVinculo"></select></div>
+              </div>
+              <label class="cal-check cnl-declaracao"><input type="checkbox" id="cnlCDeclaracao" /> Declaro que esta conta/número está em nome da IEADESPA e NÃO é de titularidade pessoal (Estatuto Art. 12)</label>
+              <div class="input-group" style="margin-top:8px;">
+                <label class="cal-check"><input type="checkbox" id="cnlCMenores" /> inclui crianças/adolescentes</label>
+                <label class="cal-check"><input type="checkbox" id="cnlCPublico" /> aparece no site</label>
+                <label class="cal-check" id="cnlCBlocoCustodia"><input type="checkbox" id="cnlCCustodia" /> senha sob custódia da Secretaria Geral</label>
+              </div>
+              <div class="input-group">
+                <label for="cnlCDescricao">Descrição (opcional, até 500 caracteres)</label>
+                <textarea id="cnlCDescricao" rows="2" maxlength="500" style="width:100%;"></textarea>
+              </div>
+              <div class="psc-acoes">
+                <button class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlSalvarCanalAcao()" id="cnlCBotaoSalvar">💾 Registrar canal</button>
+                <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlLimparFormCanalAcao()">✖️ Limpar / cancelar edição</button>
+              </div>
+              <p id="cnlCResultado" class="subtitle" role="status"></p>
+            </div>
+          </details>
+
+          <hr />
+          <h4>🔎 Detalhe do canal</h4>
+          <p id="cnlResultadoDetalheCanal" class="subtitle" role="status"></p>
+          <div id="cnlDetalheCanal"><p class="subtitle">Escolha um canal na relação (<em>Abrir</em>) ou no painel para ver os detalhes.</p></div>
+        </div>
+
+        <!-- c) OCORRÊNCIAS: Regra das 24 Horas -->
+        <div id="cnlSecaoOcorrencias" class="cal-secao" style="display:none;">
+          <h4>⏳ Ocorrências — Regra das 24 Horas</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">O administrador tem <strong>24 horas</strong> depois do aviso para remover o conteúdo irregular (Regimento Art. 160, §1º, II). Passado
+            o prazo, <strong>a Igreja está corresponsável</strong> pelo dano. Aqui a Secretaria vê quem avisou; o administrador não.</p>
+          <div class="barra-lista">
+            <select id="cnlFiltroOcStatus" title="Situação" onchange="cnlCarregarOcorrenciasAcao()">
+              <option value="">Todas as situações</option>
+              <option value="ABERTA">Abertas (aguardando a remoção)</option>
+              <option value="REMOVIDA">Removidas</option>
+              <option value="IMPROCEDENTE">Improcedentes</option>
+            </select>
+            <label class="cal-check"><input type="checkbox" id="cnlFiltroOcVencidas" onchange="cnlRedesenharOcorrenciasAcao()" /> só as com prazo VENCIDO</label>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlCarregarOcorrenciasAcao()">🔄 Atualizar</button>
+          </div>
+          <p id="cnlResultadoOcorrencias" class="subtitle" role="status"></p>
+          <div id="cnlListaOcorrencias"></div>
+          <hr />
+          <h4>🔎 Detalhe da ocorrência</h4>
+          <p id="cnlResultadoDetalheOc" class="subtitle" role="status"></p>
+          <div id="cnlDetalheOcorrenciaG"><p class="subtitle">Escolha uma ocorrência (<em>Abrir</em>) para ver a orientação e registrar a remoção.</p></div>
+        </div>
+
+        <!-- d) SENHAS E ACESSOS: custódia e trocas -->
+        <div id="cnlSecaoSenhas" class="cal-secao" style="display:none;">
+          <h4>🔑 Senhas e acessos</h4>
+          <p class="cnl-aviso-senha" role="note"><strong>Nunca escreva a senha aqui. O sistema não guarda senhas — só registra quem custodia e quando foi trocada.</strong></p>
+          <p class="subtitle" style="margin:4px 0 10px;">As senhas e o acesso das contas oficiais pertencem à Secretaria Geral, não a quem administra (Regimento Art. 160, §4º, I). Quando alguém sai da
+            liderança ou da administração de um canal, abre-se uma pendência: troque a senha e os dispositivos conectados e registre aqui que foi feito.</p>
+          <div class="barra-lista">
+            <label class="cal-check"><input type="checkbox" id="cnlTrocasResolvidas" onchange="cnlCarregarTrocasAcao()" /> incluir as já resolvidas</label>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlCarregarTrocasAcao()">🔄 Atualizar</button>
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlConferirSucessoesAcao()">🔁 Conferir sucessões</button>
+          </div>
+          <p id="cnlResultadoTrocas" class="subtitle" role="status"></p>
+          <div class="rolagem-tabela"><div id="cnlTabelaTrocas"></div></div>
+
+          <details id="cnlFormTrocaDetalhes" style="margin:12px 0;">
+            <summary><strong>➕ Abrir pendência de troca manualmente</strong></summary>
+            <div class="cal-form">
+              <div class="cal-form-grade">
+                <div class="input-group"><label for="cnlTrocaCanal">Canal</label><select id="cnlTrocaCanal"><option value="">— escolha o canal —</option></select></div>
+                <div class="input-group"><label for="cnlTrocaMotivo">Motivo</label><select id="cnlTrocaMotivo"></select></div>
+              </div>
+              <div class="input-group">
+                <label for="cnlTrocaObs">Observação (opcional, até 300 caracteres) — nunca a senha</label>
+                <input type="text" id="cnlTrocaObs" maxlength="300" />
+              </div>
+              <div class="psc-acoes">
+                <button class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlAbrirTrocaAcao()">📌 Abrir pendência</button>
+              </div>
+              <p id="cnlResultadoAbrirTroca" class="subtitle" role="status"></p>
+            </div>
+          </details>
+        </div>
+
+        <!-- e) TRANSMISSÃO E ÁREA CEGA (Art. 160, §2º) -->
+        <div id="cnlSecaoTransmissao" class="cal-secao" style="display:none;">
+          <h4>🎥 Transmissão dos cultos e Área Cega</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Congregação que transmite os cultos precisa de <strong>placa de aviso</strong> nos acessos — “Este local está sendo filmado e
+            transmitido ao vivo” (consentimento tácito) — e de uma <strong>Área Cega</strong>, zona sem filmagem (por exemplo, as últimas fileiras ou a galeria
+            lateral), ou da justificativa de que a estrutura física não permite (Regimento Art. 160, §2º).</p>
+          <div class="barra-lista">
+            <select id="cnlFiltroTrSituacao" title="Situação" onchange="cnlRedesenharTransmissaoAcao()">
+              <option value="">Todas as situações</option>
+              <option value="PENDENTE">Pendente</option>
+              <option value="NAO_INFORMADA">Não informada</option>
+              <option value="CONFORME">Conforme</option>
+              <option value="NAO_SE_APLICA">Não transmite</option>
+            </select>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlCarregarTransmissaoAcao()">🔄 Atualizar</button>
+          </div>
+          <p id="cnlResultadoTransmissao" class="subtitle" role="status"></p>
+          <div class="rolagem-tabela"><div id="cnlTabelaTransmissao"></div></div>
+
+          <details id="cnlFormTransmissaoDetalhes" style="margin:12px 0;">
+            <summary><strong id="cnlFormTransmissaoTitulo">✏️ Registrar a situação de uma congregação</strong></summary>
+            <div class="cal-form">
+              <div class="cal-form-grade">
+                <div class="input-group"><label for="cnlTrCongregacao">Congregação</label><select id="cnlTrCongregacao" onchange="cnlTrPreencherDaCongregacaoAcao()"></select></div>
+                <div class="input-group"><label for="cnlTrTransmite">Transmite os cultos?</label>
+                  <select id="cnlTrTransmite" onchange="cnlTrAtualizarBlocosAcao()">
+                    <option value="">— escolha —</option>
+                    <option value="sim">Sim, transmite</option>
+                    <option value="nao">Não transmite</option>
+                  </select></div>
+              </div>
+              <div id="cnlTrBlocoDetalhes" style="display:none;">
+                <div class="cal-form-grade">
+                  <div class="input-group"><label for="cnlTrPlaca">Data em que a placa de aviso foi instalada</label><input type="date" id="cnlTrPlaca" /></div>
+                  <div class="input-group"><label for="cnlTrAreaCega">Área Cega</label><select id="cnlTrAreaCega"></select></div>
+                </div>
+                <div class="input-group">
+                  <label for="cnlTrDescricao">Onde fica a Área Cega, ou por que a estrutura não permite (até 300 caracteres)</label>
+                  <textarea id="cnlTrDescricao" rows="2" maxlength="300" style="width:100%;"></textarea>
+                </div>
+              </div>
+              <div class="psc-acoes">
+                <button class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlSalvarTransmissaoAcao()">💾 Salvar</button>
+              </div>
+              <p id="cnlTrResultado" class="subtitle" role="status"></p>
+            </div>
+          </details>
         </div>
       </div>
 

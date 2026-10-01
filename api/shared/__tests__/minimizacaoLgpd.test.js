@@ -26,12 +26,14 @@ describe("diasMinimizacaoExMembro", () => {
 });
 
 describe("minimizarCamposExMembro", () => {
-  test("encerra vínculos (Assentos/Lideranca/Cargo) antes de zerar os campos operacionais", async () => {
-    const { pool, chamadas } = criarPoolFalso([[], [], [], []]);
+  test("encerra vínculos (Assentos/Lideranca/Cargo e, desde a Trava 6-B, professor e aluno da EBD) antes de zerar os campos operacionais", async () => {
+    const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], []]);
     await minimizarCamposExMembro(pool, 42, { dataSaida: "2026-01-01", motivo: "Carta de Mudança" });
-    expect(chamadas).toHaveLength(4); // 3 de encerrarVinculos + 1 do UPDATE final
-    expect(chamadas[3].sql).toMatch(/Telefone = NULL, Email = NULL, Endereco = NULL/);
-    expect(chamadas[3].sql).not.toMatch(/Nome\s*=\s*NULL/); // nunca apaga o Registro Histórico Mínimo
-    expect(chamadas[3].inputs.id).toBe(42);
+    expect(chamadas).toHaveLength(6); // 5 de encerrarVinculos + 1 do UPDATE final
+    expect(chamadas[3].sql).toMatch(/UPDATE EbdTurmaProfessores SET Ativo = 0/);
+    expect(chamadas[4].sql).toMatch(/UPDATE EbdAlunos SET Ativo = 0/); // saiu da igreja: a matrícula de aluno também se encerra
+    expect(chamadas[5].sql).toMatch(/Telefone = NULL, Email = NULL, Endereco = NULL/);
+    expect(chamadas[5].sql).not.toMatch(/Nome\s*=\s*NULL/); // nunca apaga o Registro Histórico Mínimo
+    expect(chamadas[5].inputs.id).toBe(42);
   });
 });

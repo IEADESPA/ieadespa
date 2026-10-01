@@ -619,8 +619,7 @@ function mapearCaderneta(row) {
 }
 
 function hojeIsoLocal() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return require("./dataBrasilia").hojeBrasilia(); // Trava 6-B: dia de Brasília, não do servidor (UTC)
 }
 
 // Junta tudo de que as linhas de UMA lição dependem, com consultas em bloco
@@ -755,6 +754,7 @@ async function salvarCaderneta(pool, { licaoId, turmaId, biblias, revistas, obse
     .input("b", sql.Int, v.biblias).input("r", sql.Int, v.revistas).input("o", sql.NVarChar(500), v.observacao)
     .input("m", sql.Int, matriculados).input("por", sql.Int, registradoPorMembroId || null);
 
+  let cadernetaId = anterior ? anterior.cadernetaId : null;
   if (anterior) {
     await r.query(`
       UPDATE EbdCadernetas SET Biblias = @b, Revistas = @r, Observacao = @o, MatriculadosRegistrado = @m,
@@ -762,14 +762,18 @@ async function salvarCaderneta(pool, { licaoId, turmaId, biblias, revistas, obse
       WHERE LicaoId = @l AND TurmaId = @t
     `);
   } else {
-    await r.query(`
+    // Trava 6-B: RegistroId de AuditLog é NOT NULL — o id da linha nova vem do
+    // OUTPUT; antes ia nulo, e a auditoria de toda linha NOVA falhava calada.
+    const inserida = await r.query(`
       INSERT INTO EbdCadernetas (LicaoId, TurmaId, Biblias, Revistas, Observacao, MatriculadosRegistrado, RegistradoPorMembroId)
+      OUTPUT INSERTED.CadernetaId
       VALUES (@l, @t, @b, @r, @o, @m, @por)
     `);
+    cadernetaId = inserida.recordset[0].CadernetaId;
   }
 
   await registrarAuditoria({
-    tabela: "EbdCadernetas", registroId: anterior ? anterior.cadernetaId : null, acao: "CADERNETA_SALVA",
+    tabela: "EbdCadernetas", registroId: cadernetaId, acao: "CADERNETA_SALVA",
     usuarioId: registradoPorMembroId,
     dadosAntes: anterior ? { biblias: anterior.biblias, revistas: anterior.revistas } : null,
     dadosDepois: { licaoId, turmaId, biblias: v.biblias, revistas: v.revistas, matriculados }
@@ -1005,6 +1009,7 @@ async function fecharTrimestre(pool, { congregacaoId, trimestre, origem, fechado
     .input("s", sql.NVarChar(sql.MAX), snapshot).input("a", sql.Int, licoesAbertas)
     .input("por", sql.Int, fechadoPorMembroId).input("o", sql.NVarChar(10), origem);
 
+  let fechamentoId = existente ? existente.fechamentoId : null;
   if (existente) {
     await r.query(`
       UPDATE EbdFechamentosTrimestrais
@@ -1012,14 +1017,18 @@ async function fecharTrimestre(pool, { congregacaoId, trimestre, origem, fechado
       WHERE CongregacaoId = @c AND Trimestre = @t
     `);
   } else {
-    await r.query(`
+    // Trava 6-B: RegistroId de AuditLog é NOT NULL — o id da linha nova vem do
+    // OUTPUT; antes ia nulo, e a auditoria de toda linha NOVA falhava calada.
+    const inserido = await r.query(`
       INSERT INTO EbdFechamentosTrimestrais (CongregacaoId, Trimestre, Origem, Snapshot, LicoesAbertas, FechadoPorMembroId)
+      OUTPUT INSERTED.FechamentoId
       VALUES (@c, @t, @o, @s, @a, @por)
     `);
+    fechamentoId = inserido.recordset[0].FechamentoId;
   }
 
   await registrarAuditoria({
-    tabela: "EbdFechamentosTrimestrais", registroId: existente ? existente.fechamentoId : null,
+    tabela: "EbdFechamentosTrimestrais", registroId: fechamentoId,
     acao: existente ? "TRIMESTRE_REFEITO" : (origem === ORIGEM_FECHAMENTO.AUTOMATICO ? "TRIMESTRE_FECHADO_AUTO" : "TRIMESTRE_FECHADO"),
     usuarioId: fechadoPorMembroId,
     dadosAntes: existente && existente.snapshot ? { versao: existente.versao, totais: existente.snapshot.congregacao.totais } : null,
@@ -1066,6 +1075,7 @@ async function prepararImportacao(pool, itens, { podeCongregacao }) {
   const congPorNome = new Map(congs.recordset.map(c => [normalizarTexto(c.Nome), c]));
   const turmasCache = new Map();
   const licaoCache = new Map();
+  const fechamentosVistos = new Map();
   const vistos = new Set();
 
   async function turmasDe(congregacaoId) {
@@ -1112,11 +1122,22 @@ async function prepararImportacao(pool, itens, { podeCongregacao }) {
           pool.request().input("l", sql.Int, licaoId).input("t", sql.Int, turmaId).query(`SELECT Origem FROM EbdCadernetas WHERE LicaoId = @l AND TurmaId = @t`),
           buscarOfertaDaLicao(pool, licaoId)
         ]);
-        if (chamada.recordset[0].Total > 0) erros.push("Esta turma já tem chamada lançada no sistema nesta data — não dá pra sobrepor com registro antigo.");
+        // Trava 6-B: lição ABERTA é domingo em andamento no sistema — uma
+        // caderneta IMPORTADA ali escondia a chamada lançada depois (a linha
+        // da caderneta passa a ler só os números importados) e travava o
+        // salvar da caderneta do sistema.
+        if (licao.status === "ABERTA") erros.push("A lição desta data está aberta no sistema (a chamada pode estar sendo lançada) — feche a lição antes de importar o registro antigo.");
+        else if (chamada.recordset[0].Total > 0) erros.push("Esta turma já tem chamada lançada no sistema nesta data — não dá pra sobrepor com registro antigo.");
         else if (caderneta.recordset[0] && caderneta.recordset[0].Origem === ORIGEM_CADERNETA.SISTEMA) erros.push("Esta turma já tem caderneta do sistema nesta data.");
         else if (caderneta.recordset[0]) { acao = "ATUALIZAR"; avisos.push("Já existia uma caderneta importada nesta data — será substituída."); }
         if (oferta != null && item.linha.oferta) erros.push("A lição já tem oferta registrada no financeiro da EBD (v6.7) — deixe a oferta em branco para não contar duas vezes.");
       }
+      // Trava 6-B: trimestre já fechado tem a foto congelada — sem refazer o
+      // fechamento, o relatório não enxerga a caderneta importada.
+      const trimestre = trimestreDaData(item.linha.data);
+      const chaveFechamento = `${congregacaoId}|${trimestre}`;
+      if (trimestre && !fechamentosVistos.has(chaveFechamento)) fechamentosVistos.set(chaveFechamento, await buscarFechamento(pool, congregacaoId, trimestre));
+      if (trimestre && fechamentosVistos.get(chaveFechamento)) avisos.push(`O trimestre ${trimestre} já foi fechado nesta congregação — depois de importar, use "Refazer" no Relatório do Superintendente para o fechamento incluir esta caderneta.`);
     }
 
     resultado.push({ numero: item.numero, linha: item.linha, erros, avisos, valido: erros.length === 0, acao: erros.length === 0 ? acao : null, congregacaoId, turmaId });
@@ -1179,7 +1200,7 @@ async function executarImportacao(pool, itens, { importadoPorMembroId }) {
   }
 
   await registrarAuditoria({
-    tabela: "EbdCadernetas", registroId: null, acao: "CADERNETAS_IMPORTADAS",
+    tabela: "EbdCadernetas", registroId: 0, acao: "CADERNETAS_IMPORTADAS", // lote: 0 = vários registros (mesma convenção de ImportarPessoas)
     usuarioId: importadoPorMembroId, dadosAntes: null, dadosDepois: resumo
   });
   return resumo;

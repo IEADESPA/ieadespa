@@ -25,9 +25,15 @@
 // POST /api/ebd-turmas/alunos/encerrar      body:{alunoId}                    -> encerra a matrícula (v6.8)
 // GET  /api/ebd-turmas/aluno?membroId=                -> vínculo de aluno de um membro específico
 // GET  /api/ebd-turmas/visao-agrupada?busca=          -> Área -> Congregação -> Turmas, dentro do escopo do usuário
+// Trava 6-B — titular SEM cadastro de membro (aluno não-membro, visitante), só
+// para o Encarregado de Dados ("protecaodedados"), nunca "ebd_gestao":
+// GET  /api/ebd-turmas/lgpd/buscar?nome=                    -> alunos não-membros e visitantes com esse nome
+// POST /api/ebd-turmas/lgpd/anonimizar-aluno     body:{alunoId}
+// POST /api/ebd-turmas/lgpd/anonimizar-visitante body:{chamadaId}
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const ebd = require("../shared/ebdTurmas");
+const ebdLgpd = require("../shared/ebdLgpd");
 
 function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
@@ -58,6 +64,39 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     context.res = { status: 200, body: { sucesso: true, turmas: await ebd.listarTurmasDoProfessor(pool, logado.membroId) } };
     return;
+  }
+
+  // Trava 6-B: direitos do titular sem cadastro de membro (ver shared/ebdLgpd.js).
+  if (String(context.bindingData.acao || "").startsWith("lgpd/")) {
+    const encarregado = auth.exigirPermissao(req, context, "protecaodedados");
+    if (!encarregado) return;
+    const poolLgpd = await getPool();
+    const acaoLgpd = context.bindingData.acao;
+    try {
+      if (acaoLgpd === "lgpd/buscar" && req.method === "GET") {
+        const resultado = await ebdLgpd.buscarTitularesEbd(poolLgpd, req.query && req.query.nome);
+        context.res = { status: resultado.sucesso ? 200 : 422, headers: { "Cache-Control": "no-store" }, body: resultado };
+        return;
+      }
+      if (acaoLgpd === "lgpd/anonimizar-aluno" && req.method === "POST") {
+        const alunoId = Number((req.body || {}).alunoId);
+        if (!alunoId) return erro(context, 400, "Informe alunoId.");
+        const resultado = await ebdLgpd.anonimizarAlunoNaoMembro(poolLgpd, { alunoId, membroId: encarregado.membroId });
+        context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+        return;
+      }
+      if (acaoLgpd === "lgpd/anonimizar-visitante" && req.method === "POST") {
+        const chamadaId = Number((req.body || {}).chamadaId);
+        if (!chamadaId) return erro(context, 400, "Informe chamadaId.");
+        const resultado = await ebdLgpd.anonimizarVisitante(poolLgpd, { chamadaId, membroId: encarregado.membroId });
+        context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+        return;
+      }
+      return erro(context, 404, "Ação inválida.");
+    } catch (e) {
+      context.log.error("[GestaoEbdTurmas/lgpd] erro:", e);
+      return erro(context, 500, "Erro interno ao processar a solicitação de dados da EBD.");
+    }
   }
 
   const usuario = auth.exigirPermissao(req, context, "ebd_gestao");

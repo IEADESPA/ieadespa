@@ -69,6 +69,24 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Enquanto durar o vínculo familiar/de membresia"
   },
   {
+    chave: "EBD",
+    finalidade: "Escola Bíblica Dominical: turmas, chamada, caderneta, atividades, alerta de ausência ao professor (FASE 6)",
+    titulares: "Alunos (membros e não-membros, inclusive crianças), professores e visitantes da EBD",
+    categoriasDados: ["Identificação (nome)", "Presença por domingo", "Respostas de atividade", "Não-membro: contato, nascimento, responsável (menor)", "Visitante: nome e contato"],
+    baseLegal: "LGPD Art. 11, II, \"a\" — organização religiosa (membros); Art. 7º, IX e Art. 14 (legítimo interesse/melhor interesse da criança, com responsável) para não-membros e visitantes",
+    tabelasEnvolvidas: ["EbdAlunos", "EbdChamadas", "EbdRespostasAlunos", "EbdCadernetas"],
+    retencao: "Presença e matrícula de membro: enquanto durar o vínculo. Visitante: nome/contato anonimizados após 12 meses; aluno não-membro: anonimizado 24 meses após encerrar a matrícula (rotina diária — PoliticasRetencao). O Encarregado anonimiza antes, a pedido (Proteção de Dados → EBD)."
+  },
+  {
+    chave: "FORMACAO",
+    finalidade: "Trilhas de formação, conclusão de módulos e certificado verificável usado como requisito (v6.5/v6.9)",
+    titulares: "Membros em formação",
+    categoriasDados: ["Matrícula e progresso em trilha", "Certificado (titular, título, validade, código de verificação)"],
+    baseLegal: "LGPD Art. 11, II, \"a\" — organização religiosa; Art. 7º, IX — prova da formação exigida pelos fluxos (consagração, liderança, escala)",
+    tabelasEnvolvidas: ["TrilhaMatriculas", "TrilhaModuloConclusoes", "CertificadosEmitidos"],
+    retencao: "Indeterminada enquanto o certificado puder ser verificado (prova de formação); a verificação pública mostra só o que está impresso no certificado"
+  },
+  {
     chave: "AUDITORIA",
     finalidade: "Trilha de integridade e compliance (quem fez o quê, quando)",
     titulares: "Quem usa o sistema (Liderança)",

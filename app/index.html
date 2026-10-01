@@ -2145,6 +2145,19 @@
         </div>
 
         <hr />
+        <h3>📖 EBD — titulares sem cadastro de membro</h3>
+        <p class="subtitle">Aluno não-membro e visitante da EBD não têm matrícula de membro, então não abrem solicitação
+          pelo portal — o pedido chega por outro canal e é atendido aqui. Anonimizar não apaga a linha: a presença
+          continua contando na chamada e na caderneta, só deixa de identificar a pessoa (nome vira um marcador;
+          contato, nascimento e responsável são apagados). A rotina diária da EBD já faz isso sozinha com visitante
+          de mais de 12 meses e aluno não-membro com matrícula encerrada há mais de 24 meses.</p>
+        <div class="barra-lista">
+          <input type="search" id="dpoEbdBusca" placeholder="Nome (pelo menos 3 letras)" style="min-width:240px;" />
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="buscarTitularesEbdDpoAcao()">🔍 Buscar</button>
+        </div>
+        <div id="resultadoTitularesEbdDpo"></div>
+
+        <hr />
         <h3>Políticas de Retenção</h3>
         <p class="subtitle">Referência de quanto tempo cada categoria de dado fica guardada e por quê — usada ao responder um pedido de exclusão. Não apaga nada sozinha (vB.6/vB.8 — algumas categorias já acionam minimização real, ver "Dados de Ex-Membro"). Edição restrita a nível Global.</p>
         <div class="rolagem-tabela"><div id="resultadoListaPoliticasRetencaoDpo"></div></div>

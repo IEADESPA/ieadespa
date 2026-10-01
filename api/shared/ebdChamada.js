@@ -285,24 +285,29 @@ async function registrarPresencaAluno(pool, { licaoId, turmaId, alunoId, status,
   const existente = await buscarPresencaPorLicaoAluno(pool, licaoId, alunoId);
   const acao = decidirAcaoRegistroPresenca(existente);
 
+  let chamadaId = existente ? existente.chamadaId : null;
   if (acao === "ATUALIZAR") {
     await pool.request().input("id", sql.Int, existente.chamadaId).input("status", sql.NVarChar(10), status)
       .input("marcado", sql.DateTime2, marcadoOfflineEm || null).query(`
       UPDATE EbdChamadas SET Status = @status, MarcadoOfflineEm = @marcado, AtualizadoEm = SYSUTCDATETIME() WHERE ChamadaId = @id
     `);
   } else {
-    await pool.request()
+    // Trava 6-B: RegistroId de AuditLog é NOT NULL — o id da linha nova vem do
+    // OUTPUT; antes ia nulo, e a auditoria de toda linha NOVA falhava calada.
+    const inserida = await pool.request()
       .input("licaoId", sql.Int, licaoId).input("turmaId", sql.Int, turmaId).input("alunoId", sql.Int, alunoId)
       .input("status", sql.NVarChar(10), status).input("registradoPor", sql.Int, registradoPorMembroId || null)
       .input("marcado", sql.DateTime2, marcadoOfflineEm || null)
       .query(`
         INSERT INTO EbdChamadas (LicaoId, TurmaId, AlunoId, Status, RegistradoPorMembroId, MarcadoOfflineEm)
+        OUTPUT INSERTED.ChamadaId
         VALUES (@licaoId, @turmaId, @alunoId, @status, @registradoPor, @marcado)
       `);
+    chamadaId = inserida.recordset[0].ChamadaId;
   }
 
   await registrarAuditoria({
-    tabela: "EbdChamadas", registroId: existente ? existente.chamadaId : null, acao: "PRESENCA_LANCADA",
+    tabela: "EbdChamadas", registroId: chamadaId, acao: "PRESENCA_LANCADA",
     usuarioId: registradoPorMembroId, dadosAntes: existente ? { status: existente.status } : null, dadosDepois: { licaoId, turmaId, alunoId, status }
   });
 

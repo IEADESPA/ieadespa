@@ -42,6 +42,18 @@ const LIMITE_LISTA_SQL = 500;
 // ---------------------------------------------------------------
 
 const limpar = (v) => String(v == null ? "" : v).trim();
+
+// Trava 6-B: o alvo do requisito (ex.: o nome do tipo de consagração) é
+// digitado à mão, e o assunto da consagração também pode ser texto livre
+// ("Outro"). Comparar com === deixava "Consagração a Diácono" sem efeito
+// sobre "consagração a diácono" — o requisito BLOQUEIA simplesmente não se
+// aplicava. A comparação ignora maiúscula, acento e espaços repetidos.
+function normalizarAlvo(v) {
+  return limpar(v).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ");
+}
+function alvoCorresponde(alvoDoRequisito, alvo) {
+  return normalizarAlvo(alvoDoRequisito) === normalizarAlvo(alvo);
+}
 const arred1 = (n) => Math.round(n * 10) / 10;
 
 function dataIsoValida(iso) {
@@ -53,8 +65,7 @@ function dataIsoValida(iso) {
 }
 
 function hojeIsoLocal() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return require("./dataBrasilia").hojeBrasilia(); // Trava 6-B: dia de Brasília, não do servidor (UTC)
 }
 
 function paraUtc(iso) {
@@ -669,9 +680,17 @@ async function concluirModulo(pool, { matriculaId, moduloId, dataConclusao, obse
     return { sucesso: true, matriculaConcluida: false, progresso: depois.progresso, mensagem: `✅ Módulo "${modulo.titulo}" concluído (${depois.progresso.obrigatoriosConcluidos}/${depois.progresso.obrigatoriosTotal}).` };
   }
 
-  const validoAte = calcularValidade(hojeIso, depois.trilha.validadeMeses);
-  const ganhou = await pool.request().input("id", sql.Int, matriculaId).input("validoAte", sql.Date, validoAte)
-    .query(`UPDATE TrilhaMatriculas SET Status = 'CONCLUIDA', ConcluidaEm = SYSUTCDATETIME(), ValidoAte = @validoAte, AtualizadoEm = SYSUTCDATETIME() WHERE MatriculaId = @id AND Status = 'EM_ANDAMENTO'`);
+  // Trava 6-B: a trilha se conclui na data do último módulo OBRIGATÓRIO
+  // concluído — não no dia em que alguém registrou. Antes, um módulo lançado
+  // com data retroativa (curso feito em março, registrado em setembro) dava
+  // validade contada a partir de setembro: meses de certificado a mais.
+  const ultima = (await pool.request().input("m", sql.Int, matriculaId).query(`
+    SELECT MAX(c.ConcluidoEm) AS Ultima FROM TrilhaModuloConclusoes c JOIN TrilhaModulos mm ON mm.ModuloId = c.ModuloId
+    WHERE c.MatriculaId = @m AND mm.Obrigatorio = 1 AND mm.Ativo = 1`)).recordset[0];
+  const concluidaIso = (ultima && certificados.isoDia(ultima.Ultima)) || hojeIso;
+  const validoAte = calcularValidade(concluidaIso, depois.trilha.validadeMeses);
+  const ganhou = await pool.request().input("id", sql.Int, matriculaId).input("validoAte", sql.Date, validoAte).input("concluida", sql.Date, concluidaIso)
+    .query(`UPDATE TrilhaMatriculas SET Status = 'CONCLUIDA', ConcluidaEm = @concluida, ValidoAte = @validoAte, AtualizadoEm = SYSUTCDATETIME() WHERE MatriculaId = @id AND Status = 'EM_ANDAMENTO'`);
   if (!ganhou.rowsAffected[0]) return { sucesso: true, matriculaConcluida: true, mensagem: "✅ Módulo concluído (a matrícula já havia sido concluída por outra requisição)." };
 
   await registrarAuditoria({ tabela: "TrilhaMatriculas", registroId: matriculaId, acao: "TRILHA_CONCLUIDA", usuarioId: registradoPorMembroId, dadosAntes: { status: "EM_ANDAMENTO" }, dadosDepois: { status: "CONCLUIDA", validoAte } });
@@ -740,7 +759,7 @@ async function listarRequisitos(pool, { contexto, apenasAtivos = true } = {}) {
 // fluxo segue exatamente como antes.
 async function avaliarRequisitos(pool, { contexto, alvoChave = "", membroId, hojeIso = hojeIsoLocal() }) {
   const reqs = await listarRequisitos(pool, { contexto });
-  const aplicaveis = reqs.filter(r => r.alvoChave === limpar(alvoChave));
+  const aplicaveis = reqs.filter(r => alvoCorresponde(r.alvoChave, alvoChave));
   if (!aplicaveis.length) return resumirRequisitos([]);
   const mapa = await carregarSituacoes(pool, { membroIds: [membroId], trilhaIds: aplicaveis.map(r => r.trilhaId), hojeIso });
   return resumirRequisitos(aplicaveis.map(r => avaliarRequisito({ requisito: r, melhor: escolherMelhor(mapa.get(`${membroId}|${r.trilhaId}`) || []) })));
@@ -750,7 +769,7 @@ async function avaliarRequisitos(pool, { contexto, alvoChave = "", membroId, hoj
 // motivo de quem NÃO pode ser escalado; quem só tem ALERTA continua elegível.
 async function filtrarMembrosQueAtendem(pool, { contexto, alvoChave = "", membroIds, hojeIso = hojeIsoLocal() }) {
   const ids = [...new Set((membroIds || []).map(Number))].filter(Boolean);
-  const reqs = (await listarRequisitos(pool, { contexto })).filter(r => r.alvoChave === limpar(alvoChave));
+  const reqs = (await listarRequisitos(pool, { contexto })).filter(r => alvoCorresponde(r.alvoChave, alvoChave));
   if (!reqs.length || !ids.length) return { temRequisitos: reqs.length > 0, atendem: new Set(ids), bloqueados: new Map() };
 
   const mapa = await carregarSituacoes(pool, { membroIds: ids, trilhaIds: reqs.map(r => r.trilhaId), hojeIso });
@@ -808,7 +827,7 @@ module.exports = {
   validarNovaTrilha, validarNovoModulo, validarPreRequisitoModulo, criariaCicloTrilhas,
   calcularProgresso, podeConcluirModulo, validarDataConclusaoModulo,
   situacaoFormacao, escolherMelhor,
-  validarRequisito, avaliarRequisito, resumirRequisitos,
+  validarRequisito, avaliarRequisito, resumirRequisitos, normalizarAlvo, alvoCorresponde,
   // Banco
   criarTrilha, atualizarTrilha, adicionarModulo, atualizarModulo, adicionarPreRequisitoModulo, adicionarPreRequisitoTrilha, removerPreRequisitoTrilha,
   listarTrilhas, carregarSituacoes, listarFormacaoDoMembro, buscarMatricula, matricular, cancelarMatricula,

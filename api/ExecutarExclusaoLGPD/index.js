@@ -72,9 +72,16 @@ module.exports = async function (context, req) {
     .query(`UPDATE SolicitacoesTitularLGPD SET Status = 'ATENDIDA', RespostaTexto = @respostaTexto,
             DataResposta = SYSUTCDATETIME(), AtendidoPor = @atendidoPor WHERE SolicitacaoId = @id`);
 
+  // Trava 6-B: a trilha de auditoria é encadeada por hash e não pode ser
+  // corrigida depois — gravar aqui o telefone/e-mail/endereço "de antes"
+  // guardava para sempre exatamente o dado que a exclusão apagou. Fica só
+  // QUAIS campos estavam preenchidos.
+  const antes = membroAntes.recordset[0] || {};
   await registrarAuditoria({
     tabela: "MembroReferencia", registroId: solicitacao.MembroId, acao: "Executou exclusão LGPD (anonimizou dados de contato e foto)",
-    usuarioId: usuario.membroId, dadosAntes: membroAntes.recordset[0], dadosDepois: { telefone: null, email: null, endereco: null, fotoUrl: null }
+    usuarioId: usuario.membroId,
+    dadosAntes: { telefonePreenchido: !!antes.Telefone, emailPreenchido: !!antes.Email, enderecoPreenchido: !!antes.Endereco, tinhaFoto: !!antes.FotoUrl },
+    dadosDepois: { telefone: null, email: null, endereco: null, fotoUrl: null }
   });
   await registrarAuditoria({
     tabela: "SolicitacoesTitularLGPD", registroId: Number(id), acao: "Atendeu solicitação de exclusão LGPD",

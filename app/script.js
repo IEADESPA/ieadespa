@@ -12523,7 +12523,7 @@ async function carregarOpcoesEbdAcao() {
   const selCong = document.getElementById("ebdCongregacao");
   if (selCong && !selCong.dataset.montado) {
     const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
-    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
 }
@@ -12534,10 +12534,10 @@ async function carregarTurmasEbdAcao() {
   if (!congregacaoId) { container.innerHTML = ""; return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-turmas/turmas?congregacaoId=${congregacaoId}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.turmas.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Faixa Etária</th><th>Professores</th><th>Alunos</th></tr></thead><tbody>
-        ${data.turmas.map(t => `<tr><td>${t.turmaId}</td><td>${t.nome}</td><td>${t.faixaEtaria || "-"}</td><td>${t.totalProfessores}</td><td>${t.totalAlunos}</td></tr>`).join("")}
+        ${data.turmas.map(t => `<tr><td>${t.turmaId}</td><td>${escaparHtmlEbd(t.nome)}</td><td>${escaparHtmlEbd(t.faixaEtaria || "-")}</td><td>${t.totalProfessores}</td><td>${t.totalAlunos}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma turma cadastrada nesta congregação ainda.</p>";
 }
@@ -12570,17 +12570,17 @@ async function carregarDetalheTurmaEbdAcao() {
   ]);
   const dadosProf = await resProf.json();
   const dadosAlu = await resAlu.json();
-  if (dadosProf.sucesso === false) { container.innerHTML = `<p class="subtitle">${dadosProf.mensagem}</p>`; return; }
+  if (dadosProf.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(dadosProf.mensagem)}</p>`; return; }
   container.innerHTML = `
     <h5>Professores</h5>
     ${dadosProf.professores.length
       ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Principal</th><th></th></tr></thead><tbody>
-          ${dadosProf.professores.map(p => `<tr><td>${p.membroId}</td><td>${p.membroNome}</td><td>${p.principal ? "Sim" : "Não"}</td>
+          ${dadosProf.professores.map(p => `<tr><td>${p.membroId}</td><td>${escaparHtmlEbd(p.membroNome)}</td><td>${p.principal ? "Sim" : "Não"}</td>
             <td><button class="btn-link" onclick="encerrarProfessorEbdAcao(${turmaId}, ${p.membroId})">Remover</button></td></tr>`).join("")}
         </tbody></table>`
       : "<p class='subtitle'>Nenhum professor designado.</p>"}
     <h5>Alunos</h5>
-    ${dadosAlu.sucesso === false ? `<p class="subtitle">${dadosAlu.mensagem}</p>` : (dadosAlu.alunos.length
+    ${dadosAlu.sucesso === false ? `<p class="subtitle">${escaparHtmlEbd(dadosAlu.mensagem)}</p>` : (dadosAlu.alunos.length
       ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula EBD</th><th>Nome</th><th>Tipo</th><th>Matrículado em</th></tr></thead><tbody>
           ${dadosAlu.alunos.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${escaparHtmlEbd(a.membroNome)}</td>
             <td>${a.naoMembro ? `Não-membro${a.responsavelNome ? ` <span class="subtitle">(resp.: ${escaparHtmlEbd(a.responsavelNome)})</span>` : ""}` : "Membro"}</td>
@@ -12706,7 +12706,7 @@ function renderPainelProfessorEbd() {
       atividades dos alunos e faz o pedido de revistas da turma. Abrir/fechar a lição do dia, cadastros,
       certificados e financeiro ficam com quem administra a EBD.</p>
     <table class="tabela-frequencia"><thead><tr><th>Id da turma</th><th>Turma</th><th>Faixa etária</th><th>Congregação</th></tr></thead><tbody>
-      ${ebdTurmasProfessor.map(t => `<tr><td>${t.turmaId}</td><td>${t.nome}</td><td>${t.faixaEtaria || "-"}</td><td>${t.congregacaoNome}</td></tr>`).join("")}
+      ${ebdTurmasProfessor.map(t => `<tr><td>${t.turmaId}</td><td>${escaparHtmlEbd(t.nome)}</td><td>${escaparHtmlEbd(t.faixaEtaria || "-")}</td><td>${escaparHtmlEbd(t.congregacaoNome)}</td></tr>`).join("")}
     </tbody></table>
     <hr />`;
 }
@@ -12718,7 +12718,7 @@ async function carregarOpcoesChamadaEbdAcao() {
   const sel = document.getElementById("ebdChamadaCongregacao");
   if (sel && !sel.dataset.montado) {
     const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
-    sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     sel.dataset.montado = "1";
   }
 }
@@ -12783,7 +12783,7 @@ async function carregarRosterChamadaEbdAcao() {
   if (!licaoId || !turmaId) { container.innerHTML = ""; mostrarToast("Informe o id da lição e o id da turma.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-chamada/roster?turmaId=${turmaId}&licaoId=${licaoId}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.alunos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula</th><th>Nome</th><th>Status</th><th>Lançar</th></tr></thead><tbody>
         ${data.alunos.map(a => `<tr>
@@ -12836,7 +12836,7 @@ async function carregarResumoChamadaEbdAcao() {
   if (!licaoId || !turmaId) { container.innerHTML = ""; return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-chamada/resumo?licaoId=${licaoId}&turmaId=${turmaId}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   const r = data.resumo;
   container.innerHTML = `
     <p>Presentes: <strong>${r.presentes}</strong> · Ausentes: <strong>${r.ausentes}</strong> · Visitantes: <strong>${r.visitantes}</strong></p>
@@ -13446,9 +13446,9 @@ function renderPainelAtividadeEbd(atividade) {
   const container = document.getElementById("painelAtividadeEbd");
   if (!atividade) { container.innerHTML = "<p class='subtitle'>Nenhuma atividade criada ainda para esta lição.</p>"; return; }
   container.innerHTML = `
-    <p class="subtitle">Atividade #${atividade.atividadeId}${atividade.titulo ? " — " + atividade.titulo : ""} (${atividade.questoes.length} questão(ões))</p>
+    <p class="subtitle">Atividade #${atividade.atividadeId}${atividade.titulo ? " — " + escaparHtmlEbd(atividade.titulo) : ""} (${atividade.questoes.length} questão(ões))</p>
     ${atividade.questoes.length ? `<table class="tabela-frequencia"><thead><tr><th>Ordem</th><th>Tipo</th><th>Enunciado</th></tr></thead><tbody>
-      ${atividade.questoes.map(q => `<tr><td>${q.ordem}</td><td>${q.tipo}</td><td>${q.enunciado}</td></tr>`).join("")}
+      ${atividade.questoes.map(q => `<tr><td>${q.ordem}</td><td>${q.tipo}</td><td>${escaparHtmlEbd(q.enunciado)}</td></tr>`).join("")}
     </tbody></table>` : ""}
   `;
 }
@@ -13526,7 +13526,7 @@ function renderPainelRespostasAlunoEbd(respostas, resumo) {
       respondidas: ${resumo.respondidas} · pendentes de revisão: ${resumo.pendentes}</p>
     <table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Enunciado</th><th>Resposta</th><th>Correção</th><th></th></tr></thead><tbody>
       ${respostas.map(q => `<tr>
-        <td>${q.tipo}</td><td>${q.enunciado}</td>
+        <td>${q.tipo}</td><td>${escaparHtmlEbd(q.enunciado)}</td>
         <td>${renderRespostaCampoEbd(q)}
           <button class="btn-link" onclick="salvarRespostaEbdAcao(${q.questaoId})">💾</button>
         </td>
@@ -13547,7 +13547,7 @@ async function carregarRespostasAlunoEbdAcao() {
   if (!atividadeId || !alunoId) { container.innerHTML = ""; mostrarToast("Informe a atividade e o aluno.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-atividades/respostas?atividadeId=${atividadeId}&alunoId=${alunoId}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   renderPainelRespostasAlunoEbd(data.respostas, data.resumo);
 }
 
@@ -13588,10 +13588,10 @@ async function carregarResumoAtividadeTurmaEbdAcao() {
   if (!atividadeId || !turmaId) { container.innerHTML = ""; mostrarToast("Informe a atividade e a turma.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-atividades/resumo?atividadeId=${atividadeId}&turmaId=${turmaId}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.resumo.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula</th><th>Nome</th><th>Corretas</th><th>%</th></tr></thead><tbody>
-        ${data.resumo.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${a.membroNome}</td><td>${a.corretas}/${a.totalQuestoes}</td><td>${a.percentual}%</td></tr>`).join("")}
+        ${data.resumo.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${escaparHtmlEbd(a.membroNome)}</td><td>${a.corretas}/${a.totalQuestoes}</td><td>${a.percentual}%</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
 }
@@ -13637,7 +13637,7 @@ async function carregarCertificadosEbdAcao() {
   if (!membroId) { container.innerHTML = ""; mostrarToast("Informe a matrícula.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/certificados?membroId=${membroId}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   certificadosCache = data.certificados || [];
   renderizarCertificadosEbd();
 }
@@ -13707,8 +13707,10 @@ async function revogarCertificadoAcao(certificadoId) {
   }
 }
 
-async function baixarPdfCertificado(certificadoId, membroId) {
-  const res = await fetch(`${API_BASE}/certificados/${certificadoId}/pdf?matricula=${membroId}`);
+// Trava 6-B: PDF e QR do certificado exigem sessão (antes bastava o par id +
+// matrícula, dois números sequenciais, e o PDF leva o código de verificação).
+async function baixarPdfCertificado(certificadoId) {
+  const res = await fetchProtegido(`${API_BASE}/certificados/${certificadoId}/pdf`);
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     mostrarToast((data && data.mensagem) || "Não foi possível gerar o PDF.", "erro");
@@ -13730,17 +13732,27 @@ function imprimirCertificado(certificadoId) {
   if (c) renderizarImpressaoCertificado(c);
 }
 
-function renderizarImpressaoCertificado(c) {
+async function renderizarImpressaoCertificado(c) {
   const dataEmissaoFmt = c.dataEmissao ? new Date(c.dataEmissao).toLocaleDateString("pt-BR") : "____/____/______";
-  // v6.9 — QR de verificação pública (SVG do servidor, mesma regra do PDF: só a
-  // própria matrícula) + código e endereço em texto, pra quem não puder ler o QR.
+  // A janela abre já no clique (senão o navegador a bloqueia como pop-up);
+  // o conteúdo entra depois que o QR chega.
+  const w = window.open("", "_blank", "width=760,height=900");
+  if (!w) { mostrarToast("O navegador bloqueou a janela de impressão — permita pop-ups para este site.", "erro"); return; }
+  // v6.9 — QR de verificação pública (SVG do servidor, mesma regra do PDF) +
+  // código e endereço em texto, pra quem não puder ler o QR. Trava 6-B: o SVG
+  // vem pela sessão e entra como data URL (um <img src> não manda o token).
   const urlBase = `${location.origin}/verificar.html`;
-  const urlQr = new URL(`${API_BASE}/certificados/${c.certificadoId}/qr?matricula=${c.membroId}`, location.href).href;
+  let urlQr = "";
+  if (c.codigoVerificacao) {
+    try {
+      const resQr = await fetchProtegido(`${API_BASE}/certificados/${c.certificadoId}/qr`);
+      if (resQr.ok) urlQr = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(await resQr.text())}`;
+    } catch (e) { /* sem o QR, o código em texto continua no papel */ }
+  }
   const blocoVerificacao = c.codigoVerificacao ? `
-    <div class="verif"><img src="${urlQr}" alt="QR Code de verificação" width="110" height="110" />
+    <div class="verif">${urlQr ? `<img src="${urlQr}" alt="QR Code de verificação" width="110" height="110" />` : ""}
       <div><strong>Verifique a autenticidade deste certificado</strong><br />Aponte a câmera para o QR Code ou acesse<br />
       <strong>${escaparHtmlEbd(urlBase)}</strong><br />e informe o código: <strong>${escaparHtmlEbd(c.codigoVerificacao)}</strong></div></div>` : "";
-  const w = window.open("", "_blank", "width=760,height=900");
   w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Certificado</title>
   <style>
     body{font-family:Georgia,serif;color:#111;padding:40px;}
@@ -13767,6 +13779,51 @@ function renderizarImpressaoCertificado(c) {
   </div></body></html>`);
   w.document.close();
   setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
+}
+
+// ---- Trava 6-B — LGPD da EBD: titular sem cadastro de membro ----
+async function buscarTitularesEbdDpoAcao() {
+  const nome = document.getElementById("dpoEbdBusca").value.trim();
+  const container = document.getElementById("resultadoTitularesEbdDpo");
+  if (nome.length < 3) { mostrarToast("Digite pelo menos 3 letras do nome.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/lgpd/buscar?nome=${encodeURIComponent(nome)}`);
+  const data = await res.json();
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  const alunos = data.alunos.length
+    ? `<h5>Alunos não-membros</h5><table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Turma</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${data.alunos.map(a => `<tr><td>${a.alunoId}</td><td>${escaparHtmlEbd(a.nome)}</td><td>${escaparHtmlEbd(a.turmaNome)} — ${escaparHtmlEbd(a.congregacaoNome)}</td>
+          <td>${a.ativo ? "Matrícula ativa" : "Encerrada"}</td>
+          <td><button class="btn-link btn-link-perigo" onclick="anonimizarAlunoEbdDpoAcao(${Number(a.alunoId)})">anonimizar</button></td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum aluno não-membro com esse nome.</p>";
+  const visitantes = data.visitantes.length
+    ? `<h5>Visitantes</h5><table class="tabela-frequencia"><thead><tr><th>Registro</th><th>Nome</th><th>Data</th><th>Turma</th><th></th></tr></thead><tbody>
+        ${data.visitantes.map(v => `<tr><td>${v.chamadaId}</td><td>${escaparHtmlEbd(v.nome)}${v.temContato ? " <span class=\"subtitle\">(com contato)</span>" : ""}</td>
+          <td>${escaparHtmlEbd(formatarDataEbd(v.data))}</td><td>${escaparHtmlEbd(v.turmaNome)} — ${escaparHtmlEbd(v.congregacaoNome)}</td>
+          <td><button class="btn-link btn-link-perigo" onclick="anonimizarVisitanteEbdDpoAcao(${Number(v.chamadaId)})">anonimizar</button></td></tr>`).join("")}
+      </tbody></table>`
+    : "<p class='subtitle'>Nenhum visitante com esse nome.</p>";
+  container.innerHTML = alunos + visitantes;
+}
+
+async function anonimizarAlunoEbdDpoAcao(alunoId) {
+  if (!confirm("Anonimizar este aluno não-membro? Nome, contato, nascimento e responsável são apagados para sempre e a matrícula é encerrada. A presença dele continua contando nos números da EBD.")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/lgpd/anonimizar-aluno`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ alunoId })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) buscarTitularesEbdDpoAcao();
+}
+
+async function anonimizarVisitanteEbdDpoAcao(chamadaId) {
+  if (!confirm("Anonimizar este visitante? Nome e contato são apagados para sempre; a visita continua contando na chamada.")) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/lgpd/anonimizar-visitante`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chamadaId })
+  });
+  const data = await res.json();
+  mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
+  if (data.sucesso !== false) buscarTitularesEbdDpoAcao();
 }
 
 // ---- Formação e certificação (v6.9) ----
@@ -14125,11 +14182,11 @@ async function carregarCatalogoRevistasEbdAcao() {
   const container = document.getElementById("painelCatalogoRevistasEbd");
   const res = await fetchProtegido(`${API_BASE}/ebd-revistas/catalogo${trimestre ? `?trimestre=${encodeURIComponent(trimestre)}` : ""}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   catalogoRevistasCache = data.catalogo || [];
   container.innerHTML = catalogoRevistasCache.length
     ? `<table class="tabela-frequencia"><thead><tr><th>ID</th><th>Nome</th><th>Faixa etária</th><th>Trimestre</th><th>Preço</th><th>Ativa</th></tr></thead><tbody>
-        ${catalogoRevistasCache.map(r => `<tr><td>${r.revistaId}</td><td>${r.nome}</td><td>${r.faixaEtaria || "-"}</td><td>${r.trimestre}</td><td>R$ ${Number(r.precoUnitario).toFixed(2)}</td><td>${r.ativa ? "Sim" : "Não"}</td></tr>`).join("")}
+        ${catalogoRevistasCache.map(r => `<tr><td>${r.revistaId}</td><td>${escaparHtmlEbd(r.nome)}</td><td>${escaparHtmlEbd(r.faixaEtaria || "-")}</td><td>${escaparHtmlEbd(r.trimestre)}</td><td>R$ ${Number(r.precoUnitario).toFixed(2)}</td><td>${r.ativa ? "Sim" : "Não"}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma revista encontrada.</p>";
 }
@@ -14140,7 +14197,7 @@ async function carregarPedidosTurmaEbdAcao() {
   if (!turmaId) { container.innerHTML = ""; mostrarToast("Informe a turma.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos?turmaId=${turmaId}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   pedidosTurmaRevistasCache = data.pedidos || [];
   container.innerHTML = pedidosTurmaRevistasCache.length
     ? `<table class="tabela-frequencia"><thead><tr><th>ID</th><th>Trimestre</th><th>Status</th><th>Pagamento</th><th>Itens</th><th>Pedido x matrícula</th><th>Valor total</th></tr></thead><tbody>
@@ -14257,14 +14314,14 @@ async function carregarConsolidadoRevistasEbdAcao() {
   const container = document.getElementById("painelConsolidadoRevistasEbd");
   const res = await fetchProtegido(`${API_BASE}/ebd-revistas/consolidado${trimestre ? `?trimestre=${encodeURIComponent(trimestre)}` : ""}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.areas.length
     ? data.areas.map(area => `
         <div class="cartao-area-ebd" style="margin-bottom:14px;">
-          <h5>🗺️ ${area.areaNome} — R$ ${Number(area.valorTotal).toFixed(2)}</h5>
+          <h5>🗺️ ${escaparHtmlEbd(area.areaNome)} — R$ ${Number(area.valorTotal).toFixed(2)}</h5>
           ${area.congregacoes.map(cong => `
             <div style="margin-left:14px; margin-bottom:8px;">
-              <strong>⛪ ${cong.congregacaoNome} — R$ ${Number(cong.valorTotal).toFixed(2)}</strong>
+              <strong>⛪ ${escaparHtmlEbd(cong.congregacaoNome)} — R$ ${Number(cong.valorTotal).toFixed(2)}</strong>
               <ul style="margin:4px 0 0 20px;">
                 ${cong.pedidos.map(p => `<li>Turma ${escaparHtmlEbd(p.turmaNome)} (${escaparHtmlEbd(p.trimestre)}) — ${p.status} / pagamento ${p.statusPagamento} — R$ ${Number(p.valorTotal).toFixed(2)} — ${textoComparacaoMatriculaEbd(p.comparacaoMatricula)}</li>`).join("")}
               </ul>
@@ -14284,7 +14341,7 @@ async function carregarOpcoesFinanceiroEbdAcao() {
   const sel = document.getElementById("finCongregacao");
   if (sel && !sel.dataset.montado) {
     const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
-    sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     sel.dataset.montado = "1";
   }
 }
@@ -14326,13 +14383,13 @@ async function carregarLancamentosFinanceiroEbdAcao() {
   if (!congregacaoId || !mes || !ano) { container.innerHTML = ""; mostrarToast("Escolha a congregação, o mês e o ano.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/lancamentos?congregacaoId=${congregacaoId}&mes=${mes}&ano=${ano}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   const lancamentos = data.lancamentos || [];
   container.innerHTML = lancamentos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th></th></tr></thead><tbody>
         ${lancamentos.map(l => `<tr>
           <td>${new Date(l.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}</td><td>${l.tipo === "ENTRADA" ? "Entrada" : "Saída"}</td>
-          <td>${l.descricao}</td><td>R$ ${Number(l.valor).toFixed(2)}</td>
+          <td>${escaparHtmlEbd(l.descricao)}</td><td>R$ ${Number(l.valor).toFixed(2)}</td>
           <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;padding:2px 8px;" onclick="excluirLancamentoFinanceiroEbdAcao(${l.lancamentoId})">🗑️</button></td>
         </tr>`).join("")}
       </tbody></table>`
@@ -14377,7 +14434,7 @@ async function carregarConsolidadoFinanceiroEbdAcao() {
   if (!congregacaoId || !mes || !ano) { container.innerHTML = ""; mostrarToast("Escolha a congregação, o mês e o ano.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/consolidado?congregacaoId=${congregacaoId}&mes=${mes}&ano=${ano}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = `<p class="subtitle">
       Ofertas do culto: <strong>R$ ${Number(data.totalOfertas).toFixed(2)}</strong> (${data.ofertas.length} domingo(s) lançado(s)) ·
       Entradas manuais: <strong>R$ ${Number(data.totalEntradas).toFixed(2)}</strong> ·
@@ -14393,16 +14450,16 @@ async function carregarVisaoAgrupadaEbdAcao() {
   const container = document.getElementById("painelVisaoAgrupadaEbd");
   const res = await fetchProtegido(`${API_BASE}/ebd-turmas/visao-agrupada${busca ? `?busca=${encodeURIComponent(busca)}` : ""}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.areas.length
     ? data.areas.map(area => `
         <div class="cartao-area-ebd" style="margin-bottom:14px;">
-          <h5>🗺️ ${area.areaNome}</h5>
+          <h5>🗺️ ${escaparHtmlEbd(area.areaNome)}</h5>
           ${area.congregacoes.map(cong => `
             <div style="margin-left:14px; margin-bottom:8px;">
-              <strong>⛪ ${cong.congregacaoNome}</strong>
+              <strong>⛪ ${escaparHtmlEbd(cong.congregacaoNome)}</strong>
               <ul style="margin:4px 0 0 20px;">
-                ${cong.turmas.map(t => `<li>${t.nome}${t.faixaEtaria ? ` (${t.faixaEtaria})` : ""} — ${t.totalProfessores} professor(es), ${t.totalAlunos} aluno(s)</li>`).join("")}
+                ${cong.turmas.map(t => `<li>${escaparHtmlEbd(t.nome)}${t.faixaEtaria ? ` (${escaparHtmlEbd(t.faixaEtaria)})` : ""} — ${t.totalProfessores} professor(es), ${t.totalAlunos} aluno(s)</li>`).join("")}
               </ul>
             </div>
           `).join("")}
@@ -14638,15 +14695,15 @@ async function carregarMinhasConquistasAcao() {
   const container = document.getElementById("resultadoMinhasConquistas");
   const res = await fetchProtegido(`${API_BASE}/conquistas/painel`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = `
     <p><strong>Pontuação atual:</strong> ${data.score}</p>
     <div style="display:flex; flex-wrap:wrap; gap:10px;">
       ${data.catalogo.map(c => `
         <div class="cartao-area-ebd" style="min-width:200px; opacity:${c.desbloqueada ? "1" : "0.5"};">
-          <div style="font-size:1.6em;">${c.icone || "🏆"}</div>
-          <strong>${c.nome}</strong>
-          <p class="subtitle">${c.descricao || ""}</p>
+          <div style="font-size:1.6em;">${escaparHtmlEbd(c.icone || "🏆")}</div>
+          <strong>${escaparHtmlEbd(c.nome)}</strong>
+          <p class="subtitle">${escaparHtmlEbd(c.descricao || "")}</p>
           <p>${c.desbloqueada ? "✅ Desbloqueada" : "🔒 Não desbloqueada"} · +${c.pontosBonus} pts</p>
         </div>
       `).join("")}
@@ -14659,10 +14716,10 @@ async function carregarRankingConquistasAcao() {
   const container = document.getElementById("resultadoRankingConquistas");
   const res = await fetchProtegido(`${API_BASE}/conquistas/ranking?escopoTipo=GLOBAL`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.ranking.length
     ? `<table class="tabela-frequencia"><thead><tr><th>#</th><th>Nome</th><th>Pontuação</th><th>Conquistas</th></tr></thead><tbody>
-        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${r.nome}</td><td>${r.score}</td><td>${r.totalConquistas}</td></tr>`).join("")}
+        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${escaparHtmlEbd(r.nome)}</td><td>${r.score}</td><td>${r.totalConquistas}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Ninguém no ranking ainda.</p>";
 }
@@ -14672,10 +14729,10 @@ async function carregarTiposEventoConquistaAcao() {
   const container = document.getElementById("painelTiposEventoConquista");
   const res = await fetchProtegido(`${API_BASE}/conquistas/tipos-evento`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.tipos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Descrição</th><th>Módulo</th></tr></thead><tbody>
-        ${data.tipos.map(t => `<tr><td>${t.tipoEvento}</td><td>${t.descricao || "-"}</td><td>${t.moduloOrigem || "-"}</td></tr>`).join("")}
+        ${data.tipos.map(t => `<tr><td>${escaparHtmlEbd(t.tipoEvento)}</td><td>${escaparHtmlEbd(t.descricao || "-")}</td><td>${escaparHtmlEbd(t.moduloOrigem || "-")}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum tipo de evento cadastrado ainda.</p>";
 }
@@ -14703,13 +14760,13 @@ async function carregarCatalogoConquistaAdminAcao() {
   const container = document.getElementById("painelCatalogoConquista");
   const res = await fetchProtegido(`${API_BASE}/conquistas/catalogo?incluirInativas=true`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.catalogo.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Oculta</th><th>Pré-requisito</th><th>Bônus</th><th>Regras</th></tr></thead><tbody>
         ${data.catalogo.map(c => `<tr>
-          <td>${c.conquistaId}</td><td>${c.icone || ""} ${c.nome}</td><td>${c.oculta ? "Sim" : "Não"}</td>
+          <td>${c.conquistaId}</td><td>${escaparHtmlEbd(c.icone || "")} ${escaparHtmlEbd(c.nome)}</td><td>${c.oculta ? "Sim" : "Não"}</td>
           <td>${c.preRequisitoConquistaId || "-"}</td><td>${c.pontosBonus}</td>
-          <td>${c.regras.map(r => `${r.tipoRegra} (${r.tipoEvento})`).join(", ") || "-"}</td>
+          <td>${c.regras.map(r => `${escaparHtmlEbd(r.tipoRegra)} (${escaparHtmlEbd(r.tipoEvento)})`).join(", ") || "-"}</td>
         </tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma conquista cadastrada ainda.</p>";
@@ -14728,7 +14785,7 @@ async function criarConquistaAcao() {
     body: JSON.stringify({ nome, icone, descricao, oculta, preRequisitoConquistaId: preRequisitoConquistaId ? Number(preRequisitoConquistaId) : null, pontosBonus })
   });
   const data = await res.json();
-  document.getElementById("resultadoNovaConquista").innerHTML = `<p class="subtitle">${data.mensagem}</p>`;
+  document.getElementById("resultadoNovaConquista").innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`;
   if (data.sucesso !== false) {
     document.getElementById("conqNovoNome").value = "";
     document.getElementById("conqNovoIcone").value = "";
@@ -14754,7 +14811,7 @@ async function criarRegraConquistaAcao() {
     body: JSON.stringify({ conquistaId, tipoRegra, tipoEvento, config })
   });
   const data = await res.json();
-  document.getElementById("resultadoNovaRegraConquista").innerHTML = `<p class="subtitle">${data.mensagem}</p>`;
+  document.getElementById("resultadoNovaRegraConquista").innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`;
   if (data.sucesso !== false) {
     document.getElementById("conqRegraConquistaId").value = "";
     document.getElementById("conqRegraTipoEvento").value = "";
@@ -14770,10 +14827,10 @@ async function carregarRankingConquistaAdminAcao() {
   const qs = `escopoTipo=${escopoTipo}${escopoId ? `&escopoId=${escopoId}` : ""}`;
   const res = await fetchProtegido(`${API_BASE}/conquistas/ranking?${qs}`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.ranking.length
     ? `<table class="tabela-frequencia"><thead><tr><th>#</th><th>Nome</th><th>Pontuação</th><th>Conquistas</th></tr></thead><tbody>
-        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${r.nome}</td><td>${r.score}</td><td>${r.totalConquistas}</td></tr>`).join("")}
+        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${escaparHtmlEbd(r.nome)}</td><td>${r.score}</td><td>${r.totalConquistas}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Ninguém no ranking neste escopo ainda.</p>";
 }

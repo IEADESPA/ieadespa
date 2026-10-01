@@ -40,6 +40,8 @@ module.exports = async function (context, req) {
     if (acao === "emitir" && metodo === "POST") {
       if (!temGestao(usuario)) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
       const { membroId, titulo, descricao, conquistaId } = req.body || {};
+      // Trava 6-B: o titular precisa estar no escopo de quem emite.
+      if (membroId && !(await certificados.gestorAlcancaMembro(pool, usuario, Number(membroId)))) return erro(context, 403, "Esta pessoa está fora do seu escopo de atuação.");
       const resultado = await certificados.emitirCertificado(pool, {
         membroId, titulo, descricao, conquistaId: conquistaId || null, emitidoPorMembroId: usuario.membroId
       });
@@ -55,6 +57,11 @@ module.exports = async function (context, req) {
       if (!temGestao(usuario) && !temGestaoFormacao(usuario)) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
       const { certificadoId, motivo } = req.body || {};
       if (!certificadoId) return erro(context, 400, "Informe certificadoId.");
+      // Trava 6-B: revogar tira o valor da formação como requisito (consagração,
+      // liderança, escala) — só quem alcança o titular pode.
+      const alvo = await certificados.buscarCertificadoPorId(pool, Number(certificadoId));
+      if (!alvo) return erro(context, 404, "Certificado não encontrado.");
+      if (!(await certificados.gestorAlcancaMembro(pool, usuario, alvo.membroId))) return erro(context, 403, "O titular deste certificado está fora do seu escopo de atuação.");
       const resultado = await certificados.revogarCertificado(pool, { certificadoId: Number(certificadoId), motivo, revogadoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -64,6 +71,9 @@ module.exports = async function (context, req) {
       const membroId = Number((req.query && req.query.membroId) || usuario.membroId);
       if (membroId !== usuario.membroId && !temGestao(usuario) && !temGestaoFormacao(usuario)) {
         return erro(context, 403, "Só é possível ver os certificados de outra pessoa com a permissão de gestão da EBD ou da formação.");
+      }
+      if (membroId !== usuario.membroId && !(await certificados.gestorAlcancaMembro(pool, usuario, membroId))) {
+        return erro(context, 403, "Esta pessoa está fora do seu escopo de atuação.");
       }
       // O selo de integridade é interno (só serve à verificação pública): a API
       // diz apenas se existe.

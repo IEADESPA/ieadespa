@@ -360,6 +360,7 @@ async function registrarRespostaAluno(pool, { questaoId, alunoId, resposta, regi
   const respostaJson = JSON.stringify(resposta === undefined ? null : resposta);
   const existente = await buscarRespostaExistente(pool, questaoId, alunoId);
 
+  let respostaId = existente ? existente.RespostaId : null;
   if (existente) {
     await pool.request()
       .input("id", sql.Int, existente.RespostaId).input("resposta", sql.NVarChar(sql.MAX), respostaJson)
@@ -371,18 +372,22 @@ async function registrarRespostaAluno(pool, { questaoId, alunoId, resposta, regi
         WHERE RespostaId = @id
       `);
   } else {
-    await pool.request()
+    // Trava 6-B: RegistroId de AuditLog é NOT NULL — o id da linha nova vem do
+    // OUTPUT; antes ia nulo, e a auditoria de toda linha NOVA falhava calada.
+    const inserida = await pool.request()
       .input("questaoId", sql.Int, questaoId).input("alunoId", sql.Int, alunoId)
       .input("resposta", sql.NVarChar(sql.MAX), respostaJson).input("correta", sql.Bit, correta)
       .input("registradoPor", sql.Int, registradoPorMembroId || null)
       .query(`
         INSERT INTO EbdRespostasAlunos (QuestaoId, AlunoId, RespostaJson, Correta, RegistradoPorMembroId)
+        OUTPUT INSERTED.RespostaId
         VALUES (@questaoId, @alunoId, @resposta, @correta, @registradoPor)
       `);
+    respostaId = inserida.recordset[0].RespostaId;
   }
 
   await registrarAuditoria({
-    tabela: "EbdRespostasAlunos", registroId: existente ? existente.RespostaId : null, acao: "RESPOSTA_LANCADA",
+    tabela: "EbdRespostasAlunos", registroId: respostaId, acao: "RESPOSTA_LANCADA",
     usuarioId: registradoPorMembroId, dadosAntes: existente ? { correta: existente.Correta } : null,
     dadosDepois: { questaoId, alunoId, correta }
   });

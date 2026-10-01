@@ -1,24 +1,27 @@
 // CertificadoQr (v6.9 — QR de verificação do certificado, em SVG)
 // O PDF (CertificadoPdf) já leva o QR; este é o mesmo QR em SVG pra página
-// imprimível do navegador (renderizarImpressaoCertificado). Mesmo modelo de
-// autoatendimento de CertificadoPdf: só a PRÓPRIA matrícula pede o QR do
-// próprio certificado. O QR carrega só a URL pública de verificação.
-// GET /api/certificados/{id}/qr?matricula=123
+// imprimível do navegador (renderizarImpressaoCertificado). Mesma regra de
+// CertificadoPdf (Trava 6-B): exige login — o titular, ou gestão que alcança o
+// titular. O QR carrega só a URL pública de verificação.
+// GET /api/certificados/{id}/qr
+const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
 const certificados = require("../shared/certificados");
 const { gerarMatriz, matrizParaSvg } = require("../shared/certificadoQr");
 
 module.exports = async function (context, req) {
-  const certificadoId = context.bindingData.id;
-  const matricula = Number((req.query || {}).matricula);
-  if (!certificadoId || !matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula: /api/certificados/{id}/qr?matricula=123" } };
+  const usuario = auth.exigirLogin(req, context);
+  if (!usuario) return;
+  const certificadoId = Number(context.bindingData.id);
+  if (!certificadoId) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o certificado." } };
     return;
   }
 
   const pool = await getPool();
   const certificado = await certificados.buscarCertificadoPorId(pool, certificadoId);
-  if (!certificado || certificado.membroId !== matricula || !certificado.codigoVerificacao) {
+  const temGestao = !!certificado && certificado.membroId !== usuario.membroId && await certificados.gestorAlcancaMembro(pool, usuario, certificado.membroId);
+  if (!certificados.podeAcessarCertificado(certificado, { membroIdSolicitante: usuario.membroId, temGestao }) || !certificado.codigoVerificacao) {
     context.res = { status: 404, body: { sucesso: false, mensagem: "Certificado não encontrado." } };
     return;
   }

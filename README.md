@@ -6451,7 +6451,8 @@ desempate do ranking.
   `GET /api/certificados?membroId=`) e `CertificadoPdf`
   (`GET /api/certificados/{id}/pdf?matricula=`, mesmo modelo de
   autoatendimento do `CartaPdf` — só a própria matrícula baixa o próprio
-  PDF). Permissão de emissão: **`ebd_gestao`** (v6.1) — a mesma que já fecha
+  PDF; **desde a Trava 6-B exige login**: o titular, ou gestão que alcança o
+  titular — ver a trava). Permissão de emissão: **`ebd_gestao`** (v6.1) — a mesma que já fecha
   turmas/chamada/lições da FASE 6, porque emitir certificado não é
   autoatendimento (a pessoa não emite pra si mesma); consultar/baixar/
   imprimir os próprios certificados continua aberto à própria matrícula,
@@ -6892,13 +6893,15 @@ dá, pela primeira vez, série histórica comparável entre congregações.
 
   **Registrado, não construído, por decisão:**
 
-  - Exclusão LGPD do aluno não-membro: o fluxo de exclusão de dados
-    (`ExcluirDados`) não cobre `EbdAlunos` nem para membros; fica para a
-    Trava 6-B, junto da política de retenção.
+  - Exclusão LGPD do aluno não-membro: o fluxo de exclusão do titular
+    (`ExecutarExclusaoLGPD` — o texto original citava `ExcluirDados`, que é
+    outra coisa: o reset de dados fictícios) não cobre `EbdAlunos`; fica para a
+    Trava 6-B, junto da política de retenção. **Resolvido na Trava 6-B.**
   - O texto digitado por gente passa por `escaparHtmlEbd` nas telas novas e
     nas duas células de nome que a v6.8 tocou (alunos da turma e roster da
     chamada); o resto da aba EBD ainda monta HTML sem escapar (nome de
-    visitante, de turma etc.) — limpeza geral para a Trava 6-B.
+    visitante, de turma etc.) — limpeza geral para a Trava 6-B. **Resolvido na
+    Trava 6-B.**
   - Matriculados de lições fechadas **antes** da v6.8 não têm foto: usam o
     número atual de alunos ativos até alguém reabrir e salvar a caderneta
     (ou até o trimestre ser fechado, que congela o resultado).
@@ -7036,8 +7039,8 @@ dá, pela primeira vez, série histórica comparável entre congregações.
   **QR:** matriz calculada pela biblioteca `qrcode` (MIT — nova dependência
   de `api/`; só o cálculo, nada de PNG) e desenhada em **vetor**, no PDF
   (pdfkit) e em SVG para a impressão do navegador (`CertificadoQr`, mesmo
-  modelo de autoatendimento do PDF: só a própria matrícula). O QR carrega
-  apenas a URL pública com o código.
+  modelo de autoatendimento do PDF: só a própria matrícula — desde a Trava 6-B,
+  com login). O QR carrega apenas a URL pública com o código.
 
   **Permissões.** `trilhas_gestao` (nova, nunca concedida a papel nenhum). Em
   duas camadas: **catálogo e requisitos** mudam a regra da igreja inteira e
@@ -7085,7 +7088,8 @@ dá, pela primeira vez, série histórica comparável entre congregações.
   - A rota pública não tem limite de taxa (não existe utilitário no `api/`, e
     estado em memória não serve em Functions com várias instâncias); o código de
     ~80 bits torna a enumeração inviável. Para revisar na Trava 6-B, junto com o
-    custo de consultas anônimas ao banco.
+    custo de consultas anônimas ao banco. **Na Trava 6-B:** limite por origem,
+    por instância (30/min).
   - A validade operacional mora na matrícula; o selo protege o que a
     verificação pública mostra. Quem tem escrita direta no banco pode mexer na
     matrícula — o mesmo que já vale para o resto do sistema.
@@ -7093,7 +7097,9 @@ dá, pela primeira vez, série histórica comparável entre congregações.
     territorial (como os demais detectores da vB.2); o filtro por escopo está na
     tela de pendências.
   - O nome do titular aparece a quem tiver o código (é o que está impresso no
-    papel); retenção e anonimização de certificados entram na Trava 6-B.
+    papel); retenção e anonimização de certificados entram na Trava 6-B. **Na
+    Trava 6-B:** retenção indeterminada, registrada em PoliticasRetencao e no
+    ROPA.
 
 #### v6.10 — Sala de aula assistida e material *(7ª rodada)*
 

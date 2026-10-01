@@ -373,8 +373,7 @@ async function buscarAlunoPorId(pool, alunoId) {
 }
 
 function hojeIsoLocal() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return require("./dataBrasilia").hojeBrasilia(); // Trava 6-B: dia de Brasília, não do servidor (UTC)
 }
 
 // Aluno sem cadastro de membro (v6.8). Recebe a matrícula pelo mesmo
@@ -426,12 +425,20 @@ async function vincularAlunoAMembro(pool, { alunoId, membroId, registradoPorMemb
   const validacao = podeVincularAMembro(aluno, vinculoDoMembro);
   if (!validacao.permitido) return { sucesso: false, mensagem: validacao.mensagem };
 
-  await pool.request().input("id", sql.Int, alunoId).input("membroId", sql.Int, membroId).query(`
-    UPDATE EbdAlunos
-    SET MembroId = @membroId, NomeNaoMembro = NULL, ContatoNaoMembro = NULL, DataNascimento = NULL, ResponsavelNome = NULL,
-        AtualizadoEm = SYSUTCDATETIME()
-    WHERE AlunoId = @id AND MembroId IS NULL
-  `);
+  try {
+    await pool.request().input("id", sql.Int, alunoId).input("membroId", sql.Int, membroId).query(`
+      UPDATE EbdAlunos
+      SET MembroId = @membroId, NomeNaoMembro = NULL, ContatoNaoMembro = NULL, DataNascimento = NULL, ResponsavelNome = NULL,
+          AtualizadoEm = SYSUTCDATETIME()
+      WHERE AlunoId = @id AND MembroId IS NULL
+    `);
+  } catch (e) {
+    // Trava 6-B: dois vínculos simultâneos ao mesmo membro batiam no índice
+    // único filtrado (UX_EbdAlunos_Membro) e viravam erro 500.
+    const numero = e && (e.number || (e.originalError && e.originalError.info && e.originalError.info.number));
+    if (numero === 2601 || numero === 2627) return { sucesso: false, mensagem: "Este membro já tem matrícula na EBD — use a transferência de turma." };
+    throw e;
+  }
 
   await registrarAuditoria({
     tabela: "EbdAlunos", registroId: alunoId, acao: "ALUNO_VINCULADO_A_MEMBRO",

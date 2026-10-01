@@ -12,15 +12,26 @@
 const { getPool } = require("../shared/db");
 const { fecharTrimestresEncerrados } = require("../shared/ebdCaderneta");
 const { exigirSegredoRotina } = require("../shared/cronAuth");
+const { aplicarRetencaoEbd } = require("../shared/ebdLgpd");
 
 module.exports = async function (context, req) {
   if (!exigirSegredoRotina(req, context)) return;
   const pool = await getPool();
   const resumo = await fecharTrimestresEncerrados(pool);
   context.log(`[EBD] fechamento trimestral automático: ${resumo.fechados} fechado(s), ${resumo.ignorados} ignorado(s), ${resumo.falhas} falha(s) — trimestres avaliados: ${resumo.trimestres.join(", ") || "nenhum"}.`);
+  // Trava 6-B — retenção LGPD da EBD (visitante > 12 meses, aluno não-membro
+  // encerrado > 24 meses: anonimizados). Fail-soft: um problema aqui não pode
+  // derrubar o fechamento, que já foi feito.
+  let retencao = null;
+  try {
+    retencao = await aplicarRetencaoEbd(pool);
+    context.log(`[EBD] retenção LGPD: ${retencao.visitantesAnonimizados} visitante(s) e ${retencao.alunosAnonimizados} aluno(s) não-membro(s) anonimizado(s).`);
+  } catch (e) {
+    context.log.error("[EBD] falha na retenção LGPD:", e.message);
+  }
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: true, ...resumo },
+    body: { sucesso: true, ...resumo, retencao },
   };
 };

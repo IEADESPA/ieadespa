@@ -64,6 +64,21 @@ function podeAcessarCertificado(certificado, { membroIdSolicitante, temGestao })
   return Number(certificado.membroId) === Number(membroIdSolicitante);
 }
 
+// Trava 6-B: "temGestao" acima precisa ser gestão QUE ALCANÇA a pessoa — a
+// permissão (ebd_gestao ou trilhas_gestao) e o titular dentro do escopo
+// territorial de quem pede (membro sem congregação só por escopo global,
+// como auth.estaNoEscopo já trata). Antes, qualquer gestor local via, emitia
+// e revogava certificado de qualquer membro da igreja.
+async function gestorAlcancaMembro(pool, usuario, membroId) {
+  const permissoes = (usuario && usuario.permissoes) || [];
+  if (!permissoes.includes("ebd_gestao") && !permissoes.includes("trilhas_gestao")) return false;
+  const r = await pool.request().input("id", sql.Int, membroId).query(`
+    SELECT c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id
+  `);
+  if (!r.recordset.length) return false;
+  return require("./auth").estaNoEscopo(usuario, r.recordset[0].CongregacaoNome);
+}
+
 // ---- Código público de verificação ----
 
 function gerarCodigoVerificacao() {
@@ -313,7 +328,7 @@ async function revogarCertificado(pool, { certificadoId, motivo, revogadoPorMemb
 module.exports = {
   TIPO_PROTOCOLO_CERTIFICADO, ALFABETO_CODIGO, TAMANHO_CODIGO,
   // Lógica pura
-  validarEmissaoCertificado, podeAcessarCertificado, mapearCertificado,
+  validarEmissaoCertificado, podeAcessarCertificado, gestorAlcancaMembro, mapearCertificado,
   gerarCodigoVerificacao, normalizarCodigo, codigoValido, formatarCodigo, urlVerificacao,
   isoDia, calcularHashIntegridade, avaliarVerificacaoPublica, podeRevogarCertificado,
   // Banco

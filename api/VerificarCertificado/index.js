@@ -17,15 +17,24 @@
 // GET /api/verificacao-certificado/{codigo}
 const { getPool } = require("../shared/db");
 const certificados = require("../shared/certificados");
+const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
+
+// Trava 6-B: 30 verificações por minuto por origem (por instância — ver
+// shared/limiteTaxa.js). Quem confere um certificado de verdade faz 1 ou 2.
+const limitador = criarLimitador({ janelaMs: 60000, maximo: 30 });
 
 function hojeIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return require("../shared/dataBrasilia").hojeBrasilia(); // Trava 6-B: dia de Brasília, não do servidor (UTC)
 }
 
 module.exports = async function (context, req) {
   const cabecalhos = { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" };
   const codigo = context.bindingData.codigo;
+  const limite = limitador.registrar(chaveDeOrigem(req));
+  if (!limite.permitido) {
+    context.res = { status: 429, headers: { ...cabecalhos, "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas verificações seguidas. Aguarde um minuto e tente de novo." } };
+    return;
+  }
 
   try {
     if (!certificados.codigoValido(codigo)) {

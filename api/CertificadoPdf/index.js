@@ -6,9 +6,13 @@
 // (shared/protocolo.js) já gravado na emissão (shared/certificados.js —
 // aqui não há "rascunho": emitir já é o evento real, então o protocolo já
 // existe desde o INSERT, nunca é gerado sob demanda neste arquivo).
-// GET /api/certificados/{id}/pdf?matricula=123 — mesmo modelo de
-// autoatendimento de CartaPdf: só a PRÓPRIA matrícula baixa o próprio
-// certificado.
+// GET /api/certificados/{id}/pdf — exige login (Trava 6-B): o titular baixa o
+// próprio; gestão da EBD/formação, só de quem está no seu escopo. Antes era
+// anônimo, protegido só pelo par certificadoId + matrícula — dois números
+// sequenciais —, e o PDF leva o código de verificação (segredo portador da
+// v6.9): dava para enumerar certificados e códigos. O parâmetro ?matricula=,
+// se vier, é ignorado.
+const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
 const certificados = require("../shared/certificados");
 const { novoDocumento, cabecalhoInstitucional, rodapeInstitucional, gerarBuffer, MARINHO, CINZA } = require("../shared/pdfInstitucional");
@@ -22,16 +26,18 @@ function fmtData(valor) {
 }
 
 module.exports = async function (context, req) {
-  const certificadoId = context.bindingData.id;
-  const matricula = Number((req.query || {}).matricula);
-  if (!certificadoId || !matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula: /api/certificados/{id}/pdf?matricula=123" } };
+  const usuario = auth.exigirLogin(req, context);
+  if (!usuario) return;
+  const certificadoId = Number(context.bindingData.id);
+  if (!certificadoId) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o certificado." } };
     return;
   }
 
   const pool = await getPool();
   const certificado = await certificados.buscarCertificadoPorId(pool, certificadoId);
-  if (!certificado || certificado.membroId !== matricula) {
+  const temGestao = !!certificado && certificado.membroId !== usuario.membroId && await certificados.gestorAlcancaMembro(pool, usuario, certificado.membroId);
+  if (!certificados.podeAcessarCertificado(certificado, { membroIdSolicitante: usuario.membroId, temGestao })) {
     context.res = { status: 404, body: { sucesso: false, mensagem: "Certificado não encontrado." } };
     return;
   }

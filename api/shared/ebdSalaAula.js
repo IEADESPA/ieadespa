@@ -59,7 +59,7 @@ const REGEX_CHAVE_CLIENTE = /^[A-Za-z0-9_-]{8,64}$/;
 // rodam em UTC: sem isto, entre 21h e meia-noite o servidor já estaria no
 // dia seguinte.
 function hojeBrasilia(agora = new Date()) {
-  return new Date(agora.getTime() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+  return require("./dataBrasilia").hojeBrasilia(agora);
 }
 
 function dataIsoValida(iso) {

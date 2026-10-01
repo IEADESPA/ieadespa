@@ -149,8 +149,8 @@ com uma plataforma de eventos de verdade, a conclusão foi que só interessa um 
 evento, lançado manualmente no sistema de gestão de membros; e-mail nunca é armazenado por padrão).
 O modelo atual:
 
-- **Evento semanal (culto)** — agenda litúrgica do sistema de governança (v7.2; coleção
-  `programacao` do Directus só como fallback, ver abaixo), sem inscrição.
+- **Evento semanal (culto)** — coleção `programacao` do Directus (a agenda litúrgica do sistema
+  de governança, v7.2, está pronta para assumir quando a CLI conferir; ver abaixo), sem inscrição.
 - **Evento simples** — coleção `eventos`, sem inscrição: data, horário de término, local (texto
   livre ou puxado automaticamente de uma `congregacao` vinculada), responsável. Arquivamento
   automático diário (Flow do Directus, 3h da manhã) some eventos passados da lista principal sem
@@ -179,9 +179,10 @@ O modelo atual:
 **Calendário oficial e agenda litúrgica (v7.2).** A grade semanal de cultos e os eventos
 especiais do calendário oficial nascem no sistema de governança e chegam ao site em tempo de
 build, por `GET https://app.ieadespa.org.br/api/agenda-publica/tudo` (sem login; ver
-[src/lib/agendaOficial.ts](./src/lib/agendaOficial.ts)). A grade (`liturgia`) substitui a coleção
-`programacao` do Directus, que sobra só como rede de segurança de transição (usada se a API estiver
-fora do ar ou devolver a grade vazia). Os eventos oficiais são mesclados à lista do Directus em
+[src/lib/agendaOficial.ts](./src/lib/agendaOficial.ts)). A grade (`liturgia`) tem código pronto para
+substituir a coleção `programacao` do Directus, mas está **desligada** (`USAR_GRADE_DO_SISTEMA` em
+[src/lib/programacao.ts](./src/lib/programacao.ts)) até a CLI conferir a agenda litúrgica do
+sistema: hoje a grade pública continua a do Directus. Os eventos oficiais são mesclados à lista do Directus em
 `/eventos/`, `/eventos.ics` e na busca (`mesclarEventos`): o **Directus segue dono dos eventos com
 inscrição/página própria** (`/evento/<slug>/`), mas quando o calendário oficial aponta o mesmo
 `slugSite`, data e hora passam a ser as oficiais; os demais eventos oficiais aparecem sem página

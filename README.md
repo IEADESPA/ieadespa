@@ -7817,11 +7817,17 @@ estava, a versão cobria talvez um quinto do que a norma manda.
     no `.ics` dele); hora oficial vazia não apaga a do Directus. Sem
     correspondência, nasce um item `agenda-<id>` sem página própria, com a etiqueta
     do tipo.
-  - **Grade de cultos.** A programação semanal (home, contato, visitante e a
-    imagem `programacao-semanal.png`) passa a vir da agenda litúrgica do sistema;
-    se ela vier vazia ou indisponível, cai no Directus. A grade semeada segue o
-    Art. 79 e **pode diferir da que estava no Directus**: conferir no site no
-    primeiro deploy.
+  - **Grade de cultos: o site continua com a do Directus, de propósito.** O código
+    para a programação semanal (home, contato, visitante e a imagem
+    `programacao-semanal.png`) vir da agenda litúrgica do sistema está pronto, mas
+    **desligado** (`USAR_GRADE_DO_SISTEMA = false` em `site/src/lib/programacao.ts`).
+    Comparei a grade que o site publica hoje com a que a migração 114 semeou a
+    partir do Art. 79 e elas **diferem** (títulos, o rodízio de domingo à noite — o
+    2º domingo é "SEMIADESPA Local" no site e "Culto de Missões" no sistema — e
+    linhas que só existem no sistema, como "Congregações fechadas"). Trocar a grade
+    pública sem a igreja confirmar seria mudar informação ao público por conta própria.
+    Quando a CLI conferir e ajustar a agenda litúrgica no sistema, basta virar a chave
+    para `true`; com a agenda indisponível ou vazia, cai no Directus.
   - **Sincronização.** Um workflow agendado (`.github/workflows/site-agenda-sync.yml`,
     a cada 20 minutos) compara a `versao` do sistema com a que o site publicado
     diz estar mostrando (`/agenda-versao.json`) e, **só se forem diferentes**,

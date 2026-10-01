@@ -51,22 +51,29 @@ export const OCCURRENCE_LABEL: Record<Ocorrencia, string> = {
 
 let cached: Promise<ProgramacaoItem[]> | null = null;
 
+/**
+ * Chave de liberação da grade de cultos do sistema (v7.2). Os EVENTOS do calendário
+ * oficial já vão ao site; a GRADE semanal só passa a vir do sistema quando a CLI
+ * confirmar a agenda litúrgica que a migração 114 semeou a partir do Art. 79 —
+ * ela difere, em títulos e no rodízio de domingo à noite, da coleção `programacao`
+ * do Directus que o site publica hoje. Trocar para `true` é a única mudança necessária.
+ */
+export const USAR_GRADE_DO_SISTEMA = false;
+
 async function carregarProgramacao(): Promise<ProgramacaoItem[]> {
   // Fonte oficial: a agenda litúrgica do sistema de governança (v7.2), mesmo
   // formato de `ProgramacaoItem`.
-  const agenda = await fetchAgendaOficial();
-  if (agenda.disponivel && agenda.liturgia.length > 0) return agenda.liturgia;
-
-  // Rede de segurança de TRANSIÇÃO: com a agenda indisponível (sistema fora do
-  // ar) OU com a liturgia vazia (ex.: o primeiro deploy do site rodou antes da
-  // API nova estar no ar / antes de cadastrarem a grade), cai para a coleção
-  // `programacao` do Directus — o site nunca fica sem horário de culto. Quando
-  // a grade oficial estiver estável em produção, esta coleção pode ser aposentada.
-  console.warn(
-    agenda.disponivel
-      ? "[programacao] liturgia oficial vazia; usando a coleção `programacao` do Directus."
-      : "[programacao] agenda oficial indisponível; usando a coleção `programacao` do Directus.",
-  );
+  if (USAR_GRADE_DO_SISTEMA) {
+    const agenda = await fetchAgendaOficial();
+    if (agenda.disponivel && agenda.liturgia.length > 0) return agenda.liturgia;
+    console.warn(
+      agenda.disponivel
+        ? "[programacao] liturgia oficial vazia; usando a coleção `programacao` do Directus."
+        : "[programacao] agenda oficial indisponível; usando a coleção `programacao` do Directus.",
+    );
+  }
+  // Sem a chave (padrão), ou com a agenda do sistema indisponível/vazia, vale a
+  // coleção `programacao` do Directus: o site nunca fica sem horário de culto.
   return fetchItems<ProgramacaoItem>("programacao", "sort[]=sort");
 }
 

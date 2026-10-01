@@ -7264,9 +7264,172 @@ dá, pela primeira vez, série histórica comparável entre congregações.
 
 #### 🔒 Trava de Revisão 6-B — antes de encerrar a FASE 6 e avançar para a FASE 7
 
-Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v6.8 a v6.10 pelas 5 perguntas do checklist, e faz uma varredura
-final na FASE 6 inteira antes de fechar.
+- [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da
+      seção 3). Auditadas v6.8 a v6.10 pelas 5 perguntas do checklist
+      (30/09), com varredura final na FASE 6 inteira. A v6.10 ainda não
+      existia quando a trava foi chamada; como o texto da trava manda auditar
+      v6.8 a v6.10, ela foi construída antes (commit `a462011`). Correções no
+      commit `bc913cd` + migração 112.
+
+  **1. Todo código novo roda de ponta a ponta contra o ambiente real?** Sim,
+  com um achado que nenhum teste pegava: **a auditoria de toda linha NOVA da
+  EBD nunca foi gravada.** `registrarPresencaAluno` (v6.2),
+  `registrarRespostaAluno` (v6.3), o salvar da caderneta e o fechamento
+  trimestral (v6.8) passavam `RegistroId` nulo quando a linha era nova (a
+  importação passava nulo sempre). A coluna não aceita nulo, e a auditoria
+  engole a falha de propósito (é fail-soft). Ninguém percebeu porque a
+  operação em si dava certo. Apareceu na verificação da v6.10 contra a
+  homologação: 11 falhas de auditoria por rodada. Corrigido com `OUTPUT
+  INSERTED` (lote usa `0`, a convenção de `ImportarPessoas`). Na rodada
+  seguinte foram zero. As 112 migrações reaplicam na homologação sem erro
+  (idempotência testada de novo); a 111 e a 112 foram aplicadas em produção.
+  As **106 rotas de ação** das 10 Functions da FASE 6, mais PDF, QR e a rotina
+  diária, foram testadas uma a uma em produção, sem sessão: todas `401`,
+  nenhuma `404` (é a lição da 6-A: testar cada ação, não só a raiz). Suíte
+  completa: 703/703 (45 suítes). Achado da varredura: **todo "hoje" da FASE 6
+  era o dia do servidor**, que roda em UTC. Das 21h à meia-noite de Brasília o
+  sistema já estava no dia seguinte, com estes efeitos:
+  - um certificado que vale "até hoje" aparecia vencido 3 horas antes;
+  - a idade do aluno menor virava na véspera;
+  - a carência do fechamento andava um dia.
+
+  Agora tudo passa por `shared/dataBrasilia.js`.
+
+  **2. Toda tela nova abre e mostra dado de verdade?** Checagem sistemática:
+  os 1736 `getElementById` literais (1114 ids distintos) foram conferidos
+  contra os 1257 ids do HTML, os 68 criados pelo JS e os 72 prefixos
+  dinâmicos. Só apareceram os 2 falsos positivos de sempre (`caixaSino`,
+  `permissaoEscopoTodas`), e todo handler inline aponta para função global. No
+  DOM simulado com o `script.js` inteiro rodaram 36 verificações da v6.10 e 8
+  da trava. **Achado de tela: XSS armazenado em 47 pontos**, todos corrigidos
+  com `escaparHtmlEbd`:
+  - 21 mensagens do servidor que voltavam para o `innerHTML`, algumas
+    repetindo o nome digitado;
+  - 26 campos digitados: congregação nos `<select>`, turma, faixa etária,
+    professor, título e enunciado de atividade (texto do professor rodando na
+    tela do gestor), revista, área/congregação/turma do consolidado e da visão
+    agrupada, e a descrição do lançamento financeiro;
+  - e as **Conquistas**: ícone, nome e descrição aparecem em "Minhas
+    Conquistas" para **todo membro**, além do ranking, dos tipos de evento e
+    das regras.
+
+  **3. README e código continuam narrando a mesma coisa?** Divergências
+  corrigidas no código:
+  - **Certificado.** A v6.9 diz que "ninguém lista nem adivinha
+    certificados", mas o PDF e o QR eram anônimos, guardados só por
+    `certificadoId` + matrícula — dois números sequenciais. O PDF traz o
+    código de verificação, então dava para enumerar códigos. A 6-A tinha
+    aceitado o modelo do `CartaPdf` antes de o certificado carregar um código
+    secreto. Agora PDF e QR **exigem login**: o titular baixa o próprio, e a
+    gestão só o de quem está no seu escopo. No front, o PDF vem por
+    `fetchProtegido` e o QR entra como `data:` URL, porque um `<img>` não manda
+    o token.
+  - **`GestaoCertificados` não conferia escopo.** Um gestor local emitia,
+    listava e **revogava** certificado de qualquer membro da igreja.
+    Revogar tira a formação como requisito e trava consagração, liderança e
+    escala em outra congregação. Agora o titular precisa estar no escopo
+    (`certificados.gestorAlcancaMembro`).
+  - **Requisito de consagração** comparava o alvo com `===`. Um requisito
+    "Consagração a Diácono" não valia para "consagração a diácono", e o
+    assunto pode ser texto livre: o `BLOQUEIA` simplesmente não se aplicava.
+    A comparação passou a ignorar maiúscula, acento e espaço repetido.
+  - **Validade da trilha** contava do dia do registro. Um módulo lançado com
+    data retroativa ganhava meses de certificado. Agora a validade conta da
+    data do último módulo obrigatório.
+  - **Importação de caderneta antiga** sobre uma lição **aberta** criava uma
+    caderneta IMPORTADA que escondia a chamada lançada depois. Agora é
+    recusada, e o trimestre já fechado gera aviso para refazer o fechamento.
+
+  Corrigido só no texto:
+  - a v6.8 chamava de "fluxo de exclusão" o `ExcluirDados`, que é o reset de
+    dados fictícios (o fluxo do titular é `ExecutarExclusaoLGPD`);
+  - na v6.5 e na v6.9, PDF e QR agora dizem "com login";
+  - os itens deixados "para a Trava 6-B" na v6.8 e na v6.9 estão marcados como
+    resolvidos.
+
+  Números de teste de v6.8 a v6.10 (61/62/35; totais 594 → 656 → 691)
+  conferem com o código. As referências cruzadas da v6.10 (v6.6, v6.8, vB.2,
+  v7.11) apontam para seções que existem.
+
+  **4. O que ficou pra trás foi de fato corrigido, não só anotado?**
+  Nenhum `TODO`/`FIXME` na FASE 6. As quatro pendências que a v6.8 e a v6.9
+  deixaram para esta trava foram resolvidas:
+  - **LGPD de quem não é membro.** Aluno não-membro e visitante não têm
+    matrícula de membro, então não abrem solicitação pelo portal. Três peças
+    resolvem:
+    - o Encarregado (`protecaodedados`, nunca `ebd_gestao`) busca por nome e
+      anonimiza, em "Proteção de Dados → EBD", pelas rotas
+      `ebd-turmas/lgpd/*` de `shared/ebdLgpd.js`;
+    - a rotina diária da EBD anonimiza sozinha o visitante com mais de 12
+      meses e o não-membro com matrícula encerrada há mais de 24;
+    - a regra está em `PoliticasRetencao` (migração 112) e no ROPA (entradas
+      `EBD` e `FORMACAO`).
+
+    Anonimizar não apaga a linha, e a contagem da chamada e da caderneta
+    continua batendo. A auditoria guarda só ids.
+  - **Escape geral da aba EBD:** feito (pergunta 2).
+  - **Limite de taxa na verificação pública:** limite por origem, por
+    instância das Functions (30 por minuto), com o IP guardado só como hash.
+    Ao vivo, a 31ª verificação seguida recebe `429` com `Retry-After`. Um
+    limite global de verdade exige borda paga (Front Door/WAF) e fica
+    registrado como decisão.
+  - **Retenção de certificados:** indeterminada enquanto o certificado puder
+    ser apresentado (é prova de formação exigida pelos fluxos), registrada com
+    a razão no catálogo.
+
+  Outros achados, também corrigidos:
+  - **A vacância** (Carta de Mudança, desligamento, abandono, disciplina,
+    licença de candidatura) não tocava a EBD: quem saía continuava professor
+    ativo. Agora lecionar sai junto com as outras funções. A matrícula de
+    aluno só se encerra quando a pessoa deixa a igreja: disciplina e licença
+    de candidatura tiram o mandato, não o direito de estudar.
+  - **`ExecutarExclusaoLGPD`** gravava na auditoria encadeada o telefone, o
+    e-mail e o endereço "de antes", ou seja, guardava para sempre exatamente o
+    que a exclusão apagou. Agora registra só quais campos estavam preenchidos.
+  - **O nome do visitante** ia para a auditoria (v6.2). Agora vão só ids.
+  - **Dois "vincular a membro" simultâneos** davam erro 500 no índice único.
+    Agora um passa e o outro recebe uma recusa clara.
+
+  **Verificado contra a homologação:** 47 verificações das correções, sem
+  falha, com o mesmo método das versões (roteiro descartável, dados fictícios
+  removidos no fim). O roteiro da v6.10 também foi reexecutado: 82 de 82.
+
+  **Fica registrado, não corrigido, por decisão:**
+  - Matriculados de lições fechadas antes da v6.8 seguem sem foto, como a
+    v6.8 descreve.
+  - Vincular um não-membro a um membro não exige o membro no escopo de quem
+    vincula, igual à matrícula: membro de outra congregação pode estudar na
+    EBD daqui.
+  - Na caderneta, escopo vazio continua sendo "não vê nada", o lado
+    restritivo, coerente com `auth.estaNoEscopo` para lista vazia.
+
+  **Fora da FASE 6, achado na varredura e levado ao responsável:**
+  - `ExcluirDados` (`POST /api/dados/excluir`, permissão `permissoes`) é o
+    reset de dados fictícios da época do mock. Nenhuma tela o chama, e com
+    dado real ele faria `DELETE` de verdade, por categoria. A categoria
+    "pessoas" hoje falha por chave estrangeira e desfaz tudo; outras
+    categorias, como reuniões, apagam tabelas inteiras.
+  - O `CartaPdf` (vB.6) continua anônimo com id + matrícula. Ele não carrega
+    código de verificação, mas é o mesmo padrão que esta trava fechou no
+    certificado.
+
+  **5. Deploy real, de ponta a ponta, aconteceu?** Sim, nos dois commits
+  (cada um terminou com "Deployment Complete"):
+
+  | Commit | Run | Testes | Migração |
+  | --- | --- | --- | --- |
+  | v6.10 (`a462011`) | `36797959217` | 691 | 111, em 11 batches |
+  | correções (`bc913cd`) | `36800434890` | 703 | 112, em 3 batches |
+
+  Conferido ao vivo, sem sessão:
+  - as 106 rotas de ação da FASE 6 respondem `401`;
+  - `verificar.html` responde 200;
+  - a verificação pública responde 404 com `no-store`/`noindex`, e `429` na
+    31ª chamada seguida;
+  - o service worker `v2` está no ar.
+
+  **FASE 6 encerrada.** v6.1 a v6.10 foram entregues e auditadas em 2 travas
+  (6-A e 6-B), com deploy real confirmado em cada uma. Avança para a FASE 7.
 
 ### FASE 7 — Saúde, Eventos e Comunicação
 

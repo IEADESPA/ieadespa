@@ -58,7 +58,7 @@ Todo o conteúdo abaixo é editado no [painel do Directus](#painel-administrativ
 em arquivo deste repositório. O site busca os dados de lá em tempo de build (ou, nos poucos casos
 que precisam disso, em tempo real pelo navegador de quem visita), através de
 [src/lib/directus.ts](./src/lib/directus.ts) e das Functions em [api/](./api/) (uma pasta por
-função — modelo clássico do Azure Functions, ver vC.5 no README da raiz).
+função — modelo clássico do Azure Functions, ver vC.5 em `docs/plano/fase-c-integracao-com-o-site.md`).
 
 ### Conteúdo institucional (leitura pública liberada)
 

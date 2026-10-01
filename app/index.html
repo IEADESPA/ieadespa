@@ -113,6 +113,7 @@
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" onclick="mostrarSubAbaMeupainel('minhaformacao')"><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" onclick="mostrarSubAbaMeupainel('agenda')"><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCanais" onclick="mostrarSubAbaMeupainel('canais')"><span class="icone">📣</span><span class="rotulo">Canais</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelEventos" onclick="mostrarSubAbaMeupainel('eventos')"><span class="icone">🎪</span><span class="rotulo">Eventos</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" onclick="mostrarSubAbaMeupainel('tarefas')"><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" onclick="mostrarSubAbaMeupainel('seguranca')"><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
@@ -326,6 +327,18 @@
           <div class="grupo-modulo" id="grupoModuloCanais" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaCanais" onclick="mostrarAbaSecretaria('canais')"><span class="icone">📣</span><span class="rotulo">Canais e Comunicação</span></button>
+          </div>
+
+          <!-- MÓDULO: EVENTOS E CONGRESSOS (v7.4) — dossiê de governança do evento do
+               Calendário: organizadores, convidados externos (parecer do Conselho de Ética
+               e Nada Consta da Presidência, Regimento Art. 111 e 111-A) e Caixa Flutuante
+               (Art. 53-E, §2º e §3º; Art. 152). Permissões próprias "eventos_gestao",
+               "eventos_etica" e "eventos_presidencia", nunca concedidas por padrão. O SITE
+               segue dono da inscrição, lista de espera, check-in e certificado. Quem organiza
+               um evento sem permissão nenhuma age em Meu Painel → Eventos. -->
+          <div class="grupo-modulo" id="grupoModuloEventos" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaEventos" onclick="mostrarAbaSecretaria('eventos')"><span class="icone">🎪</span><span class="rotulo">Eventos e Congressos</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -791,6 +804,34 @@
           </div>
           <p id="cnlMeusAvisosResultado" class="subtitle" role="status"></p>
           <div id="cnlMeusAvisos"></div>
+        </div>
+
+        <!-- SUB-ABA: EVENTOS (v7.4 — Eventos e Congressos). Autoatendimento, aberto a
+             qualquer login: o cartão fixo leva ao site (inscrição, lista de espera,
+             check-in, certificado) e, para quem organiza um evento (proponente no
+             Calendário ou designado), mostra os eventos e abre o dossiê de governança:
+             convidados e Caixa Flutuante. Toda regra mora no servidor (shared/eventos.js). -->
+        <div id="subMeupainelEventos" class="sub-aba-secretaria" style="display:none;">
+          <h3>🎪 Eventos</h3>
+          <div class="cal-cartao cartao-area-ebd evt-cartao-fixo">
+            <h5>🎟️ Eventos e inscrições</h5>
+            <p style="margin:4px 0;">A <strong>inscrição</strong>, a <strong>lista de espera</strong>, o <strong>check-in</strong> e o <strong>certificado</strong> dos
+              eventos ficam no site da IEADESPA — não são feitos aqui. Aqui fica só a governança do evento para quem o organiza:
+              convidados externos e Caixa Flutuante.</p>
+            <p style="margin:6px 0 0;">
+              <a href="https://www.ieadespa.org.br/eventos/" target="_blank" rel="noopener noreferrer">🌐 Ver os eventos e fazer a inscrição</a> ·
+              <a href="https://www.ieadespa.org.br/minha-conta/" target="_blank" rel="noopener noreferrer">👤 Minha conta no site (inscrições e certificados)</a>
+            </p>
+          </div>
+          <p id="evtMeuResultado" class="subtitle" role="status"></p>
+          <div id="evtMeusBloco" style="display:none;">
+            <h4>🗂️ Os eventos que eu organizo</h4>
+            <p class="subtitle" style="margin:4px 0 10px;">Você aparece aqui se propôs o evento no Calendário ou foi designado pela Secretaria
+              (Responsável, Organizador ou Tesoureiro).</p>
+            <div id="evtMeusEventos"></div>
+          </div>
+          <p id="evtDossieMsgM" class="subtitle" role="status"></p>
+          <div id="evtDossieM"></div>
         </div>
 
         <!-- SUB-ABA: MINHAS CONQUISTAS (v6.4 — Motor de conquistas e
@@ -3949,6 +3990,88 @@
               <p id="cnlTrResultado" class="subtitle" role="status"></p>
             </div>
           </details>
+        </div>
+      </div>
+
+      <!-- ABA: EVENTOS E CONGRESSOS (v7.4). Exige "eventos_gestao" (Secretaria Geral: painel,
+           organizadores, convidados em qualquer evento do escopo), "eventos_etica" (Conselho de
+           Ética: parecer sobre convidado de reputação desconhecida) e/ou "eventos_presidencia"
+           (Presidência: Nada Consta dos eventos gerais); a conferência do caixa é da Tesouraria
+           Geral ("financeiro" com escopo global). Toda regra (Protocolo de Convidados, antecedência
+           de 10 dias, fechamento do Caixa Flutuante em centavos, segregação de funções) mora no
+           servidor (shared/eventos.js); aqui só se monta a tela. O que o servidor devolve passa
+           por escaparHtmlEbd antes de ir ao innerHTML. O evento é do Calendário; inscrição, lista
+           de espera, check-in e certificado são do SITE. -->
+      <div id="abaEventos" class="aba-secretaria" style="display:none;">
+        <h3>🎪 Eventos e Congressos</h3>
+        <p class="subtitle">O evento é do <strong>Calendário</strong>; a inscrição, a lista de espera, o check-in e o certificado ficam no <strong>site</strong>.
+          Aqui está o <strong>dossiê de governança</strong> do evento: os <strong>organizadores</strong>, os <strong>convidados externos</strong> (parecer do
+          Conselho de Ética e Nada Consta da Presidência, Regimento Art. 111 e 111-A) e o <strong>Caixa Flutuante</strong> (prestação de contas do evento de
+          Área, Região ou Geral, Art. 53-E, §2º e §3º).</p>
+
+        <div class="cal-pilulas evt-pilulas" id="evtPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnEvtSecaoPainel" onclick="evtMostrarSecaoAcao('painel')" style="display:none;">📊 Painel</button>
+          <button type="button" class="cal-pilula" id="btnEvtSecaoFila" onclick="evtMostrarSecaoAcao('fila')" style="display:none;">⚖️ Fila de análise</button>
+          <button type="button" class="cal-pilula" id="btnEvtSecaoCaixas" onclick="evtMostrarSecaoAcao('caixas')" style="display:none;">💰 Caixas para conferir</button>
+        </div>
+
+        <!-- a) PAINEL (eventos_gestao) -->
+        <div id="evtSecaoPainel" class="cal-secao">
+          <h4>📊 Painel dos eventos</h4>
+          <div class="barra-lista">
+            <label for="evtPainelAno">Ano:</label>
+            <input type="number" id="evtPainelAno" min="2020" max="2100" style="max-width:110px;min-width:90px;" />
+            <button class="btn-confirmar" style="width:auto;margin:0;" onclick="evtCarregarPainelAcao()">🔄 Carregar</button>
+          </div>
+          <p id="evtResultadoPainel" class="subtitle" role="status"></p>
+          <div id="evtContadores" class="cnl-contadores"></div>
+          <div id="evtListaEventos"></div>
+        </div>
+
+        <!-- c) FILA DE ANÁLISE (eventos_etica e/ou eventos_presidencia) -->
+        <div id="evtSecaoFila" class="cal-secao" style="display:none;">
+          <h4>⚖️ Fila de análise de convidados</h4>
+          <p class="cnl-aviso-senha" role="note"><strong>Quem convidou, enviou ou organiza o evento não decide sobre o próprio convidado.</strong></p>
+          <div class="barra-lista">
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="evtCarregarFilaAcao()">🔄 Atualizar</button>
+          </div>
+          <p id="evtResultadoFila" class="subtitle" role="status"></p>
+          <div id="evtBlocoFilaEtica" style="display:none;">
+            <h5>🛡️ Parecer do Conselho de Ética</h5>
+            <p class="psc-legenda" style="margin-top:0;">Convidado de reputação desconhecida: o parecer precisa sair com antecedência do evento (Art. 111, parágrafo único). Parecer contrário exige o motivo.</p>
+            <div id="evtFilaEtica"></div>
+          </div>
+          <div id="evtBlocoFilaPresidencia" style="display:none;">
+            <h5>🏛️ Nada Consta da Presidência</h5>
+            <p class="psc-legenda" style="margin-top:0;">Convidados dos eventos gerais: o convite só é oficializado e divulgado depois do Nada Consta (Art. 111-A). Negar exige o motivo.</p>
+            <div id="evtFilaPresidencia"></div>
+          </div>
+        </div>
+
+        <!-- d) CAIXAS PARA CONFERIR (Tesouraria Geral ou eventos_gestao) -->
+        <div id="evtSecaoCaixas" class="cal-secao" style="display:none;">
+          <h4>💰 Caixas Flutuantes de Eventos</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">O caixa encerrado espera a conferência da Tesouraria Geral. Quem encerrou o caixa não o confere. Abra o dossiê para
+            conferir ou devolver para correção.</p>
+          <div class="barra-lista">
+            <select id="evtFiltroCaixa" title="Situação do caixa" onchange="evtCarregarCaixasAcao()">
+              <option value="ENCERRADO" selected>Para conferir (encerrados)</option>
+              <option value="ABERTO">Abertos</option>
+              <option value="CONFERIDO">Conferidos</option>
+              <option value="">Todos</option>
+            </select>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="evtCarregarCaixasAcao()">🔄 Atualizar</button>
+          </div>
+          <p id="evtResultadoCaixas" class="subtitle" role="status"></p>
+          <div class="rolagem-tabela"><div id="evtTabelaCaixas"></div></div>
+        </div>
+
+        <!-- b) DOSSIÊ DO EVENTO: o mesmo componente do Painel, da fila e dos caixas -->
+        <hr />
+        <div id="evtPainelDossie">
+          <h4>🗂️ Dossiê do evento</h4>
+          <p id="evtDossieMsgG" class="subtitle" role="status"></p>
+          <div id="evtDossieG"><p class="subtitle">Abra o dossiê de um evento (<em>Abrir dossiê</em>) no painel, na fila ou nos caixas.</p></div>
         </div>
       </div>
 

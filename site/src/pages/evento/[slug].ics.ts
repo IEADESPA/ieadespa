@@ -1,7 +1,12 @@
 import { siteConfig } from "@/config/site";
 import { fetchItems } from "@/lib/directus";
 import { hasEventPage } from "@/lib/eventos";
-import { aplicarDatasOficiais, fetchAgendaOficial } from "@/lib/agendaOficial";
+import {
+  aplicarDatasOficiais,
+  descricaoComParticipacao,
+  fetchAgendaOficial,
+  type ConvidadoOficial,
+} from "@/lib/agendaOficial";
 import { buildIcs } from "@/lib/ics";
 
 interface Evento {
@@ -14,6 +19,7 @@ interface Evento {
   description: string;
   body: string | null;
   aceita_inscricao?: boolean;
+  convidados?: ConvidadoOficial[];
 }
 
 export async function getStaticPaths() {
@@ -36,7 +42,7 @@ export async function GET({ props }: { props: Props }) {
       {
         uid: `evento-${event.slug}@ieadespa.org.br`,
         title: event.title,
-        description: event.description,
+        description: descricaoComParticipacao(event.description, event.convidados),
         location: event.location ?? undefined,
         date: event.event_date as string,
         endDate: event.end_date,

@@ -8248,8 +8248,14 @@ registro do canal, sozinho, não cobre nada disso.
 
 #### v7.4 — Eventos e congressos
 
-- [ ] Cadastro de eventos (local/área/geral) + inscrições.
-- [ ] Congresso Unificado de Departamentos.
+- [x] Cadastro de eventos (local/área/geral) + inscrições. *(O cadastro é o do
+      Calendário Oficial, v7.2; as inscrições seguem no site, como decidido abaixo.
+      A v7.4 acrescenta a governança do evento.)*
+- [x] Congresso Unificado de Departamentos. *(Já era evento de Nível 1 com bloqueio
+      total do campo desde a v7.2; a v7.4 dá a ele — e a qualquer evento geral ou de
+      Área — organizadores, convidados externos com o Protocolo de Convidados e o
+      Caixa Flutuante. Programação, inscrição, lotação por sala, QR e hospedagem por
+      congregação ficam com o site e com a v7.13.)*
 
 **Integração com o site institucional (trabalhada fora de ordem, junto com a
 FASE C, 2026-09-14)** — o site já tem um sistema de eventos público próprio
@@ -8261,17 +8267,197 @@ quórum de órgão (`AbrirReuniao`/`RegistrarPresenca`/`ListarFrequencia`,
 FASE 0), e forçar os dois a serem uma coisa só distorceria ambos. O único
 ponto real de integração:
 
-- [ ] `eventos.congregacao` (Directus) passa a apontar pro `CongregacaoId`
+- [x] `eventos.congregacao` (Directus) passa a apontar pro `CongregacaoId`
       real, via a API unificada de Congregações (vC.2, FASE C) — em vez da
-      relação Directus-Directus solta que existe hoje.
-- [ ] Site continua sendo dono do cadastro de evento/inscrição/certificado —
+      relação Directus-Directus solta que existe hoje. *(Já estava feito na FASE
+      C: `evento/[slug].astro` resolve o campo contra `fetchCongregacoesPublicas()`.
+      Os dados do próprio Directus não dá para conferir daqui.)*
+- [x] Site continua sendo dono do cadastro de evento/inscrição/certificado —
       este sistema não duplica isso, só compartilha a fonte de congregação.
-- [ ] **Integração com o Portal do Membro (vB.5)**: "minhas inscrições em
+- [x] **Integração com o Portal do Membro (vB.5)**: "minhas inscrições em
       eventos" no PWA não duplica o motor do site (decisão acima continua
-      de pé) — o portal só **linka/embute** a área de eventos do site
-      (Directus) dentro de "Meu Painel", usando a MESMA sessão verificada da
-      vB.5 (login por código) pra identificar a pessoa sem pedir login de
-      novo. Ver também v7.13, que expande esta versão na 7ª rodada.
+      de pé) — o portal só **linka** a área de eventos do site (Directus) em
+      "Meu Painel → Eventos". *(Limite: o sistema não passa a sessão do membro ao
+      site. O site identifica a pessoa pelo telefone e pelo código, no fluxo dele;
+      levar a sessão para lá exigiria um desenho de autenticação entre dois domínios
+      que não foi feito.)* Ver também v7.13, que expande esta versão na 7ª rodada.
+
+  Entrega: migração 116 (`sql/migrations/116_eventos_congressos.sql`),
+  `shared/eventos.js` (a regra, **pura**), `shared/eventosDb.js` (leitura, gravação e
+  decisões), a Function nova `GestaoEventos` (`/api/eventos-gestao/...`, 22 ações),
+  convidados no pacote público do site, seis regras no motor de notificações da
+  vB.2, a entrada `EVENTOS` no ROPA e a política de retenção da categoria.
+
+  **O que o Regimento exige e o site não tem.** Além da data (que é do
+  Calendário), um evento geral ou de Área tem dois pontos de governança que
+  nenhum módulo cobria: **quem pode ir ao púlpito** (Art. 111 e 111-A) e **para onde vai o
+  dinheiro arrecadado** (Art. 53-E, §2º). Esta versão cobre os dois, no dossiê do
+  evento, sem tocar na inscrição, na lista de espera, no check-in, no
+  certificado nem na programação do evento com página, que o Directus mantém.
+
+  **Organizadores.** O **proponente** do evento no Calendário é o **responsável
+  implícito**; a Secretaria (no escopo) ou o responsável designam mais gente com um
+  de três papéis: *responsável* (tudo), *organizador* (convidados) e *tesoureiro*
+  (caixa). Assim o voluntário que organiza um congresso age no que é dele **sem
+  ganhar uma permissão geral** — a Secretaria (`eventos_gestao`) vê todos os
+  eventos, mas **não opera o caixa** se não for tesoureiro dele (segregação). O
+  designado é avisado na hora.
+
+  **Protocolo de Convidados (Art. 111, parágrafo único e Art. 111-A).** O
+  organizador registra o convidado externo (preletor, cantor, banda ou grupo) e
+  **declara se a liderança conhece a reputação dele**, sim ou não, sem valor
+  padrão. Ao enviar o convite à análise, o sistema calcula o que ele exige:
+  - **Conselho de Ética** — quando a reputação é **desconhecida**. A consulta exige
+    **10 dias de antecedência** do evento (parâmetro `EVENTO_ETICA_ANTECEDENCIA_DIAS`):
+    com menos, o envio é **recusado**, com a explicação (exatamente 10 dias ainda
+    vale). Reputação conhecida não depende da antecedência.
+  - **Nada Consta da Presidência** — nos eventos **gerais** (Níveis 1 e 2, os das
+    Lideranças Gerais, Art. 111-A, §1º).
+  - Se nada é exigido (evento de Área ou local com convidado de reputação
+    conhecida), o convite é **autorizado na hora** — a responsabilidade pelo púlpito é
+    do Dirigente ou do Supervisor (Art. 111).
+  O convite só vira **AUTORIZADO** quando **todo** parecer exigido é favorável; uma
+  decisão contrária **veta na hora**, mesmo faltando a outra; o Nada Consta
+  não substitui o parecer da Ética. Parecer contrário e Nada Consta negado exigem
+  o **motivo**, que fica registrado e é enviado à organização. **Quem convidou,
+  quem enviou ou quem organiza o evento não decide sobre o próprio convidado.**
+  Só o autorizado se **oficializa**, e **só o oficializado, cujo convidado autorizou
+  divulgar o nome, aparece no site** (Art. 111-A, §2º: "somente após o Nada Consta o
+  convite poderá ser oficializado e divulgado"). O próprio banco impede um convidado
+  de ser AUTORIZADO sem os pareceres que a regra exigiu. A Ética e a Presidência
+  têm uma **fila** com os convites que aguardam a decisão delas, com a contagem de
+  dias até o evento; o aviso chega na hora e a rodada diária cobra o que segue sem
+  decisão quando o evento está a 5 dias ou menos.
+
+  **Caixa Flutuante de Eventos (Art. 53-E, §2º e §3º; Art. 152).** As Áreas e
+  Regiões não podem manter caixa permanente: o evento tem um **caixa temporário**,
+  liquidado no custeio, e o saldo positivo é **recolhido à Sede ou convertido em
+  benfeitoria**, nunca guardado. O sistema:
+  - só abre o caixa de evento de **Área, Região ou Geral**, já deferido ou homologado
+    (o evento de uma congregação usa a tesouraria dela), e **exige a declaração** de
+    que nenhuma conta bancária foi aberta para o evento nem haverá conta paralela em
+    nome da Igreja ou de associação (§3º: infração gravíssima) — gravada com quem
+    declarou e quando;
+  - registra **entradas** (oferta voluntária, campanha, cantina e vendas, outra) e
+    **saídas** (estrutura, alimentação, transporte, hospedagem, material, som e
+    mídia, oferta a convidado, outra); **toda saída exige comprovante** (Art. 152,
+    I) — também no banco; lançamento errado é **cancelado com motivo**, continua
+    visível e sai da conta; a conta é feita em **centavos inteiros**;
+  - no **encerramento**, o saldo positivo precisa de **destino por inteiro** — os destinos
+    (recolhido à Sede ou benfeitoria, cada um com valor, data e comprovante)
+    somam **exatamente** o saldo, sem sobra nem falta; saldo negativo exige a
+    **justificativa do déficit**; saldo zero só se confirma. O prazo é de **15 dias**
+    depois do fim do evento (parâmetro `EVENTO_CAIXA_ENCERRAR_DIAS`) e, vencido,
+    a organização e a Tesouraria são avisadas;
+  - depois de encerrado, **nem o banco aceita lançamento ou alteração** (gatilho);
+  - a **Tesouraria Geral** (permissão `financeiro` com escopo global) **confere** o
+    caixa ou o **devolve** para correção com motivo (volta a aberto, os destinos
+    são refeitos e um novo aviso sai). **Quem encerrou não confere**: outra pessoa da
+    Tesouraria precisa fazê-lo.
+
+  **O painel e os congressos.** A Secretaria vê, por ano, os eventos gerais, de Área
+  e regionais (os Congressos Unificados destacados) com o que falta em cada um:
+  sem organizador, convidados em análise, caixa fora do prazo, caixa aguardando
+  conferência.
+
+  **A tela (módulo "🎪 Eventos e Congressos").** Menu novo para quem tem uma das três
+  permissões de eventos **ou** `financeiro` (a Tesouraria Geral, que só enxerga a
+  pílula "Caixas para conferir"), com:
+  - **Painel** (Secretaria): por ano, sete indicadores e a lista de eventos gerais, de
+    Área e regionais, com o selo **"Congresso Unificado"** e o que falta em cada um;
+  - **Dossiê do evento** — o mesmo componente aparece no painel, em Meu Painel, na fila e
+    nos caixas: cabeçalho (com o link para a página do evento no site, quando há
+    `slugSite`), organizadores, convidados e caixa. O formulário de convidado faz a
+    **pergunta obrigatória, sem resposta marcada**: "a liderança conhece a reputação
+    deste convidado?"; a recusa dos 10 dias aparece tal qual o servidor a escreve;
+  - **Fila de análise** (Ética e Presidência): cada convite com o contato, o evento, a
+    contagem de dias e o formulário de decisão (motivo obrigatório quando contrária),
+    com o aviso fixo de que quem convidou ou organiza não decide;
+  - **Caixas para conferir** (Tesouraria): conferir ou devolver, e o caixa de quem
+    encerrou não oferece "conferir".
+  O **caixa** na tela: abrir exige a caixa de seleção da declaração do Art. 53-E §3º;
+  saída sem comprovante é barrada antes de enviar; o encerramento mostra ao vivo
+  "destinado R$ X de R$ Y" e só habilita o envio quando a soma bate **centavo a
+  centavo**; saldo negativo pede a justificativa; lançamento cancelado fica riscado,
+  com o motivo.
+  **Meu Painel → Eventos** (qualquer login) lista os eventos que a pessoa organiza,
+  abre o dossiê e traz o cartão fixo "Eventos e inscrições", com os links do site
+  (`/eventos/` e `/minha-conta/`) e o aviso de que inscrição, lista de espera,
+  check-in e certificado ficam lá. Na ficha do **Calendário** (Pauta e detalhe), os
+  eventos de Nível 1 a 3 ou de Área/Campo ganharam o botão "Abrir dossiê do evento".
+
+  **No site.** Os convidados já autorizados, oficializados e com divulgação consentida
+  passam a aparecer: na linha "Participação: …" do cartão do evento oficial (até 4
+  nomes e "+N"), no bloco "Participações especiais" da página do evento do Directus
+  casado por `slugSite` (as sessões do Directus não são tocadas), na descrição do
+  `.ics` e na busca. O site **só exibe o que a API manda**: a regra (Art. 111-A) é
+  do sistema. O contato do convidado nunca vai ao site; cancelar o convite tira o
+  nome e muda a `versao`, e o sincronizador reconstrói o site.
+
+  **Avisos (motor da vB.2).** Seis regras. Saem **na hora**, no ato:
+  `EVENTOS_ORGANIZADOR_DESIGNADO`, `EVENTOS_CONVIDADO_PARA_ANALISE` (à Ética e à
+  Presidência, conforme o que o convite exige), `EVENTOS_CONVIDADO_DECIDIDO` (à
+  organização) e `EVENTOS_CAIXA_PARA_CONFERIR` (à Tesouraria). Na rodada diária:
+  `EVENTOS_CONVIDADO_ATRASADO` (cobra o órgão que falta quando o evento está a 5 dias
+  ou menos) e `EVENTOS_CAIXA_ENCERRAR` (caixa fora do prazo).
+
+  **Permissões.** Três novas, nunca concedidas por padrão: `eventos_gestao`
+  (Secretaria), `eventos_etica` (Conselho de Ética) e `eventos_presidencia`
+  (Presidência) — as duas últimas só valem com escopo global, porque decidem para a
+  igreja inteira. A conferência do caixa usa a `financeiro` que já existe. Quem só
+  organiza um evento não precisa de permissão nenhuma.
+
+  **Auditoria e integridade.** `ORGANIZADOR_DESIGNADO`, `ORGANIZADOR_ENCERRADO`,
+  `CONVIDADO_REGISTRADO`, `CONVIDADO_ATUALIZADO`, `CONVIDADO_SUBMETIDO`,
+  `CONVIDADO_PARECER_ETICA`, `CONVIDADO_NADA_CONSTA`, `CONVIDADO_OFICIALIZADO`,
+  `CONVIDADO_CANCELADO`, `CAIXA_ABERTO`, `CAIXA_LANCAMENTO`,
+  `CAIXA_LANCAMENTO_CANCELADO`, `CAIXA_ENCERRADO`, `CAIXA_DEVOLVIDO` e
+  `CAIXA_CONFERIDO`. O banco garante: convidado só AUTORIZADO com os pareceres
+  exigidos, veto só com decisão contrária, oficialização só de autorizado; saída
+  com comprovante, categoria coerente com o tipo, valor positivo; destino com
+  comprovante; caixa encerrado imutável; conferido só com quem e quando; um
+  organizador ativo por pessoa e evento.
+
+  **Verificação.** 63 testes novos (regra pura e camada de banco com pool simulado); a
+  suíte da API foi de 939 para **1002**. Um roteiro ponta a ponta de **167
+  verificações** rodou os handlers reais contra um SQL Server 2019, com eventos reais
+  do calendário: papéis do proponente, do organizador e do tesoureiro, o Protocolo de
+  Convidados inteiro (10 dias a exatamente 10 e a 9, os dois órgãos, veto, ordem
+  inversa, segregação de funções), a rota pública, o caixa do lançamento à conferência
+  (com devolução e segunda conferência), o déficit, o prazo e o gatilho que fecha o
+  caixa. Ele achou um defeito que nenhum teste unitário veria: o SQL Server **recusa
+  `OUTPUT` sem `INTO` em tabela que tem gatilho** — o do caixa encerrado — e o
+  lançamento falhava; corrigido com uma variável de tabela. A tela passou por DOM
+  simulado (14.821 verificações, com texto de ataque em todo campo de texto), conferência
+  de ids e de handlers, renderização no Edge sem interface e comparação do formato real
+  das respostas com tudo o que ela lê; o site foi construído contra um servidor falso com
+  e sem convidados, com resposta antiga, com erro 500 e com texto malicioso, e contra a
+  produção.
+
+  **Decisões que o Regimento não fecha (a CLI pode reverter, cada uma é uma
+  linha).**
+  - **Nada Consta nos Níveis 1 e 2.** O Art. 111-A fala nos "Congressos das
+    Lideranças Gerais"; adotei os eventos gerais (`NIVEL_MAXIMO_NADA_CONSTA`). Nos
+    Níveis 3 a 5 vale só a consulta à Ética, quando a reputação é desconhecida.
+  - **Sem exceção aos 10 dias.** O Regimento diz "obrigatória"; o envio é recusado.
+  - **A reputação "conhecida" é declaração do organizador.** O sistema não a
+    verifica: quem declarou fica gravado e auditado. Um organizador que declarar
+    "conhecida" a todo convidado dispensa a Ética — a Presidência continua decidindo
+    nos eventos gerais.
+  - **Déficit é permitido, com justificativa.** O Regimento silencia sobre quem
+    cobre; o sistema só registra e deixa a Tesouraria conferir.
+  - **O caixa do evento não gera lançamento contábil nem "Saída" (v4.5)**, e o
+    recolhimento à Sede informa o comprovante mas **não concilia com o extrato**. A
+    cantina do evento entra no caixa do evento; a receita acessória da v4.21 segue para
+    bazar, estacionamento e cessão de salão (não há lançamento automático entre as
+    duas).
+  - **Retenção:** caixa e prestação de contas, 5 anos; o contato do convidado é
+    dado de terceiro, desnecessário depois do evento, e **a rotina automática de
+    descarte ainda não existe** (prazo a definir pela CLI/Encarregado).
+  - **Limites:** o Directus pode listar preletores nas sessões de um evento sem passar
+    por este protocolo — o sistema só controla o que ele mesmo publica; e o
+    Conselho Fiscal (NIF), que audita a prestação de contas (Art. 152, I), não tem
+    papel próprio aqui: quem confere é a Tesouraria Geral.
 
 #### v7.5 — Escalas e voluntariado
 
@@ -9099,6 +9285,8 @@ deixou passar algo.
   na 115 ganhou plataforma, categoria, tema, identificador, vínculo institucional, escopo,
   custódia da senha e vigência) e as novas `CanalAdministradores`, `CanalTrocasCredencial`,
   `CanalLiderancaSnapshot`, `CanalOcorrencias`, `CanalConferencias`, `CongregacaoTransmissao`.
+- **Eventos e congressos (v7.4):** `EventoOrganizadores`, `EventoConvidados`, `EventoCaixas`,
+  `EventoCaixaLancamentos`, `EventoCaixaDestinos`.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,

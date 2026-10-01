@@ -1,5 +1,6 @@
 import { siteConfig } from "@/config/site";
 import {
+  descricaoComParticipacao,
   fetchAgendaOficial,
   mesclarEventos,
   uidAgenda,
@@ -28,7 +29,8 @@ export async function GET() {
             ? uidAgenda(event.agendaId)
             : `evento-${event.slug}@ieadespa.org.br`,
         title: event.title,
-        description: event.description,
+        // Com convidados autorizados, acrescenta a linha "Participação: ..." (v7.4).
+        description: descricaoComParticipacao(event.description, event.convidados),
         location: event.location ?? undefined,
         date: event.event_date as string,
         endDate: event.end_date,

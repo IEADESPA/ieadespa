@@ -1,4 +1,9 @@
-import { fetchAgendaOficial, mesclarEventos, type EventoSite } from "@/lib/agendaOficial";
+import {
+  fetchAgendaOficial,
+  mesclarEventos,
+  resumoConvidados,
+  type EventoSite,
+} from "@/lib/agendaOficial";
 import { enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
@@ -223,7 +228,13 @@ export async function buildSearchIndex(): Promise<SearchItem[]> {
 
   const fromEventos: SearchItem[] = eventos.map((evento) => ({
     title: evento.title,
-    excerpt: evento.description,
+    // Eventos oficiais com convidados (v7.4): os nomes entram no texto da busca.
+    excerpt: [
+      evento.description,
+      evento.convidados?.length ? `Participação: ${resumoConvidados(evento.convidados)}` : "",
+    ]
+      .filter(Boolean)
+      .join(" — "),
     href: hasEventPage(evento) ? `/evento/${evento.slug}/` : "/eventos/",
     group: "Evento",
     meta: [evento.event_date ? formatDate(new Date(evento.event_date), "long") : null, evento.location]

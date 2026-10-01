@@ -192,6 +192,13 @@ workflow `.github/workflows/site-agenda-sync.yml` compara com `/api/agenda-publi
 20 minutos, disparando um novo deploy só quando a versão muda. Para testar o build contra um
 servidor falso, defina `SISTEMA_API_URL`.
 
+**Convidados dos eventos (v7.4).** Cada evento oficial pode trazer `convidados` (preletores,
+cantores, bandas), mostrados como "Participação: ..." na lista e no `.ics` e como bloco
+"Participações especiais" em `/evento/<slug>/`. Pelo Protocolo de Convidados (Regimento, Art. 111 e
+111-A), o sistema só envia quem já foi autorizado (parecer do Conselho de Ética e Nada Consta da
+Presidência, quando exigidos) e consentiu a divulgação do nome. As sessões e palestrantes do evento
+continuam sendo do Directus.
+
 **Canais oficiais (v7.3).** A página `/canais-oficiais/` (link no rodapé, em Institucional) lista os
 canais de comunicação instituídos em nome da igreja (Estatuto, Art. 12). Os dados vêm do mesmo
 `GET /api/agenda-publica/tudo` do calendário (campo `canais`), em tempo de build e com a mesma

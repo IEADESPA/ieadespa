@@ -31,6 +31,22 @@ export const SISTEMA_API_URL = (
 
 export type AbrangenciaEventoOficial = "CAMPO" | "AREAS" | "CONGREGACAO";
 
+export type TipoConvidadoOficial = "PRELETOR" | "CANTOR" | "BANDA" | "OUTRO";
+
+/**
+ * Convidado externo (preletor/cantor/banda) de um evento, v7.4. O sistema só envia quem já foi
+ * AUTORIZADO pelos órgãos (Protocolo de Convidados, Regimento Art. 111 e 111-A), OFICIALIZADO
+ * e deu consentimento para divulgar o nome. Texto NÃO CONFIÁVEL: só como texto, nunca `set:html`.
+ */
+export interface ConvidadoOficial {
+  nome: string;
+  tipo: TipoConvidadoOficial;
+  /** "Preletor", "Cantor", "Banda ou grupo" ou "Outro". */
+  rotuloTipo: string;
+  /** Igreja/ministério de origem, quando informado. */
+  ministerio: string | null;
+}
+
 export interface EventoOficial {
   id: number;
   titulo: string;
@@ -54,6 +70,8 @@ export interface EventoOficial {
   /** Slug do evento do Directus que tem página/inscrição própria, se houver. */
   slugSite: string | null;
   origem: "PROPOSTA" | "REGRA";
+  /** Convidados já autorizados e com divulgação consentida; `[]` se nenhum ou em resposta antiga. */
+  convidados: ConvidadoOficial[];
 }
 
 export type CategoriaCanalOficial = "INSTITUCIONAL" | "GRUPO_OFICIAL";
@@ -167,6 +185,70 @@ const CATEGORIAS_CANAL = new Set(["INSTITUCIONAL", "GRUPO_OFICIAL"]);
 const textoOuNulo = (valor: unknown): string | null =>
   typeof valor === "string" && valor.trim() !== "" ? valor.trim() : null;
 
+/** Teto de convidados por evento e de caracteres por texto: protege páginas e .ics de uma resposta absurda. */
+const MAX_CONVIDADOS_POR_EVENTO = 30;
+const MAX_TEXTO_CONVIDADO = 160;
+
+const ROTULO_TIPO_CONVIDADO: Record<TipoConvidadoOficial, string> = {
+  PRELETOR: "Preletor",
+  CANTOR: "Cantor",
+  BANDA: "Banda ou grupo",
+  OUTRO: "Outro",
+};
+
+/**
+ * Texto de UMA linha: quebras de linha e caracteres de controle viram espaço (evita injetar
+ * linhas num .ics ou num texto de busca), aparando e limitando o tamanho. `null` se não sobrar nada.
+ */
+const textoDeUmaLinha = (valor: unknown): string | null => {
+  if (typeof valor !== "string") return null;
+  const limpo = valor
+    .replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return limpo ? limpo.slice(0, MAX_TEXTO_CONVIDADO).trim() : null;
+};
+
+/**
+ * Normaliza os convidados de um evento: descarta item sem nome, tipo desconhecido vira "OUTRO",
+ * campos de texto só aceitam string. Ausente (resposta antiga) ou malformado => `[]`.
+ */
+function convidadosNormalizados(valor: unknown): ConvidadoOficial[] {
+  if (!Array.isArray(valor)) return [];
+  const lista: ConvidadoOficial[] = [];
+  for (const item of valor) {
+    if (lista.length >= MAX_CONVIDADOS_POR_EVENTO) break;
+    if (!item || typeof item !== "object") continue;
+    const c = item as Record<string, unknown>;
+    const nome = textoDeUmaLinha(c.nome);
+    if (!nome) continue;
+    const conhecido = typeof c.tipo === "string" && Object.hasOwn(ROTULO_TIPO_CONVIDADO, c.tipo);
+    const tipo = conhecido ? (c.tipo as TipoConvidadoOficial) : "OUTRO";
+    lista.push({
+      nome,
+      tipo,
+      rotuloTipo: (conhecido && textoDeUmaLinha(c.rotuloTipo)) || ROTULO_TIPO_CONVIDADO[tipo],
+      ministerio: textoDeUmaLinha(c.ministerio),
+    });
+  }
+  return lista;
+}
+
+/**
+ * "Fulano (Ministério X), Fulana, +2": os nomes dos convidados em uma linha, com o ministério
+ * entre parênteses. Com `max`, mostra só os primeiros e fecha com "+N". Vazio => "".
+ */
+export function resumoConvidados(
+  convidados: ConvidadoOficial[] | undefined,
+  max = Number.POSITIVE_INFINITY,
+): string {
+  if (!convidados?.length) return "";
+  const mostrados = convidados.slice(0, max);
+  const partes = mostrados.map((c) => (c.ministerio ? `${c.nome} (${c.ministerio})` : c.nome));
+  const resto = convidados.length - mostrados.length;
+  return resto > 0 ? `${partes.join(", ")}, +${resto}` : partes.join(", ");
+}
+
 /**
  * Só aceita link que abre com `https://`, `mailto:` ou `tel:` e que o `URL` entende;
  * qualquer outra coisa (http, javascript:, data:, texto solto...) vira `null` — o canal
@@ -232,6 +314,8 @@ function validarResposta(corpo: unknown): AgendaOficial {
     slugSite: e.slugSite || null,
     areas: Array.isArray(e.areas) ? e.areas : [],
     tipoNome: e.tipoNome || "",
+    // Resposta antiga sem `convidados` (ou malformado) => [], sem derrubar nada.
+    convidados: convidadosNormalizados(e.convidados),
   }));
   const liturgia = c.liturgia
     .filter(liturgiaValida)
@@ -343,6 +427,20 @@ export interface EventoSite {
   agendaId?: number;
   /** Nome do tipo do evento oficial ("Aniversário da Congregação"), para a etiqueta da lista. */
   tipoNome?: string;
+  /** Convidados autorizados e com divulgação consentida (v7.4) — vêm do evento oficial. */
+  convidados?: ConvidadoOficial[];
+}
+
+/**
+ * Descrição de um evento + uma linha "Participação: Fulano (Ministério X), ..." quando há
+ * convidados (v7.4). O "\n" é escapado pelo `buildIcs`; os nomes já chegam sem quebra de linha.
+ */
+export function descricaoComParticipacao(
+  descricao: string | null | undefined,
+  convidados: ConvidadoOficial[] | undefined,
+): string {
+  const participacao = resumoConvidados(convidados);
+  return [descricao, participacao && `Participação: ${participacao}`].filter(Boolean).join("\n");
 }
 
 /** Prefixo do slug dos eventos oficiais sem página própria (`agenda-<id>`). */
@@ -394,6 +492,8 @@ export function mesclarEventos(eventosDirectus: EventoSite[], agenda: AgendaOfic
       doDirectus.time = oficial.hora ?? doDirectus.time;
       doDirectus.origem = "oficial";
       doDirectus.tipoNome = oficial.tipoNome || undefined;
+      // As participações especiais vêm do sistema; as sessões do evento seguem do Directus.
+      doDirectus.convidados = oficial.convidados;
       continue;
     }
 
@@ -414,6 +514,7 @@ export function mesclarEventos(eventosDirectus: EventoSite[], agenda: AgendaOfic
       aceita_inscricao: false,
       origem: "oficial",
       tipoNome: oficial.tipoNome || undefined,
+      convidados: oficial.convidados,
     });
   }
 
@@ -424,16 +525,17 @@ export function mesclarEventos(eventosDirectus: EventoSite[], agenda: AgendaOfic
  * Só a regra (a) de `mesclarEventos`, para as páginas de UM evento (`/evento/<slug>/`
  * e o .ics dele): os eventos do Directus que o calendário oficial aponta por
  * `slugSite` ganham a data, a data final e a hora oficiais, para a página não
- * contradizer a lista. Não cria itens novos e preserva todos os campos do evento.
+ * contradizer a lista, e os convidados (v7.4) do evento oficial. Não cria itens
+ * novos e preserva todos os campos do evento.
  */
 export function aplicarDatasOficiais<
   T extends Pick<EventoSite, "slug" | "event_date" | "end_date" | "time">,
->(eventosDirectus: T[], agenda: AgendaOficial): T[] {
-  const resultado = eventosDirectus.map((e) => ({ ...e }));
-  const porSlug = new Map<string, T>();
+>(eventosDirectus: T[], agenda: AgendaOficial): (T & Pick<EventoSite, "convidados">)[] {
+  const resultado: (T & Pick<EventoSite, "convidados">)[] = eventosDirectus.map((e) => ({ ...e }));
+  const porSlug = new Map<string, T & Pick<EventoSite, "convidados">>();
   for (const evento of resultado)
     if (evento.slug && !porSlug.has(evento.slug)) porSlug.set(evento.slug, evento);
-  const jaCasados = new Set<T>();
+  const jaCasados = new Set<T & Pick<EventoSite, "convidados">>();
 
   for (const oficial of agenda.eventos) {
     const doDirectus = oficial.slugSite ? porSlug.get(oficial.slugSite) : undefined;
@@ -442,6 +544,7 @@ export function aplicarDatasOficiais<
     doDirectus.event_date = oficial.dataInicio;
     doDirectus.end_date = oficial.dataFim;
     doDirectus.time = oficial.hora ?? doDirectus.time;
+    doDirectus.convidados = oficial.convidados;
   }
   return resultado;
 }

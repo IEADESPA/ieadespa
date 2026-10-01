@@ -139,6 +139,7 @@ async function detectarAlunoAusenteEbd(pool) {
 const psc = require("./psc");
 const calendarioDb = require("./calendarioDb");
 const canaisDb = require("./canaisDb");
+const eventosDb = require("./eventosDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -171,7 +172,11 @@ const DETECTORES = {
     }
   },
   CANAIS_SEM_ADMINISTRADOR: { tabela: "CanaisOficiaisComunicacao", detectar: (pool) => canaisDb.detectarSemAdministrador(pool) },
-  CANAIS_CONFERENCIA_VENCIDA: { tabela: "CanaisOficiaisComunicacao", detectar: (pool) => canaisDb.detectarConferenciasVencidas(pool) }
+  CANAIS_CONFERENCIA_VENCIDA: { tabela: "CanaisOficiaisComunicacao", detectar: (pool) => canaisDb.detectarConferenciasVencidas(pool) },
+  // Eventos (v7.4): os avisos de organizador designado, convidado para análise/decidido e caixa para conferir saem NA HORA,
+  // no ato (por isso não têm detector); aqui ficam a cobrança do convidado sem decisão com o evento perto e o caixa fora do prazo.
+  EVENTOS_CONVIDADO_ATRASADO: { tabela: "EventoConvidados", detectar: (pool) => eventosDb.detectarConvidadosAtrasados(pool) },
+  EVENTOS_CAIXA_ENCERRAR: { tabela: "EventoCaixas", detectar: (pool) => eventosDb.detectarCaixasForaDoPrazo(pool) }
 };
 
 module.exports = { DETECTORES };

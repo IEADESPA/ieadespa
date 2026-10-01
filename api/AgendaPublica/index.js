@@ -11,6 +11,8 @@
 // publicou em /agenda-versao.json e, se diferem, manda reconstruir o site.
 //
 // GET /api/agenda-publica/tudo      -> { versao, eventos[], liturgia[], canais[] }   (o que o build do site usa)
+//   Cada evento traz `convidados[{nome,tipo,rotuloTipo,ministerio}]` (v7.4): só o convidado externo AUTORIZADO pelo
+//   Protocolo de Convidados (Regimento Art. 111-A), com o convite OFICIALIZADO e que autorizou divulgar o nome.
 // GET /api/agenda-publica/canais    -> { canais[{id,nome,plataforma,rotuloPlataforma,categoria,identificador,link,escopo,rotuloEscopo,congregacaoNome,areaNome,departamentoNome,descricao}] }
 // GET /api/agenda-publica/eventos   -> { eventos[] }
 // GET /api/agenda-publica/liturgia  -> { liturgia[] }   (formato da coleção `programacao` do Directus)

@@ -9,7 +9,7 @@ import { getAllMensagens, visiblePosts } from "@/lib/posts";
 import { COVER_WIDTHS, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, TELEFONE_HASH_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
 import { congregacaoEndereco, fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
-import { aplicarDatasOficiais, fetchAgendaOficial } from "@/lib/agendaOficial";
+import { aplicarDatasOficiais, fetchAgendaOficial, type ConvidadoOficial } from "@/lib/agendaOficial";
 import { coordenadaDeLinkMaps } from "@/lib/googleMapsLink";
 
 type TipoPergunta = "texto_curto" | "texto_longo" | "selecao_unica" | "selecao_multipla" | "numero" | "data";
@@ -61,6 +61,8 @@ interface Evento {
   inscricoes_encerradas: boolean;
   faixas_valor: { descricao: string; valor: number }[] | null;
   permite_inscricao_grupo: boolean;
+  /** Participações especiais do calendário oficial (v7.4), via `aplicarDatasOficiais`; ausente/vazio = sem bloco. */
+  convidados?: ConvidadoOficial[];
 }
 
 export async function getStaticPaths() {
@@ -263,6 +265,28 @@ const structuredData = startDate
                 </div>
               ))}
             </div>
+          </section>
+        )
+      }
+
+      {
+        /* Participações especiais (v7.4): convidados externos já autorizados pelo Protocolo de
+           Convidados e com divulgação consentida — vêm do sistema, pelo `slugSite` do evento
+           oficial. As sessões/palestrantes acima seguem sendo do Directus. */
+        event.convidados && event.convidados.length > 0 && (
+          <section class="mt-10" aria-labelledby="participacoes-heading" data-evento-participacoes>
+            <h2 id="participacoes-heading" class="section-title">Participações especiais</h2>
+            <ul class="mt-4 grid gap-3">
+              {event.convidados.map((convidado) => (
+                <li class="agenda-item">
+                  <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <p class="font-semibold">{convidado.nome}</p>
+                    <span class="pill shrink-0">{convidado.rotuloTipo}</span>
+                  </div>
+                  {convidado.ministerio && <p class="mt-1 text-sm text-muted-foreground">{convidado.ministerio}</p>}
+                </li>
+              ))}
+            </ul>
           </section>
         )
       }

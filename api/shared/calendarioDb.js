@@ -918,7 +918,18 @@ async function pacotePublicoCompleto(pool, ctx, opcoes) {
   } catch (e) {
     console.error("[AgendaPublica] canais indisponíveis:", e.message);
   }
-  return { versao: calcularVersao(base.eventos, base.liturgia, canais), eventos: base.eventos, liturgia: base.liturgia, canais };
+  // v7.4: os convidados externos AUTORIZADOS, OFICIALIZADOS e que autorizaram a divulgação acompanham o evento (Art. 111-A, §2º).
+  let eventos = base.eventos;
+  if (eventos.length) {
+    try {
+      const convidados = await require("./eventosDb").convidadosPublicos(pool, eventos.map(e => e.id));
+      eventos = eventos.map(e => ({ ...e, convidados: convidados.get(e.id) || [] }));
+    } catch (e) {
+      console.error("[AgendaPublica] convidados indisponíveis:", e.message);
+      eventos = eventos.map(e => ({ ...e, convidados: [] }));
+    }
+  }
+  return { versao: calcularVersao(eventos, base.liturgia, canais), eventos, liturgia: base.liturgia, canais };
 }
 
 // Situação da sincronização com o site: a versão daqui contra a que o site publicou.

@@ -114,6 +114,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Ocorrências e administradores: 5 anos, por margem sobre a prescrição da reparação civil (PoliticasRetencao); a rotina automática de descarte ainda não existe e o prazo é decisão da CLI/Encarregado. Registro dos canais, conferências e transmissão: enquanto o canal existir; o desativado mantém o histórico (prova das tentativas de contato do Abandono Digital)."
   },
   {
+    chave: "EVENTOS",
+    finalidade: "Governança do evento: organizadores, Protocolo de Convidados externos (parecer do Conselho de Ética e Nada Consta da Presidência) e Caixa Flutuante de Eventos com prestação de contas (Regimento Art. 53-E §2º, 111, 111-A e 152) — v7.4",
+    titulares: "Convidados externos (preletores e cantores, terceiros à Igreja), organizadores e tesoureiros do evento, e quem decide os convites",
+    categoriasDados: ["Nome, ministério ou igreja de origem e contato do convidado externo (dado de terceiro)", "Declaração sobre a reputação do convidado e os pareceres sobre ele (alinhamento doutrinário pode revelar convicção religiosa)", "Autorização do convidado para divulgar o nome", "Matrícula de quem organiza, lança, encerra e confere o caixa", "Lançamentos financeiros do evento (valor, categoria, comprovante) — sem dado de doador individual"],
+    baseLegal: "LGPD Art. 7º, IX — legítimo interesse da instituição em proteger o púlpito e prestar contas (Regimento Art. 111-A e 152); Art. 7º, I — consentimento do convidado para divulgar o nome no site; o parecer sobre alinhamento doutrinário trata convicção religiosa (dado sensível): Art. 11, II, \"d\" — exercício regular de direitos, limitado à Ética, à Presidência e à organização do evento. O contato do convidado nunca vai ao site.",
+    tabelasEnvolvidas: ["EventoOrganizadores", "EventoConvidados", "EventoCaixas", "EventoCaixaLancamentos", "EventoCaixaDestinos"],
+    retencao: "Caixa e prestação de contas: 5 anos (guarda fiscal, CTN art. 173; PoliticasRetencao). Convidado externo: o registro do protocolo fica como prova, mas o contato é desnecessário depois do evento e a rotina automática de descarte AINDA NÃO existe — o prazo é decisão da CLI/Encarregado, que pode anonimizar antes, a pedido do convidado."
+  },
+  {
     chave: "AUDITORIA",
     finalidade: "Trilha de integridade e compliance (quem fez o quê, quando)",
     titulares: "Quem usa o sistema (Liderança)",

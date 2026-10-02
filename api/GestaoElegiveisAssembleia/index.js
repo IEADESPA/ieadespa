@@ -9,7 +9,11 @@
 // gente. Pra incluir/atualizar pessoas em lote, usa-se só a aba Pessoas —
 // a elegibilidade continua recalculada automaticamente a partir de lá.
 // GET /api/assembleia/elegiveis -> lista os elegíveis atuais (calculado)
+// ESCOPO: a lista traz dado de PESSOA (nascimento, admissão, dizimista) da base inteira. Quem pede só recebe as pessoas do SEU escopo; e quem não é o nível GERAL (papel Global
+// com escopo "TODAS") recebe só o necessário para a tela (matrícula, nome, congregação, situação), sem nascimento, admissão, dizimista nem os cálculos derivados deles.
+// O quórum da Assembleia não depende desta tela: ele é calculado no servidor sobre o universo inteiro (shared/universo.js).
 const auth = require("../shared/auth");
+const { ehGeral, filtrarPorEscopo } = require("../shared/escopoRotas");
 const { getPool } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
@@ -24,18 +28,32 @@ module.exports = async function (context, req) {
     SELECT m.MembroId AS membroId, m.Nome AS nome, m.Status AS status, c.Nome AS congregacao,
            CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
            CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
-           m.DizimistaFiel AS dizimistaFiel, m.SituacaoMembro AS situacaoMembro
+           m.DizimistaFiel AS dizimistaFiel, m.SituacaoMembro AS situacaoMembro, ex.Nome AS extensao
     FROM MembroReferencia m
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
   `);
+  const geral = ehGeral(usuario);
+  const doEscopo = filtrarPorEscopo(usuario, result.recordset, (m) => m.congregacao, (m) => m.extensao);
   // Sempre real, nunca mascarado por permissão: isso é o cálculo de quem de fato
   // pode votar, não uma tela de exibição — mascarar aqui reabriria o voto de quem
   // está sob disciplina (ver mascaramento equivalente, mas só de exibição, em GestaoPessoas).
   const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
   const idsCartaMudanca = await membrosComCartaMudancaEmitida(pool);
-  const comFlag = result.recordset.map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }));
+  const comFlag = doEscopo.map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }));
   const elegiveis = comFlag
     .filter(m => !idsCartaMudanca.has(m.membroId) && estatuto.calcularCapacidadeEleitoral(m).capacidadeAtiva)
-    .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }));
+    .map(m => {
+      const capacidade = estatuto.calcularCapacidadeEleitoral(m);
+      if (geral) {
+        const { extensao, ...completo } = m;
+        return Object.assign({}, completo, { capacidade });
+      }
+      // Sem nascimento, admissão e dizimista — e sem o que se deduz deles (elegibilidade a cargo, dias de integração).
+      return {
+        membroId: m.membroId, nome: m.nome, status: m.status, congregacao: m.congregacao, situacaoMembro: m.situacaoMembro,
+        capacidade: { emComunhao: capacidade.emComunhao, categoria: capacidade.categoria, capacidadeAtiva: capacidade.capacidadeAtiva }
+      };
+    });
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: elegiveis };
 };

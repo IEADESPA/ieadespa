@@ -15,20 +15,23 @@
 // GET  /api/conciliacao-bancaria?mesReferencia=&fonteId= -> conciliações
 // GET  /api/conciliacao-bancaria/{id} -> detalhe + divergências
 // PUT  /api/conciliacao-bancaria/divergencias -> { divergenciaId, acao: 'RESOLVER' }
+// INSTITUCIONAL (extrato da conta única da igreja, sem dimensão territorial): só o nível
+// GERAL (papel Global + escopo TODAS) — a conciliação cruza as entradas e saídas de todas as congregações.
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const conciliacao = require("../shared/conciliação");
+const { decodificarArquivo } = require("../shared/financeiro1Util");
+
+// Mês de referência no formato AAAA-MM (mês 01 a 12).
+const MES_REFERENCIA = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 module.exports = async function (context, req) {
   const recurso = context.bindingData.recurso;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Conciliação bancária é matéria da Tesouraria Geral — restrito a nível Global." } };
-    return;
-  }
   const pool = await getPool();
 
   if (req.method === "GET" && recurso === "fontes") {
@@ -49,9 +52,14 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && recurso === "extratos") {
-    const { fonteId, mesReferencia, arquivoBase64, mimeType } = req.body || {};
+    const { mesReferencia, arquivoBase64 } = req.body || {};
+    const fonteId = auth.idDeRota((req.body || {}).fonteId);
     if (!fonteId || !mesReferencia) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: fonteId, mesReferencia." } };
+      return;
+    }
+    if (typeof mesReferencia !== "string" || !MES_REFERENCIA.test(mesReferencia)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "mesReferencia deve estar no formato AAAA-MM." } };
       return;
     }
     const fonteRow = await pool.request().input("id", sql.Int, fonteId).query(`SELECT Tipo FROM FontesCaixa WHERE FonteId = @id AND Ativa = 1`);
@@ -128,9 +136,9 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: fonteId, mesReferencia, arquivoBase64." } };
       return;
     }
-    let buffer;
-    try { buffer = Buffer.from(arquivoBase64, "base64"); } catch (e) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Arquivo inválido." } };
+    const buffer = decodificarArquivo(arquivoBase64);
+    if (!buffer) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Arquivo inválido, vazio ou maior que 15 MB." } };
       return;
     }
     const conteudo = buffer.toString("utf-8");
@@ -145,7 +153,8 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const arquivoUrl = await storage.salvarDocumento(buffer, mimeType || "text/plain");
+    // O extrato é lido como texto (OFX/CSV): o blob guarda sempre como text/plain, em vez de repetir o tipo que o cliente declarou (que poderia ser text/html).
+    const arquivoUrl = await storage.salvarDocumento(buffer, "text/plain");
     const saldoFinal = linhas.reduce((a, l) => a + Number(l.valor), 0);
     const extrato = await pool.request().input("fonte", sql.Int, fonteId).input("mes", sql.Char(7), mesReferencia)
       .input("tipo", sql.NVarChar(10), tipo).input("url", sql.NVarChar(500), arquivoUrl)
@@ -221,8 +230,21 @@ module.exports = async function (context, req) {
     const { mesReferencia, fonteId } = req.query || {};
     const request = pool.request();
     let where = "1=1";
-    if (mesReferencia) { request.input("mes", sql.Char(7), mesReferencia); where += " AND c.MesReferencia = @mes"; }
-    if (fonteId) { request.input("fonte", sql.Int, fonteId); where += " AND c.FonteId = @fonte"; }
+    if (mesReferencia) {
+      if (typeof mesReferencia !== "string" || !MES_REFERENCIA.test(mesReferencia)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "mesReferencia deve estar no formato AAAA-MM." } };
+        return;
+      }
+      request.input("mes", sql.Char(7), mesReferencia); where += " AND c.MesReferencia = @mes";
+    }
+    if (fonteId) {
+      const fonte = auth.idDeRota(fonteId);
+      if (!fonte) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "fonteId inválido." } };
+        return;
+      }
+      request.input("fonte", sql.Int, fonte); where += " AND c.FonteId = @fonte";
+    }
     const result = await request.query(`
       SELECT c.ConciliacaoId AS conciliacaoId, c.FonteId AS fonteId, f.Nome AS fonteNome, c.MesReferencia AS mesReferencia,
              c.Status AS status, c.TotalExtrato AS totalExtrato, c.TotalSistema AS totalSistema, c.TotalBatidas AS totalBatidas,
@@ -235,8 +257,8 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "GET" && recurso) {
-    const id = Number(recurso);
-    if (!Number.isInteger(id)) {
+    const id = auth.idDeRota(recurso);
+    if (!id) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Recurso desconhecido." } };
       return;
     }
@@ -260,15 +282,21 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "PUT" && recurso === "divergencias") {
-    const { divergenciaId, acao } = req.body || {};
+    const { acao } = req.body || {};
+    const divergenciaId = auth.idDeRota((req.body || {}).divergenciaId);
     if (acao !== "RESOLVER" || !divergenciaId) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe divergenciaId e acao: 'RESOLVER'." } };
       return;
     }
-    await pool.request().input("id", sql.Int, divergenciaId).input("por", sql.Int, usuario.membroId)
-      .query(`UPDATE ConciliacaoDivergencias SET Status = 'RESOLVIDA', ResolvidoPor = @por, ResolvidoEm = SYSUTCDATETIME() WHERE DivergenciaId = @id`);
+    // Só resolve o que está pendente: id inexistente ou divergência já resolvida não vira "Resolveu" na trilha (nem reescreve quem resolveu antes).
+    const resolveu = await pool.request().input("id", sql.Int, divergenciaId).input("por", sql.Int, usuario.membroId)
+      .query(`UPDATE ConciliacaoDivergencias SET Status = 'RESOLVIDA', ResolvidoPor = @por, ResolvidoEm = SYSUTCDATETIME() WHERE DivergenciaId = @id AND Status = 'PENDENTE'`);
+    if (resolveu.rowsAffected && resolveu.rowsAffected[0] === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Divergência não encontrada ou já resolvida." } };
+      return;
+    }
     await registrarAuditoria({
-      tabela: "ConciliacaoDivergencias", registroId: Number(divergenciaId), acao: "Resolveu divergência de conciliação", usuarioId: usuario.membroId
+      tabela: "ConciliacaoDivergencias", registroId: divergenciaId, acao: "Resolveu divergência de conciliação", usuarioId: usuario.membroId
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Divergência resolvida." } };
     return;

@@ -49,7 +49,10 @@ const QUERY_POR_TIPO = {
 // único uso do papel (assento na CLI, composicaoCLI) lê Lideranca direto,
 // nunca passa por aqui. Corrigido: DEPARTAMENTO resolve como GLOBAL.
 async function resolverEscopoCongregacoes(pool, escopoTipo, escopoId) {
-  if (!escopoTipo || escopoTipo === "GLOBAL" || escopoTipo === "DEPARTAMENTO" || !escopoId) return "TODAS";
+  if (!escopoTipo || escopoTipo === "GLOBAL" || escopoTipo === "DEPARTAMENTO") return "TODAS";
+  // Escopo territorial SEM o id (ex.: "Área" sem dizer qual) não é "todas": é nenhuma. Antes valia como acesso geral, e uma liderança cadastrada sem o id da congregação
+  // enxergava a igreja inteira. O modo seguro é vazio (acima: "resultado vazio é o modo seguro").
+  if (!escopoId) return [];
 
   const query = QUERY_POR_TIPO[escopoTipo];
   if (!query) return [];

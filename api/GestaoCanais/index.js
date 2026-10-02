@@ -57,6 +57,10 @@
 //  transmissao            body:{congregacaoId,transmite,placaAvisoInstaladaEm?,areaCegaSituacao?,areaCegaDescricao?}                             (gestão)
 //  sincronizar            body:{}  -> compara quem lidera cada congregação/Área/departamento e abre as trocas de senha pendentes                  (gestão)
 //
+// Escopo (auditoria de 02/10/2026): canal, ocorrência, congregação e designação FORA do escopo dão a mesma resposta de "não existe" (404); `sincronizar` e o sincronismo de
+// `trocas`/`cobertura` são só do nível geral (papel GLOBAL e escopo TODAS); os contadores de `cobertura.resumo` somam só os canais do escopo; quem só AVISOU uma ocorrência
+// não vê advertência, prova de remoção, quem removeu nem motivo de improcedência; `para-contato` só traz o identificador a quem tem `disciplina` (Abandono Digital) ou `canais_gestao`.
+//
 // Respostas: { sucesso:true, ... } (200; 201 quando cria) · recusa de regra: 422 { sucesso:false, mensagem } · 400 dado ruim · 403 sem permissão · 401 sem sessão.
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
@@ -64,6 +68,7 @@ const canais = require("../shared/canais");
 const db = require("../shared/canaisDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { criarLimitador } = require("../shared/limiteTaxa");
+const { ehGeral, MSG_GERAL } = require("../shared/escopoRotas");
 
 // Avisar conteúdo é aberto a qualquer login: o limite por pessoa segura quem tentar inundar a Secretaria.
 const limitadorOcorrencias = criarLimitador({ janelaMs: 3600000, maximo: 10 });
@@ -81,8 +86,10 @@ module.exports = async function (context, req) {
 
   const perms = usuario.permissoes || [];
   const ehGestao = perms.includes("canais_gestao");
-  const escopoGlobal = !usuario.escopoCongregacoes || usuario.escopoCongregacoes === "TODAS";
-  const escopo = escopoGlobal ? "TODAS" : (usuario.escopoCongregacoes || []);
+  // Falha FECHADO: sessão sem a lista de congregações não alcança nenhum canal (antes, "sem lista" valia como escopo global).
+  const escopoGlobal = usuario.escopoCongregacoes === "TODAS";
+  const escopo = escopoGlobal ? "TODAS" : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []);
+  const geral = ehGeral(usuario);   // papel GLOBAL E escopo TODAS: só ele dispara o sincronismo da igreja inteira
   const membroId = usuario.membroId || null;
 
   const acao = context.bindingData.acao || "";
@@ -101,13 +108,13 @@ module.exports = async function (context, req) {
   }
   const idDe = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 
-  // Canal pelo corpo/consulta, já conferindo o escopo de quem gere. Devolve o canal ou null (já respondeu).
-  async function canalGerido(origem) {
+  // Canal pelo corpo/consulta, já conferindo o escopo de quem gere. Devolve o canal ou null (já respondeu). Canal de fora do escopo dá a MESMA resposta de canal
+  // que não existe (404): a rota não serve de sonda de canalId. `naoExiste`: a mensagem que a rota que chegou aqui já dava para "não existe".
+  async function canalGerido(origem, naoExiste = "Canal não encontrado.") {
     const id = idDe(origem.canalId);
     if (!id) { erro(context, 400, "Informe o canalId."); return null; }
     const canal = await db.buscarCanal(pool, id, ctx);
-    if (!canal) { erro(context, 404, "Canal não encontrado."); return null; }
-    if (!canalNoEscopo(canal)) { erro(context, 403, "Este canal está fora do seu escopo."); return null; }
+    if (!canal || !canalNoEscopo(canal)) { erro(context, 404, naoExiste); return null; }
     return canal;
   }
 
@@ -164,11 +171,14 @@ module.exports = async function (context, req) {
         return;
       }
       if (acao === "para-contato") {
-        context.res = { status: 200, body: { sucesso: true, canais: await db.listarParaContato(pool, ctx) } };
+        // O identificador (número, e-mail) do canal só vai para quem usa a lista de verdade: o Abandono Digital (`disciplina`) e a gestão de canais. Os demais veem só o nome.
+        const comIdentificador = ehGestao || perms.includes("disciplina");
+        context.res = { status: 200, body: { sucesso: true, canais: await db.listarParaContato(pool, ctx, { comIdentificador }) } };
         return;
       }
       if (acao === "minhas-ocorrencias") {
-        const ocs = membroId ? await db.carregarOcorrencias(pool, ctx, { relatadaPor: membroId, verAutor: false }) : [];
+        // Quem só avisou acompanha o andamento; não vê os textos internos (advertência, prova de remoção, motivo de improcedência) — eles descrevem um terceiro.
+        const ocs = membroId ? await db.carregarOcorrencias(pool, ctx, { relatadaPor: membroId, verAutor: false, verInterno: false }) : [];
         context.res = { status: 200, body: { sucesso: true, ocorrencias: ocs } };
         return;
       }
@@ -193,9 +203,9 @@ module.exports = async function (context, req) {
         const id = idDe(q.ocorrenciaId);
         if (!id) { erro(context, 400, "Informe ocorrenciaId."); return; }
         const c = await contextoDaOcorrencia(id);
-        if (!c) { erro(context, 404, "Ocorrência não encontrada."); return; }
-        if (!(c.gestao || c.administrador || c.autor)) { erro(context, 403, SEM_PERMISSAO); return; }
-        const [oc] = await db.carregarOcorrencias(pool, ctx, { ocorrenciaId: id, verAutor: c.gestao });
+        // Sem relação com a ocorrência = a mesma resposta de ocorrência que não existe (sem sonda de id).
+        if (!c || !(c.gestao || c.administrador || c.autor)) { erro(context, 404, "Ocorrência não encontrada."); return; }
+        const [oc] = await db.carregarOcorrencias(pool, ctx, { ocorrenciaId: id, verAutor: c.gestao, verInterno: c.gestao || c.administrador });
         const aberta = c.bruta.Status === "ABERTA";
         context.res = { status: 200, body: { sucesso: true, ocorrencia: (c.gestao || c.administrador) ? oc : { ...oc, orientacao: undefined, temaRedirecionamento: undefined }, acoes: {
           remover: aberta && (c.gestao || c.administrador), improcedente: aberta && c.gestao, advertir: c.bruta.Status !== "IMPROCEDENTE" && !c.bruta.AdvertenciaEm && (c.gestao || c.administrador)
@@ -219,7 +229,8 @@ module.exports = async function (context, req) {
       }
       if (acao === "trocas") {
         if (!exigirGestao()) return;
-        try { await db.sincronizarSucessoes(pool, { hoje, por: membroId }); } catch (e) { context.log.error("[GestaoCanais] sucessão:", e); }
+        // O sincronismo olha a liderança da igreja inteira e abre pendência em canal de qualquer unidade: só o nível geral o dispara (o escopo local apenas lê).
+        if (geral) { try { await db.sincronizarSucessoes(pool, { hoje, por: membroId }); } catch (e) { context.log.error("[GestaoCanais] sucessão:", e); } }
         const todas = await db.listarTrocas(pool, ctx, { abertas: q.todas !== "1", hoje });
         const noEscopo = new Map((await db.carregarCanais(pool, ctx, { incluirInativos: true })).map(c => [c.canalId, canalNoEscopo(c)]));
         context.res = { status: 200, body: { sucesso: true, trocas: todas.filter(t => noEscopo.get(t.canalId)) } };
@@ -227,7 +238,7 @@ module.exports = async function (context, req) {
       }
       if (acao === "cobertura") {
         if (!exigirGestao()) return;
-        try { await db.sincronizarSucessoes(pool, { hoje, por: membroId }); } catch (e) { context.log.error("[GestaoCanais] sucessão:", e); }
+        if (geral) { try { await db.sincronizarSucessoes(pool, { hoje, por: membroId }); } catch (e) { context.log.error("[GestaoCanais] sucessão:", e); } }
         const naoGlobalCong = (id) => { const c = ctx.congregacoes.get(id); return escopoGlobal || (!!c && escopo.includes(c.nome)); };
         const cob = await db.montarCobertura(pool, ctx, { hoje, filtrarCanal: canalNoEscopo, filtrarCongregacao: naoGlobalCong });
         context.res = { status: 200, body: { sucesso: true, ...cob } };
@@ -292,7 +303,7 @@ module.exports = async function (context, req) {
       if (!adminId) { erro(context, 400, "Informe o adminId."); return; }
       const a = (await pool.request().input("id", sql.Int, adminId).query(`SELECT CanalId FROM CanalAdministradores WHERE AdminId = @id`)).recordset[0];
       if (!a) { erro(context, 404, "Designação não encontrada."); return; }
-      const canal = await canalGerido({ canalId: a.CanalId });
+      const canal = await canalGerido({ canalId: a.CanalId }, "Designação não encontrada.");
       if (!canal) return;
       resposta(context, await db.encerrarAdministrador(pool, ctx, { adminId, motivo: corpo.motivo, por: membroId, hoje }));
       return;
@@ -313,8 +324,8 @@ module.exports = async function (context, req) {
       const id = idDe(corpo.ocorrenciaId);
       if (!id) { erro(context, 400, "Informe a ocorrenciaId."); return; }
       const c = await contextoDaOcorrencia(id);
-      if (!c) { erro(context, 404, "Ocorrência não encontrada."); return; }
-      if (!(c.gestao || c.administrador)) { erro(context, 403, "Só quem administra o canal (ou a gestão de canais) registra isto."); return; }
+      // Sem relação com o canal = a mesma resposta de ocorrência que não existe.
+      if (!c || !(c.gestao || c.administrador)) { erro(context, 404, "Ocorrência não encontrada."); return; }
       if (acao === "ocorrencias/remover") resposta(context, await db.registrarRemocao(pool, { ocorrenciaId: id, dados: corpo, membroId }));
       else resposta(context, await db.registrarAdvertencia(pool, { ocorrenciaId: id, observacao: corpo.observacao, membroId }));
       return;
@@ -324,8 +335,7 @@ module.exports = async function (context, req) {
       const id = idDe(corpo.ocorrenciaId);
       if (!id) { erro(context, 400, "Informe a ocorrenciaId."); return; }
       const c = await contextoDaOcorrencia(id);
-      if (!c) { erro(context, 404, "Ocorrência não encontrada."); return; }
-      if (!c.gestao) { erro(context, 403, "Esta ocorrência é de um canal fora do seu escopo."); return; }
+      if (!c || !c.gestao) { erro(context, 404, "Ocorrência não encontrada."); return; }   // canal fora do escopo = ocorrência que não existe
       resposta(context, await db.marcarImprocedente(pool, { ocorrenciaId: id, motivo: corpo.motivo, membroId }));
       return;
     }
@@ -335,7 +345,7 @@ module.exports = async function (context, req) {
       if (!id) { erro(context, 400, "Informe a trocaId."); return; }
       const t = (await pool.request().input("id", sql.Int, id).query(`SELECT CanalId FROM CanalTrocasCredencial WHERE TrocaId = @id`)).recordset[0];
       if (!t) { erro(context, 404, "Pendência não encontrada."); return; }
-      const canal = await canalGerido({ canalId: t.CanalId });
+      const canal = await canalGerido({ canalId: t.CanalId }, "Pendência não encontrada.");
       if (!canal) return;
       resposta(context, await db.resolverTroca(pool, { trocaId: id, observacao: corpo.observacao, por: membroId }));
       return;
@@ -358,13 +368,15 @@ module.exports = async function (context, req) {
       if (!exigirGestao()) return;
       const congId = idDe(corpo.congregacaoId);
       const cong = congId ? ctx.congregacoes.get(congId) : null;
-      if (!cong) { erro(context, 404, "Congregação não encontrada."); return; }
-      if (!escopoGlobal && !escopo.includes(cong.nome)) { erro(context, 403, "Esta congregação está fora do seu escopo."); return; }
+      // Congregação fora do escopo = a mesma resposta de congregação que não existe.
+      if (!cong || (!escopoGlobal && !escopo.includes(cong.nome))) { erro(context, 404, "Congregação não encontrada."); return; }
       resposta(context, await db.salvarTransmissao(pool, ctx, corpo, { por: membroId }));
       return;
     }
     if (acao === "sincronizar") {
       if (!exigirGestao()) return;
+      // A varredura compara a liderança da igreja inteira e abre pendência em canal de qualquer unidade: é do nível geral.
+      if (!geral) { erro(context, 403, MSG_GERAL); return; }
       context.res = { status: 200, body: { sucesso: true, mensagem: "Sucessões conferidas.", resumo: await db.sincronizarSucessoes(pool, { hoje, por: membroId }) } };
       return;
     }

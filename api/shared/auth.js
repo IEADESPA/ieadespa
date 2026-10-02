@@ -246,11 +246,13 @@ function exigirAlgumaPermissao(req, context, chaves) {
   return usuario;
 }
 
-// Escopo: 'TODAS' (string) ou array de nomes de congregação. 'TODAS' sempre passa.
+// Escopo: 'TODAS' (string) ou array de nomes de congregação. 'TODAS' sempre passa. FALHA FECHADO: sessão sem a lista (token antigo, claim ausente) não alcança nada —
+// antes, "sem lista" valia como "todas", o que dava acesso total a quem não deveria.
 function estaNoEscopo(usuario, congregacaoNome) {
-  if (!usuario.escopoCongregacoes || usuario.escopoCongregacoes === "TODAS") return true;
-  if (!congregacaoNome) return false;
-  return usuario.escopoCongregacoes.includes(congregacaoNome);
+  const escopo = usuario && usuario.escopoCongregacoes;
+  if (escopo === "TODAS") return true;
+  if (!Array.isArray(escopo) || !congregacaoNome) return false;
+  return escopo.includes(congregacaoNome);
 }
 
 // v5.2 — Lideranca.DepartamentoId (nullable, ortogonal ao EscopoTipo/EscopoId

@@ -105,6 +105,29 @@ async function podeGerenciarRespostaDoAluno(pool, usuario, alunoId) {
   return { ok: false, aluno, turma };
 }
 
+// Revisão de escopo: a atividade/questão precisa ser da MESMA congregação da turma do aluno. Antes só o aluno era conferido — o professor de uma congregação lançava resposta em
+// questão de outra (e recebia `correta`, um oráculo do gabarito alheio) e lia o enunciado de atividade de outra congregação pelo `respostas`.
+async function questaoDaCongregacao(pool, questaoId, congregacaoId) {
+  const r = await pool.request().input("id", sql.Int, questaoId).query(`
+    SELECT l.CongregacaoId
+    FROM EbdAtividadeQuestoes q
+    JOIN EbdAtividades a ON a.AtividadeId = q.AtividadeId
+    JOIN EbdLicoes l ON l.LicaoId = a.LicaoId
+    WHERE q.QuestaoId = @id`);
+  return r.recordset.length > 0 && r.recordset[0].CongregacaoId === congregacaoId;
+}
+
+async function atividadeDaCongregacao(pool, atividadeId, congregacaoId) {
+  const r = await pool.request().input("id", sql.Int, atividadeId).query(`
+    SELECT l.CongregacaoId
+    FROM EbdAtividades a
+    JOIN EbdLicoes l ON l.LicaoId = a.LicaoId
+    WHERE a.AtividadeId = @id`);
+  return r.recordset.length > 0 && r.recordset[0].CongregacaoId === congregacaoId;
+}
+
+const FORA_DA_TURMA = "Fora do seu escopo de atuação nesta turma.";
+
 module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
   if (!usuario) return;
@@ -116,7 +139,7 @@ module.exports = async function (context, req) {
   try {
     // ---- Conteúdo da lição ----
     if (acao === "licao/conteudo" && metodo === "GET") {
-      const licaoId = Number(req.query && req.query.licaoId);
+      const licaoId = auth.idDeRota(req.query && req.query.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await atividades.buscarConteudoLicao(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -126,7 +149,8 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "licao/conteudo" && metodo === "POST") {
-      const { licaoId, titulo, referencia, conteudo } = req.body || {};
+      const { titulo, referencia, conteudo } = req.body || {};
+      const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await atividades.buscarConteudoLicao(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -138,7 +162,7 @@ module.exports = async function (context, req) {
 
     // ---- Atividade ----
     if (acao === "atividade" && metodo === "GET") {
-      const licaoId = Number(req.query && req.query.licaoId);
+      const licaoId = auth.idDeRota(req.query && req.query.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await chamada.buscarLicaoPorId(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -149,7 +173,8 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "atividade" && metodo === "POST") {
-      const { licaoId, titulo } = req.body || {};
+      const { titulo } = req.body || {};
+      const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await chamada.buscarLicaoPorId(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -160,7 +185,8 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "questao" && metodo === "POST") {
-      const { atividadeId, tipo, enunciado, opcoes, gabarito, ordem } = req.body || {};
+      const { tipo, enunciado, opcoes, gabarito, ordem } = req.body || {};
+      const atividadeId = auth.idDeRota(req.body && req.body.atividadeId);
       if (!atividadeId || !tipo || !enunciado) return erro(context, 400, "Informe atividadeId, tipo e enunciado.");
       const atividadeResult = await pool.request().input("id", sql.Int, atividadeId).query(`SELECT LicaoId FROM EbdAtividades WHERE AtividadeId = @id`);
       const atividadeRow = atividadeResult.recordset[0];
@@ -174,45 +200,53 @@ module.exports = async function (context, req) {
 
     // ---- Resposta ----
     if (acao === "resposta" && metodo === "POST") {
-      const { questaoId, alunoId, resposta } = req.body || {};
+      const { resposta } = req.body || {};
+      const questaoId = auth.idDeRota(req.body && req.body.questaoId);
+      const alunoId = auth.idDeRota(req.body && req.body.alunoId);
       if (!questaoId || !alunoId) return erro(context, 400, "Informe questaoId e alunoId.");
-      const { ok } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const { ok, turma } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
+      if (!ok) return erro(context, 403, FORA_DA_TURMA);
+      // questão inexistente e questão de outra congregação: a mesma resposta
+      if (!(await questaoDaCongregacao(pool, questaoId, turma.congregacaoId))) return erro(context, 403, FORA_DA_TURMA);
       const resultado = await atividades.registrarRespostaAluno(pool, { questaoId, alunoId, resposta, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
     }
 
     if (acao === "resposta/corrigir" && metodo === "POST") {
-      const { respostaId, correta, alunoId } = req.body || {};
+      const { correta } = req.body || {};
+      const respostaId = auth.idDeRota(req.body && req.body.respostaId);
+      const alunoId = auth.idDeRota(req.body && req.body.alunoId);
       if (!respostaId || !alunoId || correta === undefined) return erro(context, 400, "Informe respostaId, alunoId e correta.");
       const { ok } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      if (!ok) return erro(context, 403, FORA_DA_TURMA);
       const resultado = await atividades.corrigirRespostaManual(pool, { respostaId, alunoId, correta, corrigidoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
     }
 
     if (acao === "respostas" && metodo === "GET") {
-      const atividadeId = Number(req.query && req.query.atividadeId);
-      const alunoId = Number(req.query && req.query.alunoId);
+      const atividadeId = auth.idDeRota(req.query && req.query.atividadeId);
+      const alunoId = auth.idDeRota(req.query && req.query.alunoId);
       if (!atividadeId || !alunoId) return erro(context, 400, "Informe atividadeId e alunoId.");
-      const { ok } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const { ok, turma } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
+      if (!ok) return erro(context, 403, FORA_DA_TURMA);
+      if (!(await atividadeDaCongregacao(pool, atividadeId, turma.congregacaoId))) return erro(context, 403, FORA_DA_TURMA);
       const respostas = await atividades.listarRespostasAluno(pool, { atividadeId, alunoId });
       context.res = { status: 200, body: { sucesso: true, respostas, resumo: atividades.calcularNotaAtividade(respostas) } };
       return;
     }
 
     if (acao === "resumo" && metodo === "GET") {
-      const atividadeId = Number(req.query && req.query.atividadeId);
-      const turmaId = Number(req.query && req.query.turmaId);
+      const atividadeId = auth.idDeRota(req.query && req.query.atividadeId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       if (!atividadeId || !turmaId) return erro(context, 400, "Informe atividadeId e turmaId.");
       const turma = await ebdTurmas.buscarTurmaPorId(pool, turmaId);
       if (!turma) return erro(context, 404, "Turma não encontrada.");
       const temGestao = temEbdGestao(usuario) && (await podeAcessarCongregacao(pool, usuario, turma.congregacaoId));
       const ehProfessor = await ehProfessorAtivoDaTurma(pool, usuario.membroId, turmaId);
-      if (!temGestao && !ehProfessor) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      if (!temGestao && !ehProfessor) return erro(context, 403, FORA_DA_TURMA);
+      if (!(await atividadeDaCongregacao(pool, atividadeId, turma.congregacaoId))) return erro(context, 403, FORA_DA_TURMA);
       const resumo = await atividades.listarResumoTurma(pool, { atividadeId, turmaId });
       context.res = { status: 200, body: { sucesso: true, resumo } };
       return;

@@ -23,11 +23,20 @@ module.exports = async function (context, req) {
   }
 
   const composicao = await composicaoCLI(pool, orgao.orgaoId);
-  const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
-  const comFlag = composicao.map(m => Object.assign({}, m, {
-    processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId),
-    emComunhao: m.situacaoMembro !== "SEM_COMUNHAO"
-  }));
+  // SIGILO (Art. 45): "está sob processo disciplinar" e "sem comunhão" são dado de PESSOA. Só aparecem para quem tem a permissão "disciplina" E alcança a congregação da
+  // pessoa (a mesma regra de GestaoPessoas). Para as demais linhas a pessoa aparece como qualquer outra: sem a marca de disciplina, "em comunhão" e sem a situação
+  // (a lista de nomes da CLI é institucional e continua inteira). A tela chama as linhas mascaradas de "Ativo".
+  const veDisciplina = (usuario.permissoes || []).includes("disciplina");
+  const idsSobDisciplina = veDisciplina ? await disciplina.membrosSobDisciplina(pool) : new Set();
+  const comFlag = composicao.map(m => {
+    if (veDisciplina && auth.estaNoEscopo(usuario, m.congregacao)) {
+      return Object.assign({}, m, {
+        processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId),
+        emComunhao: m.situacaoMembro !== "SEM_COMUNHAO"
+      });
+    }
+    return Object.assign({}, m, { situacaoMembro: null, processoDisciplinarAtivo: false, emComunhao: true });
+  });
 
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: comFlag };
 };

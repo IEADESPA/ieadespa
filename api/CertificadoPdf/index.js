@@ -28,9 +28,19 @@ function fmtData(valor) {
 module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
   if (!usuario) return;
-  const certificadoId = Number(context.bindingData.id);
+  try {
+    await gerar(context, usuario);
+  } catch (e) {
+    context.log.error("[CertificadoPdf] erro:", e);
+    context.res = { status: 500, body: { sucesso: false, mensagem: "Erro interno ao gerar o certificado." } };
+  }
+};
+
+async function gerar(context, usuario) {
+  // Só a forma canônica do número vale ("1e1", "0x10", "Infinity" davam 500 ou outro certificado): id malformado = a mesma resposta de certificado que não existe.
+  const certificadoId = auth.idDeRota(context.bindingData.id);
   if (!certificadoId) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o certificado." } };
+    context.res = { status: 404, body: { sucesso: false, mensagem: "Certificado não encontrado." } };
     return;
   }
 
@@ -102,4 +112,4 @@ module.exports = async function (context, req) {
     body: buffer,
     isRaw: true
   };
-};
+}

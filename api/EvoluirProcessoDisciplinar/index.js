@@ -20,7 +20,8 @@ const { getPool, sql } = require("../shared/db");
 const vacancia = require("../shared/vacancia");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
 const { selectProcessoComInfracoes, validarOrgaoProcesso, SIGLAS_QUE_PODEM_RECORRER } = require("../shared/disciplinar");
-const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
+const { membroAutorizadoNoOrgaoLocal, ancestraisTerritoriais } = require("../shared/escopo");
+const { ehGeral, pessoaAlcancavel } = require("../shared/escopoRotas");
 
 const RESULTADOS_VALIDOS = ["ARQUIVADO", "SANCAO", "EXCLUSAO"];
 const CANAIS_CITACAO_VALIDOS = ["WHATSAPP", "CARTA_REGISTRADA"];
@@ -29,10 +30,14 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
   if (!usuario) return;
 
-  const processoId = context.bindingData.processoId;
   const { acao } = req.body || {};
-  if (!processoId || !acao) {
+  if (!context.bindingData.processoId || !acao) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe processoId na rota e 'acao' no corpo." } };
+    return;
+  }
+  const processoId = auth.idDeRota(context.bindingData.processoId);
+  if (!processoId) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Processo não encontrado." } };
     return;
   }
 
@@ -42,7 +47,10 @@ module.exports = async function (context, req) {
                    OrgaoResponsavelId, OrgaoLocalId, HomologadoPeloCEI
             FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
   const atual = atualResult.recordset[0];
-  if (!atual) {
+  // Auditoria de escopo (02/10/2026): o processo só existe para quem alcança o RÉU (congregação do membro) — e processo de órgão CENTRAL (sem órgão territorial) só
+  // para o nível geral. Fora disso, a mesma resposta de "não encontrado".
+  const reu = atual ? await pessoaAlcancavel(pool, usuario, atual.MembroId) : null;
+  if (!atual || !reu || (!atual.OrgaoLocalId && !ehGeral(usuario))) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Processo não encontrado." } };
     return;
   }
@@ -208,9 +216,18 @@ module.exports = async function (context, req) {
     // Central (ex: CEI) sempre serve de destino; territorial precisa ser
     // exatamente 1 nível acima (JAI Nível 1 -> JEA Nível 2; JEA Nível 2 -> TER Nível 3).
     if (destino.orgaoLocalId) {
-      const origemNivel = await pool.request().input("id", sql.Int, atual.OrgaoLocalId).query(`SELECT Nivel FROM OrgaosLocais WHERE OrgaoLocalId = @id`);
-      const nivelOrigem = origemNivel.recordset[0] ? origemNivel.recordset[0].Nivel : null;
-      if (nivelOrigem === null || destino.nivel !== nivelOrigem + 1) {
+      const origemNivel = await pool.request().input("id", sql.Int, atual.OrgaoLocalId).query(`SELECT Nivel, ReferenciaId FROM OrgaosLocais WHERE OrgaoLocalId = @id`);
+      const origemLinha = origemNivel.recordset[0];
+      const nivelOrigem = origemLinha ? origemLinha.Nivel : null;
+      let destinoValido = nivelOrigem !== null && destino.nivel === nivelOrigem + 1;
+      // Auditoria de escopo (02/10/2026): o destino também precisa estar no caminho do réu — a JEA/TER que está ACIMA da instância de origem, não "uma JEA qualquer".
+      // Recorrer para o órgão de outra área mandaria o processo para quem não o enxerga (e pararia o recurso). O geral escolhe o destino livremente.
+      if (destinoValido && !ehGeral(usuario)) {
+        const acima = await ancestraisTerritoriais(pool, sql, nivelOrigem, origemLinha.ReferenciaId);
+        const esperado = { 2: acima.areaId, 3: acima.regiaoId, 4: acima.quadranteId, 5: acima.distritoId }[destino.nivel];
+        destinoValido = !!esperado && Number(destino.referenciaId) === Number(esperado);
+      }
+      if (!destinoValido) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "O destino do recurso precisa ser a instância territorial imediatamente superior." } };
         return;
       }

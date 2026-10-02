@@ -18,33 +18,34 @@
 // PUT  /api/campanhas/{campanhaId}/sorteios/{id} -> { nome?, descricao?, precoCupom?, dataSorteio?, status?,
 //        premios?: [{premioId?, descricao?, nomeGanhador?}] }
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { idOpcional } = require("../shared/financeiroSeguro");
 
 const STATUS = ["ATIVO", "REALIZADO", "CANCELADO"];
 
-function exigirFinanceiroGlobal(req, context) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
-  if (!usuario) return null;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Criar ou editar um sorteio é restrito a papéis de nível Global." } };
-    return null;
-  }
-  return usuario;
+// Ler sorteios e prêmios fica com qualquer `financeiro` (decisão: as campanhas já são listáveis por esses papéis e o ganhador de
+// sorteio é informação de divulgação). Criar e editar — que muda prêmio, ganhador e status — é só do nível GERAL (papel Global com
+// escopo de todas as congregações).
+function exigirFinanceiroGeral(req, context) {
+  return exigirGeral(req, context, "financeiro");
 }
 
 module.exports = async function (context, req) {
-  const campanhaId = context.bindingData.campanhaId;
-  const id = context.bindingData.id;
+  const campanha = idOpcional(context.bindingData.campanhaId);
+  const campanhaId = campanha.id;
+  const rota = idOpcional(context.bindingData.id);
+  const id = rota.id;
   const usuario = auth.exigirPermissao(req, context, "financeiro");
   if (!usuario) return;
-  if (!campanhaId) {
+  if (!campanha.presente || !campanhaId) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o campanhaId na rota." } };
     return;
   }
   const pool = await getPool();
 
-  if (req.method === "GET" && !id) {
+  if (req.method === "GET" && !rota.presente) {
     const result = await pool.request().input("campanhaId", sql.Int, campanhaId).query(`
       SELECT SorteioId AS sorteioId, Nome AS nome, Descricao AS descricao, PrecoCupom AS precoCupom,
              CONVERT(varchar(10), DataSorteio, 120) AS dataSorteio, Status AS status,
@@ -56,8 +57,12 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "GET" && id) {
-    const sorteio = await pool.request().input("id", sql.Int, id).input("campanhaId", sql.Int, campanhaId).query(`
+  if (req.method === "GET" && rota.presente) {
+    if (!id) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Sorteio não encontrado." } };
+      return;
+    }
+    const sorteio =await pool.request().input("id", sql.Int, id).input("campanhaId", sql.Int, campanhaId).query(`
       SELECT SorteioId AS sorteioId, CampanhaId AS campanhaId, Nome AS nome, Descricao AS descricao, PrecoCupom AS precoCupom,
              CONVERT(varchar(10), DataSorteio, 120) AS dataSorteio, Status AS status
       FROM Sorteios WHERE SorteioId = @id AND CampanhaId = @campanhaId
@@ -76,7 +81,7 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const usuarioGlobal = exigirFinanceiroGlobal(req, context);
+    const usuarioGlobal = exigirFinanceiroGeral(req, context);
     if (!usuarioGlobal) return;
     const campanha = await pool.request().input("id", sql.Int, campanhaId).query(`SELECT Status FROM Campanhas WHERE CampanhaId = @id`);
     if (campanha.recordset.length === 0) {
@@ -126,12 +131,16 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "PUT") {
-    if (!id) {
+    if (!rota.presente) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/campanhas/{campanhaId}/sorteios/{id}" } };
       return;
     }
-    const usuarioGlobal = exigirFinanceiroGlobal(req, context);
+    const usuarioGlobal = exigirFinanceiroGeral(req, context);
     if (!usuarioGlobal) return;
+    if (!id) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Sorteio não encontrado." } };
+      return;
+    }
     const atual = await pool.request().input("id", sql.Int, id).input("campanhaId", sql.Int, campanhaId).query(`SELECT * FROM Sorteios WHERE SorteioId = @id AND CampanhaId = @campanhaId`);
     if (atual.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Sorteio não encontrado." } };
@@ -157,8 +166,11 @@ module.exports = async function (context, req) {
       const maiorOrdem = await pool.request().input("id", sql.Int, id).query(`SELECT ISNULL(MAX(Ordem), 0) AS maior FROM SorteioPremios WHERE SorteioId = @id`);
       let proximaOrdem = maiorOrdem.recordset[0].maior + 1;
       for (const p of premios) {
+        if (!p || typeof p !== "object") continue;
         if (p.premioId) {
-          const request = pool.request().input("id", sql.Int, p.premioId).input("sorteioId", sql.Int, id);
+          const premioNum = auth.idDeRota(p.premioId);
+          if (!premioNum) continue;
+          const request = pool.request().input("id", sql.Int, premioNum).input("sorteioId", sql.Int, id);
           const sets = [];
           if (p.descricao !== undefined) { request.input("descricao", sql.NVarChar(300), p.descricao); sets.push("Descricao = @descricao"); }
           if (p.nomeGanhador !== undefined) {
@@ -168,7 +180,7 @@ module.exports = async function (context, req) {
           if (sets.length > 0) {
             await request.query(`UPDATE SorteioPremios SET ${sets.join(", ")} WHERE SorteioPremioId = @id AND SorteioId = @sorteioId`);
           }
-        } else if (p.descricao && p.descricao.trim()) {
+        } else if (typeof p.descricao === "string" && p.descricao.trim()) {
           await pool.request().input("sorteioId", sql.Int, id).input("ordem", sql.Int, proximaOrdem).input("descricao", sql.NVarChar(300), p.descricao.trim())
             .query(`INSERT INTO SorteioPremios (SorteioId, Ordem, Descricao) VALUES (@sorteioId, @ordem, @descricao)`);
           proximaOrdem++;

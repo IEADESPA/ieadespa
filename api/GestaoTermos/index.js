@@ -29,7 +29,8 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    if (!tipo || !TERMOS[tipo]) {
+    // hasOwnProperty: "constructor", "__proto__" e afins existem em qualquer objeto e passavam em `!TERMOS[tipo]`, quebrando depois em `.aplicaA` (500).
+    if (typeof tipo !== "string" || !Object.prototype.hasOwnProperty.call(TERMOS, tipo)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Tipo de termo inválido." } };
       return;
     }
@@ -72,8 +73,13 @@ module.exports = async function (context, req) {
     }
 
     const pendentes = await termosPendentes(pool, sql, usuario.membroId, usuario.nivel);
-    const { termosPendentes: antigo, exp, ...dadosSessao } = usuario;
-    const token = auth.reassinarSessao(Object.assign({}, dadosSessao, { termosPendentes: pendentes }));
+    // O token novo MANTÉM a validade do original (como na troca de PIN): antes cada POST aqui renovava 12 h, então um token roubado nunca vencia e um acesso
+    // suspenso por Medida Cautelar seguia vivo para sempre. Assinar um termo atualiza só a lista de pendências.
+    const token = auth.reassinarMantendoValidade(auth.extrairToken(req), { termosPendentes: pendentes });
+    if (!token) {
+      context.res = { status: 401, body: { sucesso: false, mensagem: "Faça login para continuar." } };
+      return;
+    }
 
     context.res = {
       status: 200,

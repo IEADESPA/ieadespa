@@ -42,6 +42,7 @@ const { getPool } = require("../shared/db");
 const psc = require("../shared/psc");
 const apuracao = require("../shared/pscApuracao");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const { ehGeral } = require("../shared/escopoRotas");
 
 function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
@@ -55,12 +56,14 @@ function temHomologacao(usuario) {
   return !!(usuario.permissoes && usuario.permissoes.includes("psc_homologacao"));
 }
 
+// Escopo TODAS (o campo inteiro). Falha FECHADO: sessão sem a lista de congregações não é "global" (antes, "sem lista" valia como todas).
 function temEscopoGlobal(usuario) {
-  return !usuario.escopoCongregacoes || usuario.escopoCongregacoes === "TODAS";
+  return usuario.escopoCongregacoes === "TODAS";
 }
 
 function nomesPermitidos(usuario) {
-  return temEscopoGlobal(usuario) ? null : (usuario.escopoCongregacoes || []);
+  if (temEscopoGlobal(usuario)) return null;
+  return Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : [];
 }
 
 const SEM_PERMISSAO = "Você não tem permissão para isso. Fale com quem administra as Permissões.";
@@ -81,28 +84,28 @@ module.exports = async function (context, req) {
 
   const podeLer = temGestao(usuario) || temHomologacao(usuario);
 
-  // Decisões da CLI valem para a igreja inteira: permissão + escopo global.
+  // Decisões da CLI valem para a igreja inteira (INSTITUCIONAL): permissão + nível GERAL (papel GLOBAL e escopo TODAS).
   function exigirHomologacao() {
     if (!temHomologacao(usuario)) { erro(context, 403, SEM_PERMISSAO); return false; }
-    if (!temEscopoGlobal(usuario)) {
-      erro(context, 403, "Homologar, decidir reclassificação e mexer no catálogo do PSC valem para a igreja inteira — exige escopo global.");
+    if (!ehGeral(usuario)) {
+      erro(context, 403, "Homologar, decidir reclassificação e mexer no catálogo do PSC valem para a igreja inteira — exige o nível geral.");
       return false;
     }
     return true;
   }
 
-  // Carrega a avaliação do corpo e confere o escopo (sem checar a permissão).
+  // Carrega a avaliação do corpo e confere o escopo (sem checar a permissão — quem chama confere ANTES). Avaliação de congregação fora do escopo dá a MESMA resposta
+  // de avaliação que não existe (404): a rota não serve de sonda de avaliacaoId.
   async function avaliacaoDoCorpo(origem) {
-    const avaliacaoId = Number(origem.avaliacaoId);
+    const avaliacaoId = auth.idDeRota(origem.avaliacaoId);
     if (!avaliacaoId) { erro(context, 400, "Informe avaliacaoId."); return null; }
     const avaliacao = await psc.buscarAvaliacao(pool, avaliacaoId);
-    if (!avaliacao) { erro(context, 404, "Avaliação não encontrada."); return null; }
-    if (!auth.estaNoEscopo(usuario, avaliacao.congregacaoNome)) { erro(context, 403, "Fora do seu escopo de atuação."); return null; }
+    if (!avaliacao || !auth.estaNoEscopo(usuario, avaliacao.congregacaoNome)) { erro(context, 404, "Avaliação não encontrada."); return null; }
     return avaliacao;
   }
 
   async function reclassificacaoDoCorpo() {
-    const id = Number(corpo.reclassificacaoId);
+    const id = auth.idDeRota(corpo.reclassificacaoId);
     if (!id) { erro(context, 400, "Informe reclassificacaoId."); return null; }
     const r = await psc.buscarReclassificacao(pool, id);
     if (!r) { erro(context, 404, "Reclassificação não encontrada."); return null; }
@@ -137,8 +140,10 @@ module.exports = async function (context, req) {
       if (acao === "avaliacoes") {
         const ano = q.ano ? Number(q.ano) : null;
         if (q.ano && (!Number.isInteger(ano) || ano < 2000 || ano > 2200)) return erro(context, 400, "Ano inválido.");
+        const congregacaoFiltro = q.congregacaoId ? auth.idDeRota(q.congregacaoId) : null;
+        if (q.congregacaoId && !congregacaoFiltro) return erro(context, 400, "congregacaoId inválido.");
         const lista = await psc.listarAvaliacoes(pool, {
-          ano, congregacaoId: q.congregacaoId ? Number(q.congregacaoId) : null, status: q.status || null,
+          ano, congregacaoId: congregacaoFiltro, status: q.status || null,
           nomesCongregacoesPermitidas: nomesPermitidos(usuario)
         });
         context.res = { status: 200, body: { sucesso: true, avaliacoes: lista.itens, truncado: lista.truncado } };
@@ -146,21 +151,21 @@ module.exports = async function (context, req) {
       }
 
       if (acao === "avaliacao") {
-        const avaliacaoId = Number(q.avaliacaoId);
+        const avaliacaoId = auth.idDeRota(q.avaliacaoId);
         if (!avaliacaoId) return erro(context, 400, "Informe avaliacaoId.");
         const detalhe = await psc.detalharAvaliacao(pool, avaliacaoId);
-        if (!detalhe) return erro(context, 404, "Avaliação não encontrada.");
-        if (!auth.estaNoEscopo(usuario, detalhe.congregacaoNome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+        // Fora do escopo = a mesma resposta de avaliação que não existe.
+        if (!detalhe || !auth.estaNoEscopo(usuario, detalhe.congregacaoNome)) return erro(context, 404, "Avaliação não encontrada.");
         context.res = { status: 200, body: { sucesso: true, avaliacao: detalhe } };
         return;
       }
 
       if (acao === "historico") {
-        const congregacaoId = Number(q.congregacaoId);
+        const congregacaoId = auth.idDeRota(q.congregacaoId);
         if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
         const historico = await psc.historicoDaCongregacao(pool, congregacaoId);
-        if (!historico) return erro(context, 404, "Congregação não encontrada.");
-        if (!auth.estaNoEscopo(usuario, historico.congregacao.nome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+        // Fora do escopo = a mesma resposta de congregação que não existe.
+        if (!historico || !auth.estaNoEscopo(usuario, historico.congregacao.nome)) return erro(context, 404, "Congregação não encontrada.");
         context.res = { status: 200, body: { sucesso: true, ...historico } };
         return;
       }
@@ -203,11 +208,11 @@ module.exports = async function (context, req) {
     // ---------- Avaliação (gestão no escopo) ----------
     if (acao === "avaliacoes/abrir") {
       if (!temGestao(usuario)) return erro(context, 403, SEM_PERMISSAO);
-      const congregacaoId = Number(corpo.congregacaoId);
+      const congregacaoId = auth.idDeRota(corpo.congregacaoId);
       if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
       const congregacao = await psc.buscarCongregacao(pool, congregacaoId);
-      if (!congregacao) return erro(context, 404, "Congregação não encontrada.");
-      if (!auth.estaNoEscopo(usuario, congregacao.Nome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+      // Fora do escopo = a mesma resposta de congregação que não existe.
+      if (!congregacao || !auth.estaNoEscopo(usuario, congregacao.Nome)) return erro(context, 404, "Congregação não encontrada.");
       const resultado = await psc.abrirAvaliacao(pool, { congregacaoId, ano: corpo.ano, membroId: usuario.membroId });
       if (resultado.sucesso) {
         // Sugestões do sistema: ajuda, nunca condição (fail-soft).
@@ -256,6 +261,8 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "avaliacoes/devolver") {
+      // A permissão vem ANTES de carregar a avaliação: quem não tem nenhuma das duas não descobre, pela diferença de resposta, quais avaliacaoId existem.
+      if (!temGestao(usuario) && !temHomologacao(usuario)) return erro(context, 403, SEM_PERMISSAO);
       const avaliacao = await avaliacaoDoCorpo(corpo);
       if (!avaliacao) return;
       // Enviada: a gestão no escopo devolve. Validada: já passou pela validação, então só a CLI.

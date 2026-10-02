@@ -9,12 +9,14 @@
 //    por fluxo muda a regra pra igreja inteira (um requisito BLOQUEIA trava
 //    consagração, nomeação, escala...). Por isso exige escopo territorial
 //    GLOBAL ("TODAS"): um secretário local com trilhas_gestao não altera
-//    política que vale pra todo mundo.
+//    política que vale pra todo mundo. "Global" aqui é o nível GERAL: papel GLOBAL e escopo TODAS (os dois).
 //  - Matricular, registrar conclusão de módulo, cancelar, reemitir
 //    certificado e ver a formação de uma pessoa exigem só que a pessoa esteja
 //    no escopo do usuário (congregação do membro).
-// Ler o catálogo e a PRÓPRIA formação é aberto a qualquer login (mesmo
-// espírito de "admin gerencia, todo mundo vê o seu" da v5.7/v6.4).
+// Ler o catálogo ATIVO e a PRÓPRIA formação é aberto a qualquer login (mesmo
+// espírito de "admin gerencia, todo mundo vê o seu" da v5.7/v6.4); as trilhas
+// inativas (?todas=1) são da gestão. Matrícula/pessoa fora do escopo dá a MESMA
+// resposta de "não existe" (404): a rota não serve de sonda de id.
 //
 // GET  /api/trilhas/catalogo[?todas=1]                     -> catálogo (trilhas + módulos + pré-requisitos) — login
 // GET  /api/trilhas/minha-formacao                         -> a própria formação (matrículas, situação, certificados) — login
@@ -37,8 +39,9 @@
 // POST /api/trilhas/matricula/cancelar    body:{matriculaId, motivo}
 // POST /api/trilhas/matricula/emitir-certificado body:{matriculaId}   — reparo: emite o certificado de matrícula já concluída
 const auth = require("../shared/auth");
-const { getPool, sql } = require("../shared/db");
+const { getPool } = require("../shared/db");
 const trilhas = require("../shared/trilhas");
+const escopoRotas = require("../shared/escopoRotas");
 
 function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
@@ -48,37 +51,31 @@ function temGestao(usuario) {
   return !!(usuario.permissoes && usuario.permissoes.includes("trilhas_gestao"));
 }
 
-function temEscopoGlobal(usuario) {
-  return !usuario.escopoCongregacoes || usuario.escopoCongregacoes === "TODAS";
-}
-
-// A pessoa está no escopo de quem gerencia? Membro sem congregação só é
-// alcançável por escopo global (auth.estaNoEscopo já trata nome vazio).
+// A pessoa está no escopo de quem gerencia (congregação e, para escopo de Extensão da Tenda, a Extensão)? Membro sem congregação só é alcançável por escopo TODAS.
+// Pessoa inexistente e pessoa fora do escopo dão o MESMO resultado (`ok: false`): quem chama devolve a mesma resposta nos dois casos, sem sonda de matrícula.
 async function membroNoEscopo(pool, usuario, membroId) {
-  const r = await pool.request().input("id", sql.Int, membroId).query(`
-    SELECT m.MembroId, c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id
-  `);
-  const membro = r.recordset[0];
-  if (!membro) return { existe: false, ok: false };
-  return { existe: true, ok: auth.estaNoEscopo(usuario, membro.CongregacaoNome) };
+  const pessoa = await escopoRotas.pessoaAlcancavel(pool, usuario, membroId);
+  return { ok: !!pessoa };
 }
 
 function semPermissao(context) {
   return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
 }
 
-// Catálogo e requisitos: gestão + escopo global.
+// Catálogo e requisitos valem para a igreja inteira (INSTITUCIONAL): gestão + nível GERAL (papel GLOBAL e escopo TODAS).
 function exigirPoliticaGlobal(usuario, context) {
   if (!temGestao(usuario)) { semPermissao(context); return false; }
-  if (!temEscopoGlobal(usuario)) {
-    erro(context, 403, "Alterar o catálogo de trilhas e os requisitos vale para a igreja inteira — exige escopo global.");
+  if (!escopoRotas.ehGeral(usuario)) {
+    erro(context, 403, "Alterar o catálogo de trilhas e os requisitos vale para a igreja inteira — exige o nível geral.");
     return false;
   }
   return true;
 }
 
+// null = sem restrição (escopo TODAS); senão a lista de congregações. Sessão sem lista não alcança nenhuma (falha fechada).
 function nomesPermitidos(usuario) {
-  return temEscopoGlobal(usuario) ? null : (usuario.escopoCongregacoes || []);
+  if (usuario.escopoCongregacoes === "TODAS") return null;
+  return Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : [];
 }
 
 function resposta(context, resultado, statusOk = 200) {
@@ -100,7 +97,9 @@ module.exports = async function (context, req) {
   try {
     // ---------- Leitura aberta a qualquer login ----------
     if (acao === "catalogo" && metodo === "GET") {
-      context.res = { status: 200, body: { sucesso: true, trilhas: await trilhas.listarTrilhas(pool, { apenasAtivas: q.todas !== "1" }) } };
+      // As trilhas inativas (rascunho) são da gestão: `?todas=1` só vale com trilhas_gestao.
+      const todas = q.todas === "1" && temGestao(usuario);
+      context.res = { status: 200, body: { sucesso: true, trilhas: await trilhas.listarTrilhas(pool, { apenasAtivas: !todas }) } };
       return;
     }
 
@@ -110,13 +109,13 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "matricula" && metodo === "GET") {
-      const matriculaId = Number(q.matriculaId);
+      const matriculaId = auth.idDeRota(q.matriculaId);
       if (!matriculaId) return erro(context, 400, "Informe matriculaId.");
       const matricula = await trilhas.buscarMatricula(pool, matriculaId);
+      // Matrícula de outra pessoa: sem a permissão, ou com ela mas fora do escopo, a resposta é a MESMA de matrícula que não existe (sem sonda de id).
       if (!matricula) return erro(context, 404, "Matrícula não encontrada.");
       if (matricula.membroId !== usuario.membroId) {
-        if (!temGestao(usuario)) return erro(context, 403, "Só é possível ver a matrícula de outra pessoa com a permissão de gestão da formação.");
-        if (!(await membroNoEscopo(pool, usuario, matricula.membroId)).ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+        if (!temGestao(usuario) || !(await membroNoEscopo(pool, usuario, matricula.membroId)).ok) return erro(context, 404, "Matrícula não encontrada.");
       }
       context.res = { status: 200, body: { sucesso: true, matricula } };
       return;
@@ -125,11 +124,9 @@ module.exports = async function (context, req) {
     // ---------- Daqui em diante: permissão de gestão ----------
     if (metodo === "GET" && acao === "formacao") {
       if (!temGestao(usuario)) return semPermissao(context);
-      const membroId = Number(q.membroId);
+      const membroId = auth.idDeRota(q.membroId);
       if (!membroId) return erro(context, 400, "Informe membroId.");
-      const alcance = await membroNoEscopo(pool, usuario, membroId);
-      if (!alcance.existe) return erro(context, 404, "Membro não encontrado.");
-      if (!alcance.ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!(await membroNoEscopo(pool, usuario, membroId)).ok) return erro(context, 404, "Membro não encontrado.");
       context.res = { status: 200, body: { sucesso: true, formacao: await trilhas.listarFormacaoDoMembro(pool, membroId) } };
       return;
     }
@@ -137,9 +134,11 @@ module.exports = async function (context, req) {
     if (metodo === "GET" && acao === "pendencias") {
       if (!temGestao(usuario)) return semPermissao(context);
       const pendencias = await trilhas.listarPendenciasVencimento(pool, {
-        nomesCongregacoesPermitidas: nomesPermitidos(usuario), congregacaoId: Number(q.congregacaoId) || null
+        nomesCongregacoesPermitidas: nomesPermitidos(usuario), congregacaoId: auth.idDeRota(q.congregacaoId)
       });
-      context.res = { status: 200, body: { sucesso: true, pendencias } };
+      // Escopo de Extensão da Tenda é mais estreito que a congregação-mãe: o SQL filtra pelas congregações, aqui se confere a Extensão de cada pessoa.
+      const dentro = escopoRotas.filtrarPorEscopo(usuario, pendencias, p => p.congregacaoNome, p => p.extensaoNome);
+      context.res = { status: 200, body: { sucesso: true, pendencias: dentro } };
       return;
     }
 
@@ -151,12 +150,10 @@ module.exports = async function (context, req) {
 
     if (metodo === "GET" && acao === "requisitos/avaliar") {
       if (!temGestao(usuario)) return semPermissao(context);
-      const membroId = Number(q.membroId);
+      const membroId = auth.idDeRota(q.membroId);
       if (!q.contexto || !membroId) return erro(context, 400, "Informe contexto e membroId.");
       if (!trilhas.CONTEXTOS.includes(q.contexto)) return erro(context, 400, "Contexto inválido.");
-      const alcance = await membroNoEscopo(pool, usuario, membroId);
-      if (!alcance.existe) return erro(context, 404, "Membro não encontrado.");
-      if (!alcance.ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!(await membroNoEscopo(pool, usuario, membroId)).ok) return erro(context, 404, "Membro não encontrado.");
       context.res = { status: 200, body: { sucesso: true, avaliacao: await trilhas.avaliarRequisitos(pool, { contexto: q.contexto, alvoChave: q.alvo || "", membroId }) } };
       return;
     }
@@ -209,30 +206,30 @@ module.exports = async function (context, req) {
     // ---------- Matrícula e progresso (escopo da pessoa) ----------
     if (acao === "matricular") {
       if (!temGestao(usuario)) return semPermissao(context);
-      if (!body.trilhaId || !body.membroId) return erro(context, 400, "Informe trilhaId e membroId.");
-      const alcance = await membroNoEscopo(pool, usuario, Number(body.membroId));
-      if (!alcance.existe) return erro(context, 404, "Membro não encontrado.");
-      if (!alcance.ok) return erro(context, 403, "Fora do seu escopo de atuação.");
-      return resposta(context, await trilhas.matricular(pool, { trilhaId: Number(body.trilhaId), membroId: Number(body.membroId), registradoPorMembroId: usuario.membroId }), 201);
+      const alvoId = auth.idDeRota(body.membroId);
+      if (!body.trilhaId || !alvoId) return erro(context, 400, "Informe trilhaId e membroId.");
+      if (!(await membroNoEscopo(pool, usuario, alvoId)).ok) return erro(context, 404, "Membro não encontrado.");
+      return resposta(context, await trilhas.matricular(pool, { trilhaId: Number(body.trilhaId), membroId: alvoId, registradoPorMembroId: usuario.membroId }), 201);
     }
 
     if (acao === "modulos/concluir" || acao === "matricula/cancelar" || acao === "matricula/emitir-certificado") {
       if (!temGestao(usuario)) return semPermissao(context);
-      if (!body.matriculaId) return erro(context, 400, "Informe matriculaId.");
-      const matricula = await trilhas.buscarMatricula(pool, Number(body.matriculaId));
-      if (!matricula) return erro(context, 404, "Matrícula não encontrada.");
-      if (!(await membroNoEscopo(pool, usuario, matricula.membroId)).ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      const matriculaId = auth.idDeRota(body.matriculaId);
+      if (!matriculaId) return erro(context, 400, "Informe matriculaId.");
+      const matricula = await trilhas.buscarMatricula(pool, matriculaId);
+      // Matrícula de pessoa fora do escopo = a mesma resposta de matrícula que não existe.
+      if (!matricula || !(await membroNoEscopo(pool, usuario, matricula.membroId)).ok) return erro(context, 404, "Matrícula não encontrada.");
 
       if (acao === "modulos/concluir") {
         if (!body.moduloId) return erro(context, 400, "Informe moduloId.");
         return resposta(context, await trilhas.concluirModulo(pool, {
-          matriculaId: Number(body.matriculaId), moduloId: Number(body.moduloId), dataConclusao: body.data, observacao: body.observacao, registradoPorMembroId: usuario.membroId
+          matriculaId: matriculaId, moduloId: Number(body.moduloId), dataConclusao: body.data, observacao: body.observacao, registradoPorMembroId: usuario.membroId
         }));
       }
       if (acao === "matricula/cancelar") {
-        return resposta(context, await trilhas.cancelarMatricula(pool, { matriculaId: Number(body.matriculaId), motivo: body.motivo, registradoPorMembroId: usuario.membroId }));
+        return resposta(context, await trilhas.cancelarMatricula(pool, { matriculaId: matriculaId, motivo: body.motivo, registradoPorMembroId: usuario.membroId }));
       }
-      return resposta(context, await trilhas.garantirCertificadoDaMatricula(pool, { matriculaId: Number(body.matriculaId), emitidoPorMembroId: usuario.membroId }));
+      return resposta(context, await trilhas.garantirCertificadoDaMatricula(pool, { matriculaId: matriculaId, emitidoPorMembroId: usuario.membroId }));
     }
 
     erro(context, 404, "Ação inválida.");

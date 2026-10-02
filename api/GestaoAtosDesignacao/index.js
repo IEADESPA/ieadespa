@@ -4,24 +4,28 @@
 // exatamente o que sustenta juridicamente que a prebenda NÃO é
 // contraprestação por trabalho — o valor não é auto-atribuído pelo
 // ministro, vem de um colegiado (CLI/Assembleia), com ata própria
-// (Reg. Art. 134 §5º). Restrito a nível Global.
+// (Reg. Art. 134 §5º). INSTITUCIONAL e dado de PESSOA (valor pago a ministro): só o
+// nível GERAL (papel Global + escopo TODAS).
 // GET  /api/atos-designacao -> lista
 // GET  /api/atos-designacao/{id} -> detalhe (ata com link assinado)
 // POST /api/atos-designacao -> { numeroAto, orgaoColegiado, dataDeliberacao, valorMensal, membroId, ataBase64, mimeType }
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
+const { idOpcional, numeroPositivo, decodificarArquivo } = require("../shared/financeiro1Util");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
-const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
+const VALOR_MAXIMO = 99999999.99; // DECIMAL(10,2)
 
 module.exports = async function (context, req) {
-  const id = context.bindingData.id;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Ato de designação é matéria da Tesouraria Geral — restrito a papéis de nível Global." } };
+  // Id malformado recebe a mesma resposta de "não existe".
+  const { tem: temId, id } = idOpcional(context.bindingData.id);
+  if (temId && !id) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Ato de designação não encontrado." } };
     return;
   }
   const pool = await getPool();
@@ -61,12 +65,14 @@ module.exports = async function (context, req) {
 
 
   if (req.method === "POST") {
-    const { numeroAto, orgaoColegiado, dataDeliberacao, valorMensal, membroId, ataBase64, mimeType } = req.body || {};
-    if (!numeroAto || !numeroAto.trim() || !orgaoColegiado || !orgaoColegiado.trim() || !dataDeliberacao || !valorMensal || !membroId) {
+    const { numeroAto, orgaoColegiado, dataDeliberacao, ataBase64, mimeType } = req.body || {};
+    const membroId = auth.idDeRota((req.body || {}).membroId);
+    if (typeof numeroAto !== "string" || !numeroAto.trim() || typeof orgaoColegiado !== "string" || !orgaoColegiado.trim() || !dataDeliberacao || !(req.body || {}).valorMensal || !membroId) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: numeroAto, orgaoColegiado, dataDeliberacao, valorMensal, membroId." } };
       return;
     }
-    if (Number(valorMensal) <= 0) {
+    const valorMensal = numeroPositivo((req.body || {}).valorMensal, VALOR_MAXIMO);
+    if (valorMensal === null) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "valorMensal deve ser maior que zero." } };
       return;
     }
@@ -84,19 +90,15 @@ module.exports = async function (context, req) {
       return;
     }
 
-    let buffer;
-    try { buffer = Buffer.from(ataBase64, "base64"); } catch (e) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Arquivo da ata inválido." } };
-      return;
-    }
-    if (buffer.length === 0 || buffer.length > TAMANHO_MAXIMO_BYTES) {
+    const buffer = decodificarArquivo(ataBase64);
+    if (!buffer) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Arquivo da ata vazio ou maior que 15 MB." } };
       return;
     }
     let ataUrl;
     try { ataUrl = await storage.salvarDocumento(buffer, mimeType); } catch (erro) {
       context.log.error("Falha ao salvar ata:", erro.message);
-      context.res = { status: 500, body: { sucesso: false, mensagem: "Falha ao salvar a ata. Avise a equipe técnica: " + erro.message } };
+      context.res = { status: 500, body: { sucesso: false, mensagem: "Falha ao salvar a ata. Tente de novo ou avise a equipe técnica." } };
       return;
     }
 

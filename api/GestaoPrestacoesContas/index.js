@@ -3,70 +3,52 @@
 // Prestação de contas mensal (Reg. Art. 120): comprovantes de água/luz,
 // prazo fatal (1º útil, tolerância dia 5), Ata de Pendência automática e
 // bloqueio de repasse por falta de prestação.
+// Conferida pela Tesouraria Geral — só o nível GERAL (papel Global com escopo de todas as congregações).
+// A LEITURA nunca grava: o GET com mês de referência só CALCULA quem está em atraso (antes ele criava a ata, subia um arquivo
+// por congregação e bloqueava o repasse a cada consulta, para qualquer mês passado que alguém digitasse). A Ata de Pendência
+// nasce no POST (registro em atraso).
 // GET  /api/prestacoes-contas?mesReferencia=&congregacaoId=
 // POST /api/prestacoes-contas -> { congregacaoId, mesReferencia, comprovanteAguaBase64?, mimeTypeAgua?, comprovanteLuzBase64?, mimeTypeLuz? }
 // PUT  /api/prestacoes-contas/{id} -> { acao: 'LIBERAR'|'BLOQUEAR' }
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const { estaEmAtraso, gerarTextoAtaPendencia } = require("../shared/prestacoesContas");
+const { mesReferenciaValido, idOpcional, lerBase64 } = require("../shared/financeiroSeguro");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
-
-// Gera a Ata de Pendência (texto simples, mesmo tratamento de "documento" que
-// os comprovantes: sobe pro Blob Storage e guarda só a URL) e materializa a
-// pendência da congregação/mês como um registro real em PrestacoesContas,
-// bloqueando o repasse — reaproveitado tanto para linhas já existentes
-// (submetidas incompletas) quanto para congregações que não registraram nada.
-async function gerarAtaEBloquear(pool, { prestacaoId, congregacaoId, congregacaoNome, mesReferencia, temAgua, temLuz }) {
-  const textoAta = gerarTextoAtaPendencia({ congregacaoNome, mesReferencia, temAgua, temLuz });
-  const ataUrl = await storage.salvarDocumento(Buffer.from(textoAta, "utf-8"), "text/plain");
-
-  if (prestacaoId) {
-    await pool.request().input("id", sql.Int, prestacaoId).input("ata", sql.NVarChar(500), ataUrl)
-      .query(`UPDATE PrestacoesContas SET Status = 'ATA_PENDENCIA', BloqueioRepasse = 1, AtaPendenciaUrl = @ata WHERE PrestacaoId = @id`);
-    await registrarAuditoria({
-      tabela: "PrestacoesContas", registroId: prestacaoId, acao: "Ata de Pendência gerada automaticamente (prazo vencido)",
-      dadosDepois: { congregacaoId, mesReferencia, status: "ATA_PENDENCIA", bloqueioRepasse: true }
-    });
-    return prestacaoId;
-  }
-
-  const criada = await pool.request().input("cong", sql.Int, congregacaoId).input("mes", sql.Char(7), mesReferencia)
-    .input("status", sql.NVarChar(20), "ATA_PENDENCIA").input("ata", sql.NVarChar(500), ataUrl)
-    .query(`INSERT INTO PrestacoesContas (CongregacaoId, MesReferencia, Status, BloqueioRepasse, AtaPendenciaUrl)
-            OUTPUT INSERTED.PrestacaoId VALUES (@cong, @mes, @status, 1, @ata)`);
-  const novoId = criada.recordset[0].PrestacaoId;
-  await registrarAuditoria({
-    tabela: "PrestacoesContas", registroId: novoId, acao: "Ata de Pendência gerada automaticamente (prestação não registrada até o prazo)",
-    dadosDepois: { congregacaoId, mesReferencia, status: "ATA_PENDENCIA", bloqueioRepasse: true }
-  });
-  return novoId;
-}
+const MSG_MES = "mesReferencia deve estar no formato AAAA-MM.";
 
 module.exports = async function (context, req) {
-  const id = context.bindingData.id;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Prestação de contas é conferida pela Tesouraria Geral — restrito a nível Global." } };
-    return;
-  }
+  const rota = idOpcional(context.bindingData.id);
+  const id = rota.id;
   const pool = await getPool();
 
-  if (req.method === "GET" && !id) {
-    const { mesReferencia, congregacaoId } = req.query || {};
+  if (req.method === "GET" && !rota.presente) {
+    const { mesReferencia } = req.query || {};
+    const filtroCong = idOpcional((req.query || {}).congregacaoId);
+    if (filtroCong.presente && !filtroCong.id) {
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] };
+      return;
+    }
     const hoje = new Date();
 
-    if (mesReferencia) {
+    if (mesReferencia !== undefined && mesReferencia !== "") {
+      if (!mesReferenciaValido(mesReferencia)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: MSG_MES } };
+        return;
+      }
       // Com mês de referência informado dá pra calcular o prazo fatal: parte
       // de TODAS as congregações (LEFT JOIN), não só das que já registraram
       // algo, senão quem nunca prestou contas simplesmente some da listagem
       // em vez de aparecer "EM ATRASO".
       const request = pool.request().input("mes", sql.Char(7), mesReferencia);
       let where = "1=1";
-      if (congregacaoId) { request.input("cong", sql.Int, congregacaoId); where += " AND c.CongregacaoId = @cong"; }
+      if (filtroCong.id) { request.input("cong", sql.Int, filtroCong.id); where += " AND c.CongregacaoId = @cong"; }
       const result = await request.query(`
         SELECT c.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
                p.PrestacaoId AS prestacaoId, p.Status AS status, p.BloqueioRepasse AS bloqueioRepasse,
@@ -77,32 +59,13 @@ module.exports = async function (context, req) {
         WHERE ${where} ORDER BY c.Nome
       `);
 
+      // Só calcula, não grava: o atraso aparece na linha (emAtraso), com o estado que está no banco.
       const emAtraso = estaEmAtraso(mesReferencia, hoje);
-      const linhas = [];
-      for (const row of result.recordset) {
-        const jaCompleta = row.status === "COMPLETA";
-        const jaComAta = row.status === "ATA_PENDENCIA";
-        if (!jaCompleta && !jaComAta && emAtraso) {
-          // Transição automática: prazo (com tolerância) estourou e a
-          // prestação continua incompleta/inexistente — gera a Ata de
-          // Pendência e bloqueia o repasse agora, na leitura.
-          const novoId = await gerarAtaEBloquear(pool, {
-            prestacaoId: row.prestacaoId, congregacaoId: row.congregacaoId, congregacaoNome: row.congregacaoNome,
-            mesReferencia, temAgua: !!row.temAgua, temLuz: !!row.temLuz
-          });
-          linhas.push({
-            congregacaoId: row.congregacaoId, congregacaoNome: row.congregacaoNome, mesReferencia,
-            prestacaoId: novoId, status: "ATA_PENDENCIA", bloqueioRepasse: true, emAtraso: true,
-            temAgua: !!row.temAgua, temLuz: !!row.temLuz
-          });
-        } else {
-          linhas.push({
-            congregacaoId: row.congregacaoId, congregacaoNome: row.congregacaoNome, mesReferencia,
-            prestacaoId: row.prestacaoId, status: row.status || "PENDENTE", bloqueioRepasse: !!row.bloqueioRepasse,
-            emAtraso, temAgua: !!row.temAgua, temLuz: !!row.temLuz
-          });
-        }
-      }
+      const linhas = result.recordset.map(row => ({
+        congregacaoId: row.congregacaoId, congregacaoNome: row.congregacaoNome, mesReferencia,
+        prestacaoId: row.prestacaoId, status: row.status || "PENDENTE", bloqueioRepasse: !!row.bloqueioRepasse,
+        emAtraso, temAgua: !!row.temAgua, temLuz: !!row.temLuz
+      }));
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: linhas };
       return;
     }
@@ -111,7 +74,7 @@ module.exports = async function (context, req) {
     // registrado — mantém o comportamento original.
     const request = pool.request();
     let where = "1=1";
-    if (congregacaoId) { request.input("cong", sql.Int, congregacaoId); where += " AND p.CongregacaoId = @cong"; }
+    if (filtroCong.id) { request.input("cong", sql.Int, filtroCong.id); where += " AND p.CongregacaoId = @cong"; }
     const result = await request.query(`
       SELECT p.PrestacaoId AS prestacaoId, p.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
              p.MesReferencia AS mesReferencia, p.Status AS status, p.BloqueioRepasse AS bloqueioRepasse,
@@ -131,7 +94,19 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: congregacaoId, mesReferencia." } };
       return;
     }
-    const existente = await pool.request().input("cong", sql.Int, congregacaoId).input("mes", sql.Char(7), mesReferencia)
+    if (!mesReferenciaValido(mesReferencia)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: MSG_MES } };
+      return;
+    }
+    const congregacaoNum = auth.idDeRota(congregacaoId);
+    const cong = congregacaoNum
+      ? await pool.request().input("cong", sql.Int, congregacaoNum).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @cong`)
+      : { recordset: [] };
+    if (cong.recordset.length === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação não encontrada." } };
+      return;
+    }
+    const existente = await pool.request().input("cong", sql.Int, congregacaoNum).input("mes", sql.Char(7), mesReferencia)
       .query(`SELECT PrestacaoId FROM PrestacoesContas WHERE CongregacaoId = @cong AND MesReferencia = @mes`);
     if (existente.recordset.length > 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Já existe prestação de contas para esta congregação e mês." } };
@@ -142,11 +117,15 @@ module.exports = async function (context, req) {
     let luzUrl = null;
     if (comprovanteAguaBase64) {
       if (!mimeTypeAgua || !MIME_PERMITIDOS.includes(mimeTypeAgua)) { context.res = { status: 400, body: { sucesso: false, mensagem: "Formato de comprovante de água inválido." } }; return; }
-      aguaUrl = await storage.salvarDocumento(Buffer.from(comprovanteAguaBase64, "base64"), mimeTypeAgua);
+      const lido = lerBase64(comprovanteAguaBase64);
+      if (lido.erro) { context.res = { status: 400, body: { sucesso: false, mensagem: `Comprovante de água: ${lido.erro}` } }; return; }
+      aguaUrl = await storage.salvarDocumento(lido.buffer, mimeTypeAgua);
     }
     if (comprovanteLuzBase64) {
       if (!mimeTypeLuz || !MIME_PERMITIDOS.includes(mimeTypeLuz)) { context.res = { status: 400, body: { sucesso: false, mensagem: "Formato de comprovante de luz inválido." } }; return; }
-      luzUrl = await storage.salvarDocumento(Buffer.from(comprovanteLuzBase64, "base64"), mimeTypeLuz);
+      const lido = lerBase64(comprovanteLuzBase64);
+      if (lido.erro) { context.res = { status: 400, body: { sucesso: false, mensagem: `Comprovante de luz: ${lido.erro}` } }; return; }
+      luzUrl = await storage.salvarDocumento(lido.buffer, mimeTypeLuz);
     }
 
     const completa = !!(aguaUrl && luzUrl);
@@ -162,13 +141,11 @@ module.exports = async function (context, req) {
 
     let ataUrl = null;
     if (geraAtaImediata) {
-      const cong = await pool.request().input("cong", sql.Int, congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @cong`);
-      const congregacaoNome = cong.recordset[0] ? cong.recordset[0].Nome : String(congregacaoId);
-      const textoAta = gerarTextoAtaPendencia({ congregacaoNome, mesReferencia, temAgua: !!aguaUrl, temLuz: !!luzUrl });
+      const textoAta = gerarTextoAtaPendencia({ congregacaoNome: cong.recordset[0].Nome, mesReferencia, temAgua: !!aguaUrl, temLuz: !!luzUrl });
       ataUrl = await storage.salvarDocumento(Buffer.from(textoAta, "utf-8"), "text/plain");
     }
 
-    const criada = await pool.request().input("cong", sql.Int, congregacaoId).input("mes", sql.Char(7), mesReferencia)
+    const criada = await pool.request().input("cong", sql.Int, congregacaoNum).input("mes", sql.Char(7), mesReferencia)
       .input("agua", sql.NVarChar(500), aguaUrl).input("luz", sql.NVarChar(500), luzUrl)
       .input("status", sql.NVarChar(20), status).input("bloqueio", sql.Bit, bloqueio).input("por", sql.Int, usuario.membroId)
       .input("ata", sql.NVarChar(500), ataUrl)
@@ -178,7 +155,7 @@ module.exports = async function (context, req) {
       tabela: "PrestacoesContas", registroId: criada.recordset[0].PrestacaoId,
       acao: geraAtaImediata ? "Registrou prestação de contas em atraso — Ata de Pendência gerada" : "Registrou prestação de contas",
       usuarioId: usuario.membroId,
-      dadosDepois: { congregacaoId, mesReferencia, status, bloqueioRepasse: !!bloqueio }
+      dadosDepois: { congregacaoId: congregacaoNum, mesReferencia, status, bloqueioRepasse: !!bloqueio }
     });
 
     let mensagem;
@@ -189,17 +166,22 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "PUT" && id) {
+  if (req.method === "PUT" && rota.presente) {
     const { acao } = req.body || {};
     if (acao !== "LIBERAR" && acao !== "BLOQUEAR") {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida — use 'LIBERAR' ou 'BLOQUEAR'." } };
+      return;
+    }
+    const atual = id ? await pool.request().input("id", sql.Int, id).query(`SELECT PrestacaoId FROM PrestacoesContas WHERE PrestacaoId = @id`) : { recordset: [] };
+    if (atual.recordset.length === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Prestação de contas não encontrada." } };
       return;
     }
     const novoBloqueio = acao === "BLOQUEAR" ? 1 : 0;
     await pool.request().input("id", sql.Int, id).input("bloqueio", sql.Bit, novoBloqueio)
       .query(`UPDATE PrestacoesContas SET BloqueioRepasse = @bloqueio WHERE PrestacaoId = @id`);
     await registrarAuditoria({
-      tabela: "PrestacoesContas", registroId: Number(id), acao: acao === "BLOQUEAR" ? "Bloqueou repasse por prestação de contas" : "Liberou repasse (prestação regularizada)", usuarioId: usuario.membroId
+      tabela: "PrestacoesContas", registroId: id, acao: acao === "BLOQUEAR" ? "Bloqueou repasse por prestação de contas" : "Liberou repasse (prestação regularizada)", usuarioId: usuario.membroId
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: acao === "BLOQUEAR" ? "🔒 Repasse bloqueado." : "✅ Repasse liberado." } };
     return;

@@ -88,6 +88,10 @@ module.exports = async function (context, req) {
 
     if (acao === "catalogo" && metodo === "POST") {
       if (!temEbdGestao(usuario)) return erro(context, 403, "Administrar o catálogo de revistas exige a permissão ebd_gestao.");
+      // Revisão de escopo: o catálogo vale para o CAMPO INTEIRO (preço e edição que qualquer congregação pede). Cadastrar nele não é ato de congregação: um gestor de escopo local
+      // criava revista com preço errado para todas as unidades (e, como nome + trimestre é único, bloqueava o cadastro correto). Só escopo de TODAS as congregações — o mesmo critério
+      // do plano de aula do campo inteiro (GestaoEbdSalaAula). Não exige o nível GLOBAL do papel: o superintendente geral de EBD costuma ser Líder Geral de Departamento (nível DEPARTAMENTO, escopo TODAS).
+      if (usuario.escopoCongregacoes !== "TODAS") return erro(context, 403, "O catálogo de revistas vale para o campo inteiro: só quem tem o escopo de todas as congregações cadastra revista.");
       const { nome, faixaEtaria, trimestre, precoUnitario } = req.body || {};
       const resultado = await revistas.criarRevista(pool, { nome, faixaEtaria, trimestre, precoUnitario, criadoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
@@ -96,7 +100,7 @@ module.exports = async function (context, req) {
 
     // ---- Pedidos ----
     if (acao === "pedidos" && metodo === "GET") {
-      const turmaId = Number(req.query && req.query.turmaId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       if (!turmaId) return erro(context, 400, "Informe turmaId.");
       const turma = await ebdTurmas.buscarTurmaPorId(pool, turmaId);
       if (!turma) return erro(context, 404, "Turma não encontrada.");
@@ -106,7 +110,8 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "pedidos" && metodo === "POST") {
-      const { turmaId, trimestre, itens } = req.body || {};
+      const { trimestre, itens } = req.body || {};
+      const turmaId = auth.idDeRota(req.body && req.body.turmaId);
       if (!turmaId || !trimestre) return erro(context, 400, "Informe turmaId e trimestre.");
       const turma = await ebdTurmas.buscarTurmaPorId(pool, turmaId);
       if (!turma) return erro(context, 404, "Turma não encontrada.");
@@ -119,7 +124,7 @@ module.exports = async function (context, req) {
     // v6.10 — sugestão do pedido pela matrícula real (alunos e professores
     // ativos da turma × catálogo do trimestre na faixa etária da turma).
     if (acao === "pedidos/sugestao" && metodo === "GET") {
-      const turmaId = Number(req.query && req.query.turmaId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       const trimestre = req.query && req.query.trimestre;
       if (!turmaId || !trimestre) return erro(context, 400, "Informe turmaId e trimestre.");
       const turma = await ebdTurmas.buscarTurmaPorId(pool, turmaId);
@@ -131,7 +136,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "pedido" && metodo === "GET") {
-      const pedidoId = Number(req.query && req.query.pedidoId);
+      const pedidoId = auth.idDeRota(req.query && req.query.pedidoId);
       if (!pedidoId) return erro(context, 400, "Informe pedidoId.");
       const pedido = await revistas.buscarPedidoPorId(pool, pedidoId);
       if (!pedido) return erro(context, 404, "Pedido não encontrado.");
@@ -142,7 +147,8 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "pedidos/itens" && metodo === "POST") {
-      const { pedidoId, itens } = req.body || {};
+      const { itens } = req.body || {};
+      const pedidoId = auth.idDeRota(req.body && req.body.pedidoId);
       if (!pedidoId) return erro(context, 400, "Informe pedidoId.");
       const pedido = await revistas.buscarPedidoPorId(pool, pedidoId);
       if (!pedido) return erro(context, 404, "Pedido não encontrado.");
@@ -156,12 +162,12 @@ module.exports = async function (context, req) {
     // ---- Aprovação e pagamento (sempre ebd_gestao — nunca o professor que pediu) ----
     if (acao === "pedidos/aprovar" && metodo === "POST") {
       if (!temEbdGestao(usuario)) return erro(context, 403, "Aprovar pedido exige a permissão ebd_gestao.");
-      const { pedidoId } = req.body || {};
+      const pedidoId = auth.idDeRota(req.body && req.body.pedidoId);
       if (!pedidoId) return erro(context, 400, "Informe pedidoId.");
       const pedido = await revistas.buscarPedidoPorId(pool, pedidoId);
       if (!pedido) return erro(context, 404, "Pedido não encontrado.");
       const turma = await ebdTurmas.buscarTurmaPorId(pool, pedido.turmaId);
-      if (!(await podeAcessarCongregacao(pool, usuario, turma.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!turma || !(await podeAcessarCongregacao(pool, usuario, turma.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await revistas.aprovarPedido(pool, { pedidoId, aprovadoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -169,12 +175,12 @@ module.exports = async function (context, req) {
 
     if (acao === "pedidos/pagamento" && metodo === "POST") {
       if (!temEbdGestao(usuario)) return erro(context, 403, "Registrar pagamento exige a permissão ebd_gestao.");
-      const { pedidoId } = req.body || {};
+      const pedidoId = auth.idDeRota(req.body && req.body.pedidoId);
       if (!pedidoId) return erro(context, 400, "Informe pedidoId.");
       const pedido = await revistas.buscarPedidoPorId(pool, pedidoId);
       if (!pedido) return erro(context, 404, "Pedido não encontrado.");
       const turma = await ebdTurmas.buscarTurmaPorId(pool, pedido.turmaId);
-      if (!(await podeAcessarCongregacao(pool, usuario, turma.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!turma || !(await podeAcessarCongregacao(pool, usuario, turma.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await revistas.registrarPagamentoPedido(pool, { pedidoId, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -184,7 +190,7 @@ module.exports = async function (context, req) {
     if (acao === "consolidado" && metodo === "GET") {
       if (!temEbdGestao(usuario)) return erro(context, 403, "Ver o consolidado exige a permissão ebd_gestao.");
       const trimestre = req.query && req.query.trimestre;
-      const nomesCongregacoesPermitidas = usuario.escopoCongregacoes === "TODAS" ? null : (usuario.escopoCongregacoes || []);
+      const nomesCongregacoesPermitidas = usuario.escopoCongregacoes === "TODAS" ? null : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []);
       const pedidos = await revistas.listarPedidosParaConsolidado(pool, { trimestre, nomesCongregacoesPermitidas });
       context.res = { status: 200, body: { sucesso: true, areas: revistas.consolidarPedidosPorAreaCongregacao(pedidos) } };
       return;

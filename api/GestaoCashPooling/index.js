@@ -3,26 +3,27 @@
 // (centralizadora + caixa GERAL + aplicações do Fundo de Reserva). Os
 // movimentos de concentração/desconcentração ficam prontos pra quando
 // existirem múltiplas contas (Art. 140); hoje é uma conta só + cofre.
+// INSTITUCIONAL (a conta única da igreja, sem dimensão territorial): só o nível GERAL
+// (papel Global + escopo TODAS).
 // GET  /api/cash-pooling -> posição consolidada (pooled)
 // GET  /api/cash-pooling/movimentos -> movimentos de concentração
 // POST /api/cash-pooling/movimentos -> { fonteOrigemId, fonteDestinoId, valor, dataMovimento?, tipo, observacao? }
 // PUT  /api/cash-pooling/centralizadora -> { fonteId }
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const tesouraria = require("../shared/tesouraria");
 const investimentos = require("../shared/investimentos");
+const { numeroPositivo } = require("../shared/financeiro1Util");
 
 const TIPOS_MOVIMENTO = ["CONCENTRACAO", "DESCONCENTRACAO"];
+const VALOR_MAXIMO = 9999999999.99; // DECIMAL(12,2)
 
 module.exports = async function (context, req) {
   const recurso = context.bindingData.recurso;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Cash pooling é matéria da Tesouraria Geral — restrito a nível Global." } };
-    return;
-  }
   const pool = await getPool();
 
   if (req.method === "GET" && !recurso) {
@@ -58,17 +59,28 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && recurso === "movimentos") {
-    const { fonteOrigemId, fonteDestinoId, valor, dataMovimento, tipo, observacao } = req.body || {};
-    if (!fonteOrigemId || !fonteDestinoId || !valor || !tipo || !TIPOS_MOVIMENTO.includes(tipo)) {
+    const corpo = req.body || {};
+    const fonteOrigemId = auth.idDeRota(corpo.fonteOrigemId);
+    const fonteDestinoId = auth.idDeRota(corpo.fonteDestinoId);
+    const { dataMovimento, tipo, observacao } = corpo;
+    if (!fonteOrigemId || !fonteDestinoId || !corpo.valor || !tipo || !TIPOS_MOVIMENTO.includes(tipo)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: fonteOrigemId, fonteDestinoId, valor, tipo (${TIPOS_MOVIMENTO.join("|")}).` } };
       return;
     }
-    if (Number(fonteOrigemId) === Number(fonteDestinoId)) {
+    if (fonteOrigemId === fonteDestinoId) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Origem e destino não podem ser a mesma fonte." } };
       return;
     }
-    if (Number(valor) <= 0) {
+    const valor = numeroPositivo(corpo.valor, VALOR_MAXIMO);
+    if (valor === null) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "valor deve ser maior que zero." } };
+      return;
+    }
+    // As duas fontes precisam existir e estar ativas (antes um id inexistente dava 500 de chave estrangeira).
+    const fontes = await pool.request().input("origem", sql.Int, fonteOrigemId).input("destino", sql.Int, fonteDestinoId)
+      .query(`SELECT FonteId FROM FontesCaixa WHERE FonteId IN (@origem, @destino) AND Ativa = 1`);
+    if (fontes.recordset.length !== 2) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Fonte de caixa não encontrada ou inativa." } };
       return;
     }
     const criado = await pool.request().input("origem", sql.Int, fonteOrigemId).input("destino", sql.Int, fonteDestinoId)
@@ -85,15 +97,21 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "PUT" && recurso === "centralizadora") {
-    const { fonteId } = req.body || {};
+    const fonteId = auth.idDeRota((req.body || {}).fonteId);
     if (!fonteId) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe fonteId." } };
       return;
     }
-    await pool.request().query(`UPDATE FontesCaixa SET Centralizadora = 0`);
-    await pool.request().input("id", sql.Int, fonteId).query(`UPDATE FontesCaixa SET Centralizadora = 1 WHERE FonteId = @id`);
+    // Um comando só: ou a nova fonte vira a centralizadora e as demais deixam de ser, ou nada muda (antes eram dois UPDATEs e um id inexistente deixava o sistema sem centralizadora).
+    const trocou = await pool.request().input("id", sql.Int, fonteId)
+      .query(`UPDATE FontesCaixa SET Centralizadora = CASE WHEN FonteId = @id THEN 1 ELSE 0 END
+              WHERE EXISTS (SELECT 1 FROM FontesCaixa WHERE FonteId = @id AND Ativa = 1)`);
+    if (trocou.rowsAffected && trocou.rowsAffected[0] === 0) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Fonte de caixa não encontrada ou inativa." } };
+      return;
+    }
     await registrarAuditoria({
-      tabela: "FontesCaixa", registroId: Number(fonteId), acao: "Definiu conta centralizadora (cash pooling)", usuarioId: usuario.membroId
+      tabela: "FontesCaixa", registroId: fonteId, acao: "Definiu conta centralizadora (cash pooling)", usuarioId: usuario.membroId
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Conta centralizadora definida." } };
     return;

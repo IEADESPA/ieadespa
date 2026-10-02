@@ -444,6 +444,8 @@ async function conferirCaixa(pool, { evento, observacao, por }) {
   if (!caixa) return { sucesso: false, mensagem: "O evento não tem caixa." };
   if (caixa.Status !== "ENCERRADO") return { sucesso: false, mensagem: caixa.Status === "CONFERIDO" ? "O caixa já foi conferido." : "O caixa ainda não foi encerrado." };
   if (caixa.EncerradoPorMembroId === por) return { sucesso: false, mensagem: "Quem encerrou o caixa não faz a conferência dele: outra pessoa da Tesouraria precisa conferir." };
+  // Segregação: quem propôs ou organiza o evento (qualquer papel) não confere o caixa dele, mesmo que não tenha sido ele quem encerrou — o mesmo princípio do convidado.
+  if ((await papeisNoEvento(pool, evento, por)).algum) return { sucesso: false, mensagem: "Quem organiza este evento não faz a conferência do caixa dele: outra pessoa da Tesouraria precisa conferir." };
   const obs = limpar(observacao);
   if (obs.length > 500) return { sucesso: false, mensagem: "A observação aceita até 500 caracteres." };
   await pool.request().input("e", sql.Int, evento.id).input("por", sql.Int, por).input("obs", sql.NVarChar(500), obs || null)
@@ -480,7 +482,9 @@ async function devolverCaixa(pool, { evento, motivo, por, deps }) {
   return { sucesso: true, mensagem: "Caixa devolvido à organização para correção." };
 }
 
-async function listarCaixas(pool, ctxCal, { status = null, hoje = hojeBrasilia() } = {}) {
+// `filtrarEvento(eventoReal)`: escopo de quem pergunta, aplicado ao evento COMPLETO do calendário (com as Áreas e a congregação) — o mesmo filtro do painel. Antes o filtro
+// era feito fora, sobre um evento montado sem Áreas, e deixava passar todos os caixas de evento de Áreas.
+async function listarCaixas(pool, ctxCal, { status = null, hoje = hojeBrasilia(), filtrarEvento = null } = {}) {
   const req = pool.request();
   if (status) req.input("s", sql.NVarChar(10), status);
   const r = await req.query(`SELECT EventoId FROM EventoCaixas ${status ? "WHERE Status = @s" : ""} ORDER BY EventoId DESC OFFSET 0 ROWS FETCH NEXT ${LIMITE_LISTA} ROWS ONLY`);
@@ -488,6 +492,7 @@ async function listarCaixas(pool, ctxCal, { status = null, hoje = hojeBrasilia()
   const saida = [];
   for (const x of r.recordset) {
     const e = await calDb.buscarEvento(pool, x.EventoId, ctxCal);
+    if (e && filtrarEvento && !filtrarEvento(e)) continue;
     const c = await buscarCaixa(pool, x.EventoId, { hoje });
     if (e && c) saida.push({ evento: resumoDoEvento(e), caixa: { status: c.status, rotuloStatus: c.rotuloStatus, fase: c.fase, atrasado: c.atrasado, diasAtraso: c.diasAtraso, prazoEncerramentoEm: c.prazoEncerramentoEm, totais: c.totais, encerradoPorNome: c.encerradoPorNome, conferidoPorNome: c.conferidoPorNome } });
   }

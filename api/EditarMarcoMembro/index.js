@@ -8,14 +8,18 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { exigirGeral } = require("../shared/escopoRotas");
+const { dataISOValida } = require("../shared/escopoFichas");
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirNivelGlobal(req, context);
+  // Corrigir marco de QUALQUER pessoa é do nível GERAL (papel Global com escopo de todas as congregações): o nível do papel sozinho não prova o alcance.
+  const usuario = exigirGeral(req, context, null);
   if (!usuario) return;
 
-  const marcoId = context.bindingData.marcoId;
+  const marcoIdBruto = context.bindingData.marcoId;
+  const marcoId = auth.idDeRota(marcoIdBruto);
   const { descricao, dataMarco, dataAproximada, justificativa } = req.body || {};
-  if (!marcoId) {
+  if (!marcoIdBruto) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe marcoId na rota." } };
     return;
   }
@@ -23,16 +27,20 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Justificativa é obrigatória para corrigir um marco." } };
     return;
   }
+  if (dataMarco && !dataISOValida(dataMarco)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "dataMarco inválida — use AAAA-MM-DD." } };
+    return;
+  }
 
   const pool = await getPool();
-  const atualResult = await pool.request().input("id", sql.Int, marcoId).query(`SELECT * FROM MarcosMembro WHERE MarcoId = @id`);
+  const atualResult = marcoId ? await pool.request().input("id", sql.Int, marcoId).query(`SELECT * FROM MarcosMembro WHERE MarcoId = @id`) : { recordset: [] };
   const atual = atualResult.recordset[0];
   if (!atual) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Marco não encontrado." } };
     return;
   }
 
-  const descricaoFinal = descricao !== undefined ? String(descricao).trim() : atual.Descricao;
+  const descricaoFinal = descricao !== undefined ? String(descricao).trim().slice(0, 500) : atual.Descricao;
   const dataMarcoFinal = dataMarco !== undefined ? dataMarco : atual.DataMarco;
   const dataAproximadaFinal = dataAproximada !== undefined ? Boolean(dataAproximada) : atual.DataAproximada;
 

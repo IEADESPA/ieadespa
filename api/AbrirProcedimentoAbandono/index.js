@@ -5,14 +5,22 @@
 // projeto — e passa a contar o prazo de defesa de 15 dias antes de poder ser
 // homologado (ver EvoluirProcedimentoAbandono). Exige a permissão "disciplina" (mesma
 // CLI que já homologa processos disciplinares).
-// POST /api/procedimentos-abandono -> body: { membroId, tipo? ('MATERIAL'|'DIGITAL'), dataNotificacao?, dataEdital? }
+// POST /api/procedimentos-abandono -> body: { membroId, tipo? ('MATERIAL'|'DIGITAL'), dataEdital? }
+//
+// Auditoria de escopo (02/10/2026):
+//  - só abre contra membro DENTRO do escopo de quem chama; fora do escopo responde igual a "matrícula não encontrada" (não serve de sonda);
+//  - a data da notificação NÃO vem mais do cliente: no Material é o dia do registro (antes dava para datar 30 dias atrás e homologar na hora, sem a defesa de 15 dias);
+//    no Digital continua sendo a tentativa de contato mais recente (que agora também não pode ser retroativa — ver RegistrarTentativaContato).
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const abandonoDigital = require("../shared/abandonoDigital");
+const { pessoaAlcancavel } = require("../shared/escopoRotas");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 
 const TIPOS = ["MATERIAL", "DIGITAL"];
+const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
 
 const SELECT_PROCEDIMENTO = `
   SELECT pa.ProcedimentoId AS procedimentoId, pa.MembroId AS membroId, m.Nome AS nome,
@@ -24,14 +32,18 @@ const SELECT_PROCEDIMENTO = `
   FROM ProcedimentosAbandono pa
   JOIN MembroReferencia m ON m.MembroId = pa.MembroId`;
 
+// A MESMA resposta para matrícula inexistente, malformada e fora do escopo.
+function matriculaNaoEncontrada(context) {
+  context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+}
+
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
   if (!usuario) return;
 
-  const { membroId, dataEdital } = req.body || {};
+  const { membroId: membroInformado, dataEdital } = req.body || {};
   const tipo = req.body && req.body.tipo ? req.body.tipo : "MATERIAL";
-  let { dataNotificacao } = req.body || {};
-  if (!membroId) {
+  if (!membroInformado) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe membroId." } };
     return;
   }
@@ -39,17 +51,33 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { sucesso: false, mensagem: `Tipo inválido. Use um de: ${TIPOS.join(", ")}.` } };
     return;
   }
+  if (dataEdital !== undefined && dataEdital !== null && dataEdital !== "" && !abandonoDigital.dataIsoValida(dataEdital)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "dataEdital inválida. Use o formato AAAA-MM-DD." } };
+    return;
+  }
 
   const pool = await getPool();
+  const pessoa = await pessoaAlcancavel(pool, usuario, membroInformado);
+  if (!pessoa) {
+    matriculaNaoEncontrada(context);
+    return;
+  }
+  const membroId = pessoa.membroId;
+  if (STATUS_TERMINAIS.includes(pessoa.status)) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Este membro já não está com a membresia ativa (desligado ou falecido)." } };
+    return;
+  }
+
   const membroResult = await pool.request().input("id", sql.Int, membroId)
     .query(`SELECT MembroId, Nome, SituacaoMembro, CONVERT(varchar(10), DataAfastamento, 120) AS DataAfastamento
             FROM MembroReferencia WHERE MembroId = @id`);
   const membro = membroResult.recordset[0];
   if (!membro) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+    matriculaNaoEncontrada(context);
     return;
   }
 
+  let dataNotificacao;
   if (tipo === "MATERIAL") {
     const elegivel = estatuto.elegivelAbandonoMaterial(
       { situacaoMembro: membro.SituacaoMembro, dataAfastamento: membro.DataAfastamento }
@@ -61,6 +89,7 @@ module.exports = async function (context, req) {
       };
       return;
     }
+    dataNotificacao = hojeBrasilia();
   } else {
     // Digital (Art. 12 §2º): precisa de ≥2 tentativas de contato por canais distintos e
     // 90 dias corridos desde a 1ª — a notificação final do procedimento é a própria

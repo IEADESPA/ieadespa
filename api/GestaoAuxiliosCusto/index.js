@@ -3,22 +3,28 @@
 // saúde), cada um com sua natureza fiscal — antes tudo cairia na mesma
 // rubrica. São benefícios não-salariais (Reg. Art. 134 §4º): instrumentos
 // de trabalho e assistência, não integram remuneração pra reflexos legais.
-// Restrito a nível Global.
+// INSTITUCIONAL e dado de PESSOA (auxílio-saúde/moradia de ministro): só o nível GERAL
+// (papel Global + escopo TODAS).
 // GET  /api/auxilios-custo -> lista
 // GET  /api/auxilios-custo/{id} -> detalhe
 // POST /api/auxilios-custo -> { prebendadoId, tipo, naturezaFiscal, valorMensal, observacao? }
-// PUT  /api/auxilios-custo/{id} -> { tipo?, naturezaFiscal?, valorMensal?, acao?: 'ENCERRAR', observacao? }
+// PUT  /api/auxilios-custo/{id} -> { tipo?, naturezaFiscal?, valorMensal?, acao?: 'ENCERRAR', observacao? } (só auxílio ATIVO)
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const prebenda = require("../shared/prebenda");
+const { idOpcional, numeroPositivo } = require("../shared/financeiro1Util");
+
+const VALOR_MAXIMO = 99999999.99; // DECIMAL(10,2)
 
 module.exports = async function (context, req) {
-  const id = context.bindingData.id;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Auxílios e ajudas de custo são matéria da Tesouraria Geral — restrito a papéis de nível Global." } };
+  // Id malformado recebe a mesma resposta de "não existe".
+  const { tem: temId, id } = idOpcional(context.bindingData.id);
+  if (temId && !id) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Auxílio não encontrado." } };
     return;
   }
   const pool = await getPool();
@@ -49,8 +55,10 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const { prebendadoId, tipo, naturezaFiscal, valorMensal, observacao } = req.body || {};
-    if (!prebendadoId || !tipo || !naturezaFiscal || !valorMensal) {
+    const { tipo, naturezaFiscal, observacao } = req.body || {};
+    const prebendadoId = auth.idDeRota((req.body || {}).prebendadoId);
+    const valorBruto = (req.body || {}).valorMensal;
+    if (!prebendadoId || !tipo || !naturezaFiscal || !valorBruto) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: prebendadoId, tipo, naturezaFiscal, valorMensal." } };
       return;
     }
@@ -62,7 +70,8 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `naturezaFiscal inválida. Use uma de: ${prebenda.NATUREZAS_FISCAIS_AUXILIO.join(", ")}.` } };
       return;
     }
-    if (Number(valorMensal) <= 0) {
+    const valorMensal = numeroPositivo(valorBruto, VALOR_MAXIMO);
+    if (valorMensal === null) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "valorMensal deve ser maior que zero." } };
       return;
     }
@@ -97,6 +106,11 @@ module.exports = async function (context, req) {
       return;
     }
     const registro = atual.recordset[0];
+    // Auxílio encerrado fica como foi encerrado: não se edita nem se reabre pelo PUT.
+    if (registro.Status !== "ATIVO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este auxílio já está encerrado — não pode mais ser alterado." } };
+      return;
+    }
     const { tipo, naturezaFiscal, valorMensal, acao, observacao } = req.body || {};
 
     if (tipo !== undefined && !prebenda.TIPOS_AUXILIO.includes(tipo)) {
@@ -109,25 +123,28 @@ module.exports = async function (context, req) {
     }
     const novoTipo = tipo !== undefined ? tipo : registro.Tipo;
     const novaNatureza = naturezaFiscal !== undefined ? naturezaFiscal : registro.NaturezaFiscal;
-    const novoValor = valorMensal !== undefined ? valorMensal : registro.ValorMensal;
-    if (Number(novoValor) <= 0) {
+    const novoValor = numeroPositivo(valorMensal !== undefined ? valorMensal : registro.ValorMensal, VALOR_MAXIMO);
+    if (novoValor === null) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "valorMensal deve ser maior que zero." } };
       return;
     }
     const novoStatus = acao === "ENCERRAR" ? "ENCERRADO" : registro.Status;
 
-    await pool.request().input("id", sql.Int, id)
+    const atualizou = await pool.request().input("id", sql.Int, id)
       .input("tipo", sql.NVarChar(20), novoTipo).input("naturezaFiscal", sql.NVarChar(20), novaNatureza)
       .input("valor", sql.Decimal(10, 2), novoValor).input("status", sql.NVarChar(20), novoStatus)
       .input("observacao", sql.NVarChar(300), observacao !== undefined ? (observacao || null) : registro.Observacao)
-      .query(`UPDATE AuxiliosAjudaCusto SET Tipo = @tipo, NaturezaFiscal = @naturezaFiscal, ValorMensal = @valor, Status = @status, Observacao = @observacao WHERE AuxilioId = @id`);
+      .query(`UPDATE AuxiliosAjudaCusto SET Tipo = @tipo, NaturezaFiscal = @naturezaFiscal, ValorMensal = @valor, Status = @status, Observacao = @observacao WHERE AuxilioId = @id AND Status = 'ATIVO'`);
+    if (atualizou.rowsAffected && atualizou.rowsAffected[0] === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este auxílio já está encerrado — não pode mais ser alterado." } };
+      return;
+    }
 
     await registrarAuditoria({
-      tabela: "AuxiliosAjudaCusto", registroId: Number(id), acao: acao === "ENCERRAR" ? "Encerrou auxílio/ajuda de custo" : "Atualizou auxílio/ajuda de custo",
+      tabela: "AuxiliosAjudaCusto", registroId: id, acao: acao === "ENCERRAR" ? "Encerrou auxílio/ajuda de custo" : "Atualizou auxílio/ajuda de custo",
       usuarioId: usuario.membroId, dadosAntes: registro, dadosDepois: { tipo: novoTipo, naturezaFiscal: novaNatureza, valorMensal: novoValor, status: novoStatus }
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Auxílio/ajuda de custo atualizado." } };
     return;
   }
 };
-

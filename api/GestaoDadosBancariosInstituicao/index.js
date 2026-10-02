@@ -1,13 +1,18 @@
 // GestaoDadosBancariosInstituicao (v4.7)
 // Dados bancários da própria denominação (conta única, v4.1.3) usados
 // como remetente no arquivo de remessa bancária (CNAB 240,
-// GestaoRemessasBancarias) — nunca hardcoded no código, editável só por
-// nível Global (é dado sensível, cross-cutting).
+// GestaoRemessasBancarias) — nunca hardcoded no código. INSTITUCIONAL e sensível
+// (agência, conta e convênio da conta única da igreja): ler e editar são só do nível GERAL
+// (papel Global + escopo TODAS). O tesoureiro local não precisa dele — a remessa é da Tesouraria Geral.
 // GET /api/dados-bancarios-instituicao
 // PUT /api/dados-bancarios-instituicao -> { razaoSocial, cnpj, codigoBanco, nomeBanco, agencia, digitoAgencia, conta, digitoConta, codigoConvenio }
-const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { mascararCampos } = require("../shared/financeiro1Util");
+
+// Na trilha de auditoria o CNPJ e o banco ficam legíveis; agência, conta e convênio só pelo fim do valor.
+const CAMPOS_SENSIVEIS = ["agencia", "digitoAgencia", "conta", "digitoConta", "codigoConvenio"];
 
 function linhaParaJson(l) {
   return {
@@ -18,7 +23,7 @@ function linhaParaJson(l) {
 }
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
   const pool = await getPool();
 
@@ -29,10 +34,6 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "PUT") {
-    if (usuario.nivel !== "GLOBAL") {
-      context.res = { status: 403, body: { sucesso: false, mensagem: "Editar os dados bancários da instituição é restrito a papéis de nível Global." } };
-      return;
-    }
     const { razaoSocial, cnpj, codigoBanco, nomeBanco, agencia, digitoAgencia, conta, digitoConta, codigoConvenio } = req.body || {};
     const antes = await pool.request().query(`SELECT * FROM DadosBancariosInstituicao WHERE InstituicaoId = 1`);
     await pool.request()
@@ -46,7 +47,8 @@ module.exports = async function (context, req) {
                 DigitoConta = @digitoConta, CodigoConvenio = @codigoConvenio WHERE InstituicaoId = 1`);
     await registrarAuditoria({
       tabela: "DadosBancariosInstituicao", registroId: 1, acao: "Atualizou dados bancários da instituição", usuarioId: usuario.membroId,
-      dadosAntes: antes.recordset[0], dadosDepois: { razaoSocial, cnpj, codigoBanco, agencia, conta }
+      dadosAntes: mascararCampos(antes.recordset[0], CAMPOS_SENSIVEIS),
+      dadosDepois: mascararCampos({ razaoSocial, cnpj, codigoBanco, agencia, conta }, CAMPOS_SENSIVEIS)
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Dados bancários atualizados." } };
     return;

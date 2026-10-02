@@ -221,15 +221,30 @@ async function buscarOuCriarHabilitacao(pool, { membroId, congregacaoId, criadoP
   const existente = await buscarHabilitacaoPorMembro(pool, membroId);
   if (existente) return existente;
 
-  await pool.request()
-    .input("membroId", sql.Int, membroId)
-    .input("congregacaoId", sql.Int, congregacaoId)
-    .input("criadoPor", sql.Int, criadoPorMembroId || null)
-    .query(`
-      INSERT INTO VoluntariosHabilitacao (MembroId, CongregacaoId, CriadoPorMembroId)
-      VALUES (@membroId, @congregacaoId, @criadoPor)
-    `);
-  return buscarHabilitacaoPorMembro(pool, membroId);
+  try {
+    await pool.request()
+      .input("membroId", sql.Int, membroId)
+      .input("congregacaoId", sql.Int, congregacaoId)
+      .input("criadoPor", sql.Int, criadoPorMembroId || null)
+      .query(`
+        INSERT INTO VoluntariosHabilitacao (MembroId, CongregacaoId, CriadoPorMembroId)
+        VALUES (@membroId, @congregacaoId, @criadoPor)
+      `);
+  } catch (e) {
+    // UNIQUE por membro: dois pedidos ao mesmo tempo — vale a esteira que entrou primeiro (quem chama confere o escopo dela antes de devolver).
+    const numero = e && (e.number || (e.originalError && e.originalError.info && e.originalError.info.number));
+    if (numero !== 2627 && numero !== 2601) throw e;
+    return buscarHabilitacaoPorMembro(pool, membroId);
+  }
+  const criada = await buscarHabilitacaoPorMembro(pool, membroId);
+  // Abrir a esteira de uma pessoa é ato de quem habilita para ministério com menores: deixa rastro (só ids).
+  if (criada) {
+    await registrarAuditoria({
+      tabela: "VoluntariosHabilitacao", registroId: criada.habilitacaoId, acao: "ESTEIRA_ABERTA",
+      usuarioId: criadoPorMembroId || null, dadosAntes: null, dadosDepois: { membroId, congregacaoId }
+    });
+  }
+  return criada;
 }
 
 async function listarHabilitacoesPorCongregacao(pool, congregacaoId) {

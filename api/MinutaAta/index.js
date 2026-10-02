@@ -10,6 +10,8 @@
 const { Document, Paragraph, TextRun, Table, TableRow, TableCell, Packer, HeadingLevel, WidthType } = require("docx");
 const { getPool, sql } = require("../shared/db");
 const auth = require("../shared/auth");
+const { ehGeral } = require("../shared/escopoRotas");
+const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const { universoDoOrgao } = require("../shared/universo");
 const estatuto = require("../shared/estatuto");
 
@@ -20,7 +22,11 @@ function celula(texto, { cabecalho = false } = {}) {
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
-  const sessaoId = context.bindingData.sessaoId;
+  const sessaoId = auth.idDeRota(context.bindingData.sessaoId);
+  if (!sessaoId) {
+    context.res = { status: 404, body: { sucesso: false, mensagem: "Reunião não encontrada." } };
+    return;
+  }
   const pool = await getPool();
 
   const sessao = (await pool.request().input("id", sql.Int, sessaoId).query(`
@@ -33,7 +39,12 @@ module.exports = async function (context, req) {
     LEFT JOIN OrgaosLocais ol ON ol.OrgaoLocalId = s.OrgaoLocalId
     WHERE s.SessaoId = @id
   `)).recordset[0];
-  if (!sessao) {
+  // ESCOPO (02/10/2026): a minuta lista TODOS os presentes e ausentes pelo nome, com a justificativa de falta (texto livre). Sessão de órgão territorial: só quem é do órgão
+  // (ou o geral) — a mesma regra de AbrirReuniao/EncerrarReuniao. Sessão de órgão central (Assembleia, CLI, Diretoria...): só o geral, porque a lista é a da igreja inteira.
+  // Fora disso, a mesma resposta de "reunião não encontrada".
+  const geral = ehGeral(usuario);
+  const alcanca = !!sessao && (geral || (sessao.OrgaoLocalId != null && await membroAutorizadoNoOrgaoLocal(pool, sql, usuario.membroId, sessao.OrgaoLocalId)));
+  if (!alcanca) {
     context.res = { status: 404, body: { sucesso: false, mensagem: "Reunião não encontrada." } };
     return;
   }
@@ -58,12 +69,19 @@ module.exports = async function (context, req) {
     SELECT EnqueteId, Titulo, Vinculante, QuorumTipo, Status, ResultadoAprovado FROM Enquetes WHERE SessaoId = @id
   `)).recordset;
   for (const enquete of enquetes) {
-    const votos = (await pool.request().input("id", sql.Int, enquete.EnqueteId).query(`
-      SELECT o.Texto AS opcao, COUNT(v.VotoId) AS total
-      FROM OpcoesEnquete o LEFT JOIN VotosEnquete v ON v.OpcaoId = o.OpcaoId
-      WHERE o.EnqueteId = @id GROUP BY o.Texto ORDER BY COUNT(v.VotoId) DESC
+    // Contagem por opção a partir do modelo atual (PerguntasEnquete/OpcoesEnquete/RespostasEnquete). A consulta antiga lia VotosEnquete e OpcoesEnquete.EnqueteId, que a
+    // migração 034 removeu: qualquer sessão com enquete vinculada dava erro 500. Só as perguntas de Opções têm contagem; o texto livre não entra na minuta.
+    const linhas = (await pool.request().input("id", sql.Int, enquete.EnqueteId).query(`
+      SELECT p.PerguntaId AS perguntaId, p.Ordem AS ordem, p.Titulo AS pergunta, o.Texto AS opcao, COUNT(r.RespostaId) AS total
+      FROM PerguntasEnquete p
+      JOIN OpcoesEnquete o ON o.PerguntaId = p.PerguntaId
+      LEFT JOIN RespostasEnquete r ON r.OpcaoId = o.OpcaoId
+      WHERE p.EnqueteId = @id AND p.Tipo = 'OPCOES'
+      GROUP BY p.PerguntaId, p.Ordem, p.Titulo, o.OpcaoId, o.Texto
+      ORDER BY p.Ordem, COUNT(r.RespostaId) DESC
     `)).recordset;
-    enquete.votos = votos;
+    const variasPerguntas = new Set(linhas.map((l) => l.perguntaId)).size > 1;
+    enquete.votos = linhas.map((l) => ({ opcao: variasPerguntas ? `${l.pergunta} — ${l.opcao}` : l.opcao, total: l.total }));
   }
 
   // Quórum: só mostra veredito formal onde a regra estatutária já é

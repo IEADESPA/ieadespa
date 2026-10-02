@@ -18,13 +18,23 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
   if (!usuario) return;
 
+  // Sessão sem permissão nenhuma (membro por PIN/código) ou sem congregações no escopo não alcança órgão algum: responde vazio sem consultar o banco (antes fazia uma
+  // consulta por órgão cadastrado para, no fim, devolver []). Escopo ausente conta como vazio.
+  const lista = Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : [];
+  const todas = usuario.escopoCongregacoes === "TODAS";
+  const semPermissao = !Array.isArray(usuario.permissoes) || usuario.permissoes.length === 0;
+  if (semPermissao || (!todas && lista.length === 0)) {
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] };
+    return;
+  }
+
   const pool = await getPool();
   const result = await pool.request().query(`
     SELECT OrgaoLocalId AS orgaoLocalId, Sigla AS sigla, Nome AS nome, Nivel AS nivel, ReferenciaId AS referenciaId
     FROM OrgaosLocais WHERE Ativo = 1
   `);
 
-  if (usuario.escopoCongregacoes === "TODAS") {
+  if (todas) {
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
     return;
   }
@@ -33,7 +43,7 @@ module.exports = async function (context, req) {
   for (const orgao of result.recordset) {
     const tipo = escopo.NIVEL_PARA_ESCOPO_TIPO[orgao.nivel];
     const nomesDoOrgao = await escopo.resolverEscopoCongregacoes(pool, tipo, orgao.referenciaId);
-    if (nomesDoOrgao.some(nome => usuario.escopoCongregacoes.includes(nome))) permitidos.push(orgao);
+    if (nomesDoOrgao.some(nome => lista.includes(nome))) permitidos.push(orgao);
   }
 
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: permitidos };

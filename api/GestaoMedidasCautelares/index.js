@@ -11,6 +11,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
+const { exigirGeral } = require("../shared/escopoRotas");
 
 const DIAS_RELATORIO = 30; // Art. 45 §2º
 
@@ -25,11 +26,19 @@ const SELECT_MEDIDA = `
   JOIN MembroReferencia m ON m.MembroId = mc.MembroId`;
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "pessoas");
+  // Medida cautelar do Art. 45 é da igreja como um todo (Conselho Fiscal) e suspende o LOGIN de qualquer liderança, inclusive Pastor e Presidente: só o GERAL (papel Global com
+  // escopo de todas as congregações). Antes bastava "pessoas" — um Dirigente local suspendia o acesso do Presidente e lia o motivo de todas as medidas.
+  const usuario = exigirGeral(req, context, "pessoas");
   if (!usuario) return;
 
-  const id = context.bindingData.id;
+  const idBruto = context.bindingData.id;
+  const id = auth.idDeRota(idBruto);
   const acao = context.bindingData.acao;
+  // Um id na rota que não é uma matrícula canônica nunca vira "criar medida nova" (o ramo de criação é o POST SEM id).
+  if (idBruto !== undefined && idBruto !== null && idBruto !== "" && !id) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Medida cautelar não encontrada." } };
+    return;
+  }
   const pool = await getPool();
 
   if (req.method === "GET") {
@@ -64,12 +73,13 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && !id) {
-    const { membroId, motivo, suspenderAcessoSistema, suspensaoContasBancarias, suspensaoChavesFisicas } = req.body || {};
-    if (!membroId || !motivo) {
+    const { membroId: membroIdBruto, motivo, suspenderAcessoSistema, suspensaoContasBancarias, suspensaoChavesFisicas } = req.body || {};
+    if (!membroIdBruto || !motivo || typeof motivo !== "string" || !motivo.trim()) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, motivo." } };
       return;
     }
-    const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+    const membroId = auth.idDeRota(membroIdBruto);
+    const membro = membroId ? await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`) : { recordset: [] };
     if (membro.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
       return;
@@ -103,7 +113,7 @@ module.exports = async function (context, req) {
 
     const result = await pool.request()
       .input("membroId", sql.Int, membroId)
-      .input("motivo", sql.NVarChar(1000), motivo)
+      .input("motivo", sql.NVarChar(1000), motivo.trim().slice(0, 1000))
       .input("susAcesso", sql.Bit, !!suspenderAcessoSistema)
       .input("susBancaria", sql.Bit, !!suspensaoContasBancarias)
       .input("susChaves", sql.Bit, !!suspensaoChavesFisicas)

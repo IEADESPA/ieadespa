@@ -125,7 +125,9 @@ function parsearRetornoCnab240(conteudo) {
     const saidaId = parseInt(linha.substring(OFFSET_NUMERO_DOCUMENTO, OFFSET_NUMERO_DOCUMENTO + 20).trim(), 10);
     const codigoOcorrencia = linha.substring(230, 232).trim();
     if (!saidaId) continue;
-    resultados.push({ saidaId, sucesso: codigoOcorrencia === "00" || codigoOcorrencia === "", codigoOcorrencia });
+    // Só o código "00" (crédito efetivado) confirma o pagamento. Ocorrência em branco NÃO é sucesso: linha truncada, adulterada ou de um banco
+    // que não devolve o código vira "não confirmado" (a Saída continua APROVADA), nunca "PAGA" sem a confirmação do banco.
+    resultados.push({ saidaId, sucesso: codigoOcorrencia === "00", codigoOcorrencia });
   }
   return resultados;
 }

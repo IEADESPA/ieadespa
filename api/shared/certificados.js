@@ -72,11 +72,8 @@ function podeAcessarCertificado(certificado, { membroIdSolicitante, temGestao })
 async function gestorAlcancaMembro(pool, usuario, membroId) {
   const permissoes = (usuario && usuario.permissoes) || [];
   if (!permissoes.includes("ebd_gestao") && !permissoes.includes("trilhas_gestao")) return false;
-  const r = await pool.request().input("id", sql.Int, membroId).query(`
-    SELECT c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id
-  `);
-  if (!r.recordset.length) return false;
-  return require("./auth").estaNoEscopo(usuario, r.recordset[0].CongregacaoNome);
+  // Inexistente, malformado e fora do escopo (congregação, ou Extensão da Tenda para quem tem escopo de Extensão) dão o mesmo `false`.
+  return !!(await require("./escopoRotas").pessoaAlcancavel(pool, usuario, membroId));
 }
 
 // ---- Código público de verificação ----

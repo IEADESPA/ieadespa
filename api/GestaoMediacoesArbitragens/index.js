@@ -11,7 +11,15 @@
 //      MEDIACAO_SEM_ACORDO { motivo } | DESIGNAR_ARBITRO { arbitroId }
 //      REGISTRAR_COMPROMISSO_ARBITRAL {} | REGISTRAR_SENTENCA { sentencaBase64, mimeType }
 //      BIFURCAR_DISCIPLINAR { orgaoResponsavelId?, orgaoLocalId?, infracoesIds }
+//
+// ESCOPO (02/10/2026): abrir caso — qualquer sessão de pessoa logada, mas só como PARTE do caso (a matrícula da sessão é a Parte A ou a Parte B), a não ser que tenha a
+// permissão "mediacao"; as matrículas das partes precisam existir. BIFURCAR_DISCIPLINAR abre um processo disciplinar (sigiloso, tira a pessoa do universo de votantes),
+// então exige TAMBÉM a permissão "disciplina" e a pessoa dentro do escopo de quem pede (e o órgão territorial, se informado, tem de ser um do qual ele faz parte) — a mesma
+// regra de AbrirProcessoDisciplinar; fora do escopo = a mesma resposta de "matrícula não encontrada".
 const auth = require("../shared/auth");
+const { pessoaAlcancavel } = require("../shared/escopoRotas");
+const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
+const { validarOrgaoProcesso } = require("../shared/disciplinar");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
@@ -64,23 +72,50 @@ async function uploadArquivo(base64, mimeType, context) {
     return { url };
   } catch (erro) {
     context.log.error("Falha ao salvar arquivo no Blob Storage:", erro.message);
-    return { erro: "Falha ao salvar o arquivo. Avise a equipe técnica: " + erro.message };
+    return { erro: "Falha ao salvar o arquivo. Avise a equipe técnica." };
   }
 }
 
 module.exports = async function (context, req) {
-  const id = context.bindingData.id;
+  const idBruto = context.bindingData.id;
   const acao = context.bindingData.acao;
   const pool = await getPool();
   const hoje = new Date().toISOString().slice(0, 10);
+  // O caso só vale na forma canônica de número (auth.idDeRota); o malformado cai na mesma resposta de "caso não encontrado".
+  const temId = idBruto !== undefined && idBruto !== null && idBruto !== "";
+  const id = temId ? auth.idDeRota(idBruto) : null;
+  const CASO_NAO_ENCONTRADO = { status: 200, body: { sucesso: false, mensagem: "Caso não encontrado." } };
 
-  if (req.method === "POST" && !id) {
+  if (req.method === "POST" && !temId) {
     const usuario = auth.exigirLogin(req, context);
     if (!usuario) return;
-    const { assunto, parteAId, parteADescricao, parteBId, parteBDescricao, valorEnvolvido, prazoDiasEncerramento } = req.body || {};
-    if (!assunto || !String(assunto).trim() || !prazoDiasEncerramento) {
+    const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const { assunto, parteADescricao, parteBDescricao, valorEnvolvido, prazoDiasEncerramento } = corpo;
+    if (!assunto || typeof assunto !== "string" || !assunto.trim() || !prazoDiasEncerramento) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: assunto, prazoDiasEncerramento." } };
       return;
+    }
+    if (assunto.length > 500 || (parteADescricao != null && String(parteADescricao).length > 200) || (parteBDescricao != null && String(parteBDescricao).length > 200)
+      || !Number.isInteger(Number(prazoDiasEncerramento)) || Number(prazoDiasEncerramento) < 1 || Number(prazoDiasEncerramento) > 3650
+      || (valorEnvolvido != null && valorEnvolvido !== "" && (!Number.isFinite(Number(valorEnvolvido)) || Number(valorEnvolvido) < 0))) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Assunto (até 500), descrições das partes (até 200), prazo (1 a 3650 dias) ou valor inválidos." } };
+      return;
+    }
+    // As partes por matrícula: na forma canônica, existentes. Quem não tem a permissão "mediacao" só abre caso em que ele próprio é uma das partes.
+    const parteAId = corpo.parteAId ? auth.idDeRota(corpo.parteAId) : null;
+    const parteBId = corpo.parteBId ? auth.idDeRota(corpo.parteBId) : null;
+    const ehDaCamara = (usuario.permissoes || []).includes("mediacao");
+    if (!ehDaCamara && Number(usuario.membroId) !== parteAId && Number(usuario.membroId) !== parteBId) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Só quem é parte do caso (ou a Câmara de Mediação) pode instaurá-lo." } };
+      return;
+    }
+    for (const [informado, convertido] of [[corpo.parteAId, parteAId], [corpo.parteBId, parteBId]]) {
+      if (!informado) continue;
+      const existe = convertido && (await pool.request().input("id", sql.Int, convertido).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`)).recordset.length > 0;
+      if (!existe) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+        return;
+      }
     }
     if (!parteAId && !String(parteADescricao || "").trim()) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Informe a Parte A: matrícula (se for membro) ou descrição (ex: nome da congregação/departamento)." } };
@@ -95,7 +130,7 @@ module.exports = async function (context, req) {
       .input("parteAId", sql.Int, parteAId || null).input("parteADescricao", sql.NVarChar(200), String(parteADescricao || "").trim() || null)
       .input("parteBId", sql.Int, parteBId || null).input("parteBDescricao", sql.NVarChar(200), String(parteBDescricao || "").trim() || null)
       .input("valorEnvolvido", sql.Decimal(12, 2), valorEnvolvido || null)
-      .input("prazoDiasEncerramento", sql.Int, prazoDiasEncerramento)
+      .input("prazoDiasEncerramento", sql.Int, Number(prazoDiasEncerramento))
       .input("instauradoPor", sql.Int, usuario.membroId)
       .query(`INSERT INTO MediacoesArbitragens (Assunto, ParteAId, ParteADescricao, ParteBId, ParteBDescricao, ValorEnvolvido, PrazoDiasEncerramento, InstauradoPor)
               OUTPUT INSERTED.MediacaoId
@@ -106,12 +141,16 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "POST" && id && acao === "sessoes") {
+  if (req.method === "POST" && temId && acao === "sessoes") {
     const usuario = auth.exigirPermissao(req, context, "mediacao");
     if (!usuario) return;
     const { dataSessao, parteACompareceu, parteBCompareceu, observacoes } = req.body || {};
     if (!dataSessao) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe dataSessao." } };
+      return;
+    }
+    if (!id || (await pool.request().input("id", sql.Int, id).query(`SELECT MediacaoId FROM MediacoesArbitragens WHERE MediacaoId = @id`)).recordset.length === 0) {
+      context.res = CASO_NAO_ENCONTRADO;
       return;
     }
     const criada = await pool.request()
@@ -126,7 +165,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "GET" && !id) {
+  if (req.method === "GET" && !temId) {
     const usuario = auth.exigirPermissao(req, context, "mediacao");
     if (!usuario) return;
     const result = await pool.request().query(`${SELECT_MEDIACAO} ORDER BY m.DataInstauracao DESC`);
@@ -134,10 +173,10 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "GET" && id && !acao) {
+  if (req.method === "GET" && temId && !acao) {
     const usuario = auth.exigirPermissao(req, context, "mediacao");
     if (!usuario) return;
-    const mediacao = (await pool.request().input("id", sql.Int, id).query(`${SELECT_MEDIACAO} WHERE m.MediacaoId = @id`)).recordset[0];
+    const mediacao = id ? (await pool.request().input("id", sql.Int, id).query(`${SELECT_MEDIACAO} WHERE m.MediacaoId = @id`)).recordset[0] : null;
     if (!mediacao) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Caso não encontrado." } };
       return;
@@ -153,10 +192,10 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "PUT" && id && !acao) {
+  if (req.method === "PUT" && temId && !acao) {
     const usuario = auth.exigirPermissao(req, context, "mediacao");
     if (!usuario) return;
-    const mediacao = (await pool.request().input("id", sql.Int, id).query(`SELECT * FROM MediacoesArbitragens WHERE MediacaoId = @id`)).recordset[0];
+    const mediacao = id ? (await pool.request().input("id", sql.Int, id).query(`SELECT * FROM MediacoesArbitragens WHERE MediacaoId = @id`)).recordset[0] : null;
     if (!mediacao) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Caso não encontrado." } };
       return;
@@ -264,9 +303,24 @@ module.exports = async function (context, req) {
     }
 
     if (acaoPut === "BIFURCAR_DISCIPLINAR") {
-      const { orgaoResponsavelId, orgaoLocalId, infracoesIds, membroId } = req.body || {};
-      if (!membroId) { context.res = { status: 400, body: { sucesso: false, mensagem: "Informe membroId (quem responde ao processo disciplinar bifurcado)." } }; return; }
-      const resultadoProcesso = await mediacaoArbitragem.bifurcarParaProcessoDisciplinar(pool, contexto, { membroId, orgaoResponsavelId, orgaoLocalId, infracoesIds }, usuario.membroId);
+      const { orgaoResponsavelId, orgaoLocalId, infracoesIds, membroId: membroIdBruto } = req.body || {};
+      if (!membroIdBruto) { context.res = { status: 400, body: { sucesso: false, mensagem: "Informe membroId (quem responde ao processo disciplinar bifurcado)." } }; return; }
+      // Abrir processo disciplinar é da "disciplina" (a "mediacao" sozinha não basta) e a pessoa tem de estar no escopo de quem abre.
+      if (!(usuario.permissoes || []).includes("disciplina")) {
+        context.res = { status: 403, body: { sucesso: false, mensagem: "Requer a permissão 'disciplina'." } };
+        return;
+      }
+      const alvo = await pessoaAlcancavel(pool, usuario, membroIdBruto);
+      if (!alvo) { context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada. Cadastre a pessoa antes." } }; return; }
+      if (orgaoResponsavelId || orgaoLocalId) {
+        const orgao = await validarOrgaoProcesso(pool, sql, { orgaoResponsavelId, orgaoLocalId });
+        if (!orgao.valido) { context.res = { status: 200, body: { sucesso: false, mensagem: orgao.mensagem } }; return; }
+        if (orgao.orgaoLocalId && !(await membroAutorizadoNoOrgaoLocal(pool, sql, usuario.membroId, orgao.orgaoLocalId))) {
+          context.res = { status: 200, body: { sucesso: false, mensagem: "Você não tem vínculo com este órgão territorial." } };
+          return;
+        }
+      }
+      const resultadoProcesso = await mediacaoArbitragem.bifurcarParaProcessoDisciplinar(pool, contexto, { membroId: alvo.membroId, orgaoResponsavelId, orgaoLocalId, infracoesIds }, usuario.membroId);
       if (!resultadoProcesso.sucesso) { context.res = { status: 200, body: resultadoProcesso }; return; }
       await pool.request().input("id", sql.Int, id).input("processoId", sql.Int, resultadoProcesso.processoId)
         .query(`UPDATE MediacoesArbitragens SET ProcessoDisciplinarBifurcadoId = @processoId WHERE MediacaoId = @id`);

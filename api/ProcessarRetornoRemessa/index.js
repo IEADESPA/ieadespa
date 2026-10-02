@@ -1,41 +1,37 @@
 // ProcessarRetornoRemessa (v4.7)
 // Lê o arquivo de retorno que o banco devolve depois de processar uma
 // remessa (shared/cnab240.js::parsearRetornoCnab240) e atualiza o status
-// de cada Saída automaticamente: sucesso vira PAGA de verdade (mesmo
-// efeito de GestaoSaidas ação PAGAR, sem precisar registrar uma por uma);
-// falha marca o item como FALHOU (com o código de ocorrência do banco) e
+// de cada Saída automaticamente: sucesso (ocorrência "00") vira PAGA de verdade
+// (mesmo efeito de GestaoSaidas ação PAGAR, sem precisar registrar uma por uma);
+// falha — inclusive ocorrência em branco — marca o item como FALHOU e
 // a Saída continua APROVADA, disponível pra entrar numa remessa nova ou
-// ser paga manualmente. Restrito a nível Global — mesmo princípio de
-// quem gera a remessa (GestaoRemessasBancarias).
+// ser paga manualmente. Só o nível GERAL (papel Global com escopo de todas as congregações) —
+// mesmo princípio de quem gera a remessa (GestaoRemessasBancarias).
 // POST /api/remessas-bancarias/{id}/retorno -> { arquivoRetornoBase64, mimeType }
-const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const cnab240 = require("../shared/cnab240");
-
-const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
+const { idOpcional, lerBase64 } = require("../shared/financeiroSeguro");
 
 module.exports = async function (context, req) {
-  const id = context.bindingData.id;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Processar o retorno de uma remessa é restrito a papéis de nível Global." } };
-    return;
-  }
-  if (!id) {
+  const rota = idOpcional(context.bindingData.id);
+  const id = rota.id;
+  if (!rota.presente) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/remessas-bancarias/{id}/retorno" } };
     return;
   }
-  const { arquivoRetornoBase64, mimeType } = req.body || {};
+  const { arquivoRetornoBase64 } = req.body || {};
   if (!arquivoRetornoBase64) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Anexe o arquivo de retorno recebido do banco." } };
     return;
   }
 
   const pool = await getPool();
-  const remessa = await pool.request().input("id", sql.Int, id).query(`SELECT * FROM RemessasBancarias WHERE RemessaId = @id`);
+  const remessa = id ? await pool.request().input("id", sql.Int, id).query(`SELECT * FROM RemessasBancarias WHERE RemessaId = @id`) : { recordset: [] };
   if (remessa.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Remessa não encontrada." } };
     return;
@@ -45,15 +41,12 @@ module.exports = async function (context, req) {
     return;
   }
 
-  let buffer;
-  try { buffer = Buffer.from(arquivoRetornoBase64, "base64"); } catch (e) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Arquivo inválido." } };
+  const lido = lerBase64(arquivoRetornoBase64);
+  if (lido.erro) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: lido.erro === "Arquivo inválido." ? lido.erro : "Arquivo vazio ou maior que 15 MB." } };
     return;
   }
-  if (buffer.length === 0 || buffer.length > TAMANHO_MAXIMO_BYTES) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Arquivo vazio ou maior que 15 MB." } };
-    return;
-  }
+  const buffer = lido.buffer;
 
   const conteudo = buffer.toString("utf-8");
   const resultados = cnab240.parsearRetornoCnab240(conteudo);
@@ -62,7 +55,8 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const arquivoRetornoUrl = await storage.salvarDocumento(buffer, mimeType || "text/plain");
+  // O arquivo de retorno é texto: o tipo que o navegador declara não vale (um "text/html" servido do armazenamento seria página ativa) — grava sempre como texto puro.
+  const arquivoRetornoUrl = await storage.salvarDocumento(buffer, "text/plain");
 
   let confirmados = 0;
   let falharam = 0;
@@ -84,7 +78,8 @@ module.exports = async function (context, req) {
         .query(`UPDATE RemessaItens SET Status = 'PROCESSADO', ProcessadoEm = SYSUTCDATETIME() WHERE RemessaItemId = @id`);
       confirmados++;
     } else {
-      await pool.request().input("id", sql.Int, item.recordset[0].RemessaItemId).input("motivo", sql.NVarChar(300), `Rejeitado pelo banco — código de ocorrência ${r.codigoOcorrencia || "?"}`)
+      const motivo = r.codigoOcorrencia ? `Rejeitado pelo banco — código de ocorrência ${r.codigoOcorrencia}` : "Retorno sem código de ocorrência — pagamento não confirmado pelo banco";
+      await pool.request().input("id", sql.Int, item.recordset[0].RemessaItemId).input("motivo", sql.NVarChar(300), motivo)
         .query(`UPDATE RemessaItens SET Status = 'FALHOU', MotivoFalha = @motivo, ProcessadoEm = SYSUTCDATETIME() WHERE RemessaItemId = @id`);
       falharam++;
     }
@@ -94,7 +89,7 @@ module.exports = async function (context, req) {
     .query(`UPDATE RemessasBancarias SET Status = 'PROCESSADA', ProcessadoPor = @processadoPor, ProcessadoEm = SYSUTCDATETIME(), ArquivoRetornoUrl = @arquivoRetornoUrl WHERE RemessaId = @id`);
 
   await registrarAuditoria({
-    tabela: "RemessasBancarias", registroId: Number(id), acao: "Processou retorno de remessa bancária", usuarioId: usuario.membroId,
+    tabela: "RemessasBancarias", registroId: id, acao: "Processou retorno de remessa bancária", usuarioId: usuario.membroId,
     dadosDepois: { confirmados, falharam, totalRegistrosLidos: resultados.length }
   });
   context.res = {

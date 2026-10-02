@@ -7,7 +7,11 @@
 // GET  /api/credenciamento/{sessaoId}            -> impedidos calculados + aviso de procuração + relatório (se já gerado)
 // POST /api/credenciamento/{sessaoId}            -> { membroId } credencia/recusa um membro (mesa)
 // POST /api/credenciamento/{sessaoId}/relatorio  -> gera (ou devolve, se já existir) o relatório congelado
+// ESCOPO: a mesa de credenciamento é da Assembleia Geral (INSTITUCIONAL): credenciar, recusar e gerar/congelar o relatório são só do nível GERAL (papel Global com escopo
+// "TODAS"). O Dirigente (`reunioes`) e o Pastor de Área (`assembleia`) não operam a mesa: credenciar grava presença e mexe no quórum de toda a igreja. Ver a tela (GET)
+// segue para quem tem as permissões de hoje, mas a lista de impedidos (quem está sob disciplina ou com carta de mudança) e a trilha só trazem gente do SEU escopo.
 const auth = require("../shared/auth");
+const { exigirGeral, filtrarPorEscopo } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { AVISO_PROCURACAO, avaliarCredenciamento, listarImpedidosAssembleia, gerarOuObterRelatorioCredenciamento } = require("../shared/credenciamento");
@@ -24,14 +28,14 @@ async function carregarSessaoAssembleia(pool, sessaoId) {
 }
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirAlgumaPermissao(req, context, ["assembleia", "reunioes"]);
+  const usuario = req.method === "GET" ? auth.exigirAlgumaPermissao(req, context, ["assembleia", "reunioes"]) : exigirGeral(req, context, ["assembleia", "reunioes"]);
   if (!usuario) return;
 
-  const sessaoId = context.bindingData.sessaoId;
+  const sessaoId = auth.idDeRota(context.bindingData.sessaoId);
   const acao = context.bindingData.acao;
   const pool = await getPool();
 
-  const sessao = await carregarSessaoAssembleia(pool, sessaoId);
+  const sessao = sessaoId ? await carregarSessaoAssembleia(pool, sessaoId) : null;
   if (!sessao) {
     context.res = { status: 404, body: { sucesso: false, mensagem: "Sessão não encontrada." } };
     return;
@@ -46,14 +50,20 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "GET" && !acao) {
-    const impedidos = await listarImpedidosAssembleia(pool);
-    const credenciamentos = (await pool.request().input("id", sql.Int, sessaoId).query(`
+    const impedidos = await listarImpedidosAssembleia(pool, usuario);
+    const credenciamentosBrutos = (await pool.request().input("id", sql.Int, sessaoId).query(`
       SELECT c.CredenciamentoId AS credenciamentoId, c.MembroId AS membroId, m.Nome AS nome,
              c.Resultado AS resultado, c.MotivoArtigo AS motivoArtigo, c.MotivoDetalhe AS motivoDetalhe,
-             CONVERT(varchar(19), c.CriadoEm, 120) AS criadoEm
+             CONVERT(varchar(19), c.CriadoEm, 120) AS criadoEm,
+             cg.Nome AS congregacaoNome, ex.Nome AS extensaoNome
       FROM CredenciamentosAssembleia c JOIN MembroReferencia m ON m.MembroId = c.MembroId
+      LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
+      LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
       WHERE c.SessaoId = @id ORDER BY c.CriadoEm
     `)).recordset;
+    // A trilha da mesa nomeia pessoas e o artigo da recusa (inclusive "sob disciplina"): só as do escopo de quem pede.
+    const credenciamentos = filtrarPorEscopo(usuario, credenciamentosBrutos, (c) => c.congregacaoNome, (c) => c.extensaoNome)
+      .map(({ congregacaoNome, extensaoNome, ...resto }) => resto);
     const relatorio = (await pool.request().input("id", sql.Int, sessaoId)
       .query(`SELECT RelatorioId AS relatorioId, TotalCredenciados AS totalCredenciados, TotalImpedidos AS totalImpedidos,
                      CONVERT(varchar(19), GeradoEm, 120) AS geradoEm
@@ -67,12 +77,18 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && !acao) {
-    const { membroId } = req.body || {};
-    if (!membroId) {
+    const { membroId: membroIdBruto } = req.body || {};
+    if (!membroIdBruto) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe membroId." } };
       return;
     }
-    const membro = (await pool.request().input("id", sql.Int, membroId).query(`
+    // Credenciar grava presença: só com a Assembleia em andamento (antes valia até para sessão já encerrada, mexendo no quórum depois de fixado).
+    if (sessao.Status !== "ABERTA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Só dá para credenciar com a Assembleia em andamento." } };
+      return;
+    }
+    const membroId = auth.idDeRota(membroIdBruto);
+    const membro = !membroId ? undefined : (await pool.request().input("id", sql.Int, membroId).query(`
       SELECT MembroId AS membroId, SituacaoMembro AS situacaoMembro, Status AS status,
              CONVERT(varchar(10), DataNascimento, 120) AS dataNascimento,
              CONVERT(varchar(10), DataAdmissao, 120) AS dataAdmissao, DizimistaFiel AS dizimistaFiel

@@ -14,13 +14,25 @@ const CHAVES_DETECTOR = ["SEGUROS_VENCENDO", "PRESTACAO_CONTAS_ATRASADA", "REPAS
 
 function usuarioVeRegra(usuario, regra) {
   if (!regra.Ativa) return false;
-  if (regra.PermissaoAlvo && !usuario.permissoes.includes(regra.PermissaoAlvo)) return false;
+  if (regra.PermissaoAlvo && !(usuario.permissoes || []).includes(regra.PermissaoAlvo)) return false;
   if (regra.NivelAlvo && usuario.nivel !== regra.NivelAlvo) return false;
   return true;
 }
 
 async function montarPainelInicial(pool, usuario) {
   const blocos = [];
+  const permissoes = Array.isArray(usuario.permissoes) ? usuario.permissoes : [];
+
+  // Sessão sem permissão nenhuma (membro por PIN/código): só as notificações próprias. Não existe "tarefa de fluxo" nem bloco de detector para quem não é liderança, e
+  // varrer todos os fluxos abertos (uma consulta por fluxo) para dar zero seria custo à toa — qualquer login poderia disparar isso.
+  if (permissoes.length === 0) {
+    const naoLidasMembro = (await pool.request().input("membroId", sql.Int, usuario.membroId).query(`
+      SELECT COUNT(*) AS total FROM Notificacoes WHERE DestinatarioMembroId = @membroId AND Lida = 0 AND Arquivada = 0
+    `)).recordset[0].total;
+    blocos.push({ chave: "notificacoes", titulo: "Notificações não lidas", valor: naoLidasMembro, aba: null });
+    blocos.push({ chave: "tarefas_atrasadas", titulo: "Minhas tarefas atrasadas", valor: 0, aba: "meupainel:tarefas" });
+    return blocos;
+  }
 
   // Sempre visíveis — não dependem de permissão administrativa nenhuma,
   // são sempre "meus": minhas notificações, minhas tarefas de fluxo.

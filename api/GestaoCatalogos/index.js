@@ -9,6 +9,10 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { exigirGeral } = require("../shared/escopoRotas");
+
+// Catálogos que, mesmo tendo uma permissão de escrita própria, podem ser LIDOS por qualquer pessoa logada (o membro os usa no Meu Painel).
+const LEITURA_SO_COM_LOGIN = new Set(["categoriasEntrada"]);
 
 const CATALOGOS = {
   situacoes: {
@@ -281,7 +285,7 @@ module.exports = async function (context, req) {
   const method = (req.method || "GET").toUpperCase();
   const catalogoNome = context.bindingData.catalogo;
   const id = context.bindingData.id;
-  const config = CATALOGOS[catalogoNome];
+  const config = Object.prototype.hasOwnProperty.call(CATALOGOS, catalogoNome) ? CATALOGOS[catalogoNome] : null;
 
   if (!config) {
     context.res = { status: 404, body: { sucesso: false, mensagem: "Catálogo não encontrado." } };
@@ -290,12 +294,22 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
 
+  // LEITURA (decisão do responsável, 02/10/2026: o módulo de catálogos é da administração, não de "uma pessoa comum"). Antes qualquer pessoa da internet, sem login,
+  // lia todos os catálogos — inclusive a matriz de permissões de cada cargo, alçadas de aprovação e o plano de contas. Agora: exige LOGIN (as telas de formulário usam
+  // congregações, cargos, departamentos... para montar listas) e, nos catálogos internos, a permissão da área (a mesma que escreve neles). Exceção: as categorias de entrada
+  // são o que o membro escolhe ao lançar a própria contribuição (Meu Painel), então ficam só com login.
   if (method === "GET") {
+    const usuarioLeitura = config.permissao && !LEITURA_SO_COM_LOGIN.has(catalogoNome)
+      ? auth.exigirPermissao(req, context, config.permissao)
+      : auth.exigirLoginIgnorandoTermos(req, context);
+    if (!usuarioLeitura) return;
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: await listar(pool, config) };
     return;
   }
 
-  const usuario = auth.exigirPermissao(req, context, config.permissao || "pessoas");
+  // ESCRITA: só o nível GERAL (papel Global com escopo de todas as congregações). Antes bastava a permissão "pessoas" — um Dirigente de Congregação renomeava ou
+  // desativava congregações, áreas e departamentos de toda a igreja. A permissão de cada catálogo continua exigida (financeiro, disciplina, mediacao, permissoes).
+  const usuario = exigirGeral(req, context, config.permissao || "pessoas");
   if (!usuario) return;
 
   if (method === "POST") {

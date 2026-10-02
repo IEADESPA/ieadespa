@@ -5,16 +5,19 @@
 // uma entrada por ano de referência.
 // GET /api/notas-explicativas/{ano}
 // PUT /api/notas-explicativas/{ano} -> { texto }
-const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { inteiroEntre } = require("../shared/entradaFinanceira");
 
 module.exports = async function (context, req) {
-  const ano = context.bindingData.ano;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  // INSTITUCIONAL: as notas pertencem às demonstrações consolidadas da denominação (RelatorioDemonstracoesContabeis já é só do nível geral) — ler e editar são só do
+  // nível geral (papel Global com escopo de todas as congregações).
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
+  const ano = inteiroEntre(context.bindingData.ano, 1900, 2200);
   if (!ano) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o ano na rota." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o ano na rota (AAAA)." } };
     return;
   }
   const pool = await getPool();
@@ -26,11 +29,11 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "PUT") {
-    if (usuario.nivel !== "GLOBAL") {
-      context.res = { status: 403, body: { sucesso: false, mensagem: "Editar as Notas Explicativas é restrito a papéis de nível Global." } };
+    const { texto } = req.body || {};
+    if (texto !== undefined && texto !== null && typeof texto !== "string") {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "texto precisa ser um texto." } };
       return;
     }
-    const { texto } = req.body || {};
     await pool.request().input("ano", sql.Int, ano).input("texto", sql.NVarChar(sql.MAX), texto || null).input("atualizadoPor", sql.Int, usuario.membroId)
       .query(`MERGE NotasExplicativas AS destino
               USING (SELECT @ano AS Ano) AS origem ON destino.Ano = origem.Ano

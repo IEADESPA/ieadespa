@@ -12,7 +12,7 @@
 // consultar o próprio painel/pontuação e o ranking do escopo continua
 // aberto a qualquer usuário logado — "admin gerencia, todo mundo vê o seu"
 // (mesmo espírito de v5.6 Minhas Escalas / vB.5 self-service). Ver o
-// painel de OUTRO Membro (não o próprio) exige "conquistas_gestao".
+// painel de OUTRO Membro (não o próprio) exige "conquistas_gestao" e a pessoa dentro do escopo territorial.
 //
 // GET  /api/conquistas/tipos-evento                          -> lista tipos de evento cadastrados
 // POST /api/conquistas/tipos-evento    body:{tipoEvento, descricao?, moduloOrigem?}   -> exige conquistas_gestao
@@ -21,11 +21,14 @@
 // POST /api/conquistas/catalogo/atualizar body:{conquistaId, ...}   -> exige conquistas_gestao
 // POST /api/conquistas/regra           body:{conquistaId, tipoRegra, tipoEvento, config}  -> exige conquistas_gestao
 // POST /api/conquistas/regra/desativar body:{regraId}                -> exige conquistas_gestao
-// GET  /api/conquistas/painel?membroId=&congregacaoId=        -> painel individual (score + catálogo visível + desbloqueadas)
-// GET  /api/conquistas/ranking?escopoTipo=&escopoId=          -> ranking por Turma/Congregação/Área/Região/Quadrante/Distrito/GLOBAL
+// GET  /api/conquistas/painel?membroId=&congregacaoId=        -> painel individual (score + catálogo visível + desbloqueadas); o de outra pessoa: conquistas_gestao + pessoa no escopo
+// GET  /api/conquistas/ranking?escopoTipo=&escopoId=          -> SEM conquistas_gestao: o pedido é ignorado; vale a turma de EBD (ou a congregação) do próprio membro, com nome abreviado,
+//                                                                os 20 primeiros e a posição dele (sem matrícula). COM conquistas_gestao: Turma/Congregação/Área/Região/Quadrante/Distrito/GLOBAL,
+//                                                                sempre cruzado com o escopo de quem pede (de fora = lista vazia, igual a um escopo que não existe)
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
 const conquistas = require("../shared/conquistas");
+const escopoRotas = require("../shared/escopoRotas");
 
 function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
@@ -106,20 +109,38 @@ module.exports = async function (context, req) {
 
     // ---- Consulta — aberta a qualquer usuário logado (visão do próprio, ranking do escopo) ----
     if (acao === "painel" && metodo === "GET") {
-      const membroId = Number((req.query && req.query.membroId) || usuario.membroId);
-      if (membroId !== usuario.membroId && !temGestao(usuario)) {
-        return erro(context, 403, "Só é possível ver o painel de conquistas de outra pessoa com a permissão de gestão.");
+      const q = req.query || {};
+      const proprio = Number(usuario.membroId);
+      // Sem ?membroId= é o painel do próprio. O de OUTRA pessoa exige a permissão de gestão E a pessoa dentro do escopo; fora do escopo, inexistente e id malformado
+      // dão a mesma recusa (a rota não serve de sonda de matrícula).
+      const pedido = q.membroId === undefined || q.membroId === "" ? proprio : auth.idDeRota(q.membroId);
+      if (pedido !== proprio) {
+        if (!temGestao(usuario)) return erro(context, 403, "Só é possível ver o painel de conquistas de outra pessoa com a permissão de gestão.");
+        if (!pedido || !(await escopoRotas.pessoaAlcancavel(pool, usuario, pedido))) return erro(context, 403, escopoRotas.FORA_DO_ESCOPO.mensagem);
       }
-      const congregacaoId = req.query && req.query.congregacaoId ? Number(req.query.congregacaoId) : undefined;
-      const painel = await conquistas.buscarPainelMembro(pool, membroId, { congregacaoId });
+      const congregacaoId = auth.idDeRota(q.congregacaoId) || undefined;   // só escolhe a tabela de pesos; id inválido é ignorado
+      const painel = await conquistas.buscarPainelMembro(pool, pedido, { congregacaoId });
       context.res = { status: 200, body: { sucesso: true, ...painel } };
       return;
     }
 
     if (acao === "ranking" && metodo === "GET") {
-      const escopoTipo = (req.query && req.query.escopoTipo) || "GLOBAL";
-      const escopoId = req.query && req.query.escopoId ? Number(req.query.escopoId) : null;
-      const ranking = await conquistas.listarRanking(pool, { escopoTipo, escopoId });
+      const q = req.query || {};
+      if (!temGestao(usuario)) {
+        // Membro comum: o pedido (escopoTipo/escopoId) é IGNORADO. Vale só a turma de EBD dele (ou, se não é aluno, a congregação dele), lida do banco; nome abreviado,
+        // sem matrícula, os 20 primeiros e a posição da própria pessoa.
+        const proprio = await conquistas.rankingDoProprioMembro(pool, usuario.membroId);
+        context.res = { status: 200, body: { sucesso: true, escopo: proprio.escopo, ...conquistas.recortarRankingParaMembro(proprio.linhas, usuario.membroId) } };
+        return;
+      }
+      // Gestão: o escopo pedido é cruzado com o escopo de quem pede (turma/congregação de fora, pedido malformado e escopo desconhecido dão a mesma lista vazia).
+      const escopoTipo = typeof q.escopoTipo === "string" && q.escopoTipo ? q.escopoTipo.toUpperCase() : "GLOBAL";
+      const todas = usuario.escopoCongregacoes === "TODAS";
+      const ranking = await conquistas.listarRanking(pool, {
+        escopoTipo, escopoId: q.escopoId,
+        nomesPermitidos: todas ? null : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []),
+        extensaoNome: usuario.escopoExtensaoNome || null
+      });
       context.res = { status: 200, body: { sucesso: true, ranking } };
       return;
     }

@@ -2,6 +2,7 @@
 // Motor de cálculo da Tesouraria Local — Art. 118: retenção local (padrão
 // 40%) + repasse à Tesouraria Geral (padrão 60%), sempre derivado dos
 // lançamentos do mês, nunca digitado à mão pelo Tesoureiro.
+const { ehGeral } = require("./escopoRotas");
 const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // Termo nº sequencial e contínuo por congregação — igual ao bloco físico de
@@ -63,9 +64,15 @@ function centroCustoDepartamental(centroCusto) {
 // v5.4 — quem só tem "tesouraria_departamental" (não "financeiro") só pode
 // operar Saídas (GestaoSaidas) da categoria do PRÓPRIO departamento —
 // mesmo motor de aprovação (alçada/segregação/quatro-olhos), escopo mais
-// estreito. Quem tem "financeiro" continua operando tudo, sem mudança.
+// estreito. Quem tem "financeiro" opera o centro LOCAL (a Saída já é filtrada pela congregação) e os departamentais; os
+// centros da igreja inteira (GERAL, PDQ, CONVENCAO, PREBENDA_PASTORAL) são só do nível GERAL (papel Global com escopo de todas
+// as congregações): a Saída da prebenda nasce na congregação do ministro (GestaoPrebendas) e, sem esta trava, o tesoureiro local
+// daquela congregação a via, cancelava ou "pagava" sem pagamento.
 function podeOperarCentroCusto(usuario, centroCusto, siglaDepartamentoUsuario) {
-  if (usuario.permissoes && usuario.permissoes.includes("financeiro")) return true;
+  if (usuario.permissoes && usuario.permissoes.includes("financeiro")) {
+    if (centroCusto === "LOCAL" || centroCustoDepartamental(centroCusto)) return true;
+    return ehGeral(usuario);
+  }
   return !!siglaDepartamentoUsuario && centroCusto === `DEPTO_${siglaDepartamentoUsuario}`;
 }
 

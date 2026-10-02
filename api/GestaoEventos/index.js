@@ -66,7 +66,7 @@ const SEM_PERMISSAO = "Você não tem permissão para isso. Fale com quem admini
 function erro(context, status, mensagem) { context.res = { status, body: { sucesso: false, mensagem } }; }
 function resposta(context, resultado, statusOk = 200) { context.res = { status: resultado.sucesso ? statusOk : 422, body: resultado }; }
 const lista = (obj) => Object.entries(obj).map(([codigo, rotulo]) => ({ codigo, rotulo }));
-const idDe = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
+const idDe = auth.idDeRota; // só inteiro positivo na forma canônica ("0x10", "1e1", " 5", "05" e objetos viram null → 400/404, nunca outro registro)
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
@@ -74,8 +74,9 @@ module.exports = async function (context, req) {
 
   const perms = usuario.permissoes || [];
   const ehGestao = perms.includes("eventos_gestao");
-  const escopoGlobal = !usuario.escopoCongregacoes || usuario.escopoCongregacoes === "TODAS";
-  const escopo = escopoGlobal ? "TODAS" : (usuario.escopoCongregacoes || []);
+  // Revisão de escopo: FECHADO — sessão sem a lista de congregações (claim ausente) não é global e não alcança nada.
+  const escopoGlobal = usuario.escopoCongregacoes === "TODAS";
+  const escopo = escopoGlobal ? "TODAS" : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []);
   const ehEtica = perms.includes("eventos_etica") && escopoGlobal;
   const ehPresidencia = perms.includes("eventos_presidencia") && escopoGlobal;
   const ehTesouraria = perms.includes("financeiro") && escopoGlobal;
@@ -122,7 +123,7 @@ module.exports = async function (context, req) {
       abrirCaixa: c.p.tesoureiro && !caixa && avCaixa.ok,
       lancarNoCaixa: c.p.tesoureiro && !!caixa && caixa.status === "ABERTO",
       encerrarCaixa: c.p.tesoureiro && !!caixa && caixa.status === "ABERTO",
-      conferirCaixa: ehTesouraria && !!caixa && caixa.status === "ENCERRADO" && caixa.encerradoPorMembroId !== membroId,
+      conferirCaixa: ehTesouraria && !!caixa && caixa.status === "ENCERRADO" && caixa.encerradoPorMembroId !== membroId && !c.p.algum,
       devolverCaixa: ehTesouraria && !!caixa && caixa.status === "ENCERRADO"
     };
   }
@@ -191,9 +192,9 @@ module.exports = async function (context, req) {
         if (!ehTesouraria && !ehGestao) { erro(context, 403, SEM_PERMISSAO); return; }
         const status = q.status ? String(q.status).toUpperCase() : null;
         if (status && !ev.STATUS_CAIXA[status]) { erro(context, 400, "Situação inválida."); return; }
-        const todas = await db.listarCaixas(pool, ctxCal, { status, hoje });
-        const visiveis = ehTesouraria ? todas : todas.filter(x => { const e = { abrangencia: x.evento.abrangencia, congregacaoId: null, areaIds: [] }; return cal.escopoCobreEvento(escopo, e, ctxCal).ok; });
-        context.res = { status: 200, body: { sucesso: true, caixas: visiveis } };
+        // A Tesouraria Geral (financeiro + escopo global) vê todos; a gestão de eventos só os de eventos que o escopo cobre (conferido com o evento REAL, com as Áreas dele).
+        const caixas = await db.listarCaixas(pool, ctxCal, { status, hoje, filtrarEvento: ehTesouraria ? null : (e) => cal.escopoCobreEvento(escopo, e, ctxCal).ok });
+        context.res = { status: 200, body: { sucesso: true, caixas } };
         return;
       }
       erro(context, 404, "Ação inválida.");

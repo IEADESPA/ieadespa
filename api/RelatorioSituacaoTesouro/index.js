@@ -6,17 +6,14 @@
 // saldo é gravado à parte, então a resposta é sempre a foto real do
 // exato instante em que a tela é aberta.
 // GET /api/situacao-tesouro
-const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { getPool, sql } = require("../shared/db");
 const tesouraria = require("../shared/tesouraria");
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  // Situação consolidada do Tesouro (saldo de todas as congregações e departamentos): só o nível GERAL — papel Global E escopo de todas as congregações.
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "A situação consolidada do Tesouro é restrita a papéis de nível Global." } };
-    return;
-  }
   const pool = await getPool();
 
   const [tesouroGeral, convencao, prebendaPastoral, pdq] = await Promise.all([

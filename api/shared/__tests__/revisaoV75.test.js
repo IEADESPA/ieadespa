@@ -386,12 +386,18 @@ describe("Enquetes — o voto é da matrícula da SESSÃO", () => {
   });
 });
 
-describe("listas que mostram quem votou, documentos e projetos exigem sessão", () => {
+describe("listas que mostram quem votou e projetos exigem sessão", () => {
   test("GET sem sessão: 401 (antes qualquer um listava os participantes e, nas enquetes públicas, quem votou em quê)", async () => {
     expect((await chamar(hEnquetes, { metodo: "GET" })).status).toBe(401);
-    expect((await chamar(hDocumentos, { metodo: "GET" })).status).toBe(401);
     expect((await chamar(hProjetos, { metodo: "GET" })).status).toBe(401);
     expect(mockConsultas).toHaveLength(0);
+  });
+  // (documentos: a lista passou a atender o visitante, mas SÓ com os documentos marcados como públicos — ver documentosVisibilidade.test.js)
+  test("documentos sem sessão: só os públicos; a escrita continua exigindo sessão", async () => {
+    const lista = await chamar(hDocumentos, { metodo: "GET" });
+    expect(lista.status).toBe(200);
+    expect(mockConsultas.every(c => !/Visibilidade IN \([^)]*MEMBROS/.test(c.sql))).toBe(true);
+    for (const metodo of ["POST", "PUT", "DELETE"]) expect((await chamar(hDocumentos, { metodo, ligado: { id: "1" } })).status).toBe(401);
   });
   test("a sessão de PIN provisório também não lista", async () => {
     const token = tokenDe(20, { via: "PIN", pinProvisorio: true });

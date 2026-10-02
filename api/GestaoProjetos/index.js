@@ -10,7 +10,11 @@
 // POST /api/projetos                        -> body: { autorMembroId, titulo, texto, comissaoTematica } -> protocola
 // POST /api/projetos/{id}/parecer/{sigla}   -> body: { parecer: 'FAVORAVEL'|'CONTRARIO' } -> exige ser da comissão
 // POST /api/projetos/{id}/urgencia          -> marca regime de urgência (dispensa parecer)
+// ESCOPO (02/10/2026): projeto é INSTITUCIONAL. Marcar regime de urgência (que dispensa o parecer das comissões) é só do nível GERAL (papel Global com escopo "TODAS") e só
+// vale para projeto ainda em parecer; protocolar projeto: o autor é quem está logado (só o GERAL protocola em nome de outra pessoa); o parecer só se emite uma vez e com o
+// projeto em parecer.
 const auth = require("../shared/auth");
+const { exigirGeral, ehGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
@@ -53,23 +57,31 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Parecer deve ser FAVORAVEL ou CONTRARIO." } };
       return;
     }
-    const ehDaComissao = await membroEhDaComissao(pool, sigla, usuario.membroId);
+    const projetoId = auth.idDeRota(id);
+    const siglaComissao = String(sigla);
+    const ehDaComissao = await membroEhDaComissao(pool, siglaComissao, usuario.membroId);
     if (!ehDaComissao) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: `Você não é membro da comissão ${sigla}.` } };
+      context.res = { status: 200, body: { sucesso: false, mensagem: `Você não é membro da comissão ${siglaComissao}.` } };
       return;
     }
-    const upd = await pool.request()
-      .input("projetoId", sql.Int, id).input("sigla", sql.NVarChar(10), sigla)
-      .input("parecer", sql.NVarChar(20), parecer)
-      .query(`UPDATE PareceresComissao SET Parecer = @parecer, DataEmissao = CAST(SYSUTCDATETIME() AS DATE)
-              WHERE ProjetoId = @projetoId AND Sigla = @sigla`);
-    if (upd.rowsAffected[0] === 0) {
+    if (!projetoId) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Parecer não encontrado pra essa comissão/projeto." } };
       return;
     }
-    await atualizarStatusSeCompleto(pool, id);
+    // O parecer se emite UMA vez e só com o projeto ainda em parecer (antes qualquer membro da comissão reescrevia o parecer a qualquer momento, até depois de apto à votação).
+    const upd = await pool.request()
+      .input("projetoId", sql.Int, projetoId).input("sigla", sql.NVarChar(10), siglaComissao)
+      .input("parecer", sql.NVarChar(20), parecer)
+      .query(`UPDATE PareceresComissao SET Parecer = @parecer, DataEmissao = CAST(SYSUTCDATETIME() AS DATE)
+              WHERE ProjetoId = @projetoId AND Sigla = @sigla AND Parecer IS NULL
+                AND EXISTS (SELECT 1 FROM Projetos WHERE ProjetoId = @projetoId AND Status = 'EM_PARECER')`);
+    if (upd.rowsAffected[0] === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Parecer não encontrado pra essa comissão/projeto, já emitido, ou projeto fora de parecer." } };
+      return;
+    }
+    await atualizarStatusSeCompleto(pool, projetoId);
     await registrarAuditoria({
-      tabela: "PareceresComissao", registroId: Number(id), acao: `Emitiu parecer ${sigla}: ${parecer}`, usuarioId: usuario.membroId
+      tabela: "PareceresComissao", registroId: projetoId, acao: `Emitiu parecer ${siglaComissao}: ${parecer}`, usuarioId: usuario.membroId
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Parecer registrado." } };
     return;
@@ -77,12 +89,20 @@ module.exports = async function (context, req) {
 
   // ---- POST /projetos/{id}/urgencia ----
   if (req.method === "POST" && id && acao === "urgencia") {
-    const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "cli"]);
+    const usuario = exigirGeral(req, context, ["reunioes", "cli"]);
     if (!usuario) return;
-    await pool.request().input("id", sql.Int, id)
-      .query(`UPDATE Projetos SET RegimeUrgencia = 1, Status = 'APTO_VOTACAO' WHERE ProjetoId = @id`);
+    const projetoId = auth.idDeRota(id);
+    // Só projeto ainda em parecer: urgência não ressuscita projeto arquivado nem refaz um já apto à votação.
+    const marcado = projetoId
+      ? await pool.request().input("id", sql.Int, projetoId)
+        .query(`UPDATE Projetos SET RegimeUrgencia = 1, Status = 'APTO_VOTACAO' WHERE ProjetoId = @id AND Status = 'EM_PARECER'`)
+      : { rowsAffected: [0] };
+    if (marcado.rowsAffected[0] === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Projeto não encontrado ou não está mais em parecer." } };
+      return;
+    }
     await registrarAuditoria({
-      tabela: "Projetos", registroId: Number(id),
+      tabela: "Projetos", registroId: projetoId,
       acao: "Marcou regime de urgência (Art. 24 §2º — 2/3 do Plenário, registrado fisicamente)",
       usuarioId: usuario.membroId
     });
@@ -122,16 +142,29 @@ module.exports = async function (context, req) {
   if (req.method === "POST" && !id) {
     const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "cli"]);
     if (!usuario) return;
-    const { autorMembroId, titulo, texto, comissaoTematica } = req.body || {};
-    if (!autorMembroId || !titulo || !texto || !comissaoTematica) {
+    const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const { titulo, texto, comissaoTematica } = corpo;
+    if (!corpo.autorMembroId || !titulo || !texto || !comissaoTematica) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: autorMembroId, titulo, texto, comissaoTematica." } };
+      return;
+    }
+    if (typeof titulo !== "string" || titulo.length > 200 || typeof texto !== "string") {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Título (até 200 caracteres) e texto precisam ser texto." } };
       return;
     }
     if (!COMISSOES_TEMATICAS_VALIDAS.includes(comissaoTematica)) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Comissão temática inválida (use CFO ou CEP)." } };
       return;
     }
-    const membro = await pool.request().input("id", sql.Int, autorMembroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+    // O autor é quem protocola: só o GERAL protocola em nome de outra pessoa (antes o papel local punha qualquer matrícula como autora).
+    const autorMembroId = auth.idDeRota(corpo.autorMembroId);
+    if (!ehGeral(usuario) && autorMembroId !== Number(usuario.membroId)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Você só pode protocolar projeto em seu próprio nome." } };
+      return;
+    }
+    const membro = autorMembroId
+      ? await pool.request().input("id", sql.Int, autorMembroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`)
+      : { recordset: [] };
     if (membro.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula do autor não encontrada." } };
       return;

@@ -7,18 +7,27 @@
 // GET /api/pessoas/{membroId}/historico
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
+const { pessoaAlcancavel } = require("../shared/escopoRotas");
 
+// ESCOPO: a linha do tempo é da PESSOA — só abre quem alcança a congregação dela (shared/escopoRotas.js); fora do escopo (ou matrícula malformada) vale a mesma resposta de
+// "Matrícula não encontrada".
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
 
-  const membroId = context.bindingData.membroId;
-  if (!membroId) {
+  const membroIdBruto = context.bindingData.membroId;
+  if (!membroIdBruto) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota." } };
     return;
   }
 
   const pool = await getPool();
+  const alcancavel = await pessoaAlcancavel(pool, usuario, membroIdBruto);
+  if (!alcancavel) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+    return;
+  }
+  const membroId = alcancavel.membroId;
   const membroResult = await pool.request().input("id", sql.Int, membroId).query(`
     SELECT Nome, FormaAdmissao, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao,
            CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo,

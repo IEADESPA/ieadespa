@@ -536,7 +536,10 @@ async function papeisNoCanal(pool, canalId, membroId) {
 // Ocorrências — Regra das 24 Horas
 // ---------------------------------------------------------------
 
-function mapearOcorrencia(r, agoraMs, { verAutor }) {
+// `verAutor`: mostra quem avisou (só a gestão). `verInterno` (padrão sim): mostra o que a Igreja decidiu e escreveu sobre a ocorrência — como o membro foi advertido,
+// a prova da remoção, quem removeu, o motivo de improcedência. Quem só AVISOU (o membro comum) vê o andamento (situação e prazo), nunca esses textos livres, que
+// descrevem um terceiro.
+function mapearOcorrencia(r, agoraMs, { verAutor, verInterno = true }) {
   const cat = canais.CATEGORIAS_OCORRENCIA[r.Categoria] || {};
   const relatadaEmMs = emMs(r.RelatadaEm);
   const prazoMs = emMs(r.PrazoRemocaoEm);
@@ -550,13 +553,18 @@ function mapearOcorrencia(r, agoraMs, { verAutor }) {
     status: r.Status, rotuloStatus: canais.STATUS_OCORRENCIA[r.Status], fase: sit.fase, dentroDoPrazo: sit.dentroDoPrazo,
     horasRestantes: sit.horasRestantes != null ? arred1(sit.horasRestantes) : null, horasVencida: sit.horasVencida != null ? arred1(sit.horasVencida) : null,
     igrejaCorresponsavel: !!sit.igrejaCorresponsavel,
-    removidaEm: isoInstante(r.RemovidaEm), remocaoRegistradaEm: isoInstante(r.RemocaoRegistradaEm), removidaPorNome: r.RemovidaPorNome || null,
+    removidaEm: isoInstante(r.RemovidaEm), remocaoRegistradaEm: isoInstante(r.RemocaoRegistradaEm),
     horasAteRemover: sit.horasAteRemover != null ? arred1(sit.horasAteRemover) : null,
-    provaRemocao: r.ProvaRemocao || null, linkProva: r.LinkProva || null,
-    advertidoEm: isoInstante(r.AdvertenciaEm), advertenciaObs: r.AdvertenciaObs || null,
-    decididaEm: isoInstante(r.DecididaEm), motivoImprocedente: r.MotivoImprocedente || null,
+    advertidoEm: isoInstante(r.AdvertenciaEm),
+    decididaEm: isoInstante(r.DecididaEm),
     sugerirAdvertencia: !!cat.advertir
   };
+  if (verInterno) {
+    o.removidaPorNome = r.RemovidaPorNome || null;
+    o.provaRemocao = r.ProvaRemocao || null; o.linkProva = r.LinkProva || null;
+    o.advertenciaObs = r.AdvertenciaObs || null;
+    o.motivoImprocedente = r.MotivoImprocedente || null;
+  }
   if (verAutor) { o.relatadaPorMembroId = r.RelatadaPorMembroId; o.relatadaPorNome = r.RelatadaPorNome || null; }
   if (r.Status === "ABERTA") {
     o.orientacao = canais.orientacaoDaOcorrencia(r.Categoria);
@@ -573,7 +581,7 @@ const SELECT_OCORRENCIA = `
   LEFT JOIN MembroReferencia mm ON mm.MembroId = o.RemovidaPorMembroId`;
 
 // filtros: status, canalId, canaisIds (lista permitida), relatadaPor. `verAutor` esconde/mostra quem relatou.
-async function carregarOcorrencias(pool, ctx, { status = null, canalId = null, canaisIds = null, relatadaPor = null, ocorrenciaId = null, limite = 200, verAutor = false, agoraMs = Date.now() } = {}) {
+async function carregarOcorrencias(pool, ctx, { status = null, canalId = null, canaisIds = null, relatadaPor = null, ocorrenciaId = null, limite = 200, verAutor = false, verInterno = true, agoraMs = Date.now() } = {}) {
   const req = pool.request();
   const cond = [];
   if (status) { req.input("status", sql.NVarChar(14), status); cond.push("o.Status = @status"); }
@@ -585,7 +593,7 @@ async function carregarOcorrencias(pool, ctx, { status = null, canalId = null, c
     cond.push(`o.CanalId IN (${canaisIds.map(Number).filter(Number.isInteger).join(",") || "0"})`);
   }
   const r = await req.query(`${SELECT_OCORRENCIA} ${cond.length ? "WHERE " + cond.join(" AND ") : ""} ORDER BY CASE o.Status WHEN 'ABERTA' THEN 0 ELSE 1 END, o.PrazoRemocaoEm ASC, o.OcorrenciaId DESC OFFSET 0 ROWS FETCH NEXT ${Math.min(limite, LIMITE_LISTA)} ROWS ONLY`);
-  return r.recordset.map(x => mapearOcorrencia(x, agoraMs, { verAutor }));
+  return r.recordset.map(x => mapearOcorrencia(x, agoraMs, { verAutor, verInterno }));
 }
 
 async function buscarOcorrenciaBruta(pool, ocorrenciaId) {
@@ -859,14 +867,20 @@ async function salvarTransmissao(pool, ctx, d, { por }) {
 // ---------------------------------------------------------------
 
 async function montarCobertura(pool, ctx, { hoje = hojeBrasilia(), filtrarCanal = () => true, filtrarCongregacao = () => true } = {}) {
-  const [lista, st, confDias, transmissao, ocAbertas, trocas] = await Promise.all([
-    carregarCanais(pool, ctx, { incluirInativos: false }),
+  // Os contadores de ocorrências e de trocas pendentes vêm POR CANAL e só somam os canais que quem pede alcança (filtrarCanal): antes eram totais da igreja inteira,
+  // e um gestor local via o número de ocorrências abertas de canais que não são dele. Inativos entram na conta (como antes), por isso a lista aqui é a completa.
+  const [todosCanais, st, confDias, transmissao, ocAbertas, trocas] = await Promise.all([
+    carregarCanais(pool, ctx, { incluirInativos: true }),
     carregarEstadoDosCanais(pool),
     lerPrazoDias(pool, "CANAIS_CONFERENCIA_DIAS", CONFERENCIA_DIAS_PADRAO),
     listarTransmissao(pool, ctx),
-    pool.request().query(`SELECT COUNT(*) AS abertas, SUM(CASE WHEN PrazoRemocaoEm < SYSUTCDATETIME() THEN 1 ELSE 0 END) AS vencidas FROM CanalOcorrencias WHERE Status = 'ABERTA'`),
-    pool.request().query(`SELECT COUNT(*) AS abertas, SUM(CASE WHEN PrazoEm < CAST(SYSUTCDATETIME() AS DATE) THEN 1 ELSE 0 END) AS vencidas FROM CanalTrocasCredencial WHERE ResolvidaEm IS NULL`)
+    pool.request().query(`SELECT CanalId, COUNT(*) AS abertas, SUM(CASE WHEN PrazoRemocaoEm < SYSUTCDATETIME() THEN 1 ELSE 0 END) AS vencidas FROM CanalOcorrencias WHERE Status = 'ABERTA' GROUP BY CanalId`),
+    pool.request().query(`SELECT CanalId, COUNT(*) AS abertas, SUM(CASE WHEN PrazoEm < CAST(SYSUTCDATETIME() AS DATE) THEN 1 ELSE 0 END) AS vencidas FROM CanalTrocasCredencial WHERE ResolvidaEm IS NULL GROUP BY CanalId`)
   ]);
+  const lista = todosCanais.filter(c => c.ativo);
+  const idsAlcancados = new Set(todosCanais.filter(filtrarCanal).map(c => c.canalId));
+  const somar = (linhas) => linhas.filter(l => idsAlcancados.has(l.CanalId))
+    .reduce((s, l) => ({ abertas: s.abertas + (l.abertas || 0), vencidas: s.vencidas + (l.vencidas || 0) }), { abertas: 0, vencidas: 0 });
   const visiveis = lista.filter(filtrarCanal);
   const avaliados = visiveis.map(c => {
     const e = st.obter(c.canalId);
@@ -878,8 +892,8 @@ async function montarCobertura(pool, ctx, { hoje = hojeBrasilia(), filtrarCanal 
     return { ...t, canaisProprios: locais.length, semCanal: locais.length === 0 };
   });
   const termosPendentes = avaliados.reduce((s, c) => s + (st.obter(c.canalId).administradores.filter(a => Number(a.termoVersaoAceita) !== canais.TERMO_VERSAO).length), 0);
-  const oc = ocAbertas.recordset[0] || {};
-  const tr = trocas.recordset[0] || {};
+  const oc = somar(ocAbertas.recordset);
+  const tr = somar(trocas.recordset);
   return {
     resumo: {
       canaisAtivos: avaliados.length,
@@ -889,8 +903,8 @@ async function montarCobertura(pool, ctx, { hoje = hojeBrasilia(), filtrarCanal 
       cadastrosIncompletos: avaliados.filter(c => c.cadastroIncompleto).length,
       semAdministrador: avaliados.filter(c => c.pendencias.some(p => p.codigo === "SEM_ADMINISTRADOR")).length,
       termosPendentes,
-      ocorrenciasAbertas: oc.abertas || 0, ocorrenciasVencidas: oc.vencidas || 0,
-      trocasPendentes: tr.abertas || 0, trocasVencidas: tr.vencidas || 0,
+      ocorrenciasAbertas: oc.abertas, ocorrenciasVencidas: oc.vencidas,
+      trocasPendentes: tr.abertas, trocasVencidas: tr.vencidas,
       congregacoesSemCanal: congregacoes.filter(c => c.semCanal).length,
       transmissaoPendente: congregacoes.filter(c => c.situacao === "PENDENTE" || c.situacao === "NAO_INFORMADA").length
     },
@@ -904,9 +918,14 @@ async function montarCobertura(pool, ctx, { hoje = hojeBrasilia(), filtrarCanal 
 // Para o Abandono Digital e para o site
 // ---------------------------------------------------------------
 
-async function listarParaContato(pool, ctx) {
+// `comIdentificador`: o número/e-mail do canal só vai para quem trabalha com o Abandono Digital ou com os canais (a rota decide); os demais veem só o nome.
+async function listarParaContato(pool, ctx, { comIdentificador = false } = {}) {
   return (await carregarCanais(pool, ctx, { incluirInativos: false })).filter(c => c.contaParaAbandono)
-    .map(c => ({ canalId: c.canalId, nome: c.nome, rotuloPlataforma: c.rotuloPlataforma, identificador: c.identificador, cadastroIncompleto: c.cadastroIncompleto }));
+    .map(c => ({
+      canalId: c.canalId, nome: c.nome, rotuloPlataforma: c.rotuloPlataforma,
+      ...(comIdentificador ? { identificador: c.identificador } : {}),
+      cadastroIncompleto: c.cadastroIncompleto
+    }));
 }
 
 // O que o SITE pode mostrar: só canal ativo, marcado como público, com identificador. Nada interno.

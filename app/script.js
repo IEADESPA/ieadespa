@@ -358,16 +358,24 @@ let authNome = sessionStorage.getItem("authNome") || null;
 let authPermissoes = JSON.parse(sessionStorage.getItem("authPermissoes") || "[]");
 let authMatricula = sessionStorage.getItem("authMatricula") || null;
 let authNivel = sessionStorage.getItem("authNivel") || null;
+// "Geral" = papel de nível Global E escopo de todas as congregações (o servidor confere de novo em cada rota; aqui só decide o que aparece na tela).
+let authGeral = sessionStorage.getItem("authGeral") === "1";
+// Elementos com a classe "so-geral" (index.html) só aparecem para o nível geral: a regra de visibilidade fica no CSS, ligada por esta classe no <body>.
+function marcarSessaoGeralNaPagina() { if (typeof document !== "undefined" && document.body) document.body.classList.toggle("sessao-geral", authGeral); }
+document.addEventListener("DOMContentLoaded", marcarSessaoGeralNaPagina);
 // Trava 6-A: turmas em que a pessoa logada é professor ativo (modo
 // professor da aba EBD) — recarregada a cada abrirPainelConteudo.
 let ebdTurmasProfessor = [];
 
-function salvarSessao(token, nome, permissoes, matricula, nivel) {
+function salvarSessao(token, nome, permissoes, matricula, nivel, escopo) {
   authToken = token;
   authNome = nome;
   authPermissoes = permissoes || [];
   authMatricula = matricula != null ? String(matricula) : authMatricula;
   authNivel = nivel || null;
+  authGeral = authNivel === "GLOBAL" && escopo === "TODAS";
+  sessionStorage.setItem("authGeral", authGeral ? "1" : "0");
+  marcarSessaoGeralNaPagina();
   sessionStorage.setItem("authToken", token);
   sessionStorage.setItem("authNome", nome || "");
   sessionStorage.setItem("authPermissoes", JSON.stringify(authPermissoes));
@@ -386,6 +394,9 @@ function limparSessao() {
   ebdTurmasProfessor = [];
   authMatricula = null;
   authNivel = null;
+  authGeral = false;
+  sessionStorage.removeItem("authGeral");
+  marcarSessaoGeralNaPagina();
   sessionStorage.removeItem("authToken");
   sessionStorage.removeItem("authNome");
   sessionStorage.removeItem("authPermissoes");
@@ -426,7 +437,8 @@ async function fetchProtegido(url, opts = {}) {
       mostrarToast("Assine os termos pendentes para continuar.", "erro");
       mostrarModalTermos(data.termosPendentes);
     } else {
-      mostrarToast("Você não tem permissão para essa ação.", "erro");
+      // o servidor diz o motivo (ex.: "Esta função é da administração geral da igreja.", "Fora do seu escopo de atuação."): mostra a mensagem dele
+      mostrarToast((data && typeof data.mensagem === "string" && data.mensagem) || "Você não tem permissão para essa ação.", "erro");
     }
   }
   return res;
@@ -504,7 +516,7 @@ async function acessarPainel() {
     if (!data.sucesso) { msg.textContent = data.mensagem; return; }
   }
 
-  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel);
+  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo);
   document.getElementById("senhaPainel").value = "";
   msg.textContent = "";
   if (data.pinProvisorio) { mostrarCriarPin(); return; }          // entrou com o PIN que a Secretaria gerou: precisa criar o próprio
@@ -1061,7 +1073,10 @@ function permissoesDaAba(nome) {
 // pro professor ativo de alguma turma sem "ebd_gestao" (modo professor) — o
 // backend já o deixava lançar chamada/resposta/pedido da própria turma desde
 // a v6.2, mas ele nunca via a tela (ebdTurmasProfessor: junto do estado de sessão).
+// Abas cujo servidor agora só atende o nível GERAL (catálogos e permissões: quem cadastra congregações, cargos e papéis): para os demais nem aparecem.
+const ABAS_SO_DO_GERAL = new Set(["catalogos", "permissoes", "auditoria", "protecaodedados"]);
 function temPermissaoDaAba(nome) {
+  if (ABAS_SO_DO_GERAL.has(nome) && !authGeral) return false;
   if (permissoesDaAba(nome).some(chave => authPermissoes.includes(chave))) return true;
   return nome === "ebd" && ebdTurmasProfessor.length > 0;
 }
@@ -1156,7 +1171,7 @@ function montarGradeModulos() {
   grade.innerHTML = chaves.map(chave => {
     const m = MODULOS[chave];
     return `<div class="card-modulo" onclick="entrarModulo('${chave}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
-      <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span>
+      <span class="icone-modulo">${m.icone}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
 }
@@ -1244,7 +1259,7 @@ async function carregarPainelInicial() {
   cx.style.display = "block";
   document.getElementById("gradePainelInicial").innerHTML = comValor.map((b) => `
     <div class="card-modulo" ${b.aba ? `onclick="irParaBlocoPainel('${b.aba}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)"` : ""}>
-      <span class="icone-modulo">${b.valor}</span><span>${b.titulo}</span>
+      <span class="icone-modulo">${b.valor}</span><span>${escaparHtmlEbd(b.titulo)}</span>
     </div>
   `).join("");
 }
@@ -1288,7 +1303,7 @@ async function carregarMinhasContribuicoes() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Termo</th><th>Congregação</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Status</th></tr></thead><tbody>`;
   contribuicoes.forEach(c => {
     html += `<tr>
-      <td>${c.mesReferencia}</td><td>${c.termoNumero || "—"}</td><td>${c.congregacaoNome}</td>
+      <td>${c.mesReferencia}</td><td>${c.termoNumero || "—"}</td><td>${escaparHtmlEbd(c.congregacaoNome)}</td>
       <td>${rotuloTipoLancamento(c.tipo)}</td><td>R$ ${Number(c.valor).toFixed(2)}</td>
       <td>${c.formaPagamento}</td>
       <td>${badgeStatusContribuicao(c)}</td>
@@ -1372,21 +1387,35 @@ const SUBMODULOS_FINANCEIRO = [
   { chave: "auditoria", titulo: "Auditoria e Compliance", icone: "🕵️", pronto: false }
 ];
 
+// Sub-abas do Financeiro que o servidor agora entrega SÓ ao nível geral (papel Global com escopo de todas as congregações): para os demais tesoureiros nem aparecem.
+const SUB_ABAS_FINANCEIRO_SO_GERAL = ["situacaotesouro", "orcamento", "demonstracoes", "rateiogeral", "prebenda", "conciliacao", "investimentos", "repasses", "seguros", "parametrosmonetarios", "obrigacoes", "imunidade"];
+function subAbaFinanceiraPermitida(nome) {
+  return authGeral || !SUB_ABAS_FINANCEIRO_SO_GERAL.includes(nome);
+}
+function aplicarSubAbasFinanceiro() {
+  SUB_ABAS_FINANCEIRO_SO_GERAL.forEach(nome => {
+    const botao = document.getElementById(`btnSubFinanceiro${capitalize(nome)}`);
+    if (botao) botao.style.display = subAbaFinanceiraPermitida(nome) ? "" : "none";
+  });
+}
+
 function montarGradeSubmodulosFinanceiro() {
   const grade = document.getElementById("gradeSubmodulosFinanceiro");
-  grade.innerHTML = SUBMODULOS_FINANCEIRO.map(m => {
+  grade.innerHTML = SUBMODULOS_FINANCEIRO.filter(m => !m.pronto || subAbaFinanceiraPermitida(m.subAba)).map(m => {
     if (!m.pronto) {
       return `<div class="card-modulo card-modulo-embreve" title="Ainda não construído — ver plano da FASE 4 no README">
-        <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span><span class="tag-pendente">Em breve</span>
+        <span class="icone-modulo">${m.icone}</span><span>${escaparHtmlEbd(m.titulo)}</span><span class="tag-pendente">Em breve</span>
       </div>`;
     }
     return `<div class="card-modulo" onclick="mostrarSubAbaFinanceiro('${m.subAba}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
-      <span class="icone-modulo">${m.icone}</span><span>${m.titulo}</span>
+      <span class="icone-modulo">${m.icone}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
 }
 
 function mostrarSubAbaFinanceiro(sub) {
+  if (!subAbaFinanceiraPermitida(sub)) sub = "visaogeral";
+  aplicarSubAbasFinanceiro();
   subAbaFinanceiroAtual = sub;
   chaveAjudaAtual = `financeiro:${sub}`;
   SUB_ABAS_FINANCEIRO.forEach(nome => {
@@ -1400,7 +1429,7 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "campanhas") { carregarOpcoesCongregacoesFinanceiro().then(carregarCampanhas); return; }
   if (sub === "saidas") {
     Promise.all([carregarOpcoesCongregacoesFinanceiro(), carregarOpcoesCategoriasSaida(), carregarOpcoesFornecedoresSaida(), carregarOpcoesCampanhasSaida(), carregarValorReferenciaCotacoes()])
-      .then(() => { carregarFornecedores(); carregarSaidas(); carregarFundosFixos(); carregarDadosBancariosInstituicao(); carregarRemessas(); });
+      .then(() => { carregarFornecedores(); carregarSaidas(); carregarFundosFixos(); if (authGeral) { carregarDadosBancariosInstituicao(); carregarRemessas(); } });
     return;
   }
   if (sub === "receber") {
@@ -1519,14 +1548,14 @@ function mostrarSubAbaFinanceiro(sub) {
 // (ex: "Entrada de Ação Social") já basta pra ela aparecer aqui.
 async function carregarOpcoesCategoriasEntrada() {
   if (!_categoriasEntradaCache) {
-    const res = await fetch(`${API_BASE}/catalogos/categoriasEntrada`);
+    const res = await fetchProtegido(`${API_BASE}/catalogos/categoriasEntrada`);
     _categoriasEntradaCache = await res.json();
   }
   ["financeiroLancTipo", "autolancTipo", "receberTipo"].forEach(idSelect => {
     const select = document.getElementById(idSelect);
     if (select && !select.dataset.montado) {
       select.innerHTML = _categoriasEntradaCache.filter(c => c.ativa !== false)
-        .map(c => `<option value="${c.codigo}">${c.nome}</option>`).join("");
+        .map(c => `<option value="${c.codigo}">${escaparHtmlEbd(c.nome)}</option>`).join("");
       select.dataset.montado = "1";
     }
   });
@@ -1547,12 +1576,12 @@ function mesAtualFinanceiro() {
 // mesma consulta a cada troca de sub-aba.
 async function carregarOpcoesCongregacoesFinanceiro() {
   if (!_congregacoesFinanceiroCache) {
-    const res = await fetch(`${API_BASE}/catalogos/congregacoes`);
+    const res = await fetchProtegido(`${API_BASE}/catalogos/congregacoes`);
     _congregacoesFinanceiroCache = await res.json();
   }
   const opcoes = _congregacoesFinanceiroCache
     .filter(c => c.ativa !== false)
-    .map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    .map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
   ["financeiroLancCongregacao", "financeiroFechCongregacao", "financeiroRelCongregacao", "financeiroParamCongregacao", "financeiroDizCongregacao", "saidaCongregacao", "fundoFixoCongregacao", "receberCongregacao", "fluxoCongregacao", "casaCongregacao", "invCongregacao", "cessaoCongregacao", "doacaoCongregacao", "obraCongregacao"].forEach(id => {
     const select = document.getElementById(id);
     if (select && !select.dataset.montado) {
@@ -1597,7 +1626,7 @@ function montarMetasBuilderCampanha() {
   container.innerHTML = `<table class="tabela-frequencia"><thead><tr><th></th><th>Congregação</th><th>Meta (R$)</th></tr></thead><tbody>
     ${congregacoes.map(c => `<tr>
       <td><input type="checkbox" class="chk-meta-campanha" value="${c.congregacaoId}" /></td>
-      <td>${c.nome}</td>
+      <td>${escaparHtmlEbd(c.nome)}</td>
       <td><input type="number" class="valor-meta-campanha" min="0.01" step="0.01" style="max-width:130px;" placeholder="0,00" /></td>
     </tr>`).join("")}
   </tbody></table>`;
@@ -1651,11 +1680,13 @@ async function carregarCampanhas() {
     container.innerHTML = "<p class='subtitle'>Nenhuma campanha cadastrada ainda.</p>";
     return;
   }
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Progresso</th><th>Status</th><th></th></tr></thead><tbody>`;
+  // Quem não é da administração geral vê os números só das congregações do seu escopo (o servidor marca com agregadoDoEscopo).
+  let html = (campanhas.some(c => c.agregadoDoEscopo) ? "<p class='subtitle'>Os valores de meta e arrecadação abaixo são das congregações do seu escopo.</p>" : "") +
+    `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Progresso</th><th>Status</th><th></th></tr></thead><tbody>`;
   campanhas.forEach(c => {
     const statusClasse = c.status === "ATIVA" ? "badge-ativo" : (c.status === "ENCERRADA" ? "badge-licenca" : "badge-desligado");
     html += `<tr>
-      <td>${c.nome}${c.totalSorteios > 0 ? ` <small>🎟️ ${c.totalSorteios} sorteio(s)</small>` : ""}</td>
+      <td>${escaparHtmlEbd(c.nome)}${c.totalSorteios > 0 ? ` <small>🎟️ ${c.totalSorteios} sorteio(s)</small>` : ""}</td>
       <td>${barraProgressoCampanha(c.totalArrecadado, c.metaTotal)}</td>
       <td><span class="badge-status ${statusClasse}">${c.status}</span></td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheCampanhaAcao(${c.campanhaId})">Ver detalhe</button></td>
@@ -1671,13 +1702,13 @@ async function verDetalheCampanhaAcao(campanhaId) {
   const c = await res.json();
   if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${c.mensagem}</p>`; return; }
 
-  let html = `<hr /><h3>${c.nome}</h3>`;
-  if (c.descricao) html += `<p class="subtitle">${c.descricao}</p>`;
+  let html = `<hr /><h3>${escaparHtmlEbd(c.nome)}</h3>`;
+  if (c.descricao) html += `<p class="subtitle">${escaparHtmlEbd(c.descricao)}</p>`;
   html += `<p class="subtitle">Período: ${c.dataInicio}${c.dataFim ? ` até ${c.dataFim}` : " (sem data de fim)"} — Status: <span class="badge-status ${c.status === "ATIVA" ? "badge-ativo" : (c.status === "ENCERRADA" ? "badge-licenca" : "badge-desligado")}">${c.status}</span></p>`;
 
   html += `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Meta</th><th>Arrecadado</th></tr></thead><tbody>`;
   c.metas.forEach(m => {
-    html += `<tr><td>${m.congregacaoNome}</td><td>R$ ${Number(m.metaValor).toFixed(2)}</td><td>R$ ${Number(m.totalArrecadado).toFixed(2)}</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(m.congregacaoNome)}</td><td>R$ ${Number(m.metaValor).toFixed(2)}</td><td>R$ ${Number(m.totalArrecadado).toFixed(2)}</td></tr>`;
   });
   html += "</tbody></table>";
 
@@ -1752,7 +1783,7 @@ async function carregarSorteiosCampanha(campanhaId) {
   for (const s of sorteios) {
     const statusClasse = s.status === "ATIVO" ? "badge-ativo" : (s.status === "REALIZADO" ? "badge-licenca" : "badge-desligado");
     html += `<div style="border:1px solid #e0e0e0; border-radius:8px; padding:10px; margin-bottom:10px;">
-      <strong>${s.nome}</strong> <span class="badge-status ${statusClasse}">${s.status}</span>
+      <strong>${escaparHtmlEbd(s.nome)}</strong> <span class="badge-status ${statusClasse}">${s.status}</span>
       ${s.precoCupom ? ` — cupom R$ ${Number(s.precoCupom).toFixed(2)}` : ""}${s.dataSorteio ? ` — sorteio em ${s.dataSorteio}` : ""}
       <br /><small>${s.premiosComGanhador} de ${s.totalPremios} prêmio(s) já com ganhador registrado</small>
       <div id="detalheSorteio_${s.sorteioId}" style="margin-top:8px;"></div>
@@ -1771,7 +1802,7 @@ async function verDetalheSorteioAcao(campanhaId, sorteioId) {
   s.premios.forEach(p => {
     const podeEditar = authNivel === "GLOBAL" && s.status !== "CANCELADO";
     html += `<tr>
-      <td>${p.ordem}</td><td>${p.descricao}</td>
+      <td>${p.ordem}</td><td>${escaparHtmlEbd(p.descricao)}</td>
       <td>${podeEditar
         ? `<input type="text" id="ganhadorPremio_${p.premioId}" value="${p.nomeGanhador || ""}" placeholder="Nome de quem ganhou" style="max-width:200px;" />
            <button class="btn-link" onclick="registrarGanhadorAcao(${campanhaId}, ${sorteioId}, ${p.premioId})">Salvar</button>`
@@ -1824,12 +1855,12 @@ let _fornecedoresSaidaCache = null;
 let _campanhasSaidaCache = null;
 
 async function carregarOpcoesCategoriasSaida() {
-  const res = await fetch(`${API_BASE}/catalogos/categoriasSaida`);
+  const res = await fetchProtegido(`${API_BASE}/catalogos/categoriasSaida`);
   _categoriasSaidaCache = await res.json();
   const select = document.getElementById("saidaTipo");
   if (select) {
     select.innerHTML = _categoriasSaidaCache.filter(c => c.ativa !== false)
-      .map(c => `<option value="${c.codigo}">${c.nome} (${c.centroCusto === "GERAL" ? "Geral" : "Local"}${c.tipoFundo === "RESTRITO" ? " — restrito" : ""})</option>`).join("");
+      .map(c => `<option value="${c.codigo}">${escaparHtmlEbd(c.nome)} (${c.centroCusto === "GERAL" ? "Geral" : "Local"}${c.tipoFundo === "RESTRITO" ? " — restrito" : ""})</option>`).join("");
   }
 }
 
@@ -1840,7 +1871,7 @@ async function carregarOpcoesFornecedoresSaida() {
   if (select) {
     select.innerHTML = (Array.isArray(_fornecedoresSaidaCache) ? _fornecedoresSaidaCache : [])
       .filter(f => f.ativo !== false)
-      .map(f => `<option value="${f.fornecedorId}">${f.nome}${!f.dadosBancariosConfirmados ? " ⚠️ dados bancários pendentes" : ""}</option>`).join("");
+      .map(f => `<option value="${Number(f.fornecedorId)}">${escaparHtmlEbd(f.nome)}${!f.dadosBancariosConfirmados ? " ⚠️ dados bancários pendentes" : ""}</option>`).join("");
   }
 }
 
@@ -1848,7 +1879,7 @@ async function carregarOpcoesCampanhasSaida() {
   const res = await fetchProtegido(`${API_BASE}/campanhas`);
   const campanhas = await res.json();
   _campanhasSaidaCache = Array.isArray(campanhas) ? campanhas.filter(c => c.status === "ATIVA") : [];
-  const opcoes = _campanhasSaidaCache.map(c => `<option value="${c.campanhaId}">${c.nome}</option>`).join("");
+  const opcoes = _campanhasSaidaCache.map(c => `<option value="${c.campanhaId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
   const select = document.getElementById("saidaCampanha");
   if (select) select.innerHTML = opcoes;
   const selectReceber = document.getElementById("receberCampanha");
@@ -1906,14 +1937,15 @@ async function carregarFornecedores() {
     container.innerHTML = "<p class='subtitle'>Nenhum fornecedor cadastrado ainda.</p>";
     return;
   }
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CPF/CNPJ</th><th>Dados bancários</th><th></th></tr></thead><tbody>`;
+  // Só a administração geral vê CPF/CNPJ e dados bancários dos fornecedores, confirma os dados e anexa documentos; o tesoureiro local recebe só nome e situação.
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th>${authGeral ? "<th>CPF/CNPJ</th>" : ""}<th>Dados bancários</th><th></th></tr></thead><tbody>`;
   fornecedores.forEach(f => {
     html += `<tr>
-      <td>${f.nome}</td><td>${f.cpfCnpj}</td>
+      <td>${escaparHtmlEbd(f.nome)}</td>${authGeral ? `<td>${escaparHtmlEbd(f.cpfCnpj)}</td>` : ""}
       <td>${f.dadosBancariosConfirmados ? "<span class='badge-status badge-ativo'>Confirmados</span>" : "<span class='badge-status badge-pendente'>⚠️ Pendente de confirmação</span>"}</td>
       <td class="acoes-inline">
-        ${!f.dadosBancariosConfirmados ? `<button class="btn-link" onclick="confirmarDadosBancariosFornecedorAcao(${f.fornecedorId})">Confirmar</button>` : ""}
-        <button class="btn-link" onclick="abrirModalAnexos('Fornecedores', ${f.fornecedorId}, '${f.nome.replace(/'/g, "\\'")}')">📎 Anexos</button>
+        ${authGeral && !f.dadosBancariosConfirmados ? `<button class="btn-link" onclick="confirmarDadosBancariosFornecedorAcao(${Number(f.fornecedorId)})">Confirmar</button>` : ""}
+        ${authGeral ? `<button class="btn-link" onclick="abrirModalAnexos('Fornecedores', ${Number(f.fornecedorId)}, '${String(f.nome).replace(/[\\']/g, "").replace(/[<>"&]/g, "")}')">📎 Anexos</button>` : ""}
       </td>
     </tr>`;
   });
@@ -2080,7 +2112,7 @@ async function carregarSaidas() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Fornecedor</th><th>Categoria</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>`;
   saidas.forEach(s => {
     html += `<tr>
-      <td>${s.congregacaoNome}</td><td>${s.fornecedorNome}</td><td>${s.categoriaNome}</td>
+      <td>${escaparHtmlEbd(s.congregacaoNome)}</td><td>${s.fornecedorNome}</td><td>${s.categoriaNome}</td>
       <td>R$ ${Number(s.valor).toFixed(2)}${s.possivelDuplicidade ? " ⚠️" : ""}</td><td>${badgeStatusSaida(s.status)}</td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheSaidaAcao(${s.saidaId})">Ver detalhe</button></td>
     </tr>`;
@@ -2096,7 +2128,7 @@ async function verDetalheSaidaAcao(saidaId) {
   if (s.sucesso === false) { container.innerHTML = `<p class="subtitle">${s.mensagem}</p>`; return; }
 
   let html = `<hr /><h4>${s.fornecedorNome} — R$ ${Number(s.valor).toFixed(2)} ${badgeStatusSaida(s.status)}</h4>
-    <p class="subtitle">${s.descricao}${s.campanhaNome ? ` — campanha: ${s.campanhaNome}` : ""}</p>
+    <p class="subtitle">${escaparHtmlEbd(s.descricao)}${s.campanhaNome ? ` — campanha: ${s.campanhaNome}` : ""}</p>
     <p class="subtitle">Solicitado por ${s.solicitadoPorNome} em ${new Date(s.solicitadoEm).toLocaleString("pt-BR")}</p>
     <p class="subtitle"><a href="${s.documentoFiscalUrl}" target="_blank" rel="noopener">📎 Nota fiscal / recibo</a>${s.comprovantePagamentoUrl ? ` — <a href="${s.comprovantePagamentoUrl}" target="_blank" rel="noopener">📎 Comprovante de pagamento</a>` : ""}</p>`;
 
@@ -2217,7 +2249,7 @@ async function carregarFundosFixos() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Custodiante</th><th>Teto</th><th>Saldo atual</th><th>Status</th><th></th></tr></thead><tbody>`;
   fundos.forEach(f => {
     html += `<tr>
-      <td>${f.congregacaoNome}</td><td>${f.custodianteNome}</td>
+      <td>${escaparHtmlEbd(f.congregacaoNome)}</td><td>${f.custodianteNome}</td>
       <td>R$ ${Number(f.valorTeto).toFixed(2)}</td><td>R$ ${Number(f.saldoAtual).toFixed(2)}</td>
       <td><span class="badge-status ${f.status === "ATIVO" ? "badge-ativo" : "badge-inativo"}">${f.status}</span></td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheFundoFixoAcao(${f.fundoId})">Ver detalhe</button></td>
@@ -2236,7 +2268,7 @@ async function verDetalheFundoFixoAcao(fundoId) {
   const resMov = await fetchProtegido(`${API_BASE}/fundos-fixos/${fundoId}/movimentos`);
   const movimentos = await resMov.json();
 
-  let html = `<hr /><h4>${f.congregacaoNome} — custodiante: ${f.custodianteNome}</h4>
+  let html = `<hr /><h4>${escaparHtmlEbd(f.congregacaoNome)} — custodiante: ${f.custodianteNome}</h4>
     <p class="subtitle">Teto: R$ ${Number(f.valorTeto).toFixed(2)} — Saldo atual: R$ ${Number(f.saldoAtual).toFixed(2)}</p>`;
 
   if (f.status === "ATIVO") {
@@ -2267,7 +2299,7 @@ async function verDetalheFundoFixoAcao(fundoId) {
     movimentos.forEach(m => {
       html += `<tr>
         <td>${m.tipo === "DESPESA" ? "Despesa" : "Reposição"}</td><td>R$ ${Number(m.valor).toFixed(2)}</td>
-        <td>${m.descricao}</td><td>${m.registradoPorNome}</td>
+        <td>${escaparHtmlEbd(m.descricao)}</td><td>${escaparHtmlEbd(m.registradoPorNome)}</td>
         <td><a href="${m.documentoUrl}" target="_blank" rel="noopener">📎</a></td>
       </tr>`;
     });
@@ -2434,7 +2466,7 @@ function montarBuilderLinhasOrcamento() {
   const saidas = (_categoriasSaidaCache || []).filter(c => c.ativa !== false);
   const linha = c => `<tr>
       <td><input type="checkbox" class="chk-linha-orcamento" data-tipo="${c._tipo}" value="${c.codigo}" /></td>
-      <td>${c.nome}</td>
+      <td>${escaparHtmlEbd(c.nome)}</td>
       <td><input type="number" class="valor-linha-orcamento" min="0.01" step="0.01" style="max-width:130px;" placeholder="0,00" /></td>
     </tr>`;
   entradas.forEach(c => c._tipo = "ENTRADA");
@@ -2598,7 +2630,7 @@ async function carregarPlanosPdq() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Período</th><th>Título</th><th>Eixos</th><th>Metas</th><th>Status</th><th></th></tr></thead><tbody>`;
   planos.forEach(p => {
     html += `<tr>
-      <td>${p.anoInicio}-${p.anoFim}</td><td>${p.titulo}</td><td>${p.totalEixos}</td><td>${p.totalMetas}</td>
+      <td>${p.anoInicio}-${p.anoFim}</td><td>${escaparHtmlEbd(p.titulo)}</td><td>${p.totalEixos}</td><td>${p.totalMetas}</td>
       <td><span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : (p.status === "ENCERRADO" ? "badge-inativo" : "badge-licenca")}">${p.status}</span></td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalhePlanoPdqAcao(${p.planoId})">Ver detalhe</button></td>
     </tr>`;
@@ -2619,7 +2651,7 @@ async function verDetalhePlanoPdqAcao(planoId) {
   if (p.sucesso === false) { container.innerHTML = `<p class="subtitle">${p.mensagem}</p>`; return; }
   _pdqPlanoDetalheCache = p;
 
-  let html = `<hr /><h4>${p.titulo} (${p.anoInicio}-${p.anoFim}) — <span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : "badge-inativo"}">${p.status}</span></h4>`;
+  let html = `<hr /><h4>${escaparHtmlEbd(p.titulo)} (${p.anoInicio}-${p.anoFim}) — <span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : "badge-inativo"}">${p.status}</span></h4>`;
   if (p.status !== "ENCERRADO") {
     html += `<select id="pdqStatusPlano_${planoId}">
         <option value="EM_ELABORACAO" ${p.status === "EM_ELABORACAO" ? "selected" : ""}>Em elaboração</option>
@@ -2633,11 +2665,11 @@ async function verDetalhePlanoPdqAcao(planoId) {
 
   p.eixos.forEach(eixo => {
     html += `<div style="border:1px solid #e0e0e0; border-radius:8px; padding:12px; margin-top:12px;">
-      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">📍 ${eixo.nome}</h4>`;
+      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">📍 ${escaparHtmlEbd(eixo.nome)}</h4>`;
     eixo.metas.forEach(meta => {
       html += `<div style="margin:10px 0 10px 14px; padding-left:10px; border-left:3px solid #ddd;">
-        <strong>${meta.descricao}</strong> ${badgeStatusPdqMeta(meta.status)} ${meta.indicador ? `<br /><small>Indicador: ${meta.indicador}</small>` : ""} <small>— prazo ${meta.prazoAno}</small>
-        ${meta.justificativaTecnica ? `<br /><small>Justificativa: ${meta.justificativaTecnica}</small>` : ""}
+        <strong>${escaparHtmlEbd(meta.descricao)}</strong> ${badgeStatusPdqMeta(meta.status)} ${meta.indicador ? `<br /><small>Indicador: ${meta.indicador}</small>` : ""} <small>— prazo ${meta.prazoAno}</small>
+        ${meta.justificativaTecnica ? `<br /><small>Justificativa: ${escaparHtmlEbd(meta.justificativaTecnica)}</small>` : ""}
         <div class="barra-lista" style="margin-top:6px;">
           <select id="pdqStatusMeta_${meta.metaId}">
             <option value="EM_ANDAMENTO" ${meta.status === "EM_ANDAMENTO" ? "selected" : ""}>Em andamento</option>
@@ -2648,7 +2680,7 @@ async function verDetalhePlanoPdqAcao(planoId) {
         </div>`;
       meta.projetos.forEach(proj => {
         html += `<div style="margin:8px 0 8px 14px; padding:8px; background:#f7f7f7; border-radius:6px;">
-          <strong>${proj.nome}</strong> — R$ ${Number(proj.orcamentoPrevisto).toFixed(2)}
+          <strong>${escaparHtmlEbd(proj.nome)}</strong> — R$ ${Number(proj.orcamentoPrevisto).toFixed(2)}
           <span class="badge-status ${proj.status === "CONCLUIDO" ? "badge-ativo" : (proj.status === "CANCELADO" ? "badge-inativo" : "badge-licenca")}">${proj.status}</span>
           ${proj.atrasado ? "<span class='badge-status badge-desligado'>ATRASADO</span>" : ""}
           <br /><small>${proj.cronogramaInicio} até ${proj.cronogramaFim}</small>
@@ -3017,7 +3049,7 @@ async function carregarSituacaoTesouroAcao() {
   html += `<h4 style="margin:18px 0 8px; color: var(--cor-primaria);">Saldo Local por congregação</h4>
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Saldo Local</th></tr></thead><tbody>`;
   d.porCongregacao.forEach(c => {
-    html += `<tr><td>${c.congregacaoNome}</td><td>R$ ${Number(c.saldoLocal).toFixed(2)}</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>R$ ${Number(c.saldoLocal).toFixed(2)}</td></tr>`;
   });
   html += "</tbody></table>";
 
@@ -3028,7 +3060,7 @@ async function carregarSituacaoTesouroAcao() {
     html += `<h4 style="margin:18px 0 8px; color: var(--cor-primaria);">Departamentos e Secretarias (fundo próprio, Art. 49)</h4>
       <table class="tabela-frequencia"><thead><tr><th>Departamento</th><th>Saldo Local consolidado</th><th>Saldo Geral (último balancete fechado)</th></tr></thead><tbody>`;
     d.porDepartamento.forEach(dep => {
-      html += `<tr><td>${dep.nome}</td><td>R$ ${Number(dep.saldoLocalConsolidado).toFixed(2)}</td>
+      html += `<tr><td>${escaparHtmlEbd(dep.nome)}</td><td>R$ ${Number(dep.saldoLocalConsolidado).toFixed(2)}</td>
         <td>${dep.saldoGeralUltimoBalancete === null ? "nunca fechado" : `R$ ${Number(dep.saldoGeralUltimoBalancete).toFixed(2)}`}</td></tr>`;
     });
     html += "</tbody></table>";
@@ -3052,13 +3084,13 @@ async function carregarMalotePendenteAcao() {
   }
   let html = `<p class="subtitle"><strong>${d.totalItens} repasse(s)</strong> pendente(s), total <strong>R$ ${Number(d.totalBase).toFixed(2)}</strong>. Previsão se fechar agora:</p>
     <table class="tabela-frequencia"><thead><tr><th>Destino</th><th>%</th><th>Valor previsto</th></tr></thead><tbody>`;
-  d.previsaoDestinos.forEach(p => html += `<tr><td>${p.nome}</td><td>${p.percentual}%</td><td>R$ ${Number(p.valor).toFixed(2)}</td></tr>`);
+  d.previsaoDestinos.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${p.percentual}%</td><td>R$ ${Number(p.valor).toFixed(2)}</td></tr>`);
   html += `<tr><td><strong>Tesouro Geral (resto)</strong></td><td></td><td><strong>R$ ${Number(d.previsaoTesouroGeral).toFixed(2)}</strong></td></tr></tbody></table>`;
 
   html += `<h4 style="margin:14px 0 6px; color: var(--cor-primaria);">Repasses no malote</h4>
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Valor</th><th>Atraso</th></tr></thead><tbody>`;
   d.itens.forEach(i => {
-    html += `<tr><td>${i.congregacaoNome}</td><td>${i.mesReferencia}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
+    html += `<tr><td>${escaparHtmlEbd(i.congregacaoNome)}</td><td>${i.mesReferencia}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
       <td>${i.mesesAtraso > 0 ? `<span class="badge-status badge-pendente">${i.mesesAtraso} mês(es)</span>` : "—"}</td></tr>`;
   });
   html += "</tbody></table>";
@@ -3108,7 +3140,7 @@ async function verDetalheRateioGeralAcao(rateioGeralId) {
 
   html += `<h4 style="margin:14px 0 6px; color: var(--cor-primaria);">Repasses incluídos</h4>
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Valor</th></tr></thead><tbody>`;
-  r.itens.forEach(i => html += `<tr><td>${i.congregacaoNome}</td><td>${i.mesReferenciaCongregacao}</td><td>R$ ${Number(i.valor).toFixed(2)}</td></tr>`);
+  r.itens.forEach(i => html += `<tr><td>${escaparHtmlEbd(i.congregacaoNome)}</td><td>${i.mesReferenciaCongregacao}</td><td>R$ ${Number(i.valor).toFixed(2)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3156,7 +3188,7 @@ async function carregarOpcoesFornecedoresPrebenda() {
   const res = await fetchProtegido(`${API_BASE}/fornecedores`);
   const fornecedores = await res.json();
   select.innerHTML = `<option value="">— Selecione (PF) —</option>` +
-    (Array.isArray(fornecedores) ? fornecedores.filter(f => f.tipo === "PF").map(f => `<option value="${f.fornecedorId}">${f.nome}</option>`).join("") : "");
+    (Array.isArray(fornecedores) ? fornecedores.filter(f => f.tipo === "PF").map(f => `<option value="${f.fornecedorId}">${escaparHtmlEbd(f.nome)}</option>`).join("") : "");
 }
 
 async function carregarPrebendadosAcao() {
@@ -3168,7 +3200,7 @@ async function carregarPrebendadosAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>CPF</th><th>Valor</th><th>Início</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(p => html += `<tr><td>${p.nome}</td><td>${p.cpf}</td><td>R$ ${Number(p.valorMensalReferencia).toFixed(2)}</td><td>${p.dataInicio.slice(0, 10)}</td><td>${p.status}</td></tr>`);
+  lista.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${p.cpf}</td><td>R$ ${Number(p.valorMensalReferencia).toFixed(2)}</td><td>${p.dataInicio.slice(0, 10)}</td><td>${p.status}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3178,7 +3210,7 @@ async function carregarOpcoesPrebendadosSelecao() {
   const lista = await res.json();
   const risco = document.getElementById("prebendaRiscoPrebendado");
   const aux = document.getElementById("prebendaAuxPrebendado");
-  const opcoes = `<option value="">— Selecione —</option>` + (Array.isArray(lista) ? lista.map(p => `<option value="${p.prebendadoId}">${p.nome}</option>`).join("") : "");
+  const opcoes = `<option value="">— Selecione —</option>` + (Array.isArray(lista) ? lista.map(p => `<option value="${p.prebendadoId}">${escaparHtmlEbd(p.nome)}</option>`).join("") : "");
   risco.innerHTML = opcoes;
   aux.innerHTML = opcoes;
 }
@@ -3212,7 +3244,7 @@ async function carregarFolhaPrebendaAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Ministro</th><th>Bruto</th><th>IRRF</th><th>Líquido</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(g => html += `<tr><td>${g.mesReferencia}</td><td>${g.nome}</td><td>R$ ${Number(g.valorBruto).toFixed(2)}</td><td>R$ ${Number(g.irrfRetido).toFixed(2)}</td><td>R$ ${Number(g.valorLiquido).toFixed(2)}</td><td>${g.status}${g.alertaRisco ? " ⚠️" : ""}</td></tr>`);
+  lista.forEach(g => html += `<tr><td>${g.mesReferencia}</td><td>${escaparHtmlEbd(g.nome)}</td><td>R$ ${Number(g.valorBruto).toFixed(2)}</td><td>R$ ${Number(g.irrfRetido).toFixed(2)}</td><td>R$ ${Number(g.valorLiquido).toFixed(2)}</td><td>${g.status}${g.alertaRisco ? " ⚠️" : ""}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3237,7 +3269,7 @@ async function carregarRiscosVinculoAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody>`;
-  lista.forEach(r => html += `<tr><td>${r.nome}</td><td>${r.tipoRisco}</td><td>${r.descricao}</td><td><button class="btn-link" onclick="resolverRiscoVinculoAcao(${r.riscoVinculoId})">Resolver</button></td></tr>`);
+  lista.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${r.tipoRisco}</td><td>${escaparHtmlEbd(r.descricao)}</td><td><button class="btn-link" onclick="resolverRiscoVinculoAcao(${r.riscoVinculoId})">Resolver</button></td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3269,7 +3301,7 @@ async function carregarAuxiliosCustoAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Tipo</th><th>Natureza</th><th>Valor</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(a => html += `<tr><td>${a.nome}</td><td>${a.tipo}</td><td>${a.naturezaFiscal}</td><td>R$ ${Number(a.valorMensal).toFixed(2)}</td><td>${a.status}</td></tr>`);
+  lista.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.nome)}</td><td>${a.tipo}</td><td>${a.naturezaFiscal}</td><td>R$ ${Number(a.valorMensal).toFixed(2)}</td><td>${a.status}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3292,7 +3324,7 @@ async function salvarAuxilioCustoAcao() {
 async function carregarOpcoesBens() {
   const res = await fetchProtegido(`${API_BASE}/bens-patrimoniais`);
   const lista = await res.json();
-  const opcoes = `<option value="">— Selecione —</option>` + (Array.isArray(lista) ? lista.map(b => `<option value="${b.bemId}">${b.descricao}</option>`).join("") : "");
+  const opcoes = `<option value="">— Selecione —</option>` + (Array.isArray(lista) ? lista.map(b => `<option value="${b.bemId}">${escaparHtmlEbd(b.descricao)}</option>`).join("") : "");
   ["alienacaoBemId", "docBemId", "casaBemId"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = opcoes; });
 }
 
@@ -3305,7 +3337,7 @@ async function carregarBensPatrimoniaisAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Tipo</th><th>Valor original</th><th>Aquisição</th><th>Líquido</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(b => html += `<tr><td>${b.descricao}</td><td>${b.tipo}</td><td>R$ ${Number(b.valorAquisicao).toFixed(2)}</td><td>${b.dataAquisicao.slice(0, 10)}</td><td>R$ ${Number(b.valorContabilLiquido).toFixed(2)}</td><td>${b.status}</td></tr>`);
+  lista.forEach(b => html += `<tr><td>${escaparHtmlEbd(b.descricao)}</td><td>${b.tipo}</td><td>R$ ${Number(b.valorAquisicao).toFixed(2)}</td><td>${b.dataAquisicao.slice(0, 10)}</td><td>R$ ${Number(b.valorContabilLiquido).toFixed(2)}</td><td>${b.status}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
   carregarOpcoesBens();
@@ -3339,7 +3371,7 @@ async function carregarAlienacoesBensAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Valor proposto</th><th>Alçada</th><th>Status</th><th></th></tr></thead><tbody>`;
   lista.forEach(a => html += `<tr>
-    <td>${a.bemDescricao}</td><td>R$ ${Number(a.ValorProposto).toFixed(2)}</td><td>${a.AprovacaoNecessaria}</td><td>${a.Status}</td>
+    <td>${escaparHtmlEbd(a.bemDescricao)}</td><td>R$ ${Number(a.ValorProposto).toFixed(2)}</td><td>${a.AprovacaoNecessaria}</td><td>${a.Status}</td>
     <td>${a.Status === "PROPOSTA" ? `<button class="btn-link" onclick="abrirParecerViabilidadeAcao(${a.AlienacaoId})">📋 Parecer de Viabilidade (Art. 31)</button>` : ""}</td>
   </tr>`);
   html += "</tbody></table>";
@@ -3401,7 +3433,7 @@ async function carregarDocumentosBensAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Descrição</th><th>Responsável</th></tr></thead><tbody>`;
-  lista.forEach(d => html += `<tr><td>${d.tipoDocumento}</td><td>${d.descricao}</td><td>${d.responsavelCargo}</td></tr>`);
+  lista.forEach(d => html += `<tr><td>${d.tipoDocumento}</td><td>${escaparHtmlEbd(d.descricao)}</td><td>${d.responsavelCargo}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3458,7 +3490,7 @@ async function carregarOcupacoesCasaPastoralAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Casa</th><th>Dirigente</th><th>Congregação</th><th>Início</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(o => html += `<tr><td>${o.casaDescricao}</td><td>${o.ocupanteNome}</td><td>${o.congregacaoNome}</td><td>${o.dataInicio.slice(0, 10)}</td><td>${o.status}</td></tr>`);
+  lista.forEach(o => html += `<tr><td>${o.casaDescricao}</td><td>${o.ocupanteNome}</td><td>${escaparHtmlEbd(o.congregacaoNome)}</td><td>${o.dataInicio.slice(0, 10)}</td><td>${o.status}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3489,7 +3521,7 @@ async function carregarAlertasFrotaAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Licenciamento</th><th>Seguro</th><th>Próx. manutenção</th></tr></thead><tbody>`;
   lista.forEach(a => {
-    html += `<tr><td>${a.bemDescricao}</td>
+    html += `<tr><td>${escaparHtmlEbd(a.bemDescricao)}</td>
       <td>${a.licenciamentoAlerta ? "⚠️ " : ""}${a.licenciamentoVencimento || "não informado"}</td>
       <td>${a.seguroAlerta ? "⚠️ " : ""}${a.seguroVencimento || "sem apólice ativa"}</td>
       <td>${a.manutencaoAlerta ? "⚠️ " : ""}${a.proximaManutencaoAgendada || "-"}</td></tr>`;
@@ -3508,7 +3540,7 @@ async function carregarFrotaAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Placa</th><th>Identificação visual</th><th>Presidencial</th><th>Licenciamento</th></tr></thead><tbody>`;
   lista.forEach(v => {
-    html += `<tr><td>${v.descricao}</td><td>${v.placa || "-"}</td><td>${v.identificacaoVisualPendente ? "⚠️ pendente" : "✅"}</td>
+    html += `<tr><td>${escaparHtmlEbd(v.descricao)}</td><td>${v.placa || "-"}</td><td>${v.identificacaoVisualPendente ? "⚠️ pendente" : "✅"}</td>
       <td>${v.ehVeiculoPresidencial ? "✅" : "-"}</td><td>${v.licenciamentoVencimento || "-"} (${v.licenciamentoSituacao})</td></tr>`;
   });
   html += "</tbody></table>";
@@ -3540,7 +3572,7 @@ async function carregarTermosConducaoAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Veículo</th><th>Condutor</th><th>Missão</th><th>Período</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(t => html += `<tr><td>${t.TermoId}</td><td>${t.bemDescricao}</td><td>${t.condutorNome}</td><td>${t.MissaoDescricao}</td><td>${t.DataInicioMissao} a ${t.DataFimPrevista}</td><td>${t.Status}</td></tr>`);
+  lista.forEach(t => html += `<tr><td>${t.TermoId}</td><td>${escaparHtmlEbd(t.bemDescricao)}</td><td>${t.condutorNome}</td><td>${t.MissaoDescricao}</td><td>${t.DataInicioMissao} a ${t.DataFimPrevista}</td><td>${t.Status}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3574,7 +3606,7 @@ async function carregarRetiradasChaveAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Veículo</th><th>Condutor</th><th>Retirada</th><th>Devolução</th><th>Ação</th></tr></thead><tbody>`;
   lista.forEach(r => {
-    html += `<tr><td>${r.RetiradaId}</td><td>${r.bemDescricao}</td><td>${r.condutorNome}</td><td>${new Date(r.DataHoraRetirada).toLocaleString("pt-BR")}</td><td>${r.DataHoraDevolucao ? new Date(r.DataHoraDevolucao).toLocaleString("pt-BR") : "-"}</td>
+    html += `<tr><td>${r.RetiradaId}</td><td>${escaparHtmlEbd(r.bemDescricao)}</td><td>${r.condutorNome}</td><td>${new Date(r.DataHoraRetirada).toLocaleString("pt-BR")}</td><td>${r.DataHoraDevolucao ? new Date(r.DataHoraDevolucao).toLocaleString("pt-BR") : "-"}</td>
       <td>${r.DataHoraDevolucao ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDevolucaoChaveAcao(${r.RetiradaId})">Devolver</button>`}</td></tr>`;
   });
   html += "</tbody></table>";
@@ -3608,7 +3640,7 @@ async function carregarManutencoesVeiculoAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Tipo</th><th>Agendada</th><th>Realizada</th><th>Ação</th></tr></thead><tbody>`;
   lista.forEach(m => {
-    html += `<tr><td>${m.bemDescricao}</td><td>${m.TipoManutencao}</td><td>${m.DataAgendada}</td><td>${m.DataRealizada || "-"}</td>
+    html += `<tr><td>${escaparHtmlEbd(m.bemDescricao)}</td><td>${m.TipoManutencao}</td><td>${m.DataAgendada}</td><td>${m.DataRealizada || "-"}</td>
       <td>${m.DataRealizada ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="concluirManutencaoVeiculoAcao(${m.ManutencaoId})">Concluir</button>`}</td></tr>`;
   });
   html += "</tbody></table>";
@@ -3642,7 +3674,7 @@ async function carregarFontesCaixaAcao() {
   const select = document.getElementById("conciliacaoFonte");
   const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/fontes`);
   const lista = await res.json();
-  select.innerHTML = (Array.isArray(lista) ? lista.map(f => `<option value="${f.fonteId}" data-tipo="${f.tipo}">${f.nome}</option>`).join("") : "");
+  select.innerHTML = (Array.isArray(lista) ? lista.map(f => `<option value="${f.fonteId}" data-tipo="${f.tipo}">${escaparHtmlEbd(f.nome)}</option>`).join("") : "");
   if (!select.dataset.listenerTipoAtivo) {
     select.addEventListener("change", atualizarCampoArquivoConciliacaoAcao);
     select.dataset.listenerTipoAtivo = "1";
@@ -3891,7 +3923,7 @@ async function carregarParametrosMonetariosAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Sigla</th><th>Nome</th><th>Valor</th><th>Indexador</th><th>Última correção</th><th>Próxima</th><th></th></tr></thead><tbody>`;
-  lista.forEach(v => html += `<tr><td>${v.sigla}</td><td>${v.nome}</td><td>${v.unidade === "%" ? v.valor + "%" : "R$ " + Number(v.valor).toFixed(2)}</td><td>${v.indexador}</td><td>${v.dataUltimaCorrecao}</td><td>${v.correcaoVencida ? "⚠️ vencida" : (v.proximaCorrecao || "-")}</td><td>${v.resolucaoNumero ? `Res. ${v.resolucaoNumero}` : ""}</td></tr>`);
+  lista.forEach(v => html += `<tr><td>${v.sigla}</td><td>${escaparHtmlEbd(v.nome)}</td><td>${v.unidade === "%" ? v.valor + "%" : "R$ " + Number(v.valor).toFixed(2)}</td><td>${v.indexador}</td><td>${v.dataUltimaCorrecao}</td><td>${v.correcaoVencida ? "⚠️ vencida" : (v.proximaCorrecao || "-")}</td><td>${v.resolucaoNumero ? `Res. ${v.resolucaoNumero}` : ""}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3930,7 +3962,7 @@ async function carregarCessoesTemploAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Solicitante</th><th>Tipo</th><th>Data</th><th>Taxa</th><th>Lista</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(c => html += `<tr><td>${c.solicitanteNome}</td><td>${c.tipoEvento}</td><td>${c.dataEvento.slice(0, 10)}</td><td>${c.isencaoTaxa ? "isento" : "R$ " + Number(c.taxaZeladoria).toFixed(2)}</td><td>${c.listaMusicalAprovada ? "✅" : "❌"}</td><td>${c.status}</td></tr>`);
+  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.solicitanteNome)}</td><td>${c.tipoEvento}</td><td>${c.dataEvento.slice(0, 10)}</td><td>${c.isencaoTaxa ? "isento" : "R$ " + Number(c.taxaZeladoria).toFixed(2)}</td><td>${c.listaMusicalAprovada ? "✅" : "❌"}</td><td>${c.status}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -4022,12 +4054,12 @@ async function carregarInformeRendimentosAcao() {
   let html = `<p class="subtitle">Informe de Rendimentos ${d.anoReferencia} — Ministros: ${d.ministros.length} · Prestadores: ${d.prestadores.length}</p>`;
   if (d.ministros.length > 0) {
     html += `<h5>Ministros</h5><table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CPF</th><th>Total</th><th>IRRF</th></tr></thead><tbody>`;
-    d.ministros.forEach(m => html += `<tr><td>${m.nome}</td><td>${m.cpfCnpj}</td><td>R$ ${Number(m.valorTotal).toFixed(2)}</td><td>R$ ${Number(m.irrfRetido).toFixed(2)}</td></tr>`);
+    d.ministros.forEach(m => html += `<tr><td>${escaparHtmlEbd(m.nome)}</td><td>${m.cpfCnpj}</td><td>R$ ${Number(m.valorTotal).toFixed(2)}</td><td>R$ ${Number(m.irrfRetido).toFixed(2)}</td></tr>`);
     html += "</tbody></table>";
   }
   if (d.prestadores.length > 0) {
     html += `<h5>Prestadores</h5><table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CPF/CNPJ</th><th>Total</th></tr></thead><tbody>`;
-    d.prestadores.forEach(p => html += `<tr><td>${p.nome}</td><td>${p.cpfCnpj}</td><td>R$ ${Number(p.valorTotal).toFixed(2)}</td></tr>`);
+    d.prestadores.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${p.cpfCnpj}</td><td>R$ ${Number(p.valorTotal).toFixed(2)}</td></tr>`);
     html += "</tbody></table>";
   }
   container.innerHTML = html;
@@ -4151,7 +4183,7 @@ async function carregarImoveisAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Imóvel</th><th>IPTU</th><th>AVCB</th><th>Alvará/Habite-se</th><th>Alerta</th></tr></thead><tbody>`;
   lista.forEach(i => {
-    html += `<tr><td>${i.descricao} (bemId ${i.bemId})</td><td>${i.iptuStatus || "-"} — ${i.iptuVigenciaFim || "-"} (${i.vigenciaIptu})</td>
+    html += `<tr><td>${escaparHtmlEbd(i.descricao)} (bemId ${i.bemId})</td><td>${i.iptuStatus || "-"} — ${i.iptuVigenciaFim || "-"} (${i.vigenciaIptu})</td>
       <td>${i.avcbVigenciaFim || "-"} (${i.vigenciaAvcb})</td><td>${i.alvaraVigenciaFim || "-"} (${i.vigenciaAlvara})</td>
       <td>${i.alertaRenovacao ? "⚠️ renovar" : "✅"}${i.impedidoReceberCulto ? "<br>⚠️ AVCB vencido (alerta)" : ""}</td></tr>`;
   });
@@ -4192,7 +4224,7 @@ async function carregarObrasAcao() {
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Título</th><th>Congregação</th><th>Status</th><th>Ações</th></tr></thead><tbody>`;
   lista.forEach(o => {
-    html += `<tr><td>${o.ObraId}</td><td>${o.Titulo}</td><td>${o.congregacaoNome}</td><td>${o.Status}</td>
+    html += `<tr><td>${o.ObraId}</td><td>${o.Titulo}</td><td>${escaparHtmlEbd(o.congregacaoNome)}</td><td>${o.Status}</td>
       <td>
         ${!o.DataPedraFundamental ? `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'MARCAR_PEDRA_FUNDAMENTAL')">Pedra fundamental</button>` : ""}
         <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'CONFIRMAR_PLACA')">Confirmar placa</button>
@@ -4255,7 +4287,7 @@ async function registrarObraMarcoAcao() {
     const marcos = await res2.json();
     const container = document.getElementById("resultadoObraMarcos");
     let html = `<table class="tabela-frequencia"><thead><tr><th>Descrição</th><th>Prevista</th><th>% Previsto</th><th>% Realizado</th><th>Valor previsto</th></tr></thead><tbody>`;
-    (Array.isArray(marcos) ? marcos : []).forEach(m => html += `<tr><td>${m.Descricao}</td><td>${m.DataPrevista}</td><td>${m.PercentualFisicoPrevisto}%</td><td>${m.PercentualFisicoRealizado}%</td><td>R$ ${Number(m.ValorPrevisto).toFixed(2)}</td></tr>`);
+    (Array.isArray(marcos) ? marcos : []).forEach(m => html += `<tr><td>${escaparHtmlEbd(m.Descricao)}</td><td>${m.DataPrevista}</td><td>${m.PercentualFisicoPrevisto}%</td><td>${m.PercentualFisicoRealizado}%</td><td>R$ ${Number(m.ValorPrevisto).toFixed(2)}</td></tr>`);
     html += "</tbody></table>";
     container.innerHTML = html;
   }
@@ -4276,7 +4308,7 @@ async function carregarOpcoesDizimistasReceber() {
   const res = await fetchProtegido(`${API_BASE}/dizimistas?congregacaoId=${congregacaoId}`);
   const dizimistas = await res.json();
   select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>` +
-    (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${d.nome}</option>`).join("") : "");
+    (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${escaparHtmlEbd(d.nome)}</option>`).join("") : "");
 }
 
 async function salvarContaReceberAcao() {
@@ -4334,7 +4366,7 @@ async function carregarContasReceber() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Nome/Descrição</th><th>Categoria</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr></thead><tbody>`;
   contas.forEach(c => {
     html += `<tr>
-      <td>${c.congregacaoNome}</td><td>${c.dizimistaNome || c.nomeAvulso || c.descricao || "—"}</td><td>${c.categoriaNome || c.tipo}</td>
+      <td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>${c.dizimistaNome || c.nomeAvulso || c.descricao || "—"}</td><td>${c.categoriaNome || c.tipo}</td>
       <td>R$ ${Number(c.valor).toFixed(2)}</td><td>${c.dataVencimento}</td><td>${badgeStatusContaReceber(c.status)}</td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheContaReceberAcao(${c.contaReceberId})">Ver detalhe</button></td>
     </tr>`;
@@ -4422,7 +4454,7 @@ async function carregarOpcoesDizimistas() {
   const res = await fetchProtegido(`${API_BASE}/dizimistas?congregacaoId=${congregacaoId}`);
   const dizimistas = await res.json();
   select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>` +
-    (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${d.nome}</option>`).join("") : "");
+    (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${escaparHtmlEbd(d.nome)}</option>`).join("") : "");
 }
 
 async function salvarDizimistaAcao() {
@@ -4638,7 +4670,7 @@ async function carregarDizimistasMes() {
     <table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Contribuiu?</th><th>Total no mês</th></tr></thead><tbody>`;
   data.dizimistas.forEach(d => {
     html += `<tr>
-      <td>${d.nome}</td>
+      <td>${escaparHtmlEbd(d.nome)}</td>
       <td>${d.contribuiu ? "<span class='badge-status badge-ativo'>Sim</span>" : "<span class='badge-status badge-inativo'>Ainda não</span>"}</td>
       <td>R$ ${Number(d.totalContribuido).toFixed(2)}</td>
     </tr>`;
@@ -4649,7 +4681,7 @@ async function carregarDizimistasMes() {
     html += `<h4 style="margin:16px 0 10px; color: var(--cor-primaria);">Contribuições avulsas (sem cadastro de dizimista)</h4>
       <table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Total no mês</th></tr></thead><tbody>`;
     data.avulsos.forEach(a => {
-      html += `<tr><td>${a.nome}</td><td>R$ ${Number(a.totalContribuido).toFixed(2)}</td></tr>`;
+      html += `<tr><td>${escaparHtmlEbd(a.nome)}</td><td>R$ ${Number(a.totalContribuido).toFixed(2)}</td></tr>`;
     });
     html += "</tbody></table>";
   }
@@ -4807,7 +4839,7 @@ async function gerarRelatorioTesourariaAcao(modo) {
   const data = await res.json();
   if (!data.sucesso) { container.innerHTML = `<p class="subtitle">${data.mensagem || "Erro ao gerar relatório."}</p>`; return; }
 
-  let html = `<h4>${data.congregacaoNome} — ${data.mesReferencia} (${modo === "mural" ? "versão mural, sem valores" : "versão completa"})</h4>
+  let html = `<h4>${escaparHtmlEbd(data.congregacaoNome)} — ${data.mesReferencia} (${modo === "mural" ? "versão mural, sem valores" : "versão completa"})</h4>
     <table class="tabela-frequencia"><thead><tr><th>Termo</th><th>Nome</th><th>Tipo</th>${modo === "mural" ? "" : "<th>Valor</th><th>Forma</th>"}</tr></thead><tbody>`;
   data.lancamentos.forEach(l => {
     // Cancelado (folha arrancada do bloco físico) nunca some da numeração —
@@ -4816,7 +4848,7 @@ async function gerarRelatorioTesourariaAcao(modo) {
       html += `<tr style="opacity:.6;"><td>${l.termoNumero}</td><td colspan="${modo === "mural" ? 2 : 4}"><em>CANCELADO — ${l.motivoCancelamento || "sem motivo registrado"}</em></td></tr>`;
       return;
     }
-    html += `<tr><td>${l.termoNumero}</td><td>${l.nome}</td><td>${rotuloTipoLancamento(l.tipo)}</td>${modo === "mural" ? "" : `<td>R$ ${Number(l.valor).toFixed(2)}</td><td>${l.formaPagamento}</td>`}</tr>`;
+    html += `<tr><td>${l.termoNumero}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${rotuloTipoLancamento(l.tipo)}</td>${modo === "mural" ? "" : `<td>R$ ${Number(l.valor).toFixed(2)}</td><td>${l.formaPagamento}</td>`}</tr>`;
   });
   html += "</tbody></table>";
   if (data.fechamento) {
@@ -4884,7 +4916,7 @@ async function carregarConsolidadoTesouraria() {
     html += `<h4 style="margin:16px 0 10px; color: var(--cor-primaria);">📍 Centro de Custo Local (por congregação)</h4>
       <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Saldo Liberado</th><th>Pendente de Liberação</th></tr></thead><tbody>`;
     data.porCongregacao.forEach(c => {
-      html += `<tr><td>${c.congregacaoNome}</td><td>R$ ${c.saldoLiberado.toFixed(2)}</td><td>R$ ${c.saldoPendente.toFixed(2)}</td></tr>`;
+      html += `<tr><td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>R$ ${c.saldoLiberado.toFixed(2)}</td><td>R$ ${c.saldoPendente.toFixed(2)}</td></tr>`;
     });
     html += "</tbody></table>";
   }
@@ -4893,7 +4925,7 @@ async function carregarConsolidadoTesouraria() {
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Total Final</th><th>Centro de Custo Geral</th><th>Situação</th></tr></thead><tbody>`;
   fechamentos.forEach(f => {
     html += `<tr>
-      <td>${f.congregacaoNome}</td><td>${f.mesReferencia}</td>
+      <td>${escaparHtmlEbd(f.congregacaoNome)}</td><td>${f.mesReferencia}</td>
       <td>R$ ${Number(f.totalFinal).toFixed(2)}</td><td>R$ ${Number(f.valorRepasseGeral).toFixed(2)}</td>
       <td><span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : "badge-licenca"}">${f.status === "REPASSADO" ? "Liberado" : "Pendente"}</span></td>
     </tr>`;
@@ -4985,7 +5017,7 @@ async function salvarMeusDadosAcao() {
 // ---- MEUS VÍNCULOS FAMILIARES (v1.11 — autoatendimento) ----
 async function carregarOpcoesMeuVinculoTipo() {
   const select = document.getElementById("meuVinculoTipo");
-  const res = await fetch(`${API_BASE}/catalogos/tiposVinculoFamiliar`);
+  const res = await fetchProtegido(`${API_BASE}/catalogos/tiposVinculoFamiliar`);
   const tipos = await res.json();
   select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.tipoVinculoId}">${t.rotuloDireto}</option>`).join("");
 }
@@ -5237,7 +5269,7 @@ function escolherReuniaoParaCheckin(sessoes, mensagem) {
       <h3>Qual reunião?</h3>
       <p>${mensagem || ""}</p>
       <div class="modal-acoes" style="flex-direction:column; align-items:stretch;">
-        ${sessoes.map(s => `<button class="btn-confirmar" style="margin-bottom:6px;" data-sessao="${s.sessaoId}">${s.orgaoNome} — ${s.descricao}</button>`).join("")}
+        ${sessoes.map(s => `<button class="btn-confirmar" style="margin-bottom:6px;" data-sessao="${s.sessaoId}">${escaparHtmlEbd(s.orgaoNome)} — ${escaparHtmlEbd(s.descricao)}</button>`).join("")}
         <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
       </div>`;
     document.getElementById("modalOverlay").classList.remove("escondido");
@@ -5292,7 +5324,7 @@ function badgeCategoria(capacidade) {
 
 async function carregarOrgaos() {
   const container = document.getElementById("resultadoListaOrgaos");
-  const res = await fetch(`${API_BASE}/orgaos`);
+  const res = await fetchProtegido(`${API_BASE}/orgaos`);
   const orgaos = await res.json();
   window._orgaosCache = orgaos;
   let html = `<table class="tabela-frequencia"><thead><tr>
@@ -5302,7 +5334,7 @@ async function carregarOrgaos() {
     html += `<tr>
       <td>${o.orgaoId}</td>
       <td>${o.sigla}</td>
-      <td>${o.nome}</td>
+      <td>${escaparHtmlEbd(o.nome)}</td>
       <td>${o.quorumMinimoPct ?? "-"}</td>
       <td>${o.quorumDeliberativoPct ?? "-"}</td>
       <td>${o.faltasParaPerdaAssento ?? "-"}</td>
@@ -5316,7 +5348,7 @@ async function carregarOrgaos() {
   container.innerHTML = html;
 
   const selectAssento = document.getElementById("assentoOrgao");
-  if (selectAssento) selectAssento.innerHTML = orgaos.map(o => `<option value="${o.orgaoId}">${o.nome}</option>`).join("");
+  if (selectAssento) selectAssento.innerHTML = orgaos.map(o => `<option value="${o.orgaoId}">${escaparHtmlEbd(o.nome)}</option>`).join("");
 }
 
 function badgeSituacaoAssento(situacao) {
@@ -5339,8 +5371,8 @@ async function carregarAssentos() {
   assentos.forEach(a => {
     html += `<tr>
       <td>${a.membroId}</td>
-      <td>${a.nome}</td>
-      <td>${a.orgaoNome}</td>
+      <td>${escaparHtmlEbd(a.nome)}</td>
+      <td>${escaparHtmlEbd(a.orgaoNome)}</td>
       <td>${a.tipoAssento === "ORDENACAO" ? "Ordenação" : "Função"}</td>
       <td>${a.cargoOuFuncao || "-"}</td>
       <td>${a.dataInicio}</td>
@@ -5595,7 +5627,7 @@ function secaoCatalogo(key) {
   ).join("");
   const paiHtml = c.pai ? `<select id="cat_${key}_${c.pai.campo}" style="min-width:180px;"><option value="">Sem ${c.pai.rotulo}</option></select>` : "";
   return `<div class="cartao-perfil" style="margin-bottom:16px;">
-    <h4 style="margin:0 0 10px; color: var(--cor-primaria);">${c.titulo}</h4>
+    <h4 style="margin:0 0 10px; color: var(--cor-primaria);">${escaparHtmlEbd(c.titulo)}</h4>
     <div class="barra-lista">
       ${camposHtml}
       ${paiHtml}
@@ -5613,20 +5645,20 @@ function secaoCatalogo(key) {
 async function carregarOpcoesPai(key) {
   const c = CATALOGOS_CFG[key];
   if (!c.pai) return;
-  const res = await fetch(`${API_BASE}/catalogos/${c.pai.origem}`);
+  const res = await fetchProtegido(`${API_BASE}/catalogos/${c.pai.origem}`);
   const itens = await res.json();
   const select = document.getElementById(`cat_${key}_${c.pai.campo}`);
   if (!select) return;
   const idField = CATALOGOS_CFG[c.pai.origem].idField;
-  select.innerHTML = `<option value="">Sem ${c.pai.rotulo}</option>` + itens.map(x => `<option value="${x[idField]}">${x.nome}</option>`).join("");
+  select.innerHTML = `<option value="">Sem ${c.pai.rotulo}</option>` + itens.map(x => `<option value="${x[idField]}">${escaparHtmlEbd(x.nome)}</option>`).join("");
 }
 
 async function carregarCatalogoLista(key) {
   const c = CATALOGOS_CFG[key];
-  const res = await fetch(`${API_BASE}/catalogos/${key}`);
+  const res = await fetchProtegido(`${API_BASE}/catalogos/${key}`);
   catalogoCache[key] = await res.json();
   if (c.pai) {
-    const pres = await fetch(`${API_BASE}/catalogos/${c.pai.origem}`);
+    const pres = await fetchProtegido(`${API_BASE}/catalogos/${c.pai.origem}`);
     const pitens = await pres.json();
     const pidField = CATALOGOS_CFG[c.pai.origem].idField;
     catalogoCache[`_pai_${key}`] = {};
@@ -5720,16 +5752,6 @@ async function excluirCatalogo(key, id) {
   carregarCatalogoLista(key);
 }
 
-async function excluirDadosFicticios() {
-  const categorias = Array.from(document.querySelectorAll(".dadoExclusaoChk:checked")).map(c => c.value);
-  if (categorias.length === 0) { mostrarToast("Marque pelo menos uma categoria.", "erro"); return; }
-  if (!(await confirmarAcao("Excluir os dados selecionados? Esta ação NÃO pode ser desfeita.", "Excluir"))) return;
-  const res = await fetchProtegido(`${API_BASE}/dados/excluir`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ categorias }) });
-  const data = await res.json();
-  avisarResultado(data);
-  document.getElementById("resultadoExclusaoDados").textContent = data.mensagem || "";
-}
-
 let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar a tela após encerrar/justificar
 
 // Submenu de Reuniões — gerado em runtime a partir do catálogo de Órgãos
@@ -5750,7 +5772,7 @@ let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar 
 function renderizarListaOrgaosModulo(containerId, lista) {
   document.getElementById(containerId).innerHTML = lista.map(o => `
     <button class="btn-aba" id="btnSubReunioes${o.chave.replace(":", "_")}" onclick="selecionarOrgaoReunioes('${o.chave}')">
-      <span class="icone">🏛️</span><span class="rotulo">${o.nome}</span>
+      <span class="icone">🏛️</span><span class="rotulo">${escaparHtmlEbd(o.nome)}</span>
     </button>`).join("");
 }
 
@@ -5837,7 +5859,7 @@ async function carregarComposicaoCLI() {
     const situacao = m.processoDisciplinarAtivo ? "Sob disciplina (não conta)" : (!m.emComunhao ? "Sem comunhão (não conta)" : "Ativo");
     html += `<tr>
       <td>${m.membroId}</td>
-      <td>${m.nome}</td>
+      <td>${escaparHtmlEbd(m.nome)}</td>
       <td>${m.congregacao || "-"}</td>
       <td>${comoEntra}</td>
       <td>${situacao}</td>
@@ -5863,7 +5885,7 @@ async function carregarAssentosCLI() {
   assentos.forEach(a => {
     html += `<tr>
       <td>${a.membroId}</td>
-      <td>${a.nome}</td>
+      <td>${escaparHtmlEbd(a.nome)}</td>
       <td>${a.cargoOuFuncao || "-"}</td>
       <td>${a.dataInicio}</td>
       <td>${a.dataTerminoPrevisao || "sem prazo"}</td>
@@ -5918,7 +5940,7 @@ function tabelaComissaoCalculada(lista, siglaCadastroManual) {
   lista.forEach(m => {
     html += `<tr>
       <td>${m.membroId}</td>
-      <td>${m.nome}</td>
+      <td>${escaparHtmlEbd(m.nome)}</td>
       ${siglaCadastroManual
         ? `<td>${m.dataInicio}</td><td><button class="btn-link btn-link-perigo" onclick="removerMembroComissaoAcao('${siglaCadastroManual}', ${m.comissaoMembroId})">Remover</button></td>`
         : `<td>${m.cargoOuFuncao || "-"}${m.origemSigla ? ` (${m.origemSigla})` : ""}</td>`}
@@ -6028,7 +6050,7 @@ async function carregarProjetos() {
       return `<li>${par.sigla}: ${rotulo} ${botoes}</li>`;
     }).join("");
     html += `<div class="cartao-perfil" style="margin-bottom:12px;">
-      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${p.protocolo} — ${p.titulo}</h4>
+      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${p.protocolo} — ${escaparHtmlEbd(p.titulo)}</h4>
       <p class="subtitle">Autor: ${p.autorNome} · Protocolado em ${p.dataProtocolo} · Status: ${ROTULO_STATUS_PROJETO[p.status] || p.status}${p.regimeUrgencia ? " (regime de urgência)" : ""}</p>
       <p>${p.texto}</p>
       <ul>${pareceresHtml}</ul>
@@ -6148,7 +6170,7 @@ async function carregarSucessaoPresidencial() {
   if (!s.sucesso) { container.textContent = s.mensagem || ""; return; }
 
   if (!s.vago) {
-    container.innerHTML = `<p>✅ Presidente em exercício: <strong>${s.presidente.nome}</strong> (matrícula ${s.presidente.membroId}).</p>`;
+    container.innerHTML = `<p>✅ Presidente em exercício: <strong>${escaparHtmlEbd(s.presidente.nome)}</strong> (matrícula ${s.presidente.membroId}).</p>`;
     return;
   }
 
@@ -6349,8 +6371,8 @@ async function carregarMedidasCautelares() {
       : (m.prazoRelatorioVencido ? `🔴 VENCIDO (${m.diasDesdeAplicacao} dias)` : `🟡 em curso (${m.diasDesdeAplicacao}/${m.diasPrazoRelatorio} dias)`);
     html += `<tr>
       <td>${m.membroId}</td>
-      <td>${m.nome}</td>
-      <td>${m.motivo}</td>
+      <td>${escaparHtmlEbd(m.nome)}</td>
+      <td>${escaparHtmlEbd(m.motivo)}</td>
       <td>${restricoes}</td>
       <td>${m.dataAplicacao}</td>
       <td>${relatorio}</td>
@@ -6635,7 +6657,7 @@ async function carregarReunioes() {
     const descricaoEscapada = r.descricao.replace(/'/g, "\\'");
     html += `<tr>
       <td>${r.orgaoNome || "-"}</td>
-      <td>${r.descricao}</td>
+      <td>${escaparHtmlEbd(r.descricao)}</td>
       <td>${r.dataSessao}</td>
       <td>${r.status}</td>
       <td>${r.totalPresentes}</td>
@@ -6684,7 +6706,7 @@ async function carregarCredenciamento() {
     impedidosContainer.innerHTML = "<p class='subtitle'>Nenhum impedimento calculado no momento.</p>";
   } else {
     impedidosContainer.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Motivo</th></tr></thead><tbody>` +
-      data.impedidos.map(i => `<tr><td>${i.nome}</td><td>${i.motivoArtigo}: ${i.motivoDetalhe}</td></tr>`).join("") +
+      data.impedidos.map(i => `<tr><td>${escaparHtmlEbd(i.nome)}</td><td>${i.motivoArtigo}: ${i.motivoDetalhe}</td></tr>`).join("") +
       `</tbody></table>`;
   }
 
@@ -6693,7 +6715,7 @@ async function carregarCredenciamento() {
     trilhaContainer.innerHTML = "<p class='subtitle'>Nenhum credenciamento operado pela mesa ainda.</p>";
   } else {
     trilhaContainer.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Resultado</th><th>Motivo</th><th>Quando</th></tr></thead><tbody>` +
-      data.credenciamentos.map(c => `<tr><td>${c.nome}</td><td>${c.resultado === "CREDENCIADO" ? "✅ Credenciado" : "🚫 Recusado"}</td><td>${c.motivoArtigo ? `${c.motivoArtigo}: ${c.motivoDetalhe}` : "-"}</td><td>${c.criadoEm}</td></tr>`).join("") +
+      data.credenciamentos.map(c => `<tr><td>${escaparHtmlEbd(c.nome)}</td><td>${c.resultado === "CREDENCIADO" ? "✅ Credenciado" : "🚫 Recusado"}</td><td>${c.motivoArtigo ? `${c.motivoArtigo}: ${c.motivoDetalhe}` : "-"}</td><td>${c.criadoEm}</td></tr>`).join("") +
       `</tbody></table>`;
   }
 
@@ -6767,7 +6789,7 @@ function renderizarElegiveis() {
 
   let html = `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Congregação</th></tr></thead><tbody>`;
   pagina.forEach(m => {
-    html += `<tr><td>${m.membroId}</td><td>${m.nome}</td><td>${m.congregacao || "-"}</td></tr>`;
+    html += `<tr><td>${m.membroId}</td><td>${escaparHtmlEbd(m.nome)}</td><td>${m.congregacao || "-"}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -6837,7 +6859,7 @@ async function verFrequencia(sessaoId, descricao) {
       : "";
     html += `<tr>
       <td>${item.membroId}</td>
-      <td>${item.nome}</td>
+      <td>${escaparHtmlEbd(item.nome)}</td>
       <td>${item.funcao || "-"}</td>
       <td>${statusFrequencia(item)}</td>
       <td>${podeJustificar ? `<button class="btn-link" onclick="justificarFalta(${sessaoId}, ${item.membroId})">Justificar</button>` : ""} ${botaoCorrigir}${pendenteHtml}</td>
@@ -6918,11 +6940,11 @@ const STATUS_DEFAULT = [
 async function carregarOpcoesFormPessoa() {
   const [resCong, resDepto, resCargo, resExt, resStatus, resSituacoes] = await Promise.all([
     fetchProtegido(`${API_BASE}/congregacoes`),
-    fetch(`${API_BASE}/catalogos/departamentos`),
-    fetch(`${API_BASE}/catalogos/cargosMinisteriais`),
-    fetch(`${API_BASE}/catalogos/extensoes`),
-    fetch(`${API_BASE}/catalogos/statuses`),
-    fetch(`${API_BASE}/catalogos/situacoes`)
+    fetchProtegido(`${API_BASE}/catalogos/departamentos`),
+    fetchProtegido(`${API_BASE}/catalogos/cargosMinisteriais`),
+    fetchProtegido(`${API_BASE}/catalogos/extensoes`),
+    fetchProtegido(`${API_BASE}/catalogos/statuses`),
+    fetchProtegido(`${API_BASE}/catalogos/situacoes`)
   ]);
   const congregacoes = await resCong.json();
   const departamentos = await resDepto.json();
@@ -6938,27 +6960,27 @@ async function carregarOpcoesFormPessoa() {
   window._cargosCache = cargos;
 
   const selectCong = document.getElementById("pessoaCongregacao");
-  selectCong.innerHTML = congregacoes.filter(c => c.ativa).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+  selectCong.innerHTML = congregacoes.filter(c => c.ativa).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
 
   const selectFiltroCong = document.getElementById("pessoasFiltroCongregacao");
   if (selectFiltroCong) {
     selectFiltroCong.innerHTML = `<option value="">Todas as congregações</option>` +
-      congregacoes.map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+      congregacoes.map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
   }
   const selectFiltroSituacao = document.getElementById("pessoasFiltroSituacao");
   if (selectFiltroSituacao) {
     selectFiltroSituacao.innerHTML = `<option value="">Todas as situações</option>` +
-      situacoes.filter(s => s.ativa !== false).map(s => `<option value="${s.sigla}">${s.nome}</option>`).join("");
+      situacoes.filter(s => s.ativa !== false).map(s => `<option value="${s.sigla}">${escaparHtmlEbd(s.nome)}</option>`).join("");
   }
 
   const selectExt = document.getElementById("pessoaExtensao");
   const nomeCongPorId = Object.fromEntries(congregacoes.map(c => [String(c.congregacaoId), c.nome]));
   selectExt.innerHTML = `<option value="">Não se aplica (fica só na Congregação)</option>` +
-    extensoes.filter(e => e.ativa).map(e => `<option value="${e.extensaoId}">${e.nome} (${nomeCongPorId[String(e.congregacaoMaeId)] || "?"})</option>`).join("");
+    extensoes.filter(e => e.ativa).map(e => `<option value="${e.extensaoId}">${escaparHtmlEbd(e.nome)} (${nomeCongPorId[String(e.congregacaoMaeId)] || "?"})</option>`).join("");
 
   const selectDepto = document.getElementById("pessoaDepartamento");
   const deptosAtivos = departamentos.filter(d => d.ativo);
-  const opcaoDepto = d => `<option value="${d.departamentoId}">${d.nome}</option>`;
+  const opcaoDepto = d => `<option value="${d.departamentoId}">${escaparHtmlEbd(d.nome)}</option>`;
   const grupoDepto = (rotulo, itens) => itens.length ? `<optgroup label="${rotulo}">${itens.map(opcaoDepto).join("")}</optgroup>` : "";
   selectDepto.innerHTML = `<option value="">Não informado</option>` +
     grupoDepto("Departamentos", deptosAtivos.filter(d => d.tipo === "DEPARTAMENTO")) +
@@ -6967,12 +6989,12 @@ async function carregarOpcoesFormPessoa() {
 
   const selectCargo = document.getElementById("pessoaCargoMinisterial");
   selectCargo.innerHTML = `<option value="">Não informado</option>` +
-    cargos.filter(c => c.ativo).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(c => `<option value="${c.sigla}">${c.nome}</option>`).join("");
+    cargos.filter(c => c.ativo).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(c => `<option value="${c.sigla}">${escaparHtmlEbd(c.nome)}</option>`).join("");
 
   const selectStatus = document.getElementById("pessoaStatus");
   selectStatus.innerHTML = statuses
     .filter(s => s.ativa !== false)
-    .map(s => `<option value="${s.sigla}">${s.nome}</option>`).join("");
+    .map(s => `<option value="${s.sigla}">${escaparHtmlEbd(s.nome)}</option>`).join("");
 }
 
 async function salvarPessoa() {
@@ -7419,8 +7441,8 @@ function abrirModalRevisaoImportacaoPessoas() {
   const linhasHtml = importacaoPessoasLinhas.map((l, i) => {
     if (l.status === "DUPLICATA_MATRICULA") {
       return `<tr>
-        <td>${l.membroId}</td><td>${l.nome}</td><td>${l.situacaoMembro || "-"}</td>
-        <td>Matrícula já existe: <strong>${l.conflito.nome}</strong></td>
+        <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${l.situacaoMembro || "-"}</td>
+        <td>Matrícula já existe: <strong>${escaparHtmlEbd(l.conflito.nome)}</strong></td>
         <td>
           <select onchange="importacaoPessoasLinhas[${i}].decisao = this.value">
             <option value="MANTER" ${l.decisao === "MANTER" ? "selected" : ""}>Manter o que já está (ignorar)</option>
@@ -7431,8 +7453,8 @@ function abrirModalRevisaoImportacaoPessoas() {
     }
     if (l.status === "POSSIVEL_DUPLICATA_NOME") {
       return `<tr>
-        <td>${l.membroId}</td><td>${l.nome}</td><td>${l.situacaoMembro || "-"}</td>
-        <td>Nome ${Math.round(l.similaridade * 100)}% parecido com <strong>${l.conflito.nome}</strong> (matrícula ${l.conflito.membroId})</td>
+        <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${l.situacaoMembro || "-"}</td>
+        <td>Nome ${Math.round(l.similaridade * 100)}% parecido com <strong>${escaparHtmlEbd(l.conflito.nome)}</strong> (matrícula ${l.conflito.membroId})</td>
         <td>
           <select onchange="importacaoPessoasLinhas[${i}].decisao = this.value">
             <option value="IGNORAR" ${l.decisao === "IGNORAR" ? "selected" : ""}>Ignorar esta linha</option>
@@ -7442,7 +7464,7 @@ function abrirModalRevisaoImportacaoPessoas() {
       </tr>`;
     }
     return `<tr>
-      <td>${l.membroId}</td><td>${l.nome}</td><td>${l.situacaoMembro || "-"}</td>
+      <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${l.situacaoMembro || "-"}</td>
       <td>Novo</td><td>-</td>
     </tr>`;
   }).join("");
@@ -7602,12 +7624,12 @@ function renderizarPessoas() {
 
   pagina.forEach(p => {
     const miniatura = p.fotoUrl
-      ? `<img src="${p.fotoUrl}" alt="Foto de ${p.nome}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;" />`
+      ? `<img src="${p.fotoUrl}" alt="Foto de ${escaparHtmlEbd(p.nome)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;" />`
       : `<span style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#e5e5e5;color:#888;font-size:0.75rem;">?</span>`;
     html += `<tr>
       <td>${miniatura}</td>
       <td>${p.membroId}</td>
-      <td>${p.nome}</td>
+      <td>${escaparHtmlEbd(p.nome)}</td>
       <td>${p.congregacao || "-"}</td>
       <td>${badgeStatusPessoa(p.status)}</td>
       <td>${p.situacaoMembro || "-"}</td>
@@ -7769,7 +7791,7 @@ function renderizarCartas() {
   cartasCache.forEach(c => {
     html += `<tr>
       <td>${c.cartaId}</td>
-      <td>${c.nome} (${c.membroId})</td>
+      <td>${escaparHtmlEbd(c.nome)} (${c.membroId})</td>
       <td>${ROTULO_CARTA[c.tipo] || c.tipo}</td>
       <td><span class="badge-status ${cores[c.status] || ""}">${c.status}</span></td>
       <td>${c.destino || "-"}</td>
@@ -7888,7 +7910,7 @@ function renderizarImpressaoCarta(c) {
     <h2>${marcarOpcao("CARTA DE RECOMENDAÇÃO", c.tipo === "RECOMENDACAO")}${"&nbsp;&nbsp;"}${marcarOpcao("CARTA DE MUDANÇA", c.tipo === "MUDANCA")}${"&nbsp;&nbsp;"}${marcarOpcao("ATESTADO SUPLETIVO", c.tipo === "ATESTADO_SUPLETIVO")}</h2>
     <p>Parauapebas, PA, ${dataEmissaoFmt}.</p>
     <p>Saudações no SENHOR JESUS.</p>
-    <p>Apresentamos à Igreja em <strong>${c.destino || "______________________"}</strong> o(a) portador(a) desta carta o(a) Sr(a). <strong>${c.nome}</strong> (Cartão de Membro nº ${c.membroId}).</p>
+    <p>Apresentamos à Igreja em <strong>${c.destino || "______________________"}</strong> o(a) portador(a) desta carta o(a) Sr(a). <strong>${escaparHtmlEbd(c.nome)}</strong> (Cartão de Membro nº ${c.membroId}).</p>
     <div class="linha"><span>${marcarOpcao("Membro", !ehCongregado)}</span><span>${marcarOpcao("Congregado", ehCongregado)}</span></div>
     <p>Nesta Igreja desde ${c.dataAdmissao ? c.dataAdmissao.split("-").reverse().join("/") : "____/____/______"}, por se achar em: <strong>${situacaoRotulo}</strong>.</p>
     <p>Nós o(a) recomendamos que recebais no Senhor, como usam os Santos.</p>
@@ -7911,7 +7933,7 @@ function renderizarImpressaoCarta(c) {
 // parentesco por travessia nasce em v2.6/v3.1, quando tiver um consumidor de verdade.
 async function carregarOpcoesTipoVinculo() {
   const select = document.getElementById("vinculoTipo");
-  const res = await fetch(`${API_BASE}/catalogos/tiposVinculoFamiliar`);
+  const res = await fetchProtegido(`${API_BASE}/catalogos/tiposVinculoFamiliar`);
   const tipos = await res.json();
   select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.tipoVinculoId}">${t.rotuloDireto}</option>`).join("");
 }
@@ -7994,8 +8016,8 @@ async function carregarHistoricoMembro(membroId) {
   container.innerHTML = `<ul class="linha-tempo">` + eventos.map(e => {
     const podeCorrigir = e.marcoId != null && authNivel === "GLOBAL";
     return `<li>
-      <strong>${e.data || "data não informada"}</strong> — ${e.titulo}
-      ${e.descricao ? `<br><span class="subtitle">${e.descricao}</span>` : ""}
+      <strong>${e.data || "data não informada"}</strong> — ${escaparHtmlEbd(e.titulo)}
+      ${e.descricao ? `<br><span class="subtitle">${escaparHtmlEbd(e.descricao)}</span>` : ""}
       ${podeCorrigir ? ` <button class="btn-link" onclick="corrigirMarcoMembroAcao(${e.marcoId})">Corrigir</button>` : ""}
     </li>`;
   }).join("") + "</ul>";
@@ -8387,7 +8409,7 @@ async function carregarLicencasCandidatura(membroId) {
       <td>${l.dataPleito || "-"}</td>
       <td>${l.dataInicioLicenca || "-"}</td>
       <td>${ROTULO_STATUS_LICENCA[l.status] || l.status}</td>
-      <td>${l.status === "EM_LICENCA" ? `<button class="btn-link" onclick="registrarRetornoLicencaAcao(${l.licencaId})">Registrar retorno</button>` : "-"}</td>
+      <td>${authGeral && l.status === "EM_LICENCA" ? `<button class="btn-link" onclick="registrarRetornoLicencaAcao(${l.licencaId})">Registrar retorno</button>` : "-"}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -8473,7 +8495,7 @@ async function carregarFilaAprovacoes() {
   container.innerHTML = filaAprovacoesCache.map(s => `
     <div class="cartao-perfil" style="margin-bottom:16px;">
       <div class="barra-lista" style="justify-content:space-between;">
-        <h4 style="margin:0; color: var(--cor-primaria);">${s.nome} (matrícula ${s.membroId}) — ${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</h4>
+        <h4 style="margin:0; color: var(--cor-primaria);">${escaparHtmlEbd(s.nome)} (matrícula ${s.membroId}) — ${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</h4>
         <button class="btn-confirmar" style="width:auto;margin:0;" onclick="aprovarTodaSolicitacaoAcao(${s.solicitacaoId})">✅ Aprovar tudo</button>
       </div>
       <div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr>
@@ -8530,7 +8552,7 @@ let congregacaoDetalheEditandoId = null;
 async function carregarCongregacoesDetalhe() {
   const [resCong, resAreas] = await Promise.all([
     fetchProtegido(`${API_BASE}/catalogos/congregacoes`),
-    fetch(`${API_BASE}/catalogos/areas`)
+    fetchProtegido(`${API_BASE}/catalogos/areas`)
   ]);
   const congregacoes = await resCong.json();
   const areas = await resAreas.json();
@@ -8538,7 +8560,7 @@ async function carregarCongregacoesDetalhe() {
   window._areasCache = areas;
 
   const selectArea = document.getElementById("congDetAreaId");
-  if (selectArea) selectArea.innerHTML = `<option value="">Sem Área</option>` + areas.map(a => `<option value="${a.areaId}">${a.nome}</option>`).join("");
+  if (selectArea) selectArea.innerHTML = `<option value="">Sem Área</option>` + areas.map(a => `<option value="${a.areaId}">${escaparHtmlEbd(a.nome)}</option>`).join("");
 
   const container = document.getElementById("listaCongDetalhe");
   if (!container) return;
@@ -8551,7 +8573,7 @@ async function carregarCongregacoesDetalhe() {
   </tr></thead><tbody>`;
   congregacoes.forEach(c => {
     html += `<tr>
-      <td>${c.nome}</td>
+      <td>${escaparHtmlEbd(c.nome)}</td>
       <td>${c.cidade ? `${c.cidade}${c.estado ? "/" + c.estado : ""}${c.cep ? " · " + c.cep : ""}` : "—"}</td>
       <td>${c.dirigenteAtual || "—"}</td>
       <td>${c.ativa ? "Ativa" : "Inativa"}</td>
@@ -8675,8 +8697,8 @@ async function carregarOpcoesEscopoPermissao() {
   funcionalidadesCache = await fres.json();
   const papeis = await pres.json();
 
-  document.getElementById("permissaoPapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${p.nome}</option>`).join("");
-  document.getElementById("lotePapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${p.nome}</option>`).join("");
+  document.getElementById("permissaoPapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${escaparHtmlEbd(p.nome)}</option>`).join("");
+  document.getElementById("lotePapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${escaparHtmlEbd(p.nome)}</option>`).join("");
 
   montarCheckboxesPapeis();
   carregarPapeis();
@@ -8697,7 +8719,7 @@ const ESCOPO_NIVEIS = {
 
 function montarCheckboxesPapeis() {
   document.getElementById("papelPermissoesCheckboxes").innerHTML = funcionalidadesCache.map(f =>
-    `<label class="opcao-checkbox"><input type="checkbox" class="papelPermissaoChk" value="${f.chave}" /> ${f.nome}</label>`
+    `<label class="opcao-checkbox"><input type="checkbox" class="papelPermissaoChk" value="${f.chave}" /> ${escaparHtmlEbd(f.nome)}</label>`
   ).join("");
 }
 
@@ -8710,9 +8732,9 @@ async function onChangeEscopoTipoPermissao() {
     select.innerHTML = "";
     return;
   }
-  const res = await fetch(`${API_BASE}/catalogos/${nivel.origem}`);
+  const res = await fetchProtegido(`${API_BASE}/catalogos/${nivel.origem}`);
   const itens = (await res.json()).filter(x => x.ativa !== false && x.ativo !== false);
-  select.innerHTML = itens.map(x => `<option value="${x[nivel.idField]}">${x.nome}</option>`).join("");
+  select.innerHTML = itens.map(x => `<option value="${x[nivel.idField]}">${escaparHtmlEbd(x.nome)}</option>`).join("");
   select.style.display = "inline-block";
 }
 
@@ -8737,12 +8759,12 @@ async function salvarPapel() {
 
 async function carregarPapeis() {
   const container = document.getElementById("resultadoListaPapeis");
-  const res = await fetch(`${API_BASE}/catalogos/papeis`);
+  const res = await fetchProtegido(`${API_BASE}/catalogos/papeis`);
   const papeis = await res.json();
   let html = `<table class="tabela-frequencia"><thead><tr><th>Papel</th><th>Nível</th><th>Permissões</th><th></th></tr></thead><tbody>`;
   papeis.forEach(p => {
     html += `<tr>
-      <td>${p.nome}</td>
+      <td>${escaparHtmlEbd(p.nome)}</td>
       <td>${p.nivel}</td>
       <td>${(p.permissoes || []).join(", ") || "-"}</td>
       <td class="acoes-inline">
@@ -8756,7 +8778,7 @@ async function carregarPapeis() {
 }
 
 function editarPapel(papelId) {
-  fetch(`${API_BASE}/catalogos/papeis`).then(r => r.json()).then(papeis => {
+  fetchProtegido(`${API_BASE}/catalogos/papeis`).then(r => r.json()).then(papeis => {
     const p = papeis.find(x => String(x.papelId) === String(papelId));
     if (!p) return;
     document.getElementById("papelId").value = p.papelId;
@@ -8800,10 +8822,10 @@ function onChangeEscopoTipoLote() {
     select.innerHTML = "";
     return;
   }
-  fetch(`${API_BASE}/catalogos/${nivel.origem}`).then(r => r.json()).then(itens => {
+  fetchProtegido(`${API_BASE}/catalogos/${nivel.origem}`).then(r => r.json()).then(itens => {
     const ativos = itens.filter(x => x.ativa !== false && x.ativo !== false);
     const semEscopoFixo = tipo === "CONGREGACAO" ? `<option value="">Cada matrícula usa a própria congregação</option>` : "";
-    select.innerHTML = semEscopoFixo + ativos.map(x => `<option value="${x[nivel.idField]}">${x.nome}</option>`).join("");
+    select.innerHTML = semEscopoFixo + ativos.map(x => `<option value="${x[nivel.idField]}">${escaparHtmlEbd(x.nome)}</option>`).join("");
     select.style.display = "inline-block";
   });
 }
@@ -8844,20 +8866,27 @@ async function carregarPermissoes() {
   const container = document.getElementById("resultadoListaPermissoes");
   const res = await fetchProtegido(`${API_BASE}/lideranca`);
   const liderancas = await res.json();
+  if (!Array.isArray(liderancas)) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(liderancas && liderancas.mensagem || "Não foi possível carregar.")}</p>`; return; }
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Matrícula</th><th>Nome</th><th>Papel</th><th>Nível</th><th>Permissões</th><th></th>
+    <th>Matrícula</th><th>Nome</th><th>Papel</th><th>Nível</th><th>Onde atua</th><th>Permissões</th><th></th>
   </tr></thead><tbody>`;
   liderancas.forEach(l => {
+    // Avisos para a Secretaria corrigir o cadastro: escopo incoerente com o papel (ou território sem a unidade) e papel Global com escopo limitado (não alcança as telas da administração geral).
+    const onde = l.escopoTipo === "GLOBAL" ? "Todas as congregações" : `${l.escopoTipo}${l.escopoId ? ` nº ${l.escopoId}` : ""}`;
+    const aviso = l.escopoIncoerente
+      ? `<br><small style="color:var(--cor-perigo,#c0392b);">⚠️ Escopo não combina com o papel: edite e escolha onde esta pessoa atua.</small>`
+      : (l.semAcessoGeral ? `<br><small style="color:var(--cor-aviso,#b9770e);">ℹ️ Papel Global com escopo limitado: não acessa as telas da administração geral.</small>` : "");
     html += `<tr>
-      <td>${l.membroId}</td>
-      <td>${l.nome}</td>
-      <td>${l.papel}</td>
-      <td>${l.nivel}</td>
-      <td>${(l.permissoes || []).join(", ") || "-"}</td>
+      <td>${Number(l.membroId)}</td>
+      <td>${escaparHtmlEbd(l.nome)}</td>
+      <td>${escaparHtmlEbd(l.papel)}</td>
+      <td>${escaparHtmlEbd(l.nivel)}</td>
+      <td>${escaparHtmlEbd(onde)}${aviso}</td>
+      <td>${escaparHtmlEbd((l.permissoes || []).join(", ") || "-")}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarPermissao(${l.membroId})">Editar</button>
-        <button class="btn-link" onclick="redefinirSenhaLideranca(${l.membroId})">🔑 Redefinir senha</button>
-        <button class="btn-link btn-link-perigo" onclick="removerPermissao(${l.membroId})">Remover</button>
+        <button class="btn-link" onclick="editarPermissao(${Number(l.membroId)})">Editar</button>
+        <button class="btn-link" onclick="redefinirSenhaLideranca(${Number(l.membroId)})">🔑 Redefinir senha</button>
+        <button class="btn-link btn-link-perigo" onclick="removerPermissao(${Number(l.membroId)})">Remover</button>
       </td>
     </tr>`;
   });
@@ -8878,7 +8907,7 @@ async function carregarNotificacaoRegras() {
   regras.forEach(r => {
     const alvo = [r.permissaoAlvo, r.nivelAlvo].filter(Boolean).join(" / ") || "-";
     html += `<tr>
-      <td>${r.titulo}<br><small style="color:var(--cor-texto-suave);">${r.chave}</small></td>
+      <td>${escaparHtmlEbd(r.titulo)}<br><small style="color:var(--cor-texto-suave);">${r.chave}</small></td>
       <td>${r.categoria}</td>
       <td>${alvo}</td>
       <td><input type="checkbox" ${r.ativa ? "checked" : ""} onchange="atualizarNotificacaoRegra('${r.chave}', { ativa: this.checked })" /></td>
@@ -8959,9 +8988,9 @@ async function removerPermissao(membroId) {
 // renomear/excluir tipo sem mexer em código.
 async function carregarTiposConsagracao() {
   const select = document.getElementById("consagracaoAssunto");
-  const res = await fetch(`${API_BASE}/catalogos/tiposConsagracao`);
+  const res = await fetchProtegido(`${API_BASE}/catalogos/tiposConsagracao`);
   const tipos = await res.json();
-  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.nome}">${t.nome}</option>`).join("")
+  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${escaparHtmlEbd(t.nome)}">${escaparHtmlEbd(t.nome)}</option>`).join("")
     + `<option value="__outro">Outro (digitar)</option>`;
   document.getElementById("consagracaoAssuntoOutro").style.display = "none";
 }
@@ -9042,14 +9071,14 @@ async function carregarConsagracoes() {
 
   consagracoes.forEach(c => {
     html += `<tr>
-      <td>${c.nome}</td>
-      <td>${c.assunto}</td>
+      <td>${escaparHtmlEbd(c.nome)}</td>
+      <td>${escaparHtmlEbd(c.assunto)}</td>
       <td>${c.proponente || "-"}</td>
       <td>${ROTULO_STATUS_CONSAGRACAO[c.status] || c.status}</td>
       <td>${c.dataProtocolo}</td>
       <td>
-        <button class="btn-link" onclick="avancarConsagracaoAcao('${c.consagracaoId}')">Avançar</button>
-        <button class="btn-link btn-link-perigo" onclick="reprovarConsagracaoAcao('${c.consagracaoId}')">Reprovar</button>
+        ${authGeral ? `<button class="btn-link" onclick="avancarConsagracaoAcao('${escaparHtmlEbd(c.consagracaoId)}')">Avançar</button>
+        <button class="btn-link btn-link-perigo" onclick="reprovarConsagracaoAcao('${escaparHtmlEbd(c.consagracaoId)}')">Reprovar</button>` : "-"}
       </td>
     </tr>`;
   });
@@ -9097,13 +9126,13 @@ async function carregarTurmasBatismo() {
   </tr></thead><tbody>` + turmas.map(t => `
     <tr>
       <td>${new Date(t.dataBatismo).toLocaleDateString("pt-BR")}</td>
-      <td>${t.local} <small>(${ROTULO_TIPO_LOCAL_BATISMO[t.tipoLocal] || t.tipoLocal})</small></td>
+      <td>${escaparHtmlEbd(t.local)} <small>(${ROTULO_TIPO_LOCAL_BATISMO[t.tipoLocal] || t.tipoLocal})</small></td>
       <td>${t.autorizacaoMesa ? "✅" : "⏳"}</td>
       <td>${t.totalCandidatos}</td>
       <td>${ROTULO_STATUS_TURMA_BATISMO[t.status] || t.status}</td>
       <td class="acoes-inline">
-        ${t.status === "ABERTA" && !t.autorizacaoMesa ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'AUTORIZAR_MESA')">Autorizar Mesa</button>` : ""}
-        ${t.status === "ABERTA" ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'REALIZAR')">Realizar</button>
+        ${authGeral && t.status === "ABERTA" && !t.autorizacaoMesa ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'AUTORIZAR_MESA')">Autorizar Mesa</button>` : ""}
+        ${t.status === "ABERTA" ? `${authGeral ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'REALIZAR')">Realizar</button>` : ""}
         <button class="btn-link btn-link-perigo" onclick="acaoTurmaBatismo(${t.turmaId}, 'CANCELAR')">Cancelar</button>` : ""}
       </td>
     </tr>
@@ -9149,7 +9178,7 @@ async function carregarCandidatosBatismo() {
     <th>Nome</th><th>Idade</th><th>Certidão civil</th><th>Parecer</th><th>Discipulado</th><th>Estatuto</th><th>Status</th><th></th>
   </tr></thead><tbody>` + candidatos.map(c => `
     <tr>
-      <td>${c.nome}</td>
+      <td>${escaparHtmlEbd(c.nome)}</td>
       <td>${badgeAptidaoBatismo(c.aptidao.itens.idadeMinima)}</td>
       <td>${badgeAptidaoBatismo(c.aptidao.itens.certidaoCivil)}</td>
       <td>${badgeAptidaoBatismo(c.aptidao.itens.parecerVidaPregressa)} <button class="btn-link" onclick="parecerCandidatoBatismoAcao(${c.candidatoId})">Dar parecer</button></td>
@@ -9392,10 +9421,12 @@ async function encerrarEnqueteAcao(enqueteId) {
 
 // ---- SECRETARIA / ABA ARQUIVOS (v2.9) — catálogo de referências, sem editor ----
 async function carregarOpcoesFormDocumentos() {
-  const res = await fetch(`${API_BASE}/orgaos`);
+  // Publicar para todo mundo é ato da administração geral (o servidor confere; aqui só não oferece a opção a quem não pode).
+  document.getElementById("documentoVisibilidadePublico").disabled = authNivel !== "GLOBAL";
+  const res = await fetchProtegido(`${API_BASE}/orgaos`);
   const orgaos = await res.json();
   document.getElementById("documentoOrgao").innerHTML = `<option value="">Sem órgão específico</option>` +
-    orgaos.map(o => `<option value="${o.orgaoId}">${o.nome}</option>`).join("");
+    orgaos.map(o => `<option value="${o.orgaoId}">${escaparHtmlEbd(o.nome)}</option>`).join("");
 
   // vB.6 — categorias de retenção só carregam pra quem tem nível Global
   // (mesma restrição de GestaoPoliticasRetencao) — quem não tem, o select
@@ -9425,6 +9456,7 @@ async function salvarDocumentoAcao() {
   const referenciaId = document.getElementById("documentoReferenciaId").value || undefined;
   const descricao = document.getElementById("documentoDescricao").value.trim();
   const categoria = document.getElementById("documentoCategoria").value || undefined;
+  const visibilidade = document.getElementById("documentoVisibilidade").value;
   const arquivo = document.getElementById("documentoArquivo").files[0];
   const msg = document.getElementById("resultadoDocumento");
   if (!arquivo) { msg.textContent = "Selecione um arquivo."; return; }
@@ -9433,7 +9465,7 @@ async function salvarDocumentoAcao() {
   const res = await fetchProtegido(`${API_BASE}/documentos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tipo, orgaoId, referenciaId, descricao: descricao || undefined, categoria, arquivoBase64, mimeType: arquivo.type })
+    body: JSON.stringify({ tipo, orgaoId, referenciaId, descricao: descricao || undefined, categoria, visibilidade, arquivoBase64, mimeType: arquivo.type })
   });
   const data = await res.json();
   msg.textContent = data.mensagem;
@@ -9469,7 +9501,7 @@ async function carregarDocumentos() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Tipo</th><th>Descrição</th><th>Órgão</th><th>Registrado por</th><th>Data</th><th>Prazo</th><th>Retenção</th><th></th>
+    <th>Tipo</th><th>Descrição</th><th>Órgão</th><th>Registrado por</th><th>Data</th><th>Quem vê</th><th>Prazo</th><th>Retenção</th><th></th>
   </tr></thead><tbody>`;
   documentos.forEach(d => {
     let prazoHtml = "-";
@@ -9478,22 +9510,44 @@ async function carregarDocumentos() {
       else if (d.prazoLavraturaVencido) prazoHtml = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de lavratura vencido (${d.diasDesdeSessao}d)</span>`;
       else prazoHtml = `✅ Em dia (${d.diasDesdeSessao}d)`;
     }
+    // Quem pode mudar a visibilidade/apagar: a administração geral, ou quem registrou o documento (o servidor confere de novo). Publicar para todos só o geral.
+    const podeMexer = authNivel === "GLOBAL" || (d.registradoPor != null && String(d.registradoPor) === String(authMatricula));
+    const opcoesVisibilidade = Object.keys(ROTULO_VISIBILIDADE_DOCUMENTO)
+      .filter(v => v !== "PUBLICO" || authNivel === "GLOBAL" || d.visibilidade === "PUBLICO")
+      .map(v => `<option value="${v}"${v === d.visibilidade ? " selected" : ""}>${ROTULO_VISIBILIDADE_DOCUMENTO[v]}</option>`).join("");
+    const quemVe = podeMexer
+      ? `<select onchange="alterarVisibilidadeDocumentoAcao(${Number(d.documentoId)}, this.value)">${opcoesVisibilidade}</select>`
+      : (ROTULO_VISIBILIDADE_DOCUMENTO[d.visibilidade] || "-");
     html += `<tr>
-      <td>${ROTULO_TIPO_DOCUMENTO[d.tipo] || d.tipo}</td>
-      <td>${d.descricao || "-"}</td>
-      <td>${d.orgaoNome || "-"}</td>
-      <td>${d.registradoPorNome || "-"}</td>
-      <td>${d.criadoEm ? d.criadoEm.slice(0, 10) : "-"}</td>
+      <td>${escaparHtmlEbd(ROTULO_TIPO_DOCUMENTO[d.tipo] || d.tipo)}</td>
+      <td>${escaparHtmlEbd(d.descricao || "-")}</td>
+      <td>${escaparHtmlEbd(d.orgaoNome || "-")}</td>
+      <td>${escaparHtmlEbd(d.registradoPorNome || "-")}</td>
+      <td>${d.criadoEm ? escaparHtmlEbd(d.criadoEm.slice(0, 10)) : "-"}</td>
+      <td>${quemVe}</td>
       <td>${prazoHtml}</td>
       <td>${badgeStatusRetencao(d.statusRetencao)}</td>
       <td class="acoes-inline">
-        <a class="btn-link" href="${d.urlAssinada}" target="_blank" rel="noopener">Abrir</a>
-        <button class="btn-link btn-link-perigo" onclick="excluirDocumentoAcao(${d.documentoId})">Excluir</button>
+        <a class="btn-link" href="${escaparHtmlEbd(d.urlAssinada)}" target="_blank" rel="noopener">Abrir</a>
+        ${podeMexer ? `<button class="btn-link btn-link-perigo" onclick="excluirDocumentoAcao(${Number(d.documentoId)})">Excluir</button>` : ""}
       </td>
     </tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+const ROTULO_VISIBILIDADE_DOCUMENTO = { MEMBROS: "👥 Membros", LIDERANCA: "🔒 Liderança", PUBLICO: "🌐 Todos (público)" };
+
+async function alterarVisibilidadeDocumentoAcao(id, visibilidade) {
+  const res = await fetchProtegido(`${API_BASE}/documentos/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visibilidade })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  carregarDocumentos();
 }
 
 async function excluirDocumentoAcao(id) {
@@ -9627,21 +9681,21 @@ async function editarDiasRetencaoAcao(politicaId, diasAtual) {
 // value carrega um prefixo (central:ID / local:ID) que salvarProcessoDisciplinar()
 // decompõe em orgaoResponsavelId/orgaoLocalId.
 async function carregarOpcoesFormDisciplina() {
-  const res = await fetch(`${API_BASE}/orgaos`);
+  const res = await fetchProtegido(`${API_BASE}/orgaos`);
   const orgaos = await res.json();
-  const locaisRes = await fetch(`${API_BASE}/catalogos/orgaosLocais`);
+  const locaisRes = await fetchProtegido(`${API_BASE}/catalogos/orgaosLocais`);
   const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JAI", "JEA", "TER"].includes(o.sigla));
   document.getElementById("disciplinaOrgao").innerHTML =
     orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("") +
-    locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${o.nome}</option>`).join("");
+    locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${escaparHtmlEbd(o.nome)}</option>`).join("");
 
-  const infRes = await fetch(`${API_BASE}/catalogos/tiposInfracao`);
+  const infRes = await fetchProtegido(`${API_BASE}/catalogos/tiposInfracao`);
   const infracoes = await infRes.json();
   window._catalogoInfracoes = Array.isArray(infracoes) ? infracoes : [];
   const lista = document.getElementById("listaInfracoesAbertura");
   lista.innerHTML = window._catalogoInfracoes
     .filter(i => i.ativo !== false)
-    .map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-abertura" value="${i.infracaoId}" style="width:auto;" /> ${i.nome} <span class="subtitle">(${i.referenciaRegimento || i.codigo} — ${badgeGravidade(i.gravidade)})</span></label>`)
+    .map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-abertura" value="${i.infracaoId}" style="width:auto;" /> ${escaparHtmlEbd(i.nome)} <span class="subtitle">(${i.referenciaRegimento || i.codigo} — ${badgeGravidade(i.gravidade)})</span></label>`)
     .join("") || "<p class='subtitle'>Nenhuma infração cadastrada no catálogo.</p>";
 
   document.getElementById("catalogoTiposInfracaoConteudo").innerHTML = secaoCatalogo("tiposInfracao");
@@ -9749,9 +9803,9 @@ async function carregarProcessosDisciplinares() {
     if (p.homologadoPeloCei === false) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Aguardando homologação do CEI</span>";
     else if (p.homologadoPeloCei === true) penalidadeTexto += "<br /><span class='subtitle'>Homologado pelo CEI</span>";
     html += `<tr>
-      <td>${p.nome}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${p.defensorNome}</span>` : ""}
+      <td>${escaparHtmlEbd(p.nome)}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${p.defensorNome}</span>` : ""}
         ${p.envolveMinistro ? `<br /><span class="subtitle">⚠️ Envolve ministro — jurisdição dupla (também CIADSETA-PARÁ, fora do sistema), Art. 103 §1º, II</span>` : ""}</td>
-      <td>${p.orgaoSigla}${p.orgaoLocalId ? `<br /><span class="subtitle">${p.orgaoNome}</span>` : ""}</td>
+      <td>${p.orgaoSigla}${p.orgaoLocalId ? `<br /><span class="subtitle">${escaparHtmlEbd(p.orgaoNome)}</span>` : ""}</td>
       <td>${infracoesTexto}</td>
       <td>${p.relatorNome || "-"}</td>
       <td>${citacaoTexto}</td>
@@ -9880,9 +9934,9 @@ async function registrarProvaReintegracaoAcao(processoId) {
 // órgão central (tipicamente CEI).
 function pedirRecurso() {
   return new Promise(async resolve => {
-    const orgaosRes = await fetch(`${API_BASE}/orgaos`);
+    const orgaosRes = await fetchProtegido(`${API_BASE}/orgaos`);
     const orgaos = await orgaosRes.json();
-    const locaisRes = await fetch(`${API_BASE}/catalogos/orgaosLocais`);
+    const locaisRes = await fetchProtegido(`${API_BASE}/catalogos/orgaosLocais`);
     const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JEA", "TER"].includes(o.sigla));
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
@@ -9891,7 +9945,7 @@ function pedirRecurso() {
         <label>Destino:</label>
         <select id="modalOrgaoDestino">
           ${orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("")}
-          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${o.nome}</option>`).join("")}
+          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${escaparHtmlEbd(o.nome)}</option>`).join("")}
         </select>
       </div>
       <div class="input-group">
@@ -9928,7 +9982,7 @@ async function homologarExclusaoAcao(processoId) {
 
 // Modal customizado (mesmo padrão de pedirTexto/confirmarAcao) — Promise<{resultado, diasSancao}|null>.
 async function pedirJulgamento() {
-  const penRes = await fetch(`${API_BASE}/catalogos/tiposPenalidade`);
+  const penRes = await fetchProtegido(`${API_BASE}/catalogos/tiposPenalidade`);
   const penalidades = (await penRes.json()).filter(p => p.ativo !== false && p.codigo !== "EXCLUSAO");
 
   return new Promise(resolve => {
@@ -9945,7 +9999,7 @@ async function pedirJulgamento() {
       </div>
       <div class="input-group" id="modalGrupoPenalidade">
         <label>Penalidade (Art. 95 §2º):</label>
-        <select id="modalPenalidade">${penalidades.map(p => `<option value="${p.penalidadeId}">${p.nome}</option>`).join("")}</select>
+        <select id="modalPenalidade">${penalidades.map(p => `<option value="${p.penalidadeId}">${escaparHtmlEbd(p.nome)}</option>`).join("")}</select>
       </div>
       <div class="input-group" id="modalGrupoDias">
         <label>Dias de sanção (deixe em branco para prazo indeterminado):</label>
@@ -10052,7 +10106,7 @@ async function carregarRadarAbandono() {
     <th>Nome</th><th>Congregação</th><th>Afastado desde</th><th>Dias</th><th></th>
   </tr></thead><tbody>` +
     membros.map(m => `<tr>
-      <td>${m.nome}</td>
+      <td>${escaparHtmlEbd(m.nome)}</td>
       <td>${m.congregacao || "-"}</td>
       <td>${m.dataAfastamento || "-"}</td>
       <td>${m.diasAfastado ?? "-"}</td>
@@ -10096,15 +10150,15 @@ async function carregarProcedimentosAbandono() {
     <th>Nome</th><th>Tipo</th><th>Status</th><th>Notificado em</th><th>Recurso</th><th></th>
   </tr></thead><tbody>` +
     procedimentos.map(p => `<tr>
-      <td>${p.nome}</td>
+      <td>${escaparHtmlEbd(p.nome)}</td>
       <td>${ROTULO_TIPO_ABANDONO[p.tipo] || p.tipo}</td>
       <td>${badgeStatusAbandono(p.status)}${p.status === "NOTIFICADO" && p.prazoVencido ? " ⏰ prazo vencido" : ""}</td>
       <td>${p.dataNotificacao || "-"}</td>
       <td>${p.recursoInterposto ? `${p.resultadoRecurso || "PENDENTE"} (${p.dataRecurso || "-"})` : "-"}</td>
       <td class="acoes-inline">
-        ${p.status === "NOTIFICADO" ? `<button class="btn-link" onclick="homologarProcedimentoAbandonoAcao(${p.procedimentoId})">Homologar</button>` : ""}
+        ${authGeral && p.status === "NOTIFICADO" ? `<button class="btn-link" onclick="homologarProcedimentoAbandonoAcao(${p.procedimentoId})">Homologar</button>` : ""}
         ${p.status === "NOTIFICADO" ? `<button class="btn-link" onclick="arquivarProcedimentoAbandonoAcao(${p.procedimentoId})">Arquivar</button>` : ""}
-        ${p.status === "HOMOLOGADO" && !p.recursoInterposto ? `<button class="btn-link" onclick="registrarRecursoAbandonoAcao(${p.procedimentoId})">Registrar Recurso</button>` : ""}
+        ${authGeral && p.status === "HOMOLOGADO" && !p.recursoInterposto ? `<button class="btn-link" onclick="registrarRecursoAbandonoAcao(${p.procedimentoId})">Registrar Recurso</button>` : ""}
       </td>
     </tr>`).join("") + "</tbody></table>";
 }
@@ -10170,7 +10224,7 @@ async function carregarTentativasContatoLista(membroId) {
   container.innerHTML = resumo + `<table class="tabela-frequencia"><thead><tr>
     <th>Canal</th><th>Data</th><th>Observação</th>
   </tr></thead><tbody>` +
-    tentativas.map(t => `<tr><td>${t.canal}</td><td>${t.dataTentativa}</td><td>${t.observacao || "-"}</td></tr>`).join("") + "</tbody></table>";
+    tentativas.map(t => `<tr><td>${escaparHtmlEbd(t.canal)}</td><td>${t.dataTentativa}</td><td>${t.observacao || "-"}</td></tr>`).join("") + "</tbody></table>";
 }
 
 async function carregarRadarAbandonoDigital() {
@@ -10188,7 +10242,7 @@ async function carregarRadarAbandonoDigital() {
     <th>Nome</th><th>Congregação</th><th>Canais distintos</th><th>Dias desde a 1ª tentativa</th><th></th>
   </tr></thead><tbody>` +
     membros.map(m => `<tr>
-      <td>${m.nome}</td>
+      <td>${escaparHtmlEbd(m.nome)}</td>
       <td>${m.congregacao || "-"}</td>
       <td>${m.canaisDistintos}/2</td>
       <td>${m.diasDesdePrimeira ?? "-"}</td>
@@ -10245,7 +10299,7 @@ async function carregarPainelPessoal(matricula) {
 
   cartao.innerHTML = `
     <div class="cartao-perfil">
-      <p class="nome-perfil">${data.membro.nome}</p>
+      <p class="nome-perfil">${escaparHtmlEbd(data.membro.nome)}</p>
       <p class="linha-perfil">Matrícula ${data.membro.membroId} · ${data.membro.funcao || "sem função cadastrada"}</p>
       <p class="linha-perfil">${data.membro.congregacao || "sem congregação cadastrada"} · ${badgeStatusPessoa(data.membro.status)}</p>
     </div>`;
@@ -10571,7 +10625,7 @@ async function carregarAlertasComplianceAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Severidade</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody>`;
-  lista.forEach(a => html += `<tr><td>${a.severidade}</td><td>${a.tipo}</td><td>${a.descricao}</td><td><button class="btn-link" onclick="resolverAlertaComplianceAcao(${a.alertaId})">Resolver</button></td></tr>`);
+  lista.forEach(a => html += `<tr><td>${a.severidade}</td><td>${a.tipo}</td><td>${escaparHtmlEbd(a.descricao)}</td><td><button class="btn-link" onclick="resolverAlertaComplianceAcao(${a.alertaId})">Resolver</button></td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10587,7 +10641,7 @@ async function carregarCongregacoesPrestacaoAcao() {
   const select = document.getElementById("prestacaoCongregacao");
   const res = await fetchProtegido(`${API_BASE}/catalogos/congregacoes`);
   const lista = await res.json();
-  select.innerHTML = (Array.isArray(lista) ? lista.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("") : "");
+  select.innerHTML = (Array.isArray(lista) ? lista.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("") : "");
 }
 
 async function registrarPrestacaoContasAcao() {
@@ -10616,7 +10670,7 @@ async function carregarPrestacoesContasAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Água</th><th>Luz</th><th>Status</th><th>Repasse</th></tr></thead><tbody>`;
-  lista.forEach(p => html += `<tr><td>${p.congregacaoNome}</td><td>${p.mesReferencia}</td><td>${p.temAgua ? "✅" : "❌"}</td><td>${p.temLuz ? "✅" : "❌"}</td><td>${p.status}</td><td>${p.bloqueioRepasse ? "🔒 bloqueado" : "liberado"}</td></tr>`);
+  lista.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.congregacaoNome)}</td><td>${p.mesReferencia}</td><td>${p.temAgua ? "✅" : "❌"}</td><td>${p.temLuz ? "✅" : "❌"}</td><td>${p.status}</td><td>${p.bloqueioRepasse ? "🔒 bloqueado" : "liberado"}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10637,7 +10691,7 @@ async function carregarRecertificacoesAcao() {
       acoes = `<button class="btn-link" onclick="decidirRecertificacaoAcao(${r.recertificacaoId}, 'CONFIRMAR')">Recertificar</button>
                <button class="btn-link btn-link-perigo" onclick="decidirRecertificacaoAcao(${r.recertificacaoId}, 'EXPIRAR')">Expirar</button>`;
     }
-    html += `<tr><td>${r.nome}</td><td>${r.papelNome}</td><td>${r.permissao}</td><td>${new Date(r.prazo).toLocaleDateString("pt-BR")}</td><td>${r.status}</td><td class="acoes-inline">${acoes}</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${r.papelNome}</td><td>${r.permissao}</td><td>${new Date(r.prazo).toLocaleDateString("pt-BR")}</td><td>${r.status}</td><td class="acoes-inline">${acoes}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -10787,7 +10841,7 @@ async function carregarSinalizacoesNifAcao() {
     } else if (s.status === "CONFIRMADA") {
       acoes = `<button class="btn-link" onclick="registrarComunicacaoCoafAcao(${s.sinalizacaoId})">Comunicar ao COAF</button>`;
     }
-    html += `<tr><td>${s.tipo}</td><td>${s.descricao}</td><td>${s.fornecedorNome || "-"}</td><td>${s.status}</td><td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td><td class="acoes-inline">${acoes}</td></tr>`;
+    html += `<tr><td>${s.tipo}</td><td>${escaparHtmlEbd(s.descricao)}</td><td>${s.fornecedorNome || "-"}</td><td>${s.status}</td><td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td><td class="acoes-inline">${acoes}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -10926,7 +10980,7 @@ async function registrarAceiteAcao() {
     const lista = await res2.json();
     const container = document.getElementById("resultadoAceites");
     let html = `<table class="tabela-frequencia"><thead><tr><th>Membro</th><th>Política</th><th>Data</th></tr></thead><tbody>`;
-    (Array.isArray(lista) ? lista : []).forEach(a => html += `<tr><td>${a.membroNome}</td><td>${a.politicaTitulo}</td><td>${new Date(a.DataAceite).toLocaleString("pt-BR")}</td></tr>`);
+    (Array.isArray(lista) ? lista : []).forEach(a => html += `<tr><td>${escaparHtmlEbd(a.membroNome)}</td><td>${a.politicaTitulo}</td><td>${new Date(a.DataAceite).toLocaleString("pt-BR")}</td></tr>`);
     html += "</tbody></table>";
     container.innerHTML = html;
   }
@@ -10988,7 +11042,7 @@ async function carregarConflitosInteresseAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Dirigente</th><th>Mandato</th><th>Conflito?</th><th>Descrição</th></tr></thead><tbody>`;
-  lista.forEach(c => html += `<tr><td>${c.membroNome}</td><td>${c.MandatoReferencia}</td><td>${c.TemConflito ? "⚠️ Sim" : "✅ Não"}</td><td>${c.DescricaoConflito || "-"}</td></tr>`);
+  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.membroNome)}</td><td>${c.MandatoReferencia}</td><td>${c.TemConflito ? "⚠️ Sim" : "✅ Não"}</td><td>${c.DescricaoConflito || "-"}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -11022,7 +11076,7 @@ async function carregarSolicitacoesDPO() {
     }
     html += `<tr>
       <td>${s.membroId}</td>
-      <td>${s.nome}</td>
+      <td>${escaparHtmlEbd(s.nome)}</td>
       <td>${s.tipo}</td>
       <td>${s.descricao || "-"}</td>
       <td>${badgeStatusLgpd(s.status)}</td>
@@ -11185,13 +11239,13 @@ function pedirEncaminhamentoProcesso(orgaos, locais, infracoes) {
         <label>Órgão:</label>
         <select id="modalOrgaoEncaminhar">
           ${orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("")}
-          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${o.nome}</option>`).join("")}
+          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${escaparHtmlEbd(o.nome)}</option>`).join("")}
         </select>
       </div>
       <div class="input-group">
         <label>Infrações (Art. 96-99) — selecione 1 ou mais:</label>
         <div class="rolagem-tabela" style="max-height:180px;">
-          ${infracoes.filter(i => i.ativo !== false).map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-ouvidoria" value="${i.infracaoId}" style="width:auto;" /> ${i.nome}</label>`).join("")}
+          ${infracoes.filter(i => i.ativo !== false).map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-ouvidoria" value="${i.infracaoId}" style="width:auto;" /> ${escaparHtmlEbd(i.nome)}</label>`).join("")}
         </div>
       </div>
       <div class="modal-acoes">
@@ -11211,7 +11265,7 @@ function pedirEncaminhamentoProcesso(orgaos, locais, infracoes) {
 
 async function encaminharProcessoOuvidoriaAcao(denunciaId) {
   const [orgaosRes, locaisRes, infracoesRes] = await Promise.all([
-    fetch(`${API_BASE}/orgaos`), fetch(`${API_BASE}/catalogos/orgaosLocais`), fetch(`${API_BASE}/catalogos/tiposInfracao`)
+    fetchProtegido(`${API_BASE}/orgaos`), fetchProtegido(`${API_BASE}/catalogos/orgaosLocais`), fetchProtegido(`${API_BASE}/catalogos/tiposInfracao`)
   ]);
   const orgaos = await orgaosRes.json();
   const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JAI", "JEA", "TER"].includes(o.sigla));
@@ -11277,7 +11331,7 @@ async function carregarMediacoes() {
   </tr></thead><tbody>`;
   lista.forEach(m => {
     html += `<tr>
-      <td>${m.assunto}</td>
+      <td>${escaparHtmlEbd(m.assunto)}</td>
       <td>${m.parteANome || m.parteADescricao || "-"}</td>
       <td>${m.parteBNome || m.parteBDescricao || "-"}</td>
       <td>${ROTULO_STATUS_MEDIACAO[m.status] || m.status}</td>
@@ -11351,7 +11405,7 @@ async function abrirDetalheMediacao(mediacaoId) {
 
   container.innerHTML = `
     <hr />
-    <h4>${m.assunto} — ${ROTULO_STATUS_MEDIACAO[m.status] || m.status}</h4>
+    <h4>${escaparHtmlEbd(m.assunto)} — ${ROTULO_STATUS_MEDIACAO[m.status] || m.status}</h4>
     <p class="subtitle">Parte A: ${m.parteANome || m.parteADescricao || "-"} · Parte B: ${m.parteBNome || m.parteBDescricao || "-"}
       ${m.mediadorNome ? ` · Mediador: ${m.mediadorNome}` : ""}${m.arbitroNome ? ` · Árbitro: ${m.arbitroNome}` : ""}</p>
     ${m.sentencaArbitralUrl ? `<p><a class="btn-link" href="${m.sentencaArbitralUrl}" target="_blank" rel="noopener">📄 Ver sentença arbitral</a></p>` : ""}
@@ -11434,8 +11488,8 @@ async function carregarOpcoesRelatorioDepto() {
   document.getElementById("rdMes").value = String(new Date().getMonth() + 1);
 
   if (!selCong.dataset.montado) {
-    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
-    const opcoesCong = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const opcoesCong = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.innerHTML = opcoesCong;
     selCong.dataset.montado = "1";
     const selCdCong = document.getElementById("cdCongregacao");
@@ -11443,8 +11497,8 @@ async function carregarOpcoesRelatorioDepto() {
   }
   const selCdArea = document.getElementById("cdArea");
   if (selCdArea && !selCdArea.dataset.montado) {
-    const areas = await (await fetch(`${API_BASE}/catalogos/areas`)).json();
-    selCdArea.innerHTML = areas.filter(a => a.ativa !== false).map(a => `<option value="${a.areaId}">${a.nome}</option>`).join("");
+    const areas = await (await fetchProtegido(`${API_BASE}/catalogos/areas`)).json();
+    selCdArea.innerHTML = areas.filter(a => a.ativa !== false).map(a => `<option value="${a.areaId}">${escaparHtmlEbd(a.nome)}</option>`).join("");
     selCdArea.dataset.montado = "1";
   }
   // v5.8 — Região/Quadrante/Distrito, mesmo padrão de montagem de Área acima.
@@ -11456,18 +11510,18 @@ async function carregarOpcoesRelatorioDepto() {
   for (const { selId, rota, chave } of CD_CATALOGOS_TERRITORIAIS) {
     const sel = document.getElementById(selId);
     if (sel && !sel.dataset.montado) {
-      const itens = await (await fetch(`${API_BASE}/catalogos/${rota}`)).json();
+      const itens = await (await fetchProtegido(`${API_BASE}/catalogos/${rota}`)).json();
       // Regioes usa "ativa", Quadrantes/Distritos usa "ativo" (GestaoCatalogos)
       // — confere os dois pra não incluir inativo por engano nem excluir
       // ativo por checar o campo errado.
-      sel.innerHTML = itens.filter(i => i.ativa !== false && i.ativo !== false).map(i => `<option value="${i[chave]}">${i.nome}</option>`).join("");
+      sel.innerHTML = itens.filter(i => i.ativa !== false && i.ativo !== false).map(i => `<option value="${i[chave]}">${escaparHtmlEbd(i.nome)}</option>`).join("");
       sel.dataset.montado = "1";
     }
   }
   const selSerieDep = document.getElementById("cdSerieDepartamento");
   if (selSerieDep && !selSerieDep.dataset.montado) {
-    const deps = await (await fetch(`${API_BASE}/catalogos/departamentos`)).json();
-    selSerieDep.innerHTML = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${d.nome}</option>`).join("");
+    const deps = await (await fetchProtegido(`${API_BASE}/catalogos/departamentos`)).json();
+    selSerieDep.innerHTML = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${escaparHtmlEbd(d.nome)}</option>`).join("");
     selSerieDep.dataset.montado = "1";
   }
   const cdAno = document.getElementById("cdAno");
@@ -11475,8 +11529,8 @@ async function carregarOpcoesRelatorioDepto() {
   const cdMes = document.getElementById("cdMes");
   if (cdMes) cdMes.value = String(new Date().getMonth() + 1);
   if (!selDep.dataset.montado) {
-    const deps = await (await fetch(`${API_BASE}/catalogos/departamentos`)).json();
-    const opcoesDep = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${d.nome}</option>`).join("");
+    const deps = await (await fetchProtegido(`${API_BASE}/catalogos/departamentos`)).json();
+    const opcoesDep = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${escaparHtmlEbd(d.nome)}</option>`).join("");
     selDep.innerHTML = opcoesDep;
     selDep.dataset.montado = "1";
     const selTdDep = document.getElementById("tdDepartamento");
@@ -11575,7 +11629,7 @@ function renderizarPainelRelatorioDepto(data) {
 
   const roAttr = somenteLeitura ? "readonly" : "";
   const eventosHtml = `<h4>Eventos</h4>
-    <div class="input-group"><label>Local</label><input type="number" min="0" ${roAttr} id="rdEventoLocal" value="${data.eventos.local}" /></div>
+    <div class="input-group"><label>Local</label><input type="number" min="0" ${roAttr} id="rdEventoLocal" value="${escaparHtmlEbd(data.eventos.local)}" /></div>
     <div class="input-group"><label>Área</label><input type="number" min="0" ${roAttr} id="rdEventoArea" value="${data.eventos.area}" /></div>
     <div class="input-group"><label>Geral</label><input type="number" min="0" ${roAttr} id="rdEventoGeral" value="${data.eventos.geral}" /></div>`;
 
@@ -11590,7 +11644,7 @@ function renderizarPainelRelatorioDepto(data) {
     ${somenteLeitura ? "" : `<button type="button" class="btn-link" onclick="adicionarLinhaContribuinteRd()">➕ Adicionar contribuinte</button>`}` : "";
 
   container.innerHTML = `
-    <p><strong>${rotuloLocal}:</strong> preenchendo ${data.congregacaoNome} — ${data.departamentoNome} — ${data.mesReferencia}/${data.anoReferencia}
+    <p><strong>${rotuloLocal}:</strong> preenchendo ${escaparHtmlEbd(data.congregacaoNome)} — ${data.departamentoNome} — ${data.mesReferencia}/${data.anoReferencia}
       (status: <strong>${ROTULO_STATUS_RD[data.status] || data.status}</strong>${data.atrasado ? ` — <span style="color:var(--cor-perigo,#c0392b);">⚠️ atrasado</span>` : ""})</p>
     ${gruposHtml}
     ${eventosHtml}
@@ -11826,7 +11880,7 @@ async function carregarDespesasTesourariaDeptoAcao() {
   if (!Array.isArray(lista) || lista.length === 0) { container.innerHTML = "<p class='subtitle'>Nenhuma despesa lançada neste mês.</p>"; return; }
   container.innerHTML = `<h4>Despesas do mês</h4><table class="tabela-frequencia"><thead><tr>
     <th>Descrição</th><th>Valor</th><th>Lançado por</th><th>Autorizado por</th><th>Quando</th></tr></thead><tbody>
-    ${lista.map(d => `<tr><td>${d.descricao}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${d.nomeLancador}</td><td>${d.nomeAutorizador || "-"}</td><td>${new Date(d.criadoEm).toLocaleDateString("pt-BR")}</td></tr>`).join("")}
+    ${lista.map(d => `<tr><td>${escaparHtmlEbd(d.descricao)}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${d.nomeLancador}</td><td>${d.nomeAutorizador || "-"}</td><td>${new Date(d.criadoEm).toLocaleDateString("pt-BR")}</td></tr>`).join("")}
     </tbody></table>`;
 }
 
@@ -11938,7 +11992,7 @@ function renderizarPainelConsolidadoDepto(data) {
   const container = document.getElementById("painelConsolidadoDepto");
 
   const linhasDepto = data.porDepartamento.map(d => `<tr>
-    <td>${d.nome}</td>
+    <td>${escaparHtmlEbd(d.nome)}</td>
     <td>${d.totalEnviados}/${d.totalCongregacoes}${d.totalPendentes > 0 ? ` <span style="color:var(--cor-perigo,#c0392b);">(${d.totalPendentes} pendente(s))</span>` : ""}</td>
     <td>${d.eventosLocal + d.eventosArea + d.eventosGeral}</td>
     <td>${d.integracaoConversao + d.integracaoReconciliacao + d.integracaoDeOutraIgreja}</td>
@@ -11954,7 +12008,7 @@ function renderizarPainelConsolidadoDepto(data) {
   const pendenciasHtml = data.pendencias.length > 0 ? `
     <h4>Pendências (ainda não enviaram)</h4>
     <table class="tabela-frequencia"><thead><tr><th>Departamento</th><th>Congregação</th><th>Status</th></tr></thead><tbody>
-      ${data.pendencias.map(p => `<tr><td>${p.sigla}</td><td>${p.congregacaoNome}</td><td>${p.status === "NAO_INICIADO" ? "Não iniciado" : "Rascunho"}</td></tr>`).join("")}
+      ${data.pendencias.map(p => `<tr><td>${p.sigla}</td><td>${escaparHtmlEbd(p.congregacaoNome)}</td><td>${p.status === "NAO_INICIADO" ? "Não iniciado" : "Rascunho"}</td></tr>`).join("")}
     </tbody></table>` : `<p class="subtitle">✅ Nenhuma pendência — todos os relatórios deste mês já foram enviados.</p>`;
 
   const historicoHtml = (data.historico && data.historico.length > 0) ? `
@@ -12033,7 +12087,7 @@ async function abrirComparativoPorteAcao() {
     <p class="subtitle">Médias do grupo: Membros ativos ${g.medias.totalMembrosAtivos} · Eventos ${g.medias.totalEventos} ·
       Integração ${g.medias.totalIntegracao} · Para o Geral R$ ${g.medias.valorParaGeral.toFixed(2)} · Para o Local R$ ${g.medias.valorParaLocal.toFixed(2)}</p>
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Membros ativos</th><th>Eventos</th><th>Integração</th><th>Para o Geral</th><th>Para o Local</th></tr></thead><tbody>
-      ${g.congregacoes.map(c => `<tr><td>${c.congregacaoNome}</td><td>${c.totalMembrosAtivos}</td><td>${c.totalEventos}</td><td>${c.totalIntegracao}</td>
+      ${g.congregacoes.map(c => `<tr><td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>${c.totalMembrosAtivos}</td><td>${c.totalEventos}</td><td>${c.totalIntegracao}</td>
         <td>R$ ${Number(c.valorParaGeral).toFixed(2)}</td><td>R$ ${Number(c.valorParaLocal).toFixed(2)}</td></tr>`).join("")}
     </tbody></table>`).join("") || `<p class="subtitle">Sem dados no período pra comparar.</p>`;
 }
@@ -12044,8 +12098,8 @@ let _esCongregacaoAtual = null;
 async function carregarOpcoesEscalasAcao() {
   const selCong = document.getElementById("esCongregacao");
   if (!selCong.dataset.montado) {
-    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
-    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
 }
@@ -12329,8 +12383,8 @@ let _hvCongregacaoAtual = null;
 async function carregarOpcoesHabilitacaoAcao() {
   const selCong = document.getElementById("hvCongregacao");
   if (selCong && !selCong.dataset.montado) {
-    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
-    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
 }
@@ -12513,8 +12567,8 @@ const ROTULO_TIPO_BENEFICIO_AS = { CESTA_BASICA: "Cesta básica", AUXILIO_FINANC
 async function carregarOpcoesAssistenciaSocialAcao() {
   const selCong = document.getElementById("asCongregacao");
   if (selCong && !selCong.dataset.montado) {
-    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
-    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${c.nome}</option>`).join("");
+    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
 }
@@ -12701,7 +12755,7 @@ async function carregarProfissionaisAssistenciaAcao() {
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
   container.innerHTML = data.profissionais.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CRESS</th><th>Situação</th><th></th></tr></thead><tbody>
-        ${data.profissionais.map(p => `<tr><td>${p.membroNome}</td><td>${p.numeroCredencial}</td><td>${p.ativo ? "✅ Ativo" : "⛔ Inativo"}</td>
+        ${data.profissionais.map(p => `<tr><td>${escaparHtmlEbd(p.membroNome)}</td><td>${p.numeroCredencial}</td><td>${p.ativo ? "✅ Ativo" : "⛔ Inativo"}</td>
           <td>${p.ativo ? `<button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="descredenciarProfissionalAssistenciaAcao(${p.profissionalId})">Descredenciar</button>` : ""}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum Assistente Social credenciado ainda.</p>";
@@ -12738,7 +12792,7 @@ async function carregarPrestacaoContasAssistenciaAcao() {
 async function carregarOpcoesEbdAcao() {
   const selCong = document.getElementById("ebdCongregacao");
   if (selCong && !selCong.dataset.montado) {
-    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
     selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
@@ -12933,7 +12987,7 @@ let ebdChamadaLicaoAtual = null;
 async function carregarOpcoesChamadaEbdAcao() {
   const sel = document.getElementById("ebdChamadaCongregacao");
   if (sel && !sel.dataset.montado) {
-    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
     sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     sel.dataset.montado = "1";
   }
@@ -13471,7 +13525,7 @@ async function carregarOpcoesPlanosEbdAcao() {
   const selForm = document.getElementById("planoCongregacao");
   const selFiltro = document.getElementById("planoFiltroCongregacao");
   if (selForm && !selForm.dataset.montado) {
-    const congs = (await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json()).filter(c => c.ativa !== false);
+    const congs = (await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json()).filter(c => c.ativa !== false);
     const opcoes = congs.map(c => `<option value="${Number(c.congregacaoId)}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selForm.innerHTML = `<option value="">Campo inteiro (todas as congregações)</option>` + opcoes;
     selFiltro.innerHTML = `<option value="">Todas do meu escopo</option>` + opcoes;
@@ -14556,7 +14610,7 @@ async function carregarConsolidadoRevistasEbdAcao() {
 async function carregarOpcoesFinanceiroEbdAcao() {
   const sel = document.getElementById("finCongregacao");
   if (sel && !sel.dataset.montado) {
-    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
     sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     sel.dataset.montado = "1";
   }
@@ -14706,7 +14760,7 @@ function trimestreAtualEbd() {
 async function carregarOpcoesCadernetaEbdAcao() {
   const sel = document.getElementById("cadRelCongregacao");
   if (sel && !sel.dataset.montado) {
-    const congs = await (await fetch(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
     sel.innerHTML = `<option value="">Todas as congregações do meu escopo</option>`
       + congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     sel.dataset.montado = "1";
@@ -14930,14 +14984,19 @@ async function carregarMinhasConquistasAcao() {
 
 async function carregarRankingConquistasAcao() {
   const container = document.getElementById("resultadoRankingConquistas");
-  const res = await fetchProtegido(`${API_BASE}/conquistas/ranking?escopoTipo=GLOBAL`);
+  // O servidor decide o recorte: para o membro, a turma (ou congregação) dele — nome abreviado, sem matrícula, os 20 primeiros e a posição dele; quem tem permissão de gestão vê o escopo que alcança.
+  const res = await fetchProtegido(`${API_BASE}/conquistas/ranking`);
   const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
-  container.innerHTML = data.ranking.length
+  if (!data || data.sucesso === false || !Array.isArray(data.ranking)) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd((data && data.mensagem) || "Não foi possível carregar o ranking.")}</p>`; return; }
+  const posicaoDe = (r, i) => (r.posicao != null ? Number(r.posicao) : i + 1);
+  const rotuloEscopo = data.escopo ? `<p class="subtitle">Ranking da sua ${escaparHtmlEbd(data.escopo === "TURMA" ? "turma" : data.escopo === "CONGREGACAO" ? "congregação" : String(data.escopo).toLowerCase())}.</p>` : "";
+  const minha = data.minhaPosicao && typeof data.minhaPosicao === "object" ? data.minhaPosicao : null;       // { posicao, score, totalConquistas }
+  const foraDoTop = minha && !data.ranking.some(r => r.voce) ? `<p class="subtitle">Você está em ${Number(minha.posicao)}º lugar${data.totalParticipantes ? ` de ${Number(data.totalParticipantes)}` : ""}, com ${Number(minha.score)} ponto(s).</p>` : "";
+  container.innerHTML = rotuloEscopo + (data.ranking.length
     ? `<table class="tabela-frequencia"><thead><tr><th>#</th><th>Nome</th><th>Pontuação</th><th>Conquistas</th></tr></thead><tbody>
-        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${escaparHtmlEbd(r.nome)}</td><td>${r.score}</td><td>${r.totalConquistas}</td></tr>`).join("")}
+        ${data.ranking.map((r, i) => `<tr${r.voce ? ' style="font-weight:600;"' : ""}><td>${posicaoDe(r, i)}</td><td>${escaparHtmlEbd(r.nome)}${r.voce ? " (você)" : ""}</td><td>${Number(r.score)}</td><td>${Number(r.totalConquistas)}</td></tr>`).join("")}
       </tbody></table>`
-    : "<p class='subtitle'>Ninguém no ranking ainda.</p>";
+    : "<p class='subtitle'>Ninguém no ranking ainda.</p>") + foraDoTop;
 }
 
 // -- Administração (aba Conquistas — exige "conquistas_gestao") --

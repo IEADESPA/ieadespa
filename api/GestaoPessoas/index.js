@@ -14,11 +14,8 @@ const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
 
 // fecho da v7.5 — o POST e o DELETE não conferiam o escopo: quem tinha "pessoas" numa congregação alterava, trocava o e-mail ou desligava QUALQUER membro de QUALQUER
 // congregação (só o GET filtrava). E o e-mail virou a raiz da entrada por código ("primeiro acesso / esqueci o PIN"). Agora o alvo E o destino precisam estar no escopo.
-function noEscopoDaPessoa(usuario, congregacaoNome, extensaoNome) {
-  if (!auth.estaNoEscopo(usuario, congregacaoNome)) return false;
-  return !usuario.escopoExtensaoNome || extensaoNome === usuario.escopoExtensaoNome;
-}
-const FORA_DO_ESCOPO = { sucesso: false, mensagem: "Fora do seu escopo de atuação." };
+// (a regra mora em shared/escopoRotas.js, usada por todas as rotas de ficha)
+const { noEscopoDaPessoa, FORA_DO_ESCOPO } = require("../shared/escopoRotas");
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
 function mascararEmail(e) {
   const s = String(e || "").trim();

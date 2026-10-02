@@ -39,9 +39,11 @@ module.exports = async function (context, req) {
   try {
     if (acao === "emitir" && metodo === "POST") {
       if (!temGestao(usuario)) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
-      const { membroId, titulo, descricao, conquistaId } = req.body || {};
-      // Trava 6-B: o titular precisa estar no escopo de quem emite.
-      if (membroId && !(await certificados.gestorAlcancaMembro(pool, usuario, Number(membroId)))) return erro(context, 403, "Esta pessoa está fora do seu escopo de atuação.");
+      const { membroId: membroBruto, titulo, descricao, conquistaId } = req.body || {};
+      // Trava 6-B: o titular precisa estar no escopo de quem emite. A matrícula vale só na forma canônica (a mesma conferida é a gravada); malformada, inexistente
+      // e fora do escopo dão a mesma recusa.
+      const membroId = membroBruto ? auth.idDeRota(membroBruto) : null;
+      if (membroBruto && (!membroId || !(await certificados.gestorAlcancaMembro(pool, usuario, membroId)))) return erro(context, 403, "Esta pessoa está fora do seu escopo de atuação.");
       const resultado = await certificados.emitirCertificado(pool, {
         membroId, titulo, descricao, conquistaId: conquistaId || null, emitidoPorMembroId: usuario.membroId
       });
@@ -55,24 +57,28 @@ module.exports = async function (context, req) {
     // a dizer REVOGADO e a formação deixa de valer como requisito.
     if (acao === "revogar" && metodo === "POST") {
       if (!temGestao(usuario) && !temGestaoFormacao(usuario)) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
-      const { certificadoId, motivo } = req.body || {};
-      if (!certificadoId) return erro(context, 400, "Informe certificadoId.");
+      const { certificadoId: certificadoBruto, motivo } = req.body || {};
+      if (!certificadoBruto) return erro(context, 400, "Informe certificadoId.");
       // Trava 6-B: revogar tira o valor da formação como requisito (consagração,
-      // liderança, escala) — só quem alcança o titular pode.
-      const alvo = await certificados.buscarCertificadoPorId(pool, Number(certificadoId));
-      if (!alvo) return erro(context, 404, "Certificado não encontrado.");
-      if (!(await certificados.gestorAlcancaMembro(pool, usuario, alvo.membroId))) return erro(context, 403, "O titular deste certificado está fora do seu escopo de atuação.");
-      const resultado = await certificados.revogarCertificado(pool, { certificadoId: Number(certificadoId), motivo, revogadoPorMembroId: usuario.membroId });
+      // liderança, escala) — só quem alcança o titular pode. Certificado de titular fora do
+      // escopo, inexistente e id malformado dão a MESMA resposta (sem sonda de id).
+      const certificadoId = auth.idDeRota(certificadoBruto);
+      const alvo = certificadoId ? await certificados.buscarCertificadoPorId(pool, certificadoId) : null;
+      if (!alvo || !(await certificados.gestorAlcancaMembro(pool, usuario, alvo.membroId))) return erro(context, 404, "Certificado não encontrado.");
+      const resultado = await certificados.revogarCertificado(pool, { certificadoId, motivo, revogadoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
     }
 
     if (!acao && metodo === "GET") {
-      const membroId = Number((req.query && req.query.membroId) || usuario.membroId);
-      if (membroId !== usuario.membroId && !temGestao(usuario) && !temGestaoFormacao(usuario)) {
+      const pedido = req.query && req.query.membroId;
+      const proprio = Number(usuario.membroId);
+      const membroId = pedido === undefined || pedido === "" ? proprio : auth.idDeRota(pedido);
+      if (membroId !== proprio && !temGestao(usuario) && !temGestaoFormacao(usuario)) {
         return erro(context, 403, "Só é possível ver os certificados de outra pessoa com a permissão de gestão da EBD ou da formação.");
       }
-      if (membroId !== usuario.membroId && !(await certificados.gestorAlcancaMembro(pool, usuario, membroId))) {
+      // Malformada, inexistente e fora do escopo: a mesma recusa.
+      if (membroId !== proprio && (!membroId || !(await certificados.gestorAlcancaMembro(pool, usuario, membroId)))) {
         return erro(context, 403, "Esta pessoa está fora do seu escopo de atuação.");
       }
       // O selo de integridade é interno (só serve à verificação pública): a API

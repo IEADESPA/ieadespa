@@ -36,6 +36,11 @@ function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
 }
 
+// mês 1 a 12 e ano de 4 dígitos, inteiros (1.5, NaN e texto davam 500 na consulta)
+function mesEAnoValidos(mes, ano) {
+  return Number.isInteger(mes) && mes >= 1 && mes <= 12 && Number.isInteger(ano) && ano >= 2000 && ano <= 2100;
+}
+
 function temEbdGestao(usuario) {
   return !!(usuario.permissoes && usuario.permissoes.includes("ebd_gestao"));
 }
@@ -62,7 +67,7 @@ module.exports = async function (context, req) {
   try {
     // ---- Oferta (ancorada em EbdLicoes, v6.2) ----
     if (acao === "oferta" && metodo === "GET") {
-      const licaoId = Number(req.query && req.query.licaoId);
+      const licaoId = auth.idDeRota(req.query && req.query.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await financeiro.buscarLicaoPorId(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -72,7 +77,8 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "oferta" && metodo === "POST") {
-      const { licaoId, valor } = req.body || {};
+      const { valor } = req.body || {};
+      const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await financeiro.buscarLicaoPorId(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -84,17 +90,18 @@ module.exports = async function (context, req) {
 
     // ---- Lançamentos manuais ----
     if (acao === "lancamentos" && metodo === "GET") {
-      const congregacaoId = Number(req.query && req.query.congregacaoId);
+      const congregacaoId = auth.idDeRota(req.query && req.query.congregacaoId);
       const mes = Number(req.query && req.query.mes);
       const ano = Number(req.query && req.query.ano);
-      if (!congregacaoId || !mes || !ano) return erro(context, 400, "Informe congregacaoId, mes e ano.");
+      if (!congregacaoId || !mesEAnoValidos(mes, ano)) return erro(context, 400, "Informe congregacaoId, mes (1 a 12) e ano.");
       if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Ver lançamentos exige a permissão ebd_gestao dentro do seu escopo de atuação.");
       context.res = { status: 200, body: { sucesso: true, lancamentos: await financeiro.listarLancamentosPorCongregacaoMes(pool, { congregacaoId, mes, ano }) } };
       return;
     }
 
     if (acao === "lancamentos" && metodo === "POST") {
-      const { congregacaoId, data, tipo, descricao, valor } = req.body || {};
+      const { data, tipo, descricao, valor } = req.body || {};
+      const congregacaoId = auth.idDeRota(req.body && req.body.congregacaoId);
       if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
       if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Registrar lançamento exige a permissão ebd_gestao dentro do seu escopo de atuação.");
       const resultado = await financeiro.criarLancamento(pool, { congregacaoId, data, tipo, descricao, valor, registradoPorMembroId: usuario.membroId });
@@ -103,7 +110,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "lancamentos" && metodo === "DELETE") {
-      const lancamentoId = Number(context.bindingData.id || (req.query && req.query.id));
+      const lancamentoId = auth.idDeRota(context.bindingData.id || (req.query && req.query.id));
       if (!lancamentoId) return erro(context, 400, "Informe o id do lançamento.");
       const lancamento = await financeiro.buscarLancamentoPorId(pool, lancamentoId);
       if (!lancamento) return erro(context, 404, "Lançamento não encontrado.");
@@ -115,10 +122,10 @@ module.exports = async function (context, req) {
 
     // ---- Consolidado do mês (o que vira sugestão do campo `ofertas` no relatório departamental) ----
     if (acao === "consolidado" && metodo === "GET") {
-      const congregacaoId = Number(req.query && req.query.congregacaoId);
+      const congregacaoId = auth.idDeRota(req.query && req.query.congregacaoId);
       const mes = Number(req.query && req.query.mes);
       const ano = Number(req.query && req.query.ano);
-      if (!congregacaoId || !mes || !ano) return erro(context, 400, "Informe congregacaoId, mes e ano.");
+      if (!congregacaoId || !mesEAnoValidos(mes, ano)) return erro(context, 400, "Informe congregacaoId, mes (1 a 12) e ano.");
       if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Ver o consolidado exige a permissão ebd_gestao dentro do seu escopo de atuação.");
       context.res = { status: 200, body: { sucesso: true, ...(await financeiro.buscarConsolidadoMensal(pool, { congregacaoId, mes, ano })) } };
       return;

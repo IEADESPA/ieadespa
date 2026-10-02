@@ -5,44 +5,55 @@
 // na tabela". Detecta duas coisas que uma trilha sem hash nunca pegaria:
 // catálogo mudou o texto sem trocar VersaoTermo (inconsistência real), ou
 // a versão assinada já foi substituída por uma mais nova.
-// GET /api/termos-assinados/{id}/verificar — o próprio signatário ou nível Global.
+// GET /api/termos-assinados/{id}/verificar — o próprio signatário, ou quem audita (permissão
+// `auditoria` ou `protecaodedados`) no nível GERAL (papel GLOBAL e escopo TODAS). Qualquer outra
+// pessoa recebe a MESMA resposta de assinatura que não existe: a rota não serve de sonda de id.
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const { TERMOS } = require("../shared/termos");
 const { avaliarIntegridadeTermo } = require("../shared/assinaturaInterna");
+const { ehGeral } = require("../shared/escopoRotas");
+
+const naoEncontrada = () => ({ status: 404, body: { sucesso: false, mensagem: "Assinatura não encontrada." } });
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
   if (!usuario) return;
-  const id = context.bindingData.id;
-  const pool = await getPool();
+  const id = auth.idDeRota(context.bindingData.id);
+  if (!id) { context.res = naoEncontrada(); return; }
 
-  const termo = (await pool.request().input("id", sql.Int, id).query(`
-    SELECT t.TermoAssinadoId, t.MembroId, m.Nome AS membroNome, t.TipoTermo, t.VersaoTermo, t.HashConteudo,
-           CONVERT(varchar(33), t.DataAssinatura, 126) AS dataAssinatura
-    FROM TermosAssinados t JOIN MembroReferencia m ON m.MembroId = t.MembroId
-    WHERE t.TermoAssinadoId = @id
-  `)).recordset[0];
-  if (!termo) {
-    context.res = { status: 404, body: { sucesso: false, mensagem: "Assinatura não encontrada." } };
-    return;
-  }
-  if (termo.MembroId !== usuario.membroId && usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Você só pode verificar a própria assinatura." } };
-    return;
-  }
+  try {
+    const pool = await getPool();
+    const termo = (await pool.request().input("id", sql.Int, id).query(`
+      SELECT t.TermoAssinadoId, t.MembroId, m.Nome AS membroNome, t.TipoTermo, t.VersaoTermo, t.HashConteudo,
+             CONVERT(varchar(33), t.DataAssinatura, 126) AS dataAssinatura
+      FROM TermosAssinados t JOIN MembroReferencia m ON m.MembroId = t.MembroId
+      WHERE t.TermoAssinadoId = @id
+    `)).recordset[0];
 
-  const integridade = avaliarIntegridadeTermo({
-    catalogoTermo: TERMOS[termo.TipoTermo], hashConteudo: termo.HashConteudo, versaoTermo: termo.VersaoTermo
-  });
-
-  context.res = {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-    body: {
-      sucesso: true,
-      membroNome: termo.membroNome, tipoTermo: termo.TipoTermo, versaoTermo: termo.VersaoTermo, dataAssinatura: termo.dataAssinatura,
-      integridade
+    const permissoes = Array.isArray(usuario.permissoes) ? usuario.permissoes : [];
+    const auditoria = ehGeral(usuario) && (permissoes.includes("auditoria") || permissoes.includes("protecaodedados"));
+    if (!termo || (Number(termo.MembroId) !== Number(usuario.membroId) && !auditoria)) {
+      context.res = naoEncontrada();
+      return;
     }
-  };
+
+    const integridade = avaliarIntegridadeTermo({
+      catalogoTermo: Object.prototype.hasOwnProperty.call(TERMOS, termo.TipoTermo) ? TERMOS[termo.TipoTermo] : undefined,
+      hashConteudo: termo.HashConteudo, versaoTermo: termo.VersaoTermo
+    });
+
+    context.res = {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+      body: {
+        sucesso: true,
+        membroNome: termo.membroNome, tipoTermo: termo.TipoTermo, versaoTermo: termo.VersaoTermo, dataAssinatura: termo.dataAssinatura,
+        integridade
+      }
+    };
+  } catch (e) {
+    context.log.error("[VerificarTermoAssinado] erro:", e);
+    context.res = { status: 500, body: { sucesso: false, mensagem: "Erro interno ao verificar a assinatura." } };
+  }
 };

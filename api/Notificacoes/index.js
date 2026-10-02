@@ -17,7 +17,8 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
   if (!usuario) return;
   const pool = await getPool();
-  const idNumerico = recurso && /^\d+$/.test(recurso) ? Number(recurso) : null;
+  // Só a forma canônica do número ("007", "1e3" e id gigante não são id) — o Azure entrega o segmento numérico como número, idDeRota aceita os dois formatos.
+  const idNumerico = auth.idDeRota(recurso);
 
   if (req.method === "GET" && !recurso) {
     const status = (req.query && req.query.status) || "abertas";
@@ -60,8 +61,14 @@ module.exports = async function (context, req) {
 
   if (req.method === "PUT" && recurso === "preferencias") {
     const { categoria, emailAtivo } = req.body || {};
-    if (!categoria || typeof emailAtivo !== "boolean") {
+    if (typeof categoria !== "string" || !categoria || typeof emailAtivo !== "boolean") {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe categoria e emailAtivo (booleano)." } };
+      return;
+    }
+    // A categoria precisa existir no catálogo de regras de notificação (NotificacaoRegras.Categoria): antes qualquer texto criava uma linha de preferência.
+    const existe = await pool.request().input("categoria", sql.NVarChar(40), categoria).query(`SELECT TOP 1 1 AS ok FROM NotificacaoRegras WHERE Categoria = @categoria`);
+    if (existe.recordset.length === 0) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Categoria de notificação desconhecida." } };
       return;
     }
     await pool.request()

@@ -39,9 +39,12 @@ const SELECT_PROCESSO_BASE = `
          p.PenalidadeId AS penalidadeId, tp.Codigo AS penalidadeCodigo, tp.Nome AS penalidadeNome,
          CONVERT(varchar(10), p.DataProvaReintegracao, 120) AS dataProvaReintegracao,
          p.ResultadoProvaReintegracao AS resultadoProvaReintegracao,
-         p.ProcessoOrigemId AS processoOrigemId, p.HomologadoPeloCEI AS homologadoPeloCei
+         p.ProcessoOrigemId AS processoOrigemId, p.HomologadoPeloCEI AS homologadoPeloCei,
+         cgr.Nome AS congregacaoReu, extr.Nome AS extensaoReu
   FROM ProcessosDisciplinares p
   JOIN MembroReferencia m ON m.MembroId = p.MembroId
+  LEFT JOIN Congregacoes cgr ON cgr.CongregacaoId = m.CongregacaoId
+  LEFT JOIN ExtensoesTenda extr ON extr.ExtensaoId = m.ExtensaoId
   LEFT JOIN Orgaos o ON o.OrgaoId = p.OrgaoResponsavelId
   LEFT JOIN OrgaosLocais ol ON ol.OrgaoLocalId = p.OrgaoLocalId
   LEFT JOIN MembroReferencia relator ON relator.MembroId = p.RelatorMembroId
@@ -130,7 +133,8 @@ async function validarOrgaoProcesso(pool, sql, { orgaoResponsavelId, orgaoLocalI
     orgaoResponsavelId: resolvido.orgaoId,
     orgaoLocalId: resolvido.orgaoLocalId,
     sigla: resolvido.sigla,
-    nivel: resolvido.nivel
+    nivel: resolvido.nivel,
+    referenciaId: resolvido.referenciaId
   };
 }
 

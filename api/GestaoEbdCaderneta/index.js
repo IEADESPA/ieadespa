@@ -70,7 +70,7 @@ async function podeGerenciarTurma(pool, usuario, turmaId) {
 }
 
 function nomesPermitidos(usuario) {
-  return usuario.escopoCongregacoes === "TODAS" ? null : (usuario.escopoCongregacoes || []);
+  return usuario.escopoCongregacoes === "TODAS" ? null : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []);
 }
 
 function hojeIso() {
@@ -89,7 +89,7 @@ module.exports = async function (context, req) {
     // ---- Caderneta do domingo (congregação inteira) ----
     if (acao === "caderneta" && metodo === "GET") {
       if (!temEbdGestao(usuario)) return semPermissao(context);
-      const licaoId = Number(req.query && req.query.licaoId);
+      const licaoId = auth.idDeRota(req.query && req.query.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await chamada.buscarLicaoPorId(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -100,8 +100,8 @@ module.exports = async function (context, req) {
 
     // ---- Uma classe (ebd_gestao OU professor ativo da turma) ----
     if (acao === "caderneta/turma" && metodo === "GET") {
-      const licaoId = Number(req.query && req.query.licaoId);
-      const turmaId = Number(req.query && req.query.turmaId);
+      const licaoId = auth.idDeRota(req.query && req.query.licaoId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       if (!licaoId || !turmaId) return erro(context, 400, "Informe licaoId e turmaId.");
       if (!(await podeGerenciarTurma(pool, usuario, turmaId))) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
       const dados = await caderneta.montarLinhaDaTurma(pool, licaoId, turmaId);
@@ -114,11 +114,13 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "caderneta/salvar" && metodo === "POST") {
-      const { licaoId, turmaId, biblias, revistas, observacao } = req.body || {};
+      const { biblias, revistas, observacao } = req.body || {};
+      const licaoId = auth.idDeRota(req.body && req.body.licaoId);
+      const turmaId = auth.idDeRota(req.body && req.body.turmaId);
       if (!licaoId || !turmaId) return erro(context, 400, "Informe licaoId e turmaId.");
       if (!(await podeGerenciarTurma(pool, usuario, turmaId))) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
       const resultado = await caderneta.salvarCaderneta(pool, {
-        licaoId: Number(licaoId), turmaId: Number(turmaId), biblias, revistas, observacao, registradoPorMembroId: usuario.membroId
+        licaoId, turmaId, biblias, revistas, observacao, registradoPorMembroId: usuario.membroId
       });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -129,9 +131,11 @@ module.exports = async function (context, req) {
       if (!temEbdGestao(usuario)) return semPermissao(context);
       const trimestre = req.query && req.query.trimestre;
       if (!trimestre || !caderneta.intervaloDoTrimestre(trimestre)) return erro(context, 400, "Informe o trimestre no formato AAAA-T1 a AAAA-T4 (ex: 2026-T3).");
-      const congregacaoId = Number(req.query && req.query.congregacaoId) || null;
+      const congregacaoBruta = req.query && req.query.congregacaoId;
+      const congregacaoId = congregacaoBruta ? auth.idDeRota(congregacaoBruta) : null;
+      if (congregacaoBruta && !congregacaoId) return erro(context, 400, "congregacaoId inválido.");
       if (congregacaoId && !(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
-      const relatorio = await caderneta.gerarRelatorioTrimestre(pool, {
+      const relatorio =await caderneta.gerarRelatorioTrimestre(pool, {
         trimestre, congregacaoId, nomesCongregacoesPermitidas: nomesPermitidos(usuario)
       });
       context.res = { status: 200, body: { sucesso: true, relatorio } };
@@ -141,9 +145,11 @@ module.exports = async function (context, req) {
     // ---- Fechamento trimestral ----
     if (acao === "fechamentos" && metodo === "GET") {
       if (!temEbdGestao(usuario)) return semPermissao(context);
-      const congregacaoId = Number(req.query && req.query.congregacaoId) || null;
+      const congregacaoBruta = req.query && req.query.congregacaoId;
+      const congregacaoId = congregacaoBruta ? auth.idDeRota(congregacaoBruta) : null;
+      if (congregacaoBruta && !congregacaoId) return erro(context, 400, "congregacaoId inválido.");
       if (congregacaoId && !(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
-      const fechamentos = await caderneta.listarFechamentos(pool, {
+      const fechamentos =await caderneta.listarFechamentos(pool, {
         congregacaoId, trimestre: (req.query && req.query.trimestre) || null, nomesCongregacoesPermitidas: nomesPermitidos(usuario)
       });
       context.res = { status: 200, body: { sucesso: true, fechamentos } };
@@ -152,11 +158,12 @@ module.exports = async function (context, req) {
 
     if ((acao === "fechamento" || acao === "fechamento/refazer") && metodo === "POST") {
       if (!temEbdGestao(usuario)) return semPermissao(context);
-      const { congregacaoId, trimestre } = req.body || {};
+      const { trimestre } = req.body || {};
+      const congregacaoId = auth.idDeRota(req.body && req.body.congregacaoId);
       if (!congregacaoId || !trimestre) return erro(context, 400, "Informe congregacaoId e trimestre.");
-      if (!(await podeAcessarCongregacao(pool, usuario, Number(congregacaoId)))) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await caderneta.fecharTrimestre(pool, {
-        congregacaoId: Number(congregacaoId), trimestre: String(trimestre).trim(),
+        congregacaoId, trimestre: String(trimestre).trim(),
         origem: caderneta.ORIGEM_FECHAMENTO.MANUAL, fechadoPorMembroId: usuario.membroId, refazer: acao === "fechamento/refazer"
       });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };

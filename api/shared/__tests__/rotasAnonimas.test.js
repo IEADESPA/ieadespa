@@ -30,9 +30,8 @@ const PUBLICAS = {
   ConfirmarCodigoAcessoMembro: "confirmar o código por e-mail (com limites)",
   RegistrarPresenca: "check-in da Portaria: matrícula + senha da reunião dita na sala (com limitador)",
   InscricaoPush: "GET devolve só a chave pública VAPID; o resto exige sessão",
-  GestaoCatalogos: "GET devolve catálogos de referência (congregações, cargos...); escrever exige permissão",
-  GetOrgaos: "lista de órgãos (referência)",
-  GestaoTextoMestre: "GET do texto mestre vigente (normativo público)"
+  GestaoDocumentos: "GET sem login devolve só os documentos marcados como PÚBLICOS (documentosVisibilidade.test.js); registrar, mudar e apagar exigem sessão",
+  GestaoTextoMestre: "GET sem login devolve só a versão vigente do texto mestre (normativo público)"
 };
 // Rotinas agendadas: protegidas por segredo (x-cron-secret), não por sessão.
 const ROTINAS = new Set(["NotificacoesAgendador", "EbdFechamentoAutomatico", "FluxosEscalonador", "AvaliarNotificacoes"]);
@@ -54,7 +53,7 @@ function rotas() {
 // chega ao 401 (prova de que a porta de sessão existe e está acessível).
 // O Azure Functions entrega o segmento numérico da URL como NÚMERO (`/comissoes/1` chega como 1, não "1"): os dois formatos entram, senão um handler que chama .toUpperCase()
 // no valor passa no teste e dá 500 em produção (aconteceu em GestaoComissoes).
-const VALORES = [undefined, "1", 1, "x", "CCJ", "votar", "responder"];
+const VALORES = [undefined, "1", 1, "x", "CCJ", "votar", "responder", "congregacoes"];
 function combinacoes(route) {
   const nomes = [...route.matchAll(/\{\*?([a-zA-Z]+)\??\}/g)].map(m => m[1]);
   let todas = [{}];
@@ -98,11 +97,21 @@ describe.each([...ROTINAS].filter(n => TODAS.some(r => r.dir === n)))("rotina ag
 });
 
 describe("as rotas públicas que ainda têm ação protegida", () => {
-  test("GestaoCatalogos: escrever sem sessão é 401", async () => {
-    const handler = require(path.join(RAIZ, "GestaoCatalogos", "index.js"));
-    const context = { bindingData: { catalogo: "congregacoes" }, log: { error() {} } };
-    await handler(context, { method: "POST", query: {}, body: { nome: "x" }, headers: {} });
-    expect(context.res.status).toBe(401);
+  test("GestaoDocumentos: registrar, mudar a visibilidade e apagar sem sessão é 401", async () => {
+    const handler = require(path.join(RAIZ, "GestaoDocumentos", "index.js"));
+    for (const metodo of ["POST", "PUT", "DELETE"]) {
+      const context = { bindingData: { id: "1" }, log: { error() {} } };
+      await handler(context, { method: metodo, query: {}, body: {}, headers: {} });
+      expect(context.res.status).toBe(401);
+    }
+  });
+  test("GestaoTextoMestre: publicar nova versão sem sessão é 401", async () => {
+    const handler = require(path.join(RAIZ, "GestaoTextoMestre", "index.js"));
+    for (const metodo of ["POST", "PUT"]) {
+      const context = { bindingData: { id: "1" }, log: { error() {} } };
+      await handler(context, { method: metodo, query: {}, body: {}, headers: {} });
+      expect(context.res.status).toBe(401);
+    }
   });
   test("InscricaoPush: inscrever/remover sem sessão é 401", async () => {
     const handler = require(path.join(RAIZ, "InscricaoPush", "index.js"));

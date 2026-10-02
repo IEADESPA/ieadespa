@@ -8,14 +8,17 @@
 // GET  /api/fluxo-tipos           -> catálogo completo, com etapas aninhadas
 // POST /api/fluxo-tipos           -> { chave, nome, etapas: [{ ordem, nome, responsavelPermissao, responsavelNivelMinimo?, prazoDias }] }
 // PUT  /api/fluxo-tipos/{chave}   -> { ativo }
-const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
+const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 
 const NIVEIS_VALIDOS = ["CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO", "GLOBAL"];
 
 module.exports = async function (context, req) {
   const chave = context.bindingData.chave;
-  const usuario = auth.exigirNivelGlobal(req, context);
+  // Institucional (desenha quem aprova o quê no sistema inteiro): só o nível GERAL (papel Global E escopo de todas as congregações), com a permissão de administrar acesso.
+  // Antes era só "nível Global": o papel Global de Tesoureiro ou de Líder de Consagrações também passava.
+  const usuario = exigirGeral(req, context, "permissoes");
   if (!usuario) return;
   const pool = await getPool();
 
@@ -33,7 +36,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST" && !chave) {
     const { chave: novaChave, nome, etapas } = req.body || {};
-    if (!novaChave || !novaChave.trim() || !nome || !nome.trim() || !Array.isArray(etapas) || etapas.length === 0) {
+    if (typeof novaChave !== "string" || !novaChave.trim() || typeof nome !== "string" || !nome.trim() || !Array.isArray(etapas) || etapas.length === 0) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe chave, nome e ao menos 1 etapa." } };
       return;
     }
@@ -63,6 +66,10 @@ module.exports = async function (context, req) {
         .query(`INSERT INTO FluxoEtapas (TipoFluxo, Ordem, Nome, ResponsavelPermissao, ResponsavelNivelMinimo, PrazoDias)
                 VALUES (@tipoFluxo, @ordem, @nome, @responsavelPermissao, @responsavelNivelMinimo, @prazoDias)`);
     }
+    await registrarAuditoria({
+      tabela: "TiposFluxo", registroId: null, acao: "Criou tipo de fluxo", usuarioId: usuario.membroId,
+      dadosDepois: { chave: novaChave, nome, etapas: etapas.map(e => ({ ordem: e.ordem, nome: e.nome, responsavelPermissao: e.responsavelPermissao, responsavelNivelMinimo: e.responsavelNivelMinimo || null, prazoDias: e.prazoDias })) }
+    });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Tipo de fluxo criado.", chave: novaChave } };
     return;
   }
@@ -80,6 +87,10 @@ module.exports = async function (context, req) {
     }
     await pool.request().input("chave", sql.NVarChar(60), chave).input("ativo", sql.Bit, ativo)
       .query(`UPDATE TiposFluxo SET Ativo = @ativo WHERE Chave = @chave`);
+    await registrarAuditoria({
+      tabela: "TiposFluxo", registroId: null, acao: ativo ? "Ativou tipo de fluxo" : "Desativou tipo de fluxo", usuarioId: usuario.membroId,
+      dadosDepois: { chave, ativo }
+    });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: ativo ? "✅ Tipo de fluxo ativado." : "✅ Tipo de fluxo desativado." } };
     return;
   }

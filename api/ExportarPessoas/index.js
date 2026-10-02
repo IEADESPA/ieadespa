@@ -14,16 +14,30 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 
 const COLUNAS_SENSIVEIS = ["telefone", "email", "endereco", "dataNascimento"];
+// As colunas que a tela de exportação oferece (COLUNAS_EXPORT_PESSOAS em app/script.js). O texto da trilha de auditoria nunca carrega texto livre do cliente.
+const COLUNAS_VALIDAS = [
+  "membroId", "nome", "idade", "categoria", "formaAdmissao", "funcao", "cargoMinisterial", "congregacao",
+  "status", "situacaoMembro", "telefone", "email", "endereco", "dataNascimento", "dataAdmissao"
+];
+const MAX_QUANTIDADE = 1000000;
+const LIMITE_ACAO_AUDITORIA = 100; // AuditLog.Acao é NVARCHAR(100): texto maior fazia a gravação da trilha falhar em silêncio
 
+// ESCOPO: esta rota só valida e audita; os dados da planilha vêm de GET /api/pessoas, que já entrega só o escopo de quem exporta.
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
 
-  const { colunas, quantidade } = req.body || {};
-  if (!Array.isArray(colunas) || colunas.length === 0) {
+  const { colunas: colunasBrutas, quantidade: quantidadeBruta } = req.body || {};
+  if (!Array.isArray(colunasBrutas) || colunasBrutas.length === 0 || colunasBrutas.length > COLUNAS_VALIDAS.length * 2) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe ao menos uma coluna." } };
     return;
   }
+  if (!colunasBrutas.every((c) => typeof c === "string" && COLUNAS_VALIDAS.includes(c))) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Coluna desconhecida na exportação." } };
+    return;
+  }
+  const colunas = [...new Set(colunasBrutas)];
+  const quantidade = Number.isInteger(quantidadeBruta) && quantidadeBruta >= 0 && quantidadeBruta <= MAX_QUANTIDADE ? quantidadeBruta : null;
 
   const colunasSensiveisPedidas = colunas.filter((c) => COLUNAS_SENSIVEIS.includes(c));
   if (colunasSensiveisPedidas.length > 0 && usuario.nivel !== "GLOBAL") {
@@ -39,7 +53,9 @@ module.exports = async function (context, req) {
   // sentinel válido e já documentado aqui, não um id real de ninguém.
   await registrarAuditoria({
     tabela: "MembroReferencia", registroId: 0, usuarioId: usuario.membroId,
-    acao: `Exportou rol de membros (${quantidade != null ? quantidade : "?"} linha(s), colunas: ${colunas.join(", ")})`
+    acao: `Exportou rol de membros (${quantidade != null ? quantidade : "?"} linha(s), colunas: ${colunas.join(", ")})`.slice(0, LIMITE_ACAO_AUDITORIA),
+    // A lista completa de colunas fica no corpo da trilha (sem o limite de 100 caracteres do título).
+    dadosDepois: { quantidade, colunas }
   });
 
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Exportação registrada." } };

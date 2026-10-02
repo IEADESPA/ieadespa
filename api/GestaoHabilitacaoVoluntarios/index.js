@@ -25,10 +25,17 @@
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const hv = require("../shared/habilitacaoVoluntarios");
+const { registrarAuditoria } = require("../shared/auditoria");
+const { carregarPessoa, noEscopoDaPessoa, pessoaAlcancavel, FORA_DO_ESCOPO } = require("../shared/escopoRotas");
 
 function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
 }
+
+// Revisão de escopo (02/10/2026): fora do escopo = a MESMA resposta de "não existe", para a rota não servir de sonda (quem tem esteira, quem é voluntário, que equipe existe).
+const MSG_SEM_ESTEIRA = "Esteira de habilitação não encontrada para este voluntário (ou fora do seu escopo de atuação).";
+const MSG_MEMBRO_OU_EQUIPE = "Membro ou equipe não encontrados (ou fora do seu escopo de atuação).";
+const foraDoEscopo = (context) => erro(context, 403, FORA_DO_ESCOPO.mensagem);
 
 async function nomeCongregacao(pool, congregacaoId) {
   const r = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id`);
@@ -48,11 +55,31 @@ function idValido(v) {
 }
 const temPermissao = (usuario) => !!(usuario.permissoes && usuario.permissoes.includes("habilitacao_voluntarios"));
 
-// Congregação do membro (para o escopo de quem consulta ou registra algo sobre ele).
-async function congregacaoDoMembro(pool, membroId) {
-  const r = await pool.request().input("id", sql.Int, membroId)
-    .query(`SELECT m.MembroId, c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`);
-  return r.recordset[0] || null;
+// A pessoa está ATIVA em alguma equipe de uma congregação que o escopo de quem age alcança? (voluntário cadastrado numa congregação que serve em outra)
+async function ativoEmEquipeDoEscopo(pool, usuario, membroId) {
+  const r = await pool.request().input("m", sql.Int, membroId).query(`
+    SELECT c.Nome AS CongregacaoNome
+    FROM EscalasEquipeMembros em
+    JOIN EscalasEquipes e ON e.EquipeId = em.EquipeId
+    JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
+    WHERE em.MembroId = @m AND em.Ativo = 1 AND e.Ativa = 1`);
+  return r.recordset.some(x => auth.estaNoEscopo(usuario, x.CongregacaoNome));
+}
+
+// Equipe (por id) dentro do escopo? Inexistente ou fora do escopo → false (mesma resposta).
+async function equipeNoEscopo(pool, usuario, equipeId) {
+  const eq = (await pool.request().input("id", sql.Int, equipeId).query(`SELECT c.Nome AS CongregacaoNome FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId WHERE e.EquipeId = @id`)).recordset[0];
+  return !!eq && auth.estaNoEscopo(usuario, eq.CongregacaoNome);
+}
+
+// A esteira (por id), se existir E a congregação dela estiver no escopo de quem age; senão null (o chamador responde "não encontrada", igual nos dois casos).
+async function esteiraDoEscopo(pool, usuario, habilitacaoId) {
+  const id = idValido(habilitacaoId);
+  if (!id) return null;
+  const habilitacao = await hv.buscarHabilitacaoPorId(pool, id);
+  if (!habilitacao) return null;
+  const nome = await nomeCongregacao(pool, habilitacao.congregacaoId);
+  return nome && auth.estaNoEscopo(usuario, nome) ? habilitacao : null;
 }
 
 function comStatusCalculado(hab) {
@@ -79,10 +106,12 @@ module.exports = async function (context, req) {
     // ---- Equipes/ministérios: marcação "contato com menores" ----
     if (acao === "equipes-flag") {
       if (metodo === "GET") {
-        const congregacaoId = Number(req.query && req.query.congregacaoId);
+        // Revisão de escopo: a leitura das equipes e da marca "contato com menores" também exige a permissão (as outras leituras da esteira já exigiam desde a v7.5).
+        if (!temPermissao(usuario)) return erro(context, 403, "Você não tem permissão para isso.");
+        const congregacaoId = idValido(req.query && req.query.congregacaoId);
         if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
         const nome = await nomeCongregacao(pool, congregacaoId);
-        if (!nome || !auth.estaNoEscopo(usuario, nome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+        if (!nome || !auth.estaNoEscopo(usuario, nome)) return foraDoEscopo(context);
         context.res = { status: 200, body: { sucesso: true, equipes: await hv.listarEquipesComFlag(pool, congregacaoId) } };
         return;
       }
@@ -92,10 +121,15 @@ module.exports = async function (context, req) {
         if (!temPermissao(usuario)) return erro(context, 403, "Você não tem permissão para isso.");
         const eqId = idValido(equipeId);
         if (!eqId) return erro(context, 400, "equipeId inválido.");
-        const eq = (await pool.request().input("id", sql.Int, eqId).query(`SELECT c.Nome AS CongregacaoNome FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId WHERE e.EquipeId = @id`)).recordset[0];
-        if (!eq) return erro(context, 404, "Equipe não encontrada.");
-        if (!auth.estaNoEscopo(usuario, eq.CongregacaoNome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+        const eq = (await pool.request().input("id", sql.Int, eqId).query(`SELECT c.Nome AS CongregacaoNome, e.ContatoComMenores AS ContatoComMenores FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId WHERE e.EquipeId = @id`)).recordset[0];
+        // equipe que não existe e equipe fora do escopo: a mesma resposta
+        if (!eq || !auth.estaNoEscopo(usuario, eq.CongregacaoNome)) return erro(context, 404, "Equipe não encontrada.");
         await hv.atualizarContatoComMenores(pool, eqId, contatoComMenores);
+        // Desligar a marca "contato com menores" tira a trava do ministério com menores: a mudança deixa rastro (quem, de quê para quê).
+        await registrarAuditoria({
+          tabela: "EscalasEquipes", registroId: eqId, acao: "CONTATO_COM_MENORES_ALTERADO", usuarioId: usuario.membroId,
+          dadosAntes: { contatoComMenores: !!eq.ContatoComMenores }, dadosDepois: { contatoComMenores }
+        });
         context.res = { status: 200, body: { sucesso: true, mensagem: "✅ Marcação atualizada." } };
         return;
       }
@@ -109,32 +143,45 @@ module.exports = async function (context, req) {
       return erro(context, 403, "Você não tem permissão para isso.");
     }
     if (acao === "lista" && metodo === "GET") {
-      const congregacaoId = Number(req.query && req.query.congregacaoId);
+      const congregacaoId = idValido(req.query && req.query.congregacaoId);
       if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
       const nome = await nomeCongregacao(pool, congregacaoId);
-      if (!nome || !auth.estaNoEscopo(usuario, nome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!nome || !auth.estaNoEscopo(usuario, nome)) return foraDoEscopo(context);
       context.res = { status: 200, body: { sucesso: true, habilitacoes: await hv.listarHabilitacoesPorCongregacao(pool, congregacaoId) } };
       return;
     }
 
     // ---- Iniciar (ou reaproveitar) esteira ----
+    // Revisão de escopo: a esteira é de uma PESSOA e fica presa a uma congregação (UNIQUE por membro). Antes só a congregação do corpo era conferida: dava para abrir (e
+    // depois ler e alterar) a esteira de gente de outra unidade, e uma esteira que já existia noutra unidade era devolvida por inteiro. Agora a pessoa precisa estar no escopo
+    // de quem abre (ou estar ATIVA numa equipe de congregação do escopo — voluntário cadastrado numa congregação que serve noutra), e uma esteira existente só volta
+    // se a congregação dela também está no escopo. Tudo que falha aqui responde igual: 403 "fora do seu escopo".
     if (acao === "iniciar" && metodo === "POST") {
       const { membroId, congregacaoId } = req.body || {};
       if (!membroId || !congregacaoId) return erro(context, 400, "Informe membroId e congregacaoId.");
-      if (!(await podeGerenciarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
-      const habilitacao = await hv.buscarOuCriarHabilitacao(pool, { membroId, congregacaoId, criadoPorMembroId: usuario.membroId });
+      const mId = idValido(membroId);
+      const cId = idValido(congregacaoId);
+      if (!mId || !cId) return erro(context, 400, "membroId e congregacaoId precisam ser números inteiros positivos.");
+      if (!(await podeGerenciarCongregacao(pool, usuario, cId))) return foraDoEscopo(context);
+      const pessoa = await carregarPessoa(pool, mId);
+      if (!pessoa) return foraDoEscopo(context);
+      if (!noEscopoDaPessoa(usuario, pessoa.congregacaoNome, pessoa.extensaoNome) && !(await ativoEmEquipeDoEscopo(pool, usuario, mId))) return foraDoEscopo(context);
+      const habilitacao = await hv.buscarOuCriarHabilitacao(pool, { membroId: mId, congregacaoId: cId, criadoPorMembroId: usuario.membroId });
+      // A esteira devolvida (a que já existia, ou a que outra unidade abriu no mesmo instante) só volta se a congregação DELA está no escopo; senão, a mesma resposta de "fora do escopo".
+      if (!habilitacao || !(await podeGerenciarCongregacao(pool, usuario, habilitacao.congregacaoId))) return foraDoEscopo(context);
       context.res = { status: 201, body: { sucesso: true, habilitacao: comStatusCalculado(habilitacao) } };
       return;
     }
 
     // ---- Detalhe por voluntário ----
+    // "Sem esteira" e "esteira de outra unidade" respondem IGUAL (404): senão a rota diria quem está em processo de habilitação para ministério com menores em outra unidade.
     if (acao === "detalhe" && metodo === "GET") {
-      const membroId = Number(req.query && req.query.membroId);
+      const membroId = idValido(req.query && req.query.membroId);
       if (!membroId) return erro(context, 400, "Informe membroId.");
       const habilitacao = await hv.buscarHabilitacaoPorMembro(pool, membroId);
-      if (!habilitacao) return erro(context, 404, "Este voluntário ainda não tem esteira de habilitação aberta.");
+      if (!habilitacao) return erro(context, 404, MSG_SEM_ESTEIRA);
       const nome = await nomeCongregacao(pool, habilitacao.congregacaoId);
-      if (!nome || !auth.estaNoEscopo(usuario, nome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!nome || !auth.estaNoEscopo(usuario, nome)) return erro(context, 404, MSG_SEM_ESTEIRA);
       context.res = { status: 200, body: { sucesso: true, habilitacao: comStatusCalculado(habilitacao) } };
       return;
     }
@@ -143,9 +190,9 @@ module.exports = async function (context, req) {
     if (acao === "concluir-etapa" && metodo === "POST") {
       const { habilitacaoId, etapa, observacao, entrevistadorId } = req.body || {};
       if (!habilitacaoId || !etapa) return erro(context, 400, "Informe habilitacaoId e etapa.");
-      const habilitacao = await hv.buscarHabilitacaoPorId(pool, habilitacaoId);
+      if (!temPermissao(usuario)) return erro(context, 403, "Você não tem permissão para isso.");
+      const habilitacao = await esteiraDoEscopo(pool, usuario, habilitacaoId);
       if (!habilitacao) return erro(context, 404, "Esteira não encontrada.");
-      if (!(await podeGerenciarCongregacao(pool, usuario, habilitacao.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await hv.concluirEtapa(pool, { habilitacaoId, etapa, observacao, entrevistadorId, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -155,9 +202,9 @@ module.exports = async function (context, req) {
     if (acao === "marcar-inapto" && metodo === "POST") {
       const { habilitacaoId, motivo } = req.body || {};
       if (!habilitacaoId) return erro(context, 400, "Informe habilitacaoId.");
-      const habilitacao = await hv.buscarHabilitacaoPorId(pool, habilitacaoId);
+      if (!temPermissao(usuario)) return erro(context, 403, "Você não tem permissão para isso.");
+      const habilitacao = await esteiraDoEscopo(pool, usuario, habilitacaoId);
       if (!habilitacao) return erro(context, 404, "Esteira não encontrada.");
-      if (!(await podeGerenciarCongregacao(pool, usuario, habilitacao.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await hv.marcarInapto(pool, { habilitacaoId, motivo, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -167,9 +214,9 @@ module.exports = async function (context, req) {
     if (acao === "reabilitar" && metodo === "POST") {
       const { habilitacaoId } = req.body || {};
       if (!habilitacaoId) return erro(context, 400, "Informe habilitacaoId.");
-      const habilitacao = await hv.buscarHabilitacaoPorId(pool, habilitacaoId);
+      if (!temPermissao(usuario)) return erro(context, 403, "Você não tem permissão para isso.");
+      const habilitacao = await esteiraDoEscopo(pool, usuario, habilitacaoId);
       if (!habilitacao) return erro(context, 404, "Esteira não encontrada.");
-      if (!(await podeGerenciarCongregacao(pool, usuario, habilitacao.congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await hv.reabilitar(pool, { habilitacaoId, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -177,14 +224,17 @@ module.exports = async function (context, req) {
 
     // ---- Elegibilidade a ministério com menores (hook de leitura pra v7.7) ----
     if (acao === "elegibilidade-menores" && metodo === "GET") {
-      const membroId = Number(req.query && req.query.membroId);
-      const equipeId = req.query && req.query.equipeId ? Number(req.query.equipeId) : null;
+      const membroId = idValido(req.query && req.query.membroId);
+      const equipeBruta = req.query && req.query.equipeId;
+      const equipeId = equipeBruta ? idValido(equipeBruta) : null;
       if (!membroId) return erro(context, 400, "Informe membroId.");
-      const alvo = await congregacaoDoMembro(pool, membroId);
-      if (!alvo) return erro(context, 404, "Membro não encontrado.");
-      if (!auth.estaNoEscopo(usuario, alvo.CongregacaoNome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (equipeBruta && !equipeId) return erro(context, 400, "equipeId inválido.");
+      // pessoa inexistente e pessoa fora do escopo: a mesma resposta; a equipe também precisa estar no escopo (senão a rota entregava a marca "contato com menores" de qualquer equipe)
+      const alvo = await pessoaAlcancavel(pool, usuario, membroId);
+      if (!alvo) return erro(context, 404, MSG_MEMBRO_OU_EQUIPE);
+      if (equipeId && !(await equipeNoEscopo(pool, usuario, equipeId))) return erro(context, 404, MSG_MEMBRO_OU_EQUIPE);
       const dados = await hv.buscarDadosElegibilidade(pool, { membroId, equipeId });
-      if (!dados) return erro(context, 404, "Membro não encontrado.");
+      if (!dados) return erro(context, 404, MSG_MEMBRO_OU_EQUIPE);
       const resultado = hv.podeServirComMenores(dados);
       context.res = { status: 200, body: { sucesso: true, ...dados, ...resultado } };
       return;
@@ -201,14 +251,11 @@ module.exports = async function (context, req) {
         const eqId = semEquipe ? null : idValido(equipeId);
         if (!semEquipe && !eqId) return erro(context, 400, "equipeId inválido.");
         // v7.5 (achado da revisão): o registro de RH também respeita o escopo — o voluntário e a equipe precisam estar no alcance de quem registra.
-        const alvo = await congregacaoDoMembro(pool, mId);
-        if (!alvo) return erro(context, 404, "Voluntário não encontrado.");
-        if (removidoDaEscala !== true && !auth.estaNoEscopo(usuario, alvo.CongregacaoNome)) return erro(context, 403, "Fora do seu escopo de atuação.");
-        if (eqId) {
-          const eq = (await pool.request().input("id", sql.Int, eqId).query(`SELECT c.Nome AS CongregacaoNome FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId WHERE e.EquipeId = @id`)).recordset[0];
-          if (!eq) return erro(context, 404, "Equipe não encontrada.");
-          if (!auth.estaNoEscopo(usuario, eq.CongregacaoNome)) return erro(context, 403, "Fora do seu escopo de atuação.");
-        }
+        // Com removidoDaEscala o voluntário pode ser de outra congregação (serve numa equipe do escopo): quem decide é removerDaEscala, que só alcança as equipes do escopo e
+        // responde igual para pessoa inexistente e para pessoa que não está ativa em equipe nenhuma do alcance de quem remove.
+        // Pessoa inexistente e pessoa fora do escopo respondem IGUAL (404), e equipe inexistente e equipe fora do escopo também.
+        if (removidoDaEscala !== true && !(await pessoaAlcancavel(pool, usuario, mId))) return erro(context, 404, "Voluntário não encontrado.");
+        if (eqId && !(await equipeNoEscopo(pool, usuario, eqId))) return erro(context, 404, "Equipe não encontrada.");
         // Remover da escala só alcança as equipes que o escopo de quem remove cobre.
         const resultado = await hv.registrarDesligamento(pool, {
           membroId: mId, equipeId: eqId, tipoMotivo, motivo, removidoDaEscala: removidoDaEscala === true, registradoPorMembroId: usuario.membroId,
@@ -223,11 +270,11 @@ module.exports = async function (context, req) {
       const membroId = idValido(req.query && req.query.membroId);
       if (!temPermissao(usuario)) return erro(context, 403, "Você não tem permissão para isso.");
       if (!membroId) return erro(context, 400, "Informe membroId.");
-      const alvo = await congregacaoDoMembro(pool, membroId);
-      if (!alvo) return erro(context, 404, "Voluntário não encontrado.");
-      // Cada registro vale pela congregação da equipe; o que não tem equipe vale pela congregação do voluntário.
+      // Voluntário que não existe devolve a lista vazia, igual a quem existe mas não tem nada visível no escopo (nenhuma resposta diz quem tem cadastro).
+      const alvo = await carregarPessoa(pool, membroId);
+      // Cada registro vale pela congregação da equipe; o que não tem equipe vale pela congregação do voluntário (e a extensão dele, se o escopo for de extensão).
       const visiveis = (await hv.listarDesligamentosPorMembro(pool, membroId))
-        .filter(l => auth.estaNoEscopo(usuario, l.congregacaoNome || alvo.CongregacaoNome))
+        .filter(l => (l.congregacaoNome ? auth.estaNoEscopo(usuario, l.congregacaoNome) : !!alvo && noEscopoDaPessoa(usuario, alvo.congregacaoNome, alvo.extensaoNome)))
         .map(({ congregacaoNome, ...resto }) => resto);
       context.res = { status: 200, body: { sucesso: true, desligamentos: visiveis } };
       return;

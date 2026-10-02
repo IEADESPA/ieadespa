@@ -4,6 +4,7 @@
 // tem a mesma resposta (403), exista ou não a matrícula.
 const auth = require("./auth");
 const { sql } = require("./db");
+const { noEscopoDaPessoa } = require("./escopoRotas");
 
 const NEGADO = { sucesso: false, mensagem: "Você só pode acessar os seus próprios dados." };
 
@@ -27,8 +28,9 @@ async function exigirTitularOuPermissao(req, context, pool, matriculaDaRota, per
     return null;
   }
   const r = (await pool.request().input("id", sql.Int, alvo)
-    .query(`SELECT c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`)).recordset[0];
-  if (!r || !auth.estaNoEscopo(usuario, r.CongregacaoNome)) {
+    .query(`SELECT c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`)).recordset[0];
+  // (a regra comum de escopo da pessoa também respeita o escopo por Extensão da Tenda, que a conferência só por congregação ignorava)
+  if (!r || !noEscopoDaPessoa(usuario, r.CongregacaoNome, r.ExtensaoNome)) {
     context.res = { status: 403, body: NEGADO };
     return null;
   }

@@ -1,10 +1,11 @@
-// ListarSolicitacoesLGPD — painel do Encarregado de Dados. Exige a permissão "protecaodedados".
+// ListarSolicitacoesLGPD — painel do Encarregado de Dados. Exige a permissão "protecaodedados" E o nível GERAL
+// (papel Global com escopo de todas as congregações): o painel mostra os pedidos dos titulares de TODA a igreja.
 // GET /api/lgpd/dpo/solicitacoes?status=&tipo=
-const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
+const { exigirGeral } = require("../shared/escopoRotas");
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "protecaodedados");
+  const usuario = exigirGeral(req, context, "protecaodedados");
   if (!usuario) return;
 
   const { status, tipo } = req.query || {};

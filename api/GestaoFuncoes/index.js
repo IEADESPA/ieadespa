@@ -6,16 +6,27 @@
 // POST   /api/funcoes                -> body: { funcaoId?, nome } -> cria (sem id) ou renomeia (com id)
 // PUT    /api/funcoes/{funcaoId}     -> body: { ativa: true|false } -> reativa ou desativa
 // DELETE /api/funcoes/{funcaoId}     -> exclui de verdade (só se ninguém mais usa)
+//
+// ESCOPO: o catálogo é da igreja inteira (CONFIG), então ler continua valendo para quem tem "pessoas", mas criar, renomear, desativar e excluir é do nível GERAL (papel Global com
+// escopo de todas as congregações): um Dirigente local não muda o catálogo de todas as congregações.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { ehGeral, MSG_GERAL } = require("../shared/escopoRotas");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
 
   const method = req.method;
-  const idRota = context.bindingData.funcaoId;
+  const idRotaBruto = context.bindingData.funcaoId;
+  const idRota = auth.idDeRota(idRotaBruto);
+
+  if (method !== "GET" && !ehGeral(usuario)) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: MSG_GERAL } };
+    return;
+  }
+
   const pool = await getPool();
 
   if (method === "GET") {
@@ -27,16 +38,18 @@ module.exports = async function (context, req) {
   }
 
   if (method === "POST") {
-    const { funcaoId, nome } = req.body || {};
-    if (!nome || !nome.trim()) {
+    const { funcaoId: funcaoIdBruto, nome } = req.body || {};
+    if (!nome || typeof nome !== "string" || !nome.trim()) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o nome da função." } };
       return;
     }
-    const nomeLimpo = nome.trim();
+    const nomeLimpo = nome.trim().slice(0, 100);
+    const funcaoId = auth.idDeRota(funcaoIdBruto);
 
-    if (funcaoId) {
-      const upd = await pool.request().input("id", sql.Int, funcaoId).input("nome", sql.NVarChar(100), nomeLimpo)
-        .query(`UPDATE Funcoes SET Nome = @nome WHERE FuncaoId = @id`);
+    if (funcaoIdBruto) {
+      const upd = funcaoId
+        ? await pool.request().input("id", sql.Int, funcaoId).input("nome", sql.NVarChar(100), nomeLimpo).query(`UPDATE Funcoes SET Nome = @nome WHERE FuncaoId = @id`)
+        : { rowsAffected: [0] };
       if (upd.rowsAffected[0] === 0) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Função não encontrada." } };
         return;
@@ -53,7 +66,7 @@ module.exports = async function (context, req) {
     await registrarAuditoria({
       tabela: "Funcoes",
       registroId: funcao.funcaoId,
-      acao: funcaoId ? "Renomeou função" : "Cadastrou função",
+      acao: funcaoIdBruto ? "Renomeou função" : "Cadastrou função",
       usuarioId: usuario.membroId,
       dadosDepois: { nome: nomeLimpo }
     });
@@ -63,13 +76,14 @@ module.exports = async function (context, req) {
   }
 
   if (method === "PUT") {
-    if (!idRota) {
+    if (!idRotaBruto) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o funcaoId na rota." } };
       return;
     }
     const { ativa } = req.body || {};
-    const upd = await pool.request().input("id", sql.Int, idRota).input("ativa", sql.Bit, !!ativa)
-      .query(`UPDATE Funcoes SET Ativa = @ativa WHERE FuncaoId = @id`);
+    const upd = idRota
+      ? await pool.request().input("id", sql.Int, idRota).input("ativa", sql.Bit, !!ativa).query(`UPDATE Funcoes SET Ativa = @ativa WHERE FuncaoId = @id`)
+      : { rowsAffected: [0] };
     if (upd.rowsAffected[0] === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Função não encontrada." } };
       return;
@@ -80,12 +94,12 @@ module.exports = async function (context, req) {
   }
 
   if (method === "DELETE") {
-    if (!idRota) {
+    if (!idRotaBruto) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o funcaoId na rota." } };
       return;
     }
-    const alvo = await pool.request().input("id", sql.Int, idRota)
-      .query(`SELECT Nome FROM Funcoes WHERE FuncaoId = @id`);
+    const alvo = idRota ? await pool.request().input("id", sql.Int, idRota)
+      .query(`SELECT Nome FROM Funcoes WHERE FuncaoId = @id`) : { recordset: [] };
     if (alvo.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Função não encontrada." } };
       return;

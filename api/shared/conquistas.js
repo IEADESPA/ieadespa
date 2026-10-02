@@ -61,6 +61,7 @@
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
 const escopo = require("./escopo");
+const auth = require("./auth");
 
 const TIPOS_REGRA = ["contagem_evento", "sequencia", "combinacao_exata", "marco_unico", "periodo_perfeito"];
 
@@ -587,16 +588,41 @@ async function buscarPainelMembro(pool, membroId, { congregacaoId } = {}) {
 // escopo adicional só desta tela — "TURMA" — que não é territorial (uma
 // Turma de EBD não corresponde a um nível de Lideranca), resolvido direto
 // contra EbdAlunos/EbdTurmas.
-async function listarMembrosDoEscopo(pool, { escopoTipo, escopoId }) {
+// Escopos que o ranking aceita. "DEPARTAMENTO" não está na lista de propósito: shared/escopo.js o resolve como "todas as congregações".
+const TIPOS_RANKING = ["GLOBAL", "TURMA", "CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO"];
+const LOTE_RANKING = 500; // membros por consulta (o SQL Server aceita ~2100 parâmetros)
+
+// `nomesPermitidos`: null = sem restrição (escopo "TODAS"); array = só estas congregações (a interseção com o que foi pedido). Pedido fora do escopo, id malformado e
+// escopo desconhecido dão a MESMA lista vazia de um escopo que não existe: o ranking não serve de sonda. `extensaoNome`: quem tem escopo por Extensão da Tenda só
+// enxerga os membros daquela Extensão.
+async function listarMembrosDoEscopo(pool, { escopoTipo, escopoId, nomesPermitidos = null, extensaoNome = null }) {
+  const restringe = Array.isArray(nomesPermitidos);
+  if (restringe && nomesPermitidos.length === 0) return [];
+  if (!TIPOS_RANKING.includes(escopoTipo)) return [];
+  const id = escopoTipo === "GLOBAL" ? null : auth.idDeRota(escopoId);
+  if (escopoTipo !== "GLOBAL" && !id) return [];
+
+  const filtroExtensao = extensaoNome ? " AND ex.Nome = @extensao" : "";
+  const juncaoExtensao = extensaoNome ? "LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId" : "";
+
   if (escopoTipo === "TURMA") {
-    const result = await pool.request().input("turmaId", sql.Int, escopoId).query(`
-      SELECT DISTINCT a.MembroId, m.Nome FROM EbdAlunos a JOIN MembroReferencia m ON m.MembroId = a.MembroId
-      WHERE a.TurmaId = @turmaId AND a.Ativo = 1
+    const request = pool.request().input("turmaId", sql.Int, id);
+    if (extensaoNome) request.input("extensao", sql.NVarChar(150), extensaoNome);
+    const result = await request.query(`
+      SELECT DISTINCT a.MembroId, m.Nome, cg.Nome AS CongregacaoNome FROM EbdAlunos a
+      JOIN EbdTurmas t ON t.TurmaId = a.TurmaId
+      JOIN Congregacoes cg ON cg.CongregacaoId = t.CongregacaoId
+      JOIN MembroReferencia m ON m.MembroId = a.MembroId
+      ${juncaoExtensao}
+      WHERE a.TurmaId = @turmaId AND a.Ativo = 1${filtroExtensao}
     `);
-    return result.recordset.map(r => ({ membroId: r.MembroId, nome: r.Nome }));
+    return result.recordset
+      .filter(r => !restringe || nomesPermitidos.includes(r.CongregacaoNome))
+      .map(r => ({ membroId: r.MembroId, nome: r.Nome }));
   }
 
-  const nomesCongregacoes = await escopo.resolverEscopoCongregacoes(pool, escopoTipo, escopoId);
+  let nomesCongregacoes = await escopo.resolverEscopoCongregacoes(pool, escopoTipo, id);
+  if (restringe) nomesCongregacoes = nomesCongregacoes === "TODAS" ? nomesPermitidos : nomesCongregacoes.filter(n => nomesPermitidos.includes(n));
   let condicao = "1=1";
   const request = pool.request();
   if (nomesCongregacoes !== "TODAS") {
@@ -604,32 +630,97 @@ async function listarMembrosDoEscopo(pool, { escopoTipo, escopoId }) {
     const params = nomesCongregacoes.map((nome, i) => { request.input(`nome${i}`, sql.NVarChar(150), nome); return `@nome${i}`; });
     condicao = `cg.Nome IN (${params.join(",")})`;
   }
+  if (extensaoNome) request.input("extensao", sql.NVarChar(150), extensaoNome);
   const result = await request.query(`
     SELECT DISTINCT a.MembroId, m.Nome FROM EbdAlunos a
     JOIN EbdTurmas t ON t.TurmaId = a.TurmaId
     JOIN Congregacoes cg ON cg.CongregacaoId = t.CongregacaoId
     JOIN MembroReferencia m ON m.MembroId = a.MembroId
-    WHERE a.Ativo = 1 AND ${condicao}
+    ${juncaoExtensao}
+    WHERE a.Ativo = 1 AND ${condicao}${filtroExtensao}
   `);
   return result.recordset.map(r => ({ membroId: r.MembroId, nome: r.Nome }));
 }
 
-async function listarRanking(pool, { escopoTipo, escopoId }) {
-  const membros = await listarMembrosDoEscopo(pool, { escopoTipo, escopoId });
-  const linhas = [];
-  for (const membro of membros) {
-    const desbloqueadas = await listarConquistasDesbloqueadasMembro(pool, membro.membroId);
-    const historico = await buscarHistoricoMembro(pool, membro.membroId);
-    const pesos = await buscarPesosScoreConfig(pool, {});
+// Pontuação e conquistas de VÁRIOS membros em poucas consultas (por lote), em vez de três consultas por aluno: com o escopo "geral" eram milhares de idas ao banco
+// numa só chamada. A conta é a mesma de buscarPainelMembro (calcularScoreMembro com os pesos gerais + bônus das conquistas desbloqueadas).
+async function rankearMembros(pool, membros) {
+  if (!membros || membros.length === 0) return [];
+  const pesos = await buscarPesosScoreConfig(pool, {});
+  const desbloqueadasPor = new Map();
+  const eventosPor = new Map();
+  for (let i = 0; i < membros.length; i += LOTE_RANKING) {
+    const lote = membros.slice(i, i + LOTE_RANKING);
+    const marcadores = (request) => lote.map((m, k) => { request.input(`m${k}`, sql.Int, m.membroId); return `@m${k}`; }).join(",");
+
+    const reqDesbloqueadas = pool.request();
+    const desbloqueadas = await reqDesbloqueadas.query(`
+      SELECT d.MembroId, c.PontosBonus, d.DesbloqueadoEm FROM ConquistasDesbloqueadas d
+      JOIN CatalogoConquistas c ON c.ConquistaId = d.ConquistaId
+      WHERE d.MembroId IN (${marcadores(reqDesbloqueadas)}) ORDER BY d.DesbloqueadoEm
+    `);
+    for (const r of desbloqueadas.recordset) {
+      if (!desbloqueadasPor.has(r.MembroId)) desbloqueadasPor.set(r.MembroId, []);
+      desbloqueadasPor.get(r.MembroId).push({ pontosBonus: r.PontosBonus, desbloqueadoEm: r.DesbloqueadoEm });
+    }
+
+    const reqEventos = pool.request();
+    const eventos = await reqEventos.query(`
+      SELECT MembroId, TipoEvento, PayloadJson FROM ConquistasEventos WHERE MembroId IN (${marcadores(reqEventos)})
+    `);
+    for (const r of eventos.recordset) {
+      if (!eventosPor.has(r.MembroId)) eventosPor.set(r.MembroId, []);
+      eventosPor.get(r.MembroId).push({ tipoEvento: r.TipoEvento, payload: parseJsonSeguro(r.PayloadJson, {}) });
+    }
+  }
+  const linhas = membros.map(membro => {
+    const desbloqueadas = desbloqueadasPor.get(membro.membroId) || [];
     const bonusTotal = desbloqueadas.reduce((soma, d) => soma + (d.pontosBonus || 0), 0);
-    linhas.push({
+    return {
       membroId: membro.membroId, nome: membro.nome,
-      score: calcularScoreMembro(historico, pesos, bonusTotal),
+      score: calcularScoreMembro(eventosPor.get(membro.membroId) || [], pesos, bonusTotal),
       totalConquistas: desbloqueadas.length,
       primeiraConquistaEm: desbloqueadas.length ? desbloqueadas[0].desbloqueadoEm : null
-    });
-  }
+    };
+  });
   return ordenarRanking(linhas);
+}
+
+async function listarRanking(pool, { escopoTipo, escopoId, nomesPermitidos = null, extensaoNome = null }) {
+  return rankearMembros(pool, await listarMembrosDoEscopo(pool, { escopoTipo, escopoId, nomesPermitidos, extensaoNome }));
+}
+
+// "Maria da Silva Santos" -> "Maria S.": o ranking do membro comum não mostra o nome inteiro dos outros.
+function abreviarNome(nome) {
+  const partes = String(nome == null ? "" : nome).split(" ").filter(Boolean);
+  if (partes.length === 0) return "";
+  if (partes.length === 1) return partes[0];
+  return `${partes[0]} ${partes[partes.length - 1].charAt(0).toUpperCase()}.`;
+}
+
+// O ranking do membro comum: só a turma de EBD dele (ou, se não é aluno, a congregação dele) — lida do BANCO, nunca do pedido. Devolve as linhas já ordenadas (com
+// matrícula; quem monta a resposta decide o que mostrar) e qual foi o escopo usado.
+async function rankingDoProprioMembro(pool, membroId) {
+  const id = auth.idDeRota(membroId);
+  if (!id) return { escopo: null, linhas: [] };
+  const aluno = (await pool.request().input("id", sql.Int, id).query(`SELECT TOP 1 TurmaId FROM EbdAlunos WHERE MembroId = @id AND Ativo = 1`)).recordset[0];
+  if (aluno) return { escopo: "TURMA", linhas: await rankearMembros(pool, await listarMembrosDoEscopo(pool, { escopoTipo: "TURMA", escopoId: aluno.TurmaId })) };
+  const pessoa = (await pool.request().input("id", sql.Int, id).query(`SELECT CongregacaoId FROM MembroReferencia WHERE MembroId = @id`)).recordset[0];
+  if (!pessoa || !pessoa.CongregacaoId) return { escopo: null, linhas: [] };
+  return { escopo: "CONGREGACAO", linhas: await rankearMembros(pool, await listarMembrosDoEscopo(pool, { escopoTipo: "CONGREGACAO", escopoId: pessoa.CongregacaoId })) };
+}
+
+// Recorte para o membro comum: os 20 primeiros (nome abreviado, pontuação, sem matrícula) e a posição do próprio, onde quer que esteja.
+function recortarRankingParaMembro(linhas, membroId, limite = 20) {
+  const numerados = (linhas || []).map((l, i) => ({ ...l, posicao: i + 1 }));
+  const minha = numerados.find(l => Number(l.membroId) === Number(membroId)) || null;
+  return {
+    ranking: numerados.slice(0, limite).map(l => ({
+      posicao: l.posicao, nome: abreviarNome(l.nome), score: l.score, totalConquistas: l.totalConquistas, voce: Number(l.membroId) === Number(membroId)
+    })),
+    minhaPosicao: minha ? { posicao: minha.posicao, score: minha.score, totalConquistas: minha.totalConquistas } : null,
+    totalParticipantes: numerados.length
+  };
 }
 
 module.exports = {
@@ -645,5 +736,5 @@ module.exports = {
   listarCatalogoComRegras, criarConquista, atualizarConquista, criarRegra, desativarRegra,
   buscarHistoricoMembro, registrarEvento, avaliarConquistasParaMembro, registrarEventoEAvaliar,
   buscarPesosScoreConfig, listarConquistasDesbloqueadasMembro, buscarPainelMembro,
-  listarMembrosDoEscopo, listarRanking
+  listarMembrosDoEscopo, listarRanking, rankearMembros, rankingDoProprioMembro, recortarRankingParaMembro, abreviarNome, TIPOS_RANKING
 };

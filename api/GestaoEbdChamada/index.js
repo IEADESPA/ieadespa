@@ -85,9 +85,10 @@ module.exports = async function (context, req) {
   try {
     // ---- Lição (administração — exige ebd_gestao) ----
     if (acao === "licao" && metodo === "GET") {
-      const congregacaoId = Number(req.query && req.query.congregacaoId);
+      const congregacaoId = auth.idDeRota(req.query && req.query.congregacaoId);
       const data = req.query && req.query.data;
       if (!congregacaoId || !data) return erro(context, 400, "Informe congregacaoId e data.");
+      if (!salaAula.dataIsoValida(data)) return erro(context, 400, "Data inválida — use AAAA-MM-DD.");
       // Trava 6-A: o professor precisa achar a lição do dia pra lançar a
       // chamada da própria turma — sem isto, quem entra por código de acesso
       // (escopo territorial vazio) nunca chegava no licaoId.
@@ -101,8 +102,10 @@ module.exports = async function (context, req) {
 
     if (acao === "licao/abrir" && metodo === "POST") {
       if (!usuario.permissoes || !usuario.permissoes.includes("ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
-      const { congregacaoId, data } = req.body || {};
+      const { data } = req.body || {};
+      const congregacaoId = auth.idDeRota(req.body && req.body.congregacaoId);
       if (!congregacaoId || !data) return erro(context, 400, "Informe congregacaoId e data.");
+      if (!salaAula.dataIsoValida(data)) return erro(context, 400, "Data inválida — use AAAA-MM-DD.");
       if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await chamada.abrirLicao(pool, { congregacaoId, data, abertoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
@@ -111,7 +114,7 @@ module.exports = async function (context, req) {
 
     if (acao === "licao/fechar" && metodo === "POST") {
       if (!usuario.permissoes || !usuario.permissoes.includes("ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
-      const { licaoId } = req.body || {};
+      const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await chamada.buscarLicaoPorId(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -123,7 +126,7 @@ module.exports = async function (context, req) {
 
     if (acao === "licao/reabrir" && metodo === "POST") {
       if (!usuario.permissoes || !usuario.permissoes.includes("ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
-      const { licaoId } = req.body || {};
+      const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await chamada.buscarLicaoPorId(pool, licaoId);
       if (!licao) return erro(context, 404, "Lição não encontrada.");
@@ -135,7 +138,7 @@ module.exports = async function (context, req) {
 
     if (acao === "licoes" && metodo === "GET") {
       if (!usuario.permissoes || !usuario.permissoes.includes("ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
-      const congregacaoId = Number(req.query && req.query.congregacaoId);
+      const congregacaoId = auth.idDeRota(req.query && req.query.congregacaoId);
       if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
       if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       context.res = { status: 200, body: { sucesso: true, licoes: await chamada.listarLicoesPorCongregacao(pool, congregacaoId) } };
@@ -144,8 +147,8 @@ module.exports = async function (context, req) {
 
     // ---- Chamada por turma (ebd_gestao no escopo OU professor ativo da turma) ----
     if (acao === "roster" && metodo === "GET") {
-      const turmaId = Number(req.query && req.query.turmaId);
-      const licaoId = Number(req.query && req.query.licaoId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
+      const licaoId = auth.idDeRota(req.query && req.query.licaoId);
       if (!turmaId || !licaoId) return erro(context, 400, "Informe turmaId e licaoId.");
       const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
@@ -154,7 +157,10 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "presenca" && metodo === "POST") {
-      const { licaoId, turmaId, alunoId, status } = req.body || {};
+      const { status } = req.body || {};
+      const licaoId = auth.idDeRota(req.body && req.body.licaoId);
+      const turmaId = auth.idDeRota(req.body && req.body.turmaId);
+      const alunoId = auth.idDeRota(req.body && req.body.alunoId);
       if (!licaoId || !turmaId || !alunoId || !status) return erro(context, 400, "Informe licaoId, turmaId, alunoId e status.");
       const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
@@ -164,7 +170,9 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "visitante" && metodo === "POST") {
-      const { licaoId, turmaId, visitanteNome, visitanteContato } = req.body || {};
+      const { visitanteNome, visitanteContato } = req.body || {};
+      const licaoId = auth.idDeRota(req.body && req.body.licaoId);
+      const turmaId = auth.idDeRota(req.body && req.body.turmaId);
       if (!licaoId || !turmaId || !visitanteNome) return erro(context, 400, "Informe licaoId, turmaId e visitanteNome.");
       const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
@@ -174,8 +182,8 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "resumo" && metodo === "GET") {
-      const licaoId = Number(req.query && req.query.licaoId);
-      const turmaId = Number(req.query && req.query.turmaId);
+      const licaoId = auth.idDeRota(req.query && req.query.licaoId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       if (!licaoId || !turmaId) return erro(context, 400, "Informe licaoId e turmaId.");
       const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
@@ -186,7 +194,7 @@ module.exports = async function (context, req) {
 
     // ---- v6.10: chamada offline ----
     if (acao === "offline/pacote" && metodo === "GET") {
-      const turmaId = Number(req.query && req.query.turmaId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       const data = (req.query && req.query.data) || salaAula.hojeBrasilia();
       if (!turmaId) return erro(context, 400, "Informe turmaId.");
       if (!salaAula.dataIsoValida(data)) return erro(context, 400, "Data inválida — use AAAA-MM-DD.");

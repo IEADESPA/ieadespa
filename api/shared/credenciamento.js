@@ -7,6 +7,7 @@ const { sql } = require("./db");
 const estatuto = require("./estatuto");
 const disciplina = require("./disciplina");
 const { membrosComCartaMudancaEmitida } = require("./universo");
+const { filtrarPorEscopo } = require("./escopoRotas");
 
 // Reg. Art. 142-143 e o regime geral de deliberação associativa (CC art.
 // 44-61): o voto em assembleia é personalíssimo. O Estatuto da IEADESPA não
@@ -23,8 +24,11 @@ async function membrosAtivosParaAssembleia(pool) {
   const result = await pool.request().query(`
     SELECT m.MembroId AS membroId, m.Nome AS nome, m.SituacaoMembro AS situacaoMembro,
            m.Status AS status, CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
-           CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao, m.DizimistaFiel AS dizimistaFiel
+           CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao, m.DizimistaFiel AS dizimistaFiel,
+           c.Nome AS congregacao, ex.Nome AS extensao
     FROM MembroReferencia m
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+    LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
     WHERE m.Status = 'ATIVO'
   `);
   return result.recordset;
@@ -64,12 +68,15 @@ async function avaliarCredenciamento(pool, membro) {
 // Lista, pra toda a base ATIVA, quem seria recusado na porta e por qual
 // artigo — é o "relatório de impedidos calculado" (item 1 da vB.13): a mesa
 // não precisa adivinhar, o sistema já traz o motivo legível pronto.
-async function listarImpedidosAssembleia(pool) {
-  const [ativos, idsSobDisciplina, idsCartaMudanca] = await Promise.all([
+// `usuario` (opcional): quem pede só recebe os impedidos que estão no SEU escopo (a lista diz quem está sob disciplina — dado sigiloso de pessoa). Sem `usuario` (uso interno,
+// sem pessoa pedindo) devolve a base inteira.
+async function listarImpedidosAssembleia(pool, usuario) {
+  const [todosAtivos, idsSobDisciplina, idsCartaMudanca] = await Promise.all([
     membrosAtivosParaAssembleia(pool),
     disciplina.membrosSobDisciplina(pool),
     membrosComCartaMudancaEmitida(pool)
   ]);
+  const ativos = usuario ? filtrarPorEscopo(usuario, todosAtivos, (m) => m.congregacao, (m) => m.extensao) : todosAtivos;
   return ativos
     .map((m) => ({ membroId: m.membroId, nome: m.nome, ...avaliarMotivo(m, idsSobDisciplina, idsCartaMudanca) }))
     .filter((m) => m.artigo)

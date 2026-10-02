@@ -795,13 +795,14 @@ async function listarPendenciasVencimento(pool, { nomesCongregacoesPermitidas = 
     escopo += ` AND cg.Nome IN (${listaParametros(request, "n", nomesCongregacoesPermitidas, sql.NVarChar(150))})`;
   }
   const result = await request.query(`
-    SELECT m.MatriculaId, m.MembroId, mem.Nome AS MembroNome, cg.Nome AS CongregacaoNome, t.TrilhaId, t.Nome AS TrilhaNome, t.AvisoDias,
+    SELECT m.MatriculaId, m.MembroId, mem.Nome AS MembroNome, cg.Nome AS CongregacaoNome, ext.Nome AS ExtensaoNome, t.TrilhaId, t.Nome AS TrilhaNome, t.AvisoDias,
            m.ConcluidaEm, m.ValidoAte,
            (SELECT COUNT(*) FROM TrilhaMatriculas r WHERE r.TrilhaId = m.TrilhaId AND r.MembroId = m.MembroId AND r.Status = 'EM_ANDAMENTO') AS RenovacaoEmAndamento
     FROM TrilhaMatriculas m
     JOIN Trilhas t ON t.TrilhaId = m.TrilhaId
     JOIN MembroReferencia mem ON mem.MembroId = m.MembroId
     LEFT JOIN Congregacoes cg ON cg.CongregacaoId = mem.CongregacaoId
+    LEFT JOIN ExtensoesTenda ext ON ext.ExtensaoId = mem.ExtensaoId
     OUTER APPLY (SELECT TOP 1 RevogadoEm FROM CertificadosEmitidos WHERE TrilhaMatriculaId = m.MatriculaId ORDER BY CertificadoId DESC) c
     WHERE m.Status = 'CONCLUIDA' AND m.ValidoAte IS NOT NULL AND c.RevogadoEm IS NULL
       AND m.ValidoAte <= DATEADD(DAY, t.AvisoDias, @hoje)
@@ -813,7 +814,7 @@ async function listarPendenciasVencimento(pool, { nomesCongregacoesPermitidas = 
     const validoAte = certificados.isoDia(r.ValidoAte);
     const sit = situacaoFormacao({ status: "CONCLUIDA", validoAte, avisoDias: r.AvisoDias }, hojeIso);
     return {
-      matriculaId: r.MatriculaId, membroId: r.MembroId, membroNome: r.MembroNome, congregacaoNome: r.CongregacaoNome || null,
+      matriculaId: r.MatriculaId, membroId: r.MembroId, membroNome: r.MembroNome, congregacaoNome: r.CongregacaoNome || null, extensaoNome: r.ExtensaoNome || null,
       trilhaId: r.TrilhaId, trilhaNome: r.TrilhaNome, validoAte, situacao: sit.situacao, diasParaVencer: sit.diasParaVencer,
       renovacaoEmAndamento: r.RenovacaoEmAndamento > 0
     };

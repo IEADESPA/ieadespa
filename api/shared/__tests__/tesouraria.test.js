@@ -84,10 +84,23 @@ describe("saldoCentroCusto (LOCAL / GERAL / destinos do Rateio Geral)", () => {
 });
 
 describe("podeOperarCentroCusto (GestaoSaidas, v5.4)", () => {
-  test("quem tem 'financeiro' opera qualquer Centro de Custo, mesmo sem sigla de departamento", () => {
-    const usuario = { permissoes: ["financeiro"] };
-    expect(tesouraria.podeOperarCentroCusto(usuario, "GERAL", null)).toBe(true);
+  test("o GERAL (papel Global com escopo de todas as congregações) com 'financeiro' opera qualquer Centro de Custo, mesmo sem sigla de departamento", () => {
+    const usuario = { permissoes: ["financeiro"], nivel: "GLOBAL", escopoCongregacoes: "TODAS" };
+    for (const centro of ["LOCAL", "GERAL", "PDQ", "CONVENCAO", "PREBENDA_PASTORAL", "DEPTO_UCADESPA"]) {
+      expect(tesouraria.podeOperarCentroCusto(usuario, centro, null)).toBe(true);
+    }
+  });
+  test("tesoureiro local/de área com 'financeiro' opera o LOCAL e os departamentais, mas NÃO os centros da igreja inteira", () => {
+    const usuario = { permissoes: ["financeiro"], nivel: "CONGREGACAO", escopoCongregacoes: ["Central"] };
+    expect(tesouraria.podeOperarCentroCusto(usuario, "LOCAL", null)).toBe(true);
     expect(tesouraria.podeOperarCentroCusto(usuario, "DEPTO_UCADESPA", null)).toBe(true);
+    for (const centro of ["GERAL", "PDQ", "CONVENCAO", "PREBENDA_PASTORAL"]) {
+      expect(tesouraria.podeOperarCentroCusto(usuario, centro, null)).toBe(false);
+    }
+  });
+  test("papel Global com escopo de uma lista, ou papel local com escopo TODAS, também não opera os centros da igreja inteira", () => {
+    expect(tesouraria.podeOperarCentroCusto({ permissoes: ["financeiro"], nivel: "GLOBAL", escopoCongregacoes: ["Central"] }, "PREBENDA_PASTORAL", null)).toBe(false);
+    expect(tesouraria.podeOperarCentroCusto({ permissoes: ["financeiro"], nivel: "CONGREGACAO", escopoCongregacoes: "TODAS" }, "PREBENDA_PASTORAL", null)).toBe(false);
   });
   test("quem só tem 'tesouraria_departamental' só opera a categoria do próprio departamento", () => {
     const usuario = { permissoes: ["tesouraria_departamental"] };

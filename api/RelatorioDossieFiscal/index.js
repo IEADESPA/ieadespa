@@ -3,19 +3,21 @@
 // (v4.9) + balancetes (fechamentos) + comprovantes + atas de aprovação de
 // contas (pareceres do Conselho Fiscal, v4.12). Tudo calculado na leitura.
 // GET /api/dossie-fiscal/{ano?}
-const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { getPool, sql } = require("../shared/db");
 const demonstracoes = require("../shared/demonstracoes");
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  // Matéria da Tesouraria Geral (consolidado da denominação, comprovantes, balancetes de todas as congregações): só o nível GERAL — papel Global E escopo de todas as
+  // congregações (o papel Global sozinho não basta).
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Dossiê fiscal é matéria da Tesouraria Geral — restrito a nível Global." } };
+  const ano = parseInt(context.bindingData.ano, 10) || new Date().getFullYear();
+  if (ano < 1900 || ano > 2200) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Ano inválido." } };
     return;
   }
   const pool = await getPool();
-  const ano = parseInt(context.bindingData.ano, 10) || new Date().getFullYear();
   const inicio = new Date(ano, 0, 1);
   const fim = new Date(ano, 11, 31);
 

@@ -16,15 +16,24 @@
 // POST /api/integridade/conflitos-interesse -> { membroId, mandatoReferencia, temConflito, descricaoConflito? }
 // GET  /api/integridade/canal-denuncia
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 
 const TIPOS_POLITICA = ["DOACOES", "CODIGO_CONDUTA"];
 const STATUS_DUE_DILIGENCE = ["PENDENTE", "APROVADO", "REPROVADO"];
+const DATA_AAAA_MM_DD = /^\d{4}-\d{2}-\d{2}$/;
+// Dia que existe no calendário ("2026-02-30" não existe; o SQL recusaria com erro 500): reconverte e compara.
+function diaExiste(v) {
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
 
 module.exports = async function (context, req) {
   const recurso = context.bindingData.recurso;
-  const usuario = auth.exigirPermissao(req, context, "auditoria");
+  // Programa de integridade da igreja toda (políticas, aceites e declarações de conflito de interesses de dirigentes de qualquer congregação, due diligence de fornecedores):
+  // só o nível GERAL (papel Global E escopo de todas as congregações) com a permissão de auditoria.
+  const usuario = exigirGeral(req, context, "auditoria");
   if (!usuario) return;
   const pool = await getPool();
 
@@ -52,17 +61,27 @@ module.exports = async function (context, req) {
     }
     if (req.method === "POST") {
       const { tipo, titulo, ataReferencia, dataAprovacao, documentoUrl } = req.body || {};
-      if (!tipo || !TIPOS_POLITICA.includes(tipo) || !titulo || !titulo.trim() || !ataReferencia || !ataReferencia.trim() || !dataAprovacao) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: tipo (${TIPOS_POLITICA.join("|")}), titulo, ataReferencia (política precisa ser aprovada em ata), dataAprovacao.` } };
+      if (!tipo || !TIPOS_POLITICA.includes(tipo) || typeof titulo !== "string" || !titulo.trim() || titulo.trim().length > 200
+          || typeof ataReferencia !== "string" || !ataReferencia.trim() || ataReferencia.trim().length > 200
+          || typeof dataAprovacao !== "string" || !DATA_AAAA_MM_DD.test(dataAprovacao) || !diaExiste(dataAprovacao)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: tipo (${TIPOS_POLITICA.join("|")}), titulo, ataReferencia (política precisa ser aprovada em ata), dataAprovacao (AAAA-MM-DD).` } };
         return;
       }
-      await pool.request().input("tipo", sql.NVarChar(30), tipo)
-        .query(`UPDATE PoliticasInstitucionais SET Vigente = 0 WHERE Tipo = @tipo AND Vigente = 1`);
+      // O link do documento, se vier, é só endereço https (nada de javascript: nem texto solto que a tela depois vire link).
+      if (documentoUrl != null && documentoUrl !== "" && (typeof documentoUrl !== "string" || documentoUrl.length > 500 || !/^https:\/\//i.test(documentoUrl))) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "documentoUrl deve ser um endereço https." } };
+        return;
+      }
+      // Troca da política vigente numa transação só: se o INSERT falhar, a anterior continua vigente (antes o tipo ficava sem nenhuma política vigente).
       const criada = await pool.request().input("tipo", sql.NVarChar(30), tipo).input("titulo", sql.NVarChar(200), titulo.trim())
         .input("ata", sql.NVarChar(200), ataReferencia.trim()).input("data", sql.Date, dataAprovacao)
         .input("url", sql.NVarChar(500), documentoUrl || null).input("por", sql.Int, usuario.membroId)
-        .query(`INSERT INTO PoliticasInstitucionais (Tipo, Titulo, AtaReferencia, DataAprovacao, DocumentoUrl, RegistradoPor)
-                OUTPUT INSERTED.PoliticaId VALUES (@tipo, @titulo, @ata, @data, @url, @por)`);
+        .query(`SET XACT_ABORT ON;
+                BEGIN TRANSACTION;
+                UPDATE PoliticasInstitucionais SET Vigente = 0 WHERE Tipo = @tipo AND Vigente = 1;
+                INSERT INTO PoliticasInstitucionais (Tipo, Titulo, AtaReferencia, DataAprovacao, DocumentoUrl, RegistradoPor)
+                OUTPUT INSERTED.PoliticaId VALUES (@tipo, @titulo, @ata, @data, @url, @por);
+                COMMIT TRANSACTION;`);
       await registrarAuditoria({
         tabela: "PoliticasInstitucionais", registroId: criada.recordset[0].PoliticaId, acao: "Aprovou política institucional", usuarioId: usuario.membroId,
         dadosDepois: { tipo, titulo, ataReferencia }
@@ -77,7 +96,11 @@ module.exports = async function (context, req) {
       const { politicaId } = req.query || {};
       const request = pool.request();
       let where = "1=1";
-      if (politicaId) { request.input("politicaId", sql.Int, politicaId); where += " AND a.PoliticaId = @politicaId"; }
+      if (politicaId) {
+        const politicaIdValido = auth.idDeRota(politicaId);
+        if (!politicaIdValido) { context.res = { status: 400, body: { sucesso: false, mensagem: "politicaId inválido." } }; return; }
+        request.input("politicaId", sql.Int, politicaIdValido); where += " AND a.PoliticaId = @politicaId";
+      }
       const result = await request.query(`
         SELECT a.*, m.Nome AS membroNome, p.Titulo AS politicaTitulo FROM CodigoCondutaAceites a
         JOIN MembroReferencia m ON m.MembroId = a.MembroId
@@ -88,9 +111,22 @@ module.exports = async function (context, req) {
       return;
     }
     if (req.method === "POST") {
-      const { membroId, politicaId } = req.body || {};
+      const corpoAceite = req.body || {};
+      const membroId = auth.idDeRota(corpoAceite.membroId);
+      const politicaId = auth.idDeRota(corpoAceite.politicaId);
       if (!membroId || !politicaId) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Informe membroId e politicaId." } };
+        return;
+      }
+      // Pessoa e política precisam existir (antes a chave estrangeira estourava em erro 500).
+      const pessoa = await pool.request().input("m", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @m`);
+      if (pessoa.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Pessoa não encontrada." } };
+        return;
+      }
+      const politica = await pool.request().input("p", sql.Int, politicaId).query(`SELECT PoliticaId FROM PoliticasInstitucionais WHERE PoliticaId = @p`);
+      if (politica.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Política não encontrada." } };
         return;
       }
       const existente = await pool.request().input("m", sql.Int, membroId).input("p", sql.Int, politicaId)
@@ -121,9 +157,16 @@ module.exports = async function (context, req) {
       return;
     }
     if (req.method === "POST") {
-      const { fornecedorId, status, observacao } = req.body || {};
-      if (!fornecedorId || !status || !STATUS_DUE_DILIGENCE.includes(status)) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: `Informe fornecedorId e status (${STATUS_DUE_DILIGENCE.join("|")}).` } };
+      const corpoDd = req.body || {};
+      const fornecedorId = auth.idDeRota(corpoDd.fornecedorId);
+      const { status, observacao } = corpoDd;
+      if (!fornecedorId || !status || !STATUS_DUE_DILIGENCE.includes(status) || (observacao != null && (typeof observacao !== "string" || observacao.length > 500))) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: `Informe fornecedorId e status (${STATUS_DUE_DILIGENCE.join("|")}); observacao com até 500 caracteres.` } };
+        return;
+      }
+      const fornecedor = await pool.request().input("f", sql.Int, fornecedorId).query(`SELECT FornecedorId FROM Fornecedores WHERE FornecedorId = @f`);
+      if (fornecedor.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Fornecedor não encontrado." } };
         return;
       }
       const existente = await pool.request().input("f", sql.Int, fornecedorId).query(`SELECT DueDiligenceId FROM FornecedoresDueDiligence WHERE FornecedorId = @f`);
@@ -160,13 +203,24 @@ module.exports = async function (context, req) {
       return;
     }
     if (req.method === "POST") {
-      const { membroId, mandatoReferencia, temConflito, descricaoConflito } = req.body || {};
-      if (!membroId || !mandatoReferencia || !mandatoReferencia.trim()) {
+      const corpoConflito = req.body || {};
+      const membroId = auth.idDeRota(corpoConflito.membroId);
+      const { mandatoReferencia, temConflito, descricaoConflito } = corpoConflito;
+      if (!membroId || typeof mandatoReferencia !== "string" || !mandatoReferencia.trim() || mandatoReferencia.trim().length > 20) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Informe membroId e mandatoReferencia (ex: '2026-2028')." } };
+        return;
+      }
+      if (descricaoConflito != null && (typeof descricaoConflito !== "string" || descricaoConflito.length > 500)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "descricaoConflito deve ter até 500 caracteres." } };
         return;
       }
       if (temConflito && (!descricaoConflito || !descricaoConflito.trim())) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Havendo conflito de interesses, descreva-o em descricaoConflito." } };
+        return;
+      }
+      const pessoa = await pool.request().input("m", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @m`);
+      if (pessoa.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Pessoa não encontrada." } };
         return;
       }
       const existente = await pool.request().input("m", sql.Int, membroId).input("mandato", sql.NVarChar(20), mandatoReferencia.trim())

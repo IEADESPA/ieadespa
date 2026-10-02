@@ -1781,26 +1781,6 @@
         <h3>Catálogos Configuráveis</h3>
         <div id="catalogosConteudo"></div>
 
-        <hr />
-        <h3>🧹 Excluir dados fictícios</h3>
-        <p class="subtitle">Marque o que deseja apagar. O admin (matrícula 3) e seu acesso são sempre preservados.</p>
-        <div class="grade-permissoes" id="dadosExclusaoCheckboxes">
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="pessoas" /> Pessoas (membros)</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="congregacoes" /> Congregações</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="estrutura" /> Estrutura (áreas/regiões/quadrantes/distritos/extensões)</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="funcoes" /> Funções</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="orgaos" /> Órgãos</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="departamentos" /> Departamentos</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="situacoes" /> Situações de Membro</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="cargosMinisteriais" /> Cargos Ministeriais</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="prazos" /> Prazos</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="permissoes" /> Funcionalidades + Papéis</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="liderancas" /> Acessos (lideranças)</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="consagracoes" /> Consagrações</label>
-          <label class="opcao-checkbox"><input type="checkbox" class="dadoExclusaoChk" value="reunioes" /> Reuniões / Presenças</label>
-        </div>
-        <button class="btn-confirmar btn-perigo" style="margin-top:12px;" onclick="excluirDadosFicticios()">🗑️ Excluir selecionados</button>
-        <p id="resultadoExclusaoDados"></p>
       </div>
 
       <!-- ABA: PERMISSÕES -->
@@ -2034,6 +2014,14 @@
           <div class="input-group">
             <label>Categoria de retenção (opcional — ver "Arquivo Institucional" abaixo):</label>
             <select id="documentoCategoria"><option value="">(nenhuma)</option></select>
+          </div>
+          <div class="input-group">
+            <label>Quem pode ver este documento:</label>
+            <select id="documentoVisibilidade">
+              <option value="MEMBROS">Qualquer membro que entrou no sistema</option>
+              <option value="LIDERANCA">Só a liderança</option>
+              <option value="PUBLICO" id="documentoVisibilidadePublico">Qualquer pessoa, até sem entrar (só a administração geral publica)</option>
+            </select>
           </div>
           <div class="input-group">
             <label>Arquivo (PDF, JPG ou PNG, até 15 MB):</label>
@@ -4627,6 +4615,7 @@
           <div class="rolagem-tabela"><div id="resultadoFundosFixos"></div></div>
           <div id="detalheFundoFixo" style="margin-top:18px;"></div>
 
+          <div class="so-geral">
           <hr style="margin:24px 0;" />
 
           <h3>🏦 Remessa Bancária (CNAB 240)</h3>
@@ -4661,6 +4650,7 @@
           <p id="resultadoNovaRemessa" class="subtitle"></p>
           <div class="rolagem-tabela"><div id="resultadoRemessas"></div></div>
           <div id="detalheRemessa" style="margin-top:18px;"></div>
+          </div>
         </div>
 
         <!-- SUB-ABA: CONTAS A RECEBER (v4.6) — valor esperado, ainda não

@@ -38,12 +38,13 @@ function temEbdGestao(usuario) {
   return !!(usuario.permissoes && usuario.permissoes.includes("ebd_gestao"));
 }
 
+// Revisão de escopo: FECHADO — sessão sem a lista de congregações (claim ausente) não é global e não alcança nada. "Global" aqui = escopo de TODAS as congregações.
 function temEscopoGlobal(usuario) {
-  return !usuario.escopoCongregacoes || usuario.escopoCongregacoes === "TODAS";
+  return usuario.escopoCongregacoes === "TODAS";
 }
 
 function nomesPermitidos(usuario) {
-  return temEscopoGlobal(usuario) ? null : (usuario.escopoCongregacoes || []);
+  return temEscopoGlobal(usuario) ? null : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []);
 }
 
 async function podeAcessarCongregacao(pool, usuario, congregacaoId) {
@@ -90,7 +91,7 @@ module.exports = async function (context, req) {
 
   // Carrega o plano do corpo e confere se quem age pode geri-lo.
   async function planoGerivel() {
-    const planoId = Number(corpo.planoId);
+    const planoId = auth.idDeRota(corpo.planoId);
     if (!planoId) { erro(context, 400, "Informe planoId."); return null; }
     const plano = await salaAula.buscarPlanoPorId(pool, planoId);
     if (!plano) { erro(context, 404, "Plano não encontrado."); return null; }
@@ -109,15 +110,17 @@ module.exports = async function (context, req) {
       const dataFim = (req.query && req.query.dataFim) || dataInicio;
       if (!salaAula.dataIsoValida(dataInicio) || !salaAula.dataIsoValida(dataFim) || dataFim < dataInicio) return erro(context, 400, "Intervalo de datas inválido.");
       if (salaAula.diasEntre(dataInicio, dataFim) > 366) return erro(context, 400, "Intervalo de no máximo 1 ano.");
-      const congregacaoId = Number(req.query && req.query.congregacaoId) || null;
-      if (congregacaoId && !(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+      const congregacaoBruta = req.query && req.query.congregacaoId;
+      const congregacaoId = congregacaoBruta ? auth.idDeRota(congregacaoBruta) : null;
+      if (congregacaoBruta && !congregacaoId) return erro(context, 400, "congregacaoId inválido.");
+      if (congregacaoId &&!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
       const planos = await salaAula.listarPlanosGestao(pool, { dataInicio, dataFim, congregacaoId, nomesCongregacoesPermitidas: nomesPermitidos(usuario) });
       context.res = { status: 200, body: { sucesso: true, planos, escopoGlobal: temEscopoGlobal(usuario) } };
       return;
     }
 
     if (acao === "plano" && metodo === "GET") {
-      const planoId = Number(req.query && req.query.planoId);
+      const planoId = auth.idDeRota(req.query && req.query.planoId);
       if (!planoId) return erro(context, 400, "Informe planoId.");
       const plano = await salaAula.buscarPlanoPorId(pool, planoId);
       if (!plano) return erro(context, 404, "Plano não encontrado.");
@@ -127,7 +130,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "planos/turma" && metodo === "GET") {
-      const turmaId = Number(req.query && req.query.turmaId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       const data = (req.query && req.query.data) || salaAula.hojeBrasilia();
       if (!turmaId) return erro(context, 400, "Informe turmaId.");
       if (!salaAula.dataIsoValida(data)) return erro(context, 400, "Data inválida — use AAAA-MM-DD.");
@@ -140,7 +143,8 @@ module.exports = async function (context, req) {
 
     if (acao === "planos" && metodo === "POST") {
       if (!temEbdGestao(usuario)) return erro(context, 403, SEM_PERMISSAO);
-      const congregacaoId = corpo.congregacaoId ? Number(corpo.congregacaoId) : null;
+      const congregacaoId = corpo.congregacaoId ? auth.idDeRota(corpo.congregacaoId) : null;
+      if (corpo.congregacaoId && !congregacaoId) return erro(context, 400, "congregacaoId inválido.");
       if (congregacaoId == null) {
         if (!temEscopoGlobal(usuario)) return erro(context, 403, "Plano para o campo inteiro exige escopo global — escolha a sua congregação.");
       } else if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) {
@@ -189,7 +193,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "planos/material/remover" && metodo === "POST") {
-      const materialId = Number(corpo.materialId);
+      const materialId = auth.idDeRota(corpo.materialId);
       if (!materialId) return erro(context, 400, "Informe materialId.");
       const material = await salaAula.buscarMaterialPorId(pool, materialId);
       if (!material) return erro(context, 404, "Material não encontrado.");
@@ -202,7 +206,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "ausentes" && metodo === "GET") {
-      const turmaId = Number(req.query && req.query.turmaId);
+      const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       if (!turmaId) return erro(context, 400, "Informe turmaId.");
       const turma = await salaAula.buscarTurmaComCongregacao(pool, turmaId);
       if (!turma) return erro(context, 404, "Turma não encontrada.");

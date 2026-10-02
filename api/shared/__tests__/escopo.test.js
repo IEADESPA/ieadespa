@@ -19,10 +19,16 @@ describe("resolverEscopoCongregacoes", () => {
     expect(chamadas).toHaveLength(0); // não deve nem consultar o banco
   });
 
-  test("sem escopoId, resolve como TODAS (mesmo comportamento de sempre)", async () => {
+  test.each(["CONGREGACAO", "AREA", "REGIAO", "QUADRANTE", "DISTRITO", "EXTENSAO"])("escopo territorial %s SEM id resolve como NENHUMA congregação (antes valia como TODAS: furo de acesso geral)", async (tipo) => {
+    const { pool, chamadas } = criarPoolFalso([]);
+    for (const semId of [null, undefined, 0, ""]) expect(await escopo.resolverEscopoCongregacoes(pool, tipo, semId)).toEqual([]);
+    expect(chamadas).toHaveLength(0);
+  });
+  test("GLOBAL e DEPARTAMENTO continuam TODAS mesmo sem id", async () => {
     const { pool } = criarPoolFalso([]);
-    const r = await escopo.resolverEscopoCongregacoes(pool, "AREA", null);
-    expect(r).toBe("TODAS");
+    expect(await escopo.resolverEscopoCongregacoes(pool, "GLOBAL", null)).toBe("TODAS");
+    expect(await escopo.resolverEscopoCongregacoes(pool, "DEPARTAMENTO", null)).toBe("TODAS");
+    expect(await escopo.resolverEscopoCongregacoes(pool, null, null)).toBe("TODAS");
   });
 
   test("CONGREGACAO resolve pro nome real, consultando o banco", async () => {

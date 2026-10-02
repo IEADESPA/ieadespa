@@ -10,8 +10,17 @@ const { sql } = require("./db");
 const estatuto = require("./estatuto");
 const { sha256 } = require("./auditoria");
 const trilhas = require("./trilhas");
+const auth = require("./auth");
+const { ehGeral } = require("./escopoRotas");
 
 const IDADE_MINIMA_BATISMO = 12; // Art. 80 §2º, I
+
+// Auditoria de escopo (02/10/2026): a turma é dado de CONGREGAÇÃO. `turma`: { congregacaoId, congregacaoNome }. Turma com congregação vale para quem alcança essa
+// congregação; turma SEM congregação (da igreja toda) só para o nível geral.
+function turmaNoEscopo(usuario, turma) {
+  if (!turma || !turma.congregacaoId) return ehGeral(usuario);
+  return auth.estaNoEscopo(usuario, turma.congregacaoNome);
+}
 const MESES_VALIDOS_TURMA = [5, 10]; // maio e outubro, Art. 80 §3º, I
 const TIPOS_LOCAL_VEDADOS = ["RIO", "REPRESA"]; // Art. 80 §3º, II-III
 
@@ -114,7 +123,7 @@ async function efetivarTurma(pool, turmaId) {
 }
 
 module.exports = {
-  efetivarTurma,
+  efetivarTurma, turmaNoEscopo,
   IDADE_MINIMA_BATISMO, MESES_VALIDOS_TURMA, TIPOS_LOCAL_VEDADOS,
   mesValidoParaTurma, localPermitido, possuiCasamentoCivilRegistrado,
   calcularAptidaoBatismo, registrarAceiteEstatuto,

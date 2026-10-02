@@ -3,17 +3,14 @@
 // conflito de interesses e carga tributária embutida (LC 214/2025). Tudo
 // CALCULADO NA LEITURA (shared/imunidade.js).
 // GET /api/imunidade-tributaria
-const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { getPool, sql } = require("../shared/db");
 const imunidade = require("../shared/imunidade");
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  // Matéria da Tesouraria Geral (consolidado da denominação, com CPF de ministros): só o nível GERAL — papel Global E escopo de todas as congregações.
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Painel de Imunidade Tributária é matéria da Tesouraria Geral — restrito a nível Global." } };
-    return;
-  }
   const pool = await getPool();
   const ano = new Date().getFullYear();
 

@@ -18,11 +18,23 @@ const SISTEMA_API_URL = "https://app.ieadespa.org.br/api";
  * e orienta a usar o acesso de membro — evita a pessoa criar uma identidade
  * solta no site quando já devia estar usando o acesso de verdade. Servidor
  * pra servidor (Azure Function, não o navegador) — sem questão de CORS.
+ *
+ * Chave combinada com o sistema (CHAVE_SITE_SISTEMA, o MESMO valor nas
+ * configurações dos dois aplicativos do Azure): vai no cabeçalho x-site-key.
+ * Sem ela o sistema só responde a quem estiver com a chave definida por lá;
+ * com a chave errada ele devolve 401 e esta função cai em "não é membro" (a
+ * criação da conta segue), então um 401 aqui é logado como aviso.
  */
-async function ehMembroAtivo(email) {
+async function ehMembroAtivo(email, log) {
   try {
-    const res = await fetch(`${SISTEMA_API_URL}/verificar-conta-membro?email=${encodeURIComponent(email)}`);
-    if (!res.ok) return false;
+    const chave = process.env.CHAVE_SITE_SISTEMA;
+    const res = await fetch(`${SISTEMA_API_URL}/verificar-conta-membro?email=${encodeURIComponent(email)}`, {
+      headers: chave ? { "x-site-key": chave } : {},
+    });
+    if (!res.ok) {
+      if (res.status === 401 && log) log.warn("O sistema recusou a chave do site (CHAVE_SITE_SISTEMA diferente nos dois aplicativos do Azure?): a verificação de membro não funcionou.");
+      return false;
+    }
     const data = await res.json();
     return !!data.ehMembroAtivo;
   } catch {
@@ -72,7 +84,7 @@ module.exports = async function (context, req) {
   );
   const contaExistente = contaRes.ok ? (await contaRes.json()).data?.[0] : null;
   if (!contaExistente) {
-    if (await ehMembroAtivo(email)) {
+    if (await ehMembroAtivo(email, context.log)) {
       context.res = {
         status: 409,
         body: { erro: "Este e-mail já é de um membro ativo da IEADESPA — use o acesso de membro (matrícula e senha), não é preciso criar uma conta aqui." },

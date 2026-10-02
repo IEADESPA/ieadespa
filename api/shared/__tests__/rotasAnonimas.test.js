@@ -22,7 +22,7 @@ const PUBLICAS = {
   CongregacoesPublico: "lista pública de congregações e dirigentes (site)",
   ConsultarProtocoloOuvidoria: "consulta do próprio protocolo (o código é o segredo)",
   VerificarCertificado: "verificação pública de certificado (o código é o segredo; com limitador)",
-  VerificarContaMembro: "chamada servidor a servidor do site; só devolve um booleano (com limitador)",
+  VerificarContaMembro: "chamada servidor a servidor do site; só devolve um booleano; limitador por origem + chave combinada com o site (CHAVE_SITE_SISTEMA, ver chaveSiteSistema.test.js)",
   LoginSecretaria: "porta de entrada da liderança (senha + bloqueio)",
   LogoutSecretaria: "encerrar a própria sessão",
   MembroEntrar: "porta de entrada do membro (matrícula + PIN + bloqueio)",

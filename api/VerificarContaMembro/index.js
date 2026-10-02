@@ -6,18 +6,25 @@
 // solta no site com o mesmo e-mail de um membro ativo (devia usar o acesso
 // de membro, não uma conta paralela) — nunca pra confirmar/expor se um
 // e-mail arbitrário pertence a alguém específico.
-// GET /api/verificar-conta-membro?email=fulano@exemplo.com
+// GET /api/verificar-conta-membro?email=fulano@exemplo.com   (cabeçalho x-site-key = a chave combinada com o site, quando CHAVE_SITE_SISTEMA estiver configurada)
 const { getPool, sql } = require("../shared/db");
 const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
+const { conferirChaveDoSite } = require("../shared/chaveSiteSistema");
 
-// fecho da v7.5 — rota anônima que responde "este e-mail é de membro ativo?": sem limite, serviria para varrer e-mails. Contenção por origem (o site chama de um servidor só,
-// uma vez por criação de conta). O ideal é um segredo servidor a servidor entre o site e esta API (pede configurar a mesma chave nos dois Static Web Apps).
+// rota anônima que responde "este e-mail é de membro ativo?": sem controle, serviria para varrer e-mails e descobrir quem é membro. Duas camadas:
+//  1) (fecho da v7.5) contenção por origem — o site chama de um servidor só, uma vez por criação de conta;
+//  2) chave combinada entre o site e este sistema (CHAVE_SITE_SISTEMA, a mesma nos dois aplicativos do Azure): definida, quem não a enviar leva 401. Ver shared/chaveSiteSistema.js.
 const limitador = criarLimitador({ janelaMs: 60000, maximo: 20 });
 
 module.exports = async function (context, req) {
   const limite = limitador.registrar(chaveDeOrigem(req));
   if (!limite.permitido) {
     context.res = { status: 429, headers: { "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas consultas seguidas. Aguarde um minuto." } };
+    return;
+  }
+  const chave = conferirChaveDoSite(req);
+  if (chave.exigida && !chave.ok) {
+    context.res = { status: 401, body: { sucesso: false, mensagem: "Não autorizado." } };
     return;
   }
   if (req.method !== "GET") {

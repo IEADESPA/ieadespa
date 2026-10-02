@@ -150,3 +150,32 @@ sops -e --input-type json --output-type json --output api/local.settings.enc.jso
 | `no matching creation rules found` | O arquivo criptografado deve ser o `*.enc.json` e o `.sops.yaml` precisa listar sua public key. |
 | `sops: failed to decrypt` | Sua public key não está no `.sops.yaml` / `updatekeys` não foi rodado. Peça pro administrador. |
 | Esqueci a public key | `age-keygen -y "$env:APPDATA\sops\age\keys.txt"` mostra de novo. |
+
+---
+
+## 9. Segredos de produção que ficam só nas configurações do Azure
+
+Estes **não** estão em arquivo nenhum do repositório (nem criptografado): são digitados uma vez no portal do Azure,
+em *Static Web App → Configuration (Configuração) → Application settings*. Nunca cole o valor num comando, num
+arquivo versionado ou numa conversa.
+
+| Configuração | Onde | Para quê |
+| --- | --- | --- |
+| `AUTH_SECRET` | aplicativo do **sistema** | assina o crachá de sessão e tempera o hash do PIN. Sem ele a API se recusa a subir (`api/shared/segredoSessao.js`). Trocá-lo desconecta todo mundo e invalida todos os PINs já criados. |
+| `CHAVE_SITE_SISTEMA` | aplicativo do **sistema** **e** aplicativo do **site** — o **mesmo valor** nos dois | chave combinada para a pergunta "este e-mail é de membro ativo?" que o site faz ao sistema (`api/shared/chaveSiteSistema.js`). Enquanto não estiver definida no sistema, a rota segue só com o limite por origem. |
+
+**Como combinar a chave do site com o sistema (uma vez só):**
+
+1. Gere um valor aleatório e deixe-o na área de transferência, sem aparecer na tela (PowerShell):
+
+   ```powershell
+   $b = New-Object byte[] 36; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+   [Convert]::ToBase64String($b).Replace('+','-').Replace('/','_') | Set-Clipboard
+   ```
+
+2. No portal do Azure, abra primeiro o aplicativo do **site** e cadastre `CHAVE_SITE_SISTEMA` colando o valor.
+3. Depois abra o aplicativo do **sistema** e cadastre `CHAVE_SITE_SISTEMA` colando **o mesmo valor** (não gere outro).
+4. Teste criando uma conta de visitante no site com um e-mail de membro: deve recusar com "este e-mail já é de um membro
+   ativo". Se aceitar, o log da Function do site mostra o aviso *"O sistema recusou a chave do site"* — os valores diferem.
+
+A ordem importa: se o sistema ganhar a chave antes do site, o site fica sem conseguir perguntar até receber a mesma.

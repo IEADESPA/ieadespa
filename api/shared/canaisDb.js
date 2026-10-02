@@ -365,17 +365,24 @@ async function reativarCanal(pool, ctx, canalId, { membroId }) {
 // Notificação imediata (a Regra das 24 Horas não espera a rodada diária)
 // ---------------------------------------------------------------
 
-async function notificarAgora(pool, { regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, deps = {} }) {
+// `limiteDia` (opcional): no máximo esse tanto de avisos DESTA regra para a mesma pessoa em 24 horas; os seguintes não são criados (nem enviados por e-mail).
+// Serve para a regra que alguém pode repetir de propósito contra uma pessoa (remover e reintegrar em ciclo): o fato continua registrado, só o aviso para.
+async function notificarAgora(pool, { regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, limiteDia = null, deps = {} }) {
   try {
     const criar = deps.criarNotificacao || require("./notificacoes").criarNotificacao;
     const enviar = deps.enviarCanais || ((p, o) => require("./notificacaoMotor").enviarCanaisNotificacao(p, o));
     const regra = (await pool.request().input("chave", sql.NVarChar(60), regraChave).query(`SELECT * FROM NotificacaoRegras WHERE Chave = @chave AND Ativa = 1`)).recordset[0];
     if (!regra) return { criadas: 0 };
     const vistos = new Set();
-    let criadas = 0;
+    let criadas = 0, suprimidas = 0;
     for (const d of destinatarios || []) {
       if (!d || !d.membroId || vistos.has(d.membroId)) continue;
       vistos.add(d.membroId);
+      if (limiteDia) {
+        const hoje24 = (await pool.request().input("chave", sql.NVarChar(60), regraChave).input("dest", sql.Int, d.membroId)
+          .query(`SELECT COUNT(*) AS n FROM Notificacoes WHERE RegraChave = @chave AND DestinatarioMembroId = @dest AND CriadaEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`)).recordset[0];
+        if (hoje24 && Number(hoje24.n) >= limiteDia) { suprimidas++; continue; }
+      }
       const { criada, notificacaoId } = await criar(pool, {
         regraChave, destinatarioMembroId: d.membroId, titulo: regra.Titulo, mensagem: String(mensagem).slice(0, 1000),
         categoria: regra.Categoria, referenciaTabela, referenciaId
@@ -385,7 +392,7 @@ async function notificarAgora(pool, { regraChave, destinatarios, mensagem, refer
       try { await enviar(pool, { regra, destinatarioMembroId: d.membroId, notificacaoId, titulo: regra.Titulo, mensagem, categoria: regra.Categoria, email: d.email }); }
       catch (e) { console.error("[CANAIS] falha ao enviar aviso:", e.message); }
     }
-    return { criadas };
+    return { criadas, suprimidas };
   } catch (e) {
     console.error("[CANAIS] falha ao notificar:", e.message);
     return { criadas: 0 };

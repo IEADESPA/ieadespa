@@ -165,13 +165,42 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.Volun
     ALTER TABLE dbo.VoluntariadoAdesoes ADD CadeiaCabecalhos NVARCHAR(400) NULL;
 GO
 
--- A prova da adesão não se altera nem se apaga (é o documento da Lei 9.608/98, art. 2º).
-IF OBJECT_ID(N'dbo.TR_VoluntariadoAdesoes_Imutavel', N'TR') IS NULL
-    EXEC(N'CREATE TRIGGER dbo.TR_VoluntariadoAdesoes_Imutavel ON dbo.VoluntariadoAdesoes AFTER UPDATE, DELETE AS
+-- Menor de 18 anos não adere sozinho (Código Civil, arts. 3º e 4º): a adesão é a ficha (ou a mensagem) assinada pelo responsável, e o registro guarda quem assinou.
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.VoluntariadoAdesoes') AND name = N'ResponsavelNome')
+    ALTER TABLE dbo.VoluntariadoAdesoes ADD ResponsavelNome NVARCHAR(150) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.VoluntariadoAdesoes') AND name = N'ResponsavelVinculo')
+    ALTER TABLE dbo.VoluntariadoAdesoes ADD ResponsavelVinculo NVARCHAR(18) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_VoluntariadoAdesoes_Responsavel')
+    ALTER TABLE dbo.VoluntariadoAdesoes ADD CONSTRAINT CK_VoluntariadoAdesoes_Responsavel CHECK (
+        ((ResponsavelNome IS NULL AND ResponsavelVinculo IS NULL)
+          OR (ResponsavelNome IS NOT NULL AND ResponsavelVinculo IS NOT NULL AND ResponsavelVinculo IN ('PAI','MAE','TUTOR','RESPONSAVEL_LEGAL')))
+        AND (Forma NOT IN ('CLICKWRAP','LISTA_OURO') OR ResponsavelNome IS NULL));
+GO
+
+-- A prova da adesão não se apaga e não se altera (é o documento da Lei 9.608/98, art. 2º). ÚNICA exceção: depois do prazo de retenção, o IP do aceite digital
+-- vira 'anonimizado' e a cadeia de cabeçalhos vira NULL (LGPD art. 16: dado que deixou de ser necessário não se guarda). Qualquer outra mudança, ou um IP
+-- trocado por outro valor, é recusada. CREATE OR ALTER: o gatilho é reaplicado a cada deploy, então a regra nova vale também onde já existia o antigo.
+EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_VoluntariadoAdesoes_Imutavel ON dbo.VoluntariadoAdesoes AFTER UPDATE, DELETE AS
 BEGIN
     SET NOCOUNT ON;
-    RAISERROR(N''A adesão ao Termo de Voluntariado é prova documental: não se altera nem se apaga (Lei 9.608/98, art. 2º; Regimento Art. 133 §8º).'', 16, 1);
-    ROLLBACK TRANSACTION;
+    -- DELETE = há linhas em deleted e nenhuma em inserted. (Um UPDATE que não alcança linha nenhuma também dispara o gatilho, com as duas vazias: não é violação.)
+    IF (EXISTS (SELECT 1 FROM deleted) AND NOT EXISTS (SELECT 1 FROM inserted)) OR EXISTS (
+        SELECT 1 FROM inserted i JOIN deleted d ON d.AdesaoId = i.AdesaoId
+        WHERE i.MembroId <> d.MembroId OR i.Forma <> d.Forma
+           OR ISNULL(i.TermoVersao, -1) <> ISNULL(d.TermoVersao, -1) OR ISNULL(i.TermoHash, N'''') <> ISNULL(d.TermoHash, N'''')
+           OR i.DataAceite <> d.DataAceite OR ISNULL(i.AceitoEm, ''19000101'') <> ISNULL(d.AceitoEm, ''19000101'')
+           OR ISNULL(i.CanalMensageria, N'''') <> ISNULL(d.CanalMensageria, N'''') OR ISNULL(i.Referencia, N'''') <> ISNULL(d.Referencia, N'''')
+           OR ISNULL(i.RatificacaoId, -1) <> ISNULL(d.RatificacaoId, -1) OR i.ConvalidaPeriodoAnterior <> d.ConvalidaPeriodoAnterior
+           OR ISNULL(i.RegistradoPorMembroId, -1) <> ISNULL(d.RegistradoPorMembroId, -1) OR i.RegistradoEm <> d.RegistradoEm
+           OR ISNULL(i.ResponsavelNome, N'''') <> ISNULL(d.ResponsavelNome, N'''') OR ISNULL(i.ResponsavelVinculo, N'''') <> ISNULL(d.ResponsavelVinculo, N'''')
+           OR (ISNULL(i.EnderecoIp, N'''') <> ISNULL(d.EnderecoIp, N'''') AND NOT (i.EnderecoIp = N''anonimizado'' AND d.EnderecoIp IS NOT NULL))
+           OR (ISNULL(i.CadeiaCabecalhos, N'''') <> ISNULL(d.CadeiaCabecalhos, N'''') AND i.CadeiaCabecalhos IS NOT NULL))
+    BEGIN
+        RAISERROR(N''A adesão ao Termo de Voluntariado é prova documental: não se apaga e só admite a anonimização do IP depois do prazo de retenção (Lei 9.608/98, art. 2º; Regimento Art. 133 §8º; LGPD art. 16).'', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
 END');
 GO
 IF OBJECT_ID(N'dbo.TR_VoluntariadoRatificacoes_Imutavel', N'TR') IS NULL
@@ -225,13 +254,17 @@ IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'VOLUNTARIADO_
     VALUES (N'VOLUNTARIADO_TERMO_PENDENTE', N'Voluntários escalados sem Termo de Adesão registrado', N'ESCALAS', N'habilitacao_voluntarios', NULL, 1);
 GO
 
--- Retenção: a adesão é o documento que afasta o vínculo de emprego; a guarda cobre a prescrição trabalhista (CF art. 7º, XXIX: 5 anos,
--- até 2 após o fim do vínculo alegado). O IP do aceite é dado pessoal. O descarte automático AINDA NÃO existe e o prazo é decisão da CLI/Encarregado.
+-- Retenção: a adesão é o documento que afasta o vínculo de emprego e fica sem prazo final. O IP do aceite é dado pessoal e é anonimizado 5 anos depois do último
+-- serviço do voluntário (prescrição trabalhista, CF art. 7º, XXIX: 5 anos durante o vínculo alegado, até 2 depois dele; LGPD art. 16). O prazo é este parâmetro.
+IF NOT EXISTS (SELECT 1 FROM dbo.Prazos WHERE Sigla = 'VOLUNTARIADO_IP_RETENCAO_DIAS')
+    INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('VOLUNTARIADO_IP_RETENCAO_DIAS', N'Voluntariado — dias depois do último serviço (e da adesão) para anonimizar o IP e os cabeçalhos do aceite digital (LGPD art. 16; CF art. 7º, XXIX)', 1825);
+GO
 IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Voluntariado: adesão, rodízios e remoção da escala')
     INSERT INTO dbo.PoliticasRetencao (Categoria, BaseLegal, DiasRetencao)
-    VALUES (
-        N'Voluntariado: adesão, rodízios e remoção da escala',
-        N'Adesão ao Termo (IP, data e hora): prova da Lei 9.608/98 art. 2º e do Reg. Art. 133 §8º; 5 anos (prescrição trabalhista, CF art. 7º XXIX). Rodízios e escalas: prova do revezamento (Art. 135 §1º). Remoção da escala: registro de RH. Sem descarte automático por ora.',
-        1825
-    );
+    VALUES (N'Voluntariado: adesão, rodízios e remoção da escala', N'x', 1825);
+GO
+-- (O texto abaixo é reaplicado a cada deploy: na primeira vez que a migração rodou, a rotina de anonimização ainda não existia.)
+UPDATE dbo.PoliticasRetencao
+SET BaseLegal = N'Adesão ao Termo (Lei 9.608/98 art. 2º; Reg. Art. 133 §8º): prova guardada sem prazo final. IP e cabeçalhos do aceite digital: anonimizados 5 anos após o último serviço (CF art. 7º XXIX; LGPD art. 16). Escalas e rodízios: prova do revezamento. Remoção: registro de RH.'
+WHERE Categoria = N'Voluntariado: adesão, rodízios e remoção da escala';
 GO

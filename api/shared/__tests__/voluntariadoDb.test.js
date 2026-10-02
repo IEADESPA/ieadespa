@@ -15,7 +15,9 @@ const psc = require("../psc");
 const { criarPoolFalso } = require("./testUtils");
 
 const HOJE = "2026-10-01";
-const membro = (extra = {}) => ({ MembroId: 20, Nome: "Ana Souza", Email: "ana@exemplo.org", CongregacaoId: 1, CongregacaoNome: "Central", ...extra });
+const membro = (extra = {}) => ({ MembroId: 20, Nome: "Ana Souza", Email: "ana@exemplo.org", DataNascimento: new Date("1990-04-10T00:00:00Z"), CongregacaoId: 1, CongregacaoNome: "Central", ...extra });
+// Quem nasceu `anos` atrás, `dias` depois do aniversário de HOJE: nascidoHa(18) faz 18 anos hoje; nascidoHa(18, 1) faz 18 amanhã (ainda tem 17).
+const nascidoHa = (anos, dias = 0) => { const [a, m, d] = HOJE.split("-").map(Number); return new Date(Date.UTC(a - anos, m - 1, d + dias)); };
 const adesaoLinha = (extra = {}) => ({
   AdesaoId: 1, MembroId: 20, Forma: "CLICKWRAP", TermoVersao: vol.TERMO_VERSAO, TermoHash: vol.TERMO_HASH, DataAceite: new Date("2026-09-10T00:00:00Z"),
   AceitoEm: new Date("2026-09-10T14:03:00Z"), EnderecoIp: "177.8.9.10", CanalMensageria: null, Referencia: null, RatificacaoId: null, ConvalidaPeriodoAnterior: 0,
@@ -42,13 +44,27 @@ function poolQueFalhaNaConsulta(recordsets, n, numero = 2627) {
 
 describe("o que a pessoa vê do próprio Termo", () => {
   test("sem adesão: o texto vigente e aderiu=false", async () => {
-    const s = await db.situacaoDoTermo(criarPoolFalso([[]]).pool, 20);
+    const s = await db.situacaoDoTermo(criarPoolFalso([[], [membro()]]).pool, 20, { hoje: HOJE });
     expect(s.aderiu).toBe(false);
     expect(s.adesao).toBeNull();
     expect(s.termo.hash).toBe(vol.TERMO_HASH);
+    expect(s).toMatchObject({ podeAderirDigital: true, motivoSemAdesaoDigital: null, menorDeIdade: false });
+  });
+  test("menor de 18 anos: a tela é avisada de que não adere sozinho (e a data de nascimento não sai)", async () => {
+    const s = await db.situacaoDoTermo(criarPoolFalso([[], [membro({ DataNascimento: nascidoHa(18, 1) })]]).pool, 20, { hoje: HOJE });
+    expect(s).toMatchObject({ podeAderirDigital: false, menorDeIdade: true });
+    expect(s.motivoSemAdesaoDigital).toMatch(/responsável/);
+    expect(JSON.stringify(s)).not.toMatch(/DataNascimento|2008-/);
+    const fez18Hoje = await db.situacaoDoTermo(criarPoolFalso([[], [membro({ DataNascimento: nascidoHa(18) })]]).pool, 20, { hoje: HOJE });
+    expect(fez18Hoje.podeAderirDigital).toBe(true);
+  });
+  test("cadastro sem data de nascimento: não adere sozinho, mas também não é tratado como menor", async () => {
+    const s = await db.situacaoDoTermo(criarPoolFalso([[], [membro({ DataNascimento: null })]]).pool, 20, { hoje: HOJE });
+    expect(s).toMatchObject({ podeAderirDigital: false, menorDeIdade: false });
+    expect(s.motivoSemAdesaoDigital).toMatch(/data de nascimento/);
   });
   test("com adesão: mostra forma, data e integridade — mas NUNCA o IP (prova da Igreja, não conteúdo da tela)", async () => {
-    const s = await db.situacaoDoTermo(criarPoolFalso([[adesaoLinha()]]).pool, 20);
+    const s = await db.situacaoDoTermo(criarPoolFalso([[adesaoLinha()], [membro()]]).pool, 20, { hoje: HOJE });
     expect(s.aderiu).toBe(true);
     expect(s.adesao).toMatchObject({ forma: "CLICKWRAP", dataAceite: "2026-09-10", integridade: { status: "OK" } });
     expect(s.adesao).not.toHaveProperty("enderecoIp");
@@ -67,20 +83,35 @@ describe("aceite digital", () => {
     expect(chamadas).toHaveLength(0);
     expect(registrarAuditoria).not.toHaveBeenCalled();
   });
+  test("menor de 18 anos, ou sem data de nascimento, não adere pelo aceite digital — e nada é gravado", async () => {
+    for (const nasc of [nascidoHa(18, 1), nascidoHa(10), nascidoHa(0), null]) {
+      const { pool, chamadas } = criarPoolFalso([[membro({ DataNascimento: nasc })]]);
+      const r = await db.aceitarDigital(pool, { membroId: 20, aceito: true, ip: "177.8.9.10", hoje: HOJE });
+      expect(r.sucesso).toBe(false);
+      expect(r.mensagem).toMatch(nasc ? /responsável/ : /data de nascimento/);
+      expect(chamadas).toHaveLength(1);                                           // só leu o cadastro
+    }
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+  test("quem faz 18 anos hoje já pode aderir", async () => {
+    const { pool, chamadas } = criarPoolFalso([[membro({ DataNascimento: nascidoHa(18) })], [], [{ id: 8 }], [adesaoLinha()]]);
+    expect((await db.aceitarDigital(pool, { membroId: 20, aceito: true, ip: "177.8.9.10", hoje: HOJE })).sucesso).toBe(true);
+    expect(chamadas[2].sql).toMatch(/INSERT INTO VoluntariadoAdesoes/);
+  });
   test("quem já aderiu é avisado, com a data, e nada é gravado de novo", async () => {
-    const { pool, chamadas } = criarPoolFalso([[adesaoLinha()]]);
-    const r = await db.aceitarDigital(pool, { membroId: 20, aceito: true, ip: "1.2.3.4" });
+    const { pool, chamadas } = criarPoolFalso([[membro()], [adesaoLinha()]]);
+    const r = await db.aceitarDigital(pool, { membroId: 20, aceito: true, ip: "1.2.3.4", hoje: HOJE });
     expect(r.sucesso).toBe(false);
     expect(r.mensagem).toMatch(/já aderiu ao Termo em 10\/09\/2026/);
-    expect(chamadas).toHaveLength(1);
+    expect(chamadas).toHaveLength(2);
   });
   test("grava versão, hash, data de Brasília e IP; a auditoria guarda o hash mas não o IP", async () => {
-    const { pool, chamadas } = criarPoolFalso([[], [{ id: 7 }], [adesaoLinha()]]);
-    const cadeia = vol.cadeiaDeCabecalhos({ "x-forwarded-for": "1.2.3.4, 177.8.9.10" });
+    const { pool, chamadas } = criarPoolFalso([[membro()], [], [{ id: 7 }], [adesaoLinha()]]);
+    const cadeia = vol.cadeiaDeCabecalhos({ "x-forwarded-for": "1.2.3.4, 177.8.9.10:24294, 40.70.146.136:36945" });
     const r = await db.aceitarDigital(pool, { membroId: 20, aceito: true, ip: "177.8.9.10", cadeia, hoje: HOJE });
     expect(r.sucesso).toBe(true);
-    expect(chamadas[1].sql).toMatch(/INSERT INTO VoluntariadoAdesoes/);
-    expect(chamadas[1].inputs).toMatchObject({ m: 20, v: vol.TERMO_VERSAO, h: vol.TERMO_HASH, d: HOJE, ip: "177.8.9.10", cad: cadeia });
+    expect(chamadas[2].sql).toMatch(/INSERT INTO VoluntariadoAdesoes/);
+    expect(chamadas[2].inputs).toMatchObject({ m: 20, v: vol.TERMO_VERSAO, h: vol.TERMO_HASH, d: HOJE, ip: "177.8.9.10", cad: cadeia });
     expect(registrarAuditoria).toHaveBeenCalledTimes(1);
     const aud = registrarAuditoria.mock.calls[0][0];
     expect(aud).toMatchObject({ tabela: "VoluntariadoAdesoes", registroId: 7, acao: "ADESAO_REGISTRADA", usuarioId: 20 });
@@ -88,14 +119,14 @@ describe("aceite digital", () => {
     expect(aud.dadosDepois.termoHash).toBe(vol.TERMO_HASH);
   });
   test("dois cliques ao mesmo tempo: o segundo bate no índice único e vira mensagem, não erro 500", async () => {
-    const pool = poolQueFalhaNaConsulta([[]], 2);
+    const pool = poolQueFalhaNaConsulta([[membro()], []], 3);
     const r = await db.aceitarDigital(pool, { membroId: 20, aceito: true, ip: "1.2.3.4", hoje: HOJE });
     expect(r).toMatchObject({ sucesso: false });
     expect(r.mensagem).toMatch(/já aderiu/);
     expect(registrarAuditoria).not.toHaveBeenCalled();
   });
   test("erro de banco que não é duplicidade sobe (não é engolido)", async () => {
-    await expect(db.aceitarDigital(poolQueFalhaNaConsulta([[]], 2, 547), { membroId: 20, aceito: true, ip: "1.2.3.4", hoje: HOJE })).rejects.toThrow("dup");
+    await expect(db.aceitarDigital(poolQueFalhaNaConsulta([[membro()], []], 3, 547), { membroId: 20, aceito: true, ip: "1.2.3.4", hoje: HOJE })).rejects.toThrow("dup");
   });
 });
 
@@ -115,10 +146,33 @@ describe("registro da ficha / mensagem pela Secretaria", () => {
     const { pool, chamadas } = criarPoolFalso([[membro()], [], [{ id: 3 }], [adesaoLinha({ Forma: "FICHA_FISICA", TermoVersao: null, TermoHash: null, EnderecoIp: null, AceitoEm: null, Referencia: "Ficha nº 142", RegistradoPorMembroId: 5 })]]);
     const r = await db.registrarAdesaoManual(pool, { membroId: 20, dados: dados(), por: 5, hoje: HOJE });
     expect(r.sucesso).toBe(true);
-    expect(chamadas[2].inputs).toMatchObject({ m: 20, f: "FICHA_FISICA", d: "2026-09-01", ref: "Ficha nº 142", por: 5, c: null });
+    expect(chamadas[2].inputs).toMatchObject({ m: 20, f: "FICHA_FISICA", d: "2026-09-01", ref: "Ficha nº 142", por: 5, c: null, rn: null, rv: null });
     expect(chamadas[2].sql).not.toMatch(/TermoHash/);
     expect(r.adesao.integridade.status).toBe("DOCUMENTO_EXTERNO");
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "ADESAO_REGISTRADA", usuarioId: 5 });
+  });
+  test("menor de 18 anos sem o responsável: recusa depois de ler o cadastro e não grava nada", async () => {
+    const { pool, chamadas } = criarPoolFalso([[membro({ DataNascimento: nascidoHa(18, 1) })]]);
+    const r = await db.registrarAdesaoManual(pool, { membroId: 20, dados: dados(), por: 5, hoje: HOJE });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/menos de 18 anos/);
+    expect(chamadas).toHaveLength(1);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+  test("menor de 18 anos com o responsável: grava nome e vínculo; a auditoria diz que houve responsável, sem o nome (log imutável não guarda dado pessoal)", async () => {
+    const { pool, chamadas } = criarPoolFalso([[membro({ DataNascimento: nascidoHa(15) })], [], [{ id: 4 }], [adesaoLinha({ Forma: "FICHA_FISICA", TermoVersao: null, TermoHash: null, EnderecoIp: null, AceitoEm: null, Referencia: "Ficha nº 143", ResponsavelNome: "Maria Souza", ResponsavelVinculo: "MAE" })]]);
+    const r = await db.registrarAdesaoManual(pool, { membroId: 20, dados: dados({ referencia: "Ficha nº 143", responsavelNome: "Maria Souza", responsavelVinculo: "mae" }), por: 5, hoje: HOJE });
+    expect(r.sucesso).toBe(true);
+    expect(chamadas[2].inputs).toMatchObject({ rn: "Maria Souza", rv: "MAE" });
+    expect(r.adesao).toMatchObject({ responsavelNome: "Maria Souza", responsavelVinculo: "MAE", rotuloVinculo: "Mãe" });
+    const aud = registrarAuditoria.mock.calls[0][0];
+    expect(aud.dadosDepois.comResponsavel).toBe(true);
+    expect(JSON.stringify(aud)).not.toContain("Maria");
+  });
+  test("maior de idade: nome de responsável que vier no corpo é descartado, não gravado", async () => {
+    const { pool, chamadas } = criarPoolFalso([[membro()], [], [{ id: 5 }], [adesaoLinha({ Forma: "FICHA_FISICA" })]]);
+    await db.registrarAdesaoManual(pool, { membroId: 20, dados: dados({ responsavelNome: "Maria Souza", responsavelVinculo: "MAE" }), por: 5, hoje: HOJE });
+    expect(chamadas[2].inputs).toMatchObject({ rn: null, rv: null });
   });
 });
 
@@ -201,6 +255,24 @@ describe("ratificação coletiva — recusas antes de gravar", () => {
     const r = await db.ratificar(criarPoolFalso([[sessaoDoDia], [], []]).pool, { dados, por: 5, autorizacao: global, hoje: HOJE });
     expect(r.sucesso).toBe(false);
     expect(r.mensagem).toMatch(/nenhum signatário/);
+  });
+  test("menor de 18 anos não adere assinando lista: se só há menores, recusa e diz quantos; nada é gravado", async () => {
+    const menores = [{ MembroId: 20, DataNascimento: nascidoHa(18, 1) }, { MembroId: 21, DataNascimento: nascidoHa(9) }];
+    const { pool, chamadas } = criarPoolFalso([[sessaoDoDia], [{ MembroId: 20 }, { MembroId: 21 }], menores]);
+    const r = await db.ratificar(pool, { dados: lista(), por: 5, autorizacao: global, hoje: HOJE });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/Todos os signatários são menores de 18 anos \(2\)/);
+    expect(r.mensagem).toMatch(/responsável/);
+    expect(chamadas.some(c => /INSERT/.test(c.sql))).toBe(false);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+  test("a consulta de menores usa a data do dia (e só olha quem tem data de nascimento): quem não tem data não é tratado como menor", async () => {
+    const { pool, chamadas } = criarPoolFalso([[sessaoDoDia], [{ MembroId: 20 }], []]);
+    await db.ratificar(pool, { dados: lista(), por: 5, autorizacao: global, hoje: HOJE }).catch(() => {});     // segue para a transação, que o pool falso não tem
+    const q = chamadas.find(c => /DataNascimento > DATEADD/.test(c.sql));
+    expect(q).toBeTruthy();
+    expect(q.sql).toMatch(/DataNascimento IS NOT NULL/);
+    expect(q.inputs.hoje).toBe(HOJE);
   });
 });
 
@@ -599,13 +671,55 @@ describe("equipes que eu lidero (tela do dirigente)", () => {
 describe("cobertura do Termo (tela da Secretaria)", () => {
   test("conta quem aderiu e quem não, sem-termo primeiro na lista", async () => {
     const linhas = [
-      { MembroId: 3, Nome: "Ana", Equipes: "Limpeza, Portaria", AdesaoId: null, Forma: null, DataAceite: null, Referencia: null },
-      { MembroId: 4, Nome: "Beto", Equipes: "Limpeza", AdesaoId: 2, Forma: "FICHA_FISICA", DataAceite: new Date("2026-08-01T00:00:00Z"), Referencia: "Ficha 9" }
+      { MembroId: 3, Nome: "Ana", DataNascimento: new Date("1985-03-02T00:00:00Z"), Equipes: "Limpeza, Portaria", AdesaoId: null, Forma: null, DataAceite: null, Referencia: null },
+      { MembroId: 4, Nome: "Beto", DataNascimento: null, Equipes: "Limpeza", AdesaoId: 2, Forma: "FICHA_FISICA", DataAceite: new Date("2026-08-01T00:00:00Z"), Referencia: "Ficha 9" }
     ];
-    const r = await db.coberturaDoTermo(criarPoolFalso([linhas]).pool, { congregacaoId: 1 });
+    const r = await db.coberturaDoTermo(criarPoolFalso([linhas]).pool, { congregacaoId: 1, hoje: HOJE });
     expect(r).toMatchObject({ total: 2, comTermo: 1, semTermo: 1 });
-    expect(r.voluntarios[0]).toMatchObject({ nome: "Ana", aderiu: false, forma: null, equipes: "Limpeza, Portaria" });
-    expect(r.voluntarios[1]).toMatchObject({ nome: "Beto", aderiu: true, rotuloForma: "Cláusula de Voluntariado na Ficha de Membro assinada", dataAceite: "2026-08-01" });
+    expect(r.voluntarios[0]).toMatchObject({ nome: "Ana", aderiu: false, forma: null, equipes: "Limpeza, Portaria", menor: false });
+    expect(r.voluntarios[1]).toMatchObject({ nome: "Beto", aderiu: true, rotuloForma: "Cláusula de Voluntariado na Ficha de Membro assinada", dataAceite: "2026-08-01", menor: false });
+  });
+  test("marca quem tem menos de 18 anos (a Secretaria precisa do responsável), sem expor a data de nascimento", async () => {
+    const linhas = [
+      { MembroId: 5, Nome: "Caio", DataNascimento: nascidoHa(18, 1), Equipes: "Som", AdesaoId: null, Forma: null, DataAceite: null, Referencia: null },
+      { MembroId: 6, Nome: "Dora", DataNascimento: nascidoHa(18), Equipes: "Som", AdesaoId: null, Forma: null, DataAceite: null, Referencia: null }
+    ];
+    const r = await db.coberturaDoTermo(criarPoolFalso([linhas]).pool, { congregacaoId: 1, hoje: HOJE });
+    expect(r.voluntarios.map(x => [x.nome, x.menor])).toEqual([["Caio", true], ["Dora", false]]);
+    expect(JSON.stringify(r)).not.toMatch(/DataNascimento|2008-/);
+  });
+});
+
+describe("retenção do IP do aceite digital (LGPD art. 16)", () => {
+  test("usa o prazo configurado (padrão 5 anos), só anonimiza quem não serve mais e audita a contagem — sem dado pessoal", async () => {
+    const { pool, chamadas } = criarPoolFalso([[{ Dias: 1000 }], [{ total: 3 }]]);
+    const r = await db.anonimizarIpsVencidos(pool, { hoje: HOJE });
+    expect(r).toEqual({ anonimizados: 3, retencaoDias: 1000 });
+    const up = chamadas[1];
+    expect(up.inputs).toMatchObject({ hoje: HOJE, dias: 1000 });
+    expect(up.sql).toMatch(/SET EnderecoIp = N'anonimizado', CadeiaCabecalhos = NULL/);
+    expect(up.sql).toMatch(/a\.Forma = 'CLICKWRAP'/);
+    expect(up.sql).toMatch(/a\.DataAceite < DATEADD\(DAY, -@dias, @hoje\)/);
+    expect(up.sql).toMatch(/NOT EXISTS \(SELECT 1 FROM EscalasEquipeMembros em WHERE em\.MembroId = a\.MembroId AND em\.Ativo = 1\)/);
+    expect(up.sql).toMatch(/s\.DataHora >= DATEADD\(DAY, -@dias, @hoje\)/);
+    expect(up.sql).not.toMatch(/DELETE/i);
+    expect(registrarAuditoria).toHaveBeenCalledTimes(1);
+    const aud = registrarAuditoria.mock.calls[0][0];
+    expect(aud).toMatchObject({ tabela: "VoluntariadoAdesoes", registroId: 0, acao: "IP_ANONIMIZADO", usuarioId: null });
+    expect(aud.dadosDepois).toEqual({ quantidade: 3, retencaoDias: 1000, referencia: HOJE });
+  });
+  test("sem parâmetro cadastrado, vale o padrão de 1825 dias; sem nada a anonimizar, não audita", async () => {
+    const { pool } = criarPoolFalso([[], [{ total: 0 }]]);
+    expect(await db.anonimizarIpsVencidos(pool, { hoje: HOJE })).toEqual({ anonimizados: 0, retencaoDias: 1825 });
+    expect(vol.IP_RETENCAO_DIAS_PADRAO).toBe(1825);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+  test("prazo fora do aceitável (0, negativo, absurdo) cai no padrão: nunca anonimiza todo mundo por um parâmetro errado", async () => {
+    for (const Dias of [0, -5, 99999, "abc"]) {
+      const { pool, chamadas } = criarPoolFalso([[{ Dias }], [{ total: 0 }]]);
+      await db.anonimizarIpsVencidos(pool, { hoje: HOJE });
+      expect(chamadas[1].inputs.dias).toBe(1825);
+    }
   });
 });
 

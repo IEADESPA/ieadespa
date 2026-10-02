@@ -39,10 +39,11 @@ function criarLimitador({ janelaMs = 60000, maximo = 30, maxChaves = 5000 } = {}
 // IP do cliente atrás do proxy do Static Web Apps/Functions. Sem cabeçalho
 // conhecido, todas as requisições caem numa chave só ("desconhecida") — o
 // limite fica mais apertado, nunca mais frouxo.
+// v7.5 (revisão de segurança, medido no Azure em 02/10/2026): o x-azure-clientip e o x-client-ip chegam EXATAMENTE como o cliente os escreveu, e no
+// x-forwarded-for só o PENÚLTIMO valor (o último é o proxy do Azure) é confiável. Antes a chave saía do primeiro valor — quem trocasse esse valor a cada
+// requisição nunca batia no limite. Ver shared/origemConexao.js.
 function chaveDeOrigem(req) {
-  const h = (req && req.headers) || {};
-  const bruto = h["x-azure-clientip"] || h["x-client-ip"] || String(h["x-forwarded-for"] || "").split(",")[0] || "desconhecida";
-  const ip = String(bruto).trim().replace(/:\d+$/, ""); // tira a porta ("1.2.3.4:5678")
+  const ip = require("./origemConexao").ipDoCliente((req && req.headers) || {}, { apenasPublico: false }) || "desconhecida";
   return crypto.createHash("sha256").update(ip).digest("hex").slice(0, 16);
 }
 

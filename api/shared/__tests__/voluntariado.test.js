@@ -47,15 +47,16 @@ describe("Termo de Adesão — o texto e o que o torna prova", () => {
 });
 
 describe("IP do aceite digital — guardado, então tem que ser um endereço de verdade", () => {
-  test("pega o cabeçalho do Azure primeiro, depois o do proxy, depois o primeiro endereço PÚBLICO do X-Forwarded-For", () => {
-    expect(v.extrairIp({ "x-azure-clientip": "189.10.20.30", "x-forwarded-for": "1.1.1.1" })).toBe("189.10.20.30");
-    expect(v.extrairIp({ "x-client-ip": "189.1.2.3" })).toBe("189.1.2.3");
-    expect(v.extrairIp({ "x-forwarded-for": "177.8.9.10, 10.0.0.1, 10.0.0.2" })).toBe("177.8.9.10");
-    expect(v.extrairIp({ "x-forwarded-for": "10.0.0.5, 177.8.9.10" })).toBe("177.8.9.10");
+  // A regra de escolha (medida no Azure em 02/10/2026) e a bateria completa de endereços estão em origemConexao.test.js; aqui, só a ligação com o aceite.
+  test("o IP do cliente é o PENÚLTIMO do X-Forwarded-For; x-azure-clientip e x-client-ip (que o cliente escreve) não valem", () => {
+    expect(v.extrairIp({ "x-forwarded-for": "177.8.9.10:24465, 40.70.146.136:36945" })).toBe("177.8.9.10");
+    expect(v.extrairIp({ "x-forwarded-for": "1.2.3.4, 177.8.9.10:24294, 40.70.146.136:36945", "x-azure-clientip": "9.9.9.9", "x-client-ip": "5.6.7.8" })).toBe("177.8.9.10");
+    expect(v.extrairIp({ "x-azure-clientip": "189.10.20.30" })).toBeNull();
+    expect(v.extrairIp({ "x-client-ip": "189.1.2.3" })).toBeNull();
   });
   test("o nome do cabeçalho vale em qualquer caixa", () => {
-    expect(v.extrairIp({ "X-Azure-ClientIP": "189.10.20.30" })).toBe("189.10.20.30");
     expect(v.extrairIp({ "X-Forwarded-For": "177.8.9.10" })).toBe("177.8.9.10");
+    expect(v.extrairIp({ "X-FORWARDED-FOR": "177.8.9.10:1, 40.70.146.136:2" })).toBe("177.8.9.10");
   });
   test("endereço privado, loopback, link-local, reservado e de documentação NÃO prova de onde veio a conexão", () => {
     for (const ip of ["10.0.0.5", "172.16.0.1", "172.31.255.255", "192.168.1.5", "127.0.0.1", "0.0.0.0", "169.254.1.1", "100.64.0.1", "224.0.0.1", "255.255.255.255", "203.0.113.9", "198.51.100.7", "192.0.2.1",
@@ -68,7 +69,7 @@ describe("IP do aceite digital — guardado, então tem que ser um endereço de 
   });
   test("a cadeia dos cabeçalhos é guardada limpa e cortada, para a prova não depender só do primeiro IP", () => {
     expect(v.cadeiaDeCabecalhos({ "x-forwarded-for": "1.2.3.4, 177.8.9.10:55", "x-azure-clientip": "177.8.9.10" }))
-      .toBe(JSON.stringify({ "x-azure-clientip": "177.8.9.10", "x-forwarded-for": "1.2.3.4, 177.8.9.10:55" }));
+      .toBe(JSON.stringify({ "x-forwarded-for": "1.2.3.4, 177.8.9.10:55", "x-azure-clientip": "177.8.9.10" }));
     expect(v.cadeiaDeCabecalhos({})).toBeNull();
     const suja = v.cadeiaDeCabecalhos({ "x-forwarded-for": "1.2.3.4'; DROP TABLE X;-- <script>" });
     expect(suja).not.toMatch(/[<>';]/);
@@ -80,7 +81,7 @@ describe("IP do aceite digital — guardado, então tem que ser um endereço de 
     expect(v.extrairIp({ "x-forwarded-for": "2804:14d:5c80::1" })).toBe("2804:14d:5c80::1");
   });
   test("IPv6 sem colchetes não perde o último bloco (não confunde com porta)", () => {
-    expect(v.extrairIp({ "x-azure-clientip": "2804:14d:5c80::7334" })).toBe("2804:14d:5c80::7334");
+    expect(v.extrairIp({ "x-forwarded-for": "2804:14d:5c80::7334" })).toBe("2804:14d:5c80::7334");
   });
   test("o que parece IPv6 mas não é (só dois-pontos, grupos de letras) não passa", () => {
     for (const lixo of [":::::", ":::", "a:b:c", "1:2:3", "::::::", "g::1", "12345::1"]) expect(v.extrairIp({ "x-forwarded-for": lixo })).toBeNull();
@@ -96,15 +97,58 @@ describe("IP do aceite digital — guardado, então tem que ser um endereço de 
 });
 
 describe("aceite digital (clickwrap)", () => {
-  test("só vale com a caixa marcada de verdade (true) e com IP", () => {
-    expect(v.validarAceiteDigital({ aceito: true, ip: "1.2.3.4" }).valido).toBe(true);
-    for (const aceito of [false, "true", 1, undefined, null, "on"]) expect(v.validarAceiteDigital({ aceito, ip: "1.2.3.4" }).valido).toBe(false);
+  test("só vale com a caixa marcada de verdade (true), com IP e com a maioridade conhecida", () => {
+    expect(v.validarAceiteDigital({ aceito: true, ip: "1.2.3.4", idade: 30 }).valido).toBe(true);
+    for (const aceito of [false, "true", 1, undefined, null, "on"]) expect(v.validarAceiteDigital({ aceito, ip: "1.2.3.4", idade: 30 }).valido).toBe(false);
   });
   test("sem IP identificável não registra, e a mensagem manda procurar a Secretaria", () => {
-    const r = v.validarAceiteDigital({ aceito: true, ip: null });
+    const r = v.validarAceiteDigital({ aceito: true, ip: null, idade: 30 });
     expect(r.valido).toBe(false);
     expect(r.mensagem).toMatch(/Art\. 133 §8º, II/);
     expect(r.mensagem).toMatch(/Secretaria/);
+  });
+  test("menor de 18 anos NÃO adere pelo aceite digital — nem com a caixa marcada e IP válido", () => {
+    for (const idade of [0, 12, 15, 16, 17]) {
+      const r = v.validarAceiteDigital({ aceito: true, ip: "1.2.3.4", idade });
+      expect(r.valido).toBe(false);
+      expect(r.mensagem).toMatch(/responsável/);
+    }
+    expect(v.validarAceiteDigital({ aceito: true, ip: "1.2.3.4", idade: 18 }).valido).toBe(true);
+  });
+  test("idade desconhecida (cadastro sem data de nascimento) também não adere sozinha: não se presume maioridade", () => {
+    for (const idade of [null, undefined]) {
+      const r = v.validarAceiteDigital({ aceito: true, ip: "1.2.3.4", idade });
+      expect(r.valido).toBe(false);
+      expect(r.mensagem).toMatch(/data de nascimento/);
+    }
+  });
+  test("a idade é conferida ANTES da caixa e do IP (o motivo mostrado é o que a pessoa precisa resolver primeiro)", () => {
+    expect(v.validarAceiteDigital({ aceito: false, ip: null, idade: 15 }).mensagem).toMatch(/Menor de 18/);
+  });
+});
+
+describe("idade para aderir (Código Civil arts. 3º e 4º)", () => {
+  test("idade completa em anos: faz aniversário só no dia", () => {
+    expect(v.idadeEmAnos("2008-10-01", "2026-10-01")).toBe(18);
+    expect(v.idadeEmAnos("2008-10-02", "2026-10-01")).toBe(17);
+    expect(v.idadeEmAnos("2008-09-30", "2026-10-01")).toBe(18);
+    expect(v.idadeEmAnos("2000-02-29", "2026-02-28")).toBe(25);
+    expect(v.idadeEmAnos("2000-02-29", "2026-03-01")).toBe(26);
+    expect(v.idadeEmAnos("2026-10-01", "2026-10-01")).toBe(0);
+  });
+  test("aceita Date (coluna DATE do SQL) e texto com hora", () => {
+    expect(v.idadeEmAnos(new Date("2000-05-20T00:00:00.000Z"), "2026-10-01")).toBe(26);
+    expect(v.idadeEmAnos("2000-05-20T00:00:00.000Z", "2026-10-01")).toBe(26);
+  });
+  test("sem data, data impossível ou nascimento no futuro: null (idade desconhecida, nunca um número inventado)", () => {
+    for (const n of [null, undefined, "", "lixo", "2000-13-01", "2000-02-30", "2027-01-01"]) expect(v.idadeEmAnos(n, "2026-10-01")).toBeNull();
+    expect(v.idadeEmAnos("2000-01-01", "lixo")).toBeNull();
+  });
+  test("condicaoDeIdade: 18 anos exatos já pode; 17 é menor; desconhecida não pode e não é 'menor'", () => {
+    expect(v.condicaoDeIdade(18)).toMatchObject({ podeAderirDigital: true, menor: false, motivo: null });
+    expect(v.condicaoDeIdade(17)).toMatchObject({ podeAderirDigital: false, menor: true });
+    expect(v.condicaoDeIdade(null)).toMatchObject({ podeAderirDigital: false, menor: false });
+    expect(v.MAIORIDADE).toBe(18);
   });
 });
 
@@ -124,6 +168,29 @@ describe("registro da ficha e da mensagem (Secretaria)", () => {
   });
   test("a data de hoje é aceita (o aceite pode ter sido hoje)", () => {
     expect(v.validarRegistroAdesao(ficha({ dataAceite: HOJE }), { hoje: HOJE }).valido).toBe(true);
+  });
+  test("maior de idade (ou idade desconhecida): o responsável não é pedido e não é guardado, mesmo que venha no corpo", () => {
+    for (const idade of [18, 40, null]) {
+      const r = v.validarRegistroAdesao(ficha({ responsavelNome: "Maria Souza", responsavelVinculo: "MAE" }), { hoje: HOJE, idade });
+      expect(r.valido).toBe(true);
+      expect(r.dados).toMatchObject({ responsavelNome: null, responsavelVinculo: null });
+    }
+  });
+  test("menor de 18 anos: a Secretaria informa QUEM assinou — nome e vínculo", () => {
+    const ok = v.validarRegistroAdesao(ficha({ responsavelNome: "  Maria Souza  ", responsavelVinculo: "mae" }), { hoje: HOJE, idade: 15 });
+    expect(ok.valido).toBe(true);
+    expect(ok.dados).toMatchObject({ forma: "FICHA_FISICA", responsavelNome: "Maria Souza", responsavelVinculo: "MAE" });
+    for (const vinculo of ["PAI", "MAE", "TUTOR", "RESPONSAVEL_LEGAL"]) expect(v.validarRegistroAdesao(ficha({ responsavelNome: "Maria Souza", responsavelVinculo: vinculo }), { hoje: HOJE, idade: 17 }).valido).toBe(true);
+    const semNome = v.validarRegistroAdesao(ficha({ responsavelVinculo: "PAI" }), { hoje: HOJE, idade: 15 });
+    expect(semNome.valido).toBe(false);
+    expect(semNome.mensagem).toMatch(/menos de 18 anos/);
+    for (const nome of ["ab", "x".repeat(151), "<b>Maria</b>", "   "]) expect(v.validarRegistroAdesao(ficha({ responsavelNome: nome, responsavelVinculo: "PAI" }), { hoje: HOJE, idade: 15 }).valido).toBe(false);
+    for (const vinculo of ["", "AMIGO", "AVO", undefined]) expect(v.validarRegistroAdesao(ficha({ responsavelNome: "Maria Souza", responsavelVinculo: vinculo }), { hoje: HOJE, idade: 15 }).mensagem).toMatch(/vínculo/);
+  });
+  test("a mensagem (e-mail/WhatsApp) do menor também exige o responsável", () => {
+    const base = ficha({ forma: "MENSAGERIA", canal: "WHATSAPP" });
+    expect(v.validarRegistroAdesao(base, { hoje: HOJE, idade: 16 }).valido).toBe(false);
+    expect(v.validarRegistroAdesao({ ...base, responsavelNome: "João Pereira", responsavelVinculo: "PAI" }, { hoje: HOJE, idade: 16 }).dados).toMatchObject({ forma: "MENSAGERIA", canal: "WHATSAPP", responsavelVinculo: "PAI" });
   });
 });
 

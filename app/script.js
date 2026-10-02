@@ -10251,7 +10251,7 @@ function formatarValorLgpd(valor, tipo) {
     return isNaN(d) ? "-" : d.toLocaleString("pt-BR");
   }
   if (tipo === "bit") return valor ? "Sim" : "Não";
-  return String(valor);
+  return escaparHtmlEbd(String(valor));        // vai direto para innerHTML: nome, endereço e demais textos digitados não podem virar marcação
 }
 
 function linhaLgpd(rotulo, valor, tipo) {
@@ -10264,12 +10264,14 @@ async function alternarMeusDadosLGPD() {
   caixa.style.display = abrindo ? "block" : "none";
   if (!abrindo) return;
 
-  const res = await fetch(`${API_BASE}/lgpd/meus-dados/${authMatricula}`);
-  const data = await res.json();
+  // v7.5 — a rota exige a sessão e só entrega a matrícula da própria sessão (fetchProtegido manda o token).
+  let data;
+  try { data = await (await fetchProtegido(`${API_BASE}/lgpd/meus-dados/${authMatricula}`)).json(); }
+  catch (_) { caixa.innerHTML = `<p class="subtitle">Não foi possível carregar os seus dados agora. Tente de novo.</p>`; return; }
 
   // vB.8 — o direito de acesso (Art. 18) não depende mais de consentimento
   // nenhum (base legal era errada); só falha se a matrícula não existir.
-  if (!data.sucesso) { caixa.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (!data.sucesso) { caixa.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem || "Não foi possível carregar os seus dados.")}</p>`; return; }
 
   const m = data.membro;
   const ROTULO_MODALIDADE = { CIVIL_E_RELIGIOSO: "Civil e Religioso", SOMENTE_RELIGIOSO: "Somente Religioso" };
@@ -10327,12 +10329,44 @@ async function alternarMeusDadosLGPD() {
       ${data.licencasCandidatura.map(l => `<p class="linha-perfil">Pleito em ${formatarValorLgpd(l.dataPleito, "data")} · ${ROTULO_STATUS_LIC[l.status] || l.status}</p>`).join("")}
     </div>` : ""}
 
+    ${volCartaoMeusDados(data.voluntariado)}
+
     <div class="cartao-perfil" style="margin-top:12px;">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Consentimentos LGPD</h4>
       ${data.consentimentos.map(c => `<p class="linha-perfil">${c.tipo} — ${c.concedido ? "✅ Concedido" : "❌ Revogado"} em ${formatarValorLgpd(c.dataRegistro, "dataHora")}</p>`).join("") || "<p class='subtitle'>Nenhum registrado.</p>"}
     </div>
 
     <p class="subtitle" style="margin-top:12px;">Gerado em ${formatarValorLgpd(data.geradoEm, "dataHora")}. Precisa de uma cópia formal? Use "Enviar pedido" abaixo com o tipo "Portabilidade".</p>`;
+}
+
+// v7.5 — o que o voluntariado guarda da pessoa, em "Meus Dados" (LGPD art. 18, I). Só aparece quando há algo. Tudo escapado: o nome do responsável, a referência
+// da ficha e o motivo da indisponibilidade são texto digitado.
+function volCartaoMeusDados(v) {
+  if (!v) return "";
+  const a = v.adesao;
+  const lista = (x) => Array.isArray(x) ? x : [];
+  const temAlgo = a || lista(v.equipes).length || lista(v.servicos).length || lista(v.indisponibilidades).length || lista(v.remocoesDaEscala).length || lista(v.gruposDeRodizio).length;
+  if (!temAlgo) return "";
+  const linha = (rotulo, valor) => valor === null || valor === undefined || valor === "" ? "" : `<p class="linha-perfil"><strong>${volEsc(rotulo)}:</strong> ${volEsc(valor)}</p>`;
+  const itens = (titulo, linhas) => linhas.length ? `<p class="linha-perfil"><strong>${volEsc(titulo)}:</strong></p><ul class="vol-lista">${linhas.map(l => `<li>${l}</li>`).join("")}</ul>` : "";
+  const adesao = a ? `
+      ${linha("Adesão ao Termo", `${a.rotuloForma || a.forma} em ${volDataParede(a.dataAceite)}${a.termoVersao ? ` (versão ${a.termoVersao} do texto)` : ""}`)}
+      ${linha("Instante do aceite", a.aceitoEm ? volDataInstante(a.aceitoEm) : "")}
+      ${linha("IP do aceite", a.enderecoIp)}
+      ${linha("Cabeçalhos de conexão guardados", a.cadeiaCabecalhos)}
+      ${linha("Referência do documento", a.referencia)}
+      ${linha("Responsável que assinou", a.responsavelNome ? `${a.responsavelNome} (${a.responsavelVinculo || "responsável"})` : "")}` : "";
+  return `
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Voluntariado</h4>
+      ${adesao}
+      ${itens("Equipes", lista(v.equipes).map(e => `${volEsc(e.equipe)}${e.congregacao ? ` — ${volEsc(e.congregacao)}` : ""}${e.ativo ? "" : " (inativa)"}`))}
+      ${itens("Grupos de rodízio", lista(v.gruposDeRodizio).map(g => `${volEsc(g.rodizio)} — ${volEsc(g.grupo)}${g.saiuEm ? ` (saiu em ${volDataInstante(g.saiuEm)})` : ""}`))}
+      ${itens("Serviços escalados", lista(v.servicos).map(s => `${volDataHora(s.dataHora)} — ${volEsc(s.equipe)}${s.descricao ? `: ${volEsc(s.descricao)}` : ""} (${volEsc(s.situacao)})`))}
+      ${itens("Indisponibilidades", lista(v.indisponibilidades).map(i => `${volDataParede(i.dataInicio)} a ${volDataParede(i.dataFim)}${i.motivo ? ` — ${volEsc(i.motivo)}` : ""}`))}
+      ${itens("Remoções da escala", lista(v.remocoesDaEscala).map(r => `${volDataInstante(r.em)}${r.equipe ? ` — ${volEsc(r.equipe)}` : ""}${r.removidoDaEscala ? "" : " (apenas desligamento)"}${r.reintegradoEm ? `, reintegrado em ${volDataInstante(r.reintegradoEm)}` : ""}`))}
+      ${v.aviso ? `<p class="subtitle">${volEsc(v.aviso)}</p>` : ""}
+    </div>`;
 }
 
 async function criarSolicitacaoLGPD() {
@@ -20177,7 +20211,11 @@ function volMontarTermo(d) {
   let corpo;
   if (d.aderiu) {
     const a = d.adesao || {};
-    corpo = `<p class="vol-selo-ok">✅ Você aderiu${a.dataAceite ? ` em ${volData(a.dataAceite)}` : ""}${a.rotuloForma ? ` — ${volEsc(a.rotuloForma)}` : ""}</p>
+    corpo = `<p class="vol-selo-ok">✅ Você aderiu${a.dataAceite ? ` em ${volData(a.dataAceite)}` : ""}${a.rotuloForma ? ` — ${volEsc(a.rotuloForma)}` : ""}${a.responsavelNome ? `, assinado por ${volEsc(a.responsavelNome)} (${volEsc(a.rotuloVinculo || "responsável")})` : ""}</p>
+      <details><summary>Ver o texto do Termo</summary>${texto}</details>`;
+  } else if (d.podeAderirDigital === false) {
+    // Menor de 18 anos (ou cadastro sem data de nascimento) não adere sozinho: o aceite digital fica fechado e a tela diz o que fazer.
+    corpo = `<p class="vol-aviso">${volEsc(d.motivoSemAdesaoDigital || "O aceite digital não está disponível para o seu cadastro. Procure a Secretaria.")}</p>
       <details><summary>Ver o texto do Termo</summary>${texto}</details>`;
   } else {
     corpo = `${texto}
@@ -20624,6 +20662,8 @@ function volPrepararFormulariosHabilitacao() {
   volPreencherSelect(selForma, (cat.formasRegistroManual || []).map(f => ({ valor: f.codigo, rotulo: f.rotulo })), selForma.value);
   volPreencherSelect(selCanal, (cat.canaisMensageria || []).map(c => ({ valor: c.codigo, rotulo: c.rotulo })), selCanal.value);
   volPreencherSelect(selOrigem, (cat.origensRatificacao || []).map(o => ({ valor: o.codigo, rotulo: o.rotulo })), selOrigem.value);
+  const selVinculo = volEl("volAdesaoVinculo");
+  volPreencherSelect(selVinculo, (cat.vinculosResponsavel || []).map(x => ({ valor: x.codigo, rotulo: x.rotulo })), selVinculo.value);
   volAlternarFormaAdesaoAcao();
   volAlternarOrigemRatificacaoAcao();
   const r = cat.ratificacao || {};
@@ -20670,7 +20710,7 @@ async function volCarregarAdesoesAcao() {
   resumo.innerHTML = `<p class="vol-resumo"><strong>${Number(data.comTermo)} de ${Number(data.total)}</strong> voluntários já aderiram${Number(data.semTermo) ? ` — faltam ${Number(data.semTermo)}` : ""}.</p>`;
   painel.innerHTML = lista.length
     ? `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Voluntário</th><th>Equipes</th><th>Aderiu</th><th>Forma e data</th><th>Referência</th></tr></thead><tbody>
-        ${lista.map(v => `<tr><td>${volEsc(v.nome)} <span class="vol-matricula">matrícula ${Number(v.membroId)}</span></td><td>${volEsc(v.equipes || "")}</td><td>${v.aderiu ? "✅" : "❌"}</td>
+        ${lista.map(v => `<tr><td>${volEsc(v.nome)} <span class="vol-matricula">matrícula ${Number(v.membroId)}</span>${v.menor ? ` <span class="vol-etiqueta" title="Menor de 18 anos: a adesão é pela ficha assinada pelo responsável">menor de 18</span>` : ""}</td><td>${volEsc(v.equipes || "")}</td><td>${v.aderiu ? "✅" : "❌"}</td>
           <td>${v.aderiu ? `${volEsc(v.rotuloForma || "")} — ${volData(v.dataAceite)}` : "—"}</td><td>${volEsc(v.referencia || "")}</td></tr>`).join("")}
       </tbody></table></div>`
     : "<p class='subtitle'>Nenhum voluntário ativo nas equipes desta congregação.</p>";
@@ -20681,6 +20721,8 @@ async function volRegistrarAdesaoAcao(botao) {
   const dataAceite = volEl("volAdesaoData").value;
   const canal = volEl("volAdesaoCanal").value;
   const referencia = volEl("volAdesaoReferencia").value.trim();
+  const responsavelNome = volEl("volAdesaoResponsavel").value.trim();
+  const responsavelVinculo = volEl("volAdesaoVinculo").value;
   if (!Number.isInteger(membroId) || membroId < 1) { mostrarToast("Informe a matrícula do voluntário.", "erro"); return; }
   if (!forma) { mostrarToast("Escolha como a adesão foi dada.", "erro"); return; }
   if (!dataAceite) { mostrarToast("Informe a data da assinatura ou da resposta.", "erro"); return; }
@@ -20689,11 +20731,14 @@ async function volRegistrarAdesaoAcao(botao) {
   await volProtegerBotao(botao, async () => {
     const corpo = { membroId, forma, dataAceite, referencia };
     if (forma === "MENSAGERIA") corpo.canal = canal;
+    // Só vai quando preenchido; o servidor exige para menor de 18 anos (e descarta para maior de idade).
+    if (responsavelNome) { corpo.responsavelNome = responsavelNome; corpo.responsavelVinculo = responsavelVinculo; }
     const data = await volEnviar("voluntariado/adesao", corpo);
     if (data.sucesso === false) { volAvisarErro(data); return; }
     mostrarToast(data.mensagem, "sucesso");
     volEl("volAdesaoMatricula").value = "";
     volEl("volAdesaoReferencia").value = "";
+    volEl("volAdesaoResponsavel").value = "";
     await volCarregarAdesoesAcao();
   });
 }
@@ -20728,7 +20773,8 @@ async function volRatificarAcao(botao) {
     const ignoradas = data.matriculasIgnoradas || [];
     cx.innerHTML = `<div class="vol-resultado"><p>${volEsc(data.mensagem)}</p><ul class="vol-lista">
       <li>Signatários: ${Number(data.totalSignatarios)}</li><li>Novas adesões: ${Number(data.novasAdesoes)}</li><li>Já aderiam: ${Number(data.jaAderiam)}</li>
-      ${ignoradas.length ? `<li>Matrículas ignoradas (não existem no cadastro): ${ignoradas.map(Number).join(", ")}</li>` : ""}</ul></div>`;
+      ${ignoradas.length ? `<li>Matrículas ignoradas (não existem no cadastro): ${ignoradas.map(Number).join(", ")}</li>` : ""}
+      ${Number(data.menoresIgnorados) ? `<li>Menores de 18 anos que ficaram de fora: ${Number(data.menoresIgnorados)} — a adesão deles é pela ficha assinada pelo responsável</li>` : ""}</ul></div>`;
     ["volRatSessao", "volRatServico", "volRatDescricao", "volRatData", "volRatMatriculas"].forEach(id => { volEl(id).value = ""; });
     volEl("volRatCabecalho").checked = false;
     await Promise.all([volCarregarAdesoesAcao(), volCarregarRatificacoesAcao()]);

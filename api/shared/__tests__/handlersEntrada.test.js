@@ -46,9 +46,10 @@ describe("id em texto de dígitos (como chega do HTTP) passa na entrada", () => 
 });
 
 describe("lixo no lugar do id é recusado na entrada (400), nunca 500", () => {
-  const lixo = ["abc", "1;DROP TABLE X", "1 OR 1=1", "-1", "0", "1.5", "0x10", "99999999999999999999", ["1", "2"], { a: 1 }, true];
+  const lixo = ["abc", "1;DROP TABLE X", "1 OR 1=1", "-1", "0", "1.5", "0x10", "1e1", "2147483648", "99999999999999999999", ["1", "2"], ["5"], { a: 1 }, true];
   test.each(lixo.map(v => [JSON.stringify(v), v]))("query com %s", async (_r, v) => {
-    for (const [h, acao, campo] of [[hHab, "lista", "congregacaoId"], [hHab, "detalhe", "membroId"], [hEsc, "equipes", "congregacaoId"], [hEsc, "servicos-detalhe", "servicoId"]]) {
+    for (const [h, acao, campo] of [[hHab, "lista", "congregacaoId"], [hHab, "detalhe", "membroId"], [hEsc, "equipes", "congregacaoId"], [hEsc, "servicos-detalhe", "servicoId"],
+      [hVol, "adesoes", "congregacaoId"], [hVol, "rodizios", "congregacaoId"], [hVol, "habitualidade", "congregacaoId"], [hVol, "remocoes", "congregacaoId"], [hVol, "rodizio", "rodizioId"]]) {
       const res = await chamar(h, "GET", acao, { query: { [campo]: v } });
       expect(res.status).toBe(400);
     }
@@ -56,7 +57,9 @@ describe("lixo no lugar do id é recusado na entrada (400), nunca 500", () => {
   test.each(lixo.map(v => [JSON.stringify(v), v]))("corpo com %s", async (_r, v) => {
     for (const [h, acao, corpo] of [
       [hHab, "iniciar", { membroId: v, congregacaoId: 1 }], [hHab, "concluir-etapa", { habilitacaoId: v, etapa: "FICHA_INSCRICAO" }], [hHab, "desligamento", { membroId: v, motivo: "Motivo suficiente" }],
-      [hEsc, "auto-escalar", { servicoId: v }], [hEsc, "publicar", { servicoId: v }], [hEsc, "confirmar", { alocacaoId: v }], [hEsc, "trocas", { alocacaoOrigemId: v, membroDestinoId: 2 }]
+      [hEsc, "auto-escalar", { servicoId: v }], [hEsc, "publicar", { servicoId: v }], [hEsc, "confirmar", { alocacaoId: v }], [hEsc, "trocas", { alocacaoOrigemId: v, membroDestinoId: 2 }],
+      [hVol, "adesao", { membroId: v, forma: "FICHA_FISICA", dataAceite: "2026-10-01", referencia: "Ficha 1" }], [hVol, "equipe-natureza", { equipeId: v, natureza: "ZELADORIA" }],
+      [hVol, "rodizio-ativo", { rodizioId: v, ativo: true }], [hVol, "gerar", { rodizioId: v }], [hVol, "grupos", { rodizioId: v, nome: "Grupo A" }]
     ]) {
       const res = await chamar(h, "POST", acao, { corpo });
       expect(res.status).toBe(400);

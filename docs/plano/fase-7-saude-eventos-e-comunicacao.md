@@ -1339,33 +1339,97 @@ ponto real de integração:
     membro (§3º) e a de comissão em cantina e bazar (Art. 135 §3º). O Termo informa o
     voluntário dessas regras, mas **nada no sistema as impede ainda**; o Art. 135 §4º
     (higiene e proteção do voluntário na cozinha) também fica como orientação.
-  - **Retenção:** adesão (com IP) por 5 anos, para cobrir a prescrição trabalhista; escalas
-    e rodízios como prova do revezamento. **A rotina automática de descarte ainda não
-    existe** (prazo a definir pela CLI/Encarregado) **e o gatilho que protege a adesão
-    também impediria anonimizar o IP depois do prazo**: quando a rotina existir, ela
-    precisará de um caminho próprio (por exemplo, desabilitar o gatilho numa migração).
-    O motivo da indisponibilidade é texto livre e pode revelar saúde: a tela orienta a não
-    detalhar.
-  - **Ainda abertos (apontados pela revisão, não corrigidos nesta versão):**
-    - O **IP do aceite** ainda sai do primeiro endereço público da cadeia quando o Azure
-      não manda `x-azure-clientip`, e **não se verificou, no ar, como o Static Web Apps monta
-      esses cabeçalhos**. A cadeia inteira fica guardada; convém conferir com a primeira
-      adesão real. O mesmo cabeçalho (primeiro valor do `x-forwarded-for`) alimenta a trava
-      de tentativas do login (`limiteTaxa.js`) e pode ser forjado para escapar dela: **só se
-      deve mudar depois de ver os cabeçalhos reais**, porque trocar para o último valor
-      pode juntar todos os usuários numa chave só e trancar gente.
-    - O aceite digital **não confere a idade**: menor de idade pode aderir sozinho. É
-      decisão de negócio (a Lei 9.608/98 e o Estatuto da Criança tratam o menor à parte).
-    - **Meus Dados (LGPD)** não exporta nada do voluntariado ao titular.
-    - Ciclos de remover e reintegrar mandam 2 a 3 avisos por volta, sem limite; e gerar o
-      rodízio publicando envia os e-mails em sequência (um grupo muito grande pode
-      demorar).
-    - `resolverDestinatariosDaCongregacao` trata o escopo `DEPARTAMENTO` como alcançando
-      todas as congregações: os avisos de habitualidade e de termo pendente podem chegar a
-      mais gente do que o escopo permitiria.
-    - **Não há Content-Security-Policy** (`staticwebapp.config.json`): é a defesa que
-      limitaria o estrago de um XSS futuro. Adicionar exige ajustar os `onclick` em linha da
-      tela inteira, então fica como item à parte.
+  - **Retenção:** a **adesão** (data, versão, hash, forma) é a prova da Lei 9.608/98 e **não
+    tem prazo final**. O **IP e os cabeçalhos do aceite digital** são dado pessoal que só
+    serve para provar a adesão numa eventual reclamação trabalhista; passados **5 anos do
+    último serviço** (a prescrição trabalhista, CF art. 7º, XXIX, é de 5 anos na vigência do
+    vínculo e 2 depois dele) eles deixaram de ser necessários e são **anonimizados** (LGPD
+    art. 16) — ver "Pontos que a revisão deixou abertos", abaixo. Escalas e rodízios ficam
+    como prova do revezamento. O motivo da indisponibilidade é texto livre e pode revelar
+    saúde: a tela orienta a não detalhar.
+  - **Pontos que a revisão deixou abertos — todos fechados em 02/10/2026** (nada disto vai
+    para a Trava 7-A):
+    - **IP do aceite: medido no ar, e a escolha mudou.** Um endpoint de diagnóstico
+      temporário (commit `113a8cb`, apagado em seguida) mostrou como o Static Web Apps
+      entrega os cabeçalhos: o `x-forwarded-for` chega como `<o que o cliente escreveu>, <IP
+      real>:<porta>, <IP do proxy>:<porta>` — o Azure **acrescenta à direita** —, e o
+      `x-azure-clientip` e o `x-client-ip` chegam **exatamente como o cliente os escreveu**
+      (não são filtrados). A regra anterior preferia justamente o `x-azure-clientip`, que
+      qualquer um forja. Agora o IP é o **penúltimo** valor do `x-forwarded-for`
+      (`shared/origemConexao.js`; uma entrada só vale ela mesma, que é o pedido direto à
+      Function); endereço privado, reservado, de documentação ou malformado é recusado; e o
+      sistema **nunca procura outro valor na lista** (varrer pegaria um forjado). A cadeia
+      inteira segue guardada com o aceite, para o diagnóstico poder ser refeito. A mesma regra
+      passou a alimentar a trava de tentativas anônimas (`limiteTaxa.js`), que usava o
+      primeiro valor e podia ser contornada trocando-o a cada pedido. **Fora deste
+      repositório:** o site público (`site/api/src/lib/rateLimit.js`) ainda usa o primeiro
+      valor; é outro Static Web Apps e precisa da sua própria medição antes de mudar.
+    - **Idade para aderir (Código Civil, arts. 3º e 4º).** Menor de 18 anos **não adere pelo
+      aceite digital** — nem o cadastro sem data de nascimento (não se presume maioridade). A
+      adesão dele é a **ficha (ou a mensagem) assinada pelo responsável**, registrada pela
+      Secretaria com o **nome e o vínculo de quem assinou** (pai, mãe, tutor ou outro
+      responsável legal), obrigatórios para o menor e conferidos também pelo banco (`CHECK`);
+      o aceite digital nunca leva responsável. Na Lista de Ouro, quem o cadastro mostra como
+      menor fica de fora e a tela diz quantos. A cobertura do Termo marca "menor de 18"; a
+      data de nascimento não sai em resposta nenhuma. **O Regimento e a Lei 9.608/98 não
+      tratam a idade: esta é a leitura conservadora e convém parecer jurídico** (a regra é a
+      constante `MAIORIDADE`; o jovem de 16 a 17 anos poderia aderir assistido, se a CLI
+      assim decidir).
+    - **Meus Dados (LGPD): só sob pedido do titular.** Nada do voluntariado é exportado por
+      rotina. Quando a pessoa pede, o pacote traz a adesão (forma, data, IP e cabeçalhos,
+      responsável), as equipes, os grupos de rodízio, os serviços, as indisponibilidades e as
+      remoções (tipo e datas); ficam de fora o **texto escrito por outras pessoas** (o motivo
+      da remoção) e **quem registrou** cada ato, com o aviso de que se pedem ao Encarregado
+      de Dados. A revisão achou que **a rota não exigia sessão** (bastava saber o número da
+      matrícula); agora exige sessão e só devolve a matrícula da própria sessão, mesmo para a
+      Secretaria; termos pendentes não bloqueiam, porque o direito de acesso não depende de
+      assinar nada.
+    - **Anonimização do IP vencido (a "regra dos 5 anos").** Rotina diária
+      (`NotificacoesAgendador`, sem falhar a rodada de avisos) troca o IP por `anonimizado` e
+      apaga os cabeçalhos da adesão digital que tem **mais de N dias e cuja pessoa não serve
+      mais**: sem equipe ativa e sem serviço nos últimos N dias. N é o parâmetro
+      `VOLUNTARIADO_IP_RETENCAO_DIAS` (padrão **1.825**; valor inválido cai no padrão, para um
+      erro de digitação nunca anonimizar todo mundo). O gatilho da adesão (`CREATE OR ALTER`,
+      reaplicado a cada deploy) continua recusando apagar e alterar qualquer coisa, e passou
+      a admitir **só** essa troca: o IP vira `anonimizado` (e só onde havia IP) e a cadeia vira
+      nula. Cada rodada que anonimiza grava **uma** linha de auditoria (lote, sem usuário, só a
+      contagem e o prazo). O ROPA declara o prazo.
+    - **Avisos em ciclo.** Remover e reintegrar a mesma pessoa em sequência mandava 2 a 3
+      avisos por volta. Agora o voluntário recebe **no máximo 4 avisos de alteração de
+      participação em 24 horas**; o fato segue registrado na ficha de RH e na auditoria, só o
+      aviso para (`limiteDia` em `notificarAgora`). O aviso do rodízio publicado sai em lotes
+      de 8 em paralelo, em vez de um e-mail por vez.
+    - **Escopo `DEPARTAMENTO`: é o desenho, sem alteração.** O departamento e a Secretaria
+      alcançam todas as congregações; os avisos de habitualidade e de termo pendente chegarem
+      a quem tem esse escopo em qualquer congregação **é o comportamento pretendido**. Fica
+      registrado para não ser reaberto como defeito.
+    - **Content-Security-Policy: primeiro passo feito, o resto é decisão à parte.** Em
+      `staticwebapp.config.json` entram `frame-ancestors 'none'` (ninguém embute o sistema em
+      outro site, o que impede o clique disfarçado), `object-src 'none'`, `base-uri 'self'` e
+      `form-action 'self'`, mais `X-Frame-Options`, `X-Content-Type-Options: nosniff` e
+      `Referrer-Policy`. Não quebram nada: o sistema não usa iframe, `<base>` nem formulário
+      para fora. O que **não** entra é a restrição de `script-src`, que é a que de fato
+      barraria um XSS: o sistema tem **861 atributos de evento em linha** (`onclick=` e
+      semelhantes: 466 em `index.html` e 395 em `script.js`), que a política estrita
+      bloquearia. Trocá-los por ouvintes de evento é uma reforma da tela inteira, sem ganho
+      funcional, e **não é item de Trava**: é um projeto próprio, a decidir quando valer o
+      custo. Uma CSP intermediária (limitar de onde a tela carrega script, fonte e imagem e
+      para onde ela envia dados, mantendo os atributos em linha) é possível e barraria o
+      envio de dados a site de terceiros, mas pede um período de teste em modo "só relatar"
+      com um coletor de relatórios, para não derrubar a tela por esquecer uma origem.
+    - **Verificação do fecho.** A suíte da API foi de 1191 para **1251** testes. Contra um SQL
+      Server 2019 recriado do zero (117 migrações): o roteiro da v7.5 (**237**), um roteiro
+      novo do fecho (**81**: o IP com cabeçalhos forjados do jeito que o Azure entrega, a idade
+      no dia exato dos 18 anos, a ficha do menor, os `CHECK` e o gatilho com cada tentativa de
+      alterar ou apagar, a anonimização com os sete casos de quem mantém e de quem perde o IP,
+      Meus Dados de titular, de terceiro e sem sessão, e o ciclo de remoções), a bateria de
+      ataque (**179**) e as corridas (**20**); a migração também foi aplicada **por cima** do
+      banco que já tinha a versão anterior da 117 e rodada duas vezes. A tela passou por DOM
+      simulado (menor sem caixa de aceite, responsável escapado, token em Meus Dados, bloco de
+      voluntariado com texto de ataque). Dois achados do próprio fecho: a validação de id dos
+      handlers de voluntariado aceitava `0x10`, `1e1`, `true` e `[5]` (agora só inteiro
+      positivo ou texto de dígitos, dentro do INT do SQL, com teste que falha sem a correção), e
+      o gatilho tratava um `UPDATE` que não alcança linha alguma como se fosse um `DELETE`.
   - **Limites:** o rodízio não se liga à agenda litúrgica (v7.2) — é semanal por dia e
     hora; o serviço manual (sem rodízio) segue como na v5.6; a tela de escalas continua
     mostrando matrícula, e não nome, nas alocações do detalhe do serviço.

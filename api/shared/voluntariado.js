@@ -13,12 +13,16 @@
 //     trabalhista. Aqui vão as validações e os textos dos avisos; o efeito (cancelar as escalas futuras) é do banco.
 //  4) AFASTAMENTO (Art. 133 §7º, II): direito de recusa sem penalidade — o texto do aviso ao líder quando a vaga abre.
 const crypto = require("crypto");
-const net = require("net");
 const cal = require("./calendario");
 
 const limpar = (v) => String(v == null ? "" : v).trim();
 const sha256 = (txt) => crypto.createHash("sha256").update(txt).digest("hex");
-const inteiroPositivo = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
+// Identificador vindo de fora: número inteiro positivo ou texto só de dígitos (é assim que a query string chega), dentro do INT do SQL. Booleano, array, objeto,
+// decimal, hexadecimal ("0x10"), notação científica ("1e1") e acima do limite NÃO valem — Number() puro aceitaria todos eles.
+const inteiroPositivo = (v) => {
+  const ok = (typeof v === "number" || (typeof v === "string" && /^\d{1,10}$/.test(v.trim()))) && Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 2147483647;
+  return ok ? Number(v) : null;
+};
 
 // ---------------------------------------------------------------
 // Termo de Adesão ao Serviço Voluntário
@@ -98,75 +102,55 @@ const MAX_RODIZIOS_POR_CONGREGACAO = 50;
 const MAX_MEMBROS_POR_GRUPO = 150;
 const MAX_MEMBROS_AO_CRIAR_GRUPO = 100;
 
-// IP do aceite digital (Art. 133 §8º, II, "b"). Valida com o analisador do próprio Node (net.isIP) e só aceita endereço PÚBLICO: loopback,
-// rede privada, link-local, "não especificado" e documentação não provam de onde veio a conexão. O cabeçalho do Azure (x-azure-clientip) vale primeiro;
-// depois vem o x-client-ip e, por último, o primeiro endereço público da cadeia x-forwarded-for. Um cliente pode escrever o que quiser em
-// x-forwarded-for — por isso o aceite guarda TAMBÉM a cadeia inteira (ver cadeiaDeCabecalhos): a prova não depende de esse primeiro valor ser honesto.
-function cabecalho(headers, nome) {
-  const h = headers || {};
-  const chave = Object.keys(h).find(k => k.toLowerCase() === nome);
-  const v = chave ? h[chave] : undefined;
-  return Array.isArray(v) ? v.join(",") : String(v == null ? "" : v);
-}
-function ipPublico(ip) {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split(".").map(Number);
-    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;                    // não especificado, privado, loopback, multicast/reservado
-    if (a === 100 && b >= 64 && b <= 127) return false;                                 // CGNAT
-    if (a === 169 && b === 254) return false;                                           // link-local
-    if (a === 172 && b >= 16 && b <= 31) return false;
-    if (a === 192 && (b === 168 || (b === 0 && ip.startsWith("192.0.0.")) || ip.startsWith("192.0.2."))) return false;
-    if (a === 198 && (b === 18 || b === 19 || ip.startsWith("198.51.100."))) return false;
-    if (ip.startsWith("203.0.113.")) return false;
-    return true;
-  }
-  if (net.isIPv6(ip)) {
-    const baixo = ip.toLowerCase();
-    if (baixo === "::" || baixo === "::1") return false;
-    if (/^(fc|fd)/.test(baixo) || /^fe[89ab]/.test(baixo) || baixo.startsWith("ff")) return false; // ULA, link-local, multicast
-    if (baixo.startsWith("2001:db8")) return false;
-    const mapeado = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(baixo);
-    if (mapeado) return ipPublico(mapeado[1]);
-    return true;
-  }
-  return false;
-}
-// "1.2.3.4", "1.2.3.4:5678", "[2804::1]:443", "2804::1" -> o endereço, ou null se não for um IP válido.
-function normalizarIp(texto) {
-  const v = limpar(texto);
-  if (!v) return null;
-  let m = /^\[([^\]]+)\](?::\d+)?$/.exec(v);
-  if (m) return net.isIPv6(m[1]) ? m[1] : null;
-  m = /^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/.exec(v);
-  if (m) return net.isIPv4(m[1]) ? m[1] : null;
-  return net.isIP(v) ? v : null;
-}
-function extrairIp(headers) {
-  const candidatos = [cabecalho(headers, "x-azure-clientip"), cabecalho(headers, "x-client-ip"), ...cabecalho(headers, "x-forwarded-for").split(",")];
-  for (const c of candidatos) {
-    const ip = normalizarIp(c);
-    if (ip && ip.length <= 45 && ipPublico(ip)) return ip;
-  }
-  return null;
-}
-// Os cabeçalhos de origem como chegaram, limpos e cortados: guardados com a adesão para a prova não depender só do primeiro IP.
-function cadeiaDeCabecalhos(headers) {
-  const partes = {};
-  for (const nome of ["x-azure-clientip", "x-client-ip", "x-forwarded-for"]) {
-    const v = cabecalho(headers, nome).replace(/[^0-9a-fA-F:.,\[\] ]/g, "").trim().slice(0, 120);
-    if (v) partes[nome] = v;
-  }
-  return Object.keys(partes).length ? JSON.stringify(partes).slice(0, 400) : null;
+// IP do aceite: ver shared/origemConexao.js (medido no Azure; só o penúltimo valor do x-forwarded-for é confiável).
+const origem = require("./origemConexao");
+const { cadeiaDeCabecalhos, normalizarIp, ipPublico } = origem;
+const extrairIp = (headers) => origem.ipDoCliente(headers);
+
+// ---------------------------------------------------------------
+// Idade para aderir (Código Civil, arts. 3º e 4º: o menor de 16 anos é absolutamente incapaz e o de 16 a 17 é relativamente incapaz — o ato dele
+// precisa do responsável). Por isso o menor de 18 anos NÃO adere sozinho pelo aceite digital: a adesão é a ficha (ou a mensagem) assinada pelo
+// responsável, registrada pela Secretaria com o nome e o vínculo de quem assinou. O Regimento Art. 133 e a Lei 9.608/98 não tratam a idade; esta é a
+// leitura conservadora e convém parecer jurídico. Idade desconhecida (cadastro sem data de nascimento) também não adere sozinha: não se presume.
+// ---------------------------------------------------------------
+
+const MAIORIDADE = 18;
+// Retenção do IP e dos cabeçalhos do aceite digital: 5 anos depois do último serviço (ou da adesão, se nunca serviu). É o prazo da prescrição trabalhista
+// na vigência do vínculo (CF art. 7º, XXIX) — o IP existe para provar a adesão voluntária numa eventual reclamação; passado o prazo, deixou de ser necessário
+// (LGPD art. 16) e é anonimizado. A adesão em si (data, versão, hash) NÃO tem prazo final. Configurável em Prazos (VOLUNTARIADO_IP_RETENCAO_DIAS).
+const IP_RETENCAO_DIAS_PADRAO = 1825;
+const VINCULOS_RESPONSAVEL = { PAI: "Pai", MAE: "Mãe", TUTOR: "Tutor(a)", RESPONSAVEL_LEGAL: "Outro responsável legal" };
+
+// Idade completa em anos na data `hojeIso` (AAAA-MM-DD). Aceita Date (coluna DATE do SQL) ou texto; null se não há data de nascimento.
+function idadeEmAnos(nascimento, hojeIso) {
+  if (nascimento == null || nascimento === "") return null;
+  const n = nascimento instanceof Date ? nascimento.toISOString().slice(0, 10) : String(nascimento).slice(0, 10);
+  if (!cal.dataIsoValida(n) || !cal.dataIsoValida(hojeIso) || n > hojeIso) return null;
+  const [ya, ma, da] = n.split("-").map(Number);
+  const [yb, mb, db] = hojeIso.split("-").map(Number);
+  let anos = yb - ya;
+  if (mb < ma || (mb === ma && db < da)) anos--;
+  return anos;
 }
 
-function validarAceiteDigital({ aceito, ip }) {
+// O que a idade permite no aceite digital. `idade` = null quando o cadastro não tem a data de nascimento.
+function condicaoDeIdade(idade) {
+  if (idade == null) return { podeAderirDigital: false, menor: false, motivo: "O seu cadastro não tem a data de nascimento, e o aceite digital só vale para maiores de 18 anos. Procure a Secretaria para completar o cadastro ou registrar a sua adesão." };
+  if (idade < MAIORIDADE) return { podeAderirDigital: false, menor: true, motivo: "Menor de 18 anos não adere sozinho: a adesão é feita com a assinatura de um responsável. Peça ao seu responsável para procurar a Secretaria." };
+  return { podeAderirDigital: true, menor: false, motivo: null };
+}
+
+function validarAceiteDigital({ aceito, ip, idade }) {
+  const c = condicaoDeIdade(idade);
+  if (!c.podeAderirDigital) return { valido: false, mensagem: c.motivo };
   if (aceito !== true) return { valido: false, mensagem: "Marque a caixa de aceite para aderir ao Termo." };
   if (!ip) return { valido: false, mensagem: "Não foi possível registrar a origem da conexão (IP), que o Regimento Art. 133 §8º, II exige no aceite digital. Tente de novo ou peça à Secretaria para registrar a sua adesão." };
   return { valido: true };
 }
 
 // Adesão registrada pela Secretaria: a ficha física (§8º, I) e a confirmação por e-mail/WhatsApp (§8º, II, "c").
-function validarRegistroAdesao(d = {}, { hoje }) {
+// `idade`: do voluntário (null = desconhecida). Para menor de 18 anos, a Secretaria informa QUEM assinou (nome e vínculo do responsável).
+function validarRegistroAdesao(d = {}, { hoje, idade = null }) {
   const forma = limpar(d.forma).toUpperCase();
   if (!FORMAS_REGISTRO_MANUAL.includes(forma)) return { valido: false, mensagem: "A Secretaria registra a ficha física ou a confirmação por e-mail/WhatsApp. O aceite digital é feito pela própria pessoa, e a Lista de Ouro, na ratificação coletiva." };
   const dataAceite = limpar(d.dataAceite);
@@ -179,7 +163,14 @@ function validarRegistroAdesao(d = {}, { hoje }) {
     canal = limpar(d.canal).toUpperCase();
     if (!CANAIS_MENSAGERIA[canal]) return { valido: false, mensagem: "Informe o canal: e-mail ou WhatsApp oficial da Secretaria." };
   }
-  return { valido: true, dados: { forma, dataAceite, referencia, canal } };
+  let responsavelNome = null, responsavelVinculo = null;
+  if (idade != null && idade < MAIORIDADE) {
+    responsavelNome = limpar(d.responsavelNome);
+    responsavelVinculo = limpar(d.responsavelVinculo).toUpperCase();
+    if (responsavelNome.length < 3 || responsavelNome.length > 150 || /[<>]/.test(responsavelNome)) return { valido: false, mensagem: "Este voluntário tem menos de 18 anos: informe o nome do responsável que assinou (de 3 a 150 caracteres, sem < ou >)." };
+    if (!VINCULOS_RESPONSAVEL[responsavelVinculo]) return { valido: false, mensagem: "Informe o vínculo de quem assinou pelo menor: pai, mãe, tutor(a) ou outro responsável legal." };
+  }
+  return { valido: true, dados: { forma, dataAceite, referencia, canal, responsavelNome, responsavelVinculo } };
 }
 
 // Lista de Ouro (Art. 133 §8º, III): a assinatura em lista cujo cabeçalho traz a ratificação convalida o período anterior.
@@ -407,6 +398,7 @@ module.exports = {
   RATIFICACAO_VERSAO, RATIFICACAO_TEXTO, RATIFICACAO_HASH, ratificacaoVigente,
   FORMAS_ADESAO, FORMAS_REGISTRO_MANUAL, CANAIS_MENSAGERIA, ORIGENS_RATIFICACAO, MAX_SIGNATARIOS_MANUAIS,
   DATA_MINIMA_RATIFICACAO, MAX_RODIZIOS_POR_CONGREGACAO, MAX_MEMBROS_POR_GRUPO, MAX_MEMBROS_AO_CRIAR_GRUPO,
+  inteiroPositivo, MAIORIDADE, IP_RETENCAO_DIAS_PADRAO, VINCULOS_RESPONSAVEL, idadeEmAnos, condicaoDeIdade,
   extrairIp, cadeiaDeCabecalhos, normalizarIp, ipPublico, validarAceiteDigital, validarRegistroAdesao, validarRatificacao, avaliarIntegridadeAdesao,
   NATUREZAS, NATUREZAS_OPERACIONAIS, DIAS_SEMANA, LIMITE_SEQUENCIA_PADRAO, MAX_SEMANAS_GERACAO, SEMANAS_GERACAO_PADRAO, MAX_GRUPOS,
   equipeExigeRevezamento, validarNatureza, validarRodizio, validarNomeGrupo, validarComposicao,

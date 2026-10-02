@@ -2722,7 +2722,16 @@
               <label for="volAdesaoReferencia">Onde está a ficha / onde a conversa foi arquivada</label>
               <input type="text" id="volAdesaoReferencia" maxlength="200" placeholder="Ex.: Ficha nº 142, pasta Central" />
             </div>
+            <div class="vol-campo">
+              <label for="volAdesaoResponsavel">Responsável que assinou (só se o voluntário tem menos de 18 anos)</label>
+              <input type="text" id="volAdesaoResponsavel" maxlength="150" placeholder="Nome de quem assinou pelo menor" />
+            </div>
+            <div class="vol-campo">
+              <label for="volAdesaoVinculo">Vínculo do responsável</label>
+              <select id="volAdesaoVinculo"></select>
+            </div>
           </div>
+          <p class="subtitle">Menor de 18 anos não adere sozinho: a adesão é a ficha (ou a mensagem) assinada pelo responsável, e o sistema recusa o registro sem o nome e o vínculo de quem assinou.</p>
           <div class="vol-acoes">
             <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="volRegistrarAdesaoAcao(this)">✍️ Registrar adesão</button>
           </div>

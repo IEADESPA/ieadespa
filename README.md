@@ -323,8 +323,10 @@ diz em que arquivo ela está e em que pé ela anda.
 - **Concluídas:** FASES 0 a 6 e as FASES B (consolidação da base) e C (integração com o site), salvo uns
   poucos itens adiados de propósito, que o índice marca como 🟡.
 - **Em andamento — FASE 7:** v7.1 (PSC), v7.2 (Calendário oficial), v7.3 (Canais oficiais), v7.4
-  (Eventos e congressos) e v7.5 (Escalas e voluntariado) entregues e no ar. **Próxima: a 🔒 Trava de Revisão 7-A**,
-  que audita a v7.1 a v7.5 antes de seguir para a v7.6.
+  (Eventos e congressos) e v7.5 (Escalas e voluntariado) entregues e no ar, **sem pontos abertos**: os que a
+  revisão da v7.5 apontou (IP medido no Azure, idade para aderir, anonimização do IP, Meus Dados, avisos em ciclo,
+  escopo de departamento e o primeiro passo da CSP) foram fechados na própria versão. **Próxima: a 🔒 Trava de
+  Revisão 7-A**, que audita a v7.1 a v7.5 antes de seguir para a v7.6.
 - **Planejadas:** FASES 8 a 12.
 
 ### Fases
@@ -478,7 +480,8 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
 - **Eventos e congressos (v7.4):** `EventoOrganizadores`, `EventoConvidados`, `EventoCaixas`,
   `EventoCaixaLancamentos`, `EventoCaixaDestinos`.
 - **Escalas e voluntariado (v7.5):** `EscalasRodizios`, `EscalasRodizioGrupos`, `EscalasRodizioGrupoMembros`,
-  `VoluntariadoAdesoes`, `VoluntariadoRatificacoes`. A migração 117 também acrescenta `Natureza` a
+  `VoluntariadoAdesoes` (com a cadeia de cabeçalhos do aceite e, para menor de 18 anos, o nome e o vínculo do
+  responsável que assinou), `VoluntariadoRatificacoes`. A migração 117 também acrescenta `Natureza` a
   `EscalasEquipes`, `RodizioId` e `RodizioGrupoId` a `EscalasServicos`, e o efeito sobre as escalas e a
   reintegração a `VoluntariosDesligamentos`. As equipes, os serviços e as alocações são das migrações 098 e 099.
 

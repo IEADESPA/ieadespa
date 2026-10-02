@@ -15,7 +15,7 @@
 // ---- Leitura (GET /api/voluntariado/...) ---------------------------------------------------------
 //  catalogos          -> { naturezas[{codigo,rotulo,exigeRevezamento}], diasSemana[{codigo,rotulo}], formasAdesao[], canaisMensageria[], origensRatificacao[],
 //                          tiposMotivoRemocao[], ratificacao:{versao,texto,hash}, regras:{ limiteSequencia, maxSemanas, semanasPadrao, maxGrupos, maxSignatariosManuais } }  (login)
-//  meu-painel         -> { termo:{versao,titulo,itens[{codigo,texto,base}],aceite,hash}, aderiu, adesao|null, rodizios[{rodizioId,rodizioNome,equipeNome,rotuloDia,hora,
+//  meu-painel         -> { termo:{versao,titulo,itens[{codigo,texto,base}],aceite,hash}, aderiu, adesao|null, podeAderirDigital, motivoSemAdesaoDigital|null, menorDeIdade, rodizios[{rodizioId,rodizioNome,equipeNome,rotuloDia,hora,
 //                          grupoNome,totalGrupos,proximasDatas[AAAA-MM-DD]}] }                                                                  (login)
 //  minhas-equipes     -> { equipes[{equipeId,nome,congregacaoNome,natureza,rotuloNatureza,membros[{membroId,nome}],
 //                          remocoes[{desligamentoId,membroId,membroNome,equipeId,equipeNome,tipoMotivo,motivo,alocacoesCanceladas,desligadoEm,reintegradoEm,reintegracaoObs,podeReintegrar}]}] }
@@ -32,7 +32,10 @@
 //
 // ---- Escrita (POST /api/voluntariado/...) --------------------------------------------------------
 //  aceitar-termo      body:{aceito:true}   -> o aceite digital: guarda versão, hash do texto, IP, data e hora. Sem IP identificável, recusa.            (login)
-//  adesao             body:{membroId, forma:FICHA_FISICA|MENSAGERIA, dataAceite, referencia, canal?:EMAIL|WHATSAPP}    (habilitacao_voluntarios, membro no escopo)
+//                          O IP é o penúltimo do x-forwarded-for (shared/origemConexao.js). Menor de 18 anos, ou cadastro sem data de nascimento, não adere por aqui.
+//  adesao             body:{membroId, forma:FICHA_FISICA|MENSAGERIA, dataAceite, referencia, canal?:EMAIL|WHATSAPP,
+//                          responsavelNome?, responsavelVinculo?:PAI|MAE|TUTOR|RESPONSAVEL_LEGAL}    (habilitacao_voluntarios, membro no escopo)
+//                          menor de 18 anos: responsavelNome e responsavelVinculo são OBRIGATÓRIOS (quem assinou pelo menor); para maior de idade são descartados
 //  ratificar          body:{origem:ASSEMBLEIA_GERAL|REUNIAO_OBREIROS|ESCALA_SERVICO, sessaoId|servicoId, descricao, dataLista, cabecalhoConfirmado:true, membroIds?[]}
 //                                           (habilitacao_voluntarios; assembleia/reunião exige escopo geral; escala exige a congregação no escopo)
 //  equipe-natureza    body:{equipeId, natureza:LITURGIA|ZELADORIA|PORTARIA|COZINHA|OUTRA}                                                             (escalas)
@@ -62,7 +65,7 @@ function resposta(context, resultado, statusOk = 200) {
   context.res = { status: resultado.sucesso ? statusOk : (resultado.proibido ? 403 : 422), body: resultado };
 }
 const lista = (obj) => Object.entries(obj).map(([codigo, rotulo]) => ({ codigo, rotulo }));
-const idDe = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
+const idDe = vol.inteiroPositivo;        // estrito: "0x10", "1e1", true e [5] não são identificadores
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
@@ -109,7 +112,7 @@ module.exports = async function (context, req) {
             naturezas: Object.entries(vol.NATUREZAS).map(([codigo, rotulo]) => ({ codigo, rotulo, exigeRevezamento: vol.equipeExigeRevezamento(codigo) })),
             diasSemana: vol.DIAS_SEMANA.map((rotulo, codigo) => ({ codigo, rotulo })),
             formasAdesao: lista(vol.FORMAS_ADESAO), formasRegistroManual: vol.FORMAS_REGISTRO_MANUAL.map(c => ({ codigo: c, rotulo: vol.FORMAS_ADESAO[c] })),
-            canaisMensageria: lista(vol.CANAIS_MENSAGERIA), origensRatificacao: lista(vol.ORIGENS_RATIFICACAO),
+            canaisMensageria: lista(vol.CANAIS_MENSAGERIA), origensRatificacao: lista(vol.ORIGENS_RATIFICACAO), vinculosResponsavel: lista(vol.VINCULOS_RESPONSAVEL),
             tiposMotivoRemocao: vol.TIPOS_MOTIVO_DESLIGAMENTO.map(c => ({ codigo: c })),
             ratificacao: vol.ratificacaoVigente(),
             regras: { limiteSequencia: await db.lerLimiteSequencia(pool), maxSemanas: vol.MAX_SEMANAS_GERACAO, semanasPadrao: vol.SEMANAS_GERACAO_PADRAO, maxGrupos: vol.MAX_GRUPOS, maxSignatariosManuais: vol.MAX_SIGNATARIOS_MANUAIS }
@@ -119,7 +122,7 @@ module.exports = async function (context, req) {
       }
 
       if (acao === "meu-painel") {
-        const situacao = await db.situacaoDoTermo(pool, usuario.membroId);
+        const situacao = await db.situacaoDoTermo(pool, usuario.membroId, { hoje });
         context.res = { status: 200, body: { sucesso: true, ...situacao, rodizios: await db.meusRodizios(pool, { membroId: usuario.membroId, hoje }) } };
         return;
       }
@@ -133,7 +136,7 @@ module.exports = async function (context, req) {
         const congregacaoId = idDe(consulta.congregacaoId);
         if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
         if (!(await alcanca(ehHabilitacao, congregacaoId))) return erro(context, 403, ehHabilitacao ? "Fora do seu escopo de atuação." : SEM_PERMISSAO);
-        context.res = { status: 200, body: { sucesso: true, ...(await db.coberturaDoTermo(pool, { congregacaoId })) } };
+        context.res = { status: 200, body: { sucesso: true, ...(await db.coberturaDoTermo(pool, { congregacaoId, hoje })) } };
         return;
       }
 

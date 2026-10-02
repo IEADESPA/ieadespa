@@ -13,11 +13,28 @@
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const storage = require("../shared/storage");
+const auth = require("../shared/auth");
+const voluntariadoDb = require("../shared/voluntariadoDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
   if (!matricula) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
+    return;
+  }
+
+  // v7.5 (revisão de segurança) — o direito de acesso é do PRÓPRIO titular: exige sessão e só entrega a matrícula da sessão. Antes a rota era aberta a quem
+  // soubesse o número da matrícula, e este pacote traz endereço, processos e (agora) o IP do aceite do voluntariado. Termos pendentes não bloqueiam: o
+  // direito de acesso não depende de assinar nada.
+  const usuario = auth.exigirLoginIgnorandoTermos(req, context);
+  if (!usuario) return;
+  const alvo = Number(matricula);
+  if (!Number.isInteger(alvo) || alvo <= 0 || String(alvo) !== String(matricula)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Matrícula inválida." } };
+    return;
+  }
+  if (Number(usuario.membroId) !== alvo) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Você só pode ver os seus próprios dados." } };
     return;
   }
 
@@ -90,6 +107,9 @@ module.exports = async function (context, req) {
       FROM LicencasCandidatura WHERE MembroId = @mat ORDER BY DataPleito DESC`)
   ]);
 
+  // v7.5 — voluntariado (adesão com IP e cabeçalhos, equipes, serviços, remoções): lido só aqui, a pedido do titular; nenhuma rotina exporta isto.
+  const voluntariado = await voluntariadoDb.dadosDoTitular(pool, alvo);
+
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
   context.res = {
@@ -106,7 +126,8 @@ module.exports = async function (context, req) {
       consentimentos: consentimentos.recordset,
       solicitacoesLgpd: solicitacoes.recordset,
       casamentos: casamentos.recordset,
-      licencasCandidatura: licencasCandidatura.recordset
+      licencasCandidatura: licencasCandidatura.recordset,
+      voluntariado
     }
   };
 };

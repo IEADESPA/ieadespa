@@ -19,6 +19,11 @@ const limpar = (v) => String(v == null ? "" : v).trim();
 const isoData = (v) => (v == null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const duplicado = (e) => e && (e.number === 2601 || e.number === 2627);
 const LIMITE_LISTA = 500;
+// Remover e reintegrar a mesma pessoa em ciclo geraria um aviso a cada volta: depois de 4 avisos de alteração de participação em 24 horas, o fato segue
+// registrado (ficha de RH e auditoria) e o aviso para. E o aviso do rodízio publicado sai em lotes pequenos em paralelo, para um grupo grande não estourar o
+// tempo da requisição (e-mails em sequência, um por um, levariam minutos).
+const AVISOS_AO_VOLUNTARIO_POR_DIA = 4;
+const AVISOS_EM_PARALELO = 8;
 const STATUS_ATIVOS_SQL = "'CONVIDADO','ACEITO','CONFIRMADO'";
 
 function listaIn(request, prefixo, valores, tipo = sql.Int) {
@@ -27,7 +32,7 @@ function listaIn(request, prefixo, valores, tipo = sql.Int) {
 
 async function lerMembro(pool, membroId) {
   const r = await pool.request().input("id", sql.Int, membroId)
-    .query(`SELECT m.MembroId, m.Nome, m.Email, m.CongregacaoId, c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`);
+    .query(`SELECT m.MembroId, m.Nome, m.Email, m.DataNascimento, m.CongregacaoId, c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`);
   return r.recordset[0] || null;
 }
 
@@ -51,6 +56,7 @@ function mapearAdesao(r, { comIp = false } = {}) {
     termoVersao: r.TermoVersao, dataAceite: isoData(r.DataAceite), aceitoEm: isoInstante(r.AceitoEm),
     canalMensageria: r.CanalMensageria, rotuloCanal: r.CanalMensageria ? vol.CANAIS_MENSAGERIA[r.CanalMensageria] : null,
     referencia: r.Referencia, ratificacaoId: r.RatificacaoId, convalidaPeriodoAnterior: !!r.ConvalidaPeriodoAnterior,
+    responsavelNome: r.ResponsavelNome || null, responsavelVinculo: r.ResponsavelVinculo || null, rotuloVinculo: r.ResponsavelVinculo ? vol.VINCULOS_RESPONSAVEL[r.ResponsavelVinculo] : null,
     registradoPorMembroId: r.RegistradoPorMembroId, registradoEm: isoInstante(r.RegistradoEm),
     integridade: vol.avaliarIntegridadeAdesao({ forma: r.Forma, termoVersao: r.TermoVersao, termoHash: r.TermoHash })
   };
@@ -63,15 +69,21 @@ async function buscarAdesao(pool, membroId, opcoes) {
   return mapearAdesao(r.recordset[0], opcoes);
 }
 
-// O que a pessoa vê em Meu Painel: o texto vigente e se já aderiu (sem o IP: ele é prova da Igreja, não conteúdo da tela).
-async function situacaoDoTermo(pool, membroId) {
+// O que a pessoa vê em Meu Painel: o texto vigente, se já aderiu (sem o IP: ele é prova da Igreja, não conteúdo da tela) e se a idade lhe permite aderir pelo aceite digital.
+async function situacaoDoTermo(pool, membroId, { hoje = hojeBrasilia() } = {}) {
   const adesao = await buscarAdesao(pool, membroId);
-  return { termo: vol.termoVigente(), aderiu: !!adesao, adesao };
+  const m = await lerMembro(pool, membroId);
+  const cond = vol.condicaoDeIdade(vol.idadeEmAnos(m && m.DataNascimento, hoje));
+  return { termo: vol.termoVigente(), aderiu: !!adesao, adesao, podeAderirDigital: cond.podeAderirDigital, motivoSemAdesaoDigital: cond.motivo, menorDeIdade: cond.menor };
 }
 
 // `cadeia`: os cabeçalhos de origem como chegaram (vol.cadeiaDeCabecalhos), guardados junto do IP escolhido — o x-forwarded-for pode ter sido escrito pelo cliente.
 async function aceitarDigital(pool, { membroId, aceito, ip, cadeia = null, hoje = hojeBrasilia() }) {
-  const v = vol.validarAceiteDigital({ aceito, ip });
+  // Recusa de forma (caixa não marcada, sem IP) acontece sem consultar o banco; a idade, que exige o cadastro, vem em seguida.
+  const forma = vol.validarAceiteDigital({ aceito, ip, idade: vol.MAIORIDADE });
+  if (!forma.valido) return { sucesso: false, mensagem: forma.mensagem };
+  const membro = await lerMembro(pool, membroId);
+  const v = vol.validarAceiteDigital({ aceito, ip, idade: vol.idadeEmAnos(membro && membro.DataNascimento, hoje) });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const ja = await buscarAdesao(pool, membroId);
   if (ja) return { sucesso: false, mensagem: `Você já aderiu ao Termo em ${cal.formatarDataBr(ja.dataAceite)}.`, adesao: ja };
@@ -93,24 +105,28 @@ async function aceitarDigital(pool, { membroId, aceito, ip, cadeia = null, hoje 
 
 // Ficha física e confirmação por e-mail/WhatsApp: a Secretaria registra, a prova é o documento arquivado.
 async function registrarAdesaoManual(pool, { membroId, dados, por, hoje = hojeBrasilia() }) {
-  const v = vol.validarRegistroAdesao(dados, { hoje });
-  if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+  const forma = vol.validarRegistroAdesao(dados, { hoje, idade: vol.MAIORIDADE });      // a forma do pedido, sem consultar o banco
+  if (!forma.valido) return { sucesso: false, mensagem: forma.mensagem };
   const m = await lerMembro(pool, membroId);
   if (!m) return { sucesso: false, mensagem: "Voluntário não encontrado." };
+  // Menor de 18 anos: só vale com o nome e o vínculo de quem assinou por ele.
+  const v = vol.validarRegistroAdesao(dados, { hoje, idade: vol.idadeEmAnos(m.DataNascimento, hoje) });
+  if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const ja = await buscarAdesao(pool, membroId);
   if (ja) return { sucesso: false, mensagem: `${m.Nome} já tem a adesão registrada em ${cal.formatarDataBr(ja.dataAceite)} (${ja.rotuloForma}).`, adesao: ja };
   let id;
   try {
     const r = await pool.request().input("m", sql.Int, membroId).input("f", sql.NVarChar(12), v.dados.forma).input("d", sql.Date, v.dados.dataAceite)
       .input("c", sql.NVarChar(8), v.dados.canal).input("ref", sql.NVarChar(200), v.dados.referencia).input("por", sql.Int, por)
-      .query(`INSERT INTO VoluntariadoAdesoes (MembroId, Forma, DataAceite, CanalMensageria, Referencia, RegistradoPorMembroId)
-              VALUES (@m, @f, @d, @c, @ref, @por); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+      .input("rn", sql.NVarChar(150), v.dados.responsavelNome).input("rv", sql.NVarChar(18), v.dados.responsavelVinculo)
+      .query(`INSERT INTO VoluntariadoAdesoes (MembroId, Forma, DataAceite, CanalMensageria, Referencia, RegistradoPorMembroId, ResponsavelNome, ResponsavelVinculo)
+              VALUES (@m, @f, @d, @c, @ref, @por, @rn, @rv); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
     id = r.recordset[0].id;
   } catch (e) {
     if (duplicado(e)) return { sucesso: false, mensagem: `${m.Nome} já tem a adesão registrada.` };
     throw e;
   }
-  await registrarAuditoria({ tabela: "VoluntariadoAdesoes", registroId: id, acao: "ADESAO_REGISTRADA", usuarioId: por, dadosDepois: { membroId, forma: v.dados.forma, dataAceite: v.dados.dataAceite, canal: v.dados.canal, referencia: v.dados.referencia } });
+  await registrarAuditoria({ tabela: "VoluntariadoAdesoes", registroId: id, acao: "ADESAO_REGISTRADA", usuarioId: por, dadosDepois: { membroId, forma: v.dados.forma, dataAceite: v.dados.dataAceite, canal: v.dados.canal, referencia: v.dados.referencia, comResponsavel: !!v.dados.responsavelNome } });
   return { sucesso: true, mensagem: `Adesão de ${m.Nome} registrada (${vol.FORMAS_ADESAO[v.dados.forma]}).`, adesao: await buscarAdesao(pool, membroId) };
 }
 
@@ -151,6 +167,15 @@ async function ratificar(pool, { dados, por, autorizacao, hoje = hojeBrasilia() 
   assinantes = [...new Set(assinantes)];
   if (assinantes.length === 0) return { sucesso: false, mensagem: "A lista não tem nenhum signatário: confira a sessão/escala escolhida ou informe as matrículas." };
 
+  // Menor de 18 anos não adere assinando uma lista (precisa do responsável): quem é menor de idade no cadastro fica de fora e a quantidade é devolvida.
+  // Quem não tem data de nascimento no cadastro NÃO é excluído (a Secretaria atesta a assinatura em papel; a lista é de assembleia, reunião de obreiros ou escala).
+  const menoresDoCadastro = new Set((await pool.request().input("hoje", sql.Date, hoje)
+    .query(`SELECT MembroId, DataNascimento FROM MembroReferencia WHERE DataNascimento IS NOT NULL AND DataNascimento > DATEADD(YEAR, -${vol.MAIORIDADE}, @hoje)`)).recordset
+    .filter(x => { const idade = vol.idadeEmAnos(x.DataNascimento, hoje); return idade != null && idade < vol.MAIORIDADE; }).map(x => x.MembroId));
+  const menoresIgnorados = assinantes.filter(id => menoresDoCadastro.has(id)).length;
+  assinantes = assinantes.filter(id => !menoresDoCadastro.has(id));
+  if (assinantes.length === 0) return { sucesso: false, mensagem: `Todos os signatários são menores de 18 anos (${menoresIgnorados}): a adesão deles é feita com a assinatura do responsável, pela ficha.` };
+
   const jaAderiram = new Set((await pool.request().query(`SELECT MembroId FROM VoluntariadoAdesoes`)).recordset.map(x => x.MembroId));
   const novos = assinantes.filter(id => !jaAderiram.has(id));
 
@@ -181,8 +206,8 @@ async function ratificar(pool, { dados, por, autorizacao, hoje = hojeBrasilia() 
   await registrarAuditoria({ tabela: "VoluntariadoRatificacoes", registroId: ratificacaoId, acao: "RATIFICACAO_REGISTRADA", usuarioId: por,
     dadosDepois: { origem: d.origem, sessaoId: d.sessaoId, servicoId: d.servicoId, descricao: d.descricao, dataLista: d.dataLista, totalSignatarios: assinantes.length, novasAdesoes: novos.length, textoHash: vol.RATIFICACAO_HASH } });
   return {
-    sucesso: true, ratificacaoId, totalSignatarios: assinantes.length, novasAdesoes: novos.length, jaAderiam: assinantes.length - novos.length, matriculasIgnoradas: ignorados,
-    mensagem: `Ratificação registrada: ${novos.length} adesão(ões) nova(s)${assinantes.length - novos.length ? `, ${assinantes.length - novos.length} já aderira(m) antes` : ""}.`
+    sucesso: true, ratificacaoId, totalSignatarios: assinantes.length, novasAdesoes: novos.length, jaAderiam: assinantes.length - novos.length, matriculasIgnoradas: ignorados, menoresIgnorados,
+    mensagem: `Ratificação registrada: ${novos.length} adesão(ões) nova(s)${assinantes.length - novos.length ? `, ${assinantes.length - novos.length} já aderira(m) antes` : ""}.${menoresIgnorados ? ` ${menoresIgnorados} menor(es) de 18 anos ficaram de fora: a adesão deles é pela ficha assinada pelo responsável.` : ""}`
   };
 }
 
@@ -196,22 +221,81 @@ async function listarRatificacoes(pool, { limite = 50, porMembroId = null } = {}
 }
 
 // Quem serve nas equipes ativas da congregação e quem já aderiu. Sem termo primeiro.
-async function coberturaDoTermo(pool, { congregacaoId }) {
+async function coberturaDoTermo(pool, { congregacaoId, hoje = hojeBrasilia() }) {
   const r = await pool.request().input("c", sql.Int, congregacaoId).query(`
-    SELECT TOP (${LIMITE_LISTA}) m.MembroId, m.Nome, STRING_AGG(e.Nome, ', ') AS Equipes, a.AdesaoId, a.Forma, a.DataAceite, a.Referencia
+    SELECT TOP (${LIMITE_LISTA}) m.MembroId, m.Nome, m.DataNascimento, STRING_AGG(e.Nome, ', ') AS Equipes, a.AdesaoId, a.Forma, a.DataAceite, a.Referencia
     FROM EscalasEquipeMembros em
     JOIN EscalasEquipes e ON e.EquipeId = em.EquipeId AND e.Ativa = 1 AND e.CongregacaoId = @c
     JOIN MembroReferencia m ON m.MembroId = em.MembroId
     LEFT JOIN VoluntariadoAdesoes a ON a.MembroId = m.MembroId
     WHERE em.Ativo = 1
-    GROUP BY m.MembroId, m.Nome, a.AdesaoId, a.Forma, a.DataAceite, a.Referencia
+    GROUP BY m.MembroId, m.Nome, m.DataNascimento, a.AdesaoId, a.Forma, a.DataAceite, a.Referencia
     ORDER BY CASE WHEN a.AdesaoId IS NULL THEN 0 ELSE 1 END, m.Nome`);
+  // `menor` marca quem tem menos de 18 anos: a adesão dele exige o responsável (a tela da Secretaria avisa); a data de nascimento em si não sai daqui.
   const voluntarios = r.recordset.map(x => ({
     membroId: x.MembroId, nome: x.Nome, equipes: x.Equipes, aderiu: x.AdesaoId != null,
+    menor: (() => { const i = vol.idadeEmAnos(x.DataNascimento, hoje); return i != null && i < vol.MAIORIDADE; })(),
     forma: x.Forma || null, rotuloForma: x.Forma ? vol.FORMAS_ADESAO[x.Forma] : null, dataAceite: isoData(x.DataAceite), referencia: x.Referencia || null
   }));
   const comTermo = voluntarios.filter(v => v.aderiu).length;
   return { total: voluntarios.length, comTermo, semTermo: voluntarios.length - comTermo, voluntarios };
+}
+
+// Retenção do IP do aceite digital (LGPD art. 16). Rotina diária (NotificacoesAgendador). Só mexe no IP e nos cabeçalhos: a adesão continua íntegra (o gatilho
+// TR_VoluntariadoAdesoes_Imutavel recusa qualquer outra mudança). Anonimiza quem NÃO serve mais — fora de equipe ativa e sem serviço nos últimos N dias —
+// e aderiu há mais de N dias; quem segue servindo mantém o IP, porque a prova ainda pode ser necessária.
+async function anonimizarIpsVencidos(pool, { hoje = hojeBrasilia() } = {}) {
+  const dias = await lerPrazoDias(pool, "VOLUNTARIADO_IP_RETENCAO_DIAS", vol.IP_RETENCAO_DIAS_PADRAO);
+  const r = await pool.request().input("hoje", sql.Date, hoje).input("dias", sql.Int, dias).query(`
+    UPDATE a SET EnderecoIp = N'anonimizado', CadeiaCabecalhos = NULL
+    FROM VoluntariadoAdesoes a
+    WHERE a.Forma = 'CLICKWRAP' AND (a.EnderecoIp <> N'anonimizado' OR a.CadeiaCabecalhos IS NOT NULL)
+      AND a.DataAceite < DATEADD(DAY, -@dias, @hoje)
+      AND NOT EXISTS (SELECT 1 FROM EscalasEquipeMembros em WHERE em.MembroId = a.MembroId AND em.Ativo = 1)
+      AND NOT EXISTS (SELECT 1 FROM EscalasAlocacoes al JOIN EscalasServicos s ON s.ServicoId = al.ServicoId WHERE al.MembroId = a.MembroId AND s.DataHora >= DATEADD(DAY, -@dias, @hoje));
+    SELECT @@ROWCOUNT AS total;`);
+  const total = r.recordset[0] ? Number(r.recordset[0].total) : 0;
+  // Lote: registroId 0 (mesma convenção das outras rotinas). Sem usuário (rotina automática) e sem dado pessoal: só a contagem e o prazo aplicado.
+  if (total > 0) await registrarAuditoria({ tabela: "VoluntariadoAdesoes", registroId: 0, acao: "IP_ANONIMIZADO", usuarioId: null, dadosDepois: { quantidade: total, retencaoDias: dias, referencia: hoje } });
+  return { anonimizados: total, retencaoDias: dias };
+}
+
+// Direito de acesso do titular (LGPD art. 18, I): o que o voluntariado guarda da PRÓPRIA pessoa. Só é lido quando ela pede (Meus Dados) — nenhuma rotina
+// exporta isto para lugar nenhum. Fica de fora o texto livre escrito por outras pessoas sobre ela (o motivo da remoção da escala) e a identidade de quem
+// registrou: o titular recebe o fato (quando, onde, de que tipo) e a orientação de pedir o resto à Secretaria.
+async function dadosDoTitular(pool, membroId) {
+  const q = (texto) => pool.request().input("m", sql.Int, membroId).query(texto);
+  const [adesao, equipes, alocacoes, indisponibilidades, remocoes, grupos] = await Promise.all([
+    q(`SELECT AdesaoId, Forma, TermoVersao, TermoHash, DataAceite, AceitoEm, EnderecoIp, CadeiaCabecalhos, CanalMensageria, Referencia, ResponsavelNome, ResponsavelVinculo, RegistradoPorMembroId, RegistradoEm
+       FROM VoluntariadoAdesoes WHERE MembroId = @m`),
+    q(`SELECT e.Nome AS Equipe, c.Nome AS Congregacao, em.Ativo, em.CriadoEm
+       FROM EscalasEquipeMembros em JOIN EscalasEquipes e ON e.EquipeId = em.EquipeId LEFT JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
+       WHERE em.MembroId = @m ORDER BY em.CriadoEm DESC`),
+    q(`SELECT TOP (${LIMITE_LISTA}) s.DataHora, s.Descricao, e.Nome AS Equipe, al.Status
+       FROM EscalasAlocacoes al JOIN EscalasServicos s ON s.ServicoId = al.ServicoId JOIN EscalasEquipes e ON e.EquipeId = al.EquipeId
+       WHERE al.MembroId = @m ORDER BY s.DataHora DESC`),
+    q(`SELECT DataInicio, DataFim, Motivo FROM EscalasIndisponibilidades WHERE MembroId = @m ORDER BY DataInicio DESC`),
+    q(`SELECT d.DesligadoEm, e.Nome AS Equipe, d.TipoMotivo, d.RemovidoDaEscala, d.ReintegradoEm
+       FROM VoluntariosDesligamentos d LEFT JOIN EscalasEquipes e ON e.EquipeId = d.EquipeId WHERE d.MembroId = @m ORDER BY d.DesligadoEm DESC`),
+    q(`SELECT r.Nome AS Rodizio, g.Nome AS Grupo, gm.EntrouEm, gm.SaiuEm
+       FROM EscalasRodizioGrupoMembros gm JOIN EscalasRodizioGrupos g ON g.GrupoId = gm.GrupoId JOIN EscalasRodizios r ON r.RodizioId = gm.RodizioId
+       WHERE gm.MembroId = @m ORDER BY gm.EntrouEm DESC`)
+  ]);
+  const a = adesao.recordset[0];
+  return {
+    adesao: a ? {
+      forma: a.Forma, rotuloForma: vol.FORMAS_ADESAO[a.Forma], termoVersao: a.TermoVersao, termoHash: a.TermoHash, dataAceite: isoData(a.DataAceite), aceitoEm: isoInstante(a.AceitoEm),
+      enderecoIp: a.EnderecoIp, cadeiaCabecalhos: a.CadeiaCabecalhos, canalMensageria: a.CanalMensageria, referencia: a.Referencia,
+      responsavelNome: a.ResponsavelNome || null, responsavelVinculo: a.ResponsavelVinculo ? vol.VINCULOS_RESPONSAVEL[a.ResponsavelVinculo] : null,
+      registradaPelaSecretaria: a.RegistradoPorMembroId != null, registradoEm: isoInstante(a.RegistradoEm)
+    } : null,
+    equipes: equipes.recordset.map(x => ({ equipe: x.Equipe, congregacao: x.Congregacao || null, ativo: !!x.Ativo, desde: isoInstante(x.CriadoEm) })),
+    servicos: alocacoes.recordset.map(x => ({ dataHora: isoInstante(x.DataHora), descricao: x.Descricao || null, equipe: x.Equipe, situacao: x.Status })),
+    indisponibilidades: indisponibilidades.recordset.map(x => ({ dataInicio: isoData(x.DataInicio), dataFim: isoData(x.DataFim), motivo: x.Motivo || null })),
+    remocoesDaEscala: remocoes.recordset.map(x => ({ em: isoInstante(x.DesligadoEm), equipe: x.Equipe || null, tipo: x.TipoMotivo, removidoDaEscala: !!x.RemovidoDaEscala, reintegradoEm: isoInstante(x.ReintegradoEm) })),
+    gruposDeRodizio: grupos.recordset.map(x => ({ rodizio: x.Rodizio, grupo: x.Grupo, entrouEm: isoInstante(x.EntrouEm), saiuEm: isoInstante(x.SaiuEm) })),
+    aviso: "O motivo escrito de uma remoção da escala e o nome de quem registrou cada ato ficam com a Secretaria: peça-os pelo canal do Encarregado de Dados (LGPD art. 18)."
+  };
 }
 
 // ---------------------------------------------------------------
@@ -523,14 +607,17 @@ async function gerarRodizio(pool, { rodizioId, dados, por, hoje = hojeBrasilia()
 
   let avisados = 0;
   if (v.dados.publicar) {
-    for (const [membroId, info] of datasPorMembro) {
-      const email = (await lerMembro(pool, membroId) || {}).Email;
-      const r = await notificarAgora(pool, {
-        regraChave: "ESCALA_RODIZIO_ESCALADO", destinatarios: [{ membroId, email }],
-        mensagem: vol.textoEscaladoNoRodizio({ rodizioNome: rodizio.nome, grupoNome: info.grupoNome, datas: info.datas }),
-        referenciaId: criados[0].servicoId, referenciaTabela: "EscalasServicos", deps
-      });
-      avisados += r.criadas || 0;
+    const entradas = [...datasPorMembro];
+    for (let i = 0; i < entradas.length; i += AVISOS_EM_PARALELO) {
+      const lote = await Promise.all(entradas.slice(i, i + AVISOS_EM_PARALELO).map(async ([membroId, info]) => {
+        const email = (await lerMembro(pool, membroId) || {}).Email;
+        return notificarAgora(pool, {
+          regraChave: "ESCALA_RODIZIO_ESCALADO", destinatarios: [{ membroId, email }],
+          mensagem: vol.textoEscaladoNoRodizio({ rodizioNome: rodizio.nome, grupoNome: info.grupoNome, datas: info.datas }),
+          referenciaId: criados[0].servicoId, referenciaTabela: "EscalasServicos", deps
+        });
+      }));
+      avisados += lote.reduce((s, r) => s + (r.criadas || 0), 0);
     }
   }
   const nGrupos = new Set(criados.map(c => c.grupoId)).size;
@@ -739,7 +826,7 @@ async function removerDaEscala(pool, { dados, equipeId = null, podeCongregacao =
   await notificarAgora(pool, {
     regraChave: "ESCALA_ALTERACAO_PARTICIPACAO", destinatarios: [{ membroId: m.MembroId, email: m.Email }],
     mensagem: vol.textoAvisoRemocao({ equipes: registros.map(r => r.equipe.Nome), hoje }),
-    referenciaId: registros[0].desligamentoId * 2, referenciaTabela: "VoluntariosDesligamentos", deps
+    referenciaId: registros[0].desligamentoId * 2, referenciaTabela: "VoluntariosDesligamentos", limiteDia: AVISOS_AO_VOLUNTARIO_POR_DIA, deps
   });
   for (const reg of registros) {
     if (!reg.equipe.LiderMembroId || reg.equipe.LiderMembroId === por || reg.equipe.LiderMembroId === m.MembroId) continue;
@@ -787,7 +874,7 @@ async function reintegrar(pool, { desligamentoId, observacao, por, hoje = hojeBr
   } catch (e) { await fecharTransacao(transaction, false); throw e; }
   await registrarAuditoria({ tabela: "VoluntariosDesligamentos", registroId: desligamentoId, acao: "REINTEGRADO_NA_ESCALA", usuarioId: por, dadosDepois: { membroId: d.MembroId, equipeId: d.EquipeId, observacaoTamanho: obs.length } });
   const dest = await destinatarioMembro(pool, d.MembroId);
-  if (dest) await notificarAgora(pool, { regraChave: "ESCALA_ALTERACAO_PARTICIPACAO", destinatarios: [dest], mensagem: vol.textoAvisoReintegracao({ equipeNome: d.EquipeNome, hoje }), referenciaId: desligamentoId * 2 + 1, referenciaTabela: "VoluntariosDesligamentos", deps });
+  if (dest) await notificarAgora(pool, { regraChave: "ESCALA_ALTERACAO_PARTICIPACAO", destinatarios: [dest], mensagem: vol.textoAvisoReintegracao({ equipeNome: d.EquipeNome, hoje }), referenciaId: desligamentoId * 2 + 1, referenciaTabela: "VoluntariosDesligamentos", limiteDia: AVISOS_AO_VOLUNTARIO_POR_DIA, deps });
   return { sucesso: true, mensagem: `${d.MembroNome} voltou à equipe ${d.EquipeNome}. As escalas canceladas não voltam sozinhas: o líder convida de novo. Se estava num grupo de rodízio, coloque-o(a) no grupo outra vez.` };
 }
 
@@ -928,7 +1015,7 @@ async function detectarTermosPendentes(pool, { hoje = hojeBrasilia() } = {}) {
     const quem = info.nomes.slice(0, 5).join(", ") + (info.nomes.length > 5 ? ` e mais ${info.nomes.length - 5}` : "");
     fatos.push({
       referenciaId: congregacaoId * 10000 + chaveMensal(hoje), destinatarios,
-      fatoGerador: `${info.nomes.length} voluntário(s) de ${info.nome} servem em escalas sem o Termo de Adesão registrado (Lei 9.608/98, art. 2º): ${quem}. Peça o aceite em Meu Painel, registre a ficha/mensagem ou ratifique uma lista (Regimento Art. 133 §8º).`
+      fatoGerador: `${info.nomes.length} voluntário(s) de ${info.nome} servem em escalas sem o Termo de Adesão registrado (Lei 9.608/98, art. 2º): ${quem}. Peça o aceite em Meu Painel, registre a ficha/mensagem ou ratifique uma lista (Regimento Art. 133 §8º). Menor de 18 anos adere pela ficha assinada pelo responsável.`
     });
   }
   return fatos;
@@ -936,7 +1023,7 @@ async function detectarTermosPendentes(pool, { hoje = hojeBrasilia() } = {}) {
 
 module.exports = {
   LIMITE_LISTA, nomeDoMembro: nomeDe,
-  mapearAdesao, buscarAdesao, situacaoDoTermo, aceitarDigital, registrarAdesaoManual, ratificar, listarRatificacoes, coberturaDoTermo,
+  mapearAdesao, buscarAdesao, situacaoDoTermo, aceitarDigital, registrarAdesaoManual, ratificar, listarRatificacoes, coberturaDoTermo, anonimizarIpsVencidos, dadosDoTitular,
   definirNaturezaEquipe, removidoDaEquipe, liderAtivo, lideraAlgumaEquipe, mensagemRemovido,
   buscarRodizio, listarRodizios, detalharRodizio, criarRodizio, alterarAtivoRodizio, buscarGrupo, criarGrupo, adicionarMembroAoGrupo, removerMembroDoGrupo, desativarGrupo,
   previaGeracao, gerarRodizio, cancelarServicosFuturos, meusRodizios,

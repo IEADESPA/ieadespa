@@ -36,8 +36,9 @@ describe("limite de taxa", () => {
   });
 
   test("a origem vira hash do IP (nunca o IP em claro), sem a porta", () => {
-    const k1 = chaveDeOrigem({ headers: { "x-forwarded-for": "200.1.2.3:5555, 10.0.0.1" } });
-    const k2 = chaveDeOrigem({ headers: { "x-azure-clientip": "200.1.2.3" } });
+    // v7.5: o IP é o PENÚLTIMO do x-forwarded-for (o último é o proxy do Azure); cabeçalhos que o cliente escreve não entram na chave.
+    const k1 = chaveDeOrigem({ headers: { "x-forwarded-for": "200.1.2.3:5555, 40.70.146.136:36945" } });
+    const k2 = chaveDeOrigem({ headers: { "x-forwarded-for": "9.9.9.9, 200.1.2.3:6666, 40.70.146.136:1", "x-azure-clientip": "7.7.7.7" } });
     expect(k1).toBe(k2);
     expect(k1).toMatch(/^[0-9a-f]{16}$/);
     expect(k1).not.toContain("200");

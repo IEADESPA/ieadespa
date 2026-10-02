@@ -41,9 +41,12 @@ module.exports = async function (context, req) {
 
   if (req.method === "GET") {
     // Quem vê o quê: sem sessão, só os PÚBLICOS; membro logado, públicos + de membros; quem entrou com a senha de liderança, também os de liderança. Sessão inválida/vencida
-    // é 401 (não se trata como "visitante": a tela precisa pedir o login de novo).
+    // é 401 (não se trata como "visitante": a tela precisa pedir o login de novo) — mas só quando a tela MANDOU o cabeçalho da aplicação (x-auth-token). Um "Authorization"
+    // que não é uma sessão nossa (o Azure pode acrescentar o dele no caminho) não vira tentativa de login: sem sessão válida e sem o cabeçalho da aplicação, é visitante.
     let usuario = null;
-    if (auth.extrairToken(req)) {
+    const token = auth.extrairToken(req);
+    const mandouOCabecalhoDaAplicacao = !!((req.headers || {})["x-auth-token"] || (req.headers || {})["X-Auth-Token"]);
+    if (mandouOCabecalhoDaAplicacao || (token && auth.getSessao(token))) {
       usuario = auth.exigirLoginIgnorandoTermos(req, context);
       if (!usuario) return;
     } else {

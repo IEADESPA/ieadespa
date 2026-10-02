@@ -74,6 +74,26 @@ describe("GET: cada um vê o que é para ele", () => {
     } finally { agora.mockRestore(); }
     expect(mockConsultas).toHaveLength(0);
   });
+  test("um 'Authorization' que não é uma sessão nossa (o Azure pode acrescentar o dele) não derruba o visitante: segue como visitante, só os públicos", async () => {
+    quando(/FROM Documentos d/, [doc()]);
+    for (const authorization of ["Bearer abc.def", "Bearer", "Basic dXNlcjpzZW5oYQ==", "Negotiate xyz"]) {
+      mockConsultas = [];
+      const r = await chamar({ headers: { authorization } });
+      expect(r.status).toBe(200);
+      expect(consultaDaLista()).toMatch(/d\.Visibilidade IN \('PUBLICO'\)/);
+      expect(r.body[0]).not.toHaveProperty("registradoPor");
+    }
+  });
+  test("mas um 'Authorization: Bearer' com uma sessão nossa VÁLIDA continua valendo (quem entrou por essa via enxerga o que é dele)", async () => {
+    quando(/FROM Documentos d/, []);
+    await chamar({ headers: { authorization: `Bearer ${LOCAL()}` } });
+    expect(consultaDaLista()).toMatch(/'PUBLICO', 'MEMBROS', 'LIDERANCA'/);
+  });
+  test("o cabeçalho da aplicação (x-auth-token) vazio ou em maiúsculas: vazio é visitante; com lixo é 401", async () => {
+    quando(/FROM Documentos d/, []);
+    expect((await chamar({ headers: { "x-auth-token": "" } })).status).toBe(200);
+    expect((await chamar({ headers: { "X-Auth-Token": "lixo" } })).status).toBe(401);
+  });
   test("sessão de PIN provisório: 403 (precisa criar o PIN antes)", async () => {
     expect((await chamar({ tk: token({ via: "PIN", permissoes: [], pinProvisorio: true }) })).status).toBe(403);
   });

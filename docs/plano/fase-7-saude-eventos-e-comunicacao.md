@@ -1256,7 +1256,7 @@ ponto real de integração:
   simultâneas, a mesma pessoa entrando em dois grupos, 4 ratificações da mesma lista e a
   geração do rodízio ao mesmo tempo que a remoção de um dos voluntários; **(3)** uma
   **revisão adversarial independente do código**, feita por outro agente só de leitura. O
-  que apareceu, e foi corrigido (commits `fbe4516` e o seguinte):
+  que apareceu, e foi corrigido (commits `fbe4516`, `afe5b53` e `a5153d7`):
   - **XSS armazenado (alta).** O painel de notificações e o e-mail escreviam a mensagem
     **sem escapar**; um gestor com `escalas` podia dar a um rodízio um nome com HTML, pôr o
     Presidente num grupo e gerar o rodízio publicando — o script rodaria no navegador dele
@@ -1292,7 +1292,12 @@ ponto real de integração:
     Ficou no ar cerca de 8 minutos; o conserto (`afe5b53`) veio com um teste que chama os
     handlers com valores em texto (falha com o erro, passa sem ele).
   Verificado também em produção, sem alterar nada: um token assinado com o **segredo
-  padrão** do repositório é recusado (401), então a produção usa um segredo próprio.
+  padrão** do repositório é recusado (401), então a produção usa um segredo próprio. Depois
+  do último deploy (02/10/2026; testes e migração com a coluna nova no Azure): 18 rotas
+  testadas (as de `/api/voluntariado/*`, `lista` e `desligamentos` da habilitação, `equipes`
+  e `trocas` das escalas) respondem `401` sem sessão, o `script.js` servido traz o escape
+  do painel de notificações e a confirmação do desligamento, e a agenda pública não mudou
+  (`versao` `2ede5dad7ed05d97`).
 
   **Em produção (verificado em 01/10/2026).** O deploy do sistema passou com os testes e a
   migração 117 aplicada no Azure. As 9 rotas `GET` e as 6 `POST` testadas em

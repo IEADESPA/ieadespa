@@ -7,11 +7,29 @@ const { resolverEscopoCongregacoes, resolverNomeExtensao } = require("../shared/
 const { termosPendentes } = require("../shared/termos");
 const { permissoesEscopoDelegados } = require("../shared/delegacoes");
 const { permissoesComRecertificacaoExpirada } = require("../shared/compliance");
+const pinMembro = require("../shared/pinMembro");
+const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
+
+// fecho da v7.5 — o login da liderança não tinha limite de tentativas. Agora: contenção por origem (por instância) e bloqueio por pessoa depois de 10 erros
+// (15 min, que cresce se continuarem errando). Uma mensagem só para matrícula sem acesso, senha errada e pessoa bloqueada: não diz quem é da liderança.
+const limitador = criarLimitador({ janelaMs: 60000, maximo: 30 });
+const MENSAGEM_FALHA = "Matrícula ou senha incorreta, ou acesso bloqueado por muitas tentativas.";
+// Hash de mentira, só para gastar o mesmo tempo de uma conferência verdadeira: quem pergunta por matrícula que não é da liderança (ou que está bloqueada)
+// não distingue pelo tempo da resposta.
+const HASH_FALSO = `${"0".repeat(32)}:${"0".repeat(128)}`;
+const conferenciaFalsa = (senha) => { auth.verificarSenha(senha, HASH_FALSO); };
 
 module.exports = async function (context, req) {
-  const { matricula, senha } = req.body || {};
+  const limite = limitador.registrar(chaveDeOrigem(req));
+  if (!limite.permitido) {
+    context.res = { status: 429, headers: { "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas tentativas seguidas. Aguarde um minuto e tente de novo." } };
+    return;
+  }
+  const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+  const matricula = auth.idDeRota(corpo.matricula);
+  const senha = typeof corpo.senha === "string" || typeof corpo.senha === "number" ? corpo.senha : null;
 
-  if (!matricula || !senha) {
+  if (!matricula || senha === null || senha === "") {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe matrícula e senha." } };
     return;
   }
@@ -28,7 +46,16 @@ module.exports = async function (context, req) {
     WHERE l.MembroId = @mat
   `);
   if (result.recordset.length === 0) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula sem acesso à Secretaria." } };
+    conferenciaFalsa(senha);
+    context.res = { status: 200, body: { sucesso: false, mensagem: MENSAGEM_FALHA } };
+    return;
+  }
+
+  // A tentativa é reservada ANTES de conferir a senha (tentativas simultâneas não passam do limite); quem acerta zera o contador.
+  const reserva = await pinMembro.reservarTentativa(pool, matricula, "SENHA", pinMembro.LIMITE_FALHAS_SENHA);
+  if (reserva.bloqueado) {
+    conferenciaFalsa(senha);
+    context.res = { status: 200, body: { sucesso: false, mensagem: MENSAGEM_FALHA } };
     return;
   }
 
@@ -42,9 +69,10 @@ module.exports = async function (context, req) {
   // territorial (RANKING_NIVEL) — critério único e sempre o mesmo.
   const candidatas = result.recordset.filter((l) => l.senhaHash && auth.verificarSenha(senha, l.senhaHash));
   if (candidatas.length === 0) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Senha incorreta." } };
+    context.res = { status: 200, body: { sucesso: false, mensagem: MENSAGEM_FALHA } };
     return;
   }
+  await pinMembro.limparTentativas(pool, matricula, "SENHA");
   candidatas.sort((a, b) => (auth.RANKING_NIVEL[b.papelNivel] || 0) - (auth.RANKING_NIVEL[a.papelNivel] || 0));
   const lideranca = candidatas[0];
 
@@ -104,7 +132,10 @@ module.exports = async function (context, req) {
     // e `auth.podeDepartamento` barrava ele até das próprias aprovações.
     departamentoId: lideranca.escopoTipo === "DEPARTAMENTO" ? lideranca.escopoId : (lideranca.departamentoId || null),
     permissoes,
-    termosPendentes: pendentes
+    termosPendentes: pendentes,
+    // fecho da v7.5 — a sessão nasceu da SENHA de acesso administrativo: é isso que as rotas que dependem de "ser a liderança" (trocar a senha, aprovar etapa de
+    // fluxo, delegar papel) exigem; a sessão de PIN ou de código (via:"PIN"/"CODIGO") é de membro, ainda que a pessoa tenha cargo.
+    via: "SENHA"
   }, dispositivoInfo);
 
   context.res = {

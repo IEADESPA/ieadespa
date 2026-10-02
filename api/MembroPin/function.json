@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["post"],
-      "route": "auditoria"
+      "route": "membro/pin"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

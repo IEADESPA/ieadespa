@@ -100,8 +100,8 @@ describe("a própria pessoa recebe o pacote, com o voluntariado", () => {
   test("todas as mockConsultas do voluntariado são pela matrícula da sessão", async () => {
     mockFila = [[{ membroId: 20, nome: "Ana Souza", fotoUrl: null }]];
     await chamar("20", { "x-auth-token": tokenDe(20) });
-    const doVol = mockConsultas.filter(c => /VoluntariadoAdesoes|EscalasEquipeMembros|EscalasAlocacoes|EscalasIndisponibilidades|VoluntariosDesligamentos|EscalasRodizioGrupoMembros/.test(c.sql));
-    expect(doVol).toHaveLength(6);
+    const doVol = mockConsultas.filter(c => /VoluntariadoAdesoes|EscalasEquipeMembros|EscalasAlocacoes|EscalasIndisponibilidades|VoluntariosDesligamentos|EscalasRodizioGrupoMembros|VoluntariadoResponsaveis/.test(c.sql));
+    expect(doVol).toHaveLength(9);
     for (const c of doVol) expect(c.inputs.m).toBe(20);
   });
 });

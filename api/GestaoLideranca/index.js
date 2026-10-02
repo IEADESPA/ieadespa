@@ -24,6 +24,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const trilhas = require("../shared/trilhas");
+const pinMembro = require("../shared/pinMembro");
 const canaisDb = require("../shared/canaisDb");
 
 // v7.3 — quem sai da liderança de uma congregação/Área/departamento obriga a troca de senha dos canais
@@ -103,6 +104,10 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
               CASE WHEN @duracaoMeses IS NULL THEN NULL ELSE DATEADD(month, @duracaoMeses, CAST(SYSUTCDATETIME() AS DATE)) END)
     `);
   }
+
+  // Redefinir a senha de quem ficou bloqueado por tentativas é também o desbloqueio (fecho da v7.5): sem isso, um anônimo que errasse a senha de um líder mantinha o
+  // acesso dele trancado e a Secretaria não tinha como liberar.
+  if (senha) await pinMembro.limparTentativas(pool, membroId, "SENHA");
 
   await registrarAuditoria({
     tabela: "Lideranca",

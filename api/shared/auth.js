@@ -81,6 +81,14 @@ function reassinarSessao(info) {
   return assinar({ ...info, exp: Date.now() + (1000 * 60 * 60 * 12) });
 }
 
+// Reemite o token com claims novas MANTENDO a validade original: quem troca o PIN não ganha outras 12 horas (um token roubado não se renova sozinho). Devolve null
+// se o token não vale.
+function reassinarMantendoValidade(token, novasClaims) {
+  const payload = verificarToken(token);
+  if (!payload || !payload.exp) return null;
+  return assinar({ ...payload, ...novasClaims, exp: payload.exp });
+}
+
 async function encerrarSessao(pool, sql, token) {
   const payload = verificarToken(token);
   if (!payload || !payload.sid) return true; // token inválido/sem sid (sessão antiga, pré-vB.9) — nada a marcar, não é erro
@@ -130,14 +138,36 @@ function extrairToken(req) {
 // Mesmo corpo que exigirLogin tinha antes dos Termos (v2.7) — usada só pelo
 // endpoint de assinatura (GestaoTermos), que não pode ficar preso atrás do
 // próprio bloqueio que ele existe pra resolver.
-function exigirLoginIgnorandoTermos(req, context) {
+// `permitirProvisorio`: só a rota de criar o PIN (MembroPin) aceita a sessão aberta com o PIN PROVISÓRIO que a Secretaria gerou. Em todas as outras essa sessão é
+// recusada (403 com `criarPin`): o provisório é uma credencial que a Secretaria conhece e só serve para a pessoa escolher o PIN dela.
+function exigirLoginIgnorandoTermos(req, context, { permitirProvisorio = false } = {}) {
   const token = extrairToken(req);
   const sessao = token ? getSessao(token) : null;
   if (!sessao) {
     context.res = { status: 401, body: { sucesso: false, mensagem: "Faça login para continuar." } };
     return null;
   }
+  if (sessao.pinProvisorio === true && !permitirProvisorio) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Crie o seu PIN para continuar.", criarPin: true } };
+    return null;
+  }
   return sessao;
+}
+
+// A sessão nasceu de uma SENHA de acesso administrativo (LoginSecretaria põe via:"SENHA")? A sessão de PIN ou de código (via:"PIN"/"CODIGO") é de MEMBRO, mesmo
+// quando a pessoa também tem cargo na liderança: ela serve para os dados da própria pessoa, nunca para o que depende de ser "a liderança" (trocar a senha,
+// aprovar etapa de fluxo, delegar papel). Tokens emitidos antes desta marca (12 h no máximo) não têm `via`: valem como liderança só se carregam o nível do papel.
+function ehSessaoDeLideranca(usuario) {
+  return usuario.via === "SENHA" || (usuario.via === undefined && !!usuario.nivel);
+}
+function exigirSessaoDeLideranca(req, context) {
+  const usuario = exigirLogin(req, context);
+  if (!usuario) return null;
+  if (!ehSessaoDeLideranca(usuario)) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Esta ação exige entrar com a senha de acesso administrativo (não vale a entrada por PIN ou por código)." } };
+    return null;
+  }
+  return usuario;
 }
 
 // Uso: const usuario = exigirLogin(req, context); if (!usuario) return;
@@ -156,6 +186,34 @@ function exigirLogin(req, context) {
     return null;
   }
   return sessao;
+}
+
+// Número inteiro positivo na forma canônica (só dígitos, sem zero à esquerda nem espaço), como chega na rota ou na query, dentro do INT do SQL.
+// "0x10", "1e1", " 5", "05", "-1", "1.5", true e [5] viram null — uma matrícula só tem uma grafia.
+function idDeRota(v) {
+  if (typeof v !== "number" && typeof v !== "string") return null;
+  const s = String(v);
+  if (!/^[1-9]\d{0,9}$/.test(s)) return null;
+  const n = Number(s);
+  return n <= 2147483647 ? n : null;
+}
+
+// Rotas de AUTOATENDIMENTO ("meus dados", "minha foto"...): a matrícula da rota é a pessoa, então ela precisa ser a pessoa da sessão. Antes bastava o número
+// (inteiros em sequência, que qualquer um adivinha). 401 sem sessão, 400 se a matrícula é malformada, 403 se é de outra pessoa — e o 403 é o mesmo
+// exista ou não a matrícula, para a resposta não dizer quem tem cadastro. Termos pendentes não bloqueiam: é o dado da própria pessoa.
+function exigirTitular(req, context, matriculaDaRota) {
+  const usuario = exigirLoginIgnorandoTermos(req, context);
+  if (!usuario) return null;
+  const alvo = idDeRota(matriculaDaRota);
+  if (!alvo) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Matrícula inválida." } };
+    return null;
+  }
+  if (Number(usuario.membroId) !== alvo) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Você só pode acessar os seus próprios dados." } };
+    return null;
+  }
+  return usuario;
 }
 
 // Uso: const usuario = exigirPermissao(req, context, "pessoas"); if (!usuario) return;
@@ -231,4 +289,4 @@ function exigirNivelGlobal(req, context) {
   return usuario;
 }
 
-module.exports = { hashSenha, verificarSenha, criarSessao, reassinarSessao, encerrarSessao, listarSessoes, encerrarSessaoEspecifica, getSessao, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, podeDepartamento, nivelAtingeMinimo, RANKING_NIVEL };
+module.exports = { hashSenha, verificarSenha, criarSessao, reassinarSessao, reassinarMantendoValidade, ehSessaoDeLideranca, exigirSessaoDeLideranca, extrairToken, encerrarSessao, listarSessoes, encerrarSessaoEspecifica, getSessao, idDeRota, exigirTitular, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, podeDepartamento, nivelAtingeMinimo, RANKING_NIVEL };

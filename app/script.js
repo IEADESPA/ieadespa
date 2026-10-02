@@ -263,6 +263,8 @@ async function confirmarCodigoAcessoAcao() {
   salvarSessao(data.token, data.nome, data.permissoes, data.matricula, data.nivel);
   document.getElementById("codigoAcessoInput").value = "";
   msg.textContent = "";
+  // Primeiro acesso ou "esqueci o PIN": a pessoa acabou de provar o e-mail, agora escolhe o PIN dela antes de abrir o painel.
+  if (data.precisaCriarPin) { mostrarCriarPin(); return; }
   await abrirPainelConteudo(data.matricula);
 }
 
@@ -372,6 +374,11 @@ function salvarSessao(token, nome, permissoes, matricula, nivel) {
   if (authMatricula != null) sessionStorage.setItem("authMatricula", authMatricula);
   if (authNivel) sessionStorage.setItem("authNivel", authNivel);
 }
+// A sessão é de quem entrou com a senha de acesso administrativo (tem nível de papel e/ou permissões)? A de PIN ou de código de e-mail é de membro: as telas e as
+// rotas da liderança (tarefas de fluxo, delegações, trocar a senha) não valem para ela.
+function sessaoDeLiderancaNaTela() {
+  return !!(authToken && (authNivel || (authPermissoes && authPermissoes.length)));
+}
 function limparSessao() {
   authToken = null;
   authNome = null;
@@ -411,7 +418,11 @@ async function fetchProtegido(url, opts = {}) {
   }
   if (res.status === 403) {
     const data = await res.clone().json().catch(() => null);
-    if (data && data.termosPendentes && data.termosPendentes.length > 0) {
+    if (data && data.criarPin) {
+      // Sessão aberta com o PIN provisório da Secretaria: só serve para criar o PIN próprio.
+      mostrarToast("Crie o seu PIN para continuar.", "erro");
+      mostrarCriarPin();
+    } else if (data && data.termosPendentes && data.termosPendentes.length > 0) {
       mostrarToast("Assine os termos pendentes para continuar.", "erro");
       mostrarModalTermos(data.termosPendentes);
     } else {
@@ -440,6 +451,7 @@ function mostrarTelaPainelInicial() {
   esconderTodasAsTelas();
   document.getElementById("telaPainel").style.display = "flex";
   document.getElementById("resultadoLogin").textContent = "";
+  document.getElementById("cxCriarPin").style.display = "none";
   if (authToken && authMatricula) {
     abrirPainelConteudo(authMatricula);
   } else {
@@ -449,43 +461,123 @@ function mostrarTelaPainelInicial() {
 }
 
 // ---- Painel único: um só acesso; o que aparece depende das permissões ----
-// Com senha -> login administrativo (Lideranca), abre todas as abas permitidas.
-// Sem senha -> só a aba "Meu Painel" (consulta pública por matrícula, como já era).
+// Fecho da v7.5: TODA entrada tem sessão (token). O membro comum entra com a matrícula + PIN de 4 números (ou pelo código do e-mail, que também serve de
+// "primeiro acesso" e de "esqueci meu PIN"); quem tem acesso administrativo digita a senha no lugar do PIN e abre todas as abas permitidas.
+// Antes, sem senha, o painel abria só com a matrícula digitada e sem sessão nenhuma.
+
+// POST JSON sem sessão (login). Nunca lança: falha de rede ou resposta que não é JSON vira { sucesso:false, mensagem }.
+async function postJsonSemSessao(url, corpo) {
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    const data = await res.json().catch(() => null);
+    if (data && typeof data === "object") return data;
+    return { sucesso: false, mensagem: "Não foi possível ler a resposta do servidor. Tente de novo." };
+  } catch (_) {
+    return { sucesso: false, mensagem: "Não foi possível conectar ao servidor. Verifique sua internet e tente de novo." };
+  }
+}
+
 async function acessarPainel() {
-  const matricula = document.getElementById("matriculaPainel").value;
-  const senha = document.getElementById("senhaPainel").value;
+  const matricula = document.getElementById("matriculaPainel").value.trim();
+  const segredo = document.getElementById("senhaPainel").value;
   const msg = document.getElementById("resultadoLogin");
   if (!matricula) {
     msg.textContent = "Informe sua matrícula.";
     return;
   }
-
-  if (senha) {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matricula, senha })
-    });
-    const data = await res.json();
-    if (!data.sucesso) {
-      msg.textContent = data.mensagem;
-      return;
-    }
-    salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel);
-    document.getElementById("senhaPainel").value = "";
-    msg.textContent = "";
-    if (data.termosPendentes && data.termosPendentes.length > 0) {
-      await mostrarModalTermos(data.termosPendentes);
-      return;
-    }
-  } else {
-    limparSessao();
-    authMatricula = String(matricula);
-    document.getElementById("senhaPainel").value = "";
-    msg.textContent = "";
+  if (!segredo) {
+    msg.textContent = "Informe o seu PIN de 4 números. Primeiro acesso ou esqueceu? Use o link do código por e-mail, logo abaixo.";
+    return;
   }
 
+  let data;
+  if (/^\d{4}$/.test(segredo)) {
+    // PIN do membro. Se não servir, tenta como senha de liderança (há quem tenha senha de 4 números) antes de desistir.
+    data = await postJsonSemSessao(`${API_BASE}/membro/entrar`, { matricula, pin: segredo });
+    if (!data.sucesso) {
+      const lideranca = await postJsonSemSessao(`${API_BASE}/auth/login`, { matricula, senha: segredo });
+      if (!lideranca.sucesso) { msg.textContent = data.mensagem; return; }
+      data = lideranca;
+    }
+  } else {
+    data = await postJsonSemSessao(`${API_BASE}/auth/login`, { matricula, senha: segredo });
+    if (!data.sucesso) { msg.textContent = data.mensagem; return; }
+  }
+
+  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel);
+  document.getElementById("senhaPainel").value = "";
+  msg.textContent = "";
+  if (data.pinProvisorio) { mostrarCriarPin(); return; }          // entrou com o PIN que a Secretaria gerou: precisa criar o próprio
+  if (data.termosPendentes && data.termosPendentes.length > 0) {
+    await mostrarModalTermos(data.termosPendentes);
+    return;
+  }
   await abrirPainelConteudo(matricula);
+}
+
+// Tela de criar o PIN: depois do código por e-mail (primeiro acesso / esqueci) ou do PIN provisório da Secretaria.
+function mostrarCriarPin() {
+  document.getElementById("cxLoginPainel").style.display = "none";
+  document.getElementById("cxPainelConteudo").style.display = "none";
+  document.getElementById("cxCriarPin").style.display = "block";
+  document.getElementById("resultadoCriarPin").textContent = "";
+  document.getElementById("novoPinInput").value = "";
+  document.getElementById("novoPinRepetir").value = "";
+}
+
+async function criarPinAcao() {
+  const pin = document.getElementById("novoPinInput").value.trim();
+  const repetir = document.getElementById("novoPinRepetir").value.trim();
+  const msg = document.getElementById("resultadoCriarPin");
+  if (!/^\d{4}$/.test(pin)) { msg.textContent = "O PIN tem 4 números, sem letras nem espaços."; return; }
+  if (pin !== repetir) { msg.textContent = "Os dois PINs não são iguais. Digite de novo."; return; }
+  let data;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/membro/pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }) });
+    data = await res.json();
+  } catch (_) { msg.textContent = "Não foi possível salvar o PIN agora. Tente de novo."; return; }
+  if (!data.sucesso) { msg.textContent = data.mensagem || "Não foi possível salvar o PIN."; return; }
+  if (data.token) { authToken = data.token; sessionStorage.setItem("authToken", authToken); }
+  document.getElementById("cxCriarPin").style.display = "none";
+  mostrarToast(data.mensagem, "sucesso");
+  await abrirPainelConteudo(authMatricula);
+}
+
+// Meu Painel > Meus Dados Cadastrais > Meu PIN de acesso.
+async function alterarMeuPinAcao() {
+  const msg = document.getElementById("resultadoAlterarPin");
+  const pinAtual = document.getElementById("pinAtualPessoal").value.trim();
+  const pin = document.getElementById("pinNovoPessoal").value.trim();
+  const repetir = document.getElementById("pinNovoRepetirPessoal").value.trim();
+  if (!/^\d{4}$/.test(pin)) { msg.textContent = "O novo PIN tem 4 números, sem letras nem espaços."; return; }
+  if (pin !== repetir) { msg.textContent = "Os dois PINs novos não são iguais."; return; }
+  const corpo = { pin };
+  if (pinAtual) corpo.pinAtual = pinAtual;
+  let data;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/membro/pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    data = await res.json();
+  } catch (_) { msg.textContent = "Não foi possível salvar o PIN agora. Tente de novo."; return; }
+  msg.textContent = data.mensagem || (data.sucesso ? "PIN alterado." : "Não foi possível alterar o PIN.");
+  if (data.sucesso) {
+    if (data.token) { authToken = data.token; sessionStorage.setItem("authToken", authToken); }
+    ["pinAtualPessoal", "pinNovoPessoal", "pinNovoRepetirPessoal"].forEach(id => { document.getElementById(id).value = ""; });
+  }
+}
+
+// Secretaria (permissão "pessoas"), na ficha da pessoa: gera um PIN provisório para quem não tem e-mail ou perdeu o acesso. Aparece uma vez só.
+async function gerarPinProvisorioAcao(membroId) {
+  const nome = ((window._pessoasCache || []).find(x => x.membroId === membroId) || {}).nome || `matrícula ${membroId}`;
+  if (!(await confirmarAcao(`Gerar um PIN provisório para ${nome}? Se a pessoa já tem PIN, ele deixa de valer.`, "Gerar PIN"))) return;
+  const cx = document.getElementById("resultadoPinProvisorio");
+  let data;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/gestao/pin-membro`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId }) });
+    data = await res.json();
+  } catch (_) { return; }
+  if (!data.sucesso) { cx.textContent = data.mensagem || "Não foi possível gerar o PIN."; return; }
+  cx.innerHTML = `<p class="vol-selo-ok">PIN provisório de ${escaparHtmlEbd(data.nome)}: <strong style="font-size:1.4rem;letter-spacing:0.2em;">${escaparHtmlEbd(data.pin)}</strong></p>
+    <p class="subtitle">Entregue pessoalmente. Vale por ${Number(data.validadeDias)} dias; a pessoa cria o próprio PIN ao entrar. Esta tela não mostra o PIN de novo.${data.avisadoPorEmail ? " A pessoa também foi avisada por e-mail." : ""}</p>`;
 }
 
 // ---- Termos de Compromisso/Confidencialidade (v2.7) — bloqueio real, ver
@@ -547,9 +639,11 @@ async function assinarTermoAtual(tipo) {
 
 async function abrirPainelConteudo(matricula) {
   document.getElementById("cxLoginPainel").style.display = "none";
+  document.getElementById("cxCriarPin").style.display = "none";
   document.getElementById("cxPainelConteudo").style.display = "flex";
   document.getElementById("nomeLogado").textContent = authNome ? `Olá, ${authNome}` : "";
-  document.getElementById("cxTrocarSenha").style.display = authToken ? "block" : "none";
+  // Trocar senha é só de quem tem acesso administrativo (senha de liderança); o membro comum troca o PIN (cartão "Meu PIN", sempre visível).
+  document.getElementById("cxTrocarSenha").style.display = sessaoDeLiderancaNaTela() ? "block" : "none";
   await carregarTurmasProfessorEbd();
   aplicarPermissoesNoMenu();
   await carregarPainelPessoal(matricula);
@@ -679,8 +773,8 @@ function filtrarMinhasTarefas(filtro) {
 
 async function carregarMinhasTarefas(filtro) {
   const container = document.getElementById("resultadoMinhasTarefas");
-  if (!authToken) {
-    container.innerHTML = "<p class=\"subtitle\">Disponível só para quem entra com senha (papel de Liderança).</p>";
+  if (!sessaoDeLiderancaNaTela()) {
+    container.innerHTML = "<p class=\"subtitle\">Disponível só para quem entra com a senha de acesso administrativo (papel de Liderança).</p>";
     return;
   }
   container.innerHTML = "<p class=\"subtitle\">Carregando...</p>";
@@ -743,7 +837,7 @@ async function encerrarSessaoAcao(sessaoId) {
 }
 
 async function carregarDelegacoes() {
-  if (!authToken) return; // sem papel de Lideranca nenhum, não tem o que delegar/receber
+  if (!sessaoDeLiderancaNaTela()) return; // sem entrar como liderança, não tem o que delegar/receber
   const res = await fetchProtegido(`${API_BASE}/delegacoes`);
   const data = await res.json();
 
@@ -849,21 +943,24 @@ document.addEventListener("click", (ev) => {
   if (!caixa.contains(ev.target)) painel.style.display = "none";
 });
 
-// Self-service: só aparece pra quem logou com senha (tem Lideranca). Não pede
-// a senha atual — a sessão já autenticada é a prova de identidade.
+// Self-service: só aparece pra quem logou com a senha da liderança (não vale a entrada por PIN
+// ou código). Pede a senha ATUAL: o token sozinho não basta para trocar a senha — um token
+// roubado ou deixado aberto numa tela não vira posse permanente da conta.
 async function trocarMinhaSenha() {
+  const senhaAtual = document.getElementById("senhaAtualPessoal").value;
   const novaSenha = document.getElementById("novaSenhaPessoal").value;
   const msg = document.getElementById("resultadoTrocaSenha");
+  if (!senhaAtual) { msg.textContent = "Informe a senha atual."; return; }
   if (!novaSenha) { msg.textContent = "Informe a nova senha."; return; }
   const res = await fetchProtegido(`${API_BASE}/auth/senha`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ novaSenha })
+    body: JSON.stringify({ senhaAtual, novaSenha })
   });
   const data = await res.json();
   avisarResultado(data);
   msg.textContent = data.mensagem || "";
-  if (data.sucesso) document.getElementById("novaSenhaPessoal").value = "";
+  if (data.sucesso) { document.getElementById("novaSenhaPessoal").value = ""; document.getElementById("senhaAtualPessoal").value = ""; }
 }
 
 function sairDoPainel() {
@@ -1179,7 +1276,7 @@ async function carregarMinhasContribuicoes() {
   const cx = document.getElementById("cxMinhasContribuicoes");
   const aviso = document.getElementById("semContribuicoesAviso");
   const container = document.getElementById("resultadoMinhasContribuicoes");
-  const res = await fetch(`${API_BASE}/meus-lancamentos-tesouraria/${authMatricula}`);
+  const res = await fetchProtegido(`${API_BASE}/meus-lancamentos-tesouraria/${authMatricula}`);
   const contribuicoes = await res.json();
   if (!Array.isArray(contribuicoes) || contribuicoes.length === 0) {
     cx.style.display = "none";
@@ -1231,7 +1328,7 @@ async function registrarAutolancamentoAcao() {
   }
   const body = { tipo, valor: Number(valor), formaPagamento, mesReferencia, descricao: descricao || undefined };
   if (formaPagamento === "MISTO") body.valorPix = Number(valorPix);
-  const res = await fetch(`${API_BASE}/autolancamento-tesouraria/${authMatricula}`, {
+  const res = await fetchProtegido(`${API_BASE}/autolancamento-tesouraria/${authMatricula}`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
   });
   const dados = await res.json();
@@ -4809,7 +4906,7 @@ async function carregarConsolidadoTesouraria() {
 async function carregarMinhaFoto() {
   const preview = document.getElementById("minhaFotoPreview");
   if (!authMatricula || !preview) return;
-  const res = await fetch(`${API_BASE}/minha-foto/${authMatricula}`);
+  const res = await fetchProtegido(`${API_BASE}/minha-foto/${authMatricula}`);
   const data = await res.json();
   if (!data.sucesso) { preview.innerHTML = ""; return; }
   preview.innerHTML = data.fotoUrl
@@ -4826,7 +4923,7 @@ async function enviarMinhaFotoAcao() {
   }
   const recorte = await abrirRecorteFoto(input.files[0]);
   if (!recorte) return;
-  const res = await fetch(`${API_BASE}/minha-foto/${authMatricula}`, {
+  const res = await fetchProtegido(`${API_BASE}/minha-foto/${authMatricula}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ fotoBase64: recorte.base64, mimeType: recorte.mimeType })
@@ -4846,7 +4943,7 @@ const ROTULO_FORMA_ADMISSAO_MEUPAINEL = { BATISMO: "Batismo nas águas", CARTA_M
 
 async function carregarMeusDadosForm() {
   if (!authMatricula) return;
-  const res = await fetch(`${API_BASE}/meus-dados/${authMatricula}`);
+  const res = await fetchProtegido(`${API_BASE}/meus-dados/${authMatricula}`);
   const data = await res.json();
   if (!data.sucesso) return;
   const d = data.dados;
@@ -4875,7 +4972,7 @@ async function salvarMeusDadosAcao() {
   const endereco = document.getElementById("meuEndereco").value.trim();
   const estadoCivil = document.getElementById("meuEstadoCivil").value;
 
-  const res = await fetch(`${API_BASE}/meus-dados/${authMatricula}`, {
+  const res = await fetchProtegido(`${API_BASE}/meus-dados/${authMatricula}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ telefone, email, endereco, estadoCivil })
@@ -4896,7 +4993,7 @@ async function carregarOpcoesMeuVinculoTipo() {
 async function carregarMeusVinculos() {
   if (!authMatricula) return;
   const container = document.getElementById("resultadoListaMeusVinculos");
-  const res = await fetch(`${API_BASE}/meus-vinculos/${authMatricula}`);
+  const res = await fetchProtegido(`${API_BASE}/meus-vinculos/${authMatricula}`);
   const vinculos = await res.json();
   if (!Array.isArray(vinculos) || vinculos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum vínculo familiar cadastrado ainda.</p>";
@@ -4923,7 +5020,7 @@ async function salvarMeuVinculoAcao() {
     mostrarToast("Informe o tipo de vínculo e a matrícula da outra pessoa.", "erro");
     return;
   }
-  const res = await fetch(`${API_BASE}/meus-vinculos/${authMatricula}`, {
+  const res = await fetchProtegido(`${API_BASE}/meus-vinculos/${authMatricula}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ membroParenteId, tipoVinculoId, responsavelLegal })
@@ -4939,7 +5036,7 @@ async function salvarMeuVinculoAcao() {
 
 async function removerMeuVinculoAcao(vinculoId) {
   if (!(await confirmarAcao("Remover este vínculo familiar?", "Remover"))) return;
-  const res = await fetch(`${API_BASE}/meus-vinculos/${authMatricula}/${vinculoId}`, { method: "DELETE" });
+  const res = await fetchProtegido(`${API_BASE}/meus-vinculos/${authMatricula}/${vinculoId}`, { method: "DELETE" });
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) carregarMeusVinculos();
@@ -4971,7 +5068,7 @@ async function enviarSolicitacaoEdicaoAcao() {
     return;
   }
 
-  const res = await fetch(`${API_BASE}/solicitacoes-edicao/${authMatricula}`, {
+  const res = await fetchProtegido(`${API_BASE}/solicitacoes-edicao/${authMatricula}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ campos })
@@ -4990,7 +5087,7 @@ async function enviarSolicitacaoEdicaoAcao() {
 async function carregarMinhasSolicitacoesEdicao() {
   if (!authMatricula) return;
   const container = document.getElementById("resultadoListaSolicitacoesEdicao");
-  const res = await fetch(`${API_BASE}/solicitacoes-edicao/${authMatricula}`);
+  const res = await fetchProtegido(`${API_BASE}/solicitacoes-edicao/${authMatricula}`);
   const solicitacoes = await res.json();
   if (!Array.isArray(solicitacoes) || solicitacoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma solicitação enviada ainda.</p>";
@@ -7115,7 +7212,14 @@ function renderizarDadosPerfil(membroId) {
     <div class="cartao-perfil" style="margin-top:12px;">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Site institucional (vC.3)</h4>
       <div id="historicoSiteMembro"><p class="subtitle">Carregando…</p></div>
-    </div>`;
+    </div>
+    ${authPermissoes.includes("pessoas") ? `
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Acesso ao Meu Painel (PIN)</h4>
+      <p class="subtitle">O membro entra com a matrícula e um PIN de 4 números que ele mesmo cria, confirmando o e-mail cadastrado. Para quem não tem e-mail (ou perdeu o acesso a ele), gere um PIN provisório e entregue pessoalmente.</p>
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="gerarPinProvisorioAcao(${Number(membroId)})">🔐 Gerar PIN provisório</button>
+      <div id="resultadoPinProvisorio"></div>
+    </div>` : ""}`;
   carregarHistoricoSiteMembro(membroId);
 }
 
@@ -7166,7 +7270,7 @@ function carregarAbaFoto(membroId) {
     ? `<img src="${pessoa.fotoUrl}" alt="Foto" style="max-width:160px;border-radius:8px;" />`
     : "<span class='subtitle'>Sem foto cadastrada.</span>";
 
-  fetch(`${API_BASE}/lgpd/consentimento/${membroId}`).then(r => r.json()).then(data => {
+  fetchProtegido(`${API_BASE}/lgpd/consentimento/${membroId}`).then(r => r.json()).then(data => {
     const fotoConsentimento = (data.consentimentos || []).find(c => c.tipo === "FOTO");
     const statusEl = document.getElementById("fotoMembroStatusConsentimento");
     statusEl.textContent = fotoConsentimento && fotoConsentimento.concedido
@@ -7581,7 +7685,7 @@ let minhasCartasCache = [];
 async function carregarMinhasCartas() {
   const caixa = document.getElementById("cxMinhasCartas");
   if (!caixa || !authMatricula) return;
-  const res = await fetch(`${API_BASE}/cartas/minhas?matricula=${authMatricula}`);
+  const res = await fetchProtegido(`${API_BASE}/cartas/minhas?matricula=${authMatricula}`);
   const cartas = await res.json();
   minhasCartasCache = Array.isArray(cartas) ? cartas : [];
   if (minhasCartasCache.length === 0) {
@@ -7618,15 +7722,15 @@ async function solicitarCarta(tipo) {
       "Você quer manter acesso ao site institucional (Minha Conta, com seu e-mail atual) mesmo depois de desligado? Se sim, garantimos essa conta agora, antes da minimização apagar seu e-mail daqui. Se não, seus dados são só minimizados, como sempre.",
       "Manter acesso ao site"
     );
-    await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo }) });
-    const res2 = await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo, confirmar: true, manterAcessoSite }) });
+    await fetchProtegido(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo }) });
+    const res2 = await fetchProtegido(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo, confirmar: true, manterAcessoSite }) });
     const data2 = await res2.json();
     msg.textContent = data2.mensagem;
     carregarMinhasCartas();
     return;
   }
 
-  const res = await fetch(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo }) });
+  const res = await fetchProtegido(`${API_BASE}/cartas/minhas`, { method: "POST", headers, body: JSON.stringify({ matricula, tipo }) });
   const data = await res.json();
   msg.textContent = data.mensagem;
   carregarMinhasCartas();
@@ -7640,7 +7744,7 @@ async function confirmarCartaPendente() {
     "Você quer manter acesso ao site institucional (Minha Conta, com seu e-mail atual) mesmo depois de desligado? Se sim, garantimos essa conta agora, antes da minimização apagar seu e-mail daqui. Se não, seus dados são só minimizados, como sempre.",
     "Manter acesso ao site"
   );
-  const res = await fetch(`${API_BASE}/cartas/minhas`, {
+  const res = await fetchProtegido(`${API_BASE}/cartas/minhas`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ matricula: Number(authMatricula), tipo: "MUDANCA", confirmar: true, manterAcessoSite })
@@ -7731,7 +7835,7 @@ function marcarOpcao(rotulo, marcado) {
 // substitui "salvar como PDF" do navegador pra quem precisa de um arquivo
 // de verdade, não só imprimir na hora.
 async function baixarPdfCarta(cartaId, membroId) {
-  const res = await fetch(`${API_BASE}/cartas/${cartaId}/pdf?matricula=${membroId}`);
+  const res = await fetchProtegido(`${API_BASE}/cartas/${cartaId}/pdf?matricula=${membroId}`);
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     mostrarToast((data && data.mensagem) || "Não foi possível gerar o PDF.", "erro");
@@ -7981,7 +8085,7 @@ async function corrigirMarcoMembroAcao(marcoId) {
 async function concederConsentimentoFotoAcao() {
   const membroId = window._membroFotoAtual;
   if (!membroId) return;
-  const res = await fetch(`${API_BASE}/lgpd/consentimento/${membroId}`, {
+  const res = await fetchProtegido(`${API_BASE}/lgpd/consentimento/${membroId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tipo: "FOTO", concedido: true, baseLegal: "CONSENTIMENTO" })
@@ -9215,7 +9319,7 @@ const ROTULO_QUORUM_ENQUETE = { MAIORIA_SIMPLES: "Maioria simples", DOIS_TERCOS:
 
 function campoRespostaPergunta(enqueteId, pergunta) {
   return pergunta.tipo === "OPCOES"
-    ? `<select id="votoResposta_${enqueteId}_${pergunta.perguntaId}">${(pergunta.opcoes || []).map(o => `<option value="${o.opcaoId}">${o.texto}</option>`).join("")}</select>`
+    ? `<select id="votoResposta_${enqueteId}_${pergunta.perguntaId}">${(pergunta.opcoes || []).map(o => `<option value="${Number(o.opcaoId)}">${escaparHtmlEbd(o.texto)}</option>`).join("")}</select>`
     : `<input type="text" id="votoResposta_${enqueteId}_${pergunta.perguntaId}" placeholder="Sua resposta" style="min-width:200px;" />`;
 }
 
@@ -9229,32 +9333,31 @@ async function carregarEnquetes() {
   }
   let html = "";
   enquetes.forEach(e => {
-    const participantesHtml = (e.participantes || []).map(p => p.nome).join(", ") || "ninguém ainda";
+    const participantesHtml = (e.participantes || []).map(p => escaparHtmlEbd(p.nome)).join(", ") || "ninguém ainda";
     const resultadoHtml = e.status === "ENCERRADA" && e.vinculante
-      ? `<p><strong>${e.resultadoAprovado ? "✅ Aprovado" : "❌ Não aprovado"}</strong> (${ROTULO_QUORUM_ENQUETE[e.quorumTipo] || e.quorumTipo})</p>`
+      ? `<p><strong>${e.resultadoAprovado ? "✅ Aprovado" : "❌ Não aprovado"}</strong> (${escaparHtmlEbd(ROTULO_QUORUM_ENQUETE[e.quorumTipo] || e.quorumTipo)})</p>`
       : "";
     const perguntasHtml = (e.perguntas || []).map(p => {
-      const opcoesHtml = (p.opcoes || []).map(o => `<li>${o.texto}: <strong>${o.votos}</strong> resposta(s)</li>`).join("");
+      const opcoesHtml = (p.opcoes || []).map(o => `<li>${escaparHtmlEbd(o.texto)}: <strong>${Number(o.votos)}</strong> resposta(s)</li>`).join("");
       const detalhePublico = e.visibilidade === "PUBLICA" && Array.isArray(p.respostas)
-        ? `<p class="subtitle">Quem respondeu: ${p.respostas.map(r => `${r.nome} → ${r.textoResposta || (p.opcoes.find(o => o.opcaoId === r.opcaoId) || {}).texto || "-"}`).join("; ") || "ninguém ainda"}</p>`
+        ? `<p class="subtitle">Quem respondeu: ${p.respostas.map(r => `${escaparHtmlEbd(r.nome)} → ${escaparHtmlEbd(r.textoResposta || (p.opcoes.find(o => o.opcaoId === r.opcaoId) || {}).texto || "-")}`).join("; ") || "ninguém ainda"}</p>`
         : "";
       const campoVoto = e.status === "ABERTA" ? `<div>${campoRespostaPergunta(e.enqueteId, p)}</div>` : "";
-      return `<li style="margin-bottom:8px;"><strong>${p.titulo}</strong> (${p.totalRespostas} resposta(s))
+      return `<li style="margin-bottom:8px;"><strong>${escaparHtmlEbd(p.titulo)}</strong> (${Number(p.totalRespostas)} resposta(s))
         ${p.tipo === "OPCOES" ? `<ul>${opcoesHtml}</ul>` : ""}
         ${detalhePublico}
         ${campoVoto}
       </li>`;
     }).join("");
     html += `<div class="cartao-perfil" style="margin-bottom:12px;">
-      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${e.titulo} ${e.vinculante ? "🔒 vinculante" : ""}</h4>
-      <p class="subtitle">${e.descricao || ""}</p>
-      <p class="subtitle">Visibilidade: ${ROTULO_VISIBILIDADE_ENQUETE[e.visibilidade] || e.visibilidade} · Status: ${e.status} · Participantes: ${e.totalVotos}</p>
+      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${escaparHtmlEbd(e.titulo)} ${e.vinculante ? "🔒 vinculante" : ""}</h4>
+      <p class="subtitle">${escaparHtmlEbd(e.descricao || "")}</p>
+      <p class="subtitle">Visibilidade: ${escaparHtmlEbd(ROTULO_VISIBILIDADE_ENQUETE[e.visibilidade] || e.visibilidade)} · Status: ${escaparHtmlEbd(e.status)} · Participantes: ${Number(e.totalVotos)}</p>
       <ul>${perguntasHtml}</ul>
       <p class="subtitle">Participaram: ${participantesHtml}</p>
       ${resultadoHtml}
       ${e.status === "ABERTA" ? `
         <div class="barra-lista">
-          <input type="number" id="votoMatricula_${e.enqueteId}" placeholder="Sua matrícula" style="min-width:120px;" />
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="votarEnqueteAcao(${e.enqueteId})">Enviar respostas</button>
           <button class="btn-link btn-link-perigo" onclick="encerrarEnqueteAcao(${e.enqueteId})">Encerrar</button>
         </div>` : ""}
@@ -9264,16 +9367,15 @@ async function carregarEnquetes() {
 }
 
 async function votarEnqueteAcao(enqueteId) {
-  const membroId = document.getElementById(`votoMatricula_${enqueteId}`).value;
-  if (!membroId) { mostrarToast("Informe a matrícula.", "erro"); return; }
   const camposResposta = document.querySelectorAll(`[id^="votoResposta_${enqueteId}_"]`);
   const respostas = Array.from(camposResposta).map(campo => {
     const perguntaId = Number(campo.id.split("_")[2]);
     const ehSelect = campo.tagName === "SELECT";
     return ehSelect ? { perguntaId, opcaoId: campo.value } : { perguntaId, textoResposta: campo.value.trim() };
   });
-  const res = await fetch(`${API_BASE}/enquetes/${enqueteId}/votar`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId, respostas })
+  // O voto é da pessoa que está logada (a matrícula vem da sessão, não de um campo digitado).
+  const res = await fetchProtegido(`${API_BASE}/enquetes/${enqueteId}/votar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ respostas })
   });
   const data = await res.json();
   avisarResultado(data);
@@ -10132,7 +10234,7 @@ async function carregarPainelPessoal(matricula) {
   const stats = document.getElementById("resumoStatsPessoal");
   if (!matricula) return;
 
-  const res = await fetch(`${API_BASE}/membros/${matricula}/frequencia`);
+  const res = await fetchProtegido(`${API_BASE}/membros/${matricula}/frequencia`);
   const data = await res.json();
   if (!data.sucesso) {
     cartao.innerHTML = "";
@@ -10193,7 +10295,7 @@ async function solicitarJustificativaAcao(matricula, sessaoId) {
   const motivo = await pedirTexto("Justificar falta", "Explique por que você não pôde comparecer");
   if (motivo === null) return;
 
-  const res = await fetch(`${API_BASE}/membros/${matricula}/reunioes/${sessaoId}/solicitar-justificativa`, {
+  const res = await fetchProtegido(`${API_BASE}/membros/${matricula}/reunioes/${sessaoId}/solicitar-justificativa`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ motivo })
@@ -10215,7 +10317,7 @@ async function carregarConsentimentoLGPD(matricula) {
   const chk = document.getElementById("consentimentoDadosContato");
   const msg = document.getElementById("resultadoConsentimentoLGPD");
   if (!matricula || !chk) return;
-  const res = await fetch(`${API_BASE}/lgpd/consentimento/${matricula}`);
+  const res = await fetchProtegido(`${API_BASE}/lgpd/consentimento/${matricula}`);
   const data = await res.json();
   if (!data.sucesso) return;
   const atual = (data.consentimentos || []).find(c => c.tipo === "DADOS_CONTATO");
@@ -10227,7 +10329,7 @@ async function salvarConsentimentoLGPD() {
   const matricula = authMatricula;
   const chk = document.getElementById("consentimentoDadosContato");
   if (!matricula) return;
-  const res = await fetch(`${API_BASE}/lgpd/consentimento/${matricula}`, {
+  const res = await fetchProtegido(`${API_BASE}/lgpd/consentimento/${matricula}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tipo: "DADOS_CONTATO", concedido: chk.checked })
@@ -10374,7 +10476,7 @@ async function criarSolicitacaoLGPD() {
   const tipo = document.getElementById("solicitacaoLgpdTipo").value;
   const descricao = document.getElementById("solicitacaoLgpdDescricao").value;
   if (!matricula) return;
-  const res = await fetch(`${API_BASE}/lgpd/solicitacoes/${matricula}`, {
+  const res = await fetchProtegido(`${API_BASE}/lgpd/solicitacoes/${matricula}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tipo, descricao })
@@ -10391,7 +10493,7 @@ async function carregarMinhasSolicitacoesLGPD(matricula) {
   matricula = matricula || authMatricula;
   const container = document.getElementById("resultadoListaSolicitacoesLGPD");
   if (!matricula || !container) return;
-  const res = await fetch(`${API_BASE}/lgpd/solicitacoes/${matricula}`);
+  const res = await fetchProtegido(`${API_BASE}/lgpd/solicitacoes/${matricula}`);
   const data = await res.json();
   if (!data.sucesso || data.solicitacoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma solicitação enviada ainda.</p>";
@@ -20214,16 +20316,63 @@ function volMontarTermo(d) {
     corpo = `<p class="vol-selo-ok">✅ Você aderiu${a.dataAceite ? ` em ${volData(a.dataAceite)}` : ""}${a.rotuloForma ? ` — ${volEsc(a.rotuloForma)}` : ""}${a.responsavelNome ? `, assinado por ${volEsc(a.responsavelNome)} (${volEsc(a.rotuloVinculo || "responsável")})` : ""}</p>
       <details><summary>Ver o texto do Termo</summary>${texto}</details>`;
   } else if (d.podeAderirDigital === false) {
-    // Menor de 18 anos (ou cadastro sem data de nascimento) não adere sozinho: o aceite digital fica fechado e a tela diz o que fazer.
-    corpo = `<p class="vol-aviso">${volEsc(d.motivoSemAdesaoDigital || "O aceite digital não está disponível para o seu cadastro. Procure a Secretaria.")}</p>
+    // Menor de 18 anos (ou cadastro sem data de nascimento) não adere sozinho: o aceite digital fica fechado e a tela diz o que fazer e quem é o responsável cadastrado.
+    const resp = d.menorDeIdade
+      ? ((d.meusResponsaveis || []).length
+        ? `<p class="subtitle">Responsável cadastrado: ${(d.meusResponsaveis || []).map(r => `${volEsc(r.nome)} (${volEsc(r.rotuloVinculo)})`).join(", ")}. Ele(a) autoriza o seu serviço no Meu Painel dele(a).</p>`
+        : `<p class="subtitle">Ainda não há responsável cadastrado para você. Peça ao seu pai, mãe ou responsável legal para procurar a Secretaria com um documento.</p>`)
+      : "";
+    corpo = `<p class="vol-aviso">${volEsc(d.motivoSemAdesaoDigital || "O aceite digital não está disponível para o seu cadastro. Procure a Secretaria.")}</p>${resp}
       <details><summary>Ver o texto do Termo</summary>${texto}</details>`;
   } else {
-    corpo = `${texto}
+    // `renovar`: a adesão que a pessoa tinha foi dada pelo responsável, quando ela era menor; ao completar 18 anos ela confirma a própria.
+    corpo = `${d.renovar ? `<p class="vol-aviso">A sua adesão foi dada pelo seu responsável, quando você era menor de idade. Agora que você tem 18 anos ou mais, confirme a sua própria.</p>` : ""}${texto}
       <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="volTermoAceite" onchange="volAtualizarBotaoTermoAcao()" /> ${volEsc(t.aceite)}</label>
       <div class="vol-acoes"><button type="button" class="btn-confirmar" id="volTermoBotao" style="width:auto;margin:0;" disabled onclick="volAderirTermoAcao()">✍️ Aderir ao Termo</button></div>
       <p class="subtitle" id="volTermoResultado"></p>`;
   }
-  return `<div class="vol-cartao"><h4>${volEsc(t.titulo)}</h4><p class="subtitle">Versão ${volEsc(t.versao)}</p>${corpo}</div>`;
+  return `<div class="vol-cartao"><h4>${volEsc(t.titulo)}</h4><p class="subtitle">Versão ${volEsc(t.versao)}</p>${corpo}</div>${volMontarMenoresResponsavel(d)}`;
+}
+
+// Para quem é responsável legal de menor (cadastrado pela Secretaria): os menores dele, a Autorização e o botão de autorizar. A adesão fica no nome do menor, com a
+// matrícula, o IP, a data e a hora de quem autorizou.
+function volMontarMenoresResponsavel(d) {
+  const lista = d.menoresSobMinhaResponsabilidade || [];
+  if (!lista.length) return "";
+  const t = d.termoMenor || {};
+  const itens = (t.itens || []).map(i => `<li>${volEsc(i.texto)}<br /><small class="vol-base">${volEsc(i.base)}</small></li>`).join("");
+  const cartoes = lista.map(m => {
+    const id = Number(m.menorId);
+    let estado;
+    if (!m.aindaMenor) estado = `<p class="vol-aviso">${volEsc(m.nome)} já tem 18 anos ou mais: ele(a) mesmo(a) adere ao Termo, no Meu Painel dele(a).</p>`;
+    else if (m.aderiu) estado = `<p class="vol-selo-ok">✅ Autorizado${m.dataAceite ? ` em ${volData(m.dataAceite)}` : ""}${m.rotuloForma ? ` — ${volEsc(m.rotuloForma)}` : ""}</p>`;
+    else estado = `<details><summary>Ler a autorização e autorizar</summary>
+        <ol class="vol-termo-itens">${itens}</ol>
+        <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="volMenorAceite${id}" onchange="volAtualizarBotaoMenorAcao(${id})" /> ${volEsc(t.aceite)}</label>
+        <div class="vol-acoes"><button type="button" class="btn-confirmar" id="volMenorBotao${id}" style="width:auto;margin:0;" disabled onclick="volAutorizarMenorAcao(${id}, this)">✍️ Autorizar ${volEsc(m.nome)}</button></div>
+        <p class="subtitle" id="volMenorResultado${id}"></p></details>`;
+    return `<div class="vol-cartao"><h4>${volEsc(m.nome)} <span class="vol-matricula">${volEsc(m.rotuloVinculo)}${m.idade != null ? ` · ${Number(m.idade)} anos` : ""}</span></h4>${estado}</div>`;
+  }).join("");
+  return `<h4 style="margin-top:16px;">👨‍👩‍👧 Menores sob a minha responsabilidade</h4>
+    <p class="subtitle">${volEsc(t.titulo || "")} — versão ${volEsc(t.versao || "")}. Você foi cadastrado(a) pela Secretaria como responsável legal; ao autorizar, fica registrado o seu aceite, com o seu IP, a data e a hora.</p>${cartoes}`;
+}
+function volAtualizarBotaoMenorAcao(id) {
+  const caixa = volEl(`volMenorAceite${id}`), botao = volEl(`volMenorBotao${id}`);
+  if (caixa && botao) botao.disabled = !caixa.checked;
+}
+async function volAutorizarMenorAcao(menorId, botao) {
+  const caixa = volEl(`volMenorAceite${menorId}`), aviso = volEl(`volMenorResultado${menorId}`);
+  if (!caixa || !caixa.checked) { if (aviso) aviso.textContent = "Marque a caixa para autorizar."; return; }
+  await volProtegerBotao(botao, async () => {
+    const data = await volEnviar("voluntariado/aceitar-termo-menor", { menorId: Number(menorId), aceito: true });
+    if (data.sucesso === false) {
+      if (aviso) aviso.textContent = volMsgErro(data);
+      volAvisarErro(data);
+      return;
+    }
+    mostrarToast(data.mensagem || "✅ Autorização registrada.", "sucesso");
+    await volCarregarTermoAcao();
+  });
 }
 async function volCarregarTermoAcao() {
   const cx = volEl("volTermoMeuPainel");
@@ -20664,6 +20813,8 @@ function volPrepararFormulariosHabilitacao() {
   volPreencherSelect(selOrigem, (cat.origensRatificacao || []).map(o => ({ valor: o.codigo, rotulo: o.rotulo })), selOrigem.value);
   const selVinculo = volEl("volAdesaoVinculo");
   volPreencherSelect(selVinculo, (cat.vinculosResponsavel || []).map(x => ({ valor: x.codigo, rotulo: x.rotulo })), selVinculo.value);
+  const selVinculoResp = volEl("volRespVinculo");
+  volPreencherSelect(selVinculoResp, (cat.vinculosResponsavel || []).map(x => ({ valor: x.codigo, rotulo: x.rotulo })), selVinculoResp.value);
   volAlternarFormaAdesaoAcao();
   volAlternarOrigemRatificacaoAcao();
   const r = cat.ratificacao || {};
@@ -20710,7 +20861,7 @@ async function volCarregarAdesoesAcao() {
   resumo.innerHTML = `<p class="vol-resumo"><strong>${Number(data.comTermo)} de ${Number(data.total)}</strong> voluntários já aderiram${Number(data.semTermo) ? ` — faltam ${Number(data.semTermo)}` : ""}.</p>`;
   painel.innerHTML = lista.length
     ? `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Voluntário</th><th>Equipes</th><th>Aderiu</th><th>Forma e data</th><th>Referência</th></tr></thead><tbody>
-        ${lista.map(v => `<tr><td>${volEsc(v.nome)} <span class="vol-matricula">matrícula ${Number(v.membroId)}</span>${v.menor ? ` <span class="vol-etiqueta" title="Menor de 18 anos: a adesão é pela ficha assinada pelo responsável">menor de 18</span>` : ""}</td><td>${volEsc(v.equipes || "")}</td><td>${v.aderiu ? "✅" : "❌"}</td>
+        ${lista.map(v => `<tr><td>${volEsc(v.nome)} <span class="vol-matricula">matrícula ${Number(v.membroId)}</span>${v.menor ? ` <span class="vol-etiqueta" title="Menor de 18 anos: a adesão é dada pelo responsável legal (aceite dele no sistema) ou pela ficha assinada por ele">menor de 18</span> <span class="vol-etiqueta ${Number(v.responsaveis) ? "vol-etiqueta-ok" : "vol-etiqueta-alerta"}" title="Responsável legal cadastrado pela Secretaria">${Number(v.responsaveis) ? "responsável cadastrado" : "sem responsável cadastrado"}</span>` : ""}${v.renovar ? ` <span class="vol-etiqueta vol-etiqueta-alerta" title="A adesão foi dada pelo responsável e a pessoa já tem 18 anos: ela precisa confirmar a própria">renovar (18 anos)</span>` : ""}</td><td>${volEsc(v.equipes || "")}</td><td>${v.aderiu ? "✅" : "❌"}</td>
           <td>${v.aderiu ? `${volEsc(v.rotuloForma || "")} — ${volData(v.dataAceite)}` : "—"}</td><td>${volEsc(v.referencia || "")}</td></tr>`).join("")}
       </tbody></table></div>`
     : "<p class='subtitle'>Nenhum voluntário ativo nas equipes desta congregação.</p>";
@@ -20741,6 +20892,49 @@ async function volRegistrarAdesaoAcao(botao) {
     volEl("volAdesaoResponsavel").value = "";
     await volCarregarAdesoesAcao();
   });
+}
+
+// Secretaria: cadastrar, listar e revogar o responsável legal de um menor.
+async function volCadastrarResponsavelAcao(botao) {
+  const menorId = Number(volEl("volRespMenor").value), responsavelId = Number(volEl("volRespResponsavel").value);
+  const vinculo = volEl("volRespVinculo").value, documento = volEl("volRespDocumento").value.trim();
+  if (!Number.isInteger(menorId) || menorId < 1) { mostrarToast("Informe a matrícula do menor.", "erro"); return; }
+  if (!Number.isInteger(responsavelId) || responsavelId < 1) { mostrarToast("Informe a matrícula do responsável.", "erro"); return; }
+  if (!vinculo) { mostrarToast("Escolha o vínculo do responsável.", "erro"); return; }
+  if (documento.length < 3 || documento.length > 200) { mostrarToast("Descreva o documento conferido (de 3 a 200 caracteres).", "erro"); return; }
+  await volProtegerBotao(botao, async () => {
+    const data = await volEnviar("voluntariado/responsavel", { menorId, responsavelId, vinculo, documento });
+    if (data.sucesso === false) { volAvisarErro(data); return; }
+    mostrarToast(data.mensagem, "sucesso");
+    volEl("volRespResponsavel").value = "";
+    volEl("volRespDocumento").value = "";
+    await volVerResponsaveisAcao();
+    await volCarregarAdesoesAcao();
+  });
+}
+async function volVerResponsaveisAcao() {
+  const cx = volEl("volRespLista");
+  const menorId = Number(volEl("volRespMenor").value);
+  if (!cx) return;
+  if (!Number.isInteger(menorId) || menorId < 1) { cx.innerHTML = ""; mostrarToast("Informe a matrícula do menor.", "erro"); return; }
+  const data = await volObter(`voluntariado/responsaveis?menorId=${encodeURIComponent(menorId)}`);
+  if (data.sucesso === false) { cx.innerHTML = `<p class="vol-erro">${volEsc(volMsgErro(data))}</p>`; return; }
+  const lista = data.responsaveis || [];
+  cx.innerHTML = lista.length
+    ? `<p class="subtitle">Responsáveis de ${volEsc(data.menor.nome)}:</p><div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Responsável</th><th>Vínculo</th><th>Documento conferido</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${lista.map(r => `<tr><td>${volEsc(r.nome)} <span class="vol-matricula">matrícula ${Number(r.membroId)}</span></td><td>${volEsc(r.rotuloVinculo)}</td><td>${volEsc(r.documento)}</td>
+          <td>${r.ativo ? "✅ ativo" : `revogado em ${volDataInstante(r.revogadoEm)}`}</td>
+          <td>${r.ativo ? `<button class="btn-link btn-link-perigo" onclick="volRevogarResponsavelAcao(${Number(r.responsavelId)})">Revogar</button>` : ""}</td></tr>`).join("")}
+      </tbody></table></div>`
+    : `<p class="subtitle">Nenhum responsável cadastrado para ${volEsc(data.menor.nome)}.</p>`;
+}
+async function volRevogarResponsavelAcao(responsavelId) {
+  if (!(await confirmarAcao("Revogar este responsável? A adesão já registrada fica como prova; ele(a) deixa de poder autorizar. Se a família retirou a autorização, depois remova o(a) menor das escalas.", "Revogar"))) return;
+  const data = await volEnviar("voluntariado/responsavel-revogar", { responsavelId: Number(responsavelId) });
+  if (data.sucesso === false) { volAvisarErro(data); return; }
+  mostrarToast(data.mensagem, "sucesso");
+  await volVerResponsaveisAcao();
+  await volCarregarAdesoesAcao();
 }
 
 async function volRatificarAcao(botao) {

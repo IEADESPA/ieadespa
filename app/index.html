@@ -49,10 +49,10 @@
   <!-- PAINEL ÚNICO: um só acesso, os módulos visíveis dependem das permissões da pessoa -->
   <div id="telaPainel" style="display:none;">
 
-    <!-- Portão de entrada: matrícula sempre, senha só quem tem acesso administrativo -->
+    <!-- Portão de entrada (fecho da v7.5): matrícula + PIN de 4 números. Quem tem acesso administrativo digita a senha no lugar do PIN. -->
     <div class="caixa-login" id="cxLoginPainel">
       <h2>📋 Meu Painel</h2>
-      <p class="subtitle">Informe sua matrícula. Se você tiver acesso administrativo, informe também a senha.</p>
+      <p class="subtitle">Entre com a sua matrícula e o seu PIN de 4 números. Quem tem acesso administrativo digita a senha no lugar do PIN.</p>
 
       <form onsubmit="event.preventDefault(); acessarPainel();">
         <div class="input-group">
@@ -60,20 +60,19 @@
           <input type="number" id="matriculaPainel" placeholder="Ex: 3" autocomplete="username" />
         </div>
         <div class="input-group">
-          <label>Senha (só se você tiver acesso administrativo):</label>
-          <input type="password" id="senhaPainel" placeholder="Deixe em branco se não tiver" autocomplete="current-password" />
+          <label>PIN (4 números) ou senha de acesso administrativo:</label>
+          <input type="password" id="senhaPainel" placeholder="Seu PIN" autocomplete="current-password" />
         </div>
         <button class="btn-confirmar" type="submit">Entrar</button>
       </form>
 
       <p id="resultadoLogin"></p>
 
-      <!-- vB.5 — login simplificado sem senha, verificado por e-mail (não é
-           só "digitar a matrícula e pronto" — quem não tem acesso ao e-mail
-           cadastrado não recebe o código). -->
-      <a href="#" class="link-secretaria" onclick="alternarLoginPorCodigo()">📧 Prefere entrar com código por e-mail?</a>
+      <!-- vB.5 — código de 6 dígitos verificado por e-mail. Desde o fecho da v7.5 é o caminho do PRIMEIRO ACESSO e do "esqueci meu PIN": depois de confirmar o
+           código, a pessoa cria o PIN. Quem não tem e-mail cadastrado pede à Secretaria um PIN provisório. -->
+      <a href="#" class="link-secretaria" onclick="alternarLoginPorCodigo()">📧 Primeiro acesso ou esqueci meu PIN</a>
       <div id="cxLoginCodigo" style="display:none; margin-top:12px;">
-        <p class="subtitle">Enviamos um código de 6 dígitos pro e-mail já cadastrado da sua matrícula (acima).</p>
+        <p class="subtitle">Enviamos um código de 6 dígitos pro e-mail já cadastrado da sua matrícula (acima). Sem e-mail cadastrado? Peça à Secretaria da sua congregação um PIN provisório.</p>
         <button class="btn-confirmar btn-secundario" type="button" onclick="solicitarCodigoAcessoAcao()">Enviar código</button>
         <div class="input-group" id="cxCampoCodigoAcesso" style="display:none; margin-top:10px;">
           <label>Código recebido por e-mail:</label>
@@ -84,6 +83,24 @@
 
       <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" onclick="abrirTelaChamadaOffline(); return false;">📴 Chamada da EBD sem internet</a>
       <a href="#" class="link-secretaria" onclick="voltarParaCheckin()">← Voltar para a Portaria</a>
+    </div>
+
+    <!-- Criar o PIN (fecho da v7.5): aparece depois do código por e-mail, ou depois de entrar com o PIN provisório que a Secretaria gerou -->
+    <div class="caixa-login" id="cxCriarPin" style="display:none;">
+      <h2>🔐 Crie o seu PIN</h2>
+      <p class="subtitle">O PIN são 4 números que só você sabe; com ele e a matrícula você entra no Meu Painel. Evite 1234, 0000, o ano em que nasceu ou o final da matrícula.</p>
+      <form onsubmit="event.preventDefault(); criarPinAcao();">
+        <div class="input-group">
+          <label>Novo PIN (4 números):</label>
+          <input type="password" id="novoPinInput" inputmode="numeric" maxlength="4" autocomplete="new-password" />
+        </div>
+        <div class="input-group">
+          <label>Repita o PIN:</label>
+          <input type="password" id="novoPinRepetir" inputmode="numeric" maxlength="4" autocomplete="new-password" />
+        </div>
+        <button class="btn-confirmar" type="submit">Salvar PIN e entrar</button>
+      </form>
+      <p id="resultadoCriarPin"></p>
     </div>
 
     <!-- Conteúdo do painel (dashboard com abas) -->
@@ -465,10 +482,37 @@
              pedido explícito: mais submenus de autoatendimento). -->
         <div id="subMeupainelDados" class="sub-aba-secretaria" style="display:none;">
 
+          <!-- Meu PIN (fecho da v7.5): para todo membro -->
+          <div id="cxAlterarPin">
+            <h3>🔐 Meu PIN de acesso</h3>
+            <p class="subtitle">São os 4 números que você usa com a matrícula para entrar no Meu Painel.</p>
+            <form onsubmit="event.preventDefault(); alterarMeuPinAcao();">
+              <div class="input-group">
+                <label>PIN atual (deixe em branco se acabou de entrar pelo código do e-mail):</label>
+                <input type="password" id="pinAtualPessoal" inputmode="numeric" maxlength="4" autocomplete="current-password" />
+              </div>
+              <div class="input-group">
+                <label>Novo PIN (4 números):</label>
+                <input type="password" id="pinNovoPessoal" inputmode="numeric" maxlength="4" autocomplete="new-password" />
+              </div>
+              <div class="input-group">
+                <label>Repita o novo PIN:</label>
+                <input type="password" id="pinNovoRepetirPessoal" inputmode="numeric" maxlength="4" autocomplete="new-password" />
+              </div>
+              <button class="btn-confirmar" type="submit">Salvar novo PIN</button>
+            </form>
+            <p id="resultadoAlterarPin"></p>
+            <hr />
+          </div>
+
           <!-- Só aparece pra quem logou com senha (tem acesso à Secretaria) -->
           <div id="cxTrocarSenha" style="display:none;">
             <h3>🔑 Trocar minha senha</h3>
             <form onsubmit="event.preventDefault(); trocarMinhaSenha();">
+              <div class="input-group">
+                <label>Senha atual:</label>
+                <input type="password" id="senhaAtualPessoal" placeholder="Digite a senha atual" autocomplete="current-password" />
+              </div>
               <div class="input-group">
                 <label>Nova senha:</label>
                 <input type="password" id="novaSenhaPessoal" placeholder="Digite a nova senha" autocomplete="new-password" />
@@ -2731,10 +2775,39 @@
               <select id="volAdesaoVinculo"></select>
             </div>
           </div>
-          <p class="subtitle">Menor de 18 anos não adere sozinho: a adesão é a ficha (ou a mensagem) assinada pelo responsável, e o sistema recusa o registro sem o nome e o vínculo de quem assinou.</p>
+          <p class="subtitle">Menor de 18 anos não adere sozinho: ou o responsável cadastrado (abaixo) autoriza no sistema, ou se registra aqui a ficha (ou a mensagem) assinada pelo responsável, e o sistema recusa o registro sem o nome e o vínculo de quem assinou.</p>
           <div class="vol-acoes">
             <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="volRegistrarAdesaoAcao(this)">✍️ Registrar adesão</button>
           </div>
+        </div>
+
+        <div class="vol-form">
+          <h5>Responsável legal de menor de idade</h5>
+          <p class="subtitle">Menor de 18 anos não adere sozinho. Depois de conferir um documento (certidão de nascimento, RG, termo de tutela), cadastre aqui quem é o responsável: ele entra no Meu Painel dele
+            (matrícula + PIN), lê a Autorização e a aceita pelo menor, com o IP, a data e a hora dele. Quem não tem responsável membro do sistema segue pela ficha assinada, acima.</p>
+          <div class="vol-grade">
+            <div class="vol-campo">
+              <label for="volRespMenor">Matrícula do menor</label>
+              <input type="number" id="volRespMenor" min="1" />
+            </div>
+            <div class="vol-campo">
+              <label for="volRespResponsavel">Matrícula do responsável</label>
+              <input type="number" id="volRespResponsavel" min="1" />
+            </div>
+            <div class="vol-campo">
+              <label for="volRespVinculo">Vínculo</label>
+              <select id="volRespVinculo"></select>
+            </div>
+            <div class="vol-campo">
+              <label for="volRespDocumento">Documento conferido</label>
+              <input type="text" id="volRespDocumento" maxlength="200" placeholder="Ex.: Certidão de nascimento conferida em 02/10/2026" />
+            </div>
+          </div>
+          <div class="vol-acoes">
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="volCadastrarResponsavelAcao(this)">👪 Cadastrar responsável</button>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volVerResponsaveisAcao()">Ver os responsáveis deste menor</button>
+          </div>
+          <div id="volRespLista"></div>
         </div>
 
         <hr />

@@ -8,11 +8,22 @@
 const { getPool, sql } = require("../shared/db");
 const { gerarCodigo, podeSolicitarCodigo, registrarCodigo } = require("../shared/codigoAcesso");
 const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
+const auth = require("../shared/auth");
+const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
+
+// fecho da v7.5 — além do teto por matrícula (shared/codigoAcesso.js), contenção por origem (por instância): a rota é anônima e manda e-mail.
+const limitador = criarLimitador({ janelaMs: 60000, maximo: 60 });
 
 const MENSAGEM_GENERICA = "Se a matrícula existir e tiver e-mail cadastrado, um código foi enviado.";
 
 module.exports = async function (context, req) {
-  const matricula = Number((req.body || {}).matricula);
+  const limite = limitador.registrar(chaveDeOrigem(req));
+  if (!limite.permitido) {
+    context.res = { status: 429, headers: { "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas tentativas seguidas. Aguarde um minuto e tente de novo." } };
+    return;
+  }
+  const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+  const matricula = auth.idDeRota(corpo.matricula);          // "0x10", "1e1", lista, número gigante: 400, nunca 500
   if (!matricula) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula." } };
     return;

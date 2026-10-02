@@ -17,6 +17,9 @@
 //                          tiposMotivoRemocao[], ratificacao:{versao,texto,hash}, regras:{ limiteSequencia, maxSemanas, semanasPadrao, maxGrupos, maxSignatariosManuais } }  (login)
 //  meu-painel         -> { termo:{versao,titulo,itens[{codigo,texto,base}],aceite,hash}, aderiu, adesao|null, podeAderirDigital, motivoSemAdesaoDigital|null, menorDeIdade, rodizios[{rodizioId,rodizioNome,equipeNome,rotuloDia,hora,
 //                          grupoNome,totalGrupos,proximasDatas[AAAA-MM-DD]}] }                                                                  (login)
+//                          + renovar (a adesão que tinha foi dada pelo responsável e a pessoa já tem 18 anos), meusResponsaveis[{nome,vinculo,rotuloVinculo}] (se menor),
+//                          menoresSobMinhaResponsabilidade[{menorId,nome,vinculo,idade,aindaMenor,aderiu,dataAceite,forma}] e termoMenor (o texto da Autorização; só para quem é responsável)
+//  responsaveis       ?menorId= -> { menor, responsaveis[{responsavelId,membroId,nome,vinculo,documento,ativo,...}] }               (habilitacao_voluntarios, congregação do menor no escopo)
 //  minhas-equipes     -> { equipes[{equipeId,nome,congregacaoNome,natureza,rotuloNatureza,membros[{membroId,nome}],
 //                          remocoes[{desligamentoId,membroId,membroNome,equipeId,equipeNome,tipoMotivo,motivo,alocacoesCanceladas,desligadoEm,reintegradoEm,reintegracaoObs,podeReintegrar}]}] }
 //                          as equipes que EU lidero (vazio para quem não lidera): é a tela do dirigente que remove e reintegra na própria equipe     (login)
@@ -36,6 +39,11 @@
 //  adesao             body:{membroId, forma:FICHA_FISICA|MENSAGERIA, dataAceite, referencia, canal?:EMAIL|WHATSAPP,
 //                          responsavelNome?, responsavelVinculo?:PAI|MAE|TUTOR|RESPONSAVEL_LEGAL}    (habilitacao_voluntarios, membro no escopo)
 //                          menor de 18 anos: responsavelNome e responsavelVinculo são OBRIGATÓRIOS (quem assinou pelo menor); para maior de idade são descartados
+//  aceitar-termo-menor body:{menorId, aceito:true} -> o RESPONSÁVEL LEGAL cadastrado do menor adere por ele (aceite digital do responsável: matrícula, IP, data e
+//                          hora dele, versão e hash do texto da Autorização). Só o responsável ativo daquele menor; o menor precisa ter menos de 18 anos.   (login)
+//  responsavel        body:{menorId, responsavelId, vinculo:PAI|MAE|TUTOR|RESPONSAVEL_LEGAL, documento}  -> a Secretaria cadastra o responsável legal do menor,
+//                          depois de conferir o documento                                      (habilitacao_voluntarios, congregação do MENOR no escopo)
+//  responsavel-revogar body:{responsavelId}                                                    (habilitacao_voluntarios, congregação do MENOR no escopo)
 //  ratificar          body:{origem:ASSEMBLEIA_GERAL|REUNIAO_OBREIROS|ESCALA_SERVICO, sessaoId|servicoId, descricao, dataLista, cabecalhoConfirmado:true, membroIds?[]}
 //                                           (habilitacao_voluntarios; assembleia/reunião exige escopo geral; escala exige a congregação no escopo)
 //  equipe-natureza    body:{equipeId, natureza:LITURGIA|ZELADORIA|PORTARIA|COZINHA|OUTRA}                                                             (escalas)
@@ -96,7 +104,7 @@ module.exports = async function (context, req) {
 
   // Quem não tem a permissão recebe 403 antes de qualquer busca: assim a resposta não revela se o rodízio, a equipe ou o membro existe.
   const EXIGE_ESCALAS = ["rodizios", "rodizio", "rodizio-previa", "habitualidade", "equipe-natureza", "rodizio-ativo", "grupos", "grupo-membro", "grupo-membro-remover", "grupo-desativar", "gerar", "cancelar-futuros"];
-  const EXIGE_HABILITACAO = ["adesoes", "ratificacoes", "adesao", "ratificar"];
+  const EXIGE_HABILITACAO = ["adesoes", "ratificacoes", "adesao", "ratificar", "responsaveis", "responsavel", "responsavel-revogar"];
 
   try {
     if (EXIGE_ESCALAS.includes(acao) && !ehEscalas) return erro(context, 403, SEM_PERMISSAO);
@@ -123,7 +131,19 @@ module.exports = async function (context, req) {
 
       if (acao === "meu-painel") {
         const situacao = await db.situacaoDoTermo(pool, usuario.membroId, { hoje });
-        context.res = { status: 200, body: { sucesso: true, ...situacao, rodizios: await db.meusRodizios(pool, { membroId: usuario.membroId, hoje }) } };
+        // Menor de 18 anos: quem é o responsável cadastrado (nome e vínculo). Responsável: os menores que ele pode autorizar e o texto que vai aceitar.
+        const meusResponsaveis = situacao.menorDeIdade ? await db.responsaveisAtivosDe(pool, usuario.membroId) : [];
+        const menores = await db.menoresDoResponsavel(pool, usuario.membroId, { hoje });
+        context.res = { status: 200, body: { sucesso: true, ...situacao, meusResponsaveis, menoresSobMinhaResponsabilidade: menores, termoMenor: menores.length ? vol.termoMenorVigente() : null,
+          rodizios: await db.meusRodizios(pool, { membroId: usuario.membroId, hoje }) } };
+        return;
+      }
+
+      if (acao === "responsaveis") {
+        const menorId = idDe(consulta.menorId);
+        if (!menorId) return erro(context, 400, "Informe menorId.");
+        const r = await db.listarResponsaveisDoMenor(pool, { menorId, autorizacao });
+        context.res = { status: r.sucesso ? 200 : 403, body: r };
         return;
       }
 
@@ -203,6 +223,28 @@ module.exports = async function (context, req) {
 
     if (acao === "aceitar-termo") {
       resposta(context, await db.aceitarDigital(pool, { membroId: usuario.membroId, aceito: corpo.aceito, ip: vol.extrairIp(req.headers), cadeia: vol.cadeiaDeCabecalhos(req.headers), hoje }), 201);
+      return;
+    }
+
+    // O responsável legal aceita pelo menor, no aceite digital dele (sessão do próprio responsável; o IP é o dele).
+    if (acao === "aceitar-termo-menor") {
+      const menorId = idDe(corpo.menorId);
+      if (!menorId) return erro(context, 400, "Informe menorId.");
+      resposta(context, await db.aceitarDigitalResponsavel(pool, { responsavelId: usuario.membroId, menorId, aceito: corpo.aceito, ip: vol.extrairIp(req.headers), cadeia: vol.cadeiaDeCabecalhos(req.headers), hoje }), 201);
+      return;
+    }
+
+    // A Secretaria (habilitacao_voluntarios, congregação do MENOR no escopo) cadastra e revoga quem é o responsável legal de um menor.
+    if (acao === "responsavel") {
+      const menorId = idDe(corpo.menorId), responsavelId = idDe(corpo.responsavelId);
+      if (!menorId || !responsavelId) return erro(context, 400, "Informe menorId e responsavelId.");
+      resposta(context, await db.designarResponsavel(pool, { menorId, responsavelId, dados: corpo, por: usuario.membroId, autorizacao, hoje }), 201);
+      return;
+    }
+    if (acao === "responsavel-revogar") {
+      const responsavelId = idDe(corpo.responsavelId);
+      if (!responsavelId) return erro(context, 400, "Informe responsavelId.");
+      resposta(context, await db.revogarResponsavel(pool, { responsavelId, por: usuario.membroId, autorizacao }));
       return;
     }
 

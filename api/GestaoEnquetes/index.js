@@ -11,7 +11,8 @@
 //
 // GET  /api/enquetes                 -> lista (participação/resultado, respeita Visibilidade)
 // POST /api/enquetes                 -> cria (exige permissão reunioes/assembleia)
-// POST /api/enquetes/{id}/votar      -> body: { membroId, respostas: [{perguntaId, opcaoId?|textoResposta?}] } — público, matrícula
+// POST /api/enquetes/{id}/votar      -> body: { respostas: [{perguntaId, opcaoId?|textoResposta?}] } — exige sessão; o voto é SEMPRE da matrícula da sessão
+//                                       (fecho da v7.5: antes bastava informar uma matrícula no corpo e qualquer um votava em nome de qualquer pessoa)
 // POST /api/enquetes/{id}/encerrar   -> fecha; se Vinculante, calcula ResultadoAprovado
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
@@ -82,14 +83,33 @@ module.exports = async function (context, req) {
   const acao = context.bindingData.acao;
   const pool = await getPool();
 
-  // ---- POST /enquetes/{id}/votar: público, autoatendimento por matrícula ----
+  // ---- POST /enquetes/{id}/votar: exige sessão; vota a matrícula da sessão ----
   if (method === "POST" && id && acao === "votar") {
-    const { membroId, respostas } = req.body || {};
-    if (!membroId || !Array.isArray(respostas) || respostas.length === 0) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula (membroId) e as respostas." } };
+    const usuario = auth.exigirLoginIgnorandoTermos(req, context);
+    if (!usuario) return;
+    const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const enqueteId = auth.idDeRota(id);
+    const membroId = auth.idDeRota(usuario.membroId);
+    const { respostas } = corpo;
+    if (!enqueteId || !membroId || !Array.isArray(respostas) || respostas.length === 0 || respostas.length > 50) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a enquete e as respostas." } };
       return;
     }
-    const enquete = await montarEnqueteCompleta(pool, id);
+    // Cada pessoa vota só por si: uma matrícula no corpo que não seja a da sessão é recusada, não ignorada em silêncio.
+    if (corpo.membroId !== undefined && corpo.membroId !== null && String(corpo.membroId) !== String(membroId)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Cada pessoa vota só por si mesma." } };
+      return;
+    }
+    // Resposta é objeto com identificador de pergunta válido; o texto é texto e cabe na coluna.
+    for (const r of respostas) {
+      if (!r || typeof r !== "object" || Array.isArray(r) || !auth.idDeRota(r.perguntaId)
+        || (r.opcaoId != null && !auth.idDeRota(r.opcaoId))
+        || (r.textoResposta != null && (typeof r.textoResposta !== "string" || r.textoResposta.length > 500))) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Respostas inválidas." } };
+        return;
+      }
+    }
+    const enquete = await montarEnqueteCompleta(pool, enqueteId);
     if (!enquete) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Enquete não encontrada." } };
       return;
@@ -107,7 +127,7 @@ module.exports = async function (context, req) {
     const perguntasPorId = {};
     enquete.perguntas.forEach(p => { perguntasPorId[p.perguntaId] = p; });
     const respostasPorPerguntaId = {};
-    respostas.forEach(r => { respostasPorPerguntaId[r.perguntaId] = r; });
+    respostas.forEach(r => { respostasPorPerguntaId[Number(r.perguntaId)] = r; });
 
     for (const pergunta of enquete.perguntas) {
       const resposta = respostasPorPerguntaId[pergunta.perguntaId];
@@ -119,6 +139,11 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: `Escolha uma opção pra: "${pergunta.titulo}".` } };
         return;
       }
+      // A opção tem que ser DESTA pergunta (senão o voto contaria numa opção de outra e o resultado ficaria errado).
+      if (pergunta.tipo === "OPCOES" && !(pergunta.opcoes || []).some(o => o.opcaoId === Number(resposta.opcaoId))) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: `A opção escolhida não é de: "${pergunta.titulo}".` } };
+        return;
+      }
       if (pergunta.tipo === "TEXTO_LIVRE" && !resposta.textoResposta) {
         context.res = { status: 200, body: { sucesso: false, mensagem: `Informe uma resposta pra: "${pergunta.titulo}".` } };
         return;
@@ -126,7 +151,7 @@ module.exports = async function (context, req) {
     }
 
     const jaRespondeu = await pool.request()
-      .input("enqueteId", sql.Int, id).input("membroId", sql.Int, membroId)
+      .input("enqueteId", sql.Int, enqueteId).input("membroId", sql.Int, membroId)
       .query(`SELECT 1 FROM RespostasEnquete r JOIN PerguntasEnquete p ON p.PerguntaId = r.PerguntaId
               WHERE p.EnqueteId = @enqueteId AND r.MembroId = @membroId`);
     if (jaRespondeu.recordset.length > 0) {
@@ -152,6 +177,10 @@ module.exports = async function (context, req) {
   if (method === "POST" && id && acao === "encerrar") {
     const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia"]);
     if (!usuario) return;
+    if (!auth.idDeRota(id)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Enquete inválida." } };
+      return;
+    }
     const enquete = await montarEnqueteCompleta(pool, id);
     if (!enquete) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Enquete não encontrada." } };
@@ -178,8 +207,9 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // ---- GET: lista (com detalhe conforme visibilidade) ----
+  // ---- GET: lista (com detalhe conforme visibilidade) — exige sessão (antes qualquer um listava participantes e, nas públicas, quem votou em quê) ----
   if (method === "GET" && !id) {
+    if (!auth.exigirLoginIgnorandoTermos(req, context)) return;
     const idsResult = await pool.request().query(`SELECT EnqueteId AS enqueteId FROM Enquetes ORDER BY DataAbertura DESC`);
     const enquetes = [];
     for (const row of idsResult.recordset) {

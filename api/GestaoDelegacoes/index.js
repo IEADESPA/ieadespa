@@ -13,7 +13,9 @@ const { criarDelegacao, delegacoesAtivasRecebidas } = require("../shared/delegac
 
 module.exports = async function (context, req) {
   const id = context.bindingData.id;
-  const usuario = auth.exigirLogin(req, context);
+  // fecho da v7.5 — delegar o papel de liderança é ato de quem ENTROU como liderança (senha administrativa); a sessão de PIN ou de código de e-mail, mesmo de quem tem
+  // cargo, não delega nem cancela delegação.
+  const usuario = auth.exigirSessaoDeLideranca(req, context);
   if (!usuario) return;
   const pool = await getPool();
   const hoje = new Date().toISOString().slice(0, 10);

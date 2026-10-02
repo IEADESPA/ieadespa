@@ -83,6 +83,7 @@ function ratificacaoVigente() {
 
 const FORMAS_ADESAO = {
   CLICKWRAP: "Aceite digital (marcou a caixa, com IP, data e hora)",
+  CLICK_RESP: "Aceite digital do responsável legal, pelo menor (com IP, data e hora)",
   FICHA_FISICA: "Cláusula de Voluntariado na Ficha de Membro assinada",
   MENSAGERIA: "Termo enviado por e-mail ou WhatsApp, com resposta positiva expressa",
   LISTA_OURO: "Ratificação coletiva (Lista de Ouro)"
@@ -173,6 +174,92 @@ function validarRegistroAdesao(d = {}, { hoje, idade = null }) {
   return { valido: true, dados: { forma, dataAceite, referencia, canal, responsavelNome, responsavelVinculo } };
 }
 
+// ---------------------------------------------------------------
+// Menor de idade: o RESPONSÁVEL LEGAL aceita no sistema (fecho da v7.5)
+// ---------------------------------------------------------------
+// Quando o menor tem um responsável cadastrado (pai, mãe, tutor ou outro responsável legal, conferido pela Secretaria em documento), é esse responsável quem
+// adere pelo menor, no aceite digital dele: entra com a matrícula e o PIN dele, lê o texto abaixo e marca a caixa. Fica a prova do responsável (matrícula,
+// IP, data e hora, versão e hash do texto) amarrada ao menor. Quem não tem responsável cadastrado (ou cujo responsável não é membro) segue pela ficha.
+// O texto é um RASCUNHO JURÍDICO: convém parecer de advogado antes do uso (a versão nova cria outra versão e hash, sem invalidar o que já foi aceito).
+
+const TERMO_MENOR_VERSAO = 1;
+const TERMO_MENOR_TITULO = "Autorização do Responsável Legal — Serviço Voluntário de Menor de Idade";
+const TERMO_MENOR_ITENS = [
+  {
+    codigo: "RESPONSAVEL", base: "Código Civil, arts. 3º, 4º, 1.634, VII, e 1.747, I",
+    texto: "Declaro que sou o pai, a mãe, o tutor ou o responsável legal do(a) menor indicado(a) nesta tela e que tenho poder para autorizá-lo(a): respondo por ele(a) se tiver menos de 16 anos e o(a) assisto se tiver 16 ou 17 anos."
+  },
+  {
+    codigo: "ADESAO", base: "Lei 9.608/1998, arts. 1º a 3º; Regimento Art. 133",
+    texto: `Autorizo o(a) menor a aderir ao serviço voluntário da IEADESPA e aceito, em nome dele(a), as cláusulas do Termo de Adesão ao Serviço Voluntário (versão ${TERMO_VERSAO}, que li): o serviço é por vontade e motivação religiosa, sem pagamento e sem vínculo de emprego nem obrigação trabalhista ou previdenciária; não há cachê, comissão nem “caixinha”; não há controle de jornada; e as despesas do dia a dia são por conta própria.`
+  },
+  {
+    codigo: "IDADE", base: "Constituição, art. 7º, XXXIII; ECA, arts. 60 a 69 (em especial os arts. 67 e 68)",
+    texto: "A Igreja só escala o(a) menor em atividade própria da idade dele(a): nunca à noite (das 22h às 5h), nunca em atividade perigosa, insalubre ou penosa, e nunca em dia, horário ou local que atrapalhe a escola. Abaixo de 16 anos a participação é só de natureza educativa e religiosa, sem encargo de trabalho."
+  },
+  {
+    codigo: "SUPERVISAO", base: "ECA, arts. 4º e 70",
+    texto: "O(a) menor serve sempre sob a supervisão de um adulto da equipe. Posso acompanhar as escalas dele(a) com o líder da equipe e com a Secretaria, e a Igreja me avisa se houver qualquer problema com ele(a)."
+  },
+  {
+    codigo: "LIBERDADE", base: "Regimento Art. 133 §7º e Art. 133-D",
+    texto: "O(a) menor pode recusar uma escala ou pedir afastamento sem penalidade. Posso revogar esta autorização quando quiser, avisando a Secretaria, que o(a) retira das escalas. A consequência de faltar ou de deixar de merecer a confiança do ministério é só a remoção da escala: sem multa, sem desconto e sem suspensão trabalhista."
+  },
+  {
+    codigo: "DADOS", base: "LGPD, art. 14; ECA, art. 17; Regimento Art. 133 §6º",
+    texto: "Autorizo a Igreja a tratar os dados do(a) menor necessários ao serviço — nome, matrícula, congregação, equipe, escalas e presença —, no melhor interesse dele(a) e só para organizar o serviço voluntário. A Igreja não usa a imagem nem a voz do(a) menor sem a minha autorização específica."
+  },
+  {
+    codigo: "MAIORIDADE", base: "Código Civil, art. 5º",
+    texto: "Esta autorização vale até o(a) menor completar 18 anos. Nessa data ele(a) passa a decidir sozinho(a) e será convidado(a) a confirmar a própria adesão."
+  },
+  {
+    codigo: "REGISTRO", base: "Regimento Art. 133 §8º, II",
+    texto: "Entendo que marcar a caixa de aceite vale como a minha assinatura eletrônica e que a Igreja guarda o meu IP, a data e a hora do meu aceite, a minha matrícula como responsável e o meu vínculo com o(a) menor, como prova. O IP é apagado 5 anos depois do último serviço do(a) menor."
+  }
+];
+const TERMO_MENOR_ACEITE = "Li e, como responsável legal, autorizo o(a) menor a servir como voluntário(a) na IEADESPA e aceito o Termo de Adesão em nome dele(a)";
+// O hash amarra o texto do responsável ao Termo de Adesão que ele cita: mudar qualquer um dos dois muda o hash.
+const TERMO_MENOR_HASH = sha256(JSON.stringify({ v: TERMO_MENOR_VERSAO, t: TERMO_MENOR_TITULO, i: TERMO_MENOR_ITENS, a: TERMO_MENOR_ACEITE, b: TERMO_HASH }));
+
+function termoMenorVigente() {
+  return { versao: TERMO_MENOR_VERSAO, titulo: TERMO_MENOR_TITULO, itens: TERMO_MENOR_ITENS.map(i => ({ ...i })), aceite: TERMO_MENOR_ACEITE, hash: TERMO_MENOR_HASH, termoBase: { versao: TERMO_VERSAO, hash: TERMO_HASH } };
+}
+
+const MAX_RESPONSAVEIS_POR_MENOR = 4;
+
+// Quem a Secretaria cadastra como responsável legal de um menor: dois membros diferentes, o menor com menos de 18 anos CONHECIDOS, o responsável com 18 ou
+// mais, o vínculo da lista e o documento conferido (certidão de nascimento, RG, termo de tutela...) descrito em poucas palavras.
+function validarDesignacaoResponsavel(d = {}, { idadeMenor, idadeResponsavel, mesmaPessoa = false }) {
+  if (mesmaPessoa) return { valido: false, mensagem: "O responsável não pode ser a própria pessoa menor de idade." };
+  if (idadeMenor == null) return { valido: false, mensagem: "O cadastro do(a) menor não tem a data de nascimento: complete o cadastro antes de indicar o responsável." };
+  if (idadeMenor >= MAIORIDADE) return { valido: false, mensagem: "Esta pessoa já tem 18 anos ou mais: ela mesma adere ao Termo, não precisa de responsável." };
+  if (idadeResponsavel == null) return { valido: false, mensagem: "O cadastro do responsável não tem a data de nascimento: complete o cadastro dele antes." };
+  if (idadeResponsavel < MAIORIDADE) return { valido: false, mensagem: "O responsável precisa ter 18 anos ou mais." };
+  const vinculo = limpar(d.vinculo).toUpperCase();
+  if (!VINCULOS_RESPONSAVEL[vinculo]) return { valido: false, mensagem: "Informe o vínculo: pai, mãe, tutor(a) ou outro responsável legal." };
+  const documento = limpar(d.documento);
+  if (documento.length < 3 || documento.length > 200 || /[<>]/.test(documento)) return { valido: false, mensagem: "Descreva o documento que comprova a responsabilidade (de 3 a 200 caracteres, sem < ou >), por exemplo: Certidão de nascimento conferida em 02/10/2026." };
+  return { valido: true, dados: { vinculo, documento } };
+}
+
+// O aceite digital do responsável. A idade do menor e a do responsável vêm do cadastro (null = desconhecida: não se presume).
+function validarAceiteResponsavel({ aceito, ip, idadeMenor, idadeResponsavel }) {
+  if (idadeMenor == null) return { valido: false, mensagem: "O cadastro do(a) menor não tem a data de nascimento. Peça à Secretaria para completar o cadastro." };
+  if (idadeMenor >= MAIORIDADE) return { valido: false, mensagem: "Esta pessoa já tem 18 anos ou mais: ela mesma adere ao Termo, em Minha Habilitação." };
+  if (idadeResponsavel == null || idadeResponsavel < MAIORIDADE) return { valido: false, mensagem: "O aceite do responsável só vale com 18 anos ou mais e com a data de nascimento no cadastro. Procure a Secretaria." };
+  if (aceito !== true) return { valido: false, mensagem: "Marque a caixa de aceite para autorizar." };
+  if (!ip) return { valido: false, mensagem: "Não foi possível registrar a origem da conexão (IP), que o Regimento Art. 133 §8º, II exige no aceite digital. Tente de novo ou peça à Secretaria para registrar a ficha." };
+  return { valido: true };
+}
+
+// A adesão dada pelo responsável vale enquanto a pessoa é menor: ao completar 18 anos ela precisa confirmar a própria (a adesão com responsável é a que tem
+// ResponsavelNome). Idade desconhecida não vence nada.
+function adesaoVigente(adesao, idade) {
+  if (!adesao) return false;
+  return !(adesao.responsavelNome && idade != null && idade >= MAIORIDADE);
+}
+
 // Lista de Ouro (Art. 133 §8º, III): a assinatura em lista cujo cabeçalho traz a ratificação convalida o período anterior.
 function validarRatificacao(d = {}, { hoje }) {
   const origem = limpar(d.origem).toUpperCase();
@@ -208,8 +295,8 @@ function validarRatificacao(d = {}, { hoje }) {
 // não têm texto no sistema: a prova é o documento arquivado, apontado pela referência.
 function avaliarIntegridadeAdesao({ forma, termoVersao, termoHash }) {
   if (forma === "FICHA_FISICA" || forma === "MENSAGERIA") return { status: "DOCUMENTO_EXTERNO", mensagem: "A prova é o documento arquivado, apontado na referência (não há texto guardado no sistema)." };
-  const versaoVigente = forma === "LISTA_OURO" ? RATIFICACAO_VERSAO : TERMO_VERSAO;
-  const hashVigente = forma === "LISTA_OURO" ? RATIFICACAO_HASH : TERMO_HASH;
+  const versaoVigente = forma === "LISTA_OURO" ? RATIFICACAO_VERSAO : forma === "CLICK_RESP" ? TERMO_MENOR_VERSAO : TERMO_VERSAO;
+  const hashVigente = forma === "LISTA_OURO" ? RATIFICACAO_HASH : forma === "CLICK_RESP" ? TERMO_MENOR_HASH : TERMO_HASH;
   if (!termoHash) return { status: "SEM_HASH", mensagem: "Adesão sem hash do texto." };
   if (Number(termoVersao) !== versaoVigente) return { status: "VERSAO_ANTERIOR", mensagem: `Aceitou a versão ${termoVersao} do texto; a vigente é a ${versaoVigente}. O hash guardado prova o texto da época.` };
   if (termoHash !== hashVigente) return { status: "DIVERGENTE", mensagem: "O texto da versão vigente mudou sem trocar o número da versão: avise a equipe técnica." };
@@ -399,6 +486,8 @@ module.exports = {
   FORMAS_ADESAO, FORMAS_REGISTRO_MANUAL, CANAIS_MENSAGERIA, ORIGENS_RATIFICACAO, MAX_SIGNATARIOS_MANUAIS,
   DATA_MINIMA_RATIFICACAO, MAX_RODIZIOS_POR_CONGREGACAO, MAX_MEMBROS_POR_GRUPO, MAX_MEMBROS_AO_CRIAR_GRUPO,
   inteiroPositivo, MAIORIDADE, IP_RETENCAO_DIAS_PADRAO, VINCULOS_RESPONSAVEL, idadeEmAnos, condicaoDeIdade,
+  TERMO_MENOR_VERSAO, TERMO_MENOR_TITULO, TERMO_MENOR_ITENS, TERMO_MENOR_ACEITE, TERMO_MENOR_HASH, termoMenorVigente, MAX_RESPONSAVEIS_POR_MENOR,
+  validarDesignacaoResponsavel, validarAceiteResponsavel, adesaoVigente,
   extrairIp, cadeiaDeCabecalhos, normalizarIp, ipPublico, validarAceiteDigital, validarRegistroAdesao, validarRatificacao, avaliarIntegridadeAdesao,
   NATUREZAS, NATUREZAS_OPERACIONAIS, DIAS_SEMANA, LIMITE_SEQUENCIA_PADRAO, MAX_SEMANAS_GERACAO, SEMANAS_GERACAO_PADRAO, MAX_GRUPOS,
   equipeExigeRevezamento, validarNatureza, validarRodizio, validarNomeGrupo, validarComposicao,

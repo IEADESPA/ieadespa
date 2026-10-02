@@ -11,16 +11,15 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const { fotoConsentimentoConcedido } = require("../shared/consentimentoFoto");
+const auth = require("../shared/auth");
 
 const MIME_PERMITIDOS = ["image/jpeg", "image/png", "image/webp"];
 const TAMANHO_MAXIMO_BYTES = 5 * 1024 * 1024; // 5 MB
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão (antes bastava o número da matrícula).
   const matricula = context.bindingData.matricula;
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
+  if (!auth.exigirTitular(req, context, matricula)) return;
 
   const pool = await getPool();
   const membro = await pool.request().input("id", sql.Int, matricula).query(`SELECT MembroId, FotoUrl FROM MembroReferencia WHERE MembroId = @id`);

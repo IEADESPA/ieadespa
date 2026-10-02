@@ -10,6 +10,21 @@ const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
 const vacancia = require("../shared/vacancia");
 const storage = require("../shared/storage");
+const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
+
+// fecho da v7.5 — o POST e o DELETE não conferiam o escopo: quem tinha "pessoas" numa congregação alterava, trocava o e-mail ou desligava QUALQUER membro de QUALQUER
+// congregação (só o GET filtrava). E o e-mail virou a raiz da entrada por código ("primeiro acesso / esqueci o PIN"). Agora o alvo E o destino precisam estar no escopo.
+function noEscopoDaPessoa(usuario, congregacaoNome, extensaoNome) {
+  if (!auth.estaNoEscopo(usuario, congregacaoNome)) return false;
+  return !usuario.escopoExtensaoNome || extensaoNome === usuario.escopoExtensaoNome;
+}
+const FORA_DO_ESCOPO = { sucesso: false, mensagem: "Fora do seu escopo de atuação." };
+// "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
+function mascararEmail(e) {
+  const s = String(e || "").trim();
+  const i = s.indexOf("@");
+  return i > 0 ? `${s[0]}***${s.slice(i)}` : (s ? "***" : null);
+}
 
 // Causas de saída fixas (Reg. Art. 11 — Perda de Membresia, v1.5) — regra jurídica,
 // não catálogo editável por tela (mesmo espírito de FORMAS_ADMISSAO/ESTADOS_CIVIS).
@@ -94,12 +109,14 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
       return;
     }
+    let destinoCongregacaoNome = null, destinoExtensaoNome = null;
     if (congregacaoId) {
-      const c = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT TOP 1 1 AS x FROM Congregacoes WHERE CongregacaoId = @id`);
+      const c = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT TOP 1 Nome FROM Congregacoes WHERE CongregacaoId = @id`);
       if (c.recordset.length === 0) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Congregação inválida." } };
         return;
       }
+      destinoCongregacaoNome = c.recordset[0].Nome;
     }
     if (departamentoId) {
       const d = await pool.request().input("id", sql.Int, departamentoId).query(`SELECT TOP 1 1 AS x FROM Departamentos WHERE DepartamentoId = @id`);
@@ -116,11 +133,12 @@ module.exports = async function (context, req) {
       }
     }
     if (extensaoId) {
-      const ex = await pool.request().input("id", sql.Int, extensaoId).query(`SELECT TOP 1 1 AS x FROM ExtensoesTenda WHERE ExtensaoId = @id`);
+      const ex = await pool.request().input("id", sql.Int, extensaoId).query(`SELECT TOP 1 Nome FROM ExtensoesTenda WHERE ExtensaoId = @id`);
       if (ex.recordset.length === 0) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Extensão da Tenda inválida." } };
         return;
       }
+      destinoExtensaoNome = ex.recordset[0].Nome;
     }
 
     // Formas de admissão fixas do Estatuto Art. 6º §1º — regra jurídica, não catálogo
@@ -156,9 +174,17 @@ module.exports = async function (context, req) {
       }
     }
 
-    const existente = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, Status FROM MembroReferencia WHERE MembroId = @id`);
+    const existente = await pool.request().input("id", sql.Int, membroId).query(`
+      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
+      FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
     const existia = existente.recordset.length > 0;
+    // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
+    if ((existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) || !noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
+      context.res = { status: 403, body: FORA_DO_ESCOPO };
+      return;
+    }
     const statusAnterior = existia ? existente.recordset[0].Status : null;
+    const emailAnterior = existia ? existente.recordset[0].EmailAnterior : null;
     const statusFinal = status || "ATIVO";
     // Entrar num status terminal (vindo de outro) dispara a perda de membresia de
     // verdade: força Sem Comunhão, registra a data de saída (se não vier informada) e
@@ -224,6 +250,7 @@ module.exports = async function (context, req) {
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
     const membro = result.recordset[0];
+    const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();
     if (usuario.permissoes.includes("disciplina")) {
       const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
       membro.processoDisciplinarAtivo = idsSobDisciplina.has(membro.membroId);
@@ -238,8 +265,18 @@ module.exports = async function (context, req) {
       registroId: Number(membroId),
       acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
       usuarioId: usuario.membroId,
-      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao }
+      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
     });
+    // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar).
+    if (emailMudou && emailAnterior) {
+      try {
+        await enviarEmailNotificacao({
+          email: emailAnterior,
+          titulo: "O e-mail do seu cadastro na IEADESPA foi alterado",
+          mensagem: `O e-mail do cadastro da matrícula ${membroId} foi alterado pela Secretaria. Se foi você quem pediu, não há nada a fazer; se não foi, avise a Secretaria da sua congregação.`
+        });
+      } catch (e) { context.log.error("Falha ao avisar o e-mail antigo:", e.message); }
+    }
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: existia ? "✅ Pessoa atualizada." : "✅ Pessoa cadastrada.", membro } };
     return;
@@ -249,6 +286,14 @@ module.exports = async function (context, req) {
   if (method === "DELETE") {
     if (!membroIdRota) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota: /api/pessoas/{membroId}" } };
+      return;
+    }
+    const alvoDesligar = (await pool.request().input("id", sql.Int, membroIdRota).query(`
+      SELECT c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+      LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`)).recordset[0];
+    // Matrícula que não existe e matrícula de fora do escopo recebem a mesma recusa: a resposta não diz quem tem cadastro.
+    if (!alvoDesligar || !noEscopoDaPessoa(usuario, alvoDesligar.CongregacaoNome, alvoDesligar.ExtensaoNome)) {
+      context.res = { status: 403, body: FORA_DO_ESCOPO };
       return;
     }
     const upd = await pool.request().input("id", sql.Int, membroIdRota)

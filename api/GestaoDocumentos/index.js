@@ -25,6 +25,9 @@ module.exports = async function (context, req) {
   const pool = await getPool();
 
   if (req.method === "GET") {
+    // fecho da v7.5 — a lista (atas, termos, memorandos, com link assinado do arquivo) era aberta a qualquer pessoa da internet; agora exige sessão (a tela já só chamava
+    // logada). Quem pode VER cada documento dentro do sistema continua como era: a aba Documentos é de todo membro logado.
+    if (!auth.exigirLoginIgnorandoTermos(req, context)) return;
     const { tipo, orgaoId } = req.query || {};
     const request = pool.request();
     let where = "1=1";

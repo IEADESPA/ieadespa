@@ -86,12 +86,16 @@ const CATALOGOS = {
   },
   funcionalidades: {
     tabela: "Funcionalidades", chave: "FuncionalidadeId", idField: "funcionalidadeId",
-    campos: { chave: sql.NVarChar(50), nome: sql.NVarChar(100) }
+    campos: { chave: sql.NVarChar(50), nome: sql.NVarChar(100) },
+    // fecho da v7.5 — quem altera os PAPÉIS (nível e permissões de cada cargo) e as funcionalidades define o que todos os cargos podem; com o padrão "pessoas" quem só
+    // cuida do cadastro de membros de uma congregação fazia um papel virar Global com todas as permissões. É a mesma permissão de GestaoLideranca.
+    permissao: "permissoes"
   },
   papeis: {
     tabela: "Papeis", chave: "PapelId", idField: "papelId",
     campos: { nome: sql.NVarChar(100), nivel: sql.NVarChar(30), permissoes: sql.NVarChar(500) },
-    arrayFields: ["permissoes"]
+    arrayFields: ["permissoes"],
+    permissao: "permissoes"
   },
   tiposConsagracao: {
     tabela: "TiposConsagracao", chave: "TipoConsagracaoId", idField: "tipoConsagracaoId",

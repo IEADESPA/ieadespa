@@ -57,6 +57,7 @@ function mapearAdesao(r, { comIp = false } = {}) {
     canalMensageria: r.CanalMensageria, rotuloCanal: r.CanalMensageria ? vol.CANAIS_MENSAGERIA[r.CanalMensageria] : null,
     referencia: r.Referencia, ratificacaoId: r.RatificacaoId, convalidaPeriodoAnterior: !!r.ConvalidaPeriodoAnterior,
     responsavelNome: r.ResponsavelNome || null, responsavelVinculo: r.ResponsavelVinculo || null, rotuloVinculo: r.ResponsavelVinculo ? vol.VINCULOS_RESPONSAVEL[r.ResponsavelVinculo] : null,
+    responsavelMembroId: r.ResponsavelMembroId || null,
     registradoPorMembroId: r.RegistradoPorMembroId, registradoEm: isoInstante(r.RegistradoEm),
     integridade: vol.avaliarIntegridadeAdesao({ forma: r.Forma, termoVersao: r.TermoVersao, termoHash: r.TermoHash })
   };
@@ -64,17 +65,28 @@ function mapearAdesao(r, { comIp = false } = {}) {
   return o;
 }
 
+// A adesão MAIS RECENTE da pessoa (ela pode ter duas: a dada pelo responsável quando era menor e a dela, depois dos 18 anos). Se a mais recente ainda vale, é a adesão
+// da pessoa; ver vol.adesaoVigente.
 async function buscarAdesao(pool, membroId, opcoes) {
-  const r = await pool.request().input("m", sql.Int, membroId).query(`SELECT * FROM VoluntariadoAdesoes WHERE MembroId = @m`);
+  const r = await pool.request().input("m", sql.Int, membroId).query(`SELECT TOP 1 * FROM VoluntariadoAdesoes WHERE MembroId = @m ORDER BY AdesaoId DESC`);
   return mapearAdesao(r.recordset[0], opcoes);
 }
 
+// Trecho de SQL: junta a adesão que VALE de cada pessoa `m` (a mais recente, e a dada pelo responsável só enquanto a pessoa tem menos de 18 anos).
+// Espera o parâmetro @hoje. Quem não tem adesão que vale fica com a.AdesaoId nulo.
+const ADESAO_VIGENTE_SQL = `VoluntariadoAdesoes a ON a.MembroId = m.MembroId
+      AND a.AdesaoId = (SELECT MAX(x.AdesaoId) FROM VoluntariadoAdesoes x WHERE x.MembroId = m.MembroId)
+      AND NOT (a.ResponsavelNome IS NOT NULL AND m.DataNascimento IS NOT NULL AND m.DataNascimento <= DATEADD(YEAR, -${vol.MAIORIDADE}, @hoje))`;
+
 // O que a pessoa vê em Meu Painel: o texto vigente, se já aderiu (sem o IP: ele é prova da Igreja, não conteúdo da tela) e se a idade lhe permite aderir pelo aceite digital.
+// `renovar`: a adesão que ela tem foi dada pelo responsável e ela já completou 18 anos — agora é ela quem confirma.
 async function situacaoDoTermo(pool, membroId, { hoje = hojeBrasilia() } = {}) {
   const adesao = await buscarAdesao(pool, membroId);
   const m = await lerMembro(pool, membroId);
-  const cond = vol.condicaoDeIdade(vol.idadeEmAnos(m && m.DataNascimento, hoje));
-  return { termo: vol.termoVigente(), aderiu: !!adesao, adesao, podeAderirDigital: cond.podeAderirDigital, motivoSemAdesaoDigital: cond.motivo, menorDeIdade: cond.menor };
+  const idade = vol.idadeEmAnos(m && m.DataNascimento, hoje);
+  const cond = vol.condicaoDeIdade(idade);
+  const vigente = vol.adesaoVigente(adesao, idade);
+  return { termo: vol.termoVigente(), aderiu: vigente, adesao, renovar: !!adesao && !vigente, podeAderirDigital: cond.podeAderirDigital, motivoSemAdesaoDigital: cond.motivo, menorDeIdade: cond.menor };
 }
 
 // `cadeia`: os cabeçalhos de origem como chegaram (vol.cadeiaDeCabecalhos), guardados junto do IP escolhido — o x-forwarded-for pode ter sido escrito pelo cliente.
@@ -83,10 +95,11 @@ async function aceitarDigital(pool, { membroId, aceito, ip, cadeia = null, hoje 
   const forma = vol.validarAceiteDigital({ aceito, ip, idade: vol.MAIORIDADE });
   if (!forma.valido) return { sucesso: false, mensagem: forma.mensagem };
   const membro = await lerMembro(pool, membroId);
-  const v = vol.validarAceiteDigital({ aceito, ip, idade: vol.idadeEmAnos(membro && membro.DataNascimento, hoje) });
+  const idade = vol.idadeEmAnos(membro && membro.DataNascimento, hoje);
+  const v = vol.validarAceiteDigital({ aceito, ip, idade });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const ja = await buscarAdesao(pool, membroId);
-  if (ja) return { sucesso: false, mensagem: `Você já aderiu ao Termo em ${cal.formatarDataBr(ja.dataAceite)}.`, adesao: ja };
+  if (vol.adesaoVigente(ja, idade)) return { sucesso: false, mensagem: `Você já aderiu ao Termo em ${cal.formatarDataBr(ja.dataAceite)}.`, adesao: ja };
   let id;
   try {
     const r = await pool.request().input("m", sql.Int, membroId).input("v", sql.Int, vol.TERMO_VERSAO).input("h", sql.NVarChar(64), vol.TERMO_HASH)
@@ -110,10 +123,11 @@ async function registrarAdesaoManual(pool, { membroId, dados, por, hoje = hojeBr
   const m = await lerMembro(pool, membroId);
   if (!m) return { sucesso: false, mensagem: "Voluntário não encontrado." };
   // Menor de 18 anos: só vale com o nome e o vínculo de quem assinou por ele.
-  const v = vol.validarRegistroAdesao(dados, { hoje, idade: vol.idadeEmAnos(m.DataNascimento, hoje) });
+  const idade = vol.idadeEmAnos(m.DataNascimento, hoje);
+  const v = vol.validarRegistroAdesao(dados, { hoje, idade });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const ja = await buscarAdesao(pool, membroId);
-  if (ja) return { sucesso: false, mensagem: `${m.Nome} já tem a adesão registrada em ${cal.formatarDataBr(ja.dataAceite)} (${ja.rotuloForma}).`, adesao: ja };
+  if (vol.adesaoVigente(ja, idade)) return { sucesso: false, mensagem: `${m.Nome} já tem a adesão registrada em ${cal.formatarDataBr(ja.dataAceite)} (${ja.rotuloForma}).`, adesao: ja };
   let id;
   try {
     const r = await pool.request().input("m", sql.Int, membroId).input("f", sql.NVarChar(12), v.dados.forma).input("d", sql.Date, v.dados.dataAceite)
@@ -176,7 +190,9 @@ async function ratificar(pool, { dados, por, autorizacao, hoje = hojeBrasilia() 
   assinantes = assinantes.filter(id => !menoresDoCadastro.has(id));
   if (assinantes.length === 0) return { sucesso: false, mensagem: `Todos os signatários são menores de 18 anos (${menoresIgnorados}): a adesão deles é feita com a assinatura do responsável, pela ficha.` };
 
-  const jaAderiram = new Set((await pool.request().query(`SELECT MembroId FROM VoluntariadoAdesoes`)).recordset.map(x => x.MembroId));
+  // Já aderiu = tem adesão que VALE (a dada pelo responsável não vale mais para quem completou 18 anos: esse entra de novo pela Lista de Ouro).
+  const jaAderiram = new Set((await pool.request().input("hoje", sql.Date, hoje).query(
+    `SELECT m.MembroId FROM MembroReferencia m JOIN ${ADESAO_VIGENTE_SQL}`)).recordset.map(x => x.MembroId));
   const novos = assinantes.filter(id => !jaAderiram.has(id));
 
   const transaction = new sql.Transaction(pool);
@@ -222,23 +238,158 @@ async function listarRatificacoes(pool, { limite = 50, porMembroId = null } = {}
 
 // Quem serve nas equipes ativas da congregação e quem já aderiu. Sem termo primeiro.
 async function coberturaDoTermo(pool, { congregacaoId, hoje = hojeBrasilia() }) {
+  // A adesão considerada é a mais recente de cada pessoa; ela só vale (aderiu) se não foi dada pelo responsável a quem já completou 18 anos (`renovar`).
   const r = await pool.request().input("c", sql.Int, congregacaoId).query(`
-    SELECT TOP (${LIMITE_LISTA}) m.MembroId, m.Nome, m.DataNascimento, STRING_AGG(e.Nome, ', ') AS Equipes, a.AdesaoId, a.Forma, a.DataAceite, a.Referencia
+    SELECT TOP (${LIMITE_LISTA}) m.MembroId, m.Nome, m.DataNascimento, STRING_AGG(e.Nome, ', ') AS Equipes, a.AdesaoId, a.Forma, a.DataAceite, a.Referencia, a.ResponsavelNome,
+           (SELECT COUNT(*) FROM VoluntariadoResponsaveis rs WHERE rs.MenorMembroId = m.MembroId AND rs.RevogadoEm IS NULL) AS Responsaveis
     FROM EscalasEquipeMembros em
     JOIN EscalasEquipes e ON e.EquipeId = em.EquipeId AND e.Ativa = 1 AND e.CongregacaoId = @c
     JOIN MembroReferencia m ON m.MembroId = em.MembroId
-    LEFT JOIN VoluntariadoAdesoes a ON a.MembroId = m.MembroId
+    LEFT JOIN VoluntariadoAdesoes a ON a.AdesaoId = (SELECT MAX(x.AdesaoId) FROM VoluntariadoAdesoes x WHERE x.MembroId = m.MembroId)
     WHERE em.Ativo = 1
-    GROUP BY m.MembroId, m.Nome, m.DataNascimento, a.AdesaoId, a.Forma, a.DataAceite, a.Referencia
-    ORDER BY CASE WHEN a.AdesaoId IS NULL THEN 0 ELSE 1 END, m.Nome`);
-  // `menor` marca quem tem menos de 18 anos: a adesão dele exige o responsável (a tela da Secretaria avisa); a data de nascimento em si não sai daqui.
-  const voluntarios = r.recordset.map(x => ({
-    membroId: x.MembroId, nome: x.Nome, equipes: x.Equipes, aderiu: x.AdesaoId != null,
-    menor: (() => { const i = vol.idadeEmAnos(x.DataNascimento, hoje); return i != null && i < vol.MAIORIDADE; })(),
-    forma: x.Forma || null, rotuloForma: x.Forma ? vol.FORMAS_ADESAO[x.Forma] : null, dataAceite: isoData(x.DataAceite), referencia: x.Referencia || null
-  }));
+    GROUP BY m.MembroId, m.Nome, m.DataNascimento, a.AdesaoId, a.Forma, a.DataAceite, a.Referencia, a.ResponsavelNome
+    ORDER BY m.Nome`);
+  // `menor` marca quem tem menos de 18 anos: a adesão dele é a do responsável (a tela da Secretaria avisa e mostra se há responsável cadastrado); a data de nascimento em si não sai daqui.
+  const voluntarios = r.recordset.map(x => {
+    const idade = vol.idadeEmAnos(x.DataNascimento, hoje);
+    const tem = x.AdesaoId != null;
+    const vigente = tem && vol.adesaoVigente({ responsavelNome: x.ResponsavelNome }, idade);
+    return {
+      membroId: x.MembroId, nome: x.Nome, equipes: x.Equipes, aderiu: vigente, renovar: tem && !vigente,
+      menor: idade != null && idade < vol.MAIORIDADE, responsaveis: Number(x.Responsaveis) || 0,
+      forma: x.Forma || null, rotuloForma: x.Forma ? vol.FORMAS_ADESAO[x.Forma] : null, dataAceite: isoData(x.DataAceite), referencia: x.Referencia || null
+    };
+  }).sort((a, b) => (a.aderiu ? 1 : 0) - (b.aderiu ? 1 : 0) || a.nome.localeCompare(b.nome, "pt-BR"));              // sem termo primeiro, depois por nome
   const comTermo = voluntarios.filter(v => v.aderiu).length;
   return { total: voluntarios.length, comTermo, semTermo: voluntarios.length - comTermo, voluntarios };
+}
+
+// ---------------------------------------------------------------
+// Responsável legal de menor (fecho da v7.5): a Secretaria cadastra e confere; o responsável aceita no sistema
+// ---------------------------------------------------------------
+
+const NAO_E_RESPONSAVEL = "Você não é o responsável cadastrado desta pessoa. Procure a Secretaria da congregação.";
+const FORA_DO_ESCOPO = "Fora do seu escopo de atuação.";
+
+// `autorizacao`: { podeCongregacao(nome) } — o escopo é o da congregação do MENOR. Menor inexistente e menor fora do escopo recebem a mesma recusa.
+async function designarResponsavel(pool, { menorId, responsavelId, dados, por, autorizacao, hoje = hojeBrasilia() }) {
+  const menor = await lerMembro(pool, menorId);
+  if (!menor || !autorizacao.podeCongregacao(menor.CongregacaoNome)) return { sucesso: false, proibido: true, mensagem: FORA_DO_ESCOPO };
+  // Separação de funções: quem cadastra o responsável não pode ser ele mesmo (senão a mesma pessoa cadastraria e aceitaria a "autorização", gerando uma prova com IP e hash
+  // de aparência mais forte que a ficha).
+  if (Number(responsavelId) === Number(por)) return { sucesso: false, mensagem: "Quem cadastra não pode ser o próprio responsável do menor: peça a outra pessoa da Secretaria." };
+  const resp = await lerMembro(pool, responsavelId);
+  // O responsável também precisa estar no escopo de quem cadastra: fora dele a resposta é a mesma de "não existe", para o cadastro não servir de sonda de matrículas
+  // (existência, idade) de outras congregações. Quem tem escopo geral cadastra qualquer um; pai de outra congregação, para a Secretaria local, entra pela ficha assinada.
+  if (!resp || !autorizacao.podeCongregacao(resp.CongregacaoNome)) return { sucesso: false, mensagem: "Responsável não encontrado nas congregações do seu escopo: confira a matrícula (se ele frequenta outra congregação, use a ficha assinada)." };
+  const v = vol.validarDesignacaoResponsavel(dados, {
+    idadeMenor: vol.idadeEmAnos(menor.DataNascimento, hoje), idadeResponsavel: vol.idadeEmAnos(resp.DataNascimento, hoje), mesmaPessoa: Number(menorId) === Number(responsavelId)
+  });
+  if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+  const ativos = (await pool.request().input("mn", sql.Int, menorId).query(`SELECT COUNT(*) AS n FROM VoluntariadoResponsaveis WHERE MenorMembroId = @mn AND RevogadoEm IS NULL`)).recordset[0];
+  if (ativos && Number(ativos.n) >= vol.MAX_RESPONSAVEIS_POR_MENOR) return { sucesso: false, mensagem: `Já há ${vol.MAX_RESPONSAVEIS_POR_MENOR} responsáveis cadastrados para este(a) menor: revogue um antes de incluir outro.` };
+  let id;
+  try {
+    const r = await pool.request().input("mn", sql.Int, menorId).input("rs", sql.Int, responsavelId).input("v", sql.NVarChar(18), v.dados.vinculo)
+      .input("doc", sql.NVarChar(200), v.dados.documento).input("por", sql.Int, por)
+      .query(`INSERT INTO VoluntariadoResponsaveis (MenorMembroId, ResponsavelMembroId, Vinculo, Documento, RegistradoPorMembroId)
+              VALUES (@mn, @rs, @v, @doc, @por); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+    id = r.recordset[0].id;
+  } catch (e) {
+    if (duplicado(e)) return { sucesso: false, mensagem: `${resp.Nome} já está cadastrado(a) como responsável de ${menor.Nome}.` };
+    throw e;
+  }
+  // Só os números: o nome e o documento ficam na tabela (imutável, com revogação), não na trilha de auditoria.
+  await registrarAuditoria({ tabela: "VoluntariadoResponsaveis", registroId: id, acao: "RESPONSAVEL_CADASTRADO", usuarioId: por, dadosDepois: { menorId: Number(menorId), responsavelId: Number(responsavelId), vinculo: v.dados.vinculo } });
+  return { sucesso: true, responsavelId: id, mensagem: `${resp.Nome} cadastrado(a) como ${vol.VINCULOS_RESPONSAVEL[v.dados.vinculo].toLowerCase()} de ${menor.Nome}. Ele(a) já pode autorizar o serviço em Meu Painel → Minha Habilitação.` };
+}
+
+async function revogarResponsavel(pool, { responsavelId, por, autorizacao }) {
+  const r = (await pool.request().input("id", sql.Int, responsavelId).query(`
+    SELECT r.ResponsavelId, r.MenorMembroId, r.RevogadoEm, c.Nome AS CongregacaoNome
+    FROM VoluntariadoResponsaveis r JOIN MembroReferencia mn ON mn.MembroId = r.MenorMembroId LEFT JOIN Congregacoes c ON c.CongregacaoId = mn.CongregacaoId
+    WHERE r.ResponsavelId = @id`)).recordset[0];
+  if (!r || !autorizacao.podeCongregacao(r.CongregacaoNome)) return { sucesso: false, proibido: true, mensagem: FORA_DO_ESCOPO };
+  if (r.RevogadoEm) return { sucesso: false, mensagem: "Este cadastro de responsável já foi revogado." };
+  const u = (await pool.request().input("id", sql.Int, responsavelId).input("por", sql.Int, por)
+    // (sem OUTPUT: a tabela tem gatilho; o ROWCOUNT diz se foi esta chamada que revogou, caso duas aconteçam ao mesmo tempo)
+    .query(`UPDATE VoluntariadoResponsaveis SET RevogadoEm = SYSUTCDATETIME(), RevogadoPorMembroId = @por WHERE ResponsavelId = @id AND RevogadoEm IS NULL; SELECT @@ROWCOUNT AS n`)).recordset[0];
+  if (!u || !Number(u.n)) return { sucesso: false, mensagem: "Este cadastro de responsável já foi revogado." };
+  await registrarAuditoria({ tabela: "VoluntariadoResponsaveis", registroId: responsavelId, acao: "RESPONSAVEL_REVOGADO", usuarioId: por, dadosDepois: { menorId: r.MenorMembroId } });
+  return { sucesso: true, mensagem: "Cadastro do responsável revogado. A adesão já registrada fica como prova; se a família retirou a autorização, remova o(a) menor das escalas em “Remover da escala”." };
+}
+
+// Para a Secretaria: os responsáveis (ativos e revogados) de um menor.
+async function listarResponsaveisDoMenor(pool, { menorId, autorizacao }) {
+  const menor = await lerMembro(pool, menorId);
+  if (!menor || !autorizacao.podeCongregacao(menor.CongregacaoNome)) return { sucesso: false, proibido: true, mensagem: FORA_DO_ESCOPO };
+  const r = await pool.request().input("mn", sql.Int, menorId).query(`
+    SELECT r.ResponsavelId, r.ResponsavelMembroId, p.Nome AS ResponsavelNome, r.Vinculo, r.Documento, r.RegistradoEm, r.RevogadoEm
+    FROM VoluntariadoResponsaveis r JOIN MembroReferencia p ON p.MembroId = r.ResponsavelMembroId WHERE r.MenorMembroId = @mn ORDER BY r.ResponsavelId DESC`);
+  return {
+    sucesso: true, menor: { membroId: menor.MembroId, nome: menor.Nome },
+    responsaveis: r.recordset.map(x => ({ responsavelId: x.ResponsavelId, membroId: x.ResponsavelMembroId, nome: x.ResponsavelNome, vinculo: x.Vinculo, rotuloVinculo: vol.VINCULOS_RESPONSAVEL[x.Vinculo],
+      documento: x.Documento, registradoEm: isoInstante(x.RegistradoEm), revogadoEm: isoInstante(x.RevogadoEm), ativo: !x.RevogadoEm }))
+  };
+}
+
+// Para o menor ver, no Meu Painel dele, quem é o responsável cadastrado (só nome e vínculo).
+async function responsaveisAtivosDe(pool, menorId) {
+  const r = await pool.request().input("mn", sql.Int, menorId).query(`
+    SELECT p.Nome, r.Vinculo FROM VoluntariadoResponsaveis r JOIN MembroReferencia p ON p.MembroId = r.ResponsavelMembroId WHERE r.MenorMembroId = @mn AND r.RevogadoEm IS NULL ORDER BY r.ResponsavelId`);
+  return r.recordset.map(x => ({ nome: x.Nome, vinculo: x.Vinculo, rotuloVinculo: vol.VINCULOS_RESPONSAVEL[x.Vinculo] }));
+}
+
+// Para o responsável, no Meu Painel dele: os menores que ele pode autorizar e como está a adesão de cada um. A data de nascimento não sai: só a idade.
+async function menoresDoResponsavel(pool, responsavelId, { hoje = hojeBrasilia() } = {}) {
+  const r = await pool.request().input("rs", sql.Int, responsavelId).query(`
+    SELECT r.MenorMembroId, r.Vinculo, mn.Nome, mn.DataNascimento, a.AdesaoId, a.Forma, a.DataAceite, a.ResponsavelNome AS AdesaoResponsavelNome
+    FROM VoluntariadoResponsaveis r
+    JOIN MembroReferencia mn ON mn.MembroId = r.MenorMembroId
+    LEFT JOIN VoluntariadoAdesoes a ON a.AdesaoId = (SELECT MAX(x.AdesaoId) FROM VoluntariadoAdesoes x WHERE x.MembroId = r.MenorMembroId)
+    WHERE r.ResponsavelMembroId = @rs AND r.RevogadoEm IS NULL ORDER BY mn.Nome`);
+  return r.recordset.map(x => {
+    const idade = vol.idadeEmAnos(x.DataNascimento, hoje);
+    return {
+      menorId: x.MenorMembroId, nome: x.Nome, vinculo: x.Vinculo, rotuloVinculo: vol.VINCULOS_RESPONSAVEL[x.Vinculo], idade,
+      aindaMenor: idade != null && idade < vol.MAIORIDADE,
+      aderiu: x.AdesaoId != null && vol.adesaoVigente({ responsavelNome: x.AdesaoResponsavelNome }, idade),
+      dataAceite: isoData(x.DataAceite), forma: x.Forma || null, rotuloForma: x.Forma ? vol.FORMAS_ADESAO[x.Forma] : null
+    };
+  });
+}
+
+// O aceite digital do responsável, pelo menor. Valem os mesmos cuidados do aceite da própria pessoa (caixa, IP real, idade) mais: ser o responsável CADASTRADO
+// (ativo) deste menor. `cadeia`: os cabeçalhos de origem, como em aceitarDigital.
+async function aceitarDigitalResponsavel(pool, { responsavelId, menorId, aceito, ip, cadeia = null, hoje = hojeBrasilia() }) {
+  const forma = vol.validarAceiteResponsavel({ aceito, ip, idadeMenor: vol.MAIORIDADE - 1, idadeResponsavel: vol.MAIORIDADE });      // caixa e IP, sem consultar o banco
+  if (!forma.valido) return { sucesso: false, mensagem: forma.mensagem };
+  const desig = (await pool.request().input("mn", sql.Int, menorId).input("rs", sql.Int, responsavelId)
+    .query(`SELECT TOP 1 ResponsavelId, Vinculo FROM VoluntariadoResponsaveis WHERE MenorMembroId = @mn AND ResponsavelMembroId = @rs AND RevogadoEm IS NULL`)).recordset[0];
+  if (!desig) return { sucesso: false, proibido: true, mensagem: NAO_E_RESPONSAVEL };           // menor inexistente e responsável de outro recebem a mesma recusa
+  const resp = await lerMembro(pool, responsavelId);
+  const menor = await lerMembro(pool, menorId);
+  if (!resp || !menor) return { sucesso: false, proibido: true, mensagem: NAO_E_RESPONSAVEL };
+  const idadeMenor = vol.idadeEmAnos(menor.DataNascimento, hoje);
+  const v = vol.validarAceiteResponsavel({ aceito, ip, idadeMenor, idadeResponsavel: vol.idadeEmAnos(resp.DataNascimento, hoje) });
+  if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+  const ja = await buscarAdesao(pool, menorId);
+  if (vol.adesaoVigente(ja, idadeMenor)) return { sucesso: false, mensagem: `${menor.Nome} já tem a adesão registrada em ${cal.formatarDataBr(ja.dataAceite)}.`, adesao: ja };
+  let id;
+  try {
+    const r = await pool.request().input("m", sql.Int, menorId).input("v", sql.Int, vol.TERMO_MENOR_VERSAO).input("h", sql.NVarChar(64), vol.TERMO_MENOR_HASH)
+      .input("d", sql.Date, hoje).input("ip", sql.NVarChar(45), ip).input("cad", sql.NVarChar(400), cadeia)
+      .input("rs", sql.Int, responsavelId).input("rn", sql.NVarChar(150), resp.Nome).input("rv", sql.NVarChar(18), desig.Vinculo)
+      .query(`INSERT INTO VoluntariadoAdesoes (MembroId, Forma, TermoVersao, TermoHash, DataAceite, AceitoEm, EnderecoIp, CadeiaCabecalhos, ResponsavelMembroId, ResponsavelNome, ResponsavelVinculo)
+              VALUES (@m, 'CLICK_RESP', @v, @h, @d, SYSUTCDATETIME(), @ip, @cad, @rs, @rn, @rv); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+    id = r.recordset[0].id;
+  } catch (e) {
+    if (duplicado(e)) return { sucesso: false, mensagem: `${menor.Nome} já tem a adesão registrada.` };
+    throw e;
+  }
+  await registrarAuditoria({ tabela: "VoluntariadoAdesoes", registroId: id, acao: "ADESAO_REGISTRADA", usuarioId: responsavelId,
+    dadosDepois: { forma: "CLICK_RESP", membroId: Number(menorId), responsavelMembroId: Number(responsavelId), termoVersao: vol.TERMO_MENOR_VERSAO, termoHash: vol.TERMO_MENOR_HASH } });
+  return { sucesso: true, mensagem: `Autorização registrada. ${menor.Nome} já pode servir como voluntário(a). Obrigado por cuidar dele(a).`, adesao: await buscarAdesao(pool, menorId) };
 }
 
 // Retenção do IP do aceite digital (LGPD art. 16). Rotina diária (NotificacoesAgendador). Só mexe no IP e nos cabeçalhos: a adesão continua íntegra (o gatilho
@@ -249,7 +400,7 @@ async function anonimizarIpsVencidos(pool, { hoje = hojeBrasilia() } = {}) {
   const r = await pool.request().input("hoje", sql.Date, hoje).input("dias", sql.Int, dias).query(`
     UPDATE a SET EnderecoIp = N'anonimizado', CadeiaCabecalhos = NULL
     FROM VoluntariadoAdesoes a
-    WHERE a.Forma = 'CLICKWRAP' AND (a.EnderecoIp <> N'anonimizado' OR a.CadeiaCabecalhos IS NOT NULL)
+    WHERE a.Forma IN ('CLICKWRAP', 'CLICK_RESP') AND (a.EnderecoIp <> N'anonimizado' OR a.CadeiaCabecalhos IS NOT NULL)
       AND a.DataAceite < DATEADD(DAY, -@dias, @hoje)
       AND NOT EXISTS (SELECT 1 FROM EscalasEquipeMembros em WHERE em.MembroId = a.MembroId AND em.Ativo = 1)
       AND NOT EXISTS (SELECT 1 FROM EscalasAlocacoes al JOIN EscalasServicos s ON s.ServicoId = al.ServicoId WHERE al.MembroId = a.MembroId AND s.DataHora >= DATEADD(DAY, -@dias, @hoje));
@@ -265,9 +416,9 @@ async function anonimizarIpsVencidos(pool, { hoje = hojeBrasilia() } = {}) {
 // registrou: o titular recebe o fato (quando, onde, de que tipo) e a orientação de pedir o resto à Secretaria.
 async function dadosDoTitular(pool, membroId) {
   const q = (texto) => pool.request().input("m", sql.Int, membroId).query(texto);
-  const [adesao, equipes, alocacoes, indisponibilidades, remocoes, grupos] = await Promise.all([
+  const [adesao, equipes, alocacoes, indisponibilidades, remocoes, grupos, responsaveis, menoresDoResp, aceitesComoResp] = await Promise.all([
     q(`SELECT AdesaoId, Forma, TermoVersao, TermoHash, DataAceite, AceitoEm, EnderecoIp, CadeiaCabecalhos, CanalMensageria, Referencia, ResponsavelNome, ResponsavelVinculo, RegistradoPorMembroId, RegistradoEm
-       FROM VoluntariadoAdesoes WHERE MembroId = @m`),
+       FROM VoluntariadoAdesoes WHERE MembroId = @m ORDER BY AdesaoId DESC`),
     q(`SELECT e.Nome AS Equipe, c.Nome AS Congregacao, em.Ativo, em.CriadoEm
        FROM EscalasEquipeMembros em JOIN EscalasEquipes e ON e.EquipeId = em.EquipeId LEFT JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
        WHERE em.MembroId = @m ORDER BY em.CriadoEm DESC`),
@@ -279,16 +430,31 @@ async function dadosDoTitular(pool, membroId) {
        FROM VoluntariosDesligamentos d LEFT JOIN EscalasEquipes e ON e.EquipeId = d.EquipeId WHERE d.MembroId = @m ORDER BY d.DesligadoEm DESC`),
     q(`SELECT r.Nome AS Rodizio, g.Nome AS Grupo, gm.EntrouEm, gm.SaiuEm
        FROM EscalasRodizioGrupoMembros gm JOIN EscalasRodizioGrupos g ON g.GrupoId = gm.GrupoId JOIN EscalasRodizios r ON r.RodizioId = gm.RodizioId
-       WHERE gm.MembroId = @m ORDER BY gm.EntrouEm DESC`)
+       WHERE gm.MembroId = @m ORDER BY gm.EntrouEm DESC`),
+    // Quem é (ou foi) responsável legal desta pessoa, quando ela é menor.
+    q(`SELECT r.Vinculo, r.RegistradoEm, r.RevogadoEm, p.Nome AS Responsavel FROM VoluntariadoResponsaveis r JOIN MembroReferencia p ON p.MembroId = r.ResponsavelMembroId
+       WHERE r.MenorMembroId = @m ORDER BY r.ResponsavelId DESC`),
+    // Os menores de quem esta pessoa é responsável legal, e os aceites que ela deu por eles (o IP e a data são DELA, o responsável).
+    q(`SELECT r.Vinculo, r.RegistradoEm, r.RevogadoEm, mn.Nome AS Menor FROM VoluntariadoResponsaveis r JOIN MembroReferencia mn ON mn.MembroId = r.MenorMembroId
+       WHERE r.ResponsavelMembroId = @m ORDER BY r.ResponsavelId DESC`),
+    q(`SELECT a.DataAceite, a.AceitoEm, a.EnderecoIp, a.CadeiaCabecalhos, a.TermoVersao, a.TermoHash, mn.Nome AS Menor
+       FROM VoluntariadoAdesoes a JOIN MembroReferencia mn ON mn.MembroId = a.MembroId WHERE a.ResponsavelMembroId = @m ORDER BY a.AdesaoId DESC`)
   ]);
-  const a = adesao.recordset[0];
+  // O IP e os cabeçalhos de um aceite dado pelo RESPONSÁVEL são do responsável, não do menor: o menor não os recebe (o responsável os recebe em `aceitesComoResponsavel`).
+  const mapear = (a) => ({
+    forma: a.Forma, rotuloForma: vol.FORMAS_ADESAO[a.Forma], termoVersao: a.TermoVersao, termoHash: a.TermoHash, dataAceite: isoData(a.DataAceite), aceitoEm: isoInstante(a.AceitoEm),
+    enderecoIp: a.Forma === "CLICK_RESP" ? null : a.EnderecoIp, cadeiaCabecalhos: a.Forma === "CLICK_RESP" ? null : a.CadeiaCabecalhos,
+    canalMensageria: a.CanalMensageria, referencia: a.Referencia,
+    responsavelNome: a.ResponsavelNome || null, responsavelVinculo: a.ResponsavelVinculo ? vol.VINCULOS_RESPONSAVEL[a.ResponsavelVinculo] : null,
+    registradaPelaSecretaria: a.RegistradoPorMembroId != null, registradoEm: isoInstante(a.RegistradoEm)
+  });
+  const adesoes = adesao.recordset.map(mapear);
   return {
-    adesao: a ? {
-      forma: a.Forma, rotuloForma: vol.FORMAS_ADESAO[a.Forma], termoVersao: a.TermoVersao, termoHash: a.TermoHash, dataAceite: isoData(a.DataAceite), aceitoEm: isoInstante(a.AceitoEm),
-      enderecoIp: a.EnderecoIp, cadeiaCabecalhos: a.CadeiaCabecalhos, canalMensageria: a.CanalMensageria, referencia: a.Referencia,
-      responsavelNome: a.ResponsavelNome || null, responsavelVinculo: a.ResponsavelVinculo ? vol.VINCULOS_RESPONSAVEL[a.ResponsavelVinculo] : null,
-      registradaPelaSecretaria: a.RegistradoPorMembroId != null, registradoEm: isoInstante(a.RegistradoEm)
-    } : null,
+    adesao: adesoes[0] || null,
+    adesoesAnteriores: adesoes.slice(1),
+    responsaveisLegais: responsaveis.recordset.map(x => ({ nome: x.Responsavel, vinculo: vol.VINCULOS_RESPONSAVEL[x.Vinculo], desde: isoInstante(x.RegistradoEm), revogadoEm: isoInstante(x.RevogadoEm) })),
+    menoresSobMinhaResponsabilidade: menoresDoResp.recordset.map(x => ({ menor: x.Menor, vinculo: vol.VINCULOS_RESPONSAVEL[x.Vinculo], desde: isoInstante(x.RegistradoEm), revogadoEm: isoInstante(x.RevogadoEm) })),
+    aceitesComoResponsavel: aceitesComoResp.recordset.map(x => ({ menor: x.Menor, dataAceite: isoData(x.DataAceite), aceitoEm: isoInstante(x.AceitoEm), enderecoIp: x.EnderecoIp, cadeiaCabecalhos: x.CadeiaCabecalhos, termoVersao: x.TermoVersao, termoHash: x.TermoHash })),
     equipes: equipes.recordset.map(x => ({ equipe: x.Equipe, congregacao: x.Congregacao || null, ativo: !!x.Ativo, desde: isoInstante(x.CriadoEm) })),
     servicos: alocacoes.recordset.map(x => ({ dataHora: isoInstante(x.DataHora), descricao: x.Descricao || null, equipe: x.Equipe, situacao: x.Status })),
     indisponibilidades: indisponibilidades.recordset.map(x => ({ dataInicio: isoData(x.DataInicio), dataFim: isoData(x.DataFim), motivo: x.Motivo || null })),
@@ -993,13 +1159,13 @@ async function detectarHabitualidade(pool, { hoje = hojeBrasilia() } = {}) {
 
 // Voluntários escalados sem Termo de Adesão registrado: um aviso por congregação e por mês, para quem cuida da habilitação.
 async function detectarTermosPendentes(pool, { hoje = hojeBrasilia() } = {}) {
-  const r = await pool.request().query(`
+  const r = await pool.request().input("hoje", sql.Date, hoje).query(`
     SELECT e.CongregacaoId, c.Nome AS CongregacaoNome, m.MembroId, m.Nome
     FROM EscalasEquipeMembros em
     JOIN EscalasEquipes e ON e.EquipeId = em.EquipeId AND e.Ativa = 1
     JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
     JOIN MembroReferencia m ON m.MembroId = em.MembroId
-    LEFT JOIN VoluntariadoAdesoes a ON a.MembroId = m.MembroId
+    LEFT JOIN ${ADESAO_VIGENTE_SQL}
     WHERE em.Ativo = 1 AND a.AdesaoId IS NULL
     GROUP BY e.CongregacaoId, c.Nome, m.MembroId, m.Nome ORDER BY e.CongregacaoId, m.Nome`);
   const porCong = new Map();
@@ -1015,7 +1181,7 @@ async function detectarTermosPendentes(pool, { hoje = hojeBrasilia() } = {}) {
     const quem = info.nomes.slice(0, 5).join(", ") + (info.nomes.length > 5 ? ` e mais ${info.nomes.length - 5}` : "");
     fatos.push({
       referenciaId: congregacaoId * 10000 + chaveMensal(hoje), destinatarios,
-      fatoGerador: `${info.nomes.length} voluntário(s) de ${info.nome} servem em escalas sem o Termo de Adesão registrado (Lei 9.608/98, art. 2º): ${quem}. Peça o aceite em Meu Painel, registre a ficha/mensagem ou ratifique uma lista (Regimento Art. 133 §8º). Menor de 18 anos adere pela ficha assinada pelo responsável.`
+      fatoGerador: `${info.nomes.length} voluntário(s) de ${info.nome} servem em escalas sem o Termo de Adesão registrado (Lei 9.608/98, art. 2º): ${quem}. Peça o aceite em Meu Painel, registre a ficha/mensagem ou ratifique uma lista (Regimento Art. 133 §8º). Menor de 18 anos adere pelo aceite do responsável legal cadastrado (em Meu Painel dele) ou pela ficha assinada por ele; quem completou 18 anos confirma a própria adesão.`
     });
   }
   return fatos;
@@ -1024,6 +1190,7 @@ async function detectarTermosPendentes(pool, { hoje = hojeBrasilia() } = {}) {
 module.exports = {
   LIMITE_LISTA, nomeDoMembro: nomeDe,
   mapearAdesao, buscarAdesao, situacaoDoTermo, aceitarDigital, registrarAdesaoManual, ratificar, listarRatificacoes, coberturaDoTermo, anonimizarIpsVencidos, dadosDoTitular,
+  designarResponsavel, revogarResponsavel, listarResponsaveisDoMenor, responsaveisAtivosDe, menoresDoResponsavel, aceitarDigitalResponsavel,
   definirNaturezaEquipe, removidoDaEquipe, liderAtivo, lideraAlgumaEquipe, mensagemRemovido,
   buscarRodizio, listarRodizios, detalharRodizio, criarRodizio, alterarAtivoRodizio, buscarGrupo, criarGrupo, adicionarMembroAoGrupo, removerMembroDoGrupo, desativarGrupo,
   previaGeracao, gerarRodizio, cancelarServicosFuturos, meusRodizios,

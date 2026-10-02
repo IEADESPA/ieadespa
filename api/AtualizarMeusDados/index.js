@@ -6,15 +6,15 @@
 // POST /api/meus-dados/{matricula} -> body: { telefone?, email?, endereco?, estadoCivil? }
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const auth = require("../shared/auth");
 
 const ESTADOS_CIVIS = ["SOLTEIRO", "CASADO", "VIUVO", "DIVORCIADO", "UNIAO_ESTAVEL"];
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão. Antes, quem soubesse o número lia e TROCAVA telefone, e-mail e endereço de qualquer
+  // pessoa (e o e-mail é para onde vai o código de acesso).
   const matricula = context.bindingData.matricula;
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
+  if (!auth.exigirTitular(req, context, matricula)) return;
 
   const pool = await getPool();
 

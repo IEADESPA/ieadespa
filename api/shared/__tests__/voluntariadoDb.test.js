@@ -274,6 +274,15 @@ describe("ratificação coletiva — recusas antes de gravar", () => {
     expect(q.sql).toMatch(/DataNascimento IS NOT NULL/);
     expect(q.inputs.hoje).toBe(HOJE);
   });
+  test("'já aderiu' conta só a adesão que VALE: a mais recente, e a dada pelo responsável só enquanto a pessoa tem menos de 18 anos", async () => {
+    const { pool, chamadas } = criarPoolFalso([[sessaoDoDia], [{ MembroId: 20 }], []]);
+    await db.ratificar(pool, { dados: lista(), por: 5, autorizacao: global, hoje: HOJE }).catch(() => {});     // a 4ª consulta ("já aderiu") fica sem resposta: é registrada e a chamada para ali, antes da transação
+    const q = chamadas.find(c => /FROM MembroReferencia m JOIN VoluntariadoAdesoes a ON a\.MembroId = m\.MembroId/.test(c.sql));
+    expect(q).toBeTruthy();
+    expect(q.sql).toMatch(/a\.AdesaoId = \(SELECT MAX\(x\.AdesaoId\) FROM VoluntariadoAdesoes x WHERE x\.MembroId = m\.MembroId\)/);
+    expect(q.sql).toMatch(/NOT \(a\.ResponsavelNome IS NOT NULL AND m\.DataNascimento IS NOT NULL AND m\.DataNascimento <= DATEADD\(YEAR, -18, @hoje\)\)/);
+    expect(q.inputs.hoje).toBe(HOJE);
+  });
 });
 
 describe("natureza da equipe", () => {
@@ -645,6 +654,15 @@ describe("avisos periódicos", () => {
     expect(fato.fatoGerador).toMatch(/8 voluntário\(s\)/);
     expect(fato.fatoGerador).toMatch(/V1, V2, V3, V4, V5 e mais 3/);
   });
+  test("Termo pendente: quem só tem adesão dada pelo responsável e completou 18 anos volta a contar como pendente (mesma regra de vigência)", async () => {
+    const { pool, chamadas } = criarPoolFalso([[]]);
+    await db.detectarTermosPendentes(pool, { hoje: HOJE });
+    expect(chamadas[0].sql).toMatch(/LEFT JOIN VoluntariadoAdesoes a ON a\.MembroId = m\.MembroId/);
+    expect(chamadas[0].sql).toMatch(/SELECT MAX\(x\.AdesaoId\) FROM VoluntariadoAdesoes x WHERE x\.MembroId = m\.MembroId/);
+    expect(chamadas[0].sql).toMatch(/NOT \(a\.ResponsavelNome IS NOT NULL AND m\.DataNascimento IS NOT NULL AND m\.DataNascimento <= DATEADD\(YEAR, -18, @hoje\)\)/);
+    expect(chamadas[0].sql).toMatch(/a\.AdesaoId IS NULL/);
+    expect(chamadas[0].inputs.hoje).toBe(HOJE);
+  });
   test("Termo pendente: todo mundo aderiu, nada a avisar", async () => {
     expect(await db.detectarTermosPendentes(criarPoolFalso([[]]).pool, { hoje: HOJE })).toEqual([]);
   });
@@ -698,7 +716,7 @@ describe("retenção do IP do aceite digital (LGPD art. 16)", () => {
     const up = chamadas[1];
     expect(up.inputs).toMatchObject({ hoje: HOJE, dias: 1000 });
     expect(up.sql).toMatch(/SET EnderecoIp = N'anonimizado', CadeiaCabecalhos = NULL/);
-    expect(up.sql).toMatch(/a\.Forma = 'CLICKWRAP'/);
+    expect(up.sql).toMatch(/a\.Forma IN \('CLICKWRAP', 'CLICK_RESP'\)/);           // o IP do aceite do responsável também vence
     expect(up.sql).toMatch(/a\.DataAceite < DATEADD\(DAY, -@dias, @hoje\)/);
     expect(up.sql).toMatch(/NOT EXISTS \(SELECT 1 FROM EscalasEquipeMembros em WHERE em\.MembroId = a\.MembroId AND em\.Ativo = 1\)/);
     expect(up.sql).toMatch(/s\.DataHora >= DATEADD\(DAY, -@dias, @hoje\)/);

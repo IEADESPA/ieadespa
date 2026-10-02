@@ -11,17 +11,20 @@
 // e-mail (e foto) pra contato" — MeusDadosLGPD não checa mais nada daqui.
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
+const { exigirTitularOuPermissao } = require("../shared/titular");
 
 const TIPO_PADRAO = "DADOS_CONTATO";
+const TIPOS_CONSENTIMENTO = ["DADOS_CONTATO", "FOTO"];
 
 module.exports = async function (context, req) {
-  const matricula = context.bindingData.matricula;
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
-
+  // fecho da v7.5 — exige sessão. Quem lê e registra o consentimento é o titular; a Secretaria também o faz na ficha da pessoa (aba Foto), e só com a
+  // permissão "pessoas" e a congregação da pessoa no seu escopo. Antes qualquer um concedia ou revogava o consentimento de qualquer matrícula.
   const pool = await getPool();
+  const acesso = await exigirTitularOuPermissao(req, context, pool, context.bindingData.matricula, "pessoas");
+  if (!acesso) return;
+  const { usuario, alvo } = acesso;
+  const matricula = alvo;
+
   const membro = await pool.request().input("mat", sql.Int, matricula).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @mat`);
   if (membro.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
@@ -42,30 +45,34 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const { tipo, concedido, observacao, baseLegal, registradoPor } = req.body || {};
-    if (concedido === undefined || concedido === null) {
+    const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const { concedido } = corpo;
+    if (typeof concedido !== "boolean") {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe concedido (true/false)." } };
       return;
     }
-    const tipoFinal = tipo || TIPO_PADRAO;
-    // registradoPor normalmente é a própria matrícula, mas um responsável legal pode
-    // registrar o consentimento em nome de um menor (v1.7) que ainda não acessa o
-    // Meu Painel sozinho — sem validação cruzada rígida contra VinculosFamiliares
-    // nesta rodada: quem tem acesso físico ao Painel já está com a matrícula da criança.
+    const tipoFinal = corpo.tipo || TIPO_PADRAO;
+    if (!TIPOS_CONSENTIMENTO.includes(tipoFinal)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: `Tipo de consentimento inválido. Use: ${TIPOS_CONSENTIMENTO.join(", ")}.` } };
+      return;
+    }
+    const observacao = typeof corpo.observacao === "string" ? corpo.observacao.trim().slice(0, 300) : null;
+    // Quem registrou é SEMPRE quem está na sessão (antes vinha do corpo, e qualquer um se passava por responsável legal). Se for a Secretaria registrando na ficha
+    // da pessoa, fica gravado que não foi o próprio titular.
     await pool.request()
       .input("mat", sql.Int, matricula)
       .input("tipo", sql.NVarChar(40), tipoFinal)
       .input("concedido", sql.Bit, concedido)
-      .input("baseLegal", sql.NVarChar(40), baseLegal || "CONSENTIMENTO")
-      .input("observacao", sql.NVarChar(300), observacao || null)
-      .input("registradoPor", sql.Int, registradoPor || matricula)
+      .input("baseLegal", sql.NVarChar(40), "CONSENTIMENTO")
+      .input("observacao", sql.NVarChar(300), acesso.proprio ? (observacao || null) : (`Registrado pela Secretaria. ${observacao || ""}`).trim())
+      .input("registradoPor", sql.Int, usuario.membroId)
       .query(`INSERT INTO ConsentimentosLGPD (MembroId, Tipo, Concedido, BaseLegal, Observacao, RegistradoPor)
               VALUES (@mat, @tipo, @concedido, @baseLegal, @observacao, @registradoPor)`);
 
     await registrarAuditoria({
       tabela: "ConsentimentosLGPD", registroId: Number(matricula),
       acao: concedido ? "Concedeu consentimento LGPD" : "Revogou consentimento LGPD",
-      usuarioId: Number(matricula), dadosDepois: { tipo: tipoFinal, concedido }
+      usuarioId: Number(usuario.membroId), dadosDepois: { tipo: tipoFinal, concedido, registradoPelaSecretaria: !acesso.proprio }
     });
 
     context.res = {

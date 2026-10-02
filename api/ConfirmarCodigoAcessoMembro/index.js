@@ -8,12 +8,23 @@
 // sessão de autoatendimento nunca tem permissão pra isso.
 // POST /api/membro/confirmar-codigo -> { matricula, codigo }
 const { getPool, sql } = require("../shared/db");
-const { confirmarCodigo } = require("../shared/codigoAcesso");
+const { confirmarCodigo, MENSAGEM_FALHA } = require("../shared/codigoAcesso");
+const { lerPin } = require("../shared/pinMembro");
 const auth = require("../shared/auth");
+const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
+
+// Contenção por origem (por instância), além do limite de tentativas por código (shared/codigoAcesso.js).
+const limitador = criarLimitador({ janelaMs: 60000, maximo: 60 });
 
 module.exports = async function (context, req) {
-  const matricula = Number((req.body || {}).matricula);
-  const codigo = String((req.body || {}).codigo || "").trim();
+  const limite = limitador.registrar(chaveDeOrigem(req));
+  if (!limite.permitido) {
+    context.res = { status: 429, headers: { "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas tentativas seguidas. Aguarde um minuto e tente de novo." } };
+    return;
+  }
+  const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+  const matricula = auth.idDeRota(corpo.matricula);
+  const codigo = typeof corpo.codigo === "string" ? corpo.codigo.trim() : "";
   if (!matricula || !codigo) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe matrícula e código." } };
     return;
@@ -23,7 +34,7 @@ module.exports = async function (context, req) {
     `SELECT MembroId, Nome FROM MembroReferencia WHERE MembroId = @id AND Status = 'ATIVO'`
   )).recordset[0];
   if (!membro) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Código incorreto." } }; // mesma mensagem de "código errado" — não confirma se a matrícula existe
+    context.res = { status: 200, body: { sucesso: false, mensagem: MENSAGEM_FALHA } }; // a MESMA mensagem de qualquer falha de código — não confirma se a matrícula existe
     return;
   }
 
@@ -33,15 +44,19 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // fecho da v7.5 — `via: "CODIGO"` na sessão: quem entrou pelo código do e-mail (esqueci o PIN / primeiro acesso) escolhe o PIN novo sem informar o antigo.
+  // `precisaCriarPin`: ainda não tem PIN, ou só tem o provisório — a tela manda criar antes de abrir o painel.
+  const pin = await lerPin(pool, membro.MembroId);
+  const precisaCriarPin = !pin || pin.provisorio;
   const dispositivoInfo = (req.headers && (req.headers["user-agent"] || req.headers["User-Agent"])) || null;
   const token = await auth.criarSessao(pool, sql, {
     membroId: membro.MembroId, nome: membro.Nome, tipo: "Membro (autoatendimento)",
-    nivel: null, escopoCongregacoes: [], permissoes: [], termosPendentes: []
+    nivel: null, escopoCongregacoes: [], permissoes: [], termosPendentes: [], via: "CODIGO"
   }, dispositivoInfo);
 
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: true, token, nome: membro.Nome, tipo: "Membro (autoatendimento)", nivel: null, permissoes: [], matricula: membro.MembroId }
+    body: { sucesso: true, token, nome: membro.Nome, tipo: "Membro (autoatendimento)", nivel: null, permissoes: [], matricula: membro.MembroId, precisaCriarPin }
   };
 };

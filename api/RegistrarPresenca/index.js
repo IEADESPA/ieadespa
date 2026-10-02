@@ -12,8 +12,19 @@
 const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
 const { registrarAuditoria } = require("../shared/auditoria");
+const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
+
+// fecho da v7.5 — a porta é anônima por desenho (a senha da reunião, dita na sala, é a credencial), mas a senha é texto livre e não havia limite: quem testasse senhas
+// de reunião aberta marcaria presença de qualquer matrícula. Contenção por origem (por instância); alta o bastante para uma congregação inteira no mesmo wi-fi entrar
+// em poucos minutos.
+const limitador = criarLimitador({ janelaMs: 60000, maximo: 120 });
 
 module.exports = async function (context, req) {
+  const limite = limitador.registrar(chaveDeOrigem(req));
+  if (!limite.permitido) {
+    context.res = { status: 429, headers: { "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas tentativas seguidas. Aguarde um minuto e tente de novo." } };
+    return;
+  }
   const { matricula, senha, sessaoId } = req.body || {};
 
   if (!matricula || !senha) {

@@ -10,7 +10,9 @@ const { listarFluxosDoUsuario, avancarEtapa, resolverResponsaveisEtapa } = requi
 
 module.exports = async function (context, req) {
   const id = context.bindingData.id;
-  const usuario = auth.exigirLogin(req, context);
+  // fecho da v7.5 — "o que está comigo" e aprovar/rejeitar/devolver etapa dependem de a PESSOA ser a liderança responsável pela etapa (a consulta olha a tabela de
+  // liderança pela matrícula): só vale a sessão aberta com a senha administrativa, nunca a de PIN ou de código de e-mail.
+  const usuario = auth.exigirSessaoDeLideranca(req, context);
   if (!usuario) return;
   const pool = await getPool();
 

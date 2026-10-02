@@ -28,6 +28,7 @@
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { garantirContaSite } = require("../shared/directusContas");
+const auth = require("../shared/auth");
 
 const TIPOS = ["RECOMENDACAO", "MUDANCA", "ATESTADO_SUPLETIVO"];
 const EMISSAO_IMEDIATA = ["RECOMENDACAO", "ATESTADO_SUPLETIVO"];
@@ -59,12 +60,12 @@ const SELECT_CARTA = `
 module.exports = async function (context, req) {
   const method = req.method;
 
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão (o comentário acima já dizia "ninguém pode solicitar no lugar de outra pessoa", mas
+  // bastava informar o número). A matrícula informada na query (GET) ou no corpo (POST) é conferida contra a da sessão.
   if (method === "GET") {
-    const mat = Number((req.query || {}).matricula);
-    if (!mat) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula: /api/cartas/minhas?matricula=123" } };
-      return;
-    }
+    const usuario = auth.exigirTitular(req, context, (req.query || {}).matricula);
+    if (!usuario) return;
+    const mat = Number(usuario.membroId);
     const pool = await getPool();
     const result = await pool.request().input("id", sql.Int, mat).query(`${SELECT_CARTA} ORDER BY c.CartaId DESC`);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
@@ -76,9 +77,18 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const { matricula, tipo, destino, motivoSaida, confirmar, manterAcessoSite } = req.body || {};
-  if (!matricula || !tipo || !TIPOS.includes(tipo)) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: `Informe matricula e tipo válido (${TIPOS.join(", ")}).` } };
+  const corpoCarta = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+  const usuarioCarta = auth.exigirTitular(req, context, corpoCarta.matricula);
+  if (!usuarioCarta) return;
+  const matricula = Number(usuarioCarta.membroId);
+  const { tipo, destino, motivoSaida, confirmar, manterAcessoSite } = corpoCarta;
+  if (!tipo || !TIPOS.includes(tipo)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: `Informe o tipo válido (${TIPOS.join(", ")}).` } };
+    return;
+  }
+  const textoOk = (v, max) => v == null || v === "" || (typeof v === "string" && v.length <= max);
+  if (!textoOk(destino, 150) || !textoOk(motivoSaida, 200)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Destino (até 150 caracteres) e motivo (até 200) precisam ser texto." } };
     return;
   }
 

@@ -7,6 +7,8 @@
 // GET /api/cartas/{id}/pdf?matricula=123 — mesmo modelo de autoatendimento
 // de SolicitarCarta: só quem informa a PRÓPRIA matrícula baixa a própria carta.
 const { getPool, sql } = require("../shared/db");
+const auth = require("../shared/auth");
+const { exigirTitularOuPermissao } = require("../shared/titular");
 const { gerarProtocolo } = require("../shared/protocolo");
 const { novoDocumento, cabecalhoInstitucional, rodapeInstitucional, gerarBuffer } = require("../shared/pdfInstitucional");
 
@@ -21,13 +23,16 @@ function fmtData(iso) {
 }
 
 module.exports = async function (context, req) {
-  const cartaId = context.bindingData.id;
-  const matricula = Number((req.query || {}).matricula);
-  if (!cartaId || !matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula: /api/cartas/{id}/pdf?matricula=123" } };
+  // fecho da v7.5 — exige sessão: o titular baixa a própria carta; a Secretaria (permissão "pessoas", congregação no escopo) baixa a de quem emitiu.
+  const pool = await getPool();
+  const acesso = await exigirTitularOuPermissao(req, context, pool, (req.query || {}).matricula, "pessoas");
+  if (!acesso) return;
+  const matricula = acesso.alvo;
+  const cartaId = auth.idDeRota(context.bindingData.id);
+  if (!cartaId) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a carta e a matrícula: /api/cartas/{id}/pdf?matricula=123" } };
     return;
   }
-  const pool = await getPool();
   const carta = (await pool.request().input("id", sql.Int, cartaId).query(`
     SELECT c.CartaId AS cartaId, c.MembroId AS membroId, m.Nome AS nome, cg.Nome AS congregacao,
            c.Tipo AS tipo, c.Status AS status, c.Destino AS destino, c.Protocolo AS protocolo,

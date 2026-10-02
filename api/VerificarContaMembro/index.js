@@ -8,8 +8,18 @@
 // e-mail arbitrário pertence a alguém específico.
 // GET /api/verificar-conta-membro?email=fulano@exemplo.com
 const { getPool, sql } = require("../shared/db");
+const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
+
+// fecho da v7.5 — rota anônima que responde "este e-mail é de membro ativo?": sem limite, serviria para varrer e-mails. Contenção por origem (o site chama de um servidor só,
+// uma vez por criação de conta). O ideal é um segredo servidor a servidor entre o site e esta API (pede configurar a mesma chave nos dois Static Web Apps).
+const limitador = criarLimitador({ janelaMs: 60000, maximo: 20 });
 
 module.exports = async function (context, req) {
+  const limite = limitador.registrar(chaveDeOrigem(req));
+  if (!limite.permitido) {
+    context.res = { status: 429, headers: { "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas consultas seguidas. Aguarde um minuto." } };
+    return;
+  }
   if (req.method !== "GET") {
     context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
     return;

@@ -9,13 +9,12 @@
 // dizimista em lugar nenhum (silencioso, sem vazar se a matrícula existe).
 // GET /api/meus-lancamentos-tesouraria/{matricula}
 const { getPool, sql } = require("../shared/db");
+const auth = require("../shared/auth");
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão (antes bastava o número; ver shared/auth.js::exigirTitular).
   const matricula = context.bindingData.matricula;
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
+  if (!auth.exigirTitular(req, context, matricula)) return;
 
   const pool = await getPool();
   const result = await pool.request().input("mat", sql.Int, matricula).query(`

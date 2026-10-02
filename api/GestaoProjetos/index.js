@@ -92,6 +92,8 @@ module.exports = async function (context, req) {
 
   // ---- GET: lista ----
   if (req.method === "GET" && !id) {
+    // fecho da v7.5 — a lista (autor, texto e pareceres dos projetos) era aberta a qualquer pessoa da internet; agora exige sessão (a tela já só chamava logada).
+    if (!auth.exigirLoginIgnorandoTermos(req, context)) return;
     const result = await pool.request().query(`
       SELECT p.ProjetoId AS projetoId, p.Protocolo AS protocolo, p.AutorMembroId AS autorMembroId,
              m.Nome AS autorNome, p.Titulo AS titulo, p.Texto AS texto, p.ComissaoTematica AS comissaoTematica,

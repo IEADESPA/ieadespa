@@ -160,10 +160,13 @@ function podeServirComMenores({ habilitacao, dataAdmissao, contatoComMenores }, 
 // lista fechada) — deliberadamente NADA aqui verifica ou aciona disciplina
 // (FASE 3/CEI). "Perda de confiança" é só mais um TipoMotivo de RH.
 function validarDesligamento({ motivo, tipoMotivo }) {
-  if (!motivo || !motivo.trim()) {
+  if (typeof motivo !== "string" || !motivo.trim()) {
     return { valido: false, mensagem: "Informe o motivo do desligamento." };
   }
-  if (tipoMotivo && !TIPOS_MOTIVO_DESLIGAMENTO.includes(tipoMotivo)) {
+  if (motivo.trim().length > 300) {
+    return { valido: false, mensagem: "O motivo aceita até 300 caracteres." };
+  }
+  if (tipoMotivo != null && tipoMotivo !== "" && (typeof tipoMotivo !== "string" || !TIPOS_MOTIVO_DESLIGAMENTO.includes(tipoMotivo))) {
     return { valido: false, mensagem: `Tipo de motivo inválido. Use um de: ${TIPOS_MOTIVO_DESLIGAMENTO.join(", ")}.` };
   }
   return { valido: true };
@@ -421,9 +424,12 @@ async function registrarDesligamento(pool, { membroId, equipeId, tipoMotivo, mot
 
 async function listarDesligamentosPorMembro(pool, membroId) {
   const result = await pool.request().input("membroId", sql.Int, membroId).query(`
-    SELECT DesligamentoId AS desligamentoId, EquipeId AS equipeId, TipoMotivo AS tipoMotivo, Motivo AS motivo,
-           RemovidoDaEscala AS removidoDaEscala, DesligadoEm AS desligadoEm
-    FROM VoluntariosDesligamentos WHERE MembroId = @membroId ORDER BY DesligadoEm DESC
+    SELECT d.DesligamentoId AS desligamentoId, d.EquipeId AS equipeId, d.TipoMotivo AS tipoMotivo, d.Motivo AS motivo,
+           d.RemovidoDaEscala AS removidoDaEscala, d.DesligadoEm AS desligadoEm, c.Nome AS congregacaoNome
+    FROM VoluntariosDesligamentos d
+    LEFT JOIN EscalasEquipes e ON e.EquipeId = d.EquipeId
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
+    WHERE d.MembroId = @membroId ORDER BY d.DesligadoEm DESC
   `);
   return result.recordset;
 }

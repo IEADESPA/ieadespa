@@ -38,6 +38,8 @@ const vdb = require("../shared/voluntariadoDb");
 const { isoInstante } = require("../shared/canaisDb");
 const { enviarCanaisNotificacao } = require("../shared/notificacaoMotor");
 
+const CAMPOS_ID = ["servicoId", "alocacaoId", "alocacaoOrigemId", "membroDestinoId", "trocaId", "equipeId", "membroId", "congregacaoId", "liderMembroId"];
+
 function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
 }
@@ -57,9 +59,26 @@ async function podeGerenciarCongregacao(pool, usuario, congregacaoId) {
 // escalas (Presidente/Secretário Geral) sempre pode agir por cima — mesmo
 // princípio de "nível mais alto cobre o de baixo" usado no resto do
 // sistema (shared/escopo.js::membroAutorizadoNoOrgaoLocal).
+// v7.5 (achado da revisão de segurança): a permissão "escalas" só vale na congregação que o ESCOPO de quem pede alcança. Antes, quem a tinha
+// agia em QUALQUER congregação (incluir voluntário em equipe alheia, aprovar troca, ver pendências).
 function ehLiderOuAdmin(usuario, equipe) {
-  if (usuario.permissoes && usuario.permissoes.includes("escalas")) return true;
-  return equipe && Number(equipe.liderMembroId) === Number(usuario.membroId);
+  if (!equipe) return false;
+  if (Number(equipe.liderMembroId) === Number(usuario.membroId)) return true;
+  return !!(usuario.permissoes && usuario.permissoes.includes("escalas")) && auth.estaNoEscopo(usuario, equipe.congregacaoNome);
+}
+
+// Texto livre que vai para coluna de tamanho fixo: recusa o que não é texto ou passa do limite (antes estourava o banco e virava erro 500).
+function textoValido(valor, max) {
+  if (valor == null || valor === "") return { ok: true, valor: null };
+  if (typeof valor !== "string") return { ok: false };
+  const v = valor.trim();
+  return v.length <= max ? { ok: true, valor: v || null } : { ok: false };
+}
+function inteiroEntre(valor, min, max) {
+  if (valor == null || valor === "") return { ok: true, valor: null };
+  if (typeof valor === "boolean" || typeof valor === "object") return { ok: false };
+  const n = Number(valor);
+  return Number.isInteger(n) && n >= min && n <= max ? { ok: true, valor: n } : { ok: false };
 }
 
 module.exports = async function (context, req) {
@@ -69,6 +88,15 @@ module.exports = async function (context, req) {
   const pool = await getPool();
   const acao = context.bindingData.acao;
   const metodo = req.method;
+
+  // v7.5 (achado da revisão): todo identificador que chega de fora precisa ser um número inteiro positivo. "abc", lista, objeto, booleano ou número
+  // gigante chegavam ao banco e viravam erro 500; agora são recusados na entrada.
+  const ehIdRuim = (v) => v != null && v !== "" && !((typeof v === "number" || (typeof v === "string" && /^\d+$/.test(v.trim()))) && Number(v) >= 1 && Number(v) <= 2147483647);
+  for (const campo of CAMPOS_ID) {
+    for (const origem of [req.body, req.query]) {
+      if (origem && typeof origem === "object" && !Array.isArray(origem) && campo in origem && ehIdRuim(origem[campo])) return erro(context, 400, `${campo} inválido.`);
+    }
+  }
 
   try {
     // ---- Equipes ----
@@ -84,6 +112,7 @@ module.exports = async function (context, req) {
       if (metodo === "POST") {
         const { nome, congregacaoId, liderMembroId } = req.body || {};
         if (!nome || !congregacaoId || !liderMembroId) return erro(context, 400, "Informe nome, congregacaoId e liderMembroId.");
+        if (!textoValido(nome, 100).ok || !inteiroEntre(congregacaoId, 1, 2147483647).ok || !inteiroEntre(liderMembroId, 1, 2147483647).ok) return erro(context, 400, "Dados inválidos: o nome aceita até 100 caracteres e as matrículas são números.");
         if (!(await podeGerenciarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
         const equipeId = await es.criarEquipe(pool, { nome, congregacaoId, liderMembroId });
         context.res = { status: 201, body: { sucesso: true, equipeId } };
@@ -97,7 +126,7 @@ module.exports = async function (context, req) {
       if (!equipeId) return erro(context, 400, "Informe equipeId.");
       const equipe = await es.buscarEquipe(pool, equipeId);
       if (!equipe) return erro(context, 404, "Equipe não encontrada.");
-      if (!ehLiderOuAdmin(usuario, equipe) && !(usuario.permissoes && usuario.permissoes.includes("escalas"))) {
+      if (!ehLiderOuAdmin(usuario, equipe)) {
         return erro(context, 403, "Só o líder da equipe ou quem administra escalas.");
       }
       if (metodo === "GET") {
@@ -107,6 +136,7 @@ module.exports = async function (context, req) {
       if (metodo === "POST") {
         const { membroId, frequenciaPreferidaDias } = req.body || {};
         if (!membroId) return erro(context, 400, "Informe membroId.");
+        if (!inteiroEntre(membroId, 1, 2147483647).ok || !inteiroEntre(frequenciaPreferidaDias, 1, 365).ok) return erro(context, 400, "Dados inválidos: a matrícula é um número e a frequência vai de 1 a 365 dias.");
         // v7.5 (Art. 133-D): quem foi removido da escala desta equipe não volta por outra porta — só pela reintegração.
         const removido = await vdb.removidoDaEquipe(pool, { membroId: Number(membroId), equipeId });
         if (removido) return erro(context, 422, vdb.mensagemRemovido(removido, await vdb.nomeDoMembro(pool, Number(membroId))));
@@ -129,6 +159,9 @@ module.exports = async function (context, req) {
       if (metodo === "POST") {
         const { congregacaoId, dataHora, descricao, prazoConfirmacaoDias } = req.body || {};
         if (!congregacaoId || !dataHora) return erro(context, 400, "Informe congregacaoId e dataHora.");
+        if (!inteiroEntre(congregacaoId, 1, 2147483647).ok || typeof dataHora !== "string" || Number.isNaN(Date.parse(dataHora)) || !textoValido(descricao, 200).ok || !inteiroEntre(prazoConfirmacaoDias, 1, 30).ok) {
+          return erro(context, 400, "Dados inválidos: informe uma data e hora válidas, descrição de até 200 caracteres e prazo de 1 a 30 dias.");
+        }
         if (!(await podeGerenciarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
         const servicoId = await es.criarServico(pool, { congregacaoId, dataHora, descricao, prazoConfirmacaoDias, criadoPorMembroId: usuario.membroId });
         context.res = { status: 201, body: { sucesso: true, servicoId } };
@@ -262,7 +295,8 @@ module.exports = async function (context, req) {
       if (metodo === "POST") {
         const { dataInicio, dataFim, motivo, liberarEscalas } = req.body || {};
         if (!dataInicio || !dataFim) return erro(context, 400, "Informe dataInicio e dataFim.");
-        if (!cal.dataIsoValida(String(dataInicio)) || !cal.dataIsoValida(String(dataFim)) || String(dataFim) < String(dataInicio)) return erro(context, 400, "Datas inválidas: use AAAA-MM-DD, com o fim depois do início.");
+        if (typeof dataInicio !== "string" || typeof dataFim !== "string" || !cal.dataIsoValida(dataInicio) || !cal.dataIsoValida(dataFim) || dataFim < dataInicio) return erro(context, 400, "Datas inválidas: use AAAA-MM-DD, com o fim depois do início.");
+        if (!textoValido(motivo, 200).ok) return erro(context, 400, "O motivo aceita até 200 caracteres.");
         const indisponibilidadeId = await es.criarIndisponibilidade(pool, { membroId: usuario.membroId, dataInicio, dataFim, motivo });
         let liberadas = 0;
         const conflitos = await vdb.conflitosDoAfastamento(pool, { membroId: usuario.membroId, dataInicio: String(dataInicio), dataFim: String(dataFim) });
@@ -315,6 +349,7 @@ module.exports = async function (context, req) {
     if (acao === "trocas-aprovar" && metodo === "POST") {
       const { trocaId, aprovar, observacao } = req.body || {};
       if (!trocaId || typeof aprovar !== "boolean") return erro(context, 400, "Informe trocaId e aprovar (true/false).");
+      if (!inteiroEntre(trocaId, 1, 2147483647).ok || !textoValido(observacao, 300).ok) return erro(context, 400, "Dados inválidos: a observação aceita até 300 caracteres.");
       const troca = await es.buscarTroca(pool, trocaId);
       if (!troca) return erro(context, 404, "Troca não encontrada.");
       const equipe = await es.buscarEquipe(pool, troca.equipeId);

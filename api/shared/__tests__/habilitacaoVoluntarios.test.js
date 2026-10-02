@@ -214,4 +214,18 @@ describe("validarDesligamento (registro de RH — nunca sanção disciplinar)", 
   test("tipoMotivo é opcional (backend assume OUTRO)", () => {
     expect(hv.validarDesligamento({ motivo: "Mudou de cidade." }).valido).toBe(true);
   });
+
+  // v7.5 (achado da revisão): lixo vindo do corpo da requisição virava erro 500 (motivo não-texto) ou estourava a coluna de 300 caracteres.
+  test("motivo que não é texto, ou que passa de 300 caracteres, é recusado em vez de estourar", () => {
+    for (const motivo of [true, 1, {}, [], ["x"], null, undefined]) expect(hv.validarDesligamento({ motivo }).valido).toBe(false);
+    expect(hv.validarDesligamento({ motivo: "x".repeat(300) }).valido).toBe(true);
+    const longo = hv.validarDesligamento({ motivo: "x".repeat(301) });
+    expect(longo.valido).toBe(false);
+    expect(longo.mensagem).toMatch(/300 caracteres/);
+  });
+
+  test("tipoMotivo que não é texto é recusado; vazio e ausente continuam valendo como 'outro'", () => {
+    for (const tipoMotivo of [true, 1, {}, ["OUTRO"]]) expect(hv.validarDesligamento({ motivo: "ok", tipoMotivo }).valido).toBe(false);
+    for (const tipoMotivo of [undefined, null, ""]) expect(hv.validarDesligamento({ motivo: "ok", tipoMotivo }).valido).toBe(true);
+  });
 });

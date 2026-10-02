@@ -653,11 +653,24 @@ async function removerDaEscala(pool, { dados, equipeId = null, podeCongregacao =
   await transaction.begin();
   const registros = [];
   try {
-    await cancelarAlocacoes(transaction, { alocacoes: futuras, membroId: v.dados.membroId, por, de: hoje, equipeIds });
+    // A porta de entrada é a própria desativação na equipe (só quem ainda está ativo sai): se duas pessoas removem ao mesmo tempo, a segunda
+    // espera a primeira e não acha mais ninguém ativo — nada de registro de RH nem aviso em duplicata.
+    const efetivas = [];
     for (const eq of equipes) {
-      const proprias = futuras.filter(a => a.equipeId === eq.EquipeId);
-      await new sql.Request(transaction).input("e", sql.Int, eq.EquipeId).input("m", sql.Int, v.dados.membroId)
-        .query(`UPDATE EscalasEquipeMembros SET Ativo = 0 WHERE EquipeId = @e AND MembroId = @m`);
+      const u = await new sql.Request(transaction).input("e", sql.Int, eq.EquipeId).input("m", sql.Int, v.dados.membroId)
+        .query(`UPDATE EscalasEquipeMembros SET Ativo = 0 WHERE EquipeId = @e AND MembroId = @m AND Ativo = 1`);
+      if (u.rowsAffected && u.rowsAffected[0] > 0) efetivas.push(eq);
+    }
+    if (efetivas.length === 0) {
+      await fecharTransacao(transaction, false);
+      return { sucesso: false, mensagem: `${m.Nome} já foi removido(a) dessa escala por outra pessoa.` };
+    }
+    equipes = efetivas;
+    const idsEfetivos = efetivas.map(e => e.EquipeId);
+    const aCancelar = futuras.filter(a => idsEfetivos.includes(a.equipeId));
+    await cancelarAlocacoes(transaction, { alocacoes: aCancelar, membroId: v.dados.membroId, por, de: hoje, equipeIds: idsEfetivos });
+    for (const eq of equipes) {
+      const proprias = aCancelar.filter(a => a.equipeId === eq.EquipeId);
       // A pessoa sai também dos grupos de rodízio dessa equipe: o revezamento segue com quem ficou.
       await new sql.Request(transaction).input("e", sql.Int, eq.EquipeId).input("m", sql.Int, v.dados.membroId)
         .query(`UPDATE gm SET SaiuEm = SYSUTCDATETIME() FROM EscalasRodizioGrupoMembros gm JOIN EscalasRodizios r ON r.RodizioId = gm.RodizioId

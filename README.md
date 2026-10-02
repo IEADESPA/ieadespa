@@ -329,9 +329,12 @@ diz em que arquivo ela está e em que pé ela anda.
   exigência de sessão em todas as rotas de autoatendimento (que antes tratavam a matrícula como a própria pessoa) e o
   **Termo do menor aceito pelo responsável legal**. Uma revisão independente do acesso por PIN achou outras brechas
   (sessão de PIN valendo como liderança, troca de senha sem a senha atual, escopo de congregação ausente na ficha de
-  pessoa, voto de enquete com a matrícula do corpo, entre outras): todas corrigidas e presas por teste. Ficam
-  **declarados como em aberto**, no plano da fase 7, o escopo de congregação em algumas rotas de ficha e a leitura
-  pública dos catálogos. **Próxima: a 🔒 Trava de Revisão 7-A**, que audita a v7.1 a v7.5 antes de seguir para a v7.6.
+  pessoa, voto de enquete com a matrícula do corpo, entre outras): todas corrigidas e presas por teste. Em seguida o
+  **escopo hierárquico passou a valer em todas as rotas** (dirigente → só a congregação; pastor de área → as da área; e
+  assim até o nível geral, que vê tudo), os catálogos só são lidos com login e só o nível geral os altera, e cada
+  documento ganhou a marca de quem pode vê-lo. O que continua **em aberto** está no plano da fase 7 (delegação de
+  escopo, sessão não revogável, índices únicos). **Próxima: a 🔒 Trava de Revisão 7-A**, que audita a v7.1 a v7.5 antes
+  de seguir para a v7.6.
 - **Planejadas:** FASES 8 a 12.
 
 ### Fases
@@ -492,7 +495,7 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   A migração 118 traz `MembroPins` (o PIN de 4 números do membro, só como hash) e `AcessoTentativas` (o contador de erros e
   o bloqueio, por pessoa e canal); a 119, `VoluntariadoResponsaveis` (o responsável legal de cada menor, conferido pela
   Secretaria) e a adesão `CLICK_RESP`, dada pelo responsável; a 120 concede `escalas` e `habilitacao_voluntarios` aos
-  papéis Presidente e Secretário Geral.
+  papéis Presidente e Secretário Geral; a 121, a coluna `Visibilidade` de `Documentos` (público, membros ou liderança).
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,

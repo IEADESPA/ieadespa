@@ -1502,8 +1502,15 @@ ponto real de integração:
       **não** herda as permissões sozinho. (2) **Acesso por PIN aceito como está**: quem esquece
       o PIN recupera pelo código do e-mail ou pelo PIN provisório que a Secretaria entrega, e
       o bloqueio por tentativas é o preço de ter bloqueio. (3) **CSP forte** (`script-src`
-      estrito, acima): decisão adiada até o responsável conhecer o custo; ver o levantamento
-      mais abaixo.
+      estrito, acima): o responsável pediu para tratar **depois** das correções de escopo
+      descritas abaixo; o levantamento de custo está mais abaixo. (4) **O escopo é hierárquico
+      e vale em toda rota**: dirigente de uma congregação só vê as pessoas dela; o pastor de
+      área, as da área (várias congregações); e assim sobe até o nível geral, que vê tudo.
+      "Se não tem permissão, nem aparece": as telas só do nível geral somem para os demais.
+      (5) **Cada documento diz para quem é** (público, membros ou liderança). (6) **Chave
+      combinada entre o site e o sistema** na pergunta "este e-mail é de membro ativo?".
+      (7) **O segredo de sessão nunca cai num valor público.** (8) **O texto do Termo do menor
+      está aprovado** (ver acima).
     - **Revisão independente do acesso por PIN (02/10/2026).** Um revisor adversarial leu o
       código novo, sem ter escrito nada dele, e achou brechas que os testes do próprio fecho
       não enxergavam. Todas foram corrigidas **antes** do deploy:
@@ -1541,22 +1548,75 @@ ponto real de integração:
         pública por desenho entra na lista, com o motivo; esquecimento passa a quebrar o teste.
         (Foi essa a lição: a rota de enquetes escapou da busca anterior por "handler sem login"
         porque tinha login em outras ações.)
-    - **Em aberto, declarado.** (a) Algumas rotas de ficha exigem a permissão mas ainda não
-      conferem a congregação da pessoa: já eram assim antes e ficam para uma rodada própria de
-      escopo (só quem já tem a permissão é afetado). (b) Os catálogos de leitura são públicos, até os
-      de uso interno (papéis, alçadas, mediadores): trocar a leitura de ~15 telas para usar
-      sessão é mudança de tela à parte. (c) `VerificarContaMembro` só devolve um booleano e tem
-      limite por origem; fechar de vez pede uma chave servidor a servidor configurada **nos
-      dois** Static Web Apps. (d) A sessão não é revogável antes das 12 h (já era assim, ver
-      vB.9). (e) Quem erra o PIN de alguém 5 vezes bloqueia a conta dela por 15 minutos: é o
-      preço de ter bloqueio; a pessoa se recupera pelo código do e-mail ou pelo PIN provisório
-      da Secretaria (**aceito como está** pelo responsável). (f) Se a variável do segredo de
-      sessão (`AUTH_SECRET`) faltar no ambiente, o código cai num valor padrão de
-      desenvolvimento — que é público, por estar no repositório — em vez de recusar subir.
-      **Medido em produção em 02/10/2026:** um crachá assinado com esse valor padrão é
-      recusado (401), logo a produção usa segredo próprio; o risco é só o de a variável ser
-      apagada por engano no futuro. (g) Revogar o cadastro do responsável não anula a adesão
-      já dada (documentado acima).
+    - **Escopo territorial em todas as rotas (02/10/2026).** Uma varredura de **todas** as
+      rotas que exigem permissão achou **111** que nunca conferiam o escopo (mais um grupo de
+      rotas que só pedem login e decidem por dentro). Nove auditorias independentes leram o
+      código de cada uma, e cada correção foi feita e testada pelo auditor do seu grupo.
+      **A regra:** o escopo vem do login (a hierarquia congregação → área → região → quadrante
+      → distrito já é resolvida ali; `shared/escopo.js`) e há três tipos de dado.
+      - **Pessoa** (ficha, disciplina, LGPD, marcos, cartas...): vale a congregação da pessoa;
+        lista filtrada; registro único e escrita conferem alvo **e** destino; fora do escopo a
+        resposta é **a mesma de "não existe"** (a rota não serve de sonda de quem tem cadastro).
+      - **Congregação** (obra, veículo, cessão, turma...): vale a congregação do registro; o
+        que é da Sede só o nível geral alcança.
+      - **Institucional** (parâmetros, investimentos, plano estratégico, órgãos centrais,
+        auditoria, relatórios consolidados, catálogos...): só o **nível geral**.
+      - **"Geral" = papel Global E escopo de todas as congregações.** Os dois, porque o nível
+        vem do papel e o escopo vem da liderança, que são cadastrados em separado: um papel
+        Global com escopo de uma congregação, um papel local com escopo "todas" por esquecimento,
+        o Líder Geral de Departamento e quem age por delegação **não** são o nível geral
+        (`shared/escopoRotas.js`: `ehGeral`, `exigirGeral`, `pessoaAlcancavel`...).
+      - **Falha fechada:** sessão sem a lista de congregações não alcança nada (`estaNoEscopo`),
+        e escopo territorial **sem a unidade** ("Área" sem dizer qual) resolve para nenhuma
+        congregação. Antes valiam como "todas": um pastor de área cadastrado sem a área enxergava
+        a igreja inteira.
+      - **Quem concede cargo** (`GestaoLideranca`): só o nível geral; o escopo tem de caber no
+        papel (nunca mais largo), exigir a unidade e a unidade tem de existir; a tela de
+        Permissões sinaliza linhas antigas incoerentes e papéis Global com escopo limitado.
+      - **Catálogos:** só o nível geral escreve; para ler é preciso estar logado, e os internos
+        (papéis, plano de contas, alçadas, mediadores, infrações) pedem também a permissão da
+        área. **Documentos:** coluna `Visibilidade` (migração 121; os existentes ficam
+        "membros"); sem login só os públicos, e só o geral publica; quem registra respeita o
+        escopo. **Rota de exclusão em massa de dados (`ExcluirDados`) removida**, com a seção
+        da tela.
+      - **O que o tesoureiro local passou a não ver ou não fazer:** dados bancários e CPF de
+        fornecedores (só nome e situação), a confirmação desses dados, orçamentos, notas
+        explicativas, saldo do Fundo PDQ, remessas e rateio, prebendas, prestações, seguros,
+        investimentos, escrita no plano estratégico e as despesas de centro de custo da igreja
+        inteira (geral, PDQ, convenção, prebenda). Fornecedor cadastrado com dado bancário passa
+        a **nascer pendente** de confirmação da administração geral (antes nascia confirmado).
+      - **Verificação:** suíte da API de 1947 para **4037** testes (82 arquivos), com cada
+        conferência de escopo **quebrada de propósito** (cerca de 900 mutações entre os grupos;
+        sobreviventes eram testes fracos, reforçados, ou equivalentes). O SQL novo foi analisado
+        no SQL Server (176 textos; achou `AS dataBase`, palavra reservada, que derrubaria o
+        "processar cartas") e uma varredura de fumaça chamou **3243** combinações de rota ×
+        ação × papel sem nenhum erro de SQL. No banco real: roteiro da hierarquia completa (login
+        verdadeiro de dirigente, pastor de área, região, quadrante, distrito e geral) com **221**
+        verificações, e os roteiros anteriores seguem verdes (238, 81, 179, 20, 162, 14).
+    - **Em aberto, declarado.** (a) A **delegação** soma o escopo recebido ao escopo próprio
+      para todas as permissões da sessão; o ideal é escopo por permissão. (b) A sessão não é
+      revogável antes das 12 h (já era assim, ver vB.9). (c) O escopo compara **nome** de
+      congregação e não há índice único em `Congregacoes.Nome`: duas homônimas
+      compartilhariam escopo. (d) Faltam índices únicos como defesa em profundidade (sigla
+      de órgão, cargo ativo por órgão, credenciamento por sessão, item de remessa, número de
+      remessa, geração de prebenda); as travas de aplicação e as transações já cobrem a
+      corrida. (e) `DadosBancariosConfirmados` ainda tem `DEFAULT 1` na coluna (tratado no
+      código). (f) Mediação: os aceites do acordo e do compromisso arbitral são gravados em
+      nome das partes sem ato delas (risco jurídico, regra de negócio). (g) Abandono: a
+      homologação não é uma única transação; a janela de defesa do tipo Digital herda a data
+      da última tentativa de contato; quem abre também homologa (a tabela não guarda quem
+      abriu). (h) O retorno do banco só confirma pagamento com ocorrência "00"; a remessa ainda
+      não repete as conferências do pagamento comum (tutela, saldo do centro de custo, Fundo
+      PDQ suspenso). (i) Cancelar cessão autorizada não estorna a conta a receber. (j) Dos 216
+      textos de campo que entravam na tela sem proteção, **161** passaram a ser escapados;
+      restam os avisos de texto puro e linhas que não montam HTML; o escape completo é parte
+      do projeto da CSP forte. (k) Quem erra o PIN de alguém 5 vezes bloqueia a conta dela
+      por 15 minutos (**aceito como está** pelo responsável). (l) Revogar o cadastro do
+      responsável não anula a adesão já dada (documentado acima). (m) A chave combinada entre
+      o site e o sistema só passa a valer quando for cadastrada **nos dois** aplicativos do
+      Azure (`SECRETS.md`, seção 9); enquanto isso a rota segue só com o limite por origem.
+      (**Segredo de sessão:** medido em produção, um crachá assinado com o valor público é
+      recusado; agora o código nem tem mais esse valor padrão.)
     - **Levantamento de custo da CSP forte (02/10/2026).** Dinheiro: nenhum (é um cabeçalho
       de configuração, sem cobrança no Azure). O custo é de **trabalho e risco**: a tela tem
       **870 atributos de evento em linha** (470 em `index.html`, 400 em `script.js`), dos quais

@@ -43,7 +43,7 @@ async function podeGerenciarCongregacao(pool, usuario, congregacaoId) {
 
 // Identificador vindo de fora: só número inteiro positivo (texto de dígitos ou número). Booleano, array, objeto, decimal e vazio não valem.
 function idValido(v) {
-  const ok = (typeof v === "number" || (typeof v === "string" && /^d+$/.test(v.trim()))) && Number(v) >= 1 && Number(v) <= 2147483647 && Number.isInteger(Number(v));
+  const ok = (typeof v === "number" || (typeof v === "string" && /^\d+$/.test(v.trim()))) && Number(v) >= 1 && Number(v) <= 2147483647 && Number.isInteger(Number(v));
   return ok ? Number(v) : null;
 }
 const temPermissao = (usuario) => !!(usuario.permissoes && usuario.permissoes.includes("habilitacao_voluntarios"));

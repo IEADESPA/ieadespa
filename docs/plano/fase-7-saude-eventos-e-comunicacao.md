@@ -1572,7 +1572,12 @@ ponto real de integração:
         a igreja inteira.
       - **Quem concede cargo** (`GestaoLideranca`): só o nível geral; o escopo tem de caber no
         papel (nunca mais largo), exigir a unidade e a unidade tem de existir; a tela de
-        Permissões sinaliza linhas antigas incoerentes e papéis Global com escopo limitado.
+        Permissões sinaliza linhas antigas incoerentes e papéis Global com escopo limitado. A
+        migração 122 é a **rede de segurança**: só se não existir NENHUMA liderança ativa de
+        papel Global, escopo Global e permissão de conceder cargos, os cadastros ativos do
+        Presidente e do Secretário Geral voltam ao escopo Global (não reativa suspenso nem toca
+        em outro papel); existindo ao menos uma pessoa assim, não faz nada. Não deu para medir
+        o cadastro real: a produção só aceita conexão de endereços liberados.
       - **Catálogos:** só o nível geral escreve; para ler é preciso estar logado, e os internos
         (papéis, plano de contas, alçadas, mediadores, infrações) pedem também a permissão da
         área. **Documentos:** coluna `Visibilidade` (migração 121; os existentes ficam

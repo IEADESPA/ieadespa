@@ -159,6 +159,11 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_VoluntariadoAdesoes_Ratificacao' AND object_id = OBJECT_ID(N'dbo.VoluntariadoAdesoes'))
     CREATE INDEX IX_VoluntariadoAdesoes_Ratificacao ON dbo.VoluntariadoAdesoes (RatificacaoId) WHERE RatificacaoId IS NOT NULL;
 GO
+-- Os cabeçalhos de origem como chegaram (x-azure-clientip, x-client-ip, x-forwarded-for), guardados com o aceite digital: o x-forwarded-for pode ter sido escrito
+-- pelo cliente, e a cadeia inteira permite avaliar depois de onde veio a conexão (Art. 133 §8º, II, "b"). Coluna acrescentada pela revisão de segurança.
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.VoluntariadoAdesoes') AND name = N'CadeiaCabecalhos')
+    ALTER TABLE dbo.VoluntariadoAdesoes ADD CadeiaCabecalhos NVARCHAR(400) NULL;
+GO
 
 -- A prova da adesão não se altera nem se apaga (é o documento da Lei 9.608/98, art. 2º).
 IF OBJECT_ID(N'dbo.TR_VoluntariadoAdesoes_Imutavel', N'TR') IS NULL

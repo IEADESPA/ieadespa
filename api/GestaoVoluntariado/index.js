@@ -139,7 +139,8 @@ module.exports = async function (context, req) {
 
       if (acao === "ratificacoes") {
         if (!ehHabilitacao) return erro(context, 403, SEM_PERMISSAO);
-        context.res = { status: 200, body: { sucesso: true, ratificacoes: await db.listarRatificacoes(pool) } };
+        // Quem não tem escopo geral só vê as ratificações que registrou.
+        context.res = { status: 200, body: { sucesso: true, ratificacoes: await db.listarRatificacoes(pool, { porMembroId: escopoGlobal ? null : usuario.membroId }) } };
         return;
       }
 
@@ -176,10 +177,12 @@ module.exports = async function (context, req) {
       if (acao === "remocoes") {
         const equipeId = idDe(consulta.equipeId), congregacaoId = idDe(consulta.congregacaoId);
         if (equipeId) {
+          const temPermissao = ehEscalas || ehHabilitacao;
+          if (!temPermissao && !(await db.lideraAlgumaEquipe(pool, { membroId: usuario.membroId }))) return erro(context, 403, SEM_PERMISSAO);
           const equipe = await es.buscarEquipe(pool, equipeId);
           if (!equipe) return erro(context, 404, "Equipe não encontrada.");
-          const lider = Number(equipe.liderMembroId) === Number(usuario.membroId);
-          if (!lider && !(await alcanca(ehEscalas || ehHabilitacao, equipe.congregacaoId))) return erro(context, 403, "Só o líder da equipe ou quem administra as escalas.");
+          const lider = await db.liderAtivo(pool, { equipe, membroId: usuario.membroId });
+          if (!lider && !(await alcanca(temPermissao, equipe.congregacaoId))) return erro(context, 403, "Só o líder da equipe ou quem administra as escalas.");
           context.res = { status: 200, body: { sucesso: true, remocoes: await db.listarRemocoes(pool, { equipeIds: [equipeId] }) } };
           return;
         }
@@ -196,7 +199,7 @@ module.exports = async function (context, req) {
     if (metodo !== "POST") return erro(context, 405, "Método não suportado.");
 
     if (acao === "aceitar-termo") {
-      resposta(context, await db.aceitarDigital(pool, { membroId: usuario.membroId, aceito: corpo.aceito, ip: vol.extrairIp(req.headers), hoje }), 201);
+      resposta(context, await db.aceitarDigital(pool, { membroId: usuario.membroId, aceito: corpo.aceito, ip: vol.extrairIp(req.headers), cadeia: vol.cadeiaDeCabecalhos(req.headers), hoje }), 201);
       return;
     }
 
@@ -263,7 +266,7 @@ module.exports = async function (context, req) {
       if (!rodizioId) return erro(context, 400, "Informe rodizioId.");
       const rodizio = await rodizioAutorizado(rodizioId);
       if (!rodizio) return;
-      resposta(context, await db.criarGrupo(pool, { rodizio, nome: corpo.nome, membroIds: Array.isArray(corpo.membroIds) ? corpo.membroIds : [], por: usuario.membroId }), 201);
+      resposta(context, await db.criarGrupo(pool, { rodizio, nome: corpo.nome, membroIds: Array.isArray(corpo.membroIds) ? corpo.membroIds : [], por: usuario.membroId, podeCongregacao: autorizacao.podeCongregacao }), 201);
       return;
     }
 
@@ -273,7 +276,7 @@ module.exports = async function (context, req) {
       const { grupo, rodizio } = await grupoAutorizado(grupoId);
       if (!grupo) return;
       const f = acao === "grupo-membro" ? db.adicionarMembroAoGrupo : db.removerMembroDoGrupo;
-      resposta(context, await f(pool, { rodizio, grupo, membroId, por: usuario.membroId }));
+      resposta(context, await f(pool, { rodizio, grupo, membroId, por: usuario.membroId, podeCongregacao: autorizacao.podeCongregacao }));
       return;
     }
 
@@ -305,10 +308,10 @@ module.exports = async function (context, req) {
       if (ehEscalas || ehHabilitacao) podeCongregacao = autorizacao.podeCongregacao;
       else {
         // Sem permissão: só o líder da própria equipe (Art. 133-D, III: "o Dirigente simplesmente informará").
-        if (!equipeId) return erro(context, 403, SEM_PERMISSAO);
+        // Quem nem lidera equipe recebe 403 ANTES de qualquer busca (a resposta não revela se a equipe existe); o líder removido da própria equipe perde o poder.
+        if (!equipeId || !(await db.lideraAlgumaEquipe(pool, { membroId: usuario.membroId }))) return erro(context, 403, SEM_PERMISSAO);
         const equipe = await es.buscarEquipe(pool, equipeId);
-        if (!equipe) return erro(context, 404, "Equipe não encontrada.");
-        if (Number(equipe.liderMembroId) !== Number(usuario.membroId)) return erro(context, 403, "Só o líder da equipe ou quem administra as escalas pode remover alguém da escala.");
+        if (!equipe || !(await db.liderAtivo(pool, { equipe, membroId: usuario.membroId }))) return erro(context, 403, "Só o líder da equipe ou quem administra as escalas pode remover alguém da escala.");
         podeCongregacao = null;
       }
       resposta(context, await db.removerDaEscala(pool, { dados: corpo, equipeId, podeCongregacao, por: usuario.membroId, hoje }));
@@ -318,10 +321,19 @@ module.exports = async function (context, req) {
     if (acao === "reintegrar") {
       const desligamentoId = idDe(corpo.desligamentoId);
       if (!desligamentoId) return erro(context, 400, "Informe desligamentoId.");
+      const temPermissao = ehEscalas || ehHabilitacao;
+      // Quem nem tem permissão nem lidera equipe recebe 403 antes de qualquer busca: a resposta não revela se o registro existe.
+      if (!temPermissao && !(await db.lideraAlgumaEquipe(pool, { membroId: usuario.membroId }))) return erro(context, 403, SEM_PERMISSAO);
       const d = await db.buscarRemocao(pool, desligamentoId);
       if (!d) return erro(context, 404, "Registro de remoção não encontrado.");
-      const lider = d.LiderMembroId != null && Number(d.LiderMembroId) === Number(usuario.membroId);
-      if (!lider && !(await alcanca(ehEscalas || ehHabilitacao, d.CongregacaoId))) return erro(context, 403, "Só o líder da equipe ou quem administra as escalas.");
+      // A gestão (no escopo) reintegra qualquer um. O LÍDER só reintegra o que ele mesmo removeu — não desfaz a decisão da gestão nem de outro líder — e só
+      // enquanto ele próprio não estiver removido da equipe. Ninguém reintegra a si mesmo (a regra está em db.reintegrar).
+      let autorizado = temPermissao && (await alcanca(true, d.CongregacaoId));
+      if (!autorizado && d.EquipeId && Number(d.RegistradoPorMembroId) === Number(usuario.membroId)) {
+        const equipe = await es.buscarEquipe(pool, d.EquipeId);
+        autorizado = await db.liderAtivo(pool, { equipe, membroId: usuario.membroId });
+      }
+      if (!autorizado) return erro(context, 403, "Só quem registrou a remoção (se for o líder da equipe) ou quem administra as escalas pode reintegrar.");
       resposta(context, await db.reintegrar(pool, { desligamentoId, observacao: corpo.observacao, por: usuario.membroId, hoje }));
       return;
     }

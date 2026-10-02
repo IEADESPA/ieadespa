@@ -13,6 +13,7 @@
 //     trabalhista. Aqui vão as validações e os textos dos avisos; o efeito (cancelar as escalas futuras) é do banco.
 //  4) AFASTAMENTO (Art. 133 §7º, II): direito de recusa sem penalidade — o texto do aviso ao líder quando a vaga abre.
 const crypto = require("crypto");
+const net = require("net");
 const cal = require("./calendario");
 
 const limpar = (v) => String(v == null ? "" : v).trim();
@@ -90,20 +91,72 @@ const ORIGENS_RATIFICACAO = {
   ESCALA_SERVICO: "Escala de serviço"
 };
 const MAX_SIGNATARIOS_MANUAIS = 500;
+// A Lei 9.608/98 é de 18/02/1998: nenhuma lista de ratificação pode ser anterior a ela.
+const DATA_MINIMA_RATIFICACAO = "1998-02-19";
+// Tetos: nenhum rodízio, grupo ou criação em lote pode chegar perto do limite de parâmetros do SQL Server (2.100) nem sobrecarregar o banco.
+const MAX_RODIZIOS_POR_CONGREGACAO = 50;
+const MAX_MEMBROS_POR_GRUPO = 150;
+const MAX_MEMBROS_AO_CRIAR_GRUPO = 100;
 
-// IP do aceite digital (Art. 133 §8º, II, "b"). Mesma ordem de cabeçalhos do limitador de taxa, mas aqui o valor É guardado:
-// tira a porta do IPv4 e os colchetes do IPv6, e devolve null se não houver nada que pareça um endereço.
-function extrairIp(headers) {
+// IP do aceite digital (Art. 133 §8º, II, "b"). Valida com o analisador do próprio Node (net.isIP) e só aceita endereço PÚBLICO: loopback,
+// rede privada, link-local, "não especificado" e documentação não provam de onde veio a conexão. O cabeçalho do Azure (x-azure-clientip) vale primeiro;
+// depois vem o x-client-ip e, por último, o primeiro endereço público da cadeia x-forwarded-for. Um cliente pode escrever o que quiser em
+// x-forwarded-for — por isso o aceite guarda TAMBÉM a cadeia inteira (ver cadeiaDeCabecalhos): a prova não depende de esse primeiro valor ser honesto.
+function cabecalho(headers, nome) {
   const h = headers || {};
-  const bruto = h["x-azure-clientip"] || h["x-client-ip"] || String(h["x-forwarded-for"] || "").split(",")[0] || "";
-  const v = limpar(bruto);
+  const chave = Object.keys(h).find(k => k.toLowerCase() === nome);
+  const v = chave ? h[chave] : undefined;
+  return Array.isArray(v) ? v.join(",") : String(v == null ? "" : v);
+}
+function ipPublico(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split(".").map(Number);
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;                    // não especificado, privado, loopback, multicast/reservado
+    if (a === 100 && b >= 64 && b <= 127) return false;                                 // CGNAT
+    if (a === 169 && b === 254) return false;                                           // link-local
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && (b === 168 || (b === 0 && ip.startsWith("192.0.0.")) || ip.startsWith("192.0.2."))) return false;
+    if (a === 198 && (b === 18 || b === 19 || ip.startsWith("198.51.100."))) return false;
+    if (ip.startsWith("203.0.113.")) return false;
+    return true;
+  }
+  if (net.isIPv6(ip)) {
+    const baixo = ip.toLowerCase();
+    if (baixo === "::" || baixo === "::1") return false;
+    if (/^(fc|fd)/.test(baixo) || /^fe[89ab]/.test(baixo) || baixo.startsWith("ff")) return false; // ULA, link-local, multicast
+    if (baixo.startsWith("2001:db8")) return false;
+    const mapeado = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(baixo);
+    if (mapeado) return ipPublico(mapeado[1]);
+    return true;
+  }
+  return false;
+}
+// "1.2.3.4", "1.2.3.4:5678", "[2804::1]:443", "2804::1" -> o endereço, ou null se não for um IP válido.
+function normalizarIp(texto) {
+  const v = limpar(texto);
   if (!v) return null;
-  let m = /^\[([0-9a-f:.]+)\](?::\d+)?$/i.exec(v);
-  if (m) return m[1].length <= 45 ? m[1] : null;
+  let m = /^\[([^\]]+)\](?::\d+)?$/.exec(v);
+  if (m) return net.isIPv6(m[1]) ? m[1] : null;
   m = /^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/.exec(v);
-  if (m) return m[1].split(".").every(p => Number(p) <= 255) ? m[1] : null;
-  if (/^[0-9a-f:.]+$/i.test(v) && (v.match(/:/g) || []).length >= 2 && v.length <= 45) return v;
+  if (m) return net.isIPv4(m[1]) ? m[1] : null;
+  return net.isIP(v) ? v : null;
+}
+function extrairIp(headers) {
+  const candidatos = [cabecalho(headers, "x-azure-clientip"), cabecalho(headers, "x-client-ip"), ...cabecalho(headers, "x-forwarded-for").split(",")];
+  for (const c of candidatos) {
+    const ip = normalizarIp(c);
+    if (ip && ip.length <= 45 && ipPublico(ip)) return ip;
+  }
   return null;
+}
+// Os cabeçalhos de origem como chegaram, limpos e cortados: guardados com a adesão para a prova não depender só do primeiro IP.
+function cadeiaDeCabecalhos(headers) {
+  const partes = {};
+  for (const nome of ["x-azure-clientip", "x-client-ip", "x-forwarded-for"]) {
+    const v = cabecalho(headers, nome).replace(/[^0-9a-fA-F:.,\[\] ]/g, "").trim().slice(0, 120);
+    if (v) partes[nome] = v;
+  }
+  return Object.keys(partes).length ? JSON.stringify(partes).slice(0, 400) : null;
 }
 
 function validarAceiteDigital({ aceito, ip }) {
@@ -146,6 +199,7 @@ function validarRatificacao(d = {}, { hoje }) {
   const dataLista = limpar(d.dataLista);
   if (!cal.dataIsoValida(dataLista)) return { valido: false, mensagem: "Informe a data da lista (AAAA-MM-DD)." };
   if (dataLista > hoje) return { valido: false, mensagem: "A data da lista não pode estar no futuro." };
+  if (dataLista < DATA_MINIMA_RATIFICACAO) return { valido: false, mensagem: "A data da lista é anterior à Lei 9.608/98 (18/02/1998): confira." };
   if (d.cabecalhoConfirmado !== true) return { valido: false, mensagem: "A ratificação só vale se o CABEÇALHO da lista trouxe a menção expressa à ratificação do regime voluntário (Art. 133 §8º, III, “a”). Confirme que trouxe." };
   let extras = [];
   if (d.membroIds != null) {
@@ -200,6 +254,7 @@ function validarNatureza(natureza) {
 function validarRodizio(d = {}) {
   const nome = limpar(d.nome);
   if (nome.length < 3 || nome.length > 100) return { valido: false, mensagem: "Dê um nome ao rodízio (de 3 a 100 caracteres), por exemplo: Limpeza do templo." };
+  if (/[<>]/.test(nome)) return { valido: false, mensagem: "O nome do rodízio não pode ter os sinais < ou >." };
   const equipeId = inteiroPositivo(d.equipeId);
   if (!equipeId) return { valido: false, mensagem: "Escolha a equipe que cumpre este rodízio." };
   const diaSemana = Number(d.diaSemana);
@@ -216,6 +271,7 @@ function validarRodizio(d = {}) {
 
 function validarNomeGrupo(nome) {
   const n = limpar(nome);
+  if (/[<>]/.test(n)) return { valido: false, mensagem: "O nome do grupo não pode ter os sinais < ou >." };
   return n.length >= 1 && n.length <= 60 ? { valido: true, nome: n } : { valido: false, mensagem: "Dê um nome ao grupo (até 60 caracteres), por exemplo: Grupo A." };
 }
 
@@ -350,7 +406,8 @@ module.exports = {
   TERMO_VERSAO, TERMO_TITULO, TERMO_ITENS, TERMO_ACEITE, TERMO_HASH, termoVigente,
   RATIFICACAO_VERSAO, RATIFICACAO_TEXTO, RATIFICACAO_HASH, ratificacaoVigente,
   FORMAS_ADESAO, FORMAS_REGISTRO_MANUAL, CANAIS_MENSAGERIA, ORIGENS_RATIFICACAO, MAX_SIGNATARIOS_MANUAIS,
-  extrairIp, validarAceiteDigital, validarRegistroAdesao, validarRatificacao, avaliarIntegridadeAdesao,
+  DATA_MINIMA_RATIFICACAO, MAX_RODIZIOS_POR_CONGREGACAO, MAX_MEMBROS_POR_GRUPO, MAX_MEMBROS_AO_CRIAR_GRUPO,
+  extrairIp, cadeiaDeCabecalhos, normalizarIp, ipPublico, validarAceiteDigital, validarRegistroAdesao, validarRatificacao, avaliarIntegridadeAdesao,
   NATUREZAS, NATUREZAS_OPERACIONAIS, DIAS_SEMANA, LIMITE_SEQUENCIA_PADRAO, MAX_SEMANAS_GERACAO, SEMANAS_GERACAO_PADRAO, MAX_GRUPOS,
   equipeExigeRevezamento, validarNatureza, validarRodizio, validarNomeGrupo, validarComposicao,
   dataHoraDeParede, textoDataHora, indiceDoGrupo, planejarOcorrencias, validarGeracao,

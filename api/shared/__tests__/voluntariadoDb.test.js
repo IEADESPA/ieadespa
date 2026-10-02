@@ -76,10 +76,11 @@ describe("aceite digital", () => {
   });
   test("grava versão, hash, data de Brasília e IP; a auditoria guarda o hash mas não o IP", async () => {
     const { pool, chamadas } = criarPoolFalso([[], [{ id: 7 }], [adesaoLinha()]]);
-    const r = await db.aceitarDigital(pool, { membroId: 20, aceito: true, ip: "177.8.9.10", hoje: HOJE });
+    const cadeia = vol.cadeiaDeCabecalhos({ "x-forwarded-for": "1.2.3.4, 177.8.9.10" });
+    const r = await db.aceitarDigital(pool, { membroId: 20, aceito: true, ip: "177.8.9.10", cadeia, hoje: HOJE });
     expect(r.sucesso).toBe(true);
     expect(chamadas[1].sql).toMatch(/INSERT INTO VoluntariadoAdesoes/);
-    expect(chamadas[1].inputs).toMatchObject({ m: 20, v: vol.TERMO_VERSAO, h: vol.TERMO_HASH, d: HOJE, ip: "177.8.9.10" });
+    expect(chamadas[1].inputs).toMatchObject({ m: 20, v: vol.TERMO_VERSAO, h: vol.TERMO_HASH, d: HOJE, ip: "177.8.9.10", cad: cadeia });
     expect(registrarAuditoria).toHaveBeenCalledTimes(1);
     const aud = registrarAuditoria.mock.calls[0][0];
     expect(aud).toMatchObject({ tabela: "VoluntariadoAdesoes", registroId: 7, acao: "ADESAO_REGISTRADA", usuarioId: 20 });
@@ -136,9 +137,57 @@ describe("ratificação coletiva — recusas antes de gravar", () => {
     expect(r.mensagem).toMatch(/escopo geral/);
     expect(chamadas).toHaveLength(0);
   });
+  const sessaoDoDia = { SessaoId: 9, DataSessao: new Date("2026-03-14T00:00:00Z"), OrgaoSigla: "ASSEMBLEIA_GERAL" };
   test("sessão inexistente e lista sem ninguém", async () => {
     expect((await db.ratificar(criarPoolFalso([[]]).pool, { dados: lista(), por: 5, autorizacao: global, hoje: HOJE })).mensagem).toMatch(/Sessão não encontrada/);
-    expect((await db.ratificar(criarPoolFalso([[{ SessaoId: 9 }], []]).pool, { dados: lista(), por: 5, autorizacao: global, hoje: HOJE })).mensagem).toMatch(/nenhum signatário/);
+    expect((await db.ratificar(criarPoolFalso([[sessaoDoDia], []]).pool, { dados: lista(), por: 5, autorizacao: global, hoje: HOJE })).mensagem).toMatch(/nenhum signatário/);
+  });
+  test("a origem 'Assembleia Geral' só vale para sessão desse órgão; reunião de obreiros não tem órgão próprio e passa pela data", async () => {
+    const outra = { ...sessaoDoDia, OrgaoSigla: "CLI" };
+    const r = await db.ratificar(criarPoolFalso([[outra]]).pool, { dados: lista(), por: 5, autorizacao: global, hoje: HOJE });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/não é de Assembleia Geral/);
+    const semOrgao = await db.ratificar(criarPoolFalso([[{ ...sessaoDoDia, OrgaoSigla: null }]]).pool, { dados: lista(), por: 5, autorizacao: global, hoje: HOJE });
+    expect(semOrgao.mensagem).toMatch(/não é de Assembleia Geral/);
+    const obreiros = await db.ratificar(criarPoolFalso([[outra], []]).pool, { dados: lista({ origem: "REUNIAO_OBREIROS" }), por: 5, autorizacao: global, hoje: HOJE });
+    expect(obreiros.mensagem).toMatch(/nenhum signatário/);          // passou da checagem de órgão e da data; só falta gente na lista
+  });
+  test("a data da lista é a da sessão: não se carimba data passada qualquer numa adesão irreversível", async () => {
+    const r = await db.ratificar(criarPoolFalso([[sessaoDoDia]]).pool, { dados: lista({ dataLista: "2020-01-05" }), por: 5, autorizacao: global, hoje: HOJE });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/precisa ser a da sessão: 14\/03\/2026/);
+  });
+  test("a data da lista de escala é a da própria escala", async () => {
+    const servico = { servicoId: 11, congregacaoId: 1, dataHora: new Date("2026-09-20T19:00:00Z"), descricao: "x", status: "PUBLICADA" };
+    const dados = lista({ origem: "ESCALA_SERVICO", sessaoId: undefined, servicoId: 11, dataLista: "2020-01-05" });
+    const r = await db.ratificar(criarPoolFalso([[servico], [{ Nome: "Central" }]]).pool, { dados, por: 5, autorizacao: local, hoje: HOJE });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/precisa ser a da escala: 20\/09\/2026/);
+  });
+  test("matrícula avulsa de outra congregação recusa o pedido inteiro (403) e nada é gravado", async () => {
+    const dados = lista({ origem: "ESCALA_SERVICO", sessaoId: undefined, servicoId: 11, dataLista: "2026-09-20", membroIds: [31, 32] });
+    const servico = { servicoId: 11, congregacaoId: 1, dataHora: new Date("2026-09-20T19:00:00Z"), descricao: "x", status: "PUBLICADA" };
+    const { pool, chamadas } = criarPoolFalso([[servico], [{ Nome: "Central" }], [{ MembroId: 20 }], [{ MembroId: 31, CongregacaoNome: "Central" }, { MembroId: 32, CongregacaoNome: "Vila Nova" }]]);
+    const r = await db.ratificar(pool, { dados, por: 5, autorizacao: local, hoje: HOJE });
+    expect(r).toMatchObject({ sucesso: false, proibido: true });
+    expect(r.mensagem).toMatch(/1 matrícula\(s\) avulsa\(s\) fora do seu escopo de atuação: 32/);
+    expect(chamadas.some(c => /INSERT/.test(c.sql))).toBe(false);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+  test("matrícula avulsa sem congregação só passa com escopo geral", async () => {
+    const dados = lista({ membroIds: [31] });
+    const r = await db.ratificar(criarPoolFalso([[sessaoDoDia], [{ MembroId: 20 }], [{ MembroId: 31, CongregacaoNome: null }]]).pool,
+      { dados, por: 5, autorizacao: { global: true, podeCongregacao: (n) => n === "Central" }, hoje: HOJE });
+    expect(r).toMatchObject({ sucesso: false, proibido: true });
+  });
+  test("quem não tem escopo geral só lista as ratificações que registrou", async () => {
+    const a = criarPoolFalso([[]]);
+    await db.listarRatificacoes(a.pool, { porMembroId: 5 });
+    expect(a.chamadas[0].sql).toMatch(/WHERE RegistradoPorMembroId = @por/);
+    expect(a.chamadas[0].inputs.por).toBe(5);
+    const b = criarPoolFalso([[]]);
+    await db.listarRatificacoes(b.pool);
+    expect(b.chamadas[0].sql).not.toMatch(/WHERE/);
   });
   test("escala de serviço: serviço inexistente; congregação fora do escopo é 403", async () => {
     const dados = lista({ origem: "ESCALA_SERVICO", sessaoId: undefined, servicoId: 11 });
@@ -149,7 +198,7 @@ describe("ratificação coletiva — recusas antes de gravar", () => {
   });
   test("matrícula avulsa que não existe é ignorada e devolvida; se só ela existia, não há signatário", async () => {
     const dados = lista({ membroIds: [999] });
-    const r = await db.ratificar(criarPoolFalso([[{ SessaoId: 9 }], [], []]).pool, { dados, por: 5, autorizacao: global, hoje: HOJE });
+    const r = await db.ratificar(criarPoolFalso([[sessaoDoDia], [], []]).pool, { dados, por: 5, autorizacao: global, hoje: HOJE });
     expect(r.sucesso).toBe(false);
     expect(r.mensagem).toMatch(/nenhum signatário/);
   });
@@ -182,11 +231,18 @@ describe("rodízio — criar", () => {
     expect(registrarAuditoria).not.toHaveBeenCalled();
   });
   test("grava com o dia, a hora, o intervalo e a âncora", async () => {
-    const { pool, chamadas } = criarPoolFalso([[equipeLinha()], [{ id: 5 }]]);
+    const { pool, chamadas } = criarPoolFalso([[equipeLinha()], [{ n: 3 }], [{ id: 5 }]]);
     const r = await db.criarRodizio(pool, { dados: dados({ intervaloSemanas: 2 }), congregacaoId: 1, por: 5 });
     expect(r).toMatchObject({ sucesso: true, rodizioId: 5 });
-    expect(chamadas[1].inputs).toMatchObject({ c: 1, e: 4, n: "Limpeza do templo", dia: 6, h: "08:00", i: 2, a: "2026-10-03", por: 5 });
+    expect(chamadas[2].inputs).toMatchObject({ c: 1, e: 4, n: "Limpeza do templo", dia: 6, h: "08:00", i: 2, a: "2026-10-03", por: 5 });
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ tabela: "EscalasRodizios", registroId: 5, acao: "RODIZIO_CRIADO" });
+  });
+  test("teto de rodízios ativos por congregação: o 51º é recusado sem gravar", async () => {
+    const { pool, chamadas } = criarPoolFalso([[equipeLinha()], [{ n: vol.MAX_RODIZIOS_POR_CONGREGACAO }]]);
+    const r = await db.criarRodizio(pool, { dados: dados(), congregacaoId: 1, por: 5 });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/até 50 rodízios ativos/);
+    expect(chamadas.some(c => /INSERT/.test(c.sql))).toBe(false);
   });
   test("ativar/desativar: repetir o estado não faz nada", async () => {
     const rodizio = db.mapearAdesao && { rodizioId: 5, ativo: true };
@@ -228,18 +284,37 @@ describe("grupo — quem pode entrar", () => {
     expect(r.mensagem).toMatch(/já está no grupo “Grupo B”/);
   });
   test("entra no grupo, vira membro ativo da equipe e a ação é auditada", async () => {
-    const { pool, chamadas } = criarPoolFalso([[membro()], [], [], [], []]);
+    const { pool, chamadas } = criarPoolFalso([[membro()], [], [], [{ n: 3 }], [], []]);
     const r = await db.adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId: 20, por: 5 });
     expect(r).toMatchObject({ sucesso: true });
-    expect(chamadas[3].sql).toMatch(/INSERT INTO EscalasRodizioGrupoMembros/);
-    expect(chamadas[4].sql).toMatch(/EscalasEquipeMembros/);
-    expect(chamadas[4].sql).not.toMatch(/FrequenciaPreferidaDias/);   // não zera a frequência que a pessoa já tinha
+    expect(chamadas[4].sql).toMatch(/INSERT INTO EscalasRodizioGrupoMembros/);
+    expect(chamadas[5].sql).toMatch(/EscalasEquipeMembros/);
+    expect(chamadas[5].sql).not.toMatch(/FrequenciaPreferidaDias/);   // não zera a frequência que a pessoa já tinha
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "MEMBRO_ENTROU_NO_GRUPO", registroId: 11 });
   });
   test("índice único estourando na corrida vira mensagem", async () => {
-    const pool = poolQueFalhaNaConsulta([[membro()], [], []], 4, 2601);
+    const pool = poolQueFalhaNaConsulta([[membro()], [], [], [{ n: 3 }]], 5, 2601);
     const r = await db.adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId: 20, por: 5 });
     expect(r.mensagem).toMatch(/já está em um grupo/);
+  });
+  test("o voluntário também precisa estar no escopo de quem o coloca: 403, sem nome e sem gravar", async () => {
+    const { pool, chamadas } = criarPoolFalso([[membro({ CongregacaoNome: "Vila Nova" })]]);
+    const r = await db.adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId: 20, por: 5, podeCongregacao: (n) => n === "Central" });
+    expect(r).toMatchObject({ sucesso: false, proibido: true });
+    expect(r.mensagem).not.toContain("Ana");
+    expect(chamadas).toHaveLength(1);
+  });
+  test("grupo cheio: o 151º voluntário é recusado", async () => {
+    const r = await db.adicionarMembroAoGrupo(criarPoolFalso([[membro()], [], [], [{ n: vol.MAX_MEMBROS_POR_GRUPO }]]).pool, { rodizio, grupo, membroId: 20, por: 5 });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/até 150 voluntários/);
+  });
+  test("criar grupo com voluntários demais de uma vez é recusado antes de gravar", async () => {
+    const { pool, chamadas } = criarPoolFalso([]);
+    const r = await db.criarGrupo(pool, { rodizio, nome: "Grupo X", membroIds: Array.from({ length: 101 }, (_, i) => i + 1), por: 5 });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/até 100 voluntários/);
+    expect(chamadas).toHaveLength(0);
   });
   test("criar grupo: nome, limite de grupos e nome repetido", async () => {
     expect((await db.criarGrupo(criarPoolFalso([]).pool, { rodizio: { ...rodizio, ativo: false }, nome: "A", por: 5 })).mensagem).toMatch(/desativado/);
@@ -311,11 +386,20 @@ describe("remoção da escala — recusas antes de gravar", () => {
     expect((await db.removerDaEscala(pool, { dados: dados({ membroId: 5 }), por: 5, hoje: HOJE })).mensagem).toMatch(/remove a si mesmo/);
     expect((await db.removerDaEscala(pool, { dados: dados({ motivo: "x" }), por: 5, hoje: HOJE })).mensagem).toMatch(/motivo/);
     expect(chamadas).toHaveLength(0);
-    expect((await db.removerDaEscala(criarPoolFalso([[]]).pool, { dados: dados(), por: 5, hoje: HOJE })).mensagem).toMatch(/não encontrado/);
+    expect((await db.removerDaEscala(criarPoolFalso([[]]).pool, { dados: dados(), por: 5, hoje: HOJE })).mensagem).toMatch(/não está ativo em nenhuma equipe que você alcance/);
+  });
+  test("as recusas não citam nome nem distinguem 'não existe' de 'não é da equipe' (senão o líder varreria matrículas para descobrir nomes)", async () => {
+    const naoExiste = await db.removerDaEscala(criarPoolFalso([[]]).pool, { dados: dados(), equipeId: 9, por: 5, hoje: HOJE });
+    const naoEhDaEquipe = await db.removerDaEscala(criarPoolFalso([[membro()], [vinculo()]]).pool, { dados: dados(), equipeId: 9, por: 5, hoje: HOJE });
+    const nenhumaEquipe = await db.removerDaEscala(criarPoolFalso([[membro()], []]).pool, { dados: dados(), equipeId: 9, por: 5, hoje: HOJE });
+    expect(naoExiste.mensagem).toBe("Esse voluntário não está ativo nessa equipe.");
+    expect(naoEhDaEquipe.mensagem).toBe(naoExiste.mensagem);
+    expect(nenhumaEquipe.mensagem).toBe(naoExiste.mensagem);
+    for (const r of [naoExiste, naoEhDaEquipe, nenhumaEquipe]) expect(r.mensagem).not.toContain("Ana");
   });
   test("a pessoa não está em equipe nenhuma, ou não está na equipe pedida", async () => {
-    expect((await db.removerDaEscala(criarPoolFalso([[membro()], []]).pool, { dados: dados(), por: 5, hoje: HOJE })).mensagem).toMatch(/não está ativo\(a\) em nenhuma equipe que você alcance/);
-    expect((await db.removerDaEscala(criarPoolFalso([[membro()], [vinculo()]]).pool, { dados: dados(), equipeId: 9, por: 5, hoje: HOJE })).mensagem).toMatch(/não está ativo\(a\) nessa equipe/);
+    expect((await db.removerDaEscala(criarPoolFalso([[membro()], []]).pool, { dados: dados(), por: 5, hoje: HOJE })).mensagem).toMatch(/não está ativo em nenhuma equipe que você alcance/);
+    expect((await db.removerDaEscala(criarPoolFalso([[membro()], [vinculo()]]).pool, { dados: dados(), equipeId: 9, por: 5, hoje: HOJE })).mensagem).toMatch(/não está ativo nessa equipe/);
   });
   test("o escopo de quem remove filtra as equipes: equipe de outra congregação não é tocada", async () => {
     const r = await db.removerDaEscala(criarPoolFalso([[membro()], [vinculo({ CongregacaoNome: "Vila Nova", CongregacaoId: 2 })]]).pool, { dados: dados(), podeCongregacao: (n) => n === "Central", por: 5, hoje: HOJE });
@@ -335,6 +419,14 @@ describe("reintegração", () => {
     expect((await db.reintegrar(criarPoolFalso([[rem({ ReintegradoEm: new Date("2026-09-25T10:00:00Z") })]]).pool, { desligamentoId: 3, por: 5, hoje: HOJE })).mensagem).toMatch(/já foi reintegrado\(a\) em 25\/09\/2026/);
     expect((await db.reintegrar(criarPoolFalso([[rem()]]).pool, { desligamentoId: 3, observacao: "x".repeat(301), por: 5, hoje: HOJE })).mensagem).toMatch(/300 caracteres/);
   });
+  test("ninguém reintegra a si mesmo (nem a gestão, nem o líder removido)", async () => {
+    const { pool, chamadas } = criarPoolFalso([[rem({ MembroId: 5 })]]);
+    const r = await db.reintegrar(pool, { desligamentoId: 3, por: 5, hoje: HOJE });
+    expect(r).toMatchObject({ sucesso: false, proibido: true });
+    expect(r.mensagem).toMatch(/Ninguém reintegra a si mesmo/);
+    expect(chamadas).toHaveLength(1);                 // só leu o registro; nada foi gravado
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
 });
 
 describe("recusa num serviço de rodízio", () => {
@@ -353,6 +445,30 @@ describe("recusa num serviço de rodízio", () => {
     const r = await db.avisarRecusaEmRodizio(criarPoolFalso([[equipeLinha({ liderMembroId: 20 })]]).pool, { alocacao, servico });
     expect(r).toEqual({ criadas: 0 });
     expect(notificarAgora).not.toHaveBeenCalled();
+  });
+});
+
+describe("líder removido da própria equipe perde os poderes de líder dela", () => {
+  const equipe = { equipeId: 4, liderMembroId: 40 };
+  test("o líder que não foi removido continua líder; outra pessoa nunca é", async () => {
+    expect(await db.liderAtivo(criarPoolFalso([[]]).pool, { equipe, membroId: 40 })).toBe(true);
+    expect(await db.liderAtivo(criarPoolFalso([]).pool, { equipe, membroId: 41 })).toBe(false);     // nem consulta o banco
+    expect(await db.liderAtivo(criarPoolFalso([]).pool, { equipe: null, membroId: 40 })).toBe(false);
+  });
+  test("removido e ainda não reintegrado: deixa de ser líder ativo", async () => {
+    const { pool, chamadas } = criarPoolFalso([[{ DesligamentoId: 3, DesligadoEm: new Date("2026-09-20T12:00:00Z") }]]);
+    expect(await db.liderAtivo(pool, { equipe, membroId: 40 })).toBe(false);
+    expect(chamadas[0].sql).toMatch(/RemovidoDaEscala = 1 AND ReintegradoEm IS NULL/);
+    expect(chamadas[0].inputs).toMatchObject({ m: 40, e: 4 });
+  });
+  test("quem não lidera nenhuma equipe ativa é identificado (para recusar com 403 sem revelar nada)", async () => {
+    expect(await db.lideraAlgumaEquipe(criarPoolFalso([[]]).pool, { membroId: 20 })).toBe(false);
+    expect(await db.lideraAlgumaEquipe(criarPoolFalso([[{ ok: 1 }]]).pool, { membroId: 40 })).toBe(true);
+  });
+  test("a lista de equipes que eu lidero já exclui as equipes de onde fui removido", async () => {
+    const { pool, chamadas } = criarPoolFalso([[]]);
+    await db.equipesLideradas(pool, { membroId: 40 });
+    expect(chamadas[0].sql).toMatch(/NOT EXISTS \(SELECT 1 FROM VoluntariosDesligamentos d WHERE d\.MembroId = e\.LiderMembroId AND d\.EquipeId = e\.EquipeId AND d\.RemovidoDaEscala = 1 AND d\.ReintegradoEm IS NULL\)/);
   });
 });
 

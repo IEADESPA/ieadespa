@@ -17,6 +17,11 @@ function getClient() {
   return client;
 }
 
+// A mensagem pode carregar texto digitado por gente (nome de equipe, de rodízio...): vai ao HTML do e-mail sempre escapada.
+function escaparHtml(texto) {
+  return String(texto == null ? "" : texto).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 async function enviarEmailNotificacao({ email, titulo, mensagem }) {
   const emailClient = getClient();
   if (!emailClient || !email) return false;
@@ -26,7 +31,7 @@ async function enviarEmailNotificacao({ email, titulo, mensagem }) {
       content: {
         subject: titulo,
         plainText: mensagem,
-        html: `<p>${mensagem.replace(/\n/g, "<br>")}</p>`
+        html: `<p>${escaparHtml(mensagem).replace(/\n/g, "<br>")}</p>`
       },
       recipients: { to: [{ address: email }] }
     });

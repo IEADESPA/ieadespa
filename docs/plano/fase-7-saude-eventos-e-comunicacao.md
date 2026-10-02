@@ -1124,10 +1124,16 @@ ponto real de integração:
   banco recusa a forma sem a sua prova:
   - **Aceite digital** (a própria pessoa, em Meu Painel → Minha Habilitação): guarda
     versão, **hash do texto**, **IP**, instante exato e data de Brasília. **Sem IP
-    identificável o aceite é recusado** (o Regimento o exige), com a orientação de
-    procurar a Secretaria. O IP não aparece para o voluntário, **nem na trilha de
-    auditoria** (que é imutável e não deve replicar dado pessoal): fica só na tabela da
-    adesão.
+    público identificável o aceite é recusado** (o Regimento o exige), com a orientação
+    de procurar a Secretaria. O IP é validado com o analisador do próprio Node e só vale
+    endereço **público** (loopback, rede privada, link-local, reservado e de documentação
+    não provam de onde veio a conexão); o cabeçalho do Azure (`x-azure-clientip`) tem
+    precedência sobre `x-client-ip` e `x-forwarded-for`. Como o `x-forwarded-for` pode
+    ter sido **escrito pelo cliente**, o aceite guarda **também a cadeia inteira dos
+    cabeçalhos de origem** (coluna `CadeiaCabecalhos`, limpa e cortada em 400 caracteres):
+    a prova não depende de o primeiro valor ser honesto. O IP não aparece para o
+    voluntário, **nem para a Secretaria, nem na trilha de auditoria** (que é imutável e
+    não deve replicar dado pessoal): fica só na tabela da adesão.
   - **Ficha física** (cláusula de voluntariado na Ficha de Membro, §8º, I) e
     **e-mail/WhatsApp** com resposta positiva (§8º, II, "c"): a Secretaria registra a data
     da assinatura/resposta e **onde o documento ou a conversa está arquivado**. A prova é
@@ -1139,7 +1145,13 @@ ponto real de integração:
     cada signatário: a presença da sessão, quem aceitou ou confirmou a escala (quem
     recusou não assina) e matrículas avulsas. Quem já aderira não é sobrescrito, e
     repetir a lista é inofensivo. A adesão guarda a data da lista e a marca de
-    **convalidação do período anterior** (efeito sanador, §8º, III, "b").
+    **convalidação do período anterior** (efeito sanador, §8º, III, "b"). Como a adesão é
+    **irreversível**, a ratificação tem travas: **a data da lista é a da própria sessão ou
+    da própria escala** (não se carimba uma data passada qualquer), **nunca anterior à Lei
+    9.608/98** (18/02/1998); a origem "Assembleia Geral" só vale para sessão do órgão
+    Assembleia Geral; e **cada matrícula avulsa precisa estar no escopo de quem registra**
+    — uma só fora dele recusa o pedido inteiro, sem gravar nada. Quem não tem escopo geral
+    só vê, na lista de ratificações, as que ele mesmo registrou.
   Há **uma adesão por pessoa**. A prova **não se altera nem se apaga** (gatilho no banco,
   também para o registro da ratificação). A **etapa "termo" da esteira** (v5.7) só fecha
   se a adesão existe. A tela da Secretaria mostra, por congregação, quem serve em equipe
@@ -1155,11 +1167,22 @@ ponto real de integração:
   avisado ("a partir de hoje", sem desconto, multa ou penalidade, **sem o motivo** no
   texto) e o líder é avisado das vagas. O motivo e o tipo (perda de confiança, mudança,
   indisponibilidade, saída da igreja, outro) ficam na ficha de RH, **sem nenhuma ligação
-  com a disciplina** — nem chave estrangeira. Ninguém remove a si mesmo. Quem foi removido
-  **não volta por outra porta** (nem por "adicionar à equipe" da v5.6, nem por um grupo de
-  rodízio): só pela **reintegração**, que o líder ou a gestão faz com uma observação; ela
-  devolve a pessoa à equipe e avisa, mas **não restaura as escalas canceladas**. A mesma
-  função atende o botão "remover da escala" do formulário de desligamento da v5.7.
+  com a disciplina** — nem chave estrangeira; o texto livre do motivo **não vai para a
+  trilha de auditoria** (que é imutável): ali ficam só o tipo e o tamanho do texto. Ninguém
+  remove a si mesmo. Quem foi removido **não volta por outra porta** (nem por "adicionar à
+  equipe" da v5.6, nem por um grupo de rodízio, nem por troca de escala): só pela
+  **reintegração**. O **líder só reintegra o que ele mesmo registrou** — não desfaz a
+  decisão da gestão nem a de outro líder —, **ninguém se reintegra** e a gestão (no escopo)
+  reintegra qualquer um; a reintegração devolve a pessoa à equipe e avisa, mas **não
+  restaura as escalas canceladas**. O **líder removido da própria equipe perde os poderes
+  de líder dela** (remover, reintegrar, aprovar troca, ver a equipe) até ser reintegrado:
+  a remoção não troca o líder cadastrado, então o sistema não o trata como líder enquanto
+  houver remoção aberta. As recusas de remoção **não citam nome** nem distinguem "não
+  existe" de "não é da equipe", para o líder (que não tem permissão nenhuma) não varrer
+  matrículas atrás de nomes. Duas remoções simultâneas do mesmo voluntário viram uma só
+  (a desativação na equipe é a porta de entrada dentro da transação). A mesma função
+  atende o botão "remover da escala" do formulário de desligamento da v5.7, que agora
+  **pede confirmação**.
 
   **Direito de recusa e afastamento (Art. 133 §7º).** Recusar escala não tem consequência
   alguma: o auto-escalador ordena só por quem serviu há mais tempo, e **não existe coluna
@@ -1199,8 +1222,9 @@ ponto real de integração:
   grupo só por pessoa e rodízio, nome de grupo ativo único, um serviço ativo por data e
   rodízio e a natureza dentro do catálogo.
 
-  **Verificação.** 124 testes novos (regra pura e camada de banco com pool simulado); a
-  suíte da API foi de 1002 para **1126**. Um roteiro ponta a ponta de **237 verificações**
+  **Verificação.** 189 testes novos (regra pura, camada de banco com pool simulado, os
+  handlers com valores em texto como o HTTP entrega e o escape do e-mail); a suíte da API
+  foi de 1002 para **1191**. Um roteiro ponta a ponta de **237 verificações**
   rodou os três handlers reais contra um SQL Server 2019 recriado do zero com as 117
   migrações: o aceite digital (inclusive sem IP, com porta no IP e repetido), os
   gatilhos e os CHECK de cada forma, a ficha e a mensagem, o rodízio de ponta a ponta
@@ -1218,6 +1242,57 @@ ponto real de integração:
   `habilitacao_voluntarios`. E as telas de escala mostravam a hora do serviço 3 horas
   antes do que foi marcada (a hora é "de parede", guardada como se fosse UTC); corrigido
   nas telas de escala.
+
+  **Revisão de segurança (02/10/2026).** Depois da entrega, a versão passou por três
+  verificações independentes do que os testes funcionais cobrem: **(1)** uma bateria de
+  **177 verificações de ataque** contra o SQL Server — a matriz de autorização (gestor de
+  outra congregação, líder de outra equipe, membro comum, permissão trocada, em todas as
+  ações novas e nas rotas antigas), injeção de SQL e de HTML em cada campo de texto,
+  entradas malformadas (nulo, vazio, negativo, decimal, lista, objeto, 5.000 caracteres,
+  datas do ano 1 ao 9999) e a prova de que uma recusa por falta de permissão responde
+  igual para o objeto que existe e para o que não existe; **(2)** **20 verificações de
+  corrida** com vários processos acessando ao mesmo tempo, cada um com a sua conexão: 8
+  aceites do mesmo voluntário, 6 gerações do mesmo rodízio, 5 remoções e 5 reintegrações
+  simultâneas, a mesma pessoa entrando em dois grupos, 4 ratificações da mesma lista e a
+  geração do rodízio ao mesmo tempo que a remoção de um dos voluntários; **(3)** uma
+  **revisão adversarial independente do código**, feita por outro agente só de leitura. O
+  que apareceu, e foi corrigido (commits `fbe4516` e o seguinte):
+  - **XSS armazenado (alta).** O painel de notificações e o e-mail escreviam a mensagem
+    **sem escapar**; um gestor com `escalas` podia dar a um rodízio um nome com HTML, pôr o
+    Presidente num grupo e gerar o rodízio publicando — o script rodaria no navegador dele
+    e levaria o token de sessão. Corrigido **na saída** (painel, busca global e e-mail
+    escapam), com **teste que falha sem a correção**, e na entrada (nomes de rodízio,
+    grupo e equipe não aceitam `<` nem `>`). Também passam a exigir o escopo o
+    voluntário que o gestor põe num grupo e as matrículas avulsas de uma ratificação.
+  - **Escopo das escalas (v5.6).** `escalas` valia em **qualquer congregação** (incluir
+    voluntário em equipe alheia, aprovar troca, ver pendências). Agora só na congregação
+    que o escopo alcança. Na habilitação (v5.7), o desligamento, a leitura de
+    desligamentos, a marca "contato com menores" e a elegibilidade também respeitam o
+    escopo.
+  - **Ratificação (média-alta).** Matrícula avulsa de qualquer congregação e data passada
+    qualquer viravam adesões **irreversíveis**; ver as travas acima.
+  - **Líder removido** voltava a se reintegrar e o líder desfazia a decisão da gestão; ver
+    "Remoção da escala e reintegração".
+  - **Trocas de escala** furavam a remoção e podiam **ressuscitar** uma alocação cancelada;
+    agora o destino precisa ser da equipe, ativo nela e não removido, a escala de origem
+    precisa estar ativa, e a recusa não revela a agenda de terceiros.
+  - **Corridas:** remoção em duplicata (registros de RH e avisos repetidos) e a remoção que
+    perdia para uma geração simultânea (o removido recebia convite); `cancelar-futuros`
+    podia desfazer uma publicação feita ao mesmo tempo. Recusar a mesma escala duas vezes
+    reenviava o convite em cadeia.
+  - **Entrada:** id que não é inteiro positivo, texto maior que a coluna ou campo que não é
+    texto viravam erro 500 em toda a área; agora 400 na entrada, com limites de tamanho e
+    tetos (150 voluntários por grupo, 50 rodízios ativos por congregação, 100 voluntários ao
+    criar um grupo).
+  - **LGPD:** o texto livre do motivo e da observação ia para a auditoria imutável; agora só
+    o tipo e o tamanho. A recusa de adesão repetida deixou de devolver o IP.
+  - **Um erro meu, pego e corrigido na hora:** a primeira correção (`fbe4516`) trazia o
+    regex `/^d+$/` no lugar de `/^\d+$/` na habilitação e **recusava todo id em texto**
+    (`?congregacaoId=1`, como o HTTP entrega) — os testes passavam números e não viram.
+    Ficou no ar cerca de 8 minutos; o conserto (`afe5b53`) veio com um teste que chama os
+    handlers com valores em texto (falha com o erro, passa sem ele).
+  Verificado também em produção, sem alterar nada: um token assinado com o **segredo
+  padrão** do repositório é recusado (401), então a produção usa um segredo próprio.
 
   **Em produção (verificado em 01/10/2026).** O deploy do sistema passou com os testes e a
   migração 117 aplicada no Azure. As 9 rotas `GET` e as 6 `POST` testadas em
@@ -1261,8 +1336,31 @@ ponto real de integração:
     (higiene e proteção do voluntário na cozinha) também fica como orientação.
   - **Retenção:** adesão (com IP) por 5 anos, para cobrir a prescrição trabalhista; escalas
     e rodízios como prova do revezamento. **A rotina automática de descarte ainda não
-    existe** (prazo a definir pela CLI/Encarregado). O motivo da indisponibilidade é texto
-    livre e pode revelar saúde: a tela orienta a não detalhar.
+    existe** (prazo a definir pela CLI/Encarregado) **e o gatilho que protege a adesão
+    também impediria anonimizar o IP depois do prazo**: quando a rotina existir, ela
+    precisará de um caminho próprio (por exemplo, desabilitar o gatilho numa migração).
+    O motivo da indisponibilidade é texto livre e pode revelar saúde: a tela orienta a não
+    detalhar.
+  - **Ainda abertos (apontados pela revisão, não corrigidos nesta versão):**
+    - O **IP do aceite** ainda sai do primeiro endereço público da cadeia quando o Azure
+      não manda `x-azure-clientip`, e **não se verificou, no ar, como o Static Web Apps monta
+      esses cabeçalhos**. A cadeia inteira fica guardada; convém conferir com a primeira
+      adesão real. O mesmo cabeçalho (primeiro valor do `x-forwarded-for`) alimenta a trava
+      de tentativas do login (`limiteTaxa.js`) e pode ser forjado para escapar dela: **só se
+      deve mudar depois de ver os cabeçalhos reais**, porque trocar para o último valor
+      pode juntar todos os usuários numa chave só e trancar gente.
+    - O aceite digital **não confere a idade**: menor de idade pode aderir sozinho. É
+      decisão de negócio (a Lei 9.608/98 e o Estatuto da Criança tratam o menor à parte).
+    - **Meus Dados (LGPD)** não exporta nada do voluntariado ao titular.
+    - Ciclos de remover e reintegrar mandam 2 a 3 avisos por volta, sem limite; e gerar o
+      rodízio publicando envia os e-mails em sequência (um grupo muito grande pode
+      demorar).
+    - `resolverDestinatariosDaCongregacao` trata o escopo `DEPARTAMENTO` como alcançando
+      todas as congregações: os avisos de habitualidade e de termo pendente podem chegar a
+      mais gente do que o escopo permitiria.
+    - **Não há Content-Security-Policy** (`staticwebapp.config.json`): é a defesa que
+      limitaria o estrago de um XSS futuro. Adicionar exige ajustar os `onclick` em linha da
+      tela inteira, então fica como item à parte.
   - **Limites:** o rodízio não se liga à agenda litúrgica (v7.2) — é semanal por dia e
     hora; o serviço manual (sem rodízio) segue como na v5.6; a tela de escalas continua
     mostrando matrícula, e não nome, nas alocações do detalhe do serviço.

@@ -47,10 +47,32 @@ describe("Termo de Adesão — o texto e o que o torna prova", () => {
 });
 
 describe("IP do aceite digital — guardado, então tem que ser um endereço de verdade", () => {
-  test("pega o cabeçalho do Azure primeiro, depois o do proxy, depois o primeiro do X-Forwarded-For", () => {
+  test("pega o cabeçalho do Azure primeiro, depois o do proxy, depois o primeiro endereço PÚBLICO do X-Forwarded-For", () => {
     expect(v.extrairIp({ "x-azure-clientip": "189.10.20.30", "x-forwarded-for": "1.1.1.1" })).toBe("189.10.20.30");
-    expect(v.extrairIp({ "x-client-ip": "10.0.0.5" })).toBe("10.0.0.5");
+    expect(v.extrairIp({ "x-client-ip": "189.1.2.3" })).toBe("189.1.2.3");
     expect(v.extrairIp({ "x-forwarded-for": "177.8.9.10, 10.0.0.1, 10.0.0.2" })).toBe("177.8.9.10");
+    expect(v.extrairIp({ "x-forwarded-for": "10.0.0.5, 177.8.9.10" })).toBe("177.8.9.10");
+  });
+  test("o nome do cabeçalho vale em qualquer caixa", () => {
+    expect(v.extrairIp({ "X-Azure-ClientIP": "189.10.20.30" })).toBe("189.10.20.30");
+    expect(v.extrairIp({ "X-Forwarded-For": "177.8.9.10" })).toBe("177.8.9.10");
+  });
+  test("endereço privado, loopback, link-local, reservado e de documentação NÃO prova de onde veio a conexão", () => {
+    for (const ip of ["10.0.0.5", "172.16.0.1", "172.31.255.255", "192.168.1.5", "127.0.0.1", "0.0.0.0", "169.254.1.1", "100.64.0.1", "224.0.0.1", "255.255.255.255", "203.0.113.9", "198.51.100.7", "192.0.2.1",
+      "::1", "::", "fe80::1", "fc00::1", "fd12:3456::1", "ff02::1", "2001:db8::7334", "::ffff:10.0.0.1"]) {
+      expect(v.extrairIp({ "x-forwarded-for": ip })).toBeNull();
+    }
+    expect(v.ipPublico("172.32.0.1")).toBe(true);        // fora da faixa privada 172.16/12
+    expect(v.ipPublico("8.8.8.8")).toBe(true);
+    expect(v.extrairIp({ "x-forwarded-for": "::ffff:177.8.9.10" })).toBe("::ffff:177.8.9.10");
+  });
+  test("a cadeia dos cabeçalhos é guardada limpa e cortada, para a prova não depender só do primeiro IP", () => {
+    expect(v.cadeiaDeCabecalhos({ "x-forwarded-for": "1.2.3.4, 177.8.9.10:55", "x-azure-clientip": "177.8.9.10" }))
+      .toBe(JSON.stringify({ "x-azure-clientip": "177.8.9.10", "x-forwarded-for": "1.2.3.4, 177.8.9.10:55" }));
+    expect(v.cadeiaDeCabecalhos({})).toBeNull();
+    const suja = v.cadeiaDeCabecalhos({ "x-forwarded-for": "1.2.3.4'; DROP TABLE X;-- <script>" });
+    expect(suja).not.toMatch(/[<>';]/);
+    expect(v.cadeiaDeCabecalhos({ "x-forwarded-for": "1".repeat(500) }).length).toBeLessThanOrEqual(400);
   });
   test("tira a porta do IPv4 e os colchetes do IPv6", () => {
     expect(v.extrairIp({ "x-forwarded-for": "177.8.9.10:51234" })).toBe("177.8.9.10");
@@ -58,7 +80,10 @@ describe("IP do aceite digital — guardado, então tem que ser um endereço de 
     expect(v.extrairIp({ "x-forwarded-for": "2804:14d:5c80::1" })).toBe("2804:14d:5c80::1");
   });
   test("IPv6 sem colchetes não perde o último bloco (não confunde com porta)", () => {
-    expect(v.extrairIp({ "x-azure-clientip": "2001:db8::7334" })).toBe("2001:db8::7334");
+    expect(v.extrairIp({ "x-azure-clientip": "2804:14d:5c80::7334" })).toBe("2804:14d:5c80::7334");
+  });
+  test("o que parece IPv6 mas não é (só dois-pontos, grupos de letras) não passa", () => {
+    for (const lixo of [":::::", ":::", "a:b:c", "1:2:3", "::::::", "g::1", "12345::1"]) expect(v.extrairIp({ "x-forwarded-for": lixo })).toBeNull();
   });
   test("lixo, octeto impossível e ausência viram null — nunca um IP inventado", () => {
     expect(v.extrairIp({ "x-forwarded-for": "desconhecida" })).toBeNull();
@@ -117,6 +142,16 @@ describe("ratificação coletiva — Lista de Ouro (Art. 133 §8º, III)", () =>
       expect(r.valido).toBe(false);
       expect(r.mensagem).toMatch(/CABEÇALHO/);
     }
+  });
+  test("a lista não pode ser anterior à Lei 9.608/98 (a adesão é irreversível: data absurda não passa)", () => {
+    expect(v.DATA_MINIMA_RATIFICACAO).toBe("1998-02-19");
+    for (const dataLista of ["1900-01-01", "1998-02-18"]) {
+      const r = v.validarRatificacao(lista({ dataLista }), { hoje: HOJE });
+      expect(r.valido).toBe(false);
+      expect(r.mensagem).toMatch(/Lei 9\.608\/98/);
+    }
+    expect(v.validarRatificacao(lista({ dataLista: "0001-01-01" }), { hoje: HOJE }).valido).toBe(false);   // ano 1 nem é data válida no calendário do sistema
+    expect(v.validarRatificacao(lista({ dataLista: "1998-02-19" }), { hoje: HOJE }).valido).toBe(true);
   });
   test("descrição, data (não futura) e matrículas avulsas", () => {
     expect(v.validarRatificacao(lista({ descricao: "AG" }), { hoje: HOJE }).mensagem).toMatch(/Descreva a lista/);
@@ -194,6 +229,18 @@ describe("composição: grupos distintos se alternam (Art. 135 §1º, I)", () =>
     expect(v.validarNomeGrupo("  Grupo A ")).toEqual({ valido: true, nome: "Grupo A" });
     expect(v.validarNomeGrupo("").valido).toBe(false);
     expect(v.validarNomeGrupo("x".repeat(61)).valido).toBe(false);
+  });
+  // Defesa em profundidade contra HTML injetado em nome (o front e o e-mail também escapam na saída — é lá que a defesa principal está).
+  test("nome de grupo e de rodízio não aceitam os sinais < e >", () => {
+    expect(v.validarNomeGrupo("<img src=x onerror=alert(1)>").valido).toBe(false);
+    expect(v.validarNomeGrupo("Grupo > A").valido).toBe(false);
+    expect(v.validarRodizio(rodizioBase({ nome: "<script>alert(1)</script>" })).valido).toBe(false);
+    expect(v.validarRodizio(rodizioBase({ nome: "Limpeza & manutenção (sábado)" })).valido).toBe(true);
+  });
+  test("tetos que ficam longe do limite de 2.100 parâmetros do SQL Server", () => {
+    expect(v.MAX_MEMBROS_POR_GRUPO * v.MAX_GRUPOS).toBeLessThan(2100);
+    expect(v.MAX_RODIZIOS_POR_CONGREGACAO).toBeLessThan(2100);
+    expect(v.MAX_MEMBROS_AO_CRIAR_GRUPO).toBeLessThanOrEqual(v.MAX_MEMBROS_POR_GRUPO);
   });
 });
 

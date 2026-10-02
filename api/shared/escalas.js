@@ -131,10 +131,11 @@ function listarPendenciasConfirmacao(alocacoes, publicadaEm, prazoDias, agora) {
 // conflito ou uma indisponibilidade já declarada.
 function validarTroca({ servicoId, equipeId, membroDestinoId, dataServico, indisponibilidadesDestino, alocacoesDoServico }) {
   if (estaIndisponivelNaData(indisponibilidadesDestino, dataServico)) {
-    return { valido: false, mensagem: "O voluntário destino já se declarou indisponível nessa data." };
+    // A recusa não diz o motivo: quem pede a troca não pode descobrir, por aqui, a agenda de outra pessoa.
+    return { valido: false, mensagem: "O voluntário destino não pode assumir esta data." };
   }
   if (temConflitoEntreEquipes(alocacoesDoServico, membroDestinoId, equipeId)) {
-    return { valido: false, mensagem: "O voluntário destino já está escalado em outra equipe neste mesmo serviço." };
+    return { valido: false, mensagem: "O voluntário destino não pode assumir esta data." };
   }
   return { valido: true };
 }
@@ -406,6 +407,15 @@ async function decidirTroca(pool, { trocaId, aprovar, observacao, decididoPorMem
   if (!troca) return { sucesso: false, mensagem: "Troca não encontrada." };
   if (troca.status !== "PENDENTE") return { sucesso: false, mensagem: "Esta troca já foi decidida." };
 
+  // A escala original precisa continuar ativa. Se a pessoa foi removida, se afastou ou o serviço foi cancelado, aprovar a troca RESSUSCITARIA uma alocação
+  // cancelada (o UPDATE abaixo não olhava o status): a troca é recusada em vez disso.
+  const origem = await buscarAlocacao(pool, troca.alocacaoOrigemId);
+  if (!origem || !STATUS_ALOCACAO_ATIVOS.includes(origem.status)) {
+    await pool.request().input("id", sql.Int, trocaId).input("por", sql.Int, decididoPorMembroId)
+      .query(`UPDATE EscalasTrocas SET Status = 'RECUSADA', ObservacaoLider = N'Cancelada: a escala original não está mais ativa.', DecididaPorMembroId = @por, DecididaEm = SYSUTCDATETIME() WHERE TrocaId = @id AND Status = 'PENDENTE'`);
+    return { sucesso: false, mensagem: "A escala original não está mais ativa (o voluntário foi removido, se afastou ou o serviço foi cancelado): a troca foi encerrada." };
+  }
+
   await pool.request()
     .input("id", sql.Int, trocaId)
     .input("status", sql.NVarChar(20), aprovar ? "APROVADA" : "RECUSADA")
@@ -417,7 +427,7 @@ async function decidirTroca(pool, { trocaId, aprovar, observacao, decididoPorMem
     await pool.request()
       .input("alocacaoId", sql.Int, troca.alocacaoOrigemId)
       .input("membroDestinoId", sql.Int, troca.membroDestinoId)
-      .query(`UPDATE EscalasAlocacoes SET MembroId = @membroDestinoId, Status = 'ACEITO', RespondidoEm = SYSUTCDATETIME() WHERE AlocacaoId = @alocacaoId`);
+      .query(`UPDATE EscalasAlocacoes SET MembroId = @membroDestinoId, Status = 'ACEITO', RespondidoEm = SYSUTCDATETIME() WHERE AlocacaoId = @alocacaoId AND Status IN ('CONVIDADO','ACEITO','CONFIRMADO')`);
   }
   return { sucesso: true, mensagem: aprovar ? "✅ Troca aprovada." : "✅ Troca recusada." };
 }

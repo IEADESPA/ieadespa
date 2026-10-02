@@ -69,7 +69,8 @@ async function situacaoDoTermo(pool, membroId) {
   return { termo: vol.termoVigente(), aderiu: !!adesao, adesao };
 }
 
-async function aceitarDigital(pool, { membroId, aceito, ip, hoje = hojeBrasilia() }) {
+// `cadeia`: os cabeçalhos de origem como chegaram (vol.cadeiaDeCabecalhos), guardados junto do IP escolhido — o x-forwarded-for pode ter sido escrito pelo cliente.
+async function aceitarDigital(pool, { membroId, aceito, ip, cadeia = null, hoje = hojeBrasilia() }) {
   const v = vol.validarAceiteDigital({ aceito, ip });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const ja = await buscarAdesao(pool, membroId);
@@ -77,9 +78,9 @@ async function aceitarDigital(pool, { membroId, aceito, ip, hoje = hojeBrasilia(
   let id;
   try {
     const r = await pool.request().input("m", sql.Int, membroId).input("v", sql.Int, vol.TERMO_VERSAO).input("h", sql.NVarChar(64), vol.TERMO_HASH)
-      .input("d", sql.Date, hoje).input("ip", sql.NVarChar(45), ip)
-      .query(`INSERT INTO VoluntariadoAdesoes (MembroId, Forma, TermoVersao, TermoHash, DataAceite, AceitoEm, EnderecoIp)
-              VALUES (@m, 'CLICKWRAP', @v, @h, @d, SYSUTCDATETIME(), @ip); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+      .input("d", sql.Date, hoje).input("ip", sql.NVarChar(45), ip).input("cad", sql.NVarChar(400), cadeia)
+      .query(`INSERT INTO VoluntariadoAdesoes (MembroId, Forma, TermoVersao, TermoHash, DataAceite, AceitoEm, EnderecoIp, CadeiaCabecalhos)
+              VALUES (@m, 'CLICKWRAP', @v, @h, @d, SYSUTCDATETIME(), @ip, @cad); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
     id = r.recordset[0].id;
   } catch (e) {
     if (duplicado(e)) return { sucesso: false, mensagem: "Você já aderiu ao Termo." };
@@ -96,7 +97,7 @@ async function registrarAdesaoManual(pool, { membroId, dados, por, hoje = hojeBr
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const m = await lerMembro(pool, membroId);
   if (!m) return { sucesso: false, mensagem: "Voluntário não encontrado." };
-  const ja = await buscarAdesao(pool, membroId, { comIp: true });
+  const ja = await buscarAdesao(pool, membroId);
   if (ja) return { sucesso: false, mensagem: `${m.Nome} já tem a adesão registrada em ${cal.formatarDataBr(ja.dataAceite)} (${ja.rotuloForma}).`, adesao: ja };
   let id;
   try {
@@ -110,7 +111,7 @@ async function registrarAdesaoManual(pool, { membroId, dados, por, hoje = hojeBr
     throw e;
   }
   await registrarAuditoria({ tabela: "VoluntariadoAdesoes", registroId: id, acao: "ADESAO_REGISTRADA", usuarioId: por, dadosDepois: { membroId, forma: v.dados.forma, dataAceite: v.dados.dataAceite, canal: v.dados.canal, referencia: v.dados.referencia } });
-  return { sucesso: true, mensagem: `Adesão de ${m.Nome} registrada (${vol.FORMAS_ADESAO[v.dados.forma]}).`, adesao: await buscarAdesao(pool, membroId, { comIp: true }) };
+  return { sucesso: true, mensagem: `Adesão de ${m.Nome} registrada (${vol.FORMAS_ADESAO[v.dados.forma]}).`, adesao: await buscarAdesao(pool, membroId) };
 }
 
 // Lista de Ouro (Art. 133 §8º, III). `autorizacao`: { global:boolean, podeCongregacao(nome):boolean } decide o escopo de quem registra.
@@ -124,18 +125,27 @@ async function ratificar(pool, { dados, por, autorizacao, hoje = hojeBrasilia() 
     if (!servico) return { sucesso: false, mensagem: "Serviço não encontrado." };
     const cong = (await pool.request().input("c", sql.Int, servico.congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @c`)).recordset[0];
     if (!cong || !autorizacao.podeCongregacao(cong.Nome)) return { sucesso: false, proibido: true, mensagem: "Fora do seu escopo de atuação." };
+    // A data da adesão é a data da lista: tem que ser a da própria escala. Sem isso, qualquer data passada poderia ser carimbada, e a adesão é irreversível.
+    if (isoData(servico.dataHora) !== d.dataLista) return { sucesso: false, mensagem: `A data da lista precisa ser a da escala: ${cal.formatarDataBr(isoData(servico.dataHora))}.` };
     assinantes = (await pool.request().input("s", sql.Int, d.servicoId).query(`SELECT DISTINCT MembroId FROM EscalasAlocacoes WHERE ServicoId = @s AND Status IN ('ACEITO','CONFIRMADO')`)).recordset.map(x => x.MembroId);
   } else {
     // Assembleia e reunião de obreiros reúnem gente de várias congregações: só quem tem escopo geral ratifica.
     if (!autorizacao.global) return { sucesso: false, proibido: true, mensagem: "A ratificação de assembleia ou reunião de obreiros é da gestão com escopo geral." };
-    const sessao = (await pool.request().input("s", sql.Int, d.sessaoId).query(`SELECT SessaoId FROM Sessoes WHERE SessaoId = @s`)).recordset[0];
+    const sessao = (await pool.request().input("s", sql.Int, d.sessaoId).query(`SELECT s.SessaoId, s.DataSessao, o.Sigla AS OrgaoSigla FROM Sessoes s LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId WHERE s.SessaoId = @s`)).recordset[0];
     if (!sessao) return { sucesso: false, mensagem: "Sessão não encontrada." };
+    // A origem "Assembleia Geral" só vale para sessão do órgão Assembleia Geral. (Não há órgão cadastrado para a Reunião de Obreiros: ali só a data amarra a lista.)
+    if (d.origem === "ASSEMBLEIA_GERAL" && sessao.OrgaoSigla !== "ASSEMBLEIA_GERAL") return { sucesso: false, mensagem: "Esta sessão não é de Assembleia Geral. Se for uma reunião de obreiros, escolha essa origem." };
+    if (isoData(sessao.DataSessao) !== d.dataLista) return { sucesso: false, mensagem: `A data da lista precisa ser a da sessão: ${cal.formatarDataBr(isoData(sessao.DataSessao))}.` };
     assinantes = (await pool.request().input("s", sql.Int, d.sessaoId).query(`SELECT DISTINCT MembroId FROM Presencas WHERE SessaoId = @s AND Presente = 1`)).recordset.map(x => x.MembroId);
   }
   const ignorados = [];
   if (d.membroIds.length) {
+    // Matrícula avulsa também respeita o escopo de quem registra (a adesão é irreversível): uma só fora dele recusa o pedido inteiro.
     const r = pool.request();
-    const existentes = new Set((await r.query(`SELECT MembroId FROM MembroReferencia WHERE MembroId IN (${listaIn(r, "x", d.membroIds)})`)).recordset.map(x => x.MembroId));
+    const linhas = (await r.query(`SELECT m.MembroId, c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId IN (${listaIn(r, "x", d.membroIds)})`)).recordset;
+    const existentes = new Set(linhas.map(x => x.MembroId));
+    const fora = linhas.filter(x => !autorizacao.podeCongregacao(x.CongregacaoNome)).map(x => x.MembroId);
+    if (fora.length) return { sucesso: false, proibido: true, mensagem: `${fora.length} matrícula(s) avulsa(s) fora do seu escopo de atuação: ${fora.slice(0, 10).join(", ")}${fora.length > 10 ? "…" : ""}. Nada foi registrado.` };
     for (const id of d.membroIds) { if (existentes.has(id)) assinantes.push(id); else ignorados.push(id); }
   }
   assinantes = [...new Set(assinantes)];
@@ -176,8 +186,12 @@ async function ratificar(pool, { dados, por, autorizacao, hoje = hojeBrasilia() 
   };
 }
 
-async function listarRatificacoes(pool, { limite = 50 } = {}) {
-  const r = await pool.request().query(`SELECT TOP (${Number(limite) || 50}) RatificacaoId, Origem, Descricao, DataLista, TotalSignatarios, NovasAdesoes, RegistradoEm FROM VoluntariadoRatificacoes ORDER BY RatificacaoId DESC`);
+// `porMembroId`: quem não tem escopo geral só vê as ratificações que ele mesmo registrou.
+async function listarRatificacoes(pool, { limite = 50, porMembroId = null } = {}) {
+  const rq = pool.request();
+  let filtro = "";
+  if (porMembroId) { rq.input("por", sql.Int, porMembroId); filtro = "WHERE RegistradoPorMembroId = @por"; }
+  const r = await rq.query(`SELECT TOP (${Number(limite) || 50}) RatificacaoId, Origem, Descricao, DataLista, TotalSignatarios, NovasAdesoes, RegistradoEm FROM VoluntariadoRatificacoes ${filtro} ORDER BY RatificacaoId DESC`);
   return r.recordset.map(x => ({ ratificacaoId: x.RatificacaoId, origem: x.Origem, rotuloOrigem: vol.ORIGENS_RATIFICACAO[x.Origem], descricao: x.Descricao, dataLista: isoData(x.DataLista), totalSignatarios: x.TotalSignatarios, novasAdesoes: x.NovasAdesoes, registradoEm: isoInstante(x.RegistradoEm) }));
 }
 
@@ -220,6 +234,18 @@ async function removidoDaEquipe(pool, { membroId, equipeId }) {
   const r = await pool.request().input("m", sql.Int, membroId).input("e", sql.Int, equipeId)
     .query(`SELECT TOP 1 DesligamentoId, DesligadoEm FROM VoluntariosDesligamentos WHERE MembroId = @m AND EquipeId = @e AND RemovidoDaEscala = 1 AND ReintegradoEm IS NULL ORDER BY DesligamentoId DESC`);
   return r.recordset[0] ? { desligamentoId: r.recordset[0].DesligamentoId, desligadoEm: isoInstante(r.recordset[0].DesligadoEm) } : null;
+}
+
+// O líder da equipe só age como líder se não estiver, ele mesmo, removido da escala dela (a remoção do líder não troca o LiderMembroId).
+async function liderAtivo(pool, { equipe, membroId }) {
+  if (!equipe || Number(equipe.liderMembroId) !== Number(membroId)) return false;
+  return !(await removidoDaEquipe(pool, { membroId, equipeId: equipe.equipeId }));
+}
+
+// Para recusar com 403 (e não com 404) quem não tem permissão nem lidera nada: a resposta não revela se a equipe ou o registro existem.
+async function lideraAlgumaEquipe(pool, { membroId }) {
+  const r = await pool.request().input("m", sql.Int, membroId).query(`SELECT TOP 1 1 AS ok FROM EscalasEquipes WHERE LiderMembroId = @m AND Ativa = 1`);
+  return r.recordset.length > 0;
 }
 
 function mensagemRemovido(r, nomeMembro) {
@@ -302,6 +328,8 @@ async function criarRodizio(pool, { dados, congregacaoId, por }) {
   if (!equipe) return { sucesso: false, mensagem: "Equipe não encontrada." };
   if (Number(equipe.congregacaoId) !== Number(congregacaoId)) return { sucesso: false, mensagem: "A equipe não é desta congregação." };
   if (!equipe.ativa) return { sucesso: false, mensagem: "A equipe está inativa." };
+  const ativos = (await pool.request().input("c", sql.Int, congregacaoId).query(`SELECT COUNT(*) AS n FROM EscalasRodizios WHERE CongregacaoId = @c AND Ativo = 1`)).recordset[0].n;
+  if (ativos >= vol.MAX_RODIZIOS_POR_CONGREGACAO) return { sucesso: false, mensagem: `Cada congregação aceita até ${vol.MAX_RODIZIOS_POR_CONGREGACAO} rodízios ativos: desative algum antes.` };
   const r = await pool.request().input("c", sql.Int, congregacaoId).input("e", sql.Int, v.dados.equipeId).input("n", sql.NVarChar(100), v.dados.nome)
     .input("dia", sql.TinyInt, v.dados.diaSemana).input("h", sql.NVarChar(5), v.dados.hora).input("i", sql.TinyInt, v.dados.intervaloSemanas).input("a", sql.Date, v.dados.dataAncora).input("por", sql.Int, por)
     .query(`INSERT INTO EscalasRodizios (CongregacaoId, EquipeId, Nome, DiaSemana, Hora, IntervaloSemanas, DataAncora, CriadoPorMembroId) VALUES (@c, @e, @n, @dia, @h, @i, @a, @por);
@@ -323,11 +351,13 @@ async function buscarGrupo(pool, grupoId) {
   return r ? { grupoId: r.GrupoId, rodizioId: r.RodizioId, nome: r.Nome, ordem: r.Ordem, ativo: !!r.Ativo } : null;
 }
 
-async function adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId, por }) {
+// `podeCongregacao(nome)`: o escopo de quem coloca; o voluntário também precisa estar nele (sem isso, as mensagens abaixo — com nome — virariam consulta de nomes por matrícula).
+async function adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId, por, podeCongregacao = null }) {
   if (!rodizio.ativo) return { sucesso: false, mensagem: "O rodízio está desativado." };
   if (!grupo.ativo) return { sucesso: false, mensagem: "O grupo está desativado." };
   const m = await lerMembro(pool, membroId);
   if (!m) return { sucesso: false, mensagem: `Matrícula ${membroId} não encontrada.` };
+  if (podeCongregacao && !podeCongregacao(m.CongregacaoNome)) return { sucesso: false, proibido: true, mensagem: `A matrícula ${membroId} está fora do seu escopo de atuação.` };
   const removido = await removidoDaEquipe(pool, { membroId, equipeId: rodizio.equipeId });
   if (removido) return { sucesso: false, mensagem: mensagemRemovido(removido, m.Nome) };
   // v6.9: a equipe pode exigir uma formação vigente; vale também para quem entra por um grupo.
@@ -336,6 +366,8 @@ async function adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId, por }) {
   const outro = (await pool.request().input("r", sql.Int, rodizio.rodizioId).input("m", sql.Int, membroId)
     .query(`SELECT g.Nome FROM EscalasRodizioGrupoMembros gm JOIN EscalasRodizioGrupos g ON g.GrupoId = gm.GrupoId WHERE gm.RodizioId = @r AND gm.MembroId = @m AND gm.SaiuEm IS NULL`)).recordset[0];
   if (outro) return { sucesso: false, mensagem: `${m.Nome} já está no grupo “${outro.Nome}” deste rodízio: grupos distintos é que se alternam (Art. 135 §1º, I).` };
+  const noGrupo = (await pool.request().input("g", sql.Int, grupo.grupoId).query(`SELECT COUNT(*) AS n FROM EscalasRodizioGrupoMembros WHERE GrupoId = @g AND SaiuEm IS NULL`)).recordset[0].n;
+  if (noGrupo >= vol.MAX_MEMBROS_POR_GRUPO) return { sucesso: false, mensagem: `Um grupo aceita até ${vol.MAX_MEMBROS_POR_GRUPO} voluntários: divida em outro grupo.` };
   try {
     await pool.request().input("g", sql.Int, grupo.grupoId).input("r", sql.Int, rodizio.rodizioId).input("m", sql.Int, membroId)
       .query(`INSERT INTO EscalasRodizioGrupoMembros (GrupoId, RodizioId, MembroId) VALUES (@g, @r, @m)`);
@@ -351,10 +383,12 @@ async function adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId, por }) {
   return { sucesso: true, mensagem: `${m.Nome} entrou no ${grupo.nome}.` };
 }
 
-async function criarGrupo(pool, { rodizio, nome, membroIds = [], por }) {
+async function criarGrupo(pool, { rodizio, nome, membroIds = [], por, podeCongregacao = null }) {
   if (!rodizio.ativo) return { sucesso: false, mensagem: "O rodízio está desativado." };
   const v = vol.validarNomeGrupo(nome);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+  const pedidos = [...new Set((membroIds || []).map(Number).filter(Boolean))];
+  if (pedidos.length > vol.MAX_MEMBROS_AO_CRIAR_GRUPO) return { sucesso: false, mensagem: `Ao criar o grupo, informe até ${vol.MAX_MEMBROS_AO_CRIAR_GRUPO} voluntários; os demais entram depois, um a um.` };
   const ativos = (await pool.request().input("r", sql.Int, rodizio.rodizioId).query(`SELECT COUNT(*) AS n, ISNULL(MAX(Ordem), 0) AS maxOrdem FROM EscalasRodizioGrupos WHERE RodizioId = @r AND Ativo = 1`)).recordset[0];
   if (ativos.n >= vol.MAX_GRUPOS) return { sucesso: false, mensagem: `Um rodízio aceita até ${vol.MAX_GRUPOS} grupos.` };
   let grupoId;
@@ -369,8 +403,8 @@ async function criarGrupo(pool, { rodizio, nome, membroIds = [], por }) {
   await registrarAuditoria({ tabela: "EscalasRodizioGrupos", registroId: grupoId, acao: "GRUPO_CRIADO", usuarioId: por, dadosDepois: { rodizioId: rodizio.rodizioId, nome: v.nome } });
   const recusados = [];
   const grupo = { grupoId, rodizioId: rodizio.rodizioId, nome: v.nome, ativo: true };
-  for (const id of [...new Set((membroIds || []).map(Number).filter(Boolean))]) {
-    const r = await adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId: id, por });
+  for (const id of pedidos) {
+    const r = await adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId: id, por, podeCongregacao });
     if (!r.sucesso) recusados.push({ membroId: id, mensagem: r.mensagem });
   }
   return { sucesso: true, grupoId, recusados, mensagem: recusados.length ? `Grupo criado, mas ${recusados.length} voluntário(s) não entraram.` : "Grupo criado." };
@@ -435,8 +469,6 @@ async function gerarRodizio(pool, { rodizioId, dados, por, hoje = hojeBrasilia()
 
   // Quem pode ser convidado: membro ativo da equipe, que atende à formação exigida (v6.9) e não foi removido.
   const todos = [...new Set(grupos.flatMap(g => g.membros.map(m => m.membroId)))];
-  const rEq = pool.request().input("e", sql.Int, rodizio.equipeId);
-  const ativosNaEquipe = new Set((await rEq.query(`SELECT MembroId FROM EscalasEquipeMembros WHERE EquipeId = @e AND Ativo = 1 AND MembroId IN (${listaIn(rEq, "m", todos)})`)).recordset.map(x => x.MembroId));
   const formacao = await trilhas.filtrarMembrosQueAtendem(pool, { contexto: "ESCALA_EQUIPE", alvoChave: String(rodizio.equipeId), membroIds: todos });
   const rInd = pool.request().input("de", sql.Date, v.dados.de).input("ate", sql.Date, v.dados.ate);
   const indisp = (await rInd.query(`SELECT MembroId, DataInicio, DataFim FROM EscalasIndisponibilidades WHERE DataFim >= @de AND DataInicio <= @ate AND MembroId IN (${listaIn(rInd, "m", todos)})`)).recordset;
@@ -448,6 +480,11 @@ async function gerarRodizio(pool, { rodizioId, dados, por, hoje = hojeBrasilia()
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
   try {
+    // Quem está ativo na equipe é lido DENTRO da transação, com trava (UPDLOCK): uma remoção da escala que esteja acontecendo ao mesmo tempo espera
+    // este "gerar" terminar (e então cancela as escalas novas) ou já terminou (e o removido nem é convidado). Antes, a leitura ficava fora e o
+    // removido ainda recebia convite e aviso.
+    const rEq = new sql.Request(transaction).input("e", sql.Int, rodizio.equipeId);
+    const ativosNaEquipe = new Set((await rEq.query(`SELECT MembroId FROM EscalasEquipeMembros WITH (UPDLOCK, HOLDLOCK) WHERE EquipeId = @e AND Ativo = 1 AND MembroId IN (${listaIn(rEq, "m", todos)})`)).recordset.map(x => x.MembroId));
     for (const oc of plano.ocorrencias) {
       const grupo = grupos.find(g => g.grupoId === oc.grupoId);
       const dataHora = vol.dataHoraDeParede(oc.dataIso, rodizio.hora);
@@ -511,15 +548,23 @@ async function cancelarServicosFuturos(pool, { rodizio, por, hoje = hojeBrasilia
   if (ids.length === 0) return { sucesso: false, mensagem: "Não há serviço futuro em rascunho neste rodízio. O que já foi publicado não se cancela por aqui." };
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
+  let cancelados = 0;
   try {
-    const rq1 = new sql.Request(transaction);
-    await rq1.query(`UPDATE EscalasAlocacoes SET Status = 'CANCELADA' WHERE Status IN (${STATUS_ATIVOS_SQL}) AND ServicoId IN (${listaIn(rq1, "s", ids)})`);
-    const rq2 = new sql.Request(transaction);
-    await rq2.query(`UPDATE EscalasServicos SET Status = 'CANCELADA' WHERE ServicoId IN (${listaIn(rq2, "s", ids)})`);
+    // Só cancela o que AINDA é rascunho no instante da gravação (uma publicação feita ao mesmo tempo não é desfeita), e as alocações acompanham
+    // exatamente os serviços que foram cancelados.
+    const rq = new sql.Request(transaction);
+    const lista = listaIn(rq, "s", ids);
+    const res = await rq.query(`
+      DECLARE @cancelados TABLE (ServicoId INT);
+      UPDATE EscalasServicos SET Status = 'CANCELADA' OUTPUT INSERTED.ServicoId INTO @cancelados WHERE ServicoId IN (${lista}) AND Status = 'RASCUNHO';
+      UPDATE a SET a.Status = 'CANCELADA' FROM EscalasAlocacoes a JOIN @cancelados c ON c.ServicoId = a.ServicoId WHERE a.Status IN (${STATUS_ATIVOS_SQL});
+      SELECT COUNT(*) AS n FROM @cancelados;`);
+    cancelados = res.recordset[0].n;
     await transaction.commit();
   } catch (e) { await fecharTransacao(transaction, false); throw e; }
-  await registrarAuditoria({ tabela: "EscalasRodizios", registroId: rodizio.rodizioId, acao: "RODIZIO_FUTUROS_CANCELADOS", usuarioId: por, dadosDepois: { servicos: ids.length } });
-  return { sucesso: true, cancelados: ids.length, mensagem: `${ids.length} serviço(s) em rascunho cancelado(s). Ajuste os grupos e gere de novo.` };
+  if (cancelados === 0) return { sucesso: false, mensagem: "Os serviços em rascunho foram publicados enquanto isto era feito: nada foi cancelado." };
+  await registrarAuditoria({ tabela: "EscalasRodizios", registroId: rodizio.rodizioId, acao: "RODIZIO_FUTUROS_CANCELADOS", usuarioId: por, dadosDepois: { servicos: cancelados } });
+  return { sucesso: true, cancelados, mensagem: `${cancelados} serviço(s) em rascunho cancelado(s). Ajuste os grupos e gere de novo.` };
 }
 
 // "Meu Painel": em quais rodízios a pessoa está, qual o grupo e as próximas datas do grupo dela.
@@ -592,8 +637,9 @@ async function habitualidade(pool, { congregacaoId = null, hoje = hojeBrasilia()
 // Remoção da escala, reintegração e afastamento (Art. 133-D e Art. 133 §7º)
 // ---------------------------------------------------------------
 
-async function alocacoesFuturas(pool, { membroId, equipeIds = null, de, ate = null }) {
-  const rq = pool.request().input("m", sql.Int, membroId).input("de", sql.Date, de);
+// `criarRequest`: para ler DENTRO de uma transação (o resultado enxerga o que outra transação já confirmou); sem ele, lê direto do pool.
+async function alocacoesFuturas(pool, { membroId, equipeIds = null, de, ate = null, criarRequest = null }) {
+  const rq = (criarRequest ? criarRequest() : pool.request()).input("m", sql.Int, membroId).input("de", sql.Date, de);
   let filtro = "";
   if (ate) { rq.input("ate", sql.Date, ate); filtro += " AND CAST(s.DataHora AS DATE) <= @ate"; }
   if (equipeIds) {
@@ -635,8 +681,10 @@ async function destinatarioMembro(pool, membroId) {
 async function removerDaEscala(pool, { dados, equipeId = null, podeCongregacao = null, por, hoje = hojeBrasilia(), deps }) {
   const v = vol.validarRemocao({ membroId: dados.membroId, atorId: por, motivo: dados.motivo, tipoMotivo: dados.tipoMotivo });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+  // As recusas abaixo NÃO citam o nome: quem lidera uma equipe (sem nenhuma permissão) poderia, tentando matrículas, descobrir o nome de toda a igreja.
+  const naoAtivo = { sucesso: false, mensagem: equipeId ? "Esse voluntário não está ativo nessa equipe." : "Esse voluntário não está ativo em nenhuma equipe que você alcance." };
   const m = await lerMembro(pool, v.dados.membroId);
-  if (!m) return { sucesso: false, mensagem: "Voluntário não encontrado." };
+  if (!m) return naoAtivo;
 
   const rq = pool.request().input("m", sql.Int, v.dados.membroId);
   const memb = (await rq.query(`SELECT e.EquipeId, e.Nome, e.LiderMembroId, e.CongregacaoId, c.Nome AS CongregacaoNome FROM EscalasEquipeMembros em
@@ -644,10 +692,7 @@ async function removerDaEscala(pool, { dados, equipeId = null, podeCongregacao =
                                 WHERE em.MembroId = @m AND em.Ativo = 1 AND e.Ativa = 1`)).recordset;
   let equipes = memb.filter(e => equipeId ? Number(e.EquipeId) === Number(equipeId) : true);
   if (podeCongregacao) equipes = equipes.filter(e => podeCongregacao(e.CongregacaoNome));
-  if (equipes.length === 0) return { sucesso: false, mensagem: equipeId ? `${m.Nome} não está ativo(a) nessa equipe.` : `${m.Nome} não está ativo(a) em nenhuma equipe que você alcance.` };
-
-  const equipeIds = equipes.map(e => e.EquipeId);
-  const futuras = await alocacoesFuturas(pool, { membroId: v.dados.membroId, equipeIds, de: hoje });
+  if (equipes.length === 0) return naoAtivo;
 
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
@@ -663,11 +708,12 @@ async function removerDaEscala(pool, { dados, equipeId = null, podeCongregacao =
     }
     if (efetivas.length === 0) {
       await fecharTransacao(transaction, false);
-      return { sucesso: false, mensagem: `${m.Nome} já foi removido(a) dessa escala por outra pessoa.` };
+      return { sucesso: false, mensagem: "Esse voluntário já foi removido dessa escala por outra pessoa." };
     }
     equipes = efetivas;
     const idsEfetivos = efetivas.map(e => e.EquipeId);
-    const aCancelar = futuras.filter(a => idsEfetivos.includes(a.equipeId));
+    // As escalas a cancelar são lidas aqui, depois da trava na equipe, DENTRO da transação: um "gerar" que acabou de confirmar já aparece.
+    const aCancelar = await alocacoesFuturas(pool, { membroId: v.dados.membroId, equipeIds: idsEfetivos, de: hoje, criarRequest: () => new sql.Request(transaction) });
     await cancelarAlocacoes(transaction, { alocacoes: aCancelar, membroId: v.dados.membroId, por, de: hoje, equipeIds: idsEfetivos });
     for (const eq of equipes) {
       const proprias = aCancelar.filter(a => a.equipeId === eq.EquipeId);
@@ -686,7 +732,8 @@ async function removerDaEscala(pool, { dados, equipeId = null, podeCongregacao =
 
   for (const reg of registros) {
     await registrarAuditoria({ tabela: "VoluntariosDesligamentos", registroId: reg.desligamentoId, acao: "REMOCAO_DA_ESCALA", usuarioId: por,
-      dadosDepois: { membroId: v.dados.membroId, equipeId: reg.equipe.EquipeId, tipoMotivo: v.dados.tipoMotivo, motivo: v.dados.motivo, alocacoesCanceladas: reg.vagas.length } });
+      // O texto livre do motivo fica só na ficha de RH (que pode ser anonimizada); a trilha de auditoria é imutável e não deve replicá-lo.
+      dadosDepois: { membroId: v.dados.membroId, equipeId: reg.equipe.EquipeId, tipoMotivo: v.dados.tipoMotivo, motivoTamanho: v.dados.motivo.length, alocacoesCanceladas: reg.vagas.length } });
   }
   // Avisos na hora (Art. 133-D, III: "a partir de hoje"). O motivo NÃO vai no aviso do voluntário nem no do líder.
   await notificarAgora(pool, {
@@ -725,6 +772,8 @@ async function reintegrar(pool, { desligamentoId, observacao, por, hoje = hojeBr
   if (!d) return { sucesso: false, mensagem: "Registro de remoção não encontrado." };
   if (!d.RemovidoDaEscala || !d.EquipeId) return { sucesso: false, mensagem: "Este registro não removeu ninguém de uma equipe: não há o que reintegrar." };
   if (d.ReintegradoEm) return { sucesso: false, mensagem: `${d.MembroNome} já foi reintegrado(a) em ${cal.formatarDataBr(isoData(d.ReintegradoEm))}.` };
+  // Ninguém desfaz a própria remoção: quem decide é outra pessoa (a gestão, ou o líder da equipe que não seja o removido).
+  if (Number(d.MembroId) === Number(por)) return { sucesso: false, proibido: true, mensagem: "Ninguém reintegra a si mesmo: peça a outra pessoa da liderança ou da gestão." };
   const obs = limpar(observacao);
   if (obs.length > 300) return { sucesso: false, mensagem: "A observação aceita até 300 caracteres." };
   const transaction = new sql.Transaction(pool);
@@ -736,7 +785,7 @@ async function reintegrar(pool, { desligamentoId, observacao, por, hoje = hojeBr
     await new sql.Request(transaction).input("e", sql.Int, d.EquipeId).input("m", sql.Int, d.MembroId).query(`UPDATE EscalasEquipeMembros SET Ativo = 1 WHERE EquipeId = @e AND MembroId = @m`);
     await transaction.commit();
   } catch (e) { await fecharTransacao(transaction, false); throw e; }
-  await registrarAuditoria({ tabela: "VoluntariosDesligamentos", registroId: desligamentoId, acao: "REINTEGRADO_NA_ESCALA", usuarioId: por, dadosDepois: { membroId: d.MembroId, equipeId: d.EquipeId, observacao: obs || null } });
+  await registrarAuditoria({ tabela: "VoluntariosDesligamentos", registroId: desligamentoId, acao: "REINTEGRADO_NA_ESCALA", usuarioId: por, dadosDepois: { membroId: d.MembroId, equipeId: d.EquipeId, observacaoTamanho: obs.length } });
   const dest = await destinatarioMembro(pool, d.MembroId);
   if (dest) await notificarAgora(pool, { regraChave: "ESCALA_ALTERACAO_PARTICIPACAO", destinatarios: [dest], mensagem: vol.textoAvisoReintegracao({ equipeNome: d.EquipeNome, hoje }), referenciaId: desligamentoId * 2 + 1, referenciaTabela: "VoluntariosDesligamentos", deps });
   return { sucesso: true, mensagem: `${d.MembroNome} voltou à equipe ${d.EquipeNome}. As escalas canceladas não voltam sozinhas: o líder convida de novo. Se estava num grupo de rodízio, coloque-o(a) no grupo outra vez.` };
@@ -760,10 +809,13 @@ async function listarRemocoes(pool, { congregacaoId = null, membroId = null, equ
 
 // As equipes que a pessoa LIDERA, com os voluntários ativos e as remoções recentes: é o que o dirigente da equipe precisa para
 // "simplesmente informar" a remoção (Art. 133-D, III) sem depender de ter a permissão de escalas.
+// Líder removido da equipe perde os poderes de líder dela até ser reintegrado: não aparece aqui, não remove nem reintegra (ver liderAtivo).
 async function equipesLideradas(pool, { membroId }) {
   const eqs = (await pool.request().input("m", sql.Int, membroId).query(`
     SELECT e.EquipeId, e.Nome, e.Natureza, c.Nome AS CongregacaoNome FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
-    WHERE e.LiderMembroId = @m AND e.Ativa = 1 ORDER BY c.Nome, e.Nome`)).recordset;
+    WHERE e.LiderMembroId = @m AND e.Ativa = 1
+      AND NOT EXISTS (SELECT 1 FROM VoluntariosDesligamentos d WHERE d.MembroId = e.LiderMembroId AND d.EquipeId = e.EquipeId AND d.RemovidoDaEscala = 1 AND d.ReintegradoEm IS NULL)
+    ORDER BY c.Nome, e.Nome`)).recordset;
   if (eqs.length === 0) return [];
   const ids = eqs.map(e => e.EquipeId);
   const rq = pool.request();
@@ -885,7 +937,7 @@ async function detectarTermosPendentes(pool, { hoje = hojeBrasilia() } = {}) {
 module.exports = {
   LIMITE_LISTA, nomeDoMembro: nomeDe,
   mapearAdesao, buscarAdesao, situacaoDoTermo, aceitarDigital, registrarAdesaoManual, ratificar, listarRatificacoes, coberturaDoTermo,
-  definirNaturezaEquipe, removidoDaEquipe, mensagemRemovido,
+  definirNaturezaEquipe, removidoDaEquipe, liderAtivo, lideraAlgumaEquipe, mensagemRemovido,
   buscarRodizio, listarRodizios, detalharRodizio, criarRodizio, alterarAtivoRodizio, buscarGrupo, criarGrupo, adicionarMembroAoGrupo, removerMembroDoGrupo, desativarGrupo,
   previaGeracao, gerarRodizio, cancelarServicosFuturos, meusRodizios,
   habitualidade, lerLimiteSequencia,

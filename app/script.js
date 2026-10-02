@@ -596,8 +596,8 @@ async function executarBuscaGlobal(termo) {
     }
     painel.innerHTML = lista.map(r => `
       <div class="item-notificacao" onclick="irParaResultadoBusca('${r.aba || ""}')">
-        <span class="titulo-notificacao">${r.titulo}</span>
-        <span>${r.tipo} — ${r.subtitulo || ""}</span>
+        <span class="titulo-notificacao">${escaparHtmlEbd(r.titulo)}</span>
+        <span>${escaparHtmlEbd(r.tipo)} — ${escaparHtmlEbd(r.subtitulo || "")}</span>
       </div>
     `).join("");
   } catch (e) {
@@ -651,12 +651,12 @@ async function carregarPainelNotificacoes() {
       return;
     }
     container.innerHTML = lista.map(n => `
-      <div class="item-notificacao ${n.lida ? "lida" : ""}" onclick="abrirNotificacao(${n.notificacaoId})">
-        <span class="titulo-notificacao">${n.titulo}</span>
-        <span>${n.mensagem}</span>
+      <div class="item-notificacao ${n.lida ? "lida" : ""}" onclick="abrirNotificacao(${Number(n.notificacaoId)})">
+        <span class="titulo-notificacao">${escaparHtmlEbd(n.titulo)}</span>
+        <span>${escaparHtmlEbd(n.mensagem)}</span>
         <div class="rodape-notificacao">
           <span>${new Date(n.criadaEm).toLocaleString("pt-BR")}</span>
-          <button class="btn-link" onclick="event.stopPropagation(); arquivarNotificacao(${n.notificacaoId})">Arquivar</button>
+          <button class="btn-link" onclick="event.stopPropagation(); arquivarNotificacao(${Number(n.notificacaoId)})">Arquivar</button>
         </div>
       </div>
     `).join("");
@@ -12339,6 +12339,10 @@ async function registrarDesligamentoAcao() {
   const removidoDaEscala = document.getElementById("hvDesligarRemoverEscala").checked;
   const msg = document.getElementById("resultadoDesligamento");
   if (!membroId || !motivo) { msg.textContent = "Informe a matrícula e o motivo."; return; }
+  // v7.5: "remover da escala" tem efeito imediato e, sem o id da equipe, vale para todas as equipes do seu escopo. Pede confirmação antes.
+  if (removidoDaEscala && !confirm(equipeId
+    ? "Remover este voluntário da escala da equipe " + equipeId + "?\n\nAs escalas futuras dele nessa equipe são canceladas agora e ele é avisado."
+    : "Remover este voluntário da escala de TODAS as equipes que o seu escopo alcança?\n\nAs escalas futuras dele nelas são canceladas agora e ele é avisado.")) return;
   const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/desligamento`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ membroId: Number(membroId), equipeId: equipeId ? Number(equipeId) : null, tipoMotivo, motivo, removidoDaEscala })

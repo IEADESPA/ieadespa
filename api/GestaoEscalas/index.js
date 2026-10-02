@@ -61,9 +61,10 @@ async function podeGerenciarCongregacao(pool, usuario, congregacaoId) {
 // sistema (shared/escopo.js::membroAutorizadoNoOrgaoLocal).
 // v7.5 (achado da revisão de segurança): a permissão "escalas" só vale na congregação que o ESCOPO de quem pede alcança. Antes, quem a tinha
 // agia em QUALQUER congregação (incluir voluntário em equipe alheia, aprovar troca, ver pendências).
-function ehLiderOuAdmin(usuario, equipe) {
+async function ehLiderOuAdmin(pool, usuario, equipe) {
   if (!equipe) return false;
-  if (Number(equipe.liderMembroId) === Number(usuario.membroId)) return true;
+  // O líder removido da própria equipe (Art. 133-D) perde os poderes de líder dela até ser reintegrado.
+  if (await vdb.liderAtivo(pool, { equipe, membroId: usuario.membroId })) return true;
   return !!(usuario.permissoes && usuario.permissoes.includes("escalas")) && auth.estaNoEscopo(usuario, equipe.congregacaoNome);
 }
 
@@ -126,7 +127,7 @@ module.exports = async function (context, req) {
       if (!equipeId) return erro(context, 400, "Informe equipeId.");
       const equipe = await es.buscarEquipe(pool, equipeId);
       if (!equipe) return erro(context, 404, "Equipe não encontrada.");
-      if (!ehLiderOuAdmin(usuario, equipe)) {
+      if (!(await ehLiderOuAdmin(pool, usuario, equipe))) {
         return erro(context, 403, "Só o líder da equipe ou quem administra escalas.");
       }
       if (metodo === "GET") {
@@ -232,6 +233,8 @@ module.exports = async function (context, req) {
       const alocacao = await es.buscarAlocacao(pool, alocacaoId);
       if (!alocacao) return erro(context, 404, "Convite não encontrado.");
       if (Number(alocacao.membroId) !== Number(usuario.membroId)) return erro(context, 403, "Este convite não é seu.");
+      // Só responde quem ainda está convidado ou aceito: recusar de novo (ou uma escala cancelada) reenviaria o convite em cadeia ao próximo da fila.
+      if (!["CONVIDADO", "ACEITO"].includes(alocacao.status)) return erro(context, 422, "Este convite já foi respondido ou a escala foi cancelada.");
       await es.responderConvite(pool, alocacaoId, resposta);
 
       // Convite em cadeia: recusou, convida automaticamente o próximo
@@ -320,6 +323,14 @@ module.exports = async function (context, req) {
         const alocacao = await es.buscarAlocacao(pool, alocacaoOrigemId);
         if (!alocacao) return erro(context, 404, "Alocação não encontrada.");
         if (Number(alocacao.membroId) !== Number(usuario.membroId)) return erro(context, 403, "Só quem está escalado nesse posto pode pedir troca.");
+        if (!es.STATUS_ALOCACAO_ATIVOS.includes(alocacao.status)) return erro(context, 422, "Esta escala não está mais ativa.");
+        // O destino precisa ser da equipe, estar ativo nela e não ter sido removido da escala dela (Art. 133-D). A recusa não diz qual dos motivos foi.
+        const destinoId = Number(membroDestinoId);
+        const destinoAtivo = (await pool.request().input("e", sql.Int, alocacao.equipeId).input("m", sql.Int, destinoId)
+          .query(`SELECT 1 AS ok FROM EscalasEquipeMembros WHERE EquipeId = @e AND MembroId = @m AND Ativo = 1`)).recordset.length > 0;
+        if (destinoId === Number(usuario.membroId) || !destinoAtivo || await vdb.removidoDaEquipe(pool, { membroId: destinoId, equipeId: alocacao.equipeId })) {
+          return erro(context, 422, "O voluntário destino não pode assumir esta escala.");
+        }
         const servico = await es.buscarServico(pool, alocacao.servicoId);
         const indisponibilidades = await es.listarIndisponibilidades(pool, membroDestinoId);
         const alocacoesDoServico = await es.buscarAlocacoesAtivasDoServico(pool, alocacao.servicoId);
@@ -340,7 +351,7 @@ module.exports = async function (context, req) {
         if (!equipeId) return erro(context, 400, "Informe equipeId.");
         const equipe = await es.buscarEquipe(pool, equipeId);
         if (!equipe) return erro(context, 404, "Equipe não encontrada.");
-        if (!ehLiderOuAdmin(usuario, equipe)) return erro(context, 403, "Só o líder da equipe ou quem administra escalas.");
+        if (!(await ehLiderOuAdmin(pool, usuario, equipe))) return erro(context, 403, "Só o líder da equipe ou quem administra escalas.");
         context.res = { status: 200, body: { sucesso: true, trocas: await es.listarTrocasPendentesDaEquipe(pool, equipeId) } };
         return;
       }
@@ -353,7 +364,7 @@ module.exports = async function (context, req) {
       const troca = await es.buscarTroca(pool, trocaId);
       if (!troca) return erro(context, 404, "Troca não encontrada.");
       const equipe = await es.buscarEquipe(pool, troca.equipeId);
-      if (!ehLiderOuAdmin(usuario, equipe)) return erro(context, 403, "Só o líder da equipe pode aprovar/recusar trocas.");
+      if (!(await ehLiderOuAdmin(pool, usuario, equipe))) return erro(context, 403, "Só o líder da equipe pode aprovar/recusar trocas.");
       const resultado = await es.decidirTroca(pool, { trocaId, aprovar, observacao, decididoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -365,7 +376,7 @@ module.exports = async function (context, req) {
       if (!equipeId) return erro(context, 400, "Informe equipeId.");
       const equipe = await es.buscarEquipe(pool, equipeId);
       if (!equipe) return erro(context, 404, "Equipe não encontrada.");
-      if (!ehLiderOuAdmin(usuario, equipe)) return erro(context, 403, "Só o líder da equipe ou quem administra escalas.");
+      if (!(await ehLiderOuAdmin(pool, usuario, equipe))) return erro(context, 403, "Só o líder da equipe ou quem administra escalas.");
 
       const alocacoesResult = await pool.request().input("equipeId", sql.Int, equipeId).query(`
         SELECT a.AlocacaoId AS alocacaoId, a.ServicoId AS servicoId, a.EquipeId AS equipeId, a.MembroId AS membroId, a.Status AS status,

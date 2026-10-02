@@ -246,6 +246,7 @@ async function listarHabilitacoesPorCongregacao(pool, congregacaoId) {
 // for a última (TERMO), fecha a esteira: AptoDesde = agora, AptoValidoAte
 // = agora + 24 meses (ver decisão na migração 099), Status = APTO.
 async function concluirEtapa(pool, { habilitacaoId, etapa, registradoPorMembroId, observacao, entrevistadorId }) {
+  if (observacao != null && (typeof observacao !== "string" || observacao.length > 500)) return { sucesso: false, mensagem: "A observação aceita até 500 caracteres." };
   const hab = await buscarHabilitacaoPorId(pool, habilitacaoId);
   if (!hab) return { sucesso: false, mensagem: "Habilitação não encontrada." };
 
@@ -308,7 +309,8 @@ async function concluirEtapa(pool, { habilitacaoId, etapa, registradoPorMembroId
 }
 
 async function marcarInapto(pool, { habilitacaoId, motivo, registradoPorMembroId }) {
-  if (!motivo || !motivo.trim()) return { sucesso: false, mensagem: "Informe o motivo da inaptidão." };
+  if (typeof motivo !== "string" || !motivo.trim()) return { sucesso: false, mensagem: "Informe o motivo da inaptidão." };
+  if (motivo.trim().length > 300) return { sucesso: false, mensagem: "O motivo aceita até 300 caracteres." };
   const hab = await buscarHabilitacaoPorId(pool, habilitacaoId);
   if (!hab) return { sucesso: false, mensagem: "Habilitação não encontrada." };
 
@@ -321,7 +323,7 @@ async function marcarInapto(pool, { habilitacaoId, motivo, registradoPorMembroId
 
   await registrarAuditoria({
     tabela: "VoluntariosHabilitacao", registroId: habilitacaoId, acao: "MARCADO_INAPTO",
-    usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { motivo }
+    usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { motivoTamanho: String(motivo).length }
   });
   return { sucesso: true, mensagem: "✅ Voluntário marcado como inapto." };
 }
@@ -416,7 +418,7 @@ async function registrarDesligamento(pool, { membroId, equipeId, tipoMotivo, mot
 
   await registrarAuditoria({
     tabela: "VoluntariosDesligamentos", registroId: result.recordset[0].DesligamentoId, acao: "DESLIGAMENTO_REGISTRADO",
-    usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { membroId, tipoMotivo, motivo, removidoDaEscala: false }
+    usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { membroId, tipoMotivo, motivoTamanho: String(motivo).length, removidoDaEscala: false }
   });
 
   return { sucesso: true, desligamentoId: result.recordset[0].DesligamentoId, mensagem: "✅ Desligamento registrado." };

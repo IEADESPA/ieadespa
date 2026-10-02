@@ -29,8 +29,8 @@ function verificarSenha(senha, senhaHash) {
 // cold starts; uma sessão em memória faz o usuário "desconectar" a cada troca de
 // tela. Aqui o token carrega os dados do usuário assinados com HMAC, então qualquer
 // instância consegue validar sem estado compartilhado.
-// O segredo vem de AUTH_SECRET (obrigatório definir em produção no Azure).
-const SEGREDO = process.env.AUTH_SECRET || "dev-secret-ieadespa";
+// O segredo vem de AUTH_SECRET (obrigatório no Azure: sem ele a Function se recusa a subir — ver shared/segredoSessao.js; nunca há um valor padrão público).
+const SEGREDO = require("./segredoSessao").resolverSegredo();
 
 function assinar(payload) {
   const corpo = Buffer.from(JSON.stringify(payload)).toString("base64url");

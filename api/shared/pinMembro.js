@@ -11,7 +11,7 @@
 const crypto = require("crypto");
 const { sql } = require("./db");
 
-const PEPPER = process.env.AUTH_SECRET || "dev-secret-ieadespa";
+const PEPPER = require("./segredoSessao").resolverSegredo();
 const PIN_REGEX = /^\d{4}$/;
 const LIMITE_FALHAS_PIN = 5;
 const LIMITE_FALHAS_SENHA = 10;                 // a senha da liderança é digitada com mais cuidado e é mais valiosa; erra-se menos por engano

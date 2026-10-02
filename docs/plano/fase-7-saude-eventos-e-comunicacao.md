@@ -1404,11 +1404,18 @@ ponto real de integração:
       a quem tem esse escopo em qualquer congregação **é o comportamento pretendido**. Fica
       registrado para não ser reaberto como defeito.
     - **Content-Security-Policy: primeiro passo feito, o resto é decisão à parte.** Em
-      `staticwebapp.config.json` entram `frame-ancestors 'none'` (ninguém embute o sistema em
-      outro site, o que impede o clique disfarçado), `object-src 'none'`, `base-uri 'self'` e
-      `form-action 'self'`, mais `X-Frame-Options`, `X-Content-Type-Options: nosniff` e
-      `Referrer-Policy`. Não quebram nada: o sistema não usa iframe, `<base>` nem formulário
-      para fora. O que **não** entra é a restrição de `script-src`, que é a que de fato
+      `app/staticwebapp.config.json` entram `frame-ancestors 'none'` (ninguém embute o sistema
+      em outro site, o que impede o clique disfarçado), `object-src 'none'`, `base-uri 'self'`
+      e `form-action 'self'`, mais `X-Frame-Options: DENY`. Não quebram nada: o sistema não usa
+      iframe, `<base>` nem formulário para fora. **Atenção ao lugar do arquivo:** o deploy
+      publica a pasta `app` (`app_location`), então o `staticwebapp.config.json` da **raiz do
+      repositório não é lido pelo Azure** — as suas regras de `routes` e de `404` nunca
+      valeram (medido: um caminho inexistente responde 404, e não a reescrita para
+      `index.html` que o arquivo descreve). Por isso a configuração nova mora em `app/` e
+      traz **só** os cabeçalhos, sem ativar de repente aquelas regras antigas. O `nosniff` e
+      a política de referência já vêm do próprio Azure (`Referrer-Policy: same-origin`, mais
+      estrita do que a que se pensou em pôr). O que **não** entra é a restrição de
+      `script-src`, que é a que de fato
       barraria um XSS: o sistema tem **861 atributos de evento em linha** (`onclick=` e
       semelhantes: 466 em `index.html` e 395 em `script.js`), que a política estrita
       bloquearia. Trocá-los por ouvintes de evento é uma reforma da tela inteira, sem ganho

@@ -1485,17 +1485,25 @@ ponto real de integração:
       não aderiu. O **texto** (oito cláusulas: identificação do responsável, adesão nos termos
       da Lei 9.608/98, atividades próprias da idade e nunca noturnas, perigosas ou que
       atrapalhem a escola, supervisão por adulto, liberdade de recusar e de revogar, dados
-      do menor no melhor interesse dele, validade até os 18 anos e o registro do IP) é um
-      **rascunho jurídico: convém parecer de advogado antes do uso**, sobretudo a leitura do
-      trabalho do adolescente (Constituição art. 7º, XXXIII; ECA arts. 60 a 69) aplicada ao
-      serviço voluntário religioso.
-    - **Duas decisões do responsável pelo projeto (02/10/2026), registradas para não serem
-      reabertas como defeito.** (1) As permissões `escalas` e `habilitacao_voluntarios`
-      **seguem sem concessão automática** a papel algum; o desejo é que o papel de nível Global
-      (presidente, secretário) já **nasça** com elas em vez de serem dadas uma a uma, o que fica
-      para quando o catálogo de Permissões for tratado — não é item de Trava. (2) A **CSP forte**
-      (`script-src` estrito, acima) **não entra agora**: o custo é alto e o primeiro passo já
-      barra o clique disfarçado.
+      do menor no melhor interesse dele, validade até os 18 anos e o registro do IP) foi
+      **aprovado pelo responsável pelo projeto em 02/10/2026**. A igreja não tem advogado: o
+      texto não passou por parecer jurídico, e qualquer ajuste futuro é pedido por ele. O ponto
+      que um parecer olharia primeiro é a leitura do trabalho do adolescente (Constituição art.
+      7º, XXXIII; ECA arts. 60 a 69) aplicada ao serviço voluntário religioso.
+    - **Decisões do responsável pelo projeto (02/10/2026), registradas para não serem
+      reabertas como defeito.** (1) **Os dois papéis Global nascem com as permissões
+      `escalas` e `habilitacao_voluntarios`** (Presidente e Secretário Geral): a migração 120 as
+      concede, no mesmo molde das 093 e 096 (aditiva, idempotente). Consequência a conhecer:
+      quem tem a permissão recebe os avisos automáticos dela, e papel Global recebe os de
+      **todas** as congregações (termo de adesão pendente, escala sem confirmação, equipe sem
+      revezamento); cada regra de aviso se desliga na tela de regras de notificação. Como a
+      migração reexecuta a cada deploy, retirar uma dessas permissões desses dois papéis pela
+      tela de Permissões seria desfeito no deploy seguinte. Um papel Global criado no futuro
+      **não** herda as permissões sozinho. (2) **Acesso por PIN aceito como está**: quem esquece
+      o PIN recupera pelo código do e-mail ou pelo PIN provisório que a Secretaria entrega, e
+      o bloqueio por tentativas é o preço de ter bloqueio. (3) **CSP forte** (`script-src`
+      estrito, acima): decisão adiada até o responsável conhecer o custo; ver o levantamento
+      mais abaixo.
     - **Revisão independente do acesso por PIN (02/10/2026).** Um revisor adversarial leu o
       código novo, sem ter escrito nada dele, e achou brechas que os testes do próprio fecho
       não enxergavam. Todas foram corrigidas **antes** do deploy:
@@ -1542,14 +1550,31 @@ ponto real de integração:
       dois** Static Web Apps. (d) A sessão não é revogável antes das 12 h (já era assim, ver
       vB.9). (e) Quem erra o PIN de alguém 5 vezes bloqueia a conta dela por 15 minutos: é o
       preço de ter bloqueio; a pessoa se recupera pelo código do e-mail ou pelo PIN provisório
-      da Secretaria. (f) Se a variável do segredo de sessão faltar no ambiente, o código cai num
-      valor padrão de desenvolvimento em vez de recusar subir. (g) Revogar o cadastro do
-      responsável não anula a adesão já dada (documentado acima).
+      da Secretaria (**aceito como está** pelo responsável). (f) Se a variável do segredo de
+      sessão (`AUTH_SECRET`) faltar no ambiente, o código cai num valor padrão de
+      desenvolvimento — que é público, por estar no repositório — em vez de recusar subir.
+      **Medido em produção em 02/10/2026:** um crachá assinado com esse valor padrão é
+      recusado (401), logo a produção usa segredo próprio; o risco é só o de a variável ser
+      apagada por engano no futuro. (g) Revogar o cadastro do responsável não anula a adesão
+      já dada (documentado acima).
+    - **Levantamento de custo da CSP forte (02/10/2026).** Dinheiro: nenhum (é um cabeçalho
+      de configuração, sem cobrança no Azure). O custo é de **trabalho e risco**: a tela tem
+      **870 atributos de evento em linha** (470 em `index.html`, 400 em `script.js`), dos quais
+      **354 são montados em texto com valor interpolado** (`onclick="abrir(${id})"`) dentro de
+      cerca de 760 pontos que gravam HTML. A política estrita (`script-src` sem
+      `'unsafe-inline'`) barra todos eles, então cada um precisa virar um ouvinte de evento, e
+      os 354 dinâmicos não se convertem por substituição automática (o valor interpolado vira
+      atributo `data-*` lido por um ouvinte único, tela por tela). O defeito típico de uma
+      conversão incompleta é silencioso: o botão deixa de responder e o erro só aparece no
+      console do navegador. Ganho: uma segunda linha de defesa caso exista algum ponto de XSS —
+      e os pontos conhecidos já foram fechados e testados com texto de ataque em todo campo. O
+      que já está no ar (`frame-ancestors`, `object-src`, `base-uri`, `form-action`) cobre o
+      clique disfarçado e o formulário desviado.
     - **Verificação do fecho.** A suíte da API foi de 1191 para **1947** testes (67 arquivos;
       357 deles são a varredura de rotas), e cada correção da revisão foi **quebrada de
       propósito** para provar que o teste falha sem ela (17 mutações, nenhuma sobrevive; duas
       delas expuseram teste fraco, que foi refeito). Contra um SQL Server 2019 recriado do zero
-      (**119** migrações): o roteiro da v7.5 (**238**), o roteiro do fecho (**81**: o IP com
+      (**120** migrações): o roteiro da v7.5 (**238**), o roteiro do fecho (**81**: o IP com
       cabeçalhos forjados do jeito que o Azure entrega, a idade no dia exato dos 18 anos, a
       ficha do menor, os `CHECK` e o gatilho com cada tentativa de alterar ou apagar, a
       anonimização com os sete casos de quem mantém e de quem perde o IP, Meus Dados de
@@ -1560,7 +1585,9 @@ ponto real de integração:
       (**14**: 14 chutes de PIN ao mesmo tempo, 6 criações simultâneas do primeiro PIN, 8
       códigos certos ao mesmo tempo e mãe e pai autorizando o mesmo menor juntos). A migração
       também foi aplicada **por cima** do banco que já tinha a versão anterior da 117 e
-      reaplicada em ordem, como o deploy faz. A tela passou por DOM simulado (menor sem caixa
+      reaplicada em ordem, como o deploy faz; a migração 120 teve verificação própria (cargo
+      com lista vazia, cargo que já tinha uma das duas, cargo de nome parecido que não pode ser
+      tocado, rodar três vezes sem duplicar). A tela passou por DOM simulado (menor sem caixa
       de aceite, responsável escapado, token em Meus Dados, bloco de voluntariado com texto de
       ataque, campo de senha atual). Achados do próprio fecho: a validação de id dos handlers de
       voluntariado aceitava `0x10`, `1e1`, `true` e `[5]` (agora só inteiro positivo ou texto de

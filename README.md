@@ -491,7 +491,8 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   reintegração a `VoluntariosDesligamentos`. As equipes, os serviços e as alocações são das migrações 098 e 099.
   A migração 118 traz `MembroPins` (o PIN de 4 números do membro, só como hash) e `AcessoTentativas` (o contador de erros e
   o bloqueio, por pessoa e canal); a 119, `VoluntariadoResponsaveis` (o responsável legal de cada menor, conferido pela
-  Secretaria) e a adesão `CLICK_RESP`, dada pelo responsável.
+  Secretaria) e a adesão `CLICK_RESP`, dada pelo responsável; a 120 concede `escalas` e `habilitacao_voluntarios` aos
+  papéis Presidente e Secretário Geral.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,

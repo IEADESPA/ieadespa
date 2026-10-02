@@ -298,6 +298,14 @@ comum não entra num painel de secretaria — ele entra no celular.
       batendo 403 sozinhas). Resposta sempre genérica
       ("se a matrícula existir e tiver e-mail...") pra não vazar quem tem
       conta só de tentar matrícula em sequência.
+      **Atualização (fecho da v7.5, 02/10/2026):** a opção "verificada de verdade"
+      deixou de ser opcional. O painel sem senha, que abria só com a matrícula e
+      sem sessão nenhuma, **acabou**: todo membro entra com **matrícula + PIN de
+      4 números** (migração 118), que ele cria confirmando este mesmo código de
+      e-mail; quem não tem e-mail recebe da Secretaria um PIN provisório. O código
+      passou a queimar no quinto erro, e as rotas de autoatendimento exigem a
+      sessão. Detalhes na seção "Acesso do membro por PIN" da v7.5, em
+      [fase-7-saude-eventos-e-comunicacao](fase-7-saude-eventos-e-comunicacao.md).
 - [x] **PWA instalável** (`app/manifest.json` + `app/service-worker.js`):
       ícones reais reaproveitados do site (`site/public/favicon-192.png`,
       `logo.png`, `maskable-icon.png` — mesma identidade visual, não um

@@ -1366,15 +1366,17 @@ ponto real de integração:
       valor; é outro Static Web Apps e precisa da sua própria medição antes de mudar.
     - **Idade para aderir (Código Civil, arts. 3º e 4º).** Menor de 18 anos **não adere pelo
       aceite digital** — nem o cadastro sem data de nascimento (não se presume maioridade). A
-      adesão dele é a **ficha (ou a mensagem) assinada pelo responsável**, registrada pela
-      Secretaria com o **nome e o vínculo de quem assinou** (pai, mãe, tutor ou outro
-      responsável legal), obrigatórios para o menor e conferidos também pelo banco (`CHECK`);
-      o aceite digital nunca leva responsável. Na Lista de Ouro, quem o cadastro mostra como
-      menor fica de fora e a tela diz quantos. A cobertura do Termo marca "menor de 18"; a
-      data de nascimento não sai em resposta nenhuma. **O Regimento e a Lei 9.608/98 não
-      tratam a idade: esta é a leitura conservadora e convém parecer jurídico** (a regra é a
-      constante `MAIORIDADE`; o jovem de 16 a 17 anos poderia aderir assistido, se a CLI
-      assim decidir).
+      adesão dele é dada pelo **responsável legal**, de duas maneiras: **no sistema** (o
+      responsável cadastrado pela Secretaria aceita a "Autorização do Responsável" — ver
+      "Termo do menor aceito pelo responsável", abaixo) ou pela **ficha (ou a mensagem)
+      assinada pelo responsável**, registrada pela Secretaria com o **nome e o vínculo de
+      quem assinou** (pai, mãe, tutor ou outro responsável legal), obrigatórios para o menor e
+      conferidos também pelo banco (`CHECK`). Na Lista de Ouro, quem o cadastro mostra como
+      menor fica de fora e a tela diz quantos. A cobertura do Termo marca "menor de 18" e se
+      há responsável cadastrado; a data de nascimento não sai em resposta nenhuma. **O
+      Regimento e a Lei 9.608/98 não tratam a idade: esta é a leitura conservadora e convém
+      parecer jurídico** (a regra é a constante `MAIORIDADE`; o jovem de 16 a 17 anos poderia
+      aderir assistido, se a CLI assim decidir).
     - **Meus Dados (LGPD): só sob pedido do titular.** Nada do voluntariado é exportado por
       rotina. Quando a pessoa pede, o pacote traz a adesão (forma, data, IP e cabeçalhos,
       responsável), as equipes, os grupos de rodízio, os serviços, as indisponibilidades e as
@@ -1424,19 +1426,149 @@ ponto real de integração:
       para onde ela envia dados, mantendo os atributos em linha) é possível e barraria o
       envio de dados a site de terceiros, mas pede um período de teste em modo "só relatar"
       com um coletor de relatórios, para não derrubar a tela por esquecer uma origem.
-    - **Verificação do fecho.** A suíte da API foi de 1191 para **1251** testes. Contra um SQL
-      Server 2019 recriado do zero (117 migrações): o roteiro da v7.5 (**237**), um roteiro
-      novo do fecho (**81**: o IP com cabeçalhos forjados do jeito que o Azure entrega, a idade
-      no dia exato dos 18 anos, a ficha do menor, os `CHECK` e o gatilho com cada tentativa de
-      alterar ou apagar, a anonimização com os sete casos de quem mantém e de quem perde o IP,
-      Meus Dados de titular, de terceiro e sem sessão, e o ciclo de remoções), a bateria de
-      ataque (**179**) e as corridas (**20**); a migração também foi aplicada **por cima** do
-      banco que já tinha a versão anterior da 117 e rodada duas vezes. A tela passou por DOM
-      simulado (menor sem caixa de aceite, responsável escapado, token em Meus Dados, bloco de
-      voluntariado com texto de ataque). Dois achados do próprio fecho: a validação de id dos
-      handlers de voluntariado aceitava `0x10`, `1e1`, `true` e `[5]` (agora só inteiro
-      positivo ou texto de dígitos, dentro do INT do SQL, com teste que falha sem a correção), e
-      o gatilho tratava um `UPDATE` que não alcança linha alguma como se fosse um `DELETE`.
+    - **Acesso do membro por PIN (migração 118).** O "Meu Painel" do membro comum **abria só
+      com a matrícula**, sem senha e sem sessão — e a matrícula é um número em sequência. Agora
+      todo membro entra com **matrícula + PIN de 4 números** que ele mesmo cria, confirmando o
+      código de 6 dígitos enviado ao e-mail cadastrado (ou, quem não tem e-mail, com um **PIN
+      provisório** que a Secretaria gera na ficha da pessoa, entrega pessoalmente, vale 7 dias e
+      é trocado ao entrar). Quatro dígitos são poucos (10 mil combinações), então a segurança
+      está em outras travas: a tentativa de PIN é **reservada no banco antes de conferir** (14
+      chutes ao mesmo tempo de 14 origens: só 5 são contados), **5 erros bloqueiam 15 minutos e
+      o bloqueio cresce** (1 h, 4 h, 24 h); PIN fácil não é aceito (`0000`, `1234`, `1212`, um
+      ano, a data de nascimento ou o final da matrícula da própria pessoa); o PIN fica só como
+      hash com sal e com o segredo do sistema (um vazamento só do banco não o revela); a
+      resposta de falha é **uma só** para matrícula inexistente, sem PIN, PIN errado e pessoa
+      bloqueada; a sessão do PIN é de **membro, sem permissão nenhuma** (quem tem acesso
+      administrativo continua entrando com a senha). O código do e-mail passou a **queimar no
+      quinto erro** e a ter uma mensagem de falha única; o **login da liderança**, que não tinha
+      limite de tentativas, ganhou o bloqueio (10 erros) e a mesma mensagem única. "Esqueci o
+      PIN" não tranca ninguém: o código do e-mail (ou o PIN provisório) cria outro. O PIN nunca
+      vai para a auditoria, o log ou o e-mail. Risco que sobra, dito sem rodeio: um PIN de 4
+      dígitos protege dado pessoal do próprio membro, não dá a um atacante com muitos
+      endereços e paciência a mesma garantia de uma senha longa — por isso ele **não abre
+      nenhuma função administrativa**.
+    - **Rotas de autoatendimento: todas exigem sessão.** As rotas "meus dados" de v1.x
+      tratavam a matrícula da URL como a própria pessoa, sem conferir nada. Agora exigem a
+      sessão e só valem para a matrícula da sessão (`auth.exigirTitular`): `MeusDadosLGPD`,
+      `AtualizarMeusDados`, `MinhaFoto`, `MeusVinculosFamiliares`, `SolicitarEdicaoPessoa`,
+      `MinhasSolicitacoesLGPD`, `MinhaFrequencia`, `SolicitarJustificativa`, `SolicitarCarta`,
+      `MeusLancamentosTesouraria` e `AutolancamentoTesouraria`. Duas — o consentimento LGPD e o
+      PDF da carta — a Secretaria também usa na ficha da pessoa, e aceitam o titular **ou** a
+      permissão `pessoas` com a congregação da pessoa no escopo
+      (`shared/titular.js`); o registro do consentimento passou a gravar **quem está na sessão**
+      (antes vinha do corpo). `RadarDisciplinar`, que listava sem login nome e faltas de todos os
+      membros em risco, agora exige `disciplina` e o escopo. `RegistrarAuditoria`, que deixava
+      qualquer um escrever na trilha de auditoria, foi **removida** (nenhuma tela a usava; só o
+      servidor grava a trilha). A recusa é a mesma exista ou não a matrícula, e matrícula só vale
+      na forma canônica (`020`, `0x14` e `1e1` não são matrículas). Continuam abertas **de
+      propósito**, por serem a porta de entrada ou dado público: a agenda pública, a lista de
+      congregações, a consulta de protocolo da Ouvidoria, a verificação de certificado, o
+      pedido e a confirmação do código, a entrada por PIN, o login da liderança e o registro de
+      presença com a senha da reunião.
+    - **Termo do menor aceito pelo responsável (migração 119).** O responsável legal adere
+      **pelo menor, no sistema**: a Secretaria (permissão `habilitacao_voluntarios`, congregação
+      do menor no escopo) cadastra quem é o responsável — pai, mãe, tutor ou outro, **depois de
+      conferir um documento** (certidão de nascimento, RG, termo de tutela), que fica
+      descrito no cadastro — e o responsável entra com a **própria matrícula e PIN**, lê a
+      "Autorização do Responsável" e marca a caixa. Fica uma adesão de forma `CLICK_RESP` no
+      nome do menor, com a **matrícula, o IP, a data e a hora do responsável**, o vínculo
+      cadastrado e a versão e o hash do texto. Só o responsável **ativo** daquele menor aceita;
+      o menor precisa ter menos de 18 anos e o responsável, 18 ou mais; até 4 responsáveis por
+      menor; revogar o cadastro não apaga a adesão já dada (a Secretaria, se a família retirou
+      a autorização, remove o menor das escalas). O cadastro do responsável é prova: o banco
+      recusa apagar ou alterar (só admite revogar), e o IP do aceite é **dado do responsável**:
+      o menor não o recebe no Meus Dados, o responsável sim. **A adesão dada pelo responsável
+      vale enquanto a pessoa é menor**: ao completar 18 anos ela precisa confirmar a própria
+      — por isso "uma adesão por pessoa" virou "uma por pessoa **e por fase**" (a do
+      responsável e a dela; a mais recente é a que vale), a tela mostra "renovar", a cobertura
+      e o aviso de termo pendente passam a incluí-la e a Lista de Ouro a trata como quem ainda
+      não aderiu. O **texto** (oito cláusulas: identificação do responsável, adesão nos termos
+      da Lei 9.608/98, atividades próprias da idade e nunca noturnas, perigosas ou que
+      atrapalhem a escola, supervisão por adulto, liberdade de recusar e de revogar, dados
+      do menor no melhor interesse dele, validade até os 18 anos e o registro do IP) é um
+      **rascunho jurídico: convém parecer de advogado antes do uso**, sobretudo a leitura do
+      trabalho do adolescente (Constituição art. 7º, XXXIII; ECA arts. 60 a 69) aplicada ao
+      serviço voluntário religioso.
+    - **Duas decisões do responsável pelo projeto (02/10/2026), registradas para não serem
+      reabertas como defeito.** (1) As permissões `escalas` e `habilitacao_voluntarios`
+      **seguem sem concessão automática** a papel algum; o desejo é que o papel de nível Global
+      (presidente, secretário) já **nasça** com elas em vez de serem dadas uma a uma, o que fica
+      para quando o catálogo de Permissões for tratado — não é item de Trava. (2) A **CSP forte**
+      (`script-src` estrito, acima) **não entra agora**: o custo é alto e o primeiro passo já
+      barra o clique disfarçado.
+    - **Revisão independente do acesso por PIN (02/10/2026).** Um revisor adversarial leu o
+      código novo, sem ter escrito nada dele, e achou brechas que os testes do próprio fecho
+      não enxergavam. Todas foram corrigidas **antes** do deploy:
+      - **A sessão de PIN ou de código não vale como "liderança".** Quem tem cargo mas entrou
+        pelo PIN podia trocar a senha da liderança, ver "o que está comigo" nos fluxos e
+        delegar o papel. Agora isso só vale com a sessão aberta pela **senha administrativa**
+        (marca `via: SENHA` no token; `auth.exigirSessaoDeLideranca`). Token emitido antes da
+        marca (12 h no máximo) vale como liderança só se carrega o nível do papel.
+      - **Trocar a senha pede a senha atual** e conta nas mesmas tentativas do login (10 erros
+        bloqueiam): o token sozinho não basta para virar dono da conta.
+      - **A sessão do PIN provisório só serve para criar o PIN definitivo**: em qualquer outra
+        rota recebe 403 "crie o seu PIN", e trocar o PIN não renova as 12 horas da sessão.
+      - **Código do e-mail:** o contador de erros passou a ser **por pessoa** (10), no máximo 5
+        códigos por hora e um código novo invalida o anterior; antes cada código novo dava 5
+        chutes novos.
+      - **Um dia sem erro apaga o histórico** de tentativas (quem erra de vez em quando não
+        escala para o bloqueio de 24 h); o primeiro bloqueio não grava a trilha imutável,
+        do segundo em diante sim.
+      - **Papéis e funcionalidades** (que definem o que todos os cargos podem) passaram a exigir
+        a permissão `permissoes`, e não a de cadastro de pessoas.
+      - **Ficha de pessoa (`GestaoPessoas`)**: o escopo da congregação só era conferido ao
+        listar. Agora também ao **criar, alterar e desligar** (vale para o alvo e para o
+        destino). Trocar o e-mail — que é por onde chega o código de acesso — grava na trilha
+        só a forma mascarada e **avisa o endereço antigo**.
+      - **Enquetes**: o voto vem da matrícula da **sessão** (corpo com outra matrícula é
+        recusado), a opção precisa ser da pergunta, corpo malformado é recusado e a lista exige
+        sessão. A lista de **documentos** e a de **projetos** também passaram a exigir sessão.
+      - **Termo do menor**: quem cadastra o responsável não pode ser ele mesmo, e o responsável
+        precisa estar no escopo de quem cadastra (fora dele a resposta é a mesma de "não
+        existe", para o cadastro não servir de sonda de matrículas).
+      - **Portas anônimas** com contenção por origem: presença (120 por minuto) e verificação
+        de conta (20 por minuto).
+      - **Varredura permanente**: um teste percorre o `function.json` de **toda** rota e falha
+        se uma rota fora da lista de públicas aprovadas devolver sucesso sem sessão. Rota nova
+        pública por desenho entra na lista, com o motivo; esquecimento passa a quebrar o teste.
+        (Foi essa a lição: a rota de enquetes escapou da busca anterior por "handler sem login"
+        porque tinha login em outras ações.)
+    - **Em aberto, declarado.** (a) Algumas rotas de ficha exigem a permissão mas ainda não
+      conferem a congregação da pessoa: já eram assim antes e ficam para uma rodada própria de
+      escopo (só quem já tem a permissão é afetado). (b) Os catálogos de leitura são públicos, até os
+      de uso interno (papéis, alçadas, mediadores): trocar a leitura de ~15 telas para usar
+      sessão é mudança de tela à parte. (c) `VerificarContaMembro` só devolve um booleano e tem
+      limite por origem; fechar de vez pede uma chave servidor a servidor configurada **nos
+      dois** Static Web Apps. (d) A sessão não é revogável antes das 12 h (já era assim, ver
+      vB.9). (e) Quem erra o PIN de alguém 5 vezes bloqueia a conta dela por 15 minutos: é o
+      preço de ter bloqueio; a pessoa se recupera pelo código do e-mail ou pelo PIN provisório
+      da Secretaria. (f) Se a variável do segredo de sessão faltar no ambiente, o código cai num
+      valor padrão de desenvolvimento em vez de recusar subir. (g) Revogar o cadastro do
+      responsável não anula a adesão já dada (documentado acima).
+    - **Verificação do fecho.** A suíte da API foi de 1191 para **1947** testes (67 arquivos;
+      357 deles são a varredura de rotas), e cada correção da revisão foi **quebrada de
+      propósito** para provar que o teste falha sem ela (17 mutações, nenhuma sobrevive; duas
+      delas expuseram teste fraco, que foi refeito). Contra um SQL Server 2019 recriado do zero
+      (**119** migrações): o roteiro da v7.5 (**238**), o roteiro do fecho (**81**: o IP com
+      cabeçalhos forjados do jeito que o Azure entrega, a idade no dia exato dos 18 anos, a
+      ficha do menor, os `CHECK` e o gatilho com cada tentativa de alterar ou apagar, a
+      anonimização com os sete casos de quem mantém e de quem perde o IP, Meus Dados de
+      titular, de terceiro e sem sessão, e o ciclo de remoções), a bateria de ataque (**179**),
+      as corridas (**20**), o roteiro do acesso por PIN e do Termo do menor (**162**, incluindo
+      a rodada da revisão contra o banco de verdade: decaimento de 24 h, contador do código,
+      troca de senha, sessão de PIN × liderança, escopo e enquetes) e as corridas do acesso
+      (**14**: 14 chutes de PIN ao mesmo tempo, 6 criações simultâneas do primeiro PIN, 8
+      códigos certos ao mesmo tempo e mãe e pai autorizando o mesmo menor juntos). A migração
+      também foi aplicada **por cima** do banco que já tinha a versão anterior da 117 e
+      reaplicada em ordem, como o deploy faz. A tela passou por DOM simulado (menor sem caixa
+      de aceite, responsável escapado, token em Meus Dados, bloco de voluntariado com texto de
+      ataque, campo de senha atual). Achados do próprio fecho: a validação de id dos handlers de
+      voluntariado aceitava `0x10`, `1e1`, `true` e `[5]` (agora só inteiro positivo ou texto de
+      dígitos, dentro do INT do SQL, com teste que falha sem a correção); o gatilho tratava um
+      `UPDATE` que não alcança linha alguma como se fosse um `DELETE`; e um roteiro meu refazia
+      a migração 117 sozinho e devolvia o gatilho antigo por cima do da 119 — em produção o
+      deploy reaplica **todas** em ordem, então a 119 vence, e o roteiro passou a reaplicar
+      117, 118 e 119 e a conferir o gatilho final.
   - **Limites:** o rodízio não se liga à agenda litúrgica (v7.2) — é semanal por dia e
     hora; o serviço manual (sem rodízio) segue como na v5.6; a tela de escalas continua
     mostrando matrícula, e não nome, nas alocações do detalhe do serviço.

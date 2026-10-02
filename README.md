@@ -323,10 +323,15 @@ diz em que arquivo ela está e em que pé ela anda.
 - **Concluídas:** FASES 0 a 6 e as FASES B (consolidação da base) e C (integração com o site), salvo uns
   poucos itens adiados de propósito, que o índice marca como 🟡.
 - **Em andamento — FASE 7:** v7.1 (PSC), v7.2 (Calendário oficial), v7.3 (Canais oficiais), v7.4
-  (Eventos e congressos) e v7.5 (Escalas e voluntariado) entregues e no ar, **sem pontos abertos**: os que a
-  revisão da v7.5 apontou (IP medido no Azure, idade para aderir, anonimização do IP, Meus Dados, avisos em ciclo,
-  escopo de departamento e o primeiro passo da CSP) foram fechados na própria versão. **Próxima: a 🔒 Trava de
-  Revisão 7-A**, que audita a v7.1 a v7.5 antes de seguir para a v7.6.
+  (Eventos e congressos) e v7.5 (Escalas e voluntariado) entregues e no ar. Os pontos que a revisão da v7.5 apontou (IP
+  medido no Azure, idade para aderir, anonimização do IP, Meus Dados, avisos em ciclo, escopo de departamento e o
+  primeiro passo da CSP) foram fechados na própria versão — inclusive o **acesso do membro por matrícula + PIN**, a
+  exigência de sessão em todas as rotas de autoatendimento (que antes tratavam a matrícula como a própria pessoa) e o
+  **Termo do menor aceito pelo responsável legal**. Uma revisão independente do acesso por PIN achou outras brechas
+  (sessão de PIN valendo como liderança, troca de senha sem a senha atual, escopo de congregação ausente na ficha de
+  pessoa, voto de enquete com a matrícula do corpo, entre outras): todas corrigidas e presas por teste. Ficam
+  **declarados como em aberto**, no plano da fase 7, o escopo de congregação em algumas rotas de ficha e a leitura
+  pública dos catálogos. **Próxima: a 🔒 Trava de Revisão 7-A**, que audita a v7.1 a v7.5 antes de seguir para a v7.6.
 - **Planejadas:** FASES 8 a 12.
 
 ### Fases
@@ -484,6 +489,9 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   responsável que assinou), `VoluntariadoRatificacoes`. A migração 117 também acrescenta `Natureza` a
   `EscalasEquipes`, `RodizioId` e `RodizioGrupoId` a `EscalasServicos`, e o efeito sobre as escalas e a
   reintegração a `VoluntariosDesligamentos`. As equipes, os serviços e as alocações são das migrações 098 e 099.
+  A migração 118 traz `MembroPins` (o PIN de 4 números do membro, só como hash) e `AcessoTentativas` (o contador de erros e
+  o bloqueio, por pessoa e canal); a 119, `VoluntariadoResponsaveis` (o responsável legal de cada menor, conferido pela
+  Secretaria) e a adesão `CLICK_RESP`, dada pelo responsável.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,
@@ -560,7 +568,7 @@ governanca-ieadespa/
 
 | Function | Rota | Equivalente atual |
 | --- | --- | --- |
-| `RegistrarAuditoria` | `POST /api/auditoria` | `logAuditoria()` |
+| ~~`RegistrarAuditoria`~~ | ~~`POST /api/auditoria`~~ | removida: nenhuma tela a usava, e deixava qualquer pessoa escrever na trilha de auditoria; só o servidor grava nela |
 | `ListarAuditoria` | `GET /api/auditoria` | aba `tb_Auditoria` |
 | `RadarDisciplinar` | `GET /api/radar-disciplinar` | `abrirPainelRisco()` |
 | `GestaoLideranca` | `GET/POST/DELETE /api/lideranca` | `gerenciarLiderancaApp()` |

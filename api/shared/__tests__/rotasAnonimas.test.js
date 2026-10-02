@@ -52,7 +52,9 @@ function rotas() {
 // Parâmetros de rota ({id?}, {acao?}, {sigla?}, {matricula}...): cada rota decide o que fazer conforme a combinação (a Comissões só aceita sigla CCJ/PMO, a Enquetes só conhece
 // algumas ações). Por isso a varredura experimenta várias combinações realistas em vez de uma só: a rota é "fechada" se NENHUMA devolve sucesso sem sessão e se ao menos uma
 // chega ao 401 (prova de que a porta de sessão existe e está acessível).
-const VALORES = [undefined, "1", "x", "CCJ", "votar", "responder"];
+// O Azure Functions entrega o segmento numérico da URL como NÚMERO (`/comissoes/1` chega como 1, não "1"): os dois formatos entram, senão um handler que chama .toUpperCase()
+// no valor passa no teste e dá 500 em produção (aconteceu em GestaoComissoes).
+const VALORES = [undefined, "1", 1, "x", "CCJ", "votar", "responder"];
 function combinacoes(route) {
   const nomes = [...route.matchAll(/\{\*?([a-zA-Z]+)\??\}/g)].map(m => m[1]);
   let todas = [{}];

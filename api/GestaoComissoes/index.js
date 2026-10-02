@@ -19,7 +19,8 @@ const { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita } 
 const LIMITES_COMISSAO_MANUAL = { CCJ: 3, PMO: 9 };
 
 module.exports = async function (context, req) {
-  const sigla = (context.bindingData.sigla || "").toUpperCase();
+  // O Azure entrega um segmento numérico da URL (/comissoes/1) como número: sem String(), .toUpperCase() estoura e a resposta vira 500.
+  const sigla = String(context.bindingData.sigla || "").toUpperCase();
   const id = context.bindingData.id;
   const acao = context.bindingData.acao;
   const pool = await getPool();

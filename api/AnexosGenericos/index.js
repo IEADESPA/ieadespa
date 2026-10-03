@@ -38,10 +38,11 @@ async function autorizar(context, pool, usuario, tabela, registroId, { escrita, 
   };
   const regra = regraDaTabela(tabela);
   if (!regra) return recusar(400, "Tabela não aceita anexo genérico.");
-  const permissoes = usuario.permissoes || [];
-  if (!regra.permissoes.some((p) => permissoes.includes(p))) return recusar(403, MSG_SEM_PERMISSAO);
-  if ((regra.soGeral || (escrita && regra.escritaSoGeral)) && !ehGeral(usuario)) return recusar(403, MSG_GERAL);
-  if (!(await regra.alcance(pool, usuario, registroId))) {
+  // v7.6 — a visão só com as concessões que têm a permissão da tabela: o nível geral e o escopo do registro-pai são os DELA.
+  const visao = auth.visaoDaPermissao(usuario, regra.permissoes);
+  if (!visao) return recusar(403, MSG_SEM_PERMISSAO);
+  if ((regra.soGeral || (escrita && regra.escritaSoGeral)) && !ehGeral(visao)) return recusar(403, MSG_GERAL);
+  if (!(await regra.alcance(pool, visao, registroId))) {
     context.res = { status: 403, body: FORA_DO_ESCOPO };
     return false;
   }

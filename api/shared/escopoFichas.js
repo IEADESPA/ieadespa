@@ -27,7 +27,7 @@ const DETALHE_IMPEDIMENTO_GENERICO = "Há impedimento de um dos pais para a apre
 
 // A aptidão calculada carrega, no detalhe do impedimento dos pais, "pai sob disciplina em curso": dado sigiloso. Sem "disciplina", vira texto genérico.
 function ocultarSigiloAptidao(aptidao, usuario) {
-  if (!aptidao || (usuario.permissoes || []).includes("disciplina")) return aptidao;
+  if (!aptidao || require("./auth").temPermissao(usuario, "disciplina")) return aptidao;
   const itens = { ...aptidao.itens };
   if (itens.impedimentoPais && !itens.impedimentoPais.ok) itens.impedimentoPais = { ...itens.impedimentoPais, detalhe: DETALHE_IMPEDIMENTO_GENERICO };
   return { ...aptidao, itens };

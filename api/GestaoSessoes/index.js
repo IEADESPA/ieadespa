@@ -1,11 +1,9 @@
 // GestaoSessoes (vB.9 — Trilha de sessão)
 // "Minhas Sessões": dispositivo, quando entrou, e um botão pra encerrar
-// remotamente. Limitação real, documentada no README: encerrar aqui marca
-// a trilha e some da lista de sessões ativas, mas o TOKEN em si (se ainda
-// estiver com alguém, ex: navegador de outro aparelho) só perde validade
-// de verdade quando expira sozinho (12h) — o modelo de autenticação é
-// stateless de propósito (shared/auth.js), mudar isso pra revogação
-// instantânea exigiria tornar exigirLogin assíncrono em ~140 Functions.
+// remotamente. v7.6 — encerrar aqui vale DE VERDADE: o aparelho que estava com
+// aquela sessão recebe "Sua sessão foi encerrada. Entre novamente." em poucos
+// segundos (shared/auth.js, "SESSÃO REVOGÁVEL", e shared/entrada.js). Antes só
+// marcava a trilha e o token seguia valendo até expirar sozinho (12 h).
 // GET /api/minhas-sessoes       -> lista (mais recentes primeiro)
 // PUT /api/minhas-sessoes/{id}  -> { acao: 'ENCERRAR' }   (id = o GUID da sessão; só a dona encerra)
 const auth = require("../shared/auth");
@@ -41,7 +39,7 @@ module.exports = async function (context, req) {
       }
       context.res = {
         status: 200, headers: { "Content-Type": "application/json" },
-        body: { sucesso: true, mensagem: "✅ Sessão marcada como encerrada — se ainda estiver aberta em outro aparelho, sai sozinha em até 12h." }
+        body: { sucesso: true, mensagem: "✅ Sessão encerrada — se estava aberta em outro aparelho, ele sai em poucos segundos." }
       };
       return;
     }

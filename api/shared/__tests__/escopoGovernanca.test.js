@@ -1147,12 +1147,36 @@ describe("GestaoMediacoesArbitragens", () => {
   });
 
   describe("sentença arbitral", () => {
+    const sentenca = () => chamar(hMediacoes, { metodo: "PUT", token: GERAL(["mediacao"]), ligado: { id: "3" }, corpo: { acao: "REGISTRAR_SENTENCA", mimeType: "application/pdf", sentencaBase64: Buffer.from("%PDF-1.4").toString("base64") } });
     test("falha do armazenamento: o texto técnico do erro NÃO vai para o cliente", async () => {
-      quando(/SELECT \* FROM MediacoesArbitragens WHERE MediacaoId = @id/, [{ MediacaoId: 3, Assunto: "x", Status: "ARBITRAGEM_EM_CURSO" }]);
+      quando(/SELECT \* FROM MediacoesArbitragens WHERE MediacaoId = @id/, [{ MediacaoId: 3, Assunto: "x", Status: "ARBITRAGEM_EM_CURSO", CompromissoFirmadoEm: "2026-10-01T10:00:00" }]);
       storage.salvarDocumento.mockImplementationOnce(async () => { throw new Error("string-de-conexao-secreta"); });
-      const r = await chamar(hMediacoes, { metodo: "PUT", token: GERAL(["mediacao"]), ligado: { id: "3" }, corpo: { acao: "REGISTRAR_SENTENCA", mimeType: "application/pdf", sentencaBase64: Buffer.from("%PDF-1.4").toString("base64") } });
+      const r = await sentenca();
       expect(r.status).toBe(400);
       expect(JSON.stringify(r.body)).not.toMatch(/string-de-conexao-secreta/);
+    });
+    test("sem o compromisso arbitral FIRMADO pelas duas partes não há sentença: nada é enviado ao armazenamento nem gravado (sem convenção de arbitragem, a sentença seria nula)", async () => {
+      quando(/SELECT \* FROM MediacoesArbitragens WHERE MediacaoId = @id/, [{ MediacaoId: 3, Assunto: "x", Status: "ARBITRAGEM_EM_CURSO", CompromissoFirmadoEm: null, CompromissoHashProposto: "abc" }]);
+      const r = await sentenca();
+      expect(r.body).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/compromisso arbitral ainda não foi firmado/) });
+      expect(storage.salvarDocumento).not.toHaveBeenCalled();
+      expect(rodou(/UPDATE MediacoesArbitragens/)).toHaveLength(0);
+    });
+    test("com o compromisso firmado a sentença é gravada, e só se o caso ainda estiver em arbitragem com compromisso firmado (a corrida não derruba a regra)", async () => {
+      quando(/SELECT \* FROM MediacoesArbitragens WHERE MediacaoId = @id/, [{ MediacaoId: 3, Assunto: "x", Status: "ARBITRAGEM_EM_CURSO", CompromissoFirmadoEm: "2026-10-01T10:00:00" }]);
+      quando(/UPDATE MediacoesArbitragens SET SentencaArbitralUrl/, [], 1);
+      const r = await sentenca();
+      expect(r.body.sucesso).toBe(true);
+      const gravacao = rodou(/UPDATE MediacoesArbitragens SET SentencaArbitralUrl/);
+      expect(gravacao).toHaveLength(1);
+      expect(gravacao[0].sql).toMatch(/Status = 'ARBITRAGEM_EM_CURSO' AND CompromissoFirmadoEm IS NOT NULL/);
+    });
+    test("o caso mudou entre a conferência e a gravação (0 linhas): a resposta diz isso e nada é auditado como sentença registrada", async () => {
+      quando(/SELECT \* FROM MediacoesArbitragens WHERE MediacaoId = @id/, [{ MediacaoId: 3, Assunto: "x", Status: "ARBITRAGEM_EM_CURSO", CompromissoFirmadoEm: "2026-10-01T10:00:00" }]);
+      quando(/UPDATE MediacoesArbitragens SET SentencaArbitralUrl/, [], 0);
+      const r = await sentenca();
+      expect(r.body).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/mudou/) });
+      expect(registrarAuditoria).not.toHaveBeenCalledWith(expect.objectContaining({ acao: "Registrou sentença arbitral" }));
     });
   });
 

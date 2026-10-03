@@ -255,8 +255,18 @@ function validarAceiteResponsavel({ aceito, ip, idadeMenor, idadeResponsavel }) 
 
 // A adesão dada pelo responsável vale enquanto a pessoa é menor: ao completar 18 anos ela precisa confirmar a própria (a adesão com responsável é a que tem
 // ResponsavelNome). Idade desconhecida não vence nada.
+// Fecho dos itens em aberto (03/10/2026): a adesão dada pelo responsável CADASTRADO no sistema (CLICK_RESP) também só vale enquanto o menor tem ao menos um
+// responsável ATIVO. Se, depois do aceite, houve um momento sem nenhum responsável ativo (o último foi revogado), ela fica SUSPENSA — e continua suspensa
+// mesmo que outro responsável seja cadastrado depois: é preciso uma NOVA adesão, dada por um responsável ativo. A prova não muda (a linha é imutável): a
+// suspensão é calculada na leitura (`suspensaSemResponsavel`, ver shared/voluntariadoDb.js::ADESAO_SUSPENSA_SQL). A ficha assinada pelo responsável não é
+// atingida: o signatário dela não é o cadastro do sistema (a Secretaria a confere em papel).
+const MENSAGEM_ADESAO_SUSPENSA = "Adesão suspensa: sem responsável ativo — cadastre um responsável e peça nova adesão.";
+function adesaoSuspensa(adesao) {
+  return !!(adesao && adesao.suspensaSemResponsavel);
+}
 function adesaoVigente(adesao, idade) {
   if (!adesao) return false;
+  if (adesaoSuspensa(adesao)) return false;
   return !(adesao.responsavelNome && idade != null && idade >= MAIORIDADE);
 }
 
@@ -487,7 +497,7 @@ module.exports = {
   DATA_MINIMA_RATIFICACAO, MAX_RODIZIOS_POR_CONGREGACAO, MAX_MEMBROS_POR_GRUPO, MAX_MEMBROS_AO_CRIAR_GRUPO,
   inteiroPositivo, MAIORIDADE, IP_RETENCAO_DIAS_PADRAO, VINCULOS_RESPONSAVEL, idadeEmAnos, condicaoDeIdade,
   TERMO_MENOR_VERSAO, TERMO_MENOR_TITULO, TERMO_MENOR_ITENS, TERMO_MENOR_ACEITE, TERMO_MENOR_HASH, termoMenorVigente, MAX_RESPONSAVEIS_POR_MENOR,
-  validarDesignacaoResponsavel, validarAceiteResponsavel, adesaoVigente,
+  validarDesignacaoResponsavel, validarAceiteResponsavel, adesaoVigente, adesaoSuspensa, MENSAGEM_ADESAO_SUSPENSA,
   extrairIp, cadeiaDeCabecalhos, normalizarIp, ipPublico, validarAceiteDigital, validarRegistroAdesao, validarRatificacao, avaliarIntegridadeAdesao,
   NATUREZAS, NATUREZAS_OPERACIONAIS, DIAS_SEMANA, LIMITE_SEQUENCIA_PADRAO, MAX_SEMANAS_GERACAO, SEMANAS_GERACAO_PADRAO, MAX_GRUPOS,
   equipeExigeRevezamento, validarNatureza, validarRodizio, validarNomeGrupo, validarComposicao,

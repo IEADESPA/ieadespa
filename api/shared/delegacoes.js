@@ -7,7 +7,7 @@
 // seu, a permissão+escopo do papel delegado, por um prazo definido. Toda
 // ação continua auditada com o `usuarioId` real de quem clicou — nunca
 // precisa emprestar identidade nenhuma.
-const { resolverEscopoCongregacoes } = require("./escopo");
+const { resolverEscopoCongregacoes, resolverNomeExtensao } = require("./escopo");
 
 function validarPrazo(dataInicio, dataFim, hoje) {
   if (!dataInicio || !dataFim) return "Informe dataInicio e dataFim.";
@@ -53,8 +53,8 @@ async function criarDelegacao(pool, sql, { liderancaId, deleganteMembroId, deleg
 // mim". Ativa = Status='ATIVA' E dentro da janela de datas.
 async function delegacoesAtivasRecebidas(pool, sql, membroId, hoje) {
   const result = await pool.request().input("membroId", sql.Int, membroId).input("hoje", sql.Date, hoje).query(`
-    SELECT d.DelegacaoId, d.LiderancaId, d.DataFim, d.Motivo, deleg.Nome AS deleganteNome,
-           l.EscopoTipo, l.EscopoId, p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr
+    SELECT d.DelegacaoId, d.LiderancaId, d.DataFim, CONVERT(varchar(10), d.DataFim, 120) AS DataFimTexto, d.Motivo, deleg.Nome AS deleganteNome,
+           l.EscopoTipo, l.EscopoId, l.DepartamentoId, CONVERT(varchar(10), l.AtivoAte, 120) AS LiderancaAtivoAteTexto, p.Nome AS papelNome, p.Nivel AS papelNivel, p.Permissoes AS permissoesStr
     FROM DelegacoesAcesso d
     JOIN Lideranca l ON l.LiderancaId = d.LiderancaId
     JOIN Papeis p ON p.PapelId = l.PapelId
@@ -68,6 +68,8 @@ async function delegacoesAtivasRecebidas(pool, sql, membroId, hoje) {
 // Resolve o que a sessão do delegado ganha A MAIS (permissões + escopo) —
 // nunca substitui o que ele já tinha, só une. Escopo "TODAS" de qualquer
 // lado vence (é o modo mais amplo); senão, une as listas de congregação.
+// v7.6 — o LOGIN não usa mais esta soma (ela fazia a delegação ampliar o escopo de todas as permissões): usa concessoesDelegadas, abaixo. Fica para quem só
+// precisa do resumo (a soma das delegações, sem decidir acesso).
 async function permissoesEscopoDelegados(pool, sql, membroId, hoje) {
   const delegacoes = await delegacoesAtivasRecebidas(pool, sql, membroId, hoje);
   let permissoesExtras = [];
@@ -88,4 +90,30 @@ async function permissoesEscopoDelegados(pool, sql, membroId, hoje) {
   };
 }
 
-module.exports = { criarDelegacao, delegacoesAtivasRecebidas, permissoesEscopoDelegados };
+// v7.6 — uma CONCESSÃO por delegação ativa (ver shared/auth.js, "Concessões"): a permissão delegada vale só com o escopo, o nível e o departamento do papel
+// delegado, e só até o último dia da delegação (`ate`) — a delegação não amplia mais o escopo das permissões do cargo próprio, nem o contrário.
+// `expiradas`: permissões com recertificação vencida (shared/compliance.js) saem de todas as concessões.
+async function concessoesDelegadas(pool, sql, membroId, hoje, expiradas = []) {
+  const delegacoes = await delegacoesAtivasRecebidas(pool, sql, membroId, hoje);
+  const concessoes = [];
+  for (const d of delegacoes) {
+    const [escopo, extensao] = await Promise.all([
+      resolverEscopoCongregacoes(pool, d.EscopoTipo, d.EscopoId),
+      resolverNomeExtensao(pool, d.EscopoTipo, d.EscopoId)
+    ]);
+    // vale até o fim da delegação OU do mandato do cargo delegado, o que vier primeiro
+    const fins = [d.DataFimTexto, d.LiderancaAtivoAteTexto].filter((x) => typeof x === "string" && x);
+    concessoes.push({
+      origem: "DELEGACAO", delegacaoId: d.DelegacaoId, ate: fins.length ? fins.sort()[0] : null,
+      permissoes: [...new Set((d.permissoesStr || "").split(",").map((p) => p.trim()).filter(Boolean))].filter((p) => !expiradas.includes(p)),
+      nivel: d.papelNivel || null, escopoCongregacoes: escopo, escopoExtensaoNome: extensao || null,
+      departamentoId: d.EscopoTipo === "DEPARTAMENTO" ? d.EscopoId : (d.DepartamentoId || null)
+    });
+  }
+  return {
+    concessoes,
+    delegacoesAtivas: delegacoes.map((d) => ({ delegacaoId: d.DelegacaoId, deleganteNome: d.deleganteNome, papelNome: d.papelNome, dataFim: d.DataFim }))
+  };
+}
+
+module.exports = { criarDelegacao, delegacoesAtivasRecebidas, permissoesEscopoDelegados, concessoesDelegadas };

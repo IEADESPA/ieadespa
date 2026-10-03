@@ -265,7 +265,7 @@ module.exports = async function (context, req) {
   // ---- HOMOLOGAR_EXCLUSAO (v3.6): Exclusão/Disciplina Rigorosa votada pelo
   // TER só produz efeito (vacância) após homologação do CEI (Art. 94, II).
   if (acao === "HOMOLOGAR_EXCLUSAO") {
-    if (!usuario.permissoes || !usuario.permissoes.includes("cei")) {
+    if (!auth.temPermissao(usuario, "cei")) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "Requer a permissão 'cei'." } };
       return;
     }

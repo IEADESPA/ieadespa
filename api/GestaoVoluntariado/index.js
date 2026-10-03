@@ -79,10 +79,13 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
   if (!usuario) return;
 
-  const perms = usuario.permissoes || [];
-  const ehEscalas = perms.includes("escalas");
-  const ehHabilitacao = perms.includes("habilitacao_voluntarios");
-  const escopoGlobal = !usuario.escopoCongregacoes || usuario.escopoCongregacoes === "TODAS";
+  // v7.6 — ehEscalas/ehHabilitacao são a VISÃO da sessão só com as concessões daquela permissão (ou null): o escopo conferido é o dela, não o somado de
+  // outro cargo ou delegação. `vVoluntariado`: as concessões de qualquer das duas (onde a rota aceita uma ou outra).
+  const ehEscalas = auth.visaoDaPermissao(usuario, "escalas");
+  const ehHabilitacao = auth.visaoDaPermissao(usuario, "habilitacao_voluntarios");
+  const vVoluntariado = auth.visaoDaPermissao(usuario, ["escalas", "habilitacao_voluntarios"]);
+  const escopoGlobalDe = (v) => !v.escopoCongregacoes || v.escopoCongregacoes === "TODAS";
+  const escopoGlobal = escopoGlobalDe(vVoluntariado || usuario);
   const pool = await getPool();
   const acao = context.bindingData.acao;
   const metodo = req.method;
@@ -94,13 +97,14 @@ module.exports = async function (context, req) {
     const r = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id`);
     return r.recordset[0] ? r.recordset[0].Nome : null;
   }
-  // Permissão + congregação dentro do escopo de quem pede.
+  // Permissão + congregação dentro do escopo de quem pede. `permitido`: a visão da permissão (o escopo conferido é o dela) ou true (as duas permissões).
   async function alcanca(permitido, congregacaoId) {
     if (!permitido) return false;
+    const visao = permitido === true ? (vVoluntariado || usuario) : permitido;
     const nome = await congregacaoNome(congregacaoId);
-    return !!nome && auth.estaNoEscopo(usuario, nome);
+    return !!nome && auth.estaNoEscopo(visao, nome);
   }
-  const autorizacao = { global: escopoGlobal, podeCongregacao: (nome) => auth.estaNoEscopo(usuario, nome) };
+  const autorizacao = { global: escopoGlobal, podeCongregacao: (nome) => auth.estaNoEscopo(vVoluntariado || usuario, nome) };
 
   // Quem não tem a permissão recebe 403 antes de qualquer busca: assim a resposta não revela se o rodízio, a equipe ou o membro existe.
   const EXIGE_ESCALAS = ["rodizios", "rodizio", "rodizio-previa", "habitualidade", "equipe-natureza", "rodizio-ativo", "grupos", "grupo-membro", "grupo-membro-remover", "grupo-desativar", "gerar", "cancelar-futuros"];
@@ -163,7 +167,7 @@ module.exports = async function (context, req) {
       if (acao === "ratificacoes") {
         if (!ehHabilitacao) return erro(context, 403, SEM_PERMISSAO);
         // Quem não tem escopo geral só vê as ratificações que registrou.
-        context.res = { status: 200, body: { sucesso: true, ratificacoes: await db.listarRatificacoes(pool, { porMembroId: escopoGlobal ? null : usuario.membroId }) } };
+        context.res = { status: 200, body: { sucesso: true, ratificacoes: await db.listarRatificacoes(pool, { porMembroId: escopoGlobalDe(ehHabilitacao) ? null : usuario.membroId }) } };
         return;
       }
 
@@ -200,7 +204,7 @@ module.exports = async function (context, req) {
       if (acao === "remocoes") {
         const equipeId = idDe(consulta.equipeId), congregacaoId = idDe(consulta.congregacaoId);
         if (equipeId) {
-          const temPermissao = ehEscalas || ehHabilitacao;
+          const temPermissao = vVoluntariado;
           if (!temPermissao && !(await db.lideraAlgumaEquipe(pool, { membroId: usuario.membroId }))) return erro(context, 403, SEM_PERMISSAO);
           const equipe = await es.buscarEquipe(pool, equipeId);
           if (!equipe) return erro(context, 404, "Equipe não encontrada.");
@@ -210,7 +214,7 @@ module.exports = async function (context, req) {
           return;
         }
         if (!congregacaoId) return erro(context, 400, "Informe congregacaoId ou equipeId.");
-        if (!(await alcanca(ehEscalas || ehHabilitacao, congregacaoId))) return erro(context, 403, (ehEscalas || ehHabilitacao) ? "Fora do seu escopo de atuação." : SEM_PERMISSAO);
+        if (!(await alcanca(vVoluntariado, congregacaoId))) return erro(context, 403, vVoluntariado ? "Fora do seu escopo de atuação." : SEM_PERMISSAO);
         context.res = { status: 200, body: { sucesso: true, remocoes: await db.listarRemocoes(pool, { congregacaoId }) } };
         return;
       }
@@ -254,7 +258,7 @@ module.exports = async function (context, req) {
       if (!ehHabilitacao) return erro(context, 403, SEM_PERMISSAO);
       const m = await pool.request().input("id", sql.Int, membroId).query(`SELECT m.MembroId, c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`);
       if (!m.recordset[0]) return erro(context, 404, "Voluntário não encontrado.");
-      if (!auth.estaNoEscopo(usuario, m.recordset[0].CongregacaoNome)) return erro(context, 403, "Fora do seu escopo de atuação.");
+      if (!auth.estaNoEscopo(ehHabilitacao, m.recordset[0].CongregacaoNome)) return erro(context, 403, "Fora do seu escopo de atuação.");
       resposta(context, await db.registrarAdesaoManual(pool, { membroId, dados: corpo, por: usuario.membroId, hoje }), 201);
       return;
     }
@@ -366,7 +370,7 @@ module.exports = async function (context, req) {
     if (acao === "reintegrar") {
       const desligamentoId = idDe(corpo.desligamentoId);
       if (!desligamentoId) return erro(context, 400, "Informe desligamentoId.");
-      const temPermissao = ehEscalas || ehHabilitacao;
+      const temPermissao = vVoluntariado;
       // Quem nem tem permissão nem lidera equipe recebe 403 antes de qualquer busca: a resposta não revela se o registro existe.
       if (!temPermissao && !(await db.lideraAlgumaEquipe(pool, { membroId: usuario.membroId }))) return erro(context, 403, SEM_PERMISSAO);
       const d = await db.buscarRemocao(pool, desligamentoId);

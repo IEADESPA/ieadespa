@@ -8,6 +8,7 @@ const estatuto = require("./estatuto");
 const disciplina = require("./disciplina");
 const { membrosComCartaMudancaEmitida } = require("./universo");
 const { filtrarPorEscopo } = require("./escopoRotas");
+const { violouUnicidade } = require("./violacaoUnica");
 
 // Reg. Art. 142-143 e o regime geral de deliberação associativa (CC art.
 // 44-61): o voto em assembleia é personalíssimo. O Estatuto da IEADESPA não
@@ -90,10 +91,11 @@ async function listarImpedidosAssembleia(pool, usuario) {
 // de mudança emitida DEPOIS da instalação reescreva retroativamente a base
 // de cálculo do quórum já fixada.
 async function gerarOuObterRelatorioCredenciamento(pool, sessaoId, geradoPor) {
-  const existente = (await pool.request().input("id", sql.Int, sessaoId)
+  const lerExistente = async () => (await pool.request().input("id", sql.Int, sessaoId)
     .query(`SELECT RelatorioId AS relatorioId, TotalCredenciados AS totalCredenciados, TotalImpedidos AS totalImpedidos,
                     CONVERT(varchar(19), GeradoEm, 120) AS geradoEm
              FROM RelatoriosCredenciamento WHERE SessaoId = @id`)).recordset[0];
+  const existente = await lerExistente();
   if (existente) return { ...existente, novo: false };
 
   const totalCredenciados = (await pool.request().input("id", sql.Int, sessaoId)
@@ -101,12 +103,21 @@ async function gerarOuObterRelatorioCredenciamento(pool, sessaoId, geradoPor) {
   const totalImpedidos = (await pool.request().input("id", sql.Int, sessaoId)
     .query(`SELECT COUNT(*) AS total FROM CredenciamentosAssembleia WHERE SessaoId = @id AND Resultado = 'RECUSADO'`)).recordset[0].total;
 
-  const inserido = await pool.request()
-    .input("sessaoId", sql.Int, sessaoId).input("totalCredenciados", sql.Int, totalCredenciados)
-    .input("totalImpedidos", sql.Int, totalImpedidos).input("geradoPor", sql.Int, geradoPor || null)
-    .query(`INSERT INTO RelatoriosCredenciamento (SessaoId, TotalCredenciados, TotalImpedidos, GeradoPor)
-            OUTPUT INSERTED.RelatorioId AS relatorioId, CONVERT(varchar(19), INSERTED.GeradoEm, 120) AS geradoEm
-            VALUES (@sessaoId, @totalCredenciados, @totalImpedidos, @geradoPor)`);
+  let inserido;
+  try {
+    inserido = await pool.request()
+      .input("sessaoId", sql.Int, sessaoId).input("totalCredenciados", sql.Int, totalCredenciados)
+      .input("totalImpedidos", sql.Int, totalImpedidos).input("geradoPor", sql.Int, geradoPor || null)
+      .query(`INSERT INTO RelatoriosCredenciamento (SessaoId, TotalCredenciados, TotalImpedidos, GeradoPor)
+              OUTPUT INSERTED.RelatorioId AS relatorioId, CONVERT(varchar(19), INSERTED.GeradoEm, 120) AS geradoEm
+              VALUES (@sessaoId, @totalCredenciados, @totalImpedidos, @geradoPor)`);
+  } catch (e) {
+    // Dois pedidos geraram ao mesmo tempo: a restrição única (1 relatório por sessão) deixa passar o primeiro e recusa o segundo, que devolve o relatório congelado do primeiro.
+    if (!violouUnicidade(e)) throw e;
+    const doOutro = await lerExistente();
+    if (!doOutro) throw e;
+    return { ...doOutro, novo: false };
+  }
   return { relatorioId: inserido.recordset[0].relatorioId, totalCredenciados, totalImpedidos, geradoEm: inserido.recordset[0].geradoEm, novo: true };
 }
 

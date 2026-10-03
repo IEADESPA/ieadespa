@@ -12,7 +12,7 @@ function exigirAcessoPdq(req, context) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["cli", "financeiro"]);
   if (!usuario) return null;
   const escrita = req.method !== "GET";
-  if (escrita && !(Array.isArray(usuario.permissoes) && usuario.permissoes.includes("cli")) && !ehGeral(usuario)) {
+  if (escrita && !auth.temPermissao(usuario, "cli") && !ehGeral(usuario)) {
     context.res = { status: 403, body: { sucesso: false, mensagem: MENSAGEM_ESCRITA } };
     return null;
   }

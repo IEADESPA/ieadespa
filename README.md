@@ -332,9 +332,11 @@ diz em que arquivo ela está e em que pé ela anda.
   pessoa, voto de enquete com a matrícula do corpo, entre outras): todas corrigidas e presas por teste. Em seguida o
   **escopo hierárquico passou a valer em todas as rotas** (dirigente → só a congregação; pastor de área → as da área; e
   assim até o nível geral, que vê tudo), os catálogos só são lidos com login e só o nível geral os altera, e cada
-  documento ganhou a marca de quem pode vê-lo. O que continua **em aberto** está no plano da fase 7 (delegação de
-  escopo, sessão não revogável, índices únicos). **Próxima: a 🔒 Trava de Revisão 7-A**, que audita a v7.1 a v7.5 antes
-  de seguir para a v7.6.
+  documento ganhou a marca de quem pode vê-lo. Depois, o **fecho dos itens em aberto** (03/10/2026): sessão que se
+  derruba na hora (toda rota entra por `api/shared/entrada.js`), delegação por permissão, índices únicos no banco, aceite
+  de mediação só por ato da parte, abandono com dois olhos, remessa com as mesmas conferências do pagamento comum e
+  estorno de cessão. Só a chave site↔sistema nos dois portais do Azure depende de gente; os limites que continuam estão
+  no plano da fase 7. **Próximos: a CSP forte e a 🔒 Trava de Revisão 7-A**, antes da v7.6.
 - **Planejadas:** FASES 8 a 12.
 
 ### Fases
@@ -496,6 +498,8 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   o bloqueio, por pessoa e canal); a 119, `VoluntariadoResponsaveis` (o responsável legal de cada menor, conferido pela
   Secretaria) e a adesão `CLICK_RESP`, dada pelo responsável; a 120 concede `escalas` e `habilitacao_voluntarios` aos
   papéis Presidente e Secretário Geral; a 121, a coluna `Visibilidade` de `Documentos` (público, membros ou liderança); a 122, a rede de segurança do nível geral.
+  O fecho (03/10/2026) trouxe as migrações 123 a 139: sessões revogáveis, índices únicos que só nascem sem repetição
+  (o deploy avisa), `AceitesMediacao`, abandono com "quem abriu", divergência de remessa e estorno de cessão.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,

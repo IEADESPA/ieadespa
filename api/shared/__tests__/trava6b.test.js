@@ -110,11 +110,15 @@ describe("vacância e a EBD", () => {
   const { sqlFalso } = require("./testUtils");
   test("disciplina e licença de candidatura tiram o professor, mas mantêm a matrícula de aluno", async () => {
     for (const motivo of ["DISCIPLINA", "LICENCA_CANDIDATURA"]) {
-      const { pool, chamadas } = criarPoolFalso([[], [], [], []]);
+      const { pool, chamadas } = criarPoolFalso([[], [], [], [], []]);
       await encerrarVinculos(pool, sqlFalso, 42, motivo);
       const tudo = chamadas.map(c => c.sql).join("\n");
       expect(tudo).toMatch(/EbdTurmaProfessores/);
       expect(tudo).not.toMatch(/EbdAlunos/);
+      // v7.6 — o mandato acaba "ontem" (o login confere AtivoAte < hoje) e as sessões abertas da pessoa caem na hora
+      expect(tudo).toMatch(/UPDATE Lideranca SET AtivoAte = DATEADD\(day, -1, CAST\(SYSUTCDATETIME\(\) AS DATE\)\)/);
+      expect(chamadas[chamadas.length - 1].sql).toMatch(/UPDATE SessoesAtivas SET Encerrada = 1/);
+      expect(chamadas[chamadas.length - 1].inputs.membroId).toBe(42);
     }
   });
 });

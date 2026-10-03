@@ -48,7 +48,7 @@ function erro(context, status, mensagem) {
 }
 
 function temGestao(usuario) {
-  return !!(usuario.permissoes && usuario.permissoes.includes("trilhas_gestao"));
+  return auth.temPermissao(usuario, "trilhas_gestao");
 }
 
 // A pessoa está no escopo de quem gerencia (congregação e, para escopo de Extensão da Tenda, a Extensão)? Membro sem congregação só é alcançável por escopo TODAS.
@@ -83,8 +83,11 @@ function resposta(context, resultado, statusOk = 200) {
 }
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirLogin(req, context);
-  if (!usuario) return;
+  const sessao = auth.exigirLogin(req, context);
+  if (!sessao) return;
+  // v7.6 — escopo, nível e departamento conferidos adiante são os da permissão trilhas_gestao (a visão só com as concessões que a têm; ver shared/auth.js,
+  // "Concessões"), não o somado de outro cargo ou delegação. Sem a permissão, a sessão inteira (quem usa a rota como aluno, professor, membro...).
+  const usuario = auth.visaoDaPermissao(sessao, "trilhas_gestao") || sessao;
 
   const pool = await getPool();
   const acao = context.bindingData.acao || "";

@@ -156,7 +156,7 @@ async function calcularIndicadoresFinanceiros(pool, sql) {
 // verdade: antes disso, `RecertificacoesAcesso.Status = 'EXPIRADA'` não
 // tinha NENHUM efeito em lugar nenhum — só ficava marcado num painel de
 // compliance, sem nunca bloquear nada. Chamado do login (não de todo
-// request — esse motor de sessão é stateless de propósito, ver
+// request — o token carrega as permissões já resolvidas, ver
 // shared/auth.js): a permissão cuja recertificação MAIS RECENTE está
 // EXPIRADA não entra na sessão nova, até alguém confirmar de novo.
 async function permissoesComRecertificacaoExpirada(pool, sql, membroId) {

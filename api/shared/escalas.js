@@ -12,6 +12,7 @@
 // bem mais finas, só orquestrando o que já foi decidido aqui.
 const { sql } = require("./db");
 const trilhas = require("./trilhas");
+const adesaoMenor = require("./adesaoMenor");
 
 const STATUS_ALOCACAO_ATIVOS = ["CONVIDADO", "ACEITO", "CONFIRMADO"];
 
@@ -159,7 +160,10 @@ async function buscarCandidatosDaEquipe(pool, equipeId, dataServico) {
   const { atendem } = await trilhas.filtrarMembrosQueAtendem(pool, {
     contexto: "ESCALA_EQUIPE", alvoChave: String(equipeId), membroIds: todos.map(m => m.membroId)
   });
-  const membros = todos.filter(m => atendem.has(Number(m.membroId)));
+  // 03/10/2026: menor (idade conhecida, < 18) sem adesão ao Termo que valha — nunca dada, ou suspensa porque ficou sem responsável ativo — também não entra
+  // (shared/adesaoMenor.js). Adulto e quem não tem data de nascimento no cadastro seguem como sempre.
+  const menoresSemAdesao = await adesaoMenor.menoresSemAdesaoVigente(pool, todos.map(m => m.membroId));
+  const membros = todos.filter(m => atendem.has(Number(m.membroId)) && !menoresSemAdesao.has(Number(m.membroId)));
 
   const candidatos = [];
   for (const m of membros) {

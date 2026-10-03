@@ -78,12 +78,15 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use CANCELAR." } };
       return;
     }
-    const dona = await pool.request().input("id", sql.Int, id).query(`SELECT DeleganteMembroId FROM DelegacoesAcesso WHERE DelegacaoId = @id`);
+    const dona = await pool.request().input("id", sql.Int, id).query(`SELECT DeleganteMembroId, DelegadoMembroId FROM DelegacoesAcesso WHERE DelegacaoId = @id`);
     if (dona.recordset.length === 0 || dona.recordset[0].DeleganteMembroId !== usuario.membroId) {
       context.res = { status: 404, body: { sucesso: false, mensagem: "Delegação não encontrada." } };
       return;
     }
     await pool.request().input("id", sql.Int, id).query(`UPDATE DelegacoesAcesso SET Status = 'CANCELADA' WHERE DelegacaoId = @id`);
+    // v7.6 — a sessão do delegado carrega a delegação como uma concessão: cancelar derruba as sessões abertas dele na hora (no login seguinte ela já não vem).
+    // Antes, o que foi delegado continuava valendo até o token expirar (12 h).
+    if (dona.recordset[0].DelegadoMembroId) await auth.revogarSessoesDoMembro(pool, sql, dona.recordset[0].DelegadoMembroId);
     await registrarAuditoria({ tabela: "DelegacoesAcesso", registroId: Number(id), usuarioId: usuario.membroId, acao: "Cancelou delegação" });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Delegação cancelada." } };
     return;

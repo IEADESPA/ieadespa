@@ -294,8 +294,8 @@
           <!-- MÓDULO: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico
                (shared/conquistas.js), EBD é só o primeiro consumidor.
                Permissão própria "conquistas_gestao", nunca concedida por
-               padrão. O painel pessoal/ranking geral fica em Meu Painel →
-               Minhas Conquistas, aberto a qualquer matrícula. -->
+               padrão. O painel pessoal e o ranking da própria turma/congregação
+               ficam em Meu Painel → Minhas Conquistas, abertos a qualquer matrícula. -->
           <div class="grupo-modulo" id="grupoModuloConquistas" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaConquistas" onclick="mostrarAbaSecretaria('conquistas')"><span class="icone">🏆</span><span class="rotulo">Conquistas</span></button>
@@ -910,10 +910,10 @@
             o mesmo placar no futuro, sem precisar de uma tela nova).</p>
           <div id="resultadoMinhasConquistas"></div>
           <hr />
-          <h4>Ranking geral (todo o Campo)</h4>
-          <p class="subtitle">Ranking por Turma/Congregação/Área também é suportado pela API
-            (GET /api/conquistas/ranking?escopoTipo=&amp;escopoId=) — a tela de Meu Painel mostra o geral;
-            o painel de Conquistas (administração) mostra o ranking recortado por escopo.</p>
+          <h4>Ranking da sua turma (ou da sua congregação)</h4>
+          <p class="subtitle">Os 20 primeiros da sua turma de EBD — ou da sua congregação, se você não está
+            numa turma —, com o nome abreviado, e a sua posição. O ranking por área, região ou do Campo
+            inteiro fica com quem administra as Conquistas.</p>
           <div id="resultadoRankingConquistas"></div>
         </div>
 
@@ -929,13 +929,15 @@
             <button class="btn-subaba" id="btnFiltroTarefasAtrasadas" onclick="filtrarMinhasTarefas('atrasados')">Atrasadas</button>
           </div>
           <div class="rolagem-tabela"><div id="resultadoMinhasTarefas"></div></div>
+          <!-- Mediação/arbitragem em que sou parte: o acordo e o compromisso só valem com a decisão de cada parte (03/10/2026) -->
+          <div id="resultadoMinhasMediacoes"></div>
         </div>
 
         <!-- SUB-ABA: SEGURANÇA (vB.9 — trilha de sessão + delegação temporária) -->
         <div id="subMeupainelSeguranca" class="sub-aba-secretaria" style="display:none;">
           <h3>💻 Minhas Sessões</h3>
-          <p class="subtitle">Dispositivos onde você entrou. "Encerrar" marca a sessão como encerrada aqui —
-            se ainda estiver aberta em outro aparelho, sai sozinha em até 12h (limite de validade do login).</p>
+          <p class="subtitle">Dispositivos onde você entrou. "Encerrar" derruba aquela sessão de verdade —
+            se estiver aberta em outro aparelho, ele sai em poucos segundos. Trocar a senha também encerra as outras sessões.</p>
           <div class="rolagem-tabela"><div id="resultadoMinhasSessoes"></div></div>
 
           <hr />
@@ -978,14 +980,14 @@
              a sessão é iniciada, quando a data chegar. Os outros 4 órgãos não têm
              essa exigência estatutária — continuam abrindo na hora, sem convocação. -->
         <div id="blocoConvocarAssembleia" style="display:none;">
-          <h3 id="convocacaoTitulo">📋 Convocar Assembleia Geral</h3>
-          <p class="subtitle">
+          <h3 id="convocacaoTitulo" class="so-geral">📋 Convocar Assembleia Geral</h3>
+          <p class="subtitle so-geral">
             A Assembleia só pode ser convocada pra competência privativa dela (Art. 18) —
             marque pelo menos uma matéria. O prazo mínimo do Edital e o quórum de
             instalação são calculados automaticamente a partir das matérias escolhidas,
             não é preciso (nem dá) escolher isso direto.
           </p>
-          <form onsubmit="event.preventDefault(); convocarAssembleiaAcao();">
+          <form class="so-geral" onsubmit="event.preventDefault(); convocarAssembleiaAcao();">
             <div class="input-group">
               <label><input type="checkbox" id="convocacaoEhAnual" style="width:auto;" /> É a Assembleia Ordinária anual (AGO, dezembro)?</label>
             </div>
@@ -1067,6 +1069,8 @@
             disciplina em curso, carta de mudança já emitida):</p>
           <div class="rolagem-tabela"><div id="listaImpedidosCredenciamento"></div></div>
 
+          <!-- só o nível geral (o servidor recusa os demais com exigirGeral); para os outros nem aparece -->
+          <div class="so-geral">
           <p class="subtitle" style="margin:12px 0 4px;"><strong>Credenciamento pela mesa</strong> (com trilha — quem operou fica
             registrado na auditoria):</p>
           <div class="barra-lista">
@@ -1074,14 +1078,17 @@
             <button class="btn-confirmar" style="width:auto;margin:0;" onclick="credenciarMembroAcao()">🪪 Credenciar / Avaliar</button>
           </div>
           <p id="resultadoCredenciamento"></p>
+          </div>
           <div class="rolagem-tabela"><div id="trilhaCredenciamento"></div></div>
 
+          <div class="so-geral">
           <p class="subtitle" style="margin:12px 0 4px;"><strong>Relatório de credenciamento</strong> (Robert's Rules — gerado uma
             vez, os totais ficam congelados):</p>
           <div class="barra-lista">
             <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="gerarRelatorioCredenciamentoAcao()">📋 Gerar / Ver Relatório</button>
           </div>
           <p id="relatorioCredenciamento" class="subtitle"></p>
+          </div>
         </div>
 
         <hr />
@@ -1089,7 +1096,7 @@
         <div id="blocoFrequencia" style="display:none;">
           <h3>Lista de Frequência — <span id="tituloFrequencia"></span></h3>
           <div id="resumoQuorum" class="resumo-quorum"></div>
-          <button class="btn-confirmar" id="botaoReconvocarAssembleia" style="width:auto;display:none;">🔁 Reconvocar (Art. 21, II, "c")</button>
+          <button class="btn-confirmar so-geral" id="botaoReconvocarAssembleia" style="width:auto;display:none;">🔁 Reconvocar (Art. 21, II, "c")</button>
           <div class="rolagem-tabela"><div id="resultadoFrequencia"></div></div>
         </div>
 
@@ -1139,7 +1146,7 @@
             da Diretoria/Conselho Fiscal/CEI são cadastrados nos órgãos deles próprios (aba
             Órgãos) e entram automaticamente por herança, sem duplicar.
           </p>
-          <form onsubmit="event.preventDefault(); salvarAssentoCLI();">
+          <form class="so-geral" onsubmit="event.preventDefault(); salvarAssentoCLI();">
             <div class="barra-lista">
               <input type="number" id="assentoCLIMatricula" placeholder="Matrícula" style="min-width:120px;" />
               <select id="assentoCLIFuncao">
@@ -1162,7 +1169,7 @@
           </p>
 
           <h5 style="margin:10px 0 6px;">Comissão de Constituição, Justiça e Redação (CCJ)</h5>
-          <form onsubmit="event.preventDefault(); adicionarMembroCCJ();">
+          <form class="so-geral" onsubmit="event.preventDefault(); adicionarMembroCCJ();">
             <div class="barra-lista">
               <input type="number" id="ccjMatricula" placeholder="Matrícula" style="min-width:120px;" />
               <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar</button>
@@ -1216,7 +1223,7 @@
             Os 10 cargos são de preenchimento obrigatório (Art. 29) — 1 titular ativo por
             cargo. É vedado acumular com assento no Conselho Fiscal ou no CEI (Art. 38 §3º, II).
           </p>
-          <form onsubmit="event.preventDefault(); salvarAssentoDiretoria();">
+          <form class="so-geral" onsubmit="event.preventDefault(); salvarAssentoDiretoria();">
             <div class="barra-lista">
               <input type="number" id="assentoDiretoriaMatricula" placeholder="Matrícula" style="min-width:120px;" />
               <select id="assentoDiretoriaCargo"></select>
@@ -1247,7 +1254,7 @@
             — 1 titular ativo por cargo. Vedado acumular com Diretoria ou CEI (Art. 38 §3º, II)
             e vedado parentesco até 2º grau com a Diretoria Executiva (Art. 43 §3º, I).
           </p>
-          <form onsubmit="event.preventDefault(); salvarAssentoConselhoFiscal();">
+          <form class="so-geral" onsubmit="event.preventDefault(); salvarAssentoConselhoFiscal();">
             <div class="barra-lista">
               <input type="number" id="assentoCFMatricula" placeholder="Matrícula" style="min-width:120px;" />
               <select id="assentoCFCargo"></select>
@@ -1260,6 +1267,8 @@
 
           <hr />
 
+          <!-- só o nível geral (o servidor recusa os demais com exigirGeral); para os outros nem aparece -->
+          <div class="so-geral">
           <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Medidas Cautelares de Proteção Patrimonial (Art. 45)</h4>
           <p class="subtitle">
             Só o que o sistema controla de verdade vira ação (suspender o acesso da pessoa ao
@@ -1288,6 +1297,7 @@
           </form>
           <p id="resultadoCautelar"></p>
           <div class="rolagem-tabela"><div id="resultadoListaCautelares"></div></div>
+          </div>
         </div>
 
         <!-- CEI/Corte Suprema Eclesiástica (v3.1) — mesmo padrão do Conselho
@@ -1303,7 +1313,7 @@
             Requisitos do Art. 88 §2º (Oficial Superior/Presbítero 5+ anos, formação, reputação
             ilibada) são só orientativos — confira antes de conceder o assento.
           </p>
-          <form onsubmit="event.preventDefault(); salvarAssentoCEI();">
+          <form class="so-geral" onsubmit="event.preventDefault(); salvarAssentoCEI();">
             <div class="barra-lista">
               <input type="number" id="assentoCEIMatricula" placeholder="Matrícula" style="min-width:120px;" />
               <select id="assentoCEICargo"></select>
@@ -1468,6 +1478,8 @@
 
         <!-- SUB-ABA: BUSCAR PESSOAS -->
         <div id="subPessoasBuscar" class="sub-aba-secretaria" style="display:none;">
+          <!-- só o nível geral (o servidor recusa os demais com exigirGeral); para os outros nem aparece -->
+          <div class="so-geral">
           <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Importar Pessoas (planilha)</h4>
           <p class="subtitle" style="margin:0 0 8px;">Só Matrícula, Nome e Situação — o restante continua sendo preenchido
             manualmente no cadastro individual.</p>
@@ -1479,6 +1491,7 @@
           <p id="resultadoImportacaoPessoas"></p>
 
           <hr />
+          </div>
           <div class="barra-lista">
             <input type="text" id="pessoasBusca" placeholder="🔍 Buscar por nome ou matrícula" oninput="aplicarFiltroPessoas()" />
             <select id="pessoasFiltroCategoria" onchange="aplicarFiltroPessoas()">
@@ -1674,8 +1687,8 @@
 
       <!-- ABA: ÓRGÃOS -->
       <div id="abaOrgaos" class="aba-secretaria" style="display:none;">
-        <h3>Cadastrar / Editar Órgão</h3>
-        <form onsubmit="event.preventDefault(); salvarOrgao();">
+        <h3 class="so-geral">Cadastrar / Editar Órgão</h3>
+        <form class="so-geral" onsubmit="event.preventDefault(); salvarOrgao();">
           <input type="hidden" id="orgaoId" />
           <div class="input-group">
             <label>Sigla (ex: CLI):</label>
@@ -1708,7 +1721,7 @@
         <hr />
         <h3>Cadeiras (Assentos)</h3>
         <p class="subtitle">Quem ocupa cadeira institucional em cada órgão — é essa lista que a CLI usa pra saber quem participa dela por Função (Diretoria, Conselho Fiscal, CEI, Dirigente de Congregação...), além de quem já entra por Ordenação. Deixe a duração em branco pra cadeira sem prazo (ex: Dirigente); informe os meses do mandato pra cargo eletivo (ex: Tesoureiro) — o sistema para de contar a cadeira sozinho quando o prazo vence.</p>
-        <form onsubmit="event.preventDefault(); salvarAssento();">
+        <form class="so-geral" onsubmit="event.preventDefault(); salvarAssento();">
           <div class="barra-lista">
             <input type="number" id="assentoMatricula" placeholder="Matrícula" style="min-width:120px;" />
             <select id="assentoOrgao"></select>
@@ -1969,7 +1982,7 @@
             <textarea id="enquetePublicoMatriculas" rows="2"></textarea>
           </div>
           <div class="barra-lista">
-            <label class="opcao-checkbox"><input type="checkbox" id="enqueteVinculante" onchange="onChangeVinculanteEnquete()" /> Vinculante (eleição/reforma contestada)</label>
+            <label class="opcao-checkbox so-geral"><input type="checkbox" id="enqueteVinculante" onchange="onChangeVinculanteEnquete()" /> Vinculante (eleição/reforma contestada)</label>
             <select id="enqueteQuorumTipo" style="display:none;">
               <option value="MAIORIA_SIMPLES">Quórum: Maioria simples (&gt;50%)</option>
               <option value="DOIS_TERCOS">Quórum: Dois terços</option>
@@ -2423,7 +2436,7 @@
         <hr />
         <h4 style="margin:0 0 10px; color: var(--cor-primaria);">Consultar meu protocolo</h4>
         <div class="barra-lista">
-          <input type="text" id="consultaProtocolo" placeholder="Ex: OUV-2026-00001-a1b2" style="min-width:220px;" />
+          <input type="text" id="consultaProtocolo" placeholder="Ex: OUV-2026-K8UT-57SZ-479Y-5ZVB" style="min-width:260px;" autocomplete="off" spellcheck="false" />
           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="consultarProtocoloOuvidoriaAcao();">🔍 Consultar</button>
         </div>
         <p id="resultadoConsultaProtocolo"></p>
@@ -3442,8 +3455,8 @@
       <!-- ABA: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico, module-
            agnostic (shared/conquistas.js): catálogo/regras/tipos de evento
            administrados aqui exigem "conquistas_gestao"; o painel pessoal e
-           o ranking geral ficam em Meu Painel → Minhas Conquistas, abertos
-           a qualquer matrícula. -->
+           o ranking da própria turma/congregação ficam em Meu Painel → Minhas
+           Conquistas, abertos a qualquer matrícula. -->
       <div id="abaConquistas" class="aba-secretaria" style="display:none;">
         <h3>🏆 Conquistas — Catálogo, Regras e Ranking</h3>
         <p class="subtitle">Motor genérico de conquistas/pontuação (não é exclusivo da EBD — a EBD é só o
@@ -3498,6 +3511,8 @@
 
         <hr />
         <h4>Ranking por escopo</h4>
+        <p class="subtitle" style="margin:4px 0;">O escopo escolhido é sempre cruzado com o seu: turma, congregação ou área fora do
+          seu alcance aparecem vazias (o "Geral" mostra só quem está dentro do seu escopo, a não ser para quem tem o escopo de todas as congregações).</p>
         <div class="barra-lista">
           <select id="conqRankingEscopoTipoAdmin">
             <option value="GLOBAL">Geral (todo o Campo)</option>
@@ -3534,7 +3549,8 @@
         </div>
         <div id="painelCatalogoTrilhas"></div>
 
-        <details style="margin:8px 0;">
+        <!-- catálogo e requisitos valem para a igreja inteira: só o nível geral (GestaoTrilhas: exigirPoliticaGlobal) -->
+        <details class="so-geral" style="margin:8px 0;">
           <summary>➕ Nova trilha (escopo global)</summary>
           <div class="barra-lista">
             <input type="text" id="trilNovaNome" placeholder="Nome (ex: Professor de EBD)" style="min-width:220px;" />
@@ -3545,7 +3561,7 @@
           <textarea id="trilNovaDescricao" placeholder="Descrição (opcional)" rows="2" style="width:100%;"></textarea>
           <button class="btn-confirmar" style="width:auto;margin:8px 0;" onclick="criarTrilhaAcao()">💾 Criar trilha</button>
         </details>
-        <details style="margin:8px 0;">
+        <details class="so-geral" style="margin:8px 0;">
           <summary>🧩 Novo módulo de uma trilha (escopo global)</summary>
           <div class="barra-lista">
             <input type="number" id="trilModTrilhaId" placeholder="Id da trilha" style="max-width:140px;" />
@@ -3556,7 +3572,7 @@
             <button class="btn-confirmar" style="width:auto;margin:0;" onclick="adicionarModuloTrilhaAcao()">➕ Adicionar módulo</button>
           </div>
         </details>
-        <details style="margin:8px 0;">
+        <details class="so-geral" style="margin:8px 0;">
           <summary>🔗 Pré-requisitos (módulo→módulo e trilha→trilha)</summary>
           <p class="subtitle" style="margin:4px 0;">Módulo: o pré-requisito precisa ser da mesma trilha e vir <em>antes</em> (ordem menor).
             Trilha: só se matricula quem tem a trilha exigida vigente; ciclos são recusados.</p>
@@ -3572,7 +3588,7 @@
             <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="preRequisitoTrilhaAcao(true)">✂️ Remover</button>
           </div>
         </details>
-        <details style="margin:8px 0;">
+        <details class="so-geral" style="margin:8px 0;">
           <summary>⚙️ Ativar/desativar trilha ou módulo (escopo global)</summary>
           <div class="barra-lista">
             <input type="number" id="trilAtivaTrilhaId" placeholder="Id da trilha" style="max-width:140px;" />
@@ -3608,7 +3624,7 @@
           <strong>Alerta</strong> só avisa (não bloqueia culto). Vencida, revogada ou cancelada não cumpre.
           Alvo: nome do tipo de consagração (Consagração), Id do papel (Liderança) ou Id da equipe (Escala);
           deixe em branco nos demais.</p>
-        <div class="barra-lista">
+        <div class="barra-lista so-geral">
           <select id="trilReqContexto"></select>
           <input type="text" id="trilReqAlvo" placeholder="Alvo (se o contexto pedir)" style="min-width:200px;" />
           <input type="number" id="trilReqTrilhaId" placeholder="Id da trilha exigida" style="max-width:180px;" />
@@ -4474,9 +4490,9 @@
             (cupom físico, vendido a qualquer pessoa — o sistema só guarda os prêmios e quem
             ganhou depois do sorteio acontecer).</p>
 
-          <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="alternarFormNovaCampanha()">➕ Nova Campanha</button>
+          <button class="btn-confirmar btn-secundario so-geral" style="width:auto;" onclick="alternarFormNovaCampanha()">➕ Nova Campanha</button>
 
-          <div id="formNovaCampanha" style="display:none; margin-top:14px;">
+          <div id="formNovaCampanha" class="so-geral" style="display:none; margin-top:14px;">
             <div class="barra-lista">
               <input type="text" id="campanhaNome" placeholder="Nome da campanha (ex: Reforma do Templo)" style="min-width:260px;" />
             </div>
@@ -4546,7 +4562,7 @@
           <p class="subtitle">Valor de referência pra exigir 3 cotações (Reg. Art. 62):
             R$ <span id="valorReferenciaCotacoesTexto">—</span>
             <input type="number" id="novoValorReferenciaCotacoes" min="0.01" step="0.01" style="max-width:130px; display:none;" />
-            <button class="btn-link" onclick="alternarEdicaoValorReferenciaCotacoes()" id="btnEditarValorReferencia">editar</button>
+            <button class="btn-link so-geral" onclick="alternarEdicaoValorReferenciaCotacoes()" id="btnEditarValorReferencia">editar</button>
           </p>
           <div class="barra-lista">
             <select id="saidaFiltroCongregacao"></select>
@@ -4648,6 +4664,7 @@
             <button class="btn-confirmar btn-secundario" style="width:auto;" onclick="gerarRemessaBancariaAcao()">➕ Gerar Remessa com Solicitações Aprovadas</button>
           </div>
           <p id="resultadoNovaRemessa" class="subtitle"></p>
+          <div id="resultadoNovaRemessaBarrados"></div>
           <div class="rolagem-tabela"><div id="resultadoRemessas"></div></div>
           <div id="detalheRemessa" style="margin-top:18px;"></div>
           </div>
@@ -4772,6 +4789,8 @@
 
           <hr style="margin:24px 0;" />
 
+          <!-- só o nível geral (o servidor recusa os demais com exigirGeral); para os outros nem aparece -->
+          <div class="so-geral">
           <h3>💰 Fundo de Execução Estratégica</h3>
           <p class="subtitle">Dotação obrigatória de 10% da arrecadação líquida da Geral (Art.
             27) — calculado sozinho, nunca um saldo digitado. Suspender/reativar é ação
@@ -4783,13 +4802,14 @@
             <button class="btn-link" onclick="reativarFundoPdqAcao()">Reativar</button>
           </div>
           <p id="resultadoAcaoFundoPdq" class="subtitle"></p>
+          </div>
 
           <hr style="margin:24px 0;" />
 
           <h3>🗂️ Comissão de Acompanhamento de Projetos (PMO)</h3>
           <p class="subtitle">Monitora o cronograma físico/financeiro do PDQ e reporta
             trimestralmente à CLI (Art. 30).</p>
-          <div class="barra-lista">
+          <div class="barra-lista so-geral">
             <input type="number" id="pmoMatricula" placeholder="Matrícula" style="max-width:180px;" />
             <button class="btn-confirmar" style="width:auto;margin:0;" onclick="adicionarMembroPMO()">➕ Adicionar</button>
           </div>
@@ -4941,6 +4961,8 @@
 
           <hr style="margin:24px 0;" />
 
+          <!-- só o nível geral (o servidor recusa os demais com exigirGeral); para os outros nem aparece -->
+          <div class="so-geral">
           <h4 style="color: var(--cor-primaria);">Alienação de Bens (Alçada Patrimonial)</h4>
           <div class="input-group"><label>Bem:</label><select id="alienacaoBemId"></select></div>
           <div class="input-group"><label>Valor proposto (R$):</label><input type="number" id="alienacaoValorProposto" step="0.01" min="0" /></div>
@@ -4959,6 +4981,7 @@
           <button class="btn-confirmar" style="width:auto;" onclick="salvarDocumentoBemAcao()">📎 Registrar documento</button>
           <p id="resultadoDocumentoBem" class="subtitle"></p>
           <div class="rolagem-tabela"><div id="resultadoDocumentosBens"></div></div>
+          </div>
 
           <hr style="margin:24px 0;" />
 
@@ -4971,6 +4994,7 @@
 
           <hr style="margin:24px 0;" />
 
+          <div class="so-geral">
           <h4 style="color: var(--cor-primaria);">Casa Pastoral (Reg. Art. 115)</h4>
           <div class="input-group"><label>Casa Pastoral (bem):</label><select id="casaBemId"></select></div>
           <div class="input-group"><label>Congregação:</label><select id="casaCongregacao"></select></div>
@@ -4979,6 +5003,7 @@
           <button class="btn-confirmar" style="width:auto;" onclick="salvarOcupacaoCasaPastoralAcao()">🏠 Registrar ocupação</button>
           <p id="resultadoCasaPastoralAcao" class="subtitle"></p>
           <div class="rolagem-tabela"><div id="resultadoCasaPastoral"></div></div>
+          </div>
         </div>
 
         <!-- SUB-ABA: FROTA DE VEÍCULOS (v4.23) -->

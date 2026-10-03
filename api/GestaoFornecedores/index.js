@@ -25,6 +25,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const prebenda = require("../shared/prebenda");
 const { fornecedorParaAuditoria, idOpcional } = require("../shared/financeiro1Util");
+const { comConflito } = require("../shared/violacaoUnica");
 
 const TIPOS = ["PF", "PJ"];
 const CAMPOS_BANCARIOS = ["banco", "agencia", "conta", "tipoConta", "chavePix"];
@@ -47,7 +48,9 @@ function linhaMinima(l) {
 // Fornecedor que é prebendado (pastor): fora da vista de quem não é geral.
 const SEM_PREBENDADOS = `NOT EXISTS (SELECT 1 FROM Prebendados pb WHERE pb.FornecedorId = f.FornecedorId)`;
 
-module.exports = async function (context, req) {
+// O CPF/CNPJ do fornecedor é único também no banco (restrição UNIQUE desde a migração 052): dois cadastros ao mesmo tempo furam a conferência "já existe um fornecedor", e o
+// perdedor recebe o 409 em vez de um 500.
+module.exports = comConflito(async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "financeiro");
   if (!usuario) return;
   const geral = ehGeral(usuario);
@@ -201,4 +204,4 @@ module.exports = async function (context, req) {
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Fornecedor atualizado.${aviso}` } };
     return;
   }
-};
+}, "Já existe um fornecedor cadastrado com esse CPF/CNPJ.");

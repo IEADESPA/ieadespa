@@ -44,8 +44,11 @@ module.exports = async function (context, req) {
   await pool.request().input("id", sql.Int, membroId).input("senhaHash", sql.NVarChar(200), senhaHash)
     .query(`UPDATE Lideranca SET SenhaHash = @senhaHash WHERE MembroId = @id`);
 
-  // Nunca grava a senha (nem hash) no AuditLog — só o fato de que ela mudou.
-  await registrarAuditoria({ tabela: "Lideranca", registroId: membroId, acao: "Trocou a própria senha", usuarioId: membroId });
+  // v7.6 — senha nova derruba as OUTRAS sessões abertas (um aparelho esquecido, ou quem tinha a senha antiga, sai na hora); a sessão de quem trocou continua.
+  const derrubadas = await auth.revogarSessoesDoMembro(pool, sql, membroId, { exceto: usuario.sid });
 
-  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Senha alterada." } };
+  // Nunca grava a senha (nem hash) no AuditLog — só o fato de que ela mudou.
+  await registrarAuditoria({ tabela: "Lideranca", registroId: membroId, acao: "Trocou a própria senha", usuarioId: membroId, dadosDepois: { outrasSessoesEncerradas: derrubadas } });
+
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: derrubadas > 0 ? `✅ Senha alterada. ${derrubadas} outra(s) sessão(ões) aberta(s) foram encerradas.` : "✅ Senha alterada.", outrasSessoesEncerradas: derrubadas } };
 };

@@ -101,7 +101,7 @@ async function anexarInfracoesEPrazo(pool, sql, processos) {
 // visível pra quem abriu/opera o processo no mesmo instante (Abrir/Evoluir
 // devolvem o dado cru) — a redação só se aplica na listagem geral.
 function redigirSeSigiloso(processos, usuario) {
-  const podeVerTudo = usuario.permissoes.includes("cei");
+  const podeVerTudo = require("./auth").temPermissao(usuario, "cei");
   return processos.map(p => {
     if (!p.sigiloso || podeVerTudo || Number(usuario.membroId) === Number(p.relatorMembroId)) return p;
     return Object.assign({}, p, {

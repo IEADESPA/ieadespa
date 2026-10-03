@@ -35,6 +35,7 @@ const es = require("../shared/escalas");
 const trilhas = require("../shared/trilhas");
 const cal = require("../shared/calendario");
 const vdb = require("../shared/voluntariadoDb");
+const adesaoMenor = require("../shared/adesaoMenor");
 const { isoInstante } = require("../shared/canaisDb");
 const { enviarCanaisNotificacao } = require("../shared/notificacaoMotor");
 
@@ -50,7 +51,7 @@ async function nomeCongregacao(pool, congregacaoId) {
 }
 
 async function podeGerenciarCongregacao(pool, usuario, congregacaoId) {
-  if (!usuario.permissoes || !usuario.permissoes.includes("escalas")) return false;
+  if (!auth.temPermissao(usuario, "escalas")) return false;
   const nome = await nomeCongregacao(pool, congregacaoId);
   return !!nome && auth.estaNoEscopo(usuario, nome);
 }
@@ -65,7 +66,7 @@ async function ehLiderOuAdmin(pool, usuario, equipe) {
   if (!equipe) return false;
   // O líder removido da própria equipe (Art. 133-D) perde os poderes de líder dela até ser reintegrado.
   if (await vdb.liderAtivo(pool, { equipe, membroId: usuario.membroId })) return true;
-  return !!(usuario.permissoes && usuario.permissoes.includes("escalas")) && auth.estaNoEscopo(usuario, equipe.congregacaoNome);
+  return auth.temPermissao(usuario, "escalas") && auth.estaNoEscopo(usuario, equipe.congregacaoNome);
 }
 
 // Texto livre que vai para coluna de tamanho fixo: recusa o que não é texto ou passa do limite (antes estourava o banco e virava erro 500).
@@ -83,8 +84,11 @@ function inteiroEntre(valor, min, max) {
 }
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirLogin(req, context);
-  if (!usuario) return;
+  const sessao = auth.exigirLogin(req, context);
+  if (!sessao) return;
+  // v7.6 — escopo, nível e departamento conferidos adiante são os da permissão escalas (a visão só com as concessões que a têm; ver shared/auth.js,
+  // "Concessões"), não o somado de outro cargo ou delegação. Sem a permissão, a sessão inteira (quem usa a rota como aluno, professor, membro...).
+  const usuario = auth.visaoDaPermissao(sessao, "escalas") || sessao;
 
   const pool = await getPool();
   const acao = context.bindingData.acao;
@@ -235,6 +239,11 @@ module.exports = async function (context, req) {
       if (Number(alocacao.membroId) !== Number(usuario.membroId)) return erro(context, 403, "Este convite não é seu.");
       // Só responde quem ainda está convidado ou aceito: recusar de novo (ou uma escala cancelada) reenviaria o convite em cadeia ao próximo da fila.
       if (!["CONVIDADO", "ACEITO"].includes(alocacao.status)) return erro(context, 422, "Este convite já foi respondido ou a escala foi cancelada.");
+      // 03/10/2026: menor sem adesão que valha (nunca dada, ou suspensa: ficou sem responsável ativo) não ACEITA escala; recusar continua livre.
+      if (resposta === "ACEITO") {
+        const semAdesao = await adesaoMenor.menoresSemAdesaoVigente(pool, [alocacao.membroId]);
+        if (semAdesao.has(Number(alocacao.membroId))) return erro(context, 422, semAdesao.get(Number(alocacao.membroId)));
+      }
       await es.responderConvite(pool, alocacaoId, resposta);
 
       // Convite em cadeia: recusou, convida automaticamente o próximo
@@ -276,6 +285,8 @@ module.exports = async function (context, req) {
       const alocacao = await es.buscarAlocacao(pool, alocacaoId);
       if (!alocacao) return erro(context, 404, "Alocação não encontrada.");
       if (Number(alocacao.membroId) !== Number(usuario.membroId)) return erro(context, 403, "Esta alocação não é sua.");
+      const semAdesao = await adesaoMenor.menoresSemAdesaoVigente(pool, [alocacao.membroId]);       // 03/10/2026: idem ao aceitar
+      if (semAdesao.has(Number(alocacao.membroId))) return erro(context, 422, semAdesao.get(Number(alocacao.membroId)));
       await es.confirmarRecebimento(pool, alocacaoId);
       context.res = { status: 200, body: { sucesso: true, mensagem: "✅ Recebimento confirmado." } };
       return;
@@ -342,6 +353,8 @@ module.exports = async function (context, req) {
         // v6.9 — o destino da troca também precisa atender à formação que a equipe exige.
         const formacao = await trilhas.filtrarMembrosQueAtendem(pool, { contexto: "ESCALA_EQUIPE", alvoChave: String(alocacao.equipeId), membroIds: [membroDestinoId] });
         if (formacao.bloqueados.has(Number(membroDestinoId))) return erro(context, 422, formacao.bloqueados.get(Number(membroDestinoId)));
+        const destinoSemAdesao = await adesaoMenor.menoresSemAdesaoVigente(pool, [destinoId]);     // 03/10/2026: menor sem adesão que valha não assume escala
+        if (destinoSemAdesao.has(destinoId)) return erro(context, 422, destinoSemAdesao.get(destinoId));
         const trocaId = await es.criarTroca(pool, { alocacaoOrigemId, membroDestinoId, solicitadaPorMembroId: usuario.membroId });
         context.res = { status: 201, body: { sucesso: true, trocaId, mensagem: "✅ Pedido de troca enviado ao líder da equipe." } };
         return;
@@ -365,6 +378,11 @@ module.exports = async function (context, req) {
       if (!troca) return erro(context, 404, "Troca não encontrada.");
       const equipe = await es.buscarEquipe(pool, troca.equipeId);
       if (!(await ehLiderOuAdmin(pool, usuario, equipe))) return erro(context, 403, "Só o líder da equipe pode aprovar/recusar trocas.");
+      // 03/10/2026: entre o pedido e a aprovação o destino pode ter ficado sem adesão que valha (menor cujo último responsável foi revogado): não aprova.
+      if (aprovar && troca.status === "PENDENTE") {
+        const destinoSemAdesao = await adesaoMenor.menoresSemAdesaoVigente(pool, [troca.membroDestinoId]);
+        if (destinoSemAdesao.has(Number(troca.membroDestinoId))) return erro(context, 422, `Não dá para aprovar: ${destinoSemAdesao.get(Number(troca.membroDestinoId))}`);
+      }
       const resultado = await es.decidirTroca(pool, { trocaId, aprovar, observacao, decididoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;

@@ -4,26 +4,37 @@
 // Congregações do cenário: "A" (o escopo do usuário local) e "B" (de fora). Pessoas: 40 (A), 41 (B), 42 (sem congregação), 43 (A, desligada).
 let mockRegras = [];
 let mockConsultas = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
-    mockConsultas.push({ sql: texto, inputs: { ...inputs } });
+let mockTransacoes = [];
+// sql.Transaction / sql.Request(transacao): cada consulta guarda em que transação rodou (null = fora de transação), e a transação guarda como terminou.
+jest.mock("../db", () => {
+  const novoRequest = (transacao) => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+    mockConsultas.push({ sql: texto, inputs: { ...inputs }, transacao: transacao ? transacao.id : null });
     for (const [padrao, valor, afetadas] of mockRegras) {
       if (padrao.test(texto)) {
         return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [typeof afetadas === "function" ? afetadas(inputs) : (afetadas === undefined ? 0 : afetadas)] };
       }
     }
     return { recordset: [], rowsAffected: [0] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+  } }; return r; };
+  class Transaction {
+    constructor() { this.id = mockTransacoes.length + 1; this.estado = "nova"; mockTransacoes.push(this); }
+    async begin() { this.estado = "aberta"; }
+    async commit() { this.estado = "confirmada"; }
+    async rollback() { this.estado = "desfeita"; }
+  }
+  return {
+    getPool: async () => ({ request: () => novoRequest(null) }),
+    sql: new Proxy({}, { get: (_alvo, chave) => (chave === "Transaction" ? Transaction : chave === "Request" ? function (t) { return novoRequest(t); } : () => undefined) })
+  };
+});
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
 jest.mock("../mediacaoArbitragem", () => ({ registrarAceiteClausulaCompromissoria: jest.fn(async () => 8) }));
 jest.mock("../batismo", () => ({ ...jest.requireActual("../batismo"), registrarAceiteEstatuto: jest.fn(async () => 7) }));
 
 const auth = require("../auth");
 const er = require("../escopoRotas");
-const { registrarAuditoria } = require("../auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../auditoria");
 const vacancia = require("../vacancia");
 const { hojeBrasilia } = require("../dataBrasilia");
 const abandonoDigital = require("../abandonoDigital");
@@ -76,7 +87,9 @@ const PESSOAS = {
 beforeEach(() => {
   mockRegras = [];
   mockConsultas = [];
+  mockTransacoes = [];
   registrarAuditoria.mockClear();
+  registrarAuditoriaNaTransacao.mockClear();
   vacancia.encerrarVinculos.mockClear();
   // carregarPessoa (shared/escopoRotas.js): a pessoa pela matrícula, com congregação e extensão.
   quando(/AS CongregacaoNome/, (i) => (PESSOAS[i.id] ? [{ ...PESSOAS[i.id] }] : []));
@@ -222,14 +235,35 @@ describe("AbrirProcedimentoAbandono", () => {
   };
   const abrir = (token, corpo) => chamar(hAbrirProc, { token, corpo });
 
-  test("dentro do escopo: abre o procedimento Material com a data DO SERVIDOR, mesmo que o cliente mande outra", async () => {
+  test("dentro do escopo: abre o procedimento Material com a data DO SERVIDOR, mesmo que o cliente mande outra, grava QUEM abriu e audita na mesma transação", async () => {
     preparar();
     const r = await abrir(local(["disciplina"]), { membroId: 40, tipo: "MATERIAL", dataNotificacao: "2020-01-01" });
     expect(r.status).toBe(201);
     const ins = rodou(/INSERT INTO ProcedimentosAbandono/);
     expect(ins).toHaveLength(1);
-    expect(ins[0].inputs).toMatchObject({ membroId: 40, tipo: "MATERIAL", dataNotificacao: HOJE });
-    expect(registrarAuditoria).toHaveBeenCalledTimes(1);
+    expect(ins[0].inputs).toMatchObject({ membroId: 40, tipo: "MATERIAL", dataNotificacao: HOJE, abertoPor: 5, tentativaId: null });
+    expect(ins[0].transacao).toBe(1);
+    expect(mockTransacoes.map(t => t.estado)).toEqual(["confirmada"]);
+    expect(registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);
+    expect(registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
+    // a verificação de "já existe procedimento aberto" é feita dentro da transação, com trava
+    expect(rodou(/SELECT TOP 1 ProcedimentoId FROM ProcedimentosAbandono WITH \(UPDLOCK, HOLDLOCK\)/)[0].transacao).toBe(1);
+  });
+  test("procedimento já aberto para o membro: a transação é desfeita e nada é gravado", async () => {
+    preparar();
+    mockRegras = mockRegras.filter(([p]) => !/SELECT TOP 1 ProcedimentoId/.test(p.source));
+    quando(/SELECT TOP 1 ProcedimentoId FROM ProcedimentosAbandono/, [{ ProcedimentoId: 3 }]);
+    const r = await abrir(local(["disciplina"]), { membroId: 40 });
+    expect(r.body).toEqual({ sucesso: false, mensagem: "Já existe um procedimento em aberto (notificado) para este membro." });
+    expect(escritas()).toHaveLength(0);
+    expect(mockTransacoes.map(t => t.estado)).toEqual(["desfeita"]);
+  });
+  test("edital com data futura é recusado (o prazo também conta do edital)", async () => {
+    preparar();
+    const r = await abrir(local(["disciplina"]), { membroId: 40, dataEdital: diasAtras(-3) });
+    expect(r.status).toBe(400);
+    expect(mockConsultas).toHaveLength(0);
+    expect((await abrir(local(["disciplina"]), { membroId: 40, dataEdital: diasAtras(2) })).status).toBe(201);
   });
   test("membro FORA do escopo (ou sem congregação, inexistente, malformado): a mesma resposta, e nem a elegibilidade é consultada nem nada é gravado", async () => {
     preparar();
@@ -242,16 +276,53 @@ describe("AbrirProcedimentoAbandono", () => {
   test("Digital: fora do escopo é a mesma recusa, sem consultar as tentativas", async () => {
     preparar();
     quando(/MIN\(DataTentativa\)/, [{ Primeira: "2026-01-01", Ultima: "2026-02-01", CanaisDistintos: 2 }]);
-    expect(await abrir(local(["disciplina"]), { membroId: 41, tipo: "DIGITAL" })).toEqual(NAO_ENCONTRADA);
+    expect(await abrir(local(["disciplina"]), { membroId: 41, tipo: "DIGITAL", canalNotificacaoId: 3 })).toEqual(NAO_ENCONTRADA);
     expect(rodou(/MIN\(DataTentativa\)/)).toHaveLength(0);
     expect(escritas()).toHaveLength(0);
   });
-  test("Digital dentro do escopo: a notificação é a tentativa mais recente (não uma data enviada pelo cliente)", async () => {
+  const prepararDigital = () => {
     preparar();
     quando(/MIN\(DataTentativa\)/, [{ Primeira: "2026-01-01", Ultima: "2026-02-01", CanaisDistintos: 2 }]);
-    const r = await abrir(local(["disciplina"]), { membroId: 40, tipo: "DIGITAL", dataNotificacao: HOJE });
+    quando(/FROM CanaisOficiaisComunicacao WHERE CanalId = @id/, (i) => (i.id === 3 ? [{ CanalId: 3, Ativo: 1, Plataforma: "EMAIL", Categoria: "INSTITUCIONAL" }] : (i.id === 4 ? [{ CanalId: 4, Ativo: 1, Plataforma: "WHATSAPP_GRUPO", Categoria: "INSTITUCIONAL" }] : [])));
+    quando(/INSERT INTO TentativasContatoAbandono/, [{ TentativaId: 88 }]);
+  };
+  test("Digital dentro do escopo: abrir REGISTRA a notificação final (tentativa de hoje, no canal escolhido) e o prazo conta de HOJE — não da última tentativa", async () => {
+    prepararDigital();
+    const r = await abrir(local(["disciplina"]), { membroId: 40, tipo: "DIGITAL", dataNotificacao: "2026-02-01", canalNotificacaoId: 3 });
     expect(r.status).toBe(201);
-    expect(rodou(/INSERT INTO ProcedimentosAbandono/)[0].inputs.dataNotificacao).toBe("2026-02-01");
+    const tentativa = rodou(/INSERT INTO TentativasContatoAbandono/);
+    expect(tentativa).toHaveLength(1);
+    expect(tentativa[0].inputs).toMatchObject({ membroId: 40, canalId: 3, dataTentativa: HOJE, registradoPor: 5 });
+    expect(tentativa[0].inputs.observacao).toMatch(/Notificação final/);
+    const ins = rodou(/INSERT INTO ProcedimentosAbandono/)[0];
+    expect(ins.inputs).toMatchObject({ dataNotificacao: HOJE, tentativaId: 88, abertoPor: 5 });
+    expect(tentativa[0].transacao).toBe(1);
+    expect(ins.transacao).toBe(1);
+    expect(mockTransacoes.map(t => t.estado)).toEqual(["confirmada"]);
+  });
+  test("Digital: o banco devolve as datas das tentativas como objeto Date — a elegibilidade tem de funcionar assim (antes dava null e nunca ficava elegível)", async () => {
+    prepararDigital();
+    mockRegras.unshift([/MIN\(DataTentativa\)/, [{ Primeira: new Date(`${diasAtras(120)}T00:00:00Z`), Ultima: new Date(`${diasAtras(100)}T00:00:00Z`), CanaisDistintos: 2 }]]);
+    const r = await abrir(local(["disciplina"]), { membroId: 40, tipo: "DIGITAL", canalNotificacaoId: 3 });
+    expect(r.status).toBe(201);
+    const e = await abandonoDigital.elegibilidadeAbandonoDigital({ request: () => ({ input() { return this; }, query: async () => ({ recordset: [{ Primeira: new Date(`${diasAtras(120)}T00:00:00Z`), Ultima: new Date(`${diasAtras(100)}T00:00:00Z`), CanaisDistintos: 2 }] }) }) }, { Int: null });
+    expect(e).toMatchObject({ elegivel: true, diasDesdePrimeira: 120, ultimaTentativa: diasAtras(100) });
+  });
+  test("Digital sem o canal da notificação final: 400 sem tocar no banco; canal de grupo ou inexistente: recusado, nada gravado", async () => {
+    prepararDigital();
+    expect((await abrir(local(["disciplina"]), { membroId: 40, tipo: "DIGITAL" })).status).toBe(400);
+    expect((await abrir(local(["disciplina"]), { membroId: 40, tipo: "DIGITAL", canalNotificacaoId: "abc" })).status).toBe(400);
+    expect(mockConsultas).toHaveLength(0);
+    for (const canalNotificacaoId of [4, 99]) expect((await abrir(local(["disciplina"]), { membroId: 40, tipo: "DIGITAL", canalNotificacaoId })).body.sucesso).toBe(false);
+    expect(escritas()).toHaveLength(0);
+    expect(mockTransacoes).toHaveLength(0);
+  });
+  test("falha no meio da abertura Digital (depois da notificação gravada): a transação é desfeita e o erro sobe", async () => {
+    prepararDigital();
+    mockRegras.unshift([/INSERT INTO ProcedimentosAbandono/, () => { throw new Error("falha simulada"); }]);
+    await expect(abrir(local(["disciplina"]), { membroId: 40, tipo: "DIGITAL", canalNotificacaoId: 3 })).rejects.toThrow("falha simulada");
+    expect(mockTransacoes.map(t => t.estado)).toEqual(["desfeita"]);
+    expect(registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
   });
   test("o geral abre para qualquer congregação", async () => {
     preparar();
@@ -287,11 +358,22 @@ describe("EvoluirProcedimentoAbandono", () => {
     6: { MembroId: 41, Tipo: "MATERIAL", Status: "NOTIFICADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: null },
     7: { MembroId: 43, Tipo: "MATERIAL", Status: "NOTIFICADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: null },
     8: { MembroId: 40, Tipo: "MATERIAL", Status: "HOMOLOGADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: HOJE },
-    9: { MembroId: 40, Tipo: "DIGITAL", Status: "NOTIFICADO", DataNotificacao: HOJE, PrazoDias: 15, DataHomologacao: null }
+    9: { MembroId: 40, Tipo: "DIGITAL", Status: "NOTIFICADO", DataNotificacao: HOJE, PrazoDias: 15, DataHomologacao: null },
+    // aberto pelo geral de matrícula 1 (o mesmo token `geral` dos testes) — regra dos dois olhos
+    10: { MembroId: 40, Tipo: "MATERIAL", Status: "NOTIFICADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: null, AbertoPor: 1, AbertoEmBrasilia: "2020-01-01" },
+    11: { MembroId: 40, Tipo: "MATERIAL", Status: "NOTIFICADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: null, AbertoPor: 2, AbertoEmBrasilia: "2020-01-01" },
+    // Digital antigo: a notificação herdou a data da última tentativa (velha), mas o procedimento foi aberto há 5 dias — a defesa ainda corre
+    12: { MembroId: 40, Tipo: "DIGITAL", Status: "NOTIFICADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: null, AbertoPor: null, AbertoEmBrasilia: diasAtras(5) },
+    // edital publicado há 3 dias: o prazo conta dele
+    13: { MembroId: 40, Tipo: "MATERIAL", Status: "NOTIFICADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: null, AbertoPor: null, AbertoEmBrasilia: "2020-01-01", DataEdital: diasAtras(3) }
   };
   const NAO_ENCONTRADO = { status: 200, body: { sucesso: false, mensagem: "Procedimento não encontrado." } };
-  const preparar = ({ afetadasHomologar = 1, afetadasArquivar = 1 } = {}) => {
+  const preparar = ({ afetadasHomologar = 1, afetadasArquivar = 1, statusTravado = null } = {}) => {
     quando(/FROM ProcedimentosAbandono WHERE ProcedimentoId = @id/, (i) => (PROCEDIMENTOS[i.id] ? [{ ...PROCEDIMENTOS[i.id] }] : []));
+    // a releitura com trava, dentro da transação da homologação
+    quando(/FROM ProcedimentosAbandono WITH \(UPDLOCK, HOLDLOCK\) WHERE ProcedimentoId = @id/, (i) => (PROCEDIMENTOS[i.id] ? [{ Status: statusTravado || PROCEDIMENTOS[i.id].Status, MembroId: PROCEDIMENTOS[i.id].MembroId }] : []));
+    quando(/SELECT Status FROM MembroReferencia WITH \(UPDLOCK, HOLDLOCK\)/, (i) => (PESSOAS[i.id] ? [{ Status: PESSOAS[i.id].Status }] : []));
+    quando(/FROM Lideranca l JOIN Papeis p/, (i) => [{ MembroId: 2, Nome: "Secretário Geral" }, { MembroId: 1, Nome: "Presidente" }].filter(x => x.MembroId !== i.exceto));
     quando(/UPDATE ProcedimentosAbandono SET Status = 'HOMOLOGADO'/, [], afetadasHomologar);
     quando(/UPDATE ProcedimentosAbandono SET Status = 'ARQUIVADO'/, [], afetadasArquivar);
     quando(/UPDATE ProcedimentosAbandono SET RecursoInterposto/, [], 1);
@@ -312,7 +394,7 @@ describe("EvoluirProcedimentoAbandono", () => {
       expect((await evoluir(localComEscopoTodas(["disciplina"]), 5, { acao })).status).toBe(403);
       expect(mockConsultas).toHaveLength(0);
     });
-    test("o geral homologa: grava o procedimento, desliga o membro, encerra os vínculos e audita", async () => {
+    test("o geral homologa: grava o procedimento, desliga o membro, encerra os vínculos e audita — tudo numa transação só", async () => {
       preparar();
       const r = await evoluir(geral(["disciplina"]), 5, { acao: "HOMOLOGAR" });
       expect(r.status).toBe(200);
@@ -323,7 +405,27 @@ describe("EvoluirProcedimentoAbandono", () => {
       expect(homologou[0].inputs).toMatchObject({ id: 5, homologadoPor: 1 });
       expect(rodou(/UPDATE MembroReferencia SET Status = 'DESLIGADO'/)[0].inputs).toMatchObject({ id: 40, motivoSaida: "ABANDONO_MATERIAL" });
       expect(vacancia.encerrarVinculos).toHaveBeenCalledTimes(1);
-      expect(registrarAuditoria).toHaveBeenCalledTimes(1);
+      expect(registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);
+      expect(registrarAuditoria).not.toHaveBeenCalled();
+      // a mesma transação para tudo, e confirmada
+      expect(mockTransacoes.map(t => t.estado)).toEqual(["confirmada"]);
+      for (const c of escritas()) expect(c.transacao).toBe(1);
+      expect(rodou(/FROM ProcedimentosAbandono WITH \(UPDLOCK, HOLDLOCK\)/)[0].transacao).toBe(1);
+      expect(registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
+      // a vacância recebe um "pool" cujo request() roda DENTRO da transação
+      const poolDaVacancia = vacancia.encerrarVinculos.mock.calls[0][0];
+      await poolDaVacancia.request().query("UPDATE Assentos SET DataFim = 1");
+      expect(rodou(/UPDATE Assentos/)[0].transacao).toBe(1);
+    });
+    test("o prazo de recurso (30 dias) vence também quando a data chega do banco como objeto Date (antes nunca vencia)", async () => {
+      preparar();
+      PROCEDIMENTOS[14] = { MembroId: 40, Tipo: "MATERIAL", Status: "HOMOLOGADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: new Date(`${diasAtras(40)}T00:00:00Z`) };
+      const r = await evoluir(geral(["disciplina"]), 14, { acao: "RECURSO" });
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.mensagem).toMatch(/Prazo de recurso/);
+      PROCEDIMENTOS[14].DataHomologacao = new Date(`${diasAtras(10)}T00:00:00Z`);
+      expect((await evoluir(geral(["disciplina"]), 14, { acao: "RECURSO" })).body.sucesso).toBe(true);
+      delete PROCEDIMENTOS[14];
     });
     test("o geral registra o recurso de um procedimento homologado", async () => {
       preparar();
@@ -344,6 +446,60 @@ describe("EvoluirProcedimentoAbandono", () => {
       expect(rodou(/UPDATE MembroReferencia/)).toHaveLength(0);
       expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
       expect(registrarAuditoria).not.toHaveBeenCalled();
+      expect(registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+      expect(mockTransacoes.map(t => t.estado)).toEqual(["desfeita"]);
+    });
+    test("a releitura COM TRAVA já encontra o procedimento homologado (outra homologação terminou enquanto esta esperava): desfaz sem gravar nada", async () => {
+      preparar({ statusTravado: "HOMOLOGADO" });
+      const r = await evoluir(geral(["disciplina"]), 5, { acao: "HOMOLOGAR" });
+      expect(r.body.mensagem).toMatch(/já foi homologado ou arquivado/);
+      expect(escritas()).toHaveLength(0);
+      expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+      expect(mockTransacoes.map(t => t.estado)).toEqual(["desfeita"]);
+    });
+    test.each([
+      ["no desligamento do membro", () => mockRegras.unshift([/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, () => { throw new Error("falha simulada"); }])],
+      ["na vacância (assentos/liderança)", () => vacancia.encerrarVinculos.mockImplementationOnce(async () => { throw new Error("falha simulada"); })],
+      ["na trilha de auditoria", () => registrarAuditoriaNaTransacao.mockImplementationOnce(async () => { throw new Error("falha simulada"); })]
+    ])("falha %s: a transação inteira é desfeita (nada fica pela metade) e o erro sobe", async (_onde, quebrar) => {
+      preparar();
+      quebrar();
+      await expect(evoluir(geral(["disciplina"]), 5, { acao: "HOMOLOGAR" })).rejects.toThrow("falha simulada");
+      expect(mockTransacoes.map(t => t.estado)).toEqual(["desfeita"]);
+      for (const c of escritas()) expect(c.transacao).toBe(1);                              // nada foi gravado fora da transação desfeita
+    });
+    test("regra dos dois olhos: quem ABRIU não homologa — a recusa diz quem pode, e nada é gravado", async () => {
+      preparar();
+      const r = await evoluir(geral(["disciplina"]), 10, { acao: "HOMOLOGAR" });
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.mensagem).toMatch(/Quem abriu o procedimento não pode homologá-lo/);
+      expect(r.body.mensagem).toMatch(/Pode homologar: Secretário Geral/);
+      expect(r.body.quemPodeHomologar).toEqual(["Secretário Geral"]);
+      expect(rodou(/FROM Lideranca l JOIN Papeis p/)[0].sql).toMatch(/p\.Nivel = 'GLOBAL' AND l\.EscopoTipo = 'GLOBAL'/);
+      expect(escritas()).toHaveLength(0);
+      expect(mockTransacoes).toHaveLength(0);
+    });
+    test("regra dos dois olhos: sem mais ninguém com a homologação, a recusa diz isso (sem exceção silenciosa)", async () => {
+      preparar();
+      mockRegras.unshift([/FROM Lideranca l JOIN Papeis p/, []]);
+      const r = await evoluir(geral(["disciplina"]), 10, { acao: "HOMOLOGAR" });
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.mensagem).toMatch(/ninguém mais tem a homologação/);
+      expect(escritas()).toHaveLength(0);
+    });
+    test("outra pessoa do geral homologa o que foi aberto por alguém; procedimento antigo (sem quem abriu) segue homologável", async () => {
+      preparar();
+      expect((await evoluir(geral(["disciplina"]), 11, { acao: "HOMOLOGAR" })).body.sucesso).toBe(true);
+      expect((await evoluir(geral(["disciplina"]), 5, { acao: "HOMOLOGAR" })).body.sucesso).toBe(true);
+    });
+    test("o prazo conta do último marco: Digital antigo aberto há 5 dias (notificação herdada de anos atrás) e edital de 3 dias atrás ainda estão em prazo", async () => {
+      preparar();
+      const digital = await evoluir(geral(["disciplina"]), 12, { acao: "HOMOLOGAR" });
+      expect(digital.body.sucesso).toBe(false);
+      expect(digital.body.mensagem).toMatch(new RegExp(`contados de ${diasAtras(5)}.*a partir de ${diasAtras(-10)}`));
+      const edital = await evoluir(geral(["disciplina"]), 13, { acao: "HOMOLOGAR" });
+      expect(edital.body.mensagem).toMatch(new RegExp(`contados de ${diasAtras(3)}`));
+      expect(escritas()).toHaveLength(0);
     });
     test("membro que já está desligado: recusa, nada é gravado", async () => {
       preparar();
@@ -434,6 +590,26 @@ describe("ListarProcedimentosAbandono", () => {
     preparar();
     const r = await chamar(hListarProc, { metodo: "GET", token: geral(["disciplina"]) });
     expect(r.body.map(p => p.procedimentoId)).toEqual([1, 2, 3]);
+  });
+  test("prazo pelo último marco (abertura/edital) e quem abriu: `abertoPorMim` esconde o Homologar de quem abriu; a data de abertura não sai na resposta", async () => {
+    quando(/FROM ProcedimentosAbandono pa/, [
+      linha(1, 40, "A", { abertoPor: 1, abertoPorNome: "Presidente", abertoEmBrasilia: "2020-01-01" }),
+      linha(2, 40, "A", { abertoPor: 2, abertoEmBrasilia: diasAtras(5) }),
+      linha(3, 40, "A", { abertoPor: null, abertoEmBrasilia: null, dataEdital: diasAtras(20) })
+    ]);
+    const r = await chamar(hListarProc, { metodo: "GET", token: geral(["disciplina"]) });
+    expect(r.body.map(p => [p.abertoPorMim, p.prazoVencido])).toEqual([[true, true], [false, false], [false, true]]);
+    expect(r.body[1]).toMatchObject({ inicioPrazo: diasAtras(5), prazoVenceEm: diasAtras(-10) });
+    expect(r.body[0]).not.toHaveProperty("abertoEmBrasilia");
+    expect(rodou(/FROM ProcedimentosAbandono pa/)[0].sql).toMatch(/pa\.AbertoPor AS abertoPor/);
+  });
+  test("inicioPrazoDefesa: o último marco válido; ausentes ignorados", () => {
+    expect(abandonoDigital.inicioPrazoDefesa({ dataNotificacao: "2026-01-01", abertoEmBrasilia: "2026-03-01", dataEdital: "2026-02-01" })).toBe("2026-03-01");
+    expect(abandonoDigital.inicioPrazoDefesa({ dataNotificacao: "2026-01-01", abertoEmBrasilia: null, dataEdital: "2026-02-01" })).toBe("2026-02-01");
+    expect(abandonoDigital.inicioPrazoDefesa({ dataNotificacao: new Date("2026-01-05T00:00:00Z") })).toBe("2026-01-05");
+    expect(abandonoDigital.inicioPrazoDefesa({ dataNotificacao: null })).toBeNull();
+    expect(abandonoDigital.situacaoPrazoDefesa({ dataNotificacao: "2026-01-01", prazoDias: 15 }, "2026-01-16")).toMatchObject({ vencido: true, venceEm: "2026-01-16" });
+    expect(abandonoDigital.situacaoPrazoDefesa({ dataNotificacao: "2026-01-01", prazoDias: 15 }, "2026-01-15").vencido).toBe(false);
   });
   test("liderança por Extensão da Tenda: só os membros da MESMA extensão (mais estreito que a congregação-mãe)", async () => {
     quando(/FROM ProcedimentosAbandono pa/, [

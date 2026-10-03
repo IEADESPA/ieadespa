@@ -67,8 +67,14 @@ module.exports = async function (context, req) {
   const ehHomologacao = perms.includes("calendario_homologacao");
   const ehProposta = perms.includes("calendario_proposta");
   const temAlgum = ehSecretaria || ehHomologacao || ehProposta;
-  const escopoGlobal = !usuario.escopoCongregacoes || usuario.escopoCongregacoes === "TODAS";
-  const escopo = escopoGlobal ? "TODAS" : (usuario.escopoCongregacoes || []);
+  // v7.6 — escopo das permissões do CALENDÁRIO (só as concessões que têm alguma delas), não o somado de outro cargo ou delegação; a homologação, que exige
+  // o campo todo, olha só as concessões de "calendario_homologacao".
+  const escopoDe = (v) => (!v.escopoCongregacoes || v.escopoCongregacoes === "TODAS") ? "TODAS" : v.escopoCongregacoes;
+  const vCalendario = auth.visaoDaPermissao(usuario, ["calendario_secretaria", "calendario_homologacao", "calendario_proposta"]) || usuario;
+  const vHomologacao = auth.visaoDaPermissao(usuario, "calendario_homologacao");
+  const escopo = escopoDe(vCalendario);
+  const escopoGlobal = escopo === "TODAS";
+  const homologacaoGlobal = !!vHomologacao && escopoDe(vHomologacao) === "TODAS";
 
   const acao = context.bindingData.acao || "";
   const metodo = req.method;
@@ -85,7 +91,7 @@ module.exports = async function (context, req) {
   }
   function exigirHomologacaoGlobal() {
     if (!ehHomologacao) { erro(context, 403, SEM_PERMISSAO); return false; }
-    if (!escopoGlobal) { erro(context, 403, "Esta decisão vale para o campo todo — exige escopo global."); return false; }
+    if (!homologacaoGlobal) { erro(context, 403, "Esta decisão vale para o campo todo — exige escopo global."); return false; }
     return true;
   }
   function exigirAlgumaPermissao() {
@@ -216,7 +222,7 @@ module.exports = async function (context, req) {
               cancelar: meu && vivo && (evento.origem !== "REGRA" || ehSecretaria),
               deferir: ehSecretaria && evento.status === "PROPOSTO",
               indeferir: ehSecretaria && ["PROPOSTO", "DEFERIDO"].includes(evento.status),
-              absorver: ehHomologacao && escopoGlobal && ["DEFERIDO", "HOMOLOGADO"].includes(evento.status),
+              absorver: ehHomologacao && homologacaoGlobal &&["DEFERIDO", "HOMOLOGADO"].includes(evento.status),
               remarcar: meu && (evento.status === "ABSORVIDO" || (evento.status === "INDEFERIDO" && evento.motivoIndeferimento !== "ESGOTAMENTO_PAUTA")),
               registrarPresenca: ehSecretaria && evento.tipo.registraPresencaDirigente && ["DEFERIDO", "HOMOLOGADO"].includes(evento.status)
             }

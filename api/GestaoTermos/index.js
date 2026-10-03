@@ -34,7 +34,8 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Tipo de termo inválido." } };
       return;
     }
-    if (!TERMOS[tipo].aplicaA(usuario.nivel)) {
+    // v7.6 — o nível do CARGO PRÓPRIO (uma delegação recebida não muda quais termos a pessoa assina; ver auth.nivelDoCargoProprio)
+    if (!TERMOS[tipo].aplicaA(auth.nivelDoCargoProprio(usuario))) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este termo não se aplica ao seu papel." } };
       return;
     }
@@ -72,7 +73,7 @@ module.exports = async function (context, req) {
       }
     }
 
-    const pendentes = await termosPendentes(pool, sql, usuario.membroId, usuario.nivel);
+    const pendentes = await termosPendentes(pool, sql, usuario.membroId, auth.nivelDoCargoProprio(usuario));
     // O token novo MANTÉM a validade do original (como na troca de PIN): antes cada POST aqui renovava 12 h, então um token roubado nunca vencia e um acesso
     // suspenso por Medida Cautelar seguia vivo para sempre. Assinar um termo atualiza só a lista de pendências.
     const token = auth.reassinarMantendoValidade(auth.extrairToken(req), { termosPendentes: pendentes });

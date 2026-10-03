@@ -33,7 +33,9 @@ module.exports = async function (context, req) {
 
   const pin = pinMembro.gerarPinProvisorio({ nascimento: m.DataNascimento, matricula: membroId });
   await pinMembro.gravarPin(pool, membroId, pin, { provisorioPor: usuario.membroId });
-  await registrarAuditoria({ tabela: "MembroPins", registroId: membroId, acao: "PIN_PROVISORIO_GERADO", usuarioId: usuario.membroId, dadosDepois: { validadeDias: pinMembro.VALIDADE_PROVISORIO_DIAS } });
+  // v7.6 — PIN redefinido pela Secretaria: as sessões abertas da pessoa caem na hora (se alguém entrou com o PIN antigo, sai).
+  const derrubadas = await auth.revogarSessoesDoMembro(pool, sql, membroId);
+  await registrarAuditoria({ tabela: "MembroPins", registroId: membroId, acao: "PIN_PROVISORIO_GERADO", usuarioId: usuario.membroId, dadosDepois: { validadeDias: pinMembro.VALIDADE_PROVISORIO_DIAS, sessoesEncerradas: derrubadas } });
 
   let avisado = false;
   if (m.Email) {

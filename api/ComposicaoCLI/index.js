@@ -26,10 +26,12 @@ module.exports = async function (context, req) {
   // SIGILO (Art. 45): "está sob processo disciplinar" e "sem comunhão" são dado de PESSOA. Só aparecem para quem tem a permissão "disciplina" E alcança a congregação da
   // pessoa (a mesma regra de GestaoPessoas). Para as demais linhas a pessoa aparece como qualquer outra: sem a marca de disciplina, "em comunhão" e sem a situação
   // (a lista de nomes da CLI é institucional e continua inteira). A tela chama as linhas mascaradas de "Ativo".
-  const veDisciplina = (usuario.permissoes || []).includes("disciplina");
+  // v7.6 — o escopo é o da permissão "disciplina" (visão só das concessões que a têm), não o somado de outro cargo ou delegação.
+  const vDisciplina = auth.visaoDaPermissao(usuario, "disciplina");
+  const veDisciplina = !!vDisciplina;
   const idsSobDisciplina = veDisciplina ? await disciplina.membrosSobDisciplina(pool) : new Set();
   const comFlag = composicao.map(m => {
-    if (veDisciplina && auth.estaNoEscopo(usuario, m.congregacao)) {
+    if (veDisciplina && auth.estaNoEscopo(vDisciplina, m.congregacao)) {
       return Object.assign({}, m, {
         processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId),
         emComunhao: m.situacaoMembro !== "SEM_COMUNHAO"

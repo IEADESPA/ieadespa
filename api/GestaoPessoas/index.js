@@ -70,16 +70,17 @@ module.exports = async function (context, req) {
     // Mascaramento intencional (sigilo do processo disciplinar): só quem tem a
     // permissão "disciplina" recebe o dado real de processo ativo — sem ele, o membro
     // aparece com a categoria normal na lista, mesmo estando sob disciplina de verdade.
-    const idsSobDisciplina = usuario.permissoes.includes("disciplina")
+    // v7.6 — o dado de disciplina só para a pessoa que está no escopo da permissão "disciplina" (a visão dela), não no de "pessoas".
+    const vDisciplina = auth.visaoDaPermissao(usuario, "disciplina");
+    const idsSobDisciplina = vDisciplina
       ? await disciplina.membrosSobDisciplina(pool)
       : new Set();
     const result = await pool.request().query(`${SELECT_MEMBRO} ORDER BY m.Nome`);
     const membros = result.recordset
-      .filter(m => auth.estaNoEscopo(usuario, m.congregacao))
-      // Escopo EXTENSAO é mais estreito que a Congregação-Mãe (já garantida acima):
-      // só quem tem exatamente essa Extensão vinculada entra na lista.
-      .filter(m => !usuario.escopoExtensaoNome || m.extensao === usuario.escopoExtensaoNome)
-      .map(m => Object.assign({}, m, { processoDisciplinarAtivo: idsSobDisciplina.has(m.membroId) }))
+      // Escopo EXTENSAO é mais estreito que a Congregação-Mãe: só quem tem exatamente essa Extensão vinculada entra na lista (noEscopoDaPessoa confere os
+      // dois, concessão por concessão).
+      .filter(m => noEscopoDaPessoa(usuario, m.congregacao, m.extensao))
+      .map(m => Object.assign({}, m, { processoDisciplinarAtivo: !!vDisciplina && noEscopoDaPessoa(vDisciplina, m.congregacao, m.extensao) && idsSobDisciplina.has(m.membroId) }))
       .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }))
       .map(m => {
         const idade = estatuto.idadeEm(m.dataNascimento);
@@ -242,13 +243,17 @@ module.exports = async function (context, req) {
     }
 
     if (entrandoEmStatusTerminal) {
-      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaida || statusFinal);
+      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaida || statusFinal);   // também derruba as sessões abertas da pessoa
+    } else if (existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO") {
+      // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
+      await auth.revogarSessoesDoMembro(pool, sql, membroId);
     }
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
     const membro = result.recordset[0];
     const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();
-    if (usuario.permissoes.includes("disciplina")) {
+    const vDisciplinaMembro = auth.visaoDaPermissao(usuario, "disciplina");
+    if (vDisciplinaMembro && noEscopoDaPessoa(vDisciplinaMembro, membro.congregacao, membro.extensao)) {
       const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
       membro.processoDisciplinarAtivo = idsSobDisciplina.has(membro.membroId);
     }

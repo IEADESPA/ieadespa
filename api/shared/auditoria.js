@@ -46,4 +46,24 @@ async function registrarAuditoria({ tabela, registroId, acao, usuarioId, dadosAn
   return true;
 }
 
-module.exports = { registrarAuditoria, sha256 };
+// Variante DENTRO de uma transação (sql.Transaction), para o ato e a trilha entrarem ou saírem juntos (ex.: a homologação do abandono). Ao contrário de
+// registrarAuditoria, aqui a falha PROPAGA — quem chama desfaz a transação inteira. O topo da cadeia é lido com UPDLOCK, HOLDLOCK: outra gravação da mesma tabela
+// espera esta terminar e nunca calcula o mesmo hash anterior. Mesmo payload e mesmo hash de registrarAuditoria (a verificação da cadeia não distingue as duas).
+async function registrarAuditoriaNaTransacao(transacao, { tabela, registroId, acao, usuarioId, dadosAntes, dadosDepois }) {
+  const rq = () => new sql.Request(transacao);
+  const anterior = await rq().input("tabela", sql.NVarChar(50), tabela)
+    .query(`SELECT TOP 1 HashRegistro FROM AuditLog WITH (UPDLOCK, HOLDLOCK) WHERE Tabela = @tabela ORDER BY AuditId DESC`);
+  const hashAnterior = anterior.recordset[0] ? (anterior.recordset[0].HashRegistro || "") : "";
+  const registroIdNorm = registroId != null ? registroId : null;
+  const dadosAntesStr = dadosAntes ? JSON.stringify(dadosAntes) : null;
+  const dadosDepoisStr = dadosDepois ? JSON.stringify(dadosDepois) : null;
+  const payload = JSON.stringify({ tabela, registroId: registroIdNorm, acao, usuarioId: usuarioId || null, dadosAntes: dadosAntesStr, dadosDepois: dadosDepoisStr });
+  await rq()
+    .input("tabela", sql.NVarChar(50), tabela).input("registroId", sql.Int, registroIdNorm).input("acao", sql.NVarChar(100), acao)
+    .input("usuarioId", sql.Int, usuarioId || null).input("dadosAntes", sql.NVarChar(sql.MAX), dadosAntesStr).input("dadosDepois", sql.NVarChar(sql.MAX), dadosDepoisStr)
+    .input("hashRegistro", sql.NVarChar(64), sha256(payload + hashAnterior))
+    .query(`INSERT INTO AuditLog (Tabela, RegistroId, Acao, UsuarioId, DadosAntes, DadosDepois, HashRegistro)
+            VALUES (@tabela, @registroId, @acao, @usuarioId, @dadosAntes, @dadosDepois, @hashRegistro)`);
+}
+
+module.exports = { registrarAuditoria, registrarAuditoriaNaTransacao, sha256 };

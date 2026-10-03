@@ -99,8 +99,18 @@ function avisarErroInesperado(motivo) {
 // navegador) e mostraria um toast confuso por algo fora do nosso controle.
 window.addEventListener("unhandledrejection", (evento) => {
   if (evento.reason && evento.reason.message === "Sessão expirada") return; // já tratado em fetchProtegido
+  if (evento.reason && evento.reason.jaAvisado) { evento.preventDefault(); return; } // falha de rede: fetchProtegido já mostrou o aviso
+  // v7.6 — consequência de uma recusa que a pessoa ACABOU de ver (403/409/5xx avisado por fetchProtegido): uma tela antiga que ainda lia a resposta como se
+  // tivesse dado certo tropeça no corpo de erro. Não é erro novo nem merece um segundo aviso; a recusa já foi explicada.
+  if (evento.reason instanceof TypeError && ultimaRecusa && Date.now() - ultimaRecusa.quando < 5000) {
+    evento.preventDefault();
+    if (!ultimaRecusa.avisada) { ultimaRecusa.avisada = true; mostrarToast(ultimaRecusa.mensagem, "erro"); }
+    return;
+  }
   avisarErroInesperado(evento.reason);
 });
+// Última resposta recusada (4xx/5xx) que passou por fetchProtegido: { quando, mensagem, avisada }.
+let ultimaRecusa = null;
 
 function fecharModal() {
   document.getElementById("modalOverlay").classList.add("escondido");
@@ -112,10 +122,10 @@ function confirmarAcao(mensagem, tituloBotao) {
   return new Promise(resolve => {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
-      <p>${mensagem}</p>
+      <p>${escaparHtmlEbd(mensagem)}</p>
       <div class="modal-acoes">
         <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
-        <button class="btn-confirmar btn-perigo" id="modalConfirmar">${tituloBotao || "Confirmar"}</button>
+        <button class="btn-confirmar btn-perigo" id="modalConfirmar">${escaparHtmlEbd(tituloBotao || "Confirmar")}</button>
       </div>`;
     document.getElementById("modalOverlay").classList.remove("escondido");
     document.getElementById("modalConfirmar").onclick = () => { fecharModal(); resolve(true); };
@@ -128,8 +138,8 @@ function pedirTexto(titulo, placeholder, valorInicial) {
   return new Promise(resolve => {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
-      <h3>${titulo}</h3>
-      <textarea id="modalTexto" rows="3" placeholder="${placeholder || ""}"></textarea>
+      <h3>${escaparHtmlEbd(titulo)}</h3>
+      <textarea id="modalTexto" rows="3" placeholder="${escaparHtmlEbd(placeholder || "")}"></textarea>
       <div class="modal-acoes">
         <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
         <button class="btn-confirmar" id="modalConfirmar">Enviar</button>
@@ -277,7 +287,7 @@ function abrirModalAnexos(tabela, registroId, titulo) {
   anexosModalContexto = { tabela, registroId, titulo };
   const caixa = document.getElementById("modalCaixa");
   caixa.innerHTML = `
-    <h3>📎 Anexos — ${titulo}</h3>
+    <h3>📎 Anexos — ${escaparHtmlEbd(titulo)}</h3>
     <div class="barra-lista">
       <input type="file" id="anexoArquivo" accept="application/pdf,image/jpeg,image/png" />
       <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarAnexoModal()">Enviar</button>
@@ -295,14 +305,15 @@ async function carregarAnexosModal() {
   const container = document.getElementById("listaAnexosModal");
   if (!container) return; // modal já foi fechado antes da resposta chegar
   const res = await fetchProtegido(`${API_BASE}/anexos?tabela=${tabela}&registroId=${registroId}`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum anexo ainda.</p>";
     return;
   }
   container.innerHTML = lista.map(a => `
     <div class="item-notificacao">
-      <a href="${a.urlAssinada}" target="_blank" rel="noopener">${a.nomeArquivo}</a>
+      <a href="${urlSegura(a.urlAssinada)}" target="_blank" rel="noopener">${escaparHtmlEbd(a.nomeArquivo)}</a>
       <div class="rodape-notificacao">
         <span>${new Date(a.criadoEm).toLocaleDateString("pt-BR")}</span>
         <button class="btn-link btn-link-perigo" onclick="excluirAnexoModal(${a.anexoId})">Excluir</button>
@@ -367,13 +378,15 @@ document.addEventListener("DOMContentLoaded", marcarSessaoGeralNaPagina);
 // professor da aba EBD) — recarregada a cada abrirPainelConteudo.
 let ebdTurmasProfessor = [];
 
-function salvarSessao(token, nome, permissoes, matricula, nivel, escopo) {
+function salvarSessao(token, nome, permissoes, matricula, nivel, escopo, geral) {
   authToken = token;
   authNome = nome;
   authPermissoes = permissoes || [];
   authMatricula = matricula != null ? String(matricula) : authMatricula;
   authNivel = nivel || null;
-  authGeral = authNivel === "GLOBAL" && escopo === "TODAS";
+  // v7.6 — o login manda "geral" já calculado com a regra das rotas (nível Global e escopo TODAS numa MESMA concessão); nivel/escopo de topo juntam o cargo
+  // próprio com delegações e enganavam a tela. Resposta sem o campo (servidor antigo durante a publicação): a regra antiga.
+  authGeral = typeof geral === "boolean" ? geral : (authNivel === "GLOBAL" && escopo === "TODAS");
   sessionStorage.setItem("authGeral", authGeral ? "1" : "0");
   marcarSessaoGeralNaPagina();
   sessionStorage.setItem("authToken", token);
@@ -419,11 +432,15 @@ async function fetchProtegido(url, opts = {}) {
     res = await fetch(url, Object.assign({}, opts, { headers }));
   } catch (falhaDeRede) {
     mostrarToast("Não foi possível conectar ao servidor. Verifique sua internet e tente de novo.", "erro");
+    if (falhaDeRede && typeof falhaDeRede === "object") falhaDeRede.jaAvisado = true;
     throw falhaDeRede;
   }
   if (res.status === 401) {
+    // v7.6 — a sessão pode ter sido ENCERRADA (saiu em outro aparelho, senha trocada, cargo alterado...): o servidor diz "Sua sessão foi encerrada. Entre
+    // novamente." e a tela trata igual à sessão vencida.
+    const dados401 = await res.clone().json().catch(() => null);
     limparSessao();
-    mostrarToast("Sua sessão expirou. Faça login novamente.", "erro");
+    mostrarToast((dados401 && typeof dados401.mensagem === "string" && /encerrada/i.test(dados401.mensagem)) ? dados401.mensagem : "Sua sessão expirou. Faça login novamente.", "erro");
     mostrarTelaPainelInicial();
     throw new Error("Sessão expirada");
   }
@@ -441,7 +458,45 @@ async function fetchProtegido(url, opts = {}) {
       mostrarToast((data && typeof data.mensagem === "string" && data.mensagem) || "Você não tem permissão para essa ação.", "erro");
     }
   }
+  if (!res.ok) {
+    // v7.6 — resposta recusada: o corpo de erro nem sempre é JSON (o Azure devolve página/vazio num 500). json() passa a nunca lançar: vira { sucesso:false,
+    // mensagem } — as telas que já olham "sucesso"/Array.isArray seguem certas, e jsonDaTela() escreve o motivo no lugar do painel.
+    const corpo = await res.clone().json().catch(() => null);
+    const mensagem = (corpo && typeof corpo.mensagem === "string" && corpo.mensagem) || mensagemPadraoDaRecusa(res.status);
+    const jsonOriginal = res.json.bind(res);
+    try { res.json = async () => { try { return await jsonOriginal(); } catch (_) { return { sucesso: false, mensagem }; } }; } catch (_) { /* objeto sem extensão: fica o json() original */ }
+    if (res.status >= 500) mostrarToast(mensagem, "erro");
+    ultimaRecusa = { quando: Date.now(), mensagem, avisada: res.status === 403 || res.status >= 500 };
+  }
   return res;
+}
+function mensagemPadraoDaRecusa(status) {
+  if (status === 403) return "Você não tem permissão para ver ou fazer isto.";
+  if (status === 404) return "Não encontrado.";
+  if (status >= 500) return "O servidor teve um problema ao atender agora (erro " + status + "). Tente de novo em instantes; se continuar, avise a equipe técnica.";
+  return "Não foi possível concluir (erro " + status + ").";
+}
+// Carga de tela (GET): devolve o JSON só se veio certo e na forma esperada ("lista" = array; "objeto" = objeto sem sucesso:false). Senão escreve o motivo —
+// escapado — NO LUGAR do painel e devolve null: nunca "Nenhum item" mentiroso para quem não tem permissão, nem NaN/tela em branco. 401 nem chega aqui
+// (fetchProtegido já voltou para o login).
+// Lista para preencher <select>/cache: resposta recusada (403/5xx) ou fora do formato vira lista vazia — o aviso da recusa já saiu em fetchProtegido.
+async function listaDaApi(pedido) {
+  const res = await pedido;
+  const d = await res.json().catch(() => null);
+  return res.ok && Array.isArray(d) ? d : [];
+}
+async function jsonDaTela(res, container, forma) {
+  let data = null;
+  try { data = await res.json(); } catch (_) { data = null; }
+  const formaCerta = forma === "lista" ? Array.isArray(data) : (!!data && typeof data === "object" && data.sucesso !== false);
+  if (res.ok && formaCerta) return data;
+  let motivo;
+  if (data && typeof data.mensagem === "string" && data.mensagem) motivo = data.mensagem;
+  else if (!res.ok) motivo = mensagemPadraoDaRecusa(res.status);
+  else motivo = "A resposta do servidor veio num formato inesperado. Tente de novo.";
+  const aviso = `<p class="subtitle aviso-recusa" role="status">${res.status === 403 ? "🔒 " : "⚠️ "}${escaparHtmlEbd(motivo)}</p>`;
+  (Array.isArray(container) ? container : [container]).forEach(c => { if (c) c.innerHTML = aviso; });
+  return null;
 }
 
 // ---- navegação entre telas ----
@@ -516,7 +571,7 @@ async function acessarPainel() {
     if (!data.sucesso) { msg.textContent = data.mensagem; return; }
   }
 
-  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo);
+  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo, data.geral);
   document.getElementById("senhaPainel").value = "";
   msg.textContent = "";
   if (data.pinProvisorio) { mostrarCriarPin(); return; }          // entrou com o PIN que a Secretaria gerou: precisa criar o próprio
@@ -618,9 +673,9 @@ async function renderizarProximoTermo() {
   const termo = catalogoTermosCache[tipo];
   const caixa = document.getElementById("modalCaixa");
   caixa.innerHTML = `
-    <h3>${termo ? termo.titulo : tipo}</h3>
+    <h3>${termo ? escaparHtmlEbd(termo.titulo) : escaparHtmlEbd(tipo)}</h3>
     <div style="max-height:300px; overflow-y:auto; border:1px solid var(--cor-borda, #ccc); padding:10px; margin-bottom:12px; text-align:justify;">
-      ${termo ? termo.texto : ""}
+      ${termo ? escaparHtmlEbd(termo.texto) : ""}
     </div>
     <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
       <input type="checkbox" id="checkTermoLido" /> Li e concordo com os termos acima.
@@ -701,7 +756,7 @@ async function executarBuscaGlobal(termo) {
       return;
     }
     painel.innerHTML = lista.map(r => `
-      <div class="item-notificacao" onclick="irParaResultadoBusca('${r.aba || ""}')">
+      <div class="item-notificacao" onclick="irParaResultadoBusca(${argJs(r.aba || "")})">
         <span class="titulo-notificacao">${escaparHtmlEbd(r.titulo)}</span>
         <span>${escaparHtmlEbd(r.tipo)} — ${escaparHtmlEbd(r.subtitulo || "")}</span>
       </div>
@@ -791,7 +846,8 @@ async function carregarMinhasTarefas(filtro) {
   }
   container.innerHTML = "<p class=\"subtitle\">Carregando...</p>";
   const res = await fetchProtegido(`${API_BASE}/fluxos?filtro=${filtro}`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = `<p class="subtitle">Nenhum fluxo ${filtro === "atrasados" ? "atrasado" : "com você"} no momento.</p>`;
     return;
@@ -802,8 +858,8 @@ async function carregarMinhasTarefas(filtro) {
   lista.forEach(f => {
     const prazo = new Date(f.prazoEtapaEm).toLocaleDateString("pt-BR");
     html += `<tr>
-      <td>${f.tipoFluxoNome}${f.escalonadoNivel ? ` <small style="color:var(--cor-texto-suave);">(escalonado)</small>` : ""}</td>
-      <td>${f.etapaNome}</td>
+      <td>${escaparHtmlEbd(f.tipoFluxoNome)}${f.escalonadoNivel ? ` <small style="color:var(--cor-texto-suave);">(escalonado)</small>` : ""}</td>
+      <td>${escaparHtmlEbd(f.etapaNome)}</td>
       <td>${f.atrasado ? `<span class="badge-status badge-desligado">${prazo}</span>` : prazo}</td>
       <td class="acoes-inline">
         <button class="btn-link" onclick="acaoMinhaTarefa(${f.instanciaId}, 'APROVAR')">Aprovar</button>
@@ -821,7 +877,8 @@ async function carregarMinhasSessoes() {
   const container = document.getElementById("resultadoMinhasSessoes");
   if (!authToken) { container.innerHTML = "<p class='subtitle'>Disponível só pra quem entrou com sessão autenticada (senha ou código por e-mail).</p>"; return; }
   const res = await fetchProtegido(`${API_BASE}/minhas-sessoes`);
-  const sessoes = await res.json();
+  const sessoes = await jsonDaTela(res, container, "lista");
+  if (sessoes === null) return;
   if (!Array.isArray(sessoes) || sessoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma sessão registrada ainda.</p>";
     return;
@@ -830,7 +887,7 @@ async function carregarMinhasSessoes() {
     <th>Dispositivo</th><th>Entrou em</th><th>Status</th><th></th>
   </tr></thead><tbody>` + sessoes.map(s => `
     <tr>
-      <td style="max-width:320px; overflow-wrap:anywhere;">${s.dispositivoInfo || "—"}</td>
+      <td style="max-width:320px; overflow-wrap:anywhere;">${escaparHtmlEbd(s.dispositivoInfo) || "—"}</td>
       <td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td>
       <td>${s.encerrada ? "<span class='badge-status badge-desligado'>Encerrada</span>" : "<span class='badge-status badge-ativo'>Ativa</span>"}</td>
       <td class="acoes-inline">${!s.encerrada ? `<button class="btn-link btn-link-perigo" onclick="encerrarSessaoAcao('${s.sessaoId}')">Encerrar</button>` : ""}</td>
@@ -839,7 +896,7 @@ async function carregarMinhasSessoes() {
 }
 
 async function encerrarSessaoAcao(sessaoId) {
-  if (!(await confirmarAcao("Encerrar esta sessão? Se ainda estiver aberta em outro aparelho, sai sozinha em até 12h.", "Encerrar"))) return;
+  if (!(await confirmarAcao("Encerrar esta sessão? Se estiver aberta em outro aparelho, ele sai em poucos segundos.", "Encerrar"))) return;
   const res = await fetchProtegido(`${API_BASE}/minhas-sessoes/${sessaoId}`, {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "ENCERRAR" })
   });
@@ -851,10 +908,11 @@ async function encerrarSessaoAcao(sessaoId) {
 async function carregarDelegacoes() {
   if (!sessaoDeLiderancaNaTela()) return; // sem entrar como liderança, não tem o que delegar/receber
   const res = await fetchProtegido(`${API_BASE}/delegacoes`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, ["resultadoDelegacoesConcedidas", "resultadoDelegacoesRecebidas"].map(id => document.getElementById(id)), "objeto");
+  if (data === null) return;
 
   document.getElementById("delegacaoPapel").innerHTML = data.meusPapeis.map(p =>
-    `<option value="${p.liderancaId}">${p.papelNome} (${p.papelNivel})</option>`
+    `<option value="${p.liderancaId}">${escaparHtmlEbd(p.papelNome)} (${escaparHtmlEbd(p.papelNivel)})</option>`
   ).join("") || "<option value=''>Nenhum papel seu disponível</option>";
 
   document.getElementById("resultadoDelegacoesConcedidas").innerHTML = data.concedidas.length === 0
@@ -862,8 +920,8 @@ async function carregarDelegacoes() {
     : `<table class="tabela-frequencia"><thead><tr><th>Papel</th><th>Pra quem</th><th>Até</th><th>Status</th><th></th></tr></thead><tbody>` +
       data.concedidas.map(d => `
         <tr>
-          <td>${d.papelNome}</td><td>${d.delegadoNome}</td><td>${new Date(d.dataFim).toLocaleDateString("pt-BR")}</td>
-          <td>${d.status}</td>
+          <td>${escaparHtmlEbd(d.papelNome)}</td><td>${escaparHtmlEbd(d.delegadoNome)}</td><td>${new Date(d.dataFim).toLocaleDateString("pt-BR")}</td>
+          <td>${escaparHtmlEbd(d.status)}</td>
           <td class="acoes-inline">${d.status === "ATIVA" ? `<button class="btn-link btn-link-perigo" onclick="cancelarDelegacaoAcao(${d.delegacaoId})">Cancelar</button>` : ""}</td>
         </tr>
       `).join("") + "</tbody></table>";
@@ -871,7 +929,7 @@ async function carregarDelegacoes() {
   document.getElementById("resultadoDelegacoesRecebidas").innerHTML = data.recebidas.length === 0
     ? "<p class='subtitle'>Nenhuma.</p>"
     : `<table class="tabela-frequencia"><thead><tr><th>Papel</th><th>De quem</th><th>Até</th><th>Motivo</th></tr></thead><tbody>` +
-      data.recebidas.map(d => `<tr><td>${d.papelNome}</td><td>${d.deleganteNome}</td><td>${new Date(d.dataFim).toLocaleDateString("pt-BR")}</td><td>${d.motivo || "-"}</td></tr>`).join("") +
+      data.recebidas.map(d => `<tr><td>${escaparHtmlEbd(d.papelNome)}</td><td>${escaparHtmlEbd(d.deleganteNome)}</td><td>${new Date(d.dataFim).toLocaleDateString("pt-BR")}</td><td>${escaparHtmlEbd(d.motivo) || "-"}</td></tr>`).join("") +
       "</tbody></table>";
 }
 
@@ -1170,8 +1228,8 @@ function montarGradeModulos() {
   }
   grade.innerHTML = chaves.map(chave => {
     const m = MODULOS[chave];
-    return `<div class="card-modulo" onclick="entrarModulo('${chave}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
-      <span class="icone-modulo">${m.icone}</span><span>${escaparHtmlEbd(m.titulo)}</span>
+    return `<div class="card-modulo" onclick="entrarModulo(${argJs(chave)})" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
+      <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
 }
@@ -1227,7 +1285,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "agenda") carregarMinhaAgendaCalAcao();
   if (sub === "canais") carregarMeuPainelCanaisAcao();
   if (sub === "eventos") carregarMeuPainelEventosAcao();
-  if (sub === "tarefas") filtrarMinhasTarefas(filtroMinhasTarefasAtual);
+  if (sub === "tarefas") { filtrarMinhasTarefas(filtroMinhasTarefasAtual); carregarMinhasMediacoesAcao(); }
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarDelegacoes(); }
 }
@@ -1258,8 +1316,8 @@ async function carregarPainelInicial() {
   if (comValor.length === 0) { cx.style.display = "none"; return; }
   cx.style.display = "block";
   document.getElementById("gradePainelInicial").innerHTML = comValor.map((b) => `
-    <div class="card-modulo" ${b.aba ? `onclick="irParaBlocoPainel('${b.aba}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)"` : ""}>
-      <span class="icone-modulo">${b.valor}</span><span>${escaparHtmlEbd(b.titulo)}</span>
+    <div class="card-modulo" ${b.aba ? `onclick="irParaBlocoPainel(${argJs(b.aba)})" tabindex="0" role="button" onkeydown="ativarComTeclado(event)"` : ""}>
+      <span class="icone-modulo">${escaparHtmlEbd(b.valor)}</span><span>${escaparHtmlEbd(b.titulo)}</span>
     </div>
   `).join("");
 }
@@ -1281,7 +1339,7 @@ function badgeStatusContribuicao(c) {
   if (c.status === "CANCELADO") return "<span class='badge-status badge-desligado'>Cancelado</span>";
   if (c.origem === "AUTOLANCAMENTO") {
     if (c.statusConfirmacao === "PENDENTE") return "<span class='badge-status badge-pendente'>Aguardando confirmação</span>";
-    if (c.statusConfirmacao === "REJEITADO") return `<span class='badge-status badge-desligado' title="${c.motivoRejeicaoConfirmacao || ''}">Rejeitado</span>`;
+    if (c.statusConfirmacao === "REJEITADO") return `<span class='badge-status badge-desligado' title="${escaparHtmlEbd(c.motivoRejeicaoConfirmacao) || ''}">Rejeitado</span>`;
   }
   return "<span class='badge-status badge-ativo'>Confirmado</span>";
 }
@@ -1292,7 +1350,8 @@ async function carregarMinhasContribuicoes() {
   const aviso = document.getElementById("semContribuicoesAviso");
   const container = document.getElementById("resultadoMinhasContribuicoes");
   const res = await fetchProtegido(`${API_BASE}/meus-lancamentos-tesouraria/${authMatricula}`);
-  const contribuicoes = await res.json();
+  const contribuicoes = await jsonDaTela(res, container, "lista");
+  if (contribuicoes === null) return;
   if (!Array.isArray(contribuicoes) || contribuicoes.length === 0) {
     cx.style.display = "none";
     aviso.style.display = "block";
@@ -1303,9 +1362,9 @@ async function carregarMinhasContribuicoes() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Termo</th><th>Congregação</th><th>Tipo</th><th>Valor</th><th>Forma</th><th>Status</th></tr></thead><tbody>`;
   contribuicoes.forEach(c => {
     html += `<tr>
-      <td>${c.mesReferencia}</td><td>${c.termoNumero || "—"}</td><td>${escaparHtmlEbd(c.congregacaoNome)}</td>
-      <td>${rotuloTipoLancamento(c.tipo)}</td><td>R$ ${Number(c.valor).toFixed(2)}</td>
-      <td>${c.formaPagamento}</td>
+      <td>${escaparHtmlEbd(c.mesReferencia)}</td><td>${escaparHtmlEbd(c.termoNumero) || "—"}</td><td>${escaparHtmlEbd(c.congregacaoNome)}</td>
+      <td>${escaparHtmlEbd(rotuloTipoLancamento(c.tipo))}</td><td>R$ ${Number(c.valor).toFixed(2)}</td>
+      <td>${escaparHtmlEbd(c.formaPagamento)}</td>
       <td>${badgeStatusContribuicao(c)}</td>
     </tr>`;
   });
@@ -1404,11 +1463,11 @@ function montarGradeSubmodulosFinanceiro() {
   grade.innerHTML = SUBMODULOS_FINANCEIRO.filter(m => !m.pronto || subAbaFinanceiraPermitida(m.subAba)).map(m => {
     if (!m.pronto) {
       return `<div class="card-modulo card-modulo-embreve" title="Ainda não construído — ver plano da FASE 4 no README">
-        <span class="icone-modulo">${m.icone}</span><span>${escaparHtmlEbd(m.titulo)}</span><span class="tag-pendente">Em breve</span>
+        <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span><span class="tag-pendente">Em breve</span>
       </div>`;
     }
-    return `<div class="card-modulo" onclick="mostrarSubAbaFinanceiro('${m.subAba}')" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
-      <span class="icone-modulo">${m.icone}</span><span>${escaparHtmlEbd(m.titulo)}</span>
+    return `<div class="card-modulo" onclick="mostrarSubAbaFinanceiro(${argJs(m.subAba)})" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
+      <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
 }
@@ -1444,7 +1503,7 @@ function mostrarSubAbaFinanceiro(sub) {
   }
   if (sub === "pdq") {
     carregarPlanosPdq();
-    carregarFundoExecucaoPdq();
+    if (authGeral) carregarFundoExecucaoPdq(); // leitura do Fundo é só do geral (GestaoFundoExecucaoPdq); a seção nem aparece para os demais
     carregarComissoes();
     return;
   }
@@ -1470,10 +1529,9 @@ function mostrarSubAbaFinanceiro(sub) {
   if (sub === "patrimonio") {
     carregarOpcoesCongregacoesFinanceiro();
     carregarBensPatrimoniaisAcao();
-    carregarAlienacoesBensAcao();
-    carregarDocumentosBensAcao();
+    // alienação, documentos dos bens e Casa Pastoral: rotas só do geral (as seções nem aparecem para os demais; sem isto, cada abertura dava um aviso de recusa)
+    if (authGeral) { carregarAlienacoesBensAcao(); carregarDocumentosBensAcao(); carregarOcupacoesCasaPastoralAcao(); }
     carregarInventariosAcao();
-    carregarOcupacoesCasaPastoralAcao();
     return;
   }
   if (sub === "frota") {
@@ -1549,13 +1607,13 @@ function mostrarSubAbaFinanceiro(sub) {
 async function carregarOpcoesCategoriasEntrada() {
   if (!_categoriasEntradaCache) {
     const res = await fetchProtegido(`${API_BASE}/catalogos/categoriasEntrada`);
-    _categoriasEntradaCache = await res.json();
+    _categoriasEntradaCache = await listaDaApi(res);
   }
   ["financeiroLancTipo", "autolancTipo", "receberTipo"].forEach(idSelect => {
     const select = document.getElementById(idSelect);
     if (select && !select.dataset.montado) {
       select.innerHTML = _categoriasEntradaCache.filter(c => c.ativa !== false)
-        .map(c => `<option value="${c.codigo}">${escaparHtmlEbd(c.nome)}</option>`).join("");
+        .map(c => `<option value="${escaparHtmlEbd(c.codigo)}">${escaparHtmlEbd(c.nome)}</option>`).join("");
       select.dataset.montado = "1";
     }
   });
@@ -1675,7 +1733,8 @@ function barraProgressoCampanha(totalArrecadado, metaTotal) {
 async function carregarCampanhas() {
   const container = document.getElementById("resultadoCampanhas");
   const res = await fetchProtegido(`${API_BASE}/campanhas`);
-  const campanhas = await res.json();
+  const campanhas = await jsonDaTela(res, container, "lista");
+  if (campanhas === null) return;
   if (!Array.isArray(campanhas) || campanhas.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma campanha cadastrada ainda.</p>";
     return;
@@ -1686,9 +1745,9 @@ async function carregarCampanhas() {
   campanhas.forEach(c => {
     const statusClasse = c.status === "ATIVA" ? "badge-ativo" : (c.status === "ENCERRADA" ? "badge-licenca" : "badge-desligado");
     html += `<tr>
-      <td>${escaparHtmlEbd(c.nome)}${c.totalSorteios > 0 ? ` <small>🎟️ ${c.totalSorteios} sorteio(s)</small>` : ""}</td>
+      <td>${escaparHtmlEbd(c.nome)}${c.totalSorteios > 0 ? ` <small>🎟️ ${escaparHtmlEbd(c.totalSorteios)} sorteio(s)</small>` : ""}</td>
       <td>${barraProgressoCampanha(c.totalArrecadado, c.metaTotal)}</td>
-      <td><span class="badge-status ${statusClasse}">${c.status}</span></td>
+      <td><span class="badge-status ${statusClasse}">${escaparHtmlEbd(c.status)}</span></td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheCampanhaAcao(${c.campanhaId})">Ver detalhe</button></td>
     </tr>`;
   });
@@ -1699,12 +1758,13 @@ async function carregarCampanhas() {
 async function verDetalheCampanhaAcao(campanhaId) {
   const container = document.getElementById("detalheCampanha");
   const res = await fetchProtegido(`${API_BASE}/campanhas/${campanhaId}`);
-  const c = await res.json();
-  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${c.mensagem}</p>`; return; }
+  const c = await jsonDaTela(res, container, "objeto");
+  if (c === null) return;
+  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(c.mensagem)}</p>`; return; }
 
   let html = `<hr /><h3>${escaparHtmlEbd(c.nome)}</h3>`;
   if (c.descricao) html += `<p class="subtitle">${escaparHtmlEbd(c.descricao)}</p>`;
-  html += `<p class="subtitle">Período: ${c.dataInicio}${c.dataFim ? ` até ${c.dataFim}` : " (sem data de fim)"} — Status: <span class="badge-status ${c.status === "ATIVA" ? "badge-ativo" : (c.status === "ENCERRADA" ? "badge-licenca" : "badge-desligado")}">${c.status}</span></p>`;
+  html += `<p class="subtitle">Período: ${escaparHtmlEbd(c.dataInicio)}${c.dataFim ? ` até ${escaparHtmlEbd(c.dataFim)}` : " (sem data de fim)"} — Status: <span class="badge-status ${c.status === "ATIVA" ? "badge-ativo" : (c.status === "ENCERRADA" ? "badge-licenca" : "badge-desligado")}">${escaparHtmlEbd(c.status)}</span></p>`;
 
   html += `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Meta</th><th>Arrecadado</th></tr></thead><tbody>`;
   c.metas.forEach(m => {
@@ -1712,7 +1772,7 @@ async function verDetalheCampanhaAcao(campanhaId) {
   });
   html += "</tbody></table>";
 
-  if (authNivel === "GLOBAL" && c.status === "ATIVA") {
+  if (authGeral && c.status === "ATIVA") {
     html += `<button class="btn-link btn-link-perigo" onclick="atualizarStatusCampanhaAcao(${campanhaId}, 'ENCERRADA')">🔒 Encerrar campanha</button>
       <button class="btn-link btn-link-perigo" onclick="atualizarStatusCampanhaAcao(${campanhaId}, 'CANCELADA')">Cancelar campanha</button>`;
   }
@@ -1721,7 +1781,7 @@ async function verDetalheCampanhaAcao(campanhaId) {
   // vendido a qualquer pessoa; o sistema só guarda prêmios e resultado).
   html += `<h4 style="margin:16px 0 8px; color: var(--cor-primaria);">🎟️ Sorteios desta campanha</h4>
     <div id="listaSorteiosCampanha_${campanhaId}"><p class="subtitle">Carregando…</p></div>`;
-  if (authNivel === "GLOBAL" && c.status === "ATIVA") {
+  if (authGeral && c.status === "ATIVA") {
     html += `<button class="btn-link" onclick="alternarFormNovoSorteio(${campanhaId})">➕ Novo sorteio</button>
       <div id="formNovoSorteio_${campanhaId}" style="display:none; margin-top:10px;">
         <div class="barra-lista">
@@ -1774,7 +1834,8 @@ async function carregarSorteiosCampanha(campanhaId) {
   const container = document.getElementById(`listaSorteiosCampanha_${campanhaId}`);
   if (!container) return;
   const res = await fetchProtegido(`${API_BASE}/campanhas/${campanhaId}/sorteios`);
-  const sorteios = await res.json();
+  const sorteios = await jsonDaTela(res, container, "lista");
+  if (sorteios === null) return;
   if (!Array.isArray(sorteios) || sorteios.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum sorteio derivado desta campanha ainda.</p>";
     return;
@@ -1783,9 +1844,9 @@ async function carregarSorteiosCampanha(campanhaId) {
   for (const s of sorteios) {
     const statusClasse = s.status === "ATIVO" ? "badge-ativo" : (s.status === "REALIZADO" ? "badge-licenca" : "badge-desligado");
     html += `<div style="border:1px solid #e0e0e0; border-radius:8px; padding:10px; margin-bottom:10px;">
-      <strong>${escaparHtmlEbd(s.nome)}</strong> <span class="badge-status ${statusClasse}">${s.status}</span>
-      ${s.precoCupom ? ` — cupom R$ ${Number(s.precoCupom).toFixed(2)}` : ""}${s.dataSorteio ? ` — sorteio em ${s.dataSorteio}` : ""}
-      <br /><small>${s.premiosComGanhador} de ${s.totalPremios} prêmio(s) já com ganhador registrado</small>
+      <strong>${escaparHtmlEbd(s.nome)}</strong> <span class="badge-status ${statusClasse}">${escaparHtmlEbd(s.status)}</span>
+      ${s.precoCupom ? ` — cupom R$ ${Number(s.precoCupom).toFixed(2)}` : ""}${s.dataSorteio ? ` — sorteio em ${escaparHtmlEbd(s.dataSorteio)}` : ""}
+      <br /><small>${escaparHtmlEbd(s.premiosComGanhador)} de ${escaparHtmlEbd(s.totalPremios)} prêmio(s) já com ganhador registrado</small>
       <div id="detalheSorteio_${s.sorteioId}" style="margin-top:8px;"></div>
       <button class="btn-link" onclick="verDetalheSorteioAcao(${campanhaId}, ${s.sorteioId})">Ver prêmios / registrar ganhador</button>
     </div>`;
@@ -1796,21 +1857,22 @@ async function carregarSorteiosCampanha(campanhaId) {
 async function verDetalheSorteioAcao(campanhaId, sorteioId) {
   const container = document.getElementById(`detalheSorteio_${sorteioId}`);
   const res = await fetchProtegido(`${API_BASE}/campanhas/${campanhaId}/sorteios/${sorteioId}`);
-  const s = await res.json();
-  if (s.sucesso === false) { container.innerHTML = `<p class="subtitle">${s.mensagem}</p>`; return; }
+  const s = await jsonDaTela(res, container, "objeto");
+  if (s === null) return;
+  if (s.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(s.mensagem)}</p>`; return; }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ordem</th><th>Prêmio</th><th>Ganhador</th></tr></thead><tbody>`;
   s.premios.forEach(p => {
-    const podeEditar = authNivel === "GLOBAL" && s.status !== "CANCELADO";
+    const podeEditar = authGeral && s.status !== "CANCELADO";
     html += `<tr>
-      <td>${p.ordem}</td><td>${escaparHtmlEbd(p.descricao)}</td>
+      <td>${escaparHtmlEbd(p.ordem)}</td><td>${escaparHtmlEbd(p.descricao)}</td>
       <td>${podeEditar
-        ? `<input type="text" id="ganhadorPremio_${p.premioId}" value="${p.nomeGanhador || ""}" placeholder="Nome de quem ganhou" style="max-width:200px;" />
+        ? `<input type="text" id="ganhadorPremio_${p.premioId}" value="${escaparHtmlEbd(p.nomeGanhador) || ""}" placeholder="Nome de quem ganhou" style="max-width:200px;" />
            <button class="btn-link" onclick="registrarGanhadorAcao(${campanhaId}, ${sorteioId}, ${p.premioId})">Salvar</button>`
-        : (p.nomeGanhador || "—")}</td>
+        : (escaparHtmlEbd(p.nomeGanhador) || "—")}</td>
     </tr>`;
   });
   html += "</tbody></table>";
-  if (authNivel === "GLOBAL" && s.status === "ATIVO") {
+  if (authGeral && s.status === "ATIVO") {
     html += `<button class="btn-link" onclick="marcarSorteioRealizadoAcao(${campanhaId}, ${sorteioId})">✅ Marcar sorteio como realizado</button>`;
   }
   container.innerHTML = html;
@@ -1856,11 +1918,11 @@ let _campanhasSaidaCache = null;
 
 async function carregarOpcoesCategoriasSaida() {
   const res = await fetchProtegido(`${API_BASE}/catalogos/categoriasSaida`);
-  _categoriasSaidaCache = await res.json();
+  _categoriasSaidaCache = await listaDaApi(res);
   const select = document.getElementById("saidaTipo");
   if (select) {
     select.innerHTML = _categoriasSaidaCache.filter(c => c.ativa !== false)
-      .map(c => `<option value="${c.codigo}">${escaparHtmlEbd(c.nome)} (${c.centroCusto === "GERAL" ? "Geral" : "Local"}${c.tipoFundo === "RESTRITO" ? " — restrito" : ""})</option>`).join("");
+      .map(c => `<option value="${escaparHtmlEbd(c.codigo)}">${escaparHtmlEbd(c.nome)} (${c.centroCusto === "GERAL" ? "Geral" : "Local"}${c.tipoFundo === "RESTRITO" ? " — restrito" : ""})</option>`).join("");
   }
 }
 
@@ -1932,7 +1994,8 @@ async function salvarFornecedorAcao() {
 async function carregarFornecedores() {
   const container = document.getElementById("resultadoFornecedores");
   const res = await fetchProtegido(`${API_BASE}/fornecedores`);
-  const fornecedores = await res.json();
+  const fornecedores = await jsonDaTela(res, container, "lista");
+  if (fornecedores === null) return;
   if (!Array.isArray(fornecedores) || fornecedores.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum fornecedor cadastrado ainda.</p>";
     return;
@@ -1945,7 +2008,7 @@ async function carregarFornecedores() {
       <td>${f.dadosBancariosConfirmados ? "<span class='badge-status badge-ativo'>Confirmados</span>" : "<span class='badge-status badge-pendente'>⚠️ Pendente de confirmação</span>"}</td>
       <td class="acoes-inline">
         ${authGeral && !f.dadosBancariosConfirmados ? `<button class="btn-link" onclick="confirmarDadosBancariosFornecedorAcao(${Number(f.fornecedorId)})">Confirmar</button>` : ""}
-        ${authGeral ? `<button class="btn-link" onclick="abrirModalAnexos('Fornecedores', ${Number(f.fornecedorId)}, '${String(f.nome).replace(/[\\']/g, "").replace(/[<>"&]/g, "")}')">📎 Anexos</button>` : ""}
+        ${authGeral ? `<button class="btn-link" onclick="abrirModalAnexos('Fornecedores', ${Number(f.fornecedorId)}, ${argJs(f.nome)})">📎 Anexos</button>` : ""}
       </td>
     </tr>`;
   });
@@ -2093,7 +2156,7 @@ async function solicitarSaidaAcao() {
 
 function badgeStatusSaida(status) {
   const mapa = { PENDENTE: "badge-pendente", APROVADA: "badge-licenca", PAGA: "badge-ativo", REJEITADA: "badge-desligado", CANCELADA: "badge-desligado" };
-  return `<span class="badge-status ${mapa[status] || "badge-inativo"}">${status}</span>`;
+  return `<span class="badge-status ${mapa[status] || "badge-inativo"}">${escaparHtmlEbd(status)}</span>`;
 }
 
 async function carregarSaidas() {
@@ -2104,7 +2167,8 @@ async function carregarSaidas() {
   if (congregacaoId) params.set("congregacaoId", congregacaoId);
   if (status) params.set("status", status);
   const res = await fetchProtegido(`${API_BASE}/saidas?${params.toString()}`);
-  const saidas = await res.json();
+  const saidas = await jsonDaTela(res, container, "lista");
+  if (saidas === null) return;
   if (!Array.isArray(saidas) || saidas.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma solicitação de pagamento encontrada.</p>";
     return;
@@ -2112,7 +2176,7 @@ async function carregarSaidas() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Fornecedor</th><th>Categoria</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>`;
   saidas.forEach(s => {
     html += `<tr>
-      <td>${escaparHtmlEbd(s.congregacaoNome)}</td><td>${s.fornecedorNome}</td><td>${s.categoriaNome}</td>
+      <td>${escaparHtmlEbd(s.congregacaoNome)}</td><td>${escaparHtmlEbd(s.fornecedorNome)}</td><td>${escaparHtmlEbd(s.categoriaNome)}</td>
       <td>R$ ${Number(s.valor).toFixed(2)}${s.possivelDuplicidade ? " ⚠️" : ""}</td><td>${badgeStatusSaida(s.status)}</td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheSaidaAcao(${s.saidaId})">Ver detalhe</button></td>
     </tr>`;
@@ -2124,27 +2188,28 @@ async function carregarSaidas() {
 async function verDetalheSaidaAcao(saidaId) {
   const container = document.getElementById("detalheSaida");
   const res = await fetchProtegido(`${API_BASE}/saidas/${saidaId}`);
-  const s = await res.json();
-  if (s.sucesso === false) { container.innerHTML = `<p class="subtitle">${s.mensagem}</p>`; return; }
+  const s = await jsonDaTela(res, container, "objeto");
+  if (s === null) return;
+  if (s.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(s.mensagem)}</p>`; return; }
 
-  let html = `<hr /><h4>${s.fornecedorNome} — R$ ${Number(s.valor).toFixed(2)} ${badgeStatusSaida(s.status)}</h4>
-    <p class="subtitle">${escaparHtmlEbd(s.descricao)}${s.campanhaNome ? ` — campanha: ${s.campanhaNome}` : ""}</p>
-    <p class="subtitle">Solicitado por ${s.solicitadoPorNome} em ${new Date(s.solicitadoEm).toLocaleString("pt-BR")}</p>
-    <p class="subtitle"><a href="${s.documentoFiscalUrl}" target="_blank" rel="noopener">📎 Nota fiscal / recibo</a>${s.comprovantePagamentoUrl ? ` — <a href="${s.comprovantePagamentoUrl}" target="_blank" rel="noopener">📎 Comprovante de pagamento</a>` : ""}</p>`;
+  let html = `<hr /><h4>${escaparHtmlEbd(s.fornecedorNome)} — R$ ${Number(s.valor).toFixed(2)} ${badgeStatusSaida(s.status)}</h4>
+    <p class="subtitle">${escaparHtmlEbd(s.descricao)}${s.campanhaNome ? ` — campanha: ${escaparHtmlEbd(s.campanhaNome)}` : ""}</p>
+    <p class="subtitle">Solicitado por ${escaparHtmlEbd(s.solicitadoPorNome)} em ${new Date(s.solicitadoEm).toLocaleString("pt-BR")}</p>
+    <p class="subtitle"><a href="${urlSegura(s.documentoFiscalUrl)}" target="_blank" rel="noopener">📎 Nota fiscal / recibo</a>${s.comprovantePagamentoUrl ? ` — <a href="${urlSegura(s.comprovantePagamentoUrl)}" target="_blank" rel="noopener">📎 Comprovante de pagamento</a>` : ""}</p>`;
 
   if (s.possivelDuplicidade) {
     html += `<p class="subtitle">⚠️ <strong>Possível duplicidade</strong> — já existe outra solicitação com o mesmo fornecedor e valor nos últimos 7 dias. Confira antes de aprovar.</p>`;
   }
   if (Array.isArray(s.cotacoes) && s.cotacoes.length > 0) {
     html += `<p class="subtitle">Cotações anexadas (Reg. Art. 62):</p><ul>` +
-      s.cotacoes.map(c => `<li>${c.fornecedorNome} — R$ ${Number(c.valor).toFixed(2)} — <a href="${c.documentoUrl}" target="_blank" rel="noopener">📎 ver</a></li>`).join("") +
+      s.cotacoes.map(c => `<li>${escaparHtmlEbd(c.fornecedorNome)} — R$ ${Number(c.valor).toFixed(2)} — <a href="${urlSegura(c.documentoUrl)}" target="_blank" rel="noopener">📎 ver</a></li>`).join("") +
       `</ul>`;
   }
-  if (s.motivoRejeicao) html += `<p class="subtitle">Motivo da rejeição: ${s.motivoRejeicao}</p>`;
-  if (s.motivoCancelamento) html += `<p class="subtitle">Motivo do cancelamento: ${s.motivoCancelamento}</p>`;
+  if (s.motivoRejeicao) html += `<p class="subtitle">Motivo da rejeição: ${escaparHtmlEbd(s.motivoRejeicao)}</p>`;
+  if (s.motivoCancelamento) html += `<p class="subtitle">Motivo do cancelamento: ${escaparHtmlEbd(s.motivoCancelamento)}</p>`;
 
   if (s.status === "PENDENTE" && s.alcada) {
-    html += `<p class="subtitle">Alçada exigida: nível ${s.alcada.nivelMinimoAprovador} ou superior, ${s.alcada.quantidadeAprovadores} aprovador(es) distinto(s) — ${s.aprovacoes.length} já aprovou(aram): ${s.aprovacoes.map(a => a.aprovadoPorNome).join(", ") || "ninguém ainda"}.</p>
+    html += `<p class="subtitle">Alçada exigida: nível ${escaparHtmlEbd(s.alcada.nivelMinimoAprovador)} ou superior, ${escaparHtmlEbd(s.alcada.quantidadeAprovadores)} aprovador(es) distinto(s) — ${s.aprovacoes.length} já aprovou(aram): ${s.aprovacoes.map(a => escaparHtmlEbd(a.aprovadoPorNome)).join(", ") || "ninguém ainda"}.</p>
       <button class="btn-link" onclick="aprovarSaidaAcao(${saidaId})">✅ Aprovar</button>
       <button class="btn-link btn-link-perigo" onclick="rejeitarSaidaAcao(${saidaId})">Rejeitar</button>`;
   }
@@ -2241,7 +2306,8 @@ async function criarFundoFixoAcao() {
 async function carregarFundosFixos() {
   const container = document.getElementById("resultadoFundosFixos");
   const res = await fetchProtegido(`${API_BASE}/fundos-fixos`);
-  const fundos = await res.json();
+  const fundos = await jsonDaTela(res, container, "lista");
+  if (fundos === null) return;
   if (!Array.isArray(fundos) || fundos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum Fundo Fixo de Caixa cadastrado ainda.</p>";
     return;
@@ -2249,9 +2315,9 @@ async function carregarFundosFixos() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Custodiante</th><th>Teto</th><th>Saldo atual</th><th>Status</th><th></th></tr></thead><tbody>`;
   fundos.forEach(f => {
     html += `<tr>
-      <td>${escaparHtmlEbd(f.congregacaoNome)}</td><td>${f.custodianteNome}</td>
+      <td>${escaparHtmlEbd(f.congregacaoNome)}</td><td>${escaparHtmlEbd(f.custodianteNome)}</td>
       <td>R$ ${Number(f.valorTeto).toFixed(2)}</td><td>R$ ${Number(f.saldoAtual).toFixed(2)}</td>
-      <td><span class="badge-status ${f.status === "ATIVO" ? "badge-ativo" : "badge-inativo"}">${f.status}</span></td>
+      <td><span class="badge-status ${f.status === "ATIVO" ? "badge-ativo" : "badge-inativo"}">${escaparHtmlEbd(f.status)}</span></td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheFundoFixoAcao(${f.fundoId})">Ver detalhe</button></td>
     </tr>`;
   });
@@ -2262,13 +2328,15 @@ async function carregarFundosFixos() {
 async function verDetalheFundoFixoAcao(fundoId) {
   const container = document.getElementById("detalheFundoFixo");
   const res = await fetchProtegido(`${API_BASE}/fundos-fixos/${fundoId}`);
-  const f = await res.json();
-  if (f.sucesso === false) { container.innerHTML = `<p class="subtitle">${f.mensagem}</p>`; return; }
+  const f = await jsonDaTela(res, container, "objeto");
+  if (f === null) return;
+  if (f.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(f.mensagem)}</p>`; return; }
 
   const resMov = await fetchProtegido(`${API_BASE}/fundos-fixos/${fundoId}/movimentos`);
-  const movimentos = await resMov.json();
+  const movimentos = await jsonDaTela(resMov, container, "lista");
+  if (movimentos === null) return;
 
-  let html = `<hr /><h4>${escaparHtmlEbd(f.congregacaoNome)} — custodiante: ${f.custodianteNome}</h4>
+  let html = `<hr /><h4>${escaparHtmlEbd(f.congregacaoNome)} — custodiante: ${escaparHtmlEbd(f.custodianteNome)}</h4>
     <p class="subtitle">Teto: R$ ${Number(f.valorTeto).toFixed(2)} — Saldo atual: R$ ${Number(f.saldoAtual).toFixed(2)}</p>`;
 
   if (f.status === "ATIVO") {
@@ -2300,7 +2368,7 @@ async function verDetalheFundoFixoAcao(fundoId) {
       html += `<tr>
         <td>${m.tipo === "DESPESA" ? "Despesa" : "Reposição"}</td><td>R$ ${Number(m.valor).toFixed(2)}</td>
         <td>${escaparHtmlEbd(m.descricao)}</td><td>${escaparHtmlEbd(m.registradoPorNome)}</td>
-        <td><a href="${m.documentoUrl}" target="_blank" rel="noopener">📎</a></td>
+        <td><a href="${urlSegura(m.documentoUrl)}" target="_blank" rel="noopener">📎</a></td>
       </tr>`;
     });
     html += "</tbody></table>";
@@ -2339,7 +2407,8 @@ function alternarFormDadosBancariosInstituicao() {
 
 async function carregarDadosBancariosInstituicao() {
   const res = await fetchProtegido(`${API_BASE}/dados-bancarios-instituicao`);
-  const d = await res.json();
+  const d = await jsonDaTela(res, document.getElementById("resultadoDadosBancariosInstituicao"), "objeto");
+  if (d === null) return;
   document.getElementById("instRazaoSocial").value = d.razaoSocial || "";
   document.getElementById("instCnpj").value = d.cnpj || "";
   document.getElementById("instCodigoBanco").value = d.codigoBanco || "";
@@ -2371,6 +2440,20 @@ async function salvarDadosBancariosInstituicaoAcao() {
   document.getElementById("resultadoDadosBancariosInstituicao").textContent = data.mensagem;
 }
 
+// Saídas aprovadas que ficaram DE FORA da remessa, cada uma com todos os motivos (o servidor repete as conferências do pagamento comum na hora de gerar:
+// tutela, saldo do centro de custo, Fundo PDQ suspenso, dado bancário não confirmado/incompleto...). O texto vem do servidor: passa por escaparHtmlEbd.
+function montarBarradosRemessa(barrados) {
+  if (!Array.isArray(barrados) || barrados.length === 0) return "";
+  let html = `<h4 style="margin:12px 0 4px; color: var(--cor-erro);">⚠️ ${barrados.length} Saída(s) aprovada(s) ficaram DE FORA da remessa</h4>
+    <p class="subtitle">Nada foi enviado ao banco para elas. Resolva o motivo de cada uma e gere a remessa de novo.</p>
+    <div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Saída</th><th>Fornecedor</th><th>Valor</th><th>Por que ficou de fora</th></tr></thead><tbody>`;
+  barrados.forEach(b => {
+    html += `<tr><td>#${escaparHtmlEbd(b.saidaId)}</td><td>${escaparHtmlEbd(b.fornecedorNome || "—")}</td><td>R$ ${Number(b.valor).toFixed(2)}</td>
+      <td>${(b.motivos || []).map(m => "• " + escaparHtmlEbd(m.mensagem)).join("<br />")}</td></tr>`;
+  });
+  return html + "</tbody></table></div>";
+}
+
 async function gerarRemessaBancariaAcao() {
   const resultado = document.getElementById("resultadoNovaRemessa");
   const res = await fetchProtegido(`${API_BASE}/remessas-bancarias`, {
@@ -2379,17 +2462,19 @@ async function gerarRemessaBancariaAcao() {
   const data = await res.json();
   avisarResultado(data);
   resultado.textContent = data.mensagem;
+  document.getElementById("resultadoNovaRemessaBarrados").innerHTML = montarBarradosRemessa(data.barrados);
   if (data.sucesso) carregarRemessas();
 }
 
 function badgeStatusRemessa(status) {
-  return `<span class="badge-status ${status === "PROCESSADA" ? "badge-ativo" : "badge-licenca"}">${status}</span>`;
+  return `<span class="badge-status ${status === "PROCESSADA" ? "badge-ativo" : "badge-licenca"}">${escaparHtmlEbd(status)}</span>`;
 }
 
 async function carregarRemessas() {
   const container = document.getElementById("resultadoRemessas");
   const res = await fetchProtegido(`${API_BASE}/remessas-bancarias`);
-  const remessas = await res.json();
+  const remessas = await jsonDaTela(res, container, "lista");
+  if (remessas === null) return;
   if (!Array.isArray(remessas) || remessas.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma remessa gerada ainda.</p>";
     return;
@@ -2397,8 +2482,8 @@ async function carregarRemessas() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Nº</th><th>Registros</th><th>Valor Total</th><th>Status</th><th></th></tr></thead><tbody>`;
   remessas.forEach(r => {
     html += `<tr>
-      <td>${r.numeroSequencial}</td><td>${r.totalRegistros}</td><td>R$ ${Number(r.valorTotal).toFixed(2)}</td>
-      <td>${badgeStatusRemessa(r.status)}</td>
+      <td>${escaparHtmlEbd(r.numeroSequencial)}</td><td>${escaparHtmlEbd(r.totalRegistros)}</td><td>R$ ${Number(r.valorTotal).toFixed(2)}</td>
+      <td>${badgeStatusRemessa(r.status)}${Number(r.divergentes) > 0 ? ` <span class="badge-status badge-desligado">${Number(r.divergentes)} divergência(s)</span>` : ""}</td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheRemessaAcao(${r.remessaId})">Ver detalhe</button></td>
     </tr>`;
   });
@@ -2409,20 +2494,36 @@ async function carregarRemessas() {
 async function verDetalheRemessaAcao(remessaId) {
   const container = document.getElementById("detalheRemessa");
   const res = await fetchProtegido(`${API_BASE}/remessas-bancarias/${remessaId}`);
-  const r = await res.json();
-  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${r.mensagem}</p>`; return; }
+  const r = await jsonDaTela(res, container, "objeto");
+  if (r === null) return;
+  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(r.mensagem)}</p>`; return; }
 
-  let html = `<hr /><h4>Remessa nº ${r.numeroSequencial} ${badgeStatusRemessa(r.status)}</h4>
-    <p class="subtitle">R$ ${Number(r.valorTotal).toFixed(2)} em ${r.totalRegistros} pagamento(s) —
-      <a href="${r.arquivoUrl}" target="_blank" rel="noopener">📎 baixar arquivo de remessa</a>
-      ${r.arquivoRetornoUrl ? ` — <a href="${r.arquivoRetornoUrl}" target="_blank" rel="noopener">📎 arquivo de retorno</a>` : ""}</p>
+  let html = `<hr /><h4>Remessa nº ${escaparHtmlEbd(r.numeroSequencial)} ${badgeStatusRemessa(r.status)}</h4>
+    <p class="subtitle">R$ ${Number(r.valorTotal).toFixed(2)} em ${escaparHtmlEbd(r.totalRegistros)} pagamento(s) —
+      <a href="${urlSegura(r.arquivoUrl)}" target="_blank" rel="noopener">📎 baixar arquivo de remessa</a>
+      ${r.arquivoRetornoUrl ? ` — <a href="${urlSegura(r.arquivoRetornoUrl)}" target="_blank" rel="noopener">📎 arquivo de retorno</a>` : ""}</p>
     <table class="tabela-frequencia"><thead><tr><th>Fornecedor</th><th>Valor</th><th>Status</th></tr></thead><tbody>`;
+  let temDivergencia = false;
   r.itens.forEach(i => {
-    const mapa = { PENDENTE: "badge-licenca", PROCESSADO: "badge-ativo", FALHOU: "badge-desligado" };
-    html += `<tr><td>${i.fornecedorNome}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
-      <td><span class="badge-status ${mapa[i.status]}">${i.status}</span>${i.motivoFalha ? `<br /><small>${i.motivoFalha}</small>` : ""}</td></tr>`;
+    const mapa = { PENDENTE: "badge-licenca", PROCESSADO: "badge-ativo", FALHOU: "badge-desligado", DIVERGENTE: "badge-desligado" };
+    // DIVERGENTE: o banco pagou (ocorrência "00"), mas a Saída deixou de passar nas conferências do pagamento comum — nada foi lançado como pago; a Tesouraria Geral trata aqui.
+    let detalhe = "";
+    if (i.motivos && i.motivos.length) detalhe = i.motivos.map(m => `<br /><small>• ${escaparHtmlEbd(m.mensagem)}</small>`).join("");
+    else if (i.motivoFalha) detalhe = `<br /><small>${escaparHtmlEbd(i.motivoFalha)}</small>`;
+    if (i.tratamentoResolucao) detalhe += `<br /><small>Tratado: ${i.tratamentoResolucao === "RECONHECER_PAGAMENTO" ? "pagamento reconhecido" : "item encerrado"} — ${escaparHtmlEbd(i.tratamentoObservacao || "")}</small>`;
+    if (i.status === "DIVERGENTE") {
+      temDivergencia = true;
+      detalhe += `<br /><button class="btn-link" onclick="tratarDivergenciaRemessaAcao(${remessaId}, ${i.remessaItemId}, 'RECONHECER_PAGAMENTO')">Reconhecer pagamento</button>
+        <button class="btn-link btn-link-perigo" onclick="tratarDivergenciaRemessaAcao(${remessaId}, ${i.remessaItemId}, 'ENCERRAR')">Encerrar item</button>`;
+    }
+    html += `<tr><td>${escaparHtmlEbd(i.fornecedorNome)}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
+      <td><span class="badge-status ${mapa[i.status]}">${escaparHtmlEbd(i.status)}</span>${detalhe}</td></tr>`;
   });
   html += "</tbody></table>";
+  if (temDivergencia) {
+    html += `<p class="subtitle">⚠️ Itens DIVERGENTES: o banco já tratou o pagamento, mas ele não passa nas conferências de hoje (tutela, saldo, Fundo PDQ, dado bancário) ou o arquivo não informou o resultado.
+      Confira o extrato do banco. <strong>Reconhecer pagamento</strong>: o dinheiro saiu — a Saída vira PAGA (fica a sua justificativa na auditoria). <strong>Encerrar item</strong>: o valor não saiu ou foi devolvido — a Saída volta a poder entrar numa remessa.</p>`;
+  }
 
   if (r.status === "GERADA") {
     html += `
@@ -2450,6 +2551,21 @@ async function processarRetornoRemessaAcao(remessaId) {
   if (data.sucesso) { verDetalheRemessaAcao(remessaId); carregarRemessas(); carregarSaidas(); }
 }
 
+// Tratar um item DIVERGENTE do retorno: reconhecer que o dinheiro saiu (a Saída vira PAGA) ou encerrar o item. A justificativa é obrigatória e vai para a auditoria.
+async function tratarDivergenciaRemessaAcao(remessaId, remessaItemId, resolucao) {
+  const titulo = resolucao === "RECONHECER_PAGAMENTO"
+    ? "O que você conferiu? (o banco pagou: a Saída vai virar PAGA)"
+    : "Por que encerrar este item? (ex.: o banco devolveu o valor em dd/mm)";
+  const observacao = await pedirTexto(titulo, "Mínimo de 5 caracteres");
+  if (observacao === null) return;
+  const res = await fetchProtegido(`${API_BASE}/remessas-bancarias/${remessaId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "TRATAR_DIVERGENCIA", remessaItemId, resolucao, observacao })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) { verDetalheRemessaAcao(remessaId); carregarRemessas(); carregarSaidas(); }
+}
+
 // ---- ORÇAMENTO ANUAL, ORÇADO VS REALIZADO E FLUXO DE CAIXA PROJETADO
 // (v4.8, primeira parte) — Empenhado/Realizado sempre calculados na
 // leitura a partir das Saídas/Lançamentos de verdade, nunca digitados à
@@ -2465,7 +2581,7 @@ function montarBuilderLinhasOrcamento() {
   const entradas = (_categoriasEntradaCache || []).filter(c => c.ativa !== false);
   const saidas = (_categoriasSaidaCache || []).filter(c => c.ativa !== false);
   const linha = c => `<tr>
-      <td><input type="checkbox" class="chk-linha-orcamento" data-tipo="${c._tipo}" value="${c.codigo}" /></td>
+      <td><input type="checkbox" class="chk-linha-orcamento" data-tipo="${escaparHtmlEbd(c._tipo)}" value="${escaparHtmlEbd(c.codigo)}" /></td>
       <td>${escaparHtmlEbd(c.nome)}</td>
       <td><input type="number" class="valor-linha-orcamento" min="0.01" step="0.01" style="max-width:130px;" placeholder="0,00" /></td>
     </tr>`;
@@ -2502,7 +2618,8 @@ async function criarOrcamentoAcao() {
 async function carregarOrcamentos() {
   const container = document.getElementById("resultadoOrcamentos");
   const res = await fetchProtegido(`${API_BASE}/orcamentos`);
-  const orcamentos = await res.json();
+  const orcamentos = await jsonDaTela(res, container, "lista");
+  if (orcamentos === null) return;
   if (!Array.isArray(orcamentos) || orcamentos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum orçamento anual cadastrado ainda.</p>";
     return;
@@ -2510,8 +2627,8 @@ async function carregarOrcamentos() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ano</th><th>Orçado (Entradas)</th><th>Orçado (Saídas)</th><th>Status</th><th></th></tr></thead><tbody>`;
   orcamentos.forEach(o => {
     html += `<tr>
-      <td>${o.ano}</td><td>R$ ${Number(o.totalOrcadoEntrada).toFixed(2)}</td><td>R$ ${Number(o.totalOrcadoSaida).toFixed(2)}</td>
-      <td><span class="badge-status ${o.status === "ABERTO" ? "badge-ativo" : "badge-inativo"}">${o.status}</span></td>
+      <td>${escaparHtmlEbd(o.ano)}</td><td>R$ ${Number(o.totalOrcadoEntrada).toFixed(2)}</td><td>R$ ${Number(o.totalOrcadoSaida).toFixed(2)}</td>
+      <td><span class="badge-status ${o.status === "ABERTO" ? "badge-ativo" : "badge-inativo"}">${escaparHtmlEbd(o.status)}</span></td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheOrcamentoAcao(${o.orcamentoId})">Ver detalhe</button></td>
     </tr>`;
   });
@@ -2522,17 +2639,18 @@ async function carregarOrcamentos() {
 async function verDetalheOrcamentoAcao(orcamentoId) {
   const container = document.getElementById("detalheOrcamento");
   const res = await fetchProtegido(`${API_BASE}/orcamentos/${orcamentoId}`);
-  const o = await res.json();
-  if (o.sucesso === false) { container.innerHTML = `<p class="subtitle">${o.mensagem}</p>`; return; }
+  const o = await jsonDaTela(res, container, "objeto");
+  if (o === null) return;
+  if (o.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(o.mensagem)}</p>`; return; }
 
-  let html = `<hr /><h4>Orçamento ${o.ano} — <span class="badge-status ${o.status === "ABERTO" ? "badge-ativo" : "badge-inativo"}">${o.status}</span></h4>`;
-  if (authNivel === "GLOBAL" && o.status === "ABERTO") {
+  let html = `<hr /><h4>Orçamento ${escaparHtmlEbd(o.ano)} — <span class="badge-status ${o.status === "ABERTO" ? "badge-ativo" : "badge-inativo"}">${escaparHtmlEbd(o.status)}</span></h4>`;
+  if (authGeral && o.status === "ABERTO") {
     html += `<button class="btn-link btn-link-perigo" onclick="encerrarOrcamentoAcao(${orcamentoId})">🔒 Encerrar orçamento</button>`;
   }
   html += `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Categoria</th><th>Orçado</th><th>Empenhado</th><th>Realizado</th></tr></thead><tbody>`;
   o.linhas.forEach(l => {
     html += `<tr>
-      <td>${l.tipoMovimento === "ENTRADA" ? "Entrada" : "Saída"}</td><td>${l.categoriaNome || l.categoriaCodigo}</td>
+      <td>${l.tipoMovimento === "ENTRADA" ? "Entrada" : "Saída"}</td><td>${escaparHtmlEbd(l.categoriaNome) || escaparHtmlEbd(l.categoriaCodigo)}</td>
       <td>R$ ${Number(l.valorOrcado).toFixed(2)}</td><td>${l.empenhado != null ? "R$ " + Number(l.empenhado).toFixed(2) : "—"}</td>
       <td>R$ ${Number(l.realizado).toFixed(2)}</td>
     </tr>`;
@@ -2568,15 +2686,16 @@ async function carregarFluxoCaixaProjetadoAcao() {
     params.set("congregacaoId", congregacaoId);
   }
   const res = await fetchProtegido(`${API_BASE}/fluxo-caixa-projetado?${params.toString()}`);
-  const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
 
   let html = `<p class="subtitle">Saldo atual: R$ ${Number(data.saldoAtual).toFixed(2)} — entrada média mensal: R$ ${Number(data.entradaMediaMensal).toFixed(2)}
     — saída média mensal: R$ ${Number(data.saidaMediaMensal).toFixed(2)} — empenhado em aberto: R$ ${Number(data.totalEmpenhadoAberto).toFixed(2)}</p>
     <table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Entrada Projetada</th><th>Saída Projetada</th><th>Empenho</th><th>Saldo Projetado</th></tr></thead><tbody>`;
   data.projecao.forEach(p => {
     html += `<tr>
-      <td>${p.mesReferencia}</td><td>R$ ${Number(p.entradaProjetada).toFixed(2)}</td><td>R$ ${Number(p.saidaProjetada).toFixed(2)}</td>
+      <td>${escaparHtmlEbd(p.mesReferencia)}</td><td>R$ ${Number(p.entradaProjetada).toFixed(2)}</td><td>R$ ${Number(p.saidaProjetada).toFixed(2)}</td>
       <td>R$ ${Number(p.empenhoAberto).toFixed(2)}</td>
       <td style="${p.saldoProjetado < 0 ? "color: var(--cor-erro); font-weight:600;" : ""}">R$ ${Number(p.saldoProjetado).toFixed(2)}</td>
     </tr>`;
@@ -2622,7 +2741,8 @@ async function criarPlanoPdqAcao() {
 async function carregarPlanosPdq() {
   const container = document.getElementById("resultadoPlanosPdq");
   const res = await fetchProtegido(`${API_BASE}/pdq-planos`);
-  const planos = await res.json();
+  const planos = await jsonDaTela(res, container, "lista");
+  if (planos === null) return;
   if (!Array.isArray(planos) || planos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum Plano PDQ cadastrado ainda.</p>";
     return;
@@ -2630,8 +2750,8 @@ async function carregarPlanosPdq() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Período</th><th>Título</th><th>Eixos</th><th>Metas</th><th>Status</th><th></th></tr></thead><tbody>`;
   planos.forEach(p => {
     html += `<tr>
-      <td>${p.anoInicio}-${p.anoFim}</td><td>${escaparHtmlEbd(p.titulo)}</td><td>${p.totalEixos}</td><td>${p.totalMetas}</td>
-      <td><span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : (p.status === "ENCERRADO" ? "badge-inativo" : "badge-licenca")}">${p.status}</span></td>
+      <td>${escaparHtmlEbd(p.anoInicio)}-${escaparHtmlEbd(p.anoFim)}</td><td>${escaparHtmlEbd(p.titulo)}</td><td>${escaparHtmlEbd(p.totalEixos)}</td><td>${escaparHtmlEbd(p.totalMetas)}</td>
+      <td><span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : (p.status === "ENCERRADO" ? "badge-inativo" : "badge-licenca")}">${escaparHtmlEbd(p.status)}</span></td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalhePlanoPdqAcao(${p.planoId})">Ver detalhe</button></td>
     </tr>`;
   });
@@ -2641,17 +2761,18 @@ async function carregarPlanosPdq() {
 
 function badgeStatusPdqMeta(status) {
   const mapa = { EM_ANDAMENTO: "badge-licenca", CUMPRIDA: "badge-ativo", NAO_CUMPRIDA: "badge-desligado" };
-  return `<span class="badge-status ${mapa[status]}">${status.replace("_", " ")}</span>`;
+  return `<span class="badge-status ${mapa[status]}">${escaparHtmlEbd(status.replace("_", " "))}</span>`;
 }
 
 async function verDetalhePlanoPdqAcao(planoId) {
   const container = document.getElementById("detalhePlanoPdq");
   const res = await fetchProtegido(`${API_BASE}/pdq-planos/${planoId}`);
-  const p = await res.json();
-  if (p.sucesso === false) { container.innerHTML = `<p class="subtitle">${p.mensagem}</p>`; return; }
+  const p = await jsonDaTela(res, container, "objeto");
+  if (p === null) return;
+  if (p.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(p.mensagem)}</p>`; return; }
   _pdqPlanoDetalheCache = p;
 
-  let html = `<hr /><h4>${escaparHtmlEbd(p.titulo)} (${p.anoInicio}-${p.anoFim}) — <span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : "badge-inativo"}">${p.status}</span></h4>`;
+  let html = `<hr /><h4>${escaparHtmlEbd(p.titulo)} (${escaparHtmlEbd(p.anoInicio)}-${escaparHtmlEbd(p.anoFim)}) — <span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : "badge-inativo"}">${escaparHtmlEbd(p.status)}</span></h4>`;
   if (p.status !== "ENCERRADO") {
     html += `<select id="pdqStatusPlano_${planoId}">
         <option value="EM_ELABORACAO" ${p.status === "EM_ELABORACAO" ? "selected" : ""}>Em elaboração</option>
@@ -2668,7 +2789,7 @@ async function verDetalhePlanoPdqAcao(planoId) {
       <h4 style="margin:0 0 6px; color: var(--cor-primaria);">📍 ${escaparHtmlEbd(eixo.nome)}</h4>`;
     eixo.metas.forEach(meta => {
       html += `<div style="margin:10px 0 10px 14px; padding-left:10px; border-left:3px solid #ddd;">
-        <strong>${escaparHtmlEbd(meta.descricao)}</strong> ${badgeStatusPdqMeta(meta.status)} ${meta.indicador ? `<br /><small>Indicador: ${meta.indicador}</small>` : ""} <small>— prazo ${meta.prazoAno}</small>
+        <strong>${escaparHtmlEbd(meta.descricao)}</strong> ${badgeStatusPdqMeta(meta.status)} ${meta.indicador ? `<br /><small>Indicador: ${escaparHtmlEbd(meta.indicador)}</small>` : ""} <small>— prazo ${escaparHtmlEbd(meta.prazoAno)}</small>
         ${meta.justificativaTecnica ? `<br /><small>Justificativa: ${escaparHtmlEbd(meta.justificativaTecnica)}</small>` : ""}
         <div class="barra-lista" style="margin-top:6px;">
           <select id="pdqStatusMeta_${meta.metaId}">
@@ -2681,9 +2802,9 @@ async function verDetalhePlanoPdqAcao(planoId) {
       meta.projetos.forEach(proj => {
         html += `<div style="margin:8px 0 8px 14px; padding:8px; background:#f7f7f7; border-radius:6px;">
           <strong>${escaparHtmlEbd(proj.nome)}</strong> — R$ ${Number(proj.orcamentoPrevisto).toFixed(2)}
-          <span class="badge-status ${proj.status === "CONCLUIDO" ? "badge-ativo" : (proj.status === "CANCELADO" ? "badge-inativo" : "badge-licenca")}">${proj.status}</span>
+          <span class="badge-status ${proj.status === "CONCLUIDO" ? "badge-ativo" : (proj.status === "CANCELADO" ? "badge-inativo" : "badge-licenca")}">${escaparHtmlEbd(proj.status)}</span>
           ${proj.atrasado ? "<span class='badge-status badge-desligado'>ATRASADO</span>" : ""}
-          <br /><small>${proj.cronogramaInicio} até ${proj.cronogramaFim}</small>
+          <br /><small>${escaparHtmlEbd(proj.cronogramaInicio)} até ${escaparHtmlEbd(proj.cronogramaFim)}</small>
           <div class="barra-lista" style="margin-top:4px;">
             <select id="pdqStatusProjeto_${proj.projetoId}">
               <option value="PLANEJADO" ${proj.status === "PLANEJADO" ? "selected" : ""}>Planejado</option>
@@ -2692,7 +2813,7 @@ async function verDetalhePlanoPdqAcao(planoId) {
               <option value="CANCELADO" ${proj.status === "CANCELADO" ? "selected" : ""}>Cancelado</option>
             </select>
             <button class="btn-link" onclick="atualizarStatusProjetoPdqAcao(${proj.projetoId})">Salvar</button>
-            <button class="btn-link" onclick="solicitarRemanejamentoPdqAcao(${proj.projetoId})">↔️ Remanejar orçamento</button>
+            ${authGeral ? `<button class="btn-link" onclick="solicitarRemanejamentoPdqAcao(${proj.projetoId})">↔️ Remanejar orçamento</button>` : ""}
           </div>
         </div>`;
       });
@@ -2835,7 +2956,7 @@ async function solicitarRemanejamentoPdqAcao(projetoOrigemId) {
   avisarResultado(data);
   if (data.sucesso && data.status === "PENDENTE_CLI") {
     const container = document.getElementById("resultadoRemanejamentosPdq");
-    container.innerHTML = `<p class="subtitle">${data.mensagem}</p>
+    container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>
       <button class="btn-link" onclick="homologarRemanejamentoPdqAcao(${data.remanejamentoId})">✅ Homologar (CLI)</button>
       <button class="btn-link btn-link-perigo" onclick="rejeitarRemanejamentoPdqAcao(${data.remanejamentoId})">Rejeitar (CLI)</button>`;
   } else if (data.sucesso) {
@@ -2866,12 +2987,13 @@ async function rejeitarRemanejamentoPdqAcao(remanejamentoId) {
 async function verRelatorioProgressoPdqAcao(planoId) {
   const container = document.getElementById("resultadoRelatorioProgressoPdq");
   const res = await fetchProtegido(`${API_BASE}/pdq-relatorio-progresso/${planoId}`);
-  const r = await res.json();
-  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${r.mensagem}</p>`; return; }
+  const r = await jsonDaTela(res, container, "objeto");
+  if (r === null) return;
+  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(r.mensagem)}</p>`; return; }
   let html = `<div style="border:1px solid var(--cor-primaria); border-radius:8px; padding:10px;">
-    <strong>Progresso geral: ${r.percentualCumprimentoGeral}%</strong> (${r.totalCumpridas} de ${r.totalMetas} metas cumpridas)<br />`;
+    <strong>Progresso geral: ${escaparHtmlEbd(r.percentualCumprimentoGeral)}%</strong> (${escaparHtmlEbd(r.totalCumpridas)} de ${escaparHtmlEbd(r.totalMetas)} metas cumpridas)<br />`;
   r.eixos.forEach(e => {
-    html += `${e.nome}: ${e.percentualCumprimento}% (${e.metasCumpridas} cumprida(s), ${e.metasNaoCumpridas} não cumprida(s), ${e.metasEmAndamento} em andamento) —
+    html += `${escaparHtmlEbd(e.nome)}: ${escaparHtmlEbd(e.percentualCumprimento)}% (${escaparHtmlEbd(e.metasCumpridas)} cumprida(s), ${escaparHtmlEbd(e.metasNaoCumpridas)} não cumprida(s), ${escaparHtmlEbd(e.metasEmAndamento)} em andamento) —
       orçado em projetos: R$ ${Number(e.totalOrcadoProjetos).toFixed(2)}${e.projetosAtrasados.length > 0 ? ` — ⚠️ ${e.projetosAtrasados.length} projeto(s) atrasado(s)` : ""}<br />`;
   });
   html += "</div>";
@@ -2881,10 +3003,11 @@ async function verRelatorioProgressoPdqAcao(planoId) {
 async function carregarFundoExecucaoPdq() {
   const container = document.getElementById("resultadoFundoExecucaoPdq");
   const res = await fetchProtegido(`${API_BASE}/pdq-fundo-execucao`);
-  const f = await res.json();
-  let html = `<p class="subtitle">Dotação: ${f.percentualDotacao}% da arrecadação líquida da Geral — saldo disponível: <strong>R$ ${Number(f.saldoDisponivel).toFixed(2)}</strong></p>`;
+  const f = await jsonDaTela(res, container, "objeto");
+  if (f === null) return;
+  let html = `<p class="subtitle">Dotação: ${escaparHtmlEbd(f.percentualDotacao)}% da arrecadação líquida da Geral — saldo disponível: <strong>R$ ${Number(f.saldoDisponivel).toFixed(2)}</strong></p>`;
   if (f.suspenso) {
-    html += `<p class="subtitle">⚠️ <strong>Suspenso</strong> desde ${new Date(f.suspensao.suspensoEm).toLocaleDateString("pt-BR")} — motivo: ${f.suspensao.motivoSuspensao}</p>`;
+    html += `<p class="subtitle">⚠️ <strong>Suspenso</strong> desde ${new Date(f.suspensao.suspensoEm).toLocaleDateString("pt-BR")} — motivo: ${escaparHtmlEbd(f.suspensao.motivoSuspensao)}</p>`;
   }
   container.innerHTML = html;
 }
@@ -2941,8 +3064,9 @@ async function gerarDemonstracaoAcao() {
     params.set("dataFim", dataFim);
   }
   const res = await fetchProtegido(`${API_BASE}/demonstracoes-contabeis?${params.toString()}`);
-  const d = await res.json();
-  if (d.sucesso === false) { container.innerHTML = `<p class="subtitle">${d.mensagem}</p>`; return; }
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
+  if (d.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(d.mensagem)}</p>`; return; }
 
   if (tipo === "balanco") {
     container.innerHTML = `<h4>Balanço Patrimonial em ${d.dataCorte ? new Date(d.dataCorte).toLocaleDateString("pt-BR") : ""}</h4>
@@ -2960,13 +3084,13 @@ async function gerarDemonstracaoAcao() {
   }
 
   if (tipo === "drp") {
-    let html = `<h4>Demonstração do Resultado do Período (${d.dataInicio.slice(0, 10)} a ${d.dataFim.slice(0, 10)})</h4>
+    let html = `<h4>Demonstração do Resultado do Período (${escaparHtmlEbd(d.dataInicio.slice(0, 10))} a ${escaparHtmlEbd(d.dataFim.slice(0, 10))})</h4>
       <table class="tabela-frequencia"><thead><tr><th>Categoria</th><th>Valor</th></tr></thead><tbody>
         <tr><td colspan="2"><strong>RECEITAS</strong></td></tr>`;
-    d.receitas.forEach(r => html += `<tr><td>${r.categoriaNome || r.categoriaCodigo}</td><td>R$ ${Number(r.total).toFixed(2)}</td></tr>`);
+    d.receitas.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.categoriaNome) || escaparHtmlEbd(r.categoriaCodigo)}</td><td>R$ ${Number(r.total).toFixed(2)}</td></tr>`);
     html += `<tr><td><strong>Total de Receitas</strong></td><td><strong>R$ ${Number(d.totalReceitas).toFixed(2)}</strong></td></tr>
       <tr><td colspan="2"><strong>DESPESAS</strong></td></tr>`;
-    d.despesas.forEach(dd => html += `<tr><td>${dd.categoriaNome} ${dd.classificacaoFuncional === "ADMINISTRATIVA" ? "(administrativa)" : "(atividade-fim)"}</td><td>R$ ${Number(dd.total).toFixed(2)}</td></tr>`);
+    d.despesas.forEach(dd => html += `<tr><td>${escaparHtmlEbd(dd.categoriaNome)} ${dd.classificacaoFuncional === "ADMINISTRATIVA" ? "(administrativa)" : "(atividade-fim)"}</td><td>R$ ${Number(dd.total).toFixed(2)}</td></tr>`);
     html += `<tr><td><strong>Total de Despesas</strong></td><td><strong>R$ ${Number(d.totalDespesas).toFixed(2)}</strong></td></tr>
       <tr><td>— das quais atividades-fim</td><td>R$ ${Number(d.classificacaoFuncional.atividadesFim).toFixed(2)}</td></tr>
       <tr><td>— das quais administrativas</td><td>R$ ${Number(d.classificacaoFuncional.administrativas).toFixed(2)}</td></tr>
@@ -2977,7 +3101,7 @@ async function gerarDemonstracaoAcao() {
   }
 
   if (tipo === "mutacoes") {
-    container.innerHTML = `<h4>Mutações do Patrimônio Líquido (${d.dataInicio.slice(0, 10)} a ${d.dataFim.slice(0, 10)})</h4>
+    container.innerHTML = `<h4>Mutações do Patrimônio Líquido (${escaparHtmlEbd(d.dataInicio.slice(0, 10))} a ${escaparHtmlEbd(d.dataFim.slice(0, 10))})</h4>
       <table class="tabela-frequencia"><tbody>
         <tr><td>Patrimônio Líquido Inicial</td><td>R$ ${Number(d.patrimonioLiquidoInicial).toFixed(2)}</td></tr>
         <tr><td>(+/-) Resultado do Período</td><td>R$ ${Number(d.resultadoDoPeriodo).toFixed(2)}</td></tr>
@@ -2987,7 +3111,7 @@ async function gerarDemonstracaoAcao() {
   }
 
   if (tipo === "fluxocaixa") {
-    container.innerHTML = `<h4>Fluxo de Caixa (${d.dataInicio.slice(0, 10)} a ${d.dataFim.slice(0, 10)})</h4>
+    container.innerHTML = `<h4>Fluxo de Caixa (${escaparHtmlEbd(d.dataInicio.slice(0, 10))} a ${escaparHtmlEbd(d.dataFim.slice(0, 10))})</h4>
       <table class="tabela-frequencia"><tbody>
         <tr><td>Saldo Inicial de Caixa</td><td>R$ ${Number(d.saldoInicial).toFixed(2)}</td></tr>
         <tr><td>Entradas Operacionais</td><td>R$ ${Number(d.entradasOperacionais).toFixed(2)}</td></tr>
@@ -3002,7 +3126,8 @@ async function carregarNotasExplicativasAcao() {
   const ano = document.getElementById("notasExplicativasAno").value;
   if (!ano) { mostrarToast("Informe o ano.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/notas-explicativas/${ano}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, document.getElementById("resultadoNotasExplicativas"), "objeto");
+  if (data === null) return;
   document.getElementById("notasExplicativasTexto").value = data.texto || "";
 }
 
@@ -3026,8 +3151,9 @@ async function carregarSituacaoTesouroAcao() {
   const container = document.getElementById("resultadoSituacaoTesouro");
   container.innerHTML = "<p class='subtitle'>Carregando…</p>";
   const res = await fetchProtegido(`${API_BASE}/situacao-tesouro`);
-  const d = await res.json();
-  if (d.sucesso === false) { container.innerHTML = `<p class="subtitle">${d.mensagem}</p>`; return; }
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
+  if (d.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(d.mensagem)}</p>`; return; }
 
   const card = (titulo, valor, cor) => `<div style="flex:1; min-width:180px; border:1px solid #e0e0e0; border-radius:8px; padding:14px; background:${cor || "#fff"};">
     <div class="subtitle" style="margin:0 0 6px;">${titulo}</div>
@@ -3043,7 +3169,7 @@ async function carregarSituacaoTesouroAcao() {
     ${card("Pendente no malote (não rateado ainda)", d.malotePendente.totalBase, "#fff7e6")}
   </div>`;
   if (d.malotePendente.totalItens > 0) {
-    html += `<p class="subtitle" style="margin-top:8px;">⚠️ ${d.malotePendente.totalItens} repasse(s) aguardando o próximo fechamento do Rateio Geral — esse valor ainda não está em nenhum Centro de Custo gastável.</p>`;
+    html += `<p class="subtitle" style="margin-top:8px;">⚠️ ${escaparHtmlEbd(d.malotePendente.totalItens)} repasse(s) aguardando o próximo fechamento do Rateio Geral — esse valor ainda não está em nenhum Centro de Custo gastável.</p>`;
   }
 
   html += `<h4 style="margin:18px 0 8px; color: var(--cor-primaria);">Saldo Local por congregação</h4>
@@ -3077,21 +3203,22 @@ async function carregarSituacaoTesouroAcao() {
 async function carregarMalotePendenteAcao() {
   const container = document.getElementById("resultadoMalotePendente");
   const res = await fetchProtegido(`${API_BASE}/rateio-geral/pendentes`);
-  const d = await res.json();
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
   if (!d.totalItens || d.totalItens === 0) {
     container.innerHTML = "<p class='subtitle'>Nada pendente no malote — todos os repasses liberados já foram rateados.</p>";
     return;
   }
-  let html = `<p class="subtitle"><strong>${d.totalItens} repasse(s)</strong> pendente(s), total <strong>R$ ${Number(d.totalBase).toFixed(2)}</strong>. Previsão se fechar agora:</p>
+  let html = `<p class="subtitle"><strong>${escaparHtmlEbd(d.totalItens)} repasse(s)</strong> pendente(s), total <strong>R$ ${Number(d.totalBase).toFixed(2)}</strong>. Previsão se fechar agora:</p>
     <table class="tabela-frequencia"><thead><tr><th>Destino</th><th>%</th><th>Valor previsto</th></tr></thead><tbody>`;
-  d.previsaoDestinos.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${p.percentual}%</td><td>R$ ${Number(p.valor).toFixed(2)}</td></tr>`);
+  d.previsaoDestinos.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${escaparHtmlEbd(p.percentual)}%</td><td>R$ ${Number(p.valor).toFixed(2)}</td></tr>`);
   html += `<tr><td><strong>Tesouro Geral (resto)</strong></td><td></td><td><strong>R$ ${Number(d.previsaoTesouroGeral).toFixed(2)}</strong></td></tr></tbody></table>`;
 
   html += `<h4 style="margin:14px 0 6px; color: var(--cor-primaria);">Repasses no malote</h4>
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Valor</th><th>Atraso</th></tr></thead><tbody>`;
   d.itens.forEach(i => {
-    html += `<tr><td>${escaparHtmlEbd(i.congregacaoNome)}</td><td>${i.mesReferencia}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
-      <td>${i.mesesAtraso > 0 ? `<span class="badge-status badge-pendente">${i.mesesAtraso} mês(es)</span>` : "—"}</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(i.congregacaoNome)}</td><td>${escaparHtmlEbd(i.mesReferencia)}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
+      <td>${i.mesesAtraso > 0 ? `<span class="badge-status badge-pendente">${escaparHtmlEbd(i.mesesAtraso)} mês(es)</span>` : "—"}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -3112,14 +3239,15 @@ async function fecharRateioGeralAcao() {
 async function carregarRateiosGeraisAcao() {
   const container = document.getElementById("resultadoRateiosGerais");
   const res = await fetchProtegido(`${API_BASE}/rateio-geral`);
-  const rateios = await res.json();
+  const rateios = await jsonDaTela(res, container, "lista");
+  if (rateios === null) return;
   if (!Array.isArray(rateios) || rateios.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum Rateio Geral fechado ainda.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Repasses</th><th>Total Base</th><th>Tesouro Geral</th><th></th></tr></thead><tbody>`;
   rateios.forEach(r => {
-    html += `<tr><td>${r.mesReferencia}</td><td>${r.totalItens}</td><td>R$ ${Number(r.totalBase).toFixed(2)}</td><td>R$ ${Number(r.valorTesouroGeral).toFixed(2)}</td>
+    html += `<tr><td>${escaparHtmlEbd(r.mesReferencia)}</td><td>${escaparHtmlEbd(r.totalItens)}</td><td>R$ ${Number(r.totalBase).toFixed(2)}</td><td>R$ ${Number(r.valorTesouroGeral).toFixed(2)}</td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheRateioGeralAcao(${r.rateioGeralId})">Ver detalhe</button></td></tr>`;
   });
   html += "</tbody></table>";
@@ -3129,18 +3257,19 @@ async function carregarRateiosGeraisAcao() {
 async function verDetalheRateioGeralAcao(rateioGeralId) {
   const container = document.getElementById("detalheRateioGeral");
   const res = await fetchProtegido(`${API_BASE}/rateio-geral/${rateioGeralId}`);
-  const r = await res.json();
-  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${r.mensagem}</p>`; return; }
+  const r = await jsonDaTela(res, container, "objeto");
+  if (r === null) return;
+  if (r.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(r.mensagem)}</p>`; return; }
 
-  let html = `<hr /><h4>Rateio Geral de ${r.mesReferencia}</h4>
-    <p class="subtitle">Total base: R$ ${Number(r.totalBase).toFixed(2)} — ${r.totalItens} repasse(s)</p>
+  let html = `<hr /><h4>Rateio Geral de ${escaparHtmlEbd(r.mesReferencia)}</h4>
+    <p class="subtitle">Total base: R$ ${Number(r.totalBase).toFixed(2)} — ${escaparHtmlEbd(r.totalItens)} repasse(s)</p>
     <table class="tabela-frequencia"><thead><tr><th>Destino</th><th>%</th><th>Valor</th></tr></thead><tbody>`;
-  r.valores.forEach(v => html += `<tr><td>${v.destinoNome}</td><td>${v.percentual}%</td><td>R$ ${Number(v.valor).toFixed(2)}</td></tr>`);
+  r.valores.forEach(v => html += `<tr><td>${escaparHtmlEbd(v.destinoNome)}</td><td>${escaparHtmlEbd(v.percentual)}%</td><td>R$ ${Number(v.valor).toFixed(2)}</td></tr>`);
   html += `<tr><td><strong>Tesouro Geral (resto)</strong></td><td></td><td><strong>R$ ${Number(r.valorTesouroGeral).toFixed(2)}</strong></td></tr></tbody></table>`;
 
   html += `<h4 style="margin:14px 0 6px; color: var(--cor-primaria);">Repasses incluídos</h4>
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Valor</th></tr></thead><tbody>`;
-  r.itens.forEach(i => html += `<tr><td>${escaparHtmlEbd(i.congregacaoNome)}</td><td>${i.mesReferenciaCongregacao}</td><td>R$ ${Number(i.valor).toFixed(2)}</td></tr>`);
+  r.itens.forEach(i => html += `<tr><td>${escaparHtmlEbd(i.congregacaoNome)}</td><td>${escaparHtmlEbd(i.mesReferenciaCongregacao)}</td><td>R$ ${Number(i.valor).toFixed(2)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3149,16 +3278,17 @@ async function verDetalheRateioGeralAcao(rateioGeralId) {
 async function carregarAtosDesignacaoAcao() {
   const container = document.getElementById("resultadoAtosDesignacao");
   const res = await fetchProtegido(`${API_BASE}/atos-designacao`);
-  const atos = await res.json();
+  const atos = await jsonDaTela(res, container, "lista");
+  if (atos === null) return;
   const select = document.getElementById("prebendaAtoId");
   select.innerHTML = `<option value="">— Sem ato vinculado —</option>`;
   if (!Array.isArray(atos) || atos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum ato de designação registrado.</p>";
     return;
   }
-  atos.forEach(a => select.innerHTML += `<option value="${a.atoDesignacaoId}">${a.numeroAto} — ${a.nomeMinistro} (R$ ${Number(a.valorMensal).toFixed(2)})</option>`);
+  atos.forEach(a => select.innerHTML += `<option value="${a.atoDesignacaoId}">${escaparHtmlEbd(a.numeroAto)} — ${escaparHtmlEbd(a.nomeMinistro)} (R$ ${Number(a.valorMensal).toFixed(2)})</option>`);
   let html = `<table class="tabela-frequencia"><thead><tr><th>Nº</th><th>Ministro</th><th>Órgão</th><th>Data</th><th>Valor</th></tr></thead><tbody>`;
-  atos.forEach(a => html += `<tr><td>${a.numeroAto}</td><td>${a.nomeMinistro}</td><td>${a.orgaoColegiado}</td><td>${a.dataDeliberacao.slice(0, 10)}</td><td>R$ ${Number(a.valorMensal).toFixed(2)}</td></tr>`);
+  atos.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.numeroAto)}</td><td>${escaparHtmlEbd(a.nomeMinistro)}</td><td>${escaparHtmlEbd(a.orgaoColegiado)}</td><td>${escaparHtmlEbd(a.dataDeliberacao.slice(0, 10))}</td><td>R$ ${Number(a.valorMensal).toFixed(2)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3186,7 +3316,8 @@ async function salvarAtoDesignacaoAcao() {
 async function carregarOpcoesFornecedoresPrebenda() {
   const select = document.getElementById("prebendaFornecedorId");
   const res = await fetchProtegido(`${API_BASE}/fornecedores`);
-  const fornecedores = await res.json();
+  const fornecedores = await jsonDaTela(res, select, "lista");
+  if (fornecedores === null) return;
   select.innerHTML = `<option value="">— Selecione (PF) —</option>` +
     (Array.isArray(fornecedores) ? fornecedores.filter(f => f.tipo === "PF").map(f => `<option value="${f.fornecedorId}">${escaparHtmlEbd(f.nome)}</option>`).join("") : "");
 }
@@ -3194,13 +3325,14 @@ async function carregarOpcoesFornecedoresPrebenda() {
 async function carregarPrebendadosAcao() {
   const container = document.getElementById("resultadoPrebendados");
   const res = await fetchProtegido(`${API_BASE}/prebendados`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum prebendado cadastrado.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>CPF</th><th>Valor</th><th>Início</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${p.cpf}</td><td>R$ ${Number(p.valorMensalReferencia).toFixed(2)}</td><td>${p.dataInicio.slice(0, 10)}</td><td>${p.status}</td></tr>`);
+  lista.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${escaparHtmlEbd(p.cpf)}</td><td>R$ ${Number(p.valorMensalReferencia).toFixed(2)}</td><td>${escaparHtmlEbd(p.dataInicio.slice(0, 10))}</td><td>${escaparHtmlEbd(p.status)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3238,13 +3370,14 @@ async function salvarPrebendadoAcao() {
 async function carregarFolhaPrebendaAcao() {
   const container = document.getElementById("resultadoPrebendas");
   const res = await fetchProtegido(`${API_BASE}/prebendas`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma folha gerada ainda.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Ministro</th><th>Bruto</th><th>IRRF</th><th>Líquido</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(g => html += `<tr><td>${g.mesReferencia}</td><td>${escaparHtmlEbd(g.nome)}</td><td>R$ ${Number(g.valorBruto).toFixed(2)}</td><td>R$ ${Number(g.irrfRetido).toFixed(2)}</td><td>R$ ${Number(g.valorLiquido).toFixed(2)}</td><td>${g.status}${g.alertaRisco ? " ⚠️" : ""}</td></tr>`);
+  lista.forEach(g => html += `<tr><td>${escaparHtmlEbd(g.mesReferencia)}</td><td>${escaparHtmlEbd(g.nome)}</td><td>R$ ${Number(g.valorBruto).toFixed(2)}</td><td>R$ ${Number(g.irrfRetido).toFixed(2)}</td><td>R$ ${Number(g.valorLiquido).toFixed(2)}</td><td>${escaparHtmlEbd(g.status)}${g.alertaRisco ? " ⚠️" : ""}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3263,13 +3396,14 @@ async function gerarFolhaPrebendaAcao() {
 async function carregarRiscosVinculoAcao() {
   const container = document.getElementById("resultadoRiscosVinculo");
   const res = await fetchProtegido(`${API_BASE}/prebendas/alertas-risco`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum alerta de risco ativo. ✅</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody>`;
-  lista.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${r.tipoRisco}</td><td>${escaparHtmlEbd(r.descricao)}</td><td><button class="btn-link" onclick="resolverRiscoVinculoAcao(${r.riscoVinculoId})">Resolver</button></td></tr>`);
+  lista.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${escaparHtmlEbd(r.tipoRisco)}</td><td>${escaparHtmlEbd(r.descricao)}</td><td><button class="btn-link" onclick="resolverRiscoVinculoAcao(${r.riscoVinculoId})">Resolver</button></td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3295,13 +3429,14 @@ async function resolverRiscoVinculoAcao(riscoId) {
 async function carregarAuxiliosCustoAcao() {
   const container = document.getElementById("resultadoAuxiliosCusto");
   const res = await fetchProtegido(`${API_BASE}/auxilios-custo`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum auxílio/ajuda de custo cadastrado.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Tipo</th><th>Natureza</th><th>Valor</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.nome)}</td><td>${a.tipo}</td><td>${a.naturezaFiscal}</td><td>R$ ${Number(a.valorMensal).toFixed(2)}</td><td>${a.status}</td></tr>`);
+  lista.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.nome)}</td><td>${escaparHtmlEbd(a.tipo)}</td><td>${escaparHtmlEbd(a.naturezaFiscal)}</td><td>R$ ${Number(a.valorMensal).toFixed(2)}</td><td>${escaparHtmlEbd(a.status)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3331,13 +3466,14 @@ async function carregarOpcoesBens() {
 async function carregarBensPatrimoniaisAcao() {
   const container = document.getElementById("resultadoBensPatrimoniais");
   const res = await fetchProtegido(`${API_BASE}/bens-patrimoniais`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum bem cadastrado.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Tipo</th><th>Valor original</th><th>Aquisição</th><th>Líquido</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(b => html += `<tr><td>${escaparHtmlEbd(b.descricao)}</td><td>${b.tipo}</td><td>R$ ${Number(b.valorAquisicao).toFixed(2)}</td><td>${b.dataAquisicao.slice(0, 10)}</td><td>R$ ${Number(b.valorContabilLiquido).toFixed(2)}</td><td>${b.status}</td></tr>`);
+  lista.forEach(b => html += `<tr><td>${escaparHtmlEbd(b.descricao)}</td><td>${escaparHtmlEbd(b.tipo)}</td><td>R$ ${Number(b.valorAquisicao).toFixed(2)}</td><td>${escaparHtmlEbd(b.dataAquisicao.slice(0, 10))}</td><td>R$ ${Number(b.valorContabilLiquido).toFixed(2)}</td><td>${escaparHtmlEbd(b.status)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
   carregarOpcoesBens();
@@ -3364,14 +3500,15 @@ async function salvarBemPatrimonialAcao() {
 async function carregarAlienacoesBensAcao() {
   const container = document.getElementById("resultadoAlienacoes");
   const res = await fetchProtegido(`${API_BASE}/alienacoes-bens`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma alienação registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Valor proposto</th><th>Alçada</th><th>Status</th><th></th></tr></thead><tbody>`;
   lista.forEach(a => html += `<tr>
-    <td>${escaparHtmlEbd(a.bemDescricao)}</td><td>R$ ${Number(a.ValorProposto).toFixed(2)}</td><td>${a.AprovacaoNecessaria}</td><td>${a.Status}</td>
+    <td>${escaparHtmlEbd(a.bemDescricao)}</td><td>R$ ${Number(a.ValorProposto).toFixed(2)}</td><td>${escaparHtmlEbd(a.AprovacaoNecessaria)}</td><td>${escaparHtmlEbd(a.Status)}</td>
     <td>${a.Status === "PROPOSTA" ? `<button class="btn-link" onclick="abrirParecerViabilidadeAcao(${a.AlienacaoId})">📋 Parecer de Viabilidade (Art. 31)</button>` : ""}</td>
   </tr>`);
   html += "</tbody></table>";
@@ -3427,13 +3564,14 @@ async function proporAlienacaoAcao() {
 async function carregarDocumentosBensAcao() {
   const container = document.getElementById("resultadoDocumentosBens");
   const res = await fetchProtegido(`${API_BASE}/bens-documentos`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum documento patrimonial registrado.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Descrição</th><th>Responsável</th></tr></thead><tbody>`;
-  lista.forEach(d => html += `<tr><td>${d.tipoDocumento}</td><td>${escaparHtmlEbd(d.descricao)}</td><td>${d.responsavelCargo}</td></tr>`);
+  lista.forEach(d => html += `<tr><td>${escaparHtmlEbd(d.tipoDocumento)}</td><td>${escaparHtmlEbd(d.descricao)}</td><td>${escaparHtmlEbd(d.responsavelCargo)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3457,13 +3595,14 @@ async function salvarDocumentoBemAcao() {
 async function carregarInventariosAcao() {
   const container = document.getElementById("resultadoInventarios");
   const res = await fetchProtegido(`${API_BASE}/inventarios`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum inventário aberto.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ano</th><th>Escopo</th><th>Itens</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(i => html += `<tr><td>${i.anoReferencia}</td><td>${i.congregacaoNome || "Sede"}</td><td>${i.totalItens}</td><td>${i.status}</td></tr>`);
+  lista.forEach(i => html += `<tr><td>${escaparHtmlEbd(i.anoReferencia)}</td><td>${escaparHtmlEbd(i.congregacaoNome) || "Sede"}</td><td>${escaparHtmlEbd(i.totalItens)}</td><td>${escaparHtmlEbd(i.status)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3484,13 +3623,14 @@ async function abrirInventarioAcao() {
 async function carregarOcupacoesCasaPastoralAcao() {
   const container = document.getElementById("resultadoCasaPastoral");
   const res = await fetchProtegido(`${API_BASE}/casa-pastoral`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma ocupação de Casa Pastoral registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Casa</th><th>Dirigente</th><th>Congregação</th><th>Início</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(o => html += `<tr><td>${o.casaDescricao}</td><td>${o.ocupanteNome}</td><td>${escaparHtmlEbd(o.congregacaoNome)}</td><td>${o.dataInicio.slice(0, 10)}</td><td>${o.status}</td></tr>`);
+  lista.forEach(o => html += `<tr><td>${escaparHtmlEbd(o.casaDescricao)}</td><td>${escaparHtmlEbd(o.ocupanteNome)}</td><td>${escaparHtmlEbd(o.congregacaoNome)}</td><td>${escaparHtmlEbd(o.dataInicio.slice(0, 10))}</td><td>${escaparHtmlEbd(o.status)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3514,7 +3654,8 @@ async function salvarOcupacaoCasaPastoralAcao() {
 async function carregarAlertasFrotaAcao() {
   const container = document.getElementById("resultadoAlertasFrota");
   const res = await fetchProtegido(`${API_BASE}/manutencoes-veiculo/alertas`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum alerta no momento. ✅</p>";
     return;
@@ -3522,9 +3663,9 @@ async function carregarAlertasFrotaAcao() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Licenciamento</th><th>Seguro</th><th>Próx. manutenção</th></tr></thead><tbody>`;
   lista.forEach(a => {
     html += `<tr><td>${escaparHtmlEbd(a.bemDescricao)}</td>
-      <td>${a.licenciamentoAlerta ? "⚠️ " : ""}${a.licenciamentoVencimento || "não informado"}</td>
-      <td>${a.seguroAlerta ? "⚠️ " : ""}${a.seguroVencimento || "sem apólice ativa"}</td>
-      <td>${a.manutencaoAlerta ? "⚠️ " : ""}${a.proximaManutencaoAgendada || "-"}</td></tr>`;
+      <td>${a.licenciamentoAlerta ? "⚠️ " : ""}${escaparHtmlEbd(a.licenciamentoVencimento) || "não informado"}</td>
+      <td>${a.seguroAlerta ? "⚠️ " : ""}${escaparHtmlEbd(a.seguroVencimento) || "sem apólice ativa"}</td>
+      <td>${a.manutencaoAlerta ? "⚠️ " : ""}${escaparHtmlEbd(a.proximaManutencaoAgendada) || "-"}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -3533,15 +3674,16 @@ async function carregarAlertasFrotaAcao() {
 async function carregarFrotaAcao() {
   const container = document.getElementById("resultadoFrota");
   const res = await fetchProtegido(`${API_BASE}/frota`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum veículo cadastrado no Patrimônio (Tipo = Veículo).</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Placa</th><th>Identificação visual</th><th>Presidencial</th><th>Licenciamento</th></tr></thead><tbody>`;
   lista.forEach(v => {
-    html += `<tr><td>${escaparHtmlEbd(v.descricao)}</td><td>${v.placa || "-"}</td><td>${v.identificacaoVisualPendente ? "⚠️ pendente" : "✅"}</td>
-      <td>${v.ehVeiculoPresidencial ? "✅" : "-"}</td><td>${v.licenciamentoVencimento || "-"} (${v.licenciamentoSituacao})</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(v.descricao)}</td><td>${escaparHtmlEbd(v.placa) || "-"}</td><td>${v.identificacaoVisualPendente ? "⚠️ pendente" : "✅"}</td>
+      <td>${v.ehVeiculoPresidencial ? "✅" : "-"}</td><td>${escaparHtmlEbd(v.licenciamentoVencimento) || "-"} (${escaparHtmlEbd(v.licenciamentoSituacao)})</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -3566,13 +3708,14 @@ async function salvarFrotaAcao() {
 async function carregarTermosConducaoAcao() {
   const container = document.getElementById("resultadoTermosConducao");
   const res = await fetchProtegido(`${API_BASE}/termos-conducao`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum termo emitido.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Veículo</th><th>Condutor</th><th>Missão</th><th>Período</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(t => html += `<tr><td>${t.TermoId}</td><td>${escaparHtmlEbd(t.bemDescricao)}</td><td>${t.condutorNome}</td><td>${t.MissaoDescricao}</td><td>${t.DataInicioMissao} a ${t.DataFimPrevista}</td><td>${t.Status}</td></tr>`);
+  lista.forEach(t => html += `<tr><td>${t.TermoId}</td><td>${escaparHtmlEbd(t.bemDescricao)}</td><td>${escaparHtmlEbd(t.condutorNome)}</td><td>${escaparHtmlEbd(t.MissaoDescricao)}</td><td>${escaparHtmlEbd(t.DataInicioMissao)} a ${escaparHtmlEbd(t.DataFimPrevista)}</td><td>${escaparHtmlEbd(t.Status)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3599,14 +3742,15 @@ async function registrarTermoConducaoAcao() {
 async function carregarRetiradasChaveAcao() {
   const container = document.getElementById("resultadoRetiradasChave");
   const res = await fetchProtegido(`${API_BASE}/retiradas-chave`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma retirada registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Veículo</th><th>Condutor</th><th>Retirada</th><th>Devolução</th><th>Ação</th></tr></thead><tbody>`;
   lista.forEach(r => {
-    html += `<tr><td>${r.RetiradaId}</td><td>${escaparHtmlEbd(r.bemDescricao)}</td><td>${r.condutorNome}</td><td>${new Date(r.DataHoraRetirada).toLocaleString("pt-BR")}</td><td>${r.DataHoraDevolucao ? new Date(r.DataHoraDevolucao).toLocaleString("pt-BR") : "-"}</td>
+    html += `<tr><td>${r.RetiradaId}</td><td>${escaparHtmlEbd(r.bemDescricao)}</td><td>${escaparHtmlEbd(r.condutorNome)}</td><td>${new Date(r.DataHoraRetirada).toLocaleString("pt-BR")}</td><td>${r.DataHoraDevolucao ? new Date(r.DataHoraDevolucao).toLocaleString("pt-BR") : "-"}</td>
       <td>${r.DataHoraDevolucao ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDevolucaoChaveAcao(${r.RetiradaId})">Devolver</button>`}</td></tr>`;
   });
   html += "</tbody></table>";
@@ -3633,14 +3777,15 @@ async function registrarDevolucaoChaveAcao(retiradaId) {
 async function carregarManutencoesVeiculoAcao() {
   const container = document.getElementById("resultadoManutencoesVeiculo");
   const res = await fetchProtegido(`${API_BASE}/manutencoes-veiculo`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma manutenção registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Tipo</th><th>Agendada</th><th>Realizada</th><th>Ação</th></tr></thead><tbody>`;
   lista.forEach(m => {
-    html += `<tr><td>${escaparHtmlEbd(m.bemDescricao)}</td><td>${m.TipoManutencao}</td><td>${m.DataAgendada}</td><td>${m.DataRealizada || "-"}</td>
+    html += `<tr><td>${escaparHtmlEbd(m.bemDescricao)}</td><td>${escaparHtmlEbd(m.TipoManutencao)}</td><td>${escaparHtmlEbd(m.DataAgendada)}</td><td>${escaparHtmlEbd(m.DataRealizada) || "-"}</td>
       <td>${m.DataRealizada ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="concluirManutencaoVeiculoAcao(${m.ManutencaoId})">Concluir</button>`}</td></tr>`;
   });
   html += "</tbody></table>";
@@ -3673,8 +3818,9 @@ async function concluirManutencaoVeiculoAcao(manutencaoId) {
 async function carregarFontesCaixaAcao() {
   const select = document.getElementById("conciliacaoFonte");
   const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/fontes`);
-  const lista = await res.json();
-  select.innerHTML = (Array.isArray(lista) ? lista.map(f => `<option value="${f.fonteId}" data-tipo="${f.tipo}">${escaparHtmlEbd(f.nome)}</option>`).join("") : "");
+  const lista = await jsonDaTela(res, select, "lista");
+  if (lista === null) return;
+  select.innerHTML = (Array.isArray(lista) ? lista.map(f => `<option value="${f.fonteId}" data-tipo="${escaparHtmlEbd(f.tipo)}">${escaparHtmlEbd(f.nome)}</option>`).join("") : "");
   if (!select.dataset.listenerTipoAtivo) {
     select.addEventListener("change", atualizarCampoArquivoConciliacaoAcao);
     select.dataset.listenerTipoAtivo = "1";
@@ -3697,13 +3843,14 @@ function atualizarCampoArquivoConciliacaoAcao() {
 async function carregarConciliacoesAcao() {
   const container = document.getElementById("resultadoConciliacoes");
   const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma conciliação ainda.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Fonte</th><th>Mês</th><th>Status</th><th>Batidas</th><th>Divergências</th><th></th></tr></thead><tbody>`;
-  lista.forEach(c => html += `<tr><td>${c.fonteNome}</td><td>${c.mesReferencia}</td><td>${c.status}</td><td>R$ ${Number(c.totalBatidas).toFixed(2)}</td><td>${c.divergenciasPendentes}</td><td><button class="btn-link" onclick="verDetalheConciliacaoAcao(${c.conciliacaoId})">Ver</button></td></tr>`);
+  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.fonteNome)}</td><td>${escaparHtmlEbd(c.mesReferencia)}</td><td>${escaparHtmlEbd(c.status)}</td><td>R$ ${Number(c.totalBatidas).toFixed(2)}</td><td>${escaparHtmlEbd(c.divergenciasPendentes)}</td><td><button class="btn-link" onclick="verDetalheConciliacaoAcao(${c.conciliacaoId})">Ver</button></td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3733,15 +3880,16 @@ async function importarExtratoAcao() {
 async function verDetalheConciliacaoAcao(conciliacaoId) {
   const container = document.getElementById("detalheConciliacao");
   const res = await fetchProtegido(`${API_BASE}/conciliacao-bancaria/${conciliacaoId}`);
-  const c = await res.json();
-  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${c.mensagem}</p>`; return; }
+  const c = await jsonDaTela(res, container, "objeto");
+  if (c === null) return;
+  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(c.mensagem)}</p>`; return; }
   const divs = c.divergencias || [];
-  let html = `<hr /><h4>Conciliação de ${c.mesReferencia} (${c.fonteNome}) — ${c.status}</h4>`;
+  let html = `<hr /><h4>Conciliação de ${escaparHtmlEbd(c.mesReferencia)} (${escaparHtmlEbd(c.fonteNome)}) — ${escaparHtmlEbd(c.status)}</h4>`;
   html += `<p class="subtitle">Extrato R$ ${Number(c.totalExtrato).toFixed(2)} · Sistema R$ ${Number(c.totalSistema).toFixed(2)} · Batidas R$ ${Number(c.totalBatidas).toFixed(2)}</p>`;
   if (divs.length === 0) { html += "<p class='subtitle'>Sem divergências pendentes. ✅</p>"; }
   else {
     html += `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Valor</th><th>Referência</th><th></th></tr></thead><tbody>`;
-    divs.forEach(d => html += `<tr><td>${d.tipo === "SO_BANCO" ? "Só no banco" : "Só no sistema"}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${d.referencia || "-"}</td>${d.status === "PENDENTE" ? `<td><button class="btn-link" onclick="resolverDivergenciaAcao(${d.divergenciaId})">Resolver</button></td>` : "<td></td>"}</tr>`);
+    divs.forEach(d => html += `<tr><td>${d.tipo === "SO_BANCO" ? "Só no banco" : "Só no sistema"}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${escaparHtmlEbd(d.referencia) || "-"}</td>${d.status === "PENDENTE" ? `<td><button class="btn-link" onclick="resolverDivergenciaAcao(${d.divergenciaId})">Resolver</button></td>` : "<td></td>"}</tr>`);
     html += "</tbody></table>";
   }
   container.innerHTML = html;
@@ -3776,14 +3924,15 @@ async function salvarAplicacaoAcao() {
 async function carregarPortfolioAcao() {
   const container = document.getElementById("resultadoPortfolio");
   const res = await fetchProtegido(`${API_BASE}/investimentos`);
-  const p = await res.json();
+  const p = await jsonDaTela(res, container, "objeto");
+  if (p === null) return;
   if (!Array.isArray(p.itens) || p.itens.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma aplicação registrada.</p>";
     return;
   }
   let html = `<p class="subtitle">Aplicado R$ ${Number(p.totalAplicado).toFixed(2)} · Resgatado R$ ${Number(p.totalResgatado).toFixed(2)} · Saldo aplicado R$ ${Number(p.saldoAplicado).toFixed(2)} · Valor atual R$ ${Number(p.valorAtualEstimado).toFixed(2)} · Rentabilidade R$ ${Number(p.rentabilidadeAcumulada).toFixed(2)}</p>`;
   html += `<table class="tabela-frequencia"><thead><tr><th>Instituição</th><th>Tipo</th><th>Valor</th><th>Vencimento</th><th>Liquidez</th><th>Atual</th></tr></thead><tbody>`;
-  p.itens.forEach(i => html += `<tr><td>${i.instituicao}</td><td>${i.tipo}</td><td>R$ ${Number(i.valorAplicado).toFixed(2)}</td><td>${i.dataVencimento ? i.dataVencimento.slice(0, 10) : "-"}</td><td>${i.liquidez}</td><td>R$ ${Number(i.valorAtualEstimado).toFixed(2)}</td></tr>`);
+  p.itens.forEach(i => html += `<tr><td>${escaparHtmlEbd(i.instituicao)}</td><td>${escaparHtmlEbd(i.tipo)}</td><td>R$ ${Number(i.valorAplicado).toFixed(2)}</td><td>${i.dataVencimento ? escaparHtmlEbd(i.dataVencimento.slice(0, 10)) : "-"}</td><td>${escaparHtmlEbd(i.liquidez)}</td><td>R$ ${Number(i.valorAtualEstimado).toFixed(2)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3791,10 +3940,11 @@ async function carregarPortfolioAcao() {
 async function carregarLiquidezAcao() {
   const container = document.getElementById("resultadoLiquidez");
   const res = await fetchProtegido(`${API_BASE}/investimentos/liquidez?meses=6`);
-  const d = await res.json();
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
   let html = `<p class="subtitle">Entrada média R$ ${Number(d.mediaEntradas).toFixed(2)} ± R$ ${Number(d.desvioEntradas).toFixed(2)} (faixa: R$ ${Number(d.entradaConservador).toFixed(2)} a R$ ${Number(d.entradaOtimista).toFixed(2)})</p>`;
   html += `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Saldo base</th><th>Conservador</th><th>Otimista</th></tr></thead><tbody>`;
-  (d.projecao || []).forEach(p => html += `<tr><td>${p.mesReferencia}</td><td>R$ ${Number(p.saldoProjetado).toFixed(2)}</td><td>R$ ${Number(p.saldoConservador).toFixed(2)}</td><td>R$ ${Number(p.saldoOtimista).toFixed(2)}</td></tr>`);
+  (d.projecao || []).forEach(p => html += `<tr><td>${escaparHtmlEbd(p.mesReferencia)}</td><td>R$ ${Number(p.saldoProjetado).toFixed(2)}</td><td>R$ ${Number(p.saldoConservador).toFixed(2)}</td><td>R$ ${Number(p.saldoOtimista).toFixed(2)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3802,8 +3952,9 @@ async function carregarLiquidezAcao() {
 async function carregarCashPoolingAcao() {
   const container = document.getElementById("resultadoCashPooling");
   const res = await fetchProtegido(`${API_BASE}/cash-pooling`);
-  const d = await res.json();
-  const central = d.centralizadora ? `${d.centralizadora.nome}` : "—";
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
+  const central = d.centralizadora ? `${escaparHtmlEbd(d.centralizadora.nome)}` : "—";
   container.innerHTML = `<table class="tabela-frequencia"><tbody>
     <tr><td>Conta centralizadora</td><td>${central}</td></tr>
     <tr><td>Caixa disponível (Tesouro Geral)</td><td>R$ ${Number(d.caixaDisponivel).toFixed(2)}</td></tr>
@@ -3817,25 +3968,27 @@ async function carregarCashPoolingAcao() {
 async function carregarRepassesInstitucionaisAcao() {
   const container = document.getElementById("resultadoRepasses");
   const res = await fetchProtegido(`${API_BASE}/repasses-institucionais`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum repasse registrado.</p>";
   } else {
     let html = `<table class="tabela-frequencia"><thead><tr><th>Origem</th><th>Mês</th><th>Arrecadado</th><th>%</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>`;
-    lista.forEach(r => html += `<tr><td>${r.origemNome}</td><td>${r.mesReferencia}</td><td>R$ ${Number(r.valorArrecadadoLiquido).toFixed(2)}</td><td>${r.percentual}%</td><td>R$ ${Number(r.valorRepasse).toFixed(2)}</td><td>${r.status}${r.atrasado ? " ⚠️" : ""}</td>${r.status === "PENDENTE" ? `<td><button class="btn-link" onclick="confirmarRepasseAcao(${r.repasseId})">Repassar</button></td>` : "<td></td>"}</tr>`);
+    lista.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.origemNome)}</td><td>${escaparHtmlEbd(r.mesReferencia)}</td><td>R$ ${Number(r.valorArrecadadoLiquido).toFixed(2)}</td><td>${escaparHtmlEbd(r.percentual)}%</td><td>R$ ${Number(r.valorRepasse).toFixed(2)}</td><td>${escaparHtmlEbd(r.status)}${r.atrasado ? " ⚠️" : ""}</td>${r.status === "PENDENTE" ? `<td><button class="btn-link" onclick="confirmarRepasseAcao(${r.repasseId})">Repassar</button></td>` : "<td></td>"}</tr>`);
     html += "</tbody></table>";
     container.innerHTML = html;
   }
 
   const containerAtraso = document.getElementById("resultadoRepassesAtrasados");
   const resA = await fetchProtegido(`${API_BASE}/repasses-institucionais/alertas`);
-  const atrasados = await resA.json();
+  const atrasados = await jsonDaTela(resA, containerAtraso, "lista");
+  if (atrasados === null) return;
   if (!Array.isArray(atrasados) || atrasados.length === 0) {
     containerAtraso.innerHTML = "<p class='subtitle'>Nenhum repasse atrasado. ✅</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Origem</th><th>Mês</th><th>Valor</th></tr></thead><tbody>`;
-  atrasados.forEach(r => html += `<tr><td>${r.origemNome}</td><td>${r.mesReferencia}</td><td>R$ ${Number(r.valorRepasse).toFixed(2)}</td></tr>`);
+  atrasados.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.origemNome)}</td><td>${escaparHtmlEbd(r.mesReferencia)}</td><td>R$ ${Number(r.valorRepasse).toFixed(2)}</td></tr>`);
   html += "</tbody></table>";
   containerAtraso.innerHTML = html;
 }
@@ -3871,24 +4024,26 @@ async function confirmarRepasseAcao(repasseId) {
 async function carregarSegurosAcao() {
   const container = document.getElementById("resultadoApolices");
   const res = await fetchProtegido(`${API_BASE}/seguros`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma apólice registrada.</p>";
   } else {
     let html = `<table class="tabela-frequencia"><thead><tr><th>Seguradora</th><th>Nº</th><th>Tipo</th><th>Vigência</th><th>Coberturas</th></tr></thead><tbody>`;
-    lista.forEach(a => html += `<tr><td>${a.Seguradora}</td><td>${a.NumeroApolice}</td><td>${a.Tipo}</td><td>${a.vigencia}</td><td>${a.Coberturas}</td></tr>`);
+    lista.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.Seguradora)}</td><td>${escaparHtmlEbd(a.NumeroApolice)}</td><td>${escaparHtmlEbd(a.Tipo)}</td><td>${escaparHtmlEbd(a.vigencia)}</td><td>${escaparHtmlEbd(a.Coberturas)}</td></tr>`);
     html += "</tbody></table>";
     container.innerHTML = html;
   }
 
   const containerAlerta = document.getElementById("resultadoAlertasSeguros");
   const resA = await fetchProtegido(`${API_BASE}/seguros/alertas`);
-  const d = await resA.json();
+  const d = await jsonDaTela(resA, containerAlerta, "objeto");
+  if (d === null) return;
   let html = "";
-  if (d.temploSedeSemCobertura) html += `<p class="subtitle">${d.mensagemTemploSede}</p>`;
+  if (d.temploSedeSemCobertura) html += `<p class="subtitle">${escaparHtmlEbd(d.mensagemTemploSede)}</p>`;
   if (Array.isArray(d.vencidas) && d.vencidas.length > 0) {
     html += `<table class="tabela-frequencia"><thead><tr><th>Seguradora</th><th>Nº</th><th>Tipo</th><th>Fim</th></tr></thead><tbody>`;
-    d.vencidas.forEach(a => html += `<tr><td>${a.Seguradora}</td><td>${a.NumeroApolice}</td><td>${a.Tipo}</td><td>${a.DataFim.slice(0, 10)}</td></tr>`);
+    d.vencidas.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.Seguradora)}</td><td>${escaparHtmlEbd(a.NumeroApolice)}</td><td>${escaparHtmlEbd(a.Tipo)}</td><td>${escaparHtmlEbd(a.DataFim.slice(0, 10))}</td></tr>`);
     html += "</tbody></table>";
   }
   if (!html) html = "<p class='subtitle'>Tudo em dia. ✅</p>";
@@ -3917,13 +4072,14 @@ async function salvarApoliceAcao() {
 async function carregarParametrosMonetariosAcao() {
   const container = document.getElementById("resultadoValoresMonetarios");
   const res = await fetchProtegido(`${API_BASE}/parametros-monetarios`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum valor cadastrado.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Sigla</th><th>Nome</th><th>Valor</th><th>Indexador</th><th>Última correção</th><th>Próxima</th><th></th></tr></thead><tbody>`;
-  lista.forEach(v => html += `<tr><td>${v.sigla}</td><td>${escaparHtmlEbd(v.nome)}</td><td>${v.unidade === "%" ? v.valor + "%" : "R$ " + Number(v.valor).toFixed(2)}</td><td>${v.indexador}</td><td>${v.dataUltimaCorrecao}</td><td>${v.correcaoVencida ? "⚠️ vencida" : (v.proximaCorrecao || "-")}</td><td>${v.resolucaoNumero ? `Res. ${v.resolucaoNumero}` : ""}</td></tr>`);
+  lista.forEach(v => html += `<tr><td>${escaparHtmlEbd(v.sigla)}</td><td>${escaparHtmlEbd(v.nome)}</td><td>${v.unidade === "%" ? escaparHtmlEbd(v.valor) + "%" : "R$ " + Number(v.valor).toFixed(2)}</td><td>${escaparHtmlEbd(v.indexador)}</td><td>${escaparHtmlEbd(v.dataUltimaCorrecao)}</td><td>${v.correcaoVencida ? "⚠️ vencida" : (escaparHtmlEbd(v.proximaCorrecao) || "-")}</td><td>${v.resolucaoNumero ? `Res. ${escaparHtmlEbd(v.resolucaoNumero)}` : ""}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3956,15 +4112,30 @@ async function corrigirTodosValoresAcao() {
 async function carregarCessoesTemploAcao() {
   const container = document.getElementById("resultadoCessoes");
   const res = await fetchProtegido(`${API_BASE}/cessoes-templo`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma cessão registrada.</p>";
     return;
   }
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Solicitante</th><th>Tipo</th><th>Data</th><th>Taxa</th><th>Lista</th><th>Status</th></tr></thead><tbody>`;
-  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.solicitanteNome)}</td><td>${c.tipoEvento}</td><td>${c.dataEvento.slice(0, 10)}</td><td>${c.isencaoTaxa ? "isento" : "R$ " + Number(c.taxaZeladoria).toFixed(2)}</td><td>${c.listaMusicalAprovada ? "✅" : "❌"}</td><td>${c.status}</td></tr>`);
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Solicitante</th><th>Tipo</th><th>Data</th><th>Taxa</th><th>Lista</th><th>Status</th><th></th></tr></thead><tbody>`;
+  // Cancelar uma cessão já autorizada estorna a conta a receber junto; se a taxa já foi recebida o servidor recusa e explica o caminho (a devolução é um ato financeiro à parte).
+  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.solicitanteNome)}</td><td>${escaparHtmlEbd(c.tipoEvento)}</td><td>${escaparHtmlEbd(c.dataEvento.slice(0, 10))}</td><td>${c.isencaoTaxa ? "isento" : "R$ " + Number(c.taxaZeladoria).toFixed(2)}</td><td>${c.listaMusicalAprovada ? "✅" : "❌"}</td><td>${escaparHtmlEbd(c.status)}${c.contaReceberStatus ? `<br /><small>cobrança: ${escaparHtmlEbd(c.contaReceberStatus)}</small>` : ""}</td>
+    <td class="acoes-inline">${c.status === "SOLICITADA" || (c.status === "AUTORIZADA" && (authGeral || c.contaReceberId == null)) ? `<button class="btn-link btn-link-perigo" onclick="cancelarCessaoTemploAcao(${Number(c.cessaoId)})">Cancelar</button>` : ""}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
+}
+
+async function cancelarCessaoTemploAcao(cessaoId) {
+  const motivo = await pedirTexto("Motivo do cancelamento da cessão", "Ex: o solicitante desistiu do evento");
+  if (motivo === null) return;
+  const res = await fetchProtegido(`${API_BASE}/cessoes-templo/${cessaoId}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "CANCELAR", motivo })
+  });
+  const d = await res.json();
+  avisarResultado(d);
+  document.getElementById("resultadoCessao").textContent = d.mensagem; // a recusa por recebimento já feito traz o caminho em vários passos: fica na tela
+  if (d.sucesso) carregarCessoesTemploAcao();
 }
 
 async function salvarCessaoTemploAcao() {
@@ -3988,24 +4159,26 @@ async function salvarCessaoTemploAcao() {
 async function carregarObrigacoesFiscaisAcao() {
   const container = document.getElementById("resultadoObrigacoes");
   const res = await fetchProtegido(`${API_BASE}/obrigacoes-fiscais`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma obrigação registrada.</p>";
   } else {
     let html = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Ano</th><th>Prazo</th><th>Status</th><th>Alerta</th></tr></thead><tbody>`;
-    lista.forEach(o => html += `<tr><td>${o.Tipo}</td><td>${o.AnoReferencia}</td><td>${o.PrazoEntrega.slice(0, 10)}</td><td>${o.Status}${o.vencida ? " (vencida)" : ""}</td><td>${o.alerta || "-"}</td></tr>`);
+    lista.forEach(o => html += `<tr><td>${escaparHtmlEbd(o.Tipo)}</td><td>${escaparHtmlEbd(o.AnoReferencia)}</td><td>${escaparHtmlEbd(o.PrazoEntrega.slice(0, 10))}</td><td>${escaparHtmlEbd(o.Status)}${o.vencida ? " (vencida)" : ""}</td><td>${escaparHtmlEbd(o.alerta) || "-"}</td></tr>`);
     html += "</tbody></table>";
     container.innerHTML = html;
   }
 
   const containerRet = document.getElementById("resultadoRetencoes");
   const resR = await fetchProtegido(`${API_BASE}/obrigacoes-fiscais/retencoes`);
-  const ret = await resR.json();
+  const ret = await jsonDaTela(resR, containerRet, "lista");
+  if (ret === null) return;
   if (!Array.isArray(ret) || ret.length === 0) {
     containerRet.innerHTML = "<p class='subtitle'>Nenhuma retenção registrada.</p>";
   } else {
     let html = `<table class="tabela-frequencia"><thead><tr><th>Natureza</th><th>Competência</th><th>Base</th><th>Retido</th><th>Status</th></tr></thead><tbody>`;
-    ret.forEach(r => html += `<tr><td>${r.NaturezaRendimento}</td><td>${r.Competencia}</td><td>R$ ${Number(r.ValorBase).toFixed(2)}</td><td>R$ ${Number(r.ValorRetido).toFixed(2)}</td><td>${r.Status}</td></tr>`);
+    ret.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.NaturezaRendimento)}</td><td>${escaparHtmlEbd(r.Competencia)}</td><td>R$ ${Number(r.ValorBase).toFixed(2)}</td><td>R$ ${Number(r.ValorRetido).toFixed(2)}</td><td>${escaparHtmlEbd(r.Status)}</td></tr>`);
     html += "</tbody></table>";
     containerRet.innerHTML = html;
   }
@@ -4014,8 +4187,9 @@ async function carregarObrigacoesFiscaisAcao() {
 async function carregarMedidorEcdAcao() {
   const container = document.getElementById("resultadoMedidorEcd");
   const res = await fetchProtegido(`${API_BASE}/obrigacoes-fiscais/medidor-ecd`);
-  const d = await res.json();
-  container.innerHTML = `<p class="subtitle">Receita ${d.ano}: R$ ${Number(d.receitaExercicio).toFixed(2)} · Gatilho ECD: R$ ${Number(d.gatilhoEcd).toFixed(2)} · ${d.percentual}%${d.ultrapassou ? " ⚠️ ECD obrigatória!" : ""}</p>`;
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
+  container.innerHTML = `<p class="subtitle">Receita ${escaparHtmlEbd(d.ano)}: R$ ${Number(d.receitaExercicio).toFixed(2)} · Gatilho ECD: R$ ${Number(d.gatilhoEcd).toFixed(2)} · ${escaparHtmlEbd(d.percentual)}%${d.ultrapassou ? " ⚠️ ECD obrigatória!" : ""}</p>`;
 }
 
 async function salvarObrigacaoFiscalAcao() {
@@ -4050,16 +4224,17 @@ async function carregarInformeRendimentosAcao() {
   const ano = document.getElementById("informeAno").value || new Date().getFullYear();
   const container = document.getElementById("resultadoInformeRendimentos");
   const res = await fetchProtegido(`${API_BASE}/informes-rendimentos/${ano}`);
-  const d = await res.json();
-  let html = `<p class="subtitle">Informe de Rendimentos ${d.anoReferencia} — Ministros: ${d.ministros.length} · Prestadores: ${d.prestadores.length}</p>`;
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
+  let html = `<p class="subtitle">Informe de Rendimentos ${escaparHtmlEbd(d.anoReferencia)} — Ministros: ${d.ministros.length} · Prestadores: ${d.prestadores.length}</p>`;
   if (d.ministros.length > 0) {
     html += `<h5>Ministros</h5><table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CPF</th><th>Total</th><th>IRRF</th></tr></thead><tbody>`;
-    d.ministros.forEach(m => html += `<tr><td>${escaparHtmlEbd(m.nome)}</td><td>${m.cpfCnpj}</td><td>R$ ${Number(m.valorTotal).toFixed(2)}</td><td>R$ ${Number(m.irrfRetido).toFixed(2)}</td></tr>`);
+    d.ministros.forEach(m => html += `<tr><td>${escaparHtmlEbd(m.nome)}</td><td>${escaparHtmlEbd(m.cpfCnpj)}</td><td>R$ ${Number(m.valorTotal).toFixed(2)}</td><td>R$ ${Number(m.irrfRetido).toFixed(2)}</td></tr>`);
     html += "</tbody></table>";
   }
   if (d.prestadores.length > 0) {
     html += `<h5>Prestadores</h5><table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CPF/CNPJ</th><th>Total</th></tr></thead><tbody>`;
-    d.prestadores.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${p.cpfCnpj}</td><td>R$ ${Number(p.valorTotal).toFixed(2)}</td></tr>`);
+    d.prestadores.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.nome)}</td><td>${escaparHtmlEbd(p.cpfCnpj)}</td><td>R$ ${Number(p.valorTotal).toFixed(2)}</td></tr>`);
     html += "</tbody></table>";
   }
   container.innerHTML = html;
@@ -4068,18 +4243,19 @@ async function carregarInformeRendimentosAcao() {
 // ---- IMUNIDADE TRIBUTÁRIA (v4.20) ----
 async function carregarImunidadeTributariaAcao() {
   const res = await fetchProtegido(`${API_BASE}/imunidade-tributaria`);
-  const d = await res.json();
+  const d = await jsonDaTela(res, document.getElementById("resultadoSemaforo"), "objeto");
+  if (d === null) return;
 
   const sem = d.semaforo || {};
   const cores = { VERDE: "🟢", ATENCAO: "🟡" };
   const semaforo = document.getElementById("resultadoSemaforo");
-  let html = `<p class="subtitle">Semáforo geral: ${cores[sem.semaforoGeral] || "⚪"} ${sem.semaforoGeral}</p>`;
+  let html = `<p class="subtitle">Semáforo geral: ${cores[sem.semaforoGeral] || "⚪"} ${escaparHtmlEbd(sem.semaforoGeral)}</p>`;
   [sem.requisitoI, sem.requisitoII, sem.requisitoIII].forEach(r => {
     if (!r) return;
-    html += `<p><strong>${r.ok ? "✅" : "⚠️"} ${r.rotulo}</strong>`;
-    if (r.rotulo.indexOf("distribuir") !== -1) html += ` — ${r.pagamentosAMinistros} pagamento(s) a ministros, ${r.foraRubrica.length} fora de rubrica`;
+    html += `<p><strong>${r.ok ? "✅" : "⚠️"} ${escaparHtmlEbd(r.rotulo)}</strong>`;
+    if (r.rotulo.indexOf("distribuir") !== -1) html += ` — ${escaparHtmlEbd(r.pagamentosAMinistros)} pagamento(s) a ministros, ${r.foraRubrica.length} fora de rubrica`;
     if (r.rotulo.indexOf("País") !== -1) html += ` — ${r.remessasExterior.length} remessa(s) ao exterior`;
-    if (r.rotulo.indexOf("Escrituração") !== -1) html += ` — ${r.pctComprovante}% com comprovante`;
+    if (r.rotulo.indexOf("Escrituração") !== -1) html += ` — ${escaparHtmlEbd(r.pctComprovante)}% com comprovante`;
     html += "</p>";
   });
   semaforo.innerHTML = html;
@@ -4090,23 +4266,24 @@ async function carregarImunidadeTributariaAcao() {
     containerC.innerHTML = "<p class='subtitle'>Nenhum conflito detectado. ✅</p>";
   } else {
     let h = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Aprovador</th><th>Fornecedor</th><th>Valor</th></tr></thead><tbody>`;
-    conflitos.forEach(c => h += `<tr><td>${c.ministro}</td><td>${c.aprovadorNome}</td><td>${c.fornecedor}</td><td>R$ ${Number(c.valor).toFixed(2)}</td></tr>`);
+    conflitos.forEach(c => h += `<tr><td>${escaparHtmlEbd(c.ministro)}</td><td>${escaparHtmlEbd(c.aprovadorNome)}</td><td>${escaparHtmlEbd(c.fornecedor)}</td><td>R$ ${Number(c.valor).toFixed(2)}</td></tr>`);
     h += "</tbody></table>";
     containerC.innerHTML = h;
   }
 
   const carga = d.cargaTributaria || {};
   document.getElementById("resultadoCarga").innerHTML =
-    `<p class="subtitle">Compras ${carga.ano}: R$ ${Number(carga.totalCompras || 0).toFixed(2)} · Tributos embutidos: R$ ${Number(carga.totalTributosEmbutidos || 0).toFixed(2)} (${carga.pctCargaEmbutida || 0}%)</p>`;
+    `<p class="subtitle">Compras ${escaparHtmlEbd(carga.ano)}: R$ ${Number(carga.totalCompras || 0).toFixed(2)} · Tributos embutidos: R$ ${Number(carga.totalTributosEmbutidos || 0).toFixed(2)} (${escaparHtmlEbd(carga.pctCargaEmbutida) || 0}%)</p>`;
 }
 
 async function carregarDossieFiscalAcao() {
   const ano = document.getElementById("dossieAno").value || new Date().getFullYear();
   const container = document.getElementById("resultadoDossie");
   const res = await fetchProtegido(`${API_BASE}/dossie-fiscal/${ano}`);
-  const d = await res.json();
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
   const demonstracoes = d.demonstracoes || {};
-  let html = `<p class="subtitle">Dossiê fiscal ${d.anoReferencia} — pacote de defesa</p>`;
+  let html = `<p class="subtitle">Dossiê fiscal ${escaparHtmlEbd(d.anoReferencia)} — pacote de defesa</p>`;
   html += `<ul>`;
   if (demonstracoes.balanco) html += `<li>Balanço Patrimonial: Ativo R$ ${Number(demonstracoes.balanco.ativo.total).toFixed(2)} · PL R$ ${Number(demonstracoes.balanco.patrimonioLiquido).toFixed(2)}</li>`;
   if (demonstracoes.drp) html += `<li>Resultado do Período: R$ ${Number(demonstracoes.drp.resultadoDoPeriodo).toFixed(2)}</li>`;
@@ -4144,14 +4321,15 @@ async function registrarReceitaAcessoriaAcao() {
 async function carregarReceitasAcessoriasAcao() {
   const container = document.getElementById("resultadoReceitasAcessorias");
   const res = await fetchProtegido(`${API_BASE}/receitas-acessorias`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma receita acessória registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Tipo</th><th>Imóvel/Evento</th><th>Valor</th><th>Aplicação finalística</th><th>Comprovada</th></tr></thead><tbody>`;
   lista.forEach(r => {
-    html += `<tr><td>${r.dataRecebimento}</td><td>${r.tipo}</td><td>${r.bemDescricao || r.eventoDescricao || "-"}</td><td>R$ ${Number(r.valor).toFixed(2)}</td><td>${r.aplicacaoFinalisticaDescricao}</td><td>${r.comprovada ? "✅" : "⏳ pendente"}</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(r.dataRecebimento)}</td><td>${escaparHtmlEbd(r.tipo)}</td><td>${escaparHtmlEbd(r.bemDescricao) || escaparHtmlEbd(r.eventoDescricao) || "-"}</td><td>R$ ${Number(r.valor).toFixed(2)}</td><td>${escaparHtmlEbd(r.aplicacaoFinalisticaDescricao)}</td><td>${r.cancelada ? `❌ cancelada<br /><small>${escaparHtmlEbd(r.motivoCancelamento || "")}</small>` : r.comprovada ? "✅" : "⏳ pendente"}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -4160,14 +4338,15 @@ async function carregarReceitasAcessoriasAcao() {
 async function carregarRelatorioOrigemDestinoAcao() {
   const container = document.getElementById("resultadoOrigemDestino");
   const res = await fetchProtegido(`${API_BASE}/receitas-acessorias/relatorio-origem-destino`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Sem lançamentos ainda.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Imóvel/Evento</th><th>Lançamentos</th><th>Arrecadado</th><th>Comprovado</th><th>Pendente</th></tr></thead><tbody>`;
   lista.forEach(g => {
-    html += `<tr><td>${g.origemDestino}</td><td>${g.lancamentos}</td><td>R$ ${g.totalArrecadado.toFixed(2)}</td><td>R$ ${g.totalComprovado.toFixed(2)}</td><td>R$ ${g.totalPendente.toFixed(2)}</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(g.origemDestino)}</td><td>${escaparHtmlEbd(g.lancamentos)}</td><td>R$ ${g.totalArrecadado.toFixed(2)}</td><td>R$ ${g.totalComprovado.toFixed(2)}</td><td>R$ ${g.totalPendente.toFixed(2)}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -4176,15 +4355,16 @@ async function carregarRelatorioOrigemDestinoAcao() {
 async function carregarImoveisAcao() {
   const container = document.getElementById("resultadoImoveis");
   const res = await fetchProtegido(`${API_BASE}/imoveis`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum imóvel cadastrado no Patrimônio (v4.11, Tipo = IMOVEL).</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Imóvel</th><th>IPTU</th><th>AVCB</th><th>Alvará/Habite-se</th><th>Alerta</th></tr></thead><tbody>`;
   lista.forEach(i => {
-    html += `<tr><td>${escaparHtmlEbd(i.descricao)} (bemId ${i.bemId})</td><td>${i.iptuStatus || "-"} — ${i.iptuVigenciaFim || "-"} (${i.vigenciaIptu})</td>
-      <td>${i.avcbVigenciaFim || "-"} (${i.vigenciaAvcb})</td><td>${i.alvaraVigenciaFim || "-"} (${i.vigenciaAlvara})</td>
+    html += `<tr><td>${escaparHtmlEbd(i.descricao)} (bemId ${i.bemId})</td><td>${escaparHtmlEbd(i.iptuStatus) || "-"} — ${escaparHtmlEbd(i.iptuVigenciaFim) || "-"} (${escaparHtmlEbd(i.vigenciaIptu)})</td>
+      <td>${escaparHtmlEbd(i.avcbVigenciaFim) || "-"} (${escaparHtmlEbd(i.vigenciaAvcb)})</td><td>${escaparHtmlEbd(i.alvaraVigenciaFim) || "-"} (${escaparHtmlEbd(i.vigenciaAlvara)})</td>
       <td>${i.alertaRenovacao ? "⚠️ renovar" : "✅"}${i.impedidoReceberCulto ? "<br>⚠️ AVCB vencido (alerta)" : ""}</td></tr>`;
   });
   html += "</tbody></table>";
@@ -4217,14 +4397,15 @@ async function salvarImovelAcao() {
 async function carregarObrasAcao() {
   const container = document.getElementById("resultadoObras");
   const res = await fetchProtegido(`${API_BASE}/obras`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma obra cadastrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Título</th><th>Congregação</th><th>Status</th><th>Ações</th></tr></thead><tbody>`;
   lista.forEach(o => {
-    html += `<tr><td>${o.ObraId}</td><td>${o.Titulo}</td><td>${escaparHtmlEbd(o.congregacaoNome)}</td><td>${o.Status}</td>
+    html += `<tr><td>${o.ObraId}</td><td>${escaparHtmlEbd(o.Titulo)}</td><td>${escaparHtmlEbd(o.congregacaoNome)}</td><td>${escaparHtmlEbd(o.Status)}</td>
       <td>
         ${!o.DataPedraFundamental ? `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'MARCAR_PEDRA_FUNDAMENTAL')">Pedra fundamental</button>` : ""}
         <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'CONFIRMAR_PLACA')">Confirmar placa</button>
@@ -4287,7 +4468,7 @@ async function registrarObraMarcoAcao() {
     const marcos = await res2.json();
     const container = document.getElementById("resultadoObraMarcos");
     let html = `<table class="tabela-frequencia"><thead><tr><th>Descrição</th><th>Prevista</th><th>% Previsto</th><th>% Realizado</th><th>Valor previsto</th></tr></thead><tbody>`;
-    (Array.isArray(marcos) ? marcos : []).forEach(m => html += `<tr><td>${escaparHtmlEbd(m.Descricao)}</td><td>${m.DataPrevista}</td><td>${m.PercentualFisicoPrevisto}%</td><td>${m.PercentualFisicoRealizado}%</td><td>R$ ${Number(m.ValorPrevisto).toFixed(2)}</td></tr>`);
+    (Array.isArray(marcos) ? marcos : []).forEach(m => html += `<tr><td>${escaparHtmlEbd(m.Descricao)}</td><td>${escaparHtmlEbd(m.DataPrevista)}</td><td>${escaparHtmlEbd(m.PercentualFisicoPrevisto)}%</td><td>${escaparHtmlEbd(m.PercentualFisicoRealizado)}%</td><td>R$ ${Number(m.ValorPrevisto).toFixed(2)}</td></tr>`);
     html += "</tbody></table>";
     container.innerHTML = html;
   }
@@ -4306,7 +4487,8 @@ async function carregarOpcoesDizimistasReceber() {
   const select = document.getElementById("receberDizimista");
   if (!congregacaoId) { select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>`; return; }
   const res = await fetchProtegido(`${API_BASE}/dizimistas?congregacaoId=${congregacaoId}`);
-  const dizimistas = await res.json();
+  const dizimistas = await jsonDaTela(res, select, "lista");
+  if (dizimistas === null) return;
   select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>` +
     (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${escaparHtmlEbd(d.nome)}</option>`).join("") : "");
 }
@@ -4347,7 +4529,7 @@ async function salvarContaReceberAcao() {
 
 function badgeStatusContaReceber(status) {
   const mapa = { PREVISTO: "badge-licenca", VENCIDO: "badge-pendente", RECEBIDO: "badge-ativo", CANCELADO: "badge-desligado" };
-  return `<span class="badge-status ${mapa[status] || "badge-inativo"}">${status}</span>`;
+  return `<span class="badge-status ${mapa[status] || "badge-inativo"}">${escaparHtmlEbd(status)}</span>`;
 }
 
 async function carregarContasReceber() {
@@ -4358,7 +4540,8 @@ async function carregarContasReceber() {
   if (congregacaoId) params.set("congregacaoId", congregacaoId);
   if (status) params.set("status", status);
   const res = await fetchProtegido(`${API_BASE}/contas-receber?${params.toString()}`);
-  const contas = await res.json();
+  const contas = await jsonDaTela(res, container, "lista");
+  if (contas === null) return;
   if (!Array.isArray(contas) || contas.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma conta a receber encontrada.</p>";
     return;
@@ -4366,8 +4549,8 @@ async function carregarContasReceber() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Nome/Descrição</th><th>Categoria</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr></thead><tbody>`;
   contas.forEach(c => {
     html += `<tr>
-      <td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>${c.dizimistaNome || c.nomeAvulso || c.descricao || "—"}</td><td>${c.categoriaNome || c.tipo}</td>
-      <td>R$ ${Number(c.valor).toFixed(2)}</td><td>${c.dataVencimento}</td><td>${badgeStatusContaReceber(c.status)}</td>
+      <td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>${escaparHtmlEbd(c.dizimistaNome) || escaparHtmlEbd(c.nomeAvulso) || escaparHtmlEbd(c.descricao) || "—"}</td><td>${escaparHtmlEbd(c.categoriaNome) || escaparHtmlEbd(c.tipo)}</td>
+      <td>R$ ${Number(c.valor).toFixed(2)}</td><td>${escaparHtmlEbd(c.dataVencimento)}</td><td>${badgeStatusContaReceber(c.status)}</td>
       <td class="acoes-inline"><button class="btn-link" onclick="verDetalheContaReceberAcao(${c.contaReceberId})">Ver detalhe</button></td>
     </tr>`;
   });
@@ -4378,17 +4561,18 @@ async function carregarContasReceber() {
 async function verDetalheContaReceberAcao(contaReceberId) {
   const container = document.getElementById("detalheContaReceber");
   const res = await fetchProtegido(`${API_BASE}/contas-receber/${contaReceberId}`);
-  const c = await res.json();
-  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${c.mensagem}</p>`; return; }
+  const c = await jsonDaTela(res, container, "objeto");
+  if (c === null) return;
+  if (c.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(c.mensagem)}</p>`; return; }
 
-  let html = `<hr /><h4>${c.dizimistaNome || c.nomeAvulso || c.descricao || "—"} — R$ ${Number(c.valor).toFixed(2)} ${badgeStatusContaReceber(c.status)}</h4>
-    <p class="subtitle">${c.categoriaNome} — vencimento ${c.dataVencimento}${c.campanhaNome ? ` — campanha: ${c.campanhaNome}` : ""}</p>`;
+  let html = `<hr /><h4>${escaparHtmlEbd(c.dizimistaNome) || escaparHtmlEbd(c.nomeAvulso) || escaparHtmlEbd(c.descricao) || "—"} — R$ ${Number(c.valor).toFixed(2)} ${badgeStatusContaReceber(c.status)}</h4>
+    <p class="subtitle">${escaparHtmlEbd(c.categoriaNome)} — vencimento ${escaparHtmlEbd(c.dataVencimento)}${c.campanhaNome ? ` — campanha: ${escaparHtmlEbd(c.campanhaNome)}` : ""}</p>`;
   if (c.diasParaVencimento < 0 && c.status !== "RECEBIDO" && c.status !== "CANCELADO") {
     html += `<p class="subtitle">⚠️ Vencida há ${Math.abs(c.diasParaVencimento)} dia(s).</p>`;
   } else if (c.status === "PREVISTO") {
-    html += `<p class="subtitle">Faltam ${c.diasParaVencimento} dia(s) pro vencimento.</p>`;
+    html += `<p class="subtitle">Faltam ${escaparHtmlEbd(c.diasParaVencimento)} dia(s) pro vencimento.</p>`;
   }
-  if (c.motivoCancelamento) html += `<p class="subtitle">Motivo do cancelamento: ${c.motivoCancelamento}</p>`;
+  if (c.motivoCancelamento) html += `<p class="subtitle">Motivo do cancelamento: ${escaparHtmlEbd(c.motivoCancelamento)}</p>`;
 
   if (c.status === "PREVISTO" || c.status === "VENCIDO") {
     html += `
@@ -4452,7 +4636,8 @@ async function carregarOpcoesDizimistas() {
   const select = document.getElementById("financeiroLancDizimista");
   if (!congregacaoId) { select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>`; return; }
   const res = await fetchProtegido(`${API_BASE}/dizimistas?congregacaoId=${congregacaoId}`);
-  const dizimistas = await res.json();
+  const dizimistas = await jsonDaTela(res, select, "lista");
+  if (dizimistas === null) return;
   select.innerHTML = `<option value="">— Nome avulso (abaixo) —</option>` +
     (Array.isArray(dizimistas) ? dizimistas.map(d => `<option value="${d.dizimistaId}">${escaparHtmlEbd(d.nome)}</option>`).join("") : "");
 }
@@ -4555,7 +4740,8 @@ async function carregarLancamentosTesouraria() {
   const container = document.getElementById("resultadoLancamentosTesouraria");
   if (!congregacaoId || !mesReferencia) { container.innerHTML = ""; return; }
   const res = await fetchProtegido(`${API_BASE}/tesouraria-lancamentos?congregacaoId=${congregacaoId}&mesReferencia=${mesReferencia}`);
-  const lancamentos = await res.json();
+  const lancamentos = await jsonDaTela(res, container, "lista");
+  if (lancamentos === null) return;
   if (!Array.isArray(lancamentos) || lancamentos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum lançamento neste mês ainda.</p>";
     return;
@@ -4566,18 +4752,18 @@ async function carregarLancamentosTesouraria() {
       ? `Misto (PIX R$ ${Number(l.valorPix).toFixed(2)} + dinheiro R$ ${(Number(l.valor) - Number(l.valorPix)).toFixed(2)})`
       : l.formaPagamento;
     const comprovanteTag = l.comprovanteUrl
-      ? ` <a href="${l.comprovanteUrl}" target="_blank" rel="noopener">📎</a>`
+      ? ` <a href="${urlSegura(l.comprovanteUrl)}" target="_blank" rel="noopener">📎</a>`
       : (l.conciliacaoId ? ` <span class="badge-status badge-ativo">conciliado em lote</span>`
         : (l.comprovantePendente ? ` <span class="badge-status badge-licenca">⚠️ comprovante pendente</span>` : ""));
     // v4.3 — autolançamento do dizimista aguardando confirmação do
     // Tesoureiro nunca tem Termo nº ainda (só nasce na confirmação).
     let statusTag;
     if (l.status === "CANCELADO") {
-      statusTag = `<span class="badge-status badge-desligado">CANCELADO</span><br /><small>${l.motivoCancelamento || ""}</small>`;
+      statusTag = `<span class="badge-status badge-desligado">CANCELADO</span><br /><small>${escaparHtmlEbd(l.motivoCancelamento) || ""}</small>`;
     } else if (l.origem === "AUTOLANCAMENTO" && l.statusConfirmacao === "PENDENTE") {
       statusTag = `<span class="badge-status badge-pendente">Autolançamento — aguardando confirmação</span>`;
     } else if (l.origem === "AUTOLANCAMENTO" && l.statusConfirmacao === "REJEITADO") {
-      statusTag = `<span class="badge-status badge-desligado">Autolançamento rejeitado</span><br /><small>${l.motivoRejeicaoConfirmacao || ""}</small>`;
+      statusTag = `<span class="badge-status badge-desligado">Autolançamento rejeitado</span><br /><small>${escaparHtmlEbd(l.motivoRejeicaoConfirmacao) || ""}</small>`;
     } else if (l.origem === "AUTOLANCAMENTO") {
       statusTag = `<span class="badge-status badge-ativo">Confirmado (comprovante do dizimista)</span>`;
     } else {
@@ -4597,18 +4783,18 @@ async function carregarLancamentosTesouraria() {
       acoes = `<button class="btn-link" onclick="confirmarAutolancamentoAcao(${l.lancamentoId}, 'CONFIRMAR')">✅ Confirmar</button>
         <button class="btn-link btn-link-perigo" onclick="confirmarAutolancamentoAcao(${l.lancamentoId}, 'REJEITAR')">Rejeitar</button>`;
     } else if (!l.fechamentoId && l.status === "ATIVO" && !confirmadoAutolancamento) {
-      acoes = `<button class="btn-link btn-link-perigo" onclick="cancelarLancamentoTesourariaAcao(${l.lancamentoId}, ${l.termoNumero})">Cancelar</button>`;
+      acoes = `<button class="btn-link btn-link-perigo" onclick="cancelarLancamentoTesourariaAcao(${l.lancamentoId}, ${argJs(l.termoNumero)})">Cancelar</button>`;
       if (l.comprovantePendente) {
         acoes += ` <button class="btn-link" onclick="anexarComprovanteTesourariaAcao(${l.lancamentoId})">Anexar comprovante</button>`;
       }
     }
     html += `<tr>
-      <td>${podeConciliar ? `<input type="checkbox" class="chk-conciliar-pix" value="${l.lancamentoId}" data-valor="${valorPixParcela}" onchange="recalcularTotalConciliacaoPix()" />` : ""}</td>
-      <td>${l.termoNumero || "—"}</td>
-      <td>${l.dizimistaNome || l.nomeAvulso || l.descricao}</td>
-      <td>${rotuloTipoLancamento(l)}</td>
+      <td>${podeConciliar ? `<input type="checkbox" class="chk-conciliar-pix" value="${l.lancamentoId}" data-valor="${escaparHtmlEbd(valorPixParcela)}" onchange="recalcularTotalConciliacaoPix()" />` : ""}</td>
+      <td>${escaparHtmlEbd(l.termoNumero) || "—"}</td>
+      <td>${escaparHtmlEbd(l.dizimistaNome) || escaparHtmlEbd(l.nomeAvulso) || escaparHtmlEbd(l.descricao)}</td>
+      <td>${escaparHtmlEbd(rotuloTipoLancamento(l))}</td>
       <td>R$ ${Number(l.valor).toFixed(2)}</td>
-      <td>${formaTexto}${comprovanteTag}</td>
+      <td>${escaparHtmlEbd(formaTexto)}${comprovanteTag}</td>
       <td>${statusTag}</td>
       <td>${contabilizacaoTag}</td>
       <td class="acoes-inline">${acoes}</td>
@@ -4663,10 +4849,11 @@ async function carregarDizimistasMes() {
   if (!congregacaoId || !mesReferencia) { container.innerHTML = ""; return; }
 
   const res = await fetchProtegido(`${API_BASE}/tesouraria-dizimistas-mes?congregacaoId=${congregacaoId}&mesReferencia=${mesReferencia}`);
-  const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
 
-  let html = `<p class="subtitle"><strong>${data.totalContribuiram} de ${data.totalDizimistas}</strong> dizimistas cadastrados já contribuíram este mês.</p>
+  let html = `<p class="subtitle"><strong>${escaparHtmlEbd(data.totalContribuiram)} de ${escaparHtmlEbd(data.totalDizimistas)}</strong> dizimistas cadastrados já contribuíram este mês.</p>
     <table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Contribuiu?</th><th>Total no mês</th></tr></thead><tbody>`;
   data.dizimistas.forEach(d => {
     html += `<tr>
@@ -4744,16 +4931,17 @@ async function carregarResumoFechamento() {
   if (!congregacaoId || !mesReferencia) { container.innerHTML = ""; return; }
 
   const res = await fetchProtegido(`${API_BASE}/tesouraria-relatorio?congregacaoId=${congregacaoId}&mesReferencia=${mesReferencia}`);
-  const data = await res.json();
-  if (!data.sucesso) { container.innerHTML = `<p class="subtitle">${data.mensagem || "Erro ao carregar."}</p>`; return; }
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
+  if (!data.sucesso) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem) || "Erro ao carregar."}</p>`; return; }
 
   const f = data.fechamento;
-  const linhaValor = (rotulo, valor) => `<tr><td>${rotulo}</td><td>R$ ${Number(valor).toFixed(2)}</td></tr>`;
+  const linhaValor = (rotulo, valor) => `<tr><td>${escaparHtmlEbd(rotulo)}</td><td>R$ ${Number(valor).toFixed(2)}</td></tr>`;
 
   if (!f) {
     container.innerHTML = `
       <p class="subtitle">Mês ainda aberto — ${data.lancamentos.length} lançamento(s) registrado(s).</p>
-      <button class="btn-confirmar" style="width:auto;" onclick="fecharMesTesourariaAcao(${congregacaoId}, '${mesReferencia}')">🔒 Fechar mês</button>
+      <button class="btn-confirmar" style="width:auto;" onclick="fecharMesTesourariaAcao(${congregacaoId}, ${argJs(mesReferencia)})">🔒 Fechar mês</button>
       <p id="resultadoFecharMes" class="subtitle"></p>`;
     return;
   }
@@ -4772,10 +4960,10 @@ async function carregarResumoFechamento() {
        denominação: não há "envio" físico da congregação pra Geral, os 40%
        ficam retidos como saldo virtual (Centro de Custo Local) até a
        Tesouraria Geral conferir o fechamento e liberar. -->
-  <p class="subtitle">Situação: <span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : "badge-licenca"}">${f.status === "REPASSADO" ? "Saldo liberado pela Tesouraria Geral" : "Aguardando liberação da Tesouraria Geral"}</span>${f.dataRepasse ? ` — liberado em ${new Date(f.dataRepasse).toLocaleDateString("pt-BR")}${f.formaRepasse ? ` via ${f.formaRepasse}` : ""}` : ""}</p>`;
+  <p class="subtitle">Situação: <span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : "badge-licenca"}">${f.status === "REPASSADO" ? "Saldo liberado pela Tesouraria Geral" : "Aguardando liberação da Tesouraria Geral"}</span>${f.dataRepasse ? ` — liberado em ${new Date(f.dataRepasse).toLocaleDateString("pt-BR")}${f.formaRepasse ? ` via ${escaparHtmlEbd(f.formaRepasse)}` : ""}` : ""}</p>`;
 
   if (f.status !== "REPASSADO") {
-    if (authNivel === "GLOBAL") {
+    if (authGeral) {
       html += `
         <hr />
         <h4 style="margin:0 0 10px; color: var(--cor-primaria);">✅ Tesouraria Geral: conferir e liberar</h4>
@@ -4791,7 +4979,7 @@ async function carregarResumoFechamento() {
           <label>Comprovante (opcional):</label>
           <input type="file" id="financeiroComprovanteRepasse" accept="image/jpeg,image/png,application/pdf" />
         </div>
-        <button class="btn-confirmar" style="width:auto;" onclick="registrarRepasseTesourariaAcao(${congregacaoId}, '${mesReferencia}')">✅ Conferir e liberar saldo local</button>
+        ${authGeral ? `<button class="btn-confirmar" style="width:auto;" onclick="registrarRepasseTesourariaAcao(${congregacaoId}, ${argJs(mesReferencia)})">✅ Conferir e liberar saldo local</button>` : ""}
         <p id="resultadoRepasse" class="subtitle"></p>`;
     } else {
       html += `<p class="subtitle">Só a Tesouraria Geral pode conferir e liberar este saldo.</p>`;
@@ -4836,19 +5024,20 @@ async function gerarRelatorioTesourariaAcao(modo) {
   if (!congregacaoId || !mesReferencia) { mostrarToast("Escolha a congregação e o mês.", "erro"); return; }
 
   const res = await fetchProtegido(`${API_BASE}/tesouraria-relatorio?congregacaoId=${congregacaoId}&mesReferencia=${mesReferencia}&modo=${modo}`);
-  const data = await res.json();
-  if (!data.sucesso) { container.innerHTML = `<p class="subtitle">${data.mensagem || "Erro ao gerar relatório."}</p>`; return; }
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
+  if (!data.sucesso) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem) || "Erro ao gerar relatório."}</p>`; return; }
 
-  let html = `<h4>${escaparHtmlEbd(data.congregacaoNome)} — ${data.mesReferencia} (${modo === "mural" ? "versão mural, sem valores" : "versão completa"})</h4>
+  let html = `<h4>${escaparHtmlEbd(data.congregacaoNome)} — ${escaparHtmlEbd(data.mesReferencia)} (${modo === "mural" ? "versão mural, sem valores" : "versão completa"})</h4>
     <table class="tabela-frequencia"><thead><tr><th>Termo</th><th>Nome</th><th>Tipo</th>${modo === "mural" ? "" : "<th>Valor</th><th>Forma</th>"}</tr></thead><tbody>`;
   data.lancamentos.forEach(l => {
     // Cancelado (folha arrancada do bloco físico) nunca some da numeração —
     // continua aparecendo no relatório, marcado como tal, com o motivo.
     if (l.status === "CANCELADO") {
-      html += `<tr style="opacity:.6;"><td>${l.termoNumero}</td><td colspan="${modo === "mural" ? 2 : 4}"><em>CANCELADO — ${l.motivoCancelamento || "sem motivo registrado"}</em></td></tr>`;
+      html += `<tr style="opacity:.6;"><td>${escaparHtmlEbd(l.termoNumero)}</td><td colspan="${modo === "mural" ? 2 : 4}"><em>CANCELADO — ${escaparHtmlEbd(l.motivoCancelamento) || "sem motivo registrado"}</em></td></tr>`;
       return;
     }
-    html += `<tr><td>${l.termoNumero}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${rotuloTipoLancamento(l.tipo)}</td>${modo === "mural" ? "" : `<td>R$ ${Number(l.valor).toFixed(2)}</td><td>${l.formaPagamento}</td>`}</tr>`;
+    html += `<tr><td>${escaparHtmlEbd(l.termoNumero)}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${escaparHtmlEbd(rotuloTipoLancamento(l.tipo))}</td>${modo === "mural" ? "" : `<td>R$ ${Number(l.valor).toFixed(2)}</td><td>${escaparHtmlEbd(l.formaPagamento)}</td>`}</tr>`;
   });
   html += "</tbody></table>";
   if (data.fechamento) {
@@ -4890,7 +5079,8 @@ async function carregarConsolidadoTesouraria() {
   const container = document.getElementById("resultadoConsolidadoTesouraria");
   const qs = mesReferencia ? `?mesReferencia=${mesReferencia}` : "";
   const res = await fetchProtegido(`${API_BASE}/tesouraria-fechamentos${qs}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   const fechamentos = data.fechamentos || [];
 
   if (fechamentos.length === 0) {
@@ -4925,7 +5115,7 @@ async function carregarConsolidadoTesouraria() {
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Total Final</th><th>Centro de Custo Geral</th><th>Situação</th></tr></thead><tbody>`;
   fechamentos.forEach(f => {
     html += `<tr>
-      <td>${escaparHtmlEbd(f.congregacaoNome)}</td><td>${f.mesReferencia}</td>
+      <td>${escaparHtmlEbd(f.congregacaoNome)}</td><td>${escaparHtmlEbd(f.mesReferencia)}</td>
       <td>R$ ${Number(f.totalFinal).toFixed(2)}</td><td>R$ ${Number(f.valorRepasseGeral).toFixed(2)}</td>
       <td><span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : "badge-licenca"}">${f.status === "REPASSADO" ? "Liberado" : "Pendente"}</span></td>
     </tr>`;
@@ -4942,7 +5132,7 @@ async function carregarMinhaFoto() {
   const data = await res.json();
   if (!data.sucesso) { preview.innerHTML = ""; return; }
   preview.innerHTML = data.fotoUrl
-    ? `<img src="${data.fotoUrl}" alt="Minha foto" style="max-width:160px;border-radius:8px;" />`
+    ? `<img src="${urlSegura(data.fotoUrl)}" alt="Minha foto" style="max-width:160px;border-radius:8px;" />`
     : "<span class='subtitle'>Você ainda não tem foto cadastrada.</span>";
 }
 
@@ -5018,15 +5208,17 @@ async function salvarMeusDadosAcao() {
 async function carregarOpcoesMeuVinculoTipo() {
   const select = document.getElementById("meuVinculoTipo");
   const res = await fetchProtegido(`${API_BASE}/catalogos/tiposVinculoFamiliar`);
-  const tipos = await res.json();
-  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.tipoVinculoId}">${t.rotuloDireto}</option>`).join("");
+  const tipos = await jsonDaTela(res, select, "objeto");
+  if (tipos === null) return;
+  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.tipoVinculoId}">${escaparHtmlEbd(t.rotuloDireto)}</option>`).join("");
 }
 
 async function carregarMeusVinculos() {
   if (!authMatricula) return;
   const container = document.getElementById("resultadoListaMeusVinculos");
   const res = await fetchProtegido(`${API_BASE}/meus-vinculos/${authMatricula}`);
-  const vinculos = await res.json();
+  const vinculos = await jsonDaTela(res, container, "lista");
+  if (vinculos === null) return;
   if (!Array.isArray(vinculos) || vinculos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum vínculo familiar cadastrado ainda.</p>";
     return;
@@ -5034,8 +5226,8 @@ async function carregarMeusVinculos() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Parentesco</th><th>Pessoa</th><th></th></tr></thead><tbody>`;
   vinculos.forEach(v => {
     html += `<tr>
-      <td>${v.rotulo}</td>
-      <td>${v.outraPessoaNome} (${v.outraPessoaId})${v.outraPessoaEhResponsavel ? ' <span class="badge-status badge-ativo">Responsável Legal</span>' : ""}</td>
+      <td>${escaparHtmlEbd(v.rotulo)}</td>
+      <td>${escaparHtmlEbd(v.outraPessoaNome)} (${v.outraPessoaId})${v.outraPessoaEhResponsavel ? ' <span class="badge-status badge-ativo">Responsável Legal</span>' : ""}</td>
       <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="removerMeuVinculoAcao(${v.vinculoId})">Remover</button></td>
     </tr>`;
   });
@@ -5120,7 +5312,8 @@ async function carregarMinhasSolicitacoesEdicao() {
   if (!authMatricula) return;
   const container = document.getElementById("resultadoListaSolicitacoesEdicao");
   const res = await fetchProtegido(`${API_BASE}/solicitacoes-edicao/${authMatricula}`);
-  const solicitacoes = await res.json();
+  const solicitacoes = await jsonDaTela(res, container, "lista");
+  if (solicitacoes === null) return;
   if (!Array.isArray(solicitacoes) || solicitacoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma solicitação enviada ainda.</p>";
     return;
@@ -5130,10 +5323,10 @@ async function carregarMinhasSolicitacoesEdicao() {
     s.campos.forEach((c, i) => {
       html += `<tr>
         ${i === 0 ? `<td rowspan="${s.campos.length}">${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</td>` : ""}
-        <td>${c.nomeCampo}</td>
-        <td>${c.valorAnterior || "-"}</td>
-        <td>${c.valorProposto}</td>
-        <td>${ROTULO_STATUS_SOLICITACAO_EDICAO[c.status] || c.status}</td>
+        <td>${escaparHtmlEbd(c.nomeCampo)}</td>
+        <td>${escaparHtmlEbd(c.valorAnterior) || "-"}</td>
+        <td>${escaparHtmlEbd(c.valorProposto)}</td>
+        <td>${ROTULO_STATUS_SOLICITACAO_EDICAO[c.status] || escaparHtmlEbd(c.status)}</td>
       </tr>`;
     });
   });
@@ -5171,7 +5364,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "catalogos") montarCatalogos();
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); carregarNotificacaoRegras(); }
   if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); carregarTurmasBatismo(); carregarCandidatosBatismo(); }
-  if (aba === "enquetes") carregarEnquetes();
+  if (aba === "enquetes") { ajustarFormEnquetePorNivel(); carregarEnquetes(); }
   if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); carregarPoliticasRetencao(); carregarTextoMestre(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }
   if (aba === "abandono") { carregarRadarAbandono(); carregarOpcoesTentativaContato(); carregarRadarAbandonoDigital(); carregarProcedimentosAbandono(); }
@@ -5267,7 +5460,7 @@ function escolherReuniaoParaCheckin(sessoes, mensagem) {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
       <h3>Qual reunião?</h3>
-      <p>${mensagem || ""}</p>
+      <p>${escaparHtmlEbd(mensagem)}</p>
       <div class="modal-acoes" style="flex-direction:column; align-items:stretch;">
         ${sessoes.map(s => `<button class="btn-confirmar" style="margin-bottom:6px;" data-sessao="${s.sessaoId}">${escaparHtmlEbd(s.orgaoNome)} — ${escaparHtmlEbd(s.descricao)}</button>`).join("")}
         <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
@@ -5288,7 +5481,7 @@ function statusFrequencia(item) {
 }
 function badgeStatusPessoa(status) {
   const classes = { ATIVO: "badge-ativo", "LICENÇA": "badge-licenca", INATIVO: "badge-inativo", DESLIGADO: "badge-desligado", FALECIDO: "badge-desligado" };
-  return `<span class="badge-status ${classes[status] || ""}">${status}</span>`;
+  return `<span class="badge-status ${classes[status] || ""}">${escaparHtmlEbd(status)}</span>`;
 }
 
 function idadeDe(dataNascimento) {
@@ -5311,13 +5504,13 @@ function badgeCategoria(capacidade) {
     "Congregado": "badge-inativo",
     "Dados incompletos": "badge-licenca"
   };
-  let html = `<span class="badge-status ${cores[c.categoria] || "badge-licenca"}">${c.categoria || "-"}</span>`;
+  let html = `<span class="badge-status ${cores[c.categoria] || "badge-licenca"}">${escaparHtmlEbd(c.categoria) || "-"}</span>`;
   // v1.2 — a categoria NÃO muda com a integração: o batismo já torna a pessoa
   // "Membro em Comunhão" (Art. 7º II). Os 90 dias apenas restringem votar/ser votado,
   // então o período aparece como um aviso à parte, sem substituir a categoria.
   if (c.emPeriodoIntegracao) {
     const restantes = c.diasRestantesIntegracao != null ? c.diasRestantesIntegracao : 0;
-    html += ` <span class="badge-status badge-licenca" title="Período de Integração — Art. 6º §2º">⏳ ${restantes}d p/ votar</span>`;
+    html += ` <span class="badge-status badge-licenca" title="Período de Integração — Art. 6º §2º">⏳ ${escaparHtmlEbd(restantes)}d p/ votar</span>`;
   }
   return html;
 }
@@ -5325,7 +5518,8 @@ function badgeCategoria(capacidade) {
 async function carregarOrgaos() {
   const container = document.getElementById("resultadoListaOrgaos");
   const res = await fetchProtegido(`${API_BASE}/orgaos`);
-  const orgaos = await res.json();
+  const orgaos = await jsonDaTela(res, container, "objeto");
+  if (orgaos === null) return;
   window._orgaosCache = orgaos;
   let html = `<table class="tabela-frequencia"><thead><tr>
     <th>ID</th><th>Sigla</th><th>Nome</th><th>Quórum mín.</th><th>Quórum delib.</th><th>Faltas</th><th></th>
@@ -5333,14 +5527,14 @@ async function carregarOrgaos() {
   orgaos.forEach(o => {
     html += `<tr>
       <td>${o.orgaoId}</td>
-      <td>${o.sigla}</td>
+      <td>${escaparHtmlEbd(o.sigla)}</td>
       <td>${escaparHtmlEbd(o.nome)}</td>
-      <td>${o.quorumMinimoPct ?? "-"}</td>
-      <td>${o.quorumDeliberativoPct ?? "-"}</td>
-      <td>${o.faltasParaPerdaAssento ?? "-"}</td>
+      <td>${escaparHtmlEbd(o.quorumMinimoPct ?? "-")}</td>
+      <td>${escaparHtmlEbd(o.quorumDeliberativoPct ?? "-")}</td>
+      <td>${escaparHtmlEbd(o.faltasParaPerdaAssento ?? "-")}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarOrgao(${o.orgaoId})">Editar</button>
-        <button class="btn-link btn-link-perigo" onclick="excluirOrgao(${o.orgaoId})">Excluir</button>
+        ${authGeral ? `<button class="btn-link" onclick="editarOrgao(${o.orgaoId})">Editar</button>
+        <button class="btn-link btn-link-perigo" onclick="excluirOrgao(${o.orgaoId})">Excluir</button>` : ""}
       </td>
     </tr>`;
   });
@@ -5354,13 +5548,14 @@ async function carregarOrgaos() {
 function badgeSituacaoAssento(situacao) {
   const classes = { ATIVA: "badge-ativo", MANDATO_VENCIDO: "badge-licenca", ENCERRADA: "badge-desligado" };
   const rotulos = { ATIVA: "Ativa", MANDATO_VENCIDO: "Mandato vencido", ENCERRADA: "Encerrada" };
-  return `<span class="badge-status ${classes[situacao] || ""}">${rotulos[situacao] || situacao}</span>`;
+  return `<span class="badge-status ${classes[situacao] || ""}">${rotulos[situacao] || escaparHtmlEbd(situacao)}</span>`;
 }
 
 async function carregarAssentos() {
   const container = document.getElementById("resultadoListaAssentos");
   const res = await fetchProtegido(`${API_BASE}/assentos`);
-  const assentos = await res.json();
+  const assentos = await jsonDaTela(res, container, "lista");
+  if (assentos === null) return;
   if (!Array.isArray(assentos) || assentos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma cadeira cadastrada ainda.</p>";
     return;
@@ -5374,11 +5569,11 @@ async function carregarAssentos() {
       <td>${escaparHtmlEbd(a.nome)}</td>
       <td>${escaparHtmlEbd(a.orgaoNome)}</td>
       <td>${a.tipoAssento === "ORDENACAO" ? "Ordenação" : "Função"}</td>
-      <td>${a.cargoOuFuncao || "-"}</td>
-      <td>${a.dataInicio}</td>
-      <td>${a.dataTerminoPrevisao || "sem prazo"}</td>
+      <td>${escaparHtmlEbd(a.cargoOuFuncao) || "-"}</td>
+      <td>${escaparHtmlEbd(a.dataInicio)}</td>
+      <td>${escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo"}</td>
       <td>${badgeSituacaoAssento(a.situacaoEfetiva)}</td>
-      <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="encerrarAssentoAcao(${a.assentoId})">Encerrar</button></td>
+      <td class="acoes-inline">${authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -5567,10 +5762,10 @@ async function carregarRopa() {
   const registros = await res.json();
   container.innerHTML = registros.map(r => `
     <div style="border:1px solid var(--cor-borda); border-radius:8px; padding:12px; margin-bottom:10px;">
-      <strong>${r.finalidade}</strong>
-      <p class="subtitle" style="margin:4px 0;">Titulares: ${r.titulares} — Base legal: ${r.baseLegal}</p>
-      <p class="subtitle" style="margin:4px 0;">Retenção: ${r.retencao}</p>
-      <p class="subtitle" style="margin:4px 0;">Tabelas: ${Object.entries(r.contagens).map(([t, n]) => `${t} (${n})`).join(", ")}</p>
+      <strong>${escaparHtmlEbd(r.finalidade)}</strong>
+      <p class="subtitle" style="margin:4px 0;">Titulares: ${escaparHtmlEbd(r.titulares)} — Base legal: ${escaparHtmlEbd(r.baseLegal)}</p>
+      <p class="subtitle" style="margin:4px 0;">Retenção: ${escaparHtmlEbd(r.retencao)}</p>
+      <p class="subtitle" style="margin:4px 0;">Tabelas: ${Object.entries(r.contagens).map(([t, n]) => `${escaparHtmlEbd(t)} (${escaparHtmlEbd(n)})`).join(", ")}</p>
     </div>
   `).join("");
 }
@@ -5582,12 +5777,12 @@ async function carregarRipd() {
   const ripds = await res.json();
   container.innerHTML = ripds.map(r => `
     <div style="border:1px solid var(--cor-borda); border-radius:8px; padding:12px; margin-bottom:10px;">
-      <strong>${r.tratamento}</strong>
+      <strong>${escaparHtmlEbd(r.tratamento)}</strong>
       ${r.riscoIdentificado ? `
-        <p class="subtitle" style="margin:4px 0;">Risco: ${r.riscoIdentificado}</p>
-        <p class="subtitle" style="margin:4px 0;">Mitigação: ${r.medidasMitigacao.join("; ")}</p>
+        <p class="subtitle" style="margin:4px 0;">Risco: ${escaparHtmlEbd(r.riscoIdentificado)}</p>
+        <p class="subtitle" style="margin:4px 0;">Mitigação: ${escaparHtmlEbd(r.medidasMitigacao.join("; "))}</p>
       ` : ""}
-      <p class="subtitle" style="margin:4px 0;">Risco residual: ${r.riscoResidual}</p>
+      <p class="subtitle" style="margin:4px 0;">Risco residual: ${escaparHtmlEbd(r.riscoResidual)}</p>
     </div>
   `).join("");
 }
@@ -5622,19 +5817,19 @@ function montarCatalogos() {
 function secaoCatalogo(key) {
   const c = CATALOGOS_CFG[key];
   const camposHtml = c.campos.map(([id, rotulo, opcoes]) => opcoes
-    ? `<select id="cat_${key}_${id}"><option value="">${rotulo}</option>${opcoes.map(([v, r]) => `<option value="${v}">${r}</option>`).join("")}</select>`
-    : `<input type="text" id="cat_${key}_${id}" placeholder="${rotulo}" style="min-width:150px;" />`
+    ? `<select id="cat_${key}_${id}"><option value="">${escaparHtmlEbd(rotulo)}</option>${opcoes.map(([v, r]) => `<option value="${escaparHtmlEbd(v)}">${escaparHtmlEbd(r)}</option>`).join("")}</select>`
+    : `<input type="text" id="cat_${key}_${id}" placeholder="${escaparHtmlEbd(rotulo)}" style="min-width:150px;" />`
   ).join("");
-  const paiHtml = c.pai ? `<select id="cat_${key}_${c.pai.campo}" style="min-width:180px;"><option value="">Sem ${c.pai.rotulo}</option></select>` : "";
+  const paiHtml = c.pai ? `<select id="cat_${key}_${escaparHtmlEbd(c.pai.campo)}" style="min-width:180px;"><option value="">Sem ${escaparHtmlEbd(c.pai.rotulo)}</option></select>` : "";
   return `<div class="cartao-perfil" style="margin-bottom:16px;">
     <h4 style="margin:0 0 10px; color: var(--cor-primaria);">${escaparHtmlEbd(c.titulo)}</h4>
-    <div class="barra-lista">
+    <div class="barra-lista so-geral"><!-- escrever no catálogo é só do geral (GestaoCatalogos); os demais só consultam -->
       ${camposHtml}
       ${paiHtml}
-      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarCatalogo('${key}')">➕ Adicionar</button>
+      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarCatalogo(${argJs(key)})">➕ Adicionar</button>
     </div>
     <div class="barra-lista">
-      <input type="text" id="busca_${key}" placeholder="🔍 Buscar" oninput="filtrarCatalogo('${key}')" style="min-width:150px;" />
+      <input type="text" id="busca_${key}" placeholder="🔍 Buscar" oninput="filtrarCatalogo(${argJs(key)})" style="min-width:150px;" />
       <span id="info_${key}" class="subtitle" style="margin:0;"></span>
     </div>
     <div class="rolagem-tabela"><div id="lista_cat_${key}"></div></div>
@@ -5646,11 +5841,11 @@ async function carregarOpcoesPai(key) {
   const c = CATALOGOS_CFG[key];
   if (!c.pai) return;
   const res = await fetchProtegido(`${API_BASE}/catalogos/${c.pai.origem}`);
-  const itens = await res.json();
+  const itens = await listaDaApi(res);
   const select = document.getElementById(`cat_${key}_${c.pai.campo}`);
   if (!select) return;
   const idField = CATALOGOS_CFG[c.pai.origem].idField;
-  select.innerHTML = `<option value="">Sem ${c.pai.rotulo}</option>` + itens.map(x => `<option value="${x[idField]}">${escaparHtmlEbd(x.nome)}</option>`).join("");
+  select.innerHTML = `<option value="">Sem ${escaparHtmlEbd(c.pai.rotulo)}</option>` + itens.map(x => `<option value="${escaparHtmlEbd(x[idField])}">${escaparHtmlEbd(x.nome)}</option>`).join("");
 }
 
 async function carregarCatalogoLista(key) {
@@ -5659,7 +5854,7 @@ async function carregarCatalogoLista(key) {
   catalogoCache[key] = await res.json();
   if (c.pai) {
     const pres = await fetchProtegido(`${API_BASE}/catalogos/${c.pai.origem}`);
-    const pitens = await pres.json();
+    const pitens = await listaDaApi(pres);
     const pidField = CATALOGOS_CFG[c.pai.origem].idField;
     catalogoCache[`_pai_${key}`] = {};
     pitens.forEach(x => catalogoCache[`_pai_${key}`][x[pidField]] = x.nome);
@@ -5687,15 +5882,15 @@ function renderizarCatalogo(key) {
   } else {
     let html = "<table class='tabela-frequencia'><thead><tr>";
     c.campos.forEach(([id]) => html += `<th>${id}</th>`);
-    if (c.pai) html += `<th>${c.pai.rotulo}</th>`;
+    if (c.pai) html += `<th>${escaparHtmlEbd(c.pai.rotulo)}</th>`;
     html += "<th></th></tr></thead><tbody>";
     pagina.forEach(x => {
       html += "<tr>";
-      c.campos.forEach(([id]) => html += `<td>${x[id] ?? "-"}</td>`);
-      if (c.pai) html += `<td>${(catalogoCache[`_pai_${key}`] || {})[x[c.pai.campo]] || "-"}</td>`;
+      c.campos.forEach(([id]) => html += `<td>${escaparHtmlEbd(x[id] ?? "-")}</td>`);
+      if (c.pai) html += `<td>${escaparHtmlEbd((catalogoCache[`_pai_${key}`] || {})[x[c.pai.campo]]) || "-"}</td>`;
       html += `<td class="acoes-inline">
-        <button class="btn-link" onclick="editarCatalogo('${key}', '${x[c.idField]}')">Editar</button>
-        <button class="btn-link btn-link-perigo" onclick="excluirCatalogo('${key}', '${x[c.idField]}')">Excluir</button>
+        ${authGeral ? `<button class="btn-link" onclick="editarCatalogo(${argJs(key)}, ${argJs(x[c.idField])})">Editar</button>
+        <button class="btn-link btn-link-perigo" onclick="excluirCatalogo(${argJs(key)}, ${argJs(x[c.idField])})">Excluir</button>` : ""}
       </td></tr>`;
     });
     html += "</tbody></table>";
@@ -5704,9 +5899,9 @@ function renderizarCatalogo(key) {
 
   document.getElementById(`info_${key}`).textContent = `${total} registro(s)`;
   document.getElementById(`pag_${key}`).innerHTML = totalPaginas > 1 ? `
-    <button ${catalogoPagina[key] === 1 ? "disabled" : ""} onclick="mudarPaginaCatalogo('${key}', -1)">←</button>
-    <span class="info-pagina">${catalogoPagina[key]} / ${totalPaginas}</span>
-    <button ${catalogoPagina[key] === totalPaginas ? "disabled" : ""} onclick="mudarPaginaCatalogo('${key}', 1)">→</button>` : "";
+    <button ${catalogoPagina[key] === 1 ? "disabled" : ""} onclick="mudarPaginaCatalogo(${argJs(key)}, -1)">←</button>
+    <span class="info-pagina">${escaparHtmlEbd(catalogoPagina[key])} / ${totalPaginas}</span>
+    <button ${catalogoPagina[key] === totalPaginas ? "disabled" : ""} onclick="mudarPaginaCatalogo(${argJs(key)}, 1)">→</button>` : "";
 }
 
 function mudarPaginaCatalogo(key, delta) {
@@ -5771,14 +5966,16 @@ let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar 
 // vez (mostrarAbaSecretaria('reunioes') só é chamado a partir de um deles).
 function renderizarListaOrgaosModulo(containerId, lista) {
   document.getElementById(containerId).innerHTML = lista.map(o => `
-    <button class="btn-aba" id="btnSubReunioes${o.chave.replace(":", "_")}" onclick="selecionarOrgaoReunioes('${o.chave}')">
+    <button class="btn-aba" id="btnSubReunioes${escaparHtmlEbd(o.chave.replace(":", "_"))}" onclick="selecionarOrgaoReunioes(${argJs(o.chave)})">
       <span class="icone">🏛️</span><span class="rotulo">${escaparHtmlEbd(o.nome)}</span>
     </button>`).join("");
 }
 
 async function montarSubmenuOrgaosCentrais() {
   const res = await fetchProtegido(`${API_BASE}/orgaos`);
-  const orgaos = (await res.json()).map(o => Object.assign({}, o, { chave: `central:${o.orgaoId}` }));
+  const brutos = await jsonDaTela(res, document.getElementById("submenuOrgaosCentrais"), "lista");
+  if (brutos === null) return;
+  const orgaos = brutos.map(o => Object.assign({}, o, { chave: `central:${o.orgaoId}` }));
   window._orgaosReunioesCache = orgaos;
   renderizarListaOrgaosModulo("submenuOrgaosCentrais", orgaos);
   if (orgaos.length === 0) return;
@@ -5791,7 +5988,9 @@ async function montarSubmenuOrgaosCentrais() {
 // denominação em vez de só as da própria área (v4.2.2).
 async function montarSubmenuOrgaosRegionais() {
   const res = await fetchProtegido(`${API_BASE}/meus-orgaos-locais`);
-  const locais = (await res.json())
+  const brutos = await jsonDaTela(res, document.getElementById("submenuOrgaosRegionais"), "lista");
+  if (brutos === null) return;
+  const locais = brutos
     .map(o => Object.assign({}, o, { chave: `local:${o.orgaoLocalId}`, nome: `${o.sigla} — ${o.nome}` }));
   window._orgaosReunioesCache = locais;
   renderizarListaOrgaosModulo("submenuOrgaosRegionais", locais);
@@ -5830,7 +6029,7 @@ function selecionarOrgaoReunioes(chave) {
   if (ehAssembleia) carregarConvocacoesPendentes();
   if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); carregarProjetos(); }
   if (ehDiretoria) { carregarAssentosDiretoria(); carregarSucessaoPresidencial(); }
-  if (ehConselhoFiscal) { carregarAssentosConselhoFiscal(); carregarMedidasCautelares(); }
+  if (ehConselhoFiscal) { carregarAssentosConselhoFiscal(); if (authGeral) carregarMedidasCautelares(); } // medidas cautelares: rota inteira só do geral
   if (ehCEI) carregarAssentosCEI();
   carregarReunioes();
 }
@@ -5843,7 +6042,8 @@ function orgaoIdCLI() {
 async function carregarComposicaoCLI() {
   const container = document.getElementById("resultadoComposicaoCLI");
   const res = await fetchProtegido(`${API_BASE}/cli/composicao`);
-  const composicao = await res.json();
+  const composicao = await jsonDaTela(res, container, "lista");
+  if (composicao === null) return;
   if (!Array.isArray(composicao) || composicao.length === 0) {
     container.innerHTML = "<p class='subtitle'>Ninguém compõe a CLI ainda.</p>";
     return;
@@ -5853,14 +6053,14 @@ async function carregarComposicaoCLI() {
   </tr></thead><tbody>`;
   composicao.forEach(m => {
     let comoEntra;
-    if (m.viaOrdenacao) comoEntra = `Ordenação (${nomeCargoPorSigla(m.cargoMinisterial)})`;
-    else if (m.orgaoOrigemNome && m.orgaoOrigemNome !== "Câmara de Liderança Institucional") comoEntra = `Função (${m.cargoOuFuncao || "-"}, herdado da ${m.orgaoOrigemNome})`;
-    else comoEntra = `Função (${m.cargoOuFuncao || "-"})`;
+    if (m.viaOrdenacao) comoEntra = `Ordenação (${escaparHtmlEbd(nomeCargoPorSigla(m.cargoMinisterial))})`;
+    else if (m.orgaoOrigemNome && m.orgaoOrigemNome !== "Câmara de Liderança Institucional") comoEntra = `Função (${escaparHtmlEbd(m.cargoOuFuncao) || "-"}, herdado da ${escaparHtmlEbd(m.orgaoOrigemNome)})`;
+    else comoEntra = `Função (${escaparHtmlEbd(m.cargoOuFuncao) || "-"})`;
     const situacao = m.processoDisciplinarAtivo ? "Sob disciplina (não conta)" : (!m.emComunhao ? "Sem comunhão (não conta)" : "Ativo");
     html += `<tr>
       <td>${m.membroId}</td>
       <td>${escaparHtmlEbd(m.nome)}</td>
-      <td>${m.congregacao || "-"}</td>
+      <td>${escaparHtmlEbd(m.congregacao) || "-"}</td>
       <td>${comoEntra}</td>
       <td>${situacao}</td>
     </tr>`;
@@ -5874,7 +6074,8 @@ async function carregarAssentosCLI() {
   const orgaoId = orgaoIdCLI();
   if (!orgaoId) return;
   const res = await fetchProtegido(`${API_BASE}/assentos?orgaoId=${orgaoId}`);
-  const assentos = await res.json();
+  const assentos = await jsonDaTela(res, container, "lista");
+  if (assentos === null) return;
   if (!Array.isArray(assentos) || assentos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma cadeira aberta direto na CLI ainda.</p>";
     return;
@@ -5886,11 +6087,11 @@ async function carregarAssentosCLI() {
     html += `<tr>
       <td>${a.membroId}</td>
       <td>${escaparHtmlEbd(a.nome)}</td>
-      <td>${a.cargoOuFuncao || "-"}</td>
-      <td>${a.dataInicio}</td>
-      <td>${a.dataTerminoPrevisao || "sem prazo"}</td>
+      <td>${escaparHtmlEbd(a.cargoOuFuncao) || "-"}</td>
+      <td>${escaparHtmlEbd(a.dataInicio)}</td>
+      <td>${escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo"}</td>
       <td>${badgeSituacaoAssento(a.situacaoEfetiva)}</td>
-      <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="encerrarAssentoCLIAcao(${a.assentoId})">Encerrar</button></td>
+      <td class="acoes-inline">${authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoCLIAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -5942,8 +6143,8 @@ function tabelaComissaoCalculada(lista, siglaCadastroManual) {
       <td>${m.membroId}</td>
       <td>${escaparHtmlEbd(m.nome)}</td>
       ${siglaCadastroManual
-        ? `<td>${m.dataInicio}</td><td><button class="btn-link btn-link-perigo" onclick="removerMembroComissaoAcao('${siglaCadastroManual}', ${m.comissaoMembroId})">Remover</button></td>`
-        : `<td>${m.cargoOuFuncao || "-"}${m.origemSigla ? ` (${m.origemSigla})` : ""}</td>`}
+        ? `<td>${escaparHtmlEbd(m.dataInicio)}</td><td>${authGeral ? `<button class="btn-link btn-link-perigo" onclick="removerMembroComissaoAcao('${siglaCadastroManual}', ${m.comissaoMembroId})">Remover</button>` : ""}</td>`
+        : `<td>${escaparHtmlEbd(m.cargoOuFuncao) || "-"}${m.origemSigla ? ` (${escaparHtmlEbd(m.origemSigla)})` : ""}</td>`}
     </tr>`;
   });
   html += "</tbody></table>";
@@ -5962,7 +6163,8 @@ async function removerMembroComissaoAcao(sigla, comissaoMembroId) {
 
 async function carregarComissoes() {
   const res = await fetchProtegido(`${API_BASE}/comissoes`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, ["resultadoListaCCJ", "resultadoListaCFO", "resultadoListaCEP", "resultadoListaPMO"].map(id => document.getElementById(id)), "objeto");
+  if (data === null) return;
   window._ccjCache = data.CCJ || [];
   if (document.getElementById("resultadoListaCCJ")) document.getElementById("resultadoListaCCJ").innerHTML = tabelaComissaoCalculada(data.CCJ, "ccj");
   if (document.getElementById("resultadoListaCFO")) document.getElementById("resultadoListaCFO").innerHTML = tabelaComissaoCalculada(data.CFO, false);
@@ -6035,7 +6237,8 @@ const ROTULO_STATUS_PROJETO = { EM_PARECER: "Em parecer", APTO_VOTACAO: "Apto pa
 async function carregarProjetos() {
   const container = document.getElementById("resultadoListaProjetos");
   const res = await fetchProtegido(`${API_BASE}/projetos`);
-  const projetos = await res.json();
+  const projetos = await jsonDaTela(res, container, "lista");
+  if (projetos === null) return;
   if (!Array.isArray(projetos) || projetos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum projeto protocolado ainda.</p>";
     return;
@@ -6043,19 +6246,19 @@ async function carregarProjetos() {
   let html = "";
   projetos.forEach(p => {
     const pareceresHtml = (p.pareceres || []).map(par => {
-      const rotulo = par.parecer ? `${par.parecer === "FAVORAVEL" ? "✅" : "❌"} ${par.parecer} (${par.dataEmissao})` : "⏳ pendente";
+      const rotulo = par.parecer ? `${par.parecer === "FAVORAVEL" ? "✅" : "❌"} ${escaparHtmlEbd(par.parecer)} (${escaparHtmlEbd(par.dataEmissao)})` : "⏳ pendente";
       const botoes = !par.parecer ? `
-        <button class="btn-link" onclick="emitirParecerAcao(${p.projetoId}, '${par.sigla}', 'FAVORAVEL')">Favorável</button>
-        <button class="btn-link btn-link-perigo" onclick="emitirParecerAcao(${p.projetoId}, '${par.sigla}', 'CONTRARIO')">Contrário</button>` : "";
-      return `<li>${par.sigla}: ${rotulo} ${botoes}</li>`;
+        <button class="btn-link" onclick="emitirParecerAcao(${p.projetoId}, ${argJs(par.sigla)}, 'FAVORAVEL')">Favorável</button>
+        <button class="btn-link btn-link-perigo" onclick="emitirParecerAcao(${p.projetoId}, ${argJs(par.sigla)}, 'CONTRARIO')">Contrário</button>` : "";
+      return `<li>${escaparHtmlEbd(par.sigla)}: ${rotulo} ${botoes}</li>`;
     }).join("");
     html += `<div class="cartao-perfil" style="margin-bottom:12px;">
-      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${p.protocolo} — ${escaparHtmlEbd(p.titulo)}</h4>
-      <p class="subtitle">Autor: ${p.autorNome} · Protocolado em ${p.dataProtocolo} · Status: ${ROTULO_STATUS_PROJETO[p.status] || p.status}${p.regimeUrgencia ? " (regime de urgência)" : ""}</p>
-      <p>${p.texto}</p>
+      <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${escaparHtmlEbd(p.protocolo)} — ${escaparHtmlEbd(p.titulo)}</h4>
+      <p class="subtitle">Autor: ${escaparHtmlEbd(p.autorNome)} · Protocolado em ${escaparHtmlEbd(p.dataProtocolo)} · Status: ${ROTULO_STATUS_PROJETO[p.status] || escaparHtmlEbd(p.status)}${p.regimeUrgencia ? " (regime de urgência)" : ""}</p>
+      <p>${escaparHtmlEbd(p.texto)}</p>
       <ul>${pareceresHtml}</ul>
-      ${p.prazoVencido ? `<p class="subtitle" style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de 15 dias do parecer vencido (${p.diasDesdeProtocolo} dias desde o protocolo).</p>` : ""}
-      ${p.status === "EM_PARECER" && !p.regimeUrgencia ? `<button class="btn-link" onclick="marcarUrgenciaAcao(${p.projetoId})">Marcar regime de urgência</button>` : ""}
+      ${p.prazoVencido ? `<p class="subtitle" style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de 15 dias do parecer vencido (${escaparHtmlEbd(p.diasDesdeProtocolo)} dias desde o protocolo).</p>` : ""}
+      ${authGeral && p.status === "EM_PARECER" && !p.regimeUrgencia ? `<button class="btn-link" onclick="marcarUrgenciaAcao(${p.projetoId})">Marcar regime de urgência</button>` : ""}
     </div>`;
   });
   container.innerHTML = html;
@@ -6110,7 +6313,8 @@ async function carregarAssentosDiretoria() {
   const orgaoId = orgaoIdDiretoria();
   if (!orgaoId) return;
   const res = await fetchProtegido(`${API_BASE}/assentos?orgaoId=${orgaoId}`);
-  const assentos = await res.json();
+  const assentos = await jsonDaTela(res, container, "lista");
+  if (assentos === null) return;
 
   let html = `<table class="tabela-frequencia"><thead><tr>
     <th>Cargo</th><th>Matrícula</th><th>Nome</th><th>Desde</th><th>Até</th><th>Situação</th><th></th>
@@ -6120,11 +6324,11 @@ async function carregarAssentosDiretoria() {
     html += `<tr>
       <td>${rotulo}</td>
       <td>${a ? a.membroId : "-"}</td>
-      <td>${a ? a.nome : "<span class='subtitle'>vago</span>"}</td>
-      <td>${a ? a.dataInicio : "-"}</td>
-      <td>${a ? (a.dataTerminoPrevisao || "sem prazo") : "-"}</td>
+      <td>${a ? escaparHtmlEbd(a.nome) : "<span class='subtitle'>vago</span>"}</td>
+      <td>${a ? escaparHtmlEbd(a.dataInicio) : "-"}</td>
+      <td>${a ? (escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo") : "-"}</td>
       <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
-      <td>${a ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoDiretoriaAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoDiretoriaAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6166,7 +6370,8 @@ async function encerrarAssentoDiretoriaAcao(assentoId) {
 async function carregarSucessaoPresidencial() {
   const container = document.getElementById("resultadoSucessaoPresidencial");
   const res = await fetchProtegido(`${API_BASE}/diretoria/sucessao`);
-  const s = await res.json();
+  const s = await jsonDaTela(res, container, "objeto");
+  if (s === null) return;
   if (!s.sucesso) { container.textContent = s.mensagem || ""; return; }
 
   if (!s.vago) {
@@ -6175,8 +6380,8 @@ async function carregarSucessaoPresidencial() {
   }
 
   const origem = s.interino ? (s.interino.viaCEI ? "via CEI (Art. 32, nenhum Vice-Presidente ativo)" : "próximo na linha sucessória") : "ninguém disponível (nem Vice-Presidente, nem CEI)";
-  let html = `<p>⚠️ Presidência vaga desde <strong>${s.dataVacancia}</strong> (${s.diasDesdeVacancia} dia(s)).</p>`;
-  html += `<p>Interino: <strong>${s.interino ? s.interino.nome : "-"}</strong> — ${origem}.</p>`;
+  let html = `<p>⚠️ Presidência vaga desde <strong>${escaparHtmlEbd(s.dataVacancia)}</strong> (${escaparHtmlEbd(s.diasDesdeVacancia)} dia(s)).</p>`;
+  html += `<p>Interino: <strong>${s.interino ? escaparHtmlEbd(s.interino.nome) : "-"}</strong> — ${origem}.</p>`;
   html += `<p>${s.prazoIndicacaoCiadseta.vencido ? "🔴" : "🟡"} Prazo de indicação da CIADSETA (90 dias, Art. 32 §2º): ${s.prazoIndicacaoCiadseta.vencido ? "VENCIDO" : "em curso"}.</p>`;
   if (s.prazoAge) {
     html += `<p>${s.prazoAge.vencido ? "🔴" : "🟡"} Prazo de convocação de AGE pela CLI (+30 dias, Art. 32 §3º): ${s.prazoAge.vencido ? "VENCIDO — CLI deve convocar Assembleia" : "em curso"}.</p>`;
@@ -6206,7 +6411,8 @@ async function carregarAssentosConselhoFiscal() {
   const orgaoId = orgaoIdConselhoFiscal();
   if (!orgaoId) return;
   const res = await fetchProtegido(`${API_BASE}/assentos?orgaoId=${orgaoId}`);
-  const assentos = await res.json();
+  const assentos = await jsonDaTela(res, container, "lista");
+  if (assentos === null) return;
 
   let html = `<table class="tabela-frequencia"><thead><tr>
     <th>Cargo</th><th>Matrícula</th><th>Nome</th><th>Desde</th><th>Até</th><th>Situação</th><th></th>
@@ -6216,11 +6422,11 @@ async function carregarAssentosConselhoFiscal() {
     html += `<tr>
       <td>${rotulo}</td>
       <td>${a ? a.membroId : "-"}</td>
-      <td>${a ? a.nome : "<span class='subtitle'>vago</span>"}</td>
-      <td>${a ? a.dataInicio : "-"}</td>
-      <td>${a ? (a.dataTerminoPrevisao || "sem prazo") : "-"}</td>
+      <td>${a ? escaparHtmlEbd(a.nome) : "<span class='subtitle'>vago</span>"}</td>
+      <td>${a ? escaparHtmlEbd(a.dataInicio) : "-"}</td>
+      <td>${a ? (escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo") : "-"}</td>
       <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
-      <td>${a ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoConselhoFiscalAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoConselhoFiscalAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6281,7 +6487,8 @@ async function carregarAssentosCEI() {
   const orgaoId = orgaoIdCEI();
   if (!orgaoId) return;
   const res = await fetchProtegido(`${API_BASE}/assentos?orgaoId=${orgaoId}`);
-  const assentos = await res.json();
+  const assentos = await jsonDaTela(res, container, "lista");
+  if (assentos === null) return;
 
   let html = `<table class="tabela-frequencia"><thead><tr>
     <th>Cargo</th><th>Matrícula</th><th>Nome</th><th>Desde</th><th>Até</th><th>Situação</th><th></th>
@@ -6291,11 +6498,11 @@ async function carregarAssentosCEI() {
     html += `<tr>
       <td>${rotulo}</td>
       <td>${a ? a.membroId : "-"}</td>
-      <td>${a ? a.nome : "<span class='subtitle'>vago</span>"}</td>
-      <td>${a ? a.dataInicio : "-"}</td>
-      <td>${a ? (a.dataTerminoPrevisao || "sem prazo") : "-"}</td>
+      <td>${a ? escaparHtmlEbd(a.nome) : "<span class='subtitle'>vago</span>"}</td>
+      <td>${a ? escaparHtmlEbd(a.dataInicio) : "-"}</td>
+      <td>${a ? (escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo") : "-"}</td>
       <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
-      <td>${a ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoCEIAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoCEIAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6307,14 +6514,15 @@ async function checarElegibilidadeCEIAcao() {
   const msg = document.getElementById("resultadoElegibilidadeCEI");
   if (!membroId) { msg.textContent = "Informe a matrícula antes de checar."; return; }
   const res = await fetchProtegido(`${API_BASE}/elegibilidade-cei/${membroId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, msg, "objeto");
+  if (data === null) return;
   if (!data.sucesso) { msg.textContent = data.mensagem || "Não foi possível checar."; return; }
   const itens = [
     data.cargoElegivel ? "✅ Cargo ministerial (Oficial Superior ou Presbítero 5+ anos)" : `⚠️ ${data.motivoCargo}`,
     data.formacaoVerificavelOk ? "✅ Formação teológica avançada (AFM + CHM)" : `⚠️ ${data.motivoFormacao}`,
     data.reputacaoIlibada ? "✅ Reputação ilibada (sem sanção/exclusão nos últimos 10 anos)" : `⚠️ ${data.motivoReputacao}`
   ];
-  msg.innerHTML = itens.map(i => `<div>${i}</div>`).join("");
+  msg.innerHTML = itens.map(i => `<div>${escaparHtmlEbd(i)}</div>`).join("");
 }
 
 async function salvarAssentoCEI() {
@@ -6352,7 +6560,8 @@ async function encerrarAssentoCEIAcao(assentoId) {
 async function carregarMedidasCautelares() {
   const container = document.getElementById("resultadoListaCautelares");
   const res = await fetchProtegido(`${API_BASE}/medidas-cautelares`);
-  const medidas = await res.json();
+  const medidas = await jsonDaTela(res, container, "lista");
+  if (medidas === null) return;
   if (!Array.isArray(medidas) || medidas.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma medida cautelar aplicada.</p>";
     return;
@@ -6367,16 +6576,16 @@ async function carregarMedidasCautelares() {
       m.suspensaoChavesFisicas ? "Chaves físicas" : null
     ].filter(Boolean).join(", ") || "-";
     const relatorio = m.dataConclusaoRelatorio
-      ? `Concluído em ${m.dataConclusaoRelatorio}`
-      : (m.prazoRelatorioVencido ? `🔴 VENCIDO (${m.diasDesdeAplicacao} dias)` : `🟡 em curso (${m.diasDesdeAplicacao}/${m.diasPrazoRelatorio} dias)`);
+      ? `Concluído em ${escaparHtmlEbd(m.dataConclusaoRelatorio)}`
+      : (m.prazoRelatorioVencido ? `🔴 VENCIDO (${escaparHtmlEbd(m.diasDesdeAplicacao)} dias)` : `🟡 em curso (${escaparHtmlEbd(m.diasDesdeAplicacao)}/${escaparHtmlEbd(m.diasPrazoRelatorio)} dias)`);
     html += `<tr>
       <td>${m.membroId}</td>
       <td>${escaparHtmlEbd(m.nome)}</td>
       <td>${escaparHtmlEbd(m.motivo)}</td>
       <td>${restricoes}</td>
-      <td>${m.dataAplicacao}</td>
+      <td>${escaparHtmlEbd(m.dataAplicacao)}</td>
       <td>${relatorio}</td>
-      <td>${!m.dataConclusaoRelatorio ? `<button class="btn-link" onclick="concluirRelatorioCautelarAcao(${m.medidaId})">Concluir relatório</button>` : ""}</td>
+      <td>${authGeral && !m.dataConclusaoRelatorio ? `<button class="btn-link" onclick="concluirRelatorioCautelarAcao(${m.medidaId})">Concluir relatório</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6424,7 +6633,8 @@ async function concluirRelatorioCautelarAcao(medidaId) {
 async function carregarConvocacoesPendentes() {
   const container = document.getElementById("resultadoConvocacoesPendentes");
   const res = await fetchProtegido(`${API_BASE}/assembleia/convocar`);
-  const convocacoes = await res.json();
+  const convocacoes = await jsonDaTela(res, container, "lista");
+  if (convocacoes === null) return;
   window._convocacoesPendentesCache = convocacoes;
   if (!Array.isArray(convocacoes) || convocacoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma convocação pendente.</p>";
@@ -6432,16 +6642,16 @@ async function carregarConvocacoesPendentes() {
   }
   container.innerHTML = convocacoes.map(c => {
     const podeIniciar = c.diasParaPrevista <= 0;
-    const contagem = c.diasParaPrevista > 0 ? `faltam ${c.diasParaPrevista} dia(s)` : (c.diasParaPrevista === 0 ? "é hoje" : "data já passou");
+    const contagem = c.diasParaPrevista > 0 ? `faltam ${escaparHtmlEbd(c.diasParaPrevista)} dia(s)` : (c.diasParaPrevista === 0 ? "é hoje" : "data já passou");
     const materiasRotulo = (c.materias || "").split(",").filter(Boolean)
       .map(cod => (ROTULOS_MATERIAS[cod] || cod)).join("; ");
     return `<div class="cartao-convocacao" style="border:1px solid #e5e5e5;border-radius:8px;padding:10px;margin-bottom:8px;">
-      <strong>${TITULOS_TIPO_SESSAO[c.tipoSessao] || c.tipoSessao}</strong> — prevista para ${c.dataPrevista} (${contagem})<br/>
-      <span class="subtitle">Matérias: ${materiasRotulo}${c.reformaNucleoFundamental ? " (Núcleo Fundamental)" : ""}</span><br/>
-      <span class="subtitle">Pauta: ${c.pauta}</span><br/>
+      <strong>${TITULOS_TIPO_SESSAO[c.tipoSessao] || escaparHtmlEbd(c.tipoSessao)}</strong> — prevista para ${escaparHtmlEbd(c.dataPrevista)} (${contagem})<br/>
+      <span class="subtitle">Matérias: ${escaparHtmlEbd(materiasRotulo)}${c.reformaNucleoFundamental ? " (Núcleo Fundamental)" : ""}</span><br/>
+      <span class="subtitle">Pauta: ${escaparHtmlEbd(c.pauta)}</span><br/>
       <button class="btn-confirmar" style="width:auto;margin-top:6px;" ${podeIniciar ? "" : "disabled"} onclick="iniciarSessaoConvocadaAcao(${c.sessaoId})">▶️ Iniciar Sessão</button>
-      <button class="btn-link" style="margin-left:10px;" onclick="editarConvocacaoAcao(${c.sessaoId})">✏️ Editar</button>
-      <button class="btn-link btn-link-perigo" onclick="excluirConvocacaoAcao(${c.sessaoId})">🗑️ Cancelar</button>
+      ${authGeral ? `<button class="btn-link" style="margin-left:10px;" onclick="editarConvocacaoAcao(${c.sessaoId})">✏️ Editar</button>
+      <button class="btn-link btn-link-perigo" onclick="excluirConvocacaoAcao(${c.sessaoId})">🗑️ Cancelar</button>` : ""}
     </div>`;
   }).join("");
 }
@@ -6642,7 +6852,8 @@ async function carregarReunioes() {
   const [tipo, id] = (chave || "").split(":");
   const query = tipo === "local" ? `?orgaoLocalId=${id}` : (tipo === "central" ? `?orgaoId=${id}` : "");
   const res = await fetchProtegido(`${API_BASE}/reunioes${query}`);
-  const reunioes = await res.json();
+  const reunioes = await jsonDaTela(res, container, "objeto");
+  if (reunioes === null) return;
 
   if (reunioes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma reunião ainda.</p>";
@@ -6654,17 +6865,16 @@ async function carregarReunioes() {
   </tr></thead><tbody>`;
 
   reunioes.forEach(r => {
-    const descricaoEscapada = r.descricao.replace(/'/g, "\\'");
     html += `<tr>
-      <td>${r.orgaoNome || "-"}</td>
+      <td>${escaparHtmlEbd(r.orgaoNome) || "-"}</td>
       <td>${escaparHtmlEbd(r.descricao)}</td>
-      <td>${r.dataSessao}</td>
-      <td>${r.status}</td>
-      <td>${r.totalPresentes}</td>
-      <td>${r.totalFaltas}</td>
-      <td>${r.totalJustificadas}</td>
+      <td>${escaparHtmlEbd(r.dataSessao)}</td>
+      <td>${escaparHtmlEbd(r.status)}</td>
+      <td>${escaparHtmlEbd(r.totalPresentes)}</td>
+      <td>${escaparHtmlEbd(r.totalFaltas)}</td>
+      <td>${escaparHtmlEbd(r.totalJustificadas)}</td>
       <td>
-        <button class="btn-link" onclick="verFrequencia(${r.sessaoId}, '${descricaoEscapada}')">Ver frequência</button>
+        <button class="btn-link" onclick="verFrequencia(${r.sessaoId}, ${argJs(r.descricao)})">Ver frequência</button>
         ${r.status === "ABERTA" ? `<button class="btn-link" onclick="encerrarReuniaoAcao(${r.sessaoId})">Encerrar</button>` : ""}
         <button class="btn-link" onclick="baixarMinutaAta(${r.sessaoId})">📝 Minuta (.docx)</button>
         ${r.orgaoSigla === "ASSEMBLEIA_GERAL" ? `<button class="btn-link" onclick="abrirCredenciamentoAssembleia(${r.sessaoId})">🪪 Credenciamento</button>` : ""}
@@ -6706,7 +6916,7 @@ async function carregarCredenciamento() {
     impedidosContainer.innerHTML = "<p class='subtitle'>Nenhum impedimento calculado no momento.</p>";
   } else {
     impedidosContainer.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Motivo</th></tr></thead><tbody>` +
-      data.impedidos.map(i => `<tr><td>${escaparHtmlEbd(i.nome)}</td><td>${i.motivoArtigo}: ${i.motivoDetalhe}</td></tr>`).join("") +
+      data.impedidos.map(i => `<tr><td>${escaparHtmlEbd(i.nome)}</td><td>${escaparHtmlEbd(i.motivoArtigo)}: ${escaparHtmlEbd(i.motivoDetalhe)}</td></tr>`).join("") +
       `</tbody></table>`;
   }
 
@@ -6715,7 +6925,7 @@ async function carregarCredenciamento() {
     trilhaContainer.innerHTML = "<p class='subtitle'>Nenhum credenciamento operado pela mesa ainda.</p>";
   } else {
     trilhaContainer.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Resultado</th><th>Motivo</th><th>Quando</th></tr></thead><tbody>` +
-      data.credenciamentos.map(c => `<tr><td>${escaparHtmlEbd(c.nome)}</td><td>${c.resultado === "CREDENCIADO" ? "✅ Credenciado" : "🚫 Recusado"}</td><td>${c.motivoArtigo ? `${c.motivoArtigo}: ${c.motivoDetalhe}` : "-"}</td><td>${c.criadoEm}</td></tr>`).join("") +
+      data.credenciamentos.map(c => `<tr><td>${escaparHtmlEbd(c.nome)}</td><td>${c.resultado === "CREDENCIADO" ? "✅ Credenciado" : "🚫 Recusado"}</td><td>${c.motivoArtigo ? `${escaparHtmlEbd(c.motivoArtigo)}: ${escaparHtmlEbd(c.motivoDetalhe)}` : "-"}</td><td>${escaparHtmlEbd(c.criadoEm)}</td></tr>`).join("") +
       `</tbody></table>`;
   }
 
@@ -6759,7 +6969,9 @@ let paginaAtualElegiveis = 1;
 
 async function carregarElegiveisAssembleia() {
   const res = await fetchProtegido(`${API_BASE}/assembleia/elegiveis`);
-  elegiveisAssembleia = await res.json();
+  const lista = await jsonDaTela(res, document.getElementById("resultadoListaElegiveisAssembleia"), "lista");
+  if (lista === null) { elegiveisAssembleia = []; return; }
+  elegiveisAssembleia = lista;
   aplicarFiltroElegiveis();
 }
 
@@ -6789,7 +7001,7 @@ function renderizarElegiveis() {
 
   let html = `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Congregação</th></tr></thead><tbody>`;
   pagina.forEach(m => {
-    html += `<tr><td>${m.membroId}</td><td>${escaparHtmlEbd(m.nome)}</td><td>${m.congregacao || "-"}</td></tr>`;
+    html += `<tr><td>${m.membroId}</td><td>${escaparHtmlEbd(m.nome)}</td><td>${escaparHtmlEbd(m.congregacao) || "-"}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -6797,7 +7009,7 @@ function renderizarElegiveis() {
   document.getElementById("assembleiaInfo").textContent = `${total} elegível(is)`;
   document.getElementById("assembleiaPaginacao").innerHTML = `
     <button ${paginaAtualElegiveis === 1 ? "disabled" : ""} onclick="mudarPaginaElegiveis(-1)">← Anterior</button>
-    <span class="info-pagina">Página ${paginaAtualElegiveis} de ${totalPaginas}</span>
+    <span class="info-pagina">Página ${escaparHtmlEbd(paginaAtualElegiveis)} de ${totalPaginas}</span>
     <button ${paginaAtualElegiveis === totalPaginas ? "disabled" : ""} onclick="mudarPaginaElegiveis(1)">Próxima →</button>`;
 }
 
@@ -6853,14 +7065,14 @@ async function verFrequencia(sessaoId, descricao) {
       ? `<button class="btn-link" onclick="marcarPresencaManual(${sessaoId}, ${item.membroId}, false)">Marcar falta</button>`
       : `<button class="btn-link" onclick="marcarPresencaManual(${sessaoId}, ${item.membroId}, true)">Marcar presente</button>`;
     const pendenteHtml = item.justificativaPendente
-      ? `<div class="tag-pendente">Pedido: "${item.justificativaPendente}"</div>
-         <button class="btn-link btn-link-sucesso" onclick="aprovarJustificativaPendente(${sessaoId}, ${item.membroId}, '${item.justificativaPendente.replace(/'/g, "\\'")}')">Aprovar</button>
+      ? `<div class="tag-pendente">Pedido: "${escaparHtmlEbd(item.justificativaPendente)}"</div>
+         <button class="btn-link btn-link-sucesso" onclick="aprovarJustificativaPendente(${sessaoId}, ${item.membroId}, ${argJs(item.justificativaPendente)})">Aprovar</button>
          <button class="btn-link btn-link-perigo" onclick="rejeitarJustificativaAcao(${sessaoId}, ${item.membroId})">Rejeitar</button>`
       : "";
     html += `<tr>
       <td>${item.membroId}</td>
       <td>${escaparHtmlEbd(item.nome)}</td>
-      <td>${item.funcao || "-"}</td>
+      <td>${escaparHtmlEbd(item.funcao) || "-"}</td>
       <td>${statusFrequencia(item)}</td>
       <td>${podeJustificar ? `<button class="btn-link" onclick="justificarFalta(${sessaoId}, ${item.membroId})">Justificar</button>` : ""} ${botaoCorrigir}${pendenteHtml}</td>
     </tr>`;
@@ -6946,10 +7158,10 @@ async function carregarOpcoesFormPessoa() {
     fetchProtegido(`${API_BASE}/catalogos/statuses`),
     fetchProtegido(`${API_BASE}/catalogos/situacoes`)
   ]);
-  const congregacoes = await resCong.json();
-  const departamentos = await resDepto.json();
-  const cargos = await resCargo.json();
-  const extensoes = await resExt.json();
+  const congregacoes = await listaDaApi(resCong);
+  const departamentos = await listaDaApi(resDepto);
+  const cargos = await listaDaApi(resCargo);
+  const extensoes = await listaDaApi(resExt);
   const statusesRaw = await resStatus.json();
   const statuses = Array.isArray(statusesRaw) ? statusesRaw : STATUS_DEFAULT;
   const situacoesRaw = await resSituacoes.json();
@@ -6970,13 +7182,13 @@ async function carregarOpcoesFormPessoa() {
   const selectFiltroSituacao = document.getElementById("pessoasFiltroSituacao");
   if (selectFiltroSituacao) {
     selectFiltroSituacao.innerHTML = `<option value="">Todas as situações</option>` +
-      situacoes.filter(s => s.ativa !== false).map(s => `<option value="${s.sigla}">${escaparHtmlEbd(s.nome)}</option>`).join("");
+      situacoes.filter(s => s.ativa !== false).map(s => `<option value="${escaparHtmlEbd(s.sigla)}">${escaparHtmlEbd(s.nome)}</option>`).join("");
   }
 
   const selectExt = document.getElementById("pessoaExtensao");
   const nomeCongPorId = Object.fromEntries(congregacoes.map(c => [String(c.congregacaoId), c.nome]));
   selectExt.innerHTML = `<option value="">Não se aplica (fica só na Congregação)</option>` +
-    extensoes.filter(e => e.ativa).map(e => `<option value="${e.extensaoId}">${escaparHtmlEbd(e.nome)} (${nomeCongPorId[String(e.congregacaoMaeId)] || "?"})</option>`).join("");
+    extensoes.filter(e => e.ativa).map(e => `<option value="${e.extensaoId}">${escaparHtmlEbd(e.nome)} (${escaparHtmlEbd(nomeCongPorId[String(e.congregacaoMaeId)]) || "?"})</option>`).join("");
 
   const selectDepto = document.getElementById("pessoaDepartamento");
   const deptosAtivos = departamentos.filter(d => d.ativo);
@@ -6989,12 +7201,12 @@ async function carregarOpcoesFormPessoa() {
 
   const selectCargo = document.getElementById("pessoaCargoMinisterial");
   selectCargo.innerHTML = `<option value="">Não informado</option>` +
-    cargos.filter(c => c.ativo).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(c => `<option value="${c.sigla}">${escaparHtmlEbd(c.nome)}</option>`).join("");
+    cargos.filter(c => c.ativo).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(c => `<option value="${escaparHtmlEbd(c.sigla)}">${escaparHtmlEbd(c.nome)}</option>`).join("");
 
   const selectStatus = document.getElementById("pessoaStatus");
   selectStatus.innerHTML = statuses
     .filter(s => s.ativa !== false)
-    .map(s => `<option value="${s.sigla}">${escaparHtmlEbd(s.nome)}</option>`).join("");
+    .map(s => `<option value="${escaparHtmlEbd(s.sigla)}">${escaparHtmlEbd(s.nome)}</option>`).join("");
 }
 
 async function salvarPessoa() {
@@ -7202,7 +7414,7 @@ function renderizarDadosPerfil(membroId) {
 
   container.innerHTML = `
     <div class="cartao-perfil">
-      ${p.fotoUrl ? `<img src="${p.fotoUrl}" alt="Foto" style="max-width:120px;border-radius:8px;margin-bottom:8px;" />` : ""}
+      ${p.fotoUrl ? `<img src="${urlSegura(p.fotoUrl)}" alt="Foto" style="max-width:120px;border-radius:8px;margin-bottom:8px;" />` : ""}
       ${linhaLgpd("Nome", p.nome)}
       ${linhaLgpd("Congregação", p.congregacao)}
       ${linhaLgpd("Extensão da Tenda", p.extensao)}
@@ -7253,7 +7465,8 @@ async function carregarHistoricoSiteMembro(membroId) {
   const container = document.getElementById("historicoSiteMembro");
   if (!container) return;
   const res = await fetchProtegido(`${API_BASE}/historico-site-membro?matricula=${membroId}`);
-  const dados = await res.json();
+  const dados = await jsonDaTela(res, container, "objeto");
+  if (dados === null) return;
 
   if (!dados.temEmail) {
     container.innerHTML = "<p class='subtitle'>Sem e-mail cadastrado — não dá pra cruzar com o site.</p>";
@@ -7271,12 +7484,12 @@ async function carregarHistoricoSiteMembro(membroId) {
   let html = "";
   if (dados.inscricoes.length > 0) {
     html += `<p class="subtitle">Inscrições em eventos:</p><ul>` +
-      dados.inscricoes.map(i => `<li>${i.eventoTitulo || "Evento"} ${i.eventoData ? `(${i.eventoData})` : ""} ${i.presente ? "— presença confirmada" : ""}</li>`).join("") +
+      dados.inscricoes.map(i => `<li>${escaparHtmlEbd(i.eventoTitulo) || "Evento"} ${i.eventoData ? `(${escaparHtmlEbd(i.eventoData)})` : ""} ${i.presente ? "— presença confirmada" : ""}</li>`).join("") +
       `</ul>`;
   }
   if (dados.pedidos.length > 0) {
     html += `<p class="subtitle">Pedidos de camiseta:</p><ul>` +
-      dados.pedidos.map(p => `<li>${p.grupo || "Camiseta"} — R$ ${Number(p.valorPago || 0).toFixed(2)} pago</li>`).join("") +
+      dados.pedidos.map(p => `<li>${escaparHtmlEbd(p.grupo) || "Camiseta"} — R$ ${Number(p.valorPago || 0).toFixed(2)} pago</li>`).join("") +
       `</ul>`;
   }
   container.innerHTML = html;
@@ -7289,7 +7502,7 @@ function carregarAbaFoto(membroId) {
   document.getElementById("resultadoFotoMembro").textContent = "";
   const preview = document.getElementById("fotoMembroPreview");
   preview.innerHTML = pessoa && pessoa.fotoUrl
-    ? `<img src="${pessoa.fotoUrl}" alt="Foto" style="max-width:160px;border-radius:8px;" />`
+    ? `<img src="${urlSegura(pessoa.fotoUrl)}" alt="Foto" style="max-width:160px;border-radius:8px;" />`
     : "<span class='subtitle'>Sem foto cadastrada.</span>";
 
   fetchProtegido(`${API_BASE}/lgpd/consentimento/${membroId}`).then(r => r.json()).then(data => {
@@ -7314,7 +7527,9 @@ let pessoasFiltradas = [];
 
 async function carregarPessoas() {
   const res = await fetchProtegido(`${API_BASE}/pessoas`);
-  window._pessoasCache = await res.json();
+  const lista = await jsonDaTela(res, document.getElementById("resultadoListaPessoas"), "lista");
+  if (lista === null) { window._pessoasCache = []; return; } // recusa: o motivo fica no lugar da lista
+  window._pessoasCache = lista;
   aplicarFiltroPessoas();
 }
 
@@ -7441,7 +7656,7 @@ function abrirModalRevisaoImportacaoPessoas() {
   const linhasHtml = importacaoPessoasLinhas.map((l, i) => {
     if (l.status === "DUPLICATA_MATRICULA") {
       return `<tr>
-        <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${l.situacaoMembro || "-"}</td>
+        <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${escaparHtmlEbd(l.situacaoMembro) || "-"}</td>
         <td>Matrícula já existe: <strong>${escaparHtmlEbd(l.conflito.nome)}</strong></td>
         <td>
           <select onchange="importacaoPessoasLinhas[${i}].decisao = this.value">
@@ -7453,7 +7668,7 @@ function abrirModalRevisaoImportacaoPessoas() {
     }
     if (l.status === "POSSIVEL_DUPLICATA_NOME") {
       return `<tr>
-        <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${l.situacaoMembro || "-"}</td>
+        <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${escaparHtmlEbd(l.situacaoMembro) || "-"}</td>
         <td>Nome ${Math.round(l.similaridade * 100)}% parecido com <strong>${escaparHtmlEbd(l.conflito.nome)}</strong> (matrícula ${l.conflito.membroId})</td>
         <td>
           <select onchange="importacaoPessoasLinhas[${i}].decisao = this.value">
@@ -7464,7 +7679,7 @@ function abrirModalRevisaoImportacaoPessoas() {
       </tr>`;
     }
     return `<tr>
-      <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${l.situacaoMembro || "-"}</td>
+      <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${escaparHtmlEbd(l.situacaoMembro) || "-"}</td>
       <td>Novo</td><td>-</td>
     </tr>`;
   }).join("");
@@ -7545,7 +7760,7 @@ function abrirModalExportarPessoas() {
   const colunasDisponiveis = COLUNAS_EXPORT_PESSOAS.filter(c => !c.sensivel || authNivel === "GLOBAL");
   const checkboxesHtml = colunasDisponiveis.map(c => `
     <label style="display:flex;align-items:center;gap:6px;margin:4px 0;">
-      <input type="checkbox" id="exportCol_${c.chave}" ${c.padrao ? "checked" : ""} /> ${c.rotulo}${c.sensivel ? " 🔒" : ""}
+      <input type="checkbox" id="exportCol_${escaparHtmlEbd(c.chave)}" ${c.padrao ? "checked" : ""} /> ${escaparHtmlEbd(c.rotulo)}${c.sensivel ? " 🔒" : ""}
     </label>`).join("");
 
   caixa.innerHTML = `
@@ -7624,15 +7839,15 @@ function renderizarPessoas() {
 
   pagina.forEach(p => {
     const miniatura = p.fotoUrl
-      ? `<img src="${p.fotoUrl}" alt="Foto de ${escaparHtmlEbd(p.nome)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;" />`
+      ? `<img src="${urlSegura(p.fotoUrl)}" alt="Foto de ${escaparHtmlEbd(p.nome)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;" />`
       : `<span style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#e5e5e5;color:#888;font-size:0.75rem;">?</span>`;
     html += `<tr>
       <td>${miniatura}</td>
       <td>${p.membroId}</td>
       <td>${escaparHtmlEbd(p.nome)}</td>
-      <td>${p.congregacao || "-"}</td>
+      <td>${escaparHtmlEbd(p.congregacao) || "-"}</td>
       <td>${badgeStatusPessoa(p.status)}</td>
-      <td>${p.situacaoMembro || "-"}</td>
+      <td>${escaparHtmlEbd(p.situacaoMembro) || "-"}</td>
       <td class="acoes-inline">
         <button class="btn-link" onclick="abrirPerfilPessoa(${p.membroId})">👁️ Ver Perfil</button>
       </td>
@@ -7645,7 +7860,7 @@ function renderizarPessoas() {
   document.getElementById("pessoasInfo").textContent = `${total} pessoa(s)`;
   document.getElementById("pessoasPaginacao").innerHTML = `
     <button ${paginaAtualPessoas === 1 ? "disabled" : ""} onclick="mudarPaginaPessoas(-1)">← Anterior</button>
-    <span class="info-pagina">Página ${paginaAtualPessoas} de ${totalPaginas}</span>
+    <span class="info-pagina">Página ${escaparHtmlEbd(paginaAtualPessoas)} de ${totalPaginas}</span>
     <button ${paginaAtualPessoas === totalPaginas ? "disabled" : ""} onclick="mudarPaginaPessoas(1)">Próxima →</button>`;
 }
 
@@ -7708,7 +7923,8 @@ async function carregarMinhasCartas() {
   const caixa = document.getElementById("cxMinhasCartas");
   if (!caixa || !authMatricula) return;
   const res = await fetchProtegido(`${API_BASE}/cartas/minhas?matricula=${authMatricula}`);
-  const cartas = await res.json();
+  const cartas = await jsonDaTela(res, caixa, "lista");
+  if (cartas === null) return;
   minhasCartasCache = Array.isArray(cartas) ? cartas : [];
   if (minhasCartasCache.length === 0) {
     caixa.innerHTML = `<p class="subtitle">Nenhuma carta solicitada ainda.</p>`;
@@ -7716,10 +7932,10 @@ async function carregarMinhasCartas() {
   }
   caixa.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Status</th><th>Pedido</th><th>Validade</th><th></th></tr></thead><tbody>` +
     minhasCartasCache.map(c => `<tr>
-      <td>${ROTULO_CARTA[c.tipo] || c.tipo}</td>
-      <td>${c.status}</td>
-      <td>${c.dataPedido || "-"}</td>
-      <td>${c.dataValidade || "-"}</td>
+      <td>${ROTULO_CARTA[c.tipo] || escaparHtmlEbd(c.tipo)}</td>
+      <td>${escaparHtmlEbd(c.status)}</td>
+      <td>${escaparHtmlEbd(c.dataPedido) || "-"}</td>
+      <td>${escaparHtmlEbd(c.dataValidade) || "-"}</td>
       <td class="acoes-inline">
         ${c.tipo === "MUDANCA" && c.status === "SOLICITADA" ? `<button class="btn-link" onclick="confirmarCartaPendente()">Confirmar</button>` : ""}
         ${c.status !== "SOLICITADA" ? `<button class="btn-link" onclick="imprimirMinhaCarta(${c.cartaId})">🖨️ Imprimir</button>` : ""}
@@ -7778,7 +7994,9 @@ async function confirmarCartaPendente() {
 let cartasCache = [];
 async function carregarCartas() {
   const res = await fetchProtegido(`${API_BASE}/cartas`);
-  cartasCache = await res.json();
+  const lista = await jsonDaTela(res, document.getElementById("resultadoListaCartas"), "lista");
+  if (lista === null) { cartasCache = []; return; }
+  cartasCache = lista;
   renderizarCartas();
 }
 
@@ -7792,11 +8010,11 @@ function renderizarCartas() {
     html += `<tr>
       <td>${c.cartaId}</td>
       <td>${escaparHtmlEbd(c.nome)} (${c.membroId})</td>
-      <td>${ROTULO_CARTA[c.tipo] || c.tipo}</td>
-      <td><span class="badge-status ${cores[c.status] || ""}">${c.status}</span></td>
-      <td>${c.destino || "-"}</td>
-      <td>${c.dataPedido || "-"}</td>
-      <td>${c.dataValidade || "-"}</td>
+      <td>${ROTULO_CARTA[c.tipo] || escaparHtmlEbd(c.tipo)}</td>
+      <td><span class="badge-status ${cores[c.status] || ""}">${escaparHtmlEbd(c.status)}</span></td>
+      <td>${escaparHtmlEbd(c.destino) || "-"}</td>
+      <td>${escaparHtmlEbd(c.dataPedido) || "-"}</td>
+      <td>${escaparHtmlEbd(c.dataValidade) || "-"}</td>
       <td class="acoes-inline">
         ${["SOLICITADA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" onclick="emitirCarta(${c.cartaId})">Emitir</button>` : ""}
         ${["SOLICITADA", "CONFIRMADA", "EMITIDA"].includes(c.status) ? `<button class="btn-link btn-link-perigo" onclick="cancelarCarta(${c.cartaId})">Cancelar</button>` : ""}
@@ -7891,7 +8109,7 @@ function renderizarImpressaoCarta(c) {
   const hoje = new Date();
   const dataEmissaoFmt = c.dataEmissao ? c.dataEmissao.split("-").reverse().join("/") : `____ / ____ / ${hoje.getFullYear()}`;
   const w = window.open("", "_blank", "width=760,height=900");
-  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${rotulo}</title>
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${escaparHtmlEbd(rotulo)}</title>
   <style>
     body{font-family:Georgia,serif;color:#111;padding:40px;}
     .carta{max-width:680px;margin:auto;}
@@ -7908,21 +8126,21 @@ function renderizarImpressaoCarta(c) {
   </style></head><body><div class="carta">
     <div class="cab"><h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS</h1><div class="sub">Ministério do SETA em Parauapebas — PA · IEADESPA</div></div>
     <h2>${marcarOpcao("CARTA DE RECOMENDAÇÃO", c.tipo === "RECOMENDACAO")}${"&nbsp;&nbsp;"}${marcarOpcao("CARTA DE MUDANÇA", c.tipo === "MUDANCA")}${"&nbsp;&nbsp;"}${marcarOpcao("ATESTADO SUPLETIVO", c.tipo === "ATESTADO_SUPLETIVO")}</h2>
-    <p>Parauapebas, PA, ${dataEmissaoFmt}.</p>
+    <p>Parauapebas, PA, ${escaparHtmlEbd(dataEmissaoFmt)}.</p>
     <p>Saudações no SENHOR JESUS.</p>
-    <p>Apresentamos à Igreja em <strong>${c.destino || "______________________"}</strong> o(a) portador(a) desta carta o(a) Sr(a). <strong>${escaparHtmlEbd(c.nome)}</strong> (Cartão de Membro nº ${c.membroId}).</p>
+    <p>Apresentamos à Igreja em <strong>${escaparHtmlEbd(c.destino) || "______________________"}</strong> o(a) portador(a) desta carta o(a) Sr(a). <strong>${escaparHtmlEbd(c.nome)}</strong> (Cartão de Membro nº ${c.membroId}).</p>
     <div class="linha"><span>${marcarOpcao("Membro", !ehCongregado)}</span><span>${marcarOpcao("Congregado", ehCongregado)}</span></div>
-    <p>Nesta Igreja desde ${c.dataAdmissao ? c.dataAdmissao.split("-").reverse().join("/") : "____/____/______"}, por se achar em: <strong>${situacaoRotulo}</strong>.</p>
+    <p>Nesta Igreja desde ${c.dataAdmissao ? escaparHtmlEbd(c.dataAdmissao.split("-").reverse().join("/")) : "____/____/______"}, por se achar em: <strong>${situacaoRotulo}</strong>.</p>
     <p>Nós o(a) recomendamos que recebais no Senhor, como usam os Santos.</p>
     <div class="linha">
-      <span><strong>Função:</strong> ${c.funcao || "—"}</span>
+      <span><strong>Função:</strong> ${escaparHtmlEbd(c.funcao) || "—"}</span>
       <span><strong>Cargo:</strong> ${LABEL_CARGO_MINISTERIAL[c.cargoMinisterial] || "—"}</span>
       <span><strong>Estado Civil:</strong> ${LABEL_ESTADO_CIVIL[c.estadoCivil] || "—"}</span>
     </div>
-    ${c.declaracaoCiencia ? `<p class="decl">${c.declaracaoCiencia}</p>` : ""}
-    ${(c.motivoSaida || c.destino) ? `<p class="obs"><strong>OBS:</strong> ${c.motivoSaida || ""}</p>` : ""}
+    ${c.declaracaoCiencia ? `<p class="decl">${escaparHtmlEbd(c.declaracaoCiencia)}</p>` : ""}
+    ${(c.motivoSaida || c.destino) ? `<p class="obs"><strong>OBS:</strong> ${escaparHtmlEbd(c.motivoSaida) || ""}</p>` : ""}
     <div class="rodape"><div>Pastor Congregacional</div><div>Secretário Local(a)</div></div>
-    <p class="validade">${c.dataValidade ? `VALIDADE: até ${c.dataValidade.split("-").reverse().join("/")}` : (c.tipo === "MUDANCA" ? "" : "VALIDADE: 30 dias a partir da data de emissão")}</p>
+    <p class="validade">${c.dataValidade ? `VALIDADE: até ${escaparHtmlEbd(c.dataValidade.split("-").reverse().join("/"))}` : (c.tipo === "MUDANCA" ? "" : "VALIDADE: 30 dias a partir da data de emissão")}</p>
   </div></body></html>`);
   w.document.close();
   setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
@@ -7934,14 +8152,16 @@ function renderizarImpressaoCarta(c) {
 async function carregarOpcoesTipoVinculo() {
   const select = document.getElementById("vinculoTipo");
   const res = await fetchProtegido(`${API_BASE}/catalogos/tiposVinculoFamiliar`);
-  const tipos = await res.json();
-  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.tipoVinculoId}">${t.rotuloDireto}</option>`).join("");
+  const tipos = await jsonDaTela(res, select, "objeto");
+  if (tipos === null) return;
+  select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${t.tipoVinculoId}">${escaparHtmlEbd(t.rotuloDireto)}</option>`).join("");
 }
 
 async function carregarVinculosFamiliares(membroId) {
   const container = document.getElementById("resultadoListaVinculosFamiliares");
   const res = await fetchProtegido(`${API_BASE}/vinculos-familiares?membroId=${membroId}`);
-  const vinculos = await res.json();
+  const vinculos = await jsonDaTela(res, container, "objeto");
+  if (vinculos === null) return;
 
   if (vinculos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum vínculo familiar cadastrado.</p>";
@@ -7951,8 +8171,8 @@ async function carregarVinculosFamiliares(membroId) {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Parentesco</th><th>Pessoa</th><th></th></tr></thead><tbody>`;
   vinculos.forEach(v => {
     html += `<tr>
-      <td>${v.rotulo}</td>
-      <td>${v.outraPessoaNome} (${v.outraPessoaId})${v.outraPessoaEhResponsavel ? ' <span class="badge-status badge-ativo">Responsável Legal</span>' : ""}</td>
+      <td>${escaparHtmlEbd(v.rotulo)}</td>
+      <td>${escaparHtmlEbd(v.outraPessoaNome)} (${v.outraPessoaId})${v.outraPessoaEhResponsavel ? ' <span class="badge-status badge-ativo">Responsável Legal</span>' : ""}</td>
       <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="removerVinculoFamiliar(${v.vinculoId})">Remover</button></td>
     </tr>`;
   });
@@ -8014,9 +8234,9 @@ async function carregarHistoricoMembro(membroId) {
   }
 
   container.innerHTML = `<ul class="linha-tempo">` + eventos.map(e => {
-    const podeCorrigir = e.marcoId != null && authNivel === "GLOBAL";
+    const podeCorrigir = e.marcoId != null && authGeral;
     return `<li>
-      <strong>${e.data || "data não informada"}</strong> — ${escaparHtmlEbd(e.titulo)}
+      <strong>${escaparHtmlEbd(e.data) || "data não informada"}</strong> — ${escaparHtmlEbd(e.titulo)}
       ${e.descricao ? `<br><span class="subtitle">${escaparHtmlEbd(e.descricao)}</span>` : ""}
       ${podeCorrigir ? ` <button class="btn-link" onclick="corrigirMarcoMembroAcao(${e.marcoId})">Corrigir</button>` : ""}
     </li>`;
@@ -8055,14 +8275,14 @@ function pedirCorrecaoMarco(marco) {
   return new Promise(resolve => {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
-      <h3>Corrigir marco: ${ROTULO_TIPO_MARCO[marco.tipo] || marco.tipo}</h3>
+      <h3>Corrigir marco: ${ROTULO_TIPO_MARCO[marco.tipo] || escaparHtmlEbd(marco.tipo)}</h3>
       <div class="input-group">
         <label>Descrição:</label>
-        <input type="text" id="modalDescricao" value="${(marco.descricao || "").replace(/"/g, "&quot;")}" />
+        <input type="text" id="modalDescricao" value="${escaparHtmlEbd(marco.descricao || "")}" />
       </div>
       <div class="input-group">
         <label>Data:</label>
-        <input type="date" id="modalData" value="${marco.dataMarco || ""}" />
+        <input type="date" id="modalData" value="${escaparHtmlEbd(marco.dataMarco) || ""}" />
       </div>
       <div class="input-group">
         <label>Justificativa (obrigatória — fica registrada na auditoria):</label>
@@ -8246,7 +8466,8 @@ const ROTULO_MODALIDADE_CASAMENTO = { CIVIL_E_RELIGIOSO: "Civil e Religioso", SO
 async function carregarCasamentos(membroId) {
   const container = document.getElementById("resultadoListaCasamentos");
   const res = await fetchProtegido(`${API_BASE}/casamentos?membroId=${membroId}`);
-  const casamentos = await res.json();
+  const casamentos = await jsonDaTela(res, container, "lista");
+  if (casamentos === null) return;
   if (!Array.isArray(casamentos) || casamentos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum casamento registrado ainda.</p>";
     return;
@@ -8256,10 +8477,10 @@ async function carregarCasamentos(membroId) {
   </tr></thead><tbody>`;
   casamentos.forEach(c => {
     html += `<tr>
-      <td>${c.nomeMembroConjuge || c.nomeConjuge || "-"}</td>
-      <td>${ROTULO_MODALIDADE_CASAMENTO[c.modalidade] || c.modalidade}</td>
-      <td>${c.celebrante || "-"}</td>
-      <td>${c.dataCasamento || "-"}</td>
+      <td>${escaparHtmlEbd(c.nomeMembroConjuge) || escaparHtmlEbd(c.nomeConjuge) || "-"}</td>
+      <td>${ROTULO_MODALIDADE_CASAMENTO[c.modalidade] || escaparHtmlEbd(c.modalidade)}</td>
+      <td>${escaparHtmlEbd(c.celebrante) || "-"}</td>
+      <td>${escaparHtmlEbd(c.dataCasamento) || "-"}</td>
       <td>${c.registradoCartorio ? "✅ Sim" : "Não"}</td>
       <td><button class="btn-link btn-link-perigo" onclick="excluirCasamentoAcao(${c.casamentoId})">Excluir</button></td>
     </tr>`;
@@ -8317,7 +8538,8 @@ const ROTULO_MODALIDADE_APRESENTACAO = { SOLENE: "Solene", RESERVADA: "Reservada
 async function carregarApresentacoesCrianca(membroId) {
   const container = document.getElementById("resultadoListaApresentacoes");
   const res = await fetchProtegido(`${API_BASE}/apresentacoes-crianca?membroId=${membroId}`);
-  const apresentacoes = await res.json();
+  const apresentacoes = await jsonDaTela(res, container, "lista");
+  if (apresentacoes === null) return;
   if (!Array.isArray(apresentacoes) || apresentacoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma apresentação de criança registrada ainda.</p>";
     return;
@@ -8326,12 +8548,12 @@ async function carregarApresentacoesCrianca(membroId) {
     <th>Criança</th><th>Nascimento</th><th>Modalidade</th><th>Data</th><th>Aptidão</th><th></th>
   </tr></thead><tbody>`;
   apresentacoes.forEach(a => {
-    const aptidaoTexto = a.aptidao?.apto ? "✅ Apta" : "⚠️ " + Object.values(a.aptidao?.itens || {}).filter(i => !i.ok).map(i => i.detalhe).join("; ");
+    const aptidaoTexto = a.aptidao?.apto ? "✅ Apta" : "⚠️ " + Object.values(a.aptidao?.itens || {}).filter(i => !i.ok).map(i => escaparHtmlEbd(i.detalhe)).join("; ");
     html += `<tr>
-      <td>${a.nomeCrianca}</td>
-      <td>${a.dataNascimento || "-"}</td>
-      <td>${ROTULO_MODALIDADE_APRESENTACAO[a.modalidade] || a.modalidade}</td>
-      <td>${a.dataApresentacao || "-"}</td>
+      <td>${escaparHtmlEbd(a.nomeCrianca)}</td>
+      <td>${escaparHtmlEbd(a.dataNascimento) || "-"}</td>
+      <td>${ROTULO_MODALIDADE_APRESENTACAO[a.modalidade] || escaparHtmlEbd(a.modalidade)}</td>
+      <td>${escaparHtmlEbd(a.dataApresentacao) || "-"}</td>
       <td>${aptidaoTexto}</td>
       <td>
         ${a.geraCertificado ? `<a class="btn-link" href="${API_BASE}/apresentacoes-crianca/${a.apresentacaoId}/pdf" target="_blank">📄 Certificado</a>` : ""}
@@ -8396,7 +8618,8 @@ const ROTULO_STATUS_LICENCA = { EM_LICENCA: "Em licença", RETORNOU: "Retornou",
 async function carregarLicencasCandidatura(membroId) {
   const container = document.getElementById("resultadoListaLicencasCandidatura");
   const res = await fetchProtegido(`${API_BASE}/licencas-candidatura?membroId=${membroId}`);
-  const licencas = await res.json();
+  const licencas = await jsonDaTela(res, container, "lista");
+  if (licencas === null) return;
   if (!Array.isArray(licencas) || licencas.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma licença por candidatura registrada ainda.</p>";
     return;
@@ -8406,9 +8629,9 @@ async function carregarLicencasCandidatura(membroId) {
   </tr></thead><tbody>`;
   licencas.forEach(l => {
     html += `<tr>
-      <td>${l.dataPleito || "-"}</td>
-      <td>${l.dataInicioLicenca || "-"}</td>
-      <td>${ROTULO_STATUS_LICENCA[l.status] || l.status}</td>
+      <td>${escaparHtmlEbd(l.dataPleito) || "-"}</td>
+      <td>${escaparHtmlEbd(l.dataInicioLicenca) || "-"}</td>
+      <td>${ROTULO_STATUS_LICENCA[l.status] || escaparHtmlEbd(l.status)}</td>
       <td>${authGeral && l.status === "EM_LICENCA" ? `<button class="btn-link" onclick="registrarRetornoLicencaAcao(${l.licencaId})">Registrar retorno</button>` : "-"}</td>
     </tr>`;
   });
@@ -8484,7 +8707,8 @@ let filaAprovacoesCache = [];
 async function carregarFilaAprovacoes() {
   const container = document.getElementById("resultadoFilaAprovacoes");
   const res = await fetchProtegido(`${API_BASE}/fila-aprovacoes`);
-  const solicitacoes = await res.json();
+  const solicitacoes = await jsonDaTela(res, container, "lista");
+  if (solicitacoes === null) return;
   filaAprovacoesCache = Array.isArray(solicitacoes) ? solicitacoes : [];
 
   if (filaAprovacoesCache.length === 0) {
@@ -8502,9 +8726,9 @@ async function carregarFilaAprovacoes() {
         <th>Campo</th><th>Valor Atual</th><th>Valor Proposto</th><th></th>
       </tr></thead><tbody>
         ${s.campos.map(c => `<tr>
-          <td>${c.rotulo}</td>
-          <td>${c.valorAnterior || "-"}</td>
-          <td><strong>${c.valorProposto}</strong></td>
+          <td>${escaparHtmlEbd(c.rotulo)}</td>
+          <td>${escaparHtmlEbd(c.valorAnterior) || "-"}</td>
+          <td><strong>${escaparHtmlEbd(c.valorProposto)}</strong></td>
           <td class="acoes-inline">
             <button class="btn-link" onclick="decidirCampoFilaAcao(${s.solicitacaoId}, ${c.campoId}, 'APROVADO')">Aprovar</button>
             <button class="btn-link btn-link-perigo" onclick="decidirCampoFilaAcao(${s.solicitacaoId}, ${c.campoId}, 'REJEITADO')">Rejeitar</button>
@@ -8554,8 +8778,9 @@ async function carregarCongregacoesDetalhe() {
     fetchProtegido(`${API_BASE}/catalogos/congregacoes`),
     fetchProtegido(`${API_BASE}/catalogos/areas`)
   ]);
-  const congregacoes = await resCong.json();
-  const areas = await resAreas.json();
+  const congregacoes = await jsonDaTela(resCong, document.getElementById("listaCongDetalhe"), "lista");
+  if (congregacoes === null) return;
+  const areas = await listaDaApi(resAreas);
   window._congregacoesDetalheCache = congregacoes;
   window._areasCache = areas;
 
@@ -8574,8 +8799,8 @@ async function carregarCongregacoesDetalhe() {
   congregacoes.forEach(c => {
     html += `<tr>
       <td>${escaparHtmlEbd(c.nome)}</td>
-      <td>${c.cidade ? `${c.cidade}${c.estado ? "/" + c.estado : ""}${c.cep ? " · " + c.cep : ""}` : "—"}</td>
-      <td>${c.dirigenteAtual || "—"}</td>
+      <td>${c.cidade ? `${escaparHtmlEbd(c.cidade)}${c.estado ? "/" + escaparHtmlEbd(c.estado) : ""}${c.cep ? " · " + escaparHtmlEbd(c.cep) : ""}` : "—"}</td>
+      <td>${escaparHtmlEbd(c.dirigenteAtual) || "—"}</td>
       <td>${c.ativa ? "Ativa" : "Inativa"}</td>
       <td class="acoes-inline">
         <button class="btn-link" onclick="editarCongregacaoDetalhe(${c.congregacaoId})">Editar</button>
@@ -8694,8 +8919,8 @@ async function carregarOpcoesEscopoPermissao() {
     fetchProtegido(`${API_BASE}/catalogos/funcionalidades`),
     fetchProtegido(`${API_BASE}/catalogos/papeis`)
   ]);
-  funcionalidadesCache = await fres.json();
-  const papeis = await pres.json();
+  funcionalidadesCache = await listaDaApi(fres);
+  const papeis = await listaDaApi(pres);
 
   document.getElementById("permissaoPapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${escaparHtmlEbd(p.nome)}</option>`).join("");
   document.getElementById("lotePapel").innerHTML = papeis.map(p => `<option value="${p.papelId}">${escaparHtmlEbd(p.nome)}</option>`).join("");
@@ -8719,7 +8944,7 @@ const ESCOPO_NIVEIS = {
 
 function montarCheckboxesPapeis() {
   document.getElementById("papelPermissoesCheckboxes").innerHTML = funcionalidadesCache.map(f =>
-    `<label class="opcao-checkbox"><input type="checkbox" class="papelPermissaoChk" value="${f.chave}" /> ${escaparHtmlEbd(f.nome)}</label>`
+    `<label class="opcao-checkbox"><input type="checkbox" class="papelPermissaoChk" value="${escaparHtmlEbd(f.chave)}" /> ${escaparHtmlEbd(f.nome)}</label>`
   ).join("");
 }
 
@@ -8734,7 +8959,7 @@ async function onChangeEscopoTipoPermissao() {
   }
   const res = await fetchProtegido(`${API_BASE}/catalogos/${nivel.origem}`);
   const itens = (await res.json()).filter(x => x.ativa !== false && x.ativo !== false);
-  select.innerHTML = itens.map(x => `<option value="${x[nivel.idField]}">${escaparHtmlEbd(x.nome)}</option>`).join("");
+  select.innerHTML = itens.map(x => `<option value="${escaparHtmlEbd(x[nivel.idField])}">${escaparHtmlEbd(x.nome)}</option>`).join("");
   select.style.display = "inline-block";
 }
 
@@ -8760,13 +8985,14 @@ async function salvarPapel() {
 async function carregarPapeis() {
   const container = document.getElementById("resultadoListaPapeis");
   const res = await fetchProtegido(`${API_BASE}/catalogos/papeis`);
-  const papeis = await res.json();
+  const papeis = await jsonDaTela(res, container, "objeto");
+  if (papeis === null) return;
   let html = `<table class="tabela-frequencia"><thead><tr><th>Papel</th><th>Nível</th><th>Permissões</th><th></th></tr></thead><tbody>`;
   papeis.forEach(p => {
     html += `<tr>
       <td>${escaparHtmlEbd(p.nome)}</td>
-      <td>${p.nivel}</td>
-      <td>${(p.permissoes || []).join(", ") || "-"}</td>
+      <td>${escaparHtmlEbd(p.nivel)}</td>
+      <td>${escaparHtmlEbd((p.permissoes || []).join(", ")) || "-"}</td>
       <td class="acoes-inline">
         <button class="btn-link" onclick="editarPapel(${p.papelId})">Editar</button>
         <button class="btn-link btn-link-perigo" onclick="excluirCatalogo('papeis', '${p.papelId}')">Excluir</button>
@@ -8825,7 +9051,7 @@ function onChangeEscopoTipoLote() {
   fetchProtegido(`${API_BASE}/catalogos/${nivel.origem}`).then(r => r.json()).then(itens => {
     const ativos = itens.filter(x => x.ativa !== false && x.ativo !== false);
     const semEscopoFixo = tipo === "CONGREGACAO" ? `<option value="">Cada matrícula usa a própria congregação</option>` : "";
-    select.innerHTML = semEscopoFixo + ativos.map(x => `<option value="${x[nivel.idField]}">${escaparHtmlEbd(x.nome)}</option>`).join("");
+    select.innerHTML = semEscopoFixo + ativos.map(x => `<option value="${escaparHtmlEbd(x[nivel.idField])}">${escaparHtmlEbd(x.nome)}</option>`).join("");
     select.style.display = "inline-block";
   });
 }
@@ -8850,7 +9076,7 @@ async function salvarPermissaoLote() {
   if (!data.sucesso) { container.textContent = data.mensagem || "Erro ao processar o lote."; return; }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Resultado</th></tr></thead><tbody>`;
   data.resultados.forEach(r => {
-    html += `<tr><td>${r.membroId}</td><td>${r.sucesso ? "✅" : "❌"} ${r.mensagem}</td></tr>`;
+    html += `<tr><td>${r.membroId}</td><td>${r.sucesso ? "✅" : "❌"} ${escaparHtmlEbd(r.mensagem)}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -8865,7 +9091,8 @@ async function salvarPermissaoLote() {
 async function carregarPermissoes() {
   const container = document.getElementById("resultadoListaPermissoes");
   const res = await fetchProtegido(`${API_BASE}/lideranca`);
-  const liderancas = await res.json();
+  const liderancas = await jsonDaTela(res, container, "lista");
+  if (liderancas === null) return;
   if (!Array.isArray(liderancas)) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(liderancas && liderancas.mensagem || "Não foi possível carregar.")}</p>`; return; }
   let html = `<table class="tabela-frequencia"><thead><tr>
     <th>Matrícula</th><th>Nome</th><th>Papel</th><th>Nível</th><th>Onde atua</th><th>Permissões</th><th></th>
@@ -8886,6 +9113,7 @@ async function carregarPermissoes() {
       <td class="acoes-inline">
         <button class="btn-link" onclick="editarPermissao(${Number(l.membroId)})">Editar</button>
         <button class="btn-link" onclick="redefinirSenhaLideranca(${Number(l.membroId)})">🔑 Redefinir senha</button>
+        <button class="btn-link btn-link-perigo" onclick="derrubarAcessosPessoa(${Number(l.membroId)})">⛔ Derrubar acessos desta pessoa agora</button>
         <button class="btn-link btn-link-perigo" onclick="removerPermissao(${Number(l.membroId)})">Remover</button>
       </td>
     </tr>`;
@@ -8899,7 +9127,8 @@ async function carregarPermissoes() {
 async function carregarNotificacaoRegras() {
   const container = document.getElementById("resultadoListaNotificacaoRegras");
   const res = await fetchProtegido(`${API_BASE}/notificacao-regras`);
-  const regras = await res.json();
+  const regras = await jsonDaTela(res, container, "lista");
+  if (regras === null) return;
   if (!Array.isArray(regras)) { container.innerHTML = ""; return; }
   let html = `<table class="tabela-frequencia"><thead><tr>
     <th>Regra</th><th>Categoria</th><th>Público-alvo</th><th>Ativa</th><th>E-mail</th><th></th>
@@ -8907,13 +9136,13 @@ async function carregarNotificacaoRegras() {
   regras.forEach(r => {
     const alvo = [r.permissaoAlvo, r.nivelAlvo].filter(Boolean).join(" / ") || "-";
     html += `<tr>
-      <td>${escaparHtmlEbd(r.titulo)}<br><small style="color:var(--cor-texto-suave);">${r.chave}</small></td>
-      <td>${r.categoria}</td>
-      <td>${alvo}</td>
-      <td><input type="checkbox" ${r.ativa ? "checked" : ""} onchange="atualizarNotificacaoRegra('${r.chave}', { ativa: this.checked })" /></td>
-      <td><input type="checkbox" ${r.canalEmail ? "checked" : ""} onchange="atualizarNotificacaoRegra('${r.chave}', { canalEmail: this.checked })" /></td>
+      <td>${escaparHtmlEbd(r.titulo)}<br><small style="color:var(--cor-texto-suave);">${escaparHtmlEbd(r.chave)}</small></td>
+      <td>${escaparHtmlEbd(r.categoria)}</td>
+      <td>${escaparHtmlEbd(alvo)}</td>
+      <td><input type="checkbox" ${r.ativa ? "checked" : ""} onchange="atualizarNotificacaoRegra(${argJs(r.chave)}, { ativa: this.checked })" /></td>
+      <td><input type="checkbox" ${r.canalEmail ? "checked" : ""} onchange="atualizarNotificacaoRegra(${argJs(r.chave)}, { canalEmail: this.checked })" /></td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarTituloNotificacaoRegra('${r.chave}', '${r.titulo.replace(/'/g, "\\'")}')">Editar título</button>
+        <button class="btn-link" onclick="editarTituloNotificacaoRegra(${argJs(r.chave)}, ${argJs(r.titulo)})">Editar título</button>
       </td>
     </tr>`;
   });
@@ -8942,7 +9171,7 @@ async function editarTituloNotificacaoRegra(chave, tituloAtual) {
 // só reenviando o papel/escopo que já existiam junto com a senha nova.
 async function redefinirSenhaLideranca(membroId) {
   const res = await fetchProtegido(`${API_BASE}/lideranca`);
-  const liderancas = await res.json();
+  const liderancas = await listaDaApi(res);
   const l = liderancas.find(x => String(x.membroId) === String(membroId));
   if (!l) return;
 
@@ -8962,7 +9191,7 @@ async function redefinirSenhaLideranca(membroId) {
 // trocar papel/escopo, ou resetar a senha (deixando em branco mantém a atual).
 async function editarPermissao(membroId) {
   const res = await fetchProtegido(`${API_BASE}/lideranca`);
-  const liderancas = await res.json();
+  const liderancas = await listaDaApi(res);
   const l = liderancas.find(x => String(x.membroId) === String(membroId));
   if (!l) return;
   document.getElementById("permissaoMatricula").value = l.membroId;
@@ -8972,6 +9201,17 @@ async function editarPermissao(membroId) {
   if (l.escopoId) document.getElementById("permissaoEscopoId").value = l.escopoId;
   document.getElementById("permissaoSenha").value = "";
   document.getElementById("permissaoMatricula").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// v7.6 — encerra AGORA todas as sessões abertas da pessoa (aparelho perdido, senha vazada): ela sai em poucos segundos em qualquer aparelho. O cargo e a
+// senha não mudam (ela pode entrar de novo com a senha) — para impedir a entrada, suspenda ou remova o cargo. Só o nível geral; fica na auditoria.
+async function derrubarAcessosPessoa(membroId) {
+  if (!(await confirmarAcao("Encerrar agora todas as sessões abertas desta pessoa? Ela sai em poucos segundos em todos os aparelhos. O cargo e a senha continuam os mesmos.", "Derrubar acessos"))) return;
+  const res = await fetchProtegido(`${API_BASE}/lideranca/${Number(membroId)}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "DERRUBAR_ACESSOS" })
+  });
+  const data = await res.json();
+  avisarResultado(data);
 }
 
 async function removerPermissao(membroId) {
@@ -8989,7 +9229,8 @@ async function removerPermissao(membroId) {
 async function carregarTiposConsagracao() {
   const select = document.getElementById("consagracaoAssunto");
   const res = await fetchProtegido(`${API_BASE}/catalogos/tiposConsagracao`);
-  const tipos = await res.json();
+  const tipos = await jsonDaTela(res, select, "objeto");
+  if (tipos === null) return;
   select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${escaparHtmlEbd(t.nome)}">${escaparHtmlEbd(t.nome)}</option>`).join("")
     + `<option value="__outro">Outro (digitar)</option>`;
   document.getElementById("consagracaoAssuntoOutro").style.display = "none";
@@ -9058,7 +9299,8 @@ async function salvarConsagracao() {
 async function carregarConsagracoes() {
   const container = document.getElementById("resultadoListaConsagracoes");
   const res = await fetchProtegido(`${API_BASE}/consagracoes`);
-  const consagracoes = await res.json();
+  const consagracoes = await jsonDaTela(res, container, "objeto");
+  if (consagracoes === null) return;
 
   if (consagracoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum processo em andamento.</p>";
@@ -9073,12 +9315,12 @@ async function carregarConsagracoes() {
     html += `<tr>
       <td>${escaparHtmlEbd(c.nome)}</td>
       <td>${escaparHtmlEbd(c.assunto)}</td>
-      <td>${c.proponente || "-"}</td>
-      <td>${ROTULO_STATUS_CONSAGRACAO[c.status] || c.status}</td>
-      <td>${c.dataProtocolo}</td>
+      <td>${escaparHtmlEbd(c.proponente) || "-"}</td>
+      <td>${ROTULO_STATUS_CONSAGRACAO[c.status] || escaparHtmlEbd(c.status)}</td>
+      <td>${escaparHtmlEbd(c.dataProtocolo)}</td>
       <td>
-        ${authGeral ? `<button class="btn-link" onclick="avancarConsagracaoAcao('${escaparHtmlEbd(c.consagracaoId)}')">Avançar</button>
-        <button class="btn-link btn-link-perigo" onclick="reprovarConsagracaoAcao('${escaparHtmlEbd(c.consagracaoId)}')">Reprovar</button>` : "-"}
+        ${authGeral ? `<button class="btn-link" onclick="avancarConsagracaoAcao(${argJs(c.consagracaoId)})">Avançar</button>
+        <button class="btn-link btn-link-perigo" onclick="reprovarConsagracaoAcao(${argJs(c.consagracaoId)})">Reprovar</button>` : "-"}
       </td>
     </tr>`;
   });
@@ -9116,7 +9358,8 @@ async function salvarTurmaBatismoAcao() {
 async function carregarTurmasBatismo() {
   const container = document.getElementById("resultadoListaTurmasBatismo");
   const res = await fetchProtegido(`${API_BASE}/turmas-batismo`);
-  const turmas = await res.json();
+  const turmas = await jsonDaTela(res, container, "lista");
+  if (turmas === null) return;
   if (!Array.isArray(turmas) || turmas.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma turma criada ainda.</p>";
     return;
@@ -9126,10 +9369,10 @@ async function carregarTurmasBatismo() {
   </tr></thead><tbody>` + turmas.map(t => `
     <tr>
       <td>${new Date(t.dataBatismo).toLocaleDateString("pt-BR")}</td>
-      <td>${escaparHtmlEbd(t.local)} <small>(${ROTULO_TIPO_LOCAL_BATISMO[t.tipoLocal] || t.tipoLocal})</small></td>
+      <td>${escaparHtmlEbd(t.local)} <small>(${ROTULO_TIPO_LOCAL_BATISMO[t.tipoLocal] || escaparHtmlEbd(t.tipoLocal)})</small></td>
       <td>${t.autorizacaoMesa ? "✅" : "⏳"}</td>
-      <td>${t.totalCandidatos}</td>
-      <td>${ROTULO_STATUS_TURMA_BATISMO[t.status] || t.status}</td>
+      <td>${escaparHtmlEbd(t.totalCandidatos)}</td>
+      <td>${ROTULO_STATUS_TURMA_BATISMO[t.status] || escaparHtmlEbd(t.status)}</td>
       <td class="acoes-inline">
         ${authGeral && t.status === "ABERTA" && !t.autorizacaoMesa ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'AUTORIZAR_MESA')">Autorizar Mesa</button>` : ""}
         ${t.status === "ABERTA" ? `${authGeral ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'REALIZAR')">Realizar</button>` : ""}
@@ -9163,13 +9406,14 @@ async function inscreverCandidatoBatismoAcao() {
 }
 
 function badgeAptidaoBatismo(item) {
-  return `<span title="${item.detalhe}">${item.ok ? "✅" : "⚠️"}</span>`;
+  return `<span title="${escaparHtmlEbd(item.detalhe)}">${item.ok ? "✅" : "⚠️"}</span>`;
 }
 
 async function carregarCandidatosBatismo() {
   const container = document.getElementById("resultadoListaCandidatosBatismo");
   const res = await fetchProtegido(`${API_BASE}/candidatos-batismo`);
-  const candidatos = await res.json();
+  const candidatos = await jsonDaTela(res, container, "lista");
+  if (candidatos === null) return;
   if (!Array.isArray(candidatos) || candidatos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum candidato inscrito ainda.</p>";
     return;
@@ -9184,7 +9428,7 @@ async function carregarCandidatosBatismo() {
       <td>${badgeAptidaoBatismo(c.aptidao.itens.parecerVidaPregressa)} <button class="btn-link" onclick="parecerCandidatoBatismoAcao(${c.candidatoId})">Dar parecer</button></td>
       <td>${badgeAptidaoBatismo(c.aptidao.itens.discipulado)} <button class="btn-link" onclick="alternarDiscipuladoBatismoAcao(${c.candidatoId}, ${!c.discipuladoConcluidoManual})">${c.discipuladoConcluidoManual ? "Desmarcar" : "Marcar concluído"}</button></td>
       <td>${c.aceiteTermoAssinadoId ? "✅" : `<button class="btn-link" onclick="acaoCandidatoBatismo(${c.candidatoId}, 'ACEITAR_ESTATUTO')">Registrar aceite</button>`}</td>
-      <td>${c.status}</td>
+      <td>${escaparHtmlEbd(c.status)}</td>
       <td class="acoes-inline">
         ${c.status === "AGUARDANDO_TURMA" ? `<button class="btn-link" onclick="atribuirTurmaBatismoAcao(${c.candidatoId})">Atribuir turma</button>` : ""}
         ${c.turmaId && c.status === "AGUARDANDO_TURMA" ? `
@@ -9286,6 +9530,20 @@ function onChangeTipoPerguntaEnquete(id) {
   document.getElementById(`grupoOpcoesPergunta_${id}`).style.display = ehOpcoes ? "block" : "none";
 }
 
+// Enquete para TODOS os membros ativos (e a vinculante) é da administração geral (GestaoEnquetes: MSG_SO_GERAL): para os demais a opção nem aparece e o
+// público já vem como lista de matrículas do próprio escopo. O servidor confere de novo.
+function ajustarFormEnquetePorNivel() {
+  const sel = document.getElementById("enquetePublicoTipo");
+  if (!sel) return;
+  const opTodos = sel.querySelector("option[value=\"TODOS_ATIVOS\"]");
+  if (opTodos) { opTodos.disabled = !authGeral; opTodos.hidden = !authGeral; }
+  if (!authGeral) {
+    if (sel.value === "TODOS_ATIVOS") sel.value = "LISTA_CUSTOM";
+    const vinc = document.getElementById("enqueteVinculante");
+    if (vinc && vinc.checked) { vinc.checked = false; onChangeVinculanteEnquete(); }
+  }
+  onChangePublicoEnquete();
+}
 function onChangePublicoEnquete() {
   const ehCustom = document.getElementById("enquetePublicoTipo").value === "LISTA_CUSTOM";
   document.getElementById("grupoPublicoCustomEnquete").style.display = ehCustom ? "block" : "none";
@@ -9355,7 +9613,8 @@ function campoRespostaPergunta(enqueteId, pergunta) {
 async function carregarEnquetes() {
   const container = document.getElementById("resultadoListaEnquetes");
   const res = await fetchProtegido(`${API_BASE}/enquetes`);
-  const enquetes = await res.json();
+  const enquetes = await jsonDaTela(res, container, "lista");
+  if (enquetes === null) return;
   if (!Array.isArray(enquetes) || enquetes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma enquete criada ainda.</p>";
     return;
@@ -9422,21 +9681,21 @@ async function encerrarEnqueteAcao(enqueteId) {
 // ---- SECRETARIA / ABA ARQUIVOS (v2.9) — catálogo de referências, sem editor ----
 async function carregarOpcoesFormDocumentos() {
   // Publicar para todo mundo é ato da administração geral (o servidor confere; aqui só não oferece a opção a quem não pode).
-  document.getElementById("documentoVisibilidadePublico").disabled = authNivel !== "GLOBAL";
+  document.getElementById("documentoVisibilidadePublico").disabled = !authGeral;
   const res = await fetchProtegido(`${API_BASE}/orgaos`);
-  const orgaos = await res.json();
+  const orgaos = await listaDaApi(res);
   document.getElementById("documentoOrgao").innerHTML = `<option value="">Sem órgão específico</option>` +
     orgaos.map(o => `<option value="${o.orgaoId}">${escaparHtmlEbd(o.nome)}</option>`).join("");
 
   // vB.6 — categorias de retenção só carregam pra quem tem nível Global
   // (mesma restrição de GestaoPoliticasRetencao) — quem não tem, o select
   // fica só com "(nenhuma)" e o documento entra sem categoria mesmo.
-  if (authNivel === "GLOBAL") {
+  if (authGeral) {
     const resPol = await fetchProtegido(`${API_BASE}/politicas-retencao`);
     if (resPol.ok) {
       const politicas = await resPol.json();
       document.getElementById("documentoCategoria").innerHTML = `<option value="">(nenhuma)</option>` +
-        politicas.filter(p => p.ativo).map(p => `<option value="${p.categoria}">${p.categoria}</option>`).join("");
+        politicas.filter(p => p.ativo).map(p => `<option value="${escaparHtmlEbd(p.categoria)}">${escaparHtmlEbd(p.categoria)}</option>`).join("");
     }
   }
 }
@@ -9481,8 +9740,8 @@ async function salvarDocumentoAcao() {
 function badgeStatusRetencao(status) {
   if (!status) return "-";
   if (status.status === "INDETERMINADO") return "<span class='badge-status'>Indeterminado</span>";
-  if (status.status === "VENCIDO") return `<span class="badge-status badge-desligado">Vencido (${status.vencimentoEm})</span>`;
-  return `<span class="badge-status badge-ativo">Vigente até ${status.vencimentoEm}</span>`;
+  if (status.status === "VENCIDO") return `<span class="badge-status badge-desligado">Vencido (${escaparHtmlEbd(status.vencimentoEm)})</span>`;
+  return `<span class="badge-status badge-ativo">Vigente até ${escaparHtmlEbd(status.vencimentoEm)}</span>`;
 }
 
 const ROTULO_TIPO_DOCUMENTO = {
@@ -9495,7 +9754,8 @@ async function carregarDocumentos() {
   const container = document.getElementById("resultadoListaDocumentos");
   const tipo = document.getElementById("documentoFiltroTipo").value;
   const res = await fetchProtegido(`${API_BASE}/documentos${tipo ? `?tipo=${tipo}` : ""}`);
-  const documentos = await res.json();
+  const documentos = await jsonDaTela(res, container, "lista");
+  if (documentos === null) return;
   if (!Array.isArray(documentos) || documentos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum documento registrado ainda.</p>";
     return;
@@ -9506,15 +9766,15 @@ async function carregarDocumentos() {
   documentos.forEach(d => {
     let prazoHtml = "-";
     if (d.tipo === "ATA" && d.diasDesdeSessao != null) {
-      if (d.prazoCartorioVencido) prazoHtml = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de cartório vencido (${d.diasDesdeSessao}d)</span>`;
-      else if (d.prazoLavraturaVencido) prazoHtml = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de lavratura vencido (${d.diasDesdeSessao}d)</span>`;
-      else prazoHtml = `✅ Em dia (${d.diasDesdeSessao}d)`;
+      if (d.prazoCartorioVencido) prazoHtml = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de cartório vencido (${escaparHtmlEbd(d.diasDesdeSessao)}d)</span>`;
+      else if (d.prazoLavraturaVencido) prazoHtml = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de lavratura vencido (${escaparHtmlEbd(d.diasDesdeSessao)}d)</span>`;
+      else prazoHtml = `✅ Em dia (${escaparHtmlEbd(d.diasDesdeSessao)}d)`;
     }
     // Quem pode mudar a visibilidade/apagar: a administração geral, ou quem registrou o documento (o servidor confere de novo). Publicar para todos só o geral.
-    const podeMexer = authNivel === "GLOBAL" || (d.registradoPor != null && String(d.registradoPor) === String(authMatricula));
+    const podeMexer = authGeral || (d.registradoPor != null && String(d.registradoPor) === String(authMatricula));
     const opcoesVisibilidade = Object.keys(ROTULO_VISIBILIDADE_DOCUMENTO)
-      .filter(v => v !== "PUBLICO" || authNivel === "GLOBAL" || d.visibilidade === "PUBLICO")
-      .map(v => `<option value="${v}"${v === d.visibilidade ? " selected" : ""}>${ROTULO_VISIBILIDADE_DOCUMENTO[v]}</option>`).join("");
+      .filter(v => v !== "PUBLICO" || authGeral || d.visibilidade === "PUBLICO")
+      .map(v => `<option value="${escaparHtmlEbd(v)}"${v === d.visibilidade ? " selected" : ""}>${ROTULO_VISIBILIDADE_DOCUMENTO[v]}</option>`).join("");
     const quemVe = podeMexer
       ? `<select onchange="alterarVisibilidadeDocumentoAcao(${Number(d.documentoId)}, this.value)">${opcoesVisibilidade}</select>`
       : (ROTULO_VISIBILIDADE_DOCUMENTO[d.visibilidade] || "-");
@@ -9528,7 +9788,7 @@ async function carregarDocumentos() {
       <td>${prazoHtml}</td>
       <td>${badgeStatusRetencao(d.statusRetencao)}</td>
       <td class="acoes-inline">
-        <a class="btn-link" href="${escaparHtmlEbd(d.urlAssinada)}" target="_blank" rel="noopener">Abrir</a>
+        <a class="btn-link" href="${urlSegura(d.urlAssinada)}" target="_blank" rel="noopener">Abrir</a>
         ${podeMexer ? `<button class="btn-link btn-link-perigo" onclick="excluirDocumentoAcao(${Number(d.documentoId)})">Excluir</button>` : ""}
       </td>
     </tr>`;
@@ -9561,26 +9821,27 @@ async function excluirDocumentoAcao(id) {
 // ---- TEXTO MESTRE CONSOLIDADO (vB.15 — Reg. Art. 162 §§2º-4º e 162-B) ----
 async function carregarTextoMestre() {
   const res = await fetchProtegido(`${API_BASE}/texto-mestre`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, document.getElementById("painelTextoMestreVigente"), "objeto");
+  if (data === null) return;
 
   const vigenteEl = document.getElementById("painelTextoMestreVigente");
   vigenteEl.innerHTML = data.vigente
-    ? `Versão vigente: nº ${data.vigente.numeroVersao} (desde ${data.vigente.dataVigencia}) — <a href="${data.vigente.urlAssinada}" target="_blank" rel="noopener">abrir PDF</a>`
+    ? `Versão vigente: nº ${escaparHtmlEbd(data.vigente.numeroVersao)} (desde ${escaparHtmlEbd(data.vigente.dataVigencia)}) — <a href="${urlSegura(data.vigente.urlAssinada)}" target="_blank" rel="noopener">abrir PDF</a>`
     : "⚠️ Nenhuma versão consolidada registrada ainda.";
 
   const pendEl = document.getElementById("painelTextoMestrePendencias");
   const vencidas = (data.pendenciasAtualizacao || []).filter(p => p.prazoVencido);
   pendEl.innerHTML = vencidas.length === 0 ? "" :
-    `<p class="subtitle" style="color:var(--cor-perigo,#c0392b);">⚠️ ${vencidas.length} alteração(ões) do Regimento registrada(s) há mais de 48h sem consolidação no Texto Mestre (Art. 162 §2º): ${vencidas.map(v => v.descricao || `documento #${v.documentoId}`).join(", ")}.</p>`;
+    `<p class="subtitle" style="color:var(--cor-perigo,#c0392b);">⚠️ ${vencidas.length} alteração(ões) do Regimento registrada(s) há mais de 48h sem consolidação no Texto Mestre (Art. 162 §2º): ${vencidas.map(v => escaparHtmlEbd(v.descricao) || `documento #${v.documentoId}`).join(", ")}.</p>`;
 
   const revEl = document.getElementById("painelTextoMestreRevisaoQuadrienal");
   const rev = data.revisaoQuadrienal;
   if (!rev || !rev.definida) {
     revEl.textContent = "Revisão sistêmica quadrienal (Art. 162-B): data-base ainda não definida.";
   } else if (rev.vencida) {
-    revEl.innerHTML = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Revisão sistêmica quadrienal (Art. 162-B) vencida desde ${rev.proximaRevisao}.</span>`;
+    revEl.innerHTML = `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Revisão sistêmica quadrienal (Art. 162-B) vencida desde ${escaparHtmlEbd(rev.proximaRevisao)}.</span>`;
   } else if (rev.dentroAntecedencia) {
-    revEl.innerHTML = `⚠️ Revisão sistêmica quadrienal (Art. 162-B) prevista para ${rev.proximaRevisao} (${rev.diasRestantes} dia(s)).`;
+    revEl.innerHTML = `⚠️ Revisão sistêmica quadrienal (Art. 162-B) prevista para ${escaparHtmlEbd(rev.proximaRevisao)} (${escaparHtmlEbd(rev.diasRestantes)} dia(s)).`;
   } else {
     revEl.textContent = `Próxima revisão sistêmica quadrienal (Art. 162-B): ${rev.proximaRevisao}.`;
   }
@@ -9590,7 +9851,7 @@ async function carregarTextoMestre() {
     histEl.innerHTML = "<p class='subtitle'>Nenhuma versão registrada ainda.</p>";
   } else {
     histEl.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Versão</th><th>Vigência</th><th>Artigos tocados</th></tr></thead><tbody>` +
-      data.historico.map(v => `<tr><td>nº ${v.numeroVersao}</td><td>${v.dataVigencia}</td><td>${v.artigosTocados != null ? `${v.artigosTocados} de ${v.totalArtigos}` : "-"}</td></tr>`).join("") +
+      data.historico.map(v => `<tr><td>nº ${escaparHtmlEbd(v.numeroVersao)}</td><td>${escaparHtmlEbd(v.dataVigencia)}</td><td>${v.artigosTocados != null ? `${escaparHtmlEbd(v.artigosTocados)} de ${escaparHtmlEbd(v.totalArtigos)}` : "-"}</td></tr>`).join("") +
       `</tbody></table>`;
   }
 }
@@ -9632,20 +9893,21 @@ let idContainerPoliticasRetencaoAtual = "resultadoListaPoliticasRetencao";
 async function carregarPoliticasRetencao(idContainer) {
   idContainerPoliticasRetencaoAtual = idContainer || idContainerPoliticasRetencaoAtual;
   const container = document.getElementById(idContainerPoliticasRetencaoAtual);
-  if (authNivel !== "GLOBAL") { container.innerHTML = "<p class='subtitle'>Só nível Global administra as políticas de retenção.</p>"; return; }
+  if (!authGeral) { container.innerHTML = "<p class='subtitle'>Só a administração geral da igreja administra as políticas de retenção.</p>"; return; }
   const res = await fetchProtegido(`${API_BASE}/politicas-retencao`);
-  const politicas = await res.json();
+  const politicas = await jsonDaTela(res, container, "objeto");
+  if (politicas === null) return;
   let html = `<table class="tabela-frequencia"><thead><tr>
     <th>Categoria</th><th>Base Legal</th><th>Dias de retenção</th><th>Ativa</th><th></th>
   </tr></thead><tbody>`;
   politicas.forEach(p => {
     html += `<tr>
-      <td>${p.categoria}</td>
-      <td style="max-width:360px;">${p.baseLegal}</td>
-      <td>${p.diasRetencao != null ? p.diasRetencao : "Indeterminado"}</td>
+      <td>${escaparHtmlEbd(p.categoria)}</td>
+      <td style="max-width:360px;">${escaparHtmlEbd(p.baseLegal)}</td>
+      <td>${p.diasRetencao != null ? escaparHtmlEbd(p.diasRetencao) : "Indeterminado"}</td>
       <td><input type="checkbox" ${p.ativo ? "checked" : ""} onchange="atualizarPoliticaRetencao(${p.politicaId}, { ativo: this.checked })" /></td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarDiasRetencaoAcao(${p.politicaId}, ${p.diasRetencao != null ? p.diasRetencao : "null"})">Editar dias</button>
+        <button class="btn-link" onclick="editarDiasRetencaoAcao(${p.politicaId}, ${p.diasRetencao != null ? Number(p.diasRetencao) : "null"})">Editar dias</button>
       </td>
     </tr>`;
   });
@@ -9684,10 +9946,11 @@ async function carregarOpcoesFormDisciplina() {
   const res = await fetchProtegido(`${API_BASE}/orgaos`);
   const orgaos = await res.json();
   const locaisRes = await fetchProtegido(`${API_BASE}/catalogos/orgaosLocais`);
-  const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JAI", "JEA", "TER"].includes(o.sigla));
+  const locais = (await listaDaApi(locaisRes)).filter(o => o.ativo !== false && ["JAI", "JEA", "TER"].includes(o.sigla));
   document.getElementById("disciplinaOrgao").innerHTML =
-    orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("") +
-    locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${escaparHtmlEbd(o.nome)}</option>`).join("");
+    // órgão central (CEI/CLI...) só o geral escolhe (AbrirProcessoDisciplinar recusa os demais); o local exige vínculo com o órgão, conferido no servidor
+    (authGeral ? orgaos : []).map(o => `<option value="central:${o.orgaoId}">${escaparHtmlEbd(o.sigla)}</option>`).join("") +
+    locais.map(o => `<option value="local:${o.orgaoLocalId}">${escaparHtmlEbd(o.sigla)} — ${escaparHtmlEbd(o.nome)}</option>`).join("");
 
   const infRes = await fetchProtegido(`${API_BASE}/catalogos/tiposInfracao`);
   const infracoes = await infRes.json();
@@ -9695,7 +9958,7 @@ async function carregarOpcoesFormDisciplina() {
   const lista = document.getElementById("listaInfracoesAbertura");
   lista.innerHTML = window._catalogoInfracoes
     .filter(i => i.ativo !== false)
-    .map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-abertura" value="${i.infracaoId}" style="width:auto;" /> ${escaparHtmlEbd(i.nome)} <span class="subtitle">(${i.referenciaRegimento || i.codigo} — ${badgeGravidade(i.gravidade)})</span></label>`)
+    .map(i => `<label style="display:block;"><input type="checkbox" class="chk-infracao-abertura" value="${i.infracaoId}" style="width:auto;" /> ${escaparHtmlEbd(i.nome)} <span class="subtitle">(${escaparHtmlEbd(i.referenciaRegimento) || escaparHtmlEbd(i.codigo)} — ${badgeGravidade(i.gravidade)})</span></label>`)
     .join("") || "<p class='subtitle'>Nenhuma infração cadastrada no catálogo.</p>";
 
   document.getElementById("catalogoTiposInfracaoConteudo").innerHTML = secaoCatalogo("tiposInfracao");
@@ -9751,7 +10014,7 @@ const ORDEM_GRAVIDADE = ["LEVE", "MEDIA", "GRAVE", "GRAVISSIMA"];
 const CORES_GRAVIDADE = { LEVE: "badge-ativo", MEDIA: "badge-licenca", GRAVE: "badge-licenca", GRAVISSIMA: "badge-desligado" };
 function badgeGravidade(gravidade) {
   if (!gravidade) return "";
-  return `<span class="badge-status ${CORES_GRAVIDADE[gravidade] || ""}">${ROTULO_GRAVIDADE[gravidade] || gravidade}</span>`;
+  return `<span class="badge-status ${CORES_GRAVIDADE[gravidade] || ""}">${ROTULO_GRAVIDADE[gravidade] || escaparHtmlEbd(gravidade)}</span>`;
 }
 
 function badgeSituacaoDisciplina(situacao) {
@@ -9759,13 +10022,14 @@ function badgeSituacaoDisciplina(situacao) {
     EM_ANDAMENTO: "badge-licenca", AFASTAMENTO_CAUTELAR: "badge-licenca", EM_RECURSO: "badge-licenca", CUMPRINDO_SANCAO: "badge-licenca", PRAZO_INDETERMINADO: "badge-licenca",
     CUMPRIDO: "badge-ativo", ARQUIVADO: "badge-ativo", EXCLUIDO: "badge-desligado"
   };
-  return `<span class="badge-status ${cores[situacao] || ""}">${ROTULO_SITUACAO_DISCIPLINA[situacao] || situacao}</span>`;
+  return `<span class="badge-status ${cores[situacao] || ""}">${ROTULO_SITUACAO_DISCIPLINA[situacao] || escaparHtmlEbd(situacao)}</span>`;
 }
 
 async function carregarProcessosDisciplinares() {
   const container = document.getElementById("resultadoListaDisciplina");
   const res = await fetchProtegido(`${API_BASE}/processos-disciplinares`);
-  const processos = await res.json();
+  const processos = await jsonDaTela(res, container, "objeto");
+  if (processos === null) return;
 
   if (processos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum processo ativo.</p>";
@@ -9781,38 +10045,38 @@ async function carregarProcessosDisciplinares() {
     const podeJulgar = p.status === "EM_ANDAMENTO" || p.status === "AFASTAMENTO_CAUTELAR";
     const podeAjustarPrazo = p.situacaoEfetiva === "CUMPRINDO_SANCAO" || p.situacaoEfetiva === "PRAZO_INDETERMINADO";
     const infracoesTexto = p.detalhesRestritos
-      ? `<span class="subtitle">🔒 Sigiloso — ${p.quantidadeInfracoes ?? "?"} infração(ões), detalhes restritos ao CEI/relator</span>`
+      ? `<span class="subtitle">🔒 Sigiloso — ${escaparHtmlEbd(p.quantidadeInfracoes ?? "?")} infração(ões), detalhes restritos ao CEI/relator</span>`
       : (() => {
           const maisGrave = (p.infracoes || []).reduce((atual, i) => {
             if (!i.gravidade) return atual;
             return !atual || ORDEM_GRAVIDADE.indexOf(i.gravidade) > ORDEM_GRAVIDADE.indexOf(atual) ? i.gravidade : atual;
           }, null);
           const texto = (p.infracoes || []).map(i => i.nome).join(", ") || "-";
-          return texto === "-" ? "-" : `${texto} ${badgeGravidade(maisGrave)}`;
+          return texto === "-" ? "-" : `${escaparHtmlEbd(texto)} ${badgeGravidade(maisGrave)}`;
         })();
-    const citacaoTexto = p.dataCitacao ? `${p.dataCitacao} (${ROTULO_CANAL_CITACAO[p.canalCitacao] || p.canalCitacao})` : "-";
+    const citacaoTexto = p.dataCitacao ? `${escaparHtmlEbd(p.dataCitacao)} (${ROTULO_CANAL_CITACAO[p.canalCitacao] || escaparHtmlEbd(p.canalCitacao)})` : "-";
     const defesaTexto = p.defesaProtocolada
-      ? `Protocolada em ${p.dataDefesa}`
+      ? `Protocolada em ${escaparHtmlEbd(p.dataDefesa)}`
       : (p.prazoDefesa && p.prazoDefesa.emRevelia ? "<span class='badge-status badge-desligado'>Revelia</span>" : (p.dataCitacao ? "Aguardando" : "-"));
     const podeRegistrarProva = p.emCarenciaAdministrativa;
     const podeRecorrer = p.podeRecorrer && !p.prazoRecursoVencido;
     const podeHomologar = p.homologadoPeloCei === false && authPermissoes.includes("cei");
-    let penalidadeTexto = p.penalidadeNome || "-";
+    let penalidadeTexto = escaparHtmlEbd(p.penalidadeNome) || "-";
     if (p.emCarenciaAdministrativa) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Em Carência Administrativa</span>";
-    else if (p.resultadoProvaReintegracao) penalidadeTexto += `<br /><span class="subtitle">Prova de Reintegração: ${p.resultadoProvaReintegracao}</span>`;
+    else if (p.resultadoProvaReintegracao) penalidadeTexto += `<br /><span class="subtitle">Prova de Reintegração: ${escaparHtmlEbd(p.resultadoProvaReintegracao)}</span>`;
     if (p.homologadoPeloCei === false) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Aguardando homologação do CEI</span>";
     else if (p.homologadoPeloCei === true) penalidadeTexto += "<br /><span class='subtitle'>Homologado pelo CEI</span>";
     html += `<tr>
-      <td>${escaparHtmlEbd(p.nome)}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${p.defensorNome}</span>` : ""}
+      <td>${escaparHtmlEbd(p.nome)}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${escaparHtmlEbd(p.defensorNome)}</span>` : ""}
         ${p.envolveMinistro ? `<br /><span class="subtitle">⚠️ Envolve ministro — jurisdição dupla (também CIADSETA-PARÁ, fora do sistema), Art. 103 §1º, II</span>` : ""}</td>
-      <td>${p.orgaoSigla}${p.orgaoLocalId ? `<br /><span class="subtitle">${escaparHtmlEbd(p.orgaoNome)}</span>` : ""}</td>
+      <td>${escaparHtmlEbd(p.orgaoSigla)}${p.orgaoLocalId ? `<br /><span class="subtitle">${escaparHtmlEbd(p.orgaoNome)}</span>` : ""}</td>
       <td>${infracoesTexto}</td>
-      <td>${p.relatorNome || "-"}</td>
+      <td>${escaparHtmlEbd(p.relatorNome) || "-"}</td>
       <td>${citacaoTexto}</td>
       <td>${defesaTexto}</td>
       <td>${penalidadeTexto}</td>
       <td>${badgeSituacaoDisciplina(p.situacaoEfetiva)}</td>
-      <td>${p.diasRestantes ?? "-"}</td>
+      <td>${escaparHtmlEbd(p.diasRestantes ?? "-")}</td>
       <td class="acoes-inline">
         ${p.status !== "JULGADO" ? `<button class="btn-link" onclick="designarRelatorAcao(${p.processoId})">Relator</button>` : ""}
         ${p.status !== "JULGADO" && !p.dataCitacao ? `<button class="btn-link" onclick="citarAcao(${p.processoId})">Citar</button>` : ""}
@@ -9935,17 +10199,17 @@ async function registrarProvaReintegracaoAcao(processoId) {
 function pedirRecurso() {
   return new Promise(async resolve => {
     const orgaosRes = await fetchProtegido(`${API_BASE}/orgaos`);
-    const orgaos = await orgaosRes.json();
+    const orgaos = await listaDaApi(orgaosRes);
     const locaisRes = await fetchProtegido(`${API_BASE}/catalogos/orgaosLocais`);
-    const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JEA", "TER"].includes(o.sigla));
+    const locais = (await listaDaApi(locaisRes)).filter(o => o.ativo !== false && ["JEA", "TER"].includes(o.sigla));
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
       <h3>Recorrer para instância superior</h3>
       <div class="input-group">
         <label>Destino:</label>
         <select id="modalOrgaoDestino">
-          ${orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("")}
-          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${escaparHtmlEbd(o.nome)}</option>`).join("")}
+          ${orgaos.map(o => `<option value="central:${o.orgaoId}">${escaparHtmlEbd(o.sigla)}</option>`).join("")}
+          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${escaparHtmlEbd(o.sigla)} — ${escaparHtmlEbd(o.nome)}</option>`).join("")}
         </select>
       </div>
       <div class="input-group">
@@ -10095,7 +10359,8 @@ async function ajustarPrazoProcessoAcao(processoId) {
 async function carregarRadarAbandono() {
   const container = document.getElementById("resultadoRadarAbandono");
   const res = await fetchProtegido(`${API_BASE}/radar-abandono`);
-  const membros = await res.json();
+  const membros = await jsonDaTela(res, container, "lista");
+  if (membros === null) return;
 
   if (!Array.isArray(membros) || membros.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum membro Sem Comunhão com Data de Afastamento lançada.</p>";
@@ -10107,23 +10372,53 @@ async function carregarRadarAbandono() {
   </tr></thead><tbody>` +
     membros.map(m => `<tr>
       <td>${escaparHtmlEbd(m.nome)}</td>
-      <td>${m.congregacao || "-"}</td>
-      <td>${m.dataAfastamento || "-"}</td>
-      <td>${m.diasAfastado ?? "-"}</td>
+      <td>${escaparHtmlEbd(m.congregacao) || "-"}</td>
+      <td>${escaparHtmlEbd(m.dataAfastamento) || "-"}</td>
+      <td>${escaparHtmlEbd(m.diasAfastado ?? "-")}</td>
       <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" onclick="abrirProcedimentoAbandonoAcao(${m.membroId}, 'MATERIAL')">Abrir Procedimento</button>` : "aguardando 90 dias"}</td>
     </tr>`).join("") + "</tbody></table>";
 }
 
 const ROTULO_TIPO_ABANDONO = { MATERIAL: "Material", DIGITAL: "Digital" };
 
+// Fecho 03/10/2026: no Digital, abrir o procedimento É a notificação final (Estatuto Art. 12 §2º) — quem abre escolhe o canal oficial pelo qual está notificando,
+// e o prazo de 15 dias conta de hoje. Promise<number|null>: o canal escolhido, ou null se cancelou.
+async function escolherCanalNotificacaoFinal() {
+  let canais = [];
+  try {
+    const res = await fetchProtegido(`${API_BASE}/canais/para-contato`);
+    const data = await res.json();
+    if (data && data.sucesso !== false && Array.isArray(data.canais)) canais = data.canais;
+  } catch { /* sem a lista não há como notificar */ }
+  if (!canais.length) { mostrarToast("Nenhum canal institucional de contato cadastrado: cadastre um em Canais antes de abrir o procedimento Digital.", "erro"); return null; }
+  return new Promise(resolve => {
+    const caixa = document.getElementById("modalCaixa");
+    caixa.innerHTML = `
+      <h3>Notificação final (Abandono Digital)</h3>
+      <p class="subtitle">Abrir o procedimento registra hoje a notificação final pelo canal escolhido (Estatuto Art. 12 §2º). Envie a mensagem ao membro por esse canal: o prazo de defesa de 15 dias conta a partir de hoje.</p>
+      <select id="modalCanalNotificacao">${canais.map(c => `<option value="${Number(c.canalId)}">${escaparHtmlEbd(c.nome)}${c.identificador ? ` — ${escaparHtmlEbd(c.identificador)}` : ""}</option>`).join("")}</select>
+      <div class="modal-acoes">
+        <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
+        <button class="btn-confirmar btn-perigo" id="modalConfirmar">Notificar e abrir</button>
+      </div>`;
+    document.getElementById("modalOverlay").classList.remove("escondido");
+    document.getElementById("modalConfirmar").onclick = () => { const v = Number(document.getElementById("modalCanalNotificacao").value); fecharModal(); resolve(v || null); };
+    document.getElementById("modalCancelar").onclick = () => { fecharModal(); resolve(null); };
+  });
+}
+
 async function abrirProcedimentoAbandonoAcao(membroId, tipo) {
   tipo = tipo || "MATERIAL";
   const rotulo = ROTULO_TIPO_ABANDONO[tipo] || tipo;
-  if (!(await confirmarAcao(`Abrir o procedimento sumário de constatação de Abandono ${rotulo} para este membro? Ele passa a contar o prazo de defesa de 15 dias.`, "Abrir Procedimento"))) return;
+  let canalNotificacaoId = null;
+  if (tipo === "DIGITAL") {
+    canalNotificacaoId = await escolherCanalNotificacaoFinal();
+    if (!canalNotificacaoId) return;
+  } else if (!(await confirmarAcao(`Abrir o procedimento sumário de constatação de Abandono ${rotulo} para este membro? Ele passa a contar o prazo de defesa de 15 dias. A homologação será de outra pessoa do nível geral.`, "Abrir Procedimento"))) return;
   const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, tipo })
+    body: JSON.stringify({ membroId, tipo, canalNotificacaoId })
   });
   const data = await res.json();
   avisarResultado(data);
@@ -10133,13 +10428,14 @@ async function abrirProcedimentoAbandonoAcao(membroId, tipo) {
 const ROTULO_STATUS_ABANDONO = { NOTIFICADO: "Notificado (em prazo de defesa)", HOMOLOGADO: "Homologado (perda efetivada)", ARQUIVADO: "Arquivado" };
 function badgeStatusAbandono(status) {
   const cores = { NOTIFICADO: "badge-licenca", HOMOLOGADO: "badge-desligado", ARQUIVADO: "badge-ativo" };
-  return `<span class="badge-status ${cores[status] || ""}">${ROTULO_STATUS_ABANDONO[status] || status}</span>`;
+  return `<span class="badge-status ${cores[status] || ""}">${ROTULO_STATUS_ABANDONO[status] || escaparHtmlEbd(status)}</span>`;
 }
 
 async function carregarProcedimentosAbandono() {
   const container = document.getElementById("resultadoListaAbandono");
   const res = await fetchProtegido(`${API_BASE}/procedimentos-abandono`);
-  const procedimentos = await res.json();
+  const procedimentos = await jsonDaTela(res, container, "lista");
+  if (procedimentos === null) return;
 
   if (!Array.isArray(procedimentos) || procedimentos.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum procedimento aberto.</p>";
@@ -10147,16 +10443,18 @@ async function carregarProcedimentosAbandono() {
   }
 
   container.innerHTML = `<table class="tabela-frequencia"><thead><tr>
-    <th>Nome</th><th>Tipo</th><th>Status</th><th>Notificado em</th><th>Recurso</th><th></th>
+    <th>Nome</th><th>Tipo</th><th>Status</th><th>Notificado em</th><th>Aberto por</th><th>Recurso</th><th></th>
   </tr></thead><tbody>` +
     procedimentos.map(p => `<tr>
       <td>${escaparHtmlEbd(p.nome)}</td>
-      <td>${ROTULO_TIPO_ABANDONO[p.tipo] || p.tipo}</td>
-      <td>${badgeStatusAbandono(p.status)}${p.status === "NOTIFICADO" && p.prazoVencido ? " ⏰ prazo vencido" : ""}</td>
-      <td>${p.dataNotificacao || "-"}</td>
-      <td>${p.recursoInterposto ? `${p.resultadoRecurso || "PENDENTE"} (${p.dataRecurso || "-"})` : "-"}</td>
+      <td>${ROTULO_TIPO_ABANDONO[p.tipo] || escaparHtmlEbd(p.tipo)}</td>
+      <td>${badgeStatusAbandono(p.status)}${p.status === "NOTIFICADO" ? (p.prazoVencido ? " ⏰ prazo vencido" : (p.prazoVenceEm ? ` (defesa até ${escaparHtmlEbd(p.prazoVenceEm)})` : "")) : ""}</td>
+      <td>${escaparHtmlEbd(p.dataNotificacao) || "-"}</td>
+      <td>${p.abertoPorNome ? escaparHtmlEbd(p.abertoPorNome) : "-"}</td>
+      <td>${p.recursoInterposto ? `${escaparHtmlEbd(p.resultadoRecurso) || "PENDENTE"} (${escaparHtmlEbd(p.dataRecurso) || "-"})` : "-"}</td>
       <td class="acoes-inline">
-        ${authGeral && p.status === "NOTIFICADO" ? `<button class="btn-link" onclick="homologarProcedimentoAbandonoAcao(${p.procedimentoId})">Homologar</button>` : ""}
+        ${authGeral && p.status === "NOTIFICADO" && !p.abertoPorMim ? `<button class="btn-link" onclick="homologarProcedimentoAbandonoAcao(${p.procedimentoId})">Homologar</button>` : ""}
+        ${authGeral && p.status === "NOTIFICADO" && p.abertoPorMim ? `<span class="subtitle" title="Regra dos dois olhos">homologação: outra pessoa</span>` : ""}
         ${p.status === "NOTIFICADO" ? `<button class="btn-link" onclick="arquivarProcedimentoAbandonoAcao(${p.procedimentoId})">Arquivar</button>` : ""}
         ${authGeral && p.status === "HOMOLOGADO" && !p.recursoInterposto ? `<button class="btn-link" onclick="registrarRecursoAbandonoAcao(${p.procedimentoId})">Registrar Recurso</button>` : ""}
       </td>
@@ -10208,12 +10506,13 @@ async function carregarTentativasContatoLista(membroId) {
   const container = document.getElementById("resultadoTentativasContato");
   if (!container || !membroId) return;
   const res = await fetchProtegido(`${API_BASE}/tentativas-contato?membroId=${membroId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   const tentativas = data.tentativas || [];
   const e = data.elegibilidade || {};
 
-  const resumo = `<p class="subtitle">${e.canaisDistintos ?? 0}/2 canais distintos` +
-    (e.diasDesdePrimeira != null ? `, ${e.diasDesdePrimeira}/90 dias desde a 1ª tentativa` : "") +
+  const resumo = `<p class="subtitle">${escaparHtmlEbd(e.canaisDistintos ?? 0)}/2 canais distintos` +
+    (e.diasDesdePrimeira != null ? `, ${escaparHtmlEbd(e.diasDesdePrimeira)}/90 dias desde a 1ª tentativa` : "") +
     ` — ${e.elegivel ? "✅ elegível para abrir o procedimento" : "ainda não elegível"}.</p>`;
 
   if (tentativas.length === 0) {
@@ -10224,14 +10523,15 @@ async function carregarTentativasContatoLista(membroId) {
   container.innerHTML = resumo + `<table class="tabela-frequencia"><thead><tr>
     <th>Canal</th><th>Data</th><th>Observação</th>
   </tr></thead><tbody>` +
-    tentativas.map(t => `<tr><td>${escaparHtmlEbd(t.canal)}</td><td>${t.dataTentativa}</td><td>${t.observacao || "-"}</td></tr>`).join("") + "</tbody></table>";
+    tentativas.map(t => `<tr><td>${escaparHtmlEbd(t.canal)}</td><td>${escaparHtmlEbd(t.dataTentativa)}</td><td>${escaparHtmlEbd(t.observacao) || "-"}</td></tr>`).join("") + "</tbody></table>";
 }
 
 async function carregarRadarAbandonoDigital() {
   const container = document.getElementById("resultadoRadarAbandonoDigital");
   if (!container) return;
   const res = await fetchProtegido(`${API_BASE}/radar-abandono-digital`);
-  const membros = await res.json();
+  const membros = await jsonDaTela(res, container, "lista");
+  if (membros === null) return;
 
   if (!Array.isArray(membros) || membros.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum membro com tentativa de contato registrada.</p>";
@@ -10243,9 +10543,9 @@ async function carregarRadarAbandonoDigital() {
   </tr></thead><tbody>` +
     membros.map(m => `<tr>
       <td>${escaparHtmlEbd(m.nome)}</td>
-      <td>${m.congregacao || "-"}</td>
-      <td>${m.canaisDistintos}/2</td>
-      <td>${m.diasDesdePrimeira ?? "-"}</td>
+      <td>${escaparHtmlEbd(m.congregacao) || "-"}</td>
+      <td>${escaparHtmlEbd(m.canaisDistintos)}/2</td>
+      <td>${escaparHtmlEbd(m.diasDesdePrimeira ?? "-")}</td>
       <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" onclick="abrirProcedimentoAbandonoAcao(${m.membroId}, 'DIGITAL')">Abrir Procedimento</button>` : "requisitos incompletos"}</td>
     </tr>`).join("") + "</tbody></table>";
 }
@@ -10300,23 +10600,23 @@ async function carregarPainelPessoal(matricula) {
   cartao.innerHTML = `
     <div class="cartao-perfil">
       <p class="nome-perfil">${escaparHtmlEbd(data.membro.nome)}</p>
-      <p class="linha-perfil">Matrícula ${data.membro.membroId} · ${data.membro.funcao || "sem função cadastrada"}</p>
-      <p class="linha-perfil">${data.membro.congregacao || "sem congregação cadastrada"} · ${badgeStatusPessoa(data.membro.status)}</p>
+      <p class="linha-perfil">Matrícula ${data.membro.membroId} · ${escaparHtmlEbd(data.membro.funcao) || "sem função cadastrada"}</p>
+      <p class="linha-perfil">${escaparHtmlEbd(data.membro.congregacao) || "sem congregação cadastrada"} · ${badgeStatusPessoa(data.membro.status)}</p>
     </div>`;
 
   const orgaosContainer = document.getElementById("cartaoMeusOrgaos");
   orgaosContainer.innerHTML = (data.assentos && data.assentos.length)
-    ? `<div class="cartao-perfil"><p class="linha-perfil"><strong>Meus órgãos:</strong> ${data.assentos.map(a => `${a.orgao}${a.cargoOuFuncao ? " — " + a.cargoOuFuncao : ""}`).join(" · ")}</p></div>`
+    ? `<div class="cartao-perfil"><p class="linha-perfil"><strong>Meus órgãos:</strong> ${data.assentos.map(a => `${escaparHtmlEbd(a.orgao)}${a.cargoOuFuncao ? " — " + escaparHtmlEbd(a.cargoOuFuncao) : ""}`).join(" · ")}</p></div>`
     : "";
 
   const r = data.resumo;
   stats.innerHTML = `
     <div class="resumo-stats">
-      <div class="stat-tile"><div class="stat-valor">${r.totalReunioes}</div><div class="stat-rotulo">Reuniões</div></div>
-      <div class="stat-tile"><div class="stat-valor">${r.totalPresencas}</div><div class="stat-rotulo">Presenças</div></div>
-      <div class="stat-tile"><div class="stat-valor">${r.totalFaltas}</div><div class="stat-rotulo">Faltas</div></div>
-      <div class="stat-tile"><div class="stat-valor">${r.totalJustificadas}</div><div class="stat-rotulo">Justificadas</div></div>
-      <div class="stat-tile"><div class="stat-valor">${r.percentualPresenca != null ? r.percentualPresenca + "%" : "-"}</div><div class="stat-rotulo">Presença</div></div>
+      <div class="stat-tile"><div class="stat-valor">${escaparHtmlEbd(r.totalReunioes)}</div><div class="stat-rotulo">Reuniões</div></div>
+      <div class="stat-tile"><div class="stat-valor">${escaparHtmlEbd(r.totalPresencas)}</div><div class="stat-rotulo">Presenças</div></div>
+      <div class="stat-tile"><div class="stat-valor">${escaparHtmlEbd(r.totalFaltas)}</div><div class="stat-rotulo">Faltas</div></div>
+      <div class="stat-tile"><div class="stat-valor">${escaparHtmlEbd(r.totalJustificadas)}</div><div class="stat-rotulo">Justificadas</div></div>
+      <div class="stat-tile"><div class="stat-valor">${r.percentualPresenca != null ? escaparHtmlEbd(r.percentualPresenca) + "%" : "-"}</div><div class="stat-rotulo">Presença</div></div>
     </div>`;
 
   let html = `<table class="tabela-frequencia"><thead><tr>
@@ -10328,11 +10628,11 @@ async function carregarPainelPessoal(matricula) {
     if (!item.presente && !item.faltaJustificada) {
       acaoHtml = item.justificativaPendente
         ? `<span class="tag-pendente">Aguardando aprovação</span>`
-        : `<button class="btn-justificar" onclick="solicitarJustificativaAcao(${matricula}, ${item.sessaoId})">✍️ Justificar falta</button>`;
+        : `<button class="btn-justificar" onclick="solicitarJustificativaAcao(${argJs(matricula)}, ${item.sessaoId})">✍️ Justificar falta</button>`;
     }
     html += `<tr>
-      <td>${item.dataSessao || "-"}</td>
-      <td>${item.descricao || "-"}</td>
+      <td>${escaparHtmlEbd(item.dataSessao) || "-"}</td>
+      <td>${escaparHtmlEbd(item.descricao) || "-"}</td>
       <td>${statusFrequencia(item)}</td>
       <td>${acaoHtml}</td>
     </tr>`;
@@ -10363,7 +10663,7 @@ async function solicitarJustificativaAcao(matricula, sessaoId) {
 function badgeStatusLgpd(status) {
   const classes = { PENDENTE: "badge-licenca", EM_ANALISE: "badge-licenca", ATENDIDA: "badge-ativo", NEGADA: "badge-desligado" };
   const rotulos = { PENDENTE: "Pendente", EM_ANALISE: "Em análise", ATENDIDA: "Atendida", NEGADA: "Negada" };
-  return `<span class="badge-status ${classes[status] || ""}">${rotulos[status] || status}</span>`;
+  return `<span class="badge-status ${classes[status] || ""}">${rotulos[status] || escaparHtmlEbd(status)}</span>`;
 }
 
 async function carregarConsentimentoLGPD(matricula) {
@@ -10436,7 +10736,7 @@ async function alternarMeusDadosLGPD() {
   caixa.innerHTML = `
     <div class="cartao-perfil">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Cadastrais</h4>
-      ${m.fotoUrl ? `<img src="${m.fotoUrl}" alt="Foto" style="max-width:120px;border-radius:8px;margin-bottom:8px;" />` : ""}
+      ${m.fotoUrl ? `<img src="${urlSegura(m.fotoUrl)}" alt="Foto" style="max-width:120px;border-radius:8px;margin-bottom:8px;" />` : ""}
       ${linhaLgpd("Nome", m.nome)}
       ${linhaLgpd("Congregação", m.congregacao)}
       ${linhaLgpd("Extensão da Tenda", m.extensao)}
@@ -10476,20 +10776,20 @@ async function alternarMeusDadosLGPD() {
     ${data.casamentos.length ? `
     <div class="cartao-perfil" style="margin-top:12px;">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Casamentos</h4>
-      ${data.casamentos.map(c => `<p class="linha-perfil">${formatarValorLgpd(c.dataCasamento, "data")} · ${c.conjuge || "-"} · ${ROTULO_MODALIDADE[c.modalidade] || c.modalidade}</p>`).join("")}
+      ${data.casamentos.map(c => `<p class="linha-perfil">${formatarValorLgpd(c.dataCasamento, "data")} · ${escaparHtmlEbd(c.conjuge) || "-"} · ${ROTULO_MODALIDADE[c.modalidade] || escaparHtmlEbd(c.modalidade)}</p>`).join("")}
     </div>` : ""}
 
     ${data.licencasCandidatura.length ? `
     <div class="cartao-perfil" style="margin-top:12px;">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Licenças por Candidatura</h4>
-      ${data.licencasCandidatura.map(l => `<p class="linha-perfil">Pleito em ${formatarValorLgpd(l.dataPleito, "data")} · ${ROTULO_STATUS_LIC[l.status] || l.status}</p>`).join("")}
+      ${data.licencasCandidatura.map(l => `<p class="linha-perfil">Pleito em ${formatarValorLgpd(l.dataPleito, "data")} · ${ROTULO_STATUS_LIC[l.status] || escaparHtmlEbd(l.status)}</p>`).join("")}
     </div>` : ""}
 
     ${volCartaoMeusDados(data.voluntariado)}
 
     <div class="cartao-perfil" style="margin-top:12px;">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Consentimentos LGPD</h4>
-      ${data.consentimentos.map(c => `<p class="linha-perfil">${c.tipo} — ${c.concedido ? "✅ Concedido" : "❌ Revogado"} em ${formatarValorLgpd(c.dataRegistro, "dataHora")}</p>`).join("") || "<p class='subtitle'>Nenhum registrado.</p>"}
+      ${data.consentimentos.map(c => `<p class="linha-perfil">${escaparHtmlEbd(c.tipo)} — ${c.concedido ? "✅ Concedido" : "❌ Revogado"} em ${formatarValorLgpd(c.dataRegistro, "dataHora")}</p>`).join("") || "<p class='subtitle'>Nenhum registrado.</p>"}
     </div>
 
     <p class="subtitle" style="margin-top:12px;">Gerado em ${formatarValorLgpd(data.geradoEm, "dataHora")}. Precisa de uma cópia formal? Use "Enviar pedido" abaixo com o tipo "Portabilidade".</p>`;
@@ -10548,7 +10848,8 @@ async function carregarMinhasSolicitacoesLGPD(matricula) {
   const container = document.getElementById("resultadoListaSolicitacoesLGPD");
   if (!matricula || !container) return;
   const res = await fetchProtegido(`${API_BASE}/lgpd/solicitacoes/${matricula}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (!data.sucesso || data.solicitacoes.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma solicitação enviada ainda.</p>";
     return;
@@ -10556,10 +10857,10 @@ async function carregarMinhasSolicitacoesLGPD(matricula) {
   let html = "<table class='tabela-frequencia'><thead><tr><th>Tipo</th><th>Data</th><th>Status</th><th>Resposta</th></tr></thead><tbody>";
   data.solicitacoes.forEach(s => {
     html += `<tr>
-      <td>${s.tipo}</td>
+      <td>${escaparHtmlEbd(s.tipo)}</td>
       <td>${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</td>
       <td>${badgeStatusLgpd(s.status)}</td>
-      <td>${s.respostaTexto || "-"}</td>
+      <td>${escaparHtmlEbd(s.respostaTexto) || "-"}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -10579,8 +10880,9 @@ async function carregarAuditoria() {
   if (ate) params.set("ate", `${ate}T23:59:59`);
 
   const res = await fetchProtegido(`${API_BASE}/auditoria?${params.toString()}`);
-  const registros = await res.json();
   const container = document.getElementById("resultadoListaAuditoria");
+  const registros = await jsonDaTela(res, container, "lista");
+  if (registros === null) return;
   if (!Array.isArray(registros) || registros.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum registro encontrado.</p>";
     return;
@@ -10589,10 +10891,10 @@ async function carregarAuditoria() {
   registros.forEach(a => {
     html += `<tr>
       <td>${new Date(a.dataHora).toLocaleString("pt-BR")}</td>
-      <td>${a.tabela}</td>
+      <td>${escaparHtmlEbd(a.tabela)}</td>
       <td>${a.registroId ?? "-"}</td>
-      <td>${a.acao}</td>
-      <td>${a.usuarioNome ? `${a.usuarioNome} (${a.usuarioId})` : (a.usuarioId ?? "-")}</td>
+      <td>${escaparHtmlEbd(a.acao)}</td>
+      <td>${a.usuarioNome ? `${escaparHtmlEbd(a.usuarioNome)} (${a.usuarioId})` : (a.usuarioId ?? "-")}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -10603,7 +10905,8 @@ async function carregarAuditoria() {
 async function carregarIndicadoresAcao() {
   const container = document.getElementById("resultadoIndicadores");
   const res = await fetchProtegido(`${API_BASE}/indicadores-financeiros`);
-  const d = await res.json();
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
   const alvoAtividadesFim = d.indiceAplicacaoAtividadesFim >= 70 && d.indiceAplicacaoAtividadesFim <= 80;
   const alvoReserva = d.mesesReservaCaixa >= 3;
   container.innerHTML = `<table class="tabela-frequencia"><tbody>
@@ -10618,14 +10921,15 @@ async function carregarIndicadoresAcao() {
 async function carregarAlertasComplianceAcao() {
   const container = document.getElementById("resultadoAlertasCompliance");
   const res = await fetchProtegido(`${API_BASE}/compliance/alertas`);
-  const d = await res.json();
+  const d = await jsonDaTela(res, container, "objeto");
+  if (d === null) return;
   const lista = d.alertas || [];
   if (lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum alerta ativo. ✅</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Severidade</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody>`;
-  lista.forEach(a => html += `<tr><td>${a.severidade}</td><td>${a.tipo}</td><td>${escaparHtmlEbd(a.descricao)}</td><td><button class="btn-link" onclick="resolverAlertaComplianceAcao(${a.alertaId})">Resolver</button></td></tr>`);
+  lista.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.severidade)}</td><td>${escaparHtmlEbd(a.tipo)}</td><td>${escaparHtmlEbd(a.descricao)}</td><td><button class="btn-link" onclick="resolverAlertaComplianceAcao(${a.alertaId})">Resolver</button></td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10640,7 +10944,8 @@ async function resolverAlertaComplianceAcao(alertaId) {
 async function carregarCongregacoesPrestacaoAcao() {
   const select = document.getElementById("prestacaoCongregacao");
   const res = await fetchProtegido(`${API_BASE}/catalogos/congregacoes`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, select, "lista");
+  if (lista === null) return;
   select.innerHTML = (Array.isArray(lista) ? lista.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("") : "");
 }
 
@@ -10664,13 +10969,14 @@ async function registrarPrestacaoContasAcao() {
 async function carregarPrestacoesContasAcao() {
   const container = document.getElementById("resultadoPrestacoesContas");
   const res = await fetchProtegido(`${API_BASE}/prestacoes-contas`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma prestação registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Mês</th><th>Água</th><th>Luz</th><th>Status</th><th>Repasse</th></tr></thead><tbody>`;
-  lista.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.congregacaoNome)}</td><td>${p.mesReferencia}</td><td>${p.temAgua ? "✅" : "❌"}</td><td>${p.temLuz ? "✅" : "❌"}</td><td>${p.status}</td><td>${p.bloqueioRepasse ? "🔒 bloqueado" : "liberado"}</td></tr>`);
+  lista.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.congregacaoNome)}</td><td>${escaparHtmlEbd(p.mesReferencia)}</td><td>${p.temAgua ? "✅" : "❌"}</td><td>${p.temLuz ? "✅" : "❌"}</td><td>${escaparHtmlEbd(p.status)}</td><td>${p.bloqueioRepasse ? "🔒 bloqueado" : "liberado"}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10679,7 +10985,8 @@ async function carregarPrestacoesContasAcao() {
 async function carregarRecertificacoesAcao() {
   const container = document.getElementById("resultadoRecertificacoes");
   const res = await fetchProtegido(`${API_BASE}/compliance/recertificacoes`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma recertificação pendente.</p>";
     return;
@@ -10691,7 +10998,7 @@ async function carregarRecertificacoesAcao() {
       acoes = `<button class="btn-link" onclick="decidirRecertificacaoAcao(${r.recertificacaoId}, 'CONFIRMAR')">Recertificar</button>
                <button class="btn-link btn-link-perigo" onclick="decidirRecertificacaoAcao(${r.recertificacaoId}, 'EXPIRAR')">Expirar</button>`;
     }
-    html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${r.papelNome}</td><td>${r.permissao}</td><td>${new Date(r.prazo).toLocaleDateString("pt-BR")}</td><td>${r.status}</td><td class="acoes-inline">${acoes}</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${escaparHtmlEbd(r.papelNome)}</td><td>${escaparHtmlEbd(r.permissao)}</td><td>${new Date(r.prazo).toLocaleDateString("pt-BR")}</td><td>${escaparHtmlEbd(r.status)}</td><td class="acoes-inline">${acoes}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -10718,13 +11025,14 @@ async function verificarCadeiaAuditoriaAcao() {
 async function carregarAncoragensAcao() {
   const container = document.getElementById("resultadoAncoragens");
   const res = await fetchProtegido(`${API_BASE}/auditoria/ancoragens`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma ancoragem externa registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Quando</th><th>Método</th><th>Hash ancorado</th></tr></thead><tbody>`;
-  lista.forEach(a => html += `<tr><td>${new Date(a.criadoEm).toLocaleString("pt-BR")}</td><td>${a.metodo}</td><td style="font-family:monospace;font-size:0.85em;">${a.hashAncorado}</td></tr>`);
+  lista.forEach(a => html += `<tr><td>${new Date(a.criadoEm).toLocaleString("pt-BR")}</td><td>${escaparHtmlEbd(a.metodo)}</td><td style="font-family:monospace;font-size:0.85em;">${escaparHtmlEbd(a.hashAncorado)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10750,7 +11058,8 @@ async function registrarAncoragemAcao() {
 async function carregarAuditoriasNiveisAcao() {
   const container = document.getElementById("resultadoAuditoriasNiveis");
   const res = await fetchProtegido(`${API_BASE}/auditoria/niveis`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma auditoria registrada.</p>";
     return;
@@ -10758,7 +11067,7 @@ async function carregarAuditoriasNiveisAcao() {
   // Este recurso responde com SELECT * (colunas em PascalCase), diferente
   // dos demais endpoints do módulo que aliasam pra camelCase.
   let html = `<table class="tabela-frequencia"><thead><tr><th>Nível</th><th>Título</th><th>Ano</th><th>Status</th><th>Conclusão</th></tr></thead><tbody>`;
-  lista.forEach(a => html += `<tr><td>${a.Nivel}</td><td>${a.Titulo}</td><td>${a.AnoReferencia}</td><td>${a.Status}</td><td>${a.Conclusao || "-"}</td></tr>`);
+  lista.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.Nivel)}</td><td>${escaparHtmlEbd(a.Titulo)}</td><td>${escaparHtmlEbd(a.AnoReferencia)}</td><td>${escaparHtmlEbd(a.Status)}</td><td>${escaparHtmlEbd(a.Conclusao) || "-"}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10789,13 +11098,14 @@ async function registrarAuditoriaNivelAcao() {
 async function carregarPareceresConselhoAcao() {
   const container = document.getElementById("resultadoPareceresConselho");
   const res = await fetchProtegido(`${API_BASE}/auditoria/pareceres`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum parecer registrado.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Decisão</th><th>Justificativa</th><th>Por</th></tr></thead><tbody>`;
-  lista.forEach(p => html += `<tr><td>${p.mesReferencia}</td><td>${p.decisao === "APROVADO" ? "✅ Aprovado" : "❌ Rejeitado"}</td><td>${p.justificativa || "-"}</td><td>${p.parecerPorNome}</td></tr>`);
+  lista.forEach(p => html += `<tr><td>${escaparHtmlEbd(p.mesReferencia)}</td><td>${p.decisao === "APROVADO" ? "✅ Aprovado" : "❌ Rejeitado"}</td><td>${escaparHtmlEbd(p.justificativa) || "-"}</td><td>${escaparHtmlEbd(p.parecerPorNome)}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10823,9 +11133,10 @@ async function registrarParecerConselhoAcao() {
 async function carregarSinalizacoesNifAcao() {
   const container = document.getElementById("resultadoSinalizacoesNif");
   const res = await fetchProtegido(`${API_BASE}/nif/sinalizacoes`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista)) {
-    container.innerHTML = `<p class='subtitle'>${(lista && lista.mensagem) || "Sem acesso a este recurso (restrito à Tesouraria Geral)."}</p>`;
+    container.innerHTML = `<p class='subtitle'>${(lista && escaparHtmlEbd(lista.mensagem)) || "Sem acesso a este recurso (restrito à Tesouraria Geral)."}</p>`;
     return;
   }
   if (lista.length === 0) {
@@ -10841,7 +11152,7 @@ async function carregarSinalizacoesNifAcao() {
     } else if (s.status === "CONFIRMADA") {
       acoes = `<button class="btn-link" onclick="registrarComunicacaoCoafAcao(${s.sinalizacaoId})">Comunicar ao COAF</button>`;
     }
-    html += `<tr><td>${s.tipo}</td><td>${escaparHtmlEbd(s.descricao)}</td><td>${s.fornecedorNome || "-"}</td><td>${s.status}</td><td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td><td class="acoes-inline">${acoes}</td></tr>`;
+    html += `<tr><td>${escaparHtmlEbd(s.tipo)}</td><td>${escaparHtmlEbd(s.descricao)}</td><td>${escaparHtmlEbd(s.fornecedorNome) || "-"}</td><td>${escaparHtmlEbd(s.status)}</td><td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td><td class="acoes-inline">${acoes}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -10887,9 +11198,10 @@ async function registrarComunicacaoCoafAcao(sinalizacaoId) {
 async function carregarComunicacoesCoafAcao() {
   const container = document.getElementById("resultadoComunicacoesCoaf");
   const res = await fetchProtegido(`${API_BASE}/nif/comunicacoes`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista)) {
-    container.innerHTML = `<p class='subtitle'>${(lista && lista.mensagem) || "Sem acesso a este recurso (restrito à Tesouraria Geral)."}</p>`;
+    container.innerHTML = `<p class='subtitle'>${(lista && escaparHtmlEbd(lista.mensagem)) || "Sem acesso a este recurso (restrito à Tesouraria Geral)."}</p>`;
     return;
   }
   if (lista.length === 0) {
@@ -10897,7 +11209,7 @@ async function carregarComunicacoesCoafAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Sinalização</th><th>Protocolo</th><th>Prazo 24h</th><th>Observação</th><th>Quando</th></tr></thead><tbody>`;
-  lista.forEach(c => html += `<tr><td>#${c.sinalizacaoId}</td><td>${c.protocolo || "-"}</td><td>${c.dentroPrazo24h ? "✅ Dentro do prazo" : "⚠️ Fora do prazo"}</td><td>${c.observacao || "-"}</td><td>${new Date(c.dataComunicacao).toLocaleString("pt-BR")}</td></tr>`);
+  lista.forEach(c => html += `<tr><td>#${c.sinalizacaoId}</td><td>${escaparHtmlEbd(c.protocolo) || "-"}</td><td>${c.dentroPrazo24h ? "✅ Dentro do prazo" : "⚠️ Fora do prazo"}</td><td>${escaparHtmlEbd(c.observacao) || "-"}</td><td>${new Date(c.dataComunicacao).toLocaleString("pt-BR")}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10927,15 +11239,16 @@ async function registrarDoacaoAcao() {
 async function carregarDoacoesAcao() {
   const container = document.getElementById("resultadoDoacoes");
   const res = await fetchProtegido(`${API_BASE}/doacoes`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma doação registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Recibo</th><th>Data</th><th>Valor</th><th>Forma</th><th>Doador</th></tr></thead><tbody>`;
   lista.forEach(d => {
-    const doador = d.identificacaoObrigatoria ? `${d.doadorNome || "⚠️ não identificado"} (${d.doadorCpfCnpj || "-"})` : (d.doadorNome || "-");
-    html += `<tr><td>${d.numeroRecibo}</td><td>${d.dataRecebimento}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${d.formaPagamento}</td><td>${doador}</td></tr>`;
+    const doador = d.identificacaoObrigatoria ? `${escaparHtmlEbd(d.doadorNome) || "⚠️ não identificado"} (${escaparHtmlEbd(d.doadorCpfCnpj) || "-"})` : (d.doadorNome || "-");
+    html += `<tr><td>${escaparHtmlEbd(d.numeroRecibo)}</td><td>${escaparHtmlEbd(d.dataRecebimento)}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${escaparHtmlEbd(d.formaPagamento)}</td><td>${escaparHtmlEbd(doador)}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -10957,13 +11270,14 @@ async function registrarPoliticaAcao() {
 async function carregarPoliticasAcao() {
   const container = document.getElementById("resultadoPoliticas");
   const res = await fetchProtegido(`${API_BASE}/integridade/politicas`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma política aprovada ainda.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Tipo</th><th>Título</th><th>Ata</th><th>Aprovação</th><th>Vigente</th></tr></thead><tbody>`;
-  lista.forEach(p => html += `<tr><td>${p.PoliticaId}</td><td>${p.Tipo}</td><td>${p.Titulo}</td><td>${p.AtaReferencia}</td><td>${p.DataAprovacao}</td><td>${p.Vigente ? "✅" : "-"}</td></tr>`);
+  lista.forEach(p => html += `<tr><td>${p.PoliticaId}</td><td>${escaparHtmlEbd(p.Tipo)}</td><td>${escaparHtmlEbd(p.Titulo)}</td><td>${escaparHtmlEbd(p.AtaReferencia)}</td><td>${escaparHtmlEbd(p.DataAprovacao)}</td><td>${p.Vigente ? "✅" : "-"}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10980,7 +11294,7 @@ async function registrarAceiteAcao() {
     const lista = await res2.json();
     const container = document.getElementById("resultadoAceites");
     let html = `<table class="tabela-frequencia"><thead><tr><th>Membro</th><th>Política</th><th>Data</th></tr></thead><tbody>`;
-    (Array.isArray(lista) ? lista : []).forEach(a => html += `<tr><td>${escaparHtmlEbd(a.membroNome)}</td><td>${a.politicaTitulo}</td><td>${new Date(a.DataAceite).toLocaleString("pt-BR")}</td></tr>`);
+    (Array.isArray(lista) ? lista : []).forEach(a => html += `<tr><td>${escaparHtmlEbd(a.membroNome)}</td><td>${escaparHtmlEbd(a.politicaTitulo)}</td><td>${new Date(a.DataAceite).toLocaleString("pt-BR")}</td></tr>`);
     html += "</tbody></table>";
     container.innerHTML = html;
   }
@@ -10989,7 +11303,8 @@ async function registrarAceiteAcao() {
 async function carregarDueDiligenceAcao() {
   const container = document.getElementById("resultadoDueDiligence");
   const res = await fetchProtegido(`${API_BASE}/integridade/due-diligence`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum fornecedor cadastrado.</p>";
     return;
@@ -10997,7 +11312,7 @@ async function carregarDueDiligenceAcao() {
   const cores = { APROVADO: "✅", REPROVADO: "⛔", PENDENTE: "⏳" };
   let html = `<table class="tabela-frequencia"><thead><tr><th>Fornecedor</th><th>Status</th><th>Observação</th><th>Ação</th></tr></thead><tbody>`;
   lista.forEach(f => {
-    html += `<tr><td>${f.fornecedorNome}</td><td>${cores[f.Status] || "⏳"} ${f.Status || "PENDENTE"}</td><td>${f.Observacao || "-"}</td>
+    html += `<tr><td>${escaparHtmlEbd(f.fornecedorNome)}</td><td>${cores[f.Status] || "⏳"} ${escaparHtmlEbd(f.Status) || "PENDENTE"}</td><td>${escaparHtmlEbd(f.Observacao) || "-"}</td>
       <td>
         <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDueDiligenceAcao(${f.FornecedorId}, 'APROVADO')">Aprovar</button>
         <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDueDiligenceAcao(${f.FornecedorId}, 'REPROVADO')">Reprovar</button>
@@ -11036,13 +11351,14 @@ async function registrarConflitoInteresseAcao() {
 async function carregarConflitosInteresseAcao() {
   const container = document.getElementById("resultadoConflitosInteresse");
   const res = await fetchProtegido(`${API_BASE}/integridade/conflitos-interesse`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma declaração registrada.</p>";
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Dirigente</th><th>Mandato</th><th>Conflito?</th><th>Descrição</th></tr></thead><tbody>`;
-  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.membroNome)}</td><td>${c.MandatoReferencia}</td><td>${c.TemConflito ? "⚠️ Sim" : "✅ Não"}</td><td>${c.DescricaoConflito || "-"}</td></tr>`);
+  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.membroNome)}</td><td>${escaparHtmlEbd(c.MandatoReferencia)}</td><td>${c.TemConflito ? "⚠️ Sim" : "✅ Não"}</td><td>${escaparHtmlEbd(c.DescricaoConflito) || "-"}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -11054,8 +11370,9 @@ async function carregarSolicitacoesDPO() {
   if (status) params.set("status", status);
 
   const res = await fetchProtegido(`${API_BASE}/lgpd/dpo/solicitacoes?${params.toString()}`);
-  const registros = await res.json();
   const container = document.getElementById("resultadoListaSolicitacoesDPO");
+  const registros = await jsonDaTela(res, container, "lista");
+  if (registros === null) return;
   if (!Array.isArray(registros) || registros.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhuma solicitação encontrada.</p>";
     return;
@@ -11077,8 +11394,8 @@ async function carregarSolicitacoesDPO() {
     html += `<tr>
       <td>${s.membroId}</td>
       <td>${escaparHtmlEbd(s.nome)}</td>
-      <td>${s.tipo}</td>
-      <td>${s.descricao || "-"}</td>
+      <td>${escaparHtmlEbd(s.tipo)}</td>
+      <td>${escaparHtmlEbd(s.descricao) || "-"}</td>
       <td>${badgeStatusLgpd(s.status)}</td>
       <td>${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</td>
       <td class="acoes-inline">${acoes}</td>
@@ -11130,7 +11447,7 @@ async function salvarDenunciaOuvidoria() {
   });
   const data = await res.json();
   if (data.sucesso) {
-    msg.innerHTML = `✅ Denúncia registrada. <strong>Guarde este protocolo, é a única forma de acompanhar:</strong><br /><span style="font-size:1.2em;">${data.protocolo}</span>`;
+    msg.innerHTML = `✅ Denúncia registrada. <strong>Anote ou copie este protocolo agora — ele é a ÚNICA chave para acompanhar:</strong><br /><span style="font-size:1.2em;font-family:monospace;user-select:all;">${escaparHtmlEbd(data.protocolo)}</span><br /><span class="subtitle">A Igreja não consegue recuperá-lo nem reenviá-lo (numa denúncia anônima ninguém sabe quem a fez), e quem tiver o protocolo vê o andamento: não o compartilhe.</span>`;
     document.getElementById("ouvidoriaDenunciado").value = "";
     document.getElementById("ouvidoriaRelato").value = "";
     document.getElementById("ouvidoriaAnonima").checked = false;
@@ -11145,6 +11462,7 @@ async function consultarProtocoloOuvidoriaAcao() {
   if (!protocolo) { msg.textContent = "Informe o protocolo."; return; }
   const res = await fetch(`${API_BASE}/ouvidoria-protocolo/${encodeURIComponent(protocolo)}`);
   const data = await res.json();
+  if (res.status === 429) { msg.textContent = data.mensagem || "Muitas consultas seguidas. Aguarde um minuto."; return; }
   msg.textContent = data.sucesso ? `Status: ${ROTULO_STATUS_OUVIDORIA[data.status] || data.status} (protocolado em ${data.dataProtocolo})` : (data.mensagem || "Protocolo não encontrado.");
 }
 
@@ -11164,7 +11482,8 @@ async function carregarPainelOuvidoria() {
   if (!authPermissoes.includes("ouvidoria")) { container.innerHTML = ""; return; }
 
   const res = await fetchProtegido(`${API_BASE}/ouvidoria`);
-  const denuncias = await res.json();
+  const denuncias = await jsonDaTela(res, container, "lista");
+  if (denuncias === null) return;
   if (!Array.isArray(denuncias)) { container.innerHTML = ""; return; }
 
   let html = `<hr /><h4 style="margin:0 0 10px; color: var(--cor-primaria);">Painel da Ouvidoria (CEI/NIF)</h4>
@@ -11174,13 +11493,13 @@ async function carregarPainelOuvidoria() {
   denuncias.forEach(d => {
     const podeAnonimizar = authPermissoes.includes("protecaodedados") && !d.dadosAnonimizados && ["ARQUIVADA", "CONCLUIDA"].includes(d.status);
     html += `<tr>
-      <td>${d.protocolo}</td>
-      <td>${ROTULO_TIPO_OUVIDORIA[d.tipo] || d.tipo}</td>
-      <td>${d.anonima ? "<span class='subtitle'>Anônima</span>" : (d.denuncianteNome || "-")}</td>
-      <td>${d.denunciadoNome || "-"}${d.denunciadoEhDiretoria ? " ⚠️" : ""}</td>
-      <td style="max-width:260px;">${d.relato || ""}</td>
-      <td>${d.ouvidorNome || "-"}</td>
-      <td>${ROTULO_STATUS_OUVIDORIA[d.status] || d.status}</td>
+      <td>${escaparHtmlEbd(d.protocolo)}</td>
+      <td>${ROTULO_TIPO_OUVIDORIA[d.tipo] || escaparHtmlEbd(d.tipo)}</td>
+      <td>${d.anonima ? "<span class='subtitle'>Anônima</span>" : (escaparHtmlEbd(d.denuncianteNome) || "-")}</td>
+      <td>${escaparHtmlEbd(d.denunciadoNome) || "-"}${d.denunciadoEhDiretoria ? " ⚠️" : ""}</td>
+      <td style="max-width:260px;">${escaparHtmlEbd(d.relato) || ""}</td>
+      <td>${escaparHtmlEbd(d.ouvidorNome) || "-"}</td>
+      <td>${ROTULO_STATUS_OUVIDORIA[d.status] || escaparHtmlEbd(d.status)}</td>
       <td class="acoes-inline">
         ${d.status === "RECEBIDA" ? `<button class="btn-link" onclick="atribuirOuvidorAcao(${d.denunciaId})">Atribuir Ouvidor</button>` : ""}
         ${d.denunciadoMembroId && d.status !== "ENCAMINHADA_PROCESSO" ? `<button class="btn-link" onclick="encaminharProcessoOuvidoriaAcao(${d.denunciaId})">Encaminhar p/ Processo</button>` : ""}
@@ -11238,8 +11557,8 @@ function pedirEncaminhamentoProcesso(orgaos, locais, infracoes) {
       <div class="input-group">
         <label>Órgão:</label>
         <select id="modalOrgaoEncaminhar">
-          ${orgaos.map(o => `<option value="central:${o.orgaoId}">${o.sigla}</option>`).join("")}
-          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${o.sigla} — ${escaparHtmlEbd(o.nome)}</option>`).join("")}
+          ${orgaos.map(o => `<option value="central:${o.orgaoId}">${escaparHtmlEbd(o.sigla)}</option>`).join("")}
+          ${locais.map(o => `<option value="local:${o.orgaoLocalId}">${escaparHtmlEbd(o.sigla)} — ${escaparHtmlEbd(o.nome)}</option>`).join("")}
         </select>
       </div>
       <div class="input-group">
@@ -11268,7 +11587,7 @@ async function encaminharProcessoOuvidoriaAcao(denunciaId) {
     fetchProtegido(`${API_BASE}/orgaos`), fetchProtegido(`${API_BASE}/catalogos/orgaosLocais`), fetchProtegido(`${API_BASE}/catalogos/tiposInfracao`)
   ]);
   const orgaos = await orgaosRes.json();
-  const locais = (await locaisRes.json()).filter(o => o.ativo !== false && ["JAI", "JEA", "TER"].includes(o.sigla));
+  const locais = (await listaDaApi(locaisRes)).filter(o => o.ativo !== false && ["JAI", "JEA", "TER"].includes(o.sigla));
   const infracoes = await infracoesRes.json();
 
   const dados = await pedirEncaminhamentoProcesso(orgaos, locais, infracoes);
@@ -11321,7 +11640,8 @@ async function carregarMediacoes() {
   const container = document.getElementById("resultadoListaMediacoes");
   if (!authPermissoes.includes("mediacao")) { container.innerHTML = "<p class='subtitle'>Instaure um caso acima — a lista completa exige a permissão 'mediacao'.</p>"; return; }
   const res = await fetchProtegido(`${API_BASE}/mediacoes`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) {
     container.innerHTML = "<p class='subtitle'>Nenhum caso registrado ainda.</p>";
     return;
@@ -11332,10 +11652,10 @@ async function carregarMediacoes() {
   lista.forEach(m => {
     html += `<tr>
       <td>${escaparHtmlEbd(m.assunto)}</td>
-      <td>${m.parteANome || m.parteADescricao || "-"}</td>
-      <td>${m.parteBNome || m.parteBDescricao || "-"}</td>
-      <td>${ROTULO_STATUS_MEDIACAO[m.status] || m.status}</td>
-      <td>${m.prazoVencido ? `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Vencido (${m.diasDesdeInstauracao}d)</span>` : `${m.diasDesdeInstauracao}d de ${m.prazoDiasEncerramento}`}</td>
+      <td>${escaparHtmlEbd(m.parteANome) || escaparHtmlEbd(m.parteADescricao) || "-"}</td>
+      <td>${escaparHtmlEbd(m.parteBNome) || escaparHtmlEbd(m.parteBDescricao) || "-"}</td>
+      <td>${ROTULO_STATUS_MEDIACAO[m.status] || escaparHtmlEbd(m.status)}</td>
+      <td>${m.prazoVencido ? `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Vencido (${escaparHtmlEbd(m.diasDesdeInstauracao)}d)</span>` : `${escaparHtmlEbd(m.diasDesdeInstauracao)}d de ${escaparHtmlEbd(m.prazoDiasEncerramento)}`}</td>
       <td><button class="btn-link" onclick="abrirDetalheMediacao(${m.mediacaoId})">Abrir</button></td>
     </tr>`;
   });
@@ -11356,8 +11676,9 @@ async function evoluirMediacaoAcao(mediacaoId, corpo) {
 async function abrirDetalheMediacao(mediacaoId) {
   const container = document.getElementById("painelDetalheMediacao");
   const res = await fetchProtegido(`${API_BASE}/mediacoes/${mediacaoId}`);
-  const m = await res.json();
-  if (m.sucesso === false) { container.innerHTML = `<p class="subtitle">${m.mensagem}</p>`; return; }
+  const m = await jsonDaTela(res, container, "objeto");
+  if (m === null) return;
+  if (m.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(m.mensagem)}</p>`; return; }
 
   let acoesHtml = "";
   if (m.status === "MEDIACAO_EM_CURSO") {
@@ -11373,9 +11694,9 @@ async function abrirDetalheMediacao(mediacaoId) {
       <button class="btn-link" onclick="registrarSessaoMediacaoAcao(${mediacaoId})">Registrar Sessão</button>
     </div>
     <div class="barra-lista">
-      <input type="text" id="medDetResumoAcordo" placeholder="Resumo do acordo" style="min-width:220px;" />
+      <input type="text" id="medDetResumoAcordo" placeholder="Texto do acordo (o que as partes vão aceitar)" style="min-width:220px;" maxlength="1500" />
       <input type="number" id="medDetSaidaVinculada" placeholder="Id da Saída vinculada (opcional)" />
-      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarAcordoMediacaoAcao(${mediacaoId})">✅ Registrar Acordo</button>
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarAcordoMediacaoAcao(${mediacaoId})">📝 Propor acordo às partes</button>
       <button class="btn-link btn-link-perigo" onclick="mediacaoSemAcordoAcao(${mediacaoId})">Encerrar sem acordo</button>
     </div>`;
   }
@@ -11387,7 +11708,7 @@ async function abrirDetalheMediacao(mediacaoId) {
   }
   if (m.status === "ARBITRAGEM_EM_CURSO") {
     acoesHtml += `<div class="barra-lista">
-      <button class="btn-link" onclick="registrarCompromissoArbitralAcao(${mediacaoId})">Registrar Compromisso Arbitral</button>
+      ${m.compromisso && m.compromisso.firmadoEm ? "" : `<button class="btn-link" onclick="registrarCompromissoArbitralAcao(${mediacaoId})">Propor Compromisso Arbitral às partes</button>`}
       <input type="file" id="medDetSentencaArquivo" accept="application/pdf,image/jpeg,image/png" />
       <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarSentencaArbitralAcao(${mediacaoId})">📄 Registrar Sentença</button>
     </div>`;
@@ -11400,21 +11721,123 @@ async function abrirDetalheMediacao(mediacaoId) {
 
   const sessoesHtml = (m.sessoes || []).length === 0 ? "<p class='subtitle'>Nenhuma sessão registrada.</p>" :
     `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Parte A</th><th>Parte B</th><th>Obs.</th></tr></thead><tbody>` +
-    m.sessoes.map(s => `<tr><td>${s.dataSessao}</td><td>${s.parteACompareceu ? "✅" : "-"}</td><td>${s.parteBCompareceu ? "✅" : "-"}</td><td>${s.observacoes || "-"}</td></tr>`).join("") +
+    m.sessoes.map(s => `<tr><td>${escaparHtmlEbd(s.dataSessao)}</td><td>${s.parteACompareceu ? "✅" : "-"}</td><td>${s.parteBCompareceu ? "✅" : "-"}</td><td>${escaparHtmlEbd(s.observacoes) || "-"}</td></tr>`).join("") +
     `</tbody></table>`;
 
   container.innerHTML = `
     <hr />
-    <h4>${escaparHtmlEbd(m.assunto)} — ${ROTULO_STATUS_MEDIACAO[m.status] || m.status}</h4>
-    <p class="subtitle">Parte A: ${m.parteANome || m.parteADescricao || "-"} · Parte B: ${m.parteBNome || m.parteBDescricao || "-"}
-      ${m.mediadorNome ? ` · Mediador: ${m.mediadorNome}` : ""}${m.arbitroNome ? ` · Árbitro: ${m.arbitroNome}` : ""}</p>
-    ${m.sentencaArbitralUrl ? `<p><a class="btn-link" href="${m.sentencaArbitralUrl}" target="_blank" rel="noopener">📄 Ver sentença arbitral</a></p>` : ""}
+    <h4>${escaparHtmlEbd(m.assunto)} — ${ROTULO_STATUS_MEDIACAO[m.status] || escaparHtmlEbd(m.status)}</h4>
+    <p class="subtitle">Parte A: ${escaparHtmlEbd(m.parteANome) || escaparHtmlEbd(m.parteADescricao) || "-"} · Parte B: ${escaparHtmlEbd(m.parteBNome) || escaparHtmlEbd(m.parteBDescricao) || "-"}
+      ${m.mediadorNome ? ` · Mediador: ${escaparHtmlEbd(m.mediadorNome)}` : ""}${m.arbitroNome ? ` · Árbitro: ${escaparHtmlEbd(m.arbitroNome)}` : ""}</p>
+    ${m.sentencaArbitralUrl ? `<p><a class="btn-link" href="${urlSegura(m.sentencaArbitralUrl)}" target="_blank" rel="noopener">📄 Ver sentença arbitral</a></p>` : ""}
     ${acoesHtml}
+    ${htmlInstrumentoMediacao("Acordo de mediação", "ACORDO", m.acordo, m, mediacaoId, m.status === "MEDIACAO_EM_CURSO")}
+    ${htmlInstrumentoMediacao("Compromisso arbitral", "COMPROMISSO", m.compromisso, m, mediacaoId, m.status === "ARBITRAGEM_EM_CURSO" && !(m.compromisso && m.compromisso.firmadoEm))}
     <h5 style="margin:14px 0 6px;">Sessões de mediação</h5>
     ${sessoesHtml}
     <h5 style="margin:14px 0 6px;">Encaminhamento cruzado (Art. 91)</h5>
     ${bifurcacaoHtml}
     <p id="resultadoDetalheMediacao"></p>`;
+}
+
+// ---- Aceite só por ato da parte (03/10/2026, migração 132) ----
+// O texto proposto (hash) de cada caso/instrumento, para a decisão presencial e a da parte confirmarem que é o mesmo texto que está na tela.
+const hashPropostoMediacao = {};
+const ROTULO_DECISAO_MEDIACAO = { ACEITE: "✅ aceitou", RECUSA: "❌ recusou" };
+function htmlDecisaoParteMediacao(d) {
+  if (!d) return "<em>aguardando a decisão da parte</em>";
+  return `${ROTULO_DECISAO_MEDIACAO[d.decisao] || escaparHtmlEbd(d.decisao)} — ${escaparHtmlEbd(d.rotuloCanal || d.canal)}`
+    + (d.registradoPorNome ? ` (registrado por ${escaparHtmlEbd(d.registradoPorNome)})` : "")
+    + (d.registradoEm ? ` em ${escaparHtmlEbd(new Date(d.registradoEm).toLocaleString("pt-BR"))}` : "")
+    + (d.dataAssinaturaPresencial ? `, assinado em ${escaparHtmlEbd(formatarDataEbd(d.dataAssinaturaPresencial))}` : "")
+    + (d.anexoUrl ? ` · <a href="${urlSegura(d.anexoUrl)}" target="_blank" rel="noopener">📄 documento assinado</a>` : "");
+}
+// Bloco do acordo (ou do compromisso) no detalhe da Câmara: o texto proposto, a decisão de cada parte com o canal e o autor, os aceites antigos e o
+// formulário do registro presencial (que só envia COM o documento assinado).
+function htmlInstrumentoMediacao(titulo, instrumento, s, m, mediacaoId, aberto) {
+  if (!s) return "";
+  const chave = `${mediacaoId}:${instrumento}`;
+  hashPropostoMediacao[chave] = s.hashTexto || null;
+  const nomeA = escaparHtmlEbd(m.parteANome || m.parteADescricao || "Parte A"), nomeB = escaparHtmlEbd(m.parteBNome || m.parteBDescricao || "Parte B");
+  const legado = (s.legado || []).length ? `<p class="subtitle">⚠️ Aceite(s) antigo(s): ${s.legado.map(l => `Parte ${escaparHtmlEbd(l.parte)} — ${escaparHtmlEbd(l.rotuloCanal)}`).join("; ")}.</p>` : "";
+  if (!s.proposto && !legado) return "";
+  const situacao = s.firmado ? "✅ firmado pelas duas partes" : s.firmadoAntesDaVerificacao ? "registrado antes da verificação por ato da parte" : (s.recusadoPor || []).length ? "❌ recusado" : "aguardando as partes";
+  const formPresencial = aberto && s.proposto && !s.firmado ? `
+    <div class="barra-lista" style="flex-wrap:wrap;">
+      <strong style="width:100%;">Registrar decisão tomada em papel (o documento assinado é obrigatório):</strong>
+      <select id="medPres${instrumento}Parte"><option value="A">${nomeA}</option><option value="B">${nomeB}</option></select>
+      <select id="medPres${instrumento}Decisao"><option value="ACEITE">aceitou</option><option value="RECUSA">recusou</option></select>
+      <label>Assinado em <input type="date" id="medPres${instrumento}Data" /></label>
+      <input type="file" id="medPres${instrumento}Arquivo" accept="application/pdf,image/jpeg,image/png" />
+      <button class="btn-link" onclick="registrarDecisaoPresencialMediacaoAcao(${mediacaoId}, '${instrumento}')">Registrar com o documento</button>
+    </div>` : "";
+  return `<h5 style="margin:14px 0 6px;">${escaparHtmlEbd(titulo)} — ${situacao}</h5>
+    ${s.proposto ? `<p style="white-space:pre-wrap;border-left:3px solid var(--cor-primaria);padding-left:8px;">${escaparHtmlEbd(s.texto)}</p>
+    <ul><li>${nomeA}: ${htmlDecisaoParteMediacao(s.partes && s.partes.A)}</li><li>${nomeB}: ${htmlDecisaoParteMediacao(s.partes && s.partes.B)}</li></ul>` : ""}
+    ${legado}${formPresencial}`;
+}
+
+async function registrarDecisaoPresencialMediacaoAcao(mediacaoId, instrumento) {
+  const arquivo = document.getElementById(`medPres${instrumento}Arquivo`).files[0];
+  const dataAssinatura = document.getElementById(`medPres${instrumento}Data`).value;
+  if (!arquivo) { mostrarToast("Anexe o documento assinado pela parte: sem ele a decisão presencial não é registrada.", "erro"); return; }
+  if (!dataAssinatura) { mostrarToast("Informe a data em que a parte assinou.", "erro"); return; }
+  const parte = document.getElementById(`medPres${instrumento}Parte`).value;
+  const decisao = document.getElementById(`medPres${instrumento}Decisao`).value;
+  if (!(await confirmarAcao(`Registrar que a Parte ${parte} ${decisao === "ACEITE" ? "ACEITOU" : "RECUSOU"} este texto, com o documento assinado anexado? O registro fica com o seu nome e não pode ser desfeito.`, "Registrar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/mediacoes/${mediacaoId}/decisao-presencial`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instrumento, parte, decisao, hashTexto: hashPropostoMediacao[`${mediacaoId}:${instrumento}`], dataAssinatura,
+      documentoBase64: await arquivoParaBase64(arquivo), mimeType: arquivo.type, nomeArquivo: arquivo.name })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  abrirDetalheMediacao(mediacaoId);
+}
+
+// Meu Painel → Minhas Tarefas: os casos em que EU sou parte, com o texto a decidir (aceitar ou recusar com a minha própria sessão).
+async function carregarMinhasMediacoesAcao() {
+  const container = document.getElementById("resultadoMinhasMediacoes");
+  if (!container) return;
+  let data;
+  try { data = await (await fetchProtegido(`${API_BASE}/mediacoes/minhas`)).json(); } catch { container.innerHTML = ""; return; }
+  const casos = (data && data.casos) || [];
+  if (!casos.length) { container.innerHTML = ""; return; }
+  container.innerHTML = `<h4 style="margin:16px 0 6px;">🤝 Minhas mediações e arbitragens</h4>` + casos.map(c => {
+    const bloco = (titulo, instrumento, s, pode) => {
+      if (!s || !s.proposto) return s && s.legado && s.legado.length ? `<p class="subtitle">${escaparHtmlEbd(titulo)}: registrado antes da verificação por ato da parte.</p>` : "";
+      hashPropostoMediacao[`${c.mediacaoId}:${instrumento}`] = s.hashTexto;
+      const minhas = c.minhasPartes.map(p => s.partes[p]).filter(Boolean);
+      const situacao = s.firmado ? "✅ firmado pelas duas partes" : minhas.length ? `você ${minhas.map(d => ROTULO_DECISAO_MEDIACAO[d.decisao]).join(", ")}${s.firmado ? "" : " — aguardando a outra parte"}` : "aguarda a sua decisão";
+      return `<p><strong>${escaparHtmlEbd(titulo)}</strong> — ${situacao}</p>
+        <p style="white-space:pre-wrap;border-left:3px solid var(--cor-primaria);padding-left:8px;">${escaparHtmlEbd(s.texto)}</p>
+        ${pode && !s.firmado ? `<div class="barra-lista">
+          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="decidirMediacaoAcao(${c.mediacaoId}, '${instrumento}', 'ACEITE')">Li e aceito</button>
+          <button class="btn-link btn-link-perigo" onclick="decidirMediacaoAcao(${c.mediacaoId}, '${instrumento}', 'RECUSA')">Recuso</button>
+        </div>` : ""}`;
+    };
+    return `<div style="border:1px solid var(--cor-borda, #ddd);border-radius:8px;padding:10px;margin-bottom:10px;">
+      <p><strong>Caso nº ${Number(c.mediacaoId)} — ${escaparHtmlEbd(c.assunto)}</strong> (${escaparHtmlEbd(ROTULO_STATUS_MEDIACAO[c.status] || c.status)})</p>
+      <p class="subtitle">${escaparHtmlEbd(c.parteA || "-")} × ${escaparHtmlEbd(c.parteB || "-")}${c.mediadorNome ? ` · Mediador: ${escaparHtmlEbd(c.mediadorNome)}` : ""}${c.arbitroNome ? ` · Árbitro: ${escaparHtmlEbd(c.arbitroNome)}` : ""}</p>
+      ${bloco("Acordo de mediação", "ACORDO", c.acordo, c.podeDecidirAcordo)}
+      ${bloco("Compromisso arbitral", "COMPROMISSO", c.compromisso, c.podeDecidirCompromisso)}
+    </div>`;
+  }).join("");
+}
+
+async function decidirMediacaoAcao(mediacaoId, instrumento, decisao) {
+  const nome = instrumento === "ACORDO" ? "o acordo" : "o compromisso arbitral";
+  const msg = decisao === "ACEITE"
+    ? `Confirmar que você leu e ACEITA ${nome} exatamente como está escrito? Vale como a sua assinatura eletrônica (fica gravada com a sua matrícula, a data e a hora).`
+    : `Confirmar que você RECUSA ${nome}? A recusa fica registrada e o mediador/a Câmara será informado.`;
+  if (!(await confirmarAcao(msg, decisao === "ACEITE" ? "Aceito" : "Recuso"))) return;
+  const res = await fetchProtegido(`${API_BASE}/mediacoes/${mediacaoId}/decisao`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instrumento, decisao, hashTexto: hashPropostoMediacao[`${mediacaoId}:${instrumento}`] })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  carregarMinhasMediacoesAcao();
 }
 
 async function designarMediadorAcao(mediacaoId) {
@@ -11441,7 +11864,8 @@ async function registrarSessaoMediacaoAcao(mediacaoId) {
 async function registrarAcordoMediacaoAcao(mediacaoId) {
   const resumoAcordo = document.getElementById("medDetResumoAcordo").value.trim();
   const saidaVinculadaId = document.getElementById("medDetSaidaVinculada").value || null;
-  if (!resumoAcordo) { mostrarToast("Informe o resumo do acordo.", "erro"); return; }
+  if (!resumoAcordo) { mostrarToast("Informe o texto do acordo.", "erro"); return; }
+  // 03/10/2026: propor não é aceitar — cada parte decide com a própria sessão (ou presencial, com o termo assinado anexado).
   await evoluirMediacaoAcao(mediacaoId, { acao: "REGISTRAR_ACORDO", resumoAcordo, saidaVinculadaId });
 }
 
@@ -11488,7 +11912,7 @@ async function carregarOpcoesRelatorioDepto() {
   document.getElementById("rdMes").value = String(new Date().getMonth() + 1);
 
   if (!selCong.dataset.montado) {
-    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`));
     const opcoesCong = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.innerHTML = opcoesCong;
     selCong.dataset.montado = "1";
@@ -11497,7 +11921,7 @@ async function carregarOpcoesRelatorioDepto() {
   }
   const selCdArea = document.getElementById("cdArea");
   if (selCdArea && !selCdArea.dataset.montado) {
-    const areas = await (await fetchProtegido(`${API_BASE}/catalogos/areas`)).json();
+    const areas = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/areas`));
     selCdArea.innerHTML = areas.filter(a => a.ativa !== false).map(a => `<option value="${a.areaId}">${escaparHtmlEbd(a.nome)}</option>`).join("");
     selCdArea.dataset.montado = "1";
   }
@@ -11510,18 +11934,18 @@ async function carregarOpcoesRelatorioDepto() {
   for (const { selId, rota, chave } of CD_CATALOGOS_TERRITORIAIS) {
     const sel = document.getElementById(selId);
     if (sel && !sel.dataset.montado) {
-      const itens = await (await fetchProtegido(`${API_BASE}/catalogos/${rota}`)).json();
+      const itens = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/${rota}`));
       // Regioes usa "ativa", Quadrantes/Distritos usa "ativo" (GestaoCatalogos)
       // — confere os dois pra não incluir inativo por engano nem excluir
       // ativo por checar o campo errado.
-      sel.innerHTML = itens.filter(i => i.ativa !== false && i.ativo !== false).map(i => `<option value="${i[chave]}">${escaparHtmlEbd(i.nome)}</option>`).join("");
+      sel.innerHTML = itens.filter(i => i.ativa !== false && i.ativo !== false).map(i => `<option value="${escaparHtmlEbd(i[chave])}">${escaparHtmlEbd(i.nome)}</option>`).join("");
       sel.dataset.montado = "1";
     }
   }
   const selSerieDep = document.getElementById("cdSerieDepartamento");
   if (selSerieDep && !selSerieDep.dataset.montado) {
-    const deps = await (await fetchProtegido(`${API_BASE}/catalogos/departamentos`)).json();
-    selSerieDep.innerHTML = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${escaparHtmlEbd(d.nome)}</option>`).join("");
+    const deps = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/departamentos`));
+    selSerieDep.innerHTML = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${escaparHtmlEbd(String(d.numero).padStart(2, "0"))} — ` : ""}${escaparHtmlEbd(d.nome)}</option>`).join("");
     selSerieDep.dataset.montado = "1";
   }
   const cdAno = document.getElementById("cdAno");
@@ -11529,8 +11953,8 @@ async function carregarOpcoesRelatorioDepto() {
   const cdMes = document.getElementById("cdMes");
   if (cdMes) cdMes.value = String(new Date().getMonth() + 1);
   if (!selDep.dataset.montado) {
-    const deps = await (await fetchProtegido(`${API_BASE}/catalogos/departamentos`)).json();
-    const opcoesDep = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${String(d.numero).padStart(2, "0")} — ` : ""}${escaparHtmlEbd(d.nome)}</option>`).join("");
+    const deps = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/departamentos`));
+    const opcoesDep = deps.filter(d => d.ativo !== false).map(d => `<option value="${d.departamentoId}">${d.numero ? `${escaparHtmlEbd(String(d.numero).padStart(2, "0"))} — ` : ""}${escaparHtmlEbd(d.nome)}</option>`).join("");
     selDep.innerHTML = opcoesDep;
     selDep.dataset.montado = "1";
     const selTdDep = document.getElementById("tdDepartamento");
@@ -11568,11 +11992,11 @@ function montarRateioRd(data, somenteLeitura) {
   const r = data.rateio || {};
   if (r.precisaValorManual) {
     return `<div class="input-group"><label>Quanto vai pro Geral neste mês (variável, decidido agora)</label>
-      <input type="number" step="0.01" min="0" ${somenteLeitura ? "readonly" : ""} id="rdValorManualParaGeral" value="${data.valorManualParaGeral || 0}" /></div>
+      <input type="number" step="0.01" min="0" ${somenteLeitura ? "readonly" : ""} id="rdValorManualParaGeral" value="${escaparHtmlEbd(data.valorManualParaGeral) || 0}" /></div>
       <p class="subtitle">Para o Local (resto, calculado): R$ ${Number(r.paraLocal || 0).toFixed(2)}</p>`;
   }
   const paraLocalTexto = r.paraLocal === null ? "não rastreado (lançamento já líquido)" : `R$ ${Number(r.paraLocal || 0).toFixed(2)}`;
-  return `<p class="subtitle">Rateio (${r.metodo || "-"}): Para o Geral R$ ${Number(r.paraGeral || 0).toFixed(2)} · Para o Local ${paraLocalTexto}</p>`;
+  return `<p class="subtitle">Rateio (${escaparHtmlEbd(r.metodo) || "-"}): Para o Geral R$ ${Number(r.paraGeral || 0).toFixed(2)} · Para o Local ${paraLocalTexto}</p>`;
 }
 
 function campoInputAttrs(campo, somenteLeitura) {
@@ -11609,18 +12033,18 @@ function renderizarPainelRelatorioDepto(data) {
         const semanas = data.valoresSemanais[c.nomeCampo] || {};
         const inputsSemana = NOMES_DOMINGO_RD.map((rotulo, i) => {
           const n = i + 1;
-          return `<label style="display:inline-block;margin-right:8px;">${rotulo}<br/><input ${campoInputAttrs(c, somenteLeitura)} id="rdSemana_${c.nomeCampo}_${n}" value="${semanas[n] || 0}" style="width:70px;" /></label>`;
+          return `<label style="display:inline-block;margin-right:8px;">${rotulo}<br/><input ${campoInputAttrs(c, somenteLeitura)} id="rdSemana_${escaparHtmlEbd(c.nomeCampo)}_${n}" value="${escaparHtmlEbd(semanas[n]) || 0}" style="width:70px;" /></label>`;
         }).join("");
-        return `<div class="input-group"><label>${c.rotulo} (total do mês: ${data.valores[c.nomeCampo] || 0})</label><div>${inputsSemana}</div></div>`;
+        return `<div class="input-group"><label>${escaparHtmlEbd(c.rotulo)} (total do mês: ${escaparHtmlEbd(data.valores[c.nomeCampo]) || 0})</label><div>${inputsSemana}</div></div>`;
       }
       // v5.5 — Congregados/Membros em Comunhão/Membros sem Comunhão (nos 4
       // deptos de faixa etária/gênero) vêm do cadastro de membros — sempre
       // readonly, nunca reconta à mão (integração automática).
       if (c.automatico) {
-        return `<div class="input-group"><label>${c.rotulo} <span class="subtitle">(calculado do cadastro de membros)</span></label>
-          <input type="number" readonly id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
+        return `<div class="input-group"><label>${escaparHtmlEbd(c.rotulo)} <span class="subtitle">(calculado do cadastro de membros)</span></label>
+          <input type="number" readonly id="rdCampo_${escaparHtmlEbd(c.nomeCampo)}" value="${escaparHtmlEbd(data.valores[c.nomeCampo]) || 0}" /></div>`;
       }
-      return `<div class="input-group"><label>${c.rotulo}</label><input ${campoInputAttrs(c, somenteLeitura)} id="rdCampo_${c.nomeCampo}" value="${data.valores[c.nomeCampo] || 0}" /></div>`;
+      return `<div class="input-group"><label>${escaparHtmlEbd(c.rotulo)}</label><input ${campoInputAttrs(c, somenteLeitura)} id="rdCampo_${escaparHtmlEbd(c.nomeCampo)}" value="${escaparHtmlEbd(data.valores[c.nomeCampo]) || 0}" /></div>`;
     }).join("");
     const totalFinanceiro = grupo === "FINANCEIRO"
       ? `<p class="subtitle"><strong>Valor Total (base do rateio local/geral): R$ ${Number(data.valorTotalFinanceiro || 0).toFixed(2)}</strong></p>${montarRateioRd(data, somenteLeitura)}` : "";
@@ -11630,22 +12054,22 @@ function renderizarPainelRelatorioDepto(data) {
   const roAttr = somenteLeitura ? "readonly" : "";
   const eventosHtml = `<h4>Eventos</h4>
     <div class="input-group"><label>Local</label><input type="number" min="0" ${roAttr} id="rdEventoLocal" value="${escaparHtmlEbd(data.eventos.local)}" /></div>
-    <div class="input-group"><label>Área</label><input type="number" min="0" ${roAttr} id="rdEventoArea" value="${data.eventos.area}" /></div>
-    <div class="input-group"><label>Geral</label><input type="number" min="0" ${roAttr} id="rdEventoGeral" value="${data.eventos.geral}" /></div>`;
+    <div class="input-group"><label>Área</label><input type="number" min="0" ${roAttr} id="rdEventoArea" value="${escaparHtmlEbd(data.eventos.area)}" /></div>
+    <div class="input-group"><label>Geral</label><input type="number" min="0" ${roAttr} id="rdEventoGeral" value="${escaparHtmlEbd(data.eventos.geral)}" /></div>`;
 
   const integracaoHtml = `<h4>Integração</h4>
-    <div class="input-group"><label>Conversão</label><input type="number" min="0" ${roAttr} id="rdIntegConversao" value="${data.integracao.conversao}" /></div>
-    <div class="input-group"><label>Reconciliação</label><input type="number" min="0" ${roAttr} id="rdIntegReconciliacao" value="${data.integracao.reconciliacao}" /></div>
-    <div class="input-group"><label>De Outra Igreja</label><input type="number" min="0" ${roAttr} id="rdIntegDeOutraIgreja" value="${data.integracao.deOutraIgreja}" /></div>
-    <p class="subtitle">Total: ${data.integracao.total}</p>`;
+    <div class="input-group"><label>Conversão</label><input type="number" min="0" ${roAttr} id="rdIntegConversao" value="${escaparHtmlEbd(data.integracao.conversao)}" /></div>
+    <div class="input-group"><label>Reconciliação</label><input type="number" min="0" ${roAttr} id="rdIntegReconciliacao" value="${escaparHtmlEbd(data.integracao.reconciliacao)}" /></div>
+    <div class="input-group"><label>De Outra Igreja</label><input type="number" min="0" ${roAttr} id="rdIntegDeOutraIgreja" value="${escaparHtmlEbd(data.integracao.deOutraIgreja)}" /></div>
+    <p class="subtitle">Total: ${escaparHtmlEbd(data.integracao.total)}</p>`;
 
   const contribuintesHtml = temMensalidade ? `<h4>Contribuintes de Mensalidade</h4>
     <div id="rdListaContribuintes">${(data.contribuintes || []).map(c => linhaContribuinteRd(c, somenteLeitura)).join("")}</div>
     ${somenteLeitura ? "" : `<button type="button" class="btn-link" onclick="adicionarLinhaContribuinteRd()">➕ Adicionar contribuinte</button>`}` : "";
 
   container.innerHTML = `
-    <p><strong>${rotuloLocal}:</strong> preenchendo ${escaparHtmlEbd(data.congregacaoNome)} — ${data.departamentoNome} — ${data.mesReferencia}/${data.anoReferencia}
-      (status: <strong>${ROTULO_STATUS_RD[data.status] || data.status}</strong>${data.atrasado ? ` — <span style="color:var(--cor-perigo,#c0392b);">⚠️ atrasado</span>` : ""})</p>
+    <p><strong>${escaparHtmlEbd(rotuloLocal)}:</strong> preenchendo ${escaparHtmlEbd(data.congregacaoNome)} — ${escaparHtmlEbd(data.departamentoNome)} — ${escaparHtmlEbd(data.mesReferencia)}/${escaparHtmlEbd(data.anoReferencia)}
+      (status: <strong>${ROTULO_STATUS_RD[data.status] || escaparHtmlEbd(data.status)}</strong>${data.atrasado ? ` — <span style="color:var(--cor-perigo,#c0392b);">⚠️ atrasado</span>` : ""})</p>
     ${gruposHtml}
     ${eventosHtml}
     ${integracaoHtml}
@@ -11714,9 +12138,9 @@ function montarTrilhaRd(trilha) {
   if (!trilha || trilha.length === 0) return "";
   const linhas = trilha.map(t => `<tr>
     <td>${new Date(t.criadoEm).toLocaleString("pt-BR")}</td>
-    <td>${t.nomeMembro}</td>
-    <td>${ROTULO_ACAO_RD[t.acao] || t.acao} (${t.nivelAprovador})</td>
-    <td>${t.comentario || "-"}</td>
+    <td>${escaparHtmlEbd(t.nomeMembro)}</td>
+    <td>${ROTULO_ACAO_RD[t.acao] || escaparHtmlEbd(t.acao)} (${escaparHtmlEbd(t.nivelAprovador)})</td>
+    <td>${escaparHtmlEbd(t.comentario) || "-"}</td>
   </tr>`).join("");
   return `<h4>Trilha</h4><div class="rolagem-tabela"><table class="tabela-frequencia">
     <thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Comentário</th></tr></thead>
@@ -11745,8 +12169,8 @@ async function acaoFluxoRd(acao, extra) {
 function linhaContribuinteRd(c, somenteLeitura) {
   const ro = somenteLeitura ? "readonly" : "";
   return `<div class="barra-lista rd-linha-contribuinte">
-    <input type="text" class="rd-contribuinte-nome" ${ro} placeholder="Nome" value="${(c && c.nome) || ""}" style="min-width:200px;" />
-    <input type="number" class="rd-contribuinte-valor" step="0.01" min="0" ${ro} placeholder="Valor" value="${(c && c.valor) || 0}" style="max-width:120px;" />
+    <input type="text" class="rd-contribuinte-nome" ${ro} placeholder="Nome" value="${(c && escaparHtmlEbd(c.nome)) || ""}" style="min-width:200px;" />
+    <input type="number" class="rd-contribuinte-valor" step="0.01" min="0" ${ro} placeholder="Valor" value="${(c && escaparHtmlEbd(c.valor)) || 0}" style="max-width:120px;" />
     ${somenteLeitura ? "" : `<button type="button" class="btn-link" onclick="this.parentElement.remove()">✕</button>`}
   </div>`;
 }
@@ -11848,7 +12272,7 @@ async function renderizarPainelTesourariaDepto(data) {
 
   const perfilHtml = perfil ? `
     <h4>Perfil de Rateio ${perfil.confirmado ? "" : "<span style=\"color:var(--cor-aviso,#b8860b);\">(método a confirmar com a Secretaria Geral)</span>"}</h4>
-    <p class="subtitle">Método: <strong>${ROTULO_METODO_RATEIO[perfil.metodo] || perfil.metodo}</strong>${perfil.percentualGeral != null ? ` (${perfil.percentualGeral}% geral)` : ""} —
+    <p class="subtitle">Método: <strong>${ROTULO_METODO_RATEIO[perfil.metodo] || escaparHtmlEbd(perfil.metodo)}</strong>${perfil.percentualGeral != null ? ` (${escaparHtmlEbd(perfil.percentualGeral)}% geral)` : ""} —
       modo de entrada: ${perfil.modoEntrada === "LIQUIDO_MANUAL" ? "líquido (já lançado só a parte que sobe)" : "bruto (sistema calcula a divisão)"}
       ${perfil.suporteSecretariaGeralHabilitado ? ` · Suporte à Secretaria Geral: R$ ${Number(perfil.valorSuporteSecretariaGeral || 0).toFixed(2)}` : ""}</p>
     ${authNivel === "GLOBAL" ? `<button class="btn-link" onclick="abrirEdicaoPerfilRateioAcao()">✏️ Configurar perfil de rateio</button>` : ""}
@@ -11876,11 +12300,12 @@ async function carregarDespesasTesourariaDeptoAcao() {
   const container = document.getElementById("tdListaDespesas");
   if (!container || !_tdDepartamentoAtual) return;
   const res = await fetchProtegido(`${API_BASE}/tesouraria-departamental/despesas?departamentoId=${_tdDepartamentoAtual}&mes=${_tdMesAtual}&ano=${_tdAnoAtual}`);
-  const lista = await res.json();
+  const lista = await jsonDaTela(res, container, "lista");
+  if (lista === null) return;
   if (!Array.isArray(lista) || lista.length === 0) { container.innerHTML = "<p class='subtitle'>Nenhuma despesa lançada neste mês.</p>"; return; }
   container.innerHTML = `<h4>Despesas do mês</h4><table class="tabela-frequencia"><thead><tr>
     <th>Descrição</th><th>Valor</th><th>Lançado por</th><th>Autorizado por</th><th>Quando</th></tr></thead><tbody>
-    ${lista.map(d => `<tr><td>${escaparHtmlEbd(d.descricao)}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${d.nomeLancador}</td><td>${d.nomeAutorizador || "-"}</td><td>${new Date(d.criadoEm).toLocaleDateString("pt-BR")}</td></tr>`).join("")}
+    ${lista.map(d => `<tr><td>${escaparHtmlEbd(d.descricao)}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${escaparHtmlEbd(d.nomeLancador)}</td><td>${escaparHtmlEbd(d.nomeAutorizador) || "-"}</td><td>${new Date(d.criadoEm).toLocaleDateString("pt-BR")}</td></tr>`).join("")}
     </tbody></table>`;
 }
 
@@ -11927,7 +12352,7 @@ async function abrirEdicaoPerfilRateioAcao() {
         ${Object.entries(ROTULO_METODO_RATEIO).map(([v, r]) => `<option value="${v}" ${perfil.metodo === v ? "selected" : ""}>${r}</option>`).join("")}
       </select>
     </div>
-    <div class="input-group"><label>Percentual Geral (%, se aplicável)</label><input type="number" step="0.01" min="0" max="100" id="tdPerfilPercentual" value="${perfil.percentualGeral || ""}" /></div>
+    <div class="input-group"><label>Percentual Geral (%, se aplicável)</label><input type="number" step="0.01" min="0" max="100" id="tdPerfilPercentual" value="${escaparHtmlEbd(perfil.percentualGeral) || ""}" /></div>
     <div class="input-group"><label>Modo de entrada</label>
       <select id="tdPerfilModoEntrada">
         <option value="BRUTO_CALCULADO" ${perfil.modoEntrada === "BRUTO_CALCULADO" ? "selected" : ""}>Bruto (sistema calcula)</option>
@@ -11935,7 +12360,7 @@ async function abrirEdicaoPerfilRateioAcao() {
       </select>
     </div>
     <div class="input-group"><label><input type="checkbox" id="tdPerfilSuporte" style="width:auto;" ${perfil.suporteSecretariaGeralHabilitado ? "checked" : ""}/> Suporte à Secretaria Geral habilitado</label></div>
-    <div class="input-group"><label>Valor do suporte (R$)</label><input type="number" step="0.01" min="0" id="tdPerfilValorSuporte" value="${perfil.valorSuporteSecretariaGeral || ""}" /></div>
+    <div class="input-group"><label>Valor do suporte (R$)</label><input type="number" step="0.01" min="0" id="tdPerfilValorSuporte" value="${escaparHtmlEbd(perfil.valorSuporteSecretariaGeral) || ""}" /></div>
     <button class="btn-confirmar" style="width:auto;" onclick="salvarPerfilRateioAcao()">💾 Salvar Perfil</button>`;
 }
 
@@ -11993,28 +12418,28 @@ function renderizarPainelConsolidadoDepto(data) {
 
   const linhasDepto = data.porDepartamento.map(d => `<tr>
     <td>${escaparHtmlEbd(d.nome)}</td>
-    <td>${d.totalEnviados}/${d.totalCongregacoes}${d.totalPendentes > 0 ? ` <span style="color:var(--cor-perigo,#c0392b);">(${d.totalPendentes} pendente(s))</span>` : ""}</td>
-    <td>${d.eventosLocal + d.eventosArea + d.eventosGeral}</td>
-    <td>${d.integracaoConversao + d.integracaoReconciliacao + d.integracaoDeOutraIgreja}</td>
+    <td>${escaparHtmlEbd(d.totalEnviados)}/${escaparHtmlEbd(d.totalCongregacoes)}${d.totalPendentes > 0 ? ` <span style="color:var(--cor-perigo,#c0392b);">(${escaparHtmlEbd(d.totalPendentes)} pendente(s))</span>` : ""}</td>
+    <td>${escaparHtmlEbd(d.eventosLocal + d.eventosArea + d.eventosGeral)}</td>
+    <td>${escaparHtmlEbd(d.integracaoConversao + d.integracaoReconciliacao + d.integracaoDeOutraIgreja)}</td>
     <td>R$ ${Number(d.valorParaGeral).toFixed(2)}</td>
     <td>R$ ${Number(d.valorParaLocal).toFixed(2)}</td>
   </tr>`).join("");
 
   const totaisHtml = `<p><strong>Retrato eclesiástico do mês:</strong>
-    Eventos: ${data.totais.eventosLocal + data.totais.eventosArea + data.totais.eventosGeral} ·
-    Integração (conversões/reconciliações/de outra igreja): ${data.totais.integracaoConversao + data.totais.integracaoReconciliacao + data.totais.integracaoDeOutraIgreja} ·
+    Eventos: ${escaparHtmlEbd(data.totais.eventosLocal + data.totais.eventosArea + data.totais.eventosGeral)} ·
+    Integração (conversões/reconciliações/de outra igreja): ${escaparHtmlEbd(data.totais.integracaoConversao + data.totais.integracaoReconciliacao + data.totais.integracaoDeOutraIgreja)} ·
     Para o Geral: R$ ${Number(data.totais.valorParaGeral).toFixed(2)} · Para o Local: R$ ${Number(data.totais.valorParaLocal).toFixed(2)}</p>`;
 
   const pendenciasHtml = data.pendencias.length > 0 ? `
     <h4>Pendências (ainda não enviaram)</h4>
     <table class="tabela-frequencia"><thead><tr><th>Departamento</th><th>Congregação</th><th>Status</th></tr></thead><tbody>
-      ${data.pendencias.map(p => `<tr><td>${p.sigla}</td><td>${escaparHtmlEbd(p.congregacaoNome)}</td><td>${p.status === "NAO_INICIADO" ? "Não iniciado" : "Rascunho"}</td></tr>`).join("")}
+      ${data.pendencias.map(p => `<tr><td>${escaparHtmlEbd(p.sigla)}</td><td>${escaparHtmlEbd(p.congregacaoNome)}</td><td>${p.status === "NAO_INICIADO" ? "Não iniciado" : "Rascunho"}</td></tr>`).join("")}
     </tbody></table>` : `<p class="subtitle">✅ Nenhuma pendência — todos os relatórios deste mês já foram enviados.</p>`;
 
   const historicoHtml = (data.historico && data.historico.length > 0) ? `
     <h4>Histórico (últimos ${data.historico.length} meses com relatório enviado)</h4>
     <table class="tabela-frequencia"><thead><tr><th>Mês/Ano</th><th>Eventos</th><th>Integração</th><th>Para o Geral</th><th>Para o Local</th></tr></thead><tbody>
-      ${data.historico.map(h => `<tr><td>${h.mesReferencia}/${h.anoReferencia}</td><td>${h.totalEventos}</td><td>${h.totalIntegracao}</td>
+      ${data.historico.map(h => `<tr><td>${escaparHtmlEbd(h.mesReferencia)}/${escaparHtmlEbd(h.anoReferencia)}</td><td>${escaparHtmlEbd(h.totalEventos)}</td><td>${escaparHtmlEbd(h.totalIntegracao)}</td>
         <td>R$ ${Number(h.totalParaGeral).toFixed(2)}</td><td>R$ ${Number(h.totalParaLocal).toFixed(2)}</td></tr>`).join("")}
     </tbody></table>` : "";
 
@@ -12057,7 +12482,7 @@ async function abrirSerieHistoricaCampoAcao() {
     return;
   }
   container.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Mês/Ano</th><th>Total</th><th>Relatórios somados</th></tr></thead><tbody>
-    ${serie.map(p => `<tr><td>${p.mesReferencia}/${p.anoReferencia}</td><td>${Number(p.total).toFixed(2)}</td><td>${p.totalRelatorios}</td></tr>`).join("")}
+    ${serie.map(p => `<tr><td>${escaparHtmlEbd(p.mesReferencia)}/${escaparHtmlEbd(p.anoReferencia)}</td><td>${Number(p.total).toFixed(2)}</td><td>${escaparHtmlEbd(p.totalRelatorios)}</td></tr>`).join("")}
   </tbody></table>`;
 }
 
@@ -12083,11 +12508,11 @@ async function abrirComparativoPorteAcao() {
   const container = document.getElementById("painelComparativoPorte");
   const ROTULO_PORTE = { PEQUENA: "Pequena (< 100 membros ativos)", MEDIA: "Média (100–299)", GRANDE: "Grande (300+)" };
   container.innerHTML = grupos.map(g => `
-    <h4>${ROTULO_PORTE[g.porte] || g.porte} — ${g.totalCongregacoes} congregação(ões)</h4>
-    <p class="subtitle">Médias do grupo: Membros ativos ${g.medias.totalMembrosAtivos} · Eventos ${g.medias.totalEventos} ·
-      Integração ${g.medias.totalIntegracao} · Para o Geral R$ ${g.medias.valorParaGeral.toFixed(2)} · Para o Local R$ ${g.medias.valorParaLocal.toFixed(2)}</p>
+    <h4>${ROTULO_PORTE[g.porte] || escaparHtmlEbd(g.porte)} — ${escaparHtmlEbd(g.totalCongregacoes)} congregação(ões)</h4>
+    <p class="subtitle">Médias do grupo: Membros ativos ${escaparHtmlEbd(g.medias.totalMembrosAtivos)} · Eventos ${escaparHtmlEbd(g.medias.totalEventos)} ·
+      Integração ${escaparHtmlEbd(g.medias.totalIntegracao)} · Para o Geral R$ ${g.medias.valorParaGeral.toFixed(2)} · Para o Local R$ ${g.medias.valorParaLocal.toFixed(2)}</p>
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Membros ativos</th><th>Eventos</th><th>Integração</th><th>Para o Geral</th><th>Para o Local</th></tr></thead><tbody>
-      ${g.congregacoes.map(c => `<tr><td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>${c.totalMembrosAtivos}</td><td>${c.totalEventos}</td><td>${c.totalIntegracao}</td>
+      ${g.congregacoes.map(c => `<tr><td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>${escaparHtmlEbd(c.totalMembrosAtivos)}</td><td>${escaparHtmlEbd(c.totalEventos)}</td><td>${escaparHtmlEbd(c.totalIntegracao)}</td>
         <td>R$ ${Number(c.valorParaGeral).toFixed(2)}</td><td>R$ ${Number(c.valorParaLocal).toFixed(2)}</td></tr>`).join("")}
     </tbody></table>`).join("") || `<p class="subtitle">Sem dados no período pra comparar.</p>`;
 }
@@ -12098,7 +12523,7 @@ let _esCongregacaoAtual = null;
 async function carregarOpcoesEscalasAcao() {
   const selCong = document.getElementById("esCongregacao");
   if (!selCong.dataset.montado) {
-    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`));
     selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
@@ -12190,7 +12615,7 @@ async function carregarServicosAcao() {
   volServicoRodizio = {};
   data.servicos.forEach(s => { if (s.rodizioId) volServicoRodizio[s.servicoId] = s.rodizioId; });
   const linhas = data.servicos.map(s => `<tr>
-    <td>${volDataHora(s.dataHora)}</td><td>${escaparHtmlEbd(s.descricao || "")}${s.rodizioId ? ' <span class="vol-etiqueta">Rodízio</span>' : ""}</td><td>${s.status}</td>
+    <td>${volDataHora(s.dataHora)}</td><td>${escaparHtmlEbd(s.descricao || "")}${s.rodizioId ? ' <span class="vol-etiqueta">Rodízio</span>' : ""}</td><td>${escaparHtmlEbd(s.status)}</td>
     <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirServicoEscalaAcao(${Number(s.servicoId)})">🔍 Abrir</button></td>
   </tr>`).join("");
   document.getElementById("painelServicosEscala").innerHTML = data.servicos.length
@@ -12205,9 +12630,9 @@ async function abrirServicoEscalaAcao(servicoId) {
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
 
   const ehRodizio = !!volServicoRodizio[servicoId];
-  const linhasAlocacao = data.alocacoes.map(a => `<tr><td>${a.equipeId}</td><td>${a.membroId}</td><td>${a.status}</td></tr>`).join("");
+  const linhasAlocacao = data.alocacoes.map(a => `<tr><td>${a.equipeId}</td><td>${a.membroId}</td><td>${escaparHtmlEbd(a.status)}</td></tr>`).join("");
   container.innerHTML = `
-    <h4>${escaparHtmlEbd(data.servico.descricao || "Serviço")} — ${volDataHora(data.servico.dataHora)} (${data.servico.status})</h4>
+    <h4>${escaparHtmlEbd(data.servico.descricao || "Serviço")} — ${volDataHora(data.servico.dataHora)} (${escaparHtmlEbd(data.servico.status)})</h4>
     ${ehRodizio ? '<p class="subtitle">Serviço de rodízio: a escala é do grupo da vez (Regimento Art. 135 §1º), por isso o auto-escalador não é usado aqui.</p>' : ""}
     <div class="barra-lista">
       ${data.servico.status === "RASCUNHO" && !ehRodizio ? `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="autoEscalarAcao(${servicoId})">🤖 Rodar Auto-Escalador</button>` : ""}
@@ -12243,7 +12668,7 @@ async function carregarTrocasPendentesAcao() {
   const res = await fetchProtegido(`${API_BASE}/escalas/trocas?equipeId=${equipeId}`);
   const data = await res.json();
   const container = document.getElementById("painelTrocasPendentes");
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.trocas.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Alocação origem</th><th>Destino (matrícula)</th><th>Pedida em</th><th></th></tr></thead><tbody>
         ${data.trocas.map(t => `<tr><td>${t.alocacaoOrigemId}</td><td>${t.membroDestinoId}</td><td>${new Date(t.criadaEm).toLocaleDateString("pt-BR")}</td>
@@ -12268,10 +12693,10 @@ async function carregarPendenciasConfirmacaoAcao() {
   const res = await fetchProtegido(`${API_BASE}/escalas/pendencias-confirmacao?equipeId=${equipeId}`);
   const data = await res.json();
   const container = document.getElementById("painelPendenciasConfirmacao");
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.pendencias.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Alocação</th><th>Membro (matrícula)</th><th>Status</th></tr></thead><tbody>
-        ${data.pendencias.map(p => `<tr><td>${p.alocacaoId}</td><td>${p.membroId}</td><td>${p.status}</td></tr>`).join("")}
+        ${data.pendencias.map(p => `<tr><td>${p.alocacaoId}</td><td>${p.membroId}</td><td>${escaparHtmlEbd(p.status)}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>✅ Ninguém pendente — todos já confirmaram.</p>";
 }
@@ -12281,7 +12706,7 @@ async function carregarMinhasEscalasAcao() {
   const res = await fetchProtegido(`${API_BASE}/escalas/minhas-alocacoes`);
   const data = await res.json();
   const container = document.getElementById("resultadoMinhasEscalas");
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   if (data.alocacoes.length === 0) { container.innerHTML = "<p class='subtitle'>Nenhum convite de escala no momento.</p>"; return; }
 
   container.innerHTML = `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Equipe</th><th>Serviço</th><th>Data/Hora</th><th>Status</th><th></th></tr></thead><tbody>
@@ -12295,7 +12720,7 @@ async function carregarMinhasEscalasAcao() {
                  <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="pedirTrocaEscalaAcao(${a.alocacaoId})">🔄 Pedir troca</button>`;
       }
       const etiquetaRodizio = a.rodizioId ? ` <span class="vol-etiqueta">Rodízio${a.grupoNome ? ` · ${escaparHtmlEbd(a.grupoNome)}` : ""}</span>` : "";
-      return `<tr><td>${escaparHtmlEbd(a.equipeNome)}</td><td>${escaparHtmlEbd(a.descricao || "")}${etiquetaRodizio}</td><td>${volDataHora(a.dataHora)}</td><td>${a.status}</td><td>${acoes}</td></tr>`;
+      return `<tr><td>${escaparHtmlEbd(a.equipeNome)}</td><td>${escaparHtmlEbd(a.descricao || "")}${etiquetaRodizio}</td><td>${volDataHora(a.dataHora)}</td><td>${escaparHtmlEbd(a.status)}</td><td>${acoes}</td></tr>`;
     }).join("")}
   </tbody></table></div>`;
 }
@@ -12383,7 +12808,7 @@ let _hvCongregacaoAtual = null;
 async function carregarOpcoesHabilitacaoAcao() {
   const selCong = document.getElementById("hvCongregacao");
   if (selCong && !selCong.dataset.montado) {
-    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`));
     selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
@@ -12403,7 +12828,7 @@ async function carregarEquipesFlagAcao() {
   const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/equipes-flag?congregacaoId=${congregacaoId}`);
   const data = await res.json();
   const container = document.getElementById("painelEquipesFlag");
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.equipes.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Equipe</th><th>Contato com menores</th><th></th></tr></thead><tbody>
         ${data.equipes.map(e => `<tr><td>${escaparHtmlEbd(e.nome)}</td><td>${e.contatoComMenores ? "Sim" : "Não"}</td>
@@ -12431,10 +12856,10 @@ async function carregarHabilitacoesAcao() {
   const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/lista?congregacaoId=${_hvCongregacaoAtual}`);
   const data = await res.json();
   const container = document.getElementById("painelHabilitacoes");
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.habilitacoes.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Voluntário</th><th>Status</th><th>Esteira</th><th></th></tr></thead><tbody>
-        ${data.habilitacoes.map(h => `<tr><td>${escaparHtmlEbd(h.membroNome)}</td><td>${ROTULO_STATUS_HV[h.statusCalculado] || h.statusCalculado}</td>
+        ${data.habilitacoes.map(h => `<tr><td>${escaparHtmlEbd(h.membroNome)}</td><td>${ROTULO_STATUS_HV[h.statusCalculado] || escaparHtmlEbd(h.statusCalculado)}</td>
           <td>${montarEsteiraHtml(h)}</td>
           <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirDetalheHabilitacaoAcao(${h.habilitacaoId})">🔍 Abrir</button></td></tr>`).join("")}
       </tbody></table>`
@@ -12469,11 +12894,11 @@ async function abrirDetalheHabilitacaoAcao(habilitacaoId) {
 
   const proxima = hab.proximaEtapa;
   container.innerHTML = `
-    <h4>${escaparHtmlEbd(hab.membroNome)} — ${ROTULO_STATUS_HV[hab.statusCalculado] || hab.statusCalculado}</h4>
+    <h4>${escaparHtmlEbd(hab.membroNome)} — ${ROTULO_STATUS_HV[hab.statusCalculado] || escaparHtmlEbd(hab.statusCalculado)}</h4>
     <p>${montarEsteiraHtml(hab)}</p>
     ${proxima === "TERMO" ? '<p class="subtitle">Esta etapa só fecha depois que o voluntário aderir ao Termo (aceite digital, ficha, e-mail/WhatsApp ou Lista de Ouro).</p>' : ""}
     <div class="barra-lista">
-      ${proxima ? `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="concluirEtapaHabilitacaoAcao(${habilitacaoId}, '${proxima}')">✅ Concluir: ${ROTULO_ETAPA_HV[proxima]}</button>` : "<span class='subtitle'>Esteira completa.</span>"}
+      ${proxima ? `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="concluirEtapaHabilitacaoAcao(${habilitacaoId}, ${argJs(proxima)})">✅ Concluir: ${ROTULO_ETAPA_HV[proxima]}</button>` : "<span class='subtitle'>Esteira completa.</span>"}
       <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="marcarInaptoAcao(${habilitacaoId})">⛔ Marcar Inapto</button>
       <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="reabilitarHabilitacaoAcao(${habilitacaoId})">↩️ Reabilitar</button>
     </div>
@@ -12551,10 +12976,10 @@ async function carregarMinhaHabilitacaoAcao() {
   const res = await fetchProtegido(`${API_BASE}/habilitacao-voluntarios/minha-habilitacao`);
   const data = await res.json();
   const container = document.getElementById("resultadoMinhaHabilitacao");
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   if (!data.habilitacao) { container.innerHTML = "<p class='subtitle'>Você ainda não tem uma esteira de habilitação de voluntário aberta.</p>"; return; }
   const hab = data.habilitacao;
-  container.innerHTML = `<p><strong>Status:</strong> ${ROTULO_STATUS_HV[hab.statusCalculado] || hab.statusCalculado}</p><p>${montarEsteiraHtml(hab)}</p>`;
+  container.innerHTML = `<p><strong>Status:</strong> ${ROTULO_STATUS_HV[hab.statusCalculado] || escaparHtmlEbd(hab.statusCalculado)}</p><p>${montarEsteiraHtml(hab)}</p>`;
 }
 
 // ---- ASSISTÊNCIA SOCIAL / AÇÃO DA FÉ (v5.9) ----
@@ -12567,7 +12992,7 @@ const ROTULO_TIPO_BENEFICIO_AS = { CESTA_BASICA: "Cesta básica", AUXILIO_FINANC
 async function carregarOpcoesAssistenciaSocialAcao() {
   const selCong = document.getElementById("asCongregacao");
   if (selCong && !selCong.dataset.montado) {
-    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`));
     selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
@@ -12579,10 +13004,10 @@ async function carregarFamiliasAssistenciaAcao() {
   const res = await fetchProtegido(`${API_BASE}/assistencia-social/familias?congregacaoId=${congregacaoId}`);
   const data = await res.json();
   const container = document.getElementById("painelFamiliasAssistencia");
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.familias.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Responsável</th><th>Contato</th></tr></thead><tbody>
-        ${data.familias.map(f => `<tr><td>${f.familiaId}</td><td>${f.responsavelNome}</td><td>${f.responsavelContato || "-"}</td></tr>`).join("")}
+        ${data.familias.map(f => `<tr><td>${f.familiaId}</td><td>${escaparHtmlEbd(f.responsavelNome)}</td><td>${escaparHtmlEbd(f.responsavelContato) || "-"}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma família cadastrada nesta congregação ainda.</p>";
 }
@@ -12617,20 +13042,21 @@ async function carregarDetalheFamiliaAssistenciaAcao() {
   const container = document.getElementById("painelDetalheFamiliaAssistencia");
   if (!familiaId) { container.innerHTML = ""; return; }
   const res = await fetchProtegido(`${API_BASE}/assistencia-social/familia?familiaId=${familiaId}`);
-  const data = await res.json();
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
 
   const cadastroAtivo = (data.cadastros || []).find(c => c.status === "ATIVO");
   const alertas = (data.recorrencia || []).filter(r => r.alertaRecorrencia);
 
   container.innerHTML = `
-    <h4>${data.familia.responsavelNome}</h4>
-    ${alertas.length ? `<p class="subtitle">⚠️ Recorrência: ${alertas.map(a => `${ROTULO_TIPO_BENEFICIO_AS[a.tipoBeneficio] || a.tipoBeneficio} há ${a.mesesConsecutivos} meses seguidos`).join("; ")}</p>` : ""}
+    <h4>${escaparHtmlEbd(data.familia.responsavelNome)}</h4>
+    ${alertas.length ? `<p class="subtitle">⚠️ Recorrência: ${alertas.map(a => `${ROTULO_TIPO_BENEFICIO_AS[a.tipoBeneficio] || escaparHtmlEbd(a.tipoBeneficio)} há ${escaparHtmlEbd(a.mesesConsecutivos)} meses seguidos`).join("; ")}</p>` : ""}
 
     <h5>Cadastro socioeconômico (Art. 46)</h5>
     ${cadastroAtivo
-      ? `<p>Núcleo: ${cadastroAtivo.qtdPessoasNucleo} pessoa(s) — Situação de moradia: ${cadastroAtivo.situacaoMoradia} — Base legal: ${cadastroAtivo.baseLegal}</p>
-         <p class="subtitle">${cadastroAtivo.observacoes || ""}</p>
+      ? `<p>Núcleo: ${escaparHtmlEbd(cadastroAtivo.qtdPessoasNucleo)} pessoa(s) — Situação de moradia: ${escaparHtmlEbd(cadastroAtivo.situacaoMoradia)} — Base legal: ${escaparHtmlEbd(cadastroAtivo.baseLegal)}</p>
+         <p class="subtitle">${escaparHtmlEbd(cadastroAtivo.observacoes) || ""}</p>
          <div class="barra-lista">
            <input type="number" id="asProfissionalMatricula_${cadastroAtivo.cadastroId}" placeholder="Matrícula do Assistente Social" style="max-width:220px;" />
            <select id="asParecerResultado_${cadastroAtivo.cadastroId}"><option value="APROVADO">Aprovado</option><option value="NEGADO">Negado</option><option value="PENDENTE_DOCUMENTACAO">Pendente de documentação</option></select>
@@ -12659,7 +13085,7 @@ async function carregarDetalheFamiliaAssistenciaAcao() {
     </div>
     ${(data.entregas || []).length
       ? `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Descrição</th></tr></thead><tbody>
-          ${data.entregas.map(e => `<tr><td>${new Date(e.dataEntrega).toLocaleDateString("pt-BR")}</td><td>${ROTULO_TIPO_BENEFICIO_AS[e.tipoBeneficio] || e.tipoBeneficio}</td><td>${e.valor != null ? "R$ " + Number(e.valor).toFixed(2) : "-"}</td><td>${e.descricao || "-"}</td></tr>`).join("")}
+          ${data.entregas.map(e => `<tr><td>${new Date(e.dataEntrega).toLocaleDateString("pt-BR")}</td><td>${ROTULO_TIPO_BENEFICIO_AS[e.tipoBeneficio] || escaparHtmlEbd(e.tipoBeneficio)}</td><td>${e.valor != null ? "R$ " + Number(e.valor).toFixed(2) : "-"}</td><td>${escaparHtmlEbd(e.descricao) || "-"}</td></tr>`).join("")}
         </tbody></table>`
       : "<p class='subtitle'>Nenhuma entrega registrada ainda.</p>"}
   `;
@@ -12707,10 +13133,10 @@ async function carregarPareceresAssistenciaAcao(cadastroId, familiaId) {
   const data = await res.json();
   const container = document.getElementById(`painelPareceresAssistencia_${familiaId}`);
   if (!container) return;
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.pareceres.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Profissional</th><th>Resultado</th><th>Parecer</th></tr></thead><tbody>
-        ${data.pareceres.map(p => `<tr><td>${new Date(p.assinadoEm).toLocaleDateString("pt-BR")}</td><td>${p.profissionalNome} (CRESS ${p.numeroCredencial})</td><td>${p.resultado}</td><td>${p.parecer}</td></tr>`).join("")}
+        ${data.pareceres.map(p => `<tr><td>${new Date(p.assinadoEm).toLocaleDateString("pt-BR")}</td><td>${escaparHtmlEbd(p.profissionalNome)} (CRESS ${escaparHtmlEbd(p.numeroCredencial)})</td><td>${escaparHtmlEbd(p.resultado)}</td><td>${escaparHtmlEbd(p.parecer)}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum parecer registrado ainda.</p>";
 }
@@ -12752,10 +13178,10 @@ async function carregarProfissionaisAssistenciaAcao() {
   const res = await fetchProtegido(`${API_BASE}/assistencia-social/profissionais`);
   const data = await res.json();
   const container = document.getElementById("painelProfissionaisAssistencia");
-  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${data.mensagem}</p>`; return; }
+  if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.profissionais.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CRESS</th><th>Situação</th><th></th></tr></thead><tbody>
-        ${data.profissionais.map(p => `<tr><td>${escaparHtmlEbd(p.membroNome)}</td><td>${p.numeroCredencial}</td><td>${p.ativo ? "✅ Ativo" : "⛔ Inativo"}</td>
+        ${data.profissionais.map(p => `<tr><td>${escaparHtmlEbd(p.membroNome)}</td><td>${escaparHtmlEbd(p.numeroCredencial)}</td><td>${p.ativo ? "✅ Ativo" : "⛔ Inativo"}</td>
           <td>${p.ativo ? `<button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="descredenciarProfissionalAssistenciaAcao(${p.profissionalId})">Descredenciar</button>` : ""}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum Assistente Social credenciado ainda.</p>";
@@ -12778,11 +13204,12 @@ async function carregarPrestacaoContasAssistenciaAcao() {
   const container = document.getElementById("painelPrestacaoContasAssistencia");
   if (!mes || !ano) { container.innerHTML = "<p class='subtitle'>Informe mês e ano.</p>"; return; }
   const res = await fetchProtegido(`${API_BASE}/assistencia-social/prestacao-contas?mes=${mes}&ano=${ano}`);
-  const data = await res.json();
-  if (data.sucesso === false || data.departamentoEncontrado === false) { container.innerHTML = `<p class="subtitle">${data.mensagem || "Erro ao carregar."}</p>`; return; }
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
+  if (data.sucesso === false || data.departamentoEncontrado === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem) || "Erro ao carregar."}</p>`; return; }
   container.innerHTML = `
-    <p><strong>Famílias atendidas no mês:</strong> ${data.totalFamiliasAtendidas} — <strong>Valor total das entregas:</strong> R$ ${Number(data.totalValorEntregas || 0).toFixed(2)}</p>
-    <p>${Object.entries(data.totalEntregasPorTipo || {}).map(([tipo, qtd]) => `${ROTULO_TIPO_BENEFICIO_AS[tipo] || tipo}: ${qtd}`).join(" · ") || "Nenhuma entrega no período."}</p>
+    <p><strong>Famílias atendidas no mês:</strong> ${escaparHtmlEbd(data.totalFamiliasAtendidas)} — <strong>Valor total das entregas:</strong> R$ ${Number(data.totalValorEntregas || 0).toFixed(2)}</p>
+    <p>${Object.entries(data.totalEntregasPorTipo || {}).map(([tipo, qtd]) => `${ROTULO_TIPO_BENEFICIO_AS[tipo] || escaparHtmlEbd(tipo)}: ${escaparHtmlEbd(qtd)}`).join(" · ") || "Nenhuma entrega no período."}</p>
     <p class="subtitle">Fechamento departamental (v5.4, Ação da Fé — separado do caixa comum): ${data.fechamentoMensal ? `Total de despesas R$ ${Number(data.fechamentoMensal.TotalDespesas || 0).toFixed(2)}` : "mês ainda não fechado."}</p>
   `;
 }
@@ -12792,7 +13219,7 @@ async function carregarPrestacaoContasAssistenciaAcao() {
 async function carregarOpcoesEbdAcao() {
   const selCong = document.getElementById("ebdCongregacao");
   if (selCong && !selCong.dataset.montado) {
-    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`));
     selCong.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selCong.dataset.montado = "1";
   }
@@ -12803,11 +13230,12 @@ async function carregarTurmasEbdAcao() {
   const container = document.getElementById("painelTurmasEbd");
   if (!congregacaoId) { container.innerHTML = ""; return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-turmas/turmas?congregacaoId=${congregacaoId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.turmas.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Faixa Etária</th><th>Professores</th><th>Alunos</th></tr></thead><tbody>
-        ${data.turmas.map(t => `<tr><td>${t.turmaId}</td><td>${escaparHtmlEbd(t.nome)}</td><td>${escaparHtmlEbd(t.faixaEtaria || "-")}</td><td>${t.totalProfessores}</td><td>${t.totalAlunos}</td></tr>`).join("")}
+        ${data.turmas.map(t => `<tr><td>${t.turmaId}</td><td>${escaparHtmlEbd(t.nome)}</td><td>${escaparHtmlEbd(t.faixaEtaria || "-")}</td><td>${escaparHtmlEbd(t.totalProfessores)}</td><td>${escaparHtmlEbd(t.totalAlunos)}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma turma cadastrada nesta congregação ainda.</p>";
 }
@@ -12852,7 +13280,7 @@ async function carregarDetalheTurmaEbdAcao() {
     <h5>Alunos</h5>
     ${dadosAlu.sucesso === false ? `<p class="subtitle">${escaparHtmlEbd(dadosAlu.mensagem)}</p>` : (dadosAlu.alunos.length
       ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula EBD</th><th>Nome</th><th>Tipo</th><th>Matrículado em</th></tr></thead><tbody>
-          ${dadosAlu.alunos.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${escaparHtmlEbd(a.membroNome)}</td>
+          ${dadosAlu.alunos.map(a => `<tr><td>${a.alunoId}</td><td>${escaparHtmlEbd(a.matricula)}</td><td>${escaparHtmlEbd(a.membroNome)}</td>
             <td>${a.naoMembro ? `Não-membro${a.responsavelNome ? ` <span class="subtitle">(resp.: ${escaparHtmlEbd(a.responsavelNome)})</span>` : ""}` : "Membro"}</td>
             <td>${a.matriculadoEm ? new Date(a.matriculadoEm).toLocaleDateString("pt-BR") : "-"}</td></tr>`).join("")}
         </tbody></table>`
@@ -12987,7 +13415,7 @@ let ebdChamadaLicaoAtual = null;
 async function carregarOpcoesChamadaEbdAcao() {
   const sel = document.getElementById("ebdChamadaCongregacao");
   if (sel && !sel.dataset.montado) {
-    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`));
     sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     sel.dataset.montado = "1";
   }
@@ -13000,7 +13428,7 @@ function renderPainelLicaoEbd(licao) {
   document.getElementById("ebdChamadaLicaoId").value = licao.licaoId;
   const campoCaderneta = document.getElementById("cadLicaoId"); // v6.8: a caderneta parte da mesma lição
   if (campoCaderneta) campoCaderneta.value = licao.licaoId;
-  container.innerHTML = `<p class="subtitle">Lição #${licao.licaoId} — ${new Date(licao.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })} — status: <strong>${licao.status}</strong></p>`;
+  container.innerHTML = `<p class="subtitle">Lição #${licao.licaoId} — ${new Date(licao.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })} — status: <strong>${escaparHtmlEbd(licao.status)}</strong></p>`;
 }
 
 async function buscarLicaoEbdAcao() {
@@ -13052,12 +13480,13 @@ async function carregarRosterChamadaEbdAcao() {
   const container = document.getElementById("painelRosterChamadaEbd");
   if (!licaoId || !turmaId) { container.innerHTML = ""; mostrarToast("Informe o id da lição e o id da turma.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-chamada/roster?turmaId=${turmaId}&licaoId=${licaoId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.alunos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula</th><th>Nome</th><th>Status</th><th>Lançar</th></tr></thead><tbody>
         ${data.alunos.map(a => `<tr>
-          <td>${a.alunoId}</td><td>${a.matricula}</td><td>${escaparHtmlEbd(a.membroNome)}${a.naoMembro ? ' <span class="subtitle">(não-membro)</span>' : ""}</td><td>${a.status || "-"}</td>
+          <td>${a.alunoId}</td><td>${escaparHtmlEbd(a.matricula)}</td><td>${escaparHtmlEbd(a.membroNome)}${a.naoMembro ? ' <span class="subtitle">(não-membro)</span>' : ""}</td><td>${escaparHtmlEbd(a.status) || "-"}</td>
           <td>
             <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'PRESENTE')">✅ Presente</button>
             <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'AUSENTE')">❌ Ausente</button>
@@ -13105,12 +13534,13 @@ async function carregarResumoChamadaEbdAcao() {
   const container = document.getElementById("painelResumoChamadaEbd");
   if (!licaoId || !turmaId) { container.innerHTML = ""; return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-chamada/resumo?licaoId=${licaoId}&turmaId=${turmaId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   const r = data.resumo;
   container.innerHTML = `
-    <p>Presentes: <strong>${r.presentes}</strong> · Ausentes: <strong>${r.ausentes}</strong> · Visitantes: <strong>${r.visitantes}</strong></p>
-    <p>Percentual de presença: <strong>${r.percentualPresenca}%</strong> · Percentual de ausência: <strong>${r.percentualAusencia}%</strong></p>
+    <p>Presentes: <strong>${escaparHtmlEbd(r.presentes)}</strong> · Ausentes: <strong>${escaparHtmlEbd(r.ausentes)}</strong> · Visitantes: <strong>${escaparHtmlEbd(r.visitantes)}</strong></p>
+    <p>Percentual de presença: <strong>${escaparHtmlEbd(r.percentualPresenca)}%</strong> · Percentual de ausência: <strong>${escaparHtmlEbd(r.percentualAusencia)}%</strong></p>
   `;
 }
 
@@ -13244,7 +13674,7 @@ function resumoFilaOfflineEbdHtml(estado) {
         const [turmaId, data] = k.split("|");
         const pacote = estado.turmas[turmaId];
         return `<li>${escaparHtmlEbd(pacote ? pacote.turma.nome : `Turma ${turmaId}`)} — ${escaparHtmlEbd(formatarDataEbd(data))}: ${n}
-          <button class="btn-link btn-link-perigo" onclick="descartarGrupoOfflineEbdAcao(${Number(turmaId)}, '${escaparHtmlEbd(data)}')">descartar</button></li>`;
+          <button class="btn-link btn-link-perigo" onclick="descartarGrupoOfflineEbdAcao(${Number(turmaId)}, ${argJs(data)})">descartar</button></li>`;
       }).join("") + "</ul>");
   } else {
     partes.push("<p class='subtitle'>Nenhuma marcação aguardando envio.</p>");
@@ -13348,8 +13778,8 @@ function renderChamadaOffline() {
     ? `<ul class="lista-chamada-offline">${pacote.alunos.map(a => {
         const st = status[a.alunoId];
         return `<li><span class="nome-aluno-offline">${escaparHtmlEbd(a.nome)}${pendentes.has(a.alunoId) ? ' <span class="selo-pendente-offline">(a enviar)</span>' : ""}</span>
-          <button class="btn-presenca-offline${st === "PRESENTE" ? " ativo-presente" : ""}" aria-label="Presente" onclick="marcarPresencaOfflineEbd(${turmaId}, '${data}', ${Number(a.alunoId)}, 'PRESENTE')">✅</button>
-          <button class="btn-presenca-offline${st === "AUSENTE" ? " ativo-ausente" : ""}" aria-label="Ausente" onclick="marcarPresencaOfflineEbd(${turmaId}, '${data}', ${Number(a.alunoId)}, 'AUSENTE')">❌</button></li>`;
+          <button class="btn-presenca-offline${st === "PRESENTE" ? " ativo-presente" : ""}" aria-label="Presente" onclick="marcarPresencaOfflineEbd(${turmaId}, ${argJs(data)}, ${Number(a.alunoId)}, 'PRESENTE')">✅</button>
+          <button class="btn-presenca-offline${st === "AUSENTE" ? " ativo-ausente" : ""}" aria-label="Ausente" onclick="marcarPresencaOfflineEbd(${turmaId}, ${argJs(data)}, ${Number(a.alunoId)}, 'AUSENTE')">❌</button></li>`;
       }).join("")}</ul>`
     : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
   plano.innerHTML = pacote.data === data
@@ -13488,7 +13918,7 @@ function renderPlanosAulaEbd(planos) {
       ${p.roteiro ? `<div class="roteiro-plano">${escaparHtmlEbd(p.roteiro)}</div>` : ""}
       ${(p.materiais || []).length ? `<ul>${p.materiais.map(m => {
         const url = linkSeguroEbd(m.url);
-        return `<li>${url ? `<a href="${escaparHtmlEbd(url)}" target="_blank" rel="noopener noreferrer">🔗 ${escaparHtmlEbd(m.titulo)}</a>` : escaparHtmlEbd(m.titulo)}</li>`;
+        return `<li>${url ? `<a href="${urlSegura(url)}" target="_blank" rel="noopener noreferrer">🔗 ${escaparHtmlEbd(m.titulo)}</a>` : escaparHtmlEbd(m.titulo)}</li>`;
       }).join("")}</ul>` : ""}
     </div>`).join("");
 }
@@ -13499,7 +13929,8 @@ async function carregarPlanosTurmaEbdAcao() {
   const container = document.getElementById("painelPlanosTurmaEbd");
   if (!turmaId) { mostrarToast("Escolha a turma.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-sala/planos/turma?turmaId=${turmaId}&data=${encodeURIComponent(data)}`);
-  const resposta = await res.json();
+  const resposta = await jsonDaTela(res, container, "objeto");
+  if (resposta === null) return;
   if (resposta.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(resposta.mensagem)}</p>`; return; }
   container.innerHTML = renderPlanosAulaEbd(resposta.planos);
 }
@@ -13509,15 +13940,16 @@ async function carregarAusentesEbdAcao() {
   const container = document.getElementById("painelAusentesEbd");
   if (!turmaId) { mostrarToast("Escolha a turma.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-sala/ausentes?turmaId=${turmaId}`);
-  const resposta = await res.json();
+  const resposta = await jsonDaTela(res, container, "objeto");
+  if (resposta === null) return;
   if (resposta.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(resposta.mensagem)}</p>`; return; }
   container.innerHTML = resposta.ausentes.length
-    ? `<p class="subtitle">Sem presença há ${resposta.minimo} domingo(s) seguido(s) ou mais:</p>
+    ? `<p class="subtitle">Sem presença há ${escaparHtmlEbd(resposta.minimo)} domingo(s) seguido(s) ou mais:</p>
       <table class="tabela-frequencia"><thead><tr><th>Id</th><th>Aluno</th><th>Domingos seguidos</th><th>Falta desde</th><th>Última presença</th></tr></thead><tbody>
-        ${resposta.ausentes.map(a => `<tr><td>${a.alunoId}</td><td>${escaparHtmlEbd(a.nome)}</td><td>${a.domingos}</td>
+        ${resposta.ausentes.map(a => `<tr><td>${a.alunoId}</td><td>${escaparHtmlEbd(a.nome)}</td><td>${escaparHtmlEbd(a.domingos)}</td>
           <td>${escaparHtmlEbd(formatarDataEbd(a.faltaDesde))}</td><td>${a.ultimaPresenca ? escaparHtmlEbd(formatarDataEbd(a.ultimaPresenca)) : "nenhuma no último semestre"}</td></tr>`).join("")}
       </tbody></table>`
-    : `<p class="subtitle">Ninguém com ${resposta.minimo} domingo(s) seguido(s) de ausência. 🙌</p>`;
+    : `<p class="subtitle">Ninguém com ${escaparHtmlEbd(resposta.minimo)} domingo(s) seguido(s) de ausência. 🙌</p>`;
 }
 
 // ---- Plano de aula (Superintendente) ----
@@ -13525,7 +13957,7 @@ async function carregarOpcoesPlanosEbdAcao() {
   const selForm = document.getElementById("planoCongregacao");
   const selFiltro = document.getElementById("planoFiltroCongregacao");
   if (selForm && !selForm.dataset.montado) {
-    const congs = (await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json()).filter(c => c.ativa !== false);
+    const congs = (await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`))).filter(c => c.ativa !== false);
     const opcoes = congs.map(c => `<option value="${Number(c.congregacaoId)}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     selForm.innerHTML = `<option value="">Campo inteiro (todas as congregações)</option>` + opcoes;
     selFiltro.innerHTML = `<option value="">Todas do meu escopo</option>` + opcoes;
@@ -13547,7 +13979,8 @@ async function carregarPlanosGestaoEbdAcao() {
   const qs = new URLSearchParams({ dataInicio: inicio, dataFim: fim });
   if (congregacaoId) qs.set("congregacaoId", congregacaoId);
   const res = await fetchProtegido(`${API_BASE}/ebd-sala/planos?${qs.toString()}`);
-  const resposta = await res.json();
+  const resposta = await jsonDaTela(res, container, "objeto");
+  if (resposta === null) return;
   if (resposta.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(resposta.mensagem)}</p>`; return; }
   container.innerHTML = resposta.planos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Data</th><th>Alcance</th><th>Faixa</th><th>Título</th><th>Status</th><th>Material</th><th></th></tr></thead><tbody>
@@ -13718,7 +14151,7 @@ function renderPainelAtividadeEbd(atividade) {
   container.innerHTML = `
     <p class="subtitle">Atividade #${atividade.atividadeId}${atividade.titulo ? " — " + escaparHtmlEbd(atividade.titulo) : ""} (${atividade.questoes.length} questão(ões))</p>
     ${atividade.questoes.length ? `<table class="tabela-frequencia"><thead><tr><th>Ordem</th><th>Tipo</th><th>Enunciado</th></tr></thead><tbody>
-      ${atividade.questoes.map(q => `<tr><td>${q.ordem}</td><td>${q.tipo}</td><td>${escaparHtmlEbd(q.enunciado)}</td></tr>`).join("")}
+      ${atividade.questoes.map(q => `<tr><td>${escaparHtmlEbd(q.ordem)}</td><td>${escaparHtmlEbd(q.tipo)}</td><td>${escaparHtmlEbd(q.enunciado)}</td></tr>`).join("")}
     </tbody></table>` : ""}
   `;
 }
@@ -13785,18 +14218,18 @@ function renderRespostaCampoEbd(questao) {
   // "\"graça\"", corrigido como errado. Só lista/objeto vira JSON.
   const r = questao.resposta;
   const valorAtual = r === null || r === undefined ? "" : typeof r === "object" ? JSON.stringify(r) : String(r);
-  return `<input type="text" id="ebdRespostaCampo_${questao.questaoId}" value='${valorAtual.replace(/'/g, "&#39;")}' placeholder="Resposta (JSON quando aplicável)" style="min-width:220px;" />`;
+  return `<input type="text" id="ebdRespostaCampo_${questao.questaoId}" value='${escaparHtmlEbd(valorAtual)}' placeholder="Resposta (JSON quando aplicável)" style="min-width:220px;" />`;
 }
 
 function renderPainelRespostasAlunoEbd(respostas, resumo) {
   const container = document.getElementById("painelRespostasAlunoEbd");
   if (!respostas.length) { container.innerHTML = "<p class='subtitle'>Esta atividade ainda não tem questões.</p>"; return; }
   container.innerHTML = `
-    <p class="subtitle">Nota: <strong>${resumo.corretas}/${resumo.totalQuestoes}</strong> (${resumo.percentual}%) —
-      respondidas: ${resumo.respondidas} · pendentes de revisão: ${resumo.pendentes}</p>
+    <p class="subtitle">Nota: <strong>${escaparHtmlEbd(resumo.corretas)}/${escaparHtmlEbd(resumo.totalQuestoes)}</strong> (${escaparHtmlEbd(resumo.percentual)}%) —
+      respondidas: ${escaparHtmlEbd(resumo.respondidas)} · pendentes de revisão: ${escaparHtmlEbd(resumo.pendentes)}</p>
     <table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Enunciado</th><th>Resposta</th><th>Correção</th><th></th></tr></thead><tbody>
       ${respostas.map(q => `<tr>
-        <td>${q.tipo}</td><td>${escaparHtmlEbd(q.enunciado)}</td>
+        <td>${escaparHtmlEbd(q.tipo)}</td><td>${escaparHtmlEbd(q.enunciado)}</td>
         <td>${renderRespostaCampoEbd(q)}
           <button class="btn-link" onclick="salvarRespostaEbdAcao(${q.questaoId})">💾</button>
         </td>
@@ -13816,7 +14249,8 @@ async function carregarRespostasAlunoEbdAcao() {
   const container = document.getElementById("painelRespostasAlunoEbd");
   if (!atividadeId || !alunoId) { container.innerHTML = ""; mostrarToast("Informe a atividade e o aluno.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-atividades/respostas?atividadeId=${atividadeId}&alunoId=${alunoId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   renderPainelRespostasAlunoEbd(data.respostas, data.resumo);
 }
@@ -13857,11 +14291,12 @@ async function carregarResumoAtividadeTurmaEbdAcao() {
   const container = document.getElementById("painelResumoAtividadeEbd");
   if (!atividadeId || !turmaId) { container.innerHTML = ""; mostrarToast("Informe a atividade e a turma.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-atividades/resumo?atividadeId=${atividadeId}&turmaId=${turmaId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.resumo.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Matrícula</th><th>Nome</th><th>Corretas</th><th>%</th></tr></thead><tbody>
-        ${data.resumo.map(a => `<tr><td>${a.alunoId}</td><td>${a.matricula}</td><td>${escaparHtmlEbd(a.membroNome)}</td><td>${a.corretas}/${a.totalQuestoes}</td><td>${a.percentual}%</td></tr>`).join("")}
+        ${data.resumo.map(a => `<tr><td>${a.alunoId}</td><td>${escaparHtmlEbd(a.matricula)}</td><td>${escaparHtmlEbd(a.membroNome)}</td><td>${escaparHtmlEbd(a.corretas)}/${escaparHtmlEbd(a.totalQuestoes)}</td><td>${escaparHtmlEbd(a.percentual)}%</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
 }
@@ -13906,7 +14341,8 @@ async function carregarCertificadosEbdAcao() {
   const container = document.getElementById("painelCertificadosEbd");
   if (!membroId) { container.innerHTML = ""; mostrarToast("Informe a matrícula.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/certificados?membroId=${membroId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   certificadosCache = data.certificados || [];
   renderizarCertificadosEbd();
@@ -13931,7 +14367,7 @@ function renderizarCertificadosEbd() {
       <td class="acoes-inline">
         <button class="btn-link" onclick="imprimirCertificado(${c.certificadoId})">🖨️ Imprimir</button>
         <button class="btn-link" onclick="baixarPdfCertificado(${c.certificadoId}, ${c.membroId})">📄 Baixar PDF</button>
-        ${c.codigoVerificacao ? `<button class="btn-link" onclick="copiarLinkVerificacaoAcao('${escaparHtmlEbd(c.codigoVerificacao)}')">🔗 Copiar link de verificação</button>` : ""}
+        ${c.codigoVerificacao ? `<button class="btn-link" onclick="copiarLinkVerificacaoAcao(${argJs(c.codigoVerificacao)})">🔗 Copiar link de verificação</button>` : ""}
         ${podeRevogar && !c.revogadoEm ? `<button class="btn-link btn-link-perigo" onclick="revogarCertificadoAcao(${c.certificadoId})">⛔ Revogar</button>` : ""}
       </td>
     </tr>`;
@@ -14057,7 +14493,8 @@ async function buscarTitularesEbdDpoAcao() {
   const container = document.getElementById("resultadoTitularesEbdDpo");
   if (nome.length < 3) { mostrarToast("Digite pelo menos 3 letras do nome.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-turmas/lgpd/buscar?nome=${encodeURIComponent(nome)}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   const alunos = data.alunos.length
     ? `<h5>Alunos não-membros</h5><table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Turma</th><th>Situação</th><th></th></tr></thead><tbody>
@@ -14134,7 +14571,8 @@ async function carregarCatalogoTrilhasAcao() {
   const container = document.getElementById("painelCatalogoTrilhas");
   const todas = document.getElementById("trilhasMostrarInativas").checked ? "?todas=1" : "";
   const res = await fetchProtegido(`${API_BASE}/trilhas/catalogo${todas}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   catalogoTrilhasCache = data.trilhas || [];
   const nomePorId = new Map(catalogoTrilhasCache.map(t => [t.trilhaId, t.nome]));
@@ -14143,12 +14581,12 @@ async function carregarCatalogoTrilhasAcao() {
     const exige = t.preRequisitosTrilha.length ? t.preRequisitosTrilha.map(id => escaparHtmlEbd(nomePorId.get(id) || `#${id}`)).join(", ") : "nenhuma";
     return `<div class="cartao-area-ebd" style="margin-bottom:12px;${t.ativa ? "" : "opacity:.6;"}">
       <h5>🎓 #${t.trilhaId} ${escaparHtmlEbd(t.nome)}${t.ativa ? "" : " (desativada)"}</h5>
-      <p class="subtitle">Papel-alvo: ${escaparHtmlEbd(t.papelAlvo || "—")} · Validade do certificado: ${t.validadeMeses ? `${t.validadeMeses} meses` : "não vence"}
-        · Aviso: ${t.avisoDias} dias · Exige antes: ${exige}</p>
+      <p class="subtitle">Papel-alvo: ${escaparHtmlEbd(t.papelAlvo || "—")} · Validade do certificado: ${t.validadeMeses ? `${escaparHtmlEbd(t.validadeMeses)} meses` : "não vence"}
+        · Aviso: ${escaparHtmlEbd(t.avisoDias)} dias · Exige antes: ${exige}</p>
       ${t.descricao ? `<p class="subtitle">${escaparHtmlEbd(t.descricao)}</p>` : ""}
       ${t.modulos.length ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Ordem</th><th>Módulo</th><th>Carga (h)</th><th>Obrigatório</th><th>Exige módulo(s)</th></tr></thead><tbody>
-        ${t.modulos.map(m => `<tr style="${m.ativo ? "" : "opacity:.5;"}"><td>${m.moduloId}</td><td>${m.ordem}</td><td>${escaparHtmlEbd(m.titulo)}${m.ativo ? "" : " (desativado)"}</td>
-          <td>${m.cargaHoraria}</td><td>${m.obrigatorio ? "Sim" : "Opcional"}</td>
+        ${t.modulos.map(m => `<tr style="${m.ativo ? "" : "opacity:.5;"}"><td>${m.moduloId}</td><td>${escaparHtmlEbd(m.ordem)}</td><td>${escaparHtmlEbd(m.titulo)}${m.ativo ? "" : " (desativado)"}</td>
+          <td>${escaparHtmlEbd(m.cargaHoraria)}</td><td>${m.obrigatorio ? "Sim" : "Opcional"}</td>
           <td>${m.preRequisitos.length ? m.preRequisitos.map(id => escaparHtmlEbd(tituloModulo.get(id) || `#${id}`)).join(", ") : "—"}</td></tr>`).join("")}
       </tbody></table>` : "<p class='subtitle'>Sem módulos ainda — cadastre ao menos um obrigatório para poder matricular alguém.</p>"}
     </div>`;
@@ -14252,15 +14690,15 @@ function renderFormacaoTabela(formacao, { gestao }) {
     <th>Matrícula</th><th>Trilha</th><th>Situação</th><th>Progresso</th><th>Válido até</th><th>Certificado</th><th></th></tr></thead><tbody>
     ${formacao.map(f => {
       const cert = f.certificado;
-      const validade = f.validoAte ? `${formatarDataEbd(f.validoAte)}${f.situacao === "VENCENDO" ? ` (em ${f.diasParaVencer} dia(s))` : ""}` : (f.status === "CONCLUIDA" ? "não vence" : "—");
+      const validade = f.validoAte ? `${formatarDataEbd(f.validoAte)}${f.situacao === "VENCENDO" ? ` (em ${escaparHtmlEbd(f.diasParaVencer)} dia(s))` : ""}` : (f.status === "CONCLUIDA" ? "não vence" : "—");
       const acoes = gestao ? `
         <button class="btn-link" onclick="abrirMatriculaTrilhaAcao(${f.matriculaId})">📋 Abrir</button>
         ${f.status === "EM_ANDAMENTO" ? `<button class="btn-link btn-link-perigo" onclick="cancelarMatriculaTrilhaAcao(${f.matriculaId})">✖ Cancelar</button>` : ""}
         ${f.status === "CONCLUIDA" && !cert ? `<button class="btn-link" onclick="emitirCertificadoMatriculaAcao(${f.matriculaId})">🎓 Emitir certificado</button>` : ""}
         ${cert && !cert.revogadoEm ? `<button class="btn-link btn-link-perigo" onclick="revogarCertificadoAcao(${cert.certificadoId})">⛔ Revogar certificado</button>` : ""}` : "";
       return `<tr>
-        <td>${f.matriculaId}</td><td>${escaparHtmlEbd(f.trilhaNome)}</td><td>${ROTULO_SITUACAO_TRILHA[f.situacao] || f.situacao}</td>
-        <td>${f.obrigatoriosConcluidos}/${f.obrigatoriosTotal}</td><td>${validade}</td>
+        <td>${f.matriculaId}</td><td>${escaparHtmlEbd(f.trilhaNome)}</td><td>${ROTULO_SITUACAO_TRILHA[f.situacao] || escaparHtmlEbd(f.situacao)}</td>
+        <td>${escaparHtmlEbd(f.obrigatoriosConcluidos)}/${escaparHtmlEbd(f.obrigatoriosTotal)}</td><td>${validade}</td>
         <td>${cert ? `<code>${escaparHtmlEbd(cert.codigoVerificacao || "")}</code>${cert.revogadoEm ? " (revogado)" : ""}` : "—"}</td>
         <td class="acoes-inline">${acoes}</td></tr>`;
     }).join("")}
@@ -14270,21 +14708,22 @@ function renderFormacaoTabela(formacao, { gestao }) {
 async function abrirMatriculaTrilhaAcao(matriculaId) {
   const container = document.getElementById("painelMatriculaTrilha");
   const res = await fetchProtegido(`${API_BASE}/trilhas/matricula?matriculaId=${matriculaId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   const m = data.matricula, p = m.progresso;
   const emAndamento = m.status === "EM_ANDAMENTO";
   container.innerHTML = `<div class="cartao-area-ebd" style="margin:10px 0;">
     <h5>📋 Matrícula #${m.matriculaId} — ${escaparHtmlEbd(m.trilha.nome)}</h5>
-    <p>${ROTULO_SITUACAO_TRILHA[m.situacao] || m.status} · ${p.obrigatoriosConcluidos}/${p.obrigatoriosTotal} módulos obrigatórios (${p.percentual}%) ·
-      carga horária ${p.cargaHorariaConcluida}h de ${p.cargaHorariaTotal}h${m.validoAte ? ` · válido até ${formatarDataEbd(m.validoAte)}` : ""}</p>
+    <p>${ROTULO_SITUACAO_TRILHA[m.situacao] || escaparHtmlEbd(m.status)} · ${escaparHtmlEbd(p.obrigatoriosConcluidos)}/${escaparHtmlEbd(p.obrigatoriosTotal)} módulos obrigatórios (${escaparHtmlEbd(p.percentual)}%) ·
+      carga horária ${escaparHtmlEbd(p.cargaHorariaConcluida)}h de ${escaparHtmlEbd(p.cargaHorariaTotal)}h${m.validoAte ? ` · válido até ${formatarDataEbd(m.validoAte)}` : ""}</p>
     ${emAndamento ? `<div class="barra-lista">
       <input type="date" id="trilConclData" style="max-width:160px;" title="Data da conclusão (vazio = hoje)" />
       <input type="text" id="trilConclObs" placeholder="Observação (opcional)" style="min-width:220px;" />
     </div>` : ""}
     <table class="tabela-frequencia"><thead><tr><th>Ordem</th><th>Módulo</th><th>Carga (h)</th><th></th><th>Situação</th><th></th></tr></thead><tbody>
       ${p.modulos.map(mod => `<tr>
-        <td>${mod.ordem}</td><td>${escaparHtmlEbd(mod.titulo)}</td><td>${mod.cargaHoraria}</td><td>${mod.obrigatorio ? "" : "opcional"}</td>
+        <td>${escaparHtmlEbd(mod.ordem)}</td><td>${escaparHtmlEbd(mod.titulo)}</td><td>${escaparHtmlEbd(mod.cargaHoraria)}</td><td>${mod.obrigatorio ? "" : "opcional"}</td>
         <td>${mod.status === "CONCLUIDO" ? "✅ Concluído" : (mod.status === "BLOQUEADO" ? `🔒 Exige: ${mod.bloqueadoPor.map(escaparHtmlEbd).join(", ")}` : "▶️ Disponível")}</td>
         <td>${emAndamento && mod.status === "DISPONIVEL" ? `<button class="btn-link" onclick="concluirModuloTrilhaAcao(${m.matriculaId}, ${mod.moduloId})">✔ Concluir módulo</button>` : ""}</td>
       </tr>`).join("")}
@@ -14324,18 +14763,19 @@ async function emitirCertificadoMatriculaAcao(matriculaId) {
 async function carregarRequisitosTrilhasAcao() {
   const container = document.getElementById("painelRequisitosTrilhas");
   const res = await fetchProtegido(`${API_BASE}/trilhas/requisitos`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   const sel = document.getElementById("trilReqContexto");
   if (sel && !sel.dataset.montado) {
-    sel.innerHTML = data.contextos.map(c => `<option value="${c.contexto}">${escaparHtmlEbd(c.rotulo)}</option>`).join("");
+    sel.innerHTML = data.contextos.map(c => `<option value="${escaparHtmlEbd(c.contexto)}">${escaparHtmlEbd(c.rotulo)}</option>`).join("");
     sel.dataset.montado = "1";
   }
   container.innerHTML = data.requisitos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Onde</th><th>Alvo</th><th>Trilha exigida</th><th>Modo</th><th></th></tr></thead><tbody>
         ${data.requisitos.map(r => `<tr><td>${r.requisitoId}</td><td>${escaparHtmlEbd(r.contextoRotulo)}</td><td>${escaparHtmlEbd(r.alvoChave || "(todos)")}</td>
           <td>#${r.trilhaId} ${escaparHtmlEbd(r.trilhaNome)}${r.trilhaAtiva ? "" : " (desativada)"}</td><td>${r.modo === "BLOQUEIA" ? "⛔ Bloqueia" : "⚠️ Só alerta"}</td>
-          <td><button class="btn-link btn-link-perigo" onclick="removerRequisitoTrilhaAcao(${r.requisitoId})">Remover</button></td></tr>`).join("")}
+          <td>${authGeral ? `<button class="btn-link btn-link-perigo" onclick="removerRequisitoTrilhaAcao(${r.requisitoId})">Remover</button>` : ""}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum requisito configurado — nenhum fluxo exige formação hoje.</p>";
 }
@@ -14364,7 +14804,8 @@ async function conferirRequisitoAcao() {
   if (!contexto || !membroId) { mostrarToast("Escolha o contexto (acima) e informe a matrícula da pessoa.", "erro"); return; }
   const alvo = encodeURIComponent(document.getElementById("trilReqAlvo").value.trim());
   const res = await fetchProtegido(`${API_BASE}/trilhas/requisitos/avaliar?contexto=${contexto}&alvo=${alvo}&membroId=${membroId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   const a = data.avaliacao;
   if (!a.temRequisitos) { container.innerHTML = "<p class='subtitle'>Nenhum requisito configurado para este contexto/alvo — a pessoa não precisa de formação específica aqui.</p>"; return; }
@@ -14377,13 +14818,14 @@ async function carregarPendenciasTrilhasAcao() {
   const container = document.getElementById("painelPendenciasTrilhas");
   const cong = numeroDoCampo("trilPendCongregacao");
   const res = await fetchProtegido(`${API_BASE}/trilhas/pendencias${cong ? `?congregacaoId=${cong}` : ""}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.pendencias.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Pessoa</th><th>Congregação</th><th>Trilha</th><th>Válido até</th><th>Situação</th><th></th></tr></thead><tbody>
         ${data.pendencias.map(p => `<tr><td>${escaparHtmlEbd(p.membroNome)} <span class="subtitle">(#${p.membroId})</span></td><td>${escaparHtmlEbd(p.congregacaoNome || "—")}</td>
           <td>${escaparHtmlEbd(p.trilhaNome)}</td><td>${formatarDataEbd(p.validoAte)}</td>
-          <td>${p.situacao === "VENCIDA" ? `🔴 Vencida há ${Math.abs(p.diasParaVencer)} dia(s)` : `🟠 Vence em ${p.diasParaVencer} dia(s)`}</td>
+          <td>${p.situacao === "VENCIDA" ? `🔴 Vencida há ${Math.abs(p.diasParaVencer)} dia(s)` : `🟠 Vence em ${escaparHtmlEbd(p.diasParaVencer)} dia(s)`}</td>
           <td>${p.renovacaoEmAndamento ? "🔄 renovação em andamento" : ""}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum certificado vencido ou perto de vencer dentro do seu escopo. ✅</p>";
@@ -14400,16 +14842,16 @@ async function carregarMinhaFormacaoAcao() {
   if (!data.formacao.length) { container.innerHTML = "<p class='subtitle'>Você ainda não iniciou nenhuma trilha de formação.</p>"; return; }
   container.innerHTML = data.formacao.map(f => {
     const cert = f.certificado;
-    const vencimento = f.situacao === "VENCENDO" ? `<p style="color:var(--cor-erro);">⚠️ Seu certificado vence em ${f.diasParaVencer} dia(s) (${formatarDataEbd(f.validoAte)}) — procure a Secretaria para renovar a formação.</p>`
+    const vencimento = f.situacao === "VENCENDO" ? `<p style="color:var(--cor-erro);">⚠️ Seu certificado vence em ${escaparHtmlEbd(f.diasParaVencer)} dia(s) (${formatarDataEbd(f.validoAte)}) — procure a Secretaria para renovar a formação.</p>`
       : (f.situacao === "VENCIDA" ? `<p style="color:var(--cor-erro);">⛔ Este certificado venceu em ${formatarDataEbd(f.validoAte)}. Algumas funções podem exigir a formação vigente — procure a Secretaria para renovar.</p>` : "");
     return `<div class="cartao-area-ebd" style="margin-bottom:12px;">
       <h5>🎓 ${escaparHtmlEbd(f.trilhaNome)} <span class="subtitle">(matrícula #${f.matriculaId})</span></h5>
-      <p>${ROTULO_SITUACAO_TRILHA[f.situacao] || f.situacao} · ${f.obrigatoriosConcluidos}/${f.obrigatoriosTotal} módulos obrigatórios${f.validoAte ? ` · válido até ${formatarDataEbd(f.validoAte)}` : (f.status === "CONCLUIDA" ? " · não vence" : "")}</p>
+      <p>${ROTULO_SITUACAO_TRILHA[f.situacao] || escaparHtmlEbd(f.situacao)} · ${escaparHtmlEbd(f.obrigatoriosConcluidos)}/${escaparHtmlEbd(f.obrigatoriosTotal)} módulos obrigatórios${f.validoAte ? ` · válido até ${formatarDataEbd(f.validoAte)}` : (f.status === "CONCLUIDA" ? " · não vence" : "")}</p>
       ${vencimento}
       ${cert ? `<p>Certificado <code>${escaparHtmlEbd(cert.codigoVerificacao || "")}</code>${cert.revogadoEm ? " — <strong>revogado</strong>" : ""}</p>
         <button class="btn-link" onclick="imprimirCertificado(${cert.certificadoId})">🖨️ Imprimir</button>
         <button class="btn-link" onclick="baixarPdfCertificado(${cert.certificadoId}, ${f.membroId})">📄 Baixar PDF</button>
-        ${cert.codigoVerificacao ? `<button class="btn-link" onclick="copiarLinkVerificacaoAcao('${escaparHtmlEbd(cert.codigoVerificacao)}')">🔗 Copiar link de verificação</button>` : ""}` : ""}
+        ${cert.codigoVerificacao ? `<button class="btn-link" onclick="copiarLinkVerificacaoAcao(${argJs(cert.codigoVerificacao)})">🔗 Copiar link de verificação</button>` : ""}` : ""}
     </div>`;
   }).join("");
 }
@@ -14451,7 +14893,8 @@ async function carregarCatalogoRevistasEbdAcao() {
   const trimestre = document.getElementById("revFiltroTrimestre").value.trim();
   const container = document.getElementById("painelCatalogoRevistasEbd");
   const res = await fetchProtegido(`${API_BASE}/ebd-revistas/catalogo${trimestre ? `?trimestre=${encodeURIComponent(trimestre)}` : ""}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   catalogoRevistasCache = data.catalogo || [];
   container.innerHTML = catalogoRevistasCache.length
@@ -14466,14 +14909,15 @@ async function carregarPedidosTurmaEbdAcao() {
   const container = document.getElementById("painelPedidosTurmaEbd");
   if (!turmaId) { container.innerHTML = ""; mostrarToast("Informe a turma.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos?turmaId=${turmaId}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   pedidosTurmaRevistasCache = data.pedidos || [];
   container.innerHTML = pedidosTurmaRevistasCache.length
     ? `<table class="tabela-frequencia"><thead><tr><th>ID</th><th>Trimestre</th><th>Status</th><th>Pagamento</th><th>Itens</th><th>Pedido x matrícula</th><th>Valor total</th></tr></thead><tbody>
         ${pedidosTurmaRevistasCache.map(p => `<tr>
-          <td>${p.pedidoId}</td><td>${escaparHtmlEbd(p.trimestre)}</td><td>${p.status}</td><td>${p.statusPagamento}</td>
-          <td>${(p.itens || []).map(i => `${escaparHtmlEbd(i.revistaNome)} × ${i.quantidade}`).join(", ") || "-"}</td>
+          <td>${p.pedidoId}</td><td>${escaparHtmlEbd(p.trimestre)}</td><td>${escaparHtmlEbd(p.status)}</td><td>${escaparHtmlEbd(p.statusPagamento)}</td>
+          <td>${(p.itens || []).map(i => `${escaparHtmlEbd(i.revistaNome)} × ${escaparHtmlEbd(i.quantidade)}`).join(", ") || "-"}</td>
           <td>${textoComparacaoMatriculaEbd(p.comparacaoMatricula)}</td>
           <td>R$ ${Number(p.valorTotal).toFixed(2)}</td>
         </tr>`).join("")}
@@ -14485,8 +14929,8 @@ async function carregarPedidosTurmaEbdAcao() {
 // alunos + professores ativos guardada quando o pedido foi criado.
 function textoComparacaoMatriculaEbd(c) {
   if (!c) return "<span class=\"subtitle\">sem foto da matrícula</span>";
-  if (c.diferenca === 0) return `${c.totalRevistas} revista(s) = ${c.esperado} na matrícula`;
-  return `${c.totalRevistas} revista(s) para ${c.esperado} na matrícula (${c.diferenca > 0 ? "+" : ""}${c.diferenca})`;
+  if (c.diferenca === 0) return `${escaparHtmlEbd(c.totalRevistas)} revista(s) = ${escaparHtmlEbd(c.esperado)} na matrícula`;
+  return `${escaparHtmlEbd(c.totalRevistas)} revista(s) para ${escaparHtmlEbd(c.esperado)} na matrícula (${c.diferenca > 0 ? "+" : ""}${escaparHtmlEbd(c.diferenca)})`;
 }
 
 async function sugerirPedidoRevistaEbdAcao() {
@@ -14495,14 +14939,15 @@ async function sugerirPedidoRevistaEbdAcao() {
   const container = document.getElementById("painelSugestaoPedidoEbd");
   if (!turmaId || !trimestre) { mostrarToast("Informe a turma e o trimestre.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-revistas/pedidos/sugestao?turmaId=${turmaId}&trimestre=${encodeURIComponent(trimestre)}`);
-  const resposta = await res.json();
+  const resposta = await jsonDaTela(res, container, "objeto");
+  if (resposta === null) return;
   if (resposta.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(resposta.mensagem)}</p>`; return; }
   if (resposta.itens.length) document.getElementById("pedItensJson").value = JSON.stringify(resposta.itens);
   if (resposta.pedidoExistenteId) document.getElementById("pedIdParaEditarItens").value = resposta.pedidoExistenteId;
   container.innerHTML = `
-    <p class="subtitle">Matrícula real: <strong>${resposta.matriculados}</strong> aluno(s) ativo(s) e <strong>${resposta.professores}</strong>
+    <p class="subtitle">Matrícula real: <strong>${escaparHtmlEbd(resposta.matriculados)}</strong> aluno(s) ativo(s) e <strong>${escaparHtmlEbd(resposta.professores)}</strong>
       professor(es) ativo(s)${resposta.faixaEtaria ? ` — faixa etária "${escaparHtmlEbd(resposta.faixaEtaria)}"` : ""}.</p>
-    ${resposta.detalhes.length ? `<ul>${resposta.detalhes.map(d => `<li>${escaparHtmlEbd(d.nome)}: <strong>${d.quantidade}</strong> (${escaparHtmlEbd(d.base)})</li>`).join("")}</ul>` : ""}
+    ${resposta.detalhes.length ? `<ul>${resposta.detalhes.map(d => `<li>${escaparHtmlEbd(d.nome)}: <strong>${escaparHtmlEbd(d.quantidade)}</strong> (${escaparHtmlEbd(d.base)})</li>`).join("")}</ul>` : ""}
     ${resposta.avisos.map(a => `<p class="subtitle">⚠️ ${escaparHtmlEbd(a)}</p>`).join("")}
     ${resposta.pedidoExistenteId ? `<p class="subtitle">Esta turma já tem o pedido #${resposta.pedidoExistenteId} neste trimestre — use "Substituir itens".</p>` : ""}
     ${resposta.itens.length ? "<p class=\"subtitle\">Itens preenchidos acima — confira e ajuste antes de salvar.</p>" : ""}`;
@@ -14583,7 +15028,8 @@ async function carregarConsolidadoRevistasEbdAcao() {
   const trimestre = document.getElementById("pedConsolidadoTrimestre").value.trim();
   const container = document.getElementById("painelConsolidadoRevistasEbd");
   const res = await fetchProtegido(`${API_BASE}/ebd-revistas/consolidado${trimestre ? `?trimestre=${encodeURIComponent(trimestre)}` : ""}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.areas.length
     ? data.areas.map(area => `
@@ -14593,7 +15039,7 @@ async function carregarConsolidadoRevistasEbdAcao() {
             <div style="margin-left:14px; margin-bottom:8px;">
               <strong>⛪ ${escaparHtmlEbd(cong.congregacaoNome)} — R$ ${Number(cong.valorTotal).toFixed(2)}</strong>
               <ul style="margin:4px 0 0 20px;">
-                ${cong.pedidos.map(p => `<li>Turma ${escaparHtmlEbd(p.turmaNome)} (${escaparHtmlEbd(p.trimestre)}) — ${p.status} / pagamento ${p.statusPagamento} — R$ ${Number(p.valorTotal).toFixed(2)} — ${textoComparacaoMatriculaEbd(p.comparacaoMatricula)}</li>`).join("")}
+                ${cong.pedidos.map(p => `<li>Turma ${escaparHtmlEbd(p.turmaNome)} (${escaparHtmlEbd(p.trimestre)}) — ${escaparHtmlEbd(p.status)} / pagamento ${escaparHtmlEbd(p.statusPagamento)} — R$ ${Number(p.valorTotal).toFixed(2)} — ${textoComparacaoMatriculaEbd(p.comparacaoMatricula)}</li>`).join("")}
               </ul>
             </div>
           `).join("")}
@@ -14610,7 +15056,7 @@ async function carregarConsolidadoRevistasEbdAcao() {
 async function carregarOpcoesFinanceiroEbdAcao() {
   const sel = document.getElementById("finCongregacao");
   if (sel && !sel.dataset.montado) {
-    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`));
     sel.innerHTML = congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     sel.dataset.montado = "1";
   }
@@ -14652,7 +15098,8 @@ async function carregarLancamentosFinanceiroEbdAcao() {
   const container = document.getElementById("painelLancamentosFinanceiroEbd");
   if (!congregacaoId || !mes || !ano) { container.innerHTML = ""; mostrarToast("Escolha a congregação, o mês e o ano.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/lancamentos?congregacaoId=${congregacaoId}&mes=${mes}&ano=${ano}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   const lancamentos = data.lancamentos || [];
   container.innerHTML = lancamentos.length
@@ -14703,7 +15150,8 @@ async function carregarConsolidadoFinanceiroEbdAcao() {
   const container = document.getElementById("painelConsolidadoFinanceiroEbd");
   if (!congregacaoId || !mes || !ano) { container.innerHTML = ""; mostrarToast("Escolha a congregação, o mês e o ano.", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-financeiro/consolidado?congregacaoId=${congregacaoId}&mes=${mes}&ano=${ano}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = `<p class="subtitle">
       Ofertas do culto: <strong>R$ ${Number(data.totalOfertas).toFixed(2)}</strong> (${data.ofertas.length} domingo(s) lançado(s)) ·
@@ -14719,7 +15167,8 @@ async function carregarVisaoAgrupadaEbdAcao() {
   const busca = document.getElementById("ebdBuscaAgrupada") ? document.getElementById("ebdBuscaAgrupada").value.trim() : "";
   const container = document.getElementById("painelVisaoAgrupadaEbd");
   const res = await fetchProtegido(`${API_BASE}/ebd-turmas/visao-agrupada${busca ? `?busca=${encodeURIComponent(busca)}` : ""}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.areas.length
     ? data.areas.map(area => `
@@ -14729,7 +15178,7 @@ async function carregarVisaoAgrupadaEbdAcao() {
             <div style="margin-left:14px; margin-bottom:8px;">
               <strong>⛪ ${escaparHtmlEbd(cong.congregacaoNome)}</strong>
               <ul style="margin:4px 0 0 20px;">
-                ${cong.turmas.map(t => `<li>${escaparHtmlEbd(t.nome)}${t.faixaEtaria ? ` (${escaparHtmlEbd(t.faixaEtaria)})` : ""} — ${t.totalProfessores} professor(es), ${t.totalAlunos} aluno(s)</li>`).join("")}
+                ${cong.turmas.map(t => `<li>${escaparHtmlEbd(t.nome)}${t.faixaEtaria ? ` (${escaparHtmlEbd(t.faixaEtaria)})` : ""} — ${escaparHtmlEbd(t.totalProfessores)} professor(es), ${escaparHtmlEbd(t.totalAlunos)} aluno(s)</li>`).join("")}
               </ul>
             </div>
           `).join("")}
@@ -14744,10 +15193,26 @@ async function carregarVisaoAgrupadaEbdAcao() {
 function escaparHtmlEbd(texto) {
   return String(texto == null ? "" : texto).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+// Texto que vai como ARGUMENTO JS dentro de atributo de evento montado em string: onclick="f(${argJs(x)})" — SEM aspas em volta, o helper já devolve o
+// literal entre aspas. Vira string JS (JSON: aspas, barra invertida e quebra de linha escapadas) e depois passa pelo escape de HTML. Só o escape de HTML não
+// basta ali: o navegador desfaz o &#39; antes de rodar o JS e a aspa volta, fechando a string (teste permanente: api/shared/__tests__/frontEscape.test.js).
+function argJs(valor) {
+  return escaparHtmlEbd(JSON.stringify(valor == null ? "" : String(valor)));
+}
+// Endereço que vai para href/src: só http(s), blob:, mailto:, tel:, imagem em data: e caminho relativo; "javascript:" e qualquer outro esquema viram "#".
+// O escape de HTML sozinho não barra o esquema (um link "javascript:..." continua clicável depois de escapado). Espaço e caractere de controle no meio do
+// esquema ("java\tscript:") o navegador ignora — por isso a conferência é feita sem eles.
+function urlSegura(url) {
+  const u = String(url == null ? "" : url).trim();
+  const semControle = u.replace(/[\u0000- \u007f]/g, "");
+  const esquema = /^([a-z][a-z0-9+.\-]*):/i.exec(semControle);
+  if (esquema && !/^(https?|blob|mailto|tel)$/i.test(esquema[1]) && !/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(semControle)) return "#";
+  return escaparHtmlEbd(u);
+}
 function formatarDataEbd(valor) {
   if (!valor) return "-";
   const [a, m, d] = String(valor).slice(0, 10).split("-");
-  return `${d}/${m}/${a}`;
+  return `${escaparHtmlEbd(d)}/${escaparHtmlEbd(m)}/${escaparHtmlEbd(a)}`;
 }
 function formatarMoedaEbd(valor) {
   return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -14760,7 +15225,7 @@ function trimestreAtualEbd() {
 async function carregarOpcoesCadernetaEbdAcao() {
   const sel = document.getElementById("cadRelCongregacao");
   if (sel && !sel.dataset.montado) {
-    const congs = await (await fetchProtegido(`${API_BASE}/catalogos/congregacoes`)).json();
+    const congs = await listaDaApi(fetchProtegido(`${API_BASE}/catalogos/congregacoes`));
     sel.innerHTML = `<option value="">Todas as congregações do meu escopo</option>`
       + congs.filter(c => c.ativa !== false).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
     sel.dataset.montado = "1";
@@ -14770,8 +15235,8 @@ async function carregarOpcoesCadernetaEbdAcao() {
 }
 
 function textoRevistaVigenteEbd(rv) {
-  if (!rv || !rv.origem) return `<span class="subtitle">sem revista definida${rv ? ` (${rv.trimestre})` : ""}</span>`;
-  const nomes = rv.revistas.map(r => `${escaparHtmlEbd(r.nome)}${r.quantidade ? ` ×${r.quantidade}` : ""}`).join(", ");
+  if (!rv || !rv.origem) return `<span class="subtitle">sem revista definida${rv ? ` (${escaparHtmlEbd(rv.trimestre)})` : ""}</span>`;
+  const nomes = rv.revistas.map(r => `${escaparHtmlEbd(r.nome)}${r.quantidade ? ` ×${escaparHtmlEbd(r.quantidade)}` : ""}`).join(", ");
   return rv.origem === "PEDIDO" ? nomes : `<span class="subtitle">sugestão do catálogo:</span> ${nomes}`;
 }
 
@@ -14782,23 +15247,23 @@ function renderLinhasCadernetaEbd(linhas, licaoId, totais) {
       ? l.professores.map(p => `${escaparHtmlEbd(p.nome)}${p.principal ? " ★" : ""}`).join(", ")
       : "<span class='subtitle'>sem professor</span>";
     const campos = importada
-      ? `<td>${l.biblias ?? "-"}</td><td>${l.revistas ?? "-"}</td><td><span class="subtitle">importada · oferta ${formatarMoedaEbd(l.ofertaImportada)}</span></td>`
-      : `<td><input type="number" min="0" id="cadBiblias_${l.turmaId}" value="${l.biblias ?? ""}" style="width:70px;" /></td>
-         <td><input type="number" min="0" id="cadRevistas_${l.turmaId}" value="${l.revistas ?? ""}" style="width:70px;" /></td>
+      ? `<td>${escaparHtmlEbd(l.biblias ?? "-")}</td><td>${escaparHtmlEbd(l.revistas ?? "-")}</td><td><span class="subtitle">importada · oferta ${formatarMoedaEbd(l.ofertaImportada)}</span></td>`
+      : `<td><input type="number" min="0" id="cadBiblias_${l.turmaId}" value="${escaparHtmlEbd(l.biblias ?? "")}" style="width:70px;" /></td>
+         <td><input type="number" min="0" id="cadRevistas_${l.turmaId}" value="${escaparHtmlEbd(l.revistas ?? "")}" style="width:70px;" /></td>
          <td><input type="text" id="cadObs_${l.turmaId}" value="${escaparHtmlEbd(l.observacao || "")}" placeholder="Observação" maxlength="500" style="width:130px;" />
              <button class="btn-link" onclick="salvarCadernetaEbdAcao(${licaoId}, ${l.turmaId})">💾 Salvar</button></td>`;
     return `<tr style="${l.lancada ? "" : "opacity:.6;"}">
       <td><strong>${escaparHtmlEbd(l.turmaNome)}</strong>${l.faixaEtaria ? `<br><span class="subtitle">${escaparHtmlEbd(l.faixaEtaria)}</span>` : ""}</td>
       <td>${professores}</td><td>${textoRevistaVigenteEbd(l.revistaVigente)}</td>
-      <td>${l.matriculados}</td><td>${l.presentes}</td><td>${l.ausentes}</td><td>${l.visitantes}</td><td>${l.percentualPresenca}%</td>
+      <td>${escaparHtmlEbd(l.matriculados)}</td><td>${escaparHtmlEbd(l.presentes)}</td><td>${escaparHtmlEbd(l.ausentes)}</td><td>${escaparHtmlEbd(l.visitantes)}</td><td>${escaparHtmlEbd(l.percentualPresenca)}%</td>
       ${campos}
       <td>${l.alertas.length ? l.alertas.map(a => `<div class="subtitle">⚠️ ${escaparHtmlEbd(a)}</div>`).join("") : "✅"}</td>
     </tr>`;
   }).join("");
   const rodape = totais
-    ? `<tr style="font-weight:600;"><td colspan="3">Total (${totais.turmasLancadas} classe(s) com lançamento${totais.turmasSemLancamento ? `, ${totais.turmasSemLancamento} sem` : ""})</td>
-        <td>${totais.matriculados}</td><td>${totais.presentes}</td><td>${totais.ausentes}</td><td>${totais.visitantes}</td><td>${totais.percentualPresenca}%</td>
-        <td>${totais.biblias}</td><td>${totais.revistas}</td><td></td><td></td></tr>`
+    ? `<tr style="font-weight:600;"><td colspan="3">Total (${escaparHtmlEbd(totais.turmasLancadas)} classe(s) com lançamento${totais.turmasSemLancamento ? `, ${escaparHtmlEbd(totais.turmasSemLancamento)} sem` : ""})</td>
+        <td>${escaparHtmlEbd(totais.matriculados)}</td><td>${escaparHtmlEbd(totais.presentes)}</td><td>${escaparHtmlEbd(totais.ausentes)}</td><td>${escaparHtmlEbd(totais.visitantes)}</td><td>${escaparHtmlEbd(totais.percentualPresenca)}%</td>
+        <td>${escaparHtmlEbd(totais.biblias)}</td><td>${escaparHtmlEbd(totais.revistas)}</td><td></td><td></td></tr>`
     : "";
   return `<div style="overflow-x:auto;"><table class="tabela-frequencia"><thead><tr>
       <th>Classe</th><th>Professor(es)</th><th>Revista do trimestre</th><th>Matric.</th><th>Pres.</th><th>Aus.</th><th>Vis.</th><th>Freq.</th>
@@ -14806,7 +15271,7 @@ function renderLinhasCadernetaEbd(linhas, licaoId, totais) {
 }
 
 function cabecalhoLicaoCadernetaEbd(licao, parcial) {
-  return `<p class="subtitle">Lição #${licao.licaoId} — ${formatarDataEbd(licao.data)} — ${licao.status}${parcial ? " · <strong>números provisórios (lição aberta)</strong>" : ""}</p>`;
+  return `<p class="subtitle">Lição #${licao.licaoId} — ${formatarDataEbd(licao.data)} — ${escaparHtmlEbd(licao.status)}${parcial ? " · <strong>números provisórios (lição aberta)</strong>" : ""}</p>`;
 }
 
 async function carregarCadernetaEbdAcao() {
@@ -14818,7 +15283,8 @@ async function carregarCadernetaEbdAcao() {
     ? `${API_BASE}/ebd-caderneta/caderneta/turma?licaoId=${licaoId}&turmaId=${turmaId}`
     : `${API_BASE}/ebd-caderneta/caderneta?licaoId=${licaoId}`;
   const res = await fetchProtegido(url);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
 
   if (turmaId) {
@@ -14832,7 +15298,7 @@ async function carregarCadernetaEbdAcao() {
     ? "oferta do dia ainda não registrada (Financeiro, v6.7)"
     : `oferta do dia ${formatarMoedaEbd(cad.ofertaRegistrada)}`;
   container.innerHTML = cabecalhoLicaoCadernetaEbd(cad.licao, cad.parcial)
-    + `<p><strong>${cad.trimestre}</strong> · ${oferta} · <strong>total ${formatarMoedaEbd(cad.ofertaTotal)}</strong></p>`
+    + `<p><strong>${escaparHtmlEbd(cad.trimestre)}</strong> · ${oferta} · <strong>total ${formatarMoedaEbd(cad.ofertaTotal)}</strong></p>`
     + (cad.linhas.length ? renderLinhasCadernetaEbd(cad.linhas, licaoId, cad.totais) : "<p class='subtitle'>Nenhuma turma cadastrada nesta congregação.</p>");
 }
 
@@ -14853,8 +15319,8 @@ async function salvarCadernetaEbdAcao(licaoId, turmaId) {
 
 // -- Relatório do Superintendente / fechamento trimestral --
 function linhaTotaisRelatorioEbd(rotulo, t, destaque) {
-  return `<tr${destaque ? ' style="font-weight:600;"' : ""}><td>${rotulo}</td><td>${t.domingos}</td><td>${t.matriculadosMedio}</td><td>${t.mediaPresentes}</td>
-    <td>${t.presentes}</td><td>${t.ausentes}</td><td>${t.visitantes}</td><td>${t.biblias}</td><td>${t.revistas}</td><td>${t.percentualPresenca}%</td><td>${formatarMoedaEbd(t.oferta)}</td></tr>`;
+  return `<tr${destaque ? ' style="font-weight:600;"' : ""}><td>${rotulo}</td><td>${escaparHtmlEbd(t.domingos)}</td><td>${escaparHtmlEbd(t.matriculadosMedio)}</td><td>${escaparHtmlEbd(t.mediaPresentes)}</td>
+    <td>${escaparHtmlEbd(t.presentes)}</td><td>${escaparHtmlEbd(t.ausentes)}</td><td>${escaparHtmlEbd(t.visitantes)}</td><td>${escaparHtmlEbd(t.biblias)}</td><td>${escaparHtmlEbd(t.revistas)}</td><td>${escaparHtmlEbd(t.percentualPresenca)}%</td><td>${formatarMoedaEbd(t.oferta)}</td></tr>`;
 }
 
 function tabelaRelatorioEbd(linhasHtml) {
@@ -14864,8 +15330,8 @@ function tabelaRelatorioEbd(linhasHtml) {
 }
 
 function renderRelatorioTrimestreEbd(rel) {
-  if (!rel.areas.length) return `<p class="subtitle">Nenhuma chamada ou caderneta lançada em ${rel.trimestre} dentro do seu escopo.</p>`;
-  const cabecalho = `<p><strong>${rel.trimestre}</strong> — ${formatarDataEbd(rel.periodo.inicio)} a ${formatarDataEbd(rel.periodo.fim)}
+  if (!rel.areas.length) return `<p class="subtitle">Nenhuma chamada ou caderneta lançada em ${escaparHtmlEbd(rel.trimestre)} dentro do seu escopo.</p>`;
+  const cabecalho = `<p><strong>${escaparHtmlEbd(rel.trimestre)}</strong> — ${formatarDataEbd(rel.periodo.inicio)} a ${formatarDataEbd(rel.periodo.fim)}
     ${rel.parcial ? " · ⏳ trimestre em andamento (parcial)" : " · trimestre encerrado"}</p>`;
   const areas = rel.areas.map(area => `
     <div class="cartao-area-ebd" style="margin-bottom:14px;">
@@ -14874,11 +15340,11 @@ function renderRelatorioTrimestreEbd(rel) {
       ${area.congregacoes.map(cong => {
         const f = cong.fechamento;
         const situacao = cong.fonte === "FECHAMENTO"
-          ? `🔒 fechado (${f.origem === "AUTOMATICO" ? "automático" : "manual"}, versão ${f.versao}, ${formatarDataEbd(f.refeitoEm || f.fechadoEm)})${f.licoesAbertas > 0 ? ` ⚠️ ${f.licoesAbertas} lição(ões) estavam abertas` : ""}`
+          ? `🔒 fechado (${f.origem === "AUTOMATICO" ? "automático" : "manual"}, versão ${escaparHtmlEbd(f.versao)}, ${formatarDataEbd(f.refeitoEm || f.fechadoEm)})${f.licoesAbertas > 0 ? ` ⚠️ ${escaparHtmlEbd(f.licoesAbertas)} lição(ões) estavam abertas` : ""}`
           : "⏳ ao vivo";
         const botao = cong.fonte === "FECHAMENTO"
-          ? `<button class="btn-link" onclick="fecharTrimestreEbdAcao(${cong.congregacaoId}, '${rel.trimestre}', true)">🔄 Refazer fechamento</button>`
-          : `<button class="btn-link" onclick="fecharTrimestreEbdAcao(${cong.congregacaoId}, '${rel.trimestre}', false)">🔒 Fechar trimestre</button>`;
+          ? `<button class="btn-link" onclick="fecharTrimestreEbdAcao(${cong.congregacaoId}, ${argJs(rel.trimestre)}, true)">🔄 Refazer fechamento</button>`
+          : `<button class="btn-link" onclick="fecharTrimestreEbdAcao(${cong.congregacaoId}, ${argJs(rel.trimestre)}, false)">🔒 Fechar trimestre</button>`;
         return `<details open style="margin:8px 0 8px 14px;">
           <summary><strong>⛪ ${escaparHtmlEbd(cong.congregacaoNome)}</strong> — ${situacao} ${botao}</summary>
           ${tabelaRelatorioEbd(cong.turmas.map(t => linhaTotaisRelatorioEbd(escaparHtmlEbd(t.turmaNome), t.totais, false)).join("") + linhaTotaisRelatorioEbd("Total da congregação", cong.totais, true))}
@@ -14894,7 +15360,8 @@ async function carregarRelatorioTrimestreEbdAcao() {
   const container = document.getElementById("painelRelatorioTrimestreEbd");
   if (!/^\d{4}-T[1-4]$/.test(trimestre)) { mostrarToast("Informe o trimestre no formato AAAA-T1 a AAAA-T4 (ex: 2026-T3).", "erro"); return; }
   const res = await fetchProtegido(`${API_BASE}/ebd-caderneta/relatorio?trimestre=${trimestre}${congregacaoId ? `&congregacaoId=${congregacaoId}` : ""}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = renderRelatorioTrimestreEbd(data.relatorio);
 }
@@ -14946,8 +15413,8 @@ async function importarCadernetasEbdAcao(simular) {
     const situacao = i.valido
       ? `✅ ${i.acao === "ATUALIZAR" ? "substitui importada" : "nova"}${i.avisos.map(a => `<div class="subtitle">⚠️ ${escaparHtmlEbd(a)}</div>`).join("")}`
       : i.erros.map(e => `<div style="color:var(--cor-erro);">❌ ${escaparHtmlEbd(e)}</div>`).join("") + i.avisos.map(a => `<div class="subtitle">⚠️ ${escaparHtmlEbd(a)}</div>`).join("");
-    return `<tr><td>${i.numero ?? "-"}</td><td>${escaparHtmlEbd(l.congregacao || "-")}</td><td>${formatarDataEbd(l.data)}</td><td>${escaparHtmlEbd(l.turma || "-")}</td>
-      <td>${l.matriculados ?? "-"}/${l.presentes ?? "-"}/${l.ausentes ?? "-"}/${l.visitantes ?? "-"}</td><td>${situacao}</td></tr>`;
+    return `<tr><td>${escaparHtmlEbd(i.numero ?? "-")}</td><td>${escaparHtmlEbd(l.congregacao || "-")}</td><td>${formatarDataEbd(l.data)}</td><td>${escaparHtmlEbd(l.turma || "-")}</td>
+      <td>${escaparHtmlEbd(l.matriculados ?? "-")}/${escaparHtmlEbd(l.presentes ?? "-")}/${escaparHtmlEbd(l.ausentes ?? "-")}/${escaparHtmlEbd(l.visitantes ?? "-")}</td><td>${situacao}</td></tr>`;
   }).join("");
   container.innerHTML = resumo + `<div style="overflow-x:auto;"><table class="tabela-frequencia"><thead><tr>
     <th>Linha</th><th>Igreja</th><th>Domingo</th><th>Classe</th><th>Matric./Pres./Aus./Vis.</th><th>Situação</th></tr></thead><tbody>${linhas}</tbody></table></div>`;
@@ -14964,17 +15431,18 @@ async function importarCadernetasEbdAcao(simular) {
 async function carregarMinhasConquistasAcao() {
   const container = document.getElementById("resultadoMinhasConquistas");
   const res = await fetchProtegido(`${API_BASE}/conquistas/painel`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = `
-    <p><strong>Pontuação atual:</strong> ${data.score}</p>
+    <p><strong>Pontuação atual:</strong> ${escaparHtmlEbd(data.score)}</p>
     <div style="display:flex; flex-wrap:wrap; gap:10px;">
       ${data.catalogo.map(c => `
         <div class="cartao-area-ebd" style="min-width:200px; opacity:${c.desbloqueada ? "1" : "0.5"};">
           <div style="font-size:1.6em;">${escaparHtmlEbd(c.icone || "🏆")}</div>
           <strong>${escaparHtmlEbd(c.nome)}</strong>
           <p class="subtitle">${escaparHtmlEbd(c.descricao || "")}</p>
-          <p>${c.desbloqueada ? "✅ Desbloqueada" : "🔒 Não desbloqueada"} · +${c.pontosBonus} pts</p>
+          <p>${c.desbloqueada ? "✅ Desbloqueada" : "🔒 Não desbloqueada"} · +${escaparHtmlEbd(c.pontosBonus)} pts</p>
         </div>
       `).join("")}
     </div>
@@ -14986,7 +15454,8 @@ async function carregarRankingConquistasAcao() {
   const container = document.getElementById("resultadoRankingConquistas");
   // O servidor decide o recorte: para o membro, a turma (ou congregação) dele — nome abreviado, sem matrícula, os 20 primeiros e a posição dele; quem tem permissão de gestão vê o escopo que alcança.
   const res = await fetchProtegido(`${API_BASE}/conquistas/ranking`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (!data || data.sucesso === false || !Array.isArray(data.ranking)) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd((data && data.mensagem) || "Não foi possível carregar o ranking.")}</p>`; return; }
   const posicaoDe = (r, i) => (r.posicao != null ? Number(r.posicao) : i + 1);
   const rotuloEscopo = data.escopo ? `<p class="subtitle">Ranking da sua ${escaparHtmlEbd(data.escopo === "TURMA" ? "turma" : data.escopo === "CONGREGACAO" ? "congregação" : String(data.escopo).toLowerCase())}.</p>` : "";
@@ -15003,7 +15472,8 @@ async function carregarRankingConquistasAcao() {
 async function carregarTiposEventoConquistaAcao() {
   const container = document.getElementById("painelTiposEventoConquista");
   const res = await fetchProtegido(`${API_BASE}/conquistas/tipos-evento`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.tipos.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Descrição</th><th>Módulo</th></tr></thead><tbody>
@@ -15034,13 +15504,14 @@ async function criarTipoEventoConquistaAcao() {
 async function carregarCatalogoConquistaAdminAcao() {
   const container = document.getElementById("painelCatalogoConquista");
   const res = await fetchProtegido(`${API_BASE}/conquistas/catalogo?incluirInativas=true`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.catalogo.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Oculta</th><th>Pré-requisito</th><th>Bônus</th><th>Regras</th></tr></thead><tbody>
         ${data.catalogo.map(c => `<tr>
           <td>${c.conquistaId}</td><td>${escaparHtmlEbd(c.icone || "")} ${escaparHtmlEbd(c.nome)}</td><td>${c.oculta ? "Sim" : "Não"}</td>
-          <td>${c.preRequisitoConquistaId || "-"}</td><td>${c.pontosBonus}</td>
+          <td>${c.preRequisitoConquistaId || "-"}</td><td>${escaparHtmlEbd(c.pontosBonus)}</td>
           <td>${c.regras.map(r => `${escaparHtmlEbd(r.tipoRegra)} (${escaparHtmlEbd(r.tipoEvento)})`).join(", ") || "-"}</td>
         </tr>`).join("")}
       </tbody></table>`
@@ -15101,11 +15572,12 @@ async function carregarRankingConquistaAdminAcao() {
   const container = document.getElementById("painelRankingConquistaAdmin");
   const qs = `escopoTipo=${escopoTipo}${escopoId ? `&escopoId=${escopoId}` : ""}`;
   const res = await fetchProtegido(`${API_BASE}/conquistas/ranking?${qs}`);
-  const data = await res.json();
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.ranking.length
     ? `<table class="tabela-frequencia"><thead><tr><th>#</th><th>Nome</th><th>Pontuação</th><th>Conquistas</th></tr></thead><tbody>
-        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${escaparHtmlEbd(r.nome)}</td><td>${r.score}</td><td>${r.totalConquistas}</td></tr>`).join("")}
+        ${data.ranking.map((r, i) => `<tr><td>${i + 1}</td><td>${escaparHtmlEbd(r.nome)}</td><td>${escaparHtmlEbd(r.score)}</td><td>${escaparHtmlEbd(r.totalConquistas)}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Ninguém no ranking neste escopo ainda.</p>";
 }
@@ -15144,7 +15616,8 @@ let pscAcaoEmCurso = false;          // trava duplo clique nas transições de e
 let pscDonoDaTela = null;            // matrícula de quem a tela foi montada (não vaza dado ao trocar de login)
 
 function pscPodeGestao() { return authPermissoes.includes("psc_gestao"); }
-function pscPodeHomologar() { return authPermissoes.includes("psc_homologacao"); }
+// v7.6 — além da permissão, o nível geral: homologar e decidir reclassificação valem para a igreja inteira (o servidor recusa os demais com a mesma regra).
+function pscPodeHomologar() { return authPermissoes.includes("psc_homologacao") && authGeral; }
 
 function pscDe(mapa, chave, padrao) {
   return Object.prototype.hasOwnProperty.call(mapa, chave) ? mapa[chave] : padrao;
@@ -15210,7 +15683,7 @@ function pscSeloPrazo(prazo) {
 function pscLinkEvidencia(url) {
   const u = String(url == null ? "" : url).trim();
   if (!u) return "";
-  if (/^https:\/\/[^\s]/i.test(u)) return `<a href="${escaparHtmlEbd(u)}" target="_blank" rel="noopener noreferrer">🔗 ver evidência</a>`;
+  if (/^https:\/\/[^\s]/i.test(u)) return `<a href="${urlSegura(u)}" target="_blank" rel="noopener noreferrer">🔗 ver evidência</a>`;
   return `<span class="psc-alerta">link de evidência recusado (não é https://)</span>`;
 }
 
@@ -16168,8 +16641,8 @@ function calSeloNivel(nivel, rotulo) {
   return `<span class="cal-selo cal-selo-nivel cal-n${n}" title="${escaparHtmlEbd(`Nível ${n} — ${CAL_NIVEIS[n]}`)}">Nível ${n} · ${escaparHtmlEbd(rotulo || CAL_NIVEIS[n])}</span>`;
 }
 function calSeloStatus(status) {
-  const [rotulo, classe] = calDe(CAL_STATUS, status, null) || [escaparHtmlEbd(status || "—"), "cal-st-cancelado"];
-  return `<span class="cal-selo ${classe}">${rotulo}</span>`;
+  const [rotulo, classe] = calDe(CAL_STATUS, status, null) || [status || "—", "cal-st-cancelado"];
+  return `<span class="cal-selo ${escaparHtmlEbd(classe)}">${escaparHtmlEbd(rotulo)}</span>`;
 }
 function calHtmlLegendaNiveis() {
   return [1, 2, 3, 4, 5].map(n => `<span class="cal-legenda-item cal-n${n}"><span class="cal-bolinha"></span>Nível ${n} · ${CAL_NIVEIS[n]}</span>`).join("")
@@ -16419,7 +16892,7 @@ function calRenderGradeMes(indice) {
   if (!grade) return;
   const { ano, mes } = calMes;
   const hoje = calHojeBrasilia();
-  const cabecalho = CAL_DIAS_SEMANA.map((nome, i) => `<div class="cal-cab" title="${nome}">${"DSTQQSS"[i]}</div>`).join("");
+  const cabecalho = CAL_DIAS_SEMANA.map((nome, i) => `<div class="cal-cab" title="${nome}">${escaparHtmlEbd("DSTQQSS"[i])}</div>`).join("");
   let celulas = "";
   for (let i = 0, vazias = calDiaDaSemana(calIso(ano, mes, 1)); i < vazias; i++) celulas += `<div class="cal-dia cal-dia-vazio" aria-hidden="true"></div>`;
   for (let dia = 1, total = calUltimoDiaDoMes(ano, mes); dia <= total; dia++) {
@@ -16493,7 +16966,7 @@ function calRenderItemOficial(item, opcoes) {
     clicavel && item.publicoNoSite && status === "HOMOLOGADO" ? `<span class="cal-selo" title="Este evento aparece no site">🌐 no site</span>` : ""
   ].filter(Boolean).join(" ");
   const classeNivel = CAL_NIVEIS[nivel] ? `cal-n${nivel}` : "";
-  const classeStatus = `cal-status-${String(status).toLowerCase().replace(/[^a-z]/g, "")}`;
+  const classeStatus = `cal-status-${escaparHtmlEbd(String(status).toLowerCase().replace(/[^a-z]/g, ""))}`;
   const detalhes = clicavel && Number(item.eventoId)
     ? `<div><button type="button" class="btn-link" onclick="calAbrirEventoAcao(${Number(item.eventoId)})">🔎 Ver detalhes</button></div>` : "";
   return `<div class="cal-item cal-item-oficial ${classeNivel} ${classeStatus}">
@@ -17172,9 +17645,9 @@ function calRenderAnos() {
 
 function calLinhaAno(a) {
   const ano = Number(a.ano);
-  const [rotuloSituacao, classeSituacao] = calDe(CAL_ROTULO_ANO, a.status, null) || [escaparHtmlEbd(a.status || "—"), "cal-st-cancelado"];
+  const [rotuloSituacao, classeSituacao] = calDe(CAL_ROTULO_ANO, a.status, null) || [a.status || "—", "cal-st-cancelado"];
   const contagem = Object.keys(CAL_STATUS_CURTO).filter(s => Number(a.eventos && a.eventos[s]) > 0)
-    .map(s => `<span class="cal-selo ${CAL_STATUS[s][1]}">${CAL_STATUS_CURTO[s]}: ${Number(a.eventos[s])}</span>`).join(" ");
+    .map(s => `<span class="cal-selo ${escaparHtmlEbd(CAL_STATUS[s][1])}">${CAL_STATUS_CURTO[s]}: ${Number(a.eventos[s])}</span>`).join(" ");
   const datas = [
     a.consolidadoEm ? `Consolidado em ${escaparHtmlEbd(calData(a.consolidadoEm))}` : "",
     a.homologadoEm ? `Homologado em ${escaparHtmlEbd(calData(a.homologadoEm))}${a.ataReferencia ? ` — ata: ${escaparHtmlEbd(a.ataReferencia)}` : ""}` : ""
@@ -17190,7 +17663,7 @@ function calLinhaAno(a) {
   }
   return `<tr>
     <td><strong>${ano}</strong></td>
-    <td><span class="cal-selo ${classeSituacao}">${rotuloSituacao}</span></td>
+    <td><span class="cal-selo ${escaparHtmlEbd(classeSituacao)}">${escaparHtmlEbd(rotuloSituacao)}</span></td>
     <td>${escaparHtmlEbd(calData(a.prazoPropostas))}<br />${a.prazoVencido ? `<span class="cal-selo cal-st-indeferido" title="Propostas novas são decididas na hora e, se não couberem, indeferidas sem recurso">prazo vencido</span>` : `<span class="cal-selo cal-st-homologado">no prazo</span>`}</td>
     <td>${contagem || "—"}</td>
     <td>${a.cicloGeradoEm ? `✅ gerado em ${escaparHtmlEbd(calData(a.cicloGeradoEm))}` : `<span class="psc-alerta">não gerado</span>`}</td>
@@ -17624,10 +18097,10 @@ function calRenderPresenca(data) {
       ? `<table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Situação</th><th>Justificativa</th><th>Registro</th><th>Ações</th></tr></thead><tbody>
         ${linhas.map(l => {
     const id = Number(l.congregacaoId);
-    const [rotulo, classe] = calDe(CAL_ROTULO_PRESENCA, l.situacao, null) || [escaparHtmlEbd(l.situacao || "—"), "cal-st-cancelado"];
+    const [rotulo, classe] = calDe(CAL_ROTULO_PRESENCA, l.situacao, null) || [l.situacao || "—", "cal-st-cancelado"];
     return `<tr>
           <td><strong>${escaparHtmlEbd(l.congregacaoNome)}</strong></td>
-          <td><span class="cal-selo ${classe}">${rotulo}</span></td>
+          <td><span class="cal-selo ${escaparHtmlEbd(classe)}">${escaparHtmlEbd(rotulo)}</span></td>
           <td>${l.justificativa ? escaparHtmlEbd(l.justificativa) : "—"}</td>
           <td>${l.registradoEm ? `${escaparHtmlEbd(calDataHora(l.registradoEm))}${l.registradoPorNome ? `<br /><span class="psc-legenda">por ${escaparHtmlEbd(l.registradoPorNome)}</span>` : ""}` : "—"}</td>
           <td><button type="button" class="btn-link btn-link-sucesso" onclick="calMarcarPresencaAcao(${id}, 'PRESENTE')">✅ Presente</button>
@@ -17798,7 +18271,7 @@ function cnlNumero(valor) { const n = Number(valor); return Number.isFinite(n) ?
 function cnlLinkHttps(url, rotulo) {
   const u = String(url == null ? "" : url).trim();
   if (!u) return "";
-  if (/^https:\/\/[^\s]/i.test(u)) return `<a href="${escaparHtmlEbd(u)}" target="_blank" rel="noopener noreferrer">${rotulo}</a>`;
+  if (/^https:\/\/[^\s]/i.test(u)) return `<a href="${urlSegura(u)}" target="_blank" rel="noopener noreferrer">${rotulo}</a>`;
   return `<span class="psc-alerta">link recusado (não é https://)</span>`;
 }
 
@@ -18552,9 +19025,9 @@ function cnlRenderCartaoOcorrencia(o, ctxBruto) {
   const fase = String(o.fase || o.status || "").toLowerCase().replace(/[^a-z_]/g, "");
   const [rotuloGravidade, classeGravidade] = cnlDe(CNL_GRAVIDADE, o.gravidade, null) || ["", "cal-st-cancelado"];
   const quem = ctx === "G" && o.relatadaPorNome ? ` · avisou: ${escaparHtmlEbd(o.relatadaPorNome)}` : "";
-  return `<div class="cal-cartao cartao-area-ebd cnl-oc cnl-oc-${fase}">
+  return `<div class="cal-cartao cartao-area-ebd cnl-oc cnl-oc-${escaparHtmlEbd(fase)}">
     <div class="cnl-oc-topo">${cnlHtmlFaseOcorrencia(o)}</div>
-    <h5>${escaparHtmlEbd(o.rotuloCategoria || o.categoria)} ${rotuloGravidade ? `<span class="cal-selo ${classeGravidade}">${rotuloGravidade}</span>` : ""}</h5>
+    <h5>${escaparHtmlEbd(o.rotuloCategoria || o.categoria)} ${rotuloGravidade ? `<span class="cal-selo ${escaparHtmlEbd(classeGravidade)}">${escaparHtmlEbd(rotuloGravidade)}</span>` : ""}</h5>
     <p class="psc-legenda" style="margin:2px 0;">Canal: <strong>${escaparHtmlEbd(o.canalNome || "")}</strong> · aviso em ${escaparHtmlEbd(calDataHora(o.relatadaEm))} · prazo até ${escaparHtmlEbd(calDataHora(o.prazoRemocaoEm))}${quem}</p>
     <p style="margin:6px 0;">${escaparHtmlEbd(o.descricao)}</p>
     <div><button type="button" class="btn-link" onclick="cnlAbrirOcorrenciaAcao(${id}, '${ctx}')">🔎 Abrir</button></div>
@@ -18668,9 +19141,9 @@ function cnlRenderDetalheOcorrencia(data, ctx) {
       <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlDeclararImprocedenteAcao('${ctx}')">🚫 Declarar improcedente</button></div>
     </div>` : "";
 
-  return `<div class="cal-cartao cartao-area-ebd cnl-oc cnl-oc-${String(o.fase || "").toLowerCase().replace(/[^a-z_]/g, "")}">
+  return `<div class="cal-cartao cartao-area-ebd cnl-oc cnl-oc-${escaparHtmlEbd(String(o.fase || "").toLowerCase().replace(/[^a-z_]/g, ""))}">
     <div class="cnl-oc-topo">${cnlHtmlFaseOcorrencia(o)}</div>
-    <h4>${escaparHtmlEbd(o.rotuloCategoria || o.categoria)} ${rotuloGravidade ? `<span class="cal-selo ${classeGravidade}">${rotuloGravidade}</span>` : ""} <span class="psc-legenda">nº ${Number(o.ocorrenciaId)}</span></h4>
+    <h4>${escaparHtmlEbd(o.rotuloCategoria || o.categoria)} ${rotuloGravidade ? `<span class="cal-selo ${escaparHtmlEbd(classeGravidade)}">${escaparHtmlEbd(rotuloGravidade)}</span>` : ""} <span class="psc-legenda">nº ${Number(o.ocorrenciaId)}</span></h4>
     ${o.fase === "VENCIDA" ? `<p class="cnl-aviso-vencida"><strong>Prazo de 24 horas vencido: a Igreja está corresponsável.</strong> Remova o conteúdo e registre a prova agora.</p>` : ""}
     <dl class="cal-dl">${campos}</dl>
     ${orientacao}${redirecionamento}${sugestaoAdvertencia}
@@ -19611,7 +20084,7 @@ function evtRenderDossie(data, ctx) {
     cnlCampo("Situação no Calendário", calSeloStatus(e.status)),
     cnlCampo("Seus papéis neste evento", papeis.length ? escaparHtmlEbd(papeis.join(", ")) : "<span class='psc-legenda'>nenhum (você vê pela Secretaria, pelo Conselho de Ética ou pela Presidência)</span>"),
     cnlCampo("Página do evento no site", link
-      ? `<a href="${escaparHtmlEbd(link)}" target="_blank" rel="noopener noreferrer">🌐 abrir no site</a> <span class="psc-legenda">(inscrição, lista de espera, check-in e certificado ficam lá)</span>`
+      ? `<a href="${urlSegura(link)}" target="_blank" rel="noopener noreferrer">🌐 abrir no site</a> <span class="psc-legenda">(inscrição, lista de espera, check-in e certificado ficam lá)</span>`
       : "<span class='psc-legenda'>este evento não tem página no site</span>")
   ].join("");
   return `<div class="cal-cartao cartao-area-ebd evt-dossie${e.congresso ? " evt-congresso" : ""}">
@@ -19778,7 +20251,7 @@ function evtRenderConvidado(c, a, ctx) {
     botoes.push(`<button type="button" class="btn-link btn-link-perigo" onclick="evtAbrirCancelarConvidadoAcao(${id}, '${ctx}')">❌ Cancelar…</button>`);
   }
   const [rotuloStatus, classeStatus] = evtDe(EVT_STATUS_CONVIDADO, c.status, null) || [escaparHtmlEbd(c.status || "—"), "cal-st-cancelado"];
-  return `<div class="cal-cartao cartao-area-ebd evt-convidado evt-conv-${String(c.status || "").toLowerCase().replace(/[^a-z_]/g, "")}">
+  return `<div class="cal-cartao cartao-area-ebd evt-convidado evt-conv-${escaparHtmlEbd(String(c.status || "").toLowerCase().replace(/[^a-z_]/g, ""))}">
     <h5>${escaparHtmlEbd(c.nome)} <span class="cal-selo">${escaparHtmlEbd(c.rotuloTipo || c.tipo || "")}</span>
       <span class="cal-selo ${classeStatus}" title="${escaparHtmlEbd(c.rotuloStatus || "")}">${rotuloStatus}</span>
       ${c.divulgavel ? `<span class="cal-selo cal-st-homologado" title="Autorizado, oficializado e com o nome liberado pelo convidado">🌐 divulgável no site</span>` : ""}</h5>
@@ -20316,7 +20789,7 @@ async function volProtegerBotao(botao, tarefa) {
 // Data e hora de serviço de escala: o servidor guarda a hora que a congregação vive "como se fosse UTC", então sempre timeZone UTC.
 function volDataHora(valor) {
   if (!valor) return "—";
-  if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(valor)) return `${volData(valor)} ${valor.slice(11, 16)}`;
+  if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(valor)) return `${volData(valor)} ${escaparHtmlEbd(valor.slice(11, 16))}`;
   const d = new Date(valor);
   if (Number.isNaN(d.getTime())) return "—";
   return `${d.toLocaleDateString("pt-BR", { timeZone: "UTC" })} ${d.toLocaleTimeString("pt-BR", { timeZone: "UTC", hour: "2-digit", minute: "2-digit" })}`;
@@ -20376,11 +20849,11 @@ function volMontarTermo(d) {
       <details><summary>Ver o texto do Termo</summary>${texto}</details>`;
   } else if (d.podeAderirDigital === false) {
     // Menor de 18 anos (ou cadastro sem data de nascimento) não adere sozinho: o aceite digital fica fechado e a tela diz o que fazer e quem é o responsável cadastrado.
-    const resp = d.menorDeIdade
+    const resp = (d.suspensa ? `<p class="vol-aviso">${volEsc(d.mensagemSuspensa || "")}</p>` : "") + (d.menorDeIdade
       ? ((d.meusResponsaveis || []).length
         ? `<p class="subtitle">Responsável cadastrado: ${(d.meusResponsaveis || []).map(r => `${volEsc(r.nome)} (${volEsc(r.rotuloVinculo)})`).join(", ")}. Ele(a) autoriza o seu serviço no Meu Painel dele(a).</p>`
         : `<p class="subtitle">Ainda não há responsável cadastrado para você. Peça ao seu pai, mãe ou responsável legal para procurar a Secretaria com um documento.</p>`)
-      : "";
+      : "");
     corpo = `<p class="vol-aviso">${volEsc(d.motivoSemAdesaoDigital || "O aceite digital não está disponível para o seu cadastro. Procure a Secretaria.")}</p>${resp}
       <details><summary>Ver o texto do Termo</summary>${texto}</details>`;
   } else {
@@ -20405,7 +20878,7 @@ function volMontarMenoresResponsavel(d) {
     let estado;
     if (!m.aindaMenor) estado = `<p class="vol-aviso">${volEsc(m.nome)} já tem 18 anos ou mais: ele(a) mesmo(a) adere ao Termo, no Meu Painel dele(a).</p>`;
     else if (m.aderiu) estado = `<p class="vol-selo-ok">✅ Autorizado${m.dataAceite ? ` em ${volData(m.dataAceite)}` : ""}${m.rotuloForma ? ` — ${volEsc(m.rotuloForma)}` : ""}</p>`;
-    else estado = `<details><summary>Ler a autorização e autorizar</summary>
+    else estado = `${m.suspensa ? `<p class="vol-aviso">A autorização anterior está suspensa: houve um período em que ${volEsc(m.nome)} ficou sem responsável ativo. Autorize de novo para que ele(a) volte a ser escalado(a).</p>` : ""}<details><summary>Ler a autorização e autorizar</summary>
         <ol class="vol-termo-itens">${itens}</ol>
         <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="volMenorAceite${id}" onchange="volAtualizarBotaoMenorAcao(${id})" /> ${volEsc(t.aceite)}</label>
         <div class="vol-acoes"><button type="button" class="btn-confirmar" id="volMenorBotao${id}" style="width:auto;margin:0;" disabled onclick="volAutorizarMenorAcao(${id}, this)">✍️ Autorizar ${volEsc(m.nome)}</button></div>
@@ -20920,10 +21393,16 @@ async function volCarregarAdesoesAcao() {
   resumo.innerHTML = `<p class="vol-resumo"><strong>${Number(data.comTermo)} de ${Number(data.total)}</strong> voluntários já aderiram${Number(data.semTermo) ? ` — faltam ${Number(data.semTermo)}` : ""}.</p>`;
   painel.innerHTML = lista.length
     ? `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Voluntário</th><th>Equipes</th><th>Aderiu</th><th>Forma e data</th><th>Referência</th></tr></thead><tbody>
-        ${lista.map(v => `<tr><td>${volEsc(v.nome)} <span class="vol-matricula">matrícula ${Number(v.membroId)}</span>${v.menor ? ` <span class="vol-etiqueta" title="Menor de 18 anos: a adesão é dada pelo responsável legal (aceite dele no sistema) ou pela ficha assinada por ele">menor de 18</span> <span class="vol-etiqueta ${Number(v.responsaveis) ? "vol-etiqueta-ok" : "vol-etiqueta-alerta"}" title="Responsável legal cadastrado pela Secretaria">${Number(v.responsaveis) ? "responsável cadastrado" : "sem responsável cadastrado"}</span>` : ""}${v.renovar ? ` <span class="vol-etiqueta vol-etiqueta-alerta" title="A adesão foi dada pelo responsável e a pessoa já tem 18 anos: ela precisa confirmar a própria">renovar (18 anos)</span>` : ""}</td><td>${volEsc(v.equipes || "")}</td><td>${v.aderiu ? "✅" : "❌"}</td>
+        ${lista.map(v => `<tr><td>${volEsc(v.nome)} <span class="vol-matricula">matrícula ${Number(v.membroId)}</span>${v.menor ? ` <span class="vol-etiqueta" title="Menor de 18 anos: a adesão é dada pelo responsável legal (aceite dele no sistema) ou pela ficha assinada por ele">menor de 18</span> <span class="vol-etiqueta ${Number(v.responsaveis) ? "vol-etiqueta-ok" : "vol-etiqueta-alerta"}" title="Responsável legal cadastrado pela Secretaria">${Number(v.responsaveis) ? "responsável cadastrado" : "sem responsável cadastrado"}</span>` : ""}${v.renovar ? ` <span class="vol-etiqueta vol-etiqueta-alerta" title="A adesão foi dada pelo responsável e a pessoa já tem 18 anos: ela precisa confirmar a própria">renovar (18 anos)</span>` : ""}${v.suspensa ? ` <span class="vol-etiqueta vol-etiqueta-alerta" title="${volEsc(v.mensagemSuspensa || "")}">${volEsc(v.mensagemSuspensa || "adesão suspensa")}</span>` : ""}</td><td>${volEsc(v.equipes || "")}</td><td>${v.aderiu ? "✅" : "❌"}</td>
           <td>${v.aderiu ? `${volEsc(v.rotuloForma || "")} — ${volData(v.dataAceite)}` : "—"}</td><td>${volEsc(v.referencia || "")}</td></tr>`).join("")}
       </tbody></table></div>`
     : "<p class='subtitle'>Nenhum voluntário ativo nas equipes desta congregação.</p>";
+  // 03/10/2026: escalas futuras já marcadas de menor sem adesão que valha (nunca dada, ou suspensa por falta de responsável ativo) — a Secretaria decide.
+  const sinal = data.escalasFuturasSemAdesao || [];
+  if (sinal.length) painel.innerHTML += `<p class="vol-sub">⚠️ Escalas futuras de menores sem adesão que valha (eles não aceitam nem confirmam até a nova adesão)</p>
+    <div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Menor</th><th>Quando</th><th>Equipe</th><th>Situação</th><th>Motivo</th></tr></thead><tbody>
+      ${sinal.map(e => `<tr><td>${volEsc(e.nome)} <span class="vol-matricula">matrícula ${Number(e.membroId)}</span></td><td>${volEsc(e.dataHora ? new Date(e.dataHora).toLocaleString("pt-BR") : "")}</td><td>${volEsc(e.equipe || "")}</td><td>${volEsc(e.status || "")}</td><td>${volEsc(e.motivo || "")}</td></tr>`).join("")}
+    </tbody></table></div><p class="subtitle">Remova o(a) menor em “Remover da escala” ou peça ao responsável a nova adesão antes da data.</p>`;
 }
 async function volRegistrarAdesaoAcao(botao) {
   const membroId = Number(volEl("volAdesaoMatricula").value);
@@ -20988,10 +21467,10 @@ async function volVerResponsaveisAcao() {
     : `<p class="subtitle">Nenhum responsável cadastrado para ${volEsc(data.menor.nome)}.</p>`;
 }
 async function volRevogarResponsavelAcao(responsavelId) {
-  if (!(await confirmarAcao("Revogar este responsável? A adesão já registrada fica como prova; ele(a) deixa de poder autorizar. Se a família retirou a autorização, depois remova o(a) menor das escalas.", "Revogar"))) return;
+  if (!(await confirmarAcao("Revogar este responsável? Ele(a) deixa de poder autorizar. Se era o ÚLTIMO responsável ativo, a adesão dada por ele no sistema fica SUSPENSA (continua guardada como prova): o(a) menor não é mais escalado(a) nem confirma escala até um responsável ativo dar nova adesão.", "Revogar"))) return;
   const data = await volEnviar("voluntariado/responsavel-revogar", { responsavelId: Number(responsavelId) });
   if (data.sucesso === false) { volAvisarErro(data); return; }
-  mostrarToast(data.mensagem, "sucesso");
+  mostrarToast(data.mensagem, (data.escalasFuturas || []).length || data.adesaoSuspensa ? "erro" : "sucesso");
   await volVerResponsaveisAcao();
   await volCarregarAdesoesAcao();
 }

@@ -606,6 +606,9 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
       o delegado nunca precisa da identidade de outra pessoa pra agir.
       Delegar só o próprio papel (`Lideranca` verificada por dono), nunca o
       de terceiro. Tela "Segurança" em Meu Painel.
+      **Atualização (v7.6, 03/10/2026):** a delegação deixou de "somar" ao
+      escopo de todas as permissões: cada delegação vira uma concessão à parte
+      na sessão, com o escopo, o nível e o prazo do papel delegado.
 - [x] **Corrigido o achado da v4.5** (`LoginSecretaria`) — **achado real,
       pior do que o README descrevia**: não só o critério de escolha entre
       papéis múltiplos era indefinido (sem `ORDER BY`/`TOP 1`, o SQL Server
@@ -642,6 +645,11 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
       tira da lista de sessões ativas, mas o token em si só perde validade
       de verdade quando expira sozinho (12h, já curto). Entra como trabalho
       futuro dedicado, não fabricado aqui.
+      **Atualização (v7.6, 03/10/2026): resolvido.** Toda rota passa por um
+      ponto único de entrada (`api/shared/entrada.js`) que mantém em memória a
+      lista de sessões encerradas (relida do banco a cada 3 s); "Encerrar",
+      sair, trocar a senha, mudar ou remover o cargo e cancelar a delegação
+      derrubam o token em poucos segundos. Detalhes no plano da fase 7.
 - [x] Testado com `npx jest` (104 testes, incluindo 16 novos: sessão grava/
       marca a linha certa, delegação nunca aceita papel alheio/prazo
       passado, recertificação por permissão não duplica nem falta) e

@@ -16,13 +16,16 @@ const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita } = require("../shared/comissoes");
+const { comConflito } = require("../shared/violacaoUnica");
 
 // Limite de membros ativos por comissão de cadastro manual — CCJ é eleita
 // pelo Plenário com número fixo (Art. 19, I); PMO não tem número fixo no
 // Regimento, um teto prático evita uma comissão inchada sem propósito.
 const LIMITES_COMISSAO_MANUAL = { CCJ: 3, PMO: 9 };
 
-module.exports = async function (context, req) {
+// A mesma pessoa ativa duas vezes na mesma comissão também é recusada pelo banco (índice UX_ComissaoMembros_Ativo, migração 127): dois pedidos ao mesmo tempo furam a conferência
+// "já está na comissão", e o perdedor recebe o 409 em vez de um 500.
+module.exports = comConflito(async function (context, req) {
   // O Azure entrega um segmento numérico da URL (/comissoes/1) como número: sem String(), .toUpperCase() estoura e a resposta vira 500.
   const sigla = String(context.bindingData.sigla || "").toUpperCase();
   const id = context.bindingData.id;
@@ -113,4 +116,4 @@ module.exports = async function (context, req) {
   }
 
   context.res = { status: 405, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
-};
+}, (_erro, context) => `Essa pessoa já está na ${String(context.bindingData.sigla || "comissão").toUpperCase()}.`);

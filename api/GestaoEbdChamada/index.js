@@ -65,7 +65,7 @@ async function ehProfessorAtivoDaTurma(pool, membroId, turmaId) {
 async function podeLancarChamadaDaTurma(pool, usuario, turmaId) {
   const turma = await ebd.buscarTurmaPorId(pool, turmaId);
   if (!turma) return { ok: false, turma: null };
-  if (usuario.permissoes && usuario.permissoes.includes("ebd_gestao") && await podeAcessarCongregacao(pool, usuario, turma.congregacaoId)) {
+  if (auth.temPermissao(usuario, "ebd_gestao") && await podeAcessarCongregacao(pool, usuario, turma.congregacaoId)) {
     return { ok: true, turma };
   }
   if (await ehProfessorAtivoDaTurma(pool, usuario.membroId, turmaId)) {
@@ -75,8 +75,11 @@ async function podeLancarChamadaDaTurma(pool, usuario, turmaId) {
 }
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirLogin(req, context);
-  if (!usuario) return;
+  const sessao = auth.exigirLogin(req, context);
+  if (!sessao) return;
+  // v7.6 — escopo, nível e departamento conferidos adiante são os da permissão ebd_gestao (a visão só com as concessões que a têm; ver shared/auth.js,
+  // "Concessões"), não o somado de outro cargo ou delegação. Sem a permissão, a sessão inteira (quem usa a rota como aluno, professor, membro...).
+  const usuario = auth.visaoDaPermissao(sessao, "ebd_gestao") || sessao;
 
   const pool = await getPool();
   const acao = context.bindingData.acao;
@@ -101,7 +104,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "licao/abrir" && metodo === "POST") {
-      if (!usuario.permissoes || !usuario.permissoes.includes("ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
+      if (!auth.temPermissao(usuario, "ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
       const { data } = req.body || {};
       const congregacaoId = auth.idDeRota(req.body && req.body.congregacaoId);
       if (!congregacaoId || !data) return erro(context, 400, "Informe congregacaoId e data.");
@@ -113,7 +116,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "licao/fechar" && metodo === "POST") {
-      if (!usuario.permissoes || !usuario.permissoes.includes("ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
+      if (!auth.temPermissao(usuario, "ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
       const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await chamada.buscarLicaoPorId(pool, licaoId);
@@ -125,7 +128,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "licao/reabrir" && metodo === "POST") {
-      if (!usuario.permissoes || !usuario.permissoes.includes("ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
+      if (!auth.temPermissao(usuario, "ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
       const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       if (!licaoId) return erro(context, 400, "Informe licaoId.");
       const licao = await chamada.buscarLicaoPorId(pool, licaoId);
@@ -137,7 +140,7 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "licoes" && metodo === "GET") {
-      if (!usuario.permissoes || !usuario.permissoes.includes("ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
+      if (!auth.temPermissao(usuario, "ebd_gestao")) return erro(context, 403, "Você não tem permissão para isso. Fale com quem administra as Permissões.");
       const congregacaoId = auth.idDeRota(req.query && req.query.congregacaoId);
       if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
       if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");

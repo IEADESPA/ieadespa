@@ -56,7 +56,7 @@ async function podeAcessarCongregacao(pool, usuario, congregacaoId) {
 }
 
 function temEbdGestao(usuario) {
-  return !!(usuario.permissoes && usuario.permissoes.includes("ebd_gestao"));
+  return auth.temPermissao(usuario, "ebd_gestao");
 }
 
 async function ehProfessorAtivoDaTurma(pool, membroId, turmaId) {
@@ -129,8 +129,11 @@ async function atividadeDaCongregacao(pool, atividadeId, congregacaoId) {
 const FORA_DA_TURMA = "Fora do seu escopo de atuação nesta turma.";
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirLogin(req, context);
-  if (!usuario) return;
+  const sessao = auth.exigirLogin(req, context);
+  if (!sessao) return;
+  // v7.6 — escopo, nível e departamento conferidos adiante são os da permissão ebd_gestao (a visão só com as concessões que a têm; ver shared/auth.js,
+  // "Concessões"), não o somado de outro cargo ou delegação. Sem a permissão, a sessão inteira (quem usa a rota como aluno, professor, membro...).
+  const usuario = auth.visaoDaPermissao(sessao, "ebd_gestao") || sessao;
 
   const pool = await getPool();
   const acao = context.bindingData.acao;

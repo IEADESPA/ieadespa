@@ -1598,30 +1598,135 @@ ponto real de integração:
         ação × papel sem nenhum erro de SQL. No banco real: roteiro da hierarquia completa (login
         verdadeiro de dirigente, pastor de área, região, quadrante, distrito e geral) com **221**
         verificações, e os roteiros anteriores seguem verdes (238, 81, 179, 20, 162, 14).
-    - **Em aberto, declarado.** (a) A **delegação** soma o escopo recebido ao escopo próprio
-      para todas as permissões da sessão; o ideal é escopo por permissão. (b) A sessão não é
-      revogável antes das 12 h (já era assim, ver vB.9). (c) O escopo compara **nome** de
-      congregação e não há índice único em `Congregacoes.Nome`: duas homônimas
-      compartilhariam escopo. (d) Faltam índices únicos como defesa em profundidade (sigla
-      de órgão, cargo ativo por órgão, credenciamento por sessão, item de remessa, número de
-      remessa, geração de prebenda); as travas de aplicação e as transações já cobrem a
-      corrida. (e) `DadosBancariosConfirmados` ainda tem `DEFAULT 1` na coluna (tratado no
-      código). (f) Mediação: os aceites do acordo e do compromisso arbitral são gravados em
-      nome das partes sem ato delas (risco jurídico, regra de negócio). (g) Abandono: a
-      homologação não é uma única transação; a janela de defesa do tipo Digital herda a data
-      da última tentativa de contato; quem abre também homologa (a tabela não guarda quem
-      abriu). (h) O retorno do banco só confirma pagamento com ocorrência "00"; a remessa ainda
-      não repete as conferências do pagamento comum (tutela, saldo do centro de custo, Fundo
-      PDQ suspenso). (i) Cancelar cessão autorizada não estorna a conta a receber. (j) Dos 216
-      textos de campo que entravam na tela sem proteção, **161** passaram a ser escapados;
-      restam os avisos de texto puro e linhas que não montam HTML; o escape completo é parte
-      do projeto da CSP forte. (k) Quem erra o PIN de alguém 5 vezes bloqueia a conta dela
-      por 15 minutos (**aceito como está** pelo responsável). (l) Revogar o cadastro do
-      responsável não anula a adesão já dada (documentado acima). (m) A chave combinada entre
-      o site e o sistema só passa a valer quando for cadastrada **nos dois** aplicativos do
-      Azure (`SECRETS.md`, seção 9); enquanto isso a rota segue só com o limite por origem.
-      (**Segredo de sessão:** medido em produção, um crachá assinado com o valor público é
-      recusado; agora o código nem tem mais esse valor padrão.)
+    - **Fecho dos itens em aberto (03/10/2026).** O responsável determinou que nada ficasse
+      em aberto antes da CSP forte. Cada item da lista anterior (a–m) foi tratado:
+      - **(a) Delegação soma o escopo a todas as permissões — FECHADO.** O crachá passou a
+        carregar `concessoes`: uma por cargo próprio e uma por delegação ativa, cada uma com
+        suas permissões, nível e escopo, e com data de validade (`ate`). `exigirPermissao`,
+        `exigirAlgumaPermissao`, `exigirNivelGlobal` e `exigirGeral` devolvem uma **visão**
+        montada só com as concessões vigentes que têm a permissão pedida; `ehGeral` e a
+        conferência de escopo da pessoa decidem concessão por concessão. Uma delegação
+        Global de "financeiro" não amplia mais o "pessoas" do cargo local, e a delegação que
+        venceu deixa de valer **no mesmo dia**, não quando o crachá expira. Rotas que aceitam
+        duas permissões diferentes usam a união das concessões dessas duas.
+      - **(b) Sessão não revogável — FECHADO.** Toda rota HTTP passa a entrar por
+        `api/shared/entrada.js` (`"scriptFile": "../shared/entrada.js"` em cada
+        `function.json`; um teste falha se uma rota nova não usar). Antes do handler, a
+        entrada relê do banco (no máximo a cada 3 s) o conjunto das sessões encerradas
+        (`SessoesAtivas.Encerrada`) e `getSessao` o consulta, sem tornar nada assíncrono. Sair,
+        trocar a senha (as outras sessões caem), cargo alterado ou removido (inclusive as
+        sessões de quem recebeu delegação dele), delegação cancelada, medida cautelar,
+        vacância, saída do rol, PIN redefinido pela Secretaria, renomear congregação ou
+        mudar a hierarquia/permissões de um papel passam a derrubar o acesso em segundos em
+        qualquer instância, e na hora na que encerrou. Sem lista confiável (banco fora há
+        mais de 60 s) a resposta é 503 (falha fechado). Nova ação do nível geral "Derrubar
+        acessos desta pessoa agora". Crachá sem `sid` (só em teste) não é revogável. Migração
+        123 (índices).
+      - **(c) Escopo compara nome de congregação — FECHADO.** Criar ou renomear congregação
+        com nome já existente (sem diferenciar maiúscula, acento nem espaço nas pontas) dá
+        409; o mesmo para extensão dentro da mesma congregação-mãe; índice único no banco
+        (migração 130) quando não há homônima hoje; renomear derruba todas as sessões.
+      - **(d) Índices únicos como defesa em profundidade — FECHADO.** Migrações 124 (uma
+        linha de liderança por pessoa), 127 a 129, 130 e 139: sigla de órgão, órgão
+        territorial por unidade, cargo ocupado, membro de comissão, credenciamento, presença,
+        item de remessa em aberto, número de remessa, geração de prebenda (a 060 já tinha;
+        a 129 só garante), nome e endereço de congregação e as chaves de cadastro (sigla de
+        cargo, de departamento, nome de papel...). Cada índice só nasce **se não houver
+        repetição hoje**; havendo, a migração não falha nem mexe em linha: o deploy imprime
+        um AVISO só com a contagem (o log é público) e o índice entra sozinho no deploy
+        seguinte, depois da limpeza (consulta de conferência no cabeçalho da migração). A
+        violação vira 409 com frase clara, nunca 500; o fechamento da reunião e a presença
+        na portaria toleram a corrida. O executor das migrações agora mostra os avisos no
+        log e como anotação do GitHub Actions.
+      - **(e) `DadosBancariosConfirmados DEFAULT 1` — FECHADO.** Migração 131 troca o padrão
+        para 0 (e o de `PerfisRateioDepartamental.Confirmado`), sem tocar nas linhas
+        existentes; um teste confere que todo INSERT do repositório informa a coluna.
+      - **(f) Mediação — FECHADO.** O mediador ou a Câmara só **propõem** o texto do acordo
+        ou do compromisso arbitral; cada parte aceita ou recusa com a **própria sessão**
+        (Meu Painel → Minhas Tarefas) ou o mediador/árbitro/Câmara registra a decisão em
+        papel **com o documento assinado anexado** (arquivo, hash, data da assinatura, quem
+        registrou e quando; quem é parte não registra). Acordo e compromisso só valem com as
+        duas partes aceitando o **mesmo texto** (hash); recusa fica registrada; texto novo
+        invalida decisões do antigo. Tabela `AceitesMediacao` imutável (gatilho e `CHECK` por
+        canal). Aceites antigos ganham a marca `LEGADO_NAO_VERIFICADO` e a tela os mostra como
+        "registrado antes da verificação por ato da parte". **A sentença arbitral só é
+        registrada com o compromisso firmado pelas duas partes** (sem convenção de
+        arbitragem a sentença seria nula, Lei 9.307/1996); caso antigo em curso propõe o
+        compromisso de novo. Migração 132.
+      - **(g) Abandono — FECHADO.** A homologação é **uma transação só**, com releitura
+        travada; **quem abriu o procedimento não o homologa** (regra dos dois olhos,
+        `AbertoPor`; a recusa diz quem pode); no tipo Digital, abrir o procedimento **é** a
+        notificação final e os 15 dias contam do último marco entre notificação, abertura e
+        edital (leitura que protege o membro; Estatuto Art. 12 §2º e Art. 11 §3º, II); edital
+        com data futura é recusado. Migração 134. **Erro real achado:** o driver do SQL Server
+        entrega coluna DATE como objeto `Date`, e `estatuto.diasDesde` só entendia texto — a
+        homologação de abandono respondia sempre "prazo não venceu", o Abandono Digital nunca
+        ficava elegível e o prazo de recurso nunca vencia. `estatuto.parseData` passou a
+        aceitar `Date` (coluna DATE vale como o dia do banco) e `idadeEm` deixou de errar um
+        ano no dia exato do aniversário quando "hoje" vinha em texto.
+      - **(h) Remessa não repete as conferências do pagamento comum — FECHADO.** Pagar na
+        mão, gerar remessa e confirmar o retorno usam a **mesma** conferência
+        (`shared/conferenciaPagamento.js`): saída aprovada, fornecedor **ativo** (vazio conta
+        como ativo) com dados bancários confirmados, Fundo PDQ, tutela, saldo do centro de
+        custo (descontando o reservado em remessas sem retorno e o que o banco já pagou e
+        está a tratar) e campanha. A geração deixa de fora as saídas barradas e lista cada
+        uma com todos os motivos. No retorno, ocorrência "00" que deixou de passar, **valor
+        pago diferente, ausente ou ilegível** (comparado em centavos inteiros) ou item que o
+        arquivo não menciona vira **DIVERGENTE**: o banco já pagou, nada é lançado como pago e a
+        Tesouraria Geral trata (reconhecer o pagamento ou encerrar, com justificativa
+        auditada). Tudo em transação, sob a trava `PagamentoSaida`. Toda mudança de situação
+        da saída (aprovar, rejeitar, pagar, cancelar) leva o estado esperado no `WHERE` e
+        confere as linhas afetadas; havia um erro real: aprovar depois de cancelar
+        ressuscitava a saída. Formato de comprovante inválido deixou de marcar a saída como
+        paga sem comprovante. Migrações 135, 137 e 139. **Limite que continua:** o layout
+        CNAB é o deste gerador (número do documento e valor pago em posições próprias,
+        constantes `OFFSET_*` em `cnab240.js`) e **nunca foi homologado com um banco real**;
+        ao integrar, conferir as posições na especificação do banco, senão todo item vira
+        divergência (falha fechada, com explicação).
+      - **(i) Cancelar cessão não estorna a conta a receber — FECHADO.** Cancelar é uma
+        transação: conta prevista vira cancelada (motivo, quem, quando) e a receita acessória
+        fica marcada cancelada; conta já **recebida** bloqueia o cancelamento com o passo a
+        passo (cancelar o lançamento enquanto o mês está aberto, devolver o valor, cancelar
+        a cessão). Confirmar e cancelar conta a receber travam a mesma linha (dois cliques
+        geravam dois lançamentos). Toda soma de contas a receber ignora as canceladas (um
+        teste varre o código). Migrações 138 (regulariza contas fantasma de cessões já
+        canceladas; nunca toca conta recebida) e 139.
+      - **(j) Texto de campo na tela sem proteção — veja o resultado da rodada do front
+        abaixo.**
+      - **(k) PIN errado 5 vezes bloqueia a conta por 15 minutos — ACEITO** pelo responsável
+        (decisão, não pendência).
+      - **(l) Revogar o cadastro do responsável não anulava a adesão — FECHADO.** A adesão
+        dada pelo responsável continua gravada e imutável (é prova), mas **só vale enquanto
+        o menor tem ao menos um responsável ativo**: derivado na leitura, vale na
+        cobertura, no aviso de termo pendente, na Lista de Ouro, na habilitação e na escala
+        (o menor sem adesão que valha não entra no auto-escalador, não aceita nem confirma,
+        e as escalas futuras já marcadas ficam **sinalizadas**, não removidas). Cadastrar
+        outro responsável não restabelece sozinho: só uma nova adesão. A ficha em papel
+        assinada por responsável não é atingida. Migração 133.
+      - **(m) Chave combinada entre o site e o sistema — DEPENDE DO RESPONSÁVEL.** É o único
+        item que não se fecha por código: o valor precisa ser colado **nos dois**
+        aplicativos do Azure (`SECRETS.md`, seção 9). Enquanto isso a rota segue só com o
+        limite por origem. (**Segredo de sessão:** medido em produção, um crachá assinado
+        com o valor público é recusado; o código nem tem mais esse valor padrão.)
+      - **Também nesta rodada:** o limite de tentativas do **site** usava o primeiro valor
+        do `x-forwarded-for` (forjável; medido em produção: 25 chamadas com IP inventado
+        passaram pelo limite de 20); passou a usar o penúltimo, como no sistema. A **ouvidoria
+        anônima** tinha protocolo sequencial e adivinhável: protocolo novo é aleatório (16
+        símbolos sem ambiguidade, ~79 bits), a consulta tem limite por origem e responde
+        igual para "inválido" e "não existe". Cadastro de liderança: uma linha por pessoa
+        garantida no banco, e conceder em dobro responde com frase clara.
+      - **Riscos e limites que continuam, ditos com honestidade:** (1) os protocolos de
+        ouvidoria **já emitidos** continuam com 16 bits aleatórios (não dá para reemitir o
+        que já foi entregue); o limite por origem só desacelera. (2) A regra dos dois olhos
+        do abandono depende de haver duas pessoas do nível geral que homologam (hoje, o
+        Presidente e o Secretário Geral): se uma abriu e a outra está ausente, o caso espera.
+        (3) Menores hoje escalados **sem** adesão vigente passam a não aceitar nem confirmar
+        escala: avisar a Secretaria. (4) As migrações de índice podem imprimir AVISOS no
+        primeiro deploy se houver repetição em produção (nenhum dado é alterado). (5)
+        `RECONHECER_PAGAMENTO` de item com valor diferente deixa a saída paga pelo valor
+        da solicitação (a diferença se corrige por lançamento de ajuste). (6) Dois
+        pedidos que se cruzam entre conta a receber e cessão podem, em tese, travar um ao
+        outro (o SQL Server derruba um e a pessoa tenta de novo).
     - **Levantamento de custo da CSP forte (02/10/2026).** Dinheiro: nenhum (é um cabeçalho
       de configuração, sem cobrança no Azure). O custo é de **trabalho e risco**: a tela tem
       **870 atributos de evento em linha** (470 em `index.html`, 400 em `script.js`), dos quais

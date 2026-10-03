@@ -70,10 +70,11 @@ function podeAcessarCertificado(certificado, { membroIdSolicitante, temGestao })
 // como auth.estaNoEscopo já trata). Antes, qualquer gestor local via, emitia
 // e revogava certificado de qualquer membro da igreja.
 async function gestorAlcancaMembro(pool, usuario, membroId) {
-  const permissoes = (usuario && usuario.permissoes) || [];
-  if (!permissoes.includes("ebd_gestao") && !permissoes.includes("trilhas_gestao")) return false;
+  // v7.6 — o escopo conferido é o das concessões que têm ebd_gestao/trilhas_gestao (shared/auth.js, "Concessões"), não o somado de outro cargo ou delegação.
+  const visao = require("./auth").visaoDaPermissao(usuario, ["ebd_gestao", "trilhas_gestao"]);
+  if (!visao) return false;
   // Inexistente, malformado e fora do escopo (congregação, ou Extensão da Tenda para quem tem escopo de Extensão) dão o mesmo `false`.
-  return !!(await require("./escopoRotas").pessoaAlcancavel(pool, usuario, membroId));
+  return !!(await require("./escopoRotas").pessoaAlcancavel(pool, visao, membroId));
 }
 
 // ---- Código público de verificação ----

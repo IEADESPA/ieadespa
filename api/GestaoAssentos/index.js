@@ -23,6 +23,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { CATALOGOS_CARGOS_POR_ORGAO, ORGAOS_INCOMPATIVEIS, ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA, validarIncompatibilidadeExecutiva, cargoJaOcupado } = require("../shared/diretoria");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
+const { comConflito } = require("../shared/violacaoUnica");
 
 const TIPOS_VALIDOS = ["ORDENACAO", "FUNCAO"];
 
@@ -43,7 +44,9 @@ function comSituacaoEfetiva(assento, hoje) {
   return Object.assign({}, assento, { situacaoEfetiva });
 }
 
-module.exports = async function (context, req) {
+// O cargo fixo tem UM ocupante ativo também no banco (índice UX_Assentos_CargoAtivo, migração 127): dois pedidos ao mesmo tempo furam a conferência de cargoJaOcupado, e o
+// perdedor recebe o 409 em vez de um 500.
+module.exports = comConflito(async function (context, req) {
   const usuario = req.method === "GET" ? auth.exigirPermissao(req, context, "pessoas") : exigirGeral(req, context, "pessoas");
   if (!usuario) return;
 
@@ -212,4 +215,4 @@ module.exports = async function (context, req) {
   }
 
   context.res = { status: 405, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
-};
+}, "Esse cargo acabou de ser ocupado por outra pessoa (1 titular por cargo). Atualize a lista de cadeiras e confira antes de tentar de novo.");

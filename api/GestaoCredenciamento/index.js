@@ -15,6 +15,9 @@ const { exigirGeral, filtrarPorEscopo } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { AVISO_PROCURACAO, avaliarCredenciamento, listarImpedidosAssembleia, gerarOuObterRelatorioCredenciamento } = require("../shared/credenciamento");
+const { violouUnicidade, conflito, comConflito } = require("../shared/violacaoUnica");
+
+const MSG_JA_CREDENCIADO = "Essa pessoa já foi credenciada nesta Assembleia.";
 
 async function carregarSessaoAssembleia(pool, sessaoId) {
   const sessao = (await pool.request().input("id", sql.Int, sessaoId).query(`
@@ -27,7 +30,9 @@ async function carregarSessaoAssembleia(pool, sessaoId) {
   return sessao;
 }
 
-module.exports = async function (context, req) {
+// Credenciar é UMA vez por pessoa por Assembleia também no banco (índice UX_CredenciamentosAssembleia_Credenciado, migração 128): dois pedidos ao mesmo tempo furam a conferência
+// abaixo, e o perdedor recebe o 409 em vez de um 500. A RECUSA continua podendo se repetir (a trilha guarda cada tentativa).
+module.exports = comConflito(async function (context, req) {
   const usuario = req.method === "GET" ? auth.exigirAlgumaPermissao(req, context, ["assembleia", "reunioes"]) : exigirGeral(req, context, ["assembleia", "reunioes"]);
   if (!usuario) return;
 
@@ -99,6 +104,13 @@ module.exports = async function (context, req) {
       return;
     }
 
+    const jaCredenciado = await pool.request().input("id", sql.Int, sessaoId).input("mat", sql.Int, membroId)
+      .query(`SELECT 1 AS x FROM CredenciamentosAssembleia WHERE SessaoId = @id AND MembroId = @mat AND Resultado = 'CREDENCIADO'`);
+    if (jaCredenciado.recordset.length > 0) {
+      context.res = conflito(MSG_JA_CREDENCIADO);
+      return;
+    }
+
     const avaliacao = await avaliarCredenciamento(pool, membro);
     const resultado = avaliacao.credenciado ? "CREDENCIADO" : "RECUSADO";
 
@@ -113,8 +125,13 @@ module.exports = async function (context, req) {
       const jaTemPresenca = await pool.request().input("id", sql.Int, sessaoId).input("mat", sql.Int, membroId)
         .query(`SELECT 1 FROM Presencas WHERE SessaoId = @id AND MembroId = @mat`);
       if (jaTemPresenca.recordset.length === 0) {
-        await pool.request().input("id", sql.Int, sessaoId).input("mat", sql.Int, membroId)
-          .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente) VALUES (@id, @mat, 1)`);
+        try {
+          await pool.request().input("id", sql.Int, sessaoId).input("mat", sql.Int, membroId)
+            .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente) VALUES (@id, @mat, 1)`);
+        } catch (e) {
+          // A pessoa bateu ponto na portaria no mesmo instante: o índice único de presença (UX_Presencas_Sessao_Membro) recusa a segunda linha, e a presença dela já vale.
+          if (!violouUnicidade(e)) throw e;
+        }
       }
     }
 
@@ -151,4 +168,4 @@ module.exports = async function (context, req) {
   }
 
   context.res = { status: 400, body: { sucesso: false, mensagem: "Requisição inválida." } };
-};
+}, MSG_JA_CREDENCIADO);

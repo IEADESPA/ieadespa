@@ -8,6 +8,7 @@
 // POST   /api/lideranca            -> body: { membroId, papelId, escopoTipo, escopoId, senha, duracaoMeses? } -> concede/atualiza acesso
 // POST   /api/lideranca/lote       -> body: { membroIds[], papelId, escopoTipo, escopoId?, senha, duracaoMeses? } -> concede em massa
 // DELETE /api/lideranca/{membroId} -> remove liderança (e o acesso de login) daquele membro
+// POST   /api/lideranca/{membroId} -> body: { acao: "DERRUBAR_ACESSOS" } -> encerra agora todas as sessões abertas da pessoa (v7.6)
 //
 // "Papel" (Papeis) é quem carrega as Permissões de verdade (Papeis.Permissoes,
 // chaves separadas por vírgula). "Tipo"/"Escopo" (colunas antigas da tabela)
@@ -29,6 +30,7 @@ const trilhas = require("../shared/trilhas");
 const pinMembro = require("../shared/pinMembro");
 const canaisDb = require("../shared/canaisDb");
 const { exigirGeral } = require("../shared/escopoRotas");
+const { comConflito, violouUnicidade } = require("../shared/violacaoUnica");
 
 // v7.3 — quem sai da liderança de uma congregação/Área/departamento obriga a troca de senha dos canais
 // oficiais dele (Regimento Art. 160, §4º, I). Falha aqui nunca derruba a operação de liderança: a próxima
@@ -62,6 +64,22 @@ function incoerenciaDeEscopo(papelNivel, escopoTipo, escopoId) {
   if (larguraDoPapel === undefined) return "O nível do papel não é reconhecido.";
   if (LARGURA_ESCOPO[escopoTipo] > larguraDoPapel) return "O escopo escolhido é mais largo que o nível do papel (" + papelNivel + ").";
   return null;
+}
+
+// v7.6 — SESSÃO REVOGÁVEL (shared/auth.js). Mudar o cargo de alguém (papel, escopo, mandato, senha) ou removê-lo derruba na hora as sessões abertas dessa
+// pessoa e as de quem recebeu DELEGAÇÃO de um cargo dela (a sessão do delegado carrega o cargo delegado). Se o papel ou o escopo mudou, as delegações ativas
+// desse cargo são canceladas: a delegação aponta para a linha de Lideranca, e sem isso passaria a delegar o papel NOVO (um "Dirigente" delegado viraria
+// "Presidente" delegado só porque o cargo do delegante mudou).
+async function delegadosAtivosDoMembro(pool, membroId) {
+  const r = await pool.request().input("id", sql.Int, membroId).query(`
+    SELECT DISTINCT d.DelegadoMembroId FROM DelegacoesAcesso d JOIN Lideranca l ON l.LiderancaId = d.LiderancaId
+    WHERE l.MembroId = @id AND d.Status = 'ATIVA'`);
+  return (r.recordset || []).map((x) => x.DelegadoMembroId);
+}
+async function derrubarAcessos(pool, membroId, { delegados = [], exceto } = {}) {
+  let sessoes = await auth.revogarSessoesDoMembro(pool, sql, membroId, { exceto });
+  for (const d of new Set(delegados)) if (Number(d) !== Number(membroId)) sessoes += await auth.revogarSessoesDoMembro(pool, sql, d);
+  return sessoes;
 }
 
 async function escopoExiste(pool, escopoTipo, escopoId) {
@@ -134,7 +152,15 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
       query += `, AtivoAte = DATEADD(month, @duracaoMeses, CAST(SYSUTCDATETIME() AS DATE))`;
     }
     query += ` WHERE MembroId = @id`;
+    const delegados = await delegadosAtivosDoMembro(pool, membroId);
     await request.query(query);
+    if (mudaPapelOuEscopo && delegados.length > 0) {
+      await pool.request().input("id", sql.Int, membroId).query(`
+        UPDATE DelegacoesAcesso SET Status = 'CANCELADA'
+        WHERE Status = 'ATIVA' AND LiderancaId IN (SELECT LiderancaId FROM Lideranca WHERE MembroId = @id)`);
+    }
+    // cargo ALTERADO: as sessões abertas (dela e dos delegados) caem na hora; no login seguinte a sessão já nasce com o cargo novo
+    await derrubarAcessos(pool, membroId, { delegados });
   } else {
     const request = pool.request()
       .input("membroId", sql.Int, membroId)
@@ -143,11 +169,17 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
       .input("escopoId", sql.Int, escopoId ? auth.idDeRota(escopoId) : null)
       .input("senhaHash", sql.NVarChar(200), auth.hashSenha(senha))
       .input("duracaoMeses", sql.Int, duracaoMeses || null);
-    await request.query(`
-      INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId, SenhaHash, AtivoAte)
-      VALUES (@membroId, @papelId, @escopoTipo, @escopoId, @senhaHash,
-              CASE WHEN @duracaoMeses IS NULL THEN NULL ELSE DATEADD(month, @duracaoMeses, CAST(SYSUTCDATETIME() AS DATE)) END)
-    `);
+    try {
+      await request.query(`
+        INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId, SenhaHash, AtivoAte)
+        VALUES (@membroId, @papelId, @escopoTipo, @escopoId, @senhaHash,
+                CASE WHEN @duracaoMeses IS NULL THEN NULL ELSE DATEADD(month, @duracaoMeses, CAST(SYSUTCDATETIME() AS DATE)) END)
+      `);
+    } catch (erro) {
+      // UX_Lideranca_Membro (migração 124): outro pedido concedeu acesso à MESMA pessoa entre a conferência acima e a gravação. Num lote, só esta pessoa é recusada.
+      if (!violouUnicidade(erro)) throw erro;
+      return { sucesso: false, mensagem: "Esta pessoa acabou de receber acesso por outro pedido. Atualize a tela e altere o cargo dela, em vez de criar outro." };
+    }
   }
 
   // Redefinir a senha de quem ficou bloqueado por tentativas é também o desbloqueio (fecho da v7.5): sem isso, um anônimo que errasse a senha de um líder mantinha o
@@ -165,7 +197,7 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
   return { sucesso: true, mensagem: "✅ Liderança registrada." };
 }
 
-module.exports = async function (context, req) {
+module.exports = comConflito(async function (context, req) {
   const usuario = exigirGeral(req, context, "permissoes");
   if (!usuario) return;
 
@@ -200,6 +232,30 @@ module.exports = async function (context, req) {
       permissoes: l.permissoesStr ? l.permissoesStr.split(",").map(p => p.trim()).filter(Boolean) : []
     }));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: liderancas };
+    return;
+  }
+
+  // ---- POST /lideranca/{membroId} { acao: "DERRUBAR_ACESSOS" }: encerra AGORA todas as sessões abertas da pessoa (v7.6) ----
+  // Para o caso "esta pessoa não pode mais estar logada" (aparelho perdido, senha vazada, saída da função) sem precisar mexer no cargo. Só o nível geral (porta
+  // desta rota). O cargo e a senha não mudam: ela pode entrar de novo com a senha — para impedir, suspenda ou remova o cargo. Quem derruba a si mesmo mantém a
+  // sessão atual. Auditado.
+  if (method === "POST" && req.body && req.body.acao === "DERRUBAR_ACESSOS") {
+    const alvo = auth.idDeRota(membroIdRota);
+    if (!alvo) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota: /api/lideranca/{membroId}" } };
+      return;
+    }
+    const existe = await pool.request().input("id", sql.Int, alvo).query(`SELECT Nome FROM MembroReferencia WHERE MembroId = @id`);
+    if (!existe.recordset || existe.recordset.length === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+      return;
+    }
+    const sessoesEncerradas = await auth.revogarSessoesDoMembro(pool, sql, alvo, { exceto: Number(alvo) === Number(usuarioId) ? usuario.sid : null });
+    await registrarAuditoria({ tabela: "SessoesAtivas", registroId: alvo, acao: "Derrubou os acessos (sessões abertas) da pessoa", usuarioId, dadosDepois: { sessoesEncerradas } });
+    context.res = {
+      status: 200, headers: { "Content-Type": "application/json" },
+      body: { sucesso: true, sessoesEncerradas, mensagem: sessoesEncerradas > 0 ? `✅ ${sessoesEncerradas} sessão(ões) aberta(s) encerrada(s): a pessoa sai em poucos segundos em todos os aparelhos.` : "Nenhuma sessão aberta desta pessoa — nada a encerrar." }
+    };
     return;
   }
 
@@ -289,16 +345,28 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // v7.6 — as delegações deste cargo saem junto (a chave estrangeira impedia remover quem já tinha delegado: dava erro 500), e as sessões abertas da
+    // pessoa e dos delegados caem na hora. O histórico das delegações continua na auditoria (dadosAntes abaixo).
+    const delegados = await delegadosAtivosDoMembro(pool, membroIdRota);
+    const delegacoesDoCargo = (await pool.request().input("id", sql.Int, membroIdRota).query(`
+      SELECT d.DelegacaoId AS delegacaoId, d.DelegadoMembroId AS delegadoMembroId, d.Status AS status,
+             CONVERT(varchar(10), d.DataInicio, 120) AS dataInicio, CONVERT(varchar(10), d.DataFim, 120) AS dataFim
+      FROM DelegacoesAcesso d JOIN Lideranca l ON l.LiderancaId = d.LiderancaId WHERE l.MembroId = @id`)).recordset || [];
+    if (delegacoesDoCargo.length > 0) {
+      await pool.request().input("id", sql.Int, membroIdRota)
+        .query(`DELETE FROM DelegacoesAcesso WHERE LiderancaId IN (SELECT LiderancaId FROM Lideranca WHERE MembroId = @id)`);
+    }
     const del = await pool.request().input("id", sql.Int, membroIdRota).query(`DELETE FROM Lideranca WHERE MembroId = @id`);
     if (del.rowsAffected[0] === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta pessoa não tem liderança registrada." } };
       return;
     }
-    await registrarAuditoria({ tabela: "Lideranca", registroId: Number(membroIdRota), acao: "Removeu liderança", usuarioId });
+    const sessoesEncerradas = await derrubarAcessos(pool, auth.idDeRota(membroIdRota), { delegados });
+    await registrarAuditoria({ tabela: "Lideranca", registroId: Number(membroIdRota), acao: "Removeu liderança", usuarioId, dadosAntes: delegacoesDoCargo.length ? { delegacoes: delegacoesDoCargo } : undefined, dadosDepois: { sessoesEncerradas } });
     await conferirSucessaoDeCanais(pool, usuarioId);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Liderança removida." } };
     return;
   }
 
   context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
-};
+}, "Esta pessoa acabou de receber acesso por outro pedido. Atualize a tela e altere o cargo dela, em vez de criar outro.");

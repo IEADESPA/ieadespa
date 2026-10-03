@@ -69,9 +69,11 @@ function centroCustoDepartamental(centroCusto) {
 // as congregações): a Saída da prebenda nasce na congregação do ministro (GestaoPrebendas) e, sem esta trava, o tesoureiro local
 // daquela congregação a via, cancelava ou "pagava" sem pagamento.
 function podeOperarCentroCusto(usuario, centroCusto, siglaDepartamentoUsuario) {
-  if (usuario.permissoes && usuario.permissoes.includes("financeiro")) {
+  // v7.6 — o nível geral tem de vir de uma concessão que tenha "financeiro" (shared/auth.js, "Concessões").
+  const vFinanceiro = require("./auth").visaoDaPermissao(usuario, "financeiro");
+  if (vFinanceiro) {
     if (centroCusto === "LOCAL" || centroCustoDepartamental(centroCusto)) return true;
-    return ehGeral(usuario);
+    return ehGeral(vFinanceiro);
   }
   return !!siglaDepartamentoUsuario && centroCusto === `DEPTO_${siglaDepartamentoUsuario}`;
 }

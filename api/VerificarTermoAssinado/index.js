@@ -31,8 +31,8 @@ module.exports = async function (context, req) {
       WHERE t.TermoAssinadoId = @id
     `)).recordset[0];
 
-    const permissoes = Array.isArray(usuario.permissoes) ? usuario.permissoes : [];
-    const auditoria = ehGeral(usuario) && (permissoes.includes("auditoria") || permissoes.includes("protecaodedados"));
+    // v7.6 — o nível geral tem de vir de uma concessão que tenha a permissão de auditoria/proteção de dados (não de outro cargo ou delegação).
+    const auditoria = ehGeral(auth.visaoDaPermissao(usuario, ["auditoria", "protecaodedados"]));
     if (!termo || (Number(termo.MembroId) !== Number(usuario.membroId) && !auditoria)) {
       context.res = naoEncontrada();
       return;

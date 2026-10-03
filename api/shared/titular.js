@@ -23,18 +23,20 @@ async function exigirTitularOuPermissao(req, context, pool, matriculaDaRota, per
     context.res = { status: 403, body: { sucesso: false, mensagem: "Assine os termos pendentes para continuar.", termosPendentes: usuario.termosPendentes } };
     return null;
   }
-  if (!usuario.permissoes || !usuario.permissoes.includes(permissao)) {
+  // v7.6 — a visão só com as concessões que têm a permissão: o escopo conferido (e devolvido) é o dela.
+  const visao = auth.visaoDaPermissao(usuario, permissao);
+  if (!visao) {
     context.res = { status: 403, body: NEGADO };
     return null;
   }
   const r = (await pool.request().input("id", sql.Int, alvo)
     .query(`SELECT c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`)).recordset[0];
   // (a regra comum de escopo da pessoa também respeita o escopo por Extensão da Tenda, que a conferência só por congregação ignorava)
-  if (!r || !noEscopoDaPessoa(usuario, r.CongregacaoNome, r.ExtensaoNome)) {
+  if (!r || !noEscopoDaPessoa(visao, r.CongregacaoNome, r.ExtensaoNome)) {
     context.res = { status: 403, body: NEGADO };
     return null;
   }
-  return { usuario, alvo, proprio: false };
+  return { usuario: visao, alvo, proprio: false };
 }
 
 module.exports = { exigirTitularOuPermissao, NEGADO };

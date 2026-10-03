@@ -53,6 +53,8 @@ module.exports = async function (context, req) {
   }
 
   await pinMembro.gravarPin(pool, membroId, corpo.pin);
+  // v7.6 — PIN novo derruba as OUTRAS sessões da pessoa (a atual continua), como a troca de senha.
+  await auth.revogarSessoesDoMembro(pool, sql, membroId, { exceto: usuario.sid });
   const via = usuario.pinProvisorio === true ? "PROVISORIO" : usuario.via === "CODIGO" ? "CODIGO" : "PIN_ATUAL";
   await registrarAuditoria({ tabela: "MembroPins", registroId: membroId, acao: atual ? "PIN_ALTERADO" : "PIN_CRIADO", usuarioId: membroId, dadosDepois: { via } });
 

@@ -129,6 +129,8 @@ module.exports = async function (context, req) {
       // que a data fique estritamente no passado.
       await pool.request().input("membroId", sql.Int, membroId)
         .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, CAST(SYSUTCDATETIME() AS DATE)) WHERE MembroId = @membroId`);
+      // v7.6 — e as sessões abertas caem na hora (antes o token valia até expirar sozinho, 12 h).
+      await auth.revogarSessoesDoMembro(pool, sql, membroId);
     }
 
     await registrarAuditoria({

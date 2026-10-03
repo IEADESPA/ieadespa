@@ -252,8 +252,9 @@ module.exports = async function (context, req) {
   if (method === "GET" && !id) {
     const usuario = auth.exigirLoginIgnorandoTermos(req, context);
     if (!usuario) return;
-    const permissoes = usuario.permissoes || [];
-    const ehMesa = permissoes.includes("reunioes") || permissoes.includes("assembleia");
+    // v7.6 — a mesa vê participantes do escopo das SUAS permissões (reunioes/assembleia), não do somado de outro cargo ou delegação.
+    const vMesa = auth.visaoDaPermissao(usuario, ["reunioes", "assembleia"]);
+    const ehMesa = !!vMesa;
     const meuId = Number(usuario.membroId);
     const idsResult = await pool.request().query(`SELECT EnqueteId AS enqueteId FROM Enquetes ORDER BY DataAbertura DESC`);
     const enquetes = [];
@@ -270,7 +271,7 @@ module.exports = async function (context, req) {
         }
         if (!elegiveis.has(meuId)) continue; // enquete de outro público: nem aparece
       }
-      enquetes.push(visaoDaEnquete(enquete, usuario, !ehMesa));
+      enquetes.push(visaoDaEnquete(enquete, vMesa || usuario, !ehMesa));
     }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: enquetes };
     return;

@@ -6,6 +6,11 @@
 // gente NUNCA edita uma migração antiga, só adiciona novas; esse script só
 // muda COMO elas são executadas, não a regra de nunca alterar as antigas.
 //
+// Mensagens do SQL Server (PRINT) aparecem no log: é assim que uma migração AVISA sem derrubar o deploy — por exemplo, "índice único NÃO criado: há
+// dados repetidos" (migrações 127 a 130 e 139: cada índice só nasce se não houver repetição hoje e, havendo, só imprime "AVISO migração N: ..." e segue; no deploy
+// seguinte à limpeza o índice entra sozinho). Linhas "AVISO" viram também anotação do GitHub Actions (aparece na página da execução) e entram num resumo no
+// fim. Os avisos trazem só contagens, nunca dado de pessoa: o log de repositório público é público.
+//
 // Uso: SQL_CONNECTION_STRING=... node scripts/executar-migracoes.js
 const fs = require("fs");
 const path = require("path");
@@ -44,6 +49,20 @@ function dividirEmBatches(conteudoSql) {
     .filter(Boolean);
 }
 
+// Anotação do GitHub Actions (workflow command): `%`, CR e LF precisam de escape no texto da mensagem.
+function anotacaoDeAviso(mensagem) {
+  const texto = String(mensagem).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  return `::warning title=Migração do banco::${texto}`;
+}
+
+// Roda UM lote e entrega cada mensagem informativa (PRINT) do SQL Server a `aoReceberMensagem`. A mensagem chega pelo evento "info" da requisição do mssql; sem
+// ouvir esse evento o PRINT se perde em silêncio e o aviso de uma migração nunca apareceria no log do deploy.
+async function executarBatch(pool, batch, aoReceberMensagem) {
+  const requisicao = pool.request();
+  requisicao.on("info", (info) => aoReceberMensagem(String(info && info.message !== undefined ? info.message : "")));
+  return requisicao.query(batch);
+}
+
 async function main() {
   const connectionString = process.env.SQL_CONNECTION_STRING;
   if (!connectionString) {
@@ -64,6 +83,7 @@ async function main() {
   const pool = await conectarComRetry(connectionString);
   console.log(`Conectado. Executando ${arquivos.length} migração(ões)...`);
 
+  const avisos = [];
   try {
     for (const arquivo of arquivos) {
       const caminho = path.join(PASTA_MIGRACOES, arquivo);
@@ -71,16 +91,30 @@ async function main() {
       const batches = dividirEmBatches(conteudo);
       console.log(`→ ${arquivo} (${batches.length} batch(es))`);
       for (const batch of batches) {
-        await pool.request().query(batch);
+        await executarBatch(pool, batch, (mensagem) => {
+          console.log(`   ${mensagem}`);
+          if (/^AVISO/.test(mensagem)) {
+            avisos.push(mensagem);
+            if (process.env.GITHUB_ACTIONS === "true") console.log(anotacaoDeAviso(mensagem));
+          }
+        });
       }
     }
     console.log(`✅ ${arquivos.length} migração(ões) executada(s) com sucesso.`);
+    if (avisos.length > 0) {
+      console.log(`⚠️ ${avisos.length} aviso(s) de migração (nada falhou; o que o aviso descreve ainda não foi aplicado — leia as linhas "AVISO" acima):`);
+      for (const aviso of avisos) console.log(`   - ${aviso}`);
+    }
   } finally {
     await pool.close();
   }
 }
 
-main().catch(erro => {
-  console.error("❌ Falha ao executar migrações:", erro.message);
-  process.exit(1);
-});
+module.exports = { dividirEmBatches, executarBatch, anotacaoDeAviso, main };
+
+if (require.main === module) {
+  main().catch(erro => {
+    console.error("❌ Falha ao executar migrações:", erro.message);
+    process.exit(1);
+  });
+}

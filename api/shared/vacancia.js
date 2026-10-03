@@ -13,9 +13,11 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
     .query(`UPDATE Assentos SET DataFim = CAST(SYSUTCDATETIME() AS DATE), MotivoEncerramento = @motivo
             WHERE MembroId = @id AND DataFim IS NULL`);
 
+  // v7.6 — "ontem", não hoje: o login confere AtivoAte < hoje (mesmo padrão das medidas cautelares e da dissolução de diretoria em shared/psc.js). Com "hoje",
+  // quem perdeu a membresia entrava de novo com a senha até a meia-noite — e as sessões derrubadas logo abaixo voltavam no login seguinte.
   await pool.request()
     .input("id", sql.Int, membroId)
-    .query(`UPDATE Lideranca SET AtivoAte = CAST(SYSUTCDATETIME() AS DATE)
+    .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, CAST(SYSUTCDATETIME() AS DATE))
             WHERE MembroId = @id AND (AtivoAte IS NULL OR AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))`);
 
   await pool.request()
@@ -37,6 +39,10 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
       .input("id", sql.Int, membroId)
       .query(`UPDATE EbdAlunos SET Ativo = 0, EncerradoEm = SYSUTCDATETIME(), AtualizadoEm = SYSUTCDATETIME() WHERE MembroId = @id AND Ativo = 1`);
   }
+
+  // v7.6 — sessão revogável: quem perde a membresia, o mandato (disciplina, licença de candidatura) ou sai do rol perde também as sessões abertas, na hora
+  // (antes o token valia até expirar sozinho, 12 h). Usa o mesmo `pool` (dentro da transação de quem chamou, se houver).
+  await require("./auth").revogarSessoesDoMembro(pool, sql, membroId);
 }
 
 module.exports = { encerrarVinculos };

@@ -87,9 +87,11 @@ module.exports = async function (context, req) {
   const perms = usuario.permissoes || [];
   const ehGestao = perms.includes("canais_gestao");
   // Falha FECHADO: sessão sem a lista de congregações não alcança nenhum canal (antes, "sem lista" valia como escopo global).
-  const escopoGlobal = usuario.escopoCongregacoes === "TODAS";
-  const escopo = escopoGlobal ? "TODAS" : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []);
-  const geral = ehGeral(usuario);   // papel GLOBAL E escopo TODAS: só ele dispara o sincronismo da igreja inteira
+  // v7.6 — o escopo e o nível geral são os da permissão "canais_gestao" (só as concessões que a têm); quem não a tem usa a sessão inteira (só para a tela).
+  const vCanais = auth.visaoDaPermissao(usuario, "canais_gestao") || usuario;
+  const escopoGlobal = vCanais.escopoCongregacoes === "TODAS";
+  const escopo = escopoGlobal ? "TODAS" : (Array.isArray(vCanais.escopoCongregacoes) ? vCanais.escopoCongregacoes : []);
+  const geral = ehGeral(vCanais);   // papel GLOBAL E escopo TODAS: só ele dispara o sincronismo da igreja inteira
   const membroId = usuario.membroId || null;
 
   const acao = context.bindingData.acao || "";

@@ -14,8 +14,10 @@ const CHAVES_DETECTOR = ["SEGUROS_VENCENDO", "PRESTACAO_CONTAS_ATRASADA", "REPAS
 
 function usuarioVeRegra(usuario, regra) {
   if (!regra.Ativa) return false;
-  if (regra.PermissaoAlvo && !(usuario.permissoes || []).includes(regra.PermissaoAlvo)) return false;
-  if (regra.NivelAlvo && usuario.nivel !== regra.NivelAlvo) return false;
+  // v7.6 — o nível conferido é o das concessões que têm a permissão-alvo (shared/auth.js, "Concessões").
+  const visao = regra.PermissaoAlvo ? require("./auth").visaoDaPermissao(usuario, regra.PermissaoAlvo) : usuario;
+  if (!visao) return false;
+  if (regra.NivelAlvo && visao.nivel !== regra.NivelAlvo) return false;
   return true;
 }
 

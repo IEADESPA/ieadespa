@@ -46,17 +46,21 @@ module.exports = async function (context, req) {
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] };
     return;
   }
-  const geral = ehGeral(usuario);
+  // v7.6 — cada fonte usa a visão da SUA permissão (escopo/nível só das concessões que têm aquela permissão; ver shared/auth.js, "Concessões").
+  const vPessoas = auth.visaoDaPermissao(usuario, "pessoas");
+  const vFinanceiro = auth.visaoDaPermissao(usuario, "financeiro");
+  const vProjetos = auth.visaoDaPermissao(usuario, ["reunioes", "cli"]);
   const pool = await getPool();
   const like = `%${termo}%`;
   const resultados = [];
 
-  if (permissoes.includes("pessoas")) {
+  if (vPessoas) {
     const request = pool.request().input("q", sql.NVarChar(200), like);
-    const escopo = filtroDeCongregacoes(request, "cg.Nome", usuario);
+    const escopo = filtroDeCongregacoes(request, "cg.Nome", vPessoas);
     if (!escopo.vazio) {
       let filtroExtensao = "";
-      if (usuario.escopoExtensaoNome) { request.input("extensao", sql.NVarChar(150), usuario.escopoExtensaoNome); filtroExtensao = " AND ex.Nome = @extensao"; }
+      // extensão no SQL só quando a visão é de UMA concessão; com várias, filtrarPorEscopo (abaixo) confere concessão por concessão
+      if (vPessoas.escopoExtensaoNome && auth.concessoesDaVisao(vPessoas).length === 1) { request.input("extensao", sql.NVarChar(150), vPessoas.escopoExtensaoNome); filtroExtensao = " AND ex.Nome = @extensao"; }
       const r = await request.query(`
         SELECT TOP ${escopo.emMemoria ? TOP_EM_MEMORIA : LIMITE_POR_FONTE} m.MembroId AS id, m.Nome AS titulo, cg.Nome AS congregacao, ex.Nome AS extensao
         FROM MembroReferencia m
@@ -65,13 +69,13 @@ module.exports = async function (context, req) {
         WHERE m.Nome LIKE @q${escopo.sql}${filtroExtensao}
       `);
       // O SQL já filtrou; o JS repete a conferência (e é ele que corta quando a lista de congregações é grande demais para o SQL).
-      filtrarPorEscopo(usuario, r.recordset, p => p.congregacao, p => p.extensao).slice(0, LIMITE_POR_FONTE)
+      filtrarPorEscopo(vPessoas, r.recordset, p => p.congregacao, p => p.extensao).slice(0, LIMITE_POR_FONTE)
         .forEach(p => resultados.push({ tipo: "Pessoa", titulo: p.titulo, subtitulo: p.congregacao || "-", aba: "pessoas" }));
     }
   }
 
-  if (permissoes.includes("financeiro")) {
-    if (geral) {
+  if (vFinanceiro) {
+    if (ehGeral(vFinanceiro)) {
       const rf = await pool.request().input("q", sql.NVarChar(200), like).query(`
         SELECT TOP ${LIMITE_POR_FONTE} FornecedorId AS id, Nome AS titulo, CpfCnpj AS subtitulo FROM Fornecedores WHERE Nome LIKE @q OR CpfCnpj LIKE @q
       `);
@@ -80,19 +84,19 @@ module.exports = async function (context, req) {
 
     const numero = Number(termo);
     const requestL = pool.request().input("q", sql.NVarChar(200), like).input("numero", sql.Int, Number.isInteger(numero) && Math.abs(numero) < 2147483647 ? numero : -1);
-    const escopoL = filtroDeCongregacoes(requestL, "cg.Nome", usuario);
+    const escopoL = filtroDeCongregacoes(requestL, "cg.Nome", vFinanceiro);
     if (!escopoL.vazio) {
       const rl = await requestL.query(`
         SELECT TOP ${escopoL.emMemoria ? TOP_EM_MEMORIA : LIMITE_POR_FONTE} l.LancamentoId AS id, l.TermoNumero AS termoNumero, l.Valor AS valor, cg.Nome AS congregacao
         FROM LancamentosTesouraria l JOIN Congregacoes cg ON cg.CongregacaoId = l.CongregacaoId
         WHERE (l.TermoNumero = @numero OR l.NomeAvulso LIKE @q)${escopoL.sql}
       `);
-      rl.recordset.filter(l => auth.estaNoEscopo(usuario, l.congregacao)).slice(0, LIMITE_POR_FONTE)
+      rl.recordset.filter(l => auth.estaNoEscopo(vFinanceiro, l.congregacao)).slice(0, LIMITE_POR_FONTE)
         .forEach(l => resultados.push({ tipo: "Lançamento", titulo: `Termo nº ${l.termoNumero}`, subtitulo: `${l.congregacao} — R$ ${Number(l.valor).toFixed(2)}`, aba: "financeiro" }));
     }
   }
 
-  if (geral && (permissoes.includes("reunioes") || permissoes.includes("cli"))) {
+  if (vProjetos && ehGeral(vProjetos)) {
     const rp = await pool.request().input("q", sql.NVarChar(200), like).query(`
       SELECT TOP ${LIMITE_POR_FONTE} ProjetoId AS id, Titulo AS titulo, Protocolo AS protocolo FROM Projetos WHERE Titulo LIKE @q OR Protocolo LIKE @q
     `);
@@ -101,9 +105,10 @@ module.exports = async function (context, req) {
 
   // Anexos genéricos: busca por nome de arquivo, só do nível geral e só entre tabelas cuja permissão ele já tem — nunca revela nome de anexo de tabela que
   // ele não pode ver. As tabelas de anexo não têm congregação, então não há como filtrar por escopo: quem não é geral não os encontra por aqui.
-  const tabelasPermitidas = !geral ? [] : Object.keys(ABA_POR_TABELA_ANEXO).filter(tabela =>
-    (permissoesDaTabela(tabela) || []).some(p => permissoes.includes(p))
-  );
+  const tabelasPermitidas = Object.keys(ABA_POR_TABELA_ANEXO).filter(tabela => {
+    const permissoesTabela = permissoesDaTabela(tabela) || [];
+    return permissoesTabela.length > 0 && ehGeral(auth.visaoDaPermissao(usuario, permissoesTabela));
+  });
   if (tabelasPermitidas.length > 0) {
     const requestAnexos = pool.request().input("q", sql.NVarChar(200), like);
     const parametrosTabela = tabelasPermitidas.map((tabela, i) => {

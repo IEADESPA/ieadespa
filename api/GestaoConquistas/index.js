@@ -35,12 +35,15 @@ function erro(context, status, mensagem) {
 }
 
 function temGestao(usuario) {
-  return !!(usuario.permissoes && usuario.permissoes.includes("conquistas_gestao"));
+  return auth.temPermissao(usuario, "conquistas_gestao");
 }
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirLogin(req, context);
-  if (!usuario) return;
+  const sessao = auth.exigirLogin(req, context);
+  if (!sessao) return;
+  // v7.6 — escopo, nível e departamento conferidos adiante são os da permissão conquistas_gestao (a visão só com as concessões que a têm; ver shared/auth.js,
+  // "Concessões"), não o somado de outro cargo ou delegação. Sem a permissão, a sessão inteira (quem usa a rota como aluno, professor, membro...).
+  const usuario = auth.visaoDaPermissao(sessao, "conquistas_gestao") || sessao;
 
   const pool = await getPool();
   const acao = context.bindingData.acao;

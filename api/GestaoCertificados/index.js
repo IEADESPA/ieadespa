@@ -21,11 +21,11 @@ function erro(context, status, mensagem) {
 }
 
 function temGestao(usuario) {
-  return !!(usuario.permissoes && usuario.permissoes.includes("ebd_gestao"));
+  return auth.temPermissao(usuario, "ebd_gestao");
 }
 
 function temGestaoFormacao(usuario) {
-  return !!(usuario.permissoes && usuario.permissoes.includes("trilhas_gestao"));
+  return auth.temPermissao(usuario, "trilhas_gestao");
 }
 
 module.exports = async function (context, req) {

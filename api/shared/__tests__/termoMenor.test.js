@@ -173,10 +173,11 @@ describe("cadastrar o responsável (Secretaria)", () => {
 describe("revogar e listar (Secretaria)", () => {
   test("revoga uma vez; a segunda chamada (ou a corrida) recebe 'já foi revogado'; fora do escopo é 403", async () => {
     const linha = { ResponsavelId: 12, MenorMembroId: 30, RevogadoEm: null, CongregacaoNome: "Central" };
-    const { pool, chamadas } = criarPoolFalso([[linha], [{ n: 1 }]]);
+    const { pool, chamadas } = criarPoolFalso([[linha], [{ n: 1 }], [{ n: 1 }]]);           // revogou; e ainda resta 1 responsável ativo
     const r = await db.revogarResponsavel(pool, { responsavelId: 12, por: 5, autorizacao: todos });
     expect(r.sucesso).toBe(true);
-    expect(r.mensagem).toMatch(/Remover da escala/);
+    expect(r).toMatchObject({ adesaoSuspensa: false, escalasFuturas: [] });
+    expect(r.mensagem).toMatch(/ainda tem outro responsável ativo: a adesão continua valendo/);
     expect(chamadas[1].sql).toMatch(/AND RevogadoEm IS NULL; SELECT @@ROWCOUNT/);
     expect(chamadas[1].sql).not.toMatch(/OUTPUT/);                                                   // a tabela tem gatilho: OUTPUT sem INTO não pode
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "RESPONSAVEL_REVOGADO", registroId: 12, usuarioId: 5 });
@@ -184,6 +185,21 @@ describe("revogar e listar (Secretaria)", () => {
     expect((await db.revogarResponsavel(criarPoolFalso([[linha], [{ n: 0 }]]).pool, { responsavelId: 12, por: 5, autorizacao: todos })).mensagem).toMatch(/já foi revogado/);
     expect(await db.revogarResponsavel(criarPoolFalso([[linha]]).pool, { responsavelId: 12, por: 5, autorizacao: soVilaNova })).toMatchObject({ proibido: true });
     expect(await db.revogarResponsavel(criarPoolFalso([[]]).pool, { responsavelId: 99, por: 5, autorizacao: todos })).toMatchObject({ proibido: true });
+  });
+  test("03/10/2026 — revogar o ÚLTIMO responsável ativo: a adesão do responsável fica suspensa e as escalas futuras do menor voltam sinalizadas", async () => {
+    const linha = { ResponsavelId: 12, MenorMembroId: 30, RevogadoEm: null, CongregacaoNome: "Central" };
+    const adesao = { AdesaoId: 9, MembroId: 30, Forma: "CLICK_RESP", ResponsavelNome: "Maria", ResponsavelVinculo: "MAE", DataAceite: new Date("2026-09-01T00:00:00Z"), SuspensaSemResponsavel: 1 };
+    const escala = { AlocacaoId: 77, Status: "CONVIDADO", ServicoId: 5, DataHora: new Date("2026-12-06T12:00:00Z"), Descricao: "Culto", Equipe: "Som", MembroId: 30, Nome: "Caio", DataNascimento: nascidoHa(14), Suspensa: 1, AdesaoId: 9 };
+    const { pool, chamadas } = criarPoolFalso([[linha], [{ n: 1 }], [{ n: 0 }], [adesao], [escala]]);
+    const r = await db.revogarResponsavel(pool, { responsavelId: 12, por: 5, autorizacao: todos });
+    expect(r).toMatchObject({ sucesso: true, adesaoSuspensa: true });
+    expect(r.mensagem).toMatch(/Era o último responsável ativo\. Adesão suspensa: sem responsável ativo — cadastre um responsável e peça nova adesão/);
+    expect(r.mensagem).toMatch(/1 escala\(s\) futura\(s\) já marcada\(s\).*Remover da escala/);
+    expect(r.escalasFuturas).toEqual([expect.objectContaining({ alocacaoId: 77, membroId: 30, motivo: expect.stringMatching(/Adesão suspensa/) })]);
+    expect(chamadas[3].sql).toMatch(/AS SuspensaSemResponsavel/);
+    expect(chamadas[4].sql).toMatch(/CAST\(s\.DataHora AS DATE\) >= @hoje/);
+    // nada é alterado na adesão (a prova): nenhuma escrita além da revogação
+    expect(chamadas.filter(c => /^\s*(INSERT|UPDATE|DELETE)/i.test(c.sql)).map(c => c.sql)).toEqual([expect.stringMatching(/UPDATE VoluntariadoResponsaveis SET RevogadoEm/)]);
   });
   test("lista os responsáveis do menor, ativos e revogados, com o documento que a Secretaria conferiu", async () => {
     const { pool } = criarPoolFalso([[menor()], [
@@ -299,10 +315,65 @@ describe("a adesão do responsável não vale depois dos 18 anos: a pessoa renov
       { MembroId: 30, Nome: "Caio", DataNascimento: nascidoHa(18), Equipes: "Som", AdesaoId: 7, Forma: "CLICK_RESP", DataAceite: new Date("2024-03-01T00:00:00Z"), Referencia: null, ResponsavelNome: "Maria", Responsaveis: 1 },
       { MembroId: 31, Nome: "Dora", DataNascimento: nascidoHa(14), Equipes: "Som", AdesaoId: null, Forma: null, DataAceite: null, Referencia: null, ResponsavelNome: null, Responsaveis: 0 },
       { MembroId: 32, Nome: "Edu", DataNascimento: nascidoHa(14), Equipes: "Som", AdesaoId: 9, Forma: "CLICK_RESP", DataAceite: new Date("2026-02-01T00:00:00Z"), Referencia: null, ResponsavelNome: "Pai", Responsaveis: 1 }];
-    const r = await db.coberturaDoTermo(criarPoolFalso([linhas]).pool, { congregacaoId: 1, hoje: HOJE });
+    const r = await db.coberturaDoTermo(criarPoolFalso([linhas, []]).pool, { congregacaoId: 1, hoje: HOJE });
     expect(r.voluntarios.map(v => [v.nome, v.aderiu, v.renovar, v.menor, v.responsaveis])).toEqual([
       ["Caio", false, true, false, 1], ["Dora", false, false, true, 0], ["Ana", true, false, false, 0], ["Edu", true, false, true, 1]]);
     expect(r).toMatchObject({ total: 4, comTermo: 2, semTermo: 2 });
+  });
+});
+
+describe("03/10/2026 — a adesão do responsável só vale enquanto há responsável ATIVO (suspensa, não apagada)", () => {
+  const { MENSAGEM_ADESAO_SUSPENSA } = require("../voluntariado");
+  test("cobertura: adesão suspensa conta como SEM termo, não é 'renovar', e a tela recebe a mensagem e as escalas futuras sinalizadas", async () => {
+    const linhas = [
+      { MembroId: 32, Nome: "Edu", DataNascimento: nascidoHa(14), Equipes: "Som", AdesaoId: 9, Forma: "CLICK_RESP", DataAceite: new Date("2026-02-01T00:00:00Z"), Referencia: null, ResponsavelNome: "Pai", Responsaveis: 0, SuspensaSemResponsavel: 1 },
+      { MembroId: 33, Nome: "Fábio", DataNascimento: nascidoHa(15), Equipes: "Som", AdesaoId: 10, Forma: "CLICK_RESP", DataAceite: new Date("2026-02-01T00:00:00Z"), Referencia: null, ResponsavelNome: "Mãe", Responsaveis: 1, SuspensaSemResponsavel: 0 }];
+    const escala = { AlocacaoId: 77, Status: "ACEITO", ServicoId: 5, DataHora: new Date("2026-12-06T12:00:00Z"), Descricao: "Culto", Equipe: "Som", MembroId: 32, Nome: "Edu", DataNascimento: nascidoHa(14), Suspensa: 1, AdesaoId: 9 };
+    const { pool, chamadas } = criarPoolFalso([linhas, [escala]]);
+    const r = await db.coberturaDoTermo(pool, { congregacaoId: 1, hoje: HOJE });
+    expect(r.voluntarios.map(v => [v.nome, v.aderiu, v.renovar, v.suspensa])).toEqual([["Edu", false, false, true], ["Fábio", true, false, false]]);
+    expect(r.voluntarios[0].mensagemSuspensa).toBe(MENSAGEM_ADESAO_SUSPENSA);
+    expect(MENSAGEM_ADESAO_SUSPENSA).toBe("Adesão suspensa: sem responsável ativo — cadastre um responsável e peça nova adesão.");
+    expect(r).toMatchObject({ comTermo: 1, semTermo: 1 });
+    expect(r.escalasFuturasSemAdesao).toEqual([expect.objectContaining({ alocacaoId: 77, nome: "Edu", motivo: MENSAGEM_ADESAO_SUSPENSA })]);
+    expect(chamadas[0].sql).toMatch(/rv\.RevogadoEm >= a\.AceitoEm/);
+    expect(chamadas[1].inputs).toMatchObject({ c: 1, hoje: HOJE });
+  });
+  test("Meu Painel do menor: 'suspensa' com a mensagem; não é 'renovar' (não é questão de idade) e não aderiu", async () => {
+    const adesao = { AdesaoId: 9, MembroId: 30, Forma: "CLICK_RESP", ResponsavelNome: "Maria", ResponsavelVinculo: "MAE", DataAceite: new Date("2026-09-01T00:00:00Z"), SuspensaSemResponsavel: 1 };
+    const r = await db.situacaoDoTermo(criarPoolFalso([[adesao], [menor()]]).pool, 30, { hoje: HOJE });
+    expect(r).toMatchObject({ aderiu: false, renovar: false, suspensa: true, mensagemSuspensa: MENSAGEM_ADESAO_SUSPENSA });
+    expect(r.adesao).toMatchObject({ adesaoId: 9, suspensaSemResponsavel: true });            // a prova continua lá, inteira
+    const valendo = await db.situacaoDoTermo(criarPoolFalso([[{ ...adesao, SuspensaSemResponsavel: 0 }], [menor()]]).pool, 30, { hoje: HOJE });
+    expect(valendo).toMatchObject({ aderiu: true, suspensa: false });
+  });
+  test("nova adesão pelo responsável ativo RESTABELECE: grava outra linha apontando a suspensa (RestabeleceAdesaoId), sem tocar na antiga", async () => {
+    const suspensa = { AdesaoId: 9, MembroId: 30, Forma: "CLICK_RESP", ResponsavelNome: "Maria", ResponsavelVinculo: "MAE", DataAceite: new Date("2026-09-01T00:00:00Z"), SuspensaSemResponsavel: 1 };
+    const { pool, chamadas } = criarPoolFalso([[{ ResponsavelId: 13, Vinculo: "PAI" }], [mae({ MembroId: 41, Nome: "José" })], [menor()], [suspensa], [{ id: 11 }], [{ ...suspensa, AdesaoId: 11, SuspensaSemResponsavel: 0, RestabeleceAdesaoId: 9 }]]);
+    const r = await db.aceitarDigitalResponsavel(pool, { responsavelId: 41, menorId: 30, aceito: true, ip: "177.87.165.132", hoje: HOJE });
+    expect(r.sucesso).toBe(true);
+    const ins = chamadas.find(c => /INSERT INTO VoluntariadoAdesoes/.test(c.sql));
+    expect(ins.inputs).toMatchObject({ m: 30, rs: 41, rest: 9 });
+    expect(chamadas.filter(c => /^\s*(UPDATE|DELETE)/i.test(c.sql))).toHaveLength(0);
+    // adesão que VALE não é duplicada (recusa como antes)
+    const { pool: p2, chamadas: c2 } = criarPoolFalso([[{ ResponsavelId: 13, Vinculo: "PAI" }], [mae({ MembroId: 41 })], [menor()], [{ ...suspensa, SuspensaSemResponsavel: 0 }]]);
+    expect((await db.aceitarDigitalResponsavel(p2, { responsavelId: 41, menorId: 30, aceito: true, ip: "177.87.165.132", hoje: HOJE })).sucesso).toBe(false);
+    expect(c2.some(c => /INSERT INTO/.test(c.sql))).toBe(false);
+  });
+  test("a ficha assinada também restabelece a adesão suspensa do menor (fase do responsável)", async () => {
+    const suspensa = { AdesaoId: 9, MembroId: 30, Forma: "CLICK_RESP", ResponsavelNome: "Maria", DataAceite: new Date("2026-09-01T00:00:00Z"), SuspensaSemResponsavel: 1 };
+    const { pool, chamadas } = criarPoolFalso([[menor()], [suspensa], [{ id: 12 }], [{ ...suspensa, AdesaoId: 12, Forma: "FICHA_FISICA", SuspensaSemResponsavel: 0 }]]);
+    const r = await db.registrarAdesaoManual(pool, { membroId: 30, dados: { forma: "FICHA_FISICA", dataAceite: HOJE, referencia: "Ficha nº 7", responsavelNome: "José Souza", responsavelVinculo: "PAI" }, por: 5, hoje: HOJE });
+    expect(r.sucesso).toBe(true);
+    expect(chamadas[2].inputs).toMatchObject({ rest: 9, rn: "José Souza" });
+  });
+  test("adesaoVigente / adesaoSuspensa (regra pura)", () => {
+    const vol = require("../voluntariado");
+    expect(vol.adesaoVigente({ responsavelNome: "Maria", suspensaSemResponsavel: true }, 14)).toBe(false);
+    expect(vol.adesaoVigente({ responsavelNome: "Maria", suspensaSemResponsavel: false }, 14)).toBe(true);
+    expect(vol.adesaoVigente({ responsavelNome: null }, 30)).toBe(true);
+    expect(vol.adesaoSuspensa({ suspensaSemResponsavel: true })).toBe(true);
+    expect(vol.adesaoSuspensa(null)).toBe(false);
   });
 });
 

@@ -279,9 +279,13 @@ async function concluirEtapa(pool, { habilitacaoId, etapa, registradoPorMembroId
 
   // v7.5 — o "termo assinado" deixa de ser um carimbo manual: a etapa só fecha se a adesão existe de verdade (aceite digital com IP/data/hora,
   // ficha, mensagem ou Lista de Ouro — Reg. Art. 133 §8º; Lei 9.608/98, art. 2º). Carregado sob demanda para não criar ciclo entre os módulos.
+  // 03/10/2026: e a adesão precisa VALER hoje — não a do responsável de quem já fez 18 anos, nem a do responsável cadastrado que ficou suspensa porque o
+  // menor ficou sem responsável ativo (shared/adesaoMenor.js).
   if (etapa === "TERMO") {
-    const adesao = await require("./voluntariadoDb").buscarAdesao(pool, hab.membroId);
-    if (!adesao) return { sucesso: false, mensagem: "O voluntário ainda não aderiu ao Termo de Adesão (Lei 9.608/98). Peça o aceite em Meu Painel ou registre a ficha, a mensagem ou a Lista de Ouro em Habilitação de Voluntários." };
+    const situacao = await require("./voluntariadoDb").situacaoDoTermo(pool, hab.membroId);
+    if (!situacao.adesao) return { sucesso: false, mensagem: "O voluntário ainda não aderiu ao Termo de Adesão (Lei 9.608/98). Peça o aceite em Meu Painel ou registre a ficha, a mensagem ou a Lista de Ouro em Habilitação de Voluntários." };
+    if (situacao.suspensa) return { sucesso: false, mensagem: situacao.mensagemSuspensa };
+    if (!situacao.aderiu) return { sucesso: false, mensagem: "A adesão registrada foi dada pelo responsável e a pessoa já completou 18 anos: ela mesma precisa confirmar a adesão em Meu Painel → Minha Habilitação." };
   }
 
   const campo = CAMPO_ETAPA[etapa];

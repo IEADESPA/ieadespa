@@ -75,11 +75,15 @@ module.exports = async function (context, req) {
   const perms = usuario.permissoes || [];
   const ehGestao = perms.includes("eventos_gestao");
   // Revisão de escopo: FECHADO — sessão sem a lista de congregações (claim ausente) não é global e não alcança nada.
-  const escopoGlobal = usuario.escopoCongregacoes === "TODAS";
-  const escopo = escopoGlobal ? "TODAS" : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []);
-  const ehEtica = perms.includes("eventos_etica") && escopoGlobal;
-  const ehPresidencia = perms.includes("eventos_presidencia") && escopoGlobal;
-  const ehTesouraria = perms.includes("financeiro") && escopoGlobal;
+  // v7.6 — cada papel do evento com o escopo DA SUA permissão (só as concessões que a têm): o escopo de gestão é o de "eventos_gestao"; ética, presidência
+  // e tesouraria exigem o campo todo na própria permissão. Quem não tem "eventos_gestao" usa a sessão inteira (só para a tela).
+  const escopoTodas = (chave) => { const v = auth.visaoDaPermissao(usuario, chave); return !!v && v.escopoCongregacoes === "TODAS"; };
+  const vGestao = auth.visaoDaPermissao(usuario, "eventos_gestao") || usuario;
+  const escopoGlobal = vGestao.escopoCongregacoes === "TODAS";
+  const escopo = escopoGlobal ? "TODAS" : (Array.isArray(vGestao.escopoCongregacoes) ? vGestao.escopoCongregacoes : []);
+  const ehEtica = escopoTodas("eventos_etica");
+  const ehPresidencia = escopoTodas("eventos_presidencia");
+  const ehTesouraria = escopoTodas("financeiro");
   const membroId = usuario.membroId || null;
 
   const acao = context.bindingData.acao || "";

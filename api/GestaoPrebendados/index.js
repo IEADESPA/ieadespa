@@ -17,11 +17,14 @@ const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { soDigitos, mascararCpf, dataIsoValida, idOpcional } = require("../shared/financeiroSeguro");
+const { comConflito } = require("../shared/violacaoUnica");
 
 const ACOES = ["SUSPENDER", "ENCERRAR", "REATIVAR"];
 const NAO_ENCONTRADO = { sucesso: false, mensagem: "Prebendado não encontrado." };
 
-module.exports = async function (context, req) {
+// O CPF do prebendado é único também no banco (restrição UNIQUE desde a migração 060): dois cadastros ao mesmo tempo furam a conferência "já existe prebendado com esse CPF", e o
+// perdedor recebe o 409 em vez de um 500.
+module.exports = comConflito(async function (context, req) {
   const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
   const rota = idOpcional(context.bindingData.id);
@@ -194,4 +197,4 @@ module.exports = async function (context, req) {
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Prebendado atualizado." } };
     return;
   }
-};
+}, "Já existe prebendado com esse CPF.");

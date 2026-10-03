@@ -122,6 +122,19 @@ describe("o escopo precisa ser coerente com o papel", () => {
       expect(g[0].inputs.escopoId).toBe(corpo.escopoTipo === "GLOBAL" ? null : 7);
     }
   });
+  test("dois pedidos para a MESMA pessoa sem acesso: o banco (UX_Lideranca_Membro, migração 124) recusa o segundo e a rota responde com frase clara, nunca 500", async () => {
+    banco();
+    const duplicada = Object.assign(new Error("Cannot insert duplicate key row in object 'dbo.Lideranca' with unique index 'UX_Lideranca_Membro'."), { number: 2601 });
+    quando(/^\s*INSERT INTO Lideranca/, () => { throw duplicada; });
+    const r = await chamar({ corpo: concede() });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/acabou de receber acesso/) });
+    // falha que não é de unicidade continua subindo (não se engole erro de verdade)
+    const outra = Object.assign(new Error("Timeout expired"), { number: -2 });
+    mockRegras = []; banco();
+    quando(/^\s*INSERT INTO Lideranca/, () => { throw outra; });
+    await expect(chamar({ corpo: concede() })).rejects.toThrow("Timeout expired");
+  });
   test("Pastor de Área (nível AREA) com escopo REGIAO ou GLOBAL: recusado", async () => {
     banco();
     for (const escopoTipo of ["REGIAO", "QUADRANTE", "DISTRITO"]) expect((await chamar({ corpo: concede({ papelId: 3, escopoTipo }) })).body.mensagem).toMatch(/mais largo/);

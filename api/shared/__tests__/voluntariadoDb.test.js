@@ -692,7 +692,7 @@ describe("cobertura do Termo (tela da Secretaria)", () => {
       { MembroId: 3, Nome: "Ana", DataNascimento: new Date("1985-03-02T00:00:00Z"), Equipes: "Limpeza, Portaria", AdesaoId: null, Forma: null, DataAceite: null, Referencia: null },
       { MembroId: 4, Nome: "Beto", DataNascimento: null, Equipes: "Limpeza", AdesaoId: 2, Forma: "FICHA_FISICA", DataAceite: new Date("2026-08-01T00:00:00Z"), Referencia: "Ficha 9" }
     ];
-    const r = await db.coberturaDoTermo(criarPoolFalso([linhas]).pool, { congregacaoId: 1, hoje: HOJE });
+    const r = await db.coberturaDoTermo(criarPoolFalso([linhas, []]).pool, { congregacaoId: 1, hoje: HOJE });       // [] = nenhuma escala futura de menor sem adesão
     expect(r).toMatchObject({ total: 2, comTermo: 1, semTermo: 1 });
     expect(r.voluntarios[0]).toMatchObject({ nome: "Ana", aderiu: false, forma: null, equipes: "Limpeza, Portaria", menor: false });
     expect(r.voluntarios[1]).toMatchObject({ nome: "Beto", aderiu: true, rotuloForma: "Cláusula de Voluntariado na Ficha de Membro assinada", dataAceite: "2026-08-01", menor: false });
@@ -702,7 +702,7 @@ describe("cobertura do Termo (tela da Secretaria)", () => {
       { MembroId: 5, Nome: "Caio", DataNascimento: nascidoHa(18, 1), Equipes: "Som", AdesaoId: null, Forma: null, DataAceite: null, Referencia: null },
       { MembroId: 6, Nome: "Dora", DataNascimento: nascidoHa(18), Equipes: "Som", AdesaoId: null, Forma: null, DataAceite: null, Referencia: null }
     ];
-    const r = await db.coberturaDoTermo(criarPoolFalso([linhas]).pool, { congregacaoId: 1, hoje: HOJE });
+    const r = await db.coberturaDoTermo(criarPoolFalso([linhas, []]).pool, { congregacaoId: 1, hoje: HOJE });
     expect(r.voluntarios.map(x => [x.nome, x.menor])).toEqual([["Caio", true], ["Dora", false]]);
     expect(JSON.stringify(r)).not.toMatch(/DataNascimento|2008-/);
   });

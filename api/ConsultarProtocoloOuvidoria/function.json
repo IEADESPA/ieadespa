@@ -1,4 +1,5 @@
 {
+  "scriptFile": "../shared/entrada.js",
   "bindings": [
     {
       "authLevel": "anonymous",

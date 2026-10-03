@@ -20,30 +20,38 @@ const { sql } = require("./db");
 const MSG_GERAL = "Esta função é da administração geral da igreja.";
 const FORA_DO_ESCOPO = { sucesso: false, mensagem: "Fora do seu escopo de atuação." };
 
-// O nível geral: papel GLOBAL com escopo de todas as congregações.
+// O nível geral: papel GLOBAL com escopo de todas as congregações — numa MESMA concessão (v7.6). A visão de várias concessões une nível e escopo, e um cargo
+// Global de escopo limitado somado a um Líder Geral de Departamento (escopo TODAS) passaria se a conferência olhasse só os campos de topo.
+const concessaoGeral = (c) => !!c && c.nivel === "GLOBAL" && c.escopoCongregacoes === "TODAS";
 function ehGeral(usuario) {
-  return !!usuario && usuario.nivel === "GLOBAL" && usuario.escopoCongregacoes === "TODAS";
+  if (!usuario) return false;
+  return auth.concessoesDaVisao(usuario).some(concessaoGeral);
 }
 
-// Porta de rota institucional. `permissao`: texto, lista (qualquer uma) ou null/undefined (só login). Devolve o usuário ou null (e já deixa context.res preenchido).
+// Porta de rota institucional. `permissao`: texto, lista (qualquer uma) ou null/undefined (só login). Devolve a visão da sessão SÓ com as concessões do nível
+// geral que têm a permissão (ou null, e já deixa context.res preenchido).
 function exigirGeral(req, context, permissao) {
   let usuario;
   if (permissao === undefined || permissao === null) usuario = auth.exigirLogin(req, context);
   else if (Array.isArray(permissao)) usuario = auth.exigirAlgumaPermissao(req, context, permissao);
   else usuario = auth.exigirPermissao(req, context, permissao);
   if (!usuario) return null;
-  if (!ehGeral(usuario)) {
+  const geral = ehGeral(usuario) ? auth.restringirVisao(usuario, concessaoGeral) : null;
+  if (!geral) {
     context.res = { status: 403, body: { sucesso: false, mensagem: MSG_GERAL } };
     return null;
   }
-  return usuario;
+  return geral;
 }
 
 // A pessoa (congregação e extensão) está dentro do escopo de quem pergunta? Congregação ausente só é alcançada por quem tem escopo TODAS (auth.estaNoEscopo).
-// Escopo por Extensão da Tenda é mais estreito que a Congregação-Mãe: a pessoa precisa ser da mesma Extensão.
+// Escopo por Extensão da Tenda é mais estreito que a Congregação-Mãe: a pessoa precisa ser da mesma Extensão. v7.6 — concessão por concessão: a extensão de uma
+// delegação não estreita a congregação inteira do cargo próprio, nem o contrário.
 function noEscopoDaPessoa(usuario, congregacaoNome, extensaoNome) {
-  if (!auth.estaNoEscopo(usuario, congregacaoNome)) return false;
-  return !usuario.escopoExtensaoNome || extensaoNome === usuario.escopoExtensaoNome;
+  const cobre = (c) => auth.estaNoEscopo(c, congregacaoNome) && (!c.escopoExtensaoNome || extensaoNome === c.escopoExtensaoNome);
+  const concessoes = usuario && Array.isArray(usuario._daVisao) && usuario._daVisao.length > 1 ? usuario._daVisao : null;
+  if (concessoes) return concessoes.some(cobre);
+  return !!usuario && cobre(usuario);
 }
 
 // Carrega a pessoa com a congregação e a extensão. A matrícula só vale na forma canônica (auth.idDeRota). null = não existe (ou id malformado).

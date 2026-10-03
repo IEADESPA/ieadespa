@@ -1,11 +1,12 @@
 {
+  "scriptFile": "../shared/entrada.js",
   "bindings": [
     {
       "authLevel": "anonymous",
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": ["get", "post"],
+      "methods": ["get", "post", "put"],
       "route": "remessas-bancarias/{id?}"
     },
     { "type": "http", "direction": "out", "name": "res" }

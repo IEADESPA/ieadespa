@@ -10,6 +10,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { exigirGeral } = require("../shared/escopoRotas");
+const { violouUnicidade, comConflito } = require("../shared/violacaoUnica");
 
 // Catálogos que, mesmo tendo uma permissão de escrita própria, podem ser LIDOS por qualquer pessoa logada (o membro os usa no Meu Painel).
 const LEITURA_SO_COM_LOGIN = new Set(["categoriasEntrada"]);
@@ -203,16 +204,80 @@ async function criarOrgaosAutomaticos(pool, catalogoNome, registro) {
   if (!cfg) return;
   const referenciaId = registro[cfg.idField];
   for (const orgao of cfg.orgaos) {
-    await pool.request()
-      .input("sigla", sql.NVarChar(30), orgao.sigla)
-      .input("nome", sql.NVarChar(200), `${orgao.nome} — ${registro.nome}`)
-      .input("nivel", sql.Int, cfg.nivel)
-      .input("referenciaId", sql.Int, referenciaId)
-      .query(`
-        IF NOT EXISTS (SELECT 1 FROM OrgaosLocais WHERE Nivel = @nivel AND ReferenciaId = @referenciaId AND Sigla = @sigla)
-          INSERT INTO OrgaosLocais (Sigla, Nome, Nivel, ReferenciaId, Ativo) VALUES (@sigla, @nome, @nivel, @referenciaId, 1)
-      `);
+    try {
+      await pool.request()
+        .input("sigla", sql.NVarChar(30), orgao.sigla)
+        .input("nome", sql.NVarChar(200), `${orgao.nome} — ${registro.nome}`)
+        .input("nivel", sql.Int, cfg.nivel)
+        .input("referenciaId", sql.Int, referenciaId)
+        .query(`
+          IF NOT EXISTS (SELECT 1 FROM OrgaosLocais WHERE Nivel = @nivel AND ReferenciaId = @referenciaId AND Sigla = @sigla)
+            INSERT INTO OrgaosLocais (Sigla, Nome, Nivel, ReferenciaId, Ativo) VALUES (@sigla, @nome, @nivel, @referenciaId, 1)
+        `);
+    } catch (e) {
+      // O IF NOT EXISTS não é atômico: se outro pedido criou o mesmo órgão no meio, o índice único (UX_OrgaosLocais_Unidade_Sigla) recusa o segundo — e o órgão que se queria já existe.
+      if (!violouUnicidade(e)) throw e;
+    }
   }
+}
+
+// Frase do 409 quando o banco recusa uma repetição (índices únicos das migrações 127 e 130), escolhida pelo nome do índice que vem no erro. O resto cai na frase genérica.
+const FRASES_DE_REPETICAO = [
+  [/UX_Congregacoes_Nome/, "Já existe uma congregação com esse nome (maiúscula e minúscula contam como a mesma). Escolha outro nome ou ajuste a que já existe."],
+  [/UX_Congregacoes_Slug/, "Já existe uma congregação com esse endereço no site (slug). Escolha outro."],
+  [/UX_OrgaosLocais_Unidade_Sigla/, "Essa unidade já tem um órgão com essa sigla."],
+  [/UX_CargosMinisteriais_Sigla/, "Já existe um cargo ministerial com essa sigla."],
+  [/UX_Departamentos_Sigla/, "Já existe um departamento com essa sigla."],
+  [/UX_Papeis_Nome/, "Já existe um papel com esse nome."],
+  [/UX_SituacoesMembro_Sigla/, "Já existe uma situação de membro com essa sigla."],
+  [/UX_StatusMembro_Sigla/, "Já existe um status de membro com essa sigla."],
+  [/UX_Prazos_Sigla/, "Já existe um prazo com essa sigla."],
+  [/UX_Funcionalidades_Chave/, "Já existe uma funcionalidade com essa chave."]
+];
+function fraseDeRepeticao(erro) {
+  const texto = String((erro && erro.message) || "");
+  const achada = FRASES_DE_REPETICAO.find(([padrao]) => padrao.test(texto));
+  return achada ? achada[1] : "Já existe um registro com esses dados neste cadastro (nome, sigla ou código repetido). Confira a lista antes de salvar.";
+}
+
+// v7.6 — o ESCOPO de acesso compara o NOME da congregação (a sessão guarda a lista de nomes; ver shared/escopo.js) e, para escopo de Extensão da Tenda, o nome
+// da extensão dentro da congregação-mãe. Duas homônimas dividiriam o acesso. Criar ou renomear é recusado (409) se já existe outra com o mesmo nome — a
+// comparação é do SQL, ignorando maiúscula/minúscula, ACENTO e espaço nas pontas ("São Pedro", "sao pedro " e "SÃO PEDRO" são o mesmo nome). É mais rígida que
+// o índice único do banco (migração 130, que distingue acento): o lado seguro. O nome é gravado sem os espaços das pontas.
+const NOME_SEM_HOMONIMA = {
+  congregacoes: { mensagem: "Já existe uma congregação com esse nome (maiúsculas, acentos e espaços nas pontas não diferenciam). Escolha outro nome ou ajuste a que já existe." },
+  extensoes: { mensagem: "Essa congregação-mãe já tem uma extensão com esse nome (maiúsculas, acentos e espaços nas pontas não diferenciam). Escolha outro nome." }
+};
+async function nomeHomonimo(pool, catalogoNome, dados, idCorpo) {
+  const id = idCorpo ? auth.idDeRota(idCorpo) : null;
+  const comparar = `LTRIM(RTRIM(Nome)) COLLATE Latin1_General_CI_AI = LTRIM(RTRIM(@nome)) COLLATE Latin1_General_CI_AI`;
+  if (catalogoNome === "congregacoes") {
+    const r = await pool.request().input("nome", sql.NVarChar(150), dados.nome).input("id", sql.Int, id)
+      .query(`SELECT TOP 1 CongregacaoId FROM Congregacoes WHERE ${comparar} AND (@id IS NULL OR CongregacaoId <> @id)`);
+    return (r.recordset || []).length > 0;
+  }
+  // Extensão: homônima dentro da MESMA congregação-mãe (a do corpo ou, numa edição sem ela, a que já está gravada).
+  const r = await pool.request().input("nome", sql.NVarChar(150), dados.nome).input("id", sql.Int, id).input("mae", sql.Int, dados.congregacaoMaeId === undefined ? null : auth.idDeRota(dados.congregacaoMaeId))
+    .query(`SELECT TOP 1 ExtensaoId FROM ExtensoesTenda
+            WHERE ${comparar} AND (@id IS NULL OR ExtensaoId <> @id)
+              AND CongregacaoMaeId = COALESCE(@mae, (SELECT CongregacaoMaeId FROM ExtensoesTenda WHERE ExtensaoId = @id))`);
+  return (r.recordset || []).length > 0;
+}
+
+// v7.6 — SESSÃO REVOGÁVEL (shared/auth.js): o token carrega os NOMES de congregação (e de extensão) já resolvidos pela hierarquia, e as permissões e o nível
+// de cada papel. Renomear, mudar de área/região/quadrante/distrito, excluir uma unidade ou mudar as permissões/nível de um papel deixaria tokens velhos
+// alcançando o que não devem (ou deixando de alcançar) até expirar: todas as sessões abertas caem (menos a de quem fez a mudança, que é do nível geral) e o
+// login seguinte já monta o escopo novo. Os campos de endereço, horário, mapa etc. não estão no token e não derrubam ninguém.
+const CAMPOS_NO_TOKEN = {
+  congregacoes: ["nome", "areaId"], extensoes: ["nome", "congregacaoMaeId"], areas: ["regiaoId"], regioes: ["quadranteId"], quadrantes: ["distritoId"],
+  distritos: [], papeis: ["nivel", "permissoes"]
+};
+async function derrubarSessoesSeMudouOToken(pool, catalogoNome, antes, depois, usuario) {
+  const campos = CAMPOS_NO_TOKEN[catalogoNome];
+  if (!campos || !antes) return 0;
+  const mudou = !depois || campos.some((c) => JSON.stringify(antes[c] === undefined ? null : antes[c]) !== JSON.stringify(depois[c] === undefined ? null : depois[c]));
+  if (!mudou) return 0;
+  return auth.revogarTodasAsSessoes(pool, sql, { exceto: usuario && usuario.sid });
 }
 
 function coluna(campo) {
@@ -281,7 +346,7 @@ async function excluir(pool, config, id) {
   return del.rowsAffected[0] > 0;
 }
 
-module.exports = async function (context, req) {
+module.exports = comConflito(async function (context, req) {
   const method = (req.method || "GET").toUpperCase();
   const catalogoNome = context.bindingData.catalogo;
   const id = context.bindingData.id;
@@ -315,6 +380,18 @@ module.exports = async function (context, req) {
   if (method === "POST") {
     const dados = req.body || {};
     const idCorpo = dados.id;
+    // v7.6 — nome de congregação/extensão: sem espaço nas pontas e sem homônima (ver nomeHomonimo).
+    if (NOME_SEM_HOMONIMA[catalogoNome] && dados.nome !== undefined) {
+      if (typeof dados.nome !== "string" || !dados.nome.trim()) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o nome." } };
+        return;
+      }
+      dados.nome = dados.nome.trim();
+      if (await nomeHomonimo(pool, catalogoNome, dados, idCorpo)) {
+        context.res = { status: 409, body: { sucesso: false, mensagem: NOME_SEM_HOMONIMA[catalogoNome].mensagem } };
+        return;
+      }
+    }
     if (idCorpo) {
       const dadosAntes = await buscarPorId(pool, config, idCorpo);
       const registro = await atualizar(pool, config, idCorpo, dados);
@@ -322,9 +399,10 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Registro não encontrado." } };
         return;
       }
+      const sessoesEncerradas = await derrubarSessoesSeMudouOToken(pool, catalogoNome, dadosAntes, registro, usuario);
       await registrarAuditoria({
         tabela: config.tabela, registroId: Number(idCorpo), acao: "Atualizou registro",
-        usuarioId: usuario.membroId, dadosAntes, dadosDepois: registro
+        usuarioId: usuario.membroId, dadosAntes, dadosDepois: sessoesEncerradas ? { ...registro, sessoesEncerradas } : registro
       });
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro atualizado.", registro } };
     } else {
@@ -351,11 +429,12 @@ module.exports = async function (context, req) {
     const dadosAntes = await buscarPorId(pool, config, id);
     const ok = await excluir(pool, config, id);
     if (ok) {
-      await registrarAuditoria({ tabela: config.tabela, registroId: Number(id), acao: "Excluiu registro", usuarioId: usuario.membroId, dadosAntes });
+      const sessoesEncerradas = await derrubarSessoesSeMudouOToken(pool, catalogoNome, dadosAntes, null, usuario);
+      await registrarAuditoria({ tabela: config.tabela, registroId: Number(id), acao: "Excluiu registro", usuarioId: usuario.membroId, dadosAntes, dadosDepois: sessoesEncerradas ? { sessoesEncerradas } : undefined });
     }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: ok, mensagem: ok ? "✅ Excluído." : "Registro não encontrado." } };
     return;
   }
 
   context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
-};
+}, fraseDeRepeticao);

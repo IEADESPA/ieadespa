@@ -4,8 +4,10 @@
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const { resolverEscopoCongregacoes, resolverNomeExtensao } = require("../shared/escopo");
+const { ehGeral } = require("../shared/escopoRotas");
 const { termosPendentes } = require("../shared/termos");
-const { permissoesEscopoDelegados } = require("../shared/delegacoes");
+const { concessoesDelegadas } = require("../shared/delegacoes");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { permissoesComRecertificacaoExpirada } = require("../shared/compliance");
 const pinMembro = require("../shared/pinMembro");
 const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
@@ -78,7 +80,8 @@ module.exports = async function (context, req) {
 
   // Art. 45 §1º, I — Medida Cautelar de suspensão de acesso ao sistema
   // (GestaoMedidasCautelares grava AtivoAte = hoje na hora que aplica).
-  const hoje = new Date().toISOString().slice(0, 10);
+  // v7.6 — "hoje" no calendário de Brasília, o mesmo que a sessão usa para descartar concessão vencida (shared/auth.js).
+  const hoje = hojeBrasilia();
   if (lideranca.ativoAte && lideranca.ativoAte < hoje) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Acesso suspenso — procure a Secretaria Geral." } };
     return;
@@ -96,47 +99,50 @@ module.exports = async function (context, req) {
     resolverEscopoCongregacoes(pool, lideranca.escopoTipo, lideranca.escopoId),
     resolverNomeExtensao(pool, lideranca.escopoTipo, lideranca.escopoId),
     termosPendentes(pool, sql, lideranca.membroId, lideranca.papelNivel),
-    // vB.9 — delegação temporária: soma (nunca substitui) o que outra pessoa
-    // te delegou por um prazo, sem precisar emprestar senha de ninguém.
-    permissoesEscopoDelegados(pool, sql, lideranca.membroId, hoje),
+    // vB.9 — delegação temporária: o que outra pessoa te delegou por um prazo, sem precisar emprestar senha de ninguém. v7.6 — cada delegação vira uma
+    // CONCESSÃO à parte (com o escopo e o prazo dela), em vez de somar permissões e escopo num conjunto só.
+    concessoesDelegadas(pool, sql, lideranca.membroId, hoje),
     // vB.9 — revisão periódica com efeito real: permissão cuja recertificação
     // mais recente está EXPIRADA (v4.12, hoje generalizada a todos os papéis)
     // não entra na sessão nova, até alguém confirmar de novo (GestaoCompliance).
     permissoesComRecertificacaoExpirada(pool, sql, lideranca.membroId)
   ]);
-  const { permissoesExtras, escopoExtra, delegacoesAtivas } = delegados;
-  const uniao = [...new Set([...permissoesProprias, ...permissoesExtras])];
-  const permissoes = uniao.filter((p) => !expiradas.includes(p));
-  const escopoFinal = (escopo === "TODAS" || escopoExtra === "TODAS") ? "TODAS" : [...new Set([...escopo, ...escopoExtra])];
+  const { delegacoesAtivas } = delegados;
+  const delegadas = delegados.concessoes.map((c) => ({ ...c, permissoes: c.permissoes.filter((p) => !expiradas.includes(p)) }));
+
+  const concessaoPropria = {
+    origem: "PROPRIA",
+    // último dia do mandato/cargo (Lideranca.AtivoAte): passou, a concessão deixa de valer sozinha, sem esperar o token expirar
+    ate: lideranca.ativoAte || null,
+    permissoes: permissoesProprias.filter((p) => !expiradas.includes(p)),
+    nivel: lideranca.papelNivel,
+    escopoCongregacoes: escopo,
+    escopoExtensaoNome,
+    // v5.2 — Líder Local/de Área de um departamento específico (Lideranca.DepartamentoId). NULL = enxerga todos (Dirigente, Pastor de Área). Mesma limitação
+    // de sempre no "escolhe 1 vínculo por login" acima: o cargo próprio da sessão é UM (o de maior amplitude territorial cuja senha confere).
+    // v5.3 — Líder Geral (v2.7) guarda o departamento em `EscopoTipo='DEPARTAMENTO'`, `EscopoId`=departamentoId (mecanismo mais antigo, sem território), não
+    // na coluna `DepartamentoId`: sem este `||`, `auth.podeDepartamento` barrava ele até das próprias aprovações.
+    departamentoId: lideranca.escopoTipo === "DEPARTAMENTO" ? lideranca.escopoId : (lideranca.departamentoId || null)
+  };
+  const concessoes = [concessaoPropria, ...delegadas];
 
   // vB.9 — trilha de sessão: guarda o dispositivo (User-Agent) que logou,
   // pra tela "Minhas Sessões".
   const dispositivoInfo = (req.headers && (req.headers["user-agent"] || req.headers["User-Agent"])) || null;
+  // v7.6 — o token leva só as concessões; permissões, nível e escopo de topo são calculados delas a cada requisição (auth.getSessao) — não vão repetidos no
+  // token (o escopo de um cargo de distrito são centenas de nomes).
   const token = await auth.criarSessao(pool, sql, {
     membroId: lideranca.membroId,
     nome: lideranca.nome,
     tipo: lideranca.papelNome,
-    nivel: lideranca.papelNivel,
-    escopoCongregacoes: escopoFinal,
-    escopoExtensaoNome,
-    // v5.2 — Líder Local/de Área de um departamento específico (Lideranca.
-    // DepartamentoId). NULL = enxerga todos (Dirigente, Pastor de Área, sem
-    // mudança). Mesma limitação de sempre no "escolhe 1 vínculo por login"
-    // acima: alguém com Líder Local em 2 departamentos na mesma congregação
-    // só loga com um por vez, critério de amplitude territorial, não de
-    // departamento — documentado, não escondido.
-    // v5.3 — Líder Geral (v2.7) guarda o departamento de outro jeito
-    // (`EscopoTipo='DEPARTAMENTO'`, `EscopoId`=departamentoId — mecanismo
-    // mais antigo, sem território), não na coluna `DepartamentoId` nova.
-    // Sem este `||`, o Líder Geral logava sem departamento nenhum na sessão
-    // e `auth.podeDepartamento` barrava ele até das próprias aprovações.
-    departamentoId: lideranca.escopoTipo === "DEPARTAMENTO" ? lideranca.escopoId : (lideranca.departamentoId || null),
-    permissoes,
+    concessoes,
     termosPendentes: pendentes,
     // fecho da v7.5 — a sessão nasceu da SENHA de acesso administrativo: é isso que as rotas que dependem de "ser a liderança" (trocar a senha, aprovar etapa de
     // fluxo, delegar papel) exigem; a sessão de PIN ou de código (via:"PIN"/"CODIGO") é de membro, ainda que a pessoa tenha cargo.
     via: "SENHA"
   }, dispositivoInfo);
+  // O que a TELA mostra (menus, rótulos): a sessão inteira, com todas as concessões juntas. Quem decide acesso é a API, permissão por permissão.
+  const sessao = auth.getSessao(token);
 
   context.res = {
     status: 200,
@@ -147,8 +153,11 @@ module.exports = async function (context, req) {
       nome: lideranca.nome,
       tipo: lideranca.papelNome,
       nivel: lideranca.papelNivel,
-      escopo: escopoFinal,
-      permissoes,
+      escopo: sessao.escopoCongregacoes,
+      // v7.6 — "geral" calculado aqui com a MESMA regra das rotas (escopoRotas.ehGeral: nível Global e escopo TODAS numa mesma concessão). nivel/escopo acima
+      // juntam concessões diferentes (cargo próprio + delegação) e podiam fazer a tela mostrar como geral quem o servidor recusa. Só decide o que aparece.
+      geral: ehGeral(sessao),
+      permissoes: sessao.permissoes,
       termosPendentes: pendentes,
       delegacoesAtivas
     }

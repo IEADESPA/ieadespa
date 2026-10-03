@@ -43,7 +43,7 @@ async function nomeCongregacao(pool, congregacaoId) {
 }
 
 async function podeGerenciarCongregacao(pool, usuario, congregacaoId) {
-  if (!usuario.permissoes || !usuario.permissoes.includes("habilitacao_voluntarios")) return false;
+  if (!auth.temPermissao(usuario, "habilitacao_voluntarios")) return false;
   const nome = await nomeCongregacao(pool, congregacaoId);
   return !!nome && auth.estaNoEscopo(usuario, nome);
 }
@@ -53,7 +53,7 @@ function idValido(v) {
   const ok = (typeof v === "number" || (typeof v === "string" && /^\d+$/.test(v.trim()))) && Number(v) >= 1 && Number(v) <= 2147483647 && Number.isInteger(Number(v));
   return ok ? Number(v) : null;
 }
-const temPermissao = (usuario) => !!(usuario.permissoes && usuario.permissoes.includes("habilitacao_voluntarios"));
+const temPermissao = (usuario) => auth.temPermissao(usuario, "habilitacao_voluntarios");
 
 // A pessoa está ATIVA em alguma equipe de uma congregação que o escopo de quem age alcança? (voluntário cadastrado numa congregação que serve em outra)
 async function ativoEmEquipeDoEscopo(pool, usuario, membroId) {
@@ -88,8 +88,11 @@ function comStatusCalculado(hab) {
 }
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirLogin(req, context);
-  if (!usuario) return;
+  const sessao = auth.exigirLogin(req, context);
+  if (!sessao) return;
+  // v7.6 — escopo, nível e departamento conferidos adiante são os da permissão habilitacao_voluntarios (a visão só com as concessões que a têm; ver shared/auth.js,
+  // "Concessões"), não o somado de outro cargo ou delegação. Sem a permissão, a sessão inteira (quem usa a rota como aluno, professor, membro...).
+  const usuario = auth.visaoDaPermissao(sessao, "habilitacao_voluntarios") || sessao;
 
   const pool = await getPool();
   const acao = context.bindingData.acao;
@@ -139,7 +142,7 @@ module.exports = async function (context, req) {
     // v7.5 (achado da revisão): a lista, o detalhe e a elegibilidade só olhavam o escopo — qualquer pessoa logada com escopo na congregação (ou
     // qualquer login, no caso da elegibilidade) via o estado da habilitação dos voluntários. Passam a exigir a permissão, como o resto da esteira.
     if ((acao === "lista" || acao === "detalhe" || acao === "elegibilidade-menores") && metodo === "GET"
-        && !(usuario.permissoes && usuario.permissoes.includes("habilitacao_voluntarios"))) {
+        && !auth.temPermissao(usuario, "habilitacao_voluntarios")) {
       return erro(context, 403, "Você não tem permissão para isso.");
     }
     if (acao === "lista" && metodo === "GET") {

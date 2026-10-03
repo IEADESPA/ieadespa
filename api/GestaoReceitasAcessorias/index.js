@@ -15,6 +15,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { afetadas } = require("../shared/entradaFinanceira");
 
 const TIPOS = ["BAZAR", "ESTACIONAMENTO", "CESSAO_SALAO", "CANTINA_EVENTO", "OUTROS"];
 
@@ -24,7 +25,9 @@ function linhaParaJson(r) {
     tipo: r.Tipo, bemId: r.BemId, bemDescricao: r.bemDescricao, cessaoTemploId: r.CessaoTemploId,
     eventoDescricao: r.EventoDescricao, valor: r.Valor, dataRecebimento: r.DataRecebimento,
     aplicacaoFinalisticaDescricao: r.AplicacaoFinalisticaDescricao,
-    saidaId: r.SaidaId, comprovada: r.SaidaId != null
+    saidaId: r.SaidaId, comprovada: r.SaidaId != null,
+    // Receita de cessão cancelada (a cobrança foi estornada): continua na lista, marcada, mas não conta em nenhum total.
+    cancelada: r.CanceladaEm != null, motivoCancelamento: r.MotivoCancelamento || null
   };
 }
 
@@ -37,7 +40,7 @@ module.exports = async function (context, req) {
   if (req.method === "GET" && recurso === "relatorio-origem-destino") {
     const result = await pool.request().query(`
       SELECT r.*, b.Descricao AS bemDescricao FROM ReceitasAcessorias r
-      LEFT JOIN BensPatrimoniais b ON b.BemId = r.BemId ORDER BY r.DataRecebimento DESC
+      LEFT JOIN BensPatrimoniais b ON b.BemId = r.BemId WHERE r.CanceladaEm IS NULL ORDER BY r.DataRecebimento DESC
     `);
     const grupos = {};
     result.recordset.forEach(r => {
@@ -116,8 +119,17 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Receita acessória não encontrada." } };
       return;
     }
-    await pool.request().input("id", sql.Int, id).input("saidaId", sql.Int, saidaId)
-      .query(`UPDATE ReceitasAcessorias SET SaidaId = @saidaId WHERE ReceitaAcessoriaId = @id`);
+    if (atual.recordset[0].CanceladaEm) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Esta receita acessória foi cancelada (a cobrança de origem foi estornada) — não há o que comprovar." } };
+      return;
+    }
+    // O estado vai no WHERE (não cancelada): se a conta de origem foi cancelada (e levou esta receita junto) entre a leitura acima e este UPDATE, nada é vinculado.
+    const vinculou = await pool.request().input("id", sql.Int, id).input("saidaId", sql.Int, saidaId)
+      .query(`UPDATE ReceitasAcessorias SET SaidaId = @saidaId WHERE ReceitaAcessoriaId = @id AND CanceladaEm IS NULL`);
+    if (afetadas(vinculou) === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Esta receita acessória mudou de situação (foi cancelada) enquanto você vinculava — atualize a lista." } };
+      return;
+    }
     await registrarAuditoria({
       tabela: "ReceitasAcessorias", registroId: Number(id), acao: "Vinculou comprovação de aplicação finalística", usuarioId: usuario.membroId,
       dadosDepois: { saidaId }

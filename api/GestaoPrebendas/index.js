@@ -24,6 +24,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const prebenda = require("../shared/prebenda");
 const { mesReferenciaValido, soDigitos, idOpcional, obterTrava } = require("../shared/financeiroSeguro");
+const { violouUnicidade, conflito } = require("../shared/violacaoUnica");
 
 const MSG_MES = "mesReferencia deve estar no formato AAAA-MM.";
 
@@ -255,6 +256,12 @@ module.exports = async function (context, req) {
       };
     } catch (erro) {
       try { await transaction.rollback(); } catch (e2) { /* já pode ter sido revertida */ }
+      // Rede do banco (restrição UNIQUE de mês + prebendado, migração 129): se, apesar da trava, um ministro já tiver a geração do mês, o banco recusa e a transação inteira volta
+      // (a Saída aprovada daquele ministro também): nada fica "solto" para ser paga duas vezes.
+      if (violouUnicidade(erro)) {
+        context.res = conflito("A folha deste mês já foi gerada para um dos prebendados (outra geração simultânea). Nada foi gravado nesta tentativa — confira a lista de prebendas do mês antes de tentar de novo.");
+        return;
+      }
       context.log.error("Falha ao gerar a folha de prebenda:", erro.message);
       context.res = { status: 500, body: { sucesso: false, mensagem: "Falha ao gerar a folha de prebenda — nada foi gravado. Avise a equipe técnica." } };
     }

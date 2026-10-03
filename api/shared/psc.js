@@ -1019,6 +1019,9 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
     try { await transaction.rollback(); } catch { /* já encerrada */ }
     throw e;
   }
+  // v7.6 — a diretoria dissolvida perde também as sessões abertas, na hora (antes o token valia até expirar sozinho).
+  const { revogarSessoesDoMembro } = require("./auth");
+  for (const membroDissolvido of new Set(liderancas)) await revogarSessoesDoMembro(pool, sql, membroDissolvido);
   await registrarAuditoria({
     tabela: "PscReclassificacoes", registroId: reclassificacao.reclassificacaoId, acao: "RECLASSIFICACAO_DECRETADA", usuarioId: membroId,
     dadosAntes: { categoria: "CONGREGACAO", percentualRetencaoLocal: retencaoAnterior },

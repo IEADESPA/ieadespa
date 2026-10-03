@@ -106,6 +106,7 @@ const INSTITUCIONAIS = [
   ["RemessasBancarias GET lista", hRemessas, { metodo: "GET" }, "financeiro"],
   ["RemessasBancarias GET detalhe", hRemessas, { metodo: "GET", ligado: { id: "7" } }, "financeiro"],
   ["RemessasBancarias POST", hRemessas, { metodo: "POST", corpo: {} }, "financeiro"],
+  ["RemessasBancarias PUT (tratar divergência)", hRemessas, { metodo: "PUT", ligado: { id: "7" }, corpo: { acao: "TRATAR_DIVERGENCIA", remessaItemId: 1, resolucao: "ENCERRAR", observacao: "texto de justificativa" } }, "financeiro"],
   ["RepassesInstitucionais GET", hRepasses, { metodo: "GET" }, "financeiro"],
   ["RepassesInstitucionais GET alertas", hRepasses, { metodo: "GET", ligado: { recurso: "alertas" } }, "financeiro"],
   ["RepassesInstitucionais GET parametros", hRepasses, { metodo: "GET", ligado: { recurso: "parametros" } }, "financeiro"],
@@ -569,11 +570,14 @@ describe("GestaoPrebendas — gerar a folha de prebenda", () => {
 // =============================================================================================================================================================
 describe("GestaoRemessasBancarias — gerar a remessa", () => {
   const INSTITUICAO = { CodigoBanco: "001", Agencia: "1234", Conta: "56789", Cnpj: "12345678000190", RazaoSocial: "IEADESPA", NomeBanco: "BANCO", CodigoConvenio: "1", DigitoAgencia: "0", DigitoConta: "1" };
-  const CANDIDATA = { saidaId: 900, valor: 4000, nomeFavorecido: "JOAO", bancoFavorecido: "001", agenciaFavorecido: "1234", contaFavorecido: "98765" };
+  // A candidata agora traz o que as conferências do pagamento comum precisam (centro de custo, congregação, fornecedor confirmado) e há saldo de sobra no centro LOCAL.
+  const CANDIDATA = { saidaId: 900, valor: 4000, nomeFavorecido: "JOAO", bancoFavorecido: "001", agenciaFavorecido: "1234", contaFavorecido: "98765", congregacaoId: 1, centroCusto: "LOCAL", fornecedorId: 5, dadosBancariosConfirmados: true };
   const regras = ({ trava = 0, candidatas = [CANDIDATA] } = {}) => {
     quando(/FROM DadosBancariosInstituicao/, [INSTITUICAO]);
     quando(/sp_getapplock/, [{ resultado: trava }]);
     quando(/s\.Status = 'APROVADA'/, candidatas);
+    quando(/SUM\(ValorRetidoLocal\)/, [{ total: 100000 }]);
+    quando(/s\.Status = 'PAGA' AND cs\.CentroCusto/, [{ total: 0 }]);
     quando(/MAX\(NumeroSequencial\)/, [{ proximo: 5 }]);
     quando(/INSERT INTO RemessasBancarias/, [{ RemessaId: 77 }]);
     quando(/INSERT INTO RemessaItens/, []);
@@ -649,10 +653,12 @@ describe("GestaoRemessasBancarias — gerar a remessa", () => {
 // =============================================================================================================================================================
 // 7. Retorno do banco: só a ocorrência "00" confirma o pagamento
 // =============================================================================================================================================================
-function linhaRetorno(saidaId, ocorrencia) {
+// `valorCentavos`: o "valor efetivamente pago" que o banco devolve (posições 177-191, 15 dígitos); o padrão é o valor da Saída simulada abaixo (R$ 100,00).
+function linhaRetorno(saidaId, ocorrencia, valorCentavos = 10000) {
   const l = Array(240).fill(" ");
   l[7] = "3"; l[13] = "A";
   String(saidaId).padStart(20, "0").split("").forEach((ch, i) => { l[72 + i] = ch; });
+  String(valorCentavos).padStart(15, "0").split("").forEach((ch, i) => { l[176 + i] = ch; });
   String(ocorrencia).split("").forEach((ch, i) => { l[230 + i] = ch; });
   return l.join("");
 }
@@ -677,6 +683,12 @@ describe("ProcessarRetornoRemessa", () => {
   const regras = (statusRemessa = "GERADA") => {
     quando(/SELECT \* FROM RemessasBancarias WHERE RemessaId = @id/, [{ RemessaId: 77, Status: statusRemessa }]);
     quando(/FROM RemessaItens WHERE RemessaId = @remessaId AND SaidaId = @saidaId AND Status = 'PENDENTE'/, (i) => [{ RemessaItemId: 1000 + i.saidaId }]);
+    // O retorno agora roda numa transação sob a trava "PagamentoSaida" e confere a Saída de novo (a linha travada: aprovada, fornecedor confirmado, centro LOCAL com saldo).
+    quando(/sp_getapplock/, [{ resultado: 0 }]);
+    quando(/FROM SaidasTesouraria sa WITH \(UPDLOCK, HOLDLOCK\)/, (i) => [{ saidaId: i.saidaId, congregacaoId: 1, valor: 100, status: "APROVADA", centroCusto: "LOCAL", fornecedorId: 5, dadosBancariosConfirmados: true }]);
+    quando(/SUM\(ValorRetidoLocal\)/, [{ total: 100000 }]);
+    quando(/s\.Status = 'PAGA' AND cs\.CentroCusto/, [{ total: 0 }]);
+    quando(/UPDATE SaidasTesouraria SET Status = 'PAGA'/, [], 1); // a baixa pega 1 linha (o retorno confere as linhas afetadas)
   };
   const arquivo = (linhas) => Buffer.from(linhas.join("\r\n"), "utf-8").toString("base64");
 

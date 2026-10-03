@@ -49,11 +49,11 @@ function erro(context, status, mensagem) {
 }
 
 function temGestao(usuario) {
-  return !!(usuario.permissoes && usuario.permissoes.includes("psc_gestao"));
+  return auth.temPermissao(usuario, "psc_gestao");
 }
 
 function temHomologacao(usuario) {
-  return !!(usuario.permissoes && usuario.permissoes.includes("psc_homologacao"));
+  return auth.temPermissao(usuario, "psc_homologacao");
 }
 
 // Escopo TODAS (o campo inteiro). Falha FECHADO: sessão sem a lista de congregações não é "global" (antes, "sem lista" valia como todas).
@@ -73,8 +73,11 @@ function resposta(context, resultado, statusOk = 200) {
 }
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirLogin(req, context);
-  if (!usuario) return;
+  const sessao = auth.exigirLogin(req, context);
+  if (!sessao) return;
+  // v7.6 — escopo, nível e departamento conferidos adiante são os da permissão psc_gestao/psc_homologacao (a visão só com as concessões que a têm; ver shared/auth.js,
+  // "Concessões"), não o somado de outro cargo ou delegação. Sem a permissão, a sessão inteira (quem usa a rota como aluno, professor, membro...).
+  const usuario = auth.visaoDaPermissao(sessao, ["psc_gestao", "psc_homologacao"]) || sessao;
 
   const pool = await getPool();
   const acao = context.bindingData.acao || "";
@@ -87,7 +90,7 @@ module.exports = async function (context, req) {
   // Decisões da CLI valem para a igreja inteira (INSTITUCIONAL): permissão + nível GERAL (papel GLOBAL e escopo TODAS).
   function exigirHomologacao() {
     if (!temHomologacao(usuario)) { erro(context, 403, SEM_PERMISSAO); return false; }
-    if (!ehGeral(usuario)) {
+    if (!ehGeral(auth.visaoDaPermissao(usuario, "psc_homologacao"))) {
       erro(context, 403, "Homologar, decidir reclassificação e mexer no catálogo do PSC valem para a igreja inteira — exige o nível geral.");
       return false;
     }
@@ -212,7 +215,7 @@ module.exports = async function (context, req) {
       if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
       const congregacao = await psc.buscarCongregacao(pool, congregacaoId);
       // Fora do escopo = a mesma resposta de congregação que não existe.
-      if (!congregacao || !auth.estaNoEscopo(usuario, congregacao.Nome)) return erro(context, 404, "Congregação não encontrada.");
+      if (!congregacao || !auth.estaNoEscopo(auth.visaoDaPermissao(usuario, "psc_gestao"), congregacao.Nome)) return erro(context, 404, "Congregação não encontrada.");
       const resultado = await psc.abrirAvaliacao(pool, { congregacaoId, ano: corpo.ano, membroId: usuario.membroId });
       if (resultado.sucesso) {
         // Sugestões do sistema: ajuda, nunca condição (fail-soft).

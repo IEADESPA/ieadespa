@@ -57,19 +57,28 @@ module.exports = async function (context, req) {
     }
     const ehAnonima = anonima === true;
 
-    const protocolo = await gerarProtocolo(pool);
-    const result = await pool.request()
-      .input("protocolo", sql.NVarChar(30), protocolo)
-      .input("tipo", sql.NVarChar(30), tipo)
-      .input("anonima", sql.Bit, ehAnonima)
-      .input("denuncianteMembroId", sql.Int, ehAnonima ? null : usuario.membroId)
-      .input("denunciadoMembroId", sql.Int, denunciadoMembroId || null)
-      .input("relato", sql.NVarChar(sql.MAX), String(relato).trim())
-      .query(`
-        INSERT INTO DenunciasOuvidoria (Protocolo, Tipo, Anonima, DenuncianteMembroId, DenunciadoMembroId, Relato)
-        OUTPUT INSERTED.DenunciaId
-        VALUES (@protocolo, @tipo, @anonima, @denuncianteMembroId, @denunciadoMembroId, @relato)
-      `);
+    // Protocolo aleatório (shared/ouvidoria.js, 03/10/2026). A coluna é UNIQUE: na colisão (chance desprezível, ~79 bits) gera outro, até 3 vezes.
+    let protocolo, result;
+    for (let tentativa = 1; ; tentativa++) {
+      protocolo = await gerarProtocolo(pool);
+      try {
+        result = await pool.request()
+          .input("protocolo", sql.NVarChar(30), protocolo)
+          .input("tipo", sql.NVarChar(30), tipo)
+          .input("anonima", sql.Bit, ehAnonima)
+          .input("denuncianteMembroId", sql.Int, ehAnonima ? null : usuario.membroId)
+          .input("denunciadoMembroId", sql.Int, denunciadoMembroId || null)
+          .input("relato", sql.NVarChar(sql.MAX), String(relato).trim())
+          .query(`
+            INSERT INTO DenunciasOuvidoria (Protocolo, Tipo, Anonima, DenuncianteMembroId, DenunciadoMembroId, Relato)
+            OUTPUT INSERTED.DenunciaId
+            VALUES (@protocolo, @tipo, @anonima, @denuncianteMembroId, @denunciadoMembroId, @relato)
+          `);
+        break;
+      } catch (erro) {
+        if (!(erro && (erro.number === 2627 || erro.number === 2601)) || tentativa >= 3) throw erro;
+      }
+    }
     const novaDenunciaId = result.recordset[0].DenunciaId;
 
     // Anonimato técnico de verdade (Art. 104 §2º): nem a trilha de auditoria
@@ -82,7 +91,7 @@ module.exports = async function (context, req) {
     context.res = {
       status: 201,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: "✅ Denúncia registrada. Guarde o protocolo — é a única forma de acompanhar.", protocolo }
+      body: { sucesso: true, mensagem: "✅ Denúncia registrada. Anote ou copie o protocolo agora: ele é a ÚNICA chave para acompanhar — a Igreja não consegue recuperá-lo nem reenviá-lo (numa denúncia anônima ninguém sabe quem a fez), e quem tiver o protocolo vê o andamento. Não o compartilhe.", protocolo }
     };
     return;
   }
@@ -102,12 +111,14 @@ module.exports = async function (context, req) {
   // Permissão por ação: ANONIMIZAR exige "protecaodedados" (Encarregado de
   // Dados, não necessariamente da Ouvidoria); as demais exigem "ouvidoria".
   if (req.method === "POST" && denunciaId && acao === "evoluir") {
-    const usuario = auth.exigirLogin(req, context);
-    if (!usuario) return;
+    const sessao = auth.exigirLogin(req, context);
+    if (!sessao) return;
 
     const { acao: acaoEvoluir } = req.body || {};
     const permissaoNecessaria = acaoEvoluir === "ANONIMIZAR" ? "protecaodedados" : "ouvidoria";
-    if (!usuario.permissoes || !usuario.permissoes.includes(permissaoNecessaria)) {
+    // v7.6 — a visão só com as concessões da permissão desta ação (escopo/nível dela, não o somado de outro cargo ou delegação).
+    const usuario = auth.visaoDaPermissao(sessao, permissaoNecessaria);
+    if (!usuario) {
       context.res = { status: 403, body: { sucesso: false, mensagem: `Requer a permissão '${permissaoNecessaria}'.` } };
       return;
     }

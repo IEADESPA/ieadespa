@@ -8,6 +8,7 @@ const auth = require("../shared/auth");
 const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { comConflito } = require("../shared/violacaoUnica");
 
 const SELECT_ORGAO = `SELECT OrgaoId AS orgaoId, Sigla AS sigla, Nome AS nome,
        QuorumMinimoPct AS quorumMinimoPct, QuorumDeliberativoPct AS quorumDeliberativoPct,
@@ -32,7 +33,8 @@ function faltasValidas(v) {
   return typeof v !== "boolean" && Number.isInteger(n) && n >= 1 && n <= 100;
 }
 
-module.exports = async function (context, req) {
+// A sigla é única também no banco (índice UX_Orgaos_Sigla, migração 127): dois pedidos ao mesmo tempo furam a conferência acima, e o perdedor recebe o 409 em vez de um 500.
+module.exports = comConflito(async function (context, req) {
   const method = (req.method || "GET").toUpperCase();
 
   if (method === "GET") {
@@ -168,4 +170,4 @@ module.exports = async function (context, req) {
     await registrarAuditoria({ tabela: "Orgaos", registroId: orgaoId, acao: "Excluiu órgão", usuarioId: usuario.membroId, dadosAntes: orgaoAntes });
   }
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: ok, mensagem: ok ? "✅ Órgão excluído." : "Órgão não encontrado." } };
-};
+}, "Já existe um órgão com essa sigla.");

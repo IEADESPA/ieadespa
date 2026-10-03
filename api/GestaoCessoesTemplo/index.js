@@ -7,10 +7,13 @@
 // das congregações do SEU escopo (auth.estaNoEscopo); cessão de outra congregação responde igual a "não encontrada".
 // Autorizar é da Diretoria (nível geral: papel Global + escopo TODAS). Cada ação só vale a partir de um
 // estado: AUTORIZAR/REJEITAR de SOLICITADA, CONCLUIR de AUTORIZADA, CANCELAR de SOLICITADA ou AUTORIZADA
-// (e, com a cobrança já gerada, só o nível geral cancela).
+// (e, com a cobrança já gerada, só o nível geral cancela). CANCELAR estorna a cobrança NA MESMA TRANSAÇÃO (shared/cessaoEstorno.js): a conta a receber ainda prevista vira
+// CANCELADO (motivo "Cessão cancelada", quem e quando) e a receita acessória que nasceu junto é marcada cancelada; conta já RECEBIDA bloqueia o cancelamento com a explicação
+// do caminho (a devolução ao solicitante é ato financeiro à parte) e a cessão fica como está. Cancelar duas vezes, ou cancelar com um recebimento simultâneo, não corrompe:
+// a transição da cessão e a leitura da conta travam as linhas (o recebimento, em GestaoContasReceber, trava a mesma conta).
 // GET  /api/cessoes-templo -> lista (só as do escopo)
 // POST /api/cessoes-templo -> { congregacaoId, solicitanteNome, solicitanteContato?, tipoEvento, dataEvento, horaInicio?, horaFim?, taxaZeladoria, isencaoTaxa?, listaMusicalAprovada?, termoResponsabilidadeBase64?, mimeType? }
-// PUT  /api/cessoes-templo/{id} -> { acao: 'AUTORIZAR'|'REJEITAR'|'CONCLUIR'|'CANCELAR', motivo? }
+// PUT  /api/cessoes-templo/{id} -> { acao: 'AUTORIZAR'|'REJEITAR'|'CONCLUIR'|'CANCELAR', motivo? } (motivo obrigatório só em REJEITAR; em CANCELAR vai para a conta estornada)
 const auth = require("../shared/auth");
 const { ehGeral, congregacaoNoEscopo } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
@@ -18,6 +21,7 @@ const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const { validarIsencaoSocial } = require("../shared/assistenciaSocial");
 const { idOpcional, decodificarArquivo } = require("../shared/financeiro1Util");
+const { estornarCobranca, cancelarReceitasDaCessao } = require("../shared/cessaoEstorno");
 
 const TIPOS_EVENTO = ["CASAMENTO", "VELORIO", "EVENTO_SOCIAL", "OUTROS"];
 const ACOES = ["AUTORIZAR", "REJEITAR", "CONCLUIR", "CANCELAR"];
@@ -41,10 +45,11 @@ module.exports = async function (context, req) {
       SELECT c.CessaoId AS cessaoId, c.CongregacaoId AS congregacaoId, cg.Nome AS congregacaoNome,
              c.SolicitanteNome AS solicitanteNome, c.TipoEvento AS tipoEvento, c.DataEvento AS dataEvento,
              c.TaxaZeladoria AS taxaZeladoria, c.IsencaoTaxa AS isencaoTaxa, c.ListaMusicalAprovada AS listaMusicalAprovada,
-             c.Status AS status, c.ContaReceberId AS contaReceberId,
+             c.Status AS status, c.ContaReceberId AS contaReceberId, cr.Status AS contaReceberStatus,
              c.FinalidadeAcaoSocial AS finalidadeAcaoSocial, c.MotivoIsencaoSocial AS motivoIsencaoSocial,
              c.AssistenciaSocialFamiliaId AS assistenciaSocialFamiliaId
       FROM CessoesTemplo c JOIN Congregacoes cg ON cg.CongregacaoId = c.CongregacaoId
+      LEFT JOIN ContasAReceber cr ON cr.ContaReceberId = c.ContaReceberId
       ORDER BY c.DataEvento DESC
     `);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset.filter(c => auth.estaNoEscopo(usuario, c.congregacaoNome)) };
@@ -245,16 +250,66 @@ module.exports = async function (context, req) {
       return;
     }
     const novoStatus = acao === "CONCLUIR" ? "CONCLUIDA" : "CANCELADA";
-    const mudou = await pool.request().input("id", sql.Int, id).input("status", sql.NVarChar(20), novoStatus)
-      .query(`UPDATE CessoesTemplo SET Status = @status WHERE CessaoId = @id AND Status IN (${estadosDeOrigem.map(e => `'${e}'`).join(", ")})`);
-    if (mudou.rowsAffected && mudou.rowsAffected[0] === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: acao === "CONCLUIR" ? "Só é possível concluir uma cessão já autorizada." : "Só é possível cancelar uma cessão solicitada ou autorizada." } };
+    const devolveConta = acao === "CANCELAR" ? " OUTPUT INSERTED.ContaReceberId" : "";
+    const sqlTransicao = `UPDATE CessoesTemplo SET Status = @status${devolveConta} WHERE CessaoId = @id AND Status IN (${estadosDeOrigem.map(e => `'${e}'`).join(", ")})`;
+
+    if (acao === "CONCLUIR") {
+      const mudou = await pool.request().input("id", sql.Int, id).input("status", sql.NVarChar(20), novoStatus).query(sqlTransicao);
+      if (mudou.rowsAffected && mudou.rowsAffected[0] === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Só é possível concluir uma cessão já autorizada." } };
+        return;
+      }
+      await registrarAuditoria({ tabela: "CessoesTemplo", registroId: id, acao: "Concluiu cessão de templo", usuarioId: usuario.membroId });
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Cessão ${novoStatus.toLowerCase()}.` } };
+      return;
+    }
+
+    // CANCELAR: a cessão, a conta a receber e a receita acessória que nasceram na autorização saem JUNTAS, numa transação (shared/cessaoEstorno.js). A transição vem primeiro e
+    // com o estado no WHERE — ela trava a linha da cessão e devolve (OUTPUT) a conta a receber que a autorização gravou: cancelar duas vezes ao mesmo tempo, ou cancelar
+    // enquanto a autorização ainda está terminando, nunca passa por cima uma da outra. Conta já recebida: o cancelamento é recusado e nada muda.
+    const transaction = new sql.Transaction(pool);
+    const r = () => new sql.Request(transaction);
+    await transaction.begin();
+    let contaReceberId = null;
+    let cobranca = { estornou: false };
+    let receitasCanceladas = 0;
+    try {
+      const mudou = await r().input("id", sql.Int, id).input("status", sql.NVarChar(20), novoStatus).query(sqlTransicao);
+      if (mudou.rowsAffected && mudou.rowsAffected[0] === 0) {
+        await transaction.rollback();
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Só é possível cancelar uma cessão solicitada ou autorizada." } };
+        return;
+      }
+      // A conta vem do que a transição leu COM a linha travada (a leitura inicial pode ser anterior a uma autorização que terminou no meio).
+      contaReceberId = mudou.recordset && mudou.recordset[0] ? mudou.recordset[0].ContaReceberId : null;
+      if (contaReceberId != null) {
+        if (!ehGeral(usuario)) {
+          await transaction.rollback();
+          context.res = { status: 403, body: { sucesso: false, mensagem: "Cancelar uma cessão que já gerou cobrança é da administração geral." } };
+          return;
+        }
+        const motivoInformado = typeof motivo === "string" ? motivo : null;
+        cobranca = await estornarCobranca({ request: r }, sql, { contaReceberId, membroId: usuario.membroId, motivo: motivoInformado });
+        if (cobranca.bloqueado) {
+          await transaction.rollback();
+          context.res = { status: 200, body: { sucesso: false, mensagem: cobranca.mensagem } };
+          return;
+        }
+        receitasCanceladas = await cancelarReceitasDaCessao({ request: r }, sql, { cessaoId: id, membroId: usuario.membroId, motivo: motivoInformado });
+      }
+      await transaction.commit();
+    } catch (erro) {
+      try { await transaction.rollback(); } catch (e) { /* a transação já pode ter sido desfeita */ }
+      context.log.error("Falha ao cancelar a cessão de templo:", erro.message);
+      context.res = { status: 500, body: { sucesso: false, mensagem: "Não foi possível cancelar a cessão — nada foi alterado. Tente de novo ou avise a equipe técnica." } };
       return;
     }
     await registrarAuditoria({
-      tabela: "CessoesTemplo", registroId: id, acao: acao === "CONCLUIR" ? "Concluiu cessão de templo" : "Cancelou cessão de templo", usuarioId: usuario.membroId
+      tabela: "CessoesTemplo", registroId: id, acao: "Cancelou cessão de templo", usuarioId: usuario.membroId,
+      dadosDepois: contaReceberId != null ? { contaReceberId, contaCancelada: !!cobranca.estornou, contaJaCancelada: cobranca.situacaoAnterior === "CANCELADO", receitasAcessoriasCanceladas: receitasCanceladas } : undefined
     });
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Cessão ${novoStatus.toLowerCase()}.` } };
+    const aviso = cobranca.estornou ? " A cobrança (conta a receber) foi cancelada junto e saiu dos saldos a receber." : "";
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Cessão ${novoStatus.toLowerCase()}.${aviso}` } };
     return;
   }
 };

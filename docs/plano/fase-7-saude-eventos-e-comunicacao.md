@@ -1691,8 +1691,27 @@ ponto real de integração:
         geravam dois lançamentos). Toda soma de contas a receber ignora as canceladas (um
         teste varre o código). Migrações 138 (regulariza contas fantasma de cessões já
         canceladas; nunca toca conta recebida) e 139.
-      - **(j) Texto de campo na tela sem proteção — veja o resultado da rodada do front
-        abaixo.**
+      - **(j) Texto de campo na tela sem proteção — FECHADO.** Um analisador que lê o código
+        como árvore do JavaScript (segue variáveis, retornos, parâmetros e listas, e sabe se
+        o valor vai para texto, atributo, evento ou endereço) achou **910** pontos sem a
+        proteção certa (800 em texto, 54 em atributo, 35 em evento, 21 em endereço; 36 eram
+        mensagens da API) e hoje acha **zero**. Todo dado que entra numa tela passa pela
+        proteção do lugar onde entra: texto, `escaparHtmlEbd`; botão ou evento em linha,
+        `argJs` (testado com `'`, `"`, `\`, `</script>`, quebra de linha e `${}`); link,
+        `urlSegura` (barra `javascript:`, `vbscript:` e `data:text`, inclusive com tabulação
+        no meio). O teste permanente `frontEscape.test.js` lê `app/script.js` e
+        `app/index.html` a cada mudança e **falha se surgir um ponto novo sem proteção**
+        (exceções só por regra, justificadas: ids, números, constantes do código; prova por
+        mutação). A tela passou a esconder o que é só da administração geral (o login devolve
+        `geral` com a mesma regra das rotas; o servidor continua recusando) e, quando o
+        servidor recusa (sem permissão, conflito ou falha), mostra o motivo no lugar do painel,
+        nunca "nenhum item" nem tela em branco (175 telas). Verificação: jsdom com o front
+        verdadeiro (379 cargas de tela com resposta hostil, nenhuma tag ou `javascript:`
+        injetado; 401/403/500 sem erro não tratado no console) e o front de produção aberto
+        num navegador de verdade, sem erro de JavaScript nem violação de política de
+        segurança. **Limite que continua:** os 870 atributos de evento em linha seguem
+        existindo (é o trabalho da CSP forte); algumas ações só são recusadas pelo servidor,
+        que mostra o motivo.
       - **(k) PIN errado 5 vezes bloqueia a conta por 15 minutos — ACEITO** pelo responsável
         (decisão, não pendência).
       - **(l) Revogar o cadastro do responsável não anulava a adesão — FECHADO.** A adesão

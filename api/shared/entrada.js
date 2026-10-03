@@ -20,7 +20,10 @@ const handlers = new Map();
 // Só o NOME da pasta é usado (nunca o caminho inteiro): o handler sempre sai de <raiz da api>/<pasta>/index.js — um caminho estranho não carrega arquivo de fora.
 function pastaDaFuncao(context) {
   const ec = (context && context.executionContext) || {};
-  const candidatos = [ec.functionDirectory ? path.basename(String(ec.functionDirectory)) : null, ec.functionName ? String(ec.functionName) : null];
+  // O último trecho do caminho, com barra normal OU invertida: o Azure (Linux) entrega /home/site/wwwroot/Pasta e a máquina de desenvolvimento (Windows) entrega C:\...\Pasta;
+  // path.basename só entende o separador do sistema em que o Node roda.
+  const ultimoTrecho = (caminho) => String(caminho).split(/[\\/]+/).filter(Boolean).pop() || null;
+  const candidatos = [ec.functionDirectory ? ultimoTrecho(ec.functionDirectory) : null, ec.functionName ? String(ec.functionName) : null];
   for (const nome of candidatos) if (nome && NOME_DE_FUNCAO.test(nome) && nome !== "shared") return nome;
   return null;
 }

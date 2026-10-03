@@ -4,3 +4,8 @@
 *.enc.json text eol=lf
 secrets.env text eol=lf
 .sops.yaml text eol=lf
+
+# Bibliotecas de terceiros copiadas para dentro (SheetJS, qrcode-generator, jsQR): ficam byte a byte como o autor publicou,
+# sem conversão de quebra de linha em nenhuma máquina.
+app/vendor/* -text
+site/public/vendor/* -text

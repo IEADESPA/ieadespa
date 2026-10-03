@@ -5,8 +5,9 @@
 // chamada da EBD (v6.10), e ela não passa por aqui: o próprio script.js
 // guarda o pacote da turma e a fila de marcações no localStorage. Também recebe evento de push (shared/notificacaoPush.js
 // no back-end) e mostra a notificação do sistema operacional.
-const CACHE_NOME = "ieadespa-app-shell-v2";
-const ARQUIVOS_SHELL = ["/", "/index.html", "/script.js", "/style.css", "/manifest.json"];
+// v3 (03/10/2026): a biblioteca de planilhas (SheetJS 0.20.3) passou a ser servida daqui (/vendor), não mais de um CDN de terceiros; subir a versão do cache refaz a instalação.
+const CACHE_NOME = "ieadespa-app-shell-v3";
+const ARQUIVOS_SHELL = ["/", "/index.html", "/script.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js"];
 
 self.addEventListener("install", (evento) => {
   evento.waitUntil(caches.open(CACHE_NOME).then((cache) => cache.addAll(ARQUIVOS_SHELL)));

@@ -64,8 +64,15 @@ vez de um CDN de terceiros (um CDN comprometido injetaria código nas telas de d
 | Application Insights, alertas, e-mail (ACS) | — | — | Sem versão a conferir. |
 
 Ferramentas desta máquina (desenvolvimento): Node 26.10.0 (Current; a LTS é a 24.21.0), npm 11.19.1, Azure CLI 2.90.0 (última),
-SOPS 3.13.3 (última), `age` 1.3.1 (há 1.3.2), GitHub CLI 2.100.0 (há 2.102.0), Git 2.55.0 (há 2.56.0). Node 22 das Functions: a montagem
-usou 22.23.2 e a última 22.x é 22.23.3 (entra sozinha no próximo deploy).
+SOPS 3.13.3 (última), `age` **1.3.2** e GitHub CLI **2.102.0** (atualizados em 03/10/2026; o SOPS segue descriptografando), Git 2.55.0 (há
+2.56.0: fica para uma hora em que nenhuma sessão use o Git Bash, porque o instalador troca o `bash.exe` em uso). Node 22 das Functions: a
+montagem usou 22.23.2 e a última 22.x é 22.23.3 (entra sozinha no próximo deploy).
+
+**Pendente de aprovação (bloqueado pelo controle de permissões do Claude Code em 03/10/2026, nada foi alterado):** subir o Directus de
+12.3.1 para 12.4.1 (trocar a etiqueta da imagem do contêiner `main` do App Service `ieadespa-directus`) e exigir TLS 1.2 na conta
+`ieadespaapifunc01`. Os dois são mudanças em produção no Azure e dependem de o responsável liberar a ação (ou de fazê-las no portal). Antes
+de subir o Directus: o banco tem cópia completa automática diária e restauração a qualquer ponto desde 04/09/2026 (o servidor "burstable" não
+aceita cópia sob demanda); estado de partida conferido (ping, tela de login, o site lendo do Directus).
 
 ## Como atualizar (a rotina)
 

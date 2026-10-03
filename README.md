@@ -37,6 +37,7 @@ configurável e orientado a processo. Os 3 repositórios viram um sistema único
 `relatorios-departamentos` (Fase 5 — Relatórios). Os dois protótipos de referência
 (só o fonte, versão enxuta) estão na raiz: [`chamada-ebd/`](chamada-ebd/) e
 [`relatorios-departamentos/`](relatorios-departamentos/) — ver [`REFERENCIAS.md`](REFERENCIAS.md).
+Versões de Node, Astro e bibliotecas, e o motivo de cada uma que ficou para trás: [`docs/PLATAFORMAS.md`](docs/PLATAFORMAS.md).
 
 ## 1. Decisões de arquitetura (fechadas)
 

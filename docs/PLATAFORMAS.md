@@ -49,10 +49,23 @@ vez de um CDN de terceiros (um CDN comprometido injetaria código nas telas de d
 | `jsQR` | 1.4.0 | `site/public/vendor/` | Última. |
 | Leaflet, jsPDF, marked | 1.9.4, 4.2.1, 18.0.14 | pacotes do site | Últimas. |
 
-## Fora do repositório (a levantar com acesso ao Azure)
+## Fora do repositório (levantado em 03/10/2026, só leitura, no Azure da igreja)
 
-Não aparecem em nenhum arquivo do projeto: **Directus** (painel de conteúdo do site, App Service), **PostgreSQL** do Directus, o
-nível do Azure SQL e do Storage. Para saber a versão de cada um é preciso ler a configuração no Azure.
+| Peça | Versão em uso | Última | Situação |
+| --- | --- | --- | --- |
+| **Directus** (painel do site, App Service Linux, contêiner `directus/directus`) | **12.3.1** | 12.4.1 (23/09/2026) | **Uma versão atrás.** A 12.4.0 avisa de mudança potencialmente incompatível: o mapa do painel e o campo de geometria passam a exigir WebGL2 (Safari 14 ou anterior e Android antigo deixam de desenhar mapa no painel; o mapa do site é o Leaflet, outra coisa). A 12.4.1 corrige a leitura de pastas por quem não é administrador. A troca é mudar a etiqueta da imagem; há backup do banco de 35 dias. |
+| **PostgreSQL** do Directus (servidor flexível, Standard_B1ms, 32 GB) | **18.6** | 18.6 | Em dia; suporte da comunidade até 14/11/2030. |
+| **Azure SQL** do sistema (`app-db-prod`, `ieadespa-homolog`, serverless GP_S_Gen5, pausa em 60 min) | motor 12.0 (o Azure mantém no mais novo) | — | Em dia, TLS mínimo 1.2. |
+| **Banco de homologação** (`ieadespa-homolog`) | esquema **antigo** (faltam as migrações recentes) | 139 | O fluxo do PR migra o banco de **produção**, não este; por isso a lista de documentos dá 500 na homologação. Para a homologação provar também o SQL, falta um passo de migração dela (exige guardar a conexão dela como segredo no GitHub). |
+| Static Web Apps (`app-meusite-web`, `site-institucional`) | plano Standard | — | Em dia; domínios `app.`, `www.` e raiz. |
+| Armazenamento `ieadespaarmazenamento` | StorageV2, TLS mínimo 1.2, sem acesso público a blob | — | Em dia. |
+| Armazenamento `ieadespaapifunc01` | StorageV2, **TLS mínimo 1.0** | 1.2 | **Desatualizado** (aceita protocolo antigo). É do Function App abaixo. |
+| **Function App `func-ieadespa-api`** (Flex Consumption, Node 24, 189 funções) | cópia **antiga** da API (último deploy 20/09/2026) | — | **Sobra de uma tentativa antiga**, não ligada a nenhum Static Web App. Teve 9 execuções em 19/09 e **nenhuma nos 13 dias seguintes**. Guarda cópia dos segredos de produção e do código anterior às correções de segurança; todas as rotas testadas respondem 401. Candidata a desligar (decisão do responsável). |
+| Application Insights, alertas, e-mail (ACS) | — | — | Sem versão a conferir. |
+
+Ferramentas desta máquina (desenvolvimento): Node 26.10.0 (Current; a LTS é a 24.21.0), npm 11.19.1, Azure CLI 2.90.0 (última),
+SOPS 3.13.3 (última), `age` 1.3.1 (há 1.3.2), GitHub CLI 2.100.0 (há 2.102.0), Git 2.55.0 (há 2.56.0). Node 22 das Functions: a montagem
+usou 22.23.2 e a última 22.x é 22.23.3 (entra sozinha no próximo deploy).
 
 ## Como atualizar (a rotina)
 

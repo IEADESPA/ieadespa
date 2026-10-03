@@ -11,7 +11,7 @@ Desde a FASE C (site institucional trazido via `git subtree` pra dentro de `site
 duas vezes nem manter dois arquivos de regra):
 
 | App | Texto puro (não versionado) | Criptografado (versionado) |
-|---|---|---|
+| --- | --- | --- |
 | Sistema de governança | `api/local.settings.json` | `api/local.settings.enc.json` |
 | Site institucional (Azure Functions) | `site/api/local.settings.json` | `site/api/local.settings.enc.json` |
 | Site institucional (Directus + Azure) | `site/.env.local` | `site/secrets.env` |
@@ -36,7 +36,7 @@ sops -e --output site/secrets.env site/.env.local
 - Cada pessoa descriptografa com a **própria chave privada** — ninguém precisa compartilhar
   senha nenhuma.
 
-```
+```text
 local.settings.json         →  (texto puro, NÃO versionado)
 local.settings.enc.json     →  (criptografado, VERSIONADO)
 %APPDATA%\sops\age\keys.txt →  (sua chave privada, NÃO versionada)
@@ -145,7 +145,7 @@ sops -e --input-type json --output-type json --output api/local.settings.enc.jso
 ## 8. Solução de problemas
 
 | Problema | Solução |
-|---|---|
+| --- | --- |
 | `sops`/`age` não reconhecido | Feche e reabra o terminal (PATH novo). |
 | `no matching creation rules found` | O arquivo criptografado deve ser o `*.enc.json` e o `.sops.yaml` precisa listar sua public key. |
 | `sops: failed to decrypt` | Sua public key não está no `.sops.yaml` / `updatekeys` não foi rodado. Peça pro administrador. |
@@ -179,3 +179,20 @@ arquivo versionado ou numa conversa.
    ativo". Se aceitar, o log da Function do site mostra o aviso *"O sistema recusou a chave do site"* — os valores diferem.
 
 A ordem importa: se o sistema ganhar a chave antes do site, o site fica sem conseguir perguntar até receber a mesma.
+
+**Gravar sem o portal (feito assim em 03/10/2026).** Com o Azure CLI, num perfil separado e logado pelo próprio
+responsável (a credencial de serviço que está em `site/secrets.env` entra no Azure, mas **não enxerga a assinatura**
+atual e aponta para outro grupo de recursos: está desatualizada, não serve para isso):
+
+```powershell
+$env:AZURE_CONFIG_DIR = "$env:TEMP\az-cfg-usuario"        # perfil isolado: não troca o login da máquina
+az login --use-device-code --tenant ieadespa.org.br        # o responsável digita o código na página da Microsoft
+az staticwebapp appsettings set --name site-institucional --resource-group ieadespa --setting-names "CHAVE_SITE_SISTEMA=<valor>"
+az staticwebapp appsettings set --name app-meusite-web --resource-group ieadespa --setting-names "CHAVE_SITE_SISTEMA=<valor>"
+```
+
+O `set` **junta** à lista existente (não a substitui), mas confira depois com `az staticwebapp appsettings list` que nenhuma
+configuração antiga sumiu. Gere o valor na memória do próprio script (nunca no comando nem no chat), confira que o valor
+lido de volta é idêntico nos dois aplicativos e termine com `az logout` e apagando a pasta do perfil. No PowerShell 5.1, o
+aviso "App settings have been redacted" do `az` vai para o stderr: com `$ErrorActionPreference = 'Stop'` ele derruba o
+script (a gravação já aconteceu); use `'Continue'` e confira o código de saída. Arquivo `.ps1` com acento precisa de BOM.

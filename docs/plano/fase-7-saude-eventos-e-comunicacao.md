@@ -1722,11 +1722,13 @@ ponto real de integração:
         e as escalas futuras já marcadas ficam **sinalizadas**, não removidas). Cadastrar
         outro responsável não restabelece sozinho: só uma nova adesão. A ficha em papel
         assinada por responsável não é atingida. Migração 133.
-      - **(m) Chave combinada entre o site e o sistema — DEPENDE DO RESPONSÁVEL.** É o único
-        item que não se fecha por código: o valor precisa ser colado **nos dois**
-        aplicativos do Azure (`SECRETS.md`, seção 9). Enquanto isso a rota segue só com o
-        limite por origem. (**Segredo de sessão:** medido em produção, um crachá assinado
-        com o valor público é recusado; o código nem tem mais esse valor padrão.)
+      - **(m) Chave combinada entre o site e o sistema — FECHADO (03/10/2026).** O mesmo valor
+        aleatório foi gravado em `CHAVE_SITE_SISTEMA` nos **dois** aplicativos do Azure (site
+        primeiro, sistema depois; procedimento em `SECRETS.md`, seção 9), com a conferência de
+        que nenhuma configuração antiga mudou. Medido em produção: a pergunta "este e-mail é
+        de membro ativo?" sem a chave responde 401, com chave errada 401 e com a chave certa
+        200. (**Segredo de sessão:** medido em produção, um crachá assinado com o valor
+        público é recusado; o código nem tem mais esse valor padrão.)
       - **Também nesta rodada:** o limite de tentativas do **site** usava o primeiro valor
         do `x-forwarded-for` (forjável; medido em produção: 25 chamadas com IP inventado
         passaram pelo limite de 20); passou a usar o penúltimo, como no sistema. A **ouvidoria

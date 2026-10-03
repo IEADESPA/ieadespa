@@ -4,7 +4,7 @@
   "description": "Backend de governança (CLI, CEI, NIF, AFM) - Azure Functions",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "start": "func start",
@@ -17,7 +17,7 @@
     "@azure/storage-blob": "^12.33.0",
     "docx": "^9.5.1",
     "mssql": "^12.7.0",
-    "pdfkit": "^0.15.2",
+    "pdfkit": "^0.20.2",
     "qrcode": "^1.5.4",
     "web-push": "^3.6.7"
   },

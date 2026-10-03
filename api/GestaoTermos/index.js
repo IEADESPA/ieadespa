@@ -7,9 +7,10 @@
 // única rota que precisa continuar acessível mesmo com termos pendentes —
 // senão ninguém conseguiria assinar o que está bloqueando o próprio acesso.
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, sha256 } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { TERMOS, termosPendentes } = require("../shared/termos");
+const { registrarAceiteClausulaCompromissoria } = require("../shared/mediacaoArbitragem");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirLoginIgnorandoTermos(req, context);
@@ -28,11 +29,13 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    if (!tipo || !TERMOS[tipo]) {
+    // hasOwnProperty: "constructor", "__proto__" e afins existem em qualquer objeto e passavam em `!TERMOS[tipo]`, quebrando depois em `.aplicaA` (500).
+    if (typeof tipo !== "string" || !Object.prototype.hasOwnProperty.call(TERMOS, tipo)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Tipo de termo inválido." } };
       return;
     }
-    if (!TERMOS[tipo].aplicaA(usuario.nivel)) {
+    // v7.6 — o nível do CARGO PRÓPRIO (uma delegação recebida não muda quais termos a pessoa assina; ver auth.nivelDoCargoProprio)
+    if (!TERMOS[tipo].aplicaA(auth.nivelDoCargoProprio(usuario))) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este termo não se aplica ao seu papel." } };
       return;
     }
@@ -43,20 +46,41 @@ module.exports = async function (context, req) {
       .input("versao", sql.NVarChar(20), TERMOS[tipo].versao)
       .query(`SELECT 1 FROM TermosAssinados WHERE MembroId = @id AND TipoTermo = @tipo AND VersaoTermo = @versao`);
     if (jaAssinouEssaVersao.recordset.length === 0) {
+      // vB.6 — trilha de integridade: hash do TEXTO do termo no momento da
+      // assinatura. Sem isso, se o catálogo (shared/termos.js) mudasse o
+      // texto sem bump de versão, não haveria como detectar depois — o
+      // hash é o que permite `VerificarTermoAssinado` flagrar essa
+      // divergência (ver a Function nova).
+      const hashConteudo = sha256(TERMOS[tipo].texto);
       await pool.request()
         .input("membroId", sql.Int, usuario.membroId)
         .input("tipo", sql.NVarChar(40), tipo)
         .input("versao", sql.NVarChar(20), TERMOS[tipo].versao)
-        .query(`INSERT INTO TermosAssinados (MembroId, TipoTermo, VersaoTermo) VALUES (@membroId, @tipo, @versao)`);
+        .input("hash", sql.NVarChar(64), hashConteudo)
+        .query(`INSERT INTO TermosAssinados (MembroId, TipoTermo, VersaoTermo, HashConteudo) VALUES (@membroId, @tipo, @versao, @hash)`);
       await registrarAuditoria({
         tabela: "TermosAssinados", registroId: Number(usuario.membroId),
         acao: `Assinou termo ${tipo} (versão ${TERMOS[tipo].versao})`, usuarioId: usuario.membroId
       });
+
+      // vB.16 (Art. 161-A) — a via de Mediação/Arbitragem só é realmente
+      // obrigatória se a adesão existir ANTES do conflito (Lei 9.307 art.
+      // 4º §2º: aceite expresso e datado, nunca presumido). O Termo de
+      // Compromisso de Gestão (Art. 57) já é o momento em que um Dirigente
+      // assume — é o gancho natural, sem precisar de uma 2ª tela pra isso.
+      if (tipo === "COMPROMISSO_DIRIGENTE") {
+        await registrarAceiteClausulaCompromissoria(pool, usuario.membroId);
+      }
     }
 
-    const pendentes = await termosPendentes(pool, sql, usuario.membroId, usuario.nivel);
-    const { termosPendentes: antigo, exp, ...dadosSessao } = usuario;
-    const token = auth.criarSessao(Object.assign({}, dadosSessao, { termosPendentes: pendentes }));
+    const pendentes = await termosPendentes(pool, sql, usuario.membroId, auth.nivelDoCargoProprio(usuario));
+    // O token novo MANTÉM a validade do original (como na troca de PIN): antes cada POST aqui renovava 12 h, então um token roubado nunca vencia e um acesso
+    // suspenso por Medida Cautelar seguia vivo para sempre. Assinar um termo atualiza só a lista de pendências.
+    const token = auth.reassinarMantendoValidade(auth.extrairToken(req), { termosPendentes: pendentes });
+    if (!token) {
+      context.res = { status: 401, body: { sucesso: false, mensagem: "Faça login para continuar." } };
+      return;
+    }
 
     context.res = {
       status: 200,
@@ -66,5 +90,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

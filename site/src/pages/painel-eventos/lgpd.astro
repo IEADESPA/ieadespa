@@ -1,0 +1,182 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { BUSCAR_DADOS_PESSOAIS_URL, DIRECTUS_URL, EXCLUIR_DADOS_PESSOAIS_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Exclusão de dados pessoais (LGPD) — Gestão" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div
+      class="canvas"
+      style="max-width: 40rem;"
+      data-directus-url={DIRECTUS_URL}
+      data-buscar-url={BUSCAR_DADOS_PESSOAIS_URL}
+      data-excluir-url={EXCLUIR_DADOS_PESSOAIS_URL}
+    >
+      <header class="pagehead">
+        <p class="eyebrow"><a href="/painel-eventos/" class="text-accent">← Gestão de eventos</a></p>
+        <h1 class="pagehead-title">Exclusão de dados pessoais (LGPD)</h1>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden data-painel-conteudo>
+        <p class="mt-4 text-sm leading-relaxed text-muted-foreground">
+          Use só depois de confirmar por fora (WhatsApp, e-mail, presencialmente) que quem está
+          pedindo é mesmo a pessoa dona do telefone — canal de pedido oficial:{" "}
+          <a href="/contato/?assunto=lgpd" class="underline underline-offset-2">Fale conosco → Meus dados pessoais</a>.
+          O telefone nunca é guardado em texto puro no site — a busca aqui compara contra o hash,
+          o mesmo jeito que "Meus pedidos"/certificado já fazem.
+        </p>
+
+        <form class="mt-6 grid gap-3 max-w-sm" data-busca-form>
+          <label class="text-sm font-semibold" for="lgpd-telefone">Telefone da pessoa</label>
+          <input id="lgpd-telefone" type="tel" required class="field" autocomplete="off" />
+          <button type="submit" class="btn btn-solid">Buscar o que existe com esse telefone</button>
+        </form>
+
+        <div class="mt-6" data-resultado hidden>
+          <div data-resultado-vazio hidden>
+            <p class="text-sm text-muted-foreground">Nada encontrado com esse telefone.</p>
+          </div>
+
+          <div data-resultado-lista>
+            <h2 class="text-sm font-semibold">Encontrado:</h2>
+            <ul class="mt-3 grid gap-2 text-sm" data-lista-itens></ul>
+
+            <div class="mt-6 rounded-[var(--radius-md)] border border-red-300 p-4">
+              <p class="text-sm font-semibold text-red-700">Excluir tudo isso permanentemente</p>
+              <p class="mt-1 text-sm text-muted-foreground">
+                Apaga nome, telefone (hash) e tudo ligado (respostas, itens de pedido). Certificado
+                e crachá dessas inscrições param de funcionar pra sempre — não tem como desfazer.
+              </p>
+              <button type="button" class="btn btn-outline mt-3" data-excluir-btn>Excluir definitivamente</button>
+              <p class="mt-2 text-sm" data-excluir-status role="status" aria-live="polite"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { exigirAutenticacao } from "@/lib/painelAuth";
+
+    const AUTH = { tokenKey: "painel_eventos_token", loginPath: "/painel-eventos/entrar/" };
+
+    interface Inscricao {
+      id: number;
+      nome: string;
+      codigo: string;
+      eventoTitulo: string | null;
+    }
+    interface Pedido {
+      id: number;
+      nome: string;
+      grupoNome: string | null;
+    }
+
+    const container = document.querySelector<HTMLElement>("[data-directus-url]");
+    if (!container) throw new Error("contêiner do painel ausente");
+    const directusUrl = container.dataset.directusUrl ?? "";
+    const buscarUrl = container.dataset.buscarUrl ?? "";
+    const excluirUrl = container.dataset.excluirUrl ?? "";
+
+    const carregando = document.querySelector<HTMLElement>("[data-painel-carregando]");
+    const conteudoEl = document.querySelector<HTMLElement>("[data-painel-conteudo]");
+    const buscaForm = document.querySelector<HTMLFormElement>("[data-busca-form]");
+    const resultadoEl = document.querySelector<HTMLElement>("[data-resultado]");
+    const vazioEl = document.querySelector<HTMLElement>("[data-resultado-vazio]");
+    const listaEl = document.querySelector<HTMLElement>("[data-resultado-lista]");
+    const itensEl = document.querySelector<HTMLElement>("[data-lista-itens]");
+    const excluirBtn = document.querySelector<HTMLButtonElement>("[data-excluir-btn]");
+    const excluirStatus = document.querySelector<HTMLElement>("[data-excluir-status]");
+
+    let token = "";
+    let telefoneAtual = "";
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
+    buscaForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const telefone = (document.getElementById("lgpd-telefone") as HTMLInputElement).value.trim();
+      if (!telefone) return;
+      telefoneAtual = telefone;
+
+      if (resultadoEl) resultadoEl.hidden = false;
+      if (excluirStatus) excluirStatus.textContent = "";
+
+      const res = await fetch(buscarUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffToken: token, telefone }),
+      });
+      if (!res.ok) {
+        if (vazioEl) { vazioEl.hidden = false; vazioEl.textContent = "Não foi possível buscar agora."; }
+        if (listaEl) listaEl.hidden = true;
+        return;
+      }
+      const json = await res.json();
+      const inscricoes: Inscricao[] = json.inscricoes ?? [];
+      const pedidos: Pedido[] = json.pedidos ?? [];
+
+      if (inscricoes.length === 0 && pedidos.length === 0) {
+        if (vazioEl) vazioEl.hidden = false;
+        if (listaEl) listaEl.hidden = true;
+        return;
+      }
+
+      if (vazioEl) vazioEl.hidden = true;
+      if (listaEl) listaEl.hidden = false;
+      if (itensEl) {
+        itensEl.innerHTML = [
+          ...inscricoes.map((i) => `<li>Inscrição em <strong>${escapeHtml(i.eventoTitulo ?? "evento")}</strong> — ${escapeHtml(i.nome)} (código ${escapeHtml(i.codigo)})</li>`),
+          ...pedidos.map((p) => `<li>Pedido de camiseta — <strong>${escapeHtml(p.grupoNome ?? "campanha")}</strong> — ${escapeHtml(p.nome)}</li>`),
+        ].join("");
+      }
+    });
+
+    excluirBtn?.addEventListener("click", async () => {
+      if (!telefoneAtual) return;
+      if (!confirm("Excluir permanentemente tudo que foi encontrado com esse telefone? Não tem como desfazer.")) return;
+
+      excluirBtn.disabled = true;
+      if (excluirStatus) excluirStatus.textContent = "Excluindo…";
+
+      try {
+        const res = await fetch(excluirUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ staffToken: token, telefone: telefoneAtual, confirmar: true }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.erro ?? "falha");
+        if (excluirStatus) {
+          excluirStatus.textContent = `✅ Excluído: ${json.inscricoesExcluidas} inscrição(ões), ${json.pedidosExcluidos} pedido(s) de camiseta${json.promovidos ? `, ${json.promovidos} pessoa(s) promovida(s) da lista de espera` : ""}.`;
+        }
+        if (listaEl) listaEl.hidden = true;
+        excluirBtn.hidden = true;
+      } catch {
+        if (excluirStatus) excluirStatus.textContent = "Não foi possível excluir agora.";
+        excluirBtn.disabled = false;
+      }
+    });
+
+    async function iniciar() {
+      const tokenObtido = await exigirAutenticacao(directusUrl, AUTH);
+      if (!tokenObtido) return;
+      token = tokenObtido;
+      if (carregando) carregando.hidden = true;
+      if (conteudoEl) conteudoEl.hidden = false;
+    }
+
+    iniciar();
+  </script>
+</BaseLayout>

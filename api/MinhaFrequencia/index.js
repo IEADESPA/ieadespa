@@ -5,14 +5,12 @@
 // pessoal se integrar ao sistema de membros/credenciais existente — por ora,
 // consulta por matrícula digitada, igual ao check-in da Portaria.
 const { getPool, sql } = require("../shared/db");
+const auth = require("../shared/auth");
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — a "autenticação real" que o comentário acima deixava para depois: exige sessão e só a matrícula da própria sessão.
   const matricula = context.bindingData.matricula;
-
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
+  if (!auth.exigirTitular(req, context, matricula)) return;
 
   const pool = await getPool();
   const membroResult = await pool.request().input("mat", sql.Int, matricula).query(`

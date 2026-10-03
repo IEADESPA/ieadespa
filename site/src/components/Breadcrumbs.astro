@@ -1,0 +1,84 @@
+---
+import { siteConfig } from "@/config/site";
+
+interface Crumb {
+  label: string;
+  href?: string;
+}
+
+interface Props {
+  items: Crumb[];
+}
+
+const { items } = Astro.props;
+const all = [{ label: "Início", href: "/" }, ...items];
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: all.map((crumb, index) => ({
+    "@type": "ListItem",
+    position: index + 1,
+    name: crumb.label,
+    ...(crumb.href && { item: new URL(crumb.href, siteConfig.siteUrl).toString() }),
+  })),
+};
+---
+
+<nav class="breadcrumbs" aria-label="Trilha de navegação">
+  <ol>
+    {
+      all.map((crumb, index) => (
+        <li>
+          {crumb.href && index < all.length - 1 ? (
+            <a href={crumb.href}>{crumb.label}</a>
+          ) : (
+            <span aria-current="page">{crumb.label}</span>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+</nav>
+
+<script is:inline type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+
+<style>
+  .breadcrumbs ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    list-style: none;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+
+  .breadcrumbs li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .breadcrumbs li:not(:first-child)::before {
+    content: "/";
+    color: var(--border-strong);
+  }
+
+  .breadcrumbs a {
+    color: var(--muted-foreground);
+    text-decoration: none;
+  }
+
+  .breadcrumbs a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+
+  .breadcrumbs [aria-current="page"] {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+</style>

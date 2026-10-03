@@ -9,6 +9,9 @@
 // "Vencido" nunca é gravado — é CALCULADO NA LEITURA (hoje > data de
 // vencimento e ainda não confirmado/cancelado), mesmo princípio de
 // sempre. Cancelamento nunca é exclusão (mesmo princípio de v4.1.1).
+// CONFIRMAR e CANCELAR são UMA transação com a linha da conta travada (UPDLOCK): dois cliques não geram dois lançamentos e um cancelamento simultâneo (inclusive o da cessão de
+// templo de origem, shared/cessaoEstorno.js) não passa por cima de um recebimento. Conta CANCELADA não entra em saldo a receber, balanço nem DRP (shared/demonstracoes.js filtra
+// Status <> 'CANCELADO' em toda leitura de ContasAReceber).
 // GET  /api/contas-receber?congregacaoId=&status= -> lista dentro do escopo (status calculado: PREVISTO|VENCIDO|RECEBIDO|CANCELADO)
 // GET  /api/contas-receber/{id} -> detalhe
 // POST /api/contas-receber -> { congregacaoId, dizimistaId?, nomeAvulso?, tipo, descricao?, valor, dataVencimento, campanhaId? }
@@ -18,6 +21,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const tesouraria = require("../shared/tesouraria");
+const { afetadas } = require("../shared/entradaFinanceira");
 
 const FORMAS = ["DINHEIRO", "PIX", "MISTO"];
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
@@ -138,7 +142,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "PUT") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/contas-receber/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/contas-receber/{id}" } };
       return;
     }
     const { acao, motivo, formaPagamento, valorPix, mesReferencia, comprovanteBase64, mimeType } = req.body || {};
@@ -168,8 +172,38 @@ module.exports = async function (context, req) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o motivo do cancelamento." } };
         return;
       }
-      await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), motivo.trim()).input("canceladoPor", sql.Int, usuario.membroId)
-        .query(`UPDATE ContasAReceber SET Status = 'CANCELADO', MotivoCancelamento = @motivo, CanceladoPor = @canceladoPor, CanceladoEm = SYSUTCDATETIME() WHERE ContaReceberId = @id`);
+      // (READPAST na cessão de origem: se o cancelamento da própria cessão estiver em andamento, ele já leva a receita junto e esta consulta não espera a linha dele — sem isso
+      // os dois se travariam um ao outro, a conta de um lado e a cessão do outro.)
+      // Numa transação, com a linha da conta travada (UPDLOCK): um recebimento simultâneo (CONFIRMAR, que trava a mesma linha) ou um cancelamento da cessão de origem não passam um por
+      // cima do outro — quem chega depois vê a conta já confirmada/cancelada. A conta que nasceu de uma cessão de templo leva junto a receita acessória declarada com ela.
+      const transaction = new sql.Transaction(pool);
+      const r = () => new sql.Request(transaction);
+      await transaction.begin();
+      try {
+        const travada = await r().input("id", sql.Int, id).query(`SELECT Status FROM ContasAReceber WITH (UPDLOCK, HOLDLOCK) WHERE ContaReceberId = @id`);
+        if (!travada.recordset[0] || travada.recordset[0].Status !== "PREVISTO") {
+          await transaction.rollback();
+          context.res = { status: 200, body: { sucesso: false, mensagem: "Esta conta a receber já foi confirmada ou cancelada." } };
+          return;
+        }
+        const cancelou = await r().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), motivo.trim()).input("canceladoPor", sql.Int, usuario.membroId)
+          .query(`UPDATE ContasAReceber SET Status = 'CANCELADO', MotivoCancelamento = @motivo, CanceladoPor = @canceladoPor, CanceladoEm = SYSUTCDATETIME() WHERE ContaReceberId = @id AND Status = 'PREVISTO'`);
+        if (afetadas(cancelou) === 0) {
+          // Rede: sob a trava acima não deveria acontecer; se a conta já não estiver PREVISTA, nada é gravado (nem a receita acessória).
+          await transaction.rollback();
+          context.res = { status: 200, body: { sucesso: false, mensagem: "Esta conta a receber já foi confirmada ou cancelada." } };
+          return;
+        }
+        await r().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), `Conta a receber cancelada: ${motivo.trim()}`.slice(0, 300)).input("canceladoPor", sql.Int, usuario.membroId)
+          .query(`UPDATE ReceitasAcessorias SET CanceladaEm = SYSUTCDATETIME(), CanceladaPor = @canceladoPor, MotivoCancelamento = @motivo
+                  WHERE CanceladaEm IS NULL AND CessaoTemploId IN (SELECT CessaoId FROM CessoesTemplo WITH (READPAST) WHERE ContaReceberId = @id)`);
+        await transaction.commit();
+      } catch (erro) {
+        try { await transaction.rollback(); } catch (e) { /* a transação já pode ter sido desfeita */ }
+        context.log.error("Falha ao cancelar a conta a receber:", erro.message);
+        context.res = { status: 500, body: { sucesso: false, mensagem: "Não foi possível cancelar a conta a receber — nada foi alterado. Tente de novo ou avise a equipe técnica." } };
+        return;
+      }
       await registrarAuditoria({
         tabela: "ContasAReceber", registroId: Number(id), acao: "Cancelou conta a receber", usuarioId: usuario.membroId,
         dadosAntes: registro, dadosDepois: { motivo }
@@ -227,29 +261,56 @@ module.exports = async function (context, req) {
       }
     }
 
-    const termoNumero = await tesouraria.proximoNumeroTermo(pool, sql, registro.CongregacaoId);
-    const lancamentoCriado = await pool.request()
-      .input("congregacaoId", sql.Int, registro.CongregacaoId)
-      .input("dizimistaId", sql.Int, registro.DizimistaId)
-      .input("nomeAvulso", sql.NVarChar(200), registro.DizimistaId ? null : registro.NomeAvulso)
-      .input("termoNumero", sql.Int, termoNumero)
-      .input("tipo", sql.NVarChar(30), registro.Tipo)
-      .input("descricao", sql.NVarChar(300), registro.Descricao)
-      .input("valor", sql.Decimal(10, 2), registro.Valor)
-      .input("formaPagamento", sql.NVarChar(20), formaPagamento)
-      .input("valorPix", sql.Decimal(10, 2), valorPixFinal)
-      .input("comprovanteUrl", sql.NVarChar(500), comprovanteUrl)
-      .input("mesReferencia", sql.Char(7), mesReferencia)
-      .input("registradoPor", sql.Int, usuario.membroId)
-      .input("campanhaId", sql.Int, registro.CampanhaId)
-      .query(`INSERT INTO LancamentosTesouraria
-                (CongregacaoId, DizimistaId, NomeAvulso, TermoNumero, Tipo, Descricao, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor, CampanhaId)
-              OUTPUT INSERTED.LancamentoId
-              VALUES (@congregacaoId, @dizimistaId, @nomeAvulso, @termoNumero, @tipo, @descricao, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor, @campanhaId)`);
-    const lancamentoId = lancamentoCriado.recordset[0].LancamentoId;
+    // O lançamento e a baixa da conta vão numa transação, com a linha da conta travada (UPDLOCK): dois cliques no mesmo recebimento não geram dois lançamentos (receita em dobro) e um
+    // cancelamento simultâneo (da conta ou da cessão de origem) não passa por cima — quem chega depois vê a conta já confirmada/cancelada.
+    const transaction = new sql.Transaction(pool);
+    const r = () => new sql.Request(transaction);
+    await transaction.begin();
+    let termoNumero;
+    let lancamentoId;
+    try {
+      const travada = await r().input("id", sql.Int, id).query(`SELECT Status FROM ContasAReceber WITH (UPDLOCK, HOLDLOCK) WHERE ContaReceberId = @id`);
+      if (!travada.recordset[0] || travada.recordset[0].Status !== "PREVISTO") {
+        await transaction.rollback();
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Esta conta a receber já foi confirmada ou cancelada." } };
+        return;
+      }
+      termoNumero = await tesouraria.proximoNumeroTermo({ request: r }, sql, registro.CongregacaoId);
+      const lancamentoCriado = await r()
+        .input("congregacaoId", sql.Int, registro.CongregacaoId)
+        .input("dizimistaId", sql.Int, registro.DizimistaId)
+        .input("nomeAvulso", sql.NVarChar(200), registro.DizimistaId ? null : registro.NomeAvulso)
+        .input("termoNumero", sql.Int, termoNumero)
+        .input("tipo", sql.NVarChar(30), registro.Tipo)
+        .input("descricao", sql.NVarChar(300), registro.Descricao)
+        .input("valor", sql.Decimal(10, 2), registro.Valor)
+        .input("formaPagamento", sql.NVarChar(20), formaPagamento)
+        .input("valorPix", sql.Decimal(10, 2), valorPixFinal)
+        .input("comprovanteUrl", sql.NVarChar(500), comprovanteUrl)
+        .input("mesReferencia", sql.Char(7), mesReferencia)
+        .input("registradoPor", sql.Int, usuario.membroId)
+        .input("campanhaId", sql.Int, registro.CampanhaId)
+        .query(`INSERT INTO LancamentosTesouraria
+                  (CongregacaoId, DizimistaId, NomeAvulso, TermoNumero, Tipo, Descricao, Valor, FormaPagamento, ValorPix, ComprovanteUrl, MesReferencia, RegistradoPor, CampanhaId)
+                OUTPUT INSERTED.LancamentoId
+                VALUES (@congregacaoId, @dizimistaId, @nomeAvulso, @termoNumero, @tipo, @descricao, @valor, @formaPagamento, @valorPix, @comprovanteUrl, @mesReferencia, @registradoPor, @campanhaId)`);
+      lancamentoId = lancamentoCriado.recordset[0].LancamentoId;
 
-    await pool.request().input("id", sql.Int, id).input("lancamentoId", sql.Int, lancamentoId).input("confirmadoPor", sql.Int, usuario.membroId)
-      .query(`UPDATE ContasAReceber SET Status = 'RECEBIDO', LancamentoId = @lancamentoId, ConfirmadoPor = @confirmadoPor, ConfirmadoEm = SYSUTCDATETIME() WHERE ContaReceberId = @id`);
+      const baixou = await r().input("id", sql.Int, id).input("lancamentoId", sql.Int, lancamentoId).input("confirmadoPor", sql.Int, usuario.membroId)
+        .query(`UPDATE ContasAReceber SET Status = 'RECEBIDO', LancamentoId = @lancamentoId, ConfirmadoPor = @confirmadoPor, ConfirmadoEm = SYSUTCDATETIME() WHERE ContaReceberId = @id AND Status = 'PREVISTO'`);
+      if (afetadas(baixou) === 0) {
+        // Rede: sob a trava acima não deveria acontecer; se a conta já não estiver PREVISTA, o lançamento recém-criado é desfeito junto (nunca receita sem baixa).
+        await transaction.rollback();
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Esta conta a receber já foi confirmada ou cancelada." } };
+        return;
+      }
+      await transaction.commit();
+    } catch (erro) {
+      try { await transaction.rollback(); } catch (e) { /* a transação já pode ter sido desfeita */ }
+      context.log.error("Falha ao confirmar o recebimento da conta a receber:", erro.message);
+      context.res = { status: 500, body: { sucesso: false, mensagem: "Não foi possível confirmar o recebimento — nada foi gravado. Tente de novo ou avise a equipe técnica." } };
+      return;
+    }
 
     await registrarAuditoria({
       tabela: "ContasAReceber", registroId: Number(id), acao: "Confirmou recebimento (gerou lançamento)", usuarioId: usuario.membroId,

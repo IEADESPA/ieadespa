@@ -1,0 +1,74 @@
+---
+import { marked } from "marked";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { fetchConfiguracoes } from "@/lib/directus";
+import { quebrarEmSecoes } from "@/lib/markdown";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const config = await fetchConfiguracoes();
+
+const secoesCrencas = await Promise.all(
+  quebrarEmSecoes(config.crencas_corpo ?? "").map(async (secao) => ({
+    ...secao,
+    html: await marked.parse(secao.corpo),
+  })),
+);
+---
+
+<BaseLayout
+  title="Crenças"
+  description={`Aquilo em que a ${siteConfig.name} crê — nossa declaração de fé completa.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">O que cremos</p>
+        <h1 class="pagehead-title">Nossa declaração de fé</h1>
+        <p class="pagehead-description">
+          Somos uma igreja ligada à Convenção das Assembleias de Deus. Aqui está, com mais
+          detalhe, o que ensinamos e vivemos como igreja.
+        </p>
+      </header>
+
+      <div class="grid gap-8 mt-2">
+        {
+          secoesCrencas.length > 0 && secoesCrencas[0].titulo ? (
+            secoesCrencas.map((secao) => (
+              <section class="crencas-secao" aria-labelledby={`crenca-${secao.titulo}`}>
+                <h2 id={`crenca-${secao.titulo}`} class="section-title">{secao.titulo}</h2>
+                <div class="prose mt-3" set:html={secao.html} />
+              </section>
+            ))
+          ) : (
+            <div class="prose" set:html={secoesCrencas[0]?.html ?? ""} />
+          )
+        }
+      </div>
+
+      <div class="prose mt-16">
+        <h2>Quer conversar sobre isso?</h2>
+        <p>
+          Se você tem dúvidas sobre algum desses pontos, ou quer entender melhor como vivemos essa
+          fé no dia a dia da igreja, fale com a gente pela <a href="/contato/">página de contato</a>{" "}
+          — não fique só com a pergunta guardada.
+        </p>
+        <p>
+          Para saber quando e onde nos reunimos, veja a página do <a href="/visitante/">visitante</a>.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .crencas-secao {
+    border-left: 3px solid var(--accent);
+    padding-left: 1.25rem;
+  }
+</style>

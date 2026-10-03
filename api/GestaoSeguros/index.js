@@ -6,10 +6,13 @@
 // POST /api/seguros -> { tipo, seguradora, numeroApolice, dataInicio, dataFim, coberturas[], valorPremio?, bemId?, eventoDescricao?, documentoBase64?, mimeType?, observacao? }
 // PUT  /api/seguros -> { apoliceId, acao: 'CANCELAR' }
 // GET  /api/seguros/alertas -> apólices vencidas + falta de cobertura obrigatória
+// Seguros institucionais são matéria da Tesouraria Geral — só o nível GERAL (papel Global com escopo de todas as congregações).
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
+const { lerBase64, dataIsoValida, idOpcional } = require("../shared/financeiroSeguro");
 
 const TIPOS = ["TEMPLO_SEDE", "GRANDE_EVENTO", "RC_ADMINISTRADORES", "OUTROS"];
 const COBERTURAS_MINIMAS = ["INCENDIO", "DANOS_ELETRICOS", "RC"];
@@ -26,12 +29,8 @@ function estadoVigencia(a, hoje) {
 
 module.exports = async function (context, req) {
   const recurso = context.bindingData.recurso;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Seguros institucionais são matéria da Tesouraria Geral — restrito a nível Global." } };
-    return;
-  }
   const pool = await getPool();
   const hoje = new Date();
 
@@ -62,8 +61,17 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST" && !recurso) {
     const { tipo, seguradora, numeroApolice, dataInicio, dataFim, coberturas, valorPremio, bemId, eventoDescricao, documentoBase64, mimeType, observacao } = req.body || {};
-    if (!tipo || !TIPOS.includes(tipo) || !seguradora || !seguradora.trim() || !numeroApolice || !numeroApolice.trim() || !dataInicio || !dataFim) {
+    if (!tipo || !TIPOS.includes(tipo) || typeof seguradora !== "string" || !seguradora.trim() || typeof numeroApolice !== "string" || !numeroApolice.trim() || !dataInicio || !dataFim) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: tipo, seguradora, numeroApolice, dataInicio, dataFim." } };
+      return;
+    }
+    if (!dataIsoValida(dataInicio) || !dataIsoValida(dataFim)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "dataInicio e dataFim devem estar no formato AAAA-MM-DD." } };
+      return;
+    }
+    const bem = idOpcional(bemId);
+    if (bem.presente && !bem.id) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "bemId inválido." } };
       return;
     }
     const listaCoberturas = Array.isArray(coberturas) ? coberturas.map(c => String(c).toUpperCase()) : [];
@@ -80,12 +88,17 @@ module.exports = async function (context, req) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Formato de documento inválido." } };
         return;
       }
-      documentoUrl = await storage.salvarDocumento(Buffer.from(documentoBase64, "base64"), mimeType);
+      const lido = lerBase64(documentoBase64);
+      if (lido.erro) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: `Documento: ${lido.erro}` } };
+        return;
+      }
+      documentoUrl = await storage.salvarDocumento(lido.buffer, mimeType);
     }
     const criada = await pool.request().input("tipo", sql.NVarChar(30), tipo).input("seguradora", sql.NVarChar(150), seguradora.trim())
       .input("numero", sql.NVarChar(50), numeroApolice.trim()).input("ini", sql.Date, dataInicio).input("fim", sql.Date, dataFim)
       .input("coberturas", sql.NVarChar(500), listaCoberturas.join(",")).input("premio", sql.Decimal(12, 2), valorPremio || null)
-      .input("bemId", sql.Int, bemId || null).input("evento", sql.NVarChar(300), eventoDescricao || null)
+      .input("bemId", sql.Int, bem.id || null).input("evento", sql.NVarChar(300), eventoDescricao || null)
       .input("url", sql.NVarChar(500), documentoUrl).input("obs", sql.NVarChar(300), observacao || null).input("por", sql.Int, usuario.membroId)
       .query(`INSERT INTO ApolicesSeguro (Tipo, Seguradora, NumeroApolice, DataInicio, DataFim, Coberturas, ValorPremio, BemId, EventoDescricao, DocumentoUrl, Observacao, RegistradoPor)
               OUTPUT INSERTED.ApoliceId VALUES (@tipo, @seguradora, @numero, @ini, @fim, @coberturas, @premio, @bemId, @evento, @url, @obs, @por)`);
@@ -103,9 +116,16 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe apoliceId e acao: 'CANCELAR'." } };
       return;
     }
-    await pool.request().input("id", sql.Int, apoliceId).query(`UPDATE ApolicesSeguro SET Status = 'CANCELADA' WHERE ApoliceId = @id`);
+    const apoliceNum = auth.idDeRota(apoliceId);
+    const cancelada = apoliceNum
+      ? await pool.request().input("id", sql.Int, apoliceNum).query(`UPDATE ApolicesSeguro SET Status = 'CANCELADA' WHERE ApoliceId = @id`)
+      : null;
+    if (!cancelada || !cancelada.rowsAffected || cancelada.rowsAffected[0] !== 1) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Apólice não encontrada." } };
+      return;
+    }
     await registrarAuditoria({
-      tabela: "ApolicesSeguro", registroId: Number(apoliceId), acao: "Cancelou apólice de seguro", usuarioId: usuario.membroId
+      tabela: "ApolicesSeguro", registroId: apoliceNum, acao: "Cancelou apólice de seguro", usuarioId: usuario.membroId
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Apólice cancelada." } };
     return;

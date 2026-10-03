@@ -6,16 +6,42 @@
 // Interpreta "YYYY-MM-DD" como data local (meio-dia), evitando erro de 1 dia por fuso.
 function parseData(data) {
   if (!data) return null;
+  // O driver do SQL Server entrega coluna DATE como objeto Date à meia-noite UTC (a data do banco é a de ano/mês/dia em UTC; ler pelo fuso local erraria um dia). Antes, um
+  // Date cru caía em String(data) ("Fri Oct 02 …") e virava null: prazos e idades calculados sobre ele ficavam sem resposta (a homologação de abandono "nunca vencia").
+  // Outro Date (com hora) segue o fuso local, como normalizarParaMeioDia.
+  if (data instanceof Date) {
+    if (Number.isNaN(data.getTime())) return null;
+    const soData = data.getUTCHours() === 0 && data.getUTCMinutes() === 0 && data.getUTCSeconds() === 0 && data.getUTCMilliseconds() === 0;
+    return soData
+      ? new Date(data.getUTCFullYear(), data.getUTCMonth(), data.getUTCDate(), 12, 0, 0)
+      : new Date(data.getFullYear(), data.getMonth(), data.getDate(), 12, 0, 0);
+  }
   const [ano, mes, dia] = String(data).slice(0, 10).split("-").map(Number);
   if (!ano || !mes || !dia) return null;
   return new Date(ano, mes - 1, dia, 12, 0, 0);
+}
+
+// v5.3 — bug real encontrado (CI travou publicando a v5.3 por causa disto,
+// vB.13/credenciamento): "hoje" (Date ou string) precisa do MESMO âncora de
+// meio-dia que `parseData` usa pra data-alvo, senão a comparação por
+// diferença de milissegundos em `diasDesde` mistura um lado ancorado (meio-
+// dia) com o outro no horário exato do relógio — antes do meio-dia local,
+// "hoje menos hoje" dava `-1` em vez de `0` (ex: período de integração
+// calculado às 00h "parecia" já ter passado de vencido, ou nem começado,
+// dependendo do sinal). Extrai só a data (ano/mês/dia) de `hoje`, ignora a
+// hora — dias corridos nunca deveriam depender de que horas são agora.
+function normalizarParaMeioDia(momento) {
+  const d = momento instanceof Date ? momento : new Date(`${String(momento).slice(0, 10)}T00:00:00`);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
 }
 
 function idadeEm(dataNascimento, hoje) {
   if (!dataNascimento) return null;
   const nascimento = parseData(dataNascimento);
   if (!nascimento) return null;
-  const agora = hoje ? new Date(hoje) : new Date();
+  // "hoje" em texto AAAA-MM-DD é um DIA, não um instante: new Date("2026-06-15") é meia-noite UTC, que no Brasil ainda é o dia 14 (às 21 h) e fazia quem completa
+  // anos em 15/06 constar com um ano a menos no próprio dia do aniversário.
+  const agora = hoje ? normalizarParaMeioDia(hoje) : new Date();
   let idade = agora.getFullYear() - nascimento.getFullYear();
   const aniversarioAindaNaoChegou =
     agora.getMonth() < nascimento.getMonth() ||
@@ -28,7 +54,7 @@ function diasDesde(data, hoje) {
   if (!data) return null;
   const inicio = parseData(data);
   if (!inicio) return null;
-  const agora = hoje ? new Date(hoje) : new Date();
+  const agora = normalizarParaMeioDia(hoje || new Date());
   const diffMs = agora.getTime() - inicio.getTime();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }

@@ -15,6 +15,11 @@
 // Cancelamento nunca é exclusão (mesmo princípio de v4.1.1) — mas uma
 // Saída já PAGA não pode ser cancelada (dinheiro já saiu; corrige-se com
 // um lançamento de ajuste auditado, não reescrevendo histórico).
+// PAGAR roda numa transação sob a trava de aplicação "PagamentoSaida", com a linha da Saída travada, e usa as conferências compartilhadas
+// (shared/conferenciaPagamento.js: fornecedor confirmado, Fundo PDQ, tutela, saldo do centro de custo já descontando o reservado em remessas, campanha) — as MESMAS que a
+// geração da remessa bancária e o retorno do banco repetem na hora de o dinheiro sair (inclusive fornecedor ativo). Uma Saída que está numa remessa aguardando retorno não se paga na mão.
+// Toda mudança de situação (APROVAR, REJEITAR, PAGAR, CANCELAR) leva o estado esperado no WHERE e confere as linhas afetadas: duas aprovações, aprovar × cancelar ou rejeitar × aprovar
+// ao mesmo tempo nunca se sobrescrevem — quem chega depois recebe "a situação mudou". APROVAR (voto + virada para APROVADA) roda numa transação com a linha da Saída travada.
 // v4.5 (segunda parte):
 //  - "possivelDuplicidade" é CALCULADO NA LEITURA (mesmo fornecedor +
 //    mesmo valor + janela de 7 dias, status ainda ativo) — vira um alerta
@@ -34,11 +39,18 @@ const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const tesouraria = require("../shared/tesouraria");
 const compliance = require("../shared/compliance");
+const psc = require("../shared/psc");
+const conferencia = require("../shared/conferenciaPagamento");
+const { obterTrava } = require("../shared/financeiroSeguro");
+const { afetadas } = require("../shared/entradaFinanceira");
+const { violouUnicidade } = require("../shared/violacaoUnica");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
 const ACOES = ["APROVAR", "REJEITAR", "PAGAR", "CANCELAR"];
 
+// Devolve { url } ou { erro: "texto" } — os chamadores olham `erro`. (Antes devolvia { sucesso: false, mensagem } e ninguém lia isso: um formato inválido seguia
+// adiante com url indefinida e o pagamento era gravado SEM comprovante.)
 async function validarEUpload(comprovanteBase64, mimeType, context) {
   if (!mimeType || !MIME_PERMITIDOS.includes(mimeType)) {
     return { erro: `Formato inválido. Use um de: ${MIME_PERMITIDOS.join(", ")}.` };
@@ -55,15 +67,25 @@ async function validarEUpload(comprovanteBase64, mimeType, context) {
     return { url };
   } catch (erroUpload) {
     context.log.error("Falha ao salvar arquivo no Blob Storage:", erroUpload.message);
-    return { erro: "Falha ao salvar o arquivo. Avise a equipe técnica: " + erroUpload.message };
+    return { erro: "Falha ao salvar o arquivo. Avise a equipe técnica." }; // o detalhe do erro fica só no log
   }
+}
+
+// v5.4 — sigla do departamento de quem só tem "tesouraria_departamental"
+// (não "financeiro") — usada por `tesouraria.podeOperarCentroCusto` pra
+// restringir Saídas à categoria do próprio departamento.
+async function siglaDepartamentoDoUsuario(pool, usuario) {
+  if (!usuario.departamentoId) return null;
+  const r = await pool.request().input("id", sql.Int, usuario.departamentoId).query(`SELECT Sigla FROM Departamentos WHERE DepartamentoId = @id`);
+  return r.recordset[0] ? r.recordset[0].Sigla : null;
 }
 
 module.exports = async function (context, req) {
   const id = context.bindingData.id;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = auth.exigirAlgumaPermissao(req, context, ["financeiro", "tesouraria_departamental"]);
   if (!usuario) return;
   const pool = await getPool();
+  const siglaDepartamentoUsuario = auth.temPermissao(usuario, "financeiro") ? null : await siglaDepartamentoDoUsuario(pool, usuario);
 
   const SELECT_BASE = `
     SELECT s.SaidaId AS saidaId, s.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
@@ -95,7 +117,9 @@ module.exports = async function (context, req) {
     if (congregacaoId) { request.input("congregacaoId", sql.Int, congregacaoId); where += " AND s.CongregacaoId = @congregacaoId"; }
     if (status) { request.input("status", sql.NVarChar(20), status); where += " AND s.Status = @status"; }
     const result = await request.query(`${SELECT_BASE} WHERE ${where} ORDER BY s.SolicitadoEm DESC`);
-    const saidas = result.recordset.filter(s => auth.estaNoEscopo(usuario, s.congregacaoNome)).map(s => Object.assign({}, s, {
+    const saidas = result.recordset
+      .filter(s => auth.estaNoEscopo(usuario, s.congregacaoNome) && tesouraria.podeOperarCentroCusto(usuario, s.centroCusto, siglaDepartamentoUsuario))
+      .map(s => Object.assign({}, s, {
       documentoFiscalUrl: storage.urlDocumentoComSas(s.documentoFiscalUrl),
       comprovantePagamentoUrl: s.comprovantePagamentoUrl ? storage.urlDocumentoComSas(s.comprovantePagamentoUrl) : null
     }));
@@ -110,7 +134,7 @@ module.exports = async function (context, req) {
       return;
     }
     const saida = result.recordset[0];
-    if (!auth.estaNoEscopo(usuario, saida.congregacaoNome)) {
+    if (!auth.estaNoEscopo(usuario, saida.congregacaoNome) || !tesouraria.podeOperarCentroCusto(usuario, saida.centroCusto, siglaDepartamentoUsuario)) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
       return;
     }
@@ -170,7 +194,21 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Categoria de saída inválida ou inativa. Cadastre-a em Financeiro → Plano de Contas → Categorias de Saída." } };
       return;
     }
+    if (!tesouraria.podeOperarCentroCusto(usuario, categoria.recordset[0].CentroCusto, siglaDepartamentoUsuario)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Você só pode lançar despesa na categoria do seu próprio departamento." } };
+      return;
+    }
     const cat = categoria.recordset[0];
+    // v7.1 (PSC, Art. 129 §3º, I) — o caixa local de uma Extensão da Tenda
+    // (congregação rebaixada) é recolhido: nada de despesa nova no centro de
+    // custo local nem no departamental dela.
+    if (cat.CentroCusto === "LOCAL" || tesouraria.centroCustoDepartamental(cat.CentroCusto)) {
+      const tutela = await psc.consultarTutela(pool, congregacaoId);
+      if (tutela.sobTutela) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: tutela.mensagem } };
+        return;
+      }
+    }
     if (cat.TipoFundo === "RESTRITO") {
       if (!campanhaId) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Esta categoria é de fundo restrito — informe a campanhaId de origem do dinheiro." } };
@@ -278,7 +316,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "PUT") {
     if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/saidas/{id}" } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/saidas/{id}" } };
       return;
     }
     const { acao, motivo, comprovanteBase64, mimeType } = req.body || {};
@@ -297,7 +335,7 @@ module.exports = async function (context, req) {
       return;
     }
     const registro = atual.recordset[0];
-    if (!auth.estaNoEscopo(usuario, registro.congregacaoNome)) {
+    if (!auth.estaNoEscopo(usuario, registro.congregacaoNome) || !tesouraria.podeOperarCentroCusto(usuario, registro.centroCusto, siglaDepartamentoUsuario)) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
       return;
     }
@@ -335,15 +373,53 @@ module.exports = async function (context, req) {
       const criticoQuatroOlhos = await compliance.valorCriticoQuatroOlhos(pool, sql);
       const acimaCritico = Number(registro.Valor) >= criticoQuatroOlhos;
       const exigido = Math.max(Number(tier.QuantidadeAprovadores), acimaCritico ? 2 : 1);
-      await pool.request().input("saidaId", sql.Int, id).input("membroId", sql.Int, usuario.membroId)
-        .query(`INSERT INTO SaidaAprovacoes (SaidaId, AprovadoPor) VALUES (@saidaId, @membroId)`);
-      const contagem = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS total FROM SaidaAprovacoes WHERE SaidaId = @id`);
-      const totalAprovacoes = contagem.recordset[0].total;
-      let mensagem = `✅ Aprovação registrada (${totalAprovacoes} de ${exigido} exigida(s)${acimaCritico ? " — quatro olhos" : ""}).`;
-      if (totalAprovacoes >= exigido) {
-        await pool.request().input("id", sql.Int, id).query(`UPDATE SaidasTesouraria SET Status = 'APROVADA' WHERE SaidaId = @id`);
-        mensagem = "✅ Última aprovação necessária registrada — solicitação APROVADA, pronta pra pagamento.";
+      // O voto e a mudança de situação vão numa transação, com a linha da Saída travada (UPDLOCK, HOLDLOCK) — como o pagamento: duas aprovações simultâneas (duplo clique ou dois
+      // aprovadores) entram uma de cada vez e a contagem é sempre a certa; um cancelamento/rejeição/pagamento simultâneo espera a vez e a aprovação enxerga o resultado dele. E o
+      // estado esperado (PENDENTE) vai no WHERE do UPDATE, com as linhas afetadas conferidas: se, apesar da trava, a Saída já não estiver pendente, NADA é gravado (nem o voto) e
+      // a resposta diz que a situação mudou. Antes o UPDATE não olhava o estado: uma aprovação que chegasse depois de um cancelamento ressuscitava a Saída cancelada como APROVADA.
+      const transaction = new sql.Transaction(pool);
+      const r = () => new sql.Request(transaction);
+      const JA_APROVOU = { status: 200, body: { sucesso: false, mensagem: "Você já registrou sua aprovação para esta solicitação." } };
+      const MUDOU = { status: 200, body: { sucesso: false, mensagem: "Esta solicitação mudou de situação (foi aprovada, rejeitada ou cancelada) enquanto você aprovava — atualize a lista. Sua aprovação NÃO foi registrada." } };
+      let totalAprovacoes;
+      await transaction.begin();
+      try {
+        const travada = await r().input("id", sql.Int, id).query(`SELECT Status FROM SaidasTesouraria WITH (UPDLOCK, HOLDLOCK) WHERE SaidaId = @id`);
+        if (!travada.recordset[0] || travada.recordset[0].Status !== "PENDENTE") {
+          await transaction.rollback();
+          context.res = MUDOU;
+          return;
+        }
+        const votou = await r().input("saidaId", sql.Int, id).input("membroId", sql.Int, usuario.membroId)
+          .query(`SELECT 1 FROM SaidaAprovacoes WHERE SaidaId = @saidaId AND AprovadoPor = @membroId`);
+        if (votou.recordset.length > 0) {
+          await transaction.rollback();
+          context.res = JA_APROVOU;
+          return;
+        }
+        await r().input("saidaId", sql.Int, id).input("membroId", sql.Int, usuario.membroId)
+          .query(`INSERT INTO SaidaAprovacoes (SaidaId, AprovadoPor) VALUES (@saidaId, @membroId)`);
+        const contagem = await r().input("id", sql.Int, id).query(`SELECT COUNT(*) AS total FROM SaidaAprovacoes WHERE SaidaId = @id`);
+        totalAprovacoes = contagem.recordset[0].total;
+        if (totalAprovacoes >= exigido) {
+          const aprovou = await r().input("id", sql.Int, id).query(`UPDATE SaidasTesouraria SET Status = 'APROVADA' WHERE SaidaId = @id AND Status = 'PENDENTE'`);
+          if (afetadas(aprovou) === 0) {
+            await transaction.rollback();
+            context.res = MUDOU;
+            return;
+          }
+        }
+        await transaction.commit();
+      } catch (erroAprovacao) {
+        try { await transaction.rollback(); } catch (e) { /* a transação já pode ter sido desfeita */ }
+        // Rede do banco (UQ_SaidaAprovacao_Pessoa): o mesmo aprovador nunca vota duas vezes na mesma Saída, nem em duas requisições simultâneas.
+        if (violouUnicidade(erroAprovacao)) { context.res = JA_APROVOU; return; }
+        context.log.error("Falha ao registrar a aprovação da saída:", erroAprovacao.message);
+        context.res = { status: 500, body: { sucesso: false, mensagem: "Não foi possível registrar a aprovação — nada foi gravado. Tente de novo ou avise a equipe técnica." } };
+        return;
       }
+      let mensagem = `✅ Aprovação registrada (${totalAprovacoes} de ${exigido} exigida(s)${acimaCritico ? " — quatro olhos" : ""}).`;
+      if (totalAprovacoes >= exigido) mensagem = "✅ Última aprovação necessária registrada — solicitação APROVADA, pronta pra pagamento.";
       await registrarAuditoria({
         tabela: "SaidasTesouraria", registroId: Number(id), acao: "Aprovou solicitação de pagamento", usuarioId: usuario.membroId,
         dadosDepois: { totalAprovacoes, exigido, quatroOlhos: acimaCritico }
@@ -365,8 +441,13 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Quem solicitou o pagamento não pode rejeitar a própria solicitação — cancele em vez disso." } };
         return;
       }
-      await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), motivo.trim())
-        .query(`UPDATE SaidasTesouraria SET Status = 'REJEITADA', MotivoRejeicao = @motivo WHERE SaidaId = @id`);
+      // O estado vai no WHERE: uma aprovação (ou cancelamento) que acabou de acontecer não é sobrescrita por esta rejeição.
+      const rejeitou = await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), motivo.trim())
+        .query(`UPDATE SaidasTesouraria SET Status = 'REJEITADA', MotivoRejeicao = @motivo WHERE SaidaId = @id AND Status = 'PENDENTE'`);
+      if (afetadas(rejeitou) === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Esta solicitação mudou de situação (foi aprovada, rejeitada ou cancelada) enquanto você rejeitava — atualize a lista." } };
+        return;
+      }
       await registrarAuditoria({
         tabela: "SaidasTesouraria", registroId: Number(id), acao: "Rejeitou solicitação de pagamento", usuarioId: usuario.membroId,
         dadosAntes: registro, dadosDepois: { motivo }
@@ -384,35 +465,51 @@ module.exports = async function (context, req) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Anexe o comprovante de pagamento." } };
         return;
       }
-      const fornecedor = await pool.request().input("id", sql.Int, registro.FornecedorId).query(`SELECT DadosBancariosConfirmados FROM Fornecedores WHERE FornecedorId = @id`);
-      if (!fornecedor.recordset[0] || !fornecedor.recordset[0].DadosBancariosConfirmados) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: "Os dados bancários deste fornecedor mudaram e ainda não foram confirmados — não é possível pagar agora." } };
-        return;
-      }
-      if (registro.centroCusto === "PDQ") {
-        const suspensao = await tesouraria.suspensaoAtivaFundoPdq(pool, sql);
-        if (suspensao) {
-          context.res = { status: 200, body: { sucesso: false, mensagem: `O Fundo de Execução Estratégica (PDQ) está suspenso pelo Pastor Presidente desde ${new Date(suspensao.SuspensoEm).toLocaleDateString("pt-BR")} — não é possível pagar agora.` } };
+      // O dinheiro só sai debaixo da trava "PagamentoSaida", numa transação: conferir o saldo e gravar o pagamento não podem ser separados por outro pagamento, por uma
+      // geração de remessa ou pelo retorno do banco (cada um leria o mesmo saldo e gastaria duas vezes). As conferências (fornecedor confirmado, Fundo PDQ, tutela, saldo
+      // do centro de custo, campanha) são as mesmas da remessa e do retorno: shared/conferenciaPagamento.js. Aqui o saldo já desconta o que está reservado em remessa.
+      const transaction = new sql.Transaction(pool);
+      const execucao = { request: () => new sql.Request(transaction) };
+      await transaction.begin();
+      try {
+        if (!(await obterTrava(execucao.request, "PagamentoSaida"))) {
+          await transaction.rollback();
+          context.res = { status: 409, body: { sucesso: false, mensagem: "Há outro pagamento ou uma remessa bancária em andamento — aguarde alguns segundos e tente de novo." } };
           return;
         }
-      }
-      const saldoDisponivel = await tesouraria.saldoCentroCusto(pool, sql, registro.centroCusto, registro.CongregacaoId);
-      if (Number(registro.Valor) > saldoDisponivel) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: `Saldo insuficiente no Centro de Custo ${registro.centroCusto === "GERAL" ? "Geral" : registro.centroCusto === "PDQ" ? "PDQ" : "Local"} (disponível: R$ ${saldoDisponivel.toFixed(2)}).` } };
-        return;
-      }
-      if (registro.CampanhaId) {
-        const campanha = await pool.request().input("id", sql.Int, registro.CampanhaId).query(`SELECT Status FROM Campanhas WHERE CampanhaId = @id`);
-        if (campanha.recordset.length === 0 || campanha.recordset[0].Status === "CANCELADA") {
-          context.res = { status: 200, body: { sucesso: false, mensagem: "A campanha de origem deste gasto foi cancelada — não é possível pagar." } };
+        // A situação é lida DE NOVO, com a linha travada: duas pessoas pagando a mesma Saída ao mesmo tempo não pagam duas vezes.
+        const travada = await conferencia.carregarSaida(execucao, sql, id, { travar: true });
+        if (!travada || travada.status !== "APROVADA") {
+          await transaction.rollback();
+          context.res = { status: 200, body: { sucesso: false, mensagem: "Só é possível pagar uma solicitação já aprovada." } };
           return;
         }
+        const conferido = await conferencia.criarConferidor(execucao, sql, { reservas: "todas" }).conferir(travada, { verificarRemessaPendente: true });
+        if (!conferido.ok) {
+          await transaction.rollback();
+          context.res = { status: 200, body: { sucesso: false, mensagem: conferido.motivos[0].mensagem, motivos: conferido.motivos } };
+          return;
+        }
+        const { erro, url } = await validarEUpload(comprovanteBase64, mimeType, context);
+        if (erro) {
+          await transaction.rollback();
+          context.res = { status: 400, body: { sucesso: false, mensagem: erro } };
+          return;
+        }
+        const pagou = await execucao.request().input("id", sql.Int, id).input("pagoPor", sql.Int, usuario.membroId).input("comprovanteUrl", sql.NVarChar(500), url)
+          .query(`UPDATE SaidasTesouraria SET Status = 'PAGA', PagoPor = @pagoPor, PagoEm = SYSUTCDATETIME(), ComprovantePagamentoUrl = @comprovanteUrl WHERE SaidaId = @id AND Status = 'APROVADA'`);
+        if (afetadas(pagou) === 0) {
+          await transaction.rollback();
+          context.res = { status: 200, body: { sucesso: false, mensagem: "Só é possível pagar uma solicitação já aprovada." } };
+          return;
+        }
+        await transaction.commit();
+      } catch (erroPagamento) {
+        try { await transaction.rollback(); } catch (e) { /* a transação já pode ter sido desfeita */ }
+        context.log.error("Falha ao registrar o pagamento da saída:", erroPagamento.message);
+        context.res = { status: 500, body: { sucesso: false, mensagem: "Não foi possível registrar o pagamento — nada foi gravado. Tente de novo ou avise a equipe técnica." } };
+        return;
       }
-      const { erro, url } = await validarEUpload(comprovanteBase64, mimeType, context);
-      if (erro) { context.res = { status: 400, body: { sucesso: false, mensagem: erro } }; return; }
-
-      await pool.request().input("id", sql.Int, id).input("pagoPor", sql.Int, usuario.membroId).input("comprovanteUrl", sql.NVarChar(500), url)
-        .query(`UPDATE SaidasTesouraria SET Status = 'PAGA', PagoPor = @pagoPor, PagoEm = SYSUTCDATETIME(), ComprovantePagamentoUrl = @comprovanteUrl WHERE SaidaId = @id`);
       await registrarAuditoria({
         tabela: "SaidasTesouraria", registroId: Number(id), acao: "Efetuou pagamento", usuarioId: usuario.membroId,
         dadosAntes: registro, dadosDepois: { valor: registro.Valor }
@@ -434,8 +531,13 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Esta saída já está cancelada." } };
         return;
       }
-      await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), motivo.trim()).input("canceladoPor", sql.Int, usuario.membroId)
-        .query(`UPDATE SaidasTesouraria SET Status = 'CANCELADA', MotivoCancelamento = @motivo, CanceladoPor = @canceladoPor, CanceladoEm = SYSUTCDATETIME() WHERE SaidaId = @id`);
+      // O estado vai no WHERE: um pagamento que acabou de ser feito (ou um cancelamento simultâneo) não é sobrescrito por este cancelamento.
+      const cancelou = await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(300), motivo.trim()).input("canceladoPor", sql.Int, usuario.membroId)
+        .query(`UPDATE SaidasTesouraria SET Status = 'CANCELADA', MotivoCancelamento = @motivo, CanceladoPor = @canceladoPor, CanceladoEm = SYSUTCDATETIME() WHERE SaidaId = @id AND Status IN ('PENDENTE', 'APROVADA')`);
+      if (afetadas(cancelou) === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Esta saída mudou de situação (foi paga ou cancelada) enquanto você cancelava — atualize a lista." } };
+        return;
+      }
       await registrarAuditoria({
         tabela: "SaidasTesouraria", registroId: Number(id), acao: "Cancelou solicitação de pagamento", usuarioId: usuario.membroId,
         dadosAntes: registro, dadosDepois: { motivo }

@@ -1,0 +1,164 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { VERIFICAR_INSCRICAO_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Evento {
+  id: number;
+  slug: string;
+  title: string;
+  description: string | null;
+  aceita_inscricao: boolean;
+}
+
+export async function getStaticPaths() {
+  const events = await fetchItems<Evento>("eventos", "filter[aceita_inscricao][_eq]=true");
+  // slug e opcional no Directus - sem essa checagem, evento sem slug ainda
+  // definido quebraria o build (mesmo bug corrigido em toda pagina por slug).
+  return events.filter((event) => event.slug).map((event) => ({ params: { slug: event.slug }, props: { event } }));
+}
+
+interface Props {
+  event: Evento;
+}
+
+const { event } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title={`Crachá — ${event.title}`} description="Baixe seu crachá de identificação do evento." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas cracha-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Crachá</p>
+        <h1 class="pagehead-title">{event.title}</h1>
+        <p class="pagehead-description">
+          Digite o mesmo código usado no check-in do evento pra baixar seu crachá de
+          identificação, já com seu nome — é só imprimir e recortar.
+        </p>
+      </header>
+
+      <form
+        class="mt-8 grid gap-4 max-w-sm"
+        data-cracha-form
+        data-evento-id={event.id}
+        data-evento-titulo={event.title}
+        data-evento-tema={event.description ?? ""}
+        data-verificar-url={VERIFICAR_INSCRICAO_URL}
+      >
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="cracha-codigo">Código de confirmação</label>
+          <input
+            id="cracha-codigo"
+            name="codigo"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            maxlength="6"
+            class="field cracha-codigo-input"
+            placeholder="A3F9K2"
+          />
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="cracha-telefone">Telefone usado na inscrição</label>
+          <input
+            id="cracha-telefone"
+            name="telefone"
+            type="tel"
+            autocomplete="tel"
+            class="field"
+            placeholder="(00) 00000-0000"
+          />
+          <p class="text-xs text-muted-foreground">
+            Confere que o crachá é mesmo seu — evita que alguém baixe usando só o código.
+          </p>
+        </div>
+        <button type="submit" class="btn btn-solid">Buscar crachá</button>
+      </form>
+
+      <p class="mt-6 text-lg font-semibold" data-cracha-resultado role="status" aria-live="polite" />
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { jsPDF } from "jspdf";
+    import { carregarLogoCertificado } from "@/lib/certificado";
+    import { desenharCracha } from "@/lib/cracha";
+    import { configurarAcessibilidadePdf } from "@/lib/pdf";
+
+    const form = document.querySelector<HTMLFormElement>("[data-cracha-form]");
+    if (!form) throw new Error("formulário de crachá ausente");
+
+    const eventoId = form.dataset.eventoId;
+    const eventoTitulo = form.dataset.eventoTitulo ?? "";
+    const eventoTema = form.dataset.eventoTema ?? "";
+    const verificarUrl = form.dataset.verificarUrl ?? "";
+    const resultado = document.querySelector<HTMLElement>("[data-cracha-resultado]");
+    const codigoInput = document.getElementById("cracha-codigo") as HTMLInputElement;
+    const telefoneInput = document.getElementById("cracha-telefone") as HTMLInputElement;
+
+    async function gerarCracha(nome: string) {
+      const logo = await carregarLogoCertificado();
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      configurarAcessibilidadePdf(doc, `Crachá — ${nome} — ${eventoTitulo}`);
+      const largura = 260;
+      const altura = 340;
+      const x = (doc.internal.pageSize.getWidth() - largura) / 2;
+      const y = 80;
+      desenharCracha(doc, { x, y, largura, altura }, { nome, eventoTitulo, tema: eventoTema || null, logo });
+      doc.save(`cracha-${nome.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const codigo = codigoInput.value.trim().toUpperCase();
+      const telefone = telefoneInput.value.trim();
+      if (!resultado) return;
+
+      if (!telefone) {
+        resultado.textContent = "Digite o telefone usado na inscrição.";
+        return;
+      }
+
+      resultado.textContent = "Verificando…";
+
+      try {
+        const res = await fetch(verificarUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evento: eventoId, modo: "codigo", codigo, telefone }),
+        });
+        const pessoa = await res.json();
+
+        if (!pessoa?.encontrado) {
+          resultado.textContent = "Código ou telefone não conferem. Confira e tente de novo.";
+          return;
+        }
+
+        resultado.textContent = "Gerando crachá…";
+        await gerarCracha(pessoa.nome);
+        resultado.textContent = `✅ Crachá de ${pessoa.nome} baixado!`;
+      } catch {
+        resultado.textContent = "Não foi possível buscar agora. Tente novamente em instantes.";
+      }
+    });
+  </script>
+
+  <style>
+    .cracha-canvas {
+      max-width: 40rem;
+    }
+
+    .cracha-codigo-input {
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 1.5rem;
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+  </style>
+</BaseLayout>

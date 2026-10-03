@@ -31,7 +31,7 @@ const SELECT_DENUNCIA = `
          CASE WHEN diretoria.AssentoId IS NULL THEN 0 ELSE 1 END AS denunciadoEhDiretoria,
          d.Relato AS relato, CONVERT(varchar(33), d.DataProtocolo, 126) AS dataProtocolo,
          d.Status AS status, d.OuvidorMembroId AS ouvidorMembroId, ouvidor.Nome AS ouvidorNome,
-         d.ProcessoDisciplinarId AS processoDisciplinarId,
+         d.ProcessoDisciplinarId AS processoDisciplinarId, d.MediacaoArbitragemId AS mediacaoArbitragemId,
          CONVERT(varchar(33), d.DataConclusao, 126) AS dataConclusao, d.DadosAnonimizados AS dadosAnonimizados
   FROM DenunciasOuvidoria d
   LEFT JOIN MembroReferencia denunciante ON denunciante.MembroId = d.DenuncianteMembroId
@@ -57,19 +57,28 @@ module.exports = async function (context, req) {
     }
     const ehAnonima = anonima === true;
 
-    const protocolo = await gerarProtocolo(pool, sql);
-    const result = await pool.request()
-      .input("protocolo", sql.NVarChar(30), protocolo)
-      .input("tipo", sql.NVarChar(30), tipo)
-      .input("anonima", sql.Bit, ehAnonima)
-      .input("denuncianteMembroId", sql.Int, ehAnonima ? null : usuario.membroId)
-      .input("denunciadoMembroId", sql.Int, denunciadoMembroId || null)
-      .input("relato", sql.NVarChar(sql.MAX), String(relato).trim())
-      .query(`
-        INSERT INTO DenunciasOuvidoria (Protocolo, Tipo, Anonima, DenuncianteMembroId, DenunciadoMembroId, Relato)
-        OUTPUT INSERTED.DenunciaId
-        VALUES (@protocolo, @tipo, @anonima, @denuncianteMembroId, @denunciadoMembroId, @relato)
-      `);
+    // Protocolo aleatório (shared/ouvidoria.js, 03/10/2026). A coluna é UNIQUE: na colisão (chance desprezível, ~79 bits) gera outro, até 3 vezes.
+    let protocolo, result;
+    for (let tentativa = 1; ; tentativa++) {
+      protocolo = await gerarProtocolo(pool);
+      try {
+        result = await pool.request()
+          .input("protocolo", sql.NVarChar(30), protocolo)
+          .input("tipo", sql.NVarChar(30), tipo)
+          .input("anonima", sql.Bit, ehAnonima)
+          .input("denuncianteMembroId", sql.Int, ehAnonima ? null : usuario.membroId)
+          .input("denunciadoMembroId", sql.Int, denunciadoMembroId || null)
+          .input("relato", sql.NVarChar(sql.MAX), String(relato).trim())
+          .query(`
+            INSERT INTO DenunciasOuvidoria (Protocolo, Tipo, Anonima, DenuncianteMembroId, DenunciadoMembroId, Relato)
+            OUTPUT INSERTED.DenunciaId
+            VALUES (@protocolo, @tipo, @anonima, @denuncianteMembroId, @denunciadoMembroId, @relato)
+          `);
+        break;
+      } catch (erro) {
+        if (!(erro && (erro.number === 2627 || erro.number === 2601)) || tentativa >= 3) throw erro;
+      }
+    }
     const novaDenunciaId = result.recordset[0].DenunciaId;
 
     // Anonimato técnico de verdade (Art. 104 §2º): nem a trilha de auditoria
@@ -82,7 +91,7 @@ module.exports = async function (context, req) {
     context.res = {
       status: 201,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: "✅ Denúncia registrada. Guarde o protocolo — é a única forma de acompanhar.", protocolo }
+      body: { sucesso: true, mensagem: "✅ Denúncia registrada. Anote ou copie o protocolo agora: ele é a ÚNICA chave para acompanhar — a Igreja não consegue recuperá-lo nem reenviá-lo (numa denúncia anônima ninguém sabe quem a fez), e quem tiver o protocolo vê o andamento. Não o compartilhe.", protocolo }
     };
     return;
   }
@@ -102,12 +111,14 @@ module.exports = async function (context, req) {
   // Permissão por ação: ANONIMIZAR exige "protecaodedados" (Encarregado de
   // Dados, não necessariamente da Ouvidoria); as demais exigem "ouvidoria".
   if (req.method === "POST" && denunciaId && acao === "evoluir") {
-    const usuario = auth.exigirLogin(req, context);
-    if (!usuario) return;
+    const sessao = auth.exigirLogin(req, context);
+    if (!sessao) return;
 
     const { acao: acaoEvoluir } = req.body || {};
     const permissaoNecessaria = acaoEvoluir === "ANONIMIZAR" ? "protecaodedados" : "ouvidoria";
-    if (!usuario.permissoes || !usuario.permissoes.includes(permissaoNecessaria)) {
+    // v7.6 — a visão só com as concessões da permissão desta ação (escopo/nível dela, não o somado de outro cargo ou delegação).
+    const usuario = auth.visaoDaPermissao(sessao, permissaoNecessaria);
+    if (!usuario) {
       context.res = { status: 403, body: { sucesso: false, mensagem: `Requer a permissão '${permissaoNecessaria}'.` } };
       return;
     }
@@ -122,7 +133,7 @@ module.exports = async function (context, req) {
     if (acaoEvoluir === "ATRIBUIR_OUVIDOR") {
       const { ouvidorMembroId } = req.body || {};
       if (!ouvidorMembroId) {
-        context.res = { status: 400, body: { erro: "Informe 'ouvidorMembroId'." } };
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'ouvidorMembroId'." } };
         return;
       }
       await pool.request().input("id", sql.Int, denunciaId).input("ouvidorId", sql.Int, ouvidorMembroId)
@@ -157,10 +168,44 @@ module.exports = async function (context, req) {
       return;
     }
 
+    if (acaoEvoluir === "ENCAMINHAR_MEDIACAO") {
+      // vB.16 — segunda saída da Ouvidoria: relato que é conflito
+      // patrimonial/administrativo (não infração ética) não devia ser
+      // forçado dentro de processo disciplinar. O denunciado (se houver)
+      // vira Parte B; quem relatou (se não anônimo) vira Parte A.
+      const { assunto, valorEnvolvido, prazoDiasEncerramento } = req.body || {};
+      if (!prazoDiasEncerramento) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe prazoDiasEncerramento." } };
+        return;
+      }
+      const parteAId = atual.Anonima ? null : atual.DenuncianteMembroId;
+      const parteADescricao = atual.Anonima || !parteAId ? "Denunciante (Ouvidoria)" : null;
+      if (!atual.DenunciadoMembroId) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Esta denúncia não tem um denunciado — informe as partes diretamente em Mediação e Arbitragem." } };
+        return;
+      }
+      const criada = await pool.request()
+        .input("assunto", sql.NVarChar(500), assunto || `Encaminhado da Ouvidoria (protocolo ${atual.Protocolo})`)
+        .input("parteAId", sql.Int, parteAId).input("parteADescricao", sql.NVarChar(200), parteADescricao)
+        .input("parteBId", sql.Int, atual.DenunciadoMembroId)
+        .input("valorEnvolvido", sql.Decimal(12, 2), valorEnvolvido || null)
+        .input("prazoDiasEncerramento", sql.Int, prazoDiasEncerramento)
+        .input("instauradoPor", sql.Int, usuario.membroId)
+        .query(`INSERT INTO MediacoesArbitragens (Assunto, ParteAId, ParteADescricao, ParteBId, ValorEnvolvido, PrazoDiasEncerramento, InstauradoPor)
+                OUTPUT INSERTED.MediacaoId
+                VALUES (@assunto, @parteAId, @parteADescricao, @parteBId, @valorEnvolvido, @prazoDiasEncerramento, @instauradoPor)`);
+      const mediacaoId = criada.recordset[0].MediacaoId;
+      await pool.request().input("id", sql.Int, denunciaId).input("mediacaoId", sql.Int, mediacaoId)
+        .query(`UPDATE DenunciasOuvidoria SET Status = 'ENCAMINHADA_MEDIACAO', MediacaoArbitragemId = @mediacaoId WHERE DenunciaId = @id`);
+      await registrarAuditoria({ tabela: "DenunciasOuvidoria", registroId: Number(denunciaId), acao: "Encaminhou pra Mediação/Arbitragem", usuarioId: usuario.membroId, dadosDepois: { mediacaoId } });
+      context.res = { status: 200, body: { sucesso: true, mensagem: "✅ Encaminhado pra Mediação e Arbitragem.", mediacaoId } };
+      return;
+    }
+
     if (acaoEvoluir === "ARQUIVAR" || acaoEvoluir === "CONCLUIR") {
       const { justificativa } = req.body || {};
       if (!justificativa || !String(justificativa).trim()) {
-        context.res = { status: 400, body: { erro: "Justificativa é obrigatória." } };
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Justificativa é obrigatória." } };
         return;
       }
       const novoStatus = acaoEvoluir === "ARQUIVAR" ? "ARQUIVADA" : "CONCLUIDA";
@@ -183,9 +228,9 @@ module.exports = async function (context, req) {
       return;
     }
 
-    context.res = { status: 400, body: { erro: "Ação inválida. Use ATRIBUIR_OUVIDOR, ENCAMINHAR_PROCESSO, ARQUIVAR, CONCLUIR ou ANONIMIZAR." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use ATRIBUIR_OUVIDOR, ENCAMINHAR_PROCESSO, ENCAMINHAR_MEDIACAO, ARQUIVAR, CONCLUIR ou ANONIMIZAR." } };
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método/rota não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
 };

@@ -1,0 +1,241 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { buildSearchIndex, SEARCH_GROUPS, GROUP_LABEL_PLURAL } from "@/lib/search";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const searchItems = await buildSearchIndex();
+---
+
+<BaseLayout
+  title="Buscar"
+  description={`Busque em mensagens, notícias, órgãos e congregações da ${siteConfig.name}.`}
+  noindex
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Busca</p>
+        <h1 class="pagehead-title">Buscar no site</h1>
+
+        <form class="mt-8" role="search" aria-label="Busca no site" action="/busca/" method="get">
+          <label class="sr-only" for="search-page-input">Buscar</label>
+          <div class="flex gap-2">
+            <input
+              id="search-page-input"
+              name="q"
+              type="search"
+              class="field"
+              placeholder="Mensagens, notícias, órgãos, congregações..."
+              autocomplete="off"
+              data-search-page-input
+            />
+            <button type="submit" class="btn btn-solid shrink-0">Buscar</button>
+          </div>
+        </form>
+
+        <p class="search-page-summary mt-4 text-sm text-muted-foreground" data-search-page-summary></p>
+
+        <div class="search-page-filters mt-5" data-search-page-filters role="tablist" aria-label="Filtrar por tipo">
+          <button type="button" class="search-page-filter is-active" data-filter="" role="tab" aria-selected="true">Tudo</button>
+          {
+            SEARCH_GROUPS.map((group) => (
+              <button type="button" class="search-page-filter" data-filter={group} role="tab" aria-selected="false">
+                {GROUP_LABEL_PLURAL[group]}
+              </button>
+            ))
+          }
+        </div>
+      </header>
+
+      <div class="feed mt-10" data-search-page-results></div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline type="application/json" id="search-page-data" set:html={JSON.stringify(searchItems)} />
+  <script is:inline>
+    (() => {
+      const input = document.querySelector("[data-search-page-input]");
+      const results = document.querySelector("[data-search-page-results]");
+      const summary = document.querySelector("[data-search-page-summary]");
+      const filterButtons = document.querySelectorAll("[data-search-page-filters] [data-filter]");
+      const items = JSON.parse(document.getElementById("search-page-data")?.textContent || "[]");
+      let activeGroup = "";
+
+      if (!input || !results || !summary) return;
+
+      const escapeHtml = (value) =>
+        String(value).replace(/[&<>"']/g, (character) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[character]);
+
+      // "à" -> "a", pra "familia" encontrar "família" e vice-versa.
+      const normalize = (value) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+      const matches = (item, query) =>
+        normalize([item.title, item.excerpt, item.group, item.meta].join(" ")).includes(query);
+
+      filterButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          activeGroup = button.dataset.filter || "";
+          filterButtons.forEach((other) => {
+            const isActive = other === button;
+            other.classList.toggle("is-active", isActive);
+            other.setAttribute("aria-selected", String(isActive));
+          });
+          render();
+        });
+      });
+
+      /* Sem texto e sem filtro, a página não lista nada — busca de verdade,
+         não navegação solta. Mas escolher um filtro já mostra os itens
+         daquela categoria, pra também servir de atalho de navegação. */
+      const render = () => {
+        const raw = input.value.trim();
+        const query = normalize(raw);
+        const scoped = activeGroup ? items.filter((item) => item.group === activeGroup) : items;
+        const found = query ? scoped.filter((item) => matches(item, query)) : activeGroup ? scoped : [];
+
+        const groupLabel = activeGroup ? ` em ${activeGroup}` : "";
+        summary.textContent = query
+          ? `${found.length} ${found.length === 1 ? "resultado" : "resultados"} para “${raw}”${groupLabel}.`
+          : activeGroup
+            ? `${found.length} ${found.length === 1 ? "item" : "itens"}${groupLabel}.`
+            : "";
+
+        if (query && found.length === 0) {
+          results.innerHTML = `
+            <div class="search-page-empty">
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Nenhum resultado pra “${escapeHtml(raw)}”${escapeHtml(groupLabel)}. Confira a ortografia,
+                tente um termo mais simples, ou veja alguns atalhos:
+              </p>
+              <ul class="mt-3 grid gap-2 text-sm">
+                <li><a href="/mensagens/" class="text-accent underline underline-offset-2">Todas as mensagens</a></li>
+                <li><a href="/noticias/" class="text-accent underline underline-offset-2">Notícias</a></li>
+                <li><a href="/eventos/" class="text-accent underline underline-offset-2">Eventos</a></li>
+                <li><a href="/contato/" class="text-accent underline underline-offset-2">Fale conosco</a></li>
+              </ul>
+            </div>
+          `;
+          return;
+        }
+
+        results.innerHTML = found
+          .map(
+            (item) => `
+              <article>
+                <a href="${escapeHtml(item.href)}" class="link-title">
+                  <h2 class="search-page-title link-title__text">${escapeHtml(item.title)}</h2>
+                  ${item.excerpt ? `<p class="search-page-excerpt">${escapeHtml(item.excerpt)}</p>` : ""}
+                  <p class="meta mt-4"><span class="meta-accent">${escapeHtml(item.group)}</span>${item.meta ? `<span>${escapeHtml(item.meta)}</span>` : ""}</p>
+                </a>
+              </article>
+            `,
+          )
+          .join("");
+      };
+
+      input.value = new URLSearchParams(window.location.search).get("q") || "";
+      render();
+      input.addEventListener("input", render);
+
+      // Mesma navegação por teclado do atalho rápido (Ctrl+K): setinha pra
+      // baixo a partir do campo vai pro primeiro resultado, e dentro dos
+      // resultados as setas navegam entre eles.
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowDown") return;
+        const first = results.querySelector("a");
+        if (!first) return;
+        event.preventDefault();
+        first.focus();
+      });
+
+      results.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+
+        const links = Array.from(results.querySelectorAll("a"));
+        const current = links.indexOf(document.activeElement);
+        if (current === -1) return;
+
+        event.preventDefault();
+        if (event.key === "ArrowDown") (links[current + 1] || links[0])?.focus();
+        else if (current === 0) input.focus();
+        else links[current - 1]?.focus();
+      });
+    })();
+  </script>
+
+  <style is:global>
+    .search-page-summary:empty {
+      display: none;
+    }
+
+    .search-page-empty {
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-md);
+      padding: 1.5rem 1.75rem;
+    }
+
+    .search-page-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .search-page-filter {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted-foreground);
+      padding: 0.35rem 0.85rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition:
+        background-color var(--duration-fast) var(--ease-out),
+        color var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out);
+    }
+
+    .search-page-filter:hover {
+      border-color: var(--border-strong);
+      color: var(--foreground);
+    }
+
+    .search-page-filter.is-active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      /* var(--accent) sobre este fundo claro dava só 3.88:1 — --accent-strong
+         resolve com folga (5.97:1), em ambos os temas. */
+      color: var(--accent-strong);
+    }
+
+    .search-page-title {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: var(--text-title-sm);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      text-wrap: balance;
+    }
+
+    .search-page-excerpt {
+      margin: 0.75rem 0 0;
+      color: color-mix(in srgb, var(--foreground) 88%, transparent);
+      font-size: 1.0625rem;
+      line-height: 1.55;
+      text-wrap: pretty;
+    }
+  </style>
+</BaseLayout>

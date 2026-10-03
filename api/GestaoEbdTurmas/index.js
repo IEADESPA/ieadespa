@@ -1,0 +1,261 @@
+// GestaoEbdTurmas (v6.1 — EBD: Hierarquia e cadastros)
+//
+// Abre a FASE 6 (Escola Bíblica Dominical) — reescrita do zero em Functions
+// + front estático (ver README, preâmbulo da FASE 6: existe um protótipo
+// `chamada-ebd` em Next.js, banido neste projeto; nada de lá foi copiado).
+//
+// Toda rota exige a permissão própria "ebd_gestao" (nunca concedida
+// automaticamente a nenhum papel, migração 101 — mesmo padrão de
+// "habilitacao_voluntarios"/v5.7 e "assistencia_social"/v5.9), diferente
+// do Departamento cadastral "EBD" usado pelos Relatórios Departamentais
+// (v5.2/v5.5/v5.8) — são cadastros de naturezas diferentes, sem relação.
+// Ver shared/ebdTurmas.js pra toda a lógica de decisão (pura, testada em
+// isolamento).
+//
+// GET  /api/ebd-turmas/turmas?congregacaoId=          -> turmas da congregação (+ contagem de professores/alunos)
+// POST /api/ebd-turmas/turmas   body:{congregacaoId, nome, faixaEtaria?}
+// GET  /api/ebd-turmas/professores?turmaId=
+// POST /api/ebd-turmas/professores          body:{turmaId, membroId, principal?}
+// POST /api/ebd-turmas/professores/encerrar body:{turmaId, membroId}
+// GET  /api/ebd-turmas/alunos?turmaId=
+// POST /api/ebd-turmas/alunos               body:{membroId, turmaId}          -> matrícula (vínculo de MembroReferencia)
+// POST /api/ebd-turmas/alunos               body:{turmaId, naoMembro:{nome, contato?, dataNascimento?, responsavelNome?}} -> matrícula de NÃO-MEMBRO (v6.8)
+// POST /api/ebd-turmas/alunos/transferir    body:{membroId | alunoId, novaTurmaId}   (matrícula encerrada é reativada)
+// POST /api/ebd-turmas/alunos/vincular-membro body:{alunoId, membroId}        -> não-membro que virou membro (v6.8)
+// POST /api/ebd-turmas/alunos/encerrar      body:{alunoId}                    -> encerra a matrícula (v6.8)
+// GET  /api/ebd-turmas/aluno?membroId=                -> vínculo de aluno de um membro específico
+// GET  /api/ebd-turmas/visao-agrupada?busca=          -> Área -> Congregação -> Turmas, dentro do escopo do usuário
+// Trava 6-B — titular SEM cadastro de membro (aluno não-membro, visitante), só
+// para o Encarregado de Dados ("protecaodedados"), nunca "ebd_gestao":
+// GET  /api/ebd-turmas/lgpd/buscar?nome=                    -> alunos não-membros e visitantes com esse nome
+// POST /api/ebd-turmas/lgpd/anonimizar-aluno     body:{alunoId}
+// POST /api/ebd-turmas/lgpd/anonimizar-visitante body:{chamadaId}
+const auth = require("../shared/auth");
+const { getPool, sql } = require("../shared/db");
+const ebd = require("../shared/ebdTurmas");
+const ebdLgpd = require("../shared/ebdLgpd");
+
+function erro(context, status, mensagem) {
+  context.res = { status, body: { sucesso: false, mensagem } };
+}
+
+async function nomeCongregacao(pool, congregacaoId) {
+  const r = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id`);
+  return r.recordset[0] ? r.recordset[0].Nome : null;
+}
+
+async function podeAcessarCongregacao(pool, usuario, congregacaoId) {
+  const nome = await nomeCongregacao(pool, congregacaoId);
+  return !!nome && auth.estaNoEscopo(usuario, nome);
+}
+
+async function podeAcessarTurma(pool, usuario, turmaId) {
+  const turma = await ebd.buscarTurmaPorId(pool, turmaId);
+  if (!turma) return { ok: false, turma: null };
+  return { ok: await podeAcessarCongregacao(pool, usuario, turma.congregacaoId), turma };
+}
+
+module.exports = async function (context, req) {
+  // Trava 6-A: única rota sem "ebd_gestao" — o professor descobre as
+  // próprias turmas (e o front abre a aba EBD em modo professor).
+  if (context.bindingData.acao === "minhas-turmas" && req.method === "GET") {
+    const logado = auth.exigirLogin(req, context);
+    if (!logado) return;
+    const pool = await getPool();
+    context.res = { status: 200, body: { sucesso: true, turmas: await ebd.listarTurmasDoProfessor(pool, logado.membroId) } };
+    return;
+  }
+
+  // Trava 6-B: direitos do titular sem cadastro de membro (ver shared/ebdLgpd.js).
+  if (String(context.bindingData.acao || "").startsWith("lgpd/")) {
+    const encarregado = auth.exigirPermissao(req, context, "protecaodedados");
+    if (!encarregado) return;
+    const poolLgpd = await getPool();
+    const acaoLgpd = context.bindingData.acao;
+    try {
+      if (acaoLgpd === "lgpd/buscar" && req.method === "GET") {
+        const resultado = await ebdLgpd.buscarTitularesEbd(poolLgpd, req.query && req.query.nome);
+        context.res = { status: resultado.sucesso ? 200 : 422, headers: { "Cache-Control": "no-store" }, body: resultado };
+        return;
+      }
+      if (acaoLgpd === "lgpd/anonimizar-aluno" && req.method === "POST") {
+        const alunoId = Number((req.body || {}).alunoId);
+        if (!alunoId) return erro(context, 400, "Informe alunoId.");
+        const resultado = await ebdLgpd.anonimizarAlunoNaoMembro(poolLgpd, { alunoId, membroId: encarregado.membroId });
+        context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+        return;
+      }
+      if (acaoLgpd === "lgpd/anonimizar-visitante" && req.method === "POST") {
+        const chamadaId = Number((req.body || {}).chamadaId);
+        if (!chamadaId) return erro(context, 400, "Informe chamadaId.");
+        const resultado = await ebdLgpd.anonimizarVisitante(poolLgpd, { chamadaId, membroId: encarregado.membroId });
+        context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+        return;
+      }
+      return erro(context, 404, "Ação inválida.");
+    } catch (e) {
+      context.log.error("[GestaoEbdTurmas/lgpd] erro:", e);
+      return erro(context, 500, "Erro interno ao processar a solicitação de dados da EBD.");
+    }
+  }
+
+  const usuario = auth.exigirPermissao(req, context, "ebd_gestao");
+  if (!usuario) return;
+
+  const pool = await getPool();
+  const acao = context.bindingData.acao;
+  const metodo = req.method;
+
+  try {
+    // ---- Turmas ----
+    if (acao === "turmas") {
+      if (metodo === "GET") {
+        const congregacaoId = Number(req.query && req.query.congregacaoId);
+        if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
+        if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+        context.res = { status: 200, body: { sucesso: true, turmas: await ebd.listarTurmasPorCongregacao(pool, congregacaoId) } };
+        return;
+      }
+      if (metodo === "POST") {
+        const { congregacaoId, nome, faixaEtaria } = req.body || {};
+        if (!congregacaoId) return erro(context, 400, "Informe congregacaoId.");
+        if (!(await podeAcessarCongregacao(pool, usuario, congregacaoId))) return erro(context, 403, "Fora do seu escopo de atuação.");
+        const resultado = await ebd.criarTurma(pool, { congregacaoId, nome, faixaEtaria, criadoPorMembroId: usuario.membroId });
+        context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
+        return;
+      }
+    }
+
+    // ---- Professores ----
+    if (acao === "professores") {
+      if (metodo === "GET") {
+        const turmaId = Number(req.query && req.query.turmaId);
+        if (!turmaId) return erro(context, 400, "Informe turmaId.");
+        const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
+        if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+        context.res = { status: 200, body: { sucesso: true, professores: await ebd.listarProfessoresPorTurma(pool, turmaId) } };
+        return;
+      }
+      if (metodo === "POST") {
+        const { turmaId, membroId, principal } = req.body || {};
+        if (!turmaId || !membroId) return erro(context, 400, "Informe turmaId e membroId.");
+        const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
+        if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+        const resultado = await ebd.designarProfessor(pool, { turmaId, membroId, principal, designadoPorMembroId: usuario.membroId });
+        context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
+        return;
+      }
+    }
+
+    if (acao === "professores/encerrar" && metodo === "POST") {
+      const { turmaId, membroId } = req.body || {};
+      if (!turmaId || !membroId) return erro(context, 400, "Informe turmaId e membroId.");
+      const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      const resultado = await ebd.encerrarProfessor(pool, { turmaId, membroId, registradoPorMembroId: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
+    }
+
+    // ---- Alunos (vínculo de MembroReferencia) ----
+    if (acao === "alunos") {
+      if (metodo === "GET") {
+        const turmaId = Number(req.query && req.query.turmaId);
+        if (!turmaId) return erro(context, 400, "Informe turmaId.");
+        const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
+        if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+        context.res = { status: 200, body: { sucesso: true, alunos: await ebd.listarAlunosPorTurma(pool, turmaId) } };
+        return;
+      }
+      if (metodo === "POST") {
+        const { membroId, turmaId, naoMembro } = req.body || {};
+        // v6.8 — aluno sem cadastro de membro: body { turmaId, naoMembro: { nome, contato?, dataNascimento?, responsavelNome? } }
+        if (naoMembro) {
+          if (membroId) return erro(context, 400, "Envie membroId OU naoMembro, não os dois.");
+          if (!turmaId) return erro(context, 400, "Informe turmaId.");
+          const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
+          if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+          const resultado = await ebd.matricularAlunoNaoMembro(pool, { ...naoMembro, turmaId, criadoPorMembroId: usuario.membroId });
+          context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
+          return;
+        }
+        if (!membroId || !turmaId) return erro(context, 400, "Informe membroId e turmaId.");
+        const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
+        if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+        const resultado = await ebd.matricularAluno(pool, { membroId, turmaId, criadoPorMembroId: usuario.membroId });
+        context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
+        return;
+      }
+    }
+
+    if (acao === "alunos/transferir" && metodo === "POST") {
+      // v6.8: aceita alunoId (único jeito de achar um não-membro) além do membroId de sempre.
+      const { membroId, alunoId, novaTurmaId } = req.body || {};
+      if ((!membroId && !alunoId) || !novaTurmaId) return erro(context, 400, "Informe alunoId (ou membroId) e novaTurmaId.");
+      const { ok } = await podeAcessarTurma(pool, usuario, novaTurmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      // Trava 6-A: escopo também sobre a turma de ORIGEM — só o destino era
+      // conferido, então qualquer gestor puxava aluno de congregação alheia.
+      const alunoAtual = alunoId ? await ebd.buscarAlunoPorId(pool, alunoId) : await ebd.buscarAlunoPorMembro(pool, membroId);
+      if (alunoAtual) {
+        const origem = await podeAcessarTurma(pool, usuario, alunoAtual.turmaId);
+        if (!origem.ok) return erro(context, 403, "A turma atual do aluno está fora do seu escopo de atuação.");
+      }
+      const resultado = await ebd.transferirAluno(pool, { membroId, alunoId, novaTurmaId, registradoPorMembroId: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
+    }
+
+    // v6.8 — o não-membro virou membro: mesma matrícula, agora ligada ao cadastro do membro.
+    if (acao === "alunos/vincular-membro" && metodo === "POST") {
+      const { alunoId, membroId } = req.body || {};
+      if (!alunoId || !membroId) return erro(context, 400, "Informe alunoId e membroId.");
+      const aluno = await ebd.buscarAlunoPorId(pool, alunoId);
+      if (!aluno) return erro(context, 404, "Aluno não encontrado.");
+      const { ok } = await podeAcessarTurma(pool, usuario, aluno.turmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      const resultado = await ebd.vincularAlunoAMembro(pool, { alunoId, membroId, registradoPorMembroId: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
+    }
+
+    // v6.8 — encerra a matrícula (deixa de contar nos "matriculados" da caderneta; nada é apagado).
+    if (acao === "alunos/encerrar" && metodo === "POST") {
+      const { alunoId } = req.body || {};
+      if (!alunoId) return erro(context, 400, "Informe alunoId.");
+      const aluno = await ebd.buscarAlunoPorId(pool, alunoId);
+      if (!aluno) return erro(context, 404, "Aluno não encontrado.");
+      const { ok } = await podeAcessarTurma(pool, usuario, aluno.turmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      const resultado = await ebd.encerrarMatricula(pool, { alunoId, registradoPorMembroId: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
+    }
+
+    if (acao === "aluno" && metodo === "GET") {
+      const membroId = Number(req.query && req.query.membroId);
+      if (!membroId) return erro(context, 400, "Informe membroId.");
+      const aluno = await ebd.buscarAlunoPorMembro(pool, membroId);
+      if (!aluno) return erro(context, 404, "Este membro não tem matrícula na EBD.");
+      const { ok } = await podeAcessarTurma(pool, usuario, aluno.turmaId);
+      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
+      context.res = { status: 200, body: { sucesso: true, aluno } };
+      return;
+    }
+
+    // ---- Visão agrupada Área -> Congregação (busca), item 3 do v6.1 ----
+    if (acao === "visao-agrupada" && metodo === "GET") {
+      const nomesCongregacoesPermitidas = usuario.escopoCongregacoes === "TODAS" ? null : (usuario.escopoCongregacoes || []);
+      const turmas = await ebd.listarTurmasParaVisaoAgrupada(pool, { nomesCongregacoesPermitidas });
+      const agrupado = ebd.agruparPorAreaCongregacao(turmas);
+      const busca = req.query && req.query.busca;
+      context.res = { status: 200, body: { sucesso: true, areas: ebd.filtrarBuscaAgrupada(agrupado, busca) } };
+      return;
+    }
+
+    erro(context, 404, "Ação inválida.");
+  } catch (e) {
+    context.log.error("[GestaoEbdTurmas] erro:", e);
+    erro(context, 500, "Erro interno ao processar EBD.");
+  }
+};

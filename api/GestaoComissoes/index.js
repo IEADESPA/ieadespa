@@ -8,18 +8,26 @@
 // GET  /api/comissoes                      -> { CCJ: [...], CFO: [...], CEP: [...], PMO: [...] }
 // POST /api/comissoes/{ccj|pmo}                  -> body: { membroId }
 // POST /api/comissoes/{ccj|pmo}/{id}/encerrar    -> body: { motivoEncerramento? }
+// ESCOPO: a composição de comissão (CCJ, PMO) é INSTITUCIONAL e dá o direito de emitir parecer sobre projeto da igreja inteira (GestaoProjetos). Adicionar e encerrar
+// membro é só do nível GERAL (papel Global com escopo "TODAS"); "pessoas"/"financeiro" também são do Dirigente, do Pastor de Área e dos Tesoureiros locais. Ler a composição
+// (GET) segue para quem tem as permissões de hoje.
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita } = require("../shared/comissoes");
+const { comConflito } = require("../shared/violacaoUnica");
 
 // Limite de membros ativos por comissão de cadastro manual — CCJ é eleita
 // pelo Plenário com número fixo (Art. 19, I); PMO não tem número fixo no
 // Regimento, um teto prático evita uma comissão inchada sem propósito.
 const LIMITES_COMISSAO_MANUAL = { CCJ: 3, PMO: 9 };
 
-module.exports = async function (context, req) {
-  const sigla = (context.bindingData.sigla || "").toUpperCase();
+// A mesma pessoa ativa duas vezes na mesma comissão também é recusada pelo banco (índice UX_ComissaoMembros_Ativo, migração 127): dois pedidos ao mesmo tempo furam a conferência
+// "já está na comissão", e o perdedor recebe o 409 em vez de um 500.
+module.exports = comConflito(async function (context, req) {
+  // O Azure entrega um segmento numérico da URL (/comissoes/1) como número: sem String(), .toUpperCase() estoura e a resposta vira 500.
+  const sigla = String(context.bindingData.sigla || "").toUpperCase();
   const id = context.bindingData.id;
   const acao = context.bindingData.acao;
   const pool = await getPool();
@@ -38,12 +46,19 @@ module.exports = async function (context, req) {
   }
   const limite = LIMITES_COMISSAO_MANUAL[sigla];
 
-  const usuario = auth.exigirPermissao(req, context, sigla === "PMO" ? "financeiro" : "pessoas");
+  const usuario = exigirGeral(req, context, sigla === "PMO" ? "financeiro" : "pessoas");
   if (!usuario) return;
 
   if (req.method === "POST" && id && acao === "encerrar") {
     const { motivoEncerramento } = req.body || {};
-    const antes = await pool.request().input("id", sql.Int, id).input("sigla", sql.NVarChar(10), sigla).query(`SELECT * FROM ComissaoMembros WHERE ComissaoMembroId = @id AND Sigla = @sigla`);
+    if (motivoEncerramento != null && (typeof motivoEncerramento !== "string" || motivoEncerramento.length > 200)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Motivo inválido (texto de até 200 caracteres)." } };
+      return;
+    }
+    const comissaoMembroId = auth.idDeRota(id);
+    const antes = comissaoMembroId
+      ? await pool.request().input("id", sql.Int, comissaoMembroId).input("sigla", sql.NVarChar(10), sigla).query(`SELECT * FROM ComissaoMembros WHERE ComissaoMembroId = @id AND Sigla = @sigla`)
+      : { recordset: [] };
     if (!antes.recordset[0]) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Membro da ${sigla} não encontrado.` } };
       return;
@@ -52,10 +67,10 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Esse membro já saiu da ${sigla}.` } };
       return;
     }
-    await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(200), motivoEncerramento || null)
-      .query(`UPDATE ComissaoMembros SET DataFim = CAST(SYSUTCDATETIME() AS DATE), MotivoEncerramento = @motivo WHERE ComissaoMembroId = @id`);
+    await pool.request().input("id", sql.Int, comissaoMembroId).input("motivo", sql.NVarChar(200), motivoEncerramento || null)
+      .query(`UPDATE ComissaoMembros SET DataFim = CAST(SYSUTCDATETIME() AS DATE), MotivoEncerramento = @motivo WHERE ComissaoMembroId = @id AND DataFim IS NULL`);
     await registrarAuditoria({
-      tabela: "ComissaoMembros", registroId: Number(id), acao: `Encerrou membro da ${sigla}`, usuarioId: usuario.membroId,
+      tabela: "ComissaoMembros", registroId: comissaoMembroId, acao: `Encerrou membro da ${sigla}`, usuarioId: usuario.membroId,
       dadosAntes: antes.recordset[0], dadosDepois: { motivoEncerramento: motivoEncerramento || null }
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Membro removido da ${sigla}.` } };
@@ -63,12 +78,16 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && !id) {
-    const { membroId } = req.body || {};
-    if (!membroId) {
+    const { membroId: membroIdBruto } = req.body || {};
+    if (!membroIdBruto) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula." } };
       return;
     }
-    const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+    // A matrícula só vale na forma canônica de número (auth.idDeRota); o malformado cai na mesma resposta de "não encontrada".
+    const membroId = auth.idDeRota(membroIdBruto);
+    const membro = membroId
+      ? await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`)
+      : { recordset: [] };
     if (membro.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
       return;
@@ -96,5 +115,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método/rota não suportado." } };
-};
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
+}, (_erro, context) => `Essa pessoa já está na ${String(context.bindingData.sigla || "comissão").toUpperCase()}.`);

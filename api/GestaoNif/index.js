@@ -8,19 +8,24 @@
 // GET  /api/nif/comunicacoes
 // POST /api/nif/comunicacoes -> { sinalizacaoId, protocolo?, observacao? }
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { afetadas, textoAte, textoOpcionalAte, violouChaveEstrangeira } = require("../shared/entradaFinanceira");
 
 const TIPOS = ["VALOR_ATIPICO", "FRACIONAMENTO", "FORNECEDOR_SEM_HISTORICO"];
 
+// Id opcional do corpo: ausente → null; presente e malformado → undefined (a rota recusa com 400).
+function idOpcional(v) {
+  if (v === undefined || v === null || v === "") return null;
+  return auth.idDeRota(v) || undefined;
+}
+
 module.exports = async function (context, req) {
   const recurso = context.bindingData.recurso;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  // INSTITUCIONAL (NIF/COS é matéria da Tesouraria Geral, sem congregação): só o nível geral — papel Global com escopo de todas as congregações.
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "NIF/COS é matéria da Tesouraria Geral — restrito a papéis de nível Global." } };
-    return;
-  }
   const pool = await getPool();
 
   if (req.method === "GET" && recurso === "sinalizacoes") {
@@ -39,32 +44,55 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST" && recurso === "sinalizacoes") {
     const { tipo, descricao, saidaId, fornecedorId, doacaoId } = req.body || {};
-    if (!tipo || !TIPOS.includes(tipo) || !descricao || !descricao.trim()) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: tipo (${TIPOS.join("|")}), descricao.` } };
+    const descricaoOk = textoAte(descricao, 500);
+    if (!tipo || !TIPOS.includes(tipo) || !descricaoOk) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: tipo (${TIPOS.join("|")}), descricao (até 500 caracteres).` } };
       return;
     }
-    const criada = await pool.request().input("tipo", sql.NVarChar(30), tipo).input("descricao", sql.NVarChar(500), descricao.trim())
-      .input("saidaId", sql.Int, saidaId || null).input("fornecedorId", sql.Int, fornecedorId || null).input("doacaoId", sql.Int, doacaoId || null).input("por", sql.Int, usuario.membroId)
-      .query(`INSERT INTO NifSinalizacoes (Tipo, Descricao, SaidaId, FornecedorId, DoacaoId, RegistradoPor) OUTPUT INSERTED.SinalizacaoId VALUES (@tipo, @descricao, @saidaId, @fornecedorId, @doacaoId, @por)`);
+    const saida = idOpcional(saidaId), fornecedor = idOpcional(fornecedorId), doacao = idOpcional(doacaoId);
+    if (saida === undefined || fornecedor === undefined || doacao === undefined) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "saidaId, fornecedorId e doacaoId, quando informados, precisam ser números válidos." } };
+      return;
+    }
+    let criada;
+    try {
+      criada = await pool.request().input("tipo", sql.NVarChar(30), tipo).input("descricao", sql.NVarChar(500), descricaoOk)
+        .input("saidaId", sql.Int, saida).input("fornecedorId", sql.Int, fornecedor).input("doacaoId", sql.Int, doacao).input("por", sql.Int, usuario.membroId)
+        .query(`INSERT INTO NifSinalizacoes (Tipo, Descricao, SaidaId, FornecedorId, DoacaoId, RegistradoPor) OUTPUT INSERTED.SinalizacaoId VALUES (@tipo, @descricao, @saidaId, @fornecedorId, @doacaoId, @por)`);
+    } catch (erro) {
+      if (violouChaveEstrangeira(erro)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "A saída, o fornecedor ou a doação informados não existem." } };
+        return;
+      }
+      throw erro;
+    }
     await registrarAuditoria({
       tabela: "NifSinalizacoes", registroId: criada.recordset[0].SinalizacaoId, acao: "Registrou sinalização NIF", usuarioId: usuario.membroId,
-      dadosDepois: { tipo, descricao }
+      dadosDepois: { tipo, descricao: descricaoOk, saidaId: saida, fornecedorId: fornecedor, doacaoId: doacao }
     });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "⚠️ Sinalização de risco registrada (NIF).", sinalizacaoId: criada.recordset[0].SinalizacaoId } };
     return;
   }
 
   if (req.method === "PUT" && recurso === "sinalizacoes") {
-    const { sinalizacaoId, acao } = req.body || {};
+    const { sinalizacaoId: sinalizacaoBruto, acao } = req.body || {};
+    const sinalizacaoId = auth.idDeRota(sinalizacaoBruto);
     if (!sinalizacaoId || (acao !== "CONFIRMAR" && acao !== "DESCARTAR")) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe sinalizacaoId e acao: 'CONFIRMAR' ou 'DESCARTAR'." } };
       return;
     }
     const novoStatus = acao === "CONFIRMAR" ? "CONFIRMADA" : "DESCARTADA";
-    await pool.request().input("id", sql.Int, sinalizacaoId).input("status", sql.NVarChar(20), novoStatus).input("por", sql.Int, usuario.membroId)
-      .query(`UPDATE NifSinalizacoes SET Status = @status, DecididoPor = @por, DecididoEm = SYSUTCDATETIME() WHERE SinalizacaoId = @id`);
+    // Só se decide uma sinalização PENDENTE (a tela só oferece isso): uma CONFIRMADA (que pode já ter sido comunicada ao COAF) ou DESCARTADA não volta atrás. A
+    // conferência vai dentro do próprio UPDATE e as linhas afetadas dizem se a decisão valeu.
+    const decidida = await pool.request().input("id", sql.Int, sinalizacaoId).input("status", sql.NVarChar(20), novoStatus).input("por", sql.Int, usuario.membroId)
+      .query(`UPDATE NifSinalizacoes SET Status = @status, DecididoPor = @por, DecididoEm = SYSUTCDATETIME() WHERE SinalizacaoId = @id AND Status = 'PENDENTE'`);
+    if (afetadas(decidida) === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Sinalização não encontrada ou já decidida (só se decide uma sinalização pendente)." } };
+      return;
+    }
     await registrarAuditoria({
-      tabela: "NifSinalizacoes", registroId: Number(sinalizacaoId), acao: acao === "CONFIRMAR" ? "Confirmou sinalização NIF" : "Descartou sinalização NIF", usuarioId: usuario.membroId
+      tabela: "NifSinalizacoes", registroId: sinalizacaoId, acao: acao === "CONFIRMAR" ? "Confirmou sinalização NIF" : "Descartou sinalização NIF", usuarioId: usuario.membroId,
+      dadosAntes: { status: "PENDENTE" }, dadosDepois: { status: novoStatus }
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: acao === "CONFIRMAR" ? "✅ Sinalização confirmada — pronta pra comunicação externa." : "Sinalização descartada." } };
     return;
@@ -81,9 +109,16 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && recurso === "comunicacoes") {
-    const { sinalizacaoId, protocolo, observacao } = req.body || {};
+    const { sinalizacaoId: sinalizacaoBruto, protocolo, observacao } = req.body || {};
+    const sinalizacaoId = auth.idDeRota(sinalizacaoBruto);
     if (!sinalizacaoId) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe sinalizacaoId." } };
+      return;
+    }
+    const protocoloOk = textoOpcionalAte(protocolo, 50);
+    const observacaoOk = textoOpcionalAte(observacao, 500);
+    if (protocoloOk === null || observacaoOk === null) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "protocolo (até 50) e observacao (até 500 caracteres) são texto curto." } };
       return;
     }
     const sinal = await pool.request().input("id", sql.Int, sinalizacaoId).query(`SELECT CriadoEm, DecididoEm, Status FROM NifSinalizacoes WHERE SinalizacaoId = @id`);
@@ -103,12 +138,12 @@ module.exports = async function (context, req) {
     const referencia = sinal.recordset[0].DecididoEm || sinal.recordset[0].CriadoEm;
     const horas = Math.abs(Date.now() - new Date(referencia).getTime()) / 36e5;
     const dentroPrazo24h = horas <= 24;
-    const criada = await pool.request().input("sinal", sql.Int, sinalizacaoId).input("protocolo", sql.NVarChar(50), protocolo || null)
-      .input("dentroPrazo", sql.Bit, dentroPrazo24h ? 1 : 0).input("obs", sql.NVarChar(500), observacao || null).input("por", sql.Int, usuario.membroId)
+    const criada = await pool.request().input("sinal", sql.Int, sinalizacaoId).input("protocolo", sql.NVarChar(50), protocoloOk || null)
+      .input("dentroPrazo", sql.Bit, dentroPrazo24h ? 1 : 0).input("obs", sql.NVarChar(500), observacaoOk || null).input("por", sql.Int, usuario.membroId)
       .query(`INSERT INTO ComunicacoesCoaf (SinalizacaoId, Protocolo, DentroPrazo24h, Observacao, ComunicadoPor) OUTPUT INSERTED.ComunicacaoId VALUES (@sinal, @protocolo, @dentroPrazo, @obs, @por)`);
     await registrarAuditoria({
       tabela: "ComunicacoesCoaf", registroId: criada.recordset[0].ComunicacaoId, acao: "Comunicou operação suspeita ao COAF", usuarioId: usuario.membroId,
-      dadosDepois: { sinalizacaoId, protocolo: protocolo || null, dentroPrazo24h }
+      dadosDepois: { sinalizacaoId, protocolo: protocoloOk || null, dentroPrazo24h }
     });
     context.res = {
       status: 201, headers: { "Content-Type": "application/json" },

@@ -1,0 +1,1055 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { DIRECTUS_URL, TELEFONE_HASH_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Inscritos — Gestão de eventos" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas inscritos-canvas" data-directus-url={DIRECTUS_URL} data-telefone-hash-url={TELEFONE_HASH_URL} data-site-url={siteConfig.siteUrl}>
+      <header class="pagehead">
+        <p class="eyebrow" data-painel-voltar>
+          <a href="/painel-eventos/" class="text-accent">← Gestão de eventos</a>
+        </p>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 class="pagehead-title" data-painel-titulo>Inscritos</h1>
+          <div class="flex flex-wrap gap-3">
+            <button type="button" class="btn btn-outline" data-baixar-crachas hidden>
+              Baixar crachás de todos os confirmados
+            </button>
+            <button type="button" class="btn btn-outline" data-baixar-certificados hidden>
+              Baixar certificados de todos os presentes
+            </button>
+          </div>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden data-painel-erro class="gallery-empty mt-8">
+        <p class="text-sm text-muted-foreground">Evento não encontrado.</p>
+      </div>
+
+      <div hidden data-painel-conteudo>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-6" data-cartoes-stats>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="total">0</p>
+            <p class="stat-label">Inscritos</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="pagos">0</p>
+            <p class="stat-label">Pagos</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="presentes">0</p>
+            <p class="stat-label">Presentes</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="espera">0</p>
+            <p class="stat-label">Lista de espera</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="pendentes">0</p>
+            <p class="stat-label">Aguardando aprovação</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="arrecadado">R$ 0</p>
+            <p class="stat-label">Arrecadado (pagos)</p>
+          </div>
+        </div>
+
+        <div class="mt-8 flex flex-wrap items-center gap-3">
+          <input type="search" class="field busca-input" placeholder="Buscar por nome…" data-busca />
+          <div class="flex flex-wrap gap-2" data-filtros>
+            <button type="button" class="filtro-chip is-active" data-filtro="todos">Todos</button>
+            <button type="button" class="filtro-chip" data-filtro="pagos">Pagos</button>
+            <button type="button" class="filtro-chip" data-filtro="nao-pagos">Não pagos</button>
+            <button type="button" class="filtro-chip" data-filtro="presentes">Presentes</button>
+            <button type="button" class="filtro-chip" data-filtro="ausentes">Ausentes</button>
+            <button type="button" class="filtro-chip" data-filtro="espera">Lista de espera</button>
+            <button type="button" class="filtro-chip" data-filtro="pendentes">Aguardando aprovação</button>
+          </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-start gap-3" data-filtro-pergunta-bloco hidden>
+          <span class="text-sm font-semibold text-muted-foreground" style="padding-top:0.4rem;">Filtrar por pergunta:</span>
+          <select class="field" data-filtro-pergunta-select></select>
+          <div class="flex flex-wrap gap-x-3 gap-y-1" data-filtro-pergunta-valores hidden></div>
+          <button type="button" class="link-sweep text-accent text-sm font-semibold" data-filtro-pergunta-limpar hidden>
+            Limpar filtro
+          </button>
+        </div>
+
+        <div class="mt-6" data-graficos-bloco hidden>
+          <h2 class="text-lg font-serif font-bold">Gráficos</h2>
+          <p class="text-sm text-muted-foreground">
+            Proporção agregada das respostas — nunca lista respostas de pessoas individualmente.
+          </p>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2" data-graficos></div>
+        </div>
+
+        <div class="mt-6">
+          <button type="button" class="btn btn-outline" data-abrir-novo>+ Adicionar inscrito</button>
+          <div class="mt-4 pergunta-card" data-form-novo hidden>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <input type="text" class="field" placeholder="Nome" data-novo-nome />
+              <input type="text" class="field" placeholder="Telefone (opcional)" data-novo-telefone />
+            </div>
+            <div class="mt-4 grid gap-3" data-novo-perguntas></div>
+            <div class="mt-4 flex items-center gap-3">
+              <button type="button" class="btn btn-solid" data-salvar-novo>Adicionar</button>
+              <p class="text-sm" data-novo-status role="status" aria-live="polite"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-5 overflow-x-auto">
+          <table class="inscritos-tabela">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Telefone</th>
+                <th>Código</th>
+                <th>Valor (R$)</th>
+                <th>Pago</th>
+                <th>Presente</th>
+                <th>Espera</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody data-inscritos-corpo>
+              <tr><td colspan="8" class="text-sm text-muted-foreground">Carregando inscritos…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { jsPDF } from "jspdf";
+    import { configurarAcessibilidadePdf } from "@/lib/pdf";
+    import { carregarLogoCertificado, desenharCertificado } from "@/lib/certificado";
+    import { desenharCracha } from "@/lib/cracha";
+    import { contarRespostas, graficoBarrasSvg } from "@/lib/graficos";
+    import { exigirAutenticacao } from "@/lib/painelAuth";
+
+    let eventoTitulo = "";
+    let eventoPeriodo = "";
+    let eventoTema = "";
+    let eventoSlug = "";
+    let vagasLimite: number | null = null;
+
+    interface Inscricao {
+      id: number;
+      nome: string;
+      telefone: string | null;
+      codigo: string | null;
+      pago: boolean;
+      valor: number | null;
+      presente: boolean;
+      aguardando_vaga: boolean;
+      pendente_aprovacao: boolean;
+      cupom_usado: string | null;
+      local_checkin: string | null;
+      observacao_checkin: string | null;
+    }
+
+    interface Pergunta {
+      id: number;
+      label: string;
+      ordem: number | null;
+      tipo: string;
+      opcoes: string[] | null;
+      obrigatoria: boolean;
+      momento: string;
+    }
+
+    interface Resposta {
+      id: number;
+      inscricao: number;
+      pergunta: number;
+      valor: string;
+    }
+
+    const container = document.querySelector<HTMLElement>("[data-directus-url]");
+    if (!container) throw new Error("contêiner do painel ausente");
+    const directusUrl = container.dataset.directusUrl ?? "";
+    const telefoneHashUrl = container.dataset.telefoneHashUrl ?? "";
+    const siteUrl = container.dataset.siteUrl ?? "";
+
+    // O telefone nunca é gravado em texto puro — vira hash (scrypt, ver
+    // api/src/lib/telefone.js) antes de chegar no Directus. `null`/vazio
+    // continua indo direto (nada a proteger).
+    async function hashTelefone(bruto: string | null): Promise<string | null> {
+      if (!bruto) return null;
+      const res = await fetch(telefoneHashUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telefone: bruto }),
+      });
+      if (!res.ok) throw new Error("falha ao proteger telefone");
+      return (await res.json()).valor;
+    }
+
+    const eventoId = new URLSearchParams(window.location.search).get("id");
+
+    const carregando = document.querySelector<HTMLElement>("[data-painel-carregando]");
+    const erroEl = document.querySelector<HTMLElement>("[data-painel-erro]");
+    const tituloEl = document.querySelector<HTMLElement>("[data-painel-titulo]");
+    const conteudo = document.querySelector<HTMLElement>("[data-painel-conteudo]");
+    const corpoTabela = document.querySelector<HTMLElement>("[data-inscritos-corpo]");
+    const buscaInput = document.querySelector<HTMLInputElement>("[data-busca]");
+    const filtroBotoes = document.querySelectorAll<HTMLButtonElement>("[data-filtro]");
+    const voltarLink = document.querySelector<HTMLElement>("[data-painel-voltar] a");
+
+    let inscricoes: Inscricao[] = [];
+    let perguntasPorId = new Map<number, Pergunta>();
+    let respostasPorInscricao = new Map<number, Resposta[]>();
+    let filtroAtivo = "todos";
+    let termoBusca = "";
+    let token = "";
+    let filtroPerguntaId: number | null = null;
+    let filtroPerguntaValores: string[] = [];
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+
+    // Mesmo alfabeto usado no check-in público — sem 0/O/1/I/L, pra não confundir.
+    const ALFABETO_CODIGO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    function gerarCodigo(): string {
+      const bytes = new Uint8Array(6);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (b) => ALFABETO_CODIGO[b % ALFABETO_CODIGO.length]).join("");
+    }
+
+    /** Um campo de pergunta, pra formulário de nova pessoa ou edição de resposta. */
+    function campoHtml(pergunta: Pergunta, valorAtual: string) {
+      const attrs = `data-pergunta-id="${pergunta.id}" data-pergunta-tipo="${pergunta.tipo}"`;
+      if (pergunta.tipo === "texto_longo") {
+        return `<textarea class="field" rows="2" ${attrs}>${escapeHtml(valorAtual)}</textarea>`;
+      }
+      if (pergunta.tipo === "numero") {
+        return `<input type="number" class="field" value="${escapeHtml(valorAtual)}" ${attrs} />`;
+      }
+      if (pergunta.tipo === "data") {
+        return `<input type="date" class="field" value="${escapeHtml(valorAtual)}" ${attrs} />`;
+      }
+      if (pergunta.tipo === "selecao_unica") {
+        return `<select class="field" ${attrs}>
+          <option value="">—</option>
+          ${(pergunta.opcoes ?? [])
+            .map((o) => `<option value="${escapeHtml(o)}" ${o === valorAtual ? "selected" : ""}>${escapeHtml(o)}</option>`)
+            .join("")}
+        </select>`;
+      }
+      if (pergunta.tipo === "selecao_multipla") {
+        const marcadas = valorAtual.split(",").map((v) => v.trim());
+        return `<div class="grid gap-1" ${attrs}>
+          ${(pergunta.opcoes ?? [])
+            .map(
+              (o) => `<label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" value="${escapeHtml(o)}" ${marcadas.includes(o) ? "checked" : ""} /> ${escapeHtml(o)}
+              </label>`,
+            )
+            .join("")}
+        </div>`;
+      }
+      return `<input type="text" class="field" value="${escapeHtml(valorAtual)}" ${attrs} />`;
+    }
+
+    function lerCampo(campoEl: Element): string {
+      if (campoEl.matches("[data-pergunta-tipo='selecao_multipla']")) {
+        const marcadas = Array.from(campoEl.querySelectorAll("input[type=checkbox]:checked")).map((el) => (el as HTMLInputElement).value);
+        return marcadas.join(", ");
+      }
+      return (campoEl as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value.trim();
+    }
+
+    function perguntasOrdenadas(): Pergunta[] {
+      return Array.from(perguntasPorId.values()).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    }
+
+    function atualizarStats() {
+      const total = inscricoes.length;
+      const pagos = inscricoes.filter((i) => i.pago);
+      const presentes = inscricoes.filter((i) => i.presente).length;
+      const espera = inscricoes.filter((i) => i.aguardando_vaga).length;
+      const pendentes = inscricoes.filter((i) => i.pendente_aprovacao).length;
+      const arrecadado = pagos.reduce((soma, i) => soma + (Number(i.valor) || 0), 0);
+
+      document.querySelector('[data-stat="total"]')!.textContent = String(total);
+      document.querySelector('[data-stat="pagos"]')!.textContent = String(pagos.length);
+      document.querySelector('[data-stat="presentes"]')!.textContent = String(presentes);
+      document.querySelector('[data-stat="espera"]')!.textContent = String(espera);
+      document.querySelector('[data-stat="pendentes"]')!.textContent = String(pendentes);
+      document.querySelector('[data-stat="arrecadado"]')!.textContent = `R$ ${arrecadado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+    }
+
+    function filtrar(lista: Inscricao[]) {
+      const termo = termoBusca.trim().toLowerCase();
+      return lista.filter((i) => {
+        // Telefone agora é guardado como hash (ver README, Fase 6) — não dá
+        // mais pra buscar por ele em texto, só por nome.
+        if (termo && !i.nome.toLowerCase().includes(termo)) return false;
+        if (filtroPerguntaId !== null && filtroPerguntaValores.length > 0) {
+          const respostas = respostasPorInscricao.get(i.id) ?? [];
+          const resposta = respostas.find((r) => r.pergunta === filtroPerguntaId);
+          const valores = (resposta?.valor ?? "")
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean);
+          // Qualquer um dos valores marcados serve (ex.: "bairro A, B ou C") —
+          // não precisa bater com todos, só ter pelo menos um em comum.
+          if (!valores.some((v) => filtroPerguntaValores.includes(v))) return false;
+        }
+        if (filtroAtivo === "pagos") return i.pago;
+        if (filtroAtivo === "nao-pagos") return !i.pago;
+        if (filtroAtivo === "espera") return i.aguardando_vaga;
+        if (filtroAtivo === "pendentes") return i.pendente_aprovacao;
+        if (filtroAtivo === "presentes") return i.presente;
+        if (filtroAtivo === "ausentes") return !i.presente;
+        return true;
+      });
+    }
+
+    /** Perguntas de seleção (única/múltipla) — as únicas com gráfico e slicer. */
+    function perguntasGraficaveis(): Pergunta[] {
+      return perguntasOrdenadas().filter((p) => p.tipo === "selecao_unica" || p.tipo === "selecao_multipla");
+    }
+
+    function renderizarFiltroPergunta() {
+      const bloco = document.querySelector<HTMLElement>("[data-filtro-pergunta-bloco]");
+      const selectPergunta = document.querySelector<HTMLSelectElement>("[data-filtro-pergunta-select]");
+      const valoresWrap = document.querySelector<HTMLElement>("[data-filtro-pergunta-valores]");
+      const limparBtn = document.querySelector<HTMLButtonElement>("[data-filtro-pergunta-limpar]");
+      if (!bloco || !selectPergunta || !valoresWrap || !limparBtn) return;
+
+      const perguntas = perguntasGraficaveis();
+      bloco.hidden = perguntas.length === 0;
+      if (!perguntas.length) return;
+
+      if (!selectPergunta.dataset.montado) {
+        selectPergunta.dataset.montado = "1";
+        selectPergunta.innerHTML =
+          `<option value="">Nenhuma</option>` + perguntas.map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join("");
+
+        selectPergunta.addEventListener("change", () => {
+          const perguntaId = selectPergunta.value ? Number(selectPergunta.value) : null;
+          filtroPerguntaId = perguntaId;
+          filtroPerguntaValores = [];
+          const pergunta = perguntaId ? perguntasPorId.get(perguntaId) : null;
+          if (pergunta) {
+            // Marcadas com checkbox — várias opções ao mesmo tempo (ex.: "só
+            // quero ver quem é de 3 bairros específicos, não um só").
+            valoresWrap.innerHTML = (pergunta.opcoes ?? [])
+              .map((o) => `<label class="filtro-opcao-checkbox"><input type="checkbox" value="${escapeHtml(o)}" data-filtro-pergunta-opcao /> ${escapeHtml(o)}</label>`)
+              .join("");
+            valoresWrap.hidden = false;
+            limparBtn.hidden = false;
+          } else {
+            valoresWrap.hidden = true;
+            valoresWrap.innerHTML = "";
+            limparBtn.hidden = true;
+          }
+          renderizar();
+        });
+
+        valoresWrap.addEventListener("change", () => {
+          filtroPerguntaValores = Array.from(valoresWrap.querySelectorAll<HTMLInputElement>("[data-filtro-pergunta-opcao]:checked")).map((el) => el.value);
+          renderizar();
+        });
+
+        limparBtn.addEventListener("click", () => {
+          filtroPerguntaId = null;
+          filtroPerguntaValores = [];
+          selectPergunta.value = "";
+          valoresWrap.hidden = true;
+          valoresWrap.innerHTML = "";
+          limparBtn.hidden = true;
+          renderizar();
+        });
+      }
+    }
+
+    function renderizarGraficos(lista: Inscricao[]) {
+      const bloco = document.querySelector<HTMLElement>("[data-graficos-bloco]");
+      const container = document.querySelector<HTMLElement>("[data-graficos]");
+      if (!bloco || !container) return;
+
+      const perguntas = perguntasGraficaveis();
+      bloco.hidden = perguntas.length === 0;
+      if (!perguntas.length) return;
+
+      container.innerHTML = perguntas
+        .map((p) => {
+          const valores = lista.map((i) => (respostasPorInscricao.get(i.id) ?? []).find((r) => r.pergunta === p.id)?.valor);
+          const contagens = contarRespostas(p, valores);
+          return `
+            <div class="grafico-card">
+              <p class="grafico-titulo">${escapeHtml(p.label)}</p>
+              ${graficoBarrasSvg(contagens)}
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    function respostasHtml(inscricaoId: number) {
+      const perguntas = perguntasOrdenadas();
+      if (!perguntas.length) return `<p class="text-sm text-muted-foreground">Este evento não tem perguntas.</p>`;
+      const respostas = respostasPorInscricao.get(inscricaoId) ?? [];
+      const respostaPorPergunta = new Map(respostas.map((r) => [r.pergunta, r]));
+
+      return `
+        <div class="grid gap-3" data-respostas-form data-inscricao-id="${inscricaoId}">
+          ${perguntas
+            .map((p) => {
+              const resposta = respostaPorPergunta.get(p.id);
+              return `
+                <div class="grid gap-1">
+                  <label class="text-xs font-semibold text-muted-foreground">
+                    ${escapeHtml(p.label)}${p.momento === "pos_evento" ? " · pesquisa pós-evento" : ""}
+                  </label>
+                  ${campoHtml(p, resposta?.valor ?? "")}
+                </div>
+              `;
+            })
+            .join("")}
+          <div class="flex items-center gap-3">
+            <button type="button" class="btn btn-outline" data-salvar-respostas>Salvar respostas</button>
+            <p class="text-sm" data-respostas-status role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderizar() {
+      if (!corpoTabela) return;
+      const visiveis = filtrar(inscricoes);
+
+      if (!visiveis.length) {
+        renderizarGraficos(visiveis);
+        corpoTabela.innerHTML = `<tr><td colspan="8" class="text-sm text-muted-foreground">Nenhum inscrito encontrado.</td></tr>`;
+        return;
+      }
+
+      renderizarGraficos(visiveis);
+
+      corpoTabela.innerHTML = visiveis
+        .map(
+          (i) => `
+            <tr data-linha-id="${i.id}">
+              <td><input type="text" class="field campo-inline" value="${escapeHtml(i.nome)}" data-campo="nome" /></td>
+              <td>
+                <input
+                  type="text"
+                  class="field campo-inline"
+                  value=""
+                  placeholder="${i.telefone ? "(definido — deixe em branco pra manter)" : "(nenhum)"}"
+                  data-campo="telefone"
+                />
+              </td>
+              <td class="codigo-cel">${escapeHtml(i.codigo ?? "—")}</td>
+              <td>
+                <input type="number" step="0.01" class="field campo-inline valor-input" value="${i.valor ?? ""}" data-campo="valor" />
+                ${i.cupom_usado ? `<p class="cupom-nota" title="Cupom de desconto usado">🎟️ ${escapeHtml(i.cupom_usado)}</p>` : ""}
+              </td>
+              <td><button type="button" class="badge-toggle ${i.pago ? "is-on" : ""}" data-acao="pago">${i.pago ? "Pago" : "Pendente"}</button></td>
+              <td>
+                <button type="button" class="badge-toggle ${i.presente ? "is-on" : ""}" data-acao="presente">${i.presente ? "Presente" : "Ausente"}</button>
+                ${i.local_checkin ? `<p class="cupom-nota" title="Local do check-in">📍 ${escapeHtml(i.local_checkin)}</p>` : ""}
+                ${i.observacao_checkin ? `<p class="cupom-nota" title="Check-in excepcional">⚠️ ${escapeHtml(i.observacao_checkin)}</p>` : ""}
+              </td>
+              <td>${
+                i.pendente_aprovacao
+                  ? `<span class="badge-toggle badge-pendente">Aguardando aprovação</span>`
+                  : i.aguardando_vaga
+                  ? `<button type="button" class="badge-toggle badge-espera" data-acao="espera">Na espera</button>`
+                  : `<span class="text-xs text-muted-foreground">—</span>`
+              }</td>
+              <td class="whitespace-nowrap acoes-cel">
+                ${
+                  i.pendente_aprovacao
+                    ? `<button type="button" class="link-sweep text-accent text-sm font-semibold" data-acao="aprovar">Aprovar</button>
+                       <button type="button" class="link-sweep text-sm font-semibold acao-excluir" data-acao="reprovar">Reprovar</button>`
+                    : ""
+                }
+                <button type="button" class="link-sweep text-accent text-sm font-semibold" data-acao="salvar">Salvar</button>
+                <button type="button" class="link-sweep text-accent text-sm font-semibold" data-acao="respostas">Respostas</button>
+                <button type="button" class="link-sweep text-sm font-semibold acao-excluir" data-acao="excluir">Excluir</button>
+              </td>
+            </tr>
+            <tr class="linha-respostas" data-linha-respostas="${i.id}" hidden>
+              <td colspan="8">${respostasHtml(i.id)}</td>
+            </tr>
+          `,
+        )
+        .join("");
+
+      atualizarStats();
+    }
+
+    async function carregarTudo() {
+      const [resInscricoes, resPerguntas, resRespostas] = await Promise.all([
+        fetch(`${directusUrl}/items/inscricoes_eventos?filter[evento][_eq]=${eventoId}&sort=nome&limit=-1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${directusUrl}/items/perguntas_evento?filter[evento][_eq]=${eventoId}&sort=ordem&limit=-1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${directusUrl}/items/respostas_inscricao?filter[inscricao][evento][_eq]=${eventoId}&limit=-1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      inscricoes = (await resInscricoes.json()).data ?? [];
+      const perguntas: Pergunta[] = (await resPerguntas.json()).data ?? [];
+      const respostas: Resposta[] = (await resRespostas.json()).data ?? [];
+
+      perguntasPorId = new Map(perguntas.map((p) => [p.id, p]));
+      respostasPorInscricao = new Map();
+      respostas.forEach((r) => {
+        const lista = respostasPorInscricao.get(r.inscricao) ?? [];
+        lista.push(r);
+        respostasPorInscricao.set(r.inscricao, lista);
+      });
+
+      renderizarFiltroPergunta();
+      renderizar();
+    }
+
+    buscaInput?.addEventListener("input", () => {
+      termoBusca = buscaInput.value;
+      renderizar();
+    });
+
+    filtroBotoes.forEach((botao) => {
+      botao.addEventListener("click", () => {
+        filtroAtivo = botao.dataset.filtro ?? "todos";
+        filtroBotoes.forEach((b) => b.classList.toggle("is-active", b === botao));
+        renderizar();
+      });
+    });
+
+    corpoTabela?.addEventListener("click", async (event) => {
+      const target = event.target as HTMLElement;
+
+      if (target.matches("[data-salvar-respostas]")) {
+        const formEl = target.closest<HTMLElement>("[data-respostas-form]");
+        const statusEl = formEl?.querySelector<HTMLElement>("[data-respostas-status]");
+        if (!formEl) return;
+        const inscricaoId = Number(formEl.dataset.inscricaoId);
+        if (statusEl) statusEl.textContent = "Salvando…";
+
+        const existentes = new Map((respostasPorInscricao.get(inscricaoId) ?? []).map((r) => [r.pergunta, r]));
+        const campos = formEl.querySelectorAll<HTMLElement>("[data-pergunta-id]");
+
+        try {
+          for (const campoEl of campos) {
+            const perguntaId = Number(campoEl.dataset.perguntaId);
+            const valor = lerCampo(campoEl);
+            const existente = existentes.get(perguntaId);
+            if (existente) {
+              await fetch(`${directusUrl}/items/respostas_inscricao/${existente.id}`, {
+                method: "PATCH",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ valor }),
+              });
+              existente.valor = valor;
+            } else if (valor) {
+              const res = await fetch(`${directusUrl}/items/respostas_inscricao`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ inscricao: inscricaoId, pergunta: perguntaId, valor }),
+              });
+              const novaResposta = (await res.json()).data;
+              const lista = respostasPorInscricao.get(inscricaoId) ?? [];
+              lista.push({ id: novaResposta.id, inscricao: inscricaoId, pergunta: perguntaId, valor });
+              respostasPorInscricao.set(inscricaoId, lista);
+            }
+          }
+          if (statusEl) statusEl.textContent = "✅ Respostas salvas!";
+        } catch {
+          if (statusEl) statusEl.textContent = "Não foi possível salvar agora.";
+        }
+        return;
+      }
+
+      const linha = target.closest<HTMLElement>("[data-linha-id]");
+      if (!linha) return;
+      const id = Number(linha.dataset.linhaId);
+      const inscricao = inscricoes.find((i) => i.id === id);
+      if (!inscricao) return;
+
+      if (target.matches('[data-acao="pago"]') || target.matches('[data-acao="presente"]') || target.matches('[data-acao="espera"]')) {
+        const campo = target.dataset.acao === "pago" ? "pago" : target.dataset.acao === "presente" ? "presente" : "aguardando_vaga";
+        const novoValor = !inscricao[campo];
+        await fetch(`${directusUrl}/items/inscricoes_eventos/${id}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ [campo]: novoValor }),
+        });
+        (inscricao as any)[campo] = novoValor;
+        renderizar();
+        return;
+      }
+
+      if (target.matches('[data-acao="aprovar"]')) {
+        // Mesmo critério do cadastro público: só confirma vaga de verdade
+        // se ainda houver — senão a pessoa aprovada entra na lista de
+        // espera igual quem se inscreveu direto num evento lotado.
+        let aguardandoVaga = false;
+        if (vagasLimite) {
+          const resConfirmados = await fetch(
+            `${directusUrl}/items/inscricoes_eventos?aggregate[count]=id&filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][_or][0][aguardando_vaga][_eq]=false&filter[_and][1][_or][1][aguardando_vaga][_null]=true&filter[_and][2][pendente_aprovacao][_eq]=false`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          const confirmados = Number((await resConfirmados.json()).data?.[0]?.count?.id ?? 0);
+          aguardandoVaga = confirmados >= vagasLimite;
+        }
+        await fetch(`${directusUrl}/items/inscricoes_eventos/${id}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ pendente_aprovacao: false, aguardando_vaga: aguardandoVaga }),
+        });
+        inscricao.pendente_aprovacao = false;
+        inscricao.aguardando_vaga = aguardandoVaga;
+        renderizar();
+        return;
+      }
+
+      if (target.matches('[data-acao="reprovar"]')) {
+        if (!confirm(`Reprovar a inscrição de "${inscricao.nome}"? Essa ação não pode ser desfeita.`)) return;
+        const respostas = respostasPorInscricao.get(id) ?? [];
+        if (respostas.length) {
+          await fetch(`${directusUrl}/items/respostas_inscricao`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(respostas.map((r) => r.id)),
+          });
+        }
+        await fetch(`${directusUrl}/items/inscricoes_eventos/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        inscricoes = inscricoes.filter((i) => i.id !== id);
+        renderizar();
+        return;
+      }
+
+      if (target.matches('[data-acao="respostas"]')) {
+        const linhaRespostas = document.querySelector<HTMLElement>(`[data-linha-respostas="${id}"]`);
+        if (linhaRespostas) linhaRespostas.hidden = !linhaRespostas.hidden;
+        return;
+      }
+
+      if (target.matches('[data-acao="excluir"]')) {
+        if (!confirm(`Excluir a inscrição de "${inscricao.nome}"? Essa ação não pode ser desfeita.`)) return;
+        const respostas = respostasPorInscricao.get(id) ?? [];
+        if (respostas.length) {
+          await fetch(`${directusUrl}/items/respostas_inscricao`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(respostas.map((r) => r.id)),
+          });
+        }
+        await fetch(`${directusUrl}/items/inscricoes_eventos/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        inscricoes = inscricoes.filter((i) => i.id !== id);
+        renderizar();
+        return;
+      }
+
+      if (target.matches('[data-acao="salvar"]')) {
+        const nomeInput = linha.querySelector<HTMLInputElement>('[data-campo="nome"]');
+        const telefoneInput = linha.querySelector<HTMLInputElement>('[data-campo="telefone"]');
+        const valorInput = linha.querySelector<HTMLInputElement>('[data-campo="valor"]');
+        // Campo de telefone só aparece em branco (o valor guardado é um hash,
+        // não dá pra mostrar como texto) — em branco significa "não mexi",
+        // só troca se a equipe realmente digitou um telefone novo.
+        const telefoneDigitado = telefoneInput?.value.trim();
+        const payload: Record<string, unknown> = {
+          nome: nomeInput?.value.trim(),
+          valor: valorInput?.value ? Number(valorInput.value) : null,
+        };
+        if (telefoneDigitado) payload.telefone = await hashTelefone(telefoneDigitado);
+        await fetch(`${directusUrl}/items/inscricoes_eventos/${id}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        Object.assign(inscricao, payload);
+        atualizarStats();
+      }
+    });
+
+    const abrirNovoBtn = document.querySelector<HTMLButtonElement>("[data-abrir-novo]");
+    const formNovo = document.querySelector<HTMLElement>("[data-form-novo]");
+    const novoPerguntasEl = document.querySelector<HTMLElement>("[data-novo-perguntas]");
+
+    abrirNovoBtn?.addEventListener("click", () => {
+      if (!formNovo) return;
+      formNovo.hidden = !formNovo.hidden;
+      if (!formNovo.hidden && novoPerguntasEl) {
+        novoPerguntasEl.innerHTML = perguntasOrdenadas()
+          .map(
+            (p) => `
+              <div class="grid gap-1">
+                <label class="text-xs font-semibold text-muted-foreground">${escapeHtml(p.label)}${p.obrigatoria ? " *" : ""}</label>
+                ${campoHtml(p, "")}
+              </div>
+            `,
+          )
+          .join("");
+      }
+    });
+
+    document.querySelector("[data-salvar-novo]")?.addEventListener("click", async () => {
+      const nomeInput = document.querySelector<HTMLInputElement>("[data-novo-nome]");
+      const telefoneInput = document.querySelector<HTMLInputElement>("[data-novo-telefone]");
+      const statusEl = document.querySelector<HTMLElement>("[data-novo-status]");
+      if (!nomeInput?.value.trim()) {
+        if (statusEl) statusEl.textContent = "Digite o nome.";
+        return;
+      }
+      if (statusEl) statusEl.textContent = "Adicionando…";
+
+      try {
+        const telefoneDigitado = telefoneInput?.value.trim();
+        const res = await fetch(`${directusUrl}/items/inscricoes_eventos`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            evento: Number(eventoId),
+            nome: nomeInput.value.trim(),
+            telefone: telefoneDigitado ? await hashTelefone(telefoneDigitado) : null,
+            codigo: gerarCodigo(),
+          }),
+        });
+        const nova = (await res.json()).data;
+
+        const campos = novoPerguntasEl?.querySelectorAll<HTMLElement>("[data-pergunta-id]") ?? [];
+        for (const campoEl of campos) {
+          const valor = lerCampo(campoEl);
+          if (!valor) continue;
+          await fetch(`${directusUrl}/items/respostas_inscricao`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ inscricao: nova.id, pergunta: Number(campoEl.dataset.perguntaId), valor }),
+          });
+        }
+
+        nomeInput.value = "";
+        if (telefoneInput) telefoneInput.value = "";
+        if (formNovo) formNovo.hidden = true;
+        if (statusEl) statusEl.textContent = "";
+        await carregarTudo();
+      } catch {
+        if (statusEl) statusEl.textContent = "Não foi possível adicionar agora.";
+      }
+    });
+
+    async function iniciar() {
+      const t = await exigirAutenticacao(directusUrl);
+      if (!t) return;
+      token = t;
+
+      if (!eventoId) {
+        if (carregando) carregando.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        return;
+      }
+
+      const resEvento = await fetch(
+        `${directusUrl}/items/eventos/${eventoId}?fields=id,title,slug,description,event_date,end_date,vagas_limite`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!resEvento.ok) {
+        if (carregando) carregando.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        return;
+      }
+      const eventoJson = await resEvento.json();
+      const evento = eventoJson.data;
+      vagasLimite = evento.vagas_limite ?? null;
+      eventoSlug = evento.slug ?? "";
+
+      eventoTitulo = evento.title;
+      eventoTema = evento.description ?? "";
+      const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+      eventoPeriodo = evento.event_date
+        ? evento.end_date && evento.end_date !== evento.event_date
+          ? `${dateFormatter.format(new Date(evento.event_date))} a ${dateFormatter.format(new Date(evento.end_date))}`
+          : dateFormatter.format(new Date(evento.event_date))
+        : "";
+
+      if (tituloEl) tituloEl.textContent = `Inscritos — ${evento.title}`;
+      if (voltarLink) (voltarLink as HTMLAnchorElement).href = `/painel-eventos/evento/?id=${eventoId}`;
+      if (carregando) carregando.hidden = true;
+      if (conteudo) conteudo.hidden = false;
+
+      const baixarCrachasBtn = document.querySelector<HTMLButtonElement>("[data-baixar-crachas]");
+      if (baixarCrachasBtn) baixarCrachasBtn.hidden = false;
+      baixarCrachasBtn?.addEventListener("click", async () => {
+        const confirmados = inscricoes.filter((i) => !i.aguardando_vaga);
+        if (!confirmados.length) {
+          alert("Nenhum inscrito confirmado ainda.");
+          return;
+        }
+        baixarCrachasBtn.disabled = true;
+        baixarCrachasBtn.textContent = "Gerando…";
+        try {
+          const logo = await carregarLogoCertificado();
+          const doc = new jsPDF({ unit: "pt", format: "a4" });
+          configurarAcessibilidadePdf(doc, `Crachás — ${eventoTitulo}`);
+          const margem = 24;
+          const largura = doc.internal.pageSize.getWidth();
+          const altura = doc.internal.pageSize.getHeight();
+          const larguraCel = (largura - margem * 2) / 2;
+          const alturaCel = (altura - margem * 2) / 2;
+
+          confirmados.forEach((pessoa, index) => {
+            const posicaoNaPagina = index % 4;
+            if (index > 0 && posicaoNaPagina === 0) doc.addPage();
+
+            const coluna = posicaoNaPagina % 2;
+            const linha = Math.floor(posicaoNaPagina / 2);
+            const x = margem + coluna * larguraCel;
+            const y = margem + linha * alturaCel;
+
+            desenharCracha(doc, { x, y, largura: larguraCel, altura: alturaCel }, { nome: pessoa.nome, eventoTitulo, tema: eventoTema || null, logo });
+
+            // Linha pontilhada de corte, igual ao modelo físico usado hoje.
+            doc.setDrawColor(120);
+            doc.setLineDashPattern([2, 2], 0);
+            if (coluna === 0) doc.line(x + larguraCel, margem, x + larguraCel, altura - margem);
+            if (linha === 0) doc.line(margem, y + alturaCel, largura - margem, y + alturaCel);
+            doc.setLineDashPattern([], 0);
+          });
+
+          doc.save(`crachas-${eventoTitulo.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+        } finally {
+          baixarCrachasBtn.disabled = false;
+          baixarCrachasBtn.textContent = "Baixar crachás de todos os confirmados";
+        }
+      });
+
+      const baixarCertificadosBtn = document.querySelector<HTMLButtonElement>("[data-baixar-certificados]");
+      if (baixarCertificadosBtn) baixarCertificadosBtn.hidden = false;
+      baixarCertificadosBtn?.addEventListener("click", async () => {
+        const presentes = inscricoes.filter((i) => i.presente);
+        if (!presentes.length) {
+          alert("Ninguém confirmou presença ainda.");
+          return;
+        }
+        baixarCertificadosBtn.disabled = true;
+        baixarCertificadosBtn.textContent = "Gerando…";
+        try {
+          const logo = await carregarLogoCertificado();
+          const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
+          configurarAcessibilidadePdf(doc, `Certificados — ${eventoTitulo}`);
+          presentes.forEach((pessoa, index) => {
+            if (index > 0) doc.addPage();
+            desenharCertificado(doc, {
+              nome: pessoa.nome,
+              eventoTitulo,
+              eventoPeriodo,
+              logo,
+              codigo: pessoa.codigo ?? undefined,
+              eventoSlug,
+              siteUrl,
+            });
+          });
+          doc.save(`certificados-${eventoTitulo.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+        } finally {
+          baixarCertificadosBtn.disabled = false;
+          baixarCertificadosBtn.textContent = "Baixar certificados de todos os presentes";
+        }
+      });
+
+      await carregarTudo();
+    }
+
+    iniciar();
+  </script>
+
+  <style is:global>
+    .inscritos-canvas {
+      max-width: 68rem;
+    }
+
+    .filtro-opcao-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+
+    .stat-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      background: var(--muted);
+    }
+
+    .stat-valor {
+      margin: 0;
+      font-family: var(--font-serif);
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--accent-strong);
+    }
+
+    .stat-label {
+      margin: 0.15rem 0 0;
+      font-size: 0.8125rem;
+      color: var(--muted-foreground);
+    }
+
+    .busca-input {
+      max-width: 20rem;
+    }
+
+    .filtro-chip {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted-foreground);
+      padding: 0.35rem 0.85rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .filtro-chip.is-active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--accent-strong);
+    }
+
+    .inscritos-tabela {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    .inscritos-tabela th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 2px solid var(--border);
+      color: var(--muted-foreground);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+
+    .inscritos-tabela td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .campo-inline {
+      min-width: 8rem;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    .valor-input {
+      min-width: 5.5rem;
+    }
+
+    .cupom-nota {
+      margin: 0.25rem 0 0;
+      font-size: 0.75rem;
+      color: var(--accent-strong);
+      white-space: nowrap;
+    }
+
+    .codigo-cel {
+      font-family: var(--font-mono);
+      letter-spacing: 0.05em;
+    }
+
+    .badge-toggle {
+      border: 1px solid var(--border-strong);
+      border-radius: 999px;
+      background: var(--muted);
+      color: var(--muted-foreground);
+      padding: 0.3rem 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .badge-toggle:hover {
+      border-color: var(--accent);
+    }
+
+    .badge-toggle.is-on {
+      border-color: color-mix(in srgb, #2ecc71 70%, var(--border));
+      background: color-mix(in srgb, #2ecc71 22%, var(--background));
+      color: #1a7a3d;
+    }
+
+    .badge-espera {
+      border-color: color-mix(in srgb, #e0a52b 70%, var(--border));
+      background: color-mix(in srgb, #e0a52b 22%, var(--background));
+      color: #8a6416;
+    }
+
+    .badge-pendente {
+      display: inline-block;
+      cursor: default;
+      border-color: color-mix(in srgb, #6c5ce7 70%, var(--border));
+      background: color-mix(in srgb, #6c5ce7 18%, var(--background));
+      color: #4b3ab5;
+    }
+
+    .acoes-cel {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .acao-excluir {
+      color: #b3261e;
+    }
+
+    .grafico-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      background: var(--background);
+      color: var(--foreground);
+    }
+
+    .grafico-titulo {
+      margin: 0 0 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--accent-strong);
+    }
+
+    .linha-respostas td {
+      background: var(--muted);
+      font-size: 0.8125rem;
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
+  </style>
+</BaseLayout>

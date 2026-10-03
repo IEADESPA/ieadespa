@@ -16,7 +16,10 @@
 // DELETE /api/assembleia/convocar/{sessaoId}  -> cancela uma convocação pendente
 // Só é permitido editar/cancelar enquanto Status='CONVOCADA' — depois de
 // Iniciada (ABERTA) a sessão já é um registro de reunião de verdade, não se mexe mais aqui.
+// Convocar, editar e cancelar a Assembleia Geral é ato da igreja inteira (INSTITUCIONAL): só o nível GERAL (papel Global com escopo "TODAS"). O Pastor de Área tem a permissão
+// "assembleia" (para acompanhar a sua área), mas não convoca nem cancela a assembleia de toda a igreja. Ver a lista de convocações (GET) segue para quem tem a permissão.
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
@@ -28,7 +31,7 @@ const TITULOS_TIPO_SESSAO = {
 };
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "assembleia");
+  const usuario = req.method === "GET" ? auth.exigirPermissao(req, context, "assembleia") : exigirGeral(req, context, "assembleia");
   if (!usuario) return;
 
   const pool = await getPool();
@@ -39,7 +42,13 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const sessaoIdRota = context.bindingData.sessaoId;
+  // Identificador só vale na forma canônica (auth.idDeRota); o malformado cai na mesma resposta de "não encontrada".
+  const sessaoIdBruto = context.bindingData.sessaoId;
+  const sessaoIdRota = sessaoIdBruto === undefined || sessaoIdBruto === null || sessaoIdBruto === "" ? null : auth.idDeRota(sessaoIdBruto);
+  if (sessaoIdBruto !== undefined && sessaoIdBruto !== null && sessaoIdBruto !== "" && !sessaoIdRota) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Convocação não encontrada ou já iniciada — não dá mais pra editar/cancelar." } };
+    return;
+  }
 
   if (req.method === "GET") {
     const result = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId).query(`
@@ -58,8 +67,9 @@ module.exports = async function (context, req) {
   // Editar/cancelar só valem em cima de uma convocação que ainda não foi
   // iniciada — depois de ABERTA vira registro de reunião de verdade.
   if (sessaoIdRota) {
-    const existenteResult = await pool.request().input("id", sql.Int, sessaoIdRota)
-      .query(`SELECT SessaoId AS sessaoId, Status AS status FROM Sessoes WHERE SessaoId = @id`);
+    // Só vale se a sessão é DA Assembleia Geral (OrgaoId do órgão): antes bastava o Status ser CONVOCADA.
+    const existenteResult = await pool.request().input("id", sql.Int, sessaoIdRota).input("orgaoId", sql.Int, orgao.orgaoId)
+      .query(`SELECT SessaoId AS sessaoId, Status AS status FROM Sessoes WHERE SessaoId = @id AND OrgaoId = @orgaoId`);
     const convocadaExistente = existenteResult.recordset[0];
     if (!convocadaExistente || convocadaExistente.status !== "CONVOCADA") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Convocação não encontrada ou já iniciada — não dá mais pra editar/cancelar." } };
@@ -68,7 +78,11 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "DELETE") {
-    await pool.request().input("id", sql.Int, sessaoIdRota).query(`DELETE FROM Sessoes WHERE SessaoId = @id`);
+    if (!sessaoIdRota) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a convocação na rota: /api/assembleia/convocar/{sessaoId}" } };
+      return;
+    }
+    await pool.request().input("id", sql.Int, sessaoIdRota).query(`DELETE FROM Sessoes WHERE SessaoId = @id AND Status = 'CONVOCADA'`);
     await registrarAuditoria({ tabela: "Sessoes", registroId: Number(sessaoIdRota), acao: "Cancelou convocação da Assembleia Geral", usuarioId: usuario.membroId });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Convocação cancelada." } };
     return;
@@ -132,7 +146,7 @@ module.exports = async function (context, req) {
         UPDATE Sessoes SET Descricao=@descricao, DataSessao=@dataPrevista, TipoSessao=@tipoSessao, QuorumTipo=@quorumTipo,
                Materias=@materias, ReformaNucleoFundamental=@reformaNucleo,
                SenhaAcesso=@senha, DataPrevista=@dataPrevista, Pauta=@pauta, MeiosDivulgacao=@meios
-        WHERE SessaoId=@id`);
+        WHERE SessaoId=@id AND Status = 'CONVOCADA'`);
 
     await registrarAuditoria({
       tabela: "Sessoes", registroId: Number(sessaoIdRota), acao: "Editou convocação da Assembleia Geral",

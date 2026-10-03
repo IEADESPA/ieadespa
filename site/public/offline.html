@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sem conexão — IEADESPA</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 2rem 1.25rem;
+        background: #faf8f2;
+        color: #1a1a1a;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        text-align: center;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0a1220;
+          color: #f2f2f2;
+        }
+      }
+      .card {
+        max-width: 26rem;
+      }
+      img {
+        width: 56px;
+        height: 56px;
+        margin-bottom: 1rem;
+      }
+      h1 {
+        font-size: 1.375rem;
+        margin: 0 0 0.6rem;
+      }
+      p {
+        margin: 0 0 1.5rem;
+        line-height: 1.5;
+        opacity: 0.8;
+      }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.6rem;
+      }
+      a {
+        display: inline-block;
+        padding: 0.55rem 1rem;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        color: inherit;
+        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img src="/logo-icon.png" alt="" />
+      <h1>Sem conexão com a internet</h1>
+      <p>
+        Não foi possível carregar esta página agora. Se você já visitou a página inicial, a
+        programação ou o contato antes, elas podem estar disponíveis mesmo offline.
+      </p>
+      <div class="links">
+        <a href="/">Página inicial</a>
+        <a href="/eventos/">Programação</a>
+        <a href="/contato/">Contato</a>
+      </div>
+    </div>
+  </body>
+</html>

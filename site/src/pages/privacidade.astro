@@ -1,0 +1,290 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { enderecoCompleto, fetchConfiguracoes } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const config = await fetchConfiguracoes();
+
+const VIGENCIA = "8 de setembro de 2026";
+
+interface Tratamento {
+  dado: string;
+  finalidade: string;
+  baseLegal: string;
+  retencao: string;
+  acesso: string;
+}
+
+const tratamentos: Tratamento[] = [
+  {
+    dado: "Mural de oração — pedido de oração (texto), nome (opcional), marcação de confidencial",
+    finalidade: "Publicar o pedido para a comunidade orar, ou encaminhar só para a liderança pastoral quando marcado como confidencial.",
+    baseLegal: "Consentimento específico (Art. 11, I, LGPD) — dado sobre convicção religiosa é categoria especial, e por isso o formulário tem um checkbox de autorização próprio, separado de qualquer outro.",
+    retencao: "Pedidos públicos ficam visíveis por 90 dias, depois somem da listagem (o registro em si continua no banco, sem ser mais exibido). Pedidos confidenciais não têm prazo de exibição pública porque nunca são exibidos.",
+    acesso: "Pedidos públicos: qualquer visitante do site. Pedidos confidenciais: só a liderança pastoral e a diretoria, nunca o público.",
+  },
+  {
+    dado: "Contato — nome, e-mail, mensagem (e, se o assunto for pedido de oração, o mesmo dado sensível acima)",
+    finalidade: "Responder sua dúvida, agendar visita pastoral, ou processar sua solicitação sobre dados pessoais.",
+    baseLegal: "Execução de procedimento preliminar a pedido do titular (Art. 7º, V) para dúvidas/visitas; consentimento específico (Art. 11, I) quando o assunto é pedido de oração.",
+    retencao: "Sem prazo fixo de exclusão automática hoje — mensagens antigas e já resolvidas podem ser apagadas manualmente pela equipe a qualquer momento, e mediante solicitação sua (ver \"Seus direitos\" abaixo).",
+    acesso: "Só a equipe responsável por cada tipo de assunto (contato geral, pedidos de oração).",
+  },
+  {
+    dado: "Pedido de camiseta/uniforme — nome, telefone, congregação (opcional), itens do carrinho (tamanho, modelo, quantidade), valor pago",
+    finalidade: "Confirmar seu pedido e permitir que você mesmo consulte (só com o telefone, sem senha) quantas peças já pode retirar e quanto falta pagar, além de ajudar a equipe a controlar estoque, quem já pagou e o total por congregação.",
+    baseLegal: "Execução de procedimento preliminar/contrato a pedido do titular (Art. 7º, V) — você mesmo faz o pedido.",
+    retencao: "O telefone é guardado como hash (mesma técnica do telefone de inscrição em evento, ver abaixo), retido por prazo indeterminado. Nome, congregação, itens e valor pago seguem a mesma regra.",
+    acesso: "A equipe responsável pelo lote de camiseta. O telefone nunca é lido por ninguém — só comparado (por hash) no momento em que você mesmo o digita pra consultar seu pedido.",
+  },
+  {
+    dado: "Inscrição em evento — nome, telefone, e-mail (opcional), respostas às perguntas do evento (quando houver)",
+    finalidade: "Confirmar sua vaga, fazer seu check-in na entrada, permitir que você emita certificado/crachá ou responda a pesquisa de satisfação depois do evento, e — só se você deixar o e-mail — te enviar um comprovante da inscrição e um lembrete um dia antes do evento.",
+    baseLegal: "Execução de procedimento preliminar/contrato a pedido do titular (Art. 7º, V) — você mesmo inicia a inscrição e decide se deixa o e-mail.",
+    retencao: "O telefone é guardado como hash (explicado abaixo) e retido por prazo indeterminado, de propósito — é a chave que permite pedir uma segunda via do certificado ou de qualquer documento do evento anos depois. Nome, código, presença, e-mail e respostas seguem a mesma regra: nada é apagado automaticamente ao fim do evento.",
+    acesso: "A equipe responsável pelo evento. O telefone, especificamente, nunca é lido por ninguém, nem pela equipe — só é comparado (por hash) no momento em que você mesmo o digita para conferir sua identidade. O e-mail, quando deixado, é usado só pelo envio automático de confirmação/lembrete (Azure Communication Services) — nunca por uma pessoa lendo a lista de inscritos com outro propósito.",
+  },
+  {
+    dado: "Depoimento — texto, nome (sempre publicado, sem opção de anônimo) e, se enviada depois, foto",
+    finalidade: "Publicar o depoimento em /depoimentos/ e, quando aprovado, também um resumo na página Sobre — mostrar histórias reais de quem já faz parte da igreja.",
+    baseLegal: "Consentimento específico (Art. 7º, I) — checkbox próprio, deixando claro que a publicação (nome incluído) é permanente, sem prazo de expiração automática.",
+    retencao: "Sem prazo de expiração automática (diferente do mural de oração) — fica publicado até a pessoa pedir remoção (ver \"Seus direitos\" abaixo) ou a equipe decidir retirar.",
+    acesso: "Qualquer visitante do site, depois de aprovado pela equipe. Antes da aprovação, só quem modera.",
+  },
+  {
+    dado: "Notificação push de evento — identificador técnico do navegador (endpoint + chaves de criptografia da própria notificação)",
+    finalidade: "Enviar um lembrete de evento pelo navegador, no dia anterior.",
+    baseLegal: "Consentimento (Art. 7º, I) — você ativa isso clicando num botão específico, e pode cancelar a qualquer momento pela mesma tela.",
+    retencao: "Até você cancelar, ou até o dado parar de funcionar (ex.: navegador desinstalado).",
+    acesso: "Ninguém lê essa lista — o robô que envia o lembrete diário só grava e usa, nunca exibe.",
+  },
+];
+
+const direitos = [
+  { titulo: "Confirmação e acesso", texto: "Saber se tratamos algum dado seu, e quais." },
+  { titulo: "Correção", texto: "Pedir a correção de dado incompleto, inexato ou desatualizado." },
+  { titulo: "Anonimização, bloqueio ou eliminação", texto: "Pedir a exclusão de dado desnecessário, excessivo, ou tratado em desacordo com a lei." },
+  { titulo: "Portabilidade", texto: "Pedir uma cópia dos seus dados, num formato de fácil leitura." },
+  { titulo: "Informação sobre compartilhamento", texto: "Saber com quem compartilhamos seu dado (resposta curta: com ninguém, fora do provedor de hospedagem — ver abaixo)." },
+  { titulo: "Revogação do consentimento", texto: "Retirar, a qualquer momento, uma autorização que você deu antes (ex.: um pedido de oração)." },
+];
+---
+
+<BaseLayout title="Privacidade" description={`Política de privacidade da ${siteConfig.name} — LGPD.`}>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Privacidade</p>
+        <h1 class="pagehead-title">Política de privacidade</h1>
+        <p class="pagehead-description">
+          Como a {siteConfig.name} coleta, usa, guarda e protege dado pessoal neste site, em
+          conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018). Em vigor desde{" "}
+          {VIGENCIA}.
+        </p>
+      </header>
+
+      <div class="prose mt-2">
+        <h2>Quem somos (controlador)</h2>
+        <p>
+          {siteConfig.fullName}, CNPJ {siteConfig.cnpj}, com sede em {enderecoCompleto(config)}, é
+          quem decide como e por que seus dados pessoais são tratados neste site (o "controlador",
+          no sentido da LGPD).
+        </p>
+
+        <h2>Encarregado de dados (DPO)</h2>
+        <p>
+          Pedidos, dúvidas ou reclamações sobre o tratamento de dados pessoais podem ser
+          endereçados diretamente à liderança da igreja pelo canal abaixo — hoje, com o porte
+          desta igreja, quem responde por essa função é a própria diretoria, sem uma pessoa
+          exclusivamente dedicada ao cargo.
+        </p>
+        {
+          siteConfig.email && (
+            <p>
+              <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>, ou pelo{" "}
+              <a href="/contato/?assunto=lgpd#fale-conosco">formulário de contato</a>, escolhendo o
+              assunto "Meus dados pessoais (LGPD)".
+            </p>
+          )
+        }
+
+        <h2>O que coletamos, por quê, e por quanto tempo</h2>
+        <p>
+          Cada formulário do site trata um tipo diferente de dado, com uma base legal e um prazo de
+          guarda próprios — não existe uma regra única para "todo dado do site":
+        </p>
+        {
+          tratamentos.map((t) => (
+            <div class="privacidade-tratamento">
+              <p class="privacidade-tratamento-titulo">{t.dado}</p>
+              <dl class="privacidade-tratamento-grid">
+                <dt>Para quê</dt>
+                <dd>{t.finalidade}</dd>
+                <dt>Base legal (LGPD)</dt>
+                <dd>{t.baseLegal}</dd>
+                <dt>Por quanto tempo</dt>
+                <dd>{t.retencao}</dd>
+                <dt>Quem acessa</dt>
+                <dd>{t.acesso}</dd>
+              </dl>
+            </div>
+          ))
+        }
+
+        <h2>Sobre o telefone de inscrição, especificamente</h2>
+        <p>
+          O telefone usado numa inscrição de evento nunca é guardado como texto — ele passa por uma
+          função criptográfica de sentido único (<em>hash</em>, com <code>scrypt</code>) antes de
+          chegar ao banco de dados. Isso quer dizer que, mesmo com acesso completo ao banco, não é
+          possível recuperar o telefone original a partir do que está guardado — o mesmo princípio
+          usado para guardar senhas com segurança. Guardamos esse hash por tempo indeterminado de
+          propósito, porque é a única forma de você mesmo(a) confirmar sua identidade e pedir uma
+          segunda via de certificado, crachá, ou de qualquer documento anexado a um evento, mesmo
+          anos depois — sem esse dado, essa possibilidade deixaria de existir para sempre. Detalhe
+          técnico completo, se quiser conferir: <a href="https://github.com/IEADESPA/site" target="_blank" rel="noreferrer">código-fonte público do site</a>.
+        </p>
+
+        <h2>Crianças e adolescentes</h2>
+        <p>
+          Quando um responsável inscreve uma criança ou adolescente num evento, o dado tratado
+          (nome, e o telefone do próprio responsável) segue as mesmas regras acima, sempre com base
+          no consentimento do responsável legal (Art. 14, LGPD) — a igreja não coleta dado de
+          criança diretamente, sem a inscrição ter sido feita por um adulto responsável.
+        </p>
+
+        <h2>Com quem compartilhamos seu dado</h2>
+        <p>
+          Com ninguém, para fins de publicidade ou venda — isso nunca acontece. O único terceiro
+          envolvido é a infraestrutura técnica que hospeda o site e o banco de dados: servidores da
+          Microsoft Azure, na região Brazil South — seus dados ficam fisicamente armazenados em
+          território brasileiro, sem transferência internacional.
+        </p>
+
+        <h2>Ferramenta de tradução em Libras (VLibras)</h2>
+        <p>
+          O ícone azul flutuante que aparece em toda página é o <strong>VLibras</strong>, ferramenta
+          gratuita e oficial do Governo Federal (não é um serviço nosso, nem pago) que traduz o
+          texto da tela pra Língua Brasileira de Sinais usando um avatar 3D, sob demanda — só quando
+          a pessoa clica pra abrir. Duas coisas importantes pra ficar bem claro o que ele é e o que
+          não é:
+        </p>
+        <ul>
+          <li>Ele só traduz <strong>texto</strong>. Não gera Libras a partir de vídeo ou áudio — os
+            vídeos de mensagem (quando existirem) continuam dependendo da legenda em português do
+            próprio YouTube, não deste widget.</li>
+          <li>Quando aberto, ele carrega o avatar direto dos servidores do governo
+            (<code>vlibras.gov.br</code>), o que significa que, só naquele momento, o navegador de
+            quem abriu conversa diretamente com esse servidor (o mesmo que aconteceria em qualquer
+            site que usa essa mesma ferramenta oficial, como sites <code>.gov.br</code>). Não
+            enviamos, nós mesmos, nenhum dado seu pra esse serviço. Uma parte do rastreamento
+            próprio que a ferramenta traz de fábrica (métricas de uso do próprio fornecedor) é
+            bloqueada de propósito pela política de segurança deste site (<em>Content Security
+            Policy</em>), que só libera os domínios do próprio VLibras necessários pra ele
+            funcionar — nenhum domínio de análise de terceiro adicional.</li>
+        </ul>
+
+        <h2>Como protegemos seu dado (medidas de segurança)</h2>
+        <ul>
+          <li>Todo o tráfego do site é criptografado (HTTPS), do seu navegador até o servidor.</li>
+          <li>O telefone de inscrição é guardado como hash, não como texto (ver acima).</li>
+          <li>Cada formulário só concede acesso de leitura aos campos estritamente necessários para
+            aquele formulário funcionar — nenhum papel de acesso público consegue ler nome, telefone
+            ou código de inscrição diretamente.</li>
+          <li>Pedidos de oração marcados como confidenciais nunca são expostos por nenhuma rota
+            pública do site, nem por engano.</li>
+          <li>O painel administrativo exige login individual por e-mail e senha, com contas que
+            podem ser desativadas a qualquer momento.</li>
+          <li>Cabeçalhos de segurança (Content Security Policy e correlatos) reduzem a superfície de
+            ataques comuns a sites.</li>
+        </ul>
+
+        <h2 id="seus-direitos">Seus direitos como titular dos dados</h2>
+        <p>A LGPD (Art. 18) garante a você, a qualquer momento:</p>
+        <ul>
+          {
+            direitos.map((d) => (
+              <li>
+                <strong>{d.titulo}.</strong> {d.texto}
+              </li>
+            ))
+          }
+        </ul>
+        <p>
+          Para exercer qualquer um desses direitos, use o{" "}
+          <a href="/contato/?assunto=lgpd#fale-conosco">formulário de contato</a>, assunto "Meus
+          dados pessoais (LGPD)", ou escreva diretamente para{" "}
+          {siteConfig.email && <a href={`mailto:${siteConfig.email}`}>{siteConfig.email}</a>}.
+          Respondemos em até 15 dias. Para localizar seu registro, ajuda muito informar qual
+          formulário você usou e, se possível, o nome e telefone usados na ocasião.
+        </p>
+        <p>
+          Se não ficar satisfeito(a) com a resposta, você também pode registrar reclamação junto à{" "}
+          <a href="https://www.gov.br/anpd/" target="_blank" rel="noreferrer">
+            Autoridade Nacional de Proteção de Dados (ANPD)
+          </a>.
+        </p>
+
+        <h2>O que fica só no seu navegador (nunca chega até nós)</h2>
+        <p>
+          Este site não usa cookies de rastreamento nem de publicidade. Algumas preferências ficam
+          salvas só no armazenamento local do seu próprio navegador (<code>localStorage</code>),
+          sem nunca ser enviadas a nenhum servidor — tema claro/escuro, modo de leitura fácil, se
+          você já orou por um pedido específico do mural (evita contar duas vezes), e se você já
+          dispensou o convite para instalar o site como aplicativo. Você pode apagar tudo isso a
+          qualquer momento limpando os dados do site nas configurações do seu navegador.
+        </p>
+
+        <h2>Alterações nesta política</h2>
+        <p>
+          Se esta política mudar de forma relevante, a data de vigência no topo desta página será
+          atualizada. Mudanças relevantes na forma de tratar dado sensível (como pedidos de oração)
+          serão comunicadas de forma visível no próprio formulário afetado.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .privacidade-tratamento {
+    margin-top: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.5rem;
+  }
+
+  .privacidade-tratamento-titulo {
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+  }
+
+  .privacidade-tratamento-grid {
+    display: grid;
+    grid-template-columns: minmax(9rem, auto) 1fr;
+    gap: 0.35rem 1rem;
+    margin: 0;
+  }
+
+  .privacidade-tratamento-grid dt {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+  }
+
+  .privacidade-tratamento-grid dd {
+    margin: 0 0 0.5rem;
+    font-size: 0.9375rem;
+  }
+
+  @media (max-width: 40rem) {
+    .privacidade-tratamento-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

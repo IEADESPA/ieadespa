@@ -1,0 +1,731 @@
+// Sistema de Chamada da Escola Bíblica Dominical (EBD)
+// Hierarquia: Campo > Área > Congregação > Turma > Aluno
+//
+// TODO MUNDO no sistema é, antes de mais nada, um Aluno — identificado pela
+// matrícula (vinda do sistema de gestão de membros da igreja), matriculado
+// numa turma. Papéis administrativos são Atribuicao — concessões de acesso
+// por cima dessa mesma matrícula, nunca uma conta separada. Um aluno pode
+// acumular mais de uma Atribuicao (ex: Superintendente de uma congregação +
+// Coordenador de outra área) e alterna entre elas por um seletor de painel;
+// o "Meu Painel" (presença, atividades, ranking) fica sempre disponível,
+// porque todo mundo é aluno o tempo todo.
+//
+// Papéis (`Papel`) são dados, não um enum fixo — o Admin pode criar um papel
+// novo pela interface. Cada papel declara um `nivel` (em qual camada da
+// hierarquia ele atua: campo/área/congregação/global) e uma `ordem` (quão
+// sênior ele é — menor número concede papéis com número maior). Todo o
+// código de escopo (quem gerencia o quê) compara pelo `nivel`, nunca pelo
+// nome do papel — por isso um papel novo já nasce funcionando.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum NivelPapel {
+  GLOBAL
+  CAMPO
+  AREA
+  CONGREGACAO
+}
+
+enum StatusRegistro {
+  ATIVO
+  INATIVO
+}
+
+enum CategoriaTurma {
+  BERCARIO
+  JARDIM_INFANCIA
+  PRIMARIOS
+  JUNIORES
+  PRE_ADOLESCENTES
+  ADOLESCENTES
+  JOVENS
+  ADULTOS
+  NOVOS_CONVERTIDOS
+  MELHOR_IDADE
+  OUTRA
+}
+
+enum StatusLicao {
+  ABERTA
+  FECHADA
+}
+
+enum StatusPedidoRevista {
+  PENDENTE
+  PARCIAL
+  PAGO
+  CANCELADO
+}
+
+enum StatusAprovacaoPagamento {
+  PENDENTE_APROVACAO
+  APROVADO
+  REJEITADO
+}
+
+enum TipoPergunta {
+  MULTIPLA_ESCOLHA
+  VERDADEIRO_FALSO
+  ORDENAR
+  COMPLETAR
+  CORRESPONDENCIA
+}
+
+enum TipoLancamentoFinanceiro {
+  ENTRADA
+  SAIDA
+}
+
+// Regras de desbloqueio que o código sabe avaliar — o admin não escreve
+// lógica nova, mas pode criar quantas conquistas quiser combinando uma
+// dessas regras com nome/ícone/parâmetro/ocultação/pré-requisitos próprios.
+enum TipoRegraConquista {
+  PRIMEIRA_PRESENCA
+  SEQUENCIA_PRESENCA
+  FIDELIDADE_BIBLIA
+  FIDELIDADE_REVISTA
+  PRIMEIRA_ATIVIDADE
+  GABARITOS
+  TRIMESTRE_PERFEITO
+  TRIMESTRES_CONSECUTIVOS
+  RESPOSTA_RAPIDA
+  COMBO
+}
+
+// ---------------------------------------------------------------------------
+// Hierarquia administrativa
+// ---------------------------------------------------------------------------
+model Campo {
+  id        String   @id @default(cuid())
+  nome      String
+  sigla     String?
+  status    StatusRegistro @default(ATIVO)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  areas       Area[]
+  atribuicoes Atribuicao[]
+  scoreConfig ScoreConfig?
+
+  @@unique([nome])
+}
+
+model Area {
+  id        String   @id @default(cuid())
+  nome      String
+  campoId   String
+  status    StatusRegistro @default(ATIVO)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campo        Campo         @relation(fields: [campoId], references: [id], onDelete: Cascade)
+  congregacoes Congregacao[]
+  atribuicoes  Atribuicao[]
+
+  @@unique([campoId, nome])
+  @@index([campoId])
+}
+
+model Congregacao {
+  id                String   @id @default(cuid())
+  nome              String
+  areaId            String
+  endereco          String?
+  cidade            String?
+  estado            String?
+  pastorResponsavel String?
+  status            StatusRegistro @default(ATIVO)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  area          Area            @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  turmas        Turma[]
+  atribuicoes   Atribuicao[]
+  alunos        Aluno[]
+  licoes        Licao[]
+  pedidosRevista PedidoRevista[]
+  lancamentosFinanceiros LancamentoFinanceiro[]
+
+  @@unique([areaId, nome])
+  @@index([areaId])
+}
+
+// ---------------------------------------------------------------------------
+// Turmas de EBD
+// ---------------------------------------------------------------------------
+model Turma {
+  id             String         @id @default(cuid())
+  nome           String
+  categoria      CategoriaTurma @default(OUTRA)
+  faixaEtariaMin Int?
+  faixaEtariaMax Int?
+  congregacaoId  String
+  status         StatusRegistro @default(ATIVO)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  congregacao       Congregacao         @relation(fields: [congregacaoId], references: [id], onDelete: Cascade)
+  professores       TurmaProfessor[]
+  alunos            Aluno[]
+  chamadas          Chamada[]
+  atividades        Atividade[]
+  pedidoRevistaItens PedidoRevistaItem[]
+
+  @@unique([congregacaoId, nome])
+  @@index([congregacaoId])
+}
+
+// Relação N:N entre professores (Aluno com Atribuicao de nível PROFESSOR) e
+// turmas — um professor pode lecionar em mais de uma turma, e uma turma pode
+// ter mais de um professor.
+model TurmaProfessor {
+  id        String   @id @default(cuid())
+  turmaId   String
+  alunoId   String
+  createdAt DateTime @default(now())
+
+  turma Turma @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  aluno Aluno @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@unique([turmaId, alunoId])
+  @@index([alunoId])
+}
+
+// ---------------------------------------------------------------------------
+// Papéis — dados, não um enum fixo. Os 7 papéis originais nascem no seed
+// marcados como `sistema` (não podem ser excluídos), mas o Admin pode criar
+// quantos papéis quiser pela tela de Permissões.
+// ---------------------------------------------------------------------------
+model Papel {
+  id        String         @id @default(cuid())
+  chave     String         @unique
+  nome      String
+  nivel     NivelPapel
+  // Menor = mais sênior. Alguém só pode conceder papéis com ordem MAIOR que
+  // a do papel com que está agindo no momento (nunca concede algo acima ou
+  // igual ao próprio nível de autoridade).
+  ordem     Int
+  // Só importa em papéis de nível CONGREGACAO: true = gerencia a congregação
+  // inteira (Superintendente, Secretário, Tesoureiro); false = só enxerga o
+  // que está diretamente vinculado a si (Professor só vê as turmas em que
+  // está vinculado via TurmaProfessor). Papéis GLOBAL/CAMPO/AREA sempre
+  // gerenciam o escopo inteiro, então este campo é ignorado para eles.
+  escopoAmplo Boolean      @default(true)
+  sistema   Boolean        @default(false)
+  status    StatusRegistro @default(ATIVO)
+  createdAt DateTime       @default(now())
+
+  atribuicoes     Atribuicao[]
+  permissoesPapel PermissaoPapel[]
+
+  @@index([nivel])
+}
+
+// ---------------------------------------------------------------------------
+// Alunos — a identidade única de qualquer pessoa no sistema
+// ---------------------------------------------------------------------------
+model Aluno {
+  id             String    @id @default(cuid())
+  // Vem do sistema de gestão de membros da igreja — aqui é só armazenado,
+  // não gerado por nós (no seed de demonstração, simulamos com números
+  // aleatórios). É o que a pessoa usa pra entrar no sistema.
+  matricula      String    @unique
+  nome           String
+  dataNascimento DateTime?
+  telefone       String?
+  endereco       String?
+  // Só é obrigatória para quem tiver alguma Atribuicao (papel acima de
+  // aluno comum) — um aluno puro entra só com a matrícula.
+  senhaHash      String?
+  turmaId        String
+  congregacaoId  String
+  membroIgreja   Boolean   @default(false)
+  batizado       Boolean   @default(false)
+  matriculadoEm  DateTime  @default(now())
+  status         StatusRegistro @default(ATIVO)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  turma       Turma       @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  congregacao Congregacao @relation(fields: [congregacaoId], references: [id], onDelete: Cascade)
+
+  presencas         PresencaAluno[]
+  respostas         RespostaAtividade[]
+  conquistas        ConquistaAluno[]
+  conquistasCriadas Conquista[]
+  atribuicoes       Atribuicao[]
+  permissoesExcecao PermissaoExcecao[]
+  turmasLecionadas  TurmaProfessor[]
+  chamadasLancadas  Chamada[]
+  atividadesCriadas Atividade[]
+  licoesAbertas     Licao[]
+  pedidosRevistaCriados PedidoRevista[]
+  pagamentosRegistrados PagamentoRevista[] @relation("PagamentosRegistrados")
+  pagamentosAprovados   PagamentoRevista[] @relation("PagamentosAprovados")
+  lancamentosFinanceirosCriados LancamentoFinanceiro[]
+  certificadosRecebidos CertificadoEmitido[] @relation("CertificadosRecebidos")
+  certificadosEmitidos  CertificadoEmitido[] @relation("CertificadosEmitidos")
+
+  @@index([turmaId])
+  @@index([congregacaoId])
+  @@index([matricula])
+}
+
+// Uma atribuição = um papel administrativo com um escopo específico.
+// Um mesmo aluno pode ter várias (ex: Coordenador da Área 1 + Admin geral).
+model Atribuicao {
+  id        String   @id @default(cuid())
+  alunoId   String
+  papelId   String
+  createdAt DateTime @default(now())
+
+  // Escopo, preenchido de acordo com o nível do papel:
+  // GLOBAL -> nenhum (acesso total)
+  // CAMPO -> campoId
+  // AREA -> areaId
+  // CONGREGACAO -> congregacaoId (+ turmas específicas via TurmaProfessor)
+  campoId       String?
+  areaId        String?
+  congregacaoId String?
+
+  aluno       Aluno        @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  papel       Papel        @relation(fields: [papelId], references: [id], onDelete: Cascade)
+  campo       Campo?       @relation(fields: [campoId], references: [id], onDelete: Cascade)
+  area        Area?        @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  congregacao Congregacao? @relation(fields: [congregacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([alunoId, papelId, campoId, areaId, congregacaoId])
+  @@index([alunoId])
+  @@index([papelId])
+  @@index([campoId])
+  @@index([areaId])
+  @@index([congregacaoId])
+}
+
+// ---------------------------------------------------------------------------
+// Permissões dinâmicas: catálogo de funcionalidades + matriz por papel +
+// exceções individuais por aluno (liberar ou revogar algo específico).
+// ---------------------------------------------------------------------------
+model Funcionalidade {
+  id         String  @id @default(cuid())
+  chave      String  @unique
+  nome       String
+  descricao  String?
+  categoria  String  @default("Geral")
+  ordem      Int     @default(0)
+
+  permissoesPapel   PermissaoPapel[]
+  permissoesExcecao PermissaoExcecao[]
+}
+
+model PermissaoPapel {
+  id               String  @id @default(cuid())
+  papelId          String
+  funcionalidadeId String
+  permitido        Boolean @default(true)
+
+  papel          Papel          @relation(fields: [papelId], references: [id], onDelete: Cascade)
+  funcionalidade Funcionalidade @relation(fields: [funcionalidadeId], references: [id], onDelete: Cascade)
+
+  @@unique([papelId, funcionalidadeId])
+  @@index([funcionalidadeId])
+}
+
+// Exceção pontual: sobrepõe a matriz de papel para UM aluno específico.
+model PermissaoExcecao {
+  id               String  @id @default(cuid())
+  alunoId          String
+  funcionalidadeId String
+  permitido        Boolean
+
+  aluno          Aluno          @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  funcionalidade Funcionalidade @relation(fields: [funcionalidadeId], references: [id], onDelete: Cascade)
+
+  @@unique([alunoId, funcionalidadeId])
+  @@index([funcionalidadeId])
+}
+
+// ---------------------------------------------------------------------------
+// Lições — o superintendente/secretário "abre" a lição do trimestre para a
+// congregação; atividades e chamadas podem se referir a ela.
+// ---------------------------------------------------------------------------
+model Licao {
+  id            String      @id @default(cuid())
+  congregacaoId String
+  trimestre     Int
+  ano           Int
+  numero        Int
+  titulo        String
+  status        StatusLicao @default(ABERTA)
+  abertaPorId   String
+  abertaEm      DateTime    @default(now())
+  fechadaEm     DateTime?
+
+  congregacao Congregacao @relation(fields: [congregacaoId], references: [id], onDelete: Cascade)
+  abertaPor   Aluno       @relation(fields: [abertaPorId], references: [id])
+  atividades  Atividade[]
+  chamadas    Chamada[]
+
+  @@unique([congregacaoId, trimestre, ano, numero])
+  @@index([congregacaoId])
+}
+
+// ---------------------------------------------------------------------------
+// Chamada (registro semanal por turma)
+// ---------------------------------------------------------------------------
+model Chamada {
+  id           String   @id @default(cuid())
+  turmaId      String
+  data         DateTime // domingo referente à chamada
+  lancadoPorId String
+  licaoId      String?
+
+  // Métricas agregadas da aula
+  visitantes    Int     @default(0)
+  biblias       Int     @default(0)
+  revistas      Int     @default(0)
+  oferta        Float   @default(0)
+  inicioPontual Boolean @default(false)
+  observacoes   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  turma      Turma           @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  lancadoPor Aluno           @relation(fields: [lancadoPorId], references: [id])
+  licao      Licao?          @relation(fields: [licaoId], references: [id], onDelete: SetNull)
+  presencas  PresencaAluno[]
+
+  @@unique([turmaId, data])
+  @@index([turmaId])
+  @@index([data])
+  @@index([licaoId])
+}
+
+// Detalhe de presença por aluno em cada chamada
+model PresencaAluno {
+  id            String  @id @default(cuid())
+  chamadaId     String
+  alunoId       String
+  presente      Boolean @default(false)
+  trouxeBiblia  Boolean @default(false)
+  trouxeRevista Boolean @default(false)
+
+  chamada Chamada @relation(fields: [chamadaId], references: [id], onDelete: Cascade)
+  aluno   Aluno   @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@unique([chamadaId, alunoId])
+  @@index([alunoId])
+}
+
+// ---------------------------------------------------------------------------
+// Configuração de pontuação (score) por campo — pesos usados tanto no
+// ranking de turmas quanto no ranking unificado por aluno.
+// ---------------------------------------------------------------------------
+model ScoreConfig {
+  id             String @id @default(cuid())
+  campoId        String @unique
+  pesoPresenca   Float  @default(1)
+  pesoPontual    Float  @default(1)
+  pesoBiblia     Float  @default(1)
+  pesoRevista    Float  @default(1)
+  pesoVisitante  Float  @default(2)
+  pesoOferta     Float  @default(0)
+  pesoAtividade  Float  @default(1)
+
+  campo Campo @relation(fields: [campoId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Atividades (quizzes) — professor envia, aluno responde pelo próprio painel.
+// Pontos ganhos alimentam o ranking unificado e as conquistas do aluno.
+// ---------------------------------------------------------------------------
+model Atividade {
+  id          String    @id @default(cuid())
+  turmaId     String
+  criadoPorId String
+  licaoId     String?
+  titulo      String
+  descricao   String?
+  prazo       DateTime?
+  pontosBase  Int       @default(10)
+  status      StatusRegistro @default(ATIVO)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  turma     Turma               @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  criadoPor Aluno               @relation(fields: [criadoPorId], references: [id])
+  licao     Licao?              @relation(fields: [licaoId], references: [id], onDelete: SetNull)
+  perguntas Pergunta[]
+  respostas RespostaAtividade[]
+
+  @@index([turmaId])
+  @@index([licaoId])
+}
+
+model Pergunta {
+  id          String       @id @default(cuid())
+  atividadeId String
+  enunciado   String
+  ordem       Int          @default(0)
+  tipo        TipoPergunta @default(MULTIPLA_ESCOLHA)
+  // Só para tipo COMPLETAR — texto esperado (comparado sem diferenciar
+  // maiúsculas/acentos na correção).
+  respostaEsperada String?
+
+  atividade    Atividade          @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  alternativas Alternativa[]
+  respostas    RespostaPergunta[]
+
+  @@index([atividadeId])
+}
+
+model Alternativa {
+  id         String  @id @default(cuid())
+  perguntaId String
+  texto      String
+  correta    Boolean @default(false)
+  ordem      Int     @default(0)
+  // Só para tipo ORDENAR — posição correta desse item na sequência (1-based).
+  ordemCorreta Int?
+  // Só para tipo CORRESPONDENCIA — o item da coluna direita que combina com
+  // este `texto` (coluna esquerda).
+  parTexto     String?
+
+  pergunta  Pergunta           @relation(fields: [perguntaId], references: [id], onDelete: Cascade)
+  respostas RespostaPergunta[]
+
+  @@index([perguntaId])
+}
+
+// Uma tentativa (única) de um aluno numa atividade.
+model RespostaAtividade {
+  id             String   @id @default(cuid())
+  atividadeId    String
+  alunoId        String
+  pontosGanhos   Int      @default(0)
+  acertos        Int      @default(0)
+  totalPerguntas Int      @default(0)
+  concluidaEm    DateTime @default(now())
+
+  atividade Atividade          @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  aluno     Aluno              @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  respostas RespostaPergunta[]
+
+  @@unique([atividadeId, alunoId])
+  @@index([alunoId])
+}
+
+model RespostaPergunta {
+  id                  String  @id @default(cuid())
+  respostaAtividadeId String
+  perguntaId          String
+  // Múltipla escolha / Verdadeiro-Falso: qual alternativa foi marcada.
+  // Ordenar: reaproveita alternativaId + ordemSubmetida (a posição em que o
+  // aluno colocou aquele item). Completar: usa respostaTexto, sem
+  // alternativa. Correspondência: alternativaId = item da esquerda,
+  // respostaTexto = item da direita que o aluno escolheu para ele.
+  alternativaId    String?
+  ordemSubmetida   Int?
+  respostaTexto    String?
+
+  respostaAtividade RespostaAtividade @relation(fields: [respostaAtividadeId], references: [id], onDelete: Cascade)
+  pergunta          Pergunta          @relation(fields: [perguntaId], references: [id], onDelete: Cascade)
+  alternativa       Alternativa?      @relation(fields: [alternativaId], references: [id], onDelete: Cascade)
+
+  // Para ORDENAR/CORRESPONDENCIA existe uma linha por item (alternativa) da
+  // pergunta; para os demais tipos existe só uma linha.
+  @@unique([respostaAtividadeId, perguntaId, alternativaId])
+  @@index([perguntaId])
+}
+
+// ---------------------------------------------------------------------------
+// Conquistas (badges) — catálogo configurável pelo Admin: nome, ícone,
+// parâmetro, se é oculta e quais outras conquistas são pré-requisito. A
+// REGRA de desbloqueio em si (tipoRegra) é um conjunto fixo que o código
+// sabe avaliar; o admin combina/ajusta, não escreve lógica nova.
+// ---------------------------------------------------------------------------
+model Conquista {
+  id          String             @id @default(cuid())
+  chave       String             @unique
+  nome        String
+  descricao   String
+  icone       String
+  tipoRegra   TipoRegraConquista
+  // Limiar usado pela regra (ex: SEQUENCIA_PRESENCA=5 dias seguidos,
+  // GABARITOS=3 atividades). Regras sem parâmetro (PRIMEIRA_PRESENCA,
+  // COMBO...) ignoram este campo.
+  parametro   Int?
+  oculta      Boolean            @default(false)
+  ordem       Int                @default(0)
+  status      StatusRegistro     @default(ATIVO)
+  criadoPorId String?
+  createdAt   DateTime           @default(now())
+
+  criadoPor Aluno? @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  requisitos    ConquistaRequisito[] @relation("ConquistaBase")
+  requeridaPara ConquistaRequisito[] @relation("ConquistaExigida")
+  desbloqueios  ConquistaAluno[]
+
+  @@index([criadoPorId])
+}
+
+// Pré-requisito: `conquista` só é elegível depois que `requisito` já foi
+// desbloqueada (permite montar cadeias de progressão, ex: "Veterano da EBD"
+// exige 3 outras conquistas antes).
+model ConquistaRequisito {
+  id          String @id @default(cuid())
+  conquistaId String
+  requisitoId String
+
+  conquista Conquista @relation("ConquistaBase", fields: [conquistaId], references: [id], onDelete: Cascade)
+  requisito Conquista @relation("ConquistaExigida", fields: [requisitoId], references: [id], onDelete: Cascade)
+
+  @@unique([conquistaId, requisitoId])
+}
+
+// Conquistas já desbloqueadas por um aluno.
+model ConquistaAluno {
+  id             String   @id @default(cuid())
+  alunoId        String
+  conquistaId    String
+  desbloqueadaEm DateTime @default(now())
+
+  aluno     Aluno     @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  conquista Conquista @relation(fields: [conquistaId], references: [id], onDelete: Cascade)
+
+  @@unique([alunoId, conquistaId])
+  @@index([alunoId])
+}
+
+// ---------------------------------------------------------------------------
+// Certificados — emitidos manualmente por um professor/superintendente para
+// um aluno (ex: conclusão de um curso/trimestre), com uma tela imprimível.
+// ---------------------------------------------------------------------------
+model CertificadoEmitido {
+  id           String   @id @default(cuid())
+  alunoId      String
+  titulo       String
+  descricao    String?
+  emitidoPorId String
+  emitidoEm    DateTime @default(now())
+
+  aluno      Aluno @relation("CertificadosRecebidos", fields: [alunoId], references: [id], onDelete: Cascade)
+  emitidoPor Aluno @relation("CertificadosEmitidos", fields: [emitidoPorId], references: [id])
+
+  @@index([alunoId])
+}
+
+// ---------------------------------------------------------------------------
+// Revistas — catálogo com os três preços (fornecedor, congregação, aluno) e
+// os pedidos que cada congregação faz por trimestre, com controle de
+// pagamento (módulo financeiro mínimo).
+// ---------------------------------------------------------------------------
+model Revista {
+  id               String         @id @default(cuid())
+  titulo           String
+  categoria        CategoriaTurma?
+  trimestre        Int
+  ano              Int
+  precoFornecedor  Float
+  precoCongregacao Float
+  precoAluno       Float
+  status           StatusRegistro @default(ATIVO)
+  createdAt        DateTime       @default(now())
+
+  itensPedido PedidoRevistaItem[]
+
+  @@unique([titulo, trimestre, ano])
+}
+
+model PedidoRevista {
+  id            String              @id @default(cuid())
+  congregacaoId String
+  criadoPorId   String
+  trimestre     Int
+  ano           Int
+  status        StatusPedidoRevista @default(PENDENTE)
+  // Fechado = não aceita mais itens (janela de pedidos encerrada, pronto para
+  // entrar no consolidado enviado à casa publicadora).
+  fechado       Boolean             @default(false)
+  fechadoEm     DateTime?
+  observacoes   String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  congregacao Congregacao         @relation(fields: [congregacaoId], references: [id], onDelete: Cascade)
+  criadoPor   Aluno               @relation(fields: [criadoPorId], references: [id])
+  itens       PedidoRevistaItem[]
+  pagamentos  PagamentoRevista[]
+
+  @@index([congregacaoId])
+}
+
+model PedidoRevistaItem {
+  id            String  @id @default(cuid())
+  pedidoId      String
+  revistaId     String
+  turmaId       String?
+  quantidade    Int
+  precoUnitario Float // preço-congregação no momento do pedido (snapshot)
+
+  pedido    PedidoRevista @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  revista   Revista       @relation(fields: [revistaId], references: [id])
+  turma     Turma?        @relation(fields: [turmaId], references: [id], onDelete: SetNull)
+
+  @@index([pedidoId])
+  @@index([revistaId])
+}
+
+// Pagamento registrado pelo superintendente/secretário fica PENDENTE_APROVACAO
+// até um coordenador (ou admin) confirmar — só então conta para o saldo do
+// pedido. Isso evita que um lançamento errado ou fraudulento feche o pedido
+// sozinho.
+model PagamentoRevista {
+  id             String                   @id @default(cuid())
+  pedidoId       String
+  valor          Float
+  data           DateTime                 @default(now())
+  observacao     String?
+  status         StatusAprovacaoPagamento @default(PENDENTE_APROVACAO)
+  registradoPorId String
+  aprovadoPorId  String?
+  aprovadoEm     DateTime?
+
+  pedido       PedidoRevista @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  registradoPor Aluno        @relation("PagamentosRegistrados", fields: [registradoPorId], references: [id])
+  aprovadoPor  Aluno?        @relation("PagamentosAprovados", fields: [aprovadoPorId], references: [id])
+
+  @@index([pedidoId])
+}
+
+// ---------------------------------------------------------------------------
+// Financeiro — lançamentos manuais (além das ofertas já contabilizadas pela
+// Chamada) para dar ao tesoureiro/superintendente uma visão de caixa da
+// congregação.
+// ---------------------------------------------------------------------------
+model LancamentoFinanceiro {
+  id            String                   @id @default(cuid())
+  congregacaoId String
+  tipo          TipoLancamentoFinanceiro
+  categoria     String
+  valor         Float
+  data          DateTime
+  descricao     String?
+  criadoPorId   String
+  createdAt     DateTime                 @default(now())
+
+  congregacao Congregacao @relation(fields: [congregacaoId], references: [id], onDelete: Cascade)
+  criadoPor   Aluno       @relation(fields: [criadoPorId], references: [id])
+
+  @@index([congregacaoId])
+  @@index([data])
+}

@@ -14,11 +14,16 @@
 // GET  /api/assentos?orgaoId=&membroId=&incluirEncerrados=1
 // POST /api/assentos                  body: { membroId, orgaoId, tipoAssento, cargoOuFuncao?, dataInicio?, duracaoMeses? }
 // POST /api/assentos/{id}/encerrar    body: { motivoEncerramento? }
+// ESCOPO: cadeira de órgão central (Diretoria, Conselho Fiscal, CEI, Conselho Consultivo, CLI...) é INSTITUCIONAL e é a âncora de autoridade do sistema (quem é o Presidente,
+// quem está na Diretoria, a composição da CLI e das comissões, o quórum). Criar e encerrar cadeira é só do nível GERAL (papel Global com escopo "TODAS"): a permissão
+// "pessoas" também é do Dirigente, do Pastor de Área e do Líder Geral de Departamento, e com ela dava para se nomear Presidente. Ver a lista continua para quem tem "pessoas".
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-const { CATALOGOS_CARGOS_POR_ORGAO, ORGAOS_INCOMPATIVEIS, validarIncompatibilidadeExecutiva, cargoJaOcupado } = require("../shared/diretoria");
+const { CATALOGOS_CARGOS_POR_ORGAO, ORGAOS_INCOMPATIVEIS, ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA, validarIncompatibilidadeExecutiva, cargoJaOcupado } = require("../shared/diretoria");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
+const { comConflito } = require("../shared/violacaoUnica");
 
 const TIPOS_VALIDOS = ["ORDENACAO", "FUNCAO"];
 
@@ -39,8 +44,10 @@ function comSituacaoEfetiva(assento, hoje) {
   return Object.assign({}, assento, { situacaoEfetiva });
 }
 
-module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "pessoas");
+// O cargo fixo tem UM ocupante ativo também no banco (índice UX_Assentos_CargoAtivo, migração 127): dois pedidos ao mesmo tempo furam a conferência de cargoJaOcupado, e o
+// perdedor recebe o 409 em vez de um 500.
+module.exports = comConflito(async function (context, req) {
+  const usuario = req.method === "GET" ? auth.exigirPermissao(req, context, "pessoas") : exigirGeral(req, context, "pessoas");
   if (!usuario) return;
 
   const id = context.bindingData.id;
@@ -49,11 +56,16 @@ module.exports = async function (context, req) {
 
   if (req.method === "GET") {
     const { orgaoId, membroId, incluirEncerrados } = req.query || {};
+    // Filtros só valem na forma canônica de número (antes um valor qualquer virava erro 500).
+    if ((orgaoId && !auth.idDeRota(orgaoId)) || (membroId && !auth.idDeRota(membroId))) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Filtro inválido." } };
+      return;
+    }
     const request = pool.request();
     const condicoes = [];
     if (!incluirEncerrados) condicoes.push("a.DataFim IS NULL");
-    if (orgaoId) { request.input("orgaoId", sql.Int, orgaoId); condicoes.push("a.OrgaoId = @orgaoId"); }
-    if (membroId) { request.input("membroId", sql.Int, membroId); condicoes.push("a.MembroId = @membroId"); }
+    if (orgaoId) { request.input("orgaoId", sql.Int, auth.idDeRota(orgaoId)); condicoes.push("a.OrgaoId = @orgaoId"); }
+    if (membroId) { request.input("membroId", sql.Int, auth.idDeRota(membroId)); condicoes.push("a.MembroId = @membroId"); }
     const where = condicoes.length ? `WHERE ${condicoes.join(" AND ")}` : "";
     const result = await request.query(`${SELECT_ASSENTO} ${where} ORDER BY o.Nome, m.Nome`);
     const hoje = new Date().toISOString().slice(0, 10);
@@ -63,7 +75,14 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST" && id && acao === "encerrar") {
     const { motivoEncerramento } = req.body || {};
-    const antes = await pool.request().input("id", sql.Int, id).query(`SELECT * FROM Assentos WHERE AssentoId = @id`);
+    if (motivoEncerramento != null && (typeof motivoEncerramento !== "string" || motivoEncerramento.length > 200)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Motivo inválido (texto de até 200 caracteres)." } };
+      return;
+    }
+    const assentoId = auth.idDeRota(id);
+    const antes = assentoId
+      ? await pool.request().input("id", sql.Int, assentoId).query(`SELECT * FROM Assentos WHERE AssentoId = @id`)
+      : { recordset: [] };
     if (!antes.recordset[0]) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Cadeira não encontrada." } };
       return;
@@ -72,10 +91,10 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Essa cadeira já foi encerrada." } };
       return;
     }
-    await pool.request().input("id", sql.Int, id).input("motivo", sql.NVarChar(200), motivoEncerramento || null)
-      .query(`UPDATE Assentos SET DataFim = CAST(SYSUTCDATETIME() AS DATE), MotivoEncerramento = @motivo WHERE AssentoId = @id`);
+    await pool.request().input("id", sql.Int, assentoId).input("motivo", sql.NVarChar(200), motivoEncerramento || null)
+      .query(`UPDATE Assentos SET DataFim = CAST(SYSUTCDATETIME() AS DATE), MotivoEncerramento = @motivo WHERE AssentoId = @id AND DataFim IS NULL`);
     await registrarAuditoria({
-      tabela: "Assentos", registroId: Number(id), acao: "Encerrou cadeira", usuarioId: usuario.membroId,
+      tabela: "Assentos", registroId: assentoId, acao: "Encerrou cadeira", usuarioId: usuario.membroId,
       dadosAntes: antes.recordset[0], dadosDepois: { motivoEncerramento: motivoEncerramento || null }
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Cadeira encerrada." } };
@@ -83,12 +102,37 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && !id) {
-    const { membroId, orgaoId, tipoAssento, cargoOuFuncao, dataInicio, duracaoMeses } = req.body || {};
-    if (!membroId || !orgaoId || !tipoAssento || !TIPOS_VALIDOS.includes(tipoAssento)) {
+    const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+    const { tipoAssento, cargoOuFuncao, dataInicio, duracaoMeses } = corpo;
+    // As matrículas/ids só valem na forma canônica de número (auth.idDeRota); o malformado cai na mesma resposta de "não encontrada".
+    const membroId = auth.idDeRota(corpo.membroId);
+    const orgaoId = auth.idDeRota(corpo.orgaoId);
+    if (!corpo.membroId || !corpo.orgaoId || !tipoAssento || !TIPOS_VALIDOS.includes(tipoAssento)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: membroId, orgaoId, tipoAssento (${TIPOS_VALIDOS.join(" ou ")}).` } };
       return;
     }
-    const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+    if (!membroId) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+      return;
+    }
+    if (!orgaoId) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Órgão inválido." } };
+      return;
+    }
+    // Mandato: meses inteiros de 1 a 600 e data de início no formato AAAA-MM-DD — duração negativa criava uma cadeira que já nascia vencida.
+    if (duracaoMeses != null && duracaoMeses !== "" && (!Number.isInteger(Number(duracaoMeses)) || Number(duracaoMeses) < 1 || Number(duracaoMeses) > 600 || typeof duracaoMeses === "boolean")) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "A duração do mandato é um número inteiro de meses, de 1 a 600." } };
+      return;
+    }
+    if (dataInicio != null && dataInicio !== "" && (typeof dataInicio !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dataInicio) || Number.isNaN(Date.parse(dataInicio)))) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "A data de início deve estar no formato AAAA-MM-DD." } };
+      return;
+    }
+    if (cargoOuFuncao != null && (typeof cargoOuFuncao !== "string" || cargoOuFuncao.length > 100)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Cargo ou função inválido (texto de até 100 caracteres)." } };
+      return;
+    }
+    const membro =await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
     if (membro.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
       return;
@@ -123,12 +167,13 @@ module.exports = async function (context, req) {
       }
     }
 
-    // Art. 43 §3º, I (Conselho Fiscal) / Estatuto Art. 38 §2º (CEI) — vedação
-    // de nepotismo: parentesco até 2º grau com membros ativos da Diretoria
-    // Executiva não pode ocupar Conselho Fiscal nem CEI. (Só a metade
-    // "Diretoria" é verificável — "Tesoureiros de Departamentos" não é um
-    // cargo rastreado em lugar nenhum do sistema hoje.)
-    if (["CONSELHO_FISCAL", "CEI"].includes(orgaoSigla)) {
+    // Art. 43 §3º, I (Conselho Fiscal) / Estatuto Art. 38 §2º (CEI) / Art. 31
+    // (Conselho Consultivo Técnico, vB.14) — vedação de nepotismo: parentesco
+    // até 2º grau com membros ativos da Diretoria Executiva não pode ocupar
+    // nenhum desses três órgãos. (Só a metade "Diretoria" é verificável —
+    // "Tesoureiros de Departamentos" não é um cargo rastreado em lugar
+    // nenhum do sistema hoje.)
+    if (orgaoSigla in ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA) {
       const diretoriaAtual = await pool.request().query(`
         SELECT a.MembroId AS membroId FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId
         WHERE o.Sigla = 'DIRETORIA_EXECUTIVA' AND a.DataFim IS NULL
@@ -136,7 +181,7 @@ module.exports = async function (context, req) {
       const idsDiretoria = new Set(diretoriaAtual.recordset.map(r => r.membroId));
       const parentesco = await existeParentescoAte2Grau(pool, sql, membroId, idsDiretoria);
       if (parentesco.encontrado) {
-        const artigo = orgaoSigla === "CEI" ? "Estatuto Art. 38 §2º" : "Art. 43 §3º, I";
+        const artigo = ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA[orgaoSigla];
         context.res = {
           status: 200,
           body: { sucesso: false, mensagem: `Não é possível: essa pessoa tem parentesco até 2º grau com um membro ativo da Diretoria Executiva (matrícula ${parentesco.comMembroId}) — vedado pelo ${artigo}.` }
@@ -151,7 +196,7 @@ module.exports = async function (context, req) {
       .input("tipoAssento", sql.NVarChar(30), tipoAssento)
       .input("cargoOuFuncao", sql.NVarChar(100), cargoOuFuncao || null)
       .input("dataInicio", sql.Date, dataInicio || null)
-      .input("duracaoMeses", sql.Int, duracaoMeses || null)
+      .input("duracaoMeses", sql.Int, duracaoMeses != null && duracaoMeses !== "" ? Number(duracaoMeses) : null)
       .query(`INSERT INTO Assentos (OrgaoId, MembroId, TipoAssento, CargoOuFuncao, DataInicio, DataTerminoPrevisao)
               OUTPUT INSERTED.AssentoId
               VALUES (@orgaoId, @membroId, @tipoAssento, @cargoOuFuncao,
@@ -169,5 +214,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método/rota não suportado." } };
-};
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
+}, "Esse cargo acabou de ser ocupado por outra pessoa (1 titular por cargo). Atualize a lista de cadeiras e confira antes de tentar de novo.");

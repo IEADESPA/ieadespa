@@ -16,9 +16,13 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const tesouraria = require("../shared/tesouraria");
 const { ehPresidenteAtual } = require("../shared/diretoria");
+const { exigirGeral } = require("../shared/escopoRotas");
+const { afetadas } = require("../shared/entradaFinanceira");
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  // O saldo do Fundo, a dotação e o motivo da suspensão são da Tesouraria Geral (centro de custo PDQ, a igreja inteira): a LEITURA é só do nível geral (papel Global com
+  // escopo de todas as congregações). Suspender/reativar continua só do Assento de Presidente (conferido mais abaixo), com a permissão `financeiro`.
+  const usuario = req.method === "GET" ? exigirGeral(req, context, "financeiro") : auth.exigirPermissao(req, context, "financeiro");
   if (!usuario) return;
   const pool = await getPool();
 
@@ -43,8 +47,8 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe acao: SUSPENDER ou REATIVAR." } };
       return;
     }
-    if (!motivo || !motivo.trim()) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o motivo." } };
+    if (typeof motivo !== "string" || !motivo.trim() || motivo.trim().length > 300) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o motivo (até 300 caracteres)." } };
       return;
     }
     const ehPresidente = await ehPresidenteAtual(pool, sql, usuario.membroId);
@@ -59,8 +63,15 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "O Fundo já está suspenso." } };
         return;
       }
+      // A conferência e a gravação vão numa instrução só: duas suspensões simultâneas não criam duas linhas "ativas" (a tabela não tem índice único para isso).
       const criada = await pool.request().input("motivo", sql.NVarChar(300), motivo.trim()).input("suspensoPor", sql.Int, usuario.membroId)
-        .query(`INSERT INTO PdqFundoSuspensoes (MotivoSuspensao, SuspensoPor) OUTPUT INSERTED.SuspensaoId VALUES (@motivo, @suspensoPor)`);
+        .query(`INSERT INTO PdqFundoSuspensoes (MotivoSuspensao, SuspensoPor) OUTPUT INSERTED.SuspensaoId
+                SELECT @motivo, @suspensoPor
+                WHERE NOT EXISTS (SELECT 1 FROM PdqFundoSuspensoes WITH (UPDLOCK, HOLDLOCK) WHERE ReativadoEm IS NULL)`);
+      if (criada.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "O Fundo já está suspenso." } };
+        return;
+      }
       await registrarAuditoria({
         tabela: "PdqFundoSuspensoes", registroId: criada.recordset[0].SuspensaoId, acao: "Pastor Presidente suspendeu o Fundo de Execução Estratégica (PDQ)", usuarioId: usuario.membroId,
         dadosDepois: { motivo }
@@ -73,8 +84,12 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "O Fundo não está suspenso." } };
       return;
     }
-    await pool.request().input("id", sql.Int, suspensaoAtiva.SuspensaoId).input("motivo", sql.NVarChar(300), motivo.trim()).input("reativadoPor", sql.Int, usuario.membroId)
-      .query(`UPDATE PdqFundoSuspensoes SET MotivoReativacao = @motivo, ReativadoPor = @reativadoPor, ReativadoEm = SYSUTCDATETIME() WHERE SuspensaoId = @id`);
+    const reativada = await pool.request().input("id", sql.Int, suspensaoAtiva.SuspensaoId).input("motivo", sql.NVarChar(300), motivo.trim()).input("reativadoPor", sql.Int, usuario.membroId)
+      .query(`UPDATE PdqFundoSuspensoes SET MotivoReativacao = @motivo, ReativadoPor = @reativadoPor, ReativadoEm = SYSUTCDATETIME() WHERE SuspensaoId = @id AND ReativadoEm IS NULL`);
+    if (afetadas(reativada) === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "O Fundo não está suspenso." } };
+      return;
+    }
     await registrarAuditoria({
       tabela: "PdqFundoSuspensoes", registroId: suspensaoAtiva.SuspensaoId, acao: "Pastor Presidente reativou o Fundo de Execução Estratégica (PDQ)", usuarioId: usuario.membroId,
       dadosDepois: { motivo }

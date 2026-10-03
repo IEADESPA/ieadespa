@@ -7,15 +7,19 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { pessoaAlcancavel } = require("../shared/escopoRotas");
+const { dataISOValida } = require("../shared/escopoFichas");
 
 const TIPOS_MARCO = ["CONVERSAO", "MINISTERIO_ANTERIOR", "BATISMO_ESPIRITO_SANTO", "OUTRO"];
 
+// ESCOPO: o marco entra na linha do tempo de uma PESSOA — só lança quem alcança a congregação dela (shared/escopoRotas.js); fora do escopo vale a mesma resposta de
+// "Matrícula não encontrada".
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
 
-  const { membroId, tipo, descricao, dataMarco, dataAproximada } = req.body || {};
-  if (!membroId || !tipo || !descricao || !String(descricao).trim()) {
+  const { membroId: membroIdBruto, tipo, descricao, dataMarco, dataAproximada } = req.body || {};
+  if (!membroIdBruto || !tipo || !descricao || !String(descricao).trim()) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe membroId, tipo e descrição." } };
     return;
   }
@@ -23,18 +27,23 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { sucesso: false, mensagem: `Tipo de marco inválido. Use um de: ${TIPOS_MARCO.join(", ")}.` } };
     return;
   }
+  if (dataMarco && !dataISOValida(dataMarco)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "dataMarco inválida — use AAAA-MM-DD." } };
+    return;
+  }
 
   const pool = await getPool();
-  const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
-  if (membro.recordset.length === 0) {
+  const pessoa = await pessoaAlcancavel(pool, usuario, membroIdBruto);
+  if (!pessoa) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
   }
+  const membroId = pessoa.membroId;
 
   const result = await pool.request()
     .input("membroId", sql.Int, membroId)
     .input("tipo", sql.NVarChar(30), tipo)
-    .input("descricao", sql.NVarChar(500), String(descricao).trim())
+    .input("descricao", sql.NVarChar(500), String(descricao).trim().slice(0, 500))
     .input("dataMarco", sql.Date, dataMarco || null)
     .input("dataAproximada", sql.Bit, dataAproximada === true)
     .input("criadoPor", sql.Int, usuario.membroId)

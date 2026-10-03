@@ -7,22 +7,30 @@
 // quando o caixa é um só.
 // GET /api/demonstracoes-contabeis?tipo=balanco&dataCorte=2026-12-31
 // GET /api/demonstracoes-contabeis?tipo=drp|mutacoes|fluxocaixa&dataInicio=2026-01-01&dataFim=2026-12-31
-const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { getPool, sql } = require("../shared/db");
 const demonstracoes = require("../shared/demonstracoes");
 
 const TIPOS = ["balanco", "drp", "mutacoes", "fluxocaixa"];
+// Data AAAA-MM-DD que existe no calendário ("2026-02-30" não existe): reconverte e compara.
+const dataValida = (v) => {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+};
 
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  // Consolidado de toda a denominação (conta única): só o nível GERAL — papel Global E escopo de todas as congregações (o papel Global sozinho não basta: papel e escopo
+  // são cadastrados em separado).
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "As demonstrações contábeis são consolidadas de toda a denominação — restrito a papéis de nível Global." } };
-    return;
-  }
   const { tipo, dataCorte, dataInicio, dataFim } = req.query || {};
   if (!TIPOS.includes(tipo)) {
     context.res = { status: 400, body: { sucesso: false, mensagem: `Informe tipo: ${TIPOS.join(", ")}.` } };
+    return;
+  }
+  if ((tipo === "balanco" && dataCorte && !dataValida(dataCorte)) || (tipo !== "balanco" && ((dataInicio && !dataValida(dataInicio)) || (dataFim && !dataValida(dataFim))))) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Data inválida (use AAAA-MM-DD)." } };
     return;
   }
   const pool = await getPool();

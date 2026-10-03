@@ -12,8 +12,22 @@
 const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
 const { registrarAuditoria } = require("../shared/auditoria");
+const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
+const { comConflito } = require("../shared/violacaoUnica");
 
-module.exports = async function (context, req) {
+// fecho da v7.5 — a porta é anônima por desenho (a senha da reunião, dita na sala, é a credencial), mas a senha é texto livre e não havia limite: quem testasse senhas
+// de reunião aberta marcaria presença de qualquer matrícula. Contenção por origem (por instância); alta o bastante para uma congregação inteira no mesmo wi-fi entrar
+// em poucos minutos.
+const limitador = criarLimitador({ janelaMs: 60000, maximo: 120 });
+
+// Uma presença por pessoa por reunião também no banco (índice UX_Presencas_Sessao_Membro, migração 128): dois toques ao mesmo tempo furam o SELECT de "já registrou", e o
+// segundo recebe o 409 com a mesma frase do caso comum em vez de um 500.
+module.exports = comConflito(async function (context, req) {
+  const limite = limitador.registrar(chaveDeOrigem(req));
+  if (!limite.permitido) {
+    context.res = { status: 429, headers: { "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas tentativas seguidas. Aguarde um minuto e tente de novo." } };
+    return;
+  }
   const { matricula, senha, sessaoId } = req.body || {};
 
   if (!matricula || !senha) {
@@ -103,4 +117,4 @@ module.exports = async function (context, req) {
     headers: { "Content-Type": "application/json" },
     body: { sucesso: true, mensagem: `✅ Presença confirmada: ${membro.nome} (${sessaoEscolhida.orgaoNome})` }
   };
-};
+}, "Presença JÁ REGISTRADA para hoje!");

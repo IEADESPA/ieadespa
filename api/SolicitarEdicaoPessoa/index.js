@@ -7,13 +7,12 @@
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { CAMPOS_APROVACAO } = require("../shared/camposEdicaoPessoa");
+const auth = require("../shared/auth");
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão (antes qualquer um propunha mudar a data de nascimento de qualquer pessoa).
   const matricula = context.bindingData.matricula;
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
+  if (!auth.exigirTitular(req, context, matricula)) return;
   const pool = await getPool();
 
   if (req.method === "GET") {
@@ -98,5 +97,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

@@ -9,11 +9,18 @@ const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 
 module.exports = async function (context, req) {
-  const planoId = context.bindingData.planoId;
+  const planoIdBruto = context.bindingData.planoId;
+  // Sem restrição de nível de propósito: o Pastor de Área (assembleia) lê o relatório de progresso na AGO.
   const usuario = auth.exigirAlgumaPermissao(req, context, ["cli", "financeiro", "assembleia"]);
   if (!usuario) return;
+  if (!planoIdBruto) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o planoId na rota." } };
+    return;
+  }
+  // Id malformado ("abc", "1e1", "05") tem a mesma resposta de plano inexistente — antes estourava erro do driver (500).
+  const planoId = auth.idDeRota(planoIdBruto);
   if (!planoId) {
-    context.res = { status: 400, body: { erro: "Informe o planoId na rota." } };
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Plano PDQ não encontrado." } };
     return;
   }
   const pool = await getPool();

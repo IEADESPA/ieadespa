@@ -1,0 +1,192 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { fetchItems } from "@/lib/directus";
+
+interface Orgao {
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
+interface Categoria {
+  id: string;
+  label: string;
+  description: string | null;
+}
+
+const allPosts = visiblePosts(await getAllMensagens());
+const [orgaos, categorias] = await Promise.all([
+  fetchItems<Orgao>("ministerios", "sort[]=sort"),
+  fetchItems<Categoria>("orgao_categorias", "sort[]=sort"),
+]);
+// Os tipos de órgão são geridos direto no Directus (coleção "Categorias de
+// Órgão") — a igreja pode criar um tipo novo por lá sem precisar de mudança
+// de código aqui; a listagem só agrupa pelo que já existe.
+const groups = categorias
+  .map((categoria) => ({
+    value: categoria.id,
+    label: categoria.label,
+    description: categoria.description ?? "",
+    items: orgaos.filter((orgao) => orgao.category === categoria.id),
+  }))
+  .filter((group) => group.items.length > 0);
+---
+
+<BaseLayout
+  title="Órgãos"
+  description={`Conselhos, departamentos e secretarias da ${siteConfig.name}.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Servindo juntos</p>
+        <h1 class="pagehead-title">Órgãos</h1>
+        <p class="pagehead-description">
+          Conselhos, departamentos e secretarias que deliberam nas assembleias e reuniões da
+          igreja. Cada órgão existe para servir à igreja e à comunidade de uma forma específica —
+          há espaço para você servir com os dons que Deus lhe deu.
+        </p>
+      </header>
+
+      <nav class="orgao-tabs" aria-label="Categorias de órgãos">
+        <button type="button" class="orgao-tab is-active" data-orgao-tab="todos">Todos</button>
+        {
+          groups.map((group) => (
+            <button type="button" class="orgao-tab" data-orgao-tab={group.value}>
+              {group.label}
+            </button>
+          ))
+        }
+      </nav>
+
+      {
+        groups.map((group) => (
+          <section class:list={["orgao-group", { "orgao-group-governanca": group.value === "governanca" }]} data-orgao-group={group.value}>
+            <div class="orgao-group-head">
+              <h2 class="section-title">{group.label}</h2>
+              {group.value === "governanca" && <span class="orgao-group-badge">Deliberativo/eleito</span>}
+            </div>
+            <p class="mt-1 text-sm text-muted-foreground">{group.description}</p>
+            <ul class="mt-5 grid gap-6 sm:grid-cols-2">
+              {group.items.map((orgao) => (
+                <li class:list={["orgao-card", { "orgao-card-governanca": group.value === "governanca" }]}>
+                  <h3 class="text-lg font-semibold tracking-tight">{orgao.name}</h3>
+                  <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{orgao.description}</p>
+                  <a href={`/orgao/${orgao.slug}/`} class="mt-3 inline-block link-sweep text-sm font-semibold text-accent">
+                    {group.value === "governanca" ? "Ver composição" : "Saiba mais"}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+
+      <div class="prose mt-16">
+        <h2>Quer participar?</h2>
+        <p>
+          Fale com a liderança em um dos nossos cultos ou entre em contato pela{" "}
+          <a href="/contato/">página de contato</a> para saber como se envolver em um dos órgãos da
+          igreja.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<script is:inline>
+  (() => {
+    const tabs = document.querySelectorAll("[data-orgao-tab]");
+    const groups = document.querySelectorAll("[data-orgao-group]");
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const target = tab.getAttribute("data-orgao-tab");
+
+        tabs.forEach((t) => t.classList.toggle("is-active", t === tab));
+        groups.forEach((group) => {
+          const match = target === "todos" || group.getAttribute("data-orgao-group") === target;
+          group.hidden = !match;
+        });
+      });
+    });
+  })();
+</script>
+
+<style>
+  .orgao-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .orgao-tab {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    padding: 0.45rem 1.1rem;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: transparent;
+    transition:
+      border-color var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out),
+      background-color var(--duration-fast) var(--ease-out);
+  }
+
+  .orgao-tab:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    color: var(--accent);
+  }
+
+  .orgao-tab.is-active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .orgao-group + .orgao-group {
+    margin-top: 3rem;
+  }
+
+  .orgao-group-governanca {
+    border-left: 3px solid var(--accent);
+    padding-left: 1.25rem;
+  }
+
+  .orgao-group-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .orgao-group-badge {
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-full);
+    padding: 0.15rem 0.65rem;
+    color: var(--accent-strong);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .orgao-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem 1.6rem;
+  }
+
+  .orgao-card-governanca {
+    background: var(--muted);
+  }
+</style>

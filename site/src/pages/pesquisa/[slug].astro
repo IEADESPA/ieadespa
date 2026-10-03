@@ -1,0 +1,280 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL, VERIFICAR_INSCRICAO_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Evento {
+  id: number;
+  slug: string;
+  title: string;
+  event_date: string | null;
+  end_date: string | null;
+  aceita_inscricao: boolean;
+}
+
+export async function getStaticPaths() {
+  const events = await fetchItems<Evento>("eventos", "filter[aceita_inscricao][_eq]=true");
+  // slug e opcional no Directus - sem essa checagem, evento sem slug ainda
+  // definido quebraria o build (mesmo bug corrigido em toda pagina por slug).
+  return events.filter((event) => event.slug).map((event) => ({ params: { slug: event.slug }, props: { event } }));
+}
+
+interface Props {
+  event: Evento;
+}
+
+const { event } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+
+// A pesquisa só abre a partir do dia seguinte ao fim do evento — não faz
+// sentido perguntar satisfação antes de acontecer. Fica aberta pra sempre
+// depois disso (nome/código/respostas nunca são apagados — ver "Encerrar
+// evento" no README — então dá pra responder e ver o resultado mesmo bem
+// depois do evento arquivado).
+const dataReferencia = event.end_date || event.event_date;
+---
+
+<BaseLayout title={`Pesquisa de satisfação — ${event.title}`} description="Conte pra gente o que achou do evento." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas pesquisa-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Pesquisa de satisfação</p>
+        <h1 class="pagehead-title">{event.title}</h1>
+        <p class="pagehead-description">Conte pra gente o que achou — leva menos de um minuto.</p>
+      </header>
+
+      <div data-pesquisa-fechada hidden class="gallery-empty mt-8">
+        <p class="text-sm text-muted-foreground">
+          A pesquisa de satisfação abre no dia seguinte ao evento. Volte depois!
+        </p>
+      </div>
+
+      <div data-pesquisa-aberta hidden>
+        <form
+          class="mt-8 grid gap-4 max-w-sm"
+          data-pesquisa-busca-form
+          data-evento-id={event.id}
+          data-directus-url={DIRECTUS_URL}
+          data-verificar-url={VERIFICAR_INSCRICAO_URL}
+        >
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="pesquisa-codigo">Código de confirmação</label>
+            <input
+              id="pesquisa-codigo"
+              name="codigo"
+              type="text"
+              autocomplete="off"
+              autocapitalize="characters"
+              maxlength="6"
+              class="field pesquisa-codigo-input"
+              placeholder="A3F9K2"
+            />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="pesquisa-telefone">Telefone usado na inscrição</label>
+            <input
+              id="pesquisa-telefone"
+              name="telefone"
+              type="tel"
+              autocomplete="tel"
+              class="field"
+              placeholder="(00) 00000-0000"
+            />
+          </div>
+          <button type="submit" class="btn btn-solid">Continuar</button>
+        </form>
+
+        <p class="mt-4 text-sm leading-relaxed text-muted-foreground" data-pesquisa-status role="status" aria-live="polite" />
+
+        <form class="mt-6 grid gap-4 max-w-md" data-pesquisa-form hidden>
+          <div class="grid gap-4" data-pesquisa-perguntas />
+          <div class="flex flex-wrap items-center gap-4">
+            <button type="submit" class="btn btn-solid">Enviar respostas</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline define:vars={{ directusUrl: DIRECTUS_URL, verificarUrl: VERIFICAR_INSCRICAO_URL, eventoId: event.id, dataReferencia }}>
+    (() => {
+      const fechadaEl = document.querySelector("[data-pesquisa-fechada]");
+      const abertaEl = document.querySelector("[data-pesquisa-aberta]");
+
+      // "Amanhã" da data de referência, à meia-noite local — abre a
+      // partir do dia seguinte ao evento, nunca no mesmo dia.
+      const abre = dataReferencia ? new Date(`${dataReferencia}T00:00:00`) : null;
+      if (abre) abre.setDate(abre.getDate() + 1);
+      const aberta = !abre || new Date() >= abre;
+
+      if (!aberta) {
+        if (fechadaEl) fechadaEl.hidden = false;
+        return;
+      }
+      if (abertaEl) abertaEl.hidden = false;
+
+      const buscaForm = document.querySelector("[data-pesquisa-busca-form]");
+      const statusEl = document.querySelector("[data-pesquisa-status]");
+      const perguntasForm = document.querySelector("[data-pesquisa-form]");
+      const perguntasEl = document.querySelector("[data-pesquisa-perguntas]");
+      if (!buscaForm || !perguntasForm || !perguntasEl) return;
+
+      const escapeHtml = (value) =>
+        String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+      function campoHtml(pergunta) {
+        const campoId = `pergunta-${pergunta.id}`;
+        const attrs = `id="${campoId}" data-pergunta-id="${pergunta.id}" data-pergunta-tipo="${pergunta.tipo}"`;
+        if (pergunta.tipo === "texto_longo") return `<textarea class="field" rows="3" ${attrs}></textarea>`;
+        if (pergunta.tipo === "numero") return `<input type="number" class="field" ${attrs} />`;
+        if (pergunta.tipo === "data") return `<input type="date" class="field" ${attrs} />`;
+        if (pergunta.tipo === "selecao_unica") {
+          return `<select class="field" ${attrs}>
+            <option value="">Selecione…</option>
+            ${(pergunta.opcoes ?? []).map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("")}
+          </select>`;
+        }
+        if (pergunta.tipo === "selecao_multipla") {
+          // Grupo de opções, não um único campo — não faz sentido um <label
+          // for> apontando pra um <div>; cada opção já tem seu próprio
+          // <label> envolvendo o checkbox, e o grupo inteiro é identificado
+          // via aria-labelledby na pergunta (montado em campoBlocoHtml).
+          return `<div class="grid gap-1.5" role="group" aria-labelledby="${campoId}-label" data-pergunta-id="${pergunta.id}" data-pergunta-tipo="${pergunta.tipo}">
+            ${(pergunta.opcoes ?? [])
+              .map((o) => `<label class="contact-checkbox"><input type="checkbox" value="${escapeHtml(o)}" /> ${escapeHtml(o)}</label>`)
+              .join("")}
+          </div>`;
+        }
+        return `<input type="text" class="field" ${attrs} />`;
+      }
+
+      function campoBlocoHtml(pergunta) {
+        const campoId = `pergunta-${pergunta.id}`;
+        const rotulo = `${escapeHtml(pergunta.label)}${pergunta.obrigatoria ? " *" : ""}`;
+        const rotuloHtml =
+          pergunta.tipo === "selecao_multipla"
+            ? `<p class="text-sm font-semibold" id="${campoId}-label">${rotulo}</p>`
+            : `<label class="text-sm font-semibold" for="${campoId}">${rotulo}</label>`;
+        return `<div class="grid gap-2">${rotuloHtml}${campoHtml(pergunta)}</div>`;
+      }
+
+      function lerCampo(campoEl) {
+        if (campoEl.matches("[data-pergunta-tipo='selecao_multipla']")) {
+          return Array.from(campoEl.querySelectorAll("input[type=checkbox]:checked"))
+            .map((el) => el.value)
+            .join(", ");
+        }
+        return campoEl.value.trim();
+      }
+
+      let inscricaoId = null;
+
+      buscaForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const codigo = document.getElementById("pesquisa-codigo").value.trim().toUpperCase();
+        const telefone = document.getElementById("pesquisa-telefone").value.trim();
+        if (!statusEl) return;
+
+        if (!telefone) {
+          statusEl.textContent = "Digite o telefone usado na inscrição.";
+          return;
+        }
+
+        statusEl.textContent = "Verificando…";
+
+        try {
+          const res = await fetch(verificarUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ evento: eventoId, modo: "codigo", codigo, telefone }),
+          });
+          const pessoa = await res.json();
+
+          if (!pessoa?.encontrado) {
+            statusEl.textContent = "Código ou telefone não conferem. Confira e tente de novo.";
+            return;
+          }
+          if (!pessoa.presente) {
+            statusEl.textContent = "Só quem confirmou presença no evento pode responder a pesquisa.";
+            return;
+          }
+
+          const perguntasRes = await fetch(
+            `${directusUrl}/items/perguntas_evento?filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][momento][_eq]=pos_evento&sort=ordem&limit=-1`,
+          );
+          const perguntas = (await perguntasRes.json()).data ?? [];
+
+          if (!perguntas.length) {
+            statusEl.textContent = "Este evento ainda não tem pesquisa de satisfação cadastrada.";
+            return;
+          }
+
+          inscricaoId = pessoa.id;
+          perguntasEl.innerHTML = perguntas.map(campoBlocoHtml).join("");
+
+          buscaForm.hidden = true;
+          perguntasForm.hidden = false;
+          statusEl.textContent = `Olá, ${pessoa.nome}! Responda abaixo.`;
+        } catch {
+          statusEl.textContent = "Não foi possível buscar agora. Tente novamente em instantes.";
+        }
+      });
+
+      perguntasForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const botao = perguntasForm.querySelector("button[type=submit]");
+        if (botao) botao.disabled = true;
+        if (statusEl) statusEl.textContent = "Enviando…";
+
+        try {
+          const campos = perguntasEl.querySelectorAll("[data-pergunta-id]");
+          const respostas = [];
+          campos.forEach((campoEl) => {
+            const valor = lerCampo(campoEl);
+            if (valor) respostas.push({ inscricao: inscricaoId, pergunta: Number(campoEl.dataset.perguntaId), valor });
+          });
+
+          await Promise.all(
+            respostas.map((resposta) =>
+              fetch(`${directusUrl}/items/respostas_inscricao`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(resposta),
+              }),
+            ),
+          );
+
+          perguntasForm.hidden = true;
+          if (statusEl) statusEl.textContent = "✅ Obrigado por responder! Sua opinião ajuda a melhorar os próximos eventos.";
+        } catch {
+          if (statusEl) statusEl.textContent = "Não foi possível enviar agora. Tente novamente em instantes.";
+          if (botao) botao.disabled = false;
+        }
+      });
+    })();
+  </script>
+
+  <style is:global>
+    .pesquisa-canvas {
+      max-width: 40rem;
+    }
+
+    .pesquisa-codigo-input {
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 1.5rem;
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+
+    .contact-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+  </style>
+</BaseLayout>

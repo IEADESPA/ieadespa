@@ -61,6 +61,58 @@ describe("saldoCentroCusto (LOCAL / GERAL / destinos do Rateio Geral)", () => {
     const saldo = await tesouraria.saldoCentroCusto(pool, sqlFalso, "LOCAL", 1);
     expect(saldo).toBe(0);
   });
+
+  // v5.4 — ponte financeira departamental: DEPTO_<SIGLA> soma o "para
+  // local" JÁ CONGELADO de RelatoriosDepartamentais (nunca
+  // FechamentosTesouraria, que é a fonte do dízimo/oferta geral, não de
+  // departamento) e filtra por congregação — mesma exclusividade do LOCAL.
+  test("DEPTO_<SIGLA>: soma ValorParaLocal congelado de RelatoriosDepartamentais, filtrado por congregação, menos o pago", async () => {
+    const { pool, chamadas } = criarPoolFalso([[{ total: 400 }], [{ total: 150 }]]);
+    const saldo = await tesouraria.saldoCentroCusto(pool, sqlFalso, "DEPTO_UCADESPA", 7);
+    expect(saldo).toBe(250);
+    expect(chamadas[0].inputs.sigla).toBe("UCADESPA");
+    expect(chamadas[0].inputs.congregacaoId).toBe(7);
+    expect(chamadas[1].inputs.congregacaoId).toBe(7); // "pago" também filtra por congregação, igual LOCAL
+  });
+
+  test("centroCustoDepartamental extrai a sigla de um Centro de Custo DEPTO_*, e null pros outros", () => {
+    expect(tesouraria.centroCustoDepartamental("DEPTO_UHADESPA")).toBe("UHADESPA");
+    expect(tesouraria.centroCustoDepartamental("LOCAL")).toBeNull();
+    expect(tesouraria.centroCustoDepartamental("GERAL")).toBeNull();
+    expect(tesouraria.centroCustoDepartamental("PDQ")).toBeNull();
+  });
+});
+
+describe("podeOperarCentroCusto (GestaoSaidas, v5.4)", () => {
+  test("o GERAL (papel Global com escopo de todas as congregações) com 'financeiro' opera qualquer Centro de Custo, mesmo sem sigla de departamento", () => {
+    const usuario = { permissoes: ["financeiro"], nivel: "GLOBAL", escopoCongregacoes: "TODAS" };
+    for (const centro of ["LOCAL", "GERAL", "PDQ", "CONVENCAO", "PREBENDA_PASTORAL", "DEPTO_UCADESPA"]) {
+      expect(tesouraria.podeOperarCentroCusto(usuario, centro, null)).toBe(true);
+    }
+  });
+  test("tesoureiro local/de área com 'financeiro' opera o LOCAL e os departamentais, mas NÃO os centros da igreja inteira", () => {
+    const usuario = { permissoes: ["financeiro"], nivel: "CONGREGACAO", escopoCongregacoes: ["Central"] };
+    expect(tesouraria.podeOperarCentroCusto(usuario, "LOCAL", null)).toBe(true);
+    expect(tesouraria.podeOperarCentroCusto(usuario, "DEPTO_UCADESPA", null)).toBe(true);
+    for (const centro of ["GERAL", "PDQ", "CONVENCAO", "PREBENDA_PASTORAL"]) {
+      expect(tesouraria.podeOperarCentroCusto(usuario, centro, null)).toBe(false);
+    }
+  });
+  test("papel Global com escopo de uma lista, ou papel local com escopo TODAS, também não opera os centros da igreja inteira", () => {
+    expect(tesouraria.podeOperarCentroCusto({ permissoes: ["financeiro"], nivel: "GLOBAL", escopoCongregacoes: ["Central"] }, "PREBENDA_PASTORAL", null)).toBe(false);
+    expect(tesouraria.podeOperarCentroCusto({ permissoes: ["financeiro"], nivel: "CONGREGACAO", escopoCongregacoes: "TODAS" }, "PREBENDA_PASTORAL", null)).toBe(false);
+  });
+  test("quem só tem 'tesouraria_departamental' só opera a categoria do próprio departamento", () => {
+    const usuario = { permissoes: ["tesouraria_departamental"] };
+    expect(tesouraria.podeOperarCentroCusto(usuario, "DEPTO_UCADESPA", "UCADESPA")).toBe(true);
+    expect(tesouraria.podeOperarCentroCusto(usuario, "DEPTO_UMADESPA", "UCADESPA")).toBe(false);
+    expect(tesouraria.podeOperarCentroCusto(usuario, "GERAL", "UCADESPA")).toBe(false);
+    expect(tesouraria.podeOperarCentroCusto(usuario, "LOCAL", "UCADESPA")).toBe(false);
+  });
+  test("sem sigla de departamento (ex: Pastor de Área sem departamento fixo) e sem 'financeiro', nunca opera nada", () => {
+    const usuario = { permissoes: ["tesouraria_departamental"] };
+    expect(tesouraria.podeOperarCentroCusto(usuario, "DEPTO_UCADESPA", null)).toBe(false);
+  });
 });
 
 describe("saldoRestanteCampanha (v4.2/v4.4 — nunca gasta além do arrecadado)", () => {

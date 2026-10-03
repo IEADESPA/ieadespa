@@ -1,0 +1,625 @@
+---
+import DestaqueCarousel from "@/components/DestaqueCarousel.astro";
+import LocalIcon from "@/components/LocalIcon.astro";
+import NoticiaCard from "@/components/NoticiaCard.astro";
+import PostCard from "@/components/PostCard.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { categoryHref, getCategoryList, getFeatured, getAllMensagens, visiblePosts } from "@/lib/posts";
+import { enderecoCompleto, fetchConfiguracoes, mapsHref } from "@/lib/directus";
+import { getAllNoticias, visibleNoticias } from "@/lib/noticias";
+import { churchStructuredData, getAllProgramacao, sedeProgramacao, sedeProgramacaoCompacta } from "@/lib/programacao";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const feed = allPosts.slice(0, 6);
+const featured = getFeatured(allPosts, 4);
+const categoryList = getCategoryList(allPosts);
+const config = await fetchConfiguracoes();
+const latestNoticias = visibleNoticias(await getAllNoticias()).slice(0, 3);
+const programacao = await getAllProgramacao();
+const sedeSchedule = sedeProgramacao(programacao);
+const heroSchedule = sedeProgramacaoCompacta(programacao);
+
+/*
+ * Lido do disco (não importado como módulo ES) de propósito: um array de
+ * ~31 mil objetos vira código gigante se for `import`-ado, o que pode
+ * sobrecarregar o processo de build. Como arquivo lido em tempo de build,
+ * é só texto — sem custo de bundling.
+ *
+ * Escolhido aqui só como valor inicial (pra funcionar sem JavaScript); o
+ * script no navegador recalcula com base no horário real de quem está
+ * vendo e substitui isso na hora.
+ */
+/* `process.cwd()` (não `import.meta.url`) porque o build empacota este
+   arquivo em outra pasta (dist/.prerender/chunks/...) — resolver relativo
+   ao próprio módulo apontaria pro lugar errado depois de empacotado. */
+type Verse = { r: string; t: string };
+type Periodo = "madrugada" | "manha" | "tarde" | "noite";
+
+/* Classificação automática por padrão de texto (palavras-chave e
+   estrutura), não leitura manual verso a verso — ver
+   scratchpad/classify-verses.mjs para o critério usado. Cada período do
+   dia tem seu próprio arquivo (não um arquivo único com tudo dentro):
+   um celular numa conexão lenta só baixa ~1-2MB de um período, em vez
+   de baixar os ~4,7MB dos 4 juntos pra usar só 1/4 disso (era a causa
+   real de um LCP de quase 11s no mobile, visto no PageSpeed Insights). */
+function periodoDoHorario(hora: number): Periodo {
+  if (hora < 6) return "madrugada";
+  if (hora < 12) return "manha";
+  if (hora < 18) return "tarde";
+  return "noite";
+}
+
+// Dias desde o Unix epoch (não "dia do ano"): avança pra sempre em vez de
+// resetar todo 1º de janeiro, senão só os primeiros ~365 versículos de
+// cada balde jamais apareceriam.
+const epochDays = Math.floor(Date.now() / 86400000);
+const horaBuild = Number(
+  new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", hour: "2-digit", hour12: false }).format(new Date()),
+);
+const periodoBuild = periodoDoHorario(horaBuild);
+const versiculosPath = join(process.cwd(), "public", `versiculos-${periodoBuild}.json`);
+const baldeInicial = JSON.parse(readFileSync(versiculosPath, "utf8")) as Verse[];
+const versiculoInicial = baldeInicial[epochDays % baldeInicial.length];
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: siteConfig.name,
+    url: siteConfig.siteUrl,
+    description: siteConfig.description,
+    publisher: { "@type": "Organization", name: siteConfig.authorName, logo: { "@type": "ImageObject", url: `${siteConfig.siteUrl}/logo.png` } },
+  },
+  churchStructuredData(
+    config,
+    sedeSchedule,
+    siteConfig.siteUrl,
+    siteConfig.name,
+    siteConfig.socials.filter((s) => s.href.startsWith("http")).map((s) => s.href),
+  ),
+];
+
+// Reduzido de 8 pra 4 (Fase 2 do README) — os que já têm destaque próprio
+// no menu principal (Notícias, Órgãos, Congregações, Eventos) saíram daqui
+// pra não duplicar; ficaram só os itens que não têm outro lugar de peso.
+const quickLinks = [
+  {
+    label: "Primeira vez aqui?",
+    description: "Informações para quem vai nos visitar pela primeira vez.",
+    href: "/visitante/",
+  },
+  {
+    label: "Doações",
+    description: "Como contribuir com dízimos e ofertas.",
+    href: "/doacoes/",
+  },
+  {
+    label: "Camisetas e uniformes",
+    description: "Faça seu pedido de camiseta ou uniforme.",
+    href: "/camisetas/",
+  },
+  {
+    label: "Galeria",
+    description: "Fotos dos cultos e eventos da igreja.",
+    href: "/galeria/",
+  },
+  {
+    label: "Mural de oração",
+    description: "Compartilhe um pedido e ore pelos pedidos de outras pessoas.",
+    href: "/mural-de-oracao/",
+  },
+];
+---
+
+<BaseLayout structuredData={structuredData}>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="inner">
+      <section class="hero pt-10 pb-14 md:pt-16 md:pb-20" aria-label="Apresentação">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">{siteConfig.name} &middot; Parauapebas/PA</p>
+            <h1 class="hero-title">{config.tagline}</h1>
+            <p class="hero-description">{config.about}</p>
+
+            <div class="mt-8 flex flex-wrap items-center gap-3">
+              <a href="/visitante/" class="btn btn-solid">Primeira vez aqui?</a>
+              <a href="/ao-vivo/" class="btn btn-outline">Assista ao vivo</a>
+              <a href="/mensagens/" class="btn btn-outline">Ouvir mensagens</a>
+              <a href="/contato/" class="btn btn-outline">Como chegar</a>
+              <a href="https://app.ieadespa.org.br" target="_blank" rel="noreferrer" class="btn btn-outline">Portal do Membro</a>
+            </div>
+
+            <p class="mt-4 text-sm text-muted-foreground">
+              <a href={mapsHref(config)} target="_blank" rel="noreferrer" class="link-sweep text-accent font-semibold">
+                📍 {enderecoCompleto(config)}
+              </a>
+            </p>
+          </div>
+
+          {
+            /*
+             * Área reservada pra foto real da igreja/congregação (depende da
+             * Fase 4 — upload em Directus). Enquanto não existe, mostra um
+             * padrão gráfico só em CSS (duotone nas cores da marca + raios
+             * concêntricos bem sutis), pra já ocupar o layout de duas
+             * colunas sem parecer um espaço vazio quebrado. Pra trocar pela
+             * foto de verdade depois: troque esta div por
+             * `<img src=... alt=... class="hero-media__photo" />` dentro de
+             * `.hero-media` — o overlay de degradê abaixo já fica pronto
+             * pra aplicar sobre a foto (é só descomentar `.hero-media__photo`
+             * no <style>).
+             */
+          }
+          <div class="hero-media" aria-hidden="true">
+            <div class="hero-media__pattern"></div>
+            <div class="hero-media__overlay"></div>
+          </div>
+        </div>
+
+        <ul class="hero-services mt-10 grid gap-4 sm:grid-cols-3">
+          {
+            heroSchedule.map((service) => (
+              <li class="hero-service card-elevated">
+                <span class="block text-xs font-semibold tracking-wide text-accent uppercase">{service.label}</span>
+                <span class="mt-1 block text-lg font-semibold tracking-tight">{service.title}</span>
+                {service.time && <span class="mt-1 block text-sm text-muted-foreground">{service.time}</span>}
+              </li>
+            ))
+          }
+        </ul>
+        <p class="mt-4 text-sm text-muted-foreground">
+          <a href="/eventos/" class="link-sweep text-accent font-semibold">Ver programação completa &rarr;</a>
+        </p>
+      </section>
+
+      <DestaqueCarousel />
+
+      {
+        versiculoInicial && (
+          <section class="verse-section pb-[var(--space-section)]" aria-labelledby="verse-heading">
+            <h2 id="verse-heading" class="sr-only">Versículo do dia</h2>
+            <blockquote class="verse-card">
+              <p class="verse-text" data-verse-text>&ldquo;{versiculoInicial.t}&rdquo;</p>
+              <footer class="verse-ref" data-verse-ref>{versiculoInicial.r}</footer>
+              <div class="verse-actions">
+                <button type="button" class="verse-listen-btn" data-verse-listen-btn hidden>
+                  <LocalIcon name="volume-up-fill" className="h-4 w-4" />
+                  <span data-verse-listen-label>Ouvir</span>
+                </button>
+                <button type="button" class="verse-listen-btn" data-verse-share-btn>
+                  <LocalIcon name="share" className="h-4 w-4" />
+                  <span data-verse-share-label>Compartilhar imagem</span>
+                </button>
+              </div>
+            </blockquote>
+            <p class="verse-credit">
+              Texto: <a href="https://github.com/blivre/BibliaLivre" target="_blank" rel="noreferrer">Bíblia Livre (BLIVRE)</a>, licença CC-BY 3.0 Brasil.
+            </p>
+            <script is:inline>
+              (() => {
+                /*
+                 * Gera uma imagem de verdade (`/api/versiculo-imagem`, Azure
+                 * Function com `sharp` — precisa ser calculada a cada
+                 * request, diferente do card de programação semanal, porque
+                 * o versículo muda de dia pra dia) e tenta abrir o menu
+                 * nativo de compartilhar do celular com a imagem já anexada
+                 * (Stories, WhatsApp etc.). Sem suporte a isso (a maioria dos
+                 * navegadores de computador), cai pra baixar o arquivo direto.
+                 */
+                const btn = document.querySelector("[data-verse-share-btn]");
+                const label = document.querySelector("[data-verse-share-label]");
+                if (!btn) return;
+
+                const baixar = (blob) => {
+                  const blobUrl = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.href = blobUrl;
+                  link.download = "versiculo-do-dia.png";
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  URL.revokeObjectURL(blobUrl);
+                };
+
+                const restaurar = () => {
+                  btn.disabled = false;
+                  if (label) label.textContent = "Compartilhar imagem";
+                };
+
+                btn.addEventListener("click", async () => {
+                  if (label) label.textContent = "Gerando…";
+                  btn.disabled = true;
+                  try {
+                    const res = await fetch("/api/versiculo-imagem");
+                    if (!res.ok) throw new Error("falha ao gerar imagem");
+                    const blob = await res.blob();
+                    const file = new File([blob], "versiculo-do-dia.png", { type: "image/png" });
+
+                    if (navigator.canShare?.({ files: [file] })) {
+                      try {
+                        await navigator.share({ files: [file] });
+                        restaurar();
+                        return;
+                      } catch (err) {
+                        // Pessoa cancelou o próprio menu de compartilhar —
+                        // não é erro nenhum, só não faz nada a mais.
+                        if (err?.name === "AbortError") {
+                          restaurar();
+                          return;
+                        }
+                      }
+                    }
+                    baixar(blob);
+                    restaurar();
+                  } catch {
+                    if (label) label.textContent = "Não foi possível gerar a imagem";
+                    btn.disabled = false;
+                    // Mesmo padrão do botão de copiar código do artigo:
+                    // mensagem de erro visível por um tempo, depois volta ao
+                    // normal sozinha — sem o "finally" apagar o aviso na hora.
+                    window.setTimeout(restaurar, 2500);
+                  }
+                });
+              })();
+            </script>
+            <script is:inline>
+              (() => {
+                /* Não grava nem guarda áudio nenhum: usa a leitura em voz
+                   embutida no próprio navegador (SpeechSynthesis), lendo o
+                   texto que já está na tela na hora do clique. */
+                if (!("speechSynthesis" in window)) return;
+                const btn = document.querySelector("[data-verse-listen-btn]");
+                const label = document.querySelector("[data-verse-listen-label]");
+                if (!btn || !label) return;
+                btn.hidden = false;
+
+                const parar = () => {
+                  window.speechSynthesis.cancel();
+                  label.textContent = "Ouvir";
+                  btn.dataset.playing = "";
+                };
+
+                btn.addEventListener("click", () => {
+                  if (btn.dataset.playing === "true") {
+                    parar();
+                    return;
+                  }
+                  const textEl = document.querySelector("[data-verse-text]");
+                  const refEl = document.querySelector("[data-verse-ref]");
+                  /* "João 3:16" soa como hora ("3 horas e 16") pra síntese de
+                     voz em pt-BR — precisa virar "capítulo 3, versículo 16"
+                     antes de mandar pro SpeechSynthesis. */
+                  const refFalada = (refEl?.textContent ?? "").replace(
+                    /(\d+):(\d+)\s*$/,
+                    "capítulo $1, versículo $2",
+                  );
+                  const texto = `${textEl?.textContent ?? ""}. ${refFalada}`;
+                  const fala = new SpeechSynthesisUtterance(texto);
+                  fala.lang = "pt-BR";
+                  fala.onend = parar;
+                  fala.onerror = parar;
+                  window.speechSynthesis.cancel();
+                  window.speechSynthesis.speak(fala);
+                  label.textContent = "Parar";
+                  btn.dataset.playing = "true";
+                });
+              })();
+            </script>
+            <script is:inline>
+              (() => {
+                /* A Bíblia inteira (~31 mil versículos) fica em 4 arquivos
+                   à parte, um por período do dia (madrugada 0-6h, manhã
+                   6-12h, tarde 12-18h, noite 18-24h) — só o arquivo do
+                   período atual é baixado (~0,7 a 1,9MB), não os 4 juntos.
+                   A busca também só começa depois que a página termina de
+                   carregar, pra não competir por banda com CSS/imagens em
+                   conexões lentas — foi exatamente isso que deixava o LCP
+                   em ~11s no mobile (visto no PageSpeed Insights). */
+                const periodoDoHorario = (hora) => {
+                  if (hora < 6) return "madrugada";
+                  if (hora < 12) return "manha";
+                  if (hora < 18) return "tarde";
+                  return "noite";
+                };
+
+                const cache = {};
+                const fetchPeriodo = (periodo) => {
+                  if (cache[periodo]) return Promise.resolve(cache[periodo]);
+                  return fetch(`/versiculos-${periodo}.json`)
+                    .then((response) => (response.ok ? response.json() : null))
+                    .then((data) => {
+                      if (data) cache[periodo] = data;
+                      return data;
+                    })
+                    .catch(() => null);
+                };
+
+                const textEl = document.querySelector("[data-verse-text]");
+                const refEl = document.querySelector("[data-verse-ref]");
+
+                const render = async () => {
+                  const balde = await fetchPeriodo(periodoDoHorario(new Date().getHours()));
+                  if (!balde || !balde.length) return;
+                  const epochDays = Math.floor(Date.now() / 86400000);
+                  const verse = balde[epochDays % balde.length];
+                  if (textEl) textEl.textContent = `“${verse.t}”`;
+                  if (refEl) refEl.textContent = verse.r;
+                };
+
+                const iniciar = () => {
+                  render();
+                  // Sem precisar recarregar a página: confere a cada 5
+                  // minutos se entrou num novo período de 6h.
+                  window.ieadespaSetInterval(render, 5 * 60 * 1000);
+                };
+
+                const adiarParaOcioso = (fn) =>
+                  window.requestIdleCallback ? window.requestIdleCallback(fn) : setTimeout(fn, 200);
+
+                if (document.readyState === "complete") adiarParaOcioso(iniciar);
+                else window.addEventListener("load", () => adiarParaOcioso(iniciar));
+              })();
+            </script>
+          </section>
+        )
+      }
+
+      <section class="pb-[var(--space-section)]" aria-labelledby="quick-links">
+        <h2 id="quick-links" class="section-title">Acesso rápido</h2>
+        <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {
+            quickLinks.map((link) => (
+              <a href={link.href} class="quick-link card-elevated link-title">
+                <span class="link-title__text block text-lg font-semibold tracking-tight">{link.label}</span>
+                <span class="mt-2 block text-sm leading-relaxed text-muted-foreground">{link.description}</span>
+              </a>
+            ))
+          }
+        </div>
+      </section>
+
+      <div class="grid gap-[var(--space-section)] pb-[var(--space-section)] lg:grid-cols-[minmax(0,4fr)_minmax(0,2fr)] lg:gap-12">
+        <section aria-labelledby="latest-messages">
+          <h2 id="latest-messages" class="section-title">Últimas mensagens</h2>
+
+          {feed.length > 0 ? (
+            <div class="feed">
+              {feed.map((post, index) => (
+                <PostCard post={post} variant={index === 0 ? "lead" : "feed"} dateLabel={index === 0 ? "Mais recente" : undefined} />
+              ))}
+            </div>
+          ) : (
+            <p class="text-muted-foreground">Novas mensagens em breve.</p>
+          )}
+
+          {allPosts.length > feed.length && (
+            <a href="/mensagens/" class="btn btn-outline btn-block mt-16">Ver todas as mensagens</a>
+          )}
+        </section>
+
+        <aside class="sidebar">
+          <section aria-labelledby="about-heading">
+            <h2 id="about-heading" class="section-title">Sobre</h2>
+            <p class="text-lg font-semibold tracking-tight">{siteConfig.name}</p>
+            <p class="mt-2 text-pretty text-sm leading-relaxed text-muted-foreground">{config.about}</p>
+            <p class="mt-3 text-sm leading-relaxed text-muted-foreground">{enderecoCompleto(config)}</p>
+          </section>
+
+          {latestNoticias.length > 0 && (
+            <section aria-labelledby="noticias-heading">
+              <h2 id="noticias-heading" class="section-title">Notícias</h2>
+              <div class="grid gap-7">
+                {latestNoticias.map((noticia) => <NoticiaCard noticia={noticia} variant="compact" headingLevel="h3" />)}
+              </div>
+              <a href="/noticias/" class="btn btn-outline btn-block mt-6">Ver todas as notícias</a>
+            </section>
+          )}
+
+          {featured.length > 0 && (
+            <section aria-labelledby="featured-heading">
+              <h2 id="featured-heading" class="section-title">Destaques</h2>
+              <div class="grid gap-7">
+                {featured.map((post) => <PostCard post={post} variant="compact" headingLevel="h3" />)}
+              </div>
+            </section>
+          )}
+
+          {categoryList.length > 0 && (
+            <section aria-labelledby="categories-heading">
+              <h2 id="categories-heading" class="section-title">Temas</h2>
+              <ul class="grid gap-4">
+                {categoryList.map((category) => (
+                  <li>
+                    <a href={categoryHref(category.name)} class="link-title flex items-center justify-between gap-3">
+                      <span class="link-title__text text-base font-semibold tracking-tight">{category.name}</span>
+                      <span class="pill shrink-0">
+                        {category.count} {category.count === 1 ? "mensagem" : "mensagens"}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </aside>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .verse-card {
+    margin: 0;
+    border-left: 3px solid var(--accent);
+    padding: 1.25rem 1.6rem;
+    background: var(--muted);
+    border-radius: var(--radius-md);
+  }
+
+  .verse-text {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--text-body-lg);
+    line-height: 1.5;
+    text-wrap: pretty;
+  }
+
+  .verse-ref {
+    margin-top: 0.6rem;
+    /* var(--accent) contra este fundo dava só 4.27:1 (abaixo do mínimo
+       4.5:1 do WCAG AA em texto pequeno) — --accent-strong resolve com
+       folga (6.56:1). */
+    color: var(--accent-strong);
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .verse-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 0.9rem;
+  }
+
+  .verse-listen-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full, 999px);
+    background: var(--background);
+    color: var(--accent-strong);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .verse-listen-btn:hover {
+    background: var(--muted);
+  }
+
+  .verse-listen-btn:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .verse-credit {
+    margin: 0.6rem 0 0;
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+  }
+
+  .verse-credit a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .hero-grid {
+    display: grid;
+    gap: 2.5rem;
+    align-items: center;
+  }
+
+  @media (min-width: 768px) {
+    .hero-grid {
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+      gap: 3rem;
+    }
+  }
+
+  .hero-title {
+    margin: 0.75rem 0 0;
+    font-family: var(--font-display);
+    font-size: var(--text-title-2xl);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  .hero-description {
+    max-width: 40rem;
+    margin: 1.25rem 0 0;
+    color: var(--muted-foreground);
+    font-size: var(--text-body-lg);
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+
+  /* Escondida abaixo de md: numa tela estreita, texto + botões já preenchem
+     bem o espaço, e uma segunda coluna só empurraria tudo pra baixo. */
+  .hero-media {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .hero-media {
+      position: relative;
+      aspect-ratio: 4 / 5;
+      overflow: hidden;
+      display: block;
+      border-radius: var(--radius-md);
+      background: linear-gradient(155deg, var(--primary), var(--accent-strong));
+    }
+  }
+
+  /* Textura de raios concêntricos, bem sutil (soft-light), simulando luz —
+     só decorativo, unificado nas duas cores da marca (duotone). Some
+     nenhuma foto real; é o "encaixe" que a foto vai preencher depois. */
+  .hero-media__pattern {
+    position: absolute;
+    inset: 0;
+    background-image: repeating-conic-gradient(
+      from 0deg at 50% 116%,
+      rgb(255 255 255 / 16%) 0deg 3deg,
+      transparent 3deg 11deg
+    );
+    mix-blend-mode: soft-light;
+  }
+
+  /* Vinheta pra dar profundidade ao degradê; é a mesma técnica de overlay
+     que entra em cima da foto real quando ela chegar (troca só o `background`
+     do elemento pela foto, este overlay continua igual por cima). */
+  .hero-media__overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(0deg, rgb(0 0 0 / 22%), transparent 55%);
+  }
+
+  /* Uncomment quando a foto real (Fase 4) existir, e troque o `<div
+     class="hero-media__pattern">` por `<img class="hero-media__photo">`. */
+  /*
+  .hero-media__photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  */
+
+  .hero-service {
+    padding: 1.1rem 1.25rem;
+  }
+
+  .quick-link {
+    display: block;
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.4rem;
+    text-decoration: none;
+    transition:
+      transform var(--duration) var(--ease-out),
+      box-shadow var(--duration) var(--ease-out);
+  }
+
+  .quick-link:hover,
+  .quick-link:focus-visible {
+    transform: translateY(-2px);
+  }
+</style>

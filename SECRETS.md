@@ -5,6 +5,26 @@ connection string do SQL e `AUTH_SECRET`) **nunca** vão em texto puro. Em vez d
 arquivo **criptografado** (`api/local.settings.enc.json`) é versionado, e cada máquina
 descriptografa com a **própria chave privada Age**, que fica fora do repo.
 
+Desde a FASE C (site institucional trazido via `git subtree` pra dentro de `site/`), existem
+**três** pares de arquivo no total, cada um com seu próprio jeito de descriptografar, mas as
+**mesmas chaves Age** do `.sops.yaml` da raiz (um só, desde 14/09 — não precisa cadastrar nada
+duas vezes nem manter dois arquivos de regra):
+
+| App | Texto puro (não versionado) | Criptografado (versionado) |
+|---|---|---|
+| Sistema de governança | `api/local.settings.json` | `api/local.settings.enc.json` |
+| Site institucional (Azure Functions) | `site/api/local.settings.json` | `site/api/local.settings.enc.json` |
+| Site institucional (Directus + Azure) | `site/.env.local` | `site/secrets.env` |
+
+O terceiro par guarda o token do Directus e as credenciais do Azure (subscription, tenant,
+client id/secret) usadas pelos workflows de notificação do site. Descriptografa/recriptografa
+direto com `sops` (não tem `npm run secrets:*` pra esse, é usado pelo CI, não pelo dev local):
+
+```powershell
+sops -d --output site/.env.local site/secrets.env
+sops -e --output site/secrets.env site/.env.local
+```
+
 ---
 
 ## 1. Como funciona (resumo)
@@ -86,7 +106,8 @@ Esse comando imprime a **public key** (começa com `age1...`). Guarde ela.
 
 ## 6. Usar no dia a dia
 
-Dentro da pasta `api`:
+Dentro da pasta `api` (sistema de governança) **ou** `site/api` (site institucional —
+mesmo comando, mesma chave):
 
 ```powershell
 # 1) descriptografar (gera o local.settings.json, que NÃO é versionado)
@@ -98,7 +119,7 @@ npm run secrets:decrypt
 npm run secrets:encrypt
 ```
 
-Ou direto, sem npm:
+Ou direto, sem npm (troque `api/` por `site/api/` conforme o app):
 
 ```powershell
 sops -d --output api/local.settings.json api/local.settings.enc.json
@@ -109,9 +130,12 @@ sops -e --input-type json --output-type json --output api/local.settings.enc.jso
 
 ## 7. Regras de segurança (não pular)
 
-- ✅ Versionar: `api/local.settings.enc.json`, `.sops.yaml`.
-- ❌ **Nunca** versionar: `api/local.settings.json` (texto puro), a chave privada
-  (`keys.txt`), qualquer `.env`.
+- ✅ Versionar: `api/local.settings.enc.json`, `site/api/local.settings.enc.json`,
+  `site/secrets.env`, e o único `.sops.yaml` (raiz — desde 14/09 não existe mais um
+  segundo `.sops.yaml` dentro de `site/`; um arquivo só cobre os três pares acima,
+  o SOPS acha o da raiz sozinho mesmo rodando de dentro de `site/`).
+- ❌ **Nunca** versionar: `api/local.settings.json`, `site/api/local.settings.json`,
+  `site/.env.local` (todos texto puro), a chave privada (`keys.txt`).
 - Se uma chave **vazar**, gere outra e o administrador roda `sops updatekeys` (rotação).
 - Antes de commitar, confira: `git status` não pode listar `local.settings.json` nem
   `keys.txt`.
@@ -126,3 +150,32 @@ sops -e --input-type json --output-type json --output api/local.settings.enc.jso
 | `no matching creation rules found` | O arquivo criptografado deve ser o `*.enc.json` e o `.sops.yaml` precisa listar sua public key. |
 | `sops: failed to decrypt` | Sua public key não está no `.sops.yaml` / `updatekeys` não foi rodado. Peça pro administrador. |
 | Esqueci a public key | `age-keygen -y "$env:APPDATA\sops\age\keys.txt"` mostra de novo. |
+
+---
+
+## 9. Segredos de produção que ficam só nas configurações do Azure
+
+Estes **não** estão em arquivo nenhum do repositório (nem criptografado): são digitados uma vez no portal do Azure,
+em *Static Web App → Configuration (Configuração) → Application settings*. Nunca cole o valor num comando, num
+arquivo versionado ou numa conversa.
+
+| Configuração | Onde | Para quê |
+| --- | --- | --- |
+| `AUTH_SECRET` | aplicativo do **sistema** | assina o crachá de sessão e tempera o hash do PIN. Sem ele a API se recusa a subir (`api/shared/segredoSessao.js`). Trocá-lo desconecta todo mundo e invalida todos os PINs já criados. |
+| `CHAVE_SITE_SISTEMA` | aplicativo do **sistema** **e** aplicativo do **site** — o **mesmo valor** nos dois | chave combinada para a pergunta "este e-mail é de membro ativo?" que o site faz ao sistema (`api/shared/chaveSiteSistema.js`). Enquanto não estiver definida no sistema, a rota segue só com o limite por origem. |
+
+**Como combinar a chave do site com o sistema (uma vez só):**
+
+1. Gere um valor aleatório e deixe-o na área de transferência, sem aparecer na tela (PowerShell):
+
+   ```powershell
+   $b = New-Object byte[] 36; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+   [Convert]::ToBase64String($b).Replace('+','-').Replace('/','_') | Set-Clipboard
+   ```
+
+2. No portal do Azure, abra primeiro o aplicativo do **site** e cadastre `CHAVE_SITE_SISTEMA` colando o valor.
+3. Depois abra o aplicativo do **sistema** e cadastre `CHAVE_SITE_SISTEMA` colando **o mesmo valor** (não gere outro).
+4. Teste criando uma conta de visitante no site com um e-mail de membro: deve recusar com "este e-mail já é de um membro
+   ativo". Se aceitar, o log da Function do site mostra o aviso *"O sistema recusou a chave do site"* — os valores diferem.
+
+A ordem importa: se o sistema ganhar a chave antes do site, o site fica sem conseguir perguntar até receber a mesma.

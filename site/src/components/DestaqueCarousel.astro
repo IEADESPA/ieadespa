@@ -1,0 +1,182 @@
+---
+/**
+ * Fase 23 — carrossel de destaques na home (eventos e camisetas/uniformes
+ * marcados com `destaque:true`). Busca-se tudo marcado no build, mas a
+ * expiração de verdade acontece no navegador (script abaixo), comparando
+ * contra a data de hoje do visitante — assim o item some no dia certo
+ * mesmo que o site não tenha sido reconstruído desde então (site é 100%
+ * estático, não há como o build "saber" que hoje é um novo dia sozinho).
+ * Regra de expiração pedida pelo usuário: automática, seguindo a data real
+ * da coisa (evento — fim do evento; camiseta — prazo de pedido, se tiver;
+ * sem prazo, só o campo "Ativo" desativado tira do ar, manualmente).
+ */
+import { fetchItems } from "@/lib/directus";
+import { eventoHref, hasEventPage } from "@/lib/eventos";
+
+interface EventoDestaque {
+  slug: string;
+  title: string;
+  description: string;
+  event_date: string | null;
+  end_date: string | null;
+  body: string | null;
+  aceita_inscricao: boolean;
+}
+
+interface CamisetaDestaque {
+  slug: string;
+  nome: string;
+  descricao: string | null;
+  pedidos_ate: string | null;
+}
+
+const [eventosDestaque, camisetasDestaque] = await Promise.all([
+  fetchItems<EventoDestaque>(
+    "eventos",
+    "filter[destaque][_eq]=true&fields=slug,title,description,event_date,end_date,body,aceita_inscricao",
+  ),
+  fetchItems<CamisetaDestaque>(
+    "camiseta_grupos",
+    "filter[destaque][_eq]=true&filter[ativo][_eq]=true&fields=slug,nome,descricao,pedidos_ate",
+  ),
+]);
+
+interface Slide {
+  titulo: string;
+  descricao: string;
+  href: string;
+  /** null = nunca expira sozinho (só o campo "ativo"/"destaque" desligado manualmente tira do ar). */
+  expiraApos: string | null;
+}
+
+const slides: Slide[] = [
+  ...eventosDestaque.map((e): Slide => ({
+    titulo: e.title,
+    descricao: e.description,
+    href: hasEventPage(e) ? eventoHref(e) : "/eventos/",
+    expiraApos: e.end_date ?? e.event_date,
+  })),
+  ...camisetasDestaque.map((c): Slide => ({
+    titulo: c.nome,
+    descricao: c.descricao ?? "Faça seu pedido.",
+    href: `/camiseta/${c.slug}/`,
+    expiraApos: c.pedidos_ate,
+  })),
+];
+---
+
+{
+  slides.length > 0 && (
+    <section class="destaque-carousel" data-destaque-carousel aria-label="Destaques">
+      <div class="destaque-carousel-track" data-destaque-track>
+        {slides.map((slide) => (
+          <a href={slide.href} class="destaque-slide" data-destaque-slide data-expira-apos={slide.expiraApos ?? ""}>
+            <span class="destaque-slide-titulo">{slide.titulo}</span>
+            <span class="destaque-slide-descricao">{slide.descricao}</span>
+          </a>
+        ))}
+      </div>
+      {
+        slides.length > 1 && (
+          <div class="destaque-carousel-dots" data-destaque-dots>
+            {slides.map((_, i) => <button type="button" class="destaque-dot" data-destaque-dot data-index={i} aria-label={`Destaque ${i + 1}`} />)}
+          </div>
+        )
+      }
+    </section>
+  )
+}
+
+<script>
+  const secao = document.querySelector<HTMLElement>("[data-destaque-carousel]");
+  if (secao) {
+    const track = secao.querySelector<HTMLElement>("[data-destaque-track]");
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    // Expiração de verdade: compara contra a data de hoje do navegador, não
+    // a data do build — só assim "some no dia certo" funciona num site 100%
+    // estático, que pode ficar dias sem reconstruir.
+    track?.querySelectorAll<HTMLElement>("[data-destaque-slide]").forEach((slide) => {
+      const expiraApos = slide.dataset.expiraApos;
+      if (expiraApos && expiraApos < hoje) slide.remove();
+    });
+
+    const slidesRestantes = track?.querySelectorAll<HTMLElement>("[data-destaque-slide]") ?? [];
+    if (slidesRestantes.length === 0) {
+      secao.hidden = true;
+    } else if (slidesRestantes.length === 1) {
+      secao.querySelector("[data-destaque-dots]")?.remove();
+    } else {
+      let indiceAtual = 0;
+      const dots = Array.from(secao.querySelectorAll<HTMLButtonElement>("[data-destaque-dot]"));
+
+      function mostrar(indice: number) {
+        indiceAtual = indice;
+        if (track) track.style.transform = `translateX(-${indice * 100}%)`;
+        dots.forEach((dot, i) => dot.classList.toggle("is-active", i === indice));
+      }
+
+      dots.forEach((dot) => dot.addEventListener("click", () => mostrar(Number(dot.dataset.index))));
+
+      const intervalo = window.setInterval(() => {
+        mostrar((indiceAtual + 1) % slidesRestantes.length);
+      }, 6000);
+      secao.addEventListener("mouseenter", () => window.clearInterval(intervalo));
+
+      mostrar(0);
+    }
+  }
+</script>
+
+<style>
+  .destaque-carousel {
+    position: relative;
+    margin: 0 0 var(--space-section);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .destaque-carousel-track {
+    display: flex;
+    transition: transform 0.4s ease;
+  }
+  .destaque-slide {
+    flex: 0 0 100%;
+    display: block;
+    padding: 1.5rem 1.75rem;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    text-decoration: none;
+    color: inherit;
+  }
+  .destaque-slide-titulo {
+    display: block;
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: var(--accent);
+  }
+  .destaque-slide-descricao {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.9375rem;
+    color: var(--foreground);
+  }
+  .destaque-carousel-dots {
+    position: absolute;
+    right: 1rem;
+    bottom: 0.75rem;
+    display: flex;
+    gap: 0.4rem;
+  }
+  .destaque-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    border: none;
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    cursor: pointer;
+    padding: 0;
+  }
+  .destaque-dot.is-active {
+    background: var(--accent);
+  }
+</style>

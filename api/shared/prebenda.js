@@ -46,8 +46,10 @@ async function riscosAtivosVinculo(pool, sql, prebendadoId) {
 async function prebendadoComCpf(pool, sql, cpfCnpj) {
   const limpo = String(cpfCnpj || "").replace(/\D/g, "");
   if (!limpo) return null;
-  const result = await pool.request().input("cpf", sql.VarChar(14), cpfCnpj.trim())
-    .query(`SELECT PrebendadoId AS prebendadoId, Nome FROM Prebendados WHERE Cpf = @cpf`);
+  // A tabela Prebendados não tem coluna Nome (o nome está em MembroReferencia): pedir `Nome` aqui dava "coluna inválida" e derrubava
+  // todo cadastro de fornecedor PJ. A comparação é pelos dígitos, para o CPF com máscara não escapar da vedação.
+  const result = await pool.request().input("cpf", sql.VarChar(14), limpo)
+    .query(`SELECT PrebendadoId AS prebendadoId FROM Prebendados WHERE REPLACE(REPLACE(REPLACE(Cpf, '.', ''), '-', ''), '/', '') = @cpf`);
   return result.recordset[0] || null;
 }
 

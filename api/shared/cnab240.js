@@ -106,15 +106,31 @@ function gerarArquivoCnab240(inst, pagamentos, numeroSequencial) {
 // Leitura do retorno — percorre os Segmentos A (tipo de registro = '3' e
 // segmento = 'A') do arquivo devolvido pelo banco e extrai o número do
 // documento (onde `gerarSegmentoA` grava o SaidaId, posições 73-92 —
-// "Número do documento atribuído pela empresa") e o código de ocorrência
+// "Número do documento atribuído pela empresa"), o código de ocorrência
 // (posições 231-232 no padrão FEBRABAN oficial: '00' = sem ocorrência/
-// processado com sucesso; qualquer outro código é rejeição do banco).
+// processado com sucesso; qualquer outro código é rejeição do banco) e o
+// valor efetivamente pago (posições 177-191, em centavos — ver OFFSET_VALOR_PAGO).
 // IMPORTANTE: o offset do número do documento é o usado por ESTE gerador
 // — ao integrar de verdade com um banco, confirme na especificação/
 // homologação dele se o retorno usa o mesmo offset (o padrão FEBRABAN
 // oficial usa posições 38-57; ajuste a constante abaixo se o banco
 // contratado devolver noutra posição).
 const OFFSET_NUMERO_DOCUMENTO = 72; // 0-indexed — bate com gerarSegmentoA
+// VALOR EFETIVAMENTE PAGO ("valor real da efetivação do pagamento", o campo que o banco preenche no retorno): 15 dígitos, 2 casas decimais implícitas (centavos), logo
+// depois da data da efetivação — em `gerarSegmentoA` é o `zeros(15)` das posições 177-191, que o banco devolve preenchido. É o valor que o banco diz ter PAGO de verdade
+// (o "valor do pagamento", posições 119-133, é só o que a remessa pediu). Mesmo cuidado do número do documento: o offset é o deste gerador; ao homologar com um banco,
+// confira na especificação dele e ajuste a constante (a verificação de valor do retorno depende dela: valor fora do lugar vira "não informado" e o item vai para divergência).
+const OFFSET_VALOR_PAGO = 176; // 0-indexed, 15 posições — bate com gerarSegmentoA
+const TAMANHO_VALOR_PAGO = 15;
+// Lê o campo de valor pago em CENTAVOS INTEIROS (nunca float). Devolve { centavos, problema }: `problema` é "AUSENTE" (brancos ou só zeros — o banco não preencheu; um pagamento de
+// valor positivo nunca volta zerado) ou "ILEGIVEL" (qualquer coisa que não seja só dígitos); nos dois casos `centavos` é null. Quem confere NUNCA trata isso como "igual".
+function lerValorPagoCentavos(linha) {
+  const campo = linha.substring(OFFSET_VALOR_PAGO, OFFSET_VALOR_PAGO + TAMANHO_VALOR_PAGO);
+  if (/^ *$/.test(campo) || /^0+$/.test(campo)) return { centavos: null, problema: "AUSENTE" };
+  if (!/^[0-9]+$/.test(campo)) return { centavos: null, problema: "ILEGIVEL" };
+  return { centavos: parseInt(campo, 10), problema: null };
+}
+// Cada resultado: { saidaId, sucesso, codigoOcorrencia, valorPagoCentavos, valorPagoProblema } — `valorPagoCentavos` é número inteiro ou null (e então `valorPagoProblema` diz por quê).
 function parsearRetornoCnab240(conteudo) {
   const linhas = conteudo.split(/\r?\n/).filter(l => l.length >= 240);
   const resultados = [];
@@ -125,9 +141,12 @@ function parsearRetornoCnab240(conteudo) {
     const saidaId = parseInt(linha.substring(OFFSET_NUMERO_DOCUMENTO, OFFSET_NUMERO_DOCUMENTO + 20).trim(), 10);
     const codigoOcorrencia = linha.substring(230, 232).trim();
     if (!saidaId) continue;
-    resultados.push({ saidaId, sucesso: codigoOcorrencia === "00" || codigoOcorrencia === "", codigoOcorrencia });
+    const valor = lerValorPagoCentavos(linha);
+    // Só o código "00" (crédito efetivado) confirma o pagamento. Ocorrência em branco NÃO é sucesso: linha truncada, adulterada ou de um banco
+    // que não devolve o código vira "não confirmado" (a Saída continua APROVADA), nunca "PAGA" sem a confirmação do banco.
+    resultados.push({ saidaId, sucesso: codigoOcorrencia === "00", codigoOcorrencia, valorPagoCentavos: valor.centavos, valorPagoProblema: valor.problema });
   }
   return resultados;
 }
 
-module.exports = { gerarArquivoCnab240, parsearRetornoCnab240 };
+module.exports = { gerarArquivoCnab240, parsearRetornoCnab240, lerValorPagoCentavos, OFFSET_VALOR_PAGO, TAMANHO_VALOR_PAGO };

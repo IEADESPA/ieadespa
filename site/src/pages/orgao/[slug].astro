@@ -1,0 +1,374 @@
+---
+import { marked } from "marked";
+import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import NoticiaCard from "@/components/NoticiaCard.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { directusAssetUrl, fetchItems } from "@/lib/directus";
+import { getAllNoticias, visibleNoticias } from "@/lib/noticias";
+
+interface Orgao {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  body: string | null;
+}
+
+interface Categoria {
+  id: string;
+  label: string;
+}
+
+interface MembroOrgao {
+  id: number;
+  name: string;
+  role: string;
+  photo: string | null;
+  bio: string | null;
+  since: string | null;
+  term_end: string | null;
+}
+
+// Órgãos deliberativos/eleitos (conselho, assembleia, diretoria) chegam à
+// composição por eleição/indicação formal — diferente de um departamento,
+// que qualquer pessoa pode procurar pra servir como voluntária. O tipo em
+// si (nome/descrição) é gerido no Directus, não fica fixo no código — só
+// esse identificador "governanca" continua com tratamento especial de UI.
+const isGovernanca = (categoria: string) => categoria === "governanca";
+
+export async function getStaticPaths() {
+  const orgaos = await fetchItems<Orgao>("ministerios");
+  // slug é opcional no Directus — sem essa checagem, um órgão sem slug
+  // ainda definido quebraria o build inteiro.
+  return orgaos.filter((orgao) => orgao.slug).map((orgao) => ({ params: { slug: orgao.slug }, props: { orgao } }));
+}
+
+interface Props {
+  orgao: Orgao;
+}
+
+const { orgao } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+const bodyHtml = orgao.body ? await marked.parse(orgao.body) : null;
+const [membros, historico, categorias] = await Promise.all([
+  fetchItems<MembroOrgao>("orgao_membros", `filter[orgao][_eq]=${orgao.id}&filter[current][_eq]=true&sort[]=sort`),
+  fetchItems<MembroOrgao>("orgao_membros", `filter[orgao][_eq]=${orgao.id}&filter[current][_eq]=false&sort[]=sort`),
+  fetchItems<Categoria>("orgao_categorias"),
+]);
+const categoriaLabel = categorias.find((categoria) => categoria.id === orgao.category)?.label ?? orgao.category;
+const relatedNoticias = visibleNoticias(await getAllNoticias()).filter(
+  (noticia) => noticia.data.orgaoRelacionado === orgao.id,
+);
+
+/** "Há X anos" a partir de um texto livre tipo "2019", "jan/2019" — só
+ * calcula quando dá pra extrair um ano de 4 dígitos plausível; em qualquer
+ * outro formato (ex. "Indeterminado"), não mostra nada em vez de arriscar
+ * uma conta errada. */
+function anosNoCargo(desde: string | null): number | null {
+  if (!desde) return null;
+  const match = /\b(19|20)\d{2}\b/.exec(desde);
+  if (!match) return null;
+  const ano = Number(match[0]);
+  const anos = new Date().getFullYear() - ano;
+  return anos >= 0 ? anos : null;
+}
+
+function extrairAno(texto: string | null): number | null {
+  if (!texto) return null;
+  const match = /\b(19|20)\d{2}\b/.exec(texto);
+  return match ? Number(match[0]) : null;
+}
+
+// Linha do tempo: membros atuais e anteriores juntos, em ordem
+// cronológica — assim dá pra ver a sucessão completa (quem esteve em cada
+// período), não só "quem está agora" separado de "quem já passou". Só
+// aparece quando existe pelo menos um registro histórico; com só membros
+// atuais, o card/grade lá em cima já cobre a necessidade.
+const idsAtuais = new Set(membros.map((m) => m.id));
+const linhaDoTempo = [...membros, ...historico]
+  .sort((a, b) => (extrairAno(a.since) ?? 9999) - (extrairAno(b.since) ?? 9999))
+  .map((membro) => ({ ...membro, atual: idsAtuais.has(membro.id) }));
+---
+
+<BaseLayout title={orgao.name} description={orgao.description}>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <Breadcrumbs items={[{ label: "Órgãos", href: "/orgaos/" }, { label: orgao.name }]} />
+        <p class="eyebrow">{categoriaLabel}</p>
+        <h1 class="pagehead-title">{orgao.name}</h1>
+        <p class="pagehead-description">{orgao.description}</p>
+      </header>
+
+      {
+        membros.length === 1 && (
+          <div class="leader-card">
+            {membros[0].photo && (
+              <img
+                src={directusAssetUrl(membros[0].photo, { width: 200, height: 200, fit: "cover", quality: 80, format: "webp" })}
+                alt={membros[0].name}
+                class="leader-photo"
+              />
+            )}
+            <div>
+              <p class="text-lg font-semibold tracking-tight">{membros[0].name}</p>
+              <p class="text-sm text-muted-foreground">{membros[0].role}</p>
+              {(membros[0].since || membros[0].term_end) && (
+                <p class="text-xs text-muted-foreground mt-0.5">
+                  {membros[0].since && `Desde ${membros[0].since}`}
+                  {membros[0].since && membros[0].term_end && " · "}
+                  {membros[0].term_end && `Mandato até ${membros[0].term_end}`}
+                  {anosNoCargo(membros[0].since) !== null && ` (há ${anosNoCargo(membros[0].since)} anos)`}
+                  {(anosNoCargo(membros[0].since) ?? 0) >= 10 && (
+                    <span class="tenure-badge">longa trajetória</span>
+                  )}
+                </p>
+              )}
+              {membros[0].bio ? (
+                <p class="mt-2 text-sm leading-relaxed">{membros[0].bio}</p>
+              ) : (
+                <p class="mt-2 text-sm leading-relaxed text-muted-foreground placeholder-text">Biografia a ser adicionada.</p>
+              )}
+            </div>
+          </div>
+        )
+      }
+
+      {bodyHtml && <div class="prose mt-10" set:html={bodyHtml} />}
+
+      {
+        membros.length > 1 && (
+          <section class="mt-12" aria-labelledby="board-heading">
+            <h2 id="board-heading" class="section-title">
+              {isGovernanca(orgao.category) ? "Composição atual" : "Equipe"}
+            </h2>
+            <ul class="mt-5 grid gap-4 sm:grid-cols-2">
+              {membros.map((membro) => (
+                <li class="board-card">
+                  {membro.photo && (
+                    <img
+                      src={directusAssetUrl(membro.photo, { width: 160, height: 160, fit: "cover", quality: 80, format: "webp" })}
+                      alt={membro.name}
+                      class="board-photo"
+                    />
+                  )}
+                  <span class="block text-xs font-semibold tracking-wide text-accent uppercase">{membro.role}</span>
+                  <span class="mt-1 block text-lg font-semibold tracking-tight">{membro.name}</span>
+                  {(membro.since || membro.term_end) && (
+                    <span class="mt-0.5 block text-xs text-muted-foreground">
+                      {membro.since && `Desde ${membro.since}`}
+                      {membro.since && membro.term_end && " · "}
+                      {membro.term_end && `Mandato até ${membro.term_end}`}
+                      {anosNoCargo(membro.since) !== null && ` (há ${anosNoCargo(membro.since)} anos)`}
+                      {(anosNoCargo(membro.since) ?? 0) >= 10 && <span class="tenure-badge">longa trajetória</span>}
+                    </span>
+                  )}
+                  {membro.bio ? (
+                    <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{membro.bio}</p>
+                  ) : (
+                    <p class="mt-2 text-sm leading-relaxed text-muted-foreground placeholder-text">Biografia a ser adicionada.</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+
+      {
+        historico.length > 0 && (
+          <section class="mt-16" aria-labelledby="timeline-heading">
+            <h2 id="timeline-heading" class="section-title">Linha do tempo</h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Quem já compôs este órgão ao longo do tempo, do mais antigo ao atual.
+            </p>
+            <ol class="mt-6 timeline">
+              {linhaDoTempo.map((membro) => (
+                <li class={`timeline-item ${membro.atual ? "is-atual" : ""}`}>
+                  <span class="timeline-dot" aria-hidden="true" />
+                  <div class="timeline-card">
+                    {membro.photo && (
+                      <img
+                        src={directusAssetUrl(membro.photo, { width: 120, height: 120, fit: "cover", quality: 80, format: "webp" })}
+                        alt={membro.name}
+                        class="timeline-photo"
+                      />
+                    )}
+                    <div>
+                      <span class="timeline-periodo">
+                        {membro.since || "?"} — {membro.atual ? "atual" : membro.term_end || "?"}
+                        {anosNoCargo(membro.since) !== null && membro.atual && ` (há ${anosNoCargo(membro.since)} anos)`}
+                      </span>
+                      <p class="mt-0.5 text-lg font-semibold tracking-tight">{membro.name}</p>
+                      <p class="text-sm text-muted-foreground">{membro.role}</p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )
+      }
+
+      {
+        relatedNoticias.length > 0 && (
+          <section class="mt-16" aria-labelledby="related-heading">
+            <h2 id="related-heading" class="section-title">Notícias relacionadas</h2>
+            <div class="mt-5 grid gap-7 sm:grid-cols-3">
+              {relatedNoticias.map((noticia) => <NoticiaCard noticia={noticia} variant="compact" headingLevel="h3" />)}
+            </div>
+          </section>
+        )
+      }
+
+      <div class="prose mt-16">
+        {
+          isGovernanca(orgao.category) ? (
+            <>
+              <h2>Como participar</h2>
+              <p>
+                A composição deste órgão é definida por eleição/indicação em assembleia, conforme o
+                estatuto da igreja — não é uma vaga de voluntariado aberta. Dúvidas sobre como
+                funciona, fale pela{" "}
+                <a href="/contato/">página de contato</a>.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2>Quer servir aqui?</h2>
+              <p>
+                Fale com a liderança em um dos nossos cultos ou entre em contato pela{" "}
+                <a href="/contato/">página de contato</a> pra saber como se envolver.
+              </p>
+            </>
+          )
+        }
+        <p><a href="/orgaos/">&larr; Voltar para Órgãos</a></p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .placeholder-text {
+    /* Só itálico, sem reduzir opacidade — opacidade em cima de
+       text-muted-foreground caiu pra 3.08:1 de contraste (confirmado com
+       axe-core), abaixo do 4.5:1 exigido pelo WCAG AA pra texto normal. */
+    font-style: italic;
+  }
+
+  .leader-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .leader-photo {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+  }
+
+  .board-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.4rem;
+  }
+
+  .board-photo {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+    margin-bottom: 0.75rem;
+  }
+
+  .tenure-badge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: var(--radius-full);
+    background: var(--muted);
+    color: var(--accent-strong);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .timeline {
+    position: relative;
+    display: grid;
+    gap: 1.75rem;
+    list-style: none;
+    padding-left: 1.75rem;
+    margin: 0;
+  }
+
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 0.3rem;
+    top: 0.4rem;
+    bottom: 0.4rem;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .timeline-item {
+    position: relative;
+  }
+
+  .timeline-dot {
+    position: absolute;
+    left: -1.75rem;
+    top: 0.35rem;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: var(--radius-full);
+    background: var(--muted-foreground);
+  }
+
+  .timeline-item.is-atual .timeline-dot {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+
+  .timeline-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+  }
+
+  .timeline-item.is-atual .timeline-card {
+    border-color: var(--accent);
+  }
+
+  .timeline-photo {
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .timeline-periodo {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent-strong);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+</style>

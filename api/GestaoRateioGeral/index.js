@@ -15,20 +15,13 @@
 // GET  /api/rateio-geral/pendentes -> preview do malote acumulado (ainda não fechado)
 // GET  /api/rateio-geral/{id} -> detalhe de um rateio fechado (itens + valores por destino)
 // POST /api/rateio-geral -> { mesReferencia? } fecha o rateio com tudo que está pendente
-const auth = require("../shared/auth");
+// O Rateio Geral inteiro (leitura e fechamento) é matéria da Tesouraria Geral — só o nível GERAL (papel Global com escopo de todas as
+// congregações): o malote lista o repasse de TODAS as congregações, então um tesoureiro local não lê nem os GET.
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { round2 } = require("../shared/tesouraria");
-
-function exigirFinanceiroGlobal(req, context) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
-  if (!usuario) return null;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "O Rateio Geral é matéria da Tesouraria Geral — restrito a papéis de nível Global." } };
-    return null;
-  }
-  return usuario;
-}
+const { mesReferenciaValido, idOpcional, obterTrava } = require("../shared/financeiroSeguro");
 
 async function buscarPendentes(executor) {
   const result = await executor().query(`
@@ -46,12 +39,15 @@ async function buscarPendentes(executor) {
 }
 
 module.exports = async function (context, req) {
-  const id = context.bindingData.id;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
+  const idBruto = context.bindingData.id;
+  const pendentes = idBruto === "pendentes";
+  const rota = pendentes ? { presente: true, id: null } : idOpcional(idBruto);
+  const id = rota.id;
   const pool = await getPool();
 
-  if (req.method === "GET" && id === "pendentes") {
+  if (req.method === "GET" && pendentes) {
     const itens = await buscarPendentes(() => pool.request());
     const totalBase = round2(itens.reduce((soma, i) => soma + Number(i.valor), 0));
     const destinos = await pool.request().query(`SELECT * FROM RateioGeralDestinos WHERE Ativo = 1 ORDER BY DestinoId`);
@@ -64,7 +60,7 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "GET" && !id) {
+  if (req.method === "GET" && !rota.presente) {
     const result = await pool.request().query(`
       SELECT RateioGeralId AS rateioGeralId, MesReferencia AS mesReferencia, TotalBase AS totalBase,
              ValorTesouroGeral AS valorTesouroGeral, TotalItens AS totalItens, CONVERT(varchar(33), FechadoEm, 126) AS fechadoEm
@@ -74,7 +70,11 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "GET" && id) {
+  if (req.method === "GET" && rota.presente) {
+    if (!id) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Rateio Geral não encontrado." } };
+      return;
+    }
     const rateio = await pool.request().input("id", sql.Int, id).query(`SELECT * FROM RateiosGerais WHERE RateioGeralId = @id`);
     if (rateio.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Rateio Geral não encontrado." } };
@@ -99,10 +99,12 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
-    const usuarioGlobal = exigirFinanceiroGlobal(req, context);
-    if (!usuarioGlobal) return;
     const hoje = new Date();
     const mesReferencia = (req.body && req.body.mesReferencia) || `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+    if (!mesReferenciaValido(mesReferencia)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "mesReferencia deve estar no formato AAAA-MM." } };
+      return;
+    }
 
     // Tudo dentro de UMA transação — ou fecha por completo (rateio + valores
     // por destino + todos os itens do malote), ou não fecha nada. sp_getapplock
@@ -116,9 +118,12 @@ module.exports = async function (context, req) {
     const r = () => new sql.Request(transaction);
     await transaction.begin();
     try {
-      await r().input("recurso", sql.NVarChar(50), "RateioGeral").query(
-        `EXEC sp_getapplock @Resource = @recurso, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000`
-      );
+      // O resultado do sp_getapplock é conferido: espera esgotada (negativo) não segue como se tivesse travado.
+      if (!(await obterTrava(r, "RateioGeral"))) {
+        await transaction.rollback();
+        context.res = { status: 409, body: { sucesso: false, mensagem: "Já existe um fechamento de Rateio Geral em andamento — aguarde e confira o resultado antes de tentar de novo." } };
+        return;
+      }
 
       const itens = await buscarPendentes(r);
       if (itens.length === 0) {
@@ -131,7 +136,7 @@ module.exports = async function (context, req) {
 
       const criado = await r()
         .input("mesReferencia", sql.Char(7), mesReferencia).input("totalBase", sql.Decimal(12, 2), totalBase)
-        .input("totalItens", sql.Int, itens.length).input("fechadoPor", sql.Int, usuarioGlobal.membroId)
+        .input("totalItens", sql.Int, itens.length).input("fechadoPor", sql.Int, usuario.membroId)
         .query(`INSERT INTO RateiosGerais (MesReferencia, TotalBase, ValorTesouroGeral, TotalItens, FechadoPor)
                 OUTPUT INSERTED.RateioGeralId VALUES (@mesReferencia, @totalBase, 0, @totalItens, @fechadoPor)`);
       const rateioGeralId = criado.recordset[0].RateioGeralId;
@@ -161,7 +166,7 @@ module.exports = async function (context, req) {
       await transaction.commit();
 
       await registrarAuditoria({
-        tabela: "RateiosGerais", registroId: rateioGeralId, acao: "Fechou Rateio Geral (malote)", usuarioId: usuarioGlobal.membroId,
+        tabela: "RateiosGerais", registroId: rateioGeralId, acao: "Fechou Rateio Geral (malote)", usuarioId: usuario.membroId,
         dadosDepois: { mesReferencia, totalBase, totalItens: itens.length, valoresPorDestino, valorTesouroGeral }
       });
       context.res = {
@@ -175,7 +180,7 @@ module.exports = async function (context, req) {
     } catch (erro) {
       try { await transaction.rollback(); } catch (e2) { /* já pode ter sido revertida */ }
       context.log.error("Falha ao fechar Rateio Geral:", erro.message);
-      context.res = { status: 500, body: { sucesso: false, mensagem: "Falha ao fechar o Rateio Geral — nada foi alterado. Avise a equipe técnica: " + erro.message } };
+      context.res = { status: 500, body: { sucesso: false, mensagem: "Falha ao fechar o Rateio Geral — nada foi alterado. Avise a equipe técnica." } };
     }
     return;
   }

@@ -4,15 +4,14 @@
 // POST /api/lgpd/solicitacoes/{matricula}  -> body: { tipo, descricao? } -> cria pedido PENDENTE
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
+const auth = require("../shared/auth");
 
 const TIPOS_VALIDOS = ["ACESSO", "EXCLUSAO", "RETIFICACAO", "PORTABILIDADE"];
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão (o titular é quem exerce os próprios direitos).
   const matricula = context.bindingData.matricula;
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
+  if (!auth.exigirTitular(req, context, matricula)) return;
 
   const pool = await getPool();
   const membro = await pool.request().input("mat", sql.Int, matricula).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @mat`);
@@ -57,5 +56,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

@@ -7,18 +7,27 @@
 // GET /api/pessoas/{membroId}/historico
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
+const { pessoaAlcancavel, noEscopoDaPessoa } = require("../shared/escopoRotas");
 
+// ESCOPO: a linha do tempo é da PESSOA — só abre quem alcança a congregação dela (shared/escopoRotas.js); fora do escopo (ou matrícula malformada) vale a mesma resposta de
+// "Matrícula não encontrada".
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
 
-  const membroId = context.bindingData.membroId;
-  if (!membroId) {
+  const membroIdBruto = context.bindingData.membroId;
+  if (!membroIdBruto) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota." } };
     return;
   }
 
   const pool = await getPool();
+  const alcancavel = await pessoaAlcancavel(pool, usuario, membroIdBruto);
+  if (!alcancavel) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+    return;
+  }
+  const membroId = alcancavel.membroId;
   const membroResult = await pool.request().input("id", sql.Int, membroId).query(`
     SELECT Nome, FormaAdmissao, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao,
            CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo,
@@ -81,7 +90,9 @@ module.exports = async function (context, req) {
     eventos.push({ data: m.DataMarco, tipo: `MARCO_${m.Tipo}`, titulo: m.Descricao, descricao: m.DataAproximada ? "Data aproximada" : null, marcoId: m.MarcoId });
   }
 
-  if (usuario.permissoes.includes("disciplina")) {
+  // v7.6 — o histórico disciplinar só para quem tem "disciplina" com a pessoa no escopo DESSA permissão (não basta o escopo de "pessoas").
+  const vDisciplina = auth.visaoDaPermissao(usuario, "disciplina");
+  if (vDisciplina && noEscopoDaPessoa(vDisciplina, alcancavel.congregacaoNome, alcancavel.extensaoNome)) {
     const processos = await pool.request().input("id", sql.Int, membroId).query(`
       SELECT CONVERT(varchar(10), p.DataAbertura, 120) AS DataAbertura,
              CONVERT(varchar(10), p.DataConclusao, 120) AS DataConclusao, p.Status AS Status, p.Resultado AS Resultado,

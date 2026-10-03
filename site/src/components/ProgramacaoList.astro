@@ -1,0 +1,66 @@
+---
+import { OCCURRENCE_LABEL, SCOPE_LABEL, groupByDay, type ProgramacaoItem } from "@/lib/programacao";
+
+interface Props {
+  items: ProgramacaoItem[];
+  /** Mostra "Sede e congregações" etc. Desligue quando a lista já está filtrada para um só lugar. */
+  showScope?: boolean;
+}
+
+const { items, showScope = true } = Astro.props;
+const schedule = groupByDay(items);
+---
+
+<ul class="programacao-list">
+  {
+    schedule.map((group) => (
+      <li class="programacao-card">
+        <span class="programacao-day">{group.label}</span>
+        <ul class="mt-2 grid gap-2">
+          {group.items.map((item) => (
+            <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <span>
+                {item.occurrence && <span class="programacao-occurrence">{OCCURRENCE_LABEL[item.occurrence]}: </span>}
+                {item.title}
+              </span>
+              {(showScope || item.time) && (
+                <span class="text-sm text-muted-foreground">
+                  {showScope && SCOPE_LABEL[item.scope]}
+                  {showScope && item.time && " · "}
+                  {item.time}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .programacao-list {
+    display: grid;
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .programacao-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.4rem;
+  }
+
+  .programacao-day {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .programacao-occurrence {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>

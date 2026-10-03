@@ -7,10 +7,15 @@
 // GET  /api/licencas-candidatura?membroId=123 -> lista (de uma pessoa, ou todas)
 // POST /api/licencas-candidatura              -> cria: body { membroId, dataPleito }
 // POST /api/licencas-candidatura/{id}         -> registra o retorno: body { retornou, observacao? }
+//
+// ESCOPO: a licença é da PESSOA — só enxerga e só lança quem alcança a congregação dela (shared/escopoRotas.js); fora do escopo vale a resposta de "não existe". O RETORNO é
+// decisão da Diretoria (Art. 157 §2º): só o nível GERAL registra. Licença põe a pessoa fora de Assentos/Liderança/Cargo (vacância) — não pode ser lançada contra quem é de outra área.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const vacancia = require("../shared/vacancia");
+const { ehGeral, pessoaAlcancavel, filtrarPorEscopo, MSG_GERAL } = require("../shared/escopoRotas");
+const { dataISOValida } = require("../shared/escopoFichas");
 
 // Mesma lista de GestaoPessoas (STATUS_TERMINAIS) — entrar em licença não faz
 // sentido pra quem já saiu de vez.
@@ -22,43 +27,63 @@ module.exports = async function (context, req) {
   if (!usuario) return;
 
   const method = req.method;
-  const idRota = context.bindingData.id;
+  const idRotaBruto = context.bindingData.id;
+  const temIdNaRota = idRotaBruto !== undefined && idRotaBruto !== null && idRotaBruto !== "";
+  const idRota = auth.idDeRota(idRotaBruto);
   const pool = await getPool();
 
   // ---- GET: listar ----
   if (method === "GET") {
-    const membroId = (req.query || {}).membroId;
-    const filtro = membroId ? "WHERE l.MembroId = @membroId" : "";
+    const membroIdBruto = (req.query || {}).membroId;
+    const filtrando = membroIdBruto !== undefined && membroIdBruto !== null && membroIdBruto !== "";
+    if (filtrando) {
+      // Pessoa inexistente, malformada ou fora do escopo: lista vazia, igual a quem não tem licença.
+      const pessoa = await pessoaAlcancavel(pool, usuario, membroIdBruto);
+      if (!pessoa) {
+        context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] };
+        return;
+      }
+    }
     const request = pool.request();
-    if (membroId) request.input("membroId", sql.Int, membroId);
+    if (filtrando) request.input("membroId", sql.Int, auth.idDeRota(membroIdBruto));
     const result = await request.query(`
       SELECT l.LicencaId AS licencaId, l.MembroId AS membroId, m.Nome AS nome,
              CONVERT(varchar(10), l.DataPleito, 120) AS dataPleito,
              CONVERT(varchar(10), l.DataInicioLicenca, 120) AS dataInicioLicenca,
              l.Status AS status,
              CONVERT(varchar(10), l.DataRetornoDecidida, 120) AS dataRetornoDecidida,
-             l.ObservacaoRetorno AS observacaoRetorno
+             l.ObservacaoRetorno AS observacaoRetorno,
+             cg.Nome AS congregacaoNome, ex.Nome AS extensaoNome
       FROM LicencasCandidatura l
       JOIN MembroReferencia m ON m.MembroId = l.MembroId
-      ${filtro}
+      LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
+      LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
+      ${filtrando ? "WHERE l.MembroId = @membroId" : ""}
       ORDER BY l.DataPleito DESC`);
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
+    const visiveis = filtrarPorEscopo(usuario, result.recordset, l => l.congregacaoNome, l => l.extensaoNome)
+      .map(({ congregacaoNome, extensaoNome, ...resto }) => resto);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: visiveis };
     return;
   }
 
   // ---- POST sem id: criar (entra em licença) ----
-  if (method === "POST" && !idRota) {
-    const { membroId, dataPleito } = req.body || {};
-    if (!membroId || !dataPleito) {
+  if (method === "POST" && !temIdNaRota) {
+    const { membroId: membroIdBruto, dataPleito } = req.body || {};
+    if (!membroIdBruto || !dataPleito) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, dataPleito." } };
       return;
     }
-    const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, Status FROM MembroReferencia WHERE MembroId = @id`);
-    if (membro.recordset.length === 0) {
+    if (!dataISOValida(dataPleito)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "dataPleito inválida — use AAAA-MM-DD." } };
+      return;
+    }
+    const pessoa = await pessoaAlcancavel(pool, usuario, membroIdBruto);
+    if (!pessoa) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
       return;
     }
-    if (STATUS_TERMINAIS.includes(membro.recordset[0].Status)) {
+    const membroId = pessoa.membroId;
+    if (STATUS_TERMINAIS.includes(pessoa.status)) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta pessoa já saiu do rol de membros — não é possível registrar licença por candidatura." } };
       return;
     }
@@ -97,14 +122,19 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // ---- POST com id: registrar o retorno (decidido pela Diretoria) ----
-  if (method === "POST" && idRota) {
+  // ---- POST com id: registrar o retorno (decidido pela Diretoria: só o GERAL) ----
+  if (method === "POST" && temIdNaRota) {
+    if (!ehGeral(usuario)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: MSG_GERAL } };
+      return;
+    }
     const { retornou, observacao } = req.body || {};
-    if (retornou === undefined || retornou === null) {
+    // "false" (texto) não pode valer como verdadeiro: só booleano de verdade.
+    if (typeof retornou !== "boolean") {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe retornou (true/false)." } };
       return;
     }
-    const licenca = await pool.request().input("id", sql.Int, idRota).query(`SELECT MembroId, Status FROM LicencasCandidatura WHERE LicencaId = @id`);
+    const licenca = idRota ? await pool.request().input("id", sql.Int, idRota).query(`SELECT MembroId, Status FROM LicencasCandidatura WHERE LicencaId = @id`) : { recordset: [] };
     if (licenca.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Licença não encontrada." } };
       return;
@@ -117,17 +147,23 @@ module.exports = async function (context, req) {
     const statusFinal = retornou ? "RETORNOU" : "NAO_RETORNOU";
     const hojeISO = new Date().toISOString().slice(0, 10);
 
-    await pool.request()
+    // Só vence quem ainda a encontra EM_LICENCA: duas decisões ao mesmo tempo não se atropelam.
+    const upd = await pool.request()
       .input("id", sql.Int, idRota)
       .input("status", sql.NVarChar(20), statusFinal)
       .input("dataRetornoDecidida", sql.Date, hojeISO)
-      .input("observacao", sql.NVarChar(300), observacao || null)
-      .query(`UPDATE LicencasCandidatura SET Status = @status, DataRetornoDecidida = @dataRetornoDecidida, ObservacaoRetorno = @observacao WHERE LicencaId = @id`);
+      .input("observacao", sql.NVarChar(300), observacao ? String(observacao).slice(0, 300) : null)
+      .query(`UPDATE LicencasCandidatura SET Status = @status, DataRetornoDecidida = @dataRetornoDecidida, ObservacaoRetorno = @observacao WHERE LicencaId = @id AND Status = 'EM_LICENCA'`);
+    if (upd.rowsAffected[0] === 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Esta licença já teve o retorno registrado." } };
+      return;
+    }
 
     if (retornou) {
       // Cargo/Assentos não voltam sozinhos — reatribuição é manual na tela de
       // Pessoas, igual já é hoje pra qualquer pessoa reativada.
-      await pool.request().input("id", sql.Int, membroId).query(`UPDATE MembroReferencia SET Status = 'ATIVO' WHERE MembroId = @id`);
+      // Só reativa quem ainda está em licença: quem foi desligado/falecido nesse meio-tempo NÃO volta a ATIVO por aqui.
+      await pool.request().input("id", sql.Int, membroId).query(`UPDATE MembroReferencia SET Status = 'ATIVO' WHERE MembroId = @id AND Status = 'LICENCA_CANDIDATURA'`);
     }
 
     await registrarAuditoria({
@@ -146,5 +182,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

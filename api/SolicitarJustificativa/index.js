@@ -3,14 +3,18 @@
 // Fica "pendente" até a Secretaria aprovar ou rejeitar.
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
+const auth = require("../shared/auth");
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão (antes qualquer um "justificava" a falta de qualquer matrícula).
   const matricula = context.bindingData.matricula;
-  const sessaoId = context.bindingData.sessaoId;
-  const { motivo } = req.body || {};
+  if (!auth.exigirTitular(req, context, matricula)) return;
+  const sessaoId = auth.idDeRota(context.bindingData.sessaoId);
+  const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+  const motivo = typeof corpo.motivo === "string" ? corpo.motivo : "";
 
-  if (!matricula || !sessaoId || !motivo || !motivo.trim()) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula, a reunião e o motivo." } };
+  if (!sessaoId || !motivo.trim() || motivo.trim().length > 300) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a reunião e o motivo (até 300 caracteres)." } };
     return;
   }
 

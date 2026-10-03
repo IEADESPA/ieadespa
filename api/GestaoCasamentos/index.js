@@ -7,9 +7,14 @@
 //                                                 celebrante?, modalidade, dataHabilitacaoCivil?,
 //                                                 dataCasamento, registradoCartorio?, dataRegistroCartorio? }
 // DELETE /api/casamentos/{id}
+//
+// ESCOPO: o casamento é registrado na ficha de uma PESSOA (membroId) — só enxerga, cria e apaga quem alcança a congregação dessa pessoa (shared/escopoRotas.js); fora do escopo
+// vale a resposta de "não existe". Cônjuge que é membro também precisa estar no escopo (senão a matrícula dele serviria de sonda); cônjuge de outra congregação entra pelo nome.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { pessoaAlcancavel, filtrarPorEscopo } = require("../shared/escopoRotas");
+const { dataISOValida } = require("../shared/escopoFichas");
 
 // Fixo em código, não catálogo editável por tela — mesmo espírito de CAUSAS_SAIDA
 // e FORMAS_ADMISSAO em GestaoPessoas.
@@ -34,15 +39,20 @@ module.exports = async function (context, req) {
   if (!usuario) return;
 
   const method = req.method;
-  const idRota = context.bindingData.id;
+  const idRotaBruto = context.bindingData.id;
   const pool = await getPool();
 
-  // ---- GET: listar casamentos (de uma pessoa, ou todos) ----
+  // ---- GET: listar casamentos (de uma pessoa, ou todos os do escopo) ----
   if (method === "GET") {
-    const membroId = (req.query || {}).membroId;
-    const filtro = membroId ? "WHERE c.MembroId = @membroId" : "";
+    const membroIdBruto = (req.query || {}).membroId;
+    const filtrando = membroIdBruto !== undefined && membroIdBruto !== null && membroIdBruto !== "";
+    if (filtrando && !(await pessoaAlcancavel(pool, usuario, membroIdBruto))) {
+      // Pessoa inexistente, malformada ou fora do escopo: lista vazia, igual a quem não tem casamento registrado.
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] };
+      return;
+    }
     const request = pool.request();
-    if (membroId) request.input("membroId", sql.Int, membroId);
+    if (filtrando) request.input("membroId", sql.Int, auth.idDeRota(membroIdBruto));
     const result = await request.query(`
       SELECT c.CasamentoId AS casamentoId, c.MembroId AS membroId, m.Nome AS nome,
              c.MembroConjugeId AS membroConjugeId, mc.Nome AS nomeMembroConjuge, c.NomeConjuge AS nomeConjuge,
@@ -50,24 +60,29 @@ module.exports = async function (context, req) {
              CONVERT(varchar(10), c.DataHabilitacaoCivil, 120) AS dataHabilitacaoCivil,
              CONVERT(varchar(10), c.DataCasamento, 120) AS dataCasamento,
              c.RegistradoCartorio AS registradoCartorio,
-             CONVERT(varchar(10), c.DataRegistroCartorio, 120) AS dataRegistroCartorio
+             CONVERT(varchar(10), c.DataRegistroCartorio, 120) AS dataRegistroCartorio,
+             cg.Nome AS congregacaoNome, ex.Nome AS extensaoNome
       FROM Casamentos c
       JOIN MembroReferencia m ON m.MembroId = c.MembroId
       LEFT JOIN MembroReferencia mc ON mc.MembroId = c.MembroConjugeId
-      ${filtro}
+      LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
+      LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
+      ${filtrando ? "WHERE c.MembroId = @membroId" : ""}
       ORDER BY c.DataCasamento DESC`);
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
+    const visiveis = filtrarPorEscopo(usuario, result.recordset, c => c.congregacaoNome, c => c.extensaoNome)
+      .map(({ congregacaoNome, extensaoNome, ...resto }) => resto);
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: visiveis };
     return;
   }
 
   // ---- POST: criar ----
   if (method === "POST") {
     const {
-      membroId, membroConjugeId, nomeConjuge, celebrante, modalidade,
+      membroId: membroIdBruto, membroConjugeId: conjugeIdBruto, nomeConjuge, celebrante, modalidade,
       dataHabilitacaoCivil, dataCasamento, registradoCartorio, dataRegistroCartorio
     } = req.body || {};
 
-    if (!membroId || !modalidade || !dataCasamento) {
+    if (!membroIdBruto || !modalidade || !dataCasamento) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, modalidade, dataCasamento." } };
       return;
     }
@@ -75,33 +90,40 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Modalidade inválida. Use uma de: ${MODALIDADES.join(", ")}.` } };
       return;
     }
-    if (!membroConjugeId && !String(nomeConjuge || "").trim()) {
+    if (!dataISOValida(dataCasamento) || (dataHabilitacaoCivil && !dataISOValida(dataHabilitacaoCivil)) || (dataRegistroCartorio && !dataISOValida(dataRegistroCartorio))) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Data inválida — use AAAA-MM-DD." } };
+      return;
+    }
+    if (!conjugeIdBruto && !String(nomeConjuge || "").trim()) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Informe o cônjuge: a matrícula (se for membro) ou ao menos o nome." } };
       return;
     }
-    if (membroConjugeId && Number(membroConjugeId) === Number(membroId)) {
+    if (conjugeIdBruto && Number(conjugeIdBruto) === Number(membroIdBruto)) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "O cônjuge não pode ser a mesma pessoa." } };
       return;
     }
 
-    const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
-    if (membro.recordset.length === 0) {
+    const membro = await pessoaAlcancavel(pool, usuario, membroIdBruto);
+    if (!membro) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
       return;
     }
-    if (membroConjugeId) {
-      const conjuge = await pool.request().input("id", sql.Int, membroConjugeId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
-      if (conjuge.recordset.length === 0) {
+    const membroId = membro.membroId;
+    let membroConjugeId = null;
+    if (conjugeIdBruto) {
+      const conjuge = await pessoaAlcancavel(pool, usuario, conjugeIdBruto);
+      if (!conjuge) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula do cônjuge não encontrada." } };
         return;
       }
+      membroConjugeId = conjuge.membroId;
     }
 
     const result = await pool.request()
       .input("membroId", sql.Int, membroId)
-      .input("membroConjugeId", sql.Int, membroConjugeId || null)
-      .input("nomeConjuge", sql.NVarChar(200), String(nomeConjuge || "").trim() || null)
-      .input("celebrante", sql.NVarChar(200), String(celebrante || "").trim() || null)
+      .input("membroConjugeId", sql.Int, membroConjugeId)
+      .input("nomeConjuge", sql.NVarChar(200), String(nomeConjuge || "").trim().slice(0, 200) || null)
+      .input("celebrante", sql.NVarChar(200), String(celebrante || "").trim().slice(0, 200) || null)
       .input("modalidade", sql.NVarChar(30), modalidade)
       .input("dataHabilitacaoCivil", sql.Date, dataHabilitacaoCivil || null)
       .input("dataCasamento", sql.Date, dataCasamento)
@@ -135,20 +157,26 @@ module.exports = async function (context, req) {
 
   // ---- DELETE: remover (correção de lançamento) ----
   if (method === "DELETE") {
-    if (!idRota) {
+    if (!idRotaBruto) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/casamentos/{id}" } };
       return;
     }
-    const antes = await pool.request().input("id", sql.Int, idRota).query(`SELECT MembroId, DataCasamento FROM Casamentos WHERE CasamentoId = @id`);
+    const idRota = auth.idDeRota(idRotaBruto);
+    const antes = idRota ? (await pool.request().input("id", sql.Int, idRota).query(`SELECT MembroId, DataCasamento FROM Casamentos WHERE CasamentoId = @id`)).recordset[0] : null;
+    // Casamento inexistente e casamento de pessoa fora do escopo: a mesma resposta.
+    if (!antes || !(await pessoaAlcancavel(pool, usuario, antes.MembroId))) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Casamento não encontrado." } };
+      return;
+    }
     const del = await pool.request().input("id", sql.Int, idRota).query(`DELETE FROM Casamentos WHERE CasamentoId = @id`);
     if (del.rowsAffected[0] === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Casamento não encontrado." } };
       return;
     }
-    await registrarAuditoria({ tabela: "Casamentos", registroId: Number(idRota), acao: "Removeu registro de casamento", usuarioId: usuario.membroId, dadosAntes: antes.recordset[0] });
+    await registrarAuditoria({ tabela: "Casamentos", registroId: Number(idRota), acao: "Removeu registro de casamento", usuarioId: usuario.membroId, dadosAntes: antes });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro removido." } };
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

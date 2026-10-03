@@ -13,14 +13,22 @@ const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const { validarOrgaoProcesso, criarProcessoDisciplinar } = require("../shared/disciplinar");
 const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
+const { ehGeral, pessoaAlcancavel, MSG_GERAL } = require("../shared/escopoRotas");
 
+// Auditoria de escopo (02/10/2026): além de ser membro do órgão (abaixo), o RÉU precisa estar dentro do escopo de quem abre — fora do escopo responde igual a
+// "matrícula não encontrada" —, e processo em órgão CENTRAL (CEI etc.) só o nível geral abre.
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
   if (!usuario) return;
 
-  const { orgaoResponsavelId, orgaoLocalId } = req.body || {};
+  const { orgaoResponsavelId, orgaoLocalId, membroId } = req.body || {};
 
   const pool = await getPool();
+
+  if (membroId && !(await pessoaAlcancavel(pool, usuario, membroId))) {
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: false, mensagem: "Matrícula não encontrada. Cadastre a pessoa antes." } };
+    return;
+  }
 
   // v3.6.2 — só quem é membro daquele órgão territorial (Lideranca Papel+
   // Escopo, ou GLOBAL) pode abrir processo nele. Checagem feita aqui (antes
@@ -30,6 +38,10 @@ module.exports = async function (context, req) {
     const orgao = await validarOrgaoProcesso(pool, sql, { orgaoResponsavelId, orgaoLocalId });
     if (!orgao.valido) {
       context.res = { status: 200, body: { sucesso: false, mensagem: orgao.mensagem } };
+      return;
+    }
+    if (orgao.orgaoResponsavelId && !ehGeral(usuario)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: MSG_GERAL } };
       return;
     }
     if (orgao.orgaoLocalId && !(await membroAutorizadoNoOrgaoLocal(pool, sql, usuario.membroId, orgao.orgaoLocalId))) {

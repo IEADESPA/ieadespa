@@ -3,14 +3,25 @@
 // presentes/faltas/justificadas. Aceita ?orgaoId= pra filtrar só as sessões
 // daquele órgão; sem filtro, traz de todos (aba Reuniões única).
 
+//
+// ESCOPO (02/10/2026): as sessões de órgão TERRITORIAL (JAI, JEA, TER, CRA...) só aparecem para quem alcança o território do órgão (a mesma regra de MeusOrgaosLocais); as
+// de órgão central (Assembleia, CLI, Diretoria...) seguem visíveis a quem tem as permissões, como antes.
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
+const { orgaosLocaisNoEscopo } = require("../shared/orgaosLocaisEscopo");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
-  const { orgaoId, orgaoLocalId } = req.query || {};
+  const { orgaoId: orgaoIdBruto, orgaoLocalId: orgaoLocalIdBruto } = req.query || {};
+  // Os filtros só valem na forma canônica de número (antes um valor qualquer virava erro 500).
+  const orgaoId = orgaoIdBruto ? auth.idDeRota(orgaoIdBruto) : null;
+  const orgaoLocalId = orgaoLocalIdBruto ? auth.idDeRota(orgaoLocalIdBruto) : null;
+  if ((orgaoIdBruto && !orgaoId) || (orgaoLocalIdBruto && !orgaoLocalId)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Filtro inválido." } };
+    return;
+  }
   const pool = await getPool();
   const request = pool.request();
 
@@ -38,5 +49,8 @@ module.exports = async function (context, req) {
   query += ` GROUP BY s.SessaoId, s.Descricao, s.DataSessao, s.Status, s.OrgaoId, s.OrgaoLocalId, o.Nome, o.Sigla, ol.Nome, ol.Sigla ORDER BY s.SessaoId DESC`;
 
   const result = await request.query(query);
-  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: result.recordset };
+  // Órgão territorial fora do escopo some da lista (e `?orgaoLocalId=` de fora devolve lista vazia, igual a "não existe").
+  const permitidos = await orgaosLocaisNoEscopo(pool, usuario, result.recordset.map((s) => s.orgaoLocalId).filter((x) => x != null));
+  const sessoes = result.recordset.filter((s) => s.orgaoLocalId == null || permitidos.has(Number(s.orgaoLocalId)));
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: sessoes };
 };

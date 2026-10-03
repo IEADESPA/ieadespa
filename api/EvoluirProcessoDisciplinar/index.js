@@ -20,7 +20,8 @@ const { getPool, sql } = require("../shared/db");
 const vacancia = require("../shared/vacancia");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
 const { selectProcessoComInfracoes, validarOrgaoProcesso, SIGLAS_QUE_PODEM_RECORRER } = require("../shared/disciplinar");
-const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
+const { membroAutorizadoNoOrgaoLocal, ancestraisTerritoriais } = require("../shared/escopo");
+const { ehGeral, pessoaAlcancavel } = require("../shared/escopoRotas");
 
 const RESULTADOS_VALIDOS = ["ARQUIVADO", "SANCAO", "EXCLUSAO"];
 const CANAIS_CITACAO_VALIDOS = ["WHATSAPP", "CARTA_REGISTRADA"];
@@ -29,10 +30,14 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "disciplina");
   if (!usuario) return;
 
-  const processoId = context.bindingData.processoId;
   const { acao } = req.body || {};
-  if (!processoId || !acao) {
-    context.res = { status: 400, body: { erro: "Informe processoId na rota e 'acao' no corpo." } };
+  if (!context.bindingData.processoId || !acao) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe processoId na rota e 'acao' no corpo." } };
+    return;
+  }
+  const processoId = auth.idDeRota(context.bindingData.processoId);
+  if (!processoId) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Processo não encontrado." } };
     return;
   }
 
@@ -42,7 +47,10 @@ module.exports = async function (context, req) {
                    OrgaoResponsavelId, OrgaoLocalId, HomologadoPeloCEI
             FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
   const atual = atualResult.recordset[0];
-  if (!atual) {
+  // Auditoria de escopo (02/10/2026): o processo só existe para quem alcança o RÉU (congregação do membro) — e processo de órgão CENTRAL (sem órgão territorial) só
+  // para o nível geral. Fora disso, a mesma resposta de "não encontrado".
+  const reu = atual ? await pessoaAlcancavel(pool, usuario, atual.MembroId) : null;
+  if (!atual || !reu || (!atual.OrgaoLocalId && !ehGeral(usuario))) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Processo não encontrado." } };
     return;
   }
@@ -64,7 +72,7 @@ module.exports = async function (context, req) {
   if (acao === "DESIGNAR_RELATOR") {
     const { relatorMembroId } = req.body || {};
     if (!relatorMembroId) {
-      context.res = { status: 400, body: { erro: "Informe 'relatorMembroId'." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'relatorMembroId'." } };
       return;
     }
     const parentesco = await existeParentescoAte2Grau(pool, sql, relatorMembroId, new Set([Number(atual.MembroId)]), 3);
@@ -95,7 +103,7 @@ module.exports = async function (context, req) {
   if (acao === "CITAR") {
     const { canalCitacao, dataCitacao } = req.body || {};
     if (!CANAIS_CITACAO_VALIDOS.includes(canalCitacao)) {
-      context.res = { status: 400, body: { erro: `Informe 'canalCitacao' válido: ${CANAIS_CITACAO_VALIDOS.join(" ou ")}.` } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: `Informe 'canalCitacao' válido: ${CANAIS_CITACAO_VALIDOS.join(" ou ")}.` } };
       return;
     }
     await pool.request().input("id", sql.Int, processoId).input("canal", sql.NVarChar(30), canalCitacao).input("data", sql.Date, dataCitacao || null)
@@ -141,7 +149,7 @@ module.exports = async function (context, req) {
   if (acao === "DESIGNAR_DEFENSOR") {
     const { defensorNome } = req.body || {};
     if (!defensorNome || !String(defensorNome).trim()) {
-      context.res = { status: 400, body: { erro: "Informe 'defensorNome'." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'defensorNome'." } };
       return;
     }
     await pool.request().input("id", sql.Int, processoId).input("nome", sql.NVarChar(200), String(defensorNome).trim())
@@ -167,7 +175,7 @@ module.exports = async function (context, req) {
     }
     const { resultadoProva, dataProva } = req.body || {};
     if (!["APROVADO", "REPROVADO"].includes(resultadoProva)) {
-      context.res = { status: 400, body: { erro: "Informe 'resultadoProva' válido: APROVADO ou REPROVADO." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'resultadoProva' válido: APROVADO ou REPROVADO." } };
       return;
     }
     await pool.request().input("id", sql.Int, processoId).input("resultado", sql.NVarChar(20), resultadoProva).input("data", sql.Date, dataProva || null)
@@ -195,7 +203,7 @@ module.exports = async function (context, req) {
     }
     const { orgaoDestinoTipo, orgaoDestinoId, justificativa } = req.body || {};
     if (!justificativa || !String(justificativa).trim()) {
-      context.res = { status: 400, body: { erro: "Justificativa é obrigatória para recorrer." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Justificativa é obrigatória para recorrer." } };
       return;
     }
     const destino = orgaoDestinoTipo === "CENTRAL"
@@ -208,9 +216,18 @@ module.exports = async function (context, req) {
     // Central (ex: CEI) sempre serve de destino; territorial precisa ser
     // exatamente 1 nível acima (JAI Nível 1 -> JEA Nível 2; JEA Nível 2 -> TER Nível 3).
     if (destino.orgaoLocalId) {
-      const origemNivel = await pool.request().input("id", sql.Int, atual.OrgaoLocalId).query(`SELECT Nivel FROM OrgaosLocais WHERE OrgaoLocalId = @id`);
-      const nivelOrigem = origemNivel.recordset[0] ? origemNivel.recordset[0].Nivel : null;
-      if (nivelOrigem === null || destino.nivel !== nivelOrigem + 1) {
+      const origemNivel = await pool.request().input("id", sql.Int, atual.OrgaoLocalId).query(`SELECT Nivel, ReferenciaId FROM OrgaosLocais WHERE OrgaoLocalId = @id`);
+      const origemLinha = origemNivel.recordset[0];
+      const nivelOrigem = origemLinha ? origemLinha.Nivel : null;
+      let destinoValido = nivelOrigem !== null && destino.nivel === nivelOrigem + 1;
+      // Auditoria de escopo (02/10/2026): o destino também precisa estar no caminho do réu — a JEA/TER que está ACIMA da instância de origem, não "uma JEA qualquer".
+      // Recorrer para o órgão de outra área mandaria o processo para quem não o enxerga (e pararia o recurso). O geral escolhe o destino livremente.
+      if (destinoValido && !ehGeral(usuario)) {
+        const acima = await ancestraisTerritoriais(pool, sql, nivelOrigem, origemLinha.ReferenciaId);
+        const esperado = { 2: acima.areaId, 3: acima.regiaoId, 4: acima.quadranteId, 5: acima.distritoId }[destino.nivel];
+        destinoValido = !!esperado && Number(destino.referenciaId) === Number(esperado);
+      }
+      if (!destinoValido) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "O destino do recurso precisa ser a instância territorial imediatamente superior." } };
         return;
       }
@@ -248,7 +265,7 @@ module.exports = async function (context, req) {
   // ---- HOMOLOGAR_EXCLUSAO (v3.6): Exclusão/Disciplina Rigorosa votada pelo
   // TER só produz efeito (vacância) após homologação do CEI (Art. 94, II).
   if (acao === "HOMOLOGAR_EXCLUSAO") {
-    if (!usuario.permissoes || !usuario.permissoes.includes("cei")) {
+    if (!auth.temPermissao(usuario, "cei")) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "Requer a permissão 'cei'." } };
       return;
     }
@@ -258,7 +275,7 @@ module.exports = async function (context, req) {
     }
     const { homologado } = req.body || {};
     if (typeof homologado !== "boolean") {
-      context.res = { status: 400, body: { erro: "Informe 'homologado' (true ou false)." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'homologado' (true ou false)." } };
       return;
     }
     await pool.request().input("id", sql.Int, processoId).input("valor", sql.Bit, homologado)
@@ -284,7 +301,7 @@ module.exports = async function (context, req) {
     const { resultado, diasSancao } = req.body || {};
     let { penalidadeId } = req.body || {};
     if (!RESULTADOS_VALIDOS.includes(resultado)) {
-      context.res = { status: 400, body: { erro: "Informe 'resultado' válido: ARQUIVADO, SANCAO ou EXCLUSAO." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'resultado' válido: ARQUIVADO, SANCAO ou EXCLUSAO." } };
       return;
     }
 
@@ -298,13 +315,13 @@ module.exports = async function (context, req) {
       penalidadeCodigo = "EXCLUSAO";
     } else if (resultado === "SANCAO") {
       if (!penalidadeId) {
-        context.res = { status: 400, body: { erro: "Informe 'penalidadeId' (Advertência, Suspensão Temporária ou Disciplina Rigorosa)." } };
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'penalidadeId' (Advertência, Suspensão Temporária ou Disciplina Rigorosa)." } };
         return;
       }
       const penalidadeResult = await pool.request().input("id", sql.Int, penalidadeId)
         .query(`SELECT Codigo FROM TiposPenalidade WHERE PenalidadeId = @id AND Ativo = 1`);
       if (penalidadeResult.recordset.length === 0 || penalidadeResult.recordset[0].Codigo === "EXCLUSAO") {
-        context.res = { status: 400, body: { erro: "Penalidade inválida para SANCAO." } };
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Penalidade inválida para SANCAO." } };
         return;
       }
       penalidadeCodigo = penalidadeResult.recordset[0].Codigo;
@@ -383,11 +400,11 @@ module.exports = async function (context, req) {
     }
     const { novoDiasSancao, prazoIndeterminado, justificativa } = req.body || {};
     if (!justificativa || !String(justificativa).trim()) {
-      context.res = { status: 400, body: { erro: "Justificativa é obrigatória para ajustar o prazo de uma sanção." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Justificativa é obrigatória para ajustar o prazo de uma sanção." } };
       return;
     }
     if (!prazoIndeterminado && !novoDiasSancao) {
-      context.res = { status: 400, body: { erro: "Informe 'novoDiasSancao' ou 'prazoIndeterminado'." } };
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'novoDiasSancao' ou 'prazoIndeterminado'." } };
       return;
     }
     const diasFinal = prazoIndeterminado ? null : Number(novoDiasSancao);
@@ -419,5 +436,5 @@ module.exports = async function (context, req) {
     return;
   }
 
-  context.res = { status: 400, body: { erro: "Ação inválida. Use DESIGNAR_RELATOR, CITAR, AFASTAR, REGISTRAR_DEFESA, DESIGNAR_DEFENSOR, JULGAR, AJUSTAR_PRAZO ou REGISTRAR_PROVA_REINTEGRACAO." } };
+  context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use DESIGNAR_RELATOR, CITAR, AFASTAR, REGISTRAR_DEFESA, DESIGNAR_DEFENSOR, JULGAR, AJUSTAR_PRAZO ou REGISTRAR_PROVA_REINTEGRACAO." } };
 };

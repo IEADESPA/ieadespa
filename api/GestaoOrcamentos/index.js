@@ -7,36 +7,38 @@
 // lançamento nenhum. Empenhado (encumbrance) é o total de Saídas já
 // APROVADAS mas ainda não pagas naquela categoria/ano — reserva "de
 // fato" o valor no orçamento a partir do momento em que o compromisso é
-// assumido (v4.5), antes do pagamento sair. Criar/editar orçamento é
-// restrito a nível Global.
+// assumido (v4.5), antes do pagamento sair.
+// INSTITUCIONAL: o orçamento é um só, da igreja inteira, e o "realizado"/"empenhado" somam o caixa de TODAS as congregações — por isso ler e escrever são só do nível
+// geral (papel Global com escopo de todas as congregações). Tesoureiro Local/de Área/Região/Quadrante/Distrito não acessa.
 // GET  /api/orcamentos -> lista (ano, status, totais orçados)
 // GET  /api/orcamentos/{id} -> detalhe com Orçado/Empenhado/Realizado por linha
 // POST /api/orcamentos -> { ano, linhas: [{tipoMovimento, categoriaCodigo, valorOrcado}] }
 // PUT  /api/orcamentos/{id} -> { status?, linhas? }
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { numeroEntre, inteiroEntre, textoAte, MAX_DECIMAL_12_2 } = require("../shared/entradaFinanceira");
 
 const TIPOS = ["ENTRADA", "SAIDA"];
 const STATUS = ["ABERTO", "ENCERRADO"];
 
-function exigirFinanceiroGlobal(req, context) {
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
-  if (!usuario) return null;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Criar ou editar o Orçamento Anual é restrito a papéis de nível Global (1º Tesoureiro, Art. 36 §1º)." } };
-    return null;
-  }
-  return usuario;
+// Linha válida: tipo, código (até 30) e valor maior que zero e dentro do DECIMAL(12,2). Devolve { tipoMovimento, categoriaCodigo, valorOrcado } ou null.
+function linhaValida(l) {
+  if (!l || typeof l !== "object") return null;
+  const categoriaCodigo = textoAte(l.categoriaCodigo, 30);
+  const valorOrcado = numeroEntre(l.valorOrcado, 0.01, MAX_DECIMAL_12_2);
+  if (!TIPOS.includes(l.tipoMovimento) || !categoriaCodigo || valorOrcado === null) return null;
+  return { tipoMovimento: l.tipoMovimento, categoriaCodigo, valorOrcado };
 }
 
 module.exports = async function (context, req) {
-  const id = context.bindingData.id;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const idBruto = context.bindingData.id;
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
   const pool = await getPool();
 
-  if (req.method === "GET" && !id) {
+  if (req.method === "GET" && !idBruto) {
     const result = await pool.request().query(`
       SELECT o.OrcamentoId AS orcamentoId, o.Ano AS ano, o.Status AS status,
              ISNULL((SELECT SUM(ValorOrcado) FROM OrcamentoLinhas WHERE OrcamentoId = o.OrcamentoId AND TipoMovimento = 'ENTRADA'), 0) AS totalOrcadoEntrada,
@@ -47,8 +49,9 @@ module.exports = async function (context, req) {
     return;
   }
 
-  if (req.method === "GET" && id) {
-    const orcamento = await pool.request().input("id", sql.Int, id).query(`SELECT * FROM OrcamentosAnuais WHERE OrcamentoId = @id`);
+  if (req.method === "GET" && idBruto) {
+    const id = auth.idDeRota(idBruto);
+    const orcamento = id ? await pool.request().input("id", sql.Int, id).query(`SELECT * FROM OrcamentosAnuais WHERE OrcamentoId = @id`) : { recordset: [] };
     if (orcamento.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Orçamento não encontrado." } };
       return;
@@ -81,28 +84,38 @@ module.exports = async function (context, req) {
 
     context.res = {
       status: 200, headers: { "Content-Type": "application/json" },
-      body: { orcamentoId: Number(id), ano, status: orcamento.recordset[0].Status, linhas: linhasComRealizado }
+      body: { orcamentoId: id, ano, status: orcamento.recordset[0].Status, linhas: linhasComRealizado }
     };
     return;
   }
 
   if (req.method === "POST") {
-    const usuarioGlobal = exigirFinanceiroGlobal(req, context);
-    if (!usuarioGlobal) return;
-    const { ano, linhas } = req.body || {};
-    if (!ano || !Number.isInteger(Number(ano))) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o ano (inteiro)." } };
+    const { ano: anoBruto, linhas } = req.body || {};
+    const ano = inteiroEntre(anoBruto, 1900, 2200);
+    if (!ano) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o ano (inteiro, AAAA)." } };
       return;
     }
     if (!Array.isArray(linhas) || linhas.length === 0) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe ao menos uma linha orçamentária (linhas: [{tipoMovimento, categoriaCodigo, valorOrcado}])." } };
       return;
     }
+    // Tudo é conferido ANTES de gravar qualquer coisa: uma linha ruim ou repetida não deixa um orçamento pela metade (e o ano ocupado).
+    const validas = [];
+    const vistas = new Set();
     for (const l of linhas) {
-      if (!TIPOS.includes(l.tipoMovimento) || !l.categoriaCodigo || !l.valorOrcado || Number(l.valorOrcado) <= 0) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: "Cada linha precisa de tipoMovimento (ENTRADA|SAIDA), categoriaCodigo e valorOrcado maior que zero." } };
+      const v = linhaValida(l);
+      if (!v) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Cada linha precisa de tipoMovimento (ENTRADA|SAIDA), categoriaCodigo (até 30 caracteres) e valorOrcado maior que zero." } };
         return;
       }
+      const chave = `${v.tipoMovimento}|${v.categoriaCodigo}`;
+      if (vistas.has(chave)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Há categoria repetida nas linhas." } };
+        return;
+      }
+      vistas.add(chave);
+      validas.push(v);
     }
     const existente = await pool.request().input("ano", sql.Int, ano).query(`SELECT OrcamentoId FROM OrcamentosAnuais WHERE Ano = @ano`);
     if (existente.recordset.length > 0) {
@@ -110,32 +123,31 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const criado = await pool.request().input("ano", sql.Int, ano).input("criadoPor", sql.Int, usuarioGlobal.membroId)
+    const criado = await pool.request().input("ano", sql.Int, ano).input("criadoPor", sql.Int, usuario.membroId)
       .query(`INSERT INTO OrcamentosAnuais (Ano, CriadoPor) OUTPUT INSERTED.OrcamentoId VALUES (@ano, @criadoPor)`);
     const orcamentoId = criado.recordset[0].OrcamentoId;
 
-    for (const l of linhas) {
+    for (const l of validas) {
       await pool.request().input("orcamentoId", sql.Int, orcamentoId).input("tipoMovimento", sql.NVarChar(10), l.tipoMovimento)
         .input("categoriaCodigo", sql.NVarChar(30), l.categoriaCodigo).input("valorOrcado", sql.Decimal(12, 2), l.valorOrcado)
         .query(`INSERT INTO OrcamentoLinhas (OrcamentoId, TipoMovimento, CategoriaCodigo, ValorOrcado) VALUES (@orcamentoId, @tipoMovimento, @categoriaCodigo, @valorOrcado)`);
     }
 
     await registrarAuditoria({
-      tabela: "OrcamentosAnuais", registroId: orcamentoId, acao: "Criou orçamento anual", usuarioId: usuarioGlobal.membroId,
-      dadosDepois: { ano, totalLinhas: linhas.length }
+      tabela: "OrcamentosAnuais", registroId: orcamentoId, acao: "Criou orçamento anual", usuarioId: usuario.membroId,
+      dadosDepois: { ano, totalLinhas: validas.length }
     });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Orçamento de ${ano} criado.`, orcamentoId } };
     return;
   }
 
   if (req.method === "PUT") {
-    if (!id) {
-      context.res = { status: 400, body: { erro: "Informe o id na rota: /api/orcamentos/{id}" } };
+    if (!idBruto) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/orcamentos/{id}" } };
       return;
     }
-    const usuarioGlobal = exigirFinanceiroGlobal(req, context);
-    if (!usuarioGlobal) return;
-    const atual = await pool.request().input("id", sql.Int, id).query(`SELECT * FROM OrcamentosAnuais WHERE OrcamentoId = @id`);
+    const id = auth.idDeRota(idBruto);
+    const atual = id ? await pool.request().input("id", sql.Int, id).query(`SELECT * FROM OrcamentosAnuais WHERE OrcamentoId = @id`) : { recordset: [] };
     if (atual.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Orçamento não encontrado." } };
       return;
@@ -150,24 +162,34 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Orçamento encerrado — não é mais possível editar linhas." } };
       return;
     }
+    // Linhas inválidas continuam sendo ignoradas (comportamento anterior); só as válidas e sem repetição entram.
+    const validas = [];
+    if (Array.isArray(linhas)) {
+      const vistas = new Set();
+      for (const l of linhas) {
+        const v = linhaValida(l);
+        if (!v) continue;
+        const chave = `${v.tipoMovimento}|${v.categoriaCodigo}`;
+        if (vistas.has(chave)) continue;
+        vistas.add(chave);
+        validas.push(v);
+      }
+    }
     if (status) {
       await pool.request().input("id", sql.Int, id).input("status", sql.NVarChar(20), status).query(`UPDATE OrcamentosAnuais SET Status = @status WHERE OrcamentoId = @id`);
     }
-    if (Array.isArray(linhas)) {
-      for (const l of linhas) {
-        if (!TIPOS.includes(l.tipoMovimento) || !l.categoriaCodigo || !l.valorOrcado || Number(l.valorOrcado) <= 0) continue;
-        await pool.request().input("orcamentoId", sql.Int, id).input("tipoMovimento", sql.NVarChar(10), l.tipoMovimento)
-          .input("categoriaCodigo", sql.NVarChar(30), l.categoriaCodigo).input("valorOrcado", sql.Decimal(12, 2), l.valorOrcado)
-          .query(`MERGE OrcamentoLinhas AS destino
-                  USING (SELECT @orcamentoId AS OrcamentoId, @tipoMovimento AS TipoMovimento, @categoriaCodigo AS CategoriaCodigo) AS origem
-                  ON destino.OrcamentoId = origem.OrcamentoId AND destino.TipoMovimento = origem.TipoMovimento AND destino.CategoriaCodigo = origem.CategoriaCodigo
-                  WHEN MATCHED THEN UPDATE SET ValorOrcado = @valorOrcado
-                  WHEN NOT MATCHED THEN INSERT (OrcamentoId, TipoMovimento, CategoriaCodigo, ValorOrcado) VALUES (@orcamentoId, @tipoMovimento, @categoriaCodigo, @valorOrcado);`);
-      }
+    for (const l of validas) {
+      await pool.request().input("orcamentoId", sql.Int, id).input("tipoMovimento", sql.NVarChar(10), l.tipoMovimento)
+        .input("categoriaCodigo", sql.NVarChar(30), l.categoriaCodigo).input("valorOrcado", sql.Decimal(12, 2), l.valorOrcado)
+        .query(`MERGE OrcamentoLinhas AS destino
+                USING (SELECT @orcamentoId AS OrcamentoId, @tipoMovimento AS TipoMovimento, @categoriaCodigo AS CategoriaCodigo) AS origem
+                ON destino.OrcamentoId = origem.OrcamentoId AND destino.TipoMovimento = origem.TipoMovimento AND destino.CategoriaCodigo = origem.CategoriaCodigo
+                WHEN MATCHED THEN UPDATE SET ValorOrcado = @valorOrcado
+                WHEN NOT MATCHED THEN INSERT (OrcamentoId, TipoMovimento, CategoriaCodigo, ValorOrcado) VALUES (@orcamentoId, @tipoMovimento, @categoriaCodigo, @valorOrcado);`);
     }
     await registrarAuditoria({
-      tabela: "OrcamentosAnuais", registroId: Number(id), acao: "Atualizou orçamento anual", usuarioId: usuarioGlobal.membroId,
-      dadosAntes: registro, dadosDepois: { status, totalLinhas: Array.isArray(linhas) ? linhas.length : 0 }
+      tabela: "OrcamentosAnuais", registroId: id, acao: "Atualizou orçamento anual", usuarioId: usuario.membroId,
+      dadosAntes: registro, dadosDepois: { status, totalLinhas: validas.length }
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Orçamento atualizado." } };
     return;

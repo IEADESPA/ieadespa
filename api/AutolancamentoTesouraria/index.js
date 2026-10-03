@@ -13,6 +13,7 @@
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const storage = require("../shared/storage");
+const auth = require("../shared/auth");
 
 const FORMAS = ["DINHEIRO", "PIX", "MISTO"];
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
@@ -20,11 +21,10 @@ const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
 const REGEX_MES = /^\d{4}-\d{2}$/;
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão: antes qualquer um lançava dízimo em nome de qualquer matrícula e subia arquivo de até 15 MB
+  // ao armazenamento sem login nenhum.
   const matricula = context.bindingData.matricula;
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
+  if (!auth.exigirTitular(req, context, matricula)) return;
   const { tipo, descricao, valor, formaPagamento, valorPix, mesReferencia, comprovanteBase64, mimeType, campanhaId } = req.body || {};
   if (!tipo || !valor || !formaPagamento || !mesReferencia) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: tipo, valor, formaPagamento, mesReferencia." } };

@@ -1,0 +1,1167 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const eventos = await fetchItems<{ id: number; title: string }>("eventos", "fields=id,title&sort=-event_date");
+const ministerios = await fetchItems<{ id: number; name: string }>("ministerios", "fields=id,name&sort=name");
+---
+
+<BaseLayout title="Editar camiseta — Gestão de camisetas" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas" style="max-width: 42rem;" data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow"><a href="/painel-camisetas/" class="text-accent">← Gestão de camisetas</a></p>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 class="pagehead-title" data-painel-titulo>Camiseta</h1>
+          <a href="/painel-camisetas/grupo/pedidos/" class="btn btn-outline" data-link-pedidos hidden>Ver pedidos e lotes de compra</a>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden data-painel-erro class="gallery-empty mt-8">
+        <p class="text-sm text-muted-foreground">Não encontrado.</p>
+      </div>
+
+      <div hidden class="tab-bar mt-8" data-tabs role="tablist">
+        <button type="button" class="tab-btn is-active" data-tab="dados">Dados da campanha</button>
+        <button type="button" class="tab-btn" data-tab="perguntas">Perguntas personalizadas</button>
+        <button type="button" class="tab-btn" data-tab="retirada">E-mail de retirada</button>
+        <button type="button" class="tab-btn" data-tab="imagem">Imagem</button>
+        <button type="button" class="tab-btn" data-tab="consolidado">Consolidado</button>
+        <button type="button" class="tab-btn" data-tab="excluir">Excluir</button>
+      </div>
+
+      <div hidden class="mt-4 aviso-mudanca-remota" data-aviso-mudanca-remota>
+        <span>Esta campanha foi alterada por outra pessoa nesta tela.</span>
+        <button type="button" class="link-sweep font-semibold" data-recarregar-pagina>Atualizar agora</button>
+      </div>
+
+      <form hidden class="mt-8 grid gap-5 max-w-2xl" data-lote-form>
+      <div data-tab-panel="dados">
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-nome">Nome</label>
+          <input id="f-nome" class="field" required />
+        </div>
+
+        <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-slug">Endereço (slug)</label>
+            <input id="f-slug" class="field" placeholder="nome-da-camiseta" />
+          </div>
+          <button type="button" class="btn btn-outline" data-gerar-slug>Gerar do nome</button>
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-descricao">Descrição (aparece na página pública)</label>
+          <textarea id="f-descricao" rows="4" class="field"></textarea>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-evento">Vincular a um evento (opcional)</label>
+            <select id="f-evento" class="field">
+              <option value="">— Nenhum —</option>
+              {eventos.map((e) => <option value={e.id}>{e.title}</option>)}
+            </select>
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-ministerio">Vincular a um ministério (opcional)</label>
+            <select id="f-ministerio" class="field">
+              <option value="">— Nenhum —</option>
+              {ministerios.map((m) => <option value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Uma camiseta pode ter nenhum, um, ou os dois vínculos ao mesmo tempo — ex.: uniforme fixo
+          de um ministério não precisa de evento nenhum; camiseta de uma marcha pode ter só o evento.
+        </p>
+
+        <label class="flex items-start gap-2 text-sm">
+          <input id="f-pedir-congregacao" type="checkbox" class="mt-1" />
+          <span>
+            <strong>Perguntar a congregação no pedido</strong> — desmarque para campanhas que
+            reúnem várias igrejas/ministérios (ex.: uma marcha da cidade toda), onde vincular a uma
+            única congregação não faz sentido.
+          </span>
+        </label>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-tamanhos">Tamanhos (separados por vírgula)</label>
+            <input id="f-tamanhos" class="field" placeholder="PP, P, M, G, GG, XG" />
+          </div>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-modelos">Modelos (separados por vírgula)</label>
+            <input id="f-modelos" class="field" placeholder="Masculino, Feminino" />
+          </div>
+        </div>
+        <p class="text-xs text-muted-foreground">Deixe um campo em branco pra não pedir essa escolha no formulário público.</p>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-valor-venda">Valor de venda padrão (aparece ao público)</label>
+          <input id="f-valor-venda" type="number" step="0.01" min="0" class="field" />
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Deixe em branco pra essa camiseta ser <strong>gratuita</strong> (nenhum tamanho abaixo com
+          preço próprio cobra nada). O custo por peça não fica aqui — cada encomenda feita ao
+          fornecedor vira um "lote de compra" próprio (aba Pedidos e lotes de compra), com seu
+          próprio custo, porque o preço pago à malharia pode mudar de uma encomenda pra outra ao
+          longo do ano.
+        </p>
+
+        <div class="grid gap-2" data-precos-tamanho-wrap hidden>
+          <label class="text-sm font-semibold">Preço por tamanho (opcional)</label>
+          <p class="text-xs text-muted-foreground">
+            Deixe um tamanho em branco pra ele usar o valor de venda padrão acima. Preencha só os
+            tamanhos que custam diferente (ex.: GG mais caro) — ou todos, se cada um tiver um preço
+            próprio.
+          </p>
+          <div class="grid gap-2" data-precos-tamanho-lista></div>
+        </div>
+
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="f-pedidos-ate">Pedidos até (opcional)</label>
+          <input id="f-pedidos-ate" type="date" class="field" />
+        </div>
+
+        <div class="grid gap-3">
+          <label class="flex items-center gap-2 text-sm">
+            <input id="f-ativo" type="checkbox" /> Ativo (aparece na listagem pública e aceita novo pedido)
+          </label>
+        </div>
+
+        <div class="grid gap-3">
+          <label class="flex items-start gap-2 text-sm">
+            <input id="f-limite-uma-por-pessoa" type="checkbox" class="mt-1" />
+            <span>
+              <strong>Limitar a 1 peça por pessoa</strong> — a pessoa só consegue pedir uma unidade
+              no total (nenhum outro tamanho ou modelo, nem repetir o mesmo), travado por telefone e
+              e-mail. Desmarcado por padrão (carrinho livre, como já era).
+            </span>
+          </label>
+        </div>
+
+        <div class="grid gap-3">
+          <label class="flex items-start gap-2 text-sm">
+            <input id="f-destaque" type="checkbox" class="mt-1" />
+            <span>
+              <strong>Destacar na página inicial</strong> (carrossel) — some sozinho quando "Pedidos
+              até" passar (ou quando "Ativo" for desmarcado, se não tiver prazo definido).
+            </span>
+          </label>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <button type="submit" class="btn btn-solid" data-lote-salvar>Salvar</button>
+          <p class="text-sm" data-lote-status role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div data-tab-panel="perguntas" hidden>
+        <div style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <p class="text-sm font-semibold">Perguntas personalizadas do pedido</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Além de nome, telefone e congregação, o formulário público pode pedir campos extras
+            específicos desta campanha (ex.: bairro, nome da congregação por extenso se não estiver
+            na lista, tamanho de calçado etc.).
+          </p>
+
+          <div class="mt-4 grid gap-3" data-perguntas-lista></div>
+
+          <div class="mt-4 grid gap-3 sm:grid-cols-2" style="border-top: 1px solid var(--border); padding-top: 1rem;">
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="np-label">Nova pergunta</label>
+              <input id="np-label" class="field" placeholder="Ex.: Bairro" />
+            </div>
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="np-tipo">Tipo</label>
+              <select id="np-tipo" class="field">
+                <option value="texto_curto">Texto curto</option>
+                <option value="texto_longo">Texto longo</option>
+                <option value="selecao_unica">Seleção única (uma opção)</option>
+                <option value="selecao_multipla">Seleção múltipla (várias opções)</option>
+                <option value="numero">Número</option>
+                <option value="data">Data</option>
+              </select>
+            </div>
+            <div class="grid gap-2 sm:col-span-2" data-np-opcoes-wrap hidden>
+              <label class="text-sm font-semibold" for="np-opcoes">Opções (uma por linha)</label>
+              <textarea id="np-opcoes" rows="3" class="field"></textarea>
+            </div>
+            <label class="flex items-center gap-2 text-sm">
+              <input id="np-obrigatoria" type="checkbox" /> Obrigatória
+            </label>
+            <div class="flex items-center gap-4">
+              <button type="button" class="btn btn-outline" data-np-adicionar>+ Adicionar pergunta</button>
+              <p class="text-sm" data-np-status role="status" aria-live="polite"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div data-tab-panel="retirada" hidden>
+        <div class="grid gap-5" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <div>
+            <p class="text-sm font-semibold">Aviso de "pode retirar"</p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Quando a equipe marca um pedido como "separado" (peça já chegou da malharia e foi
+              separada pra essa pessoa), quem deixou e-mail recebe um aviso automático. Os campos
+              abaixo são todos opcionais — em branco, o e-mail sai com um texto padrão.
+            </p>
+          </div>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-retirada-local">Onde/quando retirar</label>
+            <input id="f-retirada-local" class="field" placeholder="Ex.: Secretaria da Sede, seg-sex 9h-17h" />
+          </div>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-email-assunto">Assunto customizado (opcional)</label>
+            <input id="f-email-assunto" class="field" placeholder={`Padrão: "Sua camiseta chegou! — <nome da campanha>"`} />
+          </div>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-email-corpo">Mensagem customizada (opcional)</label>
+            <textarea id="f-email-corpo" rows="3" class="field" placeholder="Texto simples — a lista de itens e o local de retirada são adicionados automaticamente depois desse parágrafo."></textarea>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-solid" data-lote-salvar>Salvar</button>
+            <p class="text-sm" data-lote-status role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+      </form>
+
+      <div data-tab-panel="imagem" hidden>
+        <div class="grid gap-4" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <div>
+            <p class="text-sm font-semibold">Imagem de compartilhamento</p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Aparece na prévia quando o link desta camiseta é compartilhado (WhatsApp, redes
+              sociais etc.). Se esta campanha estiver vinculada a um evento (aba "Dados da
+              campanha"), a imagem do evento tem prioridade sobre esta — essa aqui só aparece
+              quando não houver evento vinculado, ou o evento não tiver imagem própria.
+            </p>
+          </div>
+
+          <div data-imagem-preview-wrap hidden>
+            <img data-imagem-preview alt="Imagem atual da campanha" style="max-width: 20rem; width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border);" />
+            <button type="button" class="btn btn-outline mt-2" data-imagem-remover>Remover imagem</button>
+          </div>
+          <p class="text-sm text-muted-foreground" data-imagem-vazio>Nenhuma imagem enviada ainda.</p>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-imagem-arquivo">Enviar nova imagem</label>
+            <input id="f-imagem-arquivo" type="file" accept="image/*" class="field" />
+          </div>
+          <div class="flex items-center gap-4">
+            <button type="button" class="btn btn-solid" data-imagem-enviar>Enviar</button>
+            <p class="text-sm" data-imagem-status role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+
+      <div data-tab-panel="consolidado" hidden>
+        <div data-consolidado-carregando class="text-sm text-muted-foreground">Carregando…</div>
+        <div hidden data-consolidado-conteudo>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="stat-card"><p class="stat-numero" data-cstat="vendido">R$ 0</p><p class="stat-label">Vendido</p></div>
+            <div class="stat-card"><p class="stat-numero" data-cstat="arrecadado">R$ 0</p><p class="stat-label">Arrecadado</p></div>
+            <div class="stat-card"><p class="stat-numero" data-cstat="pago">R$ 0</p><p class="stat-label">Pago à malharia</p></div>
+            <div class="stat-card"><p class="stat-numero" data-cstat="saldo">R$ 0</p><p class="stat-label">Saldo</p></div>
+          </div>
+          <div class="mt-4 grid gap-4 sm:grid-cols-3">
+            <div class="stat-card"><p class="stat-numero" data-cstat="pedidas">0</p><p class="stat-label">Peças pedidas</p></div>
+            <div class="stat-card"><p class="stat-numero" data-cstat="aguardando">0</p><p class="stat-label">Separadas, aguardando retirada</p></div>
+            <div class="stat-card"><p class="stat-numero" data-cstat="retiradas">0</p><p class="stat-label">Já retiradas</p></div>
+          </div>
+
+          <div class="mt-6 grid gap-4 sm:grid-cols-2">
+            <div class="grafico-card"><p class="grafico-titulo">Peças por tamanho</p><div data-grafico-tamanho></div></div>
+            <div class="grafico-card"><p class="grafico-titulo">Peças por situação</p><div data-grafico-situacao></div></div>
+          </div>
+
+          <div class="mt-6">
+            <button type="button" class="btn btn-outline" data-exportar-relatorio-pdf>Exportar relatório PDF</button>
+          </div>
+        </div>
+      </div>
+
+      <div data-tab-panel="excluir" hidden>
+        <div style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <p class="text-sm font-semibold text-red-700">Excluir</p>
+          <p class="mt-1 text-sm text-muted-foreground">Remove esta camiseta, seus lotes de compra e todos os pedidos ligados a ela. Não pode ser desfeito.</p>
+          <button type="button" class="btn btn-outline mt-3" data-excluir-lote>Excluir</button>
+          <p class="mt-2 text-sm" data-excluir-status role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { exigirAutenticacao } from "@/lib/painelAuth";
+    import { directusAssetUrl } from "@/lib/directus";
+    import { jsPDF } from "jspdf";
+    import { configurarAcessibilidadePdf } from "@/lib/pdf";
+    import { graficoBarrasSvg, desenharGraficoBarrasPDF, type ContagemOpcao } from "@/lib/graficos";
+
+    const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
+
+    interface Grupo {
+      id: number;
+      nome: string;
+      slug: string | null;
+      descricao: string | null;
+      evento: number | null;
+      ministerio: number | null;
+      tamanhos: string[] | null;
+      modelos: string[] | null;
+      valor_venda: number | null;
+      precos_tamanho: Record<string, number> | null;
+      pedidos_ate: string | null;
+      ativo: boolean;
+      destaque: boolean;
+      pedir_congregacao: boolean;
+      limite_uma_por_pessoa: boolean;
+      retirada_local: string | null;
+      email_retirada_assunto: string | null;
+      email_retirada_corpo: string | null;
+      imagem: string | null;
+    }
+
+    interface PedidoResumo {
+      id: number;
+      lote: number | null;
+      valor_pago: number;
+      avulso: boolean;
+      separado: boolean;
+    }
+
+    interface ItemResumo {
+      id: number;
+      pedido: number;
+      tamanho: string | null;
+      modelo: string | null;
+      quantidade: number;
+      quantidade_retirada: number;
+    }
+
+    interface LoteResumo {
+      id: number;
+      grupo: number;
+      status: "aberto" | "fechado";
+      total_vendido: number | null;
+      total_arrecadado: number | null;
+      total_pago_malharia: number | null;
+    }
+
+    interface LoteItemResumo {
+      id: number;
+      lote: number;
+      tamanho: string | null;
+      modelo: string | null;
+      estoque_extra: number;
+      custo_unitario: number | null;
+    }
+
+    const container = document.querySelector<HTMLElement>("[data-directus-url]");
+    if (!container) throw new Error("contêiner do painel ausente");
+    const directusUrl = container.dataset.directusUrl ?? "";
+
+    const idParam = new URLSearchParams(window.location.search).get("id");
+    const grupoId = idParam ? Number(idParam) : null;
+
+    const carregando = document.querySelector<HTMLElement>("[data-painel-carregando]");
+    const erroEl = document.querySelector<HTMLElement>("[data-painel-erro]");
+    const tituloEl = document.querySelector<HTMLElement>("[data-painel-titulo]");
+    const form = document.querySelector<HTMLFormElement>("[data-lote-form]");
+    // Duas abas têm botão "Salvar" (Dados e E-mail de retirada — o mesmo
+    // registro, então o mesmo submit serve pros dois); atualiza o status nos
+    // dois lugares, pra funcionar não importa em qual aba a pessoa clicou.
+    const statusEls = document.querySelectorAll<HTMLElement>("[data-lote-status]");
+    const definirStatus = (texto: string) => statusEls.forEach((el) => { el.textContent = texto; });
+
+    const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+    const fNome = el<HTMLInputElement>("f-nome");
+    const fSlug = el<HTMLInputElement>("f-slug");
+    const fDescricao = el<HTMLTextAreaElement>("f-descricao");
+    const fEvento = el<HTMLSelectElement>("f-evento");
+    const fMinisterio = el<HTMLSelectElement>("f-ministerio");
+    const fTamanhos = el<HTMLInputElement>("f-tamanhos");
+    const fModelos = el<HTMLInputElement>("f-modelos");
+    const fValorVenda = el<HTMLInputElement>("f-valor-venda");
+    const fPedidosAte = el<HTMLInputElement>("f-pedidos-ate");
+    const fAtivo = el<HTMLInputElement>("f-ativo");
+    const fDestaque = el<HTMLInputElement>("f-destaque");
+    const fPedirCongregacao = el<HTMLInputElement>("f-pedir-congregacao");
+    const fLimiteUmaPorPessoa = el<HTMLInputElement>("f-limite-uma-por-pessoa");
+    const fRetiradaLocal = el<HTMLInputElement>("f-retirada-local");
+    const fEmailAssunto = el<HTMLInputElement>("f-email-assunto");
+    const fEmailCorpo = el<HTMLTextAreaElement>("f-email-corpo");
+    const precosTamanhoWrap = document.querySelector<HTMLElement>("[data-precos-tamanho-wrap]");
+    const precosTamanhoLista = document.querySelector<HTMLElement>("[data-precos-tamanho-lista]");
+
+    const imagemPreviewWrap = document.querySelector<HTMLElement>("[data-imagem-preview-wrap]");
+    const imagemPreview = document.querySelector<HTMLImageElement>("[data-imagem-preview]");
+    const imagemVazio = document.querySelector<HTMLElement>("[data-imagem-vazio]");
+    const imagemArquivo = el<HTMLInputElement>("f-imagem-arquivo");
+    const imagemStatus = document.querySelector<HTMLElement>("[data-imagem-status]");
+
+    const consolidadoCarregando = document.querySelector<HTMLElement>("[data-consolidado-carregando]");
+    const consolidadoConteudo = document.querySelector<HTMLElement>("[data-consolidado-conteudo]");
+
+    /**
+     * Preço por tamanho é opcional e digitado ao lado de cada tamanho já
+     * cadastrado no campo CSV acima — reconstrói as linhas sempre que a
+     * lista de tamanhos muda, preservando o que já tiver sido digitado pra
+     * cada tamanho que continuar existindo.
+     */
+    function renderizarPrecosTamanho(tamanhosAtuais: string[]) {
+      if (!precosTamanhoWrap || !precosTamanhoLista) return;
+      const valoresAtuais: Record<string, string> = {};
+      precosTamanhoLista.querySelectorAll<HTMLInputElement>("[data-preco-tamanho]").forEach((input) => {
+        if (input.value) valoresAtuais[input.dataset.precoTamanho ?? ""] = input.value;
+      });
+
+      precosTamanhoWrap.hidden = tamanhosAtuais.length === 0;
+      precosTamanhoLista.innerHTML = tamanhosAtuais
+        .map(
+          (t) => `
+            <label class="grid gap-1 sm:grid-cols-[8rem_1fr] sm:items-center text-sm">
+              <span>${escapeHtml(t)}</span>
+              <input type="number" step="0.01" min="0" class="field" placeholder="Usa o valor padrão" value="${valoresAtuais[t] ?? ""}" data-preco-tamanho="${escapeHtml(t)}" />
+            </label>
+          `,
+        )
+        .join("");
+    }
+
+    fTamanhos.addEventListener("input", () => renderizarPrecosTamanho(csvParaLista(fTamanhos.value)));
+
+    // Abas — mesmo padrão já usado em painel-eventos/evento/index.astro.
+    const tabBotoes = document.querySelectorAll<HTMLButtonElement>("[data-tab]");
+    const tabPaineis = document.querySelectorAll<HTMLElement>("[data-tab-panel]");
+    tabBotoes.forEach((botao) => {
+      botao.addEventListener("click", () => {
+        tabBotoes.forEach((b) => b.classList.toggle("is-active", b === botao));
+        tabPaineis.forEach((painel) => {
+          painel.hidden = painel.dataset.tabPanel !== botao.dataset.tab;
+        });
+      });
+    });
+
+    function slugify(texto: string): string {
+      return texto
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    document.querySelector("[data-gerar-slug]")?.addEventListener("click", () => {
+      fSlug.value = slugify(fNome.value);
+    });
+
+    function csvParaLista(valor: string): string[] {
+      return valor
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+    }
+
+    function escapeHtml(value: string) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+    }
+    const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
+    function preencherFormulario(grupo: Grupo) {
+      fNome.value = grupo.nome ?? "";
+      fSlug.value = grupo.slug ?? "";
+      fDescricao.value = grupo.descricao ?? "";
+      fEvento.value = grupo.evento ? String(grupo.evento) : "";
+      fMinisterio.value = grupo.ministerio ? String(grupo.ministerio) : "";
+      fTamanhos.value = (grupo.tamanhos ?? []).join(", ");
+      fModelos.value = (grupo.modelos ?? []).join(", ");
+      fValorVenda.value = grupo.valor_venda != null ? String(grupo.valor_venda) : "";
+      fPedidosAte.value = grupo.pedidos_ate ?? "";
+      fAtivo.checked = Boolean(grupo.ativo);
+      fDestaque.checked = Boolean(grupo.destaque);
+      fPedirCongregacao.checked = grupo.pedir_congregacao !== false;
+      fLimiteUmaPorPessoa.checked = Boolean(grupo.limite_uma_por_pessoa);
+      fRetiradaLocal.value = grupo.retirada_local ?? "";
+      fEmailAssunto.value = grupo.email_retirada_assunto ?? "";
+      fEmailCorpo.value = grupo.email_retirada_corpo ?? "";
+      renderizarPrecosTamanho(grupo.tamanhos ?? []);
+      const precos = grupo.precos_tamanho ?? {};
+      precosTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-preco-tamanho]").forEach((input) => {
+        const tamanho = input.dataset.precoTamanho ?? "";
+        if (precos[tamanho] != null) input.value = String(precos[tamanho]);
+      });
+      renderizarImagem(grupo);
+    }
+
+    function renderizarImagem(grupo: Grupo) {
+      const temImagem = Boolean(grupo.imagem);
+      if (imagemPreviewWrap) imagemPreviewWrap.hidden = !temImagem;
+      if (imagemVazio) imagemVazio.hidden = temImagem;
+      if (imagemPreview && grupo.imagem) {
+        imagemPreview.src = directusAssetUrl(grupo.imagem, { width: 640, quality: 80, format: "webp" });
+      }
+    }
+
+    function lerFormulario() {
+      const precosTamanho: Record<string, number> = {};
+      precosTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-preco-tamanho]").forEach((input) => {
+        const tamanho = input.dataset.precoTamanho ?? "";
+        if (tamanho && input.value !== "") precosTamanho[tamanho] = Number(input.value);
+      });
+
+      return {
+        nome: fNome.value.trim(),
+        slug: fSlug.value.trim() || slugify(fNome.value),
+        descricao: fDescricao.value.trim() || null,
+        evento: fEvento.value ? Number(fEvento.value) : null,
+        ministerio: fMinisterio.value ? Number(fMinisterio.value) : null,
+        tamanhos: csvParaLista(fTamanhos.value),
+        modelos: csvParaLista(fModelos.value),
+        valor_venda: fValorVenda.value ? Number(fValorVenda.value) : null,
+        precos_tamanho: Object.keys(precosTamanho).length ? precosTamanho : null,
+        pedidos_ate: fPedidosAte.value || null,
+        ativo: fAtivo.checked,
+        destaque: fDestaque.checked,
+        pedir_congregacao: fPedirCongregacao.checked,
+        limite_uma_por_pessoa: fLimiteUmaPorPessoa.checked,
+        retirada_local: fRetiradaLocal.value.trim() || null,
+        email_retirada_assunto: fEmailAssunto.value.trim() || null,
+        email_retirada_corpo: fEmailCorpo.value.trim() || null,
+      };
+    }
+
+    /**
+     * Sincronização em tempo real (Fase 30/31). Duas coleções afetam campo de formulário
+     * (`camiseta_grupos`/`perguntas_camiseta`) — esta página inteira é um formulário sempre "em
+     * edição" (diferente de `grupo/pedidos.astro`, que tem linhas com botão "Editar" próprio),
+     * então recarregar os campos por baixo da pessoa sem avisar arriscaria apagar o que ela ainda
+     * não salvou; pra essas duas, só mostra um aviso não-destrutivo, a pessoa decide quando
+     * recarregar. As outras quatro (pedidos/itens/lotes/lote_itens) só alimentam a aba
+     * "Consolidado", que é só leitura — pra essas, `aoMudarConsolidado` recalcula e re-renderiza
+     * sozinho, sem aviso nenhum (não há o que perder ali). Mesmo protocolo de autenticação do
+     * WebSocket do Directus usado em `grupo/pedidos.astro` (ver comentário lá com a fonte oficial).
+     */
+    function iniciarRealtime(accessToken: string, aoMudarConsolidado: () => void) {
+      const aviso = document.querySelector<HTMLElement>("[data-aviso-mudanca-remota]");
+      document.querySelector("[data-recarregar-pagina]")?.addEventListener("click", () => window.location.reload());
+
+      const colecoesFormulario = new Set(["gc0", "gc1"]);
+      const colecoes = [
+        { uid: "gc0", collection: "camiseta_grupos", query: { filter: { id: { _eq: grupoId } } } },
+        { uid: "gc1", collection: "perguntas_camiseta", query: { filter: { grupo: { _eq: grupoId } } } },
+        { uid: "gc2", collection: "camiseta_pedidos", query: { filter: { grupo: { _eq: grupoId } } } },
+        { uid: "gc3", collection: "camiseta_itens_pedido", query: { filter: { pedido: { grupo: { _eq: grupoId } } } } },
+        { uid: "gc4", collection: "camiseta_lotes", query: { filter: { grupo: { _eq: grupoId } } } },
+        { uid: "gc5", collection: "camiseta_lote_itens", query: { filter: { lote: { grupo: { _eq: grupoId } } } } },
+      ];
+      let ws: WebSocket | null = null;
+      let debounceConsolidado: ReturnType<typeof setTimeout> | null = null;
+      let ativo = true;
+
+      function conectar(token: string) {
+        if (!ativo) return;
+        ws = new WebSocket(`${directusUrl.replace(/^http/, "ws")}/websocket`);
+
+        ws.addEventListener("open", () => ws?.send(JSON.stringify({ type: "auth", access_token: token })));
+
+        ws.addEventListener("message", (event) => {
+          let msg: any;
+          try {
+            msg = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+
+          if (msg.type === "auth") {
+            if (msg.status === "ok") {
+              colecoes.forEach((c) => ws?.send(JSON.stringify({ type: "subscribe", collection: c.collection, query: c.query, uid: c.uid })));
+            } else {
+              console.warn("[camisetas] falha ao autenticar o tempo real:", msg);
+            }
+            return;
+          }
+
+          if (msg.type === "subscription" && msg.event && msg.event !== "init") {
+            if (colecoesFormulario.has(msg.uid)) {
+              if (aviso) aviso.hidden = false;
+            } else {
+              if (debounceConsolidado) clearTimeout(debounceConsolidado);
+              debounceConsolidado = setTimeout(aoMudarConsolidado, 500);
+            }
+          }
+        });
+
+        ws.addEventListener("close", () => {
+          if (!ativo) return;
+          setTimeout(async () => {
+            const tokenNovo = await exigirAutenticacao(directusUrl, AUTH);
+            if (tokenNovo && ativo) conectar(tokenNovo);
+          }, 3000);
+        });
+
+        ws.addEventListener("error", () => ws?.close());
+      }
+
+      conectar(accessToken);
+    }
+
+    async function iniciar() {
+      const tokenObtido = await exigirAutenticacao(directusUrl, AUTH);
+      if (!tokenObtido) return;
+      const token: string = tokenObtido;
+
+      if (!grupoId) {
+        if (carregando) carregando.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        return;
+      }
+
+      const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        if (carregando) carregando.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        return;
+      }
+      const grupo: Grupo = (await res.json()).data;
+
+      if (tituloEl) tituloEl.textContent = grupo.nome;
+      preencherFormulario(grupo);
+
+      const linkPedidos = document.querySelector<HTMLAnchorElement>("[data-link-pedidos]");
+      if (linkPedidos) {
+        linkPedidos.href = `/painel-camisetas/grupo/pedidos/?id=${grupoId}`;
+        linkPedidos.hidden = false;
+      }
+
+      if (carregando) carregando.hidden = true;
+      if (form) form.hidden = false;
+      const tabsBar = document.querySelector<HTMLElement>("[data-tabs]");
+      if (tabsBar) tabsBar.hidden = false;
+
+      form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        definirStatus("Salvando…");
+        try {
+          const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(lerFormulario()),
+          });
+          if (!res.ok) throw new Error("falha ao salvar");
+          definirStatus("✅ Salvo.");
+        } catch {
+          definirStatus("Não foi possível salvar agora.");
+        }
+      });
+
+      interface Pergunta {
+        id: number;
+        ordem: number | null;
+        label: string;
+        tipo: string;
+        opcoes: string[] | null;
+        obrigatoria: boolean;
+      }
+
+      const perguntasLista = document.querySelector<HTMLElement>("[data-perguntas-lista]");
+      const npLabel = el<HTMLInputElement>("np-label");
+      const npTipo = el<HTMLSelectElement>("np-tipo");
+      const npOpcoesWrap = document.querySelector<HTMLElement>("[data-np-opcoes-wrap]");
+      const npOpcoes = el<HTMLTextAreaElement>("np-opcoes");
+      const npObrigatoria = el<HTMLInputElement>("np-obrigatoria");
+      const npStatus = document.querySelector<HTMLElement>("[data-np-status]");
+
+      function tipoPrecisaOpcoes(tipo: string) {
+        return tipo === "selecao_unica" || tipo === "selecao_multipla";
+      }
+
+      npTipo.addEventListener("change", () => {
+        if (npOpcoesWrap) npOpcoesWrap.hidden = !tipoPrecisaOpcoes(npTipo.value);
+      });
+
+      async function carregarPerguntas() {
+        if (!perguntasLista) return;
+        const res = await fetch(`${directusUrl}/items/perguntas_camiseta?filter[grupo][_eq]=${grupoId}&sort=ordem&limit=-1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const perguntas: Pergunta[] = res.ok ? (await res.json()).data ?? [] : [];
+
+        if (perguntas.length === 0) {
+          perguntasLista.innerHTML = `<p class="text-sm text-muted-foreground">Nenhuma pergunta extra cadastrada ainda.</p>`;
+          return;
+        }
+
+        const rotuloTipo: Record<string, string> = {
+          texto_curto: "Texto curto",
+          texto_longo: "Texto longo",
+          selecao_unica: "Seleção única",
+          selecao_multipla: "Seleção múltipla",
+          numero: "Número",
+          data: "Data",
+        };
+
+        perguntasLista.innerHTML = perguntas
+          .map(
+            (p) => `
+              <div class="pergunta-card-camiseta" data-pergunta-id="${p.id}">
+                <div class="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                  <input type="text" class="field" value="${escapeHtml(p.label)}" data-campo="label" />
+                  <select class="field" data-campo="tipo">
+                    ${Object.entries(rotuloTipo)
+                      .map(([value, label]) => `<option value="${value}" ${value === p.tipo ? "selected" : ""}>${label}</option>`)
+                      .join("")}
+                  </select>
+                  <input type="number" class="field" style="width:5rem" value="${p.ordem ?? 0}" data-campo="ordem" title="Ordem" />
+                </div>
+                <textarea class="field mt-3" rows="2" placeholder="Opções (uma por linha)" data-campo="opcoes" ${
+                  tipoPrecisaOpcoes(p.tipo) ? "" : "hidden"
+                }>${(p.opcoes ?? []).join("\n")}</textarea>
+                <div class="mt-3 flex items-center justify-between gap-3">
+                  <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" data-campo="obrigatoria" ${p.obrigatoria ? "checked" : ""} /> Obrigatória
+                  </label>
+                  <div class="flex gap-3">
+                    <button type="button" class="btn btn-outline" data-salvar-pergunta>Salvar</button>
+                    <button type="button" class="btn btn-outline" data-excluir-pergunta>Excluir</button>
+                  </div>
+                </div>
+              </div>
+            `,
+          )
+          .join("");
+      }
+
+      perguntasLista?.addEventListener("change", (event) => {
+        const target = event.target as HTMLElement;
+        if (!target.matches('[data-campo="tipo"]')) return;
+        const card = target.closest<HTMLElement>("[data-pergunta-id]");
+        const opcoesTextarea = card?.querySelector<HTMLTextAreaElement>('[data-campo="opcoes"]');
+        const valor = (target as HTMLSelectElement).value;
+        if (opcoesTextarea) opcoesTextarea.hidden = !tipoPrecisaOpcoes(valor);
+      });
+
+      perguntasLista?.addEventListener("click", async (event) => {
+        const target = event.target as HTMLElement;
+        const card = target.closest<HTMLElement>("[data-pergunta-id]");
+        if (!card) return;
+        const perguntaId = card.dataset.perguntaId;
+
+        if (target.matches("[data-excluir-pergunta]")) {
+          if (!perguntaId || !confirm("Excluir esta pergunta? Respostas já dadas a ela também somem.")) return;
+          await fetch(`${directusUrl}/items/perguntas_camiseta/${perguntaId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          await carregarPerguntas();
+          return;
+        }
+
+        if (target.matches("[data-salvar-pergunta]")) {
+          const labelInput = card.querySelector<HTMLInputElement>('[data-campo="label"]');
+          const tipoSelect = card.querySelector<HTMLSelectElement>('[data-campo="tipo"]');
+          const ordemInput = card.querySelector<HTMLInputElement>('[data-campo="ordem"]');
+          const opcoesTextarea = card.querySelector<HTMLTextAreaElement>('[data-campo="opcoes"]');
+          const obrigatoriaInput = card.querySelector<HTMLInputElement>('[data-campo="obrigatoria"]');
+          const tipo = tipoSelect?.value ?? "texto_curto";
+          const opcoes = tipoPrecisaOpcoes(tipo)
+            ? opcoesTextarea?.value
+                .split("\n")
+                .map((v) => v.trim())
+                .filter(Boolean)
+            : null;
+
+          target.textContent = "Salvando…";
+          await fetch(`${directusUrl}/items/perguntas_camiseta/${perguntaId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              label: labelInput?.value.trim(),
+              tipo,
+              ordem: ordemInput?.value ? Number(ordemInput.value) : 0,
+              opcoes: opcoes?.length ? opcoes : null,
+              obrigatoria: Boolean(obrigatoriaInput?.checked),
+            }),
+          });
+          target.textContent = "Salvar";
+          await carregarPerguntas();
+        }
+      });
+
+      document.querySelector("[data-np-adicionar]")?.addEventListener("click", async () => {
+        const label = npLabel.value.trim();
+        if (!label) {
+          if (npStatus) npStatus.textContent = "Digite o texto da pergunta.";
+          return;
+        }
+        const tipo = npTipo.value;
+        const opcoes = tipoPrecisaOpcoes(tipo)
+          ? npOpcoes.value
+              .split("\n")
+              .map((v) => v.trim())
+              .filter(Boolean)
+          : null;
+
+        if (npStatus) npStatus.textContent = "Adicionando…";
+        try {
+          const res = await fetch(`${directusUrl}/items/perguntas_camiseta`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ grupo: grupoId, label, tipo, opcoes, obrigatoria: npObrigatoria.checked }),
+          });
+          if (!res.ok) throw new Error("falha ao adicionar");
+          npLabel.value = "";
+          npOpcoes.value = "";
+          npObrigatoria.checked = false;
+          if (npStatus) npStatus.textContent = "✅ Adicionada.";
+          await carregarPerguntas();
+        } catch {
+          if (npStatus) npStatus.textContent = "Não foi possível adicionar agora.";
+        }
+      });
+
+      await carregarPerguntas();
+
+      // --- imagem de compartilhamento ---
+      document.querySelector("[data-imagem-enviar]")?.addEventListener("click", async () => {
+        const arquivo = imagemArquivo.files?.[0];
+        if (!arquivo) {
+          if (imagemStatus) imagemStatus.textContent = "Escolha um arquivo primeiro.";
+          return;
+        }
+        if (imagemStatus) imagemStatus.textContent = "Enviando…";
+        try {
+          const formData = new FormData();
+          formData.append("file", arquivo);
+          const resUpload = await fetch(`${directusUrl}/files`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+          });
+          if (!resUpload.ok) throw new Error("falha no upload");
+          const arquivoId = (await resUpload.json()).data.id;
+
+          const resPatch = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ imagem: arquivoId }),
+          });
+          if (!resPatch.ok) throw new Error("falha ao salvar");
+
+          grupo.imagem = arquivoId;
+          renderizarImagem(grupo);
+          imagemArquivo.value = "";
+          if (imagemStatus) imagemStatus.textContent = "✅ Enviada.";
+        } catch {
+          if (imagemStatus) imagemStatus.textContent = "Não foi possível enviar agora.";
+        }
+      });
+
+      document.querySelector("[data-imagem-remover]")?.addEventListener("click", async () => {
+        if (!confirm("Remover a imagem desta campanha? (o arquivo continua no Directus, só desvincula daqui)")) return;
+        if (imagemStatus) imagemStatus.textContent = "Removendo…";
+        try {
+          const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ imagem: null }),
+          });
+          if (!res.ok) throw new Error("falha ao remover");
+          grupo.imagem = null;
+          renderizarImagem(grupo);
+          if (imagemStatus) imagemStatus.textContent = "✅ Removida.";
+        } catch {
+          if (imagemStatus) imagemStatus.textContent = "Não foi possível remover agora.";
+        }
+      });
+
+      // --- aba Consolidado (por campanha, com gráficos) ---
+      let pedidosResumo: PedidoResumo[] = [];
+      let itensResumo: ItemResumo[] = [];
+      let lotesResumo: LoteResumo[] = [];
+      let loteItensResumo: LoteItemResumo[] = [];
+
+      function precoTamanhoConsolidado(tamanho: string | null): number {
+        const precos = grupo.precos_tamanho ?? {};
+        if (tamanho && precos[tamanho] != null) return Number(precos[tamanho]);
+        return grupo.valor_venda != null ? Number(grupo.valor_venda) : 0;
+      }
+
+      function totalPedidoConsolidado(pedido: PedidoResumo): number {
+        return itensResumo.filter((i) => i.pedido === pedido.id).reduce((s, i) => s + i.quantidade * precoTamanhoConsolidado(i.tamanho), 0);
+      }
+
+      /** "Vendido"/"Arrecadado" de um lote fechado vêm de retrato congelado (mesmo critério de `grupo/pedidos.astro`); lote aberto calcula ao vivo. */
+      function vendidoArrecadadoLoteConsolidado(lote: LoteResumo): { vendido: number; arrecadado: number } {
+        if (lote.status === "fechado" && lote.total_vendido != null) {
+          return { vendido: Number(lote.total_vendido), arrecadado: Number(lote.total_arrecadado ?? 0) };
+        }
+        const pedidosDoLote = pedidosResumo.filter((p) => p.lote === lote.id && !p.avulso);
+        return {
+          vendido: pedidosDoLote.reduce((s, p) => s + totalPedidoConsolidado(p), 0),
+          arrecadado: pedidosDoLote.reduce((s, p) => s + Number(p.valor_pago || 0), 0),
+        };
+      }
+
+      function pagoMalhariaLoteConsolidado(lote: LoteResumo): number {
+        if (lote.status === "fechado" && lote.total_pago_malharia != null) return Number(lote.total_pago_malharia);
+        const pedidosDoLote = pedidosResumo.filter((p) => p.lote === lote.id && !p.avulso);
+        return loteItensResumo
+          .filter((li) => li.lote === lote.id)
+          .reduce((soma, li) => {
+            const pedidoSistema = pedidosDoLote.reduce((s, p) => {
+              const itensCombo = itensResumo.filter(
+                (i) => i.pedido === p.id && (i.tamanho ?? null) === (li.tamanho ?? null) && (i.modelo ?? null) === (li.modelo ?? null),
+              );
+              return s + itensCombo.reduce((s2, i) => s2 + i.quantidade, 0);
+            }, 0);
+            return soma + (pedidoSistema + Number(li.estoque_extra || 0)) * Number(li.custo_unitario || 0);
+          }, 0);
+      }
+
+      function calcularConsolidadoCampanha() {
+        let vendido = 0;
+        let arrecadado = 0;
+        let pago = 0;
+        for (const lote of lotesResumo) {
+          const va = vendidoArrecadadoLoteConsolidado(lote);
+          vendido += va.vendido;
+          arrecadado += va.arrecadado;
+          pago += pagoMalhariaLoteConsolidado(lote);
+        }
+        for (const p of pedidosResumo.filter((p) => p.avulso)) {
+          vendido += totalPedidoConsolidado(p);
+          arrecadado += Number(p.valor_pago || 0);
+        }
+
+        let pecasPedidas = 0;
+        let pecasRetiradas = 0;
+        let pecasAguardando = 0;
+        const porTamanho = new Map<string, number>();
+        for (const p of pedidosResumo) {
+          for (const i of itensResumo.filter((i) => i.pedido === p.id)) {
+            pecasPedidas += i.quantidade;
+            pecasRetiradas += Math.min(i.quantidade, i.quantidade_retirada);
+            const pendente = Math.max(0, i.quantidade - i.quantidade_retirada);
+            if (p.separado) pecasAguardando += pendente;
+            const rotuloTamanho = i.tamanho ?? "Sem tamanho";
+            porTamanho.set(rotuloTamanho, (porTamanho.get(rotuloTamanho) ?? 0) + i.quantidade);
+          }
+        }
+        const naoSeparadas = Math.max(0, pecasPedidas - pecasRetiradas - pecasAguardando);
+
+        const graficoTamanho: ContagemOpcao[] = Array.from(porTamanho.entries()).map(([rotulo, total]) => ({ rotulo, total }));
+        const graficoSituacao: ContagemOpcao[] = [
+          { rotulo: "Já retiradas", total: pecasRetiradas },
+          { rotulo: "Separadas, aguardando retirada", total: pecasAguardando },
+          { rotulo: "Ainda não separadas", total: naoSeparadas },
+        ];
+
+        return { vendido, arrecadado, pago, saldo: arrecadado - pago, pecasPedidas, pecasRetiradas, pecasAguardando, graficoTamanho, graficoSituacao };
+      }
+
+      function renderizarConsolidado() {
+        const c = calcularConsolidadoCampanha();
+        const set = (nome: string, texto: string) => {
+          const elx = document.querySelector<HTMLElement>(`[data-cstat="${nome}"]`);
+          if (elx) elx.textContent = texto;
+        };
+        set("vendido", brl(c.vendido));
+        set("arrecadado", brl(c.arrecadado));
+        set("pago", brl(c.pago));
+        set("saldo", brl(c.saldo));
+        set("pedidas", String(c.pecasPedidas));
+        set("aguardando", String(c.pecasAguardando));
+        set("retiradas", String(c.pecasRetiradas));
+
+        const semDados = `<p class="text-sm text-muted-foreground">Sem peças pedidas ainda.</p>`;
+        const graficoTamanhoEl = document.querySelector<HTMLElement>("[data-grafico-tamanho]");
+        if (graficoTamanhoEl) graficoTamanhoEl.innerHTML = c.graficoTamanho.length ? graficoBarrasSvg(c.graficoTamanho) : semDados;
+        const graficoSituacaoEl = document.querySelector<HTMLElement>("[data-grafico-situacao]");
+        if (graficoSituacaoEl) graficoSituacaoEl.innerHTML = c.graficoSituacao.some((g) => g.total > 0) ? graficoBarrasSvg(c.graficoSituacao) : semDados;
+
+        if (consolidadoCarregando) consolidadoCarregando.hidden = true;
+        if (consolidadoConteudo) consolidadoConteudo.hidden = false;
+      }
+
+      async function carregarConsolidado() {
+        const headers = { Authorization: `Bearer ${token}` };
+        const resPedidos = await fetch(
+          `${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,lote,valor_pago,avulso,separado,itens.id,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&limit=-1`,
+          { headers },
+        );
+        const pedidosComItens = resPedidos.ok ? (await resPedidos.json()).data ?? [] : [];
+        pedidosResumo = pedidosComItens.map((p: any) => ({ id: p.id, lote: p.lote, valor_pago: p.valor_pago, avulso: p.avulso, separado: p.separado }));
+        itensResumo = pedidosComItens.flatMap((p: any) => (p.itens ?? []).map((i: any) => ({ ...i, pedido: p.id })));
+
+        const resLotes = await fetch(
+          `${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&fields=id,grupo,status,total_vendido,total_arrecadado,total_pago_malharia&limit=-1`,
+          { headers },
+        );
+        lotesResumo = resLotes.ok ? (await resLotes.json()).data ?? [] : [];
+
+        loteItensResumo = [];
+        if (lotesResumo.length > 0) {
+          const idsLotes = lotesResumo.map((l) => l.id).join(",");
+          const resLoteItens = await fetch(
+            `${directusUrl}/items/camiseta_lote_itens?filter[lote][_in]=${idsLotes}&fields=id,lote,tamanho,modelo,estoque_extra,custo_unitario&limit=-1`,
+            { headers },
+          );
+          loteItensResumo = resLoteItens.ok ? (await resLoteItens.json()).data ?? [] : [];
+        }
+
+        renderizarConsolidado();
+      }
+
+      document.querySelector("[data-exportar-relatorio-pdf]")?.addEventListener("click", () => {
+        const c = calcularConsolidadoCampanha();
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
+        const titulo = `Relatório consolidado — ${grupo.nome}`;
+        configurarAcessibilidadePdf(doc, titulo);
+        const margem = 56;
+        let y = margem;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        doc.text(titulo, margem, y);
+        y += 20;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(90);
+        doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margem, y);
+        y += 26;
+        doc.setTextColor(20);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text("Resumo geral", margem, y);
+        y += 18;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        [
+          `Vendido: ${brl(c.vendido)}`,
+          `Arrecadado: ${brl(c.arrecadado)}`,
+          `Pago à malharia: ${brl(c.pago)}`,
+          `Saldo: ${brl(c.saldo)}`,
+          `Peças pedidas: ${c.pecasPedidas} · separadas aguardando retirada: ${c.pecasAguardando} · já retiradas: ${c.pecasRetiradas}`,
+        ].forEach((linha) => {
+          doc.text(linha, margem, y);
+          y += 15;
+        });
+
+        y += 16;
+        const largura = doc.internal.pageSize.getWidth();
+        if (c.graficoTamanho.length) y = desenharGraficoBarrasPDF(doc, margem, y, largura - margem * 2, "Peças por tamanho", c.graficoTamanho);
+        if (c.graficoSituacao.some((g) => g.total > 0)) y = desenharGraficoBarrasPDF(doc, margem, y, largura - margem * 2, "Peças por situação", c.graficoSituacao);
+
+        doc.save(`camiseta-${grupo.slug ?? grupoId}-relatorio.pdf`);
+      });
+
+      await carregarConsolidado();
+      iniciarRealtime(token, carregarConsolidado);
+
+      document.querySelector("[data-excluir-lote]")?.addEventListener("click", async () => {
+        const excluirStatus = document.querySelector<HTMLElement>("[data-excluir-status]");
+        if (!confirm(`Excluir "${grupo.nome}"? Isso apaga os lotes de compra e todos os pedidos ligados a ela. Não pode ser desfeito.`)) return;
+        if (excluirStatus) excluirStatus.textContent = "Excluindo…";
+        try {
+          const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error("falha ao excluir");
+          window.location.href = "/painel-camisetas/";
+        } catch {
+          if (excluirStatus) excluirStatus.textContent = "Não foi possível excluir agora.";
+        }
+      });
+    }
+
+    iniciar();
+  </script>
+
+  <style>
+    .pergunta-card-camiseta {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.1rem 1.25rem;
+    }
+
+    .stat-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem; }
+    .stat-numero { font-size: 1.5rem; font-weight: 700; }
+    .stat-label { margin-top: 0.25rem; font-size: 0.8125rem; color: var(--muted-foreground); }
+
+    /* Mesmo padrão de painel-eventos/evento/index.astro. */
+    .grafico-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      background: var(--background);
+      color: var(--foreground);
+    }
+    .grafico-titulo {
+      margin: 0 0 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--accent-strong);
+    }
+
+    .aviso-mudanca-remota {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      border: 1px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+    }
+
+    /* Mesmo padrão de abas de painel-eventos/evento/index.astro. */
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+
+    .tab-btn {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted-foreground);
+      padding: 0.45rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--duration-fast) var(--ease-out);
+    }
+
+    .tab-btn:hover {
+      border-color: var(--accent);
+    }
+
+    .tab-btn.is-active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--accent-strong);
+    }
+  </style>
+</BaseLayout>

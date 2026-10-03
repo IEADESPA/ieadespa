@@ -1,0 +1,6 @@
+# Arquivos de segredo criptografados por SOPS (metadados no formato dotenv)
+# quebram o parser do SOPS se ganharem CRLF no checkout — força LF sempre,
+# independente do core.autocrlf de cada máquina Windows.
+*.enc.json text eol=lf
+secrets.env text eol=lf
+.sops.yaml text eol=lf

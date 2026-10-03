@@ -1,0 +1,26 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Página não encontrada" description="A página solicitada não foi encontrada." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer grid min-h-[55vh] place-items-center py-16 text-center">
+    <div>
+      <p class="eyebrow">Erro 404</p>
+      <h1 class="pagehead-title">Página não encontrada</h1>
+      <p class="pagehead-description mx-auto">
+        Esse endereço pode ter mudado, ou pode haver um erro de digitação.
+      </p>
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <a href="/" class="btn btn-solid">Voltar para a página inicial</a>
+        <a href="/mensagens/" class="btn btn-outline">Ver mensagens</a>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>

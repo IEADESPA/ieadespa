@@ -1,0 +1,98 @@
+---
+import LocalIcon from "@/components/LocalIcon.astro";
+
+interface Props {
+  /** URL absoluta da página a compartilhar. */
+  url: string;
+  /** Título usado no texto pré-preenchido de cada rede. */
+  title: string;
+}
+
+const { url, title } = Astro.props;
+const encodedUrl = encodeURIComponent(url);
+const encodedTitle = encodeURIComponent(title);
+
+/* WhatsApp primeiro: de longe o canal mais usado pra compartilhar entre
+   membros da igreja no Brasil — os "clássicos" (X/Facebook/LinkedIn)
+   sozinhos deixavam de fora o que as pessoas realmente usam. */
+const shareLinks: { label: string; icon: "whatsapp" | "twitter-x" | "facebook" | "linkedin"; href: string }[] = [
+  { label: "WhatsApp", icon: "whatsapp", href: `https://wa.me/?text=${encodedTitle}%20${encodedUrl}` },
+  { label: "X", icon: "twitter-x", href: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}` },
+  { label: "Facebook", icon: "facebook", href: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}` },
+  { label: "LinkedIn", icon: "linkedin", href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}` },
+];
+---
+
+<div class="share-row flex flex-wrap items-center gap-2" role="group" aria-label="Compartilhar">
+  <button type="button" class="share-btn" data-native-share hidden aria-label={`Compartilhar ${title}`}>
+    <LocalIcon name="share" className="h-4 w-4" />
+  </button>
+  {
+    shareLinks.map((link) => (
+      <a href={link.href} target="_blank" rel="noreferrer" class="share-btn" aria-label={`Compartilhar ${title} no ${link.label}`}>
+        <LocalIcon name={link.icon} className="h-4 w-4" />
+      </a>
+    ))
+  }
+  <button type="button" class="share-btn" data-copy-link data-copy-url={url} aria-label={`Copiar link de ${title}`}>
+    <LocalIcon name="link-45deg" className="h-4 w-4" />
+  </button>
+  <p class="ml-1 text-xs text-muted-foreground" aria-live="polite" data-copy-status></p>
+</div>
+
+<script is:inline define:vars={{ url, title }}>
+  document.querySelectorAll("[data-native-share]").forEach((button) => {
+    // Só aparece quando o navegador tem o "menu de compartilhar" nativo do
+    // sistema (a maioria dos celulares) — abre WhatsApp, Telegram, e-mail,
+    // SMS etc., o que a pessoa realmente tiver instalado, em vez de só as
+    // redes fixas abaixo.
+    if (!navigator.share) return;
+    button.hidden = false;
+    button.addEventListener("click", () => {
+      navigator.share({ title, url }).catch(() => {});
+    });
+  });
+
+  document.querySelectorAll("[data-copy-link]").forEach((button) => {
+    const status = button.parentElement?.querySelector("[data-copy-status]");
+
+    button.addEventListener("click", async () => {
+      const linkUrl = button.getAttribute("data-copy-url");
+      if (!linkUrl) return;
+
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+        await navigator.clipboard.writeText(linkUrl);
+        if (status) status.textContent = "Link copiado";
+      } catch {
+        if (status) status.textContent = "Falha ao copiar";
+      }
+    });
+  });
+</script>
+
+<style>
+  .share-btn {
+    display: inline-grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    place-items: center;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    padding: 0;
+    border-radius: var(--radius-full);
+    transition:
+      border-color var(--duration) var(--ease-out),
+      color var(--duration) var(--ease-out),
+      transform var(--duration) var(--ease-out);
+  }
+
+  .share-btn:hover,
+  .share-btn:focus-visible {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    color: var(--accent);
+    transform: translateY(-2px);
+  }
+</style>

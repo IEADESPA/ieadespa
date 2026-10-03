@@ -1,0 +1,575 @@
+---
+import ProgramacaoList from "@/components/ProgramacaoList.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { DIRECTUS_URL, directusAssetUrl, enderecoCompleto, enderecoMapsQuery, fetchConfiguracoes, mapsHref } from "@/lib/directus";
+import { churchStructuredData, getAllProgramacao, sedeProgramacao, sedeProgramacaoCompacta } from "@/lib/programacao";
+import { resolverFotoAtual } from "@/lib/fotoAtual";
+import { streetViewImageUrl, streetViewMetadata } from "@/lib/streetview";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const config = await fetchConfiguracoes();
+const programacao = await getAllProgramacao();
+const sedeSchedule = sedeProgramacao(programacao);
+const structuredData = churchStructuredData(
+  config,
+  sedeSchedule,
+  siteConfig.siteUrl,
+  siteConfig.name,
+  siteConfig.socials.filter((s) => s.href.startsWith("http")).map((s) => s.href),
+);
+const contact = siteConfig.contact;
+const instagram = siteConfig.socials.find((social) => social.label === "Instagram");
+const isEnabled = contact.enabled;
+/* Fase 24.1 — quando o perfil real da Sede no Google Maps está confirmado
+   (google_maps_place_query preenchido em Configurações) E as coordenadas
+   existem, o mapa vira um mapa de verdade com a Maps JavaScript API —
+   marcador nas cores da igreja, caixinha com horários de culto e "Ver
+   rota" ao clicar — em vez do cartão padrão do Google (Maps Embed API,
+   usada até aqui). Sem isso preenchido, cai pro embed por busca de
+   endereço de sempre, sem chave de API nenhuma — mesmo critério de "nunca
+   publicar mapa sem perfil confirmado" já usado no resto da Fase 24. */
+const usaMapaProprio = Boolean(config.google_maps_place_query && config.lat && config.lng);
+const mapsEmbedSrc = `https://www.google.com/maps?q=${encodeURIComponent(enderecoMapsQuery(config))}&output=embed`;
+const mapsLinkHref = mapsHref(config);
+
+const horarioResumo = sedeProgramacaoCompacta(programacao)
+  .map((item) => `<strong>${item.label}:</strong> ${item.title}${item.time ? ` — ${item.time}` : ""}`)
+  .join("<br />");
+
+// Fase 24.2/24.11 — foto de fachada: compara a foto do Street View com uma
+// foto manual (opcional, upload em Configurações) e usa sempre a mais
+// recente das duas — o carro do Street View pode passar anos sem atualizar,
+// principalmente fora do centro, então confiar só nele deixaria a foto
+// velha pra sempre sem chance de a igreja corrigir. Mesmo helper
+// (`resolverFotoAtual`) já pensado pra reaproveitar em congregação depois.
+const svMeta = config.lat && config.lng ? await streetViewMetadata(Number(config.lat), Number(config.lng), siteConfig.googleMapsEmbedKey) : { coberto: false, data: null };
+const fotoFachada = resolverFotoAtual({
+  streetView: svMeta.coberto
+    ? { url: streetViewImageUrl(Number(config.lat), Number(config.lng), siteConfig.googleMapsEmbedKey, "400x260"), data: svMeta.data }
+    : null,
+  manual: config.foto_fachada ? { url: directusAssetUrl(config.foto_fachada, { width: 400, height: 260, fit: "cover" }), data: config.foto_fachada_data } : null,
+});
+
+// Fase 24.6 — mesma foto de fachada (a mais atual das duas, ver acima), num
+// tamanho mais parecido com o formato que WhatsApp/redes esperam pra
+// pré-visualização de link (~1.91:1), em vez da imagem genérica padrão do
+// site. Confirmado por `curl` sem cabeçalho `Referer` nenhum (do jeito que
+// um bot de rede social busca a imagem) que a chave restrita por domínio
+// ainda libera a imagem do Street View — só bloqueia quando o `Referer`
+// existe e não bate com o site, não quando ele nem existe (uma foto manual
+// não tem essa restrição, é só um arquivo público no Directus).
+const ogImageUrl =
+  fotoFachada?.fonte === "manual" && config.foto_fachada
+    ? directusAssetUrl(config.foto_fachada, { width: 640, height: 335, fit: "cover" })
+    : svMeta.coberto
+      ? streetViewImageUrl(Number(config.lat), Number(config.lng), siteConfig.googleMapsEmbedKey, "640x335")
+      : undefined;
+---
+
+<BaseLayout
+  title="Contato"
+  description={`Fale com a ${siteConfig.name} e veja como chegar até nós.`}
+  structuredData={structuredData}
+  image={ogImageUrl}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Contato</p>
+        <h1 class="pagehead-title">Fale conosco</h1>
+        <p class="pagehead-description">
+          Dúvidas, pedidos de oração e visitas pastorais — escolha o assunto para chegar direto a
+          quem cuida disso. {contact.responseTime}
+        </p>
+      </header>
+
+      <div class="grid gap-10 md:grid-cols-2">
+        <div>
+          <h2 class="section-title">Endereço</h2>
+          <p class="text-sm leading-relaxed text-muted-foreground">{enderecoCompleto(config)}</p>
+          <div class="mt-3 flex flex-wrap gap-4">
+            <a href={mapsLinkHref} target="_blank" rel="noreferrer" class="link-sweep text-sm font-semibold text-accent">
+              Ver rota no Google Maps
+            </a>
+            <a href="/ieadespa.vcf" class="link-sweep text-sm font-semibold text-accent">
+              Adicionar aos contatos
+            </a>
+          </div>
+
+          <h2 class="section-title mt-10">Horários de culto</h2>
+          <div class="mt-3">
+            <ProgramacaoList items={sedeSchedule} showScope={false} />
+          </div>
+
+          <h2 class="section-title mt-10">Outros contatos</h2>
+          <ul class="grid gap-2 text-sm text-muted-foreground">
+            {
+              siteConfig.email && (
+                <li>
+                  E-mail: <a href={`mailto:${siteConfig.email}`} class="text-accent underline underline-offset-2">{siteConfig.email}</a>
+                </li>
+              )
+            }
+            {
+              config.phone && (
+                <li>
+                  WhatsApp/Telefone: <a href={`https://wa.me/${config.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" class="text-accent underline underline-offset-2">{config.phone}</a>
+                </li>
+              )
+            }
+            {
+              instagram && (
+                <li>
+                  Instagram: <a href={instagram.href} target="_blank" rel="noreferrer" class="text-accent underline underline-offset-2">@{instagram.href.split("/").filter(Boolean).pop()}</a>
+                </li>
+              )
+            }
+          </ul>
+
+          <div class="mt-8 overflow-hidden rounded-[var(--radius-md)] border border-border">
+            {
+              usaMapaProprio ? (
+                <div id="sede-map" style="height:420px" data-sede-map />
+              ) : (
+                <iframe
+                  title="Mapa com a localização da igreja"
+                  src={mapsEmbedSrc}
+                  width="100%"
+                  height="420"
+                  style="border:0"
+                  loading="lazy"
+                  referrerpolicy="no-referrer-when-downgrade"
+                />
+              )
+            }
+          </div>
+
+          {
+            usaMapaProprio && (
+              <div class="mt-3">
+                <button type="button" class="btn btn-outline" data-tracar-rota>Traçar rota até aqui</button>
+                <p class="mt-2 text-xs text-muted-foreground" data-rota-status role="status" aria-live="polite" />
+                <a
+                  href="#"
+                  target="_blank"
+                  rel="noreferrer"
+                  class="link-sweep mt-1 inline-block text-sm font-semibold text-accent"
+                  data-abrir-no-maps
+                  hidden
+                >
+                  Abrir esta rota no Google Maps &rarr;
+                </a>
+              </div>
+            )
+          }
+
+          {
+            fotoFachada && (
+              <img
+                src={fotoFachada.url}
+                alt={`Vista da rua em frente à ${siteConfig.name}, pra reconhecer o prédio chegando`}
+                width="400"
+                height="260"
+                loading="lazy"
+                class="mt-4 w-full rounded-[var(--radius-md)] border border-border"
+              />
+            )
+          }
+        </div>
+
+        <form id="fale-conosco" class="grid gap-5" data-contact-form={isEnabled ? "" : undefined}>
+          <h2 class="section-title" data-contact-heading>Envie uma mensagem</h2>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="contact-type">Assunto</label>
+            <select id="contact-type" name="type" disabled={!isEnabled} class="field" data-contact-type>
+              <option value="duvida">Dúvida geral</option>
+              <option value="oracao">Pedido de oração</option>
+              <option value="visita">Visita pastoral</option>
+              <option value="lgpd">Meus dados pessoais (LGPD)</option>
+              <option value="outro">Outro assunto</option>
+            </select>
+          </div>
+
+          <p class="contact-privacy-note" data-contact-privacy hidden>
+            Só a diretoria e a liderança pastoral têm acesso aos pedidos de oração — nada é
+            publicado no site nem visto por outros visitantes. Se preferir compartilhar seu pedido
+            publicamente e receber orações de outras pessoas, visite o
+            <a href="/mural-de-oracao/" class="underline underline-offset-2">mural de oração</a>.
+          </p>
+
+          <p class="contact-privacy-note" data-contact-lgpd hidden>
+            Você pode pedir acesso, correção, portabilidade ou exclusão dos seus dados, com base na
+            Lei Geral de Proteção de Dados (LGPD). Pra localizarmos seus dados, diga no campo abaixo{" "}
+            <strong>qual formulário você usou</strong> (mural de oração, inscrição em evento,
+            contato) e, se possível, <strong>o nome e telefone usados</strong>. Respondemos em até
+            15 dias. Veja o processo completo na{" "}
+            <a href="/privacidade/#seus-direitos" class="underline underline-offset-2">
+              política de privacidade
+            </a>.
+          </p>
+
+          <div class="grid gap-2" data-contact-anon-field hidden>
+            <label class="contact-checkbox">
+              <input type="checkbox" name="anonymous" id="contact-anonymous" data-contact-anonymous />
+              Prefiro enviar de forma anônima (sem nome nem e-mail)
+            </label>
+          </div>
+
+          <div class="grid gap-2" data-contact-consent-field hidden>
+            <label class="contact-checkbox">
+              <input type="checkbox" id="contact-consent" data-contact-consent />
+              Autorizo o uso deste pedido pela {siteConfig.name} para o propósito de oração/apoio
+              pastoral descrito acima — dado sobre convicção religiosa pede consentimento
+              específico (ver <a href="/privacidade/" target="_blank" class="underline underline-offset-2">política de privacidade</a>).
+            </label>
+          </div>
+
+          <div class="grid gap-2" data-contact-name-field>
+            <label class="text-sm font-semibold" for="contact-name" data-contact-name-label>Nome</label>
+            <input id="contact-name" name="name" type="text" autocomplete="name" required disabled={!isEnabled} class="field" />
+          </div>
+
+          <div class="grid gap-2" data-contact-email-field>
+            <label class="text-sm font-semibold" for="contact-email" data-contact-email-label>E-mail</label>
+            <input id="contact-email" name="email" type="email" autocomplete="email" required disabled={!isEnabled} class="field" />
+          </div>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="contact-message" data-contact-message-label>Mensagem</label>
+            <textarea
+              id="contact-message"
+              name="message"
+              rows="7"
+              required
+              disabled={!isEnabled}
+              class="field resize-y"
+              data-contact-message
+            ></textarea>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-4">
+            <button type="submit" disabled={!isEnabled} class="btn btn-solid" data-contact-submit>
+              {isEnabled ? "Enviar mensagem" : "Formulário indisponível"}
+            </button>
+            <p class="contact-status text-sm leading-relaxed text-muted-foreground" role="status" aria-live="polite" data-contact-status></p>
+          </div>
+
+          {
+            !isEnabled && (
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                Este formulário está desativado. Ative em <code>siteConfig.contact.enabled</code>.
+              </p>
+            )
+          }
+        </form>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  {
+    usaMapaProprio && (
+      <script
+        is:inline
+        define:vars={{
+          googleMapsKey: siteConfig.googleMapsEmbedKey,
+          lat: config.lat,
+          lng: config.lng,
+          nomeSede: siteConfig.name,
+          horarioResumo,
+          mapsLinkHref,
+        }}
+      >
+        // Fase 24.7 — guardados fora de initSedeMap pra o botão "Traçar
+        // rota" conseguir usar depois que o mapa já carregou.
+        let mapaSede = null;
+        let posicaoSede = null;
+
+        window.initSedeMap = function initSedeMap() {
+          const container = document.querySelector("[data-sede-map]");
+          if (!container) return;
+
+          const posicao = { lat: Number(lat), lng: Number(lng) };
+          posicaoSede = posicao;
+
+          const map = new google.maps.Map(container, {
+            center: posicao,
+            zoom: 16,
+            disableDefaultUI: false,
+            fullscreenControl: true,
+            streetViewControl: false,
+            mapTypeControl: false,
+          });
+          mapaSede = map;
+
+          // Marcador nas cores da marca (var(--accent), fixo aqui porque o
+          // script roda antes de qualquer CSS ler custom property de tema).
+          const marker = new google.maps.Marker({
+            position: posicao,
+            map,
+            title: nomeSede,
+            icon: {
+              path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z",
+              fillColor: "#8f6f1f",
+              fillOpacity: 1,
+              strokeColor: "#6b5417",
+              strokeWeight: 1,
+              scale: 1.8,
+              anchor: new google.maps.Point(12, 22),
+            },
+          });
+
+          const infoWindow = new google.maps.InfoWindow({
+            content: `
+              <div style="font-family: system-ui, sans-serif; max-width: 220px;">
+                <p style="margin:0 0 6px;font-weight:700;">${nomeSede}</p>
+                <p style="margin:0 0 8px;font-size:0.8125rem;line-height:1.5;">${horarioResumo}</p>
+                <a href="${mapsLinkHref}" target="_blank" rel="noreferrer" style="font-size:0.8125rem;font-weight:600;color:#8f6f1f;">Ver rota &rarr;</a>
+              </div>
+            `,
+          });
+
+          marker.addListener("click", () => infoWindow.open(map, marker));
+          infoWindow.open(map, marker);
+        };
+
+        const script = document.createElement("script");
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsKey}&callback=initSedeMap`;
+        script.async = true;
+        document.head.appendChild(script);
+
+        // Fase 24.7 — traça a rota de verdade dentro do próprio mapa
+        // (Directions API), em vez de só abrir o Google Maps externo.
+        let directionsRenderer = null;
+
+        const botaoRota = document.querySelector("[data-tracar-rota]");
+        const statusRota = document.querySelector("[data-rota-status]");
+        const linkAbrirNoMaps = document.querySelector("[data-abrir-no-maps]");
+
+        botaoRota?.addEventListener("click", () => {
+          if (!statusRota) return;
+
+          if (!mapaSede || !window.google?.maps?.DirectionsService) {
+            statusRota.textContent = "O mapa ainda está carregando — tente de novo em instantes.";
+            return;
+          }
+          if (!navigator.geolocation) {
+            statusRota.textContent = "Seu navegador não permite compartilhar localização.";
+            return;
+          }
+
+          botaoRota.disabled = true;
+          statusRota.textContent = "Localizando você…";
+          if (linkAbrirNoMaps) linkAbrirNoMaps.hidden = true;
+
+          navigator.geolocation.getCurrentPosition(
+            (posicaoAtual) => {
+              statusRota.textContent = "Traçando rota…";
+              const origem = { lat: posicaoAtual.coords.latitude, lng: posicaoAtual.coords.longitude };
+
+              const directionsService = new google.maps.DirectionsService();
+              if (!directionsRenderer) {
+                directionsRenderer = new google.maps.DirectionsRenderer({ map: mapaSede, suppressMarkers: false });
+              }
+
+              directionsService.route(
+                { origin: origem, destination: posicaoSede, travelMode: google.maps.TravelMode.DRIVING },
+                (resultado, statusResposta) => {
+                  botaoRota.disabled = false;
+                  if (statusResposta === "OK" && resultado) {
+                    directionsRenderer.setDirections(resultado);
+                    const perna = resultado.routes[0]?.legs[0];
+                    statusRota.textContent = perna ? `${perna.distance?.text} · ${perna.duration?.text} de carro` : "";
+
+                    // Pedido do usuário: a rota traçada na tela é só uma
+                    // prévia — pra navegar de verdade, precisa ir pro app do
+                    // Google Maps já com a origem/destino prontos (sem
+                    // digitar tudo de novo lá). Formato de link público do
+                    // próprio Google Maps, sem precisar de chave de API.
+                    if (linkAbrirNoMaps) {
+                      linkAbrirNoMaps.href = `https://www.google.com/maps/dir/?api=1&origin=${origem.lat},${origem.lng}&destination=${posicaoSede.lat},${posicaoSede.lng}&travelmode=driving`;
+                      linkAbrirNoMaps.hidden = false;
+                    }
+                  } else {
+                    statusRota.textContent = "Não foi possível traçar a rota agora.";
+                  }
+                },
+              );
+            },
+            (erro) => {
+              botaoRota.disabled = false;
+              statusRota.textContent =
+                erro.code === erro.PERMISSION_DENIED
+                  ? "Você não liberou sua localização — use o link \"Ver rota\" acima como alternativa."
+                  : "Não foi possível pegar sua localização agora.";
+            },
+            { timeout: 10000 },
+          );
+        });
+      </script>
+    )
+  }
+
+  {
+    isEnabled && (
+      <script is:inline define:vars={{ directusUrl: DIRECTUS_URL }}>
+        document.querySelectorAll("[data-contact-form]").forEach((form) => {
+          const typeSelect = form.querySelector("[data-contact-type]");
+          const heading = form.querySelector("[data-contact-heading]");
+          const privacyNote = form.querySelector("[data-contact-privacy]");
+          const lgpdNote = form.querySelector("[data-contact-lgpd]");
+          const anonField = form.querySelector("[data-contact-anon-field]");
+          const anonCheckbox = form.querySelector("[data-contact-anonymous]");
+          const nameField = form.querySelector("[data-contact-name-field]");
+          const emailField = form.querySelector("[data-contact-email-field]");
+          const nameInput = form.querySelector("#contact-name");
+          const emailInput = form.querySelector("#contact-email");
+          const nameLabel = form.querySelector("[data-contact-name-label]");
+          const messageLabel = form.querySelector("[data-contact-message-label]");
+          const messageField = form.querySelector("[data-contact-message]");
+          const submitButton = form.querySelector("[data-contact-submit]");
+          const consentField = form.querySelector("[data-contact-consent-field]");
+          const consentInput = form.querySelector("[data-contact-consent]");
+
+          /* O assunto "Pedido de oração" muda o próprio formulário: título,
+             rótulos, um aviso de confidencialidade e a opção de enviar sem
+             se identificar — em vez de só mais uma opção num dropdown. */
+          const applyType = () => {
+            const isOracao = typeSelect?.value === "oracao";
+            const isLgpd = typeSelect?.value === "lgpd";
+            const isAnon = isOracao && anonCheckbox instanceof HTMLInputElement && anonCheckbox.checked;
+
+            if (heading) {
+              heading.textContent = isOracao
+                ? "Envie seu pedido de oração"
+                : isLgpd
+                  ? "Solicitação sobre meus dados (LGPD)"
+                  : "Envie uma mensagem";
+            }
+            if (privacyNote) privacyNote.hidden = !isOracao;
+            if (lgpdNote) lgpdNote.hidden = !isLgpd;
+            if (anonField) anonField.hidden = !isOracao;
+            if (messageLabel) messageLabel.textContent = isOracao ? "Seu pedido de oração" : "Mensagem";
+            if (nameLabel) nameLabel.textContent = isOracao ? "Nome (opcional se enviar anônimo)" : "Nome";
+            if (messageField) {
+              messageField.placeholder = isOracao
+                ? "Conte com suas palavras o que você gostaria que a igreja orasse."
+                : isLgpd
+                  ? "Ex.: Quero pedir a exclusão dos meus dados. Me inscrevi no evento X em [data] com o nome Y e telefone Z."
+                  : "";
+            }
+            if (submitButton) {
+              submitButton.textContent = isOracao
+                ? "Enviar pedido de oração"
+                : isLgpd
+                  ? "Enviar solicitação"
+                  : "Enviar mensagem";
+            }
+
+            if (nameField) nameField.hidden = isAnon;
+            if (emailField) emailField.hidden = isAnon;
+            if (nameInput) nameInput.required = !isAnon;
+            if (emailInput) emailInput.required = !isAnon;
+
+            if (consentField) consentField.hidden = !isOracao;
+            if (consentInput) consentInput.required = isOracao;
+          };
+
+          typeSelect?.addEventListener("change", applyType);
+          anonCheckbox?.addEventListener("change", applyType);
+
+          /* Um link tipo /contato/?assunto=oracao#fale-conosco já chega com o
+             assunto certo escolhido, sem a pessoa precisar procurar. */
+          const requestedType = new URLSearchParams(window.location.search).get("assunto");
+          if (requestedType && typeSelect) typeSelect.value = requestedType;
+          applyType();
+
+          form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const status = form.querySelector("[data-contact-status]");
+            const button = form.querySelector("button[type=submit]");
+            const data = new FormData(form);
+            const isAnon = anonCheckbox instanceof HTMLInputElement && anonCheckbox.checked && !anonField?.hidden;
+            const isOracao = typeSelect?.value === "oracao";
+
+            if (isOracao && !(consentInput instanceof HTMLInputElement && consentInput.checked)) {
+              if (status) status.textContent = "Marque a autorização de uso do pedido de oração antes de enviar.";
+              return;
+            }
+
+            if (button) button.disabled = true;
+            if (status) status.textContent = "Enviando…";
+
+            try {
+              const payload = {
+                name: isAnon ? "Anônimo" : data.get("name"),
+                type: data.get("type"),
+                message: data.get("message"),
+              };
+              if (!isAnon) payload.email = data.get("email");
+              if (isOracao) payload.consentimento_lgpd = true;
+
+              const response = await fetch(`${directusUrl}/items/contato_mensagens`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+
+              if (!response.ok) throw new Error("request failed");
+
+              if (status) status.textContent = "Mensagem enviada. Obrigado pelo contato!";
+              form.reset();
+              applyType();
+            } catch {
+              if (status) {
+                status.textContent =
+                  "Não foi possível enviar agora. Tente novamente em instantes ou escreva para " +
+                  "o e-mail no rodapé desta página.";
+              }
+            } finally {
+              if (button) button.disabled = false;
+            }
+          });
+        });
+      </script>
+    )
+  }
+
+  <style>
+    .contact-status:empty {
+      display: none;
+    }
+
+    .contact-privacy-note {
+      margin: 0;
+      border-left: 3px solid var(--accent);
+      background: var(--muted);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      color: var(--muted-foreground);
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .contact-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: var(--foreground);
+      font-size: 0.9375rem;
+      cursor: pointer;
+    }
+
+    .contact-checkbox input {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--accent);
+    }
+  </style>
+</BaseLayout>

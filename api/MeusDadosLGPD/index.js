@@ -1,18 +1,40 @@
 // MeusDadosLGPD (público — "Meu Painel", auto-atendimento por matrícula)
 // Direito de acesso e portabilidade (LGPD Art. 18, I e V): devolve, num único
 // pacote, todos os dados pessoais que o sistema guarda daquela matrícula.
-// v1.9: travado atrás do consentimento DADOS_CONTATO (generalizado — hoje cobre
-// "dados sensíveis" em geral, não só contato/foto) — mesmo padrão de trava real
-// já usado em UploadFotoMembro, adaptado pra leitura.
+// vB.8 — Correção de base legal: até aqui (v1.9) isso ficava travado atrás
+// do consentimento 'DADOS_CONTATO' — base legal ERRADA. O direito de acesso
+// do titular (Art. 18) nunca depende de consentimento; o dado básico de
+// membresia em si é tratado sob Art. 11, II, "a" (organização religiosa,
+// vínculo regular), que DISPENSA consentimento. Consentimento continua
+// valendo só pra Foto (uso de imagem) e pro uso do telefone/e-mail pra
+// contato (Tipo='DADOS_CONTATO', ver shared/consentimentoFoto.js) — nunca
+// mais pra bloquear a própria pessoa de ver o próprio cadastro.
 // GET /api/lgpd/meus-dados/{matricula}
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const storage = require("../shared/storage");
+const auth = require("../shared/auth");
+const voluntariadoDb = require("../shared/voluntariadoDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
   if (!matricula) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
+    return;
+  }
+
+  // v7.5 (revisão de segurança) — o direito de acesso é do PRÓPRIO titular: exige sessão e só entrega a matrícula da sessão. Antes a rota era aberta a quem
+  // soubesse o número da matrícula, e este pacote traz endereço, processos e (agora) o IP do aceite do voluntariado. Termos pendentes não bloqueiam: o
+  // direito de acesso não depende de assinar nada.
+  const usuario = auth.exigirLoginIgnorandoTermos(req, context);
+  if (!usuario) return;
+  const alvo = Number(matricula);
+  if (!Number.isInteger(alvo) || alvo <= 0 || String(alvo) !== String(matricula)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Matrícula inválida." } };
+    return;
+  }
+  if (Number(usuario.membroId) !== alvo) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Você só pode ver os seus próprios dados." } };
     return;
   }
 
@@ -38,20 +60,6 @@ module.exports = async function (context, req) {
   const membro = membroResult.recordset[0];
   if (!membro) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
-    return;
-  }
-
-  // Trava real (v1.9), mesmo espírito da trava de Foto (v1.7): só o consentimento
-  // mais recente conta (registro append-only — uma revogação depois de um "sim"
-  // tem que valer). Sem consentimento concedido, nem o cadastro básico sai daqui.
-  const consentimentoAtual = await pool.request().input("mat", sql.Int, matricula).query(`
-    SELECT TOP 1 Concedido FROM ConsentimentosLGPD WHERE MembroId = @mat AND Tipo = 'DADOS_CONTATO' ORDER BY ConsentimentoId DESC
-  `);
-  if (!consentimentoAtual.recordset[0] || !consentimentoAtual.recordset[0].Concedido) {
-    context.res = {
-      status: 200,
-      body: { sucesso: false, precisaConsentimento: true, mensagem: "Conceda o consentimento acima antes de visualizar seus dados completos." }
-    };
     return;
   }
 
@@ -99,6 +107,9 @@ module.exports = async function (context, req) {
       FROM LicencasCandidatura WHERE MembroId = @mat ORDER BY DataPleito DESC`)
   ]);
 
+  // v7.5 — voluntariado (adesão com IP e cabeçalhos, equipes, serviços, remoções): lido só aqui, a pedido do titular; nenhuma rotina exporta isto.
+  const voluntariado = await voluntariadoDb.dadosDoTitular(pool, alvo);
+
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
   context.res = {
@@ -115,7 +126,8 @@ module.exports = async function (context, req) {
       consentimentos: consentimentos.recordset,
       solicitacoesLgpd: solicitacoes.recordset,
       casamentos: casamentos.recordset,
-      licencasCandidatura: licencasCandidatura.recordset
+      licencasCandidatura: licencasCandidatura.recordset,
+      voluntariado
     }
   };
 };

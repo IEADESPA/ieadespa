@@ -1,0 +1,176 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { VERIFICAR_INSCRICAO_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+interface Evento {
+  id: number;
+  slug: string;
+  title: string;
+  event_date: string | null;
+  end_date: string | null;
+  aceita_inscricao: boolean;
+}
+
+export async function getStaticPaths() {
+  const events = await fetchItems<Evento>("eventos", "filter[aceita_inscricao][_eq]=true");
+  // slug e opcional no Directus - sem essa checagem, evento sem slug ainda
+  // definido quebraria o build (mesmo bug corrigido em toda pagina por slug).
+  return events.filter((event) => event.slug).map((event) => ({ params: { slug: event.slug }, props: { event } }));
+}
+
+interface Props {
+  event: Evento;
+}
+
+const { event } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+
+const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const periodoEvento = event.event_date
+  ? event.end_date && event.end_date !== event.event_date
+    ? `${dateFormatter.format(new Date(event.event_date))} a ${dateFormatter.format(new Date(event.end_date))}`
+    : dateFormatter.format(new Date(event.event_date))
+  : "";
+---
+
+<BaseLayout title={`Certificado — ${event.title}`} description="Baixe seu certificado de participação no evento." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas certificado-canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Certificado</p>
+        <h1 class="pagehead-title">{event.title}</h1>
+        <p class="pagehead-description">
+          Digite o mesmo código usado no check-in do evento pra baixar seu certificado de
+          participação.
+        </p>
+      </header>
+
+      <form
+        class="mt-8 grid gap-4 max-w-sm"
+        data-certificado-form
+        data-evento-id={event.id}
+        data-evento-slug={event.slug}
+        data-evento-titulo={event.title}
+        data-evento-periodo={periodoEvento}
+        data-verificar-url={VERIFICAR_INSCRICAO_URL}
+        data-site-url={siteConfig.siteUrl}
+      >
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="certificado-codigo">Código de confirmação</label>
+          <input
+            id="certificado-codigo"
+            name="codigo"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            maxlength="6"
+            class="field certificado-codigo-input"
+            placeholder="A3F9K2"
+          />
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="certificado-telefone">Telefone usado na inscrição</label>
+          <input
+            id="certificado-telefone"
+            name="telefone"
+            type="tel"
+            autocomplete="tel"
+            class="field"
+            placeholder="(00) 00000-0000"
+          />
+          <p class="text-xs text-muted-foreground">
+            Confere que o certificado é mesmo seu — evita que alguém baixe usando só o código.
+          </p>
+        </div>
+        <button type="submit" class="btn btn-solid">Buscar certificado</button>
+      </form>
+
+      <p class="mt-6 text-lg font-semibold" data-certificado-resultado role="status" aria-live="polite" />
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { jsPDF } from "jspdf";
+    import { carregarLogoCertificado, desenharCertificado } from "@/lib/certificado";
+    import { configurarAcessibilidadePdf } from "@/lib/pdf";
+
+    const form = document.querySelector<HTMLFormElement>("[data-certificado-form]");
+    if (!form) throw new Error("formulário de certificado ausente");
+
+    const eventoId = form.dataset.eventoId;
+    const eventoSlug = form.dataset.eventoSlug ?? "";
+    const eventoTitulo = form.dataset.eventoTitulo ?? "";
+    const eventoPeriodo = form.dataset.eventoPeriodo ?? "";
+    const verificarUrl = form.dataset.verificarUrl ?? "";
+    const siteUrl = form.dataset.siteUrl ?? "";
+    const resultado = document.querySelector<HTMLElement>("[data-certificado-resultado]");
+    const codigoInput = document.getElementById("certificado-codigo") as HTMLInputElement;
+    const telefoneInput = document.getElementById("certificado-telefone") as HTMLInputElement;
+
+    async function gerarCertificado(nome: string, codigo: string) {
+      const logo = await carregarLogoCertificado();
+      const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
+      configurarAcessibilidadePdf(doc, `Certificado — ${nome} — ${eventoTitulo}`);
+      desenharCertificado(doc, { nome, eventoTitulo, eventoPeriodo, logo, codigo, eventoSlug, siteUrl });
+      doc.save(`certificado-${nome.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const codigo = codigoInput.value.trim().toUpperCase();
+      const telefone = telefoneInput.value.trim();
+      if (!resultado) return;
+
+      if (!telefone) {
+        resultado.textContent = "Digite o telefone usado na inscrição.";
+        return;
+      }
+
+      resultado.textContent = "Verificando…";
+
+      try {
+        const res = await fetch(verificarUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evento: eventoId, modo: "codigo", codigo, telefone }),
+        });
+        const pessoa = await res.json();
+
+        if (!pessoa?.encontrado) {
+          resultado.textContent = "Código ou telefone não conferem. Confira e tente de novo.";
+          return;
+        }
+        if (!pessoa.presente) {
+          resultado.textContent = "Ainda não encontramos sua confirmação de presença nesse evento.";
+          return;
+        }
+
+        resultado.textContent = "Gerando certificado…";
+        await gerarCertificado(pessoa.nome, pessoa.codigo);
+        resultado.textContent = `✅ Certificado de ${pessoa.nome} baixado!`;
+      } catch {
+        resultado.textContent = "Não foi possível buscar agora. Tente novamente em instantes.";
+      }
+    });
+  </script>
+
+  <style>
+    .certificado-canvas {
+      max-width: 40rem;
+    }
+
+    .certificado-codigo-input {
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 1.5rem;
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+  </style>
+</BaseLayout>

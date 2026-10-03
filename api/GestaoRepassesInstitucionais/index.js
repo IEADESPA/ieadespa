@@ -9,21 +9,20 @@
 // GET  /api/repasses-institucionais/alertas -> repasses atrasados
 // GET  /api/repasses-institucionais/parametros
 // PUT  /api/repasses-institucionais/parametros -> { percentualDizimoInstitucional?, diasTolerancia? }
+// Matéria da Tesouraria Geral — só o nível GERAL (papel Global com escopo de todas as congregações).
 const auth = require("../shared/auth");
+const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const repasses = require("../shared/repassesInstitucionais");
+const { mesReferenciaValido } = require("../shared/financeiroSeguro");
 
 const ORIGENS = ["CONGREGACAO", "DEPARTAMENTO", "DISTRITO"];
 
 module.exports = async function (context, req) {
   const recurso = context.bindingData.recurso;
-  const usuario = auth.exigirPermissao(req, context, "financeiro");
+  const usuario = exigirGeral(req, context, "financeiro");
   if (!usuario) return;
-  if (usuario.nivel !== "GLOBAL") {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Repasses institucionais são matéria da Tesouraria Geral — restrito a nível Global." } };
-    return;
-  }
   const pool = await getPool();
   const hoje = new Date();
 
@@ -38,7 +37,7 @@ module.exports = async function (context, req) {
     const antes = await repasses.parametros(pool, sql);
     const percentual = percentualDizimoInstitucional !== undefined ? percentualDizimoInstitucional : antes.PercentualDizimoInstitucional;
     const dias = diasTolerancia !== undefined ? diasTolerancia : antes.DiasTolerancia;
-    if (percentual < 0 || percentual > 100) {
+    if (!Number.isFinite(Number(percentual)) || percentual === null || percentual === "" || percentual < 0 || percentual > 100) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "percentualDizimoInstitucional deve estar entre 0 e 100." } };
       return;
     }
@@ -86,9 +85,18 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && !recurso) {
-    const { origemTipo, origemId, origemNome, mesReferencia, valorArrecadadoLiquido } = req.body || {};
-    if (!origemTipo || !ORIGENS.includes(origemTipo) || !origemId || !origemNome || !mesReferencia) {
+    const { origemTipo, origemId: origemIdBruto, origemNome, mesReferencia, valorArrecadadoLiquido } = req.body || {};
+    if (!origemTipo || !ORIGENS.includes(origemTipo) || !origemIdBruto || typeof origemNome !== "string" || !origemNome.trim() || !mesReferencia) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: origemTipo (${ORIGENS.join("|")}), origemId, origemNome, mesReferencia${origemTipo === "CONGREGACAO" ? "" : ", valorArrecadadoLiquido"}.` } };
+      return;
+    }
+    const origemId = auth.idDeRota(origemIdBruto);
+    if (!origemId) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "origemId inválido." } };
+      return;
+    }
+    if (!mesReferenciaValido(mesReferencia)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "mesReferencia deve estar no formato AAAA-MM." } };
       return;
     }
     // Trava de Revisão 4-A: para CONGREGACAO a arrecadação líquida vem do
@@ -135,15 +143,23 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "PUT" && !recurso) {
-    const { repasseId, acao } = req.body || {};
-    if (acao !== "REPASSAR" || !repasseId) {
+    const { repasseId: repasseIdBruto, acao } = req.body || {};
+    if (acao !== "REPASSAR" || !repasseIdBruto) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe repasseId e acao: 'REPASSAR'." } };
       return;
     }
-    await pool.request().input("id", sql.Int, repasseId).input("por", sql.Int, usuario.membroId)
-      .query(`UPDATE RepassesInstitucionais SET Status = 'REPASSADO', DataRepasse = SYSUTCDATETIME(), RepassadoPor = @por WHERE RepasseId = @id`);
+    // Confirma só repasse que existe E ainda está pendente: reconfirmar não sobrescreve a data nem quem confirmou da primeira vez.
+    const repasseId = auth.idDeRota(repasseIdBruto);
+    const confirmado = repasseId
+      ? await pool.request().input("id", sql.Int, repasseId).input("por", sql.Int, usuario.membroId)
+        .query(`UPDATE RepassesInstitucionais SET Status = 'REPASSADO', DataRepasse = SYSUTCDATETIME(), RepassadoPor = @por WHERE RepasseId = @id AND Status <> 'REPASSADO'`)
+      : null;
+    if (!confirmado || !confirmado.rowsAffected || confirmado.rowsAffected[0] !== 1) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Repasse não encontrado ou já confirmado." } };
+      return;
+    }
     await registrarAuditoria({
-      tabela: "RepassesInstitucionais", registroId: Number(repasseId), acao: "Confirmou repasse institucional", usuarioId: usuario.membroId
+      tabela: "RepassesInstitucionais", registroId: repasseId, acao: "Confirmou repasse institucional", usuarioId: usuario.membroId
     });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Repasse confirmado." } };
     return;

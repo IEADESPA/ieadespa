@@ -10,6 +10,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
 const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
+const { violouUnicidade } = require("../shared/violacaoUnica");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -57,8 +58,15 @@ module.exports = async function (context, req) {
   let totalFaltas = 0;
   for (const membro of universo) {
     if (idsComPresenca.has(membro.membroId)) continue;
-    await pool.request().input("sessaoId", sql.Int, sessaoId).input("mat", sql.Int, membro.membroId)
-      .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente, FaltaJustificada) VALUES (@sessaoId, @mat, 0, 0)`);
+    try {
+      await pool.request().input("sessaoId", sql.Int, sessaoId).input("mat", sql.Int, membro.membroId)
+        .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente, FaltaJustificada) VALUES (@sessaoId, @mat, 0, 0)`);
+    } catch (e) {
+      // A pessoa bateu ponto entre a leitura das presenças e este INSERT: o índice único (UX_Presencas_Sessao_Membro) recusa a falta, e a presença dela vale. Sem isto o
+      // encerramento parava aqui com a reunião já ENCERRADA e as faltas dos demais nunca seriam lançadas.
+      if (!violouUnicidade(e)) throw e;
+      continue;
+    }
     totalFaltas++;
   }
 

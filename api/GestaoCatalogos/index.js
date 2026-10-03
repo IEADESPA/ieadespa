@@ -9,6 +9,11 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const { exigirGeral } = require("../shared/escopoRotas");
+const { violouUnicidade, comConflito } = require("../shared/violacaoUnica");
+
+// Catálogos que, mesmo tendo uma permissão de escrita própria, podem ser LIDOS por qualquer pessoa logada (o membro os usa no Meu Painel).
+const LEITURA_SO_COM_LOGIN = new Set(["categoriasEntrada"]);
 
 const CATALOGOS = {
   situacoes: {
@@ -45,20 +50,57 @@ const CATALOGOS = {
   },
   congregacoes: {
     tabela: "Congregacoes", chave: "CongregacaoId", idField: "congregacaoId",
-    campos: { nome: sql.NVarChar(150), ativa: sql.Bit, areaId: sql.Int },
+    // Endereço/bairro/cidade/estado/horário/mapa (v075, vC.2): campos que só
+    // existiam soltos na coleção "congregacoes" do Directus (site
+    // institucional) — viram fonte única aqui. NomePastor propositalmente
+    // NÃO é coluna: ver DIRIGENTE_ATUAL_SQL/enriquecerComDirigente abaixo —
+    // quem dirige a congregação hoje já é 100% calculável em Lideranca
+    // (mesmo critério de api/shared/universo.js), guardar de novo aqui
+    // duplicaria dado e dessincronizaria no primeiro dia em que alguém
+    // trocasse de dirigente sem lembrar de atualizar os dois lugares.
+    // cep/notaEndereco/googleMapsPlaceQuery vieram na v076, junto com a
+    // migração de dado real do Directus — mesmo motivo dos campos da v075.
+    campos: {
+      nome: sql.NVarChar(150), ativa: sql.Bit, areaId: sql.Int,
+      slug: sql.NVarChar(150), endereco: sql.NVarChar(300), bairro: sql.NVarChar(150),
+      cidade: sql.NVarChar(150), estado: sql.NVarChar(2), horarios: sql.NVarChar(500),
+      mapsUrl: sql.NVarChar(500), lat: sql.Decimal(9, 6), lng: sql.Decimal(9, 6),
+      cep: sql.NVarChar(10), notaEndereco: sql.NVarChar(300), googleMapsPlaceQuery: sql.NVarChar(300),
+      fundacaoAno: sql.SmallInt
+    },
     emUso: async (pool, id) => {
       const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);
       return r.recordset[0].Total > 0;
+    },
+    // Só pra este catálogo: acrescenta o dirigente atual calculado (nunca
+    // marcação manual) em cada item já devolvido por listar().
+    enriquecer: async (pool, itens) => {
+      const result = await pool.request().query(`
+        SELECT l.EscopoId AS congregacaoId, m.Nome AS dirigenteAtual
+        FROM Lideranca l
+        JOIN Papeis p ON p.PapelId = l.PapelId AND p.Nome = 'Dirigente de Congregação'
+        JOIN MembroReferencia m ON m.MembroId = l.MembroId
+        WHERE l.EscopoTipo = 'CONGREGACAO'
+          AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+      `);
+      const porCongregacao = {};
+      result.recordset.forEach(r => { porCongregacao[r.congregacaoId] = r.dirigenteAtual; });
+      itens.forEach(item => { item.dirigenteAtual = porCongregacao[item.congregacaoId] || null; });
+      return itens;
     }
   },
   funcionalidades: {
     tabela: "Funcionalidades", chave: "FuncionalidadeId", idField: "funcionalidadeId",
-    campos: { chave: sql.NVarChar(50), nome: sql.NVarChar(100) }
+    campos: { chave: sql.NVarChar(50), nome: sql.NVarChar(100) },
+    // fecho da v7.5 — quem altera os PAPÉIS (nível e permissões de cada cargo) e as funcionalidades define o que todos os cargos podem; com o padrão "pessoas" quem só
+    // cuida do cadastro de membros de uma congregação fazia um papel virar Global com todas as permissões. É a mesma permissão de GestaoLideranca.
+    permissao: "permissoes"
   },
   papeis: {
     tabela: "Papeis", chave: "PapelId", idField: "papelId",
     campos: { nome: sql.NVarChar(100), nivel: sql.NVarChar(30), permissoes: sql.NVarChar(500) },
-    arrayFields: ["permissoes"]
+    arrayFields: ["permissoes"],
+    permissao: "permissoes"
   },
   tiposConsagracao: {
     tabela: "TiposConsagracao", chave: "TipoConsagracaoId", idField: "tipoConsagracaoId",
@@ -80,14 +122,14 @@ const CATALOGOS = {
     tabela: "TiposVinculoFamiliar", chave: "TipoVinculoId", idField: "tipoVinculoId",
     campos: { codigo: sql.NVarChar(30), rotuloDireto: sql.NVarChar(100), rotuloInverso: sql.NVarChar(100), simetrico: sql.Bit, ativo: sql.Bit }
   },
-  politicasRetencao: {
-    tabela: "PoliticasRetencao", chave: "PoliticaId", idField: "politicaId",
-    campos: { categoria: sql.NVarChar(60), baseLegal: sql.NVarChar(300), diasRetencao: sql.Int, ativo: sql.Bit }
-  },
-  canaisOficiais: {
-    tabela: "CanaisOficiaisComunicacao", chave: "CanalId", idField: "canalId",
-    campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), ativo: sql.Bit }
-  },
+  // 'politicasRetencao' removido daqui (vB.8, achado real): este catálogo
+  // genérico só exige a permissão "pessoas" (linha ~289) — aberto demais
+  // pra editar base legal/prazo de retenção de dado pessoal. A edição real
+  // é GestaoPoliticasRetencao (vB.6), restrita a nível Global.
+  // 'canaisOficiais' removido daqui (v7.3): a relação de Canais Oficiais (Estatuto Art. 12) agora tem
+  // validação própria — conta pessoal é recusada, o vínculo institucional é declarado, há administrador
+  // com termo e custódia da senha. Editar pelo catálogo genérico (permissão "pessoas") contornaria tudo
+  // isso. A edição real é GestaoCanais (/api/canais, permissão "canais_gestao").
   tiposInfracao: {
     tabela: "TiposInfracao", chave: "InfracaoId", idField: "infracaoId",
     campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(200), referenciaRegimento: sql.NVarChar(40), gravidade: sql.NVarChar(20), ativo: sql.Bit },
@@ -122,6 +164,11 @@ const CATALOGOS = {
     tabela: "RateioGeralDestinos", chave: "DestinoId", idField: "destinoId",
     campos: { codigo: sql.NVarChar(30), nome: sql.NVarChar(150), percentual: sql.Decimal(5, 2), ativo: sql.Bit },
     permissao: "financeiro"
+  },
+  mediadoresArbitros: {
+    tabela: "CatalogoMediadoresArbitros", chave: "MediadorArbitroId", idField: "mediadorArbitroId",
+    campos: { membroId: sql.Int, papel: sql.NVarChar(20), ativo: sql.Bit },
+    permissao: "mediacao"
   }
 };
 
@@ -157,16 +204,80 @@ async function criarOrgaosAutomaticos(pool, catalogoNome, registro) {
   if (!cfg) return;
   const referenciaId = registro[cfg.idField];
   for (const orgao of cfg.orgaos) {
-    await pool.request()
-      .input("sigla", sql.NVarChar(30), orgao.sigla)
-      .input("nome", sql.NVarChar(200), `${orgao.nome} — ${registro.nome}`)
-      .input("nivel", sql.Int, cfg.nivel)
-      .input("referenciaId", sql.Int, referenciaId)
-      .query(`
-        IF NOT EXISTS (SELECT 1 FROM OrgaosLocais WHERE Nivel = @nivel AND ReferenciaId = @referenciaId AND Sigla = @sigla)
-          INSERT INTO OrgaosLocais (Sigla, Nome, Nivel, ReferenciaId, Ativo) VALUES (@sigla, @nome, @nivel, @referenciaId, 1)
-      `);
+    try {
+      await pool.request()
+        .input("sigla", sql.NVarChar(30), orgao.sigla)
+        .input("nome", sql.NVarChar(200), `${orgao.nome} — ${registro.nome}`)
+        .input("nivel", sql.Int, cfg.nivel)
+        .input("referenciaId", sql.Int, referenciaId)
+        .query(`
+          IF NOT EXISTS (SELECT 1 FROM OrgaosLocais WHERE Nivel = @nivel AND ReferenciaId = @referenciaId AND Sigla = @sigla)
+            INSERT INTO OrgaosLocais (Sigla, Nome, Nivel, ReferenciaId, Ativo) VALUES (@sigla, @nome, @nivel, @referenciaId, 1)
+        `);
+    } catch (e) {
+      // O IF NOT EXISTS não é atômico: se outro pedido criou o mesmo órgão no meio, o índice único (UX_OrgaosLocais_Unidade_Sigla) recusa o segundo — e o órgão que se queria já existe.
+      if (!violouUnicidade(e)) throw e;
+    }
   }
+}
+
+// Frase do 409 quando o banco recusa uma repetição (índices únicos das migrações 127 e 130), escolhida pelo nome do índice que vem no erro. O resto cai na frase genérica.
+const FRASES_DE_REPETICAO = [
+  [/UX_Congregacoes_Nome/, "Já existe uma congregação com esse nome (maiúscula e minúscula contam como a mesma). Escolha outro nome ou ajuste a que já existe."],
+  [/UX_Congregacoes_Slug/, "Já existe uma congregação com esse endereço no site (slug). Escolha outro."],
+  [/UX_OrgaosLocais_Unidade_Sigla/, "Essa unidade já tem um órgão com essa sigla."],
+  [/UX_CargosMinisteriais_Sigla/, "Já existe um cargo ministerial com essa sigla."],
+  [/UX_Departamentos_Sigla/, "Já existe um departamento com essa sigla."],
+  [/UX_Papeis_Nome/, "Já existe um papel com esse nome."],
+  [/UX_SituacoesMembro_Sigla/, "Já existe uma situação de membro com essa sigla."],
+  [/UX_StatusMembro_Sigla/, "Já existe um status de membro com essa sigla."],
+  [/UX_Prazos_Sigla/, "Já existe um prazo com essa sigla."],
+  [/UX_Funcionalidades_Chave/, "Já existe uma funcionalidade com essa chave."]
+];
+function fraseDeRepeticao(erro) {
+  const texto = String((erro && erro.message) || "");
+  const achada = FRASES_DE_REPETICAO.find(([padrao]) => padrao.test(texto));
+  return achada ? achada[1] : "Já existe um registro com esses dados neste cadastro (nome, sigla ou código repetido). Confira a lista antes de salvar.";
+}
+
+// v7.6 — o ESCOPO de acesso compara o NOME da congregação (a sessão guarda a lista de nomes; ver shared/escopo.js) e, para escopo de Extensão da Tenda, o nome
+// da extensão dentro da congregação-mãe. Duas homônimas dividiriam o acesso. Criar ou renomear é recusado (409) se já existe outra com o mesmo nome — a
+// comparação é do SQL, ignorando maiúscula/minúscula, ACENTO e espaço nas pontas ("São Pedro", "sao pedro " e "SÃO PEDRO" são o mesmo nome). É mais rígida que
+// o índice único do banco (migração 130, que distingue acento): o lado seguro. O nome é gravado sem os espaços das pontas.
+const NOME_SEM_HOMONIMA = {
+  congregacoes: { mensagem: "Já existe uma congregação com esse nome (maiúsculas, acentos e espaços nas pontas não diferenciam). Escolha outro nome ou ajuste a que já existe." },
+  extensoes: { mensagem: "Essa congregação-mãe já tem uma extensão com esse nome (maiúsculas, acentos e espaços nas pontas não diferenciam). Escolha outro nome." }
+};
+async function nomeHomonimo(pool, catalogoNome, dados, idCorpo) {
+  const id = idCorpo ? auth.idDeRota(idCorpo) : null;
+  const comparar = `LTRIM(RTRIM(Nome)) COLLATE Latin1_General_CI_AI = LTRIM(RTRIM(@nome)) COLLATE Latin1_General_CI_AI`;
+  if (catalogoNome === "congregacoes") {
+    const r = await pool.request().input("nome", sql.NVarChar(150), dados.nome).input("id", sql.Int, id)
+      .query(`SELECT TOP 1 CongregacaoId FROM Congregacoes WHERE ${comparar} AND (@id IS NULL OR CongregacaoId <> @id)`);
+    return (r.recordset || []).length > 0;
+  }
+  // Extensão: homônima dentro da MESMA congregação-mãe (a do corpo ou, numa edição sem ela, a que já está gravada).
+  const r = await pool.request().input("nome", sql.NVarChar(150), dados.nome).input("id", sql.Int, id).input("mae", sql.Int, dados.congregacaoMaeId === undefined ? null : auth.idDeRota(dados.congregacaoMaeId))
+    .query(`SELECT TOP 1 ExtensaoId FROM ExtensoesTenda
+            WHERE ${comparar} AND (@id IS NULL OR ExtensaoId <> @id)
+              AND CongregacaoMaeId = COALESCE(@mae, (SELECT CongregacaoMaeId FROM ExtensoesTenda WHERE ExtensaoId = @id))`);
+  return (r.recordset || []).length > 0;
+}
+
+// v7.6 — SESSÃO REVOGÁVEL (shared/auth.js): o token carrega os NOMES de congregação (e de extensão) já resolvidos pela hierarquia, e as permissões e o nível
+// de cada papel. Renomear, mudar de área/região/quadrante/distrito, excluir uma unidade ou mudar as permissões/nível de um papel deixaria tokens velhos
+// alcançando o que não devem (ou deixando de alcançar) até expirar: todas as sessões abertas caem (menos a de quem fez a mudança, que é do nível geral) e o
+// login seguinte já monta o escopo novo. Os campos de endereço, horário, mapa etc. não estão no token e não derrubam ninguém.
+const CAMPOS_NO_TOKEN = {
+  congregacoes: ["nome", "areaId"], extensoes: ["nome", "congregacaoMaeId"], areas: ["regiaoId"], regioes: ["quadranteId"], quadrantes: ["distritoId"],
+  distritos: [], papeis: ["nivel", "permissoes"]
+};
+async function derrubarSessoesSeMudouOToken(pool, catalogoNome, antes, depois, usuario) {
+  const campos = CAMPOS_NO_TOKEN[catalogoNome];
+  if (!campos || !antes) return 0;
+  const mudou = !depois || campos.some((c) => JSON.stringify(antes[c] === undefined ? null : antes[c]) !== JSON.stringify(depois[c] === undefined ? null : depois[c]));
+  if (!mudou) return 0;
+  return auth.revogarTodasAsSessoes(pool, sql, { exceto: usuario && usuario.sid });
 }
 
 function coluna(campo) {
@@ -192,7 +303,8 @@ async function buscarPorId(pool, config, id) {
 
 async function listar(pool, config) {
   const result = await pool.request().query(`SELECT * FROM ${config.tabela}`);
-  return result.recordset.map(linha => paraJson(config, linha));
+  const itens = result.recordset.map(linha => paraJson(config, linha));
+  return config.enriquecer ? await config.enriquecer(pool, itens) : itens;
 }
 
 async function criar(pool, config, dados) {
@@ -234,11 +346,11 @@ async function excluir(pool, config, id) {
   return del.rowsAffected[0] > 0;
 }
 
-module.exports = async function (context, req) {
+module.exports = comConflito(async function (context, req) {
   const method = (req.method || "GET").toUpperCase();
   const catalogoNome = context.bindingData.catalogo;
   const id = context.bindingData.id;
-  const config = CATALOGOS[catalogoNome];
+  const config = Object.prototype.hasOwnProperty.call(CATALOGOS, catalogoNome) ? CATALOGOS[catalogoNome] : null;
 
   if (!config) {
     context.res = { status: 404, body: { sucesso: false, mensagem: "Catálogo não encontrado." } };
@@ -247,17 +359,39 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
 
+  // LEITURA (decisão do responsável, 02/10/2026: o módulo de catálogos é da administração, não de "uma pessoa comum"). Antes qualquer pessoa da internet, sem login,
+  // lia todos os catálogos — inclusive a matriz de permissões de cada cargo, alçadas de aprovação e o plano de contas. Agora: exige LOGIN (as telas de formulário usam
+  // congregações, cargos, departamentos... para montar listas) e, nos catálogos internos, a permissão da área (a mesma que escreve neles). Exceção: as categorias de entrada
+  // são o que o membro escolhe ao lançar a própria contribuição (Meu Painel), então ficam só com login.
   if (method === "GET") {
+    const usuarioLeitura = config.permissao && !LEITURA_SO_COM_LOGIN.has(catalogoNome)
+      ? auth.exigirPermissao(req, context, config.permissao)
+      : auth.exigirLoginIgnorandoTermos(req, context);
+    if (!usuarioLeitura) return;
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: await listar(pool, config) };
     return;
   }
 
-  const usuario = auth.exigirPermissao(req, context, config.permissao || "pessoas");
+  // ESCRITA: só o nível GERAL (papel Global com escopo de todas as congregações). Antes bastava a permissão "pessoas" — um Dirigente de Congregação renomeava ou
+  // desativava congregações, áreas e departamentos de toda a igreja. A permissão de cada catálogo continua exigida (financeiro, disciplina, mediacao, permissoes).
+  const usuario = exigirGeral(req, context, config.permissao || "pessoas");
   if (!usuario) return;
 
   if (method === "POST") {
     const dados = req.body || {};
     const idCorpo = dados.id;
+    // v7.6 — nome de congregação/extensão: sem espaço nas pontas e sem homônima (ver nomeHomonimo).
+    if (NOME_SEM_HOMONIMA[catalogoNome] && dados.nome !== undefined) {
+      if (typeof dados.nome !== "string" || !dados.nome.trim()) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o nome." } };
+        return;
+      }
+      dados.nome = dados.nome.trim();
+      if (await nomeHomonimo(pool, catalogoNome, dados, idCorpo)) {
+        context.res = { status: 409, body: { sucesso: false, mensagem: NOME_SEM_HOMONIMA[catalogoNome].mensagem } };
+        return;
+      }
+    }
     if (idCorpo) {
       const dadosAntes = await buscarPorId(pool, config, idCorpo);
       const registro = await atualizar(pool, config, idCorpo, dados);
@@ -265,9 +399,10 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Registro não encontrado." } };
         return;
       }
+      const sessoesEncerradas = await derrubarSessoesSeMudouOToken(pool, catalogoNome, dadosAntes, registro, usuario);
       await registrarAuditoria({
         tabela: config.tabela, registroId: Number(idCorpo), acao: "Atualizou registro",
-        usuarioId: usuario.membroId, dadosAntes, dadosDepois: registro
+        usuarioId: usuario.membroId, dadosAntes, dadosDepois: sessoesEncerradas ? { ...registro, sessoesEncerradas } : registro
       });
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Registro atualizado.", registro } };
     } else {
@@ -294,11 +429,12 @@ module.exports = async function (context, req) {
     const dadosAntes = await buscarPorId(pool, config, id);
     const ok = await excluir(pool, config, id);
     if (ok) {
-      await registrarAuditoria({ tabela: config.tabela, registroId: Number(id), acao: "Excluiu registro", usuarioId: usuario.membroId, dadosAntes });
+      const sessoesEncerradas = await derrubarSessoesSeMudouOToken(pool, catalogoNome, dadosAntes, null, usuario);
+      await registrarAuditoria({ tabela: config.tabela, registroId: Number(id), acao: "Excluiu registro", usuarioId: usuario.membroId, dadosAntes, dadosDepois: sessoesEncerradas ? { sessoesEncerradas } : undefined });
     }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: ok, mensagem: ok ? "✅ Excluído." : "Registro não encontrado." } };
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
-};
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
+}, fraseDeRepeticao);

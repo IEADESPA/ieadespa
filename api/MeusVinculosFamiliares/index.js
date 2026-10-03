@@ -10,14 +10,13 @@
 // DELETE /api/meus-vinculos/{matricula}/{id} -> só remove se o vínculo for da própria matrícula
 const { getPool, sql } = require("../shared/db");
 const vinculos = require("../shared/vinculosFamiliares");
+const auth = require("../shared/auth");
 
 module.exports = async function (context, req) {
+  // fecho da v7.5 — exige sessão e só a matrícula da própria sessão (o comentário acima já dizia "trava tudo pela matrícula da rota", mas a rota era aberta).
   const matricula = context.bindingData.matricula;
   const idRota = context.bindingData.id;
-  if (!matricula) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula na rota." } };
-    return;
-  }
+  if (!auth.exigirTitular(req, context, matricula)) return;
 
   const pool = await getPool();
   const method = req.method;
@@ -38,20 +37,21 @@ module.exports = async function (context, req) {
   }
 
   if (method === "DELETE") {
-    if (!idRota) {
+    const vinculoId = auth.idDeRota(idRota);
+    if (!vinculoId) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o id na rota: /api/meus-vinculos/{matricula}/{id}" } };
       return;
     }
-    const vinculo = await pool.request().input("id", sql.Int, idRota).query(`SELECT MembroId, MembroParenteId FROM VinculosFamiliares WHERE VinculoId = @id`);
+    const vinculo = await pool.request().input("id", sql.Int, vinculoId).query(`SELECT MembroId, MembroParenteId FROM VinculosFamiliares WHERE VinculoId = @id`);
     const pertence = vinculo.recordset[0] && (String(vinculo.recordset[0].MembroId) === String(matricula) || String(vinculo.recordset[0].MembroParenteId) === String(matricula));
     if (!pertence) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Vínculo não encontrado (ou não pertence à sua matrícula)." } };
       return;
     }
-    const resultado = await vinculos.removerVinculo(pool, sql, idRota, Number(matricula));
+    const resultado = await vinculos.removerVinculo(pool, sql, vinculoId, Number(matricula));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: resultado };
     return;
   }
 
-  context.res = { status: 405, body: { erro: "Método não suportado." } };
+  context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };

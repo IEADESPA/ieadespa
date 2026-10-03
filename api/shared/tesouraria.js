@@ -2,6 +2,7 @@
 // Motor de cálculo da Tesouraria Local — Art. 118: retenção local (padrão
 // 40%) + repasse à Tesouraria Geral (padrão 60%), sempre derivado dos
 // lançamentos do mês, nunca digitado à mão pelo Tesoureiro.
+const { ehGeral } = require("./escopoRotas");
 const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // Termo nº sequencial e contínuo por congregação — igual ao bloco físico de
@@ -51,24 +52,57 @@ const DESTINOS_RATEIO_GERAL = ["CONVENCAO", "PREBENDA_PASTORAL", "PDQ"];
 // ainda não incluído num Rateio Geral fechado não é gastável em nada
 // ainda — é exatamente o controle interno pedido ("o que já foi rateado
 // não pode misturar com o que ainda não foi").
+// v5.4 — "DEPTO_<SIGLA>" é o Centro de Custo do dinheiro que um relatório
+// departamental (shared/relatoriosDepartamentais.js) decidiu manter LOCAL
+// naquela congregação (rateio, congelado em `ValorParaLocal` no momento da
+// aprovação geral — nunca `FechamentosTesouraria`, que é a fonte errada:
+// aquilo é dízimo/oferta geral, isto é dinheiro de departamento).
+function centroCustoDepartamental(centroCusto) {
+  return typeof centroCusto === "string" && centroCusto.startsWith("DEPTO_") ? centroCusto.slice(6) : null;
+}
+
+// v5.4 — quem só tem "tesouraria_departamental" (não "financeiro") só pode
+// operar Saídas (GestaoSaidas) da categoria do PRÓPRIO departamento —
+// mesmo motor de aprovação (alçada/segregação/quatro-olhos), escopo mais
+// estreito. Quem tem "financeiro" opera o centro LOCAL (a Saída já é filtrada pela congregação) e os departamentais; os
+// centros da igreja inteira (GERAL, PDQ, CONVENCAO, PREBENDA_PASTORAL) são só do nível GERAL (papel Global com escopo de todas
+// as congregações): a Saída da prebenda nasce na congregação do ministro (GestaoPrebendas) e, sem esta trava, o tesoureiro local
+// daquela congregação a via, cancelava ou "pagava" sem pagamento.
+function podeOperarCentroCusto(usuario, centroCusto, siglaDepartamentoUsuario) {
+  // v7.6 — o nível geral tem de vir de uma concessão que tenha "financeiro" (shared/auth.js, "Concessões").
+  const vFinanceiro = require("./auth").visaoDaPermissao(usuario, "financeiro");
+  if (vFinanceiro) {
+    if (centroCusto === "LOCAL" || centroCustoDepartamental(centroCusto)) return true;
+    return ehGeral(vFinanceiro);
+  }
+  return !!siglaDepartamentoUsuario && centroCusto === `DEPTO_${siglaDepartamentoUsuario}`;
+}
+
 async function saldoCentroCusto(pool, sql, centroCusto, congregacaoId) {
+  const siglaDepartamento = centroCustoDepartamental(centroCusto);
   let liberado;
   if (centroCusto === "GERAL") {
     liberado = await pool.request().query(`SELECT ISNULL(SUM(ValorTesouroGeral), 0) AS total FROM RateiosGerais`);
   } else if (DESTINOS_RATEIO_GERAL.includes(centroCusto)) {
     liberado = await pool.request().input("codigo", sql.NVarChar(30), centroCusto)
       .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM RateioGeralValores WHERE DestinoCodigo = @codigo`);
+  } else if (siglaDepartamento) {
+    liberado = await pool.request().input("sigla", sql.NVarChar(30), siglaDepartamento).input("congregacaoId", sql.Int, congregacaoId)
+      .query(`SELECT ISNULL(SUM(r.ValorParaLocal), 0) AS total FROM RelatoriosDepartamentais r
+              JOIN Departamentos d ON d.DepartamentoId = r.DepartamentoId
+              WHERE d.Sigla = @sigla AND r.CongregacaoId = @congregacaoId
+                AND r.Status IN ('APROVADO_GERAL', 'RETIFICADO') AND r.ValorParaLocal IS NOT NULL`);
   } else {
     liberado = await pool.request().input("congregacaoId", sql.Int, congregacaoId)
       .query(`SELECT ISNULL(SUM(ValorRetidoLocal), 0) AS total FROM FechamentosTesouraria WHERE Status = 'REPASSADO' AND CongregacaoId = @congregacaoId`);
   }
   const pagoRequest = pool.request().input("centroCusto", sql.NVarChar(20), centroCusto);
-  if (centroCusto === "LOCAL") pagoRequest.input("congregacaoId", sql.Int, congregacaoId);
+  if (centroCusto === "LOCAL" || siglaDepartamento) pagoRequest.input("congregacaoId", sql.Int, congregacaoId);
   const pago = await pagoRequest.query(`
     SELECT ISNULL(SUM(s.Valor), 0) AS total FROM SaidasTesouraria s
     JOIN CategoriasSaida cs ON cs.Codigo = s.Tipo
     WHERE s.Status = 'PAGA' AND cs.CentroCusto = @centroCusto
-    ${centroCusto === "LOCAL" ? "AND s.CongregacaoId = @congregacaoId" : ""}
+    ${(centroCusto === "LOCAL" || siglaDepartamento) ? "AND s.CongregacaoId = @congregacaoId" : ""}
   `);
   return round2(liberado.recordset[0].total - pago.recordset[0].total);
 }
@@ -171,4 +205,4 @@ async function projetarFluxoCaixa(pool, sql, centroCusto, congregacaoId, meses) 
   return { saldoAtual, entradaMediaMensal, saidaMediaMensal, totalEmpenhadoAberto, projecao };
 }
 
-module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo, projetarFluxoCaixa, suspensaoAtivaFundoPdq, DESTINOS_RATEIO_GERAL };
+module.exports = { proximoNumeroTermo, calcularFechamento, redigirParaMural, round2, saldoCentroCusto, saldoRestanteCampanha, saldoFundoFixo, projetarFluxoCaixa, suspensaoAtivaFundoPdq, DESTINOS_RATEIO_GERAL, centroCustoDepartamental, podeOperarCentroCusto };

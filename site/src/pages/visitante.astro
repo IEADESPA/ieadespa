@@ -1,0 +1,163 @@
+---
+import { marked } from "marked";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchSingleton, mapsHref } from "@/lib/directus";
+import { getAllProgramacao, sedeProgramacaoCompacta } from "@/lib/programacao";
+import { resolverFotoAtual } from "@/lib/fotoAtual";
+import { streetViewImageUrl, streetViewMetadata } from "@/lib/streetview";
+
+interface Visitante {
+  headline: string;
+  subheadline: string;
+  boas_vindas: string;
+  o_que_esperar: string;
+  estrutura: string;
+}
+
+const allPosts = visiblePosts(await getAllMensagens());
+const visitante = await fetchSingleton<Visitante>("visitantes");
+const config = await fetchConfiguracoes();
+const heroSchedule = sedeProgramacaoCompacta(await getAllProgramacao());
+const [boasVindasHtml, oQueEsperarHtml, estruturaHtml] = await Promise.all([
+  marked.parse(visitante.boas_vindas ?? ""),
+  marked.parse(visitante.o_que_esperar ?? ""),
+  marked.parse(visitante.estrutura ?? ""),
+]);
+
+/* Fase 24.2/24.11 — foto real da fachada, pra quem nunca veio reconhecer o
+   prédio chegando: compara a foto do Street View com uma foto manual
+   (opcional, upload em Configurações) e usa sempre a mais recente das duas
+   — o carro do Street View pode passar anos sem atualizar, principalmente
+   fora do centro. */
+const svMeta = config.lat && config.lng ? await streetViewMetadata(Number(config.lat), Number(config.lng), siteConfig.googleMapsEmbedKey) : { coberto: false, data: null };
+const fotoFachada = resolverFotoAtual({
+  streetView: svMeta.coberto
+    ? { url: streetViewImageUrl(Number(config.lat), Number(config.lng), siteConfig.googleMapsEmbedKey), data: svMeta.data }
+    : null,
+  manual: config.foto_fachada ? { url: directusAssetUrl(config.foto_fachada, { width: 640, height: 400, fit: "cover" }), data: config.foto_fachada_data } : null,
+});
+
+const nextSteps = [
+  { label: "Programação semanal", description: "Veja os dias e horários de cada culto.", href: "/eventos/" },
+  { label: "Congregações", description: "Encontre a congregação mais próxima de você.", href: "/congregacoes/" },
+  { label: "Como chegar", description: "Endereço, rota e horários da sede.", href: "/contato/" },
+  { label: "Dúvidas frequentes", description: "Perguntas comuns de quem está pensando em visitar.", href: "/duvidas-frequentes/" },
+];
+---
+
+<BaseLayout
+  title="Primeira vez aqui?"
+  description={`Informações para quem vai visitar a ${siteConfig.name} pela primeira vez.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas">
+      <header class="pagehead">
+        <p class="eyebrow">Bem-vindo(a)</p>
+        <h1 class="pagehead-title">{visitante.headline}</h1>
+        <p class="pagehead-description">{visitante.subheadline}</p>
+      </header>
+
+      <section class="visitante-quando-onde" aria-labelledby="quando-onde-heading">
+        <h2 id="quando-onde-heading" class="sr-only">Quando e onde</h2>
+        <ul class="grid gap-3 sm:grid-cols-3">
+          {
+            heroSchedule.map((service) => (
+              <li class="visitante-horario-card">
+                <span class="block text-xs font-semibold tracking-wide text-accent uppercase">{service.label}</span>
+                <span class="mt-1 block text-base font-semibold tracking-tight">{service.title}</span>
+                {service.time && <span class="mt-1 block text-sm text-muted-foreground">{service.time}</span>}
+              </li>
+            ))
+          }
+        </ul>
+        <p class="mt-3 text-sm text-muted-foreground">
+          <a href={mapsHref(config)} target="_blank" rel="noreferrer" class="link-sweep text-accent font-semibold">
+            📍 {enderecoCompleto(config)}
+          </a>
+        </p>
+
+        {
+          fotoFachada && (
+            <img
+              src={fotoFachada.url}
+              alt={`Vista da rua em frente à ${siteConfig.name}, pra reconhecer o prédio chegando`}
+              width="640"
+              height="400"
+              loading="lazy"
+              class="mt-4 w-full rounded-[var(--radius-md)] border border-border"
+            />
+          )
+        }
+      </section>
+
+      {visitante.boas_vindas && <div class="prose mt-10" set:html={boasVindasHtml} />}
+
+      {visitante.o_que_esperar && (
+        <section class="mt-14" aria-labelledby="esperar-heading">
+          <h2 id="esperar-heading" class="section-title">O que esperar</h2>
+          <div class="prose mt-4" set:html={oQueEsperarHtml} />
+        </section>
+      )}
+
+      {visitante.estrutura && (
+        <section class="mt-14" aria-labelledby="estrutura-heading">
+          <h2 id="estrutura-heading" class="section-title">Estrutura para famílias</h2>
+          <div class="prose mt-4" set:html={estruturaHtml} />
+        </section>
+      )}
+
+      <section class="mt-16" aria-labelledby="next-steps-heading">
+        <h2 id="next-steps-heading" class="section-title">Próximos passos</h2>
+        <div class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {nextSteps.map((step) => (
+            <a href={step.href} class="quick-link card-elevated link-title">
+              <span class="link-title__text block text-base font-semibold tracking-tight">{step.label}</span>
+              <span class="mt-2 block text-sm leading-relaxed text-muted-foreground">{step.description}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <div class="prose mt-16">
+        <h2>Ainda com dúvidas?</h2>
+        <p>
+          Fale com a gente pela <a href="/contato/">página de contato</a> — respondemos com prazer antes
+          da sua visita.
+        </p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .visitante-quando-onde {
+    margin-top: 1.5rem;
+  }
+
+  .visitante-horario-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.1rem 1.25rem;
+  }
+
+  .quick-link {
+    display: block;
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.4rem;
+    text-decoration: none;
+    transition:
+      transform var(--duration) var(--ease-out),
+      box-shadow var(--duration) var(--ease-out);
+  }
+
+  .quick-link:hover,
+  .quick-link:focus-visible {
+    transform: translateY(-2px);
+  }
+</style>

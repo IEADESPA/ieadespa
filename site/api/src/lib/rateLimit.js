@@ -43,10 +43,15 @@ function header(req, nome) {
   return chave ? req.headers[chave] : undefined;
 }
 
+// O IP de quem chamou. O Azure Static Web Apps ACRESCENTA entradas à direita do x-forwarded-for (medido no sistema, 02/10/2026, e confirmado aqui em 03/10/2026: com um
+// valor inventado de primeira entrada o limite nunca barrava): a esquerda pode ser escrita por quem chama, então o IP real é o PENÚLTIMO (o último é o proxy do Azure).
+// Com uma só entrada, ela é o próprio par da conexão. Sem o cabeçalho, todos caem no mesmo balde "desconhecido" (barra junto em vez de deixar passar): o
+// x-azure-clientip chega como o cliente escreveu e não vale como critério.
 function ipDoPedido(req) {
   const encaminhado = header(req, "x-forwarded-for");
-  if (encaminhado) return encaminhado.split(",")[0].trim();
-  return header(req, "x-azure-clientip") || "desconhecido";
+  const entradas = String(encaminhado == null ? "" : Array.isArray(encaminhado) ? encaminhado.join(",") : encaminhado).split(",").map((s) => s.trim()).filter(Boolean);
+  if (entradas.length === 0) return "desconhecido";
+  return (entradas.length === 1 ? entradas[0] : entradas[entradas.length - 2]).slice(0, 64);
 }
 
 module.exports = { permitir, ipDoPedido };

@@ -129,4 +129,19 @@ describe("idadeEm / diasDesde — funções de data puras (base de tudo acima)",
     const hojeStr = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
     expect(estatuto.diasDesde(hojeStr)).toBe(0);
   });
+
+  // Em produção o driver do SQL Server entrega coluna DATE como objeto Date à meia-noite UTC. Antes, parseData(Date) dava null e todo prazo/idade calculado sobre uma
+  // data crua do banco ficava sem resposta (a homologação de abandono "nunca vencia", o Abandono Digital "nunca ficava elegível").
+  test("data crua do banco (Date à meia-noite UTC) vale como o dia do banco, em qualquer fuso", () => {
+    const doBanco = new Date("2026-06-01T00:00:00.000Z");
+    expect(estatuto.diasDesde(doBanco, "2026-06-15")).toBe(14);
+    expect(estatuto.idadeEm(new Date("2000-12-31T00:00:00.000Z"), "2026-06-15")).toBe(25);
+    expect(estatuto.idadeEm(new Date("2008-06-15T00:00:00.000Z"), "2026-06-15")).toBe(18);
+    expect(estatuto.idadeEm(new Date("2008-06-16T00:00:00.000Z"), "2026-06-15")).toBe(17);
+  });
+  test("Date inválido continua sem resposta; Date com hora segue o dia local, como o 'hoje'", () => {
+    expect(estatuto.diasDesde(new Date("lixo"), "2026-06-15")).toBeNull();
+    const comHora = new Date(2026, 5, 1, 18, 30, 0);
+    expect(estatuto.diasDesde(comHora, "2026-06-15")).toBe(14);
+  });
 });

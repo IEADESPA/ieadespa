@@ -4951,7 +4951,7 @@ async function carregarResumoFechamento() {
   if (!f) {
     container.innerHTML = `
       <p class="subtitle">Mês ainda aberto — ${data.lancamentos.length} lançamento(s) registrado(s).</p>
-      <button class="btn-confirmar" style="width:auto;" data-on-click="fecharMesTesourariaAcao" data-args-click="${argsAttr(congregacaoId, String(mesReferencia ?? ""))}">🔒 Fechar mês</button>
+      <button class="btn-confirmar" style="width:auto;" data-on-click="fecharMesTesourariaAcao" data-args-click="${argsAttr(Number(congregacaoId), String(mesReferencia ?? ""))}">🔒 Fechar mês</button>
       <p id="resultadoFecharMes" class="subtitle"></p>`;
     return;
   }
@@ -4989,7 +4989,7 @@ async function carregarResumoFechamento() {
           <label>Comprovante (opcional):</label>
           <input type="file" id="financeiroComprovanteRepasse" accept="image/jpeg,image/png,application/pdf" />
         </div>
-        ${authGeral ? `<button class="btn-confirmar" style="width:auto;" data-on-click="registrarRepasseTesourariaAcao" data-args-click="${argsAttr(congregacaoId, String(mesReferencia ?? ""))}">✅ Conferir e liberar saldo local</button>` : ""}
+        ${authGeral ? `<button class="btn-confirmar" style="width:auto;" data-on-click="registrarRepasseTesourariaAcao" data-args-click="${argsAttr(Number(congregacaoId), String(mesReferencia ?? ""))}">✅ Conferir e liberar saldo local</button>` : ""}
         <p id="resultadoRepasse" class="subtitle"></p>`;
     } else {
       html += `<p class="subtitle">Só a Tesouraria Geral pode conferir e liberar este saldo.</p>`;
@@ -13293,7 +13293,7 @@ async function carregarDetalheTurmaEbdAcao() {
     ${dadosProf.professores.length
       ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Principal</th><th></th></tr></thead><tbody>
           ${dadosProf.professores.map(p => `<tr><td>${p.membroId}</td><td>${escaparHtmlEbd(p.membroNome)}</td><td>${p.principal ? "Sim" : "Não"}</td>
-            <td><button class="btn-link" data-on-click="encerrarProfessorEbdAcao" data-args-click="${argsAttr(turmaId, p.membroId)}">Remover</button></td></tr>`).join("")}
+            <td><button class="btn-link" data-on-click="encerrarProfessorEbdAcao" data-args-click="${argsAttr(Number(turmaId), p.membroId)}">Remover</button></td></tr>`).join("")}
         </tbody></table>`
       : "<p class='subtitle'>Nenhum professor designado.</p>"}
     <h5>Alunos</h5>

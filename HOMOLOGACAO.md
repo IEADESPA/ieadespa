@@ -10,7 +10,7 @@ reproduzir/manter** cada peça — não é mais um runbook pendente.
 ## O que foi criado
 
 | Recurso | Nome | Detalhe |
-|---|---|---|
+| --- | --- | --- |
 | Banco de homologação | `ieadespa-homolog` (servidor `srv-app-sql`, brazilsouth) | Serverless GP_S_Gen5, auto-pause 60min, mesmo schema da produção (74 migrações rodadas) |
 | Ambiente de homologação | PR [#1](https://github.com/IEADESPA/ieadespa/pull/1) (branch `homolog`, **não fechar**) | Ambiente de preview grátis do Static Web App (plano Standard já pago), `SQL_CONNECTION_STRING` apontada pro `ieadespa-homolog` em vez do banco de produção. URL: `https://white-grass-048208e0f-1.eastus2.6.azurestaticapps.net` |
 | Application Insights | `ieadespa-appinsights` (eastus2) | Connection string configurada como `APPLICATIONINSIGHTS_CONNECTION_STRING` tanto no ambiente de produção (`default`) quanto no de homologação (`1`) |
@@ -22,7 +22,7 @@ reproduzir/manter** cada peça — não é mais um runbook pendente.
 ## Registro de testes de restore
 
 | Data | Quem/o quê | Resultado |
-|---|---|---|
+| --- | --- | --- |
 | 2026-09-13 | Sessão Claude Code, restore de `app-db-prod` para `ieadespa-teste-restore` (point-in-time, ~10min atrás) | ✅ Restaurou limpo. Contagem de linhas nas tabelas-chave (`MembroReferencia`, `Congregacoes`, `LancamentosTesouraria`, `SaidasTesouraria`, `Doacoes`, `ReceitasAcessorias`) bateu exatamente com a produção. Banco de teste apagado logo depois (evita cobrança). Levou ~35-40 minutos do pedido de restore até o banco ficar `Online` — planeje esse tempo numa recuperação de desastre real. |
 
 Pra rodar de novo (ex.: auditoria periódica, ou treino de recuperação de
@@ -48,12 +48,14 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
 - **Não feche nem dê merge no PR #1** — o ambiente de preview é destruído
   junto. Se isso acontecer sem querer, reabra um PR do branch `homolog`
   (ou de outro) e reconfigure:
+
   ```powershell
   az staticwebapp environment list --name app-meusite-web --output table
   az staticwebapp appsettings set --name app-meusite-web --resource-group ieadespa `
     --environment-name <NOME_DO_AMBIENTE> `
     --setting-names "SQL_CONNECTION_STRING=<connection string do ieadespa-homolog>"
   ```
+
 - **Massa de dados fictícia**: o `ieadespa-homolog` hoje tem o mesmo
   schema da produção, mas nasceu vazio (só rodou as migrações, não uma
   cópia de dado real — não copiamos dado de membro de propósito). Ainda
@@ -68,7 +70,7 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
 Mesma estimativa de antes se confirmou na prática — nada surpreendeu:
 
 | Recurso | Custo |
-|---|---|
+| --- | --- |
 | Banco de homologação (Serverless, auto-pause) | ~R$ 25-100/mês (varia com uso) |
 | Ambiente de preview do SWA (plano Standard já pago) | R$ 0 adicional |
 | Application Insights (primeiros 5 GB/mês grátis) | ~R$ 0-15/mês neste volume |
@@ -104,7 +106,7 @@ observação.
 **Custo real (Cost Management API, mês corrente até 19/09, projetado):**
 
 | Recurso | Projeção mensal |
-|---|---|
+| --- | --- |
 | Banco de produção (`app-db-prod`) | ≈ US$ 118 |
 | Banco de homologação | ≈ US$ 4 |
 | Site institucional + Directus | ≈ US$ 3 |
@@ -174,9 +176,24 @@ com o backend linkado antes de qualquer deploy — ambos fora do escopo de
 "tentar de novo" simples). Cada tentativa tem custo real: a 1ª deixou
 produção ~14h fora do ar, a 2ª ~2h.
 
-Ambiente de homologação continua ligado à Function App nova e funcionando —
-prova de conceito válida, só não é possível replicar em produção por ora.
+Ambiente de homologação continuava ligado à Function App nova e funcionando —
+prova de conceito válida, só não era possível replicar em produção.
 
-**Deploy do código da API mudou**: agora é `func azure functionapp publish
-func-ieadespa-api` (de dentro de `api/`), não mais o workflow de CI/CD — hoje
-isso só afeta `func-ieadespa-api` diretamente (não usado por produção).
+> **Atualização de 04/10/2026 — a experiência foi encerrada e o aplicativo
+> removido.** O responsável confirmou que a ideia (pagar ≈ US$ 10/mês para o
+> servidor deixar de levar ~30 s para acordar) foi abandonada depois dos
+> problemas acima. Conferido antes de apagar: o aplicativo recebeu só 13
+> chamadas em 30 dias (todas de teste, a última em 01/10), nenhum site,
+> fluxo ou configuração apontava para ele, e o armazenamento dele tinha só
+> arquivos internos do próprio aplicativo. Foram apagados `func-ieadespa-api`,
+> o armazenamento `ieadespaapifunc01`, o plano `ASP-ieadespa-c292` e o
+> monitoramento `func-ieadespa-api`, e a ligação (backend) do ambiente de
+> homologação foi desfeita. **Consequência:** a API da homologação
+> **estava sendo atendida por esse aplicativo antigo (código de 20/09)**, não
+> pela API do projeto — por isso rotas novas davam 404/comportamento antigo
+> ali, e as conferências feitas na homologação até 03/10/2026 não provavam o
+> código novo (a produção, conferida logo após cada deploy, é que provou).
+> Desde 04/10/2026 o PR #1 volta a publicar a API do projeto (`api/`)
+> também na homologação, e o código vale o que está em `homolog`. O deploy
+> pelo `func azure functionapp publish` descrito antes **não existe mais**.
+> O cold start de ~30 s do modo "Managed Functions" continua.

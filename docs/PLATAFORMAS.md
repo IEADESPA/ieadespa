@@ -59,8 +59,7 @@ vez de um CDN de terceiros (um CDN comprometido injetaria código nas telas de d
 | **Banco de homologação** (`ieadespa-homolog`) | esquema **antigo** (faltam as migrações recentes) | 139 | O fluxo do PR migra o banco de **produção**, não este; por isso a lista de documentos dá 500 na homologação. Para a homologação provar também o SQL, falta um passo de migração dela (exige guardar a conexão dela como segredo no GitHub). |
 | Static Web Apps (`app-meusite-web`, `site-institucional`) | plano Standard | — | Em dia; domínios `app.`, `www.` e raiz. |
 | Armazenamento `ieadespaarmazenamento` | StorageV2, TLS mínimo 1.2, sem acesso público a blob | — | Em dia. |
-| Armazenamento `ieadespaapifunc01` | StorageV2, **TLS mínimo 1.2** (era 1.0; ajustado em 03/10/2026) | 1.2 | Em dia. É do Function App abaixo. |
-| **Function App `func-ieadespa-api`** (Flex Consumption, Node 24, 189 funções) | cópia **antiga** da API (último deploy 20/09/2026) | — | **Sobra de uma tentativa antiga**, não ligada a nenhum Static Web App. Teve 9 execuções em 19/09 e **nenhuma nos 13 dias seguintes**. Guarda cópia dos segredos de produção e do código anterior às correções de segurança; todas as rotas testadas respondem 401. Candidata a desligar (decisão do responsável). |
+| ~~Function App `func-ieadespa-api`~~ e o que era só dele (armazenamento `ieadespaapifunc01`, plano `ASP-ieadespa-c292`, monitoramento próprio) | **removidos em 04/10/2026** | — | Era a experiência de **20/09/2026** para tirar o cold start de ~30 s (≈ US$ 10/mês, "Always Ready"), abandonada (ver `HOMOLOGACAO.md`). Antes de apagar: 13 chamadas em 30 dias (todas de teste), nenhuma configuração apontava para ele, e o armazenamento tinha só arquivos internos. Guardava cópia dos segredos de produção e do código anterior às correções de segurança. |
 | Application Insights, alertas, e-mail (ACS) | — | — | Sem versão a conferir. |
 
 Ferramentas desta máquina (desenvolvimento): Node 26.10.0 (Current; a LTS é a 24.21.0), npm 11.19.1, Azure CLI 2.90.0 (última),
@@ -70,10 +69,15 @@ montagem usou 22.23.2 e a última 22.x é 22.23.3 (entra sozinha no próximo dep
 
 **Feito em 03/10/2026, com o responsável no modo manual de aprovação (no modo automático o controle de permissões do Claude Code bloqueia
 mudança em produção no Azure):** Directus 12.3.1 para 12.4.1 (só a etiqueta da imagem do contêiner `main` do App Service `ieadespa-directus`
-mudou; as demais configurações do contêiner ficaram idênticas) e TLS mínimo 1.2 na conta `ieadespaapifunc01`. Antes da troca: cópia completa
-automática diária do banco e restauração a qualquer ponto desde 04/09/2026 (o servidor "burstable" não aceita cópia sob demanda).
+mudou; as demais configurações do contêiner ficaram idênticas) e TLS mínimo 1.2 na conta `ieadespaapifunc01` (conta apagada depois, em 04/10/2026,
+junto com o Function App antigo). Antes da troca: cópia completa automática diária do banco e restauração a qualquer ponto desde 04/09/2026 (o
+servidor "burstable" não aceita cópia sob demanda).
 
-**Ainda por fazer:** Git 2.55 para 2.56 (ver acima) e a decisão de desligar o Function App `func-ieadespa-api`.
+**Ainda por fazer:** Git 2.55 para 2.56 (ver acima; sem correção de segurança, não é urgente).
+
+**Descoberta de 04/10/2026:** a homologação (PR #1) estava ligada ao Function App antigo e por isso **não rodava o código novo da API** (rotas novas
+davam 404/comportamento antigo). Desfeita a ligação, ela voltou a rodar a API do projeto. As conferências "na homologação" feitas até 03/10 não
+provavam o código novo; a produção, conferida logo após cada deploy, é que provou. Com isso o passo 4 da rotina abaixo passou a valer de verdade.
 
 ## Como atualizar (a rotina)
 

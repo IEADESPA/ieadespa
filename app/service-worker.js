@@ -6,8 +6,10 @@
 // guarda o pacote da turma e a fila de marcações no localStorage. Também recebe evento de push (shared/notificacaoPush.js
 // no back-end) e mostra a notificação do sistema operacional.
 // v3 (03/10/2026): a biblioteca de planilhas (SheetJS 0.20.3) passou a ser servida daqui (/vendor), não mais de um CDN de terceiros; subir a versão do cache refaz a instalação.
-const CACHE_NOME = "ieadespa-app-shell-v3";
-const ARQUIVOS_SHELL = ["/", "/index.html", "/script.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js"];
+// v4 (04/10/2026): CSP forte — os eventos saíram do HTML (onclick="...") para o despachante /eventos.js, que entra na casca; o index.html e o script.js
+// novos só funcionam com ele, então a versão do cache sobe para a instalação baixar os três juntos.
+const CACHE_NOME = "ieadespa-app-shell-v4";
+const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js"];
 
 self.addEventListener("install", (evento) => {
   evento.waitUntil(caches.open(CACHE_NOME).then((cache) => cache.addAll(ARQUIVOS_SHELL)));

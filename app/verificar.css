@@ -1,0 +1,25 @@
+/* verificar.css — estilo da página PÚBLICA de verificação de certificado (verificar.html). Saiu do <style> em linha da página para
+   a CSP forte do site (o estilo em linha ainda seria permitido, mas a página fica toda em arquivos do próprio site, como o resto). */
+:root { --marinho: #0f1b33; --ouro: #d9b34f; --cinza: #5a6270; --fundo: #f6f7f9; --ok: #1d7a46; --alerta: #b26a00; --erro: #b3261e; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fundo); color: #1a1d23; }
+header { background: var(--marinho); color: #fff; padding: 18px 16px; text-align: center; border-bottom: 4px solid var(--ouro); }
+header h1 { margin: 0; font-size: 1.05rem; letter-spacing: .02em; }
+header p { margin: 4px 0 0; font-size: .8rem; color: #c9d1e0; }
+main { max-width: 560px; margin: 24px auto; padding: 0 16px 40px; }
+.cartao { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(15, 27, 51, .12); }
+label { display: block; font-weight: 600; margin-bottom: 6px; }
+input { width: 100%; padding: 12px; font-size: 1.05rem; letter-spacing: .08em; text-transform: uppercase; border: 1px solid #b8bec9; border-radius: 8px; font-family: ui-monospace, Consolas, monospace; }
+button { margin-top: 12px; width: 100%; padding: 12px; font-size: 1rem; font-weight: 600; background: var(--marinho); color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
+button:disabled { opacity: .6; cursor: wait; }
+.dica { font-size: .8rem; color: var(--cinza); margin: 8px 0 0; }
+#resultado { margin-top: 20px; }
+.selo { border-radius: 12px; padding: 18px; border: 2px solid; }
+.selo h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.selo.valido { border-color: var(--ok); background: #eaf6ee; } .selo.valido h2 { color: var(--ok); }
+.selo.vencido { border-color: var(--alerta); background: #fff4e2; } .selo.vencido h2 { color: var(--alerta); }
+.selo.invalido { border-color: var(--erro); background: #fdecea; } .selo.invalido h2 { color: var(--erro); }
+dl { margin: 12px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: .92rem; }
+dt { color: var(--cinza); } dd { margin: 0; font-weight: 600; word-break: break-word; }
+footer { text-align: center; font-size: .75rem; color: var(--cinza); margin-top: 24px; }
+

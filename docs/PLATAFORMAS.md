@@ -53,13 +53,13 @@ vez de um CDN de terceiros (um CDN comprometido injetaria código nas telas de d
 
 | Peça | Versão em uso | Última | Situação |
 | --- | --- | --- | --- |
-| **Directus** (painel do site, App Service Linux, contêiner `directus/directus`) | **12.3.1** | 12.4.1 (23/09/2026) | **Uma versão atrás.** A 12.4.0 avisa de mudança potencialmente incompatível: o mapa do painel e o campo de geometria passam a exigir WebGL2 (Safari 14 ou anterior e Android antigo deixam de desenhar mapa no painel; o mapa do site é o Leaflet, outra coisa). A 12.4.1 corrige a leitura de pastas por quem não é administrador. A troca é mudar a etiqueta da imagem; há backup do banco de 35 dias. |
+| **Directus** (painel do site, App Service Linux, contêiner `directus/directus`) | **12.4.1** (atualizado em 03/10/2026; era 12.3.1) | 12.4.1 (23/09/2026) | **Em dia.** A 12.4.0 avisa de mudança potencialmente incompatível: o mapa do painel e o campo de geometria passam a exigir WebGL2 (Safari 14 ou anterior e Android antigo deixam de desenhar mapa no painel; o mapa do site é o Leaflet, outra coisa). A 12.4.1 corrige a leitura de pastas por quem não é administrador. Na subida o Directus aplicou duas atualizações internas do banco ("Add Flow Folders", "Add Flows Module"); **voltar para a 12.3.1 agora exigiria restaurar o banco** (cópia completa diária e restauração a qualquer ponto). Conferido depois da troca: ping, tela de login, o site lendo do Directus, nenhum erro no registro, e a remontagem do site (120 páginas) buscando todo o conteúdo. |
 | **PostgreSQL** do Directus (servidor flexível, Standard_B1ms, 32 GB) | **18.6** | 18.6 | Em dia; suporte da comunidade até 14/11/2030. |
 | **Azure SQL** do sistema (`app-db-prod`, `ieadespa-homolog`, serverless GP_S_Gen5, pausa em 60 min) | motor 12.0 (o Azure mantém no mais novo) | — | Em dia, TLS mínimo 1.2. |
 | **Banco de homologação** (`ieadespa-homolog`) | esquema **antigo** (faltam as migrações recentes) | 139 | O fluxo do PR migra o banco de **produção**, não este; por isso a lista de documentos dá 500 na homologação. Para a homologação provar também o SQL, falta um passo de migração dela (exige guardar a conexão dela como segredo no GitHub). |
 | Static Web Apps (`app-meusite-web`, `site-institucional`) | plano Standard | — | Em dia; domínios `app.`, `www.` e raiz. |
 | Armazenamento `ieadespaarmazenamento` | StorageV2, TLS mínimo 1.2, sem acesso público a blob | — | Em dia. |
-| Armazenamento `ieadespaapifunc01` | StorageV2, **TLS mínimo 1.0** | 1.2 | **Desatualizado** (aceita protocolo antigo). É do Function App abaixo. |
+| Armazenamento `ieadespaapifunc01` | StorageV2, **TLS mínimo 1.2** (era 1.0; ajustado em 03/10/2026) | 1.2 | Em dia. É do Function App abaixo. |
 | **Function App `func-ieadespa-api`** (Flex Consumption, Node 24, 189 funções) | cópia **antiga** da API (último deploy 20/09/2026) | — | **Sobra de uma tentativa antiga**, não ligada a nenhum Static Web App. Teve 9 execuções em 19/09 e **nenhuma nos 13 dias seguintes**. Guarda cópia dos segredos de produção e do código anterior às correções de segurança; todas as rotas testadas respondem 401. Candidata a desligar (decisão do responsável). |
 | Application Insights, alertas, e-mail (ACS) | — | — | Sem versão a conferir. |
 
@@ -68,11 +68,12 @@ SOPS 3.13.3 (última), `age` **1.3.2** e GitHub CLI **2.102.0** (atualizados em 
 2.56.0: fica para uma hora em que nenhuma sessão use o Git Bash, porque o instalador troca o `bash.exe` em uso). Node 22 das Functions: a
 montagem usou 22.23.2 e a última 22.x é 22.23.3 (entra sozinha no próximo deploy).
 
-**Pendente de aprovação (bloqueado pelo controle de permissões do Claude Code em 03/10/2026, nada foi alterado):** subir o Directus de
-12.3.1 para 12.4.1 (trocar a etiqueta da imagem do contêiner `main` do App Service `ieadespa-directus`) e exigir TLS 1.2 na conta
-`ieadespaapifunc01`. Os dois são mudanças em produção no Azure e dependem de o responsável liberar a ação (ou de fazê-las no portal). Antes
-de subir o Directus: o banco tem cópia completa automática diária e restauração a qualquer ponto desde 04/09/2026 (o servidor "burstable" não
-aceita cópia sob demanda); estado de partida conferido (ping, tela de login, o site lendo do Directus).
+**Feito em 03/10/2026, com o responsável no modo manual de aprovação (no modo automático o controle de permissões do Claude Code bloqueia
+mudança em produção no Azure):** Directus 12.3.1 para 12.4.1 (só a etiqueta da imagem do contêiner `main` do App Service `ieadespa-directus`
+mudou; as demais configurações do contêiner ficaram idênticas) e TLS mínimo 1.2 na conta `ieadespaapifunc01`. Antes da troca: cópia completa
+automática diária do banco e restauração a qualquer ponto desde 04/09/2026 (o servidor "burstable" não aceita cópia sob demanda).
+
+**Ainda por fazer:** Git 2.55 para 2.56 (ver acima) e a decisão de desligar o Function App `func-ieadespa-api`.
 
 ## Como atualizar (a rotina)
 

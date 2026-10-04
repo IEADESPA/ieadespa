@@ -124,10 +124,29 @@ describe("idadeEm / diasDesde — funções de data puras (base de tudo acima)",
     }
   });
 
-  test("diasDesde sem 'hoje' explícito (produção real) também dá 0 pra data de hoje", () => {
-    const agora = new Date();
-    const hojeStr = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
-    expect(estatuto.diasDesde(hojeStr)).toBe(0);
+  test("diasDesde sem 'hoje' explícito (produção real) também dá 0 pra data de hoje DE BRASÍLIA", () => {
+    const { hojeBrasilia } = require("../dataBrasilia");
+    expect(estatuto.diasDesde(hojeBrasilia())).toBe(0);
+  });
+
+  // As Functions rodam em UTC: das 21 h à meia-noite de Brasília o servidor já está no dia seguinte. Sem "hoje" informado, prazo e idade contavam um dia a mais nessas três horas
+  // (um teste do projeto falhou no servidor de integração, que roda em UTC, exatamente nessa janela). Vale o dia de Brasília, em qualquer fuso da máquina.
+  test("servidor em UTC já no dia seguinte (00h30 UTC = 21h30 em Brasília): 'hoje' segue sendo o dia de Brasília para prazo e idade", () => {
+    jest.useFakeTimers({ now: new Date("2026-10-04T00:30:00Z") });
+    try {
+      expect(estatuto.diasDesde("2026-10-03")).toBe(0);
+      expect(estatuto.diasDesde("2026-10-01")).toBe(2);
+      expect(estatuto.idadeEm("2008-10-03")).toBe(18);   // faz 18 anos hoje (03/10, em Brasília)
+      expect(estatuto.idadeEm("2008-10-04")).toBe(17);   // só faz amanhã: com a data do servidor (04/10) apareceria como 18 um dia antes
+    } finally { jest.useRealTimers(); }
+  });
+  test("e logo depois da meia-noite de Brasília (03h30 UTC) o dia vira", () => {
+    jest.useFakeTimers({ now: new Date("2026-10-04T03:30:00Z") });
+    try {
+      expect(estatuto.diasDesde("2026-10-04")).toBe(0);
+      expect(estatuto.diasDesde("2026-10-03")).toBe(1);
+      expect(estatuto.idadeEm("2008-10-04")).toBe(18);
+    } finally { jest.useRealTimers(); }
   });
 
   // Em produção o driver do SQL Server entrega coluna DATE como objeto Date à meia-noite UTC. Antes, parseData(Date) dava null e todo prazo/idade calculado sobre uma

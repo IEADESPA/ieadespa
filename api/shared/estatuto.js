@@ -2,6 +2,7 @@
 // Regras do Estatuto IEADESPA 2026 (oficial, registrado) centralizadas aqui — assim "18 anos",
 // "90 dias de integração", "maioria absoluta" etc. não ficam espalhadas pelas Functions. Regra
 // jurídica vira função, não dado editável por tela (mesmo espírito de mockDb.universoDoOrgao).
+const { hojeBrasilia } = require("./dataBrasilia");
 
 // Interpreta "YYYY-MM-DD" como data local (meio-dia), evitando erro de 1 dia por fuso.
 function parseData(data) {
@@ -41,7 +42,9 @@ function idadeEm(dataNascimento, hoje) {
   if (!nascimento) return null;
   // "hoje" em texto AAAA-MM-DD é um DIA, não um instante: new Date("2026-06-15") é meia-noite UTC, que no Brasil ainda é o dia 14 (às 21 h) e fazia quem completa
   // anos em 15/06 constar com um ano a menos no próprio dia do aniversário.
-  const agora = hoje ? normalizarParaMeioDia(hoje) : new Date();
+  // Sem "hoje" informado vale o DIA DE BRASÍLIA (shared/dataBrasilia.js), não o do servidor: as Functions rodam em UTC e das 21 h à meia-noite o servidor já está no dia
+  // seguinte (idade e prazos contavam um dia a mais nessas três horas).
+  const agora = normalizarParaMeioDia(hoje || hojeBrasilia());
   let idade = agora.getFullYear() - nascimento.getFullYear();
   const aniversarioAindaNaoChegou =
     agora.getMonth() < nascimento.getMonth() ||
@@ -54,7 +57,7 @@ function diasDesde(data, hoje) {
   if (!data) return null;
   const inicio = parseData(data);
   if (!inicio) return null;
-  const agora = normalizarParaMeioDia(hoje || new Date());
+  const agora = normalizarParaMeioDia(hoje || hojeBrasilia());   // dia de Brasília, não o do servidor em UTC (ver idadeEm)
   const diffMs = agora.getTime() - inicio.getTime();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }

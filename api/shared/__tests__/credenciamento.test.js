@@ -33,10 +33,10 @@ describe("avaliarCredenciamento (Art. 142-143)", () => {
     // Achado real ao publicar a v5.3: este teste travou o CI porque
     // shared/estatuto.js::diasDesde tinha um bug de raiz corrigido agora
     // (ver estatuto.test.js "regressão") — "hoje menos hoje" dava -1 antes
-    // do meio-dia local. Corrigido lá; aqui volta a ser só `new Date()`.
-    const agora = new Date();
-    const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
-    const membro = { ...MEMBRO_BASE, dataAdmissao: hojeLocal };
+    // do meio-dia local. Corrigido lá. "Hoje" é o dia de BRASÍLIA (as Functions e o servidor de integração rodam em UTC: das 21 h à meia-noite o dia do servidor já é
+    // o seguinte, e a admissão "de hoje" virava admissão no futuro).
+    const { hojeBrasilia } = require("../dataBrasilia");
+    const membro = { ...MEMBRO_BASE, dataAdmissao: hojeBrasilia() };
     const r = await credenciamento.avaliarCredenciamento(pool, membro);
     expect(r.credenciado).toBe(false);
     expect(r.artigo).toBe("Art. 142, I");

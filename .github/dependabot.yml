@@ -10,6 +10,13 @@ updates:
         patterns:
           - "astro"
           - "@astrojs/*"
+    ignore:
+      # TypeScript 7: o verificador de tipos do Astro (`astro check`) recusa o 7.0 ("use o 6"); revisar quando sair o 7.1 (docs/PLATAFORMAS.md).
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # @types/node fica na linha do Node que realmente roda (22): a 26 descreveria recursos que o servidor não tem.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

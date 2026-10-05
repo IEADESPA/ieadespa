@@ -1805,7 +1805,9 @@ ponto real de integração:
         coisas juntas. Em produção: degrau 1 e degrau 2 com 971 de 971 ações idênticas na
         passada rápida (em navegador real, API simulada dentro do navegador), zero violações, 10 de 10
         peças especiais, a política estrita entregue em **todos** os arquivos, e as 45 verificações
-        da API intactas. Para desfazer o degrau 2: `git revert -m 1 <commit de união>` (volta a política
+        da API intactas. Com a política estrita ligada em produção, a **passada completa deu 4782
+        de 4782 ações idênticas**, zero violações (na página e no console do service worker v5).
+        Para desfazer o degrau 2: `git revert -m 1 <commit de união>` (volta a política
         antiga e a conversão continua valendo).
       - **Achado só visível dentro do service worker.** Com a política estrita, o `connect-src 'self'`
         vale **também para o service worker**: o `fetch()` dele para as fontes do Google era

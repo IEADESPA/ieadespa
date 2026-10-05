@@ -1,0 +1,1 @@
+{"name":"csp-e2e","version":"1.0.0","private":true,"dependencies":{"@babel/parser":"^8.0.6","@babel/traverse":"^8.0.6","puppeteer-core":"^25.12.0"}}

@@ -1,7 +1,8 @@
 // Regra permanente da tela (app/script.js + app/index.html): TODO valor que entra em HTML montado em string passa pela proteção certa para o lugar onde entra.
 //   - texto e atributo comum (<td>${x}</td>, title="${x}", value="${x}") ........ escaparHtmlEbd(x)
-//   - argumento de evento (onclick="f(${x})") ...................................... argJs(x) — SEM aspas em volta; o escape de HTML não basta ali, porque o
-//     navegador desfaz o &#39; antes de rodar o JS e a aspa volta, fechando a string
+//   - argumento de ação (data-args-click="${argsAttr(x, y)}") ....................... argsAttr(...) — JSON escapado para atributo. Desde a CSP forte
+//     (app/eventos.js) não existe mais onclick="f(${x})" na tela (frontCsp.test.js garante); o analisador ainda entende o contexto "evento" (com o antigo
+//     argJs) só para acusar qualquer volta desse padrão
 //   - endereço (href="${x}", src="${x}") ............................................ urlSegura(x) — o escape de HTML não barra "javascript:"
 // Nasceu da v7.6: depois de duas rodadas "manuais" (161 de 216 e depois o resto, mais o código novo), sobravam ~950 pontos crus — notas, nomes, mensagens da
 // API, links. A varredura abaixo lê o código de verdade (árvore do JavaScript, não grep), acompanha variável, retorno de função, parâmetro (pelos chamadores) e
@@ -45,7 +46,8 @@ const L = {
   ENC: C.text | C.attr | C.url,
   NADA: 0
 };
-const ESCAPE_HTML = new Set(["escaparHtmlEbd"]);
+// argsAttr devolve escaparHtmlEbd(JSON.stringify(...)): seguro em texto e atributo comum (data-args-*), como o escape de HTML
+const ESCAPE_HTML = new Set(["escaparHtmlEbd", "argsAttr"]);
 const ESCAPE_JS = new Set(["argJs"]);
 const ESCAPE_URL = new Set(["urlSegura"]);
 const METODOS_NUM = new Set(["toFixed", "toLocaleDateString", "toLocaleTimeString", "toLocaleString", "getFullYear", "getMonth", "getDate", "getDay", "getHours", "getMinutes", "getSeconds", "getTime", "indexOf", "lastIndexOf", "findIndex", "localeCompare", "includes", "some", "every", "has", "startsWith", "endsWith", "test", "charCodeAt", "toISOString"]);
@@ -754,7 +756,7 @@ describe("o detector pega o que deve (e não reclama do que é seguro)", () => {
 });
 
 describe("mutação no arquivo real: tirar a proteção de pontos verdadeiros faz a varredura acusar cada um", () => {
-  test("texto, evento e endereço", () => {
+  test("texto, argumento de ação e endereço", () => {
     const linhaDe = (txt, idx) => txt.slice(0, idx).split("\n").length;
     const mutacoes = [];
     const escolher = (re, filtro, max) => {
@@ -769,18 +771,18 @@ describe("mutação no arquivo real: tirar a proteção de pontos verdadeiros fa
     };
     // 3 nomes/títulos escapados em linha de HTML -> cru
     escolher(/\$\{escaparHtmlEbd\(([a-zA-Z_]\w*\.(?:nome|titulo|descricao|motivo))\)\}/g, (m, l) => l.includes("<"), 3);
-    // 1 argumento de evento -> volta ao '${x}' antigo
-    escolher(/\$\{argJs\(([a-zA-Z_]\w*\.[a-zA-Z_]\w*)\)\}/g, (m) => !/Id$/.test(m[1]), 1);
+    // 1 argumento de ação (data-args-click) -> JSON cru, sem o escape de atributo do argsAttr
+    escolher(/\$\{argsAttr\(String\(([a-zA-Z_]\w*\.[a-zA-Z_]\w*) \?\? ""\)\)\}/g, (m) => !/Id$/.test(m[1]), 1);
     // 1 endereço -> escape de HTML (que não barra "javascript:")
     escolher(/\$\{urlSegura\(([^()]+)\)\}/g, () => true, 1);
     expect(mutacoes.length).toBe(5);
-    const trocar = (mu) => mu.m[0].startsWith("${escaparHtmlEbd(") ? "${" + mu.m[1] + "}" : mu.m[0].startsWith("${argJs(") ? "'${" + mu.m[1] + "}'" : "${escaparHtmlEbd(" + mu.m[1] + ")}";
+    const trocar = (mu) => mu.m[0].startsWith("${escaparHtmlEbd(") ? "${" + mu.m[1] + "}" : mu.m[0].startsWith("${argsAttr(") ? "${JSON.stringify([" + mu.m[1] + "])}" : "${escaparHtmlEbd(" + mu.m[1] + ")}";
     let mutado = SCRIPT;
     for (const mu of mutacoes.slice().sort((a, b) => b.ini - a.ini)) mutado = mutado.slice(0, mu.ini) + trocar(mu) + mutado.slice(mu.fim);
     const { achados } = analisar(mutado, opcoesApp);
     const linhasAcusadas = new Set(achados.map(a => a.linha));
     for (const mu of mutacoes) expect([mu.m[0], linhasAcusadas.has(linhaDe(SCRIPT, mu.ini))]).toEqual([mu.m[0], true]);
-    expect(new Set(achados.map(a => a.ctx))).toEqual(new Set(["text", "event", "url"]));
+    expect(new Set(achados.map(a => a.ctx))).toEqual(new Set(["text", "attr", "url"]));
   });
 });
 
@@ -788,28 +790,46 @@ describe("os helpers da tela resistem a texto hostil", () => {
   // tira as funções do próprio script.js (as mesmas que rodam no navegador)
   const ast = parser.parse(SCRIPT, { sourceType: "script" });
   const fontes = {};
-  for (const no of ast.program.body) if (no.type === "FunctionDeclaration" && ["escaparHtmlEbd", "argJs", "urlSegura"].includes(no.id.name)) fontes[no.id.name] = SCRIPT.slice(no.start, no.end);
+  for (const no of ast.program.body) if (no.type === "FunctionDeclaration" && ["escaparHtmlEbd", "argsAttr", "urlSegura"].includes(no.id.name)) fontes[no.id.name] = SCRIPT.slice(no.start, no.end);
+  // argsAttr usa o codificador do despachante (app/eventos.js): tira de lá o ARG e as duas funções (as mesmas que rodam no navegador)
+  const EVENTOS = fs.readFileSync(path.join(APP, "eventos.js"), "utf8");
+  const astEv = parser.parse(EVENTOS, { sourceType: "script" });
+  const fontesEv = [];
+  for (const no of astEv.program.body) {
+    if (no.type === "FunctionDeclaration" && ["codificarArgEvento", "resolverArgEvento"].includes(no.id.name)) fontesEv.push(EVENTOS.slice(no.start, no.end));
+    if (no.type === "VariableDeclaration" && no.declarations[0].id.name === "ARG") fontesEv.push(EVENTOS.slice(no.start, no.end));
+  }
   const ctx = vm.createContext({});
-  vm.runInContext(Object.values(fontes).join("\n") + "\nthis.h = { escaparHtmlEbd, argJs, urlSegura };", ctx);
+  vm.runInContext(fontesEv.join("\n") + "\n" + Object.values(fontes).join("\n") + "\nthis.h = { escaparHtmlEbd, argsAttr, urlSegura, resolverArgEvento, ARG };", ctx);
   const h = ctx.h;
-  // o que o navegador faz com o valor de um atributo antes de rodar o JS dele
+  // o que o navegador faz com o valor de um atributo antes de o despachante ler
   const decodificarAtributo = (s) => s.replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-  const HOSTIS = ["'", "\"", "\\", "</script><script>alert(1)</script>", "linha 1\nlinha 2\r\n", "${alert(1)}", "`", "');alert(1);//", "\"><img src=x onerror=window.__pwn=1>", "  ", "a\\'b", "&#39;); alert(1); ('"];
+  const HOSTIS = ["'", "\"", "\\", "</script><script>alert(1)</script>", "linha 1\nlinha 2\r\n", "${alert(1)}", "`", "');alert(1);//", "\"><img src=x onerror=window.__pwn=1>", "  ", "a\\'b", "&#39;); alert(1); ('", "{\"$\":\"this\"}"];
 
-  test("os três helpers existem no script.js", () => expect(Object.keys(fontes).sort()).toEqual(["argJs", "escaparHtmlEbd", "urlSegura"]));
-
-  test.each(HOSTIS)("argJs(%j): não fecha o atributo e o JS recebe exatamente o texto", (hostil) => {
-    const valorAtributo = `f(${h.argJs(hostil)})`;
-    expect(valorAtributo).not.toMatch(/["<>]/); // nada fecha o onclick="..." nem abre tag
-    let recebido = "__nada__";
-    const sandbox = vm.createContext({ f: (x) => { recebido = x; }, alert: () => { throw new Error("executou código injetado"); } });
-    vm.runInContext(decodificarAtributo(valorAtributo), sandbox);
-    expect(recebido).toBe(hostil);
+  test("os três helpers existem no script.js (e o codificador no eventos.js)", () => {
+    expect(Object.keys(fontes).sort()).toEqual(["argsAttr", "escaparHtmlEbd", "urlSegura"]);
+    expect(fontesEv.length).toBe(3);
   });
 
-  test("argJs de nulo/número vira string (nunca 'null' solto no código)", () => {
-    expect(decodificarAtributo(h.argJs(null))).toBe("\"\"");
-    expect(decodificarAtributo(h.argJs(12))).toBe("\"12\"");
+  test.each(HOSTIS)("argsAttr(%j): não fecha o atributo e a ação recebe exatamente o valor", (hostil) => {
+    const valorAtributo = h.argsAttr(hostil, 12, null, { nota: hostil });
+    expect(valorAtributo).not.toMatch(/["'<>]/); // nada fecha data-args-click="..." (nem com aspa simples) nem abre tag
+    const lido = h.resolverArgEvento(JSON.parse(decodificarAtributo(valorAtributo)), { value: "v" }, { type: "click" });
+    expect(JSON.parse(JSON.stringify(lido))).toEqual([hostil, 12, null, { nota: hostil }]);
+  });
+
+  test("argsAttr: undefined e NaN voltam como eram; objeto de DADO com chave $ não vira o elemento; marcadores ARG viram o elemento/valor", () => {
+    const el = { value: "escolhido", checked: true };
+    const ev = { type: "change" };
+    const lido = h.resolverArgEvento(JSON.parse(decodificarAtributo(h.argsAttr(undefined, NaN, { $: "this" }, h.ARG.elemento, h.ARG.valor, { ativa: h.ARG.marcado }, h.ARG.evento))), el, ev);
+    expect(lido[0]).toBeUndefined();
+    expect(Number.isNaN(lido[1])).toBe(true);
+    expect(lido[2]).not.toBe(el);
+    expect(JSON.parse(JSON.stringify(lido[2]))).toEqual({ $: "this" });
+    expect(lido[3]).toBe(el);
+    expect(lido[4]).toBe("escolhido");
+    expect(lido[5]).toEqual({ ativa: true });
+    expect(lido[6]).toBe(ev);
   });
 
   test.each([

@@ -337,7 +337,7 @@ diz em que arquivo ela está e em que pé ela anda.
   derruba na hora (toda rota entra por `api/shared/entrada.js`), delegação por permissão, índices únicos no banco, aceite
   de mediação só por ato da parte, abandono com dois olhos, remessa com as mesmas conferências do pagamento comum e
   estorno de cessão. Só a chave site↔sistema nos dois portais do Azure depende de gente; os limites que continuam estão
-  no plano da fase 7. **Próximos: a CSP forte e a 🔒 Trava de Revisão 7-A**, antes da v7.6.
+  no plano da fase 7. **A CSP forte (04/10/2026) está feita; próxima: a 🔒 Trava de Revisão 7-A**, antes da v7.6.
 - **Planejadas:** FASES 8 a 12.
 
 ### Fases

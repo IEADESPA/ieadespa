@@ -18,10 +18,12 @@ function mostrarToast(mensagem, tipo) {
 // de reescrever os 3 lugares que os geram como <button> (quebraria o CSS
 // de grade já pronto), cada um ganha tabindex/role="button" e chama isso no
 // keydown — mesmo efeito de clicar, acessível pelo teclado.
-function ativarComTeclado(evento) {
+// CSP forte: o keydown chega pelo despachante (eventos.js), que escuta no document — evento.currentTarget seria o document, não o cartão. Por isso o
+// cartão vem como 2º argumento (data-args-keydown com ARG.evento, ARG.elemento); o currentTarget fica só de reserva para quem chamar do jeito antigo.
+function ativarComTeclado(evento, elemento) {
   if (evento.key === "Enter" || evento.key === " ") {
     evento.preventDefault();
-    evento.currentTarget.click();
+    (elemento || evento.currentTarget).click();
   }
 }
 
@@ -84,7 +86,8 @@ function avisarResultado(data) {
 // vB.10 — rede de segurança global: qualquer erro que escapou de todo
 // tratamento local (ex: `res.json()` falhando porque o servidor devolveu
 // um erro bruto/não-JSON, ou qualquer exceção não prevista dentro de um
-// `onclick="funcaoAsync()"`) cai aqui, em vez de travar o botão em
+// botão data-on-click="funcaoAsync" — antes onclick="funcaoAsync()"; o despachante eventos.js não captura a promessa)
+// cai aqui, em vez de travar o botão em
 // silêncio sem explicação nenhuma pra quem está usando. Mensagem sempre em
 // linguagem de secretaria; o detalhe técnico só vai pro console, nunca pra
 // tela.
@@ -93,7 +96,7 @@ function avisarErroInesperado(motivo) {
   mostrarToast("Algo deu errado nesta ação. Tente de novo — se continuar, avise a equipe técnica.", "erro");
 }
 // Só `unhandledrejection` (promises rejeitadas sem `.catch` local) — é
-// exatamente o padrão de `onclick="funcaoAsync()"` que domina este arquivo
+// exatamente o padrão de `data-on-click="funcaoAsync"` que domina este arquivo
 // (nenhum tratamento de erro no HTML em si). `window.onerror` genérico
 // fica de fora de propósito: pegaria erro de terceiro (CDN, extensão do
 // navegador) e mostraria um toast confuso por algo fora do nosso controle.
@@ -290,11 +293,11 @@ function abrirModalAnexos(tabela, registroId, titulo) {
     <h3>📎 Anexos — ${escaparHtmlEbd(titulo)}</h3>
     <div class="barra-lista">
       <input type="file" id="anexoArquivo" accept="application/pdf,image/jpeg,image/png" />
-      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="enviarAnexoModal()">Enviar</button>
+      <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="enviarAnexoModal">Enviar</button>
     </div>
     <p id="resultadoAnexoModal" class="subtitle"></p>
     <div id="listaAnexosModal"></div>
-    <div class="modal-acoes"><button class="btn-confirmar btn-secundario" onclick="fecharModal()">Fechar</button></div>
+    <div class="modal-acoes"><button class="btn-confirmar btn-secundario" data-on-click="fecharModal">Fechar</button></div>
   `;
   document.getElementById("modalOverlay").classList.remove("escondido");
   carregarAnexosModal();
@@ -316,7 +319,7 @@ async function carregarAnexosModal() {
       <a href="${urlSegura(a.urlAssinada)}" target="_blank" rel="noopener">${escaparHtmlEbd(a.nomeArquivo)}</a>
       <div class="rodape-notificacao">
         <span>${new Date(a.criadoEm).toLocaleDateString("pt-BR")}</span>
-        <button class="btn-link btn-link-perigo" onclick="excluirAnexoModal(${a.anexoId})">Excluir</button>
+        <button class="btn-link btn-link-perigo" data-on-click="excluirAnexoModal" data-args-click="${argsAttr(a.anexoId)}">Excluir</button>
       </div>
     </div>
   `).join("");
@@ -756,7 +759,7 @@ async function executarBuscaGlobal(termo) {
       return;
     }
     painel.innerHTML = lista.map(r => `
-      <div class="item-notificacao" onclick="irParaResultadoBusca(${argJs(r.aba || "")})">
+      <div class="item-notificacao" data-on-click="irParaResultadoBusca" data-args-click="${argsAttr(String(r.aba || ""))}">
         <span class="titulo-notificacao">${escaparHtmlEbd(r.titulo)}</span>
         <span>${escaparHtmlEbd(r.tipo)} — ${escaparHtmlEbd(r.subtitulo || "")}</span>
       </div>
@@ -812,12 +815,12 @@ async function carregarPainelNotificacoes() {
       return;
     }
     container.innerHTML = lista.map(n => `
-      <div class="item-notificacao ${n.lida ? "lida" : ""}" onclick="abrirNotificacao(${Number(n.notificacaoId)})">
+      <div class="item-notificacao ${n.lida ? "lida" : ""}" data-on-click="abrirNotificacao" data-args-click="${argsAttr(Number(n.notificacaoId))}">
         <span class="titulo-notificacao">${escaparHtmlEbd(n.titulo)}</span>
         <span>${escaparHtmlEbd(n.mensagem)}</span>
         <div class="rodape-notificacao">
           <span>${new Date(n.criadaEm).toLocaleString("pt-BR")}</span>
-          <button class="btn-link" onclick="event.stopPropagation(); arquivarNotificacao(${Number(n.notificacaoId)})">Arquivar</button>
+          <button class="btn-link" data-on-click="arquivarNotificacao" data-args-click="${argsAttr(Number(n.notificacaoId))}" data-stop="click">Arquivar</button>
         </div>
       </div>
     `).join("");
@@ -862,9 +865,9 @@ async function carregarMinhasTarefas(filtro) {
       <td>${escaparHtmlEbd(f.etapaNome)}</td>
       <td>${f.atrasado ? `<span class="badge-status badge-desligado">${prazo}</span>` : prazo}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="acaoMinhaTarefa(${f.instanciaId}, 'APROVAR')">Aprovar</button>
-        <button class="btn-link" onclick="acaoMinhaTarefa(${f.instanciaId}, 'DEVOLVER')">Devolver</button>
-        <button class="btn-link btn-link-perigo" onclick="acaoMinhaTarefa(${f.instanciaId}, 'REJEITAR')">Rejeitar</button>
+        <button class="btn-link" data-on-click="acaoMinhaTarefa" data-args-click="${argsAttr(f.instanciaId, "APROVAR")}">Aprovar</button>
+        <button class="btn-link" data-on-click="acaoMinhaTarefa" data-args-click="${argsAttr(f.instanciaId, "DEVOLVER")}">Devolver</button>
+        <button class="btn-link btn-link-perigo" data-on-click="acaoMinhaTarefa" data-args-click="${argsAttr(f.instanciaId, "REJEITAR")}">Rejeitar</button>
       </td>
     </tr>`;
   });
@@ -890,7 +893,7 @@ async function carregarMinhasSessoes() {
       <td style="max-width:320px; overflow-wrap:anywhere;">${escaparHtmlEbd(s.dispositivoInfo) || "—"}</td>
       <td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td>
       <td>${s.encerrada ? "<span class='badge-status badge-desligado'>Encerrada</span>" : "<span class='badge-status badge-ativo'>Ativa</span>"}</td>
-      <td class="acoes-inline">${!s.encerrada ? `<button class="btn-link btn-link-perigo" onclick="encerrarSessaoAcao('${s.sessaoId}')">Encerrar</button>` : ""}</td>
+      <td class="acoes-inline">${!s.encerrada ? `<button class="btn-link btn-link-perigo" data-on-click="encerrarSessaoAcao" data-args-click="${argsAttr(String(s.sessaoId))}">Encerrar</button>` : ""}</td>
     </tr>
   `).join("") + "</tbody></table>";
 }
@@ -922,7 +925,7 @@ async function carregarDelegacoes() {
         <tr>
           <td>${escaparHtmlEbd(d.papelNome)}</td><td>${escaparHtmlEbd(d.delegadoNome)}</td><td>${new Date(d.dataFim).toLocaleDateString("pt-BR")}</td>
           <td>${escaparHtmlEbd(d.status)}</td>
-          <td class="acoes-inline">${d.status === "ATIVA" ? `<button class="btn-link btn-link-perigo" onclick="cancelarDelegacaoAcao(${d.delegacaoId})">Cancelar</button>` : ""}</td>
+          <td class="acoes-inline">${d.status === "ATIVA" ? `<button class="btn-link btn-link-perigo" data-on-click="cancelarDelegacaoAcao" data-args-click="${argsAttr(d.delegacaoId)}">Cancelar</button>` : ""}</td>
         </tr>
       `).join("") + "</tbody></table>";
 
@@ -1228,7 +1231,7 @@ function montarGradeModulos() {
   }
   grade.innerHTML = chaves.map(chave => {
     const m = MODULOS[chave];
-    return `<div class="card-modulo" onclick="entrarModulo(${argJs(chave)})" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
+    return `<div class="card-modulo" data-on-click="entrarModulo" data-args-click="${argsAttr(String(chave ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
       <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
@@ -1316,7 +1319,7 @@ async function carregarPainelInicial() {
   if (comValor.length === 0) { cx.style.display = "none"; return; }
   cx.style.display = "block";
   document.getElementById("gradePainelInicial").innerHTML = comValor.map((b) => `
-    <div class="card-modulo" ${b.aba ? `onclick="irParaBlocoPainel(${argJs(b.aba)})" tabindex="0" role="button" onkeydown="ativarComTeclado(event)"` : ""}>
+    <div class="card-modulo" ${b.aba ? `data-on-click="irParaBlocoPainel" data-args-click="${argsAttr(String(b.aba ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}"` : ""}>
       <span class="icone-modulo">${escaparHtmlEbd(b.valor)}</span><span>${escaparHtmlEbd(b.titulo)}</span>
     </div>
   `).join("");
@@ -1466,7 +1469,7 @@ function montarGradeSubmodulosFinanceiro() {
         <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span><span class="tag-pendente">Em breve</span>
       </div>`;
     }
-    return `<div class="card-modulo" onclick="mostrarSubAbaFinanceiro(${argJs(m.subAba)})" tabindex="0" role="button" onkeydown="ativarComTeclado(event)">
+    return `<div class="card-modulo" data-on-click="mostrarSubAbaFinanceiro" data-args-click="${argsAttr(String(m.subAba ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
       <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
@@ -1748,7 +1751,7 @@ async function carregarCampanhas() {
       <td>${escaparHtmlEbd(c.nome)}${c.totalSorteios > 0 ? ` <small>🎟️ ${escaparHtmlEbd(c.totalSorteios)} sorteio(s)</small>` : ""}</td>
       <td>${barraProgressoCampanha(c.totalArrecadado, c.metaTotal)}</td>
       <td><span class="badge-status ${statusClasse}">${escaparHtmlEbd(c.status)}</span></td>
-      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheCampanhaAcao(${c.campanhaId})">Ver detalhe</button></td>
+      <td class="acoes-inline"><button class="btn-link" data-on-click="verDetalheCampanhaAcao" data-args-click="${argsAttr(c.campanhaId)}">Ver detalhe</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -1773,8 +1776,8 @@ async function verDetalheCampanhaAcao(campanhaId) {
   html += "</tbody></table>";
 
   if (authGeral && c.status === "ATIVA") {
-    html += `<button class="btn-link btn-link-perigo" onclick="atualizarStatusCampanhaAcao(${campanhaId}, 'ENCERRADA')">🔒 Encerrar campanha</button>
-      <button class="btn-link btn-link-perigo" onclick="atualizarStatusCampanhaAcao(${campanhaId}, 'CANCELADA')">Cancelar campanha</button>`;
+    html += `<button class="btn-link btn-link-perigo" data-on-click="atualizarStatusCampanhaAcao" data-args-click="${argsAttr(campanhaId, "ENCERRADA")}">🔒 Encerrar campanha</button>
+      <button class="btn-link btn-link-perigo" data-on-click="atualizarStatusCampanhaAcao" data-args-click="${argsAttr(campanhaId, "CANCELADA")}">Cancelar campanha</button>`;
   }
 
   // v4.4.1 — Sorteio é um derivado opcional da campanha (cupom físico,
@@ -1782,7 +1785,7 @@ async function verDetalheCampanhaAcao(campanhaId) {
   html += `<h4 style="margin:16px 0 8px; color: var(--cor-primaria);">🎟️ Sorteios desta campanha</h4>
     <div id="listaSorteiosCampanha_${campanhaId}"><p class="subtitle">Carregando…</p></div>`;
   if (authGeral && c.status === "ATIVA") {
-    html += `<button class="btn-link" onclick="alternarFormNovoSorteio(${campanhaId})">➕ Novo sorteio</button>
+    html += `<button class="btn-link" data-on-click="alternarFormNovoSorteio" data-args-click="${argsAttr(campanhaId)}">➕ Novo sorteio</button>
       <div id="formNovoSorteio_${campanhaId}" style="display:none; margin-top:10px;">
         <div class="barra-lista">
           <input type="text" id="sorteioNome_${campanhaId}" placeholder="Nome do sorteio" style="min-width:220px;" />
@@ -1794,7 +1797,7 @@ async function verDetalheCampanhaAcao(campanhaId) {
         </div>
         <p class="subtitle">Prêmios (um por linha — é o que diferencia o sorteio de uma campanha comum):</p>
         <textarea id="sorteioPremios_${campanhaId}" rows="3" style="width:100%;" placeholder="1º prêmio: uma TV&#10;2º prêmio: uma cesta básica"></textarea>
-        <button class="btn-confirmar" style="width:auto;margin-top:8px;" onclick="criarSorteioAcao(${campanhaId})">Criar sorteio</button>
+        <button class="btn-confirmar" style="width:auto;margin-top:8px;" data-on-click="criarSorteioAcao" data-args-click="${argsAttr(campanhaId)}">Criar sorteio</button>
         <p id="resultadoNovoSorteio_${campanhaId}" class="subtitle"></p>
       </div>`;
   }
@@ -1848,7 +1851,7 @@ async function carregarSorteiosCampanha(campanhaId) {
       ${s.precoCupom ? ` — cupom R$ ${Number(s.precoCupom).toFixed(2)}` : ""}${s.dataSorteio ? ` — sorteio em ${escaparHtmlEbd(s.dataSorteio)}` : ""}
       <br /><small>${escaparHtmlEbd(s.premiosComGanhador)} de ${escaparHtmlEbd(s.totalPremios)} prêmio(s) já com ganhador registrado</small>
       <div id="detalheSorteio_${s.sorteioId}" style="margin-top:8px;"></div>
-      <button class="btn-link" onclick="verDetalheSorteioAcao(${campanhaId}, ${s.sorteioId})">Ver prêmios / registrar ganhador</button>
+      <button class="btn-link" data-on-click="verDetalheSorteioAcao" data-args-click="${argsAttr(campanhaId, s.sorteioId)}">Ver prêmios / registrar ganhador</button>
     </div>`;
   }
   container.innerHTML = html;
@@ -1867,13 +1870,13 @@ async function verDetalheSorteioAcao(campanhaId, sorteioId) {
       <td>${escaparHtmlEbd(p.ordem)}</td><td>${escaparHtmlEbd(p.descricao)}</td>
       <td>${podeEditar
         ? `<input type="text" id="ganhadorPremio_${p.premioId}" value="${escaparHtmlEbd(p.nomeGanhador) || ""}" placeholder="Nome de quem ganhou" style="max-width:200px;" />
-           <button class="btn-link" onclick="registrarGanhadorAcao(${campanhaId}, ${sorteioId}, ${p.premioId})">Salvar</button>`
+           <button class="btn-link" data-on-click="registrarGanhadorAcao" data-args-click="${argsAttr(campanhaId, sorteioId, p.premioId)}">Salvar</button>`
         : (escaparHtmlEbd(p.nomeGanhador) || "—")}</td>
     </tr>`;
   });
   html += "</tbody></table>";
   if (authGeral && s.status === "ATIVO") {
-    html += `<button class="btn-link" onclick="marcarSorteioRealizadoAcao(${campanhaId}, ${sorteioId})">✅ Marcar sorteio como realizado</button>`;
+    html += `<button class="btn-link" data-on-click="marcarSorteioRealizadoAcao" data-args-click="${argsAttr(campanhaId, sorteioId)}">✅ Marcar sorteio como realizado</button>`;
   }
   container.innerHTML = html;
 }
@@ -2007,8 +2010,8 @@ async function carregarFornecedores() {
       <td>${escaparHtmlEbd(f.nome)}</td>${authGeral ? `<td>${escaparHtmlEbd(f.cpfCnpj)}</td>` : ""}
       <td>${f.dadosBancariosConfirmados ? "<span class='badge-status badge-ativo'>Confirmados</span>" : "<span class='badge-status badge-pendente'>⚠️ Pendente de confirmação</span>"}</td>
       <td class="acoes-inline">
-        ${authGeral && !f.dadosBancariosConfirmados ? `<button class="btn-link" onclick="confirmarDadosBancariosFornecedorAcao(${Number(f.fornecedorId)})">Confirmar</button>` : ""}
-        ${authGeral ? `<button class="btn-link" onclick="abrirModalAnexos('Fornecedores', ${Number(f.fornecedorId)}, ${argJs(f.nome)})">📎 Anexos</button>` : ""}
+        ${authGeral && !f.dadosBancariosConfirmados ? `<button class="btn-link" data-on-click="confirmarDadosBancariosFornecedorAcao" data-args-click="${argsAttr(Number(f.fornecedorId))}">Confirmar</button>` : ""}
+        ${authGeral ? `<button class="btn-link" data-on-click="abrirModalAnexos" data-args-click="${argsAttr("Fornecedores", Number(f.fornecedorId), String(f.nome ?? ""))}">📎 Anexos</button>` : ""}
       </td>
     </tr>`;
   });
@@ -2178,7 +2181,7 @@ async function carregarSaidas() {
     html += `<tr>
       <td>${escaparHtmlEbd(s.congregacaoNome)}</td><td>${escaparHtmlEbd(s.fornecedorNome)}</td><td>${escaparHtmlEbd(s.categoriaNome)}</td>
       <td>R$ ${Number(s.valor).toFixed(2)}${s.possivelDuplicidade ? " ⚠️" : ""}</td><td>${badgeStatusSaida(s.status)}</td>
-      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheSaidaAcao(${s.saidaId})">Ver detalhe</button></td>
+      <td class="acoes-inline"><button class="btn-link" data-on-click="verDetalheSaidaAcao" data-args-click="${argsAttr(s.saidaId)}">Ver detalhe</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -2210,8 +2213,8 @@ async function verDetalheSaidaAcao(saidaId) {
 
   if (s.status === "PENDENTE" && s.alcada) {
     html += `<p class="subtitle">Alçada exigida: nível ${escaparHtmlEbd(s.alcada.nivelMinimoAprovador)} ou superior, ${escaparHtmlEbd(s.alcada.quantidadeAprovadores)} aprovador(es) distinto(s) — ${s.aprovacoes.length} já aprovou(aram): ${s.aprovacoes.map(a => escaparHtmlEbd(a.aprovadoPorNome)).join(", ") || "ninguém ainda"}.</p>
-      <button class="btn-link" onclick="aprovarSaidaAcao(${saidaId})">✅ Aprovar</button>
-      <button class="btn-link btn-link-perigo" onclick="rejeitarSaidaAcao(${saidaId})">Rejeitar</button>`;
+      <button class="btn-link" data-on-click="aprovarSaidaAcao" data-args-click="${argsAttr(saidaId)}">✅ Aprovar</button>
+      <button class="btn-link btn-link-perigo" data-on-click="rejeitarSaidaAcao" data-args-click="${argsAttr(saidaId)}">Rejeitar</button>`;
   }
   if (s.status === "APROVADA") {
     html += `
@@ -2219,10 +2222,10 @@ async function verDetalheSaidaAcao(saidaId) {
         <label>Comprovante de pagamento:</label>
         <input type="file" id="comprovantePagamentoSaida_${saidaId}" accept="image/jpeg,image/png,application/pdf" />
       </div>
-      <button class="btn-confirmar" style="width:auto;" onclick="pagarSaidaAcao(${saidaId})">💰 Registrar pagamento</button>`;
+      <button class="btn-confirmar" style="width:auto;" data-on-click="pagarSaidaAcao" data-args-click="${argsAttr(saidaId)}">💰 Registrar pagamento</button>`;
   }
   if (["PENDENTE", "APROVADA"].includes(s.status)) {
-    html += ` <button class="btn-link btn-link-perigo" onclick="cancelarSaidaAcao(${saidaId})">Cancelar</button>`;
+    html += ` <button class="btn-link btn-link-perigo" data-on-click="cancelarSaidaAcao" data-args-click="${argsAttr(saidaId)}">Cancelar</button>`;
   }
   container.innerHTML = html;
 }
@@ -2318,7 +2321,7 @@ async function carregarFundosFixos() {
       <td>${escaparHtmlEbd(f.congregacaoNome)}</td><td>${escaparHtmlEbd(f.custodianteNome)}</td>
       <td>R$ ${Number(f.valorTeto).toFixed(2)}</td><td>R$ ${Number(f.saldoAtual).toFixed(2)}</td>
       <td><span class="badge-status ${f.status === "ATIVO" ? "badge-ativo" : "badge-inativo"}">${escaparHtmlEbd(f.status)}</span></td>
-      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheFundoFixoAcao(${f.fundoId})">Ver detalhe</button></td>
+      <td class="acoes-inline"><button class="btn-link" data-on-click="verDetalheFundoFixoAcao" data-args-click="${argsAttr(f.fundoId)}">Ver detalhe</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -2355,7 +2358,7 @@ async function verDetalheFundoFixoAcao(fundoId) {
         <label>Recibo / comprovante (obrigatório):</label>
         <input type="file" id="fundoFixoMovDocumento_${fundoId}" accept="image/jpeg,image/png,application/pdf" />
       </div>
-      <button class="btn-confirmar" style="width:auto;" onclick="registrarMovimentoFundoFixoAcao(${fundoId})">Registrar Movimento</button>
+      <button class="btn-confirmar" style="width:auto;" data-on-click="registrarMovimentoFundoFixoAcao" data-args-click="${argsAttr(fundoId)}">Registrar Movimento</button>
       <p id="resultadoMovimentoFundoFixo_${fundoId}" class="subtitle"></p>`;
   }
 
@@ -2484,7 +2487,7 @@ async function carregarRemessas() {
     html += `<tr>
       <td>${escaparHtmlEbd(r.numeroSequencial)}</td><td>${escaparHtmlEbd(r.totalRegistros)}</td><td>R$ ${Number(r.valorTotal).toFixed(2)}</td>
       <td>${badgeStatusRemessa(r.status)}${Number(r.divergentes) > 0 ? ` <span class="badge-status badge-desligado">${Number(r.divergentes)} divergência(s)</span>` : ""}</td>
-      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheRemessaAcao(${r.remessaId})">Ver detalhe</button></td>
+      <td class="acoes-inline"><button class="btn-link" data-on-click="verDetalheRemessaAcao" data-args-click="${argsAttr(r.remessaId)}">Ver detalhe</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -2513,8 +2516,8 @@ async function verDetalheRemessaAcao(remessaId) {
     if (i.tratamentoResolucao) detalhe += `<br /><small>Tratado: ${i.tratamentoResolucao === "RECONHECER_PAGAMENTO" ? "pagamento reconhecido" : "item encerrado"} — ${escaparHtmlEbd(i.tratamentoObservacao || "")}</small>`;
     if (i.status === "DIVERGENTE") {
       temDivergencia = true;
-      detalhe += `<br /><button class="btn-link" onclick="tratarDivergenciaRemessaAcao(${remessaId}, ${i.remessaItemId}, 'RECONHECER_PAGAMENTO')">Reconhecer pagamento</button>
-        <button class="btn-link btn-link-perigo" onclick="tratarDivergenciaRemessaAcao(${remessaId}, ${i.remessaItemId}, 'ENCERRAR')">Encerrar item</button>`;
+      detalhe += `<br /><button class="btn-link" data-on-click="tratarDivergenciaRemessaAcao" data-args-click="${argsAttr(remessaId, i.remessaItemId, "RECONHECER_PAGAMENTO")}">Reconhecer pagamento</button>
+        <button class="btn-link btn-link-perigo" data-on-click="tratarDivergenciaRemessaAcao" data-args-click="${argsAttr(remessaId, i.remessaItemId, "ENCERRAR")}">Encerrar item</button>`;
     }
     html += `<tr><td>${escaparHtmlEbd(i.fornecedorNome)}</td><td>R$ ${Number(i.valor).toFixed(2)}</td>
       <td><span class="badge-status ${mapa[i.status]}">${escaparHtmlEbd(i.status)}</span>${detalhe}</td></tr>`;
@@ -2531,7 +2534,7 @@ async function verDetalheRemessaAcao(remessaId) {
       <div class="input-group">
         <input type="file" id="arquivoRetornoRemessa_${remessaId}" />
       </div>
-      <button class="btn-confirmar" style="width:auto;" onclick="processarRetornoRemessaAcao(${remessaId})">Processar Retorno</button>
+      <button class="btn-confirmar" style="width:auto;" data-on-click="processarRetornoRemessaAcao" data-args-click="${argsAttr(remessaId)}">Processar Retorno</button>
       <p id="resultadoRetornoRemessa_${remessaId}" class="subtitle"></p>`;
   }
   container.innerHTML = html;
@@ -2629,7 +2632,7 @@ async function carregarOrcamentos() {
     html += `<tr>
       <td>${escaparHtmlEbd(o.ano)}</td><td>R$ ${Number(o.totalOrcadoEntrada).toFixed(2)}</td><td>R$ ${Number(o.totalOrcadoSaida).toFixed(2)}</td>
       <td><span class="badge-status ${o.status === "ABERTO" ? "badge-ativo" : "badge-inativo"}">${escaparHtmlEbd(o.status)}</span></td>
-      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheOrcamentoAcao(${o.orcamentoId})">Ver detalhe</button></td>
+      <td class="acoes-inline"><button class="btn-link" data-on-click="verDetalheOrcamentoAcao" data-args-click="${argsAttr(o.orcamentoId)}">Ver detalhe</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -2645,7 +2648,7 @@ async function verDetalheOrcamentoAcao(orcamentoId) {
 
   let html = `<hr /><h4>Orçamento ${escaparHtmlEbd(o.ano)} — <span class="badge-status ${o.status === "ABERTO" ? "badge-ativo" : "badge-inativo"}">${escaparHtmlEbd(o.status)}</span></h4>`;
   if (authGeral && o.status === "ABERTO") {
-    html += `<button class="btn-link btn-link-perigo" onclick="encerrarOrcamentoAcao(${orcamentoId})">🔒 Encerrar orçamento</button>`;
+    html += `<button class="btn-link btn-link-perigo" data-on-click="encerrarOrcamentoAcao" data-args-click="${argsAttr(orcamentoId)}">🔒 Encerrar orçamento</button>`;
   }
   html += `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Categoria</th><th>Orçado</th><th>Empenhado</th><th>Realizado</th></tr></thead><tbody>`;
   o.linhas.forEach(l => {
@@ -2752,7 +2755,7 @@ async function carregarPlanosPdq() {
     html += `<tr>
       <td>${escaparHtmlEbd(p.anoInicio)}-${escaparHtmlEbd(p.anoFim)}</td><td>${escaparHtmlEbd(p.titulo)}</td><td>${escaparHtmlEbd(p.totalEixos)}</td><td>${escaparHtmlEbd(p.totalMetas)}</td>
       <td><span class="badge-status ${p.status === "VIGENTE" ? "badge-ativo" : (p.status === "ENCERRADO" ? "badge-inativo" : "badge-licenca")}">${escaparHtmlEbd(p.status)}</span></td>
-      <td class="acoes-inline"><button class="btn-link" onclick="verDetalhePlanoPdqAcao(${p.planoId})">Ver detalhe</button></td>
+      <td class="acoes-inline"><button class="btn-link" data-on-click="verDetalhePlanoPdqAcao" data-args-click="${argsAttr(p.planoId)}">Ver detalhe</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -2779,8 +2782,8 @@ async function verDetalhePlanoPdqAcao(planoId) {
         <option value="VIGENTE" ${p.status === "VIGENTE" ? "selected" : ""}>Vigente</option>
         <option value="ENCERRADO">Encerrado</option>
       </select>
-      <button class="btn-link" onclick="atualizarStatusPlanoPdqAcao(${planoId})">Salvar status</button>
-      <button class="btn-link" onclick="verRelatorioProgressoPdqAcao(${planoId})">📊 Relatório de Progresso (AGO)</button>`;
+      <button class="btn-link" data-on-click="atualizarStatusPlanoPdqAcao" data-args-click="${argsAttr(planoId)}">Salvar status</button>
+      <button class="btn-link" data-on-click="verRelatorioProgressoPdqAcao" data-args-click="${argsAttr(planoId)}">📊 Relatório de Progresso (AGO)</button>`;
   }
   html += `<div id="resultadoRelatorioProgressoPdq" style="margin:10px 0;"></div>`;
 
@@ -2797,7 +2800,7 @@ async function verDetalhePlanoPdqAcao(planoId) {
             <option value="CUMPRIDA" ${meta.status === "CUMPRIDA" ? "selected" : ""}>Cumprida</option>
             <option value="NAO_CUMPRIDA" ${meta.status === "NAO_CUMPRIDA" ? "selected" : ""}>Não cumprida</option>
           </select>
-          <button class="btn-link" onclick="atualizarStatusMetaPdqAcao(${meta.metaId})">Salvar</button>
+          <button class="btn-link" data-on-click="atualizarStatusMetaPdqAcao" data-args-click="${argsAttr(meta.metaId)}">Salvar</button>
         </div>`;
       meta.projetos.forEach(proj => {
         html += `<div style="margin:8px 0 8px 14px; padding:8px; background:#f7f7f7; border-radius:6px;">
@@ -2812,12 +2815,12 @@ async function verDetalhePlanoPdqAcao(planoId) {
               <option value="CONCLUIDO" ${proj.status === "CONCLUIDO" ? "selected" : ""}>Concluído</option>
               <option value="CANCELADO" ${proj.status === "CANCELADO" ? "selected" : ""}>Cancelado</option>
             </select>
-            <button class="btn-link" onclick="atualizarStatusProjetoPdqAcao(${proj.projetoId})">Salvar</button>
-            ${authGeral ? `<button class="btn-link" onclick="solicitarRemanejamentoPdqAcao(${proj.projetoId})">↔️ Remanejar orçamento</button>` : ""}
+            <button class="btn-link" data-on-click="atualizarStatusProjetoPdqAcao" data-args-click="${argsAttr(proj.projetoId)}">Salvar</button>
+            ${authGeral ? `<button class="btn-link" data-on-click="solicitarRemanejamentoPdqAcao" data-args-click="${argsAttr(proj.projetoId)}">↔️ Remanejar orçamento</button>` : ""}
           </div>
         </div>`;
       });
-      html += `<button class="btn-link" onclick="alternarFormNovoProjetoPdq(${meta.metaId})">➕ Novo projeto nesta meta</button>
+      html += `<button class="btn-link" data-on-click="alternarFormNovoProjetoPdq" data-args-click="${argsAttr(meta.metaId)}">➕ Novo projeto nesta meta</button>
         <div id="formNovoProjetoPdq_${meta.metaId}" style="display:none; margin:6px 0 6px 14px;">
           <div class="barra-lista">
             <input type="text" id="pdqProjetoNome_${meta.metaId}" placeholder="Nome do projeto" />
@@ -2827,19 +2830,19 @@ async function verDetalhePlanoPdqAcao(planoId) {
             <input type="date" id="pdqProjetoInicio_${meta.metaId}" />
             <input type="date" id="pdqProjetoFim_${meta.metaId}" />
           </div>
-          <button class="btn-confirmar" style="width:auto;" onclick="criarProjetoPdqAcao(${meta.metaId})">Criar Projeto</button>
+          <button class="btn-confirmar" style="width:auto;" data-on-click="criarProjetoPdqAcao" data-args-click="${argsAttr(meta.metaId)}">Criar Projeto</button>
           <p id="resultadoNovoProjetoPdq_${meta.metaId}" class="subtitle"></p>
         </div>`;
       html += `</div>`;
     });
-    html += `<button class="btn-link" onclick="alternarFormNovaMetaPdq(${eixo.eixoId})">➕ Nova meta neste eixo</button>
+    html += `<button class="btn-link" data-on-click="alternarFormNovaMetaPdq" data-args-click="${argsAttr(eixo.eixoId)}">➕ Nova meta neste eixo</button>
       <div id="formNovaMetaPdq_${eixo.eixoId}" style="display:none; margin:6px 0;">
         <div class="input-group"><input type="text" id="pdqMetaDescricao_${eixo.eixoId}" placeholder="Descrição da meta" /></div>
         <div class="barra-lista">
           <input type="text" id="pdqMetaIndicador_${eixo.eixoId}" placeholder="Indicador (opcional)" />
           <input type="number" id="pdqMetaPrazoAno_${eixo.eixoId}" placeholder="Ano prazo" style="max-width:130px;" />
         </div>
-        <button class="btn-confirmar" style="width:auto;" onclick="criarMetaPdqAcao(${eixo.eixoId})">Criar Meta</button>
+        <button class="btn-confirmar" style="width:auto;" data-on-click="criarMetaPdqAcao" data-args-click="${argsAttr(eixo.eixoId)}">Criar Meta</button>
         <p id="resultadoNovaMetaPdq_${eixo.eixoId}" class="subtitle"></p>
       </div>`;
     html += `</div>`;
@@ -2957,8 +2960,8 @@ async function solicitarRemanejamentoPdqAcao(projetoOrigemId) {
   if (data.sucesso && data.status === "PENDENTE_CLI") {
     const container = document.getElementById("resultadoRemanejamentosPdq");
     container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>
-      <button class="btn-link" onclick="homologarRemanejamentoPdqAcao(${data.remanejamentoId})">✅ Homologar (CLI)</button>
-      <button class="btn-link btn-link-perigo" onclick="rejeitarRemanejamentoPdqAcao(${data.remanejamentoId})">Rejeitar (CLI)</button>`;
+      <button class="btn-link" data-on-click="homologarRemanejamentoPdqAcao" data-args-click="${argsAttr(data.remanejamentoId)}">✅ Homologar (CLI)</button>
+      <button class="btn-link btn-link-perigo" data-on-click="rejeitarRemanejamentoPdqAcao" data-args-click="${argsAttr(data.remanejamentoId)}">Rejeitar (CLI)</button>`;
   } else if (data.sucesso) {
     verDetalhePlanoPdqAcao(_pdqPlanoDetalheCache.planoId);
   }
@@ -3248,7 +3251,7 @@ async function carregarRateiosGeraisAcao() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Repasses</th><th>Total Base</th><th>Tesouro Geral</th><th></th></tr></thead><tbody>`;
   rateios.forEach(r => {
     html += `<tr><td>${escaparHtmlEbd(r.mesReferencia)}</td><td>${escaparHtmlEbd(r.totalItens)}</td><td>R$ ${Number(r.totalBase).toFixed(2)}</td><td>R$ ${Number(r.valorTesouroGeral).toFixed(2)}</td>
-      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheRateioGeralAcao(${r.rateioGeralId})">Ver detalhe</button></td></tr>`;
+      <td class="acoes-inline"><button class="btn-link" data-on-click="verDetalheRateioGeralAcao" data-args-click="${argsAttr(r.rateioGeralId)}">Ver detalhe</button></td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -3403,7 +3406,7 @@ async function carregarRiscosVinculoAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Ministro</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody>`;
-  lista.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${escaparHtmlEbd(r.tipoRisco)}</td><td>${escaparHtmlEbd(r.descricao)}</td><td><button class="btn-link" onclick="resolverRiscoVinculoAcao(${r.riscoVinculoId})">Resolver</button></td></tr>`);
+  lista.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${escaparHtmlEbd(r.tipoRisco)}</td><td>${escaparHtmlEbd(r.descricao)}</td><td><button class="btn-link" data-on-click="resolverRiscoVinculoAcao" data-args-click="${argsAttr(r.riscoVinculoId)}">Resolver</button></td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3509,7 +3512,7 @@ async function carregarAlienacoesBensAcao() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Bem</th><th>Valor proposto</th><th>Alçada</th><th>Status</th><th></th></tr></thead><tbody>`;
   lista.forEach(a => html += `<tr>
     <td>${escaparHtmlEbd(a.bemDescricao)}</td><td>R$ ${Number(a.ValorProposto).toFixed(2)}</td><td>${escaparHtmlEbd(a.AprovacaoNecessaria)}</td><td>${escaparHtmlEbd(a.Status)}</td>
-    <td>${a.Status === "PROPOSTA" ? `<button class="btn-link" onclick="abrirParecerViabilidadeAcao(${a.AlienacaoId})">📋 Parecer de Viabilidade (Art. 31)</button>` : ""}</td>
+    <td>${a.Status === "PROPOSTA" ? `<button class="btn-link" data-on-click="abrirParecerViabilidadeAcao" data-args-click="${argsAttr(a.AlienacaoId)}">📋 Parecer de Viabilidade (Art. 31)</button>` : ""}</td>
   </tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -3528,7 +3531,7 @@ function abrirParecerViabilidadeAcao(alienacaoId) {
     <div class="barra-lista">
       <select id="parecerViabilidadeDecisao"><option value="FAVORAVEL">Favorável</option><option value="DESFAVORAVEL">Desfavorável</option></select>
       <input type="text" id="parecerViabilidadeJustificativa" placeholder="Justificativa" style="min-width:260px;" />
-      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="emitirParecerViabilidadeAcao()">Emitir Parecer</button>
+      <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="emitirParecerViabilidadeAcao">Emitir Parecer</button>
     </div>`;
 }
 
@@ -3751,7 +3754,7 @@ async function carregarRetiradasChaveAcao() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Veículo</th><th>Condutor</th><th>Retirada</th><th>Devolução</th><th>Ação</th></tr></thead><tbody>`;
   lista.forEach(r => {
     html += `<tr><td>${r.RetiradaId}</td><td>${escaparHtmlEbd(r.bemDescricao)}</td><td>${escaparHtmlEbd(r.condutorNome)}</td><td>${new Date(r.DataHoraRetirada).toLocaleString("pt-BR")}</td><td>${r.DataHoraDevolucao ? new Date(r.DataHoraDevolucao).toLocaleString("pt-BR") : "-"}</td>
-      <td>${r.DataHoraDevolucao ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDevolucaoChaveAcao(${r.RetiradaId})">Devolver</button>`}</td></tr>`;
+      <td>${r.DataHoraDevolucao ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" data-on-click="registrarDevolucaoChaveAcao" data-args-click="${argsAttr(r.RetiradaId)}">Devolver</button>`}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -3786,7 +3789,7 @@ async function carregarManutencoesVeiculoAcao() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Veículo</th><th>Tipo</th><th>Agendada</th><th>Realizada</th><th>Ação</th></tr></thead><tbody>`;
   lista.forEach(m => {
     html += `<tr><td>${escaparHtmlEbd(m.bemDescricao)}</td><td>${escaparHtmlEbd(m.TipoManutencao)}</td><td>${escaparHtmlEbd(m.DataAgendada)}</td><td>${escaparHtmlEbd(m.DataRealizada) || "-"}</td>
-      <td>${m.DataRealizada ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="concluirManutencaoVeiculoAcao(${m.ManutencaoId})">Concluir</button>`}</td></tr>`;
+      <td>${m.DataRealizada ? "-" : `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" data-on-click="concluirManutencaoVeiculoAcao" data-args-click="${argsAttr(m.ManutencaoId)}">Concluir</button>`}</td></tr>`;
   });
   html += "</tbody></table>";
   container.innerHTML = html;
@@ -3850,7 +3853,7 @@ async function carregarConciliacoesAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Fonte</th><th>Mês</th><th>Status</th><th>Batidas</th><th>Divergências</th><th></th></tr></thead><tbody>`;
-  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.fonteNome)}</td><td>${escaparHtmlEbd(c.mesReferencia)}</td><td>${escaparHtmlEbd(c.status)}</td><td>R$ ${Number(c.totalBatidas).toFixed(2)}</td><td>${escaparHtmlEbd(c.divergenciasPendentes)}</td><td><button class="btn-link" onclick="verDetalheConciliacaoAcao(${c.conciliacaoId})">Ver</button></td></tr>`);
+  lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.fonteNome)}</td><td>${escaparHtmlEbd(c.mesReferencia)}</td><td>${escaparHtmlEbd(c.status)}</td><td>R$ ${Number(c.totalBatidas).toFixed(2)}</td><td>${escaparHtmlEbd(c.divergenciasPendentes)}</td><td><button class="btn-link" data-on-click="verDetalheConciliacaoAcao" data-args-click="${argsAttr(c.conciliacaoId)}">Ver</button></td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -3889,7 +3892,7 @@ async function verDetalheConciliacaoAcao(conciliacaoId) {
   if (divs.length === 0) { html += "<p class='subtitle'>Sem divergências pendentes. ✅</p>"; }
   else {
     html += `<table class="tabela-frequencia"><thead><tr><th>Tipo</th><th>Valor</th><th>Referência</th><th></th></tr></thead><tbody>`;
-    divs.forEach(d => html += `<tr><td>${d.tipo === "SO_BANCO" ? "Só no banco" : "Só no sistema"}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${escaparHtmlEbd(d.referencia) || "-"}</td>${d.status === "PENDENTE" ? `<td><button class="btn-link" onclick="resolverDivergenciaAcao(${d.divergenciaId})">Resolver</button></td>` : "<td></td>"}</tr>`);
+    divs.forEach(d => html += `<tr><td>${d.tipo === "SO_BANCO" ? "Só no banco" : "Só no sistema"}</td><td>R$ ${Number(d.valor).toFixed(2)}</td><td>${escaparHtmlEbd(d.referencia) || "-"}</td>${d.status === "PENDENTE" ? `<td><button class="btn-link" data-on-click="resolverDivergenciaAcao" data-args-click="${argsAttr(d.divergenciaId)}">Resolver</button></td>` : "<td></td>"}</tr>`);
     html += "</tbody></table>";
   }
   container.innerHTML = html;
@@ -3974,7 +3977,7 @@ async function carregarRepassesInstitucionaisAcao() {
     container.innerHTML = "<p class='subtitle'>Nenhum repasse registrado.</p>";
   } else {
     let html = `<table class="tabela-frequencia"><thead><tr><th>Origem</th><th>Mês</th><th>Arrecadado</th><th>%</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>`;
-    lista.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.origemNome)}</td><td>${escaparHtmlEbd(r.mesReferencia)}</td><td>R$ ${Number(r.valorArrecadadoLiquido).toFixed(2)}</td><td>${escaparHtmlEbd(r.percentual)}%</td><td>R$ ${Number(r.valorRepasse).toFixed(2)}</td><td>${escaparHtmlEbd(r.status)}${r.atrasado ? " ⚠️" : ""}</td>${r.status === "PENDENTE" ? `<td><button class="btn-link" onclick="confirmarRepasseAcao(${r.repasseId})">Repassar</button></td>` : "<td></td>"}</tr>`);
+    lista.forEach(r => html += `<tr><td>${escaparHtmlEbd(r.origemNome)}</td><td>${escaparHtmlEbd(r.mesReferencia)}</td><td>R$ ${Number(r.valorArrecadadoLiquido).toFixed(2)}</td><td>${escaparHtmlEbd(r.percentual)}%</td><td>R$ ${Number(r.valorRepasse).toFixed(2)}</td><td>${escaparHtmlEbd(r.status)}${r.atrasado ? " ⚠️" : ""}</td>${r.status === "PENDENTE" ? `<td><button class="btn-link" data-on-click="confirmarRepasseAcao" data-args-click="${argsAttr(r.repasseId)}">Repassar</button></td>` : "<td></td>"}</tr>`);
     html += "</tbody></table>";
     container.innerHTML = html;
   }
@@ -4121,7 +4124,7 @@ async function carregarCessoesTemploAcao() {
   let html = `<table class="tabela-frequencia"><thead><tr><th>Solicitante</th><th>Tipo</th><th>Data</th><th>Taxa</th><th>Lista</th><th>Status</th><th></th></tr></thead><tbody>`;
   // Cancelar uma cessão já autorizada estorna a conta a receber junto; se a taxa já foi recebida o servidor recusa e explica o caminho (a devolução é um ato financeiro à parte).
   lista.forEach(c => html += `<tr><td>${escaparHtmlEbd(c.solicitanteNome)}</td><td>${escaparHtmlEbd(c.tipoEvento)}</td><td>${escaparHtmlEbd(c.dataEvento.slice(0, 10))}</td><td>${c.isencaoTaxa ? "isento" : "R$ " + Number(c.taxaZeladoria).toFixed(2)}</td><td>${c.listaMusicalAprovada ? "✅" : "❌"}</td><td>${escaparHtmlEbd(c.status)}${c.contaReceberStatus ? `<br /><small>cobrança: ${escaparHtmlEbd(c.contaReceberStatus)}</small>` : ""}</td>
-    <td class="acoes-inline">${c.status === "SOLICITADA" || (c.status === "AUTORIZADA" && (authGeral || c.contaReceberId == null)) ? `<button class="btn-link btn-link-perigo" onclick="cancelarCessaoTemploAcao(${Number(c.cessaoId)})">Cancelar</button>` : ""}</td></tr>`);
+    <td class="acoes-inline">${c.status === "SOLICITADA" || (c.status === "AUTORIZADA" && (authGeral || c.contaReceberId == null)) ? `<button class="btn-link btn-link-perigo" data-on-click="cancelarCessaoTemploAcao" data-args-click="${argsAttr(Number(c.cessaoId))}">Cancelar</button>` : ""}</td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -4407,10 +4410,10 @@ async function carregarObrasAcao() {
   lista.forEach(o => {
     html += `<tr><td>${o.ObraId}</td><td>${escaparHtmlEbd(o.Titulo)}</td><td>${escaparHtmlEbd(o.congregacaoNome)}</td><td>${escaparHtmlEbd(o.Status)}</td>
       <td>
-        ${!o.DataPedraFundamental ? `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'MARCAR_PEDRA_FUNDAMENTAL')">Pedra fundamental</button>` : ""}
-        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'CONFIRMAR_PLACA')">Confirmar placa</button>
-        ${o.EhObraNova ? `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'CONFIRMAR_EFICIENCIA_ENERGETICA')">Confirmar eficiência energética</button>` : ""}
-        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="acaoObra(${o.ObraId}, 'INAUGURAR')">🏁 Inaugurar</button>
+        ${!o.DataPedraFundamental ? `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" data-on-click="acaoObra" data-args-click="${argsAttr(o.ObraId, "MARCAR_PEDRA_FUNDAMENTAL")}">Pedra fundamental</button>` : ""}
+        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" data-on-click="acaoObra" data-args-click="${argsAttr(o.ObraId, "CONFIRMAR_PLACA")}">Confirmar placa</button>
+        ${o.EhObraNova ? `<button class="btn-confirmar" style="width:auto;padding:4px 8px;" data-on-click="acaoObra" data-args-click="${argsAttr(o.ObraId, "CONFIRMAR_EFICIENCIA_ENERGETICA")}">Confirmar eficiência energética</button>` : ""}
+        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" data-on-click="acaoObra" data-args-click="${argsAttr(o.ObraId, "INAUGURAR")}">🏁 Inaugurar</button>
       </td></tr>`;
   });
   html += "</tbody></table>";
@@ -4551,7 +4554,7 @@ async function carregarContasReceber() {
     html += `<tr>
       <td>${escaparHtmlEbd(c.congregacaoNome)}</td><td>${escaparHtmlEbd(c.dizimistaNome) || escaparHtmlEbd(c.nomeAvulso) || escaparHtmlEbd(c.descricao) || "—"}</td><td>${escaparHtmlEbd(c.categoriaNome) || escaparHtmlEbd(c.tipo)}</td>
       <td>R$ ${Number(c.valor).toFixed(2)}</td><td>${escaparHtmlEbd(c.dataVencimento)}</td><td>${badgeStatusContaReceber(c.status)}</td>
-      <td class="acoes-inline"><button class="btn-link" onclick="verDetalheContaReceberAcao(${c.contaReceberId})">Ver detalhe</button></td>
+      <td class="acoes-inline"><button class="btn-link" data-on-click="verDetalheContaReceberAcao" data-args-click="${argsAttr(c.contaReceberId)}">Ver detalhe</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -4590,8 +4593,8 @@ async function verDetalheContaReceberAcao(contaReceberId) {
         <label>Comprovante (opcional):</label>
         <input type="file" id="receberConfirmarComprovante_${contaReceberId}" accept="image/jpeg,image/png,application/pdf" />
       </div>
-      <button class="btn-confirmar" style="width:auto;" onclick="confirmarContaReceberAcao(${contaReceberId})">✅ Confirmar Recebimento</button>
-      <button class="btn-link btn-link-perigo" onclick="cancelarContaReceberAcao(${contaReceberId})">Cancelar</button>
+      <button class="btn-confirmar" style="width:auto;" data-on-click="confirmarContaReceberAcao" data-args-click="${argsAttr(contaReceberId)}">✅ Confirmar Recebimento</button>
+      <button class="btn-link btn-link-perigo" data-on-click="cancelarContaReceberAcao" data-args-click="${argsAttr(contaReceberId)}">Cancelar</button>
       <p id="resultadoConfirmarContaReceber_${contaReceberId}" class="subtitle"></p>`;
   }
   if (c.lancamentoId) {
@@ -4629,6 +4632,13 @@ async function cancelarContaReceberAcao(contaReceberId) {
   const data = await res.json();
   avisarResultado(data);
   if (data.sucesso) { carregarContasReceber(); verDetalheContaReceberAcao(contaReceberId); }
+}
+
+// O antigo onchange="carregarOpcoesDizimistas(); carregarLancamentosTesouraria();" da congregação dos lançamentos (CSP forte): as duas cargas, na
+// mesma ordem e sem esperar uma pela outra, como antes.
+function aoTrocarCongregacaoLancamentos() {
+  carregarOpcoesDizimistas();
+  carregarLancamentosTesouraria();
 }
 
 async function carregarOpcoesDizimistas() {
@@ -4780,16 +4790,16 @@ async function carregarLancamentosTesouraria() {
     const confirmadoAutolancamento = l.origem === "AUTOLANCAMENTO" && l.statusConfirmacao === "CONFIRMADO";
     let acoes = "";
     if (pendenteConfirmacao && l.status === "ATIVO") {
-      acoes = `<button class="btn-link" onclick="confirmarAutolancamentoAcao(${l.lancamentoId}, 'CONFIRMAR')">✅ Confirmar</button>
-        <button class="btn-link btn-link-perigo" onclick="confirmarAutolancamentoAcao(${l.lancamentoId}, 'REJEITAR')">Rejeitar</button>`;
+      acoes = `<button class="btn-link" data-on-click="confirmarAutolancamentoAcao" data-args-click="${argsAttr(l.lancamentoId, "CONFIRMAR")}">✅ Confirmar</button>
+        <button class="btn-link btn-link-perigo" data-on-click="confirmarAutolancamentoAcao" data-args-click="${argsAttr(l.lancamentoId, "REJEITAR")}">Rejeitar</button>`;
     } else if (!l.fechamentoId && l.status === "ATIVO" && !confirmadoAutolancamento) {
-      acoes = `<button class="btn-link btn-link-perigo" onclick="cancelarLancamentoTesourariaAcao(${l.lancamentoId}, ${argJs(l.termoNumero)})">Cancelar</button>`;
+      acoes = `<button class="btn-link btn-link-perigo" data-on-click="cancelarLancamentoTesourariaAcao" data-args-click="${argsAttr(l.lancamentoId, String(l.termoNumero ?? ""))}">Cancelar</button>`;
       if (l.comprovantePendente) {
-        acoes += ` <button class="btn-link" onclick="anexarComprovanteTesourariaAcao(${l.lancamentoId})">Anexar comprovante</button>`;
+        acoes += ` <button class="btn-link" data-on-click="anexarComprovanteTesourariaAcao" data-args-click="${argsAttr(l.lancamentoId)}">Anexar comprovante</button>`;
       }
     }
     html += `<tr>
-      <td>${podeConciliar ? `<input type="checkbox" class="chk-conciliar-pix" value="${l.lancamentoId}" data-valor="${escaparHtmlEbd(valorPixParcela)}" onchange="recalcularTotalConciliacaoPix()" />` : ""}</td>
+      <td>${podeConciliar ? `<input type="checkbox" class="chk-conciliar-pix" value="${l.lancamentoId}" data-valor="${escaparHtmlEbd(valorPixParcela)}" data-on-change="recalcularTotalConciliacaoPix" />` : ""}</td>
       <td>${escaparHtmlEbd(l.termoNumero) || "—"}</td>
       <td>${escaparHtmlEbd(l.dizimistaNome) || escaparHtmlEbd(l.nomeAvulso) || escaparHtmlEbd(l.descricao)}</td>
       <td>${escaparHtmlEbd(rotuloTipoLancamento(l))}</td>
@@ -4941,7 +4951,7 @@ async function carregarResumoFechamento() {
   if (!f) {
     container.innerHTML = `
       <p class="subtitle">Mês ainda aberto — ${data.lancamentos.length} lançamento(s) registrado(s).</p>
-      <button class="btn-confirmar" style="width:auto;" onclick="fecharMesTesourariaAcao(${congregacaoId}, ${argJs(mesReferencia)})">🔒 Fechar mês</button>
+      <button class="btn-confirmar" style="width:auto;" data-on-click="fecharMesTesourariaAcao" data-args-click="${argsAttr(Number(congregacaoId), String(mesReferencia ?? ""))}">🔒 Fechar mês</button>
       <p id="resultadoFecharMes" class="subtitle"></p>`;
     return;
   }
@@ -4979,7 +4989,7 @@ async function carregarResumoFechamento() {
           <label>Comprovante (opcional):</label>
           <input type="file" id="financeiroComprovanteRepasse" accept="image/jpeg,image/png,application/pdf" />
         </div>
-        ${authGeral ? `<button class="btn-confirmar" style="width:auto;" onclick="registrarRepasseTesourariaAcao(${congregacaoId}, ${argJs(mesReferencia)})">✅ Conferir e liberar saldo local</button>` : ""}
+        ${authGeral ? `<button class="btn-confirmar" style="width:auto;" data-on-click="registrarRepasseTesourariaAcao" data-args-click="${argsAttr(Number(congregacaoId), String(mesReferencia ?? ""))}">✅ Conferir e liberar saldo local</button>` : ""}
         <p id="resultadoRepasse" class="subtitle"></p>`;
     } else {
       html += `<p class="subtitle">Só a Tesouraria Geral pode conferir e liberar este saldo.</p>`;
@@ -5228,7 +5238,7 @@ async function carregarMeusVinculos() {
     html += `<tr>
       <td>${escaparHtmlEbd(v.rotulo)}</td>
       <td>${escaparHtmlEbd(v.outraPessoaNome)} (${v.outraPessoaId})${v.outraPessoaEhResponsavel ? ' <span class="badge-status badge-ativo">Responsável Legal</span>' : ""}</td>
-      <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="removerMeuVinculoAcao(${v.vinculoId})">Remover</button></td>
+      <td class="acoes-inline"><button class="btn-link btn-link-perigo" data-on-click="removerMeuVinculoAcao" data-args-click="${argsAttr(v.vinculoId)}">Remover</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -5533,8 +5543,8 @@ async function carregarOrgaos() {
       <td>${escaparHtmlEbd(o.quorumDeliberativoPct ?? "-")}</td>
       <td>${escaparHtmlEbd(o.faltasParaPerdaAssento ?? "-")}</td>
       <td class="acoes-inline">
-        ${authGeral ? `<button class="btn-link" onclick="editarOrgao(${o.orgaoId})">Editar</button>
-        <button class="btn-link btn-link-perigo" onclick="excluirOrgao(${o.orgaoId})">Excluir</button>` : ""}
+        ${authGeral ? `<button class="btn-link" data-on-click="editarOrgao" data-args-click="${argsAttr(o.orgaoId)}">Editar</button>
+        <button class="btn-link btn-link-perigo" data-on-click="excluirOrgao" data-args-click="${argsAttr(o.orgaoId)}">Excluir</button>` : ""}
       </td>
     </tr>`;
   });
@@ -5573,7 +5583,7 @@ async function carregarAssentos() {
       <td>${escaparHtmlEbd(a.dataInicio)}</td>
       <td>${escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo"}</td>
       <td>${badgeSituacaoAssento(a.situacaoEfetiva)}</td>
-      <td class="acoes-inline">${authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+      <td class="acoes-inline">${authGeral ? `<button class="btn-link btn-link-perigo" data-on-click="encerrarAssentoAcao" data-args-click="${argsAttr(a.assentoId)}">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -5826,10 +5836,10 @@ function secaoCatalogo(key) {
     <div class="barra-lista so-geral"><!-- escrever no catálogo é só do geral (GestaoCatalogos); os demais só consultam -->
       ${camposHtml}
       ${paiHtml}
-      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarCatalogo(${argJs(key)})">➕ Adicionar</button>
+      <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="salvarCatalogo" data-args-click="${argsAttr(String(key ?? ""))}">➕ Adicionar</button>
     </div>
     <div class="barra-lista">
-      <input type="text" id="busca_${key}" placeholder="🔍 Buscar" oninput="filtrarCatalogo(${argJs(key)})" style="min-width:150px;" />
+      <input type="text" id="busca_${key}" placeholder="🔍 Buscar" data-on-input="filtrarCatalogo" data-args-input="${argsAttr(String(key ?? ""))}" style="min-width:150px;" />
       <span id="info_${key}" class="subtitle" style="margin:0;"></span>
     </div>
     <div class="rolagem-tabela"><div id="lista_cat_${key}"></div></div>
@@ -5889,8 +5899,8 @@ function renderizarCatalogo(key) {
       c.campos.forEach(([id]) => html += `<td>${escaparHtmlEbd(x[id] ?? "-")}</td>`);
       if (c.pai) html += `<td>${escaparHtmlEbd((catalogoCache[`_pai_${key}`] || {})[x[c.pai.campo]]) || "-"}</td>`;
       html += `<td class="acoes-inline">
-        ${authGeral ? `<button class="btn-link" onclick="editarCatalogo(${argJs(key)}, ${argJs(x[c.idField])})">Editar</button>
-        <button class="btn-link btn-link-perigo" onclick="excluirCatalogo(${argJs(key)}, ${argJs(x[c.idField])})">Excluir</button>` : ""}
+        ${authGeral ? `<button class="btn-link" data-on-click="editarCatalogo" data-args-click="${argsAttr(String(key ?? ""), String(x[c.idField] ?? ""))}">Editar</button>
+        <button class="btn-link btn-link-perigo" data-on-click="excluirCatalogo" data-args-click="${argsAttr(String(key ?? ""), String(x[c.idField] ?? ""))}">Excluir</button>` : ""}
       </td></tr>`;
     });
     html += "</tbody></table>";
@@ -5899,9 +5909,9 @@ function renderizarCatalogo(key) {
 
   document.getElementById(`info_${key}`).textContent = `${total} registro(s)`;
   document.getElementById(`pag_${key}`).innerHTML = totalPaginas > 1 ? `
-    <button ${catalogoPagina[key] === 1 ? "disabled" : ""} onclick="mudarPaginaCatalogo(${argJs(key)}, -1)">←</button>
+    <button ${catalogoPagina[key] === 1 ? "disabled" : ""} data-on-click="mudarPaginaCatalogo" data-args-click="${argsAttr(String(key ?? ""), -1)}">←</button>
     <span class="info-pagina">${escaparHtmlEbd(catalogoPagina[key])} / ${totalPaginas}</span>
-    <button ${catalogoPagina[key] === totalPaginas ? "disabled" : ""} onclick="mudarPaginaCatalogo(${argJs(key)}, 1)">→</button>` : "";
+    <button ${catalogoPagina[key] === totalPaginas ? "disabled" : ""} data-on-click="mudarPaginaCatalogo" data-args-click="${argsAttr(String(key ?? ""), 1)}">→</button>` : "";
 }
 
 function mudarPaginaCatalogo(key, delta) {
@@ -5966,7 +5976,7 @@ let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar 
 // vez (mostrarAbaSecretaria('reunioes') só é chamado a partir de um deles).
 function renderizarListaOrgaosModulo(containerId, lista) {
   document.getElementById(containerId).innerHTML = lista.map(o => `
-    <button class="btn-aba" id="btnSubReunioes${escaparHtmlEbd(o.chave.replace(":", "_"))}" onclick="selecionarOrgaoReunioes(${argJs(o.chave)})">
+    <button class="btn-aba" id="btnSubReunioes${escaparHtmlEbd(o.chave.replace(":", "_"))}" data-on-click="selecionarOrgaoReunioes" data-args-click="${argsAttr(String(o.chave ?? ""))}">
       <span class="icone">🏛️</span><span class="rotulo">${escaparHtmlEbd(o.nome)}</span>
     </button>`).join("");
 }
@@ -6091,7 +6101,7 @@ async function carregarAssentosCLI() {
       <td>${escaparHtmlEbd(a.dataInicio)}</td>
       <td>${escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo"}</td>
       <td>${badgeSituacaoAssento(a.situacaoEfetiva)}</td>
-      <td class="acoes-inline">${authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoCLIAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+      <td class="acoes-inline">${authGeral ? `<button class="btn-link btn-link-perigo" data-on-click="encerrarAssentoCLIAcao" data-args-click="${argsAttr(a.assentoId)}">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6143,7 +6153,7 @@ function tabelaComissaoCalculada(lista, siglaCadastroManual) {
       <td>${m.membroId}</td>
       <td>${escaparHtmlEbd(m.nome)}</td>
       ${siglaCadastroManual
-        ? `<td>${escaparHtmlEbd(m.dataInicio)}</td><td>${authGeral ? `<button class="btn-link btn-link-perigo" onclick="removerMembroComissaoAcao('${siglaCadastroManual}', ${m.comissaoMembroId})">Remover</button>` : ""}</td>`
+        ? `<td>${escaparHtmlEbd(m.dataInicio)}</td><td>${authGeral ? `<button class="btn-link btn-link-perigo" data-on-click="removerMembroComissaoAcao" data-args-click="${argsAttr(String(siglaCadastroManual), m.comissaoMembroId)}">Remover</button>` : ""}</td>`
         : `<td>${escaparHtmlEbd(m.cargoOuFuncao) || "-"}${m.origemSigla ? ` (${escaparHtmlEbd(m.origemSigla)})` : ""}</td>`}
     </tr>`;
   });
@@ -6248,8 +6258,8 @@ async function carregarProjetos() {
     const pareceresHtml = (p.pareceres || []).map(par => {
       const rotulo = par.parecer ? `${par.parecer === "FAVORAVEL" ? "✅" : "❌"} ${escaparHtmlEbd(par.parecer)} (${escaparHtmlEbd(par.dataEmissao)})` : "⏳ pendente";
       const botoes = !par.parecer ? `
-        <button class="btn-link" onclick="emitirParecerAcao(${p.projetoId}, ${argJs(par.sigla)}, 'FAVORAVEL')">Favorável</button>
-        <button class="btn-link btn-link-perigo" onclick="emitirParecerAcao(${p.projetoId}, ${argJs(par.sigla)}, 'CONTRARIO')">Contrário</button>` : "";
+        <button class="btn-link" data-on-click="emitirParecerAcao" data-args-click="${argsAttr(p.projetoId, String(par.sigla ?? ""), "FAVORAVEL")}">Favorável</button>
+        <button class="btn-link btn-link-perigo" data-on-click="emitirParecerAcao" data-args-click="${argsAttr(p.projetoId, String(par.sigla ?? ""), "CONTRARIO")}">Contrário</button>` : "";
       return `<li>${escaparHtmlEbd(par.sigla)}: ${rotulo} ${botoes}</li>`;
     }).join("");
     html += `<div class="cartao-perfil" style="margin-bottom:12px;">
@@ -6258,7 +6268,7 @@ async function carregarProjetos() {
       <p>${escaparHtmlEbd(p.texto)}</p>
       <ul>${pareceresHtml}</ul>
       ${p.prazoVencido ? `<p class="subtitle" style="color:var(--cor-perigo,#c0392b);">⚠️ Prazo de 15 dias do parecer vencido (${escaparHtmlEbd(p.diasDesdeProtocolo)} dias desde o protocolo).</p>` : ""}
-      ${authGeral && p.status === "EM_PARECER" && !p.regimeUrgencia ? `<button class="btn-link" onclick="marcarUrgenciaAcao(${p.projetoId})">Marcar regime de urgência</button>` : ""}
+      ${authGeral && p.status === "EM_PARECER" && !p.regimeUrgencia ? `<button class="btn-link" data-on-click="marcarUrgenciaAcao" data-args-click="${argsAttr(p.projetoId)}">Marcar regime de urgência</button>` : ""}
     </div>`;
   });
   container.innerHTML = html;
@@ -6328,7 +6338,7 @@ async function carregarAssentosDiretoria() {
       <td>${a ? escaparHtmlEbd(a.dataInicio) : "-"}</td>
       <td>${a ? (escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo") : "-"}</td>
       <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
-      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoDiretoriaAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" data-on-click="encerrarAssentoDiretoriaAcao" data-args-click="${argsAttr(a.assentoId)}">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6426,7 +6436,7 @@ async function carregarAssentosConselhoFiscal() {
       <td>${a ? escaparHtmlEbd(a.dataInicio) : "-"}</td>
       <td>${a ? (escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo") : "-"}</td>
       <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
-      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoConselhoFiscalAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" data-on-click="encerrarAssentoConselhoFiscalAcao" data-args-click="${argsAttr(a.assentoId)}">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6502,7 +6512,7 @@ async function carregarAssentosCEI() {
       <td>${a ? escaparHtmlEbd(a.dataInicio) : "-"}</td>
       <td>${a ? (escaparHtmlEbd(a.dataTerminoPrevisao) || "sem prazo") : "-"}</td>
       <td>${a ? badgeSituacaoAssento(a.situacaoEfetiva) : "-"}</td>
-      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" onclick="encerrarAssentoCEIAcao(${a.assentoId})">Encerrar</button>` : ""}</td>
+      <td>${a && authGeral ? `<button class="btn-link btn-link-perigo" data-on-click="encerrarAssentoCEIAcao" data-args-click="${argsAttr(a.assentoId)}">Encerrar</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6585,7 +6595,7 @@ async function carregarMedidasCautelares() {
       <td>${restricoes}</td>
       <td>${escaparHtmlEbd(m.dataAplicacao)}</td>
       <td>${relatorio}</td>
-      <td>${authGeral && !m.dataConclusaoRelatorio ? `<button class="btn-link" onclick="concluirRelatorioCautelarAcao(${m.medidaId})">Concluir relatório</button>` : ""}</td>
+      <td>${authGeral && !m.dataConclusaoRelatorio ? `<button class="btn-link" data-on-click="concluirRelatorioCautelarAcao" data-args-click="${argsAttr(m.medidaId)}">Concluir relatório</button>` : ""}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -6649,9 +6659,9 @@ async function carregarConvocacoesPendentes() {
       <strong>${TITULOS_TIPO_SESSAO[c.tipoSessao] || escaparHtmlEbd(c.tipoSessao)}</strong> — prevista para ${escaparHtmlEbd(c.dataPrevista)} (${contagem})<br/>
       <span class="subtitle">Matérias: ${escaparHtmlEbd(materiasRotulo)}${c.reformaNucleoFundamental ? " (Núcleo Fundamental)" : ""}</span><br/>
       <span class="subtitle">Pauta: ${escaparHtmlEbd(c.pauta)}</span><br/>
-      <button class="btn-confirmar" style="width:auto;margin-top:6px;" ${podeIniciar ? "" : "disabled"} onclick="iniciarSessaoConvocadaAcao(${c.sessaoId})">▶️ Iniciar Sessão</button>
-      ${authGeral ? `<button class="btn-link" style="margin-left:10px;" onclick="editarConvocacaoAcao(${c.sessaoId})">✏️ Editar</button>
-      <button class="btn-link btn-link-perigo" onclick="excluirConvocacaoAcao(${c.sessaoId})">🗑️ Cancelar</button>` : ""}
+      <button class="btn-confirmar" style="width:auto;margin-top:6px;" ${podeIniciar ? "" : "disabled"} data-on-click="iniciarSessaoConvocadaAcao" data-args-click="${argsAttr(c.sessaoId)}">▶️ Iniciar Sessão</button>
+      ${authGeral ? `<button class="btn-link" style="margin-left:10px;" data-on-click="editarConvocacaoAcao" data-args-click="${argsAttr(c.sessaoId)}">✏️ Editar</button>
+      <button class="btn-link btn-link-perigo" data-on-click="excluirConvocacaoAcao" data-args-click="${argsAttr(c.sessaoId)}">🗑️ Cancelar</button>` : ""}
     </div>`;
   }).join("");
 }
@@ -6874,10 +6884,10 @@ async function carregarReunioes() {
       <td>${escaparHtmlEbd(r.totalFaltas)}</td>
       <td>${escaparHtmlEbd(r.totalJustificadas)}</td>
       <td>
-        <button class="btn-link" onclick="verFrequencia(${r.sessaoId}, ${argJs(r.descricao)})">Ver frequência</button>
-        ${r.status === "ABERTA" ? `<button class="btn-link" onclick="encerrarReuniaoAcao(${r.sessaoId})">Encerrar</button>` : ""}
-        <button class="btn-link" onclick="baixarMinutaAta(${r.sessaoId})">📝 Minuta (.docx)</button>
-        ${r.orgaoSigla === "ASSEMBLEIA_GERAL" ? `<button class="btn-link" onclick="abrirCredenciamentoAssembleia(${r.sessaoId})">🪪 Credenciamento</button>` : ""}
+        <button class="btn-link" data-on-click="verFrequencia" data-args-click="${argsAttr(r.sessaoId, String(r.descricao ?? ""))}">Ver frequência</button>
+        ${r.status === "ABERTA" ? `<button class="btn-link" data-on-click="encerrarReuniaoAcao" data-args-click="${argsAttr(r.sessaoId)}">Encerrar</button>` : ""}
+        <button class="btn-link" data-on-click="baixarMinutaAta" data-args-click="${argsAttr(r.sessaoId)}">📝 Minuta (.docx)</button>
+        ${r.orgaoSigla === "ASSEMBLEIA_GERAL" ? `<button class="btn-link" data-on-click="abrirCredenciamentoAssembleia" data-args-click="${argsAttr(r.sessaoId)}">🪪 Credenciamento</button>` : ""}
       </td>
     </tr>`;
   });
@@ -7008,9 +7018,9 @@ function renderizarElegiveis() {
 
   document.getElementById("assembleiaInfo").textContent = `${total} elegível(is)`;
   document.getElementById("assembleiaPaginacao").innerHTML = `
-    <button ${paginaAtualElegiveis === 1 ? "disabled" : ""} onclick="mudarPaginaElegiveis(-1)">← Anterior</button>
+    <button ${paginaAtualElegiveis === 1 ? "disabled" : ""} data-on-click="mudarPaginaElegiveis" data-args-click="${argsAttr(-1)}">← Anterior</button>
     <span class="info-pagina">Página ${escaparHtmlEbd(paginaAtualElegiveis)} de ${totalPaginas}</span>
-    <button ${paginaAtualElegiveis === totalPaginas ? "disabled" : ""} onclick="mudarPaginaElegiveis(1)">Próxima →</button>`;
+    <button ${paginaAtualElegiveis === totalPaginas ? "disabled" : ""} data-on-click="mudarPaginaElegiveis" data-args-click="${argsAttr(1)}">Próxima →</button>`;
 }
 
 function mudarPaginaElegiveis(delta) {
@@ -7062,19 +7072,19 @@ async function verFrequencia(sessaoId, descricao) {
   data.frequencia.forEach(item => {
     const podeJustificar = !item.presente && !item.faltaJustificada;
     const botaoCorrigir = item.presente
-      ? `<button class="btn-link" onclick="marcarPresencaManual(${sessaoId}, ${item.membroId}, false)">Marcar falta</button>`
-      : `<button class="btn-link" onclick="marcarPresencaManual(${sessaoId}, ${item.membroId}, true)">Marcar presente</button>`;
+      ? `<button class="btn-link" data-on-click="marcarPresencaManual" data-args-click="${argsAttr(sessaoId, item.membroId, false)}">Marcar falta</button>`
+      : `<button class="btn-link" data-on-click="marcarPresencaManual" data-args-click="${argsAttr(sessaoId, item.membroId, true)}">Marcar presente</button>`;
     const pendenteHtml = item.justificativaPendente
       ? `<div class="tag-pendente">Pedido: "${escaparHtmlEbd(item.justificativaPendente)}"</div>
-         <button class="btn-link btn-link-sucesso" onclick="aprovarJustificativaPendente(${sessaoId}, ${item.membroId}, ${argJs(item.justificativaPendente)})">Aprovar</button>
-         <button class="btn-link btn-link-perigo" onclick="rejeitarJustificativaAcao(${sessaoId}, ${item.membroId})">Rejeitar</button>`
+         <button class="btn-link btn-link-sucesso" data-on-click="aprovarJustificativaPendente" data-args-click="${argsAttr(sessaoId, item.membroId, String(item.justificativaPendente ?? ""))}">Aprovar</button>
+         <button class="btn-link btn-link-perigo" data-on-click="rejeitarJustificativaAcao" data-args-click="${argsAttr(sessaoId, item.membroId)}">Rejeitar</button>`
       : "";
     html += `<tr>
       <td>${item.membroId}</td>
       <td>${escaparHtmlEbd(item.nome)}</td>
       <td>${escaparHtmlEbd(item.funcao) || "-"}</td>
       <td>${statusFrequencia(item)}</td>
-      <td>${podeJustificar ? `<button class="btn-link" onclick="justificarFalta(${sessaoId}, ${item.membroId})">Justificar</button>` : ""} ${botaoCorrigir}${pendenteHtml}</td>
+      <td>${podeJustificar ? `<button class="btn-link" data-on-click="justificarFalta" data-args-click="${argsAttr(sessaoId, item.membroId)}">Justificar</button>` : ""} ${botaoCorrigir}${pendenteHtml}</td>
     </tr>`;
   });
 
@@ -7273,7 +7283,7 @@ async function salvarPessoa() {
     limparFormPessoa(); // limpa inclusive resultadoPessoa/linkPerfilAposCadastro — restaura os dois abaixo
     msg.textContent = mensagemSucesso;
     document.getElementById("linkPerfilAposCadastro").innerHTML =
-      `<button class="btn-link" onclick="abrirPerfilPessoa(${idSalvo})">→ Ver perfil desta pessoa</button>`;
+      `<button class="btn-link" data-on-click="abrirPerfilPessoa" data-args-click="${argsAttr(idSalvo)}">→ Ver perfil desta pessoa</button>`;
   }
 }
 
@@ -7451,7 +7461,7 @@ function renderizarDadosPerfil(membroId) {
     <div class="cartao-perfil" style="margin-top:12px;">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Acesso ao Meu Painel (PIN)</h4>
       <p class="subtitle">O membro entra com a matrícula e um PIN de 4 números que ele mesmo cria, confirmando o e-mail cadastrado. Para quem não tem e-mail (ou perdeu o acesso a ele), gere um PIN provisório e entregue pessoalmente.</p>
-      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="gerarPinProvisorioAcao(${Number(membroId)})">🔐 Gerar PIN provisório</button>
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="gerarPinProvisorioAcao" data-args-click="${argsAttr(Number(membroId))}">🔐 Gerar PIN provisório</button>
       <div id="resultadoPinProvisorio"></div>
     </div>` : ""}`;
   carregarHistoricoSiteMembro(membroId);
@@ -7651,6 +7661,11 @@ async function prepararImportacaoPessoas() {
   abrirModalRevisaoImportacaoPessoas();
 }
 
+// O antigo onchange="importacaoPessoasLinhas[i].decisao = this.value" (CSP forte: código não fica mais no HTML): guarda a decisão escolhida na linha i.
+function definirDecisaoImportacao(indice, valor) {
+  importacaoPessoasLinhas[indice].decisao = valor;
+}
+
 function abrirModalRevisaoImportacaoPessoas() {
   const caixa = document.getElementById("modalCaixa");
   const linhasHtml = importacaoPessoasLinhas.map((l, i) => {
@@ -7659,7 +7674,7 @@ function abrirModalRevisaoImportacaoPessoas() {
         <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${escaparHtmlEbd(l.situacaoMembro) || "-"}</td>
         <td>Matrícula já existe: <strong>${escaparHtmlEbd(l.conflito.nome)}</strong></td>
         <td>
-          <select onchange="importacaoPessoasLinhas[${i}].decisao = this.value">
+          <select data-on-change="definirDecisaoImportacao" data-args-change="${argsAttr(i, ARG.valor)}">
             <option value="MANTER" ${l.decisao === "MANTER" ? "selected" : ""}>Manter o que já está (ignorar)</option>
             <option value="ATUALIZAR" ${l.decisao === "ATUALIZAR" ? "selected" : ""}>Atualizar pessoa existente</option>
           </select>
@@ -7671,7 +7686,7 @@ function abrirModalRevisaoImportacaoPessoas() {
         <td>${l.membroId}</td><td>${escaparHtmlEbd(l.nome)}</td><td>${escaparHtmlEbd(l.situacaoMembro) || "-"}</td>
         <td>Nome ${Math.round(l.similaridade * 100)}% parecido com <strong>${escaparHtmlEbd(l.conflito.nome)}</strong> (matrícula ${l.conflito.membroId})</td>
         <td>
-          <select onchange="importacaoPessoasLinhas[${i}].decisao = this.value">
+          <select data-on-change="definirDecisaoImportacao" data-args-change="${argsAttr(i, ARG.valor)}">
             <option value="IGNORAR" ${l.decisao === "IGNORAR" ? "selected" : ""}>Ignorar esta linha</option>
             <option value="IMPORTAR" ${l.decisao === "IMPORTAR" ? "selected" : ""}>Importar mesmo assim (é pessoa nova)</option>
           </select>
@@ -7849,7 +7864,7 @@ function renderizarPessoas() {
       <td>${badgeStatusPessoa(p.status)}</td>
       <td>${escaparHtmlEbd(p.situacaoMembro) || "-"}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="abrirPerfilPessoa(${p.membroId})">👁️ Ver Perfil</button>
+        <button class="btn-link" data-on-click="abrirPerfilPessoa" data-args-click="${argsAttr(p.membroId)}">👁️ Ver Perfil</button>
       </td>
     </tr>`;
   });
@@ -7859,9 +7874,9 @@ function renderizarPessoas() {
 
   document.getElementById("pessoasInfo").textContent = `${total} pessoa(s)`;
   document.getElementById("pessoasPaginacao").innerHTML = `
-    <button ${paginaAtualPessoas === 1 ? "disabled" : ""} onclick="mudarPaginaPessoas(-1)">← Anterior</button>
+    <button ${paginaAtualPessoas === 1 ? "disabled" : ""} data-on-click="mudarPaginaPessoas" data-args-click="${argsAttr(-1)}">← Anterior</button>
     <span class="info-pagina">Página ${escaparHtmlEbd(paginaAtualPessoas)} de ${totalPaginas}</span>
-    <button ${paginaAtualPessoas === totalPaginas ? "disabled" : ""} onclick="mudarPaginaPessoas(1)">Próxima →</button>`;
+    <button ${paginaAtualPessoas === totalPaginas ? "disabled" : ""} data-on-click="mudarPaginaPessoas" data-args-click="${argsAttr(1)}">Próxima →</button>`;
 }
 
 function mudarPaginaPessoas(delta) {
@@ -7937,9 +7952,9 @@ async function carregarMinhasCartas() {
       <td>${escaparHtmlEbd(c.dataPedido) || "-"}</td>
       <td>${escaparHtmlEbd(c.dataValidade) || "-"}</td>
       <td class="acoes-inline">
-        ${c.tipo === "MUDANCA" && c.status === "SOLICITADA" ? `<button class="btn-link" onclick="confirmarCartaPendente()">Confirmar</button>` : ""}
-        ${c.status !== "SOLICITADA" ? `<button class="btn-link" onclick="imprimirMinhaCarta(${c.cartaId})">🖨️ Imprimir</button>` : ""}
-        ${["EMITIDA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" onclick="baixarPdfCarta(${c.cartaId}, ${c.membroId})">📄 Baixar PDF</button>` : ""}
+        ${c.tipo === "MUDANCA" && c.status === "SOLICITADA" ? `<button class="btn-link" data-on-click="confirmarCartaPendente">Confirmar</button>` : ""}
+        ${c.status !== "SOLICITADA" ? `<button class="btn-link" data-on-click="imprimirMinhaCarta" data-args-click="${argsAttr(c.cartaId)}">🖨️ Imprimir</button>` : ""}
+        ${["EMITIDA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" data-on-click="baixarPdfCarta" data-args-click="${argsAttr(c.cartaId, c.membroId)}">📄 Baixar PDF</button>` : ""}
       </td>
     </tr>`).join("") + "</tbody></table>";
 }
@@ -8016,10 +8031,10 @@ function renderizarCartas() {
       <td>${escaparHtmlEbd(c.dataPedido) || "-"}</td>
       <td>${escaparHtmlEbd(c.dataValidade) || "-"}</td>
       <td class="acoes-inline">
-        ${["SOLICITADA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" onclick="emitirCarta(${c.cartaId})">Emitir</button>` : ""}
-        ${["SOLICITADA", "CONFIRMADA", "EMITIDA"].includes(c.status) ? `<button class="btn-link btn-link-perigo" onclick="cancelarCarta(${c.cartaId})">Cancelar</button>` : ""}
-        <button class="btn-link" onclick="imprimirCarta(${c.cartaId})">🖨️ Imprimir</button>
-        ${["EMITIDA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" onclick="baixarPdfCarta(${c.cartaId}, ${c.membroId})">📄 Baixar PDF</button>` : ""}
+        ${["SOLICITADA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" data-on-click="emitirCarta" data-args-click="${argsAttr(c.cartaId)}">Emitir</button>` : ""}
+        ${["SOLICITADA", "CONFIRMADA", "EMITIDA"].includes(c.status) ? `<button class="btn-link btn-link-perigo" data-on-click="cancelarCarta" data-args-click="${argsAttr(c.cartaId)}">Cancelar</button>` : ""}
+        <button class="btn-link" data-on-click="imprimirCarta" data-args-click="${argsAttr(c.cartaId)}">🖨️ Imprimir</button>
+        ${["EMITIDA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" data-on-click="baixarPdfCarta" data-args-click="${argsAttr(c.cartaId, c.membroId)}">📄 Baixar PDF</button>` : ""}
       </td>
     </tr>`;
   });
@@ -8173,7 +8188,7 @@ async function carregarVinculosFamiliares(membroId) {
     html += `<tr>
       <td>${escaparHtmlEbd(v.rotulo)}</td>
       <td>${escaparHtmlEbd(v.outraPessoaNome)} (${v.outraPessoaId})${v.outraPessoaEhResponsavel ? ' <span class="badge-status badge-ativo">Responsável Legal</span>' : ""}</td>
-      <td class="acoes-inline"><button class="btn-link btn-link-perigo" onclick="removerVinculoFamiliar(${v.vinculoId})">Remover</button></td>
+      <td class="acoes-inline"><button class="btn-link btn-link-perigo" data-on-click="removerVinculoFamiliar" data-args-click="${argsAttr(v.vinculoId)}">Remover</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -8238,7 +8253,7 @@ async function carregarHistoricoMembro(membroId) {
     return `<li>
       <strong>${escaparHtmlEbd(e.data) || "data não informada"}</strong> — ${escaparHtmlEbd(e.titulo)}
       ${e.descricao ? `<br><span class="subtitle">${escaparHtmlEbd(e.descricao)}</span>` : ""}
-      ${podeCorrigir ? ` <button class="btn-link" onclick="corrigirMarcoMembroAcao(${e.marcoId})">Corrigir</button>` : ""}
+      ${podeCorrigir ? ` <button class="btn-link" data-on-click="corrigirMarcoMembroAcao" data-args-click="${argsAttr(e.marcoId)}">Corrigir</button>` : ""}
     </li>`;
   }).join("") + "</ul>";
 }
@@ -8482,7 +8497,7 @@ async function carregarCasamentos(membroId) {
       <td>${escaparHtmlEbd(c.celebrante) || "-"}</td>
       <td>${escaparHtmlEbd(c.dataCasamento) || "-"}</td>
       <td>${c.registradoCartorio ? "✅ Sim" : "Não"}</td>
-      <td><button class="btn-link btn-link-perigo" onclick="excluirCasamentoAcao(${c.casamentoId})">Excluir</button></td>
+      <td><button class="btn-link btn-link-perigo" data-on-click="excluirCasamentoAcao" data-args-click="${argsAttr(c.casamentoId)}">Excluir</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -8557,7 +8572,7 @@ async function carregarApresentacoesCrianca(membroId) {
       <td>${aptidaoTexto}</td>
       <td>
         ${a.geraCertificado ? `<a class="btn-link" href="${API_BASE}/apresentacoes-crianca/${a.apresentacaoId}/pdf" target="_blank">📄 Certificado</a>` : ""}
-        <button class="btn-link btn-link-perigo" onclick="excluirApresentacaoCriancaAcao(${a.apresentacaoId})">Excluir</button>
+        <button class="btn-link btn-link-perigo" data-on-click="excluirApresentacaoCriancaAcao" data-args-click="${argsAttr(a.apresentacaoId)}">Excluir</button>
       </td>
     </tr>`;
   });
@@ -8632,7 +8647,7 @@ async function carregarLicencasCandidatura(membroId) {
       <td>${escaparHtmlEbd(l.dataPleito) || "-"}</td>
       <td>${escaparHtmlEbd(l.dataInicioLicenca) || "-"}</td>
       <td>${ROTULO_STATUS_LICENCA[l.status] || escaparHtmlEbd(l.status)}</td>
-      <td>${authGeral && l.status === "EM_LICENCA" ? `<button class="btn-link" onclick="registrarRetornoLicencaAcao(${l.licencaId})">Registrar retorno</button>` : "-"}</td>
+      <td>${authGeral && l.status === "EM_LICENCA" ? `<button class="btn-link" data-on-click="registrarRetornoLicencaAcao" data-args-click="${argsAttr(l.licencaId)}">Registrar retorno</button>` : "-"}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -8720,7 +8735,7 @@ async function carregarFilaAprovacoes() {
     <div class="cartao-perfil" style="margin-bottom:16px;">
       <div class="barra-lista" style="justify-content:space-between;">
         <h4 style="margin:0; color: var(--cor-primaria);">${escaparHtmlEbd(s.nome)} (matrícula ${s.membroId}) — ${new Date(s.dataSolicitacao).toLocaleDateString("pt-BR")}</h4>
-        <button class="btn-confirmar" style="width:auto;margin:0;" onclick="aprovarTodaSolicitacaoAcao(${s.solicitacaoId})">✅ Aprovar tudo</button>
+        <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="aprovarTodaSolicitacaoAcao" data-args-click="${argsAttr(s.solicitacaoId)}">✅ Aprovar tudo</button>
       </div>
       <div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr>
         <th>Campo</th><th>Valor Atual</th><th>Valor Proposto</th><th></th>
@@ -8730,8 +8745,8 @@ async function carregarFilaAprovacoes() {
           <td>${escaparHtmlEbd(c.valorAnterior) || "-"}</td>
           <td><strong>${escaparHtmlEbd(c.valorProposto)}</strong></td>
           <td class="acoes-inline">
-            <button class="btn-link" onclick="decidirCampoFilaAcao(${s.solicitacaoId}, ${c.campoId}, 'APROVADO')">Aprovar</button>
-            <button class="btn-link btn-link-perigo" onclick="decidirCampoFilaAcao(${s.solicitacaoId}, ${c.campoId}, 'REJEITADO')">Rejeitar</button>
+            <button class="btn-link" data-on-click="decidirCampoFilaAcao" data-args-click="${argsAttr(s.solicitacaoId, c.campoId, "APROVADO")}">Aprovar</button>
+            <button class="btn-link btn-link-perigo" data-on-click="decidirCampoFilaAcao" data-args-click="${argsAttr(s.solicitacaoId, c.campoId, "REJEITADO")}">Rejeitar</button>
           </td>
         </tr>`).join("")}
       </tbody></table></div>
@@ -8803,11 +8818,11 @@ async function carregarCongregacoesDetalhe() {
       <td>${escaparHtmlEbd(c.dirigenteAtual) || "—"}</td>
       <td>${c.ativa ? "Ativa" : "Inativa"}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarCongregacaoDetalhe(${c.congregacaoId})">Editar</button>
+        <button class="btn-link" data-on-click="editarCongregacaoDetalhe" data-args-click="${argsAttr(c.congregacaoId)}">Editar</button>
         ${c.ativa
-          ? `<button class="btn-link" onclick="desativarCongregacaoDetalheAcao(${c.congregacaoId})">Desativar</button>`
-          : `<button class="btn-link" onclick="reativarCongregacaoDetalheAcao(${c.congregacaoId})">Reativar</button>`}
-        <button class="btn-link btn-link-perigo" onclick="excluirCongregacaoDetalheAcao(${c.congregacaoId})">Excluir</button>
+          ? `<button class="btn-link" data-on-click="desativarCongregacaoDetalheAcao" data-args-click="${argsAttr(c.congregacaoId)}">Desativar</button>`
+          : `<button class="btn-link" data-on-click="reativarCongregacaoDetalheAcao" data-args-click="${argsAttr(c.congregacaoId)}">Reativar</button>`}
+        <button class="btn-link btn-link-perigo" data-on-click="excluirCongregacaoDetalheAcao" data-args-click="${argsAttr(c.congregacaoId)}">Excluir</button>
       </td>
     </tr>`;
   });
@@ -8994,8 +9009,8 @@ async function carregarPapeis() {
       <td>${escaparHtmlEbd(p.nivel)}</td>
       <td>${escaparHtmlEbd((p.permissoes || []).join(", ")) || "-"}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarPapel(${p.papelId})">Editar</button>
-        <button class="btn-link btn-link-perigo" onclick="excluirCatalogo('papeis', '${p.papelId}')">Excluir</button>
+        <button class="btn-link" data-on-click="editarPapel" data-args-click="${argsAttr(p.papelId)}">Editar</button>
+        <button class="btn-link btn-link-perigo" data-on-click="excluirCatalogo" data-args-click="${argsAttr("papeis", String(p.papelId))}">Excluir</button>
       </td>
     </tr>`;
   });
@@ -9111,10 +9126,10 @@ async function carregarPermissoes() {
       <td>${escaparHtmlEbd(onde)}${aviso}</td>
       <td>${escaparHtmlEbd((l.permissoes || []).join(", ") || "-")}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarPermissao(${Number(l.membroId)})">Editar</button>
-        <button class="btn-link" onclick="redefinirSenhaLideranca(${Number(l.membroId)})">🔑 Redefinir senha</button>
-        <button class="btn-link btn-link-perigo" onclick="derrubarAcessosPessoa(${Number(l.membroId)})">⛔ Derrubar acessos desta pessoa agora</button>
-        <button class="btn-link btn-link-perigo" onclick="removerPermissao(${Number(l.membroId)})">Remover</button>
+        <button class="btn-link" data-on-click="editarPermissao" data-args-click="${argsAttr(Number(l.membroId))}">Editar</button>
+        <button class="btn-link" data-on-click="redefinirSenhaLideranca" data-args-click="${argsAttr(Number(l.membroId))}">🔑 Redefinir senha</button>
+        <button class="btn-link btn-link-perigo" data-on-click="derrubarAcessosPessoa" data-args-click="${argsAttr(Number(l.membroId))}">⛔ Derrubar acessos desta pessoa agora</button>
+        <button class="btn-link btn-link-perigo" data-on-click="removerPermissao" data-args-click="${argsAttr(Number(l.membroId))}">Remover</button>
       </td>
     </tr>`;
   });
@@ -9139,10 +9154,10 @@ async function carregarNotificacaoRegras() {
       <td>${escaparHtmlEbd(r.titulo)}<br><small style="color:var(--cor-texto-suave);">${escaparHtmlEbd(r.chave)}</small></td>
       <td>${escaparHtmlEbd(r.categoria)}</td>
       <td>${escaparHtmlEbd(alvo)}</td>
-      <td><input type="checkbox" ${r.ativa ? "checked" : ""} onchange="atualizarNotificacaoRegra(${argJs(r.chave)}, { ativa: this.checked })" /></td>
-      <td><input type="checkbox" ${r.canalEmail ? "checked" : ""} onchange="atualizarNotificacaoRegra(${argJs(r.chave)}, { canalEmail: this.checked })" /></td>
+      <td><input type="checkbox" ${r.ativa ? "checked" : ""} data-on-change="atualizarNotificacaoRegra" data-args-change="${argsAttr(String(r.chave ?? ""), { ativa: ARG.marcado })}" /></td>
+      <td><input type="checkbox" ${r.canalEmail ? "checked" : ""} data-on-change="atualizarNotificacaoRegra" data-args-change="${argsAttr(String(r.chave ?? ""), { canalEmail: ARG.marcado })}" /></td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarTituloNotificacaoRegra(${argJs(r.chave)}, ${argJs(r.titulo)})">Editar título</button>
+        <button class="btn-link" data-on-click="editarTituloNotificacaoRegra" data-args-click="${argsAttr(String(r.chave ?? ""), String(r.titulo ?? ""))}">Editar título</button>
       </td>
     </tr>`;
   });
@@ -9319,8 +9334,8 @@ async function carregarConsagracoes() {
       <td>${ROTULO_STATUS_CONSAGRACAO[c.status] || escaparHtmlEbd(c.status)}</td>
       <td>${escaparHtmlEbd(c.dataProtocolo)}</td>
       <td>
-        ${authGeral ? `<button class="btn-link" onclick="avancarConsagracaoAcao(${argJs(c.consagracaoId)})">Avançar</button>
-        <button class="btn-link btn-link-perigo" onclick="reprovarConsagracaoAcao(${argJs(c.consagracaoId)})">Reprovar</button>` : "-"}
+        ${authGeral ? `<button class="btn-link" data-on-click="avancarConsagracaoAcao" data-args-click="${argsAttr(String(c.consagracaoId ?? ""))}">Avançar</button>
+        <button class="btn-link btn-link-perigo" data-on-click="reprovarConsagracaoAcao" data-args-click="${argsAttr(String(c.consagracaoId ?? ""))}">Reprovar</button>` : "-"}
       </td>
     </tr>`;
   });
@@ -9374,9 +9389,9 @@ async function carregarTurmasBatismo() {
       <td>${escaparHtmlEbd(t.totalCandidatos)}</td>
       <td>${ROTULO_STATUS_TURMA_BATISMO[t.status] || escaparHtmlEbd(t.status)}</td>
       <td class="acoes-inline">
-        ${authGeral && t.status === "ABERTA" && !t.autorizacaoMesa ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'AUTORIZAR_MESA')">Autorizar Mesa</button>` : ""}
-        ${t.status === "ABERTA" ? `${authGeral ? `<button class="btn-link" onclick="acaoTurmaBatismo(${t.turmaId}, 'REALIZAR')">Realizar</button>` : ""}
-        <button class="btn-link btn-link-perigo" onclick="acaoTurmaBatismo(${t.turmaId}, 'CANCELAR')">Cancelar</button>` : ""}
+        ${authGeral && t.status === "ABERTA" && !t.autorizacaoMesa ? `<button class="btn-link" data-on-click="acaoTurmaBatismo" data-args-click="${argsAttr(t.turmaId, "AUTORIZAR_MESA")}">Autorizar Mesa</button>` : ""}
+        ${t.status === "ABERTA" ? `${authGeral ? `<button class="btn-link" data-on-click="acaoTurmaBatismo" data-args-click="${argsAttr(t.turmaId, "REALIZAR")}">Realizar</button>` : ""}
+        <button class="btn-link btn-link-perigo" data-on-click="acaoTurmaBatismo" data-args-click="${argsAttr(t.turmaId, "CANCELAR")}">Cancelar</button>` : ""}
       </td>
     </tr>
   `).join("") + "</tbody></table>";
@@ -9425,15 +9440,15 @@ async function carregarCandidatosBatismo() {
       <td>${escaparHtmlEbd(c.nome)}</td>
       <td>${badgeAptidaoBatismo(c.aptidao.itens.idadeMinima)}</td>
       <td>${badgeAptidaoBatismo(c.aptidao.itens.certidaoCivil)}</td>
-      <td>${badgeAptidaoBatismo(c.aptidao.itens.parecerVidaPregressa)} <button class="btn-link" onclick="parecerCandidatoBatismoAcao(${c.candidatoId})">Dar parecer</button></td>
-      <td>${badgeAptidaoBatismo(c.aptidao.itens.discipulado)} <button class="btn-link" onclick="alternarDiscipuladoBatismoAcao(${c.candidatoId}, ${!c.discipuladoConcluidoManual})">${c.discipuladoConcluidoManual ? "Desmarcar" : "Marcar concluído"}</button></td>
-      <td>${c.aceiteTermoAssinadoId ? "✅" : `<button class="btn-link" onclick="acaoCandidatoBatismo(${c.candidatoId}, 'ACEITAR_ESTATUTO')">Registrar aceite</button>`}</td>
+      <td>${badgeAptidaoBatismo(c.aptidao.itens.parecerVidaPregressa)} <button class="btn-link" data-on-click="parecerCandidatoBatismoAcao" data-args-click="${argsAttr(c.candidatoId)}">Dar parecer</button></td>
+      <td>${badgeAptidaoBatismo(c.aptidao.itens.discipulado)} <button class="btn-link" data-on-click="alternarDiscipuladoBatismoAcao" data-args-click="${argsAttr(c.candidatoId, !c.discipuladoConcluidoManual)}">${c.discipuladoConcluidoManual ? "Desmarcar" : "Marcar concluído"}</button></td>
+      <td>${c.aceiteTermoAssinadoId ? "✅" : `<button class="btn-link" data-on-click="acaoCandidatoBatismo" data-args-click="${argsAttr(c.candidatoId, "ACEITAR_ESTATUTO")}">Registrar aceite</button>`}</td>
       <td>${escaparHtmlEbd(c.status)}</td>
       <td class="acoes-inline">
-        ${c.status === "AGUARDANDO_TURMA" ? `<button class="btn-link" onclick="atribuirTurmaBatismoAcao(${c.candidatoId})">Atribuir turma</button>` : ""}
+        ${c.status === "AGUARDANDO_TURMA" ? `<button class="btn-link" data-on-click="atribuirTurmaBatismoAcao" data-args-click="${argsAttr(c.candidatoId)}">Atribuir turma</button>` : ""}
         ${c.turmaId && c.status === "AGUARDANDO_TURMA" ? `
-          <button class="btn-link" onclick="acaoCandidatoBatismo(${c.candidatoId}, 'APROVAR')">Aprovar</button>
-          <button class="btn-link btn-link-perigo" onclick="reprovarCandidatoBatismoAcao(${c.candidatoId})">Reprovar</button>
+          <button class="btn-link" data-on-click="acaoCandidatoBatismo" data-args-click="${argsAttr(c.candidatoId, "APROVAR")}">Aprovar</button>
+          <button class="btn-link btn-link-perigo" data-on-click="reprovarCandidatoBatismoAcao" data-args-click="${argsAttr(c.candidatoId)}">Reprovar</button>
         ` : ""}
       </td>
     </tr>
@@ -9507,11 +9522,11 @@ function adicionarBlocoPerguntaEnquete() {
   div.innerHTML = `
     <div class="barra-lista">
       <input type="text" id="perguntaTitulo_${id}" placeholder="Título da pergunta" style="min-width:220px;" />
-      <select id="perguntaTipo_${id}" onchange="onChangeTipoPerguntaEnquete(${id})">
+      <select id="perguntaTipo_${id}" data-on-change="onChangeTipoPerguntaEnquete" data-args-change="${argsAttr(id)}">
         <option value="OPCOES">Tipo: Opções</option>
         <option value="TEXTO_LIVRE">Tipo: Texto livre</option>
       </select>
-      <button type="button" class="btn-link btn-link-perigo" onclick="removerBlocoPerguntaEnquete(${id})">Remover</button>
+      <button type="button" class="btn-link btn-link-perigo" data-on-click="removerBlocoPerguntaEnquete" data-args-click="${argsAttr(id)}">Remover</button>
     </div>
     <div class="input-group" id="grupoOpcoesPergunta_${id}">
       <textarea id="perguntaOpcoes_${id}" rows="2" placeholder="Uma opção por linha (mínimo 2)"></textarea>
@@ -9646,8 +9661,8 @@ async function carregarEnquetes() {
       ${resultadoHtml}
       ${e.status === "ABERTA" ? `
         <div class="barra-lista">
-          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="votarEnqueteAcao(${e.enqueteId})">Enviar respostas</button>
-          <button class="btn-link btn-link-perigo" onclick="encerrarEnqueteAcao(${e.enqueteId})">Encerrar</button>
+          <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="votarEnqueteAcao" data-args-click="${argsAttr(e.enqueteId)}">Enviar respostas</button>
+          <button class="btn-link btn-link-perigo" data-on-click="encerrarEnqueteAcao" data-args-click="${argsAttr(e.enqueteId)}">Encerrar</button>
         </div>` : ""}
     </div>`;
   });
@@ -9776,7 +9791,7 @@ async function carregarDocumentos() {
       .filter(v => v !== "PUBLICO" || authGeral || d.visibilidade === "PUBLICO")
       .map(v => `<option value="${escaparHtmlEbd(v)}"${v === d.visibilidade ? " selected" : ""}>${ROTULO_VISIBILIDADE_DOCUMENTO[v]}</option>`).join("");
     const quemVe = podeMexer
-      ? `<select onchange="alterarVisibilidadeDocumentoAcao(${Number(d.documentoId)}, this.value)">${opcoesVisibilidade}</select>`
+      ? `<select data-on-change="alterarVisibilidadeDocumentoAcao" data-args-change="${argsAttr(Number(d.documentoId), ARG.valor)}">${opcoesVisibilidade}</select>`
       : (ROTULO_VISIBILIDADE_DOCUMENTO[d.visibilidade] || "-");
     html += `<tr>
       <td>${escaparHtmlEbd(ROTULO_TIPO_DOCUMENTO[d.tipo] || d.tipo)}</td>
@@ -9789,7 +9804,7 @@ async function carregarDocumentos() {
       <td>${badgeStatusRetencao(d.statusRetencao)}</td>
       <td class="acoes-inline">
         <a class="btn-link" href="${urlSegura(d.urlAssinada)}" target="_blank" rel="noopener">Abrir</a>
-        ${podeMexer ? `<button class="btn-link btn-link-perigo" onclick="excluirDocumentoAcao(${Number(d.documentoId)})">Excluir</button>` : ""}
+        ${podeMexer ? `<button class="btn-link btn-link-perigo" data-on-click="excluirDocumentoAcao" data-args-click="${argsAttr(Number(d.documentoId))}">Excluir</button>` : ""}
       </td>
     </tr>`;
   });
@@ -9905,9 +9920,9 @@ async function carregarPoliticasRetencao(idContainer) {
       <td>${escaparHtmlEbd(p.categoria)}</td>
       <td style="max-width:360px;">${escaparHtmlEbd(p.baseLegal)}</td>
       <td>${p.diasRetencao != null ? escaparHtmlEbd(p.diasRetencao) : "Indeterminado"}</td>
-      <td><input type="checkbox" ${p.ativo ? "checked" : ""} onchange="atualizarPoliticaRetencao(${p.politicaId}, { ativo: this.checked })" /></td>
+      <td><input type="checkbox" ${p.ativo ? "checked" : ""} data-on-change="atualizarPoliticaRetencao" data-args-change="${argsAttr(p.politicaId, { ativo: ARG.marcado })}" /></td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="editarDiasRetencaoAcao(${p.politicaId}, ${p.diasRetencao != null ? Number(p.diasRetencao) : "null"})">Editar dias</button>
+        <button class="btn-link" data-on-click="editarDiasRetencaoAcao" data-args-click="${argsAttr(p.politicaId, (p.diasRetencao != null) ? Number(p.diasRetencao) : null)}">Editar dias</button>
       </td>
     </tr>`;
   });
@@ -10078,16 +10093,16 @@ async function carregarProcessosDisciplinares() {
       <td>${badgeSituacaoDisciplina(p.situacaoEfetiva)}</td>
       <td>${escaparHtmlEbd(p.diasRestantes ?? "-")}</td>
       <td class="acoes-inline">
-        ${p.status !== "JULGADO" ? `<button class="btn-link" onclick="designarRelatorAcao(${p.processoId})">Relator</button>` : ""}
-        ${p.status !== "JULGADO" && !p.dataCitacao ? `<button class="btn-link" onclick="citarAcao(${p.processoId})">Citar</button>` : ""}
-        ${podeAfastar ? `<button class="btn-link" onclick="afastarCautelarAcao(${p.processoId})">Afastar</button>` : ""}
-        ${p.status !== "JULGADO" && p.dataCitacao && !p.defesaProtocolada ? `<button class="btn-link" onclick="registrarDefesaAcao(${p.processoId})">Registrar Defesa</button>` : ""}
-        ${p.status !== "JULGADO" ? `<button class="btn-link" onclick="designarDefensorAcao(${p.processoId})">Defensor</button>` : ""}
-        ${podeJulgar ? `<button class="btn-link" onclick="julgarProcessoAcao(${p.processoId})">Julgar</button>` : ""}
-        ${podeAjustarPrazo ? `<button class="btn-link" onclick="ajustarPrazoProcessoAcao(${p.processoId})">Ajustar Prazo</button>` : ""}
-        ${podeRegistrarProva ? `<button class="btn-link" onclick="registrarProvaReintegracaoAcao(${p.processoId})">Prova de Reintegração</button>` : ""}
-        ${podeRecorrer ? `<button class="btn-link" onclick="recorrerAcao(${p.processoId})">Recorrer</button>` : ""}
-        ${podeHomologar ? `<button class="btn-link" onclick="homologarExclusaoAcao(${p.processoId})">Homologar</button>` : ""}
+        ${p.status !== "JULGADO" ? `<button class="btn-link" data-on-click="designarRelatorAcao" data-args-click="${argsAttr(p.processoId)}">Relator</button>` : ""}
+        ${p.status !== "JULGADO" && !p.dataCitacao ? `<button class="btn-link" data-on-click="citarAcao" data-args-click="${argsAttr(p.processoId)}">Citar</button>` : ""}
+        ${podeAfastar ? `<button class="btn-link" data-on-click="afastarCautelarAcao" data-args-click="${argsAttr(p.processoId)}">Afastar</button>` : ""}
+        ${p.status !== "JULGADO" && p.dataCitacao && !p.defesaProtocolada ? `<button class="btn-link" data-on-click="registrarDefesaAcao" data-args-click="${argsAttr(p.processoId)}">Registrar Defesa</button>` : ""}
+        ${p.status !== "JULGADO" ? `<button class="btn-link" data-on-click="designarDefensorAcao" data-args-click="${argsAttr(p.processoId)}">Defensor</button>` : ""}
+        ${podeJulgar ? `<button class="btn-link" data-on-click="julgarProcessoAcao" data-args-click="${argsAttr(p.processoId)}">Julgar</button>` : ""}
+        ${podeAjustarPrazo ? `<button class="btn-link" data-on-click="ajustarPrazoProcessoAcao" data-args-click="${argsAttr(p.processoId)}">Ajustar Prazo</button>` : ""}
+        ${podeRegistrarProva ? `<button class="btn-link" data-on-click="registrarProvaReintegracaoAcao" data-args-click="${argsAttr(p.processoId)}">Prova de Reintegração</button>` : ""}
+        ${podeRecorrer ? `<button class="btn-link" data-on-click="recorrerAcao" data-args-click="${argsAttr(p.processoId)}">Recorrer</button>` : ""}
+        ${podeHomologar ? `<button class="btn-link" data-on-click="homologarExclusaoAcao" data-args-click="${argsAttr(p.processoId)}">Homologar</button>` : ""}
       </td>
     </tr>`;
   });
@@ -10375,7 +10390,7 @@ async function carregarRadarAbandono() {
       <td>${escaparHtmlEbd(m.congregacao) || "-"}</td>
       <td>${escaparHtmlEbd(m.dataAfastamento) || "-"}</td>
       <td>${escaparHtmlEbd(m.diasAfastado ?? "-")}</td>
-      <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" onclick="abrirProcedimentoAbandonoAcao(${m.membroId}, 'MATERIAL')">Abrir Procedimento</button>` : "aguardando 90 dias"}</td>
+      <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" data-on-click="abrirProcedimentoAbandonoAcao" data-args-click="${argsAttr(m.membroId, "MATERIAL")}">Abrir Procedimento</button>` : "aguardando 90 dias"}</td>
     </tr>`).join("") + "</tbody></table>";
 }
 
@@ -10453,10 +10468,10 @@ async function carregarProcedimentosAbandono() {
       <td>${p.abertoPorNome ? escaparHtmlEbd(p.abertoPorNome) : "-"}</td>
       <td>${p.recursoInterposto ? `${escaparHtmlEbd(p.resultadoRecurso) || "PENDENTE"} (${escaparHtmlEbd(p.dataRecurso) || "-"})` : "-"}</td>
       <td class="acoes-inline">
-        ${authGeral && p.status === "NOTIFICADO" && !p.abertoPorMim ? `<button class="btn-link" onclick="homologarProcedimentoAbandonoAcao(${p.procedimentoId})">Homologar</button>` : ""}
+        ${authGeral && p.status === "NOTIFICADO" && !p.abertoPorMim ? `<button class="btn-link" data-on-click="homologarProcedimentoAbandonoAcao" data-args-click="${argsAttr(p.procedimentoId)}">Homologar</button>` : ""}
         ${authGeral && p.status === "NOTIFICADO" && p.abertoPorMim ? `<span class="subtitle" title="Regra dos dois olhos">homologação: outra pessoa</span>` : ""}
-        ${p.status === "NOTIFICADO" ? `<button class="btn-link" onclick="arquivarProcedimentoAbandonoAcao(${p.procedimentoId})">Arquivar</button>` : ""}
-        ${authGeral && p.status === "HOMOLOGADO" && !p.recursoInterposto ? `<button class="btn-link" onclick="registrarRecursoAbandonoAcao(${p.procedimentoId})">Registrar Recurso</button>` : ""}
+        ${p.status === "NOTIFICADO" ? `<button class="btn-link" data-on-click="arquivarProcedimentoAbandonoAcao" data-args-click="${argsAttr(p.procedimentoId)}">Arquivar</button>` : ""}
+        ${authGeral && p.status === "HOMOLOGADO" && !p.recursoInterposto ? `<button class="btn-link" data-on-click="registrarRecursoAbandonoAcao" data-args-click="${argsAttr(p.procedimentoId)}">Registrar Recurso</button>` : ""}
       </td>
     </tr>`).join("") + "</tbody></table>";
 }
@@ -10546,7 +10561,7 @@ async function carregarRadarAbandonoDigital() {
       <td>${escaparHtmlEbd(m.congregacao) || "-"}</td>
       <td>${escaparHtmlEbd(m.canaisDistintos)}/2</td>
       <td>${escaparHtmlEbd(m.diasDesdePrimeira ?? "-")}</td>
-      <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" onclick="abrirProcedimentoAbandonoAcao(${m.membroId}, 'DIGITAL')">Abrir Procedimento</button>` : "requisitos incompletos"}</td>
+      <td class="acoes-inline">${m.elegivel ? `<button class="btn-link" data-on-click="abrirProcedimentoAbandonoAcao" data-args-click="${argsAttr(m.membroId, "DIGITAL")}">Abrir Procedimento</button>` : "requisitos incompletos"}</td>
     </tr>`).join("") + "</tbody></table>";
 }
 
@@ -10628,7 +10643,7 @@ async function carregarPainelPessoal(matricula) {
     if (!item.presente && !item.faltaJustificada) {
       acaoHtml = item.justificativaPendente
         ? `<span class="tag-pendente">Aguardando aprovação</span>`
-        : `<button class="btn-justificar" onclick="solicitarJustificativaAcao(${argJs(matricula)}, ${item.sessaoId})">✍️ Justificar falta</button>`;
+        : `<button class="btn-justificar" data-on-click="solicitarJustificativaAcao" data-args-click="${argsAttr(String(matricula ?? ""), item.sessaoId)}">✍️ Justificar falta</button>`;
     }
     html += `<tr>
       <td>${escaparHtmlEbd(item.dataSessao) || "-"}</td>
@@ -10929,7 +10944,7 @@ async function carregarAlertasComplianceAcao() {
     return;
   }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Severidade</th><th>Tipo</th><th>Descrição</th><th></th></tr></thead><tbody>`;
-  lista.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.severidade)}</td><td>${escaparHtmlEbd(a.tipo)}</td><td>${escaparHtmlEbd(a.descricao)}</td><td><button class="btn-link" onclick="resolverAlertaComplianceAcao(${a.alertaId})">Resolver</button></td></tr>`);
+  lista.forEach(a => html += `<tr><td>${escaparHtmlEbd(a.severidade)}</td><td>${escaparHtmlEbd(a.tipo)}</td><td>${escaparHtmlEbd(a.descricao)}</td><td><button class="btn-link" data-on-click="resolverAlertaComplianceAcao" data-args-click="${argsAttr(a.alertaId)}">Resolver</button></td></tr>`);
   html += "</tbody></table>";
   container.innerHTML = html;
 }
@@ -10995,8 +11010,8 @@ async function carregarRecertificacoesAcao() {
   lista.forEach(r => {
     let acoes = "-";
     if (r.status === "PENDENTE") {
-      acoes = `<button class="btn-link" onclick="decidirRecertificacaoAcao(${r.recertificacaoId}, 'CONFIRMAR')">Recertificar</button>
-               <button class="btn-link btn-link-perigo" onclick="decidirRecertificacaoAcao(${r.recertificacaoId}, 'EXPIRAR')">Expirar</button>`;
+      acoes = `<button class="btn-link" data-on-click="decidirRecertificacaoAcao" data-args-click="${argsAttr(r.recertificacaoId, "CONFIRMAR")}">Recertificar</button>
+               <button class="btn-link btn-link-perigo" data-on-click="decidirRecertificacaoAcao" data-args-click="${argsAttr(r.recertificacaoId, "EXPIRAR")}">Expirar</button>`;
     }
     html += `<tr><td>${escaparHtmlEbd(r.nome)}</td><td>${escaparHtmlEbd(r.papelNome)}</td><td>${escaparHtmlEbd(r.permissao)}</td><td>${new Date(r.prazo).toLocaleDateString("pt-BR")}</td><td>${escaparHtmlEbd(r.status)}</td><td class="acoes-inline">${acoes}</td></tr>`;
   });
@@ -11147,10 +11162,10 @@ async function carregarSinalizacoesNifAcao() {
   lista.forEach(s => {
     let acoes = "-";
     if (s.status === "PENDENTE") {
-      acoes = `<button class="btn-link" onclick="decidirSinalizacaoNifAcao(${s.sinalizacaoId}, 'CONFIRMAR')">Confirmar</button>
-               <button class="btn-link btn-link-perigo" onclick="decidirSinalizacaoNifAcao(${s.sinalizacaoId}, 'DESCARTAR')">Descartar</button>`;
+      acoes = `<button class="btn-link" data-on-click="decidirSinalizacaoNifAcao" data-args-click="${argsAttr(s.sinalizacaoId, "CONFIRMAR")}">Confirmar</button>
+               <button class="btn-link btn-link-perigo" data-on-click="decidirSinalizacaoNifAcao" data-args-click="${argsAttr(s.sinalizacaoId, "DESCARTAR")}">Descartar</button>`;
     } else if (s.status === "CONFIRMADA") {
-      acoes = `<button class="btn-link" onclick="registrarComunicacaoCoafAcao(${s.sinalizacaoId})">Comunicar ao COAF</button>`;
+      acoes = `<button class="btn-link" data-on-click="registrarComunicacaoCoafAcao" data-args-click="${argsAttr(s.sinalizacaoId)}">Comunicar ao COAF</button>`;
     }
     html += `<tr><td>${escaparHtmlEbd(s.tipo)}</td><td>${escaparHtmlEbd(s.descricao)}</td><td>${escaparHtmlEbd(s.fornecedorNome) || "-"}</td><td>${escaparHtmlEbd(s.status)}</td><td>${new Date(s.criadoEm).toLocaleString("pt-BR")}</td><td class="acoes-inline">${acoes}</td></tr>`;
   });
@@ -11314,8 +11329,8 @@ async function carregarDueDiligenceAcao() {
   lista.forEach(f => {
     html += `<tr><td>${escaparHtmlEbd(f.fornecedorNome)}</td><td>${cores[f.Status] || "⏳"} ${escaparHtmlEbd(f.Status) || "PENDENTE"}</td><td>${escaparHtmlEbd(f.Observacao) || "-"}</td>
       <td>
-        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDueDiligenceAcao(${f.FornecedorId}, 'APROVADO')">Aprovar</button>
-        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" onclick="registrarDueDiligenceAcao(${f.FornecedorId}, 'REPROVADO')">Reprovar</button>
+        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" data-on-click="registrarDueDiligenceAcao" data-args-click="${argsAttr(f.FornecedorId, "APROVADO")}">Aprovar</button>
+        <button class="btn-confirmar" style="width:auto;padding:4px 8px;" data-on-click="registrarDueDiligenceAcao" data-args-click="${argsAttr(f.FornecedorId, "REPROVADO")}">Reprovar</button>
       </td></tr>`;
   });
   html += "</tbody></table>";
@@ -11382,13 +11397,13 @@ async function carregarSolicitacoesDPO() {
     let acoes = "";
     if (s.status === "PENDENTE" || s.status === "EM_ANALISE") {
       if (s.tipo === "EXCLUSAO") {
-        acoes = `<button class="btn-link" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'EM_ANALISE')">Em análise</button>
-                 <button class="btn-link" onclick="executarExclusaoDPO(${s.solicitacaoId})">Executar exclusão</button>
-                 <button class="btn-link btn-link-perigo" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'NEGADA')">Negar</button>`;
+        acoes = `<button class="btn-link" data-on-click="responderSolicitacaoDPO" data-args-click="${argsAttr(s.solicitacaoId, "EM_ANALISE")}">Em análise</button>
+                 <button class="btn-link" data-on-click="executarExclusaoDPO" data-args-click="${argsAttr(s.solicitacaoId)}">Executar exclusão</button>
+                 <button class="btn-link btn-link-perigo" data-on-click="responderSolicitacaoDPO" data-args-click="${argsAttr(s.solicitacaoId, "NEGADA")}">Negar</button>`;
       } else {
-        acoes = `<button class="btn-link" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'EM_ANALISE')">Em análise</button>
-                 <button class="btn-link" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'ATENDIDA')">Atender</button>
-                 <button class="btn-link btn-link-perigo" onclick="responderSolicitacaoDPO(${s.solicitacaoId}, 'NEGADA')">Negar</button>`;
+        acoes = `<button class="btn-link" data-on-click="responderSolicitacaoDPO" data-args-click="${argsAttr(s.solicitacaoId, "EM_ANALISE")}">Em análise</button>
+                 <button class="btn-link" data-on-click="responderSolicitacaoDPO" data-args-click="${argsAttr(s.solicitacaoId, "ATENDIDA")}">Atender</button>
+                 <button class="btn-link btn-link-perigo" data-on-click="responderSolicitacaoDPO" data-args-click="${argsAttr(s.solicitacaoId, "NEGADA")}">Negar</button>`;
       }
     }
     html += `<tr>
@@ -11501,12 +11516,12 @@ async function carregarPainelOuvidoria() {
       <td>${escaparHtmlEbd(d.ouvidorNome) || "-"}</td>
       <td>${ROTULO_STATUS_OUVIDORIA[d.status] || escaparHtmlEbd(d.status)}</td>
       <td class="acoes-inline">
-        ${d.status === "RECEBIDA" ? `<button class="btn-link" onclick="atribuirOuvidorAcao(${d.denunciaId})">Atribuir Ouvidor</button>` : ""}
-        ${d.denunciadoMembroId && d.status !== "ENCAMINHADA_PROCESSO" ? `<button class="btn-link" onclick="encaminharProcessoOuvidoriaAcao(${d.denunciaId})">Encaminhar p/ Processo</button>` : ""}
-        ${d.denunciadoMembroId && d.status !== "ENCAMINHADA_MEDIACAO" ? `<button class="btn-link" onclick="encaminharMediacaoOuvidoriaAcao(${d.denunciaId})">Encaminhar p/ Mediação</button>` : ""}
-        ${!["ARQUIVADA", "CONCLUIDA", "ENCAMINHADA_PROCESSO", "ENCAMINHADA_MEDIACAO"].includes(d.status) ? `<button class="btn-link" onclick="arquivarOuvidoriaAcao(${d.denunciaId})">Arquivar</button>
-        <button class="btn-link" onclick="concluirOuvidoriaAcao(${d.denunciaId})">Concluir</button>` : ""}
-        ${podeAnonimizar ? `<button class="btn-link btn-link-perigo" onclick="anonimizarOuvidoriaAcao(${d.denunciaId})">Anonimizar</button>` : ""}
+        ${d.status === "RECEBIDA" ? `<button class="btn-link" data-on-click="atribuirOuvidorAcao" data-args-click="${argsAttr(d.denunciaId)}">Atribuir Ouvidor</button>` : ""}
+        ${d.denunciadoMembroId && d.status !== "ENCAMINHADA_PROCESSO" ? `<button class="btn-link" data-on-click="encaminharProcessoOuvidoriaAcao" data-args-click="${argsAttr(d.denunciaId)}">Encaminhar p/ Processo</button>` : ""}
+        ${d.denunciadoMembroId && d.status !== "ENCAMINHADA_MEDIACAO" ? `<button class="btn-link" data-on-click="encaminharMediacaoOuvidoriaAcao" data-args-click="${argsAttr(d.denunciaId)}">Encaminhar p/ Mediação</button>` : ""}
+        ${!["ARQUIVADA", "CONCLUIDA", "ENCAMINHADA_PROCESSO", "ENCAMINHADA_MEDIACAO"].includes(d.status) ? `<button class="btn-link" data-on-click="arquivarOuvidoriaAcao" data-args-click="${argsAttr(d.denunciaId)}">Arquivar</button>
+        <button class="btn-link" data-on-click="concluirOuvidoriaAcao" data-args-click="${argsAttr(d.denunciaId)}">Concluir</button>` : ""}
+        ${podeAnonimizar ? `<button class="btn-link btn-link-perigo" data-on-click="anonimizarOuvidoriaAcao" data-args-click="${argsAttr(d.denunciaId)}">Anonimizar</button>` : ""}
       </td>
     </tr>`;
   });
@@ -11656,7 +11671,7 @@ async function carregarMediacoes() {
       <td>${escaparHtmlEbd(m.parteBNome) || escaparHtmlEbd(m.parteBDescricao) || "-"}</td>
       <td>${ROTULO_STATUS_MEDIACAO[m.status] || escaparHtmlEbd(m.status)}</td>
       <td>${m.prazoVencido ? `<span style="color:var(--cor-perigo,#c0392b);">⚠️ Vencido (${escaparHtmlEbd(m.diasDesdeInstauracao)}d)</span>` : `${escaparHtmlEbd(m.diasDesdeInstauracao)}d de ${escaparHtmlEbd(m.prazoDiasEncerramento)}`}</td>
-      <td><button class="btn-link" onclick="abrirDetalheMediacao(${m.mediacaoId})">Abrir</button></td>
+      <td><button class="btn-link" data-on-click="abrirDetalheMediacao" data-args-click="${argsAttr(m.mediacaoId)}">Abrir</button></td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -11684,39 +11699,39 @@ async function abrirDetalheMediacao(mediacaoId) {
   if (m.status === "MEDIACAO_EM_CURSO") {
     acoesHtml += `<div class="barra-lista">
       <input type="number" id="medDetMediadorId" placeholder="Matrícula do mediador" />
-      <button class="btn-link" onclick="designarMediadorAcao(${mediacaoId})">Designar Mediador</button>
+      <button class="btn-link" data-on-click="designarMediadorAcao" data-args-click="${argsAttr(mediacaoId)}">Designar Mediador</button>
     </div>
     <div class="barra-lista">
       <input type="date" id="medDetSessaoData" />
       <label><input type="checkbox" id="medDetSessaoA" /> Parte A compareceu</label>
       <label><input type="checkbox" id="medDetSessaoB" /> Parte B compareceu</label>
       <input type="text" id="medDetSessaoObs" placeholder="Observações" style="min-width:200px;" />
-      <button class="btn-link" onclick="registrarSessaoMediacaoAcao(${mediacaoId})">Registrar Sessão</button>
+      <button class="btn-link" data-on-click="registrarSessaoMediacaoAcao" data-args-click="${argsAttr(mediacaoId)}">Registrar Sessão</button>
     </div>
     <div class="barra-lista">
       <input type="text" id="medDetResumoAcordo" placeholder="Texto do acordo (o que as partes vão aceitar)" style="min-width:220px;" maxlength="1500" />
       <input type="number" id="medDetSaidaVinculada" placeholder="Id da Saída vinculada (opcional)" />
-      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarAcordoMediacaoAcao(${mediacaoId})">📝 Propor acordo às partes</button>
-      <button class="btn-link btn-link-perigo" onclick="mediacaoSemAcordoAcao(${mediacaoId})">Encerrar sem acordo</button>
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="registrarAcordoMediacaoAcao" data-args-click="${argsAttr(mediacaoId)}">📝 Propor acordo às partes</button>
+      <button class="btn-link btn-link-perigo" data-on-click="mediacaoSemAcordoAcao" data-args-click="${argsAttr(mediacaoId)}">Encerrar sem acordo</button>
     </div>`;
   }
   if (m.status === "MEDIACAO_SEM_ACORDO") {
     acoesHtml += `<div class="barra-lista">
       <input type="number" id="medDetArbitroId" placeholder="Matrícula do árbitro" />
-      <button class="btn-link" onclick="designarArbitroAcao(${mediacaoId})">Designar Árbitro (abrir arbitragem)</button>
+      <button class="btn-link" data-on-click="designarArbitroAcao" data-args-click="${argsAttr(mediacaoId)}">Designar Árbitro (abrir arbitragem)</button>
     </div>`;
   }
   if (m.status === "ARBITRAGEM_EM_CURSO") {
     acoesHtml += `<div class="barra-lista">
-      ${m.compromisso && m.compromisso.firmadoEm ? "" : `<button class="btn-link" onclick="registrarCompromissoArbitralAcao(${mediacaoId})">Propor Compromisso Arbitral às partes</button>`}
+      ${m.compromisso && m.compromisso.firmadoEm ? "" : `<button class="btn-link" data-on-click="registrarCompromissoArbitralAcao" data-args-click="${argsAttr(mediacaoId)}">Propor Compromisso Arbitral às partes</button>`}
       <input type="file" id="medDetSentencaArquivo" accept="application/pdf,image/jpeg,image/png" />
-      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="registrarSentencaArbitralAcao(${mediacaoId})">📄 Registrar Sentença</button>
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="registrarSentencaArbitralAcao" data-args-click="${argsAttr(mediacaoId)}">📄 Registrar Sentença</button>
     </div>`;
   }
   const bifurcacaoHtml = !m.processoDisciplinarBifurcadoId ? `
     <div class="barra-lista">
       <input type="number" id="medDetBifurcarMembroId" placeholder="Matrícula (quem responde ao processo)" />
-      <button class="btn-link btn-link-perigo" onclick="bifurcarDisciplinarAcao(${mediacaoId})">⚠️ Bifurcar p/ Processo Disciplinar</button>
+      <button class="btn-link btn-link-perigo" data-on-click="bifurcarDisciplinarAcao" data-args-click="${argsAttr(mediacaoId)}">⚠️ Bifurcar p/ Processo Disciplinar</button>
     </div>` : `<p class="subtitle">Já bifurcado — processo disciplinar nº ${m.processoDisciplinarBifurcadoId}.</p>`;
 
   const sessoesHtml = (m.sessoes || []).length === 0 ? "<p class='subtitle'>Nenhuma sessão registrada.</p>" :
@@ -11769,7 +11784,7 @@ function htmlInstrumentoMediacao(titulo, instrumento, s, m, mediacaoId, aberto) 
       <select id="medPres${instrumento}Decisao"><option value="ACEITE">aceitou</option><option value="RECUSA">recusou</option></select>
       <label>Assinado em <input type="date" id="medPres${instrumento}Data" /></label>
       <input type="file" id="medPres${instrumento}Arquivo" accept="application/pdf,image/jpeg,image/png" />
-      <button class="btn-link" onclick="registrarDecisaoPresencialMediacaoAcao(${mediacaoId}, '${instrumento}')">Registrar com o documento</button>
+      <button class="btn-link" data-on-click="registrarDecisaoPresencialMediacaoAcao" data-args-click="${argsAttr(mediacaoId, String(instrumento))}">Registrar com o documento</button>
     </div>` : "";
   return `<h5 style="margin:14px 0 6px;">${escaparHtmlEbd(titulo)} — ${situacao}</h5>
     ${s.proposto ? `<p style="white-space:pre-wrap;border-left:3px solid var(--cor-primaria);padding-left:8px;">${escaparHtmlEbd(s.texto)}</p>
@@ -11812,8 +11827,8 @@ async function carregarMinhasMediacoesAcao() {
       return `<p><strong>${escaparHtmlEbd(titulo)}</strong> — ${situacao}</p>
         <p style="white-space:pre-wrap;border-left:3px solid var(--cor-primaria);padding-left:8px;">${escaparHtmlEbd(s.texto)}</p>
         ${pode && !s.firmado ? `<div class="barra-lista">
-          <button class="btn-confirmar" style="width:auto;margin:0;" onclick="decidirMediacaoAcao(${c.mediacaoId}, '${instrumento}', 'ACEITE')">Li e aceito</button>
-          <button class="btn-link btn-link-perigo" onclick="decidirMediacaoAcao(${c.mediacaoId}, '${instrumento}', 'RECUSA')">Recuso</button>
+          <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="decidirMediacaoAcao" data-args-click="${argsAttr(c.mediacaoId, String(instrumento), "ACEITE")}">Li e aceito</button>
+          <button class="btn-link btn-link-perigo" data-on-click="decidirMediacaoAcao" data-args-click="${argsAttr(c.mediacaoId, String(instrumento), "RECUSA")}">Recuso</button>
         </div>` : ""}`;
     };
     return `<div style="border:1px solid var(--cor-borda, #ddd);border-radius:8px;padding:10px;margin-bottom:10px;">
@@ -12065,7 +12080,7 @@ function renderizarPainelRelatorioDepto(data) {
 
   const contribuintesHtml = temMensalidade ? `<h4>Contribuintes de Mensalidade</h4>
     <div id="rdListaContribuintes">${(data.contribuintes || []).map(c => linhaContribuinteRd(c, somenteLeitura)).join("")}</div>
-    ${somenteLeitura ? "" : `<button type="button" class="btn-link" onclick="adicionarLinhaContribuinteRd()">➕ Adicionar contribuinte</button>`}` : "";
+    ${somenteLeitura ? "" : `<button type="button" class="btn-link" data-on-click="adicionarLinhaContribuinteRd">➕ Adicionar contribuinte</button>`}` : "";
 
   container.innerHTML = `
     <p><strong>${escaparHtmlEbd(rotuloLocal)}:</strong> preenchendo ${escaparHtmlEbd(data.congregacaoNome)} — ${escaparHtmlEbd(data.departamentoNome)} — ${escaparHtmlEbd(data.mesReferencia)}/${escaparHtmlEbd(data.anoReferencia)}
@@ -12099,29 +12114,29 @@ function montarAcoesFluxoRd(data) {
   const botoes = [];
 
   if (status === "RASCUNHO") {
-    botoes.push(`<button class="btn-confirmar" onclick="salvarRelatorioDeptoAcao()">💾 Salvar Rascunho</button>`);
+    botoes.push(`<button class="btn-confirmar" data-on-click="salvarRelatorioDeptoAcao">💾 Salvar Rascunho</button>`);
     if (authNivel === "CONGREGACAO" || authNivel === "GLOBAL") {
-      botoes.push(`<button class="btn-confirmar btn-secundario" onclick="acaoFluxoRd('enviar')">📤 Enviar</button>`);
+      botoes.push(`<button class="btn-confirmar btn-secundario" data-on-click="acaoFluxoRd" data-args-click="${argsAttr("enviar")}">📤 Enviar</button>`);
     }
   }
 
   if ((status === "ENVIADO" || status === "APROVADO_AREA") && (authNivel === "AREA" || authNivel === "GLOBAL")) {
-    if (status === "ENVIADO") botoes.push(`<button class="btn-confirmar" onclick="acaoFluxoRd('aprovar-area')">✅ Aprovar (Área)</button>`);
-    botoes.push(`<button class="btn-confirmar btn-secundario" onclick="comentarFluxoRdAcao()">💬 Comentar</button>`);
+    if (status === "ENVIADO") botoes.push(`<button class="btn-confirmar" data-on-click="acaoFluxoRd" data-args-click="${argsAttr("aprovar-area")}">✅ Aprovar (Área)</button>`);
+    botoes.push(`<button class="btn-confirmar btn-secundario" data-on-click="comentarFluxoRdAcao">💬 Comentar</button>`);
   }
 
   if ((status === "ENVIADO" || status === "APROVADO_AREA") && (authNivel === "DEPARTAMENTO" || authNivel === "GLOBAL")) {
-    botoes.push(`<button class="btn-confirmar" onclick="acaoFluxoRd('corrigir')">✏️ Salvar Correção</button>`);
-    botoes.push(`<button class="btn-confirmar btn-secundario" onclick="acaoFluxoRd('aprovar-geral')">✅ Aprovar (Geral) — definitivo</button>`);
+    botoes.push(`<button class="btn-confirmar" data-on-click="acaoFluxoRd" data-args-click="${argsAttr("corrigir")}">✏️ Salvar Correção</button>`);
+    botoes.push(`<button class="btn-confirmar btn-secundario" data-on-click="acaoFluxoRd" data-args-click="${argsAttr("aprovar-geral")}">✅ Aprovar (Geral) — definitivo</button>`);
   }
 
   if ((status === "APROVADO_GERAL" || status === "RETIFICADO") && authNivel === "GLOBAL") {
-    botoes.push(`<button class="btn-confirmar btn-secundario" onclick="acaoFluxoRd('retificar')">🔓 Retificar (edita os campos acima e clique aqui)</button>`);
+    botoes.push(`<button class="btn-confirmar btn-secundario" data-on-click="acaoFluxoRd" data-args-click="${argsAttr("retificar")}">🔓 Retificar (edita os campos acima e clique aqui)</button>`);
     // v5.8 — Reabertura: diferente de Retificar (que corrige o valor sem
     // reabrir o fluxo), Reabrir devolve o relatório pra Enviado, reentrando
     // no funil de aprovação inteiro — só Presidente/Secretário Geral (GLOBAL)
     // e sempre com justificativa (o backend recusa sem ela).
-    botoes.push(`<button class="btn-confirmar btn-perigo" onclick="reabrirRelatorioDeptoAcao()">↩️ Reabrir relatório</button>`);
+    botoes.push(`<button class="btn-confirmar btn-perigo" data-on-click="reabrirRelatorioDeptoAcao">↩️ Reabrir relatório</button>`);
   }
 
   return botoes.length ? `<h4>Fluxo de Aprovação</h4><div class="barra-lista">${botoes.join("")}</div>` : "";
@@ -12171,8 +12186,12 @@ function linhaContribuinteRd(c, somenteLeitura) {
   return `<div class="barra-lista rd-linha-contribuinte">
     <input type="text" class="rd-contribuinte-nome" ${ro} placeholder="Nome" value="${(c && escaparHtmlEbd(c.nome)) || ""}" style="min-width:200px;" />
     <input type="number" class="rd-contribuinte-valor" step="0.01" min="0" ${ro} placeholder="Valor" value="${(c && escaparHtmlEbd(c.valor)) || 0}" style="max-width:120px;" />
-    ${somenteLeitura ? "" : `<button type="button" class="btn-link" onclick="this.parentElement.remove()">✕</button>`}
+    ${somenteLeitura ? "" : `<button type="button" class="btn-link" data-on-click="removerPai" data-args-click="${argsAttr(ARG.elemento)}">✕</button>`}
   </div>`;
+}
+// O antigo onclick="this.parentElement.remove()" (CSP forte: código não fica mais no HTML): tira a linha inteira em que o botão está.
+function removerPai(elemento) {
+  elemento.parentElement.remove();
 }
 
 function adicionarLinhaContribuinteRd() {
@@ -12275,7 +12294,7 @@ async function renderizarPainelTesourariaDepto(data) {
     <p class="subtitle">Método: <strong>${ROTULO_METODO_RATEIO[perfil.metodo] || escaparHtmlEbd(perfil.metodo)}</strong>${perfil.percentualGeral != null ? ` (${escaparHtmlEbd(perfil.percentualGeral)}% geral)` : ""} —
       modo de entrada: ${perfil.modoEntrada === "LIQUIDO_MANUAL" ? "líquido (já lançado só a parte que sobe)" : "bruto (sistema calcula a divisão)"}
       ${perfil.suporteSecretariaGeralHabilitado ? ` · Suporte à Secretaria Geral: R$ ${Number(perfil.valorSuporteSecretariaGeral || 0).toFixed(2)}` : ""}</p>
-    ${authNivel === "GLOBAL" ? `<button class="btn-link" onclick="abrirEdicaoPerfilRateioAcao()">✏️ Configurar perfil de rateio</button>` : ""}
+    ${authNivel === "GLOBAL" ? `<button class="btn-link" data-on-click="abrirEdicaoPerfilRateioAcao">✏️ Configurar perfil de rateio</button>` : ""}
     <div id="tdEdicaoPerfil"></div>` : "";
 
   const acoesHtml = (authNivel === "DEPARTAMENTO" || authNivel === "GLOBAL") ? `
@@ -12284,13 +12303,13 @@ async function renderizarPainelTesourariaDepto(data) {
       <input type="text" id="tdDespesaDescricao" placeholder="Descrição" style="min-width:220px;" />
       <input type="number" id="tdDespesaValor" step="0.01" min="0" placeholder="Valor" style="max-width:120px;" />
       <input type="number" id="tdDespesaAutorizadoPor" placeholder="Matrícula de quem autorizou (só acima do limite)" style="min-width:220px;" />
-      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="lancarDespesaTesourariaDeptoAcao()">➕ Lançar</button>
+      <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="lancarDespesaTesourariaDeptoAcao">➕ Lançar</button>
     </div>
     <p id="resultadoDespesaTesourariaDepto"></p>
     <p class="subtitle">Pra gastar o saldo que ficou LOCAL numa congregação específica (não este fundo
       geral), use <strong>Financeiro → Saídas</strong> escolhendo a categoria "Despesa Local — [seu
       departamento]" — mesma aprovação por alçada e trava de saldo de qualquer despesa da igreja.</p>
-    ${!data.fechado ? `<button class="btn-confirmar btn-secundario" onclick="fecharMesTesourariaDeptoAcao()">🔒 Fechar Mês (congela o balancete)</button>` : ""}` : "";
+    ${!data.fechado ? `<button class="btn-confirmar btn-secundario" data-on-click="fecharMesTesourariaDeptoAcao">🔒 Fechar Mês (congela o balancete)</button>` : ""}` : "";
 
   container.innerHTML = `${resumoHtml}${perfilHtml}<div id="tdListaDespesas"></div>${acoesHtml}`;
   await carregarDespesasTesourariaDeptoAcao();
@@ -12361,7 +12380,7 @@ async function abrirEdicaoPerfilRateioAcao() {
     </div>
     <div class="input-group"><label><input type="checkbox" id="tdPerfilSuporte" style="width:auto;" ${perfil.suporteSecretariaGeralHabilitado ? "checked" : ""}/> Suporte à Secretaria Geral habilitado</label></div>
     <div class="input-group"><label>Valor do suporte (R$)</label><input type="number" step="0.01" min="0" id="tdPerfilValorSuporte" value="${escaparHtmlEbd(perfil.valorSuporteSecretariaGeral) || ""}" /></div>
-    <button class="btn-confirmar" style="width:auto;" onclick="salvarPerfilRateioAcao()">💾 Salvar Perfil</button>`;
+    <button class="btn-confirmar" style="width:auto;" data-on-click="salvarPerfilRateioAcao">💾 Salvar Perfil</button>`;
 }
 
 async function salvarPerfilRateioAcao() {
@@ -12616,7 +12635,7 @@ async function carregarServicosAcao() {
   data.servicos.forEach(s => { if (s.rodizioId) volServicoRodizio[s.servicoId] = s.rodizioId; });
   const linhas = data.servicos.map(s => `<tr>
     <td>${volDataHora(s.dataHora)}</td><td>${escaparHtmlEbd(s.descricao || "")}${s.rodizioId ? ' <span class="vol-etiqueta">Rodízio</span>' : ""}</td><td>${escaparHtmlEbd(s.status)}</td>
-    <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirServicoEscalaAcao(${Number(s.servicoId)})">🔍 Abrir</button></td>
+    <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="abrirServicoEscalaAcao" data-args-click="${argsAttr(Number(s.servicoId))}">🔍 Abrir</button></td>
   </tr>`).join("");
   document.getElementById("painelServicosEscala").innerHTML = data.servicos.length
     ? `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Data/Hora</th><th>Descrição</th><th>Status</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`
@@ -12635,8 +12654,8 @@ async function abrirServicoEscalaAcao(servicoId) {
     <h4>${escaparHtmlEbd(data.servico.descricao || "Serviço")} — ${volDataHora(data.servico.dataHora)} (${escaparHtmlEbd(data.servico.status)})</h4>
     ${ehRodizio ? '<p class="subtitle">Serviço de rodízio: a escala é do grupo da vez (Regimento Art. 135 §1º), por isso o auto-escalador não é usado aqui.</p>' : ""}
     <div class="barra-lista">
-      ${data.servico.status === "RASCUNHO" && !ehRodizio ? `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="autoEscalarAcao(${servicoId})">🤖 Rodar Auto-Escalador</button>` : ""}
-      ${data.servico.status === "RASCUNHO" ? `<button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="publicarEscalaAcao(${servicoId})">📣 Publicar</button>` : ""}
+      ${data.servico.status === "RASCUNHO" && !ehRodizio ? `<button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="autoEscalarAcao" data-args-click="${argsAttr(servicoId)}">🤖 Rodar Auto-Escalador</button>` : ""}
+      ${data.servico.status === "RASCUNHO" ? `<button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="publicarEscalaAcao" data-args-click="${argsAttr(servicoId)}">📣 Publicar</button>` : ""}
     </div>
     <table class="tabela-frequencia"><thead><tr><th>Equipe (id)</th><th>Membro (matrícula)</th><th>Status</th></tr></thead><tbody>${linhasAlocacao || "<tr><td colspan='3'>Nenhuma alocação ainda.</td></tr>"}</tbody></table>`;
 }
@@ -12672,8 +12691,8 @@ async function carregarTrocasPendentesAcao() {
   container.innerHTML = data.trocas.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Alocação origem</th><th>Destino (matrícula)</th><th>Pedida em</th><th></th></tr></thead><tbody>
         ${data.trocas.map(t => `<tr><td>${t.alocacaoOrigemId}</td><td>${t.membroDestinoId}</td><td>${new Date(t.criadaEm).toLocaleDateString("pt-BR")}</td>
-          <td><button class="btn-confirmar" style="width:auto;margin:0;" onclick="decidirTrocaAcao(${t.trocaId}, true)">✅ Aprovar</button>
-              <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="decidirTrocaAcao(${t.trocaId}, false)">❌ Recusar</button></td></tr>`).join("")}
+          <td><button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="decidirTrocaAcao" data-args-click="${argsAttr(t.trocaId, true)}">✅ Aprovar</button>
+              <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="decidirTrocaAcao" data-args-click="${argsAttr(t.trocaId, false)}">❌ Recusar</button></td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma troca pendente.</p>";
 }
@@ -12713,11 +12732,11 @@ async function carregarMinhasEscalasAcao() {
     ${data.alocacoes.map(a => {
       let acoes = "";
       if (a.status === "CONVIDADO") {
-        acoes = `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="responderConviteEscalaAcao(${a.alocacaoId},'ACEITO')">✅ Aceitar</button>
-                 <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="responderConviteEscalaAcao(${a.alocacaoId},'RECUSADO')">❌ Recusar</button>`;
+        acoes = `<button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="responderConviteEscalaAcao" data-args-click="${argsAttr(a.alocacaoId, "ACEITO")}">✅ Aceitar</button>
+                 <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="responderConviteEscalaAcao" data-args-click="${argsAttr(a.alocacaoId, "RECUSADO")}">❌ Recusar</button>`;
       } else if (a.status === "ACEITO") {
-        acoes = `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="confirmarRecebimentoEscalaAcao(${a.alocacaoId})">📩 Confirmar recebimento</button>
-                 <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="pedirTrocaEscalaAcao(${a.alocacaoId})">🔄 Pedir troca</button>`;
+        acoes = `<button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="confirmarRecebimentoEscalaAcao" data-args-click="${argsAttr(a.alocacaoId)}">📩 Confirmar recebimento</button>
+                 <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="pedirTrocaEscalaAcao" data-args-click="${argsAttr(a.alocacaoId)}">🔄 Pedir troca</button>`;
       }
       const etiquetaRodizio = a.rodizioId ? ` <span class="vol-etiqueta">Rodízio${a.grupoNome ? ` · ${escaparHtmlEbd(a.grupoNome)}` : ""}</span>` : "";
       return `<tr><td>${escaparHtmlEbd(a.equipeNome)}</td><td>${escaparHtmlEbd(a.descricao || "")}${etiquetaRodizio}</td><td>${volDataHora(a.dataHora)}</td><td>${escaparHtmlEbd(a.status)}</td><td>${acoes}</td></tr>`;
@@ -12832,7 +12851,7 @@ async function carregarEquipesFlagAcao() {
   container.innerHTML = data.equipes.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Equipe</th><th>Contato com menores</th><th></th></tr></thead><tbody>
         ${data.equipes.map(e => `<tr><td>${escaparHtmlEbd(e.nome)}</td><td>${e.contatoComMenores ? "Sim" : "Não"}</td>
-          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="alternarContatoComMenoresAcao(${e.equipeId}, ${!e.contatoComMenores})">
+          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="alternarContatoComMenoresAcao" data-args-click="${argsAttr(e.equipeId, !e.contatoComMenores)}">
             ${e.contatoComMenores ? "Desmarcar" : "Marcar como contato com menores"}</button></td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma equipe cadastrada nesta congregação ainda (cadastre em Escalas de Serviço).</p>";
@@ -12861,7 +12880,7 @@ async function carregarHabilitacoesAcao() {
     ? `<table class="tabela-frequencia"><thead><tr><th>Voluntário</th><th>Status</th><th>Esteira</th><th></th></tr></thead><tbody>
         ${data.habilitacoes.map(h => `<tr><td>${escaparHtmlEbd(h.membroNome)}</td><td>${ROTULO_STATUS_HV[h.statusCalculado] || escaparHtmlEbd(h.statusCalculado)}</td>
           <td>${montarEsteiraHtml(h)}</td>
-          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="abrirDetalheHabilitacaoAcao(${h.habilitacaoId})">🔍 Abrir</button></td></tr>`).join("")}
+          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="abrirDetalheHabilitacaoAcao" data-args-click="${argsAttr(h.habilitacaoId)}">🔍 Abrir</button></td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma esteira aberta nesta congregação ainda.</p>";
 }
@@ -12898,9 +12917,9 @@ async function abrirDetalheHabilitacaoAcao(habilitacaoId) {
     <p>${montarEsteiraHtml(hab)}</p>
     ${proxima === "TERMO" ? '<p class="subtitle">Esta etapa só fecha depois que o voluntário aderir ao Termo (aceite digital, ficha, e-mail/WhatsApp ou Lista de Ouro).</p>' : ""}
     <div class="barra-lista">
-      ${proxima ? `<button class="btn-confirmar" style="width:auto;margin:0;" onclick="concluirEtapaHabilitacaoAcao(${habilitacaoId}, ${argJs(proxima)})">✅ Concluir: ${ROTULO_ETAPA_HV[proxima]}</button>` : "<span class='subtitle'>Esteira completa.</span>"}
-      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="marcarInaptoAcao(${habilitacaoId})">⛔ Marcar Inapto</button>
-      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="reabilitarHabilitacaoAcao(${habilitacaoId})">↩️ Reabilitar</button>
+      ${proxima ? `<button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="concluirEtapaHabilitacaoAcao" data-args-click="${argsAttr(habilitacaoId, String(proxima ?? ""))}">✅ Concluir: ${ROTULO_ETAPA_HV[proxima]}</button>` : "<span class='subtitle'>Esteira completa.</span>"}
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="marcarInaptoAcao" data-args-click="${argsAttr(habilitacaoId)}">⛔ Marcar Inapto</button>
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="reabilitarHabilitacaoAcao" data-args-click="${argsAttr(habilitacaoId)}">↩️ Reabilitar</button>
     </div>
     ${hab.inaptoMotivo ? `<p class="subtitle">Motivo da inaptidão: ${escaparHtmlEbd(hab.inaptoMotivo)}</p>` : ""}
   `;
@@ -13061,14 +13080,14 @@ async function carregarDetalheFamiliaAssistenciaAcao() {
            <input type="number" id="asProfissionalMatricula_${cadastroAtivo.cadastroId}" placeholder="Matrícula do Assistente Social" style="max-width:220px;" />
            <select id="asParecerResultado_${cadastroAtivo.cadastroId}"><option value="APROVADO">Aprovado</option><option value="NEGADO">Negado</option><option value="PENDENTE_DOCUMENTACAO">Pendente de documentação</option></select>
            <input type="text" id="asParecerTexto_${cadastroAtivo.cadastroId}" placeholder="Parecer técnico" style="min-width:260px;" />
-           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarParecerAssistenciaAcao(${cadastroAtivo.cadastroId}, ${data.familia.familiaId})">✍️ Registrar Parecer</button>
+           <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="registrarParecerAssistenciaAcao" data-args-click="${argsAttr(cadastroAtivo.cadastroId, data.familia.familiaId)}">✍️ Registrar Parecer</button>
          </div>`
       : `<div class="barra-lista">
            <input type="number" id="asCadastroQtd_${data.familia.familiaId}" placeholder="Pessoas no núcleo" style="max-width:160px;" />
            <input type="number" id="asCadastroRenda_${data.familia.familiaId}" placeholder="Renda mensal (opcional)" style="max-width:180px;" />
            <select id="asCadastroSituacao_${data.familia.familiaId}"><option value="PROPRIA">Própria</option><option value="ALUGADA">Alugada</option><option value="CEDIDA">Cedida</option><option value="SITUACAO_RISCO">Situação de risco</option><option value="OUTRO">Outro</option></select>
            <input type="text" id="asCadastroObs_${data.familia.familiaId}" placeholder="Observações" style="min-width:220px;" />
-           <button class="btn-confirmar" style="width:auto;margin:0;" onclick="abrirCadastroSocioeconomicoAcao(${data.familia.familiaId})">📋 Abrir Cadastro (com consentimento)</button>
+           <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="abrirCadastroSocioeconomicoAcao" data-args-click="${argsAttr(data.familia.familiaId)}">📋 Abrir Cadastro (com consentimento)</button>
          </div>`}
     <p id="resultadoCadastroAssistencia_${data.familia.familiaId}" class="subtitle"></p>
 
@@ -13081,7 +13100,7 @@ async function carregarDetalheFamiliaAssistenciaAcao() {
       <input type="date" id="asEntregaData_${data.familia.familiaId}" style="max-width:160px;" />
       <input type="number" id="asEntregaValor_${data.familia.familiaId}" placeholder="Valor (opcional)" style="max-width:150px;" />
       <input type="text" id="asEntregaDescricao_${data.familia.familiaId}" placeholder="Descrição (opcional)" style="min-width:200px;" />
-      <button class="btn-confirmar" style="width:auto;margin:0;" onclick="registrarEntregaAssistenciaAcao(${data.familia.familiaId})">➕ Registrar Entrega</button>
+      <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="registrarEntregaAssistenciaAcao" data-args-click="${argsAttr(data.familia.familiaId)}">➕ Registrar Entrega</button>
     </div>
     ${(data.entregas || []).length
       ? `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Descrição</th></tr></thead><tbody>
@@ -13182,7 +13201,7 @@ async function carregarProfissionaisAssistenciaAcao() {
   container.innerHTML = data.profissionais.length
     ? `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>CRESS</th><th>Situação</th><th></th></tr></thead><tbody>
         ${data.profissionais.map(p => `<tr><td>${escaparHtmlEbd(p.membroNome)}</td><td>${escaparHtmlEbd(p.numeroCredencial)}</td><td>${p.ativo ? "✅ Ativo" : "⛔ Inativo"}</td>
-          <td>${p.ativo ? `<button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="descredenciarProfissionalAssistenciaAcao(${p.profissionalId})">Descredenciar</button>` : ""}</td></tr>`).join("")}
+          <td>${p.ativo ? `<button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="descredenciarProfissionalAssistenciaAcao" data-args-click="${argsAttr(p.profissionalId)}">Descredenciar</button>` : ""}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum Assistente Social credenciado ainda.</p>";
 }
@@ -13274,7 +13293,7 @@ async function carregarDetalheTurmaEbdAcao() {
     ${dadosProf.professores.length
       ? `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Principal</th><th></th></tr></thead><tbody>
           ${dadosProf.professores.map(p => `<tr><td>${p.membroId}</td><td>${escaparHtmlEbd(p.membroNome)}</td><td>${p.principal ? "Sim" : "Não"}</td>
-            <td><button class="btn-link" onclick="encerrarProfessorEbdAcao(${turmaId}, ${p.membroId})">Remover</button></td></tr>`).join("")}
+            <td><button class="btn-link" data-on-click="encerrarProfessorEbdAcao" data-args-click="${argsAttr(Number(turmaId), p.membroId)}">Remover</button></td></tr>`).join("")}
         </tbody></table>`
       : "<p class='subtitle'>Nenhum professor designado.</p>"}
     <h5>Alunos</h5>
@@ -13488,8 +13507,8 @@ async function carregarRosterChamadaEbdAcao() {
         ${data.alunos.map(a => `<tr>
           <td>${a.alunoId}</td><td>${escaparHtmlEbd(a.matricula)}</td><td>${escaparHtmlEbd(a.membroNome)}${a.naoMembro ? ' <span class="subtitle">(não-membro)</span>' : ""}</td><td>${escaparHtmlEbd(a.status) || "-"}</td>
           <td>
-            <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'PRESENTE')">✅ Presente</button>
-            <button class="btn-link" onclick="lancarPresencaEbdAcao(${a.alunoId}, 'AUSENTE')">❌ Ausente</button>
+            <button class="btn-link" data-on-click="lancarPresencaEbdAcao" data-args-click="${argsAttr(a.alunoId, "PRESENTE")}">✅ Presente</button>
+            <button class="btn-link" data-on-click="lancarPresencaEbdAcao" data-args-click="${argsAttr(a.alunoId, "AUSENTE")}">❌ Ausente</button>
           </td>
         </tr>`).join("")}
       </tbody></table>`
@@ -13623,6 +13642,11 @@ function preencherTurmasSalaEbd() {
   if (data && !data.value) data.value = dataLocalHojeEbd();
   atualizarPainelOfflineEbd();
 }
+// O antigo onchange="document.getElementById('salaTurmaId').value = this.value" do seletor de turma (CSP forte: código não fica mais no HTML).
+// idDestino é sempre o id fixo escrito no index.html.
+function copiarValorParaCampo(idDestino, valor) {
+  document.getElementById(idDestino).value = valor;
+}
 
 async function baixarTurmaOfflineEbdAcao() {
   const turmaId = Number(document.getElementById("salaTurmaId").value);
@@ -13674,7 +13698,7 @@ function resumoFilaOfflineEbdHtml(estado) {
         const [turmaId, data] = k.split("|");
         const pacote = estado.turmas[turmaId];
         return `<li>${escaparHtmlEbd(pacote ? pacote.turma.nome : `Turma ${turmaId}`)} — ${escaparHtmlEbd(formatarDataEbd(data))}: ${n}
-          <button class="btn-link btn-link-perigo" onclick="descartarGrupoOfflineEbdAcao(${Number(turmaId)}, ${argJs(data)})">descartar</button></li>`;
+          <button class="btn-link btn-link-perigo" data-on-click="descartarGrupoOfflineEbdAcao" data-args-click="${argsAttr(Number(turmaId), String(data ?? ""))}">descartar</button></li>`;
       }).join("") + "</ul>");
   } else {
     partes.push("<p class='subtitle'>Nenhuma marcação aguardando envio.</p>");
@@ -13705,11 +13729,11 @@ function atualizarPainelOfflineEbd() {
     ? `<p class="subtitle">Turmas baixadas neste aparelho:</p><table class="tabela-frequencia"><thead><tr><th>Turma</th><th>Congregação</th><th>Alunos</th><th>Baixada em</th><th></th></tr></thead><tbody>
         ${turmas.map(p => `<tr><td>${escaparHtmlEbd(p.turma.nome)}</td><td>${escaparHtmlEbd(p.turma.congregacaoNome)}</td><td>${p.alunos.length}</td>
           <td>${escaparHtmlEbd(new Date(p.baixadoEm).toLocaleString("pt-BR"))}</td>
-          <td><button class="btn-link btn-link-perigo" onclick="removerTurmaOfflineEbdAcao(${Number(p.turma.turmaId)})">remover</button></td></tr>`).join("")}
+          <td><button class="btn-link btn-link-perigo" data-on-click="removerTurmaOfflineEbdAcao" data-args-click="${argsAttr(Number(p.turma.turmaId))}">remover</button></td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma turma baixada neste aparelho ainda.</p>")
     + resumoFilaOfflineEbdHtml(estado)
-    + (estado.fila.length ? `<button class="btn-confirmar" style="width:auto;margin:4px 0;" onclick="sincronizarChamadaOfflineAcao(true)">🔄 Enviar agora</button>` : "");
+    + (estado.fila.length ? `<button class="btn-confirmar" style="width:auto;margin:4px 0;" data-on-click="sincronizarChamadaOfflineAcao" data-args-click="${argsAttr(true)}">🔄 Enviar agora</button>` : "");
 }
 
 // ---- Tela da chamada offline ----
@@ -13778,8 +13802,8 @@ function renderChamadaOffline() {
     ? `<ul class="lista-chamada-offline">${pacote.alunos.map(a => {
         const st = status[a.alunoId];
         return `<li><span class="nome-aluno-offline">${escaparHtmlEbd(a.nome)}${pendentes.has(a.alunoId) ? ' <span class="selo-pendente-offline">(a enviar)</span>' : ""}</span>
-          <button class="btn-presenca-offline${st === "PRESENTE" ? " ativo-presente" : ""}" aria-label="Presente" onclick="marcarPresencaOfflineEbd(${turmaId}, ${argJs(data)}, ${Number(a.alunoId)}, 'PRESENTE')">✅</button>
-          <button class="btn-presenca-offline${st === "AUSENTE" ? " ativo-ausente" : ""}" aria-label="Ausente" onclick="marcarPresencaOfflineEbd(${turmaId}, ${argJs(data)}, ${Number(a.alunoId)}, 'AUSENTE')">❌</button></li>`;
+          <button class="btn-presenca-offline${st === "PRESENTE" ? " ativo-presente" : ""}" aria-label="Presente" data-on-click="marcarPresencaOfflineEbd" data-args-click="${argsAttr(turmaId, String(data ?? ""), Number(a.alunoId), "PRESENTE")}">✅</button>
+          <button class="btn-presenca-offline${st === "AUSENTE" ? " ativo-ausente" : ""}" aria-label="Ausente" data-on-click="marcarPresencaOfflineEbd" data-args-click="${argsAttr(turmaId, String(data ?? ""), Number(a.alunoId), "AUSENTE")}">❌</button></li>`;
       }).join("")}</ul>`
     : "<p class='subtitle'>Nenhum aluno ativo nesta turma.</p>";
   plano.innerHTML = pacote.data === data
@@ -13989,13 +14013,13 @@ async function carregarPlanosGestaoEbdAcao() {
           <td>${p.congregacaoId == null ? "Campo inteiro" : escaparHtmlEbd(p.congregacaoNome)}</td>
           <td>${p.faixaEtaria ? escaparHtmlEbd(p.faixaEtaria) : "todas"}</td><td>${escaparHtmlEbd(p.titulo)}</td>
           <td>${p.status === "PUBLICADO" ? "✅ Publicado" : "📝 Rascunho"}</td>
-          <td>${(p.materiais || []).map(m => `${escaparHtmlEbd(m.titulo)} <button class="btn-link btn-link-perigo" onclick="removerMaterialPlanoEbdAcao(${Number(m.materialId)})">×</button>`).join("<br>") || "-"}</td>
+          <td>${(p.materiais || []).map(m => `${escaparHtmlEbd(m.titulo)} <button class="btn-link btn-link-perigo" data-on-click="removerMaterialPlanoEbdAcao" data-args-click="${argsAttr(Number(m.materialId))}">×</button>`).join("<br>") || "-"}</td>
           <td class="acoes-inline">
-            <button class="btn-link" onclick="editarPlanoEbdAcao(${Number(p.planoId)})">editar</button>
+            <button class="btn-link" data-on-click="editarPlanoEbdAcao" data-args-click="${argsAttr(Number(p.planoId))}">editar</button>
             ${p.status === "PUBLICADO"
-              ? `<button class="btn-link" onclick="publicarPlanoEbdAcao(${Number(p.planoId)}, false)">despublicar</button>`
-              : `<button class="btn-link" onclick="publicarPlanoEbdAcao(${Number(p.planoId)}, true)">publicar</button>`}
-            <button class="btn-link btn-link-perigo" onclick="excluirPlanoEbdAcao(${Number(p.planoId)})">excluir</button>
+              ? `<button class="btn-link" data-on-click="publicarPlanoEbdAcao" data-args-click="${argsAttr(Number(p.planoId), false)}">despublicar</button>`
+              : `<button class="btn-link" data-on-click="publicarPlanoEbdAcao" data-args-click="${argsAttr(Number(p.planoId), true)}">publicar</button>`}
+            <button class="btn-link btn-link-perigo" data-on-click="excluirPlanoEbdAcao" data-args-click="${argsAttr(Number(p.planoId))}">excluir</button>
           </td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum plano neste período.</p>";
@@ -14231,12 +14255,12 @@ function renderPainelRespostasAlunoEbd(respostas, resumo) {
       ${respostas.map(q => `<tr>
         <td>${escaparHtmlEbd(q.tipo)}</td><td>${escaparHtmlEbd(q.enunciado)}</td>
         <td>${renderRespostaCampoEbd(q)}
-          <button class="btn-link" onclick="salvarRespostaEbdAcao(${q.questaoId})">💾</button>
+          <button class="btn-link" data-on-click="salvarRespostaEbdAcao" data-args-click="${argsAttr(q.questaoId)}">💾</button>
         </td>
         <td>${q.respondida ? (q.correta === true ? "✅ Certa" : q.correta === false ? "❌ Errada" : "⏳ Pendente") : "-"} ${q.corrigidoManualmente ? "(manual)" : ""}</td>
         <td>${q.respondida ? `
-          <button class="btn-link" onclick="corrigirRespostaManualEbdAcao(${q.respostaId}, true)">✔️ Marcar certa</button>
-          <button class="btn-link" onclick="corrigirRespostaManualEbdAcao(${q.respostaId}, false)">✖️ Marcar errada</button>` : ""}
+          <button class="btn-link" data-on-click="corrigirRespostaManualEbdAcao" data-args-click="${argsAttr(q.respostaId, true)}">✔️ Marcar certa</button>
+          <button class="btn-link" data-on-click="corrigirRespostaManualEbdAcao" data-args-click="${argsAttr(q.respostaId, false)}">✖️ Marcar errada</button>` : ""}
         </td>
       </tr>`).join("")}
     </tbody></table>
@@ -14365,10 +14389,10 @@ function renderizarCertificadosEbd() {
       <td>${situacaoCertificadoFormacao(c)}</td>
       <td>${c.codigoVerificacao ? `<code>${escaparHtmlEbd(c.codigoVerificacao)}</code>` : "-"}</td>
       <td class="acoes-inline">
-        <button class="btn-link" onclick="imprimirCertificado(${c.certificadoId})">🖨️ Imprimir</button>
-        <button class="btn-link" onclick="baixarPdfCertificado(${c.certificadoId}, ${c.membroId})">📄 Baixar PDF</button>
-        ${c.codigoVerificacao ? `<button class="btn-link" onclick="copiarLinkVerificacaoAcao(${argJs(c.codigoVerificacao)})">🔗 Copiar link de verificação</button>` : ""}
-        ${podeRevogar && !c.revogadoEm ? `<button class="btn-link btn-link-perigo" onclick="revogarCertificadoAcao(${c.certificadoId})">⛔ Revogar</button>` : ""}
+        <button class="btn-link" data-on-click="imprimirCertificado" data-args-click="${argsAttr(c.certificadoId)}">🖨️ Imprimir</button>
+        <button class="btn-link" data-on-click="baixarPdfCertificado" data-args-click="${argsAttr(c.certificadoId, c.membroId)}">📄 Baixar PDF</button>
+        ${c.codigoVerificacao ? `<button class="btn-link" data-on-click="copiarLinkVerificacaoAcao" data-args-click="${argsAttr(String(c.codigoVerificacao ?? ""))}">🔗 Copiar link de verificação</button>` : ""}
+        ${podeRevogar && !c.revogadoEm ? `<button class="btn-link btn-link-perigo" data-on-click="revogarCertificadoAcao" data-args-click="${argsAttr(c.certificadoId)}">⛔ Revogar</button>` : ""}
       </td>
     </tr>`;
   });
@@ -14500,14 +14524,14 @@ async function buscarTitularesEbdDpoAcao() {
     ? `<h5>Alunos não-membros</h5><table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Turma</th><th>Situação</th><th></th></tr></thead><tbody>
         ${data.alunos.map(a => `<tr><td>${a.alunoId}</td><td>${escaparHtmlEbd(a.nome)}</td><td>${escaparHtmlEbd(a.turmaNome)} — ${escaparHtmlEbd(a.congregacaoNome)}</td>
           <td>${a.ativo ? "Matrícula ativa" : "Encerrada"}</td>
-          <td><button class="btn-link btn-link-perigo" onclick="anonimizarAlunoEbdDpoAcao(${Number(a.alunoId)})">anonimizar</button></td></tr>`).join("")}
+          <td><button class="btn-link btn-link-perigo" data-on-click="anonimizarAlunoEbdDpoAcao" data-args-click="${argsAttr(Number(a.alunoId))}">anonimizar</button></td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum aluno não-membro com esse nome.</p>";
   const visitantes = data.visitantes.length
     ? `<h5>Visitantes</h5><table class="tabela-frequencia"><thead><tr><th>Registro</th><th>Nome</th><th>Data</th><th>Turma</th><th></th></tr></thead><tbody>
         ${data.visitantes.map(v => `<tr><td>${v.chamadaId}</td><td>${escaparHtmlEbd(v.nome)}${v.temContato ? " <span class=\"subtitle\">(com contato)</span>" : ""}</td>
           <td>${escaparHtmlEbd(formatarDataEbd(v.data))}</td><td>${escaparHtmlEbd(v.turmaNome)} — ${escaparHtmlEbd(v.congregacaoNome)}</td>
-          <td><button class="btn-link btn-link-perigo" onclick="anonimizarVisitanteEbdDpoAcao(${Number(v.chamadaId)})">anonimizar</button></td></tr>`).join("")}
+          <td><button class="btn-link btn-link-perigo" data-on-click="anonimizarVisitanteEbdDpoAcao" data-args-click="${argsAttr(Number(v.chamadaId))}">anonimizar</button></td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum visitante com esse nome.</p>";
   container.innerHTML = alunos + visitantes;
@@ -14692,10 +14716,10 @@ function renderFormacaoTabela(formacao, { gestao }) {
       const cert = f.certificado;
       const validade = f.validoAte ? `${formatarDataEbd(f.validoAte)}${f.situacao === "VENCENDO" ? ` (em ${escaparHtmlEbd(f.diasParaVencer)} dia(s))` : ""}` : (f.status === "CONCLUIDA" ? "não vence" : "—");
       const acoes = gestao ? `
-        <button class="btn-link" onclick="abrirMatriculaTrilhaAcao(${f.matriculaId})">📋 Abrir</button>
-        ${f.status === "EM_ANDAMENTO" ? `<button class="btn-link btn-link-perigo" onclick="cancelarMatriculaTrilhaAcao(${f.matriculaId})">✖ Cancelar</button>` : ""}
-        ${f.status === "CONCLUIDA" && !cert ? `<button class="btn-link" onclick="emitirCertificadoMatriculaAcao(${f.matriculaId})">🎓 Emitir certificado</button>` : ""}
-        ${cert && !cert.revogadoEm ? `<button class="btn-link btn-link-perigo" onclick="revogarCertificadoAcao(${cert.certificadoId})">⛔ Revogar certificado</button>` : ""}` : "";
+        <button class="btn-link" data-on-click="abrirMatriculaTrilhaAcao" data-args-click="${argsAttr(f.matriculaId)}">📋 Abrir</button>
+        ${f.status === "EM_ANDAMENTO" ? `<button class="btn-link btn-link-perigo" data-on-click="cancelarMatriculaTrilhaAcao" data-args-click="${argsAttr(f.matriculaId)}">✖ Cancelar</button>` : ""}
+        ${f.status === "CONCLUIDA" && !cert ? `<button class="btn-link" data-on-click="emitirCertificadoMatriculaAcao" data-args-click="${argsAttr(f.matriculaId)}">🎓 Emitir certificado</button>` : ""}
+        ${cert && !cert.revogadoEm ? `<button class="btn-link btn-link-perigo" data-on-click="revogarCertificadoAcao" data-args-click="${argsAttr(cert.certificadoId)}">⛔ Revogar certificado</button>` : ""}` : "";
       return `<tr>
         <td>${f.matriculaId}</td><td>${escaparHtmlEbd(f.trilhaNome)}</td><td>${ROTULO_SITUACAO_TRILHA[f.situacao] || escaparHtmlEbd(f.situacao)}</td>
         <td>${escaparHtmlEbd(f.obrigatoriosConcluidos)}/${escaparHtmlEbd(f.obrigatoriosTotal)}</td><td>${validade}</td>
@@ -14725,7 +14749,7 @@ async function abrirMatriculaTrilhaAcao(matriculaId) {
       ${p.modulos.map(mod => `<tr>
         <td>${escaparHtmlEbd(mod.ordem)}</td><td>${escaparHtmlEbd(mod.titulo)}</td><td>${escaparHtmlEbd(mod.cargaHoraria)}</td><td>${mod.obrigatorio ? "" : "opcional"}</td>
         <td>${mod.status === "CONCLUIDO" ? "✅ Concluído" : (mod.status === "BLOQUEADO" ? `🔒 Exige: ${mod.bloqueadoPor.map(escaparHtmlEbd).join(", ")}` : "▶️ Disponível")}</td>
-        <td>${emAndamento && mod.status === "DISPONIVEL" ? `<button class="btn-link" onclick="concluirModuloTrilhaAcao(${m.matriculaId}, ${mod.moduloId})">✔ Concluir módulo</button>` : ""}</td>
+        <td>${emAndamento && mod.status === "DISPONIVEL" ? `<button class="btn-link" data-on-click="concluirModuloTrilhaAcao" data-args-click="${argsAttr(m.matriculaId, mod.moduloId)}">✔ Concluir módulo</button>` : ""}</td>
       </tr>`).join("")}
     </tbody></table>
   </div>`;
@@ -14775,7 +14799,7 @@ async function carregarRequisitosTrilhasAcao() {
     ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Onde</th><th>Alvo</th><th>Trilha exigida</th><th>Modo</th><th></th></tr></thead><tbody>
         ${data.requisitos.map(r => `<tr><td>${r.requisitoId}</td><td>${escaparHtmlEbd(r.contextoRotulo)}</td><td>${escaparHtmlEbd(r.alvoChave || "(todos)")}</td>
           <td>#${r.trilhaId} ${escaparHtmlEbd(r.trilhaNome)}${r.trilhaAtiva ? "" : " (desativada)"}</td><td>${r.modo === "BLOQUEIA" ? "⛔ Bloqueia" : "⚠️ Só alerta"}</td>
-          <td>${authGeral ? `<button class="btn-link btn-link-perigo" onclick="removerRequisitoTrilhaAcao(${r.requisitoId})">Remover</button>` : ""}</td></tr>`).join("")}
+          <td>${authGeral ? `<button class="btn-link btn-link-perigo" data-on-click="removerRequisitoTrilhaAcao" data-args-click="${argsAttr(r.requisitoId)}">Remover</button>` : ""}</td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum requisito configurado — nenhum fluxo exige formação hoje.</p>";
 }
@@ -14849,9 +14873,9 @@ async function carregarMinhaFormacaoAcao() {
       <p>${ROTULO_SITUACAO_TRILHA[f.situacao] || escaparHtmlEbd(f.situacao)} · ${escaparHtmlEbd(f.obrigatoriosConcluidos)}/${escaparHtmlEbd(f.obrigatoriosTotal)} módulos obrigatórios${f.validoAte ? ` · válido até ${formatarDataEbd(f.validoAte)}` : (f.status === "CONCLUIDA" ? " · não vence" : "")}</p>
       ${vencimento}
       ${cert ? `<p>Certificado <code>${escaparHtmlEbd(cert.codigoVerificacao || "")}</code>${cert.revogadoEm ? " — <strong>revogado</strong>" : ""}</p>
-        <button class="btn-link" onclick="imprimirCertificado(${cert.certificadoId})">🖨️ Imprimir</button>
-        <button class="btn-link" onclick="baixarPdfCertificado(${cert.certificadoId}, ${f.membroId})">📄 Baixar PDF</button>
-        ${cert.codigoVerificacao ? `<button class="btn-link" onclick="copiarLinkVerificacaoAcao(${argJs(cert.codigoVerificacao)})">🔗 Copiar link de verificação</button>` : ""}` : ""}
+        <button class="btn-link" data-on-click="imprimirCertificado" data-args-click="${argsAttr(cert.certificadoId)}">🖨️ Imprimir</button>
+        <button class="btn-link" data-on-click="baixarPdfCertificado" data-args-click="${argsAttr(cert.certificadoId, f.membroId)}">📄 Baixar PDF</button>
+        ${cert.codigoVerificacao ? `<button class="btn-link" data-on-click="copiarLinkVerificacaoAcao" data-args-click="${argsAttr(String(cert.codigoVerificacao ?? ""))}">🔗 Copiar link de verificação</button>` : ""}` : ""}
     </div>`;
   }).join("");
 }
@@ -15107,7 +15131,7 @@ async function carregarLancamentosFinanceiroEbdAcao() {
         ${lancamentos.map(l => `<tr>
           <td>${new Date(l.data).toLocaleDateString("pt-BR", { timeZone: "UTC" })}</td><td>${l.tipo === "ENTRADA" ? "Entrada" : "Saída"}</td>
           <td>${escaparHtmlEbd(l.descricao)}</td><td>R$ ${Number(l.valor).toFixed(2)}</td>
-          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;padding:2px 8px;" onclick="excluirLancamentoFinanceiroEbdAcao(${l.lancamentoId})">🗑️</button></td>
+          <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;padding:2px 8px;" data-on-click="excluirLancamentoFinanceiroEbdAcao" data-args-click="${argsAttr(l.lancamentoId)}">🗑️</button></td>
         </tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhum lançamento manual neste mês.</p>";
@@ -15193,11 +15217,13 @@ async function carregarVisaoAgrupadaEbdAcao() {
 function escaparHtmlEbd(texto) {
   return String(texto == null ? "" : texto).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
-// Texto que vai como ARGUMENTO JS dentro de atributo de evento montado em string: onclick="f(${argJs(x)})" — SEM aspas em volta, o helper já devolve o
-// literal entre aspas. Vira string JS (JSON: aspas, barra invertida e quebra de linha escapadas) e depois passa pelo escape de HTML. Só o escape de HTML não
-// basta ali: o navegador desfaz o &#39; antes de rodar o JS e a aspa volta, fechando a string (teste permanente: api/shared/__tests__/frontEscape.test.js).
-function argJs(valor) {
-  return escaparHtmlEbd(JSON.stringify(valor == null ? "" : String(valor)));
+// CSP forte (app/eventos.js): os argumentos de uma ação vão em data-args-<tipo>="${argsAttr(a, b)}" — JSON de verdade (não texto JS), escapado para
+// atributo. Nunca é executado: o despachante faz JSON.parse e chama só ação registrada. ARG.elemento/evento/valor/marcado = o antigo this/event/
+// this.value/this.checked. Qualquer valor (inclusive de usuário) entra por aqui, nunca cru no atributo. Substitui o antigo argJs (texto JS dentro de
+// onclick="f(${argJs(x)})"): onde ele era usado, a conversão passou String(x ?? "") — o mesmo texto que a função recebia antes (nulo virava "").
+// Testes permanentes: api/shared/__tests__/frontEscape.test.js (escape) e frontCsp.test.js (nenhum código no HTML).
+function argsAttr(...valores) {
+  return escaparHtmlEbd(JSON.stringify(valores.map(codificarArgEvento)));
 }
 // Endereço que vai para href/src: só http(s), blob:, mailto:, tel:, imagem em data: e caminho relativo; "javascript:" e qualquer outro esquema viram "#".
 // O escape de HTML sozinho não barra o esquema (um link "javascript:..." continua clicável depois de escapado). Espaço e caractere de controle no meio do
@@ -15251,7 +15277,7 @@ function renderLinhasCadernetaEbd(linhas, licaoId, totais) {
       : `<td><input type="number" min="0" id="cadBiblias_${l.turmaId}" value="${escaparHtmlEbd(l.biblias ?? "")}" style="width:70px;" /></td>
          <td><input type="number" min="0" id="cadRevistas_${l.turmaId}" value="${escaparHtmlEbd(l.revistas ?? "")}" style="width:70px;" /></td>
          <td><input type="text" id="cadObs_${l.turmaId}" value="${escaparHtmlEbd(l.observacao || "")}" placeholder="Observação" maxlength="500" style="width:130px;" />
-             <button class="btn-link" onclick="salvarCadernetaEbdAcao(${licaoId}, ${l.turmaId})">💾 Salvar</button></td>`;
+             <button class="btn-link" data-on-click="salvarCadernetaEbdAcao" data-args-click="${argsAttr(licaoId, l.turmaId)}">💾 Salvar</button></td>`;
     return `<tr style="${l.lancada ? "" : "opacity:.6;"}">
       <td><strong>${escaparHtmlEbd(l.turmaNome)}</strong>${l.faixaEtaria ? `<br><span class="subtitle">${escaparHtmlEbd(l.faixaEtaria)}</span>` : ""}</td>
       <td>${professores}</td><td>${textoRevistaVigenteEbd(l.revistaVigente)}</td>
@@ -15343,8 +15369,8 @@ function renderRelatorioTrimestreEbd(rel) {
           ? `🔒 fechado (${f.origem === "AUTOMATICO" ? "automático" : "manual"}, versão ${escaparHtmlEbd(f.versao)}, ${formatarDataEbd(f.refeitoEm || f.fechadoEm)})${f.licoesAbertas > 0 ? ` ⚠️ ${escaparHtmlEbd(f.licoesAbertas)} lição(ões) estavam abertas` : ""}`
           : "⏳ ao vivo";
         const botao = cong.fonte === "FECHAMENTO"
-          ? `<button class="btn-link" onclick="fecharTrimestreEbdAcao(${cong.congregacaoId}, ${argJs(rel.trimestre)}, true)">🔄 Refazer fechamento</button>`
-          : `<button class="btn-link" onclick="fecharTrimestreEbdAcao(${cong.congregacaoId}, ${argJs(rel.trimestre)}, false)">🔒 Fechar trimestre</button>`;
+          ? `<button class="btn-link" data-on-click="fecharTrimestreEbdAcao" data-args-click="${argsAttr(cong.congregacaoId, String(rel.trimestre ?? ""), true)}">🔄 Refazer fechamento</button>`
+          : `<button class="btn-link" data-on-click="fecharTrimestreEbdAcao" data-args-click="${argsAttr(cong.congregacaoId, String(rel.trimestre ?? ""), false)}">🔒 Fechar trimestre</button>`;
         return `<details open style="margin:8px 0 8px 14px;">
           <summary><strong>⛪ ${escaparHtmlEbd(cong.congregacaoNome)}</strong> — ${situacao} ${botao}</summary>
           ${tabelaRelatorioEbd(cong.turmas.map(t => linhaTotaisRelatorioEbd(escaparHtmlEbd(t.turmaNome), t.totais, false)).join("") + linhaTotaisRelatorioEbd("Total da congregação", cong.totais, true))}
@@ -15791,12 +15817,12 @@ function pscLinhaPainel(c, metaSinal, exigidos) {
 
   let acoes = "";
   if (c.avaliacaoId == null) {
-    if (pscPodeGestao()) acoes += `<button class="btn-link" onclick="abrirAvaliacaoPscAcao(${congregacaoId})">➕ Abrir avaliação</button>`;
+    if (pscPodeGestao()) acoes += `<button class="btn-link" data-on-click="abrirAvaliacaoPscAcao" data-args-click="${argsAttr(congregacaoId)}">➕ Abrir avaliação</button>`;
   } else {
     const preencher = c.status === "RASCUNHO" && pscPodeGestao();
-    acoes += `<button class="btn-link" onclick="carregarDetalhePscAcao(${Number(c.avaliacaoId)})">${preencher ? "✏️ Preencher" : "👁️ Ver"}</button>`;
+    acoes += `<button class="btn-link" data-on-click="carregarDetalhePscAcao" data-args-click="${argsAttr(Number(c.avaliacaoId))}">${preencher ? "✏️ Preencher" : "👁️ Ver"}</button>`;
   }
-  acoes += `<button class="btn-link" onclick="carregarHistoricoPscAcao(${congregacaoId})">🕘 Histórico</button>`;
+  acoes += `<button class="btn-link" data-on-click="carregarHistoricoPscAcao" data-args-click="${argsAttr(congregacaoId)}">🕘 Histórico</button>`;
 
   return `<tr>
     <td><strong>${escaparHtmlEbd(c.congregacaoNome)}</strong>${c.areaNome ? `<br /><span class="psc-legenda">${escaparHtmlEbd(c.areaNome)}</span>` : ""}${c.categoria === "EXTENSAO_TENDA" ? `<br /><span class="psc-selo psc-alerta-selo">Extensão da Tenda — sob tutela</span>` : ""}</td>
@@ -15919,7 +15945,7 @@ function pscRenderDetalhe(a) {
   </div>`;
 
   const barraTopo = editavel
-    ? `<div class="psc-acoes"><button class="btn-confirmar" style="width:auto;margin:0;" onclick="salvarRespostasPscAcao()">💾 Salvar respostas</button><span id="pscAlteracoesInfo" class="psc-legenda"></span></div>`
+    ? `<div class="psc-acoes"><button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="salvarRespostasPscAcao">💾 Salvar respostas</button><span id="pscAlteracoesInfo" class="psc-legenda"></span></div>`
     : "";
   const escada = (a.sinais || []).map((s, i) => pscRenderSinal(s, i, editavel)).join("");
   return `${cartaoTopo}${barraTopo}${escada}${pscRenderAcoesDetalhe(a)}`;
@@ -15963,13 +15989,13 @@ function pscRenderCriterio(c, editavel) {
   } else if (editavel && id) {
     const atual = pscRespostasAtuais.get(id) || { situacao: c.situacao, observacao: c.observacao || "", evidenciaUrl: c.evidenciaUrl || "" };
     corpo = `<div class="psc-campos">
-        <label><input type="radio" name="pscSit_${id}" id="pscSitA_${id}"${atual.situacao === "ATENDIDO" ? " checked" : ""} onchange="pscMarcarRespostaAcao(${id}, 'ATENDIDO')" /> Atendido</label>
-        <label><input type="radio" name="pscSit_${id}" id="pscSitN_${id}"${atual.situacao === "NAO_ATENDIDO" ? " checked" : ""} onchange="pscMarcarRespostaAcao(${id}, 'NAO_ATENDIDO')" /> Não atendido</label>
-        <button type="button" class="btn-link" onclick="pscMarcarRespostaAcao(${id}, 'PENDENTE')">limpar</button>
+        <label><input type="radio" name="pscSit_${id}" id="pscSitA_${id}"${atual.situacao === "ATENDIDO" ? " checked" : ""} data-on-change="pscMarcarRespostaAcao" data-args-change="${argsAttr(id, "ATENDIDO")}" /> Atendido</label>
+        <label><input type="radio" name="pscSit_${id}" id="pscSitN_${id}"${atual.situacao === "NAO_ATENDIDO" ? " checked" : ""} data-on-change="pscMarcarRespostaAcao" data-args-change="${argsAttr(id, "NAO_ATENDIDO")}" /> Não atendido</label>
+        <button type="button" class="btn-link" data-on-click="pscMarcarRespostaAcao" data-args-click="${argsAttr(id, "PENDENTE")}">limpar</button>
       </div>
       <div class="psc-campos">
-        <input type="text" id="pscObs_${id}" maxlength="500" placeholder="Observação (opcional)" value="${escaparHtmlEbd(atual.observacao)}" oninput="pscEditarTextoRespostaAcao(${id})" />
-        <input type="text" id="pscEvi_${id}" maxlength="500" placeholder="Link da evidência (https://...)" value="${escaparHtmlEbd(atual.evidenciaUrl)}" oninput="pscEditarTextoRespostaAcao(${id})" />
+        <input type="text" id="pscObs_${id}" maxlength="500" placeholder="Observação (opcional)" value="${escaparHtmlEbd(atual.observacao)}" data-on-input="pscEditarTextoRespostaAcao" data-args-input="${argsAttr(id)}" />
+        <input type="text" id="pscEvi_${id}" maxlength="500" placeholder="Link da evidência (https://...)" value="${escaparHtmlEbd(atual.evidenciaUrl)}" data-on-input="pscEditarTextoRespostaAcao" data-args-input="${argsAttr(id)}" />
       </div>`;
   } else {
     const observacao = c.observacao ? ` — ${escaparHtmlEbd(c.observacao)}` : "";
@@ -16127,7 +16153,8 @@ async function reabrirAvaliacaoPscAcao() {
 // Botões e campos conforme o estado da avaliação e a permissão de quem olha.
 function pscRenderAcoesDetalhe(a) {
   const gestao = pscPodeGestao(), homologa = pscPodeHomologar();
-  const botao = (rotulo, funcao, secundario) => `<button class="btn-confirmar${secundario ? " btn-secundario" : ""}" style="width:auto;margin:0;" onclick="${funcao}()">${rotulo}</button>`;
+  // "acao" é sempre um dos nomes fixos escritos abaixo (lista fechada do código, conferida pelo teste frontCsp), nunca dado
+  const botao = (rotulo, acao, secundario) => `<button class="btn-confirmar${secundario ? " btn-secundario" : ""}" style="width:auto;margin:0;" data-on-click="${acao}">${rotulo}</button>`;
   let corpo = "";
   if (a.status === "RASCUNHO") {
     corpo = gestao
@@ -16206,10 +16233,10 @@ function pscRenderReclassificacao(r, comAcoes) {
   let acoes = "";
   if (comAcoes && homologa) {
     if (r.status === "PROPOSTA") {
-      acoes = `<button class="btn-link" onclick="abrirFormReclassPscAcao(${id}, 'decretar')">📌 Decretar…</button>
-        <button class="btn-link btn-link-perigo" onclick="abrirFormReclassPscAcao(${id}, 'arquivar')">🗄️ Arquivar…</button>`;
+      acoes = `<button class="btn-link" data-on-click="abrirFormReclassPscAcao" data-args-click="${argsAttr(id, "decretar")}">📌 Decretar…</button>
+        <button class="btn-link btn-link-perigo" data-on-click="abrirFormReclassPscAcao" data-args-click="${argsAttr(id, "arquivar")}">🗄️ Arquivar…</button>`;
     } else if (r.status === "DECRETADA") {
-      acoes = `<button class="btn-link" onclick="abrirFormReclassPscAcao(${id}, 'restabelecer')">♻️ Restabelecer autonomia…</button>`;
+      acoes = `<button class="btn-link" data-on-click="abrirFormReclassPscAcao" data-args-click="${argsAttr(id, "restabelecer")}">♻️ Restabelecer autonomia…</button>`;
     }
   }
   return `<div class="cartao-area-ebd psc-cartao">
@@ -16252,8 +16279,8 @@ function abrirFormReclassPscAcao(reclassificacaoId, tipo) {
         ${maes.map(c => `<option value="${Number(c.congregacaoId)}">${escaparHtmlEbd(c.congregacaoNome)}${c.areaNome ? ` — ${escaparHtmlEbd(c.areaNome)}` : ""}</option>`).join("")}
       </select>
       <div class="psc-acoes">
-        <button class="btn-confirmar" style="width:auto;margin:0;" onclick="decretarReclassificacaoPscAcao(${id})">📌 Decretar</button>
-        <button class="btn-link" onclick="fecharFormReclassPscAcao(${id})">cancelar</button>
+        <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="decretarReclassificacaoPscAcao" data-args-click="${argsAttr(id)}">📌 Decretar</button>
+        <button class="btn-link" data-on-click="fecharFormReclassPscAcao" data-args-click="${argsAttr(id)}">cancelar</button>
       </div>
     </div>`;
   } else if (tipo === "arquivar") {
@@ -16264,8 +16291,8 @@ function abrirFormReclassPscAcao(reclassificacaoId, tipo) {
       <label for="pscArqResolucao_${id}">Resolução da CLI (opcional, até 150 caracteres)</label>
       <input type="text" id="pscArqResolucao_${id}" maxlength="150" />
       <div class="psc-acoes">
-        <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="arquivarReclassificacaoPscAcao(${id})">🗄️ Arquivar proposta</button>
-        <button class="btn-link" onclick="fecharFormReclassPscAcao(${id})">cancelar</button>
+        <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="arquivarReclassificacaoPscAcao" data-args-click="${argsAttr(id)}">🗄️ Arquivar proposta</button>
+        <button class="btn-link" data-on-click="fecharFormReclassPscAcao" data-args-click="${argsAttr(id)}">cancelar</button>
       </div>
     </div>`;
   } else if (tipo === "restabelecer") {
@@ -16276,8 +16303,8 @@ function abrirFormReclassPscAcao(reclassificacaoId, tipo) {
       <label for="pscResMotivo_${id}">Motivo do restabelecimento (mínimo 10 caracteres)</label>
       <textarea id="pscResMotivo_${id}" rows="2" maxlength="500" style="width:100%;"></textarea>
       <div class="psc-acoes">
-        <button class="btn-confirmar" style="width:auto;margin:0;" onclick="restabelecerReclassificacaoPscAcao(${id})">♻️ Restabelecer autonomia</button>
-        <button class="btn-link" onclick="fecharFormReclassPscAcao(${id})">cancelar</button>
+        <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="restabelecerReclassificacaoPscAcao" data-args-click="${argsAttr(id)}">♻️ Restabelecer autonomia</button>
+        <button class="btn-link" data-on-click="fecharFormReclassPscAcao" data-args-click="${argsAttr(id)}">cancelar</button>
       </div>
     </div>`;
   }
@@ -16349,7 +16376,7 @@ async function carregarHistoricoPscAcao(congregacaoId) {
           ${avaliacoes.map(a => `<tr>
             <td>${pscNum(a.ano)}</td><td>${pscSeloStatus(a.status, a.rotuloStatus)}</td><td>${a.nivelFinal != null ? pscNum(a.nivelFinal) : "—"}</td>
             <td>${a.rotuloClassificacao ? escaparHtmlEbd(a.rotuloClassificacao) : "—"}</td><td>${a.resolucaoReferencia ? escaparHtmlEbd(a.resolucaoReferencia) : "—"}</td>
-            <td><button class="btn-link" onclick="carregarDetalhePscAcao(${Number(a.avaliacaoId)})">📂 Abrir</button></td></tr>`).join("")}
+            <td><button class="btn-link" data-on-click="carregarDetalhePscAcao" data-args-click="${argsAttr(Number(a.avaliacaoId))}">📂 Abrir</button></td></tr>`).join("")}
         </tbody></table></div>`
         : "<p class='subtitle'>Nenhuma avaliação do PSC para esta congregação ainda.</p>"}
     </div>
@@ -16410,8 +16437,8 @@ async function carregarCatalogoPscAcao() {
           ${c.artigoRef ? `<span class="psc-legenda">· ${escaparHtmlEbd(c.artigoRef)}</span>` : ""}
           ${c.fonteAutomatica ? `<span class="psc-selo psc-neutro" title="O sistema consegue sugerir esta resposta a partir de dados que já tem">🤖 sugestão automática</span>` : ""}
           ${c.orientacao ? `<div class="psc-orientacao"><strong>Atenção:</strong> ${escaparHtmlEbd(c.orientacao)}</div>` : ""}
-          ${homologa ? `<div><button class="btn-link" onclick="editarCriterioPscAcao(${Number(c.criterioId)})">✏️ Editar texto</button>
-            <button class="btn-link${inativo(c) ? "" : " btn-link-perigo"}" onclick="alternarCriterioPscAcao(${Number(c.criterioId)}, ${inativo(c) ? "true" : "false"})">${inativo(c) ? "✅ Ativar" : "⛔ Desativar"}</button></div>` : ""}
+          ${homologa ? `<div><button class="btn-link" data-on-click="editarCriterioPscAcao" data-args-click="${argsAttr(Number(c.criterioId))}">✏️ Editar texto</button>
+            <button class="btn-link${inativo(c) ? "" : " btn-link-perigo"}" data-on-click="alternarCriterioPscAcao" data-args-click="${argsAttr(Number(c.criterioId), inativo(c) ? true : false)}">${inativo(c) ? "✅ Ativar" : "⛔ Desativar"}</button></div>` : ""}
         </div>`).join("") : "<p class='psc-legenda'>Sem critérios neste degrau.</p>"}
     </div>`).join("");
     return `<div class="cartao-area-ebd psc-cartao${inativo(s) ? " psc-inativo" : ""}">
@@ -16905,7 +16932,7 @@ function calRenderGradeMes(indice) {
     }).join("");
     const rotulo = `${dia} de ${CAL_MESES[mes - 1]}${oficiais.length ? `, ${oficiais.length} evento(s) oficial(is)` : ""}`;
     const classes = `cal-dia${iso === hoje ? " cal-hoje" : ""}${iso === calDiaSelecionado ? " cal-selecionado" : ""}`;
-    celulas += `<button type="button" class="${classes}" onclick="calSelecionarDiaAcao(${dia})" aria-label="${rotulo}" aria-pressed="${iso === calDiaSelecionado ? "true" : "false"}"><span class="cal-dia-num">${dia}</span><span class="cal-bolinhas">${bolinhas}</span></button>`;
+    celulas += `<button type="button" class="${classes}" data-on-click="calSelecionarDiaAcao" data-args-click="${argsAttr(dia)}" aria-label="${rotulo}" aria-pressed="${iso === calDiaSelecionado ? "true" : "false"}"><span class="cal-dia-num">${dia}</span><span class="cal-bolinhas">${bolinhas}</span></button>`;
   }
   grade.innerHTML = cabecalho + celulas;
 }
@@ -16968,7 +16995,7 @@ function calRenderItemOficial(item, opcoes) {
   const classeNivel = CAL_NIVEIS[nivel] ? `cal-n${nivel}` : "";
   const classeStatus = `cal-status-${escaparHtmlEbd(String(status).toLowerCase().replace(/[^a-z]/g, ""))}`;
   const detalhes = clicavel && Number(item.eventoId)
-    ? `<div><button type="button" class="btn-link" onclick="calAbrirEventoAcao(${Number(item.eventoId)})">🔎 Ver detalhes</button></div>` : "";
+    ? `<div><button type="button" class="btn-link" data-on-click="calAbrirEventoAcao" data-args-click="${argsAttr(Number(item.eventoId))}">🔎 Ver detalhes</button></div>` : "";
   return `<div class="cal-item cal-item-oficial ${classeNivel} ${classeStatus}">
     <div class="cal-item-topo"><strong class="cal-titulo-item">${escaparHtmlEbd(item.titulo)}</strong> ${selos}</div>
     <div class="cal-item-meta">${meta.join(" · ")}</div>
@@ -17123,7 +17150,7 @@ function calPreencherAreasProp() {
   const marcadas = calPropAreasMarcadas();
   const areas = calReferencias ? calReferencias.areas : [];
   caixa.innerHTML = areas.length
-    ? areas.map(a => `<label class="cal-check"><input type="checkbox" id="calPropArea_${Number(a.id)}" onchange="calPropAgendarVerificacaoAcao()" /> ${escaparHtmlEbd(a.nome)}</label>`).join("")
+    ? areas.map(a => `<label class="cal-check"><input type="checkbox" id="calPropArea_${Number(a.id)}" data-on-change="calPropAgendarVerificacaoAcao" /> ${escaparHtmlEbd(a.nome)}</label>`).join("")
     : "<p class='psc-legenda'>Nenhuma Área cadastrada.</p>";
   marcadas.forEach(id => { const c = calEl(`calPropArea_${id}`); if (c) c.checked = true; });
 }
@@ -17230,10 +17257,11 @@ async function calPropVerificarAgoraAcao() {
   calPropDesenharVerificacao(data);
 }
 
-function calHtmlSugestoes(sugestoes, funcao) {
+// "acao": nome fixo passado pelos dois chamadores (calUsarSugestaoVerifAcao / calUsarSugestaoRetornoAcao), nunca dado
+function calHtmlSugestoes(sugestoes, acao) {
   if (!sugestoes.length) return "";
   return `<div class="cal-sugestoes"><span class="psc-legenda">Datas livres próximas (clique para usar):</span>${sugestoes.map((s, i) =>
-    `<button type="button" class="btn-link" onclick="${funcao}(${i})">${escaparHtmlEbd(calPeriodo(s.dataInicio, s.dataFim))}</button>`).join("")}</div>`;
+    `<button type="button" class="btn-link" data-on-click="${acao}" data-args-click="${argsAttr(i)}">${escaparHtmlEbd(calPeriodo(s.dataInicio, s.dataFim))}</button>`).join("")}</div>`;
 }
 
 function calPropDesenharVerificacao(data) {
@@ -17256,7 +17284,7 @@ function calPropDesenharVerificacao(data) {
     <strong>${icone} ${rotulo}</strong>
     <div>${escaparHtmlEbd(data.mensagem || "")}</div>
     ${data.rotuloMotivo ? `<div class="psc-legenda">${escaparHtmlEbd(data.rotuloMotivo)}</div>` : ""}
-    ${conflitos.length ? `<ul>${conflitos.map(c => `<li><button type="button" class="btn-link" onclick="calAbrirEventoAcao(${Number(c.eventoId)})">${escaparHtmlEbd(c.titulo)}</button>
+    ${conflitos.length ? `<ul>${conflitos.map(c => `<li><button type="button" class="btn-link" data-on-click="calAbrirEventoAcao" data-args-click="${argsAttr(Number(c.eventoId))}">${escaparHtmlEbd(c.titulo)}</button>
       — ${calSeloNivel(c.nivel)} ${calSeloStatus(c.status)} ${escaparHtmlEbd(calPeriodo(c.dataInicio, c.dataFim))}${c.motivoConflito ? ` · ${escaparHtmlEbd(calDe(CAL_MOTIVO_CONFLITO, c.motivoConflito, c.motivoConflito))}` : ""}</li>`).join("")}</ul>` : ""}
     ${calHtmlSugestoes(calSugestoesVerif, "calUsarSugestaoVerifAcao")}
     ${prazo ? `<div class="psc-legenda">${prazo}</div>` : ""}
@@ -17324,7 +17352,7 @@ function calPropMostrarRetorno(data) {
   let html = "";
   if (registrada) html += `<div class="cal-aviso-remarcacao">A proposta ficou <strong>registrada como indeferida</strong>${eventoId ? ` (nº ${eventoId})` : ""}. Escolha uma das datas livres abaixo, ou outra data, e envie de novo.</div>`;
   html += calHtmlSugestoes(calSugestoesRetorno, "calUsarSugestaoRetornoAcao");
-  if (eventoId) html += `<div><button type="button" class="btn-link" onclick="calAbrirEventoAcao(${eventoId})">🔎 Abrir esta proposta</button></div>`;
+  if (eventoId) html += `<div><button type="button" class="btn-link" data-on-click="calAbrirEventoAcao" data-args-click="${argsAttr(eventoId)}">🔎 Abrir esta proposta</button></div>`;
   if (area) area.innerHTML = html;
   if (data.sucesso === false) return;
   // enviada: limpa o formulário (o tipo e a abrangência ficam) e avisa as outras telas que mudou
@@ -17363,7 +17391,7 @@ function calRemarcarAcao() {
   const aviso = calEl("calPropRemarcacaoAviso");
   if (aviso) {
     aviso.innerHTML = `<div class="cal-aviso-remarcacao">🔁 Remarcação de «${escaparHtmlEbd(e.titulo)}» (nº ${id}): a nova proposta <strong>mantém o carimbo da proposta original</strong> (Direito Adquirido Temporal) e é decidida na hora. Escolha a nova data.
-      <button type="button" class="btn-link" onclick="calCancelarRemarcacaoAcao()">cancelar a remarcação</button></div>`;
+      <button type="button" class="btn-link" data-on-click="calCancelarRemarcacaoAcao">cancelar a remarcação</button></div>`;
   }
   const resultado = calEl("calPropResultado");
   if (resultado) { resultado.textContent = ""; resultado.className = "subtitle"; }
@@ -17417,7 +17445,7 @@ function calRenderPauta(eventos, truncado) {
       <td>${escaparHtmlEbd(calTextoAbrangencia(e))}${e.local ? `<br /><span class="psc-legenda">📍 ${escaparHtmlEbd(e.local)}</span>` : ""}</td>
       <td>${calSeloStatus(e.status)}</td>
       <td>${proponente}</td>
-      <td><button type="button" class="btn-link" onclick="calAbrirEventoAcao(${id})">🔎 Abrir</button></td>
+      <td><button type="button" class="btn-link" data-on-click="calAbrirEventoAcao" data-args-click="${argsAttr(id)}">🔎 Abrir</button></td>
     </tr>`;
   }).join("");
   return `<table class="tabela-frequencia"><thead><tr><th>Data</th><th>Título</th><th>Tipo</th><th>Nível</th><th>Abrangência / local</th><th>Situação</th><th>Proponente</th><th></th></tr></thead><tbody>${linhas}</tbody></table>`
@@ -17453,7 +17481,7 @@ function calCampoDetalhe(rotulo, html) {
 function calRenderDetalheEvento(data) {
   const e = data.evento, a = data.acoes || {};
   const tipo = e.tipo || {};
-  const botaoEvento = (eventoId, rotulo) => `<button type="button" class="btn-link" onclick="calAbrirEventoAcao(${Number(eventoId)})">${escaparHtmlEbd(rotulo)}</button>`;
+  const botaoEvento = (eventoId, rotulo) => `<button type="button" class="btn-link" data-on-click="calAbrirEventoAcao" data-args-click="${argsAttr(Number(eventoId))}">${escaparHtmlEbd(rotulo)}</button>`;
   const campos = [
     calCampoDetalhe("Tipo", escaparHtmlEbd(tipo.nome || "—")),
     calCampoDetalhe("Quando", escaparHtmlEbd(calPeriodo(e.dataInicio, e.dataFim, e.horaInicio, e.horaFim))),
@@ -17480,21 +17508,22 @@ function calRenderDetalheEvento(data) {
   const choques = conflitos.length
     ? `<h5>⚠️ Choques atuais na pauta</h5><ul class="cal-lista-simples">${conflitos.map(c => `<li>${botaoEvento(c.eventoId, c.titulo || `evento nº ${Number(c.eventoId)}`)} — ${calSeloNivel(c.nivel)} ${calSeloStatus(c.status)} ${escaparHtmlEbd(calPeriodo(c.dataInicio))}${c.motivoConflito ? ` · ${escaparHtmlEbd(calDe(CAL_MOTIVO_CONFLITO, c.motivoConflito, c.motivoConflito))}` : ""}</li>`).join("")}</ul>` : "";
 
-  const botao = (rotulo, funcao, extra) => `<button type="button" class="btn-confirmar${extra ? ` ${extra}` : ""}" style="width:auto;margin:0;" onclick="${funcao}">${rotulo}</button>`;
+  // "acao": nome fixo escrito abaixo (lista fechada do código), "args": a lista de argumentos (vai por argsAttr)
+  const botao = (rotulo, acao, args, extra) => `<button type="button" class="btn-confirmar${extra ? ` ${extra}` : ""}" style="width:auto;margin:0;" data-on-click="${acao}"${args.length ? ` data-args-click="${argsAttr(...args)}"` : ""}>${rotulo}</button>`;
   const id = Number(e.eventoId || e.id);
   const botoes = [
-    a.editar ? botao("✏️ Editar", "calAbrirFormAcaoDetalhe('editar')", "btn-secundario") : "",
-    a.deferir ? botao("✅ Deferir", "calDeferirEventoAcao()") : "",
-    a.indeferir ? botao("🚫 Indeferir…", "calAbrirFormAcaoDetalhe('indeferir')", "btn-secundario") : "",
-    a.cancelar ? botao("❌ Cancelar evento…", "calAbrirFormAcaoDetalhe('cancelar')", "btn-secundario") : "",
-    a.absorver ? botao("🏛️ Absorver por decisão da CLI…", "calAbrirFormAcaoDetalhe('absorver')", "btn-secundario") : "",
-    a.remarcar ? botao("🔁 Remarcar", "calRemarcarAcao()") : "",
-    a.registrarPresenca ? botao("🍞 Registrar presença dos dirigentes", `calAbrirPresencaAcao(${id})`, "btn-secundario") : ""
+    a.editar ? botao("✏️ Editar", "calAbrirFormAcaoDetalhe", ["editar"], "btn-secundario") : "",
+    a.deferir ? botao("✅ Deferir", "calDeferirEventoAcao", []) : "",
+    a.indeferir ? botao("🚫 Indeferir…", "calAbrirFormAcaoDetalhe", ["indeferir"], "btn-secundario") : "",
+    a.cancelar ? botao("❌ Cancelar evento…", "calAbrirFormAcaoDetalhe", ["cancelar"], "btn-secundario") : "",
+    a.absorver ? botao("🏛️ Absorver por decisão da CLI…", "calAbrirFormAcaoDetalhe", ["absorver"], "btn-secundario") : "",
+    a.remarcar ? botao("🔁 Remarcar", "calRemarcarAcao", []) : "",
+    a.registrarPresenca ? botao("🍞 Registrar presença dos dirigentes", "calAbrirPresencaAcao", [id], "btn-secundario") : ""
   ].filter(Boolean).join("");
   // v7.4: evento de Nível 1 a 3 ou de abrangência Área/Campo tem dossiê de governança (organizadores, convidados, Caixa Flutuante).
   const nivelEvento = Number(e.nivel);
   const dossie = (nivelEvento >= 1 && nivelEvento <= 3) || e.abrangencia === "AREAS" || e.abrangencia === "CAMPO"
-    ? `<div style="margin-top:6px;"><button type="button" class="btn-link" onclick="evtAbrirDossieDoCalendarioAcao(${id})">🎪 Abrir dossiê do evento</button></div>` : "";
+    ? `<div style="margin-top:6px;"><button type="button" class="btn-link" data-on-click="evtAbrirDossieDoCalendarioAcao" data-args-click="${argsAttr(id)}">🎪 Abrir dossiê do evento</button></div>` : "";
 
   return `<div class="cal-cartao cartao-area-ebd ${CAL_NIVEIS[Number(e.nivel)] ? `cal-n${Number(e.nivel)}` : ""}">
     <h4>${escaparHtmlEbd(e.titulo)}</h4>
@@ -17520,7 +17549,7 @@ function calAbrirFormAcaoDetalhe(tipoAcao) {
   const area = calEl("calFormAcao");
   const e = calEventoAberto && calEventoAberto.evento;
   if (!area || !e) return;
-  const cancelar = `<button type="button" class="btn-link" onclick="calFecharFormAcaoDetalhe()">cancelar</button>`;
+  const cancelar = `<button type="button" class="btn-link" data-on-click="calFecharFormAcaoDetalhe">cancelar</button>`;
   if (tipoAcao === "editar") {
     area.innerHTML = `<div class="cal-form-inline">
       <p class="psc-legenda">Data e horário não mudam: para mudar, cancele este evento e proponha de novo.</p>
@@ -17533,7 +17562,7 @@ function calAbrirFormAcaoDetalhe(tipoAcao) {
       <label for="calEdSlug">Identificador no site (letras minúsculas, números e hífen)</label>
       <input type="text" id="calEdSlug" maxlength="150" value="${escaparHtmlEbd(e.slugSite || "")}" />
       <label class="cal-check"><input type="checkbox" id="calEdPublico"${e.publicoNoSite ? " checked" : ""} /> Mostrar no site (depois de homologado)</label>
-      <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="calSalvarEdicaoEventoAcao()">💾 Salvar alterações</button>${cancelar}</div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="calSalvarEdicaoEventoAcao">💾 Salvar alterações</button>${cancelar}</div>
     </div>`;
   } else if (tipoAcao === "cancelar" || tipoAcao === "indeferir") {
     const cancela = tipoAcao === "cancelar";
@@ -17541,7 +17570,7 @@ function calAbrirFormAcaoDetalhe(tipoAcao) {
       <p class="psc-aviso">${cancela ? "Cancelar tira o evento da pauta: a data volta a ficar livre." : "Indeferir recusa a proposta: o proponente é avisado e pode escolher outra data."}</p>
       <label for="calAcaoMotivo">Motivo (mínimo 10, máximo 500 caracteres)</label>
       <textarea id="calAcaoMotivo" rows="2" maxlength="500" style="width:100%;"></textarea>
-      <div class="psc-acoes"><button type="button" class="btn-confirmar ${cancela ? "btn-perigo" : "btn-secundario"}" style="width:auto;margin:0;" onclick="${cancela ? "calCancelarEventoAcao()" : "calIndeferirEventoAcao()"}">${cancela ? "❌ Cancelar o evento" : "🚫 Indeferir a proposta"}</button>${cancelar}</div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar ${cancela ? "btn-perigo" : "btn-secundario"}" style="width:auto;margin:0;" data-on-click="${cancela ? "calCancelarEventoAcao" : "calIndeferirEventoAcao"}">${cancela ? "❌ Cancelar o evento" : "🚫 Indeferir a proposta"}</button>${cancelar}</div>
     </div>`;
   } else if (tipoAcao === "absorver") {
     area.innerHTML = `<div class="cal-form-inline">
@@ -17550,7 +17579,7 @@ function calAbrirFormAcaoDetalhe(tipoAcao) {
       <textarea id="calAcaoMotivo" rows="2" maxlength="500" style="width:100%;"></textarea>
       <label for="calAcaoResolucao">Resolução da CLI (3 a 150 caracteres)</label>
       <input type="text" id="calAcaoResolucao" maxlength="150" placeholder="Ex.: Resolução CLI nº 12/2027" />
-      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="calAbsorverEventoAcao()">🏛️ Absorver o evento</button>${cancelar}</div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="calAbsorverEventoAcao">🏛️ Absorver o evento</button>${cancelar}</div>
     </div>`;
   }
 }
@@ -17654,11 +17683,11 @@ function calLinhaAno(a) {
   ].filter(Boolean).join("<br />");
   let acoes = "";
   if (calPodeSecretaria()) {
-    acoes += `<button type="button" class="btn-link" title="Cria a Santa Ceia, a CLI, o Conselho Fiscal e a CEI do ano (não duplica)" onclick="calGerarCicloAcao(${ano})">🔁 Gerar ciclo mensal</button>`;
-    if (a.status !== "HOMOLOGADO") acoes += `<button type="button" class="btn-link" onclick="calConsolidarAnoAcao(${ano})">🧮 Consolidar</button>`;
+    acoes += `<button type="button" class="btn-link" title="Cria a Santa Ceia, a CLI, o Conselho Fiscal e a CEI do ano (não duplica)" data-on-click="calGerarCicloAcao" data-args-click="${argsAttr(ano)}">🔁 Gerar ciclo mensal</button>`;
+    if (a.status !== "HOMOLOGADO") acoes += `<button type="button" class="btn-link" data-on-click="calConsolidarAnoAcao" data-args-click="${argsAttr(ano)}">🧮 Consolidar</button>`;
   }
   if (calPodeHomologar()) {
-    if (a.status === "CONSOLIDADO") acoes += `<button type="button" class="btn-link" onclick="calAbrirFormHomologarAcao(${ano})">🏛️ Homologar o ano…</button>`;
+    if (a.status === "CONSOLIDADO") acoes += `<button type="button" class="btn-link" data-on-click="calAbrirFormHomologarAcao" data-args-click="${argsAttr(ano)}">🏛️ Homologar o ano…</button>`;
     else if (a.status === "PLANEJAMENTO") acoes += `<span class="psc-legenda">homologação: aguarda a consolidação</span>`;
   }
   return `<tr>
@@ -17682,7 +17711,7 @@ async function calConcluirAcaoAno(data) {
   if (retorno) {
     retorno.innerHTML = data.sucesso !== false && lista.length
       ? `<p class="psc-legenda">Indeferidos por choque nesta consolidação (${total}); os proponentes foram avisados:</p><ul class="cal-lista-simples">${lista.map(i =>
-        `<li><button type="button" class="btn-link" onclick="calAbrirEventoAcao(${Number(i.eventoId)})">${escaparHtmlEbd(i.titulo)}</button></li>`).join("")}</ul>`
+        `<li><button type="button" class="btn-link" data-on-click="calAbrirEventoAcao" data-args-click="${argsAttr(Number(i.eventoId))}">${escaparHtmlEbd(i.titulo)}</button></li>`).join("")}</ul>`
       : "";
   }
   if (data.sucesso === false) return;
@@ -17723,8 +17752,8 @@ function calAbrirFormHomologarAcao(ano) {
     <label for="calAta_${a}">Ata ou resolução da CLI que aprova o calendário (3 a 150 caracteres)</label>
     <input type="text" id="calAta_${a}" maxlength="150" placeholder="Ex.: Ata da CLI de 12/01/${a}" />
     <div class="psc-acoes">
-      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="calHomologarAnoAcao(${a})">🏛️ Homologar ${a}</button>
-      <button type="button" class="btn-link" onclick="calFecharFormHomologarAcao(${a})">cancelar</button>
+      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="calHomologarAnoAcao" data-args-click="${argsAttr(a)}">🏛️ Homologar ${a}</button>
+      <button type="button" class="btn-link" data-on-click="calFecharFormHomologarAcao" data-args-click="${argsAttr(a)}">cancelar</button>
     </div>
   </div>`;
 }
@@ -17784,8 +17813,8 @@ function calRenderRegras(regras) {
         <td>${escaparHtmlEbd(calDe(CAL_TIPO_LITURGIA, r.tipo, r.tipo || "—"))}</td>
         <td>${r.departamentoSigla ? escaparHtmlEbd(r.departamentoSigla) : "—"}</td>
         <td>${ativo ? `<span class="cal-selo cal-st-homologado">ativa</span>` : `<span class="cal-selo cal-st-cancelado">desativada</span>`}</td>
-        <td><button type="button" class="btn-link" onclick="calEditarRegraAcao(${id})">✏️ Editar</button>
-          <button type="button" class="btn-link${ativo ? " btn-link-perigo" : ""}" onclick="calAlternarRegraAcao(${id}, ${ativo ? "false" : "true"})">${ativo ? "⛔ Desativar" : "✅ Ativar"}</button></td>
+        <td><button type="button" class="btn-link" data-on-click="calEditarRegraAcao" data-args-click="${argsAttr(id)}">✏️ Editar</button>
+          <button type="button" class="btn-link${ativo ? " btn-link-perigo" : ""}" data-on-click="calAlternarRegraAcao" data-args-click="${argsAttr(id, ativo ? false : true)}">${ativo ? "⛔ Desativar" : "✅ Ativar"}</button></td>
       </tr>`;
   }).join("")}
   </tbody></table>`;
@@ -17915,8 +17944,8 @@ function calRenderTipos(tipos) {
         <td>${regras || "—"}</td>
         <td>${t.artigoRef ? escaparHtmlEbd(t.artigoRef) : "—"}</td>
         <td>${ativo ? `<span class="cal-selo cal-st-homologado">ativo</span>` : `<span class="cal-selo cal-st-cancelado">desativado</span>`}</td>
-        <td><button type="button" class="btn-link" onclick="calEditarTipoAcao(${id})">✏️ Editar</button>
-          <button type="button" class="btn-link${ativo ? " btn-link-perigo" : ""}" onclick="calAlternarTipoAcao(${id}, ${ativo ? "false" : "true"})">${ativo ? "⛔ Desativar" : "✅ Ativar"}</button></td>
+        <td><button type="button" class="btn-link" data-on-click="calEditarTipoAcao" data-args-click="${argsAttr(id)}">✏️ Editar</button>
+          <button type="button" class="btn-link${ativo ? " btn-link-perigo" : ""}" data-on-click="calAlternarTipoAcao" data-args-click="${argsAttr(id, ativo ? false : true)}">${ativo ? "⛔ Desativar" : "✅ Ativar"}</button></td>
       </tr>`;
   }).join("")}
   </tbody></table>`;
@@ -18103,9 +18132,9 @@ function calRenderPresenca(data) {
           <td><span class="cal-selo ${escaparHtmlEbd(classe)}">${escaparHtmlEbd(rotulo)}</span></td>
           <td>${l.justificativa ? escaparHtmlEbd(l.justificativa) : "—"}</td>
           <td>${l.registradoEm ? `${escaparHtmlEbd(calDataHora(l.registradoEm))}${l.registradoPorNome ? `<br /><span class="psc-legenda">por ${escaparHtmlEbd(l.registradoPorNome)}</span>` : ""}` : "—"}</td>
-          <td><button type="button" class="btn-link btn-link-sucesso" onclick="calMarcarPresencaAcao(${id}, 'PRESENTE')">✅ Presente</button>
-            <button type="button" class="btn-link" onclick="calAbrirJustificativaPresencaAcao(${id})">🟡 Ausente justificada…</button>
-            <button type="button" class="btn-link btn-link-perigo" onclick="calMarcarPresencaAcao(${id}, 'AUSENTE_INJUSTIFICADA')">🔴 Ausente injustificada</button>
+          <td><button type="button" class="btn-link btn-link-sucesso" data-on-click="calMarcarPresencaAcao" data-args-click="${argsAttr(id, "PRESENTE")}">✅ Presente</button>
+            <button type="button" class="btn-link" data-on-click="calAbrirJustificativaPresencaAcao" data-args-click="${argsAttr(id)}">🟡 Ausente justificada…</button>
+            <button type="button" class="btn-link btn-link-perigo" data-on-click="calMarcarPresencaAcao" data-args-click="${argsAttr(id, "AUSENTE_INJUSTIFICADA")}">🔴 Ausente injustificada</button>
             <div id="calFormPresenca_${id}"></div></td>
         </tr>`;
   }).join("")}
@@ -18126,8 +18155,8 @@ function calAbrirJustificativaPresencaAcao(congregacaoId) {
     <label for="calPresJust_${id}">Justificativa comprovada (médica ou de trabalho; mínimo 10, máximo 500 caracteres)</label>
     <textarea id="calPresJust_${id}" rows="2" maxlength="500" style="width:100%;"></textarea>
     <div class="psc-acoes">
-      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="calEnviarJustificativaPresencaAcao(${id})">💾 Registrar ausência justificada</button>
-      <button type="button" class="btn-link" onclick="calFecharJustificativaPresencaAcao(${id})">cancelar</button>
+      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="calEnviarJustificativaPresencaAcao" data-args-click="${argsAttr(id)}">💾 Registrar ausência justificada</button>
+      <button type="button" class="btn-link" data-on-click="calFecharJustificativaPresencaAcao" data-args-click="${argsAttr(id)}">cancelar</button>
     </div>
   </div>`;
 }
@@ -18321,7 +18350,7 @@ function cnlSeloPendencia(p) {
 function cnlBotaoCopiar(texto, rotulo) {
   let indice = cnlTextosCopia.indexOf(String(texto));
   if (indice < 0) { cnlTextosCopia.push(String(texto)); indice = cnlTextosCopia.length - 1; }
-  return `<button type="button" class="btn-link" onclick="cnlCopiarTextoAcao(${indice})">📋 ${rotulo}</button>`;
+  return `<button type="button" class="btn-link" data-on-click="cnlCopiarTextoAcao" data-args-click="${argsAttr(indice)}">📋 ${rotulo}</button>`;
 }
 async function cnlCopiarTextoAcao(indice) {
   const texto = cnlTextosCopia[Number(indice)];
@@ -18553,7 +18582,7 @@ async function cnlCarregarPainelAcao() {
       ? comPendencia.map(c => `<div class="cal-cartao cartao-area-ebd">
           <h5>${escaparHtmlEbd(c.nome)} ${cnlSelo(CNL_SITUACAO_CANAL, c.situacao)} <span class="psc-legenda">${escaparHtmlEbd(c.rotuloPlataforma || "")}${c.rotuloEscopo ? ` · ${escaparHtmlEbd(c.rotuloEscopo)}` : ""}</span></h5>
           <ul class="cal-lista-simples">${(Array.isArray(c.pendencias) ? c.pendencias : []).map(p => `<li>${cnlSeloPendencia(p)} ${escaparHtmlEbd(p.mensagem)}</li>`).join("")}</ul>
-          <div><button type="button" class="btn-link" onclick="cnlAbrirCanalAcao(${Number(c.canalId)})">🔎 Abrir o canal</button></div>
+          <div><button type="button" class="btn-link" data-on-click="cnlAbrirCanalAcao" data-args-click="${argsAttr(Number(c.canalId))}">🔎 Abrir o canal</button></div>
         </div>`).join("")
       : "<p class='subtitle'>Nenhum canal com pendência. 🎉</p>";
   }
@@ -18562,7 +18591,7 @@ async function cnlCarregarPainelAcao() {
     semCanal.innerHTML = congregacoes.length
       ? `<ul class="cal-lista-simples">${congregacoes.map(c => `<li><strong>${escaparHtmlEbd(c.congregacaoNome)}</strong>${c.areaNome ? ` <span class="psc-legenda">(${escaparHtmlEbd(c.areaNome)})</span>` : ""}
           · transmissão: ${cnlSelo(CNL_SITUACAO_TRANSMISSAO, c.situacao)}
-          <button type="button" class="btn-link" onclick="cnlRegistrarParaCongregacaoAcao(${Number(c.congregacaoId)})">➕ Registrar canal</button></li>`).join("")}</ul>`
+          <button type="button" class="btn-link" data-on-click="cnlRegistrarParaCongregacaoAcao" data-args-click="${argsAttr(Number(c.congregacaoId))}">➕ Registrar canal</button></li>`).join("")}</ul>`
       : "<p class='subtitle'>Todas as congregações têm canal próprio.</p>";
   }
 }
@@ -18615,7 +18644,7 @@ function cnlRedesenharCanaisAcao() {
       <td>${ativo ? cnlSelo(CNL_SITUACAO_CANAL, c.situacao) : "—"}${pendencias.length ? `<br /><span class="psc-legenda">${pendencias.length} pendência(s)</span>` : ""}</td>
       <td>${cnlNumero(c.administradoresAtivos)}</td>
       <td>${c.ultimaConferencia ? `${escaparHtmlEbd(calData(c.ultimaConferencia.em))} ${cnlSelo(CNL_RESULTADO_CONFERENCIA, c.ultimaConferencia.resultado)}` : "<span class='psc-alerta'>nunca</span>"}</td>
-      <td><button type="button" class="btn-link" onclick="cnlAbrirCanalAcao(${Number(c.canalId)})">🔎 Abrir</button></td>
+      <td><button type="button" class="btn-link" data-on-click="cnlAbrirCanalAcao" data-args-click="${argsAttr(Number(c.canalId))}">🔎 Abrir</button></td>
     </tr>`;
   }).join("")}
   </tbody></table>`;
@@ -18818,7 +18847,7 @@ function cnlRenderDetalheCanal(data) {
   if (!c.declaradoInstitucionalEm) faltas.push("a declaração de que a conta está em nome da IEADESPA (Estatuto Art. 12)");
   const incompleto = c.cadastroIncompleto ? `<div class="cnl-incompleto"><strong>Cadastro incompleto.</strong> Falta registrar ${faltas.length ? faltas.map(escaparHtmlEbd).join("; ") : "dado do cadastro"}.
       Canal antigo, anterior às regras do Estatuto Art. 12: complete o cadastro para que ele volte a valer como Canal Oficial.
-      <button type="button" class="btn-confirmar" style="width:auto;margin:6px 0 0;" onclick="cnlEditarCanalAcao()">✏️ Completar cadastro</button></div>` : "";
+      <button type="button" class="btn-confirmar" style="width:auto;margin:6px 0 0;" data-on-click="cnlEditarCanalAcao">✏️ Completar cadastro</button></div>` : "";
 
   const campos = [
     cnlCampo("Identificador", c.identificador ? `<span class="cal-code">${escaparHtmlEbd(c.identificador)}</span> ${cnlLinkHttps(c.link, "abrir o canal")}` : ""),
@@ -18847,7 +18876,7 @@ function cnlRenderDetalheCanal(data) {
       <td>${escaparHtmlEbd(cnlRotuloDoCatalogo(papeis, a.papel))}</td>
       <td>${a.termoAceitoEm ? `✅ aceito (versão ${cnlNumero(a.termoVersaoAceita)}) em ${escaparHtmlEbd(calDataHora(a.termoAceitoEm))}` : "<span class='psc-alerta'>⏳ ainda não aceitou</span>"}</td>
       <td>${a.designadoEm ? escaparHtmlEbd(calData(a.designadoEm)) : "—"}</td>
-      <td><button type="button" class="btn-link btn-link-perigo" onclick="cnlAbrirFormEncerrarAcao(${adminId})">Encerrar…</button><div id="cnlEncForm_${adminId}"></div></td>
+      <td><button type="button" class="btn-link btn-link-perigo" data-on-click="cnlAbrirFormEncerrarAcao" data-args-click="${argsAttr(adminId)}">Encerrar…</button><div id="cnlEncForm_${adminId}"></div></td>
     </tr>`;
   }).join("");
   const blocoAdmins = `<h5>👤 Administradores</h5>
@@ -18858,7 +18887,7 @@ function cnlRenderDetalheCanal(data) {
     ${ativo ? `<div class="barra-lista">
       <input type="number" id="cnlDesMembro" min="1" placeholder="Matrícula" style="max-width:130px;min-width:100px;" />
       <select id="cnlDesPapel">${cnlOpcoesHtml(papeis, p => p.codigo, p => p.rotulo)}</select>
-      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlDesignarAdminAcao()">➕ Designar</button>
+      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="cnlDesignarAdminAcao">➕ Designar</button>
     </div>` : ""}`;
 
   const orientacoes = [
@@ -18872,7 +18901,7 @@ function cnlRenderDetalheCanal(data) {
         <label class="cal-check"><input type="radio" name="cnlConfItem_${i}" id="cnlConfNao_${i}" /> Não</label></div>`).join("") : "<p class='subtitle'>Nenhum item de conferência se aplica a este canal.</p>"}
     <label for="cnlConfObs" class="psc-legenda">Observação (obrigatória se algum item for “Não”; até 300 caracteres)</label>
     <textarea id="cnlConfObs" rows="2" maxlength="300" style="width:100%;"></textarea>
-    <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlRegistrarConferenciaAcao()">✅ Registrar conferência</button></div>` : "";
+    <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="cnlRegistrarConferenciaAcao">✅ Registrar conferência</button></div>` : "";
   const blocoHistorico = conferencias.length
     ? `<h5>🕘 Últimas conferências</h5><ul class="cal-lista-simples">${conferencias.map(f => {
       const nao = itens.filter(it => f.itens && f.itens[it.codigo] === false).map(it => it.texto);
@@ -18881,13 +18910,13 @@ function cnlRenderDetalheCanal(data) {
 
   const blocoOcorrencias = ocorrencias.length
     ? `<h5>⏳ Ocorrências recentes</h5>${ocorrencias.map(o => `<div class="cnl-linha-oc">${cnlHtmlFaseOcorrencia(o)} <strong>${escaparHtmlEbd(o.rotuloCategoria || o.categoria)}</strong> · ${escaparHtmlEbd(calData(o.relatadaEm))}
-        <button type="button" class="btn-link" onclick="cnlAbrirOcorrenciaAcao(${Number(o.ocorrenciaId)}, 'G')">🔎 Abrir</button></div>`).join("")}` : "";
+        <button type="button" class="btn-link" data-on-click="cnlAbrirOcorrenciaAcao" data-args-click="${argsAttr(Number(o.ocorrenciaId), "G")}">🔎 Abrir</button></div>`).join("")}` : "";
 
   const botoes = [
-    `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlEditarCanalAcao()">✏️ Editar</button>`,
-    ativo ? `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlAbrirFormCanalAcao('desativar')">⛔ Desativar…</button>`
-      : `<button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlReativarCanalAcao()">♻️ Reativar</button>`,
-    `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlAbrirCanalAcao(${id}, true)">🔄 Atualizar</button>`
+    `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="cnlEditarCanalAcao">✏️ Editar</button>`,
+    ativo ? `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="cnlAbrirFormCanalAcao" data-args-click="${argsAttr("desativar")}">⛔ Desativar…</button>`
+      : `<button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="cnlReativarCanalAcao">♻️ Reativar</button>`,
+    `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="cnlAbrirCanalAcao" data-args-click="${argsAttr(id, true)}">🔄 Atualizar</button>`
   ].join("");
 
   return `<div class="cal-cartao cartao-area-ebd">
@@ -18946,8 +18975,8 @@ function cnlAbrirFormEncerrarAcao(adminId) {
     <label for="cnlEncMotivo_${id}">Motivo (5 a 200 caracteres)</label>
     <textarea id="cnlEncMotivo_${id}" rows="2" maxlength="200" style="width:100%;"></textarea>
     <div class="psc-acoes">
-      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" onclick="cnlEncerrarAdminAcao(${id})">Encerrar a designação</button>
-      <button type="button" class="btn-link" onclick="cnlFecharFormEncerrarAcao(${id})">cancelar</button>
+      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" data-on-click="cnlEncerrarAdminAcao" data-args-click="${argsAttr(id)}">Encerrar a designação</button>
+      <button type="button" class="btn-link" data-on-click="cnlFecharFormEncerrarAcao" data-args-click="${argsAttr(id)}">cancelar</button>
     </div>
   </div>`;
 }
@@ -18991,8 +19020,8 @@ function cnlAbrirFormCanalAcao(tipoAcao) {
       <label for="cnlDesativarMotivo">Motivo da desativação (5 a 300 caracteres)</label>
       <textarea id="cnlDesativarMotivo" rows="2" maxlength="300" style="width:100%;"></textarea>
       <div class="psc-acoes">
-        <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" onclick="cnlDesativarCanalAcao()">⛔ Desativar o canal</button>
-        <button type="button" class="btn-link" onclick="cnlFecharFormAcaoCanal()">cancelar</button>
+        <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" data-on-click="cnlDesativarCanalAcao">⛔ Desativar o canal</button>
+        <button type="button" class="btn-link" data-on-click="cnlFecharFormAcaoCanal">cancelar</button>
       </div>
     </div>`;
   }
@@ -19030,7 +19059,7 @@ function cnlRenderCartaoOcorrencia(o, ctxBruto) {
     <h5>${escaparHtmlEbd(o.rotuloCategoria || o.categoria)} ${rotuloGravidade ? `<span class="cal-selo ${escaparHtmlEbd(classeGravidade)}">${escaparHtmlEbd(rotuloGravidade)}</span>` : ""}</h5>
     <p class="psc-legenda" style="margin:2px 0;">Canal: <strong>${escaparHtmlEbd(o.canalNome || "")}</strong> · aviso em ${escaparHtmlEbd(calDataHora(o.relatadaEm))} · prazo até ${escaparHtmlEbd(calDataHora(o.prazoRemocaoEm))}${quem}</p>
     <p style="margin:6px 0;">${escaparHtmlEbd(o.descricao)}</p>
-    <div><button type="button" class="btn-link" onclick="cnlAbrirOcorrenciaAcao(${id}, '${ctx}')">🔎 Abrir</button></div>
+    <div><button type="button" class="btn-link" data-on-click="cnlAbrirOcorrenciaAcao" data-args-click="${argsAttr(id, String(ctx))}">🔎 Abrir</button></div>
   </div>`;
 }
 
@@ -19126,19 +19155,19 @@ function cnlRenderDetalheOcorrencia(data, ctx) {
       <input type="text" id="cnlRemLink${ctx}" maxlength="500" placeholder="https://..." />
       <label for="cnlRemQuando${ctx}">Removido em (opcional, horário de Brasília — só se removeu antes de registrar; nunca antes do aviso)</label>
       <input type="datetime-local" id="cnlRemQuando${ctx}" />
-      <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlRegistrarRemocaoAcao('${ctx}')">🗑️ Registrar a remoção</button></div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="cnlRegistrarRemocaoAcao" data-args-click="${argsAttr(String(ctx))}">🗑️ Registrar a remoção</button></div>
     </div>` : "";
   const formAdvertir = a.advertir ? `<div class="cal-form-inline">
       <h5>⚠️ Registrar a advertência ao membro</h5>
       <label for="cnlAdvObs${ctx}">Como o membro foi advertido (5 a 300 caracteres)</label>
       <textarea id="cnlAdvObs${ctx}" rows="2" maxlength="300" style="width:100%;"></textarea>
-      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlRegistrarAdvertenciaAcao('${ctx}')">⚠️ Registrar a advertência</button></div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="cnlRegistrarAdvertenciaAcao" data-args-click="${argsAttr(String(ctx))}">⚠️ Registrar a advertência</button></div>
     </div>` : "";
   const formImprocedente = a.improcedente ? `<div class="cal-form-inline">
       <h5>🚫 Declarar improcedente</h5>
       <label for="cnlImpMotivo${ctx}">Por que o conteúdo não é irregular (10 a 300 caracteres)</label>
       <textarea id="cnlImpMotivo${ctx}" rows="2" maxlength="300" style="width:100%;"></textarea>
-      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="cnlDeclararImprocedenteAcao('${ctx}')">🚫 Declarar improcedente</button></div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="cnlDeclararImprocedenteAcao" data-args-click="${argsAttr(String(ctx))}">🚫 Declarar improcedente</button></div>
     </div>` : "";
 
   return `<div class="cal-cartao cartao-area-ebd cnl-oc cnl-oc-${escaparHtmlEbd(String(o.fase || "").toLowerCase().replace(/[^a-z_]/g, ""))}">
@@ -19244,7 +19273,7 @@ async function cnlCarregarTrocasAcao() {
         <td>${resolvida
     ? `<span class="cal-selo cal-st-homologado">✅ resolvida</span><br /><span class="psc-legenda">${escaparHtmlEbd(calData(t.resolvidaEm))}${t.resolvidaPorNome ? ` por ${escaparHtmlEbd(t.resolvidaPorNome)}` : ""}${t.observacaoResolucao ? ` — ${escaparHtmlEbd(t.observacaoResolucao)}` : ""}</span>`
     : (t.vencida ? `<span class="cal-selo cal-st-indeferido">🔴 prazo vencido</span>` : `<span class="cal-selo cal-st-proposto">🟠 pendente</span>`)}</td>
-        <td>${resolvida ? "" : `<button type="button" class="btn-link" onclick="cnlAbrirResolverTrocaAcao(${id})">✅ Resolver…</button><div id="cnlFormTroca_${id}"></div>`}</td>
+        <td>${resolvida ? "" : `<button type="button" class="btn-link" data-on-click="cnlAbrirResolverTrocaAcao" data-args-click="${argsAttr(id)}">✅ Resolver…</button><div id="cnlFormTroca_${id}"></div>`}</td>
       </tr>`;
   }).join("")}</tbody></table>`
     : "<p class='subtitle'>Nenhuma pendência de troca de senha. 🎉</p>";
@@ -19259,8 +19288,8 @@ function cnlAbrirResolverTrocaAcao(trocaId) {
     <label for="cnlTrocaObsRes_${id}">O que foi feito (5 a 300 caracteres)</label>
     <input type="text" id="cnlTrocaObsRes_${id}" maxlength="300" placeholder="Ex.: senha trocada e sessões antigas encerradas" />
     <div class="psc-acoes">
-      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlResolverTrocaAcao(${id})">✅ Registrar a troca</button>
-      <button type="button" class="btn-link" onclick="cnlFecharResolverTrocaAcao(${id})">cancelar</button>
+      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="cnlResolverTrocaAcao" data-args-click="${argsAttr(id)}">✅ Registrar a troca</button>
+      <button type="button" class="btn-link" data-on-click="cnlFecharResolverTrocaAcao" data-args-click="${argsAttr(id)}">cancelar</button>
     </div>
   </div>`;
 }
@@ -19363,7 +19392,7 @@ function cnlRedesenharTransmissaoAcao() {
       <td>${c.transmite ? `${escaparHtmlEbd(c.rotuloAreaCega || "—")}${c.areaCegaDescricao ? `<br /><span class="psc-legenda">${escaparHtmlEbd(c.areaCegaDescricao)}</span>` : ""}` : "—"}</td>
       <td>${pendencias.length ? `<ul class="cal-lista-simples">${pendencias.map(p => `<li>${escaparHtmlEbd(p)}</li>`).join("")}</ul>` : "—"}</td>
       <td>${c.conferidoEm ? `${escaparHtmlEbd(calData(c.conferidoEm))}${c.conferidoPorNome ? `<br /><span class="psc-legenda">${escaparHtmlEbd(c.conferidoPorNome)}</span>` : ""}` : "—"}</td>
-      <td><button type="button" class="btn-link" onclick="cnlEditarTransmissaoAcao(${id})">✏️ Registrar</button></td>
+      <td><button type="button" class="btn-link" data-on-click="cnlEditarTransmissaoAcao" data-args-click="${argsAttr(id)}">✏️ Registrar</button></td>
     </tr>`;
   }).join("")}
   </tbody></table>`;
@@ -19458,7 +19487,7 @@ function cnlRenderMeusCanais(meus) {
   const pendentes = lista.filter(i => i.termoAceito !== true);
   const topo = pendentes.length > 1
     ? `<div class="psc-aviso">Você tem ${pendentes.length} designações com o Termo de Dever de Moderação ainda não aceito.
-        <button type="button" class="btn-confirmar" style="width:auto;margin:6px 0 0;" onclick="cnlAceitarTermoTodosAcao()">✅ Li e aceito o Termo em todos os canais</button></div>` : "";
+        <button type="button" class="btn-confirmar" style="width:auto;margin:6px 0 0;" data-on-click="cnlAceitarTermoTodosAcao">✅ Li e aceito o Termo em todos os canais</button></div>` : "";
   let primeiroPendente = true;
   return topo + lista.map(i => {
     const c = i.canal || {};
@@ -19476,7 +19505,7 @@ function cnlRenderMeusCanais(meus) {
       termoHtml = `<div class="psc-aviso">A sua designação só vale de fato depois que você ler e aceitar o <strong>Termo de Dever de Moderação</strong>. Quem administra um canal oficial responde por ele (Regimento Art. 160, §1º, I).</div>
         <details${abrir}><summary><strong>${escaparHtmlEbd(termo.titulo || "Termo de Dever de Moderação")}</strong>${termo.versao != null ? ` <span class="psc-legenda">(versão ${cnlNumero(termo.versao)})</span>` : ""}</summary>
           <ol class="cnl-termo">${itensTermo.map(t => `<li>${escaparHtmlEbd(t)}</li>`).join("")}</ol></details>
-        <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="cnlAceitarTermoAcao(${adminId})">✅ Li e aceito o Termo de Dever de Moderação</button></div>`;
+        <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="cnlAceitarTermoAcao" data-args-click="${argsAttr(adminId)}">✅ Li e aceito o Termo de Dever de Moderação</button></div>`;
     }
     const modelos = [
       orient.modeloTermoDeUso ? `<div class="cnl-modelo"><strong>Modelo de Termo de Uso do grupo</strong> (Art. 160, §1º, III) — mantenha na descrição do grupo:<p>${escaparHtmlEbd(orient.modeloTermoDeUso)}</p>${cnlBotaoCopiar(orient.modeloTermoDeUso, "Copiar o modelo")}</div>` : "",
@@ -19901,7 +19930,7 @@ function evtRenderCartaoPainel(e) {
       <span class="psc-legenda">${escaparHtmlEbd(calPeriodo(e.dataInicio, e.dataFim, e.horaInicio))} · ${escaparHtmlEbd(calTextoAbrangencia(e))} · ${escaparHtmlEbd(e.tipoNome || "")}${e.local ? ` · 📍 ${escaparHtmlEbd(e.local)}` : ""}</span></p>
     <p style="margin:4px 0;">👥 <strong>${evtNumero(e.organizadores)}</strong> organizador(es) · 🎤 ${evtChipsConvidados(e.convidados)} · 💰 ${evtSeloCaixa(e.caixa)}</p>
     ${atencao.length ? `<ul class="evt-atencao">${atencao.map(t => `<li>⚠️ ${escaparHtmlEbd(t)}</li>`).join("")}</ul>` : ""}
-    <div><button type="button" class="btn-link" onclick="evtAbrirDossieAcao(${id}, 'G')">🗂️ Abrir dossiê</button></div>
+    <div><button type="button" class="btn-link" data-on-click="evtAbrirDossieAcao" data-args-click="${argsAttr(id, "G")}">🗂️ Abrir dossiê</button></div>
   </div>`;
 }
 
@@ -19934,7 +19963,7 @@ function evtRenderCartaoFila(c, orgao) {
   const e = c.evento || {};
   const dias = evtTextoDias(c.diasAteEvento);
   const outra = etica ? c.nadaConsta : c.etica;
-  const [favId, contId, motivoId, funcao] = etica ? [`evtEtFav_${id}`, `evtEtDes_${id}`, `evtEtMotivo_${id}`, "evtDecidirEticaAcao"] : [`evtNcCon_${id}`, `evtNcNeg_${id}`, `evtNcMotivo_${id}`, "evtDecidirNadaConstaAcao"];
+  const [favId, contId, motivoId] = etica ? [`evtEtFav_${id}`, `evtEtDes_${id}`, `evtEtMotivo_${id}`] : [`evtNcCon_${id}`, `evtNcNeg_${id}`, `evtNcMotivo_${id}`];
   const nomeRadio = etica ? `evtEtDecisao_${id}` : `evtNcDecisao_${id}`;
   return `<div class="cal-cartao cartao-area-ebd evt-fila${c.urgente ? " evt-fila-urgente" : ""}">
     <div class="evt-fila-topo">${c.urgente ? `<span class="evt-urgente">🔴 URGENTE — ${escaparHtmlEbd(dias)}</span>` : `<span class="evt-prazo">🗓️ ${escaparHtmlEbd(dias)}</span>`}</div>
@@ -19957,8 +19986,8 @@ function evtRenderCartaoFila(c, orgao) {
       <label for="${motivoId}">Motivo (obrigatório, mínimo de 10 caracteres, se for contrário; até 500)</label>
       <textarea id="${motivoId}" rows="2" maxlength="500" style="width:100%;"></textarea>
       <div class="psc-acoes">
-        <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="${funcao}(${id})">${etica ? "⚖️ Registrar o parecer" : "🏛️ Registrar a decisão"}</button>
-        <button type="button" class="btn-link" onclick="evtAbrirDossieAcao(${Number(e.eventoId)}, 'G')">🗂️ Abrir dossiê do evento</button>
+        <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="${etica ? "evtDecidirEticaAcao" : "evtDecidirNadaConstaAcao"}" data-args-click="${argsAttr(id)}">${etica ? "⚖️ Registrar o parecer" : "🏛️ Registrar a decisão"}</button>
+        <button type="button" class="btn-link" data-on-click="evtAbrirDossieAcao" data-args-click="${argsAttr(Number(e.eventoId), "G")}">🗂️ Abrir dossiê do evento</button>
       </div>
     </div>
   </div>`;
@@ -20024,7 +20053,7 @@ async function evtCarregarCaixasAcao() {
         <td>${escaparHtmlEbd(evtDinheiro(t.entradas))}</td><td>${escaparHtmlEbd(evtDinheiro(t.saidas))}</td>
         <td><strong class="${saldo < 0 ? "psc-alerta" : ""}">${escaparHtmlEbd(evtDinheiro(saldo))}</strong></td>
         <td>${c.encerradoPorNome ? `encerrou: ${escaparHtmlEbd(c.encerradoPorNome)}` : "—"}${c.conferidoPorNome ? `<br />conferiu: ${escaparHtmlEbd(c.conferidoPorNome)}` : ""}</td>
-        <td><button type="button" class="btn-link" onclick="evtAbrirDossieAcao(${Number(e.eventoId)}, 'G')">🗂️ Abrir dossiê</button></td>
+        <td><button type="button" class="btn-link" data-on-click="evtAbrirDossieAcao" data-args-click="${argsAttr(Number(e.eventoId), "G")}">🗂️ Abrir dossiê</button></td>
       </tr>`;
   }).join("")}</tbody></table>`
     : "<p class='subtitle'>Nenhum caixa com esse filtro.</p>";
@@ -20094,7 +20123,7 @@ function evtRenderDossie(data, ctx) {
     ${evtRenderOrganizadores(data, ctx)}
     ${evtRenderConvidados(data, ctx)}
     ${evtRenderCaixa(data, ctx)}
-    <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="evtAbrirDossieAcao(${id}, '${ctx}', true)">🔄 Atualizar o dossiê</button></div>
+    <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="evtAbrirDossieAcao" data-args-click="${argsAttr(id, String(ctx), true)}">🔄 Atualizar o dossiê</button></div>
   </div>`;
 }
 
@@ -20141,7 +20170,7 @@ function evtRenderOrganizadores(data, ctx) {
       <td><strong>${escaparHtmlEbd(o.nome)}</strong></td><td>${Number(o.membroId)}</td>
       <td>${escaparHtmlEbd(o.rotuloPapel || evtRotuloDoCatalogo(cat.papeis, o.papel))}</td>
       <td>${o.designadoEm ? escaparHtmlEbd(calData(o.designadoEm)) : "—"}</td>
-      <td>${a.designarOrganizador ? `<button type="button" class="btn-link btn-link-perigo" onclick="evtAbrirEncerrarOrganizadorAcao(${oid}, '${ctx}')">Encerrar…</button><div id="evtOrgEncForm${ctx}_${oid}"></div>` : ""}</td>
+      <td>${a.designarOrganizador ? `<button type="button" class="btn-link btn-link-perigo" data-on-click="evtAbrirEncerrarOrganizadorAcao" data-args-click="${argsAttr(oid, String(ctx))}">Encerrar…</button><div id="evtOrgEncForm${ctx}_${oid}"></div>` : ""}</td>
     </tr>`;
   }).join("");
   return `<h5>👥 Organizadores</h5>
@@ -20152,7 +20181,7 @@ function evtRenderOrganizadores(data, ctx) {
     ${a.designarOrganizador ? `<div class="barra-lista">
       <input type="number" id="evtOrgMembro${ctx}" min="1" placeholder="Matrícula" style="max-width:130px;min-width:100px;" />
       <select id="evtOrgPapel${ctx}">${evtOpcoesHtml(cat.papeis, p => p.codigo, p => p.rotulo)}</select>
-      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="evtDesignarOrganizadorAcao('${ctx}')">➕ Designar</button>
+      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="evtDesignarOrganizadorAcao" data-args-click="${argsAttr(String(ctx))}">➕ Designar</button>
     </div>` : ""}`;
 }
 async function evtDesignarOrganizadorAcao(ctxBruto) {
@@ -20171,8 +20200,8 @@ function evtAbrirEncerrarOrganizadorAcao(organizadorId, ctxBruto) {
     <label for="evtOrgEncMotivo${ctx}_${oid}">Motivo do encerramento (5 a 200 caracteres)</label>
     <textarea id="evtOrgEncMotivo${ctx}_${oid}" rows="2" maxlength="200" style="width:100%;"></textarea>
     <div class="psc-acoes">
-      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" onclick="evtEncerrarOrganizadorAcao(${oid}, '${ctx}')">Encerrar a designação</button>
-      <button type="button" class="btn-link" onclick="evtFecharEncerrarOrganizadorAcao(${oid}, '${ctx}')">cancelar</button>
+      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" data-on-click="evtEncerrarOrganizadorAcao" data-args-click="${argsAttr(oid, String(ctx))}">Encerrar a designação</button>
+      <button type="button" class="btn-link" data-on-click="evtFecharEncerrarOrganizadorAcao" data-args-click="${argsAttr(oid, String(ctx))}">cancelar</button>
     </div>
   </div>`;
 }
@@ -20224,7 +20253,7 @@ function evtRenderConvidados(data, ctx) {
         </fieldset>
         <label class="cal-check" style="margin-top:8px;"><input type="checkbox" id="evtConvDiv${ctx}" /> O convidado autorizou divulgar o nome</label>
         <div class="psc-acoes">
-          <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="evtRegistrarConvidadoAcao('${ctx}')">➕ Registrar convidado</button>
+          <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="evtRegistrarConvidadoAcao" data-args-click="${argsAttr(String(ctx))}">➕ Registrar convidado</button>
         </div>
       </div></details>` : "";
   return `<h5>🎤 Convidados externos</h5>
@@ -20243,12 +20272,12 @@ function evtRenderConvidado(c, a, ctx) {
   const pareceres = [parecer("Conselho de Ética", c.etica), parecer("Presidência (Nada Consta)", c.nadaConsta)].filter(Boolean).join("");
   const botoes = [];
   if (podeAgir && c.status === "RASCUNHO") {
-    botoes.push(`<button type="button" class="btn-link" onclick="evtAbrirEdicaoConvidadoAcao(${id}, '${ctx}')">✏️ Editar</button>`);
-    botoes.push(`<button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="evtSubmeterConvidadoAcao(${id}, '${ctx}')">📨 Enviar à análise</button>`);
+    botoes.push(`<button type="button" class="btn-link" data-on-click="evtAbrirEdicaoConvidadoAcao" data-args-click="${argsAttr(id, String(ctx))}">✏️ Editar</button>`);
+    botoes.push(`<button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="evtSubmeterConvidadoAcao" data-args-click="${argsAttr(id, String(ctx))}">📨 Enviar à análise</button>`);
   }
-  if (podeAgir && c.podeOficializar) botoes.push(`<button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="evtOficializarConvidadoAcao(${id}, '${ctx}')">📣 Oficializar convite</button>`);
+  if (podeAgir && c.podeOficializar) botoes.push(`<button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="evtOficializarConvidadoAcao" data-args-click="${argsAttr(id, String(ctx))}">📣 Oficializar convite</button>`);
   if (podeAgir && (c.status === "RASCUNHO" || c.status === "EM_ANALISE" || c.status === "AUTORIZADO")) {
-    botoes.push(`<button type="button" class="btn-link btn-link-perigo" onclick="evtAbrirCancelarConvidadoAcao(${id}, '${ctx}')">❌ Cancelar…</button>`);
+    botoes.push(`<button type="button" class="btn-link btn-link-perigo" data-on-click="evtAbrirCancelarConvidadoAcao" data-args-click="${argsAttr(id, String(ctx))}">❌ Cancelar…</button>`);
   }
   const [rotuloStatus, classeStatus] = evtDe(EVT_STATUS_CONVIDADO, c.status, null) || [escaparHtmlEbd(c.status || "—"), "cal-st-cancelado"];
   return `<div class="cal-cartao cartao-area-ebd evt-convidado evt-conv-${escaparHtmlEbd(String(c.status || "").toLowerCase().replace(/[^a-z_]/g, ""))}">
@@ -20326,8 +20355,8 @@ function evtAbrirEdicaoConvidadoAcao(convidadoId, ctxBruto) {
       <label class="cal-check"><input type="radio" name="evtConvRep${sufixo}" id="evtConvRepNao${sufixo}"${c.reputacaoConhecida ? "" : " checked"} /> Não</label></div>
     <label class="cal-check"><input type="checkbox" id="evtConvDiv${sufixo}"${c.divulgacaoAutorizada ? " checked" : ""} /> O convidado autorizou divulgar o nome</label>
     <div class="psc-acoes">
-      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="evtSalvarConvidadoAcao(${id}, '${ctx}')">💾 Salvar</button>
-      <button type="button" class="btn-link" onclick="evtFecharFormConvidadoAcao(${id}, '${ctx}')">cancelar</button>
+      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="evtSalvarConvidadoAcao" data-args-click="${argsAttr(id, String(ctx))}">💾 Salvar</button>
+      <button type="button" class="btn-link" data-on-click="evtFecharFormConvidadoAcao" data-args-click="${argsAttr(id, String(ctx))}">cancelar</button>
     </div>
   </div>`;
   const tipo = evtEl(`evtConvTipo${sufixo}`);
@@ -20368,8 +20397,8 @@ function evtAbrirCancelarConvidadoAcao(convidadoId, ctxBruto) {
     <label for="evtConvCancMotivo${ctx}_${id}">Motivo do cancelamento (5 a 300 caracteres)</label>
     <textarea id="evtConvCancMotivo${ctx}_${id}" rows="2" maxlength="300" style="width:100%;"></textarea>
     <div class="psc-acoes">
-      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" onclick="evtCancelarConvidadoAcao(${id}, '${ctx}')">❌ Cancelar o convite</button>
-      <button type="button" class="btn-link" onclick="evtFecharFormConvidadoAcao(${id}, '${ctx}')">voltar</button>
+      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" data-on-click="evtCancelarConvidadoAcao" data-args-click="${argsAttr(id, String(ctx))}">❌ Cancelar o convite</button>
+      <button type="button" class="btn-link" data-on-click="evtFecharFormConvidadoAcao" data-args-click="${argsAttr(id, String(ctx))}">voltar</button>
     </div>
   </div>`;
 }
@@ -20390,7 +20419,7 @@ function evtRenderCaixa(data, ctx) {
     else if (a.abrirCaixa) {
       corpo = `<div class="cal-form-inline">
         <label class="cal-check cnl-declaracao"><input type="checkbox" id="evtCaixaDecl${ctx}" /> Declaro que nenhuma conta bancária foi aberta para este evento e que o dinheiro não passará por conta paralela em nome da Igreja ou de associação (Art. 53-E, §3º)</label>
-        <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="evtAbrirCaixaAcao('${ctx}')">🔓 Abrir Caixa Flutuante</button></div>
+        <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="evtAbrirCaixaAcao" data-args-click="${argsAttr(String(ctx))}">🔓 Abrir Caixa Flutuante</button></div>
       </div>`;
     } else corpo = "<p class='subtitle'>O caixa deste evento ainda não foi aberto. Quem abre é o responsável pelo evento ou o tesoureiro designado.</p>";
   } else {
@@ -20419,7 +20448,7 @@ function evtRenderCaixaAberto(c, a, ctx) {
       <td>${l.comprovante ? escaparHtmlEbd(l.comprovante) : "—"}</td>
       <td class="evt-valor">${entrada ? "+" : "−"} ${escaparHtmlEbd(evtDinheiro(l.valor))}</td>
       <td>${l.registradoPorNome ? escaparHtmlEbd(l.registradoPorNome) : "—"}</td>
-      <td>${a.lancarNoCaixa && !l.cancelado ? `<button type="button" class="btn-link btn-link-perigo" onclick="evtAbrirCancelarLancamentoAcao(${lid}, '${ctx}')">Cancelar…</button><div id="evtCancForm${ctx}_${lid}"></div>` : ""}</td>
+      <td>${a.lancarNoCaixa && !l.cancelado ? `<button type="button" class="btn-link btn-link-perigo" data-on-click="evtAbrirCancelarLancamentoAcao" data-args-click="${argsAttr(lid, String(ctx))}">Cancelar…</button><div id="evtCancForm${ctx}_${lid}"></div>` : ""}</td>
     </tr>${l.cancelado ? `<tr class="evt-cancelado-nota"><td colspan="8"><span class="psc-alerta">Lançamento cancelado${l.canceladoEm ? ` em ${escaparHtmlEbd(calDataHora(l.canceladoEm))}` : ""}${l.motivoCancelamento ? ` — ${escaparHtmlEbd(l.motivoCancelamento)}` : ""}</span></td></tr>` : ""}`;
   }).join("");
   const atrasoAviso = c.status === "ABERTO" && c.atrasado
@@ -20463,7 +20492,7 @@ function evtRenderFormLancamento(ctx) {
     <div class="cal-form">
       <div class="cal-form-grade">
         <div class="input-group"><label for="evtLancTipo${ctx}">Tipo</label>
-          <select id="evtLancTipo${ctx}" onchange="evtLancTipoMudouAcao('${ctx}')"><option value="ENTRADA">Entrada</option><option value="SAIDA">Saída</option></select></div>
+          <select id="evtLancTipo${ctx}" data-on-change="evtLancTipoMudouAcao" data-args-change="${argsAttr(String(ctx))}"><option value="ENTRADA">Entrada</option><option value="SAIDA">Saída</option></select></div>
         <div class="input-group"><label for="evtLancCategoria${ctx}">Categoria</label>
           <select id="evtLancCategoria${ctx}">${evtOpcoesHtml(cat.categoriasEntrada, c => c.codigo, c => c.rotulo)}</select></div>
         <div class="input-group"><label for="evtLancValor${ctx}">Valor (R$)</label><input type="text" id="evtLancValor${ctx}" inputmode="decimal" placeholder="Ex.: 1.234,56" /></div>
@@ -20472,7 +20501,7 @@ function evtRenderFormLancamento(ctx) {
       <div class="input-group"><label for="evtLancDesc${ctx}">Descrição (3 a 300 caracteres)</label><input type="text" id="evtLancDesc${ctx}" maxlength="300" /></div>
       <div class="input-group"><label for="evtLancComp${ctx}" id="evtLancCompRotulo${ctx}">Comprovante (número da nota ou do recibo, ou link) — opcional na entrada</label>
         <input type="text" id="evtLancComp${ctx}" maxlength="200" /></div>
-      <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="evtLancarAcao('${ctx}')">💾 Lançar</button></div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="evtLancarAcao" data-args-click="${argsAttr(String(ctx))}">💾 Lançar</button></div>
     </div></details>`;
 }
 function evtLancTipoMudouAcao(ctxBruto) {
@@ -20514,8 +20543,8 @@ function evtAbrirCancelarLancamentoAcao(lancamentoId, ctxBruto) {
     <label for="evtCancMotivo${ctx}_${id}">Motivo (5 a 300 caracteres)</label>
     <textarea id="evtCancMotivo${ctx}_${id}" rows="2" maxlength="300" style="width:100%;"></textarea>
     <div class="psc-acoes">
-      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" onclick="evtCancelarLancamentoAcao(${id}, '${ctx}')">Cancelar o lançamento</button>
-      <button type="button" class="btn-link" onclick="evtFecharCancelarLancamentoAcao(${id}, '${ctx}')">voltar</button>
+      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" data-on-click="evtCancelarLancamentoAcao" data-args-click="${argsAttr(id, String(ctx))}">Cancelar o lançamento</button>
+      <button type="button" class="btn-link" data-on-click="evtFecharCancelarLancamentoAcao" data-args-click="${argsAttr(id, String(ctx))}">voltar</button>
     </div>
   </div>`;
 }
@@ -20538,7 +20567,7 @@ function evtRenderFormEncerrar(c, ctx) {
   if (saldoC > 0) {
     miolo = `<p>Sobrou <strong>${escaparHtmlEbd(evtDinheiro(saldoC / 100))}</strong>. Todo o superávit precisa de destino: a soma dos destinos tem de bater com o saldo.</p>
       <div id="evtDestinosLinhas${ctx}"></div>
-      <div class="psc-acoes"><button type="button" class="btn-link" onclick="evtAdicionarDestinoAcao('${ctx}')">➕ Adicionar outro destino</button></div>
+      <div class="psc-acoes"><button type="button" class="btn-link" data-on-click="evtAdicionarDestinoAcao" data-args-click="${argsAttr(String(ctx))}">➕ Adicionar outro destino</button></div>
       <p id="evtDestIndicador${ctx}" class="evt-indicador" role="status"></p>`;
   } else if (saldoC < 0) {
     miolo = `<p>O caixa fechou no <strong class="psc-alerta">negativo (${escaparHtmlEbd(evtDinheiro(saldoC / 100))})</strong>. Explique o déficit para a Tesouraria Geral.</p>
@@ -20551,7 +20580,7 @@ function evtRenderFormEncerrar(c, ctx) {
     <h5>🔒 Encerrar o caixa</h5>
     <p class="psc-aviso">${escaparHtmlEbd(EVT_TEXTO_SUPERAVIT)}</p>
     ${miolo}
-    <div class="psc-acoes"><button type="button" class="btn-confirmar" id="evtBotaoEncerrar${ctx}" style="width:auto;margin:0;"${saldoC > 0 ? " disabled" : ""} onclick="evtEncerrarCaixaAcao('${ctx}')">🔒 Encerrar o caixa</button></div>
+    <div class="psc-acoes"><button type="button" class="btn-confirmar" id="evtBotaoEncerrar${ctx}" style="width:auto;margin:0;"${saldoC > 0 ? " disabled" : ""} data-on-click="evtEncerrarCaixaAcao" data-args-click="${argsAttr(String(ctx))}">🔒 Encerrar o caixa</button></div>
   </div>`;
 }
 function evtInicializarDestinos(ctx) {
@@ -20572,9 +20601,9 @@ function evtRenderDestinos(ctx) {
   area.innerHTML = linhas.map((d, i) => `<div class="evt-destino">
       <div class="cal-form-grade">
         <div class="input-group"><label for="evtDestTipo${ctx}_${i}">Destino ${i + 1}</label>
-          <select id="evtDestTipo${ctx}_${i}" onchange="evtDestinosMudouAcao('${ctx}')">${evtOpcoesHtml(cat.destinosSuperavit, x => x.codigo, x => x.rotulo)}</select></div>
+          <select id="evtDestTipo${ctx}_${i}" data-on-change="evtDestinosMudouAcao" data-args-change="${argsAttr(String(ctx))}">${evtOpcoesHtml(cat.destinosSuperavit, x => x.codigo, x => x.rotulo)}</select></div>
         <div class="input-group"><label for="evtDestValor${ctx}_${i}">Valor (R$)</label>
-          <input type="text" id="evtDestValor${ctx}_${i}" inputmode="decimal" value="${escaparHtmlEbd(d.valor)}" oninput="evtDestinosMudouAcao('${ctx}')" /></div>
+          <input type="text" id="evtDestValor${ctx}_${i}" inputmode="decimal" value="${escaparHtmlEbd(d.valor)}" data-on-input="evtDestinosMudouAcao" data-args-input="${argsAttr(String(ctx))}" /></div>
         <div class="input-group"><label for="evtDestData${ctx}_${i}">Data</label>
           <input type="date" id="evtDestData${ctx}_${i}" value="${escaparHtmlEbd(d.data)}" max="${escaparHtmlEbd(hoje)}" /></div>
         <div class="input-group"><label for="evtDestComp${ctx}_${i}">Comprovante <span class="evt-obrigatorio">*</span></label>
@@ -20582,7 +20611,7 @@ function evtRenderDestinos(ctx) {
       </div>
       <label for="evtDestDesc${ctx}_${i}">Descrição <span class="psc-legenda">(obrigatória para benfeitoria)</span></label>
       <input type="text" id="evtDestDesc${ctx}_${i}" maxlength="300" value="${escaparHtmlEbd(d.descricao)}" />
-      ${linhas.length > 1 ? `<button type="button" class="btn-link btn-link-perigo" onclick="evtRemoverDestinoAcao(${i}, '${ctx}')">remover este destino</button>` : ""}
+      ${linhas.length > 1 ? `<button type="button" class="btn-link btn-link-perigo" data-on-click="evtRemoverDestinoAcao" data-args-click="${argsAttr(i, String(ctx))}">remover este destino</button>` : ""}
     </div>`).join("");
   linhas.forEach((d, i) => { const sel = evtEl(`evtDestTipo${ctx}_${i}`); if (sel) sel.value = d.tipo; });
   evtDestinosMudouAcao(ctx);
@@ -20670,14 +20699,14 @@ function evtRenderFormTesouraria(a, ctx) {
       <h5>✅ Conferir o caixa</h5>
       <label for="evtConfObs${ctx}">Observação (opcional, até 500 caracteres)</label>
       <textarea id="evtConfObs${ctx}" rows="2" maxlength="500" style="width:100%;"></textarea>
-      <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="evtConferirCaixaAcao('${ctx}')">✅ Conferir</button></div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="evtConferirCaixaAcao" data-args-click="${argsAttr(String(ctx))}">✅ Conferir</button></div>
     </div>`
     : (a.devolverCaixa ? "<p class='psc-aviso'>Quem encerrou o caixa não faz a conferência dele: outra pessoa da Tesouraria Geral precisa conferir.</p>" : "");
   const devolver = a.devolverCaixa ? `<div class="cal-form-inline">
       <h5>↩️ Devolver para correção</h5>
       <label for="evtDevMotivo${ctx}">O que precisa ser corrigido (10 a 300 caracteres)</label>
       <textarea id="evtDevMotivo${ctx}" rows="2" maxlength="300" style="width:100%;"></textarea>
-      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="evtDevolverCaixaAcao('${ctx}')">↩️ Devolver à organização</button></div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="evtDevolverCaixaAcao" data-args-click="${argsAttr(String(ctx))}">↩️ Devolver à organização</button></div>
     </div>` : "";
   return conferir + devolver;
 }
@@ -20723,7 +20752,7 @@ function evtRenderCartaoMeu(e) {
       <span class="psc-legenda">${escaparHtmlEbd(calPeriodo(e.dataInicio, e.dataFim, e.horaInicio))} · ${escaparHtmlEbd(calTextoAbrangencia(e))}${e.local ? ` · 📍 ${escaparHtmlEbd(e.local)}` : ""}</span></p>
     <p style="margin:4px 0;">Seu papel: <strong>${escaparHtmlEbd(rotulos.join(", ") || "—")}</strong></p>
     <p style="margin:4px 0;">🎤 ${evtChipsConvidados(e.convidados)} · 💰 ${e.caixa ? evtSeloCaixa(e.caixa) : (e.podeCaixa ? "<span class='psc-legenda'>você pode abrir o Caixa Flutuante</span>" : "<span class='psc-legenda'>sem caixa</span>")}</p>
-    <div><button type="button" class="btn-link" onclick="evtAbrirDossieAcao(${id}, 'M')">🗂️ Abrir dossiê</button></div>
+    <div><button type="button" class="btn-link" data-on-click="evtAbrirDossieAcao" data-args-click="${argsAttr(id, "M")}">🗂️ Abrir dossiê</button></div>
   </div>`;
 }
 async function carregarMeuPainelEventosAcao() {
@@ -20859,8 +20888,8 @@ function volMontarTermo(d) {
   } else {
     // `renovar`: a adesão que a pessoa tinha foi dada pelo responsável, quando ela era menor; ao completar 18 anos ela confirma a própria.
     corpo = `${d.renovar ? `<p class="vol-aviso">A sua adesão foi dada pelo seu responsável, quando você era menor de idade. Agora que você tem 18 anos ou mais, confirme a sua própria.</p>` : ""}${texto}
-      <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="volTermoAceite" onchange="volAtualizarBotaoTermoAcao()" /> ${volEsc(t.aceite)}</label>
-      <div class="vol-acoes"><button type="button" class="btn-confirmar" id="volTermoBotao" style="width:auto;margin:0;" disabled onclick="volAderirTermoAcao()">✍️ Aderir ao Termo</button></div>
+      <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="volTermoAceite" data-on-change="volAtualizarBotaoTermoAcao" /> ${volEsc(t.aceite)}</label>
+      <div class="vol-acoes"><button type="button" class="btn-confirmar" id="volTermoBotao" style="width:auto;margin:0;" disabled data-on-click="volAderirTermoAcao">✍️ Aderir ao Termo</button></div>
       <p class="subtitle" id="volTermoResultado"></p>`;
   }
   return `<div class="vol-cartao"><h4>${volEsc(t.titulo)}</h4><p class="subtitle">Versão ${volEsc(t.versao)}</p>${corpo}</div>${volMontarMenoresResponsavel(d)}`;
@@ -20880,8 +20909,8 @@ function volMontarMenoresResponsavel(d) {
     else if (m.aderiu) estado = `<p class="vol-selo-ok">✅ Autorizado${m.dataAceite ? ` em ${volData(m.dataAceite)}` : ""}${m.rotuloForma ? ` — ${volEsc(m.rotuloForma)}` : ""}</p>`;
     else estado = `${m.suspensa ? `<p class="vol-aviso">A autorização anterior está suspensa: houve um período em que ${volEsc(m.nome)} ficou sem responsável ativo. Autorize de novo para que ele(a) volte a ser escalado(a).</p>` : ""}<details><summary>Ler a autorização e autorizar</summary>
         <ol class="vol-termo-itens">${itens}</ol>
-        <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="volMenorAceite${id}" onchange="volAtualizarBotaoMenorAcao(${id})" /> ${volEsc(t.aceite)}</label>
-        <div class="vol-acoes"><button type="button" class="btn-confirmar" id="volMenorBotao${id}" style="width:auto;margin:0;" disabled onclick="volAutorizarMenorAcao(${id}, this)">✍️ Autorizar ${volEsc(m.nome)}</button></div>
+        <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="volMenorAceite${id}" data-on-change="volAtualizarBotaoMenorAcao" data-args-change="${argsAttr(id)}" /> ${volEsc(t.aceite)}</label>
+        <div class="vol-acoes"><button type="button" class="btn-confirmar" id="volMenorBotao${id}" style="width:auto;margin:0;" disabled data-on-click="volAutorizarMenorAcao" data-args-click="${argsAttr(id, ARG.elemento)}">✍️ Autorizar ${volEsc(m.nome)}</button></div>
         <p class="subtitle" id="volMenorResultado${id}"></p></details>`;
     return `<div class="vol-cartao"><h4>${volEsc(m.nome)} <span class="vol-matricula">${volEsc(m.rotuloVinculo)}${m.idade != null ? ` · ${Number(m.idade)} anos` : ""}</span></h4>${estado}</div>`;
   }).join("");
@@ -20947,7 +20976,7 @@ async function volCarregarPainelEscalasAcao() {
   if (data.sucesso === false) { aviso.innerHTML = ""; cx.innerHTML = ""; return; }   // não bloqueia a tela
   aviso.innerHTML = data.aderiu ? "" : `<div class="vol-aviso">
       <span>Você ainda não aderiu ao Termo de Adesão ao Serviço Voluntário.</span>
-      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="mostrarSubAbaMeupainel('minhahabilitacao')">Ver e aderir ao Termo</button>
+      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="mostrarSubAbaMeupainel" data-args-click="${argsAttr("minhahabilitacao")}">Ver e aderir ao Termo</button>
     </div>`;
   const rodizios = Array.isArray(data.rodizios) ? data.rodizios : [];
   cx.innerHTML = rodizios.length ? `<hr /><h4>Meus rodízios</h4>${rodizios.map(volMontarRodizioMeu).join("")}` : "";
@@ -20978,7 +21007,7 @@ function volMontarEquipeLiderada(e) {
   const membros = (e.membros || []).map(m => {
     const euMesmo = String(m.membroId) === String(authMatricula);
     const acao = euMesmo ? '<span class="vol-matricula">(você)</span>'
-      : `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volRemoverLiderAcao(${equipeId}, ${Number(m.membroId)})">🚪 Remover da escala</button>`;
+      : `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="volRemoverLiderAcao" data-args-click="${argsAttr(equipeId, Number(m.membroId))}">🚪 Remover da escala</button>`;
     return `<tr><td>${volEsc(m.nome)} <span class="vol-matricula">matrícula ${Number(m.membroId)}</span></td><td>${acao}</td></tr>`;
   }).join("");
   const remocoes = e.remocoes || [];
@@ -21030,7 +21059,7 @@ function volMontarTabelaRemocoes(remocoes, origem, comEquipe) {
       ? "Removido(a)"
       : `Reintegrado(a) em ${volDataInstante(r.reintegradoEm)}${r.reintegracaoObs ? ` — ${volEsc(r.reintegracaoObs)}` : ""}`;
     const acao = r.podeReintegrar
-      ? `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volReintegrarAcao(${Number(r.desligamentoId)}, '${origem}')">↩️ Reintegrar</button>` : "";
+      ? `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="volReintegrarAcao" data-args-click="${argsAttr(Number(r.desligamentoId), String(origem))}">↩️ Reintegrar</button>` : "";
     return `<tr><td>${volDataInstante(r.desligadoEm)}</td><td>${volEsc(r.membroNome)} <span class="vol-matricula">matrícula ${Number(r.membroId)}</span></td>
       ${comEquipe ? `<td>${volEsc(r.equipeNome)}</td>` : ""}<td>${volEsc(volRotuloMotivo[r.tipoMotivo] || r.tipoMotivo)}</td><td>${volEsc(r.motivo)}</td>
       <td>${Number(r.alocacoesCanceladas)}</td><td>${situacao}</td><td>${acao}</td></tr>`;
@@ -21043,7 +21072,7 @@ function volCelulaNatureza(e) {
   const naturezas = volCatalogos && Array.isArray(volCatalogos.naturezas) ? volCatalogos.naturezas : [];
   if (!naturezas.length) return volEsc(e.natureza || "—");
   const atual = naturezas.find(n => n.codigo === e.natureza);
-  return `<select class="vol-select-natureza" aria-label="Natureza da equipe ${volEsc(e.nome)}" onchange="volMudarNaturezaAcao(${Number(e.equipeId)}, this)">
+  return `<select class="vol-select-natureza" aria-label="Natureza da equipe ${volEsc(e.nome)}" data-on-change="volMudarNaturezaAcao" data-args-change="${argsAttr(Number(e.equipeId), ARG.elemento)}">
       ${naturezas.map(n => `<option value="${volEsc(n.codigo)}"${n.codigo === e.natureza ? " selected" : ""}>${volEsc(n.rotulo)}</option>`).join("")}
     </select>${atual && atual.exigeRevezamento ? ' <span class="vol-etiqueta vol-etiqueta-alerta">revezamento obrigatório</span>' : ""}`;
 }
@@ -21103,14 +21132,14 @@ async function volCarregarRodiziosAcao() {
 function volMontarGrupo(g, ativo) {
   const gid = Number(g.grupoId);
   const membros = (g.membros || []).map(m => `<li>${volEsc(m.nome)} <span class="vol-matricula">matrícula ${Number(m.membroId)}</span>
-      <button type="button" class="btn-link btn-link-perigo" title="Retirar do grupo" aria-label="Retirar ${volEsc(m.nome)} do ${volEsc(g.nome)}" onclick="volRetirarDoGrupoAcao(${gid}, ${Number(m.membroId)})">✕</button></li>`).join("");
+      <button type="button" class="btn-link btn-link-perigo" title="Retirar do grupo" aria-label="Retirar ${volEsc(m.nome)} do ${volEsc(g.nome)}" data-on-click="volRetirarDoGrupoAcao" data-args-click="${argsAttr(gid, Number(m.membroId))}">✕</button></li>`).join("");
   return `<div class="vol-grupo">
     <div class="vol-grupo-topo"><strong>${volEsc(g.nome)}</strong> <span class="vol-matricula">${(g.membros || []).length} voluntário(s)</span>
-      ${ativo ? `<button type="button" class="btn-link btn-link-perigo" onclick="volDesativarGrupoAcao(${gid})">Desativar grupo</button>` : ""}</div>
+      ${ativo ? `<button type="button" class="btn-link btn-link-perigo" data-on-click="volDesativarGrupoAcao" data-args-click="${argsAttr(gid)}">Desativar grupo</button>` : ""}</div>
     ${membros ? `<ul class="vol-lista">${membros}</ul>` : "<p class='subtitle'>Nenhum voluntário neste grupo ainda.</p>"}
     ${ativo ? `<div class="vol-adicionar">
       <input type="number" id="volMatricula${gid}" min="1" placeholder="Matrícula" aria-label="Matrícula do voluntário a incluir no ${volEsc(g.nome)}" />
-      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volAdicionarAoGrupoAcao(${gid})">➕ Adicionar ao grupo</button>
+      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="volAdicionarAoGrupoAcao" data-args-click="${argsAttr(gid)}">➕ Adicionar ao grupo</button>
     </div>` : ""}
   </div>`;
 }
@@ -21141,7 +21170,7 @@ function volMontarRodizio(r) {
         <div class="vol-campo"><label for="volNovoGrupoNome${rid}">Nome do grupo</label><input type="text" id="volNovoGrupoNome${rid}" maxlength="60" placeholder="Ex.: Grupo A" /></div>
         <div class="vol-campo"><label for="volNovoGrupoMatriculas${rid}">Matrículas dos voluntários (separadas por vírgula)</label><input type="text" id="volNovoGrupoMatriculas${rid}" placeholder="Ex.: 1021, 1033" /></div>
       </div>
-      <div class="vol-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" onclick="volCriarGrupoAcao(${rid})">➕ Criar grupo</button></div>
+      <div class="vol-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="volCriarGrupoAcao" data-args-click="${argsAttr(rid)}">➕ Criar grupo</button></div>
     </details>` : ""}
     <p class="vol-sub">Próximas datas</p>
     ${proximas ? `<ul class="vol-lista">${proximas}</ul>` : "<p class='subtitle'>Sem datas previstas: o rodízio precisa de grupos com voluntários.</p>"}
@@ -21151,10 +21180,10 @@ function volMontarRodizio(r) {
       <label class="vol-check"><input type="checkbox" id="volPublicar${rid}" /> Publicar já e avisar os voluntários</label>
     </div>
     <div class="vol-acoes">
-      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volPreviaRodizioAcao(${rid})">🔍 Ver prévia</button>
-      <button type="button" class="btn-confirmar" style="width:auto;margin:0;"${r.ativo ? "" : " disabled"} onclick="volGerarRodizioAcao(${rid}, this)">⚙️ Gerar</button>
-      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volCancelarFuturosAcao(${rid})">🗑️ Cancelar futuros em rascunho</button>
-      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volAlternarRodizioAcao(${rid}, ${r.ativo ? "false" : "true"})">${r.ativo ? "⏸️ Desativar rodízio" : "▶️ Reativar rodízio"}</button>
+      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="volPreviaRodizioAcao" data-args-click="${argsAttr(rid)}">🔍 Ver prévia</button>
+      <button type="button" class="btn-confirmar" style="width:auto;margin:0;"${r.ativo ? "" : " disabled"} data-on-click="volGerarRodizioAcao" data-args-click="${argsAttr(rid, ARG.elemento)}">⚙️ Gerar</button>
+      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="volCancelarFuturosAcao" data-args-click="${argsAttr(rid)}">🗑️ Cancelar futuros em rascunho</button>
+      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="volAlternarRodizioAcao" data-args-click="${argsAttr(rid, r.ativo ? false : true)}">${r.ativo ? "⏸️ Desativar rodízio" : "▶️ Reativar rodízio"}</button>
     </div>
     <div id="volPrevia${rid}"></div>
     ${volResultadoGeracao[rid] ? volMontarResultadoGeracao(volResultadoGeracao[rid]) : ""}
@@ -21353,7 +21382,7 @@ function volPrepararFormulariosHabilitacao() {
   frase.innerHTML = `<div class="vol-frase-caixa">
     <blockquote class="vol-frase" id="volFraseTexto">${volEsc(r.texto)}</blockquote>
     <div class="vol-acoes">
-      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" onclick="volCopiarFraseAcao()">📋 Copiar</button>
+      <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="volCopiarFraseAcao">📋 Copiar</button>
       <span class="vol-matricula">Versão ${volEsc(r.versao)} do texto</span>
     </div>
   </div>`;
@@ -21462,7 +21491,7 @@ async function volVerResponsaveisAcao() {
     ? `<p class="subtitle">Responsáveis de ${volEsc(data.menor.nome)}:</p><div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Responsável</th><th>Vínculo</th><th>Documento conferido</th><th>Situação</th><th></th></tr></thead><tbody>
         ${lista.map(r => `<tr><td>${volEsc(r.nome)} <span class="vol-matricula">matrícula ${Number(r.membroId)}</span></td><td>${volEsc(r.rotuloVinculo)}</td><td>${volEsc(r.documento)}</td>
           <td>${r.ativo ? "✅ ativo" : `revogado em ${volDataInstante(r.revogadoEm)}`}</td>
-          <td>${r.ativo ? `<button class="btn-link btn-link-perigo" onclick="volRevogarResponsavelAcao(${Number(r.responsavelId)})">Revogar</button>` : ""}</td></tr>`).join("")}
+          <td>${r.ativo ? `<button class="btn-link btn-link-perigo" data-on-click="volRevogarResponsavelAcao" data-args-click="${argsAttr(Number(r.responsavelId))}">Revogar</button>` : ""}</td></tr>`).join("")}
       </tbody></table></div>`
     : `<p class="subtitle">Nenhum responsável cadastrado para ${volEsc(data.menor.nome)}.</p>`;
 }
@@ -21524,3 +21553,138 @@ async function volCarregarRatificacoesAcao() {
       </tbody></table></div>`
     : "<p class='subtitle'>Nenhuma lista registrada ainda.</p>";
 }
+
+// ---- CSP forte: AÇÕES QUE O HTML PODE PEDIR (data-on-click="nome" etc.) — app/eventos.js só chama o que está aqui ----
+// Lista GERADA a partir de todos os data-on-* do index.html e do script.js (688 ações, ordem alfabética). O teste
+// api/shared/__tests__/frontCsp.test.js confere que cada nome usado está aqui e que nada sobra. Ação nova: escreva data-on-click="minhaAcao" no HTML
+// e acrescente minhaAcao abaixo (referência direta à função, nunca texto: o despachante não procura nada em window).
+registrarAcoes({
+  abrirAvaliacaoPscAcao, abrirCadastroSocioeconomicoAcao, abrirComparativoPorteAcao, abrirConsolidadoDeptoAcao, abrirCredenciamentoAssembleia,
+  abrirDetalheHabilitacaoAcao, abrirDetalheMediacao, abrirEdicaoPerfilRateioAcao, abrirFormReclassPscAcao, abrirInventarioAcao, abrirLicaoEbdAcao,
+  abrirMatriculaTrilhaAcao, abrirModalAnexos, abrirModalExportarPessoas, abrirNotificacao, abrirParecerViabilidadeAcao, abrirPerfilPessoa,
+  abrirProcedimentoAbandonoAcao, abrirRelatorioDeptoAcao, abrirReuniao, abrirSerieHistoricaCampoAcao, abrirServicoEscalaAcao,
+  abrirTelaChamadaOffline, abrirTesourariaDeptoAcao, acaoCandidatoBatismo, acaoFluxoRd, acaoMinhaTarefa, acaoObra, acaoTurmaBatismo, acessarPainel,
+  adicionarBlocoPerguntaEnquete, adicionarLinhaContribuinteRd, adicionarMaterialPlanoEbdAcao, adicionarMembroCCJ, adicionarMembroEquipeAcao,
+  adicionarMembroPMO, adicionarModuloTrilhaAcao, adicionarQuestaoEbdAcao, adicionarVisitanteOfflineAcao, afastarCautelarAcao,
+  ajustarPrazoProcessoAcao, alterarMeuPinAcao, alterarVisibilidadeDocumentoAcao, alternarAjudaContextual, alternarCampoCampanhaSaida,
+  alternarCamposDemonstracao, alternarComprovanteLancamento, alternarCongregacaoFluxoCaixa, alternarContatoComMenoresAcao, alternarCotacoesSaida,
+  alternarCriterioPscAcao, alternarDiscipuladoBatismoAcao, alternarEdicaoValorReferenciaCotacoes, alternarFormDadosBancariosInstituicao,
+  alternarFormNovaCampanha, alternarFormNovaContaReceber, alternarFormNovaMetaPdq, alternarFormNovaSaida, alternarFormNovoFornecedor,
+  alternarFormNovoFundoFixo, alternarFormNovoOrcamento, alternarFormNovoPlanoPdq, alternarFormNovoProjetoPdq, alternarFormNovoSorteio,
+  alternarLoginPorCodigo, alternarMeusDadosLGPD, alternarModoLeitura, alternarPainelNotificacoes, alternarPushAcao, alternarSidebar,
+  anexarComprovanteTesourariaAcao, anonimizarAlunoEbdDpoAcao, anonimizarOuvidoriaAcao, anonimizarVisitanteEbdDpoAcao, aoTrocarCongregacaoLancamentos,
+  apagarDadosOfflineEbdAcao, aplicarFiltroElegiveis, aplicarFiltroPessoas, aplicarMedidaCautelarAcao, aprovarJustificativaPendente,
+  aprovarPedidoRevistaEbdAcao, aprovarSaidaAcao, aprovarTodaSolicitacaoAcao, arquivarNotificacao, arquivarOuvidoriaAcao,
+  arquivarProcedimentoAbandonoAcao, arquivarReclassificacaoPscAcao, ativarComTeclado, atribuirOuvidorAcao, atribuirTurmaBatismoAcao,
+  atualizarFormularioQuestaoEbd, atualizarItensPedidoRevistaEbdAcao, atualizarNotificacaoRegra, atualizarNucleoFundamentalVisivel,
+  atualizarPoliticaRetencao, atualizarStatusCampanhaAcao, atualizarStatusMetaPdqAcao, atualizarStatusPlanoPdqAcao, atualizarStatusProjetoPdqAcao,
+  atualizarSugestoesPscAcao, autoEscalarAcao, avancarConsagracaoAcao, baixarMinutaAta, baixarModeloPessoas, baixarPdfCarta, baixarPdfCertificado,
+  baixarTurmaOfflineEbdAcao, bifurcarDisciplinarAcao, buscarLicaoEbdAcao, buscarTitularesEbdDpoAcao, cadastrarRevistaEbdAcao, calAbrirAnoAcao,
+  calAbrirEventoAcao, calAbrirFormAcaoDetalhe, calAbrirFormHomologarAcao, calAbrirJustificativaPresencaAcao, calAbrirPresencaAcao,
+  calAbsorverEventoAcao, calAlternarRegraAcao, calAlternarTipoAcao, calCancelarEventoAcao, calCancelarRemarcacaoAcao, calCarregarEventosPresencaAcao,
+  calConsolidarAnoAcao, calDeferirEventoAcao, calEditarRegraAcao, calEditarTipoAcao, calEnviarJustificativaPresencaAcao, calEnviarPropostaAcao,
+  calFecharFormAcaoDetalhe, calFecharFormHomologarAcao, calFecharJustificativaPresencaAcao, calFiltrosAgendaMudaramAcao, calGerarCicloAcao,
+  calHomologarAnoAcao, calIndeferirEventoAcao, calIrParaHojeAcao, calLimparFormRegraAcao, calLimparFormTipoAcao, calLimparPropostaAcao,
+  calMarcarPresencaAcao, calMeuMudouCongregacaoAcao, calMostrarSecaoAcao, calMudarMesAcao, calPropAbrangenciaMudouAcao,
+  calPropAgendarVerificacaoAcao, calPropTipoMudouAcao, calRedesenharAgendaAcao, calRemarcarAcao, calSalvarEdicaoEventoAcao, calSalvarRegraAcao,
+  calSalvarTipoAcao, calSelecionarDiaAcao, calUsarSugestaoRetornoAcao, calUsarSugestaoVerifAcao, cancelarCarta, cancelarCessaoTemploAcao,
+  cancelarContaReceberAcao, cancelarDelegacaoAcao, cancelarEdicaoConvocacaoAcao, cancelarLancamentoTesourariaAcao, cancelarMatriculaTrilhaAcao,
+  cancelarSaidaAcao, carregarAlertasComplianceAcao, carregarAnosCalAcao, carregarAtividadeEbdAcao, carregarAuditoria, carregarAusentesEbdAcao,
+  carregarCadernetaEbdAcao, carregarCatalogoPscAcao, carregarCatalogoRevistasEbdAcao, carregarCatalogoTrilhasAcao, carregarCertificadosEbdAcao,
+  carregarConsolidadoFinanceiroEbdAcao, carregarConsolidadoRevistasEbdAcao, carregarConsolidadoTesouraria, carregarContasReceber,
+  carregarConteudoLicaoEbdAcao, carregarDetalheFamiliaAssistenciaAcao, carregarDetalhePscAcao, carregarDetalheTurmaEbdAcao, carregarDizimistasMes,
+  carregarDocumentos, carregarDossieFiscalAcao, carregarEquipesAcao, carregarEquipesFlagAcao, carregarFamiliasAssistenciaAcao,
+  carregarFluxoCaixaProjetadoAcao, carregarFormacaoPessoaAcao, carregarHistoricoPscAcao, carregarImunidadeTributariaAcao, carregarIndicadoresAcao,
+  carregarInformeRendimentosAcao, carregarLancamentosFinanceiroEbdAcao, carregarLancamentosTesouraria, carregarLiturgiaCalAcao,
+  carregarMedidorEcdAcao, carregarMinhaAgendaCalAcao, carregarNotasExplicativasAcao, carregarOfertaLicaoEbdAcao, carregarOpcoesDizimistasReceber,
+  carregarPainelPscAcao, carregarParametrosTesouraria, carregarPautaCalAcao, carregarPedidosTurmaEbdAcao, carregarPendenciasConfirmacaoAcao,
+  carregarPendenciasTrilhasAcao, carregarPlanosGestaoEbdAcao, carregarPlanosTurmaEbdAcao, carregarPresencaCalAcao,
+  carregarPrestacaoContasAssistenciaAcao, carregarRankingConquistaAdminAcao, carregarRecertificacoesAcao, carregarReclassificacoesPscAcao,
+  carregarRelatorioTrimestreEbdAcao, carregarRequisitosTrilhasAcao, carregarRespostasAlunoEbdAcao, carregarResumoAtividadeTurmaEbdAcao,
+  carregarResumoFechamento, carregarRosterChamadaEbdAcao, carregarSaidas, carregarSiteStatusCalAcao, carregarSituacaoTesouroAcao,
+  carregarSolicitacoesDPO, carregarTiposCalAcao, carregarTrocasPendentesAcao, carregarTurmasEbdAcao, carregarVisaoAgrupadaEbdAcao,
+  checarElegibilidadeCEIAcao, citarAcao, cnlAbrirCanalAcao, cnlAbrirFormCanalAcao, cnlAbrirFormEncerrarAcao, cnlAbrirOcorrenciaAcao,
+  cnlAbrirResolverTrocaAcao, cnlAbrirTrocaAcao, cnlAceitarTermoAcao, cnlAceitarTermoTodosAcao, cnlAvisoCategoriaMudouAcao, cnlAvisoContarAcao,
+  cnlCarregarCanaisAcao, cnlCarregarMeusAvisosAcao, cnlCarregarOcorrenciasAcao, cnlCarregarPainelAcao, cnlCarregarTransmissaoAcao,
+  cnlCarregarTrocasAcao, cnlCCategoriaMudouAcao, cnlCEscopoMudouAcao, cnlConferirSucessoesAcao, cnlCopiarTextoAcao, cnlCPlataformaMudouAcao,
+  cnlDeclararImprocedenteAcao, cnlDesativarCanalAcao, cnlDesignarAdminAcao, cnlEditarCanalAcao, cnlEditarTransmissaoAcao, cnlEncerrarAdminAcao,
+  cnlEnviarAvisoAcao, cnlFecharFormAcaoCanal, cnlFecharFormEncerrarAcao, cnlFecharResolverTrocaAcao, cnlLimparFormCanalAcao, cnlMostrarSecaoAcao,
+  cnlReativarCanalAcao, cnlRedesenharCanaisAcao, cnlRedesenharOcorrenciasAcao, cnlRedesenharTransmissaoAcao, cnlRegistrarAdvertenciaAcao,
+  cnlRegistrarConferenciaAcao, cnlRegistrarParaCongregacaoAcao, cnlRegistrarRemocaoAcao, cnlResolverTrocaAcao, cnlSalvarCanalAcao,
+  cnlSalvarTransmissaoAcao, cnlTrAtualizarBlocosAcao, cnlTrPreencherDaCongregacaoAcao, comentarFluxoRdAcao, concederConsentimentoFotoAcao,
+  conciliarPixSelecionadosAcao, concluirEtapaHabilitacaoAcao, concluirManutencaoVeiculoAcao, concluirModuloTrilhaAcao, concluirOuvidoriaAcao,
+  concluirRelatorioCautelarAcao, conferirRequisitoAcao, confirmarAutolancamentoAcao, confirmarCartaPendente, confirmarCodigoAcessoAcao,
+  confirmarContaReceberAcao, confirmarDadosBancariosFornecedorAcao, confirmarRecebimentoEscalaAcao, confirmarRepasseAcao,
+  consultarProtocoloOuvidoriaAcao, convocarAssembleiaAcao, copiarLinkVerificacaoAcao, copiarValorParaCampo, corrigirMarcoMembroAcao,
+  corrigirRespostaManualEbdAcao, corrigirTodosValoresAcao, credenciarMembroAcao, credenciarProfissionalAssistenciaAcao, criarAtividadeEbdAcao,
+  criarCampanhaAcao, criarConquistaAcao, criarCriterioPscAcao, criarDelegacaoAcao, criarEquipeAcao, criarFamiliaAssistenciaAcao, criarFundoFixoAcao,
+  criarLancamentoFinanceiroEbdAcao, criarMetaPdqAcao, criarOrcamentoAcao, criarPedidoRevistaEbdAcao, criarPinAcao, criarPlanoPdqAcao,
+  criarProjetoPdqAcao, criarRegraConquistaAcao, criarRequisitoTrilhaAcao, criarServicoAcao, criarSolicitacaoLGPD, criarSorteioAcao,
+  criarTipoEventoConquistaAcao, criarTrilhaAcao, criarTurmaEbdAcao, decidirCampoFilaAcao, decidirMediacaoAcao, decidirRecertificacaoAcao,
+  decidirSinalizacaoNifAcao, decidirTrocaAcao, declararIndisponibilidadeAcao, decretarReclassificacaoPscAcao, definirDecisaoImportacao,
+  definirModuloAtivoAcao, definirTrilhaAtivaAcao, derrubarAcessosPessoa, desativarCongregacaoDetalheAcao, descartarGrupoOfflineEbdAcao,
+  descredenciarProfissionalAssistenciaAcao, designarArbitroAcao, designarDefensorAcao, designarMediadorAcao, designarProfessorEbdAcao,
+  designarRelatorAcao, desligarPessoaPerfilAcao, devolverAvaliacaoPscAcao, editarCatalogo, editarCongregacaoDetalhe, editarConvocacaoAcao,
+  editarCriterioPscAcao, editarDiasRetencaoAcao, editarOrgao, editarPapel, editarPermissao, editarPlanoEbdAcao, editarTituloNotificacaoRegra,
+  emitirCarta, emitirCertificadoEbdAcao, emitirCertificadoMatriculaAcao, emitirParecerAcao, emitirParecerViabilidadeAcao,
+  encaminharMediacaoOuvidoriaAcao, encaminharProcessoOuvidoriaAcao, encerrarAssentoAcao, encerrarAssentoCEIAcao, encerrarAssentoCLIAcao,
+  encerrarAssentoConselhoFiscalAcao, encerrarAssentoDiretoriaAcao, encerrarEnqueteAcao, encerrarMatriculaEbdAcao, encerrarOrcamentoAcao,
+  encerrarProfessorEbdAcao, encerrarReuniaoAcao, encerrarSessaoAcao, entrarModulo, enviarAnexoModal, enviarAvaliacaoPscAcao, enviarFotoMembroAcao,
+  enviarMinhaFotoAcao, enviarPresenca, enviarSolicitacaoEdicaoAcao, evtAbrirCaixaAcao, evtAbrirCancelarConvidadoAcao, evtAbrirCancelarLancamentoAcao,
+  evtAbrirDossieAcao, evtAbrirDossieDoCalendarioAcao, evtAbrirEdicaoConvidadoAcao, evtAbrirEncerrarOrganizadorAcao, evtAdicionarDestinoAcao,
+  evtCancelarConvidadoAcao, evtCancelarLancamentoAcao, evtCarregarCaixasAcao, evtCarregarFilaAcao, evtCarregarPainelAcao, evtConferirCaixaAcao,
+  evtDecidirEticaAcao, evtDecidirNadaConstaAcao, evtDesignarOrganizadorAcao, evtDestinosMudouAcao, evtDevolverCaixaAcao, evtEncerrarCaixaAcao,
+  evtEncerrarOrganizadorAcao, evtFecharCancelarLancamentoAcao, evtFecharEncerrarOrganizadorAcao, evtFecharFormConvidadoAcao, evtLancarAcao,
+  evtLancTipoMudouAcao, evtMostrarSecaoAcao, evtOficializarConvidadoAcao, evtRegistrarConvidadoAcao, evtRemoverDestinoAcao, evtSalvarConvidadoAcao,
+  evtSubmeterConvidadoAcao, excluirAnexoModal, excluirApresentacaoCriancaAcao, excluirCasamentoAcao, excluirCatalogo, excluirCongregacaoDetalheAcao,
+  excluirConvocacaoAcao, excluirDocumentoAcao, excluirLancamentoFinanceiroEbdAcao, excluirOrgao, excluirPlanoEbdAcao, executarExclusaoDPO,
+  fecharFormReclassPscAcao, fecharLicaoEbdAcao, fecharMesTesourariaAcao, fecharMesTesourariaDeptoAcao, fecharModal, fecharPrimeiroAcesso,
+  fecharRateioGeralAcao, fecharTelaChamadaOffline, fecharTrimestreEbdAcao, filtrarCatalogo, filtrarMinhasTarefas, gerarDemonstracaoAcao,
+  gerarFolhaPrebendaAcao, gerarPinProvisorioAcao, gerarRelatorioCredenciamentoAcao, gerarRelatorioTesourariaAcao, gerarRemessaBancariaAcao,
+  homologarAvaliacaoPscAcao, homologarExclusaoAcao, homologarProcedimentoAbandonoAcao, homologarRemanejamentoPdqAcao, importarCadernetasEbdAcao,
+  importarExtratoAcao, imprimirCarta, imprimirCertificado, imprimirMinhaCarta, iniciarHabilitacaoAcao, iniciarSessaoConvocadaAcao,
+  inscreverCandidatoBatismoAcao, instalarAppAcao, instaurarMediacaoAcao, irParaBlocoPainel, irParaResultadoBusca, julgarProcessoAcao,
+  justificarFalta, lancarDespesaTesourariaDeptoAcao, lancarPresencaEbdAcao, lerArquivoImportacaoEbdAcao, limparFormCongregacaoDetalhe,
+  limparFormPlanoEbd, marcarInaptoAcao, marcarPresencaManual, marcarPresencaOfflineEbd, marcarSorteioRealizadoAcao, marcarTodasNotificacoesLidas,
+  marcarUrgenciaAcao, matricularAlunoEbdAcao, matricularNaoMembroEbdAcao, matricularTrilhaAcao, mediacaoSemAcordoAcao, mostrarAbaPerfil,
+  mostrarAbaSecretaria, mostrarSubAbaFinanceiro, mostrarSubAbaMeupainel, mostrarSubAbaPessoas, mostrarTelaPainelInicial, mudarNivelConsolidadoAcao,
+  mudarPaginaCatalogo, mudarPaginaElegiveis, mudarPaginaPessoas, onChangeEscopoTipoLote, onChangeEscopoTipoPermissao, onChangePublicoEnquete,
+  onChangeTipoPerguntaEnquete, onChangeVinculanteEnquete, onDigitarBuscaGlobal, pagarSaidaAcao, parecerCandidatoBatismoAcao, pedirTrocaEscalaAcao,
+  prepararImportacaoPessoas, preRequisitoModuloAcao, preRequisitoTrilhaAcao, processarRetornoRemessaAcao, processarSaidasCartas, proporAlienacaoAcao,
+  pscEditarTextoRespostaAcao, pscMarcarRespostaAcao, pscRecarregarDetalheAcao, publicarEscalaAcao, publicarPlanoEbdAcao, reabilitarHabilitacaoAcao,
+  reabrirAvaliacaoPscAcao, reabrirLicaoEbdAcao, reabrirRelatorioDeptoAcao, reativarCongregacaoDetalheAcao, reativarFundoPdqAcao,
+  recalcularTotalConciliacaoPix, recorrerAcao, redefinirSenhaLideranca, registrarAceiteAcao, registrarAcordoMediacaoAcao, registrarAncoragemAcao,
+  registrarAuditoriaNivelAcao, registrarAutolancamentoAcao, registrarCompromissoArbitralAcao, registrarComunicacaoCoafAcao,
+  registrarConflitoInteresseAcao, registrarDecisaoPresencialMediacaoAcao, registrarDefesaAcao, registrarDesligamentoAcao,
+  registrarDevolucaoChaveAcao, registrarDoacaoAcao, registrarDueDiligenceAcao, registrarEntregaAssistenciaAcao, registrarGanhadorAcao,
+  registrarManutencaoVeiculoAcao, registrarMarcoMembroAcao, registrarMovimentoFundoFixoAcao, registrarObraAcao, registrarObraMarcoAcao,
+  registrarOfertaLicaoEbdAcao, registrarPagamentoPedidoRevistaEbdAcao, registrarParecerAssistenciaAcao, registrarParecerConselhoAcao,
+  registrarPoliticaAcao, registrarPrestacaoContasAcao, registrarProvaReintegracaoAcao, registrarReceitaAcessoriaAcao, registrarRecursoAbandonoAcao,
+  registrarRepasseInstitucionalAcao, registrarRepasseTesourariaAcao, registrarRetiradaChaveAcao, registrarRetornoLicencaAcao,
+  registrarRiscoVinculoAcao, registrarSentencaArbitralAcao, registrarSessaoMediacaoAcao, registrarSinalizacaoNifAcao, registrarTentativaContatoAcao,
+  registrarTermoConducaoAcao, registrarVersaoTextoMestreAcao, registrarVisitanteEbdAcao, rejeitarJustificativaAcao, rejeitarRemanejamentoPdqAcao,
+  rejeitarSaidaAcao, removerBlocoPerguntaEnquete, removerMaterialPlanoEbdAcao, removerMembroComissaoAcao, removerMeuVinculoAcao, removerPai,
+  removerPermissao, removerRequisitoTrilhaAcao, removerTurmaOfflineEbdAcao, removerVinculoFamiliar, renderChamadaOffline,
+  reprovarCandidatoBatismoAcao, reprovarConsagracaoAcao, resolverAlertaComplianceAcao, resolverDivergenciaAcao, resolverRiscoVinculoAcao,
+  responderConviteEscalaAcao, responderSolicitacaoDPO, restabelecerReclassificacaoPscAcao, revogarCertificadoAcao, sairDoModulo, sairDoPainel,
+  salvarAplicacaoAcao, salvarApoliceAcao, salvarApresentacaoCrianca, salvarAssento, salvarAssentoCEI, salvarAssentoCLI, salvarAssentoConselhoFiscal,
+  salvarAssentoDiretoria, salvarAtoDesignacaoAcao, salvarAuxilioCustoAcao, salvarBemPatrimonialAcao, salvarCadernetaEbdAcao, salvarCasamento,
+  salvarCatalogo, salvarCessaoTemploAcao, salvarCongregacaoDetalhe, salvarConsagracao, salvarConsentimentoLGPD, salvarContaReceberAcao,
+  salvarConteudoLicaoEbdAcao, salvarDadosBancariosInstituicaoAcao, salvarDenunciaOuvidoria, salvarDizimistaAcao, salvarDocumentoAcao,
+  salvarDocumentoBemAcao, salvarEnquete, salvarFornecedorAcao, salvarFrotaAcao, salvarImovelAcao, salvarLancamentoTesourariaAcao,
+  salvarLicencaCandidatura, salvarMeusDadosAcao, salvarMeuVinculoAcao, salvarNotasExplicativasAcao, salvarObrigacaoFiscalAcao,
+  salvarOcupacaoCasaPastoralAcao, salvarOrgao, salvarPapel, salvarParametrosPscAcao, salvarParametrosTesourariaAcao, salvarPerfilRateioAcao,
+  salvarPermissao, salvarPermissaoLote, salvarPessoa, salvarPlanoEbdAcao, salvarPrebendadoAcao, salvarProcessoDisciplinar, salvarProjeto,
+  salvarRelatorioDeptoAcao, salvarRespostaEbdAcao, salvarRespostasPscAcao, salvarRetencaoAcao, salvarTurmaBatismoAcao, salvarValorMonetarioAcao,
+  salvarVinculoFamiliar, selecionarOrgaoReunioes, sincronizarChamadaOfflineAcao, solicitarCarta, solicitarCodigoAcessoAcao,
+  solicitarJustificativaAcao, solicitarRemanejamentoPdqAcao, solicitarSaidaAcao, sugerirPedidoRevistaEbdAcao, suspenderFundoPdqAcao,
+  transferirAlunoEbdAcao, tratarDivergenciaRemessaAcao, trocarMinhaSenha, validarAvaliacaoPscAcao, verDetalheCampanhaAcao, verDetalheConciliacaoAcao,
+  verDetalheContaReceberAcao, verDetalheFundoFixoAcao, verDetalheOrcamentoAcao, verDetalhePlanoPdqAcao, verDetalheRateioGeralAcao,
+  verDetalheRemessaAcao, verDetalheSaidaAcao, verDetalheSorteioAcao, verFrequencia, verificarCadeiaAuditoriaAcao, verRelatorioProgressoPdqAcao,
+  vincularAlunoEbdAcao, volAderirTermoAcao, volAdicionarAoGrupoAcao, volAlternarFormaAdesaoAcao, volAlternarOrigemRatificacaoAcao,
+  volAlternarRodizioAcao, volAtualizarBotaoMenorAcao, volAtualizarBotaoTermoAcao, volAutorizarMenorAcao, volCadastrarResponsavelAcao,
+  volCancelarFuturosAcao, volCopiarFraseAcao, volCriarGrupoAcao, volCriarRodizioAcao, volDesativarGrupoAcao, volGerarRodizioAcao,
+  volMudarNaturezaAcao, volPreviaRodizioAcao, volRatificarAcao, volRegistrarAdesaoAcao, volReintegrarAcao, volRemoverDaEscalaAcao,
+  volRemoverLiderAcao, volRetirarDoGrupoAcao, volRevogarResponsavelAcao, voltarBuscaPessoas, voltarParaCheckin, volVerResponsaveisAcao,
+  votarEnqueteAcao
+});

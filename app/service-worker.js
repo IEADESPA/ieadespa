@@ -8,7 +8,9 @@
 // v3 (03/10/2026): a biblioteca de planilhas (SheetJS 0.20.3) passou a ser servida daqui (/vendor), não mais de um CDN de terceiros; subir a versão do cache refaz a instalação.
 // v4 (04/10/2026): CSP forte — os eventos saíram do HTML (onclick="...") para o despachante /eventos.js, que entra na casca; o index.html e o script.js
 // novos só funcionam com ele, então a versão do cache sobe para a instalação baixar os três juntos.
-const CACHE_NOME = "ieadespa-app-shell-v4";
+// v5 (05/10/2026): com a CSP estrita, o `connect-src 'self'` vale TAMBÉM para o service worker: o fetch() dele para as fontes do Google era recusado e a página perdia a fonte
+// (a página não vê essa recusa, só o console do service worker). Agora ele só trata pedidos do PRÓPRIO endereço; os de fora o navegador atende direto, sob as regras da página.
+const CACHE_NOME = "ieadespa-app-shell-v5";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js"];
 
 self.addEventListener("install", (evento) => {
@@ -29,6 +31,7 @@ self.addEventListener("activate", (evento) => {
 // trata isso com toast de erro), não devolver um cache velho de dado.
 self.addEventListener("fetch", (evento) => {
   const url = new URL(evento.request.url);
+  if (url.origin !== self.location.origin) return;   // fontes do Google etc.: o navegador busca direto (o fetch() do service worker cairia no connect-src 'self')
   if (url.pathname.startsWith("/api/")) return;
   if (evento.request.method !== "GET") return;
   // v6.9 — a página pública de verificação de certificado nunca passa pelo

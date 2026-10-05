@@ -282,11 +282,25 @@ if (typeof describe === "function") {
       expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "verificar.css"))).toBe(true);
     });
 
-    test("service-worker: cache novo (v4) e o eventos.js na casca offline", () => {
+    test("service-worker: cache novo (v5) e o eventos.js na casca offline", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v4";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v5";/);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css"]));
+    });
+
+    // Com a CSP estrita o `connect-src 'self'` vale também para o service worker: o fetch() dele para as fontes do Google era recusado e a página perdia a fonte
+    // (a recusa só aparece no console do service worker, não na página). Por isso ele só trata pedidos do PRÓPRIO endereço e deixa os de fora para o navegador.
+    test("service-worker: ignora pedido de outra origem (antes do respondWith), para não cair no connect-src 'self'", () => {
+      const sw = ler("service-worker.js");
+      const ouvinte = sw.slice(sw.indexOf('addEventListener("fetch"'));
+      const posOrigem = ouvinte.indexOf("url.origin !== self.location.origin");
+      const posResposta = ouvinte.indexOf("respondWith(");
+      expect(posOrigem).toBeGreaterThan(-1);
+      expect(ouvinte.slice(posOrigem, posOrigem + 140)).toMatch(/\)\s*return;/);
+      expect(posOrigem).toBeLessThan(posResposta);
+      // mutação: sem a checagem, o teste acusa
+      expect(sw.replace("url.origin !== self.location.origin", "false")).not.toMatch(/url\.origin !== self\.location\.origin/);
     });
   });
 

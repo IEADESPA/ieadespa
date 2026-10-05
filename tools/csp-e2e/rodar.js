@@ -6,7 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { criarServidor } = require("./servidor");
+const { criarServidor, criarRemoto } = require("./servidor");
 const { gerarModelo } = require("./modelo");
 const { abrirNavegador, executarAcao, explorar, emParalelo, arquivosDeTeste, contextosDosTrabalhadores, fecharContextos } = require("./cobertor");
 const { compararRodadas, compararAcao, resumo } = require("./comparar");
@@ -32,8 +32,9 @@ function pastaApp(p) {
 const sha = (s) => crypto.createHash("sha1").update(s).digest("hex").slice(0, 12);
 const agoraTxt = () => new Date().toLocaleTimeString("pt-BR");
 
+// pasta = caminho local, ou { remoto: "https://..." } (o front vem do endereço real; /api é interceptado e simulado)
 async function rodarPlano(nav, pasta, csp, modelo, arqs, plano, workers, rotulo, opcoesExec = {}) {
-  const srv = await criarServidor({ raiz: pasta, porta: PORTA, csp, permissoes: modelo.permissoes });
+  const srv = typeof pasta === "object" ? criarRemoto({ url: pasta.remoto, permissoes: modelo.permissoes }) : await criarServidor({ raiz: pasta, porta: PORTA, csp, permissoes: modelo.permissoes });
   const t0 = Date.now();
   let feitos = 0;
   const ctxs = await contextosDosTrabalhadores(nav, workers);
@@ -80,7 +81,9 @@ function estatisticas(plano, T) {
   const cspNova = !o["nova-sem-csp"];
   const perfis = String(o.perfis || "anonimo,geral,membro").split(",");
   const original = pastaApp(o.original);
-  const nova = o.nova ? pastaApp(o.nova) : null;
+  // --remoto <url>: a "nova" é o front publicado nesse endereço (cabeçalhos reais); /api/* simulado por interceptação no navegador
+  const remoto = typeof o.remoto === "string" ? o.remoto.replace(/\/+$/, "") : null;
+  const nova = remoto ? { remoto } : (o.nova ? pastaApp(o.nova) : null);
   const saida = path.resolve(o.saida || path.join(AQUI, "resultados"));
   fs.mkdirSync(saida, { recursive: true });
   fs.mkdirSync(path.join(AQUI, "planos"), { recursive: true });
@@ -93,13 +96,14 @@ function estatisticas(plano, T) {
   const arqs = arquivosDeTeste();
   // vários processos do Edge (rende mais que um só com muitas abas); os trabalhadores se dividem entre eles
   const nNav = Math.max(1, Math.min(Number(o.navegadores) || 3, workers));
-  const nav = await Promise.all(Array.from({ length: nNav }, (_, i) => abrirNavegador(path.join(AQUI, "perfis-edge", PORTA + "-" + i))));
+  const nav = await Promise.all(Array.from({ length: nNav }, (_, i) => abrirNavegador(path.join(AQUI, "perfis-edge", (remoto ? "remoto-" : "") + PORTA + "-" + i), { remoto: !!remoto })));
   const fecharNavs = async () => { for (const n of nav) { try { await n.close(); } catch (_) {} } };
   const relatorio = [];
   const log = (s) => { console.log(s); relatorio.push(s); };
   log(`Verificação diferencial — ${new Date().toLocaleString("pt-BR")}`);
   log(`ORIGINAL: ${original} (sem CSP)`);
-  if (nova) log(`NOVA:     ${nova} (com a CSP estrita)`);
+  if (remoto) log(`NOVA:     ${remoto} (MODO REMOTO: front e cabeçalhos reais do endereço; /api/* simulado por interceptação)`);
+  else if (nova) log(`NOVA:     ${nova} (com a CSP estrita)`);
 
   const arqPlano = path.join(AQUI, "planos", `plano-${chave}.json`);
   let plano, T1;
@@ -162,7 +166,8 @@ function estatisticas(plano, T) {
   fs.writeFileSync(path.join(saida, "cobertura-faltam.txt"), cob.faltam.join("\n"));
 
   let codigoSaida = 0;
-  if (o.estabilidade) {
+  if (o["so-especiais"]) o["sem-plano"] = true;
+  if (o.estabilidade && !o["sem-plano"]) {
     log(`\n[${agoraTxt()}] Rodada dupla: ORIGINAL × ORIGINAL ...`);
     const T2 = await rodarPlano(nav, original, false, modelo, arqs, plano, workers, "original-2");
     const r = compararRodadas(plano, T1, T2);
@@ -171,12 +176,19 @@ function estatisticas(plano, T) {
     fs.writeFileSync(path.join(saida, "estabilidade-divergencias.txt"), r.linhas.join("\n"));
     if (r.diferentes) { log(r.linhas.slice(0, 60).join("\n")); codigoSaida = 1; }
   }
-  if (nova) {
-    log(`\n[${agoraTxt()}] Rodando o plano na NOVA com a CSP estrita ...`);
+  if (remoto) {
+    const { sondarRemoto } = require("./remoto");
+    log("");
+    const sond = await sondarRemoto(nav[0], criarRemoto({ url: remoto, permissoes: modelo.permissoes }), log);
+    fs.writeFileSync(path.join(saida, "remoto-sondagem.json"), JSON.stringify(sond, null, 1));
+    if (!sond.ok || sond.csp.length || (sond.sw && sond.sw.erro)) codigoSaida = 1;
+  }
+  if (nova && !o["sem-plano"]) {
+    log(`\n[${agoraTxt()}] Rodando o plano na NOVA ${remoto ? "(endereço remoto, cabeçalhos reais)" : "com a CSP estrita"} ...`);
     const TN = await rodarPlano(nav, nova, cspNova, modelo, arqs, plano, workers, "nova");
     fs.writeFileSync(path.join(saida, "nova-transcritos.json"), JSON.stringify({ transcritos: TN }));
     const r = compararRodadas(plano, T1, TN);
-    log(`\nRESULTADO ORIGINAL × NOVA: ${r.iguais} ações iguais, ${r.diferentes} com divergência; violações de CSP na nova: ${r.violacoes.length}; falhas do equipamento: ${r.falhas.length}`);
+    log(`\nRESULTADO ORIGINAL × NOVA: ${r.iguais} ações iguais, ${r.diferentes} com divergência (${r.soEstrutura} delas só porque um controle da tela mudou de manipulador — ver o resumo); violações de CSP na nova: ${r.violacoes.length}; falhas do equipamento: ${r.falhas.length}`);
     if (r.violacoes.length) { log("VIOLAÇÕES DE CSP:"); log(r.violacoes.slice(0, 80).join("\n")); }
     if (r.diferentes) { log("DIVERGÊNCIAS (A = original, B = nova):"); log(r.linhas.join("\n")); }
     if (r.falhas.length) log("FALHAS DO EQUIPAMENTO:\n" + r.falhas.slice(0, 30).join("\n"));

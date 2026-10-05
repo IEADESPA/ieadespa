@@ -1761,6 +1761,55 @@ ponto real de integração:
       e os pontos conhecidos já foram fechados e testados com texto de ataque em todo campo. O
       que já está no ar (`frame-ancestors`, `object-src`, `base-uri`, `form-action`) cobre o
       clique disfarçado e o formulário desviado.
+    - **CSP forte (04/10/2026) — FEITA.** O cabeçalho do sistema (`app/staticwebapp.config.json`)
+      passou a ser: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'
+      https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self'
+      data: blob: https://ieadespaarmazenamento.blob.core.windows.net; connect-src 'self';
+      worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action
+      'self'; frame-ancestors 'none'; upgrade-insecure-requests`. Sem `'unsafe-inline'` nem
+      `'unsafe-eval'` nos scripts: o navegador recusa qualquer código escrito dentro do HTML, então
+      um texto malicioso que chegasse à tela não vira código.
+      - **Como foi feito.** Os **880** pontos com código escrito dentro do HTML (469 em
+        `index.html`, 411 em textos montados no `script.js`) viraram `data-on-click="acao"` e afins,
+        com os argumentos em JSON (`data-args-click`), tratados por um despachante único
+        (`app/eventos.js`) que só chama as **688 ações registradas** em `registrarAcoes` no fim do
+        `script.js` (nome fora da lista não faz nada; **nunca** `window[nome]`). Ele imita o evento
+        em linha: sobe do filho para o pai, `data-stop`, `data-prevent`, erro isolado por ação, e a
+        ordem com os "clicar fora fecha" foi preservada. `verificar.html` (página pública) perdeu o
+        script e o estilo de dentro (`verificar.js`, `verificar.css`); o service worker foi para o
+        cache v4. Um número lido de um campo continua número (`Number(...)`).
+      - **Testes que ficam.** `frontCsp.test.js` (reprova evento em linha, `javascript:`,
+        `<script>` em linha, `eval`, `new Function`, ação não registrada ou com nome vindo de dado;
+        20 mutações provadas), `eventosDespachante.test.js`, `frontTipoDosArgumentos.test.js` (uma
+        variável lida de um campo não vai crua para os argumentos) e o `frontEscape.test.js`
+        ajustado. Suíte: 97 arquivos, 4553 testes, no fuso local e em UTC.
+      - **Verificação em navegador de verdade** (`tools/csp-e2e`, Edge sem tela, API simulada;
+        `README.md` lá): 4782 ações (cada controle de cada tela, com formulários e campos
+        preenchidos, em 3 perfis), versão antiga × nova com a política estrita ligada na nova:
+        **4780 idênticas**; as 2 restantes são ruído de tempo (idênticas quando repetidas
+        isoladas). **Zero violações** da política, e as 10 peças especiais (importar e exportar
+        planilha, carta, certificado com QR, verificação pública) iguais. O equipamento acusou os
+        4 defeitos plantados numa cópia estragada, e duas rodadas da versão antiga contra ela
+        mesma deram 4782 de 4782 iguais. Contra a **homologação do Azure** (cabeçalhos reais, API
+        simulada dentro do navegador): 971 de 971 e depois 4780 de 4782, zero violações. Achou **1
+        defeito real da conversão** (um número lido de um campo chegava como texto no "Remover
+        professor" da EBD); a busca por escrito achou mais 2 iguais (fechar mês e repasse da
+        tesouraria); os três foram corrigidos.
+      - **Prova complementar, estática** (`tools/csp-e2e/equivalencia-estatica.js`): compara o
+        texto original e o convertido de cada um dos **867** pontos (ação, quantidade e conteúdo
+        de cada argumento, `prevent` e `stop`), sem depender de dados simulados; cobre também os
+        168 modelos de botão que a simulação não alcançou. Resultado: **todos equivalentes** (857
+        por regra, 10 conferidos à mão: condicionais de texto virando valor e o marcador `this`).
+      - **Publicação em dois degraus** (conversão com a política antiga, depois o cabeçalho
+        estrito), cada um conferido no endereço real; a homologação já tinha passado pelas duas
+        coisas juntas.
+      - **Limites que continuam, ditos com honestidade.** `style-src` mantém `'unsafe-inline'` de
+        propósito: o front tem 931 atributos `style="..."` no HTML e 355 em textos do `script.js`,
+        e as janelas de impressão escrevem um `<style>`; injeção de estilo não executa código, e
+        trocar isso é um projeto à parte. Botão novo exige registrar a ação em `registrarAcoes` (o
+        teste avisa). A simulação não monta módulos inteiros (canais, eventos, voluntariado, parte
+        do PSC e do calendário): para esses vale a prova estática e os testes, não a execução.
+        Nada disso valida regra do servidor.
     - **Verificação do fecho.** A suíte da API foi de 1191 para **1947** testes (67 arquivos;
       357 deles são a varredura de rotas), e cada correção da revisão foi **quebrada de
       propósito** para provar que o teste falha sem ela (17 mutações, nenhuma sobrevive; duas

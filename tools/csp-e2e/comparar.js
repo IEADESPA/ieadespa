@@ -27,7 +27,8 @@ function resumo(tr) {
     "diálogos": ordenar(tr.dialogos),
     "confirmações no modal": tr.confirmacoes || [],
     "avisos (toasts)": ordenar(tr.toasts),
-    "janelas abertas": ordenar((tr.janelas || []).map(j => `${j.url}|${j.alvo}|html#${j.hash}|${j.tamanho}b|print=${j.impresso}|close=${j.docFechado}`)),
+    // o hash já é do HTML com a origem trocada por ORIGEM; o tamanho bruto muda com o endereço (local × remoto), por isso fica de fora
+    "janelas abertas": ordenar((tr.janelas || []).map(j => `${j.url}|${j.alvo}|html#${j.hash}|print=${j.impresso}|close=${j.docFechado}`)),
     "downloads": ordenar((tr.downloads || []).map(d => `${d.nome}|${d.href}|${d.tipo}|${d.tamanho}b|#${d.hash}`)),
     "objetos blob": ordenar((tr.objetos || []).map(o => `${o.tipo}|${o.tamanho}b|#${o.hash}`)),
     "área de transferência": ordenar(tr.clip),
@@ -65,11 +66,19 @@ function compararAcao(ta, tb) {
   const ra = resumo(ta), rb = resumo(tb);
   if (!ra || !rb) return [!ra ? "  ação ausente na rodada A" : "  ação ausente na rodada B"];
   const out = [];
+  out.campos = [];
+  out.controlesSo = { A: [], B: [] };
   for (const k of Object.keys(ra)) {
     const a = ra[k], b = rb[k];
     if (Array.isArray(a)) {
-      if (JSON.stringify(a) !== JSON.stringify(b)) { out.push(`  ${k}:`); out.push(...difLista(a, b)); }
+      if (JSON.stringify(a) !== JSON.stringify(b)) {
+        out.campos.push(k); out.push(`  ${k}:`); out.push(...difLista(a, b));
+        if (k === "controles com manipulador visíveis") { out.controlesSo.A = a.filter(x => !b.includes(x)); out.controlesSo.B = b.filter(x => !a.includes(x)); }
+      }
     } else if (a !== b) {
+      // contagem de elementos com manipulador: já explicada pela lista de controles; só conta como campo se o resto da contagem mudou
+      if (k === "contagens") { const ca = JSON.parse(a), cb = JSON.parse(b); delete ca.comManipulador; delete cb.comManipulador; if (JSON.stringify(ca) !== JSON.stringify(cb)) out.campos.push(k); }
+      else out.campos.push(k);
       if (k === "texto visível") { out.push(`  ${k} (${a.length} × ${b.length} caracteres):`); out.push(...difTexto(a, b)); }
       else out.push(`  ${k}: A=${JSON.stringify(a).slice(0, 200)} | B=${JSON.stringify(b).slice(0, 200)}`);
     }
@@ -80,17 +89,28 @@ function compararAcao(ta, tb) {
 // compara duas rodadas inteiras sobre o mesmo plano
 function compararRodadas(plano, A, B, opcoes = {}) {
   const linhas = [];
-  let iguais = 0, diferentes = 0;
+  let iguais = 0, diferentes = 0, soEstrutura = 0;
   const divergentes = [];
+  // controle que aparece sem (ou com a mais) manipulador numa tela: costuma se repetir em todas as telas onde ele aparece — vai num resumo só
+  const controlesSoA = new Map(), controlesSoB = new Map();
   for (const acao of plano) {
     const d = compararAcao(A[acao.id], B[acao.id]);
     if (d.length === 0) { iguais++; continue; }
     diferentes++;
     divergentes.push(acao.id);
+    for (const c of (d.controlesSo || {}).A || []) controlesSoA.set(c, (controlesSoA.get(c) || []).concat(acao.id));
+    for (const c of (d.controlesSo || {}).B || []) controlesSoB.set(c, (controlesSoB.get(c) || []).concat(acao.id));
+    if (d.campos && d.campos.every(k => k === "controles com manipulador visíveis")) { soEstrutura++; continue; }
     const t = A[acao.id] || B[acao.id];
     linhas.push(`● ${acao.id} — ${t.alvo}${acao.codigo ? "  [original: on" + acao.evento + "=\"" + String(acao.codigo).slice(0, 90) + "\"]" : ""}`);
     if (t.caminho && t.caminho.length) linhas.push(`  caminho: ${t.caminho.join(" → ")}`);
-    linhas.push(...d);
+    linhas.push(...d.filter(x => true));
+  }
+  if (controlesSoA.size || controlesSoB.size) {
+    linhas.unshift("");
+    for (const [c, ids] of controlesSoB) linhas.unshift(`  + com manipulador só na B: ${c} — visto em ${ids.length} tela(s), ex.: ${ids.slice(0, 3).join(", ")}`);
+    for (const [c, ids] of controlesSoA) linhas.unshift(`  - com manipulador só na A (perdeu na B): ${c} — visto em ${ids.length} tela(s), ex.: ${ids.slice(0, 3).join(", ")}`);
+    linhas.unshift(`CONTROLES QUE MUDARAM DE MANIPULADOR (${soEstrutura} ação(ões) diferem só por isso e não são repetidas abaixo):`);
   }
   // CSP: a rodada B (nova, com CSP) não pode ter nenhuma violação; a A também não (sem CSP não há como)
   const violacoes = [];
@@ -106,7 +126,7 @@ function compararRodadas(plano, A, B, opcoes = {}) {
   for (const acao of plano) for (const j of ((B[acao.id] || {}).janelas || [])) if (j.temInline) violacoes.push(`B ${acao.id} ${(B[acao.id] || {}).alvo}: janela "${j.inicio.slice(0, 60)}" tem <script> ou on*= no HTML escrito (herda a CSP e não rodaria)`);
   const instaveis = plano.filter(a => ((A[a.id] || {}).instavel || 0) + ((B[a.id] || {}).instavel || 0) > 0).map(a => a.id);
   const falhas = plano.filter(a => (A[a.id] || {}).falhaDoEquipamento || (B[a.id] || {}).falhaDoEquipamento).map(a => `${a.id}: ${(A[a.id] || {}).falhaDoEquipamento || ""} | ${(B[a.id] || {}).falhaDoEquipamento || ""}`);
-  return { iguais, diferentes, divergentes, linhas, violacoes, instaveis, falhas };
+  return { iguais, diferentes, soEstrutura, divergentes, linhas, violacoes, instaveis, falhas };
 }
 
 module.exports = { compararAcao, compararRodadas, resumo };

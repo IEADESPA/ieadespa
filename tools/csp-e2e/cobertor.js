@@ -55,14 +55,15 @@ function arquivoPara(accept, id, arqs) {
   return arqs.pdf;
 }
 
-async function abrirNavegador(perfilDir) {
+async function abrirNavegador(perfilDir, opcoes = {}) {
   fs.mkdirSync(perfilDir, { recursive: true });
   return puppeteer.launch({
     executablePath: EDGE,
     headless: true,
     userDataDir: perfilDir,
     args: [
-      "--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1",   // nada sai para a internet (fontes do Google falham na hora, igual nas duas versões)
+      // local: nada sai para a internet (fontes do Google falham na hora, igual nas duas versões); remoto: o front vem do endereço real
+      ...(opcoes.remoto ? [] : ["--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1"]),
       "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--disable-component-update",
       "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
       "--disable-features=Translate,EdgeCollections,msEdgeShopping,AutofillServerCommunication",
@@ -84,7 +85,8 @@ class Sessao {
     this.page = await this.ctx.newPage();
     const page = this.page;
     page.setDefaultTimeout(30000);
-    await page.setExtraHTTPHeaders({ "x-acao": this.acaoId });
+    if (this.srv.remoto) await this.interceptarApi(page);
+    else await page.setExtraHTTPHeaders({ "x-acao": this.acaoId });
     if (paginaExtra) this.paginaExtra = paginaExtra;
     await page.evaluateOnNewDocument(instrumento, { modelo: this.modelo, guardarBlobs: !!this.guardarBlobs });
     this.sessaoPronta = this.loginRapido ? sessaoGravada(perfil, this.modelo.permissoes) : null;
@@ -95,6 +97,25 @@ class Sessao {
     await page.goto(this.srv.url + "/" + (this.paginaExtra || PERFIS[perfil].pagina), { waitUntil: "load" });
     this.navegacoes = 0;
     await this.calmo();
+  }
+  // MODO REMOTO: todo pedido a /api/* (de qualquer endereço) é segurado no navegador e respondido pela API simulada — nada chega à API de verdade.
+  // Usa o domínio Fetch do protocolo com padrão só de /api (a interceptação geral do puppeteer desligaria o cache e baixaria o script a cada ação).
+  async interceptarApi(page) {
+    await page.setBypassServiceWorker(true);
+    const cdp = await page.createCDPSession();
+    this.cdp = cdp;
+    cdp.on("Fetch.requestPaused", async (ev) => {
+      try {
+        let bruto = ev.request.postData || "";
+        if (!bruto && ev.request.hasPostData) { try { bruto = (await cdp.send("Fetch.getRequestPostData", { requestId: ev.requestId })).postData || ""; } catch (_) {} }
+        const r = this.srv.responder(this.acaoId, ev.request.method, ev.request.url, bruto);
+        await cdp.send("Fetch.fulfillRequest", { requestId: ev.requestId, responseCode: r.status, responseHeaders: Object.entries(r.cabecalhos).map(([name, value]) => ({ name, value })), body: Buffer.from(r.corpo, "utf8").toString("base64") });
+      } catch (e) {
+        this.problemas.push("interceptação: " + String(e && e.message).slice(0, 120));
+        try { await cdp.send("Fetch.failRequest", { requestId: ev.requestId, errorReason: "BlockedByClient" }); } catch (_) {}
+      }
+    });
+    await cdp.send("Fetch.enable", { patterns: [{ urlPattern: "*/api/*", requestStage: "Request" }] });
   }
   async avaliar(fn, ...args) {
     for (let t = 0; t < 3; t++) {

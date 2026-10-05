@@ -5,7 +5,7 @@
 //  3) impressão da carta (Meu Painel → Cartas) e do certificado (Meu Painel → Minha Formação): HTML escrito na janela e print() chamado;
 //  4) verificar.html: código por endereço (?c=) para cada situação, código digitado + botão, e código incompleto.
 const path = require("path");
-const { criarServidor } = require("./servidor");
+const { criarServidor, criarRemoto } = require("./servidor");
 const { Sessao } = require("./cobertor");
 const { compararAcao } = require("./comparar");
 
@@ -157,7 +157,8 @@ const CENARIOS = [
 ];
 
 async function rodarCenario(nav, pasta, csp, cen, ctx) {
-  const srv = await criarServidor({ raiz: pasta, porta: ctx.porta, csp, permissoes: ctx.modelo.permissoes });
+  // pasta = caminho local, ou { remoto: url } (front real, /api simulado por interceptação)
+  const srv = typeof pasta === "object" ? criarRemoto({ url: pasta.remoto, permissoes: ctx.modelo.permissoes }) : await criarServidor({ raiz: pasta, porta: ctx.porta, csp, permissoes: ctx.modelo.permissoes });
   const s = new Sessao(nav, srv, ctx.modelo, ctx.arqs, "especial-" + cen.nome);
   s.guardarBlobs = true;
   let tr;

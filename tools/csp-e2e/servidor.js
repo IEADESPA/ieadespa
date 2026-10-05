@@ -41,6 +41,45 @@ function respostaVerificacao(codigo) {
   return { situacao: "NAO_ENCONTRADO" };
 }
 
+// a resposta da API simulada para um pedido (a mesma no servidor local e no modo remoto)
+function respostaApi(metodo, r, bruto, permissoes) {
+  let dados = {}; try { dados = JSON.parse(bruto || "{}"); } catch (_) {}
+  // só as credenciais de teste entram (qualquer outra combinação é recusada, como no servidor de verdade)
+  if (metodo === "POST" && r === "/api/auth/login") return { corpo: (String(dados.matricula) === "5" && dados.senha === "senha-simulada-geral") ? LOGIN_GERAL(permissoes) : { sucesso: false, mensagem: "Matrícula ou senha incorretos." } };
+  if (metodo === "POST" && r === "/api/membro/entrar") return { corpo: (String(dados.matricula) === "20" && dados.pin === "1234") ? LOGIN_MEMBRO : { sucesso: false, mensagem: "Matrícula ou PIN incorretos." } };
+  if (metodo === "POST" && r === "/api/membro/solicitar-codigo") return { corpo: { sucesso: true, mensagem: "Se a matrícula tiver e-mail cadastrado, o código foi enviado." } };
+  if (metodo === "POST" && r === "/api/membro/confirmar-codigo") return { corpo: Object.assign({}, LOGIN_MEMBRO, { matricula: String(dados.matricula || "20"), precisaCriarPin: true }) };
+  if (metodo === "POST" && r === "/api/membro/pin") return { corpo: { sucesso: true, token: "tok-membro-simulado-2", mensagem: "PIN salvo." } };
+  if (r.startsWith("/api/verificacao-certificado/")) return { corpo: respostaVerificacao(decodeURIComponent(r.split("/").pop())) };
+  return { corpo: { sucesso: true }, universal: true };
+}
+
+// MODO REMOTO: o front vem de um endereço real (com os cabeçalhos reais); só /api/* é respondido aqui, pelo cobertor (interceptação no navegador).
+// Mesmo formato do servidor local para o resto do equipamento: url, marca, chamadasDe, esquecer, fechar — mais responder() para a interceptação.
+function criarRemoto({ url, permissoes = [] }) {
+  const chamadas = new Map();
+  let seq = 0;
+  const base = String(url).replace(/\/+$/, "");
+  return {
+    remoto: true,
+    url: base,
+    responder(acao, metodo, urlCompleta, bruto) {
+      const u = new URL(urlCompleta);
+      const reg = { seq: ++seq, metodo, rota: u.pathname + u.search, corpo: normalizarCorpo(bruto || "", u.origin) };
+      if (!chamadas.has(acao)) chamadas.set(acao, []);
+      chamadas.get(acao).push(reg);
+      const { corpo, universal } = respostaApi(metodo, u.pathname, bruto || "", permissoes);
+      const cab = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
+      if (universal) cab["x-simulado"] = "universal";
+      return { status: 200, cabecalhos: cab, corpo: JSON.stringify(corpo) };
+    },
+    marca: () => seq,
+    chamadasDe: (acao, desde = 0) => (chamadas.get(acao) || []).filter(c => c.seq > desde).map(c => ({ metodo: c.metodo, rota: c.rota, corpo: c.corpo })),
+    esquecer: (acao) => chamadas.delete(acao),
+    fechar: async () => {}
+  };
+}
+
 function criarServidor({ raiz, csp = false, porta = 0, permissoes = [] }) {
   const chamadas = new Map(); // x-acao -> [{seq, metodo, rota, corpo}]
   let seq = 0;
@@ -57,17 +96,7 @@ function criarServidor({ raiz, csp = false, porta = 0, permissoes = [] }) {
         const reg = { seq: ++seq, metodo: req.method, rota: url.pathname + url.search, corpo: normalizarCorpo(bruto, origem) };
         if (!chamadas.has(acao)) chamadas.set(acao, []);
         chamadas.get(acao).push(reg);
-        let corpo, universal = false;
-        const r = url.pathname;
-        let dados = {}; try { dados = JSON.parse(bruto || "{}"); } catch (_) {}
-        // só as credenciais de teste entram (qualquer outra combinação é recusada, como no servidor de verdade)
-        if (req.method === "POST" && r === "/api/auth/login") corpo = (String(dados.matricula) === "5" && dados.senha === "senha-simulada-geral") ? LOGIN_GERAL(permissoes) : { sucesso: false, mensagem: "Matrícula ou senha incorretos." };
-        else if (req.method === "POST" && r === "/api/membro/entrar") corpo = (String(dados.matricula) === "20" && dados.pin === "1234") ? LOGIN_MEMBRO : { sucesso: false, mensagem: "Matrícula ou PIN incorretos." };
-        else if (req.method === "POST" && r === "/api/membro/solicitar-codigo") corpo = { sucesso: true, mensagem: "Se a matrícula tiver e-mail cadastrado, o código foi enviado." };
-        else if (req.method === "POST" && r === "/api/membro/confirmar-codigo") corpo = Object.assign({}, LOGIN_MEMBRO, { matricula: String(dados.matricula || "20"), precisaCriarPin: true });
-        else if (req.method === "POST" && r === "/api/membro/pin") corpo = { sucesso: true, token: "tok-membro-simulado-2", mensagem: "PIN salvo." };
-        else if (r.startsWith("/api/verificacao-certificado/")) corpo = respostaVerificacao(decodeURIComponent(r.split("/").pop()));
-        else { corpo = { sucesso: true }; universal = true; }
+        const { corpo, universal } = respostaApi(req.method, url.pathname, bruto, permissoes);
         const h = Object.assign({ "Content-Type": "application/json; charset=utf-8" }, cabecalhos);
         if (universal) h["x-simulado"] = "universal";
         res.writeHead(200, h);
@@ -100,7 +129,7 @@ function criarServidor({ raiz, csp = false, porta = 0, permissoes = [] }) {
   })));
 }
 
-module.exports = { criarServidor, CSP_FINAL, hashTexto };
+module.exports = { criarServidor, criarRemoto, respostaApi, CSP_FINAL, hashTexto };
 
 if (require.main === module) {
   const [raiz, porta] = process.argv.slice(2);

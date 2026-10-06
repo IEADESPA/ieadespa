@@ -45,6 +45,19 @@ async function pedidoDuplicado(headers, grupoId, telefoneChave, email) {
   return ((await res.json()).data || []).length > 0;
 }
 
+const CACHE_GRUPO_MS = 10 * 1000;
+const cacheGrupos = new Map();
+
+async function lerGrupo(headers, grupoId) {
+  const agora = Date.now();
+  const guardado = cacheGrupos.get(grupoId);
+  if (guardado && agora - guardado.em < CACHE_GRUPO_MS) return guardado.valor;
+  const res = await fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=id,limite_uma_por_pessoa,ativo,pedidos_ate`, { headers });
+  const valor = res.ok ? { ok: true, grupo: (await res.json()).data } : { ok: false, status: res.status };
+  if (res.ok || res.status === 404) cacheGrupos.set(grupoId, { em: agora, valor });
+  return valor;
+}
+
 async function lotesAbertos(headers, grupoId) {
   const res = await fetch(
     `${DIRECTUS_URL}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=id&fields=id,numero&limit=5`,
@@ -121,9 +134,12 @@ module.exports = async function (context, req) {
   const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}`, "Content-Type": "application/json" };
 
   // Cada ida ao Directus custa ~150 ms (as Functions do site rodam em East US 2; o Directus,
-  // em Brazil South). As três consultas de abertura não dependem uma da outra: vão juntas.
+  // em Brazil South) e CPU do Directus (plano B1, 1 núcleo: o gargalo medido em 06/10/2026 —
+  // 98 % de CPU com 6 gravações em paralelo, PostgreSQL a 8 %). Por isso: a campanha fica em
+  // cache 10 s por instância (ativo/prazo/limite mudam raramente; o 403 chega em até 10 s), e
+  // as consultas de abertura que restam vão juntas.
   const [grupoRes, duplicadoRes, abertosRes] = await Promise.all([
-    fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=id,limite_uma_por_pessoa,ativo,pedidos_ate`, { headers }),
+    lerGrupo(headers, grupoId),
     pedidoDuplicado(headers, grupoId, telefoneChave, email).then((v) => ({ ok: true, v })).catch((err) => ({ ok: false, err })),
     lotesAbertos(headers, grupoId).then((v) => ({ ok: true, v })).catch((err) => ({ ok: false, err })),
   ]);
@@ -131,7 +147,7 @@ module.exports = async function (context, req) {
     context.res = { status: 404, body: { erro: "Camiseta não encontrada." } };
     return;
   }
-  const grupo = (await grupoRes.json()).data;
+  const grupo = grupoRes.grupo;
 
   // Campanha encerrada não aceita pedido — nem pelo formulário antigo ainda aberto num
   // navegador, nem por chamada direta. Até 06/10/2026 esta rota olhava só a existência do
@@ -175,6 +191,8 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // Pedido + itens + respostas numa gravação só (criação aninhada pelas relações `itens` e
+  // `respostas` do Directus, numa transação): antes eram 1 + N + M idas. Ou grava tudo, ou nada.
   const pedidoRes = await fetch(`${DIRECTUS_URL}/items/camiseta_pedidos`, {
     method: "POST",
     headers,
@@ -186,6 +204,8 @@ module.exports = async function (context, req) {
       telefone_chave: telefoneChave,
       email,
       congregacao: body.congregacaoId ? Number(body.congregacaoId) : null,
+      itens: itens.map((item) => ({ tamanho: item.tamanho || null, modelo: item.modelo || null, quantidade: Number(item.quantidade) || 0 })),
+      respostas: respostas.map((resposta) => ({ pergunta: resposta.pergunta, valor: resposta.valor })),
     }),
   });
   if (!pedidoRes.ok) {
@@ -194,28 +214,6 @@ module.exports = async function (context, req) {
     return;
   }
   const pedidoId = (await pedidoRes.json()).data.id;
-
-  // Itens e respostas em LOTE (o Directus aceita uma lista no POST): uma ida para os itens,
-  // uma para as respostas — antes era uma ida por item e por resposta.
-  const gravacoes = [];
-  gravacoes.push(
-    fetch(`${DIRECTUS_URL}/items/camiseta_itens_pedido`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(itens.map((item) => ({ pedido: pedidoId, tamanho: item.tamanho || null, modelo: item.modelo || null, quantidade: Number(item.quantidade) || 0 }))),
-    }),
-  );
-  if (respostas.length > 0) {
-    gravacoes.push(
-      fetch(`${DIRECTUS_URL}/items/respostas_pedido_camiseta`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(respostas.map((resposta) => ({ pedido: pedidoId, pergunta: resposta.pergunta, valor: resposta.valor }))),
-      }),
-    );
-  }
-  const gravados = await Promise.all(gravacoes);
-  if (!gravados[0].ok) context.log.error("Itens do pedido não gravados:", pedidoId, gravados[0].status);
 
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { pedidoId, lote: loteId } };
 };

@@ -33,9 +33,8 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const res = await fetch(`${DIRECTUS_URL}/items/eventos/${eventoId}?fields=id,aceita_inscricao,inscricoes_encerradas,inscricoes_ate`, {
-    headers: { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` },
-  });
+  const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` };
+  const res = await fetch(`${DIRECTUS_URL}/items/eventos/${eventoId}?fields=id,aceita_inscricao,inscricoes_encerradas,inscricoes_ate,vagas_limite,requer_aprovacao`, { headers });
   let corpo;
   if (res.status === 404 || res.status === 403) {
     corpo = { aberto: false, motivo: "inexistente", mensagem: "Evento não encontrado." };
@@ -45,6 +44,14 @@ module.exports = async function (context, req) {
   } else {
     const ev = (await res.json()).data;
     corpo = avaliarJanela({ ativo: ev.aceita_inscricao === true && ev.inscricoes_encerradas !== true, ate: ev.inscricoes_ate, rotulo: "inscrições" });
+    // Vagas restantes (mesmo critério do painel e de `CriarInscricao`): a página mostra
+    // "(N restantes)" sem precisar ler a coleção de inscrições pelo navegador.
+    if (ev.vagas_limite && corpo.aberto) {
+      const c = await fetch(`${DIRECTUS_URL}/items/inscricoes_eventos?aggregate[count]=id&filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][_or][0][aguardando_vaga][_eq]=false&filter[_and][1][_or][1][aguardando_vaga][_null]=true`, { headers });
+      const confirmados = c.ok ? Number(((await c.json()).data?.[0]?.count?.id) ?? 0) : null;
+      corpo.vagasLimite = Number(ev.vagas_limite);
+      corpo.vagasRestantes = confirmados == null ? null : Math.max(Number(ev.vagas_limite) - confirmados, 0);
+    }
   }
 
   cache.set(eventoId, { em: agora, corpo });

@@ -17,25 +17,48 @@ export function irParaLogin(loginPath: string = DEFAULT_LOGIN_PATH): void {
   window.location.href = `${loginPath}?voltar=${voltar}`;
 }
 
-/** Token em sessionStorage, ou renovado silenciosamente via cookie httpOnly. */
-export async function obterTokenValido(directusUrl: string, tokenKey: string = DEFAULT_TOKEN_KEY): Promise<string | null> {
-  const tokenAtual = sessionStorage.getItem(tokenKey);
-  if (tokenAtual) return tokenAtual;
+const chaveRefresh = (tokenKey: string) => `${tokenKey}_refresh`;
 
+/**
+ * Guarda a sessão devolvida pelo `/auth/login` em modo "json" (06/10/2026): o token de
+ * acesso (vale 15 min) E o token de renovação (vale dias). Antes o login era em modo
+ * "cookie" — mas o Directus mora em outro domínio (azurewebsites.net) e o navegador não
+ * manda esse cookie numa chamada entre sites, então a renovação silenciosa nunca
+ * funcionava: passados 15 minutos, toda gravação falhava e a pessoa tinha que sair e
+ * entrar de novo (relato do incidente das camisetas).
+ */
+export function guardarSessao(tokenKey: string, accessToken: string, refreshToken: string | null | undefined): void {
+  sessionStorage.setItem(tokenKey, accessToken);
+  if (refreshToken) sessionStorage.setItem(chaveRefresh(tokenKey), refreshToken);
+}
+
+/** Pede um par novo de tokens ao Directus pelo token de renovação (modo json); cai para o cookie se não houver. */
+async function renovarPeloDirectus(directusUrl: string, tokenKey: string): Promise<string | null> {
+  const refreshToken = sessionStorage.getItem(chaveRefresh(tokenKey));
   try {
     const res = await fetch(`${directusUrl}/auth/refresh`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "cookie" }),
+      body: JSON.stringify(refreshToken ? { refresh_token: refreshToken, mode: "json" } : { mode: "cookie" }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (refreshToken) sessionStorage.removeItem(chaveRefresh(tokenKey)); // renovação gasta/vencida: não insistir
+      return null;
+    }
     const json = await res.json();
-    sessionStorage.setItem(tokenKey, json.data.access_token);
+    guardarSessao(tokenKey, json.data.access_token, json.data.refresh_token);
     return json.data.access_token as string;
   } catch {
     return null;
   }
+}
+
+/** Token em sessionStorage, ou renovado silenciosamente (token de renovação; cookie como reserva). */
+export async function obterTokenValido(directusUrl: string, tokenKey: string = DEFAULT_TOKEN_KEY): Promise<string | null> {
+  const tokenAtual = sessionStorage.getItem(tokenKey);
+  if (tokenAtual) return tokenAtual;
+  return renovarPeloDirectus(directusUrl, tokenKey);
 }
 
 /**
@@ -47,7 +70,7 @@ export async function obterTokenValido(directusUrl: string, tokenKey: string = D
  */
 export async function renovarToken(directusUrl: string, tokenKey: string = DEFAULT_TOKEN_KEY): Promise<string | null> {
   sessionStorage.removeItem(tokenKey);
-  return obterTokenValido(directusUrl, tokenKey);
+  return renovarPeloDirectus(directusUrl, tokenKey);
 }
 
 interface OpcoesPainel {
@@ -98,15 +121,17 @@ export async function exigirAutenticacao(directusUrl: string, opcoes: OpcoesPain
 
 export function limparToken(tokenKey: string = DEFAULT_TOKEN_KEY): void {
   sessionStorage.removeItem(tokenKey);
+  sessionStorage.removeItem(chaveRefresh(tokenKey));
 }
 
 export async function sair(directusUrl: string, opcoes: OpcoesPainel = {}): Promise<void> {
+  const refreshToken = sessionStorage.getItem(chaveRefresh(opcoes.tokenKey ?? DEFAULT_TOKEN_KEY));
   try {
     await fetch(`${directusUrl}/auth/logout`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "cookie" }),
+      body: JSON.stringify(refreshToken ? { refresh_token: refreshToken, mode: "json" } : { mode: "cookie" }),
     });
   } catch {
     // segue o baile mesmo se o logout no servidor falhar — o token local já é limpo

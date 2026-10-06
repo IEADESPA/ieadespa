@@ -1,0 +1,90 @@
+name: Sistema - está no ar? (a cada 5 min)
+
+# vD.5 (06/10/2026). Antes, só existia um alerta no Azure (mais de 5 falhas em 15 min): se o sistema
+# saísse do ar num domingo de manhã, ninguém era avisado. Este fluxo chama GET /api/saude a cada
+# 5 minutos (rota que NÃO toca no banco: aquece as Functions sem acordar o Azure SQL) e, quando
+# a chamada falha, manda um e-mail pela mesma conta de e-mail do Azure (ACS) que o site já usa.
+#
+# Custo: zero (minutos do GitHub são gratuitos em repositório público; e-mail só na falha).
+# Para não encher a caixa: avisa só na PRIMEIRA falha de uma sequência (se a execução anterior
+# também falhou, não manda de novo). Quando voltar, manda um "voltou".
+# Observação: o GitHub pode atrasar execuções agendadas em horário de pico; 5 min é o mínimo.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: sistema-disponibilidade
+  cancel-in-progress: false
+
+jobs:
+  conferir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      URL_SAUDE: https://app.ieadespa.org.br/api/saude
+      URL_SITE: https://www.ieadespa.org.br/
+    steps:
+      - name: Chamar /api/saude (3 tentativas) e a página inicial do site
+        id: ping
+        run: |
+          set -u
+          ok_sistema=nao; ms=0
+          for i in 1 2 3; do
+            inicio=$(date +%s%3N)
+            if curl -sf -o /tmp/saude.json -m 30 "$URL_SAUDE" && grep -q '"ok":true' /tmp/saude.json; then ok_sistema=sim; ms=$(( $(date +%s%3N) - inicio )); break; fi
+            sleep 15
+          done
+          ok_site=nao
+          for i in 1 2; do curl -sf -o /dev/null -m 30 "$URL_SITE" && { ok_site=sim; break; }; sleep 10; done
+          echo "ok_sistema=$ok_sistema" >> "$GITHUB_OUTPUT"
+          echo "ok_site=$ok_site" >> "$GITHUB_OUTPUT"
+          echo "Sistema: $ok_sistema (${ms} ms) · Site: $ok_site" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: A execução anterior já tinha falhado? (para não repetir o aviso)
+        id: anterior
+        run: |
+          anterior="$(gh run list --workflow "${{ github.workflow }}" --status completed --limit 2 --json conclusion,databaseId --jq '[.[] | select(.databaseId != ${{ github.run_id }})][0].conclusion // "desconhecida"')"
+          echo "conclusao=$anterior" >> "$GITHUB_OUTPUT"
+          echo "Execução anterior: $anterior"
+
+      - name: Avisar por e-mail (só na primeira falha, e quando voltar)
+        if: (steps.ping.outputs.ok_sistema == 'nao' || steps.ping.outputs.ok_site == 'nao') && steps.anterior.outputs.conclusao != 'failure' || (steps.ping.outputs.ok_sistema == 'sim' && steps.ping.outputs.ok_site == 'sim' && steps.anterior.outputs.conclusao == 'failure')
+        env:
+          ACS_CONNECTION_STRING: ${{ secrets.ACS_CONNECTION_STRING }}
+          OK_SISTEMA: ${{ steps.ping.outputs.ok_sistema }}
+          OK_SITE: ${{ steps.ping.outputs.ok_site }}
+          DESTINATARIO: presidente@ieadespa.org
+        run: |
+          npm install --silent --no-audit --no-fund @azure/communication-email@1 >/dev/null 2>&1
+          node - <<'EOF'
+          const { EmailClient } = require("@azure/communication-email");
+          const caiu = process.env.OK_SISTEMA !== "sim" || process.env.OK_SITE !== "sim";
+          const partes = [process.env.OK_SISTEMA !== "sim" ? "o sistema (app.ieadespa.org.br)" : null, process.env.OK_SITE !== "sim" ? "o site (www.ieadespa.org.br)" : null].filter(Boolean).join(" e ");
+          const agora = new Date().toLocaleString("pt-BR", { timeZone: "America/Belem" });
+          const assunto = caiu ? `⚠️ Fora do ar: ${partes}` : "✅ Voltou ao ar: sistema e site respondendo";
+          const texto = caiu
+            ? `Às ${agora} (horário de Parauapebas), ${partes} não respondeu ao teste automático de disponibilidade (3 tentativas em 1 minuto).\n\nO teste repete a cada 5 minutos e avisa de novo quando voltar. Detalhes: https://github.com/${process.env.GITHUB_REPOSITORY}/actions/workflows/sistema-disponibilidade.yml`
+            : `Às ${agora} (horário de Parauapebas), o sistema e o site voltaram a responder ao teste automático de disponibilidade.`;
+          (async () => {
+            const client = new EmailClient(process.env.ACS_CONNECTION_STRING);
+            const poller = await client.beginSend({ senderAddress: "DoNotReply@ieadespa.org.br", content: { subject: assunto, plainText: texto }, recipients: { to: [{ address: process.env.DESTINATARIO }] } });
+            const r = await poller.pollUntilDone();
+            console.log("e-mail:", r.status, "->", process.env.DESTINATARIO);
+          })().catch((e) => { console.error("falha ao enviar e-mail:", e.message); process.exit(0); });
+          EOF
+
+      - name: Resultado
+        if: always()
+        run: |
+          if [ "${{ steps.ping.outputs.ok_sistema }}" = "sim" ] && [ "${{ steps.ping.outputs.ok_site }}" = "sim" ]; then exit 0; fi
+          echo "::error::Fora do ar — sistema: ${{ steps.ping.outputs.ok_sistema }}, site: ${{ steps.ping.outputs.ok_site }}"
+          exit 1

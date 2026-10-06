@@ -156,12 +156,13 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       suspeita; checklist de 6 passos que qualquer sessão futura consegue seguir.
 - [ ] Alerta quando a rotina diária (`rotinas-diarias.yml`) falhar duas vezes seguidas — hoje o GitHub só manda
       e-mail pra quem fez o último commit, que pode não ser quem cuida do sistema.
-- [ ] **Sincronização do site disparada pelo sistema, não por relógio** (achado de 06/10/2026, `HOMOLOGACAO.md`):
+- [ ] **Sincronização da agenda do site sem acordar o banco à toa** (achado de 06/10/2026, `HOMOLOGACAO.md`):
       `site-agenda-sync.yml` rodava a cada 20 min e por isso o banco de produção nunca pausava (R$ 65-86 por dia
-      contra R$ 6-7 pausado). Já reduzido a 3 vezes por dia; o desenho definitivo é o sistema chamar
-      `repository_dispatch` no GitHub quando um evento do calendário é homologado ou a grade litúrgica muda — zero
-      despertar à toa. Precisa de um token do GitHub (fine-grained, só `actions: write` neste repositório) guardado
-      como configuração do aplicativo no Azure, nunca no repositório.
+      contra R$ 6-7 pausado). Já reduzido a 3 vezes por dia. Desenho definitivo **sem token pessoal** (o responsável
+      não quer operar a tela de tokens do GitHub): o sistema, ao homologar evento ou mudar a grade litúrgica, grava
+      a versão da agenda num arquivo público e barato fora do banco (um blob no Storage); o fluxo do GitHub passa
+      a ler esse arquivo a cada 15 min (como o `site-conteudo-sync.yml` já faz com o Directus) e só chama a API
+      do sistema quando ele mudou. Zero despertar à toa, zero token.
 - [ ] **Orçamento com alerta no Azure** (Cost Management budget): aviso por e-mail ao passar de 50 %, 80 % e 100 % de
       US$ 150 no mês — o salto de outubro só foi visto porque alguém perguntou. Custo zero.
 
@@ -256,19 +257,27 @@ com 6 gravações em paralelo, PostgreSQL a 8 %. Capacidade medida depois de tod
 segundo (≈ 150 por minuto; o pico de 06/10 foi 17 por minuto). Acima disso ninguém recebe erro: espera na fila
 (12 pedidos ao mesmo tempo = 3 a 8 s cada). Para mais que isso, duas opções, à decisão do responsável:
 
-- [ ] **Plano do Directus B1 → B2 ou P0v3** (≈ +US$ 13 a 60/mês): mais CPU para o Directus gravar; o único
-      item que custa dinheiro nesta versão.
-- [ ] **API do site num Function App próprio em Brazil South** (≈ US$ 10/mês): corta os ~150 ms de ida entre
-      East US 2 e São Paulo em cada chamada e tira a partida a frio — foi tentado no sistema em 20/09 e esbarrou
-      num defeito do Azure; no site é outro aplicativo e pode funcionar.
+- **Decisão do responsável (06/10/2026): nenhum gasto novo agora.** A capacidade atual (≈ 150 pedidos por
+  minuto, 9 vezes o pico de 06/10) é suficiente; o que segue fica registrado como opção, não como pendência:
+  - *Plano do Directus B1 → B2 ou P0v3* (≈ +US$ 13 a 60/mês): descartado por custo.
+  - *API do site num Function App próprio em Brazil South*, **sem** instância sempre pronta (Flex Consumption
+    paga por uso: perto de zero neste volume): corta os ~150 ms de cada ida ao Directus e a partida a frio de
+    15-30 s. Só vale tentar **depois de 17/10** (site congelado) e só porque pode ser de graça; se o Azure
+    recusar a ligação (mesmo defeito de 20/09 no sistema), apaga-se e nada é cobrado. O gargalo de gravação
+    (CPU do Directus) não muda com isso.
 - [ ] **Teste de carga maior, de vários lugares** (GitHub Actions, IPs diferentes), depois da decisão acima —
       o teste de hoje saiu de uma máquina só e esbarra no próprio limite por IP da API (40 em 5 min).
 - [ ] **Painel de camisetas:** o token do Directus vence em 15 min e o painel não renova (é a "desconectar e
       entrar de novo" de 06/10) — usar o `auth/refresh` como o painel de eventos já faz.
-- [ ] **Directus → GitHub (remontar o site)**: o token `GITHUB_DISPATCH_TOKEN` do fluxo "Publicar site" está
-      inválido (GitHub responde 401 desde antes de 06/10; a última remontagem automática foi em 01/10). Precisa
-      de um token novo (fine-grained, só este repositório, permissão `Contents: read and write`), guardado na
-      configuração do App Service do Directus — **depende de você** criar o token no GitHub.
+- [x] **Directus → site sem token pessoal** (06/10/2026): o Flow "Publicar site (avisar GitHub)" usava um
+      token pessoal do GitHub que venceu em silêncio (401; última remontagem automática em 01/10 — de 01 a
+      06/10 nenhuma edição no Directus chegou ao site sozinha). O responsável não quis criar outro token na
+      tela do GitHub. Substituído por `site-conteudo-sync.yml`: a cada 15 min calcula a versão do conteúdo
+      (`site/scripts/conteudo-versao.mjs`: contagem e última alteração de 20 coleções, com o segredo do
+      Directus que os avisos já usam) e, se mudou, manda montar o site e disparar os avisos de conteúdo novo
+      com o token do próprio robô do repositório (`gh workflow run`), que não vence. Memória da última
+      versão na variável `CONTEUDO_VERSAO`. Não toca na API do sistema (não acorda o banco). O Flow do
+      Directus ficou desativado, com a explicação na descrição dele.
 
 ## 🔒 Trava de Revisão D-B — antes de encerrar a FASE D e voltar à Trava 7-A
 

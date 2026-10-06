@@ -9,11 +9,15 @@
 // minutos com o token do próprio robô do repositório, calcula esta versão e,
 // se ela mudou desde a última remontagem, manda remontar o site.
 //
-// Como calcula: para cada coleção que o site lê, a contagem de itens e a data
-// da última alteração (`date_updated`; se a coleção não tiver, `date_created`;
-// se não tiver nenhuma, só a contagem). Tudo isso vira um hash curto. Lê com o
-// token de admin (segredo do GitHub `DIRECTUS_ADMIN_TOKEN`, já usado pelos
-// avisos) porque algumas coleções não liberam essas datas ao público.
+// Como calcula: baixa o CONTEÚDO de cada coleção que o site lê (todos os
+// campos, em ordem de id) e faz um hash de tudo. A maioria das coleções deste
+// Directus não tem campo de "última alteração" (`date_updated`), então contar
+// itens ou olhar datas não enxergaria uma edição — por exemplo, desativar uma
+// campanha de camiseta não muda a contagem. Com o conteúdo inteiro no hash,
+// qualquer mudança muda a versão. São coleções pequenas (centenas de itens no
+// total); a cada 15 minutos isso é desprezível. Lê com o token de admin
+// (segredo do GitHub `DIRECTUS_ADMIN_TOKEN`, já usado pelos avisos) para não
+// depender do que está liberado ao público.
 //
 // Uso: DIRECTUS_URL=... DIRECTUS_ADMIN_TOKEN=... node site/scripts/conteudo-versao.mjs
 // Saída: uma linha com 16 caracteres hexadecimais (e, com --v, o detalhe por coleção).
@@ -46,18 +50,14 @@ async function buscar(url) {
 }
 
 async function lerColecao(colecao) {
-  const base = `${DIRECTUS_URL}/items/${colecao}?aggregate[count]=id`;
-  for (const campoData of ["date_updated", "date_created", null]) {
-    const url = campoData ? `${base}&aggregate[max]=${campoData}` : base;
-    const res = await buscar(url);
-    if (res.status === 403 && campoData) continue; // campo não liberado/inexistente: tenta o próximo
-    if (res.status === 400 && campoData) continue;
-    if (res.status === 403 || res.status === 404) return { colecao, erro: res.status }; // coleção que não existe mais: conta como vazia
-    if (!res.ok) throw new Error(`${colecao}: HTTP ${res.status}`);
-    const linha = (await res.json()).data?.[0] || {};
-    return { colecao, n: Number(linha.count?.id ?? 0), ultima: campoData ? linha.max?.[campoData] ?? null : null, campo: campoData };
-  }
-  return { colecao, n: 0, ultima: null, campo: null };
+  // `configuracoes` é "singleton" (um registro só, sem lista) — o Directus devolve um objeto.
+  const res = await buscar(`${DIRECTUS_URL}/items/${colecao}?fields=*&sort=id&limit=-1`);
+  if (res.status === 403 || res.status === 404) return { colecao, erro: res.status }; // coleção que não existe mais: conta como vazia
+  if (!res.ok) throw new Error(`${colecao}: HTTP ${res.status}`);
+  const dados = (await res.json()).data;
+  const itens = Array.isArray(dados) ? dados : dados ? [dados] : [];
+  const texto = JSON.stringify(itens);
+  return { colecao, n: itens.length, hash: createHash("sha256").update(texto).digest("hex").slice(0, 12), bytes: texto.length };
 }
 
 async function emLotes(itens, tamanho, fn) {
@@ -69,7 +69,7 @@ async function emLotes(itens, tamanho, fn) {
 export async function versaoConteudo() {
   if (!DIRECTUS_URL || !TOKEN) throw new Error("DIRECTUS_URL e DIRECTUS_ADMIN_TOKEN são obrigatórios");
   const partes = await emLotes(COLECOES, 4, lerColecao);
-  const resumo = partes.map((p) => `${p.colecao}=${p.erro ? "x" : `${p.n}@${p.ultima ?? "-"}`}`).join("|");
+  const resumo = partes.map((p) => `${p.colecao}=${p.erro ? "x" : `${p.n}@${p.hash}`}`).join("|");
   const versao = createHash("sha256").update(resumo).digest("hex").slice(0, 16);
   return { versao, resumo, partes };
 }
@@ -77,6 +77,6 @@ export async function versaoConteudo() {
 const executadoDireto = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (executadoDireto) {
   const { versao, partes } = await versaoConteudo();
-  if (process.argv.includes("--v")) for (const p of partes) console.error(`${p.colecao.padEnd(20)} ${p.erro ? "erro " + p.erro : `${String(p.n).padStart(5)} itens, última ${p.ultima ?? "-"} (${p.campo ?? "só contagem"})`}`);
+  if (process.argv.includes("--v")) for (const p of partes) console.error(`${p.colecao.padEnd(20)} ${p.erro ? "erro " + p.erro : `${String(p.n).padStart(5)} itens, ${String(Math.round(p.bytes / 1024)).padStart(4)} KB, hash ${p.hash}`}`);
   console.log(versao);
 }

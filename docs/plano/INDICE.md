@@ -177,7 +177,7 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 
 ## FASE D — Robustez, operação e celular (retrofit das fases 0 a 7)
 
-Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10 bloco(s) · itens 8/47 concluídos.
+Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10 bloco(s) · itens 9/45 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -189,7 +189,7 @@ Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10
 | vD.5 | [Operação: saber que caiu antes de alguém reclamar, e entrar sem esperar](fase-d-robustez-e-operacao.md#vd5--operação-saber-que-caiu-antes-de-alguém-reclamar-e-entrar-sem-esperar) | ⬜ 0/8 |
 | vD.6 | [Celular de verdade pro membro (parte da v10.3 trazida pra frente)](fase-d-robustez-e-operacao.md#vd6--celular-de-verdade-pro-membro-parte-da-v103-trazida-pra-frente) | ⬜ 0/4 |
 | vD.7 | [Domínio raiz: o site passa a ser `ieadespa.org.br`, e `www` vira só redirecionamento](fase-d-robustez-e-operacao.md#vd7--domínio-raiz-o-site-passa-a-ser-ieadespaorgbr-e-www-vira-só-redirecionamento) | ⬜ 0/5 |
-| vD.8 | [Blindagem de camisetas e eventos do site para pico *(emergência de 06/10/2026)*](fase-d-robustez-e-operacao.md#vd8--blindagem-de-camisetas-e-eventos-do-site-para-pico-emergência-de-06102026) | 🟡 8/13 |
+| vD.8 | [Blindagem de camisetas e eventos do site para pico *(emergência de 06/10/2026)*](fase-d-robustez-e-operacao.md#vd8--blindagem-de-camisetas-e-eventos-do-site-para-pico-emergência-de-06102026) | 🟡 9/11 |
 | 🔒 D-B | [antes de encerrar a FASE D e voltar à Trava 7-A](fase-d-robustez-e-operacao.md#-trava-de-revisão-d-b--antes-de-encerrar-a-fase-d-e-voltar-à-trava-7-a) | — |
 
 ## FASE 8 — Ministerial (AFM)

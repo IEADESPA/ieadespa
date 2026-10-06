@@ -6,19 +6,22 @@ name: Site - remontar quando o Directus mudar
 # O Flow do Directus "Publicar site (avisar GitHub)" fazia isso chamando o GitHub com um
 # token pessoal — que venceu em silêncio (401; última remontagem automática em 01/10).
 # Este fluxo dispensa token pessoal: a cada 15 minutos calcula a "versão" do conteúdo
-# (site/scripts/conteudo-versao.mjs: contagem e última alteração de cada coleção que o
-# site lê, com o segredo DIRECTUS_ADMIN_TOKEN já usado pelos avisos) e, se mudou desde a
-# última remontagem, manda montar o site e disparar os avisos de conteúdo novo — tudo com
-# o GITHUB_TOKEN do próprio robô (gh workflow run), que o GitHub dá de graça.
+# (site/scripts/conteudo-versao.mjs: hash do conteúdo inteiro das 20 coleções que o site
+# lê, com o segredo DIRECTUS_ADMIN_TOKEN já usado pelos avisos) e, se mudou desde a última
+# remontagem, manda montar o site e disparar os avisos de conteúdo novo — tudo com o
+# GITHUB_TOKEN do próprio robô (gh workflow run), que o GitHub dá de graça.
 #
 # O que NÃO faz: não toca na API do sistema (não acorda o banco Azure SQL). A agenda
 # oficial continua com o site-agenda-sync.yml, 3 vezes por dia. Uma remontagem em si lê a
 # agenda do sistema uma vez (é o build), como qualquer remontagem.
 #
-# Memória de "última versão publicada": a variável de repositório CONTEUDO_VERSAO
-# (gh variable set), gravada só depois de pedir a remontagem. Build já na fila/em
-# andamento: não dispara outro, e a variável fica como está — o próximo tique confere
-# de novo.
+# Memória de "última versão remontada": o CACHE do GitHub Actions, com a chave
+# conteudo-versao-<hash> (o GITHUB_TOKEN não pode gravar variáveis do repositório —
+# "Resource not accessible by integration" —, mas o cache ele sempre pode usar). Cache
+# existe para essa versão = já remontado. O cache some depois de 7 dias sem uso; como é
+# consultado a cada 15 min, só some se o conteúdo ficar 7 dias parado — e aí a única
+# consequência é uma remontagem a mais. Build já na fila/em andamento: não dispara outro
+# nem grava a memória — o próximo tique confere de novo.
 
 on:
   schedule:
@@ -26,7 +29,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  actions: write # gh workflow run + gh variable set
+  actions: write # gh workflow run
   contents: read
 
 concurrency:
@@ -64,26 +67,40 @@ jobs:
           echo "versao=$versao" >> "$GITHUB_OUTPUT"
           echo "Versão do conteúdo agora: $versao"
 
-      - name: Comparar com a última remontagem e, se mudou, remontar
+      - name: Esta versão já foi remontada? (cache existe = sim)
+        id: memoria
+        uses: actions/cache/restore@v6
+        with:
+          path: .conteudo-versao
+          key: conteudo-versao-${{ steps.atual.outputs.versao }}
+          lookup-only: true
+
+      - name: Sem mudança
+        if: steps.memoria.outputs.cache-hit == 'true'
+        run: echo "Sem mudança no conteúdo (versão ${{ steps.atual.outputs.versao }} já remontada). Nada a fazer." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Conteúdo mudou — remontar o site (se não houver remontagem em andamento)
+        if: steps.memoria.outputs.cache-hit != 'true'
+        id: remontar
         run: |
           set -euo pipefail
           atual="${{ steps.atual.outputs.versao }}"
-          publicada="$(gh variable get CONTEUDO_VERSAO 2>/dev/null || true)"
-          echo "Última versão remontada: ${publicada:-nenhuma}"
-          if [ "$atual" = "$publicada" ]; then
-            echo "Sem mudança no conteúdo. Nada a fazer." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          # Já há remontagem na fila ou rodando? Não empilha outra; o próximo tique confere.
           em_andamento="$(gh run list --workflow "$WORKFLOW_SITE" --status in_progress --json databaseId --jq 'length')"
           na_fila="$(gh run list --workflow "$WORKFLOW_SITE" --status queued --json databaseId --jq 'length')"
           if [ "${em_andamento:-0}" != "0" ] || [ "${na_fila:-0}" != "0" ]; then
-            echo "Conteúdo mudou ($publicada -> $atual), mas já há remontagem em andamento/fila; espero o próximo tique." >> "$GITHUB_STEP_SUMMARY"
+            echo "Conteúdo mudou (versão $atual), mas já há remontagem em andamento/fila; espero o próximo tique." >> "$GITHUB_STEP_SUMMARY"
+            echo "disparou=nao" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           gh workflow run "$WORKFLOW_SITE" --ref main
           gh workflow run "$WORKFLOW_AVISOS" --ref main || echo "::warning::não consegui disparar os avisos de conteúdo (segue sem eles)"
-          gh variable set CONTEUDO_VERSAO --body "$atual"
-          echo "Conteúdo mudou (${publicada:-nenhuma} -> $atual): remontagem do site e avisos disparados." >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p .conteudo-versao && echo "$atual" > .conteudo-versao/versao
+          echo "disparou=sim" >> "$GITHUB_OUTPUT"
+          echo "Conteúdo mudou (versão $atual): remontagem do site e avisos disparados." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar que esta versão foi remontada
+        if: steps.remontar.outputs.disparou == 'sim'
+        uses: actions/cache/save@v6
+        with:
+          path: .conteudo-versao
+          key: conteudo-versao-${{ steps.atual.outputs.versao }}

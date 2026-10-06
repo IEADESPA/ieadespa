@@ -337,8 +337,11 @@ diz em que arquivo ela está e em que pé ela anda.
   derruba na hora (toda rota entra por `api/shared/entrada.js`), delegação por permissão, índices únicos no banco, aceite
   de mediação só por ato da parte, abandono com dois olhos, remessa com as mesmas conferências do pagamento comum e
   estorno de cessão. Só a chave site↔sistema nos dois portais do Azure depende de gente; os limites que continuam estão
-  no plano da fase 7. **A CSP forte (04/10/2026) está feita; próxima: a 🔒 Trava de Revisão 7-A**, antes da v7.6.
-- **Planejadas:** FASES 8 a 12.
+  no plano da fase 7. A CSP forte (04/10/2026) está feita. **Antes da 🔒 Trava 7-A entra a FASE D** (06/10/2026, 8ª
+  rodada): retrofit de robustez e operação (prova automática de toda tela, front em módulos, homologação, segundo fator,
+  alerta de queda, celular do membro), com custo escrito por versão pra decisão do responsável.
+- **Planejadas:** FASES 8 a 12. Candidatos pra depois (implantação por congregação, pequenos grupos, Secretaria da
+  Família) estão na [8ª rodada](docs/pesquisa/oitava-rodada-2026.md), sem versão, aguardando decisão.
 
 ### Fases
 
@@ -354,14 +357,15 @@ diz em que arquivo ela está e em que pé ela anda.
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
 | 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.5 entregues) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| D | Robustez, operação e celular (retrofit das fases 0 a 7, antes da Trava 7-A) | proposta (06/10/2026) | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
 | 10 | Experiência, design e performance | planejada | [fase-10-experiencia-design-performance](docs/plano/fase-10-experiencia-design-performance.md) |
 | 11 | Sistema campal (multi-campo) | planejada | [fase-11-sistema-campal](docs/plano/fase-11-sistema-campal.md) |
 | 12 | Inteligência, indicadores e benchmarking | planejada | [fase-12-inteligencia-e-indicadores](docs/plano/fase-12-inteligencia-e-indicadores.md) |
 
-Pesquisa que embasa o plano (mercado e norma legal): [`docs/pesquisa/mercado-e-norma-2026.md`](docs/pesquisa/mercado-e-norma-2026.md)
-e a [7ª rodada](docs/pesquisa/setima-rodada-2026.md), que expandiu as fases 5 a 11.
+Pesquisa que embasa o plano (mercado e norma legal): [`docs/pesquisa/mercado-e-norma-2026.md`](docs/pesquisa/mercado-e-norma-2026.md),
+a [7ª rodada](docs/pesquisa/setima-rodada-2026.md), que expandiu as fases 5 a 11, e a [8ª rodada](docs/pesquisa/oitava-rodada-2026.md), que leu o sistema pronto e originou a FASE D.
 
 ### Como registrar uma entrega (o README não é diário)
 
@@ -585,15 +589,11 @@ governanca-ieadespa/
 | `CriarConsagracao` | `POST /api/consagracoes` | `enviarPropostaConsagracaoApp()` |
 | `EvoluirConsagracao` | `POST /api/consagracoes/{id}/evoluir` | `evoluirConsagracaoApp()` |
 
-### 6.7 Ideia futura: PWA (instalar como app)
+### 6.7 PWA (instalar como app)
 
-Ainda não implementado — fica registrado para uma versão posterior. A ideia é
-adicionar um `manifest.json` (nome, ícones, cor do tema) em `app/` e referenciá-lo
-no `<head>` do `index.html`, além de um Service Worker básico — isso permite
-"Instalar app" no navegador (celular ou notebook), com ícone próprio fora do
-navegador. Pode vir em fases: primeiro só o manifest (instalável, sem cache
-offline), depois um Service Worker cacheando o shell estático (`app/`) para uso
-com internet instável.
+Feito na vB.5: `app/manifest.json`, ícones em `app/icones/` e `app/service-worker.js` (cache só do shell
+estático; dado real sempre de `/api/*`; a chamada da EBD funciona offline — v6.10). Histórico no
+[plano da FASE B](docs/plano/fase-b-consolidacao-da-base.md#vb5--portal-do-membro-pwa-e-autoatendimento-de-verdade).
 
 Todas seguem o padrão: lógica real comentada (SQL) + resposta mock ativa para testar
 localmente. `shared/auditoria.js` é reutilizado pelas outras Functions.

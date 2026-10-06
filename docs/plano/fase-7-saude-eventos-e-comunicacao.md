@@ -1852,10 +1852,15 @@ ponto real de integração:
     hora; o serviço manual (sem rodízio) segue como na v5.6; a tela de escalas continua
     mostrando matrícula, e não nome, nas alocações do detalhe do serviço.
 
+> **Aqui entra a [FASE D — Robustez, operação e celular](fase-d-robustez-e-operacao.md)** (06/10/2026, 8ª rodada):
+> retrofit do que já está construído (prova automática de que toda tela abre, front-end em módulos, homologação igual
+> à produção, segundo fator pra liderança, operação e celular do membro), com arquivo e travas próprias, no mesmo
+> padrão da FASE B. A Trava 7-A só abre depois da Trava D-B.
+
 ## 🔒 Trava de Revisão 7-A — antes de avançar para a v7.6
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v7.1 a v7.5 pelas 5 perguntas do checklist.
+Audita v7.1 a v7.5 pelas 5 perguntas do checklist — depois de fechada a FASE D.
 
 ## v7.6 — Setores Técnicos (voluntariado profissional) *(gap da varredura)*
 

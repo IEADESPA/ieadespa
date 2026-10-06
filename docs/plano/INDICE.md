@@ -177,7 +177,7 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 
 ## FASE D — Robustez, operação e celular (retrofit das fases 0 a 7)
 
-Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 8 bloco(s) · itens 0/27 concluídos.
+Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 8 bloco(s) · itens 0/29 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -186,7 +186,7 @@ Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 8 
 | vD.3 | [Homologação igual à produção](fase-d-robustez-e-operacao.md#vd3--homologação-igual-à-produção) | ⬜ 0/4 |
 | 🔒 D-A | [antes de avançar para a vD.4](fase-d-robustez-e-operacao.md#-trava-de-revisão-d-a--antes-de-avançar-para-a-vd4) | — |
 | vD.4 | [Segundo fator para quem aprova dinheiro e concede acesso](fase-d-robustez-e-operacao.md#vd4--segundo-fator-para-quem-aprova-dinheiro-e-concede-acesso) | ⬜ 0/4 |
-| vD.5 | [Operação: saber que caiu antes de alguém reclamar, e entrar sem esperar](fase-d-robustez-e-operacao.md#vd5--operação-saber-que-caiu-antes-de-alguém-reclamar-e-entrar-sem-esperar) | ⬜ 0/6 |
+| vD.5 | [Operação: saber que caiu antes de alguém reclamar, e entrar sem esperar](fase-d-robustez-e-operacao.md#vd5--operação-saber-que-caiu-antes-de-alguém-reclamar-e-entrar-sem-esperar) | ⬜ 0/8 |
 | vD.6 | [Celular de verdade pro membro (parte da v10.3 trazida pra frente)](fase-d-robustez-e-operacao.md#vd6--celular-de-verdade-pro-membro-parte-da-v103-trazida-pra-frente) | ⬜ 0/4 |
 | 🔒 D-B | [antes de encerrar a FASE D e voltar à Trava 7-A](fase-d-robustez-e-operacao.md#-trava-de-revisão-d-b--antes-de-encerrar-a-fase-d-e-voltar-à-trava-7-a) | — |
 

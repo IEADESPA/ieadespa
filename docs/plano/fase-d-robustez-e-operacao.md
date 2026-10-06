@@ -146,6 +146,14 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       suspeita; checklist de 6 passos que qualquer sessão futura consegue seguir.
 - [ ] Alerta quando a rotina diária (`rotinas-diarias.yml`) falhar duas vezes seguidas — hoje o GitHub só manda
       e-mail pra quem fez o último commit, que pode não ser quem cuida do sistema.
+- [ ] **Sincronização do site disparada pelo sistema, não por relógio** (achado de 06/10/2026, `HOMOLOGACAO.md`):
+      `site-agenda-sync.yml` rodava a cada 20 min e por isso o banco de produção nunca pausava (R$ 65-86 por dia
+      contra R$ 6-7 pausado). Já reduzido a 3 vezes por dia; o desenho definitivo é o sistema chamar
+      `repository_dispatch` no GitHub quando um evento do calendário é homologado ou a grade litúrgica muda — zero
+      despertar à toa. Precisa de um token do GitHub (fine-grained, só `actions: write` neste repositório) guardado
+      como configuração do aplicativo no Azure, nunca no repositório.
+- [ ] **Orçamento com alerta no Azure** (Cost Management budget): aviso por e-mail ao passar de 50 %, 80 % e 100 % de
+      US$ 150 no mês — o salto de outubro só foi visto porque alguém perguntou. Custo zero.
 
 *Esforço:* baixo. *Risco:* nenhum pro código. *Depende de você:* tudo que é no Azure roda em **modo manual** (o modo
 automático bloqueia mudança em produção, como em 03/10/2026) e a decisão de custo do banco acordado é sua.

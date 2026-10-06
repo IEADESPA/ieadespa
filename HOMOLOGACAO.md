@@ -78,6 +78,56 @@ Mesma estimativa de antes se confirmou na prática — nada surpreendeu:
 | Teste de restore (banco temporário, apagado em ~40min) | desprezível |
 | **Total recorrente** | **~R$ 25-115/mês** |
 
+## Custo real medido em 06/10/2026 e a causa do salto de outubro
+
+Lido pela API de custos (Cost Management, valores em reais, antes de impostos) com login na conta da
+igreja — ver "Duas contas do Azure nesta máquina", abaixo.
+
+| Recurso | Setembro (mês cheio) | 1 a 6 de outubro |
+| --- | --- | --- |
+| Banco de produção (`app-db-prod`) | R$ 550,09 | **R$ 388,86** |
+| Function App antigo (`func-ieadespa-api`, apagado em 04/10) | R$ 48,52 | R$ 13,52 |
+| Banco de homologação (`ieadespa-homolog`) | R$ 36,66 | R$ 32,23 |
+| Plano do App Service do Directus (`asp-rgportaligreja-8bf6`) | R$ 36,50 | R$ 13,15 |
+| Static Web Apps (sistema + site) | R$ 19,45 | — |
+| **Total** | **R$ 692,18 (≈ US$ 128)** | **R$ 447,81 em 6 dias** |
+
+**Por dia, o banco de produção:** R$ 6,40 a 6,70 nos dias parados do fim de setembro (24 a 29/09, pausa
+funcionando desde o desligamento do Automatic Tuning em 20/09); **R$ 55 a 86 por dia de 1 a 5/10**. A
+métrica `app_cpu_billed` mostra o banco cobrado **24 de 24 horas desde 02/10** (29/09: 0 horas), e 4 a 17
+conexões por hora de madrugada.
+
+**Causa:** o fluxo `site-agenda-sync.yml` (criado em 01/10 com a v7.2) rodava **a cada 20 minutos, dia e
+noite**, e cada execução chama `/api/agenda-publica/versao`, que consulta o banco. Com uma chamada a cada
+20 minutos, o banco nunca fica os 60 minutos parado que a pausa automática exige — e passa a cobrar o mínimo
+(0,5 vCore) o tempo todo. Projeção se nada mudasse: **≈ R$ 2.000 a 2.400 por mês só de banco**, quase três
+vezes o teto de US$ 150.
+
+**Correção (06/10/2026):** o fluxo passou a rodar 3 vezes por dia (7h45 junto com as rotinas diárias, 13h e
+19h, horário de Brasília). Custo esperado de cada despertar do banco: ≈ R$ 2,60 (60 min a 0,5 vCore, a
+≈ R$ 5,25 por vCore-hora medido). A versão sem custo nenhum — o sistema dispara o fluxo só quando a agenda
+muda — está na vD.5 do plano (precisa de um token do GitHub guardado como segredo). Conferir aqui, uns dias
+depois, se o banco voltou a pausar (`az monitor metrics list ... --metric app_cpu_billed`).
+
+**Regra que fica:** qualquer rotina agendada que chame a API do sistema acorda o banco por 60 minutos. Antes
+de criar um agendamento novo, somar as janelas: o custo é por despertar, não por chamada.
+
+## Duas contas do Azure nesta máquina
+
+Esta máquina tem duas contas do Azure: a da **igreja** (tenant `ieadespa.org.br`, usuário
+`ieadespa@ieadespa.org.br`, assinatura "Azure subscription 1" com o grupo `ieadespa`) e a de **outra
+associação**, usada por outro repositório. O Azure CLI guarda um login só por pasta de configuração, então o
+último `az login` de uma sessão derruba o da outra. Solução adotada em 06/10/2026: este repositório usa uma
+pasta própria.
+
+```bash
+export AZURE_CONFIG_DIR="$HOME/.azure-ieadespa"   # Git Bash; no PowerShell: $env:AZURE_CONFIG_DIR = "$HOME\.azure-ieadespa"
+az account show                                    # deve mostrar ieadespa@ieadespa.org.br
+# se expirar: az login --use-device-code --tenant ieadespa.org.br  (o código aparece no terminal, confirma-se no navegador)
+```
+
+Sem essa variável, o `az` cai na conta da outra associação e o grupo `ieadespa` "não existe".
+
 ---
 
 ## Investigação de lentidão e custo (2026-09-20)

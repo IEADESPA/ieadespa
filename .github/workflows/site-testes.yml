@@ -1,0 +1,78 @@
+name: Site - testes contra o site publicado
+
+# Por que existe (06/10/2026 — vD.8)
+# ----------------------------------
+# Depois de cada montagem do site institucional, roda as baterias de site/scripts/testes
+# contra o endereço que acabou de ser publicado:
+#   - branch `homolog-site` (PR de homologação, não fechar) → a PRÉ-VISUALIZAÇÃO do Azure
+#     Static Web Apps (https://salmon-bay-0efd06d0f-<nº do PR>.3.azurestaticapps.net);
+#   - branch `main` → a PRODUÇÃO (https://www.ieadespa.org.br).
+# Os dados de teste são criados e apagados na hora, no Directus de produção (não há Directus
+# de homologação, por custo), em itens "teste-…" que a versão do conteúdo ignora.
+# Também pode ser rodado à mão, informando o endereço.
+
+on:
+  workflow_run:
+    workflows: ["Site institucional - CI/CD"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: "Endereço do site a testar (padrão: produção)"
+        required: false
+        default: "https://www.ieadespa.org.br"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  testar:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'homolog-site'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      DIRECTUS_URL: https://ieadespa-directus-gae4hfarf4a4ffcf.brazilsouth-01.azurewebsites.net
+      DIRECTUS_ADMIN_TOKEN: ${{ secrets.DIRECTUS_ADMIN_TOKEN }}
+      TELEFONE_CHAVE_SEGREDO: ${{ secrets.TELEFONE_CHAVE_SEGREDO }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+          sparse-checkout: site/scripts/testes
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Decidir o endereço a testar
+        id: alvo
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            url="${{ github.event.inputs.site_url }}"
+          elif [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
+            url="https://www.ieadespa.org.br"
+          else
+            pr="$(gh pr list --head homolog-site --state open --json number --jq '.[0].number')"
+            [ -n "$pr" ] || { echo "::error::PR de homologação (branch homolog-site) não encontrado"; exit 1; }
+            url="https://salmon-bay-0efd06d0f-${pr}.3.azurestaticapps.net"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Testando: $url" | tee -a "$GITHUB_STEP_SUMMARY"
+          # Espera o endereço responder (a pré-visualização leva uns segundos depois do deploy).
+          for i in $(seq 1 12); do curl -sf -o /dev/null -m 20 "$url/" && break; sleep 10; done
+
+      - name: Camisetas
+        env:
+          SITE_URL: ${{ steps.alvo.outputs.url }}
+        run: node site/scripts/testes/camisetas.js 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Eventos
+        if: always()
+        env:
+          SITE_URL: ${{ steps.alvo.outputs.url }}
+        run: node site/scripts/testes/eventos.js 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"

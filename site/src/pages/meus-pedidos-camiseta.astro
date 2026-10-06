@@ -56,6 +56,10 @@ const allPosts = visiblePosts(await getAllMensagens());
     interface Pedido {
       lote: string | null;
       nome: string | null;
+      criadoEm: string | null;
+      loteNumero: number | null;
+      loteStatus: "aberto" | "fechado" | null;
+      loteFechadoEm: string | null;
       valorTotal: number;
       valorPago: number;
       separado: boolean;
@@ -111,25 +115,48 @@ const allPosts = visiblePosts(await getAllMensagens());
       return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR", { timeZone: "America/Belem" });
     }
 
-    // Onde e como retirar aparece AQUI, não só no e-mail: 1 em cada 4 pedidos não
-    // tem e-mail, e a página é o que a pessoa abre com o telefone (06/10/2026).
+    // Andamento completo AQUI, não só no e-mail: a maioria dos pedidos não tem e-mail, e a
+    // página é o que a pessoa abre com o telefone (pedido do responsável, 06/10/2026).
+    // Etapas: recebido → encomendado (lote fechado) → chegou e separado → retirado.
+    function etapasHtml(p: Pedido): string {
+      const retirado = tudoRetirado(p);
+      const etapas: { titulo: string; feito: boolean; detalhe: string }[] = [
+        { titulo: "Pedido recebido", feito: true, detalhe: p.criadoEm ? `em ${dataCurta(p.criadoEm)}` : "" },
+        {
+          titulo: "Encomendado à malharia",
+          feito: p.loteStatus === "fechado",
+          detalhe: p.loteStatus === "fechado"
+            ? `lote ${p.loteNumero ?? ""} fechado${p.loteFechadoEm ? ` em ${dataCurta(p.loteFechadoEm)}` : ""}`
+            : p.loteNumero ? `você está no lote ${p.loteNumero}, que ainda está recebendo pedidos` : "",
+        },
+        { titulo: "Chegou e foi separado", feito: p.separado, detalhe: p.separado ? (p.separadoEm ? `em ${dataCurta(p.separadoEm)}` : "") : "avisaremos aqui quando chegar" },
+        { titulo: "Retirado", feito: retirado, detalhe: retirado ? "tudo retirado" : p.separado ? "pronto pra retirar" : "" },
+      ];
+      return `<ol class="camiseta-etapas">${etapas
+        .map((e) => `<li class="${e.feito ? "is-feita" : ""}"><span class="camiseta-etapa-marca" aria-hidden="true">${e.feito ? "✓" : "•"}</span><span><strong>${escapeHtml(e.titulo)}</strong>${e.detalhe ? ` <span class="text-muted-foreground">— ${escapeHtml(e.detalhe)}</span>` : ""}</span></li>`)
+        .join("")}</ol>`;
+    }
+
     function pedidoCardHtml(p: Pedido): string {
       const pronto = p.separado && !tudoRetirado(p);
-      const avisoRetirada = pronto
-        ? `<p class="camiseta-pedido-pronto">✅ Pronto pra retirar!${p.separadoEm ? ` <span class="font-normal">(separado em ${escapeHtml(dataCurta(p.separadoEm))})</span>` : ""}</p>`
-        : `<p class="camiseta-pedido-detalhe">Ainda não separado para retirada — avisaremos aqui quando chegar.</p>`;
+      const avisoRetirada = pronto ? `<p class="camiseta-pedido-pronto">✅ Pronto pra retirar!</p>` : "";
       const ondeRetirar = p.retiradaLocal
         ? `<p class="camiseta-pedido-detalhe"><strong>Onde retirar:</strong> ${escapeHtml(p.retiradaLocal)}</p>`
         : "";
       const mensagem = pronto && p.mensagemRetirada ? `<p class="camiseta-pedido-detalhe">${escapeHtml(p.mensagemRetirada)}</p>` : "";
+      const falta = Math.max(p.valorTotal - (p.valorPago || 0), 0);
+      const pagamento = p.valorTotal > 0
+        ? `<p class="camiseta-pedido-detalhe"><strong>Pagamento:</strong> ${escapeHtml(situacaoPagamento(p))}${falta > 0 ? ` — falta R$ ${falta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : ""}</p>`
+        : "";
       return `
         <div class="camiseta-pedido-card">
           <p class="camiseta-pedido-lote">${escapeHtml(p.lote ?? "Pedido")}${p.nome ? ` <span class="font-normal text-muted-foreground">· ${escapeHtml(p.nome)}</span>` : ""}</p>
           ${avisoRetirada}
+          ${etapasHtml(p)}
           ${mensagem}
           ${ondeRetirar}
           <ul class="camiseta-pedido-itens">${p.itens.map(itemLinhaHtml).join("")}</ul>
-          <p class="camiseta-pedido-detalhe">${escapeHtml(situacaoPagamento(p))}</p>
+          ${pagamento}
         </div>
       `;
     }
@@ -203,6 +230,39 @@ const allPosts = visiblePosts(await getAllMensagens());
       padding-left: 1.1rem;
       font-size: 0.875rem;
       color: var(--muted-foreground);
+    }
+    .camiseta-etapas {
+      list-style: none;
+      margin: 0.75rem 0 0;
+      padding: 0;
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.875rem;
+    }
+    .camiseta-etapas li {
+      display: flex;
+      gap: 0.5rem;
+      align-items: baseline;
+      color: var(--muted-foreground);
+    }
+    .camiseta-etapas li.is-feita {
+      color: var(--foreground);
+    }
+    .camiseta-etapa-marca {
+      display: inline-flex;
+      width: 1.25rem;
+      height: 1.25rem;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 0.75rem;
+      flex: none;
+    }
+    .camiseta-etapas li.is-feita .camiseta-etapa-marca {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
     }
   </style>
 </BaseLayout>

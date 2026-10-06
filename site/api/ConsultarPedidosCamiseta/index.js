@@ -40,7 +40,7 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  * preço de cada item conforme anda pela lista.
  */
 const CAMPOS_PEDIDO =
-  "id,nome,telefone,valor_pago,avulso,separado,separado_em,grupo.nome,grupo.valor_venda,grupo.precos_tamanho,grupo.retirada_local,grupo.email_retirada_corpo";
+  "id,nome,telefone,valor_pago,avulso,separado,separado_em,date_created,lote.numero,lote.status,lote.fechado_em,grupo.nome,grupo.valor_venda,grupo.precos_tamanho,grupo.retirada_local,grupo.email_retirada_corpo";
 const MAX_CANDIDATOS_ANTIGOS = 12;
 
 function precoTamanho(grupo, tamanho) {
@@ -164,6 +164,13 @@ module.exports = async function (context, req) {
     return {
       lote: p.grupo?.nome ?? null,
       nome: p.nome ?? null,
+      // Andamento (06/10/2026, pedido do responsável): a maioria dos pedidos não tem e-mail,
+      // então a página é onde a pessoa acompanha — quando pediu, se o lote já foi encomendado
+      // (lote fechado = pedido feito à malharia), se já chegou (separado) e se já retirou.
+      criadoEm: p.date_created ?? null,
+      loteNumero: p.lote?.numero ?? null,
+      loteStatus: p.lote?.status ?? null,
+      loteFechadoEm: p.lote?.fechado_em ?? null,
       valorTotal,
       valorPago: p.valor_pago,
       separado: Boolean(p.separado),

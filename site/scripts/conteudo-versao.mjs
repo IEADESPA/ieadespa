@@ -55,7 +55,10 @@ async function lerColecao(colecao) {
   if (res.status === 403 || res.status === 404) return { colecao, erro: res.status }; // coleção que não existe mais: conta como vazia
   if (!res.ok) throw new Error(`${colecao}: HTTP ${res.status}`);
   const dados = (await res.json()).data;
-  const itens = Array.isArray(dados) ? dados : dados ? [dados] : [];
+  // Itens de TESTE (baterias de site/scripts/testes, criados e apagados em minutos) não contam:
+  // senão cada rodada de teste remontaria o site duas vezes à toa.
+  const ehTeste = (it) => /^(teste|sonda|prova)-/.test(String(it?.slug || "")) || /^TESTE\b/.test(String(it?.title || it?.nome || ""));
+  const itens = (Array.isArray(dados) ? dados : dados ? [dados] : []).filter((it) => !ehTeste(it));
   const texto = JSON.stringify(itens);
   return { colecao, n: itens.length, hash: createHash("sha256").update(texto).digest("hex").slice(0, 12), bytes: texto.length };
 }

@@ -248,13 +248,13 @@ desativada continuava aceitando pedido, porque a regra de aberto/fechado só exi
 - [x] Lotes do incidente juntados no lote 1 (1.083 pedidos) e os cinco lotes criados por engano apagados —
       nenhum pedido apagado (ordem do responsável).
 - [x] **Provas em produção (06/10):** 17/17 verificações de camisetas e 16/16 de eventos, com grupos e evento
-      de teste criados e apagados; carga de 36 pedidos com 12 conexões: 36/36 gravados, sem erro; status a
+      de teste criados e apagados; carga de 36 pedidos com 12 conexões: 36/36 gravados, sem erro, 2,6 pedidos/s (mediana 3,4 s de espera, máximo 7,6 s); status a
       40 conexões: ~200 req/s, 157 ms de mediana, zero erro.
 
 **O limite que ficou, medido:** o Directus grava **um de cada vez** — plano B1 (1 núcleo) foi a 88-98 % de CPU
-com 6 gravações em paralelo, PostgreSQL a 8 %. Capacidade medida: ~1,5 a 2 pedidos por segundo (≈ 100 por
-minuto; o pico de 06/10 foi 17 por minuto). Acima disso ninguém recebe erro: espera na fila (12 pedidos ao
-mesmo tempo = ~8 s cada). Para mais que isso, duas opções, à decisão do responsável:
+com 6 gravações em paralelo, PostgreSQL a 8 %. Capacidade medida depois de todas as otimizações: ~2,6 pedidos por
+segundo (≈ 150 por minuto; o pico de 06/10 foi 17 por minuto). Acima disso ninguém recebe erro: espera na fila
+(12 pedidos ao mesmo tempo = 3 a 8 s cada). Para mais que isso, duas opções, à decisão do responsável:
 
 - [ ] **Plano do Directus B1 → B2 ou P0v3** (≈ +US$ 13 a 60/mês): mais CPU para o Directus gravar; o único
       item que custa dinheiro nesta versão.

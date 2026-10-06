@@ -94,12 +94,33 @@ module.exports = async function (context, req) {
 
   const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}`, "Content-Type": "application/json" };
 
-  const grupoRes = await fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=id,limite_uma_por_pessoa`, { headers });
+  const grupoRes = await fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=id,limite_uma_por_pessoa,ativo,pedidos_ate`, { headers });
   if (!grupoRes.ok) {
     context.res = { status: 404, body: { erro: "Camiseta não encontrada." } };
     return;
   }
   const grupo = (await grupoRes.json()).data;
+
+  // Campanha encerrada não aceita pedido — nem pelo formulário antigo ainda aberto num
+  // navegador, nem por chamada direta. Até 06/10/2026 esta rota olhava só a existência do
+  // grupo: uma campanha desativada no Directus (`ativo = false`) e com prazo vencido
+  // continuou recebendo centenas de pedidos, e cada lote fechado fazia o próximo pedido
+  // abrir um lote novo. `ativo` fecha de vez; `pedidos_ate` (dia, inclusive, no horário de
+  // Brasília) fecha pelo prazo.
+  if (grupo.ativo === false) {
+    context.res = { status: 403, body: { erro: "Esta campanha está encerrada e não aceita mais pedidos." } };
+    return;
+  }
+  if (grupo.pedidos_ate) {
+    const texto = String(grupo.pedidos_ate);
+    const soDia = /^\d{4}-\d{2}-\d{2}$/.test(texto);
+    const fim = new Date(soDia ? `${texto}T23:59:59-03:00` : texto);
+    if (!Number.isNaN(fim.getTime()) && Date.now() > fim.getTime()) {
+      const [ano, mes, dia] = texto.slice(0, 10).split("-");
+      context.res = { status: 403, body: { erro: `O prazo de pedidos desta campanha encerrou em ${dia}/${mes}/${ano}.` } };
+      return;
+    }
+  }
 
   if (grupo.limite_uma_por_pessoa) {
     if (totalQuantidade > 1) {

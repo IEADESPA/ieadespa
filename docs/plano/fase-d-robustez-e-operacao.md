@@ -83,8 +83,11 @@ fluxo do PR migra o banco de produção, não o de homologação — por isso a 
 passou semanas ligada ao Function App antigo sem rodar o código novo. Ou seja: "testado na homologação" não provava nada.
 E desde 13/09/2026 a `HOMOLOGACAO.md` pede um seed de dados fictícios que nunca foi escrito.
 
-- [ ] Passo de migração do banco de homologação no fluxo do PR #1 (`homolog`), com a conexão dela guardada como
+- [x] Passo de migração do banco de homologação no fluxo do PR #1 (`homolog`), com a conexão dela guardada como
       segredo do GitHub (`AZURE_SQL_CONNECTION_STRING_HOMOLOG`) — mesmo `scripts/executar-migracoes.js`, mesma ordem.
+      *Feito na noite de 06/10:* o fluxo escolhe o banco pelo branch do PR (`homolog…` → homologação; `main` →
+      produção); a conexão veio do ambiente 1 do próprio Static Web App. O `homolog` recebeu a `main` e o PR #1
+      migrou o `ieadespa-homolog` (antes com esquema atrasado): `/api/documentos`, que dava 500 lá, responde 200.
 - [ ] Seed fictício reproduzível (`api/scripts/semear-homologacao.js`): congregações, áreas, 50 a 100 pessoas com
       nomes inventados, um ciclo de tesouraria fechado, uma turma de EBD, uma escala, um processo disciplinar — tudo
       marcado como fictício; nunca roda contra a produção (recusa pela string de conexão).
@@ -136,19 +139,21 @@ acesso do dia (partida a frio das Functions + banco serverless pausado), e a ten
 (20/09) esbarrou num defeito do Azure sem solução. A restauração do banco foi ensaiada **uma vez** (13/09/2026) e os
 segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
 
-- [ ] **Teste de disponibilidade** do Application Insights a cada 5 minutos, de 3 regiões, numa rota **que não toca o
-      banco** (ex.: `GET /api/versao`, nova, só devolve a versão publicada) — alerta por e-mail quando falhar de 2
-      regiões seguidas. Efeito colateral útil: a chamada mantém as Functions **quentes** o dia inteiro (some a partida
-      a frio de 15-30 s) **sem acordar o banco**, que continua pausando de madrugada como hoje. Custo: o teste de
-      disponibilidade é gratuito até o limite da camada; o banco não muda.
+- [x] **Teste de disponibilidade** a cada 5 minutos numa rota **que não toca o banco** — *feito na noite de 06/10,
+      sem Azure e sem custo:* rota nova `GET /api/saude` (só `ok` + hora; registrada como pública no teste
+      `rotasAnonimas`) e o fluxo `sistema-disponibilidade.yml` (GitHub Actions, `*/5`), que chama a rota e a página
+      inicial do site e, na **primeira** falha de uma sequência, manda e-mail pela conta ACS do site para
+      `presidente@ieadespa.org`; quando volta, manda "voltou". Efeito colateral útil: mantém as Functions quentes
+      (some a partida a frio de 15-30 s) **sem acordar o banco**.
 - [ ] **Decisão separada, com número**: manter o banco acordado em horário de uso (6h às 23h) tira os segundos de
       retomada do serverless no primeiro login do dia, mas o banco passa a cobrar o mínimo (0,5 vCore) o tempo todo nesse
       horário — medir no portal o custo de um mês com e sem, e só então decidir. A opção gratuita (um `curl` por GitHub
       Actions a cada 15 minutos em horário de uso, como o aquecimento que `rotinas-diarias.yml` já faz às 7h) fica
       documentada como alternativa.
-- [ ] **Anexos com rede de segurança**: exclusão suave (soft delete) e versionamento de blob na conta
-      `ieadespaarmazenamento` (anexos da vB.4, fotos, documentos) — hoje o banco tem restauração a qualquer ponto, os
-      arquivos não. Custo: só o espaço das versões (centavos neste volume).
+- [x] **Anexos com rede de segurança**: exclusão suave (soft delete) e versionamento de blob na conta
+      `ieadespaarmazenamento` (anexos da vB.4, fotos, documentos) — *feito em 06/10:* a exclusão suave já existia
+      com 7 dias; agora 30 dias, com versionamento de blob e exclusão suave de contêiner (30 dias) ligados.
+      Custo: só o espaço das versões (centavos neste volume).
 - [ ] **Ensaio semestral de restauração** (banco + anexos) registrado na tabela da `HOMOLOGACAO.md`, com o tempo
       medido — e um lembrete pelo motor de notificações (vB.2) 30 dias antes de vencer, pra Secretaria Geral.
 - [ ] **Rotação de segredos com procedimento escrito** no `SECRETS.md`: `AUTH_SECRET` (derruba todas as sessões —
@@ -176,8 +181,9 @@ O membro entra pelo celular (matrícula + PIN, PWA instalável) — e encontra t
 `script.js` gera**, só 23 a usam: no telefone, a maioria corta a última coluna sem aviso. A v10.3 previa só isso, no fim
 do roteiro; o membro já usa hoje.
 
-- [ ] Toda tabela gerada pelo `script.js` nasce dentro de `.rolagem-tabela` — uma função única de montar tabela
-      (reaproveitada na vD.2), não 190 edições à mão.
+- [x] Toda tabela rola de lado no telefone — *feito em 06/10 sem tocar em markup:* regra de CSS só até 640 px
+      (`.tabela-frequencia` vira bloco rolável e as células não quebram linha); no notebook nada muda. A função
+      única de montar tabela fica para a vD.2.
 - [ ] As telas que o membro comum usa (Meu Painel: perfil, dados, família, contribuições, LGPD, cartas, escalas,
       eventos, EBD do aluno, notificações) revisadas em **360 px de largura** com prova de tela (captura antes/depois
       guardada em `docs/plano/capturas/vD.6/`): nada cortado, botão alcançável com o polegar, formulário sem zoom.

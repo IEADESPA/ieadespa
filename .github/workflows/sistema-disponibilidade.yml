@@ -40,7 +40,8 @@ jobs:
           ok_sistema=nao; ms=0
           for i in 1 2 3; do
             inicio=$(date +%s%3N)
-            if curl -sf -o /tmp/saude.json -m 30 "$URL_SAUDE" && grep -q '"ok":true' /tmp/saude.json; then ok_sistema=sim; ms=$(( $(date +%s%3N) - inicio )); break; fi
+            # 45 s: a primeira chamada depois de um deploy paga a partida a frio das Functions.
+            if curl -sf -o /tmp/saude.json -m 45 "$URL_SAUDE" && grep -Eq '"ok":[[:space:]]*true' /tmp/saude.json; then ok_sistema=sim; ms=$(( $(date +%s%3N) - inicio )); break; fi
             sleep 15
           done
           ok_site=nao

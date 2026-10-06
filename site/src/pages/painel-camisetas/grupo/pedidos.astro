@@ -119,15 +119,49 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         </div>
 
         <div class="mt-6 flex flex-wrap items-center gap-3">
-          <input type="search" class="field busca-input" placeholder="Buscar por nome…" data-busca />
+          <input type="search" class="field busca-input" placeholder="Buscar por nome, e-mail ou nº do pedido…" data-busca />
           <div class="flex flex-wrap gap-2" data-filtros>
             <button type="button" class="filtro-chip is-active" data-filtro="todos">Todos</button>
             <button type="button" class="filtro-chip" data-filtro="devendo">Devendo</button>
+            <button type="button" class="filtro-chip" data-filtro="parcial">Pago parcial</button>
             <button type="button" class="filtro-chip" data-filtro="pago">Pago</button>
             <button type="button" class="filtro-chip" data-filtro="pendente-retirada">Com peça a retirar</button>
             <button type="button" class="filtro-chip" data-filtro="retirado">Já retirado tudo</button>
           </div>
         </div>
+
+        <!-- 06/10/2026 — filtros combináveis "como no Excel" (pedido do responsável: mais de mil
+             pedidos, precisa achar "só os M do modelo X", "só os separados", "só quem não tem e-mail"…).
+             Todos se somam entre si, com a busca, com o filtro de pergunta e com a aba de lote. -->
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6" data-filtros-avancados>
+          <label class="grid gap-1 text-xs font-semibold text-muted-foreground">Tamanho
+            <select class="field" data-filtro-tamanho><option value="">Todos</option></select>
+          </label>
+          <label class="grid gap-1 text-xs font-semibold text-muted-foreground">Modelo
+            <select class="field" data-filtro-modelo><option value="">Todos</option></select>
+          </label>
+          <label class="grid gap-1 text-xs font-semibold text-muted-foreground">Separado
+            <select class="field" data-filtro-separado><option value="">Tanto faz</option><option value="sim">Já separado</option><option value="nao">Ainda não</option></select>
+          </label>
+          <label class="grid gap-1 text-xs font-semibold text-muted-foreground">E-mail
+            <select class="field" data-filtro-email><option value="">Tanto faz</option><option value="com">Com e-mail</option><option value="sem">Sem e-mail</option></select>
+          </label>
+          <label class="grid gap-1 text-xs font-semibold text-muted-foreground">Congregação
+            <select class="field" data-filtro-congregacao><option value="">Todas</option></select>
+          </label>
+          <label class="grid gap-1 text-xs font-semibold text-muted-foreground">Lote
+            <select class="field" data-filtro-lote><option value="">(o da aba)</option></select>
+          </label>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p class="text-sm text-muted-foreground" data-resumo-filtro></p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="link-sweep text-sm font-semibold text-accent" data-limpar-filtros>Limpar filtros</button>
+            <button type="button" class="btn btn-outline" data-exportar-planilha>Exportar planilha (Excel)</button>
+          </div>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-2 text-xs" data-resumo-tamanhos></div>
 
         <div class="mt-4 flex flex-wrap items-start gap-3" data-filtro-pergunta-bloco hidden>
           <span class="text-sm font-semibold text-muted-foreground" style="padding-top:0.4rem;">Filtrar por pergunta:</span>
@@ -144,8 +178,11 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
   </main>
   <SiteFooter />
 
+  <!-- SheetJS 0.20.3 servido de dentro (mesmo arquivo do sistema, site/public/vendor), para a exportação em Excel. -->
+  <script is:inline src="/vendor/xlsx.full.min.js"></script>
+
   <script>
-    import { exigirAutenticacao } from "@/lib/painelAuth";
+    import { exigirAutenticacao, fetchComSessao, renovarToken } from "@/lib/painelAuth";
     import { ENVIAR_AVISO_RETIRADA_CAMISETA_URL } from "@/lib/directus";
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
@@ -229,6 +266,9 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
     if (!container) throw new Error("contêiner do painel ausente");
     const directusUrl = container.dataset.directusUrl ?? "";
+    // Toda chamada ao Directus passa por aqui: token atual, e num 401 renova pelo cookie e
+    // repete (06/10/2026 — antes, token vencido = gravação falhando em silêncio até sair e entrar).
+    const api = (url: string, init?: RequestInit) => fetchComSessao(directusUrl, AUTH, url, init);
     // Idem à técnica de eventos/exportar.astro: nome resolvido em build time
     // porque o sistema de governança não libera CORS pra chamada direta do
     // navegador.
@@ -255,10 +295,20 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     /** "todos-os-lotes" | "avulso" | um id de lote (número, como string). */
     let visaoAtual: "todos-os-lotes" | "avulso" | number = "todos-os-lotes";
 
-    let filtroAtivo: "todos" | "devendo" | "pago" | "pendente-retirada" | "retirado" = "todos";
+    let filtroAtivo: "todos" | "devendo" | "parcial" | "pago" | "pendente-retirada" | "retirado" = "todos";
     let termoBusca = "";
     let filtroPerguntaId: number | null = null;
     let filtroPerguntaValores: string[] = [];
+    // Filtros combináveis (06/10/2026) — ver o bloco [data-filtros-avancados] no markup.
+    let filtroTamanho = "";
+    let filtroModelo = "";
+    let filtroSeparado: "" | "sim" | "nao" = "";
+    let filtroEmail: "" | "com" | "sem" = "";
+    let filtroCongregacao = "";
+    let filtroLote = "";
+    /** Última lista filtrada mostrada na tela — é o que a exportação leva. */
+    let ultimaListaFiltrada: Pedido[] = [];
+    declare const XLSX: any;
 
     function escapeHtml(value: string) {
       return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
@@ -604,6 +654,14 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
       const loteDoPedido = !p.avulso && p.lote ? lotes.find((l) => l.id === p.lote) : null;
       const loteInfo = p.avulso ? "" : p.lote ? ` · lote ${loteDoPedido?.numero ?? "?"}` : "";
+      // Troca de lote direto no cartão (06/10/2026) — ver `recalcularLoteFechado`.
+      const moverLote = p.avulso || lotes.length < 2
+        ? ""
+        : `<label class="text-xs text-muted-foreground">Lote
+             <select class="field" style="width:auto;display:inline-block;margin-left:0.25rem" data-mover-lote title="Mover este pedido para outro lote">
+               ${[...lotes].sort((a, b) => a.numero - b.numero).map((l) => `<option value="${l.id}" ${l.id === p.lote ? "selected" : ""}>Lote ${l.numero}${l.status === "aberto" ? " (aberto)" : " (fechado)"}</option>`).join("")}
+             </select>
+           </label>`;
       const avisoLoteFechado =
         loteDoPedido?.status === "fechado"
           ? `<p class="camiseta-pedido-aviso">Lote ${loteDoPedido.numero} já fechado — editar itens aqui corrige só o que esta pessoa deve/tem a retirar, sem mudar os números já travados do lote.</p>`
@@ -627,9 +685,10 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="font-semibold">${escapeHtml(p.nome)} ${p.avulso ? '<span class="badge-avulso">venda avulsa</span>' : ""}</p>
-              <p class="text-xs text-muted-foreground">${escapeHtml((p.congregacao != null ? nomesCongregacoes[p.congregacao] : null) ?? "Congregação não informada")}${loteInfo}</p>
+              <p class="text-xs text-muted-foreground">#${p.id} · ${escapeHtml((p.congregacao != null ? nomesCongregacoes[p.congregacao] : null) ?? "Congregação não informada")}${loteInfo}${p.email ? ` · ${escapeHtml(p.email)}` : ""}</p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
+              ${moverLote}
               <label class="text-sm">Pago: R$
                 <input type="number" step="0.01" min="0" class="field" style="width:6.5rem" value="${p.valor_pago}" data-campo-valor-pago />
               </label>
@@ -647,12 +706,20 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       `;
     }
 
-    function renderizarPedidos() {
-      if (!listaEl) return;
+    /** Item bate com os filtros de tamanho/modelo (vazio = qualquer). */
+    function itemBate(i: Item): boolean {
+      if (filtroTamanho && (i.tamanho ?? "") !== filtroTamanho) return false;
+      if (filtroModelo && (i.modelo ?? "") !== filtroModelo) return false;
+      return true;
+    }
+
+    function pedidosFiltrados(): Pedido[] {
       const termo = termoBusca.trim().toLowerCase();
-      const base = pedidosDaVisao();
-      const filtrados = base.filter((p) => {
-        if (termo && !p.nome.toLowerCase().includes(termo)) return false;
+      // O filtro "Lote" (quando escolhido) manda acima da aba — serve para olhar um lote específico
+      // estando em "Todos os lotes", ou cruzar lote × tamanho sem trocar de aba.
+      const base = filtroLote === "avulso" ? pedidos.filter((p) => p.avulso) : filtroLote ? pedidos.filter((p) => p.lote === Number(filtroLote) && !p.avulso) : pedidosDaVisao();
+      return base.filter((p) => {
+        if (termo && !(p.nome.toLowerCase().includes(termo) || (p.email ?? "").toLowerCase().includes(termo) || String(p.id) === termo)) return false;
         if (filtroPerguntaId !== null && filtroPerguntaValores.length > 0) {
           const respostas = respostasPorPedido.get(p.id) ?? [];
           const resposta = respostas.find((r) => r.pergunta === filtroPerguntaId);
@@ -662,14 +729,190 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
             .filter(Boolean);
           if (!valores.some((v) => filtroPerguntaValores.includes(v))) return false;
         }
+        if ((filtroTamanho || filtroModelo) && !p.itens.some(itemBate)) return false;
+        if (filtroSeparado === "sim" && !p.separado) return false;
+        if (filtroSeparado === "nao" && (p.separado || p.avulso)) return false;
+        if (filtroEmail === "com" && !p.email) return false;
+        if (filtroEmail === "sem" && p.email) return false;
+        if (filtroCongregacao === "sem" && p.congregacao != null) return false;
+        if (filtroCongregacao && filtroCongregacao !== "sem" && String(p.congregacao ?? "") !== filtroCongregacao) return false;
         if (filtroAtivo === "devendo") return devendo(p);
+        if (filtroAtivo === "parcial") return devendo(p) && Number(p.valor_pago) > 0;
         if (filtroAtivo === "pago") return !devendo(p);
         if (filtroAtivo === "pendente-retirada") return temPendenteRetirada(p);
         if (filtroAtivo === "retirado") return tudoRetirado(p);
         return true;
       });
+    }
+
+    /** "N pedidos · M peças" do que está na tela, e a contagem por tamanho × modelo (só dos itens que batem com o filtro). */
+    function renderizarResumoFiltro(filtrados: Pedido[]) {
+      const resumoEl = document.querySelector<HTMLElement>("[data-resumo-filtro]");
+      const tamanhosEl = document.querySelector<HTMLElement>("[data-resumo-tamanhos]");
+      const porCombo = new Map<string, number>();
+      let pecas = 0;
+      for (const p of filtrados) {
+        for (const i of p.itens) {
+          if (!itemBate(i)) continue;
+          pecas += i.quantidade;
+          const chave = [i.tamanho ?? "—", i.modelo ?? "—"].join(" · ");
+          porCombo.set(chave, (porCombo.get(chave) ?? 0) + i.quantidade);
+        }
+      }
+      if (resumoEl) resumoEl.textContent = `${filtrados.length} pedido${filtrados.length === 1 ? "" : "s"} · ${pecas} peça${pecas === 1 ? "" : "s"} no filtro atual`;
+      if (tamanhosEl) {
+        tamanhosEl.innerHTML = Array.from(porCombo.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([combo, n]) => `<span class="filtro-chip">${escapeHtml(combo)}: <strong>${n}</strong></span>`)
+          .join("");
+      }
+    }
+
+    function renderizarPedidos() {
+      if (!listaEl) return;
+      const filtrados = pedidosFiltrados();
+      ultimaListaFiltrada = filtrados;
+      renderizarResumoFiltro(filtrados);
       listaEl.innerHTML = filtrados.length ? filtrados.map(pedidoCardHtml).join("") : `<p class="text-sm text-muted-foreground">Nenhum pedido nesse filtro.</p>`;
     }
+
+    /** Preenche os selects de tamanho/modelo/congregação/lote com o que existe de verdade nos dados. */
+    function montarFiltrosAvancados() {
+      const opcoes = (valores: string[], rotuloVazio: string) => [`<option value="">${rotuloVazio}</option>`, ...valores.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`)].join("");
+      const tamanhos = new Set<string>(grupo.tamanhos ?? []);
+      const modelos = new Set<string>(grupo.modelos ?? []);
+      pedidos.forEach((p) => p.itens.forEach((i) => { if (i.tamanho) tamanhos.add(i.tamanho); if (i.modelo) modelos.add(i.modelo); }));
+      const selTam = document.querySelector<HTMLSelectElement>("[data-filtro-tamanho]");
+      const selMod = document.querySelector<HTMLSelectElement>("[data-filtro-modelo]");
+      const selCong = document.querySelector<HTMLSelectElement>("[data-filtro-congregacao]");
+      const selLote = document.querySelector<HTMLSelectElement>("[data-filtro-lote]");
+      if (selTam) { selTam.innerHTML = opcoes(Array.from(tamanhos), "Todos"); selTam.value = filtroTamanho; }
+      if (selMod) { selMod.innerHTML = opcoes(Array.from(modelos), "Todos"); selMod.value = filtroModelo; }
+      if (selCong) {
+        const ids = Array.from(new Set(pedidos.map((p) => p.congregacao).filter((c): c is number => c != null)));
+        const nomes = ids.map((id) => ({ id, nome: nomesCongregacoes[id] ?? `#${id}` })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+        selCong.innerHTML = `<option value="">Todas</option>` + nomes.map((c) => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join("") + `<option value="sem">Sem congregação</option>`;
+        selCong.value = filtroCongregacao;
+      }
+      if (selLote) {
+        const ordenados = [...lotes].sort((a, b) => a.numero - b.numero);
+        selLote.innerHTML = `<option value="">(o da aba)</option>` + ordenados.map((l) => `<option value="${l.id}">Lote ${l.numero}${l.status === "aberto" ? " (aberto)" : ""}</option>`).join("") + `<option value="avulso">Avulso</option>`;
+        selLote.value = filtroLote;
+      }
+    }
+
+    document.querySelector("[data-filtro-tamanho]")?.addEventListener("change", (e) => { filtroTamanho = (e.target as HTMLSelectElement).value; renderizarPedidos(); });
+    document.querySelector("[data-filtro-modelo]")?.addEventListener("change", (e) => { filtroModelo = (e.target as HTMLSelectElement).value; renderizarPedidos(); });
+    document.querySelector("[data-filtro-separado]")?.addEventListener("change", (e) => { filtroSeparado = (e.target as HTMLSelectElement).value as typeof filtroSeparado; renderizarPedidos(); });
+    document.querySelector("[data-filtro-email]")?.addEventListener("change", (e) => { filtroEmail = (e.target as HTMLSelectElement).value as typeof filtroEmail; renderizarPedidos(); });
+    document.querySelector("[data-filtro-congregacao]")?.addEventListener("change", (e) => { filtroCongregacao = (e.target as HTMLSelectElement).value; renderizarPedidos(); });
+    document.querySelector("[data-filtro-lote]")?.addEventListener("change", (e) => { filtroLote = (e.target as HTMLSelectElement).value; renderizarPedidos(); });
+    document.querySelector("[data-limpar-filtros]")?.addEventListener("click", () => {
+      filtroTamanho = ""; filtroModelo = ""; filtroSeparado = ""; filtroEmail = ""; filtroCongregacao = ""; filtroLote = "";
+      filtroAtivo = "todos"; termoBusca = ""; filtroPerguntaId = null; filtroPerguntaValores = [];
+      document.querySelectorAll<HTMLSelectElement>("[data-filtros-avancados] select").forEach((s) => { s.value = ""; });
+      document.querySelectorAll("[data-filtro]").forEach((b) => b.classList.toggle("is-active", (b as HTMLElement).dataset.filtro === "todos"));
+      const busca = document.querySelector<HTMLInputElement>("[data-busca]"); if (busca) busca.value = "";
+      const selPergunta = document.querySelector<HTMLSelectElement>("[data-filtro-pergunta-select]"); if (selPergunta) selPergunta.value = "";
+      const valoresWrap = document.querySelector<HTMLElement>("[data-filtro-pergunta-valores]"); if (valoresWrap) { valoresWrap.hidden = true; valoresWrap.innerHTML = ""; }
+      const limparPergunta = document.querySelector<HTMLElement>("[data-filtro-pergunta-limpar]"); if (limparPergunta) limparPergunta.hidden = true;
+      renderizarPedidos();
+    });
+
+    /**
+     * Exportação em Excel do que está na tela (06/10/2026): uma linha por ITEM (tamanho/modelo),
+     * para filtrar e somar na planilha; segunda aba com o resumo por tamanho × modelo; as
+     * respostas às perguntas viram uma coluna cada. Abre direto no Excel/LibreOffice.
+     */
+    document.querySelector("[data-exportar-planilha]")?.addEventListener("click", () => {
+      if (typeof XLSX === "undefined") { alert("A biblioteca da planilha não carregou. Recarregue a página e tente de novo."); return; }
+      const lista = ultimaListaFiltrada;
+      const nomeLote = (p: Pedido) => (p.avulso ? "Avulso" : p.lote ? `Lote ${lotes.find((l) => l.id === p.lote)?.numero ?? "?"}` : "");
+      const situacao = (p: Pedido) => (totalPedido(p) <= 0 ? "Grátis" : !devendo(p) ? "Pago" : Number(p.valor_pago) > 0 ? "Pago parcial" : "Devendo");
+      const dataBr = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "");
+      const linhas: Record<string, string | number>[] = [];
+      for (const p of lista) {
+        const itens = alocarPagamento(p.itens, Number(p.valor_pago)).filter(itemBate);
+        const respostas = respostasPorPedido.get(p.id) ?? [];
+        const colunasPerguntas = Object.fromEntries(perguntas.map((q) => [q.label, respostas.find((r) => r.pergunta === q.id)?.valor ?? ""]));
+        for (const i of itens) {
+          linhas.push({
+            "Nº do pedido": p.id,
+            Nome: p.nome,
+            "E-mail": p.email ?? "",
+            Congregação: p.congregacao != null ? nomesCongregacoes[p.congregacao] ?? `#${p.congregacao}` : "",
+            Lote: nomeLote(p),
+            Tamanho: i.tamanho ?? "",
+            Modelo: i.modelo ?? "",
+            Quantidade: i.quantidade,
+            "Preço unitário": precoTamanho(i.tamanho),
+            "Pagas (desta linha)": i.quantidadePaga,
+            "Retiradas (desta linha)": i.quantidade_retirada,
+            "Total do pedido": totalPedido(p),
+            "Pago (do pedido)": Number(p.valor_pago || 0),
+            "Falta (do pedido)": Math.max(totalPedido(p) - Number(p.valor_pago || 0), 0),
+            Situação: situacao(p),
+            Separado: p.separado ? "Sim" : "Não",
+            "Separado em": dataBr(p.separado_em),
+            Avulso: p.avulso ? "Sim" : "Não",
+            ...colunasPerguntas,
+          });
+        }
+      }
+      const porCombo = new Map<string, number>();
+      for (const l of linhas) { const k = `${l.Tamanho}|${l.Modelo}`; porCombo.set(k, (porCombo.get(k) ?? 0) + Number(l.Quantidade)); }
+      const resumo = Array.from(porCombo.entries()).sort().map(([k, n]) => ({ Tamanho: k.split("|")[0], Modelo: k.split("|")[1], Peças: n }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(linhas), "Pedidos");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumo), "Resumo por tamanho");
+      const nome = `camisetas-${grupo.nome.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, nome);
+    });
+
+    /**
+     * Troca de lote (06/10/2026, pedido do responsável): o pedido vai para outro lote e os números
+     * dos lotes FECHADOS envolvidos são recalculados a partir dos pedidos atuais — vendido,
+     * arrecadado e saldo. O que foi PAGO À MALHARIA não muda (é dinheiro que já saiu), nem o
+     * "pedido pelo sistema" congelado do consolidado (é o que foi encomendado de fato).
+     */
+    async function recalcularLoteFechado(lote: Lote) {
+      if (lote.status !== "fechado") return;
+      const pedidosDoLote = pedidos.filter((p) => p.lote === lote.id && !p.avulso);
+      const vendido = pedidosDoLote.reduce((s, p) => s + totalPedido(p), 0);
+      const arrecadado = pedidosDoLote.reduce((s, p) => s + Number(p.valor_pago || 0), 0);
+      const pago = Number(lote.total_pago_malharia || 0);
+      const saldo = arrecadado - pago;
+      const res = await api(`${directusUrl}/items/camiseta_lotes/${lote.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ total_vendido: vendido, total_arrecadado: arrecadado, saldo }),
+      });
+      if (res.ok) { lote.total_vendido = vendido; lote.total_arrecadado = arrecadado; lote.saldo = saldo; }
+    }
+
+    listaEl?.addEventListener("change", async (event) => {
+      const target = event.target as HTMLElement;
+      if (!target.matches("[data-mover-lote]")) return;
+      const select = target as HTMLSelectElement;
+      const card = select.closest<HTMLElement>("[data-pedido-id]");
+      const pedido = card ? pedidos.find((p) => p.id === Number(card.dataset.pedidoId)) : null;
+      if (!pedido) return;
+      const destino = lotes.find((l) => l.id === Number(select.value));
+      const origem = lotes.find((l) => l.id === pedido.lote) ?? null;
+      if (!destino || destino.id === pedido.lote) return;
+      const aviso = [origem?.status === "fechado" ? `O Lote ${origem.numero} está fechado: vendido/arrecadado/saldo dele serão recalculados (o pago à malharia não muda).` : "", destino.status === "fechado" ? `O Lote ${destino.numero} está fechado: vendido/arrecadado/saldo dele serão recalculados (o pago à malharia não muda).` : ""].filter(Boolean).join(" ");
+      if (!confirm(`Mover o pedido de "${pedido.nome}" para o Lote ${destino.numero}? ${aviso}`)) { select.value = String(pedido.lote ?? ""); return; }
+      const res = await api(`${directusUrl}/items/camiseta_pedidos/${pedido.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lote: destino.id }),
+      });
+      if (!res.ok) { select.value = String(pedido.lote ?? ""); alert("Não foi possível mover agora."); return; }
+      pedido.lote = destino.id;
+      if (origem) await recalcularLoteFechado(origem);
+      await recalcularLoteFechado(destino);
+      atualizarTudo();
+    });
 
     let atualizacaoRealtimePendente = false;
 
@@ -738,14 +981,14 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
         let salvo: LoteItem;
         if (existente) {
-          const res = await fetch(`${directusUrl}/items/camiseta_lote_itens/${existente.id}`, {
+          const res = await api(`${directusUrl}/items/camiseta_lote_itens/${existente.id}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ pedido_congelado: pedidoSistema }),
           });
           salvo = res.ok ? (await res.json()).data : { ...existente, pedido_congelado: pedidoSistema };
         } else {
-          const res = await fetch(`${directusUrl}/items/camiseta_lote_itens`, {
+          const res = await api(`${directusUrl}/items/camiseta_lote_itens`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -762,7 +1005,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const saldo = arrecadado - pago;
       const fechadoEm = new Date().toISOString();
 
-      const res = await fetch(`${directusUrl}/items/camiseta_lotes/${lote.id}`, {
+      const res = await api(`${directusUrl}/items/camiseta_lotes/${lote.id}`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -871,14 +1114,14 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       let salvo: LoteItem | null = null;
 
       if (itemId) {
-        const res = await fetch(`${directusUrl}/items/camiseta_lote_itens/${itemId}`, {
+        const res = await api(`${directusUrl}/items/camiseta_lote_itens/${itemId}`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
         if (res.ok) salvo = (await res.json()).data;
       } else {
-        const res = await fetch(`${directusUrl}/items/camiseta_lote_itens`, {
+        const res = await api(`${directusUrl}/items/camiseta_lote_itens`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -900,7 +1143,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const modelo = (document.querySelector<HTMLInputElement>("[data-novo-item-modelo]")?.value ?? "").trim() || null;
       const extra = Number(document.querySelector<HTMLInputElement>("[data-novo-item-extra]")?.value || 0);
 
-      const res = await fetch(`${directusUrl}/items/camiseta_lote_itens`, {
+      const res = await api(`${directusUrl}/items/camiseta_lote_itens`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ lote: lote.id, tamanho, modelo, estoque_extra: extra, custo_unitario: null }),
@@ -998,7 +1241,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       if (target.matches("[data-salvar-pedido]")) {
         const valorPago = Number(card.querySelector<HTMLInputElement>("[data-campo-valor-pago]")?.value || 0);
         target.textContent = "Salvando…";
-        const res = await fetch(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
+        const res = await api(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ valor_pago: valorPago }),
@@ -1012,7 +1255,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
       if (target.matches("[data-excluir-pedido]")) {
         if (!confirm(`Excluir o pedido de "${pedido.nome}"? Isso apaga o pedido e todos os itens dele.`)) return;
-        const res = await fetch(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        const res = await api(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
           pedidos = pedidos.filter((p) => p.id !== pedidoId);
           atualizarTudo();
@@ -1022,7 +1265,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       if (target.matches("[data-marcar-separado]")) {
         const separadoEm = new Date().toISOString();
         target.textContent = "Salvando…";
-        const res = await fetch(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
+        const res = await api(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ separado: true, separado_em: separadoEm }),
@@ -1059,7 +1302,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       if (linhaItem && target.matches("[data-salvar-item]")) {
         const itemId = Number(linhaItem.dataset.itemId);
         const novaRetirada = Number(linhaItem.querySelector<HTMLInputElement>("[data-campo-retirada]")?.value || 0);
-        const res = await fetch(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, {
+        const res = await api(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ quantidade_retirada: novaRetirada }),
@@ -1090,7 +1333,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           return;
         }
         target.textContent = "Salvando…";
-        const res = await fetch(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, {
+        const res = await api(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ tamanho, modelo, quantidade }),
@@ -1115,12 +1358,12 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         const rotulo = [item.tamanho, item.modelo].filter(Boolean).join(" · ") || "item";
         if (!confirm(`Remover ${rotulo} (${item.quantidade}x) deste pedido?${ultimoItem ? " Esse é o último item — o pedido ficará sem nenhum item." : ""}`)) return;
 
-        const res = await fetch(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        const res = await api(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) return;
         pedido.itens = pedido.itens.filter((i) => i.id !== itemId);
 
         if (pedido.itens.length === 0 && confirm(`O pedido de "${pedido.nome}" ficou sem nenhum item. Excluir o pedido inteiro também?`)) {
-          const resExcluir = await fetch(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+          const resExcluir = await api(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
           if (resExcluir.ok) pedidos = pedidos.filter((p) => p.id !== pedidoId);
         }
         atualizarTudo();
@@ -1139,7 +1382,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         if (quantidade < 1) return;
 
         target.textContent = "Adicionando…";
-        const res = await fetch(`${directusUrl}/items/camiseta_itens_pedido`, {
+        const res = await api(`${directusUrl}/items/camiseta_itens_pedido`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ pedido: pedidoId, tamanho, modelo, quantidade, quantidade_retirada: 0 }),
@@ -1197,7 +1440,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
       if (statusEl) statusEl.textContent = "Salvando…";
       try {
-        const res = await fetch(`${directusUrl}/items/camiseta_pedidos`, {
+        const res = await api(`${directusUrl}/items/camiseta_pedidos`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ grupo: grupoId, nome, telefone: null, avulso: true, lote: null, valor_pago: valorPago }),
@@ -1207,7 +1450,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
         const itensSalvos: Item[] = [];
         for (const item of itens) {
-          const itemRes = await fetch(`${directusUrl}/items/camiseta_itens_pedido`, {
+          const itemRes = await api(`${directusUrl}/items/camiseta_itens_pedido`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ pedido: novoPedido.id, tamanho: item.tamanho, modelo: item.modelo, quantidade: item.quantidade }),
@@ -1233,7 +1476,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       pedidos = (await resPedidos.json()).data ?? [];
       pedidos.forEach((p) => { if (!p.itens) p.itens = []; });
 
-      const resLotes = await fetch(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=numero&limit=-1`, {
+      const resLotes = await api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=numero&limit=-1`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       lotes = (await resLotes.json()).data ?? [];
@@ -1329,8 +1572,10 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         ws.addEventListener("close", () => {
           if (!ativo) return;
           setTimeout(async () => {
-            const tokenNovo = await exigirAutenticacao(directusUrl, AUTH);
-            if (tokenNovo && ativo) conectar(tokenNovo);
+            // O servidor fecha a conexão quando o token vence: renova pelo cookie (o token
+            // guardado já não serve) antes de reconectar.
+            const tokenNovo = (await renovarToken(directusUrl, AUTH.tokenKey)) ?? (await exigirAutenticacao(directusUrl, AUTH));
+            if (tokenNovo && ativo) { token = tokenNovo; conectar(tokenNovo); }
           }, 3000);
         });
 
@@ -1352,7 +1597,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         return;
       }
 
-      const resGrupo = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos,retirada_local,email_retirada_assunto,email_retirada_corpo`, {
+      const resGrupo = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos,retirada_local,email_retirada_assunto,email_retirada_corpo`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resGrupo.ok) {
@@ -1368,7 +1613,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const aberto = lotes.find((l) => l.status === "aberto");
       visaoAtual = aberto ? aberto.id : lotes.length > 0 ? lotes[lotes.length - 1].id : "todos-os-lotes";
 
-      const resPerguntas = await fetch(`${directusUrl}/items/perguntas_camiseta?filter[grupo][_eq]=${grupoId}&sort=ordem&limit=-1`, {
+      const resPerguntas = await api(`${directusUrl}/items/perguntas_camiseta?filter[grupo][_eq]=${grupoId}&sort=ordem&limit=-1`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       perguntas = (await resPerguntas.json()).data ?? [];
@@ -1392,6 +1637,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       if (conteudoEl) conteudoEl.hidden = false;
 
       renderizarFiltroPergunta();
+      montarFiltrosAvancados();
       atualizarTudo();
       avulsoItensEl?.insertAdjacentHTML("beforeend", linhaItemAvulsoHtml());
       iniciarRealtime();

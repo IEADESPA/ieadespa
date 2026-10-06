@@ -44,7 +44,7 @@ const allPosts = visiblePosts(await getAllMensagens());
   <SiteFooter />
 
   <script>
-    import { exigirAutenticacao, sair } from "@/lib/painelAuth";
+    import { exigirAutenticacao, fetchComSessao, sair } from "@/lib/painelAuth";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -57,6 +57,8 @@ const allPosts = visiblePosts(await getAllMensagens());
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
     if (!container) throw new Error("contêiner do painel ausente");
     const directusUrl = container.dataset.directusUrl ?? "";
+    // Chamadas ao Directus com sessão que se renova num 401 (06/10/2026).
+    const api = (url: string, init?: RequestInit) => fetchComSessao(directusUrl, AUTH, url, init);
 
     const carregando = document.querySelector<HTMLElement>("[data-painel-carregando]");
     const conteudo = document.querySelector<HTMLElement>("[data-painel-conteudo]");
@@ -74,7 +76,7 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     async function carregarLotes() {
       if (!listaEl) return;
-      const res = await fetch(`${directusUrl}/items/camiseta_grupos?fields=id,nome,ativo&sort=-date_created&limit=-1`, {
+      const res = await api(`${directusUrl}/items/camiseta_grupos?fields=id,nome,ativo&sort=-date_created&limit=-1`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
@@ -108,7 +110,7 @@ const allPosts = visiblePosts(await getAllMensagens());
         // `slug` é obrigatório e único no Directus — um placeholder com
         // timestamp garante que a criação nunca falhe por causa dele; a tela
         // de edição já tem "Gerar do nome" pra trocar por um slug de verdade.
-        const res = await fetch(`${directusUrl}/items/camiseta_grupos`, {
+        const res = await api(`${directusUrl}/items/camiseta_grupos`, {
           method: "POST",
           headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
           body: JSON.stringify({ nome: "Nova camiseta", slug: `nova-camiseta-${Date.now()}`, ativo: true }),

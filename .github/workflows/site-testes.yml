@@ -5,7 +5,7 @@ name: Site - testes contra o site publicado
 # Depois de cada montagem do site institucional, roda as baterias de site/scripts/testes
 # contra o endereço que acabou de ser publicado:
 #   - branch `homolog-site` (PR de homologação, não fechar) → a PRÉ-VISUALIZAÇÃO do Azure
-#     Static Web Apps (https://salmon-bay-0efd06d0f-<nº do PR>.3.azurestaticapps.net);
+#     Static Web Apps (https://salmon-bay-0efd06d0f-<nº do PR>.eastus2.3.azurestaticapps.net);
 #   - branch `main` → a PRODUÇÃO (https://www.ieadespa.org.br).
 # Os dados de teste são criados e apagados na hora, no Directus de produção (não há Directus
 # de homologação, por custo), em itens "teste-…" que a versão do conteúdo ignora.
@@ -59,7 +59,7 @@ jobs:
           else
             pr="$(gh pr list --head homolog-site --state open --json number --jq '.[0].number')"
             [ -n "$pr" ] || { echo "::error::PR de homologação (branch homolog-site) não encontrado"; exit 1; }
-            url="https://salmon-bay-0efd06d0f-${pr}.3.azurestaticapps.net"
+            url="https://salmon-bay-0efd06d0f-${pr}.eastus2.3.azurestaticapps.net"
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Testando: $url" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -69,10 +69,10 @@ jobs:
       - name: Camisetas
         env:
           SITE_URL: ${{ steps.alvo.outputs.url }}
-        run: node site/scripts/testes/camisetas.js 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+        run: node site/scripts/testes/camisetas.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Eventos
         if: always()
         env:
           SITE_URL: ${{ steps.alvo.outputs.url }}
-        run: node site/scripts/testes/eventos.js 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+        run: node site/scripts/testes/eventos.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"

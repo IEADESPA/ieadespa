@@ -5,7 +5,7 @@
 // Variáveis: SITE_URL (padrão: produção), DIRECTUS_URL, DIRECTUS_ADMIN_TOKEN, TELEFONE_CHAVE_SEGREDO.
 // Uso local: ver site/scripts/testes/README.md. No CI: .github/workflows/site-testes.yml.
 const crypto = require("node:crypto");
-const { ambiente, Verificador, esperar } = require("./comum");
+const { ambiente, Verificador, esperar } = require("./comum.cjs");
 
 async function main() {
   const { SITE, dx, site, PEPPER } = ambiente();

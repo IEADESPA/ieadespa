@@ -61,7 +61,13 @@ function alocarPagamento(itens, valorPago, grupo) {
 }
 
 async function buscar(headers, consulta) {
-  const res = await fetch(`${DIRECTUS_URL}/items/camiseta_pedidos?${consulta}`, { headers });
+  // O Directus (plano B1) devolve 5xx de vez em quando sob rajada: até 3 tentativas, com pausa.
+  let res;
+  for (let tentativa = 1; tentativa <= 3; tentativa++) {
+    res = await fetch(`${DIRECTUS_URL}/items/camiseta_pedidos?${consulta}`, { headers });
+    if (res.status < 500) break;
+    await new Promise((r) => setTimeout(r, 400 * tentativa));
+  }
   if (!res.ok) throw new Error(`falha ao buscar pedidos (${res.status})`);
   return (await res.json()).data || [];
 }

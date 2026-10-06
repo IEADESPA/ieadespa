@@ -1,7 +1,7 @@
 // Bateria de verificação da inscrição em evento no servidor (06/10/2026).
 // Cria um evento de teste só pela API (título "TESTE …", ignorado pela versão do conteúdo),
 // exercita /api/criar-inscricao e /api/status-inscricao, e apaga tudo no fim.
-const { ambiente, Verificador, esperar } = require("./comum");
+const { ambiente, Verificador, esperar } = require("./comum.cjs");
 
 async function main() {
   const { SITE, dx, site } = ambiente();

@@ -38,9 +38,52 @@ export async function obterTokenValido(directusUrl: string, tokenKey: string = D
   }
 }
 
+/**
+ * Renova o token de acesso pelo cookie httpOnly (ignorando o que está em sessionStorage).
+ * O token de acesso do Directus vale 15 minutos; a sessão (cookie) dura dias. Até
+ * 06/10/2026 o painel só pegava o token do sessionStorage e, vencido, toda gravação
+ * falhava em silêncio — a pessoa tinha que sair e entrar de novo (relato do incidente
+ * das camisetas).
+ */
+export async function renovarToken(directusUrl: string, tokenKey: string = DEFAULT_TOKEN_KEY): Promise<string | null> {
+  sessionStorage.removeItem(tokenKey);
+  return obterTokenValido(directusUrl, tokenKey);
+}
+
 interface OpcoesPainel {
   tokenKey?: string;
   loginPath?: string;
+}
+
+/**
+ * `fetch` com a sessão do painel: põe o token atual, e num 401 renova pelo cookie e
+ * repete UMA vez; se nem assim entrar, manda para o login (guardando a página para voltar).
+ * Use isto para toda chamada ao Directus feita pelos painéis.
+ */
+export async function fetchComSessao(directusUrl: string, opcoes: OpcoesPainel, input: string, init: RequestInit = {}): Promise<Response> {
+  const chamar = async (token: string) => {
+    const headers = new Headers(init.headers || {});
+    headers.set("Authorization", `Bearer ${token}`);
+    return fetch(input, { ...init, headers });
+  };
+  let token = await obterTokenValido(directusUrl, opcoes.tokenKey);
+  if (!token) {
+    irParaLogin(opcoes.loginPath);
+    throw new Error("sem sessão");
+  }
+  let res = await chamar(token);
+  if (res.status !== 401) return res;
+  token = await renovarToken(directusUrl, opcoes.tokenKey);
+  if (!token) {
+    irParaLogin(opcoes.loginPath);
+    throw new Error("sessão expirada");
+  }
+  res = await chamar(token);
+  if (res.status === 401) {
+    irParaLogin(opcoes.loginPath);
+    throw new Error("sessão expirada");
+  }
+  return res;
 }
 
 /** Redireciona pro login se não houver sessão válida; senão devolve o token. */

@@ -307,7 +307,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
   <SiteFooter />
 
   <script>
-    import { exigirAutenticacao } from "@/lib/painelAuth";
+    import { exigirAutenticacao, fetchComSessao } from "@/lib/painelAuth";
     import { directusAssetUrl } from "@/lib/directus";
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
@@ -375,6 +375,8 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
     if (!container) throw new Error("contêiner do painel ausente");
     const directusUrl = container.dataset.directusUrl ?? "";
+    // Chamadas ao Directus com sessão que se renova num 401 (06/10/2026).
+    const api = (url: string, init?: RequestInit) => fetchComSessao(directusUrl, AUTH, url, init);
 
     const idParam = new URLSearchParams(window.location.search).get("id");
     const grupoId = idParam ? Number(idParam) : null;
@@ -632,7 +634,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         return;
       }
 
-      const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) {
         if (carregando) carregando.hidden = true;
         if (erroEl) erroEl.hidden = false;
@@ -658,7 +660,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         event.preventDefault();
         definirStatus("Salvando…");
         try {
-          const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+          const res = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify(lerFormulario()),
@@ -697,7 +699,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
 
       async function carregarPerguntas() {
         if (!perguntasLista) return;
-        const res = await fetch(`${directusUrl}/items/perguntas_camiseta?filter[grupo][_eq]=${grupoId}&sort=ordem&limit=-1`, {
+        const res = await api(`${directusUrl}/items/perguntas_camiseta?filter[grupo][_eq]=${grupoId}&sort=ordem&limit=-1`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const perguntas: Pergunta[] = res.ok ? (await res.json()).data ?? [] : [];
@@ -764,7 +766,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
 
         if (target.matches("[data-excluir-pergunta]")) {
           if (!perguntaId || !confirm("Excluir esta pergunta? Respostas já dadas a ela também somem.")) return;
-          await fetch(`${directusUrl}/items/perguntas_camiseta/${perguntaId}`, {
+          await api(`${directusUrl}/items/perguntas_camiseta/${perguntaId}`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -787,7 +789,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
             : null;
 
           target.textContent = "Salvando…";
-          await fetch(`${directusUrl}/items/perguntas_camiseta/${perguntaId}`, {
+          await api(`${directusUrl}/items/perguntas_camiseta/${perguntaId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -819,7 +821,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
 
         if (npStatus) npStatus.textContent = "Adicionando…";
         try {
-          const res = await fetch(`${directusUrl}/items/perguntas_camiseta`, {
+          const res = await api(`${directusUrl}/items/perguntas_camiseta`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ grupo: grupoId, label, tipo, opcoes, obrigatoria: npObrigatoria.checked }),
@@ -856,7 +858,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
           if (!resUpload.ok) throw new Error("falha no upload");
           const arquivoId = (await resUpload.json()).data.id;
 
-          const resPatch = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+          const resPatch = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ imagem: arquivoId }),
@@ -876,7 +878,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         if (!confirm("Remover a imagem desta campanha? (o arquivo continua no Directus, só desvincula daqui)")) return;
         if (imagemStatus) imagemStatus.textContent = "Removendo…";
         try {
-          const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+          const res = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ imagem: null }),
@@ -1080,7 +1082,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         if (!confirm(`Excluir "${grupo.nome}"? Isso apaga os lotes de compra e todos os pedidos ligados a ela. Não pode ser desfeito.`)) return;
         if (excluirStatus) excluirStatus.textContent = "Excluindo…";
         try {
-          const res = await fetch(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
+          const res = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${token}` },
           });

@@ -6,8 +6,8 @@ regra que fica é que nada sobe para a produção sem passar por elas.
 
 | Script | O que prova |
 | --- | --- |
-| `camisetas.js` | status, pedido, chave do telefone, duplicado, "Meus pedidos" (rápido e antigo), retirada e andamento, prazo e `ativo`, lote único |
-| `eventos.js` | status com vagas, inscrição, cupom, lista de espera, grupo, faixa, limite por telefone, encerramento e prazo |
+| `camisetas.cjs` | status, pedido, chave do telefone, duplicado, "Meus pedidos" (rápido e antigo), retirada e andamento, prazo e `ativo`, lote único |
+| `eventos.cjs` | status com vagas, inscrição, cupom, lista de espera, grupo, faixa, limite por telefone, encerramento e prazo |
 
 ## Onde rodam
 
@@ -19,8 +19,8 @@ regra que fica é que nada sobe para a produção sem passar por elas.
 ```bash
 export SITE_URL=https://www.ieadespa.org.br   # ou o endereço da pré-visualização
 export DIRECTUS_URL=... DIRECTUS_ADMIN_TOKEN=... TELEFONE_CHAVE_SEGREDO=...   # dos segredos, nunca em texto no repositório
-node site/scripts/testes/camisetas.js
-node site/scripts/testes/eventos.js
+node site/scripts/testes/camisetas.cjs
+node site/scripts/testes/eventos.cjs
 ```
 
 ## Regras

@@ -251,6 +251,22 @@ desativada continuava aceitando pedido, porque a regra de aberto/fechado só exi
 - [x] **Provas em produção (06/10):** 17/17 verificações de camisetas e 16/16 de eventos, com grupos e evento
       de teste criados e apagados; carga de 36 pedidos com 12 conexões: 36/36 gravados, sem erro, 2,6 pedidos/s (mediana 3,4 s de espera, máximo 7,6 s); status a
       40 conexões: ~200 req/s, 157 ms de mediana, zero erro.
+- [x] **Homologação do site, de graça** (noite de 06/10): branch `homolog-site` + PR #18 (não fechar) =
+      ambiente de pré-visualização do Static Web App (`salmon-bay-0efd06d0f-18.eastus2.3.azurestaticapps.net`)
+      com as mesmas configurações da produção. As baterias de teste entraram no repositório
+      (`site/scripts/testes/`, ver o README de lá) e o fluxo `site-testes.yml` as roda sozinho depois de cada
+      montagem do site: contra a pré-visualização quando o push é no `homolog-site`, contra a produção quando
+      é na `main`. Não há Directus de homologação (custo): os testes gravam itens descartáveis ("teste-…",
+      ignorados pela versão do conteúdo) no Directus de produção e apagam tudo no fim.
+- [x] **Módulo de camisetas, pedido do responsável (noite de 06/10):** "Meus pedidos" com o andamento
+      (recebido → encomendado à malharia quando o lote fecha → chegou e separado → retirado) e o que falta
+      pagar; painel com filtros combináveis como no Excel (tamanho, modelo, separado, e-mail, congregação,
+      lote, situação de pagamento, busca por nome/e-mail/número, pergunta) com contagem de peças por tamanho ×
+      modelo do filtro atual; **exportação em Excel** (uma linha por item, aba de resumo por tamanho, uma
+      coluna por pergunta; SheetJS servido de dentro); **troca de lote** direto no cartão do pedido, com os
+      números dos lotes fechados envolvidos (vendido, arrecadado, saldo) recalculados — o pago à malharia e
+      o "pedido pelo sistema" congelado não mudam; e a sessão do painel que **se renova sozinha** (token
+      vencido em 15 min era a "desconectar e entrar de novo").
 
 **O limite que ficou, medido:** o Directus grava **um de cada vez** — plano B1 (1 núcleo) foi a 88-98 % de CPU
 com 6 gravações em paralelo, PostgreSQL a 8 %. Capacidade medida depois de todas as otimizações: ~2,6 pedidos por
@@ -267,8 +283,17 @@ segundo (≈ 150 por minuto; o pico de 06/10 foi 17 por minuto). Acima disso nin
     (CPU do Directus) não muda com isso.
 - [ ] **Teste de carga maior, de vários lugares** (GitHub Actions, IPs diferentes), depois da decisão acima —
       o teste de hoje saiu de uma máquina só e esbarra no próprio limite por IP da API (40 em 5 min).
-- [ ] **Painel de camisetas:** o token do Directus vence em 15 min e o painel não renova (é a "desconectar e
-      entrar de novo" de 06/10) — usar o `auth/refresh` como o painel de eventos já faz.
+- [x] **Painel de camisetas:** o token do Directus vence em 15 min e o painel não renovava (é a "desconectar e
+      entrar de novo" de 06/10) — feito na noite de 06/10 (`fetchComSessao` em `painelAuth.ts`: num 401
+      renova pelo cookie e repete; aplicado nas três telas do painel de camisetas).
+- [ ] **Trocar dois segredos (depende de você — modo manual):** na noite de 06/10, uma mensagem de erro do
+      Azure imprimiu no registro da sessão o token de administrador do Directus e a chave do telefone. A
+      troca automática foi bloqueada pelo controle de permissões (gravação em cofre de segredos). Passos, já
+      prontos: gerar os dois valores novos; `PATCH /users/{id}` no Directus com o token novo; gravar os dois
+      nas configurações do site no Azure (produção e ambientes 1 e 18); `gh secret set` dos dois no GitHub;
+      atualizar `site/secrets.env` (SOPS); zerar `telefone_chave` em `camiseta_pedidos` e
+      `inscricoes_eventos` (são recalculadas na próxima gravação/consulta). Até lá, o risco é só o registro
+      local da sessão nesta máquina.
 - [x] **Directus → site sem token pessoal** (06/10/2026): o Flow "Publicar site (avisar GitHub)" usava um
       token pessoal do GitHub que venceu em silêncio (401; última remontagem automática em 01/10 — de 01 a
       06/10 nenhuma edição no Directus chegou ao site sozinha). O responsável não quis criar outro token na

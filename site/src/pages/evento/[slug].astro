@@ -6,7 +6,7 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
-import { COVER_WIDTHS, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, TELEFONE_HASH_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
+import { COVER_WIDTHS, CRIAR_INSCRICAO_URL, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, STATUS_INSCRICAO_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
 import { congregacaoEndereco, fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
 import { aplicarDatasOficiais, fetchAgendaOficial, type ConvidadoOficial } from "@/lib/agendaOficial";
@@ -109,7 +109,9 @@ const localCoordenada = !congregacaoDoEvento && event.location_maps_url
 // Inscrição fecha por prazo vencido (data pública do evento, sem precisar
 // contar inscrições — não expõe nada da coleção privada) ou por decisão
 // manual da secretaria (vagas esgotadas, por exemplo).
-const inscricaoVencida = event.inscricoes_ate ? new Date(event.inscricoes_ate).getTime() < Date.now() : false;
+// Prazo = último dia (inclusive) em Brasília (06/10/2026; antes fechava um dia antes, em UTC).
+// Vale no build; ao abrir a página, o script confere de novo em `/api/status-inscricao/{id}`.
+const inscricaoVencida = event.inscricoes_ate ? new Date(`${String(event.inscricoes_ate).slice(0, 10)}T23:59:59-03:00`).getTime() < Date.now() : false;
 const inscricaoAberta = event.aceita_inscricao && !event.inscricoes_encerradas && !inscricaoVencida;
 const inscricaoEncerradaMotivo = event.inscricoes_encerradas ? "encerradas" : inscricaoVencida ? "vencido" : null;
 
@@ -546,7 +548,8 @@ const structuredData = startDate
         is:inline
         define:vars={{
           directusUrl: DIRECTUS_URL,
-          telefoneHashUrl: TELEFONE_HASH_URL,
+          criarInscricaoUrl: CRIAR_INSCRICAO_URL,
+          statusInscricaoUrl: `${STATUS_INSCRICAO_URL}/${event.id}`,
           enviarConfirmacaoUrl: ENVIAR_CONFIRMACAO_URL,
           eventoTitulo: event.title,
           eventoPeriodo: [event.event_date ? dateFormatter.format(new Date(event.event_date)) : null, timeRange].filter(Boolean).join(", "),
@@ -565,14 +568,34 @@ const structuredData = startDate
           if (contaEmailSalvo && inputEmail && !inputEmail.value) inputEmail.value = contaEmailSalvo;
         })();
 
-        // Sem caracteres ambíguos (0/O, 1/I/L) — pra ser fácil de digitar de
-        // volta na portaria no dia do evento.
-        const ALFABETO_CODIGO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-        function gerarCodigo(tamanho = 6) {
-          const bytes = new Uint8Array(tamanho);
-          crypto.getRandomValues(bytes);
-          return Array.from(bytes, (b) => ALFABETO_CODIGO[b % ALFABETO_CODIGO.length]).join("");
+        // 06/10/2026 — a página é estática: "inscrições encerradas" marcado no Directus
+        // só sumiria daqui num rebuild. Pergunta à API ao abrir e esconde o formulário na
+        // hora (mesma regra de prazo/encerramento, em `/api/status-inscricao/{id}`).
+        function encerrarInscricao(mensagem) {
+          document.querySelectorAll("[data-inscricao-form]").forEach((form) => {
+            form.hidden = true;
+            const aviso = document.createElement("p");
+            aviso.className = "mt-6 text-sm leading-relaxed text-muted-foreground";
+            aviso.setAttribute("role", "status");
+            aviso.textContent = mensagem || "As inscrições para este evento estão encerradas.";
+            form.insertAdjacentElement("beforebegin", aviso);
+          });
         }
+        const vagasRestantesEl = document.querySelector("[data-vagas-restantes]");
+        fetch(statusInscricaoUrl, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((s) => {
+            if (!s) return;
+            if (s.aberto === false) {
+              encerrarInscricao(s.mensagem);
+              return;
+            }
+            // "(N restantes)" vem da mesma rota — o navegador não lê mais a coleção de inscrições.
+            if (vagasRestantesEl && vagasLimite && s.vagasRestantes != null) {
+              vagasRestantesEl.textContent = s.vagasRestantes > 0 ? `(${s.vagasRestantes} restantes)` : "(esgotadas — lista de espera)";
+            }
+          })
+          .catch(() => {});
 
         function urlBase64ToUint8Array(base64String) {
           const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -614,28 +637,6 @@ const structuredData = startDate
           }
         }
 
-        async function contarConfirmados(eventoId) {
-          const res = await fetch(
-            // "_eq=false" sozinho não bateria com uma linha onde o campo
-            // nunca foi definido (null) — o "_or" cobre os dois casos, pra
-            // combinar com o mesmo critério usado no painel de inscritos.
-            `${directusUrl}/items/inscricoes_eventos?aggregate[count]=id&filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][_or][0][aguardando_vaga][_eq]=false&filter[_and][1][_or][1][aguardando_vaga][_null]=true`,
-          );
-          const json = await res.json();
-          return Number(json.data?.[0]?.count?.id ?? 0);
-        }
-
-        const vagasRestantesEl = document.querySelector("[data-vagas-restantes]");
-        if (vagasRestantesEl && vagasLimite) {
-          const eventoIdVagas = Number(document.querySelector("[data-inscricao-form]")?.dataset.eventoId);
-          if (eventoIdVagas) {
-            contarConfirmados(eventoIdVagas).then((confirmados) => {
-              const restantes = Math.max(vagasLimite - confirmados, 0);
-              vagasRestantesEl.textContent = restantes > 0 ? `(${restantes} restantes)` : "(esgotadas — lista de espera)";
-            });
-          }
-        }
-
         // Inscrição em grupo: cada linha vira uma pessoa própria, com seu
         // próprio código de check-in — só o nome muda, telefone e respostas
         // às perguntas do evento são compartilhados pelo grupo todo.
@@ -646,26 +647,6 @@ const structuredData = startDate
             if (campo) campo.hidden = !campo.hidden;
           });
         });
-
-        // Desconta uma faixa/valor base (ou 0, se o evento não tem faixa de
-        // valor) segundo um cupom já validado — nunca deixa o valor negativo.
-        function aplicarDesconto(valorBase, cupom) {
-          const base = valorBase ?? 0;
-          if (cupom.tipo === "fixo") return Math.max(0, base - Number(cupom.valor));
-          return Math.max(0, base - (base * Number(cupom.valor)) / 100);
-        }
-
-        async function buscarCupomValido(directusUrl, eventoId, codigo) {
-          const res = await fetch(
-            `${directusUrl}/items/cupons_desconto?filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][codigo][_eq]=${encodeURIComponent(codigo)}`,
-          );
-          const cupom = (await res.json()).data?.[0];
-          if (!cupom) return { erro: "Cupom não encontrado." };
-          if (!cupom.ativo) return { erro: "Esse cupom não está mais ativo." };
-          if (cupom.valido_ate && new Date(`${cupom.valido_ate}T23:59:59`) < new Date()) return { erro: "Esse cupom expirou." };
-          if (cupom.limite_usos !== null && cupom.usos >= cupom.limite_usos) return { erro: "Esse cupom já atingiu o limite de usos." };
-          return { cupom };
-        }
 
         document.querySelectorAll("[data-grupo-bloco]").forEach((bloco) => {
           const toggle = bloco.querySelector("[data-grupo-toggle]");
@@ -719,26 +700,9 @@ const structuredData = startDate
             if (status) status.textContent = nomes.length > 1 ? "Enviando inscrições…" : "Enviando…";
             if (cupomStatusEl) cupomStatusEl.textContent = "";
 
-            // Cupom é opcional e discreto — se o código não bater com nada
-            // válido, a inscrição segue sem desconto, sem travar ninguém.
-            let cupom = null;
-            let usosRestantesCupom = Infinity;
-            if (codigoCupom) {
-              const resultado = await buscarCupomValido(directusUrl, eventoId, codigoCupom);
-              if (resultado.cupom) {
-                cupom = resultado.cupom;
-                usosRestantesCupom = cupom.limite_usos === null ? Infinity : cupom.limite_usos - cupom.usos;
-                if (cupomStatusEl) cupomStatusEl.textContent = "✅ Cupom aplicado.";
-              } else if (cupomStatusEl) {
-                cupomStatusEl.textContent = resultado.erro;
-              }
-            }
-
             try {
-              let confirmados = vagasLimite ? await contarConfirmados(eventoId) : 0;
-
               // Respostas às perguntas do evento são as mesmas pra todo o
-              // grupo — lidas uma vez, copiadas pra cada pessoa depois.
+              // grupo — lidas uma vez; o servidor copia pra cada pessoa.
               const respostasBase = [];
               form.querySelectorAll("[data-pergunta-field]").forEach((field) => {
                 const perguntaId = Number(field.dataset.perguntaId);
@@ -756,93 +720,36 @@ const structuredData = startDate
                 if (valor) respostasBase.push({ pergunta: perguntaId, valor });
               });
 
-              const resultados = [];
-              // Contador de usos do cupom é gravado pessoa por pessoa, na
-              // hora (não só uma vez no fim) — se a rede cair no meio de um
-              // grupo grande, os usos já aplicados às pessoas já criadas com
-              // sucesso não ficam "esquecidos" sem contar no limite do cupom.
-              let usosAtuaisCupom = cupom?.usos ?? 0;
-
-              // O telefone nunca é gravado em texto puro — vira hash (scrypt,
-              // ver api/src/lib/telefone.js) antes de chegar no Directus, pra
-              // impedir que qualquer leitura da tabela revele telefones de
-              // verdade (ver README, Fase 6). Um grupo inteiro compartilha o
-              // mesmo telefone nesta tela, então o hash é calculado uma vez só.
-              const hashRes = await fetch(telefoneHashUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ telefone: data.get("telefone") }),
-              });
-              if (!hashRes.ok) throw new Error("falha ao proteger telefone");
-              const telefoneHash = (await hashRes.json()).valor;
-
               const email = String(data.get("email") || "").trim();
 
-              for (const nome of nomes) {
-                const codigo = gerarCodigo();
-                let aguardandoVaga = false;
-                // Curso/escola com aprovação manual (Fase 21): a inscrição
-                // nasce pendente, sem mexer no contador de vagas ainda — só
-                // quando a equipe aprovar (painel-eventos) é que ela entra
-                // ou não na lista de espera, com o mesmo critério abaixo.
-                const pendenteAprovacao = Boolean(requerAprovacao);
-                if (vagasLimite && !pendenteAprovacao) {
-                  aguardandoVaga = confirmados >= vagasLimite;
-                  if (!aguardandoVaga) confirmados += 1;
-                }
-
-                // Desconto aplicado pessoa por pessoa — se o cupom tiver
-                // limite de usos, os primeiros da fila levam o desconto, o
-                // resto paga o valor cheio (mesmo espírito da lista de
-                // espera: não trava a inscrição, só o que ainda cabe).
-                let valorFinal = valorFaixa;
-                let cupomAplicado = null;
-                if (cupom && usosRestantesCupom > 0) {
-                  valorFinal = aplicarDesconto(valorFaixa, cupom);
-                  cupomAplicado = cupom.codigo;
-                  usosRestantesCupom -= 1;
-                }
-
-                const inscricaoRes = await fetch(`${directusUrl}/items/inscricoes_eventos`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    evento: eventoId,
-                    nome,
-                    telefone: telefoneHash,
-                    email: email || null,
-                    codigo,
-                    valor: valorFinal,
-                    cupom_usado: cupomAplicado,
-                    aguardando_vaga: aguardandoVaga,
-                    pendente_aprovacao: pendenteAprovacao,
-                  }),
-                });
-                if (!inscricaoRes.ok) throw new Error("falha ao criar inscrição");
-                const inscricaoJson = await inscricaoRes.json();
-                const inscricaoId = inscricaoJson.data.id;
-
-                await Promise.all(
-                  respostasBase.map((resposta) =>
-                    fetch(`${directusUrl}/items/respostas_inscricao`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ ...resposta, inscricao: inscricaoId }),
-                    }),
-                  ),
-                );
-
-                if (cupomAplicado) {
-                  usosAtuaisCupom += 1;
-                  await fetch(`${directusUrl}/items/cupons_desconto/${cupom.id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ usos: usosAtuaisCupom }),
-                  });
-                }
-
-                resultados.push({ nome, codigo, aguardandoVaga, pendenteAprovacao, inscricaoId });
+              // 06/10/2026 — uma chamada só: o servidor confere prazo, vagas, cupom e grupo,
+              // protege o telefone e grava tudo (`/api/criar-inscricao`). O navegador não
+              // escreve mais no Directus. Vagas, lista de espera, aprovação e desconto
+              // seguem as mesmas regras de antes, agora fora do alcance de quem chama à mão.
+              const res = await fetch(criarInscricaoUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  eventoId,
+                  nomes,
+                  telefone: String(data.get("telefone") || ""),
+                  email: email || null,
+                  valorFaixa,
+                  cupom: codigoCupom || null,
+                  respostas: respostasBase,
+                }),
+              });
+              const json = await res.json().catch(() => null);
+              if (res.status === 403) {
+                encerrarInscricao(json?.erro);
+                return;
               }
+              if (res.status === 429) throw new Error("Muitas inscrições deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.");
+              if (!res.ok) throw new Error(json?.erro || "falha ao criar inscrição");
+
+              if (cupomStatusEl && json.cupom) cupomStatusEl.textContent = json.cupom.mensagem || "";
+              const resultados = (json.inscricoes || []).map((i) => ({ nome: i.nome, codigo: i.codigo, aguardandoVaga: i.aguardandoVaga, pendenteAprovacao: i.pendenteAprovacao, inscricaoId: i.id }));
+              if (resultados.length === 0) throw new Error("falha ao criar inscrição");
 
               if (status) {
                 if (resultados.length === 1) {
@@ -901,9 +808,9 @@ const structuredData = startDate
               const grupoLista = form.querySelector("[data-grupo-lista]");
               if (grupoNomesWrap) grupoNomesWrap.hidden = true;
               if (grupoLista) grupoLista.innerHTML = "";
-            } catch {
+            } catch (err) {
               if (status) {
-                status.textContent = "Não foi possível confirmar agora. Tente novamente em instantes.";
+                status.textContent = err && err.message && err.message !== "falha ao criar inscrição" ? err.message : "Não foi possível confirmar agora. Tente novamente em instantes.";
               }
             } finally {
               if (button) button.disabled = false;

@@ -13,6 +13,12 @@ async function sondarRemoto(nav, srv, log) {
   const respostas = {};
   const csp = [];
   const r = { ok: true, problemas: [] };
+  r.swConsole = [];
+  // console do PRÓPRIO service worker (erros de CSP no fetch do SW só aparecem ali, não na página)
+  ctx.on("targetcreated", async (t) => {
+    if (t.type() !== "service_worker") return;
+    try { const w = await t.worker(); if (w) w.on("console", (m) => r.swConsole.push(`${m.type()}: ${m.text()}`.slice(0, 300))); } catch (_) {}
+  });
   try {
     await s.interceptarApi(page);
     await page.setBypassServiceWorker(false); // aqui o service worker TEM de registrar (a interceptação de /api continua valendo)
@@ -58,6 +64,7 @@ async function sondarRemoto(nav, srv, log) {
   for (const a of ARQUIVOS) { const x = respostas[a]; if (x) log(`  ${a} → ${x.status}  ${Object.entries(x.cabecalhos).filter(([k]) => k !== "content-type").map(([k, v]) => `${k}: ${v}`).join(" | ")}`); else log(`  ${a} → (sem resposta)`); }
   log(`  service worker: ${JSON.stringify(r.sw)}; controla a página na 2ª carga: ${r.swControla}; eventos.js carregado: ${r.eventosCarregado}; clique em "Acessar meu Painel": ${r.cliqueAcessar}`);
   log(`  caches do service worker: ${JSON.stringify(r.caches)}`);
+  log(`  console do service worker: ${r.swConsole.length ? "\n    " + r.swConsole.join("\n    ") : "vazio"}`);
   log(`  violações de CSP ao carregar index/verificar: ${r.csp.length}${r.csp.length ? "\n    " + r.csp.join("\n    ") : ""}`);
   if (r.problemas.length) log(`  problemas: ${r.problemas.join("; ")}`);
   return r;

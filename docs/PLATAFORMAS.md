@@ -63,9 +63,8 @@ vez de um CDN de terceiros (um CDN comprometido injetaria código nas telas de d
 | Application Insights, alertas, e-mail (ACS) | — | — | Sem versão a conferir. |
 
 Ferramentas desta máquina (desenvolvimento): Node 26.10.0 (Current; a LTS é a 24.21.0), npm 11.19.1, Azure CLI 2.90.0 (última),
-SOPS 3.13.3 (última), `age` **1.3.2** e GitHub CLI **2.102.0** (atualizados em 03/10/2026; o SOPS segue descriptografando), Git 2.55.0 (há
-2.56.0: fica para uma hora em que nenhuma sessão use o Git Bash, porque o instalador troca o `bash.exe` em uso). Node 22 das Functions: a
-montagem usou 22.23.2 e a última 22.x é 22.23.3 (entra sozinha no próximo deploy).
+SOPS 3.13.3 (última), `age` **1.3.2** e GitHub CLI **2.102.0** (atualizados em 03/10/2026; o SOPS segue descriptografando), Git **2.56.0**
+(atualizado em 05/10/2026; ver abaixo). Node 22 das Functions: a montagem usou 22.23.2 e a última 22.x é 22.23.3 (entra sozinha no próximo deploy).
 
 **Feito em 03/10/2026, com o responsável no modo manual de aprovação (no modo automático o controle de permissões do Claude Code bloqueia
 mudança em produção no Azure):** Directus 12.3.1 para 12.4.1 (só a etiqueta da imagem do contêiner `main` do App Service `ieadespa-directus`
@@ -73,7 +72,14 @@ mudou; as demais configurações do contêiner ficaram idênticas) e TLS mínimo
 junto com o Function App antigo). Antes da troca: cópia completa automática diária do banco e restauração a qualquer ponto desde 04/09/2026 (o
 servidor "burstable" não aceita cópia sob demanda).
 
-**Ainda por fazer:** Git 2.55 para 2.56 (ver acima; sem correção de segurança, não é urgente).
+**Feito em 05/10/2026 (modo manual):** Git for Windows 2.55.0.5 para **2.56.0.windows.1**. O catálogo do `winget` ainda não tinha a 2.56 (só a 2.55.0.5),
+então o instalador veio da página oficial de versões do Git for Windows no GitHub; antes de rodar, conferiu-se o SHA-256 publicado
+(`bfe94e7b…e286a6`) e a assinatura digital (válida, do mantenedor do projeto). Instalado em silêncio, sem reiniciar o computador; depois disso o
+repositório, o login do GitHub e o `bash.exe` continuaram funcionando. Foi uma versão de correções de defeitos, sem correção de segurança. Também
+foram fechados, sem aplicar (a versão já estava na `main`), os pedidos automáticos do Dependabot #12 (`yaml` 2.9.1) e #15 (`marked` 18.0.14); só
+resta aberto o #1 (homologação, que não se fecha).
+
+**Ainda por fazer nesta lista:** nada que dependa só do código; o que segue travado é de plataforma (TypeScript 7, Node 24 nas Functions do SWA).
 
 **Descoberta de 04/10/2026:** a homologação (PR #1) estava ligada ao Function App antigo e por isso **não rodava o código novo da API** (rotas novas
 davam 404/comportamento antigo). Desfeita a ligação, ela voltou a rodar a API do projeto. As conferências "na homologação" feitas até 03/10 não

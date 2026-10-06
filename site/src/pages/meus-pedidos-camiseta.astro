@@ -30,6 +30,11 @@ const allPosts = visiblePosts(await getAllMensagens());
           <label class="text-sm font-semibold" for="consulta-telefone">Telefone / WhatsApp</label>
           <input id="consulta-telefone" name="telefone" type="tel" autocomplete="tel" required class="field" />
         </div>
+        <div class="grid gap-2" data-consulta-nome-bloco hidden>
+          <label class="text-sm font-semibold" for="consulta-nome">Nome usado no pedido</label>
+          <input id="consulta-nome" name="nome" type="text" autocomplete="name" class="field" />
+          <p class="text-xs text-muted-foreground">Pedidos feitos até 06/10/2026 precisam também do nome (ou parte dele) que você escreveu no pedido.</p>
+        </div>
         <button type="submit" class="btn btn-solid">Consultar</button>
       </form>
 
@@ -50,9 +55,17 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     interface Pedido {
       lote: string | null;
+      nome: string | null;
+      criadoEm: string | null;
+      loteNumero: number | null;
+      loteStatus: "aberto" | "fechado" | null;
+      loteFechadoEm: string | null;
       valorTotal: number;
       valorPago: number;
       separado: boolean;
+      separadoEm: string | null;
+      retiradaLocal: string | null;
+      mensagemRetirada: string | null;
       itens: Item[];
     }
 
@@ -61,6 +74,8 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     const consultaUrl = form.dataset.consultaUrl ?? "";
     const telefoneInput = document.getElementById("consulta-telefone") as HTMLInputElement;
+    const nomeInput = document.getElementById("consulta-nome") as HTMLInputElement;
+    const nomeBloco = document.querySelector<HTMLElement>("[data-consulta-nome-bloco]");
     const resultado = document.querySelector<HTMLElement>("[data-consulta-resultado]");
 
     function escapeHtml(value: string) {
@@ -94,15 +109,54 @@ const allPosts = visiblePosts(await getAllMensagens());
       return p.itens.length > 0 && p.itens.every((i) => i.quantidadeRetirada >= i.quantidade);
     }
 
+    function dataCurta(iso: string | null): string {
+      if (!iso) return "";
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR", { timeZone: "America/Belem" });
+    }
+
+    // Andamento completo AQUI, não só no e-mail: a maioria dos pedidos não tem e-mail, e a
+    // página é o que a pessoa abre com o telefone (pedido do responsável, 06/10/2026).
+    // Etapas: recebido → encomendado (lote fechado) → chegou e separado → retirado.
+    function etapasHtml(p: Pedido): string {
+      const retirado = tudoRetirado(p);
+      const etapas: { titulo: string; feito: boolean; detalhe: string }[] = [
+        { titulo: "Pedido recebido", feito: true, detalhe: p.criadoEm ? `em ${dataCurta(p.criadoEm)}` : "" },
+        {
+          titulo: "Encomendado à malharia",
+          feito: p.loteStatus === "fechado",
+          detalhe: p.loteStatus === "fechado"
+            ? `lote ${p.loteNumero ?? ""} fechado${p.loteFechadoEm ? ` em ${dataCurta(p.loteFechadoEm)}` : ""}`
+            : p.loteNumero ? `você está no lote ${p.loteNumero}, que ainda está recebendo pedidos` : "",
+        },
+        { titulo: "Chegou e foi separado", feito: p.separado, detalhe: p.separado ? (p.separadoEm ? `em ${dataCurta(p.separadoEm)}` : "") : "avisaremos aqui quando chegar" },
+        { titulo: "Retirado", feito: retirado, detalhe: retirado ? "tudo retirado" : p.separado ? "pronto pra retirar" : "" },
+      ];
+      return `<ol class="camiseta-etapas">${etapas
+        .map((e) => `<li class="${e.feito ? "is-feita" : ""}"><span class="camiseta-etapa-marca" aria-hidden="true">${e.feito ? "✓" : "•"}</span><span><strong>${escapeHtml(e.titulo)}</strong>${e.detalhe ? ` <span class="text-muted-foreground">— ${escapeHtml(e.detalhe)}</span>` : ""}</span></li>`)
+        .join("")}</ol>`;
+    }
+
     function pedidoCardHtml(p: Pedido): string {
-      const avisoRetirada =
-        p.separado && !tudoRetirado(p) ? `<p class="camiseta-pedido-pronto">✅ Pronto pra retirar!</p>` : "";
+      const pronto = p.separado && !tudoRetirado(p);
+      const avisoRetirada = pronto ? `<p class="camiseta-pedido-pronto">✅ Pronto pra retirar!</p>` : "";
+      const ondeRetirar = p.retiradaLocal
+        ? `<p class="camiseta-pedido-detalhe"><strong>Onde retirar:</strong> ${escapeHtml(p.retiradaLocal)}</p>`
+        : "";
+      const mensagem = pronto && p.mensagemRetirada ? `<p class="camiseta-pedido-detalhe">${escapeHtml(p.mensagemRetirada)}</p>` : "";
+      const falta = Math.max(p.valorTotal - (p.valorPago || 0), 0);
+      const pagamento = p.valorTotal > 0
+        ? `<p class="camiseta-pedido-detalhe"><strong>Pagamento:</strong> ${escapeHtml(situacaoPagamento(p))}${falta > 0 ? ` — falta R$ ${falta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : ""}</p>`
+        : "";
       return `
         <div class="camiseta-pedido-card">
-          <p class="camiseta-pedido-lote">${escapeHtml(p.lote ?? "Pedido")}</p>
+          <p class="camiseta-pedido-lote">${escapeHtml(p.lote ?? "Pedido")}${p.nome ? ` <span class="font-normal text-muted-foreground">· ${escapeHtml(p.nome)}</span>` : ""}</p>
           ${avisoRetirada}
+          ${etapasHtml(p)}
+          ${mensagem}
+          ${ondeRetirar}
           <ul class="camiseta-pedido-itens">${p.itens.map(itemLinhaHtml).join("")}</ul>
-          <p class="camiseta-pedido-detalhe">${escapeHtml(situacaoPagamento(p))}</p>
+          ${pagamento}
         </div>
       `;
     }
@@ -114,18 +168,30 @@ const allPosts = visiblePosts(await getAllMensagens());
       if (!telefone) return;
 
       resultado.innerHTML = `<p class="text-sm text-muted-foreground">Consultando…</p>`;
+      const nome = nomeBloco && !nomeBloco.hidden ? nomeInput.value.trim() : "";
 
       try {
         const res = await fetch(consultaUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ telefone }),
+          body: JSON.stringify(nome ? { telefone, nome } : { telefone }),
         });
+        if (res.status === 429) {
+          resultado.innerHTML = `<p class="text-sm text-muted-foreground">Muitas consultas deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.</p>`;
+          return;
+        }
         const json = await res.json();
         const pedidos: Pedido[] = json?.pedidos ?? [];
 
         if (pedidos.length === 0) {
-          resultado.innerHTML = `<p class="text-sm text-muted-foreground">Nenhum pedido encontrado com esse telefone.</p>`;
+          // Pedido antigo (antes de 06/10/2026) só é localizado com telefone + nome.
+          if (json?.precisaNome && nomeBloco) {
+            nomeBloco.hidden = false;
+            nomeInput.focus();
+            resultado.innerHTML = `<p class="text-sm text-muted-foreground">Informe também o nome usado no pedido e consulte de novo.</p>`;
+            return;
+          }
+          resultado.innerHTML = `<p class="text-sm text-muted-foreground">Nenhum pedido encontrado com ${nome ? "esse telefone e esse nome" : "esse telefone"}.</p>`;
           return;
         }
 
@@ -164,6 +230,39 @@ const allPosts = visiblePosts(await getAllMensagens());
       padding-left: 1.1rem;
       font-size: 0.875rem;
       color: var(--muted-foreground);
+    }
+    .camiseta-etapas {
+      list-style: none;
+      margin: 0.75rem 0 0;
+      padding: 0;
+      display: grid;
+      gap: 0.35rem;
+      font-size: 0.875rem;
+    }
+    .camiseta-etapas li {
+      display: flex;
+      gap: 0.5rem;
+      align-items: baseline;
+      color: var(--muted-foreground);
+    }
+    .camiseta-etapas li.is-feita {
+      color: var(--foreground);
+    }
+    .camiseta-etapa-marca {
+      display: inline-flex;
+      width: 1.25rem;
+      height: 1.25rem;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 0.75rem;
+      flex: none;
+    }
+    .camiseta-etapas li.is-feita .camiseta-etapa-marca {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
     }
   </style>
 </BaseLayout>

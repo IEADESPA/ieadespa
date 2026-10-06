@@ -23,10 +23,25 @@ name: Site - sincronizar agenda oficial
 #     quebrado; um commit/ajuste no site ou o disparo manual do deploy destravam).
 # Observação: o GitHub pode atrasar execuções agendadas e desliga agendamentos de
 # repositórios públicos sem nenhuma atividade por 60 dias; os commits frequentes mantêm vivo.
+#
+# FREQUÊNCIA (corrigida em 06/10/2026 — achado de custo real, ver HOMOLOGACAO.md):
+# de 01/10 a 06/10 este fluxo rodou a cada 20 minutos, dia e noite. Cada chamada a
+# /api/agenda-publica/versao toca o banco de produção (Azure SQL serverless, pausa
+# automática após 60 min parado) — com uma chamada a cada 20 min o banco NUNCA pausa.
+# Resultado medido: banco cobrado 24/24 h desde 02/10, R$ 65-86 por dia, contra R$ 6-7
+# por dia pausado (29/09). Agora roda 3 vezes por dia, em horário de Brasília (UTC-3):
+#   7h45 — junto com as rotinas diárias (7h/7h30/8h), que já acordam o banco;
+#   13h e 19h — duas janelas a mais, no horário em que a Secretaria edita a agenda.
+# Evento publicado no sistema aparece no site em até ~6 h; pra publicar na hora, rode
+# este fluxo à mão (Actions → "Site - sincronizar agenda oficial" → Run workflow).
+# Versão "zero custo" (o sistema dispara este fluxo só quando a agenda muda) está na
+# vD.5 do plano — depende de um token do GitHub guardado como segredo.
 
 on:
   schedule:
-    - cron: "*/20 * * * *"
+    - cron: "45 10 * * *"
+    - cron: "0 16 * * *"
+    - cron: "0 22 * * *"
   workflow_dispatch: {}
 
 permissions:

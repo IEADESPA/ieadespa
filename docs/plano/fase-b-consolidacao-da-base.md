@@ -1412,6 +1412,22 @@ aplicada a uma campanha de arrecadação específica (v4.4, `GestaoCampanhas`
   seguem exclusivamente no Directus, sem overlap. Decisão de manter como
   está, reafirmada, não uma tarefa pendente.
 
+  **Incidente de 06/10/2026 — campanha encerrada seguiu recebendo pedidos (corrigido no dia).** A campanha
+  "Marcha para Jesus 2026" (evento municipal) recebeu **mais de 1.000 pedidos num só dia** (pessoas reais: 1.002
+  nomes distintos, picos de 17 por minuto). O responsável desativou a campanha no Directus (`ativo = false`,
+  prazo `pedidos_ate` 05/10) às 12:04 de Brasília e os pedidos continuaram. Duas causas, no
+  `site/api/CriarPedidoCamiseta`: (1) a rota só conferia se o grupo **existia** — não olhava `ativo` nem
+  `pedidos_ate` (a página estática só esconde o formulário quando o site é remontado, e quem já estava com a
+  página aberta mandava direto pra API); (2) sob carga, resposta falha do Directus era lida como "nenhum lote
+  aberto", e a rota criou **seis lotes "abertos" ao mesmo tempo** (três com o número 1). Correção, em dois
+  commits (`ec6bcc9`, `d1273e5`): a rota recusa com `403` campanha inativa ou com prazo vencido (dia inclusive,
+  Brasília), e falha de consulta vira `502` sem criar lote. Conferido em produção: página da campanha `404`
+  (só campanha ativa é montada), pedido de teste recusado três vezes, nenhum pedido novo depois das 12:17.
+  Entre a desativação (12:04) e a parada (12:17) entraram cerca de 90 pedidos (ids 1013 a 1102); a decisão
+  sobre eles é do responsável. Os dois deploys do site aconteceram dentro da janela de congelamento da FASE D
+  por serem a própria emergência. **Regra que fica:** rota pública que grava nunca confia só na página; a
+  regra de "aberto/fechado" mora na API.
+
 ## 🔒 Trava de Revisão B-C — antes de encerrar a FASE B e avançar para a FASE 5
 
 - [x] Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da

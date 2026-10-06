@@ -106,6 +106,22 @@ export const ORAR_MURAL_URL = "/api/orar-mural";
 export const CRIAR_PEDIDO_CAMISETA_URL = "/api/criar-pedido-camiseta";
 
 /**
+ * "Ainda aceita pedido/inscrição?" (06/10/2026) — consultado pela página ao
+ * abrir, porque o site é estático: a campanha/evento fechada no Directus só
+ * sumiria da página num rebuild, e quem já estava com ela aberta mandava
+ * pedido mesmo assim. `GET {URL}/{id}` → `{ aberto, motivo, mensagem }`.
+ */
+export const STATUS_CAMISETA_URL = "/api/status-camiseta";
+export const STATUS_INSCRICAO_URL = "/api/status-inscricao";
+
+/**
+ * Inscrição em evento inteira no servidor (06/10/2026): prazo, vagas, cupom,
+ * grupo e gravação — o navegador não escreve mais no Directus (a permissão
+ * pública de criar inscrição/resposta e de mudar o contador do cupom saiu).
+ */
+export const CRIAR_INSCRICAO_URL = "/api/criar-inscricao";
+
+/**
  * Fase 28 — aviso de "pode retirar" (peça separada, esperando a pessoa vir
  * buscar). Chamada só pelo painel (`/painel-camisetas/grupo/pedidos/`), no
  * momento em que a equipe marca um pedido como separado — melhor esforço,

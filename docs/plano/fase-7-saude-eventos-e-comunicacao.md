@@ -1802,7 +1802,19 @@ ponto real de integração:
         por regra, 10 conferidos à mão: condicionais de texto virando valor e o marcador `this`).
       - **Publicação em dois degraus** (conversão com a política antiga, depois o cabeçalho
         estrito), cada um conferido no endereço real; a homologação já tinha passado pelas duas
-        coisas juntas.
+        coisas juntas. Em produção: degrau 1 e degrau 2 com 971 de 971 ações idênticas na
+        passada rápida (em navegador real, API simulada dentro do navegador), zero violações, 10 de 10
+        peças especiais, a política estrita entregue em **todos** os arquivos, e as 45 verificações
+        da API intactas. Com a política estrita ligada em produção, a **passada completa deu 4782
+        de 4782 ações idênticas**, zero violações (na página e no console do service worker v5).
+        Para desfazer o degrau 2: `git revert -m 1 <commit de união>` (volta a política
+        antiga e a conversão continua valendo).
+      - **Achado só visível dentro do service worker.** Com a política estrita, o `connect-src 'self'`
+        vale **também para o service worker**: o `fetch()` dele para as fontes do Google era
+        recusado e a página perdia a fonte (a página não vê essa recusa, só o console do service
+        worker, então nenhuma medição de página a pegou). O service worker agora só trata pedidos
+        do próprio endereço (cache v5); os de fora o navegador atende direto, sob as regras da
+        página. `tools/csp-e2e/sw-csp.js` mede isso; o teste permanente cobre a regra.
       - **Limites que continuam, ditos com honestidade.** `style-src` mantém `'unsafe-inline'` de
         propósito: o front tem 931 atributos `style="..."` no HTML e 355 em textos do `script.js`,
         e as janelas de impressão escrevem um `<style>`; injeção de estilo não executa código, e
@@ -1840,10 +1852,15 @@ ponto real de integração:
     hora; o serviço manual (sem rodízio) segue como na v5.6; a tela de escalas continua
     mostrando matrícula, e não nome, nas alocações do detalhe do serviço.
 
+> **Aqui entra a [FASE D — Robustez, operação e celular](fase-d-robustez-e-operacao.md)** (06/10/2026, 8ª rodada):
+> retrofit do que já está construído (prova automática de que toda tela abre, front-end em módulos, homologação igual
+> à produção, segundo fator pra liderança, operação e celular do membro), com arquivo e travas próprias, no mesmo
+> padrão da FASE B. A Trava 7-A só abre depois da Trava D-B.
+
 ## 🔒 Trava de Revisão 7-A — antes de avançar para a v7.6
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v7.1 a v7.5 pelas 5 perguntas do checklist.
+Audita v7.1 a v7.5 pelas 5 perguntas do checklist — depois de fechada a FASE D.
 
 ## v7.6 — Setores Técnicos (voluntariado profissional) *(gap da varredura)*
 

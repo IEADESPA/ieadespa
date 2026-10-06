@@ -78,6 +78,94 @@ Mesma estimativa de antes se confirmou na prática — nada surpreendeu:
 | Teste de restore (banco temporário, apagado em ~40min) | desprezível |
 | **Total recorrente** | **~R$ 25-115/mês** |
 
+## Custo real medido em 06/10/2026 e a causa do salto de outubro
+
+Lido pela API de custos (Cost Management, valores em reais, antes de impostos) com login na conta da
+igreja — ver "Duas contas do Azure nesta máquina", abaixo.
+
+| Recurso | Setembro (mês cheio) | 1 a 6 de outubro |
+| --- | --- | --- |
+| Banco de produção (`app-db-prod`) | R$ 550,09 | **R$ 388,86** |
+| Function App antigo (`func-ieadespa-api`, apagado em 04/10) | R$ 48,52 | R$ 13,52 |
+| Banco de homologação (`ieadespa-homolog`) | R$ 36,66 | R$ 32,23 |
+| Plano do App Service do Directus (`asp-rgportaligreja-8bf6`) | R$ 36,50 | R$ 13,15 |
+| Static Web Apps (sistema + site) | R$ 19,45 | — |
+| **Total** | **R$ 692,18 (≈ US$ 128)** | **R$ 447,81 em 6 dias** |
+
+**Por dia, o banco de produção:** R$ 6,40 a 6,70 nos dias parados do fim de setembro (24 a 29/09, pausa
+funcionando desde o desligamento do Automatic Tuning em 20/09); **R$ 55 a 86 por dia de 1 a 5/10**. A
+métrica `app_cpu_billed` mostra o banco cobrado **24 de 24 horas desde 02/10** (29/09: 0 horas), e 4 a 17
+conexões por hora de madrugada.
+
+**Causa:** o fluxo `site-agenda-sync.yml` (criado em 01/10 com a v7.2) rodava **a cada 20 minutos, dia e
+noite**, e cada execução chama `/api/agenda-publica/versao`, que consulta o banco. Com uma chamada a cada
+20 minutos, o banco nunca fica os 60 minutos parado que a pausa automática exige — e passa a cobrar o mínimo
+(0,5 vCore) o tempo todo. Projeção se nada mudasse: **≈ R$ 2.000 a 2.400 por mês só de banco**, quase três
+vezes o teto de US$ 150.
+
+**Correção (06/10/2026):** o fluxo passou a rodar 3 vezes por dia (7h45 junto com as rotinas diárias, 13h e
+19h, horário de Brasília). Custo esperado de cada despertar do banco: ≈ R$ 2,60 (60 min a 0,5 vCore, a
+≈ R$ 5,25 por vCore-hora medido). A versão sem custo nenhum — o sistema dispara o fluxo só quando a agenda
+muda — está na vD.5 do plano (precisa de um token do GitHub guardado como segredo). Conferir aqui, uns dias
+depois, se o banco voltou a pausar (`az monitor metrics list ... --metric app_cpu_billed`).
+
+**Regra que fica:** qualquer rotina agendada que chame a API do sistema acorda o banco por 60 minutos. Antes
+de criar um agendamento novo, somar as janelas: o custo é por despertar, não por chamada.
+
+## Homologação do site institucional (desde 06/10/2026)
+
+O site não tinha ambiente de homologação: toda mudança ia direto para `www.ieadespa.org.br`. Agora:
+
+| Peça | O que é |
+| --- | --- |
+| Branch `homolog-site` + PR [#18](https://github.com/IEADESPA/ieadespa/pull/18) (**não fechar, não dar merge pelo PR**) | Cada push no branch monta o site no ambiente de pré-visualização `18` do Static Web App `site-institucional` (grátis no plano Standard): `https://salmon-bay-0efd06d0f-18.eastus2.3.azurestaticapps.net`. O que for aprovado vai para a `main` por merge normal (`git merge --ff-only homolog-site`), nunca fechando o PR. |
+| Configurações do ambiente 18 | As mesmas da produção (`DIRECTUS_URL`, `DIRECTUS_ADMIN_TOKEN`, `TELEFONE_CHAVE_SEGREDO`, `ACS_CONNECTION_STRING`, `CHAVE_SITE_SISTEMA`, `CONTA_TOKEN_SECRET`), copiadas com `az staticwebapp appsettings set --environment-name 18` (uma chave por vez, com o valor lido da produção, nunca em texto no comando). Trocou um segredo na produção? Troque no 18 também. |
+| CORS do Directus | `CORS_ORIGIN` inclui o endereço do ambiente 18, senão o painel administrativo não funciona na pré-visualização (o Directus é outro domínio). |
+| Testes automáticos | `.github/workflows/site-testes.yml` roda `site/scripts/testes/` (camisetas e eventos) depois de cada montagem: contra o 18 quando o push é no `homolog-site`, contra a produção quando é na `main`. Resultado no resumo do run. |
+| Teste do painel (à mão) | `scratchpad/painel-e2e.js` (Edge sem janela, puppeteer-core): login, filtros, exportação, troca de lote e renovação da sessão, com massa descartável. Precisa de um usuário do Directus com o papel Semi-administrador; o `teste-painel@ieadespa.org.br` criado em 06/10 deve ser **apagado** quando não for mais usado. |
+
+**Directus**: não há cópia de homologação (custo). Os testes gravam no Directus de produção itens descartáveis
+(`slug` `teste-…`, título `TESTE …`), ignorados pela versão do conteúdo e apagados no fim de cada bateria.
+
+**Achado de 06/10 (sessão do painel)**: o login dos painéis usava o modo "cookie" do Directus, mas o Directus está
+em outro domínio (`azurewebsites.net`) e o navegador não manda esse cookie entre sites — a renovação silenciosa
+nunca funcionou, e aos 15 minutos toda gravação falhava. Agora o login é em modo "json" e o painel renova pelo
+token de renovação (`site/src/lib/painelAuth.ts`), provado no teste: gravação com token vencido continua funcionando.
+
+## Directus sob pico (medido em 06/10/2026)
+
+Durante o incidente das camisetas (vB.17) e na blindagem que se seguiu (vD.8), medições reais:
+
+| O quê | Resultado |
+| --- | --- |
+| Directus, 1 gravação isolada | 128 ms |
+| Directus, 12 gravações ao mesmo tempo | 2,3 s no total — **grava uma de cada vez** (fila) |
+| Directus, 12 leituras ao mesmo tempo | 0,67 s — leituras não enfileiram |
+| CPU do App Service do Directus (plano `ASP-rgportaligreja-8bf6`, **B1**, 1 núcleo) com 6 gravações em paralelo | **88–98 %** |
+| CPU do PostgreSQL (`ieadespa-directus-db`, B1ms) na mesma hora | 8 % |
+| Limitador do Directus (`RATE_LIMITER_POINTS`) | era **25/s por IP**; subido para **150** em 06/10 — todo o site chega de poucos IPs das Functions, e 25/s derrubava pedidos em pico (erro lido como "sem lote") |
+| API do site (`status-camiseta`, cache 20 s), 40 conexões | ~200 req/s, 157 ms de mediana, zero erro |
+| API do site (`criar-pedido-camiseta`), 12 conexões, 36 pedidos | 36/36 gravados, ~1,5 pedidos/s, espera de ~8 s por pedido na fila |
+
+Conclusão: o gargalo de gravação é a **CPU do Directus** (plano B1), não o banco nem as Functions. Capacidade
+atual ≈ 100 pedidos por minuto (o pico de 06/10 foi 17 por minuto). Opções com custo estão na vD.8.
+
+## Duas contas do Azure nesta máquina
+
+Esta máquina tem duas contas do Azure: a da **igreja** (tenant `ieadespa.org.br`, usuário
+`ieadespa@ieadespa.org.br`, assinatura "Azure subscription 1" com o grupo `ieadespa`) e a de **outra
+associação**, usada por outro repositório. O Azure CLI guarda um login só por pasta de configuração, então o
+último `az login` de uma sessão derruba o da outra. Solução adotada em 06/10/2026: este repositório usa uma
+pasta própria.
+
+```bash
+export AZURE_CONFIG_DIR="$HOME/.azure-ieadespa"   # Git Bash; no PowerShell: $env:AZURE_CONFIG_DIR = "$HOME\.azure-ieadespa"
+az account show                                    # deve mostrar ieadespa@ieadespa.org.br
+# se expirar: az login --use-device-code --tenant ieadespa.org.br  (o código aparece no terminal, confirma-se no navegador)
+```
+
+Sem essa variável, o `az` cai na conta da outra associação e o grupo `ieadespa` "não existe".
+
 ---
 
 ## Investigação de lentidão e custo (2026-09-20)

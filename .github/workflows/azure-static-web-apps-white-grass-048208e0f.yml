@@ -48,11 +48,18 @@ jobs:
       # não muda a regra de nunca editar uma migração antiga — só como elas são
       # executadas. Tem retry embutido pro Azure SQL Serverless acordar (mesmo
       # motivo do wretry que só cobria a migração 001 antes).
+      # vD.3 (06/10/2026): pull request de homologação (branches `homolog…`) migra o banco de
+      # HOMOLOGAÇÃO (`ieadespa-homolog`, segredo AZURE_SQL_CONNECTION_STRING_HOMOLOG) — até aqui
+      # todo PR migrava a produção, e o banco de homologação ficou com o esquema atrasado.
+      # Push na main continua migrando a produção.
       - name: Executar Migrações SQL
         working-directory: api
         env:
-          SQL_CONNECTION_STRING: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
-        run: node scripts/executar-migracoes.js
+          SQL_CONNECTION_STRING: ${{ (github.event_name == 'pull_request' && startsWith(github.head_ref, 'homolog')) && secrets.AZURE_SQL_CONNECTION_STRING_HOMOLOG || secrets.AZURE_SQL_CONNECTION_STRING }}
+          ALVO_MIGRACAO: ${{ (github.event_name == 'pull_request' && startsWith(github.head_ref, 'homolog')) && 'homologacao' || 'producao' }}
+        run: |
+          echo "Migrando o banco de: $ALVO_MIGRACAO"
+          node scripts/executar-migracoes.js
 
       - name: Build And Deploy
         id: builddeploy

@@ -1,0 +1,89 @@
+name: Site - remontar quando o Directus mudar
+
+# Por que existe (06/10/2026)
+# ---------------------------
+# O site é estático: conteúdo editado no Directus só aparece quando o site é remontado.
+# O Flow do Directus "Publicar site (avisar GitHub)" fazia isso chamando o GitHub com um
+# token pessoal — que venceu em silêncio (401; última remontagem automática em 01/10).
+# Este fluxo dispensa token pessoal: a cada 15 minutos calcula a "versão" do conteúdo
+# (site/scripts/conteudo-versao.mjs: contagem e última alteração de cada coleção que o
+# site lê, com o segredo DIRECTUS_ADMIN_TOKEN já usado pelos avisos) e, se mudou desde a
+# última remontagem, manda montar o site e disparar os avisos de conteúdo novo — tudo com
+# o GITHUB_TOKEN do próprio robô (gh workflow run), que o GitHub dá de graça.
+#
+# O que NÃO faz: não toca na API do sistema (não acorda o banco Azure SQL). A agenda
+# oficial continua com o site-agenda-sync.yml, 3 vezes por dia. Uma remontagem em si lê a
+# agenda do sistema uma vez (é o build), como qualquer remontagem.
+#
+# Memória de "última versão publicada": a variável de repositório CONTEUDO_VERSAO
+# (gh variable set), gravada só depois de pedir a remontagem. Build já na fila/em
+# andamento: não dispara outro, e a variável fica como está — o próximo tique confere
+# de novo.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  actions: write # gh workflow run + gh variable set
+  contents: read
+
+concurrency:
+  group: site-conteudo-sync
+  cancel-in-progress: false
+
+jobs:
+  conferir:
+    name: Comparar a versão do conteúdo com a última remontagem
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WORKFLOW_SITE: azure-static-web-apps-salmon-bay-0efd06d0f.yml
+      WORKFLOW_AVISOS: site-content-notifications.yml
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      DIRECTUS_URL: https://ieadespa-directus-gae4hfarf4a4ffcf.brazilsouth-01.azurewebsites.net
+      DIRECTUS_ADMIN_TOKEN: ${{ secrets.DIRECTUS_ADMIN_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: site/scripts/conteudo-versao.mjs
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Calcular a versão atual do conteúdo
+        id: atual
+        run: |
+          set -euo pipefail
+          versao="$(node site/scripts/conteudo-versao.mjs --v)"
+          [[ "$versao" =~ ^[0-9a-f]{16}$ ]] || { echo "::error::versão inválida: '$versao'"; exit 1; }
+          echo "versao=$versao" >> "$GITHUB_OUTPUT"
+          echo "Versão do conteúdo agora: $versao"
+
+      - name: Comparar com a última remontagem e, se mudou, remontar
+        run: |
+          set -euo pipefail
+          atual="${{ steps.atual.outputs.versao }}"
+          publicada="$(gh variable get CONTEUDO_VERSAO 2>/dev/null || true)"
+          echo "Última versão remontada: ${publicada:-nenhuma}"
+          if [ "$atual" = "$publicada" ]; then
+            echo "Sem mudança no conteúdo. Nada a fazer." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Já há remontagem na fila ou rodando? Não empilha outra; o próximo tique confere.
+          em_andamento="$(gh run list --workflow "$WORKFLOW_SITE" --status in_progress --json databaseId --jq 'length')"
+          na_fila="$(gh run list --workflow "$WORKFLOW_SITE" --status queued --json databaseId --jq 'length')"
+          if [ "${em_andamento:-0}" != "0" ] || [ "${na_fila:-0}" != "0" ]; then
+            echo "Conteúdo mudou ($publicada -> $atual), mas já há remontagem em andamento/fila; espero o próximo tique." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          gh workflow run "$WORKFLOW_SITE" --ref main
+          gh workflow run "$WORKFLOW_AVISOS" --ref main || echo "::warning::não consegui disparar os avisos de conteúdo (segue sem eles)"
+          gh variable set CONTEUDO_VERSAO --body "$atual"
+          echo "Conteúdo mudou (${publicada:-nenhuma} -> $atual): remontagem do site e avisos disparados." >> "$GITHUB_STEP_SUMMARY"

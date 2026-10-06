@@ -120,7 +120,13 @@ module.exports = async function (context, req) {
 
   const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}`, "Content-Type": "application/json" };
 
-  const grupoRes = await fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=id,limite_uma_por_pessoa,ativo,pedidos_ate`, { headers });
+  // Cada ida ao Directus custa ~150 ms (as Functions do site rodam em East US 2; o Directus,
+  // em Brazil South). As três consultas de abertura não dependem uma da outra: vão juntas.
+  const [grupoRes, duplicadoRes, abertosRes] = await Promise.all([
+    fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=id,limite_uma_por_pessoa,ativo,pedidos_ate`, { headers }),
+    pedidoDuplicado(headers, grupoId, telefoneChave, email).then((v) => ({ ok: true, v })).catch((err) => ({ ok: false, err })),
+    lotesAbertos(headers, grupoId).then((v) => ({ ok: true, v })).catch((err) => ({ ok: false, err })),
+  ]);
   if (!grupoRes.ok) {
     context.res = { status: 404, body: { erro: "Camiseta não encontrada." } };
     return;
@@ -145,24 +151,24 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { erro: "Esta campanha permite só 1 peça por pessoa." } };
       return;
     }
-    try {
-      if (await pedidoDuplicado(headers, grupoId, telefoneChave, email)) {
-        context.res = {
-          status: 409,
-          body: { erro: "Você já fez um pedido nesta campanha. Esta campanha permite só 1 peça por pessoa." },
-        };
-        return;
-      }
-    } catch (err) {
-      context.log.error("Falha ao conferir pedido duplicado:", err);
+    if (!duplicadoRes.ok) {
+      context.log.error("Falha ao conferir pedido duplicado:", duplicadoRes.err);
       context.res = { status: 502, body: { erro: "Falha ao preparar o pedido." } };
+      return;
+    }
+    if (duplicadoRes.v) {
+      context.res = {
+        status: 409,
+        body: { erro: "Você já fez um pedido nesta campanha. Esta campanha permite só 1 peça por pessoa." },
+      };
       return;
     }
   }
 
   let loteId;
   try {
-    loteId = await encontrarOuCriarLoteAberto(headers, grupoId, (m) => context.log.warn(m));
+    if (!abertosRes.ok) throw abertosRes.err;
+    loteId = abertosRes.v.length > 0 ? abertosRes.v[0].id : await encontrarOuCriarLoteAberto(headers, grupoId, (m) => context.log.warn(m));
   } catch (err) {
     context.log.error("Falha ao resolver lote aberto:", err);
     context.res = { status: 502, body: { erro: "Falha ao preparar o pedido." } };
@@ -189,22 +195,27 @@ module.exports = async function (context, req) {
   }
   const pedidoId = (await pedidoRes.json()).data.id;
 
-  await Promise.all([
-    ...itens.map((item) =>
-      fetch(`${DIRECTUS_URL}/items/camiseta_itens_pedido`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ pedido: pedidoId, tamanho: item.tamanho || null, modelo: item.modelo || null, quantidade: Number(item.quantidade) || 0 }),
-      }),
-    ),
-    ...respostas.map((resposta) =>
+  // Itens e respostas em LOTE (o Directus aceita uma lista no POST): uma ida para os itens,
+  // uma para as respostas — antes era uma ida por item e por resposta.
+  const gravacoes = [];
+  gravacoes.push(
+    fetch(`${DIRECTUS_URL}/items/camiseta_itens_pedido`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(itens.map((item) => ({ pedido: pedidoId, tamanho: item.tamanho || null, modelo: item.modelo || null, quantidade: Number(item.quantidade) || 0 }))),
+    }),
+  );
+  if (respostas.length > 0) {
+    gravacoes.push(
       fetch(`${DIRECTUS_URL}/items/respostas_pedido_camiseta`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ pedido: pedidoId, pergunta: resposta.pergunta, valor: resposta.valor }),
+        body: JSON.stringify(respostas.map((resposta) => ({ pedido: pedidoId, pergunta: resposta.pergunta, valor: resposta.valor }))),
       }),
-    ),
-  ]);
+    );
+  }
+  const gravados = await Promise.all(gravacoes);
+  if (!gravados[0].ok) context.log.error("Itens do pedido não gravados:", pedidoId, gravados[0].status);
 
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { pedidoId, lote: loteId } };
 };

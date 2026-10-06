@@ -112,6 +112,26 @@ depois, se o banco voltou a pausar (`az monitor metrics list ... --metric app_cp
 **Regra que fica:** qualquer rotina agendada que chame a API do sistema acorda o banco por 60 minutos. Antes
 de criar um agendamento novo, somar as janelas: o custo é por despertar, não por chamada.
 
+## Homologação do site institucional (desde 06/10/2026)
+
+O site não tinha ambiente de homologação: toda mudança ia direto para `www.ieadespa.org.br`. Agora:
+
+| Peça | O que é |
+| --- | --- |
+| Branch `homolog-site` + PR [#18](https://github.com/IEADESPA/ieadespa/pull/18) (**não fechar, não dar merge pelo PR**) | Cada push no branch monta o site no ambiente de pré-visualização `18` do Static Web App `site-institucional` (grátis no plano Standard): `https://salmon-bay-0efd06d0f-18.eastus2.3.azurestaticapps.net`. O que for aprovado vai para a `main` por merge normal (`git merge --ff-only homolog-site`), nunca fechando o PR. |
+| Configurações do ambiente 18 | As mesmas da produção (`DIRECTUS_URL`, `DIRECTUS_ADMIN_TOKEN`, `TELEFONE_CHAVE_SEGREDO`, `ACS_CONNECTION_STRING`, `CHAVE_SITE_SISTEMA`, `CONTA_TOKEN_SECRET`), copiadas com `az staticwebapp appsettings set --environment-name 18` (uma chave por vez, com o valor lido da produção, nunca em texto no comando). Trocou um segredo na produção? Troque no 18 também. |
+| CORS do Directus | `CORS_ORIGIN` inclui o endereço do ambiente 18, senão o painel administrativo não funciona na pré-visualização (o Directus é outro domínio). |
+| Testes automáticos | `.github/workflows/site-testes.yml` roda `site/scripts/testes/` (camisetas e eventos) depois de cada montagem: contra o 18 quando o push é no `homolog-site`, contra a produção quando é na `main`. Resultado no resumo do run. |
+| Teste do painel (à mão) | `scratchpad/painel-e2e.js` (Edge sem janela, puppeteer-core): login, filtros, exportação, troca de lote e renovação da sessão, com massa descartável. Precisa de um usuário do Directus com o papel Semi-administrador; o `teste-painel@ieadespa.org.br` criado em 06/10 deve ser **apagado** quando não for mais usado. |
+
+**Directus**: não há cópia de homologação (custo). Os testes gravam no Directus de produção itens descartáveis
+(`slug` `teste-…`, título `TESTE …`), ignorados pela versão do conteúdo e apagados no fim de cada bateria.
+
+**Achado de 06/10 (sessão do painel)**: o login dos painéis usava o modo "cookie" do Directus, mas o Directus está
+em outro domínio (`azurewebsites.net`) e o navegador não manda esse cookie entre sites — a renovação silenciosa
+nunca funcionou, e aos 15 minutos toda gravação falhava. Agora o login é em modo "json" e o painel renova pelo
+token de renovação (`site/src/lib/painelAuth.ts`), provado no teste: gravação com token vencido continua funcionando.
+
 ## Directus sob pico (medido em 06/10/2026)
 
 Durante o incidente das camisetas (vB.17) e na blindagem que se seguiu (vD.8), medições reais:

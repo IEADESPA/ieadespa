@@ -276,8 +276,10 @@ segundo (≈ 150 por minuto; o pico de 06/10 foi 17 por minuto). Acima disso nin
       (`site/scripts/conteudo-versao.mjs`: contagem e última alteração de 20 coleções, com o segredo do
       Directus que os avisos já usam) e, se mudou, manda montar o site e disparar os avisos de conteúdo novo
       com o token do próprio robô do repositório (`gh workflow run`), que não vence. Memória da última
-      versão na variável `CONTEUDO_VERSAO`. Não toca na API do sistema (não acorda o banco). O Flow do
-      Directus ficou desativado, com a explicação na descrição dele.
+      versão remontada no cache do Actions (chave `conteudo-versao-<hash>`; o robô não pode gravar variável
+      do repositório, 403). Não toca na API do sistema (não acorda o banco). Provado em 06/10: a versão
+      muda ao criar, editar e apagar um item e volta ao valor original; 1ª rodada remontou e guardou, 2ª
+      rodada "sem mudança". O Flow do Directus ficou desativado, com a explicação na descrição dele.
 
 ## 🔒 Trava de Revisão D-B — antes de encerrar a FASE D e voltar à Trava 7-A
 

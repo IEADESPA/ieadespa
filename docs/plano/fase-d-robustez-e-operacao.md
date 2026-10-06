@@ -20,6 +20,16 @@ o responsável pode fazer (criar segredo, aprovar custo no Azure, decidir entre 
 
 **Ordem obrigatória:** vD.1 antes da vD.2 (a prova automática é o que torna a modularização segura); o resto é livre.
 
+**O site institucional não entra nesta fase.** A FASE D mexe só no sistema (`app/`, `api/`, `tools/`, `docs/` e o
+fluxo de CI do sistema). O site (`site/`) tem aplicativo, fluxo de deploy e banco (Directus) próprios: um commit que
+não toca `site/` não publica o site, e o pedido de camiseta (`site/api/CriarPedidoCamiseta`) fala só com o Directus,
+nunca com a API do sistema. **Janela de congelamento do site: até 17/10/2026** (camisetas do evento municipal em
+pedido): nenhum commit em `site/`, nenhum deploy manual do site e nada da vD.5 que mude como o site é montado. A
+sincronização da agenda (3 vezes por dia) continua, porque é ela que publica o conteúdo novo do Directus — mesmo
+código do site, só conteúdo. A única chamada do site à API do sistema em tempo real é a pergunta "este e-mail é de
+membro?" da Minha Conta (`site/api/SolicitarCodigoConta`); um deploy do sistema troca a API sem derrubá-la, e essa
+tela não participa do pedido de camiseta.
+
 ## vD.1 — Toda tela abre, provado por máquina (teste de interface no CI)
 
 Hoje a pergunta 2 de toda Trava de Revisão ("toda tela nova abre e mostra dado de verdade?") é respondida clicando à
@@ -177,9 +187,37 @@ do roteiro; o membro já usa hoje.
 
 *Esforço:* baixo a médio. *Risco:* baixo. *Depende de você:* nada.
 
+## vD.7 — Domínio raiz: o site passa a ser `ieadespa.org.br`, e `www` vira só redirecionamento
+
+Pedido do responsável (06/10/2026): trabalhar no domínio raiz, sem `www`. A ideia inicial era copiar a zona DNS da
+Microsoft para outro provedor pra conseguir o raiz. **Conferido no Azure e no DNS: não precisa mover nada.** A zona
+`ieadespa.org.br` mora no DNS do Microsoft 365 (`ns1-4.bdm.microsoftonline.com`); o raiz **já aponta** pro site
+(registro A `20.36.155.75`) e **já está cadastrado e validado** como domínio do Static Web App `site-institucional`
+(status `Ready`), ao lado de `www.ieadespa.org.br`. Hoje o raiz responde `301` mandando pra `www` só porque o `www`
+está marcado como domínio padrão no Azure. Ou seja: o trabalho é inverter o padrão e trocar o nome em meia dúzia de
+lugares, não migrar DNS. Mover a zona pra fora da Microsoft não ajuda em nada aqui e ainda cria risco de e-mail
+(os registros MX/SPF/DKIM do Microsoft 365 vivem nessa mesma zona).
+
+- [ ] **Só depois de 17/10/2026** (fim dos pedidos de camiseta) e num horário de pouco acesso: no portal do Azure,
+      `Custom domains` do `site-institucional`, marcar `ieadespa.org.br` como **default** — o `www` passa a
+      redirecionar `301` pro raiz, sem tocar DNS, sem indisponibilidade (modo manual).
+- [ ] No site: `siteUrl` em `site/src/config/site.ts` (hoje `https://www.ieadespa.org.br`) vira o raiz — é a origem
+      do `<link rel="canonical">`, do sitemap, dos links do certificado (`site/src/lib/certificado.ts`) e da
+      programação (`site/src/lib/programacao.ts`). Os três fluxos do GitHub que leem o site (`site-agenda-sync.yml`,
+      `site-content-notifications.yml`, `site-event-notifications.yml`) trocam `SITE_URL` junto, no mesmo commit.
+- [ ] Directus: configurações e textos que citam `www` (links de e-mail, páginas de camiseta, QR já impresso)
+      revisados; QR e link já distribuídos continuam funcionando pelo redirecionamento — por isso o `www` **nunca**
+      é removido do Azure nem do DNS.
+- [ ] Google Search Console: propriedade do raiz e mudança de endereço; verificar depois que `www` → raiz responde
+      `301` e que o certificado TLS do raiz (gerido pelo Azure) está válido.
+- [ ] Sistema (`app.ieadespa.org.br`) **não muda**: é subdomínio próprio, com o seu Static Web App.
+
+*Esforço:* baixo (1 sessão). *Risco:* baixo — tudo reversível desmarcando o padrão. *Depende de você:* a janela
+(depois de 17/10) e a mudança no portal em modo manual. *Custo:* R$ 0.
+
 ## 🔒 Trava de Revisão D-B — antes de encerrar a FASE D e voltar à Trava 7-A
 
-Ponto de parada obrigatório. Audita vD.4 a vD.6 pelas 5 perguntas, e faz a varredura final da FASE D inteira. Atenção
+Ponto de parada obrigatório. Audita vD.4 a vD.7 pelas 5 perguntas, e faz a varredura final da FASE D inteira. Atenção
 especial à vD.4: um segundo fator mal feito tranca o Presidente fora do sistema ou, pior, deixa um atalho que o anula —
 testar o caminho de recuperação de verdade, com uma conta de teste, antes de ligar pra todo mundo. Fechada esta trava,
 abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.

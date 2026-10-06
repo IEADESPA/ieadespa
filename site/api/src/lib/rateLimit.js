@@ -18,8 +18,12 @@ function limpar(agora) {
   }
 }
 
-/** true = pode seguir; false = bloqueado por excesso de tentativas. */
-function permitir(chave) {
+/**
+ * true = pode seguir; false = bloqueado por excesso de tentativas.
+ * `limite` opcional por rota (padrão 20 em 5 min): criar pedido num evento, com
+ * dezenas de pessoas no mesmo Wi-Fi (mesmo IP de saída), precisa de mais folga.
+ */
+function permitir(chave, limite = LIMITE) {
   const agora = Date.now();
   if (tentativas.size > 5000) limpar(agora);
 
@@ -30,7 +34,7 @@ function permitir(chave) {
   }
 
   registro.contagem += 1;
-  return registro.contagem <= LIMITE;
+  return registro.contagem <= limite;
 }
 
 // vC.5 — modelo clássico (function.json + module.exports): `req.headers` é

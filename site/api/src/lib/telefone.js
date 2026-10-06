@@ -33,6 +33,13 @@ function gerarHash(telefoneBruto) {
  * string (`===`) vaza quantos caracteres bateram através do tempo de
  * resposta, o que ajudaria um ataque de força bruta a adivinhar o hash
  * caractere por caractere.
+ *
+ * CUSTO: cada chamada leva ~50 ms de CPU (scrypt é lento de propósito). Nunca
+ * rodar isto em laço sobre uma coleção inteira — foi exatamente o que travou o
+ * site em 06/10/2026 (1.000 pedidos × 50 ms = 50 s por consulta). Para achar
+ * um registro pelo telefone, use `chaveTelefone` + filtro no Directus; scrypt
+ * fica só para conferir UM registro já localizado (ou os poucos candidatos
+ * antigos, sem chave, filtrados pelo nome).
  */
 function conferirHash(telefoneBruto, valorGuardado) {
   if (!valorGuardado || !valorGuardado.includes(":")) return false;
@@ -48,4 +55,34 @@ function conferirHash(telefoneBruto, valorGuardado) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-module.exports = { normalizar, gerarHash, conferirHash };
+/**
+ * Chave de BUSCA do telefone (06/10/2026): HMAC-SHA256 do telefone normalizado
+ * com um segredo só do servidor (`TELEFONE_CHAVE_SEGREDO`, Application Setting
+ * do site, guardado criptografado em `site/secrets.env`). Determinística — o
+ * mesmo telefone dá sempre a mesma chave — então o Directus acha o registro
+ * com um filtro de igualdade (campo indexado `telefone_chave`), em
+ * milissegundos, sem varrer a coleção. Sem o segredo não dá para recalcular a
+ * chave a partir do telefone (nem de uma lista de telefones), então continua
+ * sendo um dado protegido; o scrypt com salt (`telefone`) segue gravado ao
+ * lado, como antes. Trocar o segredo invalida todas as chaves gravadas: só com
+ * reindexação.
+ */
+function chaveTelefone(telefoneBruto) {
+  const segredo = process.env.TELEFONE_CHAVE_SEGREDO;
+  if (!segredo) return null;
+  const normalizado = normalizar(telefoneBruto);
+  if (normalizado.length < 8) return null;
+  return crypto.createHmac("sha256", segredo).update(normalizado).digest("hex");
+}
+
+/** Nome sem acento, minúsculo e com espaços únicos — para casar "José" com "jose". */
+function normalizarNome(valor) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+module.exports = { normalizar, gerarHash, conferirHash, chaveTelefone, normalizarNome };

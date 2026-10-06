@@ -104,7 +104,8 @@ const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigi
     // técnica já usada no carrossel de destaque, ver README).
     (() => {
       const cards = document.querySelectorAll<HTMLElement>("[data-camiseta-card]");
-      const hoje = new Date().toISOString().slice(0, 10);
+      // Dia de hoje em Brasília (não em UTC): "pedidos até 14/10" vale o dia 14 inteiro.
+      const hoje = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Belem" });
       let visiveis = 0;
 
       cards.forEach((card) => {

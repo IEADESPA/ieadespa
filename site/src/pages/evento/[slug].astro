@@ -6,7 +6,7 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
-import { COVER_WIDTHS, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, TELEFONE_HASH_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
+import { COVER_WIDTHS, DIRECTUS_URL, ENVIAR_CONFIRMACAO_URL, STATUS_INSCRICAO_URL, TELEFONE_HASH_URL, directusAssetSrcset, directusAssetUrl, enderecoCompleto, fetchConfiguracoes, fetchItems } from "@/lib/directus";
 import { congregacaoEndereco, fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { hasEventPage } from "@/lib/eventos";
 import { aplicarDatasOficiais, fetchAgendaOficial, type ConvidadoOficial } from "@/lib/agendaOficial";
@@ -109,7 +109,9 @@ const localCoordenada = !congregacaoDoEvento && event.location_maps_url
 // Inscrição fecha por prazo vencido (data pública do evento, sem precisar
 // contar inscrições — não expõe nada da coleção privada) ou por decisão
 // manual da secretaria (vagas esgotadas, por exemplo).
-const inscricaoVencida = event.inscricoes_ate ? new Date(event.inscricoes_ate).getTime() < Date.now() : false;
+// Prazo = último dia (inclusive) em Brasília (06/10/2026; antes fechava um dia antes, em UTC).
+// Vale no build; ao abrir a página, o script confere de novo em `/api/status-inscricao/{id}`.
+const inscricaoVencida = event.inscricoes_ate ? new Date(`${String(event.inscricoes_ate).slice(0, 10)}T23:59:59-03:00`).getTime() < Date.now() : false;
 const inscricaoAberta = event.aceita_inscricao && !event.inscricoes_encerradas && !inscricaoVencida;
 const inscricaoEncerradaMotivo = event.inscricoes_encerradas ? "encerradas" : inscricaoVencida ? "vencido" : null;
 
@@ -547,6 +549,7 @@ const structuredData = startDate
         define:vars={{
           directusUrl: DIRECTUS_URL,
           telefoneHashUrl: TELEFONE_HASH_URL,
+          statusInscricaoUrl: `${STATUS_INSCRICAO_URL}/${event.id}`,
           enviarConfirmacaoUrl: ENVIAR_CONFIRMACAO_URL,
           eventoTitulo: event.title,
           eventoPeriodo: [event.event_date ? dateFormatter.format(new Date(event.event_date)) : null, timeRange].filter(Boolean).join(", "),
@@ -564,6 +567,24 @@ const structuredData = startDate
           const inputEmail = document.getElementById("inscricao-email");
           if (contaEmailSalvo && inputEmail && !inputEmail.value) inputEmail.value = contaEmailSalvo;
         })();
+
+        // 06/10/2026 — a página é estática: "inscrições encerradas" marcado no Directus
+        // só sumiria daqui num rebuild. Pergunta à API ao abrir e esconde o formulário na
+        // hora (mesma regra de prazo/encerramento, em `/api/status-inscricao/{id}`).
+        fetch(statusInscricaoUrl, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((s) => {
+            if (!s || s.aberto !== false) return;
+            document.querySelectorAll("[data-inscricao-form]").forEach((form) => {
+              form.hidden = true;
+              const aviso = document.createElement("p");
+              aviso.className = "mt-6 text-sm leading-relaxed text-muted-foreground";
+              aviso.setAttribute("role", "status");
+              aviso.textContent = s.mensagem || "As inscrições para este evento estão encerradas.";
+              form.insertAdjacentElement("beforebegin", aviso);
+            });
+          })
+          .catch(() => {});
 
         // Sem caracteres ambíguos (0/O, 1/I/L) — pra ser fácil de digitar de
         // volta na portaria no dia do evento.

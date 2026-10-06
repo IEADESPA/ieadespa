@@ -1,5 +1,6 @@
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
-const { gerarHash, conferirHash } = require("../src/lib/telefone");
+const { gerarHash, chaveTelefone } = require("../src/lib/telefone");
+const { avaliarJanela } = require("../src/lib/janela");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
@@ -18,39 +19,48 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  * lugar decide isso) e evita expor a lógica de atribuição de lote no
  * cliente.
  *
- * Telefone chega em texto puro (não mais pré-hashado pelo navegador via
- * `/api/telefone-hash`) — precisa estar em texto aqui mesmo pra poder
- * comparar contra os pedidos já existentes da campanha (hash usa salt
- * aleatório, então só dá pra comparar telefone por telefone, nunca por
- * igualdade direta de hash — mesma técnica de `VerificarInscricao`/
- * `ConsultarPedidosCamiseta`). O hash pra gravação é calculado aqui mesmo.
+ * Telefone chega em texto puro e vira DUAS coisas gravadas: `telefone`
+ * (scrypt com salt, como sempre) e `telefone_chave` (HMAC com segredo do
+ * servidor, 06/10/2026) — a chave é o que permite achar "este telefone já
+ * pediu?" com um filtro de igualdade no Directus, em vez de baixar todos os
+ * pedidos da campanha e rodar scrypt um por um (50 ms cada): com 1.000
+ * pedidos isso dava 50 s por pedido, estourava o limite da função, e foi o
+ * que travou o site no pico de 06/10/2026.
  */
-async function pedidoDuplicado(headers, grupoId, telefone, email) {
+const LIMITE_PEDIDOS_POR_IP = 40; // 5 min; muita gente pede do mesmo Wi-Fi da igreja/evento
+
+function emailNormalizado(email) {
+  const texto = email ? String(email).trim().toLowerCase() : "";
+  return texto || null;
+}
+
+async function pedidoDuplicado(headers, grupoId, telefoneChave, email) {
+  const ou = [`filter[_or][0][telefone_chave][_eq]=${encodeURIComponent(telefoneChave)}`];
+  if (email) ou.push(`filter[_or][1][email][_eq]=${encodeURIComponent(email)}`);
   const res = await fetch(
-    `${DIRECTUS_URL}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,telefone,email&limit=-1`,
+    `${DIRECTUS_URL}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&${ou.join("&")}&fields=id&limit=1`,
     { headers },
   );
-  if (!res.ok) throw new Error("falha ao conferir pedidos existentes");
-  const existentes = (await res.json()).data || [];
-  const emailNormalizado = email ? String(email).trim().toLowerCase() : null;
-  return existentes.some((p) => {
-    if (conferirHash(telefone, p.telefone)) return true;
-    if (emailNormalizado && p.email && String(p.email).trim().toLowerCase() === emailNormalizado) return true;
-    return false;
-  });
+  if (!res.ok) throw new Error(`falha ao conferir pedidos existentes (${res.status})`);
+  return ((await res.json()).data || []).length > 0;
 }
-async function encontrarOuCriarLoteAberto(headers, grupoId) {
+
+async function lotesAbertos(headers, grupoId) {
+  const res = await fetch(
+    `${DIRECTUS_URL}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=id&fields=id,numero&limit=5`,
+    { headers },
+  );
+  if (!res.ok) throw new Error(`falha ao consultar lote aberto (${res.status})`);
+  return (await res.json()).data || [];
+}
+
+async function encontrarOuCriarLoteAberto(headers, grupoId, log) {
   // Erro do Directus aqui é ERRO, nunca "não existe lote": em 06/10/2026, sob carga
   // (centenas de pedidos por hora), respostas falhas foram lidas como "nenhum lote
   // aberto" e "nenhum lote anterior", e a rota criou seis lotes "abertos" ao mesmo
   // tempo, três deles com o número 1. Falhou a consulta: 502 e o pedido não entra.
-  const abertoRes = await fetch(
-    `${DIRECTUS_URL}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=-numero&limit=1`,
-    { headers },
-  );
-  if (!abertoRes.ok) throw new Error(`falha ao consultar lote aberto (${abertoRes.status})`);
-  const aberto = (await abertoRes.json()).data?.[0];
-  if (aberto) return aberto.id;
+  const abertos = await lotesAbertos(headers, grupoId);
+  if (abertos.length > 0) return abertos[0].id;
 
   const ultimoRes = await fetch(
     `${DIRECTUS_URL}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=-numero&limit=1&fields=numero`,
@@ -67,31 +77,41 @@ async function encontrarOuCriarLoteAberto(headers, grupoId) {
   });
   if (!criadoRes.ok) throw new Error("falha ao criar lote");
   const criado = (await criadoRes.json()).data;
-  return criado.id;
+
+  // Corrida: dois pedidos simultâneos podem ter criado dois lotes. Vale o de menor id;
+  // o que este pedido criou, se não for ele, é apagado (ainda sem nenhum pedido).
+  const depois = await lotesAbertos(headers, grupoId);
+  const vencedor = depois.length > 0 ? depois[0] : criado;
+  if (vencedor.id !== criado.id) {
+    const apagar = await fetch(`${DIRECTUS_URL}/items/camiseta_lotes/${criado.id}`, { method: "DELETE", headers });
+    if (log) log(`lote ${criado.id} criado em corrida; mantido o ${vencedor.id}; apagado=${apagar.ok}`);
+  }
+  return vencedor.id;
 }
 
 module.exports = async function (context, req) {
-  if (!permitir(`criar-pedido-camiseta:${ipDoPedido(req)}`)) {
+  if (!permitir(`criar-pedido-camiseta:${ipDoPedido(req)}`, LIMITE_PEDIDOS_POR_IP)) {
     context.res = { status: 429, body: { erro: "Muitas tentativas. Aguarde alguns minutos." } };
     return;
   }
 
-  if (!DIRECTUS_URL || !DIRECTUS_ADMIN_TOKEN) {
-    context.log.error("Configuração ausente (DIRECTUS_URL/DIRECTUS_ADMIN_TOKEN).");
+  if (!DIRECTUS_URL || !DIRECTUS_ADMIN_TOKEN || !process.env.TELEFONE_CHAVE_SEGREDO) {
+    context.log.error("Configuração ausente (DIRECTUS_URL/DIRECTUS_ADMIN_TOKEN/TELEFONE_CHAVE_SEGREDO).");
     context.res = { status: 500, body: { erro: "Configuração ausente." } };
     return;
   }
 
   const body = req.body || {};
   const grupoId = Number(body.grupoId);
-  const nome = String(body.nome || "").trim();
+  const nome = String(body.nome || "").trim().slice(0, 120);
   const telefone = String(body.telefone || "");
-  const email = body.email ? String(body.email).trim() : null;
-  const itens = Array.isArray(body.itens) ? body.itens : [];
-  const respostas = Array.isArray(body.respostas) ? body.respostas : [];
+  const email = emailNormalizado(body.email);
+  const itens = Array.isArray(body.itens) ? body.itens.slice(0, 20) : [];
+  const respostas = Array.isArray(body.respostas) ? body.respostas.slice(0, 30) : [];
 
   const telefoneHash = gerarHash(telefone);
-  if (!Number.isInteger(grupoId) || grupoId <= 0 || !nome || !telefoneHash || itens.length === 0) {
+  const telefoneChave = chaveTelefone(telefone);
+  if (!Number.isInteger(grupoId) || grupoId <= 0 || !nome || !telefoneHash || !telefoneChave || itens.length === 0) {
     context.res = { status: 400, body: { erro: "Parâmetros ausentes." } };
     return;
   }
@@ -110,22 +130,14 @@ module.exports = async function (context, req) {
   // Campanha encerrada não aceita pedido — nem pelo formulário antigo ainda aberto num
   // navegador, nem por chamada direta. Até 06/10/2026 esta rota olhava só a existência do
   // grupo: uma campanha desativada no Directus (`ativo = false`) e com prazo vencido
-  // continuou recebendo centenas de pedidos, e cada lote fechado fazia o próximo pedido
-  // abrir um lote novo. `ativo` fecha de vez; `pedidos_ate` (dia, inclusive, no horário de
-  // Brasília) fecha pelo prazo.
-  if (grupo.ativo === false) {
-    context.res = { status: 403, body: { erro: "Esta campanha está encerrada e não aceita mais pedidos." } };
+  // continuou recebendo centenas de pedidos. `ativo` manda acima de tudo (desativou,
+  // fechou, mesmo com prazo no futuro); `pedidos_ate` (dia, inclusive, no horário de
+  // Brasília) fecha pelo prazo. A mesma regra está em `StatusCamiseta`, que a página
+  // consulta ao abrir.
+  const janela = avaliarJanela({ ativo: grupo.ativo !== false, ate: grupo.pedidos_ate, rotulo: "pedidos" });
+  if (!janela.aberto) {
+    context.res = { status: 403, body: { erro: janela.mensagem, motivo: janela.motivo } };
     return;
-  }
-  if (grupo.pedidos_ate) {
-    const texto = String(grupo.pedidos_ate);
-    const soDia = /^\d{4}-\d{2}-\d{2}$/.test(texto);
-    const fim = new Date(soDia ? `${texto}T23:59:59-03:00` : texto);
-    if (!Number.isNaN(fim.getTime()) && Date.now() > fim.getTime()) {
-      const [ano, mes, dia] = texto.slice(0, 10).split("-");
-      context.res = { status: 403, body: { erro: `O prazo de pedidos desta campanha encerrou em ${dia}/${mes}/${ano}.` } };
-      return;
-    }
   }
 
   if (grupo.limite_uma_por_pessoa) {
@@ -134,7 +146,7 @@ module.exports = async function (context, req) {
       return;
     }
     try {
-      if (await pedidoDuplicado(headers, grupoId, telefone, email)) {
+      if (await pedidoDuplicado(headers, grupoId, telefoneChave, email)) {
         context.res = {
           status: 409,
           body: { erro: "Você já fez um pedido nesta campanha. Esta campanha permite só 1 peça por pessoa." },
@@ -150,7 +162,7 @@ module.exports = async function (context, req) {
 
   let loteId;
   try {
-    loteId = await encontrarOuCriarLoteAberto(headers, grupoId);
+    loteId = await encontrarOuCriarLoteAberto(headers, grupoId, (m) => context.log.warn(m));
   } catch (err) {
     context.log.error("Falha ao resolver lote aberto:", err);
     context.res = { status: 502, body: { erro: "Falha ao preparar o pedido." } };
@@ -165,6 +177,7 @@ module.exports = async function (context, req) {
       lote: loteId,
       nome,
       telefone: telefoneHash,
+      telefone_chave: telefoneChave,
       email,
       congregacao: body.congregacaoId ? Number(body.congregacaoId) : null,
     }),

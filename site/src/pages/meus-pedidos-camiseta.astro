@@ -30,6 +30,11 @@ const allPosts = visiblePosts(await getAllMensagens());
           <label class="text-sm font-semibold" for="consulta-telefone">Telefone / WhatsApp</label>
           <input id="consulta-telefone" name="telefone" type="tel" autocomplete="tel" required class="field" />
         </div>
+        <div class="grid gap-2" data-consulta-nome-bloco hidden>
+          <label class="text-sm font-semibold" for="consulta-nome">Nome usado no pedido</label>
+          <input id="consulta-nome" name="nome" type="text" autocomplete="name" class="field" />
+          <p class="text-xs text-muted-foreground">Pedidos feitos até 06/10/2026 precisam também do nome (ou parte dele) que você escreveu no pedido.</p>
+        </div>
         <button type="submit" class="btn btn-solid">Consultar</button>
       </form>
 
@@ -50,9 +55,13 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     interface Pedido {
       lote: string | null;
+      nome: string | null;
       valorTotal: number;
       valorPago: number;
       separado: boolean;
+      separadoEm: string | null;
+      retiradaLocal: string | null;
+      mensagemRetirada: string | null;
       itens: Item[];
     }
 
@@ -61,6 +70,8 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     const consultaUrl = form.dataset.consultaUrl ?? "";
     const telefoneInput = document.getElementById("consulta-telefone") as HTMLInputElement;
+    const nomeInput = document.getElementById("consulta-nome") as HTMLInputElement;
+    const nomeBloco = document.querySelector<HTMLElement>("[data-consulta-nome-bloco]");
     const resultado = document.querySelector<HTMLElement>("[data-consulta-resultado]");
 
     function escapeHtml(value: string) {
@@ -94,13 +105,29 @@ const allPosts = visiblePosts(await getAllMensagens());
       return p.itens.length > 0 && p.itens.every((i) => i.quantidadeRetirada >= i.quantidade);
     }
 
+    function dataCurta(iso: string | null): string {
+      if (!iso) return "";
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR", { timeZone: "America/Belem" });
+    }
+
+    // Onde e como retirar aparece AQUI, não só no e-mail: 1 em cada 4 pedidos não
+    // tem e-mail, e a página é o que a pessoa abre com o telefone (06/10/2026).
     function pedidoCardHtml(p: Pedido): string {
-      const avisoRetirada =
-        p.separado && !tudoRetirado(p) ? `<p class="camiseta-pedido-pronto">✅ Pronto pra retirar!</p>` : "";
+      const pronto = p.separado && !tudoRetirado(p);
+      const avisoRetirada = pronto
+        ? `<p class="camiseta-pedido-pronto">✅ Pronto pra retirar!${p.separadoEm ? ` <span class="font-normal">(separado em ${escapeHtml(dataCurta(p.separadoEm))})</span>` : ""}</p>`
+        : `<p class="camiseta-pedido-detalhe">Ainda não separado para retirada — avisaremos aqui quando chegar.</p>`;
+      const ondeRetirar = p.retiradaLocal
+        ? `<p class="camiseta-pedido-detalhe"><strong>Onde retirar:</strong> ${escapeHtml(p.retiradaLocal)}</p>`
+        : "";
+      const mensagem = pronto && p.mensagemRetirada ? `<p class="camiseta-pedido-detalhe">${escapeHtml(p.mensagemRetirada)}</p>` : "";
       return `
         <div class="camiseta-pedido-card">
-          <p class="camiseta-pedido-lote">${escapeHtml(p.lote ?? "Pedido")}</p>
+          <p class="camiseta-pedido-lote">${escapeHtml(p.lote ?? "Pedido")}${p.nome ? ` <span class="font-normal text-muted-foreground">· ${escapeHtml(p.nome)}</span>` : ""}</p>
           ${avisoRetirada}
+          ${mensagem}
+          ${ondeRetirar}
           <ul class="camiseta-pedido-itens">${p.itens.map(itemLinhaHtml).join("")}</ul>
           <p class="camiseta-pedido-detalhe">${escapeHtml(situacaoPagamento(p))}</p>
         </div>
@@ -114,18 +141,30 @@ const allPosts = visiblePosts(await getAllMensagens());
       if (!telefone) return;
 
       resultado.innerHTML = `<p class="text-sm text-muted-foreground">Consultando…</p>`;
+      const nome = nomeBloco && !nomeBloco.hidden ? nomeInput.value.trim() : "";
 
       try {
         const res = await fetch(consultaUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ telefone }),
+          body: JSON.stringify(nome ? { telefone, nome } : { telefone }),
         });
+        if (res.status === 429) {
+          resultado.innerHTML = `<p class="text-sm text-muted-foreground">Muitas consultas deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.</p>`;
+          return;
+        }
         const json = await res.json();
         const pedidos: Pedido[] = json?.pedidos ?? [];
 
         if (pedidos.length === 0) {
-          resultado.innerHTML = `<p class="text-sm text-muted-foreground">Nenhum pedido encontrado com esse telefone.</p>`;
+          // Pedido antigo (antes de 06/10/2026) só é localizado com telefone + nome.
+          if (json?.precisaNome && nomeBloco) {
+            nomeBloco.hidden = false;
+            nomeInput.focus();
+            resultado.innerHTML = `<p class="text-sm text-muted-foreground">Informe também o nome usado no pedido e consulte de novo.</p>`;
+            return;
+          }
+          resultado.innerHTML = `<p class="text-sm text-muted-foreground">Nenhum pedido encontrado com ${nome ? "esse telefone e esse nome" : "esse telefone"}.</p>`;
           return;
         }
 

@@ -3,7 +3,7 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
-import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, directusAssetUrl, fetchItems } from "@/lib/directus";
+import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, STATUS_CAMISETA_URL, directusAssetUrl, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
@@ -57,7 +57,10 @@ const congregacoes = (await fetchCongregacoesPublicas())
 const perguntas = await fetchItems<Pergunta>("perguntas_camiseta", `filter[grupo][_eq]=${lote.id}&sort=ordem`);
 const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
-const prazoEncerrado = lote.pedidos_ate ? new Date(lote.pedidos_ate).getTime() < Date.now() : false;
+// Prazo = último dia (inclusive) em Brasília. `new Date("2026-10-14")` seria 14/10 00:00 UTC =
+// 13/10 21:00 aqui, fechando um dia antes. Vale no build; ao abrir a página, o script abaixo
+// confere de novo em `/api/status-camiseta/{id}` (ativo e prazo), porque o site é estático.
+const prazoEncerrado = lote.pedidos_ate ? new Date(`${String(lote.pedidos_ate).slice(0, 10)}T23:59:59-03:00`).getTime() < Date.now() : false;
 const tamanhos = lote.tamanhos ?? [];
 const modelos = lote.modelos ?? [];
 
@@ -240,6 +243,7 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
         is:inline
         define:vars={{
           criarPedidoUrl: CRIAR_PEDIDO_CAMISETA_URL,
+          statusUrl: `${STATUS_CAMISETA_URL}/${lote.id}`,
           loteId: lote.id,
           tamanhos,
           modelos,
@@ -251,6 +255,24 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
         const form = document.querySelector("[data-pedido-form]");
         const itensLista = document.querySelector("[data-itens-lista]");
         const totalEl = document.querySelector("[data-pedido-total]");
+
+        // 06/10/2026 — a campanha fechou no Directus e esta página (estática) continuou
+        // mostrando o formulário até o próximo build; centenas de pedidos entraram depois
+        // do fechamento. Agora a página pergunta à API ao abrir e esconde o formulário na
+        // hora; a API recusa de qualquer jeito (403), e esse 403 também esconde.
+        function encerrarFormulario(mensagem) {
+          if (!form) return;
+          form.hidden = true;
+          const aviso = document.createElement("p");
+          aviso.className = "mt-6 text-sm leading-relaxed text-muted-foreground";
+          aviso.setAttribute("role", "status");
+          aviso.textContent = mensagem || "Esta campanha está encerrada e não aceita mais pedidos.";
+          form.insertAdjacentElement("beforebegin", aviso);
+        }
+        fetch(statusUrl, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((s) => { if (s && s.aberto === false) encerrarFormulario(s.mensagem); })
+          .catch(() => {});
 
         // Fase 26 — pré-preenche com o e-mail da Minha Conta, se já logado.
         (() => {
@@ -402,6 +424,11 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
             });
             if (!pedidoRes.ok) {
               const erro = await pedidoRes.json().catch(() => null);
+              if (pedidoRes.status === 403) {
+                encerrarFormulario(erro?.erro);
+                return;
+              }
+              if (pedidoRes.status === 429) throw new Error("Muitos pedidos deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.");
               throw new Error(erro?.erro || "falha ao criar pedido");
             }
 

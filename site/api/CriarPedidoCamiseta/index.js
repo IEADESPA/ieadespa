@@ -40,18 +40,24 @@ async function pedidoDuplicado(headers, grupoId, telefone, email) {
   });
 }
 async function encontrarOuCriarLoteAberto(headers, grupoId) {
+  // Erro do Directus aqui é ERRO, nunca "não existe lote": em 06/10/2026, sob carga
+  // (centenas de pedidos por hora), respostas falhas foram lidas como "nenhum lote
+  // aberto" e "nenhum lote anterior", e a rota criou seis lotes "abertos" ao mesmo
+  // tempo, três deles com o número 1. Falhou a consulta: 502 e o pedido não entra.
   const abertoRes = await fetch(
     `${DIRECTUS_URL}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=-numero&limit=1`,
     { headers },
   );
-  const aberto = abertoRes.ok ? (await abertoRes.json()).data?.[0] : null;
+  if (!abertoRes.ok) throw new Error(`falha ao consultar lote aberto (${abertoRes.status})`);
+  const aberto = (await abertoRes.json()).data?.[0];
   if (aberto) return aberto.id;
 
   const ultimoRes = await fetch(
     `${DIRECTUS_URL}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=-numero&limit=1&fields=numero`,
     { headers },
   );
-  const ultimo = ultimoRes.ok ? (await ultimoRes.json()).data?.[0] : null;
+  if (!ultimoRes.ok) throw new Error(`falha ao consultar último lote (${ultimoRes.status})`);
+  const ultimo = (await ultimoRes.json()).data?.[0];
   const proximoNumero = (ultimo?.numero ?? 0) + 1;
 
   const criadoRes = await fetch(`${DIRECTUS_URL}/items/camiseta_lotes`, {

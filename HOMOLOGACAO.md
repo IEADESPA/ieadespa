@@ -112,6 +112,24 @@ depois, se o banco voltou a pausar (`az monitor metrics list ... --metric app_cp
 **Regra que fica:** qualquer rotina agendada que chame a API do sistema acorda o banco por 60 minutos. Antes
 de criar um agendamento novo, somar as janelas: o custo é por despertar, não por chamada.
 
+## Directus sob pico (medido em 06/10/2026)
+
+Durante o incidente das camisetas (vB.17) e na blindagem que se seguiu (vD.8), medições reais:
+
+| O quê | Resultado |
+| --- | --- |
+| Directus, 1 gravação isolada | 128 ms |
+| Directus, 12 gravações ao mesmo tempo | 2,3 s no total — **grava uma de cada vez** (fila) |
+| Directus, 12 leituras ao mesmo tempo | 0,67 s — leituras não enfileiram |
+| CPU do App Service do Directus (plano `ASP-rgportaligreja-8bf6`, **B1**, 1 núcleo) com 6 gravações em paralelo | **88–98 %** |
+| CPU do PostgreSQL (`ieadespa-directus-db`, B1ms) na mesma hora | 8 % |
+| Limitador do Directus (`RATE_LIMITER_POINTS`) | era **25/s por IP**; subido para **150** em 06/10 — todo o site chega de poucos IPs das Functions, e 25/s derrubava pedidos em pico (erro lido como "sem lote") |
+| API do site (`status-camiseta`, cache 20 s), 40 conexões | ~200 req/s, 157 ms de mediana, zero erro |
+| API do site (`criar-pedido-camiseta`), 12 conexões, 36 pedidos | 36/36 gravados, ~1,5 pedidos/s, espera de ~8 s por pedido na fila |
+
+Conclusão: o gargalo de gravação é a **CPU do Directus** (plano B1), não o banco nem as Functions. Capacidade
+atual ≈ 100 pedidos por minuto (o pico de 06/10 foi 17 por minuto). Opções com custo estão na vD.8.
+
 ## Duas contas do Azure nesta máquina
 
 Esta máquina tem duas contas do Azure: a da **igreja** (tenant `ieadespa.org.br`, usuário

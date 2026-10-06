@@ -215,9 +215,64 @@ lugares, não migrar DNS. Mover a zona pra fora da Microsoft não ajuda em nada 
 *Esforço:* baixo (1 sessão). *Risco:* baixo — tudo reversível desmarcando o padrão. *Depende de você:* a janela
 (depois de 17/10) e a mudança no portal em modo manual. *Custo:* R$ 0.
 
+## vD.8 — Blindagem de camisetas e eventos do site para pico *(emergência de 06/10/2026)*
+
+Pedido do responsável no dia do incidente (ver vB.17): *"blindar camisetas e eventos; o sistema tem que aguentar
+um pico de pelo menos 5 mil pessoas; se tirar o ativo, para; a data é a segunda forma; isso nunca mais pode
+acontecer"*. Feito e conferido em produção no mesmo dia. **O que travou no pico** (1.083 pedidos em 4 horas,
+picos de 17 por minuto): (1) cada pedido e cada "Meus pedidos" baixava **todos** os pedidos e rodava scrypt
+(50 ms) em cada um — 39 s por consulta medidos; (2) o limitador do Directus (25 chamadas/s por IP, e todo o
+site chega de poucos IPs) devolvia erro, que a rota lia como "sem lote" e criava lotes; (3) a campanha
+desativada continuava aceitando pedido, porque a regra de aberto/fechado só existia na página estática.
+
+- [x] **Chave de busca do telefone** (`telefone_chave`, HMAC-SHA256 com segredo `TELEFONE_CHAVE_SEGREDO` só do
+      servidor, campo indexado em `camiseta_pedidos` e `inscricoes_eventos`): achar "este telefone já pediu?"
+      e "Meus pedidos" virou um filtro de igualdade (~0,5 s), não uma varredura. Pedido antigo (sem chave) é
+      achado por telefone + nome (poucos candidatos, scrypt só neles) e reindexado na hora.
+- [x] **Aberto/fechado mora na API** (`janela.js`): `ativo` manda acima de tudo; `pedidos_ate`/`inscricoes_ate`
+      é o último dia **inclusive, em Brasília** (antes a página fechava um dia antes, em UTC). Rotas
+      `status-camiseta/{id}` e `status-inscricao/{id}` (cache 20 s): a página pergunta ao abrir e esconde o
+      formulário na hora; um `403` da gravação também esconde. Não depende mais de remontar o site.
+- [x] **Pedido de camiseta em 3 idas ao Directus** (eram 7): campanha em cache 10 s, duplicado e lote aberto
+      em paralelo, pedido + itens + respostas numa gravação só (criação aninhada). Lote nunca nasce de erro de
+      consulta; corrida de dois lotes resolvida pelo menor id.
+- [x] **Inscrição em evento inteira no servidor** (`criar-inscricao`): prazo, vagas (mesmo critério do painel),
+      lista de espera, aprovação, grupo só se permitido, faixa de valor validada, cupom conferido e contado
+      no servidor, no máximo 10 inscrições por telefone por evento, todas as pessoas do grupo numa gravação.
+      **Permissões públicas de escrita removidas do Directus** (criar inscrição e resposta; alterar usos do
+      cupom) — antes qualquer pessoa podia chamar isso à mão.
+- [x] **"Meus pedidos" mostra a retirada** (local, mensagem e data de separado): 1 em cada 4 pedidos de 06/10
+      não tinha e-mail, e a página é o que a pessoa abre com o telefone.
+- [x] **Directus:** limitador por IP de 25 para 150 chamadas/s; histórico de revisões (`accountability`)
+      reduzido a "activity" em pedidos, itens, respostas e inscrições.
+- [x] Lotes do incidente juntados no lote 1 (1.083 pedidos) e os cinco lotes criados por engano apagados —
+      nenhum pedido apagado (ordem do responsável).
+- [x] **Provas em produção (06/10):** 17/17 verificações de camisetas e 16/16 de eventos, com grupos e evento
+      de teste criados e apagados; carga de 36 pedidos com 12 conexões: 36/36 gravados, sem erro; status a
+      40 conexões: ~200 req/s, 157 ms de mediana, zero erro.
+
+**O limite que ficou, medido:** o Directus grava **um de cada vez** — plano B1 (1 núcleo) foi a 88-98 % de CPU
+com 6 gravações em paralelo, PostgreSQL a 8 %. Capacidade medida: ~1,5 a 2 pedidos por segundo (≈ 100 por
+minuto; o pico de 06/10 foi 17 por minuto). Acima disso ninguém recebe erro: espera na fila (12 pedidos ao
+mesmo tempo = ~8 s cada). Para mais que isso, duas opções, à decisão do responsável:
+
+- [ ] **Plano do Directus B1 → B2 ou P0v3** (≈ +US$ 13 a 60/mês): mais CPU para o Directus gravar; o único
+      item que custa dinheiro nesta versão.
+- [ ] **API do site num Function App próprio em Brazil South** (≈ US$ 10/mês): corta os ~150 ms de ida entre
+      East US 2 e São Paulo em cada chamada e tira a partida a frio — foi tentado no sistema em 20/09 e esbarrou
+      num defeito do Azure; no site é outro aplicativo e pode funcionar.
+- [ ] **Teste de carga maior, de vários lugares** (GitHub Actions, IPs diferentes), depois da decisão acima —
+      o teste de hoje saiu de uma máquina só e esbarra no próprio limite por IP da API (40 em 5 min).
+- [ ] **Painel de camisetas:** o token do Directus vence em 15 min e o painel não renova (é a "desconectar e
+      entrar de novo" de 06/10) — usar o `auth/refresh` como o painel de eventos já faz.
+- [ ] **Directus → GitHub (remontar o site)**: o token `GITHUB_DISPATCH_TOKEN` do fluxo "Publicar site" está
+      inválido (GitHub responde 401 desde antes de 06/10; a última remontagem automática foi em 01/10). Precisa
+      de um token novo (fine-grained, só este repositório, permissão `Contents: read and write`), guardado na
+      configuração do App Service do Directus — **depende de você** criar o token no GitHub.
+
 ## 🔒 Trava de Revisão D-B — antes de encerrar a FASE D e voltar à Trava 7-A
 
-Ponto de parada obrigatório. Audita vD.4 a vD.7 pelas 5 perguntas, e faz a varredura final da FASE D inteira. Atenção
+Ponto de parada obrigatório. Audita vD.4 a vD.8 pelas 5 perguntas, e faz a varredura final da FASE D inteira. Atenção
 especial à vD.4: um segundo fator mal feito tranca o Presidente fora do sistema ou, pior, deixa um atalho que o anula —
 testar o caminho de recuperação de verdade, com uma conta de teste, antes de ligar pra todo mundo. Fechada esta trava,
 abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.

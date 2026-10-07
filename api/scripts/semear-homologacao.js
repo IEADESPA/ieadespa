@@ -121,7 +121,7 @@ async function main() {
   const papelTesoureiro = await papel("Tesoureiro Local", "CONGREGACAO", "financeiro");
   // psc_gestao, calendario_secretaria, canais_gestao, eventos_gestao, ebd_gestao: as telas que viraram módulos na vD.2 — o pastor
   // fictício abre cada uma de verdade na homologação (prova em navegador de cada módulo extraído)
-  const papelPastorArea = await papel("Pastor de Área", "AREA", "reunioes,pessoas,relatorios,disciplina,psc_gestao,calendario_secretaria,canais_gestao,eventos_gestao,ebd_gestao");
+  const papelPastorArea = await papel("Pastor de Área", "AREA", "reunioes,pessoas,relatorios,disciplina,psc_gestao,calendario_secretaria,canais_gestao,eventos_gestao,ebd_gestao,consagracoes,relatorios_departamentais,assistencia_social,habilitacao_voluntarios,conquistas_gestao,trilhas_gestao");
   const lideranca = async (matricula, papelId, escopoTipo, escopoId, rotulo) => {
     const existe = await escalar("SELECT COUNT(*) FROM dbo.Lideranca WHERE MembroId = @m AND PapelId = @p", { m: matricula, p: papelId });
     if (existe) return;

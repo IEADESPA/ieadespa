@@ -70,9 +70,11 @@ async function api(caminho, corpo, token) {
       await page.waitForFunction(() => { const g = document.querySelector("#gradeModulos"); return g && g.children.length > 0; }, { timeout: 60000 }).catch(() => {});
       ok("entrou no painel (grade de módulos montada)", await page.evaluate(() => { const g = document.querySelector("#gradeModulos"); return !!(g && g.children.length); }));
       if (ABA) {
-        await page.evaluate((id) => { const b = document.querySelector("#" + id); if (b) b.click(); }, ABA);
+        // --aba btnAbaX clica no botão da aba; --aba X (sem "btnAba") pede a aba pelo nome ao próprio sistema (mostrarAbaSecretaria)
+        const porBotao = /^btnAba/.test(ABA);
+        await page.evaluate((id, porBotao) => { if (porBotao) { const b = document.querySelector("#" + id); if (b) b.click(); } else if (typeof mostrarAbaSecretaria === "function") mostrarAbaSecretaria(id); }, ABA, porBotao);
         await new Promise((r) => setTimeout(r, 1500));
-        const abaId = ABA.replace(/^btnAba/, "aba");
+        const abaId = porBotao ? ABA.replace(/^btnAba/, "aba") : "aba" + ABA.charAt(0).toUpperCase() + ABA.slice(1);
         ok(`aba #${abaId} aberta`, await page.evaluate((id) => { const a = document.querySelector("#" + id); return !!(a && a.style.display !== "none" && a.offsetParent !== null); }, abaId));
       }
       if (ACAO) {

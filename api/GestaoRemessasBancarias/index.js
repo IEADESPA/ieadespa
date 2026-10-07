@@ -85,6 +85,8 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST") {
+    // vD.4 — gerar remessa bancária (dinheiro de todas as congregações) exige confirmação recente (chave de acesso ou código)
+    if (!require("../shared/auth").exigirFatorRecente(req, context)) return;
     const { congregacaoId } = req.body || {};
     const filtroCong = idOpcional(congregacaoId);
     if (filtroCong.presente && !filtroCong.id) {

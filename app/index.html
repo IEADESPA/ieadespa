@@ -14,6 +14,8 @@
   <link rel="stylesheet" href="style.css" />
   <!-- SheetJS: só usado na aba Assembleia Geral, pra ler o Excel de elegíveis no navegador -->
   <script src="vendor/xlsx.full.min.js"></script>
+  <!-- vD.4 — chave de acesso (passkey): biblioteca MIT servida daqui, nunca de CDN (CSP script-src 'self') -->
+  <script src="vendor/simplewebauthn-browser.js"></script>
 </head>
 <body>
 
@@ -67,6 +69,23 @@
       </form>
 
       <p id="resultadoLogin"></p>
+
+      <!-- vD.4 — segunda etapa do login da liderança: chave de acesso do aparelho (passkey) ou, na falta dela, código por e-mail -->
+      <div id="cxSegundoFator" style="display:none; margin-top:12px;">
+        <p class="subtitle" id="segundoFatorTexto"></p>
+        <button class="btn-confirmar" type="button" id="btnUsarChaveAcesso" data-on-click="usarChaveAcessoAcao">🔑 Confirmar com a chave de acesso</button>
+        <div id="cxCodigoFator" style="display:none; margin-top:8px;">
+          <div class="input-group">
+            <label>Código recebido por e-mail:</label>
+            <input type="text" id="codigoFatorInput" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 números" />
+          </div>
+          <button class="btn-confirmar" type="button" data-on-click="confirmarCodigoFatorAcao">Confirmar código</button>
+        </div>
+        <p style="margin-top:8px;">
+          <a href="#" class="link-secretaria" id="linkCodigoFator" data-on-click="pedirCodigoFatorAcao" data-prevent="click">📧 Receber um código por e-mail</a>
+          <a href="#" class="link-secretaria" data-on-click="cancelarSegundoFatorAcao" data-prevent="click">✖ Cancelar</a>
+        </p>
+      </div>
 
       <!-- vB.5 — código de 6 dígitos verificado por e-mail. Desde o fecho da v7.5 é o caminho do PRIMEIRO ACESSO e do "esqueci meu PIN": depois de confirmar o
            código, a pessoa cria o PIN. Quem não tem e-mail cadastrado pede à Secretaria um PIN provisório. -->
@@ -944,6 +963,13 @@
           <p class="subtitle">Dispositivos onde você entrou. "Encerrar" derruba aquela sessão de verdade —
             se estiver aberta em outro aparelho, ele sai em poucos segundos. Trocar a senha também encerra as outras sessões.</p>
           <div class="rolagem-tabela"><div id="resultadoMinhasSessoes"></div></div>
+
+          <hr />
+          <!-- vD.4 — chaves de acesso (passkeys): o aparelho confiável confirma a entrada da liderança; a privada nunca sai dele -->
+          <h3>🔑 Chaves de acesso</h3>
+          <p class="subtitle">Para quem entra com senha de liderança: cadastre o seu celular ou notebook como aparelho confiável. Na entrada, depois da senha,
+            você confirma com a digital, o rosto ou a senha do aparelho — sem decorar nem digitar código. Sem chave, a confirmação vai por código no e-mail do cadastro.</p>
+          <div class="rolagem-tabela"><div id="resultadoChavesAcesso"></div></div>
 
           <hr />
           <h3>🤝 Delegação Temporária</h3>

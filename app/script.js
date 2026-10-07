@@ -427,6 +427,14 @@ async function fetchProtegido(url, opts = {}) {
     "x-auth-token": authToken,
     Authorization: "Bearer " + authToken
   });
+  // vD.4 — confirmação reforçada: 428 = "confirme de novo quem você é"; depois de confirmar, a mesma chamada é repetida UMA vez
+  if (!opts.semFator) {
+    const primeira = await fetchProtegido(url, Object.assign({}, opts, { semFator: true }));
+    if (primeira.status !== 428) return primeira;
+    const ok = await confirmarFatorAgora();
+    if (!ok) return primeira;
+    return fetchProtegido(url, Object.assign({}, opts, { semFator: true }));
+  }
   // vB.10 — mensagem de secretaria pra quem está sem internet/servidor fora
   // do ar, em vez do erro técnico do navegador ("Failed to fetch") ficar
   // silencioso (sem isso, o clique só "não fazia nada").
@@ -574,15 +582,179 @@ async function acessarPainel() {
     if (!data.sucesso) { msg.textContent = data.mensagem; return; }
   }
 
+  // vD.4 — senha certa da liderança abre a SEGUNDA ETAPA (chave de acesso do aparelho ou código por e-mail), não a sessão
+  if (data.segundoFator) { mostrarSegundoFator(data, matricula); return; }
+
   salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo, data.geral);
   document.getElementById("senhaPainel").value = "";
   msg.textContent = "";
+  if (data.avisoFator) mostrarToast(data.avisoFator, "erro");
   if (data.pinProvisorio) { mostrarCriarPin(); return; }          // entrou com o PIN que a Secretaria gerou: precisa criar o próprio
   if (data.termosPendentes && data.termosPendentes.length > 0) {
     await mostrarModalTermos(data.termosPendentes);
     return;
   }
   await abrirPainelConteudo(matricula);
+}
+
+// ---- vD.4 — segunda etapa do login da liderança: chave de acesso (passkey) com código por e-mail de reserva ----
+// A senha certa devolve um bilhete de 5 minutos e diz a etapa ("chave" se a pessoa já cadastrou um aparelho, "codigo" se só
+// tem e-mail). A chave é a biblioteca @simplewebauthn/browser (vendor/) chamando navigator.credentials; o servidor confere
+// o desafio de uso único. Em caso de falha, a tela sempre oferece o código por e-mail.
+let segundoFatorPendente = null; // { bilhete, matricula, opcoes, podeCodigo }
+const temChaveDeAcessoNoNavegador = () => !!(window.SimpleWebAuthnBrowser && SimpleWebAuthnBrowser.browserSupportsWebAuthn());
+
+function mostrarSegundoFator(data, matricula) {
+  segundoFatorPendente = { bilhete: data.bilhete, matricula, opcoes: data.opcoes || null, podeCodigo: !!data.podeCodigo };
+  const temChave = data.segundoFator === "chave";
+  document.getElementById("cxSegundoFator").style.display = "block";
+  document.getElementById("btnUsarChaveAcesso").style.display = temChave ? "" : "none";
+  document.getElementById("cxCodigoFator").style.display = temChave ? "none" : "block";
+  document.getElementById("linkCodigoFator").style.display = temChave && data.podeCodigo ? "" : "none";
+  document.getElementById("codigoFatorInput").value = "";
+  document.getElementById("segundoFatorTexto").textContent = temChave
+    ? "Senha certa. Agora confirme com a chave de acesso deste aparelho (digital, rosto ou senha do aparelho)."
+    : `Senha certa. Enviamos um código de 6 números para ${data.emailMascarado || "o e-mail do seu cadastro"}.${data.avisoCodigo ? " " + data.avisoCodigo : ""}`;
+  document.getElementById("resultadoLogin").textContent = "";
+  if (temChave) usarChaveAcessoAcao();   // já pede a chave na hora; o botão fica para repetir
+  else document.getElementById("codigoFatorInput").focus();
+}
+
+async function usarChaveAcessoAcao() {
+  const p = segundoFatorPendente;
+  if (!p) return;
+  const msg = document.getElementById("resultadoLogin");
+  if (!temChaveDeAcessoNoNavegador()) { msg.textContent = "Este navegador não tem chave de acesso. Use o código por e-mail."; return; }
+  try {
+    let opcoes = p.opcoes;
+    if (!opcoes) {
+      const o = await postJsonSemSessao(`${API_BASE}/auth/segundo-fator/chave/opcoes`, { bilhete: p.bilhete });
+      if (!o.sucesso) { msg.textContent = o.mensagem; return; }
+      opcoes = o.opcoes;
+    }
+    p.opcoes = null;   // cada desafio vale uma vez
+    const resposta = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: opcoes });
+    const data = await postJsonSemSessao(`${API_BASE}/auth/segundo-fator/chave`, { bilhete: p.bilhete, resposta });
+    if (!data.sucesso) { msg.textContent = data.mensagem; return; }
+    await concluirEntradaLideranca(data, p.matricula);
+  } catch (e) {
+    msg.textContent = /NotAllowed|Abort/i.test(String(e && e.name))
+      ? "A confirmação foi cancelada no aparelho. Tente de novo ou use o código por e-mail."
+      : "Não foi possível usar a chave de acesso neste aparelho. Use o código por e-mail.";
+  }
+}
+
+async function pedirCodigoFatorAcao() {
+  const p = segundoFatorPendente;
+  if (!p) return;
+  const data = await postJsonSemSessao(`${API_BASE}/auth/segundo-fator/codigo/enviar`, { bilhete: p.bilhete });
+  document.getElementById("resultadoLogin").textContent = data.mensagem || (data.sucesso ? "Código enviado." : "Não foi possível enviar o código.");
+  if (data.sucesso) { document.getElementById("cxCodigoFator").style.display = "block"; document.getElementById("codigoFatorInput").focus(); }
+}
+
+async function confirmarCodigoFatorAcao() {
+  const p = segundoFatorPendente;
+  if (!p) return;
+  const msg = document.getElementById("resultadoLogin");
+  const codigo = document.getElementById("codigoFatorInput").value.trim();
+  if (!/^\d{6}$/.test(codigo)) { msg.textContent = "Digite os 6 números do código."; return; }
+  const data = await postJsonSemSessao(`${API_BASE}/auth/segundo-fator/codigo`, { bilhete: p.bilhete, codigo });
+  if (!data.sucesso) { msg.textContent = data.mensagem; return; }
+  await concluirEntradaLideranca(data, p.matricula);
+}
+
+function cancelarSegundoFatorAcao() {
+  segundoFatorPendente = null;
+  document.getElementById("cxSegundoFator").style.display = "none";
+  document.getElementById("resultadoLogin").textContent = "";
+}
+
+async function concluirEntradaLideranca(data, matricula) {
+  segundoFatorPendente = null;
+  document.getElementById("cxSegundoFator").style.display = "none";
+  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo, data.geral);
+  document.getElementById("senhaPainel").value = "";
+  document.getElementById("resultadoLogin").textContent = "";
+  if (data.termosPendentes && data.termosPendentes.length > 0) { await mostrarModalTermos(data.termosPendentes); return; }
+  await abrirPainelConteudo(matricula);
+}
+
+// Confirmação reforçada (os quatro atos): a rota responde 428 quando a última confirmação passou de 10 minutos; aqui a pessoa
+// confirma de novo (chave do aparelho ou código por e-mail), a sessão é reassinada com o carimbo novo e a chamada é repetida.
+async function confirmarFatorAgora() {
+  const cabecalhos = { "Content-Type": "application/json" };
+  const chamar = (caminho, corpo) => fetchProtegido(`${API_BASE}/chaves-acesso/${caminho}`, { method: "POST", headers: cabecalhos, body: JSON.stringify(corpo || {}), semFator: true }).then((r) => r.json());
+  let data = null;
+  if (temChaveDeAcessoNoNavegador()) {
+    const o = await chamar("confirmar/opcoes");
+    if (o.sucesso) {
+      try {
+        const resposta = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: o.opcoes });
+        data = await chamar("confirmar", { resposta });
+      } catch (_) { data = null; }
+    }
+  }
+  if (!data || !data.sucesso) {
+    const envio = await chamar("confirmar/codigo/enviar");
+    if (!envio.sucesso) { mostrarToast(envio.mensagem || "Não foi possível confirmar. Cadastre uma chave de acesso em Meu Painel → Segurança.", "erro"); return false; }
+    const codigo = await pedirTexto("Este ato exige confirmação. " + (envio.mensagem || "Enviamos um código ao seu e-mail.") + " Digite o código:", "6 números", "");
+    if (!codigo) return false;
+    data = await chamar("confirmar/codigo", { codigo: String(codigo).trim() });
+    if (!data.sucesso) { mostrarToast(data.mensagem || "Código não confirmado.", "erro"); return false; }
+  }
+  authToken = data.token;
+  sessionStorage.setItem("authToken", data.token);
+  return true;
+}
+
+// Meu Painel → Segurança: as chaves de acesso da própria pessoa
+async function carregarChavesAcesso() {
+  const c = document.getElementById("resultadoChavesAcesso");
+  if (!c) return;
+  if (!authToken) { c.innerHTML = "<p class='subtitle'>Disponível só para quem entrou com senha de liderança.</p>"; return; }
+  const res = await fetchProtegido(`${API_BASE}/chaves-acesso`, { semFator: true });
+  if (res.status === 403) { c.innerHTML = "<p class='subtitle'>Chaves de acesso são da liderança (sessão com senha). O PIN do membro já é o fator dele.</p>"; return; }
+  const data = await jsonDaTela(res, c, "lista");
+  if (data === null) return;
+  if (data.sucesso === false) { c.innerHTML = `<p class='subtitle'>${escaparHtmlEbd(data.mensagem || "")}</p>`; return; }
+  const chaves = Array.isArray(data.chaves) ? data.chaves : [];
+  const linhas = chaves.map((k) => `<tr>
+      <td>${escaparHtmlEbd(k.apelido || "(sem nome)")}</td>
+      <td>${k.criadoEm ? new Date(k.criadoEm).toLocaleDateString("pt-BR") : "—"}</td>
+      <td>${k.ultimoUsoEm ? new Date(k.ultimoUsoEm).toLocaleString("pt-BR") : "nunca"}</td>
+      <td class="acoes-inline"><button class="btn-link btn-link-perigo" data-on-click="removerChaveAcessoAcao" data-args-click="${argsAttr(Number(k.chaveId))}">Remover</button></td>
+    </tr>`).join("");
+  const tabela = linhas
+    ? `<table class="tabela-frequencia"><thead><tr><th>Aparelho</th><th>Cadastrada em</th><th>Último uso</th><th></th></tr></thead><tbody>${linhas}</tbody></table>`
+    : `<p class='subtitle'>Nenhuma chave cadastrada ainda. Enquanto não houver, a confirmação vai por código no e-mail${data.emailMascarado ? ` (${escaparHtmlEbd(data.emailMascarado)})` : " — e a sua matrícula não tem e-mail cadastrado: peça à Secretaria Geral"}.</p>`;
+  const botao = temChaveDeAcessoNoNavegador()
+    ? `<button class="btn-confirmar" type="button" data-on-click="cadastrarChaveAcessoAcao">🔑 Cadastrar este aparelho</button>`
+    : "<span class='subtitle'>Este navegador não oferece chave de acesso; tente no celular ou num navegador atual.</span>";
+  c.innerHTML = `${tabela}<p style="margin-top:8px;">${botao}</p>`;
+}
+
+async function cadastrarChaveAcessoAcao() {
+  const apelido = await pedirTexto("Dê um nome a este aparelho (ex.: Celular da Maria):", "Nome do aparelho", "");
+  if (apelido === null || apelido === undefined) return;
+  const cabecalhos = { "Content-Type": "application/json" };
+  const o = await (await fetchProtegido(`${API_BASE}/chaves-acesso/registrar/opcoes`, { method: "POST", headers: cabecalhos, body: "{}", semFator: true })).json();
+  if (!o.sucesso) { mostrarToast(o.mensagem || "Não foi possível iniciar o cadastro.", "erro"); return; }
+  let resposta;
+  try { resposta = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: o.opcoes }); }
+  catch (e) {
+    mostrarToast(/InvalidState/i.test(String(e && e.name)) ? "Este aparelho já tem uma chave cadastrada para a sua matrícula." : "O cadastro foi cancelado ou o aparelho não respondeu.", "erro");
+    return;
+  }
+  const r = await (await fetchProtegido(`${API_BASE}/chaves-acesso/registrar`, { method: "POST", headers: cabecalhos, body: JSON.stringify({ resposta, apelido: String(apelido).trim() }), semFator: true })).json();
+  mostrarToast(r.mensagem || (r.sucesso ? "Chave cadastrada." : "Não foi possível cadastrar."), r.sucesso ? "sucesso" : "erro");
+  if (r.sucesso) carregarChavesAcesso();
+}
+
+async function removerChaveAcessoAcao(chaveId) {
+  if (!(await confirmarAcao("Remover esta chave de acesso? Este aparelho deixa de confirmar a sua entrada.", "Remover"))) return;
+  const r = await (await fetchProtegido(`${API_BASE}/chaves-acesso/remover`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chaveId: Number(chaveId) }), semFator: true })).json();
+  mostrarToast(r.mensagem || "", r.sucesso ? "sucesso" : "erro");
+  if (r.sucesso) carregarChavesAcesso();
 }
 
 // Tela de criar o PIN: depois do código por e-mail (primeiro acesso / esqueci) ou do PIN provisório da Secretaria.
@@ -1290,7 +1462,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "eventos") carregarMeuPainelEventosAcao();
   if (sub === "tarefas") { filtrarMinhasTarefas(filtroMinhasTarefasAtual); carregarMinhasMediacoesAcao(); }
   if (sub === "perfil") carregarPainelInicial();
-  if (sub === "seguranca") { carregarMinhasSessoes(); carregarDelegacoes(); }
+  if (sub === "seguranca") { carregarMinhasSessoes(); carregarChavesAcesso(); carregarDelegacoes(); }
 }
 
 // ---- PAINEL INICIAL POR PERFIL (vB.7) ----
@@ -1523,6 +1695,7 @@ function formatarMoedaEbd(valor) {
 // api/shared/__tests__/frontCsp.test.js confere que cada nome usado está aqui e que nada sobra. Ação nova: escreva data-on-click="minhaAcao" no HTML
 // e acrescente minhaAcao abaixo (referência direta à função, nunca texto: o despachante não procura nada em window).
 registrarAcoes({
+  usarChaveAcessoAcao, pedirCodigoFatorAcao, confirmarCodigoFatorAcao, cancelarSegundoFatorAcao, cadastrarChaveAcessoAcao, removerChaveAcessoAcao,
   abrirModalAnexos, abrirNotificacao,
   acaoMinhaTarefa, acessarPainel,
   alterarMeuPinAcao, alternarAjudaContextual,

@@ -24,6 +24,7 @@ const PUBLICAS = {
   VerificarCertificado: "verificação pública de certificado (o código é o segredo; com limitador)",
   VerificarContaMembro: "chamada servidor a servidor do site; só devolve um booleano; limitador por origem + chave combinada com o site (CHAVE_SITE_SISTEMA, ver chaveSiteSistema.test.js)",
   LoginSecretaria: "porta de entrada da liderança (senha + bloqueio)",
+  SegundoFator: "segunda etapa do login da liderança (vD.4): só com o bilhete assinado que a senha certa abriu; limitador + bloqueio por pessoa",
   LogoutSecretaria: "encerrar a própria sessão",
   MembroEntrar: "porta de entrada do membro (matrícula + PIN + bloqueio)",
   SolicitarCodigoAcessoMembro: "pedir o código por e-mail (resposta genérica, com limites)",

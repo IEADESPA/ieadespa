@@ -74,8 +74,8 @@ const rodou = (padrao) => mockConsultas.filter((c) => padrao.test(c.sql));
 const escritas = () => mockConsultas.filter((c) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(c.sql));
 const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], ...extra });
 // Geral: papel GLOBAL + escopo TODAS. Local: dirigente (membro 5) da congregação Central, a menos que se diga outro escopo.
-const GERAL = (permissoes = ["pessoas"]) => tokenDe(1, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes });
-const LOCAL = (permissoes = ["pessoas"], escopo = ["Central"], extra = {}) => tokenDe(5, { via: "SENHA", nivel: "CONGREGACAO", escopoCongregacoes: escopo, permissoes, ...extra });
+const GERAL = (permissoes = ["pessoas"]) => tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes });
+const LOCAL = (permissoes = ["pessoas"], escopo = ["Central"], extra = {}) => tokenDe(5, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "CONGREGACAO", escopoCongregacoes: escopo, permissoes, ...extra });
 const MEMBRO_PIN = tokenDe(10, { via: "PIN" });
 
 const diasAtras = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
@@ -154,9 +154,9 @@ describe("GestaoMedidasCautelares: Art. 45 é da igreja inteira, só o GERAL", (
   ];
   const naoGerais = [
     ["dirigente local com pessoas", () => LOCAL(["pessoas"])],
-    ["papel GLOBAL com escopo de uma lista", () => tokenDe(1, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: ["Central"], permissoes: ["pessoas"] })],
-    ["papel local com escopo TODAS", () => tokenDe(1, { via: "SENHA", nivel: "CONGREGACAO", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] })],
-    ["Líder Geral de Departamento (TODAS, mas não GLOBAL)", () => tokenDe(1, { via: "SENHA", nivel: "DEPARTAMENTO", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] })]
+    ["papel GLOBAL com escopo de uma lista", () => tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: ["Central"], permissoes: ["pessoas"] })],
+    ["papel local com escopo TODAS", () => tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "CONGREGACAO", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] })],
+    ["Líder Geral de Departamento (TODAS, mas não GLOBAL)", () => tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "DEPARTAMENTO", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] })]
   ];
   describe.each(naoGerais)("%s", (_q, token) => {
     test.each(casos)("%s: 403 ANTES de tocar o banco, nada gravado", async (_c, args) => {
@@ -217,7 +217,7 @@ describe("ImportarPessoas: importação do rol é do GERAL, com teto e transaç�
   });
   test("papel GLOBAL com escopo de lista e papel local com escopo TODAS: 403", async () => {
     for (const claims of [{ nivel: "GLOBAL", escopoCongregacoes: ["Central"] }, { nivel: "CONGREGACAO", escopoCongregacoes: "TODAS" }]) {
-      const r = await chamar(hImportar, { metodo: "POST", token: tokenDe(1, { via: "SENHA", permissoes: ["pessoas"], ...claims }), corpo });
+      const r = await chamar(hImportar, { metodo: "POST", token: tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, permissoes: ["pessoas"], ...claims }), corpo });
       expect(r.status).toBe(403);
     }
     expect(mockConsultas).toHaveLength(0);
@@ -281,7 +281,7 @@ describe("GestaoFuncoes: ler vale para quem tem pessoas, escrever é do GERAL", 
     expect(mockConsultas).toHaveLength(0);
   });
   test("papel GLOBAL com escopo de lista também é recusado nas escritas", async () => {
-    const token = tokenDe(1, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: ["Central"], permissoes: ["pessoas"] });
+    const token = tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: ["Central"], permissoes: ["pessoas"] });
     expect((await chamar(hFuncoes, { metodo: "POST", token, corpo: { nome: "X" } })).status).toBe(403);
     expect(mockConsultas).toHaveLength(0);
   });
@@ -308,9 +308,9 @@ describe("LGPD do Encarregado: permissão protecaodedados E nível GERAL", () =>
   ];
   describe.each(LGPD)("%s", (_nome, handler, args) => {
     test.each([
-      ["papel local com a permissão", () => tokenDe(5, { via: "SENHA", nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], permissoes: ["protecaodedados"] })],
-      ["papel GLOBAL com escopo de lista", () => tokenDe(5, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: ["Central"], permissoes: ["protecaodedados"] })],
-      ["papel local com escopo TODAS", () => tokenDe(5, { via: "SENHA", nivel: "CONGREGACAO", escopoCongregacoes: "TODAS", permissoes: ["protecaodedados"] })]
+      ["papel local com a permissão", () => tokenDe(5, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], permissoes: ["protecaodedados"] })],
+      ["papel GLOBAL com escopo de lista", () => tokenDe(5, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: ["Central"], permissoes: ["protecaodedados"] })],
+      ["papel local com escopo TODAS", () => tokenDe(5, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "CONGREGACAO", escopoCongregacoes: "TODAS", permissoes: ["protecaodedados"] })]
     ])("%s: 403 antes de tocar o banco", async (_q, token) => {
       const r = await chamar(handler, { ...args, token: token() });
       expect(r.status).toBe(403);
@@ -414,7 +414,7 @@ describe("EditarMarcoMembro: corrigir marco de qualquer pessoa é do GERAL", () 
     ["papel local com escopo TODAS", { nivel: "CONGREGACAO", escopoCongregacoes: "TODAS" }],
     ["dirigente local", { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"] }]
   ])("%s: 403 antes de tocar o banco", async (_q, claims) => {
-    const r = await chamar(hEditarMarco, { metodo: "POST", token: tokenDe(5, { via: "SENHA", permissoes: ["pessoas"], ...claims }), ligado: { marcoId: "1" }, corpo });
+    const r = await chamar(hEditarMarco, { metodo: "POST", token: tokenDe(5, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, permissoes: ["pessoas"], ...claims }), ligado: { marcoId: "1" }, corpo });
     expect(r.status).toBe(403);
     expect(r.body.mensagem).toBe(er.MSG_GERAL);
     expect(mockConsultas).toHaveLength(0);
@@ -537,7 +537,7 @@ describe("GestaoLicencasCandidatura", () => {
       expect(mockConsultas).toHaveLength(0);
     });
     test("papel GLOBAL com escopo de lista: 403", async () => {
-      const r = await retorno(tokenDe(1, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: ["Central"], permissoes: ["pessoas"] }));
+      const r = await retorno(tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: ["Central"], permissoes: ["pessoas"] }));
       expect(r.status).toBe(403);
     });
     test("geral: registra; o UPDATE só vale para licença EM_LICENCA e só reativa quem está em LICENCA_CANDIDATURA", async () => {
@@ -619,7 +619,7 @@ describe("GestaoFilaAprovacoes", () => {
       base();
       const local = await decidir(3);
       expect(local.status).toBe(403);
-      const geral = await chamar(hFila, { metodo: "POST", token: tokenDe(5, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] }), ligado: { solicitacaoId: "3", acao: "decidir" }, corpo: { decisoes: [{ campoId: 10, decisao: "APROVADO" }] } });
+      const geral = await chamar(hFila, { metodo: "POST", token: tokenDe(5, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] }), ligado: { solicitacaoId: "3", acao: "decidir" }, corpo: { decisoes: [{ campoId: 10, decisao: "APROVADO" }] } });
       expect(geral.status).toBe(403);
       expect(escritas()).toHaveLength(0);
     });

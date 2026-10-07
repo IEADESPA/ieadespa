@@ -261,6 +261,7 @@ module.exports = comConflito(async function (context, req) {
 
   // ---- POST /lideranca/lote: conceder o mesmo papel a várias matrículas ----
   if (method === "POST" && membroIdRota === "lote") {
+    if (!auth.exigirFatorRecente(req, context)) return;   // vD.4 — concessão em lote exige confirmação recente
     const { membroIds, papelId, escopoTipo, escopoId, senha, duracaoMeses } = req.body || {};
     if (!Array.isArray(membroIds) || membroIds.length === 0 || !papelId) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroIds (lista), papelId." } };
@@ -312,6 +313,7 @@ module.exports = comConflito(async function (context, req) {
 
   // ---- POST: conceder ou atualizar acesso ----
   if (method === "POST") {
+    if (!auth.exigirFatorRecente(req, context)) return;   // vD.4 — conceder cargo/permissão exige confirmação recente (chave de acesso ou código)
     const resultado = await concederOuAtualizarLideranca(pool, req.body || {}, usuarioId);
     if (resultado.sucesso) await conferirSucessaoDeCanais(pool, usuarioId);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: resultado };
@@ -320,6 +322,7 @@ module.exports = comConflito(async function (context, req) {
 
   // ---- DELETE: remover ----
   if (method === "DELETE") {
+    if (!auth.exigirFatorRecente(req, context)) return;   // vD.4 — retirar cargo exige confirmação recente
     if (!auth.idDeRota(membroIdRota)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o membroId na rota: /api/lideranca/{membroId}" } };
       return;

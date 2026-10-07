@@ -10,9 +10,12 @@ const fs = require("fs");
 const path = require("path");
 const parser = require("@babel/parser");
 const traverse = require("@babel/traverse").default;
+const { textoFront } = require("./fontes");
 
-function gerarModelo(arquivoScript) {
-  const js = fs.readFileSync(arquivoScript, "utf8");
+// Recebe a pasta do app (ou, por compatibilidade, o caminho do script.js dela): lê o script.js + app/modulos/*.js na ordem do index.html (fontes.js).
+function gerarModelo(pastaOuScript) {
+  const pasta = /\.js$/i.test(pastaOuScript) ? path.dirname(pastaOuScript) : pastaOuScript;
+  const js = textoFront(pasta);
   const ast = parser.parse(js, { sourceType: "script", errorRecovery: true });
   const props = new Set(), listas = new Set(), fracos = new Set(), objetos = new Set(), numeros = new Set(), literais = {};
   const METODOS_LISTA = new Set(["map", "forEach", "filter", "length", "reduce", "some", "find", "join", "slice", "every", "sort", "flatMap", "findIndex", "concat"]);

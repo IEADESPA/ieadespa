@@ -4,7 +4,7 @@
 const { Sessao } = require("./cobertor");
 
 const CABECALHOS = ["content-security-policy", "content-security-policy-report-only", "x-frame-options", "x-content-type-options", "strict-transport-security", "referrer-policy", "permissions-policy", "cross-origin-opener-policy", "cache-control", "content-type"];
-const ARQUIVOS = ["/", "/index.html", "/eventos.js", "/script.js", "/style.css", "/verificar.html", "/verificar.js", "/verificar.css", "/service-worker.js", "/vendor/xlsx.full.min.js"];
+const ARQUIVOS = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/psc.js", "/style.css", "/verificar.html", "/verificar.js", "/verificar.css", "/service-worker.js", "/vendor/xlsx.full.min.js"];
 
 async function sondarRemoto(nav, srv, log) {
   const s = new Sessao(nav, srv, { props: [], listas: [], literais: {}, permissoes: [] }, null, "sondagem");

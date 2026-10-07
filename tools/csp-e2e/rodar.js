@@ -8,6 +8,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { criarServidor, criarRemoto } = require("./servidor");
 const { gerarModelo } = require("./modelo");
+const { textoFront } = require("./fontes");
 const { abrirNavegador, executarAcao, explorar, emParalelo, arquivosDeTeste, contextosDosTrabalhadores, fecharContextos } = require("./cobertor");
 const { compararRodadas, compararAcao, resumo } = require("./comparar");
 
@@ -91,8 +92,8 @@ function estatisticas(plano, T) {
   // modelo de respostas e plano: sempre a partir da ORIGINAL; ficam guardados pelo hash dela
   // (mude VERSAO_PLANO quando o instrumento/cobertor mudar de um jeito que altere o transcrito; ou use --redescobrir)
   const VERSAO_PLANO = "v1";
-  const chave = sha(fs.readFileSync(path.join(original, "index.html")) + fs.readFileSync(path.join(original, "script.js")) + VERSAO_PLANO + perfis.join(","));
-  const modelo = gerarModelo(path.join(original, "script.js"));
+  const chave = sha(fs.readFileSync(path.join(original, "index.html")) + textoFront(original) + VERSAO_PLANO + perfis.join(","));
+  const modelo = gerarModelo(original);
   const arqs = arquivosDeTeste();
   // vários processos do Edge (rende mais que um só com muitas abas); os trabalhadores se dividem entre eles
   const nNav = Math.max(1, Math.min(Number(o.navegadores) || 3, workers));

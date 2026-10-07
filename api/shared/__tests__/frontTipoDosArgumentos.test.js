@@ -7,7 +7,10 @@
 const fs = require("fs");
 const path = require("path");
 
-const SCRIPT = path.join(__dirname, "..", "..", "..", "app", "script.js");
+const APP = path.join(__dirname, "..", "..", "..", "app");
+const SCRIPT = path.join(APP, "script.js");
+// vD.2: os módulos de app/modulos/*.js seguem a mesma regra
+const FONTES = ["script.js", ...fs.readdirSync(path.join(APP, "modulos")).filter(n => n.endsWith(".js")).sort().map(n => "modulos/" + n)].map(nome => ({ nome, codigo: fs.readFileSync(path.join(APP, nome), "utf8") }));
 const TEXTO_DA_TELA = /(\.value\b|\.dataset\b|\.textContent\b|\.innerText\b|getAttribute\(|\.split\(|\.replace\(|\.trim\(|\.padStart\(|searchParams|\.get\()/;
 const JA_NUMERICO = /^\s*(Number|parseInt|parseFloat)\(|\.indexOf\(|\.findIndex\(|\.length\b|^\s*\+\+|^\s*Math\./;
 
@@ -44,9 +47,10 @@ function suspeitos(codigo) {
 }
 
 describe("argumentos dos botões: o tipo de um valor lido da tela não muda na conversão para JSON", () => {
-  test("app/script.js: nenhuma variável lida de um campo da tela vai crua para argsAttr (passa por Number() ou String())", () => {
-    const achados = suspeitos(fs.readFileSync(SCRIPT, "utf8"));
-    expect(achados.map((x) => `L${x.linha}: ${x.variavel} = ${x.atribuicao}`)).toEqual([]);
+  test("app/script.js e app/modulos/*.js: nenhuma variável lida de um campo da tela vai crua para argsAttr (passa por Number() ou String())", () => {
+    const achados = FONTES.flatMap(({ nome, codigo }) => suspeitos(codigo).map((x) => `${nome} L${x.linha}: ${x.variavel} = ${x.atribuicao}`));
+    expect(achados).toEqual([]);
+    expect(FONTES.length).toBeGreaterThan(1);
   });
   test("o detector pega o defeito de verdade (mutação): o texto do campo indo cru, e solta quando vira Number()", () => {
     const ruim = 'function f() {\n  const congregacaoId = document.getElementById("x").value;\n  return `<button data-args-click="${argsAttr(congregacaoId, mes)}">ok</button>`;\n}';

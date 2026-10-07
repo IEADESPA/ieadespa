@@ -379,8 +379,13 @@
           <a href="#" class="link-secretaria" data-on-click="sairDoPainel">Sair</a>
         </div>
       </aside>
+      <!-- vD.6 (07/10/2026) — no celular a barra lateral vira uma gaveta: fechada por padrão, abre pelo ☰
+           do cabeçalho e fecha ao escolher uma aba ou tocar fora. Até aqui ela ficava fixa com 230 px e o
+           conteúdo sobrava com ~130 px numa tela de 360 px. No notebook nada muda. -->
+      <div class="fundo-menu-celular" id="fundoMenuCelular" data-on-click="alternarMenuCelular"></div>
       <main class="conteudo">
         <div class="cabecalho-secretaria">
+          <button class="btn-icon btn-menu-celular" id="btnMenuCelular" data-on-click="alternarMenuCelular" title="Menu" aria-label="Abrir o menu" aria-expanded="false">☰</button>
           <h2 id="tituloModulo">Meu Painel</h2>
           <!-- vB.4 — busca global: mesmo motivo de ficar fora de qualquer
                aba (não é preciso saber de antemão onde o dado mora). -->

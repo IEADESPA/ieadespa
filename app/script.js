@@ -5412,6 +5412,26 @@ function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 function alternarSidebar() {
   document.getElementById("sidebar").classList.toggle("recolhido");
 }
+
+// vD.6 (07/10/2026) — gaveta do menu no celular (≤ 640 px): o ☰ do cabeçalho abre/fecha; escolher uma aba
+// ou tocar no fundo escurecido fecha. Só mexe em classes; a largura e a posição vêm do CSS (@media).
+function alternarMenuCelular(forcar) {
+  const sidebar = document.getElementById("sidebar");
+  const fundo = document.getElementById("fundoMenuCelular");
+  const botao = document.getElementById("btnMenuCelular");
+  if (!sidebar) return;
+  const abrir = typeof forcar === "boolean" ? forcar : !sidebar.classList.contains("aberto-celular");
+  sidebar.classList.toggle("aberto-celular", abrir);
+  if (fundo) fundo.classList.toggle("visivel", abrir);
+  if (botao) botao.setAttribute("aria-expanded", abrir ? "true" : "false");
+}
+document.addEventListener("DOMContentLoaded", () => {
+  const sidebar = document.getElementById("sidebar");
+  if (!sidebar) return;
+  sidebar.addEventListener("click", (e) => {
+    if (window.innerWidth <= 640 && e.target.closest(".btn-aba, .btn-subaba, .link-secretaria")) alternarMenuCelular(false);
+  });
+});
 const TITULOS_MODULOS = {
   meupainel: "Meu Painel", financeiro: "Financeiro", reunioes: "Reuniões",
   pessoas: "Pessoas", cartas: "Cartas de Trânsito", congregacoes: "Congregações",
@@ -21571,7 +21591,7 @@ registrarAcoes({
   alternarCriterioPscAcao, alternarDiscipuladoBatismoAcao, alternarEdicaoValorReferenciaCotacoes, alternarFormDadosBancariosInstituicao,
   alternarFormNovaCampanha, alternarFormNovaContaReceber, alternarFormNovaMetaPdq, alternarFormNovaSaida, alternarFormNovoFornecedor,
   alternarFormNovoFundoFixo, alternarFormNovoOrcamento, alternarFormNovoPlanoPdq, alternarFormNovoProjetoPdq, alternarFormNovoSorteio,
-  alternarLoginPorCodigo, alternarMeusDadosLGPD, alternarModoLeitura, alternarPainelNotificacoes, alternarPushAcao, alternarSidebar,
+  alternarLoginPorCodigo, alternarMenuCelular, alternarMeusDadosLGPD, alternarModoLeitura, alternarPainelNotificacoes, alternarPushAcao, alternarSidebar,
   anexarComprovanteTesourariaAcao, anonimizarAlunoEbdDpoAcao, anonimizarOuvidoriaAcao, anonimizarVisitanteEbdDpoAcao, aoTrocarCongregacaoLancamentos,
   apagarDadosOfflineEbdAcao, aplicarFiltroElegiveis, aplicarFiltroPessoas, aplicarMedidaCautelarAcao, aprovarJustificativaPendente,
   aprovarPedidoRevistaEbdAcao, aprovarSaidaAcao, aprovarTodaSolicitacaoAcao, arquivarNotificacao, arquivarOuvidoriaAcao,

@@ -4,7 +4,9 @@
 const { Sessao } = require("./cobertor");
 
 const CABECALHOS = ["content-security-policy", "content-security-policy-report-only", "x-frame-options", "x-content-type-options", "strict-transport-security", "referrer-policy", "permissions-policy", "cross-origin-opener-policy", "cache-control", "content-type"];
-const ARQUIVOS = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/psc.js", "/style.css", "/verificar.html", "/verificar.js", "/verificar.css", "/service-worker.js", "/vendor/xlsx.full.min.js"];
+// os módulos (app/modulos/*.js) vêm do index.html local, na ordem em que ele os carrega (fontes.js) — não precisa editar aqui a cada módulo novo
+const MODULOS = require("./fontes").arquivosFront(require("path").join(__dirname, "..", "..", "app")).filter((a) => a !== "script.js").map((a) => "/" + a);
+const ARQUIVOS = ["/", "/index.html", "/eventos.js", "/script.js", ...MODULOS, "/style.css", "/verificar.html", "/verificar.js", "/verificar.css", "/service-worker.js", "/vendor/xlsx.full.min.js"];
 
 async function sondarRemoto(nav, srv, log) {
   const s = new Sessao(nav, srv, { props: [], listas: [], literais: {}, permissoes: [] }, null, "sondagem");

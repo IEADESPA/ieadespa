@@ -11,9 +11,9 @@
 // v5 (05/10/2026): com a CSP estrita, o `connect-src 'self'` vale TAMBÉM para o service worker: o fetch() dele para as fontes do Google era recusado e a página perdia a fonte
 // (a página não vê essa recusa, só o console do service worker). Agora ele só trata pedidos do PRÓPRIO endereço; os de fora o navegador atende direto, sob as regras da página.
 // v6 (07/10/2026): vD.2 — o script.js começou a ser dividido em módulos (app/modulos/*.js, carregados pelo index.html depois dele); cada módulo entra na
-// casca, e a versão sobe para a instalação baixar o index.html novo junto com eles.
-const CACHE_NOME = "ieadespa-app-shell-v6";
-const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/psc.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js"];
+// casca, e a versão sobe para a instalação baixar o index.html novo junto com eles (v7: + voluntariado).
+const CACHE_NOME = "ieadespa-app-shell-v7";
+const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/psc.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js"];
 
 self.addEventListener("install", (evento) => {
   evento.waitUntil(caches.open(CACHE_NOME).then((cache) => cache.addAll(ARQUIVOS_SHELL)));

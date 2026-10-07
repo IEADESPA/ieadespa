@@ -12,7 +12,7 @@ reproduzir/manter** cada peça — não é mais um runbook pendente.
 | Recurso | Nome | Detalhe |
 | --- | --- | --- |
 | Banco de homologação | `ieadespa-homolog` (servidor `srv-app-sql`, brazilsouth) | Serverless GP_S_Gen5, auto-pause 60min, mesmo schema da produção (74 migrações rodadas) |
-| Ambiente de homologação | PR [#1](https://github.com/IEADESPA/ieadespa/pull/1) (branch `homolog`, **não fechar**) | Ambiente de preview grátis do Static Web App (plano Standard já pago), `SQL_CONNECTION_STRING` apontada pro `ieadespa-homolog` em vez do banco de produção. URL: `https://white-grass-048208e0f-1.eastus2.6.azurestaticapps.net` |
+| Ambiente de homologação | PR [#21](https://github.com/IEADESPA/ieadespa/pull/21) (branch `homolog`, **não fechar nem mesclar**; substituiu o #1 em 07/10/2026) | Ambiente de preview grátis do Static Web App (plano Standard já pago), `SQL_CONNECTION_STRING` apontada pro `ieadespa-homolog` em vez do banco de produção. URL: `https://white-grass-048208e0f-1.eastus2.6.azurestaticapps.net` |
 | Application Insights | `ieadespa-appinsights` (eastus2) | Connection string configurada como `APPLICATIONINSIGHTS_CONNECTION_STRING` tanto no ambiente de produção (`default`) quanto no de homologação (`1`) |
 | Grupo de ação | `ieadespa-alertas` | E-mail: `presidente@ieadespa.org` |
 | Regra de alerta | `ieadespa-api-falhas` | Dispara quando `requests/failed` (Application Insights) passa de 5 numa janela de 15 min |
@@ -45,9 +45,14 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
 
 ## Manutenção do ambiente de homologação
 
-- **Não feche nem dê merge no PR #1** — o ambiente de preview é destruído
-  junto. Se isso acontecer sem querer, reabra um PR do branch `homolog`
-  (ou de outro) e reconfigure:
+- **Não feche nem dê merge no PR da homologação** (hoje o #21) — o ambiente de
+  preview é destruído junto. O #1 foi fechado **pelo próprio GitHub** em
+  07/10/2026: a `main` recebeu um merge do `homolog`, a ponta do ramo passou a
+  estar na `main`, o PR virou "mesclado" e o ambiente sumiu. Regra desde então:
+  a `main` recebe o **ramo da mudança**, nunca o `homolog`; o `homolog` recebe a
+  `main` por merge (`git checkout homolog && git merge main && git push`); e o
+  arquivo `RAMO-HOMOLOG.txt` existe só no `homolog`. Se acontecer de novo,
+  reabra um PR do branch `homolog` (ou de outro) e reconfigure:
 
   ```powershell
   az staticwebapp environment list --name app-meusite-web --output table

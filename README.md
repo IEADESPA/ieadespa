@@ -422,6 +422,10 @@ versões de negócio — mesmo motivo que fez a FASE B virar "FASE B" em vez de
    sub-aba criados desde a última trava, um por um — não só o primeiro da
    lista. Todo `id` de botão/`div` bate com o que o JavaScript gera; nenhum
    `getElementById` retorna `null` (a causa exata do bug do Financeiro).
+   Desde a vD.1 (07/10/2026) a resposta vem **da máquina**: a rodada completa
+   dos testes de tela (`Sistema - testes de tela`, `workflow_dispatch` com
+   `completo=sim`) tem de dar zero divergência e zero violação de CSP, e a trava
+   cita o número da corrida; clicar à mão continua valendo só pra tela nova.
 3. **README e código continuam narrando a mesma coisa?** Nenhuma versão
    marcada `[x]` sem o endpoint/tabela/tela existir de verdade; nenhuma
    referência cruzada (`vX.Y`) apontando pra versão que não existe mais.

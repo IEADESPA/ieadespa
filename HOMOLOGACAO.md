@@ -70,6 +70,38 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
   3º adulto da Alfa). Nunca copiamos dado de membro real; o script se recusa a rodar
   fora de um banco com "homolog" no nome.
 
+## O que a homologação prova — e o que não prova (vD.3, 07/10/2026)
+
+**Prova, a cada push no `homolog`:**
+
+- que o **código do commit** sobe no Azure de verdade (front e API publicados pelo
+  mesmo fluxo da produção) e que **toda rota responde** — a varredura de rotas
+  (`api/scripts/varrer-rotas.js`, passo do fluxo) chama as 200+ Functions sem
+  sessão e acusa 404 do Static Web App ou 5xx (módulo que não carregou), e
+  confere que o `index.html` publicado carrega todos os módulos do repositório;
+- que o **esquema do banco** é o do commit (migrações rodam no `ieadespa-homolog`)
+  e que há **massa fictícia** para abrir as telas (seed idempotente);
+- que **toda tela se comporta como a linha de base** (teste de tela da vD.1 roda
+  no `homolog` antes da `main`: 962 ações no modo rápido, zero divergência);
+- que uma tela escolhida **abre com a API real e a massa fictícia** quando se
+  roda `tools/modularizar/prova-modulo.js` contra o endereço (login dos fictícios).
+
+**Não prova:**
+
+- **configuração de ambiente**: o preview nasce com uma CÓPIA das configurações
+  de produção (inclusive a conexão SQL, apontada à mão para o `ieadespa-homolog`
+  em 07/10 — conferir sempre que o ambiente for recriado) e **compartilha** o
+  Directus, o ACS (e-mail) e o Storage de produção: um teste que dispara e-mail
+  ou publica no site faz isso de verdade;
+- **desempenho e custo**: o banco de homologação é menor e dorme; tempo de
+  resposta e consumo de DTU/segundos não valem para a produção;
+- **o domínio**: cabeçalhos e CSP são conferidos no host do preview, não em
+  `app.ieadespa.org.br` (mesmo Static Web App, mesmas regras — mas a prova
+  final em produção continua sendo a varredura pós-deploy da `main`);
+- **dado real**: não há membro real na homologação, de propósito — regras que
+  dependem de volume (relatórios, fechamentos de mês) só são vistas de verdade
+  em produção.
+
 ---
 
 ## Custo real observado

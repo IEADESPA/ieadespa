@@ -83,6 +83,17 @@ jobs:
           output_location: "/" # Built app content directory - optional
           ###### End of Repository/Build Configurations ######
 
+      # vD.3 (07/10/2026): varredura de rotas no endereço que acabou de ser publicado — toda Function
+      # responde sem sessão (401/400/405; nunca 404 nem 5xx) e o front tem todos os módulos. Pega o
+      # módulo que não carrega no Azure (em 04/10 a homologação passou semanas respondendo 404 sem
+      # ninguém ver). Push na main = produção; PR da homologação = o preview recém-montado.
+      - name: Varredura de rotas no endereço publicado (vD.3)
+        if: github.event_name == 'push' || startsWith(github.head_ref, 'homolog')
+        working-directory: api
+        env:
+          ALVO: ${{ github.event_name == 'push' && 'https://app.ieadespa.org.br' || steps.builddeploy.outputs.static_web_app_url }}
+        run: node scripts/varrer-rotas.js "$ALVO"
+
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest

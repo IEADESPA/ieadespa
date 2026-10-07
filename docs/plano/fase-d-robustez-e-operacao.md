@@ -68,6 +68,14 @@ seguro agora: a vD.1 prova equivalência ação por ação, igual provou a CSP (
       ajudantes de tela e o registro de ações) ficou em ~1.550 linhas. *Feito em 07/10/2026 — método e provas abaixo.*
 - [ ] Carregar cada módulo **sob demanda** ao entrar nele (hoje todos carregam sempre, como antes): exige que o
       despachante só conheça ações de módulos já carregados — mudança no `eventos.js`, com prova própria.
+      **Proposta (07/10/2026): cancelar — decisão do responsável.** Depois da divisão ficou medido o que isso
+      custaria: o núcleo chama funções e variáveis dos módulos diretamente em dezenas de pontos (`mostrarSubAbaFinanceiro`,
+      `subAbaPessoasAtual`, `carregarPainelPessoal`, os `carregarOpcoes…` de cada aba, os ajudantes de data do
+      calendário usados por canais/eventos/voluntariado…), e cada ponto teria de virar "carrega o módulo, espera,
+      depois chama" — deixa de ser uma mudança mecânica e sem risco. O ganho seria só o tempo de ler ~1,3 MB de
+      JavaScript uma vez por sessão (o service worker já guarda os arquivos: não há download repetido), algo como
+      0,2-0,4 s num celular simples. Custo alto, risco real, ganho pequeno: não vale. O mesmo vale para "`index.html`
+      por módulo" abaixo.
 - [ ] Mesmo tratamento no `index.html`: o markup de cada módulo em arquivo próprio, montado na navegação — sem
       framework (decisão da FASE 10 continua: melhorar o que existe, não reescrever).
 - [x] Prova de equivalência pela vD.1 **antes e depois de cada módulo extraído** (um módulo por commit): zero
@@ -266,7 +274,11 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       retomada do serverless no primeiro login do dia, mas o banco passa a cobrar o mínimo (0,5 vCore) o tempo todo nesse
       horário — medir no portal o custo de um mês com e sem, e só então decidir. A opção gratuita (um `curl` por GitHub
       Actions a cada 15 minutos em horário de uso, como o aquecimento que `rotinas-diarias.yml` já faz às 7h) fica
-      documentada como alternativa.
+      documentada como alternativa. *O número (07/10/2026, com o preço medido em 06/10 — ≈ R$ 5,25 por vCore-hora
+      no mínimo de 0,5 vCore):* banco acordado das 6h às 23h = 17 h × 0,5 vCore × R$ 5,25 × 30 dias ≈ R$ 1.340 por
+      mês, o dobro do teto inteiro (US$ 120 ≈ R$ 650). Hoje, com a vD.5, o banco só acorda quando alguém usa o
+      sistema ou nas rotinas das 7h: de 6-7 reais por dia pausado até ≈ R$ 2,60 por despertar. A recomendação é
+      **não** manter acordado; os segundos de retomada no primeiro acesso do dia são o preço de pagar só o uso.*
 - [x] **Anexos com rede de segurança**: exclusão suave (soft delete) e versionamento de blob na conta
       `ieadespaarmazenamento` (anexos da vB.4, fotos, documentos) — *feito em 06/10:* a exclusão suave já existia
       com 7 dias; agora 30 dias, com versionamento de blob e exclusão suave de contêiner (30 dias) ligados.

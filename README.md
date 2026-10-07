@@ -340,8 +340,10 @@ diz em que arquivo ela está e em que pé ela anda.
   no plano da fase 7. A CSP forte (04/10/2026) está feita. **Antes da 🔒 Trava 7-A entra a FASE D** (06/10/2026, 8ª
   rodada): retrofit de robustez e operação (prova automática de toda tela, front em módulos, homologação, segundo fator,
   alerta de queda, celular do membro), com custo escrito por versão pra decisão do responsável. Em 07/10/2026 a prova
-  de tela roda no CI (vD.1), o `script.js` virou núcleo + 23 módulos (vD.2), a homologação migra e se semeia sozinha
-  (vD.3) e o menu do celular virou gaveta (vD.6).
+  de tela roda no CI (vD.1, também em janela de celular pro membro), o `script.js` virou núcleo + 23 módulos (vD.2),
+  a homologação migra, se semeia e varre as suas rotas sozinha (vD.3), a agenda chega ao site sem acordar o banco
+  (vD.5) e o menu do celular virou gaveta (vD.6). A Trava D-A foi fechada no mesmo dia; o que resta da FASE D
+  depende de decisão do responsável (segundo fator, raiz do domínio, segredos, ensaio de restauração).
 - **Planejadas:** FASES 8 a 12. Candidatos pra depois (implantação por congregação, pequenos grupos, Secretaria da
   Família) estão na [8ª rodada](docs/pesquisa/oitava-rodada-2026.md), sem versão, aguardando decisão.
 

@@ -250,6 +250,18 @@ desativada continuava aceitando pedido, porque a regra de aberto/fechado só exi
       cupom) — antes qualquer pessoa podia chamar isso à mão.
 - [x] **"Meus pedidos" mostra a retirada** (local, mensagem e data de separado): 1 em cada 4 pedidos de 06/10
       não tinha e-mail, e a página é o que a pessoa abre com o telefone.
+- [x] **WhatsApp a partir do painel (07/10/2026):** o responsável quer falar com quem pediu, e 3 em 4 pedidos
+      não têm e-mail. Até aqui o telefone existia só como hash e chave de busca — nenhum dos dois volta ao
+      número, então o sistema **não tinha como** mandar nada. Decisão (do responsável, ao pedir a mensagem):
+      o número completo passa a ser guardado **cifrado** (AES-256-GCM, chave derivada do segredo do servidor;
+      quem lê o Directus vê só o cifrado) nos pedidos e inscrições novos, e um pedido antigo ganha o cifrado
+      no momento em que é achado em "Meus pedidos" (único instante em que o número está em mãos). No painel,
+      cada pedido tem o botão **WhatsApp**: a API do site (`telefone-pedido/{id}`) só devolve o número a quem
+      está logado no painel (prova: o token da pessoa precisa enxergar o pedido no Directus) e o navegador
+      abre o WhatsApp com a mensagem pronta (texto de retirada da campanha, itens e local). Sem API paga de
+      mensagens: é o link oficial `wa.me`, a pessoa da equipe aperta "enviar". Pedidos de antes de 07/10 sem
+      consulta em "Meus pedidos" respondem "telefone não guardado". A lista de campanhas do painel ganhou o
+      atalho "Pedidos, lotes, filtros e planilha Excel".
 - [x] **Directus:** limitador por IP de 25 para 150 chamadas/s; histórico de revisões (`accountability`)
       reduzido a "activity" em pedidos, itens, respostas e inscrições.
 - [x] Lotes do incidente juntados no lote 1 (1.083 pedidos) e os cinco lotes criados por engano apagados —

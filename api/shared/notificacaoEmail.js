@@ -22,7 +22,9 @@ function escaparHtml(texto) {
   return String(texto == null ? "" : texto).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-async function enviarEmailNotificacao({ email, titulo, mensagem }) {
+// `aguardarEntrega: false` (vD.4): responde assim que o serviço ACEITA o e-mail (beginSend), sem esperar a entrega — o login
+// da liderança não pode ficar 10-15 s preso esperando o serviço de e-mail confirmar.
+async function enviarEmailNotificacao({ email, titulo, mensagem, aguardarEntrega = true }) {
   const emailClient = getClient();
   if (!emailClient || !email) return false;
   try {
@@ -35,7 +37,7 @@ async function enviarEmailNotificacao({ email, titulo, mensagem }) {
       },
       recipients: { to: [{ address: email }] }
     });
-    await poller.pollUntilDone();
+    if (aguardarEntrega) await poller.pollUntilDone();
     return true;
   } catch (e) {
     console.error("[NOTIFICACOES] falha ao enviar e-mail:", e.message);

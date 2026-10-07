@@ -1,5 +1,5 @@
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
-const { gerarHash, chaveTelefone } = require("../src/lib/telefone");
+const { gerarHash, chaveTelefone, cifrarTelefone } = require("../src/lib/telefone");
 const { avaliarJanela } = require("../src/lib/janela");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
@@ -202,6 +202,8 @@ module.exports = async function (context, req) {
       nome,
       telefone: telefoneHash,
       telefone_chave: telefoneChave,
+      // Número completo cifrado (07/10/2026), para o botão de WhatsApp do painel — ver `telefone.js`.
+      telefone_cifrado: cifrarTelefone(telefone),
       email,
       congregacao: body.congregacaoId ? Number(body.congregacaoId) : null,
       itens: itens.map((item) => ({ tamanho: item.tamanho || null, modelo: item.modelo || null, quantidade: Number(item.quantidade) || 0 })),

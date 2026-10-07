@@ -1,6 +1,6 @@
 const crypto = require("node:crypto");
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
-const { gerarHash, chaveTelefone } = require("../src/lib/telefone");
+const { gerarHash, chaveTelefone, cifrarTelefone } = require("../src/lib/telefone");
 const { avaliarJanela } = require("../src/lib/janela");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
@@ -184,6 +184,7 @@ module.exports = async function (context, req) {
         nome,
         telefone: telefoneHash,
         telefone_chave: telefoneChave,
+        telefone_cifrado: cifrarTelefone(telefone),
         email,
         codigo: gerarCodigo(),
         valor: valorFinal,

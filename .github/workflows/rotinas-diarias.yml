@@ -59,6 +59,30 @@ jobs:
           curl -sf -X POST "https://app.ieadespa.org.br/api/fluxos-escalonador-interno" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
 
+  # vD.5 (07/10/2026): rotina falhou → e-mail para quem cuida do sistema (antes só o autor do último
+  # commit era avisado pelo GitHub). Usa a mesma conta de e-mail do Azure (ACS) do site.
+  avisar-falha:
+    needs: [notificacoes, fluxos, ebd-fechamento]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Avisar por e-mail
+        env:
+          ACS_CONNECTION_STRING: ${{ secrets.ACS_CONNECTION_STRING }}
+          DESTINATARIO: presidente@ieadespa.org
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm install --silent --no-audit --no-fund @azure/communication-email@1 >/dev/null 2>&1
+          node - <<'EOF'
+          const { EmailClient } = require("@azure/communication-email");
+          const agora = new Date().toLocaleString("pt-BR", { timeZone: "America/Belem" });
+          (async () => {
+            const client = new EmailClient(process.env.ACS_CONNECTION_STRING);
+            const poller = await client.beginSend({ senderAddress: "DoNotReply@ieadespa.org.br", content: { subject: "⚠️ Rotina diária do sistema falhou", plainText: `Às ${agora} (horário de Parauapebas), uma das rotinas diárias do sistema (avisos, escalonamento de fluxos ou fechamento da EBD) falhou. A rotina roda de novo amanhã; se falhar duas vezes seguidas, vale olhar.\n\nDetalhes: ${process.env.RUN_URL}` }, recipients: { to: [{ address: process.env.DESTINATARIO }] } });
+            console.log("e-mail:", (await poller.pollUntilDone()).status);
+          })().catch((e) => { console.error("falha ao enviar e-mail:", e.message); });
+          EOF
+
   ebd-fechamento:
     if: github.event.schedule == '0 11 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

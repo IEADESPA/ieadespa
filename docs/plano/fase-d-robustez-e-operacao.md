@@ -39,17 +39,19 @@ em segundos. O equipamento já existe: `tools/csp-e2e` descobre sozinho todo con
 aciona cada um com a API simulada e comparou 4.782 ações sem divergência quando a CSP forte entrou (04/10/2026). Falta
 só torná-lo **permanente**.
 
-- [ ] Rodada do `tools/csp-e2e` no CI (`azure-static-web-apps-white-grass-*.yml`), antes do deploy, com o Chromium do
-      próprio runner (hoje usa o Edge da máquina via `puppeteer-core`): plano de ações descoberto no front, API simulada,
-      perfis anônimo/geral/membro. **Qualquer erro de JavaScript, `getElementById` nulo, violação de CSP ou tela em
-      branco = o deploy não sai.**
-- [ ] Linha de base guardada no repositório (`tools/csp-e2e/base/`): o relatório da rodada aprovada vira a referência;
-      um push só passa se o resultado for igual à base **ou** se a base for atualizada no mesmo commit (mudança de tela
-      intencional fica visível no diff, não escondida).
-- [ ] Tempo total abaixo de 10 minutos (modo `--rapido`: uma ação por manipulador distinto); a rodada completa fica
-      pra `workflow_dispatch` e pras travas.
+- [x] Rodada do `tools/csp-e2e` no CI — *feita em 07/10 como fluxo próprio* (`sistema-testes-tela.yml`, a cada push na
+      `main` que toque `app/` ou o equipamento, e à mão com a rodada completa), no Chrome do runner (o equipamento
+      aceita `NAVEGADOR=<caminho>`; sem ele acha Edge/Chrome sozinho). Primeira rodada (07/10): plano descoberto com
+      **4.737 ações** em 3 perfis, modo rápido **962 ações, 105 telas distintas, 581 rotas de API**, resultado
+      **962 iguais, 0 divergência, 0 violação de CSP**. Não bloqueia o deploy (roda em paralelo): a descoberta do plano
+      de uma base nova leva ~30 min; com o plano em cache, a rodada leva ~7 min.
+- [x] Linha de base: `tools/csp-e2e/base/commit.txt` guarda o commit aprovado; o CI extrai o `app/` dele (`git
+      archive`), reaproveita o plano pelo cache do Actions (chave = commit da base) e compara com a versão atual.
+      Mudança de tela intencional = atualizar o commit da base no mesmo push (fica visível no diff).
+- [x] Tempo: ~7 min com o plano em cache (modo `--rapido`); rodada completa só por `workflow_dispatch`
+      (`completo=sim`) e nas travas.
 - [ ] As Travas de Revisão passam a citar o resultado desta rodada como resposta à pergunta 2 — clicar à mão continua
-      valendo pra tela nova, mas deixa de ser a única prova.
+      valendo pra tela nova, mas deixa de ser a única prova. (Vale a partir da Trava D-A.)
 
 *Esforço:* médio. *Risco:* baixo (não toca o sistema, só o CI). *Depende de você:* nada.
 
@@ -188,11 +190,15 @@ do roteiro; o membro já usa hoje.
 - [x] Toda tabela rola de lado no telefone — *feito em 06/10 sem tocar em markup:* regra de CSS só até 640 px
       (`.tabela-frequencia` vira bloco rolável e as células não quebram linha); no notebook nada muda. A função
       única de montar tabela fica para a vD.2.
-- [ ] As telas que o membro comum usa (Meu Painel: perfil, dados, família, contribuições, LGPD, cartas, escalas,
-      eventos, EBD do aluno, notificações) revisadas em **360 px de largura** com prova de tela (captura antes/depois
-      guardada em `docs/plano/capturas/vD.6/`): nada cortado, botão alcançável com o polegar, formulário sem zoom.
+- [x] As telas do membro revisadas em **360 px** — *feito em 07/10, na homologação, com um membro fictício entrando
+      de verdade (PIN provisório gerado pela dirigente fictícia, PIN criado, Meu Painel):* o problema real era a
+      **barra lateral fixa de 230 px**, que deixava ~130 px para o conteúdo (texto quebrando palavra por palavra,
+      sino e ajuda fora da tela). Agora, até 640 px, a barra vira **gaveta** (fechada por padrão, ☰ no cabeçalho,
+      fecha ao escolher uma aba ou tocar fora) e o cabeçalho quebra linha. Medido tela a tela (Perfil, Dados,
+      Vínculos, Contribuições, LGPD, Cartas, Escalas, Eventos, Segurança): **0 px de rolagem lateral** em todas;
+      tabelas rolam dentro de si. Capturas em `docs/plano/capturas/vD.6/`.
 - [ ] Os mesmos testes da vD.1 rodando também em janela de celular (360×740) pro perfil **membro** — regressão de
-      layout vira erro de CI, não reclamação.
+      layout vira erro de CI, não reclamação. (Depende de o equipamento aceitar viewport por perfil.)
 - [ ] O que é só da liderança (Financeiro, Disciplina, Catálogos) fica como está até a v10.3/v10.1.3 — não é o que o
       membro usa, e redesenhar tudo agora é a FASE 10.
 

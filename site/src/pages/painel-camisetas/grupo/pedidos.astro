@@ -182,7 +182,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
   <script is:inline src="/vendor/xlsx.full.min.js"></script>
 
   <script>
-    import { exigirAutenticacao, fetchComSessao, renovarToken } from "@/lib/painelAuth";
+    import { exigirAutenticacao, fetchComSessao, obterTokenValido, renovarToken } from "@/lib/painelAuth";
     import { ENVIAR_AVISO_RETIRADA_CAMISETA_URL, TELEFONE_PEDIDO_URL } from "@/lib/directus";
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
@@ -1273,7 +1273,11 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         botao.disabled = true;
         botao.textContent = "Abrindo…";
         try {
-          const res = await api(`${TELEFONE_PEDIDO_URL}/${pedidoId}`);
+          // Token do painel no cabeçalho próprio (`x-painel-token`); num 401, renova e repete uma vez.
+          const chamar = async (t: string) => fetch(`${TELEFONE_PEDIDO_URL}/${pedidoId}`, { headers: { "x-painel-token": t } });
+          let t = (await obterTokenValido(directusUrl, AUTH.tokenKey)) ?? "";
+          let res = await chamar(t);
+          if (res.status === 401) { t = (await renovarToken(directusUrl, AUTH.tokenKey)) ?? ""; res = await chamar(t); }
           const json = await res.json().catch(() => null);
           if (!res.ok || !json?.whatsapp) {
             alert(json?.erro || "Não foi possível obter o telefone agora.");

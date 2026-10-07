@@ -38,8 +38,11 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { erro: "Pedido inválido." } };
     return;
   }
-  const cabecalho = Object.keys(req.headers || {}).find((k) => k.toLowerCase() === "authorization");
-  const tokenPainel = cabecalho ? String(req.headers[cabecalho]).replace(/^Bearer\s+/i, "").trim() : "";
+  // O token do painel vem no cabeçalho próprio `x-painel-token` (mesma razão do `x-auth-token` do
+  // sistema: um `Authorization` pode ser alterado/anexado pelo proxy do Static Web Apps). Aceita o
+  // `Authorization: Bearer …` como reserva.
+  const cabecalhoDe = (nome) => { const k = Object.keys(req.headers || {}).find((c) => c.toLowerCase() === nome); return k ? String(req.headers[k]) : ""; };
+  const tokenPainel = (cabecalhoDe("x-painel-token") || cabecalhoDe("authorization")).replace(/^Bearer\s+/i, "").trim();
   if (!tokenPainel) {
     context.res = { status: 401, body: { erro: "Entre no painel para ver o telefone." } };
     return;
@@ -48,7 +51,7 @@ module.exports = async function (context, req) {
   // Prova de acesso: o token da pessoa precisa enxergar ESTE pedido no Directus.
   const prova = await fetch(`${DIRECTUS_URL}/items/camiseta_pedidos/${pedidoId}?fields=id`, { headers: { Authorization: `Bearer ${tokenPainel}` } });
   if (prova.status === 401 || prova.status === 403) {
-    context.res = { status: 401, body: { erro: "Sua sessão do painel não vale mais. Entre de novo." } };
+    context.res = { status: 401, body: { erro: `Sua sessão do painel não vale mais. Entre de novo. (Directus respondeu ${prova.status})` } };
     return;
   }
   if (prova.status === 404) {

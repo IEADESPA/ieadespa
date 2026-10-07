@@ -255,6 +255,14 @@ perdido, primeiro cadastro). Aplicativo autenticador (TOTP) **descartado** — i
       navegador na homologação com um autenticador virtual (o navegador cria e usa uma chave de verdade, sem
       aparelho físico), além da rodada de tela de sempre.
 
+**Ponto de parada — 07/10/2026, fim de tarde (pedido do responsável):** a vD.4 está **escrita, testada e publicada na
+homologação**, ainda **não** na produção. O código fica no ramo `vd4-chaves` (GitHub) e no `homolog` (PR #21); a
+migração 140 já rodou no banco de homologação; 4.605 testes verdes; a rodada local de tela mostrou só as telas novas. O
+que falta para ir à `main`: (1) a prova em navegador na homologação com autenticador virtual (roteiro pronto:
+`prova-chave-homolog.js` — entra sem chave, cadastra, sai, entra pela chave, confirmação reforçada, remove); (2) a rodada de
+tela da homologação com a nova linha de base (corrida em curso); (3) `git merge vd4-chaves` na `main`, push, conferir a
+produção e marcar os itens acima. Nada do que está na produção depende disso.
+
 *Esforço:* médio. *Risco:* baixo no código; a chave de acesso é a opção mais simples para quem usa (nada a decorar).
 *Custo:* zero (biblioteca MIT `@simplewebauthn`, servida de dentro do site; e-mail já contratado). *Depende de você:*
 nada mais — decidido.

@@ -41,3 +41,19 @@ Cuidados que apareceram na prática:
   chama-se `eventos-congressos.js`).
 - O `script.js` no disco tem CRLF; os scripts preservam as quebras das linhas movidas e o git
   normaliza no commit.
+
+## Prova em navegador de um módulo publicado
+
+```bash
+cd tools/csp-e2e   # tem o puppeteer-core
+node ../modularizar/prova-modulo.js --base https://<homologação> --modulo canais \
+  --funcoes cnlCampo,cnlCarregarPainelAcao --sw v10 \
+  --matricula 900007 --aba btnAbaCanais --api api/canais --alvo "#abaCanais" --captura canais.png
+```
+
+Confere: todo módulo que o `index.html` publicado carrega responde 200 como JavaScript e está
+na casca do service worker; as funções de amostra estão no escopo global e as ações (nomes
+terminados em `Acao` que o HTML pede) no despachante; com login, abre a aba, aciona uma ação
+(`--acao`), confere que a API real respondeu 200 e que a tela desenhou; zero erro de JavaScript
+e zero violação de CSP. Sem `--matricula` serve para a produção (só leitura, sem login).
+Escrever `--api` sem a barra inicial (o Git Bash converteria `/api/...` num caminho do Windows).

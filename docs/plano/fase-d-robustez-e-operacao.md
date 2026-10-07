@@ -63,11 +63,11 @@ vão empilhar mais. Cada edição num arquivo desse tamanho é um risco de derru
 tudo (inclusive o Financeiro) pra um membro que só quer ver a própria escala. O que mudou desde a v10.4 e torna isso
 seguro agora: a vD.1 prova equivalência ação por ação, igual provou a CSP (4.782 ações idênticas).
 
-- [ ] `app/script.js` dividido por módulo (os mesmos do objeto `MODULOS`: membresia, território, eclesiástica,
-      disciplina, financeiro, EBD, departamentos, saúde, calendário, comunicação, eventos, escalas…), um arquivo por
-      módulo em `app/modulos/`, carregado **sob demanda** ao entrar no módulo; o núcleo (login, sessão, navegação,
-      toast/modal, utilitários) fica num arquivo pequeno carregado sempre. *Em andamento (07/10/2026): 1 de ~11 temas
-      extraído — ver o piloto abaixo.*
+- [x] `app/script.js` dividido por tema, um arquivo por tema em `app/modulos/` (23 módulos, tabela abaixo); o núcleo
+      (login, sessão, navegação, Painel único, termos, busca, sino, tarefas, sessões, módulos, portaria, anexos, PWA,
+      ajudantes de tela e o registro de ações) ficou em ~1.550 linhas. *Feito em 07/10/2026 — método e provas abaixo.*
+- [ ] Carregar cada módulo **sob demanda** ao entrar nele (hoje todos carregam sempre, como antes): exige que o
+      despachante só conheça ações de módulos já carregados — mudança no `eventos.js`, com prova própria.
 - [ ] Mesmo tratamento no `index.html`: o markup de cada módulo em arquivo próprio, montado na navegação — sem
       framework (decisão da FASE 10 continua: melhorar o que existe, não reescrever).
 - [ ] Prova de equivalência pela vD.1 **antes e depois de cada módulo extraído** (um módulo por commit): zero
@@ -111,6 +111,42 @@ dedicada, um módulo por commit, com a rodada completa dos testes de tela antes 
 - **Decisão:** carregar sob demanda fica para depois de dividir tudo. O ganho de manutenção (arquivos menores, diff
   legível, um tema por commit) vem da divisão; o carregamento sob demanda exige que o despachante conheça só ações de
   módulos já carregados e muda o `eventos.js`, com risco próprio — fase separada, com a mesma prova.
+
+*Divisão completa, 07/10/2026 — 23 módulos, um commit por módulo, com as ferramentas em `tools/modularizar/`:*
+
+| Módulo (`app/modulos/`) | Linhas | Funções | Ações |
+| --- | ---: | ---: | ---: |
+| `arquivos.js` (arquivos, texto mestre, retenção) | 257 | 11 | 7 |
+| `assistencia.js` | 242 | 12 | 9 |
+| `calendario.js` | 1.736 | 140 | 51 |
+| `canais.js` | 1.459 | 104 | 46 |
+| `catalogos-estrutura.js` (CRUD genérico, congregações) | 700 | 36 | 17 |
+| `consagracoes.js` (+ esteira de batismo) | 283 | 16 | 11 |
+| `disciplina.js` (+ abandono) | 655 | 33 | 16 |
+| `doacoes.js` | 224 | 12 | 8 |
+| `ebd.js` (+ conquistas) | 2.366 | 147 | 101 |
+| `enquetes.js` | 192 | 12 | 8 |
+| `escalas.js` (+ habilitação de voluntários) | 476 | 30 | 22 |
+| `eventos-congressos.js` | 1.125 | 91 | 32 |
+| `financeiro.js` (tesouraria a dizimistas do mês) | 3.748 | 197 | 129 |
+| `meu-painel.js` (frequência, LGPD, solicitações) | 645 | 32 | 18 |
+| `meus-dados.js` (foto, dados, vínculos, edição) | 321 | 14 | 8 |
+| `ouvidoria.js` (+ mediação) | 480 | 28 | 20 |
+| `permissoes.js` (+ regras de notificação) | 326 | 18 | 12 |
+| `pessoas.js` (cadastro a fila de aprovações) | 1.643 | 67 | 34 |
+| `projetos-assembleia.js` (projetos, credenciamento, elegíveis) | 943 | 47 | 31 |
+| `psc.js` | 899 | 61 | 25 |
+| `relatorios-departamentos.js` | 634 | 28 | 16 |
+| `reunioes.js` | 195 | 12 | 5 |
+| `voluntariado.js` | 797 | 68 | 25 |
+| **núcleo `script.js`** | **1.551** | **90** | — |
+
+O que a divisão achou de graça: o `script.js` original declarava `lerArquivoComoBase64` **duas vezes** (a segunda
+vencia em silêncio); ficou uma só, no núcleo, com o texto da que valia. Seis ajudantes de uso geral que moravam na
+EBD (`escaparHtmlEbd`, `argsAttr`, `urlSegura`, `formatarDataEbd`, `formatarMoedaEbd`, `numeroDoCampo`) foram
+devolvidos ao núcleo. Cada lote subiu primeiro no `homolog` (teste de tela: 962 ações iguais, 0 divergência, 0
+violação de CSP em todos os lotes) e abriu a tela de verdade na homologação antes de ir para a `main`; a v10.4 do
+plano aponta para cá.
 
 ## vD.3 — Homologação igual à produção
 

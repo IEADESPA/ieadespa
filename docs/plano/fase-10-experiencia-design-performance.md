@@ -151,6 +151,13 @@ Audita v10.1 a v10.3 (incluindo v10.1.1-v10.1.3) pelas 5 perguntas do checklist.
 
 ## v10.4 — Modularização do front-end *(7ª rodada — dívida técnica real)*
 
+> **Entregue na vD.2 (07/10/2026), antes da FASE 7 terminar** — ver
+> [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md), seção vD.2: o
+> `script.js` (21.711 linhas) virou um núcleo de ~1.550 linhas mais 23 módulos em
+> `app/modulos/`, com prova de equivalência ação por ação. O que a vD.2 deixou de
+> propósito para depois, e continua aqui como item aberto: carregar sob demanda,
+> `index.html` por módulo e as funções reaproveitáveis.
+
 Achado da varredura de código: `app/script.js` tem **7.898 linhas em arquivo
 único** e `app/index.html`, 2.215. Todo módulo novo das fases 5-11 vai empilhar
 ali. Não é questão de estética — é que a partir de certo ponto o arquivo fica

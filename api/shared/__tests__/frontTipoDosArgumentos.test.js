@@ -62,7 +62,8 @@ describe("argumentos dos botões: o tipo de um valor lido da tela não muda na c
     expect(suspeitos("function f(p) { return `${argsAttr(p.membroId)}`; }")).toHaveLength(0);
   });
   test("a correção dos três pontos achados está no código (mutação no arquivo real: desfazer um e o teste acusa)", () => {
-    const real = fs.readFileSync(SCRIPT, "utf8");
+    // a junção script.js + módulos: o ponto da EBD (turmaId) mora em app/modulos/ebd.js desde a vD.2
+    const real = FONTES.map(({ codigo }) => codigo).join("\n");
     expect(real).toMatch(/argsAttr\(Number\(turmaId\), p\.membroId\)/);
     expect((real.match(/argsAttr\(Number\(congregacaoId\), String\(mesReferencia/g) || []).length).toBe(2);
     const estragado = real.replace("argsAttr(Number(turmaId), p.membroId)", "argsAttr(turmaId, p.membroId)");

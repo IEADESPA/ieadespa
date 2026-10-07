@@ -573,7 +573,8 @@ governanca-ieadespa/
 │   ├── shared/auth.js      Hash de senha, sessão e permissões
 │   ├── shared/auditoria.js Auditoria reutilizada
 │   └── <Function>/         Uma pasta por rota
-└── app/                    Front estático (index.html, style.css, script.js)
+└── app/                    Front estático (index.html, style.css, eventos.js, script.js)
+    ├── modulos/            Partes do script.js já separadas por tema (vD.2; um arquivo por tema, mesmo escopo)
     └── documentos/         Estatuto e Regimento Interno (cópia servida como estático)
 ```
 

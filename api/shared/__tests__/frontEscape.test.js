@@ -17,7 +17,13 @@ const parser = require("@babel/parser");
 const traverse = require("@babel/traverse").default;
 
 const APP = path.join(__dirname, "..", "..", "..", "app");
-const SCRIPT = fs.readFileSync(path.join(APP, "script.js"), "utf8");
+// vD.2: o front é o script.js MAIS os módulos de app/modulos/*.js (scripts clássicos, mesmo escopo global, carregados depois dele). A varredura lê a
+// junção dos arquivos, na ordem de nome — assim uma função de módulo que recebe texto de uma função do script.js (ou vice-versa) é acompanhada até a origem.
+const MODULOS = fs.readdirSync(path.join(APP, "modulos")).filter(n => n.endsWith(".js")).sort().map(n => "modulos/" + n);
+const FONTES = ["script.js", ...MODULOS].map(nome => ({ nome, codigo: fs.readFileSync(path.join(APP, nome), "utf8") }));
+const SCRIPT = FONTES.map(f => f.codigo).join("\n");
+// linha da junção -> "arquivo:linha" (para a mensagem apontar o arquivo certo)
+const arquivoDaLinha = (linha) => { let base = 0; for (const f of FONTES) { const n = f.codigo.split("\n").length; if (linha <= base + n) return `${f.nome}:${linha - base}`; base += n; } return `?:${linha}`; };
 const INDEX = fs.readFileSync(path.join(APP, "index.html"), "utf8");
 
 // Regras que deixam um valor entrar sem helper — cada uma com o porquê. (Aplicadas dentro do analisador: rotulo0/rotuloElementos.)
@@ -688,7 +694,7 @@ function filtrarExcecoes(achados) {
   return achados.filter(a => !Object.prototype.hasOwnProperty.call(EXCECOES_POR_TRECHO, a.texto));
 }
 function descrever(achados) {
-  return achados.map(a => `  linha ${a.linha}: [${a.ctx}] ${a.texto.replace(/\s+/g, " ").slice(0, 120)}${a.origem ? `  (vem de: ${a.origem.replace(/\s+/g, " ").slice(0, 80)})` : ""}  -> use ${DICA[a.ctx]}`).join("\n");
+  return achados.map(a => `  ${arquivoDaLinha(a.linha)}: [${a.ctx}] ${a.texto.replace(/\s+/g, " ").slice(0, 120)}${a.origem ? `  (vem de: ${a.origem.replace(/\s+/g, " ").slice(0, 80)})` : ""}  -> use ${DICA[a.ctx]}`).join("\n");
 }
 const opcoesApp = { htmlExtra: INDEX };
 
@@ -696,9 +702,10 @@ describe("tela: nenhum dado entra em HTML sem a proteção do lugar", () => {
   let resultado;
   beforeAll(() => { resultado = analisar(SCRIPT, opcoesApp); });
 
-  test("app/script.js: zero interpolação desprotegida (texto, atributo, evento e endereço)", () => {
+  test("app/script.js e app/modulos/*.js: zero interpolação desprotegida (texto, atributo, evento e endereço)", () => {
     const achados = filtrarExcecoes(resultado.achados);
-    if (achados.length) throw new Error(`${achados.length} ponto(s) de HTML sem a proteção certa em app/script.js:\n${descrever(achados)}`);
+    if (achados.length) throw new Error(`${achados.length} ponto(s) de HTML sem a proteção certa no front (app/script.js + app/modulos/*.js):\n${descrever(achados)}`);
+    expect(MODULOS.length).toBeGreaterThan(0);
     // a varredura de fato passou pelo arquivo (não é um "zero" por não ter lido nada)
     expect(resultado.raizes).toBeGreaterThan(1000);
     expect(resultado.sinks).toBeGreaterThan(500);

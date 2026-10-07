@@ -17,7 +17,8 @@ name: Sistema - testes de tela (vD.1)
 
 on:
   push:
-    branches: [main]
+    # main = produção; homolog = a homologação do sistema (PR #1): uma mudança de tela é provada lá ANTES de ir para a main
+    branches: [main, homolog]
     paths:
       - "app/**"
       - "tools/csp-e2e/**"
@@ -33,7 +34,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: sistema-testes-tela
+  # uma fila por ramo: a rodada da homolog não derruba a da main (nem o contrário)
+  group: sistema-testes-tela-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

@@ -1,7 +1,8 @@
-// Cobertura do plano: quais atributos on* da ORIGINAL (index.html estático + modelos no script.js) foram acionados ao menos uma vez.
+// Cobertura do plano: quais atributos on* da ORIGINAL (index.html estático + modelos no script.js e nos módulos de app/modulos/) foram acionados ao menos uma vez.
 // node cobertura.js <plano.json> [pastaOriginal] [-v]
 const fs = require("fs");
 const path = require("path");
+const { arquivosFront } = require("./fontes");
 
 // forma = código com todo argumento literal ou interpolado trocado por #
 function semInterpolacao(s) { let out = "", prof = 0; for (let i = 0; i < s.length; i++) { const c = s[i]; if (prof === 0 && c === "$" && s[i + 1] === "{") { prof = 1; out += "#"; i++; continue; } if (prof > 0) { if (c === "{") prof++; else if (c === "}") prof--; continue; } out += c; } return out; }
@@ -28,7 +29,7 @@ function cobertura(plano, pasta) {
   const acionadas = new Set();
   for (const a of plano) if (a.codigo) acionadas.add(a.evento + ": " + forma(a.codigo));
   const porArquivo = {}, faltam = [];
-  for (const f of ["index.html", "script.js"]) {
+  for (const f of ["index.html", ...arquivosFront(pasta)]) {
     const lista = extrair(fs.readFileSync(path.join(pasta, f), "utf8"));
     let c = 0;
     for (const x of lista) {

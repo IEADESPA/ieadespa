@@ -1,9 +1,11 @@
 // Regra permanente da tela para a CSP forte (script-src 'self', sem 'unsafe-inline' nem 'unsafe-eval'): NENHUM código escrito dentro do HTML.
 // O navegador, com essa política, simplesmente ignora onclick="...", <script> sem src, href="javascript:..." e eval — o botão "morre" em silêncio.
-// Por isso este teste lê o código de verdade (app/index.html, app/verificar.html, app/script.js, app/eventos.js, app/verificar.js) e falha quando:
-//   - aparece atributo de evento em linha (onclick=, onchange=, ... qualquer on<algo>=) no HTML ou num texto/template do script.js;
+// Por isso este teste lê o código de verdade (app/index.html, app/verificar.html, app/script.js, app/modulos/*.js, app/eventos.js, app/verificar.js) e falha quando:
+//   - aparece atributo de evento em linha (onclick=, onchange=, ... qualquer on<algo>=) no HTML ou num texto/template do script.js/módulos;
 //   - aparece "javascript:", <script> sem src (ou com src de fora), eval, new Function, setTimeout/setInterval com texto, setAttribute("on...");
-//   - um data-on-<tipo>="acao" pede ação que não está no registrarAcoes({...}) do fim do script.js (ou o registro tem nome que ninguém usa);
+//   - um data-on-<tipo>="acao" pede ação que não está em NENHUM registrarAcoes({...}) (fim do script.js e fim de cada módulo), ou o registro tem nome que ninguém usa;
+//   - (vD.2) um módulo de app/modulos/ não tem o seu registrarAcoes, ou repete nome de nível superior de outro arquivo (scripts clássicos dividem um só
+//     escopo: função repetida esconde a outra em silêncio; const/let repetido faz o navegador recusar o arquivo inteiro);
 //   - um nome de ação dinâmico (data-on-click="${x}") não vem de lista fechada do código (texto fixo, ou parâmetro que só recebe texto fixo);
 //   - um data-args-<tipo>="${...}" não passa por argsAttr(...) (o valor de usuário entraria cru no atributo).
 // Como os eventos funcionam agora: app/eventos.js (despachante por delegação; teste próprio em eventosDespachante.test.js).
@@ -143,11 +145,17 @@ function nomesPossiveis(p, visitando = new Set()) {
   return null;
 }
 const RE_EVENTO_EM_TEXTO = /(^|[\s"'\/;])on[a-z]+\s*=/i;
-// -> { problemas, acoes: Map(nome -> [onde]), registradas: Map(nome -> linha) | null, argsAttr: n }
+// -> { problemas, acoes: Map(nome -> [onde]), registradas: Map(nome -> linha) | null, argsAttr: n, declaradas: Map(nome de nível superior -> linha) }
 function analisarScript(nomeArq, codigo, opcoes = {}) {
   const ast = parser.parse(codigo, { sourceType: "script", errorRecovery: true });
   const problemas = [], acoes = new Map();
   let registradas = null, chamadasRegistro = 0, argsAttr = 0;
+  // nomes de nível superior (função, class, const/let/var): conferidos entre arquivos em conferirTela
+  const declaradas = new Map();
+  for (const no of ast.program.body) {
+    if ((no.type === "FunctionDeclaration" || no.type === "ClassDeclaration") && no.id) declaradas.set(no.id.name, no.loc.start.line);
+    else if (no.type === "VariableDeclaration") for (const d of no.declarations) if (d.id.type === "Identifier") declaradas.set(d.id.name, no.loc.start.line);
+  }
   const usar = (nome, onde) => (acoes.get(nome) || acoes.set(nome, []).get(nome)).push(onde);
   const onde = (no) => `${nomeArq}:${no.loc.start.line}`;
   const conferirTexto = (txt, no) => {
@@ -200,7 +208,7 @@ function analisarScript(nomeArq, codigo, opcoes = {}) {
           // a referência tem de ser função de nível superior, que não é trocada depois (o registro guarda a função do momento)
           const b = p.scope.getBinding(pr.value.name);
           const ehFuncaoTopo = b && b.scope.path.isProgram() && (b.path.isFunctionDeclaration() || (b.path.isVariableDeclarator() && /FunctionExpression|ArrowFunctionExpression/.test(b.path.node.init && b.path.node.init.type)));
-          if (!ehFuncaoTopo) problemas.push(`${onde(pr)} registrarAcoes: "${pr.key.name}" não é função de nível superior do script.js`);
+          if (!ehFuncaoTopo) problemas.push(`${onde(pr)} registrarAcoes: "${pr.key.name}" não é função de nível superior do ${nomeArq}`);
           else if (b.constantViolations.length) problemas.push(`${onde(pr)} registrarAcoes: "${pr.key.name}" é reatribuída em algum lugar (o registro ficaria com a versão velha)`);
         }
       }
@@ -213,7 +221,7 @@ function analisarScript(nomeArq, codigo, opcoes = {}) {
     }
   });
   if (opcoes.exigirRegistro && chamadasRegistro !== 1) problemas.push(`${nomeArq}: registrarAcoes({...}) tem de aparecer exatamente 1 vez no nível superior (achei ${chamadasRegistro})`);
-  return { problemas, acoes, registradas, argsAttr };
+  return { problemas, acoes, registradas, argsAttr, declaradas };
 }
 
 // junta tudo o que a tela usa x o que o script.js registra (a análise do script.js, ~1 s, é guardada por conteúdo: as mutações só do HTML a reaproveitam)
@@ -226,29 +234,48 @@ function analisarScriptDaTela(codigo) {
   }
   return memoScript.get(codigo);
 }
+// arquivos = { index, verificar, script, "eventos.js", "verificar.js", modulos: { "modulos/x.js": código, ... } }
 function conferirTela(arquivos) {
   const html = analisarHtml("index.html", arquivos.index);
   const verif = analisarHtml("verificar.html", arquivos.verificar);
   const scr = analisarScriptDaTela(arquivos.script);
-  const janelas = scr.janelas;
-  const outros = ["eventos.js", "verificar.js"].map(n => analisarScript(n, arquivos[n] || ""));
+  const janelas = [...scr.janelas];
+  // módulos (app/modulos/*.js, vD.2): scripts clássicos carregados depois do script.js, cada um com o SEU registrarAcoes({...}) — mesmas regras do script.js
+  const modulos = Object.entries(arquivos.modulos || {}).map(([nome, codigo]) => Object.assign(analisarScript(nome, codigo, { exigirRegistro: true, avisarWindow: (n, onde) => janelas.push({ nome: n, onde }) }), { nome }));
+  const outros = ["eventos.js", "verificar.js"].map(n => Object.assign(analisarScript(n, arquivos[n] || ""), { nome: n }));
   const usadas = new Map();
-  for (const fonte of [html.acoes, scr.acoes]) for (const [k, v] of fonte) usadas.set(k, (usadas.get(k) || []).concat(v));
-  const registradas = scr.registradas || new Map();
-  const problemas = [...html.problemas, ...verif.problemas, ...scr.problemas, ...outros.flatMap(o => o.problemas)];
+  for (const fonte of [html.acoes, scr.acoes, ...modulos.map(m => m.acoes)]) for (const [k, v] of fonte) usadas.set(k, (usadas.get(k) || []).concat(v));
+  const problemas = [...html.problemas, ...verif.problemas, ...scr.problemas, ...modulos.flatMap(m => m.problemas), ...outros.flatMap(o => o.problemas)];
+  // registros: a união do script.js com os módulos; o mesmo nome em dois registros = o segundo esconderia o primeiro
+  const registradas = new Map(), ondeRegistrada = new Map();
+  for (const arq of [Object.assign({ nome: "script.js" }, scr), ...modulos]) for (const [nome, linha] of arq.registradas || []) {
+    if (registradas.has(nome)) problemas.push(`registrarAcoes: "${nome}" registrada em ${ondeRegistrada.get(nome)} e em ${arq.nome}:${linha} (a segunda esconderia a primeira)`);
+    registradas.set(nome, linha);
+    ondeRegistrada.set(nome, `${arq.nome}:${linha}`);
+  }
+  // scripts clássicos dividem um só escopo: nome de nível superior repetido em dois arquivos = função que esconde a outra em silêncio, ou const/let que faz o
+  // navegador recusar o arquivo inteiro ("Identifier has already been declared") — e a tela "morre" sem aviso
+  const donos = new Map();
+  for (const arq of [outros[0], Object.assign({ nome: "script.js" }, scr), ...modulos]) for (const [nome, linha] of arq.declaradas) {
+    if (donos.has(nome)) problemas.push(`nome de nível superior "${nome}" declarado em ${donos.get(nome)} e em ${arq.nome}:${linha} (scripts clássicos dividem o escopo: um esconde o outro, ou o navegador recusa o arquivo inteiro)`);
+    else donos.set(nome, `${arq.nome}:${linha}`);
+  }
   for (const [nome, onde] of usadas) if (!registradas.has(nome)) problemas.push(`ação usada e NÃO registrada no registrarAcoes: "${nome}" (${onde.slice(0, 3).join(", ")})`);
-  for (const [nome, linha] of registradas) if (!usadas.has(nome)) problemas.push(`registrarAcoes tem "${nome}" (script.js:${linha}) que nenhum data-on-* usa`);
+  for (const [nome] of registradas) if (!usadas.has(nome)) problemas.push(`registrarAcoes tem "${nome}" (${ondeRegistrada.get(nome)}) que nenhum data-on-* usa`);
   for (const j of janelas) if (registradas.has(j.nome)) problemas.push(`${j.onde} window.${j.nome} = ... troca uma ação registrada por fora do registro`);
   if (verif.acoes.size) problemas.push("verificar.html não carrega o despachante: não pode ter data-on-*");
-  return { problemas, usadas, registradas, argsAttr: scr.argsAttr };
+  return { problemas, usadas, registradas, argsAttr: scr.argsAttr + modulos.reduce((s, m) => s + m.argsAttr, 0), modulos: modulos.map(m => ({ nome: m.nome, registradas: (m.registradas || new Map()).size })) };
 }
 
 module.exports = { tagsDoHtml, analisarHtml, analisarScript, conferirTela, nomesPossiveis };
 
 if (typeof describe === "function") {
+  // módulos do front (vD.2): tudo o que está em app/modulos/*.js, em ordem de nome — o index.html tem de carregar exatamente esses, nessa ordem
+  const MODULOS = fs.readdirSync(path.join(APP, "modulos")).filter(n => n.endsWith(".js")).sort().map(n => "modulos/" + n);
   const ARQUIVOS = {
     index: ler("index.html"), verificar: ler("verificar.html"), script: ler("script.js"),
-    "eventos.js": ler("eventos.js"), "verificar.js": ler("verificar.js")
+    "eventos.js": ler("eventos.js"), "verificar.js": ler("verificar.js"),
+    modulos: Object.fromEntries(MODULOS.map(n => [n, ler(n)]))
   };
 
   describe("CSP forte: nenhum código escrito dentro do HTML do front", () => {
@@ -262,15 +289,18 @@ if (typeof describe === "function") {
       expect(r.registradas.size).toBe(r.usadas.size);
       expect(r.argsAttr).toBeGreaterThan(350);
       expect((ARQUIVOS.index.match(/data-on-[a-z]+="/g) || []).length).toBeGreaterThan(450);
+      // os módulos existem, foram lidos e cada um registra as suas ações
+      expect(MODULOS).toEqual(expect.arrayContaining(["modulos/psc.js"]));
+      for (const m of r.modulos) expect([m.nome, m.registradas > 0]).toEqual([m.nome, true]);
     });
 
     test("a lista de exceções está vazia (e, se um dia tiver item, o trecho ainda existe)", () => {
       expect(Object.keys(EXCECOES)).toEqual([]);
     });
 
-    test("index.html carrega eventos.js ANTES do script.js, e todo <script> é do próprio site", () => {
+    test("index.html carrega eventos.js ANTES do script.js, os módulos DEPOIS (todos os de app/modulos/), e todo <script> é do próprio site", () => {
       const scripts = tagsDoHtml(ARQUIVOS.index).filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor);
-      expect(scripts).toEqual(["vendor/xlsx.full.min.js", "eventos.js", "script.js"]);
+      expect(scripts).toEqual(["vendor/xlsx.full.min.js", "eventos.js", "script.js", ...MODULOS]);
       const scriptsVerif = tagsDoHtml(ARQUIVOS.verificar).filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor);
       expect(scriptsVerif).toEqual(["verificar.js"]);
     });
@@ -282,11 +312,11 @@ if (typeof describe === "function") {
       expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "verificar.css"))).toBe(true);
     });
 
-    test("service-worker: cache novo (v5) e o eventos.js na casca offline", () => {
+    test("service-worker: cache novo (v6), eventos.js e todos os módulos na casca offline", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v5";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v6";/);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
-      expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css"]));
+      expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));
     });
 
     // Com a CSP estrita o `connect-src 'self'` vale também para o service worker: o fetch() dele para as fontes do Google era recusado e a página perdia a fonte
@@ -307,6 +337,7 @@ if (typeof describe === "function") {
   describe("mutação: reintroduzir cada coisa proibida faz o teste acusar", () => {
     const comMudanca = (mudar) => conferirTela(Object.assign({}, ARQUIVOS, mudar(ARQUIVOS))).problemas;
     const acrescentarNoScript = (codigo) => (a) => ({ script: a.script + "\n" + codigo + "\n" });
+    const mudarModulo = (f) => (a) => ({ modulos: Object.assign({}, a.modulos, { [MODULOS[0]]: f(a.modulos[MODULOS[0]]) }) });
     const CASOS = [
       ["onclick no index.html", (a) => ({ index: a.index.replace("<body>", "<body><button onclick=\"alert(1)\">x</button>") }), /atributo de evento em linha: onclick/],
       ["onclick em template do script.js", acrescentarNoScript("function __m(d) { return `<b onclick=\"f(${argsAttr(d.x)})\">x</b>`; }"), /atributo de evento em linha num texto/],
@@ -327,7 +358,14 @@ if (typeof describe === "function") {
       ["registro com referência que não é a função de mesmo nome", (a) => ({ script: a.script.replace(/registrarAcoes\(\{/, "registrarAcoes({ abrirNotificacao: alert,") }), /use só \{ nome \}|repetido/],
       ["ação registrada reatribuída", acrescentarNoScript("abrirNotificacao = () => {};"), /reatribuída/],
       ["data-args que não é JSON no index.html", (a) => ({ index: a.index.replace("<body>", "<body><button data-on-click=\"abrirNotificacao\" data-args-click='[1,'>x</button>") }), /não é JSON/],
-      ["tipo de evento sem despachante", (a) => ({ index: a.index.replace("<body>", "<body><input data-on-blur=\"abrirNotificacao\">") }), /sem despachante/]
+      ["tipo de evento sem despachante", (a) => ({ index: a.index.replace("<body>", "<body><input data-on-blur=\"abrirNotificacao\">") }), /sem despachante/],
+      // módulos (vD.2)
+      ["módulo com função de mesmo nome que uma do script.js", mudarModulo((m) => m + "\nfunction abrirNotificacao() {}\n"), /nome de nível superior "abrirNotificacao" declarado em script\.js:\d+ e em modulos\//],
+      ["módulo com const de mesmo nome que uma do eventos.js", mudarModulo((m) => m + "\nconst ACOES_DA_TELA = {};\n"), /"ACOES_DA_TELA" declarado em eventos\.js:\d+ e em modulos\//],
+      ["módulo sem o seu registrarAcoes", mudarModulo((m) => m.replace(/registrarAcoes\(\{[\s\S]*?\}\);/, "")), /modulos\/.*registrarAcoes\(\{\.\.\.\}\) tem de aparecer exatamente 1 vez/],
+      ["ação registrada no script.js E num módulo", mudarModulo((m) => m.replace(/registrarAcoes\(\{/, "registrarAcoes({ abrirNotificacao,")), /"abrirNotificacao" registrada em script\.js:\d+ e em modulos\//],
+      ["onclick em template de módulo", mudarModulo((m) => m + "\nfunction __m(d) { return `<b onclick=\"f(${argsAttr(d.x)})\">x</b>`; }\n"), /modulos\/.* atributo de evento em linha num texto/],
+      ["ação de módulo registrada que ninguém usa", mudarModulo((m) => m.replace(/registrarAcoes\(\{/, "function sobrandoNoModulo() {}\nregistrarAcoes({ sobrandoNoModulo,")), /"sobrandoNoModulo" \(modulos\/[^)]+\) que nenhum data-on-\* usa/]
     ];
     test.each(CASOS)("%s", (_nome, mudar, esperado) => {
       const problemas = comMudanca(mudar);

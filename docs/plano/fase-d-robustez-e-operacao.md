@@ -187,6 +187,40 @@ Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3 
 perguntas do checklist. Atenção especial à vD.2: a pergunta 2 (toda tela abre) tem que ser respondida pela rodada
 completa da vD.1 (não só o modo rápido) **e** por um clique manual em cada módulo extraído.
 
+- [x] **Fechada em 07/10/2026** — auditoria de vD.1, vD.2 e vD.3:
+  1. *Código novo roda de ponta a ponta no ambiente real?* **Sim.** Cada push migrou e semeou a homologação pelo
+     fluxo do PR #21 e migrou a produção pelo push na `main`; a varredura de rotas (vD.3) chamou as 203 Functions sem
+     sessão na produção e no preview recém-publicado — 0 rota 404, 0 rota 5xx, 23 módulos do front conferidos
+     (corridas 37652972449, 37652991368, 37653338304 e 37653351263). Front e back usam os mesmos nomes de rota: é
+     o que a varredura e o teste de tela conferem a cada deploy.
+  2. *Toda tela abre e mostra dado de verdade?* **Sim.** Rodada **completa** dos testes de tela na `main` depois
+     da divisão: corrida 37653097551 — **4.737 ações iguais à linha de base, 0 divergência, 0 violação de CSP,
+     0 falha do equipamento** (2.107 s). E o clique em cada módulo extraído, na homologação, com login dos fictícios
+     e a API real (`tools/modularizar/prova-modulo.js`): 22 dos 23 módulos tiveram a sua aba aberta e a API
+     respondendo 200 (psc, voluntariado, eventos-congressos, canais, calendario, ebd — Turmas, Trilhas e
+     Conquistas —, financeiro, disciplina, escalas — Escalas e Habilitação —, pessoas, ouvidoria, reunioes,
+     projetos-assembleia, enquetes, arquivos, consagracoes, relatorios-departamentos, assistencia,
+     catalogos-estrutura — Estrutura —, meu-painel, meus-dados, doacoes); `permissoes` (e a sub-aba Catálogos) só
+     abrem para o nível geral, que a massa fictícia não tem: ficou provado pelo perfil "geral" do teste de tela
+     (API simulada) e pela conferência de escopo/registro do módulo publicado. Zero erro de JavaScript em todas.
+  3. *README e código narram a mesma coisa?* **Sim.** README (estado atual, árvore, checklist das travas), este
+     plano (vD.1, vD.2 com a tabela dos módulos, vD.3), a nota na v10.4, `HOMOLOGACAO.md` (PR #21, regra de merge,
+     o que a homologação prova) e `tools/modularizar/README.md` foram atualizados no mesmo dia; o mapa antigo do
+     `script.js` está marcado como "de antes da divisão".
+  4. *O que ficou para trás foi corrigido, não só anotado?* **Sim, o que o código resolve.** A função declarada
+     duas vezes (`lerArquivoComoBase64`) ficou uma só; os ajudantes de uso geral voltaram ao núcleo; o PR da
+     homologação fechado pelo GitHub foi substituído (PR #21) com a regra escrita; o ambiente novo, que nasceu
+     apontado ao banco de produção, foi apontado ao `ieadespa-homolog`; o teste do site que ficava vermelho ao
+     mesclar um PR passou a fazer checkout pelo commit. **Fica para o responsável** (não cabe ao modo automático):
+     apagar o ambiente de preview órfão `18` do Static Web App do sistema (está no ar com a configuração de
+     produção), trocar os dois segredos da vD.8, escolher o segundo fator (vD.4), a raiz do domínio (vD.7) e o
+     ensaio de restauração (vD.5). O que a vD.2 deixou **por decisão** para uma fase própria (carregar sob
+     demanda, `index.html` por módulo, funções reaproveitáveis) continua como item aberto da vD.2 e não bloqueia a
+     trava.
+  5. *Deploy real aconteceu?* **Sim.** Cada lote de módulos subiu primeiro no `homolog` (teste de tela + telas
+     reais) e depois na `main`; a produção foi conferida depois de cada merge (`script.js` publicado com 1.551
+     linhas, 23 módulos no `index.html`, service worker na casca v28, varredura de rotas verde).
+
 ## vD.4 — Segundo fator para quem aprova dinheiro e concede acesso
 
 Hoje a liderança entra só com matrícula + senha. Quem tem nível geral aprova saída, gera remessa bancária (dinheiro de

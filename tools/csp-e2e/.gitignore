@@ -8,3 +8,6 @@ base/app-base/
 original/
 mutante/
 saida.txt
+base/app-base/
+resultados-*/
+saida.txt

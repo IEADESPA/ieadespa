@@ -75,7 +75,7 @@ function estatisticas(plano, T) {
 
 (async () => {
   const o = args();
-  if (!o.original) { console.log("uso: node rodar.js --original <pasta> [--nova <pasta>] [--estabilidade] [--workers 8] [--perfis anonimo,geral,membro] [--so id,id] [--redescobrir]"); process.exit(2); }
+  if (!o.original) { console.log("uso: node rodar.js --original <pasta> [--nova <pasta>] [--estabilidade] [--workers 8] [--perfis anonimo,geral,membro] [--so id,id] [--redescobrir] [--celular]"); process.exit(2); }
   const workers = Number(o.workers) || 12;
   if (o.porta) PORTA = Number(o.porta);
   // --nova-sem-csp: só para testar o próprio equipamento com uma cópia "estragada" de propósito (sem a CSP, que derrubaria tudo)
@@ -91,19 +91,23 @@ function estatisticas(plano, T) {
 
   // modelo de respostas e plano: sempre a partir da ORIGINAL; ficam guardados pelo hash dela
   // (mude VERSAO_PLANO quando o instrumento/cobertor mudar de um jeito que altere o transcrito; ou use --redescobrir)
-  const VERSAO_PLANO = "v1";
-  const chave = sha(fs.readFileSync(path.join(original, "index.html")) + textoFront(original) + VERSAO_PLANO + perfis.join(","));
+  // v2 (07/10/2026, vD.6): o retrato ganhou a rolagem lateral e a largura da janela (instrumento.js) — transcritos antigos não comparam
+  const VERSAO_PLANO = "v2";
+  // --celular: janela de celular (360×740); plano e transcritos próprios (a tela descoberta é outra: gaveta do menu, tabelas roláveis)
+  const celular = !!o.celular;
+  const chave = sha(fs.readFileSync(path.join(original, "index.html")) + textoFront(original) + VERSAO_PLANO + perfis.join(",") + (celular ? "|celular" : ""));
   const modelo = gerarModelo(original);
   const arqs = arquivosDeTeste();
   // vários processos do Edge (rende mais que um só com muitas abas); os trabalhadores se dividem entre eles
   const nNav = Math.max(1, Math.min(Number(o.navegadores) || 3, workers));
-  const nav = await Promise.all(Array.from({ length: nNav }, (_, i) => abrirNavegador(path.join(AQUI, "perfis-edge", (remoto ? "remoto-" : "") + PORTA + "-" + i), { remoto: !!remoto })));
+  const nav = await Promise.all(Array.from({ length: nNav }, (_, i) => abrirNavegador(path.join(AQUI, "perfis-edge", (remoto ? "remoto-" : "") + (celular ? "celular-" : "") + PORTA + "-" + i), { remoto: !!remoto, celular })));
   const fecharNavs = async () => { for (const n of nav) { try { await n.close(); } catch (_) {} } };
   const relatorio = [];
   const log = (s) => { console.log(s); relatorio.push(s); };
   log(`Verificação diferencial — ${new Date().toLocaleString("pt-BR")}`);
   log(`ORIGINAL: ${original} (sem CSP)`);
   if (remoto) log(`NOVA:     ${remoto} (MODO REMOTO: front e cabeçalhos reais do endereço; /api/* simulado por interceptação)`);
+  if (celular) log("JANELA:   celular 360×740 (--celular): a rolagem lateral de cada tela entra no retrato e vira divergência");
   else if (nova) log(`NOVA:     ${nova} (com a CSP estrita)`);
 
   const arqPlano = path.join(AQUI, "planos", `plano-${chave}.json`);

@@ -74,7 +74,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: tools/csp-e2e/planos
-          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-v1
+          # v2 (07/10/2026, vD.6): o retrato ganhou a rolagem lateral — plano e transcritos antigos não comparam
+          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-v2
 
       - name: Rodar o plano na versão atual e comparar com a base
         working-directory: tools/csp-e2e
@@ -92,6 +93,64 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: testes-de-tela-${{ github.run_number }}
+          path: |
+            tools/csp-e2e/resultados/
+
+  # vD.6 (07/10/2026): as mesmas ações do perfil MEMBRO numa janela de celular (360×740). Além de tudo o que a
+  # rodada de cima compara, cada tela traz a rolagem lateral em px: uma tela que passou a estourar a largura do
+  # celular vira divergência, não reclamação. Plano próprio (a tela descoberta é outra: gaveta do menu).
+  celular:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NAVEGADOR: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Instalar o equipamento (puppeteer-core, sem baixar navegador)
+        working-directory: tools/csp-e2e
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+        run: npm install --no-audit --no-fund --silent
+
+      - name: Extrair a linha de base (app/ do commit aprovado)
+        id: base
+        run: |
+          set -euo pipefail
+          base="$(tr -d '[:space:]' < tools/csp-e2e/base/commit.txt)"
+          git cat-file -e "$base^{commit}" || { echo "::error::commit da base não existe: $base"; exit 1; }
+          mkdir -p tools/csp-e2e/base/app-base
+          git archive "$base" app | tar -x -C tools/csp-e2e/base/app-base
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Plano e 1ª rodada da base em janela de celular (cache por commit da base)
+        uses: actions/cache@v6
+        with:
+          path: tools/csp-e2e/planos
+          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-celular-v2
+
+      - name: Rodar o plano do membro em 360×740 e comparar com a base
+        working-directory: tools/csp-e2e
+        run: |
+          set -o pipefail
+          modo="--rapido"
+          [ "${{ github.event.inputs.completo }}" = "sim" ] && modo=""
+          node rodar.js --original base/app-base/app --nova ../../app --perfis membro --celular $modo --workers 4 --navegadores 2 --sem-especiais --saida resultados 2>&1 | tee saida.txt
+          codigo=${PIPESTATUS[0]}
+          { echo '### Celular 360×740 (perfil membro)'; echo '```'; grep -E 'JANELA|Modo rápido|Plano (reaproveitado|salvo)|RESULTADO|VIOLAÇÕES|ações em [0-9]+ s' saida.txt | head -20; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $codigo
+
+      - name: Guardar o relatório e as divergências (celular)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: testes-de-tela-celular-${{ github.run_number }}
           path: |
             tools/csp-e2e/resultados/
             tools/csp-e2e/saida.txt

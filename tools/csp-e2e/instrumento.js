@@ -520,8 +520,11 @@ function instrumento(cfg) {
     const tit = document.getElementById("tituloModulo");
     let comManip = 0;
     for (const el of document.querySelectorAll("*")) if (manipuladores(el) && visivel(el)) comManip++;
+    // vD.6: rolagem lateral da página (px além da largura da janela) — 0 numa tela que cabe; em janela de celular,
+    // qualquer valor > 0 é regressão de layout e aparece como divergência nas "contagens"
+    const rolagemLateral = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
     return {
-      texto, modal, titulo: tit ? tit.textContent : null, url: norm(location.href),
+      texto, modal, titulo: tit ? tit.textContent : null, url: norm(location.href), rolagemLateral, largura: window.innerWidth,
       contagens: { comManipulador: comManip, botoes: document.querySelectorAll("button").length, campos: document.querySelectorAll("input,select,textarea").length, linhas: document.querySelectorAll("tr").length, nos: document.querySelectorAll("body *:not(script):not(style):not(link):not(meta):not(noscript):not(template)").length }
     };
   };

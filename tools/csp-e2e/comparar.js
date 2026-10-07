@@ -39,6 +39,8 @@ function resumo(tr) {
     "título": r.titulo || "",
     "endereço": r.url || "",
     "modal": r.modal === undefined ? "" : String(r.modal),
+    // vD.6: px de rolagem lateral (janela de celular); comparado como campo próprio para a divergência dizer o que é
+    "rolagem lateral (px)": r.rolagemLateral === undefined ? "" : String(r.rolagemLateral),
     "texto visível": r.texto || "",
     "contagens": JSON.stringify(r.contagens || {}),
     "nós do DOM criados/removidos": JSON.stringify(tr.mutacoes || {}),

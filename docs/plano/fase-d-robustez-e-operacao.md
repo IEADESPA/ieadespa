@@ -78,6 +78,13 @@ seguro agora: a vD.1 prova equivalência ação por ação, igual provou a CSP (
 
 *Esforço:* alto. *Risco:* médio, mitigado pela vD.1 (sem a vD.1 feita, **não começar**). *Depende de você:* nada.
 
+*Preparação feita em 07/10/2026:* a vD.1 está no ar (a prova de equivalência existe) e o
+[mapa do `script.js`](vD2-mapa-script.md) foi gerado: 21.711 linhas, 1.307 funções, 244 declarações e 19
+instruções soltas de nível superior; onze temas reconhecíveis (calendário, EBD, canais, relatórios, eventos, PSC,
+voluntariado, PDQ, CEI, escalas, LGPD) somam ~11 mil linhas e são os primeiros arquivos a extrair. O mapa lista
+também as ferramentas que leem `script.js` e precisam acompanhar a divisão. A extração em si fica para uma sessão
+dedicada, um módulo por commit, com a rodada completa dos testes de tela antes e depois.
+
 ## vD.3 — Homologação igual à produção
 
 Descoberta de 03-04/10/2026 (`docs/PLATAFORMAS.md`): o banco `ieadespa-homolog` está com o esquema **atrasado** (o

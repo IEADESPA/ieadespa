@@ -32,16 +32,17 @@ name: Site - sincronizar agenda oficial
 # por dia pausado (29/09). Agora roda 3 vezes por dia, em horário de Brasília (UTC-3):
 #   7h45 — junto com as rotinas diárias (7h/7h30/8h), que já acordam o banco;
 #   13h e 19h — duas janelas a mais, no horário em que a Secretaria edita a agenda.
-# Evento publicado no sistema aparece no site em até ~6 h; pra publicar na hora, rode
-# este fluxo à mão (Actions → "Site - sincronizar agenda oficial" → Run workflow).
-# Versão "zero custo" (o sistema dispara este fluxo só quando a agenda muda) está na
-# vD.5 do plano — depende de um token do GitHub guardado como segredo.
+# vD.5 (07/10/2026) — DE VOLTA A CADA 15 MIN, SEM ACORDAR O BANCO: /api/agenda-publica/versao
+# passou a responder por um blob privado do Storage (shared/agendaPublicaVersao.js), que o
+# próprio sistema regrava quando alguém mexe no calendário, nos canais ou nos eventos (o
+# banco já estava acordado para a mudança) e que a rotina diária das 7h regrava por garantia.
+# Esta checagem, portanto, não toca o Azure SQL: evento publicado aparece no site em até
+# ~15 min, e o banco pausa como deve. Pra publicar na hora, rode este fluxo à mão
+# (Actions → "Site - sincronizar agenda oficial" → Run workflow).
 
 on:
   schedule:
-    - cron: "45 10 * * *"
-    - cron: "0 16 * * *"
-    - cron: "0 22 * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 permissions:

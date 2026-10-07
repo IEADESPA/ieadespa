@@ -12,6 +12,7 @@
 // O teste shared/__tests__/entradaUnica.test.js falha se algum function.json HTTP não usar este arquivo, e carrega o handler de TODAS as pastas por aqui.
 const path = require("path");
 const auth = require("./auth");
+const agendaPublicaVersao = require("./agendaPublicaVersao");
 
 const RAIZ_API = path.resolve(__dirname, "..");
 const NOME_DE_FUNCAO = /^[A-Za-z0-9_-]+$/;
@@ -54,7 +55,11 @@ module.exports = async function entrada(context, ...args) {
       return;
     }
   }
-  return handler(context, ...args);
+  const resultado = await handler(context, ...args);
+  // vD.5: mudança no calendário, nos canais ou nos eventos → guarda a versão da agenda pública fora do banco, para o
+  // sincronizador do site não precisar acordar o banco (shared/agendaPublicaVersao.js; nunca lança, só loga).
+  await agendaPublicaVersao.depoisDeMudanca(context, pastaDaFuncao(context), req);
+  return resultado;
 };
 
 // Para os testes. NÃO enumeráveis de propósito: o exportado precisa ser, para o host, igual ao de um index.js comum (uma função sem propriedades) — um export

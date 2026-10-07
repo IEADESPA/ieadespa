@@ -279,13 +279,17 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
 - [x] Alerta quando a rotina diária (`rotinas-diarias.yml`) falhar — *feito em 07/10:* job `avisar-falha` manda
       e-mail (ACS) para `presidente@ieadespa.org` sempre que uma das três rotinas falhar, com o link da execução;
       antes o GitHub só avisava quem fez o último commit.
-- [ ] **Sincronização da agenda do site sem acordar o banco à toa** (achado de 06/10/2026, `HOMOLOGACAO.md`):
+- [x] **Sincronização da agenda do site sem acordar o banco à toa** (achado de 06/10/2026, `HOMOLOGACAO.md`):
       `site-agenda-sync.yml` rodava a cada 20 min e por isso o banco de produção nunca pausava (R$ 65-86 por dia
       contra R$ 6-7 pausado). Já reduzido a 3 vezes por dia. Desenho definitivo **sem token pessoal** (o responsável
       não quer operar a tela de tokens do GitHub): o sistema, ao homologar evento ou mudar a grade litúrgica, grava
       a versão da agenda num arquivo público e barato fora do banco (um blob no Storage); o fluxo do GitHub passa
       a ler esse arquivo a cada 15 min (como o `site-conteudo-sync.yml` já faz com o Directus) e só chama a API
-      do sistema quando ele mudou. Zero despertar à toa, zero token.
+      do sistema quando ele mudou. Zero despertar à toa, zero token. *Feito em 07/10/2026, com um ajuste no
+      desenho: a versão fica num blob privado e `GET /api/agenda-publica/versao` responde por ele sem abrir o banco
+      (a rota continua a mesma, o fluxo só voltou a rodar a cada 15 min); o sistema regrava o blob a cada mudança
+      em calendário/canais/eventos (gancho na entrada única, `shared/agendaPublicaVersao.js`) e a rotina diária das
+      7h regrava por garantia (`POST agenda-publica/atualizar-versao` com o segredo das rotinas).*
 - [ ] **Orçamento com alerta no Azure** (Cost Management budget): aviso por e-mail ao passar de 50 %, 80 % e 100 % de
       US$ 150 no mês — o salto de outubro só foi visto porque alguém perguntou. Custo zero.
 

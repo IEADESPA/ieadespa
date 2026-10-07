@@ -67,7 +67,7 @@ const rodou = (padrao) => mockConsultas.filter(c => padrao.test(c.sql));
 const ESCRITA = /\b(INSERT INTO|UPDATE|DELETE FROM)\b/i;
 const escritas = () => mockConsultas.filter(c => ESCRITA.test(c.sql));
 const posicao = (padrao) => mockConsultas.findIndex(c => padrao.test(c.sql));
-const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], via: "SENHA", ...extra });
+const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, ...extra });
 const geral = (permissoes = ["financeiro"]) => tokenDe(5, { nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes });
 const local = (nomes, permissoes = ["financeiro"], nivel = "CONGREGACAO") => tokenDe(6, { nivel, escopoCongregacoes: nomes, permissoes });
 const tokenPin = () => tokenDe(7, { via: "PIN", nivel: null, escopoCongregacoes: [], permissoes: [] });

@@ -64,7 +64,7 @@ async function chamar(handler, { metodo = "GET", corpo = {}, token, ligado = {},
 }
 const quando = (padrao, valor, afetadas) => mockRegras.push([padrao, valor, afetadas]);
 const rodou = (padrao) => mockConsultas.filter(c => padrao.test(c.sql));
-const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], via: "SENHA", ...extra });
+const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, ...extra });
 const GERAL = (permissoes, membroId = 1) => tokenDe(membroId, { nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes });
 
 // o que o driver devolve quando o banco recusa: número 2601 (índice único) ou 2627 (restrição UNIQUE/PK) e o nome do índice no texto

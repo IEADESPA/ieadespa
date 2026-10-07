@@ -373,6 +373,8 @@ module.exports = async function (context, req) {
       const criticoQuatroOlhos = await compliance.valorCriticoQuatroOlhos(pool, sql);
       const acimaCritico = Number(registro.Valor) >= criticoQuatroOlhos;
       const exigido = Math.max(Number(tier.QuantidadeAprovadores), acimaCritico ? 2 : 1);
+      // vD.4 — acima do valor dos quatro olhos, aprovar exige confirmação recente de quem aprova (chave de acesso ou código)
+      if (acimaCritico && !auth.exigirFatorRecente(req, context)) return;
       // O voto e a mudança de situação vão numa transação, com a linha da Saída travada (UPDLOCK, HOLDLOCK) — como o pagamento: duas aprovações simultâneas (duplo clique ou dois
       // aprovadores) entram uma de cada vez e a contagem é sempre a certa; um cancelamento/rejeição/pagamento simultâneo espera a vez e a aprovação enxerga o resultado dele. E o
       // estado esperado (PENDENTE) vai no WHERE do UPDATE, com as linhas afetadas conferidas: se, apesar da trava, a Saída já não estiver pendente, NADA é gravado (nem o voto) e

@@ -49,6 +49,7 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "POST" && !id) {
+    if (!auth.exigirFatorRecente(req, context)) return;   // vD.4 — delegar permissões a outra pessoa exige confirmação recente
     const { liderancaId, delegadoMembroId, dataInicio, dataFim, motivo } = req.body || {};
     if (!liderancaId || !delegadoMembroId || !dataInicio || !dataFim) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe liderancaId, delegadoMembroId, dataInicio e dataFim." } };
@@ -73,6 +74,7 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "PUT" && id) {
+    if (!auth.exigirFatorRecente(req, context)) return;   // vD.4 — cancelar delegação (retirar permissão) exige confirmação recente
     const { acao } = req.body || {};
     if (acao !== "CANCELAR") {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Ação inválida. Use CANCELAR." } };

@@ -19,7 +19,7 @@ const handler = require("../../GestaoLideranca/index.js");
 
 const quando = (padrao, valor) => mockRegras.push([padrao, valor]);
 const gravacoes = () => mockConsultas.filter(c => /^\s*(INSERT INTO Lideranca|UPDATE Lideranca|DELETE FROM Lideranca)/.test(c.sql));
-const token = (extra = {}) => auth.reassinarSessao({ membroId: 5, termosPendentes: [], via: "SENHA", permissoes: ["permissoes"], nivel: "GLOBAL", escopoCongregacoes: "TODAS", ...extra });
+const token = (extra = {}) => auth.reassinarSessao({ membroId: 5, termosPendentes: [], via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, permissoes: ["permissoes"], nivel: "GLOBAL", escopoCongregacoes: "TODAS", ...extra });
 async function chamar({ metodo = "POST", corpo = {}, tk = token(), ligado = {} } = {}) {
   const context = { bindingData: ligado, log: { error() {}, info() {}, warn() {} } };
   await handler(context, { method: metodo, query: {}, body: corpo, headers: tk ? { "x-auth-token": tk } : {} });

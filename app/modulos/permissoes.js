@@ -320,7 +320,37 @@ async function removerPermissao(membroId) {
   if (data.sucesso) carregarPermissoes();
 }
 
+// ---- vD.4 — chaves de acesso dos líderes (administração, nível geral) ----
+async function carregarChavesAcessoAdminAcao() {
+  const c = document.getElementById("resultadoChavesAcessoAdmin");
+  const res = await fetchProtegido(`${API_BASE}/chaves-acesso/admin`, { semFator: true });
+  const data = await jsonDaTela(res, c, "lista");
+  if (data === null) return;
+  if (data.sucesso === false) { c.innerHTML = `<p class='subtitle'>${escaparHtmlEbd(data.mensagem || "")}</p>`; return; }
+  const lideres = Array.isArray(data.lideres) ? data.lideres : [];
+  if (!lideres.length) { c.innerHTML = "<p class='subtitle'>Nenhum líder com senha de acesso.</p>"; return; }
+  c.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Líder</th><th>Papel</th><th>Chaves</th><th>Último uso</th><th>E-mail</th><th></th></tr></thead><tbody>` + lideres.map((l) => `
+    <tr>
+      <td>${escaparHtmlEbd(l.nome)} <span class="subtitle">(${escaparHtmlEbd(String(l.membroId))})</span></td>
+      <td>${escaparHtmlEbd(l.papel)}</td>
+      <td>${l.chaves > 0 ? `<span class='badge-status badge-ativo'>${Number(l.chaves)}</span>` : "<span class='badge-status badge-desligado'>nenhuma</span>"}</td>
+      <td>${l.ultimoUsoEm ? new Date(l.ultimoUsoEm).toLocaleString("pt-BR") : "—"}</td>
+      <td>${l.temEmail ? "sim" : "<strong>não</strong>"}</td>
+      <td class="acoes-inline">${l.chaves > 0 ? `<button class="btn-link btn-link-perigo" data-on-click="removerChavesAcessoAdminAcao" data-args-click="${argsAttr(Number(l.membroId))}">Remover chaves</button>` : ""}</td>
+    </tr>`).join("") + "</tbody></table>";
+}
+
+async function removerChavesAcessoAdminAcao(membroId) {
+  const motivo = await pedirTexto("Remover TODAS as chaves de acesso desta pessoa? Informe o motivo (ex.: perdeu o celular). Ela volta a entrar pelo código no e-mail.", "Motivo", "");
+  if (!motivo) return;
+  const res = await fetchProtegido(`${API_BASE}/chaves-acesso/admin/remover`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId: Number(membroId), motivo: String(motivo).trim() }) });
+  const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Resposta inválida." }));
+  mostrarToast(data.mensagem || "", data.sucesso ? "sucesso" : "erro");
+  if (data.sucesso) carregarChavesAcessoAdminAcao();
+}
+
 registrarAcoes({
+  carregarChavesAcessoAdminAcao, removerChavesAcessoAdminAcao,
   atualizarNotificacaoRegra, derrubarAcessosPessoa, editarPapel, editarPermissao, editarTituloNotificacaoRegra, onChangeEscopoTipoLote,
   onChangeEscopoTipoPermissao, redefinirSenhaLideranca, removerPermissao, salvarPapel, salvarPermissao, salvarPermissaoLote
 });

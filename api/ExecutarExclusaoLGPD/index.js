@@ -23,6 +23,8 @@ const STATUS_EXECUTAVEIS = ["PENDENTE", "EM_ANALISE"];
 
 module.exports = async function (context, req) {
   const usuario = exigirGeral(req, context, "protecaodedados");
+  // vD.4 — executar a exclusão LGPD (irreversível) exige confirmação recente de quem executa (chave de acesso ou código)
+  if (usuario && !require("../shared/auth").exigirFatorRecente(req, context)) return;
   if (!usuario) return;
 
   const id = auth.idDeRota(context.bindingData.id);

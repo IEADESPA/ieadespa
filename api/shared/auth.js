@@ -524,5 +524,18 @@ function exigirNivelGlobal(req, context) {
   return visao;
 }
 
-module.exports = { sincronizarRevogacoes, revogarSessoesDoMembro, revogarTodasAsSessoes, marcarRevogadas, sessaoRevogada, tokenRevogado, _reiniciarRevogacoes, MENSAGEM_SESSAO_ENCERRADA,
+// vD.4 — confirmação reforçada: os quatro atos (aprovar saída acima do valor dos quatro olhos, gerar remessa, conceder/retirar
+// permissão ou cargo, exclusão LGPD) exigem que a última confirmação por chave de acesso ou código tenha menos de 10 minutos.
+// Responde 428 com { precisaFator: true }: a tela confirma de novo (chaves-acesso/confirmar) e repete a chamada.
+function exigirFatorRecente(req, context) {
+  const sessao = getSessao(extrairToken(req));
+  if (!sessao) { context.res = { status: 401, body: { sucesso: false, mensagem: "Sessão inválida ou expirada." } }; return false; }
+  const f = sessao.fator;
+  const recente = !!(f && f.via && f.via !== "NENHUM" && Number.isFinite(f.em) && Date.now() - f.em < 10 * 60 * 1000);
+  if (recente) return true;
+  context.res = { status: 428, headers: { "Content-Type": "application/json" }, body: { sucesso: false, precisaFator: true, mensagem: "Este ato exige confirmação recente de quem você é (chave de acesso ou código por e-mail)." } };
+  return false;
+}
+
+module.exports = { exigirFatorRecente, sincronizarRevogacoes, revogarSessoesDoMembro, revogarTodasAsSessoes, marcarRevogadas, sessaoRevogada, tokenRevogado, _reiniciarRevogacoes, MENSAGEM_SESSAO_ENCERRADA,
   visaoDaPermissao, temPermissao, restringirVisao, concessoesDaVisao, concessoesVigentes, nivelDoCargoProprio, hashSenha, verificarSenha, criarSessao, reassinarSessao, reassinarMantendoValidade, ehSessaoDeLideranca, exigirSessaoDeLideranca, extrairToken, encerrarSessao, listarSessoes, encerrarSessaoEspecifica, getSessao, idDeRota, exigirTitular, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, podeDepartamento, nivelAtingeMinimo, RANKING_NIVEL };

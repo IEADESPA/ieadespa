@@ -682,7 +682,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         : `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-whatsapp title="Abre o WhatsApp com a mensagem pronta">WhatsApp</button>`;
       const avisoAguardandoRetirada =
         !p.avulso && p.separado && !tudoRetirado(p)
-          ? `<p class="camiseta-pedido-aviso camiseta-pedido-aviso-retirada">Separado${p.separado_em ? ` há ${diasDesde(p.separado_em)} dia(s)` : ""}, aguardando retirada.</p>`
+          ? `<p class="camiseta-pedido-aviso camiseta-pedido-aviso-retirada">Separado${p.separado_em ? ` há ${diasDesde(p.separado_em)} dia(s)` : ""}, aguardando retirada${p.email ? " (avisado por e-mail)" : " — sem e-mail: avise pelo botão WhatsApp"}.</p>`
           : "";
 
       return `

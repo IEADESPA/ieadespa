@@ -71,11 +71,12 @@ module.exports = async function (context, req) {
   const pedido = (await res.json()).data;
   const digitos = decifrarTelefone(pedido.telefone_cifrado);
   if (!digitos) {
-    const quando = pedido.date_created ? new Date(pedido.date_created).toLocaleDateString("pt-BR", { timeZone: "America/Belem" }) : "";
-    context.res = {
-      status: 404,
-      body: { erro: `Este pedido não tem o telefone guardado${quando ? ` (foi feito em ${quando}` : ""}${quando ? ", antes de 07/10/2026)" : ""}. Peça à pessoa que acompanhe em "Meus pedidos", com o telefone dela.` },
-    };
+    const criadoEm = pedido.date_created ? new Date(pedido.date_created) : null;
+    const antigo = criadoEm && criadoEm.getTime() < Date.parse("2026-10-07T00:00:00-03:00");
+    const motivo = antigo
+      ? `foi feito em ${criadoEm.toLocaleDateString("pt-BR", { timeZone: "America/Belem" })}, antes de o sistema guardar telefones (07/10/2026). Ele passa a ter o telefone no dia em que a pessoa consultar "Meus pedidos".`
+      : "foi lançado sem um telefone válido.";
+    context.res = { status: 404, body: { erro: `Este pedido não tem o telefone guardado: ${motivo}` } };
     return;
   }
   context.res = {

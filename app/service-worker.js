@@ -11,9 +11,9 @@
 // v5 (05/10/2026): com a CSP estrita, o `connect-src 'self'` vale TAMBÉM para o service worker: o fetch() dele para as fontes do Google era recusado e a página perdia a fonte
 // (a página não vê essa recusa, só o console do service worker). Agora ele só trata pedidos do PRÓPRIO endereço; os de fora o navegador atende direto, sob as regras da página.
 // v6 (07/10/2026): vD.2 — o script.js começou a ser dividido em módulos (app/modulos/*.js, carregados pelo index.html depois dele); cada módulo entra na
-// casca, e a versão sobe para a instalação baixar o index.html novo junto com eles (v7: + voluntariado; v8: + eventos-congressos — nome longo para não confundir com o despachante eventos.js; v9: + canais; v10: + calendario; v11: + ebd; v12: + financeiro; v13: + ouvidoria; v14: + relatorios-departamentos).
-const CACHE_NOME = "ieadespa-app-shell-v14";
-const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/ebd.js", "/modulos/eventos-congressos.js", "/modulos/financeiro.js", "/modulos/ouvidoria.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js"];
+// casca, e a versão sobe para a instalação baixar o index.html novo junto com eles (v7: + voluntariado; v8: + eventos-congressos — nome longo para não confundir com o despachante eventos.js; v9: + canais; v10: + calendario; v11: + ebd; v12: + financeiro; v13: + ouvidoria; v14: + relatorios-departamentos; v15: + escalas).
+const CACHE_NOME = "ieadespa-app-shell-v15";
+const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/ebd.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/financeiro.js", "/modulos/ouvidoria.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js"];
 
 self.addEventListener("install", (evento) => {
   evento.waitUntil(caches.open(CACHE_NOME).then((cache) => cache.addAll(ARQUIVOS_SHELL)));

@@ -66,7 +66,8 @@ seguro agora: a vD.1 prova equivalência ação por ação, igual provou a CSP (
 - [ ] `app/script.js` dividido por módulo (os mesmos do objeto `MODULOS`: membresia, território, eclesiástica,
       disciplina, financeiro, EBD, departamentos, saúde, calendário, comunicação, eventos, escalas…), um arquivo por
       módulo em `app/modulos/`, carregado **sob demanda** ao entrar no módulo; o núcleo (login, sessão, navegação,
-      toast/modal, utilitários) fica num arquivo pequeno carregado sempre.
+      toast/modal, utilitários) fica num arquivo pequeno carregado sempre. *Em andamento (07/10/2026): 1 de ~11 temas
+      extraído — ver o piloto abaixo.*
 - [ ] Mesmo tratamento no `index.html`: o markup de cada módulo em arquivo próprio, montado na navegação — sem
       framework (decisão da FASE 10 continua: melhorar o que existe, não reescrever).
 - [ ] Prova de equivalência pela vD.1 **antes e depois de cada módulo extraído** (um módulo por commit): zero
@@ -84,6 +85,32 @@ instruções soltas de nível superior; onze temas reconhecíveis (calendário, 
 voluntariado, PDQ, CEI, escalas, LGPD) somam ~11 mil linhas e são os primeiros arquivos a extrair. O mapa lista
 também as ferramentas que leem `script.js` e precisam acompanhar a divisão. A extração em si fica para uma sessão
 dedicada, um módulo por commit, com a rodada completa dos testes de tela antes e depois.
+
+*Piloto feito em 07/10/2026 — o primeiro módulo, o método e a rede de proteção:*
+
+- **`app/modulos/psc.js`**: a Saúde Congregacional (PSC) saiu do `script.js` (886 linhas, 61 funções, 17 declarações,
+  25 ações) **sem mudar uma linha de código**: é um script clássico que o `index.html` carrega depois do `script.js`
+  (mesmo escopo global, por isso as funções continuam se chamando pelo nome) e registra as suas ações no próprio fim do
+  arquivo (`registrarAcoes` mescla). O `script.js` ficou com 20.818 linhas; o service worker guarda o módulo na casca
+  (cache v6).
+- **Prova:** os testes de tela (vD.1) rodaram na homologação contra a base de antes da divisão: **962 ações iguais,
+  0 divergência, 0 violação de CSP** (o fluxo passou a rodar também em push no `homolog`, com fila por ramo — a prova
+  sai antes da `main`); os 4 testes do front no `jest` (111 casos, 6 mutações novas); e a tela aberta de verdade na
+  homologação, com a API real, pelo pastor de área fictício (ver `docs/plano/capturas/vD.2/`).
+- **Rede de proteção para os próximos módulos** (`frontCsp.test.js`): cada módulo tem exatamente um `registrarAcoes`;
+  a união dos registros é o que a tela usa; nome de nível superior repetido entre `script.js`, `eventos.js` e módulos
+  acusa (scripts clássicos dividem o escopo: função repetida esconde a outra em silêncio, `const` repetido faz o
+  navegador recusar o arquivo inteiro); o `index.html` carrega exatamente os módulos da pasta, na ordem; a casca do
+  service worker tem todos. `frontEscape` e `frontTipoDosArgumentos` varrem a junção (mensagem aponta
+  arquivo:linha). `tools/csp-e2e/fontes.js` dá ao equipamento a ordem dos arquivos lida do `index.html` (pasta sem
+  módulos = texto idêntico ao `script.js`: a chave do plano da base não muda).
+- **Como extrair o próximo:** escolher um tema contíguo no mapa; mover o bloco para `app/modulos/<tema>.js` e os
+  nomes dele do `registrarAcoes` do `script.js` para o do módulo; `index.html` (`<script>`), service worker (casca e
+  versão), `tools/csp-e2e/remoto.js`; `npx jest` do front; subir no `homolog` e esperar o teste de tela e a conferência
+  na homologação; só então a `main`, pelo ramo da mudança (nunca mesclar o `homolog`, ver `HOMOLOGACAO.md`).
+- **Decisão:** carregar sob demanda fica para depois de dividir tudo. O ganho de manutenção (arquivos menores, diff
+  legível, um tema por commit) vem da divisão; o carregamento sob demanda exige que o despachante conheça só ações de
+  módulos já carregados e muda o `eventos.js`, com risco próprio — fase separada, com a mesma prova.
 
 ## vD.3 — Homologação igual à produção
 

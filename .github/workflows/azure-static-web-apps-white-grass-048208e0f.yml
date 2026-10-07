@@ -60,6 +60,8 @@ jobs:
         run: |
           echo "Migrando o banco de: $ALVO_MIGRACAO"
           node scripts/executar-migracoes.js
+          # vD.3: a homologação sempre tem massa fictícia (idempotente; o script se recusa a rodar fora de um banco "homolog").
+          if [ "$ALVO_MIGRACAO" = "homologacao" ]; then node scripts/semear-homologacao.js; fi
 
       - name: Build And Deploy
         id: builddeploy

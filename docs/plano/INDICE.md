@@ -177,13 +177,13 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 
 ## FASE D — Robustez, operação e celular (retrofit das fases 0 a 7)
 
-Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10 bloco(s) · itens 17/49 concluídos.
+Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10 bloco(s) · itens 18/49 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
 | vD.1 | [Toda tela abre, provado por máquina (teste de interface no CI)](fase-d-robustez-e-operacao.md#vd1--toda-tela-abre-provado-por-máquina-teste-de-interface-no-ci) | ⬜ 0/4 |
 | vD.2 | [Front-end em módulos (v10.4 trazida pra frente)](fase-d-robustez-e-operacao.md#vd2--front-end-em-módulos-v104-trazida-pra-frente) | ⬜ 0/5 |
-| vD.3 | [Homologação igual à produção](fase-d-robustez-e-operacao.md#vd3--homologação-igual-à-produção) | 🟡 1/4 |
+| vD.3 | [Homologação igual à produção](fase-d-robustez-e-operacao.md#vd3--homologação-igual-à-produção) | 🟡 2/4 |
 | 🔒 D-A | [antes de avançar para a vD.4](fase-d-robustez-e-operacao.md#-trava-de-revisão-d-a--antes-de-avançar-para-a-vd4) | — |
 | vD.4 | [Segundo fator para quem aprova dinheiro e concede acesso](fase-d-robustez-e-operacao.md#vd4--segundo-fator-para-quem-aprova-dinheiro-e-concede-acesso) | ⬜ 0/4 |
 | vD.5 | [Operação: saber que caiu antes de alguém reclamar, e entrar sem esperar](fase-d-robustez-e-operacao.md#vd5--operação-saber-que-caiu-antes-de-alguém-reclamar-e-entrar-sem-esperar) | 🟡 2/8 |

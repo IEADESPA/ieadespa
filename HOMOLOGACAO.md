@@ -56,12 +56,14 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
     --setting-names "SQL_CONNECTION_STRING=<connection string do ieadespa-homolog>"
   ```
 
-- **Massa de dados fictícia**: o `ieadespa-homolog` hoje tem o mesmo
-  schema da produção, mas nasceu vazio (só rodou as migrações, não uma
-  cópia de dado real — não copiamos dado de membro de propósito). Ainda
-  não existe um script de seed com dados fictícios; peça numa próxima
-  sessão pra escrever um, cobrindo os casos de teste que a vB.1 pedia
-  (`calcularFechamento`, alçadas, etc.) sem depender de dado real.
+- **Massa de dados fictícia** (vD.3, 07/10/2026): o `ieadespa-homolog` tem o mesmo
+  schema da produção (o PR #1 migra **ele**, não a produção, desde 06/10) e recebe a
+  massa fictícia de `api/scripts/semear-homologacao.js` logo depois das migrações, a
+  cada montagem do PR: 1 área, 3 congregações "Fictícia - Alfa/Beta/Gama", 60 pessoas
+  (matrículas 900001 a 900060), 20 dizimistas e lideranças com senha padrão do script
+  (dirigente e tesoureiro de cada congregação = 1º e 2º adulto dela; pastor de área =
+  3º adulto da Alfa). Nunca copiamos dado de membro real; o script se recusa a rodar
+  fora de um banco com "homolog" no nome.
 
 ---
 

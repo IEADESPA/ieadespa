@@ -88,9 +88,12 @@ E desde 13/09/2026 a `HOMOLOGACAO.md` pede um seed de dados fictícios que nunca
       *Feito na noite de 06/10:* o fluxo escolhe o banco pelo branch do PR (`homolog…` → homologação; `main` →
       produção); a conexão veio do ambiente 1 do próprio Static Web App. O `homolog` recebeu a `main` e o PR #1
       migrou o `ieadespa-homolog` (antes com esquema atrasado): `/api/documentos`, que dava 500 lá, responde 200.
-- [ ] Seed fictício reproduzível (`api/scripts/semear-homologacao.js`): congregações, áreas, 50 a 100 pessoas com
-      nomes inventados, um ciclo de tesouraria fechado, uma turma de EBD, uma escala, um processo disciplinar — tudo
-      marcado como fictício; nunca roda contra a produção (recusa pela string de conexão).
+- [x] Seed fictício reproduzível (`api/scripts/semear-homologacao.js`) — *feito em 07/10:* 1 área, 3 congregações,
+      60 pessoas (matrículas 900001 a 900060, 1 em 5 menor), 20 dizimistas e lideranças com senha (dirigente e
+      tesoureiro de cada congregação, pastor de área; papéis criados se faltarem); tudo marcado "Fictícia"/"fict-",
+      idempotente, e o script **se recusa** a rodar se o banco da conexão não tiver "homolog" no nome. Roda sozinho no
+      fluxo do PR de homologação logo depois das migrações. Tesouraria, EBD e escalas fictícias ficam para serem
+      geradas pelas próprias telas (as regras de termo, categoria e fechamento são do app).
 - [ ] Varredura de rotas (`tools/csp-e2e --remoto`) rodando contra a homologação depois de cada deploy dela — o passo 4
       da rotina de atualização de plataformas passa a ter prova.
 - [ ] `HOMOLOGACAO.md` atualizada: o que a homologação prova e o que não prova, sem ambiguidade.

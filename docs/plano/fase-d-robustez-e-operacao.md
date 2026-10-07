@@ -219,10 +219,10 @@ completa da vD.1 (não só o modo rápido) **e** por um clique manual em cada m�
      duas vezes (`lerArquivoComoBase64`) ficou uma só; os ajudantes de uso geral voltaram ao núcleo; o PR da
      homologação fechado pelo GitHub foi substituído (PR #21) com a regra escrita; o ambiente novo, que nasceu
      apontado ao banco de produção, foi apontado ao `ieadespa-homolog`; o teste do site que ficava vermelho ao
-     mesclar um PR passou a fazer checkout pelo commit. **Fica para o responsável** (não cabe ao modo automático):
-     apagar o ambiente de preview órfão `18` do Static Web App do sistema (está no ar com a configuração de
-     produção), trocar os dois segredos da vD.8, escolher o segundo fator (vD.4), a raiz do domínio (vD.7) e o
-     ensaio de restauração (vD.5). O que a vD.2 deixou **por decisão** para uma fase própria (carregar sob
+     mesclar um PR passou a fazer checkout pelo commit. **Feito com o responsável em modo manual, na mesma tarde:**
+     os três ambientes de preview órfãos apagados (sistema `18`; site `1` e `18`) e os dois segredos da vD.8
+     trocados. **Fica para o responsável:** escolher o segundo fator (vD.4), a raiz do domínio (vD.7, depois de
+     17/10) e o ensaio de restauração (vD.5). O que a vD.2 deixou **por decisão** para uma fase própria (carregar sob
      demanda, `index.html` por módulo, funções reaproveitáveis) continua como item aberto da vD.2 e não bloqueia a
      trava.
   5. *Deploy real aconteceu?* **Sim.** Cada lote de módulos subiu primeiro no `homolog` (teste de tela + telas
@@ -447,7 +447,13 @@ segundo (≈ 150 por minuto; o pico de 06/10 foi 17 por minuto). Acima disso nin
 - [x] **Painel de camisetas:** o token do Directus vence em 15 min e o painel não renovava (é a "desconectar e
       entrar de novo" de 06/10) — feito na noite de 06/10 (`fetchComSessao` em `painelAuth.ts`: num 401
       renova pelo cookie e repete; aplicado nas três telas do painel de camisetas).
-- [ ] **Trocar dois segredos (depende de você — modo manual):** na noite de 06/10, uma mensagem de erro do
+- [x] **Trocar dois segredos (depende de você — modo manual):** *feito em 07/10/2026 à tarde, em modo manual:
+      contagem antes (1.083 pedidos: 7 com a chave velha do telefone, nenhum com telefone cifrado — a cifra é de hoje e o
+      lote estava fechado); as 7 chaves foram zeradas (recalculam na próxima consulta), os valores novos entraram nos
+      dois Static Web Apps, no Directus (token do usuário administrador), nos segredos do GitHub e nos arquivos
+      cifrados do repositório; os três ambientes de preview órfãos (sistema `18`; site `1` e `18`) foram apagados no
+      mesmo ato. Roteiro reutilizável: gerar → contar → rechavear → trocar-azure → trocar-directus → trocar-github →
+      concluir → conferir, sem imprimir valor nenhum.* Histórico: na noite de 06/10, uma mensagem de erro do
       Azure imprimiu no registro da sessão o token de administrador do Directus e a chave do telefone. A
       troca automática foi bloqueada pelo controle de permissões (gravação em cofre de segredos). Passos, já
       prontos: gerar os dois valores novos; `PATCH /users/{id}` no Directus com o token novo; gravar os dois

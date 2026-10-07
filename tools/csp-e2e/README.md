@@ -21,11 +21,11 @@ node rodar.js --original original/app --estabilidade
 Modo remoto (front publicado, com os cabeçalhos reais; só `/api/*` é simulado, interceptado dentro do navegador — nada chega à API de verdade):
 
 ```sh
-node rodar.js --original original/app --remoto https://white-grass-048208e0f-1.eastus2.6.azurestaticapps.net --rapido --workers 6
+node rodar.js --original original/app --remoto https://white-grass-048208e0f-21.eastus2.6.azurestaticapps.net --rapido --workers 6
 node so-sondagem.js https://app.ieadespa.org.br   # só cabeçalhos, service worker e CSP ao carregar
 ```
 
-Opções: `--workers 12` `--navegadores 3` `--perfis anonimo,geral,membro` `--redescobrir` (refaz o plano)
+Opções: `--workers 12` `--navegadores 3` `--perfis anonimo,geral,membro` `--redescobrir` (refaz o plano) `--celular` (janela 360×740, vD.6: a rolagem lateral de cada tela entra na comparação; plano próprio)
 `--so geral:12,geral:40 [--v]` (repete só essas ações e mostra o detalhe) `--sem-especiais` `--saida <pasta>` `--porta 47811`
 `--nova-sem-csp` (só para o autoteste com a cópia estragada: `node criar-mutante.js` e `--nova mutante/app --nova-sem-csp`).
 Só as peças especiais: `node so-especiais.js --original original/app --nova <pasta>`.

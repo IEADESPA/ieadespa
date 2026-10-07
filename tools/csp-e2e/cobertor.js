@@ -79,7 +79,9 @@ async function abrirNavegador(perfilDir, opcoes = {}) {
       "--disable-features=Translate,EdgeCollections,msEdgeShopping,AutofillServerCommunication",
       "--lang=pt-BR"
     ],
-    defaultViewport: { width: 1366, height: 900 },
+    // vD.6: --celular = janela de celular (360×740, como a revisão do Meu Painel do membro em 07/10/2026); o retrato
+    // de cada ação passa a trazer a rolagem lateral da página (ver instrumento.js, R.retrato), que vira divergência
+    defaultViewport: opcoes.celular ? { width: 360, height: 740, isMobile: true, hasTouch: false, deviceScaleFactor: 1 } : { width: 1366, height: 900 },
     protocolTimeout: 120000
   });
 }

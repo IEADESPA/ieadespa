@@ -313,8 +313,13 @@ do roteiro; o membro já usa hoje.
       fecha ao escolher uma aba ou tocar fora) e o cabeçalho quebra linha. Medido tela a tela (Perfil, Dados,
       Vínculos, Contribuições, LGPD, Cartas, Escalas, Eventos, Segurança): **0 px de rolagem lateral** em todas;
       tabelas rolam dentro de si. Capturas em `docs/plano/capturas/vD.6/`.
-- [ ] Os mesmos testes da vD.1 rodando também em janela de celular (360×740) pro perfil **membro** — regressão de
-      layout vira erro de CI, não reclamação. (Depende de o equipamento aceitar viewport por perfil.)
+- [x] Os mesmos testes da vD.1 rodando também em janela de celular (360×740) pro perfil **membro** — regressão de
+      layout vira erro de CI, não reclamação. (Depende de o equipamento aceitar viewport por perfil.) *Feito em
+      07/10/2026: `rodar.js --celular` abre o navegador em 360×740 e o retrato de cada ação passa a trazer a rolagem
+      lateral da página em px (0 numa tela que cabe), comparada como campo próprio; o fluxo de testes de tela ganhou
+      um segundo trabalho (`celular`) com o perfil membro e plano próprio. Primeira rodada local: 615 ações
+      descobertas no celular, 127 no modo rápido, 127 iguais à base, 0 divergência, 0 violação de CSP, rolagem lateral
+      0 px em todas as telas do membro — o mesmo que a revisão manual da vD.6 tinha visto.*
 - [ ] O que é só da liderança (Financeiro, Disciplina, Catálogos) fica como está até a v10.3/v10.1.3 — não é o que o
       membro usa, e redesenhar tudo agora é a FASE 10.
 

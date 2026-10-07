@@ -632,6 +632,16 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .cal-site-cartao { border: 1px solid var(--cor-borda); border-left: 6px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); background: var(--cor-superficie); padding: 12px 16px; }
 .cal-site-ok { border-left-color: var(--cor-sucesso); }
 
+/* vD.6 (06/10/2026) — no telefone, TODA tabela rola de lado sozinha, esteja ou não dentro de .rolagem-tabela
+   (das 213 tabelas que o script.js monta, só 23 tinham o invólucro; as outras cortavam a última coluna).
+   Sem mexer em markup: a tabela vira bloco rolável e as células não quebram linha, então o conteúdo
+   mantém a largura e aparece a rolagem lateral. No notebook nada muda (regra só até 640px). */
+@media (max-width: 640px) {
+  .tabela-frequencia { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; min-width: 0; }
+  .tabela-frequencia th, .tabela-frequencia td { white-space: nowrap; }
+  .rolagem-tabela { max-width: 100%; }
+}
+
 @media (max-width: 640px) {
   .cal-grade-mes { gap: 2px; }
   .cal-dia { min-height: 52px; padding: 3px 4px; }

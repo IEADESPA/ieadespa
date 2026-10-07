@@ -5,7 +5,17 @@ const path = require("path");
 const puppeteer = require("puppeteer-core");
 const { instrumento } = require("./instrumento");
 
-const EDGE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
+// Navegador: Edge nesta máquina (Windows); no CI (Linux, vD.1) o Chrome do runner — `NAVEGADOR=<caminho>` manda em ambos.
+const CANDIDATOS_NAVEGADOR = [
+  process.env.NAVEGADOR,
+  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chromium"
+].filter(Boolean);
+const EDGE = CANDIDATOS_NAVEGADOR.find((p) => { try { return fs.existsSync(p); } catch (_) { return false; } }) || CANDIDATOS_NAVEGADOR[0];
 const AQUI = __dirname;
 
 const PERFIS = {

@@ -83,11 +83,17 @@ fluxo do PR migra o banco de produção, não o de homologação — por isso a 
 passou semanas ligada ao Function App antigo sem rodar o código novo. Ou seja: "testado na homologação" não provava nada.
 E desde 13/09/2026 a `HOMOLOGACAO.md` pede um seed de dados fictícios que nunca foi escrito.
 
-- [ ] Passo de migração do banco de homologação no fluxo do PR #1 (`homolog`), com a conexão dela guardada como
+- [x] Passo de migração do banco de homologação no fluxo do PR #1 (`homolog`), com a conexão dela guardada como
       segredo do GitHub (`AZURE_SQL_CONNECTION_STRING_HOMOLOG`) — mesmo `scripts/executar-migracoes.js`, mesma ordem.
-- [ ] Seed fictício reproduzível (`api/scripts/semear-homologacao.js`): congregações, áreas, 50 a 100 pessoas com
-      nomes inventados, um ciclo de tesouraria fechado, uma turma de EBD, uma escala, um processo disciplinar — tudo
-      marcado como fictício; nunca roda contra a produção (recusa pela string de conexão).
+      *Feito na noite de 06/10:* o fluxo escolhe o banco pelo branch do PR (`homolog…` → homologação; `main` →
+      produção); a conexão veio do ambiente 1 do próprio Static Web App. O `homolog` recebeu a `main` e o PR #1
+      migrou o `ieadespa-homolog` (antes com esquema atrasado): `/api/documentos`, que dava 500 lá, responde 200.
+- [x] Seed fictício reproduzível (`api/scripts/semear-homologacao.js`) — *feito em 07/10:* 1 área, 3 congregações,
+      60 pessoas (matrículas 900001 a 900060, 1 em 5 menor), 20 dizimistas e lideranças com senha (dirigente e
+      tesoureiro de cada congregação, pastor de área; papéis criados se faltarem); tudo marcado "Fictícia"/"fict-",
+      idempotente, e o script **se recusa** a rodar se o banco da conexão não tiver "homolog" no nome. Roda sozinho no
+      fluxo do PR de homologação logo depois das migrações. Tesouraria, EBD e escalas fictícias ficam para serem
+      geradas pelas próprias telas (as regras de termo, categoria e fechamento são do app).
 - [ ] Varredura de rotas (`tools/csp-e2e --remoto`) rodando contra a homologação depois de cada deploy dela — o passo 4
       da rotina de atualização de plataformas passa a ter prova.
 - [ ] `HOMOLOGACAO.md` atualizada: o que a homologação prova e o que não prova, sem ambiguidade.
@@ -136,19 +142,21 @@ acesso do dia (partida a frio das Functions + banco serverless pausado), e a ten
 (20/09) esbarrou num defeito do Azure sem solução. A restauração do banco foi ensaiada **uma vez** (13/09/2026) e os
 segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
 
-- [ ] **Teste de disponibilidade** do Application Insights a cada 5 minutos, de 3 regiões, numa rota **que não toca o
-      banco** (ex.: `GET /api/versao`, nova, só devolve a versão publicada) — alerta por e-mail quando falhar de 2
-      regiões seguidas. Efeito colateral útil: a chamada mantém as Functions **quentes** o dia inteiro (some a partida
-      a frio de 15-30 s) **sem acordar o banco**, que continua pausando de madrugada como hoje. Custo: o teste de
-      disponibilidade é gratuito até o limite da camada; o banco não muda.
+- [x] **Teste de disponibilidade** a cada 5 minutos numa rota **que não toca o banco** — *feito na noite de 06/10,
+      sem Azure e sem custo:* rota nova `GET /api/saude` (só `ok` + hora; registrada como pública no teste
+      `rotasAnonimas`) e o fluxo `sistema-disponibilidade.yml` (GitHub Actions, `*/5`), que chama a rota e a página
+      inicial do site e, na **primeira** falha de uma sequência, manda e-mail pela conta ACS do site para
+      `presidente@ieadespa.org`; quando volta, manda "voltou". Efeito colateral útil: mantém as Functions quentes
+      (some a partida a frio de 15-30 s) **sem acordar o banco**.
 - [ ] **Decisão separada, com número**: manter o banco acordado em horário de uso (6h às 23h) tira os segundos de
       retomada do serverless no primeiro login do dia, mas o banco passa a cobrar o mínimo (0,5 vCore) o tempo todo nesse
       horário — medir no portal o custo de um mês com e sem, e só então decidir. A opção gratuita (um `curl` por GitHub
       Actions a cada 15 minutos em horário de uso, como o aquecimento que `rotinas-diarias.yml` já faz às 7h) fica
       documentada como alternativa.
-- [ ] **Anexos com rede de segurança**: exclusão suave (soft delete) e versionamento de blob na conta
-      `ieadespaarmazenamento` (anexos da vB.4, fotos, documentos) — hoje o banco tem restauração a qualquer ponto, os
-      arquivos não. Custo: só o espaço das versões (centavos neste volume).
+- [x] **Anexos com rede de segurança**: exclusão suave (soft delete) e versionamento de blob na conta
+      `ieadespaarmazenamento` (anexos da vB.4, fotos, documentos) — *feito em 06/10:* a exclusão suave já existia
+      com 7 dias; agora 30 dias, com versionamento de blob e exclusão suave de contêiner (30 dias) ligados.
+      Custo: só o espaço das versões (centavos neste volume).
 - [ ] **Ensaio semestral de restauração** (banco + anexos) registrado na tabela da `HOMOLOGACAO.md`, com o tempo
       medido — e um lembrete pelo motor de notificações (vB.2) 30 dias antes de vencer, pra Secretaria Geral.
 - [ ] **Rotação de segredos com procedimento escrito** no `SECRETS.md`: `AUTH_SECRET` (derruba todas as sessões —
@@ -176,8 +184,9 @@ O membro entra pelo celular (matrícula + PIN, PWA instalável) — e encontra t
 `script.js` gera**, só 23 a usam: no telefone, a maioria corta a última coluna sem aviso. A v10.3 previa só isso, no fim
 do roteiro; o membro já usa hoje.
 
-- [ ] Toda tabela gerada pelo `script.js` nasce dentro de `.rolagem-tabela` — uma função única de montar tabela
-      (reaproveitada na vD.2), não 190 edições à mão.
+- [x] Toda tabela rola de lado no telefone — *feito em 06/10 sem tocar em markup:* regra de CSS só até 640 px
+      (`.tabela-frequencia` vira bloco rolável e as células não quebram linha); no notebook nada muda. A função
+      única de montar tabela fica para a vD.2.
 - [ ] As telas que o membro comum usa (Meu Painel: perfil, dados, família, contribuições, LGPD, cartas, escalas,
       eventos, EBD do aluno, notificações) revisadas em **360 px de largura** com prova de tela (captura antes/depois
       guardada em `docs/plano/capturas/vD.6/`): nada cortado, botão alcançável com o polegar, formulário sem zoom.
@@ -244,6 +253,18 @@ desativada continuava aceitando pedido, porque a regra de aberto/fechado só exi
       cupom) — antes qualquer pessoa podia chamar isso à mão.
 - [x] **"Meus pedidos" mostra a retirada** (local, mensagem e data de separado): 1 em cada 4 pedidos de 06/10
       não tinha e-mail, e a página é o que a pessoa abre com o telefone.
+- [x] **WhatsApp a partir do painel (07/10/2026):** o responsável quer falar com quem pediu, e 3 em 4 pedidos
+      não têm e-mail. Até aqui o telefone existia só como hash e chave de busca — nenhum dos dois volta ao
+      número, então o sistema **não tinha como** mandar nada. Decisão (do responsável, ao pedir a mensagem):
+      o número completo passa a ser guardado **cifrado** (AES-256-GCM, chave derivada do segredo do servidor;
+      quem lê o Directus vê só o cifrado) nos pedidos e inscrições novos, e um pedido antigo ganha o cifrado
+      no momento em que é achado em "Meus pedidos" (único instante em que o número está em mãos). No painel,
+      cada pedido tem o botão **WhatsApp**: a API do site (`telefone-pedido/{id}`) só devolve o número a quem
+      está logado no painel (prova: o token da pessoa precisa enxergar o pedido no Directus) e o navegador
+      abre o WhatsApp com a mensagem pronta (texto de retirada da campanha, itens e local). Sem API paga de
+      mensagens: é o link oficial `wa.me`, a pessoa da equipe aperta "enviar". Pedidos de antes de 07/10 sem
+      consulta em "Meus pedidos" respondem "telefone não guardado". A lista de campanhas do painel ganhou o
+      atalho "Pedidos, lotes, filtros e planilha Excel".
 - [x] **Directus:** limitador por IP de 25 para 150 chamadas/s; histórico de revisões (`accountability`)
       reduzido a "activity" em pedidos, itens, respostas e inscrições.
 - [x] Lotes do incidente juntados no lote 1 (1.083 pedidos) e os cinco lotes criados por engano apagados —

@@ -90,10 +90,13 @@ const allPosts = visiblePosts(await getAllMensagens());
       listaEl.innerHTML = lotes
         .map(
           (lote) => `
-            <a href="/painel-camisetas/grupo/?id=${lote.id}" class="painel-evento-card painel-evento-link">
-              <span class="painel-evento-titulo">${escapeHtml(lote.nome)}</span>
-              <span class="painel-evento-data">${lote.ativo ? "Ativo" : "Inativo"}</span>
-            </a>
+            <div class="painel-evento-card" style="display:grid;gap:0.5rem">
+              <a href="/painel-camisetas/grupo/?id=${lote.id}" class="painel-evento-link" style="display:block">
+                <span class="painel-evento-titulo">${escapeHtml(lote.nome)}</span>
+                <span class="painel-evento-data">${lote.ativo ? "Ativo" : "Inativo"}</span>
+              </a>
+              <a href="/painel-camisetas/grupo/pedidos/?id=${lote.id}" class="link-sweep text-sm font-semibold text-accent">Pedidos, lotes, filtros e planilha Excel →</a>
+            </div>
           `,
         )
         .join("");

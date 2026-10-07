@@ -122,6 +122,13 @@ export const STATUS_INSCRICAO_URL = "/api/status-inscricao";
 export const CRIAR_INSCRICAO_URL = "/api/criar-inscricao";
 
 /**
+ * Telefone de um pedido para o botão de WhatsApp do painel (07/10/2026): `GET {URL}/{pedidoId}`
+ * com o token do Directus de quem está logado no painel; responde `{ telefone, digitos, whatsapp }`
+ * ou 404 quando o pedido é de antes de 07/10/2026 (telefone só como hash).
+ */
+export const TELEFONE_PEDIDO_URL = "/api/telefone-pedido";
+
+/**
  * Fase 28 — aviso de "pode retirar" (peça separada, esperando a pessoa vir
  * buscar). Chamada só pelo painel (`/painel-camisetas/grupo/pedidos/`), no
  * momento em que a equipe marca um pedido como separado — melhor esforço,

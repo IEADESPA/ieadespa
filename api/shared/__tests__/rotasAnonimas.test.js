@@ -31,7 +31,8 @@ const PUBLICAS = {
   RegistrarPresenca: "check-in da Portaria: matrícula + senha da reunião dita na sala (com limitador)",
   InscricaoPush: "GET devolve só a chave pública VAPID; o resto exige sessão",
   GestaoDocumentos: "GET sem login devolve só os documentos marcados como PÚBLICOS (documentosVisibilidade.test.js); registrar, mudar e apagar exigem sessão",
-  GestaoTextoMestre: "GET sem login devolve só a versão vigente do texto mestre (normativo público)"
+  GestaoTextoMestre: "GET sem login devolve só a versão vigente do texto mestre (normativo público)",
+  Saude: "vD.5: 'está no ar?' para o teste de disponibilidade (GitHub Actions a cada 5 min); não toca no banco e só devolve ok + hora"
 };
 // Rotinas agendadas: protegidas por segredo (x-cron-secret), não por sessão.
 const ROTINAS = new Set(["NotificacoesAgendador", "EbdFechamentoAutomatico", "FluxosEscalonador", "AvaliarNotificacoes"]);

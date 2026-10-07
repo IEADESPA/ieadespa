@@ -56,12 +56,14 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
     --setting-names "SQL_CONNECTION_STRING=<connection string do ieadespa-homolog>"
   ```
 
-- **Massa de dados fictícia**: o `ieadespa-homolog` hoje tem o mesmo
-  schema da produção, mas nasceu vazio (só rodou as migrações, não uma
-  cópia de dado real — não copiamos dado de membro de propósito). Ainda
-  não existe um script de seed com dados fictícios; peça numa próxima
-  sessão pra escrever um, cobrindo os casos de teste que a vB.1 pedia
-  (`calcularFechamento`, alçadas, etc.) sem depender de dado real.
+- **Massa de dados fictícia** (vD.3, 07/10/2026): o `ieadespa-homolog` tem o mesmo
+  schema da produção (o PR #1 migra **ele**, não a produção, desde 06/10) e recebe a
+  massa fictícia de `api/scripts/semear-homologacao.js` logo depois das migrações, a
+  cada montagem do PR: 1 área, 3 congregações "Fictícia - Alfa/Beta/Gama", 60 pessoas
+  (matrículas 900001 a 900060), 20 dizimistas e lideranças com senha padrão do script
+  (dirigente e tesoureiro de cada congregação = 1º e 2º adulto dela; pastor de área =
+  3º adulto da Alfa). Nunca copiamos dado de membro real; o script se recusa a rodar
+  fora de um banco com "homolog" no nome.
 
 ---
 
@@ -118,10 +120,9 @@ O site não tinha ambiente de homologação: toda mudança ia direto para `www.i
 
 | Peça | O que é |
 | --- | --- |
-| Branch `homolog-site` + PR [#18](https://github.com/IEADESPA/ieadespa/pull/18) (**não fechar, não dar merge pelo PR**) | Cada push no branch monta o site no ambiente de pré-visualização `18` do Static Web App `site-institucional` (grátis no plano Standard): `https://salmon-bay-0efd06d0f-18.eastus2.3.azurestaticapps.net`. O que for aprovado vai para a `main` por merge normal (`git merge --ff-only homolog-site`), nunca fechando o PR. |
-| Configurações do ambiente 18 | As mesmas da produção (`DIRECTUS_URL`, `DIRECTUS_ADMIN_TOKEN`, `TELEFONE_CHAVE_SEGREDO`, `ACS_CONNECTION_STRING`, `CHAVE_SITE_SISTEMA`, `CONTA_TOKEN_SECRET`), copiadas com `az staticwebapp appsettings set --environment-name 18` (uma chave por vez, com o valor lido da produção, nunca em texto no comando). Trocou um segredo na produção? Troque no 18 também. |
-| CORS do Directus | `CORS_ORIGIN` inclui o endereço do ambiente 18, senão o painel administrativo não funciona na pré-visualização (o Directus é outro domínio). |
-| Testes automáticos | `.github/workflows/site-testes.yml` roda `site/scripts/testes/` (camisetas e eventos) depois de cada montagem: contra o 18 quando o push é no `homolog-site`, contra a produção quando é na `main`. Resultado no resumo do run. |
+| **Um pull request por mudança** (branch `site/<tema>` → PR → merge) | A montagem do PR cria o ambiente de pré-visualização `<nº do PR>` do Static Web App `site-institucional` (grátis no plano Standard): `https://salmon-bay-0efd06d0f-<nº>.eastus2.3.azurestaticapps.net`. Ele **herda as configurações da produção** e é destruído quando o PR fecha. *Lição de 06/10:* um PR "permanente" (tipo o #1 do sistema) não serve para o site — qualquer merge dos commits dele o marca como mesclado e o ambiente some (aconteceu com o PR #18). |
+| CORS do Directus | O painel administrativo chama o Directus pelo navegador; `CORS_ORIGIN` só tem a produção, então **o painel só é testado na produção** (teste de ponta a ponta com massa descartável, `scratchpad/painel-e2e.js`); a API pública é testada na pré-visualização. |
+| Testes automáticos | `.github/workflows/site-testes.yml` roda `site/scripts/testes/` (camisetas e eventos) depois de cada montagem: contra a pré-visualização de qualquer PR aberto, contra a produção quando é na `main`. Resultado no resumo do run. |
 | Teste do painel (à mão) | `scratchpad/painel-e2e.js` (Edge sem janela, puppeteer-core): login, filtros, exportação, troca de lote e renovação da sessão, com massa descartável. Precisa de um usuário do Directus com o papel Semi-administrador; o `teste-painel@ieadespa.org.br` criado em 06/10 deve ser **apagado** quando não for mais usado. |
 
 **Directus**: não há cópia de homologação (custo). Os testes gravam no Directus de produção itens descartáveis

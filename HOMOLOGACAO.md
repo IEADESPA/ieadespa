@@ -144,9 +144,15 @@ vezes o teto de US$ 150.
 
 **Correção (06/10/2026):** o fluxo passou a rodar 3 vezes por dia (7h45 junto com as rotinas diárias, 13h e
 19h, horário de Brasília). Custo esperado de cada despertar do banco: ≈ R$ 2,60 (60 min a 0,5 vCore, a
-≈ R$ 5,25 por vCore-hora medido). A versão sem custo nenhum — o sistema dispara o fluxo só quando a agenda
-muda — está na vD.5 do plano (precisa de um token do GitHub guardado como segredo). Conferir aqui, uns dias
-depois, se o banco voltou a pausar (`az monitor metrics list ... --metric app_cpu_billed`).
+≈ R$ 5,25 por vCore-hora medido).
+
+**Desenho definitivo (vD.5, 07/10/2026):** a versão da agenda pública fica guardada **fora do banco**, num
+blob privado do Storage (`shared/agendaPublicaVersao.js`). O próprio sistema a regrava quando alguém mexe no
+calendário, nos canais ou nos eventos (o banco já estava acordado para a mudança) e a rotina diária das 7h a
+regrava por garantia. `GET /api/agenda-publica/versao` responde pelo blob, sem abrir o banco — por isso o
+sincronizador voltou a rodar **a cada 15 minutos** com zero despertar: evento publicado aparece no site em
+até ~15 min e o banco pausa como deve. Sem token pessoal do GitHub. Conferir uns dias depois se o banco
+voltou a pausar (`az monitor metrics list ... --metric app_cpu_billed`).
 
 **Regra que fica:** qualquer rotina agendada que chame a API do sistema acorda o banco por 60 minutos. Antes
 de criar um agendamento novo, somar as janelas: o custo é por despertar, não por chamada.

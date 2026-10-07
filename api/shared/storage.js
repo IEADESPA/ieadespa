@@ -111,4 +111,20 @@ async function excluirDocumento(urlBlob) {
   }
 }
 
-module.exports = { salvarFoto, excluirFoto, urlComSas, salvarDocumento, urlDocumentoComSas, excluirDocumento };
+// vD.5 (07/10/2026) — JSON pequeno guardado num container PRIVADO, lido só pelo servidor: o que o sistema quer
+// responder SEM abrir o banco (hoje, a versão da agenda pública que o sincronizador do site pergunta a cada 15 min).
+// Container privado como os outros; o nome do blob é escolhido por quem chama (ex.: "agenda-publica/versao.json").
+const CONTAINER_CACHE_PUBLICO = "cache-publico";
+async function salvarJsonPrivado(nomeBlob, objeto) {
+  const container = getContainerClient(CONTAINER_CACHE_PUBLICO);
+  await container.createIfNotExists();
+  const texto = JSON.stringify(objeto);
+  await container.getBlockBlobClient(nomeBlob).upload(texto, Buffer.byteLength(texto), { blobHTTPHeaders: { blobContentType: "application/json" } });
+}
+async function lerJsonPrivado(nomeBlob) {
+  const blob = getContainerClient(CONTAINER_CACHE_PUBLICO).getBlockBlobClient(nomeBlob);
+  if (!(await blob.exists())) return null;
+  return JSON.parse((await blob.downloadToBuffer()).toString("utf8"));
+}
+
+module.exports = { salvarFoto, excluirFoto, urlComSas, salvarDocumento, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado };

@@ -50,6 +50,14 @@ jobs:
           curl -sf -X POST "https://app.ieadespa.org.br/api/notificacoes-agendador-interno" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
 
+      # vD.5 (07/10/2026): com o banco já acordado, regrava a versão da agenda pública no Storage — é por
+      # ela que o sincronizador do site (a cada 15 min) decide se reconstrói, sem tocar o banco. Rede de
+      # segurança: toda mudança no calendário/canais/eventos já regrava na hora (shared/agendaPublicaVersao.js).
+      - name: Guarda a versão da agenda pública fora do banco (vD.5)
+        run: |
+          curl -sf -X POST "https://app.ieadespa.org.br/api/agenda-publica/atualizar-versao" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
   fluxos:
     if: github.event.schedule == '30 10 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

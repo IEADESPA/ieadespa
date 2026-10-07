@@ -173,7 +173,8 @@ async function enviarCodigo(pool, { membroId, email, nome, motivo }) {
   await codigoAcesso.registrarCodigo(pool, membroId, codigo);
   const enviado = await enviarEmailNotificacao({
     email, titulo: "Código de confirmação — Governança IEADESPA",
-    mensagem: `Olá, ${nome || "irmão(ã)"}.\n\nSeu código de confirmação para ${motivo || "entrar no sistema"} é: ${codigo}\n\nEle vale por 10 minutos. Se não foi você, ignore esta mensagem e avise a Secretaria Geral.`
+    mensagem: `Olá, ${nome || "irmão(ã)"}.\n\nSeu código de confirmação para ${motivo || "entrar no sistema"} é: ${codigo}\n\nEle vale por 10 minutos. Se não foi você, ignore esta mensagem e avise a Secretaria Geral.`,
+    aguardarEntrega: false
   });
   return enviado ? { sucesso: true } : { erro: "Não foi possível enviar o e-mail agora. Tente de novo em instantes." };
 }

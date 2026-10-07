@@ -136,6 +136,10 @@ async function main() {
   }
   const terceiroAlfa = adultos.filter((a) => a.cong.id === congs[0].id)[2];
   if (terceiroAlfa) await lideranca(terceiroAlfa.matricula, papelPastorArea, "AREA", areaId, `pastor de área (matrícula ${terceiroAlfa.matricula})`);
+  // vD.4: o pastor de área fictício fica SEM e-mail de propósito — é com ele que a prova em navegador cadastra a chave de acesso
+  // (sem chave e sem e-mail a senha certa entra com aviso; depois do cadastro, a entrada passa a exigir a chave). Os demais têm e-mail
+  // (@exemplo.com) e mostram o caminho do código.
+  if (terceiroAlfa) await q("UPDATE dbo.MembroReferencia SET Email = NULL WHERE MembroId = @m AND Email IS NOT NULL", { m: terceiroAlfa.matricula });
 
   await pool.close();
   console.log(feito.length ? `Semeado em "${banco}": ${feito.join("; ")}.` : `Nada a criar em "${banco}": a massa fictícia já existia.`);

@@ -1830,6 +1830,16 @@
       <!-- ABA: PERMISSÕES -->
       <div id="abaPermissoes" class="aba-secretaria" style="display:none;">
 
+        <!-- vD.4 — chaves de acesso dos líderes (nível geral): quem tem aparelho cadastrado, quem não tem, e a remoção para quem perdeu o aparelho -->
+        <h3>🔑 Chaves de acesso dos líderes</h3>
+        <p class="subtitle">Quem já cadastrou um aparelho confiável entra com senha + chave de acesso; quem não cadastrou recebe o código por e-mail (e quem
+          também não tem e-mail entra com aviso). Perdeu o aparelho? Remova as chaves da pessoa: ela volta a entrar pelo código até cadastrar outro. Toda
+          remoção fica na auditoria com o motivo.</p>
+        <div class="barra-lista"><button class="btn-confirmar btn-secundario" type="button" data-on-click="carregarChavesAcessoAdminAcao">🔄 Atualizar lista</button></div>
+        <div class="rolagem-tabela"><div id="resultadoChavesAcessoAdmin"><p class="subtitle">Clique em "Atualizar lista".</p></div></div>
+        <hr />
+
+
         <h3>Papéis (perfis predefinidos de acesso)</h3>
         <form data-on-submit="salvarPapel" data-prevent="submit">
           <input type="hidden" id="papelId" />

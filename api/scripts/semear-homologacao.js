@@ -46,6 +46,7 @@ async function main() {
   const pool = await sql.connect(conexao);
   const q = (texto, entradas = {}) => { const r = pool.request(); for (const [k, v] of Object.entries(entradas)) r.input(k, v); return r.query(texto); };
   const escalar = async (texto, entradas) => { const r = await q(texto, entradas); return r.recordset[0] ? Object.values(r.recordset[0])[0] : null; };
+  const lerUma = async (texto, entradas) => { const r = await q(texto, entradas); return r.recordset[0] || null; };
   const feito = [];
 
   // 1) Área
@@ -106,14 +107,20 @@ async function main() {
   if (dizimistas) feito.push(`${dizimistas} dizimistas`);
 
   // 5) Papéis e lideranças
+  // Papel criado se faltar; se já existe, garante que tem ao menos as permissões listadas (só acrescenta — é o banco
+  // de homologação, e as telas que a revisão automática abre precisam dessas permissões nos fictícios).
   const papel = async (nome, nivel, permissoes) => {
-    let id = await escalar("SELECT PapelId FROM dbo.Papeis WHERE Nome = @n", { n: nome });
-    if (!id) { id = await escalar("INSERT INTO dbo.Papeis (Nome, Nivel, Permissoes) OUTPUT INSERTED.PapelId VALUES (@n, @v, @p)", { n: nome, v: nivel, p: permissoes }); feito.push(`papel ${nome}`); }
-    return id;
+    const linha = await lerUma("SELECT PapelId, Permissoes FROM dbo.Papeis WHERE Nome = @n", { n: nome });
+    if (!linha) { const id = await escalar("INSERT INTO dbo.Papeis (Nome, Nivel, Permissoes) OUTPUT INSERTED.PapelId VALUES (@n, @v, @p)", { n: nome, v: nivel, p: permissoes }); feito.push(`papel ${nome}`); return id; }
+    const atuais = String(linha.Permissoes || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const faltam = permissoes.split(",").filter((p) => !atuais.includes(p));
+    if (faltam.length) { await q("UPDATE dbo.Papeis SET Permissoes = @p WHERE PapelId = @id", { p: [...atuais, ...faltam].join(","), id: linha.PapelId }); feito.push(`papel ${nome}: +${faltam.join(",")}`); }
+    return linha.PapelId;
   };
   const papelDirigente = await papel("Dirigente de Congregação", "CONGREGACAO", "reunioes,pessoas,relatorios,escalas");
   const papelTesoureiro = await papel("Tesoureiro Local", "CONGREGACAO", "financeiro");
-  const papelPastorArea = await papel("Pastor de Área", "AREA", "reunioes,pessoas,relatorios,disciplina");
+  // psc_gestao: a Saúde Congregacional (PSC) é a primeira tela que virou módulo (vD.2); o pastor fictício abre a tela de verdade na homologação
+  const papelPastorArea = await papel("Pastor de Área", "AREA", "reunioes,pessoas,relatorios,disciplina,psc_gestao");
   const lideranca = async (matricula, papelId, escopoTipo, escopoId, rotulo) => {
     const existe = await escalar("SELECT COUNT(*) FROM dbo.Lideranca WHERE MembroId = @m AND PapelId = @p", { m: matricula, p: papelId });
     if (existe) return;

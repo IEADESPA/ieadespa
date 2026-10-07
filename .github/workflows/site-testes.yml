@@ -45,7 +45,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+          # o commit, não o branch: quando o PR é mesclado e o branch apagado, o checkout pelo nome falhava
+          # (07/10/2026) antes de o passo seguinte perceber que não há PR aberto e pular os testes
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           sparse-checkout: site/scripts/testes
           sparse-checkout-cone-mode: false
 

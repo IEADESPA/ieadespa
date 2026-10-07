@@ -70,12 +70,15 @@ seguro agora: a vD.1 prova equivalência ação por ação, igual provou a CSP (
       despachante só conheça ações de módulos já carregados — mudança no `eventos.js`, com prova própria.
 - [ ] Mesmo tratamento no `index.html`: o markup de cada módulo em arquivo próprio, montado na navegação — sem
       framework (decisão da FASE 10 continua: melhorar o que existe, não reescrever).
-- [ ] Prova de equivalência pela vD.1 **antes e depois de cada módulo extraído** (um módulo por commit): zero
+- [x] Prova de equivalência pela vD.1 **antes e depois de cada módulo extraído** (um módulo por commit): zero
       divergência nas ações, zero violação de CSP, nenhum `id` perdido. O `eventos.js` (despachante com lista fechada)
-      continua único — a lista fechada passa a ser montada pelos módulos carregados.
+      continua único — a lista fechada passa a ser montada pelos módulos carregados. *Feito em 07/10/2026: um commit
+      por módulo; a prova rodou no `homolog` por lote (1, 1, 1, 2, 7 e 11 módulos — 962 ações iguais em todos) e de
+      novo na `main` a cada merge; cada lote abriu as telas de verdade na homologação (`tools/modularizar/prova-modulo.js`).*
 - [ ] O que se repete de verdade (tabela com filtro, formulário mestre-detalhe, badge de status) vira função
       reaproveitável no núcleo — só o que já se repete, sem redesenho visual (isso é v10.1).
-- [ ] A v10.4 é marcada como entregue aqui (nota lá apontando pra cá), sem duplicar.
+- [x] A v10.4 é marcada como entregue aqui (nota lá apontando pra cá), sem duplicar. *Feito em 07/10/2026 (nota no
+      plano da FASE 10; o que a vD.2 deixou para depois continua lá como item aberto).*
 
 *Esforço:* alto. *Risco:* médio, mitigado pela vD.1 (sem a vD.1 feita, **não começar**). *Depende de você:* nada.
 
@@ -166,9 +169,14 @@ E desde 13/09/2026 a `HOMOLOGACAO.md` pede um seed de dados fictícios que nunca
       idempotente, e o script **se recusa** a rodar se o banco da conexão não tiver "homolog" no nome. Roda sozinho no
       fluxo do PR de homologação logo depois das migrações. Tesouraria, EBD e escalas fictícias ficam para serem
       geradas pelas próprias telas (as regras de termo, categoria e fechamento são do app).
-- [ ] Varredura de rotas (`tools/csp-e2e --remoto`) rodando contra a homologação depois de cada deploy dela — o passo 4
-      da rotina de atualização de plataformas passa a ter prova.
-- [ ] `HOMOLOGACAO.md` atualizada: o que a homologação prova e o que não prova, sem ambiguidade.
+- [x] Varredura de rotas rodando contra a homologação depois de cada deploy dela — o passo 4 da rotina de atualização
+      de plataformas passa a ter prova. *Feito em 07/10/2026 (`api/scripts/varrer-rotas.js`, passo do fluxo do Static
+      Web App): as 203 Functions são chamadas sem sessão no endereço recém-publicado (preview do PR da homologação, ou a
+      produção depois do push na `main`); 404 do Static Web App ou 5xx persistente derruba o fluxo; o `index.html`
+      publicado tem de carregar todos os módulos do repositório. Espera a propagação (3 respostas 200 seguidas de
+      `/api/saude` e `/`) e repete 3 vezes antes de acusar.*
+- [x] `HOMOLOGACAO.md` atualizada: o que a homologação prova e o que não prova, sem ambiguidade. *Feito em 07/10/2026
+      (seção própria).*
 
 *Esforço:* baixo. *Risco:* nenhum pra produção. *Depende de você:* criar o segredo no GitHub (ou autorizar o `gh secret
 set` em modo manual) — o valor sai do portal do Azure, nunca de texto puro no repositório (regra 2 do `CLAUDE.md`).

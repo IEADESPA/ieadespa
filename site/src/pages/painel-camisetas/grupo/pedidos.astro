@@ -183,7 +183,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
   <script>
     import { exigirAutenticacao, fetchComSessao, renovarToken } from "@/lib/painelAuth";
-    import { ENVIAR_AVISO_RETIRADA_CAMISETA_URL } from "@/lib/directus";
+    import { ENVIAR_AVISO_RETIRADA_CAMISETA_URL, TELEFONE_PEDIDO_URL } from "@/lib/directus";
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
 
@@ -675,6 +675,11 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         : p.separado
           ? `<span class="badge-separado">✅ Separado</span>`
           : `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-marcar-separado>Marcar como separado</button>`;
+      // 07/10/2026 — chamar a pessoa no WhatsApp com a mensagem pronta (a maioria não tem e-mail).
+      // O telefone fica cifrado no Directus; a API do site só o devolve a quem está logado no painel.
+      const whatsappAcao = p.avulso
+        ? ""
+        : `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-whatsapp title="Abre o WhatsApp com a mensagem pronta">WhatsApp</button>`;
       const avisoAguardandoRetirada =
         !p.avulso && p.separado && !tudoRetirado(p)
           ? `<p class="camiseta-pedido-aviso camiseta-pedido-aviso-retirada">Separado${p.separado_em ? ` há ${diasDesde(p.separado_em)} dia(s)` : ""}, aguardando retirada.</p>`
@@ -694,6 +699,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
               </label>
               <button type="button" class="link-sweep text-sm font-semibold text-accent" data-salvar-pedido>Salvar</button>
               ${separadoAcao}
+              ${whatsappAcao}
               <button type="button" class="link-sweep text-sm font-semibold" data-excluir-pedido>Excluir</button>
             </div>
           </div>
@@ -1260,6 +1266,29 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           pedidos = pedidos.filter((p) => p.id !== pedidoId);
           atualizarTudo();
         }
+      }
+
+      if (target.matches("[data-whatsapp]")) {
+        const botao = target as HTMLButtonElement;
+        botao.disabled = true;
+        botao.textContent = "Abrindo…";
+        try {
+          const res = await api(`${TELEFONE_PEDIDO_URL}/${pedidoId}`);
+          const json = await res.json().catch(() => null);
+          if (!res.ok || !json?.whatsapp) {
+            alert(json?.erro || "Não foi possível obter o telefone agora.");
+            return;
+          }
+          const itens = pedido.itens.map((i) => `${[i.tamanho, i.modelo].filter(Boolean).join(" ")} (${i.quantidade}x)`).join(", ") || "camiseta";
+          const mensagem = pedido.separado
+            ? `${grupo.email_retirada_corpo || `Boa notícia, ${pedido.nome}! O pedido que você fez em "${grupo.nome}" já chegou e está separado, pronto pra você retirar.`}\n\nItens: ${itens}.${grupo.retirada_local ? `\nOnde retirar: ${grupo.retirada_local}.` : ""}`
+            : `Olá, ${pedido.nome}! Sobre o seu pedido de camiseta em "${grupo.nome}" (${itens}): acompanhe o andamento em https://www.ieadespa.org.br/meus-pedidos-camiseta/ informando o seu telefone.`;
+          window.open(`${json.whatsapp}?text=${encodeURIComponent(mensagem)}`, "_blank", "noopener");
+        } finally {
+          botao.disabled = false;
+          botao.textContent = "WhatsApp";
+        }
+        return;
       }
 
       if (target.matches("[data-marcar-separado]")) {

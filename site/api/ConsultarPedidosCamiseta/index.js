@@ -1,4 +1,4 @@
-const { conferirHash, chaveTelefone, normalizarNome } = require("../src/lib/telefone");
+const { conferirHash, chaveTelefone, normalizarNome, cifrarTelefone } = require("../src/lib/telefone");
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
@@ -101,12 +101,16 @@ async function pelosAntigosComNome(headers, telefone, nome, chave, log) {
   }
 
   const meus = candidatos.filter((p) => conferirHash(telefone, p.telefone));
+  // Reindexação preguiçosa: grava a chave de busca E o telefone cifrado (este é o único momento em
+  // que um pedido antigo tem o número em mãos, conferido pelo scrypt) — a partir daqui o painel
+  // consegue chamar essa pessoa no WhatsApp.
+  const cifrado = cifrarTelefone(telefone);
   await Promise.all(
     meus.map((p) =>
       fetch(`${DIRECTUS_URL}/items/camiseta_pedidos/${p.id}`, {
         method: "PATCH",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ telefone_chave: chave }),
+        body: JSON.stringify(cifrado ? { telefone_chave: chave, telefone_cifrado: cifrado } : { telefone_chave: chave }),
       }).catch((err) => log && log(`reindexação do pedido ${p.id} falhou: ${err}`)),
     ),
   );

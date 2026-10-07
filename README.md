@@ -339,7 +339,9 @@ diz em que arquivo ela está e em que pé ela anda.
   estorno de cessão. Só a chave site↔sistema nos dois portais do Azure depende de gente; os limites que continuam estão
   no plano da fase 7. A CSP forte (04/10/2026) está feita. **Antes da 🔒 Trava 7-A entra a FASE D** (06/10/2026, 8ª
   rodada): retrofit de robustez e operação (prova automática de toda tela, front em módulos, homologação, segundo fator,
-  alerta de queda, celular do membro), com custo escrito por versão pra decisão do responsável.
+  alerta de queda, celular do membro), com custo escrito por versão pra decisão do responsável. Em 07/10/2026 a prova
+  de tela roda no CI (vD.1), o `script.js` virou núcleo + 23 módulos (vD.2), a homologação migra e se semeia sozinha
+  (vD.3) e o menu do celular virou gaveta (vD.6).
 - **Planejadas:** FASES 8 a 12. Candidatos pra depois (implantação por congregação, pequenos grupos, Secretaria da
   Família) estão na [8ª rodada](docs/pesquisa/oitava-rodada-2026.md), sem versão, aguardando decisão.
 
@@ -574,7 +576,7 @@ governanca-ieadespa/
 │   ├── shared/auditoria.js Auditoria reutilizada
 │   └── <Function>/         Uma pasta por rota
 └── app/                    Front estático (index.html, style.css, eventos.js, script.js)
-    ├── modulos/            Partes do script.js já separadas por tema (vD.2; um arquivo por tema, mesmo escopo)
+    ├── modulos/            23 módulos por tema (vD.2); o script.js é só o núcleo (login, navegação, ajudantes)
     └── documentos/         Estatuto e Regimento Interno (cópia servida como estático)
 ```
 

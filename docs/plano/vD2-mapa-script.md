@@ -1,4 +1,4 @@
-# vD.2 — mapa do `app/script.js` (gerado em 2026-10-07)
+# vD.2 — mapa do `app/script.js` de ANTES da divisão (gerado em 2026-10-07 de manhã; a divisão em 23 módulos está na vD.2 do plano da FASE D)
 
 Total: **21711 linhas**, **1307 funções** de nível superior, **244 declarações** (const/let/var) de nível superior e **19 instruções** soltas que executam no carregamento.
 

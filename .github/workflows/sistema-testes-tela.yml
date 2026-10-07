@@ -1,0 +1,96 @@
+name: Sistema - testes de tela (vD.1)
+
+# vD.1 (07/10/2026) — "toda tela abre, provado por máquina".
+# Reaproveita o equipamento tools/csp-e2e (o mesmo que provou a CSP forte com 4.782 ações):
+# descobre sozinho todo controle do front, aciona cada um com a API simulada dentro do
+# navegador e compara, ação por ação, a versão ATUAL do app com a LINHA DE BASE aprovada
+# (tools/csp-e2e/base/commit.txt = commit da base). Qualquer erro de JavaScript, violação de
+# CSP, controle que sumiu ou tela que mudou de comportamento aparece como divergência.
+#
+# Mudança de tela intencional? Atualize tools/csp-e2e/base/commit.txt para o commit aprovado,
+# no mesmo push — a mudança fica visível no diff, não escondida.
+#
+# Plano de ações e 1ª rodada da base ficam no cache do Actions (chave = commit da base):
+# só a primeira rodada de cada base paga a descoberta; as seguintes rodam só a versão atual.
+# Modo --rapido (uma ação por manipulador distinto); a rodada completa fica para o disparo
+# manual (workflow_dispatch com completo=sim) e para as Travas de Revisão.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "tools/csp-e2e/**"
+      - ".github/workflows/sistema-testes-tela.yml"
+  workflow_dispatch:
+    inputs:
+      completo:
+        description: "Rodada completa (todas as ações) em vez do modo rápido"
+        required: false
+        default: "nao"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sistema-testes-tela
+  cancel-in-progress: true
+
+jobs:
+  telas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NAVEGADOR: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Instalar o equipamento (puppeteer-core, sem baixar navegador)
+        working-directory: tools/csp-e2e
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+        run: npm install --no-audit --no-fund --silent
+
+      - name: Extrair a linha de base (app/ do commit aprovado)
+        id: base
+        run: |
+          set -euo pipefail
+          base="$(tr -d '[:space:]' < tools/csp-e2e/base/commit.txt)"
+          git cat-file -e "$base^{commit}" || { echo "::error::commit da base não existe: $base"; exit 1; }
+          mkdir -p tools/csp-e2e/base/app-base
+          git archive "$base" app | tar -x -C tools/csp-e2e/base/app-base
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+          echo "Linha de base: $base ($(git log -1 --format=%s "$base" | cut -c1-80))" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Plano e 1ª rodada da base (cache por commit da base)
+        uses: actions/cache@v6
+        with:
+          path: tools/csp-e2e/planos
+          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-v1
+
+      - name: Rodar o plano na versão atual e comparar com a base
+        working-directory: tools/csp-e2e
+        run: |
+          set -o pipefail
+          modo="--rapido"
+          [ "${{ github.event.inputs.completo }}" = "sim" ] && modo=""
+          node rodar.js --original base/app-base/app --nova ../../app $modo --workers 4 --navegadores 2 --sem-especiais --saida resultados 2>&1 | tee saida.txt
+          codigo=${PIPESTATUS[0]}
+          { echo '```'; grep -E 'BASELINE|Modo rápido|Plano (reaproveitado|salvo)|RESULTADO|VIOLAÇÕES|ESTABILIDADE|ações em [0-9]+ s' saida.txt | head -20; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $codigo
+
+      - name: Guardar o relatório e as divergências
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: testes-de-tela-${{ github.run_number }}
+          path: |
+            tools/csp-e2e/resultados/
+            tools/csp-e2e/saida.txt
+          retention-days: 30

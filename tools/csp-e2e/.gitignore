@@ -1,0 +1,10 @@
+# Equipamento de testes de tela (vD.1): só o código e os arquivos de teste são versionados.
+node_modules/
+planos/
+resultados/
+perfis-edge/
+perfil-edge-fumaca/
+base/app-base/
+original/
+mutante/
+saida.txt

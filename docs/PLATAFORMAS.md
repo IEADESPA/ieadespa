@@ -91,7 +91,7 @@ provavam o código novo; a produção, conferida logo após cada deploy, é que 
 2. Faixas já declaradas: `npm update`. Versão maior: ler a lista de mudanças, atualizar uma por vez e **comparar o resultado** com a versão
    anterior no que o sistema faz (foi assim com PDF, planilha e QR).
 3. `npx jest` em `api/`; no site, `npm run check` e `npm run build`.
-4. Subir primeiro para a homologação (`homolog`, PR #1): ela monta no Azure de verdade e a varredura de rotas acusa módulo que não carrega.
+4. Subir primeiro para a homologação (`homolog`, PR #21): ela monta no Azure de verdade e a varredura de rotas acusa módulo que não carrega.
 5. Só então `main`, e repetir a conferência em produção.
 
 Fora do escopo: `chamada-ebd/` e `relatorios-departamentos/` são protótipos antigos só para consulta (ver `REFERENCIAS.md`); suas dependências

@@ -3,8 +3,8 @@
 // faz sparse-checkout só de `.github/scripts` (ver event-notifications.yml):
 // não existe um jeito simples de compartilhar um módulo com `api/` sem
 // baixar o repositório inteiro.
-const LOGO_URL = "https://www.ieadespa.org.br/logo.png";
-const SITE_URL = "https://www.ieadespa.org.br";
+const LOGO_URL = "https://ieadespa.org.br/logo.png";
+const SITE_URL = "https://ieadespa.org.br";
 const ACCENT = "#8f6f1f";
 
 function escaparHtml(valor) {

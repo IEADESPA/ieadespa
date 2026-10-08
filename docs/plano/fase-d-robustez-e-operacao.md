@@ -50,8 +50,9 @@ só torná-lo **permanente**.
       Mudança de tela intencional = atualizar o commit da base no mesmo push (fica visível no diff).
 - [x] Tempo: ~7 min com o plano em cache (modo `--rapido`); rodada completa só por `workflow_dispatch`
       (`completo=sim`) e nas travas.
-- [ ] As Travas de Revisão passam a citar o resultado desta rodada como resposta à pergunta 2 — clicar à mão continua
-      valendo pra tela nova, mas deixa de ser a única prova. (Vale a partir da Trava D-A.)
+- [x] As Travas de Revisão passam a citar o resultado desta rodada como resposta à pergunta 2 — clicar à mão continua
+      valendo pra tela nova, mas deixa de ser a única prova. (Vale a partir da Trava D-A.) *Feito em 07/10/2026: a
+      pergunta 2 do checklist do README passou a exigir a rodada completa e o número da corrida; a Trava D-A já cita.*
 
 *Esforço:* médio. *Risco:* baixo (não toca o sistema, só o CI). *Depende de você:* nada.
 
@@ -66,18 +67,11 @@ seguro agora: a vD.1 prova equivalência ação por ação, igual provou a CSP (
 - [x] `app/script.js` dividido por tema, um arquivo por tema em `app/modulos/` (23 módulos, tabela abaixo); o núcleo
       (login, sessão, navegação, Painel único, termos, busca, sino, tarefas, sessões, módulos, portaria, anexos, PWA,
       ajudantes de tela e o registro de ações) ficou em ~1.550 linhas. *Feito em 07/10/2026 — método e provas abaixo.*
-- [ ] Carregar cada módulo **sob demanda** ao entrar nele (hoje todos carregam sempre, como antes): exige que o
-      despachante só conheça ações de módulos já carregados — mudança no `eventos.js`, com prova própria.
-      **Proposta (07/10/2026): cancelar — decisão do responsável.** Depois da divisão ficou medido o que isso
-      custaria: o núcleo chama funções e variáveis dos módulos diretamente em dezenas de pontos (`mostrarSubAbaFinanceiro`,
-      `subAbaPessoasAtual`, `carregarPainelPessoal`, os `carregarOpcoes…` de cada aba, os ajudantes de data do
-      calendário usados por canais/eventos/voluntariado…), e cada ponto teria de virar "carrega o módulo, espera,
-      depois chama" — deixa de ser uma mudança mecânica e sem risco. O ganho seria só o tempo de ler ~1,3 MB de
-      JavaScript uma vez por sessão (o service worker já guarda os arquivos: não há download repetido), algo como
-      0,2-0,4 s num celular simples. Custo alto, risco real, ganho pequeno: não vale. O mesmo vale para "`index.html`
-      por módulo" abaixo.
-- [ ] Mesmo tratamento no `index.html`: o markup de cada módulo em arquivo próprio, montado na navegação — sem
-      framework (decisão da FASE 10 continua: melhorar o que existe, não reescrever).
+- *Cancelados pelo responsável em 07/10/2026:* "carregar cada módulo sob demanda" e "`index.html` por módulo". Motivo
+  medido depois da divisão: o núcleo chama funções e variáveis dos módulos em dezenas de pontos, e cada um teria de
+  virar "carrega, espera, chama" — trabalho e risco reais para ganhar só o tempo de ler ~1,3 MB de JavaScript uma vez
+  por sessão (0,2-0,4 s num celular simples; o service worker já guarda os arquivos). Todos os módulos continuam
+  carregando sempre, como antes.
 - [x] Prova de equivalência pela vD.1 **antes e depois de cada módulo extraído** (um módulo por commit): zero
       divergência nas ações, zero violação de CSP, nenhum `id` perdido. O `eventos.js` (despachante com lista fechada)
       continua único — a lista fechada passa a ser montada pelos módulos carregados. *Feito em 07/10/2026: um commit
@@ -236,25 +230,42 @@ todas as congregações), concede permissão e vê dado de disciplina e de menor
 telefone perdido com a senha salva) = tudo isso nas mãos de quem achou. A infraestrutura do segundo fator **já existe**:
 o membro recebe código de 6 dígitos por e-mail (`shared/codigoAcesso.js`, vB.5) pelo mesmo serviço de e-mail do Azure.
 
-- [ ] **Segundo fator no login de liderança** (quem tem registro em `Lideranca`): depois da senha, código de 6 dígitos
-      enviado ao e-mail do cadastro, válido por 10 minutos, 5 tentativas; dispositivo lembrado por 30 dias (cookie
-      assinado, revogável na tela de sessões da vB.9). Membro comum (PIN) **não muda** — o PIN já é um fator próprio
-      e o que ele alcança é só o dele.
-- [ ] **Confirmação reforçada ("step-up") em quatro atos**, mesmo com dispositivo lembrado: aprovar saída acima do
-      valor dos quatro olhos (`ParametrosCompliance`), gerar remessa bancária, conceder/retirar permissão ou cargo
-      (`GestaoLideranca`/`GestaoDelegacoes`) e executar exclusão LGPD. Código novo na hora, registrado na auditoria
-      com o ato.
-- [ ] Opção sem e-mail: aplicativo autenticador (TOTP, padrão RFC 6238, Google Authenticator/Microsoft Authenticator)
-      — sem custo, funciona sem internet no telefone. Cadastro com QR na tela "Meus Dados", códigos de recuperação
-      de uso único guardados só como hash.
-- [ ] Tela de administração: quem tem segundo fator ativo, quem não tem, último uso — e a rede de segurança: o
-      Presidente e o Secretário Geral **não ficam trancados fora** (código de recuperação emitido pela Secretaria
-      Geral com registro de dois olhos, mesmo princípio da migração 122).
+**Decisão do responsável (07/10/2026):** o segundo fator é a **chave de acesso** (*passkey*, padrão WebAuthn/FIDO2 —
+o mesmo que o Gmail, a Microsoft e os bancos usam): a pessoa cadastra o próprio celular ou notebook como aparelho
+confiável e, a cada entrada, confirma com a digital, o rosto ou a senha do aparelho; não decora nada, não digita código
+e a chave fica guardada no aparelho por tempo indeterminado. O **código por e-mail** fica como reserva (aparelho
+perdido, primeiro cadastro). Aplicativo autenticador (TOTP) **descartado** — item removido.
 
-*Esforço:* médio. *Risco:* baixo no código; **usabilidade** é o ponto a decidir (uma pessoa que entra 10 vezes por dia
-sente o código a cada 30 dias, não a cada entrada). *Depende de você:* escolher **e-mail** (já existe, custo zero, depende
-do e-mail chegar) ou **aplicativo autenticador** (mais seguro, exige instalar um app no telefone de cada líder) — ou os
-dois, à escolha de cada pessoa.
+- [ ] **Segundo fator no login de liderança** (quem tem registro em `Lideranca`): depois da senha certa, o sistema
+      pede a chave de acesso do aparelho (`navigator.credentials.get`); quem ainda não tem chave recebe o código de 6
+      dígitos no e-mail do cadastro (10 minutos, 5 tentativas), como o membro já recebe hoje. Quem não tem nem chave
+      nem e-mail **não fica trancado**: entra com aviso e é levado a cadastrar. Membro comum (PIN) **não muda** — o PIN
+      já é um fator próprio e o que ele alcança é só o dele.
+- [ ] **Cadastro e gestão da chave** em "Meus Dados → Segurança", ao lado de "Minhas Sessões" (vB.9): cadastrar este
+      aparelho (apelido, data, último uso), cadastrar mais de um (celular e notebook), remover. A chave pública fica
+      no banco (`ChavesAcesso`); a privada nunca sai do aparelho.
+- [ ] **Confirmação reforçada ("step-up") em quatro atos**: aprovar saída acima do valor dos quatro olhos
+      (`ParametrosCompliance`), gerar remessa bancária, conceder/retirar permissão ou cargo
+      (`GestaoLideranca`/`GestaoDelegacoes`) e executar exclusão LGPD — a chave (ou o código) é pedida de novo na hora
+      se a última confirmação tiver mais de 10 minutos; o ato fica na auditoria com o fator usado.
+- [ ] Tela de administração (nível geral): quem tem chave cadastrada, quem não tem, último uso; remover as chaves de
+      quem perdeu o aparelho (dois olhos, mesmo princípio da migração 122). A reserva por e-mail garante que o
+      Presidente e o Secretário Geral **não ficam trancados fora**.
+- [ ] Prova: testes de unidade do fluxo (bilhete do login, desafio de uso único, código de reserva) e prova em
+      navegador na homologação com um autenticador virtual (o navegador cria e usa uma chave de verdade, sem
+      aparelho físico), além da rodada de tela de sempre.
+
+**Ponto de parada — 07/10/2026, fim de tarde (pedido do responsável):** a vD.4 está **escrita, testada e publicada na
+homologação**, ainda **não** na produção. O código fica no ramo `vd4-chaves` (GitHub) e no `homolog` (PR #21); a
+migração 140 já rodou no banco de homologação; 4.605 testes verdes; a rodada local de tela mostrou só as telas novas. O
+que falta para ir à `main`: (1) a prova em navegador na homologação com autenticador virtual (roteiro pronto:
+`prova-chave-homolog.js` — entra sem chave, cadastra, sai, entra pela chave, confirmação reforçada, remove); (2) a rodada de
+tela da homologação com a nova linha de base (corrida em curso); (3) `git merge vd4-chaves` na `main`, push, conferir a
+produção e marcar os itens acima. Nada do que está na produção depende disso.
+
+*Esforço:* médio. *Risco:* baixo no código; a chave de acesso é a opção mais simples para quem usa (nada a decorar).
+*Custo:* zero (biblioteca MIT `@simplewebauthn`, servida de dentro do site; e-mail já contratado). *Depende de você:*
+nada mais — decidido.
 
 ## vD.5 — Operação: saber que caiu antes de alguém reclamar, e entrar sem esperar
 
@@ -270,7 +281,9 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       inicial do site e, na **primeira** falha de uma sequência, manda e-mail pela conta ACS do site para
       `presidente@ieadespa.org`; quando volta, manda "voltou". Efeito colateral útil: mantém as Functions quentes
       (some a partida a frio de 15-30 s) **sem acordar o banco**.
-- [ ] **Decisão separada, com número**: manter o banco acordado em horário de uso (6h às 23h) tira os segundos de
+- [x] **Decisão separada, com número** — *decidido pelo responsável em 07/10/2026: NÃO manter acordado; o banco
+      continua dormindo quando ninguém usa e acordando no primeiro acesso (os segundos de retomada são o preço de
+      pagar só o uso). Item encerrado.* O raciocínio: manter o banco acordado em horário de uso (6h às 23h) tira os segundos de
       retomada do serverless no primeiro login do dia, mas o banco passa a cobrar o mínimo (0,5 vCore) o tempo todo nesse
       horário — medir no portal o custo de um mês com e sem, e só então decidir. A opção gratuita (um `curl` por GitHub
       Actions a cada 15 minutos em horário de uso, como o aquecimento que `rotinas-diarias.yml` já faz às 7h) fica
@@ -283,7 +296,9 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       `ieadespaarmazenamento` (anexos da vB.4, fotos, documentos) — *feito em 06/10:* a exclusão suave já existia
       com 7 dias; agora 30 dias, com versionamento de blob e exclusão suave de contêiner (30 dias) ligados.
       Custo: só o espaço das versões (centavos neste volume).
-- [ ] **Ensaio semestral de restauração** (banco + anexos) registrado na tabela da `HOMOLOGACAO.md`, com o tempo
+- [ ] *(adiado pelo responsável em 07/10/2026 para outra rodada — nada é apagado nem desligado no ensaio: restaura-se
+      a cópia de segurança numa cópia temporária e separada do banco, mede-se o tempo e apaga-se a cópia)*
+      **Ensaio semestral de restauração** (banco + anexos) registrado na tabela da `HOMOLOGACAO.md`, com o tempo
       medido — e um lembrete pelo motor de notificações (vB.2) 30 dias antes de vencer, pra Secretaria Geral.
 - [ ] **Rotação de segredos com procedimento escrito** no `SECRETS.md`: `AUTH_SECRET` (derruba todas as sessões —
       avisar antes), `CRON_SECRET`, `CHAVE_SITE_SISTEMA` e as chaves `age` do SOPS; periodicidade anual ou a qualquer
@@ -348,10 +363,14 @@ está marcado como domínio padrão no Azure. Ou seja: o trabalho é inverter o 
 lugares, não migrar DNS. Mover a zona pra fora da Microsoft não ajuda em nada aqui e ainda cria risco de e-mail
 (os registros MX/SPF/DKIM do Microsoft 365 vivem nessa mesma zona).
 
-- [ ] **Só depois de 17/10/2026** (fim dos pedidos de camiseta) e num horário de pouco acesso: no portal do Azure,
+- [x] *Feito em 08/10/2026 (o responsável antecipou: até segunda-feira o site pode mudar à vontade), em modo manual, pela
+      linha de comando e não pelo portal:* a API do Azure aceita `PUT …/staticSites/site-institucional/customDomains/<domínio>`
+      com `{"properties":{"isDefault":…}}` sem revalidar o domínio (PATCH não existe) — primeiro `www` com `isDefault:false`,
+      depois o raiz com `true`. Resultado imediato: raiz `200`, `www` → `301` para o raiz, certificado válido, DNS intocado.
+      **Só depois de 17/10/2026** (fim dos pedidos de camiseta) e num horário de pouco acesso: no portal do Azure,
       `Custom domains` do `site-institucional`, marcar `ieadespa.org.br` como **default** — o `www` passa a
       redirecionar `301` pro raiz, sem tocar DNS, sem indisponibilidade (modo manual).
-- [ ] No site: `siteUrl` em `site/src/config/site.ts` (hoje `https://www.ieadespa.org.br`) vira o raiz — é a origem
+- [x] *Feito em 08/10/2026 (PR #22, 17 ocorrências, mesclado logo depois da troca do padrão):* No site: `siteUrl` em `site/src/config/site.ts` (hoje `https://www.ieadespa.org.br`) vira o raiz — é a origem
       do `<link rel="canonical">`, do sitemap, dos links do certificado (`site/src/lib/certificado.ts`) e da
       programação (`site/src/lib/programacao.ts`). Os três fluxos do GitHub que leem o site (`site-agenda-sync.yml`,
       `site-content-notifications.yml`, `site-event-notifications.yml`) trocam `SITE_URL` junto, no mesmo commit.
@@ -447,6 +466,14 @@ segundo (≈ 150 por minuto; o pico de 06/10 foi 17 por minuto). Acima disso nin
 - [x] **Painel de camisetas:** o token do Directus vence em 15 min e o painel não renovava (é a "desconectar e
       entrar de novo" de 06/10) — feito na noite de 06/10 (`fetchComSessao` em `painelAuth.ts`: num 401
       renova pelo cookie e repete; aplicado nas três telas do painel de camisetas).
+- [x] **Aviso de retirada em massa (08/10/2026, pedido do responsável — PR #23):** com 1.083 pedidos (805 com e-mail,
+      278 sem) avisar um por um não dá. O painel do grupo ganhou "As camisetas chegaram — liberar a retirada para
+      todos" (a página "Meus pedidos" passa a dizer "Chegou! Pode vir buscar" para TODO pedido do grupo, pelo telefone,
+      mesmo antes de separar) e "Enviar aviso a todos" (e-mail de "pode retirar" a quem tem e-mail e ainda não foi
+      avisado, em lotes de 40, com progresso; `simular` só conta). Campos novos no Directus
+      (`camiseta_grupos.retirada_liberada`, `camiseta_pedidos.aviso_retirada_em`); rota `avisar-retirada-camisetas` só
+      com sessão do painel. Limite honesto: os 278 sem e-mail só veem pelo site (o telefone deles é só hash desde 06/10 —
+      o número não é recuperável): avisar também pelos canais da igreja.
 - [x] **Trocar dois segredos (depende de você — modo manual):** *feito em 07/10/2026 à tarde, em modo manual:
       contagem antes (1.083 pedidos: 7 com a chave velha do telefone, nenhum com telefone cifrado — a cifra é de hoje e o
       lote estava fechado); as 7 chaves foram zeradas (recalculam na próxima consulta), os valores novos entraram nos

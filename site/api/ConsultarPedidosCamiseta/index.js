@@ -40,7 +40,7 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  * preço de cada item conforme anda pela lista.
  */
 const CAMPOS_PEDIDO =
-  "id,nome,telefone,valor_pago,avulso,separado,separado_em,date_created,lote.numero,lote.status,lote.fechado_em,grupo.nome,grupo.valor_venda,grupo.precos_tamanho,grupo.retirada_local,grupo.email_retirada_corpo";
+  "id,nome,telefone,valor_pago,avulso,separado,separado_em,aviso_retirada_em,date_created,lote.numero,lote.status,lote.fechado_em,grupo.nome,grupo.valor_venda,grupo.precos_tamanho,grupo.retirada_local,grupo.email_retirada_corpo,grupo.retirada_liberada";
 const MAX_CANDIDATOS_ANTIGOS = 12;
 
 function precoTamanho(grupo, tamanho) {
@@ -189,7 +189,11 @@ module.exports = async function (context, req) {
       // 1 em cada 4 pedidos de 06/10/2026 não tinha e-mail, então a página precisa
       // mostrar isto também (pedido explícito do responsável).
       retiradaLocal: p.grupo?.retirada_local ?? null,
-      mensagemRetirada: p.separado ? p.grupo?.email_retirada_corpo ?? null : null,
+      // 08/10/2026 — "as camisetas chegaram" vale para o grupo inteiro (retirada_liberada): a mensagem aparece mesmo
+      // antes de separar (separar no balcão é o de menos) e também para quem não tem e-mail.
+      retiradaLiberada: Boolean(p.grupo?.retirada_liberada),
+      avisoRetiradaEm: p.aviso_retirada_em ?? null,
+      mensagemRetirada: p.separado || p.grupo?.retirada_liberada ? p.grupo?.email_retirada_corpo ?? null : null,
       itens: itensComAlocacao.map((i) => ({
         tamanho: i.tamanho,
         modelo: i.modelo,

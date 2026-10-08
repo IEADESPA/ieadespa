@@ -9,7 +9,7 @@ export const siteConfig = {
   title: "IEADESPA — Assembleia de Deus Ministério do Seta em Parauapebas/PA",
   description:
     "Site oficial da IEADESPA, Igreja Evangélica Assembleia de Deus Ministério do Seta, em Parauapebas/PA. Confira horários de culto, ministérios, eventos, mensagens e como chegar.",
-  siteUrl: "https://www.ieadespa.org.br",
+  siteUrl: "https://ieadespa.org.br",
   authorName: "IEADESPA",
   email: "seta@ieadespa.org",
   /** Mesmo CNPJ usado como chave Pix em /doacoes/ — centralizado aqui pra

@@ -221,6 +221,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       lote: number | null;
       separado: boolean;
       separado_em: string | null;
+      aviso_retirada_em?: string | null;
       itens: Item[];
     }
 
@@ -684,6 +685,10 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         !p.avulso && p.separado && !tudoRetirado(p)
           ? `<p class="camiseta-pedido-aviso camiseta-pedido-aviso-retirada">Separado${p.separado_em ? ` há ${diasDesde(p.separado_em)} dia(s)` : ""}, aguardando retirada${p.email ? " (avisado por e-mail)" : " — sem e-mail: avise pelo botão WhatsApp"}.</p>`
           : "";
+      // aviso em massa de retirada (08/10/2026): quando este pedido recebeu o e-mail "chegou, pode vir buscar"
+      const avisoEmMassa = p.aviso_retirada_em
+        ? `<p class="camiseta-pedido-aviso">✉️ Avisado por e-mail em ${new Date(p.aviso_retirada_em).toLocaleDateString("pt-BR")} que pode retirar.</p>`
+        : "";
 
       return `
         <div class="camiseta-pedido-painel-card" data-pedido-id="${p.id}">
@@ -705,6 +710,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           </div>
           ${avisoLoteFechado}
           ${avisoAguardandoRetirada}
+          ${avisoEmMassa}
           <ul class="mt-3 grid gap-2">${itensHtml}</ul>
           <button type="button" class="link-sweep text-sm font-semibold text-accent mt-2" data-mostrar-novo-item>+ Adicionar item</button>
           ${novoItemLinhaHtml()}
@@ -1286,7 +1292,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           const itens = pedido.itens.map((i) => `${[i.tamanho, i.modelo].filter(Boolean).join(" ")} (${i.quantidade}x)`).join(", ") || "camiseta";
           const mensagem = pedido.separado
             ? `${grupo.email_retirada_corpo || `Boa notícia, ${pedido.nome}! O pedido que você fez em "${grupo.nome}" já chegou e está separado, pronto pra você retirar.`}\n\nItens: ${itens}.${grupo.retirada_local ? `\nOnde retirar: ${grupo.retirada_local}.` : ""}`
-            : `Olá, ${pedido.nome}! Sobre o seu pedido de camiseta em "${grupo.nome}" (${itens}): acompanhe o andamento em https://www.ieadespa.org.br/meus-pedidos-camiseta/ informando o seu telefone.`;
+            : `Olá, ${pedido.nome}! Sobre o seu pedido de camiseta em "${grupo.nome}" (${itens}): acompanhe o andamento em https://ieadespa.org.br/meus-pedidos-camiseta/ informando o seu telefone.`;
           window.open(`${json.whatsapp}?text=${encodeURIComponent(mensagem)}`, "_blank", "noopener");
         } finally {
           botao.disabled = false;

@@ -236,32 +236,33 @@ confiável e, a cada entrada, confirma com a digital, o rosto ou a senha do apar
 e a chave fica guardada no aparelho por tempo indeterminado. O **código por e-mail** fica como reserva (aparelho
 perdido, primeiro cadastro). Aplicativo autenticador (TOTP) **descartado** — item removido.
 
-- [ ] **Segundo fator no login de liderança** (quem tem registro em `Lideranca`): depois da senha certa, o sistema
+- [x] **Segundo fator no login de liderança** (quem tem registro em `Lideranca`): depois da senha certa, o sistema
       pede a chave de acesso do aparelho (`navigator.credentials.get`); quem ainda não tem chave recebe o código de 6
       dígitos no e-mail do cadastro (10 minutos, 5 tentativas), como o membro já recebe hoje. Quem não tem nem chave
       nem e-mail **não fica trancado**: entra com aviso e é levado a cadastrar. Membro comum (PIN) **não muda** — o PIN
       já é um fator próprio e o que ele alcança é só o dele.
-- [ ] **Cadastro e gestão da chave** em "Meus Dados → Segurança", ao lado de "Minhas Sessões" (vB.9): cadastrar este
+- [x] **Cadastro e gestão da chave** em "Meus Dados → Segurança", ao lado de "Minhas Sessões" (vB.9): cadastrar este
       aparelho (apelido, data, último uso), cadastrar mais de um (celular e notebook), remover. A chave pública fica
       no banco (`ChavesAcesso`); a privada nunca sai do aparelho.
-- [ ] **Confirmação reforçada ("step-up") em quatro atos**: aprovar saída acima do valor dos quatro olhos
+- [x] **Confirmação reforçada ("step-up") em quatro atos**: aprovar saída acima do valor dos quatro olhos
       (`ParametrosCompliance`), gerar remessa bancária, conceder/retirar permissão ou cargo
       (`GestaoLideranca`/`GestaoDelegacoes`) e executar exclusão LGPD — a chave (ou o código) é pedida de novo na hora
       se a última confirmação tiver mais de 10 minutos; o ato fica na auditoria com o fator usado.
-- [ ] Tela de administração (nível geral): quem tem chave cadastrada, quem não tem, último uso; remover as chaves de
+- [x] Tela de administração (nível geral): quem tem chave cadastrada, quem não tem, último uso; remover as chaves de
       quem perdeu o aparelho (dois olhos, mesmo princípio da migração 122). A reserva por e-mail garante que o
       Presidente e o Secretário Geral **não ficam trancados fora**.
-- [ ] Prova: testes de unidade do fluxo (bilhete do login, desafio de uso único, código de reserva) e prova em
+- [x] Prova: testes de unidade do fluxo (bilhete do login, desafio de uso único, código de reserva) e prova em
       navegador na homologação com um autenticador virtual (o navegador cria e usa uma chave de verdade, sem
-      aparelho físico), além da rodada de tela de sempre.
+      aparelho físico), além da rodada de tela de sempre. *Feito em 08/10/2026: 26 testes de unidade do fluxo
+      (`segundoFator.test.js`), prova em navegador no runner do GitHub com autenticador virtual — 13/13 na homologação
+      (fluxo `Sistema - prova em navegador`, roteiro `tools/vd4/prova-chave-acesso.js`) — e a migração 141 (o canal
+      `FATOR` nas tentativas de acesso), achada por essa prova.*
 
-**Ponto de parada — 07/10/2026, fim de tarde (pedido do responsável):** a vD.4 está **escrita, testada e publicada na
-homologação**, ainda **não** na produção. O código fica no ramo `vd4-chaves` (GitHub) e no `homolog` (PR #21); a
-migração 140 já rodou no banco de homologação; 4.605 testes verdes; a rodada local de tela mostrou só as telas novas. O
-que falta para ir à `main`: (1) a prova em navegador na homologação com autenticador virtual (roteiro pronto:
-`prova-chave-homolog.js` — entra sem chave, cadastra, sai, entra pela chave, confirmação reforçada, remove); (2) a rodada de
-tela da homologação com a nova linha de base (corrida em curso); (3) `git merge vd4-chaves` na `main`, push, conferir a
-produção e marcar os itens acima. Nada do que está na produção depende disso.
+**Feito — 08/10/2026:** a vD.4 foi para a produção pelo merge do ramo `vd4-chaves` na `main` depois da prova 13/13 na
+homologação (migrações 140 e 141 rodam no deploy). Para quem usa: a liderança que tiver chave cadastrada ou e-mail no
+cadastro passa a ter a segunda etapa no login; quem não tem nenhum dos dois entra com aviso e é levado a cadastrar a
+chave em "Meu Painel → Segurança". Dois roteiros ficam no repositório: a prova da chave e a prova de módulo, ambos
+rodando no Chrome do runner (`sistema-prova-navegador.yml`, sob demanda).
 
 *Esforço:* médio. *Risco:* baixo no código; a chave de acesso é a opção mais simples para quem usa (nada a decorar).
 *Custo:* zero (biblioteca MIT `@simplewebauthn`, servida de dentro do site; e-mail já contratado). *Depende de você:*

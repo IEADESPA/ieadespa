@@ -300,7 +300,7 @@ if (typeof describe === "function") {
 
     test("index.html carrega eventos.js ANTES do script.js, os módulos DEPOIS (todos os de app/modulos/), e todo <script> é do próprio site", () => {
       const scripts = tagsDoHtml(ARQUIVOS.index).filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor);
-      expect(scripts).toEqual(["vendor/xlsx.full.min.js", "eventos.js", "script.js", ...MODULOS]);
+      expect(scripts).toEqual(["vendor/xlsx.full.min.js", "vendor/simplewebauthn-browser.js", "eventos.js", "script.js", ...MODULOS]);
       const scriptsVerif = tagsDoHtml(ARQUIVOS.verificar).filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor);
       expect(scriptsVerif).toEqual(["verificar.js"]);
     });
@@ -312,9 +312,9 @@ if (typeof describe === "function") {
       expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "verificar.css"))).toBe(true);
     });
 
-    test("service-worker: cache novo (v28), eventos.js e todos os módulos na casca offline", () => {
+    test("service-worker: cache novo (v29), eventos.js e todos os módulos na casca offline", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v28";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v29";/);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));
     });

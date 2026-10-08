@@ -15,6 +15,7 @@
   "dependencies": {
     "@azure/communication-email": "^1.0.0",
     "@azure/storage-blob": "^12.33.0",
+    "@simplewebauthn/server": "^14.0.3",
     "docx": "^9.5.1",
     "mssql": "^12.7.0",
     "pdfkit": "^0.20.2",

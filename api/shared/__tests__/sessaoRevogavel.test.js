@@ -33,7 +33,7 @@ const quando = (padrao, valor) => mockRegras.push([padrao, valor]);
 const rodou = (padrao) => mockConsultas.filter((c) => padrao.test(c.sql));
 const REVOGA_DO_MEMBRO = /UPDATE SessoesAtivas SET Encerrada = 1[\s\S]*OUTPUT INSERTED\.SessaoId[\s\S]*WHERE MembroId = @membroId/;
 const REVOGA_TODAS = /UPDATE SessoesAtivas SET Encerrada = 1[\s\S]*OUTPUT INSERTED\.SessaoId[\s\S]*WHERE Encerrada = 0/;
-const sessaoDe = (membroId, sid, extra = {}) => auth.reassinarSessao({ membroId, nome: "P" + membroId, termosPendentes: [], via: "SENHA", nivel: "CONGREGACAO", permissoes: [], escopoCongregacoes: ["Central"], sid, ...extra });
+const sessaoDe = (membroId, sid, extra = {}) => auth.reassinarSessao({ membroId, nome: "P" + membroId, termosPendentes: [], via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "CONGREGACAO", permissoes: [], escopoCongregacoes: ["Central"], sid, ...extra });
 const geral = (extra = {}) => sessaoDe(5, SID.atual, { nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["permissoes", "pessoas"], ...extra });
 async function chamar(handler, { metodo = "POST", corpo = {}, token, ligado = {} } = {}) {
   const context = { bindingData: ligado, log: Object.assign(() => {}, { error() {}, info() {}, warn() {}, verbose() {} }) };

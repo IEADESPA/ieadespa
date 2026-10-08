@@ -136,6 +136,17 @@ async function main() {
   }
   const terceiroAlfa = adultos.filter((a) => a.cong.id === congs[0].id)[2];
   if (terceiroAlfa) await lideranca(terceiroAlfa.matricula, papelPastorArea, "AREA", areaId, `pastor de área (matrícula ${terceiroAlfa.matricula})`);
+  // vD.4: o pastor de área fictício fica SEM e-mail de propósito — é com ele que a prova em navegador cadastra a chave de acesso
+  // (sem chave e sem e-mail a senha certa entra com aviso; depois do cadastro, a entrada passa a exigir a chave). Os demais têm e-mail
+  // (@exemplo.com) e mostram o caminho do código.
+  if (terceiroAlfa) await q("UPDATE dbo.MembroReferencia SET Email = NULL WHERE MembroId = @m AND Email IS NOT NULL", { m: terceiroAlfa.matricula });
+  // vD.4: chaves de acesso dos fictícios zeradas a cada semeadura — a prova em navegador cadastra uma chave num autenticador
+  // VIRTUAL que some com a sessão; sem isto o pastor (sem e-mail) ficaria trancado fora na rodada seguinte.
+  try {
+    const r1 = await q("UPDATE dbo.ChavesAcesso SET Ativa = 0, RemovidaEm = SYSUTCDATETIME() WHERE MembroId BETWEEN 900001 AND 900060 AND Ativa = 1");
+    await q("DELETE FROM dbo.DesafiosWebAuthn WHERE MembroId BETWEEN 900001 AND 900060");
+    if (r1.rowsAffected[0]) feito.push(`${r1.rowsAffected[0]} chave(s) de acesso dos fictícios zerada(s)`);
+  } catch (e) { console.log("(chaves de acesso: " + e.message.slice(0, 80) + ")"); }
 
   await pool.close();
   console.log(feito.length ? `Semeado em "${banco}": ${feito.join("; ")}.` : `Nada a criar em "${banco}": a massa fictícia já existia.`);

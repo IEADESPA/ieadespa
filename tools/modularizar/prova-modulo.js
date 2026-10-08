@@ -9,6 +9,23 @@
 // o puppeteer-core é o de tools/csp-e2e (instalado lá); de qualquer pasta
 const puppeteer = (() => { try { return require("puppeteer-core"); } catch { return require(require("path").join(__dirname, "..", "csp-e2e", "node_modules", "puppeteer-core")); } })();
 const EDGE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
+
+// Abre o navegador com as flags usuais de CI e tenta de novo uma vez (no runner do GitHub o Chrome às vezes não responde
+// na primeira abertura: "Timed out ... waiting for the WS endpoint"); na segunda tentativa mostra a saída do próprio navegador.
+async function abrirNavegador() {
+  const args = ["--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-dev-shm-usage", ...(process.platform === "linux" ? ["--no-sandbox"] : []), "--lang=pt-BR"];
+  let ultimoErro;
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    try {
+      return await puppeteer.launch({ executablePath: EDGE, headless: true, args, timeout: 90000, dumpio: tentativa > 1 });
+    } catch (e) {
+      ultimoErro = e;
+      console.log(`navegador não abriu (tentativa ${tentativa}): ${String(e.message || e).split("\n")[0]}`);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+  throw ultimoErro;
+}
 const arg = (n, d) => { const i = process.argv.indexOf("--" + n); return i > 0 ? process.argv[i + 1] : d; };
 const BASE = (arg("base", "https://white-grass-048208e0f-21.eastus2.6.azurestaticapps.net")).replace(/\/+$/, "");
 const MODULO = arg("modulo"), FUNCOES = (arg("funcoes", "") || "").split(",").filter(Boolean), SW = arg("sw");
@@ -42,7 +59,7 @@ async function api(caminho, corpo, token) {
     if (pendentes.length) login = await api("auth/login", { matricula: Number(MATRICULA), senha: SENHA });
   }
 
-  const browser = await puppeteer.launch({ executablePath: EDGE, headless: true, args: ["--no-first-run", "--lang=pt-BR"] });
+  const browser = await abrirNavegador();
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });

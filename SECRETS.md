@@ -196,3 +196,37 @@ configuração antiga sumiu. Gere o valor na memória do próprio script (nunca 
 lido de volta é idêntico nos dois aplicativos e termine com `az logout` e apagando a pasta do perfil. No PowerShell 5.1, o
 aviso "App settings have been redacted" do `az` vai para o stderr: com `$ErrorActionPreference = 'Stop'` ele derruba o
 script (a gravação já aconteceu); use `'Continue'` e confira o código de saída. Arquivo `.ps1` com acento precisa de BOM.
+
+## 10. Rotação de segredos — procedimento (vD.5, 08/10/2026)
+
+Quando trocar: **uma vez por ano**, ou **na hora** a qualquer suspeita (valor impresso num registro, máquina perdida,
+pessoa com acesso que saiu). Toda troca é feita em **modo manual** (o modo automático é barrado em gravação de segredo),
+sem nunca mostrar o valor na tela: o valor novo nasce num script e vai direto para onde mora.
+
+| Segredo | Onde mora | O que a troca derruba | Como conferir depois |
+| --- | --- | --- | --- |
+| `AUTH_SECRET` | sistema (Azure, produção e preview) | **todas as sessões** (todo mundo entra de novo) e o tempero do hash do PIN: cada membro precisa criar o PIN de novo pelo "esqueci meu PIN". Só a qualquer suspeita; avisar antes. | login de liderança e de membro na homologação; `api/shared/segredoSessao.js` recusa valor fraco |
+| `CRON_SECRET` | sistema (Azure) **e** segredo do GitHub `CRON_SECRET` | nada para as pessoas; as rotinas das 7h falham até os dois valores baterem | `rotinas-diarias.yml` verde no dia seguinte (ou disparo manual) |
+| `CHAVE_SITE_SISTEMA` | sistema **e** site (Azure), o **mesmo** valor | a pergunta "este e-mail é de membro?" do site falha fechado até os dois baterem | seção 9 acima (criar conta de visitante com e-mail de membro: tem de recusar) |
+| `DIRECTUS_ADMIN_TOKEN` | site e sistema (Azure), GitHub, SOPS (`site/secrets.env`, `api/local.settings.enc.json`) | nada, se o token novo for gravado no Directus (`PATCH /users/<admin>`) na mesma hora | testes do site (`site-testes.yml`) e `site-conteudo-sync.yml` verdes |
+| `TELEFONE_CHAVE_SEGREDO` | site (Azure), GitHub, SOPS | as chaves de busca e o telefone cifrado dos pedidos — **rechavear** antes de trocar (script de 07/10: decifra com o velho, regrava com o novo; item só com chave velha fica nulo e volta na consulta pelo nome) | `camisetas.cjs` e `eventos.cjs` 20/20 e 15/15 |
+| `ACS_CONNECTION_STRING` | sistema e site (Azure), GitHub `ACS_CONNECTION_STRING` | e-mail para fora até os três baterem | pedir um código por e-mail no site (conta de visitante) e no login da liderança |
+| `VAPID_PRIVATE_KEY` + `VAPID_PUBLIC_KEY` (par) | sistema (Azure); só a privada no GitHub | **todas as inscrições de push**: cada pessoa ativa as notificações de novo no aparelho | ativar push num aparelho e receber um aviso |
+| `SQL_CONNECTION_STRING` (senha do SQL) | sistema (Azure, produção e preview 21 — este aponta para o `ieadespa-homolog`), GitHub `AZURE_SQL_CONNECTION_STRING` e `_HOMOLOG`, SOPS do `api/` | API fora até todos baterem (trocar a senha no servidor SQL e os valores em seguida, em minutos) | `/api/saude` 200 e varredura de rotas verde |
+| chave `age` do SOPS | `%APPDATA%\sops\age\keys.txt` de cada pessoa | ninguém mais decifra os arquivos até `sops updatekeys` com a chave nova | `sops -d site/secrets.env` com a chave nova |
+
+**Checklist (6 passos, para qualquer sessão futura):**
+
+1. **Contar antes** o que a troca atinge (sessões abertas, pedidos com chave, inscrições de push) e **avisar** quem sente.
+2. **Gerar** o valor novo dentro de um script (`crypto.randomBytes`) — nunca no terminal, nunca em texto puro.
+3. **Gravar nas configurações do Azure** dos aplicativos certos (produção **e** o preview `21` do sistema, que nasce copiando a
+   produção) pelo `python.exe -IBm azure.cli` do próprio CLI com os argumentos em lista (sem shell), `-o none`.
+4. **Gravar nos segredos do GitHub** (`gh secret set NOME` com o valor pelo stdin) e **nos arquivos SOPS** do repositório
+   (decifrar em memória, trocar, cifrar de novo com `--filename-override`), e commitar os arquivos cifrados.
+5. **Conferir** com o que já existe: testes do site contra a produção, varredura de rotas, login na homologação, um
+   e-mail de código — e ler os registros das Functions por 10 minutos.
+6. **Anotar** data e motivo no plano (vD.8) e aqui; se o valor velho apareceu em algum lugar (registro, conversa), apagar
+   o registro.
+
+Exemplo já executado, com script reutilizável: 07/10/2026, `DIRECTUS_ADMIN_TOKEN` e `TELEFONE_CHAVE_SEGREDO` (fases
+`gerar → contar → rechavear → trocar-azure → trocar-directus → trocar-github → concluir → conferir`).

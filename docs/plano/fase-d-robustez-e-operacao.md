@@ -300,9 +300,11 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       a cópia de segurança numa cópia temporária e separada do banco, mede-se o tempo e apaga-se a cópia)*
       **Ensaio semestral de restauração** (banco + anexos) registrado na tabela da `HOMOLOGACAO.md`, com o tempo
       medido — e um lembrete pelo motor de notificações (vB.2) 30 dias antes de vencer, pra Secretaria Geral.
-- [ ] **Rotação de segredos com procedimento escrito** no `SECRETS.md`: `AUTH_SECRET` (derruba todas as sessões —
+- [x] **Rotação de segredos com procedimento escrito** no `SECRETS.md`: `AUTH_SECRET` (derruba todas as sessões —
       avisar antes), `CRON_SECRET`, `CHAVE_SITE_SISTEMA` e as chaves `age` do SOPS; periodicidade anual ou a qualquer
-      suspeita; checklist de 6 passos que qualquer sessão futura consegue seguir.
+      suspeita; checklist de 6 passos que qualquer sessão futura consegue seguir. *Feito em 08/10/2026: seção 10 do
+      `SECRETS.md`, um quadro por segredo (onde vive, o que a troca derruba, como conferir) e o checklist; a troca de
+      07/10 (token do Directus e chave do telefone) é o exemplo já executado.*
 - [x] Alerta quando a rotina diária (`rotinas-diarias.yml`) falhar — *feito em 07/10:* job `avisar-falha` manda
       e-mail (ACS) para `presidente@ieadespa.org` sempre que uma das três rotinas falhar, com o link da execução;
       antes o GitHub só avisava quem fez o último commit.
@@ -317,8 +319,10 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       (a rota continua a mesma, o fluxo só voltou a rodar a cada 15 min); o sistema regrava o blob a cada mudança
       em calendário/canais/eventos (gancho na entrada única, `shared/agendaPublicaVersao.js`) e a rotina diária das
       7h regrava por garantia (`POST agenda-publica/atualizar-versao` com o segredo das rotinas).*
-- [ ] **Orçamento com alerta no Azure** (Cost Management budget): aviso por e-mail ao passar de 50 %, 80 % e 100 % de
-      US$ 150 no mês — o salto de outubro só foi visto porque alguém perguntou. Custo zero.
+- [x] **Orçamento com alerta no Azure** (Cost Management budget): aviso por e-mail ao passar de 50 %, 80 % e 100 % de
+      US$ 150 no mês — o salto de outubro só foi visto porque alguém perguntou. Custo zero. *Feito em 06/10/2026 e
+      conferido em 08/10: orçamento `ieadespa-teto-mensal`, R$ 650 por mês (o teto passou a US$ 120), avisos em 50 %,
+      80 % e 100 % (real e previsto) para o grupo de ação `ieadespa-alertas` → `presidente@ieadespa.org`.*
 
 *Esforço:* baixo. *Risco:* nenhum pro código. *Depende de você:* tudo que é no Azure roda em **modo manual** (o modo
 automático bloqueia mudança em produção, como em 03/10/2026) e a decisão de custo do banco acordado é sua.
@@ -347,7 +351,7 @@ do roteiro; o membro já usa hoje.
       um segundo trabalho (`celular`) com o perfil membro e plano próprio. Primeira rodada local: 615 ações
       descobertas no celular, 127 no modo rápido, 127 iguais à base, 0 divergência, 0 violação de CSP, rolagem lateral
       0 px em todas as telas do membro — o mesmo que a revisão manual da vD.6 tinha visto.*
-- [ ] O que é só da liderança (Financeiro, Disciplina, Catálogos) fica como está até a v10.3/v10.1.3 — não é o que o
+- [x] *(decisão registrada: nada a fazer agora)* O que é só da liderança (Financeiro, Disciplina, Catálogos) fica como está até a v10.3/v10.1.3 — não é o que o
       membro usa, e redesenhar tudo agora é a FASE 10.
 
 *Esforço:* baixo a médio. *Risco:* baixo. *Depende de você:* nada.
@@ -374,12 +378,14 @@ lugares, não migrar DNS. Mover a zona pra fora da Microsoft não ajuda em nada 
       do `<link rel="canonical">`, do sitemap, dos links do certificado (`site/src/lib/certificado.ts`) e da
       programação (`site/src/lib/programacao.ts`). Os três fluxos do GitHub que leem o site (`site-agenda-sync.yml`,
       `site-content-notifications.yml`, `site-event-notifications.yml`) trocam `SITE_URL` junto, no mesmo commit.
-- [ ] Directus: configurações e textos que citam `www` (links de e-mail, páginas de camiseta, QR já impresso)
+- [x] *Conferido em 08/10/2026: varredura das 36 coleções do Directus — nenhum texto cita `www.ieadespa.org.br`.*
+      Directus: configurações e textos que citam `www` (links de e-mail, páginas de camiseta, QR já impresso)
       revisados; QR e link já distribuídos continuam funcionando pelo redirecionamento — por isso o `www` **nunca**
       é removido do Azure nem do DNS.
 - [ ] Google Search Console: propriedade do raiz e mudança de endereço; verificar depois que `www` → raiz responde
       `301` e que o certificado TLS do raiz (gerido pelo Azure) está válido.
-- [ ] Sistema (`app.ieadespa.org.br`) **não muda**: é subdomínio próprio, com o seu Static Web App.
+- [x] Sistema (`app.ieadespa.org.br`) **não muda**: é subdomínio próprio, com o seu Static Web App. *(Confirmado em
+      08/10/2026: só o site trocou de endereço.)*
 
 *Esforço:* baixo (1 sessão). *Risco:* baixo — tudo reversível desmarcando o padrão. *Depende de você:* a janela
 (depois de 17/10) e a mudança no portal em modo manual. *Custo:* R$ 0.

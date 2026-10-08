@@ -71,10 +71,12 @@ jobs:
           echo "Linha de base: $base ($(git log -1 --format=%s "$base" | cut -c1-80))" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Plano e 1ª rodada da base (cache por commit da base)
-        uses: actions/cache@v6
+        id: cache
+        uses: actions/cache/restore@v6
         with:
           path: tools/csp-e2e/planos
           # v2 (07/10/2026, vD.6): o retrato ganhou a rolagem lateral — plano e transcritos antigos não comparam
+          # v3 (08/10/2026): repesca das falhas do equipamento antes de gravar a linha de base
           key: csp-e2e-plano-${{ steps.base.outputs.sha }}-v3
 
       - name: Rodar o plano na versão atual e comparar com a base
@@ -95,6 +97,13 @@ jobs:
           name: testes-de-tela-${{ github.run_number }}
           path: |
             tools/csp-e2e/resultados/
+
+      - name: Salvar a linha de base no cache (mesmo se a comparação falhou — a descoberta vale por si)
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: tools/csp-e2e/planos
+          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-v3
 
   # vD.6 (07/10/2026): as mesmas ações do perfil MEMBRO numa janela de celular (360×740). Além de tudo o que a
   # rodada de cima compara, cada tela traz a rolagem lateral em px: uma tela que passou a estourar a largura do
@@ -130,7 +139,8 @@ jobs:
           echo "sha=$base" >> "$GITHUB_OUTPUT"
 
       - name: Plano e 1ª rodada da base em janela de celular (cache por commit da base)
-        uses: actions/cache@v6
+        id: cache
+        uses: actions/cache/restore@v6
         with:
           path: tools/csp-e2e/planos
           key: csp-e2e-plano-${{ steps.base.outputs.sha }}-celular-v3
@@ -155,3 +165,10 @@ jobs:
             tools/csp-e2e/resultados/
             tools/csp-e2e/saida.txt
           retention-days: 30
+
+      - name: Salvar a linha de base no cache (mesmo se a comparação falhou — a descoberta vale por si)
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: tools/csp-e2e/planos
+          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-celular-v3

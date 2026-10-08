@@ -213,6 +213,7 @@ describe("confirmação reforçada (auth.exigirFatorRecente) — os quatro atos"
 });
 
 describe("o banco aceita o canal FATOR na contagem de tentativas (migração 141)", () => {
+  const fs = require("fs"), path = require("path");
   test("a restrição CK_AcessoTentativas_Canal passa a listar FATOR", () => {
     const migracoes = path.join(__dirname, "..", "..", "..", "sql", "migrations");
     const arq = fs.readdirSync(migracoes).find((n) => /canal_fator/.test(n));

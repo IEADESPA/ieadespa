@@ -61,7 +61,7 @@ jobs:
     timeout-minutes: 15
     env:
       SISTEMA_API_URL: https://app.ieadespa.org.br/api
-      SITE_URL: https://www.ieadespa.org.br
+      SITE_URL: https://ieadespa.org.br
       WORKFLOW_SITE: azure-static-web-apps-salmon-bay-0efd06d0f.yml
       # `gh` precisa saber o repositório (o job não faz checkout).
       GH_REPO: ${{ github.repository }}

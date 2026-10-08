@@ -1,5 +1,5 @@
-const LOGO_URL = "https://www.ieadespa.org.br/logo.png";
-const SITE_URL = "https://www.ieadespa.org.br";
+const LOGO_URL = "https://ieadespa.org.br/logo.png";
+const SITE_URL = "https://ieadespa.org.br";
 const ACCENT = "#8f6f1f";
 
 /** Nome/título vêm de quem preenche o formulário — nunca inserir sem escapar,

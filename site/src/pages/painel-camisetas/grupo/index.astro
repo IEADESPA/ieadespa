@@ -231,6 +231,22 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
             <textarea id="f-email-corpo" rows="3" class="field" placeholder="Texto simples — a lista de itens e o local de retirada são adicionados automaticamente depois desse parágrafo."></textarea>
           </div>
 
+          <!-- 08/10/2026 — as camisetas chegaram: "Meus pedidos" mostra "chegou, pode vir buscar" para TODOS os pedidos do grupo
+               (também os sem e-mail e os ainda não separados) e o aviso por e-mail sai em massa, em lotes, até acabar. -->
+          <div class="grid gap-3" style="border-top: 1px solid var(--border); padding-top: 1rem;">
+            <label class="flex items-start gap-2 text-sm"><input id="f-retirada-liberada" type="checkbox" class="mt-1" />
+              <span><strong>As camisetas chegaram — liberar a retirada para todos os pedidos.</strong><br />
+              <span class="text-muted-foreground">Quem consultar "Meus pedidos" (pelo telefone, sem precisar de e-mail) passa a ver "Chegou! Pode vir buscar" e o local acima, mesmo antes de a equipe separar o pedido. Salve para aplicar.</span></span>
+            </label>
+            <p class="text-sm font-semibold">Aviso por e-mail a todos de uma vez</p>
+            <p class="text-sm text-muted-foreground">Manda o e-mail de "pode retirar" (assunto e mensagem acima, itens e local) para todo pedido do grupo que tem e-mail e ainda não foi avisado, em lotes de 40. Quem não deixou e-mail só vê pelo site — avise também pelos canais da igreja.</p>
+            <div class="flex flex-wrap items-center gap-3">
+              <button type="button" class="btn btn-outline" data-aviso-conferir>Conferir quantos receberiam</button>
+              <button type="button" class="btn btn-solid" data-aviso-enviar>📣 Enviar aviso a todos</button>
+              <p class="text-sm" data-aviso-status role="status" aria-live="polite"></p>
+            </div>
+          </div>
+
           <div class="flex items-center gap-4">
             <button type="submit" class="btn btn-solid" data-lote-salvar>Salvar</button>
             <p class="text-sm" data-lote-status role="status" aria-live="polite"></p>
@@ -307,8 +323,8 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
   <SiteFooter />
 
   <script>
-    import { exigirAutenticacao, fetchComSessao } from "@/lib/painelAuth";
-    import { directusAssetUrl } from "@/lib/directus";
+    import { exigirAutenticacao, fetchComSessao, obterTokenValido, renovarToken } from "@/lib/painelAuth";
+    import { AVISAR_RETIRADA_CAMISETAS_URL, directusAssetUrl } from "@/lib/directus";
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { graficoBarrasSvg, desenharGraficoBarrasPDF, type ContagemOpcao } from "@/lib/graficos";
@@ -334,6 +350,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       retirada_local: string | null;
       email_retirada_assunto: string | null;
       email_retirada_corpo: string | null;
+      retirada_liberada?: boolean;
       imagem: string | null;
     }
 
@@ -408,6 +425,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     const fRetiradaLocal = el<HTMLInputElement>("f-retirada-local");
     const fEmailAssunto = el<HTMLInputElement>("f-email-assunto");
     const fEmailCorpo = el<HTMLTextAreaElement>("f-email-corpo");
+    const fRetiradaLiberada = el<HTMLInputElement>("f-retirada-liberada");
     const precosTamanhoWrap = document.querySelector<HTMLElement>("[data-precos-tamanho-wrap]");
     const precosTamanhoLista = document.querySelector<HTMLElement>("[data-precos-tamanho-lista]");
 
@@ -502,6 +520,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       fRetiradaLocal.value = grupo.retirada_local ?? "";
       fEmailAssunto.value = grupo.email_retirada_assunto ?? "";
       fEmailCorpo.value = grupo.email_retirada_corpo ?? "";
+      fRetiradaLiberada.checked = Boolean(grupo.retirada_liberada);
       renderizarPrecosTamanho(grupo.tamanhos ?? []);
       const precos = grupo.precos_tamanho ?? {};
       precosTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-preco-tamanho]").forEach((input) => {
@@ -545,6 +564,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         retirada_local: fRetiradaLocal.value.trim() || null,
         email_retirada_assunto: fEmailAssunto.value.trim() || null,
         email_retirada_corpo: fEmailCorpo.value.trim() || null,
+        retirada_liberada: fRetiradaLiberada.checked,
       };
     }
 
@@ -655,6 +675,58 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       if (form) form.hidden = false;
       const tabsBar = document.querySelector<HTMLElement>("[data-tabs]");
       if (tabsBar) tabsBar.hidden = false;
+
+      // 08/10/2026 — aviso EM MASSA de retirada: lotes de 40 até acabar; token do painel em x-painel-token (401 renova e repete).
+      const avisoStatus = document.querySelector<HTMLElement>("[data-aviso-status]");
+      const btnConferir = document.querySelector<HTMLButtonElement>("[data-aviso-conferir]");
+      const btnEnviar = document.querySelector<HTMLButtonElement>("[data-aviso-enviar]");
+      const dizerAviso = (t: string) => { if (avisoStatus) avisoStatus.textContent = t; };
+      interface RespostaAviso { enviados: number; falhas: number; restantes: number; jaAvisados: number; semEmail: number; retiradaLiberada: boolean }
+      async function chamarAviso(simular: boolean): Promise<RespostaAviso> {
+        const corpo = JSON.stringify({ grupoId, simular, lote: 40 });
+        const chamar = async (t: string) => fetch(AVISAR_RETIRADA_CAMISETAS_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-painel-token": t }, body: corpo });
+        let t = (await obterTokenValido(directusUrl, AUTH.tokenKey)) ?? "";
+        let res = await chamar(t);
+        if (res.status === 401) { t = (await renovarToken(directusUrl, AUTH.tokenKey)) ?? ""; res = await chamar(t); }
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.sucesso) throw new Error(j.erro || `HTTP ${res.status}`);
+        return j as RespostaAviso;
+      }
+      btnConferir?.addEventListener("click", async () => {
+        if (!grupoId) return;
+        btnConferir.disabled = true;
+        dizerAviso("Conferindo…");
+        try {
+          const r = await chamarAviso(true);
+          dizerAviso(`${r.restantes} pedido(s) com e-mail ainda sem aviso; ${r.jaAvisados} já avisado(s); ${r.semEmail} sem e-mail (só veem pelo site).`);
+        } catch (e) { dizerAviso(`Não deu: ${(e as Error).message}`); }
+        finally { btnConferir.disabled = false; }
+      });
+      let confirmacaoAvisoPendente = false;
+      btnEnviar?.addEventListener("click", async () => {
+        if (!grupoId) return;
+        if (!confirmacaoAvisoPendente) {
+          confirmacaoAvisoPendente = true;
+          dizerAviso("Isso manda o e-mail a todos os pedidos com e-mail ainda não avisados e libera a retirada para todos. Clique de novo para confirmar.");
+          setTimeout(() => { confirmacaoAvisoPendente = false; }, 15000);
+          return;
+        }
+        confirmacaoAvisoPendente = false;
+        btnEnviar.disabled = true;
+        if (btnConferir) btnConferir.disabled = true;
+        let enviados = 0, falhas = 0;
+        try {
+          for (let rodada = 0; rodada < 60; rodada++) {
+            const r = await chamarAviso(false);
+            enviados += r.enviados; falhas += r.falhas;
+            dizerAviso(`Enviados ${enviados}${falhas ? ` (${falhas} falha(s))` : ""}; faltam ${r.restantes}…`);
+            if (r.restantes <= 0 || (r.enviados === 0 && r.falhas > 0)) break;
+          }
+          fRetiradaLiberada.checked = true;
+          dizerAviso(`Pronto: ${enviados} e-mail(s) enviado(s)${falhas ? `, ${falhas} falha(s) (entram na próxima rodada)` : ""}. Retirada liberada para todos os pedidos.`);
+        } catch (e) { dizerAviso(`Parou: ${(e as Error).message}`); }
+        finally { btnEnviar.disabled = false; if (btnConferir) btnConferir.disabled = false; }
+      });
 
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();

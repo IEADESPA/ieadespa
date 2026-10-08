@@ -933,7 +933,7 @@ async function pacotePublicoCompleto(pool, ctx, opcoes) {
 }
 
 // Situação da sincronização com o site: a versão daqui contra a que o site publicou.
-async function statusSincronizacaoSite(pool, ctx, { fetchImpl = globalThis.fetch, siteUrl = process.env.SITE_URL || "https://www.ieadespa.org.br" } = {}) {
+async function statusSincronizacaoSite(pool, ctx, { fetchImpl = globalThis.fetch, siteUrl = process.env.SITE_URL || "https://ieadespa.org.br" } = {}) {
   const { versao } = await pacotePublicoCompleto(pool, ctx);
   let versaoNoSite = null;
   let erro = null;

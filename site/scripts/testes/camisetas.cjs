@@ -51,6 +51,14 @@ async function main() {
     v.ok("antigo: segunda consulta só com telefone → acha", r.status === 200 && r.j.pedidos?.length === 1, `${r.ms} ms`);
     r = await site("POST", "/api/consultar-pedidos-camiseta", { telefone: "94900000000", nome: "Teste Antigo Pereira" });
     v.ok("telefone errado com nome certo → nada", r.status === 200 && r.j.pedidos?.length === 0, `${r.ms} ms`);
+    // aviso EM MASSA de retirada (08/10/2026): só com token do painel; simular conta sem enviar; liberar retirada muda a consulta
+    r = await site("POST", "/api/avisar-retirada-camisetas", { grupoId: G, simular: true });
+    v.ok("avisar-retirada sem token → 401", r.status === 401, `${r.ms} ms`);
+    const sim = await fetch(`${SITE}/api/avisar-retirada-camisetas`, { method: "POST", headers: { "Content-Type": "application/json", "x-painel-token": process.env.DIRECTUS_ADMIN_TOKEN }, body: JSON.stringify({ grupoId: G, simular: true }) }); const sj = await sim.json().catch(() => ({}));
+    v.ok("avisar-retirada simular: 1 pedido com e-mail a avisar, 1 sem e-mail, nada enviado, retirada ainda não liberada", sim.status === 200 && sj.simulado === true && sj.enviados === 0 && sj.restantes === 1 && sj.semEmail === 1 && sj.retiradaLiberada === false, JSON.stringify(sj));
+    await dx("PATCH", `/items/camiseta_grupos/${G}`, { retirada_liberada: true, retirada_local: "Secretaria da Sede, seg a sex 8h-12h", email_retirada_corpo: "Sua camiseta chegou. Traga o comprovante." });
+    r = await site("POST", "/api/consultar-pedidos-camiseta", { telefone: t1 });
+    v.ok("retirada liberada no grupo → Meus pedidos diz que chegou (mesmo sem separar) e mostra a mensagem", r.status === 200 && r.j.pedidos?.[0]?.retiradaLiberada === true && r.j.pedidos?.[0]?.separado === false && /comprovante/.test(r.j.pedidos?.[0]?.mensagemRetirada || ""), `${r.ms} ms`);
     // separado → retirada na consulta; lote fechado → andamento
     await dx("PATCH", `/items/camiseta_grupos/${G}`, { retirada_local: "Secretaria da Sede, seg a sex 8h-12h", email_retirada_corpo: "Sua camiseta chegou. Traga o comprovante." });
     await dx("PATCH", `/items/camiseta_pedidos/${ped1}`, { separado: true, separado_em: new Date().toISOString() });

@@ -65,12 +65,12 @@ module.exports = async function (context, req) {
   if (!g.ok || !g.data) { context.res = { status: 502, body: { sucesso: false, erro: "Falha ao ler o grupo." } }; return; }
   const grupo = g.data;
 
-  const filtro = `filter[grupo][_eq]=${grupoId}&filter[email][_nnull]=true&filter[email][_neq]=&filter[aviso_retirada_em][_null]=true`;
+  const filtro = `filter[grupo][_eq]=${grupoId}&filter[email][_nempty]=true&filter[aviso_retirada_em][_null]=true`;
   const total = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&${filtro}`, DIRECTUS_ADMIN_TOKEN);
   const pendentes = Number(total.ok && total.data && total.data[0] ? total.data[0].count.id : 0);
   const avisadosAntes = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&filter[grupo][_eq]=${grupoId}&filter[aviso_retirada_em][_nnull]=true`, DIRECTUS_ADMIN_TOKEN);
   const jaAvisados = Number(avisadosAntes.ok && avisadosAntes.data && avisadosAntes.data[0] ? avisadosAntes.data[0].count.id : 0);
-  const semEmail = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&filter[grupo][_eq]=${grupoId}&filter[_or][0][email][_null]=true&filter[_or][1][email][_eq]=`, DIRECTUS_ADMIN_TOKEN);
+  const semEmail = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&filter[grupo][_eq]=${grupoId}&filter[email][_empty]=true`, DIRECTUS_ADMIN_TOKEN);
   const semEmailN = Number(semEmail.ok && semEmail.data && semEmail.data[0] ? semEmail.data[0].count.id : 0);
 
   if (simular) {

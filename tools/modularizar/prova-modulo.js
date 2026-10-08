@@ -100,7 +100,7 @@ async function api(caminho, corpo, token) {
         ok(`controle ${CLICAR} clicado`, achou);
       }
       if (SELECIONAR) {
-        const escolhido = await page.evaluate((s) => { const sel = document.querySelector(s); if (!sel) return null; const op = Array.from(sel.options).find((o) => o.value); if (!op) return ""; sel.value = op.value; sel.dispatchEvent(new Event("change", { bubbles: true })); return op.textContent.trim(); }, SELECIONAR);
+        const escolhido = await page.evaluate((s) => { const sel = document.querySelector(s); if (!sel) return null; const op = Array.from(sel.options).find((o) => o.value); if (!op) return ""; sel.value = op.value; sel.dispatchEvent(new Event("change", { bubbles: true })); return op.textContent.trim() || op.value; }, SELECIONAR);
         await new Promise((r) => setTimeout(r, 2500));
         ok(`opção escolhida em ${SELECIONAR}`, !!escolhido, String(escolhido));
       }

@@ -31,7 +31,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
       URL_SAUDE: https://app.ieadespa.org.br/api/saude
-      URL_SITE: https://www.ieadespa.org.br/
+      URL_SITE: https://ieadespa.org.br/
     steps:
       - name: Chamar /api/saude (3 tentativas) e a página inicial do site
         id: ping

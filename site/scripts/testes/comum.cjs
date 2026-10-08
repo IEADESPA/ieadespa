@@ -1,7 +1,7 @@
 // Peças comuns das baterias de teste do site (06/10/2026).
 // Lê o ambiente de variáveis (nunca de arquivo, nunca imprime segredo).
 function ambiente() {
-  const SITE = (process.env.SITE_URL || "https://www.ieadespa.org.br").replace(/\/$/, "");
+  const SITE = (process.env.SITE_URL || "https://ieadespa.org.br").replace(/\/$/, "");
   const URL = process.env.DIRECTUS_URL;
   const TOK = process.env.DIRECTUS_ADMIN_TOKEN;
   const PEPPER = process.env.TELEFONE_CHAVE_SEGREDO;

@@ -7,7 +7,7 @@ const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
  * no projeto Astro, em vez de depender de uma variável de ambiente que
  * precisaria ser configurada à parte no Azure só pra isso.
  */
-const SITE_URL = "https://www.ieadespa.org.br";
+const SITE_URL = "https://ieadespa.org.br";
 
 const WIDTH = 1080;
 const HEIGHT = 1920;

@@ -7,7 +7,7 @@ name: Site - testes contra o site publicado
 #   - qualquer pull request → a PRÉ-VISUALIZAÇÃO daquele PR no Azure Static Web Apps
 #     (https://salmon-bay-0efd06d0f-<nº do PR>.eastus2.3.azurestaticapps.net; criada na montagem
 #     do PR, destruída quando ele fecha, herda as configurações da produção);
-#   - branch `main` → a PRODUÇÃO (https://www.ieadespa.org.br).
+#   - branch `main` → a PRODUÇÃO (https://ieadespa.org.br).
 # Fluxo do site (07/10/2026): UMA mudança = UM pull request; testes verdes na pré-visualização →
 # merge → produção. (Um PR "permanente" não serve: qualquer merge dos commits dele o fecha e o
 # ambiente some — foi o que aconteceu com o PR #18 em 06/10.)
@@ -24,7 +24,7 @@ on:
       site_url:
         description: "Endereço do site a testar (padrão: produção)"
         required: false
-        default: "https://www.ieadespa.org.br"
+        default: "https://ieadespa.org.br"
 
 permissions:
   contents: read
@@ -62,7 +62,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             url="${{ github.event.inputs.site_url }}"
           elif [ "${{ github.event.workflow_run.head_branch }}" = "main" ]; then
-            url="https://www.ieadespa.org.br"
+            url="https://ieadespa.org.br"
           else
             # Pull request: a pré-visualização do Static Web App tem o número do PR no endereço
             # (ambiente criado na montagem do PR e destruído quando ele fecha; herda as

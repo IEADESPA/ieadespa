@@ -17,7 +17,7 @@ regra que fica é que nada sobe para a produção sem passar por elas.
 - **À mão**, de qualquer máquina com acesso ao Directus:
 
 ```bash
-export SITE_URL=https://www.ieadespa.org.br   # ou o endereço da pré-visualização
+export SITE_URL=https://ieadespa.org.br   # ou o endereço da pré-visualização
 export DIRECTUS_URL=... DIRECTUS_ADMIN_TOKEN=... TELEFONE_CHAVE_SEGREDO=...   # dos segredos, nunca em texto no repositório
 node site/scripts/testes/camisetas.cjs
 node site/scripts/testes/eventos.cjs

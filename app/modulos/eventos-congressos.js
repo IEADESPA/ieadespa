@@ -14,7 +14,7 @@
 // innerHTML passa por escaparHtmlEbd; onclick só recebe id numérico ou constante nossa. O MESMO dossiê serve ao
 // módulo de gestão (G) e a Meu Painel → Eventos (M). Datas/horas reaproveitam calData/calDataHora (Brasília).
 const EVT_SECOES = ["painel", "fila", "caixas"];
-const EVT_SITE = "https://www.ieadespa.org.br";
+const EVT_SITE = "https://ieadespa.org.br";
 const EVT_STATUS_CONVIDADO = {
   RASCUNHO: ["📝 Rascunho", "cal-st-cancelado"],
   EM_ANALISE: ["⏳ Em análise", "cal-st-proposto"],

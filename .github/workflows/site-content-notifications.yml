@@ -31,5 +31,5 @@ jobs:
           DIRECTUS_ADMIN_TOKEN: ${{ secrets.DIRECTUS_ADMIN_TOKEN }}
           VAPID_PUBLIC_KEY: BGhp6vLgCjC9Hb9GyEeu5m_HdshobUuFfe6N9XoDqa4RdPfQQ60CgQVhlMtrs709q-aqUlXr7tVq3WX4z1jyokk
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
-          SITE_URL: https://www.ieadespa.org.br
+          SITE_URL: https://ieadespa.org.br
         run: node site/scripts/send-content-notifications.mjs

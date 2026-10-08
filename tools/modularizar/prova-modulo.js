@@ -30,7 +30,7 @@ const arg = (n, d) => { const i = process.argv.indexOf("--" + n); return i > 0 ?
 const BASE = (arg("base", "https://white-grass-048208e0f-21.eastus2.6.azurestaticapps.net")).replace(/\/+$/, "");
 const MODULO = arg("modulo"), FUNCOES = (arg("funcoes", "") || "").split(",").filter(Boolean), SW = arg("sw");
 const MATRICULA = arg("matricula"), SENHA = arg("senha", process.env.SEED_SENHA || "Homolog@2026"), ABA = arg("aba"), ACAO = arg("acao"), API = arg("api"), ALVO = arg("alvo");
-const CAPTURA = arg("captura");
+const CAPTURA = arg("captura"), CLICAR = arg("clicar");   // --clicar <seletor>: clica num controle depois da aba (ex.: sub-aba do Meu Painel)
 if (!MODULO || !FUNCOES.length) { console.error("faltam --modulo e --funcoes"); process.exit(2); }
 const checks = [];
 const ok = (nome, cond, detalhe = "") => { checks.push({ nome, ok: !!cond }); console.log(`${cond ? "OK " : "FALHA"} ${nome}${detalhe ? "  — " + detalhe : ""}`); };
@@ -93,6 +93,11 @@ async function api(caminho, corpo, token) {
         await new Promise((r) => setTimeout(r, 1500));
         const abaId = porBotao ? ABA.replace(/^btnAba/, "aba") : "aba" + ABA.charAt(0).toUpperCase() + ABA.slice(1);
         ok(`aba #${abaId} aberta`, await page.evaluate((id) => { const a = document.querySelector("#" + id); return !!(a && a.style.display !== "none" && a.offsetParent !== null); }, abaId));
+      }
+      if (CLICAR) {
+        const achou = await page.evaluate((s) => { const el = document.querySelector(s); if (!el) return false; el.click(); return true; }, CLICAR);
+        await new Promise((r) => setTimeout(r, 4000));
+        ok(`controle ${CLICAR} clicado`, achou);
       }
       if (ACAO) {
         const clicou = await page.evaluate((acao) => { const b = Array.from(document.querySelectorAll(`[data-on-click="${acao}"]`)).find((el) => el.offsetParent !== null) || document.querySelector(`[data-on-click="${acao}"]`); if (b) { b.click(); return true; } if (typeof window[acao] === "function") { window[acao](); return "direto"; } return false; }, ACAO);

@@ -1709,9 +1709,9 @@ ponto real de integração:
         verdadeiro (379 cargas de tela com resposta hostil, nenhuma tag ou `javascript:`
         injetado; 401/403/500 sem erro não tratado no console) e o front de produção aberto
         num navegador de verdade, sem erro de JavaScript nem violação de política de
-        segurança. **Limite que continua:** os 870 atributos de evento em linha seguem
-        existindo (é o trabalho da CSP forte); algumas ações só são recusadas pelo servidor,
-        que mostra o motivo.
+        segurança. **Limite que continua:** algumas ações só são recusadas pelo servidor,
+        que mostra o motivo. *(Os 870 atributos de evento em linha, que eram o outro limite,
+        viraram delegação na CSP forte de 04/10/2026 — ver abaixo.)*
       - **(k) PIN errado 5 vezes bloqueia a conta por 15 minutos — ACEITO** pelo responsável
         (decisão, não pendência).
       - **(l) Revogar o cadastro do responsável não anulava a adesão — FECHADO.** A adesão
@@ -1821,7 +1821,10 @@ ponto real de integração:
         trocar isso é um projeto à parte. Botão novo exige registrar a ação em `registrarAcoes` (o
         teste avisa). A simulação não monta módulos inteiros (canais, eventos, voluntariado, parte
         do PSC e do calendário): para esses vale a prova estática e os testes, não a execução.
-        Nada disso valida regra do servidor.
+        Nada disso valida regra do servidor. *(Desde 07/10/2026 a FASE D cobre essa lacuna: a
+        prova de módulo abre cada tela na homologação com login fictício e a API de verdade —
+        `tools/modularizar/prova-modulo.js`, fluxo "Sistema - prova em navegador" — e a Trava
+        7-A a repetiu nas seis telas da FASE 7.)*
     - **Verificação do fecho.** A suíte da API foi de 1191 para **1947** testes (67 arquivos;
       357 deles são a varredura de rotas), e cada correção da revisão foi **quebrada de
       propósito** para provar que o teste falha sem ela (17 mutações, nenhuma sobrevive; duas
@@ -1861,6 +1864,32 @@ ponto real de integração:
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
 Audita v7.1 a v7.5 pelas 5 perguntas do checklist — depois de fechada a FASE D.
+
+- [x] **Fechada em 08/10/2026** (depois da Trava D-B) — auditoria de v7.1 a v7.5:
+  1. *Código novo roda de ponta a ponta no ambiente real?* **Sim.** As cinco versões estão na produção desde setembro
+     e início de outubro (todas as migrações da FASE 7 aplicadas; a produção está na 141), e desde a FASE D cada
+     deploy prova isso sozinho: a homologação (PR #21) migra, semeia e varre as rotas a cada push, e a produção varre
+     as suas depois de cada merge — 205 rotas sem sessão, entre elas as da FASE 7 (`psc`, `calendario`,
+     `agenda-publica`, `canais`, `eventos-gestao`, `escalas`, `voluntariado`, `habilitacao-voluntarios`): 0 rota
+     404, 0 rota 5xx (corrida 37786339310). O agendador interno de avisos (PSC, calendário, canais, escalas) é
+     chamado pelo fluxo das 7h (`rotinas-diarias.yml`), que avisa por e-mail quando falha.
+  2. *Toda tela abre e mostra dado de verdade?* **Sim.** Rodada **completa** dos testes de tela na `main`
+     (corrida 37808504793, completa: 4.762 ações iguais no desktop e 625 na janela de celular, 0 divergência, 0 violação de CSP, 0 falha do equipamento). E as seis telas da FASE 7 abertas na homologação com login fictício (pastor de área 900007) e a
+     API de verdade respondendo 200, pelo fluxo "Sistema - prova em navegador": PSC 34/34 (corrida 37800877628), Calendário 34/34 (37800884676), Canais 35/35 (37801464691), Eventos e congressos 34/34 (37800898348), Escalas 37/37 (37803832918, escolhendo a congregação e abrindo as equipes) e Voluntariado 35/35 (37801473091, sub-aba Minhas Escalas do Meu Painel) — cada uma com a aba aberta, a API do módulo respondendo 200, zero erro de JavaScript e zero violação de CSP.
+  3. *README e código narram a mesma coisa?* **Sim.** O README (estado atual, tabela das fases e tabelas do banco
+     por versão) descreve v7.1 a v7.5 como entregues e aponta para este plano; duas notas de "limite que continua"
+     deste plano estavam vencidas e foram corrigidas nesta trava (os 870 atributos de evento em linha viraram
+     delegação na CSP forte; os módulos inteiros passaram a ser abertos pela prova de módulo da FASE D).
+  4. *O que ficou para trás foi corrigido, não só anotado?* **Sim.** Os 35 itens de v7.1 a v7.5 estão riscados;
+     o "fecho dos itens em aberto" de 03/10/2026 tratou a lista (a–m) e a revisão do acesso por PIN; a FASE D
+     (06–08/10) trouxe o que a v7.5 deixou como limite de operação: prova de tela em cada push, front em módulos,
+     homologação de verdade, segundo fator, alerta de queda. **Limites que continuam, ditos com honestidade** (não
+     são pendências de código): o leiaute CNAB nunca foi homologado com um banco real (depende de integrar); os
+     protocolos de ouvidoria já emitidos continuam curtos; a regra dos dois olhos do abandono depende de duas pessoas
+     do nível geral; `style-src` mantém `'unsafe-inline'` (projeto à parte).
+  5. *Deploy real aconteceu?* **Sim.** Produção conferida hoje depois do merge da vD.4 (script com a segunda etapa,
+     casca do service worker v29, varredura verde); a agenda pública segue chegando ao site sem acordar o banco.
+     Fechada esta trava, a FASE 7 segue para a v7.6.
 
 ## v7.6 — Setores Técnicos (voluntariado profissional) *(gap da varredura)*
 

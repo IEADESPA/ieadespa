@@ -30,7 +30,7 @@ const arg = (n, d) => { const i = process.argv.indexOf("--" + n); return i > 0 ?
 const BASE = (arg("base", "https://white-grass-048208e0f-21.eastus2.6.azurestaticapps.net")).replace(/\/+$/, "");
 const MODULO = arg("modulo"), FUNCOES = (arg("funcoes", "") || "").split(",").filter(Boolean), SW = arg("sw");
 const MATRICULA = arg("matricula"), SENHA = arg("senha", process.env.SEED_SENHA || "Homolog@2026"), ABA = arg("aba"), ACAO = arg("acao"), API = arg("api"), ALVO = arg("alvo");
-const CAPTURA = arg("captura"), CLICAR = arg("clicar");   // --clicar <seletor>: clica num controle depois da aba (ex.: sub-aba do Meu Painel)
+const CAPTURA = arg("captura"), CLICAR = arg("clicar"), SELECIONAR = arg("selecionar");   // --selecionar <seletor de <select>>: escolhe a 1ª opção com valor (telas que exigem congregação/equipe antes de carregar)   // --clicar <seletor>: clica num controle depois da aba (ex.: sub-aba do Meu Painel)
 if (!MODULO || !FUNCOES.length) { console.error("faltam --modulo e --funcoes"); process.exit(2); }
 const checks = [];
 const ok = (nome, cond, detalhe = "") => { checks.push({ nome, ok: !!cond }); console.log(`${cond ? "OK " : "FALHA"} ${nome}${detalhe ? "  — " + detalhe : ""}`); };
@@ -98,6 +98,12 @@ async function api(caminho, corpo, token) {
         const achou = await page.evaluate((s) => { const el = document.querySelector(s); if (!el) return false; el.click(); return true; }, CLICAR);
         await new Promise((r) => setTimeout(r, 4000));
         ok(`controle ${CLICAR} clicado`, achou);
+      }
+      if (SELECIONAR) {
+        await page.waitForFunction((s) => { const sel = document.querySelector(s); return !!(sel && Array.from(sel.options).some((o) => o.value)); }, { timeout: 10000 }, SELECIONAR).catch(() => {});   // o seletor é preenchido depois que a aba abre
+        const escolhido = await page.evaluate((s) => { const sel = document.querySelector(s); if (!sel) return null; const op = Array.from(sel.options).find((o) => o.value); if (!op) return ""; sel.value = op.value; sel.dispatchEvent(new Event("change", { bubbles: true })); return op.textContent.trim() || op.value; }, SELECIONAR);
+        await new Promise((r) => setTimeout(r, 2500));
+        ok(`opção escolhida em ${SELECIONAR}`, !!escolhido, String(escolhido));
       }
       if (ACAO) {
         const clicou = await page.evaluate((acao) => { const b = Array.from(document.querySelectorAll(`[data-on-click="${acao}"]`)).find((el) => el.offsetParent !== null) || document.querySelector(`[data-on-click="${acao}"]`); if (b) { b.click(); return true; } if (typeof window[acao] === "function") { window[acao](); return "direto"; } return false; }, ACAO);

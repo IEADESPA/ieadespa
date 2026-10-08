@@ -211,3 +211,13 @@ describe("confirmação reforçada (auth.exigirFatorRecente) — os quatro atos"
     expect(r.status).toBe(401);
   });
 });
+
+describe("o banco aceita o canal FATOR na contagem de tentativas (migração 141)", () => {
+  test("a restrição CK_AcessoTentativas_Canal passa a listar FATOR", () => {
+    const migracoes = path.join(__dirname, "..", "..", "..", "sql", "migrations");
+    const arq = fs.readdirSync(migracoes).find((n) => /canal_fator/.test(n));
+    expect(arq).toBeTruthy();
+    const sql = fs.readFileSync(path.join(migracoes, arq), "utf8");
+    expect(sql).toMatch(/CHECK \(Canal IN \('PIN', 'SENHA', 'CODIGO', 'FATOR'\)\)/);
+  });
+});

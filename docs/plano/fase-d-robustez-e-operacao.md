@@ -383,8 +383,9 @@ lugares, não migrar DNS. Mover a zona pra fora da Microsoft não ajuda em nada 
       Directus: configurações e textos que citam `www` (links de e-mail, páginas de camiseta, QR já impresso)
       revisados; QR e link já distribuídos continuam funcionando pelo redirecionamento — por isso o `www` **nunca**
       é removido do Azure nem do DNS.
-- [ ] Google Search Console: propriedade do raiz e mudança de endereço; verificar depois que `www` → raiz responde
-      `301` e que o certificado TLS do raiz (gerido pelo Azure) está válido.
+- [x] Google Search Console: propriedade do raiz e mudança de endereço; verificar depois que `www` → raiz responde
+      `301` e que o certificado TLS do raiz (gerido pelo Azure) está válido. *(Dispensado pelo responsável em
+      08/10/2026: o raiz já responde, o `www` redireciona e o certificado está válido — nada a fazer no Google.)*
 - [x] Sistema (`app.ieadespa.org.br`) **não muda**: é subdomínio próprio, com o seu Static Web App. *(Confirmado em
       08/10/2026: só o site trocou de endereço.)*
 

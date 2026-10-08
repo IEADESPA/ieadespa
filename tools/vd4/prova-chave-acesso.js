@@ -17,8 +17,25 @@ const checks = [];
 const ok = (nome, cond, detalhe = "") => { checks.push(!!cond); console.log(`${cond ? "OK " : "FALHA"} ${nome}${detalhe ? "  — " + detalhe : ""}`); };
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Abre o navegador com as flags usuais de CI e tenta de novo uma vez (no runner do GitHub o Chrome às vezes não responde
+// na primeira abertura: "Timed out ... waiting for the WS endpoint"); na segunda tentativa mostra a saída do próprio navegador.
+async function abrirNavegador() {
+  const args = ["--no-first-run", "--no-default-browser-check", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox", "--lang=pt-BR"];
+  let ultimoErro;
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    try {
+      return await puppeteer.launch({ executablePath: NAVEGADOR, headless: true, args, timeout: 90000, dumpio: tentativa > 1 });
+    } catch (e) {
+      ultimoErro = e;
+      console.log(`navegador não abriu (tentativa ${tentativa}): ${String(e.message || e).split("\n")[0]}`);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+  throw ultimoErro;
+}
+
 (async () => {
-  const browser = await puppeteer.launch({ executablePath: NAVEGADOR, headless: true, args: ["--no-first-run", "--no-sandbox", "--lang=pt-BR"] });
+  const browser = await abrirNavegador();
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });

@@ -329,3 +329,13 @@ prova de conceito válida, só não era possível replicar em produção.
 > também na homologação, e o código vale o que está em `homolog`. O deploy
 > pelo `func azure functionapp publish` descrito antes **não existe mais**.
 > O cold start de ~30 s do modo "Managed Functions" continua.
+
+## Chave de acesso (vD.4) na homologação
+
+- A semeadura **zera as chaves de acesso** das matrículas fictícias (900001–900060) e apaga os desafios pendentes a cada
+  deploy do `homolog`: a prova sempre parte do zero. O pastor fictício (900007) fica **sem e-mail** de propósito, para
+  entrar com aviso quando não tem chave.
+- Prova de ponta a ponta com **autenticador virtual** (o Chrome cria e usa uma chave de verdade, sem aparelho):
+  fluxo `Sistema - prova em navegador` → roteiro `chave-acesso` (sob demanda; `--ref` do ramo em prova). Em 08/10/2026:
+  13/13. Se duas rodadas correrem juntas, a segunda encontra a chave da primeira e falha no passo 1 — uma por vez, ou
+  republicar o `homolog` entre elas.

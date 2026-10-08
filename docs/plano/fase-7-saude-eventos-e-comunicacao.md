@@ -1899,15 +1899,192 @@ Assistência Social Técnica, Contabilidade, Gastronomia, Segurança, Música/
 Sonoplastia, Transporte, Meio Ambiente, Capelania, Empreendedorismo, Cultura,
 História/Acervo, RP/Cerimonial, Libras, Beleza/Estética, Educação/Pedagogia.
 
-- [ ] Catálogo de Setores Técnicos + Termo de Adesão específico (Reg. Art. 49).
-- [ ] Prerrogativas de intervenção cautelar (ex: interditar templo com risco elétrico,
-      remover post oficial).
-- [ ] Verificação de antecedentes criminais/cíveis (Reg. Art. 133 §5º) na investidura
+- [x] Catálogo de Setores Técnicos + Termo de Adesão específico (Reg. Art. 49).
+      *(Os 20 setores do Art. 52 semeados com o título do próprio inciso, quem serve em cada
+      um (candidatura ou indicação → aprovação → Termo → ativo) e o Termo de Adesão do setor,
+      com versão, hash e as formas de prova da v7.5.)*
+- [x] Prerrogativas de intervenção cautelar (ex: interditar templo com risco elétrico,
+      remover post oficial). *(Art. 50: a interdição — Engenharia e Segurança — e o pedido de
+      remoção de postagem — Comunicação —, com aviso na hora, ratificação ou revogação pela
+      Diretoria Executiva e o ato registrado para sempre.)*
+- [x] Verificação de antecedentes criminais/cíveis (Reg. Art. 133 §5º) na investidura
       em cargo de liderança/confiança ou trabalho com menores — "Termo de Vistoria"
       com data, hash do documento apresentado, parecer e assinatura do responsável.
-      **Atenção:** este item era a única menção a antecedentes no roadmap inteiro e
-      está *incompleto diante da lei* — a Lei 14.811/2024 exige bem mais do que
-      verificar na investidura. Ver v7.7, que substitui e amplia este item.
+      *(O Termo de Vistoria do §5º, IV, "c": só o hash da certidão é guardado, nunca o
+      documento; acesso só da Diretoria Executiva e do Conselho de Ética. **A Lei 14.811/2024
+      pede bem mais** — validade de 180 dias, bloqueio de escala, treinamento: isso é a v7.7,
+      que usa este termo como base — ver "O que fica para a v7.7", abaixo.)*
+
+  Entrega: migração 142 (`sql/migrations/142_setores_tecnicos.sql`), `shared/setoresTecnicos.js` e
+  `shared/vistoriaAntecedentes.js` (a regra, **pura**), `shared/setoresTecnicosDb.js` e
+  `shared/vistoriaAntecedentesDb.js` (banco), as Functions novas `GestaoSetoresTecnicos`
+  (`/api/setores-tecnicos/...`, 9 leituras e 17 ações) e `GestaoVistoriasAntecedentes`
+  (`/api/vistorias-antecedentes/...`, 5 leituras e 3 ações), o módulo de tela
+  `app/modulos/setores-tecnicos.js` (a aba **Setores Técnicos**, a aba **Vistoria de
+  Antecedentes** e a sub-aba **Meu Painel → Setores Técnicos**), dez regras no motor de avisos
+  da vB.2, duas entradas no ROPA, o bloco de Meus Dados (LGPD) e a retenção do IP. Tocam o que já
+  existia: `NotificacoesAgendador` (retenção), `notificacaoDetectores`, `MeusDadosLGPD`,
+  `shared/ropa.js` e o seed da homologação.
+
+  **Os 20 setores (Art. 48 a 52).** São do âmbito **geral** ("vedada a sua fragmentação em
+  diretórios locais"): a tabela não tem congregação, e a congregação da pessoa é só de onde
+  ela vem. **Onde não há profissionais, não há setor** (Art. 48 §2º): um setor sem ninguém
+  servindo aparece como "sem profissionais", não como instalado; o catálogo diz **quantos**
+  servem, nunca quem. O nome de cada setor é o título que o Regimento dá ao inciso (um teste
+  confere a migração contra o texto do Regimento). Cada setor tem marcas: **exige registro no
+  conselho de classe** (Engenharia, Saúde, Assistência Social — "credenciados" — e
+  Contabilidade), **pode interditar** (Engenharia e Segurança Patrimonial: o Art. 50, I diz
+  "Engenharia e Segurança") e **pode pedir remoção de postagem** (Comunicação). A gestão cria,
+  edita, desativa e reativa setores (a configurabilidade total do projeto: se o estatuto
+  criar um 21º setor, ele entra sem mexer em código).
+
+  **O vínculo e o Termo (Art. 49 §2º).** `CANDIDATO → AGUARDANDO_TERMO → ATIVO → ENCERRADO`.
+  A pessoa se candidata (ou a administração a indica); ninguém aprova a própria candidatura;
+  só o vínculo **ATIVO**, com o Termo aceito, dá os poderes do setor. Serve quem é membro
+  ativo em comunhão, **maior de 18 anos e com data de nascimento no cadastro**; o setor que
+  exige registro só recebe quem informa a sigla do conselho e o número. O Termo é o texto
+  geral do voluntariado profissional (**sem honorários** — Art. 49 —, a **responsabilidade
+  técnica** do profissional que assina projeto ou laudo — Art. 49 §1º —, autonomia, ciência
+  dos antecedentes e da imagem, registro do aceite) mais as **cláusulas próprias do setor**:
+  os limites da consultoria no Jurídico (Art. 51), a interdição em Engenharia e Segurança
+  (Art. 50, I) e o pedido de remoção na Comunicação (Art. 50, II). O **hash cobre o texto
+  composto**, e o aceite guarda também a **lista das cláusulas próprias** que a pessoa viu: se
+  as marcas do catálogo mudarem depois, a conferência refaz o texto exato (um teste prova). As
+  provas são as da v7.5 menos a Lista de Ouro (que existe para regularizar membros antigos): o
+  **aceite digital** (IP, cabeçalhos, instante; sem IP público identificável é recusado), a
+  **ficha** e o **e-mail/WhatsApp**, estas duas registradas pela gestão com a referência de
+  onde o documento está (**em setor com poder, quem indicou ou aprovou a pessoa não registra a
+  ficha dela**: outra pessoa da administração confere). O aceite digital leva o **hash do texto
+  que a tela mostrou**: se o catálogo mudou entre abrir e aceitar, o servidor recusa e a pessoa
+  lê de novo — ninguém aceita um texto que não leu. A adesão **não se altera nem se apaga** (gatilho no banco), salvo a
+  anonimização do IP; o vínculo ativo e a prova nascem **na mesma transação** (nunca um sem o
+  outro: provado com oito aceites simultâneos). A pessoa **sai quando quiser** (Art. 133 §7º) e a
+  gestão pode encerrar (o desligamento exige motivo); depois de encerrado, voltar é um vínculo
+  novo — o histórico fica.
+
+  **O poder vem do Termo aceito, não só do catálogo.** Emite o ato quem serve ATIVO **e cujo
+  Termo aceito trouxe a cláusula do poder** (interdição ou remoção): ligar a marca de poder num
+  setor que já tem gente servindo não dá poder a ninguém — elas aceitaram um Termo sem aquela
+  cláusula — e o servidor recusa a edição enquanto houver vínculo vivo; o caminho é encerrar e
+  indicar de novo, com o Termo novo. **Tetos de contenção:** cada pessoa tem no máximo **5
+  vínculos vigentes** (candidato, aguardando ou ativo) e **3 candidaturas por dia**.
+
+  **Interdição cautelar e pedido de remoção (Art. 50).** Quem serve **ATIVO** num setor com o
+  poder emite o ato, em nome do setor e com o **registro profissional** que tinha na hora (o
+  Art. 49 §1º: quem assina assume a responsabilidade). A interdição vale **desde a emissão** e
+  segue até ser levantada; a Diretoria Executiva a **ratifica** ou **revoga** (revogar exige
+  motivo); quem emitiu a **levanta** quando o risco foi sanado (com a observação), e a
+  Diretoria também. **Ninguém ratifica nem revoga o próprio ato**, mesmo sendo da Diretoria; quem
+  saiu do setor perde o poder de levantar. O pedido de remoção de postagem leva o endereço
+  (só `http`/`https`), o motivo (erro grosseiro, direito autoral, doutrina/imagem) e,
+  se a rede é um canal cadastrado (v7.3), o canal: é **atendido** por quem cuida da rede, pelo líder
+  da congregação (liderança territorial com a permissão `pessoas`, sem restrição de
+  departamento), pela gestão ou pela Diretoria — nunca por quem pediu —, **cancelado** por
+  quem pediu ou **revogado** pela Diretoria. O identificador do canal (telefone, e-mail, link de
+  grupo) **só aparece** a quem administra aquele canal, à gestão e à Diretoria; os demais veem
+  a plataforma e o nome. **Contenção do poder:** no máximo **3 atos por
+  dia** e **5 em aberto** por pessoa (a emissão é serializada no banco, então 8 pedidos
+  simultâneos deixam passar exatamente 3), o mesmo local ou o mesmo link em aberto não se
+  repete, e todo texto digitado é recusado se tiver `<` ou `>`. **Avisos** (obrigatórios: o
+  destinatário não os desliga): a interdição vai **na hora** à Diretoria, à secretaria dos
+  setores, aos líderes da congregação (dirigente, pastor de área e assim até o geral — o líder de
+  departamento não) e ao próprio emitente (a confirmação de que o ato saiu em seu nome); o
+  aviso **não leva a justificativa técnica**; os avisos de ato saem em lotes e **não esperam a
+  entrega dos e-mails** (um provedor lento não segura o ato). A interdição sem ratificação é **cobrada todo
+  dia** (depois de `SETOR_INTERDICAO_LEMBRETE_DIAS`, padrão 1) e o pedido de remoção sem
+  atendimento também (`SETOR_REMOCAO_LEMBRETE_DIAS`), pelo mesmo motor da vB.2; se ninguém tem a
+  permissão de ratificar, o próprio ato avisa quem o emitiu e a cobrança cai para a gestão.
+
+  **O Termo de Vistoria (Art. 133 §5º).** A Diretoria (ou o Conselho de Ética) **solicita**
+  as certidões (a pessoa é avisada; no máximo dois avisos em 24 horas) e, ao conferir,
+  **lavra o termo**: a data da verificação, o **hash** de cada certidão (SHA-256 calculado **no
+  aparelho de quem confere**: o arquivo nunca sobe; o banco nem tem coluna onde guardá-lo), o
+  parecer, o destino do original (devolvido ou descartado — a Igreja não guarda cópia, IV, "b") e
+  o Diretor que assinou. Os motivos são os do §5º (investidura, mudança de função, suspeita
+  fundada, solicitação da Diretoria); o resultado é sem restrição, com restrição ou **recusa**
+  (que o Regimento trata como impedimento ou afastamento preventivo). **Ninguém assina a
+  própria vistoria**, o termo **não se altera nem se apaga** (gatilho; para corrigir, lavra-se
+  outro) e **lavrar pede a confirmação reforçada da vD.4** (chave de acesso ou código por
+  e-mail, até 10 minutos). Acesso **exclusivo**: a permissão `vistoria_antecedentes`, no nível
+  geral, em **sessão de liderança** (PIN e código nunca valem). A tela mostra **quem exerce
+  liderança e ainda não tem termo** (a checagem da investidura é obrigatória, II, "a") e um
+  aviso mensal cobra a Diretoria (só quem tem a permissão **no nível geral** o recebe). O aviso à
+  pessoa diz o que levar e que não fica cópia, mas **não diz por que** a Diretoria pergunta.
+  **Termo lavrado por engano** (matrícula errada) não se apaga: a Diretoria o **anula** por um
+  registro à parte, só de acréscimo, com o motivo, quem anulou e a confirmação reforçada (quem pode lavrar pode anular: a Diretoria e o Conselho de Ética); o termo
+  continua lá, marcado como anulado, e deixa de contar como a vistoria da pessoa (ela volta a
+  "quem falta"). Ninguém anula o termo feito sobre si. A tela mostra o **nome da pessoa** da
+  matrícula antes de lavrar, solicitar e anular, para não errar de pessoa, e avisa que o parecer
+  não deve citar quem denunciou nem terceiros (o termo é imutável). A auditoria guarda só quem
+  agiu, qual termo e a contagem de certidões — nunca o parecer, o resultado, o hash, a função nem o motivo.
+
+  **Permissões.** Três, novas: `setores_tecnicos` (catálogo, vínculos, Termo e a visão de todos
+  os atos), `setores_ratificacao` (a Diretoria decide) e `vistoria_antecedentes`. A migração
+  concede as três a **Presidente e Secretário Geral** (a Diretoria Executiva, como a 120 já fez com
+  `escalas`) e **alarga `Papeis.Permissoes` para 1.000 caracteres** — a coluna nasceu com 300 ou 500
+  e um UPDATE que estourasse derrubaria o deploy. O Conselho de Ética recebe `vistoria_antecedentes`
+  em Permissões. As três exigem **o nível geral numa mesma concessão e sessão de liderança**; a
+  aba só aparece para o nível geral (`ABAS_SO_DO_GERAL`). Sem permissão nenhuma, qualquer login faz o
+  que é da própria pessoa: candidatar-se, aceitar o Termo, sair e, se serve com o poder, emitir.
+
+  **A tela.** *Setores Técnicos* (gestão): os 20 setores (quantos servem, situação, marcas;
+  criar, editar, desativar), os vínculos (aprovar, recusar, registrar a ficha ou a mensagem, ver e
+  **imprimir** o texto do Termo, encerrar, **indicar alguém**) e os atos cautelares com os botões
+  que o próprio ato diz que a pessoa pode usar. *Vistoria de Antecedentes*: quem falta, os termos
+  lavrados, **lavrar** (com o botão de escolher o arquivo e o hash calculado na hora, ou o hash
+  colado), solicitar as certidões e **anular** um termo lavrado por engano. *Meu Painel → Setores Técnicos* (qualquer login, inclusive PIN):
+  a situação, a candidatura, o Termo para ler e aceitar, sair, os formulários de interdição e de
+  pedido de remoção (só para quem serve com o poder), os atos que emiti e, para o líder, os atos
+  da congregação dele. Tudo escapado na saída; a certidão é só arquivo escolhido no navegador.
+
+  **Auditoria e integridade.** `SETOR_CRIADO/EDITADO/DESATIVADO/REATIVADO`, `SETOR_CANDIDATURA`,
+  `SETOR_INDICACAO`, `SETOR_CANDIDATURA_APROVADA/RECUSADA`, `SETOR_VINCULO_ENCERRADO`,
+  `SETOR_ADESAO_REGISTRADA`, `INTERDICAO_EMITIDA`, `INTERDICAO_RATIFICADA`, `ATO_REVOGADO`,
+  `INTERDICAO_LEVANTADA`, `REMOCAO_POSTAGEM_SOLICITADA/ATENDIDA/CANCELADA`, `VISTORIA_SOLICITADA`,
+  `VISTORIA_LAVRADA`, `VISTORIA_ANULADA` e `IP_ANONIMIZADO`. O banco garante: um vínculo vigente por pessoa e setor; ATIVO só
+  com `AtivadoEm`; uma adesão por vínculo e cada forma só com a sua prova; adesão, ato e termo
+  imutáveis (gatilhos; a anulação do termo também, e é uma só por termo); ato encerrado definitivo; motivo e status coerentes com o tipo; revogação
+  com motivo; fechamento com quem, quando e observação; hash da certidão em minúsculas (compara em
+  binário); termo sem auto-assinatura e sem original na recusa.
+
+  **Retenção (LGPD).** O vínculo, o Termo (forma, data, versão, hash) e os atos ficam **sem prazo
+  final**: são prova. O **IP e os cabeçalhos** do aceite digital são anonimizados **5 anos depois
+  que o vínculo termina** (o mesmo `VOLUNTARIADO_IP_RETENCAO_DIAS`; rotina diária; o gatilho só
+  admite essa troca). O termo de vistoria é o arquivo interno que o Regimento manda guardar e só
+  tem hash. Dois blocos no ROPA e em **Meus Dados**: a pessoa recebe, a pedido, os vínculos, o
+  Termo (com o IP, que é dela), os atos que emitiu e os termos de vistoria feitos sobre ela
+  (com o parecer, os hashes e a data da anulação, se houve; sem o nome de quem assinou).
+
+  **Decisões que o Regimento não fecha (cada uma é uma linha, a CLI pode reverter).**
+  - **Segurança Patrimonial também interdita.** O Art. 50, I fala "Engenharia e Segurança"; as duas
+    marcas estão no catálogo (uma linha cada) e a CLI pode tirar a de Segurança.
+  - **A interdição vale na hora e não caduca sozinha.** O Regimento pede "ratificação" sem prazo; uma
+    interdição por risco de vida não pode perder o efeito porque a Diretoria demorou, então ela segue
+    até ser decidida ou levantada — e a Diretoria é **cobrada todo dia**.
+  - **O sistema não cancela culto nem escala sozinho.** A interdição é um ato formal com aviso e
+    ratificação; quem decide cancelar o culto do dia é o dirigente, avisado na hora. (A integração com a
+    agenda e as escalas, se a CLI quiser, é uma decisão à parte.)
+  - **Quem emite com PIN.** O voluntário profissional entra por matrícula e PIN de 4 números (a
+    decisão do responsável desde a v7.5), e é com ele que o ato é emitido. As contenções são o vínculo
+    com Termo aceito, os tetos, a ratificação pela Diretoria, o aviso ao próprio emitente e a trilha.
+  - **O líder que atende o pedido de remoção** é a liderança de nível territorial (congregação, área
+    ou geral) com a permissão `pessoas` e sem restrição de departamento, cujo escopo alcança a
+    congregação (a migração não tem o conceito de "dirigente"): o tesoureiro e o líder de
+    departamento não atendem.
+  - **O texto do Termo do setor é um rascunho aprovado pelo responsável sem parecer de advogado** (a
+    Igreja não tem). Trocar o texto cria outra versão e outro hash, sem invalidar quem aderiu.
+  - **A Diretoria Executiva = Presidente e Secretário Geral** nas permissões iniciais; o Conselho de
+    Ética recebe a de vistoria por Permissões.
+  - **Lavrar e anular o termo pedem a confirmação reforçada da vD.4**, como os quatro atos de peso daquela fase.
+  - **Termo errado se anula, não se apaga** (LGPD art. 18, III): o registro fica, marcado, e deixa de contar.
+  - **O poder de emitir só vale com a cláusula no Termo que a pessoa aceitou** (acima): a marca no catálogo sozinha não basta.
+  - **O setor só serve quem tem 18 anos ou mais** (a mesma leitura conservadora da v7.5).
+
+  **O que fica para a v7.7 (e por quê).** O Termo de Vistoria aqui feito é a base: a v7.7 liga a vistoria
+  à esteira de habilitação (v5.7), dá **validade de 180 dias**, bloqueia a escala e acrescenta o que a Lei
+  14.811/2024 exige de quem serve com menores. Também fica para lá o **dever de auto-denúncia** do voluntário
+  que passa a responder a inquérito ou processo (Art. 133 §5º, V): é do mesmo assunto, e o Termo de Adesão
+  já o informa à pessoa. Não fica nada da v7.6 em aberto.
 
 ## v7.7 — Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*
 
@@ -1954,6 +2131,11 @@ que mais fazia falta.)*
 - [ ] Adapter preparado (sem depender dele) para o futuro cadastro nacional de
       condenados por crimes contra menores — hoje ainda é projeto de lei, não
       obrigação vigente; o campo fica pronto sem criar dependência.
+- [ ] **Dever de auto-denúncia** do voluntário que passa a responder a inquérito ou
+      processo criminal (Regimento Art. 133 §5º, V — a omissão é falta grave): canal de
+      aviso à Diretoria e ligação com a vistoria. *(Veio da v7.6, que entregou o Termo de
+      Vistoria — `VistoriasAntecedentes`, com `ComVulneraveis` e `ultimaVistoria()` prontos
+      para esta versão usar.)*
 
 ## v7.8 — Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*
 

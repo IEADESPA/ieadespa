@@ -11,6 +11,7 @@ const { getPool } = require("../shared/db");
 const { avaliarRegras } = require("../shared/notificacaoMotor");
 const { exigirSegredoRotina } = require("../shared/cronAuth");
 const { anonimizarIpsVencidos } = require("../shared/voluntariadoDb");
+const setoresTecnicosDb = require("../shared/setoresTecnicosDb");
 
 module.exports = async function (context, req) {
   if (!exigirSegredoRotina(req, context)) return;
@@ -25,9 +26,17 @@ module.exports = async function (context, req) {
   } catch (e) {
     context.log.error("[VOLUNTARIADO] falha na retenção LGPD:", e.message);
   }
+  // v7.6 — o mesmo para o Termo de Adesão dos Setores Técnicos: o IP do aceite digital é anonimizado 5 anos depois que o vínculo termina. Fail-soft também.
+  let retencaoSetores = null;
+  try {
+    retencaoSetores = await setoresTecnicosDb.anonimizarIpsVencidos(pool);
+    context.log(`[SETORES] retenção LGPD: ${retencaoSetores.anonimizados} IP(s) de aceite anonimizado(s) (prazo ${retencaoSetores.retencaoDias} dias).`);
+  } catch (e) {
+    context.log.error("[SETORES] falha na retenção LGPD:", e.message);
+  }
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: true, criadas, emailsEnviados, retencaoVoluntariado },
+    body: { sucesso: true, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores },
   };
 };

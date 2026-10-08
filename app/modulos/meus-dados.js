@@ -275,6 +275,8 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "calendario") carregarOpcoesCalendarioAcao();
   if (aba === "canais") carregarOpcoesCanaisAcao();
   if (aba === "eventos") carregarOpcoesEventosAcao();
+  if (aba === "setores") carregarOpcoesSetoresAcao();
+  if (aba === "vistoria") carregarOpcoesVistoriaAcao();
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -312,7 +314,8 @@ const TITULOS_MODULOS = {
   escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários",
   assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)",
   conquistas: "Conquistas e Gamificação", trilhas: "Formação e Certificação",
-  psc: "Saúde Congregacional (PSC)", calendario: "Calendário Oficial", canais: "Canais e Comunicação", eventos: "Eventos e Congressos"
+  psc: "Saúde Congregacional (PSC)", calendario: "Calendário Oficial", canais: "Canais e Comunicação", eventos: "Eventos e Congressos",
+  setores: "Setores Técnicos", vistoria: "Vistoria de Antecedentes"
 };
 
 registrarAcoes({

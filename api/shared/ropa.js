@@ -132,6 +132,24 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Adesão ao Termo (forma, data, versão, hash) e cadastro do responsável legal de menor: sem prazo final — são a prova da Lei 9.608/98 e não se alteram nem se apagam (o cadastro do responsável só admite revogação). IP e cabeçalhos do aceite digital (da própria pessoa ou do responsável): anonimizados 5 anos (parâmetro VOLUNTARIADO_IP_RETENCAO_DIAS) depois do último serviço, por rotina diária (CF art. 7º, XXIX — prescrição trabalhista; LGPD art. 16). Escalas e rodízios: histórico que comprova o revezamento (PoliticasRetencao). O titular recebe tudo isto, a pedido, em Meus Dados — o responsável recebe também os aceites que deu."
   },
   {
+    chave: "SETORES_TECNICOS",
+    finalidade: "Organizar o voluntariado profissional dos 20 Setores Técnicos (vínculo, formação, registro no conselho de classe e Termo de Adesão com a prova do aceite) e registrar os atos de poder de polícia técnica — interdição cautelar de templo e pedido de remoção de postagem — com a ratificação da Diretoria (Regimento Art. 48 a 52; Lei 9.608/98) — v7.6",
+    titulares: "Membros que se candidatam ou são indicados a um Setor Técnico, quem os aprova e quem emite, ratifica ou atende os atos cautelares",
+    categoriasDados: ["Matrícula, setor, formação acadêmica ou técnica e registro no conselho de classe (sigla e número)", "Situação do vínculo (candidato, aguardando Termo, ativo, encerrado) e o motivo do encerramento", "Termo de Adesão: forma, data, versão, hash do texto, IP e cabeçalhos de origem do aceite digital, ou a referência do documento arquivado", "Atos cautelares: o que foi interditado ou a postagem apontada, a justificativa técnica, o registro profissional de quem emitiu, a decisão da Diretoria"],
+    baseLegal: "LGPD Art. 7º, V — execução do contrato de adesão (Lei 9.608/98, art. 2º); Art. 7º, II — obrigação legal de formalizar o termo; Art. 7º, IX — legítimo interesse em provar a gratuidade do serviço (Regimento Art. 49), a responsabilidade técnica (Art. 49 §1º) e a segurança dos templos (Art. 50). O IP do aceite é registro de conexão exigido pelo Regimento Art. 133 §8º, II, b.",
+    tabelasEnvolvidas: ["SetoresTecnicos", "SetoresTecnicosMembros", "SetoresTecnicosAdesoes", "SetoresTecnicosIntervencoes"],
+    retencao: "Vínculo, Termo (forma, data, versão, hash) e atos cautelares: sem prazo final — são prova e não se apagam (gatilhos no banco). IP e cabeçalhos do aceite digital: anonimizados 5 anos depois que o vínculo termina (parâmetro VOLUNTARIADO_IP_RETENCAO_DIAS; rotina diária; CF art. 7º, XXIX; LGPD art. 16). O titular recebe tudo isto, a pedido, em Meus Dados."
+  },
+  {
+    chave: "VISTORIA_ANTECEDENTES",
+    finalidade: "Lavrar o Termo de Vistoria quando a Diretoria confere certidão de antecedentes criminais e de distribuição cível de quem assume liderança ou confiança, muda para área sensível, é alvo de suspeita fundada ou é solicitado pela Diretoria — guardando só o hash da certidão, nunca o documento (Regimento Art. 133 §5º; Lei 14.811/2024) — v7.6",
+    titulares: "Membros e congregados vistoriados; a Diretoria Executiva e o Conselho de Ética, que conferem e assinam",
+    categoriasDados: ["Matrícula, motivo, função em jogo e se envolve vulneráveis", "Hash SHA-256 de cada certidão conferida, tipo e data de emissão (o documento NÃO é guardado)", "Parecer final e resultado (sem restrição, com restrição ou recusa) — dado sobre antecedentes, tratado com sigilo reforçado", "Quem assinou o termo e quando; o destino do original (devolvido ou descartado)"],
+    baseLegal: "LGPD Art. 7º, II — obrigação legal (ECA art. 59-A, incluído pela Lei 14.811/2024, para quem atua com crianças e adolescentes); Art. 7º, IX — legítimo interesse em proteger o rebanho (Regimento Art. 133 §5º). O consentimento prévio de todo voluntário consta do Termo de Adesão (§5º, III). Acesso restrito à Diretoria Executiva e ao Conselho de Ética (§5º, IV, a).",
+    tabelasEnvolvidas: ["VistoriasAntecedentes", "VistoriasDocumentos", "VistoriasAnulacoes"],
+    retencao: "O Termo de Vistoria é arquivo interno obrigatório da Igreja (Art. 133 §5º, IV, c) e não se altera nem se apaga (gatilho no banco); por conter só o hash, é dado mínimo. O Regimento manda arquivar e não fixa prazo: o termo fica sem prazo final de descarte; o termo lavrado por engano é ANULADO por registro à parte (não se apaga). O titular recebe o termo, a pedido, em Meus Dados."
+  },
+  {
     chave: "AUDITORIA",
     finalidade: "Trilha de integridade e compliance (quem fez o quê, quando)",
     titulares: "Quem usa o sistema (Liderança)",

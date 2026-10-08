@@ -67,7 +67,10 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
   cada montagem do PR: 1 área, 3 congregações "Fictícia - Alfa/Beta/Gama", 60 pessoas
   (matrículas 900001 a 900060), 20 dizimistas e lideranças com senha padrão do script
   (dirigente e tesoureiro de cada congregação = 1º e 2º adulto dela; pastor de área =
-  3º adulto da Alfa). Nunca copiamos dado de membro real; o script se recusa a rodar
+  3º adulto da Alfa, matrícula 900007; **secretário geral** — o único login de nível
+  geral, 4º adulto da Alfa, matrícula 900013, sem e-mail como o pastor — desde a v7.6,
+  porque as abas Setores Técnicos e Vistoria de Antecedentes só existem para o nível
+  geral). Nunca copiamos dado de membro real; o script se recusa a rodar
   fora de um banco com "homolog" no nome.
 
 ## O que a homologação prova — e o que não prova (vD.3, 07/10/2026)

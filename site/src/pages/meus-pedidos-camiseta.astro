@@ -64,6 +64,8 @@ const allPosts = visiblePosts(await getAllMensagens());
       valorPago: number;
       separado: boolean;
       separadoEm: string | null;
+      retiradaLiberada?: boolean;
+      avisoRetiradaEm?: string | null;
       retiradaLocal: string | null;
       mensagemRetirada: string | null;
       itens: Item[];
@@ -129,8 +131,9 @@ const allPosts = visiblePosts(await getAllMensagens());
             ? `lote ${p.loteNumero ?? ""} fechado${p.loteFechadoEm ? ` em ${dataCurta(p.loteFechadoEm)}` : ""}`
             : p.loteNumero ? `você está no lote ${p.loteNumero}, que ainda está recebendo pedidos` : "",
         },
-        { titulo: "Chegou e foi separado", feito: p.separado, detalhe: p.separado ? (p.separadoEm ? `em ${dataCurta(p.separadoEm)}` : "") : "avisaremos aqui quando chegar" },
-        { titulo: "Retirado", feito: retirado, detalhe: retirado ? "tudo retirado" : p.separado ? "pronto pra retirar" : "" },
+        // "chegou" vale para o grupo inteiro quando a equipe libera a retirada (retiradaLiberada), mesmo antes de separar
+        { titulo: "Chegou", feito: p.separado || p.retiradaLiberada === true, detalhe: p.separado ? `separado${p.separadoEm ? ` em ${dataCurta(p.separadoEm)}` : ""}` : p.retiradaLiberada ? "pode vir buscar — a equipe separa na hora" : "avisaremos aqui quando chegar" },
+        { titulo: "Retirado", feito: retirado, detalhe: retirado ? "tudo retirado" : (p.separado || p.retiradaLiberada) ? "pronto pra retirar" : "" },
       ];
       return `<ol class="camiseta-etapas">${etapas
         .map((e) => `<li class="${e.feito ? "is-feita" : ""}"><span class="camiseta-etapa-marca" aria-hidden="true">${e.feito ? "✓" : "•"}</span><span><strong>${escapeHtml(e.titulo)}</strong>${e.detalhe ? ` <span class="text-muted-foreground">— ${escapeHtml(e.detalhe)}</span>` : ""}</span></li>`)
@@ -138,8 +141,10 @@ const allPosts = visiblePosts(await getAllMensagens());
     }
 
     function pedidoCardHtml(p: Pedido): string {
-      const pronto = p.separado && !tudoRetirado(p);
-      const avisoRetirada = pronto ? `<p class="camiseta-pedido-pronto">✅ Pronto pra retirar!</p>` : "";
+      // "Chegou" vale para o grupo inteiro quando a equipe libera a retirada (mesmo antes de separar o pedido)
+      const chegou = p.separado || p.retiradaLiberada === true;
+      const pronto = chegou && !tudoRetirado(p);
+      const avisoRetirada = pronto ? `<p class="camiseta-pedido-pronto">✅ ${p.separado ? "Pronto pra retirar!" : "Chegou! Pode vir buscar."}</p>` : "";
       const ondeRetirar = p.retiradaLocal
         ? `<p class="camiseta-pedido-detalhe"><strong>Onde retirar:</strong> ${escapeHtml(p.retiradaLocal)}</p>`
         : "";

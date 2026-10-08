@@ -75,7 +75,7 @@ jobs:
         with:
           path: tools/csp-e2e/planos
           # v2 (07/10/2026, vD.6): o retrato ganhou a rolagem lateral — plano e transcritos antigos não comparam
-          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-v2
+          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-v3
 
       - name: Rodar o plano na versão atual e comparar com a base
         working-directory: tools/csp-e2e
@@ -133,7 +133,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: tools/csp-e2e/planos
-          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-celular-v2
+          key: csp-e2e-plano-${{ steps.base.outputs.sha }}-celular-v3
 
       - name: Rodar o plano do membro em 360×740 e comparar com a base
         working-directory: tools/csp-e2e

@@ -236,32 +236,33 @@ confiável e, a cada entrada, confirma com a digital, o rosto ou a senha do apar
 e a chave fica guardada no aparelho por tempo indeterminado. O **código por e-mail** fica como reserva (aparelho
 perdido, primeiro cadastro). Aplicativo autenticador (TOTP) **descartado** — item removido.
 
-- [ ] **Segundo fator no login de liderança** (quem tem registro em `Lideranca`): depois da senha certa, o sistema
+- [x] **Segundo fator no login de liderança** (quem tem registro em `Lideranca`): depois da senha certa, o sistema
       pede a chave de acesso do aparelho (`navigator.credentials.get`); quem ainda não tem chave recebe o código de 6
       dígitos no e-mail do cadastro (10 minutos, 5 tentativas), como o membro já recebe hoje. Quem não tem nem chave
       nem e-mail **não fica trancado**: entra com aviso e é levado a cadastrar. Membro comum (PIN) **não muda** — o PIN
       já é um fator próprio e o que ele alcança é só o dele.
-- [ ] **Cadastro e gestão da chave** em "Meus Dados → Segurança", ao lado de "Minhas Sessões" (vB.9): cadastrar este
+- [x] **Cadastro e gestão da chave** em "Meus Dados → Segurança", ao lado de "Minhas Sessões" (vB.9): cadastrar este
       aparelho (apelido, data, último uso), cadastrar mais de um (celular e notebook), remover. A chave pública fica
       no banco (`ChavesAcesso`); a privada nunca sai do aparelho.
-- [ ] **Confirmação reforçada ("step-up") em quatro atos**: aprovar saída acima do valor dos quatro olhos
+- [x] **Confirmação reforçada ("step-up") em quatro atos**: aprovar saída acima do valor dos quatro olhos
       (`ParametrosCompliance`), gerar remessa bancária, conceder/retirar permissão ou cargo
       (`GestaoLideranca`/`GestaoDelegacoes`) e executar exclusão LGPD — a chave (ou o código) é pedida de novo na hora
       se a última confirmação tiver mais de 10 minutos; o ato fica na auditoria com o fator usado.
-- [ ] Tela de administração (nível geral): quem tem chave cadastrada, quem não tem, último uso; remover as chaves de
+- [x] Tela de administração (nível geral): quem tem chave cadastrada, quem não tem, último uso; remover as chaves de
       quem perdeu o aparelho (dois olhos, mesmo princípio da migração 122). A reserva por e-mail garante que o
       Presidente e o Secretário Geral **não ficam trancados fora**.
-- [ ] Prova: testes de unidade do fluxo (bilhete do login, desafio de uso único, código de reserva) e prova em
+- [x] Prova: testes de unidade do fluxo (bilhete do login, desafio de uso único, código de reserva) e prova em
       navegador na homologação com um autenticador virtual (o navegador cria e usa uma chave de verdade, sem
-      aparelho físico), além da rodada de tela de sempre.
+      aparelho físico), além da rodada de tela de sempre. *Feito em 08/10/2026: 26 testes de unidade do fluxo
+      (`segundoFator.test.js`), prova em navegador no runner do GitHub com autenticador virtual — 13/13 na homologação
+      (fluxo `Sistema - prova em navegador`, roteiro `tools/vd4/prova-chave-acesso.js`) — e a migração 141 (o canal
+      `FATOR` nas tentativas de acesso), achada por essa prova.*
 
-**Ponto de parada — 07/10/2026, fim de tarde (pedido do responsável):** a vD.4 está **escrita, testada e publicada na
-homologação**, ainda **não** na produção. O código fica no ramo `vd4-chaves` (GitHub) e no `homolog` (PR #21); a
-migração 140 já rodou no banco de homologação; 4.605 testes verdes; a rodada local de tela mostrou só as telas novas. O
-que falta para ir à `main`: (1) a prova em navegador na homologação com autenticador virtual (roteiro pronto:
-`prova-chave-homolog.js` — entra sem chave, cadastra, sai, entra pela chave, confirmação reforçada, remove); (2) a rodada de
-tela da homologação com a nova linha de base (corrida em curso); (3) `git merge vd4-chaves` na `main`, push, conferir a
-produção e marcar os itens acima. Nada do que está na produção depende disso.
+**Feito — 08/10/2026:** a vD.4 foi para a produção pelo merge do ramo `vd4-chaves` na `main` depois da prova 13/13 na
+homologação (migrações 140 e 141 rodam no deploy). Para quem usa: a liderança que tiver chave cadastrada ou e-mail no
+cadastro passa a ter a segunda etapa no login; quem não tem nenhum dos dois entra com aviso e é levado a cadastrar a
+chave em "Meu Painel → Segurança". Dois roteiros ficam no repositório: a prova da chave e a prova de módulo, ambos
+rodando no Chrome do runner (`sistema-prova-navegador.yml`, sob demanda).
 
 *Esforço:* médio. *Risco:* baixo no código; a chave de acesso é a opção mais simples para quem usa (nada a decorar).
 *Custo:* zero (biblioteca MIT `@simplewebauthn`, servida de dentro do site; e-mail já contratado). *Depende de você:*
@@ -300,9 +301,11 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       a cópia de segurança numa cópia temporária e separada do banco, mede-se o tempo e apaga-se a cópia)*
       **Ensaio semestral de restauração** (banco + anexos) registrado na tabela da `HOMOLOGACAO.md`, com o tempo
       medido — e um lembrete pelo motor de notificações (vB.2) 30 dias antes de vencer, pra Secretaria Geral.
-- [ ] **Rotação de segredos com procedimento escrito** no `SECRETS.md`: `AUTH_SECRET` (derruba todas as sessões —
+- [x] **Rotação de segredos com procedimento escrito** no `SECRETS.md`: `AUTH_SECRET` (derruba todas as sessões —
       avisar antes), `CRON_SECRET`, `CHAVE_SITE_SISTEMA` e as chaves `age` do SOPS; periodicidade anual ou a qualquer
-      suspeita; checklist de 6 passos que qualquer sessão futura consegue seguir.
+      suspeita; checklist de 6 passos que qualquer sessão futura consegue seguir. *Feito em 08/10/2026: seção 10 do
+      `SECRETS.md`, um quadro por segredo (onde vive, o que a troca derruba, como conferir) e o checklist; a troca de
+      07/10 (token do Directus e chave do telefone) é o exemplo já executado.*
 - [x] Alerta quando a rotina diária (`rotinas-diarias.yml`) falhar — *feito em 07/10:* job `avisar-falha` manda
       e-mail (ACS) para `presidente@ieadespa.org` sempre que uma das três rotinas falhar, com o link da execução;
       antes o GitHub só avisava quem fez o último commit.
@@ -317,8 +320,10 @@ segredos (`AUTH_SECRET`, `CRON_SECRET`) nunca foram trocados.
       (a rota continua a mesma, o fluxo só voltou a rodar a cada 15 min); o sistema regrava o blob a cada mudança
       em calendário/canais/eventos (gancho na entrada única, `shared/agendaPublicaVersao.js`) e a rotina diária das
       7h regrava por garantia (`POST agenda-publica/atualizar-versao` com o segredo das rotinas).*
-- [ ] **Orçamento com alerta no Azure** (Cost Management budget): aviso por e-mail ao passar de 50 %, 80 % e 100 % de
-      US$ 150 no mês — o salto de outubro só foi visto porque alguém perguntou. Custo zero.
+- [x] **Orçamento com alerta no Azure** (Cost Management budget): aviso por e-mail ao passar de 50 %, 80 % e 100 % de
+      US$ 150 no mês — o salto de outubro só foi visto porque alguém perguntou. Custo zero. *Feito em 06/10/2026 e
+      conferido em 08/10: orçamento `ieadespa-teto-mensal`, R$ 650 por mês (o teto passou a US$ 120), avisos em 50 %,
+      80 % e 100 % (real e previsto) para o grupo de ação `ieadespa-alertas` → `presidente@ieadespa.org`.*
 
 *Esforço:* baixo. *Risco:* nenhum pro código. *Depende de você:* tudo que é no Azure roda em **modo manual** (o modo
 automático bloqueia mudança em produção, como em 03/10/2026) e a decisão de custo do banco acordado é sua.
@@ -347,7 +352,7 @@ do roteiro; o membro já usa hoje.
       um segundo trabalho (`celular`) com o perfil membro e plano próprio. Primeira rodada local: 615 ações
       descobertas no celular, 127 no modo rápido, 127 iguais à base, 0 divergência, 0 violação de CSP, rolagem lateral
       0 px em todas as telas do membro — o mesmo que a revisão manual da vD.6 tinha visto.*
-- [ ] O que é só da liderança (Financeiro, Disciplina, Catálogos) fica como está até a v10.3/v10.1.3 — não é o que o
+- [x] *(decisão registrada: nada a fazer agora)* O que é só da liderança (Financeiro, Disciplina, Catálogos) fica como está até a v10.3/v10.1.3 — não é o que o
       membro usa, e redesenhar tudo agora é a FASE 10.
 
 *Esforço:* baixo a médio. *Risco:* baixo. *Depende de você:* nada.
@@ -374,12 +379,14 @@ lugares, não migrar DNS. Mover a zona pra fora da Microsoft não ajuda em nada 
       do `<link rel="canonical">`, do sitemap, dos links do certificado (`site/src/lib/certificado.ts`) e da
       programação (`site/src/lib/programacao.ts`). Os três fluxos do GitHub que leem o site (`site-agenda-sync.yml`,
       `site-content-notifications.yml`, `site-event-notifications.yml`) trocam `SITE_URL` junto, no mesmo commit.
-- [ ] Directus: configurações e textos que citam `www` (links de e-mail, páginas de camiseta, QR já impresso)
+- [x] *Conferido em 08/10/2026: varredura das 36 coleções do Directus — nenhum texto cita `www.ieadespa.org.br`.*
+      Directus: configurações e textos que citam `www` (links de e-mail, páginas de camiseta, QR já impresso)
       revisados; QR e link já distribuídos continuam funcionando pelo redirecionamento — por isso o `www` **nunca**
       é removido do Azure nem do DNS.
 - [ ] Google Search Console: propriedade do raiz e mudança de endereço; verificar depois que `www` → raiz responde
       `301` e que o certificado TLS do raiz (gerido pelo Azure) está válido.
-- [ ] Sistema (`app.ieadespa.org.br`) **não muda**: é subdomínio próprio, com o seu Static Web App.
+- [x] Sistema (`app.ieadespa.org.br`) **não muda**: é subdomínio próprio, com o seu Static Web App. *(Confirmado em
+      08/10/2026: só o site trocou de endereço.)*
 
 *Esforço:* baixo (1 sessão). *Risco:* baixo — tudo reversível desmarcando o padrão. *Depende de você:* a janela
 (depois de 17/10) e a mudança no portal em modo manual. *Custo:* R$ 0.

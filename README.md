@@ -342,8 +342,10 @@ diz em que arquivo ela está e em que pé ela anda.
   alerta de queda, celular do membro), com custo escrito por versão pra decisão do responsável. Em 07/10/2026 a prova
   de tela roda no CI (vD.1, também em janela de celular pro membro), o `script.js` virou núcleo + 23 módulos (vD.2),
   a homologação migra, se semeia e varre as suas rotas sozinha (vD.3), a agenda chega ao site sem acordar o banco
-  (vD.5) e o menu do celular virou gaveta (vD.6). A Trava D-A foi fechada no mesmo dia; o que resta da FASE D
-  depende de decisão do responsável (segundo fator, raiz do domínio, segredos, ensaio de restauração).
+  (vD.5) e o menu do celular virou gaveta (vD.6). A Trava D-A foi fechada no mesmo dia. Em 08/10/2026: site na raiz
+  `ieadespa.org.br` (vD.7), segredos trocados e rotação escrita (vD.5/vD.8) e **chave de acesso** no login da liderança
+  (vD.4: passkey ou código por e-mail, confirmação reforçada nos quatro atos, provada com autenticador virtual no CI).
+  Resta o que depende do responsável (ensaio de restauração, Search Console, teste de carga) e a 🔒 Trava D-B.
 - **Planejadas:** FASES 8 a 12. Candidatos pra depois (implantação por congregação, pequenos grupos, Secretaria da
   Família) estão na [8ª rodada](docs/pesquisa/oitava-rodada-2026.md), sem versão, aguardando decisão.
 

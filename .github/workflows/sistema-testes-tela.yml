@@ -79,6 +79,10 @@ jobs:
           # v3 (08/10/2026): repesca das falhas do equipamento antes de gravar a linha de base
           key: csp-e2e-plano-${{ steps.base.outputs.sha }}-v3
 
+      - name: Descobrir o plano da base (processo próprio; com cache, só reaproveita)
+        working-directory: tools/csp-e2e
+        run: node rodar.js --original base/app-base/app --sem-plano --workers 4 --navegadores 2 --sem-especiais --saida resultados-descoberta
+
       - name: Rodar o plano na versão atual e comparar com a base
         working-directory: tools/csp-e2e
         run: |
@@ -144,6 +148,10 @@ jobs:
         with:
           path: tools/csp-e2e/planos
           key: csp-e2e-plano-${{ steps.base.outputs.sha }}-celular-v3
+
+      - name: Descobrir o plano da base em janela de celular (processo próprio; com cache, só reaproveita)
+        working-directory: tools/csp-e2e
+        run: node rodar.js --original base/app-base/app --perfis membro --celular --sem-plano --workers 4 --navegadores 2 --sem-especiais --saida resultados-descoberta
 
       - name: Rodar o plano do membro em 360×740 e comparar com a base
         working-directory: tools/csp-e2e

@@ -75,6 +75,8 @@ async function abrirNavegador(perfilDir, opcoes = {}) {
       // local: nada sai para a internet (fontes do Google falham na hora, igual nas duas versões); remoto: o front vem do endereço real
       ...(opcoes.remoto ? [] : ["--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1"]),
       "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--disable-component-update",
+      // Linux (runner do GitHub): /dev/shm é pequeno e o Chrome usa a memória partilhada para os renderizadores; sem a flag, páginas pesadas travam
+      ...(process.platform === "linux" ? ["--disable-dev-shm-usage", "--no-sandbox"] : []),
       "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
       "--disable-features=Translate,EdgeCollections,msEdgeShopping,AutofillServerCommunication",
       "--lang=pt-BR"

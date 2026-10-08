@@ -92,10 +92,13 @@ function compararAcao(ta, tb) {
 function compararRodadas(plano, A, B, opcoes = {}) {
   const linhas = [];
   let iguais = 0, diferentes = 0, soEstrutura = 0;
-  const divergentes = [];
+  const divergentes = [], inconclusivas = [];
   // controle que aparece sem (ou com a mais) manipulador numa tela: costuma se repetir em todas as telas onde ele aparece — vai num resumo só
   const controlesSoA = new Map(), controlesSoB = new Map();
   for (const acao of plano) {
+    // a ORIGINAL caiu por falha do equipamento (tempo do protocolo, página travada): não há com o que comparar — não é
+    // igual nem divergência, é inconclusiva (vai na lista de falhas). Só a NOVA cair continua sendo divergência: pode ser regressão.
+    if ((A[acao.id] || {}).falhaDoEquipamento) { inconclusivas.push(acao.id); continue; }
     const d = compararAcao(A[acao.id], B[acao.id]);
     if (d.length === 0) { iguais++; continue; }
     diferentes++;
@@ -128,7 +131,7 @@ function compararRodadas(plano, A, B, opcoes = {}) {
   for (const acao of plano) for (const j of ((B[acao.id] || {}).janelas || [])) if (j.temInline) violacoes.push(`B ${acao.id} ${(B[acao.id] || {}).alvo}: janela "${j.inicio.slice(0, 60)}" tem <script> ou on*= no HTML escrito (herda a CSP e não rodaria)`);
   const instaveis = plano.filter(a => ((A[a.id] || {}).instavel || 0) + ((B[a.id] || {}).instavel || 0) > 0).map(a => a.id);
   const falhas = plano.filter(a => (A[a.id] || {}).falhaDoEquipamento || (B[a.id] || {}).falhaDoEquipamento).map(a => `${a.id}: ${(A[a.id] || {}).falhaDoEquipamento || ""} | ${(B[a.id] || {}).falhaDoEquipamento || ""}`);
-  return { iguais, diferentes, soEstrutura, divergentes, linhas, violacoes, instaveis, falhas };
+  return { iguais, diferentes, soEstrutura, divergentes, linhas, violacoes, instaveis, falhas, inconclusivas };
 }
 
 module.exports = { compararAcao, compararRodadas, resumo };

@@ -43,6 +43,15 @@ async function rodarPlano(nav, pasta, csp, modelo, arqs, plano, workers, rotulo,
     feitos++;
     if (feitos % 200 === 0) console.log(`  [${agoraTxt()}] ${rotulo}: ${feitos}/${plano.length}`);
   });
+  // repesca: ação que caiu por falha do equipamento (tempo do protocolo estourado, página travada por carga do runner) roda
+  // de novo uma vez, com menos concorrência, antes de entrar no transcrito — senão a falha fica gravada na linha de base
+  // (cache por commit) e vira "divergência" fantasma em toda rodada seguinte (celular, 08/10/2026: 5 ações da EBD)
+  const caidas = res.map((r, k) => (r && r.falhaDoEquipamento ? k : -1)).filter(k => k >= 0);
+  if (caidas.length) {
+    console.log(`  ${rotulo}: ${caidas.length} ação(ões) com falha do equipamento — repescando uma vez: ${caidas.map(k => plano[k].id).join(", ")}`);
+    const outra = await emParalelo(caidas, Math.min(2, workers), (k, _j, w) => executarAcao(nav, srv, modelo, arqs, plano[k], Object.assign({ rotulo, ctx: ctxs[w] }, opcoesExec)));
+    caidas.forEach((k, j) => { const r2 = outra[j]; r2.repescada = 1; if (r2.falhaDoEquipamento) r2.falhaDoEquipamento = "(2×) " + r2.falhaDoEquipamento; res[k] = r2; });
+  }
   await fecharContextos(ctxs);
   await srv.fechar();
   const transcritos = {};
@@ -92,7 +101,7 @@ function estatisticas(plano, T) {
   // modelo de respostas e plano: sempre a partir da ORIGINAL; ficam guardados pelo hash dela
   // (mude VERSAO_PLANO quando o instrumento/cobertor mudar de um jeito que altere o transcrito; ou use --redescobrir)
   // v2 (07/10/2026, vD.6): o retrato ganhou a rolagem lateral e a largura da janela (instrumento.js) — transcritos antigos não comparam
-  const VERSAO_PLANO = "v2";
+  const VERSAO_PLANO = "v3";   // v3 (08/10/2026): repesca das falhas do equipamento antes de gravar a linha de base
   // --celular: janela de celular (360×740); plano e transcritos próprios (a tela descoberta é outra: gaveta do menu, tabelas roláveis)
   const celular = !!o.celular;
   const chave = sha(fs.readFileSync(path.join(original, "index.html")) + textoFront(original) + VERSAO_PLANO + perfis.join(",") + (celular ? "|celular" : ""));
@@ -193,7 +202,7 @@ function estatisticas(plano, T) {
     const TN = await rodarPlano(nav, nova, cspNova, modelo, arqs, plano, workers, "nova");
     fs.writeFileSync(path.join(saida, "nova-transcritos.json"), JSON.stringify({ transcritos: TN }));
     const r = compararRodadas(plano, T1, TN);
-    log(`\nRESULTADO ORIGINAL × NOVA: ${r.iguais} ações iguais, ${r.diferentes} com divergência (${r.soEstrutura} delas só porque um controle da tela mudou de manipulador — ver o resumo); violações de CSP na nova: ${r.violacoes.length}; falhas do equipamento: ${r.falhas.length}`);
+    log(`\nRESULTADO ORIGINAL × NOVA: ${r.iguais} ações iguais, ${r.diferentes} com divergência (${r.soEstrutura} delas só porque um controle da tela mudou de manipulador — ver o resumo); violações de CSP na nova: ${r.violacoes.length}; falhas do equipamento: ${r.falhas.length}; inconclusivas (a original falhou no equipamento): ${r.inconclusivas.length}`);
     if (r.violacoes.length) { log("VIOLAÇÕES DE CSP:"); log(r.violacoes.slice(0, 80).join("\n")); }
     if (r.diferentes) { log("DIVERGÊNCIAS (A = original, B = nova):"); log(r.linhas.join("\n")); }
     if (r.falhas.length) log("FALHAS DO EQUIPAMENTO:\n" + r.falhas.slice(0, 30).join("\n"));

@@ -363,11 +363,14 @@ está marcado como domínio padrão no Azure. Ou seja: o trabalho é inverter o 
 lugares, não migrar DNS. Mover a zona pra fora da Microsoft não ajuda em nada aqui e ainda cria risco de e-mail
 (os registros MX/SPF/DKIM do Microsoft 365 vivem nessa mesma zona).
 
-- [ ] *(adiado pelo responsável em 07/10/2026 para outra rodada; o que for automatizável será feito pelo modo automático
-      quando chegar a hora)* **Só depois de 17/10/2026** (fim dos pedidos de camiseta) e num horário de pouco acesso: no portal do Azure,
+- [x] *Feito em 08/10/2026 (o responsável antecipou: até segunda-feira o site pode mudar à vontade), em modo manual, pela
+      linha de comando e não pelo portal:* a API do Azure aceita `PUT …/staticSites/site-institucional/customDomains/<domínio>`
+      com `{"properties":{"isDefault":…}}` sem revalidar o domínio (PATCH não existe) — primeiro `www` com `isDefault:false`,
+      depois o raiz com `true`. Resultado imediato: raiz `200`, `www` → `301` para o raiz, certificado válido, DNS intocado.
+      **Só depois de 17/10/2026** (fim dos pedidos de camiseta) e num horário de pouco acesso: no portal do Azure,
       `Custom domains` do `site-institucional`, marcar `ieadespa.org.br` como **default** — o `www` passa a
       redirecionar `301` pro raiz, sem tocar DNS, sem indisponibilidade (modo manual).
-- [ ] No site: `siteUrl` em `site/src/config/site.ts` (hoje `https://www.ieadespa.org.br`) vira o raiz — é a origem
+- [x] *Feito em 08/10/2026 (PR #22, 17 ocorrências, mesclado logo depois da troca do padrão):* No site: `siteUrl` em `site/src/config/site.ts` (hoje `https://www.ieadespa.org.br`) vira o raiz — é a origem
       do `<link rel="canonical">`, do sitemap, dos links do certificado (`site/src/lib/certificado.ts`) e da
       programação (`site/src/lib/programacao.ts`). Os três fluxos do GitHub que leem o site (`site-agenda-sync.yml`,
       `site-content-notifications.yml`, `site-event-notifications.yml`) trocam `SITE_URL` junto, no mesmo commit.
@@ -463,6 +466,14 @@ segundo (≈ 150 por minuto; o pico de 06/10 foi 17 por minuto). Acima disso nin
 - [x] **Painel de camisetas:** o token do Directus vence em 15 min e o painel não renovava (é a "desconectar e
       entrar de novo" de 06/10) — feito na noite de 06/10 (`fetchComSessao` em `painelAuth.ts`: num 401
       renova pelo cookie e repete; aplicado nas três telas do painel de camisetas).
+- [x] **Aviso de retirada em massa (08/10/2026, pedido do responsável — PR #23):** com 1.083 pedidos (805 com e-mail,
+      278 sem) avisar um por um não dá. O painel do grupo ganhou "As camisetas chegaram — liberar a retirada para
+      todos" (a página "Meus pedidos" passa a dizer "Chegou! Pode vir buscar" para TODO pedido do grupo, pelo telefone,
+      mesmo antes de separar) e "Enviar aviso a todos" (e-mail de "pode retirar" a quem tem e-mail e ainda não foi
+      avisado, em lotes de 40, com progresso; `simular` só conta). Campos novos no Directus
+      (`camiseta_grupos.retirada_liberada`, `camiseta_pedidos.aviso_retirada_em`); rota `avisar-retirada-camisetas` só
+      com sessão do painel. Limite honesto: os 278 sem e-mail só veem pelo site (o telefone deles é só hash desde 06/10 —
+      o número não é recuperável): avisar também pelos canais da igreja.
 - [x] **Trocar dois segredos (depende de você — modo manual):** *feito em 07/10/2026 à tarde, em modo manual:
       contagem antes (1.083 pedidos: 7 com a chave velha do telefone, nenhum com telefone cifrado — a cifra é de hoje e o
       lote estava fechado); as 7 chaves foram zeradas (recalculam na próxima consulta), os valores novos entraram nos

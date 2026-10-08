@@ -1089,7 +1089,7 @@
             <p class="subtitle" style="margin:4px 0 10px;">Como líder, você vê aqui as interdições e os pedidos de remoção de postagem da congregação. Quando a postagem sair do ar,
               marque o pedido como atendido.</p>
             <div class="barra-lista">
-              <select id="stcCongAtosSel" title="Congregação" data-on-change="stcCarregarAtosCongregacaoAcao"></select>
+              <select id="stcCongAtosSel" title="Congregação" aria-label="Congregação" data-on-change="stcCarregarAtosCongregacaoAcao"></select>
               <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcCarregarAtosCongregacaoAcao">🔄 Atualizar</button>
             </div>
             <p id="stcAtosCongResultado" class="subtitle" role="status"></p>
@@ -4642,8 +4642,8 @@
           <p class="subtitle" style="margin:4px 0 10px;">Cada pessoa passa por quatro passos: <strong>candidatura</strong>, <strong>aprovação</strong>, <strong>Termo de Adesão aceito</strong> e
             <strong>servindo</strong>. Ninguém aprova a própria candidatura. O vínculo só dá os poderes do setor depois do Termo.</p>
           <div class="barra-lista">
-            <select id="stcFiltroVincSetor" title="Setor" data-on-change="stcCarregarVinculosAcao"><option value="">Todos os setores</option></select>
-            <select id="stcFiltroVincStatus" title="Situação" data-on-change="stcCarregarVinculosAcao">
+            <select id="stcFiltroVincSetor" title="Setor" aria-label="Filtrar por setor" data-on-change="stcCarregarVinculosAcao"><option value="">Todos os setores</option></select>
+            <select id="stcFiltroVincStatus" title="Situação" aria-label="Filtrar por situação do vínculo" data-on-change="stcCarregarVinculosAcao">
               <option value="">Todas as situações</option>
               <option value="CANDIDATO">Candidatura esperando decisão</option>
               <option value="AGUARDANDO_TERMO">Esperando o aceite do Termo</option>
@@ -4700,11 +4700,11 @@
             Executiva a ratifica ou a revoga (Art. 50, I). O <strong>pedido de remoção</strong> de postagem (Comunicação) pede que a rede oficial retire o conteúdo (Art. 50, II).
             Quem emitiu o ato não o ratifica nem o revoga.</p>
           <div class="barra-lista">
-            <select id="stcFiltroAtoSituacao" title="Quais atos" data-on-change="stcCarregarAtosAcao">
+            <select id="stcFiltroAtoSituacao" title="Quais atos" aria-label="Quais atos mostrar" data-on-change="stcCarregarAtosAcao">
               <option value="abertos" selected>Em aberto (o que ainda vale ou pede providência)</option>
               <option value="todos">Todos (inclusive os encerrados)</option>
             </select>
-            <select id="stcFiltroAtoTipo" title="Tipo de ato" data-on-change="stcCarregarAtosAcao">
+            <select id="stcFiltroAtoTipo" title="Tipo de ato" aria-label="Tipo de ato" data-on-change="stcCarregarAtosAcao">
               <option value="">Interdições e pedidos de remoção</option>
               <option value="INTERDICAO">Só interdições</option>
               <option value="REMOCAO_POSTAGEM">Só pedidos de remoção</option>
@@ -4752,12 +4752,14 @@
         <!-- b) TERMOS LAVRADOS -->
         <div id="stcVisSecaoLista" class="cal-secao" style="display:none;">
           <h4>📚 Termos de Vistoria lavrados</h4>
-          <p class="subtitle" style="margin:4px 0 10px;">Sem filtro, aparecem os mais recentes de todos. Para ver os de uma pessoa, digite a matrícula.</p>
+          <p class="subtitle" style="margin:4px 0 10px;">Sem filtro, aparecem os mais recentes de todos. Para ver os de uma pessoa, digite a matrícula. Um termo lavrado por engano (por exemplo, na matrícula errada) se
+            <strong>anula</strong> pelo botão do próprio termo: <strong>anular não apaga</strong>; o termo continua registrado e só deixa de contar como a vistoria da pessoa.</p>
           <div class="barra-lista">
-            <input type="number" id="stcVisFiltroMatricula" min="1" placeholder="Matrícula (opcional)" />
+            <input type="number" id="stcVisFiltroMatricula" min="1" placeholder="Matrícula (opcional)" aria-label="Matrícula (opcional)" />
             <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcVisCarregarListaAcao">🔍 Buscar</button>
           </div>
           <p id="stcVisResultadoLista" class="subtitle" role="status"></p>
+          <p id="stcVisAnularMsg" class="subtitle" role="status"></p>
           <div id="stcVisListaTermos"></div>
         </div>
 
@@ -4770,7 +4772,8 @@
             <div class="cal-form-grade">
               <div class="input-group">
                 <label for="stcLavMatricula">Matrícula de quem foi vistoriado</label>
-                <input type="number" id="stcLavMatricula" min="1" placeholder="Matrícula" />
+                <input type="number" id="stcLavMatricula" min="1" placeholder="Matrícula" data-on-change="stcPessoaMudouAcao" data-args-change='["lav"]' />
+                <p id="stcLavPessoa" class="psc-legenda" role="status"></p>
               </div>
               <div class="input-group">
                 <label for="stcLavMotivo">Motivo da vistoria</label>
@@ -4793,6 +4796,7 @@
             <div class="input-group">
               <label for="stcLavParecer">Parecer final (10 a 1000 caracteres)</label>
               <textarea id="stcLavParecer" rows="3" maxlength="1000" style="width:100%;" placeholder="Só a conclusão. Não copie dados da certidão."></textarea>
+              <p class="psc-legenda">Não cite quem denunciou nem dados de terceiros no parecer: o termo é guardado como registro documental e não se altera depois.</p>
             </div>
             <p id="stcLavAvisoRecusa" class="psc-aviso" style="display:none;">Quem recusou apresentar as certidões não tem documento a registrar: o Termo guarda só a recusa e o parecer. A recusa implica impedimento ou afastamento preventivo da função (Art. 133 §5º, I, "a"), que a Diretoria aplica.</p>
             <div id="stcLavBlocoDestino">
@@ -4826,7 +4830,8 @@
             <div class="cal-form-grade">
               <div class="input-group">
                 <label for="stcSolMatricula">Matrícula da pessoa</label>
-                <input type="number" id="stcSolMatricula" min="1" placeholder="Matrícula" />
+                <input type="number" id="stcSolMatricula" min="1" placeholder="Matrícula" data-on-change="stcPessoaMudouAcao" data-args-change='["sol"]' />
+                <p id="stcSolPessoa" class="psc-legenda" role="status"></p>
               </div>
               <div class="input-group">
                 <label for="stcSolMotivo">Motivo do pedido</label>

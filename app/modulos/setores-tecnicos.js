@@ -25,7 +25,7 @@ const STC_LIMITE_ARQUIVO = 50 * 1024 * 1024;   // uma certidão não passa disso
 const STC_CLASSE_SELO = {
   CANDIDATO: "cal-st-proposto", AGUARDANDO_TERMO: "cal-st-proposto", ATIVO: "cal-st-homologado", ENCERRADO: "cal-st-cancelado",
   EMITIDA: "cal-st-proposto", RATIFICADA: "cal-st-indeferido", REVOGADA: "cal-st-cancelado", LEVANTADA: "cal-st-homologado", ATENDIDA: "cal-st-homologado", CANCELADA: "cal-st-cancelado",
-  SEM_RESTRICAO: "cal-st-homologado", COM_RESTRICAO: "cal-st-proposto", RECUSA: "cal-st-indeferido",
+  SEM_RESTRICAO: "cal-st-homologado", COM_RESTRICAO: "cal-st-proposto", RECUSA: "cal-st-indeferido", ANULADA: "cal-st-indeferido",
   INSTALADO: "cal-st-homologado", SEM_PROFISSIONAIS: "cal-st-cancelado"
 };
 // o que cada botão de um ato faz: título e dica do formulário, rota, tamanho mínimo da observação (as mesmas regras do servidor: revogar, levantar e cancelar exigem motivo)
@@ -39,7 +39,7 @@ const STC_ACOES_ATO = {
 // onde cada lista de atos (G = aba de gestão, M = Meu Painel, C = atos da minha congregação) mostra o resultado de uma ação
 const STC_MSG_ATOS = { G: "stcAtosAcaoMsg", M: "stcMeuAcaoMsg", C: "stcAtosCongMsg" };
 
-let stcDonoDaTela = null;            // matrícula de quem a tela foi montada (não vaza dado ao trocar de login)
+let stcDonoDaTela = null;            // matrícula + tipo de sessão de quem a tela foi montada (não vaza dado ao trocar de login)
 let stcCatalogos = null;             // GET setores-tecnicos/catalogos (motivos, formas do Termo, papéis de quem está logado...)
 let stcVisCatalogos = null;          // GET vistorias-antecedentes/catalogos
 let stcSecaoAtual = "setores";
@@ -55,6 +55,10 @@ let stcPendentes = [];
 let stcDocLinhas = [];               // números das linhas de certidão do formulário de lavratura, na ordem em que aparecem
 let stcDocSeq = 0;                   // contador das linhas de certidão (nunca repete, mesmo depois de remover uma)
 let stcHashSeq = {};                 // linha -> pedido de cálculo em andamento (resposta velha não vence a nova)
+let stcVistorias = new Map();        // vistoriaId -> o termo como a tela o mostra (nome e data para a confirmação de anular)
+let stcPessoas = new Map();          // matrícula -> { achada:true, membroId, nome, congregacaoNome } (GET vistorias-antecedentes/pessoa; só o que deu certo)
+let stcPessoasEmVoo = new Map();     // matrícula -> consulta em andamento (duas telas pedindo a mesma matrícula esperam a mesma resposta)
+let stcSeqPessoa = { lav: 0, sol: 0 };   // por formulário (lavrar, solicitar): a resposta atrasada de uma matrícula antiga não vence a nova
 let stcSeqVinculos = 0, stcSeqAtos = 0, stcSeqSetores = 0, stcSeqMeu = 0, stcSeqCong = 0, stcSeqPendentes = 0, stcSeqLista = 0;
 const stcEmCurso = new Set();        // trava duplo clique nas ações que gravam
 
@@ -78,7 +82,8 @@ function stcContexto(bruto) { return bruto === "M" ? "M" : bruto === "C" ? "C" :
 function stcMsgErro(data) { return (data && data.mensagem) || "Não foi possível concluir a operação agora."; }
 function stcTemMarca(texto) { return /[<>]/.test(texto); }
 function stcClasse(codigo) { return Object.prototype.hasOwnProperty.call(STC_CLASSE_SELO, codigo) ? STC_CLASSE_SELO[codigo] : "cal-st-cancelado"; }
-function stcSelo(codigo, rotulo) { return `<span class="cal-selo ${stcClasse(codigo)}">${escaparHtmlEbd(rotulo)}</span>`; }
+// stc-selo: o rótulo vem do servidor e pode ser longo (a recusa da vistoria tem 82 caracteres); no celular ele quebra a linha em vez de estourar o cartão
+function stcSelo(codigo, rotulo) { return `<span class="cal-selo stc-selo ${stcClasse(codigo)}">${escaparHtmlEbd(rotulo)}</span>`; }
 function stcCampo(rotulo, html) { return html ? `<div><dt>${rotulo}</dt><dd>${html}</dd></div>` : ""; }
 function stcOpcoes(lista, valor, rotulo, placeholder) {
   return (placeholder != null ? `<option value="">${escaparHtmlEbd(placeholder)}</option>` : "")
@@ -102,7 +107,7 @@ function stcEscreverAviso(id, texto, destaque) {
 }
 async function stcProtegerBotao(botao, tarefa, chave) {
   if (chave) {
-    if (stcEmCurso.has(chave)) return undefined;
+    if (stcEmCurso.has(chave)) { mostrarToast("Aguarde: o pedido anterior ainda está sendo processado.", "erro"); return undefined; }
     stcEmCurso.add(chave);
   }
   if (botao) botao.disabled = true;
@@ -123,10 +128,13 @@ async function stcRequisitar(rota, caminho, opcoes) {
     // 428: a confirmação reforçada (chave de acesso ou código por e-mail) não foi concluída; o fetchProtegido já tentou uma vez
     if (res.status === 428 || corpo.precisaFator) corpo.mensagem = "Este ato precisa de uma confirmação recente de quem você é (chave de acesso ou código por e-mail). Tente de novo e confirme quando a tela pedir.";
     corpo.httpStatus = res.status;
+    // 403 e erro de servidor (5xx) o fetchProtegido já avisou com um toast; repetir o toast deixaria dois iguais na tela
+    if (res.status === 403 || res.status >= 500) corpo.jaAvisado = true;
     return corpo;
   } catch (e) {
-    // falha de rede e sessão expirada já foram avisadas por fetchProtegido; quem chama só olha "sucesso"
-    return { sucesso: false, falhaDeRede: true, mensagem: "Não foi possível falar com o servidor agora." };
+    // falha de rede e sessão expirada já foram avisadas por fetchProtegido (toast): aqui só vai o texto para a tela, sem outro toast
+    if (e && e.message === "Sessão expirada") return { sucesso: false, jaAvisado: true, sessaoExpirada: true, mensagem: "Sua sessão expirou. Entre novamente." };
+    return { sucesso: false, jaAvisado: true, falhaDeRede: true, mensagem: "Não foi possível falar com o servidor agora. Verifique a internet e tente de novo." };
   }
 }
 function stcObter(caminho) { return stcRequisitar(STC_ROTA, caminho); }
@@ -137,11 +145,10 @@ function stcObterVis(caminho) { return stcRequisitar(STC_ROTA_VISTORIA, caminho)
 function stcPostarVis(caminho, corpo) {
   return stcRequisitar(STC_ROTA_VISTORIA, caminho, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
 }
-function stcAvisarErro(data) { if (!data.falhaDeRede) mostrarToast(stcMsgErro(data), "erro"); }
-// Toast + texto fixo na tela (textContent: nada de HTML aqui).
+// Toast + texto fixo na tela (textContent: nada de HTML aqui). Quando o fetchProtegido já avisou (rede, sessão, 403, 5xx), só o texto vai para a tela.
 function stcMostrarResultado(data, idMensagem, destaque) {
   const texto = stcMsgErro(data);
-  mostrarToast(texto, data && data.sucesso === false ? "erro" : "sucesso");
+  if (!(data && data.jaAvisado)) mostrarToast(texto, data && data.sucesso === false ? "erro" : "sucesso");
   stcEscreverAviso(idMensagem, texto, destaque);
 }
 
@@ -193,25 +200,35 @@ async function stcGarantirCongregacoes() {
 const STC_IDS_LISTAS = ["stcListaSetores", "stcListaVinculos", "stcTermoVista", "stcListaAtos", "stcAvisoVigor", "stcMeuCondicao", "stcMeusVinculos", "stcMeusAtos", "stcAtosCongLista",
   "stcVisListaPendentes", "stcVisListaTermos", "stcLavDocs", "stcLavTermoLavrado"];
 const STC_IDS_MENSAGENS = ["stcResultadoSetores", "stcResultadoVinculos", "stcResultadoAtos", "stcAtosAcaoMsg", "stcSetorFormMsg", "stcIndMsg", "stcMeuResultado", "stcMeuAcaoMsg", "stcCandDica",
-  "stcIntMsg", "stcRemMsg", "stcAtosCongMsg", "stcAtosCongResultado", "stcVisResultadoPendentes", "stcVisResultadoLista", "stcLavMsg", "stcSolMsg"];
+  "stcIntMsg", "stcRemMsg", "stcAtosCongMsg", "stcAtosCongResultado", "stcVisResultadoPendentes", "stcVisResultadoLista", "stcLavMsg", "stcSolMsg", "stcLavPessoa", "stcSolPessoa", "stcVisAnularMsg"];
 const STC_IDS_CAMPOS = ["stcSetorNome", "stcSetorInciso", "stcSetorOrdem", "stcSetorCompetencia", "stcSetorProfissoes", "stcSetorConselho", "stcIndMatricula", "stcIndFormacao", "stcIndSigla", "stcIndNumero",
   "stcCandFormacao", "stcCandSigla", "stcCandNumero", "stcIntObjeto", "stcIntDescricao", "stcIntReferencia", "stcRemObjeto", "stcRemReferencia", "stcRemDescricao",
   "stcVisFiltroMatricula", "stcLavMatricula", "stcLavFuncao", "stcLavData", "stcLavParecer", "stcSolMatricula", "stcSolFuncao"];
 const STC_IDS_MARCAS = ["stcSetorExigeRegistro", "stcSetorPodeInterditar", "stcSetorPodeRemocao", "stcLavVulneraveis"];
 const STC_IDS_BLOCOS = ["stcBlocoCandidatura", "stcBlocoInterdicao", "stcBlocoRemocao", "stcBlocoMeusAtos", "stcBlocoCongregacao"];
+// selects que guardam a escolha da pessoa anterior: são esvaziados e voltam a ser preenchidos na próxima abertura da tela
+const STC_IDS_SELECTS = ["stcFiltroVincSetor", "stcIndSetor", "stcLavMotivo", "stcLavResultado", "stcLavDestino", "stcSolMotivo", "stcCandSetor", "stcIntSetor", "stcIntCong", "stcIntMotivo",
+  "stcRemSetor", "stcRemCong", "stcRemCanal", "stcRemMotivo", "stcCongAtosSel"];
 function stcLimparTela() {
   stcCatalogos = null; stcVisCatalogos = null; stcSecaoAtual = "setores"; stcVisSecaoAtual = "pendentes"; stcSetores = []; stcSetorEditando = 0; stcVinculos = [];
-  stcAtos = { G: [], M: [], C: [] }; stcPainel = null; stcTermoAberto = null; stcPendentes = []; stcDocLinhas = []; stcHashSeq = {};
+  stcAtos = { G: [], M: [], C: [] }; stcPainel = null; stcTermoAberto = null; stcPendentes = []; stcDocLinhas = []; stcHashSeq = {}; stcPessoas = new Map(); stcPessoasEmVoo = new Map(); stcVistorias = new Map();
   // pedidos que ainda estão a caminho trazem dado do login anterior: a resposta velha é descartada
-  stcSeqVinculos++; stcSeqAtos++; stcSeqSetores++; stcSeqMeu++; stcSeqCong++; stcSeqPendentes++; stcSeqLista++;
+  stcSeqVinculos++; stcSeqAtos++; stcSeqSetores++; stcSeqMeu++; stcSeqCong++; stcSeqPendentes++; stcSeqLista++; stcSeqPessoa.lav++; stcSeqPessoa.sol++;
   STC_IDS_LISTAS.forEach(id => { const el = stcEl(id); if (el) el.innerHTML = ""; });
-  STC_IDS_MENSAGENS.forEach(id => { const el = stcEl(id); if (el) el.textContent = ""; });
+  // a classe volta ao normal: uma mensagem em destaque (psc-aviso) esvaziada apareceria como uma caixa amarela vazia
+  STC_IDS_MENSAGENS.forEach(id => { const el = stcEl(id); if (el) { el.textContent = ""; el.className = String(el.className || "").replace(/\bpsc-aviso\b/g, "").replace(/\bpsc-alerta\b/g, "").replace(/\s+/g, " ").trim(); } });
   STC_IDS_CAMPOS.forEach(id => { const el = stcEl(id); if (el) el.value = ""; });
   STC_IDS_MARCAS.forEach(id => { const el = stcEl(id); if (el) el.checked = false; });
+  STC_IDS_SELECTS.forEach(id => { const el = stcEl(id); if (el) el.innerHTML = ""; });
   STC_IDS_BLOCOS.forEach(id => { const el = stcEl(id); if (el) el.style.display = "none"; });
+  stcAtualizarTituloSetorForm();   // sem isto o botão ficava "Salvar as alterações" com o formulário já sem setor em edição (salvar criaria um setor novo)
+  stcLavResultadoMudouAcao();
 }
+// De quem é a tela: a matrícula E o tipo de sessão (senha de liderança × PIN). O mesmo líder que entra por PIN e depois por senha tem outros papéis (o catálogo traz
+// `papeis` por sessão), então a tela é refeita.
+function stcChaveDoDono() { return `${authMatricula}|${sessaoDeLiderancaNaTela() ? "senha" : "pin"}`; }
 function stcVerificarDono() {
-  if (stcDonoDaTela !== authMatricula) { stcLimparTela(); stcDonoDaTela = authMatricula; }
+  if (stcDonoDaTela !== stcChaveDoDono()) { stcLimparTela(); stcDonoDaTela = stcChaveDoDono(); }
 }
 
 // ---- peças de tela que mais de uma seção usa ----
@@ -306,9 +323,9 @@ function stcRenderSetor(s) {
   const id = Number(s.setorId);
   const serve = Number(s.profissionais), analise = Number(s.emAnalise);
   const marcas = [
-    s.exigeRegistro ? `<span class="cal-selo cal-st-proposto" title="Só aceita quem tem registro no conselho de classe">🪪 Exige registro${s.conselhoClasse ? ` (${escaparHtmlEbd(s.conselhoClasse)})` : ""}</span>` : "",
-    s.podeInterditar ? `<span class="cal-selo cal-st-indeferido" title="Pode interditar templo ou estrutura em risco (Regimento Art. 50, I)">⛔ Pode interditar</span>` : "",
-    s.podeSolicitarRemocao ? `<span class="cal-selo cal-st-indeferido" title="Pode pedir a remoção de postagem nas redes oficiais (Regimento Art. 50, II)">📵 Pede remoção de postagem</span>` : ""
+    s.exigeRegistro ? `<span class="cal-selo stc-selo cal-st-proposto" title="Só aceita quem tem registro no conselho de classe">🪪 Exige registro${s.conselhoClasse ? ` (${escaparHtmlEbd(s.conselhoClasse)})` : ""}</span>` : "",
+    s.podeInterditar ? `<span class="cal-selo stc-selo cal-st-indeferido" title="Pode interditar templo ou estrutura em risco (Regimento Art. 50, I)">⛔ Pode interditar</span>` : "",
+    s.podeSolicitarRemocao ? `<span class="cal-selo stc-selo cal-st-indeferido" title="Pode pedir a remoção de postagem nas redes oficiais (Regimento Art. 50, II)">📵 Pede remoção de postagem</span>` : ""
   ].filter(Boolean).join(" ");
   const situacao = s.instalado ? stcSelo("INSTALADO", "✅ Instalado") : stcSelo("SEM_PROFISSIONAIS", "⚪ Sem profissionais");
   const botoes = stcPodeGestao() ? `<div class="psc-acoes">
@@ -394,7 +411,7 @@ async function stcAlternarSetorAtivoAcao(setorId, ativo) {
     if (data.sucesso === false) return;
     await stcCarregarSetoresAcao();
     stcEscreverAviso("stcResultadoSetores", stcMsgErro(data), false);
-  }, "setor-ativo");
+  }, `setor-ativo${id}`);   // a trava é por setor: um pedido em andamento num setor não engole o clique em outro
 }
 
 // -- b) vínculos --
@@ -426,9 +443,11 @@ async function stcCarregarVinculosAcao() {
 function stcRenderVinculo(v) {
   const id = Number(v.vinculoId);
   const termoPronto = v.status === "AGUARDANDO_TERMO" || v.status === "ATIVO";
+  const propria = String(v.membroId) === String(authMatricula);   // ninguém decide a própria candidatura (o servidor também recusa)
   const botoes = [
-    v.status === "CANDIDATO" ? `<button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcAprovarAcao" data-args-click="${argsAttr(id, ARG.elemento)}">✅ Aprovar</button>
+    v.status === "CANDIDATO" && !propria ? `<button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcAprovarAcao" data-args-click="${argsAttr(id, ARG.elemento)}">✅ Aprovar</button>
       <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcAbrirFormVinculoAcao" data-args-click="${argsAttr(id, "recusar")}">Recusar…</button>` : "",
+    v.status === "CANDIDATO" && propria ? `<span class="psc-legenda">Esta é a sua própria candidatura: outra pessoa da administração precisa decidir.</span>` : "",
     v.status === "AGUARDANDO_TERMO" ? `<button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcAbrirFormVinculoAcao" data-args-click="${argsAttr(id, "termo")}">📝 Registrar o Termo</button>` : "",
     termoPronto ? `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcVerTermoAcao" data-args-click="${argsAttr(id)}">📄 Ver / imprimir o texto do Termo</button>
       <button type="button" class="btn-link btn-link-perigo" data-on-click="stcAbrirFormVinculoAcao" data-args-click="${argsAttr(id, "encerrar")}">Encerrar…</button>` : ""
@@ -470,12 +489,19 @@ function stcFecharFormVinculoAcao(vinculoId) {
   if (area) area.innerHTML = "";
 }
 // O formulário pequeno que abre embaixo do cartão: recusar (observação), registrar o Termo (ficha ou mensagem) ou encerrar (tipo do motivo e observação)
-function stcAbrirFormVinculoAcao(vinculoId, tipo) {
+async function stcAbrirFormVinculoAcao(vinculoId, tipo) {
   const id = Number(vinculoId);
-  const area = stcEl(`stcVincForm${id}`);
+  if (!stcEl(`stcVincForm${id}`) || !stcVinculos.some(x => Number(x.vinculoId) === id)) return;
+  // se o catálogo falhou na abertura da aba, as listas do formulário (tipo do motivo, forma do Termo, canal) viriam vazias: tenta de novo agora
+  if (!stcCatalogos && tipo !== "recusar") await stcGarantirCatalogos();
+  const area = stcEl(`stcVincForm${id}`);   // depois da espera: a lista pode ter sido refeita
   const v = stcVinculos.find(x => Number(x.vinculoId) === id);
   if (!area || !v) return;
   const cat = stcCatalogosOuVazio();
+  if (tipo !== "recusar" && !stcCatalogos) {
+    area.innerHTML = `<p class="subtitle">Não foi possível carregar as opções deste formulário. Tente de novo em instantes.</p>`;
+    return;
+  }
   const nome = escaparHtmlEbd(v.membroNome);
   const fechar = `<button type="button" class="btn-link" data-on-click="stcFecharFormVinculoAcao" data-args-click="${argsAttr(id)}">cancelar</button>`;
   if (tipo === "recusar") {
@@ -814,6 +840,7 @@ function stcVisMostrarSecaoAcao(secao, semCarregar) {
   if (secao === "pendentes") stcVisCarregarPendentesAcao();
   else if (secao === "lista") stcVisCarregarListaAcao();
 }
+const STC_AVISO_SEM_OPCOES = "Não foi possível carregar as opções do formulário (motivos, certidões, resultados). Abra esta aba de novo para tentar outra vez.";
 // Os campos de escolha dos formulários vêm do catálogo do servidor (motivos, tipos de certidão, resultados, destino do original)
 function stcPreencherFormulariosVis() {
   const cat = stcVisCatalogosOuVazio();
@@ -825,6 +852,11 @@ function stcPreencherFormulariosVis() {
   stcPreencherSelect("stcSolMotivo", cat.motivos, m => m.codigo, m => `${m.rotulo} (${m.base})`);
   if (sol && primeiraVez && Array.from(sol.options).some(o => o.value === "SOLICITACAO_DIRETORIA")) sol.value = "SOLICITACAO_DIRETORIA";
   if (!stcDocLinhas.length) stcLavAdicionarDocAcao();
+  // as linhas de certidão que já existem (criadas até com o catálogo fora do ar) ganham a lista de tipos quando ela chega; a escolha já feita é mantida
+  stcDocLinhas.forEach(n => stcPreencherSelect(`stcDocTipo${n}`, cat.tiposDocumento, t => t.codigo, t => t.rotulo, "— escolha o tipo —"));
+  const aviso = stcEl("stcLavMsg");
+  if (!stcVisCatalogos) stcEscreverAviso("stcLavMsg", STC_AVISO_SEM_OPCOES, true);
+  else if (aviso && aviso.textContent === STC_AVISO_SEM_OPCOES) stcEscreverAviso("stcLavMsg", "", false);
   stcLavResultadoMudouAcao();
 }
 
@@ -860,17 +892,75 @@ function stcRenderPendente(p) {
     </div>
   </div>`;
 }
+// Quem vem do botão da lista "Quem falta" já tem o nome conhecido (stcPendentes): vai direto para o cache, sem consultar o servidor.
+function stcLembrarPessoaDaLista(membroId) {
+  const id = Number(membroId);
+  const p = stcPendentes.find(x => Number(x.membroId) === id);
+  if (p) stcPessoas.set(id, { achada: true, membroId: id, nome: String(p.nome == null ? "" : p.nome), congregacaoNome: p.congregacaoNome || null });
+}
 function stcVisIrParaLavrarAcao(membroId) {
+  stcLembrarPessoaDaLista(membroId);
   stcEl("stcLavMatricula").value = String(Number(membroId));
+  stcPessoaMudouAcao("lav");
   const motivo = stcEl("stcLavMotivo");
   if (motivo && !motivo.value && Array.from(motivo.options).some(o => o.value === "INVESTIDURA")) motivo.value = "INVESTIDURA";
   stcVisMostrarSecaoAcao("lavrar");
   stcRolarPara("stcVisSecaoLavrar");
 }
 function stcVisIrParaSolicitarAcao(membroId) {
+  stcLembrarPessoaDaLista(membroId);
   stcEl("stcSolMatricula").value = String(Number(membroId));
+  stcPessoaMudouAcao("sol");
   stcVisMostrarSecaoAcao("solicitar");
   stcRolarPara("stcVisSecaoSolicitar");
+}
+
+// -- quem é a matrícula digitada (lavrar e solicitar): o nome e a congregação aparecem ao lado do campo e entram na confirmação --
+const STC_PESSOA_CAMPOS = { lav: { campo: "stcLavMatricula", saida: "stcLavPessoa" }, sol: { campo: "stcSolMatricula", saida: "stcSolPessoa" } };
+// Consulta (e guarda) a pessoa da matrícula. Só o que deu certo fica no cache; "não existe" e falha são respondidos de novo na próxima vez.
+function stcBuscarPessoa(membroId) {
+  if (stcPessoas.has(membroId)) return Promise.resolve(stcPessoas.get(membroId));
+  if (stcPessoasEmVoo.has(membroId)) return stcPessoasEmVoo.get(membroId);
+  const mapa = stcPessoasEmVoo;   // a troca de login troca o mapa: a resposta de um login antigo não entra no cache do novo
+  const cache = stcPessoas;
+  const pedido = stcObterVis(`pessoa?membroId=${membroId}`).then(data => {
+    if (mapa.get(membroId) === pedido) mapa.delete(membroId);
+    const p = data && data.pessoa && typeof data.pessoa === "object" ? data.pessoa : null;
+    if (data.sucesso !== false && p) {
+      const r = { achada: true, membroId, nome: String(p.nome == null ? "" : p.nome), congregacaoNome: p.congregacaoNome || null };
+      cache.set(membroId, r);
+      return r;
+    }
+    return { achada: false, naoExiste: data.httpStatus === 404, mensagem: data.httpStatus === 404 ? "Matrícula não encontrada." : stcMsgErro(data) };
+  });
+  mapa.set(membroId, pedido);
+  return pedido;
+}
+// Mostra ao lado do campo quem é a pessoa. Devolve a resposta (ou null se não há matrícula válida). Resposta atrasada de uma matrícula antiga não vence a nova.
+async function stcPessoaMudouAcao(ctxBruto) {
+  const ctx = ctxBruto === "sol" ? "sol" : "lav";
+  const { campo, saida } = STC_PESSOA_CAMPOS[ctx];
+  const el = stcEl(saida);
+  const texto = stcTexto(campo);
+  const seq = ++stcSeqPessoa[ctx];
+  const escrever = (msg, alerta) => { if (el) { el.textContent = msg; el.className = alerta ? "psc-legenda psc-alerta" : "psc-legenda"; } };
+  if (!texto) { escrever("", false); return null; }
+  const membroId = stcInteiro(texto);
+  if (!membroId) { escrever("A matrícula tem só números.", true); return null; }
+  if (!stcPessoas.has(membroId)) escrever("Procurando a pessoa…", false);
+  const r = await stcBuscarPessoa(membroId);
+  if (seq !== stcSeqPessoa[ctx]) return r;
+  if (r.achada) escrever(r.congregacaoNome ? `${r.nome} — ${r.congregacaoNome}` : r.nome, false);
+  else escrever(r.mensagem, true);
+  return r;
+}
+// A pessoa da matrícula para a confirmação: usa o nome já consultado; se ainda não, consulta antes. Sem nome (matrícula que não existe, ou consulta que falhou), não deixa confirmar.
+async function stcPessoaParaConfirmar(ctx, membroId) {
+  const r = await stcPessoaMudouAcao(ctx);
+  const achada = r && r.achada && r.membroId === membroId ? r : null;
+  if (achada) return achada;
+  mostrarToast(r && r.naoExiste ? "Matrícula não encontrada: confira o número antes de continuar." : (r && r.mensagem) || "Não foi possível conferir quem é a pessoa agora. Tente de novo.", "erro");
+  return null;
 }
 
 // -- b) termos lavrados --
@@ -890,13 +980,28 @@ async function stcVisCarregarListaAcao() {
     return;
   }
   const vistorias = Array.isArray(data.vistorias) ? data.vistorias : [];
+  vistorias.forEach(stcLembrarVistoria);
   if (aviso) aviso.textContent = vistorias.length ? `${vistorias.length} termo(s)${membroId ? "" : " (os mais recentes de todos)"}.` : "";
-  lista.innerHTML = vistorias.length ? vistorias.map(stcRenderVistoria).join("") : "<p class='subtitle'>Nenhum Termo de Vistoria lavrado com esse filtro.</p>";
+  lista.innerHTML = vistorias.length ? vistorias.map(v => stcRenderVistoria(v, "L")).join("") : "<p class='subtitle'>Nenhum Termo de Vistoria lavrado com esse filtro.</p>";
 }
-function stcRenderVistoria(v) {
+// Os termos que a tela está mostrando (para o nome e a data na confirmação de anular, sem consultar de novo)
+function stcLembrarVistoria(v) { if (v && v.vistoriaId != null) stcVistorias.set(Number(v.vistoriaId), v); }
+function stcContextoVis(bruto) { return bruto === "R" ? "R" : "L"; }
+// `ctxBruto`: L = lista de termos lavrados; R = o termo recém-lavrado (cada um tem os seus ids, para não repetir id quando o mesmo termo está nos dois lugares)
+function stcRenderVistoria(v, ctxBruto) {
+  const ctx = stcContextoVis(ctxBruto);
+  const id = Number(v.vistoriaId);
+  const anulada = v.anulada && typeof v.anulada === "object" ? v.anulada : null;
   const docs = (Array.isArray(v.documentos) ? v.documentos : []).map(d => `<li>${escaparHtmlEbd(d.rotuloTipo || d.tipo)} — emitida em ${escaparHtmlEbd(calData(d.dataEmissao))}<br /><span class="cal-code">${escaparHtmlEbd(d.hash)}</span></li>`).join("");
-  return `<div class="cal-cartao cartao-area-ebd">
-    <h5>${escaparHtmlEbd(v.membroNome)} <span class="psc-legenda">matrícula ${Number(v.membroId)} · Termo nº ${Number(v.vistoriaId)}</span> ${stcSelo(v.resultado, v.rotuloResultado || v.resultado)}</h5>
+  // termo anulado: selo, data, quem anulou e o motivo (texto puro, escapado), sem botão; termo valendo: botão "Anular termo"
+  const faixaAnulado = anulada
+    ? `<div class="cal-decisao stc-anulado" role="status"><strong>Termo anulado</strong>${anulada.em ? ` em ${escaparHtmlEbd(calDataHora(anulada.em))}` : ""}${anulada.porNome ? ` por ${escaparHtmlEbd(anulada.porNome)}` : ""}.<br />Motivo: ${escaparHtmlEbd(anulada.motivo)}<br /><span class="psc-legenda">Anular não apaga: o termo continua registrado, mas não conta mais como a vistoria desta pessoa.</span></div>`
+    : "";
+  const botaoAnular = anulada ? "" : `<div class="psc-acoes"><button type="button" class="btn-link btn-link-perigo" data-on-click="stcAbrirAnularAcao" data-args-click="${argsAttr(ctx, id)}">🚫 Anular termo</button></div>
+    <div id="stcAnularForm${ctx}_${id}"></div>`;
+  return `<div class="cal-cartao cartao-area-ebd${anulada ? " stc-vis-anulada" : ""}">
+    <h5>${escaparHtmlEbd(v.membroNome)} <span class="psc-legenda">matrícula ${Number(v.membroId)} · Termo nº ${id}</span> ${stcSelo(v.resultado, v.rotuloResultado || v.resultado)}${anulada ? ` ${stcSelo("ANULADA", "Anulado")}` : ""}</h5>
+    ${faixaAnulado}
     <dl class="cal-dl">
       ${stcCampo("Data da verificação", escaparHtmlEbd(calData(v.dataVerificacao)))}
       ${stcCampo("Motivo", `${escaparHtmlEbd(v.rotuloMotivo || v.motivo)}${v.baseMotivo ? ` <span class="psc-legenda">(${escaparHtmlEbd(v.baseMotivo)})</span>` : ""}`)}
@@ -906,7 +1011,68 @@ function stcRenderVistoria(v) {
       ${stcCampo("Assinado por", `${escaparHtmlEbd(v.assinadaPorNome)}${v.assinadaEm ? ` em ${escaparHtmlEbd(calDataHora(v.assinadaEm))}` : ""}`)}
     </dl>
     ${docs ? `<p class="vol-sub">Certidões conferidas (só o código de verificação — a Igreja não guarda o documento)</p><ul class="vol-lista">${docs}</ul>` : ""}
+    ${botaoAnular}
   </div>`;
+}
+
+// -- anular um termo lavrado por engano (matrícula errada...): o termo NÃO se apaga; fica marcado como anulado e deixa de contar como a vistoria da pessoa --
+const STC_AVISO_DENUNCIANTE = "Não cite quem denunciou nem dados de terceiros no parecer: o termo é guardado como registro documental e não se altera depois.";
+const STC_MSG_ANULAR = { L: "stcVisAnularMsg", R: "stcLavMsg" };
+function stcAbrirAnularAcao(ctxBruto, vistoriaId) {
+  const ctx = stcContextoVis(ctxBruto);
+  const id = Number(vistoriaId);
+  const area = stcEl(`stcAnularForm${ctx}_${id}`);
+  const v = stcVistorias.get(id);
+  if (!area || !v || v.anulada) return;
+  area.innerHTML = `<div class="cal-form-inline">
+    <strong>Anular o Termo nº ${id} de ${escaparHtmlEbd(v.membroNome)}</strong>
+    <p class="psc-legenda"><strong>Anular não apaga.</strong> O termo continua registrado, marcado como anulado, e só deixa de contar como a vistoria da pessoa (ela volta a aparecer em “Quem falta”). Use quando o termo foi lavrado por engano.</p>
+    <label for="stcAnularMotivo${ctx}_${id}">Motivo da anulação (de 10 a 300 caracteres)</label>
+    <textarea id="stcAnularMotivo${ctx}_${id}" rows="2" maxlength="300" style="width:100%;" placeholder="Ex.: Termo lavrado na matrícula errada." data-on-input="stcAnularContarAcao" data-args-input="${argsAttr(ctx, id)}"></textarea>
+    <p class="psc-legenda"><span id="stcAnularContador${ctx}_${id}">0</span>/300 caracteres. Exemplo: “Termo lavrado na matrícula errada.” ${escaparHtmlEbd(STC_AVISO_DENUNCIANTE)}</p>
+    <div class="psc-acoes">
+      <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" data-on-click="stcAnularConfirmarAcao" data-args-click="${argsAttr(ctx, id, ARG.elemento)}">🚫 Anular o termo</button>
+      <button type="button" class="btn-link" data-on-click="stcAnularFecharAcao" data-args-click="${argsAttr(ctx, id)}">cancelar</button>
+    </div>
+  </div>`;
+}
+function stcAnularFecharAcao(ctxBruto, vistoriaId) {
+  const area = stcEl(`stcAnularForm${stcContextoVis(ctxBruto)}_${Number(vistoriaId)}`);
+  if (area) area.innerHTML = "";
+}
+function stcAnularContarAcao(ctxBruto, vistoriaId) {
+  const ctx = stcContextoVis(ctxBruto);
+  const id = Number(vistoriaId);
+  const campo = stcEl(`stcAnularMotivo${ctx}_${id}`), contador = stcEl(`stcAnularContador${ctx}_${id}`);
+  if (!campo || !contador) return;
+  const n = String(campo.value).trim().length;
+  contador.textContent = String(n);
+  contador.className = n > 0 && (n < 10 || n > 300) ? "psc-alerta" : "";   // vermelho enquanto falta (ou passa) do tamanho aceito
+}
+async function stcAnularConfirmarAcao(ctxBruto, vistoriaId, botao) {
+  const ctx = stcContextoVis(ctxBruto);
+  const id = Number(vistoriaId);
+  const v = stcVistorias.get(id);
+  if (!v || v.anulada) return;
+  const idMensagem = STC_MSG_ANULAR[ctx];
+  const motivo = stcTexto(`stcAnularMotivo${ctx}_${id}`);
+  if (motivo.length < 10 || motivo.length > 300 || stcTemMarca(motivo)) { mostrarToast("Registre o motivo da anulação (de 10 a 300 caracteres, sem < ou >), por exemplo: Termo lavrado na matrícula errada.", "erro"); return; }
+  const quando = /^\d{4}-\d{2}-\d{2}/.test(String(v.dataVerificacao || "")) ? `, verificado em ${String(v.dataVerificacao).slice(0, 10).split("-").reverse().join("/")}` : "";
+  const aviso = `Anular o Termo de Vistoria nº ${id} de ${v.membroNome} (matrícula ${Number(v.membroId)})${quando}? O termo NÃO é apagado: continua registrado como anulado, com o seu nome e o motivo, mas deixa de contar como a vistoria dessa pessoa (ela volta a aparecer em “Quem falta”).`;
+  if (!(await confirmarAcao(aviso, "Anular o termo"))) return;
+  await stcProtegerBotao(botao, async () => {
+    const data = await stcPostarVis("anular", { vistoriaId: id, motivo });   // 428 (confirmação reforçada): o fetchProtegido confirma e repete a chamada, como em lavrar
+    if (data.sucesso === false) { stcMostrarResultado(data, idMensagem, false); return; }   // recusa de regra: mensagem do servidor e formulário aberto
+    stcAnularFecharAcao(ctx, id);
+    // a lista, o termo recém-lavrado e "Quem falta" são refeitos: a pessoa volta à lista de quem falta
+    if (data.vistoria) stcLembrarVistoria(data.vistoria);
+    if (ctx === "R") {
+      const cx = stcEl("stcLavTermoLavrado");
+      if (cx && data.vistoria) cx.innerHTML = `<p class="vol-selo-ok">Termo anulado.</p>${stcRenderVistoria(data.vistoria, "R")}`;
+    }
+    await Promise.all([stcVisCarregarListaAcao(), stcVisCarregarPendentesAcao()]);
+    stcMostrarResultado(data, idMensagem, false);
+  }, `anular${id}`);
 }
 
 // -- c) lavrar o Termo: as certidões são escolhidas aqui e só o hash (SHA-256) sai do aparelho --
@@ -925,7 +1091,7 @@ function stcRenderLinhaDoc(n) {
     <label for="stcDocArq${num}">Escolher o arquivo da certidão (ele fica no seu aparelho)</label>
     <input type="file" id="stcDocArq${num}" data-on-change="stcEscolherCertidaoAcao" data-args-change="${argsAttr(num, ARG.elemento)}" />
     <label for="stcDocHash${num}">Código de verificação (hash SHA-256, 64 caracteres)</label>
-    <input type="text" id="stcDocHash${num}" maxlength="90" autocomplete="off" spellcheck="false" placeholder="aparece sozinho ao escolher o arquivo — ou cole aqui um hash já calculado" data-on-input="stcHashDigitadoAcao" data-args-input="${argsAttr(num)}" />
+    <input type="text" id="stcDocHash${num}" maxlength="90" autocomplete="off" spellcheck="false" placeholder="aparece sozinho ao escolher o arquivo — ou cole aqui um hash já calculado" data-on-input="stcHashDigitadoAcao" data-args-input="${argsAttr(num)}" data-on-change="stcHashDigitadoAcao" data-args-change="${argsAttr(num, true)}" />
     <p class="psc-legenda" id="stcDocEstado${num}" role="status"></p>
   </div>`;
 }
@@ -960,16 +1126,21 @@ async function stcCalcularHash(arquivo) {
 }
 async function stcEscolherCertidaoAcao(n, campo) {
   const num = Number(n);
-  const arquivo = campo && campo.files && campo.files[0];
   const estado = stcEl(`stcDocEstado${num}`), saida = stcEl(`stcDocHash${num}`);
-  if (!arquivo || !saida) return;
+  if (!saida) return;
+  // Toda escolha de arquivo começa apagando o hash e a mensagem da anterior: o hash de um arquivo antigo NUNCA pode sobrar no campo (ele seguiria no Termo, que é
+  // imutável) — nem quando o novo arquivo falha, passa do limite ou a janela de arquivo é cancelada/esvaziada.
+  const pedido = (stcHashSeq[num] || 0) + 1;
+  stcHashSeq[num] = pedido;
+  saida.value = "";
+  if (estado) estado.textContent = "";
+  const arquivo = campo && campo.files && campo.files[0];
+  if (!arquivo) return;
   if (arquivo.size > STC_LIMITE_ARQUIVO) {
     if (estado) estado.textContent = "Este arquivo é grande demais para ser uma certidão (mais de 50 MB). Escolha o arquivo certo.";
     campo.value = "";
     return;
   }
-  const pedido = (stcHashSeq[num] || 0) + 1;
-  stcHashSeq[num] = pedido;
   if (estado) estado.textContent = "Calculando o código de verificação aqui no seu aparelho…";
   try {
     const hash = await stcCalcularHash(arquivo);
@@ -981,12 +1152,15 @@ async function stcEscolherCertidaoAcao(n, campo) {
   }
   campo.value = "";   // solta a referência ao arquivo: só o hash interessa
 }
-function stcHashDigitadoAcao(n) {
+// A cada tecla só confere e diz o que falta; o valor só é reescrito (sem espaços, em minúsculas) quando a pessoa sai do campo (`normalizar`): reescrever a cada tecla
+// faria o cursor pular quando se edita no meio do hash.
+function stcHashDigitadoAcao(n, normalizar) {
   const num = Number(n);
   const campo = stcEl(`stcDocHash${num}`), estado = stcEl(`stcDocEstado${num}`);
   if (!campo || !estado) return;
+  stcHashSeq[num] = (stcHashSeq[num] || 0) + 1;   // o que a pessoa digita ou cola vale mais que um cálculo ainda em andamento
   const limpo = String(campo.value).replace(/\s+/g, "").toLowerCase();
-  if (limpo !== campo.value) campo.value = limpo;
+  if (normalizar === true && limpo !== campo.value) campo.value = limpo;
   if (!limpo) { estado.textContent = ""; return; }
   if (/^[0-9a-f]{64}$/.test(limpo)) estado.textContent = "✅ Hash válido (64 caracteres, em minúsculas).";
   else if (/^[0-9a-f]*$/.test(limpo)) estado.textContent = `O hash tem 64 caracteres; faltam ${Math.max(0, 64 - limpo.length)} (ou há ${Math.max(0, limpo.length - 64)} a mais).`;
@@ -1024,14 +1198,19 @@ async function stcLavrarAcao(botao) {
     corpo.destinoOriginal = destinoOriginal;
     corpo.documentos = documentos;
   }
-  const aviso = `Lavrar e assinar o Termo de Vistoria da matrícula ${membroId}? O Termo fica assinado com o seu nome, não pode ser alterado nem apagado, e guarda só o código (hash) das certidões.${resultado === "RECUSA" ? " A recusa implica impedimento ou afastamento preventivo da função." : ""}`;
+  // a confirmação traz o NOME de quem está sendo vistoriado (o nome já consultado; se ainda não foi, consulta agora). Matrícula que não existe não confirma.
+  const pessoa = await stcPessoaParaConfirmar("lav", membroId);
+  if (!pessoa) return;
+  const quem = `${pessoa.nome}${pessoa.congregacaoNome ? ` (${pessoa.congregacaoNome})` : ""}, matrícula ${membroId}`;
+  const aviso = `Lavrar e assinar o Termo de Vistoria de ${quem}? O Termo fica assinado com o seu nome, não pode ser alterado nem apagado, e guarda só o código (hash) das certidões.${resultado === "RECUSA" ? " A recusa implica impedimento ou afastamento preventivo da função." : ""}`;
   if (!(await confirmarAcao(aviso, "Lavrar e assinar"))) return;
   await stcProtegerBotao(botao, async () => {
     const data = await stcPostarVis("lavrar", corpo);   // 428 (confirmação reforçada): o fetchProtegido confirma e repete a chamada
     stcMostrarResultado(data, "stcLavMsg", false);
     if (data.sucesso === false) return;   // recusa de regra: mensagem do servidor e formulário intacto
     const cx = stcEl("stcLavTermoLavrado");
-    if (cx) cx.innerHTML = `<p class="vol-selo-ok">✅ Termo lavrado.</p>${data.vistoria ? stcRenderVistoria(data.vistoria) : ""}`;
+    if (data.vistoria) stcLembrarVistoria(data.vistoria);
+    if (cx) cx.innerHTML = `<p class="vol-selo-ok">✅ Termo lavrado.</p>${data.vistoria ? stcRenderVistoria(data.vistoria, "R") : ""}`;
     stcLavLimparForm();
     stcVisCarregarPendentesAcao();
   }, "lavrar");
@@ -1045,6 +1224,7 @@ function stcLavLimparForm() {
   stcEl("stcLavDocs").innerHTML = "";
   stcLavAdicionarDocAcao();
   stcLavResultadoMudouAcao();
+  stcPessoaMudouAcao("lav");   // campo vazio: apaga o nome que estava ao lado
 }
 
 // -- d) solicitar as certidões (só avisa a pessoa; nada é registrado) --
@@ -1054,7 +1234,10 @@ async function stcSolicitarAcao(botao) {
   if (!membroId) return erro("Informe a matrícula de quem deve apresentar as certidões.");
   if (!motivo) return erro("Escolha o motivo do pedido.");
   if (funcao && (funcao.length < 3 || funcao.length > 150 || stcTemMarca(funcao))) return erro("A função aceita de 3 a 150 caracteres, sem < ou >.");
-  if (!(await confirmarAcao(`Avisar a matrícula ${membroId} de que a Diretoria solicita as certidões de antecedentes? A pessoa recebe o aviso agora. Nada fica registrado além do aviso.`, "Enviar o aviso"))) return;
+  const pessoa = await stcPessoaParaConfirmar("sol", membroId);   // o nome de quem vai receber o aviso; matrícula que não existe não confirma
+  if (!pessoa) return;
+  const quem = `${pessoa.nome}${pessoa.congregacaoNome ? ` (${pessoa.congregacaoNome})` : ""}, matrícula ${membroId}`;
+  if (!(await confirmarAcao(`Avisar ${quem} de que a Diretoria solicita as certidões de antecedentes? A pessoa recebe o aviso agora. Nada fica registrado além do aviso.`, "Enviar o aviso"))) return;
   await stcProtegerBotao(botao, async () => {
     const corpo = { membroId, motivo };
     if (funcao) corpo.funcao = funcao;
@@ -1063,6 +1246,7 @@ async function stcSolicitarAcao(botao) {
     if (data.sucesso === false) return;
     stcEl("stcSolMatricula").value = "";
     stcEl("stcSolFuncao").value = "";
+    stcPessoaMudouAcao("sol");   // campo vazio: apaga o nome que estava ao lado
   }, "solicitar");
 }
 
@@ -1080,7 +1264,8 @@ async function carregarMeuPainelSetoresAcao() {
   }
   const seq = ++stcSeqMeu;
   if (aviso) aviso.textContent = "Carregando…";
-  const [, painel] = await Promise.all([stcGarantirCatalogos(), stcObter("meu-painel")]);
+  // o catálogo traz `papeis` (líder, gestão, Diretoria) que dependem da SESSÃO (senha × PIN): é buscado de novo a cada abertura, nunca reaproveitado
+  const [, painel] = await Promise.all([stcGarantirCatalogos(true), stcObter("meu-painel")]);
   if (seq !== stcSeqMeu) return;   // resposta velha: a pessoa trocou de login ou recarregou
   if (painel.sucesso === false) {
     stcPainel = null;
@@ -1133,15 +1318,35 @@ async function stcAplicarMeuPainel(painel) {
   const lider = !!motivos.papeis.lider;
   stcEl("stcBlocoCongregacao").style.display = lider ? "" : "none";
   if (podeInterditar.length || podeRemover.length || lider) {
-    const congregacoes = await stcGarantirCongregacoes();
-    const opcoes = (c) => String(c.congregacaoId);
-    if (podeInterditar.length) stcPreencherSelect("stcIntCong", congregacoes, opcoes, c => c.nome, "— escolha a congregação —");
-    if (podeRemover.length) {
-      stcPreencherSelect("stcRemCong", congregacoes, opcoes, c => c.nome, "— escolha a congregação —");
-      stcRemCongregacaoMudouAcao();   // monta a lista de canais da congregação já escolhida (ou só o "não está na lista")
+    const congregacoes = await stcPreencherCongregacoes();
+    if (podeRemover.length) stcRemCongregacaoMudouAcao();   // monta a lista de canais da congregação já escolhida (ou só o "não está na lista")
+    // lista que não veio: a pessoa é avisada e a tela tenta de novo na próxima abertura (ou ao tentar emitir sem escolher a congregação)
+    if (!congregacoes.length) {
+      if (podeInterditar.length) stcEscreverAviso("stcIntMsg", STC_AVISO_SEM_CONGREGACOES, true);
+      if (podeRemover.length) stcEscreverAviso("stcRemMsg", STC_AVISO_SEM_CONGREGACOES, true);
+      if (lider) stcEscreverAviso("stcAtosCongResultado", STC_AVISO_SEM_CONGREGACOES, true);
+    } else {
+      [["stcIntMsg", podeInterditar.length], ["stcRemMsg", podeRemover.length], ["stcAtosCongResultado", lider]].forEach(([id, vale]) => {
+        const el = stcEl(id);
+        if (vale && el && el.textContent === STC_AVISO_SEM_CONGREGACOES) stcEscreverAviso(id, "", false);
+      });
     }
-    if (lider) stcPreencherSelect("stcCongAtosSel", congregacoes, opcoes, c => c.nome, "— escolha a congregação —");
   }
+}
+const STC_AVISO_SEM_CONGREGACOES = "Não foi possível carregar a lista de congregações. Atualize esta tela (ou abra Meu Painel de novo) para tentar outra vez.";
+// Preenche as três escolhas de congregação (interdição, remoção, atos da congregação). Lista que não veio (rede, 403) fica vazia e é pedida de novo a cada chamada.
+async function stcPreencherCongregacoes() {
+  const congregacoes = await stcGarantirCongregacoes();
+  const valor = (c) => String(c.congregacaoId);
+  ["stcIntCong", "stcRemCong", "stcCongAtosSel"].forEach(id => stcPreencherSelect(id, congregacoes, valor, c => c.nome, "— escolha a congregação —"));
+  return congregacoes;
+}
+// A lista de congregações estava vazia quando a pessoa tentou emitir (ou ver os atos): tenta de novo antes de reclamar da escolha.
+async function stcCongregacoesAindaVazias(idSelect) {
+  const sel = stcEl(idSelect);
+  if (!sel || sel.options.length > 1) return false;
+  const lista = await stcPreencherCongregacoes();
+  return lista.length === 0;
 }
 function stcRenderMeuVinculo(v) {
   const id = Number(v.vinculoId);
@@ -1154,17 +1359,23 @@ function stcRenderMeuVinculo(v) {
     const t = v.termoParaAceitar || {};
     bloco = `<p><strong>Falta só o seu aceite.</strong> Leia o Termo com calma. Servir é voluntário e gratuito, e você pode sair quando quiser.</p>
       <div class="vol-cartao">${stcRenderTermo(t)}</div>
-      <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="stcAceite${id}" data-on-change="stcAtualizarBotaoAceiteAcao" data-args-change="${argsAttr(id)}" /> ${escaparHtmlEbd(t.aceite || stcCatalogosOuVazio().aceite)}</label>
+      <label class="opcao-checkbox vol-aceite"><input type="checkbox" id="stcAceite${id}" data-termo-hash="${escaparHtmlEbd(t.hash)}" data-on-change="stcAtualizarBotaoAceiteAcao" data-args-change="${argsAttr(id)}" /> ${escaparHtmlEbd(t.aceite || stcCatalogosOuVazio().aceite)}</label>
       <p class="psc-legenda">Marcar a caixa vale como a sua assinatura eletrônica: a Igreja guarda a versão do texto, o seu IP, a data e a hora do aceite.</p>
       <div class="psc-acoes"><button type="button" class="btn-confirmar" id="stcAceitarBotao${id}" style="width:auto;margin:0;" disabled data-on-click="stcAceitarTermoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">✍️ Aceitar o Termo</button></div>`;
     sair = "Não quero servir (sair)";
   } else if (v.status === "ATIVO") {
+    // "veja o formulário mais abaixo" só quando o formulário aparece de fato: o servidor só lista em `poderes` o que vale agora (setor ativo e pessoa em plena comunhão)
+    const poderes = stcPainel && stcPainel.poderes && typeof stcPainel.poderes === "object" ? stcPainel.poderes : {};
+    const temPoder = (lista) => Array.isArray(lista) && lista.some(p => Number(p.vinculoId) === id);
+    const comPoder = temPoder(poderes.interdicao) || temPoder(poderes.remocao);
     bloco = `<p>Você serve neste setor${v.ativadoEm ? ` desde ${escaparHtmlEbd(calData(v.ativadoEm))}` : ""}.${v.termo ? ` Termo: ${stcTextoDoTermoDoVinculo(v.termo)}` : ""}</p>
-      ${v.podeInterditar ? `<p class="psc-legenda">⛔ Este setor pode interditar templo ou estrutura em risco (Regimento Art. 50, I): veja o formulário mais abaixo.</p>` : ""}
-      ${v.podeSolicitarRemocao ? `<p class="psc-legenda">📵 Este setor pode pedir a remoção de postagem nas redes oficiais (Regimento Art. 50, II): veja o formulário mais abaixo.</p>` : ""}`;
+      ${temPoder(poderes.interdicao) ? `<p class="psc-legenda">⛔ Este setor pode interditar templo ou estrutura em risco (Regimento Art. 50, I): veja o formulário mais abaixo.</p>` : ""}
+      ${temPoder(poderes.remocao) ? `<p class="psc-legenda">📵 Este setor pode pedir a remoção de postagem nas redes oficiais (Regimento Art. 50, II): veja o formulário mais abaixo.</p>` : ""}
+      ${(v.podeInterditar || v.podeSolicitarRemocao) && !comPoder ? `<p class="psc-legenda">Este setor tem poder de ${v.podeInterditar ? "interditar templo ou estrutura" : "pedir a remoção de postagem"}, mas você não pode emitir atos agora (o setor está desativado ou a sua situação na igreja não permite). Fale com a Secretaria.</p>` : ""}`;
     sair = "Sair do setor";
   } else {
-    bloco = `<p class="psc-legenda">Vínculo encerrado${v.encerradoEm ? ` em ${escaparHtmlEbd(calDataHora(v.encerradoEm))}` : ""}${v.rotuloMotivoEncerramento ? ` — ${escaparHtmlEbd(v.rotuloMotivoEncerramento)}` : ""}${v.obsEncerramento ? `: ${escaparHtmlEbd(v.obsEncerramento)}` : ""}.</p>`;
+    // a observação escrita por quem encerrou fica com a administração: a própria pessoa recebe só o tipo do motivo
+    bloco = `<p class="psc-legenda">Vínculo encerrado${v.encerradoEm ? ` em ${escaparHtmlEbd(calDataHora(v.encerradoEm))}` : ""}${v.rotuloMotivoEncerramento ? ` — ${escaparHtmlEbd(v.rotuloMotivoEncerramento)}` : ""}.</p>`;
   }
   const botaoSair = sair ? `<div class="psc-acoes"><button type="button" class="btn-link btn-link-perigo" data-on-click="stcSairDoSetorAcao" data-args-click="${argsAttr(id, ARG.elemento)}">${escaparHtmlEbd(sair)}</button></div>` : "";
   return `<div class="cal-cartao cartao-area-ebd${v.status === "ENCERRADO" ? " cal-inativo" : ""}">
@@ -1179,12 +1390,31 @@ function stcAtualizarBotaoAceiteAcao(vinculoId) {
   const caixa = stcEl(`stcAceite${id}`), botao = stcEl(`stcAceitarBotao${id}`);
   if (caixa && botao) botao.disabled = !caixa.checked;
 }
+const STC_AVISO_TEXTO_MUDOU = "O texto do Termo foi atualizado desde que você abriu esta tela. Já mostramos o texto novo logo acima: leia de novo com calma e, se concordar, marque a caixa e aceite.";
+// O servidor recusa (422) o aceite do texto que mudou; não há código próprio para isso, então se reconhece pela frase da mensagem.
+// O servidor marca o caso com `termoMudou:true`; a frase fica só como reserva, para o caso de a resposta vir de uma versão mais antiga da API.
+function stcTermoMudou(data) { return !!data && data.sucesso === false && data.httpStatus === 422 && (data.termoMudou === true || /texto do Termo mudou/i.test(String(data.mensagem || ""))); }
 async function stcAceitarTermoAcao(vinculoId, botao) {
   const id = Number(vinculoId);
   const caixa = stcEl(`stcAceite${id}`);
   if (!caixa || !caixa.checked) { stcEscreverAviso("stcMeuAcaoMsg", "Marque a caixa para aceitar o Termo.", true); return; }
+  // o hash vai junto do texto que a tela mostrou (guardado na própria caixa, vindo de meu-painel → termoParaAceitar.hash): nunca é recalculado aqui
+  const termoHash = String(caixa.getAttribute("data-termo-hash") || "");
+  if (!termoHash) {
+    mostrarToast(STC_AVISO_TEXTO_MUDOU, "erro");
+    await carregarMeuPainelSetoresAcao();
+    stcEscreverAviso("stcMeuAcaoMsg", STC_AVISO_TEXTO_MUDOU, true);
+    return;
+  }
   await stcProtegerBotao(botao, async () => {
-    const data = await stcPostar("aceitar-termo", { vinculoId: id, aceito: true });
+    const data = await stcPostar("aceitar-termo", { vinculoId: id, aceito: true, termoHash });
+    if (stcTermoMudou(data)) {
+      // o texto mudou enquanto a pessoa lia: recarrega Meu Painel (texto e hash novos, caixa desmarcada) e pede que leia de novo antes de aceitar
+      mostrarToast(STC_AVISO_TEXTO_MUDOU, "erro");
+      await carregarMeuPainelSetoresAcao();
+      stcEscreverAviso("stcMeuAcaoMsg", STC_AVISO_TEXTO_MUDOU, true);
+      return;
+    }
     stcMostrarResultado(data, "stcMeuAcaoMsg", false);
     if (data.sucesso === false) return;
     await carregarMeuPainelSetoresAcao();
@@ -1236,7 +1466,7 @@ async function stcEmitirInterdicaoAcao(botao) {
   const erro = (texto) => { mostrarToast(texto, "erro"); stcEscreverAviso("stcIntMsg", texto, true); };
   const congregacaoId = stcInteiro(stcTexto("stcIntCong")), motivo = stcTexto("stcIntMotivo"), objeto = stcTexto("stcIntObjeto");
   const descricao = stcTexto("stcIntDescricao"), referencia = stcTexto("stcIntReferencia"), setorId = stcInteiro(stcTexto("stcIntSetor"));
-  if (!congregacaoId) { erro("Escolha a congregação do templo ou da estrutura."); return; }
+  if (!congregacaoId) { erro((await stcCongregacoesAindaVazias("stcIntCong")) ? STC_AVISO_SEM_CONGREGACOES : "Escolha a congregação do templo ou da estrutura."); return; }
   if (!motivo) { erro("Escolha o motivo da interdição."); return; }
   if (objeto.length < 3 || objeto.length > 150 || stcTemMarca(objeto)) { erro("Diga o que foi interditado (de 3 a 150 caracteres, sem < ou >), por exemplo: Templo principal — cobertura da nave."); return; }
   if (descricao.length < 30 || descricao.length > 1000 || stcTemMarca(descricao)) { erro("Registre a justificativa técnica (de 30 a 1000 caracteres, sem < ou >): o que foi visto e por que há risco iminente."); return; }
@@ -1268,13 +1498,13 @@ async function stcRemCongregacaoMudouAcao() {
   const data = await stcObter(`canais?congregacaoId=${congregacaoId}`);
   if (stcInteiro(stcTexto("stcRemCong")) !== congregacaoId) return;   // a pessoa já escolheu outra congregação
   const canais = data.sucesso === false || !Array.isArray(data.canais) ? [] : data.canais;
-  stcPreencherSelect("stcRemCanal", canais, c => String(c.canalId), c => `${c.plataforma ? `${c.plataforma} — ` : ""}${c.nome}${c.identificador ? ` (${c.identificador})` : ""}`, "— o perfil não está na lista (descreva abaixo) —");
+  stcPreencherSelect("stcRemCanal", canais, c => String(c.canalId), c => `${c.plataforma ? `${c.plataforma} — ` : ""}${c.nome}`, "— o perfil não está na lista (descreva abaixo) —");
 }
 async function stcEmitirRemocaoAcao(botao) {
   const erro = (texto) => { mostrarToast(texto, "erro"); stcEscreverAviso("stcRemMsg", texto, true); };
   const congregacaoId = stcInteiro(stcTexto("stcRemCong")), canalId = stcInteiro(stcTexto("stcRemCanal")), motivo = stcTexto("stcRemMotivo");
   const objeto = stcTexto("stcRemObjeto"), referencia = stcTexto("stcRemReferencia"), descricao = stcTexto("stcRemDescricao"), setorId = stcInteiro(stcTexto("stcRemSetor"));
-  if (!congregacaoId) { erro("Escolha a congregação dona da rede social."); return; }
+  if (!congregacaoId) { erro((await stcCongregacoesAindaVazias("stcRemCong")) ? STC_AVISO_SEM_CONGREGACOES : "Escolha a congregação dona da rede social."); return; }
   if (!motivo) { erro("Escolha o motivo do pedido."); return; }
   if (!canalId && (objeto.length < 3 || objeto.length > 150 || stcTemMarca(objeto))) { erro("Diga em que rede e perfil está a postagem (de 3 a 150 caracteres, sem < ou >), por exemplo: Instagram @congregacao."); return; }
   if (objeto && (objeto.length < 3 || objeto.length > 150 || stcTemMarca(objeto))) { erro("A rede e o perfil aceitam de 3 a 150 caracteres, sem < ou >."); return; }
@@ -1303,7 +1533,12 @@ async function stcCarregarAtosCongregacaoAcao() {
   const cx = stcEl("stcAtosCongLista");
   if (!cx) return;
   const congregacaoId = stcInteiro(stcTexto("stcCongAtosSel"));
-  if (!congregacaoId) { cx.innerHTML = ""; stcEscreverAviso("stcAtosCongResultado", "Escolha a congregação para ver os atos dela.", false); return; }
+  if (!congregacaoId) {
+    cx.innerHTML = "";
+    const vazia = await stcCongregacoesAindaVazias("stcCongAtosSel");   // a lista pode não ter carregado: tenta de novo antes de pedir a escolha
+    stcEscreverAviso("stcAtosCongResultado", vazia ? STC_AVISO_SEM_CONGREGACOES : "Escolha a congregação para ver os atos dela.", vazia);
+    return;
+  }
   const seq = ++stcSeqCong;
   stcEscreverAviso("stcAtosCongResultado", "Carregando…", false);
   const data = await stcObter(`atos-da-congregacao?congregacaoId=${congregacaoId}`);
@@ -1321,10 +1556,11 @@ async function stcCarregarAtosCongregacaoAcao() {
 }
 
 registrarAcoes({
+  stcAbrirAnularAcao, stcAnularConfirmarAcao, stcAnularContarAcao, stcAnularFecharAcao,
   stcAbrirFormVinculoAcao, stcAlternarSetorAtivoAcao, stcAprovarAcao, stcAtoAbrirFormAcao, stcAtoConfirmarAcao, stcAtoFecharFormAcao, stcAtualizarBotaoAceiteAcao,
   stcAceitarTermoAcao, stcCandSetorMudouAcao, stcCandidatarAcao, stcCarregarAtosAcao, stcCarregarAtosCongregacaoAcao, stcCarregarSetoresAcao, stcCarregarVinculosAcao,
   stcConfirmarVinculoAcao, stcEditarSetorAcao, stcEmitirInterdicaoAcao, stcEmitirRemocaoAcao, stcEscolherCertidaoAcao, stcFecharFormVinculoAcao, stcFecharTermoAcao,
   stcFormaTermoMudouAcao, stcHashDigitadoAcao, stcImprimirTermoAcao, stcIndSetorMudouAcao, stcIndicarAcao, stcLavAdicionarDocAcao, stcLavRemoverDocAcao,
-  stcLavResultadoMudouAcao, stcLavrarAcao, stcLimparSetorFormAcao, stcMostrarSecaoAcao, stcRemCongregacaoMudouAcao, stcSairDoSetorAcao, stcSalvarSetorAcao,
+  stcLavResultadoMudouAcao, stcLavrarAcao, stcLimparSetorFormAcao, stcMostrarSecaoAcao, stcPessoaMudouAcao, stcRemCongregacaoMudouAcao, stcSairDoSetorAcao, stcSalvarSetorAcao,
   stcSolicitarAcao, stcVerTermoAcao, stcVisCarregarListaAcao, stcVisCarregarPendentesAcao, stcVisIrParaLavrarAcao, stcVisIrParaSolicitarAcao, stcVisMostrarSecaoAcao
 });

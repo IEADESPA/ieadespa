@@ -150,6 +150,7 @@
             <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCanais" data-on-click="mostrarSubAbaMeupainel" data-args-click='["canais"]'><span class="icone">📣</span><span class="rotulo">Canais</span></button>
             <button class="btn-subaba" id="btnSubMeupainelEventos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["eventos"]'><span class="icone">🎪</span><span class="rotulo">Eventos</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelSetores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["setores"]'><span class="icone">🧑‍⚕️</span><span class="rotulo">Setores Técnicos</span></button>
             <button class="btn-subaba" id="btnSubMeupainelTarefas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["tarefas"]'><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" data-on-click="mostrarSubAbaMeupainel" data-args-click='["seguranca"]'><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
           </div>
@@ -375,6 +376,20 @@
           <div class="grupo-modulo" id="grupoModuloEventos" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaEventos" data-on-click="mostrarAbaSecretaria" data-args-click='["eventos"]'><span class="icone">🎪</span><span class="rotulo">Eventos e Congressos</span></button>
+          </div>
+
+          <!-- MÓDULO: SETORES TÉCNICOS (v7.6) — os 20 Setores do Regimento (Art. 48 a 52): voluntários
+               com uma profissão (engenharia, direito, contabilidade...), o Termo de Adesão de cada um
+               e os atos cautelares (interdição de templo em risco e pedido de remoção de postagem, com
+               a ratificação da Diretoria); mais a Vistoria de Antecedentes (Art. 133 §5º), que é só da
+               Diretoria Executiva e do Conselho de Ética. Permissões próprias "setores_tecnicos",
+               "setores_ratificacao" e "vistoria_antecedentes", nunca concedidas por padrão (vêm só para
+               a Diretoria Executiva). Candidatura, aceite do Termo e atos de quem serve ficam em
+               Meu Painel → Setores Técnicos, abertos a qualquer login. -->
+          <div class="grupo-modulo" id="grupoModuloSetores" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaSetores" data-on-click="mostrarAbaSecretaria" data-args-click='["setores"]'><span class="icone">🧑‍⚕️</span><span class="rotulo">Setores Técnicos</span></button>
+            <button class="btn-aba" id="btnAbaVistoria" data-on-click="mostrarAbaSecretaria" data-args-click='["vistoria"]'><span class="icone">🔎</span><span class="rotulo">Vistoria de Antecedentes</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
@@ -920,6 +935,167 @@
           </div>
           <p id="evtDossieMsgM" class="subtitle" role="status"></p>
           <div id="evtDossieM"></div>
+        </div>
+
+        <!-- SUB-ABA: SETORES TÉCNICOS (v7.6). Autoatendimento, aberto a qualquer login (inclusive PIN):
+             a situação de quem quer ou já serve num Setor Técnico (candidatura, aceite do Termo de
+             Adesão, sair do setor) e, para quem serve ATIVO num setor com o poder, a interdição de
+             templo em risco (Engenharia, Segurança) e o pedido de remoção de postagem (Comunicação);
+             o líder da congregação também vê aqui os atos da congregação dele. Toda regra mora no
+             servidor (shared/setoresTecnicos.js); os botões de cada ato vêm do campo "acoes" dele. -->
+        <div id="subMeupainelSetores" class="sub-aba-secretaria" style="display:none;">
+          <h3>🧑‍⚕️ Setores Técnicos</h3>
+          <p class="subtitle">Os <strong>Setores Técnicos</strong> reúnem membros com uma profissão — engenheiros, advogados, contadores,
+            enfermeiros, técnicos de som... — que servem a igreja <strong>de graça</strong>, por vocação (Regimento Art. 48 a 52). Aqui você
+            vê a sua situação, se candidata a um setor, lê e aceita o <strong>Termo de Adesão</strong> quando for aprovado(a) e, se serve num
+            setor com esse poder, registra uma interdição ou um pedido de remoção. Você pode <strong>sair quando quiser</strong>, sem nenhuma penalidade.</p>
+          <p id="stcMeuResultado" class="subtitle" role="status"></p>
+          <div id="stcMeuCondicao"></div>
+
+          <h4>📋 Os meus vínculos</h4>
+          <div id="stcMeusVinculos"></div>
+          <p id="stcMeuAcaoMsg" class="subtitle" role="status"></p>
+
+          <!-- candidatura: só aparece para quem pode servir -->
+          <div id="stcBlocoCandidatura" style="display:none;">
+            <hr />
+            <h4>🙋 Quero servir num setor</h4>
+            <p class="subtitle" style="margin:4px 0 10px;">Escolha o setor da sua profissão e diga a sua formação. A administração analisa; se aprovar, você recebe um aviso
+              e aceita o Termo de Adesão aqui mesmo. Exemplo: a irmã Maria é enfermeira e se candidata ao <em>Setor de Saúde e Bem-Estar</em>, com o registro no COREN.</p>
+            <div class="cal-form">
+              <div class="cal-form-grade">
+                <div class="input-group">
+                  <label for="stcCandSetor">Setor</label>
+                  <select id="stcCandSetor" data-on-change="stcCandSetorMudouAcao"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcCandFormacao">Sua formação (3 a 150 caracteres)</label>
+                  <input type="text" id="stcCandFormacao" maxlength="150" placeholder="Ex.: Enfermeira, UFPA" />
+                </div>
+                <div class="input-group">
+                  <label for="stcCandSigla">Sigla do conselho de classe (se tiver)</label>
+                  <input type="text" id="stcCandSigla" maxlength="20" placeholder="Ex.: COREN-PA" />
+                </div>
+                <div class="input-group">
+                  <label for="stcCandNumero">Número do registro (se tiver)</label>
+                  <input type="text" id="stcCandNumero" maxlength="30" placeholder="Ex.: 123456" />
+                </div>
+              </div>
+              <p id="stcCandDica" class="psc-legenda" role="status"></p>
+            </div>
+            <div class="psc-acoes">
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcCandidatarAcao" data-args-click='[{"$":"this"}]'>🙋 Enviar a candidatura</button>
+            </div>
+          </div>
+
+          <!-- interdição: só para quem serve ATIVO num setor que pode interditar -->
+          <div id="stcBlocoInterdicao" style="display:none;">
+            <hr />
+            <h4>⛔ Interditar templo ou estrutura</h4>
+            <p class="cnl-aviso-senha" role="note"><strong>Atenção:</strong> a interdição <strong>vale na hora</strong>. Ela é enviada à <strong>Diretoria Executiva</strong>, que a
+              ratifica ou revoga, e fica <strong>registrada com o seu nome</strong> e o seu registro profissional. Use só diante de <strong>risco iminente</strong> (risco de
+              desabamento ou falha elétrica grave): a segurança da vida vem antes da agenda da igreja (Regimento Art. 50, I).</p>
+            <div class="cal-form">
+              <div class="cal-form-grade">
+                <div class="input-group" id="stcIntSetorCx" style="display:none;">
+                  <label for="stcIntSetor">Em nome de qual setor?</label>
+                  <select id="stcIntSetor"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcIntCong">Congregação do templo ou da estrutura</label>
+                  <select id="stcIntCong"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcIntMotivo">Motivo</label>
+                  <select id="stcIntMotivo"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcIntObjeto">O que foi interditado (3 a 150 caracteres)</label>
+                  <input type="text" id="stcIntObjeto" maxlength="150" placeholder="Ex.: Templo principal — cobertura da nave" />
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="stcIntDescricao">Justificativa técnica (30 a 1000 caracteres)</label>
+                <textarea id="stcIntDescricao" rows="4" maxlength="1000" style="width:100%;" placeholder="O que você viu e por que há risco iminente."></textarea>
+              </div>
+              <div class="input-group">
+                <label for="stcIntReferencia">Número do laudo ou da ART (opcional)</label>
+                <input type="text" id="stcIntReferencia" maxlength="300" />
+              </div>
+            </div>
+            <div class="psc-acoes">
+              <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" data-on-click="stcEmitirInterdicaoAcao" data-args-click='[{"$":"this"}]'>⛔ Interditar</button>
+            </div>
+            <p id="stcIntMsg" class="subtitle" role="status"></p>
+          </div>
+
+          <!-- pedido de remoção de postagem: só para quem serve ATIVO num setor que pode pedir remoção -->
+          <div id="stcBlocoRemocao" style="display:none;">
+            <hr />
+            <h4>📵 Pedir a remoção de uma postagem</h4>
+            <p class="cnl-aviso-senha" role="note"><strong>Atenção:</strong> o pedido é <strong>registrado na hora</strong>, avisado a quem cuida da rede, à liderança da congregação e à
+              <strong>Diretoria Executiva</strong> (que pode revogá-lo), e fica <strong>registrado com o seu nome</strong>. É um pedido, não uma ordem: use para erro grosseiro, violação de
+              direito autoral ou ofensa à doutrina ou à imagem da Igreja nas redes oficiais (Regimento Art. 50, II).</p>
+            <div class="cal-form">
+              <div class="cal-form-grade">
+                <div class="input-group" id="stcRemSetorCx" style="display:none;">
+                  <label for="stcRemSetor">Em nome de qual setor?</label>
+                  <select id="stcRemSetor"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcRemCong">Congregação dona da rede social</label>
+                  <select id="stcRemCong" data-on-change="stcRemCongregacaoMudouAcao"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcRemCanal">Canal oficial (se estiver na lista)</label>
+                  <select id="stcRemCanal"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcRemMotivo">Motivo</label>
+                  <select id="stcRemMotivo"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcRemObjeto">Rede e perfil (obrigatório se o canal não está na lista)</label>
+                  <input type="text" id="stcRemObjeto" maxlength="150" placeholder="Ex.: Instagram @congregacao" />
+                </div>
+                <div class="input-group">
+                  <label for="stcRemReferencia">Link da postagem (começa com https://)</label>
+                  <input type="text" id="stcRemReferencia" maxlength="300" placeholder="https://..." />
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="stcRemDescricao">Justificativa (20 a 1000 caracteres)</label>
+                <textarea id="stcRemDescricao" rows="3" maxlength="1000" style="width:100%;" placeholder="Qual é o erro, a violação ou a ofensa."></textarea>
+              </div>
+            </div>
+            <div class="psc-acoes">
+              <button type="button" class="btn-confirmar btn-perigo" style="width:auto;margin:0;" data-on-click="stcEmitirRemocaoAcao" data-args-click='[{"$":"this"}]'>📵 Pedir a remoção</button>
+            </div>
+            <p id="stcRemMsg" class="subtitle" role="status"></p>
+          </div>
+
+          <!-- os atos que eu emiti -->
+          <div id="stcBlocoMeusAtos" style="display:none;">
+            <hr />
+            <h4>📜 Os atos que eu emiti</h4>
+            <p class="subtitle" style="margin:4px 0 10px;">Você pode levantar a sua interdição quando o risco for sanado, e cancelar um pedido de remoção de que desistiu.</p>
+            <div id="stcMeusAtos"></div>
+          </div>
+
+          <!-- atos da minha congregação: só o líder (o servidor confere o escopo) -->
+          <div id="stcBlocoCongregacao" style="display:none;">
+            <hr />
+            <h4>⛪ Atos da minha congregação</h4>
+            <p class="subtitle" style="margin:4px 0 10px;">Como líder, você vê aqui as interdições e os pedidos de remoção de postagem da congregação. Quando a postagem sair do ar,
+              marque o pedido como atendido.</p>
+            <div class="barra-lista">
+              <select id="stcCongAtosSel" title="Congregação" data-on-change="stcCarregarAtosCongregacaoAcao"></select>
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcCarregarAtosCongregacaoAcao">🔄 Atualizar</button>
+            </div>
+            <p id="stcAtosCongResultado" class="subtitle" role="status"></p>
+            <p id="stcAtosCongMsg" class="subtitle" role="status"></p>
+            <div id="stcAtosCongLista"></div>
+          </div>
         </div>
 
         <!-- SUB-ABA: MINHAS CONQUISTAS (v6.4 — Motor de conquistas e
@@ -4387,6 +4563,288 @@
         </div>
       </div>
 
+      <!-- ABA: SETORES TÉCNICOS (v7.6) — Regimento Art. 48 a 52. Exige "setores_tecnicos" (a gestão: catálogo
+           dos setores, vínculos, Termo de Adesão e a visão de todos os atos) e/ou "setores_ratificacao" (a
+           Diretoria Executiva: ratificar ou revogar as interdições e os pedidos de remoção); as duas só
+           valem no nível geral. Toda regra mora no servidor (shared/setoresTecnicos.js, rota
+           /api/setores-tecnicos); aqui só se monta a tela. O que o servidor devolve passa por escaparHtmlEbd.
+           Os botões de cada ato vêm do campo "acoes" do próprio ato. -->
+      <div id="abaSetores" class="aba-secretaria" style="display:none;">
+        <h3>🧑‍⚕️ Setores Técnicos</h3>
+        <p class="subtitle">Os <strong>Setores Técnicos</strong> (Regimento Art. 48 a 52) são grupos de profissionais voluntários da Igreja — engenheiros, advogados, contadores,
+          médicos e outros. Cada pessoa serve <strong>de graça</strong> (sem salário nem honorário), assina o <strong>Termo de Adesão</strong> e pode sair quando quiser. Só quem
+          serve num setor <strong>com o Termo aceito</strong> tem os poderes dele. Os setores são <strong>gerais</strong>: não existem "por congregação".</p>
+
+        <div class="cal-pilulas" id="stcPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnStcSecaoSetores" data-on-click="stcMostrarSecaoAcao" data-args-click='["setores"]' style="display:none;">🏛️ Setores</button>
+          <button type="button" class="cal-pilula" id="btnStcSecaoVinculos" data-on-click="stcMostrarSecaoAcao" data-args-click='["vinculos"]' style="display:none;">🤝 Vínculos</button>
+          <button type="button" class="cal-pilula" id="btnStcSecaoAtos" data-on-click="stcMostrarSecaoAcao" data-args-click='["atos"]' style="display:none;">🚨 Atos cautelares</button>
+        </div>
+
+        <!-- a) SETORES -->
+        <div id="stcSecaoSetores" class="cal-secao">
+          <h4>🏛️ Os setores da Igreja</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Um setor sem nenhum profissional servindo aparece como <strong>"Sem profissionais"</strong>: onde não há profissionais, o setor
+            não existe de fato (Art. 48 §2º). As marcas dizem o que o setor exige ou pode fazer: <strong>exige registro</strong> no conselho da profissão,
+            <strong>pode interditar</strong> um templo em risco ou <strong>pede remoção</strong> de postagem nas redes oficiais.</p>
+          <div class="barra-lista">
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcCarregarSetoresAcao">🔄 Atualizar</button>
+          </div>
+          <p id="stcResultadoSetores" class="subtitle" role="status"></p>
+          <div id="stcListaSetores"></div>
+
+          <div id="stcBlocoSetorForm" style="display:none;">
+            <details id="stcSetorDetalhes" class="vol-form evt-form-detalhes">
+              <summary id="stcSetorFormTitulo">➕ Cadastrar um setor novo</summary>
+              <div class="cal-form">
+                <div class="cal-form-grade">
+                  <div class="input-group">
+                    <label for="stcSetorNome">Nome do setor (3 a 100 caracteres)</label>
+                    <input type="text" id="stcSetorNome" maxlength="100" placeholder="Ex.: Setor de Engenharia, Arquitetura e Obras" />
+                  </div>
+                  <div class="input-group">
+                    <label for="stcSetorInciso">Inciso do Art. 52 (algarismos romanos, opcional)</label>
+                    <input type="text" id="stcSetorInciso" maxlength="6" placeholder="Ex.: II" />
+                  </div>
+                  <div class="input-group">
+                    <label for="stcSetorOrdem">Ordem na lista (0 a 999)</label>
+                    <input type="number" id="stcSetorOrdem" min="0" max="999" placeholder="0" />
+                  </div>
+                  <div class="input-group">
+                    <label for="stcSetorConselho">Conselho de classe (opcional)</label>
+                    <input type="text" id="stcSetorConselho" maxlength="60" placeholder="Ex.: CREA/CAU" />
+                  </div>
+                </div>
+                <div class="input-group">
+                  <label for="stcSetorCompetencia">O que o setor faz (competência, 10 a 600 caracteres)</label>
+                  <textarea id="stcSetorCompetencia" rows="3" maxlength="600" style="width:100%;"></textarea>
+                </div>
+                <div class="input-group">
+                  <label for="stcSetorProfissoes">Profissões que servem nele (opcional)</label>
+                  <input type="text" id="stcSetorProfissoes" maxlength="200" placeholder="Ex.: engenheiros, arquitetos, técnicos em edificações" />
+                </div>
+                <label class="opcao-checkbox"><input type="checkbox" id="stcSetorExigeRegistro" /> Exige registro no conselho de classe (a pessoa precisa informar a sigla e o número)</label>
+                <label class="opcao-checkbox"><input type="checkbox" id="stcSetorPodeInterditar" /> Pode interditar templo ou estrutura com risco (Art. 50, I) — como Engenharia e Segurança</label>
+                <label class="opcao-checkbox"><input type="checkbox" id="stcSetorPodeRemocao" /> Pode pedir a remoção de postagem nas redes oficiais (Art. 50, II) — como Comunicação</label>
+              </div>
+              <div class="psc-acoes">
+                <button type="button" class="btn-confirmar" id="stcSetorSalvar" style="width:auto;margin:0;" data-on-click="stcSalvarSetorAcao" data-args-click='[{"$":"this"}]'>💾 Cadastrar o setor</button>
+                <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcLimparSetorFormAcao">Limpar</button>
+              </div>
+              <p id="stcSetorFormMsg" class="subtitle" role="status"></p>
+            </details>
+          </div>
+        </div>
+
+        <!-- b) VÍNCULOS -->
+        <div id="stcSecaoVinculos" class="cal-secao" style="display:none;">
+          <h4>🤝 Quem serve em cada setor</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Cada pessoa passa por quatro passos: <strong>candidatura</strong>, <strong>aprovação</strong>, <strong>Termo de Adesão aceito</strong> e
+            <strong>servindo</strong>. Ninguém aprova a própria candidatura. O vínculo só dá os poderes do setor depois do Termo.</p>
+          <div class="barra-lista">
+            <select id="stcFiltroVincSetor" title="Setor" data-on-change="stcCarregarVinculosAcao"><option value="">Todos os setores</option></select>
+            <select id="stcFiltroVincStatus" title="Situação" data-on-change="stcCarregarVinculosAcao">
+              <option value="">Todas as situações</option>
+              <option value="CANDIDATO">Candidatura esperando decisão</option>
+              <option value="AGUARDANDO_TERMO">Esperando o aceite do Termo</option>
+              <option value="ATIVO">Servindo</option>
+              <option value="ENCERRADO">Encerrados</option>
+            </select>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcCarregarVinculosAcao">🔄 Atualizar</button>
+          </div>
+          <p id="stcResultadoVinculos" class="subtitle" role="status"></p>
+          <div id="stcTermoVista"></div>
+          <div id="stcListaVinculos"></div>
+
+          <div id="stcBlocoIndicar" style="display:none;">
+            <hr />
+            <h4>➕ Indicar alguém</h4>
+            <p class="subtitle" style="margin:4px 0 10px;">Use quando a administração convida um profissional. O vínculo já nasce aprovado e <strong>espera o Termo</strong>: a pessoa é avisada e aceita
+              em Meu Painel (ou a Secretaria registra a ficha assinada). Você não pode indicar a si mesmo.</p>
+            <div class="cal-form">
+              <div class="cal-form-grade">
+                <div class="input-group">
+                  <label for="stcIndMatricula">Matrícula da pessoa</label>
+                  <input type="number" id="stcIndMatricula" min="1" placeholder="Matrícula" />
+                </div>
+                <div class="input-group">
+                  <label for="stcIndSetor">Setor</label>
+                  <select id="stcIndSetor" data-on-change="stcIndSetorMudouAcao"></select>
+                </div>
+                <div class="input-group">
+                  <label for="stcIndFormacao">Formação (3 a 150 caracteres)</label>
+                  <input type="text" id="stcIndFormacao" maxlength="150" placeholder="Ex.: Engenheira civil, UFPA" />
+                </div>
+                <div class="input-group">
+                  <label for="stcIndSigla">Sigla do conselho (se tiver)</label>
+                  <input type="text" id="stcIndSigla" maxlength="20" placeholder="Ex.: CREA-PA" />
+                </div>
+                <div class="input-group">
+                  <label for="stcIndNumero">Número do registro (se tiver)</label>
+                  <input type="text" id="stcIndNumero" maxlength="30" placeholder="Ex.: 123456/D" />
+                </div>
+              </div>
+              <p id="stcIndDica" class="psc-legenda" role="status"></p>
+            </div>
+            <div class="psc-acoes">
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcIndicarAcao" data-args-click='[{"$":"this"}]'>➕ Indicar</button>
+            </div>
+            <p id="stcIndMsg" class="subtitle" role="status"></p>
+          </div>
+        </div>
+
+        <!-- c) ATOS CAUTELARES (interdição e pedido de remoção de postagem) -->
+        <div id="stcSecaoAtos" class="cal-secao" style="display:none;">
+          <h4>🚨 Atos cautelares</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">A <strong>interdição</strong> de um templo ou estrutura em risco (Engenharia, Segurança) <strong>vale na hora</strong>; a Diretoria
+            Executiva a ratifica ou a revoga (Art. 50, I). O <strong>pedido de remoção</strong> de postagem (Comunicação) pede que a rede oficial retire o conteúdo (Art. 50, II).
+            Quem emitiu o ato não o ratifica nem o revoga.</p>
+          <div class="barra-lista">
+            <select id="stcFiltroAtoSituacao" title="Quais atos" data-on-change="stcCarregarAtosAcao">
+              <option value="abertos" selected>Em aberto (o que ainda vale ou pede providência)</option>
+              <option value="todos">Todos (inclusive os encerrados)</option>
+            </select>
+            <select id="stcFiltroAtoTipo" title="Tipo de ato" data-on-change="stcCarregarAtosAcao">
+              <option value="">Interdições e pedidos de remoção</option>
+              <option value="INTERDICAO">Só interdições</option>
+              <option value="REMOCAO_POSTAGEM">Só pedidos de remoção</option>
+            </select>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcCarregarAtosAcao">🔄 Atualizar</button>
+          </div>
+          <p id="stcResultadoAtos" class="subtitle" role="status"></p>
+          <div id="stcAvisoVigor"></div>
+          <p id="stcAtosAcaoMsg" class="subtitle" role="status"></p>
+          <div id="stcListaAtos"></div>
+        </div>
+      </div>
+
+      <!-- ABA: VISTORIA DE ANTECEDENTES (v7.6) — Regimento Art. 133 §5º. Exige "vistoria_antecedentes": só a
+           Diretoria Executiva e o Conselho de Ética (nível geral). O Termo de Vistoria guarda a data, o
+           parecer, quem conferiu e o HASH (código SHA-256) de cada certidão: a certidão em si NUNCA sobe
+           ao servidor — o navegador calcula o hash do arquivo escolhido e só ele é enviado (IV, "b" e "c").
+           Lavrar o Termo pede a confirmação reforçada (chave de acesso ou código por e-mail). Toda regra mora
+           no servidor (shared/vistoriaAntecedentes.js, rota /api/vistorias-antecedentes). -->
+      <div id="abaVistoria" class="aba-secretaria" style="display:none;">
+        <h3>🔎 Vistoria de Antecedentes</h3>
+        <p class="subtitle">A Diretoria Executiva pode pedir a qualquer membro as <strong>certidões de antecedentes</strong> (Regimento Art. 133 §5º). O documento é conferido na presença da
+          pessoa e <strong>devolvido a ela ou descartado</strong>: a Igreja guarda só o <strong>Termo de Vistoria</strong>, com a data, o parecer, quem conferiu e o <strong>código (hash) de
+          cada certidão</strong>. Esta tela é só da Diretoria Executiva e do Conselho de Ética.</p>
+
+        <div class="cal-pilulas" id="stcVisPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnStcVisSecaoPendentes" data-on-click="stcVisMostrarSecaoAcao" data-args-click='["pendentes"]'>⏳ Quem falta</button>
+          <button type="button" class="cal-pilula" id="btnStcVisSecaoLista" data-on-click="stcVisMostrarSecaoAcao" data-args-click='["lista"]'>📚 Termos lavrados</button>
+          <button type="button" class="cal-pilula" id="btnStcVisSecaoLavrar" data-on-click="stcVisMostrarSecaoAcao" data-args-click='["lavrar"]'>📋 Lavrar Termo</button>
+          <button type="button" class="cal-pilula" id="btnStcVisSecaoSolicitar" data-on-click="stcVisMostrarSecaoAcao" data-args-click='["solicitar"]'>📨 Solicitar certidões</button>
+        </div>
+
+        <!-- a) QUEM FALTA -->
+        <div id="stcVisSecaoPendentes" class="cal-secao">
+          <h4>⏳ Lideranças em exercício sem Termo de Vistoria</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">A checagem é obrigatória na primeira vez que o membro assume cargo de liderança, de confiança ou trabalho com vulneráveis
+            (Art. 133 §5º, II, "a"). Quem só tem a recusa registrada também aparece aqui.</p>
+          <div class="barra-lista">
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcVisCarregarPendentesAcao">🔄 Atualizar</button>
+          </div>
+          <p id="stcVisResultadoPendentes" class="subtitle" role="status"></p>
+          <div id="stcVisListaPendentes"></div>
+        </div>
+
+        <!-- b) TERMOS LAVRADOS -->
+        <div id="stcVisSecaoLista" class="cal-secao" style="display:none;">
+          <h4>📚 Termos de Vistoria lavrados</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Sem filtro, aparecem os mais recentes de todos. Para ver os de uma pessoa, digite a matrícula.</p>
+          <div class="barra-lista">
+            <input type="number" id="stcVisFiltroMatricula" min="1" placeholder="Matrícula (opcional)" />
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcVisCarregarListaAcao">🔍 Buscar</button>
+          </div>
+          <p id="stcVisResultadoLista" class="subtitle" role="status"></p>
+          <div id="stcVisListaTermos"></div>
+        </div>
+
+        <!-- c) LAVRAR O TERMO -->
+        <div id="stcVisSecaoLavrar" class="cal-secao" style="display:none;">
+          <h4>📋 Lavrar o Termo de Vistoria</h4>
+          <p class="psc-aviso" role="note">🔒 <strong>A certidão não sobe para a internet.</strong> Você escolhe o arquivo, o seu navegador calcula aqui mesmo o código de verificação (hash SHA-256)
+            e <strong>só esse código</strong> é enviado. O arquivo fica no seu aparelho: devolva o original à pessoa ou descarte.</p>
+          <div class="cal-form">
+            <div class="cal-form-grade">
+              <div class="input-group">
+                <label for="stcLavMatricula">Matrícula de quem foi vistoriado</label>
+                <input type="number" id="stcLavMatricula" min="1" placeholder="Matrícula" />
+              </div>
+              <div class="input-group">
+                <label for="stcLavMotivo">Motivo da vistoria</label>
+                <select id="stcLavMotivo"></select>
+              </div>
+              <div class="input-group">
+                <label for="stcLavFuncao">Cargo ou função em jogo (3 a 150 caracteres)</label>
+                <input type="text" id="stcLavFuncao" maxlength="150" placeholder="Ex.: Professor da EBD infantil" />
+              </div>
+              <div class="input-group">
+                <label for="stcLavData">Data da verificação</label>
+                <input type="date" id="stcLavData" />
+              </div>
+              <div class="input-group">
+                <label for="stcLavResultado">Resultado</label>
+                <select id="stcLavResultado" data-on-change="stcLavResultadoMudouAcao"></select>
+              </div>
+            </div>
+            <label class="opcao-checkbox"><input type="checkbox" id="stcLavVulneraveis" /> A função envolve crianças, adolescentes, idosos ou outras pessoas vulneráveis</label>
+            <div class="input-group">
+              <label for="stcLavParecer">Parecer final (10 a 1000 caracteres)</label>
+              <textarea id="stcLavParecer" rows="3" maxlength="1000" style="width:100%;" placeholder="Só a conclusão. Não copie dados da certidão."></textarea>
+            </div>
+            <p id="stcLavAvisoRecusa" class="psc-aviso" style="display:none;">Quem recusou apresentar as certidões não tem documento a registrar: o Termo guarda só a recusa e o parecer. A recusa implica impedimento ou afastamento preventivo da função (Art. 133 §5º, I, "a"), que a Diretoria aplica.</p>
+            <div id="stcLavBlocoDestino">
+              <div class="input-group">
+                <label for="stcLavDestino">O que foi feito do documento original</label>
+                <select id="stcLavDestino"></select>
+              </div>
+            </div>
+            <div id="stcLavBlocoDocs">
+              <h5>📄 Certidões conferidas (de 1 a 6)</h5>
+              <div id="stcLavDocs"></div>
+              <div class="psc-acoes">
+                <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="stcLavAdicionarDocAcao">➕ Adicionar outra certidão</button>
+              </div>
+            </div>
+          </div>
+          <div class="psc-acoes">
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcLavrarAcao" data-args-click='[{"$":"this"}]'>✍️ Lavrar e assinar o Termo</button>
+          </div>
+          <p class="psc-legenda">O Termo fica assinado com o seu nome e <strong>não pode ser alterado nem apagado</strong>. Por segurança, o sistema pode pedir que você confirme quem é (chave de acesso ou código por e-mail).</p>
+          <p id="stcLavMsg" class="subtitle" role="status"></p>
+          <div id="stcLavTermoLavrado"></div>
+        </div>
+
+        <!-- d) SOLICITAR AS CERTIDÕES -->
+        <div id="stcVisSecaoSolicitar" class="cal-secao" style="display:none;">
+          <h4>📨 Solicitar as certidões</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Avisa a pessoa de que a Diretoria solicita a certidão de antecedentes criminais e a de distribuição cível, e que deve procurar a Diretoria. <strong>Nada
+            fica registrado</strong> além do aviso: o Termo só existe depois de lavrado. Você não pode solicitar a si mesmo.</p>
+          <div class="cal-form">
+            <div class="cal-form-grade">
+              <div class="input-group">
+                <label for="stcSolMatricula">Matrícula da pessoa</label>
+                <input type="number" id="stcSolMatricula" min="1" placeholder="Matrícula" />
+              </div>
+              <div class="input-group">
+                <label for="stcSolMotivo">Motivo do pedido</label>
+                <select id="stcSolMotivo"></select>
+              </div>
+              <div class="input-group">
+                <label for="stcSolFuncao">Cargo ou função em jogo (opcional)</label>
+                <input type="text" id="stcSolFuncao" maxlength="150" placeholder="Ex.: Professor da EBD infantil" />
+              </div>
+            </div>
+          </div>
+          <div class="psc-acoes">
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="stcSolicitarAcao" data-args-click='[{"$":"this"}]'>📨 Avisar a pessoa</button>
+          </div>
+          <p id="stcSolMsg" class="subtitle" role="status"></p>
+        </div>
+      </div>
+
       <!-- ABA: DOCUMENTOS (Governança) -->
       <!-- ABA: FINANCEIRO (v4.1) — Tesouraria Local e Repasses (Art. 118).
            Painel próprio (ver sidebar): 5 sub-abas, mesmo padrão de submenu
@@ -5540,6 +5998,7 @@
   <script src="modulos/psc.js"></script>
   <script src="modulos/relatorios-departamentos.js"></script>
   <script src="modulos/reunioes.js"></script>
+  <script src="modulos/setores-tecnicos.js"></script>
   <script src="modulos/voluntariado.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 const { EmailClient } = require("@azure/communication-email");
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
-const { renderEmailShell, escaparHtml } = require("../src/lib/emailTemplate");
+const { montarAvisoRetirada, enviarAviso } = require("../src/lib/avisoRetirada");
 
 const ACS_CONNECTION_STRING = process.env.ACS_CONNECTION_STRING;
 const REMETENTE = process.env.ACS_REMETENTE || "DoNotReply@ieadespa.org.br";
@@ -14,6 +14,7 @@ const REMETENTE = process.env.ACS_REMETENTE || "DoNotReply@ieadespa.org.br";
  * token de admin, só monta e envia o e-mail. Melhor esforço, igual ao resto
  * do e-mail transacional do site: falha aqui nunca desfaz o "separado", que
  * já foi gravado antes desta chamada.
+ * 08/10/2026 — o texto do e-mail mora em src/lib/avisoRetirada.js, o mesmo do aviso EM MASSA (AvisarRetiradaCamisetas).
  */
 module.exports = async function (context, req) {
   if (!permitir(`aviso-retirada-camiseta:${ipDoPedido(req)}`)) {
@@ -34,41 +35,9 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const itensTexto = itens.map((i) => {
-    const rotulo = [i.tamanho, i.modelo].filter(Boolean).join(" · ") || "Item";
-    return `${rotulo} — ${i.quantidade}x`;
-  });
-
-  const assuntoFinal = assunto || `Sua camiseta chegou! — ${campanhaNome}`;
-  const paragrafo = corpo || `Boa notícia, ${nome}! O pedido que você fez em "${campanhaNome}" já chegou e está separado, pronto pra você retirar.`;
-
-  const corpoHtml = `
-    <p style="margin:0 0 16px;font-size:15px;color:#3a3226;line-height:1.5;">${escaparHtml(paragrafo)}</p>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #e5decf;border-radius:8px;">
-      <tr><td style="padding:12px 16px;">
-        ${itensTexto.map((linha) => `<div style="font-size:14px;color:#2a2116;">${escaparHtml(linha)}</div>`).join("")}
-      </td></tr>
-    </table>
-    ${
-      retiradaLocal
-        ? `<p style="margin:0;font-size:14px;color:#3a3226;line-height:1.5;"><strong>Onde retirar:</strong> ${escaparHtml(retiradaLocal)}</p>`
-        : ""
-    }`;
-
-  const corpoTexto = [paragrafo, "", ...itensTexto, "", retiradaLocal ? `Onde retirar: ${retiradaLocal}` : ""].filter((l) => l !== "").join("\n");
-
   try {
-    const client = new EmailClient(ACS_CONNECTION_STRING);
-    const poller = await client.beginSend({
-      senderAddress: REMETENTE,
-      content: {
-        subject: assuntoFinal,
-        plainText: corpoTexto,
-        html: renderEmailShell({ titulo: assuntoFinal, corpoHtml }),
-      },
-      recipients: { to: [{ address: email }] },
-    });
-    await poller.pollUntilDone();
+    const aviso = montarAvisoRetirada({ nome, campanhaNome, itens, retiradaLocal, assunto, corpo });
+    await enviarAviso(new EmailClient(ACS_CONNECTION_STRING), REMETENTE, { email, aviso, aguardarEntrega: true });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { enviado: true } };
   } catch (err) {
     context.log.error("Falha ao enviar e-mail de aviso de retirada:", err);

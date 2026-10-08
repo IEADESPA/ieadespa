@@ -135,6 +135,8 @@ export const TELEFONE_PEDIDO_URL = "/api/telefone-pedido";
  * nunca bloqueia a marcação em si (ver `api/EnviarAvisoRetiradaCamiseta/`).
  */
 export const ENVIAR_AVISO_RETIRADA_CAMISETA_URL = "/api/enviar-aviso-retirada-camiseta";
+/** Aviso EM MASSA de retirada (08/10/2026): o painel chama em lotes até não sobrar pedido com e-mail sem aviso. */
+export const AVISAR_RETIRADA_CAMISETAS_URL = "/api/avisar-retirada-camisetas";
 
 /**
  * Ferramenta de exercício de direito de exclusão (LGPD, Art. 18) — só a

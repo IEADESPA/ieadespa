@@ -513,3 +513,31 @@ Ponto de parada obrigatório. Audita vD.4 a vD.8 pelas 5 perguntas, e faz a varr
 especial à vD.4: um segundo fator mal feito tranca o Presidente fora do sistema ou, pior, deixa um atalho que o anula —
 testar o caminho de recuperação de verdade, com uma conta de teste, antes de ligar pra todo mundo. Fechada esta trava,
 abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.
+
+- [x] **Fechada em 08/10/2026** — auditoria de vD.4 a vD.8 e varredura final da FASE D:
+  1. *Código novo roda de ponta a ponta no ambiente real?* **Sim.** A vD.4 subiu primeiro no `homolog` (PR #21: migrações
+     140 e 141 aplicadas e semeadura zerando as chaves fictícias) e depois na `main` (corrida 37786339310: 4.606 testes,
+     migrações 140 e 141 na produção, varredura de 205 rotas sem sessão — 200×7, 400×5, 401×190, 404-json×3 — e os 23
+     módulos conferidos). A vD.5 (agenda sem acordar o banco), a vD.7 (raiz do domínio) e a vD.8 (aviso de retirada em
+     massa) foram conferidas na produção no dia em que subiram.
+  2. *Toda tela abre e mostra dado de verdade?* **Sim.** Rodada completa dos testes de tela na `main` depois do merge
+     (corrida 37808504793, rodada completa: 4.762 ações iguais no desktop e 625 na janela de celular 360×740, 0 divergência, 0 violação de CSP, 0 falha do equipamento, 0 inconclusiva). A tela nova foi provada com dado real
+     na homologação: 13/13 na prova com autenticador virtual (corrida 37785895447 — entra sem chave com aviso, cadastra
+     pela tela, entra pela chave, confirmação reforçada reassina a sessão, remove e volta a entrar direto, zero erro de
+     JavaScript).
+  3. *README e código narram a mesma coisa?* **Sim.** README (estado atual e tabela das fases), este plano (vD.4 a vD.8
+     riscadas com data), `HOMOLOGACAO.md` (prova da chave) e `SECRETS.md` (seção 10, rotação) atualizados em 08/10.
+  4. *O que ficou para trás foi corrigido, não só anotado?* **Sim, o que o código resolve.** A prova em navegador achou a
+     restrição do banco que recusava o canal `FATOR` (migração 141) e dois defeitos do próprio roteiro (espera curta na
+     segunda etapa automática; Chrome do runner que não abre na primeira vez) — os três corrigidos antes do merge. O
+     orçamento com alerta já existia e foi conferido. **Fica para o responsável:** o ensaio de restauração (adiado por ele
+     em 07/10), o Google Search Console (conta dele), o teste de carga maior (depois da decisão sobre o Directus) e o
+     item "funções reaproveitáveis" da vD.2, que esta trava **propõe cancelar** (refatoração visual sem ganho medível com
+     dois usuários; a v10.1 cobre o redesenho). Nenhum deles bloqueia a trava.
+  5. *Deploy real aconteceu?* **Sim.** Produção conferida depois do merge: `script.js` com a segunda etapa, biblioteca
+     WebAuthn servida de dentro (200), casca do service worker v29, rotas novas respondendo 401 sem sessão/bilhete.
+     **Atenção especial da trava (caminho de recuperação):** provado com conta de teste na homologação — o dirigente
+     fictício, sem chave e com e-mail, cai na etapa do código; código errado é recusado (canal `FATOR`, 10 falhas até o
+     bloqueio escalonado), reenvio limitado a um por minuto, sem bilhete 401; quem não tem chave nem e-mail entra com
+     aviso (prova 13/13, passo 1). Ninguém fica trancado fora: a reserva por e-mail e a remoção de chaves pelo nível geral
+     (`chaves-acesso/admin/remover`, com auditoria) cobrem o aparelho perdido.

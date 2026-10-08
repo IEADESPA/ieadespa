@@ -362,8 +362,8 @@ diz em que arquivo ela está e em que pé ela anda.
 | C | Integração com o site institucional | concluída | [fase-c-integracao-com-o-site](docs/plano/fase-c-integracao-com-o-site.md) |
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
-| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.5 entregues) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
-| D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A; site congelado até 17/10) | proposta (06/10/2026) | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
+| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.5 entregues; Trava 7-A fechada em 08/10/2026; próxima: v7.6) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A) | vD.1–vD.8 feitas e Trava D-B fechada (06–08/10/2026); ficam só decisões do responsável | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
 | 10 | Experiência, design e performance | planejada | [fase-10-experiencia-design-performance](docs/plano/fase-10-experiencia-design-performance.md) |

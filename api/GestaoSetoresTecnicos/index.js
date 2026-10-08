@@ -8,7 +8,7 @@
 //   "setores_tecnicos"     catálogo, vínculos, aprovação de candidaturas, Termo (ficha/mensagem) e a visão de todos os atos cautelares;
 //   "setores_ratificacao"  a Diretoria Executiva: ratificar ou revogar as interdições e os pedidos de remoção, e levantar uma interdição.
 // Sem permissão nenhuma, qualquer pessoa logada (inclusive por PIN), sobre si mesma: se candidatar, aceitar o Termo, sair, e — se serve ATIVO num setor com o
-// poder — emitir interdição (Engenharia, Segurança) ou pedido de remoção de postagem (Comunicação). O LÍDER (sessão de liderança) vê e atende os atos da sua congregação.
+// poder — emitir interdição (Engenharia, Segurança) ou pedido de remoção de postagem (Comunicação). O LÍDER (sessão de liderança com a permissão `pessoas`, de nível territorial e sem restrição de departamento) vê e atende os atos da sua congregação; quem administra o canal e a gestão também veem o ato do seu canal.
 //
 // ---- Leitura (GET /api/setores-tecnicos/...) -----------------------------------------------------
 //  catalogos          -> { statusVinculo[], motivosEncerramento[], tiposAto[], motivosInterdicao[], motivosRemocao[], statusAto[], formasRegistroManual[], canaisMensageria[],
@@ -21,7 +21,7 @@
 //  atos?tipo=&status=&abertos=1&congregacaoId=              -> { atos[{intervencaoId,tipo,status,...,acoes[]}] }                    (setores_tecnicos ou setores_ratificacao, geral)
 //  atos-da-congregacao?congregacaoId=                       -> { atos[...] } os atos da congregação, para o líder cujo escopo a alcança                          (sessão de liderança)
 //  ato?intervencaoId=                                       -> { ato }  quem emitiu, a gestão, a Diretoria ou o líder da congregação; os outros recebem 404           (login)
-//  canais?congregacaoId=                                    -> { canais[{canalId,nome,plataforma,identificador}] } onde está a postagem  (quem serve com poder de remoção, ou a gestão/Diretoria)
+//  canais?congregacaoId=                                    -> { canais[{canalId,nome,plataforma}] } onde está a postagem (sem o identificador do canal: telefone, e-mail ou link de grupo são de quem administra canais)  (quem serve com poder de remoção, ou a gestão/Diretoria)
 //
 // ---- Escrita (POST /api/setores-tecnicos/...) ----------------------------------------------------
 //  setor              body:{nome, competencia, profissoes?, conselhoClasse?, inciso?, exigeRegistro?, podeInterditar?, podeSolicitarRemocao?, ordem?}   (setores_tecnicos, geral) -> 201
@@ -33,7 +33,8 @@
 //  recusar            body:{vinculoId, observacao?}                                                                                                      (setores_tecnicos, geral)
 //  encerrar           body:{vinculoId, tipoMotivo:SAIDA_PROPRIA|DESLIGAMENTO|MUDANCA|OUTRO, observacao?}                                                 (setores_tecnicos, geral)
 //  sair               body:{vinculoId}                                                    a pessoa sai quando quiser (Art. 133 §7º)                        (login)
-//  aceitar-termo      body:{vinculoId, aceito:true} -> o aceite digital: versão, hash do texto, IP, data e hora. Sem IP identificável, recusa.            (login, o dono do vínculo)
+//  aceitar-termo      body:{vinculoId, aceito:true, termoHash} -> o aceite digital: versão, hash do texto, IP, data e hora. `termoHash` é o hash do texto que a tela MOSTROU
+//                          (meu-painel → termoParaAceitar.hash): se o catálogo mudou desde então, recusa (422 com `termoMudou:true`). Sem IP identificável, recusa.            (login, o dono do vínculo)
 //  registrar-termo    body:{vinculoId, forma:FICHA_FISICA|MENSAGERIA, dataAceite, referencia, canal?:EMAIL|WHATSAPP}                                     (setores_tecnicos, geral)
 //  interdicao         body:{setorId?, congregacaoId, motivo:RISCO_DESABAMENTO|FALHA_ELETRICA_GRAVE, objeto, descricao, referencia?} -> 201                 (login; serve ATIVO em setor que interdita)
 //  pedido-remocao     body:{setorId?, congregacaoId, canalId?, motivo:ERRO_GROSSEIRO|DIREITO_AUTORAL|DOUTRINA_IMAGEM, objeto?, referencia:<link>, descricao} -> 201   (login; serve ATIVO em setor que pede remoção)
@@ -72,8 +73,10 @@ module.exports = async function (context, req) {
   const soGeral = (visao) => (lideranca && visao && esc.ehGeral(visao) ? visao : null);
   const gestao = soGeral(auth.visaoDaPermissao(usuario, "setores_tecnicos"));
   const diretoria = soGeral(auth.visaoDaPermissao(usuario, "setores_ratificacao"));
-  // O líder: sessão de liderança (senha), de nível territorial (o líder geral de departamento não cuida de prédio nem de rede); vale a congregação do escopo dele.
-  const visaoLider = lideranca ? auth.restringirVisao(usuario, (c) => !!c.nivel && c.nivel !== "DEPARTAMENTO") : null;
+  // O líder: sessão de liderança (senha) com a permissão `pessoas` (a que dirigentes e pastores têm; tesoureiro, por exemplo, não), de nível territorial e SEM restrição de
+  // departamento (quem cuida de um departamento não cuida de prédio nem de rede); vale a congregação do escopo dele.
+  const visaoPessoas = lideranca ? auth.visaoDaPermissao(usuario, "pessoas") : null;
+  const visaoLider = visaoPessoas ? auth.restringirVisao(visaoPessoas, (c) => !!c.nivel && c.nivel !== "DEPARTAMENTO" && !c.departamentoId) : null;
   const lider = (nomeDaCongregacao) => !!visaoLider && auth.estaNoEscopo(visaoLider, nomeDaCongregacao);
 
   const pool = await getPool();
@@ -215,7 +218,7 @@ module.exports = async function (context, req) {
       else if (acao === "encerrar") resposta(context, await db.encerrarVinculo(pool, { vinculoId, dados: corpo, por: usuario.membroId }));
       else if (acao === "sair") resposta(context, await db.sairDoSetor(pool, { vinculoId, membroId: usuario.membroId }));
       else if (acao === "aceitar-termo") {
-        resposta(context, await db.aceitarTermo(pool, { vinculoId, membroId: usuario.membroId, aceito: corpo.aceito, ip: vol.extrairIp(req.headers), cadeia: vol.cadeiaDeCabecalhos(req.headers), hoje }), 201);
+        resposta(context, await db.aceitarTermo(pool, { vinculoId, membroId: usuario.membroId, aceito: corpo.aceito, termoHash: corpo.termoHash, ip: vol.extrairIp(req.headers), cadeia: vol.cadeiaDeCabecalhos(req.headers), hoje }), 201);
       } else resposta(context, await db.registrarTermoManual(pool, { vinculoId, dados: corpo, por: usuario.membroId, hoje }), 201);
       return;
     }

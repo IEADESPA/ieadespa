@@ -17,7 +17,9 @@ const { DETECTORES } = require("./notificacaoDetectores");
 // nunca ter dois lugares reimplementando a mesma regra de canal/opt-out.
 // `regra` pode vir pré-carregada (evita reconsultar dentro de um loop já
 // carregado); sem ela, busca por regraChave.
-async function enviarCanaisNotificacao(pool, { regraChave, regra, destinatarioMembroId, notificacaoId, titulo, mensagem, categoria, email }) {
+// `aguardarEntrega: false` (v7.6): o aviso imediato de um ato (interdição) responde assim que o serviço de e-mail ACEITA a mensagem, sem esperar a entrega — com dezenas de
+// destinatários, esperar cada entrega passaria do tempo da requisição (o ato já estaria gravado e a pessoa veria erro).
+async function enviarCanaisNotificacao(pool, { regraChave, regra, destinatarioMembroId, notificacaoId, titulo, mensagem, categoria, email, aguardarEntrega = true }) {
   const regraFinal = regra || (await pool.request().input("chave", sql.NVarChar(60), regraChave)
     .query(`SELECT CanalEmail, CanalPush, Obrigatoria FROM NotificacaoRegras WHERE Chave = @chave`)).recordset[0];
   if (!regraFinal) return { emailEnviado: false, pushEnviados: 0 };
@@ -26,7 +28,7 @@ async function enviarCanaisNotificacao(pool, { regraChave, regra, destinatarioMe
   if (regraFinal.CanalEmail && email) {
     const pode = await podeReceberEmail(pool, destinatarioMembroId, categoria, regraFinal.Obrigatoria);
     if (pode) {
-      emailEnviado = await enviarEmailNotificacao({ email, titulo, mensagem });
+      emailEnviado = await enviarEmailNotificacao({ email, titulo, mensagem, aguardarEntrega });
       if (emailEnviado) await marcarEmailEnviado(pool, notificacaoId);
     }
   }

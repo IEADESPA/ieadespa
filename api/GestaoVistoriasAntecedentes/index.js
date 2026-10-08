@@ -8,8 +8,9 @@
 // ---- Leitura (GET /api/vistorias-antecedentes/...) -----------------------------------------------
 //  catalogos          -> { motivos[{codigo,rotulo,base}], tiposDocumento[], resultados[], destinosOriginal[], maxDocumentos }
 //  lista?membroId=    -> { vistorias[{vistoriaId,membroId,membroNome,motivo,funcao,comVulneraveis,dataVerificacao,resultado,parecer,destinoOriginal,assinadaPorNome,assinadaEm,
-//                          documentos[{tipo,hash,dataEmissao}]}] }   sem membroId: as mais recentes de todos
+//                          documentos[{tipo,hash,dataEmissao}], anulada: null | {em,motivo,porNome}}] }   sem membroId: as mais recentes de todos
 //  vistoria?vistoriaId= -> { vistoria }
+//  pessoa?membroId=   -> { pessoa:{ membroId, nome, congregacaoNome } }   quem é a pessoa desta matrícula (a tela confere antes de lavrar ou solicitar); 404 se não existe
 //  pendentes          -> { liderancas[{membroId,nome,congregacaoNome,cargos,ultimoResultado,recusou}] }   quem exerce liderança e ainda não tem Termo de Vistoria (II, "a")
 //
 // ---- Escrita (POST /api/vistorias-antecedentes/...) ----------------------------------------------
@@ -17,6 +18,9 @@
 //  lavrar             body:{membroId, motivo, funcao, comVulneraveis?, dataVerificacao, resultado:SEM_RESTRICAO|COM_RESTRICAO|RECUSA, parecer,
 //                          destinoOriginal:DEVOLVIDO|DESCARTADO (menos na RECUSA), documentos:[{tipo, hash, dataEmissao}]} -> 201   o Termo de Vistoria, assinado por quem o lavra
 //                          (nunca por quem foi vistoriado); não se altera nem se apaga. Pede a confirmação reforçada da vD.4 (428 se passou de 10 minutos).
+//
+//  anular             body:{vistoriaId, motivo}  anula um termo lavrado por engano (matrícula errada...): registro à parte, só de acréscimo; o termo continua lá, marcado como
+//                          anulado, e deixa de contar como a vistoria da pessoa. Ninguém anula o termo feito sobre si. Pede a confirmação reforçada (428).
 //
 // Respostas: { sucesso:true, ... } (200; 201 quando cria) · recusa de regra: 422 { sucesso:false, mensagem } · 400 dado ruim · 403 sem permissão · 404 não achou.
 const auth = require("../shared/auth");
@@ -80,6 +84,14 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: true, vistoria: v } };
         return;
       }
+      if (acao === "pessoa") {
+        const membroId = idDe(consulta.membroId);
+        if (!membroId) return erro(context, 400, "Informe membroId.");
+        const p = await db.pessoaPorMatricula(pool, membroId);
+        if (!p) return erro(context, 404, "Pessoa não encontrada.");
+        context.res = { status: 200, body: { sucesso: true, pessoa: p } };
+        return;
+      }
       if (acao === "pendentes") {
         context.res = { status: 200, body: { sucesso: true, liderancas: await db.liderancasSemVistoria(pool) } };
         return;
@@ -94,6 +106,13 @@ module.exports = async function (context, req) {
       // Assinar o Termo é um ato de peso (documento imutável sobre uma pessoa): pede a confirmação reforçada da vD.4 (chave de acesso ou código por e-mail, até 10 minutos).
       if (!auth.exigirFatorRecente(req, context)) return;
       resposta(context, await db.lavrarVistoria(pool, { dados: corpo, por: usuario.membroId, hoje: hojeBrasilia() }), 201);
+      return;
+    }
+
+    if (acao === "anular") {
+      // Anular é um ato de peso tanto quanto lavrar: a mesma confirmação reforçada da vD.4.
+      if (!auth.exigirFatorRecente(req, context)) return;
+      resposta(context, await db.anularVistoria(pool, { dados: corpo, por: usuario.membroId }));
       return;
     }
 

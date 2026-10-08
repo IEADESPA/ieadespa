@@ -94,9 +94,16 @@ async function criarSetor(pool, { dados, por }) {
 async function editarSetor(pool, { setorId, dados, por }) {
   const atual = await buscarSetor(pool, setorId);
   if (!atual) return { sucesso: false, mensagem: "Setor não encontrado." };
-  const v = st.validarSetor(dados);
+  // O campo que a edição não mandou MANTÉM o valor atual (mandar só nome e competência não desarma as marcas).
+  const v = st.validarSetor(st.mesclarEdicaoDoSetor(atual, dados));
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const d = v.dados;
+  // Dar o PODER (interditar, pedir remoção) a um setor que já tem gente servindo faria quem já aceitou o Termo ganhar um poder cuja cláusula nunca leu (Art. 49 §2º: só o
+  // vínculo ativo COM o Termo aceito dá os poderes). A administração encerra os vínculos e indica de novo: o Termo novo traz a cláusula. Tirar o poder é sempre livre.
+  if ((d.podeInterditar && !atual.podeInterditar) || (d.podeSolicitarRemocao && !atual.podeSolicitarRemocao)) {
+    const n = (await pool.request().input("s", sql.Int, setorId).query(`SELECT COUNT(*) AS n FROM SetoresTecnicosMembros WHERE SetorId = @s AND Status = 'ATIVO'`)).recordset[0];
+    if (Number(n.n) > 0) return { sucesso: false, mensagem: `Este setor já tem ${n.n} pessoa(s) servindo, e elas aceitaram um Termo sem a cláusula deste poder. Encerre os vínculos atuais e indique as pessoas de novo: o Termo novo traz a cláusula e só então o poder vale.` };
+  }
   await pool.request().input("id", sql.Int, setorId).input("n", sql.NVarChar(100), d.nome).input("i", sql.NVarChar(6), d.inciso).input("comp", sql.NVarChar(600), d.competencia)
     .input("p", sql.NVarChar(200), d.profissoes).input("cc", sql.NVarChar(60), d.conselhoClasse).input("er", sql.Bit, d.exigeRegistro ? 1 : 0)
     .input("pi", sql.Bit, d.podeInterditar ? 1 : 0).input("pr", sql.Bit, d.podeSolicitarRemocao ? 1 : 0).input("o", sql.Int, d.ordem)
@@ -133,7 +140,8 @@ const SELECT_VINCULO = `
 const setorDaLinha = (r) => ({ codigo: r.SetorCodigo, nome: r.SetorNome, podeInterditar: !!r.PodeInterditar, podeSolicitarRemocao: !!r.PodeSolicitarRemocao });
 
 // `completo`: a administração vê o motivo escrito do encerramento; quem lê o próprio vínculo também (é dele).
-function mapearVinculo(r) {
+// `comObs`: só a administração lê o texto livre que ela mesma escreveu ao encerrar o vínculo; a pessoa (Meu Painel) recebe o fato, nunca esse texto.
+function mapearVinculo(r, { comObs = false } = {}) {
   const setor = setorDaLinha(r);
   const o = {
     vinculoId: r.VinculoId, setorId: r.SetorId, setorCodigo: r.SetorCodigo, setorNome: r.SetorNome, setorAtivo: !!r.SetorAtivo, membroId: r.MembroId, membroNome: r.MembroNome, congregacaoNome: r.CongregacaoNome || null,
@@ -142,7 +150,7 @@ function mapearVinculo(r) {
     exigeRegistro: !!r.ExigeRegistro, conselhoClasse: r.ConselhoClasse || null,
     podeInterditar: !!r.PodeInterditar, podeSolicitarRemocao: !!r.PodeSolicitarRemocao,
     criadoEm: isoInstante(r.CriadoEm), aprovadoEm: isoInstante(r.AprovadoEm), ativadoEm: isoInstante(r.AtivadoEm), encerradoEm: isoInstante(r.EncerradoEm),
-    motivoEncerramento: r.MotivoEncerramento || null, rotuloMotivoEncerramento: r.MotivoEncerramento ? st.MOTIVOS_ENCERRAMENTO[r.MotivoEncerramento] : null, obsEncerramento: r.ObsEncerramento || null,
+    motivoEncerramento: r.MotivoEncerramento || null, rotuloMotivoEncerramento: r.MotivoEncerramento ? st.MOTIVOS_ENCERRAMENTO[r.MotivoEncerramento] : null, obsEncerramento: comObs ? (r.ObsEncerramento || null) : null,
     termo: r.AdesaoId ? {
       adesaoId: r.AdesaoId, forma: r.AdesaoForma, rotuloForma: vol.FORMAS_ADESAO[r.AdesaoForma], dataAceite: isoData(r.AdesaoData), referencia: r.AdesaoReferencia || null,
       integridade: st.avaliarIntegridadeAdesao({ forma: r.AdesaoForma, termoVersao: r.AdesaoVersao, termoHash: r.AdesaoHash, termoEspecificos: r.AdesaoEspecificos }, setor)
@@ -164,7 +172,7 @@ async function listarVinculos(pool, { setorId = null, status = null, limite = st
   if (status) { rq.input("st", sql.NVarChar(16), status); cond.push("v.Status = @st"); }
   const r = await rq.query(`SELECT TOP (${Number(limite) || st.LIMITE_LISTA}) * FROM (${SELECT_VINCULO} ${cond.length ? "WHERE " + cond.join(" AND ") : ""}) x
     ORDER BY CASE x.Status WHEN 'CANDIDATO' THEN 0 WHEN 'AGUARDANDO_TERMO' THEN 1 WHEN 'ATIVO' THEN 2 ELSE 3 END, x.VinculoId DESC`);
-  return r.recordset.map(mapearVinculo);
+  return r.recordset.map((x) => mapearVinculo(x, { comObs: true }));
 }
 
 // Tudo o que a pessoa vê em Meu Painel → Setores Técnicos.
@@ -180,15 +188,15 @@ async function meuPainel(pool, { membroId, hoje = hojeBrasilia() }) {
   });
   const vigentes = new Set(linhas.filter(r => r.Status !== "ENCERRADO").map(r => Number(r.SetorId)));
   const catalogo = await listarCatalogo(pool);
-  const ativos = vinculos.filter(v => v.status === "ATIVO" && v.setorAtivo);
+  // Os poderes que a tela oferece são EXATAMENTE os que a emissão aceita (vinculosQueEmitem): vínculo ativo, setor ativo, pessoa em comunhão e o Termo aceito com a cláusula.
+  const [emInterdicao, emRemocao] = condicao.pode
+    ? await Promise.all([vinculosQueEmitem(pool, { membroId, tipo: "INTERDICAO" }), vinculosQueEmitem(pool, { membroId, tipo: "REMOCAO_POSTAGEM" })]) : [[], []];
   const acesso = await contextoDeAcesso(pool, { membroId });
+  const poder = (x) => ({ vinculoId: x.VinculoId, setorId: x.SetorId, setorNome: x.SetorNome });
   return {
     condicao, vinculos,
     setoresParaCandidatura: catalogo.filter(s => !vigentes.has(s.setorId)),
-    poderes: {
-      interdicao: ativos.filter(v => v.podeInterditar).map(v => ({ vinculoId: v.vinculoId, setorId: v.setorId, setorNome: v.setorNome })),
-      remocao: ativos.filter(v => v.podeSolicitarRemocao).map(v => ({ vinculoId: v.vinculoId, setorId: v.setorId, setorNome: v.setorNome }))
-    },
+    poderes: { interdicao: emInterdicao.map(poder), remocao: emRemocao.map(poder) },
     atos: await listarAtos(pool, { emitenteId: membroId, limite: 20, acesso })
   };
 }
@@ -198,10 +206,21 @@ async function contarVigentes(pool, membroId) {
   return Number(r.recordset[0].n);
 }
 
-// Quem recebe aviso de gestão (setores_tecnicos) ou de decisão (setores_ratificacao): os portadores da permissão.
+// Quem recebe aviso de gestão (setores_tecnicos) ou de decisão (setores_ratificacao): os portadores da permissão num papel de nível GLOBAL (a administração geral).
 async function portadoresDe(pool, permissao) {
   const { resolverDestinatariosPorPermissao } = require("./notificacoes");
-  return (await resolverDestinatariosPorPermissao(pool, { permissao })).map(d => ({ membroId: d.membroId, nome: d.nome, email: d.email }));
+  return (await resolverDestinatariosPorPermissao(pool, { permissao, nivel: "GLOBAL" })).map(d => ({ membroId: d.membroId, nome: d.nome, email: d.email }));
+}
+// O aviso imediato de um ato sai em lotes de 8 em paralelo e SEM esperar a entrega do e-mail (só a aceitação): com dezenas de destinatários, esperar cada entrega
+// passaria do tempo da requisição, o ato já estaria gravado e quem o emitiu veria erro. Devolve quantos avisos foram criados.
+async function avisarEmLotes(pool, base, destinatarios) {
+  let criadas = 0;
+  const lista = destinatarios || [];
+  for (let i = 0; i < lista.length; i += 8) {
+    const rs = await Promise.all(lista.slice(i, i + 8).map(d => notificarAgora(pool, { ...base, destinatarios: [d], aguardarEntrega: false })));
+    for (const r of rs) criadas += (r && r.criadas) || 0;
+  }
+  return criadas;
 }
 function mesclar(...listas) {
   const mapa = new Map();
@@ -243,20 +262,28 @@ async function candidatar(pool, { membroId, dados, hoje = hojeBrasilia(), deps }
   if (!setor || !setor.ativo) return { sucesso: false, mensagem: "Setor não encontrado." };
   const v = st.validarCandidatura(dados, { setor });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
-  if ((await contarVigentes(pool, membroId)) >= st.MAX_VINCULOS_VIGENTES_POR_PESSOA) return { sucesso: false, mensagem: `Você já tem ${st.MAX_VINCULOS_VIGENTES_POR_PESSOA} vínculos em andamento com Setores Técnicos.` };
+  const msgTeto = `Você já tem ${st.MAX_VINCULOS_VIGENTES_POR_PESSOA} vínculos em andamento com Setores Técnicos.`;
+  if ((await contarVigentes(pool, membroId)) >= st.MAX_VINCULOS_VIGENTES_POR_PESSOA) return { sucesso: false, mensagem: msgTeto };
   let id;
   try {
+    // Os dois tetos (vínculos em andamento e candidaturas nas últimas 24 horas) são conferidos NO MESMO comando que grava, com trava de intervalo (UPDLOCK, HOLDLOCK): 20 pedidos
+    // ao mesmo tempo não furam o teto. Sem a linha gravada, `id` volta nulo e a mensagem diz qual teto foi.
     const r = await pool.request().input("s", sql.Int, setor.setorId).input("m", sql.Int, membroId).input("f", sql.NVarChar(150), v.dados.formacao)
       .input("cs", sql.NVarChar(20), v.dados.conselhoSigla).input("rn", sql.NVarChar(30), v.dados.registroNumero)
+      .input("max", sql.Int, st.MAX_VINCULOS_VIGENTES_POR_PESSOA).input("maxDia", sql.Int, st.MAX_CANDIDATURAS_POR_DIA)
       .query(`INSERT INTO SetoresTecnicosMembros (SetorId, MembroId, Status, Origem, Formacao, ConselhoSigla, RegistroNumero, CriadoPorMembroId)
-              VALUES (@s, @m, 'CANDIDATO', 'CANDIDATURA', @f, @cs, @rn, @m); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+              SELECT @s, @m, 'CANDIDATO', 'CANDIDATURA', @f, @cs, @rn, @m
+              WHERE (SELECT COUNT(*) FROM SetoresTecnicosMembros WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @m AND Status IN (${VIGENTES_SQL})) < @max
+                AND (SELECT COUNT(*) FROM SetoresTecnicosMembros WITH (UPDLOCK, HOLDLOCK) WHERE CriadoPorMembroId = @m AND Origem = 'CANDIDATURA' AND CriadoEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())) < @maxDia;
+              DECLARE @n INT = @@ROWCOUNT; SELECT CASE WHEN @n = 1 THEN CAST(SCOPE_IDENTITY() AS INT) ELSE NULL END AS id`);
     id = r.recordset[0].id;
   } catch (e) {
     if (duplicado(e)) return { sucesso: false, mensagem: "Você já tem um vínculo em andamento com este setor." };
     throw e;
   }
+  if (id == null) return { sucesso: false, mensagem: (await contarVigentes(pool, membroId)) >= st.MAX_VINCULOS_VIGENTES_POR_PESSOA ? msgTeto : `Você já enviou ${st.MAX_CANDIDATURAS_POR_DIA} candidaturas hoje: tente de novo amanhã.` };
   await registrarAuditoria({ tabela: "SetoresTecnicosMembros", registroId: id, acao: "SETOR_CANDIDATURA", usuarioId: membroId, dadosDepois: { setorId: setor.setorId, comRegistro: !!v.dados.conselhoSigla } });
-  await notificarAgora(pool, { regraChave: "SETOR_CANDIDATURA", destinatarios: await portadoresDe(pool, "setores_tecnicos"), mensagem: st.textoCandidatura({ nome: membro.Nome, setorNome: setor.nome }), referenciaId: id, referenciaTabela: "SetoresTecnicosMembros", deps });
+  await notificarAgora(pool, { regraChave: "SETOR_CANDIDATURA", destinatarios: await portadoresDe(pool, "setores_tecnicos"), mensagem: st.textoCandidatura({ nome: membro.Nome, setorNome: setor.nome }), referenciaId: id, referenciaTabela: "SetoresTecnicosMembros", limiteDia: 10, deps });
   return { sucesso: true, mensagem: `Candidatura ao ${setor.nome} enviada. A administração vai analisar e, aprovada, você aceita o Termo de Adesão.`, vinculoId: id };
 }
 
@@ -271,18 +298,22 @@ async function indicar(pool, { dados, por, hoje = hojeBrasilia(), deps }) {
   const membro = await lerMembro(pool, membroId);
   const c = condicaoDoMembro(membro, hoje);
   if (!c.pode) return { sucesso: false, mensagem: membro ? `${membro.Nome}: ${c.mensagem}` : c.mensagem };
-  if ((await contarVigentes(pool, membroId)) >= st.MAX_VINCULOS_VIGENTES_POR_PESSOA) return { sucesso: false, mensagem: `${membro.Nome} já tem ${st.MAX_VINCULOS_VIGENTES_POR_PESSOA} vínculos em andamento com Setores Técnicos.` };
+  const msgTeto = `${membro.Nome} já tem ${st.MAX_VINCULOS_VIGENTES_POR_PESSOA} vínculos em andamento com Setores Técnicos.`;
+  if ((await contarVigentes(pool, membroId)) >= st.MAX_VINCULOS_VIGENTES_POR_PESSOA) return { sucesso: false, mensagem: msgTeto };
   let id;
   try {
     const r = await pool.request().input("s", sql.Int, setor.setorId).input("m", sql.Int, membroId).input("f", sql.NVarChar(150), v.dados.formacao)
-      .input("cs", sql.NVarChar(20), v.dados.conselhoSigla).input("rn", sql.NVarChar(30), v.dados.registroNumero).input("por", sql.Int, por)
+      .input("cs", sql.NVarChar(20), v.dados.conselhoSigla).input("rn", sql.NVarChar(30), v.dados.registroNumero).input("por", sql.Int, por).input("max", sql.Int, st.MAX_VINCULOS_VIGENTES_POR_PESSOA)
       .query(`INSERT INTO SetoresTecnicosMembros (SetorId, MembroId, Status, Origem, Formacao, ConselhoSigla, RegistroNumero, CriadoPorMembroId, AprovadoPorMembroId, AprovadoEm)
-              VALUES (@s, @m, 'AGUARDANDO_TERMO', 'INDICACAO', @f, @cs, @rn, @por, @por, SYSUTCDATETIME()); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+              SELECT @s, @m, 'AGUARDANDO_TERMO', 'INDICACAO', @f, @cs, @rn, @por, @por, SYSUTCDATETIME()
+              WHERE (SELECT COUNT(*) FROM SetoresTecnicosMembros WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @m AND Status IN (${VIGENTES_SQL})) < @max;
+              DECLARE @n INT = @@ROWCOUNT; SELECT CASE WHEN @n = 1 THEN CAST(SCOPE_IDENTITY() AS INT) ELSE NULL END AS id`);
     id = r.recordset[0].id;
   } catch (e) {
     if (duplicado(e)) return { sucesso: false, mensagem: `${membro.Nome} já tem um vínculo em andamento com este setor.` };
     throw e;
   }
+  if (id == null) return { sucesso: false, mensagem: msgTeto };
   await registrarAuditoria({ tabela: "SetoresTecnicosMembros", registroId: id, acao: "SETOR_INDICACAO", usuarioId: por, dadosDepois: { membroId, setorId: setor.setorId, comRegistro: !!v.dados.conselhoSigla } });
   await notificarAgora(pool, { regraChave: "SETOR_INDICADO", destinatarios: [destinatarioMembro(membro)], mensagem: st.textoVinculoIndicado({ setorNome: setor.nome }), referenciaId: id, referenciaTabela: "SetoresTecnicosMembros", deps });
   return { sucesso: true, mensagem: `${membro.Nome} foi indicado(a) ao ${setor.nome}. O vínculo só é ativado quando a pessoa aceitar o Termo de Adesão.`, vinculoId: id };
@@ -298,7 +329,7 @@ async function aprovar(pool, { vinculoId, por, deps }) {
     .query(`UPDATE SetoresTecnicosMembros SET Status = 'AGUARDANDO_TERMO', AprovadoPorMembroId = @por, AprovadoEm = SYSUTCDATETIME() WHERE VinculoId = @id AND Status = 'CANDIDATO'`);
   if (u.rowsAffected && u.rowsAffected[0] === 0) return { sucesso: false, mensagem: "Esta candidatura já foi decidida." };
   await registrarAuditoria({ tabela: "SetoresTecnicosMembros", registroId: vinculoId, acao: "SETOR_CANDIDATURA_APROVADA", usuarioId: por, dadosDepois: { membroId: v.MembroId, setorId: v.SetorId } });
-  await notificarAgora(pool, { regraChave: "SETOR_INDICADO", destinatarios: [{ membroId: v.MembroId, nome: v.MembroNome, email: v.MembroEmail }], mensagem: st.textoVinculoIndicado({ setorNome: v.SetorNome }), referenciaId: vinculoId, referenciaTabela: "SetoresTecnicosMembros", deps });
+  await notificarAgora(pool, { regraChave: "SETOR_INDICADO", destinatarios: [{ membroId: v.MembroId, nome: v.MembroNome, email: v.MembroEmail }], mensagem: st.textoCandidaturaAprovada({ setorNome: v.SetorNome }), referenciaId: vinculoId, referenciaTabela: "SetoresTecnicosMembros", deps });
   return { sucesso: true, mensagem: `Candidatura de ${v.MembroNome} aprovada: a pessoa foi avisada para aceitar o Termo de Adesão.` };
 }
 
@@ -350,7 +381,8 @@ async function sairDoSetor(pool, { vinculoId, membroId }) {
 async function termoDoVinculo(pool, { vinculoId, membroId, gestao = false }) {
   const v = await buscarVinculo(pool, vinculoId);
   if (!v || (!gestao && Number(v.MembroId) !== Number(membroId))) return { sucesso: false, mensagem: "Vínculo não encontrado." };
-  return { sucesso: true, vinculo: mapearVinculo(v), termo: st.termoDoSetor(setorDaLinha(v)) };
+  // Quem já tem prova (aceite ou ficha) vê o texto com as cláusulas que valiam NA HORA; quem ainda não tem, o de hoje.
+  return { sucesso: true, vinculo: mapearVinculo(v), termo: st.termoDoSetor(setorDaLinha(v), v.AdesaoId ? st.listaDosEspecificos(v.AdesaoEspecificos) : null) };
 }
 
 // Ativa o vínculo e grava a prova na mesma transação. A porta de entrada é o UPDATE do status: se duas ações chegam juntas, só uma o encontra em
@@ -378,7 +410,8 @@ async function ativarComTermo(pool, { v, forma, campos, por }) {
   return { ok: true, adesaoId };
 }
 
-async function aceitarTermo(pool, { vinculoId, membroId, aceito, ip, cadeia = null, hoje = hojeBrasilia() }) {
+// `termoHash`: o hash do texto que a tela mostrou. Se o catálogo mudou entre "ver" e "aceitar", o aceite é recusado: ninguém aceita um texto que não leu.
+async function aceitarTermo(pool, { vinculoId, membroId, aceito, termoHash, ip, cadeia = null, hoje = hojeBrasilia() }) {
   const forma = vol.validarAceiteDigital({ aceito, ip, idade: vol.MAIORIDADE });
   if (!forma.valido) return { sucesso: false, mensagem: forma.mensagem };
   const v = await buscarVinculo(pool, vinculoId);
@@ -390,6 +423,7 @@ async function aceitarTermo(pool, { vinculoId, membroId, aceito, ip, cadeia = nu
   const c = condicaoDoMembro(membro, hoje);
   if (!c.pode) return { sucesso: false, mensagem: c.mensagem };
   const termo = st.termoDoSetor(setorDaLinha(v));
+  if (typeof termoHash !== "string" || termoHash.trim().toLowerCase() !== termo.hash) return { sucesso: false, termoMudou: true, mensagem: "O texto do Termo mudou desde que você abriu a tela (ou a tela está desatualizada): recarregue, leia de novo e aceite." };
   const res = await ativarComTermo(pool, { v, forma: "CLICKWRAP", por: null, campos: { versao: termo.versao, hash: termo.hash, especificos: st.textoDosEspecificos(termo.especificos), dataAceite: hoje, ip, cadeia, canal: null, referencia: null } });
   if (!res.ok) return { sucesso: false, mensagem: res.mensagem };
   // O IP fica só na tabela da adesão: a trilha de auditoria é imutável e não deve replicar dado pessoal.
@@ -406,13 +440,18 @@ async function registrarTermoManual(pool, { vinculoId, dados, por, hoje = hojeBr
   if (v.Status === "ATIVO") return { sucesso: false, mensagem: `${v.MembroNome} já tem o Termo registrado.` };
   if (v.Status === "CANDIDATO") return { sucesso: false, mensagem: "Aprove a candidatura antes de registrar o Termo." };
   if (v.Status !== "AGUARDANDO_TERMO") return { sucesso: false, mensagem: "Este vínculo está encerrado." };
+  // Separação de funções: ninguém ativa a si mesmo, e onde o Termo dá poder de polícia (interditar, pedir remoção) quem indicou ou aprovou a pessoa não registra a ficha dela.
+  if (Number(por) === Number(v.MembroId)) return { sucesso: false, proibido: true, mensagem: "Ninguém registra o próprio Termo: peça a outra pessoa da administração." };
+  if ((v.PodeInterditar || v.PodeSolicitarRemocao) && Number(v.AprovadoPorMembroId) === Number(por)) return { sucesso: false, proibido: true, mensagem: "Neste setor o Termo dá poder de polícia (interditar ou pedir remoção): quem indicou ou aprovou a pessoa não registra a ficha dela. Peça a outra pessoa da administração." };
   const membro = await lerMembro(pool, v.MembroId);
   const c = condicaoDoMembro(membro, hoje);
   if (!c.pode) return { sucesso: false, mensagem: c.mensagem };
   const d = forma.dados;
-  const res = await ativarComTermo(pool, { v, forma: d.forma, por, campos: { versao: null, hash: null, especificos: null, dataAceite: d.dataAceite, ip: null, cadeia: null, canal: d.canal, referencia: d.referencia } });
+  // A ficha impressa tem as cláusulas do catálogo de HOJE: a lista fica guardada com a prova (o poder só vale se a cláusula estava no que foi assinado).
+  const termoImpresso = st.termoDoSetor(setorDaLinha(v));
+  const res = await ativarComTermo(pool, { v, forma: d.forma, por, campos: { versao: null, hash: null, especificos: st.textoDosEspecificos(termoImpresso.especificos), dataAceite: d.dataAceite, ip: null, cadeia: null, canal: d.canal, referencia: d.referencia } });
   if (!res.ok) return { sucesso: false, mensagem: res.mensagem };
-  await registrarAuditoria({ tabela: "SetoresTecnicosAdesoes", registroId: res.adesaoId, acao: "SETOR_ADESAO_REGISTRADA", usuarioId: por, dadosDepois: { vinculoId, membroId: v.MembroId, setorId: v.SetorId, forma: d.forma, dataAceite: d.dataAceite, canal: d.canal, referencia: d.referencia } });
+  await registrarAuditoria({ tabela: "SetoresTecnicosAdesoes", registroId: res.adesaoId, acao: "SETOR_ADESAO_REGISTRADA", usuarioId: por, dadosDepois: { vinculoId, membroId: v.MembroId, setorId: v.SetorId, forma: d.forma, dataAceite: d.dataAceite, canal: d.canal, referenciaTamanho: d.referencia.length } });
   return { sucesso: true, mensagem: `Termo de ${v.MembroNome} registrado (${vol.FORMAS_ADESAO[d.forma]}): o vínculo está ativo.`, vinculo: mapearVinculo(await buscarVinculo(pool, vinculoId)) };
 }
 
@@ -439,12 +478,17 @@ const SELECT_ATO = `
   LEFT JOIN MembroReferencia md ON md.MembroId = i.DecididaPorMembroId
   LEFT JOIN MembroReferencia mf ON mf.MembroId = i.FechadaPorMembroId`;
 
+// O identificador do canal (telefone, e-mail, link de grupo) só vai a quem administra o canal, à gestão e à Diretoria.
+function podeVerIdentificador(r, acesso) {
+  return !!acesso && (!!acesso.diretoria || !!acesso.gestao || (r.CanalId != null && !!acesso.canaisAdministrados && acesso.canaisAdministrados.has(Number(r.CanalId))));
+}
+
 function mapearAto(r, acesso = null) {
   const ato = {
     intervencaoId: r.IntervencaoId, tipo: r.Tipo, rotuloTipo: st.TIPOS_ATO[r.Tipo], setorId: r.SetorId, setorNome: r.SetorNome, setorCodigo: r.SetorCodigo,
     emitidaPorMembroId: r.EmitidaPorMembroId, emitenteNome: r.EmitenteNome, registroProfissional: r.RegistroProfissional || null,
     congregacaoId: r.CongregacaoId, congregacaoNome: r.CongregacaoNome, canalId: r.CanalId || null, canalNome: r.CanalNome || null,
-    canalDescricao: r.CanalNome ? `${r.CanalPlataforma ? r.CanalPlataforma + " — " : ""}${r.CanalNome}${r.CanalIdentificador ? ` (${r.CanalIdentificador})` : ""}` : null,
+    canalDescricao: r.CanalNome ? `${r.CanalPlataforma ? r.CanalPlataforma + " — " : ""}${r.CanalNome}${r.CanalIdentificador && podeVerIdentificador(r, acesso) ? ` (${r.CanalIdentificador})` : ""}` : null,
     motivo: r.Motivo, rotuloMotivo: (r.Tipo === "INTERDICAO" ? st.MOTIVOS_INTERDICAO : st.MOTIVOS_REMOCAO)[r.Motivo], objeto: r.Objeto || null, referencia: r.Referencia || null, descricao: r.Descricao,
     status: r.Status, rotuloStatus: st.STATUS_ATO[r.Status], emitidaEm: isoInstante(r.EmitidaEm),
     decididaPorNome: r.DecididaPorNome || null, decididaEm: isoInstante(r.DecididaEm), decisaoObs: r.DecisaoObs || null,
@@ -487,16 +531,20 @@ async function detalharAto(pool, { intervencaoId, acesso = null }) {
 // Os canais cadastrados da congregação (para escolher onde está a postagem).
 async function canaisDaCongregacao(pool, congregacaoId) {
   const r = await pool.request().input("c", sql.Int, congregacaoId).query(`
-    SELECT CanalId, Nome, Plataforma, Identificador FROM CanaisOficiaisComunicacao WHERE Ativo = 1 AND CongregacaoId = @c ORDER BY Nome`);
-  return r.recordset.map(x => ({ canalId: x.CanalId, nome: x.Nome, plataforma: x.Plataforma || null, identificador: x.Identificador || null }));
+    SELECT CanalId, Nome, Plataforma FROM CanaisOficiaisComunicacao WHERE Ativo = 1 AND CongregacaoId = @c ORDER BY Nome`);
+  // Só nome e plataforma: o identificador do canal (telefone, e-mail, link de grupo) é de quem administra canais (a política da v7.3), não de todo voluntário.
+  return r.recordset.map(x => ({ canalId: x.CanalId, nome: x.Nome, plataforma: x.Plataforma || null }));
 }
 
 // Os vínculos ATIVOS da pessoa que dão o poder deste tipo de ato (o setor ativo e a pessoa ainda em plena comunhão).
 async function vinculosQueEmitem(pool, { membroId, tipo }) {
   const marca = tipo === "INTERDICAO" ? "s.PodeInterditar" : "s.PodeSolicitarRemocao";
+  // E o Termo que a pessoa aceitou (ou a ficha que a administração registrou) precisa TER a cláusula do poder: o poder nunca vale por uma marca posta no catálogo depois.
+  const clausula = tipo === "INTERDICAO" ? "INTERDICAO" : "REMOCAO_POSTAGEM";
   const r = await pool.request().input("m", sql.Int, membroId).query(`
     SELECT v.VinculoId, v.SetorId, v.ConselhoSigla, v.RegistroNumero, s.Nome AS SetorNome, s.Codigo AS SetorCodigo
     FROM SetoresTecnicosMembros v JOIN SetoresTecnicos s ON s.SetorId = v.SetorId JOIN MembroReferencia m ON m.MembroId = v.MembroId
+    JOIN SetoresTecnicosAdesoes a ON a.VinculoId = v.VinculoId AND (',' + ISNULL(a.TermoEspecificos, '') + ',') LIKE '%,${clausula},%'
     WHERE v.MembroId = @m AND v.Status = 'ATIVO' AND s.Ativo = 1 AND ${marca} = 1 AND m.Status = 'ATIVO' AND ISNULL(m.SituacaoMembro, '') <> 'SEM_COMUNHAO'
     ORDER BY v.VinculoId`);
   return r.recordset;
@@ -531,6 +579,10 @@ async function emitirAto(pool, { tipo, membroId, dados, hoje, deps }) {
   await transaction.begin();
   let id;
   try {
+    // Trava por EMITENTE: quem serve em dois setores com poder (Engenharia e Segurança) não fura os tetos emitindo pelos dois ao mesmo tempo.
+    const lock = await new sql.Request(transaction).input("r", sql.NVarChar(200), `setor-emitente-${membroId}`)
+      .query(`DECLARE @res INT; EXEC @res = sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000; SELECT @res AS r`);
+    if (!lock.recordset[0] || Number(lock.recordset[0].r) < 0) { await fecharTransacao(transaction, false); return { sucesso: false, mensagem: "O sistema está ocupado com outro ato seu: tente de novo em instantes." }; }
     const trava = await new sql.Request(transaction).input("v", sql.Int, vinculo.VinculoId)
       .query(`UPDATE SetoresTecnicosMembros SET Status = Status WHERE VinculoId = @v AND Status = 'ATIVO'`);
     if (trava.rowsAffected && trava.rowsAffected[0] === 0) { await fecharTransacao(transaction, false); return { sucesso: false, proibido: true, mensagem: "O seu vínculo com o setor não está mais ativo." }; }
@@ -558,24 +610,35 @@ async function emitirAto(pool, { tipo, membroId, dados, hoje, deps }) {
   await registrarAuditoria({ tabela: "SetoresTecnicosIntervencoes", registroId: id, acao: tipo === "INTERDICAO" ? "INTERDICAO_EMITIDA" : "REMOCAO_POSTAGEM_SOLICITADA", usuarioId: membroId,
     dadosDepois: { setorId: vinculo.SetorId, congregacaoId: d.congregacaoId, canalId: d.canalId || null, motivo: d.motivo, descricaoTamanho: d.descricao.length } });
 
-  const diretoria = await portadoresDe(pool, "setores_ratificacao");
-  const emitente = await lerMembro(pool, membroId);
-  const lideres = await lideresDaCongregacao(pool, d.congregacaoId);
-  const gestao = await portadoresDe(pool, "setores_tecnicos");
-  const base = { setorNome: vinculo.SetorNome, emitenteNome: emitente ? emitente.Nome : `matrícula ${membroId}`, congregacaoNome: cong.Nome, objeto: d.objeto, motivo: d.motivo, hoje };
-  let avisos;
-  if (tipo === "INTERDICAO") {
-    // Diretoria, líderes que alcançam a congregação, a secretaria dos setores e o PRÓPRIO emitente (a confirmação de que o ato saiu em seu nome).
-    avisos = await notificarAgora(pool, { regraChave: "SETOR_INTERDICAO", destinatarios: mesclar(diretoria, lideres, gestao, [destinatarioMembro(emitente)]), mensagem: st.textoInterdicaoEmitida({ ...base, registro }), referenciaId: id, referenciaTabela: "SetoresTecnicosIntervencoes", deps });
-  } else {
-    avisos = await notificarAgora(pool, { regraChave: "SETOR_REMOCAO_SOLICITADA", destinatarios: mesclar(await administradoresDoCanal(pool, d.canalId), lideres, diretoria, gestao, [destinatarioMembro(emitente)]), mensagem: st.textoPedidoRemocao({ ...base, objeto: d.objeto || (canal && canal.Nome) || null }), referenciaId: id, referenciaTabela: "SetoresTecnicosIntervencoes", deps });
+  // O ato JÁ está gravado: se algo falhar ao avisar, o emitente precisa ouvir isso (e telefonar à Diretoria), e não receber um erro que o faria repetir um ato que já existe.
+  let avisos = 0, semDiretoria = false, falhaNosAvisos = false;
+  try {
+    const diretoria = await portadoresDe(pool, "setores_ratificacao");
+    const emitente = await lerMembro(pool, membroId);
+    const lideres = await lideresDaCongregacao(pool, d.congregacaoId);
+    const gestao = await portadoresDe(pool, "setores_tecnicos");
+    semDiretoria = diretoria.length === 0;
+    const base = { setorNome: vinculo.SetorNome, emitenteNome: emitente ? emitente.Nome : `matrícula ${membroId}`, congregacaoNome: cong.Nome, objeto: d.objeto, motivo: d.motivo, hoje };
+    if (tipo === "INTERDICAO") {
+      // Diretoria, líderes que alcançam a congregação, a secretaria dos setores e o PRÓPRIO emitente (a confirmação de que o ato saiu em seu nome).
+      avisos = await avisarEmLotes(pool, { regraChave: "SETOR_INTERDICAO", mensagem: st.textoInterdicaoEmitida({ ...base, registro }), referenciaId: id, referenciaTabela: "SetoresTecnicosIntervencoes", deps }, mesclar(diretoria, lideres, gestao, [destinatarioMembro(emitente)]));
+    } else {
+      avisos = await avisarEmLotes(pool, { regraChave: "SETOR_REMOCAO_SOLICITADA", mensagem: st.textoPedidoRemocao({ ...base, objeto: d.objeto || (canal && canal.Nome) || null }), referenciaId: id, referenciaTabela: "SetoresTecnicosIntervencoes", deps },
+        mesclar(await administradoresDoCanal(pool, d.canalId), lideres, diretoria, gestao, [destinatarioMembro(emitente)]));
+    }
+  } catch (e) {
+    falhaNosAvisos = true;
+    console.error("[SETORES] falha ao avisar um ato já gravado:", e && e.message);
   }
-  const semDiretoria = diretoria.length === 0;
+  // A mensagem só diz que a Diretoria foi comunicada se algum aviso saiu de fato (a regra pode estar desligada ou o banco ter falhado).
+  const semAviso = falhaNosAvisos || avisos === 0;
+  const orientacao = semAviso ? " ATENÇÃO: o ato foi registrado, mas NENHUM aviso saiu — avise a Diretoria Executiva e o dirigente da congregação por telefone agora." : "";
+  const semPermissao = !semAviso && semDiretoria ? " ATENÇÃO: ninguém na Diretoria tem a permissão de decidir sobre este ato — avise a Diretoria por telefone e peça que a Secretaria conceda a permissão." : "";
   return {
-    sucesso: true, intervencaoId: id, avisados: avisos ? avisos.criadas : 0, semDiretoria,
+    sucesso: true, intervencaoId: id, avisados: avisos, semDiretoria, semAviso,
     mensagem: tipo === "INTERDICAO"
-      ? `Interdição registrada em nome de ${vinculo.SetorNome}. Ela vale desde já e foi comunicada à Diretoria Executiva e aos líderes da congregação, que precisam ratificá-la ou revogá-la (Art. 50, I).${semDiretoria ? " ATENÇÃO: ninguém na Diretoria tem a permissão de ratificar — avise a Diretoria por telefone e peça que a Secretaria conceda a permissão." : ""}`
-      : `Pedido de remoção registrado em nome de ${vinculo.SetorNome} e comunicado a quem cuida da rede e aos líderes da congregação (Art. 50, II).${semDiretoria ? " ATENÇÃO: ninguém na Diretoria tem a permissão de acompanhar este pedido — avise a Diretoria." : ""}`
+      ? `Interdição registrada em nome de ${vinculo.SetorNome}. Ela vale desde já${semAviso ? "." : " e foi comunicada à Diretoria Executiva e aos líderes da congregação, que precisam ratificá-la ou revogá-la (Art. 50, I)."}${orientacao}${semPermissao}`
+      : `Pedido de remoção registrado em nome de ${vinculo.SetorNome}${semAviso ? "." : " e comunicado a quem cuida da rede e aos líderes da congregação (Art. 50, II)."}${orientacao}${semPermissao}`
   };
 }
 const emitirInterdicao = (pool, args) => emitirAto(pool, { ...args, tipo: "INTERDICAO" });
@@ -596,7 +659,7 @@ async function avisarDecisao(pool, { ato, por, hoje, regraChave, mensagem, refer
   const emitente = destinatarioMembro(await lerMembro(pool, ato.EmitidaPorMembroId));
   const extras = ato.Tipo === "REMOCAO_POSTAGEM" ? await administradoresDoCanal(pool, ato.CanalId) : [];
   const lista = mesclar([emitente], await lideresDaCongregacao(pool, ato.CongregacaoId), extras).filter(d => Number(d.membroId) !== Number(por));
-  await notificarAgora(pool, { regraChave, destinatarios: lista, mensagem, referenciaId, referenciaTabela: "SetoresTecnicosIntervencoes", deps });
+  await avisarEmLotes(pool, { regraChave, mensagem, referenciaId, referenciaTabela: "SetoresTecnicosIntervencoes", deps }, lista);
 }
 
 // Ratificar ou revogar (a Diretoria Executiva). `acesso`: o contexto de quem decide (a regra de quem pode está em st.podeAgirNoAto).

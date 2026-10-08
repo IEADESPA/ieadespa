@@ -35,7 +35,7 @@ beforeEach(() => { registrarAuditoria.mockClear(); notificarAgora.mockClear(); r
 
 describe("o que a pessoa vê em Meu Painel", () => {
   test("vínculo aguardando o Termo traz o texto do setor para aceitar; o IP e o e-mail nunca aparecem", async () => {
-    const { pool } = criarPoolFalso([[membro()], [vinculoLinha()], [{ ...setorLinha(), Profissionais: 0, EmAnalise: 1 }, { ...setorLinha({ SetorId: 3, Codigo: "SAUDE", Nome: "Saúde", PodeInterditar: 0 }), Profissionais: 0, EmAnalise: 0 }], [], [], []]);
+    const { pool } = criarPoolFalso([[membro()], [vinculoLinha()], [{ ...setorLinha(), Profissionais: 0, EmAnalise: 1 }, { ...setorLinha({ SetorId: 3, Codigo: "SAUDE", Nome: "Saúde", PodeInterditar: 0 }), Profissionais: 0, EmAnalise: 0 }], [], [], [], [], []]);
     const p = await db.meuPainel(pool, { membroId: 20, hoje: HOJE });
     expect(p.condicao.pode).toBe(true);
     const v = p.vinculos[0];
@@ -49,14 +49,36 @@ describe("o que a pessoa vê em Meu Painel", () => {
   });
   test("vínculo ATIVO dá os poderes do setor; setor desativado não dá", async () => {
     const ativo = vinculoLinha({ Status: "ATIVO", AtivadoEm: new Date("2026-10-02T10:00:00Z"), AdesaoId: 1, AdesaoForma: "FICHA_FISICA", AdesaoData: new Date("2026-10-02T00:00:00Z"), AdesaoReferencia: "ficha 3" });
-    let { pool } = criarPoolFalso([[membro()], [ativo], [], [{ SetorId: 2 }], [], []]);
+    const quemEmite = [{ VinculoId: 7, SetorId: 2, ConselhoSigla: "CREA-PA", RegistroNumero: "12345", SetorNome: "Setor de Engenharia", SetorCodigo: "ENGENHARIA" }];
+    let { pool, chamadas } = criarPoolFalso([[membro()], [ativo], [], quemEmite, [], [{ SetorId: 2 }], [], []]);
     let p = await db.meuPainel(pool, { membroId: 20, hoje: HOJE });
     expect(p.vinculos[0].termoParaAceitar).toBeUndefined();
     expect(p.vinculos[0].termo).toMatchObject({ forma: "FICHA_FISICA", dataAceite: "2026-10-02", integridade: { status: "DOCUMENTO_EXTERNO" } });
     expect(p.poderes.interdicao).toEqual([{ vinculoId: 7, setorId: 2, setorNome: "Setor de Engenharia" }]);
-    ({ pool } = criarPoolFalso([[membro()], [{ ...ativo, SetorAtivo: 0 }], [], [{ SetorId: 2 }], [], []]));
+    // Os poderes que a tela oferece vêm da MESMA consulta que a emissão usa: Termo aceito com a cláusula, setor ativo e a pessoa em comunhão.
+    expect(chamadas.filter(c => /PodeInterditar = 1|PodeSolicitarRemocao = 1/.test(c.sql)).length).toBe(2);
+    expect(chamadas.some(c => /LIKE '%,INTERDICAO,%'/.test(c.sql))).toBe(true);
+    expect(chamadas.some(c => /LIKE '%,REMOCAO_POSTAGEM,%'/.test(c.sql))).toBe(true);
+    ({ pool } = criarPoolFalso([[membro()], [{ ...ativo, SetorAtivo: 0 }], [], [], [], [{ SetorId: 2 }], [], []]));
     p = await db.meuPainel(pool, { membroId: 20, hoje: HOJE });
     expect(p.poderes.interdicao).toEqual([]);
+  });
+  test("o texto que a administração escreveu ao encerrar NÃO chega à pessoa (só à administração)", async () => {
+    const enc = vinculoLinha({ Status: "ENCERRADO", EncerradoEm: new Date("2026-10-02T10:00:00Z"), MotivoEncerramento: "DESLIGAMENTO", ObsEncerramento: "Motivo escrito só para a administração" });
+    const { pool } = criarPoolFalso([[membro()], [enc], [], [], [], [], [], []]);
+    const p = await db.meuPainel(pool, { membroId: 20, hoje: HOJE });
+    expect(p.vinculos[0]).toMatchObject({ status: "ENCERRADO", rotuloMotivoEncerramento: "Desligamento pela administração", obsEncerramento: null });
+    expect(JSON.stringify(p)).not.toMatch(/Motivo escrito só/);
+    expect(db.mapearVinculo(enc, { comObs: true }).obsEncerramento).toBe("Motivo escrito só para a administração");
+    const lista = await db.listarVinculos(criarPoolFalso([[enc]]).pool, {});
+    expect(lista[0].obsEncerramento).toBe("Motivo escrito só para a administração");
+  });
+  test("quem perdeu a comunhão não vê os poderes do setor (a emissão recusaria)", async () => {
+    const ativo = vinculoLinha({ Status: "ATIVO", AtivadoEm: new Date() });
+    const { pool } = criarPoolFalso([[membro({ SituacaoMembro: "SEM_COMUNHAO" })], [ativo], [], [{ SetorId: 2 }], [], []]);
+    const p = await db.meuPainel(pool, { membroId: 20, hoje: HOJE });
+    expect(p.condicao.pode).toBe(false);
+    expect(p.poderes).toEqual({ interdicao: [], remocao: [] });
   });
   test("a integridade do aceite digital vem do hash guardado e das cláusulas guardadas", async () => {
     const setor = { codigo: "ENGENHARIA", nome: "Setor de Engenharia", podeInterditar: true, podeSolicitarRemocao: false };
@@ -113,8 +135,8 @@ describe("candidatura e indicação: o que é recusado antes de gravar", () => {
     const { pool, chamadas } = criarPoolFalso([[membro()], [setorLinha({ ExigeRegistro: 0 })], [{ n: 0 }], [{ id: 31 }]]);
     const r = await db.candidatar(pool, { membroId: 20, dados: { setorId: 2, formacao: "Engenheira civil, UFPA" }, hoje: HOJE });
     expect(r).toMatchObject({ sucesso: true, vinculoId: 31 });
-    expect(resolverDestinatariosPorPermissao).toHaveBeenCalledWith(expect.anything(), { permissao: "setores_tecnicos" });
-    expect(notificarAgora.mock.calls[0][1]).toMatchObject({ regraChave: "SETOR_CANDIDATURA", referenciaId: 31, referenciaTabela: "SetoresTecnicosMembros", destinatarios: [{ membroId: 1 }] });
+    expect(resolverDestinatariosPorPermissao).toHaveBeenCalledWith(expect.anything(), { permissao: "setores_tecnicos", nivel: "GLOBAL" });
+    expect(notificarAgora.mock.calls[0][1]).toMatchObject({ regraChave: "SETOR_CANDIDATURA", referenciaId: 31, referenciaTabela: "SetoresTecnicosMembros", destinatarios: [{ membroId: 1 }], limiteDia: 10 });
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "SETOR_CANDIDATURA", usuarioId: 20 });
     expect(JSON.stringify(registrarAuditoria.mock.calls[0][0])).not.toMatch(/Engenheira civil/);
     expect(chamadas.some(c => /INSERT INTO SetoresTecnicosMembros/.test(c.sql) && c.inputs.f === "Engenheira civil, UFPA")).toBe(true);
@@ -304,7 +326,13 @@ describe("a leitura dos atos", () => {
   test("o nome do canal e o link aparecem para quem pode ver o ato", async () => {
     const { pool } = criarPoolFalso([[atoLinha({ Tipo: "REMOCAO_POSTAGEM", Motivo: "DIREITO_AUTORAL", CanalId: 8, CanalNome: "Instagram da Central", CanalPlataforma: "INSTAGRAM", CanalIdentificador: "@central", Referencia: "https://x.org/p/1" })]]);
     const [a] = await db.listarAtos(pool, {});
-    expect(a.canalDescricao).toBe("INSTAGRAM — Instagram da Central (@central)");
+    expect(a.canalDescricao).toBe("INSTAGRAM — Instagram da Central");   // sem o identificador: telefone, e-mail ou link de grupo são de quem administra canais
+    expect(JSON.stringify(a)).not.toMatch(/@central/);
+    const linha = [atoLinha({ Tipo: "REMOCAO_POSTAGEM", Motivo: "DIREITO_AUTORAL", CanalId: 8, CanalNome: "Instagram da Central", CanalPlataforma: "INSTAGRAM", CanalIdentificador: "@central", Referencia: "https://x.org/p/1" })];
+    expect((await db.listarAtos(criarPoolFalso([linha]).pool, { acesso: acessoDa({ diretoria: true }) }))[0].canalDescricao).toBe("INSTAGRAM — Instagram da Central (@central)");
+    expect((await db.listarAtos(criarPoolFalso([linha]).pool, { acesso: acessoDa({ gestao: true }) }))[0].canalDescricao).toMatch(/@central/);
+    expect((await db.listarAtos(criarPoolFalso([linha]).pool, { acesso: acessoDa({ canaisAdministrados: new Set([8]) }) }))[0].canalDescricao).toMatch(/@central/);
+    expect((await db.listarAtos(criarPoolFalso([linha]).pool, { acesso: acessoDa({ canaisAdministrados: new Set([9]), lider: () => true }) }))[0].canalDescricao).not.toMatch(/@central/);
     expect(a.referencia).toBe("https://x.org/p/1");
     expect(a.rotuloMotivo).toBe("Violação de direitos autorais");
   });

@@ -13,7 +13,8 @@ const crypto = require("crypto");
 const cal = require("./calendario");
 const vol = require("./voluntariado");
 
-const limpar = (v) => String(v == null ? "" : v).trim();
+// Só texto e número viram texto: lista e objeto não (String({}) daria "[object Object]", que passaria como formação ou laudo).
+const limpar = (v) => (typeof v === "string" ? v.trim() : typeof v === "number" && Number.isFinite(v) ? String(v) : "");
 const sha256 = (txt) => crypto.createHash("sha256").update(txt).digest("hex");
 const inteiroPositivo = vol.inteiroPositivo;
 const temMarca = (s) => /[<>]/.test(s);
@@ -65,6 +66,7 @@ const transicaoPermitida = (tipo, de, para) => !!(TRANSICOES[tipo] && TRANSICOES
 const MAX_ATOS_ABERTOS_POR_EMITENTE = 5;
 const MAX_ATOS_POR_DIA = 3;
 const MAX_VINCULOS_VIGENTES_POR_PESSOA = 5;
+const MAX_CANDIDATURAS_POR_DIA = 3;
 const LEMBRETE_DIAS_PADRAO = 1;
 const IP_RETENCAO_DIAS_PADRAO = vol.IP_RETENCAO_DIAS_PADRAO;
 const LIMITE_LISTA = 300;
@@ -84,7 +86,7 @@ const TERMO_SETOR_ITENS = [
   },
   {
     codigo: "SEM_HONORARIOS", base: "Regimento Art. 49, caput, e Art. 133 §§3º e 4º",
-    texto: "É vedado pagar salário ou honorário aos membros dos Setores Técnicos: o meu serviço é devocional. Não recebo remuneração, honorário, comissão, cachê nem vantagem pelo trabalho no Setor. O transporte, a alimentação e o material do dia a dia são por minha conta; só há ressarcimento em Missão Oficial Extraordinária, com Ordem de Serviço escrita ANTES da despesa."
+    texto: "É vedado pagar salário ou honorário aos membros dos Setores Técnicos: o meu serviço é devocional. Não recebo remuneração, honorário, comissão, cachê nem vantagem pelo trabalho no Setor. O transporte, a alimentação e o vestuário do dia a dia são por minha conta; só há ressarcimento em Missão Oficial Extraordinária, com Ordem de Serviço escrita ANTES da despesa."
   },
   {
     codigo: "ABRANGENCIA", base: "Regimento Art. 48 §2º e Art. 52",
@@ -161,6 +163,14 @@ function avaliarIntegridadeAdesao({ forma, termoVersao, termoHash, termoEspecifi
 // ---------------------------------------------------------------
 // Catálogo (Art. 52)
 // ---------------------------------------------------------------
+
+// A edição que não mandou um campo MANTÉM o valor atual (antes, mandar só nome e competência desarmava as marcas e a ordem em silêncio). `atual`: o setor como o banco o tem.
+function mesclarEdicaoDoSetor(atual, dados = {}) {
+  const base = { nome: atual.nome, competencia: atual.competencia, profissoes: atual.profissoes, conselhoClasse: atual.conselhoClasse, inciso: atual.inciso, exigeRegistro: atual.exigeRegistro, podeInterditar: atual.podeInterditar, podeSolicitarRemocao: atual.podeSolicitarRemocao, ordem: atual.ordem };
+  const novo = { ...base };
+  for (const [k, v] of Object.entries(dados || {})) if (k in base && v !== undefined) novo[k] = v;
+  return novo;
+}
 
 // "Setor de Engenharia, Arquitetura e Obras" -> "SETOR_DE_ENGENHARIA_ARQUITETURA_E". Sem acento, em maiúsculas, só letras, números e sublinhado.
 function gerarCodigoSetor(nome) {
@@ -370,6 +380,11 @@ function textoVinculoIndicado({ setorNome }) {
   return `Você foi indicado(a) para servir no ${setorNome}. Para começar, leia e aceite o Termo de Adesão em Meu Painel → Setores Técnicos (Regimento Art. 49 §2º): sem o aceite, o vínculo não é ativado. Servir é voluntário e gratuito, e você pode recusar ou sair quando quiser.`;
 }
 
+// Quem se candidatou e foi aprovado não foi "indicado": o aviso diz o que aconteceu de fato.
+function textoCandidaturaAprovada({ setorNome }) {
+  return `A sua candidatura ao ${setorNome} foi aprovada. Para começar, leia e aceite o Termo de Adesão em Meu Painel → Setores Técnicos (Regimento Art. 49 §2º): sem o aceite, o vínculo não é ativado. Servir é voluntário e gratuito, e você pode sair quando quiser.`;
+}
+
 function textoCandidatura({ nome, setorNome }) {
   return `${nome} se candidatou ao ${setorNome}. Analise em Setores Técnicos → Vínculos: aprovar abre o Termo de Adesão para a pessoa aceitar.`;
 }
@@ -407,11 +422,11 @@ function textoRemocaoDecidida({ para, setorNome, congregacaoNome, observacao }) 
 
 module.exports = {
   STATUS_VINCULO, ORIGENS_VINCULO, MOTIVOS_ENCERRAMENTO, TIPOS_ATO, MOTIVOS_INTERDICAO, MOTIVOS_REMOCAO, STATUS_ATO, STATUS_ATO_ABERTOS, TRANSICOES, transicaoPermitida,
-  MAX_ATOS_ABERTOS_POR_EMITENTE, MAX_ATOS_POR_DIA, MAX_VINCULOS_VIGENTES_POR_PESSOA, LEMBRETE_DIAS_PADRAO, IP_RETENCAO_DIAS_PADRAO, LIMITE_LISTA,
+  MAX_ATOS_ABERTOS_POR_EMITENTE, MAX_ATOS_POR_DIA, MAX_VINCULOS_VIGENTES_POR_PESSOA, MAX_CANDIDATURAS_POR_DIA, LEMBRETE_DIAS_PADRAO, IP_RETENCAO_DIAS_PADRAO, LIMITE_LISTA,
   TERMO_SETOR_VERSAO, TERMO_SETOR_TITULO, TERMO_SETOR_ITENS, TERMO_SETOR_ITEM_REGISTRO, TERMO_SETOR_ITEM_INTERDICAO, TERMO_SETOR_ITEM_REMOCAO, TERMO_SETOR_ITEM_JURIDICO, TERMO_SETOR_ACEITE,
   especificosDoSetor, termoDoSetor, textoDosEspecificos, listaDosEspecificos, avaliarIntegridadeAdesao,
   gerarCodigoSetor, validarSetor, validarFormacao, validarRegistroProfissional, rotuloRegistro, condicaoParaServir, validarCandidatura, validarIndicacao, validarEncerramento, validarRegistroTermo,
   enderecoDaPostagem, validarInterdicao, validarPedidoRemocao, validarDecisao, ACOES_FECHAMENTO, validarFechamento, setorPodeEmitir, podeAgirNoAto, ACOES_DO_ATO,
-  textoVinculoIndicado, textoCandidatura, textoInterdicaoEmitida, textoInterdicaoDecidida, textoInterdicaoPendente, textoPedidoRemocao, textoRemocaoPendente, textoRemocaoDecidida,
+  textoVinculoIndicado, textoCandidaturaAprovada, mesclarEdicaoDoSetor, textoCandidatura, textoInterdicaoEmitida, textoInterdicaoDecidida, textoInterdicaoPendente, textoPedidoRemocao, textoRemocaoPendente, textoRemocaoDecidida,
   inteiroPositivo, sha256
 };

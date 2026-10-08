@@ -2,12 +2,11 @@
 //
 // A parte com banco. A regra (validação, textos) está em shared/vistoriaAntecedentes.js. Acesso exclusivo da Diretoria Executiva e do Conselho de Ética
 // (permissão `vistoria_antecedentes`, nível geral): a rota confere antes de chegar aqui. O sistema NUNCA recebe a certidão, só o hash dela. Nada do parecer nem
-// do hash vai para a trilha de auditoria (que é imutável e replicaria o dado): ali ficam o resultado, o motivo e as contagens.
+// do hash vai para a trilha de auditoria (que é imutável, replicaria o dado e é lida por quem tem "auditoria", que pode não ser da Diretoria): ali ficam só a
+// contagem de certidões e, no pedido, quem foi avisado — nunca o motivo, o resultado, o parecer nem o hash.
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
-const cal = require("./calendario");
-const vol = require("./voluntariado");
 const va = require("./vistoriaAntecedentes");
 const canaisDb = require("./canaisDb");
 
@@ -29,13 +28,17 @@ function mapearVistoria(r, documentos = []) {
     funcao: r.Funcao, comVulneraveis: !!r.ComVulneraveis, dataVerificacao: isoData(r.DataVerificacao), resultado: r.Resultado, rotuloResultado: va.RESULTADOS[r.Resultado],
     parecer: r.Parecer, destinoOriginal: r.DestinoOriginal || null, rotuloDestino: r.DestinoOriginal ? va.DESTINOS_ORIGINAL[r.DestinoOriginal] : null,
     assinadaPorMembroId: r.AssinadaPorMembroId, assinadaPorNome: r.AssinadaPorNome, assinadaEm: isoInstante(r.AssinadaEm),
+    anulada: r.AnulacaoId ? { em: isoInstante(r.AnuladaEm), motivo: r.AnulMotivo, porNome: r.AnuladaPorNome || null } : null,
     documentos: documentos.map(d => ({ tipo: d.Tipo, rotuloTipo: va.TIPOS_DOCUMENTO[d.Tipo], hash: d.HashSha256, dataEmissao: isoData(d.DataEmissao) }))
   };
 }
 
 const SELECT_VISTORIA = `
-  SELECT v.*, m.Nome AS MembroNome, a.Nome AS AssinadaPorNome
-  FROM VistoriasAntecedentes v JOIN MembroReferencia m ON m.MembroId = v.MembroId JOIN MembroReferencia a ON a.MembroId = v.AssinadaPorMembroId`;
+  SELECT v.*, m.Nome AS MembroNome, a.Nome AS AssinadaPorNome, an.AnulacaoId, an.Motivo AS AnulMotivo, an.AnuladaEm, ma.Nome AS AnuladaPorNome
+  FROM VistoriasAntecedentes v JOIN MembroReferencia m ON m.MembroId = v.MembroId JOIN MembroReferencia a ON a.MembroId = v.AssinadaPorMembroId
+  LEFT JOIN VistoriasAnulacoes an ON an.VistoriaId = v.VistoriaId LEFT JOIN MembroReferencia ma ON ma.MembroId = an.AnuladaPorMembroId`;
+// Um termo ANULADO (lavrado por engano) deixa de contar como vistoria da pessoa.
+const VALE_SQL = "NOT EXISTS (SELECT 1 FROM VistoriasAnulacoes an WHERE an.VistoriaId = v.VistoriaId)";
 
 async function carregarDocumentos(pool, vistoriaIds) {
   const mapa = new Map();
@@ -62,6 +65,13 @@ async function detalharVistoria(pool, vistoriaId) {
   return mapearVistoria(r.recordset[0], docs.get(vistoriaId) || []);
 }
 
+// Quem é a pessoa desta matrícula (nome e congregação): a tela mostra antes de lavrar ou solicitar, para um erro de digitação não recair sobre a pessoa errada.
+async function pessoaPorMatricula(pool, membroId) {
+  const r = await pool.request().input("id", sql.Int, membroId).query(`SELECT m.MembroId, m.Nome, c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`);
+  const x = r.recordset[0];
+  return x ? { membroId: x.MembroId, nome: x.Nome, congregacaoNome: x.CongregacaoNome || null } : null;
+}
+
 // O pedido da Diretoria (Art. 133 §5º, I): avisa a pessoa. Não cria registro; o ato fica na trilha de auditoria.
 async function solicitarCertidoes(pool, { dados, por, deps }) {
   const v = va.validarSolicitacao(dados, { atorId: por });
@@ -70,11 +80,14 @@ async function solicitarCertidoes(pool, { dados, por, deps }) {
   if (!membro) return { sucesso: false, mensagem: "Pessoa não encontrada." };
   const n = await pool.request().input("m", sql.Int, membro.MembroId).query(`SELECT COUNT(*) AS n FROM Notificacoes WHERE RegraChave = N'VISTORIA_SOLICITADA' AND DestinatarioMembroId = @m AND CriadaEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`);
   if (Number(n.recordset[0].n) >= 2) return { sucesso: false, mensagem: "Esta pessoa já foi avisada duas vezes nas últimas 24 horas. Fale com ela diretamente." };
-  await registrarAuditoria({ tabela: "VistoriasAntecedentes", registroId: 0, acao: "VISTORIA_SOLICITADA", usuarioId: por, dadosDepois: { membroId: membro.MembroId, motivo: v.dados.motivo } });
-  // A referência leva o instante (em segundos) para cada pedido gerar um aviso novo (o motor deduplica por regra, pessoa e referência).
+  await registrarAuditoria({ tabela: "VistoriasAntecedentes", registroId: 0, acao: "VISTORIA_SOLICITADA", usuarioId: por, dadosDepois: { membroId: membro.MembroId } });
+  // A referência leva o instante (em milissegundos, dentro do INT) para cada pedido gerar um aviso novo: o motor deduplica por regra, pessoa e referência, e é a
+  // contagem desses avisos que segura o excesso de pedidos acima.
   const r = await notificarAgora(pool, { regraChave: "VISTORIA_SOLICITADA", destinatarios: [{ membroId: membro.MembroId, nome: membro.Nome, email: membro.Email }],
-    mensagem: va.textoSolicitacao(v.dados), referenciaId: Math.floor(Date.now() / 1000) % 2000000000, referenciaTabela: "VistoriasAntecedentes", deps });
-  return { sucesso: true, avisou: !!(r && r.criadas), mensagem: `${membro.Nome} foi avisado(a) de que a Diretoria solicita as certidões.` };
+    mensagem: va.textoSolicitacao(v.dados), referenciaId: Date.now() % 2000000000, referenciaTabela: "VistoriasAntecedentes", aguardarEntrega: false, deps });
+  const avisou = !!(r && r.criadas > 0);
+  return { sucesso: true, avisou, mensagem: avisou ? `${membro.Nome} foi avisado(a) de que a Diretoria solicita as certidões.`
+    : `O pedido a ${membro.Nome} ficou registrado, mas o aviso não pôde ser criado (a regra de aviso “A Diretoria Executiva solicita certidões” está desligada). Fale com a pessoa diretamente.` };
 }
 
 // Lavra o Termo de Vistoria: o termo e as certidões (só os hashes) entram juntos ou não entram.
@@ -100,14 +113,33 @@ async function lavrarVistoria(pool, { dados, por, hoje = hojeBrasilia() }) {
     }
     await transaction.commit();
   } catch (e) { await fecharTransacao(transaction, false); throw e; }
-  await registrarAuditoria({ tabela: "VistoriasAntecedentes", registroId: id, acao: "VISTORIA_LAVRADA", usuarioId: por,
-    dadosDepois: { membroId: d.membroId, motivo: d.motivo, resultado: d.resultado, comVulneraveis: d.comVulneraveis, documentos: d.documentos.length, parecerTamanho: d.parecer.length } });
+  // O sigilo do Art. 133 §5º, IV, "a": a trilha (imutável, lida por quem tem "auditoria") leva só o número de certidões; o resultado, o motivo e o parecer ficam no termo.
+  await registrarAuditoria({ tabela: "VistoriasAntecedentes", registroId: id, acao: "VISTORIA_LAVRADA", usuarioId: por, dadosDepois: { documentos: d.documentos.length } });
   return { sucesso: true, mensagem: `Termo de Vistoria de ${membro.Nome} lavrado e assinado por você${d.resultado === "RECUSA" ? ": a recusa implica impedimento ou afastamento preventivo da função (Art. 133 §5º, I, “a”), que a Diretoria aplica" : ""}.`, vistoria: await detalharVistoria(pool, id) };
 }
 
-// A última vistoria da pessoa (para outras telas e para a v7.7). null = nunca vistoriada.
+// Anula um termo lavrado por engano (matrícula errada...): um registro à parte, só de acréscimo; o termo continua lá, marcado como anulado, e deixa de contar.
+async function anularVistoria(pool, { dados, por }) {
+  const id = va.inteiroPositivo(dados && dados.vistoriaId);
+  const termo = id ? await detalharVistoria(pool, id) : null;
+  if (!termo) return { sucesso: false, mensagem: "Termo de Vistoria não encontrado." };
+  const v = va.validarAnulacao(dados, { membroDoTermo: termo.membroId, atorId: por });
+  if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+  if (termo.anulada) return { sucesso: false, mensagem: "Este termo já foi anulado." };
+  try {
+    await pool.request().input("v", sql.Int, id).input("m", sql.NVarChar(300), v.dados.motivo).input("por", sql.Int, por)
+      .query(`INSERT INTO VistoriasAnulacoes (VistoriaId, Motivo, AnuladaPorMembroId) VALUES (@v, @m, @por)`);
+  } catch (e) {
+    if (e && (e.number === 2601 || e.number === 2627)) return { sucesso: false, mensagem: "Este termo já foi anulado." };
+    throw e;
+  }
+  await registrarAuditoria({ tabela: "VistoriasAntecedentes", registroId: id, acao: "VISTORIA_ANULADA", usuarioId: por, dadosDepois: { motivoTamanho: v.dados.motivo.length } });
+  return { sucesso: true, mensagem: "Termo anulado: ele continua registrado, marcado como anulado, e deixa de contar como a vistoria dessa pessoa.", vistoria: await detalharVistoria(pool, id) };
+}
+
+// A última vistoria VÁLIDA (não anulada) da pessoa, para outras telas e para a v7.7. null = nunca vistoriada.
 async function ultimaVistoria(pool, membroId) {
-  const r = await pool.request().input("m", sql.Int, membroId).query(`SELECT TOP 1 VistoriaId, DataVerificacao, Resultado, Motivo FROM VistoriasAntecedentes WHERE MembroId = @m ORDER BY VistoriaId DESC`);
+  const r = await pool.request().input("m", sql.Int, membroId).query(`SELECT TOP 1 v.VistoriaId, v.DataVerificacao, v.Resultado, v.Motivo FROM VistoriasAntecedentes v WHERE v.MembroId = @m AND ${VALE_SQL} ORDER BY v.VistoriaId DESC`);
   const x = r.recordset[0];
   return x ? { vistoriaId: x.VistoriaId, dataVerificacao: isoData(x.DataVerificacao), resultado: x.Resultado, motivo: x.Motivo } : null;
 }
@@ -116,10 +148,10 @@ async function ultimaVistoria(pool, membroId) {
 async function liderancasSemVistoria(pool) {
   const r = await pool.request().query(`
     SELECT m.MembroId, m.Nome, c.Nome AS CongregacaoNome, STRING_AGG(p.Nome, N', ') WITHIN GROUP (ORDER BY p.Nome) AS Cargos,
-           (SELECT TOP 1 v.Resultado FROM VistoriasAntecedentes v WHERE v.MembroId = m.MembroId ORDER BY v.VistoriaId DESC) AS UltimoResultado
+           (SELECT TOP 1 v.Resultado FROM VistoriasAntecedentes v WHERE v.MembroId = m.MembroId AND ${VALE_SQL} ORDER BY v.VistoriaId DESC) AS UltimoResultado
     FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId JOIN MembroReferencia m ON m.MembroId = l.MembroId LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
     WHERE (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE)) AND m.Status = 'ATIVO'
-      AND NOT EXISTS (SELECT 1 FROM VistoriasAntecedentes v WHERE v.MembroId = m.MembroId AND v.Resultado <> 'RECUSA')
+      AND NOT EXISTS (SELECT 1 FROM VistoriasAntecedentes v WHERE v.MembroId = m.MembroId AND v.Resultado <> 'RECUSA' AND ${VALE_SQL})
     GROUP BY m.MembroId, m.Nome, c.Nome ORDER BY m.Nome`);
   return r.recordset.map(x => ({ membroId: x.MembroId, nome: x.Nome, congregacaoNome: x.CongregacaoNome || null, cargos: x.Cargos, ultimoResultado: x.UltimoResultado || null, recusou: x.UltimoResultado === "RECUSA" }));
 }
@@ -129,23 +161,25 @@ async function detectarLiderancasSemVistoria(pool, { hoje = hojeBrasilia() } = {
   const lista = await liderancasSemVistoria(pool);
   if (lista.length === 0) return [];
   const { resolverDestinatariosPorPermissao } = require("./notificacoes");
-  const destinatarios = (await resolverDestinatariosPorPermissao(pool, { permissao: "vistoria_antecedentes" })).map(d => ({ membroId: d.membroId, nome: d.nome, email: d.email }));
+  // Só quem tem a permissão num papel de nível GLOBAL (a Diretoria): o aviso lista nomes, e quem tiver a chave num papel local não é da Diretoria nem do Conselho de Ética.
+  const destinatarios = (await resolverDestinatariosPorPermissao(pool, { permissao: "vistoria_antecedentes", nivel: "GLOBAL" })).map(d => ({ membroId: d.membroId, nome: d.nome, email: d.email }));
   if (destinatarios.length === 0) return [];
   return [{ referenciaId: chaveMensal(hoje), destinatarios, fatoGerador: va.textoPendentes({ total: lista.length, nomes: lista.map(x => x.nome) }) }];
 }
 
 // O direito de acesso do titular (LGPD art. 18, I): as vistorias feitas sobre a PRÓPRIA pessoa, com o parecer e os hashes. Não inclui quem assinou.
 async function dadosDoTitular(pool, membroId) {
-  const r = await pool.request().input("m", sql.Int, membroId).query(`SELECT VistoriaId, Motivo, Funcao, DataVerificacao, Resultado, Parecer, DestinoOriginal, AssinadaEm FROM VistoriasAntecedentes WHERE MembroId = @m ORDER BY VistoriaId DESC`);
+  const r = await pool.request().input("m", sql.Int, membroId).query(`SELECT v.VistoriaId, v.Motivo, v.Funcao, v.DataVerificacao, v.Resultado, v.Parecer, v.DestinoOriginal, v.AssinadaEm, an.AnuladaEm
+    FROM VistoriasAntecedentes v LEFT JOIN VistoriasAnulacoes an ON an.VistoriaId = v.VistoriaId WHERE v.MembroId = @m ORDER BY v.VistoriaId DESC`);
   const docs = await carregarDocumentos(pool, r.recordset.map(x => x.VistoriaId));
   return {
     vistorias: r.recordset.map(x => ({
       motivo: va.MOTIVOS[x.Motivo].rotulo, funcao: x.Funcao, dataVerificacao: isoData(x.DataVerificacao), resultado: va.RESULTADOS[x.Resultado], parecer: x.Parecer,
-      destinoDoOriginal: x.DestinoOriginal ? va.DESTINOS_ORIGINAL[x.DestinoOriginal] : null, lavradaEm: isoInstante(x.AssinadaEm),
+      destinoDoOriginal: x.DestinoOriginal ? va.DESTINOS_ORIGINAL[x.DestinoOriginal] : null, lavradaEm: isoInstante(x.AssinadaEm), anuladaEm: isoInstante(x.AnuladaEm),
       certidoes: (docs.get(x.VistoriaId) || []).map(d => ({ tipo: va.TIPOS_DOCUMENTO[d.Tipo], hash: d.HashSha256, dataEmissao: isoData(d.DataEmissao) }))
     })),
     aviso: "A Igreja guarda só o código (hash) de cada certidão, nunca o documento. Quem assinou cada termo fica com a Diretoria: peça-o pelo canal do Encarregado de Dados (LGPD art. 18)."
   };
 }
 
-module.exports = { mapearVistoria, listarVistorias, detalharVistoria, solicitarCertidoes, lavrarVistoria, ultimaVistoria, liderancasSemVistoria, detectarLiderancasSemVistoria, dadosDoTitular };
+module.exports = { pessoaPorMatricula, mapearVistoria, listarVistorias, detalharVistoria, solicitarCertidoes, lavrarVistoria, anularVistoria, ultimaVistoria, liderancasSemVistoria, detectarLiderancasSemVistoria, dadosDoTitular };

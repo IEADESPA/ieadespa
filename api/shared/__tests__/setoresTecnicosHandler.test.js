@@ -54,7 +54,7 @@ describe("a porta de todas as rotas de Setores Técnicos", () => {
     expect(mockConsultas).toHaveLength(0);
   });
   test("sem sessão: 401 também nas rotas da vistoria", async () => {
-    for (const acao of ["catalogos", "lista", "vistoria", "pendentes"]) expect((await chamar(handlerVistorias, acao)).status).toBe(401);
+    for (const acao of ["catalogos", "lista", "vistoria", "pendentes", "pessoa"]) expect((await chamar(handlerVistorias, acao)).status).toBe(401);
     for (const acao of ["solicitar", "lavrar"]) expect((await chamar(handlerVistorias, acao, { metodo: "POST" })).status).toBe(401);
     expect(mockConsultas).toHaveLength(0);
   });
@@ -95,7 +95,7 @@ describe("a porta de todas as rotas de Setores Técnicos", () => {
   test("as rotas da vistoria: só a liderança, no nível geral, com vistoria_antecedentes — PIN, local e permissão errada recebem 403 sem consulta", async () => {
     const intrusos = [PIN(), LOCAL(["vistoria_antecedentes"]), GERAL(["setores_tecnicos", "setores_ratificacao"]), GERAL(["pessoas"]), tokenDe(7, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: [] })];
     for (const t of intrusos) {
-      for (const acao of ["catalogos", "lista", "vistoria", "pendentes"]) expect((await chamar(handlerVistorias, acao, { token: t })).status).toBe(403);
+      for (const acao of ["catalogos", "lista", "vistoria", "pendentes", "pessoa"]) expect((await chamar(handlerVistorias, acao, { token: t })).status).toBe(403);
       for (const acao of ["solicitar", "lavrar"]) expect((await chamar(handlerVistorias, acao, { metodo: "POST", token: t, corpo: { membroId: 5 } })).status).toBe(403);
     }
     expect(mockConsultas).toHaveLength(0);
@@ -153,10 +153,36 @@ describe("identificadores como o HTTP os entrega (texto)", () => {
   });
   test("na vistoria: matrícula e identificador de termo malformados são 400", async () => {
     for (const v of ["abc", "0x10", "1e1", "-1", "0", "1.5"]) {
+      expect((await chamar(handlerVistorias, "pessoa", { token: GERAL(), query: { membroId: v } })).status).toBe(400);
       expect((await chamar(handlerVistorias, "lista", { token: GERAL(), query: { membroId: v } })).status).toBe(400);
       expect((await chamar(handlerVistorias, "vistoria", { token: GERAL(), query: { vistoriaId: v } })).status).toBe(400);
     }
     expect((await chamar(handlerVistorias, "vistoria", { token: GERAL() })).status).toBe(400);
+  });
+});
+
+describe("quem é 'líder da congregação' (quem atende o pedido de remoção)", () => {
+  const lider = async (extra) => (await chamar(handlerSetores, "catalogos", { token: tokenDe(5, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, ...extra }) })).body.papeis.lider;
+  test("só liderança de nível territorial, com a permissão pessoas e sem restrição de departamento — não qualquer concessão", async () => {
+    expect(await lider({ nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], permissoes: ["reunioes", "pessoas"] })).toBe(true);
+    expect(await lider({ nivel: "AREA", escopoCongregacoes: ["Central", "Vila Nova"], permissoes: ["pessoas"] })).toBe(true);
+    expect(await lider({ nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] })).toBe(true);
+    // Tesoureiro (só financeiro), mesmo no nível geral: não cuida de prédio nem de rede.
+    expect(await lider({ nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["financeiro"] })).toBe(false);
+    expect(await lider({ nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], permissoes: ["financeiro"] })).toBe(false);
+    // Líder local de um DEPARTAMENTO (papel de congregação com departamentoId) e o líder geral de departamento: não.
+    expect(await lider({ nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], permissoes: ["pessoas"], departamentoId: 7 })).toBe(false);
+    expect(await lider({ nivel: "DEPARTAMENTO", escopoCongregacoes: "TODAS", permissoes: ["pessoas"] })).toBe(false);
+  });
+});
+
+describe("consulta de nome da vistoria", () => {
+  test("devolve só nome e congregação, em texto-id; matrícula que não existe é 404", async () => {
+    quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c/, (i) => (Number(i.id) === 20 ? [{ MembroId: 20, Nome: "Ana Souza", CongregacaoNome: "Central" }] : []));
+    const ok = await chamar(handlerVistorias, "pessoa", { token: GERAL(), query: { membroId: "20" } });
+    expect(ok.status).toBe(200);
+    expect(ok.body.pessoa).toEqual({ membroId: 20, nome: "Ana Souza", congregacaoNome: "Central" });
+    expect((await chamar(handlerVistorias, "pessoa", { token: GERAL(), query: { membroId: "21" } })).status).toBe(404);
   });
 });
 
@@ -198,6 +224,22 @@ describe("quem não tem relação com o ato recebe a mesma resposta de 'não exi
     expect(inexistente).toEqual(fora);
     expect(mockConsultas.some((c) => /FROM SetoresTecnicosIntervencoes/.test(c.sql))).toBe(false);
     expect((await chamar(handlerSetores, "atos-da-congregacao", { token: PIN(), query: { congregacaoId: 1 } })).status).toBe(403);
+  });
+});
+
+describe("anular um termo de vistoria", () => {
+  test("só a Diretoria no nível geral, em sessão de liderança, e com a confirmação reforçada recente", async () => {
+    for (const t of [PIN(), LOCAL(["vistoria_antecedentes"]), GERAL(["setores_tecnicos"])]) expect((await chamar(handlerVistorias, "anular", { metodo: "POST", token: t, corpo: { vistoriaId: 1, motivo: "Termo lavrado na matrícula errada." } })).status).toBe(403);
+    expect(mockConsultas).toHaveLength(0);
+    const semFator = tokenDe(1, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["vistoria_antecedentes"] });
+    const r = await chamar(handlerVistorias, "anular", { metodo: "POST", token: semFator, corpo: { vistoriaId: 1, motivo: "Termo lavrado na matrícula errada." } });
+    expect(r.status).toBe(428);
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("termo que não existe é recusado sem gravar", async () => {
+    const r = await chamar(handlerVistorias, "anular", { metodo: "POST", token: GERAL(["vistoria_antecedentes"]), corpo: { vistoriaId: 99, motivo: "Termo lavrado na matrícula errada." } });
+    expect(r.status).toBe(422);
+    expect(escritas()).toHaveLength(0);
   });
 });
 

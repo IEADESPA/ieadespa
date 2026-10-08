@@ -103,13 +103,19 @@ describe("solicitar as certidões (Art. 133 §5º, I)", () => {
     expect(t).toMatch(/Professor da EBD infantil/);
     expect(t).toMatch(/nunca uma cópia/);
     expect(t).toMatch(/recusa em apresentar implica impedimento/);
-    expect(va.textoSolicitacao({ motivo: "SUSPEITA_FUNDADA" })).toMatch(/notícia que chegou/);
+    // O e-mail da pessoa não diz POR QUE a Diretoria pergunta quando o motivo é uma suspeita: o motivo fica no termo.
+    const suspeita = va.textoSolicitacao({ motivo: "SUSPEITA_FUNDADA" });
+    expect(suspeita).toMatch(/por determinação da Diretoria/);
+    expect(suspeita).not.toMatch(/notícia|suspeita|denúncia|rumor/i);
   });
   test("o aviso mensal cita quantos faltam e abrevia a lista de nomes", () => {
     const nomes = Array.from({ length: 9 }, (_, i) => `Pessoa ${i + 1}`);
     const t = va.textoPendentes({ total: 9, nomes });
     expect(t).toMatch(/^9 liderança\(s\)/);
     expect(t).toMatch(/e mais 3/);
+    // Nomes enormes não podem estourar a coluna das notificações (1000): o motor diário não corta e a rodada inteira cairia.
+    const gigante = va.textoPendentes({ total: 6, nomes: Array.from({ length: 6 }, () => "N".repeat(200)) });
+    expect(gigante.length).toBeLessThanOrEqual(1000);
   });
 });
 

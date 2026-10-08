@@ -29,6 +29,14 @@ describe("solicitar as certidões", () => {
       expect(chamadas).toHaveLength(0);
     }
   });
+  test("se a regra de aviso está desligada, o pedido fica registrado e a resposta não diz que a pessoa foi avisada", async () => {
+    notificarAgora.mockResolvedValueOnce({ criadas: 0 });
+    const { pool } = criarPoolFalso([[{ MembroId: 20, Nome: "Ana", Email: "a@x.org", Status: "ATIVO" }], [{ n: 0 }]]);
+    const r = await db.solicitarCertidoes(pool, { dados: { membroId: 20 }, por: 1 });
+    expect(r).toMatchObject({ sucesso: true, avisou: false });
+    expect(r.mensagem).toMatch(/não pôde ser criado/);
+    expect(r.mensagem).not.toMatch(/foi avisado/);
+  });
   test("pessoa que não existe; e o limite de dois avisos em 24 horas", async () => {
     let { pool } = criarPoolFalso([[]]);
     expect((await db.solicitarCertidoes(pool, { dados: { membroId: 20 }, por: 1 })).mensagem).toBe("Pessoa não encontrada.");
@@ -46,7 +54,11 @@ describe("solicitar as certidões", () => {
     const aviso = notificarAgora.mock.calls[0][1];
     expect(aviso).toMatchObject({ regraChave: "VISTORIA_SOLICITADA", destinatarios: [{ membroId: 20, email: "a@x.org" }], referenciaTabela: "VistoriasAntecedentes" });
     expect(aviso.mensagem).toMatch(/Professor da EBD/);
-    expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "VISTORIA_SOLICITADA", usuarioId: 1, dadosDepois: { membroId: 20, motivo: "INVESTIDURA" } });
+    expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "VISTORIA_SOLICITADA", usuarioId: 1, dadosDepois: { membroId: 20 } });
+    expect(registrarAuditoria.mock.calls[0][0].dadosDepois).not.toHaveProperty("motivo");   // a trilha é lida por quem tem "auditoria": o motivo fica fora
+    expect(aviso.aguardarEntrega).toBe(false);
+    expect(r.avisou).toBe(true);
+    expect(aviso.referenciaId).toBeLessThan(2000000000);
     expect(JSON.stringify(registrarAuditoria.mock.calls[0][0])).not.toMatch(/Professor da EBD/);
   });
 });
@@ -104,7 +116,7 @@ describe("aviso mensal à Diretoria", () => {
     const lista = [{ MembroId: 3, Nome: "Dirigente", CongregacaoNome: "Central", Cargos: "Dirigente", UltimoResultado: null }];
     resolverDestinatariosPorPermissao.mockResolvedValue([{ membroId: 1, nome: "Presidente", email: "p@x.org" }]);
     let fatos = await db.detectarLiderancasSemVistoria(criarPoolFalso([lista]).pool, { hoje: HOJE });
-    expect(resolverDestinatariosPorPermissao).toHaveBeenCalledWith(expect.anything(), { permissao: "vistoria_antecedentes" });
+    expect(resolverDestinatariosPorPermissao).toHaveBeenCalledWith(expect.anything(), { permissao: "vistoria_antecedentes", nivel: "GLOBAL" });
     expect(fatos).toHaveLength(1);
     expect(fatos[0].referenciaId).toBe((2026 - 2000) * 12 + 10);
     expect(fatos[0].fatoGerador).toMatch(/^1 liderança\(s\)/);
@@ -113,6 +125,13 @@ describe("aviso mensal à Diretoria", () => {
     expect(await db.detectarLiderancasSemVistoria(criarPoolFalso([[]]).pool, { hoje: HOJE })).toEqual([]);
     resolverDestinatariosPorPermissao.mockResolvedValue([]);
     expect(await db.detectarLiderancasSemVistoria(criarPoolFalso([lista]).pool, { hoje: HOJE })).toEqual([]);
+  });
+});
+
+describe("consulta de nome", () => {
+  test("devolve nome e congregação; matrícula que não existe, null", async () => {
+    expect(await db.pessoaPorMatricula(criarPoolFalso([[{ MembroId: 20, Nome: "Ana", CongregacaoNome: null }]]).pool, 20)).toEqual({ membroId: 20, nome: "Ana", congregacaoNome: null });
+    expect(await db.pessoaPorMatricula(criarPoolFalso([[]]).pool, 99)).toBeNull();
   });
 });
 

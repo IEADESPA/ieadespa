@@ -146,8 +146,8 @@ const REGISTROS_TRATAMENTO = [
     titulares: "Membros e congregados vistoriados; a Diretoria Executiva e o Conselho de Ética, que conferem e assinam",
     categoriasDados: ["Matrícula, motivo, função em jogo e se envolve vulneráveis", "Hash SHA-256 de cada certidão conferida, tipo e data de emissão (o documento NÃO é guardado)", "Parecer final e resultado (sem restrição, com restrição ou recusa) — dado sobre antecedentes, tratado com sigilo reforçado", "Quem assinou o termo e quando; o destino do original (devolvido ou descartado)"],
     baseLegal: "LGPD Art. 7º, II — obrigação legal (ECA art. 59-A, incluído pela Lei 14.811/2024, para quem atua com crianças e adolescentes); Art. 7º, IX — legítimo interesse em proteger o rebanho (Regimento Art. 133 §5º). O consentimento prévio de todo voluntário consta do Termo de Adesão (§5º, III). Acesso restrito à Diretoria Executiva e ao Conselho de Ética (§5º, IV, a).",
-    tabelasEnvolvidas: ["VistoriasAntecedentes", "VistoriasDocumentos"],
-    retencao: "O Termo de Vistoria é arquivo interno obrigatório da Igreja (Art. 133 §5º, IV, c) e não se altera nem se apaga (gatilho no banco); por conter só o hash, é dado mínimo. O Regimento manda arquivar e não fixa prazo: o termo fica sem prazo final de descarte. O titular recebe o termo, a pedido, em Meus Dados."
+    tabelasEnvolvidas: ["VistoriasAntecedentes", "VistoriasDocumentos", "VistoriasAnulacoes"],
+    retencao: "O Termo de Vistoria é arquivo interno obrigatório da Igreja (Art. 133 §5º, IV, c) e não se altera nem se apaga (gatilho no banco); por conter só o hash, é dado mínimo. O Regimento manda arquivar e não fixa prazo: o termo fica sem prazo final de descarte; o termo lavrado por engano é ANULADO por registro à parte (não se apaga). O titular recebe o termo, a pedido, em Meus Dados."
   },
   {
     chave: "AUDITORIA",

@@ -367,7 +367,8 @@ async function reativarCanal(pool, ctx, canalId, { membroId }) {
 
 // `limiteDia` (opcional): no máximo esse tanto de avisos DESTA regra para a mesma pessoa em 24 horas; os seguintes não são criados (nem enviados por e-mail).
 // Serve para a regra que alguém pode repetir de propósito contra uma pessoa (remover e reintegrar em ciclo): o fato continua registrado, só o aviso para.
-async function notificarAgora(pool, { regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, limiteDia = null, deps = {} }) {
+// `aguardarEntrega: false`: não espera o serviço de e-mail confirmar a entrega de cada mensagem (só a aceitação) — para o aviso de um ato que não pode demorar.
+async function notificarAgora(pool, { regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, limiteDia = null, aguardarEntrega = true, deps = {} }) {
   try {
     const criar = deps.criarNotificacao || require("./notificacoes").criarNotificacao;
     const enviar = deps.enviarCanais || ((p, o) => require("./notificacaoMotor").enviarCanaisNotificacao(p, o));
@@ -389,7 +390,7 @@ async function notificarAgora(pool, { regraChave, destinatarios, mensagem, refer
       });
       if (!criada) continue;
       criadas++;
-      try { await enviar(pool, { regra, destinatarioMembroId: d.membroId, notificacaoId, titulo: regra.Titulo, mensagem, categoria: regra.Categoria, email: d.email }); }
+      try { await enviar(pool, { regra, destinatarioMembroId: d.membroId, notificacaoId, titulo: regra.Titulo, mensagem, categoria: regra.Categoria, email: d.email, ...(aguardarEntrega === false ? { aguardarEntrega: false } : {}) }); }
       catch (e) { console.error("[CANAIS] falha ao enviar aviso:", e.message); }
     }
     return { criadas, suprimidas };

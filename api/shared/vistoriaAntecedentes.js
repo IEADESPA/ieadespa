@@ -13,7 +13,7 @@
 const cal = require("./calendario");
 const vol = require("./voluntariado");
 
-const limpar = (v) => String(v == null ? "" : v).trim();
+const limpar = (v) => (typeof v === "string" ? v.trim() : typeof v === "number" && Number.isFinite(v) ? String(v) : "");
 const inteiroPositivo = vol.inteiroPositivo;
 const temMarca = (s) => /[<>]/.test(s);
 
@@ -110,18 +110,31 @@ function validarVistoria(d = {}, { hoje, atorId }) {
   return { valido: true, dados: { membroId, motivo, funcao, comVulneraveis: d.comVulneraveis === true, dataVerificacao, resultado, parecer, destinoOriginal, documentos } };
 }
 
+// Anular um termo lavrado por engano (matrícula errada, por exemplo): o termo NÃO se apaga nem se altera — a anulação é um registro à parte, só de acréscimo, com o motivo.
+// Quem foi vistoriado não anula o próprio termo. LGPD art. 18, III: o dado errado deixa de valer sem desfazer a prova de que o ato foi feito.
+function validarAnulacao(d = {}, { membroDoTermo, atorId }) {
+  const vistoriaId = inteiroPositivo(d.vistoriaId);
+  if (!vistoriaId) return { valido: false, mensagem: "Informe o termo que será anulado." };
+  if (inteiroPositivo(membroDoTermo) === inteiroPositivo(atorId)) return { valido: false, mensagem: "Ninguém anula o termo de vistoria feito sobre si mesmo: peça a outra pessoa da Diretoria." };
+  const motivo = limpar(d.motivo);
+  if (motivo.length < 10 || motivo.length > 300 || temMarca(motivo)) return { valido: false, mensagem: "Registre o motivo da anulação (de 10 a 300 caracteres, sem < ou >), por exemplo: Termo lavrado na matrícula errada." };
+  return { valido: true, dados: { vistoriaId, motivo } };
+}
+
 function textoSolicitacao({ motivo, funcao }) {
-  const porque = motivo === "INVESTIDURA" ? "pela investidura em cargo ou função" : motivo === "MUDANCA_FUNCAO" ? "pela mudança de função" : motivo === "SUSPEITA_FUNDADA" ? "por notícia que chegou à Diretoria" : "por determinação da Diretoria";
+  // O e-mail da pessoa não diz POR QUE a Diretoria pergunta quando o motivo é uma suspeita (o motivo fica no termo, que só a Diretoria lê).
+  const porque = motivo === "INVESTIDURA" ? "pela investidura em cargo ou função" : motivo === "MUDANCA_FUNCAO" ? "pela mudança de função" : "por determinação da Diretoria";
   const qual = funcao ? ` (${funcao})` : "";
   return `A Diretoria Executiva solicita que você apresente certidão de antecedentes criminais e certidão de distribuição cível, ${porque}${qual} — Regimento Art. 133 §5º. Procure a Diretoria: o documento é conferido na sua presença e devolvido a você ou descartado, e a Igreja guarda apenas o código (hash) dele, nunca uma cópia. A recusa em apresentar implica impedimento ou afastamento preventivo da função (§5º, I, “a”).`;
 }
 
 function textoPendentes({ total, nomes }) {
   const quem = nomes.slice(0, 6).join(", ") + (nomes.length > 6 ? ` e mais ${nomes.length - 6}` : "");
-  return `${total} liderança(s) em exercício ainda sem Termo de Vistoria de antecedentes: ${quem}. A checagem é obrigatória na primeira vez que o membro assume cargo de liderança ou de confiança (Regimento Art. 133 §5º, II, “a”). Abra Vistoria de Antecedentes → Quem falta.`;
+  // O aviso cabe na coluna (1000 caracteres): nomes muito longos não podem derrubar a rodada diária.
+  return `${total} liderança(s) em exercício ainda sem Termo de Vistoria de antecedentes: ${quem}. A checagem é obrigatória na primeira vez que o membro assume cargo de liderança ou de confiança (Regimento Art. 133 §5º, II, “a”). Abra Vistoria de Antecedentes → Quem falta.`.slice(0, 1000);
 }
 
 module.exports = {
   MOTIVOS, TIPOS_DOCUMENTO, RESULTADOS, DESTINOS_ORIGINAL, MAX_DOCUMENTOS, LIMITE_LISTA,
-  validarHash, validarMotivo, validarSolicitacao, validarVistoria, textoSolicitacao, textoPendentes, inteiroPositivo
+  validarHash, validarMotivo, validarSolicitacao, validarVistoria, validarAnulacao, textoSolicitacao, textoPendentes, inteiroPositivo
 };

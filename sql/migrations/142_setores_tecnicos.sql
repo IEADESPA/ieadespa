@@ -355,6 +355,30 @@ BEGIN
 END');
 GO
 
+-- Anulação: o termo lavrado por engano (matrícula errada) não se apaga nem se altera, mas pode ser ANULADO por um registro à parte, só de acréscimo (LGPD art. 18, III).
+-- Um termo anulado deixa de contar como vistoria da pessoa (quem falta, última vistoria), e a anulação também não se apaga nem se altera.
+IF OBJECT_ID(N'dbo.VistoriasAnulacoes', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.VistoriasAnulacoes (
+        AnulacaoId          INT IDENTITY PRIMARY KEY,
+        VistoriaId          INT NOT NULL CONSTRAINT UQ_VistoriasAnulacoes_Vistoria UNIQUE REFERENCES dbo.VistoriasAntecedentes(VistoriaId),
+        Motivo              NVARCHAR(300) NOT NULL,
+        AnuladaPorMembroId  INT NOT NULL REFERENCES dbo.MembroReferencia(MembroId),
+        AnuladaEm           DATETIME2 NOT NULL CONSTRAINT DF_VistoriasAnulacoes_Em DEFAULT SYSUTCDATETIME()
+    );
+END
+GO
+EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_VistoriasAnulacoes_Imutavel ON dbo.VistoriasAnulacoes AFTER UPDATE, DELETE AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1 FROM deleted) OR EXISTS (SELECT 1 FROM inserted)
+    BEGIN
+        RAISERROR(N''A anulação de um Termo de Vistoria é registro documental: não se altera nem se apaga.'', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END');
+GO
+
 -- ---- 6) Permissões (nenhuma concedida por padrão fora da Diretoria Executiva) ----
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Funcionalidades WHERE Chave = 'setores_tecnicos')

@@ -8,7 +8,7 @@
 //        [--captura caminho.png]
 // o puppeteer-core é o de tools/csp-e2e (instalado lá); de qualquer pasta
 const puppeteer = (() => { try { return require("puppeteer-core"); } catch { return require(require("path").join(__dirname, "..", "csp-e2e", "node_modules", "puppeteer-core")); } })();
-const EDGE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
+const EDGE = process.env.NAVEGADOR || process.env.EDGE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";   // no runner do GitHub: NAVEGADOR=/usr/bin/google-chrome
 
 // Abre o navegador com as flags usuais de CI e tenta de novo uma vez (no runner do GitHub o Chrome às vezes não responde
 // na primeira abertura: "Timed out ... waiting for the WS endpoint"); na segunda tentativa mostra a saída do próprio navegador.

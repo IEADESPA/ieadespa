@@ -74,6 +74,10 @@ melhorar o que já existe (HTML/CSS/JS puro), não trocar de arquitetura.
 
 ## v10.1.2 — Redesenho dos componentes recorrentes
 
+*(Absorve o item da vD.2 cancelado pelo responsável em 08/10/2026 — "o que se repete de verdade (tabela com filtro,
+formulário mestre-detalhe, badge de status) vira função reaproveitável no núcleo": aqui ele acontece uma vez só, junto
+com o redesenho de cada peça.)*
+
 - [ ] **Faixa de indicadores** (KPI) em painéis de resumo (Meu Painel, resumos de
       módulo) — hoje `.resumo-stats`/`.stat-tile` já existe mas sem padrão de
       mercado: vira 4-6 cards no máximo, 200-280px cada (`grid-template-columns:

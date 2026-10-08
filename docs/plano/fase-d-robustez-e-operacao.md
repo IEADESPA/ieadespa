@@ -77,8 +77,10 @@ seguro agora: a vD.1 prova equivalência ação por ação, igual provou a CSP (
       continua único — a lista fechada passa a ser montada pelos módulos carregados. *Feito em 07/10/2026: um commit
       por módulo; a prova rodou no `homolog` por lote (1, 1, 1, 2, 7 e 11 módulos — 962 ações iguais em todos) e de
       novo na `main` a cada merge; cada lote abriu as telas de verdade na homologação (`tools/modularizar/prova-modulo.js`).*
-- [ ] O que se repete de verdade (tabela com filtro, formulário mestre-detalhe, badge de status) vira função
-      reaproveitável no núcleo — só o que já se repete, sem redesenho visual (isso é v10.1).
+- [x] O que se repete de verdade (tabela com filtro, formulário mestre-detalhe, badge de status) vira função
+      reaproveitável no núcleo — só o que já se repete, sem redesenho visual (isso é v10.1). *(Cancelado pelo
+      responsável em 08/10/2026: fica dentro da v10.1.2 da FASE 10, "Redesenho dos componentes recorrentes", que já
+      unifica essas peças ao redesenhá-las — fazer agora seria o mesmo trabalho duas vezes.)*
 - [x] A v10.4 é marcada como entregue aqui (nota lá apontando pra cá), sem duplicar. *Feito em 07/10/2026 (nota no
       plano da FASE 10; o que a vD.2 deixou para depois continua lá como item aberto).*
 
@@ -533,8 +535,8 @@ abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.
      segunda etapa automática; Chrome do runner que não abre na primeira vez) — os três corrigidos antes do merge. O
      orçamento com alerta já existia e foi conferido. **Fica para o responsável:** o ensaio de restauração (adiado por ele
      em 07/10), o teste de carga maior (depois da decisão sobre o Directus) e o
-     item "funções reaproveitáveis" da vD.2, que esta trava **propõe cancelar** (refatoração visual sem ganho medível com
-     dois usuários; a v10.1 cobre o redesenho). Nenhum deles bloqueia a trava.
+     item "funções reaproveitáveis" da vD.2, **cancelado por ele em 08/10/2026** (fica dentro da v10.1.2 da FASE 10,
+     que unifica essas peças ao redesenhá-las). Nenhum deles bloqueia a trava.
   5. *Deploy real aconteceu?* **Sim.** Produção conferida depois do merge: `script.js` com a segunda etapa, biblioteca
      WebAuthn servida de dentro (200), casca do service worker v29, rotas novas respondendo 401 sem sessão/bilhete.
      **Atenção especial da trava (caminho de recuperação):** provado com conta de teste na homologação — o dirigente

@@ -1,0 +1,58 @@
+name: Sistema - prova em navegador (sob demanda)
+
+# vD.4 (08/10/2026) — roda um roteiro de prova em navegador de verdade (Chrome do runner) contra um endereço
+# publicado, sem depender do navegador da máquina de quem desenvolve. Hoje: a prova da chave de acesso
+# (tools/vd4/prova-chave-acesso.js) e a prova genérica de um módulo (tools/modularizar/prova-modulo.js).
+# Só disparo manual: Actions → "Sistema - prova em navegador" → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      roteiro:
+        description: "Roteiro: chave-acesso | modulo"
+        required: true
+        default: "chave-acesso"
+      base:
+        description: "Endereço publicado (homologação por padrão)"
+        required: false
+        default: "https://white-grass-048208e0f-21.eastus2.6.azurestaticapps.net"
+      argumentos:
+        description: "Argumentos extras do roteiro (ex.: --modulo psc --funcoes carregarPainelPscAcao --matricula 900007 --aba btnAbaPsc)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  prova:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NAVEGADOR: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Instalar o puppeteer-core (sem baixar navegador)
+        working-directory: tools/csp-e2e
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+        run: npm install --no-audit --no-fund --silent
+
+      - name: Rodar o roteiro
+        working-directory: tools/csp-e2e
+        run: |
+          set -o pipefail
+          case "${{ github.event.inputs.roteiro }}" in
+            chave-acesso) script="../vd4/prova-chave-acesso.js" ;;
+            modulo)       script="../modularizar/prova-modulo.js" ;;
+            *) echo "::error::roteiro desconhecido"; exit 1 ;;
+          esac
+          node "$script" --base "${{ github.event.inputs.base }}" ${{ github.event.inputs.argumentos }} 2>&1 | tee saida.txt
+          codigo=${PIPESTATUS[0]}
+          { echo '```'; grep -E '^(OK|FALHA| )|verificações' saida.txt | head -40; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $codigo

@@ -531,7 +531,7 @@ abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.
      restrição do banco que recusava o canal `FATOR` (migração 141) e dois defeitos do próprio roteiro (espera curta na
      segunda etapa automática; Chrome do runner que não abre na primeira vez) — os três corrigidos antes do merge. O
      orçamento com alerta já existia e foi conferido. **Fica para o responsável:** o ensaio de restauração (adiado por ele
-     em 07/10), o Google Search Console (conta dele), o teste de carga maior (depois da decisão sobre o Directus) e o
+     em 07/10), o teste de carga maior (depois da decisão sobre o Directus) e o
      item "funções reaproveitáveis" da vD.2, que esta trava **propõe cancelar** (refatoração visual sem ganho medível com
      dois usuários; a v10.1 cobre o redesenho). Nenhum deles bloqueia a trava.
   5. *Deploy real aconteceu?* **Sim.** Produção conferida depois do merge: `script.js` com a segunda etapa, biblioteca

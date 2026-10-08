@@ -53,7 +53,10 @@ async function abrirNavegador() {
       });
       await page.type("#matriculaPainel", String(MATRICULA)); await page.type("#senhaPainel", SENHA); await page.keyboard.press("Enter");
       await page.waitForFunction(() => (document.querySelector("#gradeModulos") && document.querySelector("#gradeModulos").children.length > 0) || (document.querySelector("#cxSegundoFator") && document.querySelector("#cxSegundoFator").style.display === "block") || document.querySelector("#resultadoLogin").textContent, { timeout: 90000 }).catch(() => {});
-      await dormir(2000);
+      // com chave cadastrada a segunda etapa é automática (o autenticador virtual confirma sozinho e o painel abre em seguida):
+      // espera a entrada terminar, uma mensagem de erro, ou a etapa do código (que fica parada esperando a pessoa)
+      await page.waitForFunction(() => (document.querySelector("#gradeModulos") && document.querySelector("#gradeModulos").children.length > 0) || document.querySelector("#resultadoLogin").textContent || (document.querySelector("#cxSegundoFator").style.display === "block" && document.querySelector("#btnUsarChaveAcesso").style.display === "none"), { timeout: 60000 }).catch(() => {});
+      await dormir(1500);
       return page.evaluate(() => ({ entrou: !!(document.querySelector("#gradeModulos") && document.querySelector("#gradeModulos").children.length), segundaEtapa: document.querySelector("#cxSegundoFator").style.display === "block", texto: document.querySelector("#segundoFatorTexto").textContent, msg: document.querySelector("#resultadoLogin").textContent }));
     };
     const sair = async () => { await page.evaluate(() => { sessionStorage.clear(); }); };
@@ -89,7 +92,7 @@ async function abrirNavegador() {
     ok("   bilhete inválido na segunda etapa: 401", fora === 401, String(fora));
 
     // 5) remove a chave; entra de novo sem segunda etapa
-    const chaveId = s.chaves[0].chaveId;
+    const chaveId = s.chaves && s.chaves[0] ? s.chaves[0].chaveId : 0;   // se o passo 3 falhou, o 5 falha sem derrubar o roteiro
     await page.evaluate(() => { window.confirmarAcao = async () => true; });
     const remocao = await page.evaluate(async (id) => { await removerChaveAcessoAcao(id); await new Promise((r) => setTimeout(r, 1200)); const r = await fetch("/api/chaves-acesso", { headers: { "x-auth-token": sessionStorage.getItem("authToken") } }); return r.json(); }, chaveId);
     ok("5) chave removida pela tela", remocao.sucesso && remocao.chaves.length === 0);

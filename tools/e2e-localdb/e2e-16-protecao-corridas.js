@@ -60,7 +60,7 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
 
   console.log("== 6 comunicações ao órgão ao mesmo tempo ==");
   const agora = new Date().toISOString();
-  rs = await disparar(Array.from({ length: 6 }, (_, i) => prot("comunicacao", geral(i % 2 ? 1001 : 1002), { incidenteId: q2, orgao: "CONSELHO_TUTELAR", forma: "TELEFONE", comunicadoEm: agora, protocoloExterno: `CT-${i}` })));
+  rs = await disparar(Array.from({ length: 6 }, (_, i) => prot("comunicacao", geral(i % 2 ? 1001 : 1002), { incidenteId: q2, orgao: "CONSELHO_TUTELAR", forma: "TELEFONE", comunicadoEm: agora, protocoloExterno: `CT-2026/${100 + i}` })));
   console.log("   ", JSON.stringify(contar(rs)));
   ok(rs.every((x) => x.status === 201), "todas entram (cada ligação é um registro; nenhuma 500)", contar(rs));
   ok((await escalar("SELECT COUNT(*) FROM IncidenteComunicacoes WHERE IncidenteId = @i", { i: q2 })) === 6, "seis registros");

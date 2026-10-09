@@ -21,14 +21,16 @@ const falha = async (texto, params) => { try { await q(texto, params); return nu
     ok((await escalar("SELECT COUNT(*) FROM Papeis WHERE Nome = @n AND (',' + Permissoes + ',') LIKE '%,protecao_menores,%'", { n: p })) === 1, `o papel ${p} tem a permissão`);
   }
   ok((await escalar("SELECT Nivel FROM Papeis WHERE Nome = N'Comitê de Proteção'")) === "GLOBAL", "o Comitê de Proteção é papel de nível geral");
-  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'PROTECAO[_]%'")) === 6, "6 regras de aviso da proteção");
-  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'PROTECAO[_]%' AND Obrigatoria = 1 AND CanalEmail = 1")) === 6, "todas obrigatórias e por e-mail (ninguém desliga o que protege criança)");
+  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'PROTECAO[_]%'")) === 8, "8 regras de aviso da proteção");
+  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'PROTECAO[_]%' AND Obrigatoria = 1 AND CanalEmail = 1")) === 8, "todas obrigatórias e por e-mail (ninguém desliga o que protege criança)");
   ok((await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE Categoria = N'Incidentes de proteção de crianças e adolescentes' AND DiasRetencao = 7300 AND LEN(BaseLegal) BETWEEN 100 AND 300")) === 1, "a política de retenção (20 anos) está lá e cabe na coluna");
   // idempotência: reaplicar a 144 sobre o banco já migrado não duplica nada nem derruba
   const sqlTexto = fs.readFileSync(path.join(API, "../sql/migrations/144_incidentes_protecao.sql"), "utf8");
   const pool = await obterPool();
   for (let i = 0; i < 2; i++) for (const lote of sqlTexto.split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean)) await pool.request().query(lote);
-  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'PROTECAO[_]%'")) === 6, "reaplicar duas vezes não duplica as regras de aviso");
+  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'PROTECAO[_]%'")) === 8, "reaplicar duas vezes não duplica as regras de aviso");
+  ok((await escalar("SELECT Titulo FROM NotificacaoRegras WHERE Chave = N'PROTECAO_AFASTAMENTO_PESSOA'")) === "Proteção: informação sobre o seu contato com menores", "o título do aviso do levantamento é neutro (não diz que foi suspenso)");
+  ok((await escalar("SELECT COUNT(*) FROM sys.check_constraints WHERE name = N'CK_IncidentesProtecao_Resultado' AND definition LIKE N'%SEM_CONTEUDO_DE_PROTECAO%'")) === 1, "o resultado 'sem conteúdo de proteção' é aceito pela tabela");
   ok((await escalar("SELECT COUNT(*) FROM Papeis WHERE Nome = N'Comitê de Proteção'")) === 1, "nem o papel do Comitê");
   ok((await escalar("SELECT LEN(Permissoes) - LEN(REPLACE(Permissoes, 'protecao_menores', '')) FROM Papeis WHERE Nome = 'Presidente'")) === 'protecao_menores'.length, "nem repete a permissão no Presidente");
 
@@ -48,6 +50,7 @@ const falha = async (texto, params) => { try { await q(texto, params); return nu
   ok(m && /CK_IncidentesProtecao_Nivel/.test(m), "nível fora da lista é recusado", m);
 
   const quebra = (await insIncidente(incidente()))[0].id;
+  m = await falha("UPDATE IncidentesProtecao SET Status = 'ENCERRADO', EncerradoEm = SYSUTCDATETIME(), EncerradoPorMembroId = 1001, EncerramentoResultado = 'QUALQUER', EncerramentoProvidencia = N'x' WHERE IncidenteId = @i", { i: quebra }); ok(m && /CK_IncidentesProtecao_Resultado/.test(m), "resultado de encerramento fora da lista é recusado", m);
   const outro = incidente();
   const protocoloRepetido = await escalar("SELECT Protocolo FROM IncidentesProtecao WHERE IncidenteId = @i", { i: quebra });
   m = await falha(`INSERT INTO IncidentesProtecao (Protocolo, Nivel, Origem, CongregacaoId, DataOcorrencia, Descricao, ConhecidoEm, ExigeComunicacao, RegistradoPorMembroId) VALUES (@p, 'QUEBRA_POLITICA', 'MEMBRO', @c, '2026-10-01', N'x teste', SYSUTCDATETIME(), 0, 3001)`, { ...outro, p: protocoloRepetido });

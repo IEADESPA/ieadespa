@@ -18,12 +18,14 @@ const { notificarAgora } = require("./canaisDb");
 const { gerarProtocolo } = require("./ouvidoria");
 const { resolverDestinatariosPorPermissao } = require("./notificacoes");
 const { obterTrava } = require("./financeiroSeguro");
+const pendencia = require("./protecaoPendencia");
 
 const PERMISSAO = "protecao_menores";
 const PAPEL_COMITE = "Comitê de Proteção";
 const LIMITE_REGISTROS_DIA = 10;            // por pessoa, em 24 horas (contra uso de má-fé; um relato verdadeiro nunca chega perto)
 const LIMITE_ALEGACOES_DIA = 3;
-const LIMITE_CANAL_HORA = 40;               // pedidos de ajuda sem login que a Igreja aceita por hora (contra inundação; a orientação sempre aparece)
+const LIMITE_CANAL_HORA = 15;               // pedidos de ajuda sem login que a Igreja aceita por hora (contra inundação; a orientação sempre aparece)
+const LIMITE_CANAL_DIA = 60;                // e por dia: um ataque ao canal não enche a fila da Diretoria de ruído (o que passar do teto lê a orientação do 100 e do 190)
 const MAX_ADENDOS = 5;
 const MAX_ADENDO = 2000;
 const CAUTELAR_LEMBRETE_DIAS = 3;           // afastamento sem decisão do Comitê: o primeiro aviso sai em 3 dias, depois toda semana
@@ -65,14 +67,16 @@ function visivelPara(ver, incidente, membrosEnvolvidos) {
   if (!ver) return false;
   if ((membrosEnvolvidos || []).map(Number).includes(Number(ver.membroId))) return false;       // quem é envolvido não vê (nem sabe que existe)
   if (ver.geral) return true;
+  // O pedido do canal sem login é anônimo e a congregação é a que quem escreveu escolheu: o Dirigente dela pode ser justamente a pessoa de quem se fala. Só o nível geral (Diretoria e Comitê) o trata.
+  if (incidente.Origem === "CANAL_AJUDA") return false;
   return !!(incidente.CongregacaoNome && ver.podeVerCongregacao && ver.podeVerCongregacao(incidente.CongregacaoNome));
 }
 
 const SELECT_INCIDENTE = `
   SELECT i.IncidenteId, i.Protocolo, i.Nivel, i.Origem, i.CongregacaoId, c.Nome AS CongregacaoNome, i.EquipeId, q.Nome AS EquipeNome, i.DataOcorrencia, i.Onde, i.Descricao, i.RelatadoPor,
          i.ContatoCanal, i.ConhecidoEm, i.ExigeComunicacao, i.PrazoNotificacaoEm, i.RegistradoPorMembroId, i.RegistradoEm, i.Status, i.EncerradoEm, i.EncerradoPorMembroId,
-         i.EncerramentoResultado, i.EncerramentoProvidencia
-  FROM IncidentesProtecao i LEFT JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId LEFT JOIN EscalasEquipes q ON q.EquipeId = i.EquipeId`;
+         i.EncerramentoResultado, i.EncerramentoProvidencia, rp.Nome AS RegistradoPorNome
+  FROM IncidentesProtecao i LEFT JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId LEFT JOIN EscalasEquipes q ON q.EquipeId = i.EquipeId LEFT JOIN MembroReferencia rp ON rp.MembroId = i.RegistradoPorMembroId`;
 
 async function carregarIncidente(pool, id) {
   return (await pool.request().input("id", sql.Int, id).query(`${SELECT_INCIDENTE} WHERE i.IncidenteId = @id`)).recordset[0] || null;
@@ -81,7 +85,8 @@ async function envolvidosDe(pool, incidenteId) {
   return (await pool.request().input("id", sql.Int, incidenteId).query(`
     SELECT e.EnvolvidoId, e.MembroId, COALESCE(m.Nome, e.Nome) AS Nome,
            (SELECT TOP 1 d.Decisao FROM IncidenteDecisoesCautelares d WHERE d.EnvolvidoId = e.EnvolvidoId ORDER BY d.DecisaoId DESC) AS UltimaDecisao,
-           (SELECT COUNT(*) FROM IncidenteDecisoesCautelares d WHERE d.EnvolvidoId = e.EnvolvidoId) AS NDecisoes
+           (SELECT COUNT(*) FROM IncidenteDecisoesCautelares d WHERE d.EnvolvidoId = e.EnvolvidoId) AS NDecisoes,
+           (SELECT TOP 1 d.DecididaPorMembroId FROM IncidenteDecisoesCautelares d WHERE d.EnvolvidoId = e.EnvolvidoId ORDER BY d.DecisaoId DESC) AS UltimoDecisorId
     FROM IncidenteEnvolvidos e LEFT JOIN MembroReferencia m ON m.MembroId = e.MembroId WHERE e.IncidenteId = @id ORDER BY e.EnvolvidoId`)).recordset;
 }
 async function comunicacoesDe(pool, incidenteId) {
@@ -95,8 +100,8 @@ async function contarAnexos(pool, incidenteId) {
 // O carregamento que as rotas de escrita usam: o incidente + os membros envolvidos, já conferida a visão. null = "não existe" (a mesma resposta para tudo).
 async function incidenteVisivel(pool, incidenteId, ver) {
   const i = await carregarIncidente(pool, incidenteId);
-  if (!i) return null;
   const env = await envolvidosDe(pool, incidenteId);
+  if (!i) return null;
   if (!visivelPara(ver, i, env.filter((e) => e.MembroId).map((e) => e.MembroId))) return null;
   return { incidente: i, envolvidos: env };
 }
@@ -147,15 +152,24 @@ async function gerarProtocoloDeIncidente(pool) {
 const RELATADO_DO_CANAL = { CRIANCA_ADOLESCENTE: "PROPRIA_CRIANCA", RESPONSAVEL: "RESPONSAVEL", OUTRA_PESSOA: "OUTRA_PESSOA" };
 
 // Grava o incidente, o envolvido e o relato numa transação só. `d` já passou por pm.validarIncidente (ou pelo canal de ajuda).
-async function gravarIncidente(pool, { d, registrante, envolvidoNome, evitarRepeticao = false }) {
+async function gravarIncidente(pool, { d, registrante, envolvidoNome, evitarRepeticao = false, limitar = false }) {
   const protocolo = await gerarProtocoloDeIncidente(pool);
   const prazo = d.exigeComunicacao ? pm.prazoNotificacao(d.conhecidoEm) : null;
   const transaction = new sql.Transaction(pool);
   let incidenteId;
   try {
     await transaction.begin();
-    if (evitarRepeticao && registrante) {
+    if ((evitarRepeticao || limitar) && registrante) {
       if (!(await obterTrava(() => new sql.Request(transaction), `protecao-reg-${registrante}`, 8000))) { await fecharTransacao(transaction, false); return { ocupado: true }; }
+    }
+    // o teto diário é conferido AQUI, sob a trava da pessoa, junto com a gravação: oito registros ao mesmo tempo não passam todos pelo "ainda não bati no teto"
+    if (limitar && registrante) {
+      const recentes = (await new sql.Request(transaction).input("m", sql.Int, registrante).query(`
+        SELECT COUNT(*) AS total, SUM(CASE WHEN Nivel = 'ALEGACAO' THEN 1 ELSE 0 END) AS alegacoes FROM IncidentesProtecao
+        WHERE RegistradoPorMembroId = @m AND RegistradoEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`)).recordset[0];
+      if ((Number(recentes.total) || 0) >= LIMITE_REGISTROS_DIA || (d.nivel === "ALEGACAO" && (Number(recentes.alegacoes) || 0) >= LIMITE_ALEGACOES_DIA)) { await fecharTransacao(transaction, false); return { limite: true }; }
+    }
+    if (evitarRepeticao && registrante) {
       const repetido = (await new sql.Request(transaction).input("m", sql.Int, registrante).input("n", sql.NVarChar(16), d.nivel).input("dt", sql.Date, d.dataOcorrencia).input("ds", sql.NVarChar(1000), d.descricao).query(`
         SELECT TOP 1 IncidenteId, Protocolo, PrazoNotificacaoEm FROM IncidentesProtecao
         WHERE RegistradoPorMembroId = @m AND Nivel = @n AND DataOcorrencia = @dt AND Descricao = @ds AND RegistradoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY IncidenteId DESC`)).recordset[0];
@@ -205,11 +219,15 @@ async function registrarIncidente(pool, { dados, registrante, agora = new Date()
   let envolvidoNome = d.envolvidoNome;
   if (d.envolvidoMembroId) {
     const m = (await pool.request().input("id", sql.Int, d.envolvidoMembroId).query(`SELECT MembroId, Nome FROM MembroReferencia WHERE MembroId = @id`)).recordset[0];
-    if (!m) return { sucesso: false, mensagem: "A matrícula da pessoa envolvida não foi encontrada." };
-    envolvidoNome = null;       // quem é do cadastro tem o nome no cadastro
+    if (!m) {
+      // A resposta não pode servir de sonda de matrículas (qualquer pessoa logada registra): matrícula que não existe vira um registro só com o nome, que a Diretoria confere e vincula.
+      envolvidoNome = `Matrícula ${d.envolvidoMembroId} (não encontrada no cadastro)`;
+      d.envolvidoMembroId = null;
+    } else envolvidoNome = null;       // quem é do cadastro tem o nome no cadastro
   }
   // um clique duplo não registra duas vezes o mesmo fato (mesma pessoa, mesmo nível, mesma data e mesmo texto nos últimos 10 minutos): a conferência e a gravação são uma coisa só, sob trava
-  const gravado = await gravarIncidente(pool, { d: { ...d, contatoCanal: null }, registrante: registrante.membroId, envolvidoNome, evitarRepeticao: true });
+  const gravado = await gravarIncidente(pool, { d: { ...d, contatoCanal: null }, registrante: registrante.membroId, envolvidoNome, evitarRepeticao: true, limitar: true });
+  if (gravado.limite) return { sucesso: false, limite: true, mensagem: "Você já registrou muitos incidentes nas últimas 24 horas. Se há uma criança em perigo agora, ligue 100 (Disque Direitos Humanos) ou 190, ou fale direto com o Dirigente." };
   if (gravado.ocupado) return { sucesso: false, mensagem: "O sistema está ocupado com outro registro seu. Aguarde alguns segundos e confira em \"Meus registros\" antes de tentar de novo." };
   if (gravado.repetido) return { sucesso: true, repetido: true, incidenteId: gravado.repetido.IncidenteId, protocolo: gravado.repetido.Protocolo, prazoEm: iso(gravado.repetido.PrazoNotificacaoEm), mensagem: "Este incidente já tinha sido registrado agora há pouco." };
   const { incidenteId, protocolo, prazo } = gravado;
@@ -219,11 +237,18 @@ async function registrarIncidente(pool, { dados, registrante, agora = new Date()
   if (d.nivel === "ALEGACAO" && d.envolvidoMembroId) escalasDesmarcadas = await afastarDasEscalas(pool, d.envolvidoMembroId);
   const destinatarios = await destinatariosDaGestao(pool, { congregacaoId: d.congregacaoId, excluirMembroIds: d.envolvidoMembroId ? [d.envolvidoMembroId] : [] });
   const aviso = await notificarAgora(pool, { regraChave: "PROTECAO_INCIDENTE_NOVO", destinatarios, mensagem: pm.textoIncidenteNovo({ nivel: d.nivel, prazoEm: prazo }), referenciaId: incidenteId, referenciaTabela: "IncidentesProtecao", aguardarEntrega: false, deps });
+  if (d.exigeComunicacao) await pendencia.atualizar(pool);
+  // A resposta a quem registra NÃO diz quantas escalas foram desmarcadas nem a quantos o aviso chegou (isso revelaria se a pessoa apontada servia em alguma escala), e só afirma que a liderança foi
+  // avisada se o aviso de fato foi criado: a regra de aviso pode ter sido desligada ou o serviço de e-mail estar fora.
+  void escalasDesmarcadas;
+  const avisou = (aviso.criadas || 0) > 0;
   return {
-    sucesso: true, incidenteId, protocolo, prazoEm: prazo ? prazo.toISOString() : null, exigeComunicacao: d.exigeComunicacao, escalasDesmarcadas, avisados: aviso.criadas || 0,
-    mensagem: d.exigeComunicacao
-      ? `Registrado (protocolo ${protocolo}). A liderança foi avisada e o prazo de 24 horas para comunicar o Conselho Tutelar já está contando. Não faça perguntas à criança e não converse sobre o caso com outras pessoas.`
-      : `Registrado (protocolo ${protocolo}). A liderança foi avisada.`
+    sucesso: true, incidenteId, protocolo, prazoEm: prazo ? prazo.toISOString() : null, exigeComunicacao: d.exigeComunicacao,
+    mensagem: (d.exigeComunicacao
+      ? `Registrado (protocolo ${protocolo}). O prazo de 24 horas para comunicar o Conselho Tutelar já está contando.`
+      : `Registrado (protocolo ${protocolo}).`)
+      + (avisou ? " A liderança foi avisada." : " ATENÇÃO: não foi possível avisar a liderança agora: procure o Dirigente ou a Diretoria pessoalmente.")
+      + (d.exigeComunicacao ? " Não faça perguntas à criança e não converse sobre o caso com outras pessoas." : "")
   };
 }
 
@@ -233,8 +258,10 @@ async function registrarPedidoDeAjuda(pool, { dados, agora = new Date(), deps })
   const v = pm.validarPedidoDeAjuda(dados, { hoje, agora });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const x = v.dados;
-  const naHora = Number((await pool.request().query(`SELECT COUNT(*) AS n FROM IncidentesProtecao WHERE Origem = 'CANAL_AJUDA' AND RegistradoEm >= DATEADD(HOUR, -1, SYSUTCDATETIME())`)).recordset[0].n);
-  if (naHora >= LIMITE_CANAL_HORA) return { sucesso: false, limite: true, mensagem: "Estamos recebendo muitas mensagens agora e não conseguimos registrar a sua. Se você precisa de ajuda, ligue 100 (de graça, a qualquer hora) ou 190 se existe perigo agora." };
+  const taxas = (await pool.request().query(`
+    SELECT SUM(CASE WHEN RegistradoEm >= DATEADD(HOUR, -1, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS hora, COUNT(*) AS dia FROM IncidentesProtecao
+    WHERE Origem = 'CANAL_AJUDA' AND RegistradoEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`)).recordset[0] || {};
+  if ((Number(taxas.hora) || 0) >= LIMITE_CANAL_HORA || (Number(taxas.dia) || 0) >= LIMITE_CANAL_DIA) return { sucesso: false, limite: true, mensagem: "Estamos recebendo muitas mensagens agora e não conseguimos registrar a sua. Se você precisa de ajuda, ligue 100 (de graça, a qualquer hora) ou 190 se existe perigo agora." };
   let congregacaoId = null;
   if (x.congregacaoId) {
     const c = (await pool.request().input("id", sql.Int, x.congregacaoId).query(`SELECT CongregacaoId FROM Congregacoes WHERE CongregacaoId = @id`)).recordset[0];
@@ -246,8 +273,10 @@ async function registrarPedidoDeAjuda(pool, { dados, agora = new Date(), deps })
   };
   const { incidenteId, protocolo, prazo } = await gravarIncidente(pool, { d, registrante: null, envolvidoNome: null });
   await auditar({ IncidenteId: incidenteId, Nivel: "ALEGACAO" }, "PROTECAO_PEDIDO_DE_AJUDA", null);
-  const destinatarios = await destinatariosDaGestao(pool, { congregacaoId });
+  // O pedido do canal é tratado só pelo nível geral (a congregação escolhida é palpite de quem escreveu, e o Dirigente dela pode ser a pessoa de quem se fala)
+  const destinatarios = await destinatariosGeraisDaDiretoria(pool);
   const aviso = await notificarAgora(pool, { regraChave: "PROTECAO_INCIDENTE_NOVO", destinatarios, mensagem: pm.textoIncidenteNovo({ nivel: "ALEGACAO", prazoEm: prazo }), referenciaId: incidenteId, referenciaTabela: "IncidentesProtecao", aguardarEntrega: false, deps });
+  await pendencia.atualizar(pool);
   return { sucesso: true, protocolo, avisados: aviso.criadas || 0, mensagem: pm.textoConfirmacaoDeAjuda() };
 }
 
@@ -263,23 +292,28 @@ async function meusIncidentes(pool, membroId) {
 
 async function listarIncidentes(pool, { ver, status = null, agora = new Date(), limite = 200 } = {}) {
   const rq = pool.request().input("viewer", sql.Int, ver.membroId);
-  const filtro = status ? " WHERE i.Status = @status" : "";
   if (status) rq.input("status", sql.NVarChar(10), status);
+  const doStatus = status ? "i.Status = @status" : "1 = 1";
+  const filtroInterno = status ? "WHERE Status = @status" : "";
+  // Os casos que PEDEM AÇÃO (suspeita aberta sem comunicação) entram SEMPRE; o corte é só no histórico mais recente. Assim uma enxurrada de pedidos falsos não empurra o verdadeiro para fora da lista.
   const r = await rq.query(`
-    SELECT TOP 500 i.IncidenteId, i.Protocolo, i.Nivel, i.Origem, i.CongregacaoId, c.Nome AS CongregacaoNome, i.DataOcorrencia, i.ExigeComunicacao, i.PrazoNotificacaoEm, i.Status, i.RegistradoEm, i.EncerradoEm,
+    SELECT TOP 3000 i.IncidenteId, i.Protocolo, i.Nivel, i.Origem, i.CongregacaoId, c.Nome AS CongregacaoNome, i.DataOcorrencia, i.ExigeComunicacao, i.PrazoNotificacaoEm, i.Status, i.RegistradoEm, i.EncerradoEm,
       (SELECT COUNT(*) FROM IncidenteComunicacoes k WHERE k.IncidenteId = i.IncidenteId) AS NComunicacoes,
       (SELECT COUNT(*) FROM IncidenteComunicacoes k WHERE k.IncidenteId = i.IncidenteId AND (k.ProtocoloExterno IS NOT NULL OR k.ReferenciaArquivo IS NOT NULL)) AS NComComprovante,
       (SELECT COUNT(*) FROM AnexosGenericos a WHERE a.Tabela = 'IncidentesProtecao' AND a.RegistroId = i.IncidenteId) AS NAnexos,
       (SELECT COUNT(*) FROM IncidenteEnvolvidos e WHERE e.IncidenteId = i.IncidenteId AND e.MembroId IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM IncidenteDecisoesCautelares d WHERE d.EnvolvidoId = e.EnvolvidoId)) AS NSemDecisao,
       CASE WHEN EXISTS (SELECT 1 FROM IncidenteEnvolvidos e WHERE e.IncidenteId = i.IncidenteId AND e.MembroId = @viewer) THEN 1 ELSE 0 END AS ViewerEnvolvido
-    FROM IncidentesProtecao i LEFT JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId${filtro} ORDER BY i.IncidenteId DESC`);
-  const visiveis = r.recordset.filter((x) => !x.ViewerEnvolvido && (ver.geral || (x.CongregacaoNome && ver.podeVerCongregacao && ver.podeVerCongregacao(x.CongregacaoNome))));
+    FROM IncidentesProtecao i LEFT JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId
+    WHERE ${doStatus} AND (i.IncidenteId IN (SELECT TOP 200 IncidenteId FROM IncidentesProtecao ${filtroInterno} ORDER BY IncidenteId DESC)
+                           OR (i.Status = 'ABERTO' AND i.ExigeComunicacao = 1 AND NOT EXISTS (SELECT 1 FROM IncidenteComunicacoes k WHERE k.IncidenteId = i.IncidenteId)))
+    ORDER BY i.IncidenteId DESC`);
+  const visiveis = r.recordset.filter((x) => !x.ViewerEnvolvido && (ver.geral || (x.Origem !== "CANAL_AJUDA" && x.CongregacaoNome && ver.podeVerCongregacao && ver.podeVerCongregacao(x.CongregacaoNome))));
   const itens = visiveis.map((x) => mapearResumo(x, agora));
   // o que pede ação primeiro: a comunicação mais urgente, depois os demais abertos, depois os encerrados
   const peso = (i) => (i.status === "ENCERRADO" ? 3 : i.relogio ? 0 : i.exigeComunicacao && !i.comunicado ? 0 : 1);
   itens.sort((a, b) => peso(a) - peso(b) || (peso(a) === 0 ? String(a.prazoEm).localeCompare(String(b.prazoEm)) : String(b.registradoEm).localeCompare(String(a.registradoEm))));
-  return itens.slice(0, limite);
+  return [...itens.filter((i) => peso(i) === 0), ...itens.filter((i) => peso(i) !== 0).slice(0, limite)];
 }
 
 async function detalheIncidente(pool, incidenteId, { ver, agora = new Date() } = {}) {
@@ -295,6 +329,9 @@ async function detalheIncidente(pool, incidenteId, { ver, agora = new Date() } =
     FROM IncidenteDecisoesCautelares d JOIN IncidenteEnvolvidos e ON e.EnvolvidoId = d.EnvolvidoId JOIN MembroReferencia r ON r.MembroId = d.DecididaPorMembroId WHERE e.IncidenteId = @id ORDER BY d.DecisaoId`)).recordset;
   const reclass = (await pool.request().input("id", sql.Int, incidenteId).query(`
     SELECT x.NivelAnterior, x.NivelNovo, x.Motivo, x.ReclassificadoEm, r.Nome AS PorNome FROM IncidenteReclassificacoes x JOIN MembroReferencia r ON r.MembroId = x.ReclassificadoPorMembroId WHERE x.IncidenteId = @id ORDER BY x.ReclassificacaoId`)).recordset;
+  const nomeSo = envolvidos.filter((e) => !e.MembroId && e.Nome);
+  const possiveis = ver.geral && nomeSo.length && i.Status === "ABERTO" ? (await Promise.all(nomeSo.slice(0, 5).map(async (e) => ({ envolvidoId: e.EnvolvidoId, membros: (await pool.request().input("n", sql.NVarChar(150), e.Nome).query(`
+    SELECT TOP 5 m.MembroId, m.Nome, c.Nome AS CongregacaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.Nome COLLATE Latin1_General_CI_AI = @n`)).recordset })))) : [];
   const leitura = ver.geral ? (await pool.request().input("id", sql.Int, incidenteId).query(`
     SELECT TOP 10 l.LidoEm, m.Nome FROM IncidenteLeituras l JOIN MembroReferencia m ON m.MembroId = l.MembroId WHERE l.IncidenteId = @id ORDER BY l.LeituraId DESC`)).recordset : [];
 
@@ -313,14 +350,17 @@ async function detalheIncidente(pool, incidenteId, { ver, agora = new Date() } =
     incidente: {
       ...mapearResumo({ ...i, NComunicacoes: com.length, NComComprovante: com.filter((c) => pm.temComprovante(c)).length, NAnexos: nAnexos, NSemDecisao: envMapeado.filter((e) => e.afastamentoCautelar && !e.decisoes && e.membroId).length }, agora),
       descricao: i.Descricao, onde: i.Onde || null, equipeNome: i.EquipeNome || null, relatadoPor: i.RelatadoPor || null, relatadoPorRotulo: pm.QUEM_RELATOU[i.RelatadoPor] || null,
-      conhecidoEm: iso(i.ConhecidoEm), contatoCanal: ver.geral ? i.ContatoCanal || null : null, encerramento: i.Status === "ENCERRADO" ? { resultado: i.EncerramentoResultado, resultadoRotulo: pm.RESULTADOS_ENCERRAMENTO[i.EncerramentoResultado], providencia: i.EncerramentoProvidencia, em: iso(i.EncerradoEm) } : null
+      conhecidoEm: iso(i.ConhecidoEm), contatoCanal: ver.geral ? i.ContatoCanal || null : null, registradoPor: ver.geral && i.RegistradoPorMembroId ? { membroId: i.RegistradoPorMembroId, nome: i.RegistradoPorNome || null } : null, encerramento: i.Status === "ENCERRADO" ? { resultado: i.EncerramentoResultado, resultadoRotulo: pm.RESULTADOS_ENCERRAMENTO[i.EncerramentoResultado], providencia: i.EncerramentoProvidencia, em: iso(i.EncerradoEm) } : null
     },
     envolvidos: envMapeado, comunicacoes: com, anexos: nAnexos, comprovante,
     decisoes: ver.geral ? decisoes.map((d) => ({ envolvidoId: d.EnvolvidoId, decisao: d.Decisao, decisaoRotulo: pm.DECISOES_CAUTELAR[d.Decisao], observacao: d.Observacao, decididaEm: iso(d.DecididaEm), decididaPorNome: d.DecididaPorNome })) : [],
     reclassificacoes: reclass.map((x) => ({ de: x.NivelAnterior, para: x.NivelNovo, motivo: x.Motivo, em: iso(x.ReclassificadoEm), porNome: x.PorNome })),
     relato: { registrado: Number(relato.relatos) > 0, adendos: Number(relato.adendos) || 0 },
     leituras: leitura.map((l) => ({ nome: l.Nome, em: iso(l.LidoEm) })),
+    possiveisMembros: possiveis.map((p) => ({ envolvidoId: p.envolvidoId, membros: p.membros.map((m) => ({ membroId: m.MembroId, nome: m.Nome, congregacaoNome: m.CongregacaoNome || null })) })).filter((p) => p.membros.length),
     acoes: {
+      vincularEnvolvido: !!ver.geral && i.Status === "ABERTO",
+      arquivarSemConteudo: !!ver.geral && i.Status === "ABERTO" && i.Origem === "CANAL_AJUDA" && i.Nivel === "ALEGACAO" && !envolvidos.some((e) => e.MembroId),
       comunicar: i.Status === "ABERTO" && !!i.ExigeComunicacao, encerrar: !!ver.geral && i.Status === "ABERTO", reclassificar: i.Status === "ABERTO" && i.Nivel !== "ALEGACAO", decidirCautelar: !!ver.geral && i.Nivel === "ALEGACAO",
       adendo: i.Status === "ABERTO" && i.Nivel === "ALEGACAO"
     },
@@ -351,13 +391,14 @@ async function registrarComunicacao(pool, { incidenteId, dados, ver, agora = new
   const v = pm.validarComunicacaoExterna(dados, { agora, conhecidoEm: i.ConhecidoEm });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const x = v.dados;
-  const fora = pm.foraDoPrazo(x.comunicadoEm, i.PrazoNotificacaoEm);
+  const fora = pm.foraDoPrazo(x.comunicadoEm, i.PrazoNotificacaoEm) || pm.foraDoPrazo(agora, i.PrazoNotificacaoEm);       // dito dentro do prazo, mas registrado depois dele, também conta como fora
   const ins = await pool.request().input("i", sql.Int, incidenteId).input("o", sql.NVarChar(20), x.orgao).input("f", sql.NVarChar(16), x.forma).input("c", sql.DateTime2, x.comunicadoEm).input("p", sql.NVarChar(60), x.protocoloExterno)
     .input("a", sql.NVarChar(200), x.referenciaArquivo).input("ob", sql.NVarChar(300), x.observacao).input("fp", sql.Bit, fora ? 1 : 0).input("r", sql.Int, ver.membroId)
     .query(`INSERT INTO IncidenteComunicacoes (IncidenteId, Orgao, Forma, ComunicadoEm, ProtocoloExterno, ReferenciaArquivo, Observacao, ForaDoPrazo, RegistradoPorMembroId)
             SELECT @i, @o, @f, @c, @p, @a, @ob, @fp, @r WHERE EXISTS (SELECT 1 FROM IncidentesProtecao WITH (UPDLOCK, HOLDLOCK) WHERE IncidenteId = @i AND Status = 'ABERTO')`);
   if (!ins.rowsAffected || !ins.rowsAffected[0]) return { sucesso: false, mensagem: "Este incidente já foi encerrado." };
   await auditar(i, "PROTECAO_COMUNICACAO_REGISTRADA", ver.membroId, { foraDoPrazo: fora });
+  await pendencia.atualizar(pool);
   const comprovante = pm.temComprovante(x) || (await contarAnexos(pool, incidenteId)) > 0;
   return {
     sucesso: true, foraDoPrazo: fora, comprovante,
@@ -415,6 +456,7 @@ async function reclassificarIncidente(pool, { incidenteId, dados, ver, agora = n
   if (x.nivelNovo === "ALEGACAO") for (const m of envMembros) escalasDesmarcadas = (escalasDesmarcadas || 0) + ((await afastarDasEscalas(pool, m)) || 0);
   const destinatarios = await destinatariosDaGestao(pool, { congregacaoId: i.CongregacaoId, excluirMembroIds: envMembros });
   const prazoEfetivo = prazo || i.PrazoNotificacaoEm;
+  if (exige) await pendencia.atualizar(pool);
   const aviso = await notificarAgora(pool, { regraChave: "PROTECAO_INCIDENTE_NOVO", destinatarios, mensagem: pm.textoIncidenteNovo({ nivel: x.nivelNovo, prazoEm: prazoEfetivo }), referenciaId: 1000000 + incidenteId, referenciaTabela: "IncidentesProtecao", aguardarEntrega: false, deps });
   return {
     sucesso: true, nivel: x.nivelNovo, prazoEm: exige ? iso(prazoEfetivo) : null, escalasDesmarcadas, avisados: aviso.criadas || 0,
@@ -430,6 +472,8 @@ async function decidirCautelar(pool, { incidenteId, envolvidoId, dados, ver, dep
   if (!e || !e.MembroId || i.Nivel !== "ALEGACAO") return { sucesso: false, naoExiste: true };
   const v = pm.validarDecisaoCautelar(dados, { atorId: ver.membroId, membroId: e.MembroId });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+  // um membro só não mantém e levanta o mesmo afastamento: levantar é decisão de OUTRA pessoa do nível geral
+  if (v.dados.decisao === "LIBERADO" && e.UltimaDecisao === "MANTIDO_AFASTADO" && Number(e.UltimoDecisorId) === Number(ver.membroId)) return { sucesso: false, mensagem: "Você manteve este afastamento: outro membro da Diretoria ou do Comitê precisa levantá-lo." };
   await pool.request().input("e", sql.Int, e.EnvolvidoId).input("d", sql.NVarChar(18), v.dados.decisao).input("o", sql.NVarChar(300), v.dados.observacao).input("p", sql.Int, ver.membroId)
     .query(`INSERT INTO IncidenteDecisoesCautelares (EnvolvidoId, Decisao, Observacao, DecididaPorMembroId) VALUES (@e, @d, @o, @p)`);
   await auditar(i, "PROTECAO_CAUTELAR_DECIDIDA", ver.membroId);
@@ -446,19 +490,48 @@ async function encerrarIncidente(pool, { incidenteId, dados, ver }) {
   const achado = await incidenteVisivel(pool, incidenteId, ver);
   if (!achado) return { sucesso: false, naoExiste: true };
   const i = achado.incidente;
-  const v = pm.validarEncerramento(dados, { nivel: i.Nivel });
+  const v = pm.validarEncerramento(dados, { nivel: i.Nivel, origem: i.Origem });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+  const semConteudo = v.dados.resultado === "SEM_CONTEUDO_DE_PROTECAO";
   const comunicacoes = await comunicacoesDe(pool, incidenteId);
   const temAnexo = (await contarAnexos(pool, incidenteId)) > 0;
-  const regra = pm.podeEncerrar({ nivel: i.Nivel, status: i.Status },
+  const regra = pm.podeEncerrar({ nivel: i.Nivel, status: i.Status, semConteudo },
     comunicacoes.map((c) => ({ protocoloExterno: c.ProtocoloExterno, referenciaArquivo: c.ReferenciaArquivo, temAnexo })),
     achado.envolvidos.map((e) => ({ membroId: e.MembroId, nivelAlegacao: i.Nivel === "ALEGACAO", decisao: Number(e.NDecisoes) > 0 ? e.UltimaDecisao : null })));
   if (!regra.ok) return { sucesso: false, mensagem: regra.motivos.join(" "), motivos: regra.motivos };
+  // O UPDATE confere que o incidente é AINDA o que foi avaliado (aberto, mesmo nível, mesma exigência): uma reclassificação que chegou no meio faz o encerramento recuar, em vez de fechar uma
+  // suspeita de violência sem comunicação.
   const u = await pool.request().input("id", sql.Int, incidenteId).input("p", sql.Int, ver.membroId).input("r", sql.NVarChar(24), v.dados.resultado).input("pv", sql.NVarChar(500), v.dados.providencia)
-    .query(`UPDATE IncidentesProtecao SET Status = 'ENCERRADO', EncerradoEm = SYSUTCDATETIME(), EncerradoPorMembroId = @p, EncerramentoResultado = @r, EncerramentoProvidencia = @pv WHERE IncidenteId = @id AND Status = 'ABERTO'`);
-  if (!u.rowsAffected || !u.rowsAffected[0]) return { sucesso: false, mensagem: "Este incidente já foi encerrado." };
+    .input("nivel", sql.NVarChar(16), i.Nivel).input("exige", sql.Bit, i.ExigeComunicacao ? 1 : 0)
+    .query(`UPDATE IncidentesProtecao SET Status = 'ENCERRADO', EncerradoEm = SYSUTCDATETIME(), EncerradoPorMembroId = @p, EncerramentoResultado = @r, EncerramentoProvidencia = @pv
+            WHERE IncidenteId = @id AND Status = 'ABERTO' AND Nivel = @nivel AND ExigeComunicacao = @exige`);
+  if (!u.rowsAffected || !u.rowsAffected[0]) return { sucesso: false, mensagem: "Este incidente já foi encerrado ou mudou de nível enquanto você decidia. Abra-o de novo e confira." };
   await auditar(i, "PROTECAO_INCIDENTE_ENCERRADO", ver.membroId, { resultado: v.dados.resultado });
+  await pendencia.atualizar(pool);
+  if (semConteudo) {
+    // transparência: arquivar um pedido como "sem conteúdo" é decisão de uma pessoa; todos os outros da Diretoria e do Comitê são avisados (sem nome nem texto)
+    await notificarAgora(pool, { regraChave: "PROTECAO_ARQUIVADO_SEM_CONTEUDO", destinatarios: await destinatariosGeraisDaDiretoria(pool, [ver.membroId]), mensagem: pm.textoArquivadoSemConteudo(), referenciaId: incidenteId, referenciaTabela: "IncidentesProtecao" });
+  }
   return { sucesso: true, mensagem: "Incidente encerrado. O registro fica guardado." };
+}
+
+// A Diretoria liga uma pessoa do cadastro à pessoa que foi registrada só pelo nome (ou por uma matrícula que não existia): a tabela só recebe acréscimos, então entra uma linha nova.
+// Numa suspeita de violência a pessoa sai das escalas com menores na hora (como se tivesse sido registrada pela matrícula) e, se for quem está olhando, o incidente deixa de existir para ela.
+async function vincularEnvolvido(pool, { incidenteId, membroId, ver }) {
+  const achado = await incidenteVisivel(pool, incidenteId, ver);
+  if (!achado) return { sucesso: false, naoExiste: true };
+  const i = achado.incidente;
+  if (i.Status !== "ABERTO") return { sucesso: false, mensagem: "Este incidente já foi encerrado." };
+  const m = (await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, Nome FROM MembroReferencia WHERE MembroId = @id`)).recordset[0];
+  if (!m) return { sucesso: false, mensagem: "A matrícula informada não foi encontrada no cadastro." };
+  if (achado.envolvidos.some((e) => Number(e.MembroId) === Number(membroId))) return { sucesso: false, mensagem: "Esta pessoa já está vinculada como envolvida." };
+  const ins = await pool.request().input("i", sql.Int, incidenteId).input("m", sql.Int, membroId).query(`
+    INSERT INTO IncidenteEnvolvidos (IncidenteId, MembroId) SELECT @i, @m WHERE EXISTS (SELECT 1 FROM IncidentesProtecao WITH (UPDLOCK, HOLDLOCK) WHERE IncidenteId = @i AND Status = 'ABERTO')
+      AND NOT EXISTS (SELECT 1 FROM IncidenteEnvolvidos WHERE IncidenteId = @i AND MembroId = @m)`);
+  if (!ins.rowsAffected || !ins.rowsAffected[0]) return { sucesso: false, mensagem: "O incidente mudou enquanto você vinculava. Abra-o de novo." };
+  await auditar(i, "PROTECAO_ENVOLVIDO_VINCULADO", ver.membroId);
+  const escalas = i.Nivel === "ALEGACAO" ? await afastarDasEscalas(pool, membroId) : null;
+  return { sucesso: true, escalasDesmarcadas: escalas, mensagem: i.Nivel === "ALEGACAO" ? "Pessoa vinculada. Ela saiu das escalas com menores por cautela, e o Comitê precisa decidir sobre o afastamento." : "Pessoa vinculada." };
 }
 
 // ---------------------------------------------------------------
@@ -480,8 +553,16 @@ async function eventosDeQuebras(pool, { hoje }) {
     FROM IncidentesProtecao i WHERE i.Nivel IN ('QUASE_ACIDENTE', 'QUEBRA_POLITICA') AND i.DataOcorrencia >= DATEADD(DAY, -${pm.JANELA_PADRAO_DIAS + 1}, CAST(SYSUTCDATETIME() AS DATE))`);
   return r.recordset.map((x) => ({ incidenteId: x.IncidenteId, nivel: x.Nivel, equipeId: x.EquipeId, envolvidoMembroId: x.EnvolvidoMembroId, data: pm.paraIso(x.DataOcorrencia) }));
 }
-async function padroes(pool, { hoje = hojeBrasilia() } = {}) {
-  const achados = pm.padraoDeQuebras(await eventosDeQuebras(pool, { hoje }), { hoje });
+// `excluirMembroId`: quem está olhando (se for envolvido em registros, esses registros não entram na conta que ele vê).
+async function padroesComEnvolvidos(pool, { hoje = hojeBrasilia(), excluirMembroId = null } = {}) {
+  let eventos = await eventosDeQuebras(pool, { hoje });
+  if (excluirMembroId) eventos = eventos.filter((e) => Number(e.envolvidoMembroId) !== Number(excluirMembroId));
+  const achados = pm.padraoDeQuebras(eventos, { hoje });
+  const envolvidosPorIncidente = new Map(eventos.filter((e) => e.envolvidoMembroId).map((e) => [e.incidenteId, Number(e.envolvidoMembroId)]));
+  return achados.map((a) => ({ ...a, envolvidos: [...new Set(a.incidentes.map((id) => envolvidosPorIncidente.get(id)).filter(Boolean).concat(a.tipo === "PESSOA" ? [a.id] : []))] }));
+}
+async function padroes(pool, { hoje = hojeBrasilia(), verMembroId = null } = {}) {
+  const achados = (await padroesComEnvolvidos(pool, { hoje, excluirMembroId: verMembroId })).map(({ envolvidos, ...p }) => p);
   if (!achados.length) return [];
   const nomesEquipe = new Map((await pool.request().query(`SELECT q.EquipeId, q.Nome, c.Nome AS CongregacaoNome FROM EscalasEquipes q JOIN Congregacoes c ON c.CongregacaoId = q.CongregacaoId`)).recordset.map((x) => [x.EquipeId, `${x.Nome} (${x.CongregacaoNome})`]));
   const nomesPessoa = new Map((await pool.request().query(`SELECT MembroId, Nome FROM MembroReferencia`)).recordset.map((x) => [x.MembroId, x.Nome]));
@@ -531,35 +612,37 @@ async function relatorioAnual(pool, { ano, agora = new Date() } = {}) {
 // O relógio: suspeitas ainda sem comunicação em 12 h, 4 h e vencidas (a cada 6 h). Para de avisar quando a comunicação é registrada.
 async function detectarPrazos(pool, { agora = new Date() } = {}) {
   const r = await pool.request().query(`
-    SELECT i.IncidenteId, i.CongregacaoId, i.PrazoNotificacaoEm FROM IncidentesProtecao i
+    SELECT i.IncidenteId, i.CongregacaoId, i.Origem, i.PrazoNotificacaoEm FROM IncidentesProtecao i
     WHERE i.Status = 'ABERTO' AND i.ExigeComunicacao = 1 AND NOT EXISTS (SELECT 1 FROM IncidenteComunicacoes k WHERE k.IncidenteId = i.IncidenteId)`);
   const fatos = [];
   for (const x of r.recordset) {
     const etapa = pm.etapaDeAviso(x.PrazoNotificacaoEm, agora);
     if (!etapa) continue;
     const env = (await pool.request().input("id", sql.Int, x.IncidenteId).query(`SELECT MembroId FROM IncidenteEnvolvidos WHERE IncidenteId = @id AND MembroId IS NOT NULL`)).recordset.map((e) => e.MembroId);
-    const dest = await destinatariosDaGestao(pool, { congregacaoId: x.CongregacaoId, excluirMembroIds: env });
-    // vencido há mais de 12 horas: o aviso sobe para a Diretoria e o Comitê (o Dirigente local já foi avisado várias vezes)
-    const destinatarios = etapa.codigo.startsWith("VENCIDO_") && etapa.bloco >= 5 ? await destinatariosGeraisDaDiretoria(pool, env) : dest;
+    // o pedido do canal sem login é tratado só pelo nível geral; vencido há mais de 12 horas, qualquer caso sobe para a Diretoria e o Comitê (o Dirigente local já foi avisado várias vezes)
+    const soGeral = x.Origem === "CANAL_AJUDA" || (etapa.codigo.startsWith("VENCIDO_") && etapa.bloco >= 5);
+    const destinatarios = soGeral ? await destinatariosGeraisDaDiretoria(pool, env) : await destinatariosDaGestao(pool, { congregacaoId: x.CongregacaoId, excluirMembroIds: env });
     fatos.push({ referenciaId: pm.referenciaDoAviso(x.IncidenteId, etapa.bloco), fatoGerador: pm.textoPrazo({ etapa: etapa.codigo, prazoEm: x.PrazoNotificacaoEm }), destinatarios });
   }
   return fatos;
 }
 // A rede de segurança do aviso imediato: incidentes das últimas 48 horas cujo aviso não saiu (e-mail fora do ar, falha momentânea) são avisados de novo; o motor não duplica.
 async function detectarIncidentesNovos(pool, { agora = new Date() } = {}) {
-  const r = await pool.request().query(`SELECT IncidenteId, Nivel, CongregacaoId, PrazoNotificacaoEm FROM IncidentesProtecao WHERE Status = 'ABERTO' AND RegistradoEm >= DATEADD(HOUR, -48, SYSUTCDATETIME())`);
+  const r = await pool.request().query(`SELECT IncidenteId, Nivel, Origem, CongregacaoId, PrazoNotificacaoEm FROM IncidentesProtecao WHERE Status = 'ABERTO' AND RegistradoEm >= DATEADD(HOUR, -48, SYSUTCDATETIME())`);
   const fatos = [];
   for (const x of r.recordset) {
     const env = (await pool.request().input("id", sql.Int, x.IncidenteId).query(`SELECT MembroId FROM IncidenteEnvolvidos WHERE IncidenteId = @id AND MembroId IS NOT NULL`)).recordset.map((e) => e.MembroId);
-    fatos.push({ referenciaId: x.IncidenteId, fatoGerador: pm.textoIncidenteNovo({ nivel: x.Nivel, prazoEm: x.PrazoNotificacaoEm }), destinatarios: await destinatariosDaGestao(pool, { congregacaoId: x.CongregacaoId, excluirMembroIds: env }) });
+    fatos.push({ referenciaId: x.IncidenteId, fatoGerador: pm.textoIncidenteNovo({ nivel: x.Nivel, prazoEm: x.PrazoNotificacaoEm }),
+      destinatarios: x.Origem === "CANAL_AJUDA" ? await destinatariosGeraisDaDiretoria(pool, env) : await destinatariosDaGestao(pool, { congregacaoId: x.CongregacaoId, excluirMembroIds: env }) });
   }
   return fatos;
 }
 async function detectarPadroes(pool, { hoje = hojeBrasilia() } = {}) {
-  const lista = await padroes(pool, { hoje });
+  const lista = await padroesComEnvolvidos(pool, { hoje });
   if (!lista.length) return [];
-  const dest = await destinatariosGeraisDaDiretoria(pool);
-  return lista.map((p) => ({ referenciaId: pm.referenciaDoPadrao(p.tipo, p.id, p.total), fatoGerador: pm.textoPadrao({ tipo: p.tipo, total: p.total }), destinatarios: dest }));
+  const todos = await destinatariosGeraisDaDiretoria(pool);
+  // quem é envolvido em algum dos registros do padrão não recebe o aviso do padrão em que consta
+  return lista.map((p) => ({ referenciaId: pm.referenciaDoPadrao(p.tipo, p.id, p.total), fatoGerador: pm.textoPadrao({ tipo: p.tipo, total: p.total }), destinatarios: todos.filter((d) => !p.envolvidos.includes(Number(d.membroId))) }));
 }
 // Uma vez por semana, enquanto o Comitê estiver incompleto.
 async function detectarComiteIncompleto(pool, { hoje = hojeBrasilia() } = {}) {
@@ -572,7 +655,8 @@ async function detectarComiteIncompleto(pool, { hoje = hojeBrasilia() } = {}) {
 // Afastamento sem decisão do Comitê: primeiro aviso em 3 dias, depois toda semana.
 async function detectarCautelarSemDecisao(pool, { agora = new Date() } = {}) {
   const r = await pool.request().query(`
-    SELECT e.EnvolvidoId, e.MembroId, i.RegistradoEm FROM IncidenteEnvolvidos e JOIN IncidentesProtecao i ON i.IncidenteId = e.IncidenteId
+    SELECT e.EnvolvidoId, e.MembroId, COALESCE((SELECT MAX(r.ReclassificadoEm) FROM IncidenteReclassificacoes r WHERE r.IncidenteId = i.IncidenteId AND r.NivelNovo = 'ALEGACAO'), i.RegistradoEm) AS RegistradoEm
+    FROM IncidenteEnvolvidos e JOIN IncidentesProtecao i ON i.IncidenteId = e.IncidenteId
     WHERE e.MembroId IS NOT NULL AND i.Nivel = 'ALEGACAO' AND NOT EXISTS (SELECT 1 FROM IncidenteDecisoesCautelares d WHERE d.EnvolvidoId = e.EnvolvidoId)`);
   const fatos = [];
   for (const x of r.recordset) {
@@ -584,11 +668,52 @@ async function detectarCautelarSemDecisao(pool, { agora = new Date() } = {}) {
   return fatos;
 }
 
+// O resumo DIÁRIO à Diretoria e ao Comitê: suspeitas com o prazo vencido e sem comunicação (já passaram dos avisos individuais) e casos com comunicação registrada há mais de 24 horas SEM comprovante.
+async function detectarResumoDiario(pool, { agora = new Date() } = {}) {
+  const vencidas = Number((await pool.request().query(`
+    SELECT COUNT(*) AS n FROM IncidentesProtecao i WHERE i.Status = 'ABERTO' AND i.ExigeComunicacao = 1 AND i.PrazoNotificacaoEm < SYSUTCDATETIME()
+      AND NOT EXISTS (SELECT 1 FROM IncidenteComunicacoes k WHERE k.IncidenteId = i.IncidenteId)`)).recordset[0].n);
+  const candidatos = (await pool.request().query(`
+    SELECT i.IncidenteId, (SELECT MIN(k.RegistradoEm) FROM IncidenteComunicacoes k WHERE k.IncidenteId = i.IncidenteId) AS Primeira,
+           (SELECT COUNT(*) FROM AnexosGenericos a WHERE a.Tabela = 'IncidentesProtecao' AND a.RegistroId = i.IncidenteId) AS NAnexos
+    FROM IncidentesProtecao i WHERE i.Status = 'ABERTO' AND i.ExigeComunicacao = 1 AND EXISTS (SELECT 1 FROM IncidenteComunicacoes k WHERE k.IncidenteId = i.IncidenteId)`)).recordset;
+  let semComprovante = 0;
+  for (const c of candidatos) {
+    if (agora.getTime() - new Date(c.Primeira).getTime() < 24 * 3600000) continue;
+    const coms = await comunicacoesDe(pool, c.IncidenteId);
+    if (!coms.some((k) => pm.temComprovante({ protocoloExterno: k.ProtocoloExterno, referenciaArquivo: k.ReferenciaArquivo, temAnexo: Number(c.NAnexos) > 0 }))) semComprovante++;
+  }
+  if (!vencidas && !semComprovante) return [];
+  return [{ referenciaId: Math.floor(agora.getTime() / 86400000), fatoGerador: pm.textoResumoDiario({ vencidas, semComprovante }), destinatarios: await destinatariosGeraisDaDiretoria(pool) }];
+}
+
+// A rede de segurança do E-MAIL: um aviso que foi criado mas cujo e-mail não saiu (serviço fora do ar, falha momentânea) é reenviado, nas últimas 48 horas, até 100 por rodada.
+// (O motor não reenvia sozinho: criarNotificacao acha a linha já criada e segue.)
+async function reenviarEmailsPendentes(pool, { limite = 100, deps = {} } = {}) {
+  const linhas = (await pool.request().input("lim", sql.Int, limite).query(`
+    SELECT TOP (@lim) n.NotificacaoId, n.RegraChave, n.DestinatarioMembroId, n.Titulo, n.Mensagem, n.Categoria, m.Email
+    FROM Notificacoes n JOIN MembroReferencia m ON m.MembroId = n.DestinatarioMembroId
+    WHERE n.RegraChave LIKE 'PROTECAO[_]%' AND n.EnviadaEmail = 0 AND m.Email IS NOT NULL
+      AND n.CriadaEm >= DATEADD(HOUR, -48, SYSUTCDATETIME()) AND n.CriadaEm <= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY n.NotificacaoId`)).recordset;
+  const enviar = deps.enviarCanais || ((p, o) => require("./notificacaoMotor").enviarCanaisNotificacao(p, o));
+  const regras = new Map();
+  let tentados = 0;
+  for (const l of linhas) {
+    if (!regras.has(l.RegraChave)) regras.set(l.RegraChave, (await pool.request().input("c", sql.NVarChar(60), l.RegraChave).query(`SELECT * FROM NotificacaoRegras WHERE Chave = @c AND Ativa = 1`)).recordset[0] || null);
+    const regra = regras.get(l.RegraChave);
+    if (!regra || !regra.CanalEmail) continue;
+    tentados++;
+    try { await enviar(pool, { regra, destinatarioMembroId: l.DestinatarioMembroId, notificacaoId: l.NotificacaoId, titulo: l.Titulo, mensagem: l.Mensagem, categoria: l.Categoria, email: l.Email }); }
+    catch (e) { console.error("[PROTECAO] reenvio de e-mail falhou:", e && e.message); }
+  }
+  return { tentados };
+}
+
 module.exports = {
-  PERMISSAO, PAPEL_COMITE, LIMITE_REGISTROS_DIA, LIMITE_ALEGACOES_DIA, LIMITE_CANAL_HORA, MAX_ADENDOS,
+  PERMISSAO, PAPEL_COMITE, LIMITE_REGISTROS_DIA, LIMITE_ALEGACOES_DIA, LIMITE_CANAL_HORA, LIMITE_CANAL_DIA, MAX_ADENDOS,
   destinatariosDaGestao, visivelPara, incidenteVisivel, carregarIncidente, contarRegistrosRecentes,
   registrarIncidente, registrarPedidoDeAjuda, meusIncidentes, listarIncidentes, detalheIncidente, lerRelato,
-  registrarComunicacao, adicionarAdendo, reclassificarIncidente, decidirCautelar, encerrarIncidente,
+  registrarComunicacao, adicionarAdendo, reclassificarIncidente, decidirCautelar, encerrarIncidente, vincularEnvolvido,
   comiteComposicao, padroes, relatorioAnual,
-  detectarPrazos, detectarIncidentesNovos, detectarPadroes, detectarComiteIncompleto, detectarCautelarSemDecisao
+  detectarPrazos, detectarIncidentesNovos, detectarPadroes, detectarComiteIncompleto, detectarCautelarSemDecisao, detectarResumoDiario, reenviarEmailsPendentes
 };

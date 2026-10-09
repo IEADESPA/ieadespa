@@ -9,6 +9,8 @@ const P = require(path.join(API, "GestaoProtecaoMenores/index.js"));
 const AJUDA = require(path.join(API, "ProtecaoAjuda/index.js"));
 const VERIFICADOR = require(path.join(API, "ProtecaoVerificador/index.js"));
 const M = require(path.join(API, "GestaoMinisterioMenores/index.js"));
+// o armazém de arquivos não existe no teste local: a assinatura do link é trocada por uma de mentira (o que se prova aqui é quem lista e quem apaga)
+require(path.join(API, "shared/storage.js")).urlDocumentoComSas = (u) => `${u}?sas=teste`;
 const ANEXOS = require(path.join(API, "AnexosGenericos/index.js"));
 const pdb = require(path.join(API, "shared/protecaoDb.js"));
 const pm = require(path.join(API, "shared/protecaoMenores.js"));
@@ -29,6 +31,9 @@ const alegacao = (extra = {}) => incidente({ nivel: "ALEGACAO", relatadoPor: "VO
 const notif = (regra) => q("SELECT DestinatarioMembroId d, ReferenciaId r, Mensagem m FROM Notificacoes WHERE RegraChave = @r ORDER BY NotificacaoId", { r: regra });
 const auditoria = (acao) => q("SELECT RegistroId, UsuarioId, DadosDepois FROM AuditLog WHERE Acao = @a ORDER BY AuditId", { a: acao });
 const chamarRotina = async (handler, headers = {}) => { const ctx = { bindingData: {}, log: Object.assign(() => { }, { error() { }, info() { }, warn() { }, verbose() { } }) }; await handler(ctx, { method: "POST", headers, query: {}, body: {} }); return ctx.res || { status: 0, body: null }; };
+// a rodada DIÁRIA (7h): avalia as regras que não precisam rodar de hora em hora
+const motorDeAvisos = require(path.join(API, "shared/notificacaoMotor.js"));
+const rodadaDiaria = async () => motorDeAvisos.avaliarRegras(await obterPool(), { chaves: ["PROTECAO_PADRAO_QUEBRAS", "PROTECAO_COMITE_INCOMPLETO", "PROTECAO_CAUTELAR_SEM_DECISAO", "PROTECAO_RESUMO_DIARIO"] });
 const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesProtecao WHERE Protocolo = @p", { p: protocolo });
 
 (async () => {
@@ -63,11 +68,11 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
   console.log("== a suspeita de violência: prazo, cautelar e escalas ==");
   const sv = await servico(dias(20));
   await aloca(sv, eq.bercario, 6011);
-  r = await POST(P, "registrar", PIN(6012), alegacao({ envolvidoMembroId: 6011, equipeId: eq.bercario })); ok(r.status === 201 && r.body.exigeComunicacao === true && r.body.prazoEm && r.body.escalasDesmarcadas === 1, "registrada: prazo de 24 horas e o envolvido sai da escala na hora", r.body);
+  r = await POST(P, "registrar", PIN(6012), alegacao({ envolvidoMembroId: 6011, equipeId: eq.bercario })); ok(r.status === 201 && r.body.exigeComunicacao === true && r.body.prazoEm && !("escalasDesmarcadas" in r.body) && !("avisados" in r.body), "registrada: prazo de 24 horas; quem registra NÃO fica sabendo quantas escalas foram desmarcadas nem a quantos o aviso chegou", r.body);
   const alg = await idDe(r.body.protocolo);
   const horas = (new Date(r.body.prazoEm).getTime() - Date.now()) / 3600000;
   ok(horas > 23.9 && horas <= 24, "o prazo é de 24 horas a partir de agora", horas);
-  ok((await statusAloc(sv, 6011)) === "CANCELADA", "a escala futura do envolvido foi desmarcada");
+  ok((await statusAloc(sv, 6011)) === "CANCELADA", "e o envolvido saiu da escala na hora (a escala futura foi desmarcada)");
   let sit = (await GET(M, "minha-situacao", PIN(6011))).body.situacao;
   ok(sit.apto === false && sit.bloqueios.some((b) => b.codigo === "PENDENCIA_DIRETORIA") && !JSON.stringify(sit.bloqueios).match(/INCIDENTE|incidente|suspeita|alega|violên|abuso/), "o envolvido vê o afastamento SEM o motivo (Meu Painel)", sit.bloqueios);
   ok(JSON.stringify(sit).indexOf("PRO-") < 0, "e nenhum protocolo");
@@ -129,6 +134,8 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
   r = await POST(P, "comunicacao", dirCentral, { incidenteId: alg, orgao: "CONSELHO_TUTELAR", forma: "OFICIO", comunicadoEm: new Date(Date.now() + 3600000 * 5).toISOString() }); ok(r.status === 422 && /futuro/.test(r.body.mensagem), "a hora no futuro é recusada", r.body);
   r = await POST(P, "comunicacao", dirCentral, { incidenteId: alg, orgao: "CONSELHO_TUTELAR", forma: "OFICIO", comunicadoEm: new Date(Date.now() - 3600000 * 30).toISOString() }); ok(r.status === 422 && /anterior/.test(r.body.mensagem), "nem antes de a Igreja ficar sabendo", r.body);
   r = await POST(P, "comunicacao", dirCentral, { incidenteId: alg, orgao: "VIZINHO", forma: "OFICIO", comunicadoEm: instante }); ok(r.status === 422, "órgão inválido", r.status);
+  for (const vazio of ["-", "x", "n/a", "0000", "sem protocolo"]) { r = await POST(P, "comunicacao", dirCentral, { incidenteId: alg, orgao: "CONSELHO_TUTELAR", forma: "TELEFONE", comunicadoEm: instante, protocoloExterno: vazio }); ok(r.status === 422 && /incompleto/.test(r.body.mensagem), `protocolo "${vazio}" não vale como comprovante (422)`, r.body); }
+  ok((await escalar("SELECT COUNT(*) FROM IncidenteComunicacoes")) === 0, "e nenhuma comunicação 'vazia' foi gravada (ela pararia o relógio para sempre)");
   r = await POST(P, "comunicacao", dirCentral, { incidenteId: alg, orgao: "CONSELHO_TUTELAR", forma: "TELEFONE", comunicadoEm: instante, observacao: "Falei com a conselheira de plantão." });
   ok(r.status === 201 && r.body.foraDoPrazo === false && r.body.comprovante === false && /Falta o comprovante/.test(r.body.mensagem), "comunicação dentro do prazo, mas ainda sem comprovante", r.body);
   r = await GET(P, "incidentes", presidente); const l2 = r.body.incidentes.find((i) => i.incidenteId === alg);
@@ -137,6 +144,13 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
   r = await POST(P, "encerrar", dirCentral, { incidenteId: alg, resultado: "ENCAMINHADO_AUTORIDADE", providencia: "Comunicado ao Conselho Tutelar." }); ok(r.status === 403, "o Dirigente não encerra (nível geral)", r.status);
   r = await POST(P, "encerrar", presidente, { incidenteId: alg, resultado: "ENCAMINHADO_AUTORIDADE", providencia: "Comunicado ao Conselho Tutelar." }); ok(r.status === 422 && /falta o comprovante/.test(r.body.mensagem) && /Comitê decidir/.test(r.body.mensagem), "não encerra sem comprovante nem sem decisão sobre o afastamento", r.body.mensagem);
   r = await POST(P, "comunicacao", secretarioGeral, { incidenteId: alg, orgao: "CONSELHO_TUTELAR", forma: "OFICIO", comunicadoEm: instante, protocoloExterno: "CT-2026/118" }); ok(r.status === 201 && r.body.comprovante === true, "o ofício com protocolo do órgão vira comprovante", r.body);
+  await q("INSERT INTO AnexosGenericos (Tabela, RegistroId, NomeArquivo, Url, MimeType, EnviadoPorMembroId) VALUES ('IncidentesProtecao', @i, N'oficio.pdf', N'https://armazem/docs/x.pdf', 'application/pdf', 3001)", { i: alg });
+  const anexoId = await escalar("SELECT MAX(AnexoId) FROM AnexosGenericos");
+  const ctxDel = { bindingData: { id: anexoId }, log: { error() { }, info() { }, warn() { }, verbose() { } } };
+  await ANEXOS(ctxDel, { method: "DELETE", query: {}, body: {}, headers: { "x-auth-token": dirCentral } });
+  r = ctxDel.res;
+  ok(r.status === 403 && /prova e não pode ser excluído/.test(r.body.mensagem), "o comprovante anexado não se apaga (é prova)", r.body);
+  ok((await escalar("SELECT COUNT(*) FROM AnexosGenericos WHERE AnexoId = @a", { a: anexoId })) === 1, "e continua lá");
   r = await POST(P, "encerrar", presidente, { incidenteId: alg, resultado: "ENCAMINHADO_AUTORIDADE", providencia: "Comunicado ao Conselho Tutelar." }); ok(r.status === 422 && /Comitê decidir/.test(r.body.mensagem) && !/comprovante/.test(r.body.mensagem), "falta só a decisão do Comitê sobre o afastamento", r.body.mensagem);
   const envId = (await GET(P, "incidente", presidente, { incidenteId: alg })).body.envolvidos[0].envolvidoId;
   r = await POST(P, "cautelar-decidir", dirCentral, { incidenteId: alg, envolvidoId: envId, decisao: "MANTIDO_AFASTADO", observacao: "Mantido até a apuração." }); ok(r.status === 403, "o Dirigente não decide o afastamento", r.status);
@@ -153,7 +167,9 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
   const resumoEnc = (await GET(P, "incidente", presidente, { incidenteId: alg })).body;
   ok(resumoEnc.incidente.status === "ENCERRADO" && resumoEnc.incidente.encerramento.resultado === "ENCAMINHADO_AUTORIDADE" && resumoEnc.decisoes.length === 1 && resumoEnc.comunicacoes.length === 2, "o registro guarda tudo (comunicações, decisão, encerramento)", resumoEnc.incidente.status);
   r = await POST(P, "cautelar-decidir", presidente, { incidenteId: alg, envolvidoId: envId, decisao: "LIBERADO", observacao: "As autoridades arquivaram; o Comitê levanta o afastamento." });
-  ok(r.status === 200 && r.body.decisao === "LIBERADO", "mesmo com o caso encerrado o Comitê levanta o afastamento", r.body);
+  ok(r.status === 422 && /outro membro/.test(r.body.mensagem), "quem MANTEVE o afastamento não o levanta sozinho", r.body);
+  r = await POST(P, "cautelar-decidir", secretarioGeral, { incidenteId: alg, envolvidoId: envId, decisao: "LIBERADO", observacao: "As autoridades arquivaram; o Comitê levanta o afastamento." });
+  ok(r.status === 200 && r.body.decisao === "LIBERADO", "mesmo com o caso encerrado outra pessoa do nível geral levanta o afastamento", r.body);
   sit = (await GET(M, "minha-situacao", PIN(6011))).body.situacao;
   ok(!sit.bloqueios.some((b) => b.codigo === "PENDENCIA_DIRETORIA"), "e a pessoa volta a poder (se o resto da habilitação estiver em dia)", sit.bloqueios);
   const avisoLiberado = await notif("PROTECAO_AFASTAMENTO_PESSOA");
@@ -193,12 +209,15 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
   ok((await escalar("SELECT COUNT(*) FROM IncidentesProtecao")) === antesCanal + 1, "um registro só");
   const audCanal = (await auditoria("PROTECAO_PEDIDO_DE_AJUDA")).pop();
   ok(audCanal.RegistroId === 0 && audCanal.UsuarioId === null && audCanal.DadosDepois === "{}", "a auditoria não liga o pedido a ninguém", audCanal);
-  r = await GET(P, "incidentes", dirCentral); ok(r.body.incidentes.some((i) => i.protocolo === canal.Protocolo && i.origem === "CANAL_AJUDA"), "o Dirigente da congregação escolhida o vê");
-  r = await GET(P, "incidente", dirCentral, { incidenteId: canal.IncidenteId }); ok(r.body.incidente.contatoCanal === null, "mas o contato deixado só o nível geral lê");
-  r = await GET(P, "incidente", presidente, { incidenteId: canal.IncidenteId }); ok(/WhatsApp/.test(r.body.incidente.contatoCanal), "a Diretoria lê o contato");
+  r = await GET(P, "incidentes", dirCentral); ok(!r.body.incidentes.some((i) => i.protocolo === canal.Protocolo) && !r.body.incidentes.some((i) => i.origem === "CANAL_AJUDA"), "o Dirigente da congregação escolhida NÃO vê o pedido do canal (ele pode ser a pessoa de quem se fala)");
+  r = await GET(P, "incidente", dirCentral, { incidenteId: canal.IncidenteId }); ok(r.status === 404, "nem abre o detalhe (404 igual ao de um incidente que não existe)", r.status);
+  r = await POST(P, "relato", dirCentral, { incidenteId: canal.IncidenteId }); ok(r.status === 404, "nem lê o relato", r.status);
+  r = await GET(P, "incidente", presidente, { incidenteId: canal.IncidenteId }); ok(/WhatsApp/.test(r.body.incidente.contatoCanal) && r.body.acoes.arquivarSemConteudo === true, "só a Diretoria e o Comitê o tratam (e leem o contato)", r.body.acoes);
+  const avisosCanal = (await notif("PROTECAO_INCIDENTE_NOVO")).filter((x) => x.r === canal.IncidenteId);
+  ok(avisosCanal.length > 0 && avisosCanal.every((x) => [1, 2, 1001, 1002, 7001, 7002].includes(x.d)) && !avisosCanal.some((x) => x.d === 3001), "e o aviso do pedido do canal vai só ao nível geral", avisosCanal.map((x) => x.d));
   r = await chamadaAjuda({ texto: "Escrevo pelo meu primo, ele me contou algo que me deixou preocupado.", quemSou: "OUTRA_PESSOA" }); const semCong = await um("SELECT CongregacaoId, RelatadoPor FROM IncidentesProtecao WHERE Protocolo = @p", { p: r.body.protocolo });
   ok(r.status === 201 && semCong.CongregacaoId === null && semCong.RelatadoPor === "OUTRA_PESSOA", "sem congregação escolhida: só o nível geral enxerga", semCong);
-  r = await GET(P, "incidentes", dirCentral); ok(!r.body.incidentes.some((i) => i.protocolo === r.body.incidentes[0].protocolo && i.congregacaoId === null), "o Dirigente não vê o que não tem congregação");
+  r = await GET(P, "incidentes", dirCentral); ok(!r.body.incidentes.some((i) => i.congregacaoId === null), "o Dirigente não vê o que não tem congregação");
   let ultimo;
   for (let i = 0; i < 5; i++) ultimo = await chamadaAjuda({ texto: `Mensagem de teste número ${i} para o limite por origem.`, quemSou: "OUTRA_PESSOA" });
   ok(ultimo.status === 429 && ultimo.body.contatosDeAjuda.length === 3 && /100/.test(ultimo.body.mensagem), "o limite por origem (5 por hora) responde 429 e AINDA mostra o Disque 100", ultimo.body);
@@ -242,6 +261,7 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
   const antes = (await notif("PROTECAO_PRAZO_24H")).length;
   r = await chamarRotina(VERIFICADOR, { "x-cron-secret": process.env.CRON_SECRET });
   ok(r.status === 200 && (await notif("PROTECAO_PRAZO_24H")).length === antes, "rodar de novo não duplica nenhum aviso", antes);
+  const rd = await rodadaDiaria(); ok(rd.falhas.length === 0, "a rodada diária das regras da proteção roda sem falha", rd);
   const padraoAvisos = await notif("PROTECAO_PADRAO_QUEBRAS");
   ok(padraoAvisos.length > 0 && padraoAvisos.every((x) => [1, 2, 1001, 1002, 7001, 7002, 7003].includes(x.d)) && !padraoAvisos.some((x) => x.d === 3001) && /3 registros/.test(padraoAvisos[0].m), "o padrão de quebras avisa a Diretoria e o Comitê", padraoAvisos.length);
   const semComite = await notif("PROTECAO_COMITE_INCOMPLETO");
@@ -251,9 +271,11 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
   ok(r.status === 201 && r.body.foraDoPrazo === true && /FORA do prazo/.test(r.body.mensagem), "comunicar depois do prazo vale, mas fica marcado 'fora do prazo'", r.body);
   const semAviso = (await pdb.detectarPrazos(pool, { agora: new Date(Date.now() + 40 * 3600000) })).filter((f) => f.referenciaId >> 0 && Math.floor(f.referenciaId / 1000) === iVenc % 100000);
   ok(semAviso.length === 0, "incidente já comunicado nunca mais avisa o relógio", semAviso.length);
+  const resumo = await notif("PROTECAO_RESUMO_DIARIO");
+  ok(resumo.length > 0 && resumo.every((x) => [1, 2, 1001, 1002, 7001, 7002, 7003].includes(x.d)) && /VENCIDO/.test(resumo[0].m) && !/Fulano|tio a machucou/.test(resumo[0].m), "o resumo diário avisa a Diretoria e o Comitê das suspeitas com prazo vencido, sem nome nem relato", resumo.length);
   // o detector do Comitê incompleto: tira o terceiro membro
   await q("DELETE FROM Lideranca WHERE MembroId = 7003 AND PapelId = @p", { p: cena.papelComite });
-  r = await chamarRotina(VERIFICADOR, { "x-cron-secret": process.env.CRON_SECRET });
+  await rodadaDiaria();
   const semComite2 = await notif("PROTECAO_COMITE_INCOMPLETO");
   ok(semComite2.length >= 2 && /pelo menos 3 membros/.test(semComite2[0].m), "Comitê incompleto: a Diretoria é avisada (uma vez por semana)", semComite2.length);
 

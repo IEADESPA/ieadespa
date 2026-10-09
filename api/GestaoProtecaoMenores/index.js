@@ -13,9 +13,10 @@
 //  GET  incidentes?status=ABERTO|ENCERRADO   -> { incidentes[] }       GET incidente?incidenteId=  -> { detalhe }
 //  POST relato        body:{incidenteId}          -> lê o relato (confirmação reforçada; cada leitura fica registrada)
 //  POST comunicacao   body:{incidenteId,orgao,forma,comunicadoEm,protocoloExterno?,referenciaArquivo?,observacao?}
-//  POST adendo        body:{incidenteId,texto}    POST reclassificar  body:{incidenteId,nivelNovo,motivo,relatadoPor?,relato?}
+//  POST adendo        body:{incidenteId,texto}    POST reclassificar  body:{incidenteId,nivelNovo,motivo,relatadoPor?,relato?}   (para "suspeita de violência" pede a confirmação reforçada)
 // ---- Nível geral (Diretoria e Comitê de Proteção) ------------------------------------------------------------------------------------------------
 //  POST cautelar-decidir  body:{incidenteId,envolvidoId,decisao,observacao}   (confirmação reforçada)      POST encerrar  body:{incidenteId,resultado,providencia}   (confirmação reforçada)
+//  POST vincular-envolvido body:{incidenteId,membroId}   liga uma pessoa do cadastro ao envolvido registrado só por nome (confirmação reforçada)
 //  GET  padroes   GET comite   GET relatorio-anual?ano=
 //
 // Respostas: { sucesso:true, ... } (200; 201 quando cria) · recusa de regra: 422 { sucesso:false, mensagem } · 400 dado ruim · 403 sem permissão · 404 não achou (incidente que não existe,
@@ -38,7 +39,13 @@ function resposta(context, resultado, statusOk = 200) {
 }
 const lista = (obj) => Object.entries(obj).map(([codigo, rotulo]) => ({ codigo, rotulo: typeof rotulo === "object" ? rotulo.rotulo : rotulo, ...(typeof rotulo === "object" && rotulo.descricao ? { descricao: rotulo.descricao } : {}) }));
 
+// Nada daqui fica em cache (lista, detalhe, padrões, relatório: tudo é dado de proteção de criança).
 module.exports = async function (context, req) {
+  await principal(context, req);
+  if (context.res) context.res.headers = { "Cache-Control": "no-store", ...(context.res.headers || {}) };
+};
+
+async function principal(context, req) {
   const sessao = auth.exigirLogin(req, context);
   if (!sessao) return;
   // PIN ou código nunca valem como liderança (e não têm permissão alguma): a gestão só existe em sessão de liderança.
@@ -55,13 +62,13 @@ module.exports = async function (context, req) {
   const consulta = req.query || {};
 
   // Identificador que chega de fora: inteiro positivo escrito direito; o resto é 400 (nunca vira consulta ao banco).
-  for (const campo of ["incidenteId", "envolvidoId", "congregacaoId", "equipeId", "envolvidoMembroId"]) {
+  for (const campo of ["incidenteId", "envolvidoId", "congregacaoId", "equipeId", "envolvidoMembroId", "membroId"]) {
     for (const origem of [corpo, consulta]) {
       if (campo in origem && origem[campo] != null && origem[campo] !== "" && !idDe(origem[campo])) return erro(context, 400, `${campo} inválido.`);
     }
   }
   const EXIGE_GESTAO = ["incidentes", "incidente", "relato", "comunicacao", "adendo", "reclassificar"];
-  const EXIGE_GERAL = ["cautelar-decidir", "encerrar", "padroes", "comite", "relatorio-anual"];
+  const EXIGE_GERAL = ["cautelar-decidir", "encerrar", "vincular-envolvido", "padroes", "comite", "relatorio-anual"];
 
   try {
     if (EXIGE_GESTAO.includes(acao) && !gestao) return erro(context, 403, SEM_PERMISSAO);
@@ -94,7 +101,7 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: true, agora: new Date().toISOString(), ...d } };
         return;
       }
-      if (acao === "padroes") { context.res = { status: 200, body: { sucesso: true, padroes: await db.padroes(pool) } }; return; }
+      if (acao === "padroes") { context.res = { status: 200, body: { sucesso: true, padroes: await db.padroes(pool, { verMembroId: sessao.membroId }) } }; return; }
       if (acao === "comite") { context.res = { status: 200, body: { sucesso: true, comite: await db.comiteComposicao(pool) } }; return; }
       if (acao === "relatorio-anual") {
         const ano = consulta.ano != null && consulta.ano !== "" ? Number(consulta.ano) : undefined;
@@ -107,7 +114,7 @@ module.exports = async function (context, req) {
     // =============================== Escrita ===============================
     if (metodo !== "POST") return erro(context, 405, "Método não permitido.");
     // só estas ações aceitam POST (as de leitura, como "padroes", respondem 404 a um POST: nada de cair no ramo que pede incidenteId)
-    if (!["registrar", "relato", "comunicacao", "adendo", "reclassificar", "cautelar-decidir", "encerrar"].includes(acao)) return erro(context, 404, "Ação inválida.");
+    if (!["registrar", "relato", "comunicacao", "adendo", "reclassificar", "cautelar-decidir", "encerrar", "vincular-envolvido"].includes(acao)) return erro(context, 404, "Ação inválida.");
 
     if (acao === "registrar") { resposta(context, await db.registrarIncidente(pool, { dados: corpo, registrante: { membroId: sessao.membroId } }), 201); return; }
 
@@ -124,7 +131,18 @@ module.exports = async function (context, req) {
       }
       if (acao === "comunicacao") { resposta(context, await db.registrarComunicacao(pool, { incidenteId, dados: corpo, ver }), 201); return; }
       if (acao === "adendo") { resposta(context, await db.adicionarAdendo(pool, { incidenteId, texto: corpo.texto, ver }), 201); return; }
-      if (acao === "reclassificar") { resposta(context, await db.reclassificarIncidente(pool, { incidenteId, dados: corpo, ver })); return; }
+      if (acao === "reclassificar") {
+        // Transformar um registro em "suspeita de violência" afasta a pessoa envolvida na hora: é ato de peso, com a confirmação reforçada (a quebra de política para quase-acidente não pede)
+        if (corpo.nivelNovo === "ALEGACAO" && !auth.exigirFatorRecente(req, context)) return;
+        resposta(context, await db.reclassificarIncidente(pool, { incidenteId, dados: corpo, ver })); return;
+      }
+      if (acao === "vincular-envolvido") {
+        const membroId = idDe(corpo.membroId);
+        if (!membroId) return erro(context, 400, "Informe membroId.");
+        if (!auth.exigirFatorRecente(req, context)) return;
+        resposta(context, await db.vincularEnvolvido(pool, { incidenteId, membroId, ver }));
+        return;
+      }
       // Os atos do nível geral pedem a confirmação reforçada da vD.4 (chave de acesso ou código por e-mail, até 10 minutos).
       if (acao === "cautelar-decidir") {
         const envolvidoId = idDe(corpo.envolvidoId);
@@ -144,4 +162,4 @@ module.exports = async function (context, req) {
     context.log.error("[GestaoProtecaoMenores] erro:", e);
     erro(context, 500, "Erro interno ao processar a proteção de crianças.");
   }
-};
+}

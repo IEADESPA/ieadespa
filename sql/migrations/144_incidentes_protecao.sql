@@ -40,7 +40,7 @@ BEGIN
         Status                    NVARCHAR(10) NOT NULL CONSTRAINT DF_IncidentesProtecao_Status DEFAULT 'ABERTO' CONSTRAINT CK_IncidentesProtecao_Status CHECK (Status IN ('ABERTO','ENCERRADO')),
         EncerradoEm               DATETIME2 NULL,
         EncerradoPorMembroId      INT NULL REFERENCES dbo.MembroReferencia(MembroId),
-        EncerramentoResultado     NVARCHAR(24) NULL CONSTRAINT CK_IncidentesProtecao_Resultado CHECK (EncerramentoResultado IS NULL OR EncerramentoResultado IN ('ENCAMINHADO_AUTORIDADE','MEDIDA_INTERNA','SEM_CONTINUIDADE')),
+        EncerramentoResultado     NVARCHAR(24) NULL CONSTRAINT CK_IncidentesProtecao_Resultado CHECK (EncerramentoResultado IS NULL OR EncerramentoResultado IN ('ENCAMINHADO_AUTORIDADE','MEDIDA_INTERNA','SEM_CONTINUIDADE','SEM_CONTEUDO_DE_PROTECAO')),
         EncerramentoProvidencia   NVARCHAR(500) NULL,
         -- a suspeita de violência sempre tem prazo; o canal sem login não tem quem o registrou; a suspeita sempre diz quem contou
         CONSTRAINT CK_IncidentesProtecao_Prazo CHECK (ExigeComunicacao = 0 OR PrazoNotificacaoEm IS NOT NULL),
@@ -52,6 +52,14 @@ BEGIN
          OR (Status = 'ENCERRADO' AND EncerradoEm IS NOT NULL AND EncerradoPorMembroId IS NOT NULL AND EncerramentoResultado IS NOT NULL AND EncerramentoProvidencia IS NOT NULL))
     );
 END
+GO
+-- (bancos que já tinham a versão anterior da tabela: o resultado "sem conteúdo de proteção", só para pedido do canal sem login, entra na lista aceita)
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IncidentesProtecao_Resultado' AND definition NOT LIKE N'%SEM_CONTEUDO_DE_PROTECAO%')
+    ALTER TABLE dbo.IncidentesProtecao DROP CONSTRAINT CK_IncidentesProtecao_Resultado;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IncidentesProtecao_Resultado')
+    ALTER TABLE dbo.IncidentesProtecao ADD CONSTRAINT CK_IncidentesProtecao_Resultado
+        CHECK (EncerramentoResultado IS NULL OR EncerramentoResultado IN ('ENCAMINHADO_AUTORIDADE','MEDIDA_INTERNA','SEM_CONTINUIDADE','SEM_CONTEUDO_DE_PROTECAO'));
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_IncidentesProtecao_Fila' AND object_id = OBJECT_ID(N'dbo.IncidentesProtecao'))
     CREATE INDEX IX_IncidentesProtecao_Fila ON dbo.IncidentesProtecao (Status, CongregacaoId, RegistradoEm DESC);
@@ -296,7 +304,15 @@ IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'PROTECAO_CAUT
     VALUES (N'PROTECAO_CAUTELAR_SEM_DECISAO', N'Proteção: afastamento cautelar sem decisão do Comitê', N'PROTECAO', NULL, NULL, 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'PROTECAO_AFASTAMENTO_PESSOA')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
-    VALUES (N'PROTECAO_AFASTAMENTO_PESSOA', N'Proteção: o seu contato com menores foi suspenso por cautela', N'PROTECAO', NULL, NULL, 1, 1);
+    VALUES (N'PROTECAO_AFASTAMENTO_PESSOA', N'Proteção: informação sobre o seu contato com menores', N'PROTECAO', NULL, NULL, 1, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'PROTECAO_RESUMO_DIARIO')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
+    VALUES (N'PROTECAO_RESUMO_DIARIO', N'Proteção: pendências do dia (prazo vencido ou comprovante faltando)', N'PROTECAO', NULL, NULL, 1, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'PROTECAO_ARQUIVADO_SEM_CONTEUDO')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
+    VALUES (N'PROTECAO_ARQUIVADO_SEM_CONTEUDO', N'Proteção: um pedido de ajuda foi arquivado como sem conteúdo de proteção', N'PROTECAO', NULL, NULL, 1, 1);
+-- (o título da regra do levantamento do afastamento era enganoso para quem já tinha a versão anterior)
+UPDATE dbo.NotificacaoRegras SET Titulo = N'Proteção: informação sobre o seu contato com menores' WHERE Chave = N'PROTECAO_AFASTAMENTO_PESSOA' AND Titulo <> N'Proteção: informação sobre o seu contato com menores';
 GO
 
 -- ---- 8) Retenção (LGPD art. 16): o incidente guarda-se por muito tempo — o prazo para a vítima agir e para a Justiça apurar corre a partir dos 18 anos ----

@@ -209,6 +209,7 @@ const DETECTORES = {
   PROTECAO_PRAZO_24H: { tabela: "IncidentesProtecao", detectar: (pool) => protecaoDb.detectarPrazos(pool) },
   PROTECAO_PADRAO_QUEBRAS: { tabela: "IncidentesProtecao", detectar: (pool) => protecaoDb.detectarPadroes(pool) },
   PROTECAO_COMITE_INCOMPLETO: { tabela: "Papeis", detectar: (pool) => protecaoDb.detectarComiteIncompleto(pool) },
+  PROTECAO_RESUMO_DIARIO: { tabela: "IncidentesProtecao", detectar: (pool) => protecaoDb.detectarResumoDiario(pool) },
   PROTECAO_CAUTELAR_SEM_DECISAO: { tabela: "IncidenteEnvolvidos", detectar: (pool) => protecaoDb.detectarCautelarSemDecisao(pool) }
 };
 

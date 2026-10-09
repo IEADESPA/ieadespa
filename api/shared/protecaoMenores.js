@@ -21,6 +21,7 @@ const MS_HORA = 3600000;
 const LIMITE_ATENCAO_HORAS = 12;            // a partir daqui o relógio fica amarelo
 const LIMITE_CRITICO_HORAS = 4;             // e daqui vermelho
 const VENCIDO_REPETE_HORAS = 6;             // vencido: o aviso se repete a cada 6 horas até a comunicação ser registrada
+const VENCIDO_AVISOS_MAXIMO = 5;            // 0, 6, 12, 18 e 24 horas depois do prazo; daí em diante, só o resumo diário à Diretoria
 const JANELA_PADRAO_DIAS = 90;              // "a sequência de pequenas quebras": olha os últimos 90 dias
 const PADRAO_MINIMO = 3;                    // três registros da mesma equipe ou da mesma pessoa
 const MAX_CIENCIA_ATRAS_HORAS = 24 * 30;    // "soubemos há..." até 30 dias atrás (acima disso é erro de digitação)
@@ -60,6 +61,7 @@ const QUEM_RELATOU = {
 };
 const ORIGENS = { MEMBRO: "Registrado por um membro", CANAL_AJUDA: "Canal de ajuda (sem login)" };
 const RESULTADOS_ENCERRAMENTO = {
+  SEM_CONTEUDO_DE_PROTECAO: "Pedido sem conteúdo de proteção (só para o canal de ajuda sem login: teste, engano ou texto sem relato de violência)",
   ENCAMINHADO_AUTORIDADE: "Encaminhado às autoridades (a apuração é delas)",
   MEDIDA_INTERNA: "Medida interna tomada (para quase-acidente e quebra de política)",
   SEM_CONTINUIDADE: "Sem continuidade: nada mais a fazer pela Igreja"
@@ -140,7 +142,10 @@ function relogio(prazoEm, agora = new Date()) {
 function etapaDeAviso(prazoEm, agora = new Date()) {
   const r = relogio(prazoEm, agora);
   if (r.restanteMs == null) return null;
-  if (r.vencido) return { codigo: `VENCIDO_${Math.floor(Math.abs(r.restanteMs) / (VENCIDO_REPETE_HORAS * MS_HORA))}`, bloco: 3 + Math.floor(Math.abs(r.restanteMs) / (VENCIDO_REPETE_HORAS * MS_HORA)) };
+  if (r.vencido) {
+    const n = Math.floor(Math.abs(r.restanteMs) / (VENCIDO_REPETE_HORAS * MS_HORA));
+    return n >= VENCIDO_AVISOS_MAXIMO ? null : { codigo: `VENCIDO_${n}`, bloco: 3 + n };
+  }
   if (r.restanteMs <= LIMITE_CRITICO_HORAS * MS_HORA) return { codigo: "QUATRO_HORAS", bloco: 2 };
   if (r.restanteMs <= LIMITE_ATENCAO_HORAS * MS_HORA) return { codigo: "DOZE_HORAS", bloco: 1 };
   return null;
@@ -239,15 +244,25 @@ function validarComunicacaoExterna(d, { agora = new Date(), conhecidoEm } = {}) 
   if (ciencia && quando.getTime() < ciencia.getTime() - 60000) return { valido: false, mensagem: "A comunicação não pode ser anterior ao momento em que a Igreja ficou sabendo." };
   const protocoloExterno = limpar(dados.protocoloExterno);
   if (protocoloExterno.length > 60 || temMarca(protocoloExterno)) return { valido: false, mensagem: "O número de protocolo do órgão aceita até 60 caracteres, sem < ou >." };
+  if (protocoloExterno && !valorSignificativo(protocoloExterno)) return { valido: false, mensagem: "O número de protocolo parece incompleto: informe o número que o órgão deu (pelo menos 4 letras ou números), ou deixe em branco e diga onde o comprovante está guardado." };
   const referenciaArquivo = limpar(dados.referenciaArquivo);
   if (referenciaArquivo.length > 200 || temMarca(referenciaArquivo)) return { valido: false, mensagem: "Onde o comprovante está guardado: até 200 caracteres, sem < ou >." };
+  if (referenciaArquivo && !valorSignificativo(referenciaArquivo)) return { valido: false, mensagem: "Diga com clareza onde o comprovante está guardado (por exemplo: \"Pasta 4, ofício 12/2026, secretaria da sede\")." };
   const observacao = limpar(dados.observacao);
   if (observacao.length > MAX_OBSERVACAO || temMarca(observacao)) return { valido: false, mensagem: `A observação aceita até ${MAX_OBSERVACAO} caracteres, sem < ou >.` };
   return { valido: true, dados: { orgao, forma, comunicadoEm: quando, protocoloExterno: protocoloExterno || null, referenciaArquivo: referenciaArquivo || null, observacao: observacao || null } };
 }
 
+// Um texto que pode valer como prova: pelo menos 4 letras ou números, e nunca "n/a", "sem protocolo", "teste", "0000", "xxxx" ou "1234".
+const SEM_SENTIDO = /^(n\/?a|na|nada|nenhum|nenhuma|teste|test|tbd|pendente|sem|sem protocolo|sem numero|sem número|nao tem|não tem|nao sei|não sei|1234\d*|abcd\w*)$/i;
+function valorSignificativo(s) {
+  const t = limpar(s);
+  const so = t.replace(/[^0-9A-Za-zÀ-ÿ]/g, "");
+  if (so.length < 4 || /^(.)\1+$/.test(so) || SEM_SENTIDO.test(t) || SEM_SENTIDO.test(so)) return false;
+  return true;
+}
 // A comunicação tem comprovante? Protocolo do órgão, lugar onde o papel está guardado ou arquivo anexado ao incidente.
-const temComprovante = (c) => !!(c && (c.protocoloExterno || c.referenciaArquivo || c.temAnexo));
+const temComprovante = (c) => !!(c && (valorSignificativo(c.protocoloExterno) || valorSignificativo(c.referenciaArquivo) || c.temAnexo));
 const foraDoPrazo = (comunicadoEm, prazoEm) => { const c = instanteValido(comunicadoEm), p = instanteValido(prazoEm); return !!(c && p && c.getTime() > p.getTime()); };
 
 // i = { nivel, status }; comunicacoes = [{ protocoloExterno, referenciaArquivo, temAnexo }]; envolvidos = [{ membroId, nivelAlegacao, decisao }]
@@ -255,6 +270,10 @@ const foraDoPrazo = (comunicadoEm, prazoEm) => { const c = instanteValido(comuni
 function podeEncerrar(i, comunicacoes = [], envolvidos = []) {
   const motivos = [];
   if (!i || i.status === "ENCERRADO") return { ok: false, motivos: ["Este incidente já foi encerrado."] };
+  if (i.semConteudo) {
+    if ((envolvidos || []).some((e) => e.membroId)) motivos.push("Há uma pessoa do cadastro vinculada como envolvida: não é um pedido 'sem conteúdo de proteção'. Siga o caminho normal (comunicar, decidir sobre o afastamento e encaminhar).");
+    return { ok: motivos.length === 0, motivos };
+  }
   if (NIVEL_EXIGE_COMUNICACAO[i.nivel]) {
     if (!comunicacoes.length) motivos.push("Falta registrar a comunicação ao Conselho Tutelar (ou a outro órgão de proteção): a lei exige comunicar a suspeita.");
     else if (!comunicacoes.some(temComprovante)) motivos.push("A comunicação foi registrada, mas falta o comprovante: o número de protocolo do órgão, onde o papel está guardado ou o arquivo anexado.");
@@ -265,10 +284,16 @@ function podeEncerrar(i, comunicacoes = [], envolvidos = []) {
 }
 
 // d = { resultado, providencia }
-function validarEncerramento(d, { nivel } = {}) {
+function validarEncerramento(d, { nivel, origem } = {}) {
   const dados = d && typeof d === "object" && !Array.isArray(d) ? d : {};
   const resultado = limpar(dados.resultado);
   if (!tem(RESULTADOS_ENCERRAMENTO, resultado)) return { valido: false, mensagem: "Escolha como o caso termina para a Igreja." };
+  if (resultado === "SEM_CONTEUDO_DE_PROTECAO") {
+    if (origem !== "CANAL_AJUDA" || nivel !== "ALEGACAO") return { valido: false, mensagem: "\"Sem conteúdo de proteção\" só vale para um pedido do canal de ajuda sem login (teste, engano ou texto sem relato de violência). Uma suspeita registrada por um membro termina encaminhada às autoridades." };
+    const motivo = limpar(dados.providencia);
+    if (motivo.length < 10 || motivo.length > MAX_PROVIDENCIA || temMarca(motivo)) return { valido: false, mensagem: `Explique por que o pedido não tem conteúdo de proteção (de 10 a ${MAX_PROVIDENCIA} caracteres, sem < ou >), sem citar nomes de crianças.` };
+    return { valido: true, dados: { resultado, providencia: motivo } };
+  }
   if (NIVEL_EXIGE_COMUNICACAO[nivel] && resultado !== "ENCAMINHADO_AUTORIDADE") return { valido: false, mensagem: "Uma suspeita ou relato de violência só termina como \"encaminhado às autoridades\": a apuração não é da Igreja." };
   if (!NIVEL_EXIGE_COMUNICACAO[nivel] && resultado === "ENCAMINHADO_AUTORIDADE") return { valido: false, mensagem: "Para quase-acidente e quebra de política, escolha \"medida interna tomada\" ou \"sem continuidade\". Se virou uma suspeita de violência, reclassifique o incidente." };
   const providencia = limpar(dados.providencia);
@@ -383,6 +408,19 @@ function textoComiteIncompleto({ problemas }) {
 function textoCautelarSemDecisao({ dias }) {
   return `Há uma pessoa afastada por cautela do contato com menores sem decisão do Comitê há ${dias} dia(s). O afastamento não é punição, mas não pode ficar sem revisão. Abra Proteção de Crianças → Incidentes.`;
 }
+function textoResumoDiario({ vencidas, semComprovante }) {
+  const partes = [];
+  if (vencidas) partes.push(`${vencidas} suspeita(s) de violência com o prazo de 24 horas VENCIDO e sem comunicação ao Conselho Tutelar`);
+  if (semComprovante) partes.push(`${semComprovante} caso(s) com a comunicação registrada há mais de 24 horas mas SEM comprovante (protocolo do órgão, onde o papel está guardado ou arquivo)`);
+  return `Pendências da proteção de crianças: ${partes.join("; ")}. Abra Proteção de Crianças → Incidentes e resolva hoje.`.slice(0, 1000);
+}
+function textoArquivadoSemConteudo() {
+  return "Um pedido do canal de ajuda sem login foi arquivado como \"sem conteúdo de proteção\" por um membro da Diretoria ou do Comitê. Todos do Comitê podem conferir em Proteção de Crianças → Incidentes (encerrados).";
+}
+function textoRetiradaCautelar({ equipes, nEscalas }) {
+  const lista = (equipes || []).slice(0, 5).join(", ");
+  return `Por cautela, você saiu de ${nEscalas} escala(s) com crianças e adolescentes (${lista}), por decisão da Diretoria Executiva. Isso não é uma condenação. A Diretoria entrará em contato com você.`.slice(0, 1000);
+}
 function textoCautelarPessoa() {
   return "Por cautela, o seu contato com crianças e adolescentes está suspenso, por decisão da Diretoria Executiva. Isso não é uma condenação. A Diretoria entrará em contato com você.";
 }
@@ -401,5 +439,5 @@ module.exports = {
   prazoNotificacao, relogio, etapaDeAviso, referenciaDoAviso,
   validarIncidente, validarPedidoDeAjuda, validarComunicacaoExterna, temComprovante, foraDoPrazo, podeEncerrar, validarEncerramento, validarReclassificacao, validarDecisaoCautelar,
   padraoDeQuebras, referenciaDoPadrao, ehClerigo, avaliarComposicao,
-  formatarPrazo, textoIncidenteNovo, textoPrazo, textoPadrao, textoComiteIncompleto, textoCautelarSemDecisao, textoCautelarPessoa, textoCautelarLevantada, textoConfirmacaoDeAjuda
+  formatarPrazo, textoIncidenteNovo, textoPrazo, textoPadrao, textoComiteIncompleto, textoCautelarSemDecisao, textoCautelarPessoa, textoCautelarLevantada, textoConfirmacaoDeAjuda, textoResumoDiario, textoArquivadoSemConteudo, textoRetiradaCautelar, valorSignificativo, VENCIDO_AVISOS_MAXIMO
 };

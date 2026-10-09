@@ -76,7 +76,9 @@ describe("registrar um incidente", () => {
     mundoDeRegistro();
     quando(/FROM Lideranca l JOIN Papeis p/, [{ membroId: 3001, nome: "Dirigente", email: "d@e.org" }]);
     const r = await db.registrarIncidente(pool, { dados: dados({ envolvidoMembroId: 77 }), registrante: { membroId: 10 }, agora: AGORA });
-    expect(r).toMatchObject({ sucesso: true, incidenteId: 42, exigeComunicacao: false, prazoEm: null, escalasDesmarcadas: null });
+    expect(r).toMatchObject({ sucesso: true, incidenteId: 42, exigeComunicacao: false, prazoEm: null });
+    expect(r.mensagem).toMatch(/A liderança foi avisada/);
+    expect("escalasDesmarcadas" in r || "avisados" in r).toBe(false);       // quem registra não fica sabendo se a pessoa apontada servia em alguma escala nem a quantos o aviso chegou
     expect(r.protocolo).toMatch(/^PRO-\d{4}-/);
     expect(mmDb.retirarInaptosDasEscalas).not.toHaveBeenCalled();
     expect(notificarAgora).toHaveBeenCalledTimes(1);
@@ -93,7 +95,7 @@ describe("registrar um incidente", () => {
     expect(r.sucesso).toBe(true);
     expect(r.exigeComunicacao).toBe(true);
     expect(new Date(r.prazoEm).getTime() - AGORA.getTime()).toBe(24 * 3600000);
-    expect(r.escalasDesmarcadas).toBe(2);
+    expect("escalasDesmarcadas" in r).toBe(false);
     expect(mmDb.retirarInaptosDasEscalas).toHaveBeenCalledWith(expect.anything(), { membroId: 77 });
     expect(r.mensagem).toMatch(/24 horas/);
     expect(notificarAgora.mock.calls[0][1].mensagem).toMatch(/até 24 horas/);
@@ -114,11 +116,25 @@ describe("registrar um incidente", () => {
     mockRegras = []; mockConsultas = []; mundoDeRegistro({ equipeDaCongregacao: 9 });
     r = await db.registrarIncidente(pool, { dados: dados({ equipeId: 5 }), registrante: { membroId: 10 }, agora: AGORA });
     expect(r).toMatchObject({ sucesso: false, mensagem: "A equipe informada não é desta congregação." });
-    mockRegras = []; mockConsultas = []; mundoDeRegistro({ membroExiste: false });
-    r = await db.registrarIncidente(pool, { dados: alegacao({ envolvidoMembroId: 77 }), registrante: { membroId: 10 }, agora: AGORA });
-    expect(r.sucesso).toBe(false);
     expect(escritas()).toHaveLength(0);
     expect(notificarAgora).not.toHaveBeenCalled();
+  });
+  test("matrícula do envolvido que não existe NÃO é erro (não serve de sonda de matrículas): vira registro só com o nome, sem afastar ninguém", async () => {
+    mundoDeRegistro({ membroExiste: false });
+    const r = await db.registrarIncidente(pool, { dados: alegacao({ envolvidoMembroId: 77 }), registrante: { membroId: 10 }, agora: AGORA });
+    expect(r.sucesso).toBe(true);
+    const env = escritas().find((c) => /INSERT INTO IncidenteEnvolvidos/.test(c.sql));
+    expect(env.inputs).toMatchObject({ m: null });
+    expect(env.inputs.n).toMatch(/Matrícula 77 \(não encontrada no cadastro\)/);
+    expect(mmDb.retirarInaptosDasEscalas).not.toHaveBeenCalled();
+  });
+  test("a liderança NÃO é dada como avisada quando o aviso não foi criado (regra desligada, e-mail fora)", async () => {
+    mundoDeRegistro();
+    notificarAgora.mockResolvedValueOnce({ criadas: 0 });
+    const r = await db.registrarIncidente(pool, { dados: alegacao(), registrante: { membroId: 10 }, agora: AGORA });
+    expect(r.sucesso).toBe(true);
+    expect(r.mensagem).toMatch(/não foi possível avisar a liderança/);
+    expect(r.mensagem).not.toMatch(/A liderança foi avisada/);
   });
   test("o teto diário: 10 registros ou 3 suspeitas em 24 horas por pessoa; a mensagem manda ligar para o 100", async () => {
     mundoDeRegistro({ recentes: { total: 10, alegacoes: 0 } });
@@ -151,7 +167,7 @@ describe("registrar um incidente", () => {
 
 describe("o canal de ajuda (sem login)", () => {
   test("vira suspeita de violência sem registrante, sem IP; avisa a gestão; a auditoria não liga ninguém", async () => {
-    quando(/FROM IncidentesProtecao WHERE Origem = 'CANAL_AJUDA'/, [{ n: 3 }]);
+    quando(/FROM IncidentesProtecao\s+WHERE Origem = 'CANAL_AJUDA'/, [{ hora: 3, dia: 3 }]);
     quando(/SELECT CongregacaoId FROM Congregacoes WHERE CongregacaoId = @id/, [{ CongregacaoId: 3 }]);
     quando(/SELECT 1 AS x FROM IncidentesProtecao WHERE Protocolo = @p/, []);
     quando(/INSERT INTO IncidentesProtecao/, [{ id: 50 }]);
@@ -164,12 +180,18 @@ describe("o canal de ajuda (sem login)", () => {
     expect(Object.keys(ins.inputs).some((k) => /ip|cabec|agente/i.test(k))).toBe(false);
     expect(registrarAuditoria).toHaveBeenCalledWith({ tabela: "IncidentesProtecao", registroId: 0, acao: "PROTECAO_PEDIDO_DE_AJUDA", usuarioId: null, dadosDepois: {} });
     expect(notificarAgora).toHaveBeenCalledTimes(1);
+    expect(notificarAgora.mock.calls[0][1].destinatarios.map((d) => d.membroId).sort()).toEqual([1001, 1002]);       // só o nível geral: o Dirigente da congregação escolhida pode ser a pessoa de quem se fala
   });
-  test("no teto global (40 por hora) nada é gravado e a orientação do Disque 100 vem na mensagem", async () => {
-    quando(/FROM IncidentesProtecao WHERE Origem = 'CANAL_AJUDA'/, [{ n: 40 }]);
-    const r = await db.registrarPedidoDeAjuda(pool, { dados: { texto: "Quero pedir ajuda mas há muitas mensagens agora." }, agora: AGORA });
+  test("no teto global (15 por hora, 60 por dia) nada é gravado e a orientação do Disque 100 vem na mensagem", async () => {
+    quando(/FROM IncidentesProtecao\s+WHERE Origem = 'CANAL_AJUDA'/, [{ hora: 15, dia: 15 }]);
+    let r = await db.registrarPedidoDeAjuda(pool, { dados: { texto: "Quero pedir ajuda mas há muitas mensagens agora." }, agora: AGORA });
     expect(r).toMatchObject({ sucesso: false, limite: true });
     expect(r.mensagem).toMatch(/100/);
+    expect(escritas()).toHaveLength(0);
+    mockRegras = []; mockConsultas = [];
+    quando(/FROM IncidentesProtecao\s+WHERE Origem = 'CANAL_AJUDA'/, [{ hora: 2, dia: 60 }]);          // o teto do DIA também vale
+    r = await db.registrarPedidoDeAjuda(pool, { dados: { texto: "Quero pedir ajuda mas há muitas mensagens hoje." }, agora: AGORA });
+    expect(r).toMatchObject({ sucesso: false, limite: true });
     expect(escritas()).toHaveLength(0);
   });
   test("texto inválido é recusado antes de qualquer consulta; congregação que não existe vira 'sem congregação'", async () => {
@@ -210,7 +232,7 @@ describe("ler: a fila, o detalhe e o relato", () => {
   });
   test("o detalhe: o envolvido não vê (null); o Dirigente não vê decisões, leituras nem contato; as ações dependem do nível", async () => {
     const montar = (envolvidos) => {
-      quando(/WHERE i\.IncidenteId = @id/, [linha({ ContatoCanal: "tia 91 9", EquipeNome: null, Descricao: "Descrição", Onde: null, RelatadoPor: "VOLUNTARIO", ConhecidoEm: new Date("2026-10-09T15:00:00.000Z") })]);
+      quando(/WHERE i\.IncidenteId = @id/, [linha({ ContatoCanal: "tia 91 9", EquipeNome: null, Descricao: "Descrição", Onde: null, RelatadoPor: "VOLUNTARIO", RegistradoPorMembroId: 10, RegistradoPorNome: "Registrante", ConhecidoEm: new Date("2026-10-09T15:00:00.000Z") })]);
       quando(/FROM IncidenteEnvolvidos e LEFT JOIN MembroReferencia m/, envolvidos);
       quando(/FROM IncidenteComunicacoes k JOIN MembroReferencia r/, []);
       quando(/FROM AnexosGenericos WHERE Tabela = 'IncidentesProtecao'/, [{ n: 0 }]);
@@ -223,15 +245,17 @@ describe("ler: a fila, o detalhe e o relato", () => {
     const envolvido = await db.detalheIncidente(pool, 1, { ver: { membroId: 77, geral: true, podeVerCongregacao: () => true }, agora: AGORA });
     expect(envolvido).toBeNull();
     const g = await db.detalheIncidente(pool, 1, { ver: geral, agora: AGORA });
-    expect(g.acoes).toEqual({ comunicar: true, encerrar: true, reclassificar: false, decidirCautelar: true, adendo: true });
+    expect(g.acoes).toEqual({ vincularEnvolvido: true, arquivarSemConteudo: false, comunicar: true, encerrar: true, reclassificar: false, decidirCautelar: true, adendo: true });
     expect(g.incidente.contatoCanal).toBe("tia 91 9");
+    expect(g.incidente.registradoPor).toEqual({ membroId: 10, nome: "Registrante" });       // o nível geral sabe quem registrou (quem abusa fica identificado)
     expect(g.decisoes).toHaveLength(1);
     expect(g.leituras).toHaveLength(1);
     expect(g.envolvidos[0]).toMatchObject({ nome: "Fulano", afastamentoCautelar: true, ehMembro: true });
     expect(g.relato).toEqual({ registrado: true, adendos: 2 });
     expect(g.encerramentoPossivel.ok).toBe(false);
     const l = await db.detalheIncidente(pool, 1, { ver: local("Central"), agora: AGORA });
-    expect(l.acoes).toEqual({ comunicar: true, encerrar: false, reclassificar: false, decidirCautelar: false, adendo: true });
+    expect(l.acoes).toEqual({ vincularEnvolvido: false, arquivarSemConteudo: false, comunicar: true, encerrar: false, reclassificar: false, decidirCautelar: false, adendo: true });
+    expect(l.incidente.registradoPor).toBeNull();
     expect(l.incidente.contatoCanal).toBeNull();
     expect(l.decisoes).toEqual([]);
     expect(l.leituras).toEqual([]);
@@ -266,14 +290,14 @@ describe("agir: comunicar, encerrar, decidir o afastamento", () => {
   const comunicacao = (extra = {}) => ({ orgao: "CONSELHO_TUTELAR", forma: "OFICIO", comunicadoEm: "2026-10-09T14:00:00.000Z", ...extra });
   test("comunicação: grava, marca fora do prazo, e só entra em incidente que exige comunicação e está aberto", async () => {
     abrir();
-    let r = await db.registrarComunicacao(pool, { incidenteId: 1, dados: comunicacao({ protocoloExterno: "CT-1" }), ver: geral, agora: AGORA });
+    let r = await db.registrarComunicacao(pool, { incidenteId: 1, dados: comunicacao({ protocoloExterno: "CT-0001" }), ver: geral, agora: AGORA });
     expect(r).toMatchObject({ sucesso: true, foraDoPrazo: false, comprovante: true });
     const ins = escritas().find((c) => /INSERT INTO IncidenteComunicacoes/.test(c.sql));
     expect(ins.sql).toMatch(/WHERE EXISTS \(SELECT 1 FROM IncidentesProtecao WITH \(UPDLOCK, HOLDLOCK\) WHERE IncidenteId = @i AND Status = 'ABERTO'\)/);
-    expect(ins.inputs).toMatchObject({ i: 1, o: "CONSELHO_TUTELAR", f: "OFICIO", p: "CT-1", fp: 0, r: 1001 });
+    expect(ins.inputs).toMatchObject({ i: 1, o: "CONSELHO_TUTELAR", f: "OFICIO", p: "CT-0001", fp: 0, r: 1001 });
     mockRegras = []; mockConsultas = []; abrir();
     r = await db.registrarComunicacao(pool, { incidenteId: 1, dados: comunicacao(), ver: geral, agora: new Date("2026-10-11T00:00:00.000Z") });
-    expect(r).toMatchObject({ sucesso: true, foraDoPrazo: false });
+    expect(r).toMatchObject({ sucesso: true, foraDoPrazo: true });        // dita dentro do prazo, mas REGISTRADA depois dele: conta como fora
     mockRegras = []; mockConsultas = []; abrir();
     r = await db.registrarComunicacao(pool, { incidenteId: 1, dados: comunicacao({ comunicadoEm: "2026-10-10T11:00:00.000Z" }), ver: geral, agora: new Date("2026-10-10T12:00:00.000Z") });
     expect(r).toMatchObject({ sucesso: true, foraDoPrazo: true });
@@ -307,18 +331,21 @@ describe("agir: comunicar, encerrar, decidir o afastamento", () => {
     expect(r.motivos).toHaveLength(1);
     expect(r.mensagem).toMatch(/Comitê decidir/);
     mockRegras = []; mockConsultas = [];
-    abrir({}, [{ ...env[0], UltimaDecisao: "LIBERADO", NDecisoes: 1 }], [{ ComunicacaoId: 1, ProtocoloExterno: "CT-9", ReferenciaArquivo: null }]);
+    abrir({}, [{ ...env[0], UltimaDecisao: "LIBERADO", NDecisoes: 1 }], [{ ComunicacaoId: 1, ProtocoloExterno: "CT-0009", ReferenciaArquivo: null }]);
     r = await db.encerrarIncidente(pool, { incidenteId: 1, dados: dadosEnc, ver: geral });
     expect(r).toMatchObject({ sucesso: true });
     const up = escritas().find((c) => /UPDATE IncidentesProtecao SET Status = 'ENCERRADO'/.test(c.sql));
-    expect(up.sql).toMatch(/AND Status = 'ABERTO'/);
+    expect(up.sql).toMatch(/AND Status = 'ABERTO' AND Nivel = @nivel AND ExigeComunicacao = @exige/);       // o encerramento só vale se o incidente é AINDA o que foi avaliado (corrida com a reclassificação)
+    expect(up.inputs).toMatchObject({ nivel: "ALEGACAO", exige: 1 });
     expect(up.inputs).toMatchObject({ id: 1, p: 1001, r: "ENCAMINHADO_AUTORIDADE" });
     expect(registrarAuditoria).toHaveBeenCalledWith(expect.objectContaining({ acao: "PROTECAO_INCIDENTE_ENCERRADO", registroId: 0, usuarioId: null }));
   });
   test("encerrar quando outro já encerrou (UPDATE sem linha) e resultado errado para uma suspeita de violência", async () => {
-    abrir({}, [], [{ ComunicacaoId: 1, ProtocoloExterno: "CT-9" }]);
+    abrir({}, [], [{ ComunicacaoId: 1, ProtocoloExterno: "CT-0009" }]);
     mockRegras.unshift([/UPDATE IncidentesProtecao SET Status = 'ENCERRADO'/, [], 0]);
-    expect((await db.encerrarIncidente(pool, { incidenteId: 1, dados: { resultado: "ENCAMINHADO_AUTORIDADE", providencia: "Comunicado ao Conselho Tutelar, protocolo registrado." }, ver: geral })).mensagem).toBe("Este incidente já foi encerrado.");
+    const perdeu = await db.encerrarIncidente(pool, { incidenteId: 1, dados: { resultado: "ENCAMINHADO_AUTORIDADE", providencia: "Comunicado ao Conselho Tutelar, protocolo registrado." }, ver: geral });
+    expect(perdeu.sucesso).toBe(false);
+    expect(perdeu.mensagem).toMatch(/já foi encerrado ou mudou de nível/);
     expect((await db.encerrarIncidente(pool, { incidenteId: 1, dados: { resultado: "SEM_CONTINUIDADE", providencia: "Nada mais a fazer pela Igreja neste caso." }, ver: geral })).mensagem).toMatch(/apuração não é da Igreja/);
   });
   test("decidir o afastamento: ninguém decide sobre si; o envolvido precisa ser membro do mesmo incidente de suspeita; levantar avisa a pessoa (sem motivo)", async () => {
@@ -357,6 +384,100 @@ describe("agir: comunicar, encerrar, decidir o afastamento", () => {
     expect((await db.adicionarAdendo(pool, { incidenteId: 1, texto: "Mais outra coisa que ela contou sozinha de novo.", ver: geral })).mensagem).toMatch(/Repetir a escuta/);
     mockRegras = []; mockConsultas = []; abrir({ Nivel: "QUEBRA_POLITICA", ExigeComunicacao: false });
     expect((await db.adicionarAdendo(pool, { incidenteId: 1, texto: "Hoje ela disse sozinha que tem medo de voltar à sala.", ver: geral })).mensagem).toMatch(/suspeita de violência ainda aberta/);
+  });
+});
+
+describe("a revisão: visão do canal, comprovante, vincular, padrões e arquivar", () => {
+  const linhaCanal = (extra = {}) => ({ IncidenteId: 9, Protocolo: "PRO-2026-C", Nivel: "ALEGACAO", Origem: "CANAL_AJUDA", CongregacaoId: 3, CongregacaoNome: "Central", DataOcorrencia: new Date("2026-10-08"), ExigeComunicacao: true,
+    PrazoNotificacaoEm: new Date("2026-10-10T15:00:00.000Z"), Status: "ABERTO", RegistradoEm: new Date("2026-10-09T15:00:00.000Z"), EncerradoEm: null, NComunicacoes: 0, NComComprovante: 0, NAnexos: 0, NSemDecisao: 0, ViewerEnvolvido: 0, ...extra });
+  test("o pedido do canal sem login é visto só pelo nível geral (o Dirigente da congregação escolhida pode ser a pessoa de quem se fala)", async () => {
+    expect(db.visivelPara(local("Central"), { Origem: "CANAL_AJUDA", CongregacaoNome: "Central" }, [])).toBe(false);
+    expect(db.visivelPara(geral, { Origem: "CANAL_AJUDA", CongregacaoNome: "Central" }, [])).toBe(true);
+    quando(/FROM IncidentesProtecao i LEFT JOIN Congregacoes c/, [linhaCanal(), linhaCanal({ IncidenteId: 10, Origem: "MEMBRO" })]);
+    expect((await db.listarIncidentes(pool, { ver: local("Central"), agora: AGORA })).map((i) => i.incidenteId)).toEqual([10]);
+    expect((await db.listarIncidentes(pool, { ver: geral, agora: AGORA })).map((i) => i.incidenteId).sort((a, b) => a - b)).toEqual([9, 10]);
+  });
+  test("a lista NUNCA corta um caso que pede ação: a consulta inclui todos os abertos sem comunicação e só limita o histórico; os pendentes vêm primeiro mesmo com 300 itens", async () => {
+    const muitos = Array.from({ length: 300 }, (_, i) => linhaCanal({ IncidenteId: 1000 + i, PrazoNotificacaoEm: new Date(Date.UTC(2026, 9, 10, 0, 0, 0) + i * 60000) }));
+    quando(/FROM IncidentesProtecao i LEFT JOIN Congregacoes c/, [...muitos, ...Array.from({ length: 250 }, (_, i) => linhaCanal({ IncidenteId: 2000 + i, Status: "ENCERRADO", ExigeComunicacao: false, PrazoNotificacaoEm: null }))]);
+    const r = await db.listarIncidentes(pool, { ver: geral, agora: AGORA, limite: 200 });
+    expect(r.filter((i) => i.status === "ABERTO")).toHaveLength(300);          // todos os pendentes entram
+    expect(r.filter((i) => i.status === "ENCERRADO")).toHaveLength(200);        // o corte é só no histórico
+    const consulta = mockConsultas.find((c) => /FROM IncidentesProtecao i LEFT JOIN Congregacoes c/.test(c.sql));
+    expect(consulta.sql).toMatch(/OR \(i\.Status = 'ABERTO' AND i\.ExigeComunicacao = 1 AND NOT EXISTS/);
+    expect(consulta.sql).not.toMatch(/TOP 500/);
+  });
+  test("vincular a pessoa do cadastro ao envolvido registrado só por nome: acrescenta a linha, afasta da escala (suspeita de violência) e recusa quem já está ou a matrícula que não existe", async () => {
+    const abrir = (env = [{ EnvolvidoId: 8, MembroId: null, Nome: "Fulano de Tal", UltimaDecisao: null, NDecisoes: 0 }], extra = {}) => {
+      quando(/WHERE i\.IncidenteId = @id/, [{ IncidenteId: 1, Protocolo: "PRO-2026-A", Nivel: "ALEGACAO", Origem: "MEMBRO", CongregacaoId: 3, CongregacaoNome: "Central", Status: "ABERTO", ExigeComunicacao: true, ...extra }]);
+      quando(/FROM IncidenteEnvolvidos e LEFT JOIN MembroReferencia m/, env);
+      quando(/SELECT MembroId, Nome FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 77, Nome: "Fulano de Tal" }]);
+      quando(/INSERT INTO IncidenteEnvolvidos/, [], 1);
+    };
+    abrir();
+    let r = await db.vincularEnvolvido(pool, { incidenteId: 1, membroId: 77, ver: geral });
+    expect(r).toMatchObject({ sucesso: true, escalasDesmarcadas: 2 });
+    expect(escritas().find((c) => /INSERT INTO IncidenteEnvolvidos/.test(c.sql)).inputs).toEqual({ i: 1, m: 77 });
+    expect(mmDb.retirarInaptosDasEscalas).toHaveBeenCalledWith(expect.anything(), { membroId: 77 });
+    mockRegras = []; mockConsultas = []; jest.clearAllMocks(); abrir([{ EnvolvidoId: 8, MembroId: 77, Nome: "Fulano", UltimaDecisao: null, NDecisoes: 0 }]);
+    expect((await db.vincularEnvolvido(pool, { incidenteId: 1, membroId: 77, ver: geral })).mensagem).toMatch(/já está vinculada/);
+    mockRegras = []; mockConsultas = []; abrir(); mockRegras.unshift([/SELECT MembroId, Nome FROM MembroReferencia WHERE MembroId = @id/, []]);
+    expect((await db.vincularEnvolvido(pool, { incidenteId: 1, membroId: 99, ver: geral })).mensagem).toMatch(/não foi encontrada/);
+    mockRegras = []; mockConsultas = []; abrir(undefined, { Status: "ENCERRADO" });
+    expect((await db.vincularEnvolvido(pool, { incidenteId: 1, membroId: 77, ver: geral })).mensagem).toMatch(/encerrado/);
+    mockRegras = []; mockConsultas = []; abrir();
+    expect((await db.vincularEnvolvido(pool, { incidenteId: 1, membroId: 77, ver: local("Central") })).naoExiste).toBe(undefined);        // o Dirigente vê, mas a rota barra antes (nível geral); no banco a visão decide
+  });
+  test("pedido do canal 'sem conteúdo de proteção': arquiva sem comunicar e AVISA o resto da Diretoria; recusa quando alguém do cadastro foi vinculado", async () => {
+    const abrir = (env = []) => {
+      quando(/WHERE i\.IncidenteId = @id/, [{ IncidenteId: 9, Protocolo: "PRO-2026-C", Nivel: "ALEGACAO", Origem: "CANAL_AJUDA", CongregacaoId: null, CongregacaoNome: null, Status: "ABERTO", ExigeComunicacao: true }]);
+      quando(/FROM IncidenteEnvolvidos e LEFT JOIN MembroReferencia m/, env);
+      quando(/FROM AnexosGenericos WHERE Tabela = 'IncidentesProtecao'/, [{ n: 0 }]);
+    };
+    const enc = { resultado: "SEM_CONTEUDO_DE_PROTECAO", providencia: "Era um teste do próprio sistema, sem nenhum relato de violência." };
+    abrir();
+    const r = await db.encerrarIncidente(pool, { incidenteId: 9, dados: enc, ver: geral });
+    expect(r.sucesso).toBe(true);
+    const aviso = notificarAgora.mock.calls.find((c) => c[1].regraChave === "PROTECAO_ARQUIVADO_SEM_CONTEUDO")[1];
+    expect(aviso.destinatarios.map((d) => d.membroId)).toEqual([1002]);                 // quem arquivou (1001) não é avisado: os outros ficam sabendo
+    expect(aviso.mensagem).not.toMatch(/PRO-|relato/i);
+    mockRegras = []; mockConsultas = []; abrir([{ EnvolvidoId: 8, MembroId: 77, Nome: "Fulano", UltimaDecisao: null, NDecisoes: 0 }]);
+    expect((await db.encerrarIncidente(pool, { incidenteId: 9, dados: enc, ver: geral })).mensagem).toMatch(/vinculada como envolvida/);
+    mockRegras = []; mockConsultas = []; quando(/WHERE i\.IncidenteId = @id/, [{ IncidenteId: 9, Nivel: "ALEGACAO", Origem: "MEMBRO", CongregacaoNome: "Central", Status: "ABERTO", ExigeComunicacao: true }]);
+    quando(/FROM IncidenteEnvolvidos e LEFT JOIN MembroReferencia m/, []);
+    expect((await db.encerrarIncidente(pool, { incidenteId: 9, dados: enc, ver: geral })).mensagem).toMatch(/só vale para um pedido do canal/);
+  });
+  test("levantar o afastamento: quem MANTEVE não levanta (outra pessoa do nível geral)", async () => {
+    const env = [{ EnvolvidoId: 8, MembroId: 77, Nome: "Fulano", UltimaDecisao: "MANTIDO_AFASTADO", NDecisoes: 1, UltimoDecisorId: 1001 }];
+    quando(/WHERE i\.IncidenteId = @id/, [{ IncidenteId: 1, Protocolo: "PRO-2026-A", Nivel: "ALEGACAO", Origem: "MEMBRO", CongregacaoNome: "Central", Status: "ABERTO", ExigeComunicacao: true }]);
+    quando(/FROM IncidenteEnvolvidos e LEFT JOIN MembroReferencia m/, env);
+    quando(/SELECT MembroId, Nome, Email FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 77, Nome: "Fulano", Email: "f@e.org" }]);
+    const obs = "As autoridades arquivaram o caso; o Comitê levanta o afastamento.";
+    const mesmo = await db.decidirCautelar(pool, { incidenteId: 1, envolvidoId: 8, dados: { decisao: "LIBERADO", observacao: obs }, ver: geral });
+    expect(mesmo.mensagem).toMatch(/outro membro/);
+    expect(escritas()).toHaveLength(0);
+    const outro = await db.decidirCautelar(pool, { incidenteId: 1, envolvidoId: 8, dados: { decisao: "LIBERADO", observacao: obs }, ver: { membroId: 1002, geral: true, podeVerCongregacao: () => true } });
+    expect(outro.sucesso).toBe(true);
+  });
+  test("comunicação registrada DEPOIS do prazo conta como fora do prazo, mesmo que a hora declarada seja anterior", async () => {
+    quando(/WHERE i\.IncidenteId = @id/, [{ IncidenteId: 1, Protocolo: "PRO-2026-A", Nivel: "ALEGACAO", Origem: "MEMBRO", CongregacaoNome: "Central", Status: "ABERTO", ExigeComunicacao: true, ConhecidoEm: new Date("2026-10-09T10:00:00.000Z"), PrazoNotificacaoEm: new Date("2026-10-10T10:00:00.000Z") }]);
+    quando(/FROM IncidenteEnvolvidos e LEFT JOIN MembroReferencia m/, []);
+    quando(/FROM AnexosGenericos WHERE Tabela = 'IncidentesProtecao'/, [{ n: 0 }]);
+    quando(/INSERT INTO IncidenteComunicacoes/, [], 1);
+    const r = await db.registrarComunicacao(pool, { incidenteId: 1, dados: { orgao: "CONSELHO_TUTELAR", forma: "TELEFONE", comunicadoEm: "2026-10-10T09:00:00.000Z", protocoloExterno: "CT-2026/77" }, ver: geral, agora: new Date("2026-10-10T20:00:00.000Z") });
+    expect(r.foraDoPrazo).toBe(true);
+    expect(escritas().find((c) => /INSERT INTO IncidenteComunicacoes/.test(c.sql)).inputs.fp).toBe(1);
+  });
+  test("o padrão: o envolvido não o vê nem o recebe; o resumo diário junta vencidas e sem comprovante; o reenvio de e-mail só pega o que passou de 10 minutos", async () => {
+    quando(/FROM IncidentesProtecao i WHERE i\.Nivel IN \('QUASE_ACIDENTE', 'QUEBRA_POLITICA'\)/, [1, 2, 3].map((id) => ({ IncidenteId: id, Nivel: "QUEBRA_POLITICA", EquipeId: 4, DataOcorrencia: new Date("2026-10-01"), EnvolvidoMembroId: id === 3 ? 1001 : 55 })));
+    quando(/FROM EscalasEquipes q JOIN Congregacoes c/, [{ EquipeId: 4, Nome: "Recepção", CongregacaoNome: "Central" }]);
+    quando(/SELECT MembroId, Nome FROM MembroReferencia$/, [{ MembroId: 55, Nome: "Fulano" }, { MembroId: 1001, Nome: "Presidente" }]);
+    expect(await db.padroes(pool, { hoje: "2026-10-09" })).toHaveLength(1);                                   // com todos os registros, o padrão da equipe existe
+    expect(await db.padroes(pool, { hoje: "2026-10-09", verMembroId: 1001 })).toHaveLength(0);                 // o Presidente, envolvido em um deles, não o vê (sem os registros dele restam 2)
+    expect(await db.padroes(pool, { hoje: "2026-10-09", verMembroId: 1002 })).toHaveLength(1);
+    const fatos = await db.detectarPadroes(pool, { hoje: "2026-10-09" });
+    expect(fatos).toHaveLength(1);
+    expect(fatos[0].destinatarios.map((d) => d.membroId)).toEqual([1002]);        // o Presidente (envolvido em um dos registros do padrão) não recebe o aviso do padrão
   });
 });
 

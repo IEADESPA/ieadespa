@@ -33,6 +33,9 @@ describe("o relógio das 24 horas", () => {
     expect(em(-5).codigo).toBe("VENCIDO_0");
     expect(em(-6).codigo).toBe("VENCIDO_1");
     expect(em(-13).codigo).toBe("VENCIDO_2");
+    expect(em(-24).codigo).toBe("VENCIDO_4");
+    expect(em(-30)).toBeNull();                 // depois de 5 avisos vencidos o caso não gera mais aviso próprio (o resumo diário assume)
+    expect(em(-5000)).toBeNull();
     // a referência é um INT por incidente × etapa e não colide entre incidentes
     const refs = new Set([1, 2, 3].flatMap((i) => [1, 2, 3, 4].map((b) => pm.referenciaDoAviso(i, b))));
     expect(refs.size).toBe(12);
@@ -97,10 +100,18 @@ describe("comunicação externa e encerramento", () => {
     expect(pm.validarComunicacaoExterna(com({ comunicadoEm: "lixo" }), { agora: AGORA }).valido).toBe(false);
     expect(pm.validarComunicacaoExterna(com({ protocoloExterno: "<x>" }), { agora: AGORA }).valido).toBe(false);
     expect(pm.validarComunicacaoExterna(com({ referenciaArquivo: "y".repeat(201) }), { agora: AGORA }).valido).toBe(false);
+    for (const ruim of ["-", "x", "n/a", "0000", "sem protocolo"]) {
+      expect(pm.validarComunicacaoExterna(com({ protocoloExterno: ruim }), { agora: AGORA }).mensagem).toMatch(/incompleto/);
+      expect(pm.validarComunicacaoExterna(com({ referenciaArquivo: ruim }), { agora: AGORA }).mensagem).toMatch(/com clareza/);
+    }
   });
   test("comprovante = protocolo do órgão, lugar onde o papel está guardado ou arquivo anexado; fora do prazo é marcado", () => {
-    expect(pm.temComprovante({ protocoloExterno: "123" })).toBe(true);
-    expect(pm.temComprovante({ referenciaArquivo: "Pasta 4" })).toBe(true);
+    expect(pm.temComprovante({ protocoloExterno: "CT-2026/118" })).toBe(true);
+    expect(pm.temComprovante({ referenciaArquivo: "Pasta 4, ofício 12" })).toBe(true);
+    for (const vazio of ["-", "x", "0", ".", "n/a", "N/A", "sem protocolo", "teste", "0000", "xxxx", "1234", "123", "não tem", "   ", "--- ---"]) {
+      expect(pm.temComprovante({ protocoloExterno: vazio })).toBe(false);
+      expect(pm.temComprovante({ referenciaArquivo: vazio })).toBe(false);
+    }
     expect(pm.temComprovante({ temAnexo: true })).toBe(true);
     expect(pm.temComprovante({})).toBe(false);
     expect(pm.temComprovante(null)).toBe(false);
@@ -112,11 +123,15 @@ describe("comunicação externa e encerramento", () => {
     const i = { nivel: "ALEGACAO", status: "ABERTO" };
     expect(pm.podeEncerrar(i, [], []).motivos[0]).toMatch(/Falta registrar a comunicação/);
     expect(pm.podeEncerrar(i, [{ orgao: "CONSELHO_TUTELAR" }], []).motivos[0]).toMatch(/falta o comprovante/);
-    expect(pm.podeEncerrar(i, [{ protocoloExterno: "1" }], [{ membroId: 9, nivelAlegacao: true, decisao: null }]).motivos[0]).toMatch(/Comitê decidir/);
-    expect(pm.podeEncerrar(i, [{ protocoloExterno: "1" }], [{ membroId: 9, nivelAlegacao: true, decisao: "MANTIDO_AFASTADO" }]).ok).toBe(true);
-    expect(pm.podeEncerrar(i, [{ protocoloExterno: "1" }], [{ membroId: 9, nivelAlegacao: true, decisao: "LIBERADO" }]).ok).toBe(true);
+    expect(pm.podeEncerrar(i, [{ protocoloExterno: "-" }], []).motivos[0]).toMatch(/falta o comprovante/);        // "-" não é comprovante
+    expect(pm.podeEncerrar(i, [{ protocoloExterno: "CT-001" }], [{ membroId: 9, nivelAlegacao: true, decisao: null }]).motivos[0]).toMatch(/Comitê decidir/);
+    expect(pm.podeEncerrar(i, [{ protocoloExterno: "CT-001" }], [{ membroId: 9, nivelAlegacao: true, decisao: "MANTIDO_AFASTADO" }]).ok).toBe(true);
+    expect(pm.podeEncerrar(i, [{ protocoloExterno: "CT-001" }], [{ membroId: 9, nivelAlegacao: true, decisao: "LIBERADO" }]).ok).toBe(true);
     expect(pm.podeEncerrar(i, [{ temAnexo: true }], []).ok).toBe(true);                                        // o arquivo anexado ao incidente vale como comprovante
-    expect(pm.podeEncerrar(i, [{ protocoloExterno: "1" }], [{ membroId: null, nivelAlegacao: true, decisao: null }]).ok).toBe(true);       // envolvido que não é do cadastro não tem afastamento
+    expect(pm.podeEncerrar(i, [{ protocoloExterno: "CT-001" }], [{ membroId: null, nivelAlegacao: true, decisao: null }]).ok).toBe(true);       // envolvido que não é do cadastro não tem afastamento
+    // pedido do canal sem conteúdo de proteção: arquiva sem comunicar — mas não se há alguém do cadastro vinculado como envolvido
+    expect(pm.podeEncerrar({ nivel: "ALEGACAO", status: "ABERTO", semConteudo: true }, [], []).ok).toBe(true);
+    expect(pm.podeEncerrar({ nivel: "ALEGACAO", status: "ABERTO", semConteudo: true }, [], [{ membroId: 9 }]).ok).toBe(false);
     expect(pm.podeEncerrar({ nivel: "QUASE_ACIDENTE", status: "ABERTO" }, [], []).ok).toBe(true);
     expect(pm.podeEncerrar({ nivel: "QUEBRA_POLITICA", status: "ENCERRADO" }, [], []).ok).toBe(false);
     expect(pm.podeEncerrar(null).ok).toBe(false);
@@ -128,6 +143,12 @@ describe("comunicação externa e encerramento", () => {
     expect(e("ENCAMINHADO_AUTORIDADE", "QUEBRA_POLITICA").mensagem).toMatch(/reclassifique/);
     expect(e("MEDIDA_INTERNA", "QUEBRA_POLITICA").valido).toBe(true);
     expect(e("OUTRO", "QUEBRA_POLITICA").valido).toBe(false);
+    // "sem conteúdo de proteção": só para o canal sem login
+    const sc = (origem, nivel = "ALEGACAO") => pm.validarEncerramento({ resultado: "SEM_CONTEUDO_DE_PROTECAO", providencia: "Texto de teste, sem nenhum relato de violência." }, { nivel, origem });
+    expect(sc("CANAL_AJUDA").valido).toBe(true);
+    expect(sc("MEMBRO").valido).toBe(false);
+    expect(sc("CANAL_AJUDA", "QUEBRA_POLITICA").valido).toBe(false);
+    expect(pm.validarEncerramento({ resultado: "SEM_CONTEUDO_DE_PROTECAO", providencia: "curto" }, { nivel: "ALEGACAO", origem: "CANAL_AJUDA" }).valido).toBe(false);
     expect(e("MEDIDA_INTERNA", "QUEBRA_POLITICA", "curto").valido).toBe(false);
     expect(e("MEDIDA_INTERNA", "QUEBRA_POLITICA", "<b>feito</b> assim assim").valido).toBe(false);
   });
@@ -201,7 +222,7 @@ describe("os textos dos avisos", () => {
     const textos = [
       pm.textoIncidenteNovo({ nivel: "ALEGACAO", prazoEm: "2026-10-10T15:00:00.000Z" }), pm.textoIncidenteNovo({ nivel: "QUEBRA_POLITICA", prazoEm: null }),
       pm.textoPrazo({ etapa: "DOZE_HORAS", prazoEm: "2026-10-10T15:00:00.000Z" }), pm.textoPrazo({ etapa: "QUATRO_HORAS", prazoEm: "2026-10-10T15:00:00.000Z" }), pm.textoPrazo({ etapa: "VENCIDO_0", prazoEm: "2026-10-10T15:00:00.000Z" }),
-      pm.textoPadrao({ tipo: "EQUIPE", total: 3 }), pm.textoComiteIncompleto({ problemas: ["falta leigo."] }), pm.textoCautelarSemDecisao({ dias: 4 }), pm.textoCautelarPessoa(), pm.textoCautelarLevantada(), pm.textoConfirmacaoDeAjuda()
+      pm.textoPadrao({ tipo: "EQUIPE", total: 3 }), pm.textoComiteIncompleto({ problemas: ["falta leigo."] }), pm.textoCautelarSemDecisao({ dias: 4 }), pm.textoCautelarPessoa(), pm.textoCautelarLevantada(), pm.textoConfirmacaoDeAjuda(), pm.textoResumoDiario({ vencidas: 2, semComprovante: 1 }), pm.textoArquivadoSemConteudo(), pm.textoRetiradaCautelar({ equipes: ["Berçário"], nEscalas: 2 })
     ];
     for (const t of textos) { expect(typeof t).toBe("string"); expect(t.length).toBeGreaterThan(20); expect(t.length).toBeLessThanOrEqual(1000); expect(t).not.toMatch(/<|>/); }
     expect(textos[0]).toMatch(/até 24 horas.*10\/10 às 12h00/);

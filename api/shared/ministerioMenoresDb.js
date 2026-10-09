@@ -397,8 +397,10 @@ async function retirarInaptosDasEscalas(pool, { hoje = hojeBrasilia(), membroId 
   for (const [id, lista] of porMembro) {
     const pessoa = await lerEmail(pool, id);
     if (pessoa) {
+      const porCautela = lista.some((x) => (x.motivos || []).includes("INCIDENTE_EM_APURACAO"));
+      const dadosTexto = { equipes: lista.map((x) => x.equipeNome), nEscalas: lista.reduce((s, x) => s + x.alocacoes.length, 0) };
       await notificarAgora(pool, { regraChave: "MENORES_RETIRADO_DA_ESCALA", destinatarios: [pessoa],
-        mensagem: mm.textoRetiradaPessoa({ equipes: lista.map((x) => x.equipeNome), nEscalas: lista.reduce((s, x) => s + x.alocacoes.length, 0) }),
+        mensagem: porCautela ? require("./protecaoMenores").textoRetiradaCautelar(dadosTexto) : mm.textoRetiradaPessoa(dadosTexto),
         referenciaId: lista[0].retiradaId, referenciaTabela: "MinisterioMenoresRetiradas", limiteDia: AVISOS_AO_VOLUNTARIO_POR_DIA, deps });
     }
     for (const f of lista) {
@@ -469,8 +471,9 @@ async function equipesSemMarcaQueParecemInfantis(pool, { congregacaoIds = null }
 
 // O painel de conformidade: o campo inteiro para a Secretaria Geral, a congregação para o dirigente. `reservado` = quem é da Diretoria (vê o motivo de
 // uma pendência com ela); os demais veem só "pendência com a Diretoria".
-async function painel(pool, { congregacaoIds = null, reservado = false, hoje = hojeBrasilia() } = {}) {
-  const linhas = await linhasDoPainel(pool, { congregacaoIds, hoje });
+// `verMembroId`: quem está olhando. Se a própria linha dele tem o afastamento por incidente de proteção, ela aparece como "pendência com a Diretoria" (nem a Diretoria lê o motivo a respeito de si).
+async function painel(pool, { congregacaoIds = null, reservado = false, hoje = hojeBrasilia(), verMembroId = null } = {}) {
+  const linhas = (await linhasDoPainel(pool, { congregacaoIds, hoje })).map((l) => (verMembroId && Number(l.membroId) === Number(verMembroId) ? { ...l, aptidao: { ...l.aptidao, bloqueios: mm.bloqueiosParaAPessoa(l.aptidao.bloqueios) } } : l));
   const itens = linhas.map((l) => {
     const status = mm.statusDaLinha(l.aptidao);
     return {

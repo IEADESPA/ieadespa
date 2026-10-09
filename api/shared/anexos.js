@@ -36,6 +36,8 @@ const REGRAS = {
   // O nome do arquivo não deve citar a criança (a tela avisa).
   IncidentesProtecao: {
     permissoes: ["protecao_menores"],
+    semExclusao: true,             // o comprovante da comunicação ao Conselho Tutelar é PROVA: ninguém o apaga depois (nada se apaga nesta versão)
+    auditoriaSigilosa: true,       // a trilha de auditoria não liga o caso, a pessoa e o nome do arquivo
     alcance: async (pool, visao, registroId) => {
       const auth = require("./auth");
       const { ehGeral: geral } = require("./escopoRotas");

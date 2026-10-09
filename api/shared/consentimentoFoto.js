@@ -10,7 +10,21 @@
 // Aceita qualquer um dos dois tipos concedido (o mais recente de cada um,
 // trilha append-only) — cobre tanto quem já tinha FOTO concedido antes (fluxo
 // antigo, Secretaria) quanto quem só concedeu o DADOS_CONTATO novo.
-async function fotoConsentimentoConcedido(pool, sql, membroId) {
+//
+// v7.7 — MENOR DE 18 ANOS NÃO CONSENTE SOZINHO (LGPD art. 14, § 1º): se a pessoa tem idade CONHECIDA abaixo de 18, só vale o consentimento de IMAGEM VIGENTE do
+// responsável (MinisterioMenoresConsentimentos, shared/menoresConsentimentoDb.js::consentimentoVigente: a última linha concede, quem concedeu ainda é responsável
+// ativo). O consentimento genérico da própria pessoa (FOTO/DADOS_CONTATO) não destrava a foto de um menor. Adulto e idade desconhecida (cadastro sem data de
+// nascimento: não se presume menor) seguem exatamente como antes.
+const { hojeBrasilia } = require("./dataBrasilia");
+const vol = require("./voluntariado");
+const { consentimentoVigente } = require("./menoresConsentimentoDb");
+
+// { concedido, menor }: `menor` diz qual regra valeu, para a tela e a mensagem de recusa poderem falar com a pessoa certa (o menor ou o responsável).
+async function situacaoDoConsentimentoFoto(pool, sql, membroId, { hoje = hojeBrasilia() } = {}) {
+  const nasc = await pool.request().input("id", sql.Int, membroId).query(`SELECT DataNascimento FROM MembroReferencia WHERE MembroId = @id`);
+  const idade = vol.idadeEmAnos(nasc.recordset[0] && nasc.recordset[0].DataNascimento, hoje);
+  if (idade != null && idade < vol.MAIORIDADE) return { menor: true, concedido: await consentimentoVigente(pool, membroId, "IMAGEM", { hoje }) };
+
   const result = await pool.request().input("id", sql.Int, membroId).query(`
     SELECT c1.Tipo, c1.Concedido
     FROM ConsentimentosLGPD c1
@@ -20,7 +34,11 @@ async function fotoConsentimentoConcedido(pool, sql, membroId) {
         WHERE c2.MembroId = c1.MembroId AND c2.Tipo = c1.Tipo
       )
   `);
-  return result.recordset.some(r => r.Concedido);
+  return { menor: false, concedido: result.recordset.some(r => r.Concedido) };
 }
 
-module.exports = { fotoConsentimentoConcedido };
+async function fotoConsentimentoConcedido(pool, sql, membroId) {
+  return (await situacaoDoConsentimentoFoto(pool, sql, membroId)).concedido;
+}
+
+module.exports = { fotoConsentimentoConcedido, situacaoDoConsentimentoFoto };

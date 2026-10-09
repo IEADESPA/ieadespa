@@ -9,9 +9,18 @@
 // básico de membresia é Art. 11, II, "a", que DISPENSA consentimento).
 // Revertido: DADOS_CONTATO volta a significar só "posso usar seu telefone/
 // e-mail (e foto) pra contato" — MeusDadosLGPD não checa mais nada daqui.
+// v7.7 — revogar o consentimento FOTO (de qualquer membro, pelo titular ou pela
+// Secretaria) EXCLUI o arquivo (shared/storage.js::excluirFoto) e zera
+// MembroReferencia.FotoUrl: antes a revogação só gravava a linha e o blob ficava
+// guardado, o que contradizia o ROPA e o RIPD ("revogação exclui o arquivo").
+// Menor de 18 anos: o consentimento que vale é o do RESPONSÁVEL (rota
+// consentimento-menor); esta rota continua servindo ao titular adulto.
 const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { exigirTitularOuPermissao } = require("../shared/titular");
+const storage = require("../shared/storage");
+const vol = require("../shared/voluntariado");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 
 const TIPO_PADRAO = "DADOS_CONTATO";
 const TIPOS_CONSENTIMENTO = ["DADOS_CONTATO", "FOTO"];
@@ -25,7 +34,7 @@ module.exports = async function (context, req) {
   const { usuario, alvo } = acesso;
   const matricula = alvo;
 
-  const membro = await pool.request().input("mat", sql.Int, matricula).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @mat`);
+  const membro = await pool.request().input("mat", sql.Int, matricula).query(`SELECT MembroId, FotoUrl, DataNascimento FROM MembroReferencia WHERE MembroId = @mat`);
   if (membro.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
@@ -56,6 +65,14 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `Tipo de consentimento inválido. Use: ${TIPOS_CONSENTIMENTO.join(", ")}.` } };
       return;
     }
+    // Menor de 18 anos (idade conhecida): a foto só vale com a autorização do RESPONSÁVEL (rota consentimento-menor); registrar aqui um consentimento "da pessoa" seria sucesso sem efeito.
+    if (concedido && tipoFinal === "FOTO") {
+      const idade = vol.idadeEmAnos(membro.recordset[0].DataNascimento, hojeBrasilia());
+      if (idade != null && idade < vol.MAIORIDADE) {
+        context.res = { status: 422, headers: { "Content-Type": "application/json" }, body: { sucesso: false, mensagem: "Esta pessoa é menor de 18 anos: a foto só vale com a autorização do responsável (Ministério com Menores → autorização do responsável, ou o Meu Painel dele)." } };
+        return;
+      }
+    }
     const observacao = typeof corpo.observacao === "string" ? corpo.observacao.trim().slice(0, 300) : null;
     // Quem registrou é SEMPRE quem está na sessão (antes vinha do corpo, e qualquer um se passava por responsável legal). Se for a Secretaria registrando na ficha
     // da pessoa, fica gravado que não foi o próprio titular.
@@ -75,9 +92,24 @@ module.exports = async function (context, req) {
       usuarioId: Number(usuario.membroId), dadosDepois: { tipo: tipoFinal, concedido, registradoPelaSecretaria: !acesso.proprio }
     });
 
+    // Revogou a FOTO: o arquivo é apagado de verdade (blob) e a referência zerada. A referência é zerada ANTES, no SQL; apagar o blob é best-effort (excluirFoto nunca lança),
+    // como na exclusão LGPD. Revogar o DADOS_CONTATO (telefone/e-mail) não mexe na foto: é outro consentimento.
+    let fotoApagada = false;
+    if (!concedido && tipoFinal === "FOTO") {
+      fotoApagada = !!(membro.recordset[0] && membro.recordset[0].FotoUrl);
+      await pool.request().input("mat", sql.Int, matricula).query(`UPDATE MembroReferencia SET FotoUrl = NULL WHERE MembroId = @mat`);
+      await storage.excluirFoto(matricula);
+      if (fotoApagada) {
+        await registrarAuditoria({
+          tabela: "MembroReferencia", registroId: Number(matricula), acao: "Excluiu a foto (consentimento de foto revogado)",
+          usuarioId: Number(usuario.membroId), dadosDepois: { motivo: "REVOGACAO_FOTO", registradoPelaSecretaria: !acesso.proprio }
+        });
+      }
+    }
+
     context.res = {
       status: 200, headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: concedido ? "✅ Consentimento registrado." : "✅ Consentimento revogado." }
+      body: { sucesso: true, mensagem: concedido ? "✅ Consentimento registrado." : `✅ Consentimento revogado.${fotoApagada ? " O arquivo da foto foi apagado." : ""}`, fotoApagada }
     };
     return;
   }

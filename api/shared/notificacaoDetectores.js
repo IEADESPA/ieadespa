@@ -143,6 +143,7 @@ const eventosDb = require("./eventosDb");
 const voluntariadoDb = require("./voluntariadoDb");
 const setoresTecnicosDb = require("./setoresTecnicosDb");
 const vistoriaDb = require("./vistoriaAntecedentesDb");
+const mmDb = require("./ministerioMenoresDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -189,7 +190,18 @@ const DETECTORES = {
   // em exercício sem Termo de Vistoria de antecedentes (Art. 133 §5º, II, "a").
   SETOR_INTERDICAO_PENDENTE: { tabela: "SetoresTecnicosIntervencoes", detectar: (pool) => setoresTecnicosDb.detectarInterdicoesPendentes(pool) },
   SETOR_REMOCAO_PENDENTE: { tabela: "SetoresTecnicosIntervencoes", detectar: (pool) => setoresTecnicosDb.detectarRemocoesPendentes(pool) },
-  VISTORIA_PENDENTES: { tabela: "VistoriasAntecedentes", detectar: (pool) => vistoriaDb.detectarLiderancasSemVistoria(pool) }
+  VISTORIA_PENDENTES: { tabela: "VistoriasAntecedentes", detectar: (pool) => vistoriaDb.detectarLiderancasSemVistoria(pool) },
+  // Ministério com menores (v7.7, Lei 14.811/2024): a retirada da escala, a vaga aberta e a auto-denúncia avisam NA HORA, no ato (sem detector). Aqui ficam a escada
+  // de vencimento (60, 30 e 15 dias antes — a renovação leva dias para sair), a sala com menos de dois adultos nos próximos dias, o aviso mensal à Diretoria das
+  // certidões a renovar e a cobrança DIÁRIA da auto-denúncia sem decisão.
+  MENORES_VENCE_60: { tabela: "VoluntariosHabilitacao", detectar: (pool) => mmDb.detectarVencimentos(pool, { faixa: 60 }) },
+  MENORES_VENCE_30: { tabela: "VoluntariosHabilitacao", detectar: (pool) => mmDb.detectarVencimentos(pool, { faixa: 30 }) },
+  MENORES_VENCE_15: { tabela: "VoluntariosHabilitacao", detectar: (pool) => mmDb.detectarVencimentos(pool, { faixa: 15 }) },
+  MENORES_SALA_SEM_SEGUNDO_ADULTO: { tabela: "EscalasServicos", detectar: (pool) => mmDb.detectarSalasSemSegundoAdulto(pool) },
+  MENORES_VISTORIAS_A_RENOVAR: { tabela: "VistoriasAntecedentes", detectar: (pool) => mmDb.detectarVistoriasARenovar(pool) },
+  MENORES_AUTODENUNCIA_PENDENTE: { tabela: "MinisterioMenoresAutoDenuncias", detectar: (pool) => mmDb.detectarAutoDenunciaPendente(pool) },
+  // Canal com menores fora da regra (dois administradores adultos habilitados e responsável com acesso): um aviso por mês por canal (canaisDb.detectarCanaisComMenoresIrregulares).
+  MENORES_CANAL_IRREGULAR: { tabela: "CanaisOficiaisComunicacao", detectar: (pool) => canaisDb.detectarCanaisComMenoresIrregulares(pool) }
 };
 
 module.exports = { DETECTORES };

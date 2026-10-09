@@ -24,10 +24,12 @@ const { registrarAuditoria } = require("./auditoria");
 const trilhas = require("./trilhas");
 const voluntariado = require("./voluntariado");
 
-// Ordem fixa e obrigatória da esteira. Antecedentes/Treinamento são
-// carimbados por atestação manual até a v7.7 existir de verdade (upload de
-// certidão com validade de 180 dias, trilha de formação) — mesmo padrão da
-// v086 (esteira de batismo) com `DiscipuladoConcluidoManual` até a v6.9.
+// Ordem fixa e obrigatória da esteira. Desde a v7.7 os Antecedentes só fecham
+// com um Termo de Vistoria válido (v7.6: duas certidões criminais, 180 dias da
+// emissão) e o Treinamento segue a trilha de formação (v6.9) quando há requisito
+// configurado — senão continua a atestação de quem habilita, agora com validade.
+// Se a pessoa pode ou não servir com menores HOJE é decidido por
+// shared/ministerioMenores.js (esteira + certidões em dia + treinamento + política...).
 const ETAPAS = ["FICHA_INSCRICAO", "REFERENCIAS", "ENTREVISTA", "ANTECEDENTES", "TREINAMENTO", "TERMO"];
 
 const CAMPO_ETAPA = {
@@ -43,8 +45,8 @@ const TITULO_ETAPA = {
   FICHA_INSCRICAO: "Ficha de inscrição",
   REFERENCIAS: "Referências internas",
   ENTREVISTA: "Entrevista registrada",
-  ANTECEDENTES: "Antecedentes (atestação manual — verificação real na v7.7)",
-  TREINAMENTO: "Treinamento (atestação manual — verificação real na v7.7)",
+  ANTECEDENTES: "Antecedentes (certidões conferidas pela Diretoria — Termo de Vistoria)",
+  TREINAMENTO: "Treinamento de proteção de crianças e adolescentes",
   TERMO: "Termo assinado (Lei 9.608/98)"
 };
 
@@ -191,6 +193,7 @@ function mapearHabilitacao(row) {
     etapaAntecedentesEm: row.EtapaAntecedentesEm,
     etapaTreinamentoEm: row.EtapaTreinamentoEm,
     etapaTermoAssinadoEm: row.EtapaTermoAssinadoEm,
+    fichaAtualizadaEm: row.FichaAtualizadaEm,
     aptoDesde: row.AptoDesde,
     aptoValidoAte: row.AptoValidoAte,
     inaptoMotivo: row.InaptoMotivo,
@@ -268,6 +271,17 @@ async function concluirEtapa(pool, { habilitacaoId, etapa, registradoPorMembroId
   const validacao = podeConcluirEtapa(hab, etapa);
   if (!validacao.permitido) return { sucesso: false, mensagem: validacao.mensagem };
 
+  // v7.7 — os antecedentes deixam de ser carimbo manual: a etapa só fecha com um Termo de Vistoria (v7.6) que valha — as duas certidões criminais, emitidas há
+  // menos de 180 dias, sem restrição. Quem tem menos de 18 anos não tem certidão de antecedentes: fica dispensado. Carregado sob demanda para não criar ciclo.
+  if (etapa === "ANTECEDENTES") {
+    const ant = await require("./ministerioMenoresDb").antecedentesDe(pool, hab.membroId);
+    const faltam = { AUSENTE: "A Diretoria Executiva ainda não conferiu as certidões desta pessoa: peça que registre o Termo de Vistoria em Vistoria de Antecedentes.",
+      INCOMPLETO: "O Termo de Vistoria desta pessoa não tem as duas certidões criminais (federal e estadual): a Diretoria precisa registrar a que falta.",
+      COM_RESTRICAO: "A vistoria desta pessoa tem uma pendência com a Diretoria Executiva.",
+      VENCIDO: "As certidões desta pessoa venceram (valem 180 dias da emissão): a Diretoria precisa registrar certidões novas." };
+    if (ant.situacao !== "VIGENTE" && ant.situacao !== "DISPENSADO") return { sucesso: false, mensagem: faltam[ant.situacao] || faltam.AUSENTE };
+  }
+
   // v6.9 — o treinamento deixa de ser só "atestação manual" quando há uma
   // trilha exigida (TrilhaRequisitos, contexto HABILITACAO_TREINAMENTO):
   // a etapa só é carimbada se a formação estiver vigente. Sem requisito
@@ -344,6 +358,8 @@ async function marcarInapto(pool, { habilitacaoId, motivo, registradoPorMembroId
     tabela: "VoluntariosHabilitacao", registroId: habilitacaoId, acao: "MARCADO_INAPTO",
     usuarioId: registradoPorMembroId, dadosAntes: null, dadosDepois: { motivoTamanho: String(motivo).length }
   });
+  // v7.7 — inapto sai na hora das escalas futuras das equipes com menores (não espera a rotina diária). Falhar aqui não desfaz a marcação: a rotina repete.
+  try { await require("./ministerioMenoresDb").retirarInaptosDasEscalas(pool, { membroId: hab.membroId }); } catch (e) { /* a rotina diária refaz */ }
   return { sucesso: true, mensagem: "✅ Voluntário marcado como inapto." };
 }
 
@@ -403,7 +419,7 @@ async function atualizarContatoComMenores(pool, equipeId, contatoComMenores) {
 
 async function listarEquipesComFlag(pool, congregacaoId) {
   const result = await pool.request().input("congregacaoId", sql.Int, congregacaoId).query(`
-    SELECT EquipeId AS equipeId, Nome AS nome, ContatoComMenores AS contatoComMenores
+    SELECT EquipeId AS equipeId, Nome AS nome, ContatoComMenores AS contatoComMenores, FaixaEtariaMenores AS faixaEtariaMenores
     FROM EscalasEquipes WHERE CongregacaoId = @congregacaoId ORDER BY Nome
   `);
   return result.recordset;
@@ -461,7 +477,7 @@ module.exports = {
   calcularValidadeApto, calcularStatusHabilitacao,
   dataElegibilidadeSeisMeses, atendeRegraSeisMeses, podeServirComMenores,
   validarDesligamento,
-  buscarHabilitacaoPorMembro, buscarHabilitacaoPorId, buscarOuCriarHabilitacao, listarHabilitacoesPorCongregacao,
+  mapearHabilitacao, buscarHabilitacaoPorMembro, buscarHabilitacaoPorId, buscarOuCriarHabilitacao, listarHabilitacoesPorCongregacao,
   concluirEtapa, marcarInapto, reabilitar, buscarDadosElegibilidade,
   atualizarContatoComMenores, listarEquipesComFlag,
   registrarDesligamento, listarDesligamentosPorMembro

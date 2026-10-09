@@ -63,6 +63,8 @@ const AJUDA_POR_ABA = {
   "meupainel:eventos": "Se você organiza um evento (propôs no Calendário ou foi designado), registre aqui os convidados externos e o Caixa Flutuante do evento. Inscrição, lista de espera, check-in e certificado ficam no site — use os links do cartão.",
   setores: "Os 20 Setores Técnicos do Regimento (Art. 48 a 52): quem serve em cada um (candidatura, aprovação e Termo de Adesão) e os atos cautelares — a interdição de templo em risco, que vale na hora e a Diretoria ratifica ou revoga, e o pedido de remoção de postagem nas redes oficiais. Voluntariado profissional: ninguém recebe salário nem honorário.",
   "meupainel:setores": "Sua situação nos Setores Técnicos: candidate-se a um setor da sua profissão, leia e aceite o Termo de Adesão quando for aprovado(a) e saia quando quiser, sem penalidade. Quem serve em Engenharia ou Segurança pode interditar um templo em risco; quem serve em Comunicação pode pedir a remoção de uma postagem. O líder da congregação vê aqui os atos dela.",
+  menores: "Ministério com menores (Lei 14.811/2024): quem serve com crianças e adolescentes precisa estar habilitado hoje. O painel mostra, por congregação, quem está apto, quem tem algo vencendo e quem está bloqueado e por quê; as ferramentas registram o aceite da política e a autorização do responsável em ficha de papel, confirmam a ficha cadastral e definem a faixa etária da equipe. A Diretoria também decide sobre as comunicações dos voluntários que respondem a processo criminal (Regimento Art. 133 §5º, V).",
+  "meupainel:menores": "Se você serve (ou quer servir) com crianças e adolescentes: veja se está apto e o que falta, aceite a política de comunicação, confirme a sua ficha a cada 6 meses e, se responde a inquérito ou processo criminal, comunique a Diretoria (é um dever e não é punição). Se você é pai, mãe ou tutor de um menor, autorize ou revogue aqui o uso da imagem e da saúde dele(a) no crachá.",
   vistoria: "Termo de Vistoria de antecedentes (Art. 133 §5º), só da Diretoria Executiva e do Conselho de Ética: veja quem falta, lavre o Termo e solicite certidões. A certidão nunca sobe ao sistema: o navegador calcula o código (hash) do arquivo e só ele é enviado.",
   protecaodedados: "Solicitações de titular (LGPD), políticas de retenção e o Registro de Operações de Tratamento (ROPA/RIPD)."
 };
@@ -407,6 +409,7 @@ function sessaoDeLiderancaNaTela() {
   return !!(authToken && (authNivel || (authPermissoes && authPermissoes.length)));
 }
 function limparSessao() {
+  ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
   authToken = null;
   authNome = null;
   authPermissoes = [];
@@ -1223,7 +1226,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "eventos", "setores", "vistoria"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "eventos", "setores", "vistoria"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1248,6 +1251,10 @@ const ABA_PERMISSOES_ALT = {
   // quem administra a grade nem sempre é quem toca o processo de
   // referência/entrevista/desligamento).
   habilitacao: ["habilitacao_voluntarios"],
+  // v7.7 — Ministério com Menores (Lei 14.811/2024): a MESMA permissão da Habilitação, no escopo da congregação (painel e ferramentas), mais a da Vistoria, para a Diretoria e o
+  // Conselho de Ética chegarem às comunicações dos voluntários (o campo inteiro é só do nível geral; o servidor confere cada ação e a tela mostra só as seções que ele libera).
+  // A situação de quem serve com menores fica em Meu Painel → Ministério com menores, aberta a qualquer login.
+  menores: ["habilitacao_voluntarios", "vistoria_antecedentes"],
   // v5.9 — permissão própria, nunca concedida por padrão (dado mais
   // sensível do sistema: situação socioeconômica de família assistida).
   assistenciasocial: ["assistencia_social"],
@@ -1382,7 +1389,7 @@ const MODULOS = {
   disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
   departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
   escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },
-  habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao"] },
+  habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao", "menores"] },
   assistenciasocial: { titulo: "Assistência Social", icone: "🤝", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
   ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "📖", abaEntrada: "ebd", abas: ["ebd"] },
   conquistas: { titulo: "Conquistas e Gamificação", icone: "🏆", abaEntrada: "conquistas", abas: ["conquistas"] },
@@ -1442,11 +1449,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
+  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1466,6 +1473,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "contribuicoes") { carregarOpcoesCategoriasEntrada(); prepararFormAutolancamento(); carregarMinhasContribuicoes(); }
   if (sub === "minhasescalas") { carregarMinhasEscalasAcao(); carregarMinhasIndisponibilidadesAcao(); volCarregarMinhasEscalasAcao(); }
   if (sub === "minhahabilitacao") carregarMinhaHabilitacaoAcao();
+  if (sub === "menores") carregarMeuPainelMenoresAcao();
   if (sub === "minhasconquistas") carregarMinhasConquistasAcao();
   if (sub === "minhaformacao") carregarMinhaFormacaoAcao();
   if (sub === "agenda") carregarMinhaAgendaCalAcao();

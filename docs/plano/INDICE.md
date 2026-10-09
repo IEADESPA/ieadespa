@@ -152,7 +152,7 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 18 bloco(s) · itens 39/87 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 18 bloco(s) · itens 49/87 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -163,7 +163,7 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | v7.5 | [Escalas e voluntariado](fase-7-saude-eventos-e-comunicacao.md#v75--escalas-e-voluntariado) | ✅ 4/4 |
 | 🔒 7-A | [antes de avançar para a v7.6](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-a--antes-de-avançar-para-a-v76) | ✅ 1/1 |
 | v7.6 | [Setores Técnicos (voluntariado profissional) *(gap da varredura)*](fase-7-saude-eventos-e-comunicacao.md#v76--setores-técnicos-voluntariado-profissional-gap-da-varredura) | ✅ 3/3 |
-| v7.7 | [Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*](fase-7-saude-eventos-e-comunicacao.md#v77--habilitação-para-ministério-com-menores-7ª-rodada--obrigação-legal-vigente) | ⬜ 0/10 |
+| v7.7 | [Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*](fase-7-saude-eventos-e-comunicacao.md#v77--habilitação-para-ministério-com-menores-7ª-rodada--obrigação-legal-vigente) | ✅ 10/10 |
 | v7.8 | [Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*](fase-7-saude-eventos-e-comunicacao.md#v78--incidentes-notificação-obrigatória-e-escuta-protegida-7ª-rodada--obrigação-legal) | ⬜ 0/7 |
 | v7.9 | [CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)](fase-7-saude-eventos-e-comunicacao.md#v79--cli-comparecimento-obrigatório-e-perda-de-assento-por-faltas-art-27) | ⬜ 0/3 |
 | v7.10 | [Check-in infantil com cadeia de custódia *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v710--check-in-infantil-com-cadeia-de-custódia-7ª-rodada) | ⬜ 0/6 |

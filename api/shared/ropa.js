@@ -28,9 +28,9 @@ const REGISTROS_TRATAMENTO = [
     finalidade: "Identificação visual (crachá, cadastro com foto)",
     titulares: "Membros",
     categoriasDados: ["Imagem"],
-    baseLegal: "LGPD Art. 7º, I — consentimento (ConsentimentosLGPD, Tipo='FOTO'/'DADOS_CONTATO')",
+    baseLegal: "LGPD Art. 7º, I — consentimento (ConsentimentosLGPD, Tipo='FOTO'/'DADOS_CONTATO'). Menor de 18 anos: só vale o consentimento específico do responsável legal (LGPD Art. 14, § 1º; MinisterioMenoresConsentimentos, finalidade IMAGEM) — o consentimento genérico da própria criança ou adolescente não basta (v7.7)",
     tabelasEnvolvidas: ["MembroReferencia"],
-    retencao: "Enquanto o consentimento não for revogado — revogação exclui o arquivo (shared/storage.js::excluirFoto)"
+    retencao: "Enquanto o consentimento não for revogado — revogação (do titular, da Secretaria ou do responsável do menor) exclui o arquivo na hora (shared/storage.js::excluirFoto) e zera a referência no cadastro"
   },
   {
     chave: "DISCIPLINA",
@@ -148,6 +148,33 @@ const REGISTROS_TRATAMENTO = [
     baseLegal: "LGPD Art. 7º, II — obrigação legal (ECA art. 59-A, incluído pela Lei 14.811/2024, para quem atua com crianças e adolescentes); Art. 7º, IX — legítimo interesse em proteger o rebanho (Regimento Art. 133 §5º). O consentimento prévio de todo voluntário consta do Termo de Adesão (§5º, III). Acesso restrito à Diretoria Executiva e ao Conselho de Ética (§5º, IV, a).",
     tabelasEnvolvidas: ["VistoriasAntecedentes", "VistoriasDocumentos", "VistoriasAnulacoes"],
     retencao: "O Termo de Vistoria é arquivo interno obrigatório da Igreja (Art. 133 §5º, IV, c) e não se altera nem se apaga (gatilho no banco); por conter só o hash, é dado mínimo. O Regimento manda arquivar e não fixa prazo: o termo fica sem prazo final de descarte; o termo lavrado por engano é ANULADO por registro à parte (não se apaga). O titular recebe o termo, a pedido, em Meus Dados."
+  },
+  {
+    chave: "CONSENTIMENTO_MENOR",
+    finalidade: "Registrar o consentimento específico e em destaque do responsável legal para tratar a imagem do menor (foto no cadastro, no crachá e em materiais internos) e a alergia ou condição de saúde que ele escolha informar para o crachá do check-in infantil — versionado e revogável (LGPD Art. 14, § 1º, e Art. 11, I) — v7.7",
+    titulares: "Crianças e adolescentes (menores de 18 anos) e os responsáveis legais que autorizam (pai, mãe, tutor ou outro responsável legal cadastrado pela Secretaria com o documento conferido), e quem registra a ficha assinada",
+    categoriasDados: ["Matrícula do menor e do responsável, a finalidade (imagem ou saúde no crachá), se autorizou ou revogou, a forma (autorização digital ou ficha assinada) e quando", "Versão e hash do texto que o responsável viu e aceitou (a prova do que foi autorizado)", "Autorização digital: o ENDEREÇO IP e a cadeia dos cabeçalhos de origem da conexão do RESPONSÁVEL, a data e a hora", "Ficha assinada: a referência de onde está o documento (número, pasta ou arquivo) e a matrícula de quem a registrou na Secretaria", "Esta tabela guarda só o CONSENTIMENTO, nunca o dado de saúde (o dado — alergia, condição médica — só chega com o check-in infantil, v7.10); a foto fica no Blob Storage e é apagada na revogação"],
+    baseLegal: "LGPD Art. 14, § 1º — consentimento específico e em destaque de ao menos um dos pais ou do responsável legal, para dado de criança e de adolescente; Art. 11, I — consentimento específico e destacado do responsável, para o dado sensível de saúde; Art. 8º, § 5º — revogável a qualquer momento. É opcional e NÃO condiciona a participação do menor em nenhuma atividade. O IP do aceite é registro da prova (Regimento Art. 133 § 8º, II), informado ao responsável no próprio texto.",
+    tabelasEnvolvidas: ["MinisterioMenoresConsentimentos", "VoluntariadoResponsaveis"],
+    retencao: "Cada concessão e cada revogação é uma linha de acréscimo, sem prazo final: é a prova do consentimento e não se altera nem se apaga (gatilho no banco). IP e cabeçalhos do aceite digital: anonimizados 5 anos depois do registro (parâmetro VOLUNTARIADO_IP_RETENCAO_DIAS; rotina diária; LGPD Art. 16). Revogar a imagem apaga o arquivo da foto na hora (shared/storage.js::excluirFoto). A autorização deixa de valer sozinha quando quem a deu deixa de ser responsável cadastrado do menor ou quando o menor completa 18 anos (calculado na leitura). O titular e o responsável recebem tudo isto, a pedido, em Meus Dados."
+  },
+  {
+    chave: "MINISTERIO_COM_MENORES",
+    finalidade: "Cumprir a Lei 14.811/2024 (art. 59-A do ECA): conferir, a cada escala, convite, troca e publicação, se quem serve com crianças e adolescentes está habilitado hoje (certidões de antecedentes em dia, treinamento de proteção, ficha confirmada, política de comunicação aceita e 6 meses de comunhão), garantir dois adultos habilitados e a proporção por faixa etária em cada sala, e retirar da escala quem deixou de estar habilitado.",
+    titulares: "Voluntários que servem (ou pretendem servir) com crianças e adolescentes; líderes de equipe e a secretaria que habilita; a Diretoria Executiva e o Conselho de Ética, que conferem as certidões",
+    categoriasDados: ["Matrícula, equipes com menores onde serve e escalas futuras", "Aceite da política de comunicação com menores: versão, hash do texto, forma, IP e cabeçalhos da conexão, data e hora (ou a referência da ficha assinada)", "Data da última confirmação da ficha cadastral", "Retiradas automáticas da escala: equipe, quantas escalas, data e os códigos dos motivos (nunca texto livre)", "Consulta ao cadastro nacional de condenados por crimes contra menores (só se um dia existir): fonte, resultado e data", "Número de crianças previstas por sala e serviço (dado do serviço, sem identificar criança)"],
+    baseLegal: "LGPD Art. 7º, II — obrigação legal (ECA art. 59-A, incluído pela Lei 14.811/2024: entidades que atuam com crianças e adolescentes devem exigir e manter atualizados ficha cadastral e certidão de antecedentes de colaboradores e voluntários, com atualização semestral); Art. 7º, IX — legítimo interesse na proteção de crianças e adolescentes; Art. 14 — melhor interesse da criança.",
+    tabelasEnvolvidas: ["MinisterioMenoresPoliticaAceites", "MinisterioMenoresSalas", "MinisterioMenoresRetiradas", "MinisterioMenoresCadastroNacional", "VoluntariosHabilitacao"],
+    retencao: "O aceite da política e a retirada da escala são prova do dever cumprido: ficam enquanto a pessoa servir, sem prazo final, e não se alteram nem se apagam (gatilho no banco). IP e cabeçalhos do aceite: anonimizados 5 anos depois, na rotina diária (LGPD art. 16). A validade das certidões é CALCULADA na leitura pela data de emissão guardada no Termo de Vistoria (180 dias): nada disso vira dado novo. A retirada da escala diz só os códigos dos motivos, e quem gere a congregação vê apenas 'pendência com a Diretoria' quando o motivo é reservado."
+  },
+  {
+    chave: "AUTO_DENUNCIA",
+    finalidade: "Receber o aviso do voluntário ou da liderança que passa a responder a inquérito ou processo criminal (Regimento Art. 133 §5º, V — a omissão é falta grave), avisar a Diretoria Executiva na hora, suspender por cautela o contato dele com menores até a decisão e registrar a decisão da Diretoria (manter ou afastar preventivamente) e, depois, a liberação do afastamento.",
+    titulares: "Voluntários e lideranças que comunicam; a Diretoria Executiva e o Conselho de Ética, que decidem",
+    categoriasDados: ["Matrícula, o tipo (inquérito policial, processo criminal ou outro procedimento criminal) e a data em que a pessoa soube — nenhum texto livre, nenhum número de processo", "A decisão da Diretoria, quem decidiu, quando e o motivo curto (sem nomes de terceiros)", "A liberação do afastamento, se houve"],
+    baseLegal: "LGPD Art. 7º, II — obrigação legal (ECA art. 59-A, Lei 14.811/2024: proteção de crianças e adolescentes); Art. 7º, IX — legítimo interesse (Regimento Art. 133 §5º, V); Art. 14 — melhor interesse da criança. É dado sobre processo criminal: o acesso é restrito à Diretoria Executiva e ao Conselho de Ética, a auditoria não leva o tipo nem a data, e o aviso não leva o conteúdo.",
+    tabelasEnvolvidas: ["MinisterioMenoresAutoDenuncias"],
+    retencao: "A comunicação e a decisão são registro documental (gatilho no banco: não se apagam nem se alteram; a decisão entra uma vez e a liberação, uma vez): guardadas enquanto a pessoa servir e por 5 anos depois, como prova do dever cumprido. A pessoa vê tudo isso em Meus Dados."
   },
   {
     chave: "AUDITORIA",

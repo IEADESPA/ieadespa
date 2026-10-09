@@ -2281,31 +2281,133 @@ igreja; aqui o dever é **externo e legal** — comunicar ao Estado. Tratar susp
 de maus-tratos como assunto interno é exatamente o erro que gerou as maiores
 crises institucionais em denominações no mundo inteiro.
 
-- [ ] **Notificação obrigatória ao Conselho Tutelar** diante de **suspeita** (não
+- [x] **Notificação obrigatória ao Conselho Tutelar** diante de **suspeita** (não
       exige certeza, não cabe à igreja investigar): ECA **Art. 13**, com **multa
       de 3 a 20 salários de referência pela omissão, dobrada na reincidência**
       (ECA Art. 245). Fluxo com **SLA curto (24h)**, relógio regressivo visível ao
       Dirigente e à Secretaria Geral, campos de órgão notificado (Conselho
       Tutelar/MP/Polícia), protocolo e anexo do ofício.
-- [ ] **Encerramento bloqueado sem comprovante da comunicação externa** — o caso
+      *(Registrar uma suspeita de violência abre o relógio de **24 horas** contados do instante em
+      que a Igreja ficou sabendo (padrão: agora; quem registra pode informar "soubemos há N horas", até
+      30 dias). O prazo é **calculado na leitura** — vence mesmo que nenhuma rotina rode — e a fila mostra
+      o relógio regressivo (verde, amarelo abaixo de 12 h, vermelho abaixo de 4 h, "vencido há…"). O
+      aviso do incidente novo sai **na hora** (Diretoria, Comitê e o Dirigente DA congregação; nunca o
+      envolvido), e uma rotina **horária** (7h às 22h de Brasília) avisa com 12 h, com 4 h e, vencido, a
+      cada 6 h (depois de 12 h vencido o aviso sobe só para a Diretoria e o Comitê). Cada comunicação
+      registra órgão (Conselho Tutelar, Ministério Público, Polícia, Disque 100, outro), forma (ofício,
+      pessoalmente, telefone, e-mail, sistema do órgão), data e hora, **protocolo do órgão**, onde o
+      comprovante está guardado e se foi **dentro do prazo**; o ofício pode ser anexado ao incidente.
+      Comunicar fora do prazo vale, mas fica marcado e entra no relatório.)*
+- [x] **Encerramento bloqueado sem comprovante da comunicação externa** — o caso
       não fecha no sistema enquanto não houver prova de que o Estado foi avisado.
-- [ ] **Escuta protegida** (Lei 13.431/2017): a igreja **acolhe e encaminha, não
+      *(A suspeita de violência só encerra com pelo menos uma comunicação **com comprovante** (protocolo
+      do órgão, lugar onde o papel está guardado ou arquivo anexado) **e** a decisão do Comitê sobre o
+      afastamento de cada envolvido que é membro; e só como "encaminhado às autoridades": a apuração não é
+      da Igreja. Uma suspeita **nunca é rebaixada** (só se sobe de nível). Quebra de política e
+      quase-acidente encerram com a providência tomada.)*
+- [x] **Escuta protegida** (Lei 13.431/2017): a igreja **acolhe e encaminha, não
       inquire**. O formulário não tem campo de "inquirição"; exibe o roteiro
       correto (acolher → registrar o relato espontâneo, na íntegra e sem
       interpretação → encaminhar) e restringe a leitura do relato a papéis
       específicos. Repetir a entrevista é revitimizar — e o sistema tem que
       ajudar a não fazer isso.
-- [ ] **Afastamento cautelar automático** do envolvido de toda escala com menores
+      *(O formulário só tem fatos (quando, onde, o que aconteceu), quem contou e o **relato como foi
+      contado**, e mostra o roteiro "acolher / registrar como foi dito / encaminhar" e o "**não faça**"
+      (perguntas para "tirar a verdade", chamar o apontado, avisar a família dele, contar a terceiros). O
+      relato fica em **tabela à parte, só de acréscimo**, **um por incidente** (a conversa não se repete;
+      informação nova e espontânea entra como **adendo**, no máximo 5), e só é lido pela liderança de
+      proteção, com a **confirmação reforçada** (chave de acesso ou código por e-mail) — **cada leitura
+      fica registrada** (quem e quando, nunca o conteúdo) e a Diretoria vê quem leu.)*
+- [x] **Afastamento cautelar automático** do envolvido de toda escala com menores
       no momento do registro — medida protetiva, **não** punição antecipada, e
       registrada como tal (a v2.6/`MedidasCautelares` já tem o mecanismo).
-- [ ] Registro de incidentes em três níveis: quase-acidente, quebra de política e
+      *(Entra na **mesma aptidão da v7.7** como bloqueio reservado `INCIDENTE_EM_APURACAO`: vale em
+      todos os caminhos de escala, convite, troca, rodízio e designação de administrador de canal com
+      menores, e o envolvido sai das escalas futuras **na hora** do registro. É **calculado**: envolvido
+      (membro) de suspeita de violência cuja **última decisão** do Comitê não é "levantado"; sem decisão,
+      continua (o sistema não rebaixa sozinho) e, passados 3 dias, o Comitê é cobrado toda semana. Ninguém
+      decide sobre o próprio afastamento. Para a gestão da congregação vira "pendência com a Diretoria"; para
+      a **própria pessoa** o texto, o código e o rótulo são genéricos ("por cautela, o seu contato com
+      crianças está suspenso, por decisão da Diretoria; isso não é uma condenação") — nada diz que é um
+      incidente. Reaproveitei o mecanismo da v7.7 e não o de `MedidasCautelares` (que é patrimonial, Art. 45).)*
+- [x] Registro de incidentes em três níveis: quase-acidente, quebra de política e
       alegação — porque o padrão internacional mostra que o que antecede o caso
       grave é a sequência de pequenas quebras que ninguém registrou.
-- [ ] Comitê de revisão com participação **não-clerical** e relatório anual de
+      *(Qualquer pessoa logada, inclusive por PIN, registra; quem registra vê só a situação do que
+      registrou ("em andamento"/"encerrado"). A **rotina de padrões** olha os últimos 90 dias: três
+      registros de quase-acidente ou quebra na **mesma equipe** ou na **mesma pessoa** avisam a Diretoria
+      e o Comitê (e a tela de Padrões lista). Só a suspeita de violência afasta alguém; a quebra de política
+      não. O nível pode **subir** (a tela de reclassificar), e então o relógio de 24 horas começa naquele
+      instante.)*
+- [x] Comitê de revisão com participação **não-clerical** e relatório anual de
       conformidade por congregação. *(Praesidium; Royal Commission — 10 Child
       Safe Standards; Dallas Charter/USCCB)*
-- [ ] Canal de denúncia acessível também à criança/adolescente, em linguagem
+      *(O **Comitê de Proteção** é o papel de mesmo nome no cadastro de lideranças (nível geral, com a
+      permissão `protecao_menores`): quem é cadastrado nesse papel é do Comitê. A composição é
+      **calculada**: pelo menos **3 membros** e **pelo menos um que não seja do clero** (o cargo vem do
+      cadastro — Pastor, Evangelista, Presbítero, Diácono e Missionário são clero —, nunca é digitado);
+      incompleto, a Diretoria é avisada toda semana. O **relatório anual** (nível geral) traz, por
+      congregação e no total: incidentes por nível, suspeitas comunicadas **dentro do prazo** e fora/sem
+      comunicação, tempo médio até comunicar, afastamentos ativos, a composição do Comitê e a habilitação
+      dos voluntários — só números, nenhum nome nem relato — e imprime.)*
+- [x] Canal de denúncia acessível também à criança/adolescente, em linguagem
       adequada — a Ouvidoria (v3.7) hoje é desenhada para adulto.
+      *(**"Preciso de ajuda"**: tela sem login (a criança pode não ter conta), em linguagem simples, com os
+      telefones **100** (Disque Direitos Humanos, de graça, 24 h) e **190** sempre visíveis, só **um campo
+      de texto** obrigatório (nenhuma pergunta de "prova"), "quem está escrevendo" e "como falar com você"
+      opcionais, e a igreja opcional. O pedido vira **suspeita de violência** com o relógio de 24 horas e
+      avisa a liderança de proteção. **Não guarda IP nem cabeçalhos** (o limite por origem é em memória, em
+      hash truncado); contra inundação há 5 pedidos por hora por origem e um teto de 40 por hora no total —
+      no teto, ou em erro, a resposta **sempre** traz a orientação do 100 e do 190.)*
+
+### Contrato (rotas)
+
+`GestaoProtecaoMenores` (`/api/protecao-menores/{acao}`): de **qualquer pessoa logada** — `catalogos`,
+`meus`, `registrar`; da **gestão** (permissão `protecao_menores`, sessão de liderança; o Dirigente só
+enxerga a sua congregação) — `incidentes`, `incidente`, `relato` (confirmação reforçada), `comunicacao`,
+`adendo`, `reclassificar`; do **nível geral** (Diretoria e Comitê) — `cautelar-decidir` e `encerrar`
+(confirmação reforçada), `padroes`, `comite`, `relatorio-anual`. `ProtecaoAjuda` (`POST /api/protecao-ajuda`,
+sem login). `ProtecaoVerificador` (`POST /api/protecao-verificador-interno`, por segredo; chamada de hora em
+hora pelo workflow `rotinas-protecao.yml`). Anexos do incidente: `/api/anexos` com a tabela `IncidentesProtecao`.
+
+### Decisões que a Lei e o Regimento não fecham (cada uma é uma linha; a CLI pode reverter)
+
+- **Quem é "envolvido" nunca vê o incidente** (conflito de interesse): para ele a lista não o mostra, o
+  detalhe, o relato e os anexos respondem como "não existe". Vale também para a Diretoria: se o Presidente é o
+  envolvido, os outros membros da Diretoria e do Comitê tratam.
+- **O afastamento cautelar só vem de suspeita de violência** (não de quebra de política ou quase-acidente) e
+  só para envolvido que é membro; para quem não é do cadastro (um visitante, alguém de fora) o sistema não
+  tem como afastar e a decisão fica com a Diretoria fora dele — o caso encerra sem decisão de afastamento.
+- **A tela da própria pessoa afastada não diz o motivo**: a apuração é das autoridades e avisá-la do que
+  consta contra ela, antes disso, pode atrapalhar. Ela é avisada da retirada da escala (texto genérico) e,
+  se o Comitê levantar o afastamento, do levantamento.
+- **O prazo de 24 horas conta da ciência**, não do fato: quem registra pode recuar a ciência (até 30 dias),
+  e o caso já nasce vencido se for o caso (aparece no relatório).
+- **Registrar não é livre de limite**: 10 registros por dia por pessoa, 3 suspeitas por dia (contra uso de
+  má-fé; um relato verdadeiro nunca chega perto). Quem passa do limite lê para ligar para o 100 ou para o 190
+  ou falar com o Dirigente. Quem registrou fica registrado (o dono do registro está na tabela).
+- **O relato nunca vai para aviso, auditoria, relatório nem log**; a auditoria das ações sensíveis não leva o
+  número do caso, quem agiu nem o nível (o elo fica nas tabelas, que têm acesso restrito). A trilha lida por
+  quem tem a permissão "auditoria" não consegue ligar uma pessoa a um incidente.
+- **Retenção de 20 anos do encerramento** (registro de apuração de crime contra criança: o prazo corre a partir
+  dos 18 anos da vítima); a CLI pode ajustar em Catálogos. Nada se apaga (gatilhos no banco).
+- **A rotina horária roda das 7h às 22h de Brasília**, não de madrugada: o banco é serverless e só pausa se
+  ficar uma hora sem uso; uma chamada por hora o dia todo o manteria ligado (e cobrando). De madrugada o aviso do
+  incidente novo continua saindo na hora do registro e o relógio é calculado na leitura: só o lembrete espera.
+- **O Dirigente comunica, o Comitê encerra**: registrar a comunicação, o adendo e a reclassificação são da
+  gestão (inclusive o Dirigente da congregação, que é quem está perto e tem as 24 horas); decidir o afastamento
+  e encerrar o caso são do nível geral.
+- **A proteção cobre as escalas e os canais**; a sala de aula da EBD e outras funções com criança que não
+  passam pelas escalas continuam fora do portão do sistema (como já era na v7.7): o afastamento ali é
+  decisão da Diretoria sobre o cadastro do professor. *(Registrado, não esquecido: é o próximo degrau de
+  proteção, junto com a v7.10.)*
+
+### O que NÃO é desta versão (e por quê)
+
+A **escuta da criança em si** (depoimento especial, Lei 13.431 arts. 7º a 12) é das autoridades — a Igreja
+não faz e o sistema não oferece. Notificação **automática** ao Conselho Tutelar por integração também não
+existe: cada cidade tem um canal (ofício, telefone, sistema próprio) e o dever é do dirigente; o sistema
+**cobra e prova** (o relógio, o protocolo, o comprovante), não protocola por ele.
 
 ## v7.9 — CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)
 

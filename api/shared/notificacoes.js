@@ -44,19 +44,28 @@ async function criarNotificacao(pool, { regraChave, destinatarioMembroId, titulo
     `);
   if (existe.recordset.length > 0) return { criada: false, notificacaoId: existe.recordset[0].NotificacaoId };
 
-  const inserida = await pool.request()
-    .input("regraChave", sql.NVarChar(60), regraChave)
-    .input("destinatarioMembroId", sql.Int, destinatarioMembroId)
-    .input("titulo", sql.NVarChar(200), titulo)
-    .input("mensagem", sql.NVarChar(1000), mensagem)
-    .input("categoria", sql.NVarChar(40), categoria)
-    .input("referenciaTabela", sql.NVarChar(60), referenciaTabela || null)
-    .input("referenciaId", sql.Int, referenciaId != null ? referenciaId : null)
-    .query(`
-      INSERT INTO Notificacoes (RegraChave, DestinatarioMembroId, Titulo, Mensagem, Categoria, ReferenciaTabela, ReferenciaId)
-      OUTPUT INSERTED.NotificacaoId
-      VALUES (@regraChave, @destinatarioMembroId, @titulo, @mensagem, @categoria, @referenciaTabela, @referenciaId)
-    `);
+  // Duas rodadas ao mesmo tempo (a agendada e um disparo manual, por exemplo) podem passar pela conferência acima juntas: o índice único UQ_Notificacao_Origem barra a segunda gravação
+  // e isso NÃO é erro — o aviso já existe (antes a violação derrubava a rodada inteira).
+  let inserida;
+  try {
+    inserida = await pool.request()
+      .input("regraChave", sql.NVarChar(60), regraChave)
+      .input("destinatarioMembroId", sql.Int, destinatarioMembroId)
+      .input("titulo", sql.NVarChar(200), titulo)
+      .input("mensagem", sql.NVarChar(1000), mensagem)
+      .input("categoria", sql.NVarChar(40), categoria)
+      .input("referenciaTabela", sql.NVarChar(60), referenciaTabela || null)
+      .input("referenciaId", sql.Int, referenciaId != null ? referenciaId : null)
+      .query(`
+        INSERT INTO Notificacoes (RegraChave, DestinatarioMembroId, Titulo, Mensagem, Categoria, ReferenciaTabela, ReferenciaId)
+        OUTPUT INSERTED.NotificacaoId
+        VALUES (@regraChave, @destinatarioMembroId, @titulo, @mensagem, @categoria, @referenciaTabela, @referenciaId)
+      `);
+  } catch (e) {
+    const n = e && (e.number || (e.originalError && e.originalError.info && e.originalError.info.number));
+    if (n === 2627 || n === 2601) return { criada: false, notificacaoId: null };
+    throw e;
+  }
   return { criada: true, notificacaoId: inserida.recordset[0].NotificacaoId };
 }
 

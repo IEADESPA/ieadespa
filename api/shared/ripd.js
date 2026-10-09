@@ -53,6 +53,22 @@ const RIPDS = [
     riscoResidual: "Médio — o dado é sensível por natureza e depende do bom uso da Diretoria. Mitigado pelo acesso restrito, pela máscara na gestão local, pela falta de texto livre e pela trilha imutável; o que resta é o risco humano de vazamento por quem tem acesso legítimo, que se trata com o termo de confidencialidade da Diretoria."
   },
   {
+    chave: "INCIDENTES_DE_PROTECAO",
+    tratamento: "Registro de incidentes de proteção de crianças e adolescentes, do relato espontâneo, da comunicação ao Conselho Tutelar em 24 horas, do afastamento cautelar do envolvido e do relatório anual do Comitê de Proteção (v7.8).",
+    riscoIdentificado: "Dado de criança sobre violência é o mais sensível que a Igreja guarda: vazamento revitimiza e expõe; uma acusação falsa ou errada afasta e marca uma pessoa inocente; e a omissão da comunicação tem multa e, pior, deixa a criança desprotegida.",
+    medidasMitigacao: [
+      "A Igreja COMUNICA, não investiga: não há campo de pergunta nem de inquirição; o formulário mostra o roteiro (acolher, registrar como foi dito, encaminhar) e o que NÃO fazer",
+      "O relato fica em tabela à parte, só de acréscimo (gatilho no banco); um relato por incidente (repetir a escuta machuca de novo); só a liderança de proteção lê, com a confirmação reforçada (vD.4), e cada leitura fica registrada",
+      "Quem é envolvido nunca vê o incidente: para ele não existe; o Dirigente só enxerga a sua congregação",
+      "Os avisos (e-mail sai do sistema) não levam nome de criança, nome do envolvido nem conteúdo; a auditoria não leva o nível do incidente, quem registrou nem o número do caso das suspeitas de violência",
+      "O prazo de 24 horas é calculado na leitura (vence mesmo sem rotina) e uma rotina de hora em hora avisa em 12 h, 4 h e vencido; o caso de suspeita de violência só encerra com comunicação COM comprovante e a decisão do Comitê sobre o afastamento; uma suspeita nunca é rebaixada",
+      "O afastamento cautelar é medida protetiva, não punição: a mensagem à pessoa não diz o motivo, ela só volta pela decisão do Comitê e o sistema não rebaixa sozinho; ninguém decide sobre o próprio afastamento",
+      "O canal de ajuda sem login não guarda IP nem cabeçalhos e responde sempre com os telefones 100 e 190; tem limite por origem e teto por hora contra inundação",
+      "O Comitê de Proteção precisa de pelo menos 3 pessoas e uma que não seja do clero (calculado do cadastro, não digitado); sem isso a Diretoria é avisada toda semana"
+    ],
+    riscoResidual: "Médio — o dado é sensível por natureza e depende do bom uso de quem tem acesso legítimo; um registro de má-fé pode afastar alguém por cautela (mitigado: o registrante fica registrado, há teto diário por pessoa, o Comitê revisa e levanta o afastamento). Risco humano residual de vazamento por quem lê o relato, tratado por treinamento do Comitê e pelo registro de cada leitura."
+  },
+  {
     chave: "NOTA_PASTORAL",
     tratamento: "N/A hoje — não existe tabela/tela de 'nota pastoral' no sistema.",
     riscoIdentificado: null, medidasMitigacao: [], riscoResidual: "N/A — sem tratamento real, sem RIPD a fazer. Entra quando o módulo existir."

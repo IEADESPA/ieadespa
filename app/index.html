@@ -44,6 +44,8 @@
       </form>
 
       <a href="#" class="link-secretaria" data-on-click="mostrarTelaPainelInicial">📋 Acessar meu Painel</a>
+      <!-- v7.8 — Preciso de ajuda: o canal de ajuda da criança e do adolescente, sem login e sem prova (módulo protecao.js) -->
+      <button type="button" class="prt-btn-ajuda" data-on-click="prtAbrirAjudaPublicaAcao">🧒 Preciso de ajuda<small>Criança, adolescente ou alguém que quer ajudar</small></button>
       <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" data-on-click="abrirTelaChamadaOffline" data-prevent="click">📴 Chamada da EBD sem internet</a>
     </div>
   </div>
@@ -101,6 +103,7 @@
       </div>
 
       <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" data-on-click="abrirTelaChamadaOffline" data-prevent="click">📴 Chamada da EBD sem internet</a>
+      <button type="button" class="prt-btn-ajuda" data-on-click="prtAbrirAjudaPublicaAcao">🧒 Preciso de ajuda<small>Criança, adolescente ou alguém que quer ajudar</small></button>
       <a href="#" class="link-secretaria" data-on-click="voltarParaCheckin">← Voltar para a Portaria</a>
     </div>
 
@@ -146,6 +149,7 @@
             <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasescalas"]'><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhahabilitacao"]'><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMenores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com menores</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelProtecao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de crianças</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
@@ -296,6 +300,9 @@
             <!-- v7.7 — Ministério com Menores (Lei 14.811/2024): painel de conformidade, ferramentas da Secretaria e, só para a Diretoria, as comunicações dos voluntários.
                  Mesma permissão da Habilitação ("habilitacao_voluntarios"). -->
             <button class="btn-aba" id="btnAbaMenores" data-on-click="mostrarAbaSecretaria" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com Menores</span></button>
+            <!-- v7.8 — Proteção de Crianças: fila de incidentes com o relógio das 24 horas, leitura protegida do relato, comunicação ao Conselho Tutelar e, no nível geral,
+                 afastamento cautelar, encerramento, padrões, Comitê e relatório anual. Permissão própria "protecao_menores". -->
+            <button class="btn-aba" id="btnAbaProtecao" data-on-click="mostrarAbaSecretaria" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de Crianças</span></button>
           </div>
 
           <!-- MÓDULO: ASSISTÊNCIA SOCIAL / AÇÃO DA FÉ (v5.9) — permissão
@@ -889,6 +896,105 @@
             <em>Exemplo: a mãe do Pedro (10 anos) toca em "Ler o texto e autorizar", lê, marca a caixa e autoriza a foto; se mudar de ideia, toca em "Revogar" e a foto é apagada.</em></p>
           <p id="mnrMenoresMsg" class="subtitle" role="status"></p>
           <div id="mnrMenoresLista"></div>
+        </div>
+
+        <!-- SUB-ABA: PROTEÇÃO DE CRIANÇAS (v7.8 — incidentes, notificação obrigatória e escuta protegida). Aberta a qualquer login (inclusive PIN): o canal de
+             ajuda (o mesmo da tela de entrada), o registro de um incidente por voluntários e líderes (quase-acidente, quebra de política, suspeita ou relato de
+             violência) e a lista do que a própria pessoa registrou. Toda regra mora no servidor (shared/protecaoMenores.js). -->
+        <div id="subMeupainelProtecao" class="sub-aba-secretaria" style="display:none;">
+          <h3>🛡️ Proteção de crianças</h3>
+          <p class="subtitle">Proteger crianças e adolescentes é dever de todos. Aqui você pode <strong>pedir ajuda</strong> (ou pedir por alguém) e, se serve com crianças ou é líder,
+            <strong>registrar um incidente</strong>. A Igreja <strong>acolhe e encaminha</strong>: quem apura são as autoridades. Se existe perigo agora, ligue <strong>190</strong>;
+            para contar que uma criança está sofrendo violência, ligue <strong>100</strong> (de graça, a qualquer hora).
+            <em>Exemplo: a professora do Maternal vê um adulto a sós com uma criança, fora do combinado. Ela registra como "quebra de política" e a liderança de proteção cuida do assunto.</em></p>
+          <p id="prtMeuResultado" class="subtitle" role="status"></p>
+
+          <h4>🧒 Preciso de ajuda (ou alguém precisa)</h4>
+          <div class="prt-contatos" role="group" aria-label="Telefones de ajuda">
+            <a class="prt-tel" href="tel:100">📞 Ligue 100: <strong>Disque 100</strong></a><span class="prt-tel-desc">De graça, 24 horas, todos os dias. Para contar que uma criança ou adolescente está sofrendo violência.</span>
+            <a class="prt-tel prt-tel-urgente" href="tel:190">🚨 Ligue 190: <strong>Polícia</strong></a><span class="prt-tel-desc">Se existe perigo agora.</span>
+          </div>
+          <p class="subtitle" style="margin:4px 0 10px;">Se preferir, escreva abaixo. Uma pessoa preparada da liderança vai ler. <strong>Você não precisa dizer o seu nome</strong> e, mesmo com o login aberto, o pedido de ajuda não guarda quem escreveu.</p>
+          <div id="prtAjudaLogForm"></div>
+
+          <hr />
+          <h4>📝 Registrar um incidente</h4>
+          <div id="prtRegCx" style="display:none;">
+            <p class="subtitle" style="margin:4px 0 10px;">Para voluntários e líderes. Escreva só <strong>fatos</strong>, sem opinião e sem o nome de crianças. A Igreja <strong>não investiga</strong>: registra, avisa a liderança e,
+              quando a lei manda, comunica ao Conselho Tutelar.</p>
+            <div class="cal-form">
+              <fieldset class="prt-nivel-grupo">
+                <legend>O que aconteceu?</legend>
+                <div id="prtRegNiveis"></div>
+              </fieldset>
+              <div class="cal-form-grade">
+                <div class="input-group">
+                  <label for="prtRegData">Data em que aconteceu</label>
+                  <input type="date" id="prtRegData" />
+                </div>
+                <div class="input-group">
+                  <label for="prtRegCong">Congregação</label>
+                  <select id="prtRegCong" data-on-change="prtMudouCongregacaoAcao"></select>
+                </div>
+                <div class="input-group" id="prtRegEquipeCx" style="display:none;">
+                  <label for="prtRegEquipe">Equipe (se foi numa equipe)</label>
+                  <select id="prtRegEquipe"></select>
+                </div>
+                <div class="input-group">
+                  <label for="prtRegOnde">Onde aconteceu (opcional)</label>
+                  <input type="text" id="prtRegOnde" maxlength="150" placeholder="Ex.: sala do Maternal" />
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="prtRegDescricao">O que aconteceu (de 10 a 1000 caracteres)</label>
+                <textarea id="prtRegDescricao" rows="4" maxlength="1000" style="width:100%;" data-on-input="prtContarAcao" data-args-input='["prtRegDescricao"]'></textarea>
+                <p class="psc-legenda"><span id="prtRegDescContador">0</span>/1000 caracteres. Só fatos, sem opinião e <strong>sem o nome de crianças</strong> (o que a criança contou vai no relato, mais abaixo).</p>
+              </div>
+              <div class="cal-form-grade">
+                <div class="input-group">
+                  <label for="prtRegEnvMatricula">Pessoa envolvida: matrícula</label>
+                  <input type="number" id="prtRegEnvMatricula" min="1" />
+                </div>
+                <div class="input-group">
+                  <label for="prtRegEnvNome">OU o nome, se não souber a matrícula</label>
+                  <input type="text" id="prtRegEnvNome" maxlength="150" />
+                </div>
+              </div>
+              <p class="psc-legenda">Preencha só um dos dois, se houver pessoa envolvida. Com a matrícula, quem é membro sai das escalas com crianças por cautela (não é punição) numa suspeita de violência.</p>
+              <div id="prtRegAlegacaoCx" style="display:none;">
+                <p class="cnl-aviso-senha" role="note"><strong>Suspeita ou relato de violência.</strong> A lei manda comunicar ao Conselho Tutelar em até 24 horas. Ao enviar, o prazo começa a contar e a liderança de proteção é avisada na hora.
+                  Se existe perigo agora, ligue 190.</p>
+                <div id="prtRegRoteiro"></div>
+                <div class="cal-form-grade">
+                  <div class="input-group">
+                    <label for="prtRegQuem">Quem contou ou percebeu o fato</label>
+                    <select id="prtRegQuem"></select>
+                  </div>
+                  <div class="input-group">
+                    <label for="prtRegHoras">A Igreja soube há quantas horas? (0 = agora)</label>
+                    <input type="number" id="prtRegHoras" min="0" max="720" step="1" value="0" />
+                  </div>
+                </div>
+                <div class="input-group">
+                  <label for="prtRegRelato">O relato, do jeito que foi contado (de 10 a 4000 caracteres)</label>
+                  <textarea id="prtRegRelato" rows="5" maxlength="4000" autocomplete="off" style="width:100%;" data-on-input="prtContarAcao" data-args-input='["prtRegRelato"]'></textarea>
+                  <p class="psc-legenda"><span id="prtRegRelatoContador">0</span>/4000 caracteres. Use as palavras da criança, sem corrigir e sem interpretar. Este texto fica guardado em separado e só a liderança de proteção pode lê-lo.</p>
+                </div>
+              </div>
+            </div>
+            <div class="psc-acoes">
+              <button type="button" class="btn-confirmar" id="prtRegBotao" style="width:auto;margin:0;" data-on-click="prtEnviarRegistroAcao" data-args-click='[{"$":"this"}]'>📝 Registrar o incidente</button>
+            </div>
+            <p id="prtRegMsg" class="subtitle" role="status"></p>
+            <div id="prtRegResposta" role="status"></div>
+          </div>
+
+          <hr />
+          <h4>📋 Meus registros</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">O que você registrou: só o número do protocolo, o tipo, a data e se está em andamento ou encerrado. O andamento do caso fica com a liderança de proteção.</p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtCarregarMeusAcao">🔄 Atualizar</button></div>
+          <p id="prtMeusMsg" class="subtitle" role="status"></p>
+          <div id="prtMeusLista"></div>
         </div>
 
         <!-- SUB-ABA: MINHA FORMAÇÃO (v6.9 — Trilhas de formação e
@@ -3333,6 +3439,80 @@
           <p id="mnrComResultado" class="subtitle" role="status"></p>
           <p id="mnrComAcaoMsg" class="subtitle" role="status"></p>
           <div id="mnrComLista"></div>
+        </div>
+      </div>
+
+      <!-- ABA: PROTEÇÃO DE CRIANÇAS (v7.8 — ECA arts. 13 e 245; Lei 13.431/2017). Permissão "protecao_menores" (o Dirigente vê a sua congregação; a Diretoria e o Comitê veem tudo).
+           Incidentes (fila com o relógio de 24 horas, ficha, relato protegido, comunicação ao órgão, adendo, reclassificação e, no nível geral, afastamento cautelar e
+           encerramento) e, só no nível geral, padrões, Comitê e relatório anual. A tela mostra só as seções que o servidor libera para a sessão. -->
+      <div id="abaProtecao" class="aba-secretaria" style="display:none;">
+        <h3>🛡️ Proteção de Crianças</h3>
+        <p class="subtitle">Toda suspeita ou relato de violência contra criança ou adolescente precisa ser <strong>comunicada ao Conselho Tutelar em até 24 horas</strong> (ECA, art. 13; a omissão tem multa, art. 245).
+          A Igreja <strong>acolhe e encaminha</strong>: quem apura são as autoridades. O relógio abaixo mostra quanto tempo falta. <em>Exemplo: um relato chega às 9h de segunda. O Dirigente liga para o Conselho Tutelar às 11h,
+          registra aqui a hora, o protocolo e anexa o comprovante: o relógio para e o caso pode ser encerrado depois pela Diretoria.</em></p>
+
+        <div class="cal-pilulas prt-pilulas" id="prtPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnPrtSecaoIncidentes" data-on-click="prtMostrarSecaoAcao" data-args-click='["incidentes"]'>🚨 Incidentes</button>
+          <button type="button" class="cal-pilula" id="btnPrtSecaoPadroes" data-on-click="prtMostrarSecaoAcao" data-args-click='["padroes"]' style="display:none;">🔁 Padrões</button>
+          <button type="button" class="cal-pilula" id="btnPrtSecaoComite" data-on-click="prtMostrarSecaoAcao" data-args-click='["comite"]' style="display:none;">👥 Comitê</button>
+          <button type="button" class="cal-pilula" id="btnPrtSecaoRelatorio" data-on-click="prtMostrarSecaoAcao" data-args-click='["relatorio"]' style="display:none;">📊 Relatório anual</button>
+        </div>
+        <p id="prtSemAcesso" class="subtitle psc-aviso" role="status" style="display:none;">Com o seu login atual você não tem acesso a nenhuma tela desta aba. Entre com a senha de liderança ou fale com quem administra as Permissões.</p>
+
+        <!-- a) INCIDENTES -->
+        <div id="prtSecaoIncidentes" class="cal-secao">
+          <div id="prtListaCx">
+            <h4>🚨 Incidentes</h4>
+            <div class="barra-lista">
+              <label for="prtFiltroStatus">Mostrar</label>
+              <select id="prtFiltroStatus" data-on-change="prtCarregarIncidentesAcao">
+                <option value="ABERTO">Só os abertos</option>
+                <option value="ENCERRADO">Só os encerrados</option>
+                <option value="TODOS">Todos</option>
+              </select>
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtCarregarIncidentesAcao">🔄 Atualizar</button>
+            </div>
+            <p id="prtListaResultado" class="subtitle" role="status"></p>
+            <div id="prtListaIncidentes"></div>
+          </div>
+          <div id="prtDetalheCx" style="display:none;">
+            <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtFecharDetalheAcao">← Voltar à lista</button></div>
+            <p id="prtDetalheMsg" class="subtitle" role="status"></p>
+            <div id="prtDetalheConteudo"></div>
+          </div>
+        </div>
+
+        <!-- b) PADRÕES (nível geral) -->
+        <div id="prtSecaoPadroes" class="cal-secao" style="display:none;">
+          <h4>🔁 Padrões de pequenas quebras</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Quando a mesma equipe ou a mesma pessoa aparece em vários registros de quase-acidente ou quebra de política em poucos meses, o Comitê precisa conferir: pequenas quebras repetidas
+            costumam vir antes de um caso grave. <strong>Não é acusação</strong>: serve para ajudar a equipe a se organizar.</p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtCarregarPadroesAcao">🔄 Atualizar</button></div>
+          <p id="prtPadroesResultado" class="subtitle" role="status"></p>
+          <div id="prtPadroesLista"></div>
+        </div>
+
+        <!-- c) COMITÊ (nível geral) -->
+        <div id="prtSecaoComite" class="cal-secao" style="display:none;">
+          <h4>👥 Comitê de Proteção</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">O Comitê decide sobre o afastamento cautelar e revisa os casos. Precisa de pelo menos 3 pessoas e de pelo menos uma que <strong>não seja do clero</strong> (leigo): a revisão não pode ser só de ministros.
+            Quem entra no Comitê é cadastrado pelo papel «Comitê de Proteção» em Administração de Acesso → Permissões.</p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtCarregarComiteAcao">🔄 Atualizar</button></div>
+          <p id="prtComiteResultado" class="subtitle" role="status"></p>
+          <div id="prtComiteLista"></div>
+        </div>
+
+        <!-- d) RELATÓRIO ANUAL (nível geral) -->
+        <div id="prtSecaoRelatorio" class="cal-secao" style="display:none;">
+          <h4>📊 Relatório anual</h4>
+          <div class="barra-lista">
+            <label for="prtRelAno">Ano</label>
+            <select id="prtRelAno" data-on-change="prtCarregarRelatorioAcao"></select>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtCarregarRelatorioAcao">🔄 Atualizar</button>
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="prtImprimirRelatorioAcao">🖨️ Imprimir</button>
+          </div>
+          <p id="prtRelResultado" class="subtitle" role="status"></p>
+          <div id="prtRelImprimivel"></div>
         </div>
       </div>
 
@@ -6227,6 +6407,22 @@
     </div>
   </div>
 
+  <!-- v7.8 — PRECISO DE AJUDA: tela pública (sem login) do canal de ajuda da criança e do adolescente. Os telefones 100 e 190 ficam sempre à vista, escritos aqui no
+       HTML (funcionam mesmo sem internet); o formulário é montado por protecao.js. O que a pessoa escreve nunca vai para o armazenamento do navegador. -->
+  <div id="prtTelaAjuda" style="display:none;">
+    <div class="caixa-login prt-caixa-ajuda">
+      <h2>🧒 Preciso de ajuda</h2>
+      <p class="prt-acolhe">Você não tem culpa. Pode contar do seu jeito. Uma pessoa preparada vai ler.</p>
+      <div class="prt-contatos" role="group" aria-label="Telefones de ajuda">
+        <a class="prt-tel" href="tel:100">📞 Ligue 100: <strong>Disque 100</strong></a><span class="prt-tel-desc">De graça, 24 horas, todos os dias. Para contar que uma criança ou adolescente está sofrendo violência.</span>
+        <a class="prt-tel prt-tel-urgente" href="tel:190">🚨 Ligue 190: <strong>Polícia</strong></a><span class="prt-tel-desc">Se existe perigo agora.</span>
+        <p class="prt-tel-desc"><strong>Conselho Tutelar:</strong> existe um em cada cidade. Pergunte na prefeitura ou procure o mais perto de você.</p>
+      </div>
+      <div id="prtAjudaPubForm"></div>
+      <a href="#" class="link-secretaria prt-link-voltar" data-on-click="prtFecharAjudaPublicaAcao" data-prevent="click">← Voltar</a>
+    </div>
+  </div>
+
   <!-- eventos.js ANTES do script.js: despachante dos data-on-* (CSP forte, sem código escrito no HTML); o script.js registra as ações no fim -->
   <script src="eventos.js"></script>
   <script src="script.js"></script>
@@ -6250,6 +6446,7 @@
   <script src="modulos/permissoes.js"></script>
   <script src="modulos/pessoas.js"></script>
   <script src="modulos/projetos-assembleia.js"></script>
+  <script src="modulos/protecao.js"></script>
   <script src="modulos/psc.js"></script>
   <script src="modulos/relatorios-departamentos.js"></script>
   <script src="modulos/reunioes.js"></script>

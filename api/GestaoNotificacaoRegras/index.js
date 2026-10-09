@@ -33,12 +33,17 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Título inválido (texto de até 150 caracteres)." } };
       return;
     }
-    const existente = await pool.request().input("chave", sql.NVarChar(60), chave).query(`SELECT Ativa, CanalEmail, Titulo FROM NotificacaoRegras WHERE Chave = @chave`);
+    const existente = await pool.request().input("chave", sql.NVarChar(60), chave).query(`SELECT Ativa, CanalEmail, Titulo, Obrigatoria, Categoria FROM NotificacaoRegras WHERE Chave = @chave`);
     if (existente.recordset.length === 0) {
       context.res = { status: 404, body: { sucesso: false, mensagem: "Regra não encontrada." } };
       return;
     }
     const antes = existente.recordset[0];
+    // Os avisos que protegem criança (proteção e ministério com menores) são OBRIGATÓRIOS: nem o destinatário nem quem administra o sistema os desliga (seria o aviso de prazo de 24 horas calado).
+    if (antes.Obrigatoria && ["PROTECAO", "MENORES"].includes(antes.Categoria) && (ativa === false || canalEmail === false)) {
+      context.res = { status: 422, body: { sucesso: false, mensagem: "Este aviso protege crianças e adolescentes: não pode ser desligado (nem o e-mail). Só o texto do título pode ser ajustado." } };
+      return;
+    }
     await pool.request()
       .input("chave", sql.NVarChar(60), chave)
       .input("ativa", sql.Bit, typeof ativa === "boolean" ? ativa : null)

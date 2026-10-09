@@ -32,7 +32,7 @@ body {
   color: var(--cor-texto);
   margin: 0;
 }
-#telaCheckin, #telaPainel, #telaChamadaOffline {
+#telaCheckin, #telaPainel, #telaChamadaOffline, #prtTelaAjuda {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -841,6 +841,87 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .mnr-select-faixa { width: auto; min-width: 170px; max-width: 100%; padding: 6px 8px; font-size: 0.85rem; }
 #abaMenores .barra-lista label, .mnr-sala .barra-lista label { font-weight: 600; font-size: 0.85rem; }
 .mnr-sala .barra-lista input[type="number"] { width: 110px; min-width: 0; }
+
+/* v7.8 — Proteção de Crianças (módulo protecao.js: tela pública "Preciso de ajuda", Meu Painel → Proteção de crianças e a aba da liderança). Prefixo .prt-; só variáveis do tema
+   (mais o verde escuro #156B3A que o sistema já usa nos botões de sucesso, para o texto branco passar de 4,5:1). No celular (360 a 390 px) tudo empilha e nada rola de lado
+   (só as tabelas do relatório, dentro de .prt-rolagem); todo alvo de toque tem pelo menos 40 px; a informação nunca depende só da cor (ícone e texto dizem o mesmo). */
+.prt-btn-ajuda { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; min-height: 60px; margin-top: 18px; padding: 12px 16px; font-family: inherit; font-size: 1.05rem; font-weight: 700; color: var(--cor-primaria); background: var(--cor-secundaria-suave); border: 2px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); cursor: pointer; }
+.prt-btn-ajuda small { font-size: 0.8rem; font-weight: 500; color: var(--cor-texto); }
+.prt-btn-ajuda:hover { background: #F6E9BD; }
+.prt-caixa-ajuda { max-width: 560px; width: 94%; padding: 22px 16px; text-align: left; }
+.prt-caixa-ajuda h2 { text-align: center; }
+.prt-acolhe { font-size: 1.1rem; line-height: 1.5; color: var(--cor-texto); margin: 10px 0 14px; text-align: center; font-weight: 600; }
+.prt-contatos { border: 2px solid var(--cor-sucesso); background: var(--cor-sucesso-suave); border-radius: var(--raio); padding: 12px 14px; margin: 10px 0 16px; }
+.prt-tel { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 14px; margin: 8px 0 2px; border-radius: var(--raio-pequeno); background: #156B3A; color: #fff; font-weight: 600; font-size: 1.05rem; text-decoration: none; overflow-wrap: anywhere; }
+.prt-tel strong { font-weight: 800; }
+.prt-tel-urgente { background: var(--cor-erro); }
+.prt-tel:hover { text-decoration: underline; }
+.prt-tel-desc { display: block; font-size: 0.88rem; line-height: 1.4; color: var(--cor-texto); margin: 2px 2px 8px; }
+.prt-contatos-lista { list-style: none; margin: 6px 0; padding: 0; }
+.prt-contatos-lista li { margin: 4px 0; }
+.prt-ajuda-form textarea { min-height: 140px; resize: vertical; }
+.prt-ajuda-resultado { margin: 12px 0 0; font-size: 0.95rem; line-height: 1.5; overflow-wrap: anywhere; }
+.prt-ajuda-aviso { background: var(--cor-secundaria-suave); color: #7A6110; border-left: 4px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); padding: 10px 12px; }
+.prt-ajuda-ok { background: var(--cor-sucesso-suave); color: var(--cor-texto); border: 2px solid var(--cor-sucesso); border-radius: var(--raio); padding: 12px 14px; }
+.prt-ajuda-ok h4 { margin: 0 0 6px; color: #156B3A; }
+.prt-btn-enviar { width: 100%; min-height: 52px; }
+.prt-link-voltar { display: flex; align-items: center; justify-content: center; min-height: 44px; }
+.prt-nivel-grupo { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 8px 10px; margin: 0 0 12px; min-width: 0; }
+.prt-nivel-grupo legend { font-weight: 700; font-size: 0.9rem; padding: 0 6px; color: var(--cor-primaria); }
+.prt-nivel { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 10px 8px; margin: 6px 0; border: 2px solid var(--cor-borda); border-radius: var(--raio-pequeno); background: var(--cor-superficie); cursor: pointer; font-weight: normal; overflow-wrap: anywhere; }
+.prt-nivel input { width: 24px; height: 24px; flex: 0 0 24px; margin: 2px 0 0; }
+.prt-nivel:has(input:checked) { border-color: var(--cor-primaria); background: var(--cor-primaria-suave); }
+.prt-nivel-desc { font-size: 0.86rem; color: var(--cor-texto); }
+.prt-roteiro { background: var(--cor-primaria-suave); border-left: 6px solid var(--cor-primaria); border-radius: var(--raio-pequeno); padding: 10px 14px; margin: 8px 0 12px; font-size: 0.92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.prt-roteiro-passos, .prt-nao-faca-lista { margin: 6px 0; padding-left: 20px; }
+.prt-roteiro-passos li, .prt-nao-faca-lista li { margin: 6px 0; }
+.prt-nao-faca { color: var(--cor-erro); }
+.prt-resposta { border-left: 6px solid var(--cor-sucesso); overflow-wrap: anywhere; }
+.prt-meu { overflow-wrap: anywhere; }
+.prt-selo { white-space: normal; overflow-wrap: anywhere; max-width: 100%; box-sizing: border-box; line-height: 1.3; }
+/* o verde e o cinza dos selos do Calendário passam de 3,9:1 no texto pequeno: nos selos desta tela o texto é mais escuro (WCAG AA, 4,5:1) */
+.prt-selo.cal-st-homologado { color: #156B3A; }
+.prt-selo.cal-st-cancelado { color: var(--cor-texto); }
+.prt-selos { margin: 4px 0 8px; line-height: 1.9; }
+.prt-cartao, .prt-cartao h5, .prt-padrao h5 { overflow-wrap: anywhere; }
+.prt-cartao-urgente { border-left: 6px solid var(--cor-erro); }
+.prt-linha-relogio { margin: 6px 0; font-size: 0.92rem; }
+.prt-relogio { font-size: 0.92rem; padding: 4px 10px; font-variant-numeric: tabular-nums; }
+.prt-relogio-vencido { background: var(--cor-erro); color: #fff; font-weight: 800; }
+.prt-detalhe { overflow-wrap: anywhere; }
+.prt-texto { white-space: pre-wrap; overflow-wrap: anywhere; margin: 4px 0 10px; font-size: 0.95rem; line-height: 1.5; }
+.prt-lista { margin: 4px 0 10px; padding-left: 20px; font-size: 0.92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.prt-lista li { margin: 6px 0; }
+.prt-item { border-top: 1px dashed var(--cor-borda); padding: 8px 0; overflow-wrap: anywhere; }
+.prt-acoes-detalhe { gap: 10px; }
+.prt-relato { background: var(--cor-superficie); border: 3px solid var(--cor-erro); border-radius: var(--raio); padding: 12px 14px; margin: 10px 0; overflow-wrap: anywhere; }
+.prt-relato-topo { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; margin-bottom: 6px; }
+[id^="prt"] .btn-link { font-size: 0.95rem; padding: 10px 8px; min-height: 40px; }
+.prt-pilulas .cal-pilula { min-height: 44px; }
+#abaProtecao .barra-lista label { font-weight: 600; font-size: 0.85rem; }
+#abaProtecao .cal-form-inline select, #abaProtecao .cal-form-inline input[type="text"], #abaProtecao .cal-form-inline textarea { width: 100%; max-width: 100%; }
+.prt-contadores { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 14px; }
+.prt-contador { background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.prt-contador-valor { font-size: 1.6rem; font-weight: 700; color: var(--cor-primaria); line-height: 1.1; }
+.prt-contador-rotulo { font-size: 0.74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--cor-texto); }
+.prt-contador-ok { border-color: var(--cor-sucesso); background: var(--cor-sucesso-suave); }
+.prt-contador-ok .prt-contador-valor { color: var(--cor-sucesso); }
+.prt-contador-alerta { border-color: var(--cor-secundaria); background: var(--cor-secundaria-suave); }
+.prt-contador-alerta .prt-contador-valor { color: #7A6110; }
+.prt-contador-erro { border-color: var(--cor-erro); background: var(--cor-erro-suave); }
+.prt-contador-erro .prt-contador-valor { color: var(--cor-erro); }
+.prt-rolagem { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.prt-tabela { margin-top: 4px; }
+.prt-tabela th { color: var(--cor-texto); }
+/* o relatório anual imprime sozinho: a classe .prt-imprimindo existe só durante window.print() (protecao.js → prtImprimirRelatorioAcao) e esconde o resto da página */
+@media print {
+  body.prt-imprimindo * { visibility: hidden !important; }
+  body.prt-imprimindo #prtRelImprimivel, body.prt-imprimindo #prtRelImprimivel * { visibility: visible !important; }
+  body.prt-imprimindo #prtRelImprimivel { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }
+  body.prt-imprimindo .prt-rolagem { overflow: visible; }
+  body.prt-imprimindo .prt-tabela { display: table; width: 100%; font-size: 9pt; }
+  body.prt-imprimindo .prt-tabela th, body.prt-imprimindo .prt-tabela td { white-space: normal; }
+}
 
 /* Blocos que o servidor só entrega ao nível geral (papel Global com escopo de todas as congregações): escondidos para os demais. */
 body:not(.sessao-geral) .so-geral { display: none !important; }

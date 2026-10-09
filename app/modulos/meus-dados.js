@@ -4,11 +4,28 @@
 // que o HTML pede deste módulo são registradas aqui mesmo, no fim do arquivo (registrarAcoes mescla).
 
 // ---- MINHA FOTO (v1.10 — autoatendimento, dentro de Meus Dados (LGPD)) ----
+// v7.7: quem tem menos de 18 anos não consente sozinho — só vale a autorização do RESPONSÁVEL (Meu Painel → Ministério com menores). Sem ela, o envio nem é oferecido.
+let minhaFotoBloqueadaParaMenor = false;
+let minhaFotoDono = null;   // de quem é o aviso que está na tela (outra pessoa entrou: o estado dela não vale para esta)
+function aplicarEnvioDaMinhaFoto(data) {
+  const aviso = document.getElementById("minhaFotoAvisoMenor"), envio = document.getElementById("minhaFotoEnvio");
+  const menor = !!(data && data.sucesso && data.menorDeIdade === true);
+  const liberada = menor && data.consentimentoConcedido === true;
+  minhaFotoBloqueadaParaMenor = menor && !liberada;
+  if (envio) envio.style.display = minhaFotoBloqueadaParaMenor ? "none" : "";
+  if (!aviso) return;
+  aviso.className = minhaFotoBloqueadaParaMenor ? "subtitle psc-aviso" : "subtitle";
+  aviso.textContent = minhaFotoBloqueadaParaMenor
+    ? "Você tem menos de 18 anos: o seu responsável precisa autorizar o uso da sua imagem antes de você enviar a foto. Peça a ele(a) que entre no sistema e autorize em Meu Painel → Ministério com menores (se ele(a) ainda não consta como seu responsável, a Secretaria da congregação faz esse cadastro). Depois da autorização, o envio da foto fica liberado aqui. Exemplo: a sua mãe entra com a matrícula dela, abre Ministério com menores e toca em \"Ler o texto e autorizar\"."
+    : (liberada ? "O seu responsável autorizou o uso da sua imagem: você pode enviar a foto." : "");
+}
 async function carregarMinhaFoto() {
   const preview = document.getElementById("minhaFotoPreview");
   if (!authMatricula || !preview) return;
+  if (minhaFotoDono !== authMatricula) { aplicarEnvioDaMinhaFoto(null); minhaFotoDono = authMatricula; }
   const res = await fetchProtegido(`${API_BASE}/minha-foto/${authMatricula}`);
   const data = await res.json();
+  aplicarEnvioDaMinhaFoto(data);
   if (!data.sucesso) { preview.innerHTML = ""; return; }
   preview.innerHTML = data.fotoUrl
     ? `<img src="${urlSegura(data.fotoUrl)}" alt="Minha foto" style="max-width:160px;border-radius:8px;" />`
@@ -18,6 +35,7 @@ async function carregarMinhaFoto() {
 async function enviarMinhaFotoAcao() {
   const input = document.getElementById("minhaFotoArquivo");
   const msg = document.getElementById("resultadoMinhaFoto");
+  if (minhaFotoBloqueadaParaMenor) { msg.textContent = "O seu responsável precisa autorizar o uso da sua imagem antes do envio da foto."; return; }
   if (!authMatricula || !input.files[0]) {
     msg.textContent = "Escolha um arquivo de imagem.";
     return;
@@ -260,6 +278,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "relatoriosdepto") carregarOpcoesRelatorioDepto();
   if (aba === "escalas") carregarOpcoesEscalasAcao();
   if (aba === "habilitacao") carregarOpcoesHabilitacaoAcao();
+  if (aba === "menores") carregarOpcoesMenoresAcao();
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
   if (aba === "ebd") {
     const modoProfessor = !authPermissoes.includes("ebd_gestao");
@@ -311,7 +330,7 @@ const TITULOS_MODULOS = {
   abandono: "Perda de Membresia",
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos",
   mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos",
-  escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários",
+  escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários", menores: "Ministério com Menores",
   assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)",
   conquistas: "Conquistas e Gamificação", trilhas: "Formação e Certificação",
   psc: "Saúde Congregacional (PSC)", calendario: "Calendário Oficial", canais: "Canais e Comunicação", eventos: "Eventos e Congressos",

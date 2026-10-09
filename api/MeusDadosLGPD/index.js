@@ -16,7 +16,9 @@ const storage = require("../shared/storage");
 const auth = require("../shared/auth");
 const voluntariadoDb = require("../shared/voluntariadoDb");
 const setoresTecnicosDb = require("../shared/setoresTecnicosDb");
+const mmDb = require("../shared/ministerioMenoresDb");
 const vistoriaDb = require("../shared/vistoriaAntecedentesDb");
+const menoresConsentimentoDb = require("../shared/menoresConsentimentoDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -114,6 +116,10 @@ module.exports = async function (context, req) {
   // v7.6 — Setores Técnicos (vínculos, Termo com IP, atos cautelares que a pessoa emitiu) e os Termos de Vistoria de antecedentes feitos sobre ela.
   const setoresTecnicos = await setoresTecnicosDb.dadosDoTitular(pool, alvo);
   const vistoriasAntecedentes = await vistoriaDb.dadosDoTitular(pool, alvo);
+  // v7.7 — consentimento do responsável (LGPD art. 14, § 1º): o que a pessoa autorizou COMO RESPONSÁVEL (com o IP dela) e o que foi autorizado SOBRE ela quando era menor.
+  const consentimentosMenores = await menoresConsentimentoDb.dadosDoTitular(pool, alvo);
+  // v7.7 — ministério com menores: o aceite da política (com o IP dela), a ficha confirmada, as retiradas da escala e as comunicações que a própria pessoa fez à Diretoria.
+  const ministerioMenores = await mmDb.dadosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -134,7 +140,9 @@ module.exports = async function (context, req) {
       licencasCandidatura: licencasCandidatura.recordset,
       voluntariado,
       setoresTecnicos,
-      vistoriasAntecedentes
+      vistoriasAntecedentes,
+      consentimentosMenores,
+      ministerioMenores
     }
   };
 };

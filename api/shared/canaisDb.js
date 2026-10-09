@@ -11,6 +11,9 @@ const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
 const canais = require("./canais");
+// v7.7 — a regra pura do ministério com menores (rótulos, máscara das pendências e texto do aviso). O banco dele (ministerioMenoresDb.js) importa ESTE arquivo no
+// topo: por isso ele só é carregado sob demanda, dentro das funções (aptidaoMenoresDb), nunca aqui em cima — senão há ciclo.
+const mm = require("./ministerioMenores");
 
 const LIMITE_LISTA = 500;
 const CONFERENCIA_DIAS_PADRAO = 180;
@@ -83,7 +86,7 @@ function mapearCanal(r, ctx) {
     congregacaoId: r.CongregacaoId || null, congregacaoNome: cong ? cong.nomeExibicao : null,
     areaId: r.AreaId || null, areaNome: area ? area.nome : null,
     departamentoId: r.DepartamentoId || null, departamentoNome: dep ? dep.nome : null,
-    incluiMenores: !!r.IncluiMenores, publicoNoSite: !!r.PublicoNoSite, descricao: r.Descricao || null,
+    incluiMenores: !!r.IncluiMenores, responsavelAcessoMembroId: r.ResponsavelAcessoMembroId || null, publicoNoSite: !!r.PublicoNoSite, descricao: r.Descricao || null,
     custodiaSecretaria: !!r.CustodiaSecretaria, ultimaTrocaCredencialEm: isoData(r.UltimaTrocaCredencialEm),
     ativo: !!r.Ativo, vigenteDesde: isoData(r.VigenteDesde), vigenteAte: isoData(r.VigenteAte), desativadoMotivo: r.DesativadoMotivo || null,
     registradoEm: isoInstante(r.RegistradoEm)
@@ -113,17 +116,22 @@ async function buscarCanal(pool, canalId, ctx) {
 // Estado de cada canal (administradores, conferência, trocas, ocorrências vencidas)
 // ---------------------------------------------------------------
 
-async function carregarEstadoDosCanais(pool, { canalId = null } = {}) {
+// v7.7 — canal que inclui menores: o estado ganha, em cada administrador, `aptoMenores` (habilitado para servir com menores) e `adulto` (idade conhecida, 18 anos ou
+// mais), e, no canal, `responsavelAcesso` ({ membroId, nome, ativo, adulto } | null). Só os canais ATIVOS que incluem menores pagam esse custo: a habilitação de cada
+// administrador é calculada na leitura (várias consultas), então nunca se calcula para quem não precisa. `comoMenores` ({ responsavelAcessoMembroId }, só junto de
+// `canalId`) trata o canal como se já incluísse menores — é como se confere, ANTES de gravar, se ligar a marca deixaria o grupo irregular. O nome do responsável é só para a gestão.
+async function carregarEstadoDosCanais(pool, { canalId = null, hoje = hojeBrasilia(), comoMenores = null } = {}) {
   const filtro = (col) => canalId ? `AND ${col} = @canalId` : "";
   const q = (texto) => { const req = pool.request(); if (canalId) req.input("canalId", sql.Int, canalId); return req.query(texto); };
-  const [adm, conf, trocas, venc] = await Promise.all([
+  const [adm, conf, trocas, venc, menores] = await Promise.all([
     q(`SELECT a.AdminId, a.CanalId, a.MembroId, m.Nome AS MembroNome, a.Papel, a.TermoVersaoAceita, a.TermoAceitoEm, a.DesignadoEm
        FROM CanalAdministradores a JOIN MembroReferencia m ON m.MembroId = a.MembroId WHERE a.EncerradoEm IS NULL ${filtro("a.CanalId")}`),
     q(`SELECT CanalId, ConferenciaId, ConferidoEm, Resultado, ItensJson, Observacao FROM (
          SELECT *, ROW_NUMBER() OVER (PARTITION BY CanalId ORDER BY ConferidoEm DESC, ConferenciaId DESC) AS rn FROM CanalConferencias WHERE 1 = 1 ${filtro("CanalId")}
        ) x WHERE rn = 1`),
     q(`SELECT TrocaId, CanalId, Motivo, MembroReferenciaId, PrazoEm FROM CanalTrocasCredencial WHERE ResolvidaEm IS NULL ${filtro("CanalId")}`),
-    q(`SELECT CanalId, COUNT(*) AS n FROM CanalOcorrencias WHERE Status = 'ABERTA' AND PrazoRemocaoEm < SYSUTCDATETIME() ${filtro("CanalId")} GROUP BY CanalId`)
+    q(`SELECT CanalId, COUNT(*) AS n FROM CanalOcorrencias WHERE Status = 'ABERTA' AND PrazoRemocaoEm < SYSUTCDATETIME() ${filtro("CanalId")} GROUP BY CanalId`),
+    q(`SELECT CanalId, ResponsavelAcessoMembroId FROM CanaisOficiaisComunicacao WHERE Ativo = 1 AND IncluiMenores = 1 ${filtro("CanalId")}`)
   ]);
   const estado = new Map();
   const obter = (id) => { if (!estado.has(id)) estado.set(id, { administradores: [], ultimaConferencia: null, trocasAbertas: [], ocorrenciasVencidas: 0, termoVersao: canais.TERMO_VERSAO }); return estado.get(id); };
@@ -131,12 +139,42 @@ async function carregarEstadoDosCanais(pool, { canalId = null } = {}) {
   for (const c of conf.recordset) obter(c.CanalId).ultimaConferencia = { conferenciaId: c.ConferenciaId, em: isoInstante(c.ConferidoEm), resultado: c.Resultado, itens: c.ItensJson ? JSON.parse(c.ItensJson) : {}, observacao: c.Observacao || null };
   for (const t of trocas.recordset) obter(t.CanalId).trocasAbertas.push({ trocaId: t.TrocaId, motivo: t.Motivo, membroReferenciaId: t.MembroReferenciaId, prazoEm: isoData(t.PrazoEm) });
   for (const o of venc.recordset) obter(o.CanalId).ocorrenciasVencidas = o.n;
+  const comMenores = new Map(menores.recordset.map(m => [m.CanalId, m.ResponsavelAcessoMembroId || null]));
+  if (canalId && comoMenores) comMenores.set(Number(canalId), comoMenores.responsavelAcessoMembroId || null);
+  if (comMenores.size) await completarEstadoMenores(pool, [...comMenores].map(([id, responsavelId]) => ({ estado: obter(id), responsavelId })), { hoje });
   return { estado, obter: (id) => estado.get(id) || { administradores: [], ultimaConferencia: null, trocasAbertas: [], ocorrenciasVencidas: 0, termoVersao: canais.TERMO_VERSAO } };
+}
+
+// A habilitação para servir com menores é do ministerioMenoresDb, que importa este arquivo no topo: carregado aqui sob demanda (sem ciclo).
+function aptidaoMenoresDb() { return require("./ministerioMenoresDb"); }
+
+// `linhas`: [{ estado (o objeto de estado do canal, já com os administradores), responsavelId | null }]. Uma leitura de habilitação para TODOS os administradores
+// de todos esses canais e uma leitura dos responsáveis: o custo não cresce com o número de canais.
+async function completarEstadoMenores(pool, linhas, { hoje }) {
+  const adminIds = [...new Set(linhas.flatMap(l => l.estado.administradores.map(a => a.membroId)))];
+  const aptidoes = adminIds.length ? await aptidaoMenoresDb().aptidaoEmLote(pool, adminIds, { hoje }) : new Map();
+  const responsavelIds = [...new Set(linhas.map(l => l.responsavelId).filter(Boolean))];
+  const responsaveis = new Map();
+  if (responsavelIds.length) {
+    const req = pool.request();
+    const lista = responsavelIds.map((id, i) => { req.input(`r${i}`, sql.Int, id); return `@r${i}`; }).join(",");
+    for (const m of (await req.query(`SELECT MembroId, Nome, Status, DataNascimento FROM MembroReferencia WHERE MembroId IN (${lista})`)).recordset) responsaveis.set(m.MembroId, m);
+  }
+  for (const l of linhas) {
+    for (const a of l.estado.administradores) {
+      const ap = aptidoes.get(a.membroId);
+      a.aptoMenores = !!(ap && ap.apto);
+      a.adulto = !!(ap && ap.contaComoAdulto);
+    }
+    const m = l.responsavelId ? responsaveis.get(l.responsavelId) : null;
+    const idade = m ? idadeEmAnos(m.DataNascimento, hoje) : null;
+    l.estado.responsavelAcesso = l.responsavelId ? { membroId: l.responsavelId, nome: m ? m.Nome : null, ativo: !!m && m.Status === "ATIVO", adulto: idade != null && idade >= 18 } : null;
+  }
 }
 
 function conformidadeDe(canal, estadoCanal, { hoje, conferenciaDias }) {
   return canais.conformidadeDoCanal(
-    { plataforma: canal.plataforma, categoria: canal.categoria, identificador: canal.identificador, ativo: canal.ativo, custodiaSecretaria: canal.custodiaSecretaria, incluiMenores: canal.incluiMenores },
+    { plataforma: canal.plataforma, categoria: canal.categoria, identificador: canal.identificador, ativo: canal.ativo, custodiaSecretaria: canal.custodiaSecretaria, incluiMenores: canal.incluiMenores, responsavelAcessoMembroId: canal.responsavelAcessoMembroId },
     estadoCanal, { hoje, conferenciaDias }
   );
 }
@@ -144,7 +182,7 @@ function conformidadeDe(canal, estadoCanal, { hoje, conferenciaDias }) {
 async function listarCanais(pool, ctx, { incluirInativos = false, hoje = hojeBrasilia() } = {}) {
   const [lista, st, confDias] = await Promise.all([
     carregarCanais(pool, ctx, { incluirInativos }),
-    carregarEstadoDosCanais(pool),
+    carregarEstadoDosCanais(pool, { hoje }),
     lerPrazoDias(pool, "CANAIS_CONFERENCIA_DIAS", CONFERENCIA_DIAS_PADRAO)
   ]);
   return lista.map(c => {
@@ -158,7 +196,7 @@ async function detalharCanal(pool, canalId, ctx, { hoje = hojeBrasilia(), agoraM
   const canal = await buscarCanal(pool, canalId, ctx);
   if (!canal) return null;
   const [st, confDias, historico, ocorrencias] = await Promise.all([
-    carregarEstadoDosCanais(pool, { canalId: canal.canalId }),
+    carregarEstadoDosCanais(pool, { canalId: canal.canalId, hoje }),
     lerPrazoDias(pool, "CANAIS_CONFERENCIA_DIAS", CONFERENCIA_DIAS_PADRAO),
     pool.request().input("canalId", sql.Int, canal.canalId).query(`
       SELECT TOP 10 c.ConferenciaId, c.ConferidoEm, c.Resultado, c.ItensJson, c.Observacao, m.Nome AS PorNome
@@ -169,7 +207,9 @@ async function detalharCanal(pool, canalId, ctx, { hoje = hojeBrasilia(), agoraM
   const conf = conformidadeDe(canal, e, { hoje, conferenciaDias: confDias });
   return {
     canal, situacao: conf.situacao, pendencias: conf.pendencias,
+    // Em canal com menores, cada administrador traz `aptoMenores` e `adulto` (só os dois sim/não, nunca o motivo) e o canal traz o responsável com acesso (com nome: esta rota é só da gestão).
     administradores: e.administradores, trocasAbertas: e.trocasAbertas,
+    responsavelAcesso: canal.incluiMenores ? (e.responsavelAcesso || null) : null,
     conferencias: historico.recordset.map(c => ({ conferenciaId: c.ConferenciaId, em: isoInstante(c.ConferidoEm), resultado: c.Resultado, itens: c.ItensJson ? JSON.parse(c.ItensJson) : {}, observacao: c.Observacao || null, porNome: c.PorNome })),
     itensConferencia: canais.itensDeConferencia(canal),
     ocorrenciasRecentes: ocorrencias,
@@ -226,12 +266,47 @@ function mensagemDeErroDoBanco(e) {
   return null;
 }
 
+// v7.7 — o responsável com acesso ao grupo (pai, mãe ou tutor de um dos menores) é membro ATIVO e ADULTO (idade conhecida, 18 anos completos). As mensagens não citam
+// nome: quem indica pode estar digitando a matrícula de alguém de outra congregação, e o que o sistema devolve não pode virar consulta de cadastro alheio.
+async function conferirResponsavelDeAcesso(pool, membroId, { hoje = hojeBrasilia() } = {}) {
+  const m = (await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, Status, DataNascimento FROM MembroReferencia WHERE MembroId = @id`)).recordset[0];
+  // UMA mensagem para os três casos (não existe, não está ativo, não é adulto): quem tem canais_gestao digita matrículas de qualquer congregação, e três mensagens virariam um
+  // oráculo de cadastro alheio.
+  const RECUSA = "Essa matrícula não pode ser indicada como responsável com acesso: precisa ser de um membro ATIVO e adulto (18 anos completos).";
+  if (!m || m.Status !== "ATIVO") return RECUSA;
+  const idade = idadeEmAnos(m.DataNascimento, hoje);
+  if (idade == null || idade < 18) return RECUSA;
+  return null;
+}
+
+// Recusa de regra do grupo com menores (vira 422): a mensagem junta as pendências em português simples e a lista delas vai junto, para a tela e para o teste.
+function recusaMenores(introducao, pendencias) {
+  return { sucesso: false, mensagem: `${introducao} ${pendencias.map(p => p.mensagem).join(" ")}`.trim(), pendencias };
+}
+
+// Ligar "inclui menores" num canal que JÁ tem administradores: só passa se, com o canal já tratado como grupo com menores, a regra estiver cumprida (dois adultos
+// habilitados com o Termo aceito, todo administrador habilitado e responsável com acesso — o indicado nesta mesma gravação conta). Canal ainda SEM administradores
+// pode ligar: não há quem habilitar agora, ele fica IRREGULAR até cumprir (e designar já exige quem esteja habilitado). Devolve a recusa ou null.
+async function recusaDeLigarMenores(pool, canal, responsavelAcessoMembroId, { hoje }) {
+  const st = await carregarEstadoDosCanais(pool, { canalId: canal.canalId, hoje, comoMenores: { responsavelAcessoMembroId } });
+  const e = st.obter(canal.canalId);
+  if (e.administradores.length === 0) return null;
+  const pend = canais.pendenciasDeMenores({ incluiMenores: true, responsavelAcessoMembroId }, e);
+  if (pend.length === 0) return null;
+  return recusaMenores("Este canal já tem administradores, e só pode passar a incluir crianças e adolescentes se a regra do grupo com menores já estiver cumprida.", pend);
+}
+
 async function criarCanal(pool, ctx, d, { membroId }) {
   const v = canais.validarCanal(d, { criando: true });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const dados = v.dados;
   const recusa = await conferirRegrasDoBanco(pool, ctx, dados);
   if (recusa) return { sucesso: false, mensagem: recusa };
+  // v7.7: o responsável com acesso é conferido ANTES de gravar. Canal novo com menores e ainda SEM administradores é permitido (não há quem designar ainda): nasce IRREGULAR até cumprir.
+  if (dados.responsavelAcessoMembroId) {
+    const recusaResp = await conferirResponsavelDeAcesso(pool, dados.responsavelAcessoMembroId);
+    if (recusaResp) return { sucesso: false, mensagem: recusaResp };
+  }
 
   let canalId;
   try {
@@ -240,14 +315,14 @@ async function criarCanal(pool, ctx, d, { membroId }) {
       .input("tema", sql.NVarChar(30), dados.temaFocado).input("ident", sql.NVarChar(200), dados.identificador).input("norm", sql.NVarChar(200), dados.identificadorNormalizado)
       .input("vinculo", sql.NVarChar(12), dados.vinculoInstitucional).input("por", sql.Int, membroId || null)
       .input("escopo", sql.NVarChar(14), dados.escopo).input("cong", sql.Int, dados.congregacaoId).input("area", sql.Int, dados.areaId).input("dep", sql.Int, dados.departamentoId)
-      .input("menores", sql.Bit, dados.incluiMenores).input("publico", sql.Bit, dados.publicoNoSite).input("custodia", sql.Bit, dados.custodiaSecretaria)
+      .input("menores", sql.Bit, dados.incluiMenores).input("resp", sql.Int, dados.responsavelAcessoMembroId).input("publico", sql.Bit, dados.publicoNoSite).input("custodia", sql.Bit, dados.custodiaSecretaria)
       .input("descricao", sql.NVarChar(500), dados.descricao).input("hoje", sql.Date, hojeBrasilia())
       .query(`
         INSERT INTO CanaisOficiaisComunicacao (Sigla, Nome, Ativo, Plataforma, Categoria, TemaFocado, Identificador, IdentificadorNormalizado, VinculoInstitucional,
-          DeclaracaoInstitucionalPorMembroId, DeclaracaoInstitucionalEm, Escopo, CongregacaoId, AreaId, DepartamentoId, IncluiMenores, PublicoNoSite, CustodiaSecretaria,
+          DeclaracaoInstitucionalPorMembroId, DeclaracaoInstitucionalEm, Escopo, CongregacaoId, AreaId, DepartamentoId, IncluiMenores, ResponsavelAcessoMembroId, PublicoNoSite, CustodiaSecretaria,
           Descricao, VigenteDesde, RegistradoPorMembroId)
         OUTPUT INSERTED.CanalId
-        VALUES (N'CANAL', @nome, 1, @plataforma, @categoria, @tema, @ident, @norm, @vinculo, @por, SYSUTCDATETIME(), @escopo, @cong, @area, @dep, @menores, @publico, @custodia, @descricao, @hoje, @por)`);
+        VALUES (N'CANAL', @nome, 1, @plataforma, @categoria, @tema, @ident, @norm, @vinculo, @por, SYSUTCDATETIME(), @escopo, @cong, @area, @dep, @menores, @resp, @publico, @custodia, @descricao, @hoje, @por)`);
     canalId = r.recordset[0].CanalId;
     await pool.request().input("id", sql.Int, canalId).query(`UPDATE CanaisOficiaisComunicacao SET Sigla = LEFT(Plataforma, 22) + N'_' + CONVERT(NVARCHAR(10), CanalId) WHERE CanalId = @id`);
   } catch (e) {
@@ -257,7 +332,8 @@ async function criarCanal(pool, ctx, d, { membroId }) {
   }
   await registrarAuditoria({ tabela: "CanaisOficiaisComunicacao", registroId: canalId, acao: "CANAL_REGISTRADO", usuarioId: membroId, dadosDepois: { ...dados, canalId } });
   const canal = await buscarCanal(pool, canalId, ctx);
-  return { sucesso: true, mensagem: `Canal “${dados.nome}” registrado. Designe os administradores e peça que aceitem o Termo de Dever de Moderação.`, canalId, canal };
+  const aviso = dados.incluiMenores ? " Como inclui crianças e adolescentes, o canal fica IRREGULAR até ter ao menos dois administradores adultos habilitados e um responsável com acesso." : "";
+  return { sucesso: true, mensagem: `Canal “${dados.nome}” registrado. Designe os administradores e peça que aceitem o Termo de Dever de Moderação.${aviso}`, canalId, canal };
 }
 
 async function atualizarCanal(pool, ctx, canalId, d, { membroId }) {
@@ -281,6 +357,7 @@ async function atualizarCanal(pool, ctx, canalId, d, { membroId }) {
     areaId: tem("areaId") ? d.areaId : atual.areaId,
     departamentoId: tem("departamentoId") ? d.departamentoId : atual.departamentoId,
     incluiMenores: tem("incluiMenores") ? d.incluiMenores : atual.incluiMenores,
+    responsavelAcessoMembroId: tem("responsavelAcessoMembroId") ? d.responsavelAcessoMembroId : atual.responsavelAcessoMembroId,
     publicoNoSite: tem("publicoNoSite") ? d.publicoNoSite : atual.publicoNoSite,
     custodiaSecretaria: tem("custodiaSecretaria") ? d.custodiaSecretaria : atual.custodiaSecretaria,
     descricao: tem("descricao") ? d.descricao : atual.descricao
@@ -296,18 +373,30 @@ async function atualizarCanal(pool, ctx, canalId, d, { membroId }) {
     if (recusa) return { sucesso: false, mensagem: recusa };
   }
 
+  // v7.7 — só se confere o responsável QUANDO ele muda (um canal cujo responsável ficou inativo depois continua editável nos outros campos; a pendência já aparece na
+  // conformidade). E ligar "inclui menores" num canal que já tem administradores exige a regra cumprida (dois adultos habilitados, responsável com acesso).
+  const hoje = hojeBrasilia();
+  if (dados.responsavelAcessoMembroId && dados.responsavelAcessoMembroId !== atual.responsavelAcessoMembroId) {
+    const recusaResp = await conferirResponsavelDeAcesso(pool, dados.responsavelAcessoMembroId, { hoje });
+    if (recusaResp) return { sucesso: false, mensagem: recusaResp };
+  }
+  if (dados.incluiMenores && !atual.incluiMenores && atual.ativo) {
+    const recusaLigar = await recusaDeLigarMenores(pool, atual, dados.responsavelAcessoMembroId, { hoje });
+    if (recusaLigar) return recusaLigar;
+  }
+
   try {
     await pool.request().input("id", sql.Int, atual.canalId)
       .input("nome", sql.NVarChar(150), dados.nome).input("plataforma", sql.NVarChar(20), dados.plataforma).input("categoria", sql.NVarChar(20), dados.categoria)
       .input("tema", sql.NVarChar(30), dados.temaFocado).input("ident", sql.NVarChar(200), dados.identificador).input("norm", sql.NVarChar(200), dados.identificadorNormalizado)
       .input("vinculo", sql.NVarChar(12), dados.vinculoInstitucional).input("por", sql.Int, membroId || null)
       .input("escopo", sql.NVarChar(14), dados.escopo).input("cong", sql.Int, dados.congregacaoId).input("area", sql.Int, dados.areaId).input("dep", sql.Int, dados.departamentoId)
-      .input("menores", sql.Bit, dados.incluiMenores).input("publico", sql.Bit, dados.publicoNoSite).input("custodia", sql.Bit, dados.custodiaSecretaria)
+      .input("menores", sql.Bit, dados.incluiMenores).input("resp", sql.Int, dados.responsavelAcessoMembroId).input("publico", sql.Bit, dados.publicoNoSite).input("custodia", sql.Bit, dados.custodiaSecretaria)
       .input("descricao", sql.NVarChar(500), dados.descricao).input("declarouAgora", sql.Bit, !atual.declaradoInstitucionalEm)
       .query(`
         UPDATE CanaisOficiaisComunicacao SET Nome = @nome, Plataforma = @plataforma, Categoria = @categoria, TemaFocado = @tema, Identificador = @ident,
           IdentificadorNormalizado = @norm, VinculoInstitucional = @vinculo, Escopo = @escopo, CongregacaoId = @cong, AreaId = @area, DepartamentoId = @dep,
-          IncluiMenores = @menores, PublicoNoSite = @publico, CustodiaSecretaria = @custodia, Descricao = @descricao,
+          IncluiMenores = @menores, ResponsavelAcessoMembroId = @resp, PublicoNoSite = @publico, CustodiaSecretaria = @custodia, Descricao = @descricao,
           DeclaracaoInstitucionalPorMembroId = CASE WHEN @declarouAgora = 1 THEN @por ELSE DeclaracaoInstitucionalPorMembroId END,
           DeclaracaoInstitucionalEm = CASE WHEN @declarouAgora = 1 THEN SYSUTCDATETIME() ELSE DeclaracaoInstitucionalEm END
         WHERE CanalId = @id`);
@@ -321,6 +410,29 @@ async function atualizarCanal(pool, ctx, canalId, d, { membroId }) {
   }
   await registrarAuditoria({ tabela: "CanaisOficiaisComunicacao", registroId: atual.canalId, acao: "CANAL_ATUALIZADO", usuarioId: membroId, dadosAntes: atual, dadosDepois: dados });
   return { sucesso: true, mensagem: "Canal atualizado.", canal: await buscarCanal(pool, atual.canalId, ctx) };
+}
+
+// v7.7 — indica (ou retira, com `membroId` nulo) o responsável com acesso ao grupo de um canal que inclui menores. O canal já foi conferido no escopo de quem pede
+// (GestaoCanais); aqui valem as regras do dado: canal ativo, que inclui menores, e responsável membro ATIVO e ADULTO. A auditoria guarda só matrículas.
+async function definirResponsavelAcesso(pool, ctx, { canalId, membroId, por, hoje = hojeBrasilia() }) {
+  const canal = await buscarCanal(pool, canalId, ctx);
+  if (!canal) return { sucesso: false, mensagem: "Canal não encontrado." };
+  if (!canal.ativo) return { sucesso: false, mensagem: "O canal está desativado." };
+  if (!canal.incluiMenores) return { sucesso: false, mensagem: "Este canal não está marcado como “inclui crianças/adolescentes”: marque isso no cadastro do canal antes de indicar o responsável com acesso." };
+  const novo = membroId == null ? null : canais.inteiroPositivoEstrito(membroId);
+  if (membroId != null && !novo) return { sucesso: false, mensagem: "Informe a matrícula do responsável com acesso (número inteiro positivo)." };
+  const atual = canal.responsavelAcessoMembroId || null;
+  if (novo === atual) return { sucesso: false, mensagem: novo ? "Esta pessoa já é o responsável com acesso deste canal." : "Este canal já está sem responsável com acesso indicado." };
+  if (novo) {
+    const recusa = await conferirResponsavelDeAcesso(pool, novo, { hoje });
+    if (recusa) return { sucesso: false, mensagem: recusa };
+  }
+  await pool.request().input("id", sql.Int, canal.canalId).input("resp", sql.Int, novo).query(`UPDATE CanaisOficiaisComunicacao SET ResponsavelAcessoMembroId = @resp WHERE CanalId = @id`);
+  await registrarAuditoria({ tabela: "CanaisOficiaisComunicacao", registroId: canal.canalId, acao: "CANAL_RESPONSAVEL_ACESSO", usuarioId: por, dadosAntes: { responsavelAcessoMembroId: atual }, dadosDepois: { responsavelAcessoMembroId: novo } });
+  return {
+    sucesso: true, canalId: canal.canalId, responsavelAcessoMembroId: novo,
+    mensagem: novo ? "Responsável com acesso indicado." : "Responsável com acesso retirado: o canal fica IRREGULAR até que outro seja indicado."
+  };
 }
 
 async function desativarCanal(pool, ctx, canalId, motivo, { membroId }) {
@@ -441,6 +553,16 @@ async function designarAdministrador(pool, ctx, { canalId, membroId, papel, desi
   const ja = await pool.request().input("c", sql.Int, canal.canalId).input("m", sql.Int, idMembro).query(`SELECT AdminId FROM CanalAdministradores WHERE CanalId = @c AND MembroId = @m AND EncerradoEm IS NULL`);
   if (ja.recordset[0]) return { sucesso: false, mensagem: `${m.Nome} já é administrador deste canal.` };
 
+  // v7.7 — canal que inclui crianças e adolescentes: só administra (ou opera) quem está habilitado para servir com menores. A recusa diz o que falta, mas pela máscara da
+  // gestão: pendência com a Diretoria (restrição, comunicação em análise, cadastro nacional, fora de comunhão) aparece só como "pendência com a Diretoria", sem o motivo.
+  if (canal.incluiMenores) {
+    const ap = (await aptidaoMenoresDb().aptidaoEmLote(pool, [idMembro], { hoje: hojeBrasilia() })).get(idMembro);
+    if (!ap || !ap.apto || !ap.contaComoAdulto) {
+      const faltas = ap ? mm.mascararParaGestao(ap.bloqueios).map(b => (mm.ROTULO_BLOQUEIO[b.codigo] || "Pendência na habilitação").toLowerCase()) : [];
+      return { sucesso: false, mensagem: `Este canal inclui crianças e adolescentes: só administra quem está habilitado para servir com menores (Lei 14.811/2024). Esta pessoa ainda não está habilitada${faltas.length ? ` — ${faltas.join("; ")}` : ""}. Peça que ela regularize em Meu Painel → Ministério com menores.` };
+    }
+  }
+
   let adminId;
   try {
     const r = await pool.request().input("c", sql.Int, canal.canalId).input("m", sql.Int, idMembro).input("papel", sql.NVarChar(14), papelNorm).input("por", sql.Int, designadoPor || null)
@@ -464,12 +586,28 @@ async function emailDe(pool, membroId) {
   return r.recordset[0] ? r.recordset[0].Email : null;
 }
 
-async function encerrarAdministrador(pool, ctx, { adminId, motivo, por, hoje = hojeBrasilia() }) {
+// `canalDesativando`: quem chama está encerrando as designações porque o canal inteiro está sendo desativado — aí não há grupo para proteger e a trava dos dois administradores não vale.
+async function encerrarAdministrador(pool, ctx, { adminId, motivo, por, hoje = hojeBrasilia(), canalDesativando = false }) {
   const a = (await pool.request().input("id", sql.Int, Number(adminId)).query(`SELECT AdminId, CanalId, MembroId, Papel, EncerradoEm FROM CanalAdministradores WHERE AdminId = @id`)).recordset[0];
   if (!a) return { sucesso: false, mensagem: "Designação não encontrada." };
   if (a.EncerradoEm) return { sucesso: false, mensagem: "Esta designação já foi encerrada." };
   const m = limpar(motivo);
   if (m.length < 5 || m.length > 200) return { sucesso: false, mensagem: "Informe o motivo do encerramento (5 a 200 caracteres)." };
+  // v7.7 — grupo ativo com crianças e adolescentes nunca fica com menos de dois administradores: designe o substituto ANTES de encerrar esta designação.
+  // (Canal já desativado, ou sendo desativado agora, não tem grupo a proteger; desmarcar "inclui menores" também libera.)
+  if (!canalDesativando) {
+    const canal = await buscarCanal(pool, a.CanalId, ctx);
+    if (canal && canal.ativo && canal.incluiMenores) {
+      const ativos = Number((await pool.request().input("c", sql.Int, a.CanalId).query(`SELECT COUNT(*) AS n FROM CanalAdministradores WHERE CanalId = @c AND EncerradoEm IS NULL`)).recordset[0].n);
+      if (ativos - 1 < canais.MENORES_ADMINISTRADORES_MINIMOS) {
+        return recusaMenores("Este grupo inclui crianças e adolescentes e precisa manter pelo menos dois administradores.", [{
+          codigo: "MENORES_SEM_SEGUNDO_ADULTO", gravidade: "ALTA",
+          mensagem: `Hoje há ${ativos} designação(ões) ativa(s): designe antes o substituto, habilitado para servir com menores, e só então encerre esta designação.`,
+          resumo: "há menos de dois administradores adultos com o Termo de Dever de Moderação aceito"
+        }]);
+      }
+    }
+  }
   await pool.request().input("id", sql.Int, a.AdminId).input("por", sql.Int, por || null).input("motivo", sql.NVarChar(200), m)
     .query(`UPDATE CanalAdministradores SET EncerradoEm = SYSUTCDATETIME(), EncerradoPorMembroId = @por, MotivoEncerramento = @motivo WHERE AdminId = @id`);
   await registrarAuditoria({ tabela: "CanalAdministradores", registroId: a.AdminId, acao: "ADMIN_ENCERRADO", usuarioId: por, dadosAntes: { canalId: a.CanalId, membroId: a.MembroId, papel: a.Papel }, dadosDepois: { motivo: m } });
@@ -872,7 +1010,7 @@ async function montarCobertura(pool, ctx, { hoje = hojeBrasilia(), filtrarCanal 
   // e um gestor local via o número de ocorrências abertas de canais que não são dele. Inativos entram na conta (como antes), por isso a lista aqui é a completa.
   const [todosCanais, st, confDias, transmissao, ocAbertas, trocas] = await Promise.all([
     carregarCanais(pool, ctx, { incluirInativos: true }),
-    carregarEstadoDosCanais(pool),
+    carregarEstadoDosCanais(pool, { hoje }),
     lerPrazoDias(pool, "CANAIS_CONFERENCIA_DIAS", CONFERENCIA_DIAS_PADRAO),
     listarTransmissao(pool, ctx),
     pool.request().query(`SELECT CanalId, COUNT(*) AS abertas, SUM(CASE WHEN PrazoRemocaoEm < SYSUTCDATETIME() THEN 1 ELSE 0 END) AS vencidas FROM CanalOcorrencias WHERE Status = 'ABERTA' GROUP BY CanalId`),
@@ -903,6 +1041,7 @@ async function montarCobertura(pool, ctx, { hoje = hojeBrasilia(), filtrarCanal 
       irregulares: avaliados.filter(c => c.situacao === "IRREGULAR").length,
       cadastrosIncompletos: avaliados.filter(c => c.cadastroIncompleto).length,
       semAdministrador: avaliados.filter(c => c.pendencias.some(p => p.codigo === "SEM_ADMINISTRADOR")).length,
+      menoresIrregulares: avaliados.filter(c => c.pendencias.some(p => canais.CODIGOS_PENDENCIA_MENORES.includes(p.codigo))).length,
       termosPendentes,
       ocorrenciasAbertas: oc.abertas, ocorrenciasVencidas: oc.vencidas,
       trocasPendentes: tr.abertas, trocasVencidas: tr.vencidas,
@@ -933,7 +1072,7 @@ async function listarParaContato(pool, ctx, { comIdentificador = false } = {}) {
 async function canaisPublicos(pool, ctx) {
   const lista = await carregarCanais(pool, ctx, { incluirInativos: false });
   const ordemEscopo = { CAMPO: 0, AREA: 1, DEPARTAMENTO: 2, CONGREGACAO: 3 };
-  return lista.filter(c => c.publicoNoSite && c.plataforma && c.identificador && c.categoria !== "GRUPO_FOCADO")
+  return lista.filter(c => c.publicoNoSite && !c.incluiMenores && c.plataforma && c.identificador && c.categoria !== "GRUPO_FOCADO")
     .sort((a, b) => ordemEscopo[a.escopo] - ordemEscopo[b.escopo] || a.nome.localeCompare(b.nome, "pt-BR"))
     .map(c => ({
       id: c.canalId, nome: c.nome, plataforma: c.plataforma, rotuloPlataforma: c.rotuloPlataforma, categoria: c.categoria,
@@ -1014,6 +1153,32 @@ async function detectarSemAdministrador(pool, { hoje = hojeBrasilia() } = {}) {
   return fatos;
 }
 
+// v7.7 — canal ATIVO que inclui crianças e adolescentes e está fora da regra (menos de dois administradores adultos com o Termo aceito, administrador sem habilitação para
+// servir com menores, ou sem responsável com acesso). Um aviso por MÊS por canal enquanto durar, a quem administra o canal e à gestão de canais (destinatários sem repetição:
+// quem é as duas coisas recebe uma vez). O texto traz só o que está errado, em português simples — nunca o motivo da falta de habilitação de ninguém. A referência é
+// canal * 10000 + o número do mês: dentro do INT do banco para qualquer canal que a igreja venha a ter.
+async function detectarCanaisComMenoresIrregulares(pool, { hoje = hojeBrasilia() } = {}) {
+  const lista = (await pool.request().query(`SELECT CanalId, Nome, ResponsavelAcessoMembroId FROM CanaisOficiaisComunicacao WHERE Ativo = 1 AND IncluiMenores = 1`)).recordset;
+  if (lista.length === 0) return [];
+  const st = await carregarEstadoDosCanais(pool, { hoje });
+  const idx = mesIndice(hoje) % 10000;
+  let gestao = null;
+  const fatos = [];
+  for (const c of lista) {
+    const pend = canais.pendenciasDeMenores({ incluiMenores: true, responsavelAcessoMembroId: c.ResponsavelAcessoMembroId || null }, st.obter(c.CanalId));
+    if (pend.length === 0) continue;
+    gestao = gestao || await gestoresDeCanais(pool);
+    const admins = await administradoresAtivosDoCanal(pool, c.CanalId);
+    const vistos = new Set();
+    const destinatarios = [...admins, ...gestao].filter(d => d && d.membroId && !vistos.has(d.membroId) && vistos.add(d.membroId));
+    fatos.push({
+      referenciaId: c.CanalId * 10000 + idx, destinatarios,
+      fatoGerador: mm.textoCanalIrregular({ canalNome: c.Nome, problemas: pend.map(p => p.resumo) })
+    });
+  }
+  return fatos;
+}
+
 // Conferência vencida (ou nunca feita, depois de uma semana de cadastro): um aviso por semestre.
 async function detectarConferenciasVencidas(pool, { hoje = hojeBrasilia() } = {}) {
   const [lista, st, confDias] = await Promise.all([
@@ -1039,12 +1204,12 @@ async function detectarConferenciasVencidas(pool, { hoje = hojeBrasilia() } = {}
 module.exports = {
   LIMITE_LISTA, emMs, isoInstante, carregarContexto, lerPrazoDias,
   mapearCanal, carregarCanais, buscarCanal, listarCanais, detalharCanal, carregarEstadoDosCanais,
-  buscarContatosPessoais, criarCanal, atualizarCanal, desativarCanal, reativarCanal,
+  buscarContatosPessoais, criarCanal, atualizarCanal, definirResponsavelAcesso, desativarCanal, reativarCanal,
   notificarAgora, administradoresAtivosDoCanal, gestoresDeCanais,
   designarAdministrador, encerrarAdministrador, aceitarTermo, meusCanais, papeisNoCanal,
   carregarOcorrencias, abrirOcorrencia, registrarRemocao, marcarImprocedente, registrarAdvertencia, buscarOcorrenciaBruta, mapearOcorrencia,
   gerarTroca, gerarTrocaManual, listarTrocas, resolverTroca, sincronizarSucessoes,
   registrarConferencia, listarTransmissao, salvarTransmissao, montarCobertura,
   listarParaContato, canaisPublicos,
-  detectarOcorrenciasVencidas, detectarTermosPendentes, detectarTrocasCredencial, detectarSemAdministrador, detectarConferenciasVencidas
+  detectarOcorrenciasVencidas, detectarTermosPendentes, detectarTrocasCredencial, detectarSemAdministrador, detectarConferenciasVencidas, detectarCanaisComMenoresIrregulares
 };

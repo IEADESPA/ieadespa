@@ -25,6 +25,8 @@
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const hv = require("../shared/habilitacaoVoluntarios");
+const mm = require("../shared/ministerioMenores");
+const mmDb = require("../shared/ministerioMenoresDb");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { carregarPessoa, noEscopoDaPessoa, pessoaAlcancavel, FORA_DO_ESCOPO } = require("../shared/escopoRotas");
 
@@ -127,13 +129,18 @@ module.exports = async function (context, req) {
         const eq = (await pool.request().input("id", sql.Int, eqId).query(`SELECT c.Nome AS CongregacaoNome, e.ContatoComMenores AS ContatoComMenores FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId WHERE e.EquipeId = @id`)).recordset[0];
         // equipe que não existe e equipe fora do escopo: a mesma resposta
         if (!eq || !auth.estaNoEscopo(usuario, eq.CongregacaoNome)) return erro(context, 404, "Equipe não encontrada.");
+        // v7.7: desligar a marca derruba todo o portão da equipe (certidões, dois adultos, proporção): pede a confirmação reforçada. Ligar é livre.
+        if (!contatoComMenores && eq.ContatoComMenores && !auth.exigirFatorRecente(req, context)) return;
         await hv.atualizarContatoComMenores(pool, eqId, contatoComMenores);
+        // v7.7: ao ligar a marca, quem já estava escalado e não está habilitado sai das escalas futuras da equipe na hora (não espera a rotina diária).
+        let retirada = null;
+        if (contatoComMenores && !eq.ContatoComMenores) { try { retirada = await mmDb.retirarInaptosDasEscalas(pool, { equipeId: eqId }); } catch (e) { context.log.error("[GestaoHabilitacaoVoluntarios] varredura da equipe:", e); } }
         // Desligar a marca "contato com menores" tira a trava do ministério com menores: a mudança deixa rastro (quem, de quê para quê).
         await registrarAuditoria({
           tabela: "EscalasEquipes", registroId: eqId, acao: "CONTATO_COM_MENORES_ALTERADO", usuarioId: usuario.membroId,
           dadosAntes: { contatoComMenores: !!eq.ContatoComMenores }, dadosDepois: { contatoComMenores }
         });
-        context.res = { status: 200, body: { sucesso: true, mensagem: "✅ Marcação atualizada." } };
+        context.res = { status: 200, body: { sucesso: true, mensagem: retirada && retirada.alocacoes ? `✅ Marcação atualizada. ${retirada.alocacoes} escala(s) futura(s) de quem ainda não está habilitado foram desmarcadas.` : "✅ Marcação atualizada." } };
         return;
       }
     }
@@ -220,6 +227,8 @@ module.exports = async function (context, req) {
       if (!temPermissao(usuario)) return erro(context, 403, "Você não tem permissão para isso.");
       const habilitacao = await esteiraDoEscopo(pool, usuario, habilitacaoId);
       if (!habilitacao) return erro(context, 404, "Esteira não encontrada.");
+      // v7.7: o "inapto" passou a ser uma trava de proteção de crianças: ninguém o levanta de si mesmo.
+      if (Number(habilitacao.membroId) === Number(usuario.membroId)) return erro(context, 403, "Ninguém reabilita a si mesmo: peça a outra pessoa da Secretaria.");
       const resultado = await hv.reabilitar(pool, { habilitacaoId, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -239,7 +248,13 @@ module.exports = async function (context, req) {
       const dados = await hv.buscarDadosElegibilidade(pool, { membroId, equipeId });
       if (!dados) return erro(context, 404, MSG_MEMBRO_OU_EQUIPE);
       const resultado = hv.podeServirComMenores(dados);
-      context.res = { status: 200, body: { sucesso: true, ...dados, ...resultado } };
+      // v7.7: a decisão passa a ser a aptidão completa (esteira + certidões em dia + treinamento + ficha + política + 6 meses...); a gestão da congregação vê o que a
+      // pessoa precisa fazer, mas não o motivo de uma pendência com a Diretoria. Os campos antigos (elegivel, motivo) seguem, agora coerentes com a aptidão.
+      const aptidao = await mmDb.aptidaoDe(pool, membroId);
+      const bloqueios = mm.mascararParaGestao(aptidao.bloqueios);
+      const elegivel = !dados.contatoComMenores || aptidao.apto;
+      context.res = { status: 200, body: { sucesso: true, ...dados, ...resultado, elegivel, motivo: elegivel ? null : (bloqueios[0] && bloqueios[0].mensagem) || resultado.motivo,
+        aptidao: { apto: aptidao.apto, contaComoAdulto: aptidao.contaComoAdulto, bloqueios, validades: mm.validadesParaGestao(aptidao.validades, aptidao.bloqueios), proximoVencimento: mm.proximoVencimentoParaGestao(aptidao.proximoVencimento, aptidao.bloqueios) } } };
       return;
     }
 

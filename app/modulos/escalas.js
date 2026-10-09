@@ -109,22 +109,88 @@ async function carregarServicosAcao() {
     : "<p class='subtitle'>Nenhum serviço cadastrado ainda.</p>";
 }
 
-async function abrirServicoEscalaAcao(servicoId) {
+// `problemasPublicacao`: os problemas que a recusa de publicar (422) trouxe; ficam listados no topo do detalhe, com o que fazer em cada um.
+async function abrirServicoEscalaAcao(servicoId, problemasPublicacao) {
   const res = await fetchProtegido(`${API_BASE}/escalas/servicos-detalhe?servicoId=${servicoId}`);
   const data = await res.json();
   const container = document.getElementById("painelDetalheServicoEscala");
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  // v7.7: as salas com menores precisam do nome das faixas (o catálogo do ministério com menores)
+  if (data.menores && Array.isArray(data.menores.salas) && data.menores.salas.length) await mnrGarantirCatalogos();
 
   const ehRodizio = !!volServicoRodizio[servicoId];
   const linhasAlocacao = data.alocacoes.map(a => `<tr><td>${a.equipeId}</td><td>${a.membroId}</td><td>${escaparHtmlEbd(a.status)}</td></tr>`).join("");
   container.innerHTML = `
     <h4>${escaparHtmlEbd(data.servico.descricao || "Serviço")} — ${volDataHora(data.servico.dataHora)} (${escaparHtmlEbd(data.servico.status)})</h4>
+    ${montarProblemasPublicacaoHtml(problemasPublicacao)}
     ${ehRodizio ? '<p class="subtitle">Serviço de rodízio: a escala é do grupo da vez (Regimento Art. 135 §1º), por isso o auto-escalador não é usado aqui.</p>' : ""}
     <div class="barra-lista">
       ${data.servico.status === "RASCUNHO" && !ehRodizio ? `<button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="autoEscalarAcao" data-args-click="${argsAttr(servicoId)}">🤖 Rodar Auto-Escalador</button>` : ""}
       ${data.servico.status === "RASCUNHO" ? `<button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="publicarEscalaAcao" data-args-click="${argsAttr(servicoId)}">📣 Publicar</button>` : ""}
     </div>
-    <table class="tabela-frequencia"><thead><tr><th>Equipe (id)</th><th>Membro (matrícula)</th><th>Status</th></tr></thead><tbody>${linhasAlocacao || "<tr><td colspan='3'>Nenhuma alocação ainda.</td></tr>"}</tbody></table>`;
+    <table class="tabela-frequencia"><thead><tr><th>Equipe (id)</th><th>Membro (matrícula)</th><th>Status</th></tr></thead><tbody>${linhasAlocacao || "<tr><td colspan='3'>Nenhuma alocação ainda.</td></tr>"}</tbody></table>
+    ${montarSalasMenoresHtml(data.menores, servicoId, Array.isArray(problemasPublicacao) && problemasPublicacao.length > 0)}`;
+}
+
+// ---- v7.7: salas com menores do serviço (Lei 14.811/2024): dois adultos habilitados por sala e proporção de adultos por criança, conferidos ANTES de publicar ----
+const escCriancasEmCurso = new Set();   // trava duplo clique em "Salvar" das crianças previstas
+function montarSalasMenoresHtml(menores, servicoId, jaListouProblemas) {
+  if (!menores || typeof menores !== "object" || !Array.isArray(menores.salas)) return "";
+  const problemas = Array.isArray(menores.problemas) ? menores.problemas : [];
+  const idServico = Number(servicoId);
+  const cabecalho = `<h5 style="margin:16px 0 4px;">🧒 Salas com menores</h5>
+    <p class="subtitle" style="margin:0 0 8px;">Uma sala com crianças <strong>nunca fica com um adulto só</strong>, e cada adulto acompanha um número limitado de crianças conforme a faixa etária (Lei 14.811/2024). Informe quantas crianças a sala espera neste serviço: o sistema confere se há adultos habilitados suficientes antes de publicar. <em>Exemplo: 12 crianças no Maternal (até 5 por adulto) pedem 3 adultos habilitados.</em></p>`;
+  if (!menores.salas.length) return `${cabecalho}<p class="subtitle">Nenhuma sala com menores neste serviço: só entram as equipes marcadas com "contato com menores" que já têm alguém escalado.</p>`;
+  const cartoes = menores.salas.map(s => {
+    const idEquipe = Number(s.equipeId);
+    const dela = jaListouProblemas ? [] : problemas.filter(p => Number(p.equipeId) === idEquipe);
+    const faixa = s.faixa ? escaparHtmlEbd(mnrRotuloFaixa(s.faixa)) : "<span class='psc-alerta'>não definida</span> — escolha em Habilitação de Voluntários, ao lado da equipe";
+    return `<div class="cal-cartao cartao-area-ebd mnr-sala ${s.ok ? "mnr-sala-ok" : "mnr-sala-problema"}">
+      <h5>${escaparHtmlEbd(s.equipeNome)} ${s.ok ? '<span class="cal-selo mnr-selo cal-st-homologado">✓ Em ordem</span>' : '<span class="cal-selo mnr-selo cal-st-indeferido">✗ Falta ajustar</span>'}</h5>
+      <dl class="cal-dl">
+        <div><dt>Faixa etária</dt><dd>${faixa}</dd></div>
+        <div><dt>Adultos habilitados escalados</dt><dd><strong>${Number(s.adultos) || 0}</strong> de ${Number(s.necessarios) || 0} necessários ${(Number(s.adultos) || 0) >= (Number(s.necessarios) || 0) ? "✓" : "✗"}</dd></div>
+      </dl>
+      <div class="barra-lista">
+        <label for="escCriancas${idServico}_${idEquipe}">Crianças previstas neste serviço</label>
+        <input type="number" id="escCriancas${idServico}_${idEquipe}" min="0" max="200" value="${s.criancasPrevistas == null ? "" : Number(s.criancasPrevistas)}" />
+        <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="salvarCriancasPrevistasAcao" data-args-click="${argsAttr(idServico, idEquipe, ARG.elemento)}">💾 Salvar</button>
+      </div>
+      ${dela.length ? `<ul class="mnr-problemas" role="status">${dela.map(p => `<li>${escaparHtmlEbd(p.mensagem)}${mnrTem(MNR_COMO_RESOLVER, p.codigo) ? `<br /><small>${escaparHtmlEbd(MNR_COMO_RESOLVER[p.codigo])}</small>` : ""}</li>`).join("")}</ul>` : ""}
+    </div>`;
+  }).join("");
+  return `${cabecalho}${cartoes}`;
+}
+// A lista de problemas que a recusa de publicar (422) trouxe, no topo do detalhe: o que está errado e o que fazer
+function montarProblemasPublicacaoHtml(problemas) {
+  if (!Array.isArray(problemas) || !problemas.length) return "";
+  return `<div class="cnl-aviso-senha" role="alert"><strong>Não dá para publicar ainda. Ajuste o que está abaixo e publique de novo:</strong>
+    <ul class="mnr-problemas">${problemas.map(p => `<li>${escaparHtmlEbd(p.mensagem)}${mnrTem(MNR_COMO_RESOLVER, p.codigo) ? `<br /><small>${escaparHtmlEbd(MNR_COMO_RESOLVER[p.codigo])}</small>` : ""}</li>`).join("")}</ul></div>`;
+}
+async function salvarCriancasPrevistasAcao(servicoId, equipeId, botao) {
+  const campo = document.getElementById(`escCriancas${Number(servicoId)}_${Number(equipeId)}`);
+  const texto = campo ? String(campo.value).trim() : "";
+  if (!/^\d{1,3}$/.test(texto) || Number(texto) > 200) { mostrarToast("Informe quantas crianças a sala espera: um número inteiro de 0 a 200.", "erro"); return; }
+  const chave = `${Number(servicoId)}_${Number(equipeId)}`;
+  if (escCriancasEmCurso.has(chave)) { mostrarToast("Aguarde: o pedido anterior ainda está sendo processado.", "erro"); return; }
+  escCriancasEmCurso.add(chave);
+  if (botao) botao.disabled = true;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/escalas/criancas-previstas`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ servicoId: Number(servicoId), equipeId: Number(equipeId), criancas: Number(texto) })
+    });
+    const data = await res.json();
+    if (data.sucesso === false) { if (res.status !== 403) mostrarToast(data.mensagem, "erro"); return; }
+    mostrarToast(data.mensagem, "sucesso");
+    // o detalhe é refeito (os adultos necessários mudam com o número de crianças), mas o que foi digitado nas OUTRAS salas e ainda não foi salvo volta aos campos
+    const digitados = Array.from(document.querySelectorAll(`[id^="escCriancas${Number(servicoId)}_"]`)).filter(el => el.id !== (campo && campo.id)).map(el => [el.id, el.value]);
+    await abrirServicoEscalaAcao(Number(servicoId));
+    digitados.forEach(([idCampo, valor]) => { const el = document.getElementById(idCampo); if (el && valor !== "") el.value = valor; });
+  } finally {
+    if (botao) botao.disabled = false;
+    escCriancasEmCurso.delete(chave);
+  }
 }
 
 async function autoEscalarAcao(servicoId) {
@@ -142,7 +208,14 @@ async function publicarEscalaAcao(servicoId) {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ servicoId })
   });
   const data = await res.json();
-  if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+  if (data.sucesso === false) {
+    // v7.7: sala com menores fora da regra (422 com a lista de problemas): a lista aparece no detalhe do serviço, com o que fazer em cada um
+    if (Array.isArray(data.problemas) && data.problemas.length) {
+      mostrarToast("Não dá para publicar ainda: veja a lista de problemas no detalhe do serviço.", "erro");
+      abrirServicoEscalaAcao(servicoId, data.problemas);
+    } else mostrarToast(data.mensagem, "erro");
+    return;
+  }
   mostrarToast(data.mensagem, "sucesso");
   carregarServicosAcao();
   abrirServicoEscalaAcao(servicoId);
@@ -315,13 +388,22 @@ async function carregarEquipesFlagAcao() {
   const data = await res.json();
   const container = document.getElementById("painelEquipesFlag");
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
+  // v7.7: a faixa etária (quantas crianças cada adulto acompanha) só importa para a equipe com contato com menores: o seletor aparece ao lado da marca
+  if (data.equipes.some(e => e.contatoComMenores)) await mnrGarantirCatalogos();
   container.innerHTML = data.equipes.length
-    ? `<table class="tabela-frequencia"><thead><tr><th>Equipe</th><th>Contato com menores</th><th></th></tr></thead><tbody>
-        ${data.equipes.map(e => `<tr><td>${escaparHtmlEbd(e.nome)}</td><td>${e.contatoComMenores ? "Sim" : "Não"}</td>
+    ? `<table class="tabela-frequencia"><thead><tr><th>Equipe e faixa etária (proporção de adultos)</th><th>Contato com menores</th><th></th></tr></thead><tbody>
+        ${data.equipes.map(e => `<tr><td>${escaparHtmlEbd(e.nome)}${e.contatoComMenores ? `<br /><select id="hvFaixa${Number(e.equipeId)}" class="mnr-select-faixa" aria-label="Faixa etária da equipe ${escaparHtmlEbd(e.nome)}">${mnrOpcoesFaixa("— escolher a faixa —", true)}</select>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:4px 0 0;" data-on-click="salvarFaixaEquipeAcao" data-args-click="${argsAttr(e.equipeId, ARG.elemento)}">💾 Salvar a faixa</button>` : ""}</td><td>${e.contatoComMenores ? "Sim" : "Não"}</td>
           <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="alternarContatoComMenoresAcao" data-args-click="${argsAttr(e.equipeId, !e.contatoComMenores)}">
             ${e.contatoComMenores ? "Desmarcar" : "Marcar como contato com menores"}</button></td></tr>`).join("")}
-      </tbody></table>`
+      </tbody></table>
+      <p class="psc-legenda">Sem a faixa, a escala de uma sala com crianças não pode ser publicada. A faixa já gravada aparece escolhida ao lado do nome da equipe: escolha outra e salve para trocar.</p>`
     : "<p class='subtitle'>Nenhuma equipe cadastrada nesta congregação ainda (cadastre em Escalas de Serviço).</p>";
+  // a faixa que a equipe já tem aparece escolhida (só se for uma das faixas do catálogo)
+  data.equipes.forEach(e => {
+    const sel = e.contatoComMenores ? document.getElementById(`hvFaixa${Number(e.equipeId)}`) : null;
+    if (sel && e.faixaEtariaMenores && Array.from(sel.options).some(o => o.value === e.faixaEtariaMenores)) sel.value = e.faixaEtariaMenores;
+  });
 
   await carregarHabilitacoesAcao();
   volCarregarHabilitacaoAcao();
@@ -335,6 +417,18 @@ async function alternarContatoComMenoresAcao(equipeId, novoValor) {
   const data = await res.json();
   mostrarToast(data.mensagem, data.sucesso === false ? "erro" : "sucesso");
   carregarEquipesFlagAcao();
+}
+
+// v7.7: grava a faixa etária da equipe (ministerio-menores/equipe-faixa); "NENHUMA" remove a faixa
+async function salvarFaixaEquipeAcao(equipeId, botao) {
+  const id = Number(equipeId);
+  const sel = document.getElementById(`hvFaixa${id}`);
+  const faixa = sel ? String(sel.value).trim() : "";
+  if (!faixa) { mostrarToast("Escolha a faixa etária da equipe.", "erro"); return; }
+  await mnrProtegerBotao(botao, async () => {
+    const data = await mnrPostar("equipe-faixa", { equipeId: id, faixa: faixa === "NENHUMA" ? null : faixa });
+    if (!data.jaAvisado) mostrarToast(mnrMsgErro(data), data.sucesso === false ? "erro" : "sucesso");
+  }, `faixaEquipe${id}`);
 }
 
 async function carregarHabilitacoesAcao() {
@@ -472,5 +566,6 @@ registrarAcoes({
   abrirDetalheHabilitacaoAcao, abrirServicoEscalaAcao, adicionarMembroEquipeAcao, alternarContatoComMenoresAcao, autoEscalarAcao,
   carregarEquipesAcao, carregarEquipesFlagAcao, carregarPendenciasConfirmacaoAcao, carregarTrocasPendentesAcao, concluirEtapaHabilitacaoAcao,
   confirmarRecebimentoEscalaAcao, criarEquipeAcao, criarServicoAcao, decidirTrocaAcao, declararIndisponibilidadeAcao, iniciarHabilitacaoAcao,
-  marcarInaptoAcao, pedirTrocaEscalaAcao, publicarEscalaAcao, reabilitarHabilitacaoAcao, registrarDesligamentoAcao, responderConviteEscalaAcao
+  marcarInaptoAcao, pedirTrocaEscalaAcao, publicarEscalaAcao, reabilitarHabilitacaoAcao, registrarDesligamentoAcao, responderConviteEscalaAcao,
+  salvarCriancasPrevistasAcao, salvarFaixaEquipeAcao
 });

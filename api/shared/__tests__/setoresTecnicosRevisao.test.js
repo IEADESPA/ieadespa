@@ -135,6 +135,10 @@ describe("achado 3: o Termo de Vistoria não vaza para a trilha de auditoria nem
     expect(chamadas.some(c => /INSERT INTO VistoriasAnulacoes/.test(c.sql))).toBe(true);
     expect(chamadas.some(c => /DELETE|UPDATE VistoriasAntecedentes/i.test(c.sql))).toBe(false);
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "VISTORIA_ANULADA", registroId: 5, dadosDepois: { motivoTamanho: 34 } });
+    // v7.7: anular o termo dispara a retirada imediata das escalas com menores (fail-soft: a consulta sem resultado empilhado no mock NÃO quebra a anulação — a rotina diária refaz)
+    expect(chamadas.length).toBeGreaterThanOrEqual(6);
+    expect(chamadas[5].sql).toMatch(/FROM EscalasAlocacoes a JOIN EscalasServicos s/);          // a varredura da retirada, só desta pessoa
+    expect(chamadas[5].inputs.m).toBe(20);
     // recusas: inexistente, ninguém anula o próprio termo, motivo curto, já anulado
     ({ pool } = criarPoolFalso([[]]));
     expect((await vdb.anularVistoria(pool, { dados: { vistoriaId: 5, motivo: "Termo lavrado na matrícula errada." }, por: 1 })).mensagem).toMatch(/não encontrado/);

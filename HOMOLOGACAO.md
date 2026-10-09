@@ -70,7 +70,10 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
   3º adulto da Alfa, matrícula 900007; **secretário geral** — o único login de nível
   geral, 4º adulto da Alfa, matrícula 900013, sem e-mail como o pastor — desde a v7.6,
   porque as abas Setores Técnicos e Vistoria de Antecedentes só existem para o nível
-  geral). Nunca copiamos dado de membro real; o script se recusa a rodar
+  geral; e, desde a v7.7, com as permissões das escalas e da habilitação). A Alfa tem
+  ainda um **Ministério Infantil fictício** (equipe com contato com menores) com cinco
+  voluntários, cada um numa situação — dois em dia, um com a certidão vencida, um sem o
+  treinamento e um sem a política aceita —, para abrir o painel de conformidade. Nunca copiamos dado de membro real; o script se recusa a rodar
   fora de um banco com "homolog" no nome.
 
 ## O que a homologação prova — e o que não prova (vD.3, 07/10/2026)

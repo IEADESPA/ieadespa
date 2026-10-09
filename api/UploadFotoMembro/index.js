@@ -13,7 +13,8 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
-const { fotoConsentimentoConcedido } = require("../shared/consentimentoFoto");
+const { situacaoDoConsentimentoFoto } = require("../shared/consentimentoFoto");
+const { MSG_FOTO_MENOR_SECRETARIA } = require("../shared/menoresConsentimento");
 const { pessoaAlcancavel } = require("../shared/escopoRotas");
 
 const MIME_PERMITIDOS = ["image/jpeg", "image/png", "image/webp"];
@@ -60,9 +61,11 @@ module.exports = async function (context, req) {
   // shared/consentimentoFoto.js — bug real da v1.10: o autoatendimento só tem a
   // caixa de DADOS_CONTATO na tela, então travar só em FOTO deixava o upload
   // impossível mesmo com o consentimento concedido).
-  const concedido = await fotoConsentimentoConcedido(pool, sql, membroId);
-  if (!concedido) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: "Registre o consentimento de Foto (LGPD) antes de fazer o upload." } };
+  // v7.7 — menor de 18 anos (idade conhecida): só vale o consentimento de IMAGEM do RESPONSÁVEL (Meu Painel dele, ou a ficha assinada que a Secretaria registra em
+  // Ministério com menores); o consentimento genérico da própria pessoa não destrava a foto de um menor.
+  const situacao = await situacaoDoConsentimentoFoto(pool, sql, membroId);
+  if (!situacao.concedido) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: situacao.menor ? MSG_FOTO_MENOR_SECRETARIA : "Registre o consentimento de Foto (LGPD) antes de fazer o upload." } };
     return;
   }
 

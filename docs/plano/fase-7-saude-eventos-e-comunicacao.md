@@ -2102,40 +2102,176 @@ História/Acervo, RP/Cerimonial, Libras, Beleza/Estética, Educação/Pedagogia.
 roadmap pulava de v7.6 para v7.9 sem nota. A lacuna foi preenchida com o tema
 que mais fazia falta.)*
 
-- [ ] **Habilitação para Ministério Infantojuvenil** por voluntário: ficha
+- [x] **Habilitação para Ministério Infantojuvenil** por voluntário: ficha
       cadastral + certidão de antecedentes (federal/PF e estadual/TJ) anexada,
       com `data_emissao` e **validade automática de 180 dias**.
-- [ ] **Bloqueio de escala por habilitação vencida** — não é alerta: quem está
+      *(A esteira da v5.7 passou a usar a verificação real: o passo "Antecedentes" só fecha
+      com um Termo de Vistoria da v7.6 válido — as **duas** certidões criminais, sem restrição,
+      emitidas há no máximo 180 dias; a certidão não é guardada, só o hash e a data de emissão
+      que a v7.6 já guarda. A validade é **calculada na leitura**: vale até o 180º dia contado da
+      EMISSÃO, inclusive; vence a mais antiga das duas. A ficha cadastral é reconfirmada a cada
+      semestre pela própria pessoa, em Meu Painel, ou pela Secretaria.)*
+- [x] **Bloqueio de escala por habilitação vencida** — não é alerta: quem está
       com certidão vencida sai automaticamente das escalas de ministério com
       menores e não pode ser escalado. Alertas em D-60/D-30/D-15 antes de vencer
       (a renovação leva dias para sair; avisar no dia do vencimento é inútil).
-- [ ] **Treinamento obrigatório de proteção** com validade e renovação periódica
+      *(O portão vale em **todos** os caminhos que colocam alguém numa escala de equipe marcada
+      "contato com menores": aceitar, confirmar, trocar (e aprovar a troca), auto-escalar,
+      convite em cadeia, entrar num grupo de rodízio e gerar o rodízio. Quem perde a habilitação
+      sai das escalas futuras **na hora** (marcar inapto, ligar a marca da equipe, declarar uma
+      auto-denúncia) e, para o que vence com o tempo, na rotina diária, que roda ANTES dos avisos.
+      A escada 60/30/15 avisa a pessoa, o líder da equipe e a secretaria; quem entra tarde só
+      recebe o último degrau e a renovação reabre a escada.)*
+- [x] **Treinamento obrigatório de proteção** com validade e renovação periódica
       (padrão internacional: 2 a 3 anos), também bloqueante — conecta com a
       trilha de formação (v6.9). *(MinistrySafe; Church of England safeguarding)*
-- [ ] **Regra dos dois adultos** (*two-adult rule*) validada na escala: nenhuma
+      *(Quando há requisito BLOQUEIA no contexto `HABILITACAO_TREINAMENTO` da trilha, a situação
+      vem da trilha (vigente/vencendo valem; vencida bloqueia); sem requisito, a atestação da
+      esteira vale 2 anos (`HABILITACAO_TREINAMENTO_DIAS`, em Catálogos → Prazos).)*
+- [x] **Regra dos dois adultos** (*two-adult rule*) validada na escala: nenhuma
       sala com menores publica escala com **um adulto sozinho**, e a proporção
       adulto/criança mínima por faixa etária é verificada antes de publicar.
       *(Church Answers; padrão consolidado em seguradoras de igrejas nos EUA)*
-- [ ] **Regra dos 6 meses** de frequência antes de servir com menores (v5.7) —
-      calculada, não digitada.
-- [ ] **Política de comunicação eletrônica com menores**: vedada mensagem privada
+      *(Publicar **recusa** a sala sem dois adultos habilitados, ou fora da proporção
+      (berçário 3, maternal 5, infantil 8, juniores 10, adolescentes 12 crianças por adulto,
+      todos ajustáveis em Prazos), ou sem a faixa etária da equipe, ou sem as crianças previstas
+      que o líder informa por serviço. O adolescente serve como auxiliar e **não conta** como adulto.
+      O rodízio de equipe com menores nasce sempre como rascunho, para a publicação passar
+      pelo portão. A rotina diária avisa o líder da sala que ficou com menos de dois adultos nos
+      próximos 7 dias.)*
+- [x] **Regra dos 6 meses** de frequência antes de servir com menores (v5.7) —
+      calculada, não digitada. *(Da `DataAdmissao`, com o fim de mês tratado: 31/ago + 6 meses
+      = 28/fev. Sem a data, não se presume.)*
+- [x] **Política de comunicação eletrônica com menores**: vedada mensagem privada
       1:1 entre adulto e menor; canais de grupo exigem segundo adulto e
       responsável com acesso. Aceite da política registrado por voluntário
       (conecta com a Regra das 24 Horas, v7.3).
-- [ ] **Consentimento específico e destacado do responsável** (LGPD Art. 14) para
+      *(Texto versionado com hash (`POLITICA_VERSAO`), aceito digitalmente com o hash do texto que a
+      tela mostrou, o IP e o instante (ou em ficha assinada, registrada pela Secretaria); sem o
+      aceite da versão vigente a pessoa não serve com menores. O sistema **não tem mensagem
+      privada**: a vedação 1:1 é o compromisso aceito, e a Regra das 24 Horas da v7.3 trata o
+      conteúdo impróprio em canal oficial. Todo canal que inclui menores exige **dois
+      administradores adultos habilitados com o Termo de Dever de Moderação aceito e um responsável
+      com acesso**: o canal que não cumpre fica IRREGULAR e é cobrado todo mês; ligar a marca
+      num canal que já tem administradores, encerrar o segundo administrador e designar quem
+      não está habilitado são recusados.)*
+- [x] **Consentimento específico e destacado do responsável** (LGPD Art. 14) para
       dados de menor — uso de imagem, alergia/condição de saúde para o crachá —
       versionado e revogável.
-- [ ] **Painel de conformidade por congregação**: quantos voluntários aptos,
+      *(Dois consentimentos separados, cada um com texto próprio, versão e hash: **imagem** e
+      **saúde no crachá**. Quem concede é o responsável cadastrado pela Secretaria (digital, com IP,
+      ou em ficha registrada por OUTRA pessoa); qualquer responsável ativo revoga, e revogar a imagem
+      **apaga o arquivo da foto**. Vale enquanto quem autorizou continua responsável ativo e o
+      menor tem menos de 18 anos. A foto de menor deixa de depender do consentimento do próprio menor
+      (que não vale): só o do responsável destrava. Revogar a foto de qualquer membro passou a apagar
+      o arquivo, como o ROPA já dizia. **O dado de alergia e o crachá ainda não existem no sistema**:
+      chegam com o check-in infantil da v7.10, que só consulta este consentimento.)*
+- [x] **Painel de conformidade por congregação**: quantos voluntários aptos,
       quantos vencendo, quantos bloqueados — o Dirigente precisa ver isso antes
       de o problema existir, e a Secretaria Geral precisa ver o campo inteiro.
-- [ ] Adapter preparado (sem depender dele) para o futuro cadastro nacional de
+      *(Aba **Ministério com Menores**: o painel da congregação para quem habilita e o do campo
+      inteiro para a Secretaria Geral, com o resumo, o status de cada voluntário e o próximo
+      vencimento. O que é reservado à Diretoria — restrição na vistoria, comunicação em análise,
+      cadastro nacional, fora de comunhão — a gestão da congregação vê só como "pendência com a
+      Diretoria", **inclusive nas contagens e na situação das certidões** (o ensaio no banco achou os
+      dois vazamentos).)*
+- [x] Adapter preparado (sem depender dele) para o futuro cadastro nacional de
       condenados por crimes contra menores — hoje ainda é projeto de lei, não
       obrigação vigente; o campo fica pronto sem criar dependência.
-- [ ] **Dever de auto-denúncia** do voluntário que passa a responder a inquérito ou
+      *(`shared/cadastroNacionalMenores.js`: interface do provedor, tabela de consultas só de
+      acréscimo e o efeito na aptidão ("consta" bloqueia; "indisponível" nunca bloqueia). Sem
+      provedor registrado não faz nada, e nenhuma rota ou rotina o chama.)*
+- [x] **Dever de auto-denúncia** do voluntário que passa a responder a inquérito ou
       processo criminal (Regimento Art. 133 §5º, V — a omissão é falta grave): canal de
       aviso à Diretoria e ligação com a vistoria. *(Veio da v7.6, que entregou o Termo de
       Vistoria — `VistoriasAntecedentes`, com `ComVulneraveis` e `ultimaVistoria()` prontos
       para esta versão usar.)*
+      *(Em Meu Painel, a pessoa comunica **só o tipo e a data da ciência** — nenhum texto livre, nenhum
+      número de processo; a Diretoria Executiva e o Conselho de Ética são avisados na hora e
+      cobrados todo dia até decidir. Por cautela, e sem ser punição, o contato dela com menores fica
+      suspenso e ela sai das escalas futuras com menores até a decisão: **manter** (volta
+      imediatamente, se a habilitação está em dia) ou **afastar preventivamente** (que outra pessoa
+      da Diretoria pode levantar depois, uma única vez). Decidir e liberar pedem a confirmação
+      reforçada; ninguém decide sobre a própria comunicação; a auditoria não leva nem o tipo.)*
+
+  Entrega: migração 143 (`sql/migrations/143_ministerio_menores.sql`), `shared/ministerioMenores.js`
+  (a regra, **pura**), `shared/ministerioMenoresDb.js` (banco), `shared/menoresConsentimento.js` e
+  `menoresConsentimentoDb.js` (consentimento do responsável), `shared/cadastroNacionalMenores.js`, as
+  Functions novas `GestaoMinisterioMenores` (`/api/ministerio-menores/...`, 6 leituras e 8 ações) e
+  `GestaoConsentimentoMenor` (`/api/consentimento-menor/...`, 3 leituras e 3 ações), as rotas novas
+  `escalas/criancas-previstas` e `canais/responsavel-acesso`, o portão nas escalas, nos convites, nas
+  trocas, nos grupos e no rodízio, a retirada automática, onze regras no motor de avisos da vB.2,
+  a retenção do IP e os blocos de Meus Dados, ROPA e RIPD. Tocam o que já existia: `escalas.js`,
+  `voluntariadoDb.js`, `habilitacaoVoluntarios.js` (os antecedentes deixam de ser carimbo manual),
+  `GestaoEscalas`, `GestaoHabilitacaoVoluntarios` (a elegibilidade passa a trazer a aptidão),
+  `canais.js`/`canaisDb.js`, `consentimentoFoto.js`, `MinhaFoto`, `UploadFotoMembro`,
+  `GestaoConsentimentoLGPD`, `NotificacoesAgendador` e `notificacaoDetectores`.
+
+  **Quem está apto** (`avaliarAptidao`, calculado na leitura, nunca digitado): em plena comunhão;
+  com data de nascimento; sem comunicação à Diretoria em análise e sem "consta" no cadastro nacional;
+  habilitação da esteira concluída, em dia e não marcada inapta; **as duas certidões criminais**
+  do último Termo de Vistoria (não anulado) sem restrição e com menos de 180 dias; treinamento de
+  proteção em dia; ficha confirmada nos últimos 180 dias; política da versão vigente aceita; 6 meses
+  de comunhão. Cada falta vira um bloqueio com mensagem em português simples e o que fazer. O menor de
+  18 anos não tem certidão de antecedentes (ato infracional corre em segredo de justiça): serve só
+  como auxiliar, nunca conta como adulto e ainda precisa de tudo o mais.
+
+  **Decisões que a Lei e o Regimento não fecham (cada uma é uma linha; a CLI pode reverter).**
+  - **A validade da certidão conta da emissão** (a Lei fala em "atualização semestral"): 180 dias,
+    configurável. Vale até o último dia, inclusive.
+  - **As duas certidões criminais (federal e estadual) são exigidas**; a de distribuição cível é
+    informativa. A vistoria que decide é a última não anulada: uma vistoria mais nova incompleta
+    não é completada por uma antiga.
+  - **A marca `ComVulneraveis` da vistoria não decide a aptidão** (senão uma vistoria recente de
+    investidura, completa, seria recusada só pela marca): decidem as certidões.
+  - **Treinamento sem trilha configurada vale 2 anos**, atestado por quem habilita.
+  - **Quem comunica a auto-denúncia fica suspenso do contato com menores por cautela** até a
+    decisão — padrão de políticas de proteção de crianças; a mensagem diz que não é punição.
+  - **O líder só vê o motivo curto; o colega que pede uma troca não vê motivo nenhum**; a pessoa
+    vê tudo o que lhe diz respeito.
+  - **A regra de canais vale para qualquer canal que inclui menores** (não só grupos): mais
+    rigorosa, e a CLI pode restringir a grupos numa condição de `pendenciasDeMenores`.
+  - **Rodízio com menores nasce rascunho**: a quantidade de crianças é por serviço e só existe
+    depois dele.
+  - **Os prazos configuráveis só podem encurtar**: certidão e ficha têm teto de 180 dias, treinamento
+    de 3 anos, e o mínimo de adultos na sala é 2 (configurar 365 dias ou 1 adulto não afrouxa a regra).
+  - **Em sala com menores, adulto só troca com adulto** (o adolescente apto é auxiliar e não conta como
+    adulto): senão a troca esvaziaria a sala dos dois adultos que a regra exige.
+  - **Sala sem nenhum voluntário não publica** (zero adultos também é falta).
+  - **Ninguém reabilita a si mesmo** e **desligar a marca de menores de uma equipe** (que derruba todo o
+    portão) pede a confirmação reforçada, como a decisão da auto-denúncia; ligar é livre.
+  - **Canal que inclui menores não é divulgado no site**, e a indicação do "responsável com acesso" tem uma
+    mensagem de recusa só (não existe / não está ativo / não é adulto), para não virar consulta de cadastro.
+  - **A rotina diária não dá verde quando falha o que protege criança**: a retirada das escalas ou um
+    detector do ministério com menores que falha faz a resposta virar 500 (o job do GitHub fica vermelho);
+    um detector de outro assunto que falha só é registrado. Vistoria lavrada com restrição ou recusa, ou
+    termo anulado, tira a pessoa das escalas com menores **na hora**, sem esperar a rotina.
+  - **Foto de menor só fica com a autorização vigente do responsável**: a faxina diária (e o ato que tira o
+    responsável) apaga a foto de menor de 18 anos sem essa autorização — inclusive a enviada antes da v7.7
+    com o consentimento do próprio menor, que não vale. O adulto que desmarca só o telefone/e-mail continua
+    com a foto (decisão antiga, travada em teste).
+  - **A gestão não distingue as pendências reservadas, nem pelos detalhes**: restrição nos antecedentes,
+    comunicação em análise, cadastro nacional e fora de comunhão aparecem como a **mesma linha** ("pendência
+    reservada: procurar a Diretoria"), sem datas de certidão e sem "próximo vencimento"; a legenda do painel
+    não dá exemplo da causa. A Diretoria vê o detalhe.
+  - **A Diretoria sabe que o motivo que escreve será lido pela pessoa** (Meus Dados, direito de acesso da
+    LGPD): o formulário de decidir e de levantar o afastamento diz isso.
+  - **A Secretaria não registra o consentimento de foto de menor de 18 anos** (a rota recusa e a tela não
+    oferece o botão): quem autoriza é o responsável; registrar o da própria pessoa seria "sucesso" sem efeito.
+  - **A tela diz "a lei e o Regimento pedem"** e não só "a lei": a Lei 14.811/2024 não fala em treinamento,
+    política de comunicação nem 6 meses de comunhão; isso é Regimento e regra do sistema. O número de crianças
+    por adulto aparece como **padrão** (a Igreja pode mudá-lo em Catálogos → Prazos).
+  - **Risco aceito: as ações da própria pessoa valem em sessão de PIN** (aceitar a política, confirmar a
+    ficha, comunicar a auto-denúncia), pela decisão de 02/10/2026 de acesso do membro por PIN. Ninguém
+    ganha poder com isso: a aptidão continua dependendo de certidões lançadas pela Diretoria, treinamento
+    atestado e esteira; e a auto-denúncia só **restringe** (suspensão cautelar). As decisões da Diretoria
+    (decidir/liberar) exigem sessão de liderança com a confirmação reforçada.
+
+  **O que fica para a v7.10 (e por quê).** O **dado** de alergia ou condição de saúde e o **crachá**
+  do check-in infantil: hoje não existem no sistema (o consentimento de saúde já pode ser dado e
+  revogado, e a v7.10 precisa apagar o dado ao revogar). Também fica lá a autorização do responsável
+  para quem **não é membro** (criança só de EBD ou de apresentação): o consentimento desta versão é
+  do menor que é membro, com responsável cadastrado. Não fica nada da v7.7 em aberto.
 
 ## v7.8 — Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*
 

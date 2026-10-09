@@ -163,7 +163,13 @@ async function buscarCandidatosDaEquipe(pool, equipeId, dataServico) {
   // 03/10/2026: menor (idade conhecida, < 18) sem adesão ao Termo que valha — nunca dada, ou suspensa porque ficou sem responsável ativo — também não entra
   // (shared/adesaoMenor.js). Adulto e quem não tem data de nascimento no cadastro seguem como sempre.
   const menoresSemAdesao = await adesaoMenor.menoresSemAdesaoVigente(pool, todos.map(m => m.membroId));
-  const membros = todos.filter(m => atendem.has(Number(m.membroId)) && !menoresSemAdesao.has(Number(m.membroId)));
+  let membros = todos.filter(m => atendem.has(Number(m.membroId)) && !menoresSemAdesao.has(Number(m.membroId)));
+  // v7.7 (Lei 14.811/2024): equipe com contato com menores só escala quem está habilitado HOJE (certidões em dia, treinamento, política, ficha, 6 meses...).
+  // Carregado sob demanda para não criar ciclo entre os módulos. Equipe sem a marca de menores libera todos, como sempre.
+  if (membros.length) {
+    const menores = await require("./ministerioMenoresDb").aptosParaEquipe(pool, { equipeId, membroIds: membros.map(m => m.membroId) });
+    if (menores.contatoComMenores) membros = membros.filter(m => menores.aptos.has(Number(m.membroId)));
+  }
 
   const candidatos = [];
   for (const m of membros) {

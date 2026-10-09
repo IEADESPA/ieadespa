@@ -15,6 +15,8 @@
 // O sistema NUNCA guarda senha de rede social: guarda quem tem a custódia, quando foi a última
 // troca e o que está pendente. (Regra do projeto: segredo só no fluxo cifrado.)
 const crypto = require("crypto");
+// v7.7 — identificador estrito (o mesmo da v5.x em diante): "0x10", "1e1", true e [5] NÃO são matrícula nem canal. Módulo puro, sem ciclo com este.
+const { inteiroPositivo: inteiroPositivoEstrito } = require("./voluntariado");
 
 const limpar = (v) => String(v == null ? "" : v).trim();
 
@@ -301,6 +303,15 @@ function validarCanal(d, { criando = true } = {}) {
   const descricao = limpar(d.descricao);
   if (descricao.length > 500) return { valido: false, mensagem: "A descrição aceita até 500 caracteres." };
 
+  // v7.7 — responsável com acesso (pai, mãe ou tutor de um dos menores): matrícula estrita ou nula. Malformada é erro mesmo que o canal não inclua menores (o dado
+  // veio errado); mas SÓ vale em canal que inclui menores: nos demais é guardada vazia. Que a matrícula é de membro ativo e adulto, quem confere é o banco.
+  const incluiMenores = d.incluiMenores === true;
+  let responsavelAcessoMembroId = null;
+  if (d.responsavelAcessoMembroId != null) {
+    responsavelAcessoMembroId = inteiroPositivoEstrito(d.responsavelAcessoMembroId);
+    if (!responsavelAcessoMembroId) return { valido: false, mensagem: "A matrícula do responsável com acesso precisa ser um número inteiro positivo (ou ficar em branco)." };
+  }
+
   return {
     valido: true,
     dados: {
@@ -311,7 +322,8 @@ function validarCanal(d, { criando = true } = {}) {
       congregacaoId: escopo === "CONGREGACAO" ? congregacaoId : null,
       areaId: escopo === "AREA" ? areaId : null,
       departamentoId: escopo === "DEPARTAMENTO" ? departamentoId : null,
-      incluiMenores: d.incluiMenores === true,
+      incluiMenores,
+      responsavelAcessoMembroId: incluiMenores ? responsavelAcessoMembroId : null,
       publicoNoSite: d.publicoNoSite === true,
       custodiaSecretaria: d.custodiaSecretaria === true,
       descricao: descricao || null
@@ -438,7 +450,12 @@ function itensDeConferencia(canal) {
     itens.push({ codigo: "POSTURA", texto: "O operador não entra em discussões nos comentários nem posta fotos pessoais na conta.", artigo: "Art. 160, §4º, II" });
   }
   if (exigeCustodia(canal)) itens.push({ codigo: "CUSTODIA", texto: "A senha e o acesso continuam sob a custódia da Secretaria Geral.", artigo: "Art. 160, §4º, I" });
-  if (canal.incluiMenores) itens.push({ codigo: "PROTECAO_MENORES", texto: "Fotos e vídeos de crianças são de conjunto, sem destacar uma criança nem entrevistas.", artigo: "Art. 160, §5º" });
+  if (canal.incluiMenores) {
+    itens.push({ codigo: "PROTECAO_MENORES", texto: "Fotos e vídeos de crianças são de conjunto, sem destacar uma criança nem entrevistas.", artigo: "Art. 160, §5º" });
+    // v7.7 — as duas travas do grupo com menores (o sistema também as cobra sozinho; aqui é a conferência de quem olha o grupo de verdade, com o celular na mão).
+    itens.push({ codigo: "MENORES_DOIS_ADMINISTRADORES", texto: "O grupo tem pelo menos dois administradores adultos, ambos habilitados para servir com menores.", artigo: "Art. 160, §5º; Lei 14.811/2024" });
+    itens.push({ codigo: "MENORES_RESPONSAVEL_NO_GRUPO", texto: "Um responsável (pai, mãe ou tutor) tem acesso ao grupo e pode ver o que é conversado.", artigo: "Art. 160, §5º; Lei 14.811/2024" });
+  }
   return itens;
 }
 
@@ -456,8 +473,61 @@ function avaliarConferencia(canal, itens) {
 // Conformidade do canal (o que está pendente para ele estar regular)
 // ---------------------------------------------------------------
 
-// estado = { administradores:[{papel, ativo, termoVersaoAceita}], ultimaConferencia:{em:'ISO', resultado, itens} | null,
-//            trocasAbertas:[{prazoEm:'YYYY-MM-DD'}], ocorrenciasVencidas:n, termoVersao }
+// ---- v7.7: grupo com crianças e adolescentes (Lei 14.811/2024; Regimento Art. 160, §5º; política de comunicação com menores) ----
+// Todo canal que inclui menores precisa de: (1) ao menos DOIS administradores/operadores adultos, ativos e com o Termo de Dever de Moderação aceito — um adulto só,
+// sozinho com as crianças no grupo, é o risco que a regra existe para evitar; (2) todo administrador ativo habilitado para servir com menores (a habilitação é
+// calculada pelo banco, na leitura: `aptoMenores`); (3) um responsável (pai, mãe ou tutor) com acesso, que seja membro ativo e adulto. Qualquer falha deixa o canal
+// IRREGULAR (gravidade ALTA). Cada pendência traz `resumo`: a mesma coisa em uma frase curta, para entrar no meio do texto do aviso. A de habilitação NUNCA diz o
+// motivo (pode ser pendência com a Diretoria): só que "não está habilitado para servir com menores".
+const MENORES_ADMINISTRADORES_MINIMOS = 2;
+const CODIGOS_PENDENCIA_MENORES = ["MENORES_SEM_SEGUNDO_ADULTO", "MENORES_ADMIN_SEM_HABILITACAO", "MENORES_SEM_RESPONSAVEL"];
+
+function pendenciasDeMenores(canal, estado) {
+  if (!canal || !canal.incluiMenores) return [];
+  const e = estado || {};
+  const adm = (e.administradores || []).filter(a => a.ativo !== false);
+  const termoVersao = e.termoVersao || TERMO_VERSAO;
+  // Só conta como "segundo adulto" quem o banco confirmou adulto (idade conhecida, 18 anos ou mais) E já aceitou o termo vigente: designado que ainda não aceitou não responde pelo grupo.
+  const adultosComTermo = adm.filter(a => a.adulto === true && Number(a.termoVersaoAceita) === termoVersao);
+  const pend = [];
+  if (adultosComTermo.length < MENORES_ADMINISTRADORES_MINIMOS) {
+    pend.push({
+      codigo: "MENORES_SEM_SEGUNDO_ADULTO", gravidade: "ALTA",
+      mensagem: `Grupo com crianças ou adolescentes precisa de pelo menos dois administradores adultos que já aceitaram o Termo de Dever de Moderação: ${adultosComTermo.length === 0 ? "hoje não há nenhum" : "hoje há só um"} (Art. 160, §5º).`,
+      resumo: "há menos de dois administradores adultos com o Termo de Dever de Moderação aceito"
+    });
+  }
+  // Falha FECHADO: quem o banco não confirmou apto (ou cujo estado nem veio) conta como não habilitado.
+  const semHabilitacao = adm.filter(a => a.aptoMenores !== true).length;
+  if (semHabilitacao > 0) {
+    pend.push({
+      codigo: "MENORES_ADMIN_SEM_HABILITACAO", gravidade: "ALTA",
+      mensagem: `${semHabilitacao === 1 ? "Um administrador deste grupo não está habilitado" : `${semHabilitacao} administradores deste grupo não estão habilitados`} para servir com menores. Peça a regularização da habilitação ou troque o administrador.`,
+      resumo: semHabilitacao === 1 ? "um administrador não está habilitado para servir com menores" : "há administradores que não estão habilitados para servir com menores"
+    });
+  }
+  const indicado = canal.responsavelAcessoMembroId ? Number(canal.responsavelAcessoMembroId) : null;
+  const r = e.responsavelAcesso;
+  if (!indicado) {
+    pend.push({
+      codigo: "MENORES_SEM_RESPONSAVEL", gravidade: "ALTA",
+      mensagem: "Falta indicar o responsável (pai, mãe ou tutor de um dos menores) que tem acesso a este grupo.",
+      resumo: "falta indicar o responsável com acesso ao grupo"
+    });
+  } else if (!(r && Number(r.membroId) === indicado && r.ativo === true && r.adulto === true)) {
+    pend.push({
+      codigo: "MENORES_SEM_RESPONSAVEL", gravidade: "ALTA",
+      mensagem: "O responsável com acesso indicado para este grupo não é mais membro ativo e adulto: indique outro.",
+      resumo: "o responsável indicado não é mais membro ativo e adulto"
+    });
+  }
+  return pend;
+}
+
+// estado = { administradores:[{papel, ativo, termoVersaoAceita, aptoMenores?, adulto?}], ultimaConferencia:{em:'ISO', resultado, itens} | null,
+//            trocasAbertas:[{prazoEm:'YYYY-MM-DD'}], ocorrenciasVencidas:n, termoVersao,
+//            responsavelAcesso?: { membroId, ativo, adulto } | null }
+//   (aptoMenores, adulto e responsavelAcesso só vêm do banco para canal que inclui menores — v7.7; canal = { ..., incluiMenores, responsavelAcessoMembroId })
 // opcoes = { hoje:'YYYY-MM-DD', conferenciaDias }
 function conformidadeDoCanal(canal, estado, opcoes) {
   const hoje = opcoes.hoje;
@@ -473,6 +543,7 @@ function conformidadeDoCanal(canal, estado, opcoes) {
     else if (precisaAdministrador && comTermo.length === 0) pend.push({ codigo: "TERMO_PENDENTE", gravidade: "ALTA", mensagem: "Nenhum administrador aceitou o Termo de Dever de Moderação vigente." });
     else if (adm.length > comTermo.length) pend.push({ codigo: "TERMO_PENDENTE_PARCIAL", gravidade: "MEDIA", mensagem: `${adm.length - comTermo.length} administrador(es) ainda não aceitaram o termo vigente.` });
     if (exigeCustodia(canal) && !canal.custodiaSecretaria) pend.push({ codigo: "SEM_CUSTODIA", gravidade: "ALTA", mensagem: "A custódia da senha pela Secretaria Geral ainda não foi confirmada (Art. 160, §4º, I)." });
+    pend.push(...pendenciasDeMenores(canal, estado));   // v7.7: grupo com menores (dois adultos habilitados e responsável com acesso)
     for (const t of estado.trocasAbertas || []) {
       const vencida = t.prazoEm && t.prazoEm < hoje;
       pend.push({ codigo: vencida ? "TROCA_VENCIDA" : "TROCA_PENDENTE", gravidade: vencida ? "ALTA" : "MEDIA", mensagem: vencida ? "Troca de senha/acesso com o prazo vencido." : "Há uma troca de senha/acesso pendente." });
@@ -572,6 +643,7 @@ module.exports = {
   validarCanal, contaParaAbandono, exigeCustodia, categoriaExigeGrupo, escopoCobreCanal,
   prazoDaOcorrencia, situacaoDaOcorrencia, validarOcorrencia, validarRemocao, orientacaoDaOcorrencia,
   itensDeConferencia, avaliarConferencia, conformidadeDoCanal,
+  MENORES_ADMINISTRADORES_MINIMOS, CODIGOS_PENDENCIA_MENORES, pendenciasDeMenores, inteiroPositivoEstrito,
   validarTransmissao, avaliarTransmissao,
   compararSucessao, assinaturaDeMatriculas, acaoDaTroca,
   diasEntreIso, somarDiasIso

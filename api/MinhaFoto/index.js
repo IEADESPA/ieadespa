@@ -3,14 +3,18 @@
 // exige permissão "pessoas") — o próprio membro não tinha como ver/subir a
 // própria foto pelo Meu Painel. Mesmo modelo de acesso de MeusDadosLGPD/
 // GestaoConsentimentoLGPD (só a matrícula da sessão, sem exigir permissão).
-// GET  /api/minha-foto/{matricula} -> { fotoUrl, consentimentoConcedido }
+// GET  /api/minha-foto/{matricula} -> { fotoUrl, consentimentoConcedido, menorDeIdade }
 // POST /api/minha-foto/{matricula} -> body: { fotoBase64, mimeType } (mesma trava
 //      de consentimento de UploadFotoMembro — aceita FOTO ou DADOS_CONTATO,
 //      ver shared/consentimentoFoto.js)
+// v7.7 — menor de 18 anos (idade conhecida) não consente sozinho: só vale o
+//      consentimento de IMAGEM do responsável (consentimentoConcedido passa a
+//      ser o dele; menorDeIdade avisa a tela de que a decisão é do responsável).
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
-const { fotoConsentimentoConcedido } = require("../shared/consentimentoFoto");
+const { situacaoDoConsentimentoFoto } = require("../shared/consentimentoFoto");
+const { MSG_FOTO_MENOR_PROPRIO } = require("../shared/menoresConsentimento");
 const auth = require("../shared/auth");
 
 const MIME_PERMITIDOS = ["image/jpeg", "image/png", "image/webp"];
@@ -29,11 +33,11 @@ module.exports = async function (context, req) {
   }
 
   if (req.method === "GET") {
-    const concedido = await fotoConsentimentoConcedido(pool, sql, matricula);
+    const situacao = await situacaoDoConsentimentoFoto(pool, sql, matricula);
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, fotoUrl: storage.urlComSas(membro.recordset[0].FotoUrl), consentimentoConcedido: concedido }
+      body: { sucesso: true, fotoUrl: storage.urlComSas(membro.recordset[0].FotoUrl), consentimentoConcedido: situacao.concedido, menorDeIdade: situacao.menor }
     };
     return;
   }
@@ -50,9 +54,9 @@ module.exports = async function (context, req) {
     }
 
     // Mesma trava real de UploadFotoMembro (v1.7) — só o estado mais recente conta.
-    const concedido = await fotoConsentimentoConcedido(pool, sql, matricula);
-    if (!concedido) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Conceda o consentimento de Foto antes de fazer o upload." } };
+    const situacao = await situacaoDoConsentimentoFoto(pool, sql, matricula);
+    if (!situacao.concedido) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: situacao.menor ? MSG_FOTO_MENOR_PROPRIO : "Conceda o consentimento de Foto antes de fazer o upload." } };
       return;
     }
 

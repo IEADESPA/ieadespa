@@ -33,7 +33,10 @@
 //  ocorrencia?ocorrenciaId=  -> { ocorrencia, acoes:{remover,improcedente,advertir} }  gestão no escopo, administrador do canal ou quem avisou
 //  canais[?todos=1]       -> { canais[{...canal, situacao, pendencias[{codigo,gravidade,mensagem}], administradoresAtivos, ultimaConferencia}] }      (gestão)
 //  canal?canalId=         -> { canal, situacao, pendencias, administradores[{adminId,membroId,nome,papel,termoVersaoAceita,termoAceitoEm}],
-//                              trocasAbertas[], conferencias[], itensConferencia[{codigo,texto,artigo}], ocorrenciasRecentes[], orientacoes }      (gestão)
+//                              trocasAbertas[], conferencias[], itensConferencia[{codigo,texto,artigo}], ocorrenciasRecentes[], orientacoes,
+//                              responsavelAcesso:{membroId,nome,ativo,adulto}|null }                                                              (gestão)
+//                            (v7.7) em canal que inclui menores cada administrador traz também `aptoMenores` e `adulto` (só o sim/não, nunca o motivo) e
+//                            as pendências MENORES_SEM_SEGUNDO_ADULTO, MENORES_ADMIN_SEM_HABILITACAO e MENORES_SEM_RESPONSAVEL (gravidade ALTA = IRREGULAR).
 //  trocas[?todas=1]       -> { trocas[{trocaId,canalId,canalNome,motivo,rotuloMotivo,acao,saiuNome,prazoEm,vencida,...}] }  (gestão; atualiza a sucessão antes)
 //  cobertura              -> { resumo{...contadores}, canaisComPendencia[], congregacoes[{congregacaoId,congregacaoNome,canaisProprios,semCanal,
 //                              situacao,pendencias[],transmite,...}] }  (gestão; atualiza a sucessão antes)
@@ -41,11 +44,19 @@
 //
 // ---- Escrita (POST /api/canais/...) ------------------------------------------------------------
 //  canais                 body:{nome,plataforma,categoria,temaFocado?,identificador,vinculoInstitucional,declaracaoInstitucional:true,escopo,
-//                               congregacaoId?|areaId?|departamentoId?,incluiMenores?,publicoNoSite?,custodiaSecretaria?,descricao?}   (gestão) -> 201
-//  canais/atualizar       body:{canalId, ...campos do cadastro}                                                                                   (gestão)
+//                               congregacaoId?|areaId?|departamentoId?,incluiMenores?,responsavelAcessoMembroId?,publicoNoSite?,custodiaSecretaria?,descricao?}   (gestão) -> 201
+//                            (v7.7) canal que inclui menores e ainda sem administradores é aceito: nasce IRREGULAR até ter dois administradores adultos
+//                            habilitados e o responsável com acesso. `responsavelAcessoMembroId` só vale com incluiMenores (nos demais fica vazio).
+//  canais/atualizar       body:{canalId, ...campos do cadastro}  (v7.7: ligar incluiMenores num canal que já tem administradores exige a regra já cumprida -> 422 com `pendencias`) (gestão)
 //  canais/desativar       body:{canalId, motivo}   canais/reativar  body:{canalId}                                                                (gestão)
-//  administradores/designar  body:{canalId, membroId, papel:ADMINISTRADOR|OPERADOR}                                                               (gestão)
-//  administradores/encerrar  body:{adminId, motivo}  -> abre a pendência de troca de senha/acesso                                                 (gestão)
+//  canais/responsavel-acesso  body:{canalId, membroId|null}  (v7.7) indica (ou retira, com null) o responsável (pai, mãe ou tutor) com acesso a um grupo que
+//                            inclui menores; precisa ser membro ATIVO e ADULTO (18 anos completos); o canal precisa estar ativo e marcado como "inclui menores"
+//                            (gestão). Ids estritos (inteiro positivo; "0x10", "1e1", true e [5] -> 400); a mesma autorização de administradores/designar;
+//                            canal inexistente ou fora do escopo = a MESMA 404; sem a chave `membroId` -> 400 (retirar é `null` explícito). Auditoria
+//                            CANAL_RESPONSAVEL_ACESSO só com matrículas. -> { sucesso, canalId, responsavelAcessoMembroId, mensagem }
+//  administradores/designar  body:{canalId, membroId, papel:ADMINISTRADOR|OPERADOR}  (v7.7: em canal que inclui menores só aceita quem está habilitado para servir com menores) (gestão)
+//  administradores/encerrar  body:{adminId, motivo}  -> abre a pendência de troca de senha/acesso  (v7.7: recusa 422, com `pendencias`, se deixaria um canal
+//                            ativo que inclui menores com menos de dois administradores)                                                           (gestão)
 //  termo/aceitar          body:{adminId} | {todos:true}  só a PRÓPRIA designação                                                                  (login)
 //  ocorrencias            body:{canalId,categoria,descricao,linkEvidencia?}  -> 201; o relógio de 24 h corre a partir daqui                       (login)
 //  ocorrencias/remover    body:{ocorrenciaId,provaRemocao,linkProva?,removidaEm?}                                                                 (gestão no escopo ou administrador do canal)
@@ -290,6 +301,19 @@ module.exports = async function (context, req) {
       const canal = await canalGerido(corpo);
       if (!canal) return;
       resposta(context, await db.reativarCanal(pool, ctx, canal.canalId, { membroId }));
+      return;
+    }
+    if (acao === "canais/responsavel-acesso") {
+      if (!exigirGestao()) return;
+      // Ids ESTRITOS e conferidos ANTES de qualquer consulta: `Number("0x10")`, `Number("1e1")`, `Number(true)` e `Number([5])` viram número e passariam pelo idDe. Retirar o
+      // responsável é `membroId: null` EXPLÍCITO (a chave ausente é erro, para um corpo vazio nunca apagar nada). Só depois vem o escopo: canal de fora = canal que não existe.
+      const canalIdEstrito = canais.inteiroPositivoEstrito(corpo.canalId);
+      if (!canalIdEstrito) { erro(context, 400, "Informe o canalId."); return; }
+      const responsavelId = corpo.membroId === null ? null : canais.inteiroPositivoEstrito(corpo.membroId);
+      if (corpo.membroId !== null && !responsavelId) { erro(context, 400, "Informe a matrícula do responsável com acesso (número inteiro positivo), ou null para retirar."); return; }
+      const canal = await canalGerido({ canalId: canalIdEstrito });
+      if (!canal) return;
+      resposta(context, await db.definirResponsavelAcesso(pool, ctx, { canalId: canal.canalId, membroId: responsavelId, por: membroId }));
       return;
     }
     if (acao === "administradores/designar") {

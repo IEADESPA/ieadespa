@@ -679,6 +679,9 @@ async function adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId, por, pod
   // v6.9: a equipe pode exigir uma formação vigente; vale também para quem entra por um grupo.
   const formacao = await trilhas.filtrarMembrosQueAtendem(pool, { contexto: "ESCALA_EQUIPE", alvoChave: String(rodizio.equipeId), membroIds: [membroId] });
   if (formacao.bloqueados.has(Number(membroId))) return { sucesso: false, mensagem: `${m.Nome}: ${formacao.bloqueados.get(Number(membroId))}` };
+  // v7.7: equipe com menores só recebe, no grupo, quem está habilitado hoje (a mensagem não detalha pendência com a Diretoria).
+  const menores = await require("./ministerioMenoresDb").aptosParaEquipe(pool, { equipeId: rodizio.equipeId, membroIds: [membroId] });
+  if (menores.contatoComMenores && !menores.aptos.has(Number(membroId))) return { sucesso: false, mensagem: `${m.Nome}: ${menores.bloqueados.get(Number(membroId))}.` };
   const outro = (await pool.request().input("r", sql.Int, rodizio.rodizioId).input("m", sql.Int, membroId)
     .query(`SELECT g.Nome FROM EscalasRodizioGrupoMembros gm JOIN EscalasRodizioGrupos g ON g.GrupoId = gm.GrupoId WHERE gm.RodizioId = @r AND gm.MembroId = @m AND gm.SaiuEm IS NULL`)).recordset[0];
   if (outro) return { sucesso: false, mensagem: `${m.Nome} já está no grupo “${outro.Nome}” deste rodízio: grupos distintos é que se alternam (Art. 135 §1º, I).` };
@@ -788,6 +791,12 @@ async function gerarRodizio(pool, { rodizioId, dados, por, hoje = hojeBrasilia()
   const formacao = await trilhas.filtrarMembrosQueAtendem(pool, { contexto: "ESCALA_EQUIPE", alvoChave: String(rodizio.equipeId), membroIds: todos });
   // 03/10/2026: menor sem adesão que valha (nunca dada, ou suspensa por falta de responsável ativo) não é escalado — a vaga aparece "sem cobertura" com o motivo.
   const menoresSemAdesao = await menoresSemAdesaoVigente(pool, todos, { hoje });
+  // v7.7: equipe com menores — quem não está habilitado HOJE não é convidado (a vaga aparece "sem cobertura" com o motivo curto).
+  const habilitadosMenores = await require("./ministerioMenoresDb").aptosParaEquipe(pool, { equipeId: rodizio.equipeId, membroIds: todos, hoje });
+  // Equipe com menores: o rodízio nasce SEMPRE como rascunho. A quantidade de crianças é informada por serviço (depois que ele existe) e a publicação passa
+  // pelo portão dos dois adultos e da proporção (GestaoEscalas → publicar); publicar já na geração contornaria essa conferência.
+  const publicarAgora = !!v.dados.publicar && !habilitadosMenores.contatoComMenores;
+  const publicacaoAdiada = !!v.dados.publicar && habilitadosMenores.contatoComMenores;
   const rInd = pool.request().input("de", sql.Date, v.dados.de).input("ate", sql.Date, v.dados.ate);
   const indisp = (await rInd.query(`SELECT MembroId, DataInicio, DataFim FROM EscalasIndisponibilidades WHERE DataFim >= @de AND DataInicio <= @ate AND MembroId IN (${listaIn(rInd, "m", todos)})`)).recordset;
   const indispPorMembro = new Map();
@@ -808,7 +817,7 @@ async function gerarRodizio(pool, { rodizioId, dados, por, hoje = hojeBrasilia()
       const dataHora = vol.dataHoraDeParede(oc.dataIso, rodizio.hora);
       const rs = await new sql.Request(transaction)
         .input("c", sql.Int, rodizio.congregacaoId).input("dh", sql.DateTime2, dataHora).input("desc", sql.NVarChar(200), `${rodizio.nome} — ${grupo.nome}`.slice(0, 200))
-        .input("rod", sql.Int, rodizioId).input("gr", sql.Int, grupo.grupoId).input("pub", sql.Bit, v.dados.publicar ? 1 : 0).input("por", sql.Int, por)
+        .input("rod", sql.Int, rodizioId).input("gr", sql.Int, grupo.grupoId).input("pub", sql.Bit, publicarAgora ? 1 : 0).input("por", sql.Int, por)
         .query(`INSERT INTO EscalasServicos (CongregacaoId, DataHora, Descricao, Status, PublicadaEm, CriadoPorMembroId, RodizioId, RodizioGrupoId)
                 VALUES (@c, @dh, @desc, CASE WHEN @pub = 1 THEN 'PUBLICADA' ELSE 'RASCUNHO' END, CASE WHEN @pub = 1 THEN SYSUTCDATETIME() ELSE NULL END, @por, @rod, @gr);
                 SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
@@ -819,6 +828,7 @@ async function gerarRodizio(pool, { rodizioId, dados, por, hoje = hojeBrasilia()
         if (!ativosNaEquipe.has(m.membroId)) motivo = "não está mais ativo na equipe";
         else if (formacao.bloqueados.has(Number(m.membroId))) motivo = formacao.bloqueados.get(Number(m.membroId));
         else if (menoresSemAdesao.has(Number(m.membroId))) motivo = menoresSemAdesao.get(Number(m.membroId));
+        else if (habilitadosMenores.contatoComMenores && !habilitadosMenores.aptos.has(Number(m.membroId))) motivo = habilitadosMenores.bloqueados.get(Number(m.membroId));
         else if (es.estaIndisponivelNaData(indispPorMembro.get(m.membroId) || [], oc.dataIso)) motivo = "declarou indisponibilidade nesta data";
         if (motivo) { semCobertura.push({ dataIso: oc.dataIso, grupoNome: grupo.nome, membroId: m.membroId, nome: m.nome, motivo }); continue; }
         await new sql.Request(transaction).input("s", sql.Int, servicoId).input("e", sql.Int, rodizio.equipeId).input("m", sql.Int, m.membroId)
@@ -838,10 +848,10 @@ async function gerarRodizio(pool, { rodizioId, dados, por, hoje = hojeBrasilia()
     throw e;
   }
   await registrarAuditoria({ tabela: "EscalasRodizios", registroId: rodizioId, acao: "RODIZIO_GERADO", usuarioId: por,
-    dadosDepois: { servicos: criados.length, de: v.dados.de, ate: v.dados.ate, publicado: v.dados.publicar, semCobertura: semCobertura.length } });
+    dadosDepois: { servicos: criados.length, de: v.dados.de, ate: v.dados.ate, publicado: publicarAgora, semCobertura: semCobertura.length } });
 
   let avisados = 0;
-  if (v.dados.publicar) {
+  if (publicarAgora) {
     const entradas = [...datasPorMembro];
     for (let i = 0; i < entradas.length; i += AVISOS_EM_PARALELO) {
       const lote = await Promise.all(entradas.slice(i, i + AVISOS_EM_PARALELO).map(async ([membroId, info]) => {
@@ -858,7 +868,7 @@ async function gerarRodizio(pool, { rodizioId, dados, por, hoje = hojeBrasilia()
   const nGrupos = new Set(criados.map(c => c.grupoId)).size;
   return {
     sucesso: true, criados, jaExistem: plano.jaExistem, semCobertura, avisados,
-    mensagem: `${criados.length} serviço(s) gerado(s), alternando ${nGrupos} grupo(s)${v.dados.publicar ? " e já publicado(s)" : " como rascunho — confira e publique"}.${semCobertura.length ? ` Atenção: ${semCobertura.length} vaga(s) ficaram sem cobertura.` : ""}`
+    mensagem: `${criados.length} serviço(s) gerado(s), alternando ${nGrupos} grupo(s)${publicarAgora ? " e já publicado(s)" : publicacaoAdiada ? " como rascunho: equipe com menores — informe as crianças previstas de cada serviço e publique (a publicação confere os dois adultos e a proporção)" : " como rascunho — confira e publique"}.${semCobertura.length ? ` Atenção: ${semCobertura.length} vaga(s) ficaram sem cobertura.` : ""}`
   };
 }
 
@@ -1265,6 +1275,6 @@ module.exports = {
   buscarRodizio, listarRodizios, detalharRodizio, criarRodizio, alterarAtivoRodizio, buscarGrupo, criarGrupo, adicionarMembroAoGrupo, removerMembroDoGrupo, desativarGrupo,
   previaGeracao, gerarRodizio, cancelarServicosFuturos, meusRodizios,
   habitualidade, lerLimiteSequencia,
-  alocacoesFuturas, removerDaEscala, buscarRemocao, reintegrar, listarRemocoes, equipesLideradas, conflitosDoAfastamento, liberarPorAfastamento, avisarRecusaEmRodizio,
+  alocacoesFuturas, cancelarAlocacoes, removerDaEscala, buscarRemocao, reintegrar, listarRemocoes, equipesLideradas, conflitosDoAfastamento, liberarPorAfastamento, avisarRecusaEmRodizio,
   detectarHabitualidade, detectarTermosPendentes
 };

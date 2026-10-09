@@ -5,6 +5,8 @@ jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true)
 jest.mock("../canaisDb", () => ({ ...jest.requireActual("../canaisDb"), notificarAgora: jest.fn(async () => ({ criadas: 1 })) }));
 jest.mock("../trilhas", () => ({ filtrarMembrosQueAtendem: jest.fn(async () => ({ temRequisitos: false, atendem: new Set(), bloqueados: new Map() })) }));
 jest.mock("../psc", () => ({ resolverDestinatariosDaCongregacao: jest.fn(async () => []) }));
+// v7.7: o portão do ministério com menores é testado à parte (ministerioMenoresDb.test.js); aqui a equipe é comum (libera todos) salvo no teste que o liga.
+jest.mock("../ministerioMenoresDb", () => ({ aptosParaEquipe: jest.fn(async (pool, { membroIds }) => ({ contatoComMenores: false, aptos: new Set((membroIds || []).map(Number)), bloqueados: new Map() })) }));
 
 const db = require("../voluntariadoDb");
 const vol = require("../voluntariado");
@@ -12,6 +14,7 @@ const { registrarAuditoria } = require("../auditoria");
 const { notificarAgora } = require("../canaisDb");
 const trilhas = require("../trilhas");
 const psc = require("../psc");
+const mmDb = require("../ministerioMenoresDb");
 const { criarPoolFalso } = require("./testUtils");
 
 const HOJE = "2026-10-01";
@@ -358,6 +361,15 @@ describe("grupo — quem pode entrar", () => {
     const r = await db.adicionarMembroAoGrupo(criarPoolFalso([[membro()], []]).pool, { rodizio, grupo, membroId: 20, por: 5 });
     expect(r.mensagem).toBe("Ana Souza: Falta a trilha de Recepção.");
     expect(trilhas.filtrarMembrosQueAtendem.mock.calls[0][1]).toMatchObject({ contexto: "ESCALA_EQUIPE", alvoChave: "4", membroIds: [20] });
+  });
+  test("v7.7: equipe com menores só recebe no grupo quem está habilitado hoje — e a recusa não detalha pendência com a Diretoria", async () => {
+    mmDb.aptosParaEquipe.mockResolvedValueOnce({ contatoComMenores: true, aptos: new Set(), bloqueados: new Map([[20, "habilitação para servir com menores pendente (certidões de antecedentes vencidas)"]]) });
+    const { pool, chamadas } = criarPoolFalso([[membro()], []]);
+    const r = await db.adicionarMembroAoGrupo(pool, { rodizio, grupo, membroId: 20, por: 5 });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toBe("Ana Souza: habilitação para servir com menores pendente (certidões de antecedentes vencidas).");
+    expect(mmDb.aptosParaEquipe.mock.calls.at(-1)[1]).toMatchObject({ equipeId: 4, membroIds: [20] });
+    expect(chamadas.some(c => /INSERT/.test(c.sql))).toBe(false);
   });
   test("a mesma pessoa não fica em dois grupos do mesmo rodízio (grupos distintos se alternam)", async () => {
     const r = await db.adicionarMembroAoGrupo(criarPoolFalso([[membro()], [], [{ Nome: "Grupo B" }]]).pool, { rodizio, grupo, membroId: 20, por: 5 });

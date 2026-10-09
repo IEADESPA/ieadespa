@@ -309,6 +309,12 @@ function mascararParaGestao(bloqueios) {
   return saida;
 }
 
+// O que a PRÓPRIA pessoa lê sobre o seu bloqueio: igual ao dela, exceto o afastamento por incidente de proteção, que vira "pendência com a Diretoria" (o texto já é genérico, mas o código e o
+// rótulo do catálogo diriam o motivo; a apuração é das autoridades e avisar o envolvido do que consta contra ele não cabe ao sistema).
+function bloqueiosParaAPessoa(bloqueios) {
+  return (bloqueios || []).map((b) => (b.codigo === "INCIDENTE_EM_APURACAO" ? { ...b, codigo: "PENDENCIA_DIRETORIA" } : b));
+}
+
 // O painel da congregação mostra a cada bloqueio só o código e um rótulo curto (as mensagens são para a própria pessoa: falam em "você"). A Diretoria (reservado)
 // vê todos os códigos; a gestão vê os reservados como "pendência com a Diretoria".
 function bloqueiosParaPainel(bloqueios, { reservado = false } = {}) {
@@ -545,7 +551,7 @@ module.exports = {
   ANTECEDENTES_DIAS_PADRAO, TREINAMENTO_DIAS_PADRAO, FICHA_DIAS_PADRAO, ADULTOS_MINIMOS_PADRAO, ALERTAS_DIAS, SALA_ALERTA_DIAS_PADRAO, AUTODENUNCIA_LEMBRETE_DIAS_PADRAO,
   SIGLAS_PRAZO, FAIXAS, CODIGOS_FAIXA, CERTIDOES_CRIMINAIS, ROTULO_CERTIDAO, ROTULO_BLOQUEIO, BLOQUEIOS_RESERVADOS, ROTULO_ITEM_VENCIMENTO, MAX_CRIANCAS_POR_SALA, MAIORIDADE,
   paraIso, somarDiasIso, somarMesesIso, diasEntreIso, ordinalDeIso, prazosEfetivos, formatarDataBr,
-  temBloqueioReservado, proximoVencimentoParaGestao, avaliarAntecedentes, avaliarTreinamento, avaliarAptidao, itensAVencer, proximoVencimento, faixaDeAlerta, referenciaDoAviso, referenciaDaSala, nomeSugereMenores, mascararParaGestao, bloqueiosParaPainel, validadesParaGestao, statusDaLinha,
+  temBloqueioReservado, bloqueiosParaAPessoa, proximoVencimentoParaGestao, avaliarAntecedentes, avaliarTreinamento, avaliarAptidao, itensAVencer, proximoVencimento, faixaDeAlerta, referenciaDoAviso, referenciaDaSala, nomeSugereMenores, mascararParaGestao, bloqueiosParaPainel, validadesParaGestao, statusDaLinha,
   criancasPorAdulto, avaliarSala, validarCriancasPrevistas, validarFaixa,
   POLITICA_VERSAO, POLITICA_TITULO, POLITICA_ITENS, POLITICA_ACEITE, POLITICA_HASH, politicaVigente, avaliarIntegridadePolitica,
   TIPOS_AUTODENUNCIA, DECISOES_AUTODENUNCIA, validarAutoDenuncia, validarDecisaoAutoDenuncia, validarLiberacaoAutoDenuncia, validarAceitePolitica, validarConfirmacaoFicha,

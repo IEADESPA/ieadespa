@@ -495,7 +495,7 @@ async function minhaSituacao(pool, membroId, { hoje = hojeBrasilia() } = {}) {
   const aberta = (await pool.request().input("m", sql.Int, membroId).query(`
     SELECT TOP 1 AutoDenunciaId, Tipo, DataCiencia, DeclaradaEm, Decisao, DecididaEm, LiberadoEm FROM MinisterioMenoresAutoDenuncias WHERE MembroId = @m ORDER BY AutoDenunciaId DESC`)).recordset[0];
   return {
-    apto: ap.apto, contaComoAdulto: ap.contaComoAdulto, bloqueios: ap.bloqueios, validades: ap.validades, proximoVencimento: ap.proximoVencimento,
+    apto: ap.apto, contaComoAdulto: ap.contaComoAdulto, bloqueios: mm.bloqueiosParaAPessoa(ap.bloqueios), validades: ap.validades, proximoVencimento: ap.proximoVencimento,
     equipes: r.recordset.map((x) => ({ equipeId: x.EquipeId, nome: x.Nome })),
     habilitacaoAberta: ap.fatos.esteira.existe,
     politica: { vigente: { versao: mm.POLITICA_VERSAO }, aceita: politicaAceita },

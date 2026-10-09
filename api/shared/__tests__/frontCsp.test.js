@@ -312,9 +312,9 @@ if (typeof describe === "function") {
       expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "verificar.css"))).toBe(true);
     });
 
-    test("service-worker: cache novo (v31), eventos.js e todos os módulos na casca offline", () => {
+    test("service-worker: cache novo (v32), eventos.js e todos os módulos na casca offline", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v31";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v32";/);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));
     });

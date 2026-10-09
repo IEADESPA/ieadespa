@@ -264,7 +264,7 @@ async function buscarEquipe(pool, equipeId) {
 
 async function listarEquipes(pool, congregacaoId) {
   const result = await pool.request().input("congregacaoId", sql.Int, congregacaoId).query(`
-    SELECT e.EquipeId AS equipeId, e.Nome AS nome, e.LiderMembroId AS liderMembroId, m.Nome AS liderNome, e.Ativa AS ativa, e.Natureza AS natureza
+    SELECT e.EquipeId AS equipeId, e.Nome AS nome, e.LiderMembroId AS liderMembroId, m.Nome AS liderNome, e.Ativa AS ativa, e.Natureza AS natureza, e.FaixaEtariaMenores AS faixaEtariaMenores
     FROM EscalasEquipes e JOIN MembroReferencia m ON m.MembroId = e.LiderMembroId
     WHERE e.CongregacaoId = @congregacaoId
     ORDER BY e.Nome

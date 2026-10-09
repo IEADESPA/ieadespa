@@ -510,10 +510,10 @@ function textoVistoriasARenovar({ total, nomes }) {
 }
 // O e-mail sai do sistema e não se recolhe: nenhum aviso leva o NOME de quem comunicou nem o TIPO do procedimento (isso só se vê dentro do sistema, na fila da Diretoria).
 function textoAutoDenuncia() {
-  return "Há uma comunicação nova de voluntário aguardando a decisão da Diretoria Executiva (Regimento Art. 133 §5º, V). Por cautela, o contato dessa pessoa com menores já está suspenso. Abra Vistoria de Antecedentes → Comunicações dos voluntários para ver e decidir.";
+  return "Há uma comunicação nova de voluntário aguardando a decisão da Diretoria Executiva (Regimento Art. 133 §5º, V). Por cautela, o contato dessa pessoa com menores já está suspenso. Abra Ministério com Menores → Comunicações dos voluntários para ver e decidir.";
 }
 function textoAutoDenunciaPendente({ dias }) {
-  return `Há uma comunicação de voluntário sem decisão da Diretoria há ${dias} dia(s), e o contato dessa pessoa com menores segue suspenso. Abra Vistoria de Antecedentes → Comunicações dos voluntários para decidir: manter ou afastar preventivamente.`.slice(0, 1000);
+  return `Há uma comunicação de voluntário sem decisão da Diretoria há ${dias} dia(s), e o contato dessa pessoa com menores segue suspenso. Abra Ministério com Menores → Comunicações dos voluntários para decidir: manter ou afastar preventivamente.`.slice(0, 1000);
 }
 function textoAutoDenunciaPessoa() {
   return "A sua comunicação foi recebida pela Diretoria Executiva. Obrigado por avisar: é o que o Regimento pede. Por cautela, o seu contato com menores fica suspenso até a decisão da Diretoria — isso não é punição e não afeta os seus outros serviços. A Diretoria pode pedir certidões novas.";

@@ -369,6 +369,10 @@ function carregarAbaFoto(membroId) {
     ? `<img src="${urlSegura(pessoa.fotoUrl)}" alt="Foto" style="max-width:160px;border-radius:8px;" />`
     : "<span class='subtitle'>Sem foto cadastrada.</span>";
 
+  // v7.7: menor de 18 anos — quem decide sobre a foto é o responsável (não o consentimento da própria pessoa): o aviso dele substitui a linha do consentimento de Foto
+  mnrPrepararFotoDeMenor(membroId, pessoa);
+  if (mnrEhMenorDeIdade(pessoa)) return;
+
   fetchProtegido(`${API_BASE}/lgpd/consentimento/${membroId}`).then(r => r.json()).then(data => {
     const fotoConsentimento = (data.consentimentos || []).find(c => c.tipo === "FOTO");
     const statusEl = document.getElementById("fotoMembroStatusConsentimento");

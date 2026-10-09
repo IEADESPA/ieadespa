@@ -145,6 +145,7 @@
             <button class="btn-subaba" id="btnSubMeupainelCartas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cartas"]'><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasescalas"]'><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhahabilitacao"]'><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMenores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com menores</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
@@ -292,6 +293,9 @@
           <div class="grupo-modulo" id="grupoModuloHabilitacao" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaHabilitacao" data-on-click="mostrarAbaSecretaria" data-args-click='["habilitacao"]'><span class="icone">🛡️</span><span class="rotulo">Habilitação de Voluntários</span></button>
+            <!-- v7.7 — Ministério com Menores (Lei 14.811/2024): painel de conformidade, ferramentas da Secretaria e, só para a Diretoria, as comunicações dos voluntários.
+                 Mesma permissão da Habilitação ("habilitacao_voluntarios"). -->
+            <button class="btn-aba" id="btnAbaMenores" data-on-click="mostrarAbaSecretaria" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com Menores</span></button>
           </div>
 
           <!-- MÓDULO: ASSISTÊNCIA SOCIAL / AÇÃO DA FÉ (v5.9) — permissão
@@ -719,8 +723,9 @@
           <p class="subtitle" style="margin:0 0 8px;">Dado sensível (LGPD) — precisa do consentimento acima concedido antes de
             fazer o upload.</p>
           <div id="minhaFotoPreview" style="margin:0 0 10px;"></div>
-          <div class="barra-lista">
-            <input type="file" id="minhaFotoArquivo" accept="image/*" capture />
+          <p id="minhaFotoAvisoMenor" class="subtitle" role="status"></p>
+          <div class="barra-lista" id="minhaFotoEnvio">
+            <input type="file" id="minhaFotoArquivo" accept="image/*" capture aria-label="Escolher a foto" />
             <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="enviarMinhaFotoAcao">📷 Enviar Foto</button>
           </div>
           <p id="resultadoMinhaFoto" class="subtitle"></p>
@@ -811,6 +816,79 @@
           <div id="resultadoMinhaHabilitacao"></div>
           <hr />
           <div id="volTermoMeuPainel"></div>
+        </div>
+
+        <!-- SUB-ABA: MINISTÉRIO COM MENORES (v7.7 — Lei 14.811/2024). Autoatendimento, aberto a qualquer login (inclusive PIN):
+             a minha situação (apto ou não, o que falta, as validades), a política de comunicação, a confirmação da ficha, a
+             comunicação à Diretoria (Regimento Art. 133 §5º, V) e, para o responsável legal, a autorização sobre a imagem e a
+             saúde dos menores dele (LGPD art. 14). Toda regra mora no servidor (shared/ministerioMenores.js). -->
+        <div id="subMeupainelMenores" class="sub-aba-secretaria" style="display:none;">
+          <h3>🧒 Ministério com menores</h3>
+          <p class="subtitle">Quem serve com crianças e adolescentes (berçário, EBD infantil, juniores, adolescentes...) precisa estar <strong>habilitado</strong>
+            (Lei 14.811/2024). Aqui você vê se está apto, <strong>o que falta</strong> e <strong>até quando</strong> cada documento vale. A lei pede: certidões de
+            antecedentes criminais (federal e estadual) com cerca de 6 meses de validade, treinamento de proteção, ficha cadastral confirmada a cada 6 meses, o aceite
+            da política de comunicação e 6 meses de comunhão. <em>Exemplo: a irmã Ana serve no Maternal e a certidão dela vence em 40 dias. O painel mostra o prazo em
+            amarelo; ela pede a certidão nova com tempo e continua servindo. Se deixar vencer, o sistema a tira das escalas com crianças até regularizar. Não é punição.</em></p>
+          <p id="mnrMeuResultado" class="subtitle" role="status"></p>
+
+          <h4>🛡️ A minha situação</h4>
+          <div id="mnrSituacao"></div>
+
+          <hr />
+          <h4>📜 Política de comunicação com crianças e adolescentes</h4>
+          <div id="mnrPoliticaCx"></div>
+          <p id="mnrPoliticaMsg" class="subtitle" role="status"></p>
+
+          <hr />
+          <h4>🗂️ Confirmar a minha ficha</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">A lei pede a ficha cadastral atualizada a cada 6 meses. Confira o seu nome, telefone, e-mail e endereço (em
+            <em>Meus Dados Cadastrais</em>) e confirme aqui. Exemplo: você mudou de número de telefone, atualiza em Meus Dados Cadastrais e depois confirma a ficha.</p>
+          <div id="mnrFichaValidade" class="psc-legenda" role="status"></div>
+          <label class="opcao-checkbox"><input type="checkbox" id="mnrFichaMarca" /> Confirmo que os meus dados cadastrais (nome, telefone, e-mail e endereço) estão atualizados.</label>
+          <div class="psc-acoes">
+            <button type="button" class="btn-confirmar" id="mnrFichaBotao" style="width:auto;margin:0;" data-on-click="mnrConfirmarFichaAcao" data-args-click='[{"$":"this"}]'>✅ Confirmar a minha ficha</button>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="mostrarSubAbaMeupainel" data-args-click='["dados"]'>✏️ Revisar meus dados cadastrais</button>
+          </div>
+          <p id="mnrFichaMsg" class="subtitle" role="status"></p>
+
+          <hr />
+          <h4>📣 Comunicar à Diretoria</h4>
+          <p class="cnl-aviso-senha" role="note"><strong>Para quem responde a inquérito ou processo criminal.</strong> O Regimento (Art. 133 §5º, V) pede que quem responde a
+            inquérito policial, processo criminal ou outro procedimento criminal <strong>avise a Diretoria Executiva</strong>. Avisar é um <strong>dever</strong> e é o certo a fazer.
+            Por cautela, <strong>só o seu contato com menores</strong> fica suspenso até a Diretoria decidir (os seus outros serviços continuam). <strong>Isso não é punição</strong>
+            nem acusação: protege você, as crianças e a Igreja. Você informa só o <strong>tipo</strong> e a <strong>data em que soube</strong>: não descreva o caso nem cite nomes.</p>
+          <div id="mnrAdAndamento"></div>
+          <div id="mnrAdFormCx" style="display:none;">
+            <details id="mnrAdDetalhes" class="vol-form evt-form-detalhes" open>
+              <summary id="mnrAdResumo">📣 Comunicar à Diretoria</summary>
+              <div class="cal-form">
+                <div class="cal-form-grade">
+                  <div class="input-group">
+                    <label for="mnrAdTipo">O que você está respondendo</label>
+                    <select id="mnrAdTipo"></select>
+                  </div>
+                  <div class="input-group">
+                    <label for="mnrAdData">Data em que você soube</label>
+                    <input type="date" id="mnrAdData" />
+                  </div>
+                </div>
+                <label class="opcao-checkbox"><input type="checkbox" id="mnrAdCiente" /> Estou ciente de que a comunicação vai à Diretoria Executiva e de que, por cautela, o meu contato com menores fica suspenso até a decisão (não é punição).</label>
+              </div>
+              <div class="psc-acoes">
+                <button type="button" class="btn-confirmar" id="mnrAdBotao" style="width:auto;margin:0;" data-on-click="mnrComunicarAcao" data-args-click='[{"$":"this"}]'>📣 Comunicar à Diretoria</button>
+              </div>
+            </details>
+          </div>
+          <p id="mnrAdMsg" class="subtitle" role="status"></p>
+
+          <hr />
+          <h4>👪 Menores sob a minha responsabilidade</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Se você é pai, mãe ou tutor de um menor de 18 anos cadastrado pela Secretaria, <strong>você decide</strong> (LGPD, art. 14) se a Igreja
+            pode usar a <strong>foto</strong> dele(a) no cadastro e no crachá e se pode imprimir no crachá uma <strong>alergia ou condição de saúde</strong> que você escolher informar.
+            É <strong>opcional</strong>: sem a sua autorização o(a) menor participa normalmente. Você lê o texto exato antes de autorizar e pode <strong>revogar quando quiser</strong>.
+            <em>Exemplo: a mãe do Pedro (10 anos) toca em "Ler o texto e autorizar", lê, marca a caixa e autoriza a foto; se mudar de ideia, toca em "Revogar" e a foto é apagada.</em></p>
+          <p id="mnrMenoresMsg" class="subtitle" role="status"></p>
+          <div id="mnrMenoresLista"></div>
         </div>
 
         <!-- SUB-ABA: MINHA FORMAÇÃO (v6.9 — Trilhas de formação e
@@ -1789,7 +1867,8 @@
               fazer o upload. Não é registro paralelo como telefone/e-mail: sem consentimento, o sistema bloqueia.</p>
             <div id="fotoMembroPreview" style="margin:0 0 10px;"></div>
             <p id="fotoMembroStatusConsentimento" class="subtitle"></p>
-            <div class="barra-lista">
+            <p id="fotoMembroAvisoMenor" class="subtitle" role="status"></p>
+            <div class="barra-lista" id="fotoMembroEnvio">
               <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="concederConsentimentoFotoAcao">✅ Conceder Consentimento de Foto</button>
               <input type="file" id="fotoMembroArquivo" accept="image/*" capture />
               <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="enviarFotoMembroAcao">📷 Enviar Foto</button>
@@ -2932,11 +3011,12 @@
         <p class="subtitle">Esteira sequencial obrigatória — não dá pra pular etapa: ficha de inscrição →
           referências internas → entrevista registrada → antecedentes → treinamento → termo assinado →
           <strong>apto</strong>. Status calculado (nunca digitado): apto / pendente / inapto / vencido
-          (o "apto" vale 24 meses). Pré-requisito da futura v7.7 (Habilitação para Ministério com Menores).</p>
+          (o "apto" vale 24 meses). Quem serve com crianças e adolescentes precisa também da habilitação para menores: veja a aba <strong>Ministério com Menores</strong> (Lei 14.811/2024).</p>
 
         <h4>Equipes/ministérios — marcação "contato com menores"</h4>
-        <p class="subtitle">É essa marcação que vai disparar as exigências reforçadas da v7.7 (bloqueio de
-          escala por habilitação vencida, regra dos dois adultos etc.) — aqui só o cadastro do sinalizador.</p>
+        <p class="subtitle">É essa marcação que liga as exigências do ministério com menores (v7.7): só é escalado quem está
+          habilitado hoje, uma sala com crianças nunca fica com um adulto só e há uma proporção de adultos por faixa etária.
+          Aqui você marca a equipe e escolhe a <strong>faixa etária</strong> dela.</p>
         <div class="barra-lista">
           <select id="hvCongregacao"></select>
           <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="carregarEquipesFlagAcao">📂 Abrir</button>
@@ -3091,6 +3171,169 @@
           <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="registrarDesligamentoAcao">🚪 Registrar Desligamento</button>
         </div>
         <p id="resultadoDesligamento" class="subtitle"></p>
+      </div>
+
+      <!-- ABA: MINISTÉRIO COM MENORES (v7.7 — Lei 14.811/2024). Permissão "habilitacao_voluntarios" (no escopo da congregação; o campo inteiro é só do nível
+           geral). Painel de conformidade, ferramentas da Secretaria (aceite da política e autorização do responsável em ficha, confirmação da ficha cadastral,
+           faixa etária da equipe) e, só para a Diretoria (vistoria_antecedentes, nível geral), as comunicações dos voluntários (Regimento Art. 133 §5º, V). A aba também abre
+           para quem só tem "vistoria_antecedentes" (Conselho de Ética): a tela mostra só as seções que o servidor libera para a sessão. -->
+      <div id="abaMenores" class="aba-secretaria" style="display:none;">
+        <h3>🧒 Ministério com Menores</h3>
+        <p class="subtitle">Quem serve com crianças e adolescentes precisa estar habilitado hoje (Lei 14.811/2024): certidões de antecedentes em dia, treinamento, ficha
+          confirmada, política aceita e 6 meses de comunhão. A situação é <strong>calculada na hora</strong>, nunca digitada. Quem deixa de estar apto <strong>sai sozinho das
+          escalas futuras</strong> das equipes marcadas com "contato com menores" (sem punição), e o painel abaixo mostra o que falta para ajudá-lo a se regularizar.
+          <em>Exemplo: o irmão Davi tem a certidão vencendo em 30 dias. Ele aparece em amarelo e a Secretaria o lembra de pedir a nova com a Diretoria antes do dia do vencimento.</em></p>
+
+        <div class="cal-pilulas" id="mnrPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnMnrSecaoPainel" data-on-click="mnrMostrarSecaoAcao" data-args-click='["painel"]'>📊 Painel de conformidade</button>
+          <button type="button" class="cal-pilula" id="btnMnrSecaoFerramentas" data-on-click="mnrMostrarSecaoAcao" data-args-click='["ferramentas"]'>🧰 Ferramentas</button>
+          <button type="button" class="cal-pilula" id="btnMnrSecaoComunicacoes" data-on-click="mnrMostrarSecaoAcao" data-args-click='["comunicacoes"]' style="display:none;">⚖️ Comunicações dos voluntários</button>
+        </div>
+        <p id="mnrSemAcesso" class="subtitle psc-aviso" role="status" style="display:none;">Com o seu login atual você não tem acesso a nenhuma tela desta aba. Entre com a senha de liderança ou fale com quem administra as Permissões.</p>
+
+        <!-- a) PAINEL DE CONFORMIDADE -->
+        <div id="mnrSecaoPainel" class="cal-secao">
+          <h4>📊 Painel de conformidade</h4>
+          <div class="barra-lista">
+            <label for="mnrPainelCong">Congregação</label>
+            <select id="mnrPainelCong"></select>
+            <label for="mnrPainelFiltro">Mostrar</label>
+            <select id="mnrPainelFiltro" data-on-change="mnrFiltrarPainelAcao">
+              <option value="todos">Todos</option>
+              <option value="BLOQUEADO">Só os bloqueados</option>
+              <option value="VENCENDO">Só os que vencem logo</option>
+              <option value="APTO">Só os aptos</option>
+            </select>
+            <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="mnrCarregarPainelAcao">📂 Abrir o painel</button>
+          </div>
+          <p id="mnrPainelResultado" class="subtitle" role="status"></p>
+          <p id="mnrPainelPrivacidade" class="psc-legenda" style="display:none;">Aqui você vê só o que ajuda a pessoa a se regularizar. Quando a pendência é assunto reservado
+            à Diretoria Executiva (por exemplo, uma restrição nos antecedentes), aparece apenas "pendência com a Diretoria", sem detalhes.</p>
+          <div id="mnrPainelResumo"></div>
+          <div id="mnrPainelPorCong"></div>
+          <div id="mnrPainelLista"></div>
+        </div>
+
+        <!-- b) FERRAMENTAS DA SECRETARIA -->
+        <div id="mnrSecaoFerramentas" class="cal-secao" style="display:none;">
+          <h4>🧰 Ferramentas da Secretaria</h4>
+
+          <div class="cal-form">
+            <h5>📜 Aceite da política, em ficha de papel</h5>
+            <p class="psc-legenda">Para quem não consegue aceitar pela internet: a pessoa assina a ficha e você registra aqui <strong>onde ela está arquivada</strong>. Quem registra não pode ser a própria pessoa.</p>
+            <div class="cal-form-grade">
+              <div class="input-group">
+                <label for="mnrRpMatricula">Matrícula de quem assinou</label>
+                <input type="number" id="mnrRpMatricula" min="1" />
+              </div>
+              <div class="input-group">
+                <label for="mnrRpReferencia">Onde a ficha está arquivada (3 a 200 caracteres)</label>
+                <input type="text" id="mnrRpReferencia" maxlength="200" placeholder="Ex.: Pasta 3, ficha 12" />
+              </div>
+            </div>
+            <div class="psc-acoes">
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="mnrRegistrarPoliticaAcao" data-args-click='[{"$":"this"}]'>📜 Registrar o aceite</button>
+            </div>
+            <p id="mnrRpMsg" class="subtitle" role="status"></p>
+          </div>
+
+          <div class="cal-form">
+            <h5>🗂️ Confirmar a ficha cadastral de uma pessoa</h5>
+            <p class="psc-legenda">Use depois de conferir com a pessoa o nome, o telefone, o e-mail e o endereço. A confirmação vale por 6 meses.</p>
+            <div class="cal-form-grade">
+              <div class="input-group">
+                <label for="mnrFpMatricula">Matrícula da pessoa</label>
+                <input type="number" id="mnrFpMatricula" min="1" />
+              </div>
+            </div>
+            <label class="opcao-checkbox"><input type="checkbox" id="mnrFpMarca" /> Conferi os dados cadastrais com a pessoa (nome, telefone, e-mail e endereço).</label>
+            <div class="psc-acoes">
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="mnrConfirmarFichaPessoaAcao" data-args-click='[{"$":"this"}]'>🗂️ Confirmar a ficha</button>
+            </div>
+            <p id="mnrFpMsg" class="subtitle" role="status"></p>
+          </div>
+
+          <div class="cal-form">
+            <h5>🧸 Faixa etária da equipe</h5>
+            <p class="psc-legenda">A faixa define quantas crianças cada adulto pode acompanhar na sala (por exemplo, berçário: até 3 crianças por adulto). Sem a faixa, a escala da sala não pode ser publicada. Esta lista não mostra a faixa já gravada: escolha para definir ou trocar.</p>
+            <div class="barra-lista">
+              <label for="mnrFaixaCong">Congregação</label>
+              <select id="mnrFaixaCong"></select>
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="mnrCarregarEquipesFaixaAcao">📂 Ver as equipes</button>
+            </div>
+            <div class="cal-form-grade">
+              <div class="input-group">
+                <label for="mnrFaixaEquipe">Equipe</label>
+                <select id="mnrFaixaEquipe"></select>
+              </div>
+              <div class="input-group">
+                <label for="mnrFaixaValor">Faixa etária</label>
+                <select id="mnrFaixaValor"></select>
+              </div>
+            </div>
+            <div class="psc-acoes">
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="mnrSalvarFaixaAcao" data-args-click='[{"$":"this"}]'>💾 Salvar a faixa</button>
+            </div>
+            <p id="mnrFaixaMsg" class="subtitle" role="status"></p>
+          </div>
+
+          <div class="cal-form">
+            <h5>👪 Autorização do responsável, em ficha de papel</h5>
+            <p class="psc-legenda">Quando o pai, a mãe ou o tutor assina a ficha em papel (autorizando ou revogando o uso da imagem ou da saúde no crachá), você registra aqui onde ela está arquivada. O responsável precisa estar
+              cadastrado para o menor (com o documento conferido). Primeiro consulte o menor para ver como está cada autorização. Quem registra não pode ser o responsável nem o menor.</p>
+            <div class="barra-lista">
+              <label for="mnrFcMenor">Matrícula do menor</label>
+              <input type="number" id="mnrFcMenor" min="1" />
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="mnrConsultarMenorAcao">🔎 Consultar</button>
+            </div>
+            <div id="mnrFcMenorInfo"></div>
+            <div id="mnrFcForm" style="display:none;">
+              <div class="cal-form-grade">
+                <div class="input-group">
+                  <label for="mnrFcResp">Quem assinou a ficha</label>
+                  <select id="mnrFcResp"></select>
+                </div>
+                <div class="input-group">
+                  <label for="mnrFcFinalidade">O que a ficha trata</label>
+                  <select id="mnrFcFinalidade">
+                    <option value="IMAGEM">Uso da imagem (foto)</option>
+                    <option value="SAUDE_CRACHA">Alergia ou saúde no crachá</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label for="mnrFcAcao">A ficha</label>
+                  <select id="mnrFcAcao">
+                    <option value="concede">AUTORIZA</option>
+                    <option value="revoga">REVOGA a autorização</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label for="mnrFcRef">Onde a ficha está arquivada (3 a 200 caracteres)</label>
+                  <input type="text" id="mnrFcRef" maxlength="200" placeholder="Ex.: Pasta 3, ficha 12" />
+                </div>
+              </div>
+              <div class="psc-acoes">
+                <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="mnrRegistrarFichaAcao" data-args-click='[{"$":"this"}]'>👪 Registrar a ficha</button>
+              </div>
+            </div>
+            <p id="mnrFcMsg" class="subtitle" role="status"></p>
+          </div>
+        </div>
+
+        <!-- c) COMUNICAÇÕES DOS VOLUNTÁRIOS (só a Diretoria Executiva e o Conselho de Ética) -->
+        <div id="mnrSecaoComunicacoes" class="cal-secao" style="display:none;">
+          <h4>⚖️ Comunicações dos voluntários</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Quem responde a inquérito ou processo criminal avisa a Diretoria (Regimento Art. 133 §5º, V). Enquanto a decisão não sai, o contato da pessoa com menores fica suspenso por cautela.
+            A Diretoria <strong>mantém</strong> (a pessoa volta a servir, se a habilitação estiver em dia) ou <strong>afasta preventivamente</strong> (até levantar o afastamento depois). Decidir e liberar pedem uma confirmação recente de quem você é.
+            Ninguém decide sobre a própria comunicação.</p>
+          <div class="barra-lista">
+            <label class="cal-check"><input type="checkbox" id="mnrComAbertas" checked data-on-change="mnrCarregarComunicacoesAcao" /> Só as abertas</label>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="mnrCarregarComunicacoesAcao">🔄 Atualizar</button>
+          </div>
+          <p id="mnrComResultado" class="subtitle" role="status"></p>
+          <p id="mnrComAcaoMsg" class="subtitle" role="status"></p>
+          <div id="mnrComLista"></div>
+        </div>
       </div>
 
       <!-- ABA: ASSISTÊNCIA SOCIAL / AÇÃO DA FÉ (v5.9) -->
@@ -6002,6 +6245,7 @@
   <script src="modulos/financeiro.js"></script>
   <script src="modulos/meu-painel.js"></script>
   <script src="modulos/meus-dados.js"></script>
+  <script src="modulos/ministerio-menores.js"></script>
   <script src="modulos/ouvidoria.js"></script>
   <script src="modulos/permissoes.js"></script>
   <script src="modulos/pessoas.js"></script>

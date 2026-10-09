@@ -419,7 +419,7 @@ async function atualizarContatoComMenores(pool, equipeId, contatoComMenores) {
 
 async function listarEquipesComFlag(pool, congregacaoId) {
   const result = await pool.request().input("congregacaoId", sql.Int, congregacaoId).query(`
-    SELECT EquipeId AS equipeId, Nome AS nome, ContatoComMenores AS contatoComMenores
+    SELECT EquipeId AS equipeId, Nome AS nome, ContatoComMenores AS contatoComMenores, FaixaEtariaMenores AS faixaEtariaMenores
     FROM EscalasEquipes WHERE CongregacaoId = @congregacaoId ORDER BY Nome
   `);
   return result.recordset;

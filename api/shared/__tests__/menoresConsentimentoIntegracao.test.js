@@ -180,7 +180,7 @@ describe("UploadFotoMembro (a Secretaria)", () => {
 });
 
 describe("GestaoConsentimentoLGPD: revogar o consentimento FOTO exclui o arquivo", () => {
-  const membro = (fotoUrl) => quando(/SELECT MembroId, FotoUrl FROM MembroReferencia WHERE MembroId = @mat/, [{ MembroId: 20, FotoUrl: fotoUrl }]);
+  const membro = (fotoUrl, nasc = null) => quando(/SELECT MembroId, FotoUrl, DataNascimento FROM MembroReferencia WHERE MembroId = @mat/, [{ MembroId: 20, FotoUrl: fotoUrl, DataNascimento: nasc }]);
   const POST = (corpo, token = tokenDe(20)) => chamar(hConsentimento, { metodo: "POST", ligado: { matricula: "20" }, token, corpo });
   test("o titular revoga a FOTO: grava a revogação, zera a referência, exclui o blob e audita (sem a URL)", async () => {
     membro("https://armazem/fotos-membros/membro-20");
@@ -227,6 +227,22 @@ describe("GestaoConsentimentoLGPD: revogar o consentimento FOTO exclui o arquivo
     expect(contato.body).toMatchObject({ sucesso: true, fotoApagada: false, mensagem: "✅ Consentimento revogado." });
     expect(storage.excluirFoto).not.toHaveBeenCalled();
     expect(mockConsultas.some((c) => /UPDATE MembroReferencia/.test(c.sql))).toBe(false);
+  });
+  test("menor de 18 anos: NÃO se registra o consentimento de FOTO da pessoa (quem autoriza é o responsável); revogar continua valendo; adulto e idade desconhecida seguem como antes", async () => {
+    membro("https://armazem/fotos-membros/membro-20", new Date(Date.now() - 12 * 365 * 86400000));
+    const recusa = await POST({ tipo: "FOTO", concedido: true });
+    expect(recusa.status).toBe(422);
+    expect(recusa.body).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/menor de 18 anos.*autorização do responsável/) });
+    expect(escritas()).toHaveLength(0);
+    const revoga = await POST({ tipo: "FOTO", concedido: false });
+    expect(revoga.body).toMatchObject({ sucesso: true, fotoApagada: true });
+  });
+  test("adulto e idade desconhecida registram o consentimento de FOTO como sempre", async () => {
+    membro(null, new Date("1990-01-01"));
+    expect((await POST({ tipo: "FOTO", concedido: true })).body.sucesso).toBe(true);
+    mockRegras.length = 0;
+    membro(null, null);
+    expect((await POST({ tipo: "FOTO", concedido: true })).body.sucesso).toBe(true);
   });
   test("o tipo por omissão é DADOS_CONTATO: revogar sem dizer o tipo não apaga a foto", async () => {
     membro("https://armazem/fotos-membros/membro-20");

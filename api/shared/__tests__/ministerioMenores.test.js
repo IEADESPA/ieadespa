@@ -393,6 +393,19 @@ describe("a máscara do painel da gestão (achados do ensaio no banco: nada rese
     expect(mm.validadesParaGestao(linhas[5].aptidao.validades).antecedentes.situacao).toBe("VIGENTE");
     expect(mm.validadesParaGestao(undefined)).toEqual({});
   });
+  test("as QUATRO pendências reservadas ficam idênticas para a gestão: mesma linha das certidões e sem 'próximo vencimento' (nada as distingue por um detalhe)", () => {
+    const reservadas = linhas.slice(0, 4);
+    expect(reservadas.map((l) => l.aptidao.bloqueios[0].codigo)).toEqual(["ANTECEDENTES_COM_RESTRICAO", "AUTO_DENUNCIA_EM_ANALISE", "CADASTRO_NACIONAL", "FORA_DE_COMUNHAO"]);
+    const vistas = reservadas.map((l) => JSON.stringify({ v: mm.validadesParaGestao(l.aptidao.validades, l.aptidao.bloqueios).antecedentes, p: mm.proximoVencimentoParaGestao(l.aptidao.proximoVencimento, l.aptidao.bloqueios) }));
+    expect(new Set(vistas).size).toBe(1);
+    expect(JSON.parse(vistas[0])).toEqual({ v: { situacao: "PENDENCIA_DIRETORIA", validoAte: null, emitidaEm: null }, p: null });
+    // quem NÃO tem pendência reservada mantém as datas e o próximo vencimento
+    const comum = linhas[4];
+    expect(mm.validadesParaGestao(comum.aptidao.validades, comum.aptidao.bloqueios).antecedentes.situacao).toBe(comum.aptidao.validades.antecedentes.situacao);
+    expect(mm.proximoVencimentoParaGestao(comum.aptidao.proximoVencimento, comum.aptidao.bloqueios)).toEqual(comum.aptidao.proximoVencimento);
+    expect(mm.temBloqueioReservado([])).toBe(false);
+    expect(mm.temBloqueioReservado(undefined)).toBe(false);
+  });
   test("o painel leva só código e rótulo (a mensagem fala 'você' e é da própria pessoa); a Diretoria vê todos os códigos", () => {
     const b = mm.bloqueiosParaPainel(linhas[4].aptidao.bloqueios);
     expect(b).toEqual([{ codigo: "TREINAMENTO_AUSENTE", rotulo: "Sem treinamento de proteção" }]);

@@ -79,7 +79,15 @@ const MUTACOES = [
   // ---- comunicação à Diretoria ----
   ["comunicação: o formulário continua depois de enviada", M, "formCx.style.display = encerrada ? \"\" : \"none\";", "formCx.style.display = \"\";"],
   ["comunicação: envia sem a caixa 'ciente'", M, "if (!mnrMarcado(\"mnrAdCiente\")) { erro(", "if (false) { erro("],
-  ["comunicação: aceita data no futuro", M, "if (dataCiencia > calHojeBrasilia()) {", "if (false) {"]
+  ["comunicação: aceita data no futuro", M, "if (dataCiencia > calHojeBrasilia()) {", "if (false) {"],
+  // ---- revisão independente da tela (09/10/2026) ----
+  ["reservado: a linha própria da pendência reservada some (volta a parecer pendência das certidões)", M, "const reservada = !!(v.antecedentes && v.antecedentes.situacao === \"PENDENCIA_DIRETORIA\");", "const reservada = false;"],
+  ["escalas: ✗ também quando os adultos bastam", E, "(Number(s.adultos) || 0) >= (Number(s.necessarios) || 0) ? \"✓\" : \"✗\"", "s.ok ? \"✓\" : \"✗\""],
+  ["escalas: salvar uma sala apaga o que foi digitado nas outras", E, "digitados.forEach(([idCampo, valor]) => {", "[].forEach(([idCampo, valor]) => {"],
+  ["escalas: a faixa gravada deixa de aparecer escolhida", E, "sel.value = e.faixaEtariaMenores;", "void 0;"],
+  ["foto de menor: o botão de consentimento próprio continua visível", M, "if (conceder) conceder.style.display = \"none\";", "void 0;"],
+  ["foto de menor: sem ler o estado, o texto afirma que falta a autorização", M, "if (!imagem) {", "if (false) {"],
+  ["avisos fixos: o erro tem a mesma cara do sucesso", M, "destaque || !!(data && data.sucesso === false)", "destaque"]
 ];
 
 const vivo = setInterval(() => {}, 1000);   // um ato esperando para sempre não pode encerrar o processo em silêncio

@@ -311,11 +311,21 @@ function bloqueiosParaPainel(bloqueios, { reservado = false } = {}) {
   const lista = reservado ? (bloqueios || []) : mascararParaGestao(bloqueios);
   return lista.map((b) => ({ codigo: b.codigo, rotulo: ROTULO_BLOQUEIO[b.codigo] || b.codigo, ...(b.venceuEm ? { venceuEm: b.venceuEm } : {}), ...(b.elegivelEm ? { elegivelEm: b.elegivelEm } : {}) }));
 }
-// A situação das certidões também revelaria a restrição ("COM_RESTRICAO"): para a gestão vira "pendência com a Diretoria".
-function validadesParaGestao(validades) {
+// A pessoa tem alguma pendência reservada à Diretoria? (restrição, comunicação em análise, cadastro nacional, fora de comunhão)
+function temBloqueioReservado(bloqueios) {
+  return (bloqueios || []).some((b) => BLOQUEIOS_RESERVADOS.includes(b.codigo));
+}
+// A situação das certidões também revelaria a restrição ("COM_RESTRICAO"), e o "próximo vencimento" muda quando as certidões não valem. Para a gestão, QUALQUER pendência
+// reservada vira a mesma linha — "pendência com a Diretoria", sem datas de certidão — para que as quatro causas não se distingam por um detalhe da tela.
+// `bloqueios` são os bloqueios BRUTOS da aptidão (antes da máscara).
+function validadesParaGestao(validades, bloqueios = []) {
   const v = JSON.parse(JSON.stringify(validades || {}));
-  if (v.antecedentes && v.antecedentes.situacao === "COM_RESTRICAO") v.antecedentes = { situacao: "PENDENCIA_DIRETORIA", validoAte: null, emitidaEm: null };
+  const reservado = temBloqueioReservado(bloqueios) || (v.antecedentes && v.antecedentes.situacao === "COM_RESTRICAO");
+  if (reservado && v.antecedentes) v.antecedentes = { situacao: "PENDENCIA_DIRETORIA", validoAte: null, emitidaEm: null };
   return v;
+}
+function proximoVencimentoParaGestao(proximo, bloqueios = []) {
+  return temBloqueioReservado(bloqueios) ? null : proximo;
 }
 
 // APTO | VENCENDO (apto, mas algo vence em até 60 dias) | BLOQUEADO
@@ -531,7 +541,7 @@ module.exports = {
   ANTECEDENTES_DIAS_PADRAO, TREINAMENTO_DIAS_PADRAO, FICHA_DIAS_PADRAO, ADULTOS_MINIMOS_PADRAO, ALERTAS_DIAS, SALA_ALERTA_DIAS_PADRAO, AUTODENUNCIA_LEMBRETE_DIAS_PADRAO,
   SIGLAS_PRAZO, FAIXAS, CODIGOS_FAIXA, CERTIDOES_CRIMINAIS, ROTULO_CERTIDAO, ROTULO_BLOQUEIO, BLOQUEIOS_RESERVADOS, ROTULO_ITEM_VENCIMENTO, MAX_CRIANCAS_POR_SALA, MAIORIDADE,
   paraIso, somarDiasIso, somarMesesIso, diasEntreIso, ordinalDeIso, prazosEfetivos, formatarDataBr,
-  avaliarAntecedentes, avaliarTreinamento, avaliarAptidao, itensAVencer, proximoVencimento, faixaDeAlerta, referenciaDoAviso, referenciaDaSala, nomeSugereMenores, mascararParaGestao, bloqueiosParaPainel, validadesParaGestao, statusDaLinha,
+  temBloqueioReservado, proximoVencimentoParaGestao, avaliarAntecedentes, avaliarTreinamento, avaliarAptidao, itensAVencer, proximoVencimento, faixaDeAlerta, referenciaDoAviso, referenciaDaSala, nomeSugereMenores, mascararParaGestao, bloqueiosParaPainel, validadesParaGestao, statusDaLinha,
   criancasPorAdulto, avaliarSala, validarCriancasPrevistas, validarFaixa,
   POLITICA_VERSAO, POLITICA_TITULO, POLITICA_ITENS, POLITICA_ACEITE, POLITICA_HASH, politicaVigente, avaliarIntegridadePolitica,
   TIPOS_AUTODENUNCIA, DECISOES_AUTODENUNCIA, validarAutoDenuncia, validarDecisaoAutoDenuncia, validarLiberacaoAutoDenuncia, validarAceitePolitica, validarConfirmacaoFicha,

@@ -467,8 +467,9 @@ async function painel(pool, { congregacaoIds = null, reservado = false, hoje = h
     const status = mm.statusDaLinha(l.aptidao);
     return {
       membroId: l.membroId, nome: l.nome, congregacaoId: l.congregacaoId, congregacaoNome: l.congregacaoNome, equipes: l.equipes.map((e) => e.nome),
-      status, bloqueios: mm.bloqueiosParaPainel(l.aptidao.bloqueios, { reservado }), proximoVencimento: l.aptidao.proximoVencimento,
-      validades: reservado ? l.aptidao.validades : mm.validadesParaGestao(l.aptidao.validades)
+      status, bloqueios: mm.bloqueiosParaPainel(l.aptidao.bloqueios, { reservado }),
+      proximoVencimento: reservado ? l.aptidao.proximoVencimento : mm.proximoVencimentoParaGestao(l.aptidao.proximoVencimento, l.aptidao.bloqueios),
+      validades: reservado ? l.aptidao.validades : mm.validadesParaGestao(l.aptidao.validades, l.aptidao.bloqueios)
     };
   }).sort((a, b) => ({ BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[a.status] - { BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[b.status]) || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
   return { resumo: mm.resumirPainel(linhas, { reservado }), porCongregacao: mm.agruparPorCongregacao(linhas, { reservado }), voluntarios: itens, equipesSemMarca: await equipesSemMarcaQueParecemInfantis(pool, { congregacaoIds }) };
@@ -544,7 +545,7 @@ async function confirmarFicha(pool, { membroId, por, confirmo }) {
   const v = mm.validarConfirmacaoFicha({ confirmo });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const hab = await habMod.buscarHabilitacaoPorMembro(pool, membroId);
-  if (!hab) return { sucesso: false, mensagem: "A habilitação ainda não foi aberta: peça à Secretaria da congregação para iniciá-la." };
+  if (!hab) return { sucesso: false, mensagem: "A habilitação desta pessoa ainda não foi aberta: ela é aberta em Habilitação de Voluntários (a Secretaria da congregação inicia)." };
   await pool.request().input("id", sql.Int, hab.habilitacaoId).query(`UPDATE VoluntariosHabilitacao SET FichaAtualizadaEm = SYSUTCDATETIME(), AtualizadoEm = SYSUTCDATETIME() WHERE HabilitacaoId = @id`);
   await registrarAuditoria({ tabela: "VoluntariosHabilitacao", registroId: hab.habilitacaoId, acao: "MENORES_FICHA_CONFIRMADA", usuarioId: por, dadosDepois: { membroId } });
   return { sucesso: true, mensagem: "Ficha confirmada. Ela vale por mais 6 meses." };

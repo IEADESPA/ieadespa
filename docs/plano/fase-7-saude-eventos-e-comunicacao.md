@@ -2250,6 +2250,17 @@ que mais fazia falta.)*
     responsável) apaga a foto de menor de 18 anos sem essa autorização — inclusive a enviada antes da v7.7
     com o consentimento do próprio menor, que não vale. O adulto que desmarca só o telefone/e-mail continua
     com a foto (decisão antiga, travada em teste).
+  - **A gestão não distingue as pendências reservadas, nem pelos detalhes**: restrição nos antecedentes,
+    comunicação em análise, cadastro nacional e fora de comunhão aparecem como a **mesma linha** ("pendência
+    reservada: procurar a Diretoria"), sem datas de certidão e sem "próximo vencimento"; a legenda do painel
+    não dá exemplo da causa. A Diretoria vê o detalhe.
+  - **A Diretoria sabe que o motivo que escreve será lido pela pessoa** (Meus Dados, direito de acesso da
+    LGPD): o formulário de decidir e de levantar o afastamento diz isso.
+  - **A Secretaria não registra o consentimento de foto de menor de 18 anos** (a rota recusa e a tela não
+    oferece o botão): quem autoriza é o responsável; registrar o da própria pessoa seria "sucesso" sem efeito.
+  - **A tela diz "a lei e o Regimento pedem"** e não só "a lei": a Lei 14.811/2024 não fala em treinamento,
+    política de comunicação nem 6 meses de comunhão; isso é Regimento e regra do sistema. O número de crianças
+    por adulto aparece como **padrão** (a Igreja pode mudá-lo em Catálogos → Prazos).
   - **Risco aceito: as ações da própria pessoa valem em sessão de PIN** (aceitar a política, confirmar a
     ficha, comunicar a auto-denúncia), pela decisão de 02/10/2026 de acesso do membro por PIN. Ninguém
     ganha poder com isso: a aptidão continua dependendo de certidões lançadas pela Diretoria, treinamento

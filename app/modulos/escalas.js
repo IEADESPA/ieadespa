@@ -149,7 +149,7 @@ function montarSalasMenoresHtml(menores, servicoId, jaListouProblemas) {
       <h5>${escaparHtmlEbd(s.equipeNome)} ${s.ok ? '<span class="cal-selo mnr-selo cal-st-homologado">✓ Em ordem</span>' : '<span class="cal-selo mnr-selo cal-st-indeferido">✗ Falta ajustar</span>'}</h5>
       <dl class="cal-dl">
         <div><dt>Faixa etária</dt><dd>${faixa}</dd></div>
-        <div><dt>Adultos habilitados escalados</dt><dd><strong>${Number(s.adultos) || 0}</strong> de ${Number(s.necessarios) || 0} necessários ${s.ok ? "✓" : "✗"}</dd></div>
+        <div><dt>Adultos habilitados escalados</dt><dd><strong>${Number(s.adultos) || 0}</strong> de ${Number(s.necessarios) || 0} necessários ${(Number(s.adultos) || 0) >= (Number(s.necessarios) || 0) ? "✓" : "✗"}</dd></div>
       </dl>
       <div class="barra-lista">
         <label for="escCriancas${idServico}_${idEquipe}">Crianças previstas neste serviço</label>
@@ -181,9 +181,12 @@ async function salvarCriancasPrevistasAcao(servicoId, equipeId, botao) {
       body: JSON.stringify({ servicoId: Number(servicoId), equipeId: Number(equipeId), criancas: Number(texto) })
     });
     const data = await res.json();
-    if (data.sucesso === false) { mostrarToast(data.mensagem, "erro"); return; }
+    if (data.sucesso === false) { if (res.status !== 403) mostrarToast(data.mensagem, "erro"); return; }
     mostrarToast(data.mensagem, "sucesso");
-    await abrirServicoEscalaAcao(Number(servicoId));   // os adultos necessários mudam com o número de crianças
+    // o detalhe é refeito (os adultos necessários mudam com o número de crianças), mas o que foi digitado nas OUTRAS salas e ainda não foi salvo volta aos campos
+    const digitados = Array.from(document.querySelectorAll(`[id^="escCriancas${Number(servicoId)}_"]`)).filter(el => el.id !== (campo && campo.id)).map(el => [el.id, el.value]);
+    await abrirServicoEscalaAcao(Number(servicoId));
+    digitados.forEach(([idCampo, valor]) => { const el = document.getElementById(idCampo); if (el && valor !== "") el.value = valor; });
   } finally {
     if (botao) botao.disabled = false;
     escCriancasEmCurso.delete(chave);
@@ -388,15 +391,19 @@ async function carregarEquipesFlagAcao() {
   // v7.7: a faixa etária (quantas crianças cada adulto acompanha) só importa para a equipe com contato com menores: o seletor aparece ao lado da marca
   if (data.equipes.some(e => e.contatoComMenores)) await mnrGarantirCatalogos();
   container.innerHTML = data.equipes.length
-    ? `<table class="tabela-frequencia"><thead><tr><th>Equipe</th><th>Contato com menores</th><th></th><th>Faixa etária (proporção de adultos)</th></tr></thead><tbody>
-        ${data.equipes.map(e => `<tr><td>${escaparHtmlEbd(e.nome)}</td><td>${e.contatoComMenores ? "Sim" : "Não"}</td>
+    ? `<table class="tabela-frequencia"><thead><tr><th>Equipe e faixa etária (proporção de adultos)</th><th>Contato com menores</th><th></th></tr></thead><tbody>
+        ${data.equipes.map(e => `<tr><td>${escaparHtmlEbd(e.nome)}${e.contatoComMenores ? `<br /><select id="hvFaixa${Number(e.equipeId)}" class="mnr-select-faixa" aria-label="Faixa etária da equipe ${escaparHtmlEbd(e.nome)}">${mnrOpcoesFaixa("— escolher a faixa —", true)}</select>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:4px 0 0;" data-on-click="salvarFaixaEquipeAcao" data-args-click="${argsAttr(e.equipeId, ARG.elemento)}">💾 Salvar a faixa</button>` : ""}</td><td>${e.contatoComMenores ? "Sim" : "Não"}</td>
           <td><button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="alternarContatoComMenoresAcao" data-args-click="${argsAttr(e.equipeId, !e.contatoComMenores)}">
-            ${e.contatoComMenores ? "Desmarcar" : "Marcar como contato com menores"}</button></td>
-          <td>${e.contatoComMenores ? `<select id="hvFaixa${Number(e.equipeId)}" class="mnr-select-faixa" aria-label="Faixa etária da equipe ${escaparHtmlEbd(e.nome)}">${mnrOpcoesFaixa("— escolher a faixa —", true)}</select>
-            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="salvarFaixaEquipeAcao" data-args-click="${argsAttr(e.equipeId, ARG.elemento)}">💾 Salvar a faixa</button>` : "<span class='psc-legenda'>só para equipe com contato com menores</span>"}</td></tr>`).join("")}
+            ${e.contatoComMenores ? "Desmarcar" : "Marcar como contato com menores"}</button></td></tr>`).join("")}
       </tbody></table>
-      <p class="psc-legenda">Sem a faixa, a escala de uma sala com crianças não pode ser publicada. Esta lista não mostra a faixa já gravada: escolha para definir ou trocar.</p>`
+      <p class="psc-legenda">Sem a faixa, a escala de uma sala com crianças não pode ser publicada. A faixa já gravada aparece escolhida ao lado do nome da equipe: escolha outra e salve para trocar.</p>`
     : "<p class='subtitle'>Nenhuma equipe cadastrada nesta congregação ainda (cadastre em Escalas de Serviço).</p>";
+  // a faixa que a equipe já tem aparece escolhida (só se for uma das faixas do catálogo)
+  data.equipes.forEach(e => {
+    const sel = e.contatoComMenores ? document.getElementById(`hvFaixa${Number(e.equipeId)}`) : null;
+    if (sel && e.faixaEtariaMenores && Array.from(sel.options).some(o => o.value === e.faixaEtariaMenores)) sel.value = e.faixaEtariaMenores;
+  });
 
   await carregarHabilitacoesAcao();
   volCarregarHabilitacaoAcao();

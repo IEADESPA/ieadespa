@@ -171,6 +171,7 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
     const pf = chamadas(env, "POST ministerio-menores/confirmar-ficha");
     confere(pf.length === 1 && pf[0].corpo.confirmo === true, "ficha: o POST devia levar confirmo:true");
     confere(/vale por mais 6 meses/.test(texto(env, "mnrFichaMsg")), "ficha: a mensagem do servidor devia aparecer");
+    confere(!/psc-aviso/.test(e("mnrFichaMsg").className), "ficha: a mensagem de sucesso não fica em destaque de erro");
     confere(e("mnrFichaMarca").checked === false, "ficha: a caixa devia voltar desmarcada");
 
     // -- comunicar à Diretoria: validação, confirmação, andamento
@@ -286,6 +287,7 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
     doc.marcar(e("mnrFichaMarca"), true); env.limparRegistro();
     doc.clicar(e("mnrFichaBotao")); await env.ocioso();
     confere(/ainda não foi aberta/.test(texto(env, "mnrFichaMsg")) && e("mnrFichaMarca").checked === true && e("mnrFichaBotao").disabled === false, "ficha: a recusa devia mostrar a mensagem, manter a caixa marcada e soltar o botão");
+    confere(/psc-aviso/.test(e("mnrFichaMsg").className), "ficha: a mensagem de ERRO fixa fica em destaque (não tem a mesma cara do sucesso)");
     // 401: o fetchProtegido real avisa (toast) e volta ao login; a tela mostra o texto sem outro toast
     doc.marcar(e("mnrPoliticaAceite"), true); env.limparRegistro();
     doc.clicar(e("mnrPoliticaBotao")); await env.ocioso();
@@ -408,7 +410,9 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
     const corpo = painelTexto();
     confere(corpo.includes(F.mm.ROTULO_BLOQUEIO.PENDENCIA_DIRETORIA), "painel mascarado: devia mostrar 'Pendência a tratar com a Diretoria Executiva'");
     confere(!corpo.includes(F.mm.ROTULO_BLOQUEIO.ANTECEDENTES_COM_RESTRICAO) && !corpo.includes(F.mm.ROTULO_BLOQUEIO.AUTO_DENUNCIA_EM_ANALISE) && !/ANTECEDENTES_COM_RESTRICAO|AUTO_DENUNCIA_EM_ANALISE/.test(corpo), "painel mascarado: a gestão NÃO pode ver o motivo reservado (restrição / comunicação em análise)");
-    confere(!/com pendência \(fale com a Diretoria/.test(corpo) && corpo.includes("pendência com a Diretoria Executiva"), "painel mascarado: a validade das certidões devia dizer 'pendência com a Diretoria Executiva'");
+    confere(!/com pendência \(fale com a Diretoria/.test(corpo) && corpo.includes("Situação com a Diretoria Executiva") && corpo.includes("pendência reservada"), "painel mascarado: a linha reservada devia aparecer, sem dizer que são as certidões");
+    confere(!/Certidões de antecedentes criminais[^<]*pendência/.test(corpo), "painel mascarado: a pendência reservada NÃO pode aparecer como pendência das certidões");
+    confere(!/restrição nos antecedentes/.test(e("mnrPainelPrivacidade").textContent) && e("mnrPainelPrivacidade").style.display === "", "painel: a legenda não dá exemplo da causa reservada e fica visível para a gestão");
     const resumo = texto(env, "mnrPainelResumo");
     confere(/Voluntários com menores/.test(resumo) && /Aptos/.test(resumo) && /Vencendo/.test(resumo) && /Bloqueados/.test(resumo), "painel: cartões do resumo ausentes");
     confere(resumo.includes("Por que estão bloqueados") && resumo.includes(F.mm.ROTULO_BLOQUEIO.PENDENCIA_DIRETORIA), "painel: a contagem por motivo (já mascarada pelo servidor) devia aparecer");
@@ -643,14 +647,14 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
   cenario("Escalas: salas com menores, crianças previstas, publicar com 422 e a faixa etária da equipe", async () => {
     const env = ambienteAtual = novo(); const { doc, api, e } = env;
     const sala = (extra) => F.salaDe(Object.assign({ equipeId: 3, equipeNome: ATAQUE("salaMaternal"), faixa: "MATERNAL", criancasPrevistas: 12, adultos: 2 }, extra));
-    const S = { salas: [sala(), F.salaDe({ equipeId: 6, equipeNome: ATAQUE("salaJun"), faixa: null, criancasPrevistas: null, adultos: 1, semHabilitacao: [ATAQUE("semHab")] })], status: "RASCUNHO", salvou: 0 };
+    const S = { salas: [sala(), F.salaDe({ equipeId: 6, equipeNome: ATAQUE("salaJun"), faixa: null, criancasPrevistas: null, adultos: 1, semHabilitacao: [ATAQUE("semHab")] }), F.salaDe({ equipeId: 7, equipeNome: "SalaSemFaixa", faixa: null, criancasPrevistas: 0, adultos: 2 })], status: "RASCUNHO", salvou: 0 };
     api.rotas = {
       "GET ministerio-menores/catalogos": { corpo: F.catalogos({ gestao: false, geral: false, diretoria: false }) },
       "GET escalas/servicos-detalhe": () => ({ corpo: F.servicoDetalhe(S.salas, S.status) }),
       "POST escalas/criancas-previstas": (c) => { S.salvou++; S.salas[0] = sala({ criancasPrevistas: c.corpo.criancas }); return { corpo: { sucesso: true, criancas: c.corpo.criancas, mensagem: `Crianças previstas: ${c.corpo.criancas}.` } }; },
       "POST escalas/publicar": () => { const m = F.menoresDoServico(S.salas); return m.ok ? { corpo: { sucesso: true, mensagem: "✅ Escala publicada." } } : { status: 422, corpo: { sucesso: false, mensagem: `Não dá para publicar: ${m.problemas.map(p => p.mensagem).join(" ")}`, problemas: m.problemas, salas: m.salas } }; },
       "GET escalas/servicos": { corpo: { sucesso: true, servicos: [] } },
-      "GET habilitacao-voluntarios/equipes-flag": { corpo: { sucesso: true, equipes: [{ equipeId: 3, nome: ATAQUE("hvMaternal"), contatoComMenores: true }, { equipeId: 5, nome: "Louvor", contatoComMenores: false }] } },
+      "GET habilitacao-voluntarios/equipes-flag": { corpo: { sucesso: true, equipes: [{ equipeId: 3, nome: ATAQUE("hvMaternal"), contatoComMenores: true, faixaEtariaMenores: "MATERNAL" }, { equipeId: 5, nome: "Louvor", contatoComMenores: false, faixaEtariaMenores: null }] } },
       "GET habilitacao-voluntarios/lista": { corpo: { sucesso: true, habilitacoes: [] } },
       "POST ministerio-menores/equipe-faixa": (c) => ({ corpo: { sucesso: true, faixa: c.corpo.faixa, mensagem: `Faixa etária da equipe: ${c.corpo.faixa}.` } })
     };
@@ -663,6 +667,10 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
     confere(det.includes("[semHab]") && /Defina a faixa etária/.test(det) && /Vá em Habilitação de Voluntários/.test(det), "escalas: os problemas em português (e como resolver) devem aparecer por sala");
     const campo = e("escCriancas5_3");
     confere(!!campo && campo.value === "12" && e("escCriancas5_6").value === "", "escalas: o campo de crianças previstas deve vir preenchido (12) ou vazio (sem número)");
+    // o ✗ da linha de adultos só aparece quando FALTAM adultos: a sala sem faixa tem 2 de 2 e o problema é outro
+    const cartaoSemFaixa = achar(env, x => x.className && /mnr-sala/.test(x.className) && /SalaSemFaixa/.test(x.textContent));
+    confere(!!cartaoSemFaixa && /2 de 2 necessários ✓/.test(cartaoSemFaixa.textContent) && !/2 de 2 necessários ✗/.test(cartaoSemFaixa.textContent) && /Falta ajustar/.test(cartaoSemFaixa.textContent), "escalas: sala com adultos suficientes e outro problema NÃO mostra ✗ na linha de adultos");
+    confere(/1 de 2 necessários ✗/.test(det), "escalas: sala que precisa de mais adultos mostra ✗");
     limpo(env, "Escalas/detalhe", [ATAQUE("salaMaternal"), ATAQUE("semHab")]);
     // salvar: validação e POST
     env.limparRegistro();
@@ -671,10 +679,11 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
     confere(chamadas(env, "POST escalas/criancas-previstas").length === 0 && env.toasts().length === 1, "crianças: valor inválido não pode enviar");
     env.limparRegistro(); campo.value = "250"; doc.clicar(botao(env, "Salvar", e("painelDetalheServicoEscala"))); await env.ocioso();
     confere(chamadas(env, "POST escalas/criancas-previstas").length === 0, "crianças: 250 (acima de 200) não pode enviar");
-    env.limparRegistro(); e("escCriancas5_3").value = "15"; doc.clicar(botao(env, "Salvar", e("painelDetalheServicoEscala"))); await env.ocioso();
+    env.limparRegistro(); e("escCriancas5_3").value = "15"; e("escCriancas5_6").value = "9"; doc.clicar(botao(env, "Salvar", e("painelDetalheServicoEscala"))); await env.ocioso();
     const pc = chamadas(env, "POST escalas/criancas-previstas");
     confere(pc.length === 1 && pc[0].corpo.servicoId === 5 && pc[0].corpo.equipeId === 3 && pc[0].corpo.criancas === 15 && ["servicoId", "equipeId", "criancas"].every(k => typeof pc[0].corpo[k] === "number"), "crianças: POST com servicoId, equipeId e criancas NUMÉRICOS");
     confere(chamadas(env, "GET escalas/servicos-detalhe").length === 1 && /de 3 necessários/.test(texto(env, "painelDetalheServicoEscala")) && e("escCriancas5_3").value === "15", "crianças: devia recarregar o detalhe com o número novo");
+    confere(e("escCriancas5_6").value === "9", "crianças: salvar uma sala NÃO apaga o que foi digitado (e não salvo) nas outras");
     confere(env.toasts().length === 1, `crianças: toast (${env.toasts().length})`);
     // publicar com a sala fora da regra (422 com problemas)
     env.limparRegistro();
@@ -693,9 +702,11 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
     e("hvCongregacao").innerHTML = '<option value="2">Sede</option>'; e("hvCongregacao").value = "2";
     await env.ev("carregarEquipesFlagAcao()"); await env.ocioso();
     confere(!!e("hvFaixa3") && !e("hvFaixa5"), "habilitação: o seletor de faixa só aparece para a equipe COM a marca 'contato com menores'");
+    confere(e("hvFaixa3").value === "MATERNAL" && !/não mostra a faixa já gravada/.test(texto(env, "painelEquipesFlag")), "habilitação: a faixa já gravada aparece escolhida (e o texto não diz mais que não aparece)");
     confere([...e("hvFaixa3").options].map(o => o.value).includes("BERCARIO") && [...e("hvFaixa3").options].map(o => o.value).includes("NENHUMA"), "habilitação: o seletor deve ter as faixas do catálogo");
     limpo(env, "Habilitação/faixa", [ATAQUE("hvMaternal")]);
     env.limparRegistro();
+    e("hvFaixa3").value = "";       // a pessoa volta ao "— escolher a faixa —"
     doc.clicar(botao(env, "Salvar a faixa", e("painelEquipesFlag"))); await env.ocioso();
     confere(chamadas(env, "POST ministerio-menores/equipe-faixa").length === 0, "habilitação: sem escolher a faixa não pode enviar");
     confere(env.toasts().length === 1, "habilitação: a recusa de faixa em branco devia avisar uma vez");
@@ -755,11 +766,15 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
     await env.ev("carregarAbaFoto(73)"); await env.ocioso();
     confere(e("fotoMembroEnvio").style.display === "none" && /menos de 18 anos/.test(texto(env, "fotoMembroAvisoMenor")) && texto(env, "fotoMembroStatusConsentimento") === "", "foto (Secretaria): menor sem autorização do responsável: sem envio e com o aviso (e sem a linha do consentimento genérico)");
     confere(chamadas(env, "GET lgpd/consentimento/73").length === 0, "foto (Secretaria): para menor não se consulta o consentimento genérico de Foto");
+    confere(e("btnConcederFotoMembro").style.display === "none", "foto (Secretaria): menor NÃO tem o botão 'Conceder Consentimento de Foto' (o consentimento da própria pessoa não vale)");
     env.ev("window._membroFotoAtual = 71"); await env.ev("carregarAbaFoto(71)"); await env.ocioso();
     confere(e("fotoMembroEnvio").style.display === "" && /responsável autorizou/.test(texto(env, "fotoMembroAvisoMenor")), "foto (Secretaria): menor COM autorização do responsável: envio liberado");
+    confere(e("btnConcederFotoMembro").style.display === "none", "foto (Secretaria): menor com autorização do responsável também não tem o botão de consentimento próprio");
     env.ev("window._membroFotoAtual = 70"); await env.ev("carregarAbaFoto(70)"); await env.ocioso();
     confere(e("fotoMembroEnvio").style.display === "" && /menos de 18 anos/.test(texto(env, "fotoMembroAvisoMenor")), "foto (Secretaria): se o estado não pode ser lido (404) explica e deixa o servidor decidir");
+    confere(/Se a autorização já foi dada, o envio funciona/.test(texto(env, "fotoMembroAvisoMenor")) && !/precisa autorizar o uso da imagem antes/.test(texto(env, "fotoMembroAvisoMenor")) && e("btnConcederFotoMembro").style.display === "none", "foto (Secretaria): sem poder ler o estado, o texto é neutro (não afirma que falta a autorização) e não oferece o consentimento próprio");
     env.ev("window._membroFotoAtual = 72"); env.limparRegistro(); await env.ev("carregarAbaFoto(72)"); await env.ocioso();
+    confere(e("btnConcederFotoMembro").style.display === "", "foto (Secretaria): adulto continua com o botão de consentimento");
     confere(e("fotoMembroEnvio").style.display === "" && texto(env, "fotoMembroAvisoMenor") === "" && /Consentimento de Foto concedido/.test(texto(env, "fotoMembroStatusConsentimento")) && chamadas(env, "GET consentimento-menor/menor").length === 0, "foto (Secretaria): adulto segue como sempre, sem consultar o consentimento de menor");
     env.ev("window._membroFotoAtual = 74"); env.limparRegistro(); await env.ev("carregarAbaFoto(74)"); await env.ocioso();
     confere(chamadas(env, "GET consentimento-menor/menor").length === 0 && e("fotoMembroEnvio").style.display === "", "foto (Secretaria): sem data de nascimento não se presume menor");

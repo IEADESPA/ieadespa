@@ -8,4 +8,4 @@ Três equipamentos, sem tocar na API de verdade nem no banco. Rodar da pasta `to
 | `node mutacoes.js` | Desfaz, uma a uma, as proteções da tela (escape, hash, 428, confirmações, permissões, máscara); cada mutação TEM de ser acusada pelo roteiro. Se o código da tela mudar de forma, ajuste a âncora da mutação. |
 | `node navegador.js` | A tela no Edge headless com a CSP final do projeto, a 390 px e a 1280 px: sem violação de CSP, nada executado, sem rolagem lateral. Usa o `puppeteer-core` de `tools/csp-e2e` (rode `npm ci` lá antes). Capturas na pasta temporária do sistema. |
 
-Resultado de referência (09/10/2026): roteiro 281 verificações, 0 falhas; 64 mutações, 64 acusadas; Edge 14 medições por largura, 0 violações.
+Resultado de referência (09/10/2026, depois da revisão independente da tela): roteiro 293 verificações, 0 falhas; 71 mutações, 71 acusadas; Edge 14 medições por largura, 0 violações.

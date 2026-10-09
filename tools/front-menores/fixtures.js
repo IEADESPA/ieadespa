@@ -67,8 +67,9 @@ function painel(linhas, { reservado = false, equipesSemMarca = [] } = {}) {
     const status = mm.statusDaLinha(l.aptidao);
     return {
       membroId: l.membroId, nome: l.nome, congregacaoId: l.congregacaoId, congregacaoNome: l.congregacaoNome, equipes: l.equipes.map((e) => e.nome),
-      status, bloqueios: mm.bloqueiosParaPainel(l.aptidao.bloqueios, { reservado }), proximoVencimento: l.aptidao.proximoVencimento,
-      validades: reservado ? l.aptidao.validades : mm.validadesParaGestao(l.aptidao.validades)
+      status, bloqueios: mm.bloqueiosParaPainel(l.aptidao.bloqueios, { reservado }),
+      proximoVencimento: reservado ? l.aptidao.proximoVencimento : mm.proximoVencimentoParaGestao(l.aptidao.proximoVencimento, l.aptidao.bloqueios),
+      validades: reservado ? l.aptidao.validades : mm.validadesParaGestao(l.aptidao.validades, l.aptidao.bloqueios)
     };
   }).sort((a, b) => ({ BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[a.status] - { BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[b.status]) || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
   return { sucesso: true, resumo: mm.resumirPainel(linhas, { reservado }), porCongregacao: mm.agruparPorCongregacao(linhas, { reservado }), voluntarios: itens, equipesSemMarca };

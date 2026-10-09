@@ -19,6 +19,8 @@ const { getPool, sql } = require("../shared/db");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { exigirTitularOuPermissao } = require("../shared/titular");
 const storage = require("../shared/storage");
+const vol = require("../shared/voluntariado");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 
 const TIPO_PADRAO = "DADOS_CONTATO";
 const TIPOS_CONSENTIMENTO = ["DADOS_CONTATO", "FOTO"];
@@ -32,7 +34,7 @@ module.exports = async function (context, req) {
   const { usuario, alvo } = acesso;
   const matricula = alvo;
 
-  const membro = await pool.request().input("mat", sql.Int, matricula).query(`SELECT MembroId, FotoUrl FROM MembroReferencia WHERE MembroId = @mat`);
+  const membro = await pool.request().input("mat", sql.Int, matricula).query(`SELECT MembroId, FotoUrl, DataNascimento FROM MembroReferencia WHERE MembroId = @mat`);
   if (membro.recordset.length === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
     return;
@@ -62,6 +64,14 @@ module.exports = async function (context, req) {
     if (!TIPOS_CONSENTIMENTO.includes(tipoFinal)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: `Tipo de consentimento inválido. Use: ${TIPOS_CONSENTIMENTO.join(", ")}.` } };
       return;
+    }
+    // Menor de 18 anos (idade conhecida): a foto só vale com a autorização do RESPONSÁVEL (rota consentimento-menor); registrar aqui um consentimento "da pessoa" seria sucesso sem efeito.
+    if (concedido && tipoFinal === "FOTO") {
+      const idade = vol.idadeEmAnos(membro.recordset[0].DataNascimento, hojeBrasilia());
+      if (idade != null && idade < vol.MAIORIDADE) {
+        context.res = { status: 422, headers: { "Content-Type": "application/json" }, body: { sucesso: false, mensagem: "Esta pessoa é menor de 18 anos: a foto só vale com a autorização do responsável (Ministério com Menores → autorização do responsável, ou o Meu Painel dele)." } };
+        return;
+      }
     }
     const observacao = typeof corpo.observacao === "string" ? corpo.observacao.trim().slice(0, 300) : null;
     // Quem registrou é SEMPRE quem está na sessão (antes vinha do corpo, e qualquer um se passava por responsável legal). Se for a Secretaria registrando na ficha

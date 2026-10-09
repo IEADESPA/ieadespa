@@ -409,6 +409,7 @@ function sessaoDeLiderancaNaTela() {
   return !!(authToken && (authNivel || (authPermissoes && authPermissoes.length)));
 }
 function limparSessao() {
+  ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
   authToken = null;
   authNome = null;
   authPermissoes = [];

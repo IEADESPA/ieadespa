@@ -254,7 +254,7 @@ module.exports = async function (context, req) {
       const bloqueios = mm.mascararParaGestao(aptidao.bloqueios);
       const elegivel = !dados.contatoComMenores || aptidao.apto;
       context.res = { status: 200, body: { sucesso: true, ...dados, ...resultado, elegivel, motivo: elegivel ? null : (bloqueios[0] && bloqueios[0].mensagem) || resultado.motivo,
-        aptidao: { apto: aptidao.apto, contaComoAdulto: aptidao.contaComoAdulto, bloqueios, validades: mm.validadesParaGestao(aptidao.validades), proximoVencimento: aptidao.proximoVencimento } } };
+        aptidao: { apto: aptidao.apto, contaComoAdulto: aptidao.contaComoAdulto, bloqueios, validades: mm.validadesParaGestao(aptidao.validades, aptidao.bloqueios), proximoVencimento: mm.proximoVencimentoParaGestao(aptidao.proximoVencimento, aptidao.bloqueios) } } };
       return;
     }
 

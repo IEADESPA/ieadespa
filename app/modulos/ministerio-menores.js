@@ -165,7 +165,11 @@ function mnrHtmlValidade(chave, v) {
 }
 function mnrRenderValidades(validades) {
   const v = validades && typeof validades === "object" ? validades : {};
-  return `<dl class="cal-dl">${MNR_ORDEM_VALIDADE.map(chave => mnrCampo(escaparHtmlEbd(MNR_ROTULO_VALIDADE[chave]), mnrHtmlValidade(chave, v[chave]))).join("")}</dl>`;
+  // o servidor manda à gestão "PENDENCIA_DIRETORIA" para QUALQUER assunto reservado (restrição, comunicação, cadastro nacional, comunhão): a linha não pode dizer que são as certidões
+  const reservada = !!(v.antecedentes && v.antecedentes.situacao === "PENDENCIA_DIRETORIA");
+  return `<dl class="cal-dl">${MNR_ORDEM_VALIDADE.map(chave => (reservada && chave === "antecedentes")
+    ? mnrCampo("Situação com a Diretoria Executiva", mnrSelo("cal-st-indeferido", "pendência reservada: a pessoa deve procurar a Diretoria"))
+    : mnrCampo(escaparHtmlEbd(MNR_ROTULO_VALIDADE[chave]), mnrHtmlValidade(chave, v[chave]))).join("")}</dl>`;
 }
 function mnrRotuloBloqueio(codigo) {
   const rotulos = mnrCatalogos ? mnrCatalogos.rotulosBloqueio : null;
@@ -204,7 +208,7 @@ function mnrPostarCons(caminho, corpo) {
 function mnrMostrarResultado(data, idMensagem, destaque) {
   const texto = mnrMsgErro(data);
   if (!(data && data.jaAvisado)) mostrarToast(texto, data && data.sucesso === false ? "erro" : "sucesso");
-  mnrEscreverAviso(idMensagem, texto, destaque);
+  mnrEscreverAviso(idMensagem, texto, destaque || !!(data && data.sucesso === false));
 }
 // O servidor recusa (422) o aceite de um texto que mudou e marca o caso (`politicaMudou`/`termoMudou`); a frase fica só como reserva, para uma resposta de API mais antiga.
 function mnrTextoMudou(data, chave) {
@@ -213,7 +217,9 @@ function mnrTextoMudou(data, chave) {
 
 async function mnrGarantirCatalogos(forcar) {
   if (mnrCatalogos && !forcar) return mnrCatalogos;
+  const dono = mnrDonoDaTela;
   const data = await mnrObter("catalogos");
+  if (dono !== mnrDonoDaTela) return mnrCatalogos;   // a pessoa trocou de login enquanto o catálogo vinha: o dela é outro (a tela é refeita no próximo carregamento)
   if (data.sucesso === false) { mnrCatalogos = null; return null; }
   const lista = (v) => (Array.isArray(v) ? v : []);
   const mapa = (v) => { const m = Object.create(null); if (v && typeof v === "object" && !Array.isArray(v)) Object.keys(v).forEach(k => { m[k] = String(v[k]); }); return m; };
@@ -228,7 +234,7 @@ async function mnrGarantirCatalogos(forcar) {
 // As faixas etárias do catálogo como opções de um <select> (a faixa de cada equipe; escalas.js usa na tela de Habilitação)
 function mnrOpcoesFaixa(placeholder, comRemover) {
   const faixas = mnrCatalogos ? mnrCatalogos.faixas : [];
-  return mnrOpcoes(faixas, f => f.codigo, f => `${f.rotulo} — até ${Number(f.criancasPorAdultoPadrao)} crianças por adulto`, placeholder)
+  return mnrOpcoes(faixas, f => f.codigo, f => `${f.rotulo} — padrão: até ${Number(f.criancasPorAdultoPadrao)} crianças por adulto`, placeholder)
     + (comRemover ? `<option value="NENHUMA">Nenhuma (remover a faixa da equipe)</option>` : "");
 }
 function mnrRotuloFaixa(codigo) {
@@ -258,7 +264,7 @@ const MNR_IDS_SELECTS = ["mnrAdTipo", "mnrPainelCong", "mnrFaixaCong", "mnrFaixa
 // selects de opções fixas: voltam à primeira opção
 const MNR_IDS_SELECTS_FIXOS = { mnrPainelFiltro: "todos", mnrFcFinalidade: "IMAGEM", mnrFcAcao: "concede" };
 function mnrLimparTela() {
-  mnrCatalogos = null; mnrSecaoAtual = "painel"; mnrSituacao = null; mnrPolitica = null; mnrMenores = []; mnrPainel = null; mnrEquipesFaixa = []; mnrMenorConsultado = null;
+  mnrCatalogos = null; mnrCongregacoes = null; mnrSecaoAtual = "painel"; mnrSituacao = null; mnrPolitica = null; mnrMenores = []; mnrPainel = null; mnrEquipesFaixa = []; mnrMenorConsultado = null;
   mnrComunicacoes = new Map();
   // pedidos que ainda estão a caminho trazem dado do login anterior: a resposta velha é descartada
   mnrSeqMeu++; mnrSeqPainel++; mnrSeqCom++; mnrSeqFicha++; mnrSeqEquipes++;
@@ -635,7 +641,8 @@ const MNR_AVISO_SEM_CONGREGACOES = "Não foi possível carregar a lista de congr
 async function carregarOpcoesMenoresAcao() {
   mnrVerificarDono();
   if (!mnrPodeAba()) return;
-  await mnrGarantirCatalogos(true);   // os papéis (gestão, nível geral, Diretoria) dependem da sessão
+  const catalogo = await mnrGarantirCatalogos(true);   // os papéis (gestão, nível geral, Diretoria) dependem da sessão
+  if (!catalogo) { mostrarToast("Não foi possível carregar o Ministério com Menores agora. Abra a aba de novo para tentar outra vez.", "erro"); return; }
   mnrAplicarPermissoes();
   const congregacoes = mnrEhGestao() ? await mnrGarantirCongregacoes() : [];
   // "campo inteiro" só para o nível geral (o servidor também recusa a quem não é)
@@ -658,6 +665,7 @@ function mnrMostrarSecaoAcao(secao, semCarregar) {
     if (div) div.style.display = nome === secao ? "block" : "none";
     const btn = mnrEl(`btnMnrSecao${capitalize(nome)}`);
     if (btn && btn.classList) btn.classList.toggle("ativo", nome === secao);
+    if (btn && btn.setAttribute) btn.setAttribute("aria-pressed", nome === secao ? "true" : "false");
   });
   if (semCarregar) return;
   if (secao === "comunicacoes") mnrCarregarComunicacoesAcao();
@@ -698,7 +706,7 @@ async function mnrCarregarPainelAcao() {
   };
   if (aviso) { aviso.textContent = ""; aviso.className = "subtitle"; }
   const ajuda = mnrEl("mnrPainelPrivacidade");
-  if (ajuda) ajuda.style.display = "";
+  if (ajuda) ajuda.style.display = mnrEhDiretoria() ? "none" : "";
   mnrRenderPainel();
 }
 function mnrContador(valor, rotulo, classe) {
@@ -951,8 +959,8 @@ function mnrRenderComunicacao(a) {
   </div>`;
 }
 const MNR_ACOES_COMUNICACAO = {
-  decidir: { titulo: "Decidir sobre a comunicação", rota: "auto-denuncia-decidir", rotuloCampo: "Motivo da decisão (de 10 a 300 caracteres, sem citar nomes de terceiros)", confirmar: "⚖️ Registrar a decisão", classe: "" },
-  liberar: { titulo: "Levantar o afastamento preventivo", rota: "auto-denuncia-liberar", rotuloCampo: "Motivo da liberação (de 10 a 300 caracteres, sem citar nomes de terceiros)", confirmar: "🔓 Levantar o afastamento", classe: "" }
+  decidir: { titulo: "Decidir sobre a comunicação", rota: "auto-denuncia-decidir", rotuloCampo: "Motivo da decisão (de 10 a 300 caracteres, sem citar nomes de terceiros). A pessoa poderá ler este motivo em Meus Dados", confirmar: "⚖️ Registrar a decisão", classe: "" },
+  liberar: { titulo: "Levantar o afastamento preventivo", rota: "auto-denuncia-liberar", rotuloCampo: "Motivo da liberação (de 10 a 300 caracteres, sem citar nomes de terceiros). A pessoa poderá ler este motivo em Meus Dados", confirmar: "🔓 Levantar o afastamento", classe: "" }
 };
 const MNR_ROTULO_DECISAO = { MANTIDO: "Mantido: pode voltar a servir com menores", AFASTADO_PREVENTIVAMENTE: "Afastado preventivamente do ministério com menores" };
 function mnrTipoDecisaoValido(bruto) { return bruto === "liberar" ? "liberar" : bruto === "decidir" ? "decidir" : ""; }
@@ -967,7 +975,7 @@ function mnrAbrirDecisaoAcao(autoDenunciaId, tipoBruto) {
       <select id="mnrComDecisao${id}">${mnrOpcoes(decisoes, d => d.codigo, d => d.rotulo, "— escolha —")}</select>` : "";
   area.innerHTML = `<div class="cal-form-inline">
     <strong>${escaparHtmlEbd(regra.titulo)} de ${escaparHtmlEbd(a.nome)}</strong>
-    <p class="cnl-aviso-senha" role="note">Este ato pede <strong>uma confirmação recente de quem você é</strong> (a chave de acesso do aparelho ou um código enviado ao seu e-mail): a tela pede na hora de registrar. A decisão fica registrada com o seu nome, e a pessoa é avisada.</p>
+    <p class="cnl-aviso-senha" role="note">Este ato pede <strong>uma confirmação recente de quem você é</strong> (a chave de acesso do aparelho ou um código enviado ao seu e-mail): a tela pede na hora de registrar. A decisão fica registrada com o seu nome, a pessoa é avisada e <strong>pode ler o motivo que você escrever</strong> (em Meus Dados, direito de acesso da LGPD).</p>
     ${campoDecisao}
     <label for="mnrComObs${id}">${escaparHtmlEbd(regra.rotuloCampo)}</label>
     <textarea id="mnrComObs${id}" rows="3" maxlength="300" style="width:100%;" data-on-input="mnrContarObsAcao" data-args-input="${argsAttr(id)}"></textarea>
@@ -1045,7 +1053,10 @@ async function mnrPrepararFotoDeMenor(membroId, pessoa) {
   aviso.textContent = "";
   aviso.className = "subtitle";
   envio.style.display = "";
+  const conceder = mnrEl("btnConcederFotoMembro");
+  if (conceder) conceder.style.display = "";
   if (!mnrEhMenorDeIdade(pessoa)) return;
+  if (conceder) conceder.style.display = "none";   // o consentimento de foto da própria pessoa não vale para menor: o servidor recusa, e a tela não oferece
   if (status) status.textContent = "";
   const data = await mnrObterCons(`menor?menorId=${id}`);
   if (Number(window._membroFotoAtual) !== id) return;   // a Secretaria já abriu outra pessoa
@@ -1055,6 +1066,11 @@ async function mnrPrepararFotoDeMenor(membroId, pessoa) {
     return;
   }
   aviso.className = "subtitle psc-aviso";
+  if (!imagem) {
+    // o estado não pôde ser lido (a Secretaria de Pessoas pode não ver o menor): não se afirma que falta a autorização, que pode já ter sido dada
+    aviso.textContent = "Esta pessoa tem menos de 18 anos: a foto só vale com a autorização do responsável, e o consentimento de foto da própria pessoa não vale. Se a autorização já foi dada, o envio funciona; se não, o sistema avisa. O responsável autoriza em Meu Painel → Ministério com menores, ou em ficha assinada registrada em Habilitação de Voluntários → Ministério com Menores → Ferramentas.";
+    return;
+  }
   aviso.textContent = "Esta pessoa tem menos de 18 anos: o responsável precisa autorizar o uso da imagem antes do envio da foto. O responsável autoriza em Meu Painel → Ministério com menores; se ele não puder usar o sistema, registre a ficha assinada em Habilitação de Voluntários → Ministério com Menores → Ferramentas. O consentimento de foto da própria pessoa não vale para menor de idade.";
   if (imagem) envio.style.display = "none";   // autorização que se sabe que não vale: não se oferece o envio
 }

@@ -175,6 +175,9 @@ class Documento {
   getElementById(id) { for (const e of this.body.descendentes()) if (e.getAttribute("id") === id) return e; return null; }
   querySelectorAll(sel) {
     if (sel === ".grupo-modulo") return [...this.body.descendentes()].filter(e => e.classList.contains("grupo-modulo"));
+    // [id^="prefixo"]: o único seletor de atributo que a tela usa (escalas.js, ao refazer o detalhe do serviço)
+    const prefixo = /^\[id\^="([^"]+)"\]$/.exec(sel);
+    if (prefixo) return [...this.body.descendentes()].filter(e => String(e.getAttribute("id") || "").startsWith(prefixo[1]));
     return [];
   }
   _ligou() {}

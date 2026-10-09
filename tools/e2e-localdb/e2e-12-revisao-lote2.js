@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const L = require("./lib");
 const { q, escalar, ok, fim, GET, POST, GERAL, LIDER, PIN, sessao, IP_PUBLICO, API, path, obterPool } = L;
 const E = require(path.join(API, "GestaoEscalas/index.js"));
+const M = require(path.join(API, "GestaoMinisterioMenores/index.js"));
 const HAB = require(path.join(API, "GestaoHabilitacaoVoluntarios/index.js"));
 const V = require(path.join(API, "GestaoVistoriasAntecedentes/index.js"));
 const VOL = require(path.join(API, "GestaoVoluntariado/index.js"));
@@ -39,6 +40,17 @@ const statusAloc = (servico, membro) => escalar("SELECT Status FROM EscalasAloca
 (async () => {
   let r;
   const pool = await obterPool();
+
+  console.log("== o painel da gestão não distingue as pendências reservadas ==");
+  r = await POST(M, "auto-denuncia", PIN(6024), { tipo: "INQUERITO_POLICIAL", dataCiencia: hoje, ciente: true }); ok(r.status === 201 || r.status === 200, "6024 comunica um fato à Diretoria (comunicação em análise)", r.body);
+  r = await GET(M, "painel", secretaria, { congregacaoId: c1 }); ok(r.status === 200, "a Secretaria abre o painel da congregação", r.status);
+  const linha = (corpo, id) => (corpo.voluntarios || []).find((v) => v.membroId === id);
+  const gestao6019 = linha(r.body, 6019), gestao6024 = linha(r.body, 6024);
+  ok(!!gestao6019 && !!gestao6024, "6019 (restrição) e 6024 (comunicação em análise) estão no painel", [!!gestao6019, !!gestao6024]);
+  ok(JSON.stringify(gestao6019.validades.antecedentes) === JSON.stringify(gestao6024.validades.antecedentes) && gestao6019.proximoVencimento === null && gestao6024.proximoVencimento === null, "as duas pendências reservadas têm a MESMA linha das certidões e nenhum próximo vencimento para a gestão", [gestao6019.validades.antecedentes, gestao6024.validades.antecedentes, gestao6019.proximoVencimento, gestao6024.proximoVencimento]);
+  ok(gestao6019.validades.antecedentes.situacao === "PENDENCIA_DIRETORIA" && !/RESTRICAO|AUTO_DENUNCIA/.test(JSON.stringify([gestao6019, gestao6024])), "e nada nelas cita restrição nem comunicação", gestao6019);
+  r = await GET(M, "painel", diretoriaHab, { congregacaoId: c1 });
+  ok(r.status === 200 && linha(r.body, 6019).validades.antecedentes.situacao === "COM_RESTRICAO", "a Diretoria vê o detalhe (restrição nas certidões)", r.status);
 
   console.log("== vistoria com restrição tira da escala na hora ==");
   const sv1 = await servico(dias(40));

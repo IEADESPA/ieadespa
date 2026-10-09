@@ -825,7 +825,7 @@
         <div id="subMeupainelMenores" class="sub-aba-secretaria" style="display:none;">
           <h3>🧒 Ministério com menores</h3>
           <p class="subtitle">Quem serve com crianças e adolescentes (berçário, EBD infantil, juniores, adolescentes...) precisa estar <strong>habilitado</strong>
-            (Lei 14.811/2024). Aqui você vê se está apto, <strong>o que falta</strong> e <strong>até quando</strong> cada documento vale. A lei pede: certidões de
+            (Lei 14.811/2024). Aqui você vê se está apto, <strong>o que falta</strong> e <strong>até quando</strong> cada documento vale. A lei e o Regimento pedem: certidões de
             antecedentes criminais (federal e estadual) com cerca de 6 meses de validade, treinamento de proteção, ficha cadastral confirmada a cada 6 meses, o aceite
             da política de comunicação e 6 meses de comunhão. <em>Exemplo: a irmã Ana serve no Maternal e a certidão dela vence em 40 dias. O painel mostra o prazo em
             amarelo; ela pede a certidão nova com tempo e continua servindo. Se deixar vencer, o sistema a tira das escalas com crianças até regularizar. Não é punição.</em></p>
@@ -841,7 +841,7 @@
 
           <hr />
           <h4>🗂️ Confirmar a minha ficha</h4>
-          <p class="subtitle" style="margin:4px 0 10px;">A lei pede a ficha cadastral atualizada a cada 6 meses. Confira o seu nome, telefone, e-mail e endereço (em
+          <p class="subtitle" style="margin:4px 0 10px;">O sistema pede a ficha cadastral atualizada a cada 6 meses. Confira o seu nome, telefone, e-mail e endereço (em
             <em>Meus Dados Cadastrais</em>) e confirme aqui. Exemplo: você mudou de número de telefone, atualiza em Meus Dados Cadastrais e depois confirma a ficha.</p>
           <div id="mnrFichaValidade" class="psc-legenda" role="status"></div>
           <label class="opcao-checkbox"><input type="checkbox" id="mnrFichaMarca" /> Confirmo que os meus dados cadastrais (nome, telefone, e-mail e endereço) estão atualizados.</label>
@@ -1869,7 +1869,7 @@
             <p id="fotoMembroStatusConsentimento" class="subtitle"></p>
             <p id="fotoMembroAvisoMenor" class="subtitle" role="status"></p>
             <div class="barra-lista" id="fotoMembroEnvio">
-              <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="concederConsentimentoFotoAcao">✅ Conceder Consentimento de Foto</button>
+              <button class="btn-confirmar btn-secundario" id="btnConcederFotoMembro" style="width:auto;margin:0;" data-on-click="concederConsentimentoFotoAcao">✅ Conceder Consentimento de Foto</button>
               <input type="file" id="fotoMembroArquivo" accept="image/*" capture />
               <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="enviarFotoMembroAcao">📷 Enviar Foto</button>
             </div>
@@ -3179,7 +3179,7 @@
            para quem só tem "vistoria_antecedentes" (Conselho de Ética): a tela mostra só as seções que o servidor libera para a sessão. -->
       <div id="abaMenores" class="aba-secretaria" style="display:none;">
         <h3>🧒 Ministério com Menores</h3>
-        <p class="subtitle">Quem serve com crianças e adolescentes precisa estar habilitado hoje (Lei 14.811/2024): certidões de antecedentes em dia, treinamento, ficha
+        <p class="subtitle">Quem serve com crianças e adolescentes precisa estar habilitado hoje (Lei 14.811/2024 e Regimento): certidões de antecedentes em dia, treinamento, ficha
           confirmada, política aceita e 6 meses de comunhão. A situação é <strong>calculada na hora</strong>, nunca digitada. Quem deixa de estar apto <strong>sai sozinho das
           escalas futuras</strong> das equipes marcadas com "contato com menores" (sem punição), e o painel abaixo mostra o que falta para ajudá-lo a se regularizar.
           <em>Exemplo: o irmão Davi tem a certidão vencendo em 30 dias. Ele aparece em amarelo e a Secretaria o lembra de pedir a nova com a Diretoria antes do dia do vencimento.</em></p>
@@ -3207,8 +3207,8 @@
             <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="mnrCarregarPainelAcao">📂 Abrir o painel</button>
           </div>
           <p id="mnrPainelResultado" class="subtitle" role="status"></p>
-          <p id="mnrPainelPrivacidade" class="psc-legenda" style="display:none;">Aqui você vê só o que ajuda a pessoa a se regularizar. Quando a pendência é assunto reservado
-            à Diretoria Executiva (por exemplo, uma restrição nos antecedentes), aparece apenas "pendência com a Diretoria", sem detalhes.</p>
+          <p id="mnrPainelPrivacidade" class="psc-legenda" style="display:none;">Aqui você vê só o que ajuda a pessoa a se regularizar. Os assuntos reservados à Diretoria Executiva aparecem apenas como "pendência com a Diretoria", sem
+            detalhes e sem dizer qual é.</p>
           <div id="mnrPainelResumo"></div>
           <div id="mnrPainelPorCong"></div>
           <div id="mnrPainelLista"></div>
@@ -3255,7 +3255,7 @@
 
           <div class="cal-form">
             <h5>🧸 Faixa etária da equipe</h5>
-            <p class="psc-legenda">A faixa define quantas crianças cada adulto pode acompanhar na sala (por exemplo, berçário: até 3 crianças por adulto). Sem a faixa, a escala da sala não pode ser publicada. Esta lista não mostra a faixa já gravada: escolha para definir ou trocar.</p>
+            <p class="psc-legenda">A faixa define quantas crianças cada adulto pode acompanhar na sala (por exemplo, berçário: até 3 crianças por adulto). Sem a faixa, a escala da sala não pode ser publicada. Cada equipe da lista mostra a faixa que tem hoje.</p>
             <div class="barra-lista">
               <label for="mnrFaixaCong">Congregação</label>
               <select id="mnrFaixaCong"></select>

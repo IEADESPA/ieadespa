@@ -10,4 +10,5 @@ bash rodar.sh roteiro e2e-6-corridas.js
 BASE=cenario-menores bash rodar.sh roteiro e2e-8-menores.js
 BASE=cenario-menores bash rodar.sh roteiro e2e-9-menores-seguranca.js
 BASE=cenario-menores bash rodar.sh roteiro e2e-10-menores-corridas.js
+BASE=cenario-menores bash rodar.sh roteiro e2e-11-consentimento-canais.js
 echo TUDO-PRONTO

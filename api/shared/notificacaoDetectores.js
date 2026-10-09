@@ -144,6 +144,7 @@ const voluntariadoDb = require("./voluntariadoDb");
 const setoresTecnicosDb = require("./setoresTecnicosDb");
 const vistoriaDb = require("./vistoriaAntecedentesDb");
 const mmDb = require("./ministerioMenoresDb");
+const protecaoDb = require("./protecaoDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -201,7 +202,14 @@ const DETECTORES = {
   MENORES_VISTORIAS_A_RENOVAR: { tabela: "VistoriasAntecedentes", detectar: (pool) => mmDb.detectarVistoriasARenovar(pool) },
   MENORES_AUTODENUNCIA_PENDENTE: { tabela: "MinisterioMenoresAutoDenuncias", detectar: (pool) => mmDb.detectarAutoDenunciaPendente(pool) },
   // Canal com menores fora da regra (dois administradores adultos habilitados e responsável com acesso): um aviso por mês por canal (canaisDb.detectarCanaisComMenoresIrregulares).
-  MENORES_CANAL_IRREGULAR: { tabela: "CanaisOficiaisComunicacao", detectar: (pool) => canaisDb.detectarCanaisComMenoresIrregulares(pool) }
+  MENORES_CANAL_IRREGULAR: { tabela: "CanaisOficiaisComunicacao", detectar: (pool) => canaisDb.detectarCanaisComMenoresIrregulares(pool) },
+  // Proteção de crianças (v7.8, ECA Art. 13): o aviso do incidente novo sai NA HORA, no ato; estes detectores são a rede de segurança e o relógio (12 h, 4 h, vencido) — rodam de
+  // hora em hora (ProtecaoVerificador) e na rodada diária, e o motor não duplica aviso.
+  PROTECAO_INCIDENTE_NOVO: { tabela: "IncidentesProtecao", detectar: (pool) => protecaoDb.detectarIncidentesNovos(pool) },
+  PROTECAO_PRAZO_24H: { tabela: "IncidentesProtecao", detectar: (pool) => protecaoDb.detectarPrazos(pool) },
+  PROTECAO_PADRAO_QUEBRAS: { tabela: "IncidentesProtecao", detectar: (pool) => protecaoDb.detectarPadroes(pool) },
+  PROTECAO_COMITE_INCOMPLETO: { tabela: "Papeis", detectar: (pool) => protecaoDb.detectarComiteIncompleto(pool) },
+  PROTECAO_CAUTELAR_SEM_DECISAO: { tabela: "IncidenteEnvolvidos", detectar: (pool) => protecaoDb.detectarCautelarSemDecisao(pool) }
 };
 
 module.exports = { DETECTORES };

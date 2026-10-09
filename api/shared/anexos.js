@@ -32,6 +32,17 @@ const REGRAS = {
     escritaSoGeral: true,
     alcance: async (pool, _usuario, registroId) => !!(await registroExiste(pool, `SELECT ProjetoId FROM Projetos WHERE ProjetoId = @id`, registroId))
   },
+  // v7.8: o comprovante da comunicação ao Conselho Tutelar. Quem anexa é quem alcança o incidente (o Dirigente da congregação, a Diretoria e o Comitê); o envolvido não alcança.
+  // O nome do arquivo não deve citar a criança (a tela avisa).
+  IncidentesProtecao: {
+    permissoes: ["protecao_menores"],
+    alcance: async (pool, visao, registroId) => {
+      const auth = require("./auth");
+      const { ehGeral: geral } = require("./escopoRotas");
+      const ver = { membroId: visao.membroId, geral: geral(visao), podeVerCongregacao: (nome) => auth.estaNoEscopo(visao, nome) };
+      return !!(await require("./protecaoDb").incidenteVisivel(pool, registroId, ver));
+    }
+  },
   DenunciasOuvidoria: {
     permissoes: ["ouvidoria"],
     alcance: async (pool, usuario, registroId) => {

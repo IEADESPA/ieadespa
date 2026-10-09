@@ -1,0 +1,60 @@
+name: Rotina horária da proteção de crianças (prazo de 24 horas)
+
+# v7.8 (ECA Art. 13): a suspeita de violência contra criança ou adolescente precisa ser comunicada ao Conselho Tutelar em até 24 horas. A rodada diária das 7h não basta
+# para avisar "faltam 12 horas / 4 horas / vencido": esta rotina roda de hora em hora e chama a rota protegida por segredo (api/ProtecaoVerificador), que refaz a retirada
+# das escalas de quem está sob afastamento cautelar e avalia SÓ as regras da proteção (o motor não duplica aviso).
+#
+# Roda das 7h às 22h de Brasília (10h às 01h UTC) e NÃO de madrugada, de propósito: o banco é serverless e só pausa se ficar uma hora sem uso; uma chamada por hora, o dia inteiro,
+# o manteria ligado (e cobrando) a noite toda. De madrugada o aviso do incidente novo continua saindo NA HORA, no ato do registro, e o relógio é calculado na leitura (o prazo vence
+# mesmo sem rotina): o que a madrugada adia é só o lembrete.
+# Falhou (retirada da escala ou detector da proteção): o job fica vermelho e o e-mail de falha sai, como na rotina diária.
+
+on:
+  schedule:
+    - cron: "17 0-1,10-23 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  protecao:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aquece a API e o banco
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -sf -o /dev/null -m 60 "https://app.ieadespa.org.br/api/congregacoes-publico"; then
+              echo "API e banco prontos (tentativa $i)"; exit 0
+            fi
+            sleep 20
+          done
+          echo "Aquecimento não respondeu; segue mesmo assim"
+
+      - name: Avalia o relógio, os padrões e os afastamentos (v7.8)
+        run: |
+          curl -sf -X POST "https://app.ieadespa.org.br/api/protecao-verificador-interno" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
+
+  avisar-falha:
+    needs: [protecao]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Avisar por e-mail
+        env:
+          ACS_CONNECTION_STRING: ${{ secrets.ACS_CONNECTION_STRING }}
+          DESTINATARIO: presidente@ieadespa.org
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm install --silent --no-audit --no-fund @azure/communication-email@1 >/dev/null 2>&1
+          node - <<'EOF'
+          const { EmailClient } = require("@azure/communication-email");
+          const agora = new Date().toLocaleString("pt-BR", { timeZone: "America/Belem" });
+          (async () => {
+            const client = new EmailClient(process.env.ACS_CONNECTION_STRING);
+            const poller = await client.beginSend({
+              senderAddress: "DoNotReply@ieadespa.org.br",
+              content: { subject: "⚠️ Rotina de proteção de crianças falhou", plainText: `Às ${agora} (horário de Parauapebas) a rotina horária da proteção de crianças falhou. Ela cuida do prazo de 24 horas para comunicar o Conselho Tutelar e do afastamento cautelar. Veja o motivo: ${process.env.RUN_URL}` },
+              recipients: { to: [{ address: process.env.DESTINATARIO }] }
+            });
+            console.log("e-mail:", (await poller.pollUntilDone()).status);
+          })().catch((e) => { console.error("falha ao enviar e-mail:", e.message); });
+          EOF

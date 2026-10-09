@@ -1,9 +1,10 @@
 #!/bin/bash
 # Equipamento de verificação ponta a ponta contra um SQL Server LocalDB (ver README.md desta pasta).
 #   bash rodar.sh preparar            recria o banco do zero, aplica TODAS as migrações pelo executor do deploy, roda o setup do cenário (e2e-1) e salva a base "cenario";
-#                                     depois roda o setup da v7.7 (e2e-7) por cima e salva a base "cenario-menores"
+#                                     depois roda o setup da v7.7 (e2e-7) por cima e salva a base "cenario-menores"; e o da v7.8 (e2e-13) por cima e salva "cenario-protecao"
 #   bash rodar.sh roteiro e2e-3-atos.js [e2e-5-seguranca.js ...]    restaura a base "cenario" (segundos) e roda os roteiros em sequência, no MESMO banco
-#   BASE=cenario-menores bash rodar.sh roteiro e2e-8-menores.js ...  o mesmo, a partir da base da v7.7 (e2e-8 a e2e-10)
+#   BASE=cenario-menores bash rodar.sh roteiro e2e-8-menores.js ...  o mesmo, a partir da base da v7.7 (e2e-8 a e2e-12)
+#   BASE=cenario-protecao bash rodar.sh roteiro e2e-14-protecao.js ...  o mesmo, a partir da base da v7.8 (e2e-14 a e2e-16)
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 API="$AQUI/../../api"
 PS="powershell.exe -NoProfile -ExecutionPolicy Bypass -File"
@@ -15,6 +16,8 @@ case "$1" in
     $PS "$AQUI/bases.ps1" salvar cenario
     (cd "$AQUI" && node -r ./shim-mssql.js e2e-7-setup.js 2>&1 | tail -${LINHAS:-12})
     $PS "$AQUI/bases.ps1" salvar cenario-menores
+    (cd "$AQUI" && node -r ./shim-mssql.js e2e-13-protecao-setup.js 2>&1 | tail -${LINHAS:-12})
+    $PS "$AQUI/bases.ps1" salvar cenario-protecao
     ;;
   roteiro)
     shift

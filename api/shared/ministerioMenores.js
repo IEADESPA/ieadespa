@@ -149,6 +149,7 @@ const ROTULO_BLOQUEIO = {
   FORA_DE_COMUNHAO: "Fora de plena comunhão",
   SEM_DATA_NASCIMENTO: "Cadastro sem data de nascimento",
   AUTO_DENUNCIA_EM_ANALISE: "Comunicação à Diretoria em análise",
+  INCIDENTE_EM_APURACAO: "Incidente de proteção em apuração (afastamento cautelar)",
   PENDENCIA_DIRETORIA: "Pendência a tratar com a Diretoria Executiva",
   INAPTO: "Marcado como inapto na habilitação",
   CADASTRO_NACIONAL: "Consta no cadastro nacional",
@@ -166,7 +167,7 @@ const ROTULO_BLOQUEIO = {
   SEIS_MESES: "Menos de 6 meses de comunhão"
 };
 // Estes só a Diretoria Executiva (e o Conselho de Ética) enxerga com o motivo: quem habilita na congregação vê só "pendência com a Diretoria".
-const BLOQUEIOS_RESERVADOS = ["ANTECEDENTES_COM_RESTRICAO", "AUTO_DENUNCIA_EM_ANALISE", "CADASTRO_NACIONAL", "FORA_DE_COMUNHAO"];
+const BLOQUEIOS_RESERVADOS = ["ANTECEDENTES_COM_RESTRICAO", "AUTO_DENUNCIA_EM_ANALISE", "CADASTRO_NACIONAL", "FORA_DE_COMUNHAO", "INCIDENTE_EM_APURACAO"];
 
 const bloq = (codigo, mensagem, extra = {}) => ({ codigo, mensagem, ...extra });
 
@@ -177,7 +178,8 @@ const bloq = (codigo, mensagem, extra = {}) => ({ codigo, mensagem, ...extra });
 //   treinamento: (ver avaliarTreinamento) | null,
 //   fichaEm: data (a mais recente entre a ficha de inscrição e a última confirmação) | null,
 //   politicaVersaoAceita: número | null, politicaVersaoVigente: número,
-//   autoDenunciaAberta: boolean, cadastroNacional: 'CONSTA' | 'NADA_CONSTA' | 'INDISPONIVEL' | null
+//   autoDenunciaAberta: boolean, cadastroNacional: 'CONSTA' | 'NADA_CONSTA' | 'INDISPONIVEL' | null,
+//   incidenteEmApuracao: boolean   (v7.8: envolvido de suspeita de violência cujo afastamento cautelar o Comitê ainda não levantou)
 // }
 // Resultado: { apto, contaComoAdulto, idade, bloqueios[], validades{}, proximoVencimento }
 function avaliarAptidao(e, { hoje, prazos = {} }) {
@@ -193,6 +195,8 @@ function avaliarAptidao(e, { hoje, prazos = {} }) {
   if (membro.status !== undefined && (membro.status !== "ATIVO" || membro.situacao === "SEM_COMUNHAO")) bloqueios.push(bloq("FORA_DE_COMUNHAO", "O ministério com menores é para membros em plena comunhão. Procure a Secretaria ou a Diretoria."));
   if (idade == null) bloqueios.push(bloq("SEM_DATA_NASCIMENTO", "O seu cadastro não tem a data de nascimento. Com menores, a Igreja precisa saber a idade de quem serve: procure a Secretaria para completar o cadastro."));
   if (e.autoDenunciaAberta) bloqueios.push(bloq("AUTO_DENUNCIA_EM_ANALISE", "Por cautela, o contato com menores fica suspenso enquanto a Diretoria analisa a sua comunicação. Não é punição: a Diretoria decide em seguida."));
+  // v7.8: o afastamento cautelar por incidente de proteção. A mensagem NUNCA diz o motivo (a apuração é das autoridades; avisar o envolvido do que consta contra ele não cabe ao sistema).
+  if (e.incidenteEmApuracao) bloqueios.push(bloq("INCIDENTE_EM_APURACAO", "Por cautela, o seu contato com crianças e adolescentes está suspenso, por decisão da Diretoria Executiva. Isso não é uma condenação. A Diretoria entrará em contato com você."));
   if (e.cadastroNacional === "CONSTA") bloqueios.push(bloq("CADASTRO_NACIONAL", "Há registro no cadastro nacional de condenados por crimes contra menores. Procure a Diretoria Executiva."));
 
   const esteira = e.esteira || { existe: false };

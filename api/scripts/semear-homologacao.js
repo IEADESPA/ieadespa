@@ -140,10 +140,40 @@ async function main() {
   // geral (as três permissões são da Diretoria Executiva), e a prova em navegador precisa abri-las de verdade. Sem e-mail, como o pastor: entra sem segunda etapa.
   const quartoAlfa = adultos.filter((a) => a.cong.id === congs[0].id)[3];
   if (quartoAlfa) {
-    const papelSecretarioGeral = await papel("Secretário Geral", "GLOBAL", "setores_tecnicos,setores_ratificacao,vistoria_antecedentes");
+    const papelSecretarioGeral = await papel("Secretário Geral", "GLOBAL", "setores_tecnicos,setores_ratificacao,vistoria_antecedentes,habilitacao_voluntarios,escalas");
     await lideranca(quartoAlfa.matricula, papelSecretarioGeral, "GLOBAL", null, `secretário geral (matrícula ${quartoAlfa.matricula})`);
     await q("UPDATE dbo.MembroReferencia SET Email = NULL WHERE MembroId = @m AND Email IS NOT NULL", { m: quartoAlfa.matricula });
   }
+  // v7.7: um ministério infantil fictício (equipe com contato com menores) com cinco voluntários, cada um numa situação — em dia (2), certidão vencida, sem treinamento e sem a
+  // política aceita —, para a prova em navegador abrir o painel de conformidade e para o responsável explorar a tela. Só cria se a equipe ainda não existe; fail-soft: uma
+  // falha aqui nunca derruba a semeadura nem o deploy.
+  try {
+    const alfa = adultos.filter((a) => a.cong.id === congs[0].id);
+    const NOME_EQUIPE = "Ministério Infantil (fictício)";
+    if (alfa.length >= 9 && quartoAlfa && !(await escalar("SELECT EquipeId FROM dbo.EscalasEquipes WHERE Nome = @n AND CongregacaoId = @c", { n: NOME_EQUIPE, c: congs[0].id }))) {
+      const crypto = require("crypto");
+      const { POLITICA_HASH, POLITICA_VERSAO } = require("../shared/ministerioMenores");
+      const equipeId = await escalar("INSERT INTO dbo.EscalasEquipes (Nome, CongregacaoId, LiderMembroId, ContatoComMenores, FaixaEtariaMenores) OUTPUT INSERTED.EquipeId VALUES (@n, @c, @l, 1, 'MATERNAL')",
+        { n: NOME_EQUIPE, c: congs[0].id, l: alfa[2].matricula });
+      const dias = (n) => new Date(Date.now() - n * 86400000);
+      const hash = (texto) => crypto.createHash("sha256").update(texto).digest("hex");
+      const voluntarios = [
+        { a: alfa[4], certidao: 20, treino: 90, politica: true }, { a: alfa[5], certidao: 25, treino: 120, politica: true },
+        { a: alfa[6], certidao: 230, treino: 90, politica: true }, { a: alfa[7], certidao: 20, treino: null, politica: true }, { a: alfa[8], certidao: 20, treino: 90, politica: false }
+      ];
+      for (const v of voluntarios) {
+        const m = v.a.matricula;
+        await q("INSERT INTO dbo.EscalasEquipeMembros (EquipeId, MembroId) VALUES (@e, @m)", { e: equipeId, m });
+        await q(`INSERT INTO dbo.VoluntariosHabilitacao (MembroId, CongregacaoId, EtapaFichaInscricaoEm, EtapaReferenciasEm, EtapaEntrevistaEm, EtapaAntecedentesEm, EtapaTreinamentoEm, EtapaTermoAssinadoEm, Status, AptoDesde, AptoValidoAte, FichaAtualizadaEm)
+                VALUES (@m, @c, @f, @f, @f, @f, @t, @f, 'APTO', @f, @v, @fa)`, { m, c: congs[0].id, f: dias(200), t: v.treino === null ? null : dias(v.treino), v: new Date(Date.now() + 500 * 86400000), fa: dias(30) });
+        const vid = await escalar(`INSERT INTO dbo.VistoriasAntecedentes (MembroId, Motivo, Funcao, ComVulneraveis, DataVerificacao, Resultado, Parecer, DestinoOriginal, AssinadaPorMembroId)
+                OUTPUT INSERTED.VistoriaId VALUES (@m, 'INVESTIDURA', N'Ministério infantil (fictício)', 1, @d, 'SEM_RESTRICAO', N'Certidões sem apontamentos (dado fictício de homologação).', 'DEVOLVIDO', @por)`, { m, d: dias(v.certidao).toISOString().slice(0, 10), por: quartoAlfa.matricula });
+        for (const tipo of ["ANTECEDENTES_FEDERAL", "ANTECEDENTES_ESTADUAL"]) await q("INSERT INTO dbo.VistoriasDocumentos (VistoriaId, Tipo, HashSha256, DataEmissao) VALUES (@v, @t, @h, @d)", { v: vid, t: tipo, h: hash(`homolog-${m}-${tipo}`), d: dias(v.certidao).toISOString().slice(0, 10) });
+        if (v.politica) await q("INSERT INTO dbo.MinisterioMenoresPoliticaAceites (MembroId, Versao, TextoHash, Forma, EnderecoIp) VALUES (@m, @v, @h, 'CLICKWRAP', N'anonimizado')", { m, v: POLITICA_VERSAO, h: POLITICA_HASH });
+      }
+      feito.push(`ministério infantil fictício com ${voluntarios.length} voluntários (v7.7)`);
+    }
+  } catch (e) { console.log("(ministério infantil: " + e.message.slice(0, 160) + ")"); }
   // vD.4: o pastor de área fictício fica SEM e-mail de propósito — é com ele que a prova em navegador cadastra a chave de acesso
   // (sem chave e sem e-mail a senha certa entra com aviso; depois do cadastro, a entrada passa a exigir a chave). Os demais têm e-mail
   // (@exemplo.com) e mostram o caminho do código.

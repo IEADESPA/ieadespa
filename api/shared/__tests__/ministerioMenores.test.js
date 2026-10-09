@@ -148,9 +148,13 @@ describe("aptidão para servir com menores", () => {
     const a = mm.avaliarAptidao(emDia({ vistoria: null, treinamento: null, politicaVersaoAceita: null, fichaEm: null }), { hoje: HOJE });
     expect(codigos(a)).toEqual(["ANTECEDENTES_AUSENTES", "TREINAMENTO_AUSENTE", "FICHA_DESATUALIZADA", "POLITICA_NAO_ACEITA"]);
   });
-  test("os prazos configurados mudam a conta (antecedentes de 30 dias, ficha de 365)", () => {
+  test("os prazos configurados podem ENCURTAR a conta (antecedentes de 30 dias), nunca alongá-la além do que a Lei e o Regimento pedem", () => {
     expect(codigos(mm.avaliarAptidao(emDia(), { hoje: HOJE, prazos: { antecedentesDias: 30 } }))).toEqual(["ANTECEDENTES_VENCIDOS"]);
-    expect(mm.avaliarAptidao(emDia({ fichaEm: "2026-01-01" }), { hoje: HOJE, prazos: { fichaDias: 365 } }).apto).toBe(true);
+    // teto de 180 dias para as certidões e para a ficha (a Lei fala em atualização semestral): configurar 365 ou 3650 não afrouxa nada
+    expect(codigos(mm.avaliarAptidao(emDia({ fichaEm: "2026-01-01" }), { hoje: HOJE, prazos: { fichaDias: 365 } }))).toEqual(["FICHA_DESATUALIZADA"]);
+    expect(codigos(mm.avaliarAptidao(emDia({ vistoria: vistoriaOk({ documentos: [doc("ANTECEDENTES_FEDERAL", "2026-01-01"), doc("ANTECEDENTES_ESTADUAL", "2026-01-01")] }) }), { hoje: HOJE, prazos: { antecedentesDias: 3650 } }))).toEqual(["ANTECEDENTES_VENCIDOS"]);
+    expect(mm.prazosEfetivos({ antecedentesDias: 3650, fichaDias: 3650, treinamentoDias: 9999, adultosMinimos: 1 })).toEqual({ antecedentesDias: 180, fichaDias: 180, treinamentoDias: 1095, adultosMinimos: 2 });
+    expect(mm.prazosEfetivos({ adultosMinimos: 3, antecedentesDias: 90 })).toMatchObject({ adultosMinimos: 3, antecedentesDias: 90 });
     // valor torto (zero, negativo, texto) cai no padrão, nunca em "nunca vence"
     expect(codigos(mm.avaliarAptidao(emDia({ fichaEm: "2026-01-01" }), { hoje: HOJE, prazos: { fichaDias: 0 } }))).toEqual(["FICHA_DESATUALIZADA"]);
     expect(codigos(mm.avaliarAptidao(emDia({ fichaEm: "2026-01-01" }), { hoje: HOJE, prazos: { fichaDias: "abc" } }))).toEqual(["FICHA_DESATUALIZADA"]);
@@ -340,7 +344,26 @@ describe("os textos dos avisos", () => {
     expect(mm.textoAutoDenunciaPessoa()).toMatch(/não é punição/);
     expect(mm.textoAutoDenunciaDecidida({ decisao: "MANTIDO" })).toMatch(/liberado/);
     expect(mm.textoAutoDenunciaDecidida({ decisao: "AFASTADO_PREVENTIVAMENTE" })).toMatch(/afastado preventivamente/);
-    expect(mm.textoAutoDenuncia({ nome: "Ana", tipo: "PROCESSO_CRIMINAL" })).toMatch(/processo criminal/);
+    // o e-mail sai do sistema e não se recolhe: nem o nome de quem comunicou nem o tipo do procedimento vão no aviso (isso só se vê dentro do sistema)
+    for (const t of [mm.textoAutoDenuncia({ nome: "Ana Souza", tipo: "PROCESSO_CRIMINAL" }), mm.textoAutoDenunciaPendente({ nome: "Ana Souza", dias: 3 })]) expect(t).not.toMatch(/Ana|Souza|inquérito|processo criminal|procedimento/i);
+    expect(mm.textoAutoDenuncia()).toMatch(/aguardando a decisão da Diretoria/);
+    expect(mm.textoAutoDenunciaPendente({ dias: 3 })).toMatch(/3 dia\(s\)/);
+  });
+});
+
+describe("referências dos avisos e nome de equipe", () => {
+  test("a referência do aviso de sala muda quando o número de adultos muda (o aviso reabre) e cabe em INT", () => {
+    const a = mm.referenciaDaSala(100, 5, 1), b = mm.referenciaDaSala(100, 5, 0), c = mm.referenciaDaSala(100, 5, 2);
+    expect(new Set([a, b, c]).size).toBe(3);
+    expect(mm.referenciaDaSala(100, 5, 1)).toBe(a);
+    expect(mm.referenciaDaSala(1999999, 99, 9)).toBeLessThan(2147483647);
+    expect(mm.referenciaDaSala(100, 5, 99)).toBe(mm.referenciaDaSala(100, 5, 9));      // o número de adultos é limitado a um dígito
+    expect(mm.referenciaDoAviso(500000, "2036-01-01")).toBeLessThan(2147483647);
+    expect(mm.referenciaDoAviso(21475, "2026-12-01")).toBeLessThan(2147483647);        // a antiga (id × 100000) estourava aqui
+  });
+  test("o nome que sugere crianças (a Secretaria precisa conferir a marca)", () => {
+    for (const bom of ["Ministério Infantil", "Berçário", "bercario", "Maternal", "Juniores", "Pré-Adolescentes", "Adolescentes", "Ministério Teen", "Crianças", "Kids", "Escola Dominical Infantil"]) expect(mm.nomeSugereMenores(bom)).toBe(true);
+    for (const ruim of ["Louvor", "Recepção", "Som e Mídia", "Intercessão", "Jovens", "Diaconia", "", null, undefined]) expect(mm.nomeSugereMenores(ruim)).toBe(false);
   });
 });
 

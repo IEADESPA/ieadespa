@@ -365,6 +365,8 @@ async function revogarResponsavel(pool, { responsavelId, por, autorizacao }) {
     .query(`UPDATE VoluntariadoResponsaveis SET RevogadoEm = SYSUTCDATETIME(), RevogadoPorMembroId = @por WHERE ResponsavelId = @id AND RevogadoEm IS NULL; SELECT @@ROWCOUNT AS n`)).recordset[0];
   if (!u || !Number(u.n)) return { sucesso: false, mensagem: "Este cadastro de responsável já foi revogado." };
   await registrarAuditoria({ tabela: "VoluntariadoResponsaveis", registroId: responsavelId, acao: "RESPONSAVEL_REVOGADO", usuarioId: por, dadosDepois: { menorId: r.MenorMembroId } });
+  // v7.7: a autorização de imagem valia enquanto QUEM A DEU era responsável ativo; se ele saiu, a foto do menor sem outra autorização vigente é apagada. Fail-soft: a rotina diária refaz.
+  const limparFoto = async () => { try { await require("./menoresConsentimentoDb").apagarFotosDeMenoresSemConsentimento(pool, { menorId: r.MenorMembroId, por }); } catch (e) { /* a rotina diária refaz */ } };
   // 03/10/2026: era o ÚLTIMO responsável ativo? A adesão dada pelo responsável cadastrado fica suspensa (calculado na leitura; a prova continua) e o menor
   // não é mais escalado nem confirma escala até uma nova adesão. As escalas futuras já marcadas voltam na resposta, para a Secretaria decidir.
   const restantes = (await pool.request().input("mn", sql.Int, r.MenorMembroId).query(`SELECT COUNT(*) AS n FROM VoluntariadoResponsaveis WHERE MenorMembroId = @mn AND RevogadoEm IS NULL`)).recordset[0];
@@ -372,12 +374,14 @@ async function revogarResponsavel(pool, { responsavelId, por, autorizacao }) {
     const adesao = await buscarAdesao(pool, r.MenorMembroId);
     const escalasFuturas = await escalasFuturasDeMenoresSemAdesao(pool, { membroId: r.MenorMembroId });
     const suspensa = vol.adesaoSuspensa(adesao);
+    await limparFoto();
     return {
       sucesso: true, adesaoSuspensa: suspensa, escalasFuturas,
       mensagem: `Cadastro do responsável revogado. Era o último responsável ativo.${suspensa ? ` ${vol.MENSAGEM_ADESAO_SUSPENSA} (A adesão antiga continua guardada como prova, mas não vale mais.)` : ""}` +
         (escalasFuturas.length ? ` Atenção: ${escalasFuturas.length} escala(s) futura(s) já marcada(s) para este(a) menor — remova-o(a) em “Remover da escala” ou peça a nova adesão antes da data.` : "")
     };
   }
+  await limparFoto();
   return { sucesso: true, adesaoSuspensa: false, escalasFuturas: [], mensagem: "Cadastro do responsável revogado. O(a) menor ainda tem outro responsável ativo: a adesão continua valendo." };
 }
 

@@ -170,6 +170,23 @@ async function apagarFotoDoMenor(pool, { menorId, fotoUrl, por }) {
   return havia;
 }
 
+// A foto de menor de 18 anos só fica guardada com a autorização VIGENTE do responsável. Quando a autorização acaba (revogada, o responsável deixou de ser responsável) ou nunca existiu
+// (foto enviada antes da v7.7, com o consentimento do próprio menor, que não vale), o arquivo é apagado: na hora, no ato que tirou o responsável, e na rotina diária. Idade desconhecida
+// não é menor. `menorId` limita a um menor.
+async function apagarFotosDeMenoresSemConsentimento(pool, { menorId = null, hoje = hojeBrasilia(), por = null } = {}) {
+  const rq = pool.request().input("hoje", sql.Date, hoje);
+  let filtro = "";
+  if (menorId) { rq.input("m", sql.Int, menorId); filtro = " AND m.MembroId = @m"; }
+  const alvos = (await rq.query(`SELECT m.MembroId, m.FotoUrl FROM MembroReferencia m WHERE m.FotoUrl IS NOT NULL AND m.DataNascimento IS NOT NULL AND m.DataNascimento > DATEADD(YEAR, -18, @hoje)${filtro}`)).recordset;
+  let apagadas = 0;
+  for (const a of alvos) {
+    if (await consentimentoVigente(pool, a.MembroId, "IMAGEM", { hoje })) continue;
+    await apagarFotoDoMenor(pool, { menorId: a.MembroId, fotoUrl: a.FotoUrl, por });
+    apagadas++;
+  }
+  return { apagadas };
+}
+
 // O responsável ATIVO concede, pelo menor, no aceite digital dele (sessão do próprio responsável; o IP é o dele). Valem os mesmos cuidados do aceite do voluntariado:
 // caixa marcada, IP público identificável, responsável cadastrado, menor com idade conhecida abaixo de 18 — e mais: `textoHash` é o hash do texto que a tela MOSTROU.
 // Se o texto mudou desde então, recusa com `termoMudou:true` (ninguém autoriza um texto que não leu).
@@ -317,5 +334,5 @@ async function dadosDoTitular(pool, membroId) {
 
 module.exports = {
   lerMembro, mapearLinha, carregarContexto, estadoDaFinalidade, estadosDoContexto, acessoAoMenor, estadoDoMenor, menoresDoResponsavel, consentimentoVigente,
-  inserirLinha, apagarFotoDoMenor, conceder, revogar, registrarManual, anonimizarIpsVencidos, dadosDoTitular
+  inserirLinha, apagarFotoDoMenor, apagarFotosDeMenoresSemConsentimento, conceder, revogar, registrarManual, anonimizarIpsVencidos, dadosDoTitular
 };

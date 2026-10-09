@@ -86,12 +86,14 @@ function ordinalDeIso(iso) { return diasEntreIso("2026-01-01", iso); }
 
 // Prazo configurado com limites sãos (o leitor de Prazos já limita a 1..3650; aqui só o padrão quando vier lixo).
 function prazoOuPadrao(valor, padrao) { return Number.isInteger(valor) && valor >= 1 ? valor : padrao; }
+// A Lei pede atualização SEMESTRAL e o Regimento, dois adultos: o prazo das certidões e da ficha pode ser mais CURTO que o padrão, nunca mais longo (teto de 180 dias), e o
+// mínimo de adultos nunca fica abaixo de dois. O treinamento tem teto de 3 anos (o padrão internacional é de 2 a 3).
 function prazosEfetivos(p = {}) {
   return {
-    antecedentesDias: prazoOuPadrao(p.antecedentesDias, ANTECEDENTES_DIAS_PADRAO),
-    treinamentoDias: prazoOuPadrao(p.treinamentoDias, TREINAMENTO_DIAS_PADRAO),
-    fichaDias: prazoOuPadrao(p.fichaDias, FICHA_DIAS_PADRAO),
-    adultosMinimos: prazoOuPadrao(p.adultosMinimos, ADULTOS_MINIMOS_PADRAO)
+    antecedentesDias: Math.min(ANTECEDENTES_DIAS_PADRAO, prazoOuPadrao(p.antecedentesDias, ANTECEDENTES_DIAS_PADRAO)),
+    treinamentoDias: Math.min(1095, prazoOuPadrao(p.treinamentoDias, TREINAMENTO_DIAS_PADRAO)),
+    fichaDias: Math.min(FICHA_DIAS_PADRAO, prazoOuPadrao(p.fichaDias, FICHA_DIAS_PADRAO)),
+    adultosMinimos: Math.max(ADULTOS_MINIMOS_PADRAO, prazoOuPadrao(p.adultosMinimos, ADULTOS_MINIMOS_PADRAO))
   };
 }
 
@@ -275,8 +277,18 @@ function faixaDeAlerta(dias) {
 }
 
 // Para a referência do aviso: um número por ciclo de validade (habilitação × data em que vence), de modo que a renovação reabre a escada de avisos.
+// habilitacaoId * 4096 + (dias desde 2026 mod 4096): cabe em INT até a habilitação nº 524.000 e muda a cada data de vencimento.
 function referenciaDoAviso(habilitacaoId, dataVencimentoIso) {
-  return Number(habilitacaoId) * 100000 + ordinalDeIso(dataVencimentoIso);
+  return Number(habilitacaoId) * 4096 + (ordinalDeIso(dataVencimentoIso) % 4096);
+}
+// Uma referência por (serviço, equipe, nº de adultos escalados): se o problema muda (o 2º adulto saiu e depois voltou a faltar), o aviso é reaberto.
+function referenciaDaSala(servicoId, equipeId, adultos) {
+  return (Number(servicoId) % 2000000) * 1000 + (Number(equipeId) % 100) * 10 + Math.min(Math.max(Number(adultos) || 0, 0), 9);
+}
+// Nome de equipe que sugere crianças: o que a Secretaria precisa conferir se ainda NÃO tem a marca de "contato com menores" (a marca nasce desligada).
+function nomeSugereMenores(nome) {
+  const s = String(nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return /infantil|crianc|bercari|maternal|junior|adolescen|teen|kids|menor|mirim|pre-?adolesc|ebd.*infan/.test(s);
 }
 
 // Quem gere a congregação vê o que a pessoa precisa fazer, mas NÃO o motivo de uma pendência com a Diretoria (restrição, auto-denúncia, cadastro nacional).
@@ -328,7 +340,7 @@ function criancasPorAdulto(faixa, prazosFaixa = {}) {
 function avaliarSala(s) {
   const problemas = [];
   const nome = s.equipeNome || "a sala";
-  const minimo = prazoOuPadrao(s.adultosMinimos, ADULTOS_MINIMOS_PADRAO);
+  const minimo = Math.max(ADULTOS_MINIMOS_PADRAO, prazoOuPadrao(s.adultosMinimos, ADULTOS_MINIMOS_PADRAO));
   if (!s.faixa || !FAIXAS[s.faixa]) problemas.push({ codigo: "SEM_FAIXA", mensagem: `Defina a faixa etária da equipe ${nome} para conferir a proporção de adultos por criança.` });
   if (s.criancasPrevistas == null) problemas.push({ codigo: "SEM_CRIANCAS_PREVISTAS", mensagem: `Informe quantas crianças a equipe ${nome} espera neste serviço.` });
   const porAdulto = s.criancasPorAdulto || (s.faixa ? criancasPorAdulto(s.faixa) : null);
@@ -496,11 +508,12 @@ function textoVistoriasARenovar({ total, nomes }) {
   const resto = total - mostrados.length;
   return `${total} voluntário(s) que servem com menores precisam de certidões de antecedentes novas nos próximos 60 dias, ou já estão sem elas: ${mostrados.join(", ")}${resto > 0 ? ` e mais ${resto}` : ""}. Confira em Vistoria de Antecedentes e solicite as certidões.`.slice(0, 1000);
 }
-function textoAutoDenuncia({ nome, tipo }) {
-  return `${nome} comunicou à Diretoria que responde a ${TIPOS_AUTODENUNCIA[tipo].toLowerCase()} (Regimento Art. 133 §5º, V). Por cautela, o contato dessa pessoa com menores está suspenso até a sua decisão. Registre a decisão em Vistoria de Antecedentes.`.slice(0, 1000);
+// O e-mail sai do sistema e não se recolhe: nenhum aviso leva o NOME de quem comunicou nem o TIPO do procedimento (isso só se vê dentro do sistema, na fila da Diretoria).
+function textoAutoDenuncia() {
+  return "Há uma comunicação nova de voluntário aguardando a decisão da Diretoria Executiva (Regimento Art. 133 §5º, V). Por cautela, o contato dessa pessoa com menores já está suspenso. Abra Vistoria de Antecedentes → Comunicações dos voluntários para ver e decidir.";
 }
-function textoAutoDenunciaPendente({ nome, dias }) {
-  return `A comunicação de ${nome} segue sem decisão há ${dias} dia(s), e o contato dela com menores está suspenso. Decida em Vistoria de Antecedentes: manter ou afastar preventivamente.`.slice(0, 1000);
+function textoAutoDenunciaPendente({ dias }) {
+  return `Há uma comunicação de voluntário sem decisão da Diretoria há ${dias} dia(s), e o contato dessa pessoa com menores segue suspenso. Abra Vistoria de Antecedentes → Comunicações dos voluntários para decidir: manter ou afastar preventivamente.`.slice(0, 1000);
 }
 function textoAutoDenunciaPessoa() {
   return "A sua comunicação foi recebida pela Diretoria Executiva. Obrigado por avisar: é o que o Regimento pede. Por cautela, o seu contato com menores fica suspenso até a decisão da Diretoria — isso não é punição e não afeta os seus outros serviços. A Diretoria pode pedir certidões novas.";
@@ -518,7 +531,7 @@ module.exports = {
   ANTECEDENTES_DIAS_PADRAO, TREINAMENTO_DIAS_PADRAO, FICHA_DIAS_PADRAO, ADULTOS_MINIMOS_PADRAO, ALERTAS_DIAS, SALA_ALERTA_DIAS_PADRAO, AUTODENUNCIA_LEMBRETE_DIAS_PADRAO,
   SIGLAS_PRAZO, FAIXAS, CODIGOS_FAIXA, CERTIDOES_CRIMINAIS, ROTULO_CERTIDAO, ROTULO_BLOQUEIO, BLOQUEIOS_RESERVADOS, ROTULO_ITEM_VENCIMENTO, MAX_CRIANCAS_POR_SALA, MAIORIDADE,
   paraIso, somarDiasIso, somarMesesIso, diasEntreIso, ordinalDeIso, prazosEfetivos, formatarDataBr,
-  avaliarAntecedentes, avaliarTreinamento, avaliarAptidao, itensAVencer, proximoVencimento, faixaDeAlerta, referenciaDoAviso, mascararParaGestao, bloqueiosParaPainel, validadesParaGestao, statusDaLinha,
+  avaliarAntecedentes, avaliarTreinamento, avaliarAptidao, itensAVencer, proximoVencimento, faixaDeAlerta, referenciaDoAviso, referenciaDaSala, nomeSugereMenores, mascararParaGestao, bloqueiosParaPainel, validadesParaGestao, statusDaLinha,
   criancasPorAdulto, avaliarSala, validarCriancasPrevistas, validarFaixa,
   POLITICA_VERSAO, POLITICA_TITULO, POLITICA_ITENS, POLITICA_ACEITE, POLITICA_HASH, politicaVigente, avaliarIntegridadePolitica,
   TIPOS_AUTODENUNCIA, DECISOES_AUTODENUNCIA, validarAutoDenuncia, validarDecisaoAutoDenuncia, validarLiberacaoAutoDenuncia, validarAceitePolitica, validarConfirmacaoFicha,

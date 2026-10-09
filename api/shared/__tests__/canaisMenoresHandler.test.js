@@ -189,7 +189,7 @@ describe("canais/responsavel-acesso: o que a rota faz", () => {
   test("recusas de regra viram 422 { sucesso:false, mensagem }, sem gravar: inativo, menor de 18, sem cadastro, o mesmo responsável, canal que não inclui menores", async () => {
     montarBase();
     const t = tokenLocal(["canais_gestao"]);
-    const casos = [[1, 71, /situação ATIVO/], [1, 72, /precisa ser adulto/], [1, 999, /não encontrada/], [4, 70, /já é o responsável/], [3, 70, /não está marcado como “inclui crianças\/adolescentes”/]];
+    const casos = [[1, 71, /membro ATIVO e adulto/], [1, 72, /membro ATIVO e adulto/], [1, 999, /membro ATIVO e adulto/], [4, 70, /já é o responsável/], [3, 70, /não está marcado como “inclui crianças\/adolescentes”/]];
     for (const [canalId, membroId, msg] of casos) {
       const r = await post(ROTA, t, { canalId, membroId });
       expect(r.status).toBe(422);

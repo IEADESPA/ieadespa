@@ -46,11 +46,13 @@ async function avaliarRegras(pool) {
   let criadas = 0;
   let emailsEnviados = 0;
   let pushesEnviados = 0;
+  const falhas = [];      // chaves das regras cujo detector falhou nesta rodada: as outras regras seguem (um detector com problema não derruba os avisos do dia)
 
   for (const regra of regras) {
     const detector = DETECTORES[regra.Chave];
     if (!detector) continue; // regra cadastrada sem detector implementado ainda — fica inerte, não quebra a rodada
-    const fatos = await detector.detectar(pool);
+    let fatos;
+    try { fatos = await detector.detectar(pool); } catch (e) { falhas.push(regra.Chave); console.error(`[NOTIFICACOES] o detector ${regra.Chave} falhou:`, e && e.message); continue; }
     if (fatos.length === 0) continue;
     // v6.10 — um fato pode trazer os próprios destinatários (ex.: o aluno
     // ausente avisa os professores DAQUELA turma, não quem tem uma
@@ -90,7 +92,7 @@ async function avaliarRegras(pool) {
     }
   }
 
-  return { criadas, emailsEnviados, pushesEnviados };
+  return { criadas, emailsEnviados, pushesEnviados, falhas };
 }
 
 // Digest por perfil (vB.2) — não é um segundo canal, é a mesma central de

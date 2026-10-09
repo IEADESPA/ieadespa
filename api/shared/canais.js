@@ -306,6 +306,8 @@ function validarCanal(d, { criando = true } = {}) {
   // v7.7 — responsável com acesso (pai, mãe ou tutor de um dos menores): matrícula estrita ou nula. Malformada é erro mesmo que o canal não inclua menores (o dado
   // veio errado); mas SÓ vale em canal que inclui menores: nos demais é guardada vazia. Que a matrícula é de membro ativo e adulto, quem confere é o banco.
   const incluiMenores = d.incluiMenores === true;
+  // v7.7: o convite de um grupo com crianças e adolescentes não se divulga no site (o identificador e o link seriam públicos).
+  if (incluiMenores && d.publicoNoSite === true) return { valido: false, mensagem: "Um canal que inclui crianças e adolescentes não pode ser divulgado no site: o convite de um grupo com menores não se publica. Desmarque \"público no site\"." };
   let responsavelAcessoMembroId = null;
   if (d.responsavelAcessoMembroId != null) {
     responsavelAcessoMembroId = inteiroPositivoEstrito(d.responsavelAcessoMembroId);

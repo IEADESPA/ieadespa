@@ -129,6 +129,8 @@ module.exports = async function (context, req) {
         const eq = (await pool.request().input("id", sql.Int, eqId).query(`SELECT c.Nome AS CongregacaoNome, e.ContatoComMenores AS ContatoComMenores FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId WHERE e.EquipeId = @id`)).recordset[0];
         // equipe que não existe e equipe fora do escopo: a mesma resposta
         if (!eq || !auth.estaNoEscopo(usuario, eq.CongregacaoNome)) return erro(context, 404, "Equipe não encontrada.");
+        // v7.7: desligar a marca derruba todo o portão da equipe (certidões, dois adultos, proporção): pede a confirmação reforçada. Ligar é livre.
+        if (!contatoComMenores && eq.ContatoComMenores && !auth.exigirFatorRecente(req, context)) return;
         await hv.atualizarContatoComMenores(pool, eqId, contatoComMenores);
         // v7.7: ao ligar a marca, quem já estava escalado e não está habilitado sai das escalas futuras da equipe na hora (não espera a rotina diária).
         let retirada = null;
@@ -225,6 +227,8 @@ module.exports = async function (context, req) {
       if (!temPermissao(usuario)) return erro(context, 403, "Você não tem permissão para isso.");
       const habilitacao = await esteiraDoEscopo(pool, usuario, habilitacaoId);
       if (!habilitacao) return erro(context, 404, "Esteira não encontrada.");
+      // v7.7: o "inapto" passou a ser uma trava de proteção de crianças: ninguém o levanta de si mesmo.
+      if (Number(habilitacao.membroId) === Number(usuario.membroId)) return erro(context, 403, "Ninguém reabilita a si mesmo: peça a outra pessoa da Secretaria.");
       const resultado = await hv.reabilitar(pool, { habilitacaoId, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;

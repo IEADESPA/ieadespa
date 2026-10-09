@@ -244,7 +244,20 @@ describe("habilitacao-voluntarios · leituras e escritas da esteira", () => {
       tabela: "EscalasEquipes", registroId: 100, acao: "CONTATO_COM_MENORES_ALTERADO", usuarioId: 5,
       dadosAntes: { contatoComMenores: false }, dadosDepois: { contatoComMenores: true }
     }));
-    expect((await chamar(hHab, "equipes-flag", { metodo: "POST", token: geral(["habilitacao_voluntarios"]), corpo: { equipeId: 200, contatoComMenores: false } })).status).toBe(200);
+    // v7.7: DESLIGAR a marca (equipe que já tem menores) derruba todo o portão: exige a confirmação reforçada (428 sem ela); LIGAR é livre (acima)
+    const semFator = await chamar(hHab, "equipes-flag", { metodo: "POST", token: geral(["habilitacao_voluntarios"]), corpo: { equipeId: 200, contatoComMenores: false } });
+    expect(semFator.status).toBe(428);
+    expect(semFator.body.precisaFator).toBe(true);
+    expect(rodou(/UPDATE EscalasEquipes SET ContatoComMenores/)).toHaveLength(1);       // só a do "ligar" acima: o desligar sem fator não gravou
+    const comFator = tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["habilitacao_voluntarios"] });
+    expect((await chamar(hHab, "equipes-flag", { metodo: "POST", token: comFator, corpo: { equipeId: 200, contatoComMenores: false } })).status).toBe(200);
+  });
+  test("reabilitar a si mesmo é recusado (403): o 'inapto' é trava de proteção de crianças", async () => {
+    esteiras.set(1, { ...esteira(1, 1, 901), Status: "INAPTO" });
+    const r = await chamar(hHab, "reabilitar", { metodo: "POST", token: geral(["habilitacao_voluntarios"]), corpo: { habilitacaoId: 901 } });
+    expect(r.status).toBe(403);
+    expect(r.body.mensagem).toMatch(/Ninguém reabilita a si mesmo/);
+    expect(escritas()).toHaveLength(0);
   });
 
   test("elegibilidade-menores: pessoa de fora = inexistente (mesma resposta); equipe de fora não entrega a marca; do escopo 200; GERAL 200", async () => {

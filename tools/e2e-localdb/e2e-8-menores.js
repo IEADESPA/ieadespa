@@ -109,6 +109,8 @@ const auditoria = (acao) => q("SELECT RegistroId, UsuarioId, DadosDepois FROM Au
   r = await POST(E, "trocas", PIN(6010), { alocacaoOrigemId: alocT, membroDestinoId: 6011 }); ok(r.status === 201, "trocar com quem está habilitado vale", r.body);
   const trocaId = r.body.trocaId;
   // entre o pedido e a aprovação, o destino perde a habilitação (marcado inapto): o líder não consegue aprovar
+  // (6011 não pode ter outra escala viva no berçário: a varredura imediata da retirada recusa a troca pendente de quem sai da escala daquela equipe — o caso abaixo)
+  await q("UPDATE EscalasAlocacoes SET Status = 'CANCELADA' WHERE MembroId = 6011 AND EquipeId = @e AND Status <> 'CANCELADA'", { e: eq.bercario });
   const hab6011 = await escalar("SELECT HabilitacaoId FROM VoluntariosHabilitacao WHERE MembroId = 6011");
   r = await POST(HAB, "marcar-inapto", secretaria, { habilitacaoId: hab6011, motivo: "Afastado para o teste." }); ok(r.status === 200, "marca 6011 como inapto", r.body);
   r = await POST(E, "trocas-aprovar", PIN(6001), { trocaId, aprovar: true }); ok(r.status === 422 && /Não dá para aprovar/.test(r.body.mensagem) && /habilitação para servir com menores pendente/.test(r.body.mensagem), "aprovar troca para quem deixou de estar habilitado é recusado (o líder vê o motivo curto)", r.body);

@@ -2233,6 +2233,28 @@ que mais fazia falta.)*
     rigorosa, e a CLI pode restringir a grupos numa condição de `pendenciasDeMenores`.
   - **Rodízio com menores nasce rascunho**: a quantidade de crianças é por serviço e só existe
     depois dele.
+  - **Os prazos configuráveis só podem encurtar**: certidão e ficha têm teto de 180 dias, treinamento
+    de 3 anos, e o mínimo de adultos na sala é 2 (configurar 365 dias ou 1 adulto não afrouxa a regra).
+  - **Em sala com menores, adulto só troca com adulto** (o adolescente apto é auxiliar e não conta como
+    adulto): senão a troca esvaziaria a sala dos dois adultos que a regra exige.
+  - **Sala sem nenhum voluntário não publica** (zero adultos também é falta).
+  - **Ninguém reabilita a si mesmo** e **desligar a marca de menores de uma equipe** (que derruba todo o
+    portão) pede a confirmação reforçada, como a decisão da auto-denúncia; ligar é livre.
+  - **Canal que inclui menores não é divulgado no site**, e a indicação do "responsável com acesso" tem uma
+    mensagem de recusa só (não existe / não está ativo / não é adulto), para não virar consulta de cadastro.
+  - **A rotina diária não dá verde quando falha o que protege criança**: a retirada das escalas ou um
+    detector do ministério com menores que falha faz a resposta virar 500 (o job do GitHub fica vermelho);
+    um detector de outro assunto que falha só é registrado. Vistoria lavrada com restrição ou recusa, ou
+    termo anulado, tira a pessoa das escalas com menores **na hora**, sem esperar a rotina.
+  - **Foto de menor só fica com a autorização vigente do responsável**: a faxina diária (e o ato que tira o
+    responsável) apaga a foto de menor de 18 anos sem essa autorização — inclusive a enviada antes da v7.7
+    com o consentimento do próprio menor, que não vale. O adulto que desmarca só o telefone/e-mail continua
+    com a foto (decisão antiga, travada em teste).
+  - **Risco aceito: as ações da própria pessoa valem em sessão de PIN** (aceitar a política, confirmar a
+    ficha, comunicar a auto-denúncia), pela decisão de 02/10/2026 de acesso do membro por PIN. Ninguém
+    ganha poder com isso: a aptidão continua dependendo de certidões lançadas pela Diretoria, treinamento
+    atestado e esteira; e a auto-denúncia só **restringe** (suspensão cautelar). As decisões da Diretoria
+    (decidir/liberar) exigem sessão de liderança com a confirmação reforçada.
 
   **O que fica para a v7.10 (e por quê).** O **dado** de alergia ou condição de saúde e o **crachá**
   do check-in infantil: hoje não existem no sistema (o consentimento de saúde já pode ser dado e

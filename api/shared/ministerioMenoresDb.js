@@ -138,7 +138,7 @@ async function carregarFatos(pool, membroIds, { hoje = hojeBrasilia() } = {}) {
     rq = pool.request();
     const cadastro = (await rq.query(`
       SELECT x.MembroId, x.Resultado FROM (SELECT MembroId, Resultado, ROW_NUMBER() OVER (PARTITION BY MembroId ORDER BY ConsultaId DESC) AS rn
-      FROM MinisterioMenoresCadastroNacional WHERE MembroId IN (${listaIn(rq, "m", lote)})) x WHERE x.rn = 1`)).recordset;
+      FROM MinisterioMenoresCadastroNacional WHERE MembroId IN (${listaIn(rq, "m", lote)}) AND Resultado <> 'INDISPONIVEL') x WHERE x.rn = 1`)).recordset;
     const cadastroPorMembro = new Map(cadastro.map((c) => [c.MembroId, c.Resultado]));
 
     for (const id of lote) {
@@ -212,6 +212,15 @@ async function conferirParaServir(pool, { equipeId, membroId, visao = "COLEGA", 
   return { ok: false, mensagem: "O voluntário destino não pode assumir esta escala." };
 }
 
+// Em sala com menores, quem é adulto só troca com outro adulto (o adolescente apto serve como auxiliar e não conta como adulto): senão a troca esvazia a sala dos dois adultos que a regra exige.
+async function trocaPreservaAdultos(pool, { equipeId, origemId, destinoId, hoje = hojeBrasilia() }) {
+  if (!(await equipeComMenores(pool, equipeId))) return { ok: true };
+  const ap = await aptidaoEmLote(pool, [origemId, destinoId], { hoje });
+  const o = ap.get(Number(origemId)), d = ap.get(Number(destinoId));
+  if (o && d && o.contaComoAdulto && !d.contaComoAdulto) return { ok: false, mensagem: "Em sala com menores, quem é adulto só troca com outro adulto: a sala precisa continuar com dois adultos habilitados." };
+  return { ok: true };
+}
+
 // Os antecedentes da esteira (a etapa só fecha com certidões válidas). Menor de 18 anos é dispensado: não existe certidão de antecedentes para ele.
 async function antecedentesDe(pool, membroId, { hoje = hojeBrasilia() } = {}) {
   const f = (await carregarFatos(pool, [membroId], { hoje })).get(Number(membroId));
@@ -234,14 +243,22 @@ async function salasDosServicos(pool, servicoIds, { hoje = hojeBrasilia() } = {}
     SELECT a.ServicoId, a.EquipeId, a.MembroId, m.Nome AS MembroNome, e.Nome AS EquipeNome, e.FaixaEtariaMenores, e.LiderMembroId, e.CongregacaoId, s.DataHora, s.Status AS ServicoStatus
     FROM EscalasAlocacoes a JOIN EscalasEquipes e ON e.EquipeId = a.EquipeId JOIN EscalasServicos s ON s.ServicoId = a.ServicoId JOIN MembroReferencia m ON m.MembroId = a.MembroId
     WHERE a.ServicoId IN (${listaIn(rq, "s", ids)}) AND a.Status IN (${STATUS_ATIVOS_SQL}) AND e.ContatoComMenores = 1`)).recordset;
-  if (!alocs.length) return [];
+  // Sala em que o líder já informou crianças mas NINGUÉM segura o posto (recusaram, ou a retirada automática desmarcou todos): é a pior das salas, e também entra.
+  const rq0 = pool.request();
+  const vazias = (await rq0.query(`
+    SELECT sa.ServicoId, sa.EquipeId, e.Nome AS EquipeNome, e.FaixaEtariaMenores, e.LiderMembroId, e.CongregacaoId, s.DataHora, s.Status AS ServicoStatus
+    FROM MinisterioMenoresSalas sa JOIN EscalasEquipes e ON e.EquipeId = sa.EquipeId JOIN EscalasServicos s ON s.ServicoId = sa.ServicoId
+    WHERE sa.ServicoId IN (${listaIn(rq0, "s", ids)}) AND e.ContatoComMenores = 1 AND sa.CriancasPrevistas > 0`)).recordset;
+  if (!alocs.length && !vazias.length) return [];
   const rq2 = pool.request();
   const previstas = new Map((await rq2.query(`SELECT ServicoId, EquipeId, CriancasPrevistas FROM MinisterioMenoresSalas WHERE ServicoId IN (${listaIn(rq2, "s", ids)})`)).recordset
     .map((x) => [`${x.ServicoId}|${x.EquipeId}`, x.CriancasPrevistas]));
   const prazos = await lerPrazos(pool);
   const faixas = await lerPrazosFaixas(pool);
-  const aptidoes = await aptidaoEmLote(pool, alocs.map((a) => a.MembroId), { hoje, prazos });
+  const aptidoes = alocs.length ? await aptidaoEmLote(pool, alocs.map((a) => a.MembroId), { hoje, prazos }) : new Map();
   const grupos = new Map();
+  for (const v of vazias) grupos.set(`${v.ServicoId}|${v.EquipeId}`, { servicoId: v.ServicoId, equipeId: v.EquipeId, equipeNome: v.EquipeNome, faixa: v.FaixaEtariaMenores || null, liderMembroId: v.LiderMembroId,
+    congregacaoId: v.CongregacaoId, dataHora: v.DataHora, servicoStatus: v.ServicoStatus, membros: [] });
   for (const a of alocs) {
     const chave = `${a.ServicoId}|${a.EquipeId}`;
     if (!grupos.has(chave)) grupos.set(chave, { servicoId: a.ServicoId, equipeId: a.EquipeId, equipeNome: a.EquipeNome, faixa: a.FaixaEtariaMenores || null, liderMembroId: a.LiderMembroId,
@@ -338,15 +355,17 @@ async function retirarInaptosDasEscalas(pool, { hoje = hojeBrasilia(), membroId 
   if (!pares.size) return { retirados: 0, alocacoes: 0 };
 
   const feitos = [];
+  const erros = [];
   for (const par of pares.values()) {
     const transaction = new sql.Transaction(pool);
-    await transaction.begin();
     let retiradaId;
     try {
+      await transaction.begin();
       // Relê, com trava, quais escalas ainda estão vivas: se uma varredura concorrente (a rotina diária e um ato da Diretoria ao mesmo tempo) já as desmarcou,
       // esta não registra a retirada nem avisa de novo.
       const rv = new sql.Request(transaction);
-      const vivas = new Set((await rv.query(`SELECT AlocacaoId FROM EscalasAlocacoes WITH (UPDLOCK, HOLDLOCK) WHERE AlocacaoId IN (${listaIn(rv, "a", par.alocacoes.map((a) => a.alocacaoId))}) AND Status IN (${STATUS_ATIVOS_SQL})`)).recordset.map((x) => x.AlocacaoId));
+      rv.input("pm", sql.Int, par.membroId);
+      const vivas = new Set((await rv.query(`SELECT AlocacaoId FROM EscalasAlocacoes WITH (UPDLOCK, HOLDLOCK) WHERE AlocacaoId IN (${listaIn(rv, "a", par.alocacoes.map((a) => a.alocacaoId))}) AND MembroId = @pm AND Status IN (${STATUS_ATIVOS_SQL})`)).recordset.map((x) => x.AlocacaoId));
       par.alocacoes = par.alocacoes.filter((a) => vivas.has(a.alocacaoId));
       if (!par.alocacoes.length) { await fecharTransacao(transaction, false); continue; }
       await vdb.cancelarAlocacoes(transaction, { alocacoes: par.alocacoes, membroId: par.membroId, por: null, de: hoje, equipeIds: [par.equipeId] });
@@ -355,10 +374,12 @@ async function retirarInaptosDasEscalas(pool, { hoje = hojeBrasilia(), membroId 
         .query(`INSERT INTO MinisterioMenoresRetiradas (MembroId, EquipeId, Motivos, AlocacoesCanceladas) VALUES (@m, @e, @mot, @n); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
       retiradaId = ins.recordset[0].id;
       await transaction.commit();
-    } catch (e) { await fecharTransacao(transaction, false); throw e; }
-    // A trilha de auditoria é imutável e lida por quem tem "auditoria": nada dos motivos (podem ser pendência com a Diretoria) — só quem, onde e quantas.
+    } catch (e) { await fecharTransacao(transaction, false); erros.push(e); continue; }
+    // A trilha de auditoria é imutável e lida por quem tem "auditoria": nada dos motivos (podem ser pendência com a Diretoria) — só onde e quantas. E a matrícula só entra
+    // quando NENHUM dos motivos é reservado (restrição, comunicação em análise, cadastro nacional, comunhão): senão a retirada, somada à hora, apontaria quem comunicou algo.
+    const reservado = par.motivos.some((c) => mm.BLOQUEIOS_RESERVADOS.includes(c));
     await registrarAuditoria({ tabela: "MinisterioMenoresRetiradas", registroId: retiradaId, acao: "MENORES_RETIRADO_DA_ESCALA", usuarioId: null,
-      dadosDepois: { membroId: par.membroId, equipeId: par.equipeId, alocacoesCanceladas: par.alocacoes.length } });
+      dadosDepois: { ...(reservado ? {} : { membroId: par.membroId }), equipeId: par.equipeId, alocacoesCanceladas: par.alocacoes.length } });
     feitos.push({ ...par, retiradaId });
   }
 
@@ -381,7 +402,14 @@ async function retirarInaptosDasEscalas(pool, { hoje = hojeBrasilia(), membroId 
         referenciaId: f.retiradaId, referenciaTabela: "MinisterioMenoresRetiradas", deps });
     }
   }
-  return { retirados: porMembro.size, alocacoes: feitos.reduce((s, f) => s + f.alocacoes.length, 0) };
+  const resultado = { retirados: porMembro.size, alocacoes: feitos.reduce((s, f) => s + f.alocacoes.length, 0) };
+  if (erros.length) {
+    // Os pares que deram certo já foram gravados e avisados; os que falharam ficam para a próxima rodada. Quem chama precisa SABER (a rotina diária vira alerta).
+    const e = new Error(`A retirada automática falhou em ${erros.length} de ${pares.size} par(es) pessoa×equipe: ${erros[0].message}`);
+    e.parcial = resultado;
+    throw e;
+  }
+  return resultado;
 }
 
 // ---------------------------------------------------------------
@@ -409,10 +437,26 @@ async function voluntariosComMenores(pool, { congregacaoIds = null } = {}) {
   return [...porMembro.values()];
 }
 
-async function linhasDoPainel(pool, { congregacaoIds = null, hoje = hojeBrasilia() } = {}) {
+// `cache`: só os detectores diários o usam — os quatro precisam das mesmas linhas, e a conta (a aptidão de todos) é a parte cara. O painel da tela nunca usa cache.
+const CACHE_LINHAS = { hoje: null, em: 0, pool: null, linhas: null };
+async function linhasDoPainel(pool, { congregacaoIds = null, hoje = hojeBrasilia(), cache = false } = {}) {
+  if (cache && !congregacaoIds && CACHE_LINHAS.linhas && CACHE_LINHAS.hoje === hoje && CACHE_LINHAS.pool === pool && Date.now() - CACHE_LINHAS.em < 60000) return CACHE_LINHAS.linhas;
   const pessoas = await voluntariosComMenores(pool, { congregacaoIds });
   const aptidoes = await aptidaoEmLote(pool, pessoas.map((p) => p.membroId), { hoje });
-  return pessoas.map((p) => ({ ...p, aptidao: aptidoes.get(p.membroId) }));
+  const linhas = pessoas.map((p) => ({ ...p, aptidao: aptidoes.get(p.membroId) }));
+  if (cache && !congregacaoIds) Object.assign(CACHE_LINHAS, { hoje, em: Date.now(), pool, linhas });
+  return linhas;
+}
+function limparCacheDoPainel() { Object.assign(CACHE_LINHAS, { hoje: null, em: 0, pool: null, linhas: null }); }
+
+// Equipes que PARECEM de crianças pelo nome mas ainda não têm a marca "contato com menores" (a marca nasce desligada): a Secretaria precisa conferir, senão a equipe nova de crianças
+// fica sem nenhuma proteção. É só um aviso na tela — quem decide é a Secretaria.
+async function equipesSemMarcaQueParecemInfantis(pool, { congregacaoIds = null } = {}) {
+  const rq = pool.request();
+  let filtro = "";
+  if (congregacaoIds) { if (!congregacaoIds.length) return []; filtro = ` AND e.CongregacaoId IN (${listaIn(rq, "c", congregacaoIds)})`; }
+  const r = await rq.query(`SELECT e.EquipeId, e.Nome, e.CongregacaoId, c.Nome AS CongregacaoNome FROM EscalasEquipes e JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId WHERE e.Ativa = 1 AND e.ContatoComMenores = 0${filtro} ORDER BY c.Nome, e.Nome`);
+  return r.recordset.filter((x) => mm.nomeSugereMenores(x.Nome)).map((x) => ({ equipeId: x.EquipeId, nome: x.Nome, congregacaoId: x.CongregacaoId, congregacaoNome: x.CongregacaoNome }));
 }
 
 // O painel de conformidade: o campo inteiro para a Secretaria Geral, a congregação para o dirigente. `reservado` = quem é da Diretoria (vê o motivo de
@@ -427,7 +471,7 @@ async function painel(pool, { congregacaoIds = null, reservado = false, hoje = h
       validades: reservado ? l.aptidao.validades : mm.validadesParaGestao(l.aptidao.validades)
     };
   }).sort((a, b) => ({ BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[a.status] - { BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[b.status]) || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
-  return { resumo: mm.resumirPainel(linhas, { reservado }), porCongregacao: mm.agruparPorCongregacao(linhas, { reservado }), voluntarios: itens };
+  return { resumo: mm.resumirPainel(linhas, { reservado }), porCongregacao: mm.agruparPorCongregacao(linhas, { reservado }), voluntarios: itens, equipesSemMarca: await equipesSemMarcaQueParecemInfantis(pool, { congregacaoIds }) };
 }
 
 // ---------------------------------------------------------------
@@ -535,11 +579,14 @@ async function declararAutoDenuncia(pool, { membroId, dados, hoje = hojeBrasilia
   }
   const id = r.recordset[0].id;
   // A trilha só diz que houve a comunicação: nem o tipo nem a data (quem lê a auditoria não é a Diretoria).
-  await registrarAuditoria({ tabela: "MinisterioMenoresAutoDenuncias", registroId: id, acao: "MENORES_AUTODENUNCIA", usuarioId: membroId, dadosDepois: {} });
-  // Por cautela, o contato com menores já fica suspenso (a aptidão enxerga a comunicação em aberto): tira das escalas futuras agora, sem esperar a rotina.
-  const retirada = await retirarInaptosDasEscalas(pool, { hoje, membroId, deps });
+  // A trilha NÃO diz quem comunicou nem o quê (quem lê a auditoria não é a Diretoria, e o ato é reservado): registroId 0 e nenhum usuário. O elo fica só na tabela, restrita.
+  await registrarAuditoria({ tabela: "MinisterioMenoresAutoDenuncias", registroId: 0, acao: "MENORES_AUTODENUNCIA", usuarioId: null, dadosDepois: {} });
+  // Por cautela, o contato com menores já fica suspenso (a aptidão enxerga a comunicação em aberto): tira das escalas futuras agora, sem esperar a rotina. Se a retirada
+  // falhar, a comunicação já está gravada: a Diretoria é avisada do mesmo jeito e a rotina diária refaz a retirada.
+  let retirada = { alocacoes: 0 };
+  try { retirada = await retirarInaptosDasEscalas(pool, { hoje, membroId, deps }); } catch (e) { retirada = { alocacoes: 0, falhou: true }; }
   const dir = await diretoria(pool);
-  if (dir.length) await notificarAgora(pool, { regraChave: "MENORES_AUTODENUNCIA", destinatarios: dir, mensagem: mm.textoAutoDenuncia({ nome: m.Nome, tipo: v.dados.tipo }), referenciaId: id, referenciaTabela: "MinisterioMenoresAutoDenuncias", deps });
+  if (dir.length) await notificarAgora(pool, { regraChave: "MENORES_AUTODENUNCIA", destinatarios: dir, mensagem: mm.textoAutoDenuncia(), referenciaId: id, referenciaTabela: "MinisterioMenoresAutoDenuncias", deps });
   await notificarAgora(pool, { regraChave: "MENORES_AUTODENUNCIA_DECIDIDA", destinatarios: [destinatarioDe(m)], mensagem: mm.textoAutoDenunciaPessoa(), referenciaId: id * 2, referenciaTabela: "MinisterioMenoresAutoDenuncias", limiteDia: 2, deps });
   return { sucesso: true, autoDenunciaId: id, escalasDesmarcadas: retirada.alocacoes, mensagem: "Comunicação recebida pela Diretoria Executiva. Obrigado por avisar. Por cautela, o seu contato com menores fica suspenso até a decisão, o que não é punição e não afeta os seus outros serviços." };
 }
@@ -615,7 +662,9 @@ function unicosPorMembro(lista) {
 // A escada de avisos de vencimento (60, 30 e 15 dias). Uma rodada por degrau, cada uma ligada à sua regra. Quem já está bloqueado não recebe aviso de vencimento
 // (o aviso útil, então, é o do próprio bloqueio). A referência leva o ciclo de validade: a renovação reabre a escada.
 async function detectarVencimentos(pool, { faixa, hoje = hojeBrasilia() } = {}) {
-  const linhas = await linhasDoPainel(pool, { hoje });
+  const linhas = await linhasDoPainel(pool, { hoje, cache: true });
+  const gestores = new Map();       // a secretaria é buscada UMA vez por congregação na rodada
+  const gestoresDe = async (congregacaoId) => { if (!gestores.has(congregacaoId)) gestores.set(congregacaoId, await gestoresDaCongregacao(pool, congregacaoId)); return gestores.get(congregacaoId); };
   const fatos = [];
   for (const l of linhas) {
     const ap = l.aptidao;
@@ -629,7 +678,7 @@ async function detectarVencimentos(pool, { faixa, hoje = hojeBrasilia() } = {}) 
     // Os líderes das equipes e a secretaria da congregação sabem com a mesma antecedência (não é só problema do voluntário).
     const lideres = [];
     for (const e of l.equipes) if (e.liderMembroId && e.liderMembroId !== l.membroId) { const d = await lerEmail(pool, e.liderMembroId); if (d) lideres.push(d); }
-    const destinatarios = unicosPorMembro([...lideres, ...(await gestoresDaCongregacao(pool, l.congregacaoId))]).filter((d) => d.membroId !== l.membroId);
+    const destinatarios = unicosPorMembro([...lideres, ...(await gestoresDe(l.congregacaoId))]).filter((d) => d.membroId !== l.membroId);
     if (destinatarios.length) {
       const lista = itens.map((i) => `${i.rotulo} (${mm.formatarDataBr(i.data)})`).join(", ");
       fatos.push({ referenciaId, destinatarios, fatoGerador: `Ministério com menores: a habilitação de ${l.nome} vence em até ${faixa} dias — ${lista}. Acompanhe a renovação: no dia do vencimento a pessoa sai automaticamente das escalas com menores.`.slice(0, 1000) });
@@ -643,8 +692,10 @@ async function detectarSalasSemSegundoAdulto(pool, { hoje = hojeBrasilia() } = {
   const dias = await lerPrazoDias(pool, mm.SIGLAS_PRAZO.salaAlertaDias, mm.SALA_ALERTA_DIAS_PADRAO);
   const rq = pool.request().input("hoje", sql.Date, hoje).input("ate", sql.Date, mm.somarDiasIso(hoje, dias));
   const servicos = (await rq.query(`
-    SELECT DISTINCT s.ServicoId FROM EscalasServicos s JOIN EscalasAlocacoes a ON a.ServicoId = s.ServicoId JOIN EscalasEquipes e ON e.EquipeId = a.EquipeId AND e.ContatoComMenores = 1
-    WHERE s.Status = 'PUBLICADA' AND CAST(s.DataHora AS DATE) BETWEEN @hoje AND @ate AND a.Status IN (${STATUS_ATIVOS_SQL})`)).recordset.map((x) => x.ServicoId);
+    SELECT s.ServicoId FROM EscalasServicos s
+    WHERE s.Status = 'PUBLICADA' AND CAST(s.DataHora AS DATE) BETWEEN @hoje AND @ate AND (
+      EXISTS (SELECT 1 FROM EscalasAlocacoes a JOIN EscalasEquipes e ON e.EquipeId = a.EquipeId AND e.ContatoComMenores = 1 WHERE a.ServicoId = s.ServicoId AND a.Status IN (${STATUS_ATIVOS_SQL}))
+      OR EXISTS (SELECT 1 FROM MinisterioMenoresSalas sa JOIN EscalasEquipes e ON e.EquipeId = sa.EquipeId AND e.ContatoComMenores = 1 WHERE sa.ServicoId = s.ServicoId AND sa.CriancasPrevistas > 0))`)).recordset.map((x) => x.ServicoId);
   if (!servicos.length) return [];
   const salas = await salasDosServicos(pool, servicos, { hoje });
   const fatos = [];
@@ -654,15 +705,15 @@ async function detectarSalasSemSegundoAdulto(pool, { hoje = hojeBrasilia() } = {
     const lider = s.liderMembroId ? await lerEmail(pool, s.liderMembroId) : null;
     const destinatarios = unicosPorMembro([lider, ...(await gestoresDaCongregacao(pool, s.congregacaoId))]);
     if (!destinatarios.length) continue;
-    const quando = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }).format(s.dataHora instanceof Date ? s.dataHora : new Date(s.dataHora));
-    fatos.push({ referenciaId: s.servicoId * 1000 + (s.equipeId % 1000), destinatarios, fatoGerador: mm.textoSalaSemAdulto({ equipe: s.equipeNome, dataHora: quando, adultos: s.adultos, necessarios: s.avaliacao.necessarios }) });
+    const quando = new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC", dateStyle: "short", timeStyle: "short" }).format(s.dataHora instanceof Date ? s.dataHora : new Date(s.dataHora));
+    fatos.push({ referenciaId: mm.referenciaDaSala(s.servicoId, s.equipeId, s.adultos), destinatarios, fatoGerador: mm.textoSalaSemAdulto({ equipe: s.equipeNome, dataHora: quando, adultos: s.adultos, necessarios: s.avaliacao.necessarios }) });
   }
   return fatos;
 }
 
 // Aviso mensal à Diretoria: quem serve com menores e precisa de certidões novas (já sem elas, ou vencendo em 60 dias).
 async function detectarVistoriasARenovar(pool, { hoje = hojeBrasilia() } = {}) {
-  const linhas = await linhasDoPainel(pool, { hoje });
+  const linhas = await linhasDoPainel(pool, { hoje, cache: true });
   const nomes = [];
   for (const l of linhas) {
     const v = l.aptidao.validades.antecedentes;
@@ -679,7 +730,7 @@ async function detectarVistoriasARenovar(pool, { hoje = hojeBrasilia() } = {}) {
 // A decisão pendente é cobrada da Diretoria todo dia, até sair. A referência leva os dias desde a declaração (cada dia é um aviso).
 async function detectarAutoDenunciaPendente(pool, { hoje = hojeBrasilia() } = {}) {
   const lembrete = await lerPrazoDias(pool, mm.SIGLAS_PRAZO.autodenunciaLembreteDias, mm.AUTODENUNCIA_LEMBRETE_DIAS_PADRAO);
-  const r = await pool.request().query(`SELECT a.AutoDenunciaId, a.DeclaradaEm, m.Nome FROM MinisterioMenoresAutoDenuncias a JOIN MembroReferencia m ON m.MembroId = a.MembroId WHERE a.Decisao IS NULL`);
+  const r = await pool.request().query(`SELECT a.AutoDenunciaId, a.DeclaradaEm FROM MinisterioMenoresAutoDenuncias a WHERE a.Decisao IS NULL`);
   if (!r.recordset.length) return [];
   const dir = await diretoria(pool);
   if (!dir.length) return [];
@@ -689,7 +740,7 @@ async function detectarAutoDenunciaPendente(pool, { hoje = hojeBrasilia() } = {}
     if (!declarada) continue;
     const dias = mm.diasEntreIso(declarada, hoje);
     if (dias < lembrete) continue;
-    fatos.push({ referenciaId: x.AutoDenunciaId * 1000 + Math.min(dias, 999), destinatarios: dir, fatoGerador: mm.textoAutoDenunciaPendente({ nome: x.Nome, dias }) });
+    fatos.push({ referenciaId: x.AutoDenunciaId * 1000 + Math.min(dias, 999), destinatarios: dir, fatoGerador: mm.textoAutoDenunciaPendente({ dias }) });
   }
   return fatos;
 }
@@ -727,9 +778,9 @@ async function dadosDoTitular(pool, membroId) {
 }
 
 module.exports = {
-  lerPrazos, lerPrazosFaixas, carregarFatos, aptidaoEmLote, aptidaoDe, equipeComMenores, aptosParaEquipe, motivoCurto, conferirParaServir, antecedentesDe,
+  lerPrazos, lerPrazosFaixas, carregarFatos, aptidaoEmLote, aptidaoDe, equipeComMenores, aptosParaEquipe, motivoCurto, conferirParaServir, trocaPreservaAdultos, antecedentesDe,
   salasDosServicos, avaliarPublicacao, definirFaixaEquipe, definirCriancasPrevistas, criancasPrevistasDoServico,
-  retirarInaptosDasEscalas, voluntariosComMenores, linhasDoPainel, painel, minhaSituacao,
+  retirarInaptosDasEscalas, voluntariosComMenores, linhasDoPainel, limparCacheDoPainel, equipesSemMarcaQueParecemInfantis, painel, minhaSituacao,
   aceitarPolitica, registrarPoliticaManual, confirmarFicha,
   declararAutoDenuncia, listarAutoDenuncias, decidirAutoDenuncia, liberarAutoDenuncia, mapearAutoDenuncia,
   detectarVencimentos, detectarSalasSemSegundoAdulto, detectarVistoriasARenovar, detectarAutoDenunciaPendente,

@@ -130,12 +130,13 @@ describe("auto-denúncia", () => {
     expect(r).toMatchObject({ sucesso: true, autoDenunciaId: 31 });
     const ins = escritas().find((c) => /INSERT INTO MinisterioMenoresAutoDenuncias/.test(c.sql));
     expect(ins.inputs).toMatchObject({ m: 20, t: "INQUERITO_POLICIAL", d: "2026-09-20" });
-    expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "MENORES_AUTODENUNCIA", registroId: 31, usuarioId: 20, dadosDepois: {} });
+    // a auditoria é lida por quem tem a permissão "auditoria" (que pode não ser da Diretoria): nem quem comunicou (usuarioId), nem qual comunicação (registroId) — o elo fica só na tabela
+    expect(registrarAuditoria.mock.calls[0][0]).toEqual({ tabela: "MinisterioMenoresAutoDenuncias", registroId: 0, acao: "MENORES_AUTODENUNCIA", usuarioId: null, dadosDepois: {} });
     expect(resolverDestinatariosPorPermissao).toHaveBeenCalledWith(expect.anything(), { permissao: "vistoria_antecedentes", nivel: "GLOBAL" });
     const avisoDir = notificarAgora.mock.calls.find((c) => c[1].regraChave === "MENORES_AUTODENUNCIA")[1];
     expect(avisoDir.destinatarios.map((d) => d.membroId)).toEqual([1, 2]);
-    expect(avisoDir.mensagem).toMatch(/Ana Souza comunicou/);
-    expect(avisoDir.mensagem).not.toMatch(/2026-09-20|20\/09/);               // nem a data vai no aviso
+    expect(avisoDir.mensagem).toMatch(/aguardando a decisão da Diretoria/);
+    expect(avisoDir.mensagem).not.toMatch(/Ana|Souza|2026-09-20|20\/09|inquérito/i);      // o e-mail não leva nome, data nem tipo
     const avisoPessoa = notificarAgora.mock.calls.find((c) => c[1].regraChave === "MENORES_AUTODENUNCIA_DECIDIDA")[1];
     expect(avisoPessoa.destinatarios[0].membroId).toBe(20);
     expect(avisoPessoa.mensagem).toMatch(/não é punição/);

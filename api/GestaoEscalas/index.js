@@ -186,8 +186,11 @@ module.exports = async function (context, req) {
       if (!nome || !auth.estaNoEscopo(usuario, nome)) return erro(context, 403, "Fora do seu escopo de atuação.");
       const alocacoes = await es.buscarAlocacoesAtivasDoServico(pool, servicoId);
       // v7.7: as salas com menores deste serviço (crianças previstas, adultos habilitados, quantos são necessários) para o líder ver antes de publicar.
-      const menores = await mmDb.avaliarPublicacao(pool, servicoId);
-      context.res = { status: 200, body: { sucesso: true, servico, alocacoes, menores } };
+      // As salas com menores trazem nomes de voluntários sem habilitação: só para quem administra escalas ou lidera uma equipe (quem tem qualquer outro cargo com a congregação
+      // no escopo, como o tesoureiro local, não vê).
+      const veMenores = auth.temPermissao(usuario, "escalas") || (await vdb.lideraAlgumaEquipe(pool, { membroId: usuario.membroId }));
+      const menores = veMenores ? await mmDb.avaliarPublicacao(pool, servicoId) : null;
+      context.res = { status: 200, body: { sucesso: true, servico, alocacoes, ...(menores ? { menores } : {}) } };
       return;
     }
 
@@ -292,7 +295,7 @@ module.exports = async function (context, req) {
         const alocacoesExistentes = await es.buscarAlocacoesAtivasDoServico(pool, alocacao.servicoId);
         const fila = es.ordenarCandidatosElegiveis(candidatos, servico.dataHora)
           .map(c => c.membroId)
-          .filter(id => !alocacoesExistentes.some(a => a.membroId === id && a.equipeId !== alocacao.equipeId && es.STATUS_ALOCACAO_ATIVOS.includes(a.status)));
+          .filter(id => !alocacoesExistentes.some(a => a.membroId === id && es.STATUS_ALOCACAO_ATIVOS.includes(a.status)));       // quem já segura QUALQUER posto neste serviço (inclusive nesta equipe) não é convidado de novo
         const { proximoConvidado } = es.proximoConviteAposRecusa(fila, alocacao.membroId, []);
         if (proximoConvidado) {
           await es.gravarAlocacao(pool, { servicoId: alocacao.servicoId, equipeId: alocacao.equipeId, membroId: proximoConvidado, ordemConvite: (alocacao.ordemConvite || 1) + 1 });
@@ -389,6 +392,8 @@ module.exports = async function (context, req) {
         if (destinoSemAdesao.has(destinoId)) return erro(context, 422, destinoSemAdesao.get(destinoId));
         const destinoMenores = await mmDb.conferirParaServir(pool, { equipeId: alocacao.equipeId, membroId: destinoId });       // v7.7: o destino também precisa estar habilitado
         if (!destinoMenores.ok) return erro(context, 422, destinoMenores.mensagem);
+        const adultos = await mmDb.trocaPreservaAdultos(pool, { equipeId: alocacao.equipeId, origemId: usuario.membroId, destinoId });       // v7.7: a sala com menores não perde um adulto na troca
+        if (!adultos.ok) return erro(context, 422, adultos.mensagem);
         const trocaId = await es.criarTroca(pool, { alocacaoOrigemId, membroDestinoId, solicitadaPorMembroId: usuario.membroId });
         context.res = { status: 201, body: { sucesso: true, trocaId, mensagem: "✅ Pedido de troca enviado ao líder da equipe." } };
         return;
@@ -419,6 +424,8 @@ module.exports = async function (context, req) {
         // v7.7: e entre o pedido e a aprovação a habilitação do destino pode ter vencido.
         const destinoMenores = await mmDb.conferirParaServir(pool, { equipeId: troca.equipeId, membroId: troca.membroDestinoId, visao: "LIDER" });
         if (!destinoMenores.ok) return erro(context, 422, `Não dá para aprovar: ${destinoMenores.mensagem}`);
+        const adultos = await mmDb.trocaPreservaAdultos(pool, { equipeId: troca.equipeId, origemId: troca.membroOrigemId, destinoId: troca.membroDestinoId });
+        if (!adultos.ok) return erro(context, 422, `Não dá para aprovar: ${adultos.mensagem}`);
       }
       const resultado = await es.decidirTroca(pool, { trocaId, aprovar, observacao, decididoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };

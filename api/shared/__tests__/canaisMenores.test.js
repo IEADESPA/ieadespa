@@ -151,6 +151,14 @@ describe("regra pura: validação da matrícula do responsável", () => {
     expect(c.validarCanal({ ...BASE, incluiMenores: false, responsavelAcessoMembroId: 7 }).dados).toMatchObject({ incluiMenores: false, responsavelAcessoMembroId: null });
     expect(c.validarCanal({ ...BASE, responsavelAcessoMembroId: 7 }).dados.responsavelAcessoMembroId).toBeNull();
   });
+
+  test("canal que inclui menores NÃO pode ser público no site (o convite de um grupo com crianças não se divulga); sem a marca, segue livre", () => {
+    const r = c.validarCanal({ ...BASE, incluiMenores: true, responsavelAcessoMembroId: 7, publicoNoSite: true });
+    expect(r.valido).toBe(false);
+    expect(r.mensagem).toMatch(/não pode ser divulgado no site/);
+    expect(c.validarCanal({ ...BASE, incluiMenores: true, responsavelAcessoMembroId: 7, publicoNoSite: false }).valido).toBe(true);
+    expect(c.validarCanal({ ...BASE, incluiMenores: false, publicoNoSite: true }).valido).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -310,10 +318,10 @@ describe("estado dos canais: a habilitação só é calculada onde há menores",
 
 describe("registro e edição do canal: o responsável com acesso", () => {
   test.each([
-    [71, /situação ATIVO/],
-    [72, /precisa ser adulto/],
-    [73, /precisa ser adulto/],
-    [999, /não encontrada/]
+    [71, /membro ATIVO e adulto/],
+    [72, /membro ATIVO e adulto/],
+    [73, /membro ATIVO e adulto/],
+    [999, /membro ATIVO e adulto/]
   ])("registrar com o responsável %p é recusado (422), sem gravar, e a mensagem não cita nome", async (id, msg) => {
     const { pool, consultas } = cenario();
     const r = await db.criarCanal(pool, ctx(), dadosCanal({ incluiMenores: true, responsavelAcessoMembroId: id }), { membroId: 1 });
@@ -362,7 +370,7 @@ describe("registro e edição do canal: o responsável com acesso", () => {
 
     const outro = cenario({ canal: linhaCanal({ IncluiMenores: 1, ResponsavelAcessoMembroId: 70 }), admins: [linhaAdmin(1, 9), linhaAdmin(2, 10)] });
     const ruim = await db.atualizarCanal(outro.pool, ctx(), 5, { responsavelAcessoMembroId: 72 }, { membroId: 1 });
-    expect(ruim).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/precisa ser adulto/) });
+    expect(ruim).toMatchObject({ sucesso: false, mensagem: expect.stringMatching(/membro ATIVO e adulto/) });
     expect(escritas(outro.consultas)).toHaveLength(0);
     const bom = await db.atualizarCanal(outro.pool, ctx(), 5, { responsavelAcessoMembroId: 74 }, { membroId: 1 });
     expect(bom.sucesso).toBe(true);
@@ -544,9 +552,9 @@ describe("definirResponsavelAcesso (a rota canais/responsavel-acesso)", () => {
   test("recusas: o mesmo responsável, inativo, menor, matrícula inexistente, canal sem a marca, canal desativado, canal inexistente — nenhuma grava", async () => {
     const casos = [
       [linhaCanal({ IncluiMenores: 1, ResponsavelAcessoMembroId: 70 }), 70, /já é o responsável/],
-      [linhaCanal({ IncluiMenores: 1 }), 71, /situação ATIVO/],
-      [linhaCanal({ IncluiMenores: 1 }), 72, /precisa ser adulto/],
-      [linhaCanal({ IncluiMenores: 1 }), 999, /não encontrada/],
+      [linhaCanal({ IncluiMenores: 1 }), 71, /membro ATIVO e adulto/],
+      [linhaCanal({ IncluiMenores: 1 }), 72, /membro ATIVO e adulto/],
+      [linhaCanal({ IncluiMenores: 1 }), 999, /membro ATIVO e adulto/],
       [linhaCanal({ IncluiMenores: 0 }), 70, /não está marcado como “inclui crianças\/adolescentes”/],
       [linhaCanal({ IncluiMenores: 1, Ativo: 0 }), 70, /desativado/]
     ];

@@ -270,10 +270,12 @@ function mensagemDeErroDoBanco(e) {
 // nome: quem indica pode estar digitando a matrícula de alguém de outra congregação, e o que o sistema devolve não pode virar consulta de cadastro alheio.
 async function conferirResponsavelDeAcesso(pool, membroId, { hoje = hojeBrasilia() } = {}) {
   const m = (await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, Status, DataNascimento FROM MembroReferencia WHERE MembroId = @id`)).recordset[0];
-  if (!m) return "Matrícula do responsável com acesso não encontrada.";
-  if (m.Status !== "ATIVO") return "O responsável com acesso precisa ser membro com a situação ATIVO no cadastro.";
+  // UMA mensagem para os três casos (não existe, não está ativo, não é adulto): quem tem canais_gestao digita matrículas de qualquer congregação, e três mensagens virariam um
+  // oráculo de cadastro alheio.
+  const RECUSA = "Essa matrícula não pode ser indicada como responsável com acesso: precisa ser de um membro ATIVO e adulto (18 anos completos).";
+  if (!m || m.Status !== "ATIVO") return RECUSA;
   const idade = idadeEmAnos(m.DataNascimento, hoje);
-  if (idade == null || idade < 18) return "O responsável com acesso precisa ser adulto (18 anos completos, pela data de nascimento do cadastro).";
+  if (idade == null || idade < 18) return RECUSA;
   return null;
 }
 
@@ -1070,7 +1072,7 @@ async function listarParaContato(pool, ctx, { comIdentificador = false } = {}) {
 async function canaisPublicos(pool, ctx) {
   const lista = await carregarCanais(pool, ctx, { incluirInativos: false });
   const ordemEscopo = { CAMPO: 0, AREA: 1, DEPARTAMENTO: 2, CONGREGACAO: 3 };
-  return lista.filter(c => c.publicoNoSite && c.plataforma && c.identificador && c.categoria !== "GRUPO_FOCADO")
+  return lista.filter(c => c.publicoNoSite && !c.incluiMenores && c.plataforma && c.identificador && c.categoria !== "GRUPO_FOCADO")
     .sort((a, b) => ordemEscopo[a.escopo] - ordemEscopo[b.escopo] || a.nome.localeCompare(b.nome, "pt-BR"))
     .map(c => ({
       id: c.canalId, nome: c.nome, plataforma: c.plataforma, rotuloPlataforma: c.rotuloPlataforma, categoria: c.categoria,

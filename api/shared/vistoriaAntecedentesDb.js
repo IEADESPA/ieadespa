@@ -115,7 +115,10 @@ async function lavrarVistoria(pool, { dados, por, hoje = hojeBrasilia() }) {
   } catch (e) { await fecharTransacao(transaction, false); throw e; }
   // O sigilo do Art. 133 §5º, IV, "a": a trilha (imutável, lida por quem tem "auditoria") leva só o número de certidões; o resultado, o motivo e o parecer ficam no termo.
   await registrarAuditoria({ tabela: "VistoriasAntecedentes", registroId: id, acao: "VISTORIA_LAVRADA", usuarioId: por, dadosDepois: { documentos: d.documentos.length } });
-  return { sucesso: true, mensagem: `Termo de Vistoria de ${membro.Nome} lavrado e assinado por você${d.resultado === "RECUSA" ? ": a recusa implica impedimento ou afastamento preventivo da função (Art. 133 §5º, I, “a”), que a Diretoria aplica" : ""}.`, vistoria: await detalharVistoria(pool, id) };
+  // v7.7: uma vistoria com restrição ou recusa tira a pessoa das escalas com menores AGORA (não espera a rotina do dia seguinte: pode haver culto no meio). Fail-soft: a rotina refaz.
+  const vistoriaLavrada = await detalharVistoria(pool, id);
+  if (d.resultado !== "SEM_RESTRICAO") { try { await require("./ministerioMenoresDb").retirarInaptosDasEscalas(pool, { membroId: d.membroId }); } catch (e) { /* a rotina diária refaz */ } }
+  return { sucesso: true, mensagem: `Termo de Vistoria de ${membro.Nome} lavrado e assinado por você${d.resultado === "RECUSA" ? ": a recusa implica impedimento ou afastamento preventivo da função (Art. 133 §5º, I, “a”), que a Diretoria aplica" : ""}.`, vistoria: vistoriaLavrada };
 }
 
 // Anula um termo lavrado por engano (matrícula errada...): um registro à parte, só de acréscimo; o termo continua lá, marcado como anulado, e deixa de contar.
@@ -134,7 +137,10 @@ async function anularVistoria(pool, { dados, por }) {
     throw e;
   }
   await registrarAuditoria({ tabela: "VistoriasAntecedentes", registroId: id, acao: "VISTORIA_ANULADA", usuarioId: por, dadosDepois: { motivoTamanho: v.dados.motivo.length } });
-  return { sucesso: true, mensagem: "Termo anulado: ele continua registrado, marcado como anulado, e deixa de contar como a vistoria dessa pessoa.", vistoria: await detalharVistoria(pool, id) };
+  // v7.7: anular o termo que sustentava a habilitação de quem serve com menores também tira a pessoa das escalas com menores na hora (se não houver outra vistoria válida).
+  const vistoriaAnulada = await detalharVistoria(pool, id);
+  try { await require("./ministerioMenoresDb").retirarInaptosDasEscalas(pool, { membroId: termo.membroId }); } catch (e) { /* a rotina diária refaz */ }
+  return { sucesso: true, mensagem: "Termo anulado: ele continua registrado, marcado como anulado, e deixa de contar como a vistoria dessa pessoa.", vistoria: vistoriaAnulada };
 }
 
 // A última vistoria VÁLIDA (não anulada) da pessoa, para outras telas e para a v7.7. null = nunca vistoriada.

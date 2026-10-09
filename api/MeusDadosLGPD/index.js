@@ -15,6 +15,8 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const storage = require("../shared/storage");
 const auth = require("../shared/auth");
 const voluntariadoDb = require("../shared/voluntariadoDb");
+const setoresTecnicosDb = require("../shared/setoresTecnicosDb");
+const vistoriaDb = require("../shared/vistoriaAntecedentesDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -109,6 +111,9 @@ module.exports = async function (context, req) {
 
   // v7.5 — voluntariado (adesão com IP e cabeçalhos, equipes, serviços, remoções): lido só aqui, a pedido do titular; nenhuma rotina exporta isto.
   const voluntariado = await voluntariadoDb.dadosDoTitular(pool, alvo);
+  // v7.6 — Setores Técnicos (vínculos, Termo com IP, atos cautelares que a pessoa emitiu) e os Termos de Vistoria de antecedentes feitos sobre ela.
+  const setoresTecnicos = await setoresTecnicosDb.dadosDoTitular(pool, alvo);
+  const vistoriasAntecedentes = await vistoriaDb.dadosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -127,7 +132,9 @@ module.exports = async function (context, req) {
       solicitacoesLgpd: solicitacoes.recordset,
       casamentos: casamentos.recordset,
       licencasCandidatura: licencasCandidatura.recordset,
-      voluntariado
+      voluntariado,
+      setoresTecnicos,
+      vistoriasAntecedentes
     }
   };
 };

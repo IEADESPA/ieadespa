@@ -141,6 +141,8 @@ const calendarioDb = require("./calendarioDb");
 const canaisDb = require("./canaisDb");
 const eventosDb = require("./eventosDb");
 const voluntariadoDb = require("./voluntariadoDb");
+const setoresTecnicosDb = require("./setoresTecnicosDb");
+const vistoriaDb = require("./vistoriaAntecedentesDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -181,7 +183,13 @@ const DETECTORES = {
   // Voluntariado (v7.5): remoção da escala, vaga aberta e rodízio publicado avisam NA HORA, no ato (sem detector); aqui ficam a trava de
   // habitualidade (Art. 135 §1º, II — quem serve escala após escala numa equipe operacional) e o Termo de Adesão ainda sem registro (Art. 133 §8º).
   ESCALA_HABITUALIDADE: { tabela: "EscalasEquipes", detectar: (pool) => voluntariadoDb.detectarHabitualidade(pool) },
-  VOLUNTARIADO_TERMO_PENDENTE: { tabela: "VoluntariadoAdesoes", detectar: (pool) => voluntariadoDb.detectarTermosPendentes(pool) }
+  VOLUNTARIADO_TERMO_PENDENTE: { tabela: "VoluntariadoAdesoes", detectar: (pool) => voluntariadoDb.detectarTermosPendentes(pool) },
+  // Setores Técnicos (v7.6): a indicação, a candidatura, a interdição emitida, a decisão sobre ela e o pedido de remoção avisam NA HORA, no ato (sem detector); aqui
+  // ficam a cobrança DIÁRIA da Diretoria pela interdição sem ratificação e do pedido de remoção ainda não atendido (Art. 50), e o aviso mensal das lideranças
+  // em exercício sem Termo de Vistoria de antecedentes (Art. 133 §5º, II, "a").
+  SETOR_INTERDICAO_PENDENTE: { tabela: "SetoresTecnicosIntervencoes", detectar: (pool) => setoresTecnicosDb.detectarInterdicoesPendentes(pool) },
+  SETOR_REMOCAO_PENDENTE: { tabela: "SetoresTecnicosIntervencoes", detectar: (pool) => setoresTecnicosDb.detectarRemocoesPendentes(pool) },
+  VISTORIA_PENDENTES: { tabela: "VistoriasAntecedentes", detectar: (pool) => vistoriaDb.detectarLiderancasSemVistoria(pool) }
 };
 
 module.exports = { DETECTORES };

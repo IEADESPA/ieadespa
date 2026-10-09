@@ -61,6 +61,9 @@ const AJUDA_POR_ABA = {
   "meupainel:canais": "Se você administra um canal oficial, aceite aqui o Termo de Dever de Moderação e trate as ocorrências em até 24 horas. Qualquer pessoa pode avisar um conteúdo irregular num canal oficial e acompanhar o aviso.",
   eventos: "Dossiê de governança do evento do Calendário: organizadores, convidados externos (parecer do Conselho de Ética e Nada Consta da Presidência — Art. 111 e 111-A) e Caixa Flutuante (superávit recolhido à Sede ou convertido em benfeitoria — Art. 53-E §2º). Inscrição, check-in e certificado ficam no site.",
   "meupainel:eventos": "Se você organiza um evento (propôs no Calendário ou foi designado), registre aqui os convidados externos e o Caixa Flutuante do evento. Inscrição, lista de espera, check-in e certificado ficam no site — use os links do cartão.",
+  setores: "Os 20 Setores Técnicos do Regimento (Art. 48 a 52): quem serve em cada um (candidatura, aprovação e Termo de Adesão) e os atos cautelares — a interdição de templo em risco, que vale na hora e a Diretoria ratifica ou revoga, e o pedido de remoção de postagem nas redes oficiais. Voluntariado profissional: ninguém recebe salário nem honorário.",
+  "meupainel:setores": "Sua situação nos Setores Técnicos: candidate-se a um setor da sua profissão, leia e aceite o Termo de Adesão quando for aprovado(a) e saia quando quiser, sem penalidade. Quem serve em Engenharia ou Segurança pode interditar um templo em risco; quem serve em Comunicação pode pedir a remoção de uma postagem. O líder da congregação vê aqui os atos dela.",
+  vistoria: "Termo de Vistoria de antecedentes (Art. 133 §5º), só da Diretoria Executiva e do Conselho de Ética: veja quem falta, lavre o Termo e solicite certidões. A certidão nunca sobe ao sistema: o navegador calcula o código (hash) do arquivo e só ele é enviado.",
   protecaodedados: "Solicitações de titular (LGPD), políticas de retenção e o Registro de Operações de Tratamento (ROPA/RIPD)."
 };
 function alternarAjudaContextual() {
@@ -1220,7 +1223,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "eventos"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "eventos", "setores", "vistoria"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1293,6 +1296,13 @@ const ABA_PERMISSOES_ALT = {
   // para conferir" aparece. Quem só organiza um evento age em Meu Painel → Eventos. O backend
   // confere cada ação.
   eventos: ["eventos_gestao", "eventos_etica", "eventos_presidencia", "financeiro"],
+  // v7.6 — Setores Técnicos (Regimento Art. 48 a 52) e Vistoria de Antecedentes (Art. 133 §5º): três permissões próprias, nunca
+  // concedidas por padrão (vêm só para a Diretoria Executiva; o Conselho de Ética recebe "vistoria_antecedentes" em Permissões).
+  // "setores_tecnicos" administra catálogo, vínculos e Termo; "setores_ratificacao" (Diretoria) ratifica ou revoga os atos
+  // cautelares; qualquer uma libera a aba "Setores Técnicos". O servidor só atende o nível GERAL nas três (ver ABAS_SO_DO_GERAL).
+  // A candidatura, o aceite do Termo e os atos de quem serve ficam em Meu Painel → Setores Técnicos, abertos a qualquer login.
+  setores: ["setores_tecnicos", "setores_ratificacao"],
+  vistoria: ["vistoria_antecedentes"],
   // v5.4 (correção) — quem só tem "tesouraria_departamental" (líder local/
   // geral de departamento) também acessa Financeiro → Saídas, pra gastar o
   // saldo do próprio departamento (Centro de Custo DEPTO_<SIGLA>) pelo
@@ -1307,7 +1317,7 @@ function permissoesDaAba(nome) {
 // backend já o deixava lançar chamada/resposta/pedido da própria turma desde
 // a v6.2, mas ele nunca via a tela (ebdTurmasProfessor: junto do estado de sessão).
 // Abas cujo servidor agora só atende o nível GERAL (catálogos e permissões: quem cadastra congregações, cargos e papéis): para os demais nem aparecem.
-const ABAS_SO_DO_GERAL = new Set(["catalogos", "permissoes", "auditoria", "protecaodedados"]);
+const ABAS_SO_DO_GERAL = new Set(["catalogos", "permissoes", "auditoria", "protecaodedados", "setores", "vistoria"]);
 function temPermissaoDaAba(nome) {
   if (ABAS_SO_DO_GERAL.has(nome) && !authGeral) return false;
   if (permissoesDaAba(nome).some(chave => authPermissoes.includes(chave))) return true;
@@ -1381,6 +1391,7 @@ const MODULOS = {
   calendario: { titulo: "Calendário Oficial", icone: "📅", abaEntrada: "calendario", abas: ["calendario"] },
   canais: { titulo: "Canais e Comunicação", icone: "📣", abaEntrada: "canais", abas: ["canais"] },
   eventos: { titulo: "Eventos e Congressos", icone: "🎪", abaEntrada: "eventos", abas: ["eventos"] },
+  setores: { titulo: "Setores Técnicos", icone: "🧑‍⚕️", abaEntrada: "setores", abas: ["setores", "vistoria"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
@@ -1431,11 +1442,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos",
+  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1460,6 +1471,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "agenda") carregarMinhaAgendaCalAcao();
   if (sub === "canais") carregarMeuPainelCanaisAcao();
   if (sub === "eventos") carregarMeuPainelEventosAcao();
+  if (sub === "setores") carregarMeuPainelSetoresAcao();
   if (sub === "tarefas") { filtrarMinhasTarefas(filtroMinhasTarefasAtual); carregarMinhasMediacoesAcao(); }
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarChavesAcesso(); carregarDelegacoes(); }

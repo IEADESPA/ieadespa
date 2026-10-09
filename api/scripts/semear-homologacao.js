@@ -136,6 +136,14 @@ async function main() {
   }
   const terceiroAlfa = adultos.filter((a) => a.cong.id === congs[0].id)[2];
   if (terceiroAlfa) await lideranca(terceiroAlfa.matricula, papelPastorArea, "AREA", areaId, `pastor de área (matrícula ${terceiroAlfa.matricula})`);
+  // v7.6: um login do NÍVEL GERAL fictício (Secretário Geral, o 4º adulto da Alfa). As abas "Setores Técnicos" e "Vistoria de Antecedentes" só existem para o nível
+  // geral (as três permissões são da Diretoria Executiva), e a prova em navegador precisa abri-las de verdade. Sem e-mail, como o pastor: entra sem segunda etapa.
+  const quartoAlfa = adultos.filter((a) => a.cong.id === congs[0].id)[3];
+  if (quartoAlfa) {
+    const papelSecretarioGeral = await papel("Secretário Geral", "GLOBAL", "setores_tecnicos,setores_ratificacao,vistoria_antecedentes");
+    await lideranca(quartoAlfa.matricula, papelSecretarioGeral, "GLOBAL", null, `secretário geral (matrícula ${quartoAlfa.matricula})`);
+    await q("UPDATE dbo.MembroReferencia SET Email = NULL WHERE MembroId = @m AND Email IS NOT NULL", { m: quartoAlfa.matricula });
+  }
   // vD.4: o pastor de área fictício fica SEM e-mail de propósito — é com ele que a prova em navegador cadastra a chave de acesso
   // (sem chave e sem e-mail a senha certa entra com aviso; depois do cadastro, a entrada passa a exigir a chave). Os demais têm e-mail
   // (@exemplo.com) e mostram o caminho do código.
@@ -150,7 +158,7 @@ async function main() {
 
   await pool.close();
   console.log(feito.length ? `Semeado em "${banco}": ${feito.join("; ")}.` : `Nada a criar em "${banco}": a massa fictícia já existia.`);
-  console.log(`Acessos fictícios (senha ${process.env.SEED_SENHA ? "de SEED_SENHA" : "padrão do script"}): dirigentes/tesoureiros = 1º e 2º adulto de cada congregação; pastor de área = 3º adulto da Alfa. Matrículas de ${BASE_MATRICULA + 1} a ${BASE_MATRICULA + 60}.`);
+  console.log(`Acessos fictícios (senha ${process.env.SEED_SENHA ? "de SEED_SENHA" : "padrão do script"}): dirigentes/tesoureiros = 1º e 2º adulto de cada congregação; pastor de área = 3º adulto da Alfa (900007); secretário geral (nível geral) = 4º adulto da Alfa (900013). Matrículas de ${BASE_MATRICULA + 1} a ${BASE_MATRICULA + 60}.`);
 }
 
 main().catch((e) => { console.error("ERRO ao semear:", e.message); process.exit(1); });

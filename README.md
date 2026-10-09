@@ -324,7 +324,7 @@ diz em que arquivo ela está e em que pé ela anda.
 - **Concluídas:** FASES 0 a 6 e as FASES B (consolidação da base) e C (integração com o site), salvo uns
   poucos itens adiados de propósito, que o índice marca como 🟡.
 - **Em andamento — FASE 7:** v7.1 (PSC), v7.2 (Calendário oficial), v7.3 (Canais oficiais), v7.4
-  (Eventos e congressos) e v7.5 (Escalas e voluntariado) entregues e no ar. Os pontos que a revisão da v7.5 apontou (IP
+  (Eventos e congressos), v7.5 (Escalas e voluntariado) e v7.6 (Setores Técnicos e Termo de Vistoria) entregues e no ar. Os pontos que a revisão da v7.5 apontou (IP
   medido no Azure, idade para aderir, anonimização do IP, Meus Dados, avisos em ciclo, escopo de departamento e o
   primeiro passo da CSP) foram fechados na própria versão — inclusive o **acesso do membro por matrícula + PIN**, a
   exigência de sessão em todas as rotas de autoatendimento (que antes tratavam a matrícula como a própria pessoa) e o
@@ -362,7 +362,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | C | Integração com o site institucional | concluída | [fase-c-integracao-com-o-site](docs/plano/fase-c-integracao-com-o-site.md) |
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
-| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.5 entregues; Trava 7-A fechada em 08/10/2026; próxima: v7.6) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.6 entregues; Trava 7-A fechada em 08/10/2026; próxima: v7.7) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
 | D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A) | vD.1–vD.8 feitas e Trava D-B fechada (06–08/10/2026); ficam só decisões do responsável | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
@@ -515,6 +515,9 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   papéis Presidente e Secretário Geral; a 121, a coluna `Visibilidade` de `Documentos` (público, membros ou liderança); a 122, a rede de segurança do nível geral.
   O fecho (03/10/2026) trouxe as migrações 123 a 139: sessões revogáveis, índices únicos que só nascem sem repetição
   (o deploy avisa), `AceitesMediacao`, abandono com "quem abriu", divergência de remessa e estorno de cessão.
+- **Setores Técnicos e vistoria (v7.6, migração 142):** `SetoresTecnicos` (os 20 do Art. 52), `...Membros` (o vínculo), `...Adesoes`
+  (o Termo, com hash e IP), `...Intervencoes` (interdição e pedido de remoção), `VistoriasAntecedentes`, `VistoriasDocumentos` (só o
+  hash da certidão) e `VistoriasAnulacoes`. Permissões novas, só da Diretoria: `setores_tecnicos`, `setores_ratificacao`, `vistoria_antecedentes`.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,

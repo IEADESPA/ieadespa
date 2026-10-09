@@ -2293,11 +2293,14 @@ crises institucionais em denominações no mundo inteiro.
       o relógio regressivo (verde, amarelo abaixo de 12 h, vermelho abaixo de 4 h, "vencido há…"). O
       aviso do incidente novo sai **na hora** (Diretoria, Comitê e o Dirigente DA congregação; nunca o
       envolvido), e uma rotina **horária** (7h às 22h de Brasília) avisa com 12 h, com 4 h e, vencido, a
-      cada 6 h (depois de 12 h vencido o aviso sobe só para a Diretoria e o Comitê). Cada comunicação
+      cada 6 h (no máximo 5 avisos de vencido por caso; depois disso o **resumo diário das 7h** assume e
+      lembra a Diretoria e o Comitê todo dia enquanto o caso estiver vencido ou sem comprovante). Cada comunicação
       registra órgão (Conselho Tutelar, Ministério Público, Polícia, Disque 100, outro), forma (ofício,
       pessoalmente, telefone, e-mail, sistema do órgão), data e hora, **protocolo do órgão**, onde o
       comprovante está guardado e se foi **dentro do prazo**; o ofício pode ser anexado ao incidente.
-      Comunicar fora do prazo vale, mas fica marcado e entra no relatório.)*
+      Comunicar fora do prazo vale, mas fica marcado e entra no relatório. O protocolo e o lugar do comprovante
+      precisam **ter sentido** (pelo menos 4 letras ou números: "-", "n/a" ou "0000" não valem, porque uma
+      comunicação vazia pararia o relógio para sempre), e um **anexo de prova nunca se apaga**.)*
 - [x] **Encerramento bloqueado sem comprovante da comunicação externa** — o caso
       não fecha no sistema enquanto não houver prova de que o Estado foi avisado.
       *(A suspeita de violência só encerra com pelo menos uma comunicação **com comprovante** (protocolo
@@ -2356,17 +2359,21 @@ crises institucionais em denominações no mundo inteiro.
       telefones **100** (Disque Direitos Humanos, de graça, 24 h) e **190** sempre visíveis, só **um campo
       de texto** obrigatório (nenhuma pergunta de "prova"), "quem está escrevendo" e "como falar com você"
       opcionais, e a igreja opcional. O pedido vira **suspeita de violência** com o relógio de 24 horas e
-      avisa a liderança de proteção. **Não guarda IP nem cabeçalhos** (o limite por origem é em memória, em
-      hash truncado); contra inundação há 5 pedidos por hora por origem e um teto de 40 por hora no total —
-      no teto, ou em erro, a resposta **sempre** traz a orientação do 100 e do 190.)*
+      avisa **só o nível geral** (Diretoria e Comitê): a congregação escolhida é palpite de quem escreveu, e o
+      Dirigente dela pode ser justamente a pessoa de quem se fala, então ele nem vê o pedido. **Não guarda IP
+      nem cabeçalhos** (o limite por origem é em memória, em hash truncado); contra inundação há 5 pedidos por
+      hora por origem e, no total, 15 por hora e 60 por dia — no teto, ou em erro, a resposta **sempre** traz a
+      orientação do 100 e do 190. Se o pedido não tem conteúdo de proteção (teste, engano), a Diretoria o
+      **arquiva como "sem conteúdo de proteção"**, com o motivo, e o resto do nível geral é avisado.)*
 
 ### Contrato (rotas)
 
 `GestaoProtecaoMenores` (`/api/protecao-menores/{acao}`): de **qualquer pessoa logada** — `catalogos`,
 `meus`, `registrar`; da **gestão** (permissão `protecao_menores`, sessão de liderança; o Dirigente só
 enxerga a sua congregação) — `incidentes`, `incidente`, `relato` (confirmação reforçada), `comunicacao`,
-`adendo`, `reclassificar`; do **nível geral** (Diretoria e Comitê) — `cautelar-decidir` e `encerrar`
-(confirmação reforçada), `padroes`, `comite`, `relatorio-anual`. `ProtecaoAjuda` (`POST /api/protecao-ajuda`,
+`adendo`, `reclassificar`; do **nível geral** (Diretoria e Comitê) — `cautelar-decidir`, `encerrar` e
+`vincular-envolvido` (liga ao cadastro a pessoa que foi registrada só pelo nome; confirmação reforçada),
+`padroes`, `comite`, `relatorio-anual`. `ProtecaoAjuda` (`POST /api/protecao-ajuda`,
 sem login). `ProtecaoVerificador` (`POST /api/protecao-verificador-interno`, por segredo; chamada de hora em
 hora pelo workflow `rotinas-protecao.yml`). Anexos do incidente: `/api/anexos` com a tabela `IncidentesProtecao`.
 
@@ -2391,9 +2398,23 @@ hora pelo workflow `rotinas-protecao.yml`). Anexos do incidente: `/api/anexos` c
   quem tem a permissão "auditoria" não consegue ligar uma pessoa a um incidente.
 - **Retenção de 20 anos do encerramento** (registro de apuração de crime contra criança: o prazo corre a partir
   dos 18 anos da vítima); a CLI pode ajustar em Catálogos. Nada se apaga (gatilhos no banco).
-- **A rotina horária roda das 7h às 22h de Brasília**, não de madrugada: o banco é serverless e só pausa se
-  ficar uma hora sem uso; uma chamada por hora o dia todo o manteria ligado (e cobrando). De madrugada o aviso do
-  incidente novo continua saindo na hora do registro e o relógio é calculado na leitura: só o lembrete espera.
+- **A rotina horária roda das 7h às 22h de Brasília** e **só abre o banco se há prazo correndo**: o banco é
+  serverless e só pausa se ficar uma hora sem uso; uma chamada por hora o dia todo o manteria ligado (R$ 65 a 86
+  por dia contra R$ 6 a 7 pausado). Por isso a rotina pergunta antes a uma marca guardada no Storage ("há
+  suspeita aberta, sem comunicação, dentro da janela de avisos?") e, se não há, responde sem tocar no banco; a
+  marca é refeita por toda mudança e pela rodada diária. Sem marca, ou com o Storage fora do ar, na dúvida ela
+  olha o banco. Ela cuida só do aviso do incidente novo e do relógio; padrão de quebras, Comitê incompleto,
+  afastamento sem decisão e o resumo diário são da rodada das 7h. De madrugada o aviso do incidente novo continua
+  saindo na hora do registro e o relógio é calculado na leitura: só o lembrete espera. Um aviso cujo e-mail não
+  saiu é reenviado a cada rodada (até 48 horas depois).
+- **Os avisos que protegem criança não se desligam**: as regras da proteção e do ministério com menores são
+  obrigatórias; a tela de regras recusa desligar o aviso ou o e-mail (só o título pode ser ajustado).
+- **Quem manteve o afastamento não o levanta sozinho**: o levantamento tem de vir de outra pessoa do nível geral
+  (dois olhares sobre a decisão mais delicada). A pessoa afastada é avisada do levantamento com título neutro.
+- **Quem registra não fica sabendo o efeito**: a resposta não diz quantas escalas foram desmarcadas nem a
+  quantas pessoas o aviso chegou (isso revelaria se a pessoa apontada servia em alguma escala). Se a matrícula
+  informada não existe, o registro vira "só o nome", sem dizer isso a quem registrou; a Diretoria confere e
+  vincula. Os padrões e o painel da v7.7 não mostram a pessoa para ela mesma.
 - **O Dirigente comunica, o Comitê encerra**: registrar a comunicação, o adendo e a reclassificação são da
   gestão (inclusive o Dirigente da congregação, que é quem está perto e tem as 24 horas); decidir o afastamento
   e encerrar o caso são do nível geral.

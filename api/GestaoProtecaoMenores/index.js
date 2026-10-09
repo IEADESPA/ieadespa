@@ -106,6 +106,8 @@ module.exports = async function (context, req) {
 
     // =============================== Escrita ===============================
     if (metodo !== "POST") return erro(context, 405, "Método não permitido.");
+    // só estas ações aceitam POST (as de leitura, como "padroes", respondem 404 a um POST: nada de cair no ramo que pede incidenteId)
+    if (!["registrar", "relato", "comunicacao", "adendo", "reclassificar", "cautelar-decidir", "encerrar"].includes(acao)) return erro(context, 404, "Ação inválida.");
 
     if (acao === "registrar") { resposta(context, await db.registrarIncidente(pool, { dados: corpo, registrante: { membroId: sessao.membroId } }), 201); return; }
 

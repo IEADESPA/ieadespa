@@ -17,6 +17,7 @@ const { hojeBrasilia } = require("./dataBrasilia");
 const { notificarAgora } = require("./canaisDb");
 const { gerarProtocolo } = require("./ouvidoria");
 const { resolverDestinatariosPorPermissao } = require("./notificacoes");
+const { obterTrava } = require("./financeiroSeguro");
 
 const PERMISSAO = "protecao_menores";
 const PAPEL_COMITE = "Comitê de Proteção";
@@ -146,13 +147,20 @@ async function gerarProtocoloDeIncidente(pool) {
 const RELATADO_DO_CANAL = { CRIANCA_ADOLESCENTE: "PROPRIA_CRIANCA", RESPONSAVEL: "RESPONSAVEL", OUTRA_PESSOA: "OUTRA_PESSOA" };
 
 // Grava o incidente, o envolvido e o relato numa transação só. `d` já passou por pm.validarIncidente (ou pelo canal de ajuda).
-async function gravarIncidente(pool, { d, registrante, envolvidoNome }) {
+async function gravarIncidente(pool, { d, registrante, envolvidoNome, evitarRepeticao = false }) {
   const protocolo = await gerarProtocoloDeIncidente(pool);
   const prazo = d.exigeComunicacao ? pm.prazoNotificacao(d.conhecidoEm) : null;
   const transaction = new sql.Transaction(pool);
   let incidenteId;
   try {
     await transaction.begin();
+    if (evitarRepeticao && registrante) {
+      if (!(await obterTrava(() => new sql.Request(transaction), `protecao-reg-${registrante}`, 8000))) { await fecharTransacao(transaction, false); return { ocupado: true }; }
+      const repetido = (await new sql.Request(transaction).input("m", sql.Int, registrante).input("n", sql.NVarChar(16), d.nivel).input("dt", sql.Date, d.dataOcorrencia).input("ds", sql.NVarChar(1000), d.descricao).query(`
+        SELECT TOP 1 IncidenteId, Protocolo, PrazoNotificacaoEm FROM IncidentesProtecao
+        WHERE RegistradoPorMembroId = @m AND Nivel = @n AND DataOcorrencia = @dt AND Descricao = @ds AND RegistradoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY IncidenteId DESC`)).recordset[0];
+      if (repetido) { await fecharTransacao(transaction, false); return { repetido }; }
+    }
     const rq = new sql.Request(transaction);
     const ins = await rq.input("p", sql.NVarChar(30), protocolo).input("n", sql.NVarChar(16), d.nivel).input("o", sql.NVarChar(12), d.origem).input("c", sql.Int, d.congregacaoId || null).input("e", sql.Int, d.equipeId || null)
       .input("dt", sql.Date, d.dataOcorrencia).input("on", sql.NVarChar(150), d.onde || null).input("ds", sql.NVarChar(1000), d.descricao).input("rp", sql.NVarChar(16), d.relatadoPor || null)
@@ -200,13 +208,11 @@ async function registrarIncidente(pool, { dados, registrante, agora = new Date()
     if (!m) return { sucesso: false, mensagem: "A matrícula da pessoa envolvida não foi encontrada." };
     envolvidoNome = null;       // quem é do cadastro tem o nome no cadastro
   }
-  // um clique duplo não registra duas vezes o mesmo fato (mesma pessoa, mesmo nível, mesma data e mesmo texto nos últimos 10 minutos)
-  const repetido = (await pool.request().input("m", sql.Int, registrante.membroId).input("n", sql.NVarChar(16), d.nivel).input("dt", sql.Date, d.dataOcorrencia).input("ds", sql.NVarChar(1000), d.descricao).query(`
-    SELECT TOP 1 IncidenteId, Protocolo, PrazoNotificacaoEm FROM IncidentesProtecao
-    WHERE RegistradoPorMembroId = @m AND Nivel = @n AND DataOcorrencia = @dt AND Descricao = @ds AND RegistradoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY IncidenteId DESC`)).recordset[0];
-  if (repetido) return { sucesso: true, repetido: true, incidenteId: repetido.IncidenteId, protocolo: repetido.Protocolo, prazoEm: iso(repetido.PrazoNotificacaoEm), mensagem: "Este incidente já tinha sido registrado agora há pouco." };
-
-  const { incidenteId, protocolo, prazo } = await gravarIncidente(pool, { d: { ...d, contatoCanal: null }, registrante: registrante.membroId, envolvidoNome });
+  // um clique duplo não registra duas vezes o mesmo fato (mesma pessoa, mesmo nível, mesma data e mesmo texto nos últimos 10 minutos): a conferência e a gravação são uma coisa só, sob trava
+  const gravado = await gravarIncidente(pool, { d: { ...d, contatoCanal: null }, registrante: registrante.membroId, envolvidoNome, evitarRepeticao: true });
+  if (gravado.ocupado) return { sucesso: false, mensagem: "O sistema está ocupado com outro registro seu. Aguarde alguns segundos e confira em \"Meus registros\" antes de tentar de novo." };
+  if (gravado.repetido) return { sucesso: true, repetido: true, incidenteId: gravado.repetido.IncidenteId, protocolo: gravado.repetido.Protocolo, prazoEm: iso(gravado.repetido.PrazoNotificacaoEm), mensagem: "Este incidente já tinha sido registrado agora há pouco." };
+  const { incidenteId, protocolo, prazo } = gravado;
   await auditar({ IncidenteId: incidenteId, Nivel: d.nivel }, "PROTECAO_INCIDENTE_REGISTRADO", registrante.membroId, { nivel: d.nivel });
 
   let escalasDesmarcadas = null;
@@ -346,9 +352,11 @@ async function registrarComunicacao(pool, { incidenteId, dados, ver, agora = new
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const x = v.dados;
   const fora = pm.foraDoPrazo(x.comunicadoEm, i.PrazoNotificacaoEm);
-  await pool.request().input("i", sql.Int, incidenteId).input("o", sql.NVarChar(20), x.orgao).input("f", sql.NVarChar(16), x.forma).input("c", sql.DateTime2, x.comunicadoEm).input("p", sql.NVarChar(60), x.protocoloExterno)
+  const ins = await pool.request().input("i", sql.Int, incidenteId).input("o", sql.NVarChar(20), x.orgao).input("f", sql.NVarChar(16), x.forma).input("c", sql.DateTime2, x.comunicadoEm).input("p", sql.NVarChar(60), x.protocoloExterno)
     .input("a", sql.NVarChar(200), x.referenciaArquivo).input("ob", sql.NVarChar(300), x.observacao).input("fp", sql.Bit, fora ? 1 : 0).input("r", sql.Int, ver.membroId)
-    .query(`INSERT INTO IncidenteComunicacoes (IncidenteId, Orgao, Forma, ComunicadoEm, ProtocoloExterno, ReferenciaArquivo, Observacao, ForaDoPrazo, RegistradoPorMembroId) VALUES (@i, @o, @f, @c, @p, @a, @ob, @fp, @r)`);
+    .query(`INSERT INTO IncidenteComunicacoes (IncidenteId, Orgao, Forma, ComunicadoEm, ProtocoloExterno, ReferenciaArquivo, Observacao, ForaDoPrazo, RegistradoPorMembroId)
+            SELECT @i, @o, @f, @c, @p, @a, @ob, @fp, @r WHERE EXISTS (SELECT 1 FROM IncidentesProtecao WITH (UPDLOCK, HOLDLOCK) WHERE IncidenteId = @i AND Status = 'ABERTO')`);
+  if (!ins.rowsAffected || !ins.rowsAffected[0]) return { sucesso: false, mensagem: "Este incidente já foi encerrado." };
   await auditar(i, "PROTECAO_COMUNICACAO_REGISTRADA", ver.membroId, { foraDoPrazo: fora });
   const comprovante = pm.temComprovante(x) || (await contarAnexos(pool, incidenteId)) > 0;
   return {
@@ -366,7 +374,11 @@ async function adicionarAdendo(pool, { incidenteId, texto, ver }) {
   if (t.length < 10 || t.length > MAX_ADENDO || /[<>]/.test(t)) return { sucesso: false, mensagem: `Registre só o que a criança disse por conta própria, com as palavras dela (de 10 a ${MAX_ADENDO} caracteres, sem < ou >). Não faça novas perguntas para obter mais.` };
   const n = Number((await pool.request().input("i", sql.Int, incidenteId).query(`SELECT COUNT(*) AS n FROM IncidenteRelatos WHERE IncidenteId = @i AND Tipo = 'ADENDO'`)).recordset[0].n);
   if (n >= MAX_ADENDOS) return { sucesso: false, mensagem: `Já há ${MAX_ADENDOS} adendos. Repetir a escuta machuca de novo: o que for novo deve ir direto às autoridades.` };
-  await pool.request().input("i", sql.Int, incidenteId).input("t", sql.NVarChar(4000), t).input("r", sql.Int, ver.membroId).query(`INSERT INTO IncidenteRelatos (IncidenteId, Tipo, Texto, RegistradoPorMembroId) VALUES (@i, 'ADENDO', @t, @r)`);
+  const insA = await pool.request().input("i", sql.Int, incidenteId).input("t", sql.NVarChar(4000), t).input("r", sql.Int, ver.membroId).query(`
+    INSERT INTO IncidenteRelatos (IncidenteId, Tipo, Texto, RegistradoPorMembroId)
+    SELECT @i, 'ADENDO', @t, @r WHERE EXISTS (SELECT 1 FROM IncidentesProtecao WITH (UPDLOCK, HOLDLOCK) WHERE IncidenteId = @i AND Status = 'ABERTO')
+      AND (SELECT COUNT(*) FROM IncidenteRelatos WITH (UPDLOCK, HOLDLOCK) WHERE IncidenteId = @i AND Tipo = 'ADENDO') < ${MAX_ADENDOS}`);
+  if (!insA.rowsAffected || !insA.rowsAffected[0]) return { sucesso: false, mensagem: "O incidente foi encerrado ou já tem o máximo de adendos. Repetir a escuta machuca de novo: o que for novo deve ir direto às autoridades." };
   await auditar(i, "PROTECAO_ADENDO_REGISTRADO", ver.membroId);
   return { sucesso: true, mensagem: "Adendo registrado." };
 }

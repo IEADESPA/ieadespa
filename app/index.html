@@ -4353,9 +4353,15 @@
               </div>
               <label class="cal-check cnl-declaracao"><input type="checkbox" id="cnlCDeclaracao" /> Declaro que esta conta/número está em nome da IEADESPA e NÃO é de titularidade pessoal (Estatuto Art. 12)</label>
               <div class="input-group" style="margin-top:8px;">
-                <label class="cal-check"><input type="checkbox" id="cnlCMenores" /> inclui crianças/adolescentes</label>
+                <label class="cal-check"><input type="checkbox" id="cnlCMenores" data-on-change="cnlCMenoresMudouAcao" /> inclui crianças/adolescentes</label>
                 <label class="cal-check"><input type="checkbox" id="cnlCPublico" /> aparece no site</label>
                 <label class="cal-check" id="cnlCBlocoCustodia"><input type="checkbox" id="cnlCCustodia" /> senha sob custódia da Secretaria Geral</label>
+              </div>
+              <div class="input-group" id="cnlCBlocoResponsavel" style="display:none;">
+                <label for="cnlCResponsavel">Responsável com acesso (matrícula)</label>
+                <input type="number" id="cnlCResponsavel" min="1" step="1" placeholder="Matrícula do pai, mãe ou tutor" style="max-width:220px;" />
+                <p class="psc-legenda">Grupo com crianças ou adolescentes precisa de <strong>dois administradores adultos habilitados</strong> e de <strong>um responsável
+                  (pai, mãe ou tutor) com acesso ao grupo</strong>, membro ativo e adulto. Pode ficar em branco por enquanto: o canal fica <strong>irregular</strong> até ser indicado.</p>
               </div>
               <div class="input-group">
                 <label for="cnlCDescricao">Descrição (opcional, até 500 caracteres)</label>

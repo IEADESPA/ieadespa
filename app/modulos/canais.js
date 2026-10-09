@@ -39,7 +39,7 @@ const CNL_RESULTADO_CONFERENCIA = { CONFORME: ["🟢 Conforme", "cal-st-homologa
 // chave do resumo da cobertura, rótulo e o que pintar quando o valor é maior que zero
 const CNL_CONTADORES = [
   ["canaisAtivos", "Canais ativos", ""], ["regulares", "Regulares", "ok"], ["atencao", "Em atenção", "alerta"], ["irregulares", "Irregulares", "erro"],
-  ["cadastrosIncompletos", "Cadastros incompletos", "alerta"], ["semAdministrador", "Sem administrador", "erro"], ["termosPendentes", "Termos pendentes", "alerta"],
+  ["cadastrosIncompletos", "Cadastros incompletos", "alerta"], ["semAdministrador", "Sem administrador", "erro"], ["menoresIrregulares", "Grupos com menores fora da regra", "erro"], ["termosPendentes", "Termos pendentes", "alerta"],
   ["ocorrenciasAbertas", "Ocorrências abertas", ""], ["ocorrenciasVencidas", "Ocorrências VENCIDAS", "erro"],
   ["trocasPendentes", "Trocas de senha pendentes", "alerta"], ["trocasVencidas", "Trocas vencidas", "erro"],
   ["congregacoesSemCanal", "Congregações sem canal", "alerta"], ["transmissaoPendente", "Transmissão pendente", "alerta"]
@@ -472,6 +472,13 @@ function cnlCCategoriaMudouAcao() {
   const tema = cnlEl("cnlCBlocoTema");
   if (tema) tema.style.display = cnlTexto("cnlCCategoria") === "GRUPO_FOCADO" ? "block" : "none";
 }
+// v7.7 — o responsável com acesso (pai, mãe ou tutor) só existe em canal que inclui crianças/adolescentes: o campo aparece, e vale, só com a marca; sem ela, esvazia.
+function cnlCMenoresMudouAcao() {
+  const bloco = cnlEl("cnlCBlocoResponsavel"), campo = cnlEl("cnlCResponsavel");
+  const marcado = cnlMarcado("cnlCMenores");
+  if (bloco) bloco.style.display = marcado ? "block" : "none";
+  if (campo && !marcado) campo.value = "";
+}
 function cnlCEscopoMudouAcao() {
   const escopo = cnlTexto("cnlCEscopo");
   [["cnlCBlocoCongregacao", "CONGREGACAO"], ["cnlCBlocoArea", "AREA"], ["cnlCBlocoDepto", "DEPARTAMENTO"]].forEach(([id, valor]) => {
@@ -481,7 +488,7 @@ function cnlCEscopoMudouAcao() {
 }
 
 function cnlLimparFormCanalAcao() {
-  ["cnlCCanalId", "cnlCNome", "cnlCIdentificador", "cnlCDescricao", "cnlCPlataforma", "cnlCTema", "cnlCVinculo", "cnlCCongregacao", "cnlCArea", "cnlCDepto"].forEach(id => {
+  ["cnlCCanalId", "cnlCNome", "cnlCIdentificador", "cnlCDescricao", "cnlCPlataforma", "cnlCTema", "cnlCVinculo", "cnlCCongregacao", "cnlCArea", "cnlCDepto", "cnlCResponsavel"].forEach(id => {
     const el = cnlEl(id);
     if (el) el.value = "";
   });
@@ -491,6 +498,7 @@ function cnlLimparFormCanalAcao() {
   if (categoria) categoria.value = "INSTITUCIONAL";
   cnlCPlataformaMudouAcao();
   cnlCEscopoMudouAcao();
+  cnlCMenoresMudouAcao();
   const titulo = cnlEl("cnlFormCanalTitulo"), botao = cnlEl("cnlCBotaoSalvar"), resultado = cnlEl("cnlCResultado");
   if (titulo) titulo.textContent = "➕ Registrar canal";
   if (botao) botao.textContent = "💾 Registrar canal";
@@ -514,6 +522,13 @@ function cnlCorpoCanal() {
     incluiMenores: cnlMarcado("cnlCMenores"), publicoNoSite: cnlMarcado("cnlCPublico"), custodiaSecretaria: cnlMarcado("cnlCCustodia")
   };
   if (categoria === "GRUPO_FOCADO") corpo.temaFocado = cnlTexto("cnlCTema");
+  // v7.7: o responsável com acesso vai SEMPRE (vazio = null), para que desmarcar "inclui menores" ou apagar o campo também limpe o que estava gravado. O servidor confere que é membro ativo e adulto.
+  corpo.responsavelAcessoMembroId = null;
+  const responsavel = corpo.incluiMenores ? cnlTexto("cnlCResponsavel") : "";
+  if (responsavel) {
+    if (!/^\d{1,10}$/.test(responsavel) || Number(responsavel) < 1) return { problema: "A matrícula do responsável com acesso precisa ser um número inteiro positivo (ou ficar em branco)." };
+    corpo.responsavelAcessoMembroId = Number(responsavel);
+  }
   const alvo = { CONGREGACAO: ["cnlCCongregacao", "congregacaoId", "Escolha a congregação do canal."], AREA: ["cnlCArea", "areaId", "Escolha a Área do canal."], DEPARTAMENTO: ["cnlCDepto", "departamentoId", "Escolha o departamento do canal."] }[escopo];
   if (alvo) {
     const id = numeroDoCampo(alvo[0]);
@@ -570,6 +585,8 @@ function cnlEditarCanalAcao() {
   cnlCEscopoMudouAcao();
   preencher("cnlCDescricao", c.descricao);
   [["cnlCMenores", c.incluiMenores], ["cnlCPublico", c.publicoNoSite], ["cnlCCustodia", c.custodiaSecretaria]].forEach(([id, valor]) => { const el = cnlEl(id); if (el) el.checked = !!valor; });
+  preencher("cnlCResponsavel", c.responsavelAcessoMembroId);
+  cnlCMenoresMudouAcao();
   const declarado = cnlEl("cnlCDeclaracao");
   if (declarado) declarado.checked = false;   // a declaração é um ato de quem salva: sempre marcada de novo
   const titulo = cnlEl("cnlFormCanalTitulo"), botao = cnlEl("cnlCBotaoSalvar"), detalhes = cnlEl("cnlFormCanalDetalhes");
@@ -618,6 +635,14 @@ async function cnlAbrirCanalAcao(canalId, manterPosicao) {
 
 function cnlCampo(rotulo, html) { return html ? `<div><dt>${rotulo}</dt><dd>${html}</dd></div>` : ""; }
 
+// v7.7 — o responsável com acesso ao grupo (o nome só chega à gestão). `r` = { membroId, nome, ativo, adulto } | null; `id` = a matrícula gravada no canal.
+function cnlHtmlResponsavel(r, id) {
+  if (!id) return "<span class='psc-alerta'>Ainda não indicado</span>";
+  if (!r) return `matrícula ${cnlNumero(id)}`;
+  const aviso = r.ativo === true && r.adulto === true ? "" : " <span class='psc-alerta'>(não é mais membro ativo e adulto: indique outro)</span>";
+  return `${escaparHtmlEbd(r.nome || "—")} (matrícula ${cnlNumero(r.membroId)})${aviso}`;
+}
+
 function cnlRenderDetalheCanal(data) {
   const c = data.canal || {};
   const id = Number(c.canalId);
@@ -645,6 +670,7 @@ function cnlRenderDetalheCanal(data) {
     cnlCampo("Senha sob custódia da Secretaria", c.exigeCustodia ? (c.custodiaSecretaria ? "Sim" : "<span class='psc-alerta'>Ainda não confirmada</span>") : "Não se aplica (sem senha)"),
     cnlCampo("Última troca de senha", c.ultimaTrocaCredencialEm ? escaparHtmlEbd(calData(c.ultimaTrocaCredencialEm)) : ""),
     cnlCampo("Inclui crianças/adolescentes", c.incluiMenores ? "Sim (Art. 160, §5º)" : "Não"),
+    cnlCampo("Responsável com acesso ao grupo", c.incluiMenores ? cnlHtmlResponsavel(data.responsavelAcesso, c.responsavelAcessoMembroId) : ""),
     cnlCampo("Aparece no site", c.publicoNoSite ? "Sim" : "Não"),
     cnlCampo("Serve ao Abandono Digital", c.contaParaAbandono ? "Sim (contato individual institucional)" : "Não"),
     cnlCampo("Vigente desde", c.vigenteDesde ? escaparHtmlEbd(calData(c.vigenteDesde)) : ""),
@@ -662,7 +688,7 @@ function cnlRenderDetalheCanal(data) {
     return `<tr>
       <td><strong>${escaparHtmlEbd(a.nome)}</strong></td><td>${Number(a.membroId)}</td>
       <td>${escaparHtmlEbd(cnlRotuloDoCatalogo(papeis, a.papel))}</td>
-      <td>${a.termoAceitoEm ? `✅ aceito (versão ${cnlNumero(a.termoVersaoAceita)}) em ${escaparHtmlEbd(calDataHora(a.termoAceitoEm))}` : "<span class='psc-alerta'>⏳ ainda não aceitou</span>"}</td>
+      <td>${a.termoAceitoEm ? `✅ aceito (versão ${cnlNumero(a.termoVersaoAceita)}) em ${escaparHtmlEbd(calDataHora(a.termoAceitoEm))}` : "<span class='psc-alerta'>⏳ ainda não aceitou</span>"}${a.aptoMenores === false ? "<br /><span class='psc-alerta'>⚠️ não está habilitado para servir com menores</span>" : ""}</td>
       <td>${a.designadoEm ? escaparHtmlEbd(calData(a.designadoEm)) : "—"}</td>
       <td><button type="button" class="btn-link btn-link-perigo" data-on-click="cnlAbrirFormEncerrarAcao" data-args-click="${argsAttr(adminId)}">Encerrar…</button><div id="cnlEncForm_${adminId}"></div></td>
     </tr>`;
@@ -677,6 +703,15 @@ function cnlRenderDetalheCanal(data) {
       <select id="cnlDesPapel">${cnlOpcoesHtml(papeis, p => p.codigo, p => p.rotulo)}</select>
       <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="cnlDesignarAdminAcao">➕ Designar</button>
     </div>` : ""}`;
+
+  // v7.7: grupo com crianças/adolescentes — o responsável (pai, mãe ou tutor) com acesso ao grupo. Indicar e retirar usam a rota canais/responsavel-acesso.
+  const blocoResponsavel = ativo && c.incluiMenores ? `<h5>👪 Responsável com acesso ao grupo</h5>
+    <p class="psc-legenda" style="margin-top:0;">Pai, mãe ou tutor de um dos menores, membro ativo e adulto, que tem acesso ao grupo. Sem ele, o canal fica irregular.</p>
+    <div class="barra-lista">
+      <input type="number" id="cnlRespMembro" min="1" step="1" placeholder="Matrícula" value="${c.responsavelAcessoMembroId ? cnlNumero(c.responsavelAcessoMembroId) : ""}" style="max-width:130px;min-width:100px;" />
+      <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="cnlSalvarResponsavelAcao">💾 Indicar</button>
+      ${c.responsavelAcessoMembroId ? `<button type="button" class="btn-link btn-link-perigo" data-on-click="cnlRetirarResponsavelAcao">Retirar</button>` : ""}
+    </div>` : "";
 
   const orientacoes = [
     orient.modeloTermoDeUso ? `<div class="cnl-modelo"><strong>Modelo de Termo de Uso do grupo oficial</strong> (Art. 160, §1º, III) — cole na descrição do grupo:<p>${escaparHtmlEbd(orient.modeloTermoDeUso)}</p>${cnlBotaoCopiar(orient.modeloTermoDeUso, "Copiar o modelo de Termo de Uso")}</div>` : "",
@@ -717,6 +752,7 @@ function cnlRenderDetalheCanal(data) {
     ${blocoPendencias}
     ${trocas.length ? `<p class="psc-aviso">Há ${trocas.length} pendência(s) de troca de senha/acesso em aberto — veja em <em>Senhas e acessos</em>.</p>` : ""}
     ${blocoAdmins}
+    ${blocoResponsavel}
     ${orientacoes}
     ${blocoConferencia}
     ${blocoHistorico}
@@ -753,6 +789,15 @@ async function cnlDesignarAdminAcao() {
   if (!Number.isInteger(membroId) || membroId <= 0) { mostrarToast("Informe a matrícula de quem vai administrar o canal.", "erro"); return; }
   if (!papel) { mostrarToast("Escolha o papel (Administrador ou Operador da conta).", "erro"); return; }
   await cnlExecutarAcaoCanal("administradores/designar", { membroId, papel });
+}
+// v7.7 — indica o responsável com acesso ao grupo (pai, mãe ou tutor). O servidor confere: membro ativo e adulto; canal ativo e que inclui menores.
+async function cnlSalvarResponsavelAcao() {
+  const membroId = numeroDoCampo("cnlRespMembro");
+  if (!Number.isInteger(membroId) || membroId <= 0) { mostrarToast("Informe a matrícula do responsável (pai, mãe ou tutor) com acesso ao grupo.", "erro"); return; }
+  await cnlExecutarAcaoCanal("canais/responsavel-acesso", { membroId });
+}
+async function cnlRetirarResponsavelAcao() {
+  await cnlExecutarAcaoCanal("canais/responsavel-acesso", { membroId: null }, "Retirar o responsável com acesso? O canal fica irregular até que outro seja indicado.");
 }
 function cnlAbrirFormEncerrarAcao(adminId) {
   const id = Number(adminId);
@@ -1449,11 +1494,11 @@ async function cnlCarregarMeusAvisosAcao() {
 registrarAcoes({
   cnlAbrirCanalAcao, cnlAbrirFormCanalAcao, cnlAbrirFormEncerrarAcao, cnlAbrirOcorrenciaAcao, cnlAbrirResolverTrocaAcao, cnlAbrirTrocaAcao,
   cnlAceitarTermoAcao, cnlAceitarTermoTodosAcao, cnlAvisoCategoriaMudouAcao, cnlAvisoContarAcao, cnlCarregarCanaisAcao, cnlCarregarMeusAvisosAcao,
-  cnlCarregarOcorrenciasAcao, cnlCarregarPainelAcao, cnlCarregarTransmissaoAcao, cnlCarregarTrocasAcao, cnlCCategoriaMudouAcao, cnlCEscopoMudouAcao,
+  cnlCarregarOcorrenciasAcao, cnlCarregarPainelAcao, cnlCarregarTransmissaoAcao, cnlCarregarTrocasAcao, cnlCCategoriaMudouAcao, cnlCEscopoMudouAcao, cnlCMenoresMudouAcao,
   cnlConferirSucessoesAcao, cnlCopiarTextoAcao, cnlCPlataformaMudouAcao, cnlDeclararImprocedenteAcao, cnlDesativarCanalAcao, cnlDesignarAdminAcao,
   cnlEditarCanalAcao, cnlEditarTransmissaoAcao, cnlEncerrarAdminAcao, cnlEnviarAvisoAcao, cnlFecharFormAcaoCanal, cnlFecharFormEncerrarAcao,
   cnlFecharResolverTrocaAcao, cnlLimparFormCanalAcao, cnlMostrarSecaoAcao, cnlReativarCanalAcao, cnlRedesenharCanaisAcao,
   cnlRedesenharOcorrenciasAcao, cnlRedesenharTransmissaoAcao, cnlRegistrarAdvertenciaAcao, cnlRegistrarConferenciaAcao,
-  cnlRegistrarParaCongregacaoAcao, cnlRegistrarRemocaoAcao, cnlResolverTrocaAcao, cnlSalvarCanalAcao, cnlSalvarTransmissaoAcao,
+  cnlRegistrarParaCongregacaoAcao, cnlRegistrarRemocaoAcao, cnlResolverTrocaAcao, cnlRetirarResponsavelAcao, cnlSalvarCanalAcao, cnlSalvarResponsavelAcao, cnlSalvarTransmissaoAcao,
   cnlTrAtualizarBlocosAcao, cnlTrPreencherDaCongregacaoAcao
 });

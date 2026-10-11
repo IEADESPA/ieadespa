@@ -96,7 +96,7 @@ jobs:
 
       - name: Guardar o relatório e as divergências
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: testes-de-tela-${{ github.run_number }}
           path: |
@@ -166,7 +166,7 @@ jobs:
 
       - name: Guardar o relatório e as divergências (celular)
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: testes-de-tela-celular-${{ github.run_number }}
           path: |

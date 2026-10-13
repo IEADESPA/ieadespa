@@ -71,7 +71,8 @@ module.exports = async function (context, req) {
   // Prova de acesso e lista de tamanhos/modelos: a campanha lida com o token da PRÓPRIA pessoa.
   const grupoRes = await directus(token, `/items/camiseta_grupos/${grupoId}?fields=id,nome,tamanhos,modelos`);
   if (grupoRes.status === 401) return responder(401, { erro: "Sua sessão do painel venceu. Entre de novo." });
-  if (grupoRes.status === 403) return responder(403, { erro: "Seu perfil não pode registrar vendas de camiseta." });
+  // (o Directus responde 403, e não 404, a quem não é administrador quando o item não existe)
+  if (grupoRes.status === 403) return responder(403, { erro: "Campanha não encontrada, ou o seu perfil não pode registrar vendas de camiseta nela." });
   if (grupoRes.status === 404) return responder(404, { erro: "Campanha não encontrada." });
   if (!grupoRes.ok) return responder(502, { erro: "Falha ao conferir a campanha. Tente de novo." });
   const grupo = (await grupoRes.json()).data;

@@ -75,7 +75,7 @@ async function main() {
     r = await balcao(gestor, { grupoId: G, nome: "Ana", itens: item("XG") }); v.ok("tamanho fora da lista da campanha → 400", r.status === 400, r.j.erro);
     r = await balcao(gestor, { grupoId: G, nome: "Ana", itens: item("GG", 0) }); v.ok("quantidade 0 → 400", r.status === 400, r.j.erro);
     r = await balcao(gestor, { grupoId: G, nome: "Ana", itens: [] }); v.ok("sem itens → 400", r.status === 400, r.j.erro);
-    r = await balcao(gestor, { grupoId: 999999999, nome: "Ana", itens: item() }); v.ok("campanha que não existe → 404", r.status === 404, r.j.erro);
+    r = await balcao(gestor, { grupoId: 999999999, nome: "Ana", itens: item() }); v.ok("campanha que não existe → recusada (403 para quem não é administrador, 404 para o administrador)", r.status === 403 || r.status === 404, r.j.erro);
     v.ok("nada gravado pelas recusas", ((await dx("GET", `/items/camiseta_pedidos?filter[grupo][_eq]=${G}&fields=id`)).data || []).length === 0);
 
     // venda sem telefone nem e-mail, no lote aberto (que ainda não existe: nasce o lote 1)

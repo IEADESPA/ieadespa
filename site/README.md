@@ -264,8 +264,36 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
 - **Consulta pública** (`/meus-pedidos-camiseta/`) — só por telefone, sem código, por decisão
   explícita de simplicidade.
 - **Painel de gestão** (`/painel-camisetas/`) — CRUD de campanha, abas por lote (todos os
-  lotes/lote N/avulso), fechamento de lote, consolidado editável, venda avulsa, controle de
-  retirada.
+  lotes/lote N/avulso), fechamento de lote, consolidado editável, venda de balcão (abaixo),
+  controle de retirada.
+- **Venda de balcão e a função "Gestor de Camisetas" (13/10/2026, pedido do responsável)** — quem
+  cuida das camisetas lança, pelo painel (`/painel-camisetas/grupo/pedidos/` → "+ Registrar venda"),
+  a venda para quem está na sua frente, muitas vezes sem telefone nem e-mail: nome (obrigatório),
+  telefone e e-mail se houver, congregação, itens (tamanho/modelo/quantidade), valor já pago e o
+  **lote** — o que está aberto (padrão; nasce o próximo se nenhum estiver), outro lote escolhido ou
+  **Avulso** (peça de estoque, sem lote; é a antiga "venda avulsa"). Vale com a campanha aberta ou
+  fechada para o público (a regra de prazo é do formulário público). Passa pela Function
+  `api/RegistrarVendaBalcao/` (`POST /api/registrar-venda-balcao`), não direto pelo navegador,
+  porque o telefone precisa virar hash (scrypt), chave de busca (HMAC) e número cifrado — o segredo
+  dessas contas só existe no servidor; com isso a pessoa acha a venda em "Meus pedidos" pelo
+  telefone e o painel abre o WhatsApp dela. **A função não usa o token de administrador:** grava com
+  o token do próprio gestor (`x-painel-token`), então quem o Directus não deixaria criar pedido não
+  cria por aqui. Avisa e pede confirmação (409) quando já existe pedido com o mesmo telefone ou
+  e-mail na campanha e quando o lote escolhido já está fechado (a encomenda dele já foi feita; a
+  peça ficaria fora dela). Regra pura em `api/src/lib/vendaBalcao.js`; bateria
+  `scripts/testes/balcao.cjs`. **Função no Directus:** "Gestor de Camisetas" (política própria, sem
+  acesso ao painel do Directus): lê/cria/edita campanha e cria/lê/edita/apaga pedido, item de pedido,
+  lote, estoque do lote, pergunta e resposta — **não apaga campanha** e **não enxerga mais nada** do
+  site (notícias, eventos, inscrições, contas dão 403). Para dar a função a alguém: Directus →
+  Usuários → criar o usuário com a função "Gestor de Camisetas" e entrar em
+  `/painel-camisetas/entrar/`.
+- **Painel de pedidos no celular (13/10/2026)** — a barra de busca fica presa no alto durante a
+  rolagem e os filtros ficam **recolhidos** atrás do botão "Filtros" (com um selo com quantos estão
+  ligados); uma linha "Filtrando por: Tamanho GG" com o botão "Limpar" fica sempre à vista, para
+  ninguém procurar um nome sem saber que um filtro esconde o pedido; um botão "Buscar pedido" no
+  topo leva direto à busca. No computador nada muda. Também: a sessão do painel renova sem corrida
+  (o token de renovação do Directus vale uma vez; duas renovações juntas mandavam a pessoa ao login,
+  perdendo o que digitava) e a queda do tempo real nunca leva ao login.
 - **Perguntas personalizadas por campanha** (`perguntas_camiseta`/`respostas_pedido_camiseta`) —
   espelha o mesmo sistema de eventos: cada campanha pode pedir campos extras no formulário público
   (ex. bairro, forma de retirada), com os mesmos 6 tipos de pergunta (texto curto/longo, seleção
@@ -449,7 +477,7 @@ nem de conta no GitHub — só um login de e-mail e senha criado para cada pesso
 - **Acesso**: `https://ieadespa-directus-gae4hfarf4a4ffcf.brazilsouth-01.azurewebsites.net/admin`
 - **Perfis (roles) hoje**: Administrator, Semi-administrador (tudo exceto
   Configurações/Fluxos/Webhooks/Usuários/tokens), Editor de eventos, Editor de notícias, Editor de
-  contatos — cada um limitado ao próprio escopo (testado: acesso fora do escopo dá 403).
+  contatos, Gestor de Camisetas (só as coleções de camiseta, sem apagar campanha) — cada um limitado ao próprio escopo (testado: acesso fora do escopo dá 403).
 - **Mídia**: fotos e PDFs enviados no Directus vão direto para o Azure Blob Storage, não para o
   repositório do GitHub.
 - **Limitações do plano gratuito ("Core")**: sem filtro condicional em permissão (força

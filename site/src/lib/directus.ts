@@ -129,6 +129,14 @@ export const CRIAR_INSCRICAO_URL = "/api/criar-inscricao";
 export const TELEFONE_PEDIDO_URL = "/api/telefone-pedido";
 
 /**
+ * Venda de balcão (13/10/2026): `POST` com o token do painel em `x-painel-token`; quem tem a função
+ * "Gestor de Camisetas" (ou é administrador) lança a venda para quem está na sua frente — nome,
+ * telefone e e-mail se houver, congregação, itens, valor pago e o lote (o aberto, outro ou avulso).
+ * Ver `api/RegistrarVendaBalcao/`.
+ */
+export const REGISTRAR_VENDA_BALCAO_URL = "/api/registrar-venda-balcao";
+
+/**
  * Fase 28 — aviso de "pode retirar" (peça separada, esperando a pessoa vir
  * buscar). Chamada só pelo painel (`/painel-camisetas/grupo/pedidos/`), no
  * momento em que a equipe marca um pedido como separado — melhor esforço,

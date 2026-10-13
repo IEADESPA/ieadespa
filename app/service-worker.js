@@ -16,7 +16,8 @@
 // v30 (08/10/2026): v7.6 — o módulo setores-tecnicos.js (Setores Técnicos e Vistoria de Antecedentes) entra na casca.
 // v31 (09/10/2026): v7.7 — o módulo ministerio-menores.js (Habilitação para Ministério com Menores) entra na casca.
 // v32 (09/10/2026): v7.8 — o módulo protecao.js (Incidentes, notificação obrigatória e escuta protegida; inclui a tela pública "Preciso de ajuda") entra na casca.
-const CACHE_NOME = "ieadespa-app-shell-v32";
+// v33 (13/10/2026): v7.8 — correções da revisão independente da tela da proteção (protecao.js, script.js, meus-dados.js, index.html e style.css mudaram): a casca nova baixa junto.
+const CACHE_NOME = "ieadespa-app-shell-v33";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/consagracoes.js", "/modulos/disciplina.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/enquetes.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/financeiro.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/setores-tecnicos.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

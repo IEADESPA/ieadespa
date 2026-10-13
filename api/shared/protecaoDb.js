@@ -171,7 +171,7 @@ async function gravarIncidente(pool, { d, registrante, envolvidoNome, evitarRepe
     }
     if (evitarRepeticao && registrante) {
       const repetido = (await new sql.Request(transaction).input("m", sql.Int, registrante).input("n", sql.NVarChar(16), d.nivel).input("dt", sql.Date, d.dataOcorrencia).input("ds", sql.NVarChar(1000), d.descricao).query(`
-        SELECT TOP 1 IncidenteId, Protocolo, PrazoNotificacaoEm FROM IncidentesProtecao
+        SELECT TOP 1 IncidenteId, Protocolo, Nivel, ExigeComunicacao, PrazoNotificacaoEm FROM IncidentesProtecao
         WHERE RegistradoPorMembroId = @m AND Nivel = @n AND DataOcorrencia = @dt AND Descricao = @ds AND RegistradoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY IncidenteId DESC`)).recordset[0];
       if (repetido) { await fecharTransacao(transaction, false); return { repetido }; }
     }
@@ -229,7 +229,11 @@ async function registrarIncidente(pool, { dados, registrante, agora = new Date()
   const gravado = await gravarIncidente(pool, { d: { ...d, contatoCanal: null }, registrante: registrante.membroId, envolvidoNome, evitarRepeticao: true, limitar: true });
   if (gravado.limite) return { sucesso: false, limite: true, mensagem: "Você já registrou muitos incidentes nas últimas 24 horas. Se há uma criança em perigo agora, ligue 100 (Disque Direitos Humanos) ou 190, ou fale direto com o Dirigente." };
   if (gravado.ocupado) return { sucesso: false, mensagem: "O sistema está ocupado com outro registro seu. Aguarde alguns segundos e confira em \"Meus registros\" antes de tentar de novo." };
-  if (gravado.repetido) return { sucesso: true, repetido: true, incidenteId: gravado.repetido.IncidenteId, protocolo: gravado.repetido.Protocolo, prazoEm: iso(gravado.repetido.PrazoNotificacaoEm), mensagem: "Este incidente já tinha sido registrado agora há pouco." };
+  // Repetido (clique duplo): a resposta traz o MESMO formato da primeira (nível e `exigeComunicacao` do registro que já existe), para a tela de quem registra seguir mostrando o que fazer numa suspeita (o que NÃO fazer, o prazo e o 100/190); nada de contagem de escalas nem de avisados.
+  if (gravado.repetido) {
+    const r = gravado.repetido;
+    return { sucesso: true, repetido: true, incidenteId: r.IncidenteId, protocolo: r.Protocolo, nivel: r.Nivel || d.nivel, exigeComunicacao: r.ExigeComunicacao === undefined ? !!d.exigeComunicacao : !!r.ExigeComunicacao, prazoEm: iso(r.PrazoNotificacaoEm), mensagem: "Este incidente já tinha sido registrado agora há pouco." };
+  }
   const { incidenteId, protocolo, prazo } = gravado;
   await auditar({ IncidenteId: incidenteId, Nivel: d.nivel }, "PROTECAO_INCIDENTE_REGISTRADO", registrante.membroId, { nivel: d.nivel });
 
@@ -277,7 +281,9 @@ async function registrarPedidoDeAjuda(pool, { dados, agora = new Date(), deps })
   const destinatarios = await destinatariosGeraisDaDiretoria(pool);
   const aviso = await notificarAgora(pool, { regraChave: "PROTECAO_INCIDENTE_NOVO", destinatarios, mensagem: pm.textoIncidenteNovo({ nivel: "ALEGACAO", prazoEm: prazo }), referenciaId: incidenteId, referenciaTabela: "IncidentesProtecao", aguardarEntrega: false, deps });
   await pendencia.atualizar(pool);
-  return { sucesso: true, protocolo, avisados: aviso.criadas || 0, mensagem: pm.textoConfirmacaoDeAjuda() };
+  // `avisada` é só um sim/não (a quem escreve sem login não se diz QUANTAS pessoas foram avisadas): a mensagem só afirma que a liderança foi avisada se o aviso de fato foi criado
+  const avisada = (aviso.criadas || 0) > 0;
+  return { sucesso: true, protocolo, avisada, mensagem: pm.textoConfirmacaoDeAjuda({ avisada }) };
 }
 
 // ---------------------------------------------------------------

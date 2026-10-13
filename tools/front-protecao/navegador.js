@@ -41,7 +41,8 @@ function fichaDe(id) {
   const comum = { descricao: ATAQUE("desc") + " " + "fato ".repeat(60), onde: ATAQUE("onde"), equipeNome: ATAQUE("equipe"), contatoCanal: ATAQUE("contato"), relatadoPor: "PROPRIA_CRIANCA", relato: { registrado: true, adendos: 1 }, leituras: [{ nome: ATAQUE("leitor") }] };
   let d;
   if (id === 4) d = F.detalhe(Object.assign({ id: 4, origem: "CANAL_AJUDA", prazoEm: em(-2), protocolo: ATAQUE("prot4"), congregacaoNome: ATAQUE("cong4"), envolvidos: [{ envolvidoId: 7, membroId: 41, nome: ATAQUE("env") }, { envolvidoId: 8, nome: ATAQUE("envNome"), membroId: null }], comunicacoes: [], nAnexos: 0, possiveisMembros: [{ envolvidoId: 8, membros: [{ membroId: 41, nome: ATAQUE("candidato"), congregacaoNome: ATAQUE("candCong") }, { membroId: 52, nome: "Outra pessoa com o mesmo nome e um sobrenome bem comprido", congregacaoNome: "Congregação Norte" }] }] }, comum), agora);
-  else if (id === 2) d = F.detalhe(Object.assign({ id: 2, origem: "CANAL_AJUDA", prazoEm: em(8), protocolo: ATAQUE("prot2"), congregacaoNome: ATAQUE("cong2"), envolvidos: [], comunicacoes: [], nAnexos: 0, registradoPor: { nome: ATAQUE("registrador") } }, comum), agora);
+  // (o pedido do canal de ajuda que tem só uma pessoa registrada pelo nome: é nele que se vê o "Vincular"; com uma pessoa do cadastro já vinculada o botão não é oferecido)
+  else if (id === 2) d = F.detalhe(Object.assign({ id: 2, origem: "CANAL_AJUDA", prazoEm: em(8), protocolo: ATAQUE("prot2"), congregacaoNome: ATAQUE("cong2"), envolvidos: [{ envolvidoId: 8, nome: ATAQUE("envNome2"), membroId: null }], possiveisMembros: [{ envolvidoId: 8, membros: [{ membroId: 41, nome: ATAQUE("candidato2"), congregacaoNome: ATAQUE("candCong2") }] }], comunicacoes: [], nAnexos: 0, registradoPor: { nome: ATAQUE("registrador") } }, comum), agora);
   else if (id === 7) d = F.detalhe({ id: 7, nivel: "QUEBRA_POLITICA", exigeComunicacao: false, protocolo: "PRO-2026-0007", relato: { registrado: false, adendos: 0 }, envolvidos: [], reclassificacoes: [{ de: "QUASE_ACIDENTE", para: "QUEBRA_POLITICA", motivo: ATAQUE("motivo"), porNome: ATAQUE("porRec") }] }, agora);
   else d = F.detalhe(Object.assign({ id, prazoEm: em(3, 20), protocolo: ATAQUE("prot"), congregacaoNome: ATAQUE("cong"), envolvidos: [{ envolvidoId: 7, membroId: 41, nome: ATAQUE("env"), ultimaDecisao: "MANTIDO_AFASTADO", nDecisoes: 1 }], comunicacoes: [{ protocoloExterno: ATAQUE("protExt"), referenciaArquivo: ATAQUE("refArq"), observacao: ATAQUE("obsCom"), registradoPorNome: ATAQUE("porCom"), foraDoPrazo: true }], nAnexos: 2, decisoes: [{ envolvidoId: 7, decisao: "MANTIDO_AFASTADO", observacao: ATAQUE("obsDec"), decididaPorNome: ATAQUE("porDec") }] }, comum), agora);
   d.incidente.relatadoPorRotulo = ATAQUE("relatadoPorRotulo");
@@ -59,7 +60,7 @@ function api(metodo, caminho, consulta, corpo, token) {
     estado.ajudas++;
     if (token) return ok({ sucesso: false, mensagem: "O canal público recebeu um token: isso não pode acontecer." }, 400);
     if (estado.ajuda === "429") return ok(F.falhaDeAjuda(`Você já enviou mensagens demais por agora. ${pm.CONTATOS_DE_AJUDA[0].descricao} ${ATAQUE("msg429")}`), 429);
-    const c = F.confirmacaoDeAjuda(ATAQUE("protocolo")); c.mensagem = `${pm.textoConfirmacaoDeAjuda()} ${ATAQUE("msgOk")}`;
+    const c = F.confirmacaoDeAjuda(ATAQUE("protocolo"), true); c.mensagem = `${pm.textoConfirmacaoDeAjuda({ avisada: true })} ${ATAQUE("msgOk")}`;
     return ok(c, 201);
   }
   // ---- proteção
@@ -230,6 +231,15 @@ async function rodarViewport(nav, base, nome, viewport) {
     if (apos429.campo === 0 || apos429.tels < 2) relatorio.problemas.push(`no 429 o texto devia ficar e os telefones aparecer: ${JSON.stringify(apos429)}`);
     estado.ajuda = "ok";
     await clicarTexto("a", "Voltar", "#prtTelaAjuda");
+    // com texto escrito e não enviado, "Voltar" pergunta antes de apagar: cancelar fica na tela, confirmar sai
+    await esperar(() => !document.getElementById("modalOverlay").classList.contains("escondido") && /NÃO foi enviada/.test(document.getElementById("modalCaixa").textContent), "a pergunta ao sair com texto não enviado");
+    await medida("Público / pergunta ao sair"); await foto("#modalCaixa", "publico-sair");
+    await page.evaluate(() => { const b = document.getElementById("modalCancelar"); if (b) b.click(); }); await calmo();
+    const ficou = await page.evaluate(() => ({ campo: document.getElementById("prtAjudaPubTexto").value.length, tela: getComputedStyle(document.getElementById("prtTelaAjuda")).display }));
+    if (ficou.campo === 0 || ficou.tela === "none") relatorio.problemas.push(`cancelar a pergunta de sair devia manter a tela e o texto: ${JSON.stringify(ficou)}`);
+    await clicarTexto("a", "Voltar", "#prtTelaAjuda");
+    await esperar(() => !document.getElementById("modalOverlay").classList.contains("escondido"), "a pergunta ao sair (segunda vez)");
+    await page.evaluate(() => { const b = document.getElementById("modalConfirmar"); if (b) b.click(); }); await calmo();
     const saiu = await page.evaluate(() => ({ campo: document.getElementById("prtAjudaPubForm").innerHTML === "", entrada: getComputedStyle(document.getElementById("telaCheckin")).display }));
     if (!saiu.campo || saiu.entrada === "none") relatorio.problemas.push(`ao voltar, o formulário devia ser desmontado e a entrada reaparecer: ${JSON.stringify(saiu)}`);
 
@@ -271,6 +281,10 @@ async function rodarViewport(nav, base, nome, viewport) {
     await clicarTexto("button", "Abrir", "#prtListaIncidentes");
     await esperar(() => document.getElementById("prtDetalheConteudo").textContent.length > 200, "a ficha do incidente"); await calmo();
     await medida("Ficha / aberta"); await foto("#prtDetalheCx", "ficha");
+    const focoFicha = await page.evaluate(() => document.activeElement && document.activeElement.id);
+    if (focoFicha !== "prtDetalheTitulo") relatorio.problemas.push(`abrir a ficha devia levar o foco ao título dela (foco em "${focoFicha}")`);
+    const naoFacaNaFicha = await page.evaluate(() => { const c = document.getElementById("prtFichaNaoFaca"); return !!c && c.getClientRects().length > 0 && /NÃO FAÇA/.test(c.textContent); });
+    if (!naoFacaNaFicha) relatorio.problemas.push("a ficha de uma suspeita aberta devia mostrar a caixa NÃO FAÇA");
     // relato: confirmação, leitura, caixa
     await clicarTexto("button", "Ler o relato", "#prtDetalheConteudo");
     await esperar(() => !document.getElementById("modalOverlay").classList.contains("escondido"), "a confirmação da leitura do relato");
@@ -278,12 +292,21 @@ async function rodarViewport(nav, base, nome, viewport) {
     await page.evaluate(() => { const b = document.getElementById("modalConfirmar"); if (b) b.click(); });
     await esperar(() => document.getElementById("prtRelatoCx") && getComputedStyle(document.getElementById("prtRelatoCx")).display !== "none" && document.getElementById("prtRelatoCorpo").textContent.length > 20, "o relato na caixa"); await calmo();
     await medida("Ficha / relato aberto"); await foto("#prtRelatoCx", "relato");
+    const focoRelato = await page.evaluate(() => document.activeElement && document.activeElement.id);
+    if (focoRelato !== "prtRelatoCx") relatorio.problemas.push(`abrir o relato devia levar o foco à caixa dele (foco em "${focoRelato}")`);
+    // um Ctrl+P comum com o relato aberto NÃO imprime o relato (nem a ficha): display:none em qualquer impressão
+    await page.emulateMediaType("print");
+    const relatoNaImpressao = await page.evaluate(() => ({ relato: getComputedStyle(document.getElementById("prtRelatoCx")).display, ficha: getComputedStyle(document.getElementById("prtDetalheCx")).display }));
+    await page.emulateMediaType("screen");
+    if (relatoNaImpressao.relato !== "none" || relatoNaImpressao.ficha !== "none") relatorio.problemas.push(`na impressão comum o relato e a ficha não podem sair: ${JSON.stringify(relatoNaImpressao)}`);
     const relatoOk = await page.evaluate(() => ({ imgs: document.querySelectorAll("#prtRelatoCorpo img, #prtRelatoCorpo svg").length, texto: document.getElementById("prtRelatoCorpo").textContent.includes("[relato]") }));
     if (relatoOk.imgs !== 0 || !relatoOk.texto) relatorio.problemas.push(`o relato devia aparecer como texto, sem elementos nascidos dele: ${JSON.stringify(relatoOk)}`);
     // os formulários dos atos
-    for (const [botao, rotulo] of [["Registrar a comunicação ao órgão", "comunicação"], ["Adendo", "adendo"], ["Decidir o afastamento", "decidir"], ["Vincular a uma pessoa do cadastro", "vincular"], ["Encerrar o caso", "encerrar"]]) {
+    for (const [botao, rotulo] of [["Registrar a comunicação ao órgão", "comunicação"], ["Adendo", "adendo"], ["Decidir o afastamento", "decidir"], ["Encerrar o caso", "encerrar"]]) {
       await clicarTexto("#prtDetalheConteudo .prt-acoes-detalhe button, #prtDetalheConteudo button", botao, "#prtDetalheConteudo");
       await medida(`Ficha / formulário ${rotulo}`); await foto("#prtFormAcao", `form-${rotulo}`);
+      const focoForm = await page.evaluate(() => { const a = document.activeElement; return (a && a.id) || "(nenhum)"; });
+      if (!/^prt(Fc|Fa|Fd|Fe)/.test(focoForm)) relatorio.problemas.push(`o formulário ${rotulo} devia abrir com o foco no primeiro campo (foco em "${focoForm}")`);
     }
     await clicarTexto("button", "Fechar e apagar", "#prtRelatoCx");
     const apagou = await page.evaluate(() => document.getElementById("prtRelatoCorpo").textContent === "" && !document.body.innerText.includes("[relato]"));
@@ -292,7 +315,11 @@ async function rodarViewport(nav, base, nome, viewport) {
     // o pedido do canal de ajuda sem pessoa do cadastro: arquivar como "sem conteúdo de proteção" (aviso do risco) e o modal de anexos (comprovante = prova, sem Excluir)
     await page.evaluate(() => { const c = [...document.querySelectorAll("#prtListaIncidentes .cal-cartao")].find(x => x.textContent.includes("PRO-2026-0002")); const b = c && [...c.querySelectorAll("button")].find(x => /Abrir/.test(x.textContent)); if (b) b.click(); });
     await calmo();
+    await clicarTexto("button", "Vincular a uma pessoa do cadastro", "#prtDetalheConteudo");
+    await medida("Ficha / formulário vincular"); await foto("#prtFormAcao", "form-vincular");
     await clicarTexto("button", "Encerrar o caso", "#prtDetalheConteudo");
+    const ordemResultados = await page.evaluate(() => [...document.getElementById("prtFeResultado").options].map(o => o.value).join());
+    if (ordemResultados !== ",ENCAMINHADO_AUTORIDADE,SEM_CONTEUDO_DE_PROTECAO") relatorio.problemas.push(`o encerramento devia oferecer "encaminhado" primeiro e "sem conteúdo de proteção" por último: ${ordemResultados}`);
     await preencher("prtFeResultado", "SEM_CONTEUDO_DE_PROTECAO");
     await medida("Ficha / arquivar sem conteúdo de proteção"); await foto("#prtFormAcao", "form-arquivar");
     const aviso = await page.evaluate(() => { const a = document.getElementById("prtFeAvisoSemConteudo"); return a && getComputedStyle(a).display !== "none" && /NÃO arquive/.test(a.textContent); });
@@ -320,10 +347,19 @@ async function rodarViewport(nav, base, nome, viewport) {
     // a impressão do relatório: só o relatório fica visível
     await page.emulateMediaType("print");
     await page.evaluate(() => document.body.classList.add("prt-imprimindo"));
-    const impressao = await page.evaluate(() => { const v = (s) => { const el = document.querySelector(s); return el ? getComputedStyle(el).visibility : "ausente"; }; return { relatorio: v("#prtRelImprimivel h4"), tabela: v("#prtRelImprimivel table"), menu: v("#sidebar"), titulo: v("#abaProtecao > h3"), filtros: v("#prtPilulas") }; });
+    const impressao = await page.evaluate(() => { const v = (s) => { const el = document.querySelector(s); return el ? getComputedStyle(el).visibility : "ausente"; }; const d = (s) => { const el = document.querySelector(s); return el ? getComputedStyle(el).display : "ausente"; }; return { relatorio: v("#prtRelImprimivel h4"), tabela: v("#prtRelImprimivel table"), menu: v("#sidebar"), titulo: v("#abaProtecao > h3"), filtros: v("#prtPilulas"), menuDisplay: d("#sidebar"), tituloDisplay: d("#abaProtecao > h3"), filtrosDisplay: d("#prtPilulas"), relatorioDisplay: d("#prtRelImprimivel"), abaDisplay: d("#abaProtecao"), painelDisplay: d("#cxPainelConteudo"), alturaDoDocumento: document.documentElement.scrollHeight, alturaDaFolha: window.innerHeight }; });
+    // a folha de verdade: o relatório (poucas linhas) tem de caber em UMA folha; com só visibility:hidden o resto da página ainda ocupava lugar e sobrava uma folha em branco no fim
+    // (o PDF do Edge guarda as páginas em fluxos compactados: não dá para contar por texto. Pede-se a folha N; o Edge recusa uma folha que não existe, e a última que ele aceita é o total)
+    const contarFolhas = async (margem) => { let total = 0; for (let n = 1; n <= 12; n++) { try { await page.pdf({ format: "A4", printBackground: true, margin: margem, pageRanges: String(n) }); total = n; } catch (_) { break; } } return total; };
+    const folhasSemMargem = await contarFolhas(undefined);
+    const folhasComMargem = await contarFolhas({ top: "1cm", bottom: "1cm", left: "1cm", right: "1cm" });   // a impressão comum tem margem: foi onde a folha em branco do fim aparecia
+    const folhas = Math.max(folhasSemMargem, folhasComMargem);
     await page.evaluate(() => document.body.classList.remove("prt-imprimindo"));
     await page.emulateMediaType("screen");
     if (impressao.relatorio !== "visible" || impressao.tabela !== "visible" || impressao.menu !== "hidden" || impressao.titulo !== "hidden" || impressao.filtros !== "hidden") relatorio.problemas.push(`na impressão só o relatório devia aparecer: ${JSON.stringify(impressao)}`);
+    if (impressao.menuDisplay !== "none" || impressao.tituloDisplay !== "none" || impressao.filtrosDisplay !== "none" || impressao.relatorioDisplay === "none" || impressao.abaDisplay === "none" || impressao.painelDisplay === "none") relatorio.problemas.push(`na impressão o resto da página devia sair com display:none (sem ocupar folha) e as pastas do relatório ficar: ${JSON.stringify(impressao)}`);
+    if (folhas !== 1) relatorio.problemas.push(`na impressão o relatório devia caber em 1 folha (saíram ${folhas})`);
+    relatorio.folhas = folhas; relatorio.alturaImpressao = `${impressao.alturaDoDocumento} px de documento para ${impressao.alturaDaFolha} px de janela`;
     // sair da aba: o intervalo para e o relato/a fila saem
     await clicarTexto("button", "Painel Principal", "#sidebar");
     const saidaDaAba = await page.evaluate(() => ({ fila: document.getElementById("prtListaIncidentes").innerHTML === "", aba: getComputedStyle(document.getElementById("abaProtecao")).display }));
@@ -358,6 +394,7 @@ async function rodarViewport(nav, base, nome, viewport) {
     console.log(`\n=== ${r.nome} px ===`);
     console.log(`medidas: ${r.medidas.length} (sem rolagem lateral e alvos ≥ 40 px: ${r.medidas.filter(m => !m.rolagemLateral && !m.ofensores.length && !m.alvosPequenos.length).length})`);
     console.log(`violações de CSP: ${r.csp.length + r.cspVioladas.length} · código do ataque executado: ${r.xss} · erros de JavaScript/console: ${r.erros.length}`);
+    console.log(`impressão do relatório: ${r.folhas} folha(s) A4 (${r.alturaImpressao})`);
     r.csp.slice(0, 5).forEach(x => console.log("  CSP: " + x)); r.cspVioladas.slice(0, 5).forEach(x => console.log("  CSP(evento): " + x));
     r.erros.slice(0, process.env.DEPURAR ? 40 : 8).forEach(x => console.log("  erro: " + x.replace(/\n/g, " | ")));
     r.problemas.forEach(x => console.log("  ✗ " + x));

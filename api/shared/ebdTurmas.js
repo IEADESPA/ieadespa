@@ -203,7 +203,9 @@ function mapearTurma(row) {
   if (!row) return null;
   return {
     turmaId: row.TurmaId, congregacaoId: row.CongregacaoId, nome: row.Nome,
-    faixaEtaria: row.FaixaEtaria, ativa: row.Ativa, criadoEm: row.CriadoEm
+    faixaEtaria: row.FaixaEtaria, ativa: row.Ativa, criadoEm: row.CriadoEm,
+    // v7.10: turma "com menores" só aceita professor apto (a marca nasce desligada)
+    contatoComMenores: !!row.ContatoComMenores
   };
 }
 
@@ -306,6 +308,13 @@ async function designarProfessor(pool, { turmaId, membroId, principal, designado
   const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "EBD_PROFESSOR", membroId });
   if (formacao.bloqueado) return { sucesso: false, mensagem: formacao.mensagemBloqueio };
 
+  // v7.10 — portão da EBD (Lei 14.811/2024): turma marcada "com menores" só aceita professor APTO hoje (a aptidão da v7.7, calculada agora). Quem já leciona sai pela
+  // rotina diária (ministerioMenoresDb.retirarInaptosDasTurmas); aqui só a designação nova (ou a reativação) passa pelo portão. Turma sem a marca: nada muda.
+  const portao = await require("./ministerioMenoresDb").aptosParaTurma(pool, { turmaId, membroIds: [membroId] });
+  if (portao.contatoComMenores && !portao.aptos.has(Number(membroId))) {
+    return { sucesso: false, mensagem: `Esta turma está marcada como "com menores" e o professor não pode ser designado: ${portao.bloqueados.get(Number(membroId))}.` };
+  }
+
   if (vinculo) {
     await pool.request().input("id", sql.Int, vinculo.turmaProfessorId).input("principal", sql.Bit, !!principal).query(`
       UPDATE EbdTurmaProfessores SET Ativo = 1, Principal = @principal, EncerradoEm = NULL, DesignadoEm = SYSUTCDATETIME() WHERE TurmaProfessorId = @id
@@ -323,6 +332,22 @@ async function designarProfessor(pool, { turmaId, membroId, principal, designado
   });
 
   return { sucesso: true, mensagem: "✅ Professor designado.", alertas: formacao.alertas };
+}
+
+// v7.10: marcar (ou desmarcar) a turma como "com menores". Ligar é livre e já tira da turma, na hora, o professor que não é apto; desligar derruba o portão da turma e a rota pede a
+// confirmação reforçada. Devolve `mudou` para a rota saber se houve mudança (a auditoria é só de mudança).
+async function definirContatoComMenores(pool, { turmaId, contatoComMenores, por }) {
+  const turma = await buscarTurmaPorId(pool, turmaId);
+  if (!turma) return { sucesso: false, mensagem: "Turma não encontrada." };
+  const marca = contatoComMenores === true;
+  if (turma.contatoComMenores === marca) return { sucesso: true, mudou: false, mensagem: marca ? "A turma já estava marcada como \"com menores\"." : "A turma já estava sem a marca de menores." };
+  await pool.request().input("id", sql.Int, turmaId).input("v", sql.Bit, marca ? 1 : 0).query(`UPDATE EbdTurmas SET ContatoComMenores = @v, AtualizadoEm = SYSUTCDATETIME() WHERE TurmaId = @id`);
+  await registrarAuditoria({ tabela: "EbdTurmas", registroId: turmaId, acao: "TURMA_CONTATO_COM_MENORES_ALTERADO", usuarioId: por, dadosAntes: { contatoComMenores: !marca }, dadosDepois: { contatoComMenores: marca } });
+  let retirada = null;
+  if (marca) { try { retirada = await require("./ministerioMenoresDb").retirarInaptosDasTurmas(pool, { turmaId }); } catch (e) { retirada = { retirados: 0, vinculos: 0, falhou: true }; } }
+  const n = retirada ? retirada.vinculos : 0;
+  return { sucesso: true, mudou: true, retirados: n, retiradaFalhou: !!(retirada && retirada.falhou),
+    mensagem: marca ? (n ? `✅ Turma marcada como "com menores". ${n} professor(es) sem habilitação saíram da turma (eles e os colegas foram avisados).` : "✅ Turma marcada como \"com menores\": só professor com habilitação em dia será designado.") : "✅ Marca de menores retirada da turma." };
 }
 
 async function encerrarProfessor(pool, { turmaId, membroId, registradoPorMembroId }) {
@@ -583,6 +608,7 @@ async function listarTurmasParaVisaoAgrupada(pool, { nomesCongregacoesPermitidas
 }
 
 module.exports = {
+  definirContatoComMenores,
   PREFIXO_MATRICULA_EBD,
   nomeTurmaValido, validarNovaTurma, podeDesignarProfessor, podeMatricularAluno,
   formatarMatricula, agruparPorAreaCongregacao, filtrarBuscaAgrupada,

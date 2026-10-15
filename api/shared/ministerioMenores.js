@@ -517,6 +517,10 @@ function textoRetiradaPessoa({ equipes, nEscalas }) {
   const onde = listaEmTexto(equipes);
   return `Você saiu das escalas futuras com menores (${onde}) por uma pendência na habilitação${nEscalas ? `: ${nEscalas} escala(s) foram desmarcadas` : ""}. Veja o que falta em Meu Painel → Ministério com menores. Assim que regularizar, você volta a poder ser escalado. Isso não abre processo disciplinar.`.slice(0, 1000);
 }
+// v7.10: o mesmo para o professor que saiu de uma turma da EBD marcada "com menores" (não cita o motivo; não abre processo disciplinar).
+function textoRetiradaProfessorPessoa({ turmaNome }) {
+  return `Você saiu da turma ${turmaNome} da EBD por uma pendência na sua habilitação para servir com menores (a turma está marcada como "com menores"). Veja o que falta em Meu Painel → Ministério com menores. Assim que regularizar, a Secretaria da EBD pode designar você de novo. Isso não abre processo disciplinar.`.slice(0, 1000);
+}
 function textoVagaAberta({ nome, equipe, nEscalas }) {
   return `${nome} saiu das escalas da equipe ${equipe} por uma pendência de habilitação para servir com menores${nEscalas ? ` (${nEscalas} escala(s) desmarcada(s))` : ""}. Confira as vagas abertas e a regra dos dois adultos antes de cada serviço.`.slice(0, 1000);
 }
@@ -556,6 +560,6 @@ module.exports = {
   POLITICA_VERSAO, POLITICA_TITULO, POLITICA_ITENS, POLITICA_ACEITE, POLITICA_HASH, politicaVigente, avaliarIntegridadePolitica,
   TIPOS_AUTODENUNCIA, DECISOES_AUTODENUNCIA, validarAutoDenuncia, validarDecisaoAutoDenuncia, validarLiberacaoAutoDenuncia, validarAceitePolitica, validarConfirmacaoFicha,
   resumirPainel, agruparPorCongregacao,
-  textoVencendo, textoRetiradaPessoa, textoVagaAberta, textoSalaSemAdulto, textoVistoriasARenovar, textoAutoDenuncia, textoAutoDenunciaPendente, textoAutoDenunciaPessoa,
+  textoVencendo, textoRetiradaPessoa, textoRetiradaProfessorPessoa, textoVagaAberta, textoSalaSemAdulto, textoVistoriasARenovar, textoAutoDenuncia, textoAutoDenunciaPendente, textoAutoDenunciaPessoa,
   textoAutoDenunciaDecidida, textoCanalIrregular
 };

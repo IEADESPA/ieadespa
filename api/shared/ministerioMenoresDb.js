@@ -338,7 +338,7 @@ async function lerEmail(pool, membroId) {
 }
 
 // `membroId`: reavalia só uma pessoa (logo depois de um ato da Diretoria); sem ele, é a rotina diária sobre todos.
-async function retirarInaptosDasEscalas(pool, { hoje = hojeBrasilia(), membroId = null, equipeId = null, deps } = {}) {
+async function retirarInaptosDasEscalasSomente(pool, { hoje = hojeBrasilia(), membroId = null, equipeId = null, deps } = {}) {
   const vdb = require("./voluntariadoDb");
   const rq = pool.request().input("hoje", sql.Date, hoje);
   let filtro = "";
@@ -423,6 +423,125 @@ async function retirarInaptosDasEscalas(pool, { hoje = hojeBrasilia(), membroId 
 }
 
 // ---------------------------------------------------------------
+// Portão da EBD (v7.10): a turma marcada "com menores" só aceita professor apto e perde o que deixou de ser apto. A marca nasce desligada (nada muda sozinho).
+// ---------------------------------------------------------------
+
+async function turmaComMenores(pool, turmaId) {
+  const r = await pool.request().input("t", sql.Int, turmaId).query(`SELECT ContatoComMenores FROM EbdTurmas WHERE TurmaId = @t`);
+  return !!(r.recordset[0] && r.recordset[0].ContatoComMenores);
+}
+
+// O portão que a designação de professor usa: quem, dentre `membroIds`, pode ser designado na turma. Turma sem a marca libera todos (uma única consulta).
+async function aptosParaTurma(pool, { turmaId, membroIds, hoje = hojeBrasilia() }) {
+  const ids = idsValidos(membroIds);
+  if (!ids.length || !(await turmaComMenores(pool, turmaId))) return { contatoComMenores: false, aptos: new Set(ids), bloqueados: new Map() };
+  const aptidoes = await aptidaoEmLote(pool, ids, { hoje });
+  const aptos = new Set(), bloqueados = new Map();
+  for (const id of ids) {
+    const a = aptidoes.get(id);
+    if (a && a.apto) aptos.add(id); else bloqueados.set(id, a ? motivoCurto(a) : "habilitação para servir com menores pendente");
+  }
+  return { contatoComMenores: true, aptos, bloqueados };
+}
+
+// A rotina diária e os atos da Diretoria (certidão com restrição, inapto marcado, auto-denúncia, incidente) tiram da turma com menores o professor que deixou de ser apto, na hora.
+// `membroId`: só uma pessoa; `turmaId`: só uma turma (ao ligar a marca). Cada par pessoa×turma é uma transação que relê o vínculo com trava (duas varreduras ao mesmo tempo não avisam duas vezes).
+async function retirarInaptosDasTurmas(pool, { hoje = hojeBrasilia(), membroId = null, turmaId = null, deps } = {}) {
+  const rq = pool.request();
+  let filtro = "";
+  if (membroId) { rq.input("m", sql.Int, membroId); filtro += " AND tp.MembroId = @m"; }
+  if (turmaId) { rq.input("t", sql.Int, turmaId); filtro += " AND tp.TurmaId = @t"; }
+  const linhas = (await rq.query(`
+    SELECT tp.TurmaProfessorId, tp.TurmaId, tp.MembroId, t.Nome AS TurmaNome, t.CongregacaoId
+    FROM EbdTurmaProfessores tp JOIN EbdTurmas t ON t.TurmaId = tp.TurmaId
+    WHERE tp.Ativo = 1 AND t.Ativa = 1 AND t.ContatoComMenores = 1${filtro}`)).recordset;
+  if (!linhas.length) return { retirados: 0, vinculos: 0 };
+  const aptidoes = await aptidaoEmLote(pool, linhas.map((l) => l.MembroId), { hoje });
+  const pares = [];
+  for (const l of linhas) {
+    const ap = aptidoes.get(l.MembroId);
+    if (ap && ap.apto) continue;
+    pares.push({ turmaProfessorId: l.TurmaProfessorId, turmaId: l.TurmaId, turmaNome: l.TurmaNome, congregacaoId: l.CongregacaoId, membroId: l.MembroId, motivos: ap ? ap.bloqueios.map((b) => b.codigo) : ["SEM_HABILITACAO"] });
+  }
+  if (!pares.length) return { retirados: 0, vinculos: 0 };
+
+  const feitos = [];
+  const erros = [];
+  for (const par of pares) {
+    const transaction = new sql.Transaction(pool);
+    let retiradaId;
+    try {
+      await transaction.begin();
+      const viva = (await new sql.Request(transaction).input("tp", sql.Int, par.turmaProfessorId).query(`SELECT TurmaProfessorId FROM EbdTurmaProfessores WITH (UPDLOCK, HOLDLOCK) WHERE TurmaProfessorId = @tp AND Ativo = 1`)).recordset[0];
+      if (!viva) { await fecharTransacao(transaction, false); continue; }
+      await new sql.Request(transaction).input("tp", sql.Int, par.turmaProfessorId).query(`UPDATE EbdTurmaProfessores SET Ativo = 0, EncerradoEm = SYSUTCDATETIME() WHERE TurmaProfessorId = @tp AND Ativo = 1`);
+      const ins = await new sql.Request(transaction).input("m", sql.Int, par.membroId).input("t", sql.Int, par.turmaId).input("mot", sql.NVarChar(200), par.motivos.join(",").slice(0, 200))
+        .query(`INSERT INTO MinisterioMenoresRetiradas (MembroId, TurmaId, Motivos, AlocacoesCanceladas) VALUES (@m, @t, @mot, 1); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+      retiradaId = ins.recordset[0].id;
+      await transaction.commit();
+    } catch (e) { await fecharTransacao(transaction, false); erros.push(e); continue; }
+    // Mesma cautela da retirada das escalas: a auditoria é imutável e não leva o motivo; a matrícula só entra quando nenhum motivo é reservado.
+    const reservado = par.motivos.some((c) => mm.BLOQUEIOS_RESERVADOS.includes(c));
+    await registrarAuditoria({ tabela: "MinisterioMenoresRetiradas", registroId: retiradaId, acao: "MENORES_RETIRADO_DA_TURMA_EBD", usuarioId: null,
+      dadosDepois: { ...(reservado ? {} : { membroId: par.membroId }), turmaId: par.turmaId } });
+    feitos.push({ ...par, retiradaId });
+  }
+
+  // Avisos: um à pessoa (a regra obrigatória das escalas) e um aos outros professores da turma e à gestão da EBD da congregação. Nenhum cita o motivo.
+  const ck = require("./checkinInfantil");
+  const psc = require("./psc");
+  for (const f of feitos) {
+    const pessoa = await lerEmail(pool, f.membroId);
+    if (pessoa) {
+      await notificarAgora(pool, { regraChave: "MENORES_RETIRADO_DA_ESCALA", destinatarios: [pessoa], mensagem: mm.textoRetiradaProfessorPessoa({ turmaNome: f.turmaNome }),
+        referenciaId: f.retiradaId, referenciaTabela: "MinisterioMenoresRetiradas", limiteDia: AVISOS_AO_VOLUNTARIO_POR_DIA, deps });
+    }
+    const colegas = (await pool.request().input("t", sql.Int, f.turmaId).input("m", sql.Int, f.membroId)
+      .query(`SELECT m.MembroId, m.Nome, m.Email FROM EbdTurmaProfessores tp JOIN MembroReferencia m ON m.MembroId = tp.MembroId WHERE tp.TurmaId = @t AND tp.Ativo = 1 AND tp.MembroId <> @m`)).recordset
+      .map((x) => ({ membroId: x.MembroId, nome: x.Nome, email: x.Email }));
+    let gestao = [];
+    try { gestao = (await psc.resolverDestinatariosDaCongregacao(pool, { permissao: "ebd_gestao", congregacaoId: f.congregacaoId })).map((d) => ({ membroId: d.membroId, nome: d.nome, email: d.email })); } catch (e) { /* o aviso aos colegas segue */ }
+    const destinatarios = unicosPorMembro([...colegas, ...gestao]).filter((d) => d.membroId !== f.membroId);
+    if (destinatarios.length) {
+      await notificarAgora(pool, { regraChave: "EBD_PROFESSOR_RETIRADO", destinatarios, mensagem: ck.textoProfessorRetirado({ turmaNome: f.turmaNome }),
+        referenciaId: f.retiradaId, referenciaTabela: "MinisterioMenoresRetiradas", deps });
+    }
+  }
+  const resultado = { retirados: new Set(feitos.map((f) => f.membroId)).size, vinculos: feitos.length };
+  if (erros.length) {
+    const e = new Error(`A retirada automática das turmas da EBD falhou em ${erros.length} de ${pares.length} par(es) professor×turma: ${erros[0].message}`);
+    e.parcial = resultado;
+    throw e;
+  }
+  return resultado;
+}
+
+// O invólucro que todo ato da Diretoria e a rotina diária já chamam: varre as escalas e, se não é só uma equipe, também as turmas da EBD marcadas "com menores".
+// Uma falha numa das duas não impede a outra; o erro sobe no fim, com o que já foi feito em `parcial`.
+async function retirarInaptosDasEscalas(pool, opcoes = {}) {
+  let resultado = { retirados: 0, alocacoes: 0 };
+  let erro = null;
+  try { resultado = await retirarInaptosDasEscalasSomente(pool, opcoes); } catch (e) { erro = e; resultado = e.parcial || resultado; }
+  if (!opcoes.equipeId) {
+    try {
+      const t = await retirarInaptosDasTurmas(pool, { hoje: opcoes.hoje, membroId: opcoes.membroId, deps: opcoes.deps });
+      resultado = { ...resultado, turmasRetiradas: t.vinculos };
+    } catch (e) { erro = erro || e; resultado = { ...resultado, turmasRetiradas: (e.parcial && e.parcial.vinculos) || 0 }; }
+  }
+  if (erro) { erro.parcial = resultado; throw erro; }
+  return resultado;
+}
+
+// Turma que parece infantil pelo nome ("Crianças", "Juniores"...) e ainda não tem a marca: o que a Secretaria precisa conferir (a marca nasce desligada).
+async function turmasSemMarcaQueParecemInfantis(pool, { congregacaoIds = null } = {}) {
+  const rq = pool.request();
+  let filtro = "";
+  if (congregacaoIds) { if (!congregacaoIds.length) return []; filtro = ` AND t.CongregacaoId IN (${listaIn(rq, "c", congregacaoIds)})`; }
+  const r = await rq.query(`SELECT t.TurmaId, t.Nome, t.CongregacaoId, c.Nome AS CongregacaoNome FROM EbdTurmas t JOIN Congregacoes c ON c.CongregacaoId = t.CongregacaoId WHERE t.Ativa = 1 AND t.ContatoComMenores = 0${filtro} ORDER BY c.Nome, t.Nome`);
+  return r.recordset.filter((x) => mm.nomeSugereMenores(x.Nome)).map((x) => ({ turmaId: x.TurmaId, nome: x.Nome, congregacaoId: x.CongregacaoId, congregacaoNome: x.CongregacaoNome }));
+}
+
+// ---------------------------------------------------------------
 // Quem serve com menores: a base do painel e dos avisos
 // ---------------------------------------------------------------
 
@@ -483,7 +602,7 @@ async function painel(pool, { congregacaoIds = null, reservado = false, hoje = h
       validades: reservado ? l.aptidao.validades : mm.validadesParaGestao(l.aptidao.validades, l.aptidao.bloqueios)
     };
   }).sort((a, b) => ({ BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[a.status] - { BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[b.status]) || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
-  return { resumo: mm.resumirPainel(linhas, { reservado }), porCongregacao: mm.agruparPorCongregacao(linhas, { reservado }), voluntarios: itens, equipesSemMarca: await equipesSemMarcaQueParecemInfantis(pool, { congregacaoIds }) };
+  return { resumo: mm.resumirPainel(linhas, { reservado }), porCongregacao: mm.agruparPorCongregacao(linhas, { reservado }), voluntarios: itens, equipesSemMarca: await equipesSemMarcaQueParecemInfantis(pool, { congregacaoIds }), turmasSemMarca: await turmasSemMarcaQueParecemInfantis(pool, { congregacaoIds }) };
 }
 
 // ---------------------------------------------------------------
@@ -792,7 +911,7 @@ async function dadosDoTitular(pool, membroId) {
 module.exports = {
   lerPrazos, lerPrazosFaixas, carregarFatos, aptidaoEmLote, aptidaoDe, equipeComMenores, aptosParaEquipe, motivoCurto, conferirParaServir, trocaPreservaAdultos, antecedentesDe,
   salasDosServicos, avaliarPublicacao, definirFaixaEquipe, definirCriancasPrevistas, criancasPrevistasDoServico,
-  retirarInaptosDasEscalas, voluntariosComMenores, linhasDoPainel, limparCacheDoPainel, equipesSemMarcaQueParecemInfantis, painel, minhaSituacao,
+  retirarInaptosDasEscalas, retirarInaptosDasTurmas, aptosParaTurma, turmaComMenores, turmasSemMarcaQueParecemInfantis, voluntariosComMenores, linhasDoPainel, limparCacheDoPainel, equipesSemMarcaQueParecemInfantis, painel, minhaSituacao,
   aceitarPolitica, registrarPoliticaManual, confirmarFicha,
   declararAutoDenuncia, listarAutoDenuncias, decidirAutoDenuncia, liberarAutoDenuncia, mapearAutoDenuncia,
   detectarVencimentos, detectarSalasSemSegundoAdulto, detectarVistoriasARenovar, detectarAutoDenunciaPendente,

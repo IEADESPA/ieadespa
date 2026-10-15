@@ -208,10 +208,12 @@ describe("retenção e varredura", () => {
     expect(r).toEqual({ anonimizados: 4, retencaoDias: 1825 });
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "MENORES_IP_ANONIMIZADO", dadosDepois: { quantidade: 4 } });
   });
-  test("sem ninguém escalado nas equipes com menores, a varredura não faz nada (uma consulta e mais nenhuma)", async () => {
+  test("sem ninguém escalado nas equipes com menores, a varredura não faz nada (uma consulta nas escalas e uma nas turmas da EBD, e mais nenhuma)", async () => {
     const r = await db.retirarInaptosDasEscalas(pool, { hoje: HOJE });
-    expect(r).toEqual({ retirados: 0, alocacoes: 0 });
-    expect(mockConsultas).toHaveLength(1);
+    expect(r).toEqual({ retirados: 0, alocacoes: 0, turmasRetiradas: 0 });
+    expect(mockConsultas).toHaveLength(2);
+    expect(mockConsultas[0].sql).toMatch(/FROM EscalasAlocacoes a/);
+    expect(mockConsultas[1].sql).toMatch(/FROM EbdTurmaProfessores tp JOIN EbdTurmas t/);
     expect(escritas()).toHaveLength(0);
     expect(notificarAgora).not.toHaveBeenCalled();
   });
@@ -223,6 +225,12 @@ describe("retenção e varredura", () => {
     await db.retirarInaptosDasEscalas(pool, { hoje: HOJE, equipeId: 3 });
     expect(mockConsultas[0].sql).toMatch(/a\.EquipeId = @eq/);
     expect(mockConsultas[0].inputs.eq).toBe(3);
+    expect(mockConsultas).toHaveLength(1);                         // varrer UMA equipe não olha as turmas da EBD
+  });
+  test("a varredura de uma pessoa também olha as turmas da EBD dela (filtro por professor)", async () => {
+    await db.retirarInaptosDasEscalas(pool, { hoje: HOJE, membroId: 7 });
+    expect(mockConsultas[1].sql).toMatch(/tp\.MembroId = @m/);
+    expect(mockConsultas[1].inputs.m).toBe(7);
   });
 });
 
@@ -236,5 +244,102 @@ describe("a ficha cadastral", () => {
     expect(r.sucesso).toBe(true);
     expect(escritas()[0].sql).toMatch(/FichaAtualizadaEm = SYSUTCDATETIME\(\)/);
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "MENORES_FICHA_CONFIRMADA", registroId: 3, usuarioId: 5 });
+  });
+});
+
+describe("portão da EBD (v7.10): a turma \"com menores\"", () => {
+  const turma = (extra = {}) => ({ TurmaProfessorId: 1, TurmaId: 3, MembroId: 7, TurmaNome: "Juniores", CongregacaoId: 1, ...extra });
+  const MEMBRO_DO_PROFESSOR = /FROM MembroReferencia m LEFT JOIN Congregacoes c ON c\.CongregacaoId = m\.CongregacaoId WHERE m\.MembroId/;
+
+  test("turma SEM a marca libera todos com uma única consulta (nada de aptidão)", async () => {
+    quando(/SELECT ContatoComMenores FROM EbdTurmas WHERE TurmaId = @t/, [{ ContatoComMenores: 0 }]);
+    const r = await db.aptosParaTurma(pool, { turmaId: 3, membroIds: [7, 8], hoje: HOJE });
+    expect(r.contatoComMenores).toBe(false);
+    expect([...r.aptos].sort()).toEqual([7, 8]);
+    expect(mockConsultas).toHaveLength(1);
+    expect(await db.turmaComMenores(pool, 3)).toBe(false);
+  });
+  test("turma COM a marca barra quem não está habilitado, com o motivo curto (sem o detalhe de pendência reservada)", async () => {
+    quando(/SELECT ContatoComMenores FROM EbdTurmas WHERE TurmaId = @t/, [{ ContatoComMenores: 1 }]);
+    quando(/SELECT MembroId, DataNascimento, DataAdmissao, Status, SituacaoMembro FROM MembroReferencia/, [{ MembroId: 7, DataNascimento: new Date("1990-01-01"), DataAdmissao: new Date("2016-01-01"), Status: "ATIVO", SituacaoMembro: "EM_COMUNHAO" }]);
+    const r = await db.aptosParaTurma(pool, { turmaId: 3, membroIds: [7], hoje: HOJE });
+    expect(r.contatoComMenores).toBe(true);
+    expect(r.aptos.size).toBe(0);
+    expect(r.bloqueados.get(7)).toMatch(/habilitação para servir com menores pendente/);
+    expect((await db.aptosParaTurma(pool, { turmaId: 3, membroIds: [], hoje: HOJE })).aptos.size).toBe(0);
+  });
+  test("a varredura só olha turma ATIVA, MARCADA e professor ativo; sem ninguém, não faz nada", async () => {
+    const r = await db.retirarInaptosDasTurmas(pool, { hoje: HOJE });
+    expect(r).toEqual({ retirados: 0, vinculos: 0 });
+    expect(mockConsultas).toHaveLength(1);
+    expect(mockConsultas[0].sql).toMatch(/tp\.Ativo = 1 AND t\.Ativa = 1 AND t\.ContatoComMenores = 1/);
+    expect(escritas()).toHaveLength(0);
+    expect(notificarAgora).not.toHaveBeenCalled();
+  });
+  test("professor sem habilitação sai da turma (UPDATE só se o vínculo ainda está vivo), a retirada é registrada com a TURMA, a auditoria não leva o motivo e a pessoa e os colegas são avisados", async () => {
+    quando(/FROM EbdTurmaProfessores tp JOIN EbdTurmas t ON t\.TurmaId = tp\.TurmaId/, [turma()]);
+    quando(/SELECT TurmaProfessorId FROM EbdTurmaProfessores WITH \(UPDLOCK, HOLDLOCK\)/, [{ TurmaProfessorId: 1 }]);
+    quando(/INSERT INTO MinisterioMenoresRetiradas \(MembroId, TurmaId/, [{ id: 50 }]);
+    quando(LER_MEMBRO, [membro({ MembroId: 7, Nome: "Prof Sete" })]);
+    quando(/SELECT m\.MembroId, m\.Nome, m\.Email FROM EbdTurmaProfessores tp/, [{ MembroId: 8, Nome: "Colega Oito", Email: "c8@e.org" }]);
+    const r = await db.retirarInaptosDasTurmas(pool, { hoje: HOJE });
+    expect(r).toEqual({ retirados: 1, vinculos: 1 });
+    const up = escritas().find((c) => /UPDATE EbdTurmaProfessores SET Ativo = 0/.test(c.sql));
+    expect(up.sql).toMatch(/WHERE TurmaProfessorId = @tp AND Ativo = 1/);
+    expect(up.inputs.tp).toBe(1);
+    const ins = escritas().find((c) => /INSERT INTO MinisterioMenoresRetiradas/.test(c.sql));
+    expect(ins.inputs).toMatchObject({ m: 7, t: 3 });
+    expect(ins.sql).toMatch(/AlocacoesCanceladas\) VALUES \(@m, @t, @mot, 1\)/);
+    const aud = registrarAuditoria.mock.calls.at(-1)[0];
+    expect(aud).toMatchObject({ acao: "MENORES_RETIRADO_DA_TURMA_EBD", registroId: 50, usuarioId: null });
+    expect(JSON.stringify(aud)).not.toMatch(/ANTECEDENTES|SEM_HABILITACAO|ESTEIRA|motivo/i);
+    const avisos = notificarAgora.mock.calls.map((c) => c[1]);
+    expect(avisos.map((a) => a.regraChave)).toEqual(["MENORES_RETIRADO_DA_ESCALA", "EBD_PROFESSOR_RETIRADO"]);
+    expect(avisos[0].destinatarios.map((d) => d.membroId)).toEqual([7]);   // a pessoa que saiu da turma
+    expect(avisos[0].mensagem).toMatch(/turma Juniores da EBD/);
+    expect(avisos[1].destinatarios.map((d) => d.membroId)).toEqual([8]);
+    expect(avisos[1].mensagem).toMatch(/Juniores/);
+    for (const a of avisos) { expect(a).toMatchObject({ referenciaId: 50, referenciaTabela: "MinisterioMenoresRetiradas" }); expect(a.mensagem).not.toMatch(/ANTECEDENTES|certidão vencida/i); }
+  });
+  test("duas varreduras ao mesmo tempo: quem já foi tirado (vínculo não vive mais) não é retirado nem avisado de novo", async () => {
+    quando(/FROM EbdTurmaProfessores tp JOIN EbdTurmas t ON t\.TurmaId = tp\.TurmaId/, [turma()]);
+    quando(/SELECT TurmaProfessorId FROM EbdTurmaProfessores WITH \(UPDLOCK, HOLDLOCK\)/, []);
+    const r = await db.retirarInaptosDasTurmas(pool, { hoje: HOJE });
+    expect(r).toEqual({ retirados: 0, vinculos: 0 });
+    expect(escritas()).toHaveLength(0);
+    expect(notificarAgora).not.toHaveBeenCalled();
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+  test("se a gravação de um par falha, o erro sobe no fim com o que já foi feito em parcial (a rotina diária vira alerta)", async () => {
+    quando(/FROM EbdTurmaProfessores tp JOIN EbdTurmas t ON t\.TurmaId = tp\.TurmaId/, [turma(), turma({ TurmaProfessorId: 2, MembroId: 9 })]);
+    quando(/SELECT TurmaProfessorId FROM EbdTurmaProfessores WITH \(UPDLOCK, HOLDLOCK\)/, [{ TurmaProfessorId: 1 }]);
+    let n = 0;
+    quando(/INSERT INTO MinisterioMenoresRetiradas \(MembroId, TurmaId/, () => { if (n++ === 0) return [{ id: 51 }]; throw new Error("deu ruim"); });
+    quando(LER_MEMBRO, [membro({ MembroId: 7 })]);
+    await expect(db.retirarInaptosDasTurmas(pool, { hoje: HOJE })).rejects.toMatchObject({ message: expect.stringMatching(/1 de 2 par\(es\) professor×turma/), parcial: { retirados: 1, vinculos: 1 } });
+  });
+  test("o invólucro varre escalas E turmas, e o erro de uma não impede a outra", async () => {
+    quando(/FROM EbdTurmaProfessores tp JOIN EbdTurmas t ON t\.TurmaId = tp\.TurmaId/, [turma()]);
+    quando(/SELECT TurmaProfessorId FROM EbdTurmaProfessores WITH \(UPDLOCK, HOLDLOCK\)/, [{ TurmaProfessorId: 1 }]);
+    quando(/INSERT INTO MinisterioMenoresRetiradas \(MembroId, TurmaId/, [{ id: 52 }]);
+    quando(LER_MEMBRO, [membro({ MembroId: 7 })]);
+    const r = await db.retirarInaptosDasEscalas(pool, { hoje: HOJE });
+    expect(r).toMatchObject({ retirados: 0, alocacoes: 0, turmasRetiradas: 1 });
+    mockConsultas = []; mockRegras = [];
+    quando(/FROM EscalasAlocacoes a JOIN EscalasServicos s/, () => { throw new Error("escalas fora do ar"); });
+    quando(/FROM EbdTurmaProfessores tp JOIN EbdTurmas t ON t\.TurmaId = tp\.TurmaId/, [turma()]);
+    quando(/SELECT TurmaProfessorId FROM EbdTurmaProfessores WITH \(UPDLOCK, HOLDLOCK\)/, [{ TurmaProfessorId: 1 }]);
+    quando(/INSERT INTO MinisterioMenoresRetiradas \(MembroId, TurmaId/, [{ id: 53 }]);
+    quando(LER_MEMBRO, [membro({ MembroId: 7 })]);
+    await expect(db.retirarInaptosDasEscalas(pool, { hoje: HOJE })).rejects.toMatchObject({ message: "escalas fora do ar", parcial: { turmasRetiradas: 1 } });
+    expect(escritas().some((c) => /UPDATE EbdTurmaProfessores SET Ativo = 0/.test(c.sql))).toBe(true);
+  });
+  test("turma com nome de criança e sem a marca aparece no painel como alerta (a marca nasce desligada)", async () => {
+    quando(/SELECT t\.TurmaId, t\.Nome, t\.CongregacaoId, c\.Nome AS CongregacaoNome FROM EbdTurmas t/, [
+      { TurmaId: 1, Nome: "Juniores", CongregacaoId: 1, CongregacaoNome: "Central" }, { TurmaId: 2, Nome: "Adultos", CongregacaoId: 1, CongregacaoNome: "Central" }, { TurmaId: 3, Nome: "Crianças da Vila", CongregacaoId: 2, CongregacaoNome: "Vila" }]);
+    const r = await db.turmasSemMarcaQueParecemInfantis(pool, {});
+    expect(r.map((x) => x.nome)).toEqual(["Juniores", "Crianças da Vila"]);
+    expect(mockConsultas[0].sql).toMatch(/t\.Ativa = 1 AND t\.ContatoComMenores = 0/);
+    expect(await db.turmasSemMarcaQueParecemInfantis(pool, { congregacaoIds: [] })).toEqual([]);
   });
 });

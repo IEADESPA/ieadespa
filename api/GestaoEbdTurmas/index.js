@@ -14,6 +14,7 @@
 //
 // GET  /api/ebd-turmas/turmas?congregacaoId=          -> turmas da congregação (+ contagem de professores/alunos)
 // POST /api/ebd-turmas/turmas   body:{congregacaoId, nome, faixaEtaria?}
+// POST /api/ebd-turmas/turmas/menores body:{turmaId, contatoComMenores:true|false}  -> v7.10: marca a turma "com menores" (só professor apto; ligar já tira o inapto; desligar pede a confirmação reforçada)
 // GET  /api/ebd-turmas/professores?turmaId=
 // POST /api/ebd-turmas/professores          body:{turmaId, membroId, principal?}
 // POST /api/ebd-turmas/professores/encerrar body:{turmaId, membroId}
@@ -124,6 +125,21 @@ module.exports = async function (context, req) {
         context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
         return;
       }
+    }
+
+    // v7.10 — portão da EBD: a marca "com menores" da turma. Desligar derruba o portão (certidões, treinamento, política...): pede a confirmação reforçada, como a marca das equipes.
+    if (acao === "turmas/menores" && metodo === "POST") {
+      const { turmaId, contatoComMenores } = req.body || {};
+      if (!turmaId || typeof contatoComMenores !== "boolean") return erro(context, 400, "Informe turmaId e contatoComMenores (true/false).");
+      const tid = Number(turmaId);
+      if (!Number.isInteger(tid) || tid <= 0 || String(turmaId).trim() !== String(tid)) return erro(context, 400, "turmaId inválido.");
+      const { ok, turma } = await podeAcessarTurma(pool, usuario, tid);
+      // turma que não existe e turma fora do escopo: a mesma resposta
+      if (!turma || !ok) return erro(context, 404, "Turma não encontrada.");
+      if (!contatoComMenores && turma.contatoComMenores && !auth.exigirFatorRecente(req, context)) return;
+      const resultado = await ebd.definirContatoComMenores(pool, { turmaId: tid, contatoComMenores, por: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
     }
 
     // ---- Professores ----

@@ -133,7 +133,7 @@ autenticado), `/cracha/<slug>/`, `/pesquisa/<slug>/`, `/qrcode/<slug>/`,
 **Comunidade e conta**: `/mural-de-oracao/`, `/enquetes/`, `/minha-conta/`.
 
 **Painel de equipe**: `/painel-eventos/` (gestão de eventos, autenticado), `/painel-conteudo/`
-(notícias e mensagens, autenticado — ver [Painel de conteúdo](#painel-de-conteúdo-notícias-e-mensagens)),
+(notícias, mensagens, FAQ, programação, galeria, ministérios, história e páginas fixas, autenticado — ver [Painel de conteúdo](#painel-de-conteúdo)),
 `/painel/<local>/` (telão "hoje na igreja", sem autenticação — pensado para um aparelho fixo na recepção).
 
 **Sistema**: `/404`, `robots.txt`, `sitemap.xml`, `rss.xml`, `/busca` (índice JSON),
@@ -451,48 +451,109 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   campanha e a do evento) lado a lado na página — a prévia de link (que só tem espaço pra uma)
   continua com prioridade pro evento.
 
-### Painel de conteúdo (notícias e mensagens)
+### Painel de conteúdo
 
-Uma página feita para o **celular**, no lugar do Directus "cru", para escrever notícias e mensagens
-(pregações e estudos). Endereços: `/painel-conteudo/` (início, com um cartão por tipo de conteúdo —
-só aparece o que o perfil consegue ler), `/painel-conteudo/entrar/` (login),
-`/painel-conteudo/lista/?tipo=noticias` ou `?tipo=mensagens` (lista com busca pelo título e filtros
-Todos / Publicados / Rascunhos / Destaques) e `/painel-conteudo/editar/?tipo=…&id=…` (formulário;
-sem `id` cria um item novo). Como os outros painéis, entra com a **própria conta do Directus** (tokens
-em `sessionStorage`, chaves `painel_conteudo_token` e `painel_conteudo_token_refresh`) e **toda
-leitura e gravação vai ao Directus com o token da pessoa**: quem decide o que cada um pode fazer é o
-Directus; a tela só mostra o que ele permite (um 403 vira "Seu perfil não pode … aqui").
+Uma página feita para o **celular**, no lugar do Directus "cru", para a equipe escrever e editar o que
+aparece no site **sem precisar abrir o Directus**: notícias, mensagens (pregações e estudos), perguntas
+frequentes, programação semanal, galeria de fotos, ministérios, a história da igreja e os textos fixos
+de "Sobre" e "Crenças". Endereços: `/painel-conteudo/` (início, com os cartões agrupados em três seções
+— "Notícias e mensagens", "Páginas e informações" e "Institucional" — e uma frase embaixo de cada
+cartão; só aparece o que o perfil consegue ler), `/painel-conteudo/entrar/` (login),
+`/painel-conteudo/lista/?tipo=…` (lista com busca pelo título) e `/painel-conteudo/editar/?tipo=…&id=…`
+(formulário; sem `id` cria um item novo). Como os outros painéis, entra com a **própria conta do
+Directus** (tokens em `sessionStorage`, chaves `painel_conteudo_token` e `painel_conteudo_token_refresh`)
+e **toda leitura e gravação vai ao Directus com o token da pessoa**: quem decide o que cada um pode
+fazer é o Directus; a tela só mostra o que ele permite (um 403 vira "Seu perfil não pode … aqui").
 
-- **Quem usa** (funções do Directus): "Editor de notícias" cobre notícias **e** mensagens, envia imagem
-  (só JPEG, PNG, WebP e GIF) e lê `orgao_membros`/`orgao_categorias`; "Semi-administrador" e
-  "Administrator" fazem tudo. O que é confidencial — `mural_oracao`, `contas`, `contas_codigos`,
-  inscrições, pedidos de camiseta, `push_subscriptions`, `contato_mensagens` — o Editor de notícias
-  **não alcança** (403); a bateria `site/scripts/testes/conteudo.cjs` confere isso, o envio só de imagem
-  e as quatro páginas, a cada montagem (passo "Painel de conteúdo" do `site-testes.yml`).
-- **Publicar e avisar**: `draft: true` é rascunho e `draft: false` é publicado; nada de agendamento
-  (o site só esconde o rascunho, não olha a data — por isso o campo se chama "Data exibida"). O campo
-  `notificacao_enviada` é **somente leitura** na tela: o robô `scripts/send-content-notifications.mjs` o
-  marca depois de mandar a notificação no navegador a quem ativou os avisos. Publicar um item com
-  `notificacao_enviada = false` **notifica gente de verdade**; por isso a confirmação de "Publicar" diz
-  isso (e diz que não haverá aviso novo quando já estiver `true`). O site pode levar até uns 20 minutos
-  para mostrar a mudança (montagem automática a cada 15 min).
+| Tipo (`?tipo=`) | Coleção | Aparece em | Rascunho | Ordem manual (▲/▼) |
+| --- | --- | --- | --- | --- |
+| `noticias` | `noticias` | `/noticias/` | sim (`draft`) + aviso no navegador | não (a data decide) |
+| `mensagens` | `mensagens` | `/mensagens/` | sim (`draft`) + aviso no navegador | não (a data decide) |
+| `faq` | `faq` | `/duvidas-frequentes/` | sim (`draft`), **sem** aviso | dentro de cada categoria |
+| `programacao` | `programacao` | `/` e `/contato/` | não | dentro de cada dia da semana |
+| `galeria` | `galeria` | `/galeria/` | não | dentro de cada álbum |
+| `ministerios` | `ministerios` | `/orgaos/` e `/orgao/<slug>/` | não | dentro de cada tipo de órgão |
+| `historia` | `historia` (+ `historia_files`) | `/historia/` | não | uma fila só |
+| `configuracoes` | `configuracoes` (item único) | `/`, `/sobre/`, `/crencas/` | não | não |
+
+- **Quem usa** (funções do Directus): "Editor de notícias" cobre notícias, mensagens, FAQ, programação,
+  galeria, ministérios e história (incluindo as fotos extras, `historia_files`), envia imagem (só
+  JPEG, PNG, WebP e GIF, sem apagar arquivo) e **lê** `orgao_membros`/`orgao_categorias`.
+  "Semi-administrador" e "Administrator" editam as páginas fixas (`configuracoes`) — **só** eles; o
+  Editor de notícias recebe 403 e o cartão nem aparece. Atenção: a função "Semi-administrador"
+  **ainda não tem** permissão em `faq`, `historia_files`, `orgao_categorias` e `orgao_membros`
+  (conferido com `/permissions/me`): ela não vê o cartão de FAQ; na história, o campo de fotos extras vira
+  um aviso ("Seu perfil não pode ver nem mudar estas fotos aqui") em vez de fingir que não há fotos; e,
+  em ministérios, o "Tipo de órgão" não carrega a lista. Dar essas permissões é decisão do responsável
+  (no Directus), não do código. O que é confidencial — `mural_oracao`, `contas`, `contas_codigos`,
+  inscrições, pedidos de camiseta, `push_subscriptions`, `contato_mensagens`, relatórios, depoimentos —
+  o Editor de notícias **não alcança** (403); a bateria `site/scripts/testes/conteudo.cjs` confere isso
+  (inclusive pelo mapa `/permissions/me`, sem gravar nada), o envio só de imagem e as quatro páginas, a
+  cada montagem (passo "Painel de conteúdo" do `site-testes.yml`).
+- **Com rascunho × sem rascunho**: tipos com `draft` (notícias, mensagens, FAQ) têm "Salvar rascunho" e
+  "Publicar" (depois, "Salvar alterações" e "Voltar para rascunho"); nada de agendamento (o site só esconde
+  o rascunho, não olha a data — por isso o campo se chama "Data exibida"). Publicar notícia/mensagem com
+  `notificacao_enviada = false` **notifica gente de verdade** (o robô `scripts/send-content-notifications.mjs`
+  marca o campo, que é **somente leitura** na tela); a confirmação diz isso. **Os demais tipos não têm
+  rascunho: o que for salvo vai ao ar na próxima montagem do site** (até uns 20 minutos; montagem
+  automática a cada 15 min). Por isso o formulário tem um botão só, **"Salvar — aparece no site em até uns
+  20 minutos"**, a lista não mostra "Publicado/Rascunho", e **excluir** continua exigindo digitar EXCLUIR.
+- **Ordem manual** (`ordem: { campo: "sort", agruparPor }`): a lista mostra **▲ e ▼** em cada item. Um
+  toque troca o valor de `sort` com o do vizinho **visível do mesmo grupo** — um único `PATCH` em lote
+  (`PATCH /items/<coleção>` com `[{ id, sort }, { id, sort }]`, tudo ou nada) — e a lista já mostra a nova
+  ordem, avisa o leitor de tela e mantém o foco na seta. Se algum item do grupo não tem `sort` ou há
+  valores repetidos, o grupo é renumerado 1, 2, 3… (só vão os que mudam). Item **novo** entra no fim do
+  grupo (`maior sort + 1`, perguntado ao Directus na hora de salvar); item que **muda de grupo** (ex.:
+  pergunta que troca de categoria) também vai para o fim do grupo novo. O campo `sort` nunca aparece no
+  formulário. Funções puras testadas em `site/scripts/testes/painel-unidade.cjs`: `calcularTroca`,
+  `montarGrupos`, `proximaOrdem`, `consultaMaiorOrdem`.
+- **Item único** (`unico: true`, hoje `configuracoes`): não existe lista; o cartão abre direto o formulário
+  (`editar/?tipo=configuracoes`, sem `id`), lê e grava no endereço do singleton (`/items/configuracoes`),
+  manda só o campo que mudou, e não tem "novo" nem "excluir". As páginas "Sobre" e "Crenças" são Markdown:
+  **cada título (`##`) vira uma seção** da página (ver `quebrarEmSecoes` em `src/lib/markdown.ts`).
+  A bateria nunca grava nessa coleção — e confere o texto antes e depois.
+- **Várias fotos** (campo `tipo: "imagens"`, hoje `historia.fotos` via `historia_files`): "Adicionar
+  fotos" aceita várias de uma vez, mostra miniaturas com ◀ ▶ (ordem) e "Remover" (tira só a ligação; o
+  arquivo continua no Directus). Ao salvar manda a diferença no formato do Directus
+  (`{ create: […], update: […], delete: […] }` — `diferencaFotos`) e relê as linhas novas para não duplicar
+  nada na gravação seguinte. Se o perfil não pode ler a tabela de ligação, o campo vira um aviso e as
+  fotos ficam intactas.
+- **Perguntas frequentes**: "Grupo da pergunta" tem as mesmas oito opções do campo `categoria` do Directus
+  e de `CATEGORY_ORDER` em `src/lib/faq.ts` (nova categoria = Directus + este arquivo + `faq.ts`). A resposta
+  é texto simples (o site a mostra sem formatação). **Galeria**: a "Descrição da foto" (`alt`) é
+  **obrigatória** e a tela explica por quê: é o que o leitor de tela lê para quem é cego ou tem baixa
+  visão; o campo "Álbum" sugere os álbuns que já existem (para não escrever o mesmo nome de dois jeitos);
+  sem álbum a foto vai para "Outras fotos". **Programação**: o dia é obrigatório e começa em branco (escolha
+  consciente); "Qual domingo do mês" só vale para "Domingo à noite". **Ministérios**: o endereço (slug) é
+  único e vira `/orgao/<slug>/`; o tipo vem de `orgao_categorias`; excluir um ministério que ainda tem
+  membros ou notícias ligadas é recusado pelo Directus e a tela explica.
+- **"Ver no site"**: cada tipo declara as páginas públicas que o mostram (`paginasPublicas`); a lista e o
+  formulário trazem os links "Ver a página “…” no site ↗" com o aviso de que o site mostra a mudança em
+  até uns 20 minutos (só para o que já está no ar).
 - **O que a tela cuida**: endereço (slug) gerado do título enquanto a pessoa não o edita (aviso quando
-  mudá-lo quebra links de um item publicado e mensagem clara se já existir); texto em Markdown com barra
-  (negrito, itálico, título, lista, citação, link, imagem por endereço) e **prévia ao vivo sanitizada** (lista
-  de tags e atributos permitidos; `on…`, `style`, `script`, `iframe` e `javascript:` somem); capa com envio
-  direto ao Directus (JPEG/PNG/WebP/GIF, até 8 MB); salvar manda só o que mudou; "Salvar rascunho" /
-  "Publicar" (e, se já publicado, "Salvar alterações" / "Voltar para rascunho"); aviso de alterações não
-  salvas; clique duplo não duplica; a sessão que acaba **não apaga o texto** (aparece "Entrar de novo", que
-  abre outra aba); **Excluir** fica numa zona de perigo e só vale digitando EXCLUIR.
-- **Acrescentar um tipo novo** (FAQ, programação, galeria, ministérios, história, relatórios,
-  depoimentos…): é só um objeto novo em `TIPOS_CONTEUDO`, em
-  [`src/lib/painelConteudo.ts`](./src/lib/painelConteudo.ts) — coleção, títulos, qual campo marca o
-  rascunho, como montar o endereço público e a lista de campos em seções (`text`, `textarea`,
-  `markdown`, `select`, `boolean`, `date`, `datetime`, `image`, `m2o`, `number`, `url`, `slug`,
-  `readonly`) — **mais a permissão da função no Directus**. As páginas não mudam e o cartão aparece
-  sozinho para quem puder ler a coleção. O desenho dos campos fica em `src/lib/painelConteudoCampos.ts`.
-  Atenção ao tipo real do campo de data no Directus: `date` (só dia, caso de `noticias` e `mensagens`)
-  ou `dateTime` (`datetime`, que converte entre o horário local da tela e o ISO gravado).
+  mudá-lo quebra links de um item no ar e mensagem clara se já existir); texto em Markdown com barra
+  (negrito, itálico, título, lista, citação, link, imagem por endereço ou enviada do aparelho) e **prévia
+  ao vivo sanitizada** (lista de tags e atributos permitidos; `on…`, `style`, `script`, `iframe` e
+  `javascript:` somem); imagem com envio direto ao Directus (JPEG/PNG/WebP/GIF, até 8 MB); campos
+  obrigatórios conferidos no navegador com frase em português; salvar manda só o que mudou; aviso de
+  alterações não salvas; clique duplo não duplica; a sessão que acaba **não apaga o texto** (aparece
+  "Entrar de novo", que abre outra aba); **Excluir** fica numa zona de perigo e só vale digitando
+  EXCLUIR.
+- **Acrescentar um tipo novo**: um objeto novo em `TIPOS_CONTEUDO`, em
+  [`src/lib/painelConteudo.ts`](./src/lib/painelConteudo.ts) — coleção, `titulos`, `grupo` (seção da página
+  inicial), `paginasPublicas`, campo do título, `rascunho` (omita para "vai direto ao site"), `ordem`
+  (ordem manual e agrupamento), `unico`, `camposMeta` (o que aparece embaixo do título na lista),
+  `urlPublica` e a lista de campos em seções (`text`, `textarea`, `markdown`, `select`, `boolean`, `date`,
+  `datetime`, `image`, `imagens`, `m2o`, `number`, `url`, `slug`, `readonly`) — **mais a permissão da função no
+  Directus**. As páginas não mudam e o cartão aparece sozinho para quem puder ler a coleção. O desenho dos
+  campos fica em `src/lib/painelConteudoCampos.ts`. Atenção ao tipo real do campo de data no Directus:
+  `date` (só dia) ou `dateTime` (`datetime`, que converte entre o horário local da tela e o ISO gravado).
+  Tipo sem rascunho é público no instante em que se grava: **nunca teste gravando de verdade nele**.
+- **Testes**: `site/scripts/testes/painel-unidade.cjs` (sem rede: datas, endereço, validação, ordem,
+  fotos, configuração dos oito tipos — `node scripts/testes/painel-unidade.cjs` dentro de `site/`);
+  `conteudo.cjs` (CI, Directus de verdade: só itens de teste em rascunho, nada gravado onde não pode);
+  e, fora do repositório, uma prova no navegador (Edge) com as gravações dos tipos sem rascunho
+  interceptadas.
 
 ### Comunidade: mural de oração, enquetes e Minha Conta
 
@@ -570,8 +631,8 @@ nem de conta no GitHub — só um login de e-mail e senha criado para cada pesso
 
 - **Acesso**: `https://ieadespa-directus-gae4hfarf4a4ffcf.brazilsouth-01.azurewebsites.net/admin`
 - **Perfis (roles) hoje**: Administrator, Semi-administrador (tudo exceto
-  Configurações/Fluxos/Webhooks/Usuários/tokens), Editor de eventos, Editor de notícias (notícias e mensagens, pelo
-  [painel de conteúdo](#painel-de-conteúdo-notícias-e-mensagens); envia só imagens), Editor de
+  Configurações/Fluxos/Webhooks/Usuários/tokens), Editor de eventos, Editor de notícias (notícias, mensagens, FAQ, programação, galeria, ministérios e história, pelo
+  [painel de conteúdo](#painel-de-conteúdo); envia só imagens), Editor de
   contatos, Gestor de Camisetas (só as coleções de camiseta, sem apagar campanha) — cada um limitado ao próprio escopo (testado: acesso fora do escopo dá 403).
 - **Mídia**: fotos e PDFs enviados no Directus vão direto para o Azure Blob Storage, não para o
   repositório do GitHub.

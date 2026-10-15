@@ -23,8 +23,8 @@ const allPosts = visiblePosts(await getAllMensagens());
         <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
         <p class="mt-3 text-sm text-muted-foreground" data-pc-meta hidden></p>
         <p class="mt-2 text-sm" data-pc-ver-site-wrap hidden>
-          <a href="/" target="_blank" rel="noopener" class="link-sweep font-semibold text-accent" data-pc-ver-site>Ver no site ↗</a>
-          <span class="text-muted-foreground"> — o site pode levar até uns 20 minutos para mostrar mudanças.</span>
+          <span data-pc-ver-site-links></span>
+          <span class="text-muted-foreground"> O site pode levar até uns 20 minutos para mostrar mudanças.</span>
         </p>
       </header>
 
@@ -97,21 +97,27 @@ const allPosts = visiblePosts(await getAllMensagens());
       CANAL_SESSAO,
       SessaoExpiradaErro,
       camposDaEdicao,
+      caminhoItem,
+      consultaMaiorOrdem,
       criarApi,
       dataBR,
+      diferencaFotos,
       estaPublicado,
       explicarErroDirectus,
       hojeLocal,
       iniciarQuandoPronto,
+      chaveGrupo,
       obterTipo,
       painelUrls,
+      proximaOrdem,
       todosCampos,
       validarTudo,
       valorPadrao,
+      type FotoLigada,
       type TipoConteudo,
       type Valores,
     } from "@/lib/painelConteudo";
-    import { montarCampo, type CampoMontado, type ContextoForm } from "@/lib/painelConteudoCampos";
+    import { h, montarCampo, type CampoMontado, type ContextoForm } from "@/lib/painelConteudoCampos";
 
     /**
      * Guarda de "alterações não salvas". Estes ouvintes são registrados UMA vez por carregamento do script e olham
@@ -160,7 +166,7 @@ const allPosts = visiblePosts(await getAllMensagens());
       const estadoEl = q("[data-pc-estado]");
       const metaEl = q("[data-pc-meta]");
       const verSiteWrap = q("[data-pc-ver-site-wrap]");
-      const verSite = q<HTMLAnchorElement>("[data-pc-ver-site]");
+      const verSiteLinks = q("[data-pc-ver-site-links]");
       const voltarEl = q<HTMLAnchorElement>("[data-pc-voltar]");
       const erroPagina = q("[data-pc-erro-pagina]");
       const erroPaginaTexto = q("[data-pc-erro-pagina-texto]");
@@ -187,30 +193,42 @@ const allPosts = visiblePosts(await getAllMensagens());
         return;
       }
       const tipoAtual: TipoConteudo = tipo;
-      if (idParam !== null && !/^\d+$/.test(idParam)) {
+      /** Tipo sem rascunho: tudo o que for salvo vale no site na próxima montagem (só existe o botão "Salvar"). */
+      const direto = !tipoAtual.rascunho;
+      /** Tipo de item único (ex.: Sobre e Crenças): abre direto o formulário, sem "novo" nem "excluir". */
+      const unico = Boolean(tipoAtual.unico);
+      if (!unico && idParam !== null && !/^\d+$/.test(idParam)) {
         mostrarErroPagina("O endereço desta página está incompleto ou errado (número do item inválido).");
         return;
       }
 
-      const listaUrl = painelUrls.lista(tipoAtual.id);
-      if (voltarEl) voltarEl.href = listaUrl;
-      if (erroVoltar) erroVoltar.href = listaUrl;
-      document.title = `${idParam ? "Editar" : tipoAtual.titulos.nova} — Painel de conteúdo`;
+      const listaUrl = unico ? painelUrls.inicio : painelUrls.lista(tipoAtual.id);
+      if (voltarEl) {
+        voltarEl.href = listaUrl;
+        if (unico) voltarEl.textContent = "← Voltar ao painel";
+      }
+      if (erroVoltar) {
+        erroVoltar.href = listaUrl;
+        if (unico) erroVoltar.textContent = "Voltar ao painel";
+      }
+      document.title = `${unico ? tipoAtual.titulos.plural : idParam ? "Editar" : tipoAtual.titulos.nova} — Painel de conteúdo`;
 
       // Sem item aberto ainda: chamadas que mandam para o login (nada foi digitado). Depois de carregar, `api` nunca
       // redireciona — se a sessão acabar, o texto fica na tela (ver `mostrarSessao`).
       const apiInicial = criarApi(directusUrl, { redirecionar: true });
       const api = criarApi(directusUrl, { redirecionar: false });
 
-      let itemId: number | null = idParam ? Number(idParam) : null;
+      let itemId: number | null = !unico && idParam ? Number(idParam) : null;
       let item: Record<string, unknown> | null = null;
-      let publicadoAgora = false;
+      let publicadoAgora = direto;
+      /** Campos "imagens" que o perfil não consegue ler (o Directus recusa a tabela de ligação): ficam de fora, intactos. */
+      const semAcesso = new Set<string>();
       let notificacaoEnviada = false;
       let inicial: Valores = {};
       let emAcao = false;
       let ocupacoes = 0;
       const campos = new Map<string, CampoMontado>();
-      const camposEditaveis = () => todosCampos(tipoAtual).filter((c) => c.tipo !== "readonly");
+      const camposEditaveis = () => todosCampos(tipoAtual).filter((c) => c.tipo !== "readonly" && !semAcesso.has(c.nome));
       const estado = { sujo: () => false as boolean, saindo: false };
 
       // ---------------------------------------------------------------- utilidades de tela
@@ -238,8 +256,13 @@ const allPosts = visiblePosts(await getAllMensagens());
         const travado = emAcao || ocupacoes > 0;
         for (const b of botoes) {
           const acao = b.dataset.pcAcao as Acao;
-          const mostrar = publicadoAgora ? acao === "salvar" || acao === "despublicar" : acao === "rascunho" || acao === "publicar";
+          const mostrar = direto
+            ? acao === "salvar"
+            : publicadoAgora
+              ? acao === "salvar" || acao === "despublicar"
+              : acao === "rascunho" || acao === "publicar";
           b.hidden = !mostrar;
+          if (direto && acao === "salvar") b.textContent = "Salvar — aparece no site em até uns 20 minutos";
           b.disabled = travado;
         }
         const excluirAbrir = q<HTMLButtonElement>("[data-pc-excluir-abrir]");
@@ -269,14 +292,16 @@ const allPosts = visiblePosts(await getAllMensagens());
         const publicado = publicadoAgora;
         if (tituloEl) {
           const titulo = String(campos.get(tipoAtual.campoTitulo)?.ler() ?? "").trim();
-          tituloEl.textContent = itemId ? (titulo ? `Editar: ${titulo}` : `Editar ${tipoAtual.titulos.singular}`) : tipoAtual.titulos.nova;
+          tituloEl.textContent = unico ? tipoAtual.titulos.plural : itemId ? (titulo ? `Editar: ${titulo}` : `Editar ${tipoAtual.titulos.singular}`) : tipoAtual.titulos.nova;
         }
         if (estadoEl) {
           estadoEl.replaceChildren();
-          const selo = document.createElement("span");
-          selo.className = `pc-selo ${itemId ? (publicado ? "pc-selo-publicado" : "pc-selo-rascunho") : "pc-selo-destaque"}`;
-          selo.textContent = itemId ? (publicado ? "Publicado" : "Rascunho") : "Novo";
-          estadoEl.append(selo);
+          if (!unico) {
+            const selo = document.createElement("span");
+            selo.className = `pc-selo ${itemId ? (publicado ? "pc-selo-publicado" : "pc-selo-rascunho") : "pc-selo-destaque"}`;
+            selo.textContent = itemId ? (direto ? "No site" : publicado ? "Publicado" : "Rascunho") : "Novo";
+            estadoEl.append(selo);
+          }
         }
         const atualizadoCfg = tipoAtual.campoAtualizado;
         const quando = atualizadoCfg && item ? dataBR(item[atualizadoCfg.campo]) : "";
@@ -284,18 +309,36 @@ const allPosts = visiblePosts(await getAllMensagens());
           metaEl.hidden = !quando;
           metaEl.textContent = quando ? `Última atualização: ${quando}` : "";
         }
-        const url = publicado && item ? tipoAtual.urlPublica(item) : null;
-        if (verSiteWrap && verSite) {
-          verSiteWrap.hidden = !url;
-          if (url) verSite.href = url;
+        // "Ver no site": a página do próprio item (se tem) e as páginas que mostram este tipo — só do que já está no ar.
+        if (verSiteWrap && verSiteLinks) {
+          const noAr = Boolean(itemId) && publicado;
+          const links: { rotulo: string; url: string }[] = [];
+          const urlItem = noAr && item ? tipoAtual.urlPublica(item) : null;
+          if (urlItem) links.push({ rotulo: "Ver esta página no site", url: urlItem });
+          if (noAr) for (const p of tipoAtual.paginasPublicas) links.push({ rotulo: `Ver a página “${p.rotulo}” no site`, url: p.url });
+          verSiteWrap.hidden = links.length === 0;
+          verSiteLinks.replaceChildren(
+            ...links.flatMap((l, i) => {
+              const a = document.createElement("a");
+              a.href = l.url;
+              a.target = "_blank";
+              a.rel = "noopener";
+              a.className = "link-sweep font-semibold text-accent";
+              a.setAttribute("data-pc-ver-site", "");
+              a.textContent = `${l.rotulo} ↗`;
+              return i ? [document.createTextNode(" · "), a] : [a];
+            }),
+          );
         }
         if (perigo) {
-          perigo.hidden = !itemId;
+          perigo.hidden = !itemId || unico;
           const texto = q("[data-pc-perigo-texto]");
           if (texto) {
-            texto.textContent = publicado
-              ? `Excluir apaga ${tipoAtual.titulos.esta} para sempre e não dá para desfazer por aqui. Como está publicado, deixa de aparecer no site em até uns 20 minutos e os links passam a mostrar “página não encontrada”. Se só quer tirar do ar, use “Voltar para rascunho”.`
-              : `Excluir apaga ${tipoAtual.titulos.esta} para sempre e não dá para desfazer por aqui.`;
+            texto.textContent = direto
+              ? `Excluir apaga ${tipoAtual.titulos.esta} para sempre e não dá para desfazer por aqui. Como não existe rascunho nesta área, deixa de aparecer no site em até uns 20 minutos.`
+              : publicado
+                ? `Excluir apaga ${tipoAtual.titulos.esta} para sempre e não dá para desfazer por aqui. Como está publicado, deixa de aparecer no site em até uns 20 minutos e os links passam a mostrar “página não encontrada”. Se só quer tirar do ar, use “Voltar para rascunho”.`
+                : `Excluir apaga ${tipoAtual.titulos.esta} para sempre e não dá para desfazer por aqui.`;
           }
         }
         atualizarBotoes();
@@ -347,7 +390,7 @@ const allPosts = visiblePosts(await getAllMensagens());
         directusUrl,
         tipo: tipoAtual,
         api,
-        novo: itemId === null,
+        novo: itemId === null && !unico,
         itemId: () => itemId,
         publicadoAoCarregar: () => publicadoAgora,
         aoAlterar: (nome) => {
@@ -383,6 +426,15 @@ const allPosts = visiblePosts(await getAllMensagens());
           const grade = document.createElement("div");
           grade.className = "pc-campos";
           for (const campo of secao.campos) {
+            if (semAcesso.has(campo.nome)) {
+              grade.append(
+                h("div", { class: "pc-campo", "data-campo": campo.nome },
+                  h("p", { class: "pc-rotulo" }, campo.rotulo),
+                  h("p", { class: "pc-ajuda" }, "Seu perfil não pode ver nem mudar estas fotos aqui. Elas continuam como estão; peça à Secretaria se precisar mexer."),
+                ),
+              );
+              continue;
+            }
             const montado = montarCampo(campo, ctx);
             campos.set(campo.nome, montado);
             grade.append(montado.raiz);
@@ -396,7 +448,7 @@ const allPosts = visiblePosts(await getAllMensagens());
         for (const c of todosCampos(tipoAtual)) {
           const montado = campos.get(c.nome);
           if (!montado) continue;
-          montado.definir(dados ? (dados[c.nome] ?? null) : valorPadrao(c));
+          montado.definir(dados ? (dados[c.nome] ?? (c.tipo === "imagens" ? [] : null)) : valorPadrao(c));
         }
         // O retrato "como está salvo" é tirado DEPOIS de preencher: assim o que o navegador normaliza (quebras de linha etc.)
         // não conta como alteração do usuário.
@@ -412,12 +464,19 @@ const allPosts = visiblePosts(await getAllMensagens());
       function montarCorpo(acao: Acao, atuais: Valores): Record<string, unknown> {
         const corpo: Record<string, unknown> = {};
         for (const c of camposEditaveis()) {
-          if (itemId === null || !igual(atuais[c.nome], inicial[c.nome])) corpo[c.nome] = atuais[c.nome];
+          if (itemId !== null && igual(atuais[c.nome], inicial[c.nome])) continue;
+          if (c.tipo === "imagens") {
+            // Várias fotos: o Directus quer só a diferença (linhas novas, linhas tiradas, posições mudadas).
+            const dif = diferencaFotos(c, (inicial[c.nome] as FotoLigada[] | undefined) ?? [], (atuais[c.nome] as FotoLigada[] | undefined) ?? []);
+            if (dif) corpo[c.nome] = dif;
+          } else corpo[c.nome] = atuais[c.nome];
         }
-        const campoRascunho = tipoAtual.rascunho.campo;
-        const valorRascunho = tipoAtual.rascunho.valorRascunho;
-        if (acao === "publicar" && (itemId === null || !publicadoAgora)) corpo[campoRascunho] = !valorRascunho;
-        else if ((acao === "rascunho" || acao === "despublicar") && (itemId === null || publicadoAgora)) corpo[campoRascunho] = valorRascunho;
+        if (tipoAtual.rascunho) {
+          const campoRascunho = tipoAtual.rascunho.campo;
+          const valorRascunho = tipoAtual.rascunho.valorRascunho;
+          if (acao === "publicar" && (itemId === null || !publicadoAgora)) corpo[campoRascunho] = !valorRascunho;
+          else if ((acao === "rascunho" || acao === "despublicar") && (itemId === null || publicadoAgora)) corpo[campoRascunho] = valorRascunho;
+        }
         // Item que JÁ estava publicado e foi salvo COM alguma mudança: marca "atualizada em" (campos com `automatico`).
         if (itemId !== null && publicadoAgora && Object.keys(corpo).length > 0) {
           for (const c of todosCampos(tipoAtual)) if (c.automatico === "hoje-ao-salvar-publicado") corpo[c.nome] = hojeLocal();
@@ -473,13 +532,29 @@ const allPosts = visiblePosts(await getAllMensagens());
         }
 
         setStatus(acao === "publicar" ? "Publicando…" : "Salvando…");
-        const fields = encodeURIComponent(camposDaEdicao(tipoAtual).join(","));
+        const fields = encodeURIComponent(camposDaEdicao(tipoAtual, { semRelacoes: semAcesso.size > 0 }).join(","));
         let res: Response;
         try {
+          // Ordem manual: item novo (ou que mudou de grupo) entra no FIM do grupo — maior ordem + 1.
+          const ordem = tipoAtual.ordem;
+          if (ordem) {
+            const grupo = ordem.agruparPor;
+            const mudouDeGrupo = grupo !== undefined && itemId !== null && chaveGrupo(atuais[grupo]) !== chaveGrupo(inicial[grupo]);
+            if (itemId === null || mudouDeGrupo) {
+              const r = await api(consultaMaiorOrdem(tipoAtual, grupo ? atuais[grupo] : null));
+              if (!r.ok) {
+                const j = await r.json().catch(() => null);
+                setStatus(explicarErroDirectus(r.status, j, "salvar", tipoAtual).mensagem, "erro");
+                return;
+              }
+              const lido = (await r.json().catch(() => null)) as { data?: Record<string, unknown>[] } | null;
+              corpo[ordem.campo] = proximaOrdem(lido?.data?.[0]?.[ordem.campo]);
+            }
+          }
           res =
             itemId === null
               ? await api(`/items/${tipoAtual.colecao}?fields=${fields}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) })
-              : await api(`/items/${tipoAtual.colecao}/${itemId}?fields=${fields}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+              : await api(`${caminhoItem(tipoAtual, itemId)}?fields=${fields}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
         } catch (e) {
           if (e instanceof SessaoExpiradaErro) mostrarSessao();
           else setStatus("Não foi possível falar com o servidor (sem conexão?). Seu texto continua aqui; tente de novo.", "erro");
@@ -505,12 +580,18 @@ const allPosts = visiblePosts(await getAllMensagens());
           publicadoAgora = estaPublicado(tipoAtual, salvo);
           notificacaoEnviada = tipoAtual.campoNotificacao ? salvo[tipoAtual.campoNotificacao] === true : false;
           for (const c of todosCampos(tipoAtual)) if (c.tipo === "readonly") campos.get(c.nome)?.definir(salvo[c.nome] ?? null);
+          // Várias fotos: as linhas novas ganharam número no Directus; relê para a próxima gravação não duplicar nada.
+          for (const c of camposEditaveis()) {
+            if (c.tipo !== "imagens" || !Array.isArray(salvo[c.nome])) continue;
+            campos.get(c.nome)?.definir(salvo[c.nome]);
+            atuais[c.nome] = campos.get(c.nome)?.ler() ?? [];
+          }
         } else {
           // Resposta sem corpo (não deveria acontecer): confia no que foi enviado.
           publicadoAgora = acao === "publicar" ? true : acao === "salvar" ? publicadoAgora : false;
         }
         inicial = atuais; // o que foi enviado agora é o "salvo"; se a pessoa digitou mais enquanto isso, continua marcado como alterado
-        if (eraNovo && itemId !== null) {
+        if (eraNovo && itemId !== null && !unico) {
           // Passa a ser edição do item criado (sem recarregar a página: o texto fica intacto).
           const novaUrl = painelUrls.editar(tipoAtual.id, itemId);
           window.history.replaceState(null, "", novaUrl);
@@ -521,7 +602,7 @@ const allPosts = visiblePosts(await getAllMensagens());
         const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
         if (acao === "publicar") setStatus(`✅ Publicado às ${hora}. O site pode levar até uns 20 minutos para mostrar.`, "ok");
         else if (acao === "despublicar") setStatus(`✅ Voltou para rascunho às ${hora}. Sai do site em até uns 20 minutos.`, "ok");
-        else if (acao === "salvar") setStatus(`✅ Alterações salvas às ${hora}. O site pode levar até uns 20 minutos para mostrar.`, "ok");
+        else if (acao === "salvar") setStatus(direto ? `✅ Salvo às ${hora}. Aparece no site em até uns 20 minutos.` : `✅ Alterações salvas às ${hora}. O site pode levar até uns 20 minutos para mostrar.`, "ok");
         else setStatus(`✅ Rascunho salvo às ${hora}. Ainda não aparece no site.`, "ok");
       }
 
@@ -569,12 +650,12 @@ const allPosts = visiblePosts(await getAllMensagens());
       excluirTexto?.addEventListener("input", atualizarExcluir);
       excluirConfirmar?.addEventListener("click", () =>
         void executar(async () => {
-          if (itemId === null || !excluirTexto || excluirTexto.value.trim().toUpperCase() !== "EXCLUIR") return;
+          if (unico || itemId === null || !excluirTexto || excluirTexto.value.trim().toUpperCase() !== "EXCLUIR") return;
           if (excluirErro) excluirErro.hidden = true;
           setStatus("Excluindo…");
           let res: Response;
           try {
-            res = await api(`/items/${tipoAtual.colecao}/${itemId}`, { method: "DELETE" });
+            res = await api(caminhoItem(tipoAtual, itemId), { method: "DELETE" });
           } catch (e) {
             if (e instanceof SessaoExpiradaErro) mostrarSessao();
             else setStatus("Não foi possível falar com o servidor (sem conexão?). Nada foi excluído.", "erro");
@@ -631,12 +712,26 @@ const allPosts = visiblePosts(await getAllMensagens());
         const token = await exigirAutenticacao(directusUrl, AUTH_CONTEUDO);
         if (!token || !form) return;
 
-        if (itemId !== null) {
+        if (itemId !== null || unico) {
+          const carregar = (opcoes: { semRelacoes?: boolean }) =>
+            apiInicial(`${caminhoItem(tipoAtual, itemId)}?fields=${encodeURIComponent(camposDaEdicao(tipoAtual, opcoes).join(","))}`);
           let res: Response;
           try {
-            res = await apiInicial(`/items/${tipoAtual.colecao}/${itemId}?fields=${encodeURIComponent(camposDaEdicao(tipoAtual).join(","))}`);
+            res = await carregar({});
+            // Perfil sem acesso à tabela das fotos extras: o Directus recusa o pedido inteiro. Abre sem elas (e as deixa intactas).
+            if (res.status === 403 && todosCampos(tipoAtual).some((c) => c.tipo === "imagens")) {
+              const segundo = await carregar({ semRelacoes: true });
+              if (segundo.ok) {
+                for (const c of todosCampos(tipoAtual)) if (c.tipo === "imagens") semAcesso.add(c.nome);
+                res = segundo;
+              }
+            }
           } catch {
             mostrarErroPagina("Não foi possível carregar agora (sem conexão ou servidor fora do ar). Recarregue a página para tentar de novo.");
+            return;
+          }
+          if (res.status === 403 && unico) {
+            mostrarErroPagina(`Seu perfil não pode abrir “${tipoAtual.titulos.plural}”. Se isso parece errado, peça à Secretaria para conferir a sua função no Directus.`);
             return;
           }
           if (res.status === 403 || res.status === 404) {
@@ -648,9 +743,30 @@ const allPosts = visiblePosts(await getAllMensagens());
             mostrarErroPagina(explicarErroDirectus(res.status, json, "abrir", tipoAtual).mensagem);
             return;
           }
-          item = ((await res.json()) as { data: Record<string, unknown> }).data;
+          const dados = ((await res.json()) as { data: Record<string, unknown> | Record<string, unknown>[] }).data;
+          item = Array.isArray(dados) ? (dados[0] ?? null) : dados;
+          if (!item) {
+            mostrarErroPagina("Não encontramos nada para editar aqui (o registro ainda não foi criado no Directus).");
+            return;
+          }
+          if (typeof item.id === "number") itemId = item.id;
           publicadoAgora = estaPublicado(tipoAtual, item);
           notificacaoEnviada = tipoAtual.campoNotificacao ? item[tipoAtual.campoNotificacao] === true : false;
+        }
+
+        // Campos "várias fotos": se o perfil não lê a tabela de ligação (o Directus então some com o campo, sem avisar), não
+        // finge que "não há fotos": o campo vira um aviso e as fotos continuam como estão.
+        for (const c of todosCampos(tipoAtual)) {
+          if (c.tipo !== "imagens" || !c.imagens || semAcesso.has(c.nome)) continue;
+          let sem = item !== null && item[c.nome] === undefined;
+          if (!sem) {
+            try {
+              sem = (await apiInicial(`/items/${c.imagens.colecao}?limit=1&fields=id`)).status === 403;
+            } catch {
+              /* sem resposta: mantém o campo (se der erro ao salvar, a mensagem explica) */
+            }
+          }
+          if (sem) semAcesso.add(c.nome);
         }
 
         construirFormulario();

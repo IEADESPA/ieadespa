@@ -2502,6 +2502,88 @@ retirada, a política de proteção é só documento.
       próprios filhos pelo celular — nunca fazendo o check-in ele mesmo (isso
       continua sendo ação de voluntário na sala, com a etiqueta física). Sub-aba
       nova em "Meu Painel", mesma infraestrutura de login/PWA da vB.5.
+- [ ] **Portão da EBD** (o "próximo degrau" que a v7.8 deixou registrado): a turma da EBD marcada como
+      "com menores" só aceita professor **apto** (a aptidão da v7.7) e perde, na rotina diária, o professor que
+      deixou de ser apto — hoje só as escalas e os canais passam pelo portão.
+
+### Contrato da v7.10 (decisões tomadas antes de construir)
+
+Escrito em 15/10/2026, depois de ler o que a v7.7 e a v7.8 deixaram prontos. Cada linha é uma decisão que a lei e o
+Regimento não fecham; a CLI pode revertê-la. Nada disto está construído ainda: os itens acima só viram `[x]` com a
+prova (jest, banco real, tela, homologação).
+
+**A sala e quem opera.** A *sala* do check-in é a mesma da v7.7: o par **(serviço da escala, equipe marcada "contato
+com menores")**, com a faixa etária que a equipe já tem. Opera a sala quem está **escalado** nela (aceito ou
+confirmado) naquele serviço e **apto hoje**, e a aptidão é reavaliada a **cada ato** (não só ao entrar); também opera o
+líder da equipe, se for apto. A sessão pode ser a de PIN (voluntário comum não tem senha administrativa): o que protege a
+criança é o código e a conferência do servidor, não o tipo de login. Atos de **gestão** (aprovar retirada divergente, ver
+o relatório do dia, cadastrar autorizados e saúde a partir de ficha) exigem sessão de **liderança** com a permissão
+`habilitacao_voluntarios` no escopo da congregação. A janela do check-in é do serviço: de **60 minutos antes** até **5
+horas depois** do horário (ajustáveis em Prazos); fora dela a sala não abre.
+
+**A criança.** É **membro** (menor de 18 anos cadastrado) ou **visitante** (nome, data de nascimento e quem a trouxe, só
+para esta visita). Visitante não ganha cadastro de membro (mesmo princípio da chamada da EBD). A idade fora da faixa da
+sala **avisa**, não impede. Uma família faz o check-in de até 6 crianças de uma vez.
+
+**Quem é o responsável: o cadastro da Secretaria, não o vínculo familiar.** O plano original dizia "reaproveita
+`VinculosFamiliares` e `ResponsavelLegal`", mas a v7.7 criou o cadastro de responsáveis (`VoluntariadoResponsaveis`:
+pai, mãe, tutor, com o documento conferido pela Secretaria) e é nele que o consentimento já se apoia. O vínculo familiar
+é de **autoatendimento** (qualquer membro pode declarar parentesco), então **não vale para custódia**: quem se diz
+"responsável legal" sozinho não vê histórico nem retira criança. Criança membro sem responsável cadastrado faz o
+check-in como visitante (a pessoa que traz é registrada na hora) e a tela sugere à Secretaria o cadastro.
+
+**O código.** Um **código aleatório por criança, por visita**: 6 caracteres sem os parecidos (sem 0/O, 1/I/L), gerado no
+servidor, impresso na **etiqueta da criança** e no **recibo do responsável**. O servidor guarda só o **HMAC** do código
+(com segredo do servidor, atado ao registro); o texto do código **nunca** é gravado, registrado em log nem enviado à
+auditoria, e só sai uma vez, na resposta do check-in. A retirada é por criança: o voluntário escolhe a criança na tela e
+digita o código; **5 erros** travam aquela criança (só a gestão destrava, ou a segunda via). Sem código não se retira,
+**ainda que a pessoa seja conhecida** (é a regra do plano). Perdeu a etiqueta e o recibo? **Segunda via**: um voluntário
+confere o documento de quem pede (precisa estar entre os autorizados) e **outro adulto presente na sala confirma** em até
+10 minutos (dois olhares); o código antigo morre e o ato fica no histórico.
+
+**Quem pode retirar.** Os **responsáveis cadastrados** da criança (sempre), **mais** a lista de autorizados que o
+responsável faz (nome, parentesco, até 8 por criança, com validade opcional, revogável) e quem **trouxe** a criança nesta
+visita (mais até 3 nomes que o responsável indicar no check-in). Retirada por quem **não está nessa lista** é
+**divergente**: precisa do código **e** da aprovação de um gestor (sessão de liderança), que vê o motivo e o telefone do
+responsável para confirmar; o sistema **avisa os responsáveis** na hora (aviso obrigatório) e o líder; sem aprovação a
+criança **não sai**. Quem não tem código e não está na lista não retira criança nenhuma: chama-se o responsável.
+
+**Lotação em tempo real e as regras da v7.7 valendo na porta.** Adultos da sala = voluntários que **entraram** (registro
+de entrada e de saída), **maiores de 18 anos e aptos agora**; o adolescente serve como auxiliar e não conta. O check-in é
+**recusado** se há menos de 2 adultos presentes, se a criança a mais passaria da proporção da faixa (o mesmo padrão
+ajustável da v7.7) ou se a equipe não tem faixa; o voluntário **não pode sair** se deixaria menos de 2 adultos com
+criança na sala; a sala só **encerra** com a sala vazia. A tela da sala atualiza sozinha a cada poucos segundos.
+
+**Saúde (alergia e condição).** O dado é **do responsável**: ele (Meu Painel) ou a Secretaria (ficha assinada) o grava, e
+**só se há consentimento vigente** de saúde da v7.7. Sai na etiqueta (⚠) só com esse consentimento; **revogar o
+consentimento apaga o dado** (e as cópias nos registros de check-in) na mesma operação, e a rotina diária apaga o de quem
+perdeu o consentimento por outro motivo (responsável desativado, criança fez 18 anos). Para o **visitante** não há
+consentimento guardado: o responsável presente informa e concorda no balcão (texto e versão registrados), e o dado vale
+só para aquela visita.
+
+**Registro e prova.** Cada ato (check-in, entrada e saída de voluntário, erro de código, retirada, divergência pedida,
+aprovada ou negada, segunda via, encerramento) é uma linha de **histórico só de acréscimo** (gatilho no banco impede
+alterar ou apagar), com quem fez, o horário do **servidor** e o código do ato. A auditoria geral do sistema recebe só
+ids e códigos: nunca nome de criança, código de retirada, saúde nem texto livre. O responsável vê, em Meu Painel, **só o
+histórico das próprias crianças** (data, sala, quem trouxe, quem retirou, horários), nunca de outras, nunca o nome do
+voluntário, nunca o código.
+
+**Guarda e LGPD (art. 14).** Os registros de custódia ficam **5 anos** (política de retenção própria, ajustável); o
+telefone de quem trouxe um visitante é apagado em **90 dias** e o dado de saúde do visitante, junto com o registro, no
+mesmo prazo; depois do prazo geral o registro é anonimizado, não apagado (a contagem de presença sobrevive). ROPA e RIPD
+ganham a atividade "Check-in infantil" (criança, saúde e custódia são dado sensível de menor).
+
+**Avisos.** Obrigatórios (o destinatário não desliga): *retirada divergente* (responsáveis, líder e gestão da
+congregação), *criança sem retirada registrada* (a rotina diária da manhã seguinte avisa a gestão se alguma criança
+ficou "na sala" depois do fim do serviço) e *segunda via emitida* (responsáveis).
+
+**Portão da EBD.** A turma ganha a marca "com menores" (começa **desmarcada**, para nada mudar de uma hora para outra) e
+o nome que parece infantil ("Crianças", "Juniores"...) gera o mesmo alerta que a equipe sem marca já gera. Com a marca,
+**cadastrar** professor exige aptidão, e a rotina diária tira da turma o professor que deixou de ser apto (e avisa o
+líder e a gestão), como já faz com as escalas.
+
+**Fora desta versão (por decisão):** QR no celular do responsável, impressora térmica com integração direta (imprime-se
+pelo navegador, em etiqueta ou papel comum) e modo sem internet — o código em papel já é a prova que a retirada exige.
 
 ## 🔒 Trava de Revisão 7-B — antes de avançar para a v7.11
 

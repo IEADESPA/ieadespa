@@ -95,6 +95,12 @@ jobs:
           SITE_URL: ${{ steps.alvo.outputs.url }}
         run: node site/scripts/testes/reserva.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Painel de conteúdo
+        if: always() && steps.alvo.outputs.url != ''
+        env:
+          SITE_URL: ${{ steps.alvo.outputs.url }}
+        run: node site/scripts/testes/conteudo.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Eventos
         if: always() && steps.alvo.outputs.url != ''
         env:

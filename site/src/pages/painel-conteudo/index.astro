@@ -1,0 +1,152 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { painelUrls, TIPOS_CONTEUDO } from "@/lib/painelConteudo";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import "@/styles/painel-conteudo.css";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const tipos = Object.values(TIPOS_CONTEUDO);
+---
+
+<BaseLayout title="Painel de conteúdo" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer pc-escopo">
+    <div class="canvas" data-pc-inicio data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow">Área restrita</p>
+        <div class="pc-topo-linha">
+          <h1 class="pagehead-title">Painel de conteúdo</h1>
+          <p class="pc-usuario" data-painel-usuario-wrap hidden>
+            <span data-painel-usuario></span> ·{" "}
+            <button type="button" class="pc-link-botao" data-painel-sair>Sair</button>
+          </p>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div hidden data-painel-conteudo>
+        <p class="text-sm text-muted-foreground">Escolha o que você quer escrever ou editar.</p>
+
+        <div class="pc-cartoes mt-5" data-pc-cartoes>
+          {
+            tipos.map((t) => (
+              <a href={painelUrls.lista(t.id)} class="pc-cartao" data-pc-cartao={t.id} data-astro-reload hidden>
+                <span class="pc-cartao-icone" aria-hidden="true">
+                  {t.icone}
+                </span>
+                <span>
+                  <span class="pc-cartao-titulo">{t.titulos.plural}</span>
+                  <span class="pc-cartao-texto">{t.descricao}</span>
+                  <span class="pc-cartao-contagem" data-pc-contagem />
+                </span>
+              </a>
+            ))
+          }
+        </div>
+
+        <div class="pc-vazio mt-5" data-pc-sem-acesso hidden>
+          <p><strong>Seu perfil não tem acesso a nenhum conteúdo aqui.</strong></p>
+          <p class="mt-2 text-sm">Se isso parece errado, peça à Secretaria para conferir a sua função no Directus.</p>
+        </div>
+
+        <div class="pc-faixa pc-faixa-erro mt-5" data-pc-erro hidden>
+          <p data-pc-erro-texto>Não foi possível conferir o seu acesso agora.</p>
+          <div class="pc-faixa-botoes">
+            <button type="button" class="btn btn-outline" data-pc-tentar>Tentar de novo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { exigirAutenticacao, sair } from "@/lib/painelAuth";
+    import { AUTH_CONTEUDO, TIPOS_CONTEUDO, criarApi, iniciarQuandoPronto } from "@/lib/painelConteudo";
+
+    iniciarQuandoPronto("[data-pc-inicio]", (raiz) => {
+      const directusUrl = raiz.dataset.directusUrl ?? "";
+      const api = criarApi(directusUrl, { redirecionar: true });
+      const q = <T extends HTMLElement>(seletor: string) => raiz.querySelector<T>(seletor);
+
+      const carregando = q("[data-painel-carregando]");
+      const conteudo = q("[data-painel-conteudo]");
+      const semAcesso = q("[data-pc-sem-acesso]");
+      const erroEl = q("[data-pc-erro]");
+      const erroTexto = q("[data-pc-erro-texto]");
+
+      q("[data-painel-sair]")?.addEventListener("click", () => sair(directusUrl, AUTH_CONTEUDO));
+      q("[data-pc-tentar]")?.addEventListener("click", () => void verificar());
+
+      /** Pergunta ao Directus, tipo a tipo, se o perfil consegue LER a coleção: 200 mostra o cartão, 403 esconde. */
+      async function verificar() {
+        if (erroEl) erroEl.hidden = true;
+        if (semAcesso) semAcesso.hidden = true;
+        let algumVisivel = false;
+        let falhou = false;
+        await Promise.all(
+          Object.values(TIPOS_CONTEUDO).map(async (tipo) => {
+            const cartao = q<HTMLAnchorElement>(`[data-pc-cartao="${tipo.id}"]`);
+            if (!cartao) return;
+            try {
+              const res = await api(`/items/${tipo.colecao}?limit=1&fields=id&meta=filter_count`);
+              if (res.status === 403) {
+                cartao.hidden = true;
+                return;
+              }
+              cartao.hidden = false;
+              algumVisivel = true;
+              if (res.ok) {
+                const json = (await res.json()) as { meta?: { filter_count?: number } };
+                const n = json.meta?.filter_count;
+                const alvo = cartao.querySelector<HTMLElement>("[data-pc-contagem]");
+                if (alvo && typeof n === "number") alvo.textContent = n === 1 ? "1 item" : `${n} itens`;
+              } else {
+                falhou = true;
+              }
+            } catch {
+              cartao.hidden = false;
+              algumVisivel = true;
+              falhou = true;
+            }
+          }),
+        );
+        if (!algumVisivel && semAcesso) semAcesso.hidden = false;
+        if (falhou && erroEl) {
+          erroEl.hidden = false;
+          if (erroTexto) erroTexto.textContent = "Não foi possível conferir tudo agora (o servidor pode estar instável). Os cartões abaixo podem estar incompletos.";
+        }
+      }
+
+      async function iniciar() {
+        const token = await exigirAutenticacao(directusUrl, AUTH_CONTEUDO);
+        if (!token) return;
+        if (carregando) carregando.hidden = true;
+        if (conteudo) conteudo.hidden = false;
+        // Quem está logado (opcional: se o perfil não puder ler o próprio usuário, só não mostra).
+        void (async () => {
+          try {
+            const res = await api("/users/me?fields=email");
+            if (!res.ok) return;
+            const json = (await res.json()) as { data?: { email?: string } };
+            const email = json.data?.email;
+            const wrap = q("[data-painel-usuario-wrap]");
+            const alvo = q("[data-painel-usuario]");
+            if (email && wrap && alvo) {
+              alvo.textContent = email;
+              wrap.hidden = false;
+            }
+          } catch {
+            /* opcional */
+          }
+        })();
+        await verificar();
+      }
+
+      void iniciar();
+    });
+  </script>
+</BaseLayout>

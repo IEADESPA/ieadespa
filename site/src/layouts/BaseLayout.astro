@@ -233,7 +233,7 @@ const schema = structuredData ?? defaultStructuredData;
        */
       document.addEventListener("astro:page-load", () => {
         const path = location.pathname;
-        const internas = ["/painel-eventos", "/painel/", "/checkin"];
+        const internas = ["/painel-eventos", "/painel-camisetas", "/painel-conteudo", "/painel/", "/checkin"];
         if (internas.some((prefixo) => path.startsWith(prefixo))) return;
 
         let referrerDomain = null;

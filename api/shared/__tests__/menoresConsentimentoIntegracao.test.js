@@ -315,12 +315,23 @@ describe("ROPA e RIPD", () => {
     const foto = RIPDS.find((r) => r.chave === "FOTO");
     expect(foto.medidasMitigacao.join(" ")).toMatch(/Menor de 18 anos: o upload só passa com o consentimento de IMAGEM do responsável/);
   });
-  test("RIPD: a saúde em evento continua 'ainda sem dado de saúde' — o consentimento já existe, o dado chega com o check-in da v7.10", () => {
+  test("RIPD: a saúde em evento virou um RIPD de verdade com a v7.10 — o consentimento é pré-requisito e revogar apaga o dado", () => {
     const saude = RIPDS.find((r) => r.chave === "DADO_DE_SAUDE_EM_EVENTO");
-    expect(saude.tratamento).toMatch(/ainda sem dado de saúde/);
-    expect(saude.tratamento).toMatch(/consentimento já existe/);
-    expect(saude.tratamento).toMatch(/v7\.10/);
-    expect(saude.riscoIdentificado).toBeNull();
-    expect(saude.medidasMitigacao).toEqual([]);
+    expect(saude.tratamento).not.toMatch(/N\/A/);
+    expect(saude.tratamento).toMatch(/check-in infantil/);
+    expect(saude.riscoIdentificado).toBeTruthy();
+    const medidas = saude.medidasMitigacao.join(" ");
+    expect(medidas).toMatch(/consentimento específico e em destaque do responsável/);
+    expect(medidas).toMatch(/Revogar o consentimento apaga o dado/);
+    expect(medidas).toMatch(/400 caracteres/);
+    expect(medidas).toMatch(/nunca vai para a auditoria/);
+    expect(saude.riscoResidual).toMatch(/^Médio/);
+    const checkin = RIPDS.find((r) => r.chave === "CHECKIN_INFANTIL");
+    expect(checkin.medidasMitigacao.join(" ")).toMatch(/HMAC/);
+    expect(checkin.medidasMitigacao.join(" ")).toMatch(/vínculo familiar de autoatendimento/);
+    const ropa = REGISTROS_TRATAMENTO.find((r) => r.chave === "CHECKIN_INFANTIL");
+    expect(ropa.tabelasEnvolvidas).toEqual(["CheckinInfantilRegistros", "CheckinInfantilEventos", "CheckinInfantilVoluntarios", "CheckinInfantilAutorizados", "CheckinInfantilAutorizadosVisita", "CheckinInfantilSaude", "CheckinInfantilSegundasVias"]);
+    expect(ropa.retencao).toMatch(/5 anos/);
+    expect(ropa.categoriasDados.join(" ")).toMatch(/nunca é guardado/);
   });
 });

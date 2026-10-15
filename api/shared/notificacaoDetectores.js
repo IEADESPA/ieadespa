@@ -145,6 +145,7 @@ const setoresTecnicosDb = require("./setoresTecnicosDb");
 const vistoriaDb = require("./vistoriaAntecedentesDb");
 const mmDb = require("./ministerioMenoresDb");
 const protecaoDb = require("./protecaoDb");
+const checkinDb = require("./checkinInfantilDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -210,7 +211,10 @@ const DETECTORES = {
   PROTECAO_PADRAO_QUEBRAS: { tabela: "IncidentesProtecao", detectar: (pool) => protecaoDb.detectarPadroes(pool) },
   PROTECAO_COMITE_INCOMPLETO: { tabela: "Papeis", detectar: (pool) => protecaoDb.detectarComiteIncompleto(pool) },
   PROTECAO_RESUMO_DIARIO: { tabela: "IncidentesProtecao", detectar: (pool) => protecaoDb.detectarResumoDiario(pool) },
-  PROTECAO_CAUTELAR_SEM_DECISAO: { tabela: "IncidenteEnvolvidos", detectar: (pool) => protecaoDb.detectarCautelarSemDecisao(pool) }
+  PROTECAO_CAUTELAR_SEM_DECISAO: { tabela: "IncidenteEnvolvidos", detectar: (pool) => protecaoDb.detectarCautelarSemDecisao(pool) },
+  // Check-in infantil (v7.10): a retirada divergente e a segunda via avisam NA HORA, no ato (sem detector). Aqui fica a manhã seguinte: criança que ficou "na sala"
+  // depois do serviço, sem retirada registrada (a Igreja precisa provar a quem entregou cada criança).
+  CHECKIN_SEM_RETIRADA: { tabela: "CheckinInfantilRegistros", detectar: (pool) => checkinDb.detectarCriancasSemRetirada(pool) }
 };
 
 module.exports = { DETECTORES };

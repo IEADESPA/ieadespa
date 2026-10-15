@@ -74,9 +74,35 @@ const RIPDS = [
     riscoIdentificado: null, medidasMitigacao: [], riscoResidual: "N/A — sem tratamento real, sem RIPD a fazer. Entra quando o módulo existir."
   },
   {
+    chave: "CHECKIN_INFANTIL",
+    tratamento: "Check-in infantil com cadeia de custódia (v7.10): registro de quem entregou e quem retirou cada criança, código de retirada, lista de pessoas autorizadas, retirada divergente, segunda via e presença dos voluntários na sala.",
+    riscoIdentificado: "Quem sabe onde a criança está e a quem ela pode ser entregue tem poder sobre ela: um código vazado, uma lista de autorizados lida por quem não devia, ou uma retirada indevida por pessoa de fora é o pior desfecho possível; e o histórico (quem trouxe, quando, em qual sala) expõe a rotina da família.",
+    medidasMitigacao: [
+      "O código de retirada é gerado no servidor, guardado só como HMAC (atado ao registro e à geração do código) e nunca aparece em log, auditoria nem no histórico; só sai uma vez, na resposta do check-in ou da segunda via, e a tela o apaga ao fechar",
+      "Cada tentativa de código é reservada no banco ANTES de ser conferida: o limite de 5 erros vale mesmo com mil requisições em paralelo; ao errar, a criança trava e só a liderança destrava",
+      "Sem código não se retira, ainda que a pessoa seja conhecida; quem perdeu o código pede a segunda via, que exige documento conferido e a confirmação de OUTRO adulto da sala (dois olhares), e o código antigo morre",
+      "Quem não está na lista de autorizados só sai com o código E a aprovação da liderança (confirmação reforçada), com aviso imediato aos responsáveis; quem pediu não decide",
+      "A custódia se apoia no cadastro de responsáveis da Secretaria (documento conferido), nunca no vínculo familiar de autoatendimento",
+      "Só opera a sala quem está escalado nela, é adulto e apto hoje (a aptidão da v7.7 é recalculada a cada ato) e entrou na sala; a regra dos dois adultos e a proporção valem na porta, com a lotação lida dentro de uma transação com trava",
+      "O registro de custódia e o histórico de atos não se apagam nem se alteram (gatilhos no banco); a auditoria geral recebe só ids e códigos: nunca nome de criança, código, saúde nem texto livre",
+      "O responsável vê só o histórico das próprias crianças (data, sala, quem trouxe, quem retirou), nunca o código, nunca o nome do voluntário, nunca a saúde dos outros",
+      "A criança visitante não ganha cadastro: nome e nascimento ficam só no registro da visita, o telefone de quem a trouxe é apagado em 90 dias e o registro é anonimizado em 5 anos"
+    ],
+    riscoResidual: "Médio — o risco humano permanece: um responsável que entrega o código a quem não devia, ou um voluntário que vê o código na etiqueta de uma criança (a etiqueta fica no peito dela). Mitigado pela retirada divergente com a liderança (a pessoa que pega o código ainda precisa ser aprovada se não estiver na lista), pelo aviso na hora aos responsáveis e pelo registro de tudo."
+  },
+  {
     chave: "DADO_DE_SAUDE_EM_EVENTO",
-    tratamento: "N/A hoje — ainda sem dado de saúde: não existe cadastro de alergia ou condição médica em evento ou check-in. O consentimento já existe (v7.7, finalidade SAUDE_CRACHA, específico e em destaque, LGPD Art. 11, I); o dado chega com o check-in infantil da v7.10.",
-    riscoIdentificado: null, medidasMitigacao: [], riscoResidual: "N/A — sem tratamento real do dado, sem RIPD a fazer. Quando a v7.10 trouxer o dado de saúde, este item vira um RIPD de verdade (o consentimento do responsável já é pré-requisito e a revogação deve apagar o dado)."
+    tratamento: "Alergia ou condição de saúde da criança, informada pelo responsável para constar no crachá do check-in infantil (v7.10): dado sensível de criança (LGPD Art. 11, I; Art. 14).",
+    riscoIdentificado: "Dado de saúde de criança é sensível por natureza; impresso num crachá no peito dela, qualquer pessoa o lê; guardado depois do consentimento, vira dado sem finalidade; e um erro de transcrição pode ser tão perigoso quanto a falta do aviso.",
+    medidasMitigacao: [
+      "Só com o consentimento específico e em destaque do responsável (finalidade SAUDE_CRACHA, texto versionado com hash): sem consentimento vigente o dado nem é gravado e não sai na etiqueta",
+      "Revogar o consentimento apaga o dado e as cópias nos registros de check-in na mesma operação; a rotina diária apaga o de quem perdeu o consentimento por outro caminho (responsável desativado, criança que fez 18 anos)",
+      "Quem informa é o responsável (Meu Painel) ou a Secretaria com a ficha assinada (a referência é obrigatória); o texto é livre só até 400 caracteres e sem marcação, e nunca vai para a auditoria",
+      "O dado informado no balcão para criança visitante vale só para aquela visita e é apagado em 90 dias",
+      "O que sai na etiqueta é só o texto que o responsável escolheu; a equipe da sala o lê, a liderança também, mais ninguém; o responsável pode apagá-lo quando quiser",
+      "O texto do consentimento diz o que é impresso, quem vê, por quanto tempo, que é opcional e como revogar; participar do ministério nunca depende dele"
+    ],
+    riscoResidual: "Médio — o crachá é visível a quem estiver perto da criança (o texto da autorização avisa); o dado só é tão bom quanto o que o responsável escreve. Mitigado pela escolha do próprio responsável sobre o que informar e pela revogação que apaga de verdade."
   }
 ];
 

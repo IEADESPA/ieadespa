@@ -366,7 +366,11 @@ async function revogarResponsavel(pool, { responsavelId, por, autorizacao }) {
   if (!u || !Number(u.n)) return { sucesso: false, mensagem: "Este cadastro de responsável já foi revogado." };
   await registrarAuditoria({ tabela: "VoluntariadoResponsaveis", registroId: responsavelId, acao: "RESPONSAVEL_REVOGADO", usuarioId: por, dadosDepois: { menorId: r.MenorMembroId } });
   // v7.7: a autorização de imagem valia enquanto QUEM A DEU era responsável ativo; se ele saiu, a foto do menor sem outra autorização vigente é apagada. Fail-soft: a rotina diária refaz.
-  const limparFoto = async () => { try { await require("./menoresConsentimentoDb").apagarFotosDeMenoresSemConsentimento(pool, { menorId: r.MenorMembroId, por }); } catch (e) { /* a rotina diária refaz */ } };
+  // v7.10: o mesmo vale para o dado de saúde do check-in infantil (só existe com o consentimento de saúde vigente).
+  const limparFoto = async () => {
+    try { await require("./menoresConsentimentoDb").apagarFotosDeMenoresSemConsentimento(pool, { menorId: r.MenorMembroId, por }); } catch (e) { /* a rotina diária refaz */ }
+    try { await require("./checkinInfantilDb").apagarSaudeSemConsentimento(pool, { menorId: r.MenorMembroId }); } catch (e) { /* a rotina diária refaz */ }
+  };
   // 03/10/2026: era o ÚLTIMO responsável ativo? A adesão dada pelo responsável cadastrado fica suspensa (calculado na leitura; a prova continua) e o menor
   // não é mais escalado nem confirma escala até uma nova adesão. As escalas futuras já marcadas voltam na resposta, para a Secretaria decidir.
   const restantes = (await pool.request().input("mn", sql.Int, r.MenorMembroId).query(`SELECT COUNT(*) AS n FROM VoluntariadoResponsaveis WHERE MenorMembroId = @mn AND RevogadoEm IS NULL`)).recordset[0];

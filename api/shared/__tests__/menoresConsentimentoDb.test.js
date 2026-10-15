@@ -105,11 +105,11 @@ describe("conceder: o que é gravado", () => {
     expect(r).toMatchObject({ sucesso: true, consentimentoId: 77 });
     expect(r.mensagem).toMatch(/Caio Souza/);
     const ins = insercao(chamadas);
-    expect(ins.inputs).toMatchObject({ mn: 30, rs: 40, f: "IMAGEM", c: 1, ver: 1, h: HASH("IMAGEM"), forma: "CLICK_RESP", ip: IP, cad: CADEIA, ref: null, por: null });
+    expect(ins.inputs).toMatchObject({ mn: 30, rs: 40, f: "IMAGEM", c: 1, ver: 2, h: HASH("IMAGEM"), forma: "CLICK_RESP", ip: IP, cad: CADEIA, ref: null, por: null });
     expect(escritas(chamadas)).toHaveLength(1);
     expect(registrarAuditoria).toHaveBeenCalledTimes(1);
     const aud = registrarAuditoria.mock.calls[0][0];
-    expect(aud).toMatchObject({ tabela: "MinisterioMenoresConsentimentos", registroId: 77, acao: "MENOR_CONSENTIMENTO_CONCEDIDO", usuarioId: 40, dadosDepois: { menorId: 30, finalidade: "IMAGEM", forma: "CLICK_RESP", textoVersao: 1, textoHash: HASH("IMAGEM") } });
+    expect(aud).toMatchObject({ tabela: "MinisterioMenoresConsentimentos", registroId: 77, acao: "MENOR_CONSENTIMENTO_CONCEDIDO", usuarioId: 40, dadosDepois: { menorId: 30, finalidade: "IMAGEM", forma: "CLICK_RESP", textoVersao: 2, textoHash: HASH("IMAGEM") } });
     expect(JSON.stringify(aud)).not.toMatch(/177\.8|forwarded|Caio|Maria/);
   });
   test("a finalidade vai em maiúsculas e o hash enviado em qualquer caixa é aceito, mas o que se grava é o do texto VIGENTE", async () => {
@@ -203,12 +203,23 @@ describe("revogar", () => {
     expect(registrarAuditoria).toHaveBeenCalledTimes(1);
   });
   test("revogar a SAÚDE no crachá não toca na foto", async () => {
-    const { pool, chamadas } = criarPoolFalso([[linhaBD({ Finalidade: "SAUDE_CRACHA", TextoHash: HASH("SAUDE_CRACHA") })], [ativoBD(40)], [pessoa(30, { FotoUrl: "https://armazem/fotos-membros/membro-30" })], [{ id: 81 }]]);
+    const { pool, chamadas } = criarPoolFalso([[linhaBD({ Finalidade: "SAUDE_CRACHA", TextoHash: HASH("SAUDE_CRACHA") })], [ativoBD(40)], [pessoa(30, { FotoUrl: "https://armazem/fotos-membros/membro-30" })], [{ id: 81 }], [{ n: 1 }], [{ n: 2 }]]);
     const r = await db.revogar(pool, { menorId: 30, responsavelId: 40, finalidade: "SAUDE_CRACHA", ip: IP, hoje: HOJE });
     expect(r).toMatchObject({ sucesso: true, fotoApagada: false });
-    expect(r.mensagem).toMatch(/informação de saúde de Caio Souza deixa de ser usada no crachá/);
+    expect(r.mensagem).toMatch(/informação de saúde de Caio Souza deixa de ser usada no crachá e foi apagada/);
     expect(chamadas.some((c) => /UPDATE MembroReferencia/.test(c.sql))).toBe(false);
     expect(storage.excluirFoto).not.toHaveBeenCalled();
+    // v7.10: o dado de saúde do check-in infantil e as cópias nos registros saem junto, e a auditoria do ato não leva o texto
+    expect(chamadas.some((c) => /DELETE FROM CheckinInfantilSaude WHERE MenorMembroId = @m/.test(c.sql) && c.inputs.m === 30)).toBe(true);
+    expect(chamadas.some((c) => /UPDATE CheckinInfantilRegistros SET SaudeTexto = NULL/.test(c.sql))).toBe(true);
+    const acoes = registrarAuditoria.mock.calls.map((x) => x[0].acao);
+    expect(acoes).toEqual(["MENOR_CONSENTIMENTO_REVOGADO", "CHECKIN_SAUDE_APAGADA"]);
+    expect(JSON.stringify(registrarAuditoria.mock.calls)).not.toMatch(/alergia|amendoim/i);
+  });
+  test("revogar a IMAGEM não apaga o dado de saúde (cada finalidade é separada)", async () => {
+    const { pool, chamadas } = criarPoolFalso([[linhaBD()], [ativoBD(40)], [pessoa(30)], [{ id: 83 }], []]);
+    await db.revogar(pool, { menorId: 30, responsavelId: 40, finalidade: "IMAGEM", ip: IP, hoje: HOJE });
+    expect(chamadas.some((c) => /CheckinInfantil/.test(c.sql))).toBe(false);
   });
   test("sem IP nenhum a revogação NÃO fica bloqueada: grava com o marcador 'indisponivel'", async () => {
     const { pool, chamadas } = criarPoolFalso([[linhaBD()], [ativoBD(40)], [pessoa(30)], [{ id: 82 }], []]);
@@ -223,10 +234,11 @@ describe("revogar", () => {
     expect(insercao(chamadas)).toBeUndefined();
     expect(storage.excluirFoto).toHaveBeenCalledWith(30);
     storage.excluirFoto.mockClear();
-    ({ pool, chamadas } = criarPoolFalso([[linhaBD({ Finalidade: "SAUDE_CRACHA", Concedido: 0 })], [ativoBD(40)], [pessoa(30)]]));
+    ({ pool, chamadas } = criarPoolFalso([[linhaBD({ Finalidade: "SAUDE_CRACHA", Concedido: 0 })], [ativoBD(40)], [pessoa(30)], [{ n: 1 }], [{ n: 0 }]]));
     r = await db.revogar(pool, { menorId: 30, responsavelId: 40, finalidade: "SAUDE_CRACHA", hoje: HOJE });
     expect(r).toMatchObject({ sucesso: true, jaRevogada: true, fotoApagada: false });
-    expect(escritas(chamadas)).toHaveLength(0);
+    expect(insercao(chamadas)).toBeUndefined();
+    expect(chamadas.some((c) => /DELETE FROM CheckinInfantilSaude/.test(c.sql))).toBe(true);      // v7.10: o dado de saúde que tenha sobrado é apagado de qualquer forma
     expect(storage.excluirFoto).not.toHaveBeenCalled();
   });
   test("revogar o que NUNCA foi dado também grava (a pessoa pediu: fica registrado e a foto antiga é apagada)", async () => {
@@ -296,7 +308,7 @@ describe("registrarManual (a ficha assinada, pela Secretaria)", () => {
     const r = await db.registrarManual(pool, { ...FICHA, autorizacao: dentro() });
     expect(r).toMatchObject({ sucesso: true, consentimentoId: 90, fotoApagada: false });
     expect(r.mensagem).toMatch(/passa a valer/);
-    expect(insercao(chamadas).inputs).toMatchObject({ mn: 30, rs: 40, f: "IMAGEM", c: 1, forma: "FICHA_FISICA", ip: null, cad: null, ref: "Ficha 12, pasta azul", por: 5, h: HASH("IMAGEM"), ver: 1 });
+    expect(insercao(chamadas).inputs).toMatchObject({ mn: 30, rs: 40, f: "IMAGEM", c: 1, forma: "FICHA_FISICA", ip: null, cad: null, ref: "Ficha 12, pasta azul", por: 5, h: HASH("IMAGEM"), ver: 2 });
     expect(r.estado).toMatchObject({ situacao: "CONCEDIDO", vigente: true, forma: "FICHA_FISICA", integridade: { status: "DOCUMENTO_EXTERNO" }, concedidoPorMembroId: 40, referencia: "Ficha 12, pasta azul" });
     const aud = registrarAuditoria.mock.calls[0][0];
     expect(aud).toMatchObject({ acao: "MENOR_CONSENTIMENTO_FICHA", usuarioId: 5, dadosDepois: { menorId: 30, responsavelId: 40, finalidade: "IMAGEM", concedido: true, referenciaTamanho: "Ficha 12, pasta azul".length } });
@@ -503,7 +515,7 @@ describe("alinhamento com o esquema da migração 143 (o código e o banco não 
   test("CHECKs da migração: clique exige IP e ninguém que registre; ficha exige referência e quem registra ≠ responsável — o código grava exatamente assim", async () => {
     expect(sqlMigracao).toMatch(/Forma <> 'CLICK_RESP' OR \(EnderecoIp IS NOT NULL AND RegistradoPorMembroId IS NULL\)/);
     expect(sqlMigracao).toMatch(/Forma <> 'FICHA_FISICA' OR \(Referencia IS NOT NULL AND RegistradoPorMembroId IS NOT NULL AND RegistradoPorMembroId <> ResponsavelMembroId\)/);
-    let { pool, chamadas } = criarPoolFalso([[], [ativoBD(40)], [pessoa(30)], [{ id: 1 }], []]);
+    let { pool, chamadas } = criarPoolFalso([[], [ativoBD(40)], [pessoa(30)], [{ id: 1 }], [{ n: 0 }], [{ n: 0 }]]);
     await db.revogar(pool, { menorId: 30, responsavelId: 40, finalidade: "SAUDE_CRACHA", ip: null, hoje: HOJE });
     expect(insercao(chamadas).inputs).toMatchObject({ forma: "CLICK_RESP", por: null });
     expect(insercao(chamadas).inputs.ip).toBeTruthy();                        // revogar sem IP usa o marcador: o CHECK do clique exige valor

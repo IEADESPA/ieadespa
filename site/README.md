@@ -309,6 +309,21 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   aviso em massa agora **erra de forma explícita (502)** quando uma consulta
   ao Directus falha, em vez de contar zero e o painel dizer "Pronto: 0". Bateria `scripts/testes/reserva.cjs`
   (só simula, nunca envia e-mail).
+- **Filtros de separação, separação em massa e campanha grátis (15/10/2026, pedido do responsável durante a
+  entrega da Marcha para Jesus)** — o chip "Com peça a retirar" misturava quem já tinha a peça separada e
+  quem não. Agora os chips são: Todos · Devendo · Pago parcial · Pago · **Falta retirar (todos)** ·
+  **Separados (aguardando)** · **Não separados** · Já retirado tudo, **cada um com a contagem** do que está na
+  tela (menos o próprio chip), e uma linha de resumo "Separados aguardando · Não separados · Já retirado
+  tudo". **Separação em massa** (barra abaixo dos filtros): "Marcar como separado" e "Tirar a reserva" valem só
+  para o que está na tela (filtros e aba do lote incluídos), ficam de fora os já separados, quem já levou tudo e
+  as vendas avulsas, e há o campo **"os primeiros N"** (os pedidos mais antigos primeiro) para separar só quanto
+  chegou de peças. Confirma mostrando quantos e quais (#a até #b); acima de 100 pedidos, ou sem nenhum filtro
+  ligado, exige digitar SEPARAR/TIRAR; grava em lotes de 100; **não manda e-mail** (depois, na campanha, o aviso
+  "só quem está separado"); **"Desfazer a última ação em massa"** devolve cada pedido ao estado de antes. Em
+  **campanha grátis** (nenhum tamanho tem preço) somem os chips e cartões de dinheiro e o campo "Pago: R$" dos
+  cartões — só reaparece, com um aviso, num pedido que já tenha valor lançado, para poder zerar (em 15/10/2026 a
+  Marcha tinha 74 pedidos com R$ 1,00 "pago" que ninguém arrecadou; o Directus não guardou quem nem quando;
+  foram zerados, com cópia do estado anterior).
 - **Painel de pedidos no celular (13/10/2026)** — a barra de busca fica presa no alto durante a
   rolagem e os filtros ficam **recolhidos** atrás do botão "Filtros" (com um selo com quantos estão
   ligados); uma linha "Filtrando por: Tamanho GG" com o botão "Limpar" fica sempre à vista, para

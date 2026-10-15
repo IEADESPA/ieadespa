@@ -37,8 +37,8 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
         <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-stats-grid>
           <div class="stat-card"><p class="stat-numero" data-stat="total">0</p><p class="stat-label">Pedidos (todos os lotes)</p></div>
-          <div class="stat-card"><p class="stat-numero" data-stat="arrecadado">R$ 0</p><p class="stat-label">Arrecadado</p></div>
-          <div class="stat-card"><p class="stat-numero" data-stat="esperado">R$ 0</p><p class="stat-label">Esperado (total)</p></div>
+          <div class="stat-card" data-stat-dinheiro><p class="stat-numero" data-stat="arrecadado">R$ 0</p><p class="stat-label">Arrecadado</p></div>
+          <div class="stat-card" data-stat-dinheiro><p class="stat-numero" data-stat="esperado">R$ 0</p><p class="stat-label">Esperado (total)</p></div>
         </div>
 
         <div class="mt-8">
@@ -167,10 +167,12 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           </div>
           <div class="flex flex-wrap gap-2" data-filtros data-filtros-colapsavel>
             <button type="button" class="filtro-chip is-active" data-filtro="todos">Todos</button>
-            <button type="button" class="filtro-chip" data-filtro="devendo">Devendo</button>
-            <button type="button" class="filtro-chip" data-filtro="parcial">Pago parcial</button>
-            <button type="button" class="filtro-chip" data-filtro="pago">Pago</button>
-            <button type="button" class="filtro-chip" data-filtro="pendente-retirada">Com peça a retirar</button>
+            <button type="button" class="filtro-chip" data-filtro="devendo" data-chip-dinheiro>Devendo</button>
+            <button type="button" class="filtro-chip" data-filtro="parcial" data-chip-dinheiro>Pago parcial</button>
+            <button type="button" class="filtro-chip" data-filtro="pago" data-chip-dinheiro>Pago</button>
+            <button type="button" class="filtro-chip" data-filtro="pendente-retirada" title="Todos que ainda não levaram a peça, separados ou não">Falta retirar (todos)</button>
+            <button type="button" class="filtro-chip" data-filtro="separados" title="A peça já está separada e esperando a pessoa vir buscar">Separados (aguardando)</button>
+            <button type="button" class="filtro-chip" data-filtro="nao-separados" title="Ainda não tem peça separada para a pessoa e ela ainda não levou nada">Não separados</button>
             <button type="button" class="filtro-chip" data-filtro="retirado">Já retirado tudo</button>
           </div>
         </div>
@@ -206,7 +208,27 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
             <button type="button" class="btn btn-outline" data-exportar-planilha>Exportar planilha (Excel)</button>
           </div>
         </div>
+        <p class="mt-1 text-sm font-semibold" data-resumo-separacao></p>
         <div class="mt-2 flex flex-wrap gap-2 text-xs" data-resumo-tamanhos></div>
+
+        <!-- 15/10/2026 — ações em massa sobre o que está na tela (pedido do responsável: separar as peças de 600 pedidos "um por um" não dá). Não manda e-mail:
+             depois, na campanha, o aviso com "só quem está separado". Dá para desfazer a última. -->
+        <div class="mt-4 massa-barra" data-massa-barra>
+          <p class="text-sm font-semibold">Separação em massa — vale só para o que está na tela (filtros e aba do lote incluídos)</p>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <label class="text-sm">Os primeiros
+              <input type="number" min="1" inputmode="numeric" class="field massa-qtd" placeholder="todos" aria-label="Quantos pedidos separar (vazio = todos os que aparecem)" data-massa-qtd />
+              <span class="text-muted-foreground">(em branco = todos; vale a ordem do pedido, o mais antigo primeiro)</span>
+            </label>
+          </div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" class="btn btn-solid" data-massa-separar>Marcar como separado</button>
+            <button type="button" class="btn btn-outline" data-massa-tirar>Tirar a reserva</button>
+            <button type="button" class="btn btn-outline" data-massa-desfazer hidden>Desfazer a última ação em massa</button>
+          </div>
+          <p class="mt-2 text-xs text-muted-foreground" data-massa-info></p>
+          <p class="mt-1 text-sm" data-massa-status role="status" aria-live="polite"></p>
+        </div>
 
         <div class="mt-4 flex flex-wrap items-start gap-3" data-filtro-pergunta-bloco data-filtros-colapsavel hidden>
           <span class="text-sm font-semibold text-muted-foreground" style="padding-top:0.4rem;">Filtrar por pergunta:</span>
@@ -342,7 +364,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     /** "todos-os-lotes" | "avulso" | um id de lote (número, como string). */
     let visaoAtual: "todos-os-lotes" | "avulso" | number = "todos-os-lotes";
 
-    let filtroAtivo: "todos" | "devendo" | "parcial" | "pago" | "pendente-retirada" | "retirado" = "todos";
+    let filtroAtivo: "todos" | "devendo" | "parcial" | "pago" | "pendente-retirada" | "separados" | "nao-separados" | "retirado" = "todos";
     let termoBusca = "";
     let filtroPerguntaId: number | null = null;
     let filtroPerguntaValores: string[] = [];
@@ -751,10 +773,12 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
             </div>
             <div class="flex flex-wrap items-center gap-3">
               ${moverLote}
-              <label class="text-sm">Pago: R$
+              ${campanhaGratis() && !(Number(p.valor_pago) > 0)
+                ? ""
+                : `<label class="text-sm">Pago: R$
                 <input type="number" step="0.01" min="0" class="field" style="width:6.5rem" value="${p.valor_pago}" data-campo-valor-pago />
               </label>
-              <button type="button" class="link-sweep text-sm font-semibold text-accent" data-salvar-pedido>Salvar</button>
+              <button type="button" class="link-sweep text-sm font-semibold text-accent" data-salvar-pedido>Salvar</button>${campanhaGratis() ? `<span class="text-xs" style="color:#b45309;font-weight:600;">⚠ esta campanha é grátis: o valor deveria ser 0</span>` : ""}`}
               ${separadoAcao}
               ${reenviarAcao}
               ${whatsappAcao}
@@ -778,7 +802,29 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       return true;
     }
 
-    function pedidosFiltrados(): Pedido[] {
+    /** Campanha grátis: nenhum tamanho tem preço. O dinheiro não faz sentido ali (e digitar valor onde não há preço só sujou os números). */
+    function campanhaGratis(): boolean {
+      return !(Number(grupo.valor_venda) > 0) && !Object.values(grupo.precos_tamanho ?? {}).some((v) => Number(v) > 0);
+    }
+
+    /** Separação (a peça já está guardada para a pessoa): quem ainda espera a peça e já tem a reserva. */
+    function estaSeparadoAguardando(p: Pedido): boolean { return !p.avulso && p.separado && !tudoRetirado(p); }
+    /** Quem ainda não tem peça separada e ainda não levou tudo. */
+    function estaNaoSeparado(p: Pedido): boolean { return !p.avulso && !p.separado && !tudoRetirado(p); }
+
+    /** O pedido bate com o chip de situação (o botão "Todos/Devendo/…/Separados/Não separados"). */
+    function casaChip(chip: typeof filtroAtivo, p: Pedido): boolean {
+      if (chip === "devendo") return devendo(p);
+      if (chip === "parcial") return devendo(p) && Number(p.valor_pago) > 0;
+      if (chip === "pago") return !devendo(p);
+      if (chip === "pendente-retirada") return temPendenteRetirada(p);
+      if (chip === "separados") return estaSeparadoAguardando(p);
+      if (chip === "nao-separados") return estaNaoSeparado(p);
+      if (chip === "retirado") return tudoRetirado(p);
+      return true;
+    }
+
+    function pedidosFiltrados(opcoes: { semChip?: boolean } = {}): Pedido[] {
       const termo = termoBusca.trim().toLowerCase();
       // O filtro "Lote" (quando escolhido) manda acima da aba — serve para olhar um lote específico
       // estando em "Todos os lotes", ou cruzar lote × tamanho sem trocar de aba.
@@ -801,12 +847,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         if (filtroEmail === "sem" && p.email) return false;
         if (filtroCongregacao === "sem" && p.congregacao != null) return false;
         if (filtroCongregacao && filtroCongregacao !== "sem" && String(p.congregacao ?? "") !== filtroCongregacao) return false;
-        if (filtroAtivo === "devendo") return devendo(p);
-        if (filtroAtivo === "parcial") return devendo(p) && Number(p.valor_pago) > 0;
-        if (filtroAtivo === "pago") return !devendo(p);
-        if (filtroAtivo === "pendente-retirada") return temPendenteRetirada(p);
-        if (filtroAtivo === "retirado") return tudoRetirado(p);
-        return true;
+        return opcoes.semChip ? true : casaChip(filtroAtivo, p);
       });
     }
 
@@ -835,7 +876,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
     /** Os filtros que estão escondendo pedidos agora (para a linha "Filtrando por…" do celular). */
     function filtrosLigados(): string[] {
-      const nomesChip: Record<string, string> = { devendo: "Devendo", parcial: "Pago parcial", pago: "Pago", "pendente-retirada": "Com peça a retirar", retirado: "Já retirado tudo" };
+      const nomesChip: Record<string, string> = { devendo: "Devendo", parcial: "Pago parcial", pago: "Pago", "pendente-retirada": "Falta retirar (todos)", separados: "Separados (aguardando)", "nao-separados": "Não separados", retirado: "Já retirado tudo" };
       const lista: string[] = [];
       if (filtroAtivo !== "todos") lista.push(nomesChip[filtroAtivo] ?? filtroAtivo);
       if (filtroTamanho) lista.push(`Tamanho ${filtroTamanho}`);
@@ -882,12 +923,39 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     window.addEventListener("resize", ajustarTopoDaBusca);
     ajustarTopoDaBusca();
 
+    /** Chips com a contagem (do que está na tela, menos o próprio chip), resumo da separação e botões da separação em massa. */
+    function atualizarChipsEMassa(filtrados: Pedido[]) {
+      const gratis = campanhaGratis();
+      document.querySelectorAll<HTMLElement>("[data-chip-dinheiro]").forEach((c) => { c.hidden = gratis; });
+      document.querySelectorAll<HTMLElement>("[data-stat-dinheiro]").forEach((c) => { c.hidden = gratis; });
+      const semChip = pedidosFiltrados({ semChip: true });
+      document.querySelectorAll<HTMLButtonElement>("[data-filtro]").forEach((chip) => {
+        const quem = chip.dataset.filtro as typeof filtroAtivo;
+        if (!chip.dataset.rotulo) chip.dataset.rotulo = chip.textContent ?? "";
+        chip.textContent = quem === "todos" ? `${chip.dataset.rotulo} · ${semChip.length}` : `${chip.dataset.rotulo} · ${semChip.filter((p) => casaChip(quem, p)).length}`;
+      });
+      const resumo = document.querySelector<HTMLElement>("[data-resumo-separacao]");
+      const aguardando = filtrados.filter(estaSeparadoAguardando).length;
+      const naoSep = filtrados.filter(estaNaoSeparado).length;
+      const retirados = filtrados.filter(tudoRetirado).length;
+      if (resumo) resumo.textContent = `Separados aguardando: ${aguardando} · Não separados: ${naoSep} · Já retirado tudo: ${retirados}`;
+      const paraSeparar = elegiveisParaSeparar().length;
+      const paraTirar = elegiveisParaTirar().length;
+      const btnSep = document.querySelector<HTMLButtonElement>("[data-massa-separar]");
+      const btnTirar = document.querySelector<HTMLButtonElement>("[data-massa-tirar]");
+      if (btnSep) { btnSep.disabled = paraSeparar === 0; btnSep.textContent = `Marcar como separado (${paraSeparar})`; }
+      if (btnTirar) { btnTirar.disabled = paraTirar === 0; btnTirar.textContent = `Tirar a reserva (${paraTirar})`; }
+      const info = document.querySelector<HTMLElement>("[data-massa-info]");
+      if (info) info.textContent = `Na tela: ${filtrados.length} pedido(s). Podem ser separados: ${paraSeparar} (ficam de fora os já separados, quem já levou tudo e as vendas avulsas). Têm reserva para tirar: ${paraTirar}.`;
+    }
+
     function renderizarPedidos() {
       if (!listaEl) return;
       const filtrados = pedidosFiltrados();
       ultimaListaFiltrada = filtrados;
       renderizarResumoFiltro(filtrados);
       atualizarIndicadorDeFiltros();
+      atualizarChipsEMassa(filtrados);
       listaEl.innerHTML = filtrados.length ? filtrados.map(pedidoCardHtml).join("") : `<p class="text-sm text-muted-foreground">Nenhum pedido nesse filtro.</p>`;
     }
 
@@ -1278,6 +1346,81 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         document.querySelectorAll("[data-filtro]").forEach((b) => b.classList.toggle("is-active", b === botao));
         renderizarPedidos();
       });
+    });
+
+    // --- separação em massa (15/10/2026) ---
+    const elegiveisParaSeparar = (): Pedido[] => [...ultimaListaFiltrada].filter(estaNaoSeparado).sort((a, b) => a.id - b.id);
+    const elegiveisParaTirar = (): Pedido[] => [...ultimaListaFiltrada].filter(estaSeparadoAguardando).sort((a, b) => a.id - b.id);
+    const massaStatus = (texto: string) => { const el = document.querySelector<HTMLElement>("[data-massa-status]"); if (el) el.textContent = texto; };
+    // (ao destravar, atualizarTudo() refaz o estado de "Marcar como separado"/"Tirar a reserva" pelas contagens)
+    const massaBotoes = (travar: boolean) => document.querySelectorAll<HTMLButtonElement>("[data-massa-separar],[data-massa-tirar],[data-massa-desfazer]").forEach((b) => { b.disabled = travar; });
+    /** O que a última ação em massa mudou, para o "Desfazer": cada pedido com o estado de antes. */
+    let ultimaMassa: { rotulo: string; antes: { id: number; separado: boolean; separado_em: string | null }[] } | null = null;
+
+    /** Grava em lotes de 100 (um PATCH por lote, itens com valores próprios); devolve quantos foram gravados. */
+    async function gravarSeparacaoEmLotes(itens: { id: number; separado: boolean; separado_em: string | null }[], aoAvancar: (feitos: number) => void): Promise<number> {
+      let feitos = 0;
+      for (let i = 0; i < itens.length; i += 100) {
+        const parte = itens.slice(i, i + 100);
+        const res = await api(`${directusUrl}/items/camiseta_pedidos`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(parte) });
+        if (!res.ok) break;
+        feitos += parte.length;
+        aoAvancar(feitos);
+      }
+      return feitos;
+    }
+
+    async function executarMassa(tipo: "separar" | "tirar") {
+      const elegiveis = tipo === "separar" ? elegiveisParaSeparar() : elegiveisParaTirar();
+      const qtdTexto = (document.querySelector<HTMLInputElement>("[data-massa-qtd]")?.value ?? "").trim();
+      if (qtdTexto && !/^\d+$/.test(qtdTexto)) { massaStatus("Escreva só o número de pedidos (ou deixe em branco para todos)."); return; }
+      const limite = qtdTexto ? Number(qtdTexto) : elegiveis.length;
+      const alvo = elegiveis.slice(0, Math.max(0, limite));
+      if (!alvo.length) { massaStatus("Nenhum pedido da tela se encaixa."); return; }
+      const filtros = filtrosLigados().join(" · ") || "nenhum filtro (todos os pedidos da aba)";
+      const verbo = tipo === "separar" ? "MARCAR COMO SEPARADO" : "TIRAR A RESERVA de";
+      const resumo = `${verbo} ${alvo.length} pedido(s)?\n\nFiltros: ${filtros}.\nOs primeiros são os mais antigos (#${alvo[0].id} até #${alvo[alvo.length - 1].id}).\n\nNão manda e-mail agora${tipo === "separar" ? ": depois, na campanha, use o aviso com \"só quem está separado\"" : ""}. Dá para desfazer logo em seguida.`;
+      if (!confirm(resumo)) return;
+      if (alvo.length > 100 || !filtrosLigados().length) {
+        const palavra = tipo === "separar" ? "SEPARAR" : "TIRAR";
+        const digitado = prompt(`São ${alvo.length} pedidos${filtrosLigados().length ? "" : " e NENHUM filtro está ligado"}. Para confirmar, digite ${palavra}:`);
+        if (digitado === null || digitado.trim().toUpperCase() !== palavra) { massaStatus("Cancelado: nada foi alterado."); return; }
+      }
+      massaBotoes(true);
+      const antes = alvo.map((p) => ({ id: p.id, separado: p.separado, separado_em: p.separado_em }));
+      const agora = new Date().toISOString();
+      const novos = alvo.map((p) => ({ id: p.id, separado: tipo === "separar", separado_em: tipo === "separar" ? agora : null }));
+      massaStatus(`Gravando 0 de ${alvo.length}…`);
+      let feitos = 0;
+      try { feitos = await gravarSeparacaoEmLotes(novos, (n) => massaStatus(`Gravando ${n} de ${alvo.length}…`)); }
+      catch { /* a contagem de quantos foram gravados vale */ }
+      const gravados = new Set(alvo.slice(0, feitos).map((p) => p.id));
+      for (const p of pedidos) if (gravados.has(p.id)) { p.separado = tipo === "separar"; p.separado_em = tipo === "separar" ? agora : null; }
+      ultimaMassa = feitos > 0 ? { rotulo: `${tipo === "separar" ? "separar" : "tirar a reserva de"} ${feitos} pedido(s)`, antes: antes.slice(0, feitos) } : null;
+      const desfazer = document.querySelector<HTMLButtonElement>("[data-massa-desfazer]");
+      if (desfazer) { desfazer.hidden = !ultimaMassa; if (ultimaMassa) desfazer.textContent = `Desfazer: ${ultimaMassa.rotulo}`; }
+      massaStatus(feitos === alvo.length
+        ? `✅ ${tipo === "separar" ? "Separados" : "Reserva tirada de"} ${feitos} pedido(s).`
+        : `⚠ Só ${feitos} de ${alvo.length} foram gravados (a conexão falhou). Confira a lista e repita para os que faltam.`);
+      massaBotoes(false);
+      atualizarTudo();
+    }
+    document.querySelector("[data-massa-separar]")?.addEventListener("click", () => { void executarMassa("separar"); });
+    document.querySelector("[data-massa-tirar]")?.addEventListener("click", () => { void executarMassa("tirar"); });
+    document.querySelector("[data-massa-desfazer]")?.addEventListener("click", async () => {
+      if (!ultimaMassa) return;
+      if (!confirm(`Desfazer: ${ultimaMassa.rotulo}? Cada pedido volta ao estado de antes.`)) return;
+      const { antes } = ultimaMassa;
+      massaBotoes(true);
+      massaStatus(`Desfazendo 0 de ${antes.length}…`);
+      let feitos = 0;
+      try { feitos = await gravarSeparacaoEmLotes(antes, (n) => massaStatus(`Desfazendo ${n} de ${antes.length}…`)); } catch { /* idem */ }
+      const porId = new Map(antes.map((a) => [a.id, a]));
+      for (const p of pedidos) { const a = porId.get(p.id); if (a && antes.slice(0, feitos).some((x) => x.id === p.id)) { p.separado = a.separado; p.separado_em = a.separado_em; } }
+      if (feitos === antes.length) { ultimaMassa = null; const d = document.querySelector<HTMLButtonElement>("[data-massa-desfazer]"); if (d) d.hidden = true; }
+      massaStatus(feitos === antes.length ? `✅ Desfeito (${feitos} pedido(s)).` : `⚠ Só ${feitos} de ${antes.length} foram desfeitos. Confira a lista.`);
+      massaBotoes(false);
+      atualizarTudo();
     });
 
     const buscaInput = document.querySelector<HTMLInputElement>("[data-busca]");

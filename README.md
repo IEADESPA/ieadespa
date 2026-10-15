@@ -324,7 +324,7 @@ diz em que arquivo ela está e em que pé ela anda.
 - **Concluídas:** FASES 0 a 6 e as FASES B (consolidação da base) e C (integração com o site), salvo uns
   poucos itens adiados de propósito, que o índice marca como 🟡.
 - **Em andamento — FASE 7:** v7.1 (PSC), v7.2 (Calendário oficial), v7.3 (Canais oficiais), v7.4
-  (Eventos e congressos), v7.5 (Escalas e voluntariado), v7.6 (Setores Técnicos e Termo de Vistoria) e v7.7 (Ministério com menores, Lei 14.811/2024) entregues e no ar. Os pontos que a revisão da v7.5 apontou (IP
+  (Eventos e congressos), v7.5 (Escalas e voluntariado), v7.6 (Setores Técnicos e Termo de Vistoria) v7.7 (Ministério com menores, Lei 14.811/2024) e v7.8 (Incidentes de proteção de crianças, ECA Art. 13: relógio de 24 horas para o Conselho Tutelar, relato protegido, afastamento cautelar, canal de ajuda sem login) entregues e no ar. Os pontos que a revisão da v7.5 apontou (IP
   medido no Azure, idade para aderir, anonimização do IP, Meus Dados, avisos em ciclo, escopo de departamento e o
   primeiro passo da CSP) foram fechados na própria versão — inclusive o **acesso do membro por matrícula + PIN**, a
   exigência de sessão em todas as rotas de autoatendimento (que antes tratavam a matrícula como a própria pessoa) e o
@@ -362,7 +362,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | C | Integração com o site institucional | concluída | [fase-c-integracao-com-o-site](docs/plano/fase-c-integracao-com-o-site.md) |
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
-| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.7 entregues; Trava 7-A fechada em 08/10/2026; próxima: v7.8) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.8 entregues; Trava 7-A fechada em 08/10/2026; próxima: v7.9; Trava 7-B antes da v7.11) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
 | D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A) | vD.1–vD.8 feitas e Trava D-B fechada (06–08/10/2026); ficam só decisões do responsável | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
@@ -520,6 +520,9 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   hash da certidão) e `VistoriasAnulacoes`. Permissões novas, só da Diretoria: `setores_tecnicos`, `setores_ratificacao`, `vistoria_antecedentes`.
 - **Ministério com menores (v7.7, migração 143):** `MinisterioMenoresPoliticaAceites`, `...Consentimentos` (do responsável, LGPD art. 14), `...AutoDenuncias`,
   `...Retiradas`, `...Salas`, `...CadastroNacional`; a validade das certidões (180 dias) é calculada pela data de emissão do Termo de Vistoria, nunca gravada.
+- **Incidentes de proteção (v7.8, migração 144):** `IncidentesProtecao`, `IncidenteEnvolvidos`, `IncidenteRelatos` (um relato por incidente, só de acréscimo), `IncidenteLeituras`, `IncidenteComunicacoes`,
+  `IncidenteDecisoesCautelares`, `IncidenteReclassificacoes` (gatilhos: nada se apaga; o nível só sobe). O prazo de 24 horas é calculado na leitura; o afastamento cautelar é um bloqueio reservado
+  da aptidão da v7.7; permissão `protecao_menores` e papel "Comitê de Proteção". Rotina horária (`rotinas-protecao.yml`) que só abre o banco se há prazo correndo.
 
 **Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
 implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,

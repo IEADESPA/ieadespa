@@ -49,6 +49,9 @@ const PRT_CONTADORES = {
 };
 const PRT_FORMS = ["comunicacao", "adendo", "reclassificar", "decidir", "encerrar", "vincular"];
 const PRT_RESULTADO_SEM_CONTEUDO = "SEM_CONTEUDO_DE_PROTECAO";   // arquivar um pedido do canal de ajuda que não tem relato de violência (teste, engano): só quando o servidor oferece (acoes.arquivarSemConteudo)
+const PRT_MS_LIMITE_AJUDA = 30000;                          // o envio do canal público desiste depois de 30 s: a criança vê que NÃO foi enviada (com o 100 e o 190) e o texto fica no campo
+// o primeiro campo de cada formulário da ficha: para lá vai o foco quando o formulário abre (teclado e leitor de tela)
+const PRT_PRIMEIRO_CAMPO = { comunicacao: "prtFcOrgao", adendo: "prtFaTexto", reclassificar: "prtFrNivel", decidir: "prtFdDecisao", vincular: "prtFvMatricula", encerrar: "prtFeResultado" };
 
 let prtDonoDaTela = null;            // matrícula + tipo de sessão de quem a tela foi montada (não vaza dado ao trocar de login)
 let prtCatalogos = null;             // GET protecao-menores/catalogos (níveis, órgãos, formas, roteiro da escuta, papéis de quem está logado)
@@ -63,6 +66,8 @@ let prtTimer = null;                 // setInterval do relógio: só existe com 
 let prtGeracao = 0;                  // sobe a cada limpeza da tela (troca de login, saída): um pedido que ia gravar de outra "geração" não mexe na tela de agora
 let prtSeqMeu = 0, prtSeqLista = 0, prtSeqDetalhe = 0, prtSeqRelato = 0, prtSeqPadroes = 0, prtSeqComite = 0, prtSeqRel = 0, prtSeqEquipes = 0;
 const prtEmCurso = new Set();        // trava duplo clique nas ações que gravam
+const prtAjudaEnviada = { Pub: false, Log: false };   // um pedido de ajuda acabou de ser enviado e o texto ainda não foi mexido: o botão fica travado (o segundo toque, com o campo vazio, apagava o número do pedido)
+let prtGatilhoForm = null;           // o botão que abriu o formulário da ficha: o foco volta para ele quando o formulário fecha
 
 // A aba abre para quem tem a permissão da proteção; cada seção só aparece para quem o SERVIDOR diz que pode (o catálogo traz os papéis da sessão).
 function prtPodeAba() { return authPermissoes.includes("protecao_menores"); }
@@ -97,6 +102,13 @@ function prtRolarPara(id) {
   const el = prtEl(id);
   if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
+// Foco (teclado e leitor de tela): o foco vai para o que acabou de abrir (título da ficha, primeiro campo do formulário, caixa do relato, resposta do envio) e volta ao botão de onde a pessoa
+// saiu quando o formulário ou o relato fecha. O scroll continua por conta do prtRolarPara (suave); por isso o foco não rola a página por conta própria.
+function prtFocar(el) {
+  if (!el || typeof el.focus !== "function") return;
+  try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+}
+function prtFocarId(id) { prtFocar(prtEl(id)); }
 function prtEscreverAviso(id, texto, destaque) {
   const el = prtEl(id);
   if (el) { el.textContent = texto; el.className = destaque ? "subtitle psc-aviso" : "subtitle"; }
@@ -118,9 +130,9 @@ function prtRotuloDe(lista, codigo) {
 }
 function prtRotuloNivel(codigo) { return prtCatalogos ? prtRotuloDe(prtCatalogos.niveis, codigo) : String(codigo); }
 function prtClasseNivel(codigo) { return prtTem(PRT_CLASSE_NIVEL, codigo) ? PRT_CLASSE_NIVEL[codigo] : "cal-st-cancelado"; }
-// os dias de um instante AAAA-MM-DD... ou a data completa de um instante com hora
+// o "agora" do formulário da comunicação (campo datetime-local, no fuso do aparelho) vem do relógio do SERVIDOR: com o aparelho adiantado o padrão virava "no futuro", e atrasado, "anterior à ciência"
 function prtAgoraLocalInput() {
-  const d = new Date();
+  const d = new Date(prtAgoraServidor());
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
@@ -151,8 +163,11 @@ function prtPostar(caminho, corpo) {
 }
 // O canal de ajuda é PÚBLICO: a criança pode não ter conta. Chamada comum, sem token e sem nenhum cabeçalho de sessão (nunca fetchProtegido). Nunca lança.
 async function prtPostarAjuda(corpo) {
+  // Desiste depois de 30 s: sem limite, uma rede que não responde deixava a criança olhando "Enviando…" sem saber se foi. A desistência cai no mesmo caminho da rede caída ("NÃO foi enviada" + 100 e 190).
+  const controle = typeof AbortController === "function" ? new AbortController() : null;
+  const limite = controle ? setTimeout(() => controle.abort(), PRT_MS_LIMITE_AJUDA) : null;
   try {
-    const res = await fetch(`${API_BASE}/protecao-ajuda`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    const res = await fetch(`${API_BASE}/protecao-ajuda`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal: controle ? controle.signal : undefined });
     let dados = null;
     try { dados = await res.json(); } catch { /* resposta que não é JSON (página de erro do servidor) */ }
     if (!dados || typeof dados !== "object" || Array.isArray(dados)) return { sucesso: false, httpStatus: res.status, mensagem: PRT_MSG_AJUDA_FALHA };
@@ -161,6 +176,8 @@ async function prtPostarAjuda(corpo) {
     return dados;
   } catch (e) {
     return { sucesso: false, falhaDeRede: true, mensagem: PRT_MSG_AJUDA_FALHA };
+  } finally {
+    if (limite != null) clearTimeout(limite);
   }
 }
 // Toast + texto fixo na tela (textContent: nada de HTML aqui). Quando o fetchProtegido já avisou (rede, sessão, 403, 5xx), só o texto vai para a tela.
@@ -206,6 +223,12 @@ const PRT_IDS_CAMPOS = ["prtRegOnde", "prtRegDescricao", "prtRegEnvMatricula", "
 const PRT_IDS_SELECTS = ["prtRegCong", "prtRegEquipe", "prtRegQuem", "prtRelAno"];
 const PRT_IDS_BLOCOS = ["prtRegCx", "prtRegAlegacaoCx", "prtRegEquipeCx", "prtDetalheCx", "prtSemAcesso"];
 const PRT_IDS_CONTADORES = ["prtRegDescContador", "prtRegRelatoContador"];
+// O modal de anexos do incidente (comprovantes) é o modal compartilhado do script.js: se ele está aberto para um incidente quando a sessão acaba ou muda, fecha e esvazia (lista de nomes de arquivo).
+function prtFecharModalDeAnexos() {
+  const sobre = prtEl("modalOverlay");
+  const contexto = typeof anexosModalContexto !== "undefined" ? anexosModalContexto : null;
+  if (sobre && !sobre.classList.contains("escondido") && contexto && contexto.tabela === "IncidentesProtecao" && document.getElementById("listaAnexosModal")) fecharModal();   // (a lista de anexos é criada pelo modal compartilhado, não por este módulo)
+}
 function prtLimparTela() {
   prtGeracao++;
   prtCatalogos = null; prtSecaoAtual = "incidentes"; prtIncidentes = []; prtDetalhe = null; prtDeslocamento = 0; prtRelogiosLista = []; prtRelogioDetalhe = null;
@@ -224,6 +247,8 @@ function prtLimparTela() {
   if (filtro) filtro.value = "ABERTO";
   const impressao = document.body && document.body.classList;
   if (impressao) impressao.remove("prt-imprimindo");
+  prtAjudaEnviada.Pub = false; prtAjudaEnviada.Log = false; prtGatilhoForm = null;
+  prtFecharModalDeAnexos();   // o nome de um arquivo anexado pode ter o nome da criança: o modal não sobrevive à saída da sessão nem à troca de login
   prtAplicarPermissoes();   // sem isto as pílulas do nível geral ficavam visíveis para quem entrou depois
 }
 // De quem é a tela: a matrícula E o tipo de sessão (senha de liderança × PIN). O mesmo líder que entra por PIN e depois por senha tem outros papéis (o catálogo traz
@@ -310,7 +335,7 @@ function prtMontarFormAjuda(ctxBruto) {
   cx.innerHTML = `<div class="prt-ajuda-form">
     <div class="input-group">
       <label for="prtAjuda${ctx}Texto">Conte o que aconteceu, com as suas palavras</label>
-      <textarea id="prtAjuda${ctx}Texto" rows="6" maxlength="4000" autocomplete="off" placeholder="Pode escrever do seu jeito. Não existe resposta certa nem errada."></textarea>
+      <textarea id="prtAjuda${ctx}Texto" rows="6" maxlength="4000" autocomplete="off" spellcheck="false" placeholder="Pode escrever do seu jeito. Não existe resposta certa nem errada." data-on-input="prtEditouAjudaAcao" data-args-input="${argsAttr(ctx)}"></textarea>
       <p class="psc-legenda">Você não precisa dizer o seu nome. Escreva só o que quiser contar.</p>
     </div>
     <div class="input-group">
@@ -328,9 +353,18 @@ function prtMontarFormAjuda(ctxBruto) {
     <div class="psc-acoes">
       <button type="button" class="btn-confirmar prt-btn-enviar" id="prtAjuda${ctx}Botao" data-on-click="prtEnviarAjudaAcao" data-args-click="${argsAttr(ctx, ARG.elemento)}">💛 Enviar</button>
     </div>
-    <div id="prtAjuda${ctx}Resultado" class="prt-ajuda-resultado" role="status" aria-live="polite"></div>
+    <div id="prtAjuda${ctx}Resultado" class="prt-ajuda-resultado" role="status" aria-live="polite" tabindex="-1"></div>
   </div>`;
+  prtAjudaEnviada[ctx] = false;
   prtPreencherCongAjuda();
+}
+// A pessoa voltou a mexer no texto depois de um envio que deu certo: o botão volta a valer (para uma segunda mensagem). Só o TEXTO destrava: sem texto não há o que enviar.
+function prtEditouAjudaAcao(ctxBruto) {
+  const ctx = prtCtxAjuda(ctxBruto);
+  if (!prtAjudaEnviada[ctx]) return;
+  prtAjudaEnviada[ctx] = false;
+  const botao = prtEl(`prtAjuda${ctx}Botao`);
+  if (botao) botao.disabled = false;
 }
 function prtPreencherCongAjuda() {
   const lista = prtCongregacoes || [];
@@ -343,11 +377,20 @@ function prtPreencherCongAjuda() {
   });
 }
 // o que a criança escreveu nunca fica no aparelho: ao enviar com sucesso, ao sair da tela e ao trocar de login o campo é esvaziado (nada vai para localStorage/sessionStorage)
-function prtLimparCamposAjuda(ctx) {
-  [`prtAjuda${ctx}Texto`, `prtAjuda${ctx}Contato`].forEach(id => { const el = prtEl(id); if (el) el.value = ""; });
-  const quem = prtEl(`prtAjuda${ctx}Quem`), cong = prtEl(`prtAjuda${ctx}Cong`);
-  if (quem) quem.value = "";
-  if (cong) cong.value = "";
+// `enviado` (o que saiu no pedido): só se apaga o que de fato foi enviado. Texto digitado enquanto o pedido estava a caminho NÃO foi enviado e fica no campo (devolve true quando sobrou algo).
+function prtLimparCamposAjuda(ctx, enviado) {
+  let sobrou = false;
+  const limpar = (id, igual) => {
+    const el = prtEl(id);
+    if (!el) return;
+    if (enviado && prtTexto(id) !== igual) { sobrou = true; return; }
+    el.value = "";
+  };
+  limpar(`prtAjuda${ctx}Texto`, enviado && enviado.texto);
+  limpar(`prtAjuda${ctx}Contato`, enviado && enviado.contato);
+  limpar(`prtAjuda${ctx}Quem`, enviado && enviado.quem);
+  limpar(`prtAjuda${ctx}Cong`, enviado && enviado.cong);
+  return sobrou;
 }
 function prtEscreverAjuda(ctx, texto) {
   const el = prtEl(`prtAjuda${ctx}Resultado`);
@@ -364,38 +407,51 @@ function prtValidarAjuda(texto, contato) {
 function prtMostrarFalhaAjuda(ctx, data) {
   const el = prtEl(`prtAjuda${ctx}Resultado`);
   if (!el) return;
+  // resposta de erro sem `mensagem` (JSON de um proxy, corpo vazio): o texto de sempre, que diz que a mensagem NÃO foi enviada. O 100 e o 190 vêm sempre.
+  const mensagem = typeof data.mensagem === "string" && data.mensagem.trim() ? data.mensagem : PRT_MSG_AJUDA_FALHA;
   el.className = "prt-ajuda-resultado prt-ajuda-aviso";
-  el.innerHTML = `<p>${escaparHtmlEbd(prtMsgErro(data))}</p>
+  el.innerHTML = `<p>${escaparHtmlEbd(mensagem)}</p>
     <p class="psc-legenda">Se precisar, estes telefones atendem de graça:</p>${prtHtmlContatos(data.contatosDeAjuda)}`;
+  prtFocar(el);
 }
 function prtMostrarSucessoAjuda(ctx, data) {
   const el = prtEl(`prtAjuda${ctx}Resultado`);
   if (!el) return;
-  el.className = "prt-ajuda-resultado prt-ajuda-ok";
+  // O servidor diz se a liderança foi mesmo avisada (`avisada`). Se não foi, a caixa sai do verde (não é um "tudo certo") e a mensagem dele, que manda ligar 100 ou 190, aparece como está.
+  const semAviso = data.avisada === false;
+  const mensagem = typeof data.mensagem === "string" && data.mensagem.trim() ? data.mensagem : "Recebemos o que você contou. Se existe perigo agora, ligue 190. Para falar com alguém a qualquer hora, ligue 100 (de graça).";
+  el.className = semAviso ? "prt-ajuda-resultado prt-ajuda-aviso" : "prt-ajuda-resultado prt-ajuda-ok";
   el.innerHTML = `<h4>💛 Recebemos o que você contou</h4>
-    <p>${escaparHtmlEbd(prtMsgErro(data))}</p>
+    <p>${escaparHtmlEbd(mensagem)}</p>
     ${data.protocolo ? `<p>Número do seu pedido: <strong>${escaparHtmlEbd(data.protocolo)}</strong>. Anote, se quiser. Não é obrigatório.</p>` : ""}
-    <p class="psc-legenda">Se precisar falar com alguém agora, estes telefones atendem de graça:</p>${prtHtmlContatos(data.contatosDeAjuda)}`;
+    <p class="psc-legenda">${semAviso ? "Ligue agora. Estes telefones atendem de graça:" : "Se precisar falar com alguém agora, estes telefones atendem de graça:"}</p>${prtHtmlContatos(data.contatosDeAjuda)}`;
+  prtFocar(el);
 }
 async function prtEnviarAjudaAcao(ctxBruto, botao) {
   const ctx = prtCtxAjuda(ctxBruto);
   const texto = prtTexto(`prtAjuda${ctx}Texto`), contato = prtTexto(`prtAjuda${ctx}Contato`);
-  const quemSou = prtTexto(`prtAjuda${ctx}Quem`), congregacaoId = prtInteiro(prtTexto(`prtAjuda${ctx}Cong`));
+  const quemSou = prtTexto(`prtAjuda${ctx}Quem`), congTexto = prtTexto(`prtAjuda${ctx}Cong`), congregacaoId = prtInteiro(congTexto);
+  // Acabou de enviar e o texto não foi mexido (o campo está vazio): não há o que enviar, e a mensagem de "falta texto" NÃO pode apagar o número do pedido que a criança está lendo.
+  if (prtAjudaEnviada[ctx] && !texto) return;
   const problema = prtValidarAjuda(texto, contato);
-  if (problema) { prtEscreverAjuda(ctx, problema); return; }
+  if (problema) { prtEscreverAjuda(ctx, problema); prtFocarId(`prtAjuda${ctx}Texto`); return; }
   const corpo = { texto };
   if (quemSou) corpo.quemSou = quemSou;
   if (contato) corpo.contato = contato;
   if (congregacaoId) corpo.congregacaoId = congregacaoId;
+  const enviado = { texto, contato, quem: quemSou, cong: congTexto };
   await prtProtegerBotao(botao, async () => {
     const el = prtEl(`prtAjuda${ctx}Resultado`);
     if (el) { el.textContent = "Enviando…"; el.className = "prt-ajuda-resultado"; }
     const data = await prtPostarAjuda(corpo);
     // não deu certo (regra, limite ou erro): o que a pessoa escreveu FICA no campo, e o servidor diz o que fazer (100 e 190 sempre à vista)
     if (data.sucesso !== true) { prtMostrarFalhaAjuda(ctx, data); return; }
-    prtLimparCamposAjuda(ctx);
+    // só sai do campo o que foi enviado; o que foi digitado durante o envio fica (e o botão segue livre para essa nova mensagem)
+    prtAjudaEnviada[ctx] = !prtLimparCamposAjuda(ctx, enviado);
     prtMostrarSucessoAjuda(ctx, data);
   }, `ajuda${ctx}`);
+  // O prtProtegerBotao solta o botão no fim; depois de um envio que deu certo ele fica travado até a pessoa voltar a mexer no texto (o número do pedido não se perde com um segundo toque).
+  if (prtAjudaEnviada[ctx]) { const b = prtEl(`prtAjuda${ctx}Botao`); if (b) b.disabled = true; }
 }
 // A tela pública: abre a partir da tela de entrada (sem login).
 async function prtAbrirAjudaPublicaAcao() {
@@ -406,10 +462,15 @@ async function prtAbrirAjudaPublicaAcao() {
   await prtGarantirCongregacoes();
   prtPreencherCongAjuda();
 }
-function prtFecharAjudaPublicaAcao() {
+async function prtFecharAjudaPublicaAcao() {
+  // Quem escreveu e ainda não enviou não perde o texto com um toque sem querer em "← Voltar": a tela pergunta antes (sair apaga; o texto nunca é guardado em lugar nenhum).
+  if (prtTexto("prtAjudaPubTexto") || prtTexto("prtAjudaPubContato")) {
+    if (!(await confirmarAcao("Você escreveu uma mensagem e ela ainda NÃO foi enviada. Se você sair agora, o que você escreveu será apagado. Quer sair mesmo?", "Sair e apagar"))) { prtFocarId("prtAjudaPubTexto"); return; }
+  }
   // o que foi escrito e não enviado não fica no aparelho (pode ser um computador de uso comum): o formulário é desmontado
   const cx = prtEl("prtAjudaPubForm");
   if (cx) cx.innerHTML = "";
+  prtAjudaEnviada.Pub = false;
   const tela = prtEl("prtTelaAjuda");
   if (tela) tela.style.display = "none";
   if (authToken && authMatricula) mostrarTelaPainelInicial(); else voltarParaCheckin();
@@ -469,14 +530,24 @@ function prtPrepararFormRegistro(congregacoes) {
   prtMudouNivelAcao();
 }
 // O roteiro da escuta (acolher, registrar como foi dito, encaminhar) e o que NÃO fazer: o texto vem do catálogo do servidor.
+// o catálogo escreve "1. Acolher"; o <ol> já numera, e o número do texto fazia "1. 1. Acolher": o número escrito à mão (e o ponto, parêntese ou travessão depois dele) sai
+function prtPassoSemNumero(passo) {
+  return String(passo == null ? "" : passo).replace(/^\s*\d+\s*[.)\-–]\s*/, "");
+}
+// O que NÃO fazer diante de uma suspeita (do catálogo do servidor): na tela de registro, na resposta e na ficha de quem trata o caso
+function prtHtmlNaoFaca() {
+  const cat = prtCatalogos;
+  if (!cat) return "";
+  return `<strong class="prt-nao-faca">NÃO FAÇA</strong>
+    <ul class="prt-nao-faca-lista">${cat.naoFaca.map(t => `<li>${escaparHtmlEbd(t)}</li>`).join("")}</ul>`;
+}
 function prtHtmlRoteiro() {
   const cat = prtCatalogos;
   if (!cat) return "";
   return `<div class="prt-roteiro" role="note">
     <strong>Como acolher (a Igreja acolhe e encaminha; quem apura são as autoridades)</strong>
-    <ol class="prt-roteiro-passos">${cat.roteiroEscuta.map(p => `<li><strong>${escaparHtmlEbd(p.passo)}</strong> ${escaparHtmlEbd(p.texto)}</li>`).join("")}</ol>
-    <strong class="prt-nao-faca">NÃO FAÇA</strong>
-    <ul class="prt-nao-faca-lista">${cat.naoFaca.map(t => `<li>${escaparHtmlEbd(t)}</li>`).join("")}</ul>
+    <ol class="prt-roteiro-passos">${cat.roteiroEscuta.map(p => `<li><strong>${escaparHtmlEbd(prtPassoSemNumero(p.passo))}</strong> ${escaparHtmlEbd(p.texto)}</li>`).join("")}</ol>
+    ${prtHtmlNaoFaca()}
   </div>`;
 }
 // o nível escolhido (índice numérico no id: nenhum texto do servidor vira id)
@@ -594,14 +665,15 @@ async function prtEnviarRegistroAcao(botao) {
     prtMostrarResultado(data, "prtRegMsg", false);
     if (data.sucesso === false) { prtMostrarRespostaRegistro(null); return; }   // recusa de regra (inclusive o limite): mensagem do servidor e formulário intacto
     prtLimparFormRegistro();
-    prtMostrarRespostaRegistro(data);
+    prtMostrarRespostaRegistro(data, c.nivel);   // o nível que a PESSOA escolheu vale mesmo se a resposta vier sem `exigeComunicacao` (um clique duplo devolve o registro que já existia)
     await prtCarregarMeusAcao();
   }, "registrar");
 }
 // o que foi escrito (principalmente o relato) some do formulário depois de enviado
 function prtLimparFormRegistro() {
   ["prtRegOnde", "prtRegDescricao", "prtRegEnvMatricula", "prtRegEnvNome", "prtRegRelato"].forEach(id => { const el = prtEl(id); if (el) el.value = ""; });
-  const horas = prtEl("prtRegHoras"), quem = prtEl("prtRegQuem"), equipe = prtEl("prtRegEquipe");
+  const horas = prtEl("prtRegHoras"), quem = prtEl("prtRegQuem"), equipe = prtEl("prtRegEquipe"), dia = prtEl("prtRegData");
+  if (dia) dia.value = calHojeBrasilia();   // o próximo registro começa em hoje (a data do fato anterior não fica)
   if (horas) horas.value = "0";
   if (quem) quem.value = "";
   if (equipe) equipe.value = "";
@@ -609,17 +681,17 @@ function prtLimparFormRegistro() {
   ["prtRegDescContador", "prtRegRelatoContador"].forEach(id => { const el = prtEl(id); if (el) { el.textContent = "0"; el.className = ""; } });
   prtMudouNivelAcao();
 }
-// Resposta: protocolo, prazo e o que fazer agora.
-function prtMostrarRespostaRegistro(data) {
+// Resposta: protocolo, prazo e o que fazer agora. `nivelEscolhido`: o nível que a pessoa registrou; uma SUSPEITA sempre mostra o que NÃO fazer, o prazo e o 100/190, mesmo que a resposta venha sem `exigeComunicacao`.
+function prtMostrarRespostaRegistro(data, nivelEscolhido) {
   const cx = prtEl("prtRegResposta");
   if (!cx) return;
   if (!data) { cx.innerHTML = ""; return; }
   const cat = prtCatalogos;
-  const exige = data.exigeComunicacao === true;
+  const exige = data.exigeComunicacao === true || nivelEscolhido === "ALEGACAO" || data.nivel === "ALEGACAO";
   cx.innerHTML = `<div class="cal-cartao cartao-area-ebd prt-resposta">
-    <h5>✅ Registrado ${data.protocolo ? prtSelo("cal-st-homologado", data.protocolo) : ""}</h5>
+    <h5 id="prtRegRespostaTitulo" tabindex="-1">✅ Registrado ${data.protocolo ? prtSelo("cal-st-homologado", data.protocolo) : ""}</h5>
     <p>${escaparHtmlEbd(prtMsgErro(data))}</p>
-    ${exige && data.prazoEm ? `<p><strong>Prazo para comunicar o Conselho Tutelar:</strong> ${prtDataHora(data.prazoEm)}</p>` : ""}
+    ${exige ? `<p><strong>Prazo para comunicar o Conselho Tutelar:</strong> ${data.prazoEm ? prtDataHora(data.prazoEm) : "em até 24 horas depois de a Igreja ficar sabendo"}</p>` : ""}
     <p><strong>O que fazer agora</strong></p>
     ${exige
     ? `<ul class="prt-nao-faca-lista">${(cat ? cat.naoFaca : []).map(t => `<li>${escaparHtmlEbd(t)}</li>`).join("")}<li>A comunicação ao Conselho Tutelar é feita pela liderança de proteção. Se a mensagem acima disser que não foi possível avisá-la, procure o Dirigente ou a Diretoria agora.</li></ul>
@@ -627,6 +699,7 @@ function prtMostrarRespostaRegistro(data) {
     : "<p>Obrigado por registrar. A liderança vai conferir e tomar a providência. Não é preciso fazer mais nada agora.</p>"}
   </div>`;
   prtRolarPara("prtRegResposta");
+  prtFocarId("prtRegRespostaTitulo");
 }
 
 // ============================================================================
@@ -642,7 +715,10 @@ function prtAplicarPermissoes() {
 async function carregarOpcoesProtecaoAcao() {
   prtVerificarDono();
   if (!prtPodeAba()) return;
+  const geracao = prtGeracao;
   const catalogo = await prtGarantirCatalogos(true);   // os papéis (gestão, nível geral) dependem da sessão
+  // O catálogo demorou: se a pessoa já saiu da aba (ou saiu da sessão / trocou de login), nada é montado — a fila voltaria a encher a página com protocolo, congregação e datas e a ligar o relógio fora da aba.
+  if (geracao !== prtGeracao || !prtTelaViva()) return;
   if (!catalogo) { mostrarToast("Não foi possível carregar a Proteção de Crianças agora. Abra a aba de novo para tentar outra vez.", "erro"); return; }
   prtAplicarPermissoes();
   prtFecharDetalheInterno();   // abrir a aba (ou tocar nela de novo) sempre volta à lista: um relato lido não fica à espera
@@ -653,7 +729,11 @@ function prtMostrarSecaoAcao(secao, semCarregar) {
   if (!prtSecaoPermitida(secao)) secao = PRT_SECOES.find(prtSecaoPermitida) || "";
   const mudou = secao !== prtSecaoAtual;
   prtSecaoAtual = secao || "incidentes";
-  if (mudou) prtFecharDetalheInterno();   // sair da ficha apaga o relato da tela
+  if (mudou) {
+    prtFecharDetalheInterno();   // sair da ficha apaga o relato da tela
+    // um pedido que ainda vinha para a seção que ficou para trás (fila, padrões, Comitê, relatório) não escreve mais nada nem religa o relógio
+    prtSeqLista++; prtSeqPadroes++; prtSeqComite++; prtSeqRel++;
+  }
   PRT_SECOES.forEach(nome => {
     const div = prtEl(`prtSecao${capitalize(nome)}`);
     if (div) div.style.display = nome === secao ? "block" : "none";
@@ -687,12 +767,15 @@ function prtFiltroEscolhido() { const f = prtTexto("prtFiltroStatus"); return f 
 async function prtCarregarIncidentesAcao() {
   const lista = prtEl("prtListaIncidentes");
   if (!lista) return;
+  // a fila só se carrega com a aba aberta e na seção dos incidentes (um ato que termina depois de a pessoa sair da aba, por exemplo, pedia a fila de novo e religava o relógio)
+  if (!prtTelaViva() || prtSecaoAtual !== "incidentes") return;
   const filtro = prtFiltroEscolhido();
   const caminho = filtro === "TODOS" ? "incidentes" : `incidentes?status=${filtro}`;
   const seq = ++prtSeqLista;
   prtEscreverAviso("prtListaResultado", "Carregando os incidentes…", false);
   const data = await prtObter(caminho);
   if (seq !== prtSeqLista) return;   // resposta velha: outro filtro foi pedido depois, ou a pessoa saiu da aba ou trocou de login
+  if (!prtTelaViva() || prtSecaoAtual !== "incidentes") return;   // a pessoa saiu da aba ou foi para outra seção enquanto a fila vinha: nada é escrito e o relógio não religa
   if (data.sucesso === false || !Array.isArray(data.incidentes)) {
     prtIncidentes = []; prtRelogiosLista = [];
     lista.innerHTML = "";
@@ -737,14 +820,14 @@ function prtRenderCartao(i) {
     <h5>${escaparHtmlEbd(i.protocolo)} <span class="psc-legenda">${prtData(i.dataOcorrencia)}${i.congregacaoNome ? ` · ${escaparHtmlEbd(i.congregacaoNome)}` : ""}</span></h5>
     <p class="prt-selos">${prtSelosDoIncidente(i)}</p>
     ${relogio ? `<p class="prt-linha-relogio"><strong>Prazo para comunicar:</strong> ${relogio} <span class="psc-legenda">${prtDataHora(i.relogio.prazoEm)}</span></p>` : ""}
-    <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="prtAbrirDetalheAcao" data-args-click="${argsAttr(id)}">📂 Abrir</button></div>
+    <div class="psc-acoes"><button type="button" class="btn-confirmar" id="prtAbrirCartao${id}" style="width:auto;margin:0;" data-on-click="prtAbrirDetalheAcao" data-args-click="${argsAttr(id)}">📂 Abrir</button></div>
   </div>`;
 }
 
 // -- b) a ficha do incidente --
 // fecha a ficha SEM mexer na lista (quem chama decide): o relato, o formulário e o relógio da ficha saem da tela
 function prtLimparDetalhe() {
-  prtDetalhe = null; prtRelogioDetalhe = null;
+  prtDetalhe = null; prtRelogioDetalhe = null; prtGatilhoForm = null;
   prtSeqDetalhe++; prtSeqRelato++;   // um pedido do relato ou da ficha que ainda esteja a caminho não entra na ficha seguinte
   const conteudo = prtEl("prtDetalheConteudo"), msg = prtEl("prtDetalheMsg"), cx = prtEl("prtDetalheCx");
   if (conteudo) conteudo.innerHTML = "";
@@ -757,7 +840,12 @@ function prtFecharDetalheInterno() {
   if (lista) lista.style.display = "";
   prtAjustarRelogio();
 }
-function prtFecharDetalheAcao() { prtFecharDetalheInterno(); prtRolarPara("prtListaCx"); }
+function prtFecharDetalheAcao() {
+  const id = prtIncidenteAberto();
+  prtFecharDetalheInterno();
+  prtRolarPara("prtListaCx");
+  prtFocarId(`prtAbrirCartao${id}`);   // o foco volta ao "Abrir" do incidente de onde a pessoa veio (o botão da ficha que fechou não existe mais)
+}
 async function prtAbrirDetalheAcao(incidenteId) {
   const id = Number(incidenteId);
   if (!prtInteiro(id)) return;
@@ -779,12 +867,14 @@ async function prtCarregarDetalhe(id) {
   if (data.sucesso === false || !data.incidente || typeof data.incidente !== "object") {
     prtDetalhe = null; prtRelogioDetalhe = null; prtAjustarRelogio();
     // 404 é a MESMA resposta para "não existe", "fora do seu alcance" e "você é um dos envolvidos": a tela não distingue nem insinua nada
-    conteudo.innerHTML = `<p class="subtitle psc-aviso" role="status">${escaparHtmlEbd(data.httpStatus === 404 ? PRT_MSG_NAO_ABRIU : prtMsgErro(data))}</p>`;
+    conteudo.innerHTML = `<p id="prtDetalheErro" class="subtitle psc-aviso" role="status" tabindex="-1">${escaparHtmlEbd(data.httpStatus === 404 ? PRT_MSG_NAO_ABRIU : prtMsgErro(data))}</p>`;
+    prtFocarId("prtDetalheErro");
     return false;
   }
   prtAcertarRelogio(data.agora);
   prtDetalhe = data;
   prtRenderDetalhe();
+  prtFocarId("prtDetalheTitulo");   // a ficha (ou a ficha refeita depois de um ato) acabou de aparecer: o foco vai para o título dela, não fica num botão que deixou de existir
   return true;
 }
 function prtAtualizarDetalheAcao() {
@@ -799,15 +889,18 @@ function prtHtmlEnvolvidos(d) {
   const lista = Array.isArray(d.envolvidos) ? d.envolvidos : [];
   if (!lista.length) return "<p class='subtitle'>Nenhuma pessoa envolvida foi informada.</p>";
   const podeDecidir = !!(d.acoes && d.acoes.decidirCautelar);
-  const podeVincular = !!(d.acoes && d.acoes.vincularEnvolvido);   // só o nível geral, com o incidente aberto: liga a pessoa registrada só pelo nome a uma matrícula do cadastro
+  // só o nível geral, com o incidente aberto: liga a pessoa registrada só pelo nome a uma matrícula do cadastro. O servidor guarda o vínculo como uma linha NOVA e mantém a do nome: depois do primeiro vínculo a
+  // linha do nome continua na ficha, e um segundo "Vincular" ligaria (e tiraria das escalas) outra pessoa por engano. Por isso, com QUALQUER pessoa do cadastro já vinculada ao incidente, o botão não é oferecido.
+  const jaTemMembro = lista.some(x => x.ehMembro);
+  const podeVincular = !!(d.acoes && d.acoes.vincularEnvolvido) && !jaTemMembro;
   return `<ul class="prt-lista">${lista.map(e => {
     const eid = Number(e.envolvidoId);
     const cautelar = prtRotuloCautelar(e);
     return `<li><strong>${escaparHtmlEbd(e.nome)}</strong>
       ${e.ehMembro ? `<span class="psc-legenda">matrícula ${Number(e.membroId)}</span>` : "<span class='psc-legenda'>sem matrícula</span>"}
       ${cautelar ? prtSelo(e.afastamentoCautelar ? "cal-st-indeferido" : "cal-st-homologado", cautelar) : ""}
-      ${podeDecidir && e.ehMembro && d.incidente.nivel === "ALEGACAO" ? `<div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtAbrirFormAcao" data-args-click="${argsAttr("decidir", eid)}">⚖️ Decidir o afastamento</button></div>` : ""}
-      ${podeVincular && !e.ehMembro ? `<div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtAbrirFormAcao" data-args-click="${argsAttr("vincular", eid)}">🔗 Vincular a uma pessoa do cadastro</button></div>` : ""}
+      ${podeDecidir && e.ehMembro && d.incidente.nivel === "ALEGACAO" ? `<div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtAbrirFormAcao" data-args-click="${argsAttr("decidir", eid, ARG.elemento)}">⚖️ Decidir o afastamento</button></div>` : ""}
+      ${podeVincular && !e.ehMembro ? `<div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtAbrirFormAcao" data-args-click="${argsAttr("vincular", eid, ARG.elemento)}">🔗 Vincular a uma pessoa do cadastro</button></div>` : ""}
     </li>`;
   }).join("")}</ul>`;
 }
@@ -862,10 +955,10 @@ function prtHtmlBotoesDetalhe(d) {
   const id = Number(d.incidente.incidenteId);
   const botao = (acao, argumentos, texto, classe) => `<button type="button" class="btn-confirmar ${classe}" style="width:auto;margin:0;" data-on-click="${acao}" data-args-click="${argsAttr(...argumentos)}">${texto}</button>`;
   return [
-    a.comunicar ? botao("prtAbrirFormAcao", ["comunicacao"], "📞 Registrar a comunicação ao órgão", "") : "",
-    a.adendo ? botao("prtAbrirFormAcao", ["adendo"], "➕ Adendo", "btn-secundario") : "",
-    a.reclassificar ? botao("prtAbrirFormAcao", ["reclassificar"], "⬆️ Reclassificar", "btn-secundario") : "",
-    a.encerrar ? botao("prtAbrirFormAcao", ["encerrar"], "✅ Encerrar o caso", "btn-secundario") : "",
+    a.comunicar ? botao("prtAbrirFormAcao", ["comunicacao", 0, ARG.elemento], "📞 Registrar a comunicação ao órgão", "") : "",
+    a.adendo ? botao("prtAbrirFormAcao", ["adendo", 0, ARG.elemento], "➕ Adendo", "btn-secundario") : "",
+    a.reclassificar ? botao("prtAbrirFormAcao", ["reclassificar", 0, ARG.elemento], "⬆️ Reclassificar", "btn-secundario") : "",
+    a.encerrar ? botao("prtAbrirFormAcao", ["encerrar", 0, ARG.elemento], "✅ Encerrar o caso", "btn-secundario") : "",
     botao("prtAtualizarDetalheAcao", [], "🔄 Atualizar", "btn-secundario"),
     d.incidente.exigeComunicacao ? botao("abrirModalAnexos", ["IncidentesProtecao", id, `comprovante ${d.incidente.protocolo}`], "📎 Anexar comprovante", "btn-secundario") : ""
   ].filter(Boolean).join(" ");
@@ -882,7 +975,7 @@ function prtRenderDetalhe() {
   const adendos = Number(relato.adendos) || 0;
   const leituras = Array.isArray(d.leituras) ? d.leituras : [];
   conteudo.innerHTML = `<div class="cal-cartao cartao-area-ebd prt-detalhe">
-    <h4>${escaparHtmlEbd(inc.protocolo)}</h4>
+    <h4 id="prtDetalheTitulo" tabindex="-1">${escaparHtmlEbd(inc.protocolo)}</h4>
     <p class="prt-selos">${prtSelosDoIncidente(inc)}</p>
     ${prtRelogioDetalhe ? `<p class="prt-linha-relogio"><strong>Prazo para comunicar o Conselho Tutelar:</strong> ${prtHtmlRelogio("prtRelogioDet", inc.relogio.prazoEm)} <span class="psc-legenda">${prtDataHora(inc.relogio.prazoEm)}</span></p>` : ""}
     <dl class="cal-dl">
@@ -898,6 +991,7 @@ function prtRenderDetalhe() {
     </dl>
     <h5>O que aconteceu (só os fatos)</h5>
     <p class="prt-texto">${escaparHtmlEbd(inc.descricao)}</p>
+    ${inc.nivel === "ALEGACAO" && aberto ? `<div class="prt-roteiro" role="note" id="prtFichaNaoFaca">${prtHtmlNaoFaca()}</div>` : ""}
     <h5>👥 Pessoa envolvida</h5>
     ${prtHtmlEnvolvidos(d)}
     <h5>📞 Comunicação aos órgãos de proteção</h5>
@@ -908,9 +1002,9 @@ function prtRenderDetalhe() {
     <h5>🔒 Relato</h5>
     ${relato.registrado
     ? `<p>Há um relato guardado${adendos ? ` e ${adendos} adendo(s)` : ""}. Ele só aparece depois que você pedir, e cada leitura fica registrada com o seu nome.</p>
-       <div class="psc-acoes"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="prtLerRelatoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">🔒 Ler o relato</button></div>`
+       <div class="psc-acoes"><button type="button" class="btn-confirmar" id="prtLerRelatoBotao" style="width:auto;margin:0;" data-on-click="prtLerRelatoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">🔒 Ler o relato</button></div>`
     : "<p class='subtitle'>Não há relato guardado.</p>"}
-    <div id="prtRelatoCx" class="prt-relato" role="region" aria-label="Relato guardado (a leitura fica registrada)" style="display:none;">
+    <div id="prtRelatoCx" class="prt-relato" role="region" aria-label="Relato guardado (a leitura fica registrada)" tabindex="-1" style="display:none;">
       <div class="prt-relato-topo"><strong>🔒 Relato (leitura registrada)</strong>
         <button type="button" class="btn-link" data-on-click="prtFecharRelatoAcao">✖ Fechar e apagar da tela</button></div>
       <div id="prtRelatoCorpo"></div>
@@ -931,7 +1025,10 @@ function prtLimparRelato() {
   if (corpo) corpo.textContent = "";
   if (cx) cx.style.display = "none";
 }
-function prtFecharRelatoAcao() { prtLimparRelato(); }
+function prtFecharRelatoAcao() {
+  prtLimparRelato();
+  prtFocarId("prtLerRelatoBotao");   // o foco volta ao botão de ler (a caixa que o continha acabou de sumir)
+}
 function prtLinhaRelato(corpo, tag, classe, texto) {
   const el = document.createElement(tag);
   if (classe) el.className = classe;
@@ -953,6 +1050,7 @@ function prtMostrarRelato(dados) {
     prtLinhaRelato(corpo, "p", "prt-texto", String(a && a.texto != null ? a.texto : ""));
   });
   cx.style.display = "block";
+  prtFocar(cx);   // quem usa teclado ou leitor de tela cai no relato que acabou de abrir
 }
 async function prtLerRelatoAcao(incidenteId, botao) {
   const id = Number(incidenteId);
@@ -1003,7 +1101,7 @@ function prtFormAdendo() {
     <strong>➕ Adendo ao relato</strong>
     <p class="cnl-aviso-senha" role="note"><strong>Só se a criança contou algo mais por conta própria.</strong> Registre com as palavras dela. <strong>Não faça novas perguntas</strong> para obter mais: repetir a conversa machuca de novo. O que for novo deve ir direto às autoridades.</p>
     <label for="prtFaTexto">O que a criança disse (de 10 a 2000 caracteres)</label>
-    <textarea id="prtFaTexto" rows="4" maxlength="2000" style="width:100%;" data-on-input="prtContarAcao" data-args-input="${argsAttr("prtFaTexto")}"></textarea>
+    <textarea id="prtFaTexto" rows="4" maxlength="2000" spellcheck="false" autocomplete="off" style="width:100%;" data-on-input="prtContarAcao" data-args-input="${argsAttr("prtFaTexto")}"></textarea>
     <p class="psc-legenda"><span id="prtFaContador">0</span>/2000 caracteres. São aceitos no máximo 5 adendos por caso.</p>
     <div class="psc-acoes">
       <button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="prtEnviarAdendoAcao" data-args-click="${argsAttr(ARG.elemento)}">➕ Registrar o adendo</button>
@@ -1035,7 +1133,7 @@ function prtFormReclassificar() {
       <label for="prtFrQuem">Quem contou ou percebeu o fato</label>
       <select id="prtFrQuem">${prtOpcoes(cat.quemRelatou, x => x.codigo, x => x.rotulo, "— escolha —")}</select>
       <label for="prtFrRelato">O relato (de 10 a 4000 caracteres)</label>
-      <textarea id="prtFrRelato" rows="4" maxlength="4000" style="width:100%;" data-on-input="prtContarAcao" data-args-input="${argsAttr("prtFrRelato")}"></textarea>
+      <textarea id="prtFrRelato" rows="4" maxlength="4000" spellcheck="false" autocomplete="off" style="width:100%;" data-on-input="prtContarAcao" data-args-input="${argsAttr("prtFrRelato")}"></textarea>
       <p class="psc-legenda"><span id="prtFrRelatoContador">0</span>/4000 caracteres.</p>
     </div>
     <div class="psc-acoes">
@@ -1095,7 +1193,9 @@ function prtResultadosPossiveis(d) {
   const todos = prtCatalogos ? prtCatalogos.resultados : [];
   const suspeita = d.incidente.nivel === "ALEGACAO";
   const arquivar = !!(d.acoes && d.acoes.arquivarSemConteudo);
-  return todos.filter(r => (r.codigo === PRT_RESULTADO_SEM_CONTEUDO ? arquivar : suspeita === (r.codigo === "ENCAMINHADO_AUTORIDADE")));
+  const possiveis = todos.filter(r => (r.codigo === PRT_RESULTADO_SEM_CONTEUDO ? arquivar : suspeita === (r.codigo === "ENCAMINHADO_AUTORIDADE")));
+  // A saída que encerra SEM avisar o Conselho Tutelar nunca é a primeira da lista (o catálogo do servidor a traz primeiro): "Encaminhado às autoridades" abre a lista e "sem conteúdo de proteção" vem por último, e nunca pré-escolhida.
+  return [...possiveis.filter(r => r.codigo !== PRT_RESULTADO_SEM_CONTEUDO), ...possiveis.filter(r => r.codigo === PRT_RESULTADO_SEM_CONTEUDO)];
 }
 function prtMudouResultadoAcao() {
   const aviso = prtEl("prtFeAvisoSemConteudo");
@@ -1122,20 +1222,34 @@ function prtFormEncerrar() {
     <p id="prtFeMsg" class="subtitle" role="status"></p>
   </div>`;
 }
-function prtAbrirFormAcao(tipoBruto, extra) {
+// `gatilho`: o botão que abriu o formulário (o foco volta para ele quando o formulário fecha). Sem o catálogo carregado (a primeira carga falhou, ou a sessão trocou) o botão não pode ficar mudo: tenta de novo e, se não der, diz.
+async function prtAbrirFormAcao(tipoBruto, extra, gatilho) {
   const tipo = prtTipoFormValido(tipoBruto);
   const area = prtEl("prtFormAcao");
-  if (!tipo || !area || !prtDetalhe || !prtCatalogos) return;
+  if (!tipo || !area || !prtDetalhe) return;
+  if (!prtCatalogos) {
+    const id = prtIncidenteAberto(), geracao = prtGeracao;
+    await prtGarantirCatalogos();
+    if (geracao !== prtGeracao || id !== prtIncidenteAberto()) return;   // a pessoa trocou de ficha ou de login enquanto o catálogo vinha
+    if (!prtCatalogos) { prtEscreverAviso("prtDetalheMsg", "Não foi possível carregar as opções deste ato agora. Verifique a internet e toque de novo no botão.", true); prtRolarPara("prtDetalheMsg"); return; }
+    prtEscreverAviso("prtDetalheMsg", "", false);
+  }
   const porEnvolvido = tipo === "decidir" || tipo === "vincular";
   const envolvido = porEnvolvido ? (prtDetalhe.envolvidos || []).find(e => Number(e.envolvidoId) === Number(extra)) : null;
   if (porEnvolvido && !envolvido) return;
+  prtGatilhoForm = gatilho && typeof gatilho === "object" ? gatilho : null;
   area.innerHTML = tipo === "comunicacao" ? prtFormComunicacao() : tipo === "adendo" ? prtFormAdendo() : tipo === "reclassificar" ? prtFormReclassificar() : tipo === "decidir" ? prtFormDecidir(envolvido)
     : tipo === "vincular" ? prtFormVincular(envolvido) : prtFormEncerrar();
   prtRolarPara("prtFormAcao");
+  prtFocarId(PRT_PRIMEIRO_CAMPO[tipo]);   // o foco vai para o primeiro campo do formulário que acabou de abrir
 }
 function prtFecharFormAcao() {
   const area = prtEl("prtFormAcao");
   if (area) area.innerHTML = "";
+  // o foco volta ao botão de onde a pessoa abriu o formulário (se a ficha foi refeita e o botão não existe mais, o título dela já recebeu o foco)
+  const gatilho = prtGatilhoForm;
+  prtGatilhoForm = null;
+  if (gatilho && gatilho.isConnected) prtFocar(gatilho);
 }
 // Depois de um ato que deu certo: a ficha e a fila são refeitas e a mensagem do servidor volta para o lugar dela.
 async function prtDepoisDoAto(id, mensagem) {
@@ -1155,7 +1269,7 @@ async function prtEnviarComunicacaoAcao(botao) {
   if (!forma) { erro("Escolha como o órgão foi avisado (ofício, pessoalmente, telefone...)."); return; }
   const quando = new Date(quandoTexto);
   if (!quandoTexto || Number.isNaN(quando.getTime())) { erro("Informe a data e a hora em que o órgão foi avisado."); return; }
-  if (quando.getTime() > Date.now() + 5 * 60000) { erro("A hora em que o órgão foi avisado não pode estar no futuro."); return; }
+  if (quando.getTime() > prtAgoraServidor() + 5 * 60000) { erro("A hora em que o órgão foi avisado não pode estar no futuro."); return; }   // o relógio do servidor, não o do aparelho (adiantado ou atrasado)
   const ciencia = Date.parse(prtDetalhe.incidente.conhecidoEm);
   if (Number.isFinite(ciencia) && quando.getTime() < ciencia - 60000) { erro(`A comunicação não pode ser anterior ao momento em que a Igreja ficou sabendo (${calDataHora(prtDetalhe.incidente.conhecidoEm)}).`); return; }
   if (protocoloExterno.length > 60 || prtTemMarca(protocoloExterno)) { erro("O número de protocolo do órgão aceita até 60 caracteres, sem < ou >."); return; }
@@ -1340,7 +1454,7 @@ async function prtCarregarComiteAcao() {
       <span class="psc-legenda">${Number(a.total) || 0} membro(s): ${Number(a.clericos) || 0} do clero e ${Number(a.leigos) || 0} leigo(s)</span></h5>
     ${problemas.length ? `<ul class="prt-lista">${problemas.map(p => `<li>${escaparHtmlEbd(p)}</li>`).join("")}</ul>` : ""}
     ${membros.length ? `<ul class="prt-lista">${membros.map(m => `<li><strong>${escaparHtmlEbd(m.nome)}</strong> ${prtSelo(m.clerigo ? "cal-st-deferido" : "cal-st-cancelado", m.clerigo ? "clero" : "leigo")}</li>`).join("")}</ul>` : "<p class='subtitle'>Ninguém ocupa o papel do Comitê ainda.</p>"}
-    <p class="psc-legenda">Quem entra no Comitê é cadastrado pelo papel «${escaparHtmlEbd(c.papel || "Comitê de Proteção")}» em Administração de Acesso → Permissões. Se é do clero ou leigo vem do cadastro da pessoa: não se digita aqui. O Comitê precisa de pelo menos 3 pessoas e de pelo menos uma que não seja do clero.</p>
+    <p class="psc-legenda">Quem entra no Comitê é cadastrado pelo papel «${escaparHtmlEbd(c.papel || "Comitê de Proteção")}» em Administração de Acesso → Permissões → Atribuir acesso a uma pessoa. Se é do clero ou leigo vem do cadastro da pessoa: não se digita aqui. O Comitê precisa de pelo menos 3 pessoas e de pelo menos uma que não seja do clero.</p>
   </div>`;
 }
 
@@ -1407,9 +1521,17 @@ function prtImprimirRelatorioAcao() {
   try { window.print(); } finally { if (classes) classes.remove("prt-imprimindo"); }
 }
 
+// Ao voltar para o navegador (celular que dormiu, outra aba do navegador), o relógio é refeito NA HORA: o sistema pode ter segurado o intervalo de 30 s enquanto a página esteve escondida, e a fila mostraria um prazo velho
+// até o próximo tique. Fora da aba (ou de outra pessoa), o próprio tique desliga o intervalo, como sempre.
+function prtVisibilidadeMudou() {
+  if (document.visibilityState === "hidden") return;
+  prtTique();
+}
+document.addEventListener("visibilitychange", prtVisibilidadeMudou);
+
 registrarAcoes({
   prtAbrirAjudaPublicaAcao, prtAbrirDetalheAcao, prtAbrirDetalheDePadraoAcao, prtAbrirFormAcao, prtAtualizarDetalheAcao, prtCarregarComiteAcao, prtCarregarIncidentesAcao, prtCarregarMeusAcao,
   prtCarregarPadroesAcao, prtCarregarRelatorioAcao, prtContarAcao, prtEnviarAdendoAcao, prtEnviarAjudaAcao, prtEnviarComunicacaoAcao, prtEnviarDecisaoAcao, prtEnviarEncerramentoAcao,
   prtEnviarReclassificacaoAcao, prtEnviarRegistroAcao, prtFecharAjudaPublicaAcao, prtFecharDetalheAcao, prtFecharFormAcao, prtFecharRelatoAcao, prtImprimirRelatorioAcao, prtLerRelatoAcao,
-  prtMostrarSecaoAcao, prtMudouCongregacaoAcao, prtMudouNivelAcao, prtMudouNivelReclassAcao, prtMudouResultadoAcao, prtEnviarVinculoAcao, prtEscolherMembroVinculoAcao
+  prtEditouAjudaAcao, prtMostrarSecaoAcao, prtMudouCongregacaoAcao, prtMudouNivelAcao, prtMudouNivelReclassAcao, prtMudouResultadoAcao, prtEnviarVinculoAcao, prtEscolherMembroVinculoAcao
 });

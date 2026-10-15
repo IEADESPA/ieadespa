@@ -36,8 +36,17 @@ function resposta(status, corpo, naoJson) {
 }
 
 // `mutar`: { "modulos/protecao.js": [[de, para], ...] } — cada troca tem de achar o trecho exatamente uma vez
-function criarAmbiente({ mutar = {}, agora = "2026-10-09T15:00:00.000Z" } = {}) {
+function criarAmbiente({ mutar = {}, agora = "2026-10-09T15:00:00.000Z", semModulo = false } = {}) {
   const doc = new Documento();
+  // foco, como o navegador: só recebe foco o que é focalizável (campo, botão, link com href ou tabindex), não está desabilitado e não está dentro de algo escondido; elemento retirado da árvore perde o foco (volta ao body)
+  const Elemento = doc.body.constructor;
+  // (o painel inteiro — telaPainel e cxPainelConteudo — nunca é aberto aqui: o roteiro mexe direto nas abas; só conta o que fica DENTRO dele)
+  const FORA_DA_CONTA = ["telaPainel", "cxPainelConteudo"];
+  const focalizavel = (el) => { for (let p = el; p && p.nodeType === 1; p = p.parentNode) if (p.style && p.style.display === "none" && !FORA_DA_CONTA.includes(p.id)) return false; return !el.disabled && (el.hasAttribute("tabindex") || ["input", "select", "textarea", "button"].includes(el.localName) && el.type !== "hidden" || (el.localName === "a" && el.hasAttribute("href"))); };
+  Elemento.prototype.focus = function () { if (focalizavel(this)) { this.ownerDocument._focado = this; this.ownerDocument._focos.push(this.id || this.localName); } };
+  Object.defineProperty(Elemento.prototype, "isConnected", { configurable: true, get() { for (let p = this; p; p = p.parentNode) if (p === this.ownerDocument.body) return true; return false; } });
+  doc._focos = []; doc._focado = null; doc.visibilityState = "visible";
+  Object.defineProperty(doc, "activeElement", { configurable: true, get() { return this._focado && this._focado.isConnected ? this._focado : this.body; } });
   const contexto = vm.createContext({ document: doc, console });
   const ev = (codigo, nome) => vm.runInContext(codigo, contexto, { filename: nome });
   const aplicarMutacoes = (rel, codigo) => {
@@ -64,7 +73,12 @@ function criarAmbiente({ mutar = {}, agora = "2026-10-09T15:00:00.000Z" } = {}) 
     const rota = api.rotas[chamada.chave] || api.rotas[`${metodo} ${chamada.caminho.replace(/\?.*/, "")}`];
     const r = rota ? (typeof rota === "function" ? rota(chamada) : rota) : null;
     const reten = api.retencoes.find(x => !x.usada && x.casa(chamada));
-    if (reten) { reten.usada = true; reten.chegou = true; await reten.promessa; }
+    if (reten) {
+      reten.usada = true; reten.chegou = true;
+      // um pedido com "signal" (a desistência do canal público) é interrompido quando o sinal dispara, como o fetch de verdade faz
+      const abortada = opts.signal ? new Promise((_, rej) => { const f = () => rej(Object.assign(new Error("The operation was aborted."), { name: "AbortError" })); if (opts.signal.aborted) f(); else opts.signal.addEventListener("abort", f, { once: true }); }) : null;
+      await (abortada ? Promise.race([reten.promessa, abortada]) : reten.promessa);
+    }
     if (api.redeCaida) throw new TypeError("Failed to fetch");
     if (!r) return resposta(404, { sucesso: false, mensagem: `rota sem fixture: ${chamada.chave}` });
     return resposta(r.status || 200, r.corpo, r.naoJson);
@@ -78,8 +92,13 @@ function criarAmbiente({ mutar = {}, agora = "2026-10-09T15:00:00.000Z" } = {}) 
   let proximoIntervalo = 1;
   ctx.setInterval = (fn, ms) => { const id = proximoIntervalo++; intervalos.set(id, { fn, ms }); return id; };
   ctx.clearInterval = (id) => { intervalos.delete(id); };
-  ctx.setTimeout = () => 0;            // os toasts e o resto ficam parados: a conferência conta o que ficou na tela
-  ctx.clearTimeout = () => {};
+  // temporizadores observáveis: nada dispara sozinho (os toasts e o resto ficam parados: a conferência conta o que ficou na tela); o roteiro dispara o que quer provar (ex.: a desistência de 30 s do canal público)
+  const temporizadores = new Map();
+  let proximoTemporizador = 1;
+  ctx.setTimeout = (fn, ms) => { const id = proximoTemporizador++; temporizadores.set(id, { fn, ms }); return id; };
+  ctx.clearTimeout = (id) => { temporizadores.delete(id); };
+  const dispararTemporizador = (ms) => { for (const [id, t] of [...temporizadores]) if (t.ms === ms) { temporizadores.delete(id); t.fn(); } };
+  ctx.AbortController = AbortController;
   ctx.setImmediate = setImmediate;
   // ---- armazenamento do navegador: anota tudo o que for gravado (o texto de uma criança nunca pode estar aqui) ----
   const gravacoes = [];
@@ -120,7 +139,8 @@ function avisarResultado(d) { mostrarToast(d.mensagem, d.sucesso ? "sucesso" : "
   ev(lerApp("eventos.js"), "eventos.js");
   ev("registrarAcoes({ abrirModalAnexos, fecharModal, mostrarSubAbaMeupainel, mostrarTelaPainelInicial, voltarParaCheckin });", "acoes-do-script");
   // o módulo inteiro
-  ev(aplicarMutacoes("modulos/protecao.js", lerApp("modulos/protecao.js")), "protecao.js");
+  // (semModulo: o modulos/protecao.js falta ou está velho no cache do service worker — só o script.js e o meus-dados.js novos rodam)
+  if (!semModulo) ev(aplicarMutacoes("modulos/protecao.js", lerApp("modulos/protecao.js")), "protecao.js");
 
   // ---- utilidades de teste ----
   const e = (id) => doc.getElementById(id);
@@ -145,7 +165,8 @@ function avisarResultado(d) { mostrarToast(d.mensagem, d.sucesso ? "sucesso" : "
   const avancar = (ms) => { ctx.__relogioMs += ms; };
   const tique = () => { [...intervalos.values()].forEach(i => i.fn()); };
   const relogioMs = () => ctx.__relogioMs;
-  return { doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, modal, responderModal, limparRegistro, errosDaPagina, resposta, intervalos, gravacoes, impressoes, avancar, tique, relogioMs };
+  const foco = () => doc.activeElement;
+  return { doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, modal, responderModal, limparRegistro, errosDaPagina, resposta, intervalos, gravacoes, impressoes, avancar, tique, relogioMs, temporizadores, dispararTemporizador, foco };
 }
 
 module.exports = { criarAmbiente, extrair, lerApp };

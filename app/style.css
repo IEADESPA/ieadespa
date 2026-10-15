@@ -913,14 +913,25 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 .prt-rolagem { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
 .prt-tabela { margin-top: 4px; }
 .prt-tabela th { color: var(--cor-texto); }
-/* o relatório anual imprime sozinho: a classe .prt-imprimindo existe só durante window.print() (protecao.js → prtImprimirRelatorioAcao) e esconde o resto da página */
+/* Impressão (v7.8). (1) O relato de uma criança e a ficha do incidente NUNCA saem na impressora, nem num Ctrl+P comum com a caixa do relato aberta.
+   (2) O relatório anual imprime sozinho: a classe .prt-imprimindo existe só durante window.print() (protecao.js → prtImprimirRelatorioAcao) e esconde o resto da página.
+   Base (qualquer navegador): visibility:hidden. Onde o navegador sabe :has() (o quase todo), o resto da página sai com display:none: com só visibility:hidden o que ficava escondido continuava ocupando folha
+   e sobrava uma página em branco no fim (duas folhas para um relatório de uma linha). As pastas onde o relatório está perdem altura mínima, margem e rolagem para ele começar no alto da folha. */
 @media print {
+  #prtRelatoCx, #prtDetalheCx { display: none !important; }
   body.prt-imprimindo * { visibility: hidden !important; }
   body.prt-imprimindo #prtRelImprimivel, body.prt-imprimindo #prtRelImprimivel * { visibility: visible !important; }
   body.prt-imprimindo #prtRelImprimivel { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }
   body.prt-imprimindo .prt-rolagem { overflow: visible; }
   body.prt-imprimindo .prt-tabela { display: table; width: 100%; font-size: 9pt; }
   body.prt-imprimindo .prt-tabela th, body.prt-imprimindo .prt-tabela td { white-space: normal; }
+}
+@supports selector(:has(*)) {
+  @media print {
+    body.prt-imprimindo *:not(#prtRelImprimivel):not(#prtRelImprimivel *):not(:has(#prtRelImprimivel)) { display: none !important; }
+    body.prt-imprimindo *:has(#prtRelImprimivel) { display: block !important; position: static !important; width: auto !important; max-width: none !important; min-height: 0 !important; height: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; overflow: visible !important; background: #fff !important; }
+    body.prt-imprimindo #prtRelImprimivel { position: static; width: auto; }
+  }
 }
 
 /* Blocos que o servidor só entrega ao nível geral (papel Global com escopo de todas as congregações): escondidos para os demais. */

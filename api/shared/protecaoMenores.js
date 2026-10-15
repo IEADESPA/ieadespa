@@ -403,7 +403,8 @@ function textoPadrao({ tipo, total }) {
   return `Há ${total} registros de quase-acidente ou quebra de política nos últimos ${JANELA_PADRAO_DIAS} dias na mesma ${tipo === "EQUIPE" ? "equipe" : "pessoa"}. Pequenas quebras repetidas costumam anteceder um caso grave: o Comitê deve conferir. Abra Proteção de Crianças → Padrões.`;
 }
 function textoComiteIncompleto({ problemas }) {
-  return `O Comitê de Proteção está incompleto: ${(problemas || []).join(" ")} Cadastre os membros em Proteção de Crianças → Comitê.`.slice(0, 1000);
+  // O Comitê são as pessoas que ocupam o papel «Comitê de Proteção» no cadastro de lideranças (Permissões → "Atribuir acesso a uma pessoa"); a aba Comitê só mostra quem é (a mesma frase está nela e no index.html)
+  return `O Comitê de Proteção está incompleto: ${(problemas || []).join(" ")} Cadastre os membros pelo papel «Comitê de Proteção» em Administração de Acesso → Permissões → Atribuir acesso a uma pessoa.`.slice(0, 1000);
 }
 function textoCautelarSemDecisao({ dias }) {
   return `Há uma pessoa afastada por cautela do contato com menores sem decisão do Comitê há ${dias} dia(s). O afastamento não é punição, mas não pode ficar sem revisão. Abra Proteção de Crianças → Incidentes.`;
@@ -427,8 +428,11 @@ function textoCautelarPessoa() {
 function textoCautelarLevantada() {
   return "A Diretoria Executiva levantou a suspensão cautelar do seu contato com crianças e adolescentes. Você só volta às escalas com menores se a sua habilitação estiver em dia (certidões, treinamento, ficha e política).";
 }
-function textoConfirmacaoDeAjuda() {
-  return "Recebemos o que você contou. Obrigado por confiar. Pessoas preparadas da liderança da Igreja foram avisadas. Você não tem culpa de nada. Se existe perigo agora, ligue 190. Para falar com alguém a qualquer hora, ligue 100 (de graça).";
+// `avisada`: o aviso à liderança de fato foi criado. A criança só lê que "a liderança foi avisada" quando isso é verdade (regra de aviso desligada, ninguém para receber ou e-mail fora do ar
+// deixam `avisada` falso): nesse caso o texto diz o que houve e manda ligar. O 100 e o 190 estão nas DUAS versões. O padrão é a versão honesta (sem promessa): quem esquecer de passar o valor não promete.
+function textoConfirmacaoDeAjuda({ avisada = false } = {}) {
+  if (avisada === true) return "Recebemos o que você contou. Obrigado por confiar. Pessoas preparadas da liderança da Igreja foram avisadas. Você não tem culpa de nada. Se existe perigo agora, ligue 190. Para falar com alguém a qualquer hora, ligue 100 (de graça).";
+  return "Recebemos o seu pedido, mas não conseguimos avisar ninguém da liderança agora. Por favor, ligue 100 (Disque Direitos Humanos, de graça, 24 horas) ou 190 agora, ou fale com um adulto de confiança. Você não tem culpa de nada.";
 }
 
 module.exports = {

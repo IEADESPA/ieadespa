@@ -148,12 +148,27 @@ describe("registrar um incidente", () => {
   });
   test("o clique duplo: a conferência de repetição acontece sob trava e devolve o incidente já registrado, sem gravar outro", async () => {
     mundoDeRegistro();
-    quando(/SELECT TOP 1 IncidenteId, Protocolo, PrazoNotificacaoEm FROM IncidentesProtecao/, [{ IncidenteId: 41, Protocolo: "PRO-2026-ANT", PrazoNotificacaoEm: null }]);
+    quando(/SELECT TOP 1 IncidenteId, Protocolo, Nivel, ExigeComunicacao, PrazoNotificacaoEm FROM IncidentesProtecao/, [{ IncidenteId: 41, Protocolo: "PRO-2026-ANT", Nivel: "QUEBRA_POLITICA", ExigeComunicacao: false, PrazoNotificacaoEm: null }]);
     const r = await db.registrarIncidente(pool, { dados: dados(), registrante: { membroId: 10 }, agora: AGORA });
     expect(r).toMatchObject({ sucesso: true, repetido: true, incidenteId: 41, protocolo: "PRO-2026-ANT" });
     expect(escritas().filter((c) => /INSERT INTO IncidentesProtecao/.test(c.sql))).toHaveLength(0);
     expect(notificarAgora).not.toHaveBeenCalled();
     expect(mockConsultas.findIndex((c) => /sp_getapplock/.test(c.sql))).toBeLessThan(mockConsultas.findIndex((c) => /SELECT TOP 1 IncidenteId, Protocolo/.test(c.sql)));
+  });
+  test("o clique duplo numa SUSPEITA devolve também o nível e `exigeComunicacao` do registro que já existe (a tela segue mostrando o que NÃO fazer, o prazo e o 100/190), sem vazar escalas nem avisados", async () => {
+    mundoDeRegistro();
+    quando(/SELECT TOP 1 IncidenteId, Protocolo, Nivel, ExigeComunicacao, PrazoNotificacaoEm FROM IncidentesProtecao/, [{ IncidenteId: 41, Protocolo: "PRO-2026-ANT", Nivel: "ALEGACAO", ExigeComunicacao: true, PrazoNotificacaoEm: new Date("2026-10-10T15:00:00.000Z") }]);
+    const r = await db.registrarIncidente(pool, { dados: alegacao({ envolvidoMembroId: 77 }), registrante: { membroId: 10 }, agora: AGORA });
+    expect(r).toMatchObject({ sucesso: true, repetido: true, incidenteId: 41, protocolo: "PRO-2026-ANT", nivel: "ALEGACAO", exigeComunicacao: true, prazoEm: "2026-10-10T15:00:00.000Z" });
+    expect("escalasDesmarcadas" in r || "avisados" in r || "avisada" in r).toBe(false);
+    expect(mmDb.retirarInaptosDasEscalas).not.toHaveBeenCalled();
+    expect(escritas().filter((c) => /INSERT INTO IncidentesProtecao/.test(c.sql))).toHaveLength(0);
+  });
+  test("o campo vem do REGISTRO existente: um repetido de quebra de política não promete prazo nem comunicação", async () => {
+    mundoDeRegistro();
+    quando(/SELECT TOP 1 IncidenteId, Protocolo, Nivel, ExigeComunicacao, PrazoNotificacaoEm FROM IncidentesProtecao/, [{ IncidenteId: 40, Protocolo: "PRO-2026-Q", Nivel: "QUEBRA_POLITICA", ExigeComunicacao: false, PrazoNotificacaoEm: null }]);
+    const r = await db.registrarIncidente(pool, { dados: dados(), registrante: { membroId: 10 }, agora: AGORA });
+    expect(r).toMatchObject({ repetido: true, nivel: "QUEBRA_POLITICA", exigeComunicacao: false, prazoEm: null });
   });
   test("trava ocupada: pede para esperar e não grava", async () => {
     mundoDeRegistro();
@@ -174,6 +189,9 @@ describe("o canal de ajuda (sem login)", () => {
     const r = await db.registrarPedidoDeAjuda(pool, { dados: { texto: "Um adulto me tocou e eu não gostei, tenho medo.", quemSou: "CRIANCA_ADOLESCENTE", contato: "tia 91 9", congregacaoId: 3 }, agora: AGORA });
     expect(r.sucesso).toBe(true);
     expect(r.mensagem).toMatch(/190/);
+    expect(r.avisada).toBe(true);                               // o aviso à gestão foi criado: a criança lê que a liderança foi avisada
+    expect(r.mensagem).toMatch(/liderança da Igreja foram avisadas/);
+    expect("avisados" in r).toBe(false);                        // a quem escreve sem login só se diz sim ou não, nunca quantos
     const ins = escritas().find((c) => /INSERT INTO IncidentesProtecao/.test(c.sql));
     expect(ins.inputs).toMatchObject({ n: "ALEGACAO", o: "CANAL_AJUDA", c: 3, rp: "PROPRIA_CRIANCA", ct: "tia 91 9", x: 1 });
     expect(ins.inputs.r).toBeNull();
@@ -181,6 +199,22 @@ describe("o canal de ajuda (sem login)", () => {
     expect(registrarAuditoria).toHaveBeenCalledWith({ tabela: "IncidentesProtecao", registroId: 0, acao: "PROTECAO_PEDIDO_DE_AJUDA", usuarioId: null, dadosDepois: {} });
     expect(notificarAgora).toHaveBeenCalledTimes(1);
     expect(notificarAgora.mock.calls[0][1].destinatarios.map((d) => d.membroId).sort()).toEqual([1001, 1002]);       // só o nível geral: o Dirigente da congregação escolhida pode ser a pessoa de quem se fala
+  });
+  test("se ninguém foi avisado (regra desligada, sem destinatário, e-mail fora) o pedido é gravado mas a criança NÃO lê que a liderança foi avisada: lê para ligar 100 ou 190", async () => {
+    quando(/FROM IncidentesProtecao\s+WHERE Origem = 'CANAL_AJUDA'/, [{ hora: 0, dia: 0 }]);
+    quando(/SELECT 1 AS x FROM IncidentesProtecao WHERE Protocolo = @p/, []);
+    quando(/INSERT INTO IncidentesProtecao/, [{ id: 52 }]);
+    notificarAgora.mockResolvedValueOnce({ criadas: 0 });
+    const r = await db.registrarPedidoDeAjuda(pool, { dados: { texto: "Um adulto me tocou e eu não gostei, tenho medo." }, agora: AGORA });
+    expect(r.sucesso).toBe(true);                               // o relato está guardado e o relógio de 24 horas conta, com ou sem aviso
+    expect(escritas().some((c) => /INSERT INTO IncidentesProtecao/.test(c.sql))).toBe(true);
+    expect(r.avisada).toBe(false);
+    expect(typeof r.avisada).toBe("boolean");
+    expect(r.mensagem).not.toMatch(/foram avisadas/);
+    expect(r.mensagem).toMatch(/não conseguimos avisar ninguém da liderança/);
+    expect(r.mensagem).toMatch(/\b100\b/);
+    expect(r.mensagem).toMatch(/\b190\b/);
+    expect("avisados" in r).toBe(false);
   });
   test("no teto global (15 por hora, 60 por dia) nada é gravado e a orientação do Disque 100 vem na mensagem", async () => {
     quando(/FROM IncidentesProtecao\s+WHERE Origem = 'CANAL_AJUDA'/, [{ hora: 15, dia: 15 }]);

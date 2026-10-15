@@ -231,6 +231,24 @@ describe("os textos dos avisos", () => {
     expect(pm.textoConfirmacaoDeAjuda()).toMatch(/190/);
     expect(pm.textoConfirmacaoDeAjuda()).toMatch(/100/);
   });
+  test("a confirmação do canal de ajuda só diz que a liderança foi avisada quando foi; o 100 e o 190 estão nas DUAS versões e sem valor nunca promete", () => {
+    const avisada = pm.textoConfirmacaoDeAjuda({ avisada: true });
+    const naoAvisada = pm.textoConfirmacaoDeAjuda({ avisada: false });
+    expect(avisada).toMatch(/liderança da Igreja foram avisadas/);
+    expect(naoAvisada).not.toMatch(/foram avisadas/);
+    expect(naoAvisada).toMatch(/não conseguimos avisar ninguém da liderança/);
+    expect(naoAvisada).toMatch(/Disque Direitos Humanos, de graça, 24 horas/);
+    for (const t of [avisada, naoAvisada]) { expect(t).toMatch(/\b100\b/); expect(t).toMatch(/\b190\b/); expect(t).not.toMatch(/<|>/); }
+    expect(pm.textoConfirmacaoDeAjuda()).toBe(naoAvisada);
+    expect(pm.textoConfirmacaoDeAjuda({ avisada: "sim" })).toBe(naoAvisada);        // só o booleano verdadeiro promete
+  });
+  test("o aviso de Comitê incompleto manda cadastrar no papel «Comitê de Proteção» em Permissões: é onde o Comitê é cadastrado de verdade (a aba Comitê só mostra quem é)", () => {
+    const t = pm.textoComiteIncompleto({ problemas: ["O Comitê precisa de pelo menos 3 membros (hoje há 2)."] });
+    expect(t).toMatch(/papel «Comitê de Proteção»/);
+    expect(t).toMatch(/Administração de Acesso → Permissões → Atribuir acesso a uma pessoa/);
+    expect(t).not.toMatch(/Proteção de Crianças → Comitê/);
+    expect(t).toMatch(/hoje há 2/);
+  });
   test("a orientação da escuta protegida: acolher, registrar, encaminhar; e o que NÃO fazer", () => {
     expect(pm.ROTEIRO_ESCUTA.map((p) => p.passo)).toEqual(["1. Acolher", "2. Registrar o que foi dito", "3. Encaminhar"]);
     expect(pm.NAO_FACA.join(" ")).toMatch(/Não faça perguntas/);

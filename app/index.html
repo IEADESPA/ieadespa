@@ -942,22 +942,22 @@
                 </div>
                 <div class="input-group">
                   <label for="prtRegOnde">Onde aconteceu (opcional)</label>
-                  <input type="text" id="prtRegOnde" maxlength="150" placeholder="Ex.: sala do Maternal" />
+                  <input type="text" id="prtRegOnde" maxlength="150" autocomplete="off" placeholder="Ex.: sala do Maternal" />
                 </div>
               </div>
               <div class="input-group">
                 <label for="prtRegDescricao">O que aconteceu (de 10 a 1000 caracteres)</label>
-                <textarea id="prtRegDescricao" rows="4" maxlength="1000" style="width:100%;" data-on-input="prtContarAcao" data-args-input='["prtRegDescricao"]'></textarea>
+                <textarea id="prtRegDescricao" rows="4" maxlength="1000" autocomplete="off" style="width:100%;" data-on-input="prtContarAcao" data-args-input='["prtRegDescricao"]'></textarea>
                 <p class="psc-legenda"><span id="prtRegDescContador">0</span>/1000 caracteres. Só fatos, sem opinião e <strong>sem o nome de crianças</strong> (o que a criança contou vai no relato, mais abaixo).</p>
               </div>
               <div class="cal-form-grade">
                 <div class="input-group">
                   <label for="prtRegEnvMatricula">Pessoa envolvida: matrícula</label>
-                  <input type="number" id="prtRegEnvMatricula" min="1" />
+                  <input type="number" id="prtRegEnvMatricula" min="1" autocomplete="off" />
                 </div>
                 <div class="input-group">
                   <label for="prtRegEnvNome">OU o nome, se não souber a matrícula</label>
-                  <input type="text" id="prtRegEnvNome" maxlength="150" />
+                  <input type="text" id="prtRegEnvNome" maxlength="150" autocomplete="off" />
                 </div>
               </div>
               <p class="psc-legenda">Preencha só um dos dois, se houver pessoa envolvida. Com a matrícula, quem é membro sai das escalas com crianças por cautela (não é punição) numa suspeita de violência.</p>
@@ -977,7 +977,7 @@
                 </div>
                 <div class="input-group">
                   <label for="prtRegRelato">O relato, do jeito que foi contado (de 10 a 4000 caracteres)</label>
-                  <textarea id="prtRegRelato" rows="5" maxlength="4000" autocomplete="off" style="width:100%;" data-on-input="prtContarAcao" data-args-input='["prtRegRelato"]'></textarea>
+                  <textarea id="prtRegRelato" rows="5" maxlength="4000" autocomplete="off" spellcheck="false" style="width:100%;" data-on-input="prtContarAcao" data-args-input='["prtRegRelato"]'></textarea>
                   <p class="psc-legenda"><span id="prtRegRelatoContador">0</span>/4000 caracteres. Use as palavras da criança, sem corrigir e sem interpretar. Este texto fica guardado em separado e só a liderança de proteção pode lê-lo.</p>
                 </div>
               </div>
@@ -3496,7 +3496,7 @@
         <div id="prtSecaoComite" class="cal-secao" style="display:none;">
           <h4>👥 Comitê de Proteção</h4>
           <p class="subtitle" style="margin:4px 0 10px;">O Comitê decide sobre o afastamento cautelar e revisa os casos. Precisa de pelo menos 3 pessoas e de pelo menos uma que <strong>não seja do clero</strong> (leigo): a revisão não pode ser só de ministros.
-            Quem entra no Comitê é cadastrado pelo papel «Comitê de Proteção» em Administração de Acesso → Permissões.</p>
+            Quem entra no Comitê é cadastrado pelo papel «Comitê de Proteção» em Administração de Acesso → Permissões → Atribuir acesso a uma pessoa.</p>
           <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtCarregarComiteAcao">🔄 Atualizar</button></div>
           <p id="prtComiteResultado" class="subtitle" role="status"></p>
           <div id="prtComiteLista"></div>

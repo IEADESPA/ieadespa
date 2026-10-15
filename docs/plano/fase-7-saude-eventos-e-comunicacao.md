@@ -2415,6 +2415,20 @@ hora pelo workflow `rotinas-protecao.yml`). Anexos do incidente: `/api/anexos` c
   quantas pessoas o aviso chegou (isso revelaria se a pessoa apontada servia em alguma escala). Se a matrícula
   informada não existe, o registro vira "só o nome", sem dizer isso a quem registrou; a Diretoria confere e
   vincula. Os padrões e o painel da v7.7 não mostram a pessoa para ela mesma.
+- **A criança só lê "a liderança foi avisada" quando isso é verdade**: o pedido de ajuda sem login devolve só
+  um sim/não (`avisada`, nunca a contagem) e o texto muda — se ninguém pôde ser avisado (sem destinatário, regra
+  desligada, e-mail fora), ela lê para **ligar agora para o 100 ou o 190**. O 100 e o 190 aparecem nas duas versões.
+- **A tela revisada por quem não a construiu** (revisão adversarial independente: 5 achados médios e 12 baixos, nenhum
+  crítico; vazamento do relato, XSS e CSP estavam sãos). O que mudou: os dados do caso saem da tela ao sair da aba
+  (respostas atrasadas não repovoam a fila nem religam o relógio); na tela da criança, um novo toque em "Enviar" não
+  apaga a confirmação com o número do pedido e o texto digitado durante o envio não se perde; o registro **repetido**
+  de uma suspeita mostra o prazo de 24 horas, o "não faça" e o 100/190 (o servidor devolve se exige comunicação); a
+  ficha de uma suspeita aberta traz o "não faça" para quem comunica; "Vincular" some quando a pessoa do cadastro já está
+  vinculada; o formulário da comunicação usa o relógio do **servidor**; o modal de anexos fecha ao trocar de login;
+  "pedido sem conteúdo de proteção" é sempre a **última** opção de encerramento (nunca a primeira nem a escolhida de
+  partida); foco de teclado nos formulários, impressão do relatório sem página em branco e sem o relato; as chamadas
+  entre arquivos da tela não derrubam a navegação nem o logout se o módulo faltar na casca; o texto do aviso de
+  "Comitê incompleto" e o da aba dizem o mesmo (o Comitê se cadastra pelo papel "Comitê de Proteção", em Permissões).
 - **O Dirigente comunica, o Comitê encerra**: registrar a comunicação, o adendo e a reclassificação são da
   gestão (inclusive o Dirigente da congregação, que é quem está perto e tem as 24 horas); decidir o afastamento
   e encerrar o caso são do nível geral.

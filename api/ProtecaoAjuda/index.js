@@ -25,7 +25,8 @@ module.exports = async function (context, req) {
   try {
     const pool = await getPool();
     const r = await db.registrarPedidoDeAjuda(pool, { dados: corpo });
-    if (r.sucesso) { context.res = { status: 201, headers: cabecalhos, body: { sucesso: true, protocolo: r.protocolo, mensagem: r.mensagem, contatosDeAjuda: pm.CONTATOS_DE_AJUDA } }; return; }
+    // `avisada` (sim/não, nunca a contagem): a mensagem já vem no tom certo (a liderança foi avisada, ou não conseguimos avisar e a pessoa deve ligar); a tela mostra o que o servidor diz
+    if (r.sucesso) { context.res = { status: 201, headers: cabecalhos, body: { sucesso: true, protocolo: r.protocolo, avisada: r.avisada === true, mensagem: r.mensagem, contatosDeAjuda: pm.CONTATOS_DE_AJUDA } }; return; }
     context.res = { status: r.limite ? 429 : 422, headers: cabecalhos, body: { sucesso: false, mensagem: r.mensagem, contatosDeAjuda: pm.CONTATOS_DE_AJUDA } };
   } catch (e) {
     context.log.error("[ProtecaoAjuda] erro:", e && e.message);       // nunca registra o corpo: é o relato de uma criança

@@ -233,7 +233,7 @@ async function carregarMinhasSolicitacoesEdicao() {
 
 function mostrarAbaSecretaria(aba) {
   chaveAjudaAtual = aba;
-  if (aba !== "protecao") prtAbaFechada();   // v7.8: o relato, a ficha do incidente e o relógio das 24 horas não ficam para trás
+  if (aba !== "protecao" && typeof prtAbaFechada === "function") prtAbaFechada();   // v7.8: o relato, a ficha do incidente e o relógio das 24 horas não ficam para trás (módulo ausente ou velho no cache: a navegação segue)
   NOMES_ABAS.forEach(nome => {
     const podeVer = nome === "meupainel" || nome === "documentos" || nome === "ouvidoria" || temPermissaoDaAba(nome);
     const divAba = document.getElementById(`aba${capitalize(nome)}`);
@@ -280,7 +280,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "escalas") carregarOpcoesEscalasAcao();
   if (aba === "habilitacao") carregarOpcoesHabilitacaoAcao();
   if (aba === "menores") carregarOpcoesMenoresAcao();
-  if (aba === "protecao") carregarOpcoesProtecaoAcao();
+  if (aba === "protecao" && typeof carregarOpcoesProtecaoAcao === "function") carregarOpcoesProtecaoAcao();
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
   if (aba === "ebd") {
     const modoProfessor = !authPermissoes.includes("ebd_gestao");

@@ -412,7 +412,9 @@ function sessaoDeLiderancaNaTela() {
   return !!(authToken && (authNivel || (authPermissoes && authPermissoes.length)));
 }
 function limparSessao() {
-  prtLimparTela();   // v7.8: o relato e a fila de incidentes (dado de criança) saem da página junto com a sessão
+  // v7.8: o relato e a fila de incidentes (dado de criança) saem da página junto com a sessão. O módulo é outro arquivo (modulos/protecao.js): se ele faltar ou estiver velho no cache do service worker,
+  // a saída da sessão NÃO pode parar aqui (sem isto o authToken ficava preenchido).
+  if (typeof prtLimparTela === "function") prtLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
   authToken = null;
   authNome = null;
@@ -1483,7 +1485,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "minhasescalas") { carregarMinhasEscalasAcao(); carregarMinhasIndisponibilidadesAcao(); volCarregarMinhasEscalasAcao(); }
   if (sub === "minhahabilitacao") carregarMinhaHabilitacaoAcao();
   if (sub === "menores") carregarMeuPainelMenoresAcao();
-  if (sub === "protecao") carregarMeuPainelProtecaoAcao();
+  if (sub === "protecao" && typeof carregarMeuPainelProtecaoAcao === "function") carregarMeuPainelProtecaoAcao();
   if (sub === "minhasconquistas") carregarMinhasConquistasAcao();
   if (sub === "minhaformacao") carregarMinhaFormacaoAcao();
   if (sub === "agenda") carregarMinhaAgendaCalAcao();

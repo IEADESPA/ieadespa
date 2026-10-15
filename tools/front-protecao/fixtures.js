@@ -116,7 +116,8 @@ function detalhe(o, agora) {
 
 // ---- demais respostas ----
 const meus = (lista) => ({ sucesso: true, incidentes: lista });
-const confirmacaoDeAjuda = (protocolo = "PRO-2026-0900") => ({ sucesso: true, protocolo, mensagem: pm.textoConfirmacaoDeAjuda(), contatosDeAjuda: pm.CONTATOS_DE_AJUDA });
+// `avisada`: o servidor diz se a liderança foi mesmo avisada (a mensagem muda junto: ProtecaoAjuda → registrarPedidoDeAjuda); sem contagem
+const confirmacaoDeAjuda = (protocolo = "PRO-2026-0900", avisada = true) => ({ sucesso: true, protocolo, avisada, mensagem: pm.textoConfirmacaoDeAjuda({ avisada }), contatosDeAjuda: pm.CONTATOS_DE_AJUDA });
 const falhaDeAjuda = (mensagem) => ({ sucesso: false, mensagem, contatosDeAjuda: pm.CONTATOS_DE_AJUDA });
 // GET comite (db.comiteComposicao): a avaliação vem da regra de verdade
 function comite(membros) {
@@ -155,7 +156,7 @@ function contratoComOServidor() {
       "acoes", "comunicar", "encerrar", "reclassificar", "decidirCautelar", "adendo", "encerramentoPossivel", "anexos", "clerigo", "avaliacao", "habilitacaoPorCongregacao", "porCongregacao", "geradoEm", "afastamentosCautelaresAtivos",
       "suspeitasComunicadasNoPrazo", "suspeitasForaDoPrazoOuSemComunicacao", "horasMediasAteComunicar", "quaseAcidentes", "quebrasDePolitica", "suspeitasDeViolencia", "abertos", "motivos", "situacao", "vincularEnvolvido", "arquivarSemConteudo", "possiveisMembros", "registradoPor", "SEM_CONTEUDO_DE_PROTECAO"],
     handler: ["niveis", "orgaos", "formas", "quemRelatou", "resultados", "decisoes", "contatosDeAjuda", "roteiroEscuta", "naoFaca", "horasPrazo", "papeis", "agora", "incidentes", "incidente", "padroes", "comite", "relatorio", "vincular-envolvido"],
-    ajuda: ["contatosDeAjuda", "protocolo", "mensagem"]
+    ajuda: ["contatosDeAjuda", "protocolo", "mensagem", "avisada"]
   };
   const faltam = [];
   for (const [fonte, texto] of [["db", db], ["handler", handler], ["ajuda", ajuda]]) for (const c of campos[fonte]) if (!new RegExp(`\\b${c}\\b`).test(texto)) faltam.push(`${fonte}:${c}`);

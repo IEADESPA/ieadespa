@@ -78,6 +78,11 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const marcado = [0, 1, 2].map(i => env.e(`prtRegNivel${i}`)).find(r => r && r.checked);
     if (marcado) env.doc.disparar(marcado, "change");
   };
+  const cssDoApp = () => {
+    let css = lerApp("style.css");
+    for (const [de, para] of (mutar["style.css"] || [])) { const n = css.split(de).length - 1; if (n !== 1) throw new Error(`mutação inaplicável em style.css (${n} ocorrências): ${de.slice(0, 80)}`); css = css.replace(de, () => para); }
+    return css;
+  };
   const clicarEResponder = async (env, el, confirmar) => { env.doc.clicar(el); const m = await env.responderModal(confirmar); await env.ocioso(); return m; };
 
   // ============================================================================================================================================
@@ -106,7 +111,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
     confere(scripts.includes("modulos/protecao.js"), "o index.html não carrega modulos/protecao.js");
     const sw = lerApp("service-worker.js");
-    confere(/ieadespa-app-shell-v32/.test(sw) && sw.includes('"/modulos/protecao.js"'), "o service worker devia estar na v32 com /modulos/protecao.js na casca");
+    confere(/ieadespa-app-shell-v33/.test(sw) && sw.includes('"/modulos/protecao.js"'), "o service worker devia estar na v33 com /modulos/protecao.js na casca");
     confere(env.errosDaPagina === 0, `index.html com estrutura quebrada (${env.errosDaPagina} erro(s))`);
   });
 
@@ -122,10 +127,12 @@ async function rodar({ mutar = {}, so = null } = {}) {
       "POST protecao-ajuda": () => {
         if (S.modo === "429") return { status: 429, corpo: F.falhaDeAjuda(`Você já enviou mensagens demais por agora. ${ATAQUE("msg429")}`) };
         if (S.modo === "500") return { status: 500, corpo: F.falhaDeAjuda(`Não conseguimos registrar agora. ${ATAQUE("msg500")}`) };
+        if (S.modo === "semMensagem") return { status: 500, corpo: { sucesso: false } };          // L4: erro em JSON sem `mensagem` (um proxy, por exemplo)
         if (S.modo === "naoJson") return { status: 502, naoJson: true, corpo: {} };
         if (S.modo === "422") return { status: 422, corpo: F.falhaDeAjuda(`Escreva o que você quer contar, com as suas palavras. ${ATAQUE("msg422")}`) };
-        const ok = F.confirmacaoDeAjuda(ATAQUE("protocolo"));
-        ok.mensagem = `${pm.textoConfirmacaoDeAjuda()} ${ATAQUE("msgOk")}`;
+        if (S.modo === "naoAvisada") { const nao = F.confirmacaoDeAjuda(ATAQUE("protocolo"), false); nao.contatosDeAjuda = F.catalogosComAtaque().contatosDeAjuda; return { status: 201, corpo: nao }; }   // M4: gravado, mas ninguém foi avisado
+        const ok = F.confirmacaoDeAjuda(ATAQUE("protocolo"), true);
+        ok.mensagem = `${pm.textoConfirmacaoDeAjuda({ avisada: true })} ${ATAQUE("msgOk")}`;
         ok.contatosDeAjuda = F.catalogosComAtaque().contatosDeAjuda;
         return { status: 201, corpo: ok };
       }
@@ -149,6 +156,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     env.limparRegistro();
     doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
     confere(chamadas(env, "POST protecao-ajuda").length === 0 && /pelo menos 10 letras/.test(texto(env, "prtAjudaPubResultado")), "texto vazio não pode enviar e devia explicar");
+    confere(env.foco() === e("prtAjudaPubTexto"), "L9: depois de uma validação o foco vai para o campo do texto");
     e("prtAjudaPubTexto").value = "oi"; doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
     confere(chamadas(env, "POST protecao-ajuda").length === 0, "texto curto não pode enviar");
     e("prtAjudaPubTexto").value = "Preciso falar <b>com alguém</b> hoje"; doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
@@ -168,43 +176,109 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(p[0] && JSON.stringify(p[0].corpo) === JSON.stringify({ texto: TEXTO, quemSou: "CRIANCA_ADOLESCENTE", contato: "WhatsApp 11 99999-0000", congregacaoId: 2 }) && typeof p[0].corpo.congregacaoId === "number", `corpo do pedido: ${JSON.stringify(p[0] && p[0].corpo)}`);
     const res = e("prtAjudaPubResultado");
     confere(res.textContent.includes("[msgOk]") && res.textContent.includes("[protocolo]") && /Número do seu pedido/.test(res.textContent) && /Recebemos o que você contou/.test(res.textContent), "a confirmação (mensagem do servidor e protocolo) devia aparecer");
+    confere(res.textContent.includes("Pessoas preparadas da liderança da Igreja foram avisadas") && res.className.includes("prt-ajuda-ok"), "M4: com a liderança avisada a confirmação é a de sempre, no verde");
     confere(!!link(env, "tel:100", res) && !!link(env, "tel:190", res) && res.textContent.includes("[contatoNome0]"), "depois de enviar, os telefones do servidor (100 e 190) devem aparecer na resposta");
     confere(e("prtAjudaPubTexto").value === "" && e("prtAjudaPubContato").value === "" && e("prtAjudaPubQuem").value === "" && e("prtAjudaPubCong").value === "", "depois de enviar, o campo e as escolhas devem ser limpos");
     confere(!doc.body.textContent.includes("Meu tio mexe"), "o texto da criança não pode continuar na tela depois de enviado");
     confere(env.gravacoes.length === 0, `o texto NUNCA pode ir para localStorage/sessionStorage (${JSON.stringify(env.gravacoes).slice(0, 80)})`);
     confere(env.toasts().length === 0, "o canal público não deve soltar toast (a resposta fica na própria tela)");
+    confere(env.foco() === res && res.getAttribute("tabindex") === "-1", "L9: depois de enviar o foco vai para a caixa da resposta (a criança lê o número do pedido)");
+    confere(![...env.temporizadores.values()].some(t => t.ms === 30000), "(c) o limite de 30 s é desarmado quando a resposta chega");
     limpo(env, "Público/enviado", [ATAQUE("protocolo"), ATAQUE("msgOk")]);
 
-    // duplo clique: um pedido só
-    e("prtAjudaPubTexto").value = TEXTO; env.limparRegistro();
+    // M2: o segundo toque em "Enviar" depois do envio (campo vazio) NÃO apaga o número do pedido: o botão fica travado até o texto ser mexido de novo
+    confere(e("prtAjudaPubBotao").disabled === true, "M2: depois de um envio que deu certo o botão devia ficar travado até a pessoa voltar a mexer no texto");
+    env.limparRegistro();
+    doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
+    await esperar(env.ev("prtEnviarAjudaAcao('Pub', document.getElementById('prtAjudaPubBotao'))")); await env.ocioso();   // e mesmo por chamada direta, sem passar pelo botão
+    confere(chamadas(env, "POST protecao-ajuda").length === 0, "M2: o segundo toque não pode mandar nada");
+    confere(res.textContent.includes("[protocolo]") && /Número do seu pedido/.test(res.textContent) && !/pelo menos 10 letras/.test(res.textContent) && res.className.includes("prt-ajuda-ok"), `M2: o número do pedido e a confirmação continuam na tela (a mensagem de 'falta texto' não os apaga): ${res.textContent.slice(0, 60)}`);
+    confere(!!link(env, "tel:100", tela) && !!link(env, "tel:190", tela) && !!link(env, "tel:100", res), "M2: o 100 e o 190 (estáticos e os da resposta) seguem à vista");
+    confere(env.toasts().length === 0, "M2: o segundo toque não solta aviso nenhum");
+
+    // duplo clique: um pedido só (digitar de verdade, com o evento de entrada, destrava o botão do envio anterior)
+    doc.digitar(e("prtAjudaPubTexto"), TEXTO); env.limparRegistro();
+    confere(e("prtAjudaPubBotao").disabled === false, "M2: voltar a digitar no texto destrava o botão");
     const dup = env.ev("(function(){ const b = document.getElementById('prtAjudaPubBotao'); return Promise.all([prtEnviarAjudaAcao('Pub', b), prtEnviarAjudaAcao('Pub', b)]); })()");
     await esperar(dup); await env.ocioso();
     confere(chamadas(env, "POST protecao-ajuda").length === 1, `duplo clique: devia sair UM pedido só (saíram ${chamadas(env, "POST protecao-ajuda").length})`);
-    confere(/Aguarde/.test(env.toasts().join("|")) && e("prtAjudaPubBotao").disabled === false, "duplo clique: devia avisar 'Aguarde' e soltar o botão no fim");
+    confere(/Aguarde/.test(env.toasts().join("|")), "duplo clique: devia avisar 'Aguarde'");
+    confere(e("prtAjudaPubBotao").disabled === true && e("prtAjudaPubTexto").value === "", "duplo clique: com o envio feito o botão fica travado (M2) e o campo vazio");
 
     // falhas: o texto FICA no campo, a mensagem do servidor aparece e 100/190 estão sempre à vista
-    for (const [modo, marca] of [["429", "[msg429]"], ["500", "[msg500]"], ["422", "[msg422]"], ["naoJson", "NÃO foi enviada"]]) {
-      S.modo = modo; e("prtAjudaPubTexto").value = TEXTO; env.limparRegistro();
+    for (const [modo, marca] of [["429", "[msg429]"], ["500", "[msg500]"], ["422", "[msg422]"], ["naoJson", "NÃO foi enviada"], ["semMensagem", "NÃO foi enviada"]]) {
+      S.modo = modo; doc.digitar(e("prtAjudaPubTexto"), TEXTO); env.limparRegistro();
       doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
       const r = e("prtAjudaPubResultado");
       confere(r.textContent.includes(marca), `falha ${modo}: a mensagem esperada ("${marca}") não apareceu`);
       confere(!!link(env, "tel:100", r) && !!link(env, "tel:190", r), `falha ${modo}: os telefones 100 e 190 têm de aparecer junto da mensagem`);
       confere(e("prtAjudaPubTexto").value === TEXTO && e("prtAjudaPubBotao").disabled === false, `falha ${modo}: o texto devia ficar no campo e o botão ser solto`);
       confere(env.gravacoes.length === 0 && env.toasts().length === 0, `falha ${modo}: nada pode ir para o armazenamento nem para toast`);
+      confere(env.foco() === r, `L9 falha ${modo}: o foco vai para a caixa da mensagem`);
       limpo(env, `Público/falha ${modo}`);
     }
-    S.modo = "ok"; api.redeCaida = true; e("prtAjudaPubTexto").value = TEXTO; env.limparRegistro();
+    // L4: o erro em JSON SEM mensagem ainda diz que a mensagem NÃO foi enviada (e traz o 100 e o 190 padrão)
+    confere(/Ela NÃO foi enviada/.test(texto(env, "prtAjudaPubResultado")) && /ligue 190/.test(texto(env, "prtAjudaPubResultado")) && /ligue 100/.test(texto(env, "prtAjudaPubResultado")), "L4: o erro sem mensagem devia cair no texto 'Ela NÃO foi enviada' com o 190 e o 100");
+    S.modo = "ok"; api.redeCaida = true; doc.digitar(e("prtAjudaPubTexto"), TEXTO); env.limparRegistro();
     doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
     confere(/NÃO foi enviada/.test(texto(env, "prtAjudaPubResultado")) && !!link(env, "tel:190", e("prtAjudaPubResultado")) && e("prtAjudaPubTexto").value === TEXTO, "rede caída: mensagem clara, telefones e o texto ainda no campo");
     api.redeCaida = false;
 
-    // sair da tela apaga o que não foi enviado e volta para a entrada
-    e("prtAjudaPubTexto").value = "texto que a pessoa desistiu de mandar";
-    doc.clicar(achar(env, x => x.localName === "a" && /Voltar/.test(x.textContent) && tela.descendentes && [...tela.descendentes()].includes(x))); await env.ocioso();
-    confere(e("prtAjudaPubForm").innerHTML === "" && !doc.body.textContent.includes("desistiu de mandar"), "ao sair, o formulário (e o texto não enviado) devia ser desmontado");
+    // (c) a rede não responde: depois de 30 s o envio desiste, diz que NÃO foi enviada, mantém o texto e mostra o 100 e o 190
+    env.limparRegistro();
+    const presaTempo = env.retem(x => x.chave === "POST protecao-ajuda");
+    doc.clicar(e("prtAjudaPubBotao"));
+    for (let i = 0; i < 30 && !presaTempo.chegou; i++) await new Promise(r => setImmediate(r));
+    confere(presaTempo.chegou && /Enviando/.test(texto(env, "prtAjudaPubResultado")) && e("prtAjudaPubBotao").disabled === true, "(c) o pedido devia estar a caminho, com 'Enviando…' e o botão travado");
+    confere([...env.temporizadores.values()].some(t => t.ms === 30000), "(c) o envio devia ter um limite de 30 s");
+    env.dispararTemporizador(30000); await env.ocioso();
+    confere(/NÃO foi enviada/.test(texto(env, "prtAjudaPubResultado")) && !!link(env, "tel:100", e("prtAjudaPubResultado")) && !!link(env, "tel:190", e("prtAjudaPubResultado")), "(c) passados 30 s: mensagem de que NÃO foi enviada, com o 100 e o 190");
+    confere(e("prtAjudaPubTexto").value === TEXTO && e("prtAjudaPubBotao").disabled === false && env.toasts().length === 0, "(c) passados 30 s: o texto fica no campo, o botão é solto e não sai toast");
+    confere(![...env.temporizadores.values()].some(t => t.ms === 30000), "(c) o temporizador não fica para trás");
+    api.retencoes.length = 0;
+
+    // M4: o servidor diz que NINGUÉM da liderança foi avisado: a tela mostra o que ele diz (não promete aviso), sai do verde e manda ligar
+    S.modo = "naoAvisada"; env.limparRegistro();
+    doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
+    const rn = e("prtAjudaPubResultado");
+    confere(rn.textContent.includes(pm.textoConfirmacaoDeAjuda({ avisada: false })) && !/foram avisadas/.test(rn.textContent), `M4: a tela devia mostrar o texto do servidor para 'ninguém foi avisado': ${rn.textContent.slice(0, 120)}`);
+    confere(rn.className.includes("prt-ajuda-aviso") && !rn.className.includes("prt-ajuda-ok") && /Ligue agora/.test(rn.textContent), "M4: sem aviso a caixa sai do verde e manda ligar");
+    confere(!!link(env, "tel:100", rn) && !!link(env, "tel:190", rn) && rn.textContent.includes("[protocolo]"), "M4: o 100, o 190 e o número do pedido aparecem");
+    confere(e("prtAjudaPubTexto").value === "", "M4: o pedido está gravado: o campo é limpo");
+    limpo(env, "Público/não avisada", [ATAQUE("protocolo")]);
+
+    // L5: o que foi digitado ENQUANTO o pedido ia NÃO foi enviado: não pode ser apagado
+    S.modo = "ok"; doc.digitar(e("prtAjudaPubTexto"), TEXTO); env.limparRegistro();
+    const presaL5 = env.retem(x => x.chave === "POST protecao-ajuda");
+    doc.clicar(e("prtAjudaPubBotao"));
+    for (let i = 0; i < 30 && !presaL5.chegou; i++) await new Promise(r => setImmediate(r));
+    confere(presaL5.chegou, "L5: o pedido devia estar a caminho");
+    const SEGUNDA = "Depois lembrei de mais uma coisa que aconteceu na semana passada.";
+    doc.digitar(e("prtAjudaPubTexto"), SEGUNDA);
+    presaL5.liberar(); await env.ocioso(); api.retencoes.length = 0;
+    confere(e("prtAjudaPubTexto").value === SEGUNDA, `L5: o texto digitado durante o envio devia ficar no campo (está "${e("prtAjudaPubTexto").value.slice(0, 30)}")`);
+    confere(/Recebemos o que você contou/.test(texto(env, "prtAjudaPubResultado")) && e("prtAjudaPubBotao").disabled === false, "L5: a confirmação do primeiro aparece e o botão fica livre para a nova mensagem");
+    env.limparRegistro();
+    doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
+    confere(chamadas(env, "POST protecao-ajuda").length === 1 && chamadas(env, "POST protecao-ajuda")[0].corpo.texto === SEGUNDA, "L5: a segunda mensagem sai inteira, como foi escrita");
+    confere(e("prtAjudaPubTexto").value === "", "L5: a segunda, enviada sem mexer durante o envio, limpa o campo");
+
+    // sair da tela apaga o que não foi enviado e volta para a entrada — DEPOIS de perguntar (L5)
+    const voltar = () => achar(env, x => x.localName === "a" && /Voltar/.test(x.textContent) && [...tela.descendentes()].includes(x));
+    doc.digitar(e("prtAjudaPubTexto"), "texto que a pessoa desistiu de mandar");
+    doc.clicar(voltar()); let m = await env.responderModal(false); await env.ocioso();
+    confere(m.aberto && /NÃO foi enviada/.test(m.texto) && /será apagado/.test(m.texto), `L5: com texto não enviado, 'Voltar' pergunta antes de apagar: ${m.texto.slice(0, 100)}`);
+    confere(tela.style.display === "flex" && e("prtAjudaPubTexto").value === "texto que a pessoa desistiu de mandar" && env.foco() === e("prtAjudaPubTexto"), "L5: cancelar a pergunta fica na tela, com o texto e o foco no campo");
+    doc.clicar(voltar()); m = await env.responderModal(true); await env.ocioso();
+    confere(e("prtAjudaPubForm").innerHTML === "" && !doc.body.textContent.includes("desistiu de mandar"), "ao sair (confirmando), o formulário (e o texto não enviado) devia ser desmontado");
     confere(tela.style.display === "none" && e("telaCheckin").style.display === "flex", "ao sair, devia voltar para a tela de entrada");
     doc.clicar(entrada); await env.ocioso();
     confere(e("prtAjudaPubTexto").value === "", "ao reabrir, o campo devia estar vazio");
+    confere(e("prtAjudaPubBotao").disabled === false, "ao reabrir, o botão devia estar livre (a trava do envio anterior não vale para o formulário novo)");
+    // sem texto escrito, 'Voltar' sai direto, sem pergunta
+    doc.clicar(voltar()); m = await env.responderModal(true); await env.ocioso();
+    confere(!m.aberto && tela.style.display === "none", "L5: sem texto escrito, 'Voltar' sai direto (sem pergunta)");
+    doc.clicar(entrada); await env.ocioso();
     // qualquer troca de tela (esconderTodasAsTelas, a função de verdade) esconde a de ajuda
     env.ev("voltarParaCheckin()");
     confere(tela.style.display === "none" && e("telaCheckin").style.display === "flex", "voltarParaCheckin (de verdade) devia esconder a tela de ajuda");
@@ -215,12 +289,13 @@ async function rodar({ mutar = {}, so = null } = {}) {
     doc.clicar(e("prtAjudaPubBotao")); await env.ocioso();
     const p2 = chamadas(env, "POST protecao-ajuda");
     confere(p2.length === 1 && p2[0].comToken === false, "com login aberto, o pedido de ajuda continua SEM token");
-    doc.clicar(achar(env, x => x.localName === "a" && /Voltar/.test(x.textContent) && [...tela.descendentes()].includes(x))); await env.ocioso();
+    doc.clicar(voltar()); await env.ocioso();
     confere(env.g("window.__telaInicial") === 1, "com login aberto, Voltar devia levar ao painel (mostrarTelaPainelInicial)");
     doc.clicar(entrada);
     confereAcessibilidade(env, ["prtTelaAjuda"], "Público");
     confere(e("prtAjudaPubResultado").getAttribute("role") === "status" && e("prtAjudaPubResultado").getAttribute("aria-live") === "polite", "acessibilidade: o resultado precisa de role=status e aria-live");
     confere(["prtAjudaPubTexto", "prtAjudaPubContato"].every(id => e(id).getAttribute("autocomplete") === "off"), "os campos de texto da criança devem pedir autocomplete=off");
+    confere(e("prtAjudaPubTexto").getAttribute("spellcheck") === "false", "o texto da criança não passa pelo corretor ortográfico do navegador (spellcheck=false)");
   });
 
   // ============================================================================================================================================
@@ -239,6 +314,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
         if (S.modo === "429") return { status: 429, corpo: { sucesso: false, limite: true, mensagem: `Você já registrou muitos incidentes nas últimas 24 horas. ${ATAQUE("msg429")}` } };
         if (S.modo === "422") return { status: 422, corpo: { sucesso: false, mensagem: `A matrícula da pessoa envolvida não foi encontrada. ${ATAQUE("msg422")}` } };
         const exige = c.corpo.nivel === "ALEGACAO";
+        // M3: o clique duplo devolve o registro que já existia. "repetido" = resposta SEM exigeComunicacao nem nivel (servidor antigo); "repetidoNovo" = a do servidor corrigido (as duas sem contagem nenhuma)
+        if (S.modo === "repetido") return { status: 200, corpo: { sucesso: true, repetido: true, incidenteId: 77, protocolo: ATAQUE("protoRep"), prazoEm: exige ? em(24) : null, mensagem: "Este incidente já tinha sido registrado agora há pouco." } };
+        if (S.modo === "repetidoNovo") return { status: 200, corpo: { sucesso: true, repetido: true, incidenteId: 77, protocolo: ATAQUE("protoRep"), nivel: c.corpo.nivel, exigeComunicacao: exige, prazoEm: exige ? em(24) : null, mensagem: "Este incidente já tinha sido registrado agora há pouco." } };
         return { status: 201, corpo: { sucesso: true, incidenteId: 77, protocolo: ATAQUE("protoNovo"), prazoEm: exige ? em(24) : null, exigeComunicacao: exige,
           mensagem: exige ? `Registrado. A liderança foi avisada e o prazo de 24 horas já está contando. ${ATAQUE("msgReg")}` : `Registrado. A liderança foi avisada. ${ATAQUE("msgReg")}` } };
       },
@@ -298,6 +376,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(e("prtRegDescricao").value === "" && e("prtRegOnde").value === "" && e("prtRegEnvMatricula").value === "", "depois de enviar, o formulário devia ser limpo");
     confere(chamadas(env, "GET protecao-menores/meus").length === 1 && env.toasts().length === 1, "depois de enviar, 'Meus registros' é refeito e sai um toast só");
     limpo(env, "Meu Painel/quebra registrada", [ATAQUE("protoNovo"), ATAQUE("msgReg")]);
+    confere(env.foco() && env.foco().id === "prtRegRespostaTitulo" && env.foco().getAttribute("tabindex") === "-1", "L9: depois de registrar o foco vai para o título da resposta (protocolo e o que fazer agora)");
+    confere(["prtRegOnde", "prtRegDescricao", "prtRegEnvMatricula", "prtRegEnvNome", "prtRegRelato"].every(id => e(id).getAttribute("autocomplete") === "off"), "os campos do registro (onde, descrição, matrícula, nome, relato) pedem autocomplete=off: o que é escrito sobre uma criança não vira sugestão do navegador");
+    confere(e("prtRegRelato").getAttribute("spellcheck") === "false", "o relato não passa pelo corretor ortográfico do navegador (spellcheck=false)");
 
     // suspeita ou relato de violência: o roteiro da escuta, os campos próprios, a confirmação com o efeito real
     escolherNivel(env, "ALEGACAO");
@@ -305,6 +386,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const roteiro = texto(env, "prtRegRoteiro");
     confere(pm.ROTEIRO_ESCUTA.every(p => roteiro.includes(p.passo.split(". ")[1])) && /NÃO FAÇA/.test(roteiro) && pm.NAO_FACA.every(n => roteiro.includes(n.slice(0, 40))), "o roteiro (acolher, registrar como foi dito, encaminhar) e o NÃO FAÇA do catálogo devem aparecer");
     limpo(env, "Meu Painel/roteiro", [ATAQUE("passo0"), ATAQUE("naoFaca1")]);
+    const passos = [...e("prtRegRoteiro").descendentes()].filter(x => x.localName === "li" && x.parentNode && /prt-roteiro-passos/.test(x.parentNode.className));
+    confere(passos.length === 3 && passos.every(li => !/^s*d+s*[.)-–]/.test(li.textContent)), `L7: o <ol> já numera: o texto de cada passo não pode começar com número (fica "1. 1. Acolher"): ${passos.map(li => li.textContent.slice(0, 12)).join(" | ")}`);
+    confere(passos.length === 3 && /^Acolher/.test(passos[0].textContent) && /^Registrar o que foi dito/.test(passos[1].textContent) && /^Encaminhar/.test(passos[2].textContent), "L7: o nome de cada passo continua lá, sem o número escrito à mão");
     doc.escolher(e("prtRegCong"), "2"); e("prtRegData").value = HOJE;
     e("prtRegDescricao").value = "Criança contou algo sobre um adulto."; e("prtRegEnvMatricula").value = "41";
     await enviar(); semEnvio("suspeita sem quem contou", /quem contou ou percebeu/);
@@ -344,6 +428,26 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(![0, 1, 2].some(i => e(`prtRegNivel${i}`).checked) && e("prtRegAlegacaoCx").style.display === "none", "depois de enviar, o nível volta a nenhum escolhido");
     confere(env.gravacoes.length === 0, "nada do relato pode ir para o armazenamento do navegador");
     limpo(env, "Meu Painel/suspeita registrada", [ATAQUE("protoNovo")]);
+    // M3: o clique duplo devolve o registro que já existia: a SUSPEITA segue mostrando o que NÃO fazer, o prazo e o 100/190 (mesmo que a resposta venha sem exigeComunicacao)
+    for (const modo of ["repetido", "repetidoNovo"]) {
+      S.modo = modo; escolherNivel(env, "ALEGACAO"); doc.escolher(e("prtRegCong"), "2"); e("prtRegData").value = HOJE;
+      e("prtRegDescricao").value = "Criança contou algo sobre um adulto."; e("prtRegEnvMatricula").value = "41"; doc.escolher(e("prtRegQuem"), "PROPRIA_CRIANCA"); e("prtRegRelato").value = RELATO; e("prtRegHoras").value = "0"; env.limparRegistro();
+      ato = env.ev("prtEnviarRegistroAcao(document.getElementById('prtRegBotao'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
+      const rr = texto(env, "prtRegResposta");
+      confere(rr.includes("[protoRep]") && /já tinha sido registrado/.test(rr) && !/Não é preciso fazer mais nada/.test(rr), `M3 (${modo}): a suspeita repetida NÃO pode dizer que não é preciso fazer nada: ${rr.slice(0, 100)}`);
+      confere(pm.NAO_FACA.every(n => rr.includes(n.slice(0, 40))) && /Prazo para comunicar o Conselho Tutelar/.test(rr) && !!link(env, "tel:100", e("prtRegResposta")) && !!link(env, "tel:190", e("prtRegResposta")), `M3 (${modo}): a suspeita repetida mostra o que NÃO fazer, o prazo e o 100 e o 190`);
+      confere(chamadas(env, "POST protecao-menores/registrar").length === 1 && !/escala/i.test(rr), `M3 (${modo}): um pedido só, e a resposta não fala de escalas`);
+      limpo(env, `Meu Painel/suspeita repetida ${modo}`, [ATAQUE("protoRep")]);
+    }
+    // uma quebra de política repetida segue SEM o relógio nem o NÃO FAÇA
+    S.modo = "repetido"; escolherNivel(env, "QUEBRA_POLITICA"); doc.escolher(e("prtRegCong"), "2"); e("prtRegData").value = HOJE; e("prtRegDescricao").value = "Adulto ficou a sós com uma criança na sala."; env.limparRegistro();
+    doc.clicar(e("prtRegBotao")); await env.ocioso();
+    confere(/Obrigado por registrar/.test(texto(env, "prtRegResposta")) && !/Prazo para comunicar/.test(texto(env, "prtRegResposta")) && !pm.NAO_FACA.some(n => texto(env, "prtRegResposta").includes(n.slice(0, 40))), "M3: a quebra de política repetida não mostra prazo nem o NÃO FAÇA da suspeita");
+    S.modo = "ok";
+    // (d) depois de registrar, a data volta para hoje (a data do fato anterior não fica para o próximo registro)
+    escolherNivel(env, "QUASE_ACIDENTE"); doc.escolher(e("prtRegCong"), "2"); e("prtRegData").value = "2026-10-05"; e("prtRegDescricao").value = "Criança saiu da sala e foi achada logo."; env.limparRegistro();
+    doc.clicar(e("prtRegBotao")); await env.ocioso();
+    confere(chamadas(env, "POST protecao-menores/registrar").length === 1 && chamadas(env, "POST protecao-menores/registrar")[0].corpo.dataOcorrencia === "2026-10-05" && e("prtRegData").value === HOJE, `(d) o registro sai com a data escolhida e o campo volta para hoje (${e("prtRegData").value})`);
 
     // o canal de ajuda logado: o mesmo formulário, e continua SEM token
     e("prtAjudaLogTexto").value = "Quero contar uma coisa que aconteceu comigo."; env.limparRegistro();
@@ -607,6 +711,66 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(e("btnPrtSecaoIncidentes").getAttribute("aria-pressed") === "true", "a pílula escolhida devia ter aria-pressed=true");
   });
 
+  cenario("Fila (M1): a fila que chega depois de sair da aba ou de ir para outra seção NÃO volta à página nem religa o relógio", async () => {
+    // (1) o catálogo ainda vem quando a pessoa sai da aba: depois que ele chega, nada é montado, nenhuma fila é pedida e nenhum intervalo nasce
+    const env = ambienteAtual = ambienteLideranca(); const { doc, api, e } = env;
+    const S = { fila: filaPadrao(), det: {} };
+    rotasDaLideranca(env, S);
+    const presaCat = env.retem(c => c.chave === "GET protecao-menores/catalogos");
+    env.ev("mostrarAbaSecretaria('protecao')");
+    for (let i = 0; i < 30 && !presaCat.chegou; i++) await new Promise(r => setImmediate(r));
+    confere(presaCat.chegou, "M1 (1): o pedido do catálogo devia estar a caminho");
+    env.ev("mostrarAbaSecretaria('documentos')"); await env.ocioso();     // saiu da aba antes de o catálogo chegar
+    presaCat.liberar(); await env.ocioso();
+    confere(e("prtListaIncidentes").innerHTML === "" && !doc.body.textContent.includes("[prot1]") && !doc.body.textContent.includes("[cong1]"), "M1 (1): a fila (protocolo, congregação, datas) NÃO pode aparecer na página depois de a pessoa sair da aba");
+    confere(env.intervalos.size === 0, `M1 (1): o relógio NÃO pode ligar fora da aba (há ${env.intervalos.size} intervalo(s))`);
+    confere(chamadas(env, "GET protecao-menores/incidentes").length === 0, "M1 (1): a fila nem deve ser pedida ao servidor");
+    api.retencoes.length = 0;
+    // (1b) o mesmo, saindo da sessão
+    const envB = ambienteAtual = ambienteLideranca();
+    rotasDaLideranca(envB, { fila: filaPadrao(), det: {} });
+    const presaCatB = envB.retem(c => c.chave === "GET protecao-menores/catalogos");
+    envB.ev("mostrarAbaSecretaria('protecao')");
+    for (let i = 0; i < 30 && !presaCatB.chegou; i++) await new Promise(r => setImmediate(r));
+    envB.ev("limparSessao()");
+    presaCatB.liberar(); await envB.ocioso();
+    confere(envB.e("prtListaIncidentes").innerHTML === "" && envB.intervalos.size === 0 && chamadas(envB, "GET protecao-menores/incidentes").length === 0, "M1 (1b): sair da sessão com o catálogo a caminho: nada é montado e nenhuma fila é pedida");
+
+    // (2) a fila de ABERTOS ainda vem quando a pessoa vai para Padrões: ela não reescreve a lista nem religa o relógio
+    const env2 = ambienteAtual = ambienteLideranca();
+    const S2 = { fila: filaPadrao(), det: {} };
+    rotasDaLideranca(env2, S2);
+    env2.api.rotas["GET protecao-menores/padroes"] = () => ({ corpo: F.padroes([1, 2, 3].map(i => ({ incidenteId: 10 + i, nivel: "QUEBRA_POLITICA", equipeId: 3, envolvidoMembroId: 41, data: F.hoje })), { "EQUIPE:3": ATAQUE("equipePad"), "PESSOA:41": ATAQUE("pessoaPad") }) });
+    await abrirAba(env2);
+    confere(env2.intervalos.size === 1 && env2.e("prtListaIncidentes").children.length === 8, "M1 (2): a fila carregou e o relógio anda");
+    S2.fila = [{ id: 31, protocolo: ATAQUE("protTardia"), prazoEm: em(5) }];
+    const presaLista = env2.retem(x => x.chave === "GET protecao-menores/incidentes");
+    const pedido = env2.ev("prtCarregarIncidentesAcao()");
+    for (let i = 0; i < 30 && !presaLista.chegou; i++) await new Promise(r => setImmediate(r));
+    confere(presaLista.chegou, "M1 (2): o pedido da fila devia estar a caminho");
+    env2.doc.clicar(env2.e("btnPrtSecaoPadroes")); await env2.ocioso();
+    confere(env2.intervalos.size === 0, "M1 (2): fora da fila não há relógio");
+    presaLista.liberar(); await esperar(pedido); await env2.ocioso();
+    confere(!env2.doc.body.textContent.includes("[protTardia]"), "M1 (2): a fila que chegou depois de a pessoa ir para Padrões NÃO pode reescrever a lista");
+    confere(env2.intervalos.size === 0, `M1 (2): ... nem religar o relógio (há ${env2.intervalos.size} intervalo(s))`);
+    confere(env2.e("prtListaIncidentes").children.length === 8, "M1 (2): a lista segue como estava");
+    env2.api.retencoes.length = 0;
+    // voltar para os incidentes pede a fila de novo e ela vale
+    env2.doc.clicar(env2.e("btnPrtSecaoIncidentes")); await env2.ocioso();
+    confere(env2.doc.body.textContent.includes("[protTardia]") && env2.intervalos.size === 1, "M1 (2): voltar para os incidentes carrega a fila atual e religa o relógio");
+
+    // (3) os padrões ainda vêm quando a pessoa volta para a fila: a resposta velha não escreve na seção que ficou para trás
+    env2.api.rotas["GET protecao-menores/padroes"] = () => ({ corpo: F.padroes([1, 2, 3].map(i => ({ incidenteId: 10 + i, nivel: "QUEBRA_POLITICA", equipeId: 3, envolvidoMembroId: 41, data: F.hoje })), { "EQUIPE:3": ATAQUE("equipeTardia"), "PESSOA:41": ATAQUE("pessoaTardia") }) });   // outro conteúdo: a resposta tardia se distingue do que já estava lá
+    const presaPad = env2.retem(x => x.chave === "GET protecao-menores/padroes");
+    env2.doc.clicar(env2.e("btnPrtSecaoPadroes"));
+    for (let i = 0; i < 30 && !presaPad.chegou; i++) await new Promise(r => setImmediate(r));
+    confere(presaPad.chegou, "M1 (3): o pedido dos padrões devia estar a caminho");
+    env2.doc.clicar(env2.e("btnPrtSecaoIncidentes")); await env2.ocioso();
+    presaPad.liberar(); await env2.ocioso();
+    confere(!env2.doc.body.textContent.includes("[equipeTardia]"), "M1 (3): os padrões que chegaram depois de a pessoa voltar para a fila NÃO podem entrar na página");
+    env2.api.retencoes.length = 0;
+  });
+
   // ============================================================================================================================================
   // 4) A FICHA, O RELATO PROTEGIDO
   // ============================================================================================================================================
@@ -633,6 +797,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     doc.clicar(botao(env, "Abrir", cartaoDe(env, 1))); await env.ocioso();
     const ch = chamadas(env, "GET protecao-menores/incidente");
     confere(ch.length === 1 && ch[0].consulta.incidenteId === "1", "abrir devia pedir incidente?incidenteId=1");
+    confere(env.foco() && env.foco().id === "prtDetalheTitulo" && env.foco().getAttribute("tabindex") === "-1" && env.foco().textContent.includes("[protoDet]"), "L9: abrir a ficha leva o foco para o título dela (protocolo)");
     confere(e("prtDetalheCx").style.display === "block" && e("prtListaCx").style.display === "none", "a ficha substitui a fila");
     const ficha = texto(env, "prtDetalheConteudo");
     for (const marca of ["protoDet", "congDet", "descDet", "ondeDet", "equipeDet", "contatoDet", "envDet", "envNome", "envSem", "protExt", "refArq", "obsCom", "porCom", "obsDec", "porDec", "motivoRec", "porRec", "leitor", "relatadoPorRotulo", "orgaoRot", "formaRot", "decRot", "motivoEnc"]) confere(ficha.includes(`[${marca}]`), `a ficha devia mostrar o campo "${marca}" (como texto)`);
@@ -647,15 +812,22 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(/Mudanças de nível/.test(ficha) && /Decisões sobre o afastamento/.test(ficha), "reclassificações e decisões do Comitê aparecem");
     confere(/Ainda falta para encerrar/.test(ficha) && /Falta o Comitê decidir|comprovante|comunicação/.test(ficha) === false || /Ainda falta para encerrar/.test(ficha), "o que falta para encerrar devia aparecer");
     limpo(env, "Ficha", []);
+    // M5: quem trata uma SUSPEITA aberta vê na ficha o que NÃO fazer (do catálogo do servidor)
+    const caixaNaoFaca = e("prtFichaNaoFaca");
+    confere(!!caixaNaoFaca && /NÃO FAÇA/.test(caixaNaoFaca.textContent) && pm.NAO_FACA.every(n => caixaNaoFaca.textContent.includes(n.slice(0, 40))) && caixaNaoFaca.getAttribute("role") === "note", "M5: a ficha de uma suspeita aberta devia trazer a caixa NÃO FAÇA, com todos os itens do catálogo");
+    limpo(env, "Ficha/NÃO FAÇA", [ATAQUE("naoFaca0"), ATAQUE("naoFaca3")]);
     confere(e("prtRelogioDet") === null, "com comunicação registrada a ficha não tem relógio");
     // botões por `acoes`
     const textos = [...e("prtDetalheConteudo").descendentes()].filter(x => x.localName === "button").map(x => x.textContent);
     const tem = (t) => textos.some(x => x.includes(t));
     confere(tem("Registrar a comunicação ao órgão") && tem("Adendo") && tem("Encerrar o caso") && tem("Decidir o afastamento") && tem("Ler o relato") && tem("Anexar comprovante") && tem("Atualizar") && !tem("Reclassificar"), `botões da suspeita aberta (nível geral): ${textos.join(" | ")}`);
     confere([...e("prtDetalheConteudo").descendentes()].filter(x => x.localName === "button" && /Decidir o afastamento/.test(x.textContent)).length === 2, "decidir para cada envolvido que é membro (quem é só um nome não tem botão)");
-    confere([...e("prtDetalheConteudo").descendentes()].filter(x => x.localName === "button" && /Vincular a uma pessoa do cadastro/.test(x.textContent)).length === 1, "vincular só para o envolvido registrado pelo nome (os que já têm matrícula não têm o botão)");
+    // L1: o servidor mantém a linha do nome depois de um vínculo; com QUALQUER pessoa do cadastro já vinculada (aqui há duas), o botão de vincular não é oferecido (um segundo vínculo tiraria outra pessoa das escalas)
+    confere([...e("prtDetalheConteudo").descendentes()].filter(x => x.localName === "button" && /Vincular a uma pessoa do cadastro/.test(x.textContent)).length === 0, "L1: com uma pessoa do cadastro já vinculada ao incidente, nenhuma linha oferece o botão de vincular");
+    confere(/sem matrícula/.test(texto(env, "prtDetalheConteudo")) && texto(env, "prtDetalheConteudo").includes("[envNome]"), "L1: a linha do nome continua visível (só o botão some)");
     // sem comunicação: a ficha tem o relógio, e ele anda
     doc.clicar(botao(env, "Voltar à lista", e("prtDetalheCx"))); await env.ocioso();
+    confere(env.foco() && env.foco().id === "prtAbrirCartao1", `L9: fechar a ficha leva o foco de volta ao "Abrir" do incidente de onde se veio (${env.foco() && env.foco().id})`);
     doc.clicar(botao(env, "Abrir", cartaoDe(env, 4))); await env.ocioso();
     const chipDet = e("prtRelogioDet");
     confere(chipDet && chipDet.textContent === "⛔ vencido há 2 h 00 min" && /prt-relogio-vencido/.test(chipDet.className), `a ficha sem comunicação tem o relógio (${chipDet && chipDet.textContent})`);
@@ -675,11 +847,15 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(!/Quem leu o relato/.test(texto(env, "prtDetalheConteudo")) && !/Decisões sobre o afastamento/.test(texto(env, "prtDetalheConteudo")), "o Dirigente não vê leituras nem decisões do Comitê");
     // quase-acidente: nada de comunicação, adendo; reclassificar sim
     S.det[7] = { id: 7, nivel: "QUEBRA_POLITICA", exigeComunicacao: false, relato: { registrado: false, adendos: 0 }, geral: true };
+    S.det[8] = { id: 8, nivel: "ALEGACAO", status: "ENCERRADO", encerradoEm: em(-30), relato: { registrado: false, adendos: 0 }, geral: true };
     doc.clicar(botao(env, "Voltar à lista", e("prtDetalheCx"))); await env.ocioso();
     doc.clicar(botao(env, "Abrir", cartaoDe(env, 7))); await env.ocioso();
     const t7 = [...e("prtDetalheConteudo").descendentes()].filter(x => x.localName === "button").map(x => x.textContent);
     confere(t7.some(x => x.includes("Reclassificar")) && !t7.some(x => /comunicação ao órgão|Adendo|Anexar|Ler o relato/.test(x)), `quebra de política: só reclassificar e encerrar (${t7.join(" | ")})`);
     confere(/Não há relato guardado/.test(texto(env, "prtDetalheConteudo")), "sem relato guardado, sem botão de ler");
+    confere(e("prtFichaNaoFaca") === null, "M5: a quebra de política não traz a caixa NÃO FAÇA (ela é da suspeita)");
+    await env.ev("prtAbrirDetalheAcao(8)"); await env.ocioso();
+    confere(/Como o caso terminou/.test(texto(env, "prtDetalheConteudo")) && e("prtFichaNaoFaca") === null, "M5: a suspeita já encerrada não traz a caixa NÃO FAÇA (ela é de quem ainda trata o caso)");
     // 404: a MESMA resposta para "não existe", "fora do alcance" e "você é um envolvido": a tela não distingue
     doc.clicar(botao(env, "Voltar à lista", e("prtDetalheCx"))); await env.ocioso();
     S.det[2] = undefined; delete S.det[2];
@@ -689,6 +865,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(/Não foi possível abrir este incidente\. Ele pode não existir ou estar fora do seu alcance\./.test(neutro) && !/Incidente não encontrado/.test(neutro) && !/envolvid/i.test(neutro), `404: mensagem neutra (${neutro})`);
     confere(env.toasts().length === 0, "404 não solta toast");
     confere(e("prtDetalheCx").style.display === "block", "o botão de voltar continua à mão");
+    confere(env.foco() && env.foco().id === "prtDetalheErro", "L9: quando a ficha não abre, o foco vai para a mensagem (que o leitor de tela lê)");
     // detalhe que o servidor recusa por rede
     doc.clicar(botao(env, "Voltar à lista", e("prtDetalheCx"))); await env.ocioso();
     env.api.redeCaida = true;
@@ -727,6 +904,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(env.g("window.__fatorPedidos") === 1 && S.lidos === 1, "a confirmação reforçada foi pedida uma vez e o relato lido uma vez");
     confere(cx().style.display === "block" && corpo().textContent.includes(RELATO_ATAQUE) && corpo().textContent.includes(ADENDO_ATAQUE), "o relato e o adendo aparecem na caixa, como TEXTO");
     confere(/O que foi contado/.test(corpo().textContent) && /Adendo 1/.test(corpo().textContent), "com títulos simples");
+    confere(env.foco() === cx() && cx().getAttribute("tabindex") === "-1", "L9: ao abrir o relato o foco vai para a caixa dele");
     confere(env.doc._ataques.length === 0 && env.ctx.__xss.chamadas.length === 0, `o relato NÃO pode virar marcação nem executar nada (${JSON.stringify(env.doc._ataques.slice(0, 2))})`);
     confere([...corpo().descendentes()].every(x => ["h5", "p"].includes(x.localName)), "a caixa só tem os elementos que a própria tela criou (h5 e p): nenhum nasceu do relato");
     confere(!doc.body.innerHTML.includes("<img src=x"), "o texto do relato não gerou tag nenhuma no HTML da página");
@@ -734,6 +912,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // fechar apaga
     doc.clicar(botao(env, "Fechar e apagar", cx())); await env.ocioso();
     confere(cx().style.display === "none" && corpo().textContent === "" && !doc.body.textContent.includes("[relato]"), "Fechar apaga o relato da tela");
+    confere(env.foco() && env.foco().id === "prtLerRelatoBotao", `L9: ao fechar o relato o foco volta ao botão de ler (${env.foco() && env.foco().id})`);
     // trocar de incidente apaga
     S.fatorOk = true;
     m = await clicarEResponder(env, verRelato(), true);
@@ -849,6 +1028,11 @@ async function rodar({ mutar = {}, so = null } = {}) {
     await abrirFicha(env, 1);
     doc.clicar(botao(env, "Registrar a comunicação ao órgão", e("prtDetalheConteudo"))); await env.ocioso();
     const form = e("prtFormAcao");
+    confere(env.foco() && env.foco().id === "prtFcOrgao", `L9: ao abrir o formulário o foco vai para o primeiro campo (${env.foco() && env.foco().id})`);
+    const gatilhoCom = botao(env, "Registrar a comunicação ao órgão", e("prtDetalheConteudo"));
+    doc.clicar(botao(env, "cancelar", form)); await env.ocioso();
+    confere(e("prtFormAcao").innerHTML === "" && env.foco() === gatilhoCom, "L9: cancelar fecha o formulário e devolve o foco ao botão que o abriu");
+    doc.clicar(gatilhoCom); await env.ocioso();   // reabre para o resto da prova
     confere(/para o relógio de 24 horas/.test(form.textContent) && /não pode ser apagado/.test(form.textContent), "o formulário explica o efeito (para o relógio, não se apaga)");
     confere([...e("prtFcOrgao").options].length === 7 && [...e("prtFcForma").options].length === 6, "órgãos (com o extra) e formas vêm do catálogo");
     confere(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(e("prtFcQuando").value), `a data e hora começam em agora (${e("prtFcQuando").value})`);
@@ -930,6 +1114,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // ---- adendo
     await abrirFicha(env, 1);
     doc.clicar(botao(env, "Adendo", e("prtDetalheConteudo"))); await env.ocioso();
+    confere(env.foco() && env.foco().id === "prtFaTexto", "L9: o formulário do adendo abre com o foco no campo do texto");
+    confere(e("prtFaTexto").getAttribute("spellcheck") === "false", "o texto do adendo (palavras da criança) não passa pelo corretor ortográfico");
     confere(/Não faça novas perguntas/.test(texto(env, "prtFormAcao")) && /só se a criança contou algo mais por conta própria/i.test(texto(env, "prtFormAcao")), "o adendo avisa: só se a criança contou por conta própria e sem novas perguntas");
     const enviar = async () => { env.limparRegistro(); doc.clicar(botao(env, "Registrar o adendo", e("prtFormAcao"))); await env.ocioso(); };
     await enviar(); confere(S.posts.length === 0 && /de 10 a 2000/.test(texto(env, "prtFaMsg")), "adendo vazio não envia");
@@ -944,6 +1130,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     S.posts.length = 0;
     await abrirFicha(env, 7);
     doc.clicar(botao(env, "Reclassificar", e("prtDetalheConteudo"))); await env.ocioso();
+    confere(env.foco() && env.foco().id === "prtFrNivel", "L9: o formulário de reclassificar abre com o foco no novo nível");
     let opcoes = [...e("prtFrNivel").options].map(o => o.value);
     confere(JSON.stringify(opcoes) === JSON.stringify(["", "ALEGACAO"]), `de quebra de política só se sobe para suspeita de violência (${opcoes})`);
     await abrirFicha(env, 9);
@@ -972,6 +1159,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // para suspeita: pede quem contou e o relato; a confirmação diz o efeito
     doc.escolher(e("prtFrNivel"), "ALEGACAO");
     confere(e("prtFrAlegCx").style.display !== "none" && /NÃO FAÇA/.test(texto(env, "prtFrAlegCx")) && /confirmação recente de quem você é/.test(texto(env, "prtFrAlegCx")), "para suspeita: quem contou, o relato, o roteiro e o aviso da confirmação de identidade");
+    confere(e("prtFrRelato").getAttribute("spellcheck") === "false", "o relato da reclassificação não passa pelo corretor ortográfico");
     await reclass(); confere(S.posts.length === 0 && /Informe quem contou/.test(texto(env, "prtFrMsg")), "suspeita sem quem contou não envia");
     doc.escolher(e("prtFrQuem"), "VOLUNTARIO"); e("prtFrRelato").value = "curto"; await reclass(); confere(S.posts.length === 0 && /relato/.test(texto(env, "prtFrMsg")), "suspeita com relato curto não envia");
     const RELATO = "A criança contou, sozinha, o que aconteceu no banheiro.";
@@ -1010,6 +1198,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // ---- decidir o afastamento
     await abrirFicha(env, 1);
     doc.clicar(botao(env, "Decidir o afastamento", e("prtDetalheConteudo"))); await env.ocioso();
+    confere(env.foco() && env.foco().id === "prtFdDecisao", "L9: o formulário de decidir abre com o foco na decisão");
     confere(/confirmação recente de quem você é/.test(texto(env, "prtFormAcao")) && /não é punição/.test(texto(env, "prtFormAcao")) && /não pode ler o motivo/.test(texto(env, "prtFormAcao")), "o formulário avisa da confirmação reforçada e que não é punição");
     confere([...e("prtFdDecisao").options].map(o => o.value).join() === ",MANTIDO_AFASTADO,LIBERADO", "as decisões vêm do catálogo");
     limpo(env, "Decidir/formulário", [ATAQUE("envDec")]);
@@ -1042,6 +1231,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     S.fatorOk = false; env.ctx.__fatorPedidos = undefined; env.ev("window.__fatorPedidos = undefined");
     await abrirFicha(env, 4);   // sem comunicação: não pode encerrar
     doc.clicar(botao(env, "Encerrar o caso", e("prtDetalheConteudo"))); await env.ocioso();
+    confere(env.foco() && env.foco().id === "prtFeResultado", "L9: o formulário de encerrar abre com o foco no resultado");
     confere(/Ainda falta:/.test(texto(env, "prtFormAcao")) && /comunicação ao Conselho Tutelar/.test(texto(env, "prtFormAcao")), "o formulário mostra o que falta para encerrar");
     confere([...e("prtFeResultado").options].map(o => o.value).join() === ",ENCAMINHADO_AUTORIDADE", "suspeita só termina como encaminhada às autoridades");
     limpo(env, "Encerrar/formulário", [ATAQUE("motivoEnc")]);
@@ -1102,6 +1292,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
     api.rotas["POST protecao-menores/vincular-envolvido"] = (c) => {
       if (!S.fatorOk) return { status: 428, corpo: { sucesso: false, precisaFator: true, mensagem: "Confirme de novo." } };
       S.posts.push(["vincular", c.corpo]);
+      // o servidor mantém a linha do nome e ACRESCENTA a da pessoa vinculada (e `possiveisMembros` ainda lista a linha do nome)
+      if (!S.recusaVinculo) S.det[22] = () => detalheDeAtaque(Object.assign({}, base, { id: 22, origem: "CANAL_AJUDA", envolvidos: [{ envolvidoId: 31, nome: ATAQUE("soNome"), membroId: null }, { envolvidoId: 32, nome: "Pessoa vinculada", membroId: 41, ultimaDecisao: null, nDecisoes: 0 }],
+        possiveisMembros: [{ envolvidoId: 31, membros: [{ membroId: 41, nome: ATAQUE("candidato"), congregacaoNome: ATAQUE("candCong") }] }] }));
       return S.recusaVinculo ? { status: 422, corpo: { sucesso: false, mensagem: `A matrícula informada não foi encontrada no cadastro. ${ATAQUE("msgVinculo")}` } } : { corpo: { sucesso: true, escalasDesmarcadas: 1, mensagem: "Pessoa vinculada. Ela saiu das escalas com menores por cautela, e o Comitê precisa decidir sobre o afastamento." } };
     };
     const abrirDireto = async (id) => { await env.ev(`prtAbrirDetalheAcao(${id})`); await env.ocioso(); };
@@ -1114,7 +1307,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // ---- pedido do canal de ajuda, sem pessoa do cadastro: pode ser arquivado como "sem conteúdo de proteção"
     await abrirDireto(20);
     doc.clicar(botao(env, "Encerrar o caso", e("prtDetalheConteudo"))); await env.ocioso();
-    confere([...e("prtFeResultado").options].map(o => o.value).join() === ",SEM_CONTEUDO_DE_PROTECAO,ENCAMINHADO_AUTORIDADE", `pedido do canal de ajuda: as duas saídas (${[...e("prtFeResultado").options].map(o => o.value)})`);
+    confere([...e("prtFeResultado").options].map(o => o.value).join() === ",ENCAMINHADO_AUTORIDADE,SEM_CONTEUDO_DE_PROTECAO", `L10: pedido do canal de ajuda: "Encaminhado às autoridades" abre a lista e "sem conteúdo de proteção" vem por último (${[...e("prtFeResultado").options].map(o => o.value)})`);
+    confere(e("prtFeResultado").value === "", "L10: nenhum resultado vem pré-escolhido (o que encerra sem avisar o Conselho Tutelar nunca é o padrão)");
     confere(e("prtFeAvisoSemConteudo").style.display === "none", "o aviso do arquivamento só aparece quando o resultado é escolhido");
     doc.escolher(e("prtFeResultado"), "SEM_CONTEUDO_DE_PROTECAO");
     confere(e("prtFeAvisoSemConteudo").style.display !== "none" && /SEM comunicar ao Conselho Tutelar/.test(texto(env, "prtFeAvisoSemConteudo")) && /NÃO arquive/.test(texto(env, "prtFeAvisoSemConteudo")), "o aviso do arquivamento explica o risco");
@@ -1141,6 +1335,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const botoesVincular = () => [...e("prtDetalheConteudo").descendentes()].filter(x => x.localName === "button" && /Vincular a uma pessoa do cadastro/.test(x.textContent));
     confere(botoesVincular().length === 1, "o envolvido registrado só pelo nome tem o botão de vincular");
     doc.clicar(botoesVincular()[0]); await env.ocioso();
+    confere(env.foco() && env.foco().id === "prtFvMatricula", "L9: o formulário de vincular abre com o foco na matrícula");
     const form = e("prtFormAcao");
     confere(/confirmação recente de quem você é/.test(form.textContent) && /sai das escalas com crianças na hora/.test(form.textContent) && form.textContent.includes("[soNome]"), "o formulário explica o efeito e cita o nome");
     confere(form.textContent.includes("[candidato]") && form.textContent.includes("[candCong]") && /mesmo nome/.test(form.textContent), "as pessoas do cadastro com o mesmo nome aparecem para conferir");
@@ -1163,6 +1358,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     ato = env.ev("prtEnviarVinculoAcao(31, document.getElementById('prtFvMatricula'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
     confere(S.posts.length === 1 && JSON.stringify(S.posts[0][1]) === JSON.stringify({ incidenteId: 22, membroId: 41 }) && typeof S.posts[0][1].membroId === "number" && typeof S.posts[0][1].incidenteId === "number", `corpo do vínculo: ${JSON.stringify(S.posts[0] && S.posts[0][1])}`);
     confere(/Pessoa vinculada/.test(texto(env, "prtDetalheMsg")) && e("prtFormAcao").innerHTML === "", "vinculado: mensagem do servidor na ficha e formulário fechado");
+    confere(texto(env, "prtDetalheConteudo").includes("[soNome]") && /matrícula 41/.test(texto(env, "prtDetalheConteudo")) && botoesVincular().length === 0, "L1: depois do vínculo a linha do nome continua na ficha (o servidor a mantém), mas o botão de vincular NÃO é oferecido de novo (um segundo vínculo tiraria outra pessoa das escalas)");
     confere(env.g("window.__fatorPedidos") === 1, "a confirmação reforçada foi pedida uma vez");
     // se a pessoa vinculada é quem está olhando, a ficha passa a responder 404: só a mensagem neutra
     S.det[22] = undefined; delete S.det[22];
@@ -1177,6 +1373,117 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const tD = [...dirigente.e("prtDetalheConteudo").descendentes()].filter(x => x.localName === "button").map(x => x.textContent);
     confere(!tD.some(x => /Vincular|Encerrar o caso|Decidir/.test(x)) && tD.some(x => /Registrar a comunicação/.test(x)), `o Dirigente não vincula nem encerra: ${tD.join(" | ")}`);
     confere(!/Registrado por/.test(dirigente.e("prtDetalheConteudo").textContent), "o Dirigente não vê quem registrou");
+  });
+
+  cenario("Ficha (L6): se o catálogo não carregou, o botão do ato tenta de novo e, se não der, avisa — não fica mudo", async () => {
+    const { env } = await preparar({ estado: { det: { 1: () => detalheDeAtaque({ comunicacoes: [], nAnexos: 0, decisoes: [], reclassificacoes: [], leituras: [], envolvidos: [] }) } } });
+    const { doc, api, e } = env;
+    await abrirFicha(env, 1);
+    const catalogoOk = api.rotas["GET protecao-menores/catalogos"];
+    // o catálogo some (a primeira carga falhou, ou foi refeita no meio) e o servidor não responde
+    env.ev("prtCatalogos = null");
+    api.rotas["GET protecao-menores/catalogos"] = { status: 500, corpo: { sucesso: false, mensagem: "Erro interno." } };
+    env.limparRegistro();
+    doc.clicar(botao(env, "Adendo", e("prtDetalheConteudo"))); await env.ocioso();
+    confere(chamadas(env, "GET protecao-menores/catalogos").length === 1, "L6: sem o catálogo o botão devia tentar carregá-lo de novo");
+    confere(e("prtFormAcao").innerHTML === "" && /Não foi possível carregar as opções deste ato/.test(texto(env, "prtDetalheMsg")) && /psc-aviso/.test(e("prtDetalheMsg").className), `L6: se não carregou, uma mensagem visível diz (o botão não fica mudo): "${texto(env, "prtDetalheMsg")}"`);
+    // o servidor voltou: o mesmo botão agora abre o formulário e o aviso some
+    api.rotas["GET protecao-menores/catalogos"] = catalogoOk;
+    env.limparRegistro();
+    doc.clicar(botao(env, "Adendo", e("prtDetalheConteudo"))); await env.ocioso();
+    confere(chamadas(env, "GET protecao-menores/catalogos").length === 1 && e("prtFaTexto") !== null && e("prtFormAcao").innerHTML !== "", "L6: com o servidor de volta, o botão carrega o catálogo e abre o formulário");
+    confere(texto(env, "prtDetalheMsg") === "" && env.foco() && env.foco().id === "prtFaTexto", "L6: o aviso de falha some e o foco vai para o primeiro campo");
+    // com o catálogo carregado, o botão não pede nada ao servidor
+    doc.clicar(botao(env, "cancelar", e("prtFormAcao"))); env.limparRegistro();
+    doc.clicar(botao(env, "Adendo", e("prtDetalheConteudo"))); await env.ocioso();
+    confere(chamadas(env, "GET protecao-menores/catalogos").length === 0, "L6: com o catálogo na mão não há pedido novo");
+  });
+
+  cenario("Comunicação (L2): o 'agora' do formulário e a conferência de 'no futuro' usam o relógio do SERVIDOR, não o do aparelho", async () => {
+    const local = (ms) => { const d = new Date(ms); const p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+    for (const [rotulo, aparelho, ciencia] of [["aparelho 2 h adiantado", "2026-10-09T17:00:00.000Z", em(-4)], ["aparelho 2 h atrasado", "2026-10-09T13:00:00.000Z", em(-1)]]) {
+      const { env, S } = await preparar({ opcoesAmbiente: { aparelho }, estado: { det: { 1: () => detalheDeAtaque({ comunicacoes: [], nAnexos: 0, decisoes: [], reclassificacoes: [], leituras: [], envolvidos: [], conhecidoEm: ciencia }) } } });
+      const { doc, api, e } = env;
+      S.comunicados = [];
+      api.rotas["POST protecao-menores/comunicacao"] = (c) => { S.comunicados.push(c.corpo); return { status: 201, corpo: { sucesso: true, foraDoPrazo: false, mensagem: "Comunicação registrada." } }; };
+      await abrirFicha(env, 1);
+      const abrirForm = async () => { doc.clicar(botao(env, "Registrar a comunicação ao órgão", e("prtDetalheConteudo"))); await env.ocioso(); doc.escolher(e("prtFcOrgao"), "CONSELHO_TUTELAR"); doc.escolher(e("prtFcForma"), "TELEFONE"); };
+      const enviar = async () => { env.limparRegistro(); const ato = env.ev("prtEnviarComunicacaoAcao(document.getElementById('prtFcOrgao'))"); await env.responderModal(true); await esperar(ato); await env.ocioso(); };
+      await abrirForm();
+      confere(new Date(e("prtFcQuando").value).getTime() === srvMs, `L2 (${rotulo}): o padrão do formulário devia ser o "agora" do SERVIDOR, não o do aparelho (${e("prtFcQuando").value})`);
+      // o padrão, sem mexer, é aceito (com o aparelho adiantado ele virava "no futuro"; atrasado, "anterior à ciência")
+      await enviar();
+      confere(S.comunicados.length === 1 && Date.parse(S.comunicados[0].comunicadoEm) === srvMs && !/no futuro|anterior ao momento/.test(texto(env, "prtFcMsg")), `L2 (${rotulo}): o padrão, sem mexer, devia ser aceito (saíram ${S.comunicados.length}; ${texto(env, "prtFcMsg")})`);
+      // uma hora uma hora à frente do SERVIDOR é recusada, mesmo que o aparelho (adiantado) ache que já passou
+      await abrirForm(); S.comunicados.length = 0;
+      e("prtFcQuando").value = local(srvMs + 60 * MIN); await enviar();
+      confere(S.comunicados.length === 0 && /não pode estar no futuro/.test(texto(env, "prtFcMsg")) && !env.modal().aberto, `L2 (${rotulo}): uma hora à frente do servidor é futuro, qualquer que seja o relógio do aparelho`);
+      // dentro da tolerância de 5 minutos do servidor é aceita
+      e("prtFcQuando").value = local(srvMs + 4 * MIN); await enviar();
+      confere(S.comunicados.length === 1 && Date.parse(S.comunicados[0].comunicadoEm) === srvMs + 4 * MIN, `L2 (${rotulo}): 4 minutos à frente do servidor está na tolerância`);
+    }
+  });
+
+  cenario("Anexos (L3): o modal de comprovantes do incidente não sobrevive à saída da sessão nem à troca de login", async () => {
+    const montar = async () => {
+      const { env } = await preparar({ estado: { det: { 1: () => detalheDeAtaque({ comunicacoes: [], nAnexos: 1, decisoes: [], reclassificacoes: [], leituras: [], envolvidos: [] }) } } });
+      env.api.rotas["GET anexos"] = { corpo: [{ anexoId: 5, nomeArquivo: ATAQUE("anexoNome"), mimeType: "application/pdf", criadoEm: em(-1), urlAssinada: "https://exemplo.org/arquivo.pdf" }] };
+      await abrirFicha(env, 1);
+      env.doc.clicar(botao(env, "Anexar comprovante", env.e("prtDetalheConteudo"))); await env.ocioso();
+      confere(env.modal().aberto && env.modal().texto.includes("[anexoNome]"), "(o modal de anexos do incidente está aberto, com o nome do arquivo)");
+      return env;
+    };
+    // sair da sessão
+    let env = await montar();
+    env.ev("limparSessao()");
+    confere(!env.modal().aberto && env.e("modalCaixa").textContent === "" && !env.doc.body.textContent.includes("[anexoNome]"), "L3: sair da sessão fecha e esvazia o modal de anexos (o nome do arquivo pode ter o nome da criança)");
+    // troca de login sem passar pela saída
+    env = await montar();
+    env.sessao({ matricula: 9, nivel: "GLOBAL", permissoes: ["protecao_menores"], geral: true });
+    await env.ev("mostrarAbaSecretaria('protecao')"); await env.ocioso();
+    confere(!env.modal().aberto && !env.doc.body.textContent.includes("[anexoNome]"), "L3: outra pessoa no mesmo navegador não herda o modal de anexos aberto");
+    // o modal de anexos de OUTRA tela não é fechado por este módulo
+    env = await montar();
+    await env.ev("abrirModalAnexos('Congregacoes', 5, 'outra tela')"); await env.ocioso();
+    env.ev("prtLimparTela()");
+    confere(env.modal().aberto && /outra tela/.test(env.modal().texto), "L3: o modal de anexos de OUTRA tela não é fechado por este módulo");
+  });
+
+  cenario("Módulo ausente ou velho no cache (L11): sair da sessão e navegar entre abas não podem quebrar", async () => {
+    const env = ambienteAtual = novo({ semModulo: true }); const { e } = env;
+    const tenta = (codigo) => { try { env.ev(codigo); return null; } catch (erro) { return String(erro && erro.message || erro); } };
+    confere(env.g("typeof prtLimparTela") === "undefined" && env.g("typeof prtAbaFechada") === "undefined" && env.g("typeof carregarOpcoesProtecaoAcao") === "undefined", "(o módulo da proteção não foi carregado neste cenário)");
+    env.sessao({ matricula: 5, nivel: "GLOBAL", permissoes: ["protecao_menores"], geral: true });
+    let erro = tenta("mostrarAbaSecretaria('documentos')");
+    confere(erro === null && e("abaDocumentos").style.display === "block", `L11: trocar de aba sem o módulo da proteção não pode quebrar (${erro})`);
+    erro = tenta("mostrarAbaSecretaria('protecao')");
+    confere(erro === null, `L11: abrir a aba da proteção sem o módulo não pode quebrar a navegação (${erro})`);
+    erro = tenta("mostrarAbaSecretaria('meupainel')");
+    confere(erro === null, `L11: sair da aba da proteção sem o módulo não pode quebrar (${erro})`);
+    erro = tenta("mostrarSubAbaMeupainel('protecao')");
+    confere(erro === null, `L11: a sub-aba Proteção de Meu Painel sem o módulo não pode quebrar (${erro})`);
+    erro = tenta("limparSessao()");
+    confere(erro === null, `L11: sair da sessão sem o módulo da proteção tem de terminar (${erro})`);
+    confere(env.g("authToken") === null && env.g("authMatricula") === null && env.g("authPermissoes").length === 0 && env.g("authNivel") === null && env.g("authGeral") === false, "L11: a saída da sessão limpou o token e a identidade mesmo sem o módulo");
+  });
+
+  cenario("Relógio (b): ao voltar para o navegador o relógio é refeito na hora; fora da aba nada acontece", async () => {
+    const env = ambienteAtual = ambienteLideranca(); const { doc, e } = env;
+    rotasDaLideranca(env, { fila: filaPadrao(), det: {} });
+    await abrirAba(env);
+    const antes = e("prtRelogio1").textContent;
+    confere(antes === "🚨 faltam 3 h 20 min", `(o relógio de partida: ${antes})`);
+    env.avancar(20 * MIN);     // o sistema segurou o intervalo de 30 s enquanto a página esteve escondida: nenhum tique veio
+    confere(e("prtRelogio1").textContent === antes, "(sem tique o relógio não muda sozinho)");
+    doc.visibilityState = "hidden"; doc.disparar(doc.body, "visibilitychange");
+    confere(e("prtRelogio1").textContent === antes, "ao esconder a página nada é refeito");
+    doc.visibilityState = "visible"; doc.disparar(doc.body, "visibilitychange");
+    confere(e("prtRelogio1").textContent === "🚨 faltam 3 h 00 min" && e("prtRelogio4").textContent === "⛔ vencido há 2 h 20 min", `(b) ao voltar para o navegador o relógio é refeito na hora (${e("prtRelogio1").textContent})`);
+    confere(env.intervalos.size === 1, "o intervalo segue um só");
+    // fora da aba: o evento não mexe em nada e desliga o intervalo
+    await env.ev("sairDoModulo()"); await env.ocioso();
+    doc.visibilityState = "visible"; doc.disparar(doc.body, "visibilitychange");
+    confere(env.intervalos.size === 0 && e("prtListaIncidentes").innerHTML === "", "fora da aba, voltar para o navegador não religa nem refaz nada");
   });
 
   // ============================================================================================================================================
@@ -1268,6 +1575,11 @@ cenario("Padrões, Comitê e relatório: saem da página ao sair da aba e a resp
     confere(itemDe("[comLeigo]") && /leigo/.test(itemDe("[comLeigo]").textContent) && !/clero/.test(itemDe("[comLeigo]").textContent), "quem não tem cargo ministerial aparece como leigo");
     confere(/Comitê incompleto/.test(com) && /pelo menos 3 membros \(hoje há 2\)/.test(com), "as pendências em português vêm do servidor");
     confere(/«Comitê de Proteção»/.test(com) && /Permissões/.test(com), "explica que o Comitê é cadastrado pelo papel «Comitê de Proteção» em Permissões");
+    // L12: o aviso que o servidor manda (Comitê incompleto) e a aba dizem a MESMA coisa, e verdadeira, sobre onde o Comitê é cadastrado (o cadastro do papel é em Permissões; a aba Comitê só mostra quem é)
+    const ondeCadastra = "Administração de Acesso → Permissões → Atribuir acesso a uma pessoa";
+    const avisoServidor = pm.textoComiteIncompleto({ problemas: ["O Comitê precisa de pelo menos 3 membros (hoje há 2)."] });
+    confere(com.includes(ondeCadastra) && avisoServidor.includes(ondeCadastra) && avisoServidor.includes("«Comitê de Proteção»") && !/Proteção de Crianças → Comitê/.test(avisoServidor), `L12: a aba e o aviso do servidor devem dizer o mesmo lugar (${ondeCadastra}): aviso = "${avisoServidor.slice(-110)}"`);
+    confere(lerApp("index.html").includes(`Quem entra no Comitê é cadastrado pelo papel «Comitê de Proteção» em ${ondeCadastra}.`), "L12: o texto fixo da seção Comitê (index.html) diz o mesmo lugar");
     limpo(env, "Comitê", [ATAQUE("comPastor"), ATAQUE("comLeigo"), ATAQUE("problemaComite")]);
     membros.push({ membroId: 3, nome: "Terceira", cargoMinisterial: null });
     doc.clicar(botao(env, "Atualizar", e("prtSecaoComite"))); await env.ocioso();
@@ -1298,6 +1610,14 @@ cenario("Padrões, Comitê e relatório: saem da página ao sair da aba e a resp
     doc.clicar(botao(env, "Imprimir", e("prtSecaoRelatorio")));
     confere(env.impressoes.length === 1 && env.impressoes[0].classeImprimindo === true && !doc.body.classList.contains("prt-imprimindo"), "Imprimir chama window.print com a classe de impressão e a retira depois");
     confere(/@media print[\s\S]*prt-imprimindo[\s\S]*prtRelImprimivel/.test(lerApp("style.css")), "o CSS de impressão existe");
+    // L8: o relato (e a ficha com o relato) nunca saem na impressora, nem num Ctrl+P comum; e o resto da página sai com display:none (visibility:hidden sozinho deixava uma folha em branco no fim)
+    const css = cssDoApp();
+    const blocoPrint = css.slice(css.indexOf("@media print {"), css.indexOf("@supports selector(:has(*))"));
+    confere(blocoPrint.includes("#prtRelatoCx, #prtDetalheCx { display: none !important; }"), "L8: a caixa do relato e a ficha do incidente têm de sumir em QUALQUER impressão (display:none !important dentro de @media print)");
+    const blocoDisplay = css.slice(css.indexOf("@supports selector(:has(*))"));
+    confere(blocoDisplay.includes("@media print") && blocoDisplay.includes("body.prt-imprimindo *:not(#prtRelImprimivel):not(#prtRelImprimivel *):not(:has(#prtRelImprimivel)) { display: none !important; }"), "L8: na impressão do relatório, tudo o que não é o relatório (nem uma pasta dele) sai com display:none (sem folha em branco no fim)");
+    confere(blocoDisplay.includes("body.prt-imprimindo *:has(#prtRelImprimivel) {") && /min-height: 0 !important/.test(blocoDisplay) && /overflow: visible !important/.test(blocoDisplay), "L8: as pastas onde o relatório está perdem altura mínima e rolagem na impressão");
+    confere(css.includes("body.prt-imprimindo * { visibility: hidden !important; }"), "L8: a base de visibility:hidden segue como reserva para quem não sabe :has()");
     env.api.rotas["GET protecao-menores/relatorio-anual"] = { status: 500, corpo: { sucesso: false, mensagem: "Erro interno." } };
     doc.clicar(botao(env, "Atualizar", e("prtSecaoRelatorio"))); await env.ocioso();
     confere(/Erro interno/.test(texto(env, "prtRelResultado")) && e("prtRelImprimivel").innerHTML === "", "erro do servidor: mensagem e relatório vazio");

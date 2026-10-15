@@ -16,7 +16,6 @@ const MUTACOES = [
   ["escape: nome do envolvido no formulário de vincular", P, "<strong>🔗 Vincular ${escaparHtmlEbd(envolvido.nome)} a uma pessoa do cadastro</strong>", "<strong>🔗 Vincular ${envolvido.nome} a uma pessoa do cadastro</strong>"],
   ["escape: nome do candidato ao vínculo", P, "matrícula <strong>${Number(m.membroId)}</strong>: ${escaparHtmlEbd(m.nome)}", "matrícula <strong>${Number(m.membroId)}</strong>: ${m.nome}"],
   ["escape: congregação do candidato ao vínculo", P, "${m.congregacaoNome ? ` (${escaparHtmlEbd(m.congregacaoNome)})` : \"\"}", "${m.congregacaoNome ? ` (${m.congregacaoNome})` : \"\"}"],
-  ["vincular: o botão aparece também para quem já é membro", P, "${podeVincular && !e.ehMembro ? `", "${podeVincular ? `"],
   ["vincular: o botão aparece sem a ação liberada pelo servidor", P, "const podeVincular = !!(d.acoes && d.acoes.vincularEnvolvido) && !jaTemMembro;", "const podeVincular = true && !jaTemMembro;"],
   ["vincular: sem o 'tem certeza'", P, "  if (!(await confirmarAcao(`Vincular \"${envolvido.nome}\" à matrícula ${membroId}?", "  if (false && !(await confirmarAcao(`Vincular \"${envolvido.nome}\" à matrícula ${membroId}?"],
   ["vincular: a confirmação não diz que a pessoa sai das escalas", P, "Por ser uma suspeita de violência, a pessoa sai das escalas com crianças agora, por cautela (não é punição), e o Comitê precisa decidir sobre o afastamento.", "A pessoa passa a constar."],

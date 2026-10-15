@@ -238,11 +238,22 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
               <span><strong>As camisetas chegaram — liberar a retirada para todos os pedidos.</strong><br />
               <span class="text-muted-foreground">Quem consultar "Meus pedidos" (pelo telefone, sem precisar de e-mail) passa a ver "Chegou! Pode vir buscar" e o local acima, mesmo antes de a equipe separar o pedido. Salve para aplicar.</span></span>
             </label>
-            <p class="text-sm font-semibold">Aviso por e-mail a todos de uma vez</p>
+            <p class="text-sm font-semibold">Aviso por e-mail de uma vez</p>
             <p class="text-sm text-muted-foreground">Manda o e-mail de "pode retirar" (assunto e mensagem acima, itens e local) para todo pedido do grupo que tem e-mail e ainda não foi avisado, em lotes de 40. Quem não deixou e-mail só vê pelo site — avise também pelos canais da igreja.</p>
+            <!-- 15/10/2026 — aviso seletivo: só quem tem reserva (separado) e/ou só um lote. Em modo seletivo NÃO libera a retirada para todos. -->
+            <div class="grid gap-3 sm:grid-cols-2 max-w-xl">
+              <label class="flex items-start gap-2 text-sm"><input id="aviso-so-separados" type="checkbox" class="mt-1" />
+                <span><strong>Só quem está separado (com reserva)</strong><br /><span class="text-muted-foreground">Os que a equipe marcou como "Separado" no painel de pedidos.</span></span>
+              </label>
+              <div class="grid gap-1">
+                <label class="text-sm font-semibold" for="aviso-lote">Só do lote</label>
+                <select id="aviso-lote" class="field"><option value="">Todos os lotes</option></select>
+              </div>
+            </div>
+            <p class="text-xs text-muted-foreground" data-aviso-modo>Sem nenhuma das duas opções: vale para todos os pedidos com e-mail ainda não avisados e a retirada é liberada para todos.</p>
             <div class="flex flex-wrap items-center gap-3">
               <button type="button" class="btn btn-outline" data-aviso-conferir>Conferir quantos receberiam</button>
-              <button type="button" class="btn btn-solid" data-aviso-enviar>📣 Enviar aviso a todos</button>
+              <button type="button" class="btn btn-solid" data-aviso-enviar>📣 Enviar aviso</button>
               <p class="text-sm" data-aviso-status role="status" aria-live="polite"></p>
             </div>
           </div>
@@ -683,7 +694,8 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       const dizerAviso = (t: string) => { if (avisoStatus) avisoStatus.textContent = t; };
       interface RespostaAviso { enviados: number; falhas: number; restantes: number; jaAvisados: number; semEmail: number; retiradaLiberada: boolean }
       async function chamarAviso(simular: boolean): Promise<RespostaAviso> {
-        const corpo = JSON.stringify({ grupoId, simular, lote: 40 });
+        const loteEscolhido = document.getElementById("aviso-lote") as HTMLSelectElement | null;
+        const corpo = JSON.stringify({ grupoId, simular, lote: 40, somenteSeparados: (document.getElementById("aviso-so-separados") as HTMLInputElement | null)?.checked === true, loteId: loteEscolhido && loteEscolhido.value ? Number(loteEscolhido.value) : null });
         const chamar = async (t: string) => fetch(AVISAR_RETIRADA_CAMISETAS_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-painel-token": t }, body: corpo });
         let t = (await obterTokenValido(directusUrl, AUTH.tokenKey)) ?? "";
         let res = await chamar(t);
@@ -692,6 +704,17 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         if (!res.ok || !j.sucesso) throw new Error(j.erro || `HTTP ${res.status}`);
         return j as RespostaAviso;
       }
+      // Lotes da campanha para o filtro do aviso (o token do painel enxerga os lotes; sem eles o filtro fica só em "todos").
+      try {
+        const rl = await api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=numero&limit=-1&fields=id,numero,status`, { headers: { Authorization: `Bearer ${token}` } });
+        const selLote = document.getElementById("aviso-lote") as HTMLSelectElement | null;
+        if (rl.ok && selLote) for (const l of (await rl.json()).data ?? []) selLote.insertAdjacentHTML("beforeend", `<option value="${Number(l.id)}">Lote ${Number(l.numero)}${l.status === "aberto" ? " (aberto)" : " (fechado)"}</option>`);
+      } catch { /* sem a lista, o aviso segue valendo para todos os lotes */ }
+      const avisoModo = document.querySelector<HTMLElement>("[data-aviso-modo]");
+      const modoSeletivo = () => (document.getElementById("aviso-so-separados") as HTMLInputElement | null)?.checked === true || !!(document.getElementById("aviso-lote") as HTMLSelectElement | null)?.value;
+      const atualizarModo = () => { if (avisoModo) avisoModo.textContent = modoSeletivo() ? "Aviso SELETIVO: só quem se encaixa nas opções acima recebe, e a retirada NÃO é liberada para todos." : "Sem nenhuma das duas opções: vale para todos os pedidos com e-mail ainda não avisados e a retirada é liberada para todos."; };
+      document.getElementById("aviso-so-separados")?.addEventListener("change", atualizarModo);
+      document.getElementById("aviso-lote")?.addEventListener("change", atualizarModo);
       btnConferir?.addEventListener("click", async () => {
         if (!grupoId) return;
         btnConferir.disabled = true;
@@ -707,7 +730,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         if (!grupoId) return;
         if (!confirmacaoAvisoPendente) {
           confirmacaoAvisoPendente = true;
-          dizerAviso("Isso manda o e-mail a todos os pedidos com e-mail ainda não avisados e libera a retirada para todos. Clique de novo para confirmar.");
+          dizerAviso(modoSeletivo()
+            ? "Isso manda o e-mail só aos pedidos escolhidos acima (com e-mail e ainda não avisados) e NÃO libera a retirada para todos. Clique de novo para confirmar."
+            : "Isso manda o e-mail a todos os pedidos com e-mail ainda não avisados e libera a retirada para todos. Clique de novo para confirmar.");
           setTimeout(() => { confirmacaoAvisoPendente = false; }, 15000);
           return;
         }
@@ -722,8 +747,8 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
             dizerAviso(`Enviados ${enviados}${falhas ? ` (${falhas} falha(s))` : ""}; faltam ${r.restantes}…`);
             if (r.restantes <= 0 || (r.enviados === 0 && r.falhas > 0)) break;
           }
-          fRetiradaLiberada.checked = true;
-          dizerAviso(`Pronto: ${enviados} e-mail(s) enviado(s)${falhas ? `, ${falhas} falha(s) (entram na próxima rodada)` : ""}. Retirada liberada para todos os pedidos.`);
+          if (!modoSeletivo()) fRetiradaLiberada.checked = true;
+          dizerAviso(`Pronto: ${enviados} e-mail(s) enviado(s)${falhas ? `, ${falhas} falha(s) (entram na próxima rodada)` : ""}.${modoSeletivo() ? "" : " Retirada liberada para todos os pedidos."}`);
         } catch (e) { dizerAviso(`Parou: ${(e as Error).message}`); }
         finally { btnEnviar.disabled = false; if (btnConferir) btnConferir.disabled = false; }
       });

@@ -26,9 +26,9 @@ async function main() {
     const agora = new Date().toISOString();
     const pedido = async (nome, extra) => (await dx("POST", "/items/camiseta_pedidos", { grupo: G, lote: L1, nome, valor_pago: 30, itens: [{ tamanho: "M", modelo: "Unico", quantidade: 1 }], ...extra })).data.id;
     const A = await pedido("Teste A separado com e-mail", { email: "a@exemplo.com", separado: true, separado_em: agora });
-    await pedido("Teste B nao separado com e-mail", { email: "b@exemplo.com" });
+    const B = await pedido("Teste B nao separado com e-mail", { email: "b@exemplo.com" });
     await pedido("Teste C separado lote 2", { email: "c@exemplo.com", separado: true, separado_em: agora, lote: L2 });
-    await pedido("Teste D separado sem e-mail", { separado: true, separado_em: agora });
+    const D = await pedido("Teste D separado sem e-mail", { separado: true, separado_em: agora });
     await pedido("Teste E separado ja avisado", { email: "e@exemplo.com", separado: true, separado_em: agora, aviso_retirada_em: agora });
     const adm = process.env.DIRECTUS_ADMIN_TOKEN;
 
@@ -63,6 +63,24 @@ async function main() {
     r = await massa(lg.data.access_token, { grupoId: G, simular: true, somenteSeparados: true });
     v.ok("o gestor consegue conferir o aviso seletivo pelo painel (token dele)", r.status === 200 && r.j.restantes === 1, JSON.stringify(r.j));
     v.ok("e depois de tirada a reserva de A, só C receberia (A não está mais separado)", r.j.restantes === 1);
+
+    // o aviso INDIVIDUAL (15/10/2026) está fechado: exige o token do painel e só envia o que o PEDIDO diz. Aqui só caminhos que NÃO enviam e-mail.
+    const individual = async (token, corpo) => {
+      const x = await fetch(SITE + "/api/enviar-aviso-retirada-camiseta", { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { "x-painel-token": token } : {}) }, body: JSON.stringify(corpo) });
+      return { status: x.status, j: await x.json().catch(() => ({})) };
+    };
+    r = await individual(null, { pedidoId: D });
+    v.ok("aviso individual SEM token → 401 (a porta não é mais pública)", r.status === 401, JSON.stringify(r.j));
+    r = await individual("token-invalido", { pedidoId: D });
+    v.ok("aviso individual com token inválido → 401", r.status === 401, JSON.stringify(r.j));
+    r = await individual(lg.data.access_token, { pedidoId: "abc" });
+    v.ok("pedido inválido → 400", r.status === 400, JSON.stringify(r.j));
+    r = await individual(lg.data.access_token, { pedidoId: 999999999 });
+    v.ok("pedido que não existe → 403/404 (Directus não distingue para quem não é administrador)", r.status === 403 || r.status === 404, JSON.stringify(r.j));
+    r = await individual(lg.data.access_token, { pedidoId: D, email: "atacante@exemplo.com", assunto: "Ganhe um prêmio", corpo: "Clique aqui" });
+    v.ok("pedido sem e-mail → 400, mesmo que a chamada traga um e-mail (o e-mail da chamada não vale: nada é enviado)", r.status === 400 && /não tem e-mail/.test(r.j.erro || ""), JSON.stringify(r.j));
+    r = await individual(lg.data.access_token, { pedidoId: B });
+    v.ok("pedido ainda não separado (e retirada não liberada) → 409, nada enviado", r.status === 409, JSON.stringify(r.j));
   } finally {
     if (G) await limparGrupo(dx, G);
     if (usuario) await dx("DELETE", `/users/${usuario}`);

@@ -81,6 +81,10 @@ async function main() {
     v.ok("pedido sem e-mail → 400, mesmo que a chamada traga um e-mail (o e-mail da chamada não vale: nada é enviado)", r.status === 400 && /não tem e-mail/.test(r.j.erro || ""), JSON.stringify(r.j));
     r = await individual(lg.data.access_token, { pedidoId: B });
     v.ok("pedido ainda não separado (e retirada não liberada) → 409, nada enviado", r.status === 409, JSON.stringify(r.j));
+    // a "Separação em massa" do painel grava vários pedidos de uma vez, cada um com o seu valor (PATCH em lote com o id em cada item)
+    const emLote = await comoGestor("PATCH", "/items/camiseta_pedidos", [{ id: B, separado: true, separado_em: new Date().toISOString() }, { id: D, separado: false, separado_em: null }]);
+    const [B1, D1] = [(await dx("GET", `/items/camiseta_pedidos/${B}?fields=separado,separado_em`)).data, (await dx("GET", `/items/camiseta_pedidos/${D}?fields=separado,separado_em`)).data];
+    v.ok("gestor separa e tira a reserva de vários pedidos de uma vez (o que a separação em massa faz)", emLote === 200 && B1.separado === true && !!B1.separado_em && D1.separado === false && D1.separado_em === null, JSON.stringify({ emLote, B1, D1 }));
   } finally {
     if (G) await limparGrupo(dx, G);
     if (usuario) await dx("DELETE", `/users/${usuario}`);

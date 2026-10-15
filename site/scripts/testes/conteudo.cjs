@@ -123,7 +123,6 @@ async function main() {
         body: "**teste**",
         date: new Date().toISOString().slice(0, 10),
         draft: true,
-        notificacao_enviada: true,
         ...extra,
       };
       const c = await como("POST", `/items/${col}`, base);
@@ -134,6 +133,15 @@ async function main() {
         `${c.status} ${c.erro || ""}`,
       );
       if (!id) continue;
+      // O editor NÃO escreve "notificacao_enviada" (15/10/2026: quem a controla é o robô de avisos; um editor poderia religar o aviso de uma
+      // notícia antiga para todos). Quem marca o item de teste como "já notificado" é o administrador, logo depois de criado.
+      await dx("PATCH", `/items/${col}/${id}`, { notificacao_enviada: true });
+      const comAviso = await como("POST", `/items/${col}`, { ...base, slug: `${slug}-aviso`, notificacao_enviada: false });
+      v.ok(`${col}: o editor NÃO consegue criar item escrevendo "notificacao_enviada" (403)`, comAviso.status === 403, `${comAviso.status}`);
+      // (se um dia a trava falhar, o item de teste — sempre rascunho — não fica para trás)
+      if (comAviso.j.data && comAviso.j.data.id) await dx("DELETE", `/items/${col}/${comAviso.j.data.id}`);
+      const religar = await como("PATCH", `/items/${col}/${id}`, { notificacao_enviada: false });
+      v.ok(`${col}: o editor NÃO consegue religar o aviso de um item (403)`, religar.status === 403, `${religar.status}`);
       const noAdmin =
         (await dx("GET", `/items/${col}/${id}?fields=draft,notificacao_enviada,slug`)).data || {};
       v.ok(

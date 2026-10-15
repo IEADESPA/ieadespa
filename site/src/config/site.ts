@@ -108,7 +108,8 @@ export const footerNavigation = [
   {
     label: "Equipe",
     items: [
-      { label: "Painel de conteúdo", href: DIRECTUS_ADMIN_URL },
+      { label: "Painel de notícias e mensagens", href: "/painel-conteudo/" },
+      { label: "Painel avançado (Directus)", href: DIRECTUS_ADMIN_URL },
       { label: "Gestão de eventos", href: "/painel-eventos/" },
       { label: "Gestão de camisetas", href: "/painel-camisetas/" },
     ],

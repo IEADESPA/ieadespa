@@ -70,8 +70,8 @@ BEGIN
             OR (MenorMembroId IS NULL AND VisitanteNome IS NOT NULL AND VisitanteNascimento IS NOT NULL)),
         CONSTRAINT CK_CheckinReg_Trouxe CHECK (AnonimizadoEm IS NOT NULL OR TrouxeMembroId IS NOT NULL OR (TrouxeNome IS NOT NULL AND TrouxeDocumento IS NOT NULL)),
         CONSTRAINT CK_CheckinReg_Saude CHECK ((SaudeTexto IS NULL AND SaudeOrigem IS NULL AND SaudeTextoVersao IS NULL AND SaudeTextoHash IS NULL)
-            OR (SaudeTexto IS NOT NULL AND SaudeOrigem = 'CADASTRO')
-            OR (SaudeTexto IS NOT NULL AND SaudeOrigem = 'BALCAO' AND SaudeTextoVersao IS NOT NULL AND SaudeTextoHash IS NOT NULL)),
+            OR (SaudeTexto IS NOT NULL AND SaudeOrigem IS NOT NULL AND SaudeOrigem = 'CADASTRO')
+            OR (SaudeTexto IS NOT NULL AND SaudeOrigem IS NOT NULL AND SaudeOrigem = 'BALCAO' AND SaudeTextoVersao IS NOT NULL AND SaudeTextoHash IS NOT NULL)),
         CONSTRAINT CK_CheckinReg_Estado CHECK (
                (Situacao = 'NA_SALA' AND RetiradoEm IS NULL AND RetiradoTipo IS NULL AND Divergente = 0)
             OR (Situacao = 'RETIRADA_PENDENTE' AND RetiradoEm IS NULL AND RetiradoTipo IS NOT NULL AND Divergente = 1 AND DivergenciaPedidaEm IS NOT NULL)
@@ -96,8 +96,20 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CheckinReg_Pendentes'
     CREATE INDEX IX_CheckinReg_Pendentes ON dbo.CheckinInfantilRegistros (CongregacaoId, Situacao) WHERE Situacao <> 'RETIRADA';
 GO
 
+-- Achado na prova no banco real: num CHECK, "desconhecido" PASSA. Com SaudeOrigem nulo, "SaudeOrigem = 'CADASTRO'" é desconhecido e deixava gravar texto de saúde sem origem (sem dizer
+-- se veio do cadastro ou do balcão, e sem o hash do texto autorizado). O texto novo exige a origem; quem já aplicou o antigo recebe o novo (idempotente: sem o texto antigo, nada acontece).
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_CheckinReg_Saude' AND parent_object_id = OBJECT_ID(N'dbo.CheckinInfantilRegistros') AND definition NOT LIKE N'%SaudeOrigem] IS NOT NULL%')
+BEGIN
+    ALTER TABLE dbo.CheckinInfantilRegistros DROP CONSTRAINT CK_CheckinReg_Saude;
+    ALTER TABLE dbo.CheckinInfantilRegistros ADD CONSTRAINT CK_CheckinReg_Saude CHECK ((SaudeTexto IS NULL AND SaudeOrigem IS NULL AND SaudeTextoVersao IS NULL AND SaudeTextoHash IS NULL)
+        OR (SaudeTexto IS NOT NULL AND SaudeOrigem IS NOT NULL AND SaudeOrigem = 'CADASTRO')
+        OR (SaudeTexto IS NOT NULL AND SaudeOrigem IS NOT NULL AND SaudeOrigem = 'BALCAO' AND SaudeTextoVersao IS NOT NULL AND SaudeTextoHash IS NOT NULL));
+END
+GO
+
 -- O registro é prova de custódia: não se apaga, e o que prova (quando, quem entregou, quem retirou, de qual sala) não se altera. Os campos pessoais podem ser
--- anonimizados e o dado de saúde pode ser apagado (revogação do consentimento, retenção), e só.
+-- anonimizados e o dado de saúde pode ser apagado (revogação do consentimento, retenção), e só. "Quem entregou" e "quem retirou" incluem o NOME em texto livre, o
+-- documento conferido e a matrícula de quem trouxe a criança: só a anonimização (que preenche AnonimizadoEm no mesmo comando) os apaga; reescrever, nunca.
 EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_CheckinRegistros_Protegido ON dbo.CheckinInfantilRegistros AFTER UPDATE, DELETE AS
 BEGIN
     SET NOCOUNT ON;
@@ -112,6 +124,11 @@ BEGIN
            OR i.EntregueEm <> d.EntregueEm OR i.EntreguePorMembroId <> d.EntreguePorMembroId OR i.IdadeAnos <> d.IdadeAnos OR i.FaixaSala <> d.FaixaSala
            OR (d.Situacao = N''RETIRADA'' AND (i.Situacao <> N''RETIRADA'' OR i.RetiradoEm <> d.RetiradoEm OR i.RetiradoTipo <> d.RetiradoTipo OR ISNULL(i.RetiradoPorOperadorId, -1) <> ISNULL(d.RetiradoPorOperadorId, -1)
                 OR ISNULL(i.RetiradoMembroId, -1) <> ISNULL(d.RetiradoMembroId, -1) OR i.Divergente <> d.Divergente))
+           OR ISNULL(i.TrouxeMembroId, -1) <> ISNULL(d.TrouxeMembroId, -1) OR ISNULL(i.TrouxeDocumento, N'''') <> ISNULL(d.TrouxeDocumento, N'''') OR ISNULL(i.TrouxeParentesco, N'''') <> ISNULL(d.TrouxeParentesco, N'''')
+           OR (i.AnonimizadoEm IS NULL AND (ISNULL(i.VisitanteNome, N'''') <> ISNULL(d.VisitanteNome, N'''') OR ISNULL(i.VisitanteNascimento, ''19000101'') <> ISNULL(d.VisitanteNascimento, ''19000101'')
+                OR ISNULL(i.TrouxeNome, N'''') <> ISNULL(d.TrouxeNome, N'''')))
+           OR (d.Situacao = N''RETIRADA'' AND i.AnonimizadoEm IS NULL AND (ISNULL(i.RetiradoNome, N'''') <> ISNULL(d.RetiradoNome, N'''') OR ISNULL(i.RetiradoParentesco, N'''') <> ISNULL(d.RetiradoParentesco, N'''')
+                OR ISNULL(i.RetiradoDocumento, N'''') <> ISNULL(d.RetiradoDocumento, N'''')))
            OR (d.AnonimizadoEm IS NOT NULL AND ISNULL(i.AnonimizadoEm, ''19000101'') <> d.AnonimizadoEm))
     BEGIN
         RAISERROR(N''O registro de check-in infantil é prova de custódia: o que prova quando, quem entregou, quem retirou e de qual sala não se altera.'', 16, 1);
@@ -174,6 +191,10 @@ END
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CheckinVol_Presente' AND object_id = OBJECT_ID(N'dbo.CheckinInfantilVoluntarios'))
     CREATE UNIQUE INDEX UX_CheckinVol_Presente ON dbo.CheckinInfantilVoluntarios (ServicoId, EquipeId, MembroId) WHERE SaiuEm IS NULL;
+GO
+-- Uma pessoa só está num lugar: o mesmo voluntário não está presente em duas salas do mesmo serviço (o líder de duas equipes, por exemplo, não conta como adulto das duas).
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CheckinVol_UmaSala' AND object_id = OBJECT_ID(N'dbo.CheckinInfantilVoluntarios'))
+    CREATE UNIQUE INDEX UX_CheckinVol_UmaSala ON dbo.CheckinInfantilVoluntarios (ServicoId, MembroId) WHERE SaiuEm IS NULL;
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CheckinVol_Sala' AND object_id = OBJECT_ID(N'dbo.CheckinInfantilVoluntarios'))
     CREATE INDEX IX_CheckinVol_Sala ON dbo.CheckinInfantilVoluntarios (ServicoId, EquipeId, SaiuEm);

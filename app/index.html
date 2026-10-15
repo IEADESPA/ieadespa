@@ -150,6 +150,7 @@
             <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhahabilitacao"]'><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMenores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com menores</span></button>
             <button class="btn-subaba" id="btnSubMeupainelProtecao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de crianças</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCheckininfantil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in infantil</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
@@ -303,6 +304,9 @@
             <!-- v7.8 — Proteção de Crianças: fila de incidentes com o relógio das 24 horas, leitura protegida do relato, comunicação ao Conselho Tutelar e, no nível geral,
                  afastamento cautelar, encerramento, padrões, Comitê e relatório anual. Permissão própria "protecao_menores". -->
             <button class="btn-aba" id="btnAbaProtecao" data-on-click="mostrarAbaSecretaria" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de Crianças</span></button>
+            <!-- v7.10 — Check-in infantil: as salas de hoje do escopo (tela da sala com a visão da liderança), as aprovações de retirada divergente e as fichas assinadas.
+                 Mesma permissão da Habilitação ("habilitacao_voluntarios"). -->
+            <button class="btn-aba" id="btnAbaCheckininfantil" data-on-click="mostrarAbaSecretaria" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in Infantil</span></button>
           </div>
 
           <!-- MÓDULO: ASSISTÊNCIA SOCIAL / AÇÃO DA FÉ (v5.9) — permissão
@@ -995,6 +999,28 @@
           <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="prtCarregarMeusAcao">🔄 Atualizar</button></div>
           <p id="prtMeusMsg" class="subtitle" role="status"></p>
           <div id="prtMeusLista"></div>
+        </div>
+
+        <!-- SUB-ABA: CHECK-IN INFANTIL (v7.10 — check-in com cadeia de custódia). Aberta a qualquer login (inclusive PIN): "Minhas salas de hoje" (a tela da sala, para quem serve na
+             equipe escalada e habilitada) e "Meus filhos" (o responsável vê o histórico, cuida de quem pode retirar e da saúde; NUNCA faz o check-in por aqui).
+             Toda regra mora no servidor (shared/checkinInfantil.js); a tela é montada por checkin-infantil.js. -->
+        <div id="subMeupainelCheckininfantil" class="sub-aba-secretaria">
+          <h3>👶 Check-in infantil</h3>
+          <p class="subtitle">Aqui ficam as <strong>salas de hoje</strong> em que você serve com crianças e, se você é pai, mãe ou responsável, os seus <strong>filhos</strong>. Cada criança que entra recebe uma
+            <strong>etiqueta com um código</strong> e a família leva o recibo: na saída, <strong>só leva a criança quem digita o código</strong>, mesmo que a equipe conheça a pessoa.
+            <em>Exemplo: a tia Maria está escalada no Maternal às 9h. Ela abre a sala, toca em “Entrar na sala”, recebe os pequenos e imprime as etiquetas. Na saída, o pai mostra o recibo, a tia digita o código e entrega o filho.</em>
+            Pais e responsáveis <strong>não fazem o check-in por aqui</strong>: a entrega é sempre com um voluntário na sala.</p>
+          <p id="chkMeuMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="chkMeuListas">
+            <h4>🏠 Minhas salas de hoje</h4>
+            <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario chk-btn" data-on-click="chkCarregarMeuPainelAcao">🔄 Atualizar</button></div>
+            <div id="chkMeuSalasLista"></div>
+            <hr />
+            <h4>👪 Meus filhos</h4>
+            <p class="subtitle">Se você é pai, mãe ou tutor cadastrado pela Secretaria, veja quando seus filhos entraram e saíram, escolha <strong>quem mais pode retirá-los</strong> e, se quiser, informe uma <strong>alergia ou condição de saúde</strong> para ir na etiqueta.</p>
+            <div id="chkFilhosLista"></div>
+          </div>
+          <div id="chkSalaMeu"></div>
         </div>
 
         <!-- SUB-ABA: MINHA FORMAÇÃO (v6.9 — Trilhas de formação e
@@ -3513,6 +3539,54 @@
           </div>
           <p id="prtRelResultado" class="subtitle" role="status"></p>
           <div id="prtRelImprimivel"></div>
+        </div>
+      </div>
+
+      <!-- ABA: CHECK-IN INFANTIL (v7.10 — check-in com cadeia de custódia). Permissão "habilitacao_voluntarios" (sessão de liderança, dentro do escopo da congregação): as salas de hoje com a
+           visão da liderança (telefones, relatório do dia, tirar voluntário da sala), as aprovações de retirada divergente e criança travada, e as fichas assinadas (quem pode retirar e a saúde,
+           a partir do papel). A tela da sala e as regras são as mesmas do Meu Painel; tudo é montado por checkin-infantil.js. -->
+      <div id="abaCheckininfantil" class="aba-secretaria">
+        <h3>👶 Check-in infantil</h3>
+        <p class="subtitle">Acompanhe as salas com crianças <strong>hoje</strong>, decida as <strong>retiradas por quem não está na lista</strong> e registre as <strong>fichas assinadas</strong> pelos responsáveis.
+          <em>Exemplo: uma tia pede para levar o Pedro, mas não está na lista de autorizados. A equipe digita o código certo e o pedido chega aqui em “Aprovações”. Você liga para a mãe, confirma e decide: a criança só sai depois da sua aprovação.</em></p>
+        <div class="cal-pilulas chk-pilulas" id="chkPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnChkSecaoSalas" aria-pressed="true" data-on-click="chkMostrarSecaoAcao" data-args-click='["salas"]'>🏠 Salas de hoje</button>
+          <button type="button" class="cal-pilula" id="btnChkSecaoAprovacoes" aria-pressed="false" data-on-click="chkMostrarSecaoAcao" data-args-click='["aprovacoes"]'>✅ Aprovações</button>
+          <button type="button" class="cal-pilula" id="btnChkSecaoFichas" aria-pressed="false" data-on-click="chkMostrarSecaoAcao" data-args-click='["fichas"]'>📄 Fichas assinadas</button>
+        </div>
+        <p id="chkGesMsg" class="subtitle" role="status" aria-live="polite"></p>
+
+        <!-- a) SALAS DE HOJE -->
+        <div id="chkSecaoSalas" class="cal-secao">
+          <div id="chkGesListas">
+            <h4>🏠 Salas de hoje</h4>
+            <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario chk-btn" data-on-click="chkCarregarSalasGesAcao">🔄 Atualizar</button></div>
+            <div id="chkGesSalasLista"></div>
+          </div>
+          <div id="chkSalaGes"></div>
+        </div>
+
+        <!-- b) APROVAÇÕES (retirada por quem não está na lista; criança travada) -->
+        <div id="chkSecaoAprovacoes" class="cal-secao">
+          <h4>✅ Aprovações</h4>
+          <p class="subtitle">O que está esperando a liderança em todas as salas de hoje: retiradas por quem <strong>não está na lista</strong> de autorizados (confirme com o responsável pelo telefone antes de decidir) e crianças
+            <strong>travadas</strong> por erros do código. A lista se atualiza sozinha enquanto esta tela está aberta.</p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario chk-btn" data-on-click="chkCarregarAprovacoesAcao">🔄 Atualizar</button></div>
+          <p id="chkAprMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="chkAprovacoesLista"></div>
+        </div>
+
+        <!-- c) FICHAS ASSINADAS -->
+        <div id="chkSecaoFichas" class="cal-secao">
+          <h4>📄 Fichas assinadas</h4>
+          <p class="subtitle">Quando o responsável assina no papel quem pode retirar a criança, ou uma alergia ou condição de saúde, a Secretaria registra aqui. Informe a <strong>matrícula da criança</strong> e diga onde a ficha ficou arquivada.</p>
+          <div class="barra-lista">
+            <label for="chkFiMatricula">Matrícula da criança</label>
+            <input type="number" id="chkFiMatricula" min="1" autocomplete="off" />
+            <button type="button" class="btn-confirmar chk-btn" id="chkFiBuscar" data-on-click="chkFichaBuscarAcao" data-args-click='[{"$":"this"}]'>🔎 Procurar</button>
+          </div>
+          <p id="chkFichaMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="chkFichaCx"></div>
         </div>
       </div>
 
@@ -6431,6 +6505,7 @@
   <script src="modulos/calendario.js"></script>
   <script src="modulos/canais.js"></script>
   <script src="modulos/catalogos-estrutura.js"></script>
+  <script src="modulos/checkin-infantil.js"></script>
   <script src="modulos/consagracoes.js"></script>
   <script src="modulos/disciplina.js"></script>
   <script src="modulos/doacoes.js"></script>

@@ -1,5 +1,5 @@
 ---
-import { marked } from "marked";
+import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
@@ -53,7 +53,7 @@ interface Props {
 
 const { orgao } = Astro.props;
 const allPosts = visiblePosts(await getAllMensagens());
-const bodyHtml = orgao.body ? await marked.parse(orgao.body) : null;
+const bodyHtml = orgao.body ? await renderizarMarkdown(orgao.body) : null;
 const [membros, historico, categorias] = await Promise.all([
   fetchItems<MembroOrgao>("orgao_membros", `filter[orgao][_eq]=${orgao.id}&filter[current][_eq]=true&sort[]=sort`),
   fetchItems<MembroOrgao>("orgao_membros", `filter[orgao][_eq]=${orgao.id}&filter[current][_eq]=false&sort[]=sort`),

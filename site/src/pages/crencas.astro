@@ -1,5 +1,5 @@
 ---
-import { marked } from "marked";
+import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
@@ -14,7 +14,7 @@ const config = await fetchConfiguracoes();
 const secoesCrencas = await Promise.all(
   quebrarEmSecoes(config.crencas_corpo ?? "").map(async (secao) => ({
     ...secao,
-    html: await marked.parse(secao.corpo),
+    html: await renderizarMarkdown(secao.corpo),
   })),
 );
 ---

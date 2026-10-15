@@ -299,7 +299,14 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   avisada e não carimba. No **aviso em massa** (campanha → "E-mail de retirada"): caixa **"só quem está
   separado"** e filtro **"só do lote"**; em modo seletivo **não libera a retirada para todos** (isso é do
   envio a todos), e a contagem do "Conferir" segue o filtro (`somenteSeparados`, `loteId` em
-  `api/AvisarRetiradaCamisetas`). A função agora **erra de forma explícita (502)** quando uma consulta
+  `api/AvisarRetiradaCamisetas`). **O aviso individual (`api/EnviarAvisoRetiradaCamiseta`) foi fechado em 15/10/2026**: antes era uma porta
+  pública que mandava e-mail para o endereço e com o texto que a chamada trouxesse (o login só protegia o botão,
+  não a porta; o código é aberto no GitHub). Agora exige o token do painel (`x-painel-token`), lê o pedido no
+  Directus **com o token da própria pessoa** e recebe só o `pedidoId`: destinatário, itens, local, assunto e
+  texto vêm do pedido e da campanha, nunca da chamada; só envia se o pedido tem e-mail, não é avulso e está
+  separado (ou a retirada foi liberada ao grupo). O robô de avisos de conteúdo novo
+  (`scripts/send-content-notifications.mjs`) também passou a ignorar itens com slug "teste-…". A função do
+  aviso em massa agora **erra de forma explícita (502)** quando uma consulta
   ao Directus falha, em vez de contar zero e o painel dizer "Pronto: 0". Bateria `scripts/testes/reserva.cjs`
   (só simula, nunca envia e-mail).
 - **Painel de pedidos no celular (13/10/2026)** — a barra de busca fica presa no alto durante a

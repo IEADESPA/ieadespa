@@ -34,7 +34,7 @@ async function enviar(subscriptionKeys, payload) {
 
 async function processarTipo({ tipo, collection, campoPreferencia, montarUrl, montarTitulo, subs }) {
   const pendentesRes = await fetch(
-    `${DIRECTUS_URL}/items/${collection}?filter[_and][0][draft][_eq]=false&filter[_and][1][notificacao_enviada][_eq]=false&limit=-1`,
+    `${DIRECTUS_URL}/items/${collection}?filter[_and][0][draft][_eq]=false&filter[_and][1][notificacao_enviada][_eq]=false&filter[_and][2][slug][_nstarts_with]=teste-&limit=-1`,
     { headers: { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` } },
   );
   if (!pendentesRes.ok) throw new Error(`Falha ao buscar ${collection} pendentes: ${pendentesRes.status}`);

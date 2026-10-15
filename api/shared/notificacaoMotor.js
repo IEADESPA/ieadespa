@@ -41,8 +41,9 @@ async function enviarCanaisNotificacao(pool, { regraChave, regra, destinatarioMe
   return { emailEnviado, pushEnviados };
 }
 
-async function avaliarRegras(pool) {
-  const regras = (await pool.request().query(`SELECT * FROM NotificacaoRegras WHERE Ativa = 1`)).recordset;
+async function avaliarRegras(pool, { chaves = null } = {}) {
+  let regras = (await pool.request().query(`SELECT * FROM NotificacaoRegras WHERE Ativa = 1`)).recordset;
+  if (Array.isArray(chaves)) regras = regras.filter((r) => chaves.includes(r.Chave));       // a rotina horária da proteção (v7.8) avalia só as regras dela
   let criadas = 0;
   let emailsEnviados = 0;
   let pushesEnviados = 0;

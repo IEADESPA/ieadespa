@@ -33,10 +33,11 @@ const PUBLICAS = {
   InscricaoPush: "GET devolve só a chave pública VAPID; o resto exige sessão",
   GestaoDocumentos: "GET sem login devolve só os documentos marcados como PÚBLICOS (documentosVisibilidade.test.js); registrar, mudar e apagar exigem sessão",
   GestaoTextoMestre: "GET sem login devolve só a versão vigente do texto mestre (normativo público)",
+  ProtecaoAjuda: "v7.8: canal de ajuda da criança e do adolescente — SEM login por desenho (a criança pode não ter conta); só grava um pedido de ajuda, sem perguntas, sem IP guardado; limitador por origem (5/hora) e teto global (40/hora) no banco",
   Saude: "vD.5: 'está no ar?' para o teste de disponibilidade (GitHub Actions a cada 5 min); não toca no banco e só devolve ok + hora"
 };
 // Rotinas agendadas: protegidas por segredo (x-cron-secret), não por sessão.
-const ROTINAS = new Set(["NotificacoesAgendador", "EbdFechamentoAutomatico", "FluxosEscalonador", "AvaliarNotificacoes"]);
+const ROTINAS = new Set(["NotificacoesAgendador", "EbdFechamentoAutomatico", "FluxosEscalonador", "AvaliarNotificacoes", "ProtecaoVerificador"]);
 
 function rotas() {
   const saida = [];

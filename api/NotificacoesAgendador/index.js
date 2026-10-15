@@ -31,6 +31,8 @@ module.exports = async function (context, req) {
     retiradaFalhou = true;
   }
   const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);
+  // v7.8 — a marca "há prazo de 24 horas correndo" (que deixa a rotina horária da proteção dormir sem abrir o banco) é regravada todo dia, e os e-mails da proteção que não saíram são reenviados.
+  try { await require("../shared/protecaoPendencia").atualizar(pool); await require("../shared/protecaoDb").reenviarEmailsPendentes(pool); } catch (e) { context.log.error("[PROTECAO] marca de pendência / reenvio:", e.message); }
   if (falhas.length) context.log.error(`[NOTIFICACOES] detector(es) que falharam: ${falhas.join(", ")}`);
   context.log(`[NOTIFICACOES] rodada agendada: ${criadas} notificação(ões) nova(s), ${emailsEnviados} e-mail(s) enviado(s).`);
   // v7.5 — retenção LGPD do voluntariado: o IP do aceite digital é anonimizado 5 anos depois do último serviço. Fail-soft: uma falha aqui não derruba a rodada de avisos.
@@ -69,7 +71,7 @@ module.exports = async function (context, req) {
   }
   // A rotina é fail-soft de propósito (uma falha não derruba as outras), mas a retirada que protege criança e os detectores do ministério com menores NÃO podem falhar em silêncio:
   // aí a resposta é 500, o job do GitHub fica vermelho e o aviso de "rotina falhou" sai. (Tudo o mais já rodou: a resposta vem no fim.)
-  const falhaMenores = retiradaFalhou || falhas.some((k) => String(k).startsWith("MENORES_"));
+  const falhaMenores = retiradaFalhou || falhas.some((k) => String(k).startsWith("MENORES_") || String(k).startsWith("PROTECAO_"));
   context.res = {
     status: falhaMenores ? 500 : 200,
     headers: { "Content-Type": "application/json" },

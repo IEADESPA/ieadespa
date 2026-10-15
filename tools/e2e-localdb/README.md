@@ -30,9 +30,18 @@ bash rodar.sh roteiro e2e-4-vistoria.js
 bash rodar.sh roteiro e2e-6-corridas.js
 ```
 
-Os roteiros são os da **v7.6** (Setores Técnicos e Termo de Vistoria): servem de modelo para o da versão seguinte.
+Os roteiros 2 a 6 são os da **v7.6** (Setores Técnicos e Termo de Vistoria); servem de modelo para os das versões seguintes.
 O cenário (`e2e-1-setup.js`) cria congregações, pessoas e lideranças fictícias, confere as garantias da migração
 142 (gatilhos, `CHECK`, permissões, idempotência) e grava `cenario.json` (ignorado pelo git).
+
+Cada versão parte da base da anterior (`BASE=...`):
+
+- **v7.7** (ministério com menores), base `cenario-menores`: `e2e-7` (setup) e `e2e-8` a `e2e-12`.
+- **v7.8** (incidentes de proteção), base `cenario-protecao`: `e2e-13` (setup e migração 144), `e2e-14` (fluxos), `e2e-15` (segurança),
+  `e2e-16` (corridas com vários processos) e `e2e-17` (o que a revisão independente pediu: vínculo do envolvido, tetos, regra obrigatória,
+  rotina horária, reenvio de e-mail).
+
+`bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 
 ## Armadilhas já pagas
 

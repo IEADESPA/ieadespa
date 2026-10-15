@@ -135,7 +135,10 @@ module.exports = async function (context, req) {
       }
       throw erro;
     }
-    await registrarAuditoria({ tabela: "AnexosGenericos", registroId: anexoId, acao: `Anexou documento em ${tabela}#${registroId}`, usuarioId: usuario.membroId, dadosDepois: { tabela, registroId, nomeArquivo } });
+    const sigilosa = !!(regraDaTabela(tabela) || {}).auditoriaSigilosa;
+    await registrarAuditoria(sigilosa
+      ? { tabela: "AnexosGenericos", registroId: 0, acao: "Anexou documento (proteção de crianças)", usuarioId: null, dadosDepois: {} }
+      : { tabela: "AnexosGenericos", registroId: anexoId, acao: `Anexou documento em ${tabela}#${registroId}`, usuarioId: usuario.membroId, dadosDepois: { tabela, registroId, nomeArquivo } });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Anexo enviado.", anexoId } };
     return;
   }
@@ -153,6 +156,8 @@ module.exports = async function (context, req) {
       return;
     }
     if (!(await autorizar(context, pool, usuario, anexo.Tabela, anexo.RegistroId, { escrita: true, uniforme: true }))) return;
+    const regraAnexo = regraDaTabela(anexo.Tabela) || {};
+    if (regraAnexo.semExclusao) { context.res = { status: 403, body: { sucesso: false, mensagem: "Este anexo é prova e não pode ser excluído." } }; return; }
     await pool.request().input("id", sql.Int, anexoId).query(`DELETE FROM AnexosGenericos WHERE AnexoId = @id`);
     await storage.excluirDocumento(anexo.Url);
     await registrarAuditoria({

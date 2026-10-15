@@ -105,12 +105,12 @@ module.exports = async function (context, req) {
         const nome = (await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id`)).recordset[0];
         // congregação que não existe e congregação fora do escopo: a mesma resposta
         if (!nome || !auth.estaNoEscopo(visaoHab, nome.Nome)) return erro(context, 403, esc.FORA_DO_ESCOPO.mensagem);
-        context.res = { status: 200, body: { sucesso: true, ...(await db.painel(pool, { congregacaoIds: [congregacaoId], reservado: diretoria, hoje })) } };
+        context.res = { status: 200, body: { sucesso: true, ...(await db.painel(pool, { congregacaoIds: [congregacaoId], reservado: diretoria, hoje, verMembroId: sessao.membroId })) } };
         return;
       }
       if (acao === "painel-geral") {
         if (!geral) return erro(context, 403, esc.MSG_GERAL || SEM_PERMISSAO);
-        context.res = { status: 200, body: { sucesso: true, ...(await db.painel(pool, { congregacaoIds: null, reservado: diretoria, hoje })) } };
+        context.res = { status: 200, body: { sucesso: true, ...(await db.painel(pool, { congregacaoIds: null, reservado: diretoria, hoje, verMembroId: sessao.membroId })) } };
         return;
       }
       if (acao === "auto-denuncias") {

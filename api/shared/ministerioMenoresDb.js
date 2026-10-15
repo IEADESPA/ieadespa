@@ -90,7 +90,7 @@ async function carregarFatos(pool, membroIds, { hoje = hojeBrasilia() } = {}) {
   const fatos = new Map();
   for (const id of todos) {
     fatos.set(id, { membro: {}, esteira: { existe: false }, vistoria: null, treinamento: null, fichaEm: null, politicaVersaoAceita: null,
-      politicaVersaoVigente: mm.POLITICA_VERSAO, autoDenunciaAberta: false, cadastroNacional: null });
+      politicaVersaoVigente: mm.POLITICA_VERSAO, autoDenunciaAberta: false, cadastroNacional: null, incidenteEmApuracao: false });
   }
   if (!todos.length) return fatos;
   const reqs = (await trilhas.listarRequisitos(pool, { contexto: "HABILITACAO_TREINAMENTO" }))
@@ -135,6 +135,13 @@ async function carregarFatos(pool, membroIds, { hoje = hojeBrasilia() } = {}) {
       SELECT DISTINCT MembroId FROM MinisterioMenoresAutoDenuncias
       WHERE MembroId IN (${listaIn(rq, "m", lote)}) AND (Decisao IS NULL OR (Decisao = 'AFASTADO_PREVENTIVAMENTE' AND LiberadoEm IS NULL))`)).recordset.map((x) => x.MembroId));
 
+    // v7.8: o afastamento cautelar de quem é envolvido numa suspeita de violência vale até o Comitê decidir "levantado" (a última decisão manda; sem decisão, continua)
+    rq = pool.request();
+    const apuracao = new Set((await rq.query(`
+      SELECT DISTINCT e.MembroId FROM IncidenteEnvolvidos e JOIN IncidentesProtecao i ON i.IncidenteId = e.IncidenteId
+      WHERE e.MembroId IN (${listaIn(rq, "m", lote)}) AND i.Nivel = 'ALEGACAO'
+        AND ISNULL((SELECT TOP 1 d.Decisao FROM IncidenteDecisoesCautelares d WHERE d.EnvolvidoId = e.EnvolvidoId ORDER BY d.DecisaoId DESC), 'MANTIDO_AFASTADO') <> 'LIBERADO'`)).recordset.map((x) => x.MembroId));
+
     rq = pool.request();
     const cadastro = (await rq.query(`
       SELECT x.MembroId, x.Resultado FROM (SELECT MembroId, Resultado, ROW_NUMBER() OVER (PARTITION BY MembroId ORDER BY ConsultaId DESC) AS rn
@@ -151,6 +158,7 @@ async function carregarFatos(pool, membroIds, { hoje = hojeBrasilia() } = {}) {
       f.fichaEm = h ? [dataBr(h.fichaAtualizadaEm), dataBr(h.etapaFichaInscricaoEm)].filter(Boolean).sort().pop() || null : null;
       f.politicaVersaoAceita = versaoPorMembro.has(id) ? versaoPorMembro.get(id) : null;
       f.autoDenunciaAberta = abertas.has(id);
+      f.incidenteEmApuracao = apuracao.has(id);
       f.cadastroNacional = cadastroPorMembro.get(id) || null;
       f.habilitacaoId = h ? h.habilitacaoId : null;
     }
@@ -389,8 +397,10 @@ async function retirarInaptosDasEscalas(pool, { hoje = hojeBrasilia(), membroId 
   for (const [id, lista] of porMembro) {
     const pessoa = await lerEmail(pool, id);
     if (pessoa) {
+      const porCautela = lista.some((x) => (x.motivos || []).includes("INCIDENTE_EM_APURACAO"));
+      const dadosTexto = { equipes: lista.map((x) => x.equipeNome), nEscalas: lista.reduce((s, x) => s + x.alocacoes.length, 0) };
       await notificarAgora(pool, { regraChave: "MENORES_RETIRADO_DA_ESCALA", destinatarios: [pessoa],
-        mensagem: mm.textoRetiradaPessoa({ equipes: lista.map((x) => x.equipeNome), nEscalas: lista.reduce((s, x) => s + x.alocacoes.length, 0) }),
+        mensagem: porCautela ? require("./protecaoMenores").textoRetiradaCautelar(dadosTexto) : mm.textoRetiradaPessoa(dadosTexto),
         referenciaId: lista[0].retiradaId, referenciaTabela: "MinisterioMenoresRetiradas", limiteDia: AVISOS_AO_VOLUNTARIO_POR_DIA, deps });
     }
     for (const f of lista) {
@@ -461,8 +471,9 @@ async function equipesSemMarcaQueParecemInfantis(pool, { congregacaoIds = null }
 
 // O painel de conformidade: o campo inteiro para a Secretaria Geral, a congregação para o dirigente. `reservado` = quem é da Diretoria (vê o motivo de
 // uma pendência com ela); os demais veem só "pendência com a Diretoria".
-async function painel(pool, { congregacaoIds = null, reservado = false, hoje = hojeBrasilia() } = {}) {
-  const linhas = await linhasDoPainel(pool, { congregacaoIds, hoje });
+// `verMembroId`: quem está olhando. Se a própria linha dele tem o afastamento por incidente de proteção, ela aparece como "pendência com a Diretoria" (nem a Diretoria lê o motivo a respeito de si).
+async function painel(pool, { congregacaoIds = null, reservado = false, hoje = hojeBrasilia(), verMembroId = null } = {}) {
+  const linhas = (await linhasDoPainel(pool, { congregacaoIds, hoje })).map((l) => (verMembroId && Number(l.membroId) === Number(verMembroId) ? { ...l, aptidao: { ...l.aptidao, bloqueios: mm.bloqueiosParaAPessoa(l.aptidao.bloqueios) } } : l));
   const itens = linhas.map((l) => {
     const status = mm.statusDaLinha(l.aptidao);
     return {
@@ -487,7 +498,7 @@ async function minhaSituacao(pool, membroId, { hoje = hojeBrasilia() } = {}) {
   const aberta = (await pool.request().input("m", sql.Int, membroId).query(`
     SELECT TOP 1 AutoDenunciaId, Tipo, DataCiencia, DeclaradaEm, Decisao, DecididaEm, LiberadoEm FROM MinisterioMenoresAutoDenuncias WHERE MembroId = @m ORDER BY AutoDenunciaId DESC`)).recordset[0];
   return {
-    apto: ap.apto, contaComoAdulto: ap.contaComoAdulto, bloqueios: ap.bloqueios, validades: ap.validades, proximoVencimento: ap.proximoVencimento,
+    apto: ap.apto, contaComoAdulto: ap.contaComoAdulto, bloqueios: mm.bloqueiosParaAPessoa(ap.bloqueios), validades: ap.validades, proximoVencimento: ap.proximoVencimento,
     equipes: r.recordset.map((x) => ({ equipeId: x.EquipeId, nome: x.Nome })),
     habilitacaoAberta: ap.fatos.esteira.existe,
     politica: { vigente: { versao: mm.POLITICA_VERSAO }, aceita: politicaAceita },

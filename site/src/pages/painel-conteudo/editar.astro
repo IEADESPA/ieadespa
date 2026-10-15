@@ -1,0 +1,667 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { painelUrls } from "@/lib/painelConteudo";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import "@/styles/painel-conteudo.css";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Editar — Painel de conteúdo" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer pc-escopo">
+    <div class="canvas pc-edicao-canvas" data-pc-editar data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow"><a href={painelUrls.inicio} class="text-accent" data-pc-voltar data-astro-reload>← Voltar à lista</a></p>
+        <div class="pc-topo-linha">
+          <h1 class="pagehead-title" data-pc-titulo>Conteúdo</h1>
+          <div class="pc-selos" data-pc-estado></div>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+        <p class="mt-3 text-sm text-muted-foreground" data-pc-meta hidden></p>
+        <p class="mt-2 text-sm" data-pc-ver-site-wrap hidden>
+          <a href="/" target="_blank" rel="noopener" class="link-sweep font-semibold text-accent" data-pc-ver-site>Ver no site ↗</a>
+          <span class="text-muted-foreground"> — o site pode levar até uns 20 minutos para mostrar mudanças.</span>
+        </p>
+      </header>
+
+      <div class="pc-faixa pc-faixa-erro" data-pc-erro-pagina hidden>
+        <p data-pc-erro-pagina-texto></p>
+        <div class="pc-faixa-botoes">
+          <a href={painelUrls.inicio} class="btn btn-outline" data-pc-erro-voltar data-astro-reload>Voltar à lista</a>
+        </div>
+      </div>
+
+      <div class="pc-faixa pc-faixa-erro mb-6" data-pc-sessao role="alert" hidden>
+        <p>
+          <strong>Sua sessão acabou.</strong> Nada do que você escreveu foi perdido: o texto continua nesta tela. Entre de novo
+          (abre numa aba nova) e depois volte aqui para salvar.
+        </p>
+        <div class="pc-faixa-botoes">
+          <button type="button" class="btn btn-solid" data-pc-sessao-entrar>Entrar de novo (abre em outra aba)</button>
+          <button type="button" class="btn btn-outline" data-pc-sessao-tentar>Já entrei, conferir</button>
+        </div>
+        <p class="mt-2 text-xs text-muted-foreground" data-pc-sessao-msg role="status"></p>
+      </div>
+
+      <form class="pc-form" data-pc-form hidden novalidate>
+        <div class="pc-form" data-pc-secoes></div>
+
+        <div class="pc-barra-acoes" data-pc-barra>
+          <p class="pc-status" data-pc-status role="status" aria-live="polite"></p>
+          <p class="pc-status pc-sujo" data-pc-sujo hidden>● Há alterações que ainda não foram salvas.</p>
+          <button type="button" class="btn btn-outline" data-pc-acao="rascunho">Salvar rascunho</button>
+          <button type="button" class="btn btn-solid" data-pc-acao="publicar">Publicar</button>
+          <button type="button" class="btn btn-solid" data-pc-acao="salvar" hidden>Salvar alterações</button>
+          <button type="button" class="btn btn-outline" data-pc-acao="despublicar" hidden>Voltar para rascunho</button>
+        </div>
+      </form>
+
+      <section class="pc-perigo" data-pc-perigo hidden aria-labelledby="pc-perigo-titulo">
+        <h2 class="pc-perigo-titulo" id="pc-perigo-titulo">Zona de perigo</h2>
+        <p data-pc-perigo-texto></p>
+        <div>
+          <button type="button" class="btn btn-outline pc-btn-perigo" data-pc-excluir-abrir>Excluir…</button>
+        </div>
+        <div class="pc-perigo-caixa" data-pc-excluir-caixa hidden>
+          <p>Para confirmar, digite a palavra <strong>EXCLUIR</strong> na caixa abaixo.</p>
+          <label class="pc-rotulo" for="pc-excluir-texto">Digite EXCLUIR</label>
+          <input id="pc-excluir-texto" class="field" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" data-pc-excluir-texto />
+          <div class="pc-dialogo-botoes">
+            <button type="button" class="btn btn-outline pc-btn-perigo" data-pc-excluir-confirmar disabled>Excluir definitivamente</button>
+            <button type="button" class="btn btn-outline" data-pc-excluir-cancelar>Cancelar</button>
+          </div>
+          <p class="pc-erro" data-pc-excluir-erro role="alert" hidden></p>
+        </div>
+      </section>
+
+      <dialog class="pc-dialogo" data-pc-dialogo aria-labelledby="pc-dialogo-titulo">
+        <h2 class="pc-dialogo-titulo" id="pc-dialogo-titulo" data-pc-dialogo-titulo></h2>
+        <div data-pc-dialogo-corpo></div>
+        <div class="pc-dialogo-botoes">
+          <button type="button" class="btn btn-solid" data-pc-dialogo-sim>Confirmar</button>
+          <button type="button" class="btn btn-outline" data-pc-dialogo-nao>Cancelar</button>
+        </div>
+      </dialog>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { exigirAutenticacao, guardarSessao } from "@/lib/painelAuth";
+    import {
+      AUTH_CONTEUDO,
+      CANAL_SESSAO,
+      SessaoExpiradaErro,
+      camposDaEdicao,
+      criarApi,
+      dataBR,
+      estaPublicado,
+      explicarErroDirectus,
+      hojeLocal,
+      iniciarQuandoPronto,
+      obterTipo,
+      painelUrls,
+      todosCampos,
+      validarTudo,
+      valorPadrao,
+      type TipoConteudo,
+      type Valores,
+    } from "@/lib/painelConteudo";
+    import { montarCampo, type CampoMontado, type ContextoForm } from "@/lib/painelConteudoCampos";
+
+    /**
+     * Guarda de "alterações não salvas". Estes ouvintes são registrados UMA vez por carregamento do script e olham
+     * para a tela que estiver aberta agora (`pagina`); com a troca de página do Astro, sair por um link comum não
+     * dispara `beforeunload`, por isso o clique em links também é conferido aqui.
+     */
+    let paginaAtual: { sujo: () => boolean; saindo: boolean } | null = null;
+
+    window.addEventListener("beforeunload", (ev) => {
+      if (paginaAtual && !paginaAtual.saindo && paginaAtual.sujo()) {
+        ev.preventDefault();
+        ev.returnValue = "";
+      }
+    });
+    document.addEventListener(
+      "click",
+      (ev) => {
+        if (!paginaAtual || paginaAtual.saindo || ev.defaultPrevented) return;
+        const link = (ev.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+        if (!link || link.target === "_blank" || link.hasAttribute("download") || link.getAttribute("href")?.startsWith("#")) return;
+        if (!paginaAtual.sujo()) return;
+        if (window.confirm("Você tem alterações que ainda não foram salvas. Sair mesmo assim e perder o que escreveu?")) {
+          paginaAtual.saindo = true; // já perguntamos: o navegador não precisa perguntar de novo
+        } else {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+      },
+      true,
+    );
+    document.addEventListener("astro:before-swap", () => {
+      paginaAtual = null;
+    });
+
+    type Acao = "rascunho" | "publicar" | "salvar" | "despublicar";
+
+    iniciarQuandoPronto("[data-pc-editar]", (raiz) => {
+      const directusUrl = raiz.dataset.directusUrl ?? "";
+      const q = <T extends HTMLElement>(seletor: string) => raiz.querySelector<T>(seletor);
+      const params = new URLSearchParams(window.location.search);
+      const tipo = obterTipo(params.get("tipo"));
+      const idParam = params.get("id");
+
+      const carregando = q("[data-painel-carregando]");
+      const tituloEl = q("[data-pc-titulo]");
+      const estadoEl = q("[data-pc-estado]");
+      const metaEl = q("[data-pc-meta]");
+      const verSiteWrap = q("[data-pc-ver-site-wrap]");
+      const verSite = q<HTMLAnchorElement>("[data-pc-ver-site]");
+      const voltarEl = q<HTMLAnchorElement>("[data-pc-voltar]");
+      const erroPagina = q("[data-pc-erro-pagina]");
+      const erroPaginaTexto = q("[data-pc-erro-pagina-texto]");
+      const erroVoltar = q<HTMLAnchorElement>("[data-pc-erro-voltar]");
+      const sessaoEl = q("[data-pc-sessao]");
+      const sessaoMsg = q("[data-pc-sessao-msg]");
+      const form = q<HTMLFormElement>("[data-pc-form]");
+      const secoesEl = q("[data-pc-secoes]");
+      const statusEl = q("[data-pc-status]");
+      const sujoEl = q("[data-pc-sujo]");
+      const botoes = Array.from(raiz.querySelectorAll<HTMLButtonElement>("[data-pc-acao]"));
+      const perigo = q("[data-pc-perigo]");
+      const dialogo = q<HTMLDialogElement>("[data-pc-dialogo]");
+
+      const mostrarErroPagina = (texto: string) => {
+        if (carregando) carregando.hidden = true;
+        if (form) form.hidden = true;
+        if (erroPagina) erroPagina.hidden = false;
+        if (erroPaginaTexto) erroPaginaTexto.textContent = texto;
+      };
+
+      if (!tipo || !form || !secoesEl || !statusEl) {
+        mostrarErroPagina("Não conheço este tipo de conteúdo. Volte ao painel e escolha uma das opções.");
+        return;
+      }
+      const tipoAtual: TipoConteudo = tipo;
+      if (idParam !== null && !/^\d+$/.test(idParam)) {
+        mostrarErroPagina("O endereço desta página está incompleto ou errado (número do item inválido).");
+        return;
+      }
+
+      const listaUrl = painelUrls.lista(tipoAtual.id);
+      if (voltarEl) voltarEl.href = listaUrl;
+      if (erroVoltar) erroVoltar.href = listaUrl;
+      document.title = `${idParam ? "Editar" : tipoAtual.titulos.nova} — Painel de conteúdo`;
+
+      // Sem item aberto ainda: chamadas que mandam para o login (nada foi digitado). Depois de carregar, `api` nunca
+      // redireciona — se a sessão acabar, o texto fica na tela (ver `mostrarSessao`).
+      const apiInicial = criarApi(directusUrl, { redirecionar: true });
+      const api = criarApi(directusUrl, { redirecionar: false });
+
+      let itemId: number | null = idParam ? Number(idParam) : null;
+      let item: Record<string, unknown> | null = null;
+      let publicadoAgora = false;
+      let notificacaoEnviada = false;
+      let inicial: Valores = {};
+      let emAcao = false;
+      let ocupacoes = 0;
+      const campos = new Map<string, CampoMontado>();
+      const camposEditaveis = () => todosCampos(tipoAtual).filter((c) => c.tipo !== "readonly");
+      const estado = { sujo: () => false as boolean, saindo: false };
+
+      // ---------------------------------------------------------------- utilidades de tela
+      let statusTom: "info" | "ok" | "erro" = "info";
+      const setStatus = (texto: string, tom: "info" | "ok" | "erro" = "info") => {
+        statusTom = tom;
+        statusEl.textContent = texto;
+        statusEl.classList.toggle("pc-status-erro", tom === "erro");
+        statusEl.classList.toggle("pc-status-ok", tom === "ok");
+      };
+
+      const valoresAtuais = (): Valores => {
+        const v: Valores = {};
+        for (const c of camposEditaveis()) v[c.nome] = campos.get(c.nome)?.ler() ?? null;
+        return v;
+      };
+      const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+      estado.sujo = () => campos.size > 0 && !igual(valoresAtuais(), inicial);
+
+      const atualizarSujo = () => {
+        if (sujoEl) sujoEl.hidden = !estado.sujo();
+      };
+
+      const atualizarBotoes = () => {
+        const travado = emAcao || ocupacoes > 0;
+        for (const b of botoes) {
+          const acao = b.dataset.pcAcao as Acao;
+          const mostrar = publicadoAgora ? acao === "salvar" || acao === "despublicar" : acao === "rascunho" || acao === "publicar";
+          b.hidden = !mostrar;
+          b.disabled = travado;
+        }
+        const excluirAbrir = q<HTMLButtonElement>("[data-pc-excluir-abrir]");
+        if (excluirAbrir) excluirAbrir.disabled = travado;
+        atualizarExcluir();
+      };
+
+      const ocupar = () => {
+        ocupacoes++;
+        atualizarBotoes();
+        let solta = false;
+        return () => {
+          if (solta) return;
+          solta = true;
+          ocupacoes--;
+          atualizarBotoes();
+        };
+      };
+
+      const mostrarSessao = () => {
+        if (sessaoEl) sessaoEl.hidden = false;
+        setStatus("Sua sessão acabou. O texto continua aqui; entre de novo para salvar.", "erro");
+        sessaoEl?.scrollIntoView({ block: "nearest" });
+      };
+
+      const pintarCabecalho = () => {
+        const publicado = publicadoAgora;
+        if (tituloEl) {
+          const titulo = String(campos.get(tipoAtual.campoTitulo)?.ler() ?? "").trim();
+          tituloEl.textContent = itemId ? (titulo ? `Editar: ${titulo}` : `Editar ${tipoAtual.titulos.singular}`) : tipoAtual.titulos.nova;
+        }
+        if (estadoEl) {
+          estadoEl.replaceChildren();
+          const selo = document.createElement("span");
+          selo.className = `pc-selo ${itemId ? (publicado ? "pc-selo-publicado" : "pc-selo-rascunho") : "pc-selo-destaque"}`;
+          selo.textContent = itemId ? (publicado ? "Publicado" : "Rascunho") : "Novo";
+          estadoEl.append(selo);
+        }
+        const atualizadoCfg = tipoAtual.campoAtualizado;
+        const quando = atualizadoCfg && item ? dataBR(item[atualizadoCfg.campo]) : "";
+        if (metaEl) {
+          metaEl.hidden = !quando;
+          metaEl.textContent = quando ? `Última atualização: ${quando}` : "";
+        }
+        const url = publicado && item ? tipoAtual.urlPublica(item) : null;
+        if (verSiteWrap && verSite) {
+          verSiteWrap.hidden = !url;
+          if (url) verSite.href = url;
+        }
+        if (perigo) {
+          perigo.hidden = !itemId;
+          const texto = q("[data-pc-perigo-texto]");
+          if (texto) {
+            texto.textContent = publicado
+              ? `Excluir apaga ${tipoAtual.titulos.esta} para sempre e não dá para desfazer por aqui. Como está publicado, deixa de aparecer no site em até uns 20 minutos e os links passam a mostrar “página não encontrada”. Se só quer tirar do ar, use “Voltar para rascunho”.`
+              : `Excluir apaga ${tipoAtual.titulos.esta} para sempre e não dá para desfazer por aqui.`;
+          }
+        }
+        atualizarBotoes();
+      };
+
+      // ---------------------------------------------------------------- confirmações
+      const dlgTitulo = q("[data-pc-dialogo-titulo]");
+      const dlgCorpo = q("[data-pc-dialogo-corpo]");
+      const dlgSim = q<HTMLButtonElement>("[data-pc-dialogo-sim]");
+      const dlgNao = q<HTMLButtonElement>("[data-pc-dialogo-nao]");
+
+      /** Pergunta "tem certeza?" numa janela própria (melhor no celular que a janelinha do navegador). */
+      function confirmar(titulo: string, paragrafos: string[], sim: string): Promise<boolean> {
+        if (!dialogo || !dlgTitulo || !dlgCorpo || !dlgSim || !dlgNao || typeof dialogo.showModal !== "function") {
+          return Promise.resolve(window.confirm(`${titulo}\n\n${paragrafos.join("\n\n")}`));
+        }
+        const dlg = dialogo;
+        return new Promise((resolve) => {
+          dlgTitulo.textContent = titulo;
+          dlgCorpo.replaceChildren(
+            ...paragrafos.map((p) => {
+              const el = document.createElement("p");
+              el.textContent = p;
+              return el;
+            }),
+          );
+          dlgSim.textContent = sim;
+          let resultado = false;
+          const aoFechar = () => {
+            dlg.removeEventListener("close", aoFechar);
+            resolve(resultado);
+          };
+          dlg.addEventListener("close", aoFechar);
+          dlgSim.onclick = () => {
+            resultado = true;
+            dlg.close();
+          };
+          dlgNao.onclick = () => {
+            resultado = false;
+            dlg.close();
+          };
+          dlg.showModal();
+          dlgNao.focus();
+        });
+      }
+
+      // ---------------------------------------------------------------- montagem do formulário
+      const ctx: ContextoForm = {
+        directusUrl,
+        tipo: tipoAtual,
+        api,
+        novo: itemId === null,
+        itemId: () => itemId,
+        publicadoAoCarregar: () => publicadoAgora,
+        aoAlterar: (nome) => {
+          for (const c of campos.values()) c.aoMudarOutroCampo?.(nome);
+          if (nome === tipoAtual.campoTitulo) pintarCabecalho();
+          // Mexeu no texto: o recado de erro/sucesso da última ação já não vale (o aviso de "não salvo" o substitui).
+          if (statusTom !== "info" && sessaoEl?.hidden !== false) setStatus("");
+          atualizarSujo();
+        },
+        valorDe: (nome) => campos.get(nome)?.ler(),
+        ocupar,
+        sessaoExpirou: mostrarSessao,
+      };
+
+      function construirFormulario() {
+        if (!secoesEl) return;
+        secoesEl.replaceChildren();
+        for (const secao of tipoAtual.secoes) {
+          const bloco = document.createElement("section");
+          bloco.className = "pc-secao";
+          bloco.setAttribute("aria-labelledby", `pc-sec-${secao.id}`);
+          const titulo = document.createElement("h2");
+          titulo.className = "pc-secao-titulo";
+          titulo.id = `pc-sec-${secao.id}`;
+          titulo.textContent = secao.titulo;
+          bloco.append(titulo);
+          if (secao.descricao) {
+            const d = document.createElement("p");
+            d.className = "pc-secao-descricao";
+            d.textContent = secao.descricao;
+            bloco.append(d);
+          }
+          const grade = document.createElement("div");
+          grade.className = "pc-campos";
+          for (const campo of secao.campos) {
+            const montado = montarCampo(campo, ctx);
+            campos.set(campo.nome, montado);
+            grade.append(montado.raiz);
+          }
+          bloco.append(grade);
+          secoesEl.append(bloco);
+        }
+      }
+
+      function preencher(dados: Record<string, unknown> | null) {
+        for (const c of todosCampos(tipoAtual)) {
+          const montado = campos.get(c.nome);
+          if (!montado) continue;
+          montado.definir(dados ? (dados[c.nome] ?? null) : valorPadrao(c));
+        }
+        // O retrato "como está salvo" é tirado DEPOIS de preencher: assim o que o navegador normaliza (quebras de linha etc.)
+        // não conta como alteração do usuário.
+        inicial = valoresAtuais();
+        atualizarSujo();
+      }
+
+      // ---------------------------------------------------------------- salvar
+      function limparErros() {
+        for (const c of campos.values()) c.erro(null);
+      }
+
+      function montarCorpo(acao: Acao, atuais: Valores): Record<string, unknown> {
+        const corpo: Record<string, unknown> = {};
+        for (const c of camposEditaveis()) {
+          if (itemId === null || !igual(atuais[c.nome], inicial[c.nome])) corpo[c.nome] = atuais[c.nome];
+        }
+        const campoRascunho = tipoAtual.rascunho.campo;
+        const valorRascunho = tipoAtual.rascunho.valorRascunho;
+        if (acao === "publicar" && (itemId === null || !publicadoAgora)) corpo[campoRascunho] = !valorRascunho;
+        else if ((acao === "rascunho" || acao === "despublicar") && (itemId === null || publicadoAgora)) corpo[campoRascunho] = valorRascunho;
+        // Item que JÁ estava publicado e foi salvo COM alguma mudança: marca "atualizada em" (campos com `automatico`).
+        if (itemId !== null && publicadoAgora && Object.keys(corpo).length > 0) {
+          for (const c of todosCampos(tipoAtual)) if (c.automatico === "hoje-ao-salvar-publicado") corpo[c.nome] = hojeLocal();
+        }
+        return corpo;
+      }
+
+      async function salvar(acao: Acao) {
+        const atuais = valoresAtuais();
+        // Item publicado (ou que vai ser) precisa dos campos "obrigatórios para publicar"; rascunho não.
+        const exigePublicavel = acao === "publicar" || acao === "salvar";
+        limparErros();
+        const erros = validarTudo(tipoAtual, atuais, exigePublicavel);
+        if (erros.length) {
+          for (const e of erros) campos.get(e.campo)?.erro(e.mensagem);
+          campos.get(erros[0].campo)?.focar();
+          campos.get(erros[0].campo)?.raiz.scrollIntoView({ block: "center", behavior: "smooth" });
+          setStatus(erros.length === 1 ? "Falta corrigir 1 campo (marcado em vermelho)." : `Faltam ${erros.length} campos para corrigir (marcados em vermelho).`, "erro");
+          return;
+        }
+
+        const titulo = String(atuais[tipoAtual.campoTitulo] ?? "").trim() || `esta ${tipoAtual.titulos.singular}`;
+        if (acao === "publicar") {
+          const textoAviso =
+            tipoAtual.campoNotificacao && !notificacaoEnviada
+              ? "Ao publicar, quem ativou os avisos no site recebe uma notificação no navegador. Isso acontece só na primeira publicação; editar depois não avisa de novo. O site pode levar até uns 20 minutos para mostrar."
+              : tipoAtual.campoNotificacao
+                ? "Quem ativou os avisos no site não receberá uma nova notificação: o aviso desta publicação já foi enviado antes. O site pode levar até uns 20 minutos para mostrar."
+                : "O site pode levar até uns 20 minutos para mostrar.";
+          if (!(await confirmar(`Publicar “${titulo}”?`, [textoAviso], "Sim, publicar"))) {
+            setStatus("Publicação cancelada. Nada foi alterado.");
+            return;
+          }
+        } else if (acao === "despublicar") {
+          if (!(await confirmar(`Voltar “${titulo}” para rascunho?`, ["Deixa de aparecer no site em até uns 20 minutos, e os links param de funcionar até você publicar de novo. Nada é apagado."], "Sim, voltar para rascunho"))) {
+            setStatus("Nada foi alterado.");
+            return;
+          }
+        } else if (acao === "salvar" && publicadoAgora) {
+          const campoSlug = todosCampos(tipoAtual).find((c) => c.tipo === "slug");
+          if (campoSlug && itemId !== null && !igual(atuais[campoSlug.nome], inicial[campoSlug.nome])) {
+            if (!(await confirmar("Mudar o endereço de uma página publicada?", ["Os links antigos (já compartilhados no WhatsApp, em buscas e em outras páginas) vão parar de funcionar. Só continue se for isso mesmo que você quer."], "Sim, salvar com o endereço novo"))) {
+              setStatus("Nada foi salvo.");
+              return;
+            }
+          }
+        }
+
+        const corpo = montarCorpo(acao, atuais);
+        if (itemId !== null && Object.keys(corpo).length === 0) {
+          setStatus("Não há nenhuma alteração para salvar.");
+          return;
+        }
+
+        setStatus(acao === "publicar" ? "Publicando…" : "Salvando…");
+        const fields = encodeURIComponent(camposDaEdicao(tipoAtual).join(","));
+        let res: Response;
+        try {
+          res =
+            itemId === null
+              ? await api(`/items/${tipoAtual.colecao}?fields=${fields}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) })
+              : await api(`/items/${tipoAtual.colecao}/${itemId}?fields=${fields}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+        } catch (e) {
+          if (e instanceof SessaoExpiradaErro) mostrarSessao();
+          else setStatus("Não foi possível falar com o servidor (sem conexão?). Seu texto continua aqui; tente de novo.", "erro");
+          return;
+        }
+        if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          const e = explicarErroDirectus(res.status, json, acao === "publicar" ? "publicar" : "salvar alterações", tipoAtual);
+          if (e.campo && campos.has(e.campo)) {
+            campos.get(e.campo)?.erro(e.mensagem);
+            campos.get(e.campo)?.focar();
+          }
+          setStatus(e.mensagem, "erro");
+          return;
+        }
+
+        const json = (await res.json().catch(() => null)) as { data?: Record<string, unknown> } | null;
+        const salvo = json?.data ?? null;
+        const eraNovo = itemId === null;
+        if (salvo) {
+          item = salvo;
+          if (typeof salvo.id === "number") itemId = salvo.id;
+          publicadoAgora = estaPublicado(tipoAtual, salvo);
+          notificacaoEnviada = tipoAtual.campoNotificacao ? salvo[tipoAtual.campoNotificacao] === true : false;
+          for (const c of todosCampos(tipoAtual)) if (c.tipo === "readonly") campos.get(c.nome)?.definir(salvo[c.nome] ?? null);
+        } else {
+          // Resposta sem corpo (não deveria acontecer): confia no que foi enviado.
+          publicadoAgora = acao === "publicar" ? true : acao === "salvar" ? publicadoAgora : false;
+        }
+        inicial = atuais; // o que foi enviado agora é o "salvo"; se a pessoa digitou mais enquanto isso, continua marcado como alterado
+        if (eraNovo && itemId !== null) {
+          // Passa a ser edição do item criado (sem recarregar a página: o texto fica intacto).
+          const novaUrl = painelUrls.editar(tipoAtual.id, itemId);
+          window.history.replaceState(null, "", novaUrl);
+          ctx.novo = false;
+        }
+        pintarCabecalho();
+        atualizarSujo();
+        const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+        if (acao === "publicar") setStatus(`✅ Publicado às ${hora}. O site pode levar até uns 20 minutos para mostrar.`, "ok");
+        else if (acao === "despublicar") setStatus(`✅ Voltou para rascunho às ${hora}. Sai do site em até uns 20 minutos.`, "ok");
+        else if (acao === "salvar") setStatus(`✅ Alterações salvas às ${hora}. O site pode levar até uns 20 minutos para mostrar.`, "ok");
+        else setStatus(`✅ Rascunho salvo às ${hora}. Ainda não aparece no site.`, "ok");
+      }
+
+      /** Toda ação passa por aqui: uma de cada vez, botões travados desde o primeiro toque (nada de clique duplo). */
+      async function executar(fn: () => Promise<void>) {
+        if (emAcao || ocupacoes > 0) return;
+        emAcao = true;
+        atualizarBotoes();
+        try {
+          await fn();
+        } catch (e) {
+          if (e instanceof SessaoExpiradaErro) mostrarSessao();
+          else setStatus("Algo deu errado. Seu texto continua aqui; tente de novo.", "erro");
+        } finally {
+          emAcao = false;
+          atualizarBotoes();
+        }
+      }
+
+      for (const b of botoes) b.addEventListener("click", () => void executar(() => salvar(b.dataset.pcAcao as Acao)));
+      form.addEventListener("submit", (ev) => ev.preventDefault());
+
+      // ---------------------------------------------------------------- excluir (digitar EXCLUIR)
+      const excluirAbrir = q<HTMLButtonElement>("[data-pc-excluir-abrir]");
+      const excluirCaixa = q("[data-pc-excluir-caixa]");
+      const excluirTexto = q<HTMLInputElement>("[data-pc-excluir-texto]");
+      const excluirConfirmar = q<HTMLButtonElement>("[data-pc-excluir-confirmar]");
+      const excluirErro = q("[data-pc-excluir-erro]");
+
+      function atualizarExcluir() {
+        if (!excluirConfirmar || !excluirTexto) return;
+        const certo = excluirTexto.value.trim().toUpperCase() === "EXCLUIR";
+        excluirConfirmar.disabled = !certo || emAcao || ocupacoes > 0;
+      }
+      excluirAbrir?.addEventListener("click", () => {
+        if (excluirCaixa) excluirCaixa.hidden = false;
+        excluirTexto?.focus();
+        excluirCaixa?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+      q("[data-pc-excluir-cancelar]")?.addEventListener("click", () => {
+        if (excluirCaixa) excluirCaixa.hidden = true;
+        if (excluirTexto) excluirTexto.value = "";
+        atualizarExcluir();
+      });
+      excluirTexto?.addEventListener("input", atualizarExcluir);
+      excluirConfirmar?.addEventListener("click", () =>
+        void executar(async () => {
+          if (itemId === null || !excluirTexto || excluirTexto.value.trim().toUpperCase() !== "EXCLUIR") return;
+          if (excluirErro) excluirErro.hidden = true;
+          setStatus("Excluindo…");
+          let res: Response;
+          try {
+            res = await api(`/items/${tipoAtual.colecao}/${itemId}`, { method: "DELETE" });
+          } catch (e) {
+            if (e instanceof SessaoExpiradaErro) mostrarSessao();
+            else setStatus("Não foi possível falar com o servidor (sem conexão?). Nada foi excluído.", "erro");
+            return;
+          }
+          if (!res.ok) {
+            const json = await res.json().catch(() => null);
+            const e = explicarErroDirectus(res.status, json, "excluir", tipoAtual);
+            if (excluirErro) {
+              excluirErro.hidden = false;
+              excluirErro.textContent = e.mensagem;
+            }
+            setStatus(e.mensagem, "erro");
+            return;
+          }
+          estado.saindo = true;
+          window.location.href = `${listaUrl}&excluido=1`;
+        }),
+      );
+
+      // ---------------------------------------------------------------- sessão que acabou
+      q("[data-pc-sessao-entrar]")?.addEventListener("click", () => {
+        window.open(`${painelUrls.entrar}?aba=1`, "_blank");
+        if (sessaoMsg) sessaoMsg.textContent = "Entre na aba que abriu. Quando terminar, esta tela percebe sozinha; se não perceber, toque em “Já entrei, conferir”.";
+      });
+      q("[data-pc-sessao-tentar]")?.addEventListener("click", async () => {
+        try {
+          const res = await api("/users/me?fields=id");
+          if (res.ok) {
+            if (sessaoEl) sessaoEl.hidden = true;
+            setStatus("Sessão ok. Pode salvar de novo; o texto está intacto.", "ok");
+          } else if (sessaoMsg) sessaoMsg.textContent = "Ainda não deu. Use “Entrar de novo” e termine o login na outra aba.";
+        } catch (e) {
+          if (sessaoMsg) sessaoMsg.textContent = e instanceof SessaoExpiradaErro ? "Ainda sem sessão. Use “Entrar de novo” e termine o login na outra aba." : "Sem conexão com o servidor agora.";
+        }
+      });
+      let canal: BroadcastChannel | null = null;
+      try {
+        canal = new BroadcastChannel(CANAL_SESSAO);
+        canal.addEventListener("message", (ev: MessageEvent) => {
+          const d = ev.data as { tipo?: string; access?: string; refresh?: string } | null;
+          if (d?.tipo !== "sessao" || typeof d.access !== "string") return;
+          guardarSessao(AUTH_CONTEUDO.tokenKey, d.access, d.refresh);
+          if (sessaoEl) sessaoEl.hidden = true;
+          setStatus("Sessão renovada. O texto está intacto: pode salvar de novo.", "ok");
+        });
+      } catch {
+        canal = null;
+      }
+      document.addEventListener("astro:before-swap", () => canal?.close(), { once: true });
+
+      // ---------------------------------------------------------------- início
+      async function iniciar() {
+        const token = await exigirAutenticacao(directusUrl, AUTH_CONTEUDO);
+        if (!token || !form) return;
+
+        if (itemId !== null) {
+          let res: Response;
+          try {
+            res = await apiInicial(`/items/${tipoAtual.colecao}/${itemId}?fields=${encodeURIComponent(camposDaEdicao(tipoAtual).join(","))}`);
+          } catch {
+            mostrarErroPagina("Não foi possível carregar agora (sem conexão ou servidor fora do ar). Recarregue a página para tentar de novo.");
+            return;
+          }
+          if (res.status === 403 || res.status === 404) {
+            mostrarErroPagina(`Não encontramos ${tipoAtual.titulos.esta}: o item pode ter sido excluído, ou o seu perfil não pode abri-lo aqui.`);
+            return;
+          }
+          if (!res.ok) {
+            const json = await res.json().catch(() => null);
+            mostrarErroPagina(explicarErroDirectus(res.status, json, "abrir", tipoAtual).mensagem);
+            return;
+          }
+          item = ((await res.json()) as { data: Record<string, unknown> }).data;
+          publicadoAgora = estaPublicado(tipoAtual, item);
+          notificacaoEnviada = tipoAtual.campoNotificacao ? item[tipoAtual.campoNotificacao] === true : false;
+        }
+
+        construirFormulario();
+        preencher(item);
+        if (carregando) carregando.hidden = true;
+        form.hidden = false;
+        pintarCabecalho();
+        paginaAtual = estado;
+      }
+
+      void iniciar();
+    });
+  </script>
+</BaseLayout>

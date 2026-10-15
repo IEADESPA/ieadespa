@@ -9,6 +9,7 @@ regra que fica é que nada sobe para a produção sem passar por elas.
 | `camisetas.cjs` | status, pedido, chave do telefone, duplicado, "Meus pedidos" (rápido e antigo), retirada e andamento, prazo e `ativo`, lote único |
 | `balcao.cjs` | venda de balcão e função "Gestor de Camisetas": quem pode (401/403), validações, venda sem telefone/e-mail com a campanha fechada, telefone (hash, chave, cifrado, WhatsApp, "Meus pedidos"), repetido, lote aberto/fechado/de outra campanha/avulso |
 | `reserva.cjs` | aviso em massa seletivo (só separados, só um lote; só simula, nunca envia e-mail), recusas (lote inválido, token inválido) e o que os botões "Tirar reserva"/"Reenviar aviso" gravam com o token do Gestor de Camisetas |
+| `conteudo.cjs` | painel de conteúdo (`/painel-conteudo/`): com um usuário temporário da função "Editor de notícias", lê/cria (só rascunho)/altera/apaga notícias e mensagens, envia imagem (e recusa texto e PDF), NÃO lê nada sigiloso (mural, contas, inscrições, pedidos de camiseta, avisos do navegador, contatos…) e confere que as 4 páginas do painel respondem no site |
 | `eventos.cjs` | status com vagas, inscrição, cupom, lista de espera, grupo, faixa, limite por telefone, encerramento e prazo |
 
 ## Onde rodam
@@ -25,11 +26,12 @@ node site/scripts/testes/camisetas.cjs
 node site/scripts/testes/balcao.cjs
 node site/scripts/testes/reserva.cjs
 node site/scripts/testes/eventos.cjs
+node site/scripts/testes/conteudo.cjs
 ```
 
 ## Regras
 
-- Dados de teste têm `slug` começando com `teste-` (camisetas) ou título começando com `TESTE`
+- Dados de teste têm `slug` começando com `teste-` (camisetas, conteúdo) ou título começando com `TESTE`
   (eventos): a versão do conteúdo (`conteudo-versao.mjs`) ignora esses itens, então o teste não
   remonta o site; e tudo é apagado no `finally`, mesmo quando uma verificação falha.
 - A API guarda a campanha/evento em cache por 10 s e o status por 20 s: depois de mudar prazo ou

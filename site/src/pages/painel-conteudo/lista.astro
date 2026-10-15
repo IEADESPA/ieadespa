@@ -1,0 +1,335 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { painelUrls } from "@/lib/painelConteudo";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import "@/styles/painel-conteudo.css";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Lista — Painel de conteúdo" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer pc-escopo">
+    <div class="canvas" data-pc-lista data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow"><a href={painelUrls.inicio} class="text-accent" data-astro-reload>← Painel de conteúdo</a></p>
+        <div class="pc-topo-linha">
+          <h1 class="pagehead-title" data-pc-titulo>Conteúdo</h1>
+          <a href={painelUrls.inicio} class="btn btn-solid" data-pc-nova data-astro-reload hidden>+ Nova</a>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+      </header>
+
+      <div class="pc-faixa pc-faixa-erro" data-pc-erro hidden>
+        <p data-pc-erro-texto></p>
+        <div class="pc-faixa-botoes">
+          <button type="button" class="btn btn-outline" data-pc-tentar>Tentar de novo</button>
+          <a href={painelUrls.inicio} class="btn btn-outline" data-astro-reload>Voltar ao painel</a>
+        </div>
+      </div>
+
+      <div hidden data-painel-conteudo>
+        <p class="pc-faixa" data-pc-excluido hidden>Item excluído.</p>
+
+        <div class="pc-resumo" data-pc-resumo>
+          <div class="stat-card"><p class="stat-numero" data-pc-stat="total">0</p><p class="stat-label">No total</p></div>
+          <div class="stat-card"><p class="stat-numero" data-pc-stat="publicados">0</p><p class="stat-label">Publicados</p></div>
+          <div class="stat-card"><p class="stat-numero" data-pc-stat="rascunhos">0</p><p class="stat-label">Rascunhos</p></div>
+          <div class="stat-card"><p class="stat-numero" data-pc-stat="destaques">0</p><p class="stat-label">Em destaque</p></div>
+        </div>
+
+        <div class="pc-lista-barra mt-6">
+          <label class="sr-only" for="pc-busca">Buscar pelo título</label>
+          <input id="pc-busca" type="search" class="field" placeholder="Buscar pelo título…" autocomplete="off" data-pc-busca />
+          <div class="pc-lista-chips" role="group" aria-label="Filtrar" data-pc-chips>
+            <button type="button" class="filtro-chip is-active" data-pc-filtro="todos" aria-pressed="true">Todos</button>
+            <button type="button" class="filtro-chip" data-pc-filtro="publicados" aria-pressed="false">Publicados</button>
+            <button type="button" class="filtro-chip" data-pc-filtro="rascunhos" aria-pressed="false">Rascunhos</button>
+            <button type="button" class="filtro-chip" data-pc-filtro="destaques" aria-pressed="false">Destaques</button>
+          </div>
+        </div>
+
+        <p class="mt-4 text-xs text-muted-foreground">
+          Depois de publicar ou editar, o site pode levar até uns 20 minutos para mostrar a mudança.
+        </p>
+
+        <p class="mt-4 text-sm" data-pc-contagem role="status" aria-live="polite"></p>
+        <div class="pc-itens mt-3" data-pc-itens></div>
+        <div class="mt-5" data-pc-mais-wrap hidden>
+          <button type="button" class="btn btn-outline btn-block" data-pc-mais>Mostrar mais</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { directusAssetUrl } from "@/lib/directus";
+    import { exigirAutenticacao } from "@/lib/painelAuth";
+    import {
+      AUTH_CONTEUDO,
+      camposDaLista,
+      criarApi,
+      dataBR,
+      estaPublicado,
+      explicarErroDirectus,
+      iniciarQuandoPronto,
+      obterTipo,
+      painelUrls,
+      todosCampos,
+      type TipoConteudo,
+    } from "@/lib/painelConteudo";
+
+    iniciarQuandoPronto("[data-pc-lista]", (raiz) => {
+      const directusUrl = raiz.dataset.directusUrl ?? "";
+      const api = criarApi(directusUrl, { redirecionar: true });
+      const q = <T extends HTMLElement>(seletor: string) => raiz.querySelector<T>(seletor);
+      const params = new URLSearchParams(window.location.search);
+      const tipoOuNulo = obterTipo(params.get("tipo"));
+
+      const carregando = q("[data-painel-carregando]");
+      const conteudo = q("[data-painel-conteudo]");
+      const erroEl = q("[data-pc-erro]");
+      const erroTexto = q("[data-pc-erro-texto]");
+      const tituloEl = q("[data-pc-titulo]");
+      const novaEl = q<HTMLAnchorElement>("[data-pc-nova]");
+      const itensEl = q("[data-pc-itens]");
+      const contagemEl = q("[data-pc-contagem]");
+      const maisWrap = q("[data-pc-mais-wrap]");
+      const maisBtn = q<HTMLButtonElement>("[data-pc-mais]");
+      const buscaEl = q<HTMLInputElement>("[data-pc-busca]");
+
+      const mostrarErro = (texto: string) => {
+        if (carregando) carregando.hidden = true;
+        if (conteudo) conteudo.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        if (erroTexto) erroTexto.textContent = texto;
+      };
+
+      if (!tipoOuNulo) {
+        mostrarErro("Não conheço este tipo de conteúdo. Volte ao painel e escolha uma das opções.");
+        q("[data-pc-tentar]")?.setAttribute("hidden", "");
+        return;
+      }
+
+      const tipo: TipoConteudo = tipoOuNulo;
+      document.title = `${tipo.titulos.plural} — Painel de conteúdo`;
+      if (tituloEl) tituloEl.textContent = tipo.titulos.plural;
+      if (novaEl) {
+        novaEl.textContent = `+ ${tipo.titulos.nova}`;
+        novaEl.href = painelUrls.editar(tipo.id);
+        novaEl.hidden = false;
+      }
+      if (params.get("excluido") === "1") q("[data-pc-excluido]")?.removeAttribute("hidden");
+
+      type Item = Record<string, unknown> & { id: number };
+      const categoriaCampo = todosCampos(tipo).find((c) => c.nome === tipo.campoCategoria);
+      const rotuloCategoria = (valor: unknown) => {
+        if (valor === null || valor === undefined || valor === "") return "";
+        return categoriaCampo?.opcoes?.find((o) => o.valor === valor)?.rotulo ?? String(valor);
+      };
+
+      let itens: Item[] = [];
+      let filtro: "todos" | "publicados" | "rascunhos" | "destaques" = "todos";
+      let termo = "";
+      let limite = 30;
+      const PASSO = 30;
+
+      const normalizar = (s: unknown) =>
+        String(s ?? "")
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "")
+          .toLowerCase();
+
+      const ehDestaque = (i: Item) => Boolean(tipo.campoDestaque && i[tipo.campoDestaque] === true);
+      const ehPublicado = (i: Item) => estaPublicado(tipo, i);
+
+      function filtrados(): Item[] {
+        const t = normalizar(termo.trim());
+        return itens.filter((i) => {
+          if (filtro === "publicados" && !ehPublicado(i)) return false;
+          if (filtro === "rascunhos" && ehPublicado(i)) return false;
+          if (filtro === "destaques" && !ehDestaque(i)) return false;
+          return !t || normalizar(i[tipo.campoTitulo]).includes(t);
+        });
+      }
+
+      function criarCartao(i: Item): HTMLElement {
+        const publicado = ehPublicado(i);
+        const capa = tipo.campoCapa ? (i[tipo.campoCapa] as string | null) : null;
+        const cartao = document.createElement("article");
+        cartao.className = "pc-item";
+        cartao.dataset.pcItem = String(i.id);
+
+        if (capa) {
+          const img = document.createElement("img");
+          img.className = "pc-item-capa";
+          img.alt = "";
+          img.loading = "lazy";
+          img.width = 80;
+          img.height = 80;
+          img.src = directusAssetUrl(capa, { width: 160, height: 160, fit: "cover", quality: 70, format: "webp" });
+          cartao.append(img);
+        } else {
+          const vazia = document.createElement("div");
+          vazia.className = "pc-item-capa-vazia";
+          vazia.setAttribute("aria-hidden", "true");
+          vazia.textContent = tipo.icone;
+          cartao.append(vazia);
+        }
+
+        const texto = document.createElement("div");
+        const titulo = document.createElement("h2");
+        titulo.className = "pc-item-titulo";
+        titulo.textContent = String(i[tipo.campoTitulo] || "(sem título)");
+        const meta = document.createElement("p");
+        meta.className = "pc-item-meta";
+        const partes = [tipo.campoData ? dataBR(i[tipo.campoData]) : "", tipo.campoCategoria ? rotuloCategoria(i[tipo.campoCategoria]) : ""].filter(Boolean);
+        meta.textContent = partes.join(" · ") || "Sem data";
+        const selos = document.createElement("div");
+        selos.className = "pc-selos";
+        const selo = (classe: string, texto: string) => {
+          const s = document.createElement("span");
+          s.className = `pc-selo ${classe}`;
+          s.textContent = texto;
+          selos.append(s);
+        };
+        selo(publicado ? "pc-selo-publicado" : "pc-selo-rascunho", publicado ? "Publicado" : "Rascunho");
+        if (ehDestaque(i)) selo("pc-selo-destaque", "Destaque");
+        texto.append(titulo, meta, selos);
+        cartao.append(texto);
+
+        const acoes = document.createElement("div");
+        acoes.className = "pc-item-acoes";
+        const editar = document.createElement("a");
+        editar.className = "btn btn-solid";
+        editar.href = painelUrls.editar(tipo.id, i.id);
+        editar.textContent = "Editar";
+        editar.setAttribute("data-astro-reload", "");
+        acoes.append(editar);
+        const url = publicado ? tipo.urlPublica(i) : null;
+        if (url) {
+          const ver = document.createElement("a");
+          ver.className = "btn btn-outline";
+          ver.href = url;
+          ver.target = "_blank";
+          ver.rel = "noopener";
+          ver.textContent = "Ver no site";
+          ver.title = "O site pode levar até uns 20 minutos para mostrar mudanças recentes.";
+          acoes.append(ver);
+        }
+        cartao.append(acoes);
+        return cartao;
+      }
+
+      function atualizarResumo() {
+        const set = (nome: string, valor: number) => {
+          const el = q(`[data-pc-stat="${nome}"]`);
+          if (el) el.textContent = String(valor);
+        };
+        set("total", itens.length);
+        set("publicados", itens.filter(ehPublicado).length);
+        set("rascunhos", itens.filter((i) => !ehPublicado(i)).length);
+        set("destaques", itens.filter(ehDestaque).length);
+        const conta: Record<string, number> = {
+          todos: itens.length,
+          publicados: itens.filter(ehPublicado).length,
+          rascunhos: itens.filter((i) => !ehPublicado(i)).length,
+          destaques: itens.filter(ehDestaque).length,
+        };
+        raiz.querySelectorAll<HTMLButtonElement>("[data-pc-filtro]").forEach((b) => {
+          const nome = b.dataset.pcFiltro ?? "todos";
+          const rotulo = { todos: "Todos", publicados: "Publicados", rascunhos: "Rascunhos", destaques: "Destaques" }[nome as "todos"] ?? nome;
+          b.textContent = `${rotulo} (${conta[nome] ?? 0})`;
+        });
+      }
+
+      function pintar() {
+        if (!itensEl) return;
+        const lista = filtrados();
+        const visiveis = lista.slice(0, limite);
+        itensEl.replaceChildren(...visiveis.map(criarCartao));
+        if (contagemEl) {
+          contagemEl.textContent = !itens.length
+            ? `Ainda não há ${tipo.titulos.plural.toLowerCase()}. Use o botão “+ ${tipo.titulos.nova}” para criar a primeira.`
+            : !lista.length
+              ? "Nada encontrado com essa busca ou filtro."
+              : lista.length > visiveis.length
+                ? `Mostrando ${visiveis.length} de ${lista.length}.`
+                : `${lista.length} ${lista.length === 1 ? "item" : "itens"}.`;
+        }
+        if (maisWrap) maisWrap.hidden = lista.length <= visiveis.length;
+        if (maisBtn) maisBtn.textContent = `Mostrar mais (${Math.min(PASSO, lista.length - visiveis.length)})`;
+      }
+
+      raiz.querySelectorAll<HTMLButtonElement>("[data-pc-filtro]").forEach((b) => {
+        b.addEventListener("click", () => {
+          filtro = (b.dataset.pcFiltro as typeof filtro) ?? "todos";
+          limite = PASSO;
+          raiz.querySelectorAll<HTMLButtonElement>("[data-pc-filtro]").forEach((o) => {
+            const ativo = o === b;
+            o.classList.toggle("is-active", ativo);
+            o.setAttribute("aria-pressed", String(ativo));
+          });
+          pintar();
+        });
+      });
+      buscaEl?.addEventListener("input", () => {
+        termo = buscaEl.value;
+        limite = PASSO;
+        pintar();
+      });
+      maisBtn?.addEventListener("click", () => {
+        limite += PASSO;
+        pintar();
+      });
+      q("[data-pc-tentar]")?.addEventListener("click", () => void carregar());
+
+      /** Lê tudo em páginas de 200 (o Directus entrega no máximo isso de uma vez com segurança); a tela só desenha 30 por vez. */
+      async function carregar() {
+        if (erroEl) erroEl.hidden = true;
+        if (carregando) {
+          carregando.hidden = false;
+          carregando.textContent = `Carregando ${tipo.titulos.plural.toLowerCase()}…`;
+        }
+        const campos = camposDaLista(tipo).join(",");
+        const sort = tipo.ordenacao.join(",");
+        const TAMANHO = 200;
+        const todos: Item[] = [];
+        try {
+          for (let offset = 0; offset < 5000; offset += TAMANHO) {
+            const res = await api(`/items/${tipo.colecao}?fields=${encodeURIComponent(campos)}&sort=${encodeURIComponent(sort)}&limit=${TAMANHO}&offset=${offset}`);
+            if (!res.ok) {
+              const json = await res.json().catch(() => null);
+              mostrarErro(explicarErroDirectus(res.status, json, `ver ${tipo.titulos.plural.toLowerCase()}`, tipo).mensagem);
+              return;
+            }
+            const json = (await res.json()) as { data?: Item[] };
+            const pagina = json.data ?? [];
+            todos.push(...pagina);
+            if (pagina.length < TAMANHO) break;
+          }
+        } catch {
+          mostrarErro("Não foi possível carregar agora (sem conexão ou servidor fora do ar). Tente de novo.");
+          return;
+        }
+        itens = todos;
+        if (carregando) carregando.hidden = true;
+        if (conteudo) conteudo.hidden = false;
+        atualizarResumo();
+        pintar();
+      }
+
+      async function iniciar() {
+        const token = await exigirAutenticacao(directusUrl, AUTH_CONTEUDO);
+        if (!token) return;
+        await carregar();
+      }
+
+      void iniciar();
+    });
+  </script>
+</BaseLayout>

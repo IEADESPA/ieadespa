@@ -324,6 +324,12 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   cartões — só reaparece, com um aviso, num pedido que já tenha valor lançado, para poder zerar (em 15/10/2026 a
   Marcha tinha 74 pedidos com R$ 1,00 "pago" que ninguém arrecadou; o Directus não guardou quem nem quando;
   foram zerados, com cópia do estado anterior).
+- **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
+  trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
+  Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de
+  quantidade zero, com a linha "Total de peças"; quando a campanha tem mais de um modelo, o modelo vai junto do
+  tamanho ("M - Baby look"). A tela do consolidado continua com a conta completa. Regra pura em
+  `src/lib/pdfMalharia.ts`.
 - **Painel de pedidos no celular (13/10/2026)** — a barra de busca fica presa no alto durante a
   rolagem e os filtros ficam **recolhidos** atrás do botão "Filtros" (com um selo com quantos estão
   ligados); uma linha "Filtrando por: Tamanho GG" com o botão "Limpar" fica sempre à vista, para

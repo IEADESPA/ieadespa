@@ -253,6 +253,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     import { ENVIAR_AVISO_RETIRADA_CAMISETA_URL, REGISTRAR_VENDA_BALCAO_URL, TELEFONE_PEDIDO_URL } from "@/lib/directus";
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
+    import { montarLinhasMalharia } from "@/lib/pdfMalharia";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -1218,7 +1219,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const linhas = calcularConsolidado(lote.id, congelado);
 
       const doc = new jsPDF({ unit: "pt", format: "a4" });
-      const titulo = `Lote ${lote.numero} — ${grupo.nome}`;
+      const titulo = `Lote ${lote.numero} - ${grupo.nome}`;   // (hífen simples: o travessão não existe na fonte do PDF e sumia)
       configurarAcessibilidadePdf(doc, titulo);
       const margem = 56;
       let y = margem;
@@ -1230,16 +1231,16 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(90);
-      doc.text(`Gerado em ${new Date().toLocaleDateString("pt-BR")}`, margem, y);
+      doc.text(`Quantidade a encomendar, por tamanho - gerado em ${new Date().toLocaleDateString("pt-BR")}`, margem, y);
       y += 30;
       doc.setTextColor(20);
 
+      // 15/10/2026 — este PDF vai para a MALHARIA: só o resultado final, em duas colunas (tamanho e quantidade). "Pedido pelo sistema", "estoque extra" e custo são conta
+      // interna da igreja e ficam de fora (o consolidado na tela continua com tudo).
+      const { linhas: linhasMalharia, totalPecas } = montarLinhasMalharia(linhas, grupo.tamanhos ?? []);
       const colunas = [
-        { titulo: "Tamanho", x: margem, largura: 90 },
-        { titulo: "Modelo", x: margem + 90, largura: 150 },
-        { titulo: "Pedido pelo sistema", x: margem + 240, largura: 110 },
-        { titulo: "Estoque extra", x: margem + 350, largura: 90 },
-        { titulo: "Total a encomendar", x: margem + 440, largura: 60 },
+        { titulo: "Tamanho", x: margem, largura: 300 },
+        { titulo: "Quantidade", x: margem + 300, largura: 130 },
       ];
       const larguraTabela = colunas.reduce((s, c) => s + c.largura, 0);
       const alturaPagina = doc.internal.pageSize.getHeight();
@@ -1256,12 +1257,12 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       desenharCabecalho();
       doc.setFont("helvetica", "normal");
 
-      if (linhas.length === 0) {
-        doc.text("Nenhum pedido neste lote.", margem + 6, y + 14);
+      if (linhasMalharia.length === 0) {
+        doc.text("Nada a encomendar neste lote.", margem + 6, y + 14);
         y += 20;
       }
 
-      linhas.forEach((linha) => {
+      linhasMalharia.forEach((linha) => {
         if (y + 20 > alturaPagina - margem) {
           doc.addPage();
           y = margem;
@@ -1269,13 +1270,20 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           doc.setFont("helvetica", "normal");
         }
         doc.rect(margem, y, larguraTabela, 20);
-        doc.text(String(linha.tamanho), colunas[0].x + 6, y + 14);
-        doc.text(String(linha.modelo), colunas[1].x + 6, y + 14);
-        doc.text(String(linha.pedidoSistema), colunas[2].x + 6, y + 14);
-        doc.text(String(linha.extra), colunas[3].x + 6, y + 14);
-        doc.text(String(linha.total), colunas[4].x + 6, y + 14);
+        doc.text(linha.rotulo, colunas[0].x + 6, y + 14);
+        doc.text(String(linha.quantidade), colunas[1].x + 6, y + 14);
         y += 20;
       });
+
+      if (linhasMalharia.length > 0) {
+        if (y + 20 > alturaPagina - margem) { doc.addPage(); y = margem; }
+        doc.setFont("helvetica", "bold");
+        doc.setFillColor(240, 236, 224);
+        doc.rect(margem, y, larguraTabela, 20, "FD");
+        doc.text("Total de peças", colunas[0].x + 6, y + 14);
+        doc.text(String(totalPecas), colunas[1].x + 6, y + 14);
+        y += 20;
+      }
 
       doc.save(`camisetas-lote-${lote.numero}-${grupo.nome.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`);
     });

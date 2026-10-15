@@ -83,6 +83,18 @@ jobs:
           SITE_URL: ${{ steps.alvo.outputs.url }}
         run: node site/scripts/testes/camisetas.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Venda de balcão
+        if: always() && steps.alvo.outputs.url != ''
+        env:
+          SITE_URL: ${{ steps.alvo.outputs.url }}
+        run: node site/scripts/testes/balcao.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Reserva e aviso seletivo
+        if: always() && steps.alvo.outputs.url != ''
+        env:
+          SITE_URL: ${{ steps.alvo.outputs.url }}
+        run: node site/scripts/testes/reserva.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Eventos
         if: always() && steps.alvo.outputs.url != ''
         env:

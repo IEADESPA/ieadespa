@@ -32,8 +32,23 @@ export function guardarSessao(tokenKey: string, accessToken: string, refreshToke
   if (refreshToken) sessionStorage.setItem(chaveRefresh(tokenKey), refreshToken);
 }
 
+/**
+ * Renovações em andamento, por painel. O token de renovação do Directus vale UMA vez: duas renovações ao mesmo tempo (o tempo real
+ * reconectando enquanto a pessoa salva uma venda, por exemplo) fazem a segunda falhar e mandam a pessoa para o login, perdendo o que
+ * digitava (visto em 13/10/2026 na bateria do celular). Quem chega durante uma renovação espera por ela e usa o mesmo resultado.
+ */
+const renovacoesEmAndamento = new Map<string, Promise<string | null>>();
+
 /** Pede um par novo de tokens ao Directus pelo token de renovação (modo json); cai para o cookie se não houver. */
-async function renovarPeloDirectus(directusUrl: string, tokenKey: string): Promise<string | null> {
+function renovarPeloDirectus(directusUrl: string, tokenKey: string): Promise<string | null> {
+  const andamento = renovacoesEmAndamento.get(tokenKey);
+  if (andamento) return andamento;
+  const nova = renovarDeFato(directusUrl, tokenKey).finally(() => renovacoesEmAndamento.delete(tokenKey));
+  renovacoesEmAndamento.set(tokenKey, nova);
+  return nova;
+}
+
+async function renovarDeFato(directusUrl: string, tokenKey: string): Promise<string | null> {
   const refreshToken = sessionStorage.getItem(chaveRefresh(tokenKey));
   try {
     const res = await fetch(`${directusUrl}/auth/refresh`, {
@@ -69,8 +84,12 @@ export async function obterTokenValido(directusUrl: string, tokenKey: string = D
  * das camisetas).
  */
 export async function renovarToken(directusUrl: string, tokenKey: string = DEFAULT_TOKEN_KEY): Promise<string | null> {
+  const anterior = sessionStorage.getItem(tokenKey);
   sessionStorage.removeItem(tokenKey);
-  return renovarPeloDirectus(directusUrl, tokenKey);
+  const novo = await renovarPeloDirectus(directusUrl, tokenKey);
+  // Renovação que não deu (sem internet agora, por exemplo): o token que havia volta ao lugar, para a tela não ficar sem sessão à toa.
+  if (!novo && anterior && !sessionStorage.getItem(tokenKey)) sessionStorage.setItem(tokenKey, anterior);
+  return novo;
 }
 
 interface OpcoesPainel {

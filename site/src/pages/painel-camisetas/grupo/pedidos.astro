@@ -31,7 +31,10 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         <p class="text-sm text-muted-foreground">Não encontrado.</p>
       </div>
 
-      <div hidden data-painel-conteudo>
+      <div hidden data-painel-conteudo class="filtros-fechados">
+        <!-- Celular: a página é longa (números, lotes, consolidado); este botão leva direto à busca. -->
+        <button type="button" class="btn btn-solid ir-busca" data-ir-busca>🔎 Buscar pedido</button>
+
         <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-stats-grid>
           <div class="stat-card"><p class="stat-numero" data-stat="total">0</p><p class="stat-label">Pedidos (todos os lotes)</p></div>
           <div class="stat-card"><p class="stat-numero" data-stat="arrecadado">R$ 0</p><p class="stat-label">Arrecadado</p></div>
@@ -91,36 +94,78 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
         <div class="mt-8 flex flex-wrap items-baseline justify-between gap-3">
           <h2 class="section-title">Pedidos deste lote</h2>
-          <button type="button" class="btn btn-solid" data-abrir-avulso>+ Venda avulsa</button>
+          <button type="button" class="btn btn-solid" data-abrir-venda>+ Registrar venda</button>
         </div>
 
-        <div hidden class="mt-4 grid gap-3 max-w-lg" data-avulso-form-wrap>
+        <!-- 13/10/2026 — venda de balcão (pedido do responsável): o gestor lança a venda para quem está na sua
+             frente, muitas vezes sem telefone nem e-mail; ele se responsabiliza pelos dados e escolhe o lote,
+             esteja a campanha aberta ou fechada para o público. Passa por api/RegistrarVendaBalcao (o telefone
+             vira hash/chave/cifrado só no servidor). A venda avulsa antiga virou a opção "Avulso" do lote. -->
+        <div hidden class="mt-4 grid gap-3 max-w-lg" data-venda-form-wrap>
+          <p class="text-sm text-muted-foreground">
+            Para quem está comprando agora na sua frente, mesmo sem telefone ou e-mail. Você se responsabiliza pelos
+            dados. Vale com a campanha aberta ou fechada para o público.
+          </p>
           <div class="grid gap-2">
-            <label class="text-sm font-semibold">Nome (opcional)</label>
-            <input type="text" class="field" data-avulso-nome />
+            <label class="text-sm font-semibold" for="venda-nome">Nome *</label>
+            <input id="venda-nome" type="text" class="field" maxlength="120" autocomplete="off" data-venda-nome />
           </div>
-          <div class="grid gap-2">
-            <label class="text-sm font-semibold">Valor já pago</label>
-            <input type="number" step="0.01" min="0" class="field" value="0" data-avulso-valor-pago />
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="venda-telefone">Telefone (se tiver)</label>
+              <input id="venda-telefone" type="tel" inputmode="tel" class="field" maxlength="40" autocomplete="off" placeholder="(94) 99999-9999" data-venda-telefone />
+            </div>
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="venda-email">E-mail (se tiver)</label>
+              <input id="venda-email" type="email" class="field" maxlength="160" autocomplete="off" data-venda-email />
+            </div>
           </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="venda-congregacao">Congregação</label>
+              <select id="venda-congregacao" class="field" data-venda-congregacao><option value="">Não informada</option></select>
+            </div>
+            <div class="grid gap-2">
+              <label class="text-sm font-semibold" for="venda-lote">Lote da encomenda</label>
+              <select id="venda-lote" class="field" data-venda-lote></select>
+            </div>
+          </div>
+          <p class="text-xs text-muted-foreground" data-venda-lote-ajuda></p>
           <fieldset class="grid gap-2">
             <legend class="text-sm font-semibold">Itens</legend>
-            <div class="grid gap-2" data-avulso-itens></div>
-            <button type="button" class="btn btn-outline mt-1" data-avulso-item-adicionar>+ Adicionar item</button>
+            <div class="grid gap-2" data-venda-itens></div>
+            <button type="button" class="btn btn-outline mt-1" data-venda-item-adicionar>+ Adicionar item</button>
           </fieldset>
-          <div class="flex items-center gap-4">
-            <button type="button" class="btn btn-solid" data-avulso-salvar>Registrar venda avulsa</button>
-            <p class="text-sm" data-avulso-status role="status" aria-live="polite"></p>
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="venda-valor-pago">Valor já pago (R$)</label>
+            <input id="venda-valor-pago" type="number" step="0.01" min="0" inputmode="decimal" class="field" value="0" data-venda-valor-pago />
           </div>
-          <p class="text-xs text-muted-foreground">
-            Venda avulsa não entra em nenhum lote (mesmo espírito do "AVULSO" da planilha) — é peça
-            que já existia em estoque, não gerou encomenda nova.
-          </p>
+          <div hidden class="venda-confirmar" data-venda-confirmar role="alert">
+            <p class="text-sm font-semibold" data-venda-confirmar-texto></p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button type="button" class="btn btn-solid" data-venda-confirmar-sim>Registrar mesmo assim</button>
+              <button type="button" class="btn btn-outline" data-venda-confirmar-nao>Cancelar</button>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-4">
+            <button type="button" class="btn btn-solid" data-venda-salvar>Registrar venda</button>
+            <p class="text-sm" data-venda-status role="status" aria-live="polite"></p>
+          </div>
         </div>
 
-        <div class="mt-6 flex flex-wrap items-center gap-3">
-          <input type="search" class="field busca-input" placeholder="Buscar por nome, e-mail ou nº do pedido…" data-busca />
-          <div class="flex flex-wrap gap-2" data-filtros>
+        <!-- 13/10/2026 — no celular a barra de busca fica presa no alto e os filtros ficam recolhidos atrás do botão
+             "Filtros" (antes ocupavam a tela inteira e um toque errado trocava o filtro sem a pessoa perceber); uma
+             linha avisa quais filtros estão ligados. No computador nada muda (ver o <style> no fim da página). -->
+        <div class="mt-6 flex flex-wrap items-center gap-3 busca-linha">
+          <div class="busca-barra" data-busca-barra>
+            <input type="search" class="field busca-input" placeholder="Buscar nome, e-mail ou nº" aria-label="Buscar pedido" autocomplete="off" enterkeyhint="search" data-busca />
+            <button type="button" class="btn btn-outline filtros-toggle" aria-expanded="false" data-filtros-toggle>Filtros<span class="filtros-contagem" data-filtros-contagem hidden></span></button>
+            <div class="filtros-ativos" data-filtros-ativos hidden>
+              <span data-filtros-ativos-texto></span>
+              <button type="button" class="link-sweep text-sm font-semibold text-accent" data-filtros-ativos-limpar>Limpar</button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2" data-filtros data-filtros-colapsavel>
             <button type="button" class="filtro-chip is-active" data-filtro="todos">Todos</button>
             <button type="button" class="filtro-chip" data-filtro="devendo">Devendo</button>
             <button type="button" class="filtro-chip" data-filtro="parcial">Pago parcial</button>
@@ -133,7 +178,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         <!-- 06/10/2026 — filtros combináveis "como no Excel" (pedido do responsável: mais de mil
              pedidos, precisa achar "só os M do modelo X", "só os separados", "só quem não tem e-mail"…).
              Todos se somam entre si, com a busca, com o filtro de pergunta e com a aba de lote. -->
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6" data-filtros-avancados>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6" data-filtros-avancados data-filtros-colapsavel>
           <label class="grid gap-1 text-xs font-semibold text-muted-foreground">Tamanho
             <select class="field" data-filtro-tamanho><option value="">Todos</option></select>
           </label>
@@ -163,7 +208,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         </div>
         <div class="mt-2 flex flex-wrap gap-2 text-xs" data-resumo-tamanhos></div>
 
-        <div class="mt-4 flex flex-wrap items-start gap-3" data-filtro-pergunta-bloco hidden>
+        <div class="mt-4 flex flex-wrap items-start gap-3" data-filtro-pergunta-bloco data-filtros-colapsavel hidden>
           <span class="text-sm font-semibold text-muted-foreground" style="padding-top:0.4rem;">Filtrar por pergunta:</span>
           <select class="field" data-filtro-pergunta-select></select>
           <div class="flex flex-wrap gap-x-3 gap-y-1" data-filtro-pergunta-valores hidden></div>
@@ -183,7 +228,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
 
   <script>
     import { exigirAutenticacao, fetchComSessao, obterTokenValido, renovarToken } from "@/lib/painelAuth";
-    import { ENVIAR_AVISO_RETIRADA_CAMISETA_URL, TELEFONE_PEDIDO_URL } from "@/lib/directus";
+    import { ENVIAR_AVISO_RETIRADA_CAMISETA_URL, REGISTRAR_VENDA_BALCAO_URL, TELEFONE_PEDIDO_URL } from "@/lib/directus";
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
 
@@ -197,6 +242,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       tamanhos: string[] | null;
       modelos: string[] | null;
       retirada_local: string | null;
+      retirada_liberada?: boolean;
       email_retirada_assunto: string | null;
       email_retirada_corpo: string | null;
     }
@@ -674,8 +720,14 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const separadoAcao = p.avulso
         ? ""
         : p.separado
-          ? `<span class="badge-separado">✅ Separado</span>`
+          // 15/10/2026 — "Tirar reserva" (a pessoa não veio buscar; a peça passa para a próxima): volta a "ainda não separado", sem apagar o pedido nem mexer
+          // em "Retiradas". Some quando já levou tudo (não há reserva a desfazer).
+          ? `<span class="badge-separado">✅ Separado</span>${tudoRetirado(p) ? "" : ` <button type="button" class="link-sweep text-sm font-semibold" data-tirar-reserva title="A pessoa não veio buscar: volta a 'ainda não separado'. O pedido não é apagado.">Tirar reserva</button>`}`
           : `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-marcar-separado>Marcar como separado</button>`;
+      // 15/10/2026 — "Reenviar aviso": manda de novo o e-mail de "pode retirar" a este pedido (quando está separado ou a retirada foi liberada para o grupo).
+      const reenviarAcao = !p.avulso && p.email && !tudoRetirado(p) && (p.separado || grupo.retirada_liberada)
+        ? `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-reenviar-aviso title="Manda de novo o e-mail de 'pode retirar' para ${escapeHtml(p.email)}">Reenviar aviso</button>`
+        : "";
       // 07/10/2026 — chamar a pessoa no WhatsApp com a mensagem pronta (a maioria não tem e-mail).
       // O telefone fica cifrado no Directus; a API do site só o devolve a quem está logado no painel.
       const whatsappAcao = p.avulso
@@ -704,6 +756,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
               </label>
               <button type="button" class="link-sweep text-sm font-semibold text-accent" data-salvar-pedido>Salvar</button>
               ${separadoAcao}
+              ${reenviarAcao}
               ${whatsappAcao}
               <button type="button" class="link-sweep text-sm font-semibold" data-excluir-pedido>Excluir</button>
             </div>
@@ -780,11 +833,61 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       }
     }
 
+    /** Os filtros que estão escondendo pedidos agora (para a linha "Filtrando por…" do celular). */
+    function filtrosLigados(): string[] {
+      const nomesChip: Record<string, string> = { devendo: "Devendo", parcial: "Pago parcial", pago: "Pago", "pendente-retirada": "Com peça a retirar", retirado: "Já retirado tudo" };
+      const lista: string[] = [];
+      if (filtroAtivo !== "todos") lista.push(nomesChip[filtroAtivo] ?? filtroAtivo);
+      if (filtroTamanho) lista.push(`Tamanho ${filtroTamanho}`);
+      if (filtroModelo) lista.push(`Modelo ${filtroModelo}`);
+      if (filtroSeparado) lista.push(filtroSeparado === "sim" ? "Já separado" : "Ainda não separado");
+      if (filtroEmail) lista.push(filtroEmail === "com" ? "Com e-mail" : "Sem e-mail");
+      if (filtroCongregacao) lista.push(filtroCongregacao === "sem" ? "Sem congregação" : (nomesCongregacoes[Number(filtroCongregacao)] ?? "Congregação"));
+      if (filtroLote) lista.push(filtroLote === "avulso" ? "Avulso" : `Lote ${lotes.find((l) => String(l.id) === filtroLote)?.numero ?? "?"}`);
+      if (filtroPerguntaId !== null && filtroPerguntaValores.length > 0) lista.push(`Pergunta: ${filtroPerguntaValores.join(", ")}`);
+      return lista;
+    }
+
+    function atualizarIndicadorDeFiltros() {
+      const ligados = filtrosLigados();
+      const linha = document.querySelector<HTMLElement>("[data-filtros-ativos]");
+      const texto = document.querySelector<HTMLElement>("[data-filtros-ativos-texto]");
+      const contagem = document.querySelector<HTMLElement>("[data-filtros-contagem]");
+      if (linha) linha.hidden = ligados.length === 0;
+      if (texto) texto.textContent = `Filtrando por: ${ligados.join(" · ")}`;
+      if (contagem) { contagem.hidden = ligados.length === 0; contagem.textContent = String(ligados.length); }
+    }
+
+    document.querySelector("[data-ir-busca]")?.addEventListener("click", () => {
+      const busca = document.querySelector<HTMLInputElement>("[data-busca]");
+      busca?.scrollIntoView({ block: "center", behavior: "smooth" });
+      busca?.focus({ preventScroll: true });
+    });
+    document.querySelector("[data-filtros-toggle]")?.addEventListener("click", (e) => {
+      const aberto = conteudoEl?.classList.toggle("filtros-abertos") ?? false;
+      conteudoEl?.classList.toggle("filtros-fechados", !aberto);
+      (e.currentTarget as HTMLElement).setAttribute("aria-expanded", String(aberto));
+    });
+    document.querySelector("[data-filtros-ativos-limpar]")?.addEventListener("click", () => {
+      document.querySelector<HTMLElement>("[data-limpar-filtros]")?.click();
+    });
+
+    // A barra de busca fica presa logo abaixo do cabeçalho do site (que some ao rolar para baixo e volta ao rolar para cima).
+    const cabecalhoDoSite = document.querySelector<HTMLElement>(".site-header");
+    function ajustarTopoDaBusca() {
+      const escondido = !cabecalhoDoSite || cabecalhoDoSite.classList.contains("is-hidden");
+      document.documentElement.style.setProperty("--painel-topo", escondido ? "0px" : `${cabecalhoDoSite.offsetHeight}px`);
+    }
+    if (cabecalhoDoSite) new MutationObserver(ajustarTopoDaBusca).observe(cabecalhoDoSite, { attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("resize", ajustarTopoDaBusca);
+    ajustarTopoDaBusca();
+
     function renderizarPedidos() {
       if (!listaEl) return;
       const filtrados = pedidosFiltrados();
       ultimaListaFiltrada = filtrados;
       renderizarResumoFiltro(filtrados);
+      atualizarIndicadorDeFiltros();
       listaEl.innerHTML = filtrados.length ? filtrados.map(pedidoCardHtml).join("") : `<p class="text-sm text-muted-foreground">Nenhum pedido nesse filtro.</p>`;
     }
 
@@ -1241,6 +1344,19 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       }
     }
 
+    /**
+     * Pede à Function o e-mail de "pode retirar" deste pedido (15/10/2026): vai SÓ o número do pedido e o token do painel; destinatário, itens,
+     * local e texto o servidor lê do próprio pedido (a Function não aceita mais endereço nem texto vindos da chamada).
+     */
+    async function enviarAvisoDoPedido(idDoPedido: number): Promise<{ ok: boolean; erro?: string }> {
+      const chamar = (t: string) => fetch(ENVIAR_AVISO_RETIRADA_CAMISETA_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-painel-token": t }, body: JSON.stringify({ pedidoId: idDoPedido }) });
+      let t = (await obterTokenValido(directusUrl, AUTH.tokenKey)) ?? "";
+      let res = await chamar(t);
+      if (res.status === 401) { t = (await renovarToken(directusUrl, AUTH.tokenKey)) ?? ""; res = await chamar(t); }
+      const json = await res.json().catch(() => null);
+      return { ok: res.ok && json?.enviado === true, erro: json?.erro };
+    }
+
     // --- pedidos: salvar valor pago / excluir / retirada por item ---
     listaEl?.addEventListener("click", async (event) => {
       const target = event.target as HTMLElement;
@@ -1301,6 +1417,59 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         return;
       }
 
+      if (target.matches("[data-tirar-reserva]")) {
+        if (!confirm(`Tirar a reserva de "${pedido.nome}"?\n\nO pedido volta a "ainda não separado" e a peça fica livre para outra pessoa. O pedido NÃO é apagado e as "Retiradas" não mudam. Quem já recebeu o e-mail de "pode retirar" não recebe aviso de cancelamento.`)) return;
+        const botao = target as HTMLButtonElement;
+        botao.disabled = true;
+        botao.textContent = "Tirando…";
+        const res = await api(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ separado: false, separado_em: null }),
+        });
+        if (!res.ok) {
+          botao.disabled = false;
+          botao.textContent = "Tirar reserva";
+          alert("Não foi possível tirar a reserva agora. Nada foi alterado; tente de novo.");
+          return;
+        }
+        pedido.separado = false;
+        pedido.separado_em = null;
+        atualizarTudo();
+        return;
+      }
+
+      if (target.matches("[data-reenviar-aviso]")) {
+        if (!pedido.email) return;
+        if (!confirm(`Reenviar o aviso de retirada para ${pedido.email}?`)) return;
+        const botao = target as HTMLButtonElement;
+        botao.disabled = true;
+        botao.textContent = "Enviando…";
+        try {
+          const envio = await enviarAvisoDoPedido(pedidoId);
+          if (!envio.ok) {
+            alert(envio.erro || "Não foi possível reenviar agora. Confira o e-mail do pedido e tente de novo.");
+            return;
+          }
+          // o carimbo de "avisado em" passa a ser de agora (e este pedido não entra de novo no aviso em massa)
+          const agora = new Date().toISOString();
+          const carimbo = await api(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ aviso_retirada_em: agora }),
+          });
+          if (carimbo.ok) pedido.aviso_retirada_em = agora;
+          atualizarTudo();
+          alert(`Aviso reenviado para ${pedido.email}.`);
+        } catch {
+          alert("Sem conexão agora. O aviso não foi reenviado; tente de novo.");
+        } finally {
+          botao.disabled = false;
+          botao.textContent = "Reenviar aviso";
+        }
+        return;
+      }
+
       if (target.matches("[data-marcar-separado]")) {
         const separadoEm = new Date().toISOString();
         target.textContent = "Salvando…";
@@ -1321,19 +1490,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         // "separado" já gravado se o envio falhar (mesmo padrão do resto do
         // e-mail transacional do site).
         if (pedido.email) {
-          fetch(ENVIAR_AVISO_RETIRADA_CAMISETA_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: pedido.email,
-              nome: pedido.nome,
-              campanhaNome: grupo.nome,
-              itens: pedido.itens.map((i) => ({ tamanho: i.tamanho, modelo: i.modelo, quantidade: i.quantidade })),
-              retiradaLocal: grupo.retirada_local || null,
-              assunto: grupo.email_retirada_assunto || null,
-              corpo: grupo.email_retirada_corpo || null,
-            }),
-          }).catch(() => {});
+          enviarAvisoDoPedido(pedidoId).catch(() => {});
         }
       }
 
@@ -1435,75 +1592,175 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       }
     });
 
-    // --- venda avulsa ---
-    const avulsoWrap = document.querySelector<HTMLElement>("[data-avulso-form-wrap]");
-    document.querySelector("[data-abrir-avulso]")?.addEventListener("click", () => {
-      if (avulsoWrap) avulsoWrap.hidden = !avulsoWrap.hidden;
-    });
+    // --- venda de balcão (13/10/2026; no lugar da venda avulsa, que virou a opção "Avulso" do lote) ---
+    const vendaWrap = document.querySelector<HTMLElement>("[data-venda-form-wrap]");
+    const vendaItensEl = document.querySelector<HTMLElement>("[data-venda-itens]");
+    const vendaStatusEl = document.querySelector<HTMLElement>("[data-venda-status]");
+    const vendaSalvarBtn = document.querySelector<HTMLButtonElement>("[data-venda-salvar]");
+    const vendaConfirmarEl = document.querySelector<HTMLElement>("[data-venda-confirmar]");
+    const vendaLoteSel = document.querySelector<HTMLSelectElement>("[data-venda-lote]");
+    /** Venda que o servidor devolveu pedindo confirmação (pedido repetido ou lote fechado), à espera do gestor. */
+    let vendaPendente: Record<string, unknown> | null = null;
 
-    function linhaItemAvulsoHtml() {
+    const vendaTexto = (seletor: string) => (document.querySelector<HTMLInputElement | HTMLSelectElement>(seletor)?.value ?? "").trim();
+    const vendaMensagem = (texto: string) => { if (vendaStatusEl) vendaStatusEl.textContent = texto; };
+
+    function linhaItemVendaHtml() {
       const tamanhos = grupo.tamanhos ?? [];
       const modelos = grupo.modelos ?? [];
-      const tamanhoOpcoes = tamanhos.length ? tamanhos.map((t) => `<option value="${t}">${t}</option>`).join("") : `<option value="">—</option>`;
-      const modeloOpcoes = modelos.length ? modelos.map((m) => `<option value="${m}">${m}</option>`).join("") : `<option value="">—</option>`;
+      const tamanhoOpcoes = tamanhos.length ? tamanhos.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("") : `<option value="">—</option>`;
+      const modeloOpcoes = modelos.length ? modelos.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("") : `<option value="">—</option>`;
       return `
-        <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] item-linha">
-          <select class="field" data-item-tamanho>${tamanhoOpcoes}</select>
-          <select class="field" data-item-modelo>${modeloOpcoes}</select>
-          <input type="number" min="1" value="1" class="field" style="width:5rem" data-item-quantidade />
+        <div class="grid gap-2 grid-cols-[1fr_1fr_4.5rem_auto] items-center item-linha">
+          <select class="field" aria-label="Tamanho" data-item-tamanho>${tamanhoOpcoes}</select>
+          <select class="field" aria-label="Modelo" data-item-modelo>${modeloOpcoes}</select>
+          <input type="number" min="1" max="50" value="1" inputmode="numeric" class="field" aria-label="Quantidade" data-item-quantidade />
+          <button type="button" class="btn btn-outline" aria-label="Tirar esta linha" data-venda-item-remover>✕</button>
         </div>
       `;
     }
 
-    const avulsoItensEl = document.querySelector<HTMLElement>("[data-avulso-itens]");
-    document.querySelector("[data-avulso-item-adicionar]")?.addEventListener("click", () => {
-      avulsoItensEl?.insertAdjacentHTML("beforeend", linhaItemAvulsoHtml());
+    /** Congregações e lotes do formulário: o lote da aba aberta vem escolhido; o padrão é o lote que está aberto. */
+    function montarOpcoesVenda() {
+      const selCong = document.querySelector<HTMLSelectElement>("[data-venda-congregacao]");
+      if (selCong) {
+        const atual = selCong.value;
+        const nomes = Object.entries(nomesCongregacoes).map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+        selCong.innerHTML = `<option value="">Não informada</option>` + nomes.map((c) => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join("");
+        selCong.value = atual;
+      }
+      if (!vendaLoteSel) return;
+      const anterior = vendaLoteSel.value;
+      const aberto = [...lotes].filter((l) => l.status === "aberto").sort((a, b) => a.numero - b.numero)[0];
+      const opcoes = [`<option value="aberto">${aberto ? `Lote ${aberto.numero} (o que está aberto agora)` : "Novo lote (nenhum está aberto)"}</option>`];
+      [...lotes].sort((a, b) => b.numero - a.numero).forEach((l) => {
+        if (aberto && l.id === aberto.id) return;
+        opcoes.push(`<option value="${l.id}">Lote ${l.numero} — ${l.status === "aberto" ? "aberto" : "fechado"}</option>`);
+      });
+      opcoes.push(`<option value="avulso">Avulso — peça que já estava em estoque, sem lote</option>`);
+      vendaLoteSel.innerHTML = opcoes.join("");
+      const daAba = typeof visaoAtual === "number" ? String(visaoAtual) : visaoAtual === "avulso" ? "avulso" : "";
+      const escolha = anterior || (daAba && aberto && Number(daAba) === aberto.id ? "aberto" : daAba);
+      vendaLoteSel.value = Array.from(vendaLoteSel.options).some((o) => o.value === escolha) ? escolha : "aberto";
+      explicarLoteDaVenda();
+    }
+
+    function explicarLoteDaVenda() {
+      const ajuda = document.querySelector<HTMLElement>("[data-venda-lote-ajuda]");
+      if (!ajuda || !vendaLoteSel) return;
+      const v = vendaLoteSel.value;
+      const lote = /^\d+$/.test(v) ? lotes.find((l) => l.id === Number(v)) : null;
+      ajuda.textContent = v === "avulso"
+        ? "Sem lote: não gera encomenda nova (peça que já estava em estoque)."
+        : lote && lote.status !== "aberto"
+          ? `⚠ O lote ${lote.numero} já está fechado: a encomenda dele já foi feita e esta peça ficaria fora dela. O sistema vai pedir a sua confirmação.`
+          : "A peça entra na encomenda deste lote.";
+    }
+    vendaLoteSel?.addEventListener("change", explicarLoteDaVenda);
+
+    function reiniciarItensDaVenda() {
+      if (vendaItensEl) vendaItensEl.innerHTML = linhaItemVendaHtml();
+    }
+
+    document.querySelector("[data-abrir-venda]")?.addEventListener("click", () => {
+      if (!vendaWrap) return;
+      vendaWrap.hidden = !vendaWrap.hidden;
+      if (vendaWrap.hidden) return;
+      montarOpcoesVenda();
+      if (!vendaItensEl?.children.length) reiniciarItensDaVenda();
+      document.querySelector<HTMLInputElement>("[data-venda-nome]")?.focus();
     });
 
-    document.querySelector("[data-avulso-salvar]")?.addEventListener("click", async () => {
-      const statusEl = document.querySelector<HTMLElement>("[data-avulso-status]");
-      const nome = (document.querySelector<HTMLInputElement>("[data-avulso-nome]")?.value ?? "").trim() || "Venda avulsa";
-      const valorPago = Number(document.querySelector<HTMLInputElement>("[data-avulso-valor-pago]")?.value || 0);
-      const itens = Array.from(document.querySelectorAll("[data-avulso-itens] .item-linha"))
+    document.querySelector("[data-venda-item-adicionar]")?.addEventListener("click", () => {
+      vendaItensEl?.insertAdjacentHTML("beforeend", linhaItemVendaHtml());
+    });
+    vendaItensEl?.addEventListener("click", (e) => {
+      const alvo = e.target as HTMLElement;
+      if (!alvo.matches("[data-venda-item-remover]")) return;
+      alvo.closest(".item-linha")?.remove();
+      if (!vendaItensEl.children.length) reiniciarItensDaVenda();
+    });
+
+    function lerCorpoDaVenda(): Record<string, unknown> | null {
+      const itens = Array.from(document.querySelectorAll("[data-venda-itens] .item-linha"))
         .map((linha) => ({
           tamanho: linha.querySelector<HTMLSelectElement>("[data-item-tamanho]")?.value || null,
           modelo: linha.querySelector<HTMLSelectElement>("[data-item-modelo]")?.value || null,
           quantidade: Number(linha.querySelector<HTMLInputElement>("[data-item-quantidade]")?.value || 0),
         }))
         .filter((i) => i.quantidade > 0);
+      const nome = vendaTexto("[data-venda-nome]");
+      const lote = vendaTexto("[data-venda-lote]") || "aberto";
+      if (!nome && lote !== "avulso") { vendaMensagem("Informe o nome de quem está comprando."); return null; }
+      if (!itens.length) { vendaMensagem("Adicione pelo menos um item."); return null; }
+      return {
+        grupoId,
+        nome,
+        telefone: vendaTexto("[data-venda-telefone]"),
+        email: vendaTexto("[data-venda-email]"),
+        congregacaoId: vendaTexto("[data-venda-congregacao]") || null,
+        itens,
+        valorPago: vendaTexto("[data-venda-valor-pago]").replace(",", ".") || 0,
+        lote: lote === "aberto" || lote === "avulso" ? lote : Number(lote),
+      };
+    }
 
-      if (!itens.length) {
-        if (statusEl) statusEl.textContent = "Adicione pelo menos um item.";
-        return;
-      }
-
-      if (statusEl) statusEl.textContent = "Salvando…";
+    async function enviarVenda(corpo: Record<string, unknown>) {
+      if (vendaSalvarBtn) vendaSalvarBtn.disabled = true;
+      if (vendaConfirmarEl) vendaConfirmarEl.hidden = true;
+      vendaMensagem("Salvando…");
       try {
-        const res = await api(`${directusUrl}/items/camiseta_pedidos`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ grupo: grupoId, nome, telefone: null, avulso: true, lote: null, valor_pago: valorPago }),
-        });
-        if (!res.ok) throw new Error("falha ao criar pedido avulso");
-        const novoPedido = (await res.json()).data;
-
-        const itensSalvos: Item[] = [];
-        for (const item of itens) {
-          const itemRes = await api(`${directusUrl}/items/camiseta_itens_pedido`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ pedido: novoPedido.id, tamanho: item.tamanho, modelo: item.modelo, quantidade: item.quantidade }),
-          });
-          if (itemRes.ok) itensSalvos.push((await itemRes.json()).data);
+        // Token do painel no cabeçalho próprio (`x-painel-token`); num 401, renova e repete uma vez.
+        const chamar = (t: string) => fetch(REGISTRAR_VENDA_BALCAO_URL, { method: "POST", headers: { "x-painel-token": t, "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+        let t = (await obterTokenValido(directusUrl, AUTH.tokenKey)) ?? "";
+        let res = await chamar(t);
+        if (res.status === 401) { t = (await renovarToken(directusUrl, AUTH.tokenKey)) ?? ""; res = await chamar(t); }
+        const json = await res.json().catch(() => null);
+        if (res.status === 409 && (json?.duplicado || json?.loteFechado)) {
+          vendaPendente = { ...corpo, ...(json.duplicado ? { confirmarDuplicado: false } : {}), ...(json.loteFechado ? { confirmarLoteFechado: false } : {}) };
+          const texto = document.querySelector<HTMLElement>("[data-venda-confirmar-texto]");
+          if (texto) texto.textContent = json.erro;
+          if (vendaConfirmarEl) vendaConfirmarEl.hidden = false;
+          vendaMensagem("");
+          return;
         }
-
-        pedidos.push({ ...novoPedido, congregacao: null, itens: itensSalvos });
+        if (!res.ok) { vendaMensagem(json?.erro || "Não foi possível salvar agora. Nada foi registrado."); return; }
+        vendaPendente = null;
+        await carregarDadosPedidos();
         atualizarTudo();
-        if (statusEl) statusEl.textContent = "✅ Venda avulsa registrada.";
-        if (avulsoWrap) avulsoWrap.hidden = true;
+        montarOpcoesVenda();
+        const onde = json.avulso ? "avulso (sem lote)" : `lote ${json.loteNumero}`;
+        vendaMensagem(`✅ Venda registrada: pedido #${json.pedidoId}, ${onde}.${json.telefoneGuardado ? "" : " (sem telefone)"}`);
+        // pronto para a próxima pessoa: limpa os dados dela, mantém o lote
+        for (const s of ["[data-venda-nome]", "[data-venda-telefone]", "[data-venda-email]"]) { const el = document.querySelector<HTMLInputElement>(s); if (el) el.value = ""; }
+        const cong = document.querySelector<HTMLSelectElement>("[data-venda-congregacao]"); if (cong) cong.value = "";
+        const pago = document.querySelector<HTMLInputElement>("[data-venda-valor-pago]"); if (pago) pago.value = "0";
+        reiniciarItensDaVenda();
+        document.querySelector<HTMLInputElement>("[data-venda-nome]")?.focus();
       } catch {
-        if (statusEl) statusEl.textContent = "Não foi possível salvar agora.";
+        vendaMensagem("Sem conexão agora. Nada foi registrado; confira a internet e tente de novo.");
+      } finally {
+        if (vendaSalvarBtn) vendaSalvarBtn.disabled = false;
       }
+    }
+
+    vendaSalvarBtn?.addEventListener("click", () => {
+      const corpo = lerCorpoDaVenda();
+      if (corpo) void enviarVenda(corpo);
+    });
+    document.querySelector("[data-venda-confirmar-sim]")?.addEventListener("click", () => {
+      if (!vendaPendente) return;
+      // cada confirmação liga só o aviso que o servidor acabou de fazer; as anteriores continuam valendo
+      const anterior = vendaPendente;
+      const corpo = { ...anterior };
+      if ("confirmarDuplicado" in anterior) corpo.confirmarDuplicado = true;
+      if ("confirmarLoteFechado" in anterior) corpo.confirmarLoteFechado = true;
+      void enviarVenda(corpo);
+    });
+    document.querySelector("[data-venda-confirmar-nao]")?.addEventListener("click", () => {
+      vendaPendente = null;
+      if (vendaConfirmarEl) vendaConfirmarEl.hidden = true;
+      vendaMensagem("Venda não registrada.");
     });
 
     /** Recarrega pedidos/lotes/lote_itens deste grupo — usado no carregamento inicial e a cada notificação em tempo real. */
@@ -1576,6 +1833,18 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         }, 500);
       }
 
+      // O servidor fecha a conexão quando o token vence (ou a rede cai): renova a sessão e reconecta. Se a renovação não der agora
+      // (sinal ruim no celular), tenta de novo mais tarde — e NUNCA manda para o login por causa do tempo real: quem está lançando uma
+      // venda ou procurando um nome não pode perder a tela por uma queda de sinal (o login só vem de uma ação da própria pessoa).
+      function reconectar(espera: number) {
+        setTimeout(async () => {
+          if (!ativo) return;
+          const tokenNovo = await renovarToken(directusUrl, AUTH.tokenKey);
+          if (!ativo) return;
+          if (tokenNovo) { token = tokenNovo; conectar(tokenNovo); } else reconectar(Math.min(espera * 2, 60000));
+        }, espera);
+      }
+
       function conectar(accessToken: string) {
         if (!ativo) return;
         ws = new WebSocket(`${directusUrl.replace(/^http/, "ws")}/websocket`);
@@ -1609,13 +1878,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         });
 
         ws.addEventListener("close", () => {
-          if (!ativo) return;
-          setTimeout(async () => {
-            // O servidor fecha a conexão quando o token vence: renova pelo cookie (o token
-            // guardado já não serve) antes de reconectar.
-            const tokenNovo = (await renovarToken(directusUrl, AUTH.tokenKey)) ?? (await exigirAutenticacao(directusUrl, AUTH));
-            if (tokenNovo && ativo) { token = tokenNovo; conectar(tokenNovo); }
-          }, 3000);
+          if (ativo) reconectar(3000);
         });
 
         ws.addEventListener("error", () => ws?.close());
@@ -1636,7 +1899,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         return;
       }
 
-      const resGrupo = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos,retirada_local,email_retirada_assunto,email_retirada_corpo`, {
+      const resGrupo = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos,retirada_local,retirada_liberada,email_retirada_assunto,email_retirada_corpo`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resGrupo.ok) {
@@ -1678,7 +1941,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       renderizarFiltroPergunta();
       montarFiltrosAvancados();
       atualizarTudo();
-      avulsoItensEl?.insertAdjacentHTML("beforeend", linhaItemAvulsoHtml());
+      reiniciarItensDaVenda();
       iniciarRealtime();
     }
 
@@ -1701,5 +1964,30 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     .camiseta-pedido-aviso { margin-top: 0.5rem; font-size: 0.8125rem; color: var(--muted-foreground); border-left: 2px solid var(--accent); padding-left: 0.6rem; }
     .camiseta-pedido-aviso-retirada { border-left-color: #b8860b; color: #8a6d1f; font-weight: 600; }
     .badge-separado { font-size: 0.8125rem; font-weight: 600; color: var(--accent); }
+    .venda-confirmar { border: 1px solid #b8860b; border-radius: var(--radius-md); padding: 0.75rem 1rem; background: rgb(184 134 11 / 8%); }
+    .filtros-contagem { margin-left: 0.4rem; border-radius: 999px; background: var(--accent); color: var(--background); font-size: 0.75rem; font-weight: 700; padding: 0 0.45rem; }
+    .filtros-ativos { font-size: 0.8125rem; color: var(--muted-foreground); }
+    .filtros-ativos:not([hidden]) { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+    .ir-busca { margin-top: 1.25rem; }
+    /* Computador: a barra de busca e a linha de filtros ficam como sempre foram. */
+    @media (min-width: 768px) {
+      div.busca-barra { display: contents; }
+      .ir-busca { display: none !important; }
+      .filtros-toggle, .filtros-ativos { display: none !important; }
+    }
+    /* Celular (13/10/2026): a linha de busca passa a ser filha direta do conteúdo (display: contents), para a barra poder ficar presa
+       no alto durante toda a rolagem; os filtros ficam recolhidos até o botão "Filtros" ser tocado. */
+    @media (max-width: 767px) {
+      div.busca-linha { display: contents; }
+      div.busca-barra {
+        position: sticky; top: var(--painel-topo, 0px); z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+        margin-top: 1.5rem; padding: 0.5rem 0; background: var(--background); transition: top 0.3s;
+      }
+      .busca-barra .busca-input { flex: 1 1 10rem; min-width: 0; }
+      .ir-busca { display: block; width: 100%; }
+      .filtros-ativos { flex: 1 0 100%; }
+      .filtros-fechados [data-filtros-colapsavel] { display: none; }
+      .filtros-abertos [data-filtros-colapsavel] { margin-top: 0.75rem; }
+    }
   </style>
 </BaseLayout>

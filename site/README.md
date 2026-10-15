@@ -264,8 +264,57 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
 - **Consulta pública** (`/meus-pedidos-camiseta/`) — só por telefone, sem código, por decisão
   explícita de simplicidade.
 - **Painel de gestão** (`/painel-camisetas/`) — CRUD de campanha, abas por lote (todos os
-  lotes/lote N/avulso), fechamento de lote, consolidado editável, venda avulsa, controle de
-  retirada.
+  lotes/lote N/avulso), fechamento de lote, consolidado editável, venda de balcão (abaixo),
+  controle de retirada.
+- **Venda de balcão e a função "Gestor de Camisetas" (13/10/2026, pedido do responsável)** — quem
+  cuida das camisetas lança, pelo painel (`/painel-camisetas/grupo/pedidos/` → "+ Registrar venda"),
+  a venda para quem está na sua frente, muitas vezes sem telefone nem e-mail: nome (obrigatório),
+  telefone e e-mail se houver, congregação, itens (tamanho/modelo/quantidade), valor já pago e o
+  **lote** — o que está aberto (padrão; nasce o próximo se nenhum estiver), outro lote escolhido ou
+  **Avulso** (peça de estoque, sem lote; é a antiga "venda avulsa"). Vale com a campanha aberta ou
+  fechada para o público (a regra de prazo é do formulário público). Passa pela Function
+  `api/RegistrarVendaBalcao/` (`POST /api/registrar-venda-balcao`), não direto pelo navegador,
+  porque o telefone precisa virar hash (scrypt), chave de busca (HMAC) e número cifrado — o segredo
+  dessas contas só existe no servidor; com isso a pessoa acha a venda em "Meus pedidos" pelo
+  telefone e o painel abre o WhatsApp dela. **A função não usa o token de administrador:** grava com
+  o token do próprio gestor (`x-painel-token`), então quem o Directus não deixaria criar pedido não
+  cria por aqui. Avisa e pede confirmação (409) quando já existe pedido com o mesmo telefone ou
+  e-mail na campanha e quando o lote escolhido já está fechado (a encomenda dele já foi feita; a
+  peça ficaria fora dela). Regra pura em `api/src/lib/vendaBalcao.js`; bateria
+  `scripts/testes/balcao.cjs`. **Função no Directus:** "Gestor de Camisetas" (política própria, sem
+  acesso ao painel do Directus): lê/cria/edita campanha e cria/lê/edita/apaga pedido, item de pedido,
+  lote, estoque do lote, pergunta e resposta — **não apaga campanha** e **não enxerga mais nada** do
+  site (notícias, eventos, inscrições, contas dão 403). Para dar a função a alguém: Directus →
+  Usuários → criar o usuário com a função "Gestor de Camisetas" e entrar em
+  `/painel-camisetas/entrar/`.
+- **Tirar reserva, reenviar aviso e aviso em massa seletivo (15/10/2026, pedido do responsável)** — a
+  reserva de uma camiseta é a marca "Separado" do pedido (`separado`/`separado_em`). Até aqui só havia
+  "Marcar como separado"; quem não vinha buscar não tinha como perder a reserva, e "Retiradas = 0" não
+  resolve (é a quantidade já levada). Agora, no cartão do pedido (`/painel-camisetas/grupo/pedidos/`):
+  **"Tirar reserva"** (com confirmação) volta o pedido a "ainda não separado" **sem apagá-lo e sem mexer em
+  "Retiradas", valor pago ou lote**, e não manda e-mail; some quando a pessoa já levou tudo. **"Reenviar
+  aviso"** manda de novo o e-mail de "pode retirar" ao e-mail do pedido (aparece para quem está separado ou
+  quando a retirada foi liberada para o grupo) e atualiza o carimbo "avisado em"; a falha do envio é
+  avisada e não carimba. No **aviso em massa** (campanha → "E-mail de retirada"): caixa **"só quem está
+  separado"** e filtro **"só do lote"**; em modo seletivo **não libera a retirada para todos** (isso é do
+  envio a todos), e a contagem do "Conferir" segue o filtro (`somenteSeparados`, `loteId` em
+  `api/AvisarRetiradaCamisetas`). **O aviso individual (`api/EnviarAvisoRetiradaCamiseta`) foi fechado em 15/10/2026**: antes era uma porta
+  pública que mandava e-mail para o endereço e com o texto que a chamada trouxesse (o login só protegia o botão,
+  não a porta; o código é aberto no GitHub). Agora exige o token do painel (`x-painel-token`), lê o pedido no
+  Directus **com o token da própria pessoa** e recebe só o `pedidoId`: destinatário, itens, local, assunto e
+  texto vêm do pedido e da campanha, nunca da chamada; só envia se o pedido tem e-mail, não é avulso e está
+  separado (ou a retirada foi liberada ao grupo). O robô de avisos de conteúdo novo
+  (`scripts/send-content-notifications.mjs`) também passou a ignorar itens com slug "teste-…". A função do
+  aviso em massa agora **erra de forma explícita (502)** quando uma consulta
+  ao Directus falha, em vez de contar zero e o painel dizer "Pronto: 0". Bateria `scripts/testes/reserva.cjs`
+  (só simula, nunca envia e-mail).
+- **Painel de pedidos no celular (13/10/2026)** — a barra de busca fica presa no alto durante a
+  rolagem e os filtros ficam **recolhidos** atrás do botão "Filtros" (com um selo com quantos estão
+  ligados); uma linha "Filtrando por: Tamanho GG" com o botão "Limpar" fica sempre à vista, para
+  ninguém procurar um nome sem saber que um filtro esconde o pedido; um botão "Buscar pedido" no
+  topo leva direto à busca. No computador nada muda. Também: a sessão do painel renova sem corrida
+  (o token de renovação do Directus vale uma vez; duas renovações juntas mandavam a pessoa ao login,
+  perdendo o que digitava) e a queda do tempo real nunca leva ao login.
 - **Perguntas personalizadas por campanha** (`perguntas_camiseta`/`respostas_pedido_camiseta`) —
   espelha o mesmo sistema de eventos: cada campanha pode pedir campos extras no formulário público
   (ex. bairro, forma de retirada), com os mesmos 6 tipos de pergunta (texto curto/longo, seleção
@@ -449,7 +498,7 @@ nem de conta no GitHub — só um login de e-mail e senha criado para cada pesso
 - **Acesso**: `https://ieadespa-directus-gae4hfarf4a4ffcf.brazilsouth-01.azurewebsites.net/admin`
 - **Perfis (roles) hoje**: Administrator, Semi-administrador (tudo exceto
   Configurações/Fluxos/Webhooks/Usuários/tokens), Editor de eventos, Editor de notícias, Editor de
-  contatos — cada um limitado ao próprio escopo (testado: acesso fora do escopo dá 403).
+  contatos, Gestor de Camisetas (só as coleções de camiseta, sem apagar campanha) — cada um limitado ao próprio escopo (testado: acesso fora do escopo dá 403).
 - **Mídia**: fotos e PDFs enviados no Directus vão direto para o Azure Blob Storage, não para o
   repositório do GitHub.
 - **Limitações do plano gratuito ("Core")**: sem filtro condicional em permissão (força

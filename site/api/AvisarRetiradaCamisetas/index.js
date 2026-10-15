@@ -20,6 +20,11 @@ const REMETENTE = process.env.ACS_REMETENTE || "DoNotReply@ieadespa.org.br";
  * Quem pode: só quem está logado no painel — o token do Directus da pessoa vem em `x-painel-token` e tem de
  * enxergar o grupo (mesma prova do telefone-pedido). `simular: true` só conta, não envia nem carimba.
  * Melhor esforço por e-mail: um envio que falha não derruba o lote (fica sem carimbo e entra no próximo).
+ *
+ * 15/10/2026 — AVISO SELETIVO (pedido do responsável: "enviar só para quem tem reserva de fato"): `somenteSeparados: true`
+ * limita o envio (e a contagem) aos pedidos marcados como separados, e `loteId` aos pedidos de um lote da campanha. Em modo
+ * seletivo a retirada NÃO é liberada para o grupo inteiro (isso é do envio a todos): só recebe o e-mail quem foi escolhido.
+ * (`lote`, mais abaixo, é o TAMANHO do lote de envio — 40 e-mails por chamada —, não o lote de camisetas.)
  */
 const LOTE_MAX = 40;
 const LIMITE_POR_IP = 60; // 5 min: 805 e-mails são ~21 lotes
@@ -49,6 +54,14 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { sucesso: false, erro: "Grupo inválido." } };
     return;
   }
+  const somenteSeparados = corpo.somenteSeparados === true;
+  const loteId = corpo.loteId == null || corpo.loteId === "" ? null : Number(corpo.loteId);
+  if (loteId !== null && (!Number.isInteger(loteId) || loteId <= 0)) {
+    context.res = { status: 400, body: { sucesso: false, erro: "Lote inválido." } };
+    return;
+  }
+  const seletivo = somenteSeparados || loteId !== null;
+  const recorte = (somenteSeparados ? "&filter[separado][_eq]=true" : "") + (loteId !== null ? `&filter[lote][_eq]=${loteId}` : "");
   const tokenPainel = (cabecalhoDe(req, "x-painel-token") || cabecalhoDe(req, "authorization")).replace(/^Bearer\s+/i, "").trim();
   if (!tokenPainel) {
     context.res = { status: 401, body: { sucesso: false, erro: "Entre no painel para avisar os pedidos." } };
@@ -65,24 +78,33 @@ module.exports = async function (context, req) {
   if (!g.ok || !g.data) { context.res = { status: 502, body: { sucesso: false, erro: "Falha ao ler o grupo." } }; return; }
   const grupo = g.data;
 
-  const filtro = `filter[grupo][_eq]=${grupoId}&filter[email][_nempty]=true&filter[aviso_retirada_em][_null]=true`;
+  const filtro = `filter[grupo][_eq]=${grupoId}&filter[email][_nempty]=true&filter[aviso_retirada_em][_null]=true${recorte}`;
   const total = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&${filtro}`, DIRECTUS_ADMIN_TOKEN);
   const pendentes = Number(total.ok && total.data && total.data[0] ? total.data[0].count.id : 0);
-  const avisadosAntes = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&filter[grupo][_eq]=${grupoId}&filter[aviso_retirada_em][_nnull]=true`, DIRECTUS_ADMIN_TOKEN);
+  const avisadosAntes = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&filter[grupo][_eq]=${grupoId}&filter[aviso_retirada_em][_nnull]=true${recorte}`, DIRECTUS_ADMIN_TOKEN);
   const jaAvisados = Number(avisadosAntes.ok && avisadosAntes.data && avisadosAntes.data[0] ? avisadosAntes.data[0].count.id : 0);
-  const semEmail = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&filter[grupo][_eq]=${grupoId}&filter[email][_empty]=true`, DIRECTUS_ADMIN_TOKEN);
+  const semEmail = await directus("GET", `/items/camiseta_pedidos?aggregate[count]=id&filter[grupo][_eq]=${grupoId}&filter[email][_empty]=true${recorte}`, DIRECTUS_ADMIN_TOKEN);
   const semEmailN = Number(semEmail.ok && semEmail.data && semEmail.data[0] ? semEmail.data[0].count.id : 0);
-
-  if (simular) {
-    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: { sucesso: true, simulado: true, enviados: 0, falhas: 0, restantes: pendentes, jaAvisados, semEmail: semEmailN, retiradaLiberada: !!grupo.retirada_liberada } };
+  // Consulta que falhou NÃO vale zero: sem isto, um soluço do Directus fazia o painel dizer "0 a avisar" / "Pronto: 0" sem ter enviado nada (visto em 15/10/2026).
+  if (!total.ok || !avisadosAntes.ok || !semEmail.ok) {
+    context.res = { status: 502, body: { sucesso: false, erro: "Não foi possível contar os pedidos agora. Nada foi enviado; tente de novo." } };
     return;
   }
 
-  // 1ª chamada: libera a retirada para todos (Meus pedidos passa a mostrar "chegou")
-  if (!grupo.retirada_liberada) await directus("PATCH", `/items/camiseta_grupos/${grupoId}`, DIRECTUS_ADMIN_TOKEN, { retirada_liberada: true });
+  if (simular) {
+    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: { sucesso: true, simulado: true, enviados: 0, falhas: 0, restantes: pendentes, jaAvisados, semEmail: semEmailN, retiradaLiberada: !!grupo.retirada_liberada, seletivo } };
+    return;
+  }
+
+  // 1ª chamada do envio a TODOS: libera a retirada para todos (Meus pedidos passa a mostrar "chegou"). No envio seletivo não.
+  if (!seletivo && !grupo.retirada_liberada) await directus("PATCH", `/items/camiseta_grupos/${grupoId}`, DIRECTUS_ADMIN_TOKEN, { retirada_liberada: true });
 
   const lista = await directus("GET", `/items/camiseta_pedidos?fields=id,nome,email,itens.tamanho,itens.modelo,itens.quantidade&${filtro}&limit=${lote}&sort=id`, DIRECTUS_ADMIN_TOKEN);
-  const pedidos = lista.ok && Array.isArray(lista.data) ? lista.data : [];
+  if (!lista.ok) {
+    context.res = { status: 502, body: { sucesso: false, erro: "Não foi possível ler os pedidos agora. Nada foi enviado; tente de novo." } };
+    return;
+  }
+  const pedidos = Array.isArray(lista.data) ? lista.data : [];
   const client = new EmailClient(ACS_CONNECTION_STRING);
   const agora = new Date().toISOString();
   const carimbar = [];
@@ -104,6 +126,6 @@ module.exports = async function (context, req) {
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    body: { sucesso: true, simulado: false, enviados: carimbar.length, falhas, restantes: Math.max(0, pendentes - carimbar.length), jaAvisados: jaAvisados + carimbar.length, semEmail: semEmailN, retiradaLiberada: true }
+    body: { sucesso: true, simulado: false, enviados: carimbar.length, falhas, restantes: Math.max(0, pendentes - carimbar.length), jaAvisados: jaAvisados + carimbar.length, semEmail: semEmailN, retiradaLiberada: seletivo ? !!grupo.retirada_liberada : true, seletivo }
   };
 };

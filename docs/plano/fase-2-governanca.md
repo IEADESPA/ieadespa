@@ -167,7 +167,7 @@ Convocação Independente da Presidência (v2.1). Fica só no Regimento/prática
 sem tentativa de espelhar no sistema.
 
 **Comparecimento obrigatório: 3 faltas consecutivas = exclusão automática
-(Art. 27) — movido pra logo antes da FASE 8**, ver `v7.9` abaixo. Motivo:
+(Art. 27) — movido pra logo antes da FASE 8**, ver a `v8.1` na [fase 8](fase-8-ministerial-afm.md) (era a `v7.9`, movida para lá em 15/10/2026). Motivo:
 Art. 69 do Regimento diz que a cada 3 meses o domingo da reunião da CLI vira
 "Sessão da AFM" em vez de reunião comum — contar faltas certo exige saber
 quais sessões da CLI também são sessões da AFM, e a AFM é o módulo inteiro da

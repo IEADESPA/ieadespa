@@ -2100,7 +2100,7 @@ História/Acervo, RP/Cerimonial, Libras, Beleza/Estética, Educação/Pedagogia.
 
 *(Numeração: as versões v7.7 e v7.8 existiam como lacuna no documento — o
 roadmap pulava de v7.6 para v7.9 sem nota. A lacuna foi preenchida com o tema
-que mais fazia falta.)*
+que mais fazia falta. Em 15/10/2026 a v7.9 foi movida, na íntegra, para a v8.1 da fase 8: a numeração da fase 7 segue na v7.10.)*
 
 - [x] **Habilitação para Ministério Infantojuvenil** por voluntário: ficha
       cadastral + certidão de antecedentes (federal/PF e estadual/TJ) anexada,
@@ -2444,29 +2444,11 @@ não faz e o sistema não oferece. Notificação **automática** ao Conselho Tut
 existe: cada cidade tem um canal (ofício, telefone, sistema próprio) e o dever é do dirigente; o sistema
 **cobra e prova** (o relógio, o protocolo, o comprovante), não protocola por ele.
 
-## v7.9 — CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)
+## v7.9 — Movida para a v8.1 (fase 8), na íntegra
 
-Movido de v2.3 de propósito — ver nota lá. Constrói **junto** com v8.1 (AFM),
-não antes: precisa primeiro saber marcar uma sessão da CLI como "integrada com
-AFM" (Art. 69) pra não contar errado a cada 3 meses.
-
-- [ ] 3 faltas consecutivas sem justificativa aceita nas reuniões da CLI
-      (excluindo as integradas com AFM) = perda automática do assento (Art. 27
-      §1º) — calculado a partir de `Presencas`, igual mandato vencido de
-      Assento (nunca marcação manual). Quem entra por Ordenação (Pastor/
-      Evangelista/Presbítero) precisa de um jeito de sair da composição da CLI
-      sem perder o `CargoMinisterial` (são coisas diferentes: perder assento
-      na Câmara ≠ deixar de ser Pastor); quem entra por Função já sai
-      naturalmente encerrando o Assento (mecanismo já existe).
-- [ ] Art. 27 §2º: se a exclusão for de quem está na CLI por cargo eletivo da
-      Diretoria Executiva ou Conselho Fiscal, a CLI aprecia e, sendo o caso,
-      convoca AGE de destituição em até 30 dias (matéria "Destituição", já
-      existente desde v2.2) — o sistema só aponta pro fluxo existente, não
-      automatiza a convocação.
-- [ ] **Taxonomia fechada de justificativa de falta** (Art. 149 §2º, gap da
-      varredura): só fator externo justifica — **escala ou evento de departamento
-      não é justificativa válida**. Catálogo com os motivos vedados bloqueados na
-      própria tela, não conferidos depois por alguém que talvez não conheça o §2º.
+Por decisão do responsável (15/10/2026), esta versão **não é construída na fase 7**: o texto completo (os três itens, a nota sobre as sessões da CLI
+integradas com a AFM e a taxonomia de justificativas) foi copiado **sem alterações** para a [v8.1 da fase 8](fase-8-ministerial-afm.md), que passa a ser
+uma versão grande: o módulo da AFM **e** a contagem de faltas da CLI (Art. 27), construídos juntos. A próxima versão a construir na fase 7 é a **v7.10**.
 
 ## v7.10 — Check-in infantil com cadeia de custódia *(7ª rodada)*
 

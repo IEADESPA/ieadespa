@@ -152,7 +152,7 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 18 bloco(s) · itens 56/87 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 18 bloco(s) · itens 56/84 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -165,7 +165,7 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | v7.6 | [Setores Técnicos (voluntariado profissional) *(gap da varredura)*](fase-7-saude-eventos-e-comunicacao.md#v76--setores-técnicos-voluntariado-profissional-gap-da-varredura) | ✅ 3/3 |
 | v7.7 | [Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*](fase-7-saude-eventos-e-comunicacao.md#v77--habilitação-para-ministério-com-menores-7ª-rodada--obrigação-legal-vigente) | ✅ 10/10 |
 | v7.8 | [Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*](fase-7-saude-eventos-e-comunicacao.md#v78--incidentes-notificação-obrigatória-e-escuta-protegida-7ª-rodada--obrigação-legal) | ✅ 7/7 |
-| v7.9 | [CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)](fase-7-saude-eventos-e-comunicacao.md#v79--cli-comparecimento-obrigatório-e-perda-de-assento-por-faltas-art-27) | ⬜ 0/3 |
+| v7.9 | [Movida para a v8.1 (fase 8), na íntegra](fase-7-saude-eventos-e-comunicacao.md#v79--movida-para-a-v81-fase-8-na-íntegra) | — |
 | v7.10 | [Check-in infantil com cadeia de custódia *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v710--check-in-infantil-com-cadeia-de-custódia-7ª-rodada) | ⬜ 0/6 |
 | 🔒 7-B | [antes de avançar para a v7.11](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-b--antes-de-avançar-para-a-v711) | — |
 | v7.11 | [Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v711--cuidado-pastoral-filas-com-responsável-prazo-e-sigilo-7ª-rodada) | ⬜ 0/4 |
@@ -194,11 +194,11 @@ Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10
 
 ## FASE 8 — Ministerial (AFM)
 
-Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 0/26 concluídos.
+Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 0/29 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
-| v8.1 | [AFM (Academia de Formação Ministerial)](fase-8-ministerial-afm.md#v81--afm-academia-de-formação-ministerial) | ⬜ 0/5 |
+| v8.1 | [AFM (Academia de Formação Ministerial) e CLI: comparecimento e perda de assento (a antiga v7.9)](fase-8-ministerial-afm.md#v81--afm-academia-de-formação-ministerial-e-cli-comparecimento-e-perda-de-assento-a-antiga-v79) | ⬜ 0/8 |
 | v8.2 | [Escada ministerial e ascensão](fase-8-ministerial-afm.md#v82--escada-ministerial-e-ascensão) | ⬜ 0/3 |
 | v8.3 | [Consagração e documentação](fase-8-ministerial-afm.md#v83--consagração-e-documentação) | ⬜ 0/3 |
 | v8.4 | [Credencial digital com QR Code](fase-8-ministerial-afm.md#v84--credencial-digital-com-qr-code) | ⬜ 0/3 |

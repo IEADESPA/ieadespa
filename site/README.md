@@ -133,7 +133,7 @@ autenticado), `/cracha/<slug>/`, `/pesquisa/<slug>/`, `/qrcode/<slug>/`,
 **Comunidade e conta**: `/mural-de-oracao/`, `/enquetes/`, `/minha-conta/`.
 
 **Painel de equipe**: `/painel-eventos/` (gestão de eventos, autenticado), `/painel-conteudo/`
-(notícias, mensagens, FAQ, programação, galeria, ministérios, história e páginas fixas, autenticado — ver [Painel de conteúdo](#painel-de-conteúdo)),
+(notícias, mensagens, FAQ, programação, galeria, ministérios, história, páginas fixas, relatórios de transparência e, para a Diretoria, a moderação de depoimentos e do mural, autenticado — ver [Painel de conteúdo](#painel-de-conteúdo)),
 `/painel/<local>/` (telão "hoje na igreja", sem autenticação — pensado para um aparelho fixo na recepção).
 
 **Sistema**: `/404`, `robots.txt`, `sitemap.xml`, `rss.xml`, `/busca` (índice JSON),
@@ -455,15 +455,20 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
 
 Uma página feita para o **celular**, no lugar do Directus "cru", para a equipe escrever e editar o que
 aparece no site **sem precisar abrir o Directus**: notícias, mensagens (pregações e estudos), perguntas
-frequentes, programação semanal, galeria de fotos, ministérios, a história da igreja e os textos fixos
-de "Sobre" e "Crenças". Endereços: `/painel-conteudo/` (início, com os cartões agrupados em três seções
-— "Notícias e mensagens", "Páginas e informações" e "Institucional" — e uma frase embaixo de cada
-cartão; só aparece o que o perfil consegue ler), `/painel-conteudo/entrar/` (login),
-`/painel-conteudo/lista/?tipo=…` (lista com busca pelo título) e `/painel-conteudo/editar/?tipo=…&id=…`
-(formulário; sem `id` cria um item novo). Como os outros painéis, entra com a **própria conta do
+frequentes, programação semanal, galeria de fotos, ministérios, a história da igreja, os textos fixos
+de "Sobre" e "Crenças" e os **relatórios de transparência** (PDF) — e, só para a Diretoria, a **moderação**
+do que o público envia pelo site (depoimentos e pedidos do mural de oração). Endereços:
+`/painel-conteudo/` (início, com os cartões agrupados em quatro seções — "Moderação", "Notícias e
+mensagens", "Páginas e informações" e "Institucional" — e uma frase embaixo de cada cartão; só aparece o
+que o perfil consegue ler), `/painel-conteudo/entrar/` (login),
+`/painel-conteudo/lista/?tipo=…` (lista com busca pelo título), `/painel-conteudo/editar/?tipo=…&id=…`
+(formulário; sem `id` cria um item novo) e `/painel-conteudo/moderar/?tipo=depoimentos|mural_oracao`
+(moderação, descrita mais abaixo). Como os outros painéis, entra com a **própria conta do
 Directus** (tokens em `sessionStorage`, chaves `painel_conteudo_token` e `painel_conteudo_token_refresh`)
 e **toda leitura e gravação vai ao Directus com o token da pessoa**: quem decide o que cada um pode
 fazer é o Directus; a tela só mostra o que ele permite (um 403 vira "Seu perfil não pode … aqui").
+A moderação e os relatórios são **só da Diretoria** (funções "Semi-administrador" e "Administrator"): o
+"Editor de notícias" não tem essas coleções (403) e não vê os cartões.
 
 | Tipo (`?tipo=`) | Coleção | Aparece em | Rascunho | Ordem manual (▲/▼) |
 | --- | --- | --- | --- | --- |
@@ -474,6 +479,7 @@ fazer é o Directus; a tela só mostra o que ele permite (um 403 vira "Seu perfi
 | `galeria` | `galeria` | `/galeria/` | não | dentro de cada álbum |
 | `ministerios` | `ministerios` | `/orgaos/` e `/orgao/<slug>/` | não | dentro de cada tipo de órgão |
 | `historia` | `historia` (+ `historia_files`) | `/historia/` | não | uma fila só |
+| `relatorios` | `relatorios` | `/transparencia/` | não | não (a data decide) |
 | `configuracoes` | `configuracoes` (item único) | `/`, `/sobre/`, `/crencas/` | não | não |
 
 - **Quem usa** (funções do Directus): "Editor de notícias" cobre notícias, mensagens, FAQ, programação,
@@ -488,8 +494,10 @@ fazer é o Directus; a tela só mostra o que ele permite (um 403 vira "Seu perfi
   (no Directus), não do código. O que é confidencial — `mural_oracao`, `contas`, `contas_codigos`,
   inscrições, pedidos de camiseta, `push_subscriptions`, `contato_mensagens`, relatórios, depoimentos —
   o Editor de notícias **não alcança** (403); a bateria `site/scripts/testes/conteudo.cjs` confere isso
-  (inclusive pelo mapa `/permissions/me`, sem gravar nada), o envio só de imagem e as quatro páginas, a
-  cada montagem (passo "Painel de conteúdo" do `site-testes.yml`).
+  (inclusive pelo mapa `/permissions/me`, sem gravar nada), o envio só de imagem e as cinco páginas, a
+  cada montagem (passo "Painel de conteúdo" do `site-testes.yml`). **Só a Diretoria** ("Semi-administrador"
+  e "Administrator") lê, grava e apaga `depoimentos`, `mural_oracao` e `relatorios` e envia **imagem e
+  PDF** (`directus_files:create` aceita JPEG, PNG, WebP, GIF e PDF; o Editor de notícias, só as imagens).
 - **Com rascunho × sem rascunho**: tipos com `draft` (notícias, mensagens, FAQ) têm "Salvar rascunho" e
   "Publicar" (depois, "Salvar alterações" e "Voltar para rascunho"); nada de agendamento (o site só esconde
   o rascunho, não olha a data — por isso o campo se chama "Data exibida"). Publicar notícia/mensagem com
@@ -527,6 +535,50 @@ fazer é o Directus; a tela só mostra o que ele permite (um 403 vira "Seu perfi
   consciente); "Qual domingo do mês" só vale para "Domingo à noite". **Ministérios**: o endereço (slug) é
   único e vira `/orgao/<slug>/`; o tipo vem de `orgao_categorias`; excluir um ministério que ainda tem
   membros ou notícias ligadas é recusado pelo Directus e a tela explica.
+- **Relatórios de transparência** (`relatorios`, só Diretoria): título, período (a etiqueta ao lado do título
+  na página), data (só ordena: o mais recente primeiro), resumo (opcional) e o **arquivo PDF** — todos
+  obrigatórios menos o resumo, conferidos no navegador. Sem rascunho: o que for salvo aparece em
+  `/transparencia/` na próxima montagem (o botão diz isso). A lista traz **"Abrir PDF"** em cada item e o
+  link "Ver a página “Transparência” no site". A página pública só lista relatório que tem arquivo.
+- **Envio de PDF** (campo `tipo: "arquivo"`, com `regraArquivo: REGRA_PDF`): "Escolher arquivo" abre o
+  seletor do aparelho. **Antes de enviar** o navegador confere, com frase em português (e sem mandar nada
+  ao servidor quando recusa): só **PDF** (tipo `application/pdf`; aparelho que não informa o tipo vale pela
+  extensão `.pdf`; Word e Excel pedem "Salvar como PDF"), arquivo **não vazio**, no máximo **25 MB**
+  ("O arquivo tem 26 MB e o limite é 25 MB…") e **conteúdo de PDF de verdade** (começa com `%PDF-`; um
+  arquivo só renomeado para `.pdf` é barrado). Enviado, o campo mostra **nome, tamanho** (lidos do Directus)
+  e o link **"Abrir / baixar"**; **"Trocar arquivo"** envia outro e avisa que o anterior **continua
+  guardado no Directus**, só sem ligação com o relatório (o painel nunca apaga arquivo). Qualquer pessoa
+  baixa o PDF direto de `/assets/<id>` (a leitura pública de `directus_files` já existe): a tela avisa que
+  **não se deve enviar nada sigiloso** (CPF, endereço, dados de membros). Funções puras testadas:
+  `validarArquivoPorRegra`, `tamanhoLegivel`, `confereAssinatura`.
+- **Moderação** (`/painel-conteudo/moderar/?tipo=depoimentos` ou `mural_oracao`, só Diretoria): na página
+  inicial, a seção **"Moderação"** (a primeira) tem um cartão para cada assunto com a contagem do que espera
+  decisão ("3 aguardando", "2 aguardando · 1 confidencial"; o cartão some para quem não lê a coleção). A
+  tela tem **abas** — "Aguardando" (`aprovado = falso`, e no mural `confidencial` diferente de verdade),
+  "Publicados" (`aprovado = verdadeiro`) e, só no mural, "🔒 Confidenciais (só a equipe pastoral)" ("Só a
+  Diretoria vê esta aba") — com a contagem em cada uma, e `?aba=` no endereço. Os filtros tratam campo vazio
+  como "não" e as três abas juntas cobrem todos os itens, sem sobrepor (conferido pelo teste de unidade e,
+  com o Directus de verdade, pela bateria). Cada item é um cartão com nome (ou "Anônimo"), data e hora
+  locais, o **texto inteiro** (sempre `textContent`, com as quebras de linha; HTML escrito pela pessoa não
+  executa), a miniatura da foto (depoimentos), o selo "Consentimento LGPD: sim/não" e, no mural, "🙏 N
+  orando" (só leitura: o contador é da Function `OrarMural`). Do mais novo para o mais antigo, 20 por vez
+  ("Mostrar mais"). **Ações**: **Aprovar** (grava só `{ aprovado: true }`), **Tirar do ar** (só
+  `{ aprovado: false }`; um toque, sem confirmação, por ser o caminho seguro) e **Excluir** (digitar
+  EXCLUIR). **Regras da tela**: depoimento **sem consentimento LGPD não se aprova** (botão desligado, com o
+  motivo escrito ao lado; o mesmo vale para pedido do mural, porque o formulário público exige a caixa);
+  pedido **confidencial não tem Aprovar** — só o rótulo "Confidencial: só a equipe pastoral lê; nunca é
+  publicado" e Excluir (a confirmação pede que se exclua só depois do atendimento pastoral); aprovar um
+  depoimento avisa que ele aparece "na próxima montagem (em até uns 20 minutos)", e aprovar um pedido do
+  mural avisa que ele aparece **IMEDIATAMENTE** no mural público (o mural é em tempo real), por **90
+  dias** — por isso o item publicado mostra "No mural público até dd/mm/aaaa" ou "Já saiu do mural público
+  (passou de 90 dias)". Antes de aprovar, a tela **lê o item de novo** e aplica as regras ao que está no
+  Directus agora (se virou confidencial ou perdeu o consentimento com a tela aberta, recusa e atualiza).
+  Depois de cada ação a lista e as contagens se atualizam **sem recarregar a página**; botões travados
+  desde o primeiro toque (nada de clique duplo); erro (servidor, rede, 403) mostra a frase e **não mexe
+  em nada**; a mensagem de resultado recebe o foco (leitor de tela). Excluir um depoimento **não apaga a
+  foto** (o painel não apaga arquivos). Regras e textos em
+  [`src/lib/painelModeracao.ts`](./src/lib/painelModeracao.ts) (`TIPOS_MODERACAO`; tipo novo = um objeto
+  novo ali).
 - **"Ver no site"**: cada tipo declara as páginas públicas que o mostram (`paginasPublicas`); a lista e o
   formulário trazem os links "Ver a página “…” no site ↗" com o aviso de que o site mostra a mudança em
   até uns 20 minutos (só para o que já está no ar).
@@ -544,16 +596,21 @@ fazer é o Directus; a tela só mostra o que ele permite (um 403 vira "Seu perfi
   inicial), `paginasPublicas`, campo do título, `rascunho` (omita para "vai direto ao site"), `ordem`
   (ordem manual e agrupamento), `unico`, `camposMeta` (o que aparece embaixo do título na lista),
   `urlPublica` e a lista de campos em seções (`text`, `textarea`, `markdown`, `select`, `boolean`, `date`,
-  `datetime`, `image`, `imagens`, `m2o`, `number`, `url`, `slug`, `readonly`) — **mais a permissão da função no
+  `datetime`, `image`, `imagens`, `arquivo`, `m2o`, `number`, `url`, `slug`, `readonly`) — **mais a permissão da função no
   Directus**. As páginas não mudam e o cartão aparece sozinho para quem puder ler a coleção. O desenho dos
   campos fica em `src/lib/painelConteudoCampos.ts`. Atenção ao tipo real do campo de data no Directus:
   `date` (só dia) ou `dateTime` (`datetime`, que converte entre o horário local da tela e o ISO gravado).
   Tipo sem rascunho é público no instante em que se grava: **nunca teste gravando de verdade nele**.
 - **Testes**: `site/scripts/testes/painel-unidade.cjs` (sem rede: datas, endereço, validação, ordem,
-  fotos, configuração dos oito tipos — `node scripts/testes/painel-unidade.cjs` dentro de `site/`);
-  `conteudo.cjs` (CI, Directus de verdade: só itens de teste em rascunho, nada gravado onde não pode);
-  e, fora do repositório, uma prova no navegador (Edge) com as gravações dos tipos sem rascunho
-  interceptadas.
+  fotos, envio de arquivo, configuração dos nove tipos e a moderação — filtros das abas, regras de
+  aprovação, textos de confirmação, cartões da página inicial —; `node scripts/testes/painel-unidade.cjs`
+  dentro de `site/`); `conteudo.cjs` (CI, Directus de verdade: só itens de teste em rascunho, nada gravado
+  onde não pode; com um usuário "Semi-administrador" confere leitura, abas da moderação, envio de PDF e
+  que o PDF é baixado por qualquer pessoa); e, fora do repositório, uma prova no navegador (Edge) com as
+  gravações dos tipos sem rascunho interceptadas. **Regra para qualquer teste da moderação: o mural é
+  público e em tempo real, então NUNCA se grava `aprovado: true` de verdade** (nem em depoimentos);
+  itens de teste nascem `aprovado: false`, com texto começando por "TESTE", e são apagados no fim; em
+  `relatorios` não se grava nada de verdade (vai ao site na montagem seguinte).
 
 ### Comunidade: mural de oração, enquetes e Minha Conta
 

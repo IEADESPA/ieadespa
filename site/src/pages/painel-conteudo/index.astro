@@ -3,13 +3,15 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { DIRECTUS_URL } from "@/lib/directus";
-import { GRUPOS_HOME, painelUrls, TIPOS_CONTEUDO } from "@/lib/painelConteudo";
+import { GRUPOS_HOME } from "@/lib/painelConteudo";
+import { cartoesHome } from "@/lib/painelModeracao";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 import "@/styles/painel-conteudo.css";
 
 const allPosts = visiblePosts(await getAllMensagens());
-const tipos = Object.values(TIPOS_CONTEUDO);
-const secoes = GRUPOS_HOME.map((g) => ({ ...g, tipos: tipos.filter((t) => t.grupo === g.id) })).filter((g) => g.tipos.length > 0);
+// Cartões de conteúdo (editar) e de moderação (aprovar o que o público enviou) lado a lado, agrupados pela seção de cada um.
+const cartoes = cartoesHome();
+const secoes = GRUPOS_HOME.map((g) => ({ ...g, cartoes: cartoes.filter((c) => c.grupo === g.id) })).filter((g) => g.cartoes.length > 0);
 ---
 
 <BaseLayout title="Painel de conteúdo" description="Área restrita da equipe." noindex>
@@ -40,14 +42,14 @@ const secoes = GRUPOS_HOME.map((g) => ({ ...g, tipos: tipos.filter((t) => t.grup
                 </h2>
                 <p class="pc-secao-home-texto">{g.descricao}</p>
                 <div class="pc-cartoes mt-4">
-                  {g.tipos.map((t) => (
-                    <a href={painelUrls.destino(t)} class="pc-cartao" data-pc-cartao={t.id} data-astro-reload hidden>
+                  {g.cartoes.map((c) => (
+                    <a href={c.href} class="pc-cartao" data-pc-cartao={c.id} data-pc-origem={c.origem} data-astro-reload hidden>
                       <span class="pc-cartao-icone" aria-hidden="true">
-                        {t.icone}
+                        {c.icone}
                       </span>
                       <span>
-                        <span class="pc-cartao-titulo">{t.titulos.plural}</span>
-                        <span class="pc-cartao-texto">{t.descricao}</span>
+                        <span class="pc-cartao-titulo">{c.titulo}</span>
+                        <span class="pc-cartao-texto">{c.descricao}</span>
                         <span class="pc-cartao-contagem" data-pc-contagem />
                       </span>
                     </a>
@@ -77,6 +79,7 @@ const secoes = GRUPOS_HOME.map((g) => ({ ...g, tipos: tipos.filter((t) => t.grup
   <script>
     import { exigirAutenticacao, sair } from "@/lib/painelAuth";
     import { AUTH_CONTEUDO, TIPOS_CONTEUDO, criarApi, iniciarQuandoPronto } from "@/lib/painelConteudo";
+    import { TIPOS_MODERACAO, consultaContagem, textoContagemCartao, type TipoModeracao } from "@/lib/painelModeracao";
 
     iniciarQuandoPronto("[data-pc-inicio]", (raiz) => {
       const directusUrl = raiz.dataset.directusUrl ?? "";
@@ -98,8 +101,47 @@ const secoes = GRUPOS_HOME.map((g) => ({ ...g, tipos: tipos.filter((t) => t.grup
         if (semAcesso) semAcesso.hidden = true;
         let algumVisivel = false;
         let falhou = false;
-        await Promise.all(
-          Object.values(TIPOS_CONTEUDO).map(async (tipo) => {
+        /** Moderação: uma contagem por aba que aparece no cartão ("3 aguardando · 1 confidencial"); 403 em qualquer uma esconde o cartão. */
+        async function verificarModeracao(tipo: TipoModeracao) {
+          const cartao = q<HTMLAnchorElement>(`[data-pc-cartao="${tipo.id}"]`);
+          if (!cartao) return;
+          const abas = tipo.abas.filter((a) => a.cartao);
+          try {
+            const respostas = await Promise.all(abas.map((a) => api(consultaContagem(tipo, a.id))));
+            if (respostas.some((r) => r.status === 403)) {
+              cartao.hidden = true;
+              return;
+            }
+            cartao.hidden = false;
+            algumVisivel = true;
+            const alvo = cartao.querySelector<HTMLElement>("[data-pc-contagem]");
+            const partes: string[] = [];
+            for (let i = 0; i < abas.length; i++) {
+              const r = respostas[i];
+              if (!r.ok) {
+                falhou = true;
+                continue;
+              }
+              const json = (await r.json()) as { meta?: { filter_count?: number } };
+              const n = json.meta?.filter_count;
+              if (typeof n !== "number") continue;
+              const frase = textoContagemCartao(tipo, abas[i].id, n);
+              if (frase) partes.push(frase);
+              if (abas[i].id === "aguardando") {
+                cartao.dataset.pcAguardando = String(n);
+                alvo?.classList.toggle("pc-cartao-atencao", n > 0);
+              }
+            }
+            if (alvo) alvo.textContent = partes.join(" · ");
+          } catch {
+            cartao.hidden = false;
+            algumVisivel = true;
+            falhou = true;
+          }
+        }
+
+        await Promise.all([
+          ...Object.values(TIPOS_CONTEUDO).map(async (tipo) => {
             const cartao = q<HTMLAnchorElement>(`[data-pc-cartao="${tipo.id}"]`);
             if (!cartao) return;
             try {
@@ -124,7 +166,8 @@ const secoes = GRUPOS_HOME.map((g) => ({ ...g, tipos: tipos.filter((t) => t.grup
               falhou = true;
             }
           }),
-        );
+          ...Object.values(TIPOS_MODERACAO).map(verificarModeracao),
+        ]);
         // Uma seção (título + descrição) só aparece se pelo menos um cartão dela apareceu.
         raiz.querySelectorAll<HTMLElement>("[data-pc-secao-home]").forEach((secao) => {
           secao.hidden = !secao.querySelector("[data-pc-cartao]:not([hidden])");

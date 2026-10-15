@@ -841,3 +841,173 @@ textarea.field {
   border-color: var(--danger);
   color: #fff;
 }
+
+/* arquivo (PDF do relatório): nome, tamanho, abrir e trocar */
+
+.pc-arquivo {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.pc-arquivo-cartao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+
+.pc-arquivo-icone {
+  flex: none;
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.pc-arquivo-texto {
+  display: grid;
+  flex: 1 1 10rem;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.pc-arquivo-nome {
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.pc-arquivo-detalhe {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.pc-arquivo-abrir {
+  flex: 1 1 8rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 1.1rem;
+}
+
+.pc-arquivo .pc-img-botoes .btn {
+  min-height: 2.75rem;
+}
+
+/* lista: botão "Abrir arquivo" do item */
+
+.pc-item-acoes .pc-item-arquivo {
+  flex: 1 1 8rem;
+}
+
+/* moderação do que o público envia (/painel-conteudo/moderar/) */
+
+.pc-abas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pc-aba {
+  min-height: 2.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  padding: 0.4rem 1rem;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.pc-aba:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pc-aba[aria-selected="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.pc-mod-item {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.95rem;
+}
+
+.pc-mod-item-confidencial {
+  border-color: var(--warning);
+}
+
+.pc-mod-cab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.35rem 0.9rem;
+}
+
+.pc-mod-cab-com-foto {
+  grid-template-columns: 5rem minmax(0, 1fr);
+}
+
+.pc-mod-foto {
+  width: 5rem;
+  height: 5rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--muted);
+}
+
+.pc-mod-texto {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pc-mod-trava {
+  margin: 0;
+  border-left: 3px solid var(--warning);
+  padding-left: 0.7rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.pc-mod-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pc-mod-acoes .btn {
+  flex: 1 1 8rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 1.1rem;
+}
+
+.pc-mod-acoes .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pc-selo-nao {
+  color: var(--danger);
+}
+
+.pc-selo-neutro {
+  color: var(--muted-foreground);
+}
+
+.pc-dialogo-digitar {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.pc-cartao-atencao {
+  color: var(--warning);
+}

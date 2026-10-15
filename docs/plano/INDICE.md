@@ -68,11 +68,12 @@ Arquivo: [`fase-3-disciplina-e-etica.md`](fase-3-disciplina-e-etica.md) — 7 bl
 
 ## FASE 4 — Financeiro e Patrimônio
 
-Arquivo: [`fase-4-financeiro-e-patrimonio.md`](fase-4-financeiro-e-patrimonio.md) — 1 bloco(s) · itens 21/21 concluídos.
+Arquivo: [`fase-4-financeiro-e-patrimonio.md`](fase-4-financeiro-e-patrimonio.md) — 2 bloco(s) · itens 21/21 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
 | v4.1 | [Tesouraria Local e Repasses (Entradas)](fase-4-financeiro-e-patrimonio.md#v41--tesouraria-local-e-repasses-entradas) | ✅ 21/21 |
+| · | [Nota de numeração das refatorações de navegação (movida do README em 15/10/2026)](fase-4-financeiro-e-patrimonio.md#nota-de-numeração-das-refatorações-de-navegação-movida-do-readme-em-15102026) | — |
 
 ## FASE B — Consolidação da Base
 
@@ -152,10 +153,11 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 18 bloco(s) · itens 56/84 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 56/84 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
+| · | [Resumo em prosa do andamento da fase 7 e da fase D (movido do README em 15/10/2026)](fase-7-saude-eventos-e-comunicacao.md#resumo-em-prosa-do-andamento-da-fase-7-e-da-fase-d-movido-do-readme-em-15102026) | — |
 | v7.1 | [PSC (Programa de Saúde Congregacional)](fase-7-saude-eventos-e-comunicacao.md#v71--psc-programa-de-saúde-congregacional) | ✅ 6/6 |
 | v7.2 | [Calendário oficial e agenda unificada](fase-7-saude-eventos-e-comunicacao.md#v72--calendário-oficial-e-agenda-unificada) | ✅ 12/12 |
 | v7.3 | [Canais oficiais e comunicação](fase-7-saude-eventos-e-comunicacao.md#v73--canais-oficiais-e-comunicação) | ✅ 8/8 |

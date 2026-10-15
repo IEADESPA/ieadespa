@@ -3,6 +3,34 @@
 > Histórico e checklist desta parte do plano de versões. As referências a “seção 2.x” e “seção 4” apontam para o
 > [README](../../README.md); cada versão tem seu lugar no [índice do plano](INDICE.md).
 
+## Resumo em prosa do andamento da fase 7 e da fase D (movido do README em 15/10/2026)
+
+*Texto que estava no “Estado atual” do README, guardado aqui sem alterações. É uma fotografia de 08/10/2026: a situação de hoje de cada versão está no [índice do plano](INDICE.md).*
+
+- **Em andamento — FASE 7:** v7.1 (PSC), v7.2 (Calendário oficial), v7.3 (Canais oficiais), v7.4
+  (Eventos e congressos), v7.5 (Escalas e voluntariado), v7.6 (Setores Técnicos e Termo de Vistoria) v7.7 (Ministério com menores, Lei 14.811/2024) e v7.8 (Incidentes de proteção de crianças, ECA Art. 13: relógio de 24 horas para o Conselho Tutelar, relato protegido, afastamento cautelar, canal de ajuda sem login) entregues e no ar. Os pontos que a revisão da v7.5 apontou (IP
+  medido no Azure, idade para aderir, anonimização do IP, Meus Dados, avisos em ciclo, escopo de departamento e o
+  primeiro passo da CSP) foram fechados na própria versão — inclusive o **acesso do membro por matrícula + PIN**, a
+  exigência de sessão em todas as rotas de autoatendimento (que antes tratavam a matrícula como a própria pessoa) e o
+  **Termo do menor aceito pelo responsável legal**. Uma revisão independente do acesso por PIN achou outras brechas
+  (sessão de PIN valendo como liderança, troca de senha sem a senha atual, escopo de congregação ausente na ficha de
+  pessoa, voto de enquete com a matrícula do corpo, entre outras): todas corrigidas e presas por teste. Em seguida o
+  **escopo hierárquico passou a valer em todas as rotas** (dirigente → só a congregação; pastor de área → as da área; e
+  assim até o nível geral, que vê tudo), os catálogos só são lidos com login e só o nível geral os altera, e cada
+  documento ganhou a marca de quem pode vê-lo. Depois, o **fecho dos itens em aberto** (03/10/2026): sessão que se
+  derruba na hora (toda rota entra por `api/shared/entrada.js`), delegação por permissão, índices únicos no banco, aceite
+  de mediação só por ato da parte, abandono com dois olhos, remessa com as mesmas conferências do pagamento comum e
+  estorno de cessão. Só a chave site↔sistema nos dois portais do Azure depende de gente; os limites que continuam estão
+  no plano da fase 7. A CSP forte (04/10/2026) está feita. **Antes da 🔒 Trava 7-A entra a FASE D** (06/10/2026, 8ª
+  rodada): retrofit de robustez e operação (prova automática de toda tela, front em módulos, homologação, segundo fator,
+  alerta de queda, celular do membro), com custo escrito por versão pra decisão do responsável. Em 07/10/2026 a prova
+  de tela roda no CI (vD.1, também em janela de celular pro membro), o `script.js` virou núcleo + 23 módulos (vD.2),
+  a homologação migra, se semeia e varre as suas rotas sozinha (vD.3), a agenda chega ao site sem acordar o banco
+  (vD.5) e o menu do celular virou gaveta (vD.6). A Trava D-A foi fechada no mesmo dia. Em 08/10/2026: site na raiz
+  `ieadespa.org.br` (vD.7), segredos trocados e rotação escrita (vD.5/vD.8) e **chave de acesso** no login da liderança
+  (vD.4: passkey ou código por e-mail, confirmação reforçada nos quatro atos, provada com autenticador virtual no CI).
+  Resta o que depende do responsável (ensaio de restauração, Search Console, teste de carga) e a 🔒 Trava D-B.
+
 ## v7.1 — PSC (Programa de Saúde Congregacional)
 
 - [x] Avaliação anual obrigatória por congregação (Reg. Art. 127-129).

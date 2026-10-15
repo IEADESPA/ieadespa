@@ -1,14 +1,14 @@
 /**
  * Painel de conteúdo (/painel-conteudo/) — o "motor" configurável.
  *
- * A equipe edita notícias e mensagens numa página bonita (e boa no celular) em vez do Directus
- * "cru". Tudo o que muda de um tipo de conteúdo para outro mora num objeto de configuração
- * (`TIPOS_CONTEUDO` abaixo): coleção, títulos, colunas da lista, como saber se é rascunho, como
- * montar o endereço público e a lista de campos do formulário, agrupada em seções. As páginas
- * (`lista.astro`, `editar.astro`, `index.astro`) não conhecem nenhum tipo: só leem esta configuração.
+ * A equipe edita notícias, mensagens, perguntas frequentes, programação, galeria, ministérios, história e as
+ * páginas Sobre/Crenças numa página bonita (e boa no celular) em vez do Directus "cru". Tudo o que muda de um tipo de
+ * conteúdo para outro mora num objeto de configuração (`TIPOS_CONTEUDO` abaixo): coleção, títulos, colunas da lista,
+ * como saber se é rascunho (ou nada: vai direto ao site), ordenação manual, item único (singleton), páginas públicas,
+ * como montar o endereço público e a lista de campos do formulário, agrupada em seções. As páginas (`lista.astro`,
+ * `editar.astro`, `index.astro`) não conhecem nenhum tipo: só leem esta configuração.
  *
- * Para acrescentar um tipo novo (FAQ, programação, galeria…): um objeto novo em `TIPOS_CONTEUDO`
- * (e a permissão da função no Directus). Nada mais.
+ * Para acrescentar um tipo novo: um objeto novo em `TIPOS_CONTEUDO` (e a permissão da função no Directus). Nada mais.
  *
  * Este arquivo é "puro" (sem tocar em `document` ao ser importado): serve tanto ao servidor, que monta
  * os cartões da página inicial, quanto ao navegador. O desenho dos campos fica em `painelConteudoCampos.ts`.
@@ -29,6 +29,7 @@ export type TipoCampo =
   | "date"
   | "datetime"
   | "image"
+  | "imagens"
   | "m2o"
   | "number"
   | "url"
@@ -38,6 +39,26 @@ export type TipoCampo =
 export interface OpcaoCampo {
   valor: string;
   rotulo: string;
+}
+
+/** Campo "imagens" (várias fotos): a tabela de ligação (junction) do Directus que guarda uma linha por foto. */
+export interface RelacaoImagens {
+  /** Coleção da ligação (ex.: `historia_files`). */
+  colecao: string;
+  /** Campo da ligação que aponta para o item pai (ex.: `historia_id`). */
+  campoPai: string;
+  /** Campo da ligação que aponta para o arquivo (ex.: `directus_files_id`). */
+  campoArquivo: string;
+  /** Campo numérico da ligação com a posição da foto. */
+  campoOrdem: string;
+}
+
+/** O que o campo "imagens" guarda na tela: uma linha da ligação (`id` vazio = foto nova ainda não salva). */
+export interface FotoLigada {
+  id: number | null;
+  arquivo: string;
+  /** Posição guardada hoje no Directus (nula numa foto nova): serve para saber se a ordem mudou. */
+  ordem?: number | null;
 }
 
 /** Valor inicial de um item NOVO: um valor fixo, "hoje" (data local) ou "agora" (data e hora locais). */
@@ -53,11 +74,15 @@ export interface CampoConteudo {
   placeholder?: string;
   /** Sem isto não salva nem como rascunho. */
   obrigatorio?: boolean;
+  /** Frase mostrada quando um campo obrigatório fica vazio (padrão: "Preencha o campo …"). */
+  mensagemObrigatorio?: string;
   /** Só é cobrado na hora de PUBLICAR (rascunho pode ficar incompleto). */
   obrigatorioParaPublicar?: boolean;
   padrao?: PadraoCampo;
   /** text/textarea/markdown: tamanho máximo. */
   maxLength?: number;
+  /** text: sugere (lista ao digitar) os valores que já existem nesse campo na coleção — evita álbuns, grupos etc. escritos de jeitos diferentes. */
+  sugerirExistentes?: boolean;
   /** textarea/markdown: altura inicial, em linhas. */
   linhas?: number;
   /** select: as opções. */
@@ -69,8 +94,13 @@ export interface CampoConteudo {
   /** m2o: de onde vêm as opções (coleção e campo mostrado). */
   colecaoRelacionada?: string;
   campoRotuloRelacionado?: string;
+  /** m2o: campo da coleção relacionada que dá a ordem dos grupos na lista (ex.: `sort`). */
+  campoOrdemRelacionado?: string;
   /** slug: campo de onde o endereço é gerado enquanto a pessoa não o edita. */
   slugDe?: string;
+  /** imagens: a tabela de ligação e o limite de fotos (padrão 30). */
+  imagens?: RelacaoImagens;
+  maximo?: number;
   /** readonly: como mostrar o valor. */
   formato?: "texto" | "sim-nao" | "data" | "datahora";
   rotuloSim?: string;
@@ -91,6 +121,33 @@ export interface SecaoConteudo {
   campos: CampoConteudo[];
 }
 
+/** Seção da página inicial do painel em que o cartão do tipo aparece. */
+export type GrupoHome = "noticias" | "paginas" | "institucional";
+
+export const GRUPOS_HOME: { id: GrupoHome; titulo: string; descricao: string }[] = [
+  {
+    id: "noticias",
+    titulo: "Notícias e mensagens",
+    descricao: "O que você escreve toda semana: avisos, novidades e pregações.",
+  },
+  {
+    id: "paginas",
+    titulo: "Páginas e informações",
+    descricao: "Textos e fotos das páginas de consulta do site.",
+  },
+  {
+    id: "institucional",
+    titulo: "Institucional",
+    descricao: "O que fala da igreja: ministérios, história e páginas fixas.",
+  },
+];
+
+/** Uma página do site pública que mostra este tipo de conteúdo (para o link "Ver no site"). */
+export interface PaginaPublica {
+  rotulo: string;
+  url: string;
+}
+
 export interface TipoConteudo {
   /** Valor de `?tipo=` nas páginas do painel. */
   id: string;
@@ -105,13 +162,33 @@ export interface TipoConteudo {
   /** Frase do cartão da página inicial. */
   descricao: string;
   icone: string;
+  /** Em que seção da página inicial o cartão aparece. */
+  grupo: GrupoHome;
+  /** Páginas do site que mostram este conteúdo (link "Ver no site" na lista e no formulário). */
+  paginasPublicas: PaginaPublica[];
   campoTitulo: string;
   campoData?: string;
   campoCategoria?: string;
   campoCapa?: string;
   campoDestaque?: string;
-  /** Qual campo diz se é rascunho e qual valor dele significa "rascunho". */
-  rascunho: { campo: string; valorRascunho: boolean };
+  /**
+   * Campos cujo texto aparece, separado por " · ", embaixo do título na lista (select mostra o rótulo da opção,
+   * data vira dd/mm/aaaa). Sem isto vale `campoData` + `campoCategoria`.
+   */
+  camposMeta?: string[];
+  /**
+   * Qual campo diz se é rascunho e qual valor dele significa "rascunho". SEM isto o tipo não tem rascunho: o que for
+   * salvo vai ao site na próxima montagem (a tela avisa e só oferece "Salvar").
+   */
+  rascunho?: { campo: string; valorRascunho: boolean };
+  /** Item único (ex.: textos fixos do site): a lista não existe, o cartão abre direto o formulário; sem "novo" nem "excluir". */
+  unico?: boolean;
+  /**
+   * Ordem manual: o campo numérico (`sort`) define a ordem no site. A lista mostra ▲/▼ que trocam os valores de
+   * `sort` entre vizinhos; item novo entra no fim (`maior sort + 1`). Com `agruparPor`, a ordem vale DENTRO de cada
+   * grupo (ex.: perguntas dentro de cada categoria; atividades dentro de cada dia) e a lista mostra os grupos.
+   */
+  ordem?: { campo: string; agruparPor?: string; rotuloSemGrupo?: string };
   /**
    * Campo booleano que um robô marca DEPOIS de avisar os inscritos (notificação no navegador). Quando existe e está
    * falso, publicar dispara aviso de verdade; a tela de confirmação diz isso.
@@ -142,6 +219,8 @@ const noticias: TipoConteudo = {
   titulos: { plural: "Notícias", singular: "notícia", nova: "Nova notícia", esta: "esta notícia" },
   descricao: "Avisos e novidades da igreja que aparecem na página de notícias.",
   icone: "📰",
+  grupo: "noticias",
+  paginasPublicas: [{ rotulo: "Notícias", url: "/noticias/" }],
   campoTitulo: "title",
   campoData: "date",
   campoCategoria: "category",
@@ -292,6 +371,8 @@ const mensagens: TipoConteudo = {
   },
   descricao: "Estudos, pregações e reflexões publicados na página de mensagens.",
   icone: "📖",
+  grupo: "noticias",
+  paginasPublicas: [{ rotulo: "Mensagens", url: "/mensagens/" }],
   campoTitulo: "title",
   campoData: "date",
   campoCategoria: "category",
@@ -462,8 +543,501 @@ const mensagens: TipoConteudo = {
   ],
 };
 
-/** O registro: para um tipo novo, acrescente um objeto aqui. */
-export const TIPOS_CONTEUDO: Record<string, TipoConteudo> = { noticias, mensagens };
+// ----------------------------------------------------------------------------------------------
+// Segundo lote: perguntas frequentes, programação, ministérios, história, galeria e páginas fixas
+// ----------------------------------------------------------------------------------------------
+
+/** Mesmas opções (e mesma ordem) do campo `categoria` do FAQ no Directus e de `CATEGORY_ORDER` em `src/lib/faq.ts`. */
+const CATEGORIAS_FAQ: OpcaoCampo[] = [
+  { valor: "primeira-visita", rotulo: "Primeira visita" },
+  { valor: "cultos", rotulo: "Cultos e congregações" },
+  { valor: "doacoes", rotulo: "Doações" },
+  { valor: "mensagens", rotulo: "Mensagens e conteúdo" },
+  { valor: "site", rotulo: "Usando o site" },
+  { valor: "oracao", rotulo: "Oração" },
+  { valor: "eventos", rotulo: "Eventos" },
+  { valor: "transparencia", rotulo: "Transparência" },
+];
+
+const faq: TipoConteudo = {
+  id: "faq",
+  colecao: "faq",
+  titulos: {
+    plural: "Perguntas frequentes",
+    singular: "pergunta",
+    nova: "Nova pergunta",
+    esta: "esta pergunta",
+  },
+  descricao: "As perguntas e respostas da página “Dúvidas frequentes”.",
+  icone: "❓",
+  grupo: "paginas",
+  paginasPublicas: [{ rotulo: "Dúvidas frequentes", url: "/duvidas-frequentes/" }],
+  campoTitulo: "pergunta",
+  campoCategoria: "categoria",
+  camposMeta: [],
+  rascunho: { campo: "draft", valorRascunho: true },
+  ordem: { campo: "sort", agruparPor: "categoria" },
+  ordenacao: ["sort", "id"],
+  urlPublica: () => null,
+  secoes: [
+    {
+      id: "principal",
+      titulo: "A pergunta e a resposta",
+      campos: [
+        {
+          nome: "pergunta",
+          tipo: "text",
+          rotulo: "Pergunta",
+          obrigatorio: true,
+          maxLength: 255,
+          placeholder: "Ex.: Tem estacionamento?",
+        },
+        {
+          nome: "resposta",
+          tipo: "textarea",
+          rotulo: "Resposta",
+          obrigatorio: true,
+          linhas: 6,
+          ajuda:
+            "Texto simples: o site mostra exatamente o que você escrever aqui, sem negrito nem links.",
+        },
+        {
+          nome: "categoria",
+          tipo: "select",
+          rotulo: "Grupo da pergunta",
+          obrigatorio: true,
+          opcoes: CATEGORIAS_FAQ,
+          ajuda:
+            "Em qual grupo da página a pergunta aparece. A ordem dentro do grupo você muda na lista, com as setas ▲ e ▼.",
+        },
+      ],
+    },
+  ],
+};
+
+const DIAS_PROGRAMACAO: OpcaoCampo[] = [
+  { valor: "segunda", rotulo: "Segunda-feira" },
+  { valor: "terca", rotulo: "Terça-feira" },
+  { valor: "quarta", rotulo: "Quarta-feira" },
+  { valor: "quinta", rotulo: "Quinta-feira" },
+  { valor: "sexta", rotulo: "Sexta-feira" },
+  { valor: "sabado", rotulo: "Sábado" },
+  { valor: "domingo_manha", rotulo: "Domingo de manhã" },
+  { valor: "domingo_noite", rotulo: "Domingo à noite" },
+];
+
+const programacao: TipoConteudo = {
+  id: "programacao",
+  colecao: "programacao",
+  titulos: {
+    plural: "Programação semanal",
+    singular: "atividade",
+    nova: "Nova atividade",
+    esta: "esta atividade",
+  },
+  descricao: "Os cultos e reuniões de cada dia da semana, na Sede e nas congregações.",
+  icone: "🗓️",
+  grupo: "paginas",
+  paginasPublicas: [
+    { rotulo: "Página inicial", url: "/" },
+    { rotulo: "Contato", url: "/contato/" },
+  ],
+  campoTitulo: "title",
+  camposMeta: ["scope", "occurrence", "time"],
+  ordem: { campo: "sort", agruparPor: "day" },
+  ordenacao: ["sort", "id"],
+  urlPublica: () => null,
+  secoes: [
+    {
+      id: "principal",
+      titulo: "A atividade",
+      campos: [
+        {
+          nome: "day",
+          tipo: "select",
+          rotulo: "Dia da semana",
+          obrigatorio: true,
+          meia: true,
+          opcoes: DIAS_PROGRAMACAO,
+        },
+        {
+          nome: "scope",
+          tipo: "select",
+          rotulo: "Onde acontece",
+          padrao: "todas",
+          meia: true,
+          opcoes: [
+            { valor: "todas", rotulo: "Sede e congregações" },
+            { valor: "sede", rotulo: "Somente na Sede" },
+            { valor: "congregacoes", rotulo: "Nas congregações" },
+          ],
+        },
+        {
+          nome: "title",
+          tipo: "text",
+          rotulo: "Nome da atividade",
+          obrigatorio: true,
+          maxLength: 255,
+          placeholder: "Ex.: Escola Bíblica Dominical",
+        },
+        {
+          nome: "time",
+          tipo: "text",
+          rotulo: "Horário (opcional)",
+          maxLength: 60,
+          meia: true,
+          placeholder: "Ex.: 19h30",
+        },
+        {
+          nome: "occurrence",
+          tipo: "select",
+          rotulo: "Qual domingo do mês (opcional)",
+          meia: true,
+          opcoes: [
+            { valor: "1", rotulo: "1º domingo do mês" },
+            { valor: "2", rotulo: "2º domingo do mês" },
+            { valor: "3", rotulo: "3º domingo do mês" },
+            { valor: "4_se_5", rotulo: "4º domingo (só em meses com 5 domingos)" },
+            { valor: "ultimo", rotulo: "Último domingo do mês" },
+          ],
+          ajuda: "Só vale para “Domingo à noite”. Deixe em branco nos outros dias.",
+        },
+      ],
+    },
+  ],
+};
+
+const ministerios: TipoConteudo = {
+  id: "ministerios",
+  colecao: "ministerios",
+  titulos: {
+    plural: "Ministérios e órgãos",
+    singular: "ministério",
+    nova: "Novo ministério",
+    esta: "este ministério",
+  },
+  descricao: "Departamentos, secretarias e conselhos da página “Órgãos” e a página de cada um.",
+  icone: "⛪",
+  grupo: "institucional",
+  paginasPublicas: [{ rotulo: "Órgãos", url: "/orgaos/" }],
+  campoTitulo: "name",
+  campoCategoria: "category",
+  camposMeta: [],
+  ordem: { campo: "sort", agruparPor: "category" },
+  ordenacao: ["sort", "id"],
+  urlPublica: (item) => (item.slug ? `/orgao/${item.slug}/` : null),
+  secoes: [
+    {
+      id: "principal",
+      titulo: "O ministério",
+      campos: [
+        {
+          nome: "name",
+          tipo: "text",
+          rotulo: "Nome",
+          obrigatorio: true,
+          maxLength: 255,
+          placeholder: "Ex.: Departamento de Jovens",
+        },
+        {
+          nome: "slug",
+          tipo: "slug",
+          rotulo: "Endereço (slug)",
+          obrigatorio: true,
+          slugDe: "name",
+          maxLength: 120,
+          ajuda:
+            "É o final do endereço da página deste ministério no site. Só letras minúsculas, números e hífen.",
+        },
+        {
+          nome: "category",
+          tipo: "m2o",
+          rotulo: "Tipo de órgão",
+          obrigatorio: true,
+          padrao: "departamentos",
+          colecaoRelacionada: "orgao_categorias",
+          campoRotuloRelacionado: "label",
+          campoOrdemRelacionado: "sort",
+          ajuda:
+            "Em qual grupo da página “Órgãos” ele aparece (governança, departamentos, secretarias…).",
+        },
+        {
+          nome: "description",
+          tipo: "textarea",
+          rotulo: "Resumo",
+          linhas: 3,
+          ajuda: "O texto curto que aparece no cartão da página “Órgãos”.",
+        },
+        {
+          nome: "body",
+          tipo: "markdown",
+          rotulo: "Texto completo",
+          linhas: 14,
+          ajuda:
+            "Aparece na página do ministério (botão “Saiba mais”). Use os botões acima do texto para negrito, título, lista etc.",
+        },
+      ],
+    },
+  ],
+};
+
+const historia: TipoConteudo = {
+  id: "historia",
+  colecao: "historia",
+  titulos: { plural: "Nossa história", singular: "marco", nova: "Novo marco", esta: "este marco" },
+  descricao: "A linha do tempo da igreja, ano a ano, com texto e fotos.",
+  icone: "🕰️",
+  grupo: "institucional",
+  paginasPublicas: [{ rotulo: "Nossa história", url: "/historia/" }],
+  campoTitulo: "title",
+  campoCapa: "photo",
+  camposMeta: ["period"],
+  ordem: { campo: "sort" },
+  ordenacao: ["sort", "id"],
+  urlPublica: () => null,
+  secoes: [
+    {
+      id: "principal",
+      titulo: "O marco",
+      campos: [
+        {
+          nome: "title",
+          tipo: "text",
+          rotulo: "Título",
+          obrigatorio: true,
+          maxLength: 255,
+          placeholder: "Ex.: Inauguração do templo sede",
+        },
+        {
+          nome: "period",
+          tipo: "text",
+          rotulo: "Ano ou período",
+          maxLength: 255,
+          placeholder: "Ex.: 2010",
+          ajuda: "Aparece no menu de anos da página. Ex.: 1985, Década de 1990, Anos 2000.",
+        },
+        {
+          nome: "body",
+          tipo: "markdown",
+          rotulo: "Relato",
+          linhas: 12,
+          ajuda: "Relato, entrevista ou trecho da história desse período.",
+        },
+      ],
+    },
+    {
+      id: "fotos",
+      titulo: "Fotos",
+      campos: [
+        {
+          nome: "photo",
+          tipo: "image",
+          rotulo: "Foto principal",
+          ajuda: "Foto de época, se houver. JPEG, PNG, WebP ou GIF, até 8 MB.",
+        },
+        {
+          nome: "fotos",
+          tipo: "imagens",
+          rotulo: "Mais fotos deste marco (opcional)",
+          imagens: {
+            colecao: "historia_files",
+            campoPai: "historia_id",
+            campoArquivo: "directus_files_id",
+            campoOrdem: "sort",
+          },
+          maximo: 30,
+          ajuda:
+            "Outras fotos do mesmo momento. Toque em “Adicionar fotos”; use ◀ e ▶ para mudar a ordem.",
+        },
+      ],
+    },
+  ],
+};
+
+const galeria: TipoConteudo = {
+  id: "galeria",
+  colecao: "galeria",
+  titulos: {
+    plural: "Galeria de fotos",
+    singular: "foto",
+    nova: "Nova foto",
+    esta: "esta foto",
+  },
+  descricao: "As fotos de cultos e eventos, organizadas por álbum.",
+  icone: "🖼️",
+  grupo: "paginas",
+  paginasPublicas: [{ rotulo: "Galeria de fotos", url: "/galeria/" }],
+  campoTitulo: "alt",
+  campoCapa: "photo",
+  camposMeta: ["caption"],
+  ordem: { campo: "sort", agruparPor: "album", rotuloSemGrupo: "Outras fotos" },
+  ordenacao: ["sort", "id"],
+  urlPublica: () => null,
+  secoes: [
+    {
+      id: "principal",
+      titulo: "A foto",
+      campos: [
+        {
+          nome: "photo",
+          tipo: "image",
+          rotulo: "Foto",
+          obrigatorio: true,
+          mensagemObrigatorio: "Escolha a foto: sem ela não há o que mostrar na galeria.",
+          ajuda: "JPEG, PNG, WebP ou GIF, até 8 MB.",
+        },
+        {
+          nome: "alt",
+          tipo: "text",
+          rotulo: "Descrição da foto (para quem não enxerga)",
+          obrigatorio: true,
+          maxLength: 255,
+          mensagemObrigatorio:
+            "Descreva a foto em uma frase. É obrigatório: pessoas cegas ou com baixa visão só “veem” a foto por este texto, lido pelo leitor de tela.",
+          placeholder: "Ex.: Batismo nas águas no culto de domingo",
+          ajuda:
+            "Explique em uma frase o que aparece, como se estivesse contando por telefone para quem não pode ver. É o que o leitor de tela lê para pessoas cegas ou com baixa visão (e o que aparece se a foto não carregar).",
+        },
+        {
+          nome: "caption",
+          tipo: "text",
+          rotulo: "Legenda (opcional)",
+          maxLength: 255,
+          ajuda: "Texto que aparece embaixo da foto no site.",
+        },
+        {
+          nome: "album",
+          tipo: "text",
+          rotulo: "Álbum (opcional)",
+          maxLength: 255,
+          sugerirExistentes: true,
+          placeholder: "Ex.: Culto de Natal 2026",
+          ajuda:
+            "Escreva o mesmo nome em todas as fotos do mesmo evento (ao digitar, o painel sugere os álbuns que já existem). Em branco: a foto vai para “Outras fotos”.",
+        },
+      ],
+    },
+  ],
+};
+
+const configuracoes: TipoConteudo = {
+  id: "configuracoes",
+  colecao: "configuracoes",
+  titulos: {
+    plural: "Páginas do site: Sobre e Crenças",
+    singular: "página do site",
+    nova: "",
+    esta: "estas páginas",
+  },
+  descricao:
+    "A frase de abertura, o texto de “Sobre”, a declaração de “Crenças” e a foto da fachada.",
+  icone: "📜",
+  grupo: "institucional",
+  paginasPublicas: [
+    { rotulo: "Página inicial", url: "/" },
+    { rotulo: "Sobre", url: "/sobre/" },
+    { rotulo: "Crenças", url: "/crencas/" },
+  ],
+  campoTitulo: "tagline",
+  unico: true,
+  ordenacao: ["id"],
+  urlPublica: () => null,
+  secoes: [
+    {
+      id: "abertura",
+      titulo: "Abertura do site",
+      campos: [
+        {
+          nome: "tagline",
+          tipo: "text",
+          rotulo: "Frase de abertura",
+          obrigatorio: true,
+          maxLength: 255,
+          ajuda: "A frase grande no topo da página inicial.",
+        },
+        {
+          nome: "about",
+          tipo: "textarea",
+          rotulo: "Resumo da igreja",
+          obrigatorio: true,
+          linhas: 4,
+          ajuda: "Um parágrafo curto. Aparece na página inicial e no topo da página “Sobre”.",
+        },
+        {
+          nome: "phone",
+          tipo: "text",
+          rotulo: "Telefone / WhatsApp (opcional)",
+          maxLength: 60,
+          placeholder: "Ex.: (94) 99999-9999",
+          ajuda:
+            "Aparece na página “Contato” e no cartão de contato que a pessoa salva no celular.",
+        },
+      ],
+    },
+    {
+      id: "sobre",
+      titulo: "Página “Sobre”",
+      campos: [
+        {
+          nome: "sobre_corpo",
+          tipo: "markdown",
+          rotulo: "Texto da página “Sobre”",
+          obrigatorio: true,
+          linhas: 18,
+          ajuda:
+            "Cada título (botão “Título”) vira uma seção da página. Veja como fica na aba Prévia.",
+        },
+      ],
+    },
+    {
+      id: "crencas",
+      titulo: "Página “Crenças”",
+      campos: [
+        {
+          nome: "crencas_corpo",
+          tipo: "markdown",
+          rotulo: "Texto da página “Crenças” (declaração de fé)",
+          linhas: 24,
+          ajuda:
+            "Cada título (botão “Título”) vira uma seção da página. Veja como fica na aba Prévia.",
+        },
+      ],
+    },
+    {
+      id: "fachada",
+      titulo: "Foto da fachada (opcional)",
+      descricao:
+        "O site usa a foto do Google Street View; esta foto só vale se for mais recente que a do Street View.",
+      campos: [
+        {
+          nome: "foto_fachada",
+          tipo: "image",
+          rotulo: "Foto da fachada",
+          ajuda: "JPEG, PNG, WebP ou GIF, até 8 MB.",
+        },
+        {
+          nome: "foto_fachada_data",
+          tipo: "date",
+          rotulo: "Data em que a foto foi tirada",
+          ajuda:
+            "Preencha junto com a foto: é com esta data que o site decide qual das duas é a mais recente.",
+        },
+      ],
+    },
+  ],
+};
+
+/** O registro: para um tipo novo, acrescente um objeto aqui. A ordem dos cartões na página inicial segue esta ordem. */
+export const TIPOS_CONTEUDO: Record<string, TipoConteudo> = {
+  noticias,
+  mensagens,
+  faq,
+  programacao,
+  galeria,
+  ministerios,
+  historia,
+  configuracoes,
+};
 
 export const obterTipo = (id: string | null | undefined): TipoConteudo | null =>
   id && Object.prototype.hasOwnProperty.call(TIPOS_CONTEUDO, id) ? TIPOS_CONTEUDO[id] : null;
@@ -475,6 +1049,17 @@ export const todosCampos = (tipo: TipoConteudo): CampoConteudo[] =>
 export const campoSlugDe = (tipo: TipoConteudo): CampoConteudo | null =>
   todosCampos(tipo).find((c) => c.tipo === "slug") ?? null;
 
+/** Nomes (no Directus) que um campo do formulário ocupa: o campo "imagens" lê as linhas da tabela de ligação. */
+export function nomesNoDirectus(campo: CampoConteudo): string[] {
+  if (campo.tipo === "imagens" && campo.imagens)
+    return [
+      `${campo.nome}.id`,
+      `${campo.nome}.${campo.imagens.campoArquivo}`,
+      `${campo.nome}.${campo.imagens.campoOrdem}`,
+    ];
+  return [campo.nome];
+}
+
 /** Campos que a LISTA precisa ler do Directus. */
 export function camposDaLista(tipo: TipoConteudo): string[] {
   const nomes = [
@@ -485,28 +1070,240 @@ export function camposDaLista(tipo: TipoConteudo): string[] {
     tipo.campoCategoria,
     tipo.campoCapa,
     tipo.campoDestaque,
-    tipo.rascunho.campo,
+    tipo.rascunho?.campo,
     tipo.campoNotificacao,
     tipo.campoAtualizado?.campo,
+    tipo.ordem?.campo,
+    tipo.ordem?.agruparPor,
+    ...(tipo.camposMeta ?? []),
   ];
   return [...new Set(nomes.filter((n): n is string => Boolean(n)))];
 }
 
-/** Campos que a EDIÇÃO precisa ler do Directus. */
-export function camposDaEdicao(tipo: TipoConteudo): string[] {
+/**
+ * Campos que a EDIÇÃO precisa ler do Directus. `semRelacoes` deixa de fora os campos "imagens" (tabela de ligação):
+ * usado quando o perfil não pode ler a ligação e o Directus recusa o pedido inteiro.
+ */
+export function camposDaEdicao(
+  tipo: TipoConteudo,
+  opcoes: { semRelacoes?: boolean } = {},
+): string[] {
   const nomes = [
     "id",
-    tipo.rascunho.campo,
+    tipo.rascunho?.campo,
     tipo.campoNotificacao,
     tipo.campoAtualizado?.campo,
-    ...todosCampos(tipo).map((c) => c.nome),
+    ...todosCampos(tipo)
+      .filter((c) => !(opcoes.semRelacoes && c.tipo === "imagens"))
+      .flatMap(nomesNoDirectus),
   ];
   return [...new Set(nomes.filter((n): n is string => Boolean(n)))];
 }
 
-/** Item publicado = o campo de rascunho NÃO vale "rascunho" (o site mostra tudo o que não é `draft: true`). */
+/**
+ * Item "publicado" = o campo de rascunho NÃO vale "rascunho" (o site mostra tudo o que não é `draft: true`). Tipo sem
+ * rascunho: todo item salvo já está valendo no site.
+ */
 export const estaPublicado = (tipo: TipoConteudo, item: Record<string, unknown>): boolean =>
-  item[tipo.rascunho.campo] !== tipo.rascunho.valorRascunho;
+  !tipo.rascunho || item[tipo.rascunho.campo] !== tipo.rascunho.valorRascunho;
+
+/** Caminho do item no Directus: item único (singleton) usa o endereço da coleção; os demais, `/items/coleção/id`. */
+export const caminhoItem = (tipo: TipoConteudo, id?: number | string | null): string =>
+  tipo.unico || id === null || id === undefined
+    ? `/items/${tipo.colecao}`
+    : `/items/${tipo.colecao}/${encodeURIComponent(String(id))}`;
+
+// ----------------------------------------------------------------------------------------------
+// Ordem manual (▲/▼) e grupos
+// ----------------------------------------------------------------------------------------------
+
+export type ItemLista = Record<string, unknown> & { id: number | string };
+
+const numeroOuNulo = (v: unknown): number | null =>
+  typeof v === "number" && Number.isFinite(v) ? v : null;
+
+/** Texto da chave de grupo de um item: vazio/nulo = "sem grupo" (chave ""). */
+export const chaveGrupo = (valor: unknown): string =>
+  valor === null || valor === undefined ? "" : String(valor).trim();
+
+/** Compara dois itens pelo campo de ordem (menor primeiro, SEM ordem por último — como o Postgres faz) e depois pelo id. */
+export function compararPorOrdem(campo: string) {
+  return (a: ItemLista, b: ItemLista): number => {
+    const x = numeroOuNulo(a[campo]);
+    const y = numeroOuNulo(b[campo]);
+    if (x !== y) {
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return x - y;
+    }
+    const ia = Number(a.id);
+    const ib = Number(b.id);
+    return Number.isFinite(ia) && Number.isFinite(ib)
+      ? ia - ib
+      : String(a.id).localeCompare(String(b.id));
+  };
+}
+
+export interface GrupoLista {
+  chave: string;
+  rotulo: string;
+  itens: ItemLista[];
+}
+
+/**
+ * Separa os itens em grupos (ex.: uma pergunta de cada categoria) e ordena cada grupo pela ordem manual. A ordem dos
+ * grupos é a de `ordemChaves` (a das opções do campo); grupos que não estão lá vêm depois, na ordem em que aparecem; o
+ * grupo "sem valor" vai por último. Sem `campoGrupo`, devolve um grupo só, sem título.
+ */
+export function montarGrupos(
+  itens: ItemLista[],
+  campoGrupo: string | undefined,
+  opcoes: {
+    campoOrdem: string;
+    ordemChaves?: string[];
+    rotulos?: Record<string, string>;
+    rotuloSemGrupo?: string;
+  },
+): GrupoLista[] {
+  const ordenados = [...itens].sort(compararPorOrdem(opcoes.campoOrdem));
+  if (!campoGrupo) return [{ chave: "", rotulo: "", itens: ordenados }];
+  const mapa = new Map<string, ItemLista[]>();
+  for (const it of ordenados) {
+    const chave = chaveGrupo(it[campoGrupo]);
+    const lista = mapa.get(chave);
+    if (lista) lista.push(it);
+    else mapa.set(chave, [it]);
+  }
+  const chaves = [...mapa.keys()];
+  const conhecidas = (opcoes.ordemChaves ?? []).filter((c) => c !== "" && mapa.has(c));
+  const outras = chaves.filter((c) => c !== "" && !conhecidas.includes(c));
+  const ordemFinal = [...conhecidas, ...outras, ...(mapa.has("") ? [""] : [])];
+  return ordemFinal.map((chave) => ({
+    chave,
+    rotulo:
+      chave === "" ? (opcoes.rotuloSemGrupo ?? "Sem grupo") : (opcoes.rotulos?.[chave] ?? chave),
+    itens: mapa.get(chave) ?? [],
+  }));
+}
+
+/**
+ * Troca de lugar o item `idA` com o vizinho `idB` e devolve o que gravar (uma lista de `{ id, [campoOrdem]: número }`).
+ * `grupo` são TODOS os itens do mesmo grupo, na ordem atual. Caso normal (ordens distintas): troca os dois valores e só
+ * esses dois itens são gravados. Se algum item do grupo não tem ordem, ou há ordens repetidas, a troca não bastaria
+ * (os valores iguais não dizem quem vem antes): então o grupo é renumerado 1, 2, 3… com a troca feita, e só são
+ * gravados os itens cujo número mudou. Lista vazia = nada a gravar (item não encontrado ou trocando consigo mesmo).
+ */
+export function calcularTroca(
+  grupo: ItemLista[],
+  campoOrdem: string,
+  idA: number | string,
+  idB: number | string,
+): Record<string, number | string>[] {
+  const a = grupo.find((i) => i.id === idA);
+  const b = grupo.find((i) => i.id === idB);
+  if (!a || !b || a === b) return [];
+  const valores = grupo.map((i) => numeroOuNulo(i[campoOrdem]));
+  const limpos = valores.every((v) => v !== null) && new Set(valores).size === valores.length;
+  if (limpos)
+    return [
+      { id: a.id, [campoOrdem]: valores[grupo.indexOf(b)] as number },
+      { id: b.id, [campoOrdem]: valores[grupo.indexOf(a)] as number },
+    ];
+  const lista = [...grupo];
+  const ia = lista.indexOf(a);
+  const ib = lista.indexOf(b);
+  [lista[ia], lista[ib]] = [lista[ib], lista[ia]];
+  const gravar: Record<string, number | string>[] = [];
+  lista.forEach((it, posicao) => {
+    if (numeroOuNulo(it[campoOrdem]) !== posicao + 1)
+      gravar.push({ id: it.id, [campoOrdem]: posicao + 1 });
+  });
+  return gravar;
+}
+
+/** Próximo número de ordem de um item novo: o maior atual + 1 (1 se não há nenhum). */
+export function proximaOrdem(maior: unknown): number {
+  const n = numeroOuNulo(typeof maior === "string" && maior !== "" ? Number(maior) : maior);
+  return n === null ? 1 : Math.floor(n) + 1;
+}
+
+/** Pergunta ao Directus qual é a maior ordem hoje (no mesmo grupo, quando o tipo agrupa). `grupoValor` é o valor do campo de grupo do item. */
+export function consultaMaiorOrdem(tipo: TipoConteudo, grupoValor: unknown): string {
+  const o = tipo.ordem;
+  if (!o) return `/items/${tipo.colecao}?fields=id&limit=1`;
+  let filtroGrupo = "";
+  if (o.agruparPor) {
+    const v = chaveGrupo(grupoValor);
+    filtroGrupo =
+      v === ""
+        ? `&filter[${o.agruparPor}][_null]=true`
+        : `&filter[${o.agruparPor}][_eq]=${encodeURIComponent(v)}`;
+  }
+  return `/items/${tipo.colecao}?fields=${o.campo}&sort=-${o.campo}&limit=1&filter[${o.campo}][_nnull]=true${filtroGrupo}`;
+}
+
+// ----------------------------------------------------------------------------------------------
+// Várias fotos (campo "imagens", tabela de ligação)
+// ----------------------------------------------------------------------------------------------
+
+/** Linhas da ligação como o Directus entrega (`[{ id, directus_files_id, sort }]`) → lista de fotos na ordem certa. */
+export function fotosDeDirectus(campo: CampoConteudo, bruto: unknown): FotoLigada[] {
+  const rel = campo.imagens;
+  if (!rel || !Array.isArray(bruto)) return [];
+  const linhas: FotoLigada[] = [];
+  for (const l of bruto) {
+    if (!l || typeof l !== "object") continue; // só ids soltos (sem os campos pedidos): não dá para usar
+    const o = l as Record<string, unknown>;
+    const arquivo = o[rel.campoArquivo];
+    if (typeof arquivo !== "string" || !arquivo) continue;
+    linhas.push({
+      id: typeof o.id === "number" ? o.id : null,
+      arquivo,
+      ordem: numeroOuNulo(o[rel.campoOrdem]),
+    });
+  }
+  return linhas
+    .map((l, i) => ({ l, i }))
+    .sort((x, y) => {
+      const a = x.l.ordem ?? Number.POSITIVE_INFINITY;
+      const b = y.l.ordem ?? Number.POSITIVE_INFINITY;
+      return a === b ? x.i - y.i : a - b;
+    })
+    .map((x) => x.l);
+}
+
+export interface DiferencaFotos {
+  create: Record<string, unknown>[];
+  update: Record<string, unknown>[];
+  delete: number[];
+}
+
+/**
+ * O que mandar ao Directus para o campo "imagens" (formato de relação um-para-muitos: `create`, `update`, `delete`).
+ * Fotos novas viram linhas novas; fotos tiradas viram `delete` (só a linha de ligação — o arquivo continua guardado);
+ * as que ficaram e mudaram de posição levam a posição nova (posição = lugar na lista, 1, 2, 3…). Devolve `null` se não
+ * mudou nada.
+ */
+export function diferencaFotos(
+  campo: CampoConteudo,
+  inicial: FotoLigada[],
+  atual: FotoLigada[],
+): DiferencaFotos | null {
+  const rel = campo.imagens;
+  if (!rel) return null;
+  const idsAtuais = new Set(atual.filter((f) => f.id !== null).map((f) => f.id));
+  const apagar = inicial
+    .filter((f) => f.id !== null && !idsAtuais.has(f.id))
+    .map((f) => f.id as number);
+  const criar: Record<string, unknown>[] = [];
+  const atualizar: Record<string, unknown>[] = [];
+  atual.forEach((f, i) => {
+    if (f.id === null) criar.push({ [rel.campoArquivo]: f.arquivo, [rel.campoOrdem]: i + 1 });
+    else if (f.ordem !== i + 1) atualizar.push({ id: f.id, [rel.campoOrdem]: i + 1 });
+  });
+  if (!apagar.length && !criar.length && !atualizar.length) return null;
+  return { create: criar, update: atualizar, delete: apagar };
+}
 
 /** Endereços das páginas do painel. */
 export const painelUrls = {
@@ -515,6 +1312,11 @@ export const painelUrls = {
   lista: (tipo: string) => `/painel-conteudo/lista/?tipo=${encodeURIComponent(tipo)}`,
   editar: (tipo: string, id?: number | string | null) =>
     `/painel-conteudo/editar/?tipo=${encodeURIComponent(tipo)}${id ? `&id=${encodeURIComponent(String(id))}` : ""}`,
+  /** Para onde o cartão da página inicial leva: a lista (ou, em tipo de item único, direto o formulário). */
+  destino: (tipo: { id: string; unico?: boolean }) =>
+    tipo.unico
+      ? `/painel-conteudo/editar/?tipo=${encodeURIComponent(tipo.id)}`
+      : `/painel-conteudo/lista/?tipo=${encodeURIComponent(tipo.id)}`,
 };
 
 /** Sessão do painel de conteúdo: chaves em sessionStorage e tela de login. */
@@ -643,6 +1445,7 @@ export function valorPadrao(campo: CampoConteudo): unknown {
   if (p === "agora")
     return campo.tipo === "date" ? hojeLocal() : localInputParaIso(agoraLocalInput());
   if (p !== undefined) return p;
+  if (campo.tipo === "imagens") return [];
   return campo.tipo === "boolean" ? false : null;
 }
 
@@ -667,6 +1470,8 @@ export function paraDirectus(campo: CampoConteudo, bruto: unknown): unknown {
     case "datetime": {
       return typeof bruto === "string" && bruto ? bruto : null;
     }
+    case "imagens":
+      return Array.isArray(bruto) ? bruto : [];
     default: {
       const t = typeof bruto === "string" ? bruto.trim() : bruto;
       return t === "" || t === undefined ? null : t;
@@ -683,9 +1488,14 @@ export function validarCampo(
   // Número digitado que o navegador não conseguiu entender (ex.: "1e"): chega como NaN.
   if (typeof valor === "number" && Number.isNaN(valor))
     return `"${campo.rotulo}" precisa ser um número.`;
-  const vazio = valor === null || valor === undefined || valor === "";
+  const vazio =
+    valor === null ||
+    valor === undefined ||
+    valor === "" ||
+    (Array.isArray(valor) && valor.length === 0);
   if (vazio) {
-    if (campo.obrigatorio) return `Preencha o campo "${campo.rotulo}".`;
+    if (campo.obrigatorio)
+      return campo.mensagemObrigatorio ?? `Preencha o campo "${campo.rotulo}".`;
     if (publicar && campo.obrigatorioParaPublicar)
       return `Para publicar, preencha "${campo.rotulo}". (Você pode salvar como rascunho sem isso.)`;
     return null;
@@ -714,6 +1524,12 @@ export function validarCampo(
         return `"${campo.rotulo}" não pode ser menor que ${campo.min}.`;
       if (campo.max !== undefined && n > campo.max)
         return `"${campo.rotulo}" não pode ser maior que ${campo.max}.`;
+      break;
+    }
+    case "imagens": {
+      const max = campo.maximo ?? 30;
+      if (Array.isArray(valor) && valor.length > max)
+        return `"${campo.rotulo}" aceita no máximo ${max} fotos (tem ${valor.length}). Tire algumas.`;
       break;
     }
     case "date":
@@ -778,6 +1594,14 @@ export function explicarErroDirectus(
   const campo = e?.extensions?.field;
   const slug = tipo ? campoSlugDe(tipo)?.nome : undefined;
   if (status === 403) return { status, mensagem: `Seu perfil não pode ${acao} aqui.` };
+  if (status === 400 && codigo === "INVALID_FOREIGN_KEY")
+    return {
+      status,
+      mensagem:
+        acao === "excluir"
+          ? "Não dá para excluir: este item está ligado a outros registros (por exemplo membros do órgão ou notícias que o citam). Desfaça essas ligações antes ou peça ajuda à Secretaria."
+          : "O servidor recusou: um dos valores aponta para algo que não existe mais. Recarregue a página e tente de novo.",
+    };
   if (status === 401)
     return {
       status,

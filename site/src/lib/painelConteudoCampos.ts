@@ -11,6 +11,7 @@ import {
   dataBR,
   dataHoraBR,
   explicarErroDirectus,
+  fotosDeDirectus,
   isoParaLocalInput,
   localInputParaIso,
   paraDirectus,
@@ -19,6 +20,7 @@ import {
   urlSegura,
   type ApiPainel,
   type CampoConteudo,
+  type FotoLigada,
   type TipoConteudo,
 } from "@/lib/painelConteudo";
 
@@ -173,7 +175,33 @@ function montarEntrada(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
       controle.step = String(campo.passo ?? 1);
     }
   }
-  const c = casca(campo, controle);
+  // Sugestões: os valores que já existem nesse campo (ex.: nomes de álbum), para não escrever o mesmo de dois jeitos.
+  let sugestoes: HTMLDataListElement | null = null;
+  if (campo.sugerirExistentes && campo.tipo === "text") {
+    sugestoes = h("datalist", { id: `${id}-sugestoes` });
+    controle.setAttribute("list", sugestoes.id);
+    const lista = sugestoes;
+    void (async () => {
+      try {
+        const res = await ctx.api(
+          `/items/${ctx.tipo.colecao}?fields=${encodeURIComponent(campo.nome)}&limit=-1&sort=${encodeURIComponent(campo.nome)}`,
+        );
+        if (!res.ok) return;
+        const json = (await res.json()) as { data?: Record<string, unknown>[] };
+        const vistos = new Set<string>();
+        for (const item of json.data ?? []) {
+          const v = typeof item[campo.nome] === "string" ? (item[campo.nome] as string).trim() : "";
+          if (v && !vistos.has(v)) {
+            vistos.add(v);
+            lista.append(h("option", { value: v }));
+          }
+        }
+      } catch {
+        /* sugestão é só um luxo: sem ela o campo funciona igual */
+      }
+    })();
+  }
+  const c = casca(campo, sugestoes ? h("div", {}, controle, sugestoes) : controle);
   controle.addEventListener("input", () => {
     c.mostrarErro(null);
     ctx.aoAlterar(campo.nome);
@@ -207,13 +235,17 @@ function montarSelecao(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
     name: campo.nome,
     "aria-describedby": campo.ajuda ? `${id}-ajuda ${id}-erro` : `${id}-erro`,
   });
-  // Com valor padrão (ou obrigatório) não há opção "em branco": a pessoa não deixa o campo sem valor por engano
-  // (a categoria de uma mensagem em branco derrubaria a montagem do site).
-  const semVazio = Boolean(campo.obrigatorio) || campo.padrao !== undefined;
+  // Com valor padrão não há opção "em branco": a pessoa não deixa o campo sem valor por engano (a categoria de uma
+  // mensagem em branco derrubaria a montagem do site). Obrigatório SEM padrão (ex.: o dia da programação) começa em
+  // branco, para a escolha ser consciente, e a validação exige que ela seja feita.
+  const semVazio = campo.padrao !== undefined;
   const opcoes = campo.opcoes ?? [];
   const montarOpcoes = (valorAtual: string) => {
     sel.replaceChildren();
-    if (!semVazio) sel.append(h("option", { value: "" }, "— Nenhuma —"));
+    if (!semVazio)
+      sel.append(
+        h("option", { value: "" }, campo.obrigatorio ? "— Escolha uma opção —" : "— Nenhuma —"),
+      );
     for (const o of opcoes) sel.append(h("option", { value: o.valor }, o.rotulo));
     if (valorAtual && !opcoes.some((o) => o.valor === valorAtual))
       sel.append(h("option", { value: valorAtual }, `${valorAtual} (valor antigo)`));
@@ -252,7 +284,13 @@ function montarRelacao(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
     sel.replaceChildren(h("option", { value: "" }, "— Nenhum —"));
     for (const o of opcoes) sel.append(h("option", { value: String(o.id) }, o.rotulo));
     if (valor !== null && !opcoes.some((o) => String(o.id) === String(valor)))
-      sel.append(h("option", { value: String(valor) }, `Item nº ${valor}`));
+      sel.append(
+        h(
+          "option",
+          { value: String(valor) },
+          typeof valor === "number" ? `Item nº ${valor}` : String(valor),
+        ),
+      );
     sel.value = valor === null ? "" : String(valor);
   };
   pintar();
@@ -260,7 +298,7 @@ function montarRelacao(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
     const rotuloCampo = campo.campoRotuloRelacionado ?? "id";
     try {
       const res = await ctx.api(
-        `/items/${campo.colecaoRelacionada}?fields=id,${rotuloCampo}&sort=${rotuloCampo}&limit=-1`,
+        `/items/${campo.colecaoRelacionada}?fields=id,${rotuloCampo}&sort=${campo.campoOrdemRelacionado ?? rotuloCampo}&limit=-1`,
       );
       if (!res.ok) {
         sel.disabled = true;
@@ -641,6 +679,193 @@ function montarImagem(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
     },
     erro: c.mostrarErro,
     focar: () => escolher.focus(),
+  };
+}
+
+// ----------------------------------------------------------------------------------------------
+// Várias fotos (galeria de um item: tabela de ligação com uma linha por foto)
+// ----------------------------------------------------------------------------------------------
+
+function montarFotos(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
+  const id = idDoCampo(campo);
+  const maximo = campo.maximo ?? 30;
+  const lista = h("ul", { class: "pc-fotos-lista", "aria-label": campo.rotulo });
+  const vazio = h("p", { class: "pc-ajuda pc-fotos-vazio" }, "Nenhuma foto adicionada.");
+  const arquivoEl = h("input", {
+    id,
+    type: "file",
+    multiple: true,
+    class: "pc-img-arquivo",
+    accept: IMAGEM_TIPOS_ACEITOS.join(","),
+    "aria-describedby": `${id}-ajuda ${id}-erro`,
+  });
+  const adicionar = h(
+    "button",
+    { type: "button", class: "btn btn-outline pc-fotos-adicionar" },
+    "Adicionar fotos",
+  );
+  const status = h("p", { class: "pc-img-status", role: "status", "aria-live": "polite" });
+  const c = casca(
+    campo,
+    h(
+      "div",
+      { class: "pc-fotos" },
+      lista,
+      vazio,
+      h("div", { class: "pc-img-botoes" }, adicionar),
+      arquivoEl,
+      status,
+    ),
+    { rotuloPara: id },
+  );
+
+  let fotos: FotoLigada[] = [];
+  const locais = new Map<string, string>(); // arquivo enviado agora → endereço local para a miniatura
+
+  const soltarLocais = () => {
+    for (const u of locais.values()) URL.revokeObjectURL(u);
+    locais.clear();
+  };
+
+  const pintar = (focoEm?: { arquivo: string; acao: "esq" | "dir" | "remover" }) => {
+    lista.replaceChildren();
+    vazio.hidden = fotos.length > 0;
+    adicionar.disabled = fotos.length >= maximo;
+    fotos.forEach((foto, i) => {
+      const num = i + 1;
+      const img = h("img", {
+        class: "pc-foto-img",
+        alt: `Foto ${num} de ${fotos.length}`,
+        width: "96",
+        height: "96",
+        loading: "lazy",
+      });
+      img.src =
+        locais.get(foto.arquivo) ??
+        directusAssetUrl(foto.arquivo, {
+          width: 192,
+          height: 192,
+          fit: "cover",
+          quality: 70,
+          format: "webp",
+        });
+      const botao = (acao: "esq" | "dir" | "remover", texto: string, dica: string, off = false) =>
+        h(
+          "button",
+          {
+            type: "button",
+            class: `btn btn-outline pc-foto-btn${acao === "remover" ? " pc-btn-perigo" : ""}`,
+            "data-foto-acao": acao,
+            "aria-label": dica,
+            title: dica,
+            disabled: off,
+          },
+          texto,
+        );
+      const esq = botao("esq", "◀", `Mover a foto ${num} para antes`, i === 0);
+      const dir = botao("dir", "▶", `Mover a foto ${num} para depois`, i === fotos.length - 1);
+      const rem = botao("remover", "Remover", `Remover a foto ${num} deste item`);
+      const mover = (de: number, para: number, acao: "esq" | "dir") => {
+        const novo = [...fotos];
+        const [x] = novo.splice(de, 1);
+        novo.splice(para, 0, x);
+        fotos = novo;
+        c.mostrarErro(null);
+        status.textContent = `Foto movida para a posição ${para + 1}. Salve para valer.`;
+        pintar({ arquivo: x.arquivo, acao });
+        ctx.aoAlterar(campo.nome);
+      };
+      esq.addEventListener("click", () => mover(i, i - 1, "esq"));
+      dir.addEventListener("click", () => mover(i, i + 1, "dir"));
+      rem.addEventListener("click", () => {
+        fotos = fotos.filter((_, j) => j !== i);
+        c.mostrarErro(null);
+        status.textContent =
+          "Foto tirada deste item (o arquivo continua guardado no Directus). Salve para valer.";
+        pintar();
+        ctx.aoAlterar(campo.nome);
+        adicionar.focus();
+      });
+      lista.append(
+        h(
+          "li",
+          { class: "pc-foto", "data-foto": foto.arquivo },
+          img,
+          h("div", { class: "pc-foto-botoes" }, esq, dir, rem),
+        ),
+      );
+    });
+    if (focoEm) {
+      const alvo = Array.from(lista.querySelectorAll<HTMLElement>(".pc-foto")).find(
+        (li) => li.dataset.foto === focoEm.arquivo,
+      );
+      const preferido = alvo?.querySelector<HTMLButtonElement>(`[data-foto-acao="${focoEm.acao}"]`);
+      (preferido && !preferido.disabled
+        ? preferido
+        : alvo?.querySelector<HTMLButtonElement>("button:not(:disabled)")
+      )?.focus();
+    }
+  };
+  pintar();
+
+  adicionar.addEventListener("click", () => arquivoEl.click());
+  arquivoEl.addEventListener("change", async () => {
+    const escolhidos = Array.from(arquivoEl.files ?? []);
+    arquivoEl.value = "";
+    if (!escolhidos.length) return;
+    const vagas = maximo - fotos.length;
+    const recusas: string[] = [];
+    const aceitos: File[] = [];
+    for (const arq of escolhidos) {
+      const recusa = validarArquivoImagem(arq);
+      if (recusa) recusas.push(`${arq.name}: ${recusa}`);
+      else if (aceitos.length >= vagas)
+        recusas.push(`${arq.name}: passou do limite de ${maximo} fotos neste item.`);
+      else aceitos.push(arq);
+    }
+    c.mostrarErro(recusas.length ? recusas.join(" ") : null);
+    if (!aceitos.length) {
+      status.textContent = "";
+      return;
+    }
+    const soltar = ctx.ocupar();
+    adicionar.disabled = true;
+    let enviadas = 0;
+    try {
+      for (const arq of aceitos) {
+        status.textContent = `Enviando foto ${enviadas + 1} de ${aceitos.length}…`;
+        const r = await enviarArquivoImagem(ctx, arq);
+        if (!("id" in r)) {
+          if (r.sessao) ctx.sessaoExpirou();
+          else c.mostrarErro([...recusas, `${arq.name}: ${r.erro}`].join(" "));
+          break;
+        }
+        locais.set(r.id, URL.createObjectURL(arq));
+        fotos = [...fotos, { id: null, arquivo: r.id, ordem: null }];
+        enviadas++;
+        pintar();
+        ctx.aoAlterar(campo.nome);
+      }
+      status.textContent = enviadas
+        ? `${enviadas === 1 ? "1 foto enviada" : `${enviadas} fotos enviadas`}. Salve o item para valer.`
+        : "";
+    } finally {
+      adicionar.disabled = fotos.length >= maximo;
+      soltar();
+    }
+  });
+
+  return {
+    campo,
+    raiz: c.raiz,
+    ler: () => fotos.map((f) => ({ ...f })),
+    definir: (valor) => {
+      soltarLocais();
+      fotos = fotosDeDirectus(campo, valor);
+      pintar();
+    },
+    erro: c.mostrarErro,
+    focar: () => adicionar.focus(),
   };
 }
 
@@ -1031,6 +1256,8 @@ export function montarCampo(campo: CampoConteudo, ctx: ContextoForm): CampoMonta
       return montarBooleano(campo, ctx);
     case "image":
       return montarImagem(campo, ctx);
+    case "imagens":
+      return montarFotos(campo, ctx);
     case "readonly":
       return montarSomenteLeitura(campo);
     case "slug":

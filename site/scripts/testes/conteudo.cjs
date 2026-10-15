@@ -1,12 +1,19 @@
 // Bateria do PAINEL DE CONTEÚDO (/painel-conteudo/) contra o Directus de verdade e o site publicado (15/10/2026).
 // Cria um usuário temporário com a função "Editor de notícias" e confere, com o token DELE (o mesmo que o painel usa):
-//   - o que pode: ler, criar (SÓ rascunho), alterar e apagar notícias e mensagens; ler órgãos; enviar imagem (só imagem);
+//   - o que pode: ler, criar (SÓ rascunho), alterar e apagar notícias, mensagens e perguntas frequentes (FAQ); ler (e, pelo
+//     mapa de permissões, escrever em) programação, galeria, história (e suas fotos) e ministérios; ler órgãos; enviar imagem
+//     (só imagem); trocar a ordem (`sort`) de itens em LOTE, como o painel faz com as setas ▲/▼;
 //   - o que NÃO pode: nada sigiloso (mural de oração, contas, inscrições, pedidos de camiseta, avisos do navegador, mensagens
-//     de contato…), nem enviar arquivo que não seja imagem, nem apagar arquivo;
+//     de contato, relatórios, depoimentos…), nem as páginas fixas do site (`configuracoes`), nem gravar em órgãos/categorias de
+//     órgão, nem enviar arquivo que não seja imagem, nem apagar arquivo;
 //   - que as quatro páginas do painel respondem no site.
 // REGRA DE SEGURANÇA: o Directus daqui é o de produção e um item com draft=false e notificacao_enviada=false dispara notificação
 // de verdade para quem ativou os avisos. Por isso TODO item criado aqui nasce `draft: true` E `notificacao_enviada: true`,
 // com slug "teste-conteudo-…" (a versão do conteúdo ignora "teste-…") e é apagado no `finally`, junto com o usuário e o arquivo.
+// Os tipos SEM rascunho (programação, ministérios, história, galeria, configuracoes) são públicos no instante em que se grava:
+// aqui NUNCA se grava neles — só leitura, 403 e o mapa de permissões (`/permissions/me`). O FAQ tem `draft`: os itens de teste
+// dele nascem `draft: true`, começam por "TESTE" (a versão do conteúdo os ignora) e são apagados no `finally`.
+// No começo e no fim a bateria conta os itens desses tipos (e confere o texto das páginas fixas): se algo mudou, falha.
 //
 // Variáveis: SITE_URL (padrão: produção), DIRECTUS_URL, DIRECTUS_ADMIN_TOKEN (ver README desta pasta). Nada de segredo é impresso.
 const crypto = require("node:crypto");
@@ -24,6 +31,21 @@ async function main() {
   const prefixo = "teste-conteudo-" + Date.now();
   let usuarioId = null;
   const arquivos = [];
+  // Coleções em que a bateria NUNCA grava: o retrato de antes e de depois tem que ser idêntico.
+  const SO_LEITURA = ["programacao", "ministerios", "historia", "historia_files", "galeria"];
+  const contar = async (col) => {
+    const r = await dx("GET", `/items/${col}?aggregate[count]=*`);
+    const d = Array.isArray(r.data) ? r.data[0] : r.data;
+    return d && d.count !== undefined ? Number(d.count) : null;
+  };
+  const retrato = async () => {
+    const o = {};
+    for (const c of SO_LEITURA) o[c] = await contar(c);
+    const cfg = await dx("GET", "/items/configuracoes");
+    o.configuracoes = crypto.createHash("sha256").update(JSON.stringify(cfg.data || null)).digest("hex").slice(0, 12);
+    return o;
+  };
+  const antes = await retrato();
 
   // O Directus (plano pequeno) devolve 503/429 de vez em quando: a limpeza tenta de novo, para não deixar lixo de teste em produção.
   async function tentar(fn) {
@@ -43,6 +65,13 @@ async function main() {
       );
       const ids = (r.data || []).map((x) => x.id);
       if (ids.length) await tentar(() => dx("DELETE", `/items/${col}`, ids));
+    }
+    {
+      const r = await tentar(() =>
+        dx("GET", `/items/faq?filter[pergunta][_starts_with]=TESTE ${prefixo}&fields=id&limit=-1`),
+      );
+      const ids = (r.data || []).map((x) => x.id);
+      if (ids.length) await tentar(() => dx("DELETE", "/items/faq", ids));
     }
     if (usuarioId) {
       const f = await tentar(() =>
@@ -104,9 +133,69 @@ async function main() {
     };
 
     // ---- o que o Editor de notícias PODE (leitura)
-    for (const c of ["noticias", "mensagens", "orgao_membros", "orgao_categorias"]) {
+    for (const c of [
+      "noticias",
+      "mensagens",
+      "orgao_membros",
+      "orgao_categorias",
+      "faq",
+      "programacao",
+      "galeria",
+      "ministerios",
+      "historia",
+      "historia_files",
+    ]) {
       const r = await como("GET", `/items/${c}?limit=1&fields=id`);
       v.ok(`lê ${c} (200)`, r.status === 200, r.status);
+    }
+    // A história com as linhas da tabela de fotos (é o que o formulário pede) e os ministérios com o tipo de órgão.
+    const h = await como("GET", "/items/historia?limit=1&fields=id,title,photo,fotos.id,fotos.directus_files_id,fotos.sort");
+    v.ok(
+      "lê a história junto com as linhas da tabela de fotos (fotos.id, fotos.directus_files_id, fotos.sort)",
+      h.status === 200 && Array.isArray(h.j.data) && h.j.data.length === 1 && Array.isArray(h.j.data[0].fotos),
+      h.status,
+    );
+    // O mapa de permissões da própria conta (leitura, sem gravar nada): o que o editor PODE e NÃO PODE escrever.
+    const pm = await como("GET", "/permissions/me");
+    const mapa = (pm.j && pm.j.data) || {};
+    const acesso = (col, acao) => (mapa[col] && mapa[col][acao] && mapa[col][acao].access) || "none";
+    v.ok("GET /permissions/me responde (200)", pm.status === 200 && Object.keys(mapa).length > 0, pm.status);
+    for (const col of ["noticias", "mensagens", "faq", "programacao", "galeria", "ministerios", "historia", "historia_files"]) {
+      v.ok(
+        `mapa de permissões: escreve (cria, altera, apaga) e lê ${col}`,
+        ["create", "read", "update", "delete"].every((a) => acesso(col, a) !== "none"),
+        ["create", "read", "update", "delete"].map((a) => acesso(col, a)).join("/"),
+      );
+    }
+    for (const col of ["orgao_membros", "orgao_categorias"]) {
+      v.ok(
+        `mapa de permissões: só LÊ ${col} (não cria, altera nem apaga)`,
+        acesso(col, "read") !== "none" && ["create", "update", "delete"].every((a) => acesso(col, a) === "none"),
+        ["create", "read", "update", "delete"].map((a) => acesso(col, a)).join("/"),
+      );
+    }
+    for (const col of [
+      "configuracoes",
+      "relatorios",
+      "depoimentos",
+      "mural_oracao",
+      "contas",
+      "contas_codigos",
+      "inscricoes_eventos",
+      "camiseta_pedidos",
+      "push_subscriptions",
+      "contato_mensagens",
+    ]) {
+      v.ok(
+        `mapa de permissões: NENHUM acesso a ${col}`,
+        ["create", "read", "update", "delete"].every((a) => acesso(col, a) === "none"),
+        ["create", "read", "update", "delete"].map((a) => acesso(col, a)).join("/"),
+      );
+    }
+    // Campos que o painel manda ao gravar um tipo sem rascunho: tudo liberado ("*") nas coleções do segundo lote.
+    for (const col of ["faq", "programacao", "galeria", "ministerios", "historia", "historia_files"]) {
+      const campos = (mapa[col] && mapa[col].update && mapa[col].update.fields) || [];
+      v.ok(`${col}: o editor altera todos os campos (inclui "sort", usado pelas setas ▲/▼)`, campos.includes("*") || campos.includes("sort"), JSON.stringify(campos).slice(0, 80));
     }
 
     // ---- ciclo completo em RASCUNHO (nunca publicado) nas duas coleções
@@ -170,6 +259,59 @@ async function main() {
       v.ok(`${col}: o item de teste sumiu mesmo`, (some.data || []).length === 0);
     }
 
+    // ---- FAQ: ciclo completo em RASCUNHO + troca de ordem em lote (como as setas ▲/▼ do painel). Só itens "TESTE", sempre draft:true.
+    {
+      const baseFaq = (n, sort) => ({
+        pergunta: `TESTE ${prefixo} ${n} (apagar)`,
+        resposta: "teste do painel",
+        categoria: "site",
+        draft: true,
+        sort,
+      });
+      const a = await como("POST", "/items/faq", baseFaq("A", 9001));
+      const b = await como("POST", "/items/faq", baseFaq("B", 9002));
+      const idA = a.j.data && a.j.data.id;
+      const idB = b.j.data && b.j.data.id;
+      v.ok("cria dois itens de FAQ em rascunho (200)", a.status === 200 && b.status === 200 && !!idA && !!idB, `${a.status} ${b.status} ${a.erro || ""}`);
+      if (idA && idB) {
+        const noAdmin = (await dx("GET", `/items/faq?filter[id][_in]=${idA},${idB}&fields=id,draft,sort,categoria&sort=id`)).data || [];
+        v.ok(
+          "faq: os itens de teste nasceram RASCUNHO (nada vai ao ar)",
+          noAdmin.length === 2 && noAdmin.every((x) => x.draft === true),
+          JSON.stringify(noAdmin),
+        );
+        // O painel descobre o "maior sort" do grupo antes de criar um item novo.
+        const maior = await como("GET", "/items/faq?fields=sort&sort=-sort&limit=1&filter[sort][_nnull]=true&filter[categoria][_eq]=site");
+        v.ok(
+          "faq: a consulta do 'maior sort da categoria' funciona para o editor e enxerga o item novo",
+          maior.status === 200 && maior.j.data && maior.j.data[0] && maior.j.data[0].sort === 9002,
+          `${maior.status} ${JSON.stringify(maior.j.data)}`,
+        );
+        // Setas ▲/▼: um PATCH em lote, com os ids no corpo, troca os dois valores de uma vez (tudo ou nada).
+        const lote = await como("PATCH", "/items/faq", [
+          { id: idA, sort: 9002 },
+          { id: idB, sort: 9001 },
+        ]);
+        v.ok("faq: PATCH em lote [{id, sort}, {id, sort}] (troca de ordem) responde 200", lote.status === 200, `${lote.status} ${lote.erro || ""}`);
+        const depois = (await dx("GET", `/items/faq?filter[id][_in]=${idA},${idB}&fields=id,sort&sort=id`)).data || [];
+        const porId = Object.fromEntries(depois.map((x) => [x.id, x.sort]));
+        v.ok("faq: os dois valores de sort foram trocados de verdade", porId[idA] === 9002 && porId[idB] === 9001, JSON.stringify(porId));
+        const p = await como("PATCH", `/items/faq/${idA}`, { resposta: "alterada pelo teste" });
+        v.ok("altera em faq (200)", p.status === 200 && p.j.data && p.j.data.resposta === "alterada pelo teste", p.status);
+        const noAdmin2 = (await dx("GET", `/items/faq/${idA}?fields=draft`)).data || {};
+        v.ok("faq: continua RASCUNHO depois de alterar", noAdmin2.draft === true, JSON.stringify(noAdmin2));
+        const d = await como("DELETE", `/items/faq/${idA}`);
+        v.ok("apaga em faq (204)", d.status === 204, d.status);
+      }
+    }
+    // O editor NÃO escreve nas páginas fixas nem nos órgãos: sonda SEM efeito (id que não existe / nada é enviado).
+    const orgaoNaoExiste = await como("PATCH", "/items/orgao_membros/987654", { name: "x" });
+    v.ok("NÃO altera orgao_membros (403, sem chegar a existir o item)", orgaoNaoExiste.status === 403, orgaoNaoExiste.status);
+    const orgaoApaga = await como("DELETE", "/items/orgao_membros/987654");
+    v.ok("NÃO apaga em orgao_membros (403)", orgaoApaga.status === 403, orgaoApaga.status);
+    const catApaga = await como("DELETE", "/items/orgao_categorias/nao-existe-teste");
+    v.ok("NÃO apaga em orgao_categorias (403)", catApaga.status === 403, catApaga.status);
+
     // ---- envio de arquivo: só imagem
     const fd = new FormData();
     fd.append("file", new Blob([PNG_1PX], { type: "image/png" }), "teste-conteudo-1px.png");
@@ -232,10 +374,14 @@ async function main() {
       "depoimentos",
       "configuracoes",
       "eventos",
+      "relatorios",
     ]) {
       const r = await como("GET", `/items/${c}?limit=1&fields=id`);
       v.ok(`NÃO lê ${c} (403)`, r.status === 403, r.status);
     }
+    // As páginas fixas (singleton): o endereço do item único também é recusado — e nada é gravado.
+    const cfgLe = await como("GET", "/items/configuracoes?fields=tagline");
+    v.ok("NÃO lê as páginas fixas pelo endereço do item único (403)", cfgLe.status === 403, cfgLe.status);
     // Contas de outras pessoas: o Directus deixa todo usuário do painel ver a PRÓPRIA conta (e só ela).
     const us = await como("GET", "/users?limit=-1&fields=id");
     v.ok(
@@ -272,7 +418,15 @@ async function main() {
       const r = await dx("GET", `/items/${col}?filter[slug][_starts_with]=${prefixo}&fields=id`);
       sobra.push(...(r.data || []));
     }
+    const sobraFaq = await dx("GET", `/items/faq?filter[pergunta][_starts_with]=TESTE ${prefixo}&fields=id`);
+    sobra.push(...(sobraFaq.data || []));
     v.ok("limpeza: nenhum item de teste ficou no Directus", sobra.length === 0, sobra.length);
+    const depois = await retrato();
+    v.ok(
+      "nada foi gravado onde não se pode: programação, ministérios, história (e fotos) e galeria com a mesma contagem; páginas fixas com o mesmo texto",
+      JSON.stringify(antes) === JSON.stringify(depois),
+      `antes ${JSON.stringify(antes)} depois ${JSON.stringify(depois)}`,
+    );
     const usuariosSobra = await dx(
       "GET",
       `/users?filter[email][_starts_with]=teste-conteudo-&fields=id&limit=-1`,

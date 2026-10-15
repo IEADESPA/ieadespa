@@ -3,12 +3,13 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { DIRECTUS_URL } from "@/lib/directus";
-import { painelUrls, TIPOS_CONTEUDO } from "@/lib/painelConteudo";
+import { GRUPOS_HOME, painelUrls, TIPOS_CONTEUDO } from "@/lib/painelConteudo";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 import "@/styles/painel-conteudo.css";
 
 const allPosts = visiblePosts(await getAllMensagens());
 const tipos = Object.values(TIPOS_CONTEUDO);
+const secoes = GRUPOS_HOME.map((g) => ({ ...g, tipos: tipos.filter((t) => t.grupo === g.id) })).filter((g) => g.tipos.length > 0);
 ---
 
 <BaseLayout title="Painel de conteúdo" description="Área restrita da equipe." noindex>
@@ -30,19 +31,29 @@ const tipos = Object.values(TIPOS_CONTEUDO);
       <div hidden data-painel-conteudo>
         <p class="text-sm text-muted-foreground">Escolha o que você quer escrever ou editar.</p>
 
-        <div class="pc-cartoes mt-5" data-pc-cartoes>
+        <div data-pc-cartoes>
           {
-            tipos.map((t) => (
-              <a href={painelUrls.lista(t.id)} class="pc-cartao" data-pc-cartao={t.id} data-astro-reload hidden>
-                <span class="pc-cartao-icone" aria-hidden="true">
-                  {t.icone}
-                </span>
-                <span>
-                  <span class="pc-cartao-titulo">{t.titulos.plural}</span>
-                  <span class="pc-cartao-texto">{t.descricao}</span>
-                  <span class="pc-cartao-contagem" data-pc-contagem />
-                </span>
-              </a>
+            secoes.map((g) => (
+              <section class="pc-secao-home mt-8" data-pc-secao-home={g.id} aria-labelledby={`pc-home-${g.id}`} hidden>
+                <h2 class="pc-secao-home-titulo" id={`pc-home-${g.id}`}>
+                  {g.titulo}
+                </h2>
+                <p class="pc-secao-home-texto">{g.descricao}</p>
+                <div class="pc-cartoes mt-4">
+                  {g.tipos.map((t) => (
+                    <a href={painelUrls.destino(t)} class="pc-cartao" data-pc-cartao={t.id} data-astro-reload hidden>
+                      <span class="pc-cartao-icone" aria-hidden="true">
+                        {t.icone}
+                      </span>
+                      <span>
+                        <span class="pc-cartao-titulo">{t.titulos.plural}</span>
+                        <span class="pc-cartao-texto">{t.descricao}</span>
+                        <span class="pc-cartao-contagem" data-pc-contagem />
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </section>
             ))
           }
         </div>
@@ -103,7 +114,7 @@ const tipos = Object.values(TIPOS_CONTEUDO);
                 const json = (await res.json()) as { meta?: { filter_count?: number } };
                 const n = json.meta?.filter_count;
                 const alvo = cartao.querySelector<HTMLElement>("[data-pc-contagem]");
-                if (alvo && typeof n === "number") alvo.textContent = n === 1 ? "1 item" : `${n} itens`;
+                if (alvo && !tipo.unico && typeof n === "number") alvo.textContent = n === 1 ? "1 item" : `${n} itens`;
               } else {
                 falhou = true;
               }
@@ -114,6 +125,10 @@ const tipos = Object.values(TIPOS_CONTEUDO);
             }
           }),
         );
+        // Uma seção (título + descrição) só aparece se pelo menos um cartão dela apareceu.
+        raiz.querySelectorAll<HTMLElement>("[data-pc-secao-home]").forEach((secao) => {
+          secao.hidden = !secao.querySelector("[data-pc-cartao]:not([hidden])");
+        });
         if (!algumVisivel && semAcesso) semAcesso.hidden = false;
         if (falhou && erroEl) {
           erroEl.hidden = false;

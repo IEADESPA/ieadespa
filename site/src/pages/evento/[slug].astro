@@ -1,5 +1,5 @@
 ---
-import { marked } from "marked";
+import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
@@ -78,7 +78,7 @@ interface Props {
 }
 
 const { event } = Astro.props;
-const bodyHtml = event.body ? await marked.parse(event.body) : "";
+const bodyHtml = event.body ? await renderizarMarkdown(event.body) : "";
 /* timeZone: "UTC" porque as datas vêm do Directus como "AAAA-MM-DD" (um dia
    de calendário, não um instante) — sem isso, formatar dependeria do fuso
    horário de onde o build roda, podendo mostrar o dia errado. */

@@ -1,5 +1,5 @@
 ---
-import { marked } from "marked";
+import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import NoticiaCard from "@/components/NoticiaCard.astro";
 import ShareButtons from "@/components/ShareButtons.astro";
@@ -43,7 +43,7 @@ interface Props {
 
 const { noticia, allNoticias, orgaos } = Astro.props;
 const allPosts = visiblePosts(await getAllMensagens());
-const bodyHtml = await marked.parse(noticia.body);
+const bodyHtml = await renderizarMarkdown(noticia.body);
 const data = noticia.data;
 const orgaoRelacionado = orgaos.find((orgao) => orgao.id === data.orgaoRelacionado);
 // Prioriza notícias da mesma categoria (como mensagens já fazem por tema);

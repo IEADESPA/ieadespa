@@ -1,5 +1,5 @@
 ---
-import { marked } from "marked";
+import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
@@ -23,9 +23,9 @@ const visitante = await fetchSingleton<Visitante>("visitantes");
 const config = await fetchConfiguracoes();
 const heroSchedule = sedeProgramacaoCompacta(await getAllProgramacao());
 const [boasVindasHtml, oQueEsperarHtml, estruturaHtml] = await Promise.all([
-  marked.parse(visitante.boas_vindas ?? ""),
-  marked.parse(visitante.o_que_esperar ?? ""),
-  marked.parse(visitante.estrutura ?? ""),
+  renderizarMarkdown(visitante.boas_vindas ?? ""),
+  renderizarMarkdown(visitante.o_que_esperar ?? ""),
+  renderizarMarkdown(visitante.estrutura ?? ""),
 ]);
 
 /* Fase 24.2/24.11 — foto real da fachada, pra quem nunca veio reconhecer o

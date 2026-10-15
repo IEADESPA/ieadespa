@@ -330,6 +330,14 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   quantidade zero, com a linha "Total de peças"; quando a campanha tem mais de um modelo, o modelo vai junto do
   tamanho ("M - Baby look"). A tela do consolidado continua com a conta completa. Regra pura em
   `src/lib/pdfMalharia.ts`.
+- **Markdown das páginas públicas passa por um filtro (15/10/2026)** — as oito páginas que mostram texto escrito no
+  Directus (notícia, mensagem, evento, órgão/ministério, história, sobre, crenças, visitante) chamavam o `marked`
+  direto e jogavam o HTML na página; a política de segurança do site aceita script em linha, então quem edita um
+  texto poderia publicar script. Agora usam `src/lib/markdownSeguro.ts`: HTML escrito à mão no texto vira texto
+  visível (nunca marcação) e link/imagem só com endereço http(s), mailto/tel (só link), relativo ou âncora. Nos 39
+  textos que o site tem hoje a saída é **idêntica** (conferido também comparando as 33 páginas montadas antes e
+  depois: 0 diferenças). Quem precisar de quebra de linha usa dois espaços no fim da linha, não `<br>`. Teste à mão:
+  `scripts/testes/markdown-seguro.mjs` (precisa do `marked` instalado; só lê o Directus).
 - **Painel de pedidos no celular (13/10/2026)** — a barra de busca fica presa no alto durante a
   rolagem e os filtros ficam **recolhidos** atrás do botão "Filtros" (com um selo com quantos estão
   ligados); uma linha "Filtrando por: Tamanho GG" com o botão "Limpar" fica sempre à vista, para

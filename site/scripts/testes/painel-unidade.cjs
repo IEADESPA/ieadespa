@@ -1,5 +1,7 @@
-// Testes de UNIDADE do motor do painel de conteúdo (src/lib/painelConteudo.ts): só as funções puras — datas locais, endereço (slug),
-// validação, serialização, URL segura, erros do Directus, a configuração dos tipos, a ordem manual (▲/▼) e as várias fotos.
+// Testes de UNIDADE do motor do painel de conteúdo (src/lib/painelConteudo.ts) e da moderação (src/lib/painelModeracao.ts): só as
+// funções puras — datas locais, endereço (slug), validação, serialização, URL segura, erros do Directus, a configuração dos tipos,
+// a ordem manual (▲/▼), as várias fotos, o envio de arquivo (PDF: tipo, tamanho, assinatura) e a moderação (filtros das abas,
+// regras de aprovação, textos de confirmação, cartões da página inicial).
 // Não usa rede nem Directus. Como rodar (de dentro de site/):  node scripts/testes/painel-unidade.cjs
 //   (para conferir o fuso:  PC_TZ=America/Belem node scripts/testes/painel-unidade.cjs   e   PC_TZ=Asia/Tokyo …)
 if (process.env.PC_TZ) process.env.TZ = process.env.PC_TZ;
@@ -8,21 +10,33 @@ const path = require("path");
 const Module = require("module");
 const ts = require("typescript");
 
-const arquivo = path.join(__dirname, "../../src/lib/painelConteudo.ts");
-const js = ts.transpileModule(fs.readFileSync(arquivo, "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const m = new Module("painelConteudo.js");
+// Carrega um arquivo .ts da pasta src/lib como módulo CommonJS, trocando por dublês o que só existe no navegador/no Astro.
 const original = Module._load;
-Module._load = function (req, ...resto) {
-  if (req === "marked") return { marked: { parse: () => "" } };
-  if (req === "@/lib/painelAuth")
-    return { irParaLogin() {}, obterTokenValido: async () => null, renovarToken: async () => null };
-  return original.call(this, req, ...resto);
-};
-m._compile(js, "painelConteudo.js");
-Module._load = original;
-const L = m.exports;
+const modulosCarregados = {};
+function carregar(nome) {
+  const arquivo = path.join(__dirname, `../../src/lib/${nome}.ts`);
+  const js = ts.transpileModule(fs.readFileSync(arquivo, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const mod = new Module(`${nome}.js`);
+  Module._load = function (req, ...resto) {
+    if (req === "marked") return { marked: { parse: () => "" } };
+    if (req === "@/lib/painelAuth")
+      return { irParaLogin() {}, obterTokenValido: async () => null, renovarToken: async () => null };
+    if (req === "@/lib/painelConteudo" && modulosCarregados.painelConteudo)
+      return modulosCarregados.painelConteudo;
+    return original.call(this, req, ...resto);
+  };
+  try {
+    mod._compile(js, `${nome}.js`);
+  } finally {
+    Module._load = original;
+  }
+  modulosCarregados[nome] = mod.exports;
+  return mod.exports;
+}
+const L = carregar("painelConteudo");
+const M = carregar("painelModeracao");
 
 let falhas = 0;
 let total = 0;
@@ -209,9 +223,10 @@ eq(
     "galeria",
     "ministerios",
     "historia",
+    "relatorios",
     "configuracoes",
   ],
-  "registro: os oito tipos, na ordem dos cartões",
+  "registro: os nove tipos, na ordem dos cartões",
 );
 eq(L.obterTipo("faq").colecao, "faq", "obterTipo");
 eq(L.obterTipo("__proto__"), null, "obterTipo não cai em protótipo");
@@ -220,8 +235,8 @@ eq(L.obterTipo(null), null, "obterTipo(null)");
 const gruposIds = L.GRUPOS_HOME.map((g) => g.id);
 eq(
   L.GRUPOS_HOME.map((g) => g.titulo),
-  ["Notícias e mensagens", "Páginas e informações", "Institucional"],
-  "seções da página inicial",
+  ["Moderação", "Notícias e mensagens", "Páginas e informações", "Institucional"],
+  "seções da página inicial (Moderação primeiro: é a fila de decisões da Diretoria)",
 );
 for (const t of Object.values(L.TIPOS_CONTEUDO)) {
   const campos = L.todosCampos(t).map((c) => c.nome);
@@ -691,6 +706,274 @@ eq(
   "chave estrangeira inválida ao salvar: explica",
 );
 eq(L.explicarErroDirectus(500, null, "salvar").status, 500, "resposta sem corpo não quebra");
+
+// ---------------------------------------------------------------- terceiro lote: arquivo (PDF)
+const PDF = L.REGRA_PDF;
+const MBYTES = 1024 * 1024;
+eq(
+  [PDF.tipos, PDF.extensoes, PDF.maxBytes, PDF.assinatura],
+  [["application/pdf"], [".pdf"], 25 * MBYTES, "%PDF-"],
+  "regra padrão: só PDF, até 25 MB, começando com %PDF-",
+);
+eq(
+  [0, 1, 1023, 1024, 820 * 1024, MBYTES, Math.round(1.4 * MBYTES), 10.4 * MBYTES, 25 * MBYTES, 25 * MBYTES + 1].map(L.tamanhoLegivel),
+  ["0 bytes", "1 bytes", "1023 bytes", "1 KB", "820 KB", "1 MB", "1,4 MB", "10 MB", "25 MB", "25 MB"],
+  "tamanho legível em português (vírgula, sem casa decimal quando passa de 10 MB)",
+);
+eq([NaN, -5].map(L.tamanhoLegivel), ["", ""], "tamanho inválido → vazio");
+const arq = (type, size, name) => ({ type, size, name });
+eq(L.validarArquivoPorRegra(arq("application/pdf", 1 * MBYTES, "balanco.pdf"), PDF), null, "PDF de 1 MB passa");
+eq(L.validarArquivoPorRegra(arq("application/pdf", 25 * MBYTES, "grande.pdf"), PDF), null, "PDF de exatamente 25 MB passa");
+eq(
+  /limite é 25 MB/.test(L.validarArquivoPorRegra(arq("application/pdf", 25 * MBYTES + 1, "grande.pdf"), PDF)) &&
+    /tem 25 MB/.test(L.validarArquivoPorRegra(arq("application/pdf", 25 * MBYTES + 1, "grande.pdf"), PDF)),
+  true,
+  "PDF de 25 MB + 1 byte: recusa dizendo o tamanho e o limite",
+);
+eq(
+  /tem 40 MB e o limite é 25 MB/.test(L.validarArquivoPorRegra(arq("application/pdf", 40 * MBYTES, "x.pdf"), PDF)),
+  true,
+  "PDF de 40 MB: 'tem 40 MB e o limite é 25 MB'",
+);
+eq(L.validarArquivoPorRegra(arq("application/pdf", 0, "vazio.pdf"), PDF), "O arquivo está vazio.", "arquivo vazio");
+eq(
+  /não serve: envie um PDF\./.test(L.validarArquivoPorRegra(arq("text/plain", 10, "nota.txt"), PDF)) &&
+    /Salvar como PDF/.test(L.validarArquivoPorRegra(arq("text/plain", 10, "nota.txt"), PDF)),
+  true,
+  "texto: recusa e diz como gerar um PDF",
+);
+eq(
+  L.validarArquivoPorRegra(arq("image/png", 10, "foto.pdf"), PDF) !== null,
+  true,
+  "tipo diz imagem mesmo com nome .pdf: recusa",
+);
+eq(
+  L.validarArquivoPorRegra(arq("application/vnd.openxmlformats-officedocument.wordprocessingml.document", 10, "balanco.docx"), PDF) !== null,
+  true,
+  "Word (.docx): recusa",
+);
+eq(L.validarArquivoPorRegra(arq("", 100, "relatorio.PDF"), PDF), null, "aparelho que não informa o tipo: vale a extensão (.PDF)");
+eq(L.validarArquivoPorRegra(arq("", 100, "relatorio.txt"), PDF) !== null, true, "tipo em branco e extensão errada: recusa");
+eq(L.validarArquivoPorRegra(arq("", 100, undefined), PDF) !== null, true, "tipo em branco e sem nome: recusa");
+eq(L.validarArquivoPorRegra(arq("APPLICATION/PDF", 100, "a.pdf"), PDF), null, "tipo em maiúsculas é aceito");
+const bytesDe = (t) => Array.from(t).map((c) => c.charCodeAt(0));
+eq(L.confereAssinatura(bytesDe("%PDF-1.7\n%âãÏÓ"), "%PDF-"), true, "PDF de verdade: assinatura confere");
+eq(L.confereAssinatura(bytesDe("PK\u0003\u0004word/document.xml"), "%PDF-"), false, "arquivo Word renomeado para .pdf: não confere");
+eq(L.confereAssinatura(bytesDe("lixo\r\n".repeat(20) + "%PDF-1.4"), "%PDF-"), true, "assinatura com lixo antes (até 1 KB): confere");
+eq(L.confereAssinatura(bytesDe("x".repeat(1100) + "%PDF-1.4"), "%PDF-"), false, "assinatura depois de 1 KB: não confere");
+eq(L.confereAssinatura([], "%PDF-"), false, "arquivo sem nenhum byte: não confere");
+eq(/não é de um PDF de verdade/.test(L.MENSAGEM_ASSINATURA), true, "mensagem da assinatura explica");
+
+// ---------------------------------------------------------------- terceiro lote: relatórios de transparência
+const rel = L.obterTipo("relatorios");
+eq(rel.colecao, "relatorios", "relatórios: coleção");
+eq(rel.rascunho, undefined, "relatórios: sem rascunho (vai ao site na próxima montagem)");
+eq(rel.grupo, "institucional", "relatórios: cartão em Institucional");
+eq(rel.paginasPublicas, [{ rotulo: "Transparência", url: "/transparencia/" }], "relatórios: 'Ver no site' leva a /transparencia/");
+eq(obrig(rel), ["title", "period", "date", "file"], "relatórios: título, período, data e arquivo obrigatórios");
+eq(
+  L.todosCampos(rel).map((c) => [c.nome, c.tipo]),
+  [["title", "text"], ["period", "text"], ["date", "date"], ["excerpt", "textarea"], ["file", "arquivo"]],
+  "relatórios: campos e tipos",
+);
+eq(L.todosCampos(rel).find((c) => c.nome === "file").regraArquivo, PDF, "relatórios: o arquivo usa a regra de PDF até 25 MB");
+eq(rel.campoArquivo, "file", "relatórios: a lista abre o arquivo do campo 'file'");
+eq(
+  ["id", "title", "date", "file", "period"].every((c) => L.camposDaLista(rel).includes(c)),
+  true,
+  "relatórios: a lista lê título, data, período e arquivo",
+);
+eq(L.camposDaEdicao(rel).includes("file") && L.camposDaEdicao(rel).includes("excerpt"), true, "relatórios: a edição lê o arquivo e o resumo");
+eq(L.camposDaEdicao(rel).includes("draft"), false, "relatórios: não há campo draft");
+eq(rel.ordenacao, ["-date", "-id"], "relatórios: do mais recente para o mais antigo");
+eq(rel.urlPublica({ id: 1 }), null, "relatórios: não há página própria por item");
+eq(L.estaPublicado(rel, {}), true, "relatórios: todo item salvo já vale no site");
+eq(L.caminhoItem(rel, 4), "/items/relatorios/4", "relatórios: caminho de um item");
+const errRel = L.validarTudo(rel, { title: "", period: null, date: null, excerpt: null, file: null }, false);
+eq(errRel.map((e) => e.campo), ["title", "period", "date", "file"], "relatório vazio: quatro erros, na ordem do formulário");
+eq(/PDF do relatório/.test(errRel[3].mensagem), true, "o erro do arquivo explica: escolha o PDF do relatório");
+eq(/período/.test(errRel[1].mensagem), true, "o erro do período explica");
+eq(
+  L.validarTudo(rel, { title: "Prestação de contas", period: "1º semestre de 2026", date: "2026-07-10", excerpt: null, file: "7f5c2f0e-1111-4222-8333-444455556666" }, false),
+  [],
+  "relatório completo passa",
+);
+eq(
+  L.validarTudo(rel, { title: "x", period: "y", date: "2026-02-30", excerpt: null, file: "u" }, false).map((e) => e.campo),
+  ["date"],
+  "relatório com data impossível: erro na data",
+);
+eq(L.paraDirectus(L.todosCampos(rel).find((c) => c.nome === "file"), "uuid"), "uuid", "o arquivo vai ao Directus como o id (texto)");
+eq(L.valorPadrao(L.todosCampos(rel).find((c) => c.nome === "file")), null, "arquivo novo começa sem nada");
+eq(L.valorPadrao(L.todosCampos(rel).find((c) => c.nome === "date")), L.hojeLocal(), "a data do relatório começa em hoje");
+eq(L.painelUrls.destino(rel), "/painel-conteudo/lista/?tipo=relatorios", "o cartão dos relatórios abre a lista");
+
+// ---------------------------------------------------------------- terceiro lote: moderação (filtros, regras, textos)
+eq(Object.keys(M.TIPOS_MODERACAO), ["depoimentos", "mural_oracao"], "moderação: dois tipos, na ordem dos cartões");
+eq(M.obterTipoModeracao("mural_oracao").colecao, "mural_oracao", "obterTipoModeracao");
+eq([M.obterTipoModeracao("__proto__"), M.obterTipoModeracao("constructor"), M.obterTipoModeracao(null), M.obterTipoModeracao("faq")], [null, null, null, null], "obterTipoModeracao não cai em protótipo nem em tipo de conteúdo");
+const dep = M.obterTipoModeracao("depoimentos");
+const mur = M.obterTipoModeracao("mural_oracao");
+for (const t of Object.values(M.TIPOS_MODERACAO)) {
+  eq(gruposIds.includes(t.grupo) && t.grupo === "moderacao", true, `${t.id}: cartão na seção Moderação`);
+  eq(t.paginasPublicas.length > 0 && t.paginasPublicas.every((p) => p.url.startsWith("/") && p.rotulo), true, `${t.id}: tem a página pública para "Ver no site"`);
+  eq(Boolean(t.descricao) && t.descricao.length < 140, true, `${t.id}: descrição curta no cartão`);
+  const idsAbas = t.abas.map((a) => a.id);
+  eq(new Set(idsAbas).size === idsAbas.length && idsAbas[0] === "aguardando", true, `${t.id}: abas únicas, a primeira é "Aguardando"`);
+  eq(t.abas.every((a) => a.rotulo && a.vazio && a.vazio.length > 10), true, `${t.id}: toda aba tem nome e frase de aba vazia`);
+  eq(t.abas.find((a) => a.id === "aguardando").cartao !== undefined, true, `${t.id}: a contagem de "aguardando" aparece no cartão`);
+  eq(Object.keys(L.TIPOS_CONTEUDO).includes(t.id), false, `${t.id}: o identificador não colide com um tipo de conteúdo`);
+}
+eq(dep.abas.map((a) => a.id), ["aguardando", "publicados"], "depoimentos: abas Aguardando e Publicados");
+eq(mur.abas.map((a) => a.id), ["aguardando", "publicados", "confidenciais"], "mural: abas Aguardando, Publicados e Confidenciais");
+eq(mur.abas[2].rotulo, "🔒 Confidenciais (só a equipe pastoral)", "mural: nome da aba confidencial");
+eq(/Só a Diretoria vê esta aba/.test(mur.abas[2].aviso) && /nunca são publicados/.test(mur.abas[2].aviso), true, "mural: a aba confidencial avisa que só a Diretoria vê e que nunca é publicado");
+eq(/IMEDIATAMENTE/.test(mur.abas[0].aviso) && /90 dias/.test(mur.abas[0].aviso), true, "mural: o aviso de 'Aguardando' diz que aprovar publica na hora");
+eq(/20 minutos/.test(dep.abas[0].aviso), true, "depoimentos: o aviso diz que leva uns 20 minutos");
+eq([dep.publicacao, mur.publicacao], [{ imediata: false }, { imediata: true, dias: 90 }], "publicação: depoimento na próxima montagem; mural na hora, por 90 dias");
+eq(M.abaInicial(mur, "confidenciais"), "confidenciais", "?aba= válida é respeitada");
+eq([M.abaInicial(dep, "confidenciais"), M.abaInicial(dep, null), M.abaInicial(mur, "lixo")], ["aguardando", "aguardando", "aguardando"], "?aba= que não existe NESTE tipo: volta para Aguardando");
+
+// Um avaliador mínimo do filtro do Directus (só o que usamos: _and, _or, _eq, _null), para provar que as abas cobrem tudo sem sobrepor.
+function casa(filtro, item) {
+  return Object.entries(filtro).every(([chave, v]) => {
+    if (chave === "_and") return v.every((f) => casa(f, item));
+    if (chave === "_or") return v.some((f) => casa(f, item));
+    const alvo = item[chave] === undefined ? null : item[chave];
+    if ("_eq" in v) return alvo === v._eq;
+    if ("_null" in v) return (alvo === null) === v._null;
+    throw new Error("operador não previsto " + JSON.stringify(v));
+  });
+}
+const tri = [true, false, null];
+const itensMural = [];
+for (const a of tri) for (const c of tri) itensMural.push({ id: itensMural.length + 1, aprovado: a, confidencial: c });
+for (const it of itensMural) {
+  const abas = mur.abas.map((a) => a.id).filter((id) => casa(M.filtroDaAba(mur, id), it));
+  const esperada = it.confidencial === true ? "confidenciais" : it.aprovado === true ? "publicados" : "aguardando";
+  eq(abas, [esperada], `mural: aprovado=${it.aprovado} confidencial=${it.confidencial} cai numa aba só (${esperada})`);
+}
+for (const a of tri) {
+  const it = { aprovado: a };
+  const abas = dep.abas.map((x) => x.id).filter((id) => casa(M.filtroDaAba(dep, id), it));
+  eq(abas, [a === true ? "publicados" : "aguardando"], `depoimentos: aprovado=${a} cai numa aba só`);
+}
+eq(
+  casa(M.filtroDaAba(mur, "aguardando"), { aprovado: false, confidencial: true }),
+  false,
+  "mural: pedido confidencial NUNCA entra em 'Aguardando' (então nunca ganha botão Aprovar na fila)",
+);
+eq(M.filtroDaAba(mur, "confidenciais"), { confidencial: { _eq: true } }, "filtro das confidenciais");
+eq(
+  M.filtroDaAba(dep, "aguardando"),
+  { _or: [{ aprovado: { _eq: false } }, { aprovado: { _null: true } }] },
+  "filtro do 'Aguardando' de depoimentos",
+);
+eq(M.filtroDaAba(dep, "confidenciais"), { id: { _null: true } }, "tipo sem campo confidencial: a aba confidencial nunca acha nada");
+const filtroDaUrl = (u) => JSON.parse(decodeURIComponent(/[?&]filter=([^&]*)/.exec(u)[1]));
+eq(filtroDaUrl(M.consultaContagem(mur, "aguardando")), M.filtroDaAba(mur, "aguardando"), "consulta de contagem leva o filtro da aba (JSON, escapado)");
+eq(
+  M.consultaContagem(dep, "publicados").startsWith("/items/depoimentos?limit=1&fields=id&meta=filter_count&filter="),
+  true,
+  "contagem: pede só o total (limit=1, meta=filter_count)",
+);
+const lista = M.consultaLista(mur, "publicados", 20, 40);
+eq(
+  ["limit=20", "offset=40", "meta=filter_count", "sort=-date_created,-id"].every((p) => lista.includes(p)) && lista.startsWith("/items/mural_oracao?fields="),
+  true,
+  "lista: do mais novo para o mais antigo, página e deslocamento",
+);
+eq(filtroDaUrl(lista), M.filtroDaAba(mur, "publicados"), "lista: o filtro é o da aba");
+eq(decodeURIComponent(/fields=([^&]*)/.exec(lista)[1]).split(","), ["id", "nome", "texto", "aprovado", "consentimento_lgpd", "date_created", "confidencial", "orando_count"], "mural: campos lidos (confidencial e contador, sem foto)");
+eq(decodeURIComponent(/fields=([^&]*)/.exec(M.consultaLista(dep, "aguardando", 20, 0))[1]).split(","), ["id", "nome", "texto", "aprovado", "consentimento_lgpd", "date_created", "foto"], "depoimentos: campos lidos (foto, sem confidencial nem contador)");
+eq(M.consultaItem(dep, 7).startsWith("/items/depoimentos/7?fields="), true, "consulta de um item");
+eq(M.consultaItem(dep, "a/b").includes("/items/depoimentos/a%2Fb?"), true, "o id vai escapado no caminho");
+
+// Regras de aprovação e ações por item
+const ok1 = { aprovado: false, consentimento_lgpd: true, confidencial: false };
+eq(M.avaliarAprovacao(mur, ok1), { pode: true, motivo: null }, "pedido com consentimento e não confidencial: pode aprovar");
+eq(M.avaliarAprovacao(mur, { ...ok1, confidencial: true }), { pode: false, motivo: M.MOTIVO_CONFIDENCIAL }, "pedido CONFIDENCIAL: nunca pode aprovar");
+eq(M.avaliarAprovacao(mur, { ...ok1, confidencial: true, consentimento_lgpd: false }).motivo, M.MOTIVO_CONFIDENCIAL, "confidencial sem consentimento: o motivo é o da confidencialidade");
+eq(M.avaliarAprovacao(dep, { aprovado: false, consentimento_lgpd: false }), { pode: false, motivo: M.MOTIVO_SEM_CONSENTIMENTO }, "depoimento SEM consentimento LGPD: não pode aprovar");
+eq(M.avaliarAprovacao(dep, { aprovado: false, consentimento_lgpd: null }).pode, false, "consentimento vazio (null) conta como 'não'");
+eq(M.avaliarAprovacao(dep, { aprovado: false }).pode, false, "consentimento ausente conta como 'não'");
+eq(M.avaliarAprovacao(dep, { aprovado: false, consentimento_lgpd: true }).pode, true, "depoimento com consentimento: pode aprovar");
+eq(M.avaliarAprovacao(mur, { aprovado: false, consentimento_lgpd: false, confidencial: false }).pode, false, "pedido sem consentimento: também não (o formulário público exige a caixa)");
+eq(M.avaliarAprovacao(dep, { aprovado: false, consentimento_lgpd: "true" }).pode, false, "consentimento só vale se for exatamente verdadeiro");
+eq(M.avaliarAprovacao(dep, { aprovado: false, consentimento_lgpd: true, confidencial: true }).pode, true, "depoimento não tem 'confidencial': o campo é ignorado");
+eq(/^Confidencial: só a equipe pastoral lê; nunca é publicado$/.test(M.MOTIVO_CONFIDENCIAL), true, "texto do rótulo confidencial");
+eq(M.acoesDoItem(mur, { aprovado: false, confidencial: true }), ["excluir"], "confidencial: SÓ excluir (sem Aprovar)");
+eq(M.acoesDoItem(mur, { aprovado: true, confidencial: true }), ["excluir"], "confidencial (mesmo marcado aprovado por engano no Directus): SÓ excluir");
+eq(M.acoesDoItem(mur, { aprovado: false, confidencial: false }), ["aprovar", "excluir"], "aguardando: aprovar e excluir");
+eq(M.acoesDoItem(mur, { aprovado: false, confidencial: null }), ["aprovar", "excluir"], "confidencial vazio conta como 'não': aprovar e excluir");
+eq(M.acoesDoItem(dep, { aprovado: true }), ["tirar", "excluir"], "publicado: tirar do ar e excluir");
+eq(M.acoesDoItem(dep, { aprovado: null }), ["aprovar", "excluir"], "aprovado vazio conta como 'aguardando'");
+eq(M.corpoDaAcao("aprovar"), { aprovado: true }, "aprovar grava SÓ { aprovado: true }");
+eq(M.corpoDaAcao("tirar"), { aprovado: false }, "tirar do ar grava SÓ { aprovado: false }");
+eq([M.nomeDoAutor({ nome: "  Maria  " }), M.nomeDoAutor({ nome: "" }), M.nomeDoAutor({ nome: "   " }), M.nomeDoAutor({ nome: null }), M.nomeDoAutor({})], ["Maria", "Anônimo", "Anônimo", "Anônimo", "Anônimo"], "nome do autor: vazio vira 'Anônimo'");
+
+// 90 dias do mural
+const agora = new Date("2026-10-15T12:00:00Z");
+const novo = { aprovado: true, confidencial: false, date_created: "2026-09-15T12:00:00Z" };
+const velho = { aprovado: true, confidencial: false, date_created: "2026-06-01T12:00:00Z" };
+const fimNovo = new Date(Date.parse("2026-09-15T12:00:00Z") + 90 * 86400000);
+const dd = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+eq(M.situacaoNoMural(mur, novo, agora), { noMural: true, frase: `No mural público até ${dd(fimNovo)}` }, "mural: pedido de 30 dias está no ar e diz até quando");
+eq(M.situacaoNoMural(mur, velho, agora), { noMural: false, frase: "Já saiu do mural público (passou de 90 dias)" }, "mural: pedido de mais de 90 dias já saiu do mural");
+eq(M.situacaoNoMural(mur, { ...novo, aprovado: false }, agora), null, "mural: não aprovado não tem situação");
+eq(M.situacaoNoMural(mur, { ...novo, confidencial: true }, agora), null, "mural: confidencial não tem situação (nunca vai ao ar)");
+eq(M.situacaoNoMural(dep, novo, agora), null, "depoimentos: sem prazo de dias");
+eq(M.situacaoNoMural(mur, { ...novo, date_created: "lixo" }, agora), null, "data inválida: sem situação (não quebra)");
+
+// Textos de confirmação (cada promessa feita à pessoa)
+const cmur = M.textoConfirmacao(mur, "aprovar", { nome: "Ana", aprovado: false });
+eq(/IMEDIATAMENTE/.test(cmur.paragrafos.join(" ")) && /90 dias/.test(cmur.paragrafos.join(" ")) && /na hora/.test(cmur.paragrafos.join(" ")), true, "aprovar pedido: a confirmação diz IMEDIATAMENTE, na hora, por 90 dias");
+eq([cmur.titulo, cmur.sim, cmur.digitar], ["Aprovar o pedido de “Ana”?", "Sim, publicar agora", undefined], "aprovar pedido: título e botão, sem digitar");
+const cdep = M.textoConfirmacao(dep, "aprovar", { nome: "", aprovado: false });
+eq(/20 minutos/.test(cdep.paragrafos.join(" ")) && !/IMEDIATAMENTE/.test(cdep.paragrafos.join(" ")), true, "aprovar depoimento: a confirmação diz próxima montagem (uns 20 minutos), nunca imediatamente");
+eq(cdep.titulo, "Aprovar o depoimento de “Anônimo”?", "aprovar depoimento anônimo");
+const cex = M.textoConfirmacao(dep, "excluir", { nome: "Zé", aprovado: true, foto: "abc" });
+eq([cex.digitar, cex.perigo, cex.sim], ["EXCLUIR", true, "Excluir definitivamente"], "excluir: exige digitar EXCLUIR");
+eq(/para sempre/.test(cex.paragrafos[0]) && /sai do site/.test(cex.paragrafos.join(" ")) && /foto continua guardada/.test(cex.paragrafos.join(" ")), true, "excluir depoimento publicado com foto: avisa que sai do site e que a foto continua no Directus");
+eq(M.textoConfirmacao(dep, "excluir", { nome: "Zé", aprovado: false }).paragrafos.some((p) => /foto/.test(p)), false, "excluir sem foto: nada sobre foto");
+eq(M.textoConfirmacao(mur, "excluir", { nome: "Ana", confidencial: true }).paragrafos.some((p) => /equipe pastoral já tiver atendido/.test(p)), true, "excluir pedido confidencial: só depois do atendimento pastoral");
+eq(M.textoConfirmacao(mur, "excluir", { nome: "Ana", aprovado: true, confidencial: false }).paragrafos.some((p) => /sai do mural público na hora/.test(p)), true, "excluir pedido publicado: sai do mural na hora");
+eq(M.PALAVRA_EXCLUIR, "EXCLUIR", "a palavra digitada");
+eq(
+  [M.textoSucesso(mur, "aprovar"), M.textoSucesso(dep, "aprovar"), M.textoSucesso(mur, "tirar"), M.textoSucesso(dep, "tirar"), M.textoSucesso(dep, "excluir")],
+  [
+    "Pedido aprovado: já está no mural público.",
+    "Depoimento aprovado. Ele aparece no site na próxima montagem (em até uns 20 minutos).",
+    "Pedido tirado do mural público (vale na hora).",
+    "Depoimento tirado do ar. Sai do site na próxima montagem (em até uns 20 minutos).",
+    "Excluído para sempre.",
+  ],
+  "frases de sucesso de cada ação",
+);
+eq(
+  [M.textoContagemCartao(dep, "aguardando", 0), M.textoContagemCartao(dep, "aguardando", 1), M.textoContagemCartao(dep, "aguardando", 3), M.textoContagemCartao(dep, "publicados", 9)],
+  ["Nenhum aguardando", "1 aguardando", "3 aguardando", ""],
+  "contagem no cartão: nenhum / 1 / vários; abas fora do cartão não mostram nada",
+);
+eq(
+  [M.textoContagemCartao(mur, "confidenciais", 0), M.textoContagemCartao(mur, "confidenciais", 1), M.textoContagemCartao(mur, "confidenciais", 2)],
+  ["", "1 confidencial", "2 confidenciais"],
+  "contagem das confidenciais no cartão do mural (zero não aparece)",
+);
+eq(L.painelUrls.moderar("mural_oracao"), "/painel-conteudo/moderar/?tipo=mural_oracao", "endereço da moderação");
+eq(L.painelUrls.moderar("mural_oracao", "confidenciais"), "/painel-conteudo/moderar/?tipo=mural_oracao&aba=confidenciais", "endereço da moderação com aba");
+
+// Cartões da página inicial: conteúdo e moderação juntos
+const cartoes = M.cartoesHome();
+eq(cartoes.map((c) => c.id), [...Object.keys(L.TIPOS_CONTEUDO), "depoimentos", "mural_oracao"], "cartões: conteúdo na ordem do registro, depois a moderação");
+eq(new Set(cartoes.map((c) => c.id)).size, cartoes.length, "cartões: nenhum identificador repetido (a tela usa o id para achar o cartão)");
+eq(L.GRUPOS_HOME.every((g) => cartoes.some((c) => c.grupo === g.id)), true, "cartões: toda seção da página inicial tem pelo menos um cartão");
+eq(cartoes.every((c) => gruposIds.includes(c.grupo)), true, "cartões: todo cartão está numa seção que existe");
+eq(cartoes.filter((c) => c.grupo === "moderacao").map((c) => [c.id, c.origem, c.href]), [["depoimentos", "moderacao", "/painel-conteudo/moderar/?tipo=depoimentos"], ["mural_oracao", "moderacao", "/painel-conteudo/moderar/?tipo=mural_oracao"]], "cartões da Moderação abrem a tela de moderação");
+eq(cartoes.find((c) => c.id === "relatorios").grupo, "institucional", "o cartão dos relatórios está em Institucional");
+eq(cartoes.find((c) => c.id === "relatorios").href, "/painel-conteudo/lista/?tipo=relatorios", "o cartão dos relatórios abre a lista");
+eq(cartoes.find((c) => c.id === "configuracoes").unico, true, "o cartão das páginas fixas segue sendo de item único");
+eq(cartoes.filter((c) => c.origem === "moderacao").every((c) => !c.unico), true, "cartões de moderação não são de item único");
 
 console.log(falhas ? `\n${falhas} FALHA(S) de ${total}` : `\n${total}/${total} verificações ok`);
 process.exitCode = falhas ? 1 : 0;

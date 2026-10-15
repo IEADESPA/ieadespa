@@ -328,6 +328,18 @@ const allPosts = visiblePosts(await getAllMensagens());
           ver.title = "O site pode levar até uns 20 minutos para mostrar mudanças recentes.";
           acoes.append(ver);
         }
+        const arquivoId = tipo.campoArquivo ? (i[tipo.campoArquivo] as string | null) : null;
+        if (arquivoId) {
+          const abrir = document.createElement("a");
+          abrir.className = "btn btn-outline pc-item-arquivo";
+          abrir.href = directusAssetUrl(arquivoId);
+          abrir.target = "_blank";
+          abrir.rel = "noopener noreferrer";
+          abrir.textContent = "Abrir PDF";
+          abrir.setAttribute("data-pc-abrir-arquivo", "");
+          abrir.setAttribute("aria-label", `Abrir o arquivo de “${String(i[tipo.campoTitulo] || "este item")}”`);
+          acoes.append(abrir);
+        }
         if (vizinhos) {
           const nomeItem = String(i[tipo.campoTitulo] || "este item");
           const lugar = vizinhos.grupo.rotulo ? ` (em “${vizinhos.grupo.rotulo}”)` : "";
@@ -427,7 +439,7 @@ const allPosts = visiblePosts(await getAllMensagens());
         }
         if (contagemEl) {
           contagemEl.textContent = !itens.length
-            ? `Ainda não há ${tipo.titulos.plural.toLowerCase()}. Use o botão “+ ${tipo.titulos.nova}” para criar a primeira.`
+            ? `Ainda não há ${tipo.titulos.plural.toLowerCase()}. Use o botão “+ ${tipo.titulos.nova}” para criar ${/^novo\b/i.test(tipo.titulos.nova) ? "o primeiro" : "a primeira"}.`
             : !lista.length
               ? "Nada encontrado com essa busca ou filtro."
               : lista.length > desenhados

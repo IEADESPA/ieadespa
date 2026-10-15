@@ -6,8 +6,11 @@
  */
 import { directusAssetUrl } from "@/lib/directus";
 import {
+  MENSAGEM_ASSINATURA,
+  REGRA_PDF,
   SLUG_VALIDO,
   SessaoExpiradaErro,
+  confereAssinatura,
   dataBR,
   dataHoraBR,
   explicarErroDirectus,
@@ -17,7 +20,9 @@ import {
   paraDirectus,
   renderizarMarkdownSeguro,
   slugify,
+  tamanhoLegivel,
   urlSegura,
+  validarArquivoPorRegra,
   type ApiPainel,
   type CampoConteudo,
   type FotoLigada,
@@ -538,10 +543,21 @@ export function validarArquivoImagem(arquivo: {
   return null;
 }
 
-/** Envia uma imagem ao Directus (token do próprio usuário). Devolve o id do arquivo ou a mensagem do que deu errado. */
-async function enviarArquivoImagem(
+/** O que dizer quando o envio de um arquivo dá errado (a frase muda com o tipo: imagem, documento…). */
+interface TextosEnvio {
+  /** O que a pessoa estava fazendo, para o 403 ("Seu perfil não pode enviar imagens aqui"). */
+  acao: string;
+  /** O Directus recusou o arquivo (400): o que serve. */
+  recusado: string;
+  /** Sem conexão. */
+  semConexao: string;
+}
+
+/** Envia um arquivo ao Directus (token do próprio usuário). Devolve o id do arquivo ou a mensagem do que deu errado. */
+async function enviarArquivoAoDirectus(
   ctx: ContextoForm,
   arquivo: File,
+  textos: TextosEnvio,
 ): Promise<{ id: string } | { erro: string; sessao?: boolean }> {
   try {
     const corpo = new FormData();
@@ -549,22 +565,25 @@ async function enviarArquivoImagem(
     const res = await ctx.api("/files", { method: "POST", body: corpo });
     if (!res.ok) {
       const json = await res.json().catch(() => null);
-      const e = explicarErroDirectus(res.status, json, "enviar imagens");
-      return {
-        erro:
-          res.status === 400
-            ? "O servidor não aceitou este arquivo como imagem. Use JPEG, PNG, WebP ou GIF."
-            : e.mensagem,
-      };
+      const e = explicarErroDirectus(res.status, json, textos.acao);
+      return { erro: res.status === 400 ? textos.recusado : e.mensagem };
     }
     const json = (await res.json()) as { data?: { id?: string } };
     if (!json.data?.id) throw new Error("resposta sem id");
     return { id: json.data.id };
   } catch (e) {
     if (e instanceof SessaoExpiradaErro) return { erro: "", sessao: true };
-    return { erro: "Não foi possível enviar a imagem agora (sem conexão?). Tente de novo." };
+    return { erro: textos.semConexao };
   }
 }
+
+/** Envia uma imagem ao Directus. */
+const enviarArquivoImagem = (ctx: ContextoForm, arquivo: File) =>
+  enviarArquivoAoDirectus(ctx, arquivo, {
+    acao: "enviar imagens",
+    recusado: "O servidor não aceitou este arquivo como imagem. Use JPEG, PNG, WebP ou GIF.",
+    semConexao: "Não foi possível enviar a imagem agora (sem conexão?). Tente de novo.",
+  });
 
 function montarImagem(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
   const id = idDoCampo(campo);
@@ -676,6 +695,179 @@ function montarImagem(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
       valor = typeof v === "string" && v ? v : null;
       soltarUrlLocal();
       pintar(false);
+    },
+    erro: c.mostrarErro,
+    focar: () => escolher.focus(),
+  };
+}
+
+// ----------------------------------------------------------------------------------------------
+// Arquivo (PDF de relatório): envio do aparelho, nome e tamanho, "Abrir / baixar" e "Trocar arquivo"
+// ----------------------------------------------------------------------------------------------
+
+function montarArquivo(campo: CampoConteudo, ctx: ContextoForm): CampoMontado {
+  const id = idDoCampo(campo);
+  const regra = campo.regraArquivo ?? REGRA_PDF;
+  const rotuloTipo = (regra.extensoes[0] ?? "").replace(/^\./, "").toUpperCase();
+  const nomeEl = h("strong", { class: "pc-arquivo-nome" });
+  const detalheEl = h("span", { class: "pc-arquivo-detalhe" });
+  const abrir = h(
+    "a",
+    {
+      class: "btn btn-outline pc-arquivo-abrir",
+      target: "_blank",
+      rel: "noopener noreferrer",
+    },
+    "Abrir / baixar",
+  );
+  const cartao = h(
+    "div",
+    { class: "pc-arquivo-cartao", hidden: true },
+    h("span", { class: "pc-arquivo-icone", "aria-hidden": "true" }, "📄"),
+    h("div", { class: "pc-arquivo-texto" }, nomeEl, detalheEl),
+    abrir,
+  );
+  const vazio = h("p", { class: "pc-ajuda pc-arquivo-vazio" }, "Nenhum arquivo escolhido.");
+  const arquivoEl = h("input", {
+    id,
+    type: "file",
+    class: "pc-img-arquivo",
+    accept: [...regra.extensoes, ...regra.tipos].join(","),
+    "aria-describedby": campo.ajuda ? `${id}-ajuda ${id}-erro` : `${id}-erro`,
+  });
+  const escolher = h(
+    "button",
+    { type: "button", class: "btn btn-outline pc-arquivo-escolher" },
+    "Escolher arquivo",
+  );
+  const status = h("p", { class: "pc-img-status", role: "status", "aria-live": "polite" });
+  const c = casca(
+    campo,
+    h(
+      "div",
+      { class: "pc-arquivo" },
+      cartao,
+      vazio,
+      h("div", { class: "pc-img-botoes" }, escolher),
+      arquivoEl,
+      status,
+    ),
+    { rotuloPara: id },
+  );
+
+  let valor: string | null = null;
+  let meta: { nome: string; tamanho: number | null } | null = null;
+  let sequencia = 0;
+
+  const pintar = () => {
+    const tem = Boolean(valor);
+    cartao.hidden = !tem;
+    vazio.hidden = tem;
+    escolher.textContent = tem ? "Trocar arquivo" : "Escolher arquivo";
+    if (!tem || !valor) return;
+    const nome = meta?.nome || "Arquivo enviado";
+    nomeEl.textContent = nome;
+    detalheEl.textContent = [rotuloTipo, meta?.tamanho != null ? tamanhoLegivel(meta.tamanho) : ""]
+      .filter(Boolean)
+      .join(" · ");
+    abrir.href = directusAssetUrl(valor);
+    abrir.setAttribute("aria-label", `Abrir ou baixar ${nome}`);
+  };
+
+  /** Nome e tamanho de um arquivo que já estava guardado (se o perfil não pode ler os dados do arquivo, mostra só "Arquivo enviado"). */
+  const carregarMeta = async (arquivoId: string) => {
+    const minha = ++sequencia;
+    try {
+      const res = await ctx.api(
+        `/files/${encodeURIComponent(arquivoId)}?fields=id,filename_download,filesize`,
+      );
+      if (minha !== sequencia || !res.ok) return;
+      const json = (await res.json()) as {
+        data?: { filename_download?: string; filesize?: number | string };
+      };
+      const d = json.data;
+      if (!d) return;
+      const tamanho = Number(d.filesize);
+      meta = {
+        nome: String(d.filename_download ?? ""),
+        tamanho: Number.isFinite(tamanho) && tamanho > 0 ? tamanho : null,
+      };
+      pintar();
+    } catch (e) {
+      if (e instanceof SessaoExpiradaErro) return; // a tela já avisa quando a pessoa for salvar
+    }
+  };
+
+  escolher.addEventListener("click", () => arquivoEl.click());
+  arquivoEl.addEventListener("change", async () => {
+    const arquivo = arquivoEl.files?.[0];
+    arquivoEl.value = "";
+    if (!arquivo) return;
+    const recusa = validarArquivoPorRegra(arquivo, regra);
+    if (recusa) {
+      c.mostrarErro(recusa);
+      status.textContent = "";
+      return;
+    }
+    if (regra.assinatura) {
+      // O começo do conteúdo: um PDF de verdade começa com "%PDF-" (barra arquivo de outro tipo só renomeado).
+      let bytes: Uint8Array | null = null;
+      try {
+        bytes = new Uint8Array(await arquivo.slice(0, 1024).arrayBuffer());
+      } catch {
+        bytes = null; // não deu para ler o começo: segue (o Directus ainda confere o tipo)
+      }
+      if (bytes && !confereAssinatura(bytes, regra.assinatura)) {
+        c.mostrarErro(MENSAGEM_ASSINATURA);
+        status.textContent = "";
+        return;
+      }
+    }
+    c.mostrarErro(null);
+    status.textContent = "Enviando arquivo…";
+    const soltar = ctx.ocupar();
+    escolher.disabled = true;
+    try {
+      // Alguns aparelhos não dizem o tipo do arquivo: manda com o tipo certo (a extensão já foi conferida).
+      const paraEnviar = arquivo.type
+        ? arquivo
+        : new File([arquivo], arquivo.name, { type: regra.tipos[0] });
+      const r = await enviarArquivoAoDirectus(ctx, paraEnviar, {
+        acao: "enviar arquivos",
+        recusado: `O servidor não aceitou este arquivo. Envie ${regra.rotulo} de até ${tamanhoLegivel(regra.maxBytes)}.`,
+        semConexao: "Não foi possível enviar o arquivo agora (sem conexão?). Tente de novo.",
+      });
+      if (!("id" in r)) {
+        status.textContent = "";
+        if (r.sessao) ctx.sessaoExpirou();
+        else c.mostrarErro(r.erro);
+        return;
+      }
+      const substituiu = Boolean(valor);
+      sequencia++; // uma leitura de dados do arquivo anterior que ainda esteja a caminho perde a validade
+      valor = r.id;
+      meta = { nome: arquivo.name, tamanho: arquivo.size };
+      pintar();
+      status.textContent = substituiu
+        ? "Arquivo enviado. Salve para valer. O arquivo anterior continua guardado no Directus, mas deixa de estar ligado a este item."
+        : "Arquivo enviado. Salve para valer.";
+      ctx.aoAlterar(campo.nome);
+    } finally {
+      escolher.disabled = false;
+      soltar();
+    }
+  });
+
+  return {
+    campo,
+    raiz: c.raiz,
+    ler: () => valor,
+    definir: (v) => {
+      valor = typeof v === "string" && v ? v : null;
+      meta = null;
+      sequencia++;
+      pintar();
+      if (valor) void carregarMeta(valor);
     },
     erro: c.mostrarErro,
     focar: () => escolher.focus(),
@@ -1258,6 +1450,8 @@ export function montarCampo(campo: CampoConteudo, ctx: ContextoForm): CampoMonta
       return montarImagem(campo, ctx);
     case "imagens":
       return montarFotos(campo, ctx);
+    case "arquivo":
+      return montarArquivo(campo, ctx);
     case "readonly":
       return montarSomenteLeitura(campo);
     case "slug":

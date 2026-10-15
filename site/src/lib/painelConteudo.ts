@@ -1,8 +1,10 @@
 /**
  * Painel de conteúdo (/painel-conteudo/) — o "motor" configurável.
  *
- * A equipe edita notícias, mensagens, perguntas frequentes, programação, galeria, ministérios, história e as
- * páginas Sobre/Crenças numa página bonita (e boa no celular) em vez do Directus "cru". Tudo o que muda de um tipo de
+ * A equipe edita notícias, mensagens, perguntas frequentes, programação, galeria, ministérios, história, as
+ * páginas Sobre/Crenças e (só a Diretoria) os relatórios de transparência em PDF numa página bonita (e boa no celular)
+ * em vez do Directus "cru". A moderação do que o público envia (depoimentos e mural de oração) tem as regras e os textos
+ * em `painelModeracao.ts` e a tela em `/painel-conteudo/moderar/`. Tudo o que muda de um tipo de
  * conteúdo para outro mora num objeto de configuração (`TIPOS_CONTEUDO` abaixo): coleção, títulos, colunas da lista,
  * como saber se é rascunho (ou nada: vai direto ao site), ordenação manual, item único (singleton), páginas públicas,
  * como montar o endereço público e a lista de campos do formulário, agrupada em seções. As páginas (`lista.astro`,
@@ -30,6 +32,7 @@ export type TipoCampo =
   | "datetime"
   | "image"
   | "imagens"
+  | "arquivo"
   | "m2o"
   | "number"
   | "url"
@@ -59,6 +62,22 @@ export interface FotoLigada {
   arquivo: string;
   /** Posição guardada hoje no Directus (nula numa foto nova): serve para saber se a ordem mudou. */
   ordem?: number | null;
+}
+
+/** Campo "arquivo" (documento enviado do aparelho, ex.: PDF de relatório): o que é aceito e o tamanho máximo. */
+export interface RegraArquivo {
+  /** Tipos (MIME) aceitos, ex.: `application/pdf`. */
+  tipos: string[];
+  /** Extensões aceitas, com ponto (ex.: `.pdf`): valem quando o navegador não informa o tipo do arquivo. */
+  extensoes: string[];
+  /** Tamanho máximo, em bytes. */
+  maxBytes: number;
+  /** Como dizer o que serve, em português: "um PDF". */
+  rotulo: string;
+  /** Conselho curto quando o tipo não serve (ex.: como gerar um PDF). */
+  dicaTipo?: string;
+  /** Texto que deve aparecer logo no começo do conteúdo do arquivo (PDF de verdade começa com `%PDF-`). */
+  assinatura?: string;
 }
 
 /** Valor inicial de um item NOVO: um valor fixo, "hoje" (data local) ou "agora" (data e hora locais). */
@@ -101,6 +120,8 @@ export interface CampoConteudo {
   /** imagens: a tabela de ligação e o limite de fotos (padrão 30). */
   imagens?: RelacaoImagens;
   maximo?: number;
+  /** arquivo: o que é aceito (padrão: PDF até 25 MB). */
+  regraArquivo?: RegraArquivo;
   /** readonly: como mostrar o valor. */
   formato?: "texto" | "sim-nao" | "data" | "datahora";
   rotuloSim?: string;
@@ -122,9 +143,15 @@ export interface SecaoConteudo {
 }
 
 /** Seção da página inicial do painel em que o cartão do tipo aparece. */
-export type GrupoHome = "noticias" | "paginas" | "institucional";
+export type GrupoHome = "moderacao" | "noticias" | "paginas" | "institucional";
 
 export const GRUPOS_HOME: { id: GrupoHome; titulo: string; descricao: string }[] = [
+  {
+    id: "moderacao",
+    titulo: "Moderação",
+    descricao:
+      "O que o público enviou pelo site: leia e decida o que vai ao ar. Só a Diretoria vê esta seção.",
+  },
   {
     id: "noticias",
     titulo: "Notícias e mensagens",
@@ -138,7 +165,8 @@ export const GRUPOS_HOME: { id: GrupoHome; titulo: string; descricao: string }[]
   {
     id: "institucional",
     titulo: "Institucional",
-    descricao: "O que fala da igreja: ministérios, história e páginas fixas.",
+    descricao:
+      "O que fala da igreja: ministérios, história, relatórios de transparência e páginas fixas.",
   },
 ];
 
@@ -171,6 +199,8 @@ export interface TipoConteudo {
   campoCategoria?: string;
   campoCapa?: string;
   campoDestaque?: string;
+  /** Campo (tipo "arquivo") com o documento do item: a lista mostra o botão "Abrir arquivo". */
+  campoArquivo?: string;
   /**
    * Campos cujo texto aparece, separado por " · ", embaixo do título na lista (select mostra o rótulo da opção,
    * data vira dd/mm/aaaa). Sem isto vale `campoData` + `campoCategoria`.
@@ -920,6 +950,106 @@ const galeria: TipoConteudo = {
   ],
 };
 
+// ----------------------------------------------------------------------------------------------
+// Terceiro lote: relatórios de transparência (PDF) — e, em `painelModeracao.ts`, a moderação do que o público envia
+// ----------------------------------------------------------------------------------------------
+
+/** Um megabyte, em bytes. */
+export const MB = 1024 * 1024;
+
+/** O que um campo "arquivo" aceita por padrão: um PDF de verdade, até 25 MB. */
+export const REGRA_PDF: RegraArquivo = {
+  tipos: ["application/pdf"],
+  extensoes: [".pdf"],
+  maxBytes: 25 * MB,
+  rotulo: "um PDF",
+  dicaTipo: "Se o relatório está em Word ou Excel, use “Salvar como PDF” e envie o PDF.",
+  assinatura: "%PDF-",
+};
+
+const relatorios: TipoConteudo = {
+  id: "relatorios",
+  colecao: "relatorios",
+  titulos: {
+    plural: "Relatórios de transparência",
+    singular: "relatório",
+    nova: "Novo relatório",
+    esta: "este relatório",
+  },
+  descricao: "Prestação de contas em PDF: qualquer pessoa baixa na página “Transparência”.",
+  icone: "📑",
+  grupo: "institucional",
+  paginasPublicas: [{ rotulo: "Transparência", url: "/transparencia/" }],
+  campoTitulo: "title",
+  campoData: "date",
+  campoArquivo: "file",
+  camposMeta: ["period", "date"],
+  ordenacao: ["-date", "-id"],
+  urlPublica: () => null,
+  secoes: [
+    {
+      id: "principal",
+      titulo: "O relatório",
+      campos: [
+        {
+          nome: "title",
+          tipo: "text",
+          rotulo: "Título do relatório",
+          obrigatorio: true,
+          maxLength: 200,
+          placeholder: "Ex.: Prestação de contas — 1º semestre de 2026",
+        },
+        {
+          nome: "period",
+          tipo: "text",
+          rotulo: "Período",
+          obrigatorio: true,
+          maxLength: 60,
+          meia: true,
+          placeholder: "Ex.: 1º semestre de 2026",
+          mensagemObrigatorio:
+            "Diga a que período o relatório se refere (ex.: 1º semestre de 2026): aparece ao lado do título na página.",
+          ajuda: "Aparece como uma etiqueta ao lado do título na página “Transparência”.",
+        },
+        {
+          nome: "date",
+          tipo: "date",
+          rotulo: "Data do relatório",
+          obrigatorio: true,
+          padrao: "hoje",
+          meia: true,
+          ajuda: "Só ordena a lista: o relatório mais recente aparece primeiro.",
+        },
+        {
+          nome: "excerpt",
+          tipo: "textarea",
+          rotulo: "Resumo (opcional)",
+          linhas: 3,
+          maxLength: 300,
+          ajuda: "Uma ou duas frases sobre o que o relatório mostra. Aparece embaixo do título.",
+        },
+      ],
+    },
+    {
+      id: "arquivo",
+      titulo: "O arquivo",
+      campos: [
+        {
+          nome: "file",
+          tipo: "arquivo",
+          rotulo: "Arquivo do relatório (PDF)",
+          obrigatorio: true,
+          regraArquivo: REGRA_PDF,
+          mensagemObrigatorio:
+            "Escolha o arquivo PDF do relatório: sem ele não há o que as pessoas possam baixar.",
+          ajuda:
+            "PDF de até 25 MB. Qualquer pessoa poderá baixar este arquivo na página “Transparência”: não envie nada sigiloso (CPF, endereço ou dados de membros).",
+        },
+      ],
+    },
+  ],
+};
+
 const configuracoes: TipoConteudo = {
   id: "configuracoes",
   colecao: "configuracoes",
@@ -1036,6 +1166,7 @@ export const TIPOS_CONTEUDO: Record<string, TipoConteudo> = {
   galeria,
   ministerios,
   historia,
+  relatorios,
   configuracoes,
 };
 
@@ -1070,6 +1201,7 @@ export function camposDaLista(tipo: TipoConteudo): string[] {
     tipo.campoCategoria,
     tipo.campoCapa,
     tipo.campoDestaque,
+    tipo.campoArquivo,
     tipo.rascunho?.campo,
     tipo.campoNotificacao,
     tipo.campoAtualizado?.campo,
@@ -1305,6 +1437,53 @@ export function diferencaFotos(
   return { create: criar, update: atualizar, delete: apagar };
 }
 
+// ----------------------------------------------------------------------------------------------
+// Arquivo enviado do aparelho (campo "arquivo", ex.: PDF do relatório)
+// ----------------------------------------------------------------------------------------------
+
+/** Tamanho em português: `820 KB`, `1,4 MB`, `25 MB`. */
+export function tamanhoLegivel(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < MB) return `${Math.round(bytes / 1024)} KB`;
+  const mb = bytes / MB;
+  const texto = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1).replace(/\.0$/, "");
+  return `${texto.replace(".", ",")} MB`;
+}
+
+/** Confere o arquivo escolhido (tipo, extensão, vazio, tamanho) ANTES de enviar. Devolve a recusa em português ou `null`. */
+export function validarArquivoPorRegra(
+  arquivo: { type: string; size: number; name?: string },
+  regra: RegraArquivo,
+): string | null {
+  const tipo = String(arquivo.type ?? "").toLowerCase();
+  const nome = String(arquivo.name ?? "").toLowerCase();
+  const extensaoCerta = regra.extensoes.some((e) => nome.endsWith(e.toLowerCase()));
+  // Tipo informado e aceito: serve. Tipo em branco (alguns aparelhos): vale a extensão. Qualquer outro tipo: recusa.
+  const tipoServe = tipo ? regra.tipos.includes(tipo) : extensaoCerta;
+  if (!tipoServe)
+    return `Esse tipo de arquivo não serve: envie ${regra.rotulo}.${regra.dicaTipo ? ` ${regra.dicaTipo}` : ""}`;
+  if (!(arquivo.size > 0)) return "O arquivo está vazio.";
+  if (arquivo.size > regra.maxBytes)
+    return `O arquivo tem ${tamanhoLegivel(arquivo.size)} e o limite é ${tamanhoLegivel(regra.maxBytes)}. Reduza o tamanho (por exemplo, exportando o PDF de novo com qualidade menor) e tente de novo.`;
+  return null;
+}
+
+/**
+ * O começo do arquivo (até 1 KB) tem a assinatura esperada? Um PDF de verdade começa com `%PDF-`; um arquivo de outro tipo
+ * só renomeado para `.pdf` não passa. `bytes` são os primeiros bytes lidos do arquivo.
+ */
+export function confereAssinatura(bytes: ArrayLike<number>, assinatura: string): boolean {
+  const limite = Math.min(bytes.length, 1024);
+  let inicio = "";
+  for (let i = 0; i < limite; i++) inicio += String.fromCharCode(bytes[i]);
+  return inicio.includes(assinatura);
+}
+
+/** Mensagem quando o conteúdo não tem a assinatura (arquivo renomeado). */
+export const MENSAGEM_ASSINATURA =
+  "O conteúdo desse arquivo não é de um PDF de verdade (talvez ele só tenha sido renomeado para .pdf). Abra o documento original e use “Salvar como PDF”.";
+
 /** Endereços das páginas do painel. */
 export const painelUrls = {
   inicio: "/painel-conteudo/",
@@ -1312,6 +1491,9 @@ export const painelUrls = {
   lista: (tipo: string) => `/painel-conteudo/lista/?tipo=${encodeURIComponent(tipo)}`,
   editar: (tipo: string, id?: number | string | null) =>
     `/painel-conteudo/editar/?tipo=${encodeURIComponent(tipo)}${id ? `&id=${encodeURIComponent(String(id))}` : ""}`,
+  /** Tela de moderação do que o público enviou (`aba`: aguardando, publicados ou confidenciais). */
+  moderar: (tipo: string, aba?: string) =>
+    `/painel-conteudo/moderar/?tipo=${encodeURIComponent(tipo)}${aba ? `&aba=${encodeURIComponent(aba)}` : ""}`,
   /** Para onde o cartão da página inicial leva: a lista (ou, em tipo de item único, direto o formulário). */
   destino: (tipo: { id: string; unico?: boolean }) =>
     tipo.unico

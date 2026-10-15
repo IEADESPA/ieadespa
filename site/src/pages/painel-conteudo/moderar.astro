@@ -1,0 +1,629 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { painelUrls } from "@/lib/painelConteudo";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import "@/styles/painel-conteudo.css";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Moderação — Painel de conteúdo" description="Área restrita da Diretoria." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer pc-escopo">
+    <div class="canvas" data-pc-moderar data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow"><a href={painelUrls.inicio} class="text-accent" data-astro-reload>← Painel de conteúdo</a></p>
+        <div class="pc-topo-linha">
+          <h1 class="pagehead-title" data-pc-titulo>Moderação</h1>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+        <p class="mt-3 text-sm" data-pc-ver-site-wrap hidden>
+          <span data-pc-ver-site-links></span>
+        </p>
+      </header>
+
+      <div class="pc-faixa pc-faixa-erro" data-pc-erro hidden>
+        <p data-pc-erro-texto></p>
+        <div class="pc-faixa-botoes">
+          <button type="button" class="btn btn-outline" data-pc-tentar>Tentar de novo</button>
+          <a href={painelUrls.inicio} class="btn btn-outline" data-astro-reload>Voltar ao painel</a>
+        </div>
+      </div>
+
+      <div hidden data-painel-conteudo>
+        <div class="pc-abas" role="tablist" aria-label="Situação dos envios" data-pc-abas></div>
+
+        <p class="pc-faixa mt-4" data-pc-aviso-aba></p>
+
+        <p class="pc-faixa mt-3" role="status" tabindex="-1" data-pc-ok hidden></p>
+        <div class="pc-faixa pc-faixa-erro mt-3" role="alert" data-pc-acao-erro hidden>
+          <p data-pc-acao-erro-texto></p>
+          <div class="pc-faixa-botoes" data-pc-acao-erro-botoes hidden>
+            <button type="button" class="btn btn-outline" data-pc-tentar-lista>Tentar de novo</button>
+          </div>
+        </div>
+
+        <p class="mt-4 text-sm" role="status" aria-live="polite" data-pc-contagem></p>
+        <div class="pc-itens mt-3" role="tabpanel" aria-label="Envios desta aba" data-pc-itens></div>
+        <div class="mt-5" data-pc-mais-wrap hidden>
+          <button type="button" class="btn btn-outline btn-block" data-pc-mais>Mostrar mais</button>
+        </div>
+      </div>
+
+      <dialog class="pc-dialogo" data-pc-dialogo aria-labelledby="pc-dialogo-titulo">
+        <h2 class="pc-dialogo-titulo" id="pc-dialogo-titulo" data-pc-dialogo-titulo></h2>
+        <div data-pc-dialogo-corpo></div>
+        <div class="pc-dialogo-digitar" data-pc-dialogo-digitar hidden>
+          <label class="pc-rotulo" for="pc-dialogo-texto" data-pc-dialogo-rotulo>Digite EXCLUIR</label>
+          <input id="pc-dialogo-texto" class="field" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" data-pc-dialogo-texto />
+        </div>
+        <div class="pc-dialogo-botoes">
+          <button type="button" class="btn btn-solid" data-pc-dialogo-sim>Confirmar</button>
+          <button type="button" class="btn btn-outline" data-pc-dialogo-nao>Cancelar</button>
+        </div>
+      </dialog>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { directusAssetUrl } from "@/lib/directus";
+    import { exigirAutenticacao } from "@/lib/painelAuth";
+    import { AUTH_CONTEUDO, SessaoExpiradaErro, criarApi, dataHoraBR, explicarErroDirectus, iniciarQuandoPronto, painelUrls } from "@/lib/painelConteudo";
+    import {
+      MOTIVO_CONFIDENCIAL,
+      abaInicial,
+      acoesDoItem,
+      avaliarAprovacao,
+      consultaContagem,
+      consultaItem,
+      consultaLista,
+      corpoDaAcao,
+      ehConfidencial,
+      estaAprovado,
+      nomeDoAutor,
+      obterTipoModeracao,
+      situacaoNoMural,
+      temConsentimento,
+      textoConfirmacao,
+      textoSucesso,
+      type AcaoModeracao,
+      type IdAba,
+      type TextoConfirmacao,
+    } from "@/lib/painelModeracao";
+
+    iniciarQuandoPronto("[data-pc-moderar]", (raiz) => {
+      const directusUrl = raiz.dataset.directusUrl ?? "";
+      const api = criarApi(directusUrl, { redirecionar: true });
+      const q = <T extends HTMLElement>(seletor: string) => raiz.querySelector<T>(seletor);
+      const params = new URLSearchParams(window.location.search);
+      const tipoOuNulo = obterTipoModeracao(params.get("tipo"));
+
+      const carregando = q("[data-painel-carregando]");
+      const conteudo = q("[data-painel-conteudo]");
+      const erroEl = q("[data-pc-erro]");
+      const erroTexto = q("[data-pc-erro-texto]");
+      const tituloEl = q("[data-pc-titulo]");
+      const abasEl = q("[data-pc-abas]");
+      const avisoAba = q("[data-pc-aviso-aba]");
+      const okEl = q("[data-pc-ok]");
+      const acaoErroEl = q("[data-pc-acao-erro]");
+      const acaoErroTexto = q("[data-pc-acao-erro-texto]");
+      const acaoErroBotoes = q("[data-pc-acao-erro-botoes]");
+      const contagemEl = q("[data-pc-contagem]");
+      const itensEl = q("[data-pc-itens]");
+      const maisWrap = q("[data-pc-mais-wrap]");
+      const maisBtn = q<HTMLButtonElement>("[data-pc-mais]");
+
+      const mostrarErroPagina = (texto: string, comTentar = true) => {
+        if (carregando) carregando.hidden = true;
+        if (conteudo) conteudo.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        if (erroTexto) erroTexto.textContent = texto;
+        q("[data-pc-tentar]")?.toggleAttribute("hidden", !comTentar);
+      };
+
+      if (!tipoOuNulo) {
+        mostrarErroPagina("Não conheço este tipo de envio. Volte ao painel e escolha uma das opções.", false);
+        return;
+      }
+      const tipo = tipoOuNulo;
+      const plural = tipo.titulos.plural;
+      document.title = `Moderar: ${plural} — Painel de conteúdo`;
+      if (tituloEl) tituloEl.textContent = `Moderar: ${plural}`;
+
+      // "Ver no site": a página pública onde isto aparece.
+      const verSiteWrap = q("[data-pc-ver-site-wrap]");
+      const verSiteLinks = q("[data-pc-ver-site-links]");
+      if (verSiteWrap && verSiteLinks && tipo.paginasPublicas.length) {
+        verSiteLinks.replaceChildren(
+          ...tipo.paginasPublicas.flatMap((p, i) => {
+            const a = document.createElement("a");
+            a.href = p.url;
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.className = "link-sweep font-semibold text-accent";
+            a.setAttribute("data-pc-ver-site", "");
+            a.textContent = `Ver a página “${p.rotulo}” no site ↗`;
+            return i ? [document.createTextNode(" · "), a] : [a];
+          }),
+        );
+        verSiteWrap.hidden = false;
+      }
+
+      type Item = Record<string, unknown> & { id: number | string };
+      const PASSO = 20;
+      let aba: IdAba = abaInicial(tipo, params.get("aba"));
+      let itens: Item[] = [];
+      let total = 0;
+      const contagens: Partial<Record<IdAba, number>> = {};
+      let ocupado = false;
+      let sequencia = 0;
+      let primeiraCarga = true;
+
+      // ------------------------------------------------------------------ mensagens
+      const limparMensagens = () => {
+        if (okEl) okEl.hidden = true;
+        if (acaoErroEl) acaoErroEl.hidden = true;
+      };
+      const mostrarOk = (texto: string) => {
+        if (!okEl) return;
+        okEl.textContent = texto;
+        okEl.hidden = false;
+        okEl.focus();
+      };
+      const mostrarErroAcao = (texto: string, comTentar = false) => {
+        if (!acaoErroEl) return;
+        if (acaoErroTexto) acaoErroTexto.textContent = texto;
+        if (acaoErroBotoes) acaoErroBotoes.hidden = !comTentar;
+        acaoErroEl.hidden = false;
+      };
+      /** A frase do erro do Directus. Aqui ninguém digitou nada: o recado padrão de "o que você digitou continua na tela" não serve. */
+      const explicar = (status: number, json: unknown, acao: string): string =>
+        status >= 500 ? "O servidor está instável agora. Tente de novo em instantes." : status === 401 ? "Sua sessão acabou. Entre de novo." : explicarErroDirectus(status, json, acao).mensagem;
+      const erroDeSessaoOuRede = (e: unknown) =>
+        e instanceof SessaoExpiradaErro
+          ? "Sua sessão acabou. Entre de novo; nada foi alterado."
+          : "Não foi possível falar com o servidor (sem conexão?). Nada foi alterado; tente de novo.";
+
+      // ------------------------------------------------------------------ abas
+      const botoesAba = new Map<IdAba, HTMLButtonElement>();
+      function montarAbas() {
+        if (!abasEl) return;
+        abasEl.replaceChildren();
+        for (const a of tipo.abas) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "pc-aba";
+          b.id = `pc-aba-${a.id}`;
+          b.setAttribute("role", "tab");
+          b.dataset.pcAba = a.id;
+          b.addEventListener("click", () => selecionarAba(a.id));
+          b.addEventListener("keydown", (ev) => {
+            const ids = tipo.abas.map((x) => x.id);
+            const i = ids.indexOf(a.id);
+            let alvo: IdAba | null = null;
+            if (ev.key === "ArrowRight") alvo = ids[(i + 1) % ids.length];
+            else if (ev.key === "ArrowLeft") alvo = ids[(i - 1 + ids.length) % ids.length];
+            else if (ev.key === "Home") alvo = ids[0];
+            else if (ev.key === "End") alvo = ids[ids.length - 1];
+            if (!alvo) return;
+            ev.preventDefault();
+            selecionarAba(alvo);
+            botoesAba.get(alvo)?.focus();
+          });
+          botoesAba.set(a.id, b);
+          abasEl.append(b);
+        }
+        atualizarAbas();
+      }
+      function atualizarAbas() {
+        for (const a of tipo.abas) {
+          const b = botoesAba.get(a.id);
+          if (!b) continue;
+          const n = contagens[a.id];
+          b.textContent = n === undefined ? a.rotulo : `${a.rotulo} (${n})`;
+          const ativa = a.id === aba;
+          b.setAttribute("aria-selected", String(ativa));
+          b.tabIndex = ativa ? 0 : -1;
+        }
+        const atual = tipo.abas.find((a) => a.id === aba);
+        if (avisoAba) {
+          avisoAba.textContent = atual?.aviso ?? "";
+          avisoAba.hidden = !atual?.aviso;
+        }
+        if (itensEl) itensEl.setAttribute("aria-labelledby", `pc-aba-${aba}`);
+      }
+      function selecionarAba(id: IdAba) {
+        if (id === aba || ocupado) return;
+        aba = id;
+        window.history.replaceState(null, "", painelUrls.moderar(tipo.id, aba));
+        limparMensagens();
+        atualizarAbas();
+        void carregarLista({ reiniciar: true });
+      }
+
+      // ------------------------------------------------------------------ desenho da lista
+      function travar(sim: boolean) {
+        raiz.querySelectorAll<HTMLButtonElement>("button[data-pc-acao], [data-pc-mais], .pc-aba").forEach((b) => {
+          b.disabled = sim || b.dataset.pcBloqueado === "1";
+        });
+      }
+
+      function criarCartao(item: Item): HTMLElement {
+        const conf = ehConfidencial(tipo, item);
+        const autor = nomeDoAutor(item);
+        const consentiu = temConsentimento(item);
+        const foto = tipo.campos.foto ? (item[tipo.campos.foto] as string | null) : null;
+        const cartao = document.createElement("article");
+        cartao.className = `pc-mod-item${conf ? " pc-mod-item-confidencial" : ""}`;
+        cartao.dataset.pcItem = String(item.id);
+        cartao.setAttribute("aria-labelledby", `pc-mod-t-${item.id}`);
+
+        const cab = document.createElement("div");
+        cab.className = `pc-mod-cab${foto ? " pc-mod-cab-com-foto" : ""}`;
+        if (foto) {
+          const img = document.createElement("img");
+          img.className = "pc-mod-foto";
+          img.alt = `Foto enviada por ${autor}`;
+          img.loading = "lazy";
+          img.width = 80;
+          img.height = 80;
+          img.src = directusAssetUrl(foto, { width: 160, height: 160, fit: "cover", quality: 70, format: "webp" });
+          cab.append(img);
+        }
+        const quem = document.createElement("div");
+        const nomeEl = document.createElement("h2");
+        nomeEl.className = "pc-item-titulo";
+        nomeEl.id = `pc-mod-t-${item.id}`;
+        nomeEl.textContent = autor;
+        const quando = document.createElement("p");
+        quando.className = "pc-item-meta";
+        quando.textContent = dataHoraBR(item.date_created) || "Sem data";
+        quem.append(nomeEl, quando);
+
+        const selos = document.createElement("div");
+        selos.className = "pc-selos";
+        const selo = (classe: string, rotulo: string, marca: string) => {
+          const s = document.createElement("span");
+          s.className = `pc-selo ${classe}`;
+          s.dataset.pcSelo = marca;
+          s.textContent = rotulo;
+          selos.append(s);
+        };
+        selo(consentiu ? "pc-selo-publicado" : "pc-selo-nao", `Consentimento LGPD: ${consentiu ? "sim" : "não"}`, "lgpd");
+        if (tipo.campos.contador) {
+          const n = Number(item[tipo.campos.contador]);
+          selo("pc-selo-neutro", `🙏 ${Number.isFinite(n) ? n : 0} orando`, "orando");
+        }
+        if (conf) selo("pc-selo-rascunho", "🔒 Confidencial", "confidencial");
+        else selo(estaAprovado(item) ? "pc-selo-publicado" : "pc-selo-rascunho", estaAprovado(item) ? "Publicado" : "Aguardando", "estado");
+        quem.append(selos);
+        cab.append(quem);
+        cartao.append(cab);
+
+        const texto = document.createElement("p");
+        texto.className = "pc-mod-texto";
+        texto.dataset.pcTexto = "";
+        texto.textContent = String(item.texto ?? "");
+        cartao.append(texto);
+
+        const situacao = situacaoNoMural(tipo, item);
+        if (situacao) {
+          const s = document.createElement("p");
+          s.className = "pc-ajuda";
+          s.dataset.pcSituacao = situacao.noMural ? "no-mural" : "fora-do-mural";
+          s.textContent = situacao.frase;
+          cartao.append(s);
+        }
+        if (conf) {
+          const trava = document.createElement("p");
+          trava.className = "pc-mod-trava";
+          trava.dataset.pcTrava = "confidencial";
+          trava.textContent = `🔒 ${MOTIVO_CONFIDENCIAL}.`;
+          cartao.append(trava);
+        }
+
+        const acoes = document.createElement("div");
+        acoes.className = "pc-mod-acoes";
+        const nomeParaLeitor = `${tipo.titulos.singular} de ${autor}`;
+        for (const acao of acoesDoItem(tipo, item)) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.dataset.pcAcao = acao;
+          if (acao === "aprovar") {
+            b.className = "btn btn-solid";
+            b.textContent = "Aprovar";
+            b.setAttribute("aria-label", `Aprovar o ${nomeParaLeitor}`);
+            const avaliacao = avaliarAprovacao(tipo, item);
+            if (!avaliacao.pode) {
+              b.dataset.pcBloqueado = "1";
+              b.disabled = true;
+              const idMotivo = `pc-mod-m-${item.id}`;
+              b.setAttribute("aria-describedby", idMotivo);
+              const m = document.createElement("p");
+              m.className = "pc-mod-trava";
+              m.id = idMotivo;
+              m.dataset.pcMotivo = "aprovar";
+              m.textContent = `${avaliacao.motivo}.`;
+              cartao.append(m);
+            }
+          } else if (acao === "tirar") {
+            b.className = "btn btn-outline";
+            b.textContent = "Tirar do ar";
+            b.setAttribute("aria-label", `Tirar do ar o ${nomeParaLeitor}`);
+          } else {
+            b.className = "btn btn-outline pc-btn-perigo";
+            b.textContent = "Excluir…";
+            b.setAttribute("aria-label", `Excluir o ${nomeParaLeitor}`);
+          }
+          if (ocupado) b.disabled = true;
+          b.addEventListener("click", () => void acionar(item, acao as AcaoModeracao));
+          acoes.append(b);
+        }
+        // O motivo do botão desligado vem ANTES dos botões na leitura; os botões ficam por último.
+        cartao.append(acoes);
+        return cartao;
+      }
+
+      function pintar() {
+        if (!itensEl) return;
+        itensEl.replaceChildren(...itens.map(criarCartao));
+        const atual = tipo.abas.find((a) => a.id === aba);
+        if (contagemEl) {
+          contagemEl.textContent = !itens.length
+            ? (atual?.vazio ?? "Nada por aqui.")
+            : total > itens.length
+              ? `Mostrando ${itens.length} de ${total}, do mais novo para o mais antigo.`
+              : `${total} ${total === 1 ? "item" : "itens"}, do mais novo para o mais antigo.`;
+        }
+        if (maisWrap) maisWrap.hidden = itens.length >= total;
+        if (maisBtn) maisBtn.textContent = `Mostrar mais (${Math.max(0, Math.min(PASSO, total - itens.length))})`;
+        itensEl.setAttribute("aria-busy", "false");
+      }
+
+      // ------------------------------------------------------------------ leitura (lista e contagens)
+      /**
+       * Lê a aba ativa. `reiniciar`: troca de aba (começa do zero). `acrescentar`: "Mostrar mais". `manter`: depois de uma ação,
+       * relê o mesmo tanto que já estava na tela. Uma resposta atrasada de uma aba que já não é a ativa é descartada.
+       */
+      async function carregarLista(opcoes: { reiniciar?: boolean; acrescentar?: boolean; manter?: boolean } = {}): Promise<boolean> {
+        const minha = ++sequencia;
+        const abaPedida = aba;
+        const deslocamento = opcoes.acrescentar ? itens.length : 0;
+        const limite = opcoes.manter ? Math.min(Math.max(PASSO, itens.length), 200) : PASSO;
+        if (opcoes.reiniciar) {
+          itens = [];
+          total = 0;
+          itensEl?.replaceChildren();
+          itensEl?.setAttribute("aria-busy", "true");
+          if (contagemEl) contagemEl.textContent = "Carregando…";
+          if (maisWrap) maisWrap.hidden = true;
+        }
+        let res: Response;
+        try {
+          res = await api(consultaLista(tipo, abaPedida, limite, deslocamento));
+        } catch (e) {
+          if (minha !== sequencia) return false;
+          if (primeiraCarga) mostrarErroPagina(erroDeSessaoOuRede(e));
+          else mostrarErroAcao(erroDeSessaoOuRede(e), true);
+          itensEl?.setAttribute("aria-busy", "false");
+          return false;
+        }
+        if (minha !== sequencia) return false;
+        if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          const msg = explicar(res.status, json, `ver ${plural.toLowerCase()}`);
+          if (primeiraCarga || res.status === 403)
+            mostrarErroPagina(res.status === 403 ? `${msg} Esta área é só da Diretoria.` : msg, res.status !== 403);
+          else mostrarErroAcao(msg, true);
+          itensEl?.setAttribute("aria-busy", "false");
+          return false;
+        }
+        const json = (await res.json()) as { data?: Item[]; meta?: { filter_count?: number } };
+        const pagina = json.data ?? [];
+        if (minha !== sequencia) return false;
+        if (opcoes.acrescentar) {
+          const vistos = new Set(itens.map((i) => String(i.id)));
+          itens = [...itens, ...pagina.filter((i) => !vistos.has(String(i.id)))];
+        } else itens = pagina;
+        total = typeof json.meta?.filter_count === "number" ? json.meta.filter_count : itens.length;
+        contagens[abaPedida] = total;
+        primeiraCarga = false;
+        if (acaoErroEl && !acaoErroEl.hidden && acaoErroBotoes && !acaoErroBotoes.hidden) acaoErroEl.hidden = true;
+        atualizarAbas();
+        pintar();
+        return true;
+      }
+
+      /** As contagens de todas as abas (os números ao lado dos nomes). Falha de uma conta só deixa o número antigo. */
+      async function atualizarContagens() {
+        await Promise.all(
+          tipo.abas.map(async (a) => {
+            try {
+              const res = await api(consultaContagem(tipo, a.id));
+              if (!res.ok) return;
+              const json = (await res.json()) as { meta?: { filter_count?: number } };
+              if (typeof json.meta?.filter_count === "number") contagens[a.id] = json.meta.filter_count;
+            } catch {
+              /* o número antigo fica */
+            }
+          }),
+        );
+        atualizarAbas();
+      }
+
+      async function recarregar() {
+        await Promise.all([carregarLista({ manter: true }), atualizarContagens()]);
+      }
+
+      // ------------------------------------------------------------------ confirmação (janela própria)
+      const dialogo = q<HTMLDialogElement>("[data-pc-dialogo]");
+      const dlgTitulo = q("[data-pc-dialogo-titulo]");
+      const dlgCorpo = q("[data-pc-dialogo-corpo]");
+      const dlgSim = q<HTMLButtonElement>("[data-pc-dialogo-sim]");
+      const dlgNao = q<HTMLButtonElement>("[data-pc-dialogo-nao]");
+      const dlgDigitar = q("[data-pc-dialogo-digitar]");
+      const dlgRotulo = q("[data-pc-dialogo-rotulo]");
+      const dlgTexto = q<HTMLInputElement>("[data-pc-dialogo-texto]");
+
+      function confirmar(t: TextoConfirmacao): Promise<boolean> {
+        if (!dialogo || !dlgTitulo || !dlgCorpo || !dlgSim || !dlgNao || !dlgDigitar || !dlgRotulo || !dlgTexto || typeof dialogo.showModal !== "function") {
+          const corpo = `${t.titulo}\n\n${t.paragrafos.join("\n\n")}`;
+          if (t.digitar) return Promise.resolve((window.prompt(`${corpo}\n\nPara confirmar, digite ${t.digitar}:`) ?? "").trim().toUpperCase() === t.digitar);
+          return Promise.resolve(window.confirm(corpo));
+        }
+        const dlg = dialogo;
+        return new Promise((resolve) => {
+          dlgTitulo.textContent = t.titulo;
+          dlgCorpo.replaceChildren(
+            ...t.paragrafos.map((p) => {
+              const el = document.createElement("p");
+              el.textContent = p;
+              return el;
+            }),
+          );
+          dlgSim.textContent = t.sim;
+          dlgSim.className = t.perigo ? "btn btn-outline pc-btn-perigo" : "btn btn-solid";
+          dlgDigitar.hidden = !t.digitar;
+          dlgTexto.value = "";
+          if (t.digitar) dlgRotulo.textContent = `Para confirmar, digite ${t.digitar}`;
+          const atualizar = () => {
+            dlgSim.disabled = Boolean(t.digitar) && dlgTexto.value.trim().toUpperCase() !== t.digitar;
+          };
+          atualizar();
+          let resultado = false;
+          const aoFechar = () => {
+            dlg.removeEventListener("close", aoFechar);
+            dlgTexto.oninput = null;
+            dlgTexto.onkeydown = null;
+            resolve(resultado);
+          };
+          dlg.addEventListener("close", aoFechar);
+          dlgTexto.oninput = atualizar;
+          dlgTexto.onkeydown = (ev) => {
+            if (ev.key === "Enter") {
+              ev.preventDefault();
+              if (!dlgSim.disabled) dlgSim.click();
+            }
+          };
+          dlgSim.onclick = () => {
+            if (dlgSim.disabled) return;
+            resultado = true;
+            dlgSim.disabled = true; // um toque só: sem clique duplo
+            dlg.close();
+          };
+          dlgNao.onclick = () => {
+            resultado = false;
+            dlg.close();
+          };
+          dlg.showModal();
+          (t.digitar ? dlgTexto : dlgNao).focus();
+        });
+      }
+
+      // ------------------------------------------------------------------ ações
+      /** Lê o item de novo (o que está na tela pode estar velho). `null` = não deu; a mensagem já foi mostrada. */
+      async function lerItem(id: Item["id"]): Promise<Item | null> {
+        const res = await api(consultaItem(tipo, id));
+        if (res.ok) return ((await res.json()) as { data?: Item }).data ?? null;
+        // O Directus responde 403 (não 404) a um item que não existe; como a pessoa acabou de ler a lista, aqui só pode ser item que sumiu.
+        if (res.status === 403 || res.status === 404) {
+          mostrarErroAcao("Este item não existe mais (talvez outra pessoa o tenha excluído). A lista foi atualizada.");
+          await recarregar();
+          return null;
+        }
+        const json = await res.json().catch(() => null);
+        mostrarErroAcao(`${explicar(res.status, json, "abrir")} Nada foi alterado.`);
+        return null;
+      }
+
+      /** Toda ação passa por aqui: uma de cada vez, com todos os botões travados desde o primeiro toque (nada de clique duplo). */
+      async function acionar(item: Item, acao: AcaoModeracao) {
+        if (ocupado) return;
+        ocupado = true;
+        travar(true);
+        limparMensagens();
+        try {
+          let alvo: Item = item;
+          if (acao === "aprovar") {
+            // A regra vale sobre o que está no servidor AGORA, não sobre a tela (que pode estar velha).
+            const fresco = await lerItem(item.id);
+            if (!fresco) return;
+            alvo = fresco;
+            if (estaAprovado(alvo)) {
+              mostrarOk("Este item já estava publicado.");
+              await recarregar();
+              return;
+            }
+            const avaliacao = avaliarAprovacao(tipo, alvo);
+            if (!avaliacao.pode) {
+              mostrarErroAcao(`Não foi aprovado: ${avaliacao.motivo}.`);
+              await recarregar();
+              return;
+            }
+          }
+          if (acao !== "tirar") {
+            if (!(await confirmar(textoConfirmacao(tipo, acao, alvo)))) return;
+          }
+          const caminho = `/items/${tipo.colecao}/${encodeURIComponent(String(item.id))}`;
+          const res =
+            acao === "excluir"
+              ? await api(caminho, { method: "DELETE" })
+              : await api(caminho, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpoDaAcao(acao)) });
+          if (!res.ok) {
+            const json = await res.json().catch(() => null);
+            mostrarErroAcao(`${explicar(res.status, json, acao === "excluir" ? "excluir" : acao === "aprovar" ? "aprovar" : "tirar do ar")} Nada foi alterado.`);
+            if (res.status === 404) await recarregar();
+            return;
+          }
+          mostrarOk(textoSucesso(tipo, acao));
+          await recarregar();
+        } catch (e) {
+          mostrarErroAcao(erroDeSessaoOuRede(e));
+        } finally {
+          ocupado = false;
+          travar(false);
+        }
+      }
+
+      // ------------------------------------------------------------------ início
+      maisBtn?.addEventListener("click", () => {
+        if (ocupado) return;
+        limparMensagens();
+        void carregarLista({ acrescentar: true });
+      });
+      q("[data-pc-tentar]")?.addEventListener("click", () => {
+        if (erroEl) erroEl.hidden = true;
+        void iniciarConteudo();
+      });
+      q("[data-pc-tentar-lista]")?.addEventListener("click", () => {
+        limparMensagens();
+        void recarregar();
+      });
+
+      async function iniciarConteudo() {
+        if (carregando) {
+          carregando.hidden = false;
+          carregando.textContent = `Carregando ${plural.toLowerCase()}…`;
+        }
+        montarAbas();
+        const [ok] = await Promise.all([carregarLista({ reiniciar: true }), atualizarContagens()]);
+        if (!ok) return;
+        if (carregando) carregando.hidden = true;
+        if (conteudo) conteudo.hidden = false;
+      }
+
+      async function iniciar() {
+        const token = await exigirAutenticacao(directusUrl, AUTH_CONTEUDO);
+        if (!token) return;
+        await iniciarConteudo();
+      }
+
+      void iniciar();
+    });
+  </script>
+</BaseLayout>

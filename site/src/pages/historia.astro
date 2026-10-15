@@ -1,5 +1,5 @@
 ---
-import { marked } from "marked";
+import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
@@ -23,7 +23,7 @@ const registrosComHtml = await Promise.all(
   registros.map(async (registro, index) => ({
     ...registro,
     slug: `marco-${index}`,
-    bodyHtml: await marked.parse(registro.body ?? ""),
+    bodyHtml: await renderizarMarkdown(registro.body ?? ""),
     // Galeria (Fase 20): fotos extras do mesmo marco, além da foto principal
     // acima — a maioria dos marcos ainda não tem nenhuma (conteúdo, não
     // técnico, ver README), então isso só aparece quando existir de fato.

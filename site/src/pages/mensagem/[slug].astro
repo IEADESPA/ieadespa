@@ -1,5 +1,5 @@
 ---
-import { marked } from "marked";
+import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import PostCard from "@/components/PostCard.astro";
 import ShareButtons from "@/components/ShareButtons.astro";
@@ -37,7 +37,7 @@ interface Props {
 }
 
 const { post, allPosts } = Astro.props;
-const bodyHtml = await marked.parse(post.body);
+const bodyHtml = await renderizarMarkdown(post.body);
 const data = post.data;
 const related = getRelated(allPosts, post);
 const serie = getSerie(allPosts, post);

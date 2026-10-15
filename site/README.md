@@ -287,6 +287,20 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   site (notícias, eventos, inscrições, contas dão 403). Para dar a função a alguém: Directus →
   Usuários → criar o usuário com a função "Gestor de Camisetas" e entrar em
   `/painel-camisetas/entrar/`.
+- **Tirar reserva, reenviar aviso e aviso em massa seletivo (15/10/2026, pedido do responsável)** — a
+  reserva de uma camiseta é a marca "Separado" do pedido (`separado`/`separado_em`). Até aqui só havia
+  "Marcar como separado"; quem não vinha buscar não tinha como perder a reserva, e "Retiradas = 0" não
+  resolve (é a quantidade já levada). Agora, no cartão do pedido (`/painel-camisetas/grupo/pedidos/`):
+  **"Tirar reserva"** (com confirmação) volta o pedido a "ainda não separado" **sem apagá-lo e sem mexer em
+  "Retiradas", valor pago ou lote**, e não manda e-mail; some quando a pessoa já levou tudo. **"Reenviar
+  aviso"** manda de novo o e-mail de "pode retirar" ao e-mail do pedido (aparece para quem está separado ou
+  quando a retirada foi liberada para o grupo) e atualiza o carimbo "avisado em"; a falha do envio é
+  avisada e não carimba. No **aviso em massa** (campanha → "E-mail de retirada"): caixa **"só quem está
+  separado"** e filtro **"só do lote"**; em modo seletivo **não libera a retirada para todos** (isso é do
+  envio a todos), e a contagem do "Conferir" segue o filtro (`somenteSeparados`, `loteId` em
+  `api/AvisarRetiradaCamisetas`). A função agora **erra de forma explícita (502)** quando uma consulta
+  ao Directus falha, em vez de contar zero e o painel dizer "Pronto: 0". Bateria `scripts/testes/reserva.cjs`
+  (só simula, nunca envia e-mail).
 - **Painel de pedidos no celular (13/10/2026)** — a barra de busca fica presa no alto durante a
   rolagem e os filtros ficam **recolhidos** atrás do botão "Filtros" (com um selo com quantos estão
   ligados); uma linha "Filtrando por: Tamanho GG" com o botão "Limpar" fica sempre à vista, para

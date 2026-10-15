@@ -242,6 +242,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       tamanhos: string[] | null;
       modelos: string[] | null;
       retirada_local: string | null;
+      retirada_liberada?: boolean;
       email_retirada_assunto: string | null;
       email_retirada_corpo: string | null;
     }
@@ -719,8 +720,14 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const separadoAcao = p.avulso
         ? ""
         : p.separado
-          ? `<span class="badge-separado">✅ Separado</span>`
+          // 15/10/2026 — "Tirar reserva" (a pessoa não veio buscar; a peça passa para a próxima): volta a "ainda não separado", sem apagar o pedido nem mexer
+          // em "Retiradas". Some quando já levou tudo (não há reserva a desfazer).
+          ? `<span class="badge-separado">✅ Separado</span>${tudoRetirado(p) ? "" : ` <button type="button" class="link-sweep text-sm font-semibold" data-tirar-reserva title="A pessoa não veio buscar: volta a 'ainda não separado'. O pedido não é apagado.">Tirar reserva</button>`}`
           : `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-marcar-separado>Marcar como separado</button>`;
+      // 15/10/2026 — "Reenviar aviso": manda de novo o e-mail de "pode retirar" a este pedido (quando está separado ou a retirada foi liberada para o grupo).
+      const reenviarAcao = !p.avulso && p.email && !tudoRetirado(p) && (p.separado || grupo.retirada_liberada)
+        ? `<button type="button" class="link-sweep text-sm font-semibold text-accent" data-reenviar-aviso title="Manda de novo o e-mail de 'pode retirar' para ${escapeHtml(p.email)}">Reenviar aviso</button>`
+        : "";
       // 07/10/2026 — chamar a pessoa no WhatsApp com a mensagem pronta (a maioria não tem e-mail).
       // O telefone fica cifrado no Directus; a API do site só o devolve a quem está logado no painel.
       const whatsappAcao = p.avulso
@@ -749,6 +756,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
               </label>
               <button type="button" class="link-sweep text-sm font-semibold text-accent" data-salvar-pedido>Salvar</button>
               ${separadoAcao}
+              ${reenviarAcao}
               ${whatsappAcao}
               <button type="button" class="link-sweep text-sm font-semibold" data-excluir-pedido>Excluir</button>
             </div>
@@ -1396,6 +1404,72 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         return;
       }
 
+      if (target.matches("[data-tirar-reserva]")) {
+        if (!confirm(`Tirar a reserva de "${pedido.nome}"?\n\nO pedido volta a "ainda não separado" e a peça fica livre para outra pessoa. O pedido NÃO é apagado e as "Retiradas" não mudam. Quem já recebeu o e-mail de "pode retirar" não recebe aviso de cancelamento.`)) return;
+        const botao = target as HTMLButtonElement;
+        botao.disabled = true;
+        botao.textContent = "Tirando…";
+        const res = await api(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ separado: false, separado_em: null }),
+        });
+        if (!res.ok) {
+          botao.disabled = false;
+          botao.textContent = "Tirar reserva";
+          alert("Não foi possível tirar a reserva agora. Nada foi alterado; tente de novo.");
+          return;
+        }
+        pedido.separado = false;
+        pedido.separado_em = null;
+        atualizarTudo();
+        return;
+      }
+
+      if (target.matches("[data-reenviar-aviso]")) {
+        if (!pedido.email) return;
+        if (!confirm(`Reenviar o aviso de retirada para ${pedido.email}?`)) return;
+        const botao = target as HTMLButtonElement;
+        botao.disabled = true;
+        botao.textContent = "Enviando…";
+        try {
+          const res = await fetch(ENVIAR_AVISO_RETIRADA_CAMISETA_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: pedido.email,
+              nome: pedido.nome,
+              campanhaNome: grupo.nome,
+              itens: pedido.itens.map((i) => ({ tamanho: i.tamanho, modelo: i.modelo, quantidade: i.quantidade })),
+              retiradaLocal: grupo.retirada_local || null,
+              assunto: grupo.email_retirada_assunto || null,
+              corpo: grupo.email_retirada_corpo || null,
+            }),
+          });
+          const json = await res.json().catch(() => null);
+          if (!res.ok || !json?.enviado) {
+            alert("Não foi possível reenviar agora. Confira o e-mail do pedido e tente de novo.");
+            return;
+          }
+          // o carimbo de "avisado em" passa a ser de agora (e este pedido não entra de novo no aviso em massa)
+          const agora = new Date().toISOString();
+          const carimbo = await api(`${directusUrl}/items/camiseta_pedidos/${pedidoId}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ aviso_retirada_em: agora }),
+          });
+          if (carimbo.ok) pedido.aviso_retirada_em = agora;
+          atualizarTudo();
+          alert(`Aviso reenviado para ${pedido.email}.`);
+        } catch {
+          alert("Sem conexão agora. O aviso não foi reenviado; tente de novo.");
+        } finally {
+          botao.disabled = false;
+          botao.textContent = "Reenviar aviso";
+        }
+        return;
+      }
+
       if (target.matches("[data-marcar-separado]")) {
         const separadoEm = new Date().toISOString();
         target.textContent = "Salvando…";
@@ -1837,7 +1911,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         return;
       }
 
-      const resGrupo = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos,retirada_local,email_retirada_assunto,email_retirada_corpo`, {
+      const resGrupo = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos,retirada_local,retirada_liberada,email_retirada_assunto,email_retirada_corpo`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resGrupo.ok) {

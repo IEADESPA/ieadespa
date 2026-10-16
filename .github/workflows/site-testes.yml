@@ -124,3 +124,9 @@ jobs:
         env:
           SITE_URL: ${{ steps.alvo.outputs.url }}
         run: node site/scripts/testes/eventos.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Vagas e cupom dos eventos
+        if: always() && steps.alvo.outputs.url != ''
+        env:
+          SITE_URL: ${{ steps.alvo.outputs.url }}
+        run: node site/scripts/testes/inscricao-vagas.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"

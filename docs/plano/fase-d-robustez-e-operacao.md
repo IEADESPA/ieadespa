@@ -554,5 +554,7 @@ abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.
   dessa consulta por hora era igual à de chamadas, 1 para 1). A correção está em `auth.temSessaoAssinada(req)`: só uma sessão
   nossa (assinada e no prazo, conferida na memória) justifica a leitura; token do Azure, inválido ou vencido não vira sessão e o
   handler responde 401 sozinho. Provas: `entradaUnica.test.js` (5 testes novos; voltando a condição antiga, 3 reprovam) e a suíte
-  inteira (5.226 testes). Efeito esperado: o banco volta a pausar sem uso; conferir o custo diário no Azure (Cost Management) e o
-  estado do banco (`Paused` fora do horário de trabalho).
+  inteira (5.226 testes). **Confirmado em 16/10/2026:** o banco pausou às 13h03 (Belém), 60 minutos depois do último uso; a cobrança por
+  hora caiu de ~2.440 vCore-segundos (ligado o tempo todo) para 96 na hora da pausa e 0 depois. O custo em reais aparece no
+  Cost Management com um dia de atraso: conferir 17/10 (esperado ~R$ 8 em vez de ~R$ 87). O orçamento `ieadespa-teto-mensal`
+  (R$ 650/mês, avisos em 50 %, 80 %, 100 % e na previsão de 100 %, pelo grupo de ação `ieadespa-alertas`) já existia desde 01/10.

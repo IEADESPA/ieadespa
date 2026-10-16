@@ -350,6 +350,21 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   `scripts/testes/exclusao.cjs` (31, contra o Directus; roda no CI) e a prova no Edge com a página real, na aba
   "Excluir" (59 verificações, campanha descartável: inclui que a tela de pedidos não tem mais o botão e que os números
   travados do lote fechado não mudam).
+- **Limite de pedidos (16/10/2026, pedido do responsável: na Marcha são 140 camisetas e a 141ª tem de ser recusada)** — na aba **Dados**
+  da campanha: **"Limite de pedidos"** (total, todos os tamanhos) e **"Limite por tamanho"**; em branco = sem limite. Vale para as peças dos
+  **lotes abertos** da campanha (site e balcão, pagas ou não; pedido apagado libera a vaga na hora; venda avulsa e lote fechado não contam; ao
+  fechar o lote o próximo começa do zero). A página pública mostra **"esgotado"** (o formulário some e volta sozinho se liberar vaga) e o tamanho
+  esgotado fica desabilitado. **Como nunca passa do número**: o Directus não tem transação entre chamadas, então cada pedido grava, na MESMA
+  transação, uma "senha" no livro `camiseta_controle` (chave única `campanha:n`, n = último + 1), depois de ler o último número e SÓ ENTÃO a
+  soma das peças; se outro pedido pegou a mesma senha o banco recusa e se lê tudo de novo (`api/src/lib/limiteLote.js`, o raciocínio está no
+  cabeçalho do arquivo). **Estabilidade** (o Directus B1 grava ~1,5 pedido/s): o hash do telefone é assíncrono e só calculado depois das
+  recusas; os pedidos de uma campanha entram numa fila de um por vez por instância e quem não daria tempo recebe 503 "tente de novo" na hora;
+  a instância lembra por 3 s o último número e as peças (pula 2 leituras por pedido; a idade conta desde a última leitura real); o lote é criado
+  uma vez só por instância. Gestor: adicionar/editar item ou mover pedido que passa do limite **avisa e pede confirmação** (não bloqueia); o
+  "Desfazer exclusão" não restaura o que não cabe. Esquema (2 campos na campanha + a coleção do livro, repetível, só acrescenta):
+  `site/scripts/directus-limite-esquema.mjs`. Provas: `limite-unidade.cjs` (130, com 7 mutações que têm de reprovar), `limite-carga.cjs` (Directus
+  real, 1 a 8 instâncias em processos separados), `limite.cjs` (HTTP, roda no CI) e o emulador `swa-local.cjs` (site + API contra um Directus de
+  teste, sem tocar a produção).
 - **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
   trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
   Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de

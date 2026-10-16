@@ -107,6 +107,12 @@ jobs:
           SITE_URL: ${{ steps.alvo.outputs.url }}
         run: node site/scripts/testes/exclusao.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Limite de pedidos
+        if: always() && steps.alvo.outputs.url != ''
+        env:
+          SITE_URL: ${{ steps.alvo.outputs.url }}
+        run: node site/scripts/testes/limite.cjs 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Painel de conteúdo
         if: always() && steps.alvo.outputs.url != ''
         env:

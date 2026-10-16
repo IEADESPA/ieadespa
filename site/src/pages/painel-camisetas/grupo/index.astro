@@ -125,6 +125,28 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
           <div class="grid gap-2" data-precos-tamanho-lista></div>
         </div>
 
+        <!-- 16/10/2026 — limite de pedidos do lote aberto. Só aparece se o Directus já tem os campos (limite_total / limites_tamanho). A regra e a trava estão em api/src/lib/limiteLote.js. -->
+        <div class="grid gap-2 limite-bloco" data-limite-wrap hidden>
+          <label class="text-sm font-semibold" for="f-limite-total">Limite de pedidos (opcional)</label>
+          <p class="text-xs text-muted-foreground">
+            Quantas peças o <strong>lote aberto</strong> aceita, de todos os tamanhos juntos. Chegou no número, o site mostra
+            <strong>"esgotado"</strong> e não aceita mais pedido — nem com muita gente pedindo ao mesmo tempo. Pedido apagado
+            libera a vaga na hora. Deixe em branco para <strong>não ter limite</strong>. Conta todas as peças do lote
+            (site e balcão, pagas ou não). Ao fechar o lote, o próximo pedido abre um lote novo e começa do zero com estes
+            mesmos limites: mude os números aqui antes, se precisar.
+          </p>
+          <input id="f-limite-total" type="number" min="0" step="1" inputmode="numeric" class="field" placeholder="Sem limite" style="max-width:12rem" />
+          <div class="grid gap-2" data-limite-tamanho-wrap hidden>
+            <label class="text-sm font-semibold">Limite por tamanho (opcional)</label>
+            <p class="text-xs text-muted-foreground">
+              Preencha só os tamanhos que precisam de limite próprio (ex.: M 40, G 30); o tamanho que chegar no seu número aparece
+              como <strong>"esgotado"</strong> e os outros seguem abertos. Em branco = sem limite próprio (só conta no total).
+            </p>
+            <div class="grid gap-2" data-limite-tamanho-lista></div>
+          </div>
+          <p class="text-sm font-semibold" data-limite-uso aria-live="polite"></p>
+        </div>
+
         <div class="grid gap-2">
           <label class="text-sm font-semibold" for="f-pedidos-ate">Pedidos até (opcional)</label>
           <input id="f-pedidos-ate" type="date" class="field" />
@@ -370,6 +392,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     import { graficoBarrasSvg, desenharGraficoBarrasPDF, type ContagemOpcao } from "@/lib/graficos";
     import { elegiveisParaExcluir, filtrarAlvo, limiteDaExclusao, descreverEscolha, levouAlgumaPeca, resumoDaExclusao, type CopiaDaExclusao, type PedidoParaExcluir, type LoteParaExcluir } from "@/lib/exclusaoEmMassa";
     import { excluirPedidos, desfazerExclusao, type AmbienteExclusao } from "@/lib/exclusaoEmMassaAcao";
+    import { avaliar, limitesDoGrupo, pedidoDosItens, resumoDoUso, temLimite, usoDoAgregado, type Limites } from "@/lib/limitePedidos";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -393,6 +416,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       email_retirada_assunto: string | null;
       email_retirada_corpo: string | null;
       retirada_liberada?: boolean;
+      // campos novos (16/10/2026): só existem depois do roteiro `scripts/directus-limite-esquema.mjs`
+      limite_total?: number | null;
+      limites_tamanho?: Record<string, number> | null;
       imagem: string | null;
     }
 
@@ -506,7 +532,37 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         .join("");
     }
 
-    fTamanhos.addEventListener("input", () => renderizarPrecosTamanho(csvParaLista(fTamanhos.value)));
+    // Limite de pedidos (16/10/2026): os campos só existem se o Directus já tem as colunas; sem elas o bloco fica escondido e nada disto vai no PATCH.
+    const limiteWrap = document.querySelector<HTMLElement>("[data-limite-wrap]");
+    const fLimiteTotal = el<HTMLInputElement>("f-limite-total");
+    const limiteTamanhoWrap = document.querySelector<HTMLElement>("[data-limite-tamanho-wrap]");
+    const limiteTamanhoLista = document.querySelector<HTMLElement>("[data-limite-tamanho-lista]");
+    let limiteDisponivel = false;
+    let limitesSalvos: Limites = { total: null, porTamanho: {} }; // o que está gravado no Directus (a linha de uso mostra este, não o que está sendo digitado)
+
+    function renderizarLimitesTamanho(tamanhosAtuais: string[]) {
+      if (!limiteTamanhoWrap || !limiteTamanhoLista) return;
+      const valoresAtuais: Record<string, string> = {};
+      limiteTamanhoLista.querySelectorAll<HTMLInputElement>("[data-limite-tamanho]").forEach((input) => {
+        if (input.value) valoresAtuais[input.dataset.limiteTamanho ?? ""] = input.value;
+      });
+      limiteTamanhoWrap.hidden = tamanhosAtuais.length === 0;
+      limiteTamanhoLista.innerHTML = tamanhosAtuais
+        .map(
+          (t) => `
+            <label class="grid gap-1 sm:grid-cols-[8rem_1fr] sm:items-center text-sm">
+              <span>${escapeHtml(t)}</span>
+              <input type="number" min="0" step="1" inputmode="numeric" class="field" placeholder="Sem limite próprio" value="${valoresAtuais[t] ?? ""}" data-limite-tamanho="${escapeHtml(t)}" style="max-width:12rem" />
+            </label>
+          `,
+        )
+        .join("");
+    }
+
+    fTamanhos.addEventListener("input", () => {
+      renderizarPrecosTamanho(csvParaLista(fTamanhos.value));
+      if (limiteDisponivel) renderizarLimitesTamanho(csvParaLista(fTamanhos.value));
+    });
 
     // Abas — mesmo padrão já usado em painel-eventos/evento/index.astro.
     const tabBotoes = document.querySelectorAll<HTMLButtonElement>("[data-tab]");
@@ -569,6 +625,18 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         const tamanho = input.dataset.precoTamanho ?? "";
         if (precos[tamanho] != null) input.value = String(precos[tamanho]);
       });
+      limiteDisponivel = "limite_total" in grupo && "limites_tamanho" in grupo;
+      if (limiteWrap) limiteWrap.hidden = !limiteDisponivel;
+      if (limiteDisponivel) {
+        const limites = limitesDoGrupo(grupo);
+        limitesSalvos = limites;
+        fLimiteTotal.value = limites.total !== null ? String(limites.total) : "";
+        renderizarLimitesTamanho(grupo.tamanhos ?? []);
+        limiteTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-limite-tamanho]").forEach((input) => {
+          const valor = limites.porTamanho[input.dataset.limiteTamanho ?? ""];
+          if (valor !== undefined) input.value = String(valor);
+        });
+      }
       renderizarImagem(grupo);
     }
 
@@ -588,7 +656,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         if (tamanho && input.value !== "") precosTamanho[tamanho] = Number(input.value);
       });
 
-      return {
+      const base = {
         nome: fNome.value.trim(),
         slug: fSlug.value.trim() || slugify(fNome.value),
         descricao: fDescricao.value.trim() || null,
@@ -608,6 +676,31 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         email_retirada_corpo: fEmailCorpo.value.trim() || null,
         retirada_liberada: fRetiradaLiberada.checked,
       };
+      if (!limiteDisponivel) return base;
+      const limitesTamanho: Record<string, number> = {};
+      const tamanhosDaLista = new Set(base.tamanhos);
+      limiteTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-limite-tamanho]").forEach((input) => {
+        const tamanho = input.dataset.limiteTamanho ?? "";
+        if (tamanho && tamanhosDaLista.has(tamanho) && input.value.trim() !== "") limitesTamanho[tamanho] = Math.floor(Number(input.value));
+      });
+      return {
+        ...base,
+        limite_total: fLimiteTotal.value.trim() !== "" ? Math.floor(Number(fLimiteTotal.value)) : null,
+        limites_tamanho: Object.keys(limitesTamanho).length ? limitesTamanho : null,
+      };
+    }
+
+    /** Confere, antes de salvar, que os números dos limites são inteiros de 0 para cima (a tela de edição é a única porta de entrada deles). */
+    function limitesInvalidos(): string | null {
+      if (!limiteDisponivel) return null;
+      const campos: [string, string][] = [["limite total", fLimiteTotal.value]];
+      limiteTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-limite-tamanho]").forEach((input) => campos.push([`limite do tamanho ${input.dataset.limiteTamanho}`, input.value]));
+      for (const [nome, valor] of campos) {
+        if (valor.trim() === "") continue;
+        const n = Number(valor);
+        if (!Number.isInteger(n) || n < 0) return `O ${nome} precisa ser um número inteiro, de 0 para cima (ou fique em branco para não ter limite).`;
+      }
+      return null;
     }
 
     /**
@@ -784,16 +877,42 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         finally { btnEnviar.disabled = false; if (btnConferir) btnConferir.disabled = false; }
       });
 
+      // Quanto do limite o lote aberto já usou (aba Dados). Atualiza ao abrir, ao salvar e a cada mudança de pedido (tempo real), então dá para acompanhar a rajada.
+      async function carregarUsoDoLimite() {
+        const alvo = document.querySelector<HTMLElement>("[data-limite-uso]");
+        if (!alvo) return;
+        if (!limiteDisponivel || !temLimite(limitesSalvos)) { alvo.textContent = ""; return; }
+        try {
+          const cab = { headers: { Authorization: `Bearer ${token}` } };
+          const lotesRes = await api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=numero&fields=id,numero&limit=20`, cab);
+          if (!lotesRes.ok) throw new Error("lotes");
+          const abertos = ((await lotesRes.json()).data ?? []) as { id: number; numero: number }[];
+          let uso = usoDoAgregado([]);
+          if (abertos.length) {
+            const usoRes = await api(`${directusUrl}/items/camiseta_itens_pedido?filter[pedido][lote][grupo][_eq]=${grupoId}&filter[pedido][lote][status][_eq]=aberto&aggregate[sum]=quantidade&groupBy[]=tamanho`, cab);
+            if (!usoRes.ok) throw new Error("uso");
+            uso = usoDoAgregado((await usoRes.json()).data);
+          }
+          alvo.textContent = resumoDoUso(limitesSalvos, uso, abertos.map((l) => l.numero));
+        } catch {
+          alvo.textContent = "";
+        }
+      }
+
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const invalido = limitesInvalidos();
+        if (invalido) { definirStatus(invalido); return; }
         definirStatus("Salvando…");
         try {
+          const corpo = lerFormulario();
           const res = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify(lerFormulario()),
+            body: JSON.stringify(corpo),
           });
           if (!res.ok) throw new Error("falha ao salvar");
+          if (limiteDisponivel) { limitesSalvos = limitesDoGrupo(corpo as { limite_total?: number | null; limites_tamanho?: Record<string, number> | null }); void carregarUsoDoLimite(); }
           definirStatus("✅ Salvo.");
         } catch {
           definirStatus("Não foi possível salvar agora.");
@@ -1203,7 +1322,8 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       });
 
       await carregarConsolidado();
-      iniciarRealtime(token, carregarConsolidado);
+      void carregarUsoDoLimite();
+      iniciarRealtime(token, () => { void carregarConsolidado(); void carregarUsoDoLimite(); });
 
       document.querySelector("[data-excluir-lote]")?.addEventListener("click", async () => {
         const excluirStatus = document.querySelector<HTMLElement>("[data-excluir-status]");
@@ -1233,6 +1353,22 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       const ambienteDaExclusao: AmbienteExclusao = {
         api, directusUrl, token: () => token,
         confirmar: (texto) => confirm(texto), perguntar: (texto) => prompt(texto), status: exStatus,
+        // Limite de pedidos: se, depois da exclusão, pedidos novos ocuparam as vagas do lote aberto, restaurar pedidos desse lote passaria do limite — então não restaura.
+        conferirEspaco: async (copia) => {
+          if (!limiteDisponivel || !temLimite(limitesSalvos)) return null;
+          const cab = { headers: { Authorization: `Bearer ${token}` } };
+          const lotesRes = await api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=numero&fields=id,numero&limit=20`, cab);
+          if (!lotesRes.ok) throw new Error("lotes");
+          const abertos = ((await lotesRes.json()).data ?? []) as { id: number; numero: number }[];
+          const idsAbertos = new Set(abertos.map((l) => l.id));
+          const doAberto = new Set(copia.pedidos.filter((p) => idsAbertos.has(Number(p.lote))).map((p) => Number(p.id)));
+          if (doAberto.size === 0) return null;
+          const usoRes = await api(`${directusUrl}/items/camiseta_itens_pedido?filter[pedido][lote][grupo][_eq]=${grupoId}&filter[pedido][lote][status][_eq]=aberto&aggregate[sum]=quantidade&groupBy[]=tamanho`, cab);
+          if (!usoRes.ok) throw new Error("uso");
+          const volta = pedidoDosItens(copia.itens.filter((i) => doAberto.has(Number(i.pedido))) as { tamanho?: string | null; quantidade?: unknown }[]);
+          const v = avaliar(limitesSalvos, usoDoAgregado((await usoRes.json()).data), volta);
+          return v.ok ? null : `Não dá para desfazer agora: ${v.mensagem}, e ${doAberto.size} desses pedidos voltariam para um lote aberto. NADA foi restaurado; o arquivo da cópia continua com você.`;
+        },
         baixar: (nome, conteudo) => {
           const url = URL.createObjectURL(new Blob([conteudo], { type: "application/json" }));
           const a = document.createElement("a");

@@ -1,7 +1,9 @@
 const crypto = require("node:crypto");
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
-const { gerarHash, chaveTelefone, cifrarTelefone } = require("../src/lib/telefone");
+const { gerarHashAssincrono, chaveTelefone, cifrarTelefone } = require("../src/lib/telefone");
 const { avaliarJanela } = require("../src/lib/janela");
+const { gravarInscricoesComTrava } = require("../src/lib/vagasEvento");
+const { umaVezPorChave } = require("../src/lib/limiteLote");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
@@ -22,7 +24,10 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  *   - cupom conferido aqui (ativo, validade, usos restantes) e o contador de
  *     usos atualizado aqui — nunca pelo navegador;
  *   - vagas contadas aqui, no mesmo critério do painel (aguardando_vaga falso
- *     ou nulo); quem não cabe entra na lista de espera, como antes;
+ *     ou nulo); quem não cabe entra na lista de espera, como antes. Vagas e
+ *     limite de usos do cupom passam pela TRAVA de `vagasEvento.js` (16/10/2026:
+ *     "conta, depois grava" deixava 40 inscrições simultâneas ocuparem 20 vagas);
+ *     evento sem limite e cupom sem limite seguem direto, sem trava;
  *   - telefone gravado como scrypt (`telefone`) + chave de busca
  *     (`telefone_chave`, HMAC) — ver `telefone.js`;
  *   - no máximo 10 inscrições por telefone por evento (grupo cabe; abuso não);
@@ -60,10 +65,13 @@ async function lerEvento(headers, eventoId) {
   const agora = Date.now();
   const guardado = cacheEventos.get(eventoId);
   if (guardado && agora - guardado.em < CACHE_EVENTO_MS) return guardado.valor;
-  const r = await directus(headers, "GET", `/items/eventos/${eventoId}?fields=id,title,aceita_inscricao,inscricoes_encerradas,inscricoes_ate,vagas_limite,requer_aprovacao,permite_inscricao_grupo,faixas_valor`);
-  const valor = r.ok ? { ok: true, evento: r.data } : { ok: false, status: r.status };
-  if (r.ok || r.status === 404 || r.status === 403) cacheEventos.set(eventoId, { em: agora, valor });
-  return valor;
+  // Uma leitura só por evento de cada vez (uma rajada de inscrições não repete a mesma pergunta ao Directus dezenas de vezes).
+  return umaVezPorChave(`ler-evento:${eventoId}`, async () => {
+    const r = await directus(headers, "GET", `/items/eventos/${eventoId}?fields=id,title,aceita_inscricao,inscricoes_encerradas,inscricoes_ate,vagas_limite,requer_aprovacao,permite_inscricao_grupo,faixas_valor`);
+    const valor = r.ok ? { ok: true, evento: r.data } : { ok: false, status: r.status };
+    if (r.ok || r.status === 404 || r.status === 403) cacheEventos.set(eventoId, { em: Date.now(), valor });
+    return valor;
+  });
 }
 
 async function contarConfirmados(headers, eventoId) {
@@ -92,6 +100,46 @@ async function buscarCupom(headers, eventoId, codigo) {
   return { cupom: { ...cupom, usos }, mensagem: null };
 }
 
+/**
+ * Decide, com o que se sabe das vagas (`estado.confirmados`) e dos usos do cupom (`estado.usosCupom`), quem fica confirmado e quem vai para a lista de espera, e quem leva o
+ * desconto. É PURA (a trava a chama de novo a cada tentativa, com a leitura nova). Devolve `{ registros, confirmadosNovos, usosNovos }`.
+ */
+function montarRegistros({ nomes, evento, eventoId, valorFaixa, cupom, contarVagas, pendenteAprovacao, telefone, telefoneHash, telefoneChave, email }, estado) {
+  let confirmados = estado.confirmados;
+  let usosRestantesCupom = cupom ? (cupom.limite_usos == null ? Infinity : Number(cupom.limite_usos) - estado.usosCupom) : 0;
+  let confirmadosNovos = 0;
+  let usosNovos = 0;
+  const registros = nomes.map((nome) => {
+    let aguardandoVaga = false;
+    if (contarVagas) {
+      aguardandoVaga = confirmados >= Number(evento.vagas_limite);
+      if (!aguardandoVaga) { confirmados += 1; confirmadosNovos += 1; }
+    }
+    let valorFinal = valorFaixa;
+    let cupomAplicado = null;
+    if (cupom && usosRestantesCupom > 0) {
+      valorFinal = aplicarDesconto(valorFaixa, cupom);
+      cupomAplicado = cupom.codigo;
+      usosRestantesCupom -= 1;
+      usosNovos += 1;
+    }
+    return {
+      evento: eventoId,
+      nome,
+      telefone: telefoneHash,
+      telefone_chave: telefoneChave,
+      telefone_cifrado: cifrarTelefone(telefone),
+      email,
+      codigo: gerarCodigo(),
+      valor: valorFinal,
+      cupom_usado: cupomAplicado,
+      aguardando_vaga: aguardandoVaga,
+      pendente_aprovacao: pendenteAprovacao,
+    };
+  });
+  return { registros, confirmadosNovos, usosNovos };
+}
+
 module.exports = async function (context, req) {
   if (!permitir(`criar-inscricao:${ipDoPedido(req)}`, LIMITE_POR_IP)) {
     context.res = { status: 429, body: { erro: "Muitas tentativas. Aguarde alguns minutos." } };
@@ -111,9 +159,9 @@ module.exports = async function (context, req) {
   const codigoCupom = body.cupom ? String(body.cupom).trim().toUpperCase().slice(0, 40) : "";
   const respostasBase = (Array.isArray(body.respostas) ? body.respostas : []).slice(0, 30).map((r) => ({ pergunta: Number(r.pergunta), valor: String(r.valor ?? "").slice(0, 2000) })).filter((r) => Number.isInteger(r.pergunta) && r.valor);
 
-  const telefoneHash = gerarHash(telefone);
+  // `chaveTelefone` é nula nas mesmas condições do hash (menos de 8 dígitos); o hash scrypt só é calculado depois das recusas baratas, de forma assíncrona.
   const telefoneChave = chaveTelefone(telefone);
-  if (!Number.isInteger(eventoId) || eventoId <= 0 || nomes.length === 0 || !telefoneHash || !telefoneChave) {
+  if (!Number.isInteger(eventoId) || eventoId <= 0 || nomes.length === 0 || !telefoneChave) {
     context.res = { status: 400, body: { erro: "Parâmetros ausentes (evento, nome e telefone com pelo menos 8 dígitos)." } };
     return;
   }
@@ -122,7 +170,9 @@ module.exports = async function (context, req) {
 
   const lido = await lerEvento(headers, eventoId);
   if (!lido.ok) {
-    context.res = { status: 404, body: { erro: "Evento não encontrado." } };
+    // 404/403 = o evento não existe (ou não é público); qualquer outra falha é o Directus ocupado: "tente de novo", não "evento não encontrado".
+    if (lido.status === 404 || lido.status === 403) context.res = { status: 404, body: { erro: "Evento não encontrado." } };
+    else context.res = { status: 503, body: { erro: "Não foi possível conferir o evento agora. Aguarde alguns segundos e tente de novo." } };
     return;
   }
   const evento = lido.evento;
@@ -151,9 +201,8 @@ module.exports = async function (context, req) {
   }
 
   try {
-    const [jaTem, confirmadosIniciais, cupomInfo] = await Promise.all([
+    const [jaTem, cupomInfo] = await Promise.all([
       contarPorTelefone(headers, eventoId, telefoneChave),
-      evento.vagas_limite && !evento.requer_aprovacao ? contarConfirmados(headers, eventoId) : Promise.resolve(0),
       codigoCupom ? buscarCupom(headers, eventoId, codigoCupom) : Promise.resolve({ cupom: null, mensagem: null }),
     ]);
     if (jaTem + nomes.length > MAX_POR_TELEFONE) {
@@ -162,53 +211,61 @@ module.exports = async function (context, req) {
     }
 
     const cupom = cupomInfo.cupom;
-    let usosRestantesCupom = cupom ? (cupom.limite_usos == null ? Infinity : Number(cupom.limite_usos) - cupom.usos) : 0;
-    let confirmados = confirmadosIniciais;
     const pendenteAprovacao = Boolean(evento.requer_aprovacao);
+    const contarVagas = Boolean(evento.vagas_limite) && !pendenteAprovacao;
+    const contarCupom = Boolean(cupom) && cupom.limite_usos != null;
 
-    const registros = nomes.map((nome) => {
-      let aguardandoVaga = false;
-      if (evento.vagas_limite && !pendenteAprovacao) {
-        aguardandoVaga = confirmados >= Number(evento.vagas_limite);
-        if (!aguardandoVaga) confirmados += 1;
-      }
-      let valorFinal = valorFaixa;
-      let cupomAplicado = null;
-      if (cupom && usosRestantesCupom > 0) {
-        valorFinal = aplicarDesconto(valorFaixa, cupom);
-        cupomAplicado = cupom.codigo;
-        usosRestantesCupom -= 1;
-      }
-      return {
-        evento: eventoId,
-        nome,
-        telefone: telefoneHash,
-        telefone_chave: telefoneChave,
-        telefone_cifrado: cifrarTelefone(telefone),
-        email,
-        codigo: gerarCodigo(),
-        valor: valorFinal,
-        cupom_usado: cupomAplicado,
-        aguardando_vaga: aguardandoVaga,
-        pendente_aprovacao: pendenteAprovacao,
-      };
-    });
-
-    const criado = await directus(headers, "POST", "/items/inscricoes_eventos", registros);
-    if (!criado.ok || !Array.isArray(criado.data)) {
-      context.log.error("Falha ao criar inscrição:", criado.status);
-      context.res = { status: 502, body: { erro: "Falha ao registrar a inscrição." } };
+    // O hash scrypt do telefone (assíncrono e com poucos ao mesmo tempo) só é calculado agora, com as recusas baratas já feitas.
+    const telefoneHash = await gerarHashAssincrono(telefone);
+    if (!telefoneHash) {
+      context.res = { status: 400, body: { erro: "Parâmetros ausentes (evento, nome e telefone com pelo menos 8 dígitos)." } };
       return;
     }
-    const criadas = criado.data;
+    const montar = (estado) => montarRegistros({ nomes, evento, eventoId, valorFaixa, cupom, contarVagas, pendenteAprovacao, telefone, telefoneHash, telefoneChave, email }, estado);
+
+    let criadas = null;
+    let montagem = null;
+    let usosDoCupom = null; // valor do contador `usos` do cupom depois desta inscrição
+
+    if (contarVagas || contarCupom) {
+      // Vagas ou limite de cupom em jogo: grava com a senha do livro do evento, para nunca passar do número com muita gente ao mesmo tempo.
+      const r = await gravarInscricoesComTrava({
+        directus: (caminho, init = {}) => fetch(`${DIRECTUS_URL}${caminho}`, { ...init, headers }),
+        eventoId, cupomCodigo: contarCupom ? cupom.codigo : null, contarVagas, montar, log: (m) => context.log.warn(m),
+      });
+      if (r.erroHttp) {
+        context.res = { status: r.erroHttp.status, headers: { "Content-Type": "application/json" }, body: r.erroHttp.body };
+        return;
+      }
+      if (!r.semControle) {
+        criadas = r.criadas;
+        montagem = r.montagem;
+        usosDoCupom = r.estado.usosCupom;
+      }
+    }
+
+    if (!criadas) {
+      // Sem limite nenhum — ou o livro de senhas ainda não existe no Directus (esquema não aplicado): grava do jeito de sempre, para nunca deixar de aceitar inscrição.
+      const confirmados = contarVagas ? await contarConfirmados(headers, eventoId) : 0;
+      montagem = montar({ confirmados, usosCupom: cupom ? cupom.usos : 0 });
+      const criado = await directus(headers, "POST", "/items/inscricoes_eventos", montagem.registros);
+      if (!criado.ok || !Array.isArray(criado.data)) {
+        context.log.error("Falha ao criar inscrição:", criado.status);
+        context.res = { status: 502, body: { erro: "Falha ao registrar a inscrição." } };
+        return;
+      }
+      criadas = criado.data;
+      usosDoCupom = cupom ? cupom.usos + montagem.usosNovos : null;
+    }
 
     const tarefas = [];
     if (respostasBase.length > 0) {
       const respostas = criadas.flatMap((i) => respostasBase.map((r) => ({ inscricao: i.id, pergunta: r.pergunta, valor: r.valor })));
       tarefas.push(directus(headers, "POST", "/items/respostas_inscricao", respostas));
     }
-    const usosAplicados = registros.filter((r) => r.cupom_usado).length;
-    if (cupom && usosAplicados > 0) tarefas.push(directus(headers, "PATCH", `/items/cupons_desconto/${cupom.id}`, { usos: cupom.usos + usosAplicados }));
+    const usosAplicados = montagem.usosNovos;
+    // O contador `usos` é só o número que o painel mostra: o limite de verdade é a contagem das inscrições com o cupom, feita dentro da trava.
+    if (cupom && usosAplicados > 0) tarefas.push(directus(headers, "PATCH", `/items/cupons_desconto/${cupom.id}`, { usos: usosDoCupom }));
     const resultadosTarefas = await Promise.all(tarefas);
     resultadosTarefas.forEach((r) => { if (!r.ok) context.log.warn("Gravação complementar falhou:", r.status); });
 
@@ -225,3 +282,5 @@ module.exports = async function (context, req) {
     context.res = { status: 502, body: { erro: "Falha ao registrar a inscrição." } };
   }
 };
+
+module.exports.montarRegistros = montarRegistros; // para o teste de unidade

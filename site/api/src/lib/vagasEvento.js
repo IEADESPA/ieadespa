@@ -68,21 +68,37 @@ async function reservarEGravarEvento({ lerUltimaSenha, lerEstado, montar, gravar
 /** Mesmo critério do painel de inscritos: aguardando_vaga falso OU nulo conta como confirmado. */
 const FILTRO_CONFIRMADOS = (eventoId) => `filter[_and][0][evento][_eq]=${eventoId}&filter[_and][1][_or][0][aguardando_vaga][_eq]=false&filter[_and][1][_or][1][aguardando_vaga][_null]=true`;
 
-function operacoesDoEvento(directus, eventoId, { cupomCodigo = null, contarVagas = true } = {}) {
-  const contar = async (consulta, o_que) => {
+/**
+ * Uma LEITURA que falhou (Directus ocupado: 5xx, 429, conexão caída) é repetida até 3 vezes com uma espera curta — ler de novo é sempre seguro. A GRAVAÇÃO nunca é repetida às cegas: um 5xx
+ * pode ter vindo depois de o banco gravar, e repetir criaria a inscrição em dobro. O esquema ausente (`semEsquema`) não se repete.
+ */
+async function lerComRepeticao(fazer, { tentativas = 3, esperar = pausar, aleatorio = Math.random } = {}) {
+  let erro;
+  for (let i = 0; i < tentativas; i += 1) {
+    try { return await fazer(); } catch (e) {
+      if (e && e.semEsquema) throw e;
+      erro = e;
+      if (i < tentativas - 1) await esperar(150 * (i + 1) + Math.floor(aleatorio() * 100));
+    }
+  }
+  throw erro;
+}
+
+function operacoesDoEvento(directus, eventoId, { cupomCodigo = null, contarVagas = true, repeticao = {} } = {}) {
+  const contar = (consulta, o_que) => lerComRepeticao(async () => {
     const r = await directus(`/items/inscricoes_eventos?aggregate[count]=id&${consulta}`);
     if (!r.ok) throw new Error(`falha ao contar ${o_que} (${r.status})`);
     return Number(((await r.json()).data || [])[0]?.count?.id ?? 0);
-  };
+  }, repeticao);
   return {
-    async lerUltimaSenha() {
+    lerUltimaSenha: () => lerComRepeticao(async () => {
       const r = await directus(`/items/evento_controle?filter[evento][_eq]=${eventoId}&sort=-n&limit=1&fields=n`);
       // O Directus responde 403 tanto para "sem permissão" quanto para "coleção que não existe": com o token de administrador só pode ser o esquema ainda não aplicado.
       if (r.status === 403 || r.status === 404) { const e = new Error(`o livro de senhas do evento não existe neste Directus (${r.status})`); e.semEsquema = true; throw e; }
       if (!r.ok) throw new Error(`falha ao ler o livro de senhas do evento (${r.status})`);
       const linhas = (await r.json()).data || [];
       return linhas.length ? Number(linhas[0].n) || 0 : 0;
-    },
+    }, repeticao),
     async lerEstado() {
       const [confirmados, usosCupom] = await Promise.all([
         contarVagas ? contar(FILTRO_CONFIRMADOS(eventoId), "as vagas") : Promise.resolve(0),
@@ -111,8 +127,8 @@ const MENSAGEM_OCUPADO = "Muita gente se inscrevendo ao mesmo tempo. Aguarde alg
  * `{ criadas, montagem, estado }`, ou `{ erroHttp: { status, body } }`, ou `{ semControle: true }` (o Directus não aceitou a senha — o esquema não existe — e a função de inscrição
  * grava do jeito antigo, para nunca deixar de aceitar inscrição por causa disto).
  */
-async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null, contarVagas = true, montar, log = () => {}, opcoesFila = {} }) {
-  const ops = operacoesDoEvento(directus, eventoId, { cupomCodigo, contarVagas });
+async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null, contarVagas = true, montar, log = () => {}, opcoesFila = {}, repeticao = {} }) {
+  const ops = operacoesDoEvento(directus, eventoId, { cupomCodigo, contarVagas, repeticao });
   const chave = chaveDoEstado(eventoId, cupomCodigo, contarVagas);
   let fila;
   try {
@@ -149,5 +165,5 @@ async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null
 module.exports = {
   MAX_TENTATIVAS_SENHA, VALIDADE_MEMORIA_MS, FILTRO_CONFIRMADOS, MENSAGEM_OCUPADO,
   chaveDoEstado, lembrarEstado, esquecerEstado, estadoRecente, esquecerMemoria,
-  reservarEGravarEvento, operacoesDoEvento, classificarGravacaoLote, gravarInscricoesComTrava,
+  reservarEGravarEvento, operacoesDoEvento, classificarGravacaoLote, gravarInscricoesComTrava, lerComRepeticao,
 };

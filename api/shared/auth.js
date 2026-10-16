@@ -360,6 +360,15 @@ function extrairToken(req) {
   return tipo === "Bearer" ? token : null;
 }
 
+// A chamada traz uma SESSÃO NOSSA: token assinado por este sistema e dentro do prazo? (confere a assinatura na memória, sem banco.)
+// Existe por causa do Azure Static Web Apps: ele entrega à Function um `Authorization: Bearer …` PRÓPRIO em TODA chamada que passa por ele (medido no projeto, ver
+// `extrairToken`), então "tem token" não quer dizer "tem sessão". O ponto de entrada só precisa consultar a lista de sessões encerradas (banco) quando há uma sessão
+// de verdade a conferir; sem esta distinção, até o "está no ar" e a agenda pública abriam o banco a cada chamada e o Azure SQL serverless nunca pausava (16/10/2026).
+function temSessaoAssinada(req) {
+  const token = extrairToken(req);
+  return !!token && !!verificarToken(token);
+}
+
 // Mesmo corpo que exigirLogin tinha antes dos Termos (v2.7) — usada só pelo
 // endpoint de assinatura (GestaoTermos), que não pode ficar preso atrás do
 // próprio bloqueio que ele existe pra resolver.
@@ -537,5 +546,5 @@ function exigirFatorRecente(req, context) {
   return false;
 }
 
-module.exports = { exigirFatorRecente, sincronizarRevogacoes, revogarSessoesDoMembro, revogarTodasAsSessoes, marcarRevogadas, sessaoRevogada, tokenRevogado, _reiniciarRevogacoes, MENSAGEM_SESSAO_ENCERRADA,
+module.exports = { exigirFatorRecente, sincronizarRevogacoes, revogarSessoesDoMembro, revogarTodasAsSessoes, marcarRevogadas, sessaoRevogada, tokenRevogado, temSessaoAssinada, _reiniciarRevogacoes, MENSAGEM_SESSAO_ENCERRADA,
   visaoDaPermissao, temPermissao, restringirVisao, concessoesDaVisao, concessoesVigentes, nivelDoCargoProprio, hashSenha, verificarSenha, criarSessao, reassinarSessao, reassinarMantendoValidade, ehSessaoDeLideranca, exigirSessaoDeLideranca, extrairToken, encerrarSessao, listarSessoes, encerrarSessaoEspecifica, getSessao, idDeRota, exigirTitular, exigirLogin, exigirLoginIgnorandoTermos, exigirPermissao, exigirAlgumaPermissao, exigirNivelGlobal, estaNoEscopo, podeDepartamento, nivelAtingeMinimo, RANKING_NIVEL };

@@ -723,6 +723,18 @@ Quality/Pollen/Solar/Roads/Time Zone/Weather (sem aplicação real para um site 
 - **Performance**: `srcset` responsivo (3 larguras) nas capas de conteúdo, `fetchpriority="high"`
   nelas, `Cache-Control` de longo prazo para assets com hash de conteúdo, `preconnect`/
   `dns-prefetch` para o Directus.
+- **Imagens do Directus servidas pelo próprio site**: depois do `astro build`,
+  `scripts/localizar-imagens.mjs` (encadeado em `npm run build`, que é o que o Static Web Apps
+  roda) varre o HTML montado atrás de `https://<Directus>/assets/<id>?...`, baixa cada imagem
+  distinta uma vez (4 ao mesmo tempo, 30 s, 2 tentativas, só se a resposta for `image/*`), grava em
+  `dist/media/<hash do conteúdo>.<ext>` e troca a URL por `/media/...` (`og:image`,
+  `twitter:image` e o JSON-LD pela URL absoluta do site). Assim nenhum visitante pede imagem ao
+  Directus (1 núcleo, de 0,3 a 1,4 s de CPU cada). Se um download falha, a resposta não é imagem
+  (SVG fica de fora de propósito: aberto direto no nosso domínio executaria script) ou o total passa
+  de 120 MB, aquela ocorrência fica com a URL do Directus e o resumo avisa — a montagem nunca falha
+  por isso. `/media/*` tem `Cache-Control` de 1 ano (`immutable`; o nome muda com o conteúdo) em
+  `public/staticwebapp.config.json`. As telas do painel, que desenham a imagem no navegador,
+  continuam no Directus. Prova sem rede: `scripts/testes/imagens-locais-unidade.cjs`.
 - **SEO**: `sitemap.xml`, `rss.xml`, dados estruturados (`VideoObject`, `FAQPage`), busca rápida
   (Ctrl/Cmd+K, 10 tipos de conteúdo), atalho de vídeo com miniatura estática ("facade" do YouTube,
   sem carregar o player até o clique).

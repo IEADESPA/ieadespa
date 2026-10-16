@@ -324,6 +324,25 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   cartões — só reaparece, com um aviso, num pedido que já tenha valor lançado, para poder zerar (em 15/10/2026 a
   Marcha tinha 74 pedidos com R$ 1,00 "pago" que ninguém arrecadou; o Directus não guardou quem nem quando;
   foram zerados, com cópia do estado anterior).
+- **Excluir em massa os pedidos que ninguém veio buscar (16/10/2026, pedido do responsável: na Marcha para Jesus mais de
+  300 pessoas não pegaram a camiseta e a peça precisa passar para o próximo)** — na mesma barra da separação em massa,
+  o bloco **"Excluir os pedidos que ninguém veio buscar"** (botão "Excluir os não separados (N)"). Vale só para o que
+  está na tela (filtros e aba do lote incluídos; o campo "os primeiros N" também vale) e só para pedido **não separado
+  e em que ninguém levou nenhuma peça**: ficam de fora os separados, as vendas avulsas, quem já levou tudo **e quem
+  levou só parte** (apagar apagaria a prova do que a pessoa recebeu). **A conta da malharia não muda nos lotes
+  fechados**: o lote fechado guarda os números congelados no fechamento (`total_vendido`, `total_arrecadado`,
+  `total_pago_malharia`, `saldo` e, por tamanho, `pedido_congelado`) e nunca os recalcula; no lote **aberto** a conta é ao
+  vivo e diminui, e a confirmação avisa com destaque quantos pedidos estão em cada caso. Passos: (1) confirma dizendo
+  quantos, do #a ao #b, as peças por tamanho e o que acontece com a malharia; (2) pede para **digitar EXCLUIR** (sempre,
+  mesmo com poucos pedidos); (3) relê os pedidos no Directus e, se alguém separou ou deu retirada no meio, **não apaga
+  nada**; (4) **baixa um arquivo de cópia** (`pedidos-excluidos-<campanha>-<data>.json`, com todas as colunas, itens e
+  respostas e os mesmos números); (5) apaga em lotes de 100 (o banco apaga itens e respostas em cascata); (6) aparece
+  **"Desfazer a exclusão"**, que recria tudo com os **mesmos números** (só a data de criação passa a ser a da
+  restauração, porque o Directus a preenche sozinho). Fechou a página? Restaura-se pelo arquivo:
+  `DIRECTUS_URL=… DIRECTUS_ADMIN_TOKEN=… node site/scripts/restaurar-pedidos.mjs arquivo.json` (use `--conferir` para só
+  ver; recusa restaurar o que já existe, para nunca duplicar). Regra pura em `src/lib/exclusaoEmMassa.ts`; provas:
+  `scripts/testes/exclusao-unidade.cjs` (72, sem rede), `scripts/testes/exclusao.cjs` (31, contra o Directus; roda no CI) e
+  a prova no Edge com a página real (55 verificações, campanha descartável).
 - **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
   trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
   Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de

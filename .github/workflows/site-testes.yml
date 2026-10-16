@@ -36,6 +36,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # bash com pipefail: "node bateria.cjs | tee ..." só fica verde se a bateria passou (antes o passo ficava verde mesmo com FALHA no texto: o código de saída era o do tee)
+    defaults:
+      run:
+        shell: bash
     env:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
@@ -48,7 +52,9 @@ jobs:
           # o commit, não o branch: quando o PR é mesclado e o branch apagado, o checkout pelo nome falhava
           # (07/10/2026) antes de o passo seguinte perceber que não há PR aberto e pular os testes
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          sparse-checkout: site/scripts/testes
+          sparse-checkout: |
+            site/scripts/testes
+            site/scripts/restaurar-pedidos.mjs
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@v7

@@ -42,16 +42,56 @@ export function levouAlgumaPeca(p: Pick<PedidoParaExcluir, "itens">): boolean {
 }
 
 /**
- * O que a exclusão em massa pode apagar entre `naTela`: o que a tela chama de "não separado" (`estaNaoSeparado`: sem reserva, não avulso, ainda falta retirar)
- * E que não levou nenhuma peça. Do mais antigo para o mais novo (a mesma ordem da separação em massa).
+ * O que a exclusão em massa pode apagar entre `pedidos`: o pedido NÃO separado (sem reserva), que não é venda avulsa e em que ninguém levou nenhuma peça. Do mais antigo
+ * para o mais novo (a mesma ordem da separação em massa). (Quem levou tudo já está fora porque levou alguma peça.)
  */
-export function elegiveisParaExcluir<T extends PedidoParaExcluir>(
-  naTela: T[],
-  estaNaoSeparado: (p: T) => boolean,
-): T[] {
-  return [...naTela]
-    .filter((p) => estaNaoSeparado(p) && !p.avulso && !p.separado && !levouAlgumaPeca(p))
+export function elegiveisParaExcluir<T extends PedidoParaExcluir>(pedidos: T[]): T[] {
+  return [...pedidos]
+    .filter((p) => !p.avulso && !p.separado && !levouAlgumaPeca(p))
     .sort((a, b) => a.id - b.id);
+}
+
+export interface EscolhaDoAlvo {
+  /** "" = todos os lotes; senão o id do lote */
+  loteId?: string;
+  /** "" = todos os tamanhos */
+  tamanho?: string;
+  /** "" = todos os modelos */
+  modelo?: string;
+}
+
+/** Aplica as escolhas da aba Excluir (lote, tamanho, modelo) sobre o que pode ser excluído: o pedido entra se tem ao menos um item do tamanho/modelo escolhido. */
+export function filtrarAlvo<T extends PedidoParaExcluir>(
+  elegiveis: T[],
+  escolha: EscolhaDoAlvo,
+): T[] {
+  return elegiveis.filter((p) => {
+    if (escolha.loteId && String(p.lote ?? "") !== String(escolha.loteId)) return false;
+    if (
+      escolha.tamanho &&
+      !(p.itens ?? []).some((i) => String(i.tamanho ?? "") === escolha.tamanho)
+    )
+      return false;
+    if (escolha.modelo && !(p.itens ?? []).some((i) => String(i.modelo ?? "") === escolha.modelo))
+      return false;
+    return true;
+  });
+}
+
+/** O texto do "Filtros:" da confirmação, a partir do que a pessoa escolheu (rótulos já prontos). */
+export function descreverEscolha(
+  rotuloLote: string,
+  tamanho: string,
+  modelo: string,
+  primeiros: number | null,
+): string {
+  const partes = [
+    rotuloLote,
+    tamanho ? `tamanho ${tamanho}` : "",
+    modelo ? `modelo ${modelo}` : "",
+    primeiros != null ? `os primeiros ${primeiros}` : "",
+  ].filter(Boolean);
+  return partes.join(" · ") || "todos os pedidos que ninguém veio buscar";
 }
 
 /** "os primeiros N": vazio = todos; só dígitos; zero não vale. `null` quando o texto não é um número aceitável. */

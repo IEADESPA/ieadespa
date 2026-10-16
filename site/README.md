@@ -324,10 +324,13 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   cartões — só reaparece, com um aviso, num pedido que já tenha valor lançado, para poder zerar (em 15/10/2026 a
   Marcha tinha 74 pedidos com R$ 1,00 "pago" que ninguém arrecadou; o Directus não guardou quem nem quando;
   foram zerados, com cópia do estado anterior).
-- **Excluir em massa os pedidos que ninguém veio buscar (16/10/2026, pedido do responsável: na Marcha para Jesus mais de
-  300 pessoas não pegaram a camiseta e a peça precisa passar para o próximo)** — na mesma barra da separação em massa,
-  o bloco **"Excluir os pedidos que ninguém veio buscar"** (botão "Excluir os não separados (N)"). Vale só para o que
-  está na tela (filtros e aba do lote incluídos; o campo "os primeiros N" também vale) e só para pedido **não separado
+- **Excluir os pedidos que ninguém veio buscar (16/10/2026, pedido do responsável: na Marcha para Jesus mais de
+  300 pessoas não pegaram a camiseta e a peça precisa passar para o próximo)** — fica na página da **campanha**, na aba
+  **"Excluir"** (a última, a mais escondida, junto de "Excluir a campanha inteira"); a tela de pedidos **não tem mais o
+  botão**, para ninguém apertar sem querer (foi o responsável quem pediu a mudança no mesmo dia). O bloco **"Excluir os
+  pedidos que ninguém veio buscar"** tem as escolhas de **lote**, **tamanho** e **modelo** e o campo **"só os primeiros
+  N"**, mostra o resumo, a lista do que seria excluído e o botão "Excluir os pedidos (N)". A lista é lida ao abrir a aba
+  (e em "Atualizar a lista"), sempre do Directus, e só entra pedido **não separado
   e em que ninguém levou nenhuma peça**: ficam de fora os separados, as vendas avulsas, quem já levou tudo **e quem
   levou só parte** (apagar apagaria a prova do que a pessoa recebeu). **A conta da malharia não muda nos lotes
   fechados**: o lote fechado guarda os números congelados no fechamento (`total_vendido`, `total_arrecadado`,
@@ -338,11 +341,15 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   nada**; (4) **baixa um arquivo de cópia** (`pedidos-excluidos-<campanha>-<data>.json`, com todas as colunas, itens e
   respostas e os mesmos números); (5) apaga em lotes de 100 (o banco apaga itens e respostas em cascata); (6) aparece
   **"Desfazer a exclusão"**, que recria tudo com os **mesmos números** (só a data de criação passa a ser a da
-  restauração, porque o Directus a preenche sozinho). Fechou a página? Restaura-se pelo arquivo:
+  restauração, porque o Directus a preenche sozinho; a mensagem do desfazer fica na tela depois de a lista recarregar).
+  Fechou a página? Restaura-se pelo arquivo:
   `DIRECTUS_URL=… DIRECTUS_ADMIN_TOKEN=… node site/scripts/restaurar-pedidos.mjs arquivo.json` (use `--conferir` para só
-  ver; recusa restaurar o que já existe, para nunca duplicar). Regra pura em `src/lib/exclusaoEmMassa.ts`; provas:
-  `scripts/testes/exclusao-unidade.cjs` (72, sem rede), `scripts/testes/exclusao.cjs` (31, contra o Directus; roda no CI) e
-  a prova no Edge com a página real (55 verificações, campanha descartável).
+  ver; recusa restaurar o que já existe, para nunca duplicar). Regra pura em `src/lib/exclusaoEmMassa.ts` e a parte com
+  rede (relê, baixa a cópia, apaga, desfaz) em `src/lib/exclusaoEmMassaAcao.ts`; provas:
+  `scripts/testes/exclusao-unidade.cjs` (143, sem rede, com um Directus de mentira rodando o fluxo inteiro),
+  `scripts/testes/exclusao.cjs` (31, contra o Directus; roda no CI) e a prova no Edge com a página real, na aba
+  "Excluir" (59 verificações, campanha descartável: inclui que a tela de pedidos não tem mais o botão e que os números
+  travados do lote fechado não mudam).
 - **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
   trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
   Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de

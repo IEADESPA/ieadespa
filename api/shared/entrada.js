@@ -6,7 +6,7 @@
 //
 // Por que existir: a sessão passou a ser revogável (shared/auth.js, "SESSÃO REVOGÁVEL"). getSessao/exigirLogin são síncronos e ~180 handlers os chamam sem
 // await, quase todos ANTES de abrir o banco — então a lista de sessões encerradas precisa estar em memória ANTES do handler rodar. É isso que se faz aqui:
-// `await auth.sincronizarRevogacoes()` (relê no máximo a cada 3 s; bloqueia só na primeira vez). Requisição sem token não espera nada (não há sessão a
+// `await auth.sincronizarRevogacoes()` (relê no máximo a cada 3 s; bloqueia só na primeira vez). Requisição sem sessão nossa (sem token, ou com um `Authorization` que não é de sessão assinada e vigente) não espera nada (não há sessão a
 // conferir). Sem lista confiável (banco fora há mais de 60 s), a resposta é 503 — falha FECHADO: um token derrubado não pode voltar a valer porque o banco caiu.
 //
 // O teste shared/__tests__/entradaUnica.test.js falha se algum function.json HTTP não usar este arquivo, e carrega o handler de TODAS as pastas por aqui.
@@ -42,7 +42,11 @@ function carregarHandler(context) {
 module.exports = async function entrada(context, ...args) {
   const handler = carregarHandler(context);
   const req = args[0];
-  if (auth.extrairToken(req)) {
+  // Só quando há uma sessão NOSSA a conferir (token assinado e no prazo), e não em qualquer `Authorization`: o Azure SWA entrega um `Authorization` próprio em TODA chamada
+  // (ver auth.temSessaoAssinada). Até 16/10/2026 esta condição era "tem algum token" e valia para tudo — o "está no ar" (a cada 5 min) e a agenda pública (a cada 15 min)
+  // consultavam o banco toda vez, e o Azure SQL serverless nunca chegava a pausar (R$ ~87/dia em vez de ~R$ 8). Token inválido ou vencido não vira sessão: o handler responde
+  // 401 sozinho, sem precisar da lista.
+  if (auth.temSessaoAssinada(req)) {
     try {
       await auth.sincronizarRevogacoes();
     } catch (e) {

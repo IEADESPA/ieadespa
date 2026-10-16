@@ -90,12 +90,14 @@ console.log("== a resposta da gravação em lote ==");
   // ----- o Directus de mentira -----
   // Cada operação demora um tempo aleatório (para as inscrições se entrelaçarem de verdade). A gravação em lote é atômica: ou grava tudo e a senha, ou nada, e a chave única recusa quem chegou
   // depois — como o PostgreSQL faz com a transação do Directus. `semUnico` desliga a chave única (para o teste do teste).
-  function novoDirectus({ atraso = 4, falhaGravacao = false, semEsquema = false, semPermissaoDaSenha = false, semUnico = false } = {}) {
-    const banco = { inscricoes: [], chaves: new Set(), controle: [], proximoId: 1, chamadas: { senha: 0, vagas: 0, cupom: 0, gravacao: 0, conflitos: 0 } };
+  // `leiturasQueFalham`: as primeiras N leituras (GET) respondem 503 (Directus ocupado); `Infinity` = todas. `gravacaoDepoisDeGravar`: grava e responde 503 (o 5xx que vem DEPOIS de o banco gravar).
+  function novoDirectus({ atraso = 4, falhaGravacao = false, semEsquema = false, semPermissaoDaSenha = false, semUnico = false, leiturasQueFalham = 0, gravacaoDepoisDeGravar = false } = {}) {
+    const banco = { inscricoes: [], chaves: new Set(), controle: [], proximoId: 1, chamadas: { senha: 0, vagas: 0, cupom: 0, gravacao: 0, conflitos: 0, leiturasRecusadas: 0 } };
     const json = (status, corpo) => new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json" } });
     async function directus(caminho, init = {}) {
       await dormir(Math.floor(Math.random() * atraso));
       const metodo = init.method || "GET";
+      if (metodo === "GET" && banco.chamadas.leiturasRecusadas < leiturasQueFalham) { banco.chamadas.leiturasRecusadas += 1; return json(503, { errors: [{ message: "ocupado" }] }); }
       const url = new URL("http://x" + caminho);
       const evento = Number((/evento\]\[_eq\]=(\d+)/.exec(caminho) || /evento\]\[_eq\]=(\d+)/.exec(decodeURIComponent(caminho)) || [])[1]);
       if (url.pathname === "/items/evento_controle" && metodo === "GET") {
@@ -128,6 +130,7 @@ console.log("== a resposta da gravação em lote ==");
           banco.inscricoes.push(linha);
           return linha;
         });
+        if (gravacaoDepoisDeGravar) return json(503, { errors: [{ message: "o gateway desistiu depois de o banco gravar" }] });
         return json(200, { data: criadas });
       }
       return json(404, { errors: [{ message: "rota não prevista no teste: " + caminho }] });
@@ -139,9 +142,10 @@ console.log("== a resposta da gravação em lote ==");
   const comCupom = (fake, codigo, ev = 1) => fake.banco.inscricoes.filter((i) => i.evento === ev && i.cupom_usado === codigo).length;
   const FILA_FOLGADA = { maxNaFila: 100000, esperaMaxMs: 600000 };
   // O que a função de inscrição faz: monta com a regra real (`montarRegistros`) e grava pela trava.
-  const inscrever = (modulo, fake, { pessoas = 1, vagas = 40, cupom = null, contarVagas = true, evento = 1, opcoesFila = FILA_FOLGADA } = {}) => {
+  const inscrever = (modulo, fake, { pessoas = 1, vagas = 40, cupom = null, contarVagas = true, evento = 1, opcoesFila = FILA_FOLGADA, repeticao = { esperar: async () => {} } } = {}) => {
     const montar = (estado) => montarRegistros({ nomes: Array.from({ length: pessoas }, (_, i) => `Pessoa ${i}`), evento: { vagas_limite: vagas }, eventoId: evento, valorFaixa: 100, cupom, contarVagas, pendenteAprovacao: false, telefone: "11 99999-0000", telefoneHash: "hash", telefoneChave: "chave", email: null }, estado);
-    return modulo.gravarInscricoesComTrava({ directus: fake.directus, eventoId: evento, cupomCodigo: cupom && cupom.limite_usos != null ? cupom.codigo : null, contarVagas, montar, log: () => {}, opcoesFila }).catch((e) => ({ erro: e.message }));
+    // `repeticao.esperar` vazio: o teste não espera de verdade entre as releituras
+    return modulo.gravarInscricoesComTrava({ directus: fake.directus, eventoId: evento, cupomCodigo: cupom && cupom.limite_usos != null ? cupom.codigo : null, contarVagas, montar, log: () => {}, opcoesFila, repeticao }).catch((e) => ({ erro: e.message }));
   };
   async function rajada(instancias, inscricoes, opcoes, { atraso = 6, fake = novoDirectus({ atraso }), ev = 1 } = {}) {
     const modulos = Array.from({ length: instancias }, () => novaInstancia());
@@ -268,6 +272,31 @@ console.log("== a resposta da gravação em lote ==");
     const r1 = await inscrever(a, fake, { vagas: 5 });                        // memória velha: tenta a senha 2, o banco recusa, A lê de novo (4 de 5) e grava a 5ª
     const r2 = await inscrever(a, fake, { vagas: 5 });                        // a 6ª pessoa de 5 vagas: lista de espera
     eq([r1.montagem.registros[0].aguardando_vaga, r2.montagem.registros[0].aguardando_vaga, confirmadas(fake), fake.banco.chamadas.conflitos], [false, true, 5, 1], "A com memória velha: o banco recusa a senha tomada por B, A relê e só então grava; a 6ª vai para a lista de espera (5 de 5)");
+  }
+
+  console.log("== Directus ocupado: a leitura que falha é refeita, a gravação nunca é repetida às cegas ==");
+  {
+    // 6 leituras recusadas no começo, 30 inscrições ao mesmo tempo, 40 vagas: nenhuma falha chega à pessoa e nada passa do limite
+    const ocupado = novoDirectus({ atraso: 3, leiturasQueFalham: 6 });
+    const { resultados } = await rajada(2, 30, { vagas: 10, repeticao: { tentativas: 20, esperar: async () => {} } }, { fake: ocupado });
+    eq([so200(resultados), confirmadas(ocupado), ocupado.banco.chamadas.leiturasRecusadas], [30, 10, 6], "6 leituras recusadas (503) no começo da rajada, com folga de tentativas: as 30 inscrições entram, as vagas continuam exatas (10)");
+    // o Directus não volta: depois de 3 tentativas a função desiste COM ERRO (a API responde 502) e nada é gravado
+    const fora = novoDirectus({ atraso: 1, leiturasQueFalham: Infinity });
+    const r = await inscrever(novaInstancia(), fora, { vagas: 10 });
+    verdade(/falha ao ler o livro de senhas do evento \(503\)/.test(r.erro || ""), "Directus fora do ar: erro claro depois das tentativas, sem gravar");
+    eq([fora.banco.chamadas.leiturasRecusadas, fora.banco.inscricoes.length], [3, 0], "foram exatamente 3 tentativas de leitura");
+    // o 5xx que vem DEPOIS de o banco gravar: repetir a gravação criaria a inscrição em dobro, então ela NÃO é repetida
+    const depois = novoDirectus({ atraso: 1, gravacaoDepoisDeGravar: true });
+    const g = await inscrever(novaInstancia(), depois, { vagas: 10 });
+    eq([g.erroHttp && g.erroHttp.status, depois.banco.chamadas.gravacao, depois.banco.inscricoes.length], [502, 1, 1], "5xx na gravação: 502 para a pessoa, UMA só gravação (nunca em dobro)");
+    // a espera entre as tentativas cresce e a de esquema ausente não repete
+    const esperas = [];
+    let chamadas = 0;
+    await V0.lerComRepeticao(async () => { chamadas += 1; if (chamadas < 3) throw new Error("x"); return "ok"; }, { esperar: async (ms) => { esperas.push(ms); }, aleatorio: () => 0 });
+    eq([chamadas, esperas], [3, [150, 300]], "duas esperas crescentes (150 ms, 300 ms) antes da terceira tentativa");
+    let semEsq = 0;
+    await V0.lerComRepeticao(async () => { semEsq += 1; const e = new Error("sem esquema"); e.semEsquema = true; throw e; }, { esperar: async () => {} }).catch(() => {});
+    eq(semEsq, 1, "esquema ausente: uma tentativa só (repetir não adianta)");
   }
 
   console.log("== falhas ==");

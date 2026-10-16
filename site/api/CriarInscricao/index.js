@@ -2,7 +2,7 @@ const crypto = require("node:crypto");
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
 const { gerarHashAssincrono, chaveTelefone, cifrarTelefone } = require("../src/lib/telefone");
 const { avaliarJanela } = require("../src/lib/janela");
-const { gravarInscricoesComTrava } = require("../src/lib/vagasEvento");
+const { gravarInscricoesComTrava, lerComRepeticao } = require("../src/lib/vagasEvento");
 const { umaVezPorChave } = require("../src/lib/limiteLote");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
@@ -202,7 +202,7 @@ module.exports = async function (context, req) {
 
   try {
     const [jaTem, cupomInfo] = await Promise.all([
-      contarPorTelefone(headers, eventoId, telefoneChave),
+      lerComRepeticao(() => contarPorTelefone(headers, eventoId, telefoneChave)),
       codigoCupom ? buscarCupom(headers, eventoId, codigoCupom) : Promise.resolve({ cupom: null, mensagem: null }),
     ]);
     if (jaTem + nomes.length > MAX_POR_TELEFONE) {

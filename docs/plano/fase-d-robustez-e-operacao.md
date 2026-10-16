@@ -558,3 +558,23 @@ abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.
   hora caiu de ~2.440 vCore-segundos (ligado o tempo todo) para 96 na hora da pausa e 0 depois. O custo em reais aparece no
   Cost Management com um dia de atraso: conferir 17/10 (esperado ~R$ 8 em vez de ~R$ 87). O orçamento `ieadespa-teto-mensal`
   (R$ 650/mês, avisos em 50 %, 80 %, 100 % e na previsão de 100 %, pelo grupo de ação `ieadespa-alertas`) já existia desde 01/10.
+
+- **16/10/2026 (tarde) — alívio do servidor do site e trava de vagas (a "tabela" aprovada pelo responsável; troca de plano adiada por ele).**
+  Diagnóstico do pico da Marcha: o gargalo era o Directus (plano B1, 1 núcleo) a 100 % de CPU com ~60–70 visitantes por minuto, não os
+  pedidos. Entregue, tudo em produção e conferido lá: (1) **contador de visitas leve** (PR #44): `POST /api/registrar-visita`, as visitas
+  ficam num buffer em memória da Function e o Directus recebe UM POST em lote a cada 25 visitas ou 10 s — cada visita deixou de ser
+  duas requisições ao Directus (gravação + pré-voo) e passou a ser uma só à Function; perda aceita de propósito: as visitas ainda no
+  buffer se a instância reciclar (no máximo ~10 s); a permissão pública de criar em `pageviews` continua para as páginas antigas em cache
+  (removê-la depois fecha o spam direto); (2) **imagens servidas pelo próprio site** (PR #43): passo `localizar-imagens.mjs` depois do
+  `astro build` baixa cada imagem do Directus uma vez e reescreve o HTML para `/media/<hash>` com cache de 1 ano (nunca derruba a
+  montagem; SVG não é trazido; hoje o site não tem imagem do Directus fora das páginas de campanha, então o passo não faz nada até a
+  próxima campanha); (3) **trava de vagas e de cupom das inscrições em evento** (PRs #42 e #45): medido, 40 inscrições simultâneas
+  para 20 vagas saíam as 40 confirmadas; agora a senha única do livro `evento_controle` (mesma técnica do limite de pedidos) mantém vagas e
+  usos do cupom exatos (120 inscrições para 40 vagas, com cupom e grupos, 1 a 8 instâncias: sempre exato); ninguém é recusado, quem não cabe
+  vai para a lista de espera; leitura que falha repete, gravação nunca (ver o cabeçalho de `site/api/src/lib/vagasEvento.js`); esquema
+  aplicado no Directus de produção antes do código (`site/scripts/directus-vagas-esquema.mjs`); (4) Always On e (5) registro HTTP do
+  Directus ligados. **Provas em produção:** `inscricao-vagas.cjs` 18/18 (agora também no CI), contador com 30 visitas simultâneas
+  (todas gravadas em `pageviews`, robô ignorado, corpo inválido 400). **Lição de processo:** as baterias de CI usam todas o MESMO
+  Directus de produção; três PRs abertos ao mesmo tempo sobrecarregaram o B1 e geraram falhas falsas (503) — vale "uma mudança = um PR" e
+  esperar a bateria de um terminar antes de empurrar outro. **Fica para o responsável:** decidir o plano do Directus (B2 = ~R$ 156/mês, 2
+  núcleos) e, em 17/10, conferir o custo diário do banco SQL e quantas vezes ele acorda por dia para decidir `autoPauseDelay` 60 → 15 min.

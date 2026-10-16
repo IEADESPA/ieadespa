@@ -227,6 +227,20 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
             <button type="button" class="btn btn-outline" data-massa-desfazer hidden>Desfazer a última ação em massa</button>
           </div>
           <p class="mt-2 text-xs text-muted-foreground" data-massa-info></p>
+          <!-- 16/10/2026 — excluir de verdade os pedidos que ninguém veio buscar (a peça passa para o próximo). Só "Não separados" em que ninguém levou nenhuma peça. Lote FECHADO
+               guarda os números congelados: a conta da malharia não muda. Baixa uma cópia antes e dá para desfazer logo depois. -->
+          <div class="mt-4 massa-perigo" data-massa-perigo>
+            <p class="text-sm font-semibold">Excluir os pedidos que ninguém veio buscar</p>
+            <p class="mt-1 text-xs text-muted-foreground">
+              Vale só para o que está na tela e só para quem está <strong>não separado</strong> e <strong>não levou nenhuma peça</strong> (os separados, as vendas avulsas e quem já levou algo ficam de fora).
+              Apaga o pedido e os itens de verdade. Nos lotes <strong>fechados</strong> a conta da malharia <strong>não muda</strong> (os números ficaram travados no fechamento); no lote aberto a quantidade a encomendar diminui.
+              Antes de apagar o navegador baixa uma cópia, e logo depois dá para desfazer. O campo "Os primeiros" acima também vale aqui.
+            </p>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <button type="button" class="btn btn-outline massa-excluir" data-massa-excluir>Excluir os não separados (0)</button>
+              <button type="button" class="btn btn-outline" data-massa-restaurar hidden>Desfazer a exclusão</button>
+            </div>
+          </div>
           <p class="mt-1 text-sm" data-massa-status role="status" aria-live="polite"></p>
         </div>
 
@@ -254,6 +268,10 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { montarLinhasMalharia } from "@/lib/pdfMalharia";
+    import {
+      elegiveisParaExcluir, limiteDaExclusao, resumoDaExclusao, textoDaConfirmacao, textoDaPalavra, palavraConfere, emLotes, montarCopia, nomeDoArquivoDaCopia, etapasDaRestauracao, mensagemDoResultado,
+      type CopiaDaExclusao,
+    } from "@/lib/exclusaoEmMassa";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -942,10 +960,13 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       if (resumo) resumo.textContent = `Separados aguardando: ${aguardando} · Não separados: ${naoSep} · Já retirado tudo: ${retirados}`;
       const paraSeparar = elegiveisParaSeparar().length;
       const paraTirar = elegiveisParaTirar().length;
+      const paraExcluir = elegiveisParaApagar().length;
       const btnSep = document.querySelector<HTMLButtonElement>("[data-massa-separar]");
       const btnTirar = document.querySelector<HTMLButtonElement>("[data-massa-tirar]");
       if (btnSep) { btnSep.disabled = paraSeparar === 0; btnSep.textContent = `Marcar como separado (${paraSeparar})`; }
       if (btnTirar) { btnTirar.disabled = paraTirar === 0; btnTirar.textContent = `Tirar a reserva (${paraTirar})`; }
+      const btnExcluir = document.querySelector<HTMLButtonElement>("[data-massa-excluir]");
+      if (btnExcluir) { btnExcluir.disabled = paraExcluir === 0; btnExcluir.textContent = `Excluir os não separados (${paraExcluir})`; }
       const info = document.querySelector<HTMLElement>("[data-massa-info]");
       if (info) info.textContent = `Na tela: ${filtrados.length} pedido(s). Podem ser separados: ${paraSeparar} (ficam de fora os já separados, quem já levou tudo e as vendas avulsas). Têm reserva para tirar: ${paraTirar}.`;
     }
@@ -1361,7 +1382,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     const elegiveisParaTirar = (): Pedido[] => [...ultimaListaFiltrada].filter(estaSeparadoAguardando).sort((a, b) => a.id - b.id);
     const massaStatus = (texto: string) => { const el = document.querySelector<HTMLElement>("[data-massa-status]"); if (el) el.textContent = texto; };
     // (ao destravar, atualizarTudo() refaz o estado de "Marcar como separado"/"Tirar a reserva" pelas contagens)
-    const massaBotoes = (travar: boolean) => document.querySelectorAll<HTMLButtonElement>("[data-massa-separar],[data-massa-tirar],[data-massa-desfazer]").forEach((b) => { b.disabled = travar; });
+    const massaBotoes = (travar: boolean) => document.querySelectorAll<HTMLButtonElement>("[data-massa-separar],[data-massa-tirar],[data-massa-desfazer],[data-massa-excluir],[data-massa-restaurar]").forEach((b) => { b.disabled = travar; });
     /** O que a última ação em massa mudou, para o "Desfazer": cada pedido com o estado de antes. */
     let ultimaMassa: { rotulo: string; antes: { id: number; separado: boolean; separado_em: string | null }[] } | null = null;
 
@@ -1430,6 +1451,112 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       massaBotoes(false);
       atualizarTudo();
     });
+
+    // --- exclusão em massa dos NÃO separados (16/10/2026) ---
+    const elegiveisParaApagar = (): Pedido[] => elegiveisParaExcluir(ultimaListaFiltrada, estaNaoSeparado);
+    /** O que a última exclusão apagou (a cópia completa, com os mesmos ids), para o "Desfazer a exclusão". Some ao fechar a página: o arquivo baixado é a cópia que fica. */
+    let ultimaExclusao: CopiaDaExclusao | null = null;
+    const cabecalhoJson = () => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
+
+    function baixarArquivo(nome: string, conteudo: string) {
+      const url = URL.createObjectURL(new Blob([conteudo], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = nome;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+
+    function mostrarDesfazerExclusao() {
+      const b = document.querySelector<HTMLButtonElement>("[data-massa-restaurar]");
+      if (!b) return;
+      b.hidden = !ultimaExclusao;
+      if (ultimaExclusao) b.textContent = `Desfazer a exclusão de ${ultimaExclusao.pedidos.length} pedido(s)`;
+    }
+
+    async function executarExclusao() {
+      const elegiveis = elegiveisParaApagar();
+      const limite = limiteDaExclusao(document.querySelector<HTMLInputElement>("[data-massa-qtd]")?.value, elegiveis.length);
+      if (limite === null) { massaStatus("Escreva só o número de pedidos (ou deixe em branco para todos)."); return; }
+      const alvo = elegiveis.slice(0, limite);
+      if (!alvo.length) { massaStatus("Nenhum pedido da tela se encaixa."); return; }
+      const filtros = filtrosLigados().join(" · ") || "nenhum filtro (todos os pedidos da aba)";
+      if (!confirm(textoDaConfirmacao(resumoDaExclusao(alvo, lotes), filtros))) return;
+      if (!palavraConfere(prompt(textoDaPalavra(alvo.length, !filtrosLigados().length)))) { massaStatus("Cancelado: nada foi apagado."); return; }
+      massaBotoes(true);
+      const ids = alvo.map((p) => p.id);
+      let apagouAlgum = false;
+      try {
+        massaStatus("Conferindo os pedidos e preparando a cópia…");
+        // 1) lê tudo de novo (com todas as colunas, itens e respostas): é a cópia, e é a conferência de que NINGUÉM mudou nada desde que a tela foi montada
+        const completos: (Record<string, unknown> & { id: number; itens?: Record<string, unknown>[] })[] = [];
+        const respostasDosPedidos: Record<string, unknown>[] = [];
+        for (const parte of emLotes(ids)) {
+          const lista = parte.join(",");
+          const r1 = await api(`${directusUrl}/items/camiseta_pedidos?filter[id][_in]=${lista}&fields=*,itens.*&limit=-1`, { headers: { Authorization: `Bearer ${token}` } });
+          const r2 = await api(`${directusUrl}/items/respostas_pedido_camiseta?filter[pedido][_in]=${lista}&fields=*&limit=-1`, { headers: { Authorization: `Bearer ${token}` } });
+          if (!r1.ok || !r2.ok) throw new Error("leitura");
+          completos.push(...((await r1.json()).data ?? []));
+          respostasDosPedidos.push(...((await r2.json()).data ?? []));
+        }
+        const mudou = completos.length !== ids.length || completos.some((p) => p.separado === true || p.avulso === true || (p.itens ?? []).some((i) => Number(i.quantidade_retirada) > 0));
+        if (mudou) { massaStatus("Alguém mudou esses pedidos enquanto você confirmava (separou, deu retirada ou já apagou). NADA foi apagado: confira a lista e tente de novo."); return; }
+        // 2) a cópia vai para o computador ANTES de apagar qualquer coisa
+        const quando = new Date();
+        const copia = montarCopia({ id: grupo.id, nome: grupo.nome }, completos, respostasDosPedidos, quando.toISOString());
+        const arquivo = nomeDoArquivoDaCopia(grupo.nome, quando);
+        baixarArquivo(arquivo, JSON.stringify(copia));
+        // 3) apaga em lotes de 100 (o banco apaga os itens e as respostas junto); para no primeiro lote que falhar
+        let feitos = 0;
+        for (const parte of emLotes(ids)) {
+          const res = await api(`${directusUrl}/items/camiseta_pedidos`, { method: "DELETE", headers: cabecalhoJson(), body: JSON.stringify(parte) });
+          if (!res.ok) break;
+          feitos += parte.length;
+          apagouAlgum = true;
+          massaStatus(`Apagando ${feitos} de ${ids.length}…`);
+        }
+        const apagados = new Set(ids.slice(0, feitos));
+        pedidos = pedidos.filter((p) => !apagados.has(p.id));
+        ultimaExclusao = feitos > 0
+          ? { ...copia, pedidos: copia.pedidos.filter((p) => apagados.has(Number(p.id))), itens: copia.itens.filter((i) => apagados.has(Number(i.pedido))), respostas: copia.respostas.filter((r) => apagados.has(Number(r.pedido))) }
+          : null;
+        mostrarDesfazerExclusao();
+        massaStatus(mensagemDoResultado(feitos, ids.length, arquivo));
+      } catch {
+        massaStatus(apagouAlgum ? "⚠ A conexão falhou no meio. Confira a lista (a cópia dos pedidos já foi baixada)." : "Não consegui ler os pedidos agora: NADA foi apagado. Tente de novo.");
+      } finally {
+        massaBotoes(false);
+        atualizarTudo();
+      }
+    }
+
+    async function desfazerExclusao() {
+      if (!ultimaExclusao) return;
+      const copia = ultimaExclusao;
+      if (!confirm(`Desfazer a exclusão? Os ${copia.pedidos.length} pedido(s) voltam com os mesmos números, itens e respostas.`)) return;
+      massaBotoes(true);
+      let tudo = true;
+      let pedidosVoltaram = 0;
+      try {
+        for (const etapa of etapasDaRestauracao(copia)) {
+          for (const parte of etapa.lotes) {
+            const res = await api(`${directusUrl}/items/${etapa.colecao}`, { method: "POST", headers: cabecalhoJson(), body: JSON.stringify(parte) });
+            if (!res.ok) { tudo = false; break; }
+            if (etapa.colecao === "camiseta_pedidos") pedidosVoltaram += parte.length;
+            massaStatus(`Restaurando… (${pedidosVoltaram} de ${copia.pedidos.length} pedidos)`);
+          }
+          if (!tudo) break;
+        }
+      } catch { tudo = false; }
+      if (tudo) { ultimaExclusao = null; mostrarDesfazerExclusao(); }
+      massaStatus(tudo
+        ? `✅ Exclusão desfeita: ${pedidosVoltaram} pedido(s) de volta, com itens e respostas.`
+        : "⚠ Não consegui restaurar tudo. NÃO tente de novo por aqui (poderia duplicar): use o arquivo de cópia que foi baixado (peça ao suporte para restaurar) e confira a lista.");
+      try { await carregarDadosPedidos(); } catch { /* o tempo real refaz */ }
+      massaBotoes(false);
+      atualizarTudo();
+    }
+    document.querySelector("[data-massa-excluir]")?.addEventListener("click", () => { void executarExclusao(); });
+    document.querySelector("[data-massa-restaurar]")?.addEventListener("click", () => { void desfazerExclusao(); });
 
     const buscaInput = document.querySelector<HTMLInputElement>("[data-busca]");
     buscaInput?.addEventListener("input", () => {
@@ -2115,6 +2242,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     .camiseta-pedido-aviso { margin-top: 0.5rem; font-size: 0.8125rem; color: var(--muted-foreground); border-left: 2px solid var(--accent); padding-left: 0.6rem; }
     .camiseta-pedido-aviso-retirada { border-left-color: #b8860b; color: #8a6d1f; font-weight: 600; }
     .badge-separado { font-size: 0.8125rem; font-weight: 600; color: var(--accent); }
+    .massa-perigo { border: 1px solid #a33a2a; border-radius: var(--radius-md); padding: 0.75rem 1rem; background: rgb(163 58 42 / 6%); }
     .venda-confirmar { border: 1px solid #b8860b; border-radius: var(--radius-md); padding: 0.75rem 1rem; background: rgb(184 134 11 / 8%); }
     .filtros-contagem { margin-left: 0.4rem; border-radius: 999px; background: var(--accent); color: var(--background); font-size: 0.75rem; font-weight: 700; padding: 0 0.45rem; }
     .filtros-ativos { font-size: 0.8125rem; color: var(--muted-foreground); }

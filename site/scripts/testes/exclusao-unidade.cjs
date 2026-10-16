@@ -258,6 +258,20 @@ const executar = (amb, alvo, extra = {}) => A.excluirPedidos(amb, { grupo: grupo
   const de2 = ambiente(d, { conf: false });
   eq(await A.desfazerExclusao(de2.amb, r.copia), { ok: false, pedidosVoltaram: 0 }, "desfazer: se a pessoa não confirma, nada é feito");
   eq(de2.eventos.filter((e) => e === "POST").length, 0, "desfazer sem confirmar: nenhuma gravação");
+  // 8b) limite de pedidos (16/10/2026): se os pedidos voltando não cabem no limite do lote aberto, nada é restaurado
+  const aCheio = ambiente(directusFalso({ pedidos: [pedidoDoBanco(3)] }));
+  aCheio.amb.conferirEspaco = async () => "Não dá para desfazer agora: o lote já está no limite de 140 peças.";
+  eq(await A.desfazerExclusao(aCheio.amb, r.copia), { ok: false, pedidosVoltaram: 0 }, "desfazer com o limite cheio: não restaura");
+  eq(aCheio.eventos.filter((e) => e === "POST" || e === "confirmar").length, 0, "desfazer com o limite cheio: nem pergunta nem grava");
+  verdade(aCheio.avisos.some((x) => /limite de 140/.test(x)), "desfazer com o limite cheio: diz o motivo");
+  const dCabe = directusFalso({ pedidos: [pedidoDoBanco(3)] });
+  const aCabe = ambiente(dCabe);
+  aCabe.amb.conferirEspaco = async () => null;
+  eq((await A.desfazerExclusao(aCabe.amb, r.copia)).pedidosVoltaram, 2, "desfazer com espaço no limite: restaura normalmente");
+  const aSemConferir = ambiente(directusFalso({ pedidos: [pedidoDoBanco(3)] }));
+  aSemConferir.amb.conferirEspaco = async () => { throw new Error("rede"); };
+  eq(await A.desfazerExclusao(aSemConferir.amb, r.copia), { ok: false, pedidosVoltaram: 0 }, "desfazer sem conseguir conferir o limite: NÃO restaura");
+  verdade(aSemConferir.avisos.some((x) => /NADA foi restaurado/.test(x)) && aSemConferir.eventos.filter((e) => e === "POST").length === 0, "...e avisa que nada foi restaurado");
 }
 { // 2) cancelar no primeiro aviso, palavra errada ou cancelada no segundo
   const d = directusFalso({ pedidos: [pedidoDoBanco(1)] });

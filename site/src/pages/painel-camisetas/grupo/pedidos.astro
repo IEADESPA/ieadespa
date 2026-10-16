@@ -254,6 +254,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { montarLinhasMalharia } from "@/lib/pdfMalharia";
+    import { avaliar, limitesDoGrupo, pedidoDosItens, temLimite, type PedidoDoLimite } from "@/lib/limitePedidos";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -268,6 +269,9 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       retirada_liberada?: boolean;
       email_retirada_assunto: string | null;
       email_retirada_corpo: string | null;
+      // campos novos (16/10/2026): só existem depois do roteiro `scripts/directus-limite-esquema.mjs`
+      limite_total?: number | null;
+      limites_tamanho?: Record<string, number> | null;
     }
 
     interface Item {
@@ -1074,6 +1078,31 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       if (res.ok) { lote.total_vendido = vendido; lote.total_arrecadado = arrecadado; lote.saldo = saldo; }
     }
 
+    /**
+     * Limite de pedidos (16/10/2026): ações MANUAIS do gestor que AUMENTAM as peças de um lote ABERTO com limite (mover um pedido para ele, adicionar item, aumentar a quantidade,
+     * trocar o tamanho). O formulário público e a venda de balcão são barrados pela API; aqui o gestor pode corrigir a realidade (uma troca de tamanho no balcão, por exemplo), então
+     * a tela só AVISA e pede confirmação. Devolve o aviso, ou null se cabe (ou se não há limite). A conta usa os pedidos que a tela já tem (atualizados em tempo real).
+     */
+    function avisoDeLimite(loteId: number | null, antes: Item[], depois: Item[]): string | null {
+      const lote = lotes.find((l) => l.id === loteId);
+      if (!lote || lote.status !== "aberto") return null;
+      const idsAbertos = new Set(lotes.filter((l) => l.status === "aberto").map((l) => l.id));
+      const limites = limitesDoGrupo(grupo);
+      if (!temLimite(limites)) return null;
+      const a = pedidoDosItens(antes);
+      const d = pedidoDosItens(depois);
+      const acrescimo: PedidoDoLimite = { total: Math.max(0, d.total - a.total), porTamanho: {} };
+      for (const [tamanho, q] of Object.entries(d.porTamanho)) {
+        const mais = q - (a.porTamanho[tamanho] || 0);
+        if (mais > 0) acrescimo.porTamanho[tamanho] = mais;
+      }
+      if (acrescimo.total === 0 && Object.keys(acrescimo.porTamanho).length === 0) return null;
+      // o limite vale para as peças dos lotes abertos da campanha (normalmente um só)
+      const uso = pedidoDosItens(pedidos.filter((p) => p.lote !== null && idsAbertos.has(p.lote)).flatMap((p) => p.itens));
+      const v = avaliar(limites, uso, acrescimo);
+      return v.ok ? null : `Atenção: ${v.mensagem} (Lote ${lote.numero}).`;
+    }
+
     listaEl?.addEventListener("change", async (event) => {
       const target = event.target as HTMLElement;
       if (!target.matches("[data-mover-lote]")) return;
@@ -1085,7 +1114,9 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const origem = lotes.find((l) => l.id === pedido.lote) ?? null;
       if (!destino || destino.id === pedido.lote) return;
       const aviso = [origem?.status === "fechado" ? `O Lote ${origem.numero} está fechado: vendido/arrecadado/saldo dele serão recalculados (o pago à malharia não muda).` : "", destino.status === "fechado" ? `O Lote ${destino.numero} está fechado: vendido/arrecadado/saldo dele serão recalculados (o pago à malharia não muda).` : ""].filter(Boolean).join(" ");
-      if (!confirm(`Mover o pedido de "${pedido.nome}" para o Lote ${destino.numero}? ${aviso}`)) { select.value = String(pedido.lote ?? ""); return; }
+      // mover entre lotes ABERTOS não muda o total (o limite conta os lotes abertos juntos): só avisa quando o pedido está vindo de fora deles (lote fechado ou avulso)
+      const avisoLimite = origem?.status === "aberto" ? null : avisoDeLimite(destino.id, [], pedido.itens);
+      if (!confirm(`Mover o pedido de "${pedido.nome}" para o Lote ${destino.numero}? ${aviso}${avisoLimite ? `\n\n${avisoLimite} Mover mesmo assim?` : ""}`)) { select.value = String(pedido.lote ?? ""); return; }
       const res = await api(`${directusUrl}/items/camiseta_pedidos/${pedido.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1679,6 +1710,9 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           alert('Quantidade precisa ser pelo menos 1 — pra remover o item inteiro, use "Remover".');
           return;
         }
+        const itemAntes = pedido.itens.find((i) => i.id === itemId);
+        const avisoLimite = itemAntes ? avisoDeLimite(pedido.lote, [itemAntes], [{ ...itemAntes, tamanho, modelo, quantidade }]) : null;
+        if (avisoLimite && !confirm(`${avisoLimite}\n\nSalvar a edição mesmo assim?`)) return;
         target.textContent = "Salvando…";
         const res = await api(`${directusUrl}/items/camiseta_itens_pedido/${itemId}`, {
           method: "PATCH",
@@ -1727,6 +1761,8 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         const modelo = novoWrap?.querySelector<HTMLSelectElement>("[data-campo-modelo]")?.value || null;
         const quantidade = Number(novoWrap?.querySelector<HTMLInputElement>("[data-campo-quantidade]")?.value || 0);
         if (quantidade < 1) return;
+        const avisoLimite = avisoDeLimite(pedido.lote, [], [{ id: 0, tamanho, modelo, quantidade, quantidade_retirada: 0 }]);
+        if (avisoLimite && !confirm(`${avisoLimite}\n\nAdicionar o item mesmo assim?`)) return;
 
         target.textContent = "Adicionando…";
         const res = await api(`${directusUrl}/items/camiseta_itens_pedido`, {
@@ -2050,7 +2086,8 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
         return;
       }
 
-      const resGrupo = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=id,nome,valor_venda,precos_tamanho,tamanhos,modelos,retirada_local,retirada_liberada,email_retirada_assunto,email_retirada_corpo`, {
+      // `fields=*` (e não a lista): `limite_total`/`limites_tamanho` são campos novos (16/10/2026) e o Directus responde 403 a quem pede um campo que não existe.
+      const resGrupo = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}?fields=*`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resGrupo.ok) {

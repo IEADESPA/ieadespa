@@ -31,6 +31,11 @@ export interface AmbienteExclusao {
   status: (texto: string) => void;
   baixar: (nome: string, conteudo: string) => void;
   agora?: () => Date;
+  /**
+   * Chamada antes de restaurar: devolve o motivo de NÃO caber (por exemplo, o limite de pedidos do lote aberto, que foi preenchido por pedidos novos depois da exclusão),
+   * ou null se cabe. Nada é restaurado quando devolve texto.
+   */
+  conferirEspaco?: (copia: CopiaDaExclusao) => Promise<string | null>;
 }
 
 type Registro = Record<string, unknown>;
@@ -174,6 +179,19 @@ export async function desfazerExclusao(
   } catch (e) {
     amb.status((e as Error).message);
     return { ok: false, pedidosVoltaram: 0 };
+  }
+  if (amb.conferirEspaco) {
+    let problema: string | null;
+    try {
+      problema = await amb.conferirEspaco(copia);
+    } catch {
+      amb.status("Não consegui conferir o limite de pedidos agora: NADA foi restaurado. Tente de novo.");
+      return { ok: false, pedidosVoltaram: 0 };
+    }
+    if (problema) {
+      amb.status(problema);
+      return { ok: false, pedidosVoltaram: 0 };
+    }
   }
   if (
     !amb.confirmar(

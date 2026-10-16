@@ -104,7 +104,7 @@ quem não deveria vê-lo.
 | `mural_oracao` | Pedido de oração, nome opcional, confidencial | Leitura pública só do que é `aprovado=true`, não confidencial e dos últimos 90 dias; contador `orando_count` só é escrito pela Function `OrarMural/index.js` |
 | `contato_mensagens` | Formulário de contato (inclui LGPD/pedido de oração) | Só cria publicamente, nunca lida |
 | `push_subscriptions` | Inscrição de notificação push | Só cria publicamente; edição usa o próprio endpoint como "senha de posse" |
-| `pageviews` | Caminho da página + domínio de origem + data (sem IP, sem cookie) | Só cria publicamente |
+| `pageviews` | Caminho da página + domínio de origem + data (sem IP, sem cookie) | Só cria publicamente (permissão que o site já não usa: quem grava é a Function `RegistrarVisita`, com o token de administrador, em lote) |
 | `contas` | E-mail da "Minha Conta" | Sem leitura/escrita pública — só via Functions da Minha Conta |
 | `contas_codigos` | Código de login de 6 dígitos (hash SHA-256) | Sem leitura/escrita pública |
 | `enquete_votos` | Voto (enquete + opção + e-mail) | Sem leitura/escrita pública — só via `ConsultarEnquete/index.js`/`VotarEnquete/index.js` |
@@ -714,6 +714,16 @@ Quality/Pollen/Solar/Roads/Time Zone/Weather (sem aplicação real para um site 
 - **Analytics próprio, sem cookie**: contador de visitas (`pageviews`, só caminho + origem + data)
   com dashboard nativo no Directus Insights; notificação push de conteúdo novo como alternativa a
   newsletter por e-mail.
+- **Contador de visitas em lote (16/10/2026)**: o navegador chama `POST /api/registrar-visita`
+  (`api/RegistrarVisita/`, mesma origem, sem pré-voo CORS) em vez de gravar direto no Directus (antes:
+  duas requisições por visita; o Directus B1, de 1 núcleo, chegava a 100 % de CPU com ~60–70
+  visitantes por minuto). A Function ignora robôs, valida `{ path, referrer_domain }`, limita a 120
+  visitas por IP em 5 min e guarda a visita num buffer em memória; o Directus recebe UM
+  `POST /items/pageviews` com o array de linhas a cada 25 visitas ou 10 s (uma gravação por vez por
+  instância; falha devolve as linhas ao buffer, no máximo 500, e nunca derruba a visita).
+  **Perda aceita**: se a instância reciclar, somem as visitas ainda no buffer (no máximo as dos
+  últimos 10 s) — é só um contador. Regra e provas: `api/src/lib/visitas.js` e
+  `scripts/testes/visitas-unidade.cjs`.
 
 ### E-mail transacional
 

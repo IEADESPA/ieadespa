@@ -28,6 +28,36 @@ function gerarHash(telefoneBruto) {
   return `${salt}:${hash}`;
 }
 
+// Mesmo hash (mesmo formato, `conferirHash` confere), mas FORA do processo principal e com poucos ao mesmo tempo (16/10/2026): o `scryptSync` acima trava o processo por ~50 ms
+// por chamada, e com centenas de pedidos de uma vez (o link caiu no grupo) isso virava segundos de processo parado — as gravações no Directus e as respostas esperavam junto. Só
+// DOIS scrypt por vez: o resto da pool de threads do Node serve a rede (DNS, arquivos) em vez de ficar na fila atrás deles.
+const SCRYPT_SIMULTANEOS = 2;
+let scryptAtivos = 0;
+const scryptEsperando = [];
+function limitarScrypt(tarefa) {
+  return new Promise((resolve, reject) => {
+    const rodar = () => {
+      scryptAtivos += 1;
+      tarefa().then(resolve, reject).finally(() => {
+        scryptAtivos -= 1;
+        const proxima = scryptEsperando.shift();
+        if (proxima) proxima();
+      });
+    };
+    if (scryptAtivos < SCRYPT_SIMULTANEOS) rodar();
+    else scryptEsperando.push(rodar);
+  });
+}
+
+function gerarHashAssincrono(telefoneBruto) {
+  const normalizado = normalizar(telefoneBruto);
+  if (normalizado.length < 8) return Promise.resolve(null);
+  const salt = crypto.randomBytes(16).toString("hex");
+  return limitarScrypt(() => new Promise((resolve, reject) => {
+    crypto.scrypt(normalizado, salt, SCRYPT_KEYLEN, (erro, chave) => (erro ? reject(erro) : resolve(`${salt}:${chave.toString("hex")}`)));
+  }));
+}
+
 /**
  * Compara em tempo constante (`timingSafeEqual`) — comparação normal de
  * string (`===`) vaza quantos caracteres bateram através do tempo de
@@ -136,4 +166,4 @@ function normalizarNome(valor) {
     .trim();
 }
 
-module.exports = { normalizar, gerarHash, conferirHash, chaveTelefone, normalizarNome, digitosCompletos, cifrarTelefone, decifrarTelefone, linkWhatsApp };
+module.exports = { normalizar, gerarHash, gerarHashAssincrono, conferirHash, chaveTelefone, normalizarNome, digitosCompletos, cifrarTelefone, decifrarTelefone, linkWhatsApp };

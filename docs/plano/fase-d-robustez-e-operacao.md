@@ -544,3 +544,15 @@ abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.
      bloqueio escalonado), reenvio limitado a um por minuto, sem bilhete 401; quem não tem chave nem e-mail entra com
      aviso (prova 13/13, passo 1). Ninguém fica trancado fora: a reserva por e-mail e a remoção de chaves pelo nível geral
      (`chaves-acesso/admin/remover`, com auditoria) cobrem o aparelho perdido.
+
+- **16/10/2026 — a entrada única acordava o banco em TODA chamada (custo): causa e correção.** O Azure SQL serverless (`app-db-prod`,
+  pausa em 60 min) ficou ligado 24 h por dia desde 01/10 (~R$ 87/dia, contra ~R$ 8 pausado; ~R$ 2.900/mês no ritmo, a maior
+  linha da conta do Azure). Causa, provada pelo Query Store do banco: `shared/entrada.js` lia a lista de sessões encerradas
+  (`SELECT SessaoId FROM SessoesAtivas WHERE Encerrada = 1 …`) quando `auth.extrairToken(req)` achava um token — e o Azure Static
+  Web Apps entrega à Function um `Authorization: Bearer …` PRÓPRIO em toda chamada (já registrado em 02/10), então a condição valia
+  para tudo: o "está no ar" (a cada 5 min) e a agenda pública (a cada 15 min) abriam o banco toda vez (de madrugada a quantidade
+  dessa consulta por hora era igual à de chamadas, 1 para 1). A correção está em `auth.temSessaoAssinada(req)`: só uma sessão
+  nossa (assinada e no prazo, conferida na memória) justifica a leitura; token do Azure, inválido ou vencido não vira sessão e o
+  handler responde 401 sozinho. Provas: `entradaUnica.test.js` (5 testes novos; voltando a condição antiga, 3 reprovam) e a suíte
+  inteira (5.226 testes). Efeito esperado: o banco volta a pausar sem uso; conferir o custo diário no Azure (Cost Management) e o
+  estado do banco (`Paused` fora do horário de trabalho).

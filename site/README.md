@@ -324,6 +324,47 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   cartões — só reaparece, com um aviso, num pedido que já tenha valor lançado, para poder zerar (em 15/10/2026 a
   Marcha tinha 74 pedidos com R$ 1,00 "pago" que ninguém arrecadou; o Directus não guardou quem nem quando;
   foram zerados, com cópia do estado anterior).
+- **Excluir os pedidos que ninguém veio buscar (16/10/2026, pedido do responsável: na Marcha para Jesus mais de
+  300 pessoas não pegaram a camiseta e a peça precisa passar para o próximo)** — fica na página da **campanha**, na aba
+  **"Excluir"** (a última, a mais escondida, junto de "Excluir a campanha inteira"); a tela de pedidos **não tem mais o
+  botão**, para ninguém apertar sem querer (foi o responsável quem pediu a mudança no mesmo dia). O bloco **"Excluir os
+  pedidos que ninguém veio buscar"** tem as escolhas de **lote**, **tamanho** e **modelo** e o campo **"só os primeiros
+  N"**, mostra o resumo, a lista do que seria excluído e o botão "Excluir os pedidos (N)". A lista é lida ao abrir a aba
+  (e em "Atualizar a lista"), sempre do Directus, e só entra pedido **não separado
+  e em que ninguém levou nenhuma peça**: ficam de fora os separados, as vendas avulsas, quem já levou tudo **e quem
+  levou só parte** (apagar apagaria a prova do que a pessoa recebeu). **A conta da malharia não muda nos lotes
+  fechados**: o lote fechado guarda os números congelados no fechamento (`total_vendido`, `total_arrecadado`,
+  `total_pago_malharia`, `saldo` e, por tamanho, `pedido_congelado`) e nunca os recalcula; no lote **aberto** a conta é ao
+  vivo e diminui, e a confirmação avisa com destaque quantos pedidos estão em cada caso. Passos: (1) confirma dizendo
+  quantos, do #a ao #b, as peças por tamanho e o que acontece com a malharia; (2) pede para **digitar EXCLUIR** (sempre,
+  mesmo com poucos pedidos); (3) relê os pedidos no Directus e, se alguém separou ou deu retirada no meio, **não apaga
+  nada**; (4) **baixa um arquivo de cópia** (`pedidos-excluidos-<campanha>-<data>.json`, com todas as colunas, itens e
+  respostas e os mesmos números); (5) apaga em lotes de 100 (o banco apaga itens e respostas em cascata); (6) aparece
+  **"Desfazer a exclusão"**, que recria tudo com os **mesmos números** (só a data de criação passa a ser a da
+  restauração, porque o Directus a preenche sozinho; a mensagem do desfazer fica na tela depois de a lista recarregar).
+  Fechou a página? Restaura-se pelo arquivo:
+  `DIRECTUS_URL=… DIRECTUS_ADMIN_TOKEN=… node site/scripts/restaurar-pedidos.mjs arquivo.json` (use `--conferir` para só
+  ver; recusa restaurar o que já existe, para nunca duplicar). Regra pura em `src/lib/exclusaoEmMassa.ts` e a parte com
+  rede (relê, baixa a cópia, apaga, desfaz) em `src/lib/exclusaoEmMassaAcao.ts`; provas:
+  `scripts/testes/exclusao-unidade.cjs` (143, sem rede, com um Directus de mentira rodando o fluxo inteiro),
+  `scripts/testes/exclusao.cjs` (31, contra o Directus; roda no CI) e a prova no Edge com a página real, na aba
+  "Excluir" (59 verificações, campanha descartável: inclui que a tela de pedidos não tem mais o botão e que os números
+  travados do lote fechado não mudam).
+- **Limite de pedidos (16/10/2026, pedido do responsável: na Marcha são 140 camisetas e a 141ª tem de ser recusada)** — na aba **Dados**
+  da campanha: **"Limite de pedidos"** (total, todos os tamanhos) e **"Limite por tamanho"**; em branco = sem limite. Vale para as peças dos
+  **lotes abertos** da campanha (site e balcão, pagas ou não; pedido apagado libera a vaga na hora; venda avulsa e lote fechado não contam; ao
+  fechar o lote o próximo começa do zero). A página pública mostra **"esgotado"** (o formulário some e volta sozinho se liberar vaga) e o tamanho
+  esgotado fica desabilitado. **Como nunca passa do número**: o Directus não tem transação entre chamadas, então cada pedido grava, na MESMA
+  transação, uma "senha" no livro `camiseta_controle` (chave única `campanha:n`, n = último + 1), depois de ler o último número e SÓ ENTÃO a
+  soma das peças; se outro pedido pegou a mesma senha o banco recusa e se lê tudo de novo (`api/src/lib/limiteLote.js`, o raciocínio está no
+  cabeçalho do arquivo). **Estabilidade** (o Directus B1 grava ~1,5 pedido/s): o hash do telefone é assíncrono e só calculado depois das
+  recusas; os pedidos de uma campanha entram numa fila de um por vez por instância e quem não daria tempo recebe 503 "tente de novo" na hora;
+  a instância lembra por 3 s o último número e as peças (pula 2 leituras por pedido; a idade conta desde a última leitura real); o lote é criado
+  uma vez só por instância. Gestor: adicionar/editar item ou mover pedido que passa do limite **avisa e pede confirmação** (não bloqueia); o
+  "Desfazer exclusão" não restaura o que não cabe. Esquema (2 campos na campanha + a coleção do livro, repetível, só acrescenta):
+  `site/scripts/directus-limite-esquema.mjs`. Provas: `limite-unidade.cjs` (130, com 7 mutações que têm de reprovar), `limite-carga.cjs` (Directus
+  real, 1 a 8 instâncias em processos separados), `limite.cjs` (HTTP, roda no CI) e o emulador `swa-local.cjs` (site + API contra um Directus de
+  teste, sem tocar a produção).
 - **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
   trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
   Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de

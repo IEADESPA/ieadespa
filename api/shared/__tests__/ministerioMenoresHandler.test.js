@@ -173,7 +173,7 @@ describe("a auto-denúncia", () => {
   test("quem já comunicou e ainda não teve decisão não grava de novo", async () => {
     quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId/, [{ MembroId: 10, Nome: "Ana", Email: "a@e.org" }]);
     quando(/SELECT TOP 1 AutoDenunciaId FROM MinisterioMenoresAutoDenuncias/, [{ AutoDenunciaId: 3 }]);
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = require("../dataBrasilia").hojeBrasilia();      // o servidor conta o dia em Brasília: com a data em UTC este teste falhava das 21h à meia-noite
     const r = await chamar("auto-denuncia", { metodo: "POST", token: PIN(), corpo: { tipo: "INQUERITO_POLICIAL", dataCiencia: hoje, ciente: true } });
     expect(r.status).toBe(422);
     expect(r.body.mensagem).toMatch(/já comunicou/);

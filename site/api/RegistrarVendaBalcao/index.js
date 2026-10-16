@@ -1,6 +1,7 @@
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
 const { cifrarTelefone } = require("../src/lib/telefone");
 const { validarVenda } = require("../src/lib/vendaBalcao");
+const { limitesDoGrupo, temLimite, normalizarItens, criarPedidoComLimite, umaVezPorChave } = require("../src/lib/limiteLote");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 
@@ -53,8 +54,18 @@ async function encontrarOuCriarLoteAberto(token, grupoId, log) {
   return vencedor;
 }
 
+// A mensagem da recusa por limite, para quem está no balcão (a do formulário público fala com o cliente).
+function mensagemDoLimiteParaGestor(recusa, limites, loteNumero) {
+  const lote = loteNumero ? `lote ${loteNumero}` : "lote aberto";
+  const pecas = (n) => `${n} ${n === 1 ? "peça" : "peças"}`;
+  if (recusa.motivo === "esgotado") return `O ${lote} já atingiu o limite de pedidos (${pecas(limites.total)}). Para vender mais, aumente o limite na campanha (aba Dados). Nada foi registrado.`;
+  if (recusa.motivo === "quantidade") return `Só restam ${pecas(recusa.restam)} no limite de pedidos do ${lote}. Diminua a quantidade ou aumente o limite na campanha. Nada foi registrado.`;
+  if (recusa.motivo === "tamanho_esgotado") return `O tamanho ${recusa.tamanho} já atingiu o limite do ${lote} (${pecas(limites.porTamanho[recusa.tamanho])}). Aumente o limite do tamanho na campanha (aba Dados) ou escolha outro. Nada foi registrado.`;
+  return `Do tamanho ${recusa.tamanho} só restam ${pecas(recusa.restam)} no limite do ${lote}. Diminua a quantidade ou aumente o limite na campanha. Nada foi registrado.`;
+}
+
 module.exports = async function (context, req) {
-  const responder = (status, body) => { context.res = { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body }; };
+  const responder =(status, body) => { context.res = { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body }; };
 
   if (!permitir(`venda-balcao:${ipDoPedido(req)}`, LIMITE_POR_IP)) return responder(429, { erro: "Muitas tentativas. Aguarde alguns minutos." });
   if (!DIRECTUS_URL || !process.env.TELEFONE_CHAVE_SEGREDO) {
@@ -69,7 +80,8 @@ module.exports = async function (context, req) {
   if (!Number.isInteger(grupoId) || grupoId <= 0) return responder(400, { erro: "Campanha inválida." });
 
   // Prova de acesso e lista de tamanhos/modelos: a campanha lida com o token da PRÓPRIA pessoa.
-  const grupoRes = await directus(token, `/items/camiseta_grupos/${grupoId}?fields=id,nome,tamanhos,modelos`);
+  // `fields=*`: `limite_total` e `limites_tamanho` são campos novos (16/10/2026) e o Directus responde 403 a quem pede um campo que não existe.
+  const grupoRes = await directus(token, `/items/camiseta_grupos/${grupoId}?fields=*`);
   if (grupoRes.status === 401) return responder(401, { erro: "Sua sessão do painel venceu. Entre de novo." });
   // (o Directus responde 403, e não 404, a quem não é administrador quando o item não existe)
   if (grupoRes.status === 403) return responder(403, { erro: "Campanha não encontrada, ou o seu perfil não pode registrar vendas de camiseta nela." });
@@ -99,10 +111,11 @@ module.exports = async function (context, req) {
     let loteId = null;
     let avulso = false;
     let loteNumero = null;
+    let loteEstaAberto = false; // o limite de pedidos vale para o lote ABERTO (16/10/2026)
     if (d.lote === "avulso") avulso = true;
     else if (d.lote === "aberto") {
-      const l = await encontrarOuCriarLoteAberto(token, grupoId, (m) => context.log.warn(m));
-      loteId = l.id; loteNumero = l.numero;
+      const l = await umaVezPorChave(`criar-lote-balcao:${grupoId}`, () => encontrarOuCriarLoteAberto(token, grupoId, (m) => context.log.warn(m))); // uma vez só por instância (ver CriarPedidoCamiseta)
+      loteId = l.id; loteNumero = l.numero; loteEstaAberto = true;
     } else {
       const loteRes = await directus(token, `/items/camiseta_lotes/${d.lote}?fields=id,numero,grupo,status`);
       if (loteRes.status === 404 || loteRes.status === 403) return responder(400, { erro: "Lote não encontrado." });
@@ -113,33 +126,52 @@ module.exports = async function (context, req) {
       if (l.status !== "aberto" && !d.confirmarLoteFechado) {
         return responder(409, { loteFechado: true, erro: `O lote ${l.numero} já está fechado: a encomenda dele já foi feita e esta peça ficaria fora dela. Confirme só se isso é mesmo o que você quer.` });
       }
-      loteId = l.id; loteNumero = l.numero;
+      loteId = l.id; loteNumero = l.numero; loteEstaAberto = l.status === "aberto";
     }
 
     // Pedido + itens numa gravação só (criação aninhada, numa transação): ou grava tudo, ou nada.
-    const pedidoRes = await directus(token, "/items/camiseta_pedidos", {
-      method: "POST",
-      body: JSON.stringify({
-        grupo: grupoId,
-        lote: loteId,
-        avulso,
-        nome: d.nome,
-        telefone: d.telefone ? d.telefone.hash : null,
-        telefone_chave: d.telefone ? d.telefone.chave : null,
-        telefone_cifrado: d.telefone ? cifrarTelefone(d.telefone.bruto) : null,
-        email: d.email,
-        congregacao: d.congregacao,
-        valor_pago: d.valorPago,
-        itens: d.itens,
-      }),
-    });
-    if (pedidoRes.status === 401) return responder(401, { erro: "Sua sessão do painel venceu. Entre de novo." });
-    if (pedidoRes.status === 403) return responder(403, { erro: "Seu perfil não pode registrar vendas de camiseta." });
-    if (!pedidoRes.ok) {
-      context.log.error("Falha ao criar a venda de balcão:", pedidoRes.status, (await pedidoRes.text()).slice(0, 300));
-      return responder(502, { erro: "Não foi possível gravar a venda. Nada foi registrado; tente de novo." });
+    const corpoPedido = {
+      grupo: grupoId,
+      lote: loteId,
+      avulso,
+      nome: d.nome,
+      telefone: d.telefone ? d.telefone.hash : null,
+      telefone_chave: d.telefone ? d.telefone.chave : null,
+      telefone_cifrado: d.telefone ? cifrarTelefone(d.telefone.bruto) : null,
+      email: d.email,
+      congregacao: d.congregacao,
+      valor_pago: d.valorPago,
+      itens: d.itens,
+    };
+
+    let pedidoId;
+    const limites = limitesDoGrupo(grupo);
+    if (temLimite(limites) && loteId && loteEstaAberto) {
+      // Mesmo limite do formulário público (ver `limiteLote.js`): a peça vendida no balcão também sai do que o lote tem. Sem exceção: para vender além do número, aumente o limite na campanha.
+      const itensLimite = normalizarItens(d.itens);
+      if (!itensLimite.ok) return responder(400, { erro: itensLimite.erro });
+      const r = await criarPedidoComLimite({
+        directus: (caminho, init = {}) => directus(token, caminho, init),
+        grupoId, limites, pedido: { total: itensLimite.total, porTamanho: itensLimite.porTamanho }, corpoPedido, log: (m) => context.log.warn(m),
+      });
+      if (r.erroHttp) {
+        const { status, body } = r.erroHttp;
+        if (body.motivo === "permissao") return responder(status, { erro: status === 401 ? "Sua sessão do painel venceu. Entre de novo." : "Seu perfil não pode registrar vendas de camiseta." });
+        if (status === 409) return responder(409, { limiteDoLote: true, motivo: body.motivo, restam: body.restam, erro: mensagemDoLimiteParaGestor(body, limites, loteNumero) });
+        if (status === 503) return responder(503, { erro: "O sistema está recebendo muitos pedidos agora. Nada foi registrado; tente de novo em alguns segundos." });
+        return responder(502, { erro: "Não foi possível gravar a venda. Nada foi registrado; tente de novo." });
+      }
+      pedidoId = r.pedidoId;
+    } else {
+      const pedidoRes = await directus(token, "/items/camiseta_pedidos", { method: "POST", body: JSON.stringify(corpoPedido) });
+      if (pedidoRes.status === 401) return responder(401, { erro: "Sua sessão do painel venceu. Entre de novo." });
+      if (pedidoRes.status === 403) return responder(403, { erro: "Seu perfil não pode registrar vendas de camiseta." });
+      if (!pedidoRes.ok) {
+        context.log.error("Falha ao criar a venda de balcão:", pedidoRes.status, (await pedidoRes.text()).slice(0, 300));
+        return responder(502, { erro: "Não foi possível gravar a venda. Nada foi registrado; tente de novo." });
+      }
+      pedidoId = (await pedidoRes.json()).data.id;
     }
-    const pedidoId = (await pedidoRes.json()).data.id;
 
     // Quem lançou: só no registro de execução (o Directus não guarda esse dado no pedido).
     let quem = "desconhecido";

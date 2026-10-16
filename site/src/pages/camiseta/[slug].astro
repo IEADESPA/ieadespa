@@ -260,8 +260,22 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
         // mostrando o formulário até o próximo build; centenas de pedidos entraram depois
         // do fechamento. Agora a página pergunta à API ao abrir e esconde o formulário na
         // hora; a API recusa de qualquer jeito (403), e esse 403 também esconde.
+        //
+        // 16/10/2026 — limite de pedidos do lote: a resposta de `status-camiseta` traz `limite: { esgotado, tamanhosEsgotados }`.
+        // Esgotado = o formulário some com um aviso e a página confere de novo a cada 45 s (se uma peça for liberada, o formulário volta);
+        // tamanho esgotado = a opção fica desabilitada e marcada "(esgotado)". Quem manda é a API (ela recusa o que não cabe, com 409):
+        // isto é só para a pessoa não preencher um formulário que vai ser recusado.
+        let tamanhosEsgotados = new Set();
+        let avisoEsgotado = null;
+        let temporizadorEsgotado = null;
+
+        function pararConferenciaDeEsgotado() {
+          if (temporizadorEsgotado) { clearInterval(temporizadorEsgotado); temporizadorEsgotado = null; }
+        }
         function encerrarFormulario(mensagem) {
           if (!form) return;
+          pararConferenciaDeEsgotado();
+          if (avisoEsgotado) avisoEsgotado.hidden = true;
           form.hidden = true;
           const aviso = document.createElement("p");
           aviso.className = "mt-6 text-sm leading-relaxed text-muted-foreground";
@@ -269,10 +283,54 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
           aviso.textContent = mensagem || "Esta campanha está encerrada e não aceita mais pedidos.";
           form.insertAdjacentElement("beforebegin", aviso);
         }
-        fetch(statusUrl, { cache: "no-store" })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((s) => { if (s && s.aberto === false) encerrarFormulario(s.mensagem); })
-          .catch(() => {});
+        function aplicarTamanhosEsgotados() {
+          document.querySelectorAll("[data-item-tamanho]").forEach((seletor) => {
+            seletor.querySelectorAll("option").forEach((opcao) => {
+              if (!opcao.value) return;
+              const esgotado = tamanhosEsgotados.has(opcao.value);
+              opcao.disabled = esgotado;
+              opcao.textContent = esgotado ? `${opcao.value} (esgotado)` : opcao.value;
+            });
+            if (seletor.value && tamanhosEsgotados.has(seletor.value)) seletor.value = "";
+          });
+        }
+        function mostrarEsgotado() {
+          if (!form) return;
+          form.hidden = true;
+          if (!avisoEsgotado) {
+            avisoEsgotado = document.createElement("p");
+            avisoEsgotado.className = "mt-6 text-sm leading-relaxed text-muted-foreground";
+            avisoEsgotado.setAttribute("role", "status");
+            avisoEsgotado.textContent = "Os pedidos desta campanha esgotaram. Se alguma peça for liberada, esta página volta a aceitar pedidos (ela confere sozinha de tempos em tempos).";
+            form.insertAdjacentElement("beforebegin", avisoEsgotado);
+          }
+          avisoEsgotado.hidden = false;
+          if (!temporizadorEsgotado) temporizadorEsgotado = setInterval(conferirStatus, 45000);
+        }
+        function mostrarFormulario() {
+          if (!form) return;
+          pararConferenciaDeEsgotado();
+          if (avisoEsgotado) avisoEsgotado.hidden = true;
+          if (form.hidden) {
+            form.hidden = false;
+            const botao = form.querySelector('button[type="submit"]');
+            if (botao) botao.disabled = false;
+          }
+        }
+        function aplicarStatus(s) {
+          if (!s) return;
+          if (s.aberto === false) { encerrarFormulario(s.mensagem); return; }
+          tamanhosEsgotados = new Set((s.limite && s.limite.tamanhosEsgotados) || []);
+          aplicarTamanhosEsgotados();
+          if (s.limite && s.limite.esgotado) mostrarEsgotado(); else mostrarFormulario();
+        }
+        function conferirStatus() {
+          fetch(statusUrl, { cache: "no-store" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then(aplicarStatus)
+            .catch(() => {});
+        }
+        conferirStatus();
 
         // Fase 26 — pré-preenche com o e-mail da Minha Conta, se já logado.
         (() => {
@@ -341,9 +399,11 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
         }
 
         itensLista?.insertAdjacentHTML("beforeend", linhaItemHtml());
+        aplicarTamanhosEsgotados();
 
         document.querySelector("[data-item-adicionar]")?.addEventListener("click", () => {
           itensLista?.insertAdjacentHTML("beforeend", linhaItemHtml());
+          aplicarTamanhosEsgotados();
         });
 
         itensLista?.addEventListener("click", (event) => {
@@ -429,6 +489,18 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
                 return;
               }
               if (pedidoRes.status === 429) throw new Error("Muitos pedidos deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.");
+              // limite de pedidos do lote (16/10/2026): esgotou tudo, esgotou um tamanho, ou não cabe a quantidade pedida — os dados digitados ficam
+              if (pedidoRes.status === 409 && erro?.motivo === "esgotado") {
+                mostrarEsgotado();
+                if (button) button.disabled = false;
+                if (status) status.textContent = "";
+                return;
+              }
+              if (pedidoRes.status === 409 && erro?.motivo === "tamanho_esgotado" && erro.tamanho) {
+                tamanhosEsgotados.add(erro.tamanho);
+                aplicarTamanhosEsgotados();
+                atualizarTotal();
+              }
               throw new Error(erro?.erro || "falha ao criar pedido");
             }
 

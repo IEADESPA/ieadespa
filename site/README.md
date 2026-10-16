@@ -365,6 +365,21 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   `site/scripts/directus-limite-esquema.mjs`. Provas: `limite-unidade.cjs` (130, com 7 mutações que têm de reprovar), `limite-carga.cjs` (Directus
   real, 1 a 8 instâncias em processos separados), `limite.cjs` (HTTP, roda no CI) e o emulador `swa-local.cjs` (site + API contra um Directus de
   teste, sem tocar a produção).
+- **Vagas e cupom das inscrições em evento (16/10/2026)** — medido no Directus local: com 20 vagas e 40 inscrições ao mesmo tempo, as 40 saíam
+  **confirmadas** ("conta os confirmados, depois grava", sem trava), e o limite de usos do cupom tinha a mesma falha (lia `usos` e gravava
+  `usos + n`). Agora, quando o evento tem limite de vagas (sem aprovação) ou o cupom tem limite de usos, a inscrição grava na MESMA transação uma
+  senha no livro `evento_controle` (chave única `evento:n`, n = última + 1; ler a última senha, SÓ ENTÃO contar confirmados e usos; se outra
+  inscrição pegou a senha o banco recusa e a leitura é refeita) — a mesma técnica do limite de pedidos das camisetas, em `api/src/lib/vagasEvento.js`
+  (o raciocínio está no cabeçalho). Diferente do pedido de camiseta, **ninguém é recusado por falta de vaga**: quem não cabe entra na lista de
+  espera, e o cupom esgotado só deixa de dar desconto. O limite do cupom passa a ser a **contagem das inscrições com o código**; o campo `usos` é só o
+  número que o painel mostra. Evento sem limite e cupom sem limite seguem direto, sem trava. Estabilidade: fila de uma inscrição por vez por evento e
+  instância (503 "tente de novo" na hora quando não daria tempo), hash do telefone assíncrono depois das recusas baratas, memória de 3 s da senha e
+  das contagens, leitura do evento uma vez só por instância; falha do Directus ao ler o evento agora é 503, não "evento não encontrado". Sem o esquema
+  aplicado a função grava do jeito antigo (e avisa no log), nunca deixa de aceitar inscrição. Esquema (a coleção do livro + 1 campo na inscrição,
+  repetível, só acrescenta): `site/scripts/directus-vagas-esquema.mjs` — **aplicar no Directus ANTES de publicar o código**. Provas:
+  `vagas-evento-unidade.cjs` (sem rede; inclui o teste do teste: sem a chave única, ou contando antes de ler a senha, a corrida estoura),
+  `inscricao-carga.cjs` (Directus real local, 1 a 8 instâncias em processos separados; 120 inscrições para 40 vagas, com cupom e com grupos: sempre
+  exato) e `inscricao-vagas.cjs` (HTTP, roda no CI).
 - **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
   trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
   Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de

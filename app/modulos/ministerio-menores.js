@@ -23,7 +23,7 @@ const MNR_FINALIDADES = ["IMAGEM", "SAUDE_CRACHA"];   // as duas autorizações 
 const MNR_ROTULO_FINALIDADE = { IMAGEM: "Uso da imagem (foto)", SAUDE_CRACHA: "Alergia ou saúde no crachá" };
 const MNR_AJUDA_FINALIDADE = {
   IMAGEM: "Autorizar permite a foto do rosto dele(a) no cadastro e no crachá. É opcional: sem a autorização ele(a) participa normalmente, só sem foto.",
-  SAUDE_CRACHA: "Autorizar permite imprimir no crachá a alergia ou a condição de saúde que você escolher informar (o check-in infantil com crachá ainda está em preparo). É opcional."
+  SAUDE_CRACHA: "Autorizar permite imprimir no crachá do check-in infantil a alergia ou a condição de saúde que você escolher informar, para a equipe da sala saber cuidar. O que você informar fica guardado só enquanto a autorização valer: se você revogar, a informação é apagada. É opcional."
 };
 // cor do selo de cada situação (painel, autorização do responsável, comunicação à Diretoria); código que não está aqui cai no cinza
 const MNR_CLASSE_SELO = {
@@ -702,6 +702,7 @@ async function mnrCarregarPainelAcao() {
     porCongregacao: Array.isArray(data.porCongregacao) ? data.porCongregacao : [],
     voluntarios: Array.isArray(data.voluntarios) ? data.voluntarios : [],
     equipesSemMarca: Array.isArray(data.equipesSemMarca) ? data.equipesSemMarca : [],
+    turmasSemMarca: Array.isArray(data.turmasSemMarca) ? data.turmasSemMarca : [],
     campoInteiro: escolha === "TODAS"
   };
   if (aviso) { aviso.textContent = ""; aviso.className = "subtitle"; }
@@ -722,7 +723,11 @@ function mnrRenderPainel() {
   const semMarca = p.equipesSemMarca.length
     ? `<div class="cnl-incompleto" role="status"><strong>Confira estas equipes:</strong> pelo nome parecem equipes de crianças, mas ainda não têm a marca "contato com menores". Sem a marca, ninguém é conferido para servir nelas. Marque em Habilitação de Voluntários, ao lado de cada equipe.
         <ul class="mnr-motivos">${p.equipesSemMarca.map(e => `<li>${escaparHtmlEbd(e.nome)}${e.congregacaoNome ? ` — ${escaparHtmlEbd(e.congregacaoNome)}` : ""}</li>`).join("")}</ul></div>` : "";
-  if (resumo) resumo.innerHTML = `${semMarca}<div class="mnr-contadores">
+  // v7.10: o mesmo aviso para as turmas da EBD que parecem de crianças e ainda não têm a marca (sem ela, qualquer professor é aceito na turma)
+  const semMarcaTurmas = p.turmasSemMarca.length
+    ? `<div class="cnl-incompleto" role="status"><strong>Confira estas turmas da EBD:</strong> pelo nome parecem turmas de crianças, mas ainda não têm a marca "contato com menores". Sem a marca, qualquer professor é aceito na turma. Marque em EBD, na lista de turmas.
+        <ul class="mnr-motivos">${p.turmasSemMarca.map(t => `<li>${escaparHtmlEbd(t.nome)}${t.congregacaoNome ? ` — ${escaparHtmlEbd(t.congregacaoNome)}` : ""}</li>`).join("")}</ul></div>` : "";
+  if (resumo) resumo.innerHTML = `${semMarca}${semMarcaTurmas}<div class="mnr-contadores">
       ${mnrContador(r.total, "Voluntários com menores", "")}
       ${mnrContador(r.aptos, "Aptos", " mnr-contador-ok")}
       ${mnrContador(r.vencendo, "Vencendo (até 60 dias)", " mnr-contador-alerta")}
@@ -1096,6 +1101,25 @@ function mnrCartaoMeusDados(m) {
       ${itens("Comunicações que você fez à Diretoria", comunicacoes.map(c => `${escaparHtmlEbd(c.tipoRotulo || c.tipo)} · soube em ${mnrData(c.dataCiencia)} · comunicada em ${mnrDataHora(c.declaradaEm)} · ${escaparHtmlEbd(mnrTem(MNR_ROTULO_SITUACAO_AD, c.situacao) ? MNR_ROTULO_SITUACAO_AD[c.situacao] : c.situacao)}${c.decisaoRotulo ? ` (${escaparHtmlEbd(c.decisaoRotulo)}${c.decididaEm ? ` em ${mnrDataHora(c.decididaEm)}` : ""})` : ""}${c.decisaoObservacao ? ` — ${escaparHtmlEbd(c.decisaoObservacao)}` : ""}${c.liberadoEm ? ` · afastamento levantado em ${mnrDataHora(c.liberadoEm)}${c.liberacaoObservacao ? ` — ${escaparHtmlEbd(c.liberacaoObservacao)}` : ""}` : ""}`))}
       ${itens("Consultas ao cadastro nacional", consultas.map(c => `${escaparHtmlEbd(c.fonte)} · ${escaparHtmlEbd(mnrTem(MNR_ROTULO_CADASTRO, c.resultado) ? MNR_ROTULO_CADASTRO[c.resultado] : c.resultado)} · ${mnrDataHora(c.em)}`))}
       ${m.aviso ? `<p class="subtitle">${escaparHtmlEbd(m.aviso)}</p>` : ""}
+    </div>`;
+}
+// v7.10 — Meus Dados: o que o check-in infantil guarda sobre a pessoa (só contagens e datas, nunca o conteúdo): como criança, como quem trouxe ou retirou, como autorizada, e se há dado de saúde.
+function mnrCartaoCheckinMeusDados(c) {
+  if (!c || typeof c !== "object") return "";
+  const crianca = c.comoCrianca && typeof c.comoCrianca === "object" ? c.comoCrianca : {};
+  const pessoa = c.comoQuemTrouxeOuRetirou && typeof c.comoQuemTrouxeOuRetirou === "object" ? c.comoQuemTrouxeOuRetirou : {};
+  const autorizado = c.comoAutorizado && typeof c.comoAutorizado === "object" ? c.comoAutorizado : {};
+  const nCrianca = Number(crianca.registros) || 0, nPessoa = Number(pessoa.registros) || 0, nAutorizado = Number(autorizado.criancas) || 0;
+  if (!nCrianca && !nPessoa && !nAutorizado && !crianca.saudeGuardada) return "";
+  const linha = (rotulo, valor) => `<p class="linha-perfil"><strong>${escaparHtmlEbd(rotulo)}:</strong> ${valor}</p>`;
+  const quando = (v) => (v ? ` (o último em ${mnrDataHora(v)})` : "");
+  return `
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Check-in infantil</h4>
+      ${nCrianca ? linha("Registros em que você é a criança", `${nCrianca}${quando(crianca.ultimo)}`) : ""}
+      ${crianca.saudeGuardada ? linha("Informação de saúde guardada para o crachá", "sim (some se a autorização do responsável for revogada)") : ""}
+      ${nPessoa ? linha("Registros em que você trouxe ou retirou uma criança", `${nPessoa}${quando(pessoa.ultimo)}`) : ""}
+      ${nAutorizado ? linha("Crianças que você está autorizado(a) a retirar", String(nAutorizado)) : ""}
     </div>`;
 }
 function mnrCartaoConsentimentosMeusDados(c) {

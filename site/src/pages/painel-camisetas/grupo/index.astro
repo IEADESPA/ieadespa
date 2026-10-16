@@ -322,8 +322,37 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       </div>
 
       <div data-tab-panel="excluir" hidden>
-        <div style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
-          <p class="text-sm font-semibold text-red-700">Excluir</p>
+        <!-- 16/10/2026 — excluir de verdade os pedidos que ninguém veio buscar (a peça passa para o próximo). Fica AQUI, na aba mais escondida, e não junto dos botões do dia a dia.
+             Só pedido não separado em que ninguém levou nenhuma peça. Lote FECHADO guarda os números congelados: a conta da malharia não muda. Baixa uma cópia antes e dá para desfazer. -->
+        <div class="excluir-bloco" data-excluir-pedidos>
+          <p class="text-sm font-semibold text-red-700">Excluir os pedidos que ninguém veio buscar</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Apaga de vez os pedidos <strong>não separados</strong> em que <strong>ninguém levou nenhuma peça</strong>, para a peça passar para o próximo.
+            Os separados, as vendas avulsas e quem já levou alguma peça ficam de fora. Nos lotes <strong>fechados</strong> a conta da malharia <strong>não muda</strong> (os números ficaram travados no fechamento);
+            no lote aberto a quantidade a encomendar diminui. Antes de apagar, o navegador baixa uma cópia, e logo depois dá para desfazer.
+          </p>
+          <div class="mt-3 flex flex-wrap items-end gap-3">
+            <label class="text-sm">Lote<br /><select class="field" data-excluir-lote-filtro aria-label="Lote"></select></label>
+            <label class="text-sm">Tamanho<br /><select class="field" data-excluir-tamanho aria-label="Tamanho"></select></label>
+            <label class="text-sm">Modelo<br /><select class="field" data-excluir-modelo aria-label="Modelo"></select></label>
+            <label class="text-sm">Só os primeiros<br /><input type="number" min="1" inputmode="numeric" class="field" style="width:7rem" placeholder="todos" data-excluir-qtd aria-label="Só os primeiros quantos pedidos (vazio = todos)" /></label>
+            <button type="button" class="btn btn-outline" data-excluir-atualizar>Atualizar a lista</button>
+          </div>
+          <p class="mt-3 text-sm font-semibold" data-excluir-resumo aria-live="polite">Carregando os pedidos…</p>
+          <p class="mt-1 text-xs text-muted-foreground" data-excluir-fora></p>
+          <details class="mt-2">
+            <summary class="text-sm font-semibold" style="cursor:pointer">Ver os pedidos que seriam excluídos</summary>
+            <ol class="mt-2 text-sm excluir-lista" data-excluir-lista></ol>
+          </details>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" class="btn btn-outline excluir-perigo" data-excluir-executar disabled>Excluir os pedidos (0)</button>
+            <button type="button" class="btn btn-outline" data-excluir-restaurar hidden>Desfazer a exclusão</button>
+          </div>
+          <p class="mt-2 text-sm" data-excluir-pedidos-status role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="mt-6" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <p class="text-sm font-semibold text-red-700">Excluir a campanha inteira</p>
           <p class="mt-1 text-sm text-muted-foreground">Remove esta camiseta, seus lotes de compra e todos os pedidos ligados a ela. Não pode ser desfeito.</p>
           <button type="button" class="btn btn-outline mt-3" data-excluir-lote>Excluir</button>
           <p class="mt-2 text-sm" data-excluir-status role="status" aria-live="polite"></p>
@@ -339,6 +368,8 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { graficoBarrasSvg, desenharGraficoBarrasPDF, type ContagemOpcao } from "@/lib/graficos";
+    import { elegiveisParaExcluir, filtrarAlvo, limiteDaExclusao, descreverEscolha, levouAlgumaPeca, resumoDaExclusao, type CopiaDaExclusao, type PedidoParaExcluir, type LoteParaExcluir } from "@/lib/exclusaoEmMassa";
+    import { excluirPedidos, desfazerExclusao, type AmbienteExclusao } from "@/lib/exclusaoEmMassaAcao";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -1189,12 +1220,170 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
           if (excluirStatus) excluirStatus.textContent = "Não foi possível excluir agora.";
         }
       });
+
+      // --- aba Excluir: os pedidos que ninguém veio buscar (16/10/2026) ---
+      type PedidoLista = PedidoParaExcluir & { nome: string };
+      let pedidosCarregados: PedidoLista[] = [];
+      let lotesDaExclusao: (LoteParaExcluir & { numero: number })[] = [];
+      let ultimaCopia: CopiaDaExclusao | null = null;
+      let ocupado = false;
+      const exQuery = <T extends HTMLElement>(s: string) => document.querySelector<T>(s);
+      const exStatus = (texto: string) => { const el = exQuery("[data-excluir-pedidos-status]"); if (el) el.textContent = texto; };
+
+      const ambienteDaExclusao: AmbienteExclusao = {
+        api, directusUrl, token: () => token,
+        confirmar: (texto) => confirm(texto), perguntar: (texto) => prompt(texto), status: exStatus,
+        baixar: (nome, conteudo) => {
+          const url = URL.createObjectURL(new Blob([conteudo], { type: "application/json" }));
+          const a = document.createElement("a");
+          a.href = url; a.download = nome;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        },
+      };
+
+      async function carregarParaExcluir(limparMensagem = true) {
+        if (limparMensagem) exStatus("");
+        const resumo = exQuery("[data-excluir-resumo]");
+        if (resumo) resumo.textContent = "Carregando os pedidos…";
+        try {
+          const [rp, rl] = await Promise.all([
+            api(`${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,nome,avulso,separado,lote,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&sort=id&limit=-1`, { headers: { Authorization: `Bearer ${token}` } }),
+            api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=numero&limit=-1&fields=id,numero,status,total_vendido`, { headers: { Authorization: `Bearer ${token}` } }),
+          ]);
+          if (!rp.ok || !rl.ok) throw new Error("leitura");
+          pedidosCarregados = ((await rp.json()).data ?? []).map((p: PedidoLista) => ({ ...p, itens: p.itens ?? [] }));
+          lotesDaExclusao = (await rl.json()).data ?? [];
+        } catch {
+          if (resumo) resumo.textContent = "Não consegui carregar os pedidos agora. Use “Atualizar a lista”.";
+          pedidosCarregados = [];
+        }
+        montarOpcoesDaExclusao();
+        renderizarExclusao();
+      }
+
+      function opcoesDe(sel: HTMLSelectElement | null, rotuloTodos: string, valores: { valor: string; rotulo: string }[]) {
+        if (!sel) return;
+        const atual = sel.value;
+        sel.innerHTML = `<option value="">${rotuloTodos}</option>` + valores.map((v) => `<option value="${escaparHtmlAtributo(v.valor)}">${escaparHtmlAtributo(v.rotulo)}</option>`).join("");
+        if (valores.some((v) => v.valor === atual)) sel.value = atual;
+      }
+      function escaparHtmlAtributo(s: string) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c); }
+
+      function montarOpcoesDaExclusao() {
+        const elegiveis = elegiveisParaExcluir(pedidosCarregados);
+        opcoesDe(exQuery<HTMLSelectElement>("[data-excluir-lote-filtro]"), "Todos os lotes", lotesDaExclusao.map((l) => ({ valor: String(l.id), rotulo: `Lote ${l.numero} (${l.status === "aberto" ? "aberto" : "fechado"})` })));
+        const tamanhos = [...new Set(elegiveis.flatMap((p) => p.itens.map((i) => String(i.tamanho ?? "")).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+        const modelos = [...new Set(elegiveis.flatMap((p) => p.itens.map((i) => String(i.modelo ?? "")).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+        opcoesDe(exQuery<HTMLSelectElement>("[data-excluir-tamanho]"), "Todos os tamanhos", tamanhos.map((v) => ({ valor: v, rotulo: v })));
+        opcoesDe(exQuery<HTMLSelectElement>("[data-excluir-modelo]"), "Todos os modelos", modelos.map((v) => ({ valor: v, rotulo: v })));
+      }
+
+      /** O que a pessoa escolheu agora e o que isso alcança (já com o "só os primeiros N"); `primeiros` é null quando o campo está em branco. */
+      function alvoDaExclusao() {
+        const sel = (s: string) => exQuery<HTMLSelectElement>(s)?.value ?? "";
+        const escolha = { loteId: sel("[data-excluir-lote-filtro]"), tamanho: sel("[data-excluir-tamanho]"), modelo: sel("[data-excluir-modelo]") };
+        const todos = filtrarAlvo(elegiveisParaExcluir(pedidosCarregados), escolha);
+        const texto = exQuery<HTMLInputElement>("[data-excluir-qtd]")?.value ?? "";
+        const limite = limiteDaExclusao(texto, todos.length);
+        const primeiros = texto.trim() === "" ? null : limite;
+        return { escolha, todos, limite, primeiros, alvo: limite === null ? [] : todos.slice(0, limite) };
+      }
+
+      function renderizarExclusao() {
+        const resumoEl = exQuery("[data-excluir-resumo]");
+        const foraEl = exQuery("[data-excluir-fora]");
+        const lista = exQuery("[data-excluir-lista]");
+        const botao = exQuery<HTMLButtonElement>("[data-excluir-executar]");
+        const { alvo, limite } = alvoDaExclusao();
+        const r = resumoDaExclusao(alvo, lotesDaExclusao);
+        if (resumoEl) {
+          resumoEl.textContent = limite === null
+            ? "Escreva só o número de pedidos (ou deixe em branco para todos)."
+            : alvo.length === 0
+              ? "Nenhum pedido que ninguém veio buscar com essa escolha."
+              : `${alvo.length} pedido(s) que ninguém veio buscar (${r.pecas} peça(s))${r.emLoteTravado.pedidos ? ` · ${r.emLoteTravado.pedidos} em lote fechado (conta da malharia não muda)` : ""}${r.emLoteAoVivo.pedidos ? ` · ⚠ ${r.emLoteAoVivo.pedidos} em lote aberto ou sem lote (a quantidade a encomendar diminui)` : ""}.`;
+        }
+        const separados = pedidosCarregados.filter((p) => !p.avulso && p.separado).length;
+        const avulsos = pedidosCarregados.filter((p) => p.avulso).length;
+        const comRetirada = pedidosCarregados.filter((p) => !p.avulso && !p.separado && levouAlgumaPeca(p)).length;
+        if (foraEl) foraEl.textContent = `Ficam de fora: ${separados} separado(s), ${avulsos} venda(s) avulsa(s) e ${comRetirada} que já levaram alguma peça.`;
+        if (lista) {
+          const mostrados = alvo.slice(0, 300) as PedidoLista[];
+          lista.innerHTML = "";
+          for (const p of mostrados) {
+            const li = document.createElement("li");
+            const pecas = p.itens.map((i) => `${i.quantidade}× ${[i.tamanho, i.modelo].filter(Boolean).join(" ")}`).join(", ") || "sem itens";
+            li.textContent = `#${p.id} — ${p.nome} — ${pecas}`;
+            lista.appendChild(li);
+          }
+          if (alvo.length > mostrados.length) { const li = document.createElement("li"); li.textContent = `… e mais ${alvo.length - mostrados.length}`; lista.appendChild(li); }
+        }
+        if (botao) { botao.disabled = ocupado || alvo.length === 0; botao.textContent = `Excluir os pedidos (${alvo.length})`; }
+        const restaurar = exQuery<HTMLButtonElement>("[data-excluir-restaurar]");
+        if (restaurar) {
+          restaurar.hidden = !ultimaCopia;
+          restaurar.disabled = ocupado;
+          if (ultimaCopia) restaurar.textContent = `Desfazer a exclusão de ${ultimaCopia.pedidos.length} pedido(s)`;
+        }
+      }
+
+      function travarExclusao(travar: boolean) {
+        ocupado = travar;
+        exQuery("[data-excluir-atualizar]")?.toggleAttribute("disabled", travar);
+        renderizarExclusao();
+      }
+
+      for (const s of ["[data-excluir-lote-filtro]", "[data-excluir-tamanho]", "[data-excluir-modelo]"]) exQuery(s)?.addEventListener("change", renderizarExclusao);
+      exQuery("[data-excluir-qtd]")?.addEventListener("input", renderizarExclusao);
+      exQuery("[data-excluir-atualizar]")?.addEventListener("click", () => { void carregarParaExcluir(); });
+      document.querySelector('[data-tab="excluir"]')?.addEventListener("click", () => { void carregarParaExcluir(); });
+      // as abas aparecem antes de o consolidado terminar de carregar: quem já abriu a aba Excluir nesse intervalo não clicou "depois" do ouvinte, então carrega agora
+      if (document.querySelector('[data-tab-panel="excluir"]')?.hasAttribute("hidden") === false) void carregarParaExcluir();
+
+      exQuery("[data-excluir-executar]")?.addEventListener("click", async () => {
+        if (ocupado) return;
+        const { escolha, alvo, primeiros } = alvoDaExclusao();
+        if (!alvo.length) return;
+        const rotuloLote = escolha.loteId ? (exQuery<HTMLSelectElement>("[data-excluir-lote-filtro]")?.selectedOptions[0]?.textContent ?? "") : "";
+        const filtros = descreverEscolha(rotuloLote, escolha.tamanho, escolha.modelo, primeiros);
+        const semFiltro = !escolha.loteId && !escolha.tamanho && !escolha.modelo && primeiros === null;
+        travarExclusao(true);
+        try {
+          const resultado = await excluirPedidos(ambienteDaExclusao, { grupo: { id: grupo.id, nome: grupo.nome }, alvo, lotes: lotesDaExclusao, filtros, semFiltro });
+          if (resultado && resultado.apagados.length) {
+            const apagados = new Set(resultado.apagados);
+            pedidosCarregados = pedidosCarregados.filter((p) => !apagados.has(p.id));
+            ultimaCopia = resultado.copia;
+          }
+        } finally {
+          travarExclusao(false);
+        }
+        void carregarConsolidado();
+      });
+
+      exQuery("[data-excluir-restaurar]")?.addEventListener("click", async () => {
+        if (ocupado || !ultimaCopia) return;
+        travarExclusao(true);
+        try {
+          const r = await desfazerExclusao(ambienteDaExclusao, ultimaCopia);
+          if (r.ok) ultimaCopia = null;
+        } finally {
+          travarExclusao(false);
+        }
+        await carregarParaExcluir(false);
+        void carregarConsolidado();
+      });
     }
 
     iniciar();
   </script>
 
   <style>
+    .excluir-bloco { border: 1px solid #a33a2a; border-radius: var(--radius-md); padding: 1rem 1.25rem; background: rgb(163 58 42 / 6%); }
+    .excluir-lista { max-height: 18rem; overflow: auto; padding-left: 1.5rem; list-style: decimal; }
+    .excluir-perigo:not(:disabled) { border-color: #a33a2a; color: #a33a2a; font-weight: 600; }
+    .excluir-perigo:not(:disabled):hover { background: rgb(163 58 42 / 10%); }
     .pergunta-card-camiseta {
       border: 1px solid var(--border);
       border-radius: var(--radius-md);

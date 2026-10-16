@@ -1,16 +1,22 @@
-// Testes de UNIDADE da exclusão em massa dos pedidos de camiseta NÃO separados (src/lib/exclusaoEmMassa.ts): o que entra, o que NUNCA entra, o que a confirmação promete
-// sobre a conta da malharia (lote fechado = números travados), a cópia que se baixa antes de apagar e a ordem da restauração. Só funções puras: sem rede nem Directus.
+// Testes de UNIDADE da exclusão em massa dos pedidos de camiseta NÃO separados (src/lib/exclusaoEmMassa.ts e exclusaoEmMassaAcao.ts): o que entra, o que NUNCA entra, o que a
+// confirmação promete sobre a conta da malharia (lote fechado = números travados), a cópia que se baixa antes de apagar, a ordem da restauração e o fluxo inteiro (confirmar,
+// digitar a palavra, reler, baixar a cópia, apagar em lotes, desfazer) contra um Directus de MENTIRA em memória. Sem rede.
 // Como rodar (de dentro de site/):  node scripts/testes/exclusao-unidade.cjs
 const fs = require("fs");
 const path = require("path");
 const Module = require("module");
 const ts = require("typescript");
 
-const arquivo = path.join(__dirname, "../../src/lib/exclusaoEmMassa.ts");
-const js = ts.transpileModule(fs.readFileSync(arquivo, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-const mod = new Module("exclusaoEmMassa.js");
-mod._compile(js, "exclusaoEmMassa.js");
-const X = mod.exports;
+function carregar(nome, dependencias = {}) {
+  const arquivo = path.join(__dirname, `../../src/lib/${nome}.ts`);
+  const js = ts.transpileModule(fs.readFileSync(arquivo, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const mod = new Module(`${nome}.js`);
+  mod.require = (req) => dependencias[req] ?? require(req);
+  mod._compile(js, `${nome}.js`);
+  return mod.exports;
+}
+const X = carregar("exclusaoEmMassa");
+const A = carregar("exclusaoEmMassaAcao", { "./exclusaoEmMassa": X });
 
 let falhas = 0;
 let total = 0;
@@ -29,9 +35,6 @@ const lotes = [
   { id: 13, numero: 2, status: "aberto", total_vendido: null },
   { id: 14, numero: 3, status: "fechado", total_vendido: null },     // fechado sem números travados (legado): calcula ao vivo
 ];
-// o que a tela chama de "não separado" (a mesma regra de pedidos.astro: não avulso, sem reserva, ainda falta retirar)
-const tudoRetirado = (p) => p.itens.length > 0 && p.itens.every((i) => i.quantidade_retirada >= i.quantidade);
-const estaNaoSeparado = (p) => !p.avulso && !p.separado && !tudoRetirado(p);
 
 console.log("== quem pode ser excluído ==");
 const cenario = [
@@ -43,19 +46,20 @@ const cenario = [
   ped(15, { itens: [item("P", 1), item("G", 1, 1)] }),           // levou uma peça de um dos itens
   ped(16, { itens: [] }),                                        // sem itens (pedido vazio): nada a perder
 ];
-const el = X.elegiveisParaExcluir(cenario, estaNaoSeparado);
+const el = X.elegiveisParaExcluir(cenario);
 eq(el.map((p) => p.id), [10, 16, 20, 30, 40], "entram só os não separados, não avulsos e sem nenhuma peça levada, do mais antigo ao mais novo");
 verdade(!el.some((p) => [11, 12, 13, 14, 15].includes(p.id)), "separado, avulso, quem levou alguma peça e quem levou tudo ficam de fora");
 eq(X.levouAlgumaPeca(ped(1, { itens: [item("M", 3, 0), item("G", 1, 1)] })), true, "levouAlgumaPeca: uma peça de qualquer item basta");
 eq(X.levouAlgumaPeca(ped(1)), false, "levouAlgumaPeca: nenhuma");
 eq(X.levouAlgumaPeca({ itens: undefined }), false, "levouAlgumaPeca: sem lista de itens não quebra");
 eq(X.levouAlgumaPeca(ped(1, { itens: [{ quantidade: 1, quantidade_retirada: "1" }] })), true, "levouAlgumaPeca: número escrito como texto vale");
-eq(X.elegiveisParaExcluir([], estaNaoSeparado), [], "lista vazia");
-eq(X.elegiveisParaExcluir([ped(2, { avulso: true })], () => true), [], "mesmo que a tela diga que sim, avulso nunca entra (defesa em dobro)");
-eq(X.elegiveisParaExcluir([ped(2, { separado: true })], () => true), [], "mesmo que a tela diga que sim, separado nunca entra");
-eq(X.elegiveisParaExcluir([ped(2, { itens: [item("M", 1, 1)] })], () => true), [], "mesmo que a tela diga que sim, quem levou peça nunca entra");
+eq(X.elegiveisParaExcluir([]), [], "lista vazia");
+eq(X.elegiveisParaExcluir([ped(2, { avulso: true })]), [], "avulso nunca entra");
+eq(X.elegiveisParaExcluir([ped(2, { separado: true })]), [], "separado nunca entra");
+eq(X.elegiveisParaExcluir([ped(2, { itens: [item("M", 1, 1)] })]), [], "quem levou peça nunca entra");
+eq(X.elegiveisParaExcluir([ped(2, { separado: true, avulso: true, itens: [item("M", 1, 1)] })]), [], "nenhuma das três coisas, nem juntas");
 const ordemOriginal = [ped(3), ped(1), ped(2)];
-X.elegiveisParaExcluir(ordemOriginal, estaNaoSeparado);
+X.elegiveisParaExcluir(ordemOriginal);
 eq(ordemOriginal.map((p) => p.id), [3, 1, 2], "não reordena a lista da tela (trabalha numa cópia)");
 
 console.log("== os primeiros N ==");
@@ -70,7 +74,7 @@ eq(X.limiteDaExclusao(" 7 ", 300), 7, "espaços ao redor são ignorados");
 
 console.log("== lote travado × lote ao vivo ==");
 eq([X.loteTravado(lotes[0]), X.loteTravado(lotes[1]), X.loteTravado(lotes[2]), X.loteTravado(undefined), X.loteTravado(null)], [true, false, false, false, false], "só fechado COM números travados é travado");
-const alvo = X.elegiveisParaExcluir(cenario, estaNaoSeparado);
+const alvo = X.elegiveisParaExcluir(cenario);
 const r = X.resumoDaExclusao(alvo, lotes);
 eq([r.pedidos, r.pecas, r.primeiroId, r.ultimoId], [5, 5, 10, 40], "resumo: 5 pedidos, 5 peças (o de G tem 2; o sem itens tem 0), do #10 ao #40");
 eq(r.emLoteTravado, { pedidos: 3, pecas: 2, lotes: [1] }, "3 pedidos (10, 16 e 30) estão em lote fechado e travado: a conta da malharia não muda");
@@ -142,5 +146,187 @@ for (const ruim of [null, undefined, {}, { versao: 2, pedidos: [], itens: [], re
   verdade(/Arquivo de cópia desconhecido/.test(msg), `recusa cópia de formato estranho: ${JSON.stringify(ruim)}`);
 }
 
-console.log(falhas ? `\n${falhas} FALHA(S) de ${total}` : `\n${total}/${total} verificações ok`);
-process.exitCode = falhas ? 1 : 0;
+console.log("== as escolhas da aba Excluir (lote, tamanho, modelo) ==");
+const base = [
+  ped(1, { lote: 12, itens: [item("M", 1)] }), ped(2, { lote: 12, itens: [item("G", 2)] }), ped(3, { lote: 13, itens: [item("M", 1, 0, "Baby look")] }),
+  ped(4, { lote: null, itens: [item("P", 1), item("G", 1)] }), ped(5, { lote: 12, itens: [] }),
+];
+eq(X.filtrarAlvo(base, {}).map((p) => p.id), [1, 2, 3, 4, 5], "sem escolha: todos");
+eq(X.filtrarAlvo(base, { loteId: "12" }).map((p) => p.id), [1, 2, 5], "lote 12");
+eq(X.filtrarAlvo(base, { loteId: "13" }).map((p) => p.id), [3], "lote 13");
+eq(X.filtrarAlvo(base, { loteId: "999" }).map((p) => p.id), [], "lote que não existe: ninguém");
+eq(X.filtrarAlvo(base, { tamanho: "G" }).map((p) => p.id), [2, 4], "tamanho G: o pedido que tem um item G (inclusive o de dois itens)");
+eq(X.filtrarAlvo(base, { modelo: "Baby look" }).map((p) => p.id), [3], "modelo Baby look");
+eq(X.filtrarAlvo(base, { loteId: "12", tamanho: "G" }).map((p) => p.id), [2], "lote 12 e tamanho G");
+eq(X.filtrarAlvo(base, { loteId: "", tamanho: "", modelo: "" }).length, 5, "escolhas em branco valem 'todos'");
+eq(X.filtrarAlvo([ped(9, { itens: undefined })], { tamanho: "M" }), [], "pedido sem lista de itens não quebra o filtro");
+eq(X.descreverEscolha("", "", "", null), "todos os pedidos que ninguém veio buscar", "descrição sem escolha");
+eq(X.descreverEscolha("Lote 1 (fechado)", "M", "", 50), "Lote 1 (fechado) · tamanho M · os primeiros 50", "descrição com lote, tamanho e primeiros");
+eq(X.descreverEscolha("", "", "Baby look", null), "modelo Baby look", "descrição só com o modelo");
+
+async function fluxoCompleto() {
+console.log("== o fluxo inteiro contra um Directus de mentira ==");
+// um Directus em memória: pedidos com itens e respostas, cascata no DELETE, POST com id (e recusa de id repetido), falhas combinadas
+function directusFalso({ pedidos, respostas = [], falharLeitura = false, falharDeleteNoLote = 0, falharPostEm = null }) {
+  const guarda = new Map(pedidos.map((p) => [p.id, JSON.parse(JSON.stringify(p))]));
+  const resp = respostas.map((r) => ({ ...r }));
+  const itens = new Map();
+  for (const p of guarda.values()) for (const i of p.itens ?? []) itens.set(i.id, { ...i, pedido: p.id });
+  const log = [];
+  let deletes = 0;
+  const resposta = (status, data) => ({ ok: status >= 200 && status < 300, status, json: async () => ({ data }) });
+  const ids = (url, campo) => decodeURIComponent(url).match(new RegExp("filter\\[" + campo + "\\]\\[_in\\]=([0-9,]+)"))?.[1].split(",").map(Number) ?? [];
+  const api = async (url, init = {}) => {
+    const metodo = init.method ?? "GET";
+    const auth = (init.headers ?? {}).Authorization;
+    log.push({ metodo, url: url.replace(/^https?:\/\/[^/]+/, ""), auth });
+    if (metodo === "GET" && url.includes("/items/camiseta_pedidos?")) {
+      if (falharLeitura) return resposta(500);
+      return resposta(200, ids(url, "id").filter((id) => guarda.has(id)).map((id) => ({ ...guarda.get(id), itens: [...itens.values()].filter((i) => i.pedido === id), respostas: resp.filter((r) => r.pedido === id).map((r) => r.id) })));
+    }
+    if (metodo === "GET" && url.includes("/items/respostas_pedido_camiseta?")) return falharLeitura ? resposta(500) : resposta(200, resp.filter((r) => ids(url, "pedido").includes(r.pedido)));
+    if (metodo === "DELETE" && url.endsWith("/items/camiseta_pedidos")) {
+      deletes++;
+      if (falharDeleteNoLote && deletes === falharDeleteNoLote) return resposta(500);
+      for (const id of JSON.parse(init.body)) { guarda.delete(id); for (const [k, i] of itens) if (i.pedido === id) itens.delete(k); for (let n = resp.length - 1; n >= 0; n--) if (resp[n].pedido === id) resp.splice(n, 1); }
+      return resposta(204);
+    }
+    if (metodo === "POST") {
+      const colecao = url.split("/items/")[1];
+      if (falharPostEm === colecao) return resposta(500);
+      const lista = JSON.parse(init.body);
+      for (const x of lista) {
+        if (colecao === "camiseta_pedidos") { if (guarda.has(x.id)) return resposta(400); guarda.set(x.id, { ...x, itens: undefined }); }
+        else if (colecao === "camiseta_itens_pedido") { if (!guarda.has(x.pedido)) return resposta(400); itens.set(x.id, { ...x }); }
+        else resp.push({ ...x });
+      }
+      return resposta(200, lista);
+    }
+    return resposta(404);
+  };
+  return { api, log, guarda, itens, resp, deletes: () => deletes };
+}
+const pedidoDoBanco = (id, extra = {}) => ({ id, grupo: 5, nome: `Pessoa ${id}`, email: `p${id}@x.org`, telefone_chave: `ch${id}`, telefone_cifrado: `ci${id}`, avulso: false, separado: false, lote: 12, valor_pago: "0.00", itens: [{ id: id * 10, tamanho: "M", modelo: "Unico", quantidade: 1, quantidade_retirada: 0 }], ...extra });
+const ambiente = (d, { conf = true, palavra = "EXCLUIR", token = null } = {}) => {
+  const eventos = [], avisos = [], baixados = [];
+  let n = 0;
+  return {
+    eventos, avisos, baixados,
+    amb: {
+      api: async (...a) => { eventos.push(a[1]?.method ?? "GET"); return d.api(...a); },
+      directusUrl: "https://dx.exemplo", token: token ?? (() => `token-${++n}`),
+      confirmar: (texto) => { eventos.push("confirmar"); avisos.push(texto); return conf; },
+      perguntar: (texto) => { eventos.push("perguntar"); avisos.push(texto); return palavra; },
+      status: (texto) => avisos.push("STATUS: " + texto),
+      baixar: (nome, conteudo) => { eventos.push("baixar"); baixados.push({ nome, conteudo }); },
+      agora: () => new Date(2026, 9, 16, 9, 5, 7),
+    },
+  };
+};
+const alvoDe = (...ids) => ids.map((id) => ({ id, avulso: false, separado: false, lote: 12, itens: [item("M", 1)] }));
+const lotesF = [{ id: 12, numero: 1, status: "fechado", total_vendido: 100 }, { id: 13, numero: 2, status: "aberto", total_vendido: null }];
+const grupoF = { id: 5, nome: "Marcha para Jesus" };
+const executar = (amb, alvo, extra = {}) => A.excluirPedidos(amb, { grupo: grupoF, alvo, lotes: lotesF, filtros: "Lote 1 (fechado)", semFiltro: false, ...extra });
+
+{ // 1) caminho feliz
+  const d = directusFalso({ pedidos: [pedidoDoBanco(1), pedidoDoBanco(2), pedidoDoBanco(3)], respostas: [{ id: 900, pedido: 1, pergunta: 1, valor: "Central" }] });
+  const { amb, eventos, baixados, avisos } = ambiente(d);
+  const r = await executar(amb, alvoDe(1, 2));
+  eq(r.apagados, [1, 2], "feliz: apagou os 2 pedidos pedidos");
+  eq([...d.guarda.keys()], [3], "feliz: no 'banco' só sobrou o #3 (os itens e a resposta do #1 foram em cascata)");
+  eq([d.itens.size, d.resp.length], [1, 0], "feliz: itens e respostas dos apagados foram junto");
+  eq(eventos.filter((e) => ["confirmar", "perguntar", "baixar"].includes(e)), ["confirmar", "perguntar", "baixar"], "feliz: a ordem é confirmar, digitar a palavra e SÓ ENTÃO baixar a cópia");
+  verdade(eventos.indexOf("baixar") < eventos.indexOf("DELETE"), "feliz: a cópia é baixada ANTES do primeiro DELETE");
+  eq(baixados.length, 1, "feliz: UMA cópia");
+  eq(baixados[0].nome, "pedidos-excluidos-marcha-para-jesus-20261016-090507.json", "feliz: nome do arquivo com a data e a hora");
+  const copia = JSON.parse(baixados[0].conteudo);
+  eq([copia.pedidos.map((p) => p.id), copia.itens.map((i) => [i.id, i.pedido]), copia.respostas.map((x) => x.id)], [[1, 2], [[10, 1], [20, 2]], [900]], "feliz: a cópia leva pedidos, itens e respostas com os mesmos números");
+  verdade(copia.pedidos.every((p) => p.telefone_cifrado && p.telefone_chave && p.email), "feliz: e todas as colunas (telefone cifrado, chave, e-mail)");
+  eq(r.copia.pedidos.length, 2, "feliz: a cópia devolvida para o Desfazer é a do que foi apagado");
+  verdade(avisos.some((a) => /^STATUS: ✅ Excluídos 2 pedidos\. Cópia baixada: pedidos-excluidos-marcha-para-jesus/.test(a)), "feliz: mensagem de sucesso");
+  verdade(d.log.every((x) => /^Bearer token-\d+$/.test(x.auth)), "feliz: toda chamada leva o token de AGORA (a sessão se renova)", d.log.map((x) => x.auth));
+  verdade(new Set(d.log.map((x) => x.auth)).size === d.log.length, "feliz: e cada chamada pediu o token de novo (não guarda um velho)");
+  verdade(/EXCLUIR 2 pedidos/.test(avisos[0]) && /Filtros: Lote 1 \(fechado\)\./.test(avisos[0]) && /EXCLUIR:/.test(avisos[1]), "feliz: os dois avisos mostrados à pessoa");
+  // 8) desfazer
+  const a2 = ambiente(d);
+  const v = await A.desfazerExclusao(a2.amb, r.copia);
+  eq(v, { ok: true, pedidosVoltaram: 2 }, "desfazer: voltaram 2 pedidos");
+  eq([...d.guarda.keys()].sort((a, b) => a - b), [1, 2, 3], "desfazer: os mesmos números de volta");
+  eq([d.itens.size, d.resp.length, [...d.itens.keys()].sort((a, b) => a - b)], [3, 1, [10, 20, 30]], "desfazer: itens e resposta de volta, com os mesmos números");
+  const ordem = d.log.filter((x) => x.metodo === "POST").map((x) => x.url);
+  eq(ordem, ["/items/camiseta_pedidos", "/items/camiseta_itens_pedido", "/items/respostas_pedido_camiseta"], "desfazer: primeiro os pedidos, depois itens e respostas");
+  const de2 = ambiente(d, { conf: false });
+  eq(await A.desfazerExclusao(de2.amb, r.copia), { ok: false, pedidosVoltaram: 0 }, "desfazer: se a pessoa não confirma, nada é feito");
+  eq(de2.eventos.filter((e) => e === "POST").length, 0, "desfazer sem confirmar: nenhuma gravação");
+}
+{ // 2) cancelar no primeiro aviso, palavra errada ou cancelada no segundo
+  const d = directusFalso({ pedidos: [pedidoDoBanco(1)] });
+  let e = ambiente(d, { conf: false });
+  eq(await executar(e.amb, alvoDe(1)), null, "cancelar o aviso: devolve null");
+  eq(e.eventos, ["confirmar"], "cancelar o aviso: só perguntou; nenhuma chamada ao Directus");
+  for (const palavra of ["separar", "", "excluir tudo", null]) {
+    e = ambiente(d, { palavra });
+    eq(await executar(e.amb, alvoDe(1)), null, `palavra ${JSON.stringify(palavra)}: devolve null`);
+    verdade(!e.eventos.some((x) => ["GET", "DELETE", "baixar"].includes(x)) && e.avisos.some((a) => /Cancelado: nada foi apagado/.test(a)), `palavra ${JSON.stringify(palavra)}: nada lido, nada baixado, nada apagado`);
+  }
+  eq([...d.guarda.keys()], [1], "o pedido continua no 'banco'");
+  e = ambiente(d);
+  eq(await executar(e.amb, []), null, "lista vazia: nem pergunta");
+  eq(e.eventos, [], "lista vazia: nenhum evento");
+  e = ambiente(d, { palavra: "excluir" });
+  verdade((await executar(e.amb, alvoDe(1), { semFiltro: true })) !== null && /NENHUM filtro está ligado/.test(e.avisos[1]), "sem filtro nenhum a pergunta da palavra avisa; e a palavra vale em minúscula");
+}
+{ // 3) alguém mudou algo no meio
+  for (const [rotulo, mexe] of [["separou um", (d) => { d.guarda.get(2).separado = true; }], ["deu retirada em um", (d) => { d.itens.get(10).quantidade_retirada = 1; }], ["apagou um", (d) => { d.guarda.delete(1); }], ["virou avulso", (d) => { d.guarda.get(2).avulso = true; }]]) {
+    const d = directusFalso({ pedidos: [pedidoDoBanco(1), pedidoDoBanco(2)] });
+    mexe(d);
+    const e = ambiente(d);
+    eq(await executar(e.amb, alvoDe(1, 2)), null, `alguém ${rotulo}: devolve null`);
+    verdade(!e.eventos.includes("baixar") && d.deletes() === 0 && e.avisos.some((a) => /Alguém mudou esses pedidos.*NADA foi apagado/.test(a)), `alguém ${rotulo}: não baixa, não apaga e avisa`);
+  }
+}
+{ // 4) a leitura falha
+  const d = directusFalso({ pedidos: [pedidoDoBanco(1)], falharLeitura: true });
+  const e = ambiente(d);
+  eq(await executar(e.amb, alvoDe(1)), null, "leitura falhou: devolve null");
+  verdade(!e.eventos.includes("baixar") && d.deletes() === 0 && e.avisos.some((a) => /Não consegui ler os pedidos agora: NADA foi apagado/.test(a)), "leitura falhou: não baixa, não apaga e avisa");
+}
+{ // 5) 250 pedidos = lotes de 100; o segundo lote falha
+  const grandes = Array.from({ length: 250 }, (_, i) => pedidoDoBanco(i + 1));
+  const d = directusFalso({ pedidos: grandes, falharDeleteNoLote: 2 });
+  const e = ambiente(d);
+  const r = await executar(e.amb, alvoDe(...grandes.map((p) => p.id)));
+  eq(r.apagados.length, 100, "250 pedidos, o 2º lote falha: só os 100 primeiros foram apagados");
+  eq(d.guarda.size, 150, "no 'banco' sobraram 150");
+  eq(e.baixados.length, 1, "e a cópia baixada ANTES é uma só (de todos os 250)");
+  eq(JSON.parse(e.baixados[0].conteudo).pedidos.length, 250, "a cópia baixada leva os 250");
+  eq(r.copia.pedidos.length, 100, "a cópia para o Desfazer leva só os 100 apagados");
+  eq([r.copia.itens.length, r.copia.pedidos[0].id, r.copia.pedidos[99].id], [100, 1, 100], "e os itens dos 100, do #1 ao #100");
+  verdade(e.avisos.some((a) => /Só 100 de 250 foram excluídos.*a cópia baixada: pedidos-excluidos/i.test(a)), "a mensagem diz quantos foram e onde está a cópia");
+  eq(d.log.filter((x) => x.metodo === "GET" && x.url.includes("camiseta_pedidos?")).length, 3, "a leitura também é em lotes de 100 (3 chamadas)");
+  const d2 = directusFalso({ pedidos: Array.from({ length: 250 }, (_, i) => pedidoDoBanco(i + 1)) });
+  const ok = await executar(ambiente(d2).amb, alvoDe(...Array.from({ length: 250 }, (_, i) => i + 1)));
+  eq([ok.apagados.length, d2.guarda.size, d2.deletes()], [250, 0, 3], "250 sem falha: 3 lotes de DELETE (100, 100, 50) e nada sobra");
+}
+{ // 6) desfazer com falha no meio
+  const d = directusFalso({ pedidos: [pedidoDoBanco(1), pedidoDoBanco(2)], respostas: [{ id: 900, pedido: 1, pergunta: 1, valor: "x" }] });
+  const e1 = ambiente(d);
+  const r = await executar(e1.amb, alvoDe(1, 2));
+  const falha = directusFalso({ pedidos: [], falharPostEm: "camiseta_itens_pedido" });
+  const e2 = ambiente(falha);
+  const v = await A.desfazerExclusao(e2.amb, r.copia);
+  eq(v.ok, false, "desfazer com falha nos itens: devolve ok:false");
+  eq(v.pedidosVoltaram, 2, "…mas conta os pedidos que já voltaram");
+  verdade(e2.avisos.some((a) => /NÃO tente de novo por aqui.*duplicar.*arquivo de cópia/.test(a)), "…e manda usar o arquivo de cópia em vez de tentar de novo (duplicaria)");
+  const falhaPedidos = directusFalso({ pedidos: [], falharPostEm: "camiseta_pedidos" });
+  const e3 = ambiente(falhaPedidos);
+  eq((await A.desfazerExclusao(e3.amb, r.copia)).pedidosVoltaram, 0, "falha já nos pedidos: nenhum voltou");
+  const e4 = ambiente(directusFalso({ pedidos: [] }));
+  let erro = ""; try { const x = await A.desfazerExclusao(e4.amb, { versao: 9 }); erro = JSON.stringify(x); } catch (e) { erro = e.message; }
+  verdade(/desconhecido|ok":false/.test(erro), "cópia de formato estranho no Desfazer: não restaura");
+}
+}
+fluxoCompleto().then(() => {
+  console.log(falhas ? `\n${falhas} FALHA(S) de ${total}` : `\n${total}/${total} verificações ok`);
+  process.exitCode = falhas ? 1 : 0;
+});

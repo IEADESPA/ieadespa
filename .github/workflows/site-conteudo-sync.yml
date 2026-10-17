@@ -5,7 +5,7 @@ name: Site - remontar quando o Directus mudar
 # O site é estático: conteúdo editado no Directus só aparece quando o site é remontado.
 # O Flow do Directus "Publicar site (avisar GitHub)" fazia isso chamando o GitHub com um
 # token pessoal — que venceu em silêncio (401; última remontagem automática em 01/10).
-# Este fluxo dispensa token pessoal: a cada 15 minutos calcula a "versão" do conteúdo
+# Este fluxo dispensa token pessoal: a cada poucos minutos (ver "Frequência" abaixo) calcula a "versão" do conteúdo
 # (site/scripts/conteudo-versao.mjs: hash do conteúdo inteiro das 20 coleções que o site
 # lê, com o segredo DIRECTUS_ADMIN_TOKEN já usado pelos avisos) e, se mudou desde a última
 # remontagem, manda montar o site e disparar os avisos de conteúdo novo — tudo com o
@@ -19,13 +19,19 @@ name: Site - remontar quando o Directus mudar
 # conteudo-versao-<hash> (o GITHUB_TOKEN não pode gravar variáveis do repositório —
 # "Resource not accessible by integration" —, mas o cache ele sempre pode usar). Cache
 # existe para essa versão = já remontado. O cache some depois de 7 dias sem uso; como é
-# consultado a cada 15 min, só some se o conteúdo ficar 7 dias parado — e aí a única
+# consultado a cada poucos minutos, só some se o conteúdo ficar 7 dias parado — e aí a única
 # consequência é uma remontagem a mais. Build já na fila/em andamento: não dispara outro
 # nem grava a memória — o próximo tique confere de novo.
 
+# Frequência (17/10/2026): o GitHub atrasa e derruba parte dos disparos agendados. Medido em 12 h com "*/15": o intervalo REAL entre
+# execuções foi de 10 a 54 minutos (mediana 19) — a Marcha foi ativada e a página só apareceu mais de 20 minutos depois. Com "*/5" a
+# mediana medida em outro fluxo foi 10 min (máx. 40). Por isso dois relógios independentes, defasados, de 5 em 5 minutos (cada linha é
+# um disparo próprio, então a perda de um não deixa o site parado), fora dos minutos redondos, onde o GitHub atrasa mais. Custa pouco:
+# a conferência é uma leitura de ~20 coleções do Directus (~25 s de robô) e, sem mudança, não faz mais nada.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "1-59/5 * * * *"
+    - cron: "3-59/5 * * * *"
   workflow_dispatch: {}
 
 permissions:

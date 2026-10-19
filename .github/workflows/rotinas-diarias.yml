@@ -11,13 +11,19 @@ name: Rotinas diárias (notificações e escalonamento)
 on:
   schedule:
     # 10h00 UTC = 7h00 em Parauapebas/PA (UTC-3, sem horário de verão).
+    #
+    # CUSTO (19/10/2026): cada uma destas rotinas reabre o banco Azure SQL serverless, que só pausa depois de
+    # um tempo SEM uso. Com os três horários separados por 30 min o banco ficava ligado das 7h às ~9h todo dia
+    # (~2 h x R$ 3,6/h = ~R$ 7/dia, ~R$ 220/mês) para umas poucas chamadas de segundos. Agora os três saem
+    # coladinhos (6 min de intervalo: o GitHub já atrasa cada disparo por conta própria, e as chamadas levam
+    # segundos) e o banco pausa 15 min depois da última.
     - cron: "0 10 * * *"
-    # 10h30 UTC = 7h30 — 30min depois de propósito, mesma razão de sempre:
+    # 10h06 UTC = 7h06 — alguns minutos depois de propósito, mesma razão de sempre:
     # não competir pelo mesmo pool de conexão no exato mesmo minuto.
-    - cron: "30 10 * * *"
-    # 11h00 UTC = 8h00 — fechamento trimestral da EBD (v6.8), 30min depois do
+    - cron: "6 10 * * *"
+    # 10h12 UTC = 7h12 — fechamento trimestral da EBD (v6.8), alguns minutos depois do
     # último, pelo mesmo motivo.
-    - cron: "0 11 * * *"
+    - cron: "12 10 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -59,7 +65,7 @@ jobs:
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
 
   fluxos:
-    if: github.event.schedule == '30 10 * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '6 10 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Escalona instâncias de fluxo com SLA vencido (vB.3)
@@ -92,7 +98,7 @@ jobs:
           EOF
 
   ebd-fechamento:
-    if: github.event.schedule == '0 11 * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '12 10 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       # Idempotente: só fecha o que ainda não tem fechamento e nunca refaz o

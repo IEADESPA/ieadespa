@@ -61,7 +61,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
   const chamadas = (env, chave) => env.api.chamadas.filter(c => c.chave === chave);
   const texto = (env, id) => (env.e(id) ? env.e(id).textContent : "");
   const argsDe = (el, tipo = "click") => JSON.parse(el.getAttribute(`data-args-${tipo}`));
-  const visivel = (env, id) => { const el = env.e(id); if (!el) return false; for (let p = el; p && p.nodeType === 1; p = p.parentNode) if (p.style && p.style.display === "none" && !["telaPainel", "cxPainelConteudo"].includes(p.id)) return false; return true; };   // (o painel inteiro nunca é aberto aqui: só conta o que fica DENTRO dele)
+  const visivel = (env, id) => { const el = env.e(id); if (!el) return false; for (let p = el; p && p.nodeType === 1; p = p.parentNode) if (p.style && p.style.display === "none") return false; return true; };
 
   // acessibilidade: todo campo tem rótulo (label for, label em volta ou aria-label); todo botão tem texto
   const controlesSemNome = (env, raiz) => {
@@ -86,7 +86,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     if (raiz) for (const el of raiz.descendentes()) { const id = el.getAttribute("id"); if (!id) continue; if (vistos.has(id)) rep.add(id); vistos.add(id); }
     return [...rep];
   };
-  const clicarEResponder = async (env, el, confirmar) => { env.doc.clicar(el); const m = await env.responderModal(confirmar); await env.ocioso(); return m; };
+  // (o navegador dá o foco ao botão que a pessoa toca: o ambiente simulado só o faz se o teste mandar)
+  const clicarEResponder = async (env, el, confirmar) => { if (el && typeof el.focus === "function") el.focus(); env.doc.clicar(el); const m = await env.responderModal(confirmar); await env.ocioso(); return m; };
   const esperaChegar = async (r) => { for (let i = 0; i < 40 && !r.chegou; i++) await new Promise(x => setImmediate(x)); };
   const nomeDe = (id) => `chkNome${id}`;
 
@@ -129,8 +130,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
   // 0) O CONTRATO: o HTML, o módulo e o servidor falam dos mesmos nomes
   // ============================================================================================================================================
   cenario("Contrato: ids do HTML, ações registradas, ligação com a navegação e campos do servidor", async () => {
-    const html = lerApp("index.html");
-    const modulo = lerApp("modulos/checkin-infantil.js");
+    const ler = montar().env.lerMutado;
+    const html = ler("index.html");
+    const modulo = ler("modulos/checkin-infantil.js");
     const idsDoHtml = new Set([...html.matchAll(/\bid="([^"$]+)"/g)].map(m => m[1]));
     const prefixosDeTemplate = new Set([...modulo.matchAll(/\bid="(chk[A-Za-z0-9]+)(?:\$\{[^}]*\}|[A-Za-z0-9])*"/g)].map(m => m[1]));
     const todos = (id) => idsDoHtml.has(id) || prefixosDeTemplate.has(id) || [...prefixosDeTemplate].some(p => id.startsWith(p));
@@ -158,10 +160,10 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(!!env.g("TITULOS_SUB_MEUPAINEL").checkininfantil && !!env.g("AJUDA_POR_ABA")["meupainel:checkininfantil"] && !!env.g("AJUDA_POR_ABA").checkininfantil, "título e ajuda contextual das duas telas");
     const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
     confere(scripts.includes("modulos/checkin-infantil.js") && scripts.indexOf("modulos/checkin-infantil.js") > scripts.indexOf("script.js") && scripts.indexOf("modulos/checkin-infantil.js") === scripts.indexOf("modulos/catalogos-estrutura.js") + 1, "modulos/checkin-infantil.js entra depois do script.js, na ordem alfabética dos módulos");
-    const sw = lerApp("service-worker.js");
+    const sw = ler("service-worker.js");
     confere(/ieadespa-app-shell-v34/.test(sw) && sw.includes('"/modulos/checkin-infantil.js"'), "o service worker devia estar na v34 com /modulos/checkin-infantil.js na casca");
     confere(/\/\/ v34 \(/.test(sw), "a v34 do service worker precisa da linha de comentário do histórico");
-    const script = lerApp("script.js"), dados = lerApp("modulos/meus-dados.js");
+    const script = ler("script.js"), dados = ler("modulos/meus-dados.js");
     confere(/typeof chkLimparTela === "function"/.test(script) && /typeof chkSubAbaMudou === "function"/.test(script) && /typeof chkCarregarMeuPainelAcao === "function"/.test(script), "script.js: as três ligações com o módulo têm a guarda `typeof`");
     confere(/typeof chkAbaMudou === "function"/.test(dados) && /typeof chkCarregarOpcoesAcao === "function"/.test(dados), "meus-dados.js: as duas ligações com o módulo têm a guarda `typeof`");
     // nada de código nem estilo em linha no que o módulo e o HTML novo escrevem
@@ -169,7 +171,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(!/\sstyle="/.test(modulo.replace(/\/\/.*$/gm, "")) && !/\son[a-z]+="/.test(modulo.replace(/\/\/.*$/gm, "")), "o módulo não escreve style nem on...= em linha");
     confere(trechoHtml.length > 100 && !/\son(click|change|input|submit)="/.test(trechoHtml), "o HTML da sub-aba não tem evento em linha");
     confere(/^[\s\S]*registrarAcoes\(\{[\s\S]*chkAbrirSalaAcao[\s\S]*\}\);\s*$/.test(modulo), "o módulo termina registrando as suas ações");
-    const css = lerApp("style.css");
+    const css = ler("style.css");
     confere(/\.chk-etiqueta\b/.test(css) && /chk-imprimindo/.test(css) && /@media print/.test(css) && /\.chk-alergia\b/.test(css), "style.css: etiqueta, alergia e impressão");
   });
 
@@ -678,15 +680,43 @@ async function rodar({ mutar = {}, so = null } = {}) {
     preencherOutraPessoa(env, { tel: "11999990002" });
     env.limparRegistro(); await enviarCheckin(env);
     confere(/O texto da autorização de saúde mudou/.test(texto(env, "chkCiMsg")) && chamadas(env, "GET checkin-infantil/catalogos").length === 1, "texto de saúde mudou: a mensagem do servidor e o catálogo é pedido de novo");
-    confere(!!env.e("chkChip0"), "a criança continua na lista");
+    // o "concordo" do responsável era sobre o texto ANTIGO: o visitante com alergia sai da lista e volta ao formulário (senão cada nova tentativa seria recusada de novo)
+    confere(!env.e("chkChip0") && env.g("chkCi").criancas.length === 0, "o visitante cujo 'concordo' valia para o texto antigo sai da lista");
+    confere(env.e("chkCiVisNome").value === "Visitante Dez" && env.e("chkCiVisNasc").value === "2022-04-04" && env.e("chkCiVisSaude").value === "Asma" && env.e("chkCiVisConcordo").checked === false && visivel(env, "chkCiVisTermoCx") && env.e("chkCiVisDetalhes").open === true, "e volta ao formulário com os dados preenchidos, o texto novo à vista e a caixa de concordância desmarcada");
+    confere(env.foco() === env.e("chkCiVisConcordo") && /voltou para o formulário/.test(texto(env, "chkCiVisMsg")) && /Visitante Dez saiu da lista/.test(texto(env, "chkCiVisMsg")), "o foco vai para a caixa de concordância e a mensagem explica o que fazer");
+    confere(env.g("chkCatalogos").textoSaude.hash === F.mc.textoDe("SAUDE_CRACHA").hash, "o catálogo guardado já é o do texto novo");
+    env.limparRegistro(); env.doc.clicar(env.e("chkCiVisAdicionar")); await env.ocioso();
+    confere(/precisa ler o texto e marcar que concorda/.test(texto(env, "chkCiVisMsg")) && !env.e("chkChip0"), "sem concordar de novo, o visitante não volta à lista");
+    env.doc.marcar(env.e("chkCiVisConcordo"), true); env.doc.clicar(env.e("chkCiVisAdicionar")); await env.ocioso();
+    confere(!!env.e("chkChip0") && /Saúde informada/.test(texto(env, "chkChip0")), "concordando de novo com o texto novo, ele volta à lista");
+    preencherOutraPessoa(env, { tel: "11999990002" });
+    env.limparRegistro(); await enviarCheckin(env);
+    confere(!!env.e("chkImprimivel") && env.e("chkCodigo0x0") && /Check-in|entregue/.test(texto(env, "chkCiMsg")) || !!env.e("chkImprimivel"), "e agora o check-in dele passa (com o hash do texto novo)");
+    // quem tinha o formulário do visitante em uso não perde o que digitava: só a mensagem diz o que aconteceu
+    env.e("chkCiVisNome").value = "Visitante Doze"; env.e("chkCiVisNasc").value = "2022-05-05";
+    env.doc.digitar(env.e("chkCiVisSaude"), "Rinite"); env.doc.marcar(env.e("chkCiVisConcordo"), true);
+    await env.ev("chkCatalogos.textoSaude.hash = 'hash-velho'");
+    env.doc.clicar(env.e("chkCiVisAdicionar")); await env.ocioso();
+    env.e("chkCiVisNome").value = "Visitante Treze"; env.e("chkCiVisNasc").value = "2022-06-06";
+    preencherOutraPessoa(env, { tel: "11999990003" });
+    env.limparRegistro(); await enviarCheckin(env);
+    confere(env.e("chkCiVisNome").value === "Visitante Treze" && !env.e("chkChip0") && /Visitante Doze saiu da lista/.test(texto(env, "chkCiVisMsg")) && /Peça ao responsável para ler o texto novo/.test(texto(env, "chkCiVisMsg")), "com o formulário do visitante em uso, o que a pessoa digitava fica e a mensagem diz quem saiu da lista");
     // 6) a pessoa não está mais na sala (403)
+    env.e("chkCiVisNome").value = "Visitante Onze"; env.e("chkCiVisNasc").value = "2021-05-05"; env.doc.clicar(env.e("chkCiVisAdicionar")); await env.ocioso();
+    preencherOutraPessoa(env, { tel: "11999990004" });
     S.salas[0].voluntarios.forEach(v => { if (v.membroId === MEU) v.saiuEm = S.agoraMs; });
     env.limparRegistro(); await enviarCheckin(env);
     confere(/Entre na sala primeiro/.test(texto(env, "chkCiMsg")), "sem estar na sala: a mensagem do servidor tal qual (403, sem toast repetido)");
     confere(env.toasts().filter(t => /Entre na sala primeiro/.test(t)).length === 1, "o aviso do 403 aparece uma vez só (o fetchProtegido já avisou)");
   });
 
-  // @@CENARIOS@@
+  // os cenários seguintes moram em arquivos próprios e recebem os mesmos auxiliares
+  const H = { T, cenario, confere, esperar, montar, limpo, achar, descendentes, botao, botoes, chamadas, texto, argsDe, visivel, confereAcessibilidade, idsRepetidos, clicarEResponder, esperaChegar, nomeDe,
+    abrirMeuPainel, abrirSalaMeu, abrirAbaGestao, abrirSalaGestao, entrarNaSala, salaPronta, buscar, adicionarMembro, escolherQuemTrouxe, preencherOutraPessoa, enviarCheckin, checkinDoPedro, cartao, seloDe, ocorrencias,
+    F, ATAQUE, ck, MEU, SALA, MIN, ALFABETO, criarAmbiente, lerApp, mutar, ambiente: () => ambienteAtual };
+  for (const arquivo of ["./cenarios-retirada", "./cenarios-lideranca", "./cenarios-filhos-e-falhas", "./cenarios-ataque-total", "./cenarios-defesa"]) {
+    try { require(arquivo)(H); } catch (erro) { if (erro && erro.code === "MODULE_NOT_FOUND" && String(erro.message).includes(arquivo.slice(2))) continue; throw erro; }
+  }
 
   // ---- execução ----
   const vivo = setInterval(() => {}, 1000);   // um ato esperando para sempre não pode encerrar o processo em silêncio

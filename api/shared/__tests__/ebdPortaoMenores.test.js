@@ -84,7 +84,9 @@ describe("a marca da turma (rota turmas/menores)", () => {
     expect(mockConsultas).toHaveLength(0);
   });
   test("corpo ruim: 400 (boolean de verdade, id na grafia canônica)", async () => {
-    for (const corpo of [{}, { turmaId: 3 }, { turmaId: 3, contatoComMenores: "true" }, { turmaId: 3, contatoComMenores: 1 }, { turmaId: "0x3", contatoComMenores: true }, { turmaId: "03", contatoComMenores: true }, { turmaId: -3, contatoComMenores: true }, { turmaId: 3.5, contatoComMenores: true }]) {
+    for (const corpo of [{}, { turmaId: 3 }, { turmaId: 3, contatoComMenores: "true" }, { turmaId: 3, contatoComMenores: 1 }, { turmaId: "0x3", contatoComMenores: true }, { turmaId: "03", contatoComMenores: true }, { turmaId: -3, contatoComMenores: true }, { turmaId: 3.5, contatoComMenores: true },
+      // uma lista [3] vira "3" ao virar texto e passava como o número 3 (achado na prova no banco real: a marca era ligada com o id dentro de uma lista)
+      { turmaId: [3], contatoComMenores: true }, { turmaId: { toString: () => "3" }, contatoComMenores: true }, { turmaId: true, contatoComMenores: true }]) {
       expect((await chamar("turmas/menores", { corpo, token: EBD() })).status).toBe(400);
     }
     expect(mockConsultas).toHaveLength(0);

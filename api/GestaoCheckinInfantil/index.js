@@ -58,7 +58,7 @@ const lista = (obj) => Object.entries(obj).map(([codigo, rotulo]) => ({ codigo, 
 
 module.exports = async function (context, req) {
   const sessao = auth.exigirLogin(req, context);
-  if (!sessao) return;
+  if (!sessao) { if (context.res) context.res.headers = { ...(context.res.headers || {}), ...NO_STORE }; return; }       // até a recusa de sessão leva no-store (a regra é "toda resposta")
   // A permissão da liderança só vale em sessão de liderança: PIN ou código nunca valem como liderança (e não têm permissão alguma).
   const lideranca = auth.ehSessaoDeLideranca(sessao);
   const visaoHab = lideranca ? auth.visaoDaPermissao(sessao, "habilitacao_voluntarios") : null;
@@ -80,14 +80,18 @@ module.exports = async function (context, req) {
 
   // A sala (par serviço + equipe) e quem está agindo nela. `modo`: "sala" (só carrega a sala: a função do banco confere o operador no ato, com a aptidão de AGORA),
   // "gestor" (liderança no escopo) ou "qualquer" (a equipe da sala ou a liderança no escopo: a leitura da sala).
-  async function abrirSala(origem, modo) {
+  // `exigirMarca: false` (ler a sala e sair dela): a criança e o voluntário que JÁ estão lá dentro não podem ficar presos se a equipe perder a marca no meio do serviço.
+  async function abrirSala(origem, modo, { exigirMarca = true } = {}) {
     const v = ck.validarSala(origem);
     if (!v.valido) return { falha: [400, v.mensagem] };
     const pool = await getPool();
-    const c = await db.contextoDaSala(pool, { servicoId: v.servicoId, equipeId: v.equipeId });
-    // sala que não existe, sem a marca ou de outra congregação: a mesma resposta (e a liderança fora do escopo não a distingue)
+    const c = await db.contextoDaSala(pool, { servicoId: v.servicoId, equipeId: v.equipeId }, { exigirMarca: false });
     if (!c.sucesso) return { falha: [c.naoAchou ? 404 : 422, c.mensagem] };
     const comoGestor = gestao && gestorPodeVer(c.sala.congregacaoNome);
+    // Sala que não existe, sala de outra congregação e sala em que a pessoa não tem relação nenhuma (não está escalada, não a lidera e não é da gestão da congregação) recebem a MESMA
+    // resposta ("não existe"): nem a sala, nem a marca da equipe viram sonda para quem só tem um login (achado na prova no banco real, e2e-20: antes era 403 para uma e 404 para a outra).
+    if (!comoGestor && !(await db.relacionadoComASala(pool, c.sala, sessao.membroId))) return { falha: [404, ck.MENSAGENS.SALA_NAO_ENCONTRADA] };
+    if (exigirMarca && !c.sala.comMarca) return { falha: [422, ck.MENSAGENS.SALA_SEM_MARCA] };
     if (modo === "sala") return { pool, sala: c.sala, comoGestor };
     if (modo === "gestor") {
       if (!comoGestor) return { falha: [403, SEM_PERMISSAO] };
@@ -141,7 +145,7 @@ module.exports = async function (context, req) {
         return resposta(context, r);
       }
       if (acao === "sala" || acao === "relatorio") {
-        const a = await abrirSala(consulta, "qualquer");
+        const a = await abrirSala(consulta, "qualquer", { exigirMarca: false });
         if (a.falha) return erro(context, ...a.falha);
         if (acao === "relatorio") return responder(context, 200, { sucesso: true, ...(await db.relatorioDaSala(a.pool, a.sala)) });
         responder(context, 200, { sucesso: true, ...(await db.snapshotDaSala(a.pool, a.sala, { hoje, visao: a.comoGestor ? "GESTOR" : "OPERADOR" })) });
@@ -203,7 +207,7 @@ module.exports = async function (context, req) {
     }
     if (acao === "sair-da-sala") {
       const tiraOutro = corpo.membroId != null && corpo.membroId !== "" && idDe(corpo.membroId) !== Number(sessao.membroId);
-      const a = await abrirSala(corpo, tiraOutro ? "gestor" : "sala");
+      const a = await abrirSala(corpo, tiraOutro ? "gestor" : "sala", { exigirMarca: false });
       if (a.falha) return erro(context, ...a.falha);
       const alvo = tiraOutro ? idDe(corpo.membroId) : Number(sessao.membroId);
       return resposta(context, await db.sairDaSala(a.pool, { sala: a.sala, membroId: alvo, porId: tiraOutro ? Number(sessao.membroId) : null, hoje }));
@@ -215,11 +219,19 @@ module.exports = async function (context, req) {
       if (a.falha) return erro(context, ...a.falha);
       return resposta(context, await db.fazerCheckin(a.pool, { sala: a.sala, operadorId: sessao.membroId, dados: v, hoje }), 201);
     }
+    // Registro (e não sala) na entrada: quem não tem relação com a sala dele (nem a gestão da congregação) recebe a MESMA resposta de "registro que não existe" (e2e-20).
+    async function registroAcessivel(pool, registroId) {
+      const rs = await db.registroComSala(pool, registroId);
+      if (!rs.sucesso) return rs;
+      const gestaoDaCongregacao = gestao && gestorPodeVer(rs.sala.congregacaoNome);
+      if (!gestaoDaCongregacao && !(await db.relacionadoComASala(pool, rs.sala, sessao.membroId))) return { sucesso: false, naoAchou: true, mensagem: ck.MENSAGENS.CRIANCA_NAO_ACHADA };
+      return rs;
+    }
     if (acao === "retirar") {
       const v = ck.validarRetirada(corpo);
       if (!v.valido) return erro(context, 422, v.mensagem);
       const pool = await getPool();
-      const rs = await db.registroComSala(pool, v.registroId);
+      const rs = await registroAcessivel(pool, v.registroId);
       if (!rs.sucesso) return resposta(context, rs);
       return resposta(context, await db.retirar(pool, { sala: rs.sala, registroId: v.registroId, operadorId: sessao.membroId, dados: v, hoje }));
     }
@@ -227,7 +239,7 @@ module.exports = async function (context, req) {
       const v = ck.validarPedidoSegundaVia(corpo);
       if (!v.valido) return erro(context, 422, v.mensagem);
       const pool = await getPool();
-      const rs = await db.registroComSala(pool, v.registroId);
+      const rs = await registroAcessivel(pool, v.registroId);
       if (!rs.sucesso) return resposta(context, rs);
       return resposta(context, await db.pedirSegundaVia(pool, { sala: rs.sala, operadorId: sessao.membroId, dados: v, hoje }), 201);
     }
@@ -235,7 +247,7 @@ module.exports = async function (context, req) {
       const registroId = idDe(corpo.registroId);
       if (!registroId) return erro(context, 400, "Informe registroId.");
       const pool = await getPool();
-      const rs = await db.registroComSala(pool, registroId);
+      const rs = await registroAcessivel(pool, registroId);
       if (!rs.sucesso) return resposta(context, rs);
       return resposta(context, await db.confirmarSegundaVia(pool, { sala: rs.sala, operadorId: sessao.membroId, registroId, hoje }));
     }

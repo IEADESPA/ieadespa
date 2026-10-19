@@ -19,6 +19,17 @@ case "$1" in
     (cd "$AQUI" && node -r ./shim-mssql.js e2e-13-protecao-setup.js 2>&1 | tail -${LINHAS:-12})
     $PS "$AQUI/bases.ps1" salvar cenario-protecao
     ;;
+  preparar-checkin)
+    # v7.10: a partir da base "cenario-protecao" (v7.8), aplica só a migração 145 (segundos), salva "protecao-145", roda o setup do check-in (e2e-18) e salva "cenario-checkin"
+    cd "$AQUI"
+    $PS bases.ps1 restaurar cenario-protecao | tail -1
+    node -r ./shim-mssql.js aplicar-migracao.js 145 2>&1 | tail -2
+    $PS bases.ps1 salvar protecao-145 | tail -1
+    SAIDA="$(mktemp)"
+    node -r ./shim-mssql.js e2e-18-checkin-setup.js > "$SAIDA" 2>&1; ESTADO=$?
+    tail -${LINHAS:-12} "$SAIDA"; rm -f "$SAIDA"
+    if [ "$ESTADO" -eq 0 ]; then $PS bases.ps1 salvar cenario-checkin | tail -1; else echo "O SETUP FALHOU: a base cenario-checkin NÃO foi salva."; exit 1; fi
+    ;;
   roteiro)
     shift
     cd "$AQUI"

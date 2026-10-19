@@ -82,9 +82,15 @@ BEGIN
     );
 END
 GO
--- A criança só está em UMA sala por vez (enquanto não foi retirada). Visitante não tem id para isto: a conferência dele é por nome e nascimento no serviço, no código.
+-- A criança só está em UMA sala por vez (enquanto não foi retirada). Visitante não tem matrícula: a conferência dele é por nome e nascimento NO SERVIÇO (índice logo abaixo).
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CheckinReg_MenorEmSala' AND object_id = OBJECT_ID(N'dbo.CheckinInfantilRegistros'))
     CREATE UNIQUE INDEX UX_CheckinReg_MenorEmSala ON dbo.CheckinInfantilRegistros (MenorMembroId) WHERE MenorMembroId IS NOT NULL AND Situacao <> 'RETIRADA';
+GO
+-- Achado na prova no banco real: sem este índice o MESMO visitante (nome e nascimento) podia fazer check-in duas vezes no mesmo serviço, ganhando dois códigos, dois registros e uma
+-- contagem dobrada na proporção da sala; só um dos dois registros seria retirado e o outro ficaria "na sala" para sempre (e acionaria o aviso de criança sem retirada). Vale entre as salas
+-- do serviço, e a corrida entre dois voluntários de salas diferentes também cai aqui (a trava da sala é por sala). O índice usa a ordenação do banco (sem diferenciar maiúscula de minúscula).
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CheckinReg_VisitanteEmSala' AND object_id = OBJECT_ID(N'dbo.CheckinInfantilRegistros'))
+    CREATE UNIQUE INDEX UX_CheckinReg_VisitanteEmSala ON dbo.CheckinInfantilRegistros (ServicoId, VisitanteNome, VisitanteNascimento) WHERE MenorMembroId IS NULL AND Situacao <> 'RETIRADA';
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CheckinReg_Sala' AND object_id = OBJECT_ID(N'dbo.CheckinInfantilRegistros'))
     CREATE INDEX IX_CheckinReg_Sala ON dbo.CheckinInfantilRegistros (ServicoId, EquipeId, Situacao);
@@ -110,21 +116,31 @@ GO
 -- O registro é prova de custódia: não se apaga, e o que prova (quando, quem entregou, quem retirou, de qual sala) não se altera. Os campos pessoais podem ser
 -- anonimizados e o dado de saúde pode ser apagado (revogação do consentimento, retenção), e só. "Quem entregou" e "quem retirou" incluem o NOME em texto livre, o
 -- documento conferido e a matrícula de quem trouxe a criança: só a anonimização (que preenche AnonimizadoEm no mesmo comando) os apaga; reescrever, nunca.
+-- A anonimização também TIRA as três matrículas (da criança, de quem trouxe e de quem retirou): achado na prova no banco real, o registro "anonimizado" de uma criança membro continuava
+-- ligado às pessoas pelos números de matrícula, o que é pseudonimizar e não anonimizar (os CHECK de baixo já aceitavam o nulo quando AnonimizadoEm está preenchido; faltava o gatilho
+-- deixar e a rotina de retenção fazer). Trocar uma matrícula por OUTRA, ou pôr uma onde não havia, continua proibido.
 EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_CheckinRegistros_Protegido ON dbo.CheckinInfantilRegistros AFTER UPDATE, DELETE AS
 BEGIN
     SET NOCOUNT ON;
+    -- Achado na prova no banco real: o gatilho dispara TAMBÉM quando o UPDATE não alcança nenhuma linha (inserted e deleted vazios). Tratar "inserted vazio" como "DELETE" derrubava
+    -- com "não se apaga" todo UPDATE que não casava com linha alguma — e é exatamente o que a retirada, a conferência do código, o destravar, a segunda via, o apagar da saúde e a rotina
+    -- diária de retenção fazem quando perdem a corrida ou não há nada a mudar (viravam erro 500 em vez de "o registro mudou", e a retenção falhava todo dia). Só é DELETE se há linha em deleted.
     IF NOT EXISTS (SELECT 1 FROM inserted)
     BEGIN
-        RAISERROR(N''O registro de check-in infantil é prova de custódia: não se apaga.'', 16, 1);
-        ROLLBACK TRANSACTION;
+        IF EXISTS (SELECT 1 FROM deleted)
+        BEGIN
+            RAISERROR(N''O registro de check-in infantil é prova de custódia: não se apaga.'', 16, 1);
+            ROLLBACK TRANSACTION;
+        END
         RETURN;
     END
     IF EXISTS (SELECT 1 FROM inserted i JOIN deleted d ON d.RegistroId = i.RegistroId
-        WHERE i.ServicoId <> d.ServicoId OR i.EquipeId <> d.EquipeId OR i.CongregacaoId <> d.CongregacaoId OR ISNULL(i.MenorMembroId, -1) <> ISNULL(d.MenorMembroId, -1)
+        WHERE i.ServicoId <> d.ServicoId OR i.EquipeId <> d.EquipeId OR i.CongregacaoId <> d.CongregacaoId
+           OR (ISNULL(i.MenorMembroId, -1) <> ISNULL(d.MenorMembroId, -1) AND NOT (i.AnonimizadoEm IS NOT NULL AND i.MenorMembroId IS NULL))
            OR i.EntregueEm <> d.EntregueEm OR i.EntreguePorMembroId <> d.EntreguePorMembroId OR i.IdadeAnos <> d.IdadeAnos OR i.FaixaSala <> d.FaixaSala
            OR (d.Situacao = N''RETIRADA'' AND (i.Situacao <> N''RETIRADA'' OR i.RetiradoEm <> d.RetiradoEm OR i.RetiradoTipo <> d.RetiradoTipo OR ISNULL(i.RetiradoPorOperadorId, -1) <> ISNULL(d.RetiradoPorOperadorId, -1)
-                OR ISNULL(i.RetiradoMembroId, -1) <> ISNULL(d.RetiradoMembroId, -1) OR i.Divergente <> d.Divergente))
-           OR ISNULL(i.TrouxeMembroId, -1) <> ISNULL(d.TrouxeMembroId, -1) OR ISNULL(i.TrouxeDocumento, N'''') <> ISNULL(d.TrouxeDocumento, N'''') OR ISNULL(i.TrouxeParentesco, N'''') <> ISNULL(d.TrouxeParentesco, N'''')
+                OR (ISNULL(i.RetiradoMembroId, -1) <> ISNULL(d.RetiradoMembroId, -1) AND NOT (i.AnonimizadoEm IS NOT NULL AND i.RetiradoMembroId IS NULL)) OR i.Divergente <> d.Divergente))
+           OR (ISNULL(i.TrouxeMembroId, -1) <> ISNULL(d.TrouxeMembroId, -1) AND NOT (i.AnonimizadoEm IS NOT NULL AND i.TrouxeMembroId IS NULL)) OR ISNULL(i.TrouxeDocumento, N'''') <> ISNULL(d.TrouxeDocumento, N'''') OR ISNULL(i.TrouxeParentesco, N'''') <> ISNULL(d.TrouxeParentesco, N'''')
            OR (i.AnonimizadoEm IS NULL AND (ISNULL(i.VisitanteNome, N'''') <> ISNULL(d.VisitanteNome, N'''') OR ISNULL(i.VisitanteNascimento, ''19000101'') <> ISNULL(d.VisitanteNascimento, ''19000101'')
                 OR ISNULL(i.TrouxeNome, N'''') <> ISNULL(d.TrouxeNome, N'''')))
            OR (d.Situacao = N''RETIRADA'' AND i.AnonimizadoEm IS NULL AND (ISNULL(i.RetiradoNome, N'''') <> ISNULL(d.RetiradoNome, N'''') OR ISNULL(i.RetiradoParentesco, N'''') <> ISNULL(d.RetiradoParentesco, N'''')

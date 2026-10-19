@@ -86,6 +86,8 @@ const MENSAGENS = {
   SALA_NAO_ENCONTRADA: "Sala não encontrada.",
   SALA_SEM_MARCA: "Esta equipe não está marcada como \"contato com menores\": o check-in infantil só funciona em sala com essa marca.",
   SERVICO_NAO_PUBLICADO: "O serviço desta sala não está publicado: o check-in só abre em serviço publicado.",
+  RESPONSAVEL_SO_DE_MEMBRO: "O responsável cadastrado só vale para criança membro. Para criança visitante, informe quem a trouxe pelo nome, parentesco, documento e telefone.",
+  EQUIPE_DESATIVADA: "Esta equipe está desativada: não recebe crianças novas. Quem já está na sala continua podendo ser retirado; fale com a liderança.",
   CODIGO_FORMATO: "O código tem 6 letras e números, como está na etiqueta (não usa 0, 1, O, I nem L). Confira e digite de novo.",
   CODIGO_ERRADO: "Código errado.",
   CRIANCA_TRAVADA: "Esta criança está travada por erros do código. Peça à liderança para destravar ou emita a segunda via.",

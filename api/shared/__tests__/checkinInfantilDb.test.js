@@ -106,10 +106,23 @@ describe("entrar na sala", () => {
     expect(com(/INSERT INTO CheckinInfantilVoluntarios/)[0].inputs).toMatchObject({ s: 5, e: 7, m: 10 });
     expect(com(/INSERT INTO CheckinInfantilEventos/)[0].inputs).toMatchObject({ t: "VOLUNTARIO_ENTROU", a: 10 });
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "CHECKIN_VOLUNTARIO_ENTROU", usuarioId: 10, dadosDepois: { servicoId: 5, equipeId: 7 } });
-    mockRegras = []; mockConsultas = []; escalado();
+    mockRegras = []; mockConsultas = []; escalado(); presenteNaSala();
     const e = new Error("duplicado"); e.number = 2601;
     quando(/INSERT INTO CheckinInfantilVoluntarios/, () => { throw e; });
     expect(await db.entrarNaSala(pool, { sala: SALA, membroId: 10, hoje: HOJE, agoraIso: AGORA })).toMatchObject({ sucesso: true, jaEstava: true });
+  });
+  // Achado na prova no banco real (e2e-19): o índice UX_CheckinVol_UmaSala (uma pessoa, um serviço, uma sala) também dispara o erro de duplicidade; responder "você já está na sala"
+  // a quem está em OUTRA sala fazia a tela achar que ela operava esta e o primeiro ato caía em "entre na sala primeiro".
+  test("duplicidade por estar em OUTRA sala do mesmo serviço: recusa clara, nunca 'já estava'", async () => {
+    escalado(); presenteNaSala(false);
+    const e = new Error("duplicado em outra sala"); e.number = 2601;
+    quando(/INSERT INTO CheckinInfantilVoluntarios/, () => { throw e; });
+    const r = await db.entrarNaSala(pool, { sala: SALA, membroId: 10, hoje: HOJE, agoraIso: AGORA });
+    expect(r.sucesso).toBe(false);
+    expect(r.jaEstava).toBeUndefined();
+    expect(r.mensagem).toMatch(/em outra sala deste serviço/);
+    expect(com(/INSERT INTO CheckinInfantilEventos/)).toHaveLength(0);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
   });
 });
 
@@ -339,6 +352,10 @@ describe("retirada", () => {
     const reserva = com(/UPDATE CheckinInfantilRegistros SET Tentativas = Tentativas \+ 1/)[0];
     expect(reserva.sql).toMatch(/WHERE RegistroId = @r AND Situacao = 'NA_SALA' AND Travado = 0 AND Tentativas < @max/);
     expect(reserva.inputs.max).toBe(5);
+    // Achado na prova no banco real (e2e-19): CheckinInfantilRegistros tem gatilho, e o SQL Server recusa "UPDATE ... OUTPUT" sem "INTO" numa tabela com gatilho (erro 334): a retirada
+    // com código inteira caía em 500. O OUTPUT tem de ir para uma variável de tabela.
+    expect(reserva.sql).toMatch(/OUTPUT[^;]*\bINTO @reservada\b/);
+    expect(reserva.sql).toMatch(/SELECT tentativas, hash, geracao FROM @reservada/);
     expect(com(/INSERT INTO CheckinInfantilEventos/)[0].inputs).toMatchObject({ r: 9, t: "CODIGO_ERRADO", a: 10, d: "tentativa=2/5" });
     expect(com(/SET Situacao = 'RETIRADA'/)).toHaveLength(0);
   });
@@ -711,6 +728,8 @@ describe("retenção, histórico do responsável e Meus Dados", () => {
     expect(longo.inputs.d).toBe(1825);
     expect(longo.sql).toMatch(/Situacao = 'RETIRADA'/);          // criança ainda na sala nunca é anonimizada
     expect(longo.sql).toMatch(/AnonimizadoEm = SYSUTCDATETIME\(\)/);
+    // Achado na prova no banco real (e2e-19): o registro de criança MEMBRO "anonimizado" continuava ligado às pessoas pelas matrículas (criança, quem trouxe, quem retirou).
+    expect(longo.sql).toMatch(/MenorMembroId = NULL, TrouxeMembroId = NULL, RetiradoMembroId = NULL/);
   });
   test("o histórico do responsável só traz as crianças de que ele é responsável ATIVO e nunca o código, o voluntário ou a saúde", async () => {
     quando(/WHERE r\.MenorMembroId IS NOT NULL AND EXISTS \(SELECT 1 FROM VoluntariadoResponsaveis v/, [{
@@ -770,5 +789,52 @@ describe("a sala hoje (leitura)", () => {
     expect(fatos[0].fatoGerador).toMatch(/2 criança\(s\) da sala Maternal ficaram sem retirada/);
     expect(fatos[0].referenciaId).toBe(ck.referenciaDeSemRetirada(5, 7));
     expect(com(/CAST\(s\.DataHora AS DATE\) < @hoje/)).toHaveLength(1);
+  });
+});
+
+// Achados da prova no SQL Server de verdade (tools/e2e-localdb, e2e-19 a e2e-22): cada teste abaixo reprova sem a correção correspondente.
+describe("achados da prova no banco real", () => {
+  const SALA_BANCO = { ServicoId: 5, EquipeId: 7, EquipeNome: "Maternal", FaixaEtariaMenores: "MATERNAL", LiderMembroId: 600, ContatoComMenores: 1, Ativa: 1, CongregacaoId: 1, CongregacaoNome: "Central", DataHora: new Date("2026-10-18T09:00:00Z"), ServicoStatus: "PUBLICADA" };
+  const salaDoBanco = (extra = {}) => quando(/FROM EscalasServicos s\s+JOIN EscalasEquipes e ON e\.EquipeId = @e/, [{ ...SALA_BANCO, ...extra }]);
+
+  test("a criança que JÁ está na sala continua alcançável se a equipe perde a marca no meio do serviço (retirar, segunda via, destravar, decidir); só criança NOVA exige a marca", async () => {
+    salaDoBanco({ ContatoComMenores: 0 });
+    quando(/WHERE r\.RegistroId = @r/, [{ RegistroId: 9, ServicoId: 5, EquipeId: 7, Situacao: "NA_SALA" }]);
+    const rs = await db.registroComSala(pool, 9);
+    expect(rs.sucesso).toBe(true);
+    expect(rs.sala).toMatchObject({ servicoId: 5, equipeId: 7, comMarca: false });
+    expect(await db.contextoDaSala(pool, { servicoId: 5, equipeId: 7 })).toMatchObject({ sucesso: false, mensagem: ck.MENSAGENS.SALA_SEM_MARCA });
+    expect((await db.contextoDaSala(pool, { servicoId: 5, equipeId: 7 }, { exigirMarca: false })).sucesso).toBe(true);
+  });
+  test("equipe DESATIVADA não recebe voluntário novo nem criança nova", async () => {
+    escalado(); presenteNaSala(); salaCom([10, 11], 0);
+    const desativada = { ...SALA, equipeAtiva: false };
+    const e = await db.entrarNaSala(pool, { sala: desativada, membroId: 10, hoje: HOJE, agoraIso: AGORA });
+    expect(e).toMatchObject({ sucesso: false, mensagem: ck.MENSAGENS.EQUIPE_DESATIVADA });
+    const c = await db.fazerCheckin(pool, { sala: desativada, operadorId: 10, dados: { servicoId: 5, equipeId: 7, criancas: [{ tipo: "VISITANTE", nome: "Davi Lima", nascimento: "2021-03-02", idade: 5, saude: null }], trouxe: { nome: "Paula Lima", parentesco: "MAE", documento: "RG", contato: "94991112222" }, extras: [] }, hoje: HOJE, agoraIso: AGORA });
+    expect(c).toMatchObject({ sucesso: false, mensagem: ck.MENSAGENS.EQUIPE_DESATIVADA });
+    expect(escritas()).toHaveLength(0);
+  });
+  test("o responsável cadastrado (responsavelId) só vale com criança MEMBRO no pedido: com só visitante, recusa e nem consulta a matrícula (não vira sonda nem deixa qualquer membro virar 'quem trouxe')", async () => {
+    escalado(); presenteNaSala(); salaCom([10, 11], 0);
+    const dados = { servicoId: 5, equipeId: 7, trouxe: { membroId: 40 }, extras: [], criancas: [{ tipo: "VISITANTE", nome: "Davi Lima", nascimento: "2019-03-02", idade: 7, saude: null }] };
+    const r = await db.fazerCheckin(pool, { sala: SALA, operadorId: 10, dados, hoje: HOJE, agoraIso: AGORA });
+    expect(r).toMatchObject({ sucesso: false, mensagem: ck.MENSAGENS.RESPONSAVEL_SO_DE_MEMBRO });
+    expect(com(/INSERT INTO CheckinInfantilRegistros/)).toHaveLength(0);
+    expect(com(/SELECT Nome FROM MembroReferencia WHERE MembroId = @m/)).toHaveLength(0);
+  });
+  test("relacionadoComASala: o líder da equipe e quem está escalado (aceito ou confirmado) têm relação; quem não está, não", async () => {
+    expect(await db.relacionadoComASala(pool, SALA, 600)).toBe(true);
+    expect(mockConsultas).toHaveLength(0);                       // o líder nem precisa de consulta
+    quando(/FROM EscalasAlocacoes WHERE ServicoId = @s AND EquipeId = @e AND MembroId = @m AND Status IN \('ACEITO','CONFIRMADO'\)/, [{ x: 1 }]);
+    expect(await db.relacionadoComASala(pool, SALA, 10)).toBe(true);
+    mockRegras = [];
+    expect(await db.relacionadoComASala(pool, SALA, 11)).toBe(false);
+  });
+  test("a lista de salas de hoje mantém a sala que tem criança ou voluntário DENTRO mesmo se a equipe perdeu a marca, foi desativada ou o serviço foi cancelado", async () => {
+    await db.minhasSalas(pool, { membroId: 10, hoje: HOJE });
+    const consulta = com(/FROM EscalasServicos s\s+JOIN EscalasEquipes e/)[0].sql;
+    expect(consulta).toMatch(/OR EXISTS \(SELECT 1 FROM CheckinInfantilRegistros r WHERE r\.ServicoId = s\.ServicoId AND r\.EquipeId = e\.EquipeId AND r\.Situacao <> 'RETIRADA'\)/);
+    expect(consulta).toMatch(/OR EXISTS \(SELECT 1 FROM CheckinInfantilVoluntarios v WHERE v\.ServicoId = s\.ServicoId AND v\.EquipeId = e\.EquipeId AND v\.SaiuEm IS NULL\)/);
   });
 });

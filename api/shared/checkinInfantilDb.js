@@ -61,7 +61,10 @@ async function lerPrazos(pool) {
 
 // A sala é o par (serviço, equipe com a marca "contato com menores"), da mesma congregação. Sala que não existe, equipe sem a marca e serviço de outra congregação
 // recebem a mesma resposta (a rota não serve de sonda).
-async function contextoDaSala(pool, { servicoId, equipeId }) {
+// `exigirMarca: false` é para o que lida com criança que JÁ ESTÁ na sala (ler a sala, retirar, segunda via, destravar, decidir, sair): se a liderança tirar a marca da equipe (ou
+// desativá-la) no meio do serviço, a criança que está lá dentro continua podendo ser retirada. Achado na prova no banco real: com a marca tirada, toda retirada dava 422 e as crianças
+// ficavam presas na sala. Só o que traz criança NOVA (entrar na sala, check-in, buscar) exige a marca.
+async function contextoDaSala(pool, { servicoId, equipeId }, { exigirMarca = true } = {}) {
   const r = await pool.request().input("s", sql.Int, servicoId).input("e", sql.Int, equipeId).query(`
     SELECT s.ServicoId, s.DataHora, s.Descricao, s.Status AS ServicoStatus, e.EquipeId, e.Nome AS EquipeNome, e.FaixaEtariaMenores, e.LiderMembroId, e.ContatoComMenores,
            e.Ativa, e.CongregacaoId, c.Nome AS CongregacaoNome
@@ -71,14 +74,24 @@ async function contextoDaSala(pool, { servicoId, equipeId }) {
     WHERE s.ServicoId = @s`);
   const x = r.recordset[0];
   if (!x) return { sucesso: false, naoAchou: true, mensagem: ck.MENSAGENS.SALA_NAO_ENCONTRADA };
-  if (!x.ContatoComMenores) return { sucesso: false, mensagem: ck.MENSAGENS.SALA_SEM_MARCA };
+  if (exigirMarca && !x.ContatoComMenores) return { sucesso: false, mensagem: ck.MENSAGENS.SALA_SEM_MARCA };
   return {
     sucesso: true,
     sala: {
       servicoId: x.ServicoId, equipeId: x.EquipeId, equipeNome: x.EquipeNome, faixa: x.FaixaEtariaMenores || null, liderMembroId: x.LiderMembroId ? Number(x.LiderMembroId) : null,
-      congregacaoId: x.CongregacaoId, congregacaoNome: x.CongregacaoNome, dataHora: iso(x.DataHora), descricao: x.Descricao || null, servicoStatus: x.ServicoStatus, equipeAtiva: !!x.Ativa
+      congregacaoId: x.CongregacaoId, congregacaoNome: x.CongregacaoNome, dataHora: iso(x.DataHora), descricao: x.Descricao || null, servicoStatus: x.ServicoStatus, equipeAtiva: !!x.Ativa, comMarca: !!x.ContatoComMenores
     }
   };
+}
+
+// A pessoa tem relação com a sala (está escalada nela, aceita ou confirmada, ou lidera a equipe)? É o que decide se a rota diz "não é seu" ou "não existe": quem não tem relação
+// nenhuma recebe sempre a resposta de "não existe" (nem a sala nem o registro viram sonda para quem só tem um login). Não olha a aptidão: o inapto tem relação e ouve o motivo.
+async function relacionadoComASala(pool, sala, membroId) {
+  const id = Number(membroId);
+  if (sala.liderMembroId === id) return true;
+  const r = await pool.request().input("s", sql.Int, sala.servicoId).input("e", sql.Int, sala.equipeId).input("m", sql.Int, id)
+    .query(`SELECT TOP 1 1 AS x FROM EscalasAlocacoes WHERE ServicoId = @s AND EquipeId = @e AND MembroId = @m AND Status IN (${STATUS_ESCALADO_SQL})`);
+  return !!r.recordset[0];
 }
 
 // Quem pode operar a sala: escalado nela (aceito ou confirmado) ou líder da equipe, E apto hoje, E adulto. A aptidão é a da v7.7, calculada agora (nunca guardada).
@@ -151,6 +164,7 @@ async function parametrosDaProporcao(pool, sala) {
 async function entrarNaSala(pool, { sala, membroId, hoje = hojeBrasilia(), agoraIso = ck.agoraBrasiliaIso() }) {
   const prazos = await lerPrazos(pool);
   if (sala.servicoStatus !== "PUBLICADA") return { sucesso: false, mensagem: ck.MENSAGENS.SERVICO_NAO_PUBLICADO };
+  if (sala.equipeAtiva === false) return { sucesso: false, mensagem: ck.MENSAGENS.EQUIPE_DESATIVADA };
   const janela = ck.avaliarJanela({ servicoIso: sala.dataHora, agoraIso, antesMin: prazos.abreMinutosAntes, depoisHoras: prazos.fechaHorasDepois });
   if (!janela.aberta) return { sucesso: false, mensagem: janela.mensagem };
   const p = await papelDoOperador(pool, sala, membroId, { hoje });
@@ -159,7 +173,12 @@ async function entrarNaSala(pool, { sala, membroId, hoje = hojeBrasilia(), agora
     await pool.request().input("s", sql.Int, sala.servicoId).input("e", sql.Int, sala.equipeId).input("m", sql.Int, Number(membroId))
       .query(`INSERT INTO CheckinInfantilVoluntarios (ServicoId, EquipeId, MembroId) VALUES (@s, @e, @m)`);
   } catch (e) {
-    if (duplicado(e)) return { sucesso: true, jaEstava: true, mensagem: "Você já está na sala." };
+    if (duplicado(e)) {
+      // Há dois índices únicos aqui: "já está NESTA sala" (tudo certo) e "já está em OUTRA sala do mesmo serviço" (um adulto só conta num lugar). No segundo caso dizer
+      // "você já está na sala" enganava a tela: ela acharia que a pessoa opera esta sala e a primeira tentativa de ato cairia em "entre na sala primeiro".
+      if (await estaPresente(pool, sala, membroId)) return { sucesso: true, jaEstava: true, mensagem: "Você já está na sala." };
+      return { sucesso: false, mensagem: "Você já está em outra sala deste serviço. Saia dela antes de entrar nesta: um adulto só conta como adulto numa sala." };
+    }
     throw e;
   }
   await registrarEvento(exec(pool), { servicoId: sala.servicoId, equipeId: sala.equipeId, tipo: "VOLUNTARIO_ENTROU", atorId: Number(membroId) });
@@ -304,11 +323,15 @@ async function minhasSalas(pool, { membroId, gestorPodeVer = null, hoje = hojeBr
     SELECT DISTINCT s.ServicoId, s.DataHora, s.Descricao, s.Status AS ServicoStatus, e.EquipeId, e.Nome AS EquipeNome, e.FaixaEtariaMenores, e.LiderMembroId, e.CongregacaoId, c.Nome AS CongregacaoNome,
            CASE WHEN e.LiderMembroId = @m OR EXISTS (SELECT 1 FROM EscalasAlocacoes a WHERE a.ServicoId = s.ServicoId AND a.EquipeId = e.EquipeId AND a.MembroId = @m AND a.Status IN (${STATUS_ESCALADO_SQL})) THEN 1 ELSE 0 END AS Meu
     FROM EscalasServicos s
-    JOIN EscalasEquipes e ON e.CongregacaoId = s.CongregacaoId AND e.ContatoComMenores = 1 AND e.Ativa = 1
+    JOIN EscalasEquipes e ON e.CongregacaoId = s.CongregacaoId
     JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
-    WHERE s.Status = 'PUBLICADA' AND CAST(s.DataHora AS DATE) = @hoje
-      AND (EXISTS (SELECT 1 FROM EscalasAlocacoes a WHERE a.ServicoId = s.ServicoId AND a.EquipeId = e.EquipeId AND a.Status IN (${STATUS_ESCALADO_SQL}))
-           OR EXISTS (SELECT 1 FROM MinisterioMenoresSalas sa WHERE sa.ServicoId = s.ServicoId AND sa.EquipeId = e.EquipeId))
+    WHERE CAST(s.DataHora AS DATE) = @hoje
+      AND ((s.Status = 'PUBLICADA' AND e.ContatoComMenores = 1 AND e.Ativa = 1
+            AND (EXISTS (SELECT 1 FROM EscalasAlocacoes a WHERE a.ServicoId = s.ServicoId AND a.EquipeId = e.EquipeId AND a.Status IN (${STATUS_ESCALADO_SQL}))
+                 OR EXISTS (SELECT 1 FROM MinisterioMenoresSalas sa WHERE sa.ServicoId = s.ServicoId AND sa.EquipeId = e.EquipeId)))
+           -- a sala com criança ou voluntário DENTRO continua na lista mesmo que a equipe tenha perdido a marca, tenha sido desativada ou o serviço tenha sido cancelado no meio do culto
+           OR EXISTS (SELECT 1 FROM CheckinInfantilRegistros r WHERE r.ServicoId = s.ServicoId AND r.EquipeId = e.EquipeId AND r.Situacao <> 'RETIRADA')
+           OR EXISTS (SELECT 1 FROM CheckinInfantilVoluntarios v WHERE v.ServicoId = s.ServicoId AND v.EquipeId = e.EquipeId AND v.SaiuEm IS NULL))
     ORDER BY s.DataHora, e.Nome`)).recordset;
   const prazos = await lerPrazos(pool);
   const saida = [];
@@ -377,6 +400,7 @@ async function saudeVigenteDosMenores(pool, menorIds, hoje) {
 // `dados`: já validado por ck.validarCheckin. Devolve, por criança, a etiqueta (com o código, que só aparece AQUI) e o recibo do responsável.
 async function fazerCheckin(pool, { sala, operadorId, dados, hoje = hojeBrasilia(), agoraIso = ck.agoraBrasiliaIso() }) {
   if (sala.servicoStatus !== "PUBLICADA") return { sucesso: false, mensagem: ck.MENSAGENS.SERVICO_NAO_PUBLICADO };
+  if (sala.equipeAtiva === false) return { sucesso: false, mensagem: ck.MENSAGENS.EQUIPE_DESATIVADA };
   const prazos = await lerPrazos(pool);
   const janela = ck.avaliarJanela({ servicoIso: sala.dataHora, agoraIso, antesMin: prazos.abreMinutosAntes, depoisHoras: prazos.fechaHorasDepois });
   if (!janela.aberta) return { sucesso: false, mensagem: janela.mensagem };
@@ -385,6 +409,10 @@ async function fazerCheckin(pool, { sala, operadorId, dados, hoje = hojeBrasilia
 
   // As crianças membro: existem, têm idade conhecida abaixo de 18 e não estão em outra sala.
   const idsMembros = dados.criancas.filter((c) => c.tipo === "MEMBRO").map((c) => c.menorId);
+  // O responsável cadastrado (responsavelId) só tem o que conferir quando há criança MEMBRO no pedido (cada uma tem de ter essa pessoa como responsável). Sem criança membro, aceitar a
+  // matrícula deixava o operador registrar QUALQUER membro como "quem trouxe" um visitante (e esse membro passava a poder retirá-lo), e a resposta diferente para matrícula que existe e que
+  // não existe virava sonda de matrículas (achado na prova no banco real, e2e-20).
+  if (dados.trouxe.membroId && !idsMembros.length) return { sucesso: false, mensagem: ck.MENSAGENS.RESPONSAVEL_SO_DE_MEMBRO };
   const membros = new Map();
   if (idsMembros.length) {
     const rq = pool.request();
@@ -512,18 +540,22 @@ async function lerRegistro(pool, registroId) {
 async function registroComSala(pool, registroId) {
   const reg = await lerRegistro(pool, registroId);
   if (!reg) return { sucesso: false, naoAchou: true, mensagem: ck.MENSAGENS.CRIANCA_NAO_ACHADA };
-  const c = await contextoDaSala(pool, { servicoId: reg.ServicoId, equipeId: reg.EquipeId });
+  const c = await contextoDaSala(pool, { servicoId: reg.ServicoId, equipeId: reg.EquipeId }, { exigirMarca: false });      // a criança que já está na sala sai mesmo sem a marca
   if (!c.sucesso) return c;
   return { sucesso: true, registro: reg, sala: c.sala };
 }
 
 // Reserva UMA tentativa antes de conferir o código: o UPDATE só passa enquanto a criança não está travada e ainda tem tentativas; o contador sobe no mesmo comando.
 // Em paralelo, no máximo `max` conferências acontecem, não importa quantas requisições cheguem.
+// Achado na prova no banco real: a tabela tem gatilho (TR_CheckinRegistros_Protegido), e o SQL Server NÃO aceita "UPDATE ... OUTPUT" sem "INTO" numa tabela com gatilho (erro 334):
+// com o OUTPUT solto toda retirada com código dava erro 500. O OUTPUT vai para uma variável de tabela e o SELECT devolve o que a reserva leu.
 async function reservarTentativa(pool, { registroId, max }) {
   const r = await pool.request().input("r", sql.Int, registroId).input("max", sql.Int, max).query(`
+    DECLARE @reservada TABLE (tentativas INT, hash NVARCHAR(64), geracao INT);
     UPDATE CheckinInfantilRegistros SET Tentativas = Tentativas + 1
-    OUTPUT INSERTED.Tentativas AS tentativas, INSERTED.CodigoHash AS hash, INSERTED.CodigoGeracao AS geracao
-    WHERE RegistroId = @r AND Situacao = 'NA_SALA' AND Travado = 0 AND Tentativas < @max`);
+    OUTPUT INSERTED.Tentativas, INSERTED.CodigoHash, INSERTED.CodigoGeracao INTO @reservada (tentativas, hash, geracao)
+    WHERE RegistroId = @r AND Situacao = 'NA_SALA' AND Travado = 0 AND Tentativas < @max;
+    SELECT tentativas, hash, geracao FROM @reservada`);
   return r.recordset[0] || null;
 }
 
@@ -930,6 +962,7 @@ async function aplicarRetencao(pool, { hoje = hojeBrasilia() } = {}) {
     WHERE EntregueEm < DATEADD(DAY, -@d, CAST(@hoje AS DATETIME2)) AND (TrouxeContato IS NOT NULL OR SaudeOrigem = 'BALCAO'); SELECT @@ROWCOUNT AS n`);
   const longo = await pool.request().input("hoje", sql.Date, hoje).input("d", sql.Int, retencaoDias).query(`
     UPDATE CheckinInfantilRegistros SET VisitanteNome = CASE WHEN MenorMembroId IS NULL THEN N'(anonimizado)' ELSE VisitanteNome END, VisitanteNascimento = NULL, TrouxeNome = NULL, TrouxeContato = NULL,
+           MenorMembroId = NULL, TrouxeMembroId = NULL, RetiradoMembroId = NULL,
            RetiradoNome = NULL, SaudeTexto = NULL, SaudeOrigem = NULL, SaudeTextoVersao = NULL, SaudeTextoHash = NULL, AnonimizadoEm = SYSUTCDATETIME()
     WHERE AnonimizadoEm IS NULL AND Situacao = 'RETIRADA' AND EntregueEm < DATEADD(DAY, -@d, CAST(@hoje AS DATETIME2)); SELECT @@ROWCOUNT AS n`);
   const visitas = await pool.request().input("hoje", sql.Date, hoje).input("d", sql.Int, retencaoDias).query(`
@@ -958,7 +991,7 @@ async function dadosDoTitular(pool, membroId) {
 module.exports = {
   lerPrazos, contextoDaSala, papelDoOperador, estaPresente, conferirOperador, presentes, entrarNaSala, sairDaSala,
   carregarAutorizados, snapshotDaSala, minhasSalas, buscarCriancas, responsaveisDaCrianca, fazerCheckin,
-  lerRegistro, registroComSala, retirar, decidirDivergencia, destravar, pedirSegundaVia, confirmarSegundaVia,
+  relacionadoComASala, lerRegistro, registroComSala, retirar, decidirDivergencia, destravar, pedirSegundaVia, confirmarSegundaVia,
   listarAutorizados, adicionarAutorizado, revogarAutorizado, lerSaudeDaCrianca, gravarSaude, apagarSaudeDoMenor, apagarSaudeSemConsentimento,
   historicoDoResponsavel, meusFilhos, relatorioDaSala, detectarCriancasSemRetirada, aplicarRetencao, dadosDoTitular
 };

@@ -45,7 +45,7 @@ let chkSala = null;                // a sala aberta: { servicoId, equipeId, ctx,
 let chkSnap = null;                // o último GET sala (o que a tela mostra; nunca guarda o código)
 let chkAssinatura = "";            // assinatura do último snapshot: a lista só é refeita se algo mudou (sem piscar nem roubar o foco)
 let chkAcao = null;                // o painel de ação aberto: { tipo: "retirada" | "segundavia", registroId }
-let chkGatilhoForm = null;         // o botão que abriu o painel de ação (o foco volta para ele)
+let chkGatilhoForm = null;         // o id do botão que abriu o painel de ação (o foco volta para ele)
 let chkCi = null;                  // o formulário de check-in: { criancas: [...], resultados: [...] }
 let chkImpressao = null;           // { lotes: [{ tipo, etiquetas, recibo }], impressa } — o código só mora aqui (e no painel de impressão)
 let chkSalasMeu = [], chkSalasGes = [];          // GET minhas-salas (as entradas, para abrir a sala)
@@ -77,6 +77,19 @@ function chkFocar(el) {
   try { el.focus({ preventScroll: true }); } catch { el.focus(); }
 }
 function chkFocarId(id) { chkFocar(chkEl(id)); }
+// Os modais (confirmarAcao e pedirTexto) somem ao fechar e levam o foco junto: depois da resposta o foco volta ao botão de onde a pessoa saiu, se ele ainda está na tela (teclado e leitor de tela).
+// (o botão é procurado pelo id: a lista pode ter sido refeita enquanto o modal estava aberto, e o botão de antes já não está na árvore; o novo, com o mesmo id, está)
+function chkVoltarFoco(origem) {
+  const id = typeof origem === "string" ? origem : (origem && typeof origem === "object" ? origem.id : "");
+  const el = id ? chkEl(id) : (origem && typeof origem === "object" ? origem : null);
+  if (el && typeof el === "object" && el.isConnected) chkFocar(el);
+}
+function chkFocoPerdido() { return !document.activeElement || document.activeElement === document.body; }
+async function chkPerguntar(mensagem, rotulo, origem) {
+  const sim = await confirmarAcao(mensagem, rotulo);
+  chkVoltarFoco(origem);
+  return sim;
+}
 function chkEscrever(id, texto, destaque) {
   const el = chkEl(id);
   if (el) { el.textContent = texto; el.className = destaque ? "subtitle psc-aviso" : "subtitle"; }
@@ -86,10 +99,17 @@ async function chkProtegerBotao(botao, tarefa, chave) {
     if (chkEmCurso.has(chave)) { mostrarToast("Aguarde: o pedido anterior ainda está sendo processado.", "erro"); return undefined; }
     chkEmCurso.add(chave);
   }
+  // desabilitar o botão que tem o foco faz o navegador tirar o foco dele (regra de "focus fixup"): quem usa teclado ou leitor de tela volta ao mesmo botão quando o pedido termina
+  const tinhaFoco = !!botao && document.activeElement === botao;
   if (botao) botao.disabled = true;
   try { return await tarefa(); } finally {
     if (botao) botao.disabled = false;
     if (chave) chkEmCurso.delete(chave);
+    if (tinhaFoco && chkFocoPerdido()) {   // só quando o foco se perdeu: um ato que levou o foco a outro lugar de propósito fica como está
+      chkVoltarFoco(botao);
+      // o botão saiu da tela (a criança foi retirada, a lista foi refeita): o foco não fica no corpo da página
+      if (chkFocoPerdido()) chkFocarId(chkSala ? "chkSalaTitulo" : (chkVisivel("chkSecaoAprovacoes") ? "btnChkSecaoAprovacoes" : ""));
+    }
   }
 }
 function chkSelo(classe, rotulo) { return `<span class="cal-selo chk-selo ${escaparHtmlEbd(classe)}">${escaparHtmlEbd(rotulo)}</span>`; }
@@ -245,7 +265,8 @@ function chkFecharContexto(ctx) {
   chkSeqSala++;
   const ids = ctx === "Ges" ? ["chkGesSalasLista", "chkAprovacoesLista", "chkSalaGes"] : ["chkMeuSalasLista", "chkFilhosLista", "chkSalaMeu"];
   ids.forEach(id => { const el = chkEl(id); if (el) el.innerHTML = ""; });
-  if (ctx === "Ges") { chkAprovacoes = []; chkSalasGes = []; chkSeqGes++; chkSeqApr++; chkPararTimerSeOciosa(); } else { chkSalasMeu = []; chkSeqMeu++; }
+  // (quem chama já está saindo da aba: a navegação avisa o módulo ANTES de esconder a aba, então não adianta perguntar o que está à vista — sem sala aberta, o relógio da fila para agora)
+  if (ctx === "Ges") { chkAprovacoes = []; chkSalasGes = []; chkSeqGes++; chkSeqApr++; if (!chkSala) chkPararTimer(); } else { chkSalasMeu = []; chkSeqMeu++; }
   chkMostrarListas(ctx, true);
 }
 function chkSairDasFichas() {
@@ -258,7 +279,13 @@ function chkSairDasFichas() {
 // ============================================================================
 // O RELÓGIO DE ATUALIZAÇÃO (a sala, e a fila de aprovações, se refazem a cada ~8 s enquanto a tela está aberta e visível; nunca dois intervalos)
 // ============================================================================
-function chkVisivel(id) { const el = chkEl(id); return !!el && el.style.display !== "none"; }
+// à vista = o elemento e todos os que o contêm estão sem display:none (a tela some inteira quando o painel é escondido, sem que a aba tenha mudado de estado)
+function chkVisivel(id) {
+  const el = chkEl(id);
+  if (!el) return false;
+  for (let p = el; p && p.nodeType === 1; p = p.parentNode) if (p.style && p.style.display === "none") return false;
+  return true;
+}
 // o lugar onde a sala está aberta continua na tela?
 function chkContextoVisivel(ctx) {
   return ctx === "Ges" ? chkVisivel("abaCheckininfantil") : chkVisivel("abaMeupainel") && chkVisivel("subMeupainelCheckininfantil");
@@ -427,6 +454,12 @@ function chkAplicarFilhos(resposta) {
   filhos.forEach(f => { const n = chkEl(`chkFhNome${Number(f.menorId)}`); if (n) n.textContent = String(f.nome == null ? "" : f.nome); });
 }
 const CHK_SUFIXO_SECAO = { hist: "Hist", aut: "Aut", sau: "Sau" };
+// Em Meus filhos cada seção tem o seu botão (aria-expanded); a ficha da liderança não recolhe: ali a seção está sempre aberta.
+function chkSecaoFilhoAberta(pfx, sufixo, id) {
+  if (pfx !== "Fh") return true;
+  const btn = chkEl(`chkFhBtn${sufixo}${Number(id)}`);
+  return !!btn && btn.getAttribute("aria-expanded") === "true";
+}
 async function chkAlternarFilhoAcao(menorId, secaoBruta) {
   const id = Number(menorId), secao = chkSecaoFilhoValida(secaoBruta);
   if (!chkInteiro(id) || !secao) return;
@@ -475,10 +508,10 @@ function chkHtmlAutorizados(pfx, id, data) {
   const ficha = pfx === "Fi";
   const itens = lista.map(a => `<li class="chk-autorizado" id="chk${pfx}AutItem${Number(a.autorizadoId)}">
       <strong>${escaparHtmlEbd(a.nome)}</strong> <span class="psc-legenda">${escaparHtmlEbd(a.rotuloParentesco || chkRotuloParentesco(a.parentesco))}${a.validoAte ? ` · vale até ${formatarDataEbd(a.validoAte)}` : " · sem prazo"}${a.forma ? ` · ${escaparHtmlEbd(CHK_FORMA_AUTORIZADO[a.forma] || a.forma)}` : ""}</span>
-      <button type="button" class="btn-link btn-link-perigo" data-on-click="chkRevogarAutorizadoAcao" data-args-click="${argsAttr(Number(a.autorizadoId), pfx, id)}">Revogar</button>
+      <button type="button" class="btn-link btn-link-perigo" id="chk${pfx}AutRev${Number(a.autorizadoId)}" data-on-click="chkRevogarAutorizadoAcao" data-args-click="${argsAttr(Number(a.autorizadoId), pfx, id)}">Revogar</button>
     </li>`).join("");
   const opcoesParentesco = chkOpcoes(chkCatalogos ? chkCatalogos.parentescos : [], x => x.codigo, x => x.rotulo, "— escolha —");
-  return `<h6 class="chk-subtitulo">👥 Quem pode retirar</h6>
+  return `<h6 class="chk-subtitulo" id="chk${pfx}AutTitulo${id}" tabindex="-1">👥 Quem pode retirar</h6>
     <p class="psc-legenda">${resp.length ? `Os responsáveis cadastrados pela Secretaria sempre podem retirar: <strong>${resp.map(r => escaparHtmlEbd(r.nome)).join(", ")}</strong>.` : "Esta criança ainda não tem responsável cadastrado pela Secretaria."} A lista abaixo é de quem o responsável autorizou além deles (no máximo ${limite}).</p>
     ${itens ? `<ul class="chk-lista">${itens}</ul>` : "<p class='subtitle'>Ninguém na lista ainda.</p>"}
     ${lista.length >= limite ? `<p class="psc-aviso" role="status">A lista está cheia (${limite} pessoas). Revogue uma para incluir outra.</p>` : `<div class="cal-form-inline">
@@ -507,7 +540,7 @@ function chkAplicarAutorizados(pfx, menorId, data) {
 async function chkCarregarAutorizados(pfxBruto, menorId) {
   const pfx = chkPfxValido(pfxBruto), id = Number(menorId), geracao = chkGeracao;
   const data = await chkObter(`autorizados?menorId=${id}`);
-  if (geracao !== chkGeracao) return;
+  if (geracao !== chkGeracao || !chkSecaoFilhoAberta(pfx, "Aut", id)) return;   // a seção foi recolhida enquanto a resposta vinha: nada entra na tela
   chkAplicarAutorizados(pfx, id, data);
 }
 async function chkAdicionarAutorizadoAcao(pfxBruto, menorId, botao) {
@@ -534,12 +567,13 @@ async function chkAdicionarAutorizadoAcao(pfxBruto, menorId, botao) {
     if (data.sucesso === false) return;   // recusa de regra: mensagem do servidor e formulário intacto
     await chkCarregarAutorizados(pfx, id);
     chkEscrever(campo("Msg"), chkMsgErro(data), false);   // o painel foi refeito: a mensagem de sucesso volta para o lugar dela
+    chkFocarId(`chk${pfx}AutTitulo${id}`);                // e o botão que a pessoa tocou deixou de existir: o foco vai para o título da lista, que foi refeita
   }, `aut${pfx}${id}`);
 }
 async function chkRevogarAutorizadoAcao(autorizadoId, pfxBruto, menorId) {
   const pfx = chkPfxValido(pfxBruto), id = Number(menorId);
   if (!chkInteiro(autorizadoId)) return;
-  if (!(await confirmarAcao("Revogar esta autorização? A pessoa deixa de poder retirar a criança nas próximas visitas (um check-in que já está aberto continua com a lista de quando foi feito; para esse, peça a segunda via do código).", "Revogar"))) return;
+  if (!(await chkPerguntar("Revogar esta autorização? A pessoa deixa de poder retirar a criança nas próximas visitas (um check-in que já está aberto continua com a lista de quando foi feito; para esse, peça a segunda via do código).", "Revogar", `chk${pfx}AutRev${Number(autorizadoId)}`))) return;
   const geracao = chkGeracao;
   await chkProtegerBotao(null, async () => {
     const data = await chkPostar("autorizado-revogar", { autorizadoId: Number(autorizadoId) });
@@ -547,6 +581,7 @@ async function chkRevogarAutorizadoAcao(autorizadoId, pfxBruto, menorId) {
     if (!data.jaAvisado) mostrarToast(chkMsgErro(data), data.sucesso === false ? "erro" : "sucesso");
     await chkCarregarAutorizados(pfx, id);
     if (data.sucesso === false) chkEscrever(`chk${pfx}AutMsg${id}`, chkMsgErro(data), true);
+    chkFocarId(`chk${pfx}AutTitulo${id}`);   // o botão Revogar saiu da tela com a lista refeita: o foco vai para o título dela
   }, `revogar${autorizadoId}`);
 }
 
@@ -579,7 +614,7 @@ async function chkCarregarSaude(pfxBruto, menorId) {
   const pfx = chkPfxValido(pfxBruto), id = Number(menorId), geracao = chkGeracao;
   const data = await chkObter(`saude?menorId=${id}`);
   const cx = chkEl(`chk${pfx}Sau${id}`);
-  if (geracao !== chkGeracao || !cx) return;
+  if (geracao !== chkGeracao || !cx || !chkSecaoFilhoAberta(pfx, "Sau", id)) return;   // a seção foi recolhida enquanto a resposta vinha: nada entra na tela
   if (data.sucesso === false) { cx.innerHTML = `<p class="subtitle psc-aviso" role="status">${escaparHtmlEbd(chkMsgErro(data))}</p>`; return; }
   cx.innerHTML = chkHtmlSaude(pfx, id, data);
   // o texto de saúde entra só como valor do campo (nunca como marcação)
@@ -603,11 +638,12 @@ async function chkGravarSaudeAcao(pfxBruto, menorId, botao) {
     if (data.sucesso === false) return;
     await chkCarregarSaude(pfx, id);
     chkEscrever(msg, chkMsgErro(data), false);
+    chkFocarId(`chk${pfx}SauTexto${id}`);   // a seção foi refeita e o botão tocado deixou de existir: o foco vai para o campo
   }, `saude${pfx}${id}`);
 }
 async function chkApagarSaudeAcao(pfxBruto, menorId, botao) {
   const pfx = chkPfxValido(pfxBruto), id = Number(menorId);
-  if (!(await confirmarAcao("Apagar a informação de saúde desta criança? Ela deixa de aparecer na etiqueta e não pode ser recuperada.", "Apagar"))) return;
+  if (!(await chkPerguntar("Apagar a informação de saúde desta criança? Ela deixa de aparecer na etiqueta e não pode ser recuperada.", "Apagar", botao))) return;
   const geracao = chkGeracao;
   await chkProtegerBotao(botao, async () => {
     const data = await chkPostar("saude-apagar", { menorId: id });
@@ -615,6 +651,7 @@ async function chkApagarSaudeAcao(pfxBruto, menorId, botao) {
     if (!data.jaAvisado) mostrarToast(chkMsgErro(data), data.sucesso === false ? "erro" : "sucesso");
     await chkCarregarSaude(pfx, id);
     chkEscrever(`chk${pfx}SauMsg${id}`, chkMsgErro(data), data.sucesso === false);
+    chkFocarId(`chk${pfx}SauTexto${id}`);   // o botão Apagar saiu da tela com a seção refeita: o foco vai para o campo
   }, `apagarsaude${pfx}${id}`);
 }
 
@@ -715,7 +752,7 @@ async function chkAbrirSalaAcao(servicoId, equipeId, ctxBruto) {
 async function chkFecharSalaAcao() {
   if (!chkSala) return;
   // há código na tela que ninguém levou: a saída pergunta antes (o código só aparece uma vez)
-  if (chkImpressao && !chkImpressao.impressa && !(await confirmarAcao("Há códigos de retirada na tela que ainda NÃO foram impressos. Eles não aparecem de novo (só a segunda via gera outro). Sair e apagar mesmo assim?", "Sair e apagar"))) return;
+  if (chkImpressao && !chkImpressao.impressa && !(await chkPerguntar("Há códigos de retirada na tela que ainda NÃO foram impressos. Eles não aparecem de novo (só a segunda via gera outro). Sair e apagar mesmo assim?", "Sair e apagar", "chkVoltarBotao"))) return;
   if (!chkSala) return;
   const gatilho = chkSala.gatilhoId;
   chkFecharSalaInterno();
@@ -824,23 +861,29 @@ function chkRenderVoluntarios() {
   const botao = !chkSala.ehMinha ? ""
     : euPresente ? `<button type="button" class="btn-confirmar btn-secundario chk-btn" id="chkSairBotao" data-on-click="chkSairAcao" data-args-click="${argsAttr(ARG.elemento)}">🚶 Sair da sala</button>`
       : `<button type="button" class="btn-confirmar chk-btn" id="chkEntrarBotao" data-on-click="chkEntrarAcao" data-args-click="${argsAttr(ARG.elemento)}">🙋 Entrar na sala</button>`;
-  cx.innerHTML = `<div class="cal-cartao chk-voluntarios">
+  chkComFoco(() => {
+    cx.innerHTML = `<div class="cal-cartao chk-voluntarios">
     <h5>🧑 Quem está na sala (voluntários)</h5>
     ${itens ? `<ul class="chk-lista">${itens}</ul>` : "<p class='subtitle'>Ninguém entrou na sala ainda. O check-in só funciona com pelo menos 2 adultos habilitados presentes.</p>"}
     <div class="psc-acoes">${botao}</div>
   </div>`;
+  });
 }
 // as crianças com pendência vêm primeiro: retirada aguardando a liderança, travada, segunda via; depois, na ordem de chegada
 function chkOrdenarCriancas(lista) {
   const peso = (c) => (c.divergencia ? 0 : c.travado ? 1 : c.segundaViaPendente ? 2 : 3);
   return lista.map((c, i) => ({ c, i })).sort((a, b) => peso(a.c) - peso(b.c) || a.i - b.i).map(x => x.c);
 }
-// refaz um pedaço da tela sem tirar o foco de quem estava num botão dele (a mesma tecla continua no mesmo botão, se ele ainda existir)
+// refaz um pedaço da tela sem tirar o foco de quem estava num botão dele (a mesma tecla continua no mesmo botão, se ele ainda existir). Se o botão deixou de existir (a criança foi retirada,
+// a pessoa entrou ou saiu da sala), o foco NÃO se perde no corpo da página: vai para o título da sala (ou, na fila de aprovações, para o botão da seção).
 function chkComFoco(fn) {
   const ativo = document.activeElement;
   const idAtivo = ativo && ativo.id ? ativo.id : "";
   fn();
-  if (idAtivo) { const novo = chkEl(idAtivo); if (novo && novo !== ativo) chkFocar(novo); }
+  if (!idAtivo) return;
+  const novo = chkEl(idAtivo);
+  if (novo) { if (novo !== ativo) chkFocar(novo); return; }
+  chkFocarId(chkSala ? "chkSalaTitulo" : "btnChkSecaoAprovacoes");
 }
 function chkRenderNaSala() {
   const cx = chkEl("chkNaSalaLista");
@@ -945,10 +988,10 @@ async function chkSairAcao(botao) {
 }
 async function chkTirarVoluntarioAcao(membroId, botao) {
   if (!chkSala || !chkSala.ehGestao || !chkInteiro(membroId)) return;
+  const geracao = chkGeracao, seq = chkSeqSala, sala = chkSala;   // a sala de agora: se a pessoa sair dela ou trocar de login com o modal aberto, nada é enviado
   const v = (chkSnap && Array.isArray(chkSnap.adultosPresentes) ? chkSnap.adultosPresentes : []).find(x => x && Number(x.membroId) === Number(membroId));
-  if (!(await confirmarAcao(`Tirar ${v ? v.nome : "esta pessoa"} da sala? Use quando alguém esqueceu de sair. A sala precisa continuar com pelo menos 2 adultos se houver crianças.`, "Tirar da sala"))) return;
-  if (!chkSala) return;
-  const geracao = chkGeracao, seq = chkSeqSala, sala = chkSala;
+  if (!(await chkPerguntar(`Tirar ${v ? v.nome : "esta pessoa"} da sala? Use quando alguém esqueceu de sair. A sala precisa continuar com pelo menos 2 adultos se houver crianças.`, "Tirar da sala", botao))) return;
+  if (geracao !== chkGeracao || seq !== chkSeqSala || !chkSala) return;
   await chkProtegerBotao(botao, async () => {
     const data = await chkPostar("sair-da-sala", { servicoId: sala.servicoId, equipeId: sala.equipeId, membroId: Number(membroId) });
     if (geracao !== chkGeracao || seq !== chkSeqSala) return;
@@ -1163,6 +1206,26 @@ function chkAdicionarVisitanteAcao() {
   chkAtualizarListaCheckin(); chkAtualizarTrouxe();
   chkFocarId("chkCiVisNome");
 }
+// O texto da autorização de saúde mudou: o "concordo" que o responsável deu foi sobre o texto ANTIGO e não vale mais (o servidor recusaria de novo, a cada tentativa). O visitante que levava alergia
+// sai da lista e, se o formulário do visitante está vazio, volta para ele (nome, data e alergia preenchidos, caixa desmarcada): o responsável lê o texto novo, concorda de novo e adiciona outra vez.
+function chkReabrirVisitantesComSaude() {
+  if (!chkCi) return;
+  const comSaude = chkCi.criancas.filter(c => c.tipo === "VISITANTE" && c.saude);
+  if (!comSaude.length) return;
+  chkCi.criancas = chkCi.criancas.filter(c => !comSaude.includes(c));
+  const formVazio = !chkTexto("chkCiVisNome") && !chkTexto("chkCiVisNasc") && !chkTexto("chkCiVisSaude");
+  const primeiro = comSaude[0];
+  if (formVazio) {
+    const preencher = (id, valor) => { const el = chkEl(id); if (el) el.value = valor; };
+    preencher("chkCiVisNome", primeiro.nome); preencher("chkCiVisNasc", primeiro.nascimento); preencher("chkCiVisSaude", primeiro.saude.texto);
+    const detalhes = chkEl("chkCiVisDetalhes"); if (detalhes) detalhes.open = true;
+  }
+  const concordo = chkEl("chkCiVisConcordo"); if (concordo) concordo.checked = false;
+  chkVisSaudeDigitouAcao(); chkAtualizarListaCheckin(); chkAtualizarTrouxe();
+  const nomes = comSaude.map(c => c.nome).join(", ");
+  chkEscrever("chkCiVisMsg", `O texto da autorização de saúde mudou: ${nomes} saiu da lista. ${formVazio ? `${primeiro.nome} voltou para o formulário: peça ao responsável para ler o texto novo e marcar que concorda, e adicione de novo.${comSaude.length > 1 ? " Os outros também precisam ser adicionados de novo." : ""}` : "Peça ao responsável para ler o texto novo e marcar que concorda, e adicione de novo."}`, true);
+  chkFocarId(formVazio ? "chkCiVisConcordo" : "chkCiVisNome");
+}
 // ---- a lista de crianças desta entrada ----
 function chkRemoverCriancaAcao(indice) {
   if (!chkCi || !Number.isInteger(indice) || indice < 0 || indice >= chkCi.criancas.length) return;
@@ -1266,7 +1329,7 @@ async function chkEnviarCheckinAcao(botao) {
       // recusa de regra (janela, lotação, criança já na sala...): a mensagem do servidor tal qual e o formulário intacto
       chkMostrarResultado(data, msg, true);
       if (data.termoMudou) {   // o texto da autorização de saúde mudou: a tela pega o novo e o responsável lê de novo
-        chkGarantirCatalogos(true).then(() => { if (geracao !== chkGeracao || seqSala !== chkSeqSala) return; const c = chkEl("chkCiVisConcordo"); if (c) c.checked = false; });
+        chkGarantirCatalogos(true).then(() => { if (geracao !== chkGeracao || seqSala !== chkSeqSala) return; const c = chkEl("chkCiVisConcordo"); if (c) c.checked = false; chkReabrirVisitantesComSaude(); });
       }
       if (data.httpStatus === 409) chkLerSala(true);
       return;
@@ -1353,7 +1416,7 @@ function chkImprimirAcao() {
 }
 async function chkFecharImpressaoAcao() {
   if (!chkImpressao) return;
-  if (!chkImpressao.impressa && !(await confirmarAcao("Os códigos de retirada ainda NÃO foram impressos e não aparecem de novo (só a segunda via gera outro). Fechar e apagar mesmo assim?", "Fechar e apagar"))) return;
+  if (!chkImpressao.impressa && !(await chkPerguntar("Os códigos de retirada ainda NÃO foram impressos e não aparecem de novo (só a segunda via gera outro). Fechar e apagar mesmo assim?", "Fechar e apagar", "chkFecharImpressaoBotao"))) return;
   chkImpressao = null;
   chkRenderImpressao(false);
   chkLimparImpressaoDaPagina();
@@ -1368,13 +1431,19 @@ function chkFecharPainelAcao(semFoco) {
   if (area) area.innerHTML = "";
   const gatilho = chkGatilhoForm;
   chkAcao = null; chkGatilhoForm = null;
-  if (!semFoco && gatilho && typeof gatilho === "object" && gatilho.isConnected) chkFocar(gatilho);
+  if (!semFoco && gatilho) chkVoltarFoco(gatilho);
 }
 function chkFecharAcaoAcao() { chkFecharPainelAcao(false); }
 // Depois de cada leitura: se a criança do painel aberto já saiu ou mudou de estado (outra pessoa agiu), o painel fecha e diz por quê.
 function chkConferirAcaoAberta() {
   const a = chkAcao;
   if (!a) return;
+  // a pessoa deixou de estar na sala (a liderança a tirou, ou ela saiu em outro aparelho): o servidor recusaria cada envio, então o painel não fica aberto à toa
+  if (!chkPodeOperar()) {
+    chkFecharPainelAcao(true);
+    chkEscrever("chkSalaMsg", "Você não está mais na sala (a liderança pode ter tirado você, ou você saiu em outro aparelho): toque em “Entrar na sala” para voltar a receber e entregar crianças.", true);
+    return;
+  }
   const c = chkAcharCrianca(a.registroId);
   const ok = c && c.situacao === "NA_SALA" && (a.tipo === "retirada" ? !c.travado && !c.divergencia : !c.segundaViaPendente);
   if (ok) return;
@@ -1419,7 +1488,7 @@ function chkAbrirRetiradaAcao(registroId, gatilho) {
   const c = chkAcharCrianca(registroId), area = chkEl("chkAcaoCx");
   if (!c || !area || !chkSala || !chkPodeOperar() || !chkCatalogos) return;
   chkAcao = { tipo: "retirada", registroId: Number(registroId) };
-  chkGatilhoForm = gatilho && typeof gatilho === "object" ? gatilho : null;
+  chkGatilhoForm = gatilho && typeof gatilho === "object" && gatilho.id ? gatilho.id : null;   // o id, não o elemento: a lista é refeita a cada leitura da sala
   area.innerHTML = chkFormRetirada(c);
   const nome = chkEl("chkAcaoNome"); if (nome) nome.textContent = String(c.nome == null ? "" : c.nome);
   chkMudouRetiranteAcao();
@@ -1498,7 +1567,7 @@ function chkAbrirSegundaViaAcao(registroId, gatilho) {
   const c = chkAcharCrianca(registroId), area = chkEl("chkAcaoCx");
   if (!c || !area || !chkSala || !chkPodeOperar() || !chkCatalogos) return;
   chkAcao = { tipo: "segundavia", registroId: Number(registroId) };
-  chkGatilhoForm = gatilho && typeof gatilho === "object" ? gatilho : null;
+  chkGatilhoForm = gatilho && typeof gatilho === "object" && gatilho.id ? gatilho.id : null;   // o id, não o elemento: a lista é refeita a cada leitura da sala
   area.innerHTML = chkFormSegundaVia(c);
   const nome = chkEl("chkAcaoNome"); if (nome) nome.textContent = String(c.nome == null ? "" : c.nome);
   chkRolarPara("chkAcaoCx");
@@ -1531,9 +1600,9 @@ async function chkConfirmarSegundaViaAcao(registroId, botao) {
   if (!chkSala || !chkPodeOperar()) return;
   const via = c && c.segundaViaPendente;
   if (!c || !via) { chkLerSala(true); return; }
-  if (!(await confirmarAcao(`Você conferiu o documento de ${via.pessoaNome || "quem pediu"} e confirma a segunda via do código de ${c.nome}? O código antigo deixa de valer agora e a etiqueta nova sai na tela.`, "Confirmar a segunda via"))) return;
-  if (!chkSala) return;
   const geracao = chkGeracao, seqSala = chkSeqSala, id = Number(registroId);
+  if (!(await chkPerguntar(`Você conferiu o documento de ${via.pessoaNome || "quem pediu"} e confirma a segunda via do código de ${c.nome}? O código antigo deixa de valer agora e a etiqueta nova sai na tela.`, "Confirmar a segunda via", botao))) return;
+  if (geracao !== chkGeracao || seqSala !== chkSeqSala || !chkSala) return;
   await chkProtegerBotao(botao, async () => {
     const data = await chkPostar("segunda-via-confirmar", { registroId: id });
     if (geracao !== chkGeracao || seqSala !== chkSeqSala || !chkSala) return;
@@ -1560,17 +1629,19 @@ async function chkDecidirAcao(registroId, aprovar, botao) {
   const pergunta = aprovar
     ? `Aprovar a retirada de ${c.nome} por ${quem.nome || "quem pediu"}? Antes, confirme com o responsável pelo telefone cadastrado. Aprovando, a criança é liberada a essa pessoa e o ato fica registrado com o seu nome.`
     : `Negar a retirada de ${c.nome} por ${quem.nome || "quem pediu"}? A criança continua na sala e só sai com quem está na lista ou com outra aprovação.`;
-  if (!(await confirmarAcao(pergunta, aprovar ? "Aprovar a retirada" : "Negar a retirada"))) return;
+  const geracao = chkGeracao, seqSala = chkSeqSala, id = Number(registroId);   // a tela de agora: se a pessoa sair ou trocar de login com um modal aberto, nada é enviado depois
+  if (!(await chkPerguntar(pergunta, aprovar ? "Aprovar a retirada" : "Negar a retirada", botao))) return;
   // o motivo fica registrado: de 8 a 300 caracteres, sem < ou >; texto curto demais volta a ser pedido, com o que já foi escrito
   let motivo = "";
   for (;;) {
     const digitado = await pedirTexto(`Motivo da decisão (de ${CHK_MIN_MOTIVO} a ${CHK_MAX_MOTIVO} caracteres)`, "Ex.: liguei para a mãe, que confirmou que a tia busca.", motivo);
-    if (digitado == null) return;
+    if (digitado == null) { chkVoltarFoco(botao); return; }
     motivo = chkEspacos(digitado);
     if (motivo.length >= CHK_MIN_MOTIVO && motivo.length <= CHK_MAX_MOTIVO && !chkTemMarca(motivo)) break;
     mostrarToast(`Escreva o motivo com ${CHK_MIN_MOTIVO} a ${CHK_MAX_MOTIVO} caracteres, sem < ou >.`, "erro");
   }
-  const geracao = chkGeracao, seqSala = chkSeqSala, id = Number(registroId);
+  chkVoltarFoco(botao);
+  if (geracao !== chkGeracao || seqSala !== chkSeqSala) return;
   await chkProtegerBotao(botao, async () => {
     const data = await chkPostar("decidir-divergencia", { registroId: id, aprovar, motivo });   // 428: o fetchProtegido confirma a identidade e repete a chamada uma vez
     if (geracao !== chkGeracao || seqSala !== chkSeqSala) return;
@@ -1581,8 +1652,9 @@ async function chkDecidirAcao(registroId, aprovar, botao) {
 async function chkDestravarAcao(registroId, botao) {
   const c = chkAcharCrianca(registroId);
   if (!c) { chkAtualizarDepoisDoAto(); return; }
-  if (!(await confirmarAcao(`Destravar ${c.nome}? Faça isso só depois de confirmar quem está retirando a criança. O código continua o mesmo: quem o perdeu pede a segunda via.`, "Destravar"))) return;
   const geracao = chkGeracao, seqSala = chkSeqSala, id = Number(registroId);
+  if (!(await chkPerguntar(`Destravar ${c.nome}? Faça isso só depois de confirmar quem está retirando a criança. O código continua o mesmo: quem o perdeu pede a segunda via.`, "Destravar", botao))) return;
+  if (geracao !== chkGeracao || seqSala !== chkSeqSala) return;
   await chkProtegerBotao(botao, async () => {
     const data = await chkPostar("destravar", { registroId: id });
     if (geracao !== chkGeracao || seqSala !== chkSeqSala) return;

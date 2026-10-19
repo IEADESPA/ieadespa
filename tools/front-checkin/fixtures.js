@@ -23,7 +23,18 @@ const HORA = 3600000, MIN = 60000;
 const lista = (obj) => Object.entries(obj).map(([codigo, rotulo]) => ({ codigo, rotulo }));
 const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
 
-// `op`: { ataque, hoje, agoraMs, fatorFresco }
+// ---- ataque total: TODO texto que o servidor devolve (menos o que a tela usa como código de enumeração, data ou referência) leva o texto de ataque no fim ----
+// (o nome do campo vai dentro do texto de ataque: um [t_campo] na tela prova que aquele campo chegou como TEXTO; um <img onerror> executado ou um atributo on* prova que escapou)
+const ESTRUTURAIS = new Set(["ref", "tipo", "codigo", "situacao", "faixa", "parentesco", "documento", "vinculo", "forma", "hash", "textoHash", "versao", "data", "dataHora", "validoAte", "instante", "entregueEm", "retiradoEm",
+  "pedidaEm", "entrouEm", "saiuEm", "em", "atualizadoEm", "registradoEm", "tipoRetirante"]);
+function atacarTudo(valor, chave) {
+  if (typeof valor === "string") return !valor || ESTRUTURAIS.has(chave) || /^\d{4}-\d{2}-\d{2}/.test(valor) ? valor : `${valor} ${ATAQUE(`t_${chave}`)}`;
+  if (Array.isArray(valor)) return valor.map(v => atacarTudo(v, chave));
+  if (valor && typeof valor === "object") return Object.fromEntries(Object.entries(valor).map(([k, v]) => [k, atacarTudo(v, k)]));
+  return valor;
+}
+
+// `op`: { ataque ("total": todo texto do servidor leva o ataque), hoje, agoraMs, fatorFresco }
 function criarServidor(op = {}) {
   const ataque = !!op.ataque;
   const n = (campo, base) => (ataque ? `${base} ${ATAQUE(campo)}` : base);   // com `ataque`, todo texto do servidor leva o texto de ataque
@@ -479,7 +490,8 @@ function criarServidor(op = {}) {
     return falha(404, "Ação inválida.");
   };
 
-  S.responder = responder;
+  S.ataqueTotal = op.ataque === "total";
+  S.responder = (c) => { const r = responder(c); if (S.ataqueTotal && r && r.corpo && typeof r.corpo === "object") r.corpo = atacarTudo(r.corpo, ""); return r; };
   S.codigoDe = (registroId) => S.codigos[registroId];
   S.registro = (registroId) => S.registros.find(x => x.registroId === registroId);
   S.definirSessao = (s) => { S.sessao = Object.assign({ lideranca: false, gestao: false }, s); };

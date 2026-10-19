@@ -9,14 +9,38 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const parser = require(path.resolve(__dirname, "../../api/node_modules/@babel/parser"));
-const { Documento, carregarHtml } = require("../front-menores/dom");
+const { Documento, Elemento: ElementoDoDom, Texto: TextoDoDom, carregarHtml } = require("../front-menores/dom");
 
 const RAIZ = path.resolve(__dirname, "../..");
 const APP = path.join(RAIZ, "app");
 const lerApp = (rel) => fs.readFileSync(path.join(APP, rel), "utf8").replace(/\r\n/g, "\n");   // os arquivos do app estão em CRLF: aqui tudo é LF (as mutações e o vm não ligam)
 
+// ---- o index.html (6.500 linhas) é analisado UMA vez por texto (original ou já com as trocas de mutação); cada ambiente recebe uma cópia da árvore, bem mais barata que analisar de novo ----
+const MODELOS_DE_HTML = new Map();
+function clonarNo(no, doc) {
+  if (no.nodeType === 3) return new TextoDoDom(no.data);
+  const novo = new ElementoDoDom(doc, no.localName);
+  for (const [k, v] of no.attrs) novo.attrs.set(k, v);
+  novo.style = Object.assign({}, no.style);
+  for (const f of no.children) { const c = clonarNo(f, doc); c.parentNode = novo; novo.children.push(c); }
+  return novo;
+}
+function carregarHtmlComCopia(doc, html) {
+  if (!MODELOS_DE_HTML.has(html)) { const modelo = new Documento(); carregarHtml(modelo, html); MODELOS_DE_HTML.set(html, { raiz: modelo.body, erros: modelo._erros.slice() }); }
+  const m = MODELOS_DE_HTML.get(html);
+  for (const f of m.raiz.children) { const c = clonarNo(f, doc); c.parentNode = doc.body; doc.body.children.push(c); }
+  doc._erros.push(...m.erros);
+}
+
 // ---- extração de declarações de nível superior (funções, const/let) pelo nome ----
+// (a árvore de cada arquivo é montada uma vez só por processo: o roteiro cria dezenas de ambientes e a prova de mutação centenas; as trocas de mutação entram DEPOIS, sobre o texto extraído)
+const CACHE_EXTRAIDO = new Map();
 function extrair(rel, nomes) {
+  const chave = `${rel}|${nomes.join(",")}`;
+  if (!CACHE_EXTRAIDO.has(chave)) CACHE_EXTRAIDO.set(chave, extrairSemCache(rel, nomes));
+  return CACHE_EXTRAIDO.get(chave);
+}
+function extrairSemCache(rel, nomes) {
   const codigo = lerApp(rel);
   const ast = parser.parse(codigo, { sourceType: "script", errorRecovery: false });
   const achados = new Map();
@@ -40,11 +64,12 @@ function criarAmbiente({ mutar = {}, agora = "2026-10-15T12:30:00.000Z", semModu
   const doc = new Documento();
   // foco, como o navegador: só recebe foco o que é focalizável (campo, botão, link com href ou tabindex), não está desabilitado e não está dentro de algo escondido; elemento retirado da árvore perde o foco (volta ao body)
   const Elemento = doc.body.constructor;
-  // (o painel inteiro — telaPainel e cxPainelConteudo — nunca é aberto aqui: o roteiro mexe direto nas abas; só conta o que fica DENTRO dele)
-  const FORA_DA_CONTA = ["telaPainel", "cxPainelConteudo"];
-  const focalizavel = (el) => { for (let p = el; p && p.nodeType === 1; p = p.parentNode) if (p.style && p.style.display === "none" && !FORA_DA_CONTA.includes(p.id)) return false; return !el.disabled && (el.hasAttribute("tabindex") || ["input", "select", "textarea", "button"].includes(el.localName) && el.type !== "hidden" || (el.localName === "a" && el.hasAttribute("href"))); };
+  const focalizavel = (el) => { for (let p = el; p && p.nodeType === 1; p = p.parentNode) if (p.style && p.style.display === "none") return false; return !el.disabled && (el.hasAttribute("tabindex") || ["input", "select", "textarea", "button"].includes(el.localName) && el.type !== "hidden" || (el.localName === "a" && el.hasAttribute("href"))); };
   Elemento.prototype.focus = function () { if (focalizavel(this)) { this.ownerDocument._focado = this; this.ownerDocument._focos.push(this.id || this.localName); } };
   Object.defineProperty(Elemento.prototype, "isConnected", { configurable: true, get() { for (let p = this; p; p = p.parentNode) if (p === this.ownerDocument.body) return true; return false; } });
+  // o navegador tira o foco de um botão que é desabilitado enquanto o tem (regra de "focus fixup" do HTML): o ambiente faz o mesmo
+  const modeloDisabled = Object.getOwnPropertyDescriptor(Elemento.prototype, "disabled");
+  Object.defineProperty(Elemento.prototype, "disabled", { configurable: true, get: modeloDisabled.get, set(v) { modeloDisabled.set.call(this, v); if (v && this.ownerDocument._focado === this) this.ownerDocument._focado = null; } });
   doc._focos = []; doc._focado = null; doc.visibilityState = "visible";
   Object.defineProperty(doc, "activeElement", { configurable: true, get() { return this._focado && this._focado.isConnected ? this._focado : this.body; } });
   doc.createDocumentFragment = () => doc.createElement("div");
@@ -114,9 +139,12 @@ function criarAmbiente({ mutar = {}, agora = "2026-10-15T12:30:00.000Z", semModu
   doc._executar = (codigo) => { try { vm.runInContext(codigo, contexto); } catch (e) { /* o ataque pode falhar; só importa se rodou */ } };
 
   // ---- a página de verdade ----
-  carregarHtml(doc, aplicarMutacoes("index.html", lerApp("index.html")));
+  carregarHtmlComCopia(doc, aplicarMutacoes("index.html", lerApp("index.html")));
   const errosDaPagina = doc._erros.length;
   doc._erros.length = 0;
+  // o painel aberto, como depois do login (a tela da sala só existe dentro dele): a portaria e o portão de login escondidos
+  doc.getElementById("telaCheckin").style.display = "none"; doc.getElementById("cxLoginPainel").style.display = "none";
+  doc.getElementById("telaPainel").style.display = "flex"; doc.getElementById("cxPainelConteudo").style.display = "flex";
 
   ev("var window = globalThis; var self = globalThis;", "janela");
   ev(`const API_BASE = "/api";
@@ -178,7 +206,8 @@ function avisarResultado(d) { mostrarToast(d.mensagem, d.sucesso ? "sucesso" : "
   const tique = () => { [...intervalos.values()].forEach(i => i.fn()); };
   const relogioMs = () => ctx.__relogioMs;
   const foco = () => doc.activeElement;
-  return { doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, modal, responderModal, responderTexto, limparRegistro, errosDaPagina, resposta, intervalos, gravacoes, impressoes, avancar, tique, relogioMs, temporizadores, dispararTemporizador, foco, saidaConsole };
+  const lerMutado = (rel) => aplicarMutacoes(rel, lerApp(rel));   // o mesmo arquivo do app, já com as trocas da prova de mutação (para as conferências de texto do roteiro)
+  return { lerMutado, doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, modal, responderModal, responderTexto, limparRegistro, errosDaPagina, resposta, intervalos, gravacoes, impressoes, avancar, tique, relogioMs, temporizadores, dispararTemporizador, foco, saidaConsole };
 }
 
 module.exports = { criarAmbiente, extrair, lerApp, APP };

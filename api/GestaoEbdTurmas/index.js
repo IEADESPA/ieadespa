@@ -132,7 +132,8 @@ module.exports = async function (context, req) {
       const { turmaId, contatoComMenores } = req.body || {};
       if (!turmaId || typeof contatoComMenores !== "boolean") return erro(context, 400, "Informe turmaId e contatoComMenores (true/false).");
       const tid = Number(turmaId);
-      if (!Number.isInteger(tid) || tid <= 0 || String(turmaId).trim() !== String(tid)) return erro(context, 400, "turmaId inválido.");
+      // só número ou texto de dígitos: uma lista [3] vira "3" ao virar texto e passava como se fosse o número 3 (achado na prova no banco real, e2e-19)
+      if ((typeof turmaId !== "number" && typeof turmaId !== "string") || !Number.isInteger(tid) || tid <= 0 || String(turmaId).trim() !== String(tid)) return erro(context, 400, "turmaId inválido.");
       const { ok, turma } = await podeAcessarTurma(pool, usuario, tid);
       // turma que não existe e turma fora do escopo: a mesma resposta
       if (!turma || !ok) return erro(context, 404, "Turma não encontrada.");

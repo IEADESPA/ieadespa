@@ -24,7 +24,7 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   for (const g of ["TR_CheckinRegistros_Protegido", "TR_CheckinEventos_Imutavel", "TR_CheckinAutorizados_SemApagar", "TR_CheckinVias_SemApagar"]) {
     ok((await escalar("SELECT COUNT(*) FROM sys.triggers WHERE name = @t AND is_disabled = 0", { t: g })) === 1, `gatilho ${g} existe e está ligado`);
   }
-  for (const [ix, tab] of [["UX_CheckinReg_MenorEmSala", "CheckinInfantilRegistros"], ["UX_CheckinVol_Presente", "CheckinInfantilVoluntarios"], ["UX_CheckinVol_UmaSala", "CheckinInfantilVoluntarios"], ["UX_CheckinAut_MembroAtivo", "CheckinInfantilAutorizados"], ["UX_CheckinVia_Pendente", "CheckinInfantilSegundasVias"]]) {
+  for (const [ix, tab] of [["UX_CheckinReg_MenorEmSala", "CheckinInfantilRegistros"], ["UX_CheckinReg_VisitanteEmSala", "CheckinInfantilRegistros"], ["UX_CheckinVol_Presente", "CheckinInfantilVoluntarios"], ["UX_CheckinVol_UmaSala", "CheckinInfantilVoluntarios"], ["UX_CheckinAut_MembroAtivo", "CheckinInfantilAutorizados"], ["UX_CheckinVia_Pendente", "CheckinInfantilSegundasVias"]]) {
     ok((await escalar("SELECT COUNT(*) FROM sys.indexes WHERE name = @i AND object_id = OBJECT_ID(@t) AND is_unique = 1 AND has_filter = 1", { i: ix, t: "dbo." + tab })) === 1, `índice único filtrado ${ix} existe`);
   }
   for (const [ix, tab] of [["IX_CheckinReg_Sala", "CheckinInfantilRegistros"], ["IX_CheckinReg_Menor", "CheckinInfantilRegistros"], ["IX_CheckinReg_Pendentes", "CheckinInfantilRegistros"], ["IX_CheckinEv_Registro", "CheckinInfantilEventos"],
@@ -63,7 +63,7 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   ok(!/^x$/.test(await escalar("SELECT BaseLegal FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'")), "e a base legal não ficou com o texto provisório");
 
   console.log("== CHECK e gatilhos: o registro da criança ==");
-  const sv = await H.servico(c1), sv2 = await H.servico(c1);
+  const sv = await H.servico(c1), sv2 = await H.servico(c1), sv3 = await H.servico(c1);
   await H.adulto(7020, "Adulto Gatilho E2E", c1); await H.crianca({ id: 7021, nome: "Crianca Gatilho A E2E", idade: 4, cong: c1 }); await H.crianca({ id: 7022, nome: "Crianca Gatilho B E2E", idade: 3, cong: c1 });
   function montar(over = {}, tabela = "CheckinInfantilRegistros", padrao = null) {
     const d = padrao || { ServicoId: sv, EquipeId: eq.maternal, CongregacaoId: c1, MenorMembroId: null, VisitanteNome: "Visitante Gatilho", VisitanteNascimento: iso("2022-01-01"), IdadeAnos: 4, FaixaSala: "MATERNAL", TrouxeNome: "Quem Trouxe", TrouxeDocumento: "RG", CodigoHash: "a".repeat(64), EntreguePorMembroId: 6010 };
@@ -98,6 +98,12 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
 
   const r1 = await ins({});
   ok((await escalar("SELECT Situacao FROM CheckinInfantilRegistros WHERE RegistroId = @r", { r: r1 })) === "NA_SALA", "o registro de visitante válido entra 'na sala'");
+  await insFalha("o MESMO visitante (nome e nascimento) no mesmo serviço: o índice único recusa o segundo registro", {}, /UX_CheckinReg_VisitanteEmSala|duplicate/i);
+  await insFalha("com o nome em outra caixa (maiúsculas) também: é o mesmo visitante", { VisitanteNome: "VISITANTE GATILHO" }, /UX_CheckinReg_VisitanteEmSala|duplicate/i);
+  await insFalha("e em OUTRA sala do mesmo serviço também (a criança não está em duas salas)", { EquipeId: eq.bercario }, /UX_CheckinReg_VisitanteEmSala|duplicate/i);
+  const rVisOutroNasc = await ins({ VisitanteNascimento: iso("2022-01-02") });
+  const rVisOutroServico = await ins({ ServicoId: sv2 });
+  ok(rVisOutroNasc > r1 && rVisOutroServico > rVisOutroNasc, "outro nascimento, ou o mesmo visitante em OUTRO serviço, são registros novos (cada culto tem o seu)");
   const rm1 = await ins({ MenorMembroId: 7021, VisitanteNome: null, VisitanteNascimento: null });
   await insFalha("a criança membro já está numa sala: o índice único recusa a segunda", { MenorMembroId: 7021, VisitanteNome: null, VisitanteNascimento: null }, /UX_CheckinReg_MenorEmSala|duplicate/i);
   await ins({ MenorMembroId: 7022, VisitanteNome: null, VisitanteNascimento: null });
@@ -109,9 +115,17 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   await q("UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME(), RetiradoTipo = 'RESPONSAVEL', RetiradoMembroId = 7020, RetiradoPorOperadorId = 6010 WHERE RegistroId = @r", { r: rm2 });
 
   console.log("== o registro é prova de custódia: o que o gatilho proíbe ==");
+  await aceita("UPDATE que não alcança NENHUM registro não é erro (a retirada que perde a corrida, o destravar de quem não está travado e a retenção diária sem nada a fazer dependem disto)", "UPDATE CheckinInfantilRegistros SET Tentativas = Tentativas + 1 WHERE RegistroId = -1", {});
+  await aceita("DELETE que não alcança nenhum registro também não é erro (só apagar de verdade é)", "DELETE FROM CheckinInfantilRegistros WHERE RegistroId = -1", {});
+  await nega("o banco recusa 'UPDATE ... OUTPUT' sem INTO nesta tabela (tem gatilho, erro 334): é por isso que a reserva de tentativa usa OUTPUT INTO", "UPDATE CheckinInfantilRegistros SET Tentativas = Tentativas + 1 OUTPUT INSERTED.Tentativas WHERE RegistroId = @r", { r: r1 }, /OUTPUT clause without INTO|cláusula OUTPUT sem/i);
+  await aceita("a reserva de tentativa como o código a faz (OUTPUT INTO + SELECT) que não casa com a criança (travada, sem tentativas ou já retirada) devolve zero linhas, sem erro",
+    "DECLARE @res TABLE (tentativas INT, hash NVARCHAR(64), geracao INT); UPDATE CheckinInfantilRegistros SET Tentativas = Tentativas + 1 OUTPUT INSERTED.Tentativas, INSERTED.CodigoHash, INSERTED.CodigoGeracao INTO @res WHERE RegistroId = @r AND Situacao = 'NA_SALA' AND Travado = 0 AND Tentativas < 0; SELECT tentativas FROM @res", { r: r1 });
+  const reservada = await q("DECLARE @res TABLE (tentativas INT, hash NVARCHAR(64), geracao INT); UPDATE CheckinInfantilRegistros SET Tentativas = Tentativas + 1 OUTPUT INSERTED.Tentativas, INSERTED.CodigoHash, INSERTED.CodigoGeracao INTO @res WHERE RegistroId = @r AND Situacao = 'NA_SALA' AND Travado = 0 AND Tentativas < 5; SELECT tentativas, hash, geracao FROM @res", { r: r1 });
+  ok(reservada.length === 1 && reservada[0].tentativas === 1 && reservada[0].geracao === 1 && /^[0-9a-f]{64}$/.test(reservada[0].hash), "e a reserva que casa devolve a linha (tentativa 1, geração 1, o HMAC guardado)", reservada);
+  await q("UPDATE CheckinInfantilRegistros SET Tentativas = 0 WHERE RegistroId = @r", { r: r1 });
   await nega("o registro não se apaga", "DELETE FROM CheckinInfantilRegistros WHERE RegistroId = @r", { r: r1 }, /prova de custódia: não se apaga/);
   await nega("nem uma pessoa 'na sala' se apaga", "DELETE FROM CheckinInfantilRegistros WHERE Situacao = 'NA_SALA' AND RegistroId = @r", { r: r1 }, /não se apaga/);
-  for (const [coluna, valor] of [["ServicoId", sv2], ["EquipeId", eq.bercario], ["CongregacaoId", c2], ["EntreguePorMembroId", 6011], ["IdadeAnos", 9], ["FaixaSala", "INFANTIL"]]) {
+  for (const [coluna, valor] of [["ServicoId", sv3], ["EquipeId", eq.bercario], ["CongregacaoId", c2], ["EntreguePorMembroId", 6011], ["IdadeAnos", 9], ["FaixaSala", "INFANTIL"]]) {
     await nega(`o ${coluna} do registro não se altera`, `UPDATE CheckinInfantilRegistros SET ${coluna} = @v WHERE RegistroId = @r`, { v: valor, r: r1 }, /não se altera/);
   }
   await nega("o horário em que a criança foi entregue não se altera", "UPDATE CheckinInfantilRegistros SET EntregueEm = DATEADD(HOUR, 1, EntregueEm) WHERE RegistroId = @r", { r: r1 }, /não se altera/);
@@ -132,7 +146,12 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   await aceita("a anonimização (a única reescrita admitida dos campos pessoais) passa", "UPDATE CheckinInfantilRegistros SET VisitanteNome = N'(anonimizado)', VisitanteNascimento = NULL, TrouxeNome = NULL, TrouxeContato = NULL, RetiradoNome = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: r1 });
   await nega("depois de anonimizado, não se desfaz (o CHECK e o gatilho seguram)", "UPDATE CheckinInfantilRegistros SET AnonimizadoEm = NULL WHERE RegistroId = @r", { r: r1 }, /não se altera|CK_CheckinReg_Crianca/);
   await nega("nem se troca a data da anonimização", "UPDATE CheckinInfantilRegistros SET AnonimizadoEm = DATEADD(DAY, 1, AnonimizadoEm) WHERE RegistroId = @r", { r: r1 }, /não se altera/);
-
+  // a criança MEMBRO: a anonimização tira também as três matrículas (senão o registro segue ligado às pessoas); tirá-las SEM anonimizar, ou trocar por outra, não
+  await nega("tirar a matrícula de quem retirou SEM anonimizar é proibido", "UPDATE CheckinInfantilRegistros SET RetiradoMembroId = NULL WHERE RegistroId = @r", { r: rm1 }, /não se altera|CK_CheckinReg_Estado/);
+  await nega("tirar a matrícula da criança SEM anonimizar é proibido", "UPDATE CheckinInfantilRegistros SET MenorMembroId = NULL WHERE RegistroId = @r", { r: rm1 }, /não se altera|CK_CheckinReg_Crianca/);
+  await nega("trocar a matrícula de quem retirou por OUTRA, mesmo anonimizando, é proibido", "UPDATE CheckinInfantilRegistros SET RetiradoMembroId = 7022, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rm1 }, /não se altera/);
+  await aceita("a anonimização completa de uma criança MEMBRO (tira as três matrículas no mesmo comando que preenche AnonimizadoEm) passa", "UPDATE CheckinInfantilRegistros SET MenorMembroId = NULL, TrouxeMembroId = NULL, RetiradoMembroId = NULL, TrouxeNome = NULL, RetiradoNome = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rm1 });
+  await nega("depois de anonimizada, ninguém recoloca uma matrícula nela", "UPDATE CheckinInfantilRegistros SET MenorMembroId = 7022 WHERE RegistroId = @r", { r: rm1 }, /não se altera/);
   console.log("== o histórico de acréscimo ==");
   await aceita("um evento entra", "INSERT INTO CheckinInfantilEventos (RegistroId, ServicoId, EquipeId, Tipo, AtorMembroId, Detalhe) VALUES (@r, @s, @e, 'CHECKIN', 6010, N'adultos=2;criancas=1')", { r: r1, s: sv, e: eq.maternal });
   await aceita("evento sem registro (voluntário entrou na sala) também entra", "INSERT INTO CheckinInfantilEventos (RegistroId, ServicoId, EquipeId, Tipo, AtorMembroId) VALUES (NULL, @s, @e, 'VOLUNTARIO_ENTROU', 6010)", { s: sv, e: eq.maternal });
@@ -224,6 +243,13 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   ok((await escalar("SELECT Ativa FROM NotificacaoRegras WHERE Chave = 'CHECKIN_SEM_RETIRADA'")) === false, "nem religa uma regra que a gestão desativou");
   ok((await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'")) === 1 && (await escalar("SELECT DiasRetencao FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'")) === 2000, "nem duplica a política de retenção nem desfaz o prazo ajustado");
   ok((await escalar("SELECT COUNT(*) FROM sys.triggers WHERE name LIKE 'TR[_]Checkin%' AND is_disabled = 1")) === 0, "os 4 gatilhos continuam ligados");
+  // quem já tinha aplicado a versão ANTIGA da 145 (o CHECK da saúde sem a exigência da origem) recebe o texto novo ao reaplicar
+  await q("ALTER TABLE dbo.CheckinInfantilRegistros DROP CONSTRAINT CK_CheckinReg_Saude");
+  await q(`ALTER TABLE dbo.CheckinInfantilRegistros ADD CONSTRAINT CK_CheckinReg_Saude CHECK ((SaudeTexto IS NULL AND SaudeOrigem IS NULL AND SaudeTextoVersao IS NULL AND SaudeTextoHash IS NULL)
+    OR (SaudeTexto IS NOT NULL AND SaudeOrigem = 'CADASTRO') OR (SaudeTexto IS NOT NULL AND SaudeOrigem = 'BALCAO' AND SaudeTextoVersao IS NOT NULL AND SaudeTextoHash IS NOT NULL))`);
+  ok((await escalar("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_CheckinReg_Saude' AND definition NOT LIKE N'%SaudeOrigem] IS NOT NULL%'")) === 1, "(preparo) o CHECK antigo da saúde está no banco");
+  for (const lote of sqlTexto.split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean)) await pool.request().query(lote);
+  ok((await escalar("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_CheckinReg_Saude' AND definition LIKE N'%SaudeOrigem] IS NOT NULL%' AND is_disabled = 0 AND is_not_trusted = 0")) === 1, "reaplicar a 145 troca o CHECK antigo da saúde pelo novo (ligado e confiável)");
   const rSolto = await ins({ VisitanteNome: "Visitante sem dependentes" });
   await nega("e o gatilho refeito continua valendo (apagar um registro sem nada ligado a ele)", "DELETE FROM CheckinInfantilRegistros WHERE RegistroId = @r", { r: rSolto }, /não se apaga/);
   await nega("e a regra nova do CHECK da saúde também (texto sem origem)", montar({ SaudeTexto: "alergia" }).texto, montar({ SaudeTexto: "alergia" }).params, /CK_CheckinReg_Saude/);
@@ -239,7 +265,7 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   await q("DELETE FROM dbo.CheckinInfantilVoluntarios; DELETE FROM dbo.CheckinInfantilSaude");
   await q("DISABLE TRIGGER dbo.TR_MenoresRetiradas_Imutavel ON dbo.MinisterioMenoresRetiradas; DELETE FROM dbo.MinisterioMenoresRetiradas WHERE Motivos = N'TESTE145'; ENABLE TRIGGER dbo.TR_MenoresRetiradas_Imutavel ON dbo.MinisterioMenoresRetiradas");
   await q("DELETE FROM EbdTurmas WHERE TurmaId = @t", { t: turma });
-  await q("DELETE FROM EscalasServicos WHERE ServicoId IN (@a, @b)", { a: sv, b: sv2 });
+  await q("DELETE FROM EscalasServicos WHERE ServicoId IN (@a, @b, @c)", { a: sv, b: sv2, c: sv3 });
   await q("DELETE FROM MembroReferencia WHERE MembroId IN (7020, 7021, 7022)");
   let sobras = 0; for (const t of H.TABELAS_CK) sobras += await escalar(`SELECT COUNT(*) FROM ${t}`);
   ok(sobras === 0 && (await escalar("SELECT COUNT(*) FROM sys.triggers WHERE (name LIKE 'TR[_]Checkin%' OR name = 'TR_MenoresRetiradas_Imutavel') AND is_disabled = 1")) === 0 && (await escalar("SELECT COUNT(*) FROM MinisterioMenoresRetiradas WHERE Motivos = N'TESTE145'")) === 0,
@@ -258,7 +284,28 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   const gestaoVila = (await psc.resolverDestinatariosDaCongregacao(pool, { permissao: "habilitacao_voluntarios", congregacaoId: c2 })).map((d) => Number(d.membroId)).sort((a, b) => a - b);
   ok(gestaoCentral.includes(7010) && !gestaoCentral.includes(7011) && gestaoVila.includes(7011) && !gestaoVila.includes(7010), "a Secretaria de cada congregação recebe só os avisos da própria congregação", { gestaoCentral, gestaoVila });
   ok(gestaoCentral.includes(1001) && gestaoCentral.includes(1002) && gestaoVila.includes(1001), "e a Diretoria (nível geral) recebe os de todas", { gestaoCentral, gestaoVila });
-  const cenario = { c1, c2, c3, eq, secretaria: { central: 7010, vila: 7011 }, gestaoCentral, gestaoVila, voluntariosCentral: [6010, 6011, 6012, 6024], lideres: { central: 6001, centralDois: 6002, vila: 6003 }, voluntariosVila: [6023, 6026],
+  console.log("== o cenário: famílias, crianças e responsáveis cadastrados pela Secretaria (ficam na base 'cenario-checkin') ==");
+  // Adultos da Central: 7101 e 7102 são pai e mãe da Bia e do Caio; 7103 é mãe da Duda e do Enzo; 7104 e 7105 são adultos SEM vínculo cadastrado (a avó e um conhecido); 7108 é adolescente (17).
+  const pessoas = { alice: 7101, bernardo: 7102, claudia: 7103, dina: 7104, everton: 7105, irene: 7106, gustavo: 7108 };
+  await H.adulto(7101, "Alice Mae E2E", c1); await H.adulto(7102, "Bernardo Pai E2E", c1); await H.adulto(7103, "Claudia Mae E2E", c1);
+  await H.adulto(7104, "Dina Avo E2E", c1); await H.adulto(7105, "Everton Conhecido E2E", c1); await H.adulto(7106, "Irene Mae Vila E2E", c2);
+  await H.membro({ id: 7108, nome: "Gustavo Adolescente E2E", nasc: H.nascimentoParaIdade(17), cong: c1 });
+  // As crianças (menores de 18, cada uma com a idade que o roteiro precisa). `resp` = os responsáveis cadastrados (VoluntariadoResponsaveis, documento conferido pela Secretaria).
+  const criancas = { bia: 7201, caio: 7202, duda: 7203, enzo: 7204, fabio: 7205, gabi: 7206, heitor: 7207, isa: 7208, joana: 7209, heitorVila: 7220, kauaVila: 7221 };
+  await H.crianca({ id: 7201, nome: "Bia Silva E2E", idade: 4, cong: c1, resp: [[7101, "MAE"], [7102, "PAI"]] });
+  await H.crianca({ id: 7202, nome: "Caio Silva E2E", idade: 4, cong: c1, resp: [[7101, "MAE"]] });
+  await H.crianca({ id: 7203, nome: "Duda Souza E2E", idade: 2, cong: c1, resp: [[7103, "MAE"]] });
+  await H.crianca({ id: 7204, nome: "Enzo Souza E2E", idade: 4, cong: c1, resp: [[7103, "MAE"]] });
+  await H.crianca({ id: 7205, nome: "Fabio Sem Responsavel E2E", idade: 4, cong: c1 });
+  await H.crianca({ id: 7206, nome: "Gabi Adolescente E2E", idade: 17, cong: c1, resp: [[7101, "TUTOR"]] });
+  await H.membro({ id: 7207, nome: "Heitor Maior de Idade E2E", nasc: H.nascimentoParaIdade(18), cong: c1 });
+  await H.membro({ id: 7208, nome: "Isa Sem Nascimento E2E", nasc: null, cong: c1 });
+  await H.crianca({ id: 7209, nome: "Joana Silva E2E", idade: 3, cong: c1, resp: [[7101, "MAE"]] });
+  await H.crianca({ id: 7220, nome: "Heitor Vila E2E", idade: 7, cong: c2, resp: [[7106, "MAE"]] });
+  await H.crianca({ id: 7221, nome: "Kaua Vila E2E", idade: 6, cong: c2, resp: [[7106, "MAE"]] });
+  ok((await escalar("SELECT COUNT(*) FROM VoluntariadoResponsaveis WHERE MenorMembroId BETWEEN 7201 AND 7221 AND RevogadoEm IS NULL")) === 9, "9 responsáveis cadastrados nas 8 crianças que têm responsável (o Fábio não tem)");
+  ok((await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId BETWEEN 7101 AND 7221")) === 18, "as 18 pessoas do cenário (adultos, crianças e o adolescente) existem");
+  const cenario = { c1, c2, c3, eq, pessoas, criancas, secretaria: { central: 7010, vila: 7011 }, gestaoCentral, gestaoVila, voluntariosCentral: [6010, 6011, 6012, 6024], lideres: { central: 6001, centralDois: 6002, vila: 6003 }, voluntariosVila: [6023, 6026],
     faixas: { bercario: 3, maternal: 5, infantilVila: 8 }, faixaDaEquipe: { bercario: "BERCARIO", maternal: "MATERNAL", infantilVila: "INFANTIL" } };
   fs.writeFileSync(path.join(__dirname, "cenario-checkin.json"), JSON.stringify(cenario, null, 1));
   const menoresJson = path.join(__dirname, "cenario-menores.json");

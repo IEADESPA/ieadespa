@@ -68,7 +68,9 @@ describe("a porta de todas as rotas", () => {
     const respostas = [
       await chamar("catalogos", { token: PIN() }), await chamar("nao-existe", { token: PIN() }), await chamar("minhas-salas", { token: PIN() }),
       await chamar("checkin", { metodo: "POST", token: PIN(), corpo: {} }), await chamar("sala", { token: PIN(), query: { servicoId: "x" } }),
-      await chamar("checkin", { metodo: "DELETE", token: PIN() })
+      await chamar("checkin", { metodo: "DELETE", token: PIN() }),
+      // até a recusa por falta de sessão (achado na prova no banco real: o 401 saía sem o cabeçalho)
+      await chamar("sala", { query: CORPO_SALA }), await chamar("checkin", { metodo: "POST" }), await chamar("sala", { token: "lixo", query: CORPO_SALA })
     ];
     for (const r of respostas) expect(r.headers).toMatchObject({ "Cache-Control": "no-store" });
   });
@@ -135,21 +137,53 @@ describe("a sala (porta e leitura)", () => {
   const sala = (extra = {}) => quando(/FROM EscalasServicos s\s+JOIN EscalasEquipes e ON e\.EquipeId = @e/, [{ ...SALA_BANCO, ...extra }]);
   const escalado = (sim) => quando(/FROM EscalasAlocacoes WHERE ServicoId = @s AND EquipeId = @e AND MembroId = @m AND Status IN/, sim ? [{ x: 1 }] : []);
 
-  test("sala que não existe e equipe sem a marca: respostas de recusa (404 e 422), nunca dado", async () => {
-    expect((await chamar("sala", { token: PIN(), query: CORPO_SALA })).status).toBe(404);
-    sala({ ContatoComMenores: 0 });
-    mockRegras = []; sala({ ContatoComMenores: 0 });
-    const r = await chamar("sala", { token: PIN(), query: CORPO_SALA });
-    expect(r.status).toBe(422);
-    expect(r.body.mensagem).toBe(ck.MENSAGENS.SALA_SEM_MARCA);
+  // Achado na prova no banco real (e2e-20): "não existe" e "não é seu" tinham respostas DIFERENTES (404 e 403), e a marca da equipe também aparecia (422): três sondas para quem só tem um login.
+  test("sala que não existe, sala sem relação com a pessoa e equipe sem a marca (para quem não é dela): a MESMA resposta (404), nunca dado", async () => {
+    const naoExiste = await chamar("sala", { token: PIN(), query: CORPO_SALA });
+    expect(naoExiste.status).toBe(404);
+    mockRegras = []; sala({ ContatoComMenores: 0 }); escalado(false);
+    const semMarcaDeOutro = await chamar("sala", { token: PIN(), query: CORPO_SALA });
+    expect(semMarcaDeOutro.status).toBe(404);
+    expect(semMarcaDeOutro.body).toEqual(naoExiste.body);
+    mockRegras = []; sala(); escalado(false);
+    const existeSemRelacao = await chamar("sala", { token: PIN(), query: CORPO_SALA });
+    expect(existeSemRelacao.status).toBe(404);
+    expect(existeSemRelacao.body).toEqual(naoExiste.body);
+    expect(com(/FROM CheckinInfantilRegistros r\s+LEFT JOIN/)).toHaveLength(0);
   });
-  test("quem não está escalado e não é da liderança do escopo recebe 403 na leitura da sala (nada de dado de criança)", async () => {
+  test("quem é da sala: equipe sem a marca é dita ao ENTRAR e ao fazer check-in (422), mas ler a sala e sair dela continuam valendo (a criança que está dentro não fica presa)", async () => {
+    sala({ ContatoComMenores: 0 }); escalado(true);
+    for (const [acao, metodo, dados] of [["entrar-na-sala", "POST", CORPO_SALA], ["checkin", "POST", { ...CORPO_SALA, criancas: [{ visitante: { nome: "Davi Lima", nascimento: "2021-03-02" } }], trouxe: { nome: "Paula Lima", parentesco: "MAE", documento: "RG", contato: "94991112222" } }]]) {
+      const r = await chamar(acao, { metodo, token: PIN(10), corpo: dados });
+      expect(r.status).toBe(422);
+      expect(r.body.mensagem).toBe(ck.MENSAGENS.SALA_SEM_MARCA);
+    }
+    expect((await chamar("sala", { token: PIN(10), query: CORPO_SALA })).status).toBe(200);
+    expect((await chamar("relatorio", { token: PIN(10), query: CORPO_SALA })).status).toBe(200);
+    quando(/SELECT TOP 1 PresencaId FROM CheckinInfantilVoluntarios WITH \(UPDLOCK\)/, [{ PresencaId: 1 }]);
+    expect((await chamar("sair-da-sala", { metodo: "POST", token: PIN(10), corpo: CORPO_SALA })).status).toBe(200);
+  });
+  test("quem não está escalado e não é da liderança do escopo recebe 404 na leitura da sala (a mesma de 'não existe'; nada de dado de criança)", async () => {
     sala(); escalado(false);
     for (const t of [PIN(), LOCAL(["habilitacao_voluntarios"], ["Vila"]), LOCAL(["pessoas"])]) {
       const r = await chamar("sala", { token: t, query: CORPO_SALA });
-      expect(r.status).toBe(403);
+      expect(r.status).toBe(404);
     }
     expect(com(/FROM CheckinInfantilRegistros r\s+LEFT JOIN/)).toHaveLength(0);
+  });
+  test("registro que existe mas é de uma sala sem relação com a pessoa: a MESMA resposta de registro que não existe (retirar, segunda via)", async () => {
+    sala(); escalado(false);
+    quando(/FROM CheckinInfantilRegistros r\s+LEFT JOIN MembroReferencia m/, [{ RegistroId: 9, ServicoId: 5, EquipeId: 7, Situacao: "NA_SALA", MenorMembroId: 30, CriancaNome: "Caio Souza" }]);
+    const corposReais = [["retirar", { registroId: 9, codigo: "AB3K9Z", retirante: { ref: "RESP:40" } }], ["segunda-via-pedir", { registroId: 9, pessoa: { ref: "RESP:40" }, documento: "RG" }], ["segunda-via-confirmar", { registroId: 9 }]];
+    for (const [acao, corpo] of corposReais) {
+      const real = await chamar(acao, { metodo: "POST", token: PIN(10), corpo });
+      mockRegras = mockRegras.filter(([p]) => !/FROM CheckinInfantilRegistros r/.test(p.source));
+      const falso = await chamar(acao, { metodo: "POST", token: PIN(10), corpo: { ...corpo, registroId: 999 } });
+      expect(real.status).toBe(404);
+      expect(real.body).toEqual(falso.body);
+      quando(/FROM CheckinInfantilRegistros r\s+LEFT JOIN MembroReferencia m/, [{ RegistroId: 9, ServicoId: 5, EquipeId: 7, Situacao: "NA_SALA", MenorMembroId: 30, CriancaNome: "Caio Souza" }]);
+    }
+    expect(escritas()).toHaveLength(0);
   });
   test("o voluntário escalado lê a sala (visão da equipe, sem telefone); a liderança do escopo lê com a visão de gestão", async () => {
     sala();
@@ -171,9 +205,12 @@ describe("a sala (porta e leitura)", () => {
     expect(r.body.criancas[0].telefoneDeQuemTrouxe).toBe("94991112222");
   });
   test("sair da sala tirando OUTRA pessoa é só da liderança do escopo; sair a si mesmo vale para quem está na sala", async () => {
-    sala();
-    const r = await chamar("sair-da-sala", { metodo: "POST", token: PIN(10), corpo: { ...CORPO_SALA, membroId: 11 } });
-    expect(r.status).toBe(403);
+    sala(); escalado(true);
+    let r = await chamar("sair-da-sala", { metodo: "POST", token: PIN(10), corpo: { ...CORPO_SALA, membroId: 11 } });
+    expect(r.status).toBe(403);                       // da equipe, mas sem a liderança: 403
+    mockRegras = []; sala(); escalado(false);
+    r = await chamar("sair-da-sala", { metodo: "POST", token: PIN(10), corpo: { ...CORPO_SALA, membroId: 11 } });
+    expect(r.status).toBe(404);                       // sem relação nenhuma com a sala: a mesma resposta de 'não existe'
     expect(escritas()).toHaveLength(0);
   });
 });

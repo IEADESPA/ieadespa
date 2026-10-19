@@ -989,6 +989,8 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 #subMeupainelCheckininfantil .opcao-checkbox input, #abaCheckininfantil .opcao-checkbox input { width: 24px; height: 24px; flex: 0 0 24px; margin: 2px 0 0; }
 #abaCheckininfantil .barra-lista label { font-weight: 600; font-size: 0.85rem; }
 .chk-pilulas .cal-pilula { min-height: 44px; }
+/* o cinza das legendas e dos subtítulos do sistema (#6B7280) passa de 4,5:1 só sobre branco; nos cartões (fundo tingido) fica em 4,4:1: aqui o texto é mais escuro (6,9:1) */
+#subMeupainelCheckininfantil .psc-legenda, #abaCheckininfantil .psc-legenda, #subMeupainelCheckininfantil .subtitle:not(.psc-aviso), #abaCheckininfantil .subtitle:not(.psc-aviso) { color: #4B5563; }
 /* a etiqueta e o recibo: na tela e no papel (etiqueta pequena; recibo à parte; a saúde em destaque) */
 .chk-imprimivel { margin-top: 8px; }
 .chk-lote { margin: 0 0 16px; }

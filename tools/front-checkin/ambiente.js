@@ -91,7 +91,7 @@ function criarAmbiente({ mutar = {}, agora = "2026-10-15T12:30:00.000Z", semModu
     const u = new URL(url, "http://local");
     const metodo = (opts.method || "GET").toUpperCase();
     const cabecalhos = Object.fromEntries(Object.entries(opts.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
-    const chamada = { metodo, caminho: u.pathname.replace(/^\/api\//, ""), consulta: Object.fromEntries(u.searchParams), corpo: opts.body ? JSON.parse(opts.body) : null, semFator: !!opts.semFator, cabecalhos, url: String(url) };
+    const chamada = { metodo, caminho: u.pathname.replace(/^\/api\//, ""), consulta: Object.fromEntries(u.searchParams), corpo: opts.body ? JSON.parse(opts.body) : null, semFator: !!opts.semFator, cabecalhos, url: String(url), temSinal: !!opts.signal };
     chamada.chave = `${metodo} ${chamada.caminho}`;
     chamada.comToken = "x-auth-token" in cabecalhos || "authorization" in cabecalhos;
     api.chamadas.push(chamada);
@@ -99,11 +99,15 @@ function criarAmbiente({ mutar = {}, agora = "2026-10-15T12:30:00.000Z", semModu
     const rota = api.rotas[chamada.chave];
     const r = rota ? (typeof rota === "function" ? rota(chamada) : rota) : (api.responder ? api.responder(chamada) : null);
     const reten = api.retencoes.find(x => !x.usada && x.casa(chamada));
+    // o tempo-limite do pedido (AbortSignal.timeout): se o sinal dispara enquanto o pedido espera, o fetch falha como no navegador
+    const sinal = opts.signal;
+    const interrompido = sinal ? new Promise((_, rej) => { const f = () => rej(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" })); if (sinal.aborted) f(); else sinal.addEventListener("abort", f, { once: true }); }) : null;
+    if (interrompido) interrompido.catch(() => {});
     if (reten) {
       reten.usada = true; reten.chegou = true;
-      await reten.promessa;
-    }
-    if (api.redeCaida) throw new TypeError("Failed to fetch");
+      await (interrompido ? Promise.race([reten.promessa, interrompido]) : reten.promessa);
+    } else if (interrompido && sinal.aborted) await interrompido;
+    if (api.redeCaida || (r && r.perdeuAResposta)) throw new TypeError("Failed to fetch");   // (perdeuAResposta: o servidor JÁ processou o pedido e a resposta se perdeu no caminho)
     if (!r) return resposta(404, { sucesso: false, mensagem: `rota sem fixture: ${chamada.chave}` });
     return resposta(r.status || 200, r.corpo, r.naoJson);
   };
@@ -122,6 +126,11 @@ function criarAmbiente({ mutar = {}, agora = "2026-10-15T12:30:00.000Z", semModu
   ctx.clearTimeout = (id) => { temporizadores.delete(id); };
   const dispararTemporizador = (ms) => { for (const [id, t] of [...temporizadores]) if (t.ms === ms) { temporizadores.delete(id); t.fn(); } };
   ctx.AbortController = AbortController;
+  ctx.AbortSignal = AbortSignal;
+  // ouvintes da janela (o módulo registra o aviso de saída com código não impresso: beforeunload)
+  const ouvintesDaJanela = {};
+  ctx.addEventListener = (tipo, fn) => { (ouvintesDaJanela[tipo] = ouvintesDaJanela[tipo] || []).push(fn); };
+  const dispararJanela = (tipo) => { const ev = { type: tipo, defaultPrevented: false, returnValue: undefined, preventDefault() { this.defaultPrevented = true; } }; const retornos = (ouvintesDaJanela[tipo] || []).map(fn => fn(ev)); return { evento: ev, retornos, ouvintes: (ouvintesDaJanela[tipo] || []).length }; };
   ctx.setImmediate = setImmediate;
   // ---- armazenamento do navegador: anota tudo o que for gravado (o código de retirada nunca pode estar aqui) ----
   const gravacoes = [];
@@ -133,7 +142,12 @@ function criarAmbiente({ mutar = {}, agora = "2026-10-15T12:30:00.000Z", semModu
   ctx.console = { log: (...a) => saidaConsole.push(a.map(String).join(" ")), error: (...a) => saidaConsole.push(a.map(String).join(" ")), warn: (...a) => saidaConsole.push(a.map(String).join(" ")), info: (...a) => saidaConsole.push(a.map(String).join(" ")) };
   // ---- impressão observável: anota as classes do <body> NO MOMENTO de imprimir ----
   const impressoes = [];
-  ctx.print = () => { impressoes.push({ classes: doc.body.className }); };
+  // (o que o navegador levaria ao papel: as classes do <body> E os lotes marcados como alvo, com o texto de cada um — um lote sem a marca é escondido pelo CSS de impressão)
+  ctx.print = () => {
+    const todos = [...doc.body.descendentes()];
+    const alvos = todos.filter(x => /(^|\s)chk-lote-alvo(\s|$)/.test(x.className));
+    impressoes.push({ classes: doc.body.className, alvos: alvos.map(x => x.id), textoAlvos: alvos.map(x => x.textContent).join("|"), lotesNaTela: todos.filter(x => /(^|\s)chk-lote(\s|$)/.test(x.className)).map(x => x.id) });
+  };
   ctx.__xss = function (c) { ctx.__xss.chamadas.push(String(c)); };
   ctx.__xss.chamadas = [];
   doc._executar = (codigo) => { try { vm.runInContext(codigo, contexto); } catch (e) { /* o ataque pode falhar; só importa se rodou */ } };
@@ -207,7 +221,7 @@ function avisarResultado(d) { mostrarToast(d.mensagem, d.sucesso ? "sucesso" : "
   const relogioMs = () => ctx.__relogioMs;
   const foco = () => doc.activeElement;
   const lerMutado = (rel) => aplicarMutacoes(rel, lerApp(rel));   // o mesmo arquivo do app, já com as trocas da prova de mutação (para as conferências de texto do roteiro)
-  return { lerMutado, doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, modal, responderModal, responderTexto, limparRegistro, errosDaPagina, resposta, intervalos, gravacoes, impressoes, avancar, tique, relogioMs, temporizadores, dispararTemporizador, foco, saidaConsole };
+  return { lerMutado, doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, modal, responderModal, responderTexto, limparRegistro, errosDaPagina, resposta, intervalos, gravacoes, impressoes, avancar, tique, relogioMs, temporizadores, dispararTemporizador, foco, saidaConsole, dispararJanela };
 }
 
 module.exports = { criarAmbiente, extrair, lerApp, APP };

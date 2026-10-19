@@ -89,9 +89,10 @@ function criarServidor(op = {}) {
     if (!presente(s, id)) return { sucesso: false, proibido: true, mensagem: "Entre na sala primeiro (botão \"Entrar na sala\"): só quem está na sala opera o check-in." };
     return { sucesso: true };
   };
-  const presentes = (s) => s.voluntarios.filter(v => v.saiuEm == null).map(v => {
+  // `comApto`: só a visão da LIDERANÇA recebe "apto" (o voluntário recebe só contaComoAdulto: o motivo de não contar não é assunto dele)
+  const presentes = (s, comApto = true) => s.voluntarios.filter(v => v.saiuEm == null).map(v => {
     const p = S.pessoas[v.membroId] || { apto: false, adulto: false };
-    return { membroId: v.membroId, nome: nomeDe(v.membroId), entrouEm: iso(v.entrouEm), apto: !!p.apto, contaComoAdulto: !!(p.apto && p.adulto) };
+    return Object.assign({ membroId: v.membroId, nome: nomeDe(v.membroId), entrouEm: iso(v.entrouEm) }, comApto ? { apto: !!p.apto } : {}, { contaComoAdulto: !!(p.apto && p.adulto) });
   });
   const naSala = (s) => S.registros.filter(r => r.servicoId === s.servicoId && r.equipeId === s.equipeId && r.situacao !== "RETIRADA");
   const membroDe = (id) => S.membros.find(m => m.menorId === Number(id)) || null;
@@ -121,10 +122,11 @@ function criarServidor(op = {}) {
         travado: !!r.travado, tentativasRestantes: Math.max(0, prazos.tentativasCodigo - r.tentativas), saude: r.saudeTexto || null,
         quemTrouxe: { nome: r.trouxeMembroId ? nomeDeResponsavel(r.trouxeMembroId) : r.trouxeNome || null, parentesco: r.trouxeParentesco || null },
         quemPodeRetirar: autorizadosDe(r).map(a => ({ ref: a.ref, tipo: a.tipo, nome: a.nome, rotulo: a.rotulo })),
-        segundaViaPendente: via ? { viaId: via.viaId, pedidaEm: iso(via.pedidaEm), pedidaPorMembroId: via.pedidaPor, pessoaNome: via.pessoaNome || null } : null,
+        segundaViaPendente: via ? { viaId: via.viaId, pedidaEm: iso(via.pedidaEm), pedidaPorMembroId: via.pedidaPor, pessoaNome: via.pessoaNome || null, documento: via.documento || null } : null,
         divergencia: r.situacao === "RETIRADA_PENDENTE" ? { pedidaEm: iso(r.divergenciaPedidaEm), quem: { nome: r.retiradoNome || null, parentesco: r.retiradoParentesco || null, documento: r.retiradoDocumento || null }, pedidaPorMembroId: r.retiradoPorOperadorId } : null
       };
       if (visao === "GESTOR") {
+        if (c.divergencia) c.divergencia.motivo = r.divergenciaPedidoMotivo || null;   // o que o voluntário ouviu de quem pediu: só a liderança que decide o vê
         c.telefoneDeQuemTrouxe = r.trouxeContato || null;
         if (r.menorId) c.responsaveisParaContato = membroDe(r.menorId).responsaveis.map(x => ({ nome: x.nome, telefone: x.telefone || null }));
       }
@@ -132,7 +134,7 @@ function criarServidor(op = {}) {
     });
     const todos = S.registros.filter(r => r.servicoId === s.servicoId && r.equipeId === s.equipeId);
     return {
-      sala: Object.assign(infoDaSala(s), { janela: janelaDe(s) }), adultosPresentes: presentes(s), lotacao: lotacaoDe(s, 0), criancas,
+      sala: Object.assign(infoDaSala(s), { janela: janelaDe(s) }), adultosPresentes: presentes(s, visao === "GESTOR"), lotacao: lotacaoDe(s, 0), criancas,
       totais: { entregues: todos.length, retiradas: todos.filter(r => r.situacao === "RETIRADA").length, naSala: regs.length },
       pendencias: { divergencias: criancas.filter(c => c.divergencia).length, segundasVias: criancas.filter(c => c.segundaViaPendente).length, travadas: criancas.filter(c => c.travado).length },
       atualizadoEm: iso(S.agoraMs)
@@ -171,7 +173,7 @@ function criarServidor(op = {}) {
     r.codigoHash = ck.hashCodigo(codigo, { registroId: r.registroId, geracao: 1, segredo: SEGREDO });
     S.codigos[r.registroId] = codigo;
     S.registros.push(r);
-    evento(r, s, "CHECKIN", operadorId);
+    evento(r, s, "CHECKIN", operadorId, `adultos=${presentes(s, false).filter(x => x.contaComoAdulto).length};criancas=${naSala(s).length}`);
     return { r, codigo };
   };
   S.semear = ({ sala: salaId, menorId, visitante, trouxeMembroId, trouxeNome, trouxeParentesco, trouxeContato, saude, extras, situacao, travado, tentativas } = {}) => {
@@ -186,14 +188,14 @@ function criarServidor(op = {}) {
   };
   S.pedirDivergencia = (registroId, quem) => {   // um registro que já espera a liderança (retirada por quem não está na lista)
     const r = S.registros.find(x => x.registroId === registroId);
-    Object.assign(r, { situacao: "RETIRADA_PENDENTE", divergente: true, divergenciaPedidaEm: S.agoraMs, retiradoNome: quem.nome, retiradoParentesco: quem.parentesco, retiradoDocumento: quem.documento, retiradoPorOperadorId: quem.operadorId || 42 });
+    Object.assign(r, { situacao: "RETIRADA_PENDENTE", divergente: true, divergenciaPedidaEm: S.agoraMs, retiradoNome: quem.nome, retiradoParentesco: quem.parentesco, retiradoDocumento: quem.documento, retiradoPorOperadorId: quem.operadorId || 42, divergenciaPedidoMotivo: quem.motivo || null });
   };
   S.entrar = (s, membroId) => { s.voluntarios.push({ membroId, entrouEm: S.agoraMs, saiuEm: null }); };
   S.voluntariosPresentes = (s) => presentes(s || S.salas[0]);
 
   // ---- o catálogo (GET catalogos, a mesma montagem do handler) ----
   const catalogos = () => {
-    const t = mc.textoDe("SAUDE_CRACHA");
+    const t = S.textoSaudeNovo || mc.textoDe("SAUDE_CRACHA");
     return {
       sucesso: true, parentescos: lista(ck.PARENTESCOS), documentos: lista(ck.DOCUMENTOS), faixas: Object.entries(mm.FAIXAS).map(([codigo, f]) => ({ codigo, rotulo: f.rotulo })),
       textoSaude: { versao: t.versao, titulo: t.titulo, itens: t.itens, aceite: t.aceite, hash: t.hash }, tentativas: prazos.tentativasCodigo, janela: { antesMinutos: prazos.abreMinutosAntes, depoisHoras: prazos.fechaHorasDepois },
@@ -231,8 +233,11 @@ function criarServidor(op = {}) {
         for (const s of S.salas) {
           const meu = s.escalados.includes(sess.membroId) || s.liderMembroId === sess.membroId, comoGestor = escopoOk(s);
           if (!s.contatoComMenores || (!meu && !comoGestor)) continue;
+          // a sala de um dia que passou só aparece para a liderança, e só enquanto tem criança sem retirada ou voluntário que não saiu
+          const diaAnterior = s.dataHora.slice(0, 10) < hoje;
+          if (diaAnterior && (!comoGestor || !(naSala(s).length || presentes(s).length))) continue;
           salas.push({ servicoId: s.servicoId, equipeId: s.equipeId, equipeNome: s.equipeNome, faixa: s.faixa, congregacaoId: s.congregacaoId, congregacaoNome: s.congregacaoNome, dataHora: s.dataHora, descricao: s.descricao,
-            janela: janelaDe(s), ehMinha: meu, ehGestao: comoGestor, criancasNaSala: naSala(s).length, voluntariosNaSala: presentes(s).length });
+            janela: janelaDe(s), ehMinha: meu, ehGestao: comoGestor, criancasNaSala: naSala(s).length, voluntariosNaSala: presentes(s).length, diaAnterior });
         }
         return { status: 200, corpo: { sucesso: true, salas } };
       }
@@ -242,7 +247,7 @@ function criarServidor(op = {}) {
         const h = S.registros.filter(r => r.menorId && (!menorId || r.menorId === menorId) && ehResponsavel(membroDe(r.menorId), sess.membroId)).sort((a, b) => b.registroId - a.registroId).map(r => {
           const s = salaDe(r.servicoId, r.equipeId);
           return Object.assign(ck.linhaDoHistoricoParaResponsavel({ registroId: r.registroId, data: s.dataHora.slice(0, 10), salaNome: s.equipeNome, congregacaoNome: s.congregacaoNome, entregueEm: iso(r.entregueEm), retiradoEm: iso(r.retiradoEm), situacao: r.situacao,
-            quemTrouxe: r.trouxeMembroId ? nomeDeResponsavel(r.trouxeMembroId) : r.trouxeNome, quemRetirou: r.situacao === "RETIRADA" ? r.retiradoNome : null, divergente: !!r.divergente }), { menorId: r.menorId, crianca: r.nome });
+            quemTrouxe: r.trouxeMembroId ? nomeDeResponsavel(r.trouxeMembroId) : r.trouxeNome, quemRetirou: r.situacao === "RETIRADA" ? r.retiradoNome : null, divergente: !!r.divergente, baixaAdministrativa: r.situacao === "RETIRADA" && r.retiradoTipo === "BAIXA_ADM" }), { menorId: r.menorId, crianca: r.nome });
         });
         return { status: 200, corpo: { sucesso: true, historico: h } };
       }
@@ -260,7 +265,8 @@ function criarServidor(op = {}) {
         const s = a.s;
         const regs = S.registros.filter(r => r.servicoId === s.servicoId && r.equipeId === s.equipeId);
         return { status: 200, corpo: { sucesso: true, sala: infoDaSala(s), voluntarios: s.voluntarios.map(v => ({ membroId: v.membroId, nome: nomeDe(v.membroId), entrouEm: iso(v.entrouEm), saiuEm: iso(v.saiuEm) })),
-          criancas: regs.map(r => ({ registroId: r.registroId, nome: r.nome, tipo: r.menorId ? "MEMBRO" : "VISITANTE", idade: r.idade, entregueEm: iso(r.entregueEm), quemTrouxe: r.trouxeMembroId ? nomeDeResponsavel(r.trouxeMembroId) : r.trouxeNome || null, situacao: r.situacao, retiradoEm: iso(r.retiradoEm), quemRetirou: r.retiradoNome || null, retiradaDivergente: !!r.divergente, tipoRetirante: r.retiradoTipo || null })),
+          criancas: regs.map(r => ({ registroId: r.registroId, nome: r.nome, tipo: r.menorId ? "MEMBRO" : "VISITANTE", idade: r.idade, entregueEm: iso(r.entregueEm), quemTrouxe: r.trouxeMembroId ? nomeDeResponsavel(r.trouxeMembroId) : r.trouxeNome || null, situacao: r.situacao, retiradoEm: iso(r.retiradoEm), quemRetirou: r.retiradoNome || null, retiradaDivergente: !!r.divergente, tipoRetirante: r.retiradoTipo || null,
+            baixaAdministrativa: r.situacao === "RETIRADA" && r.retiradoTipo === "BAIXA_ADM", baixaMotivo: r.baixaMotivo || null, motivoDoPedido: r.divergenciaPedidoMotivo || null, motivoDaDecisao: r.divergenciaMotivo || null })),
           eventos: S.eventos.filter(e => e.servicoId === s.servicoId && e.equipeId === s.equipeId).map(e => ({ eventoId: e.eventoId, registroId: e.registroId, tipo: e.tipo, rotulo: ck.TIPOS_EVENTO[e.tipo] || e.tipo, ator: nomeDe(e.ator), em: iso(e.em), detalhe: e.detalhe })) } };
       }
       if (acao === "buscar" || acao === "responsaveis") {
@@ -379,7 +385,7 @@ function criarServidor(op = {}) {
           if (v.trouxe.membroId && !ehResponsavel(mn, v.trouxe.membroId)) return respostaHttp({ sucesso: false, mensagem: `${mn.nome}: a pessoa escolhida não é responsável cadastrado desta criança. ${ck.MENSAGENS.SEM_RESPONSAVEL}` });
           preparadas.push({ tipo: "MEMBRO", menorId: mn.menorId, nome: mn.nome, idade: mn.idade, saudeTexto: mn.consentimento && mn.saude ? mn.saude.texto : null });
         } else {
-          if (cr.saude && !mc.hashConfere("SAUDE_CRACHA", cr.saude.textoHash)) return respostaHttp({ sucesso: false, termoMudou: true, mensagem: "O texto da autorização de saúde mudou desde que a tela foi aberta: recarregue a tela e peça ao responsável para ler de novo." });
+          if (cr.saude && !(S.textoSaudeNovo ? cr.saude.textoHash === S.textoSaudeNovo.hash : mc.hashConfere("SAUDE_CRACHA", cr.saude.textoHash))) return respostaHttp({ sucesso: false, termoMudou: true, mensagem: "O texto da autorização de saúde mudou desde que a tela foi aberta: recarregue a tela e peça ao responsável para ler de novo." });
           preparadas.push({ tipo: "VISITANTE", nome: cr.nome, nascimento: cr.nascimento, idade: cr.idade, saudeTexto: cr.saude ? cr.saude.texto : null });
         }
       }
@@ -410,7 +416,7 @@ function criarServidor(op = {}) {
       const certo = ck.confereCodigo(v.codigo, r.codigoHash, { registroId: r.registroId, geracao: r.geracao, segredo: SEGREDO });
       if (!certo) {
         evento(r, s, "CODIGO_ERRADO", sess.membroId, `tentativa=${r.tentativas}/${prazos.tentativasCodigo}`);
-        if (r.tentativas >= prazos.tentativasCodigo) { r.travado = true; evento(r, s, "CRIANCA_TRAVADA", sess.membroId); return respostaHttp({ sucesso: false, codigoErrado: true, travada: true, mensagem: `Código errado. A criança foi travada depois de ${prazos.tentativasCodigo} erros: peça à liderança para destravar ou emita a segunda via.` }); }
+        if (r.tentativas >= prazos.tentativasCodigo) { r.travado = true; evento(r, s, "CRIANCA_TRAVADA", sess.membroId, `erros=${r.tentativas}`); return respostaHttp({ sucesso: false, codigoErrado: true, travada: true, mensagem: `Código errado. A criança foi travada depois de ${prazos.tentativasCodigo} erros: peça à liderança para destravar ou emita a segunda via.` }); }
         return respostaHttp({ sucesso: false, codigoErrado: true, tentativasRestantes: prazos.tentativasCodigo - r.tentativas, mensagem: `${ck.MENSAGENS.CODIGO_ERRADO} Restam ${prazos.tentativasCodigo - r.tentativas} tentativa(s).` });
       }
       if (!quem.divergente) {
@@ -418,9 +424,12 @@ function criarServidor(op = {}) {
         evento(r, s, "RETIRADA", sess.membroId, quem.tipo);
         return respostaHttp({ sucesso: true, retirada: true, mensagem: "Criança entregue a quem a retirou." });
       }
-      Object.assign(r, { situacao: "RETIRADA_PENDENTE", retiradoTipo: "OUTRO", retiradoMembroId: null, retiradoNome: quem.nome, retiradoParentesco: quem.parentesco, retiradoDocumento: quem.documento, retiradoPorOperadorId: sess.membroId, divergente: true, divergenciaPedidaEm: S.agoraMs, tentativas: 0 });
+      Object.assign(r, { situacao: "RETIRADA_PENDENTE", retiradoTipo: "OUTRO", retiradoMembroId: null, retiradoNome: quem.nome, retiradoParentesco: quem.parentesco, retiradoDocumento: quem.documento, retiradoPorOperadorId: sess.membroId, divergente: true, divergenciaPedidaEm: S.agoraMs, divergenciaPedidoMotivo: quem.motivo || null, tentativas: 0 });
       evento(r, s, "RETIRADA_DIVERGENTE_PEDIDA", sess.membroId);
-      return respostaHttp({ sucesso: true, divergente: true, aguardaLideranca: true, mensagem: "Quem pediu não está na lista de quem pode retirar esta criança. O pedido foi enviado à liderança da congregação; a criança continua na sala até a aprovação." });
+      // semAviso: o sistema NÃO conseguiu avisar a liderança (o servidor manda o voluntário ligar para ela)
+      const textoSemAviso = ck.MENSAGENS.SEM_AVISO_LIDERANCA || "ATENÇÃO: a liderança NÃO foi avisada pelo sistema. Ligue agora para a liderança da congregação para ela decidir.";
+      return respostaHttp({ sucesso: true, divergente: true, aguardaLideranca: true, avisados: S.semAviso ? 0 : 1, semAviso: !!S.semAviso,
+        mensagem: `Quem pediu não está na lista de quem pode retirar esta criança. O pedido foi enviado à liderança da congregação; a criança continua na sala até a aprovação.${S.semAviso ? ` ${textoSemAviso}` : ""}` });
     }
     if (acao === "segunda-via-pedir") {
       const v = ck.validarPedidoSegundaVia(corpo);
@@ -458,12 +467,34 @@ function criarServidor(op = {}) {
       r.codigoHash = ck.hashCodigo(codigo, { registroId: r.registroId, geracao: r.geracao, segredo: SEGREDO });
       S.codigos[r.registroId] = codigo;
       S.nVias++;
-      evento(r, s, "SEGUNDA_VIA_EMITIDA", sess.membroId);
-      return respostaHttp({ sucesso: true, mensagem: "Segunda via emitida. O código antigo deixou de valer: entregue a etiqueta e o recibo novos a quem pediu.", registroId: r.registroId,
-        etiqueta: ck.montarEtiqueta({ nomeCrianca: r.nome, idade: r.idade, salaNome: s.equipeNome, congregacaoNome: s.congregacaoNome, codigo, saudeTexto: r.saudeTexto, instante: iso(S.agoraMs) }) });
+      evento(r, s, "SEGUNDA_VIA_EMITIDA", sess.membroId, `geracao=${r.geracao}`);
+      const textoSemAvisoVia = ck.MENSAGENS.SEM_AVISO_RESPONSAVEIS || "Atenção: o sistema não conseguiu avisar o responsável cadastrado da nova segunda via.";
+      return respostaHttp({ sucesso: true, mensagem: `Segunda via emitida. O código antigo deixou de valer: entregue a etiqueta e o recibo novos a quem pediu.${S.semAvisoVia ? ` ${textoSemAvisoVia}` : ""}`, registroId: r.registroId, avisados: S.semAvisoVia ? 0 : 1, semAviso: !!S.semAvisoVia,
+        etiqueta: ck.montarEtiqueta({ nomeCrianca: r.nome, idade: r.idade, salaNome: s.equipeNome, congregacaoNome: s.congregacaoNome, codigo, saudeTexto: r.saudeTexto, instante: iso(r.entregueEm), segundaViaEm: iso(S.agoraMs) }) });
     }
 
     // ---- a liderança ----
+    if (acao === "encerrar-sala") {
+      if (!gestao) return falha(403, SEM_PERMISSAO);
+      const v = ck.validarEncerramentoSala(corpo);
+      if (!v.valido) return falha(422, v.mensagem);
+      const a = abrirSala(corpo, "gestor");
+      if (a.falha) return falha(...a.falha);
+      if (S.fatorEncerrar && !S.fatorFresco) return { status: 428, corpo: { sucesso: false, precisaFator: true, mensagem: "Este ato exige confirmação recente de quem você é (chave de acesso ou código por e-mail)." } };
+      const abertas = naSala(a.s);
+      const regra = ck.avaliarEncerramentoDaSala({ janela: janelaDe(a.s), servicoStatus: a.s.servicoStatus, criancas: abertas.length });
+      if (!regra.ok) return respostaHttp({ sucesso: false, mensagem: regra.mensagem });
+      const saindo = a.s.voluntarios.filter(x => x.saiuEm == null);
+      // nada a fazer (nenhuma criança sem retirada e ninguém presente): repetir não é erro, e o servidor diz que já estava encerrada
+      if (!abertas.length && !saindo.length) return respostaHttp({ sucesso: true, baixadas: 0, jaEncerrada: true, mensagem: "A sala já estava encerrada: nenhuma criança ficou sem retirada e ninguém constava como presente." });
+      abertas.forEach(r => { const antes = r.situacao; Object.assign(r, { situacao: "RETIRADA", retiradoTipo: "BAIXA_ADM", retiradoEm: S.agoraMs, retiradoNome: null, retiradoMembroId: null, retiradoPorOperadorId: sess.membroId, baixaMotivo: v.motivo, travado: false, tentativas: 0 }); evento(r, a.s, "BAIXA_ADMINISTRATIVA", sess.membroId, antes === "RETIRADA_PENDENTE" ? "RETIRADA_PENDENTE" : "NA_SALA"); });
+      saindo.forEach(x => { x.saiuEm = S.agoraMs; evento(null, a.s, "VOLUNTARIO_SAIU", sess.membroId, "sala encerrada pela liderança"); });
+      evento(null, a.s, "SALA_ENCERRADA", sess.membroId, `baixadas=${abertas.length};voluntarios=${saindo.length}`);
+      S.encerramentos = (S.encerramentos || 0) + 1;
+      return respostaHttp({ sucesso: true, baixadas: abertas.length, mensagem: abertas.length
+        ? `Sala encerrada: ${abertas.length} criança(s) receberam a baixa administrativa (sem retirada registrada; o motivo ficou guardado) e ${saindo.length} voluntário(s) saíram da sala.`
+        : `Sala encerrada: nenhuma criança ficou sem retirada; ${saindo.length} voluntário(s) saíram da sala.` });
+    }
     if (acao === "decidir-divergencia" || acao === "destravar") {
       if (!gestao) return falha(403, SEM_PERMISSAO);
       const v = acao === "destravar" ? { valido: !!idDe(corpo.registroId), registroId: idDe(corpo.registroId), mensagem: "Informe registroId." } : ck.validarDecisaoDivergencia(corpo);
@@ -483,7 +514,7 @@ function criarServidor(op = {}) {
         r.situacao = "RETIRADA"; r.retiradoEm = S.agoraMs; r.divergenciaMotivo = v.motivo; evento(r, s, "RETIRADA_DIVERGENTE_APROVADA", sess.membroId);
         return respostaHttp({ sucesso: true, aprovada: true, mensagem: "Retirada aprovada: a criança pode ser entregue a quem pediu." });
       }
-      Object.assign(r, { situacao: "NA_SALA", retiradoTipo: null, retiradoMembroId: null, retiradoNome: null, retiradoParentesco: null, retiradoDocumento: null, retiradoPorOperadorId: null, divergente: false, divergenciaPedidaEm: null, divergenciaMotivo: v.motivo });
+      Object.assign(r, { situacao: "NA_SALA", retiradoTipo: null, retiradoMembroId: null, retiradoNome: null, retiradoParentesco: null, retiradoDocumento: null, retiradoPorOperadorId: null, divergente: false, divergenciaPedidaEm: null, divergenciaPedidoMotivo: null, divergenciaMotivo: v.motivo });
       evento(r, s, "RETIRADA_DIVERGENTE_NEGADA", sess.membroId);
       return respostaHttp({ sucesso: true, negada: true, mensagem: "Retirada negada: a criança continua na sala. Peça a quem a trouxe, ou a alguém da lista, que a retire com o código." });
     }
@@ -523,12 +554,13 @@ function contratoComOServidor(codigoDoModulo) {
       "voluntariosNaSala", "equipeNome", "congregacaoNome", "dataHora", "descricao", "faixa", "temResponsavel", "jaNaSala", "rotuloVinculo", "etiquetas", "recibo", "etiqueta", "termoMudou", "codigoErrado", "travada", "retirada",
       "divergente", "aguardaLideranca", "viaId", "autorizados", "responsaveis", "limite", "consentimentoVigente", "menor", "autorizadoId", "rotuloParentesco", "validoAte", "forma", "filhos", "menorId", "voluntarios",
       "eventos", "rotulo", "ator", "detalhe", "saiuEm", "entregueEm", "retiradoEm", "quemRetirou", "retiradaDivergente", "tipoRetirante", "situacao", "membroId", "nome", "idade", "instante", "orientacao", "criancas", "codigo",
-      "registroId", "mensagem", "mudou", "naoAchou", "proibido", "atualizadoEm", "tipo", "ref", "rotulo", "tentativas"],
+      "registroId", "mensagem", "mudou", "naoAchou", "proibido", "atualizadoEm", "tipo", "ref", "rotulo", "tentativas",
+      "baixaAdministrativa", "baixaMotivo", "motivoDoPedido", "motivoDaDecisao", "semAviso", "diaAnterior", "jaEncerrada"],
     handler: ["parentescos", "documentos", "faixas", "textoSaude", "tentativas", "segundaViaMinutos", "maxAutorizados", "maxCriancasPorCheckin", "papeis", "gestao", "salas", "filhos", "historico", "autorizados", "saude",
       "autorizado-adicionar", "autorizado-revogar", "saude-gravar", "saude-apagar", "entrar-na-sala", "sair-da-sala", "checkin", "retirar", "segunda-via-pedir", "segunda-via-confirmar", "decidir-divergencia", "destravar",
-      "buscar", "responsaveis", "relatorio", "minhas-salas", "meus-filhos", "catalogos", "exigirFatorRecente", "servicoId", "equipeId", "menorId", "registroId", "membroId", "autorizadoId", "ficha", "referencia", "aprovar", "motivo"],
+      "buscar", "responsaveis", "relatorio", "minhas-salas", "meus-filhos", "catalogos", "exigirFatorRecente", "encerrar-sala", "servicoId", "equipeId", "menorId", "registroId", "membroId", "autorizadoId", "ficha", "referencia", "aprovar", "motivo"],
     regra: ["codigo", "retirante", "outro", "ref", "documento", "parentesco", "nome", "criancas", "visitante", "nascimento", "saude", "texto", "concordo", "textoHash", "trouxe", "responsavelId", "contato", "autorizadosVisita", "pessoa",
-      "menorId", "validoAte", "MENSAGENS", "aprovar", "motivo", "referencia"]
+      "menorId", "validoAte", "MENSAGENS", "aprovar", "motivo", "referencia", "segundaViaEm", "encerradaEm"]
   };
   for (const [fonte, texto] of [["db", db], ["handler", handler], ["regra", regra]]) for (const c of campos[fonte]) if (!new RegExp(`(^|[^A-Za-z0-9_])${c.replace(/[-]/g, "\\-")}([^A-Za-z0-9_]|$)`).test(texto)) faltam.push(`${fonte}:${c}`);
   return faltam;

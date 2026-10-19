@@ -385,12 +385,12 @@ module.exports = function registrar(H) {
     // 502 sem corpo JSON
     env.api.rotas["POST checkin-infantil/checkin"] = { status: 502, corpo: "<html>Bad gateway</html>", naoJson: true };
     env.limparRegistro(); await enviarCheckin(env);
-    confere(/O servidor teve um problema ao atender agora \(erro 502\)/.test(texto(env, "chkCiMsg")), "502 com página em vez de JSON: a mensagem padrão da recusa");
+    confere(/A conexão caiu\. Não sabemos se a entrada foi registrada/.test(texto(env, "chkCiMsg")) && env.toasts().some(t => /O servidor teve um problema ao atender agora/.test(t)) && chamadas(env, "GET checkin-infantil/sala").length === 1, "502 com página em vez de JSON: a entrada pode ter sido gravada — a tela diz para conferir a lista e já a atualiza (o aviso do fetchProtegido segue)");
     intacto("502");
     // 200 que não é JSON
     env.api.rotas["POST checkin-infantil/checkin"] = { status: 200, corpo: "<html>ok</html>", naoJson: true };
     env.limparRegistro(); await enviarCheckin(env);
-    confere(/Resposta inesperada do servidor \(200\)/.test(texto(env, "chkCiMsg")), "200 que não é JSON: 'resposta inesperada'");
+    confere(/A conexão caiu\. Não sabemos se a entrada foi registrada/.test(texto(env, "chkCiMsg")) && !/\(200\)/.test(texto(env, "chkCiMsg")), "200 que não é JSON: a resposta não é do servidor, a entrada pode ter sido gravada — mesmo aviso, sem número de status");
     intacto("200 sem JSON");
     // 201 sem etiquetas (servidor com defeito): nunca finge que deu certo
     env.api.rotas["POST checkin-infantil/checkin"] = { status: 201, corpo: { sucesso: true, mensagem: "Criança entregue na sala." } };
@@ -400,7 +400,7 @@ module.exports = function registrar(H) {
     // rede caída
     delete env.api.rotas["POST checkin-infantil/checkin"]; env.api.redeCaida = true;
     env.limparRegistro(); await enviarCheckin(env);
-    confere(/Não foi possível falar com o servidor agora/.test(texto(env, "chkCiMsg")) && env.toasts().filter(t => /Não foi possível conectar ao servidor/.test(t)).length === 1, "rede caída: a mensagem na tela e um aviso só");
+    confere(/A conexão caiu\. Não sabemos se a entrada foi registrada\. Confira na lista “Na sala”/.test(texto(env, "chkCiMsg")) && env.toasts().filter(t => /Não foi possível conectar ao servidor/.test(t)).length === 2 && chamadas(env, "GET checkin-infantil/sala").length === 1, "rede caída no check-in: a mensagem manda conferir a lista antes de tentar de novo; a tela já tenta ler a sala (um aviso do fetchProtegido para o envio e outro para a leitura)");
     intacto("rede");
     env.api.redeCaida = false;
     // 401 durante o envio: a sessão acaba, nada fica

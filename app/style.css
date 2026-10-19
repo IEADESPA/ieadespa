@@ -994,6 +994,8 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 /* a etiqueta e o recibo: na tela e no papel (etiqueta pequena; recibo à parte; a saúde em destaque) */
 .chk-imprimivel { margin-top: 8px; }
 .chk-lote { margin: 0 0 16px; }
+.chk-lote-estado { margin: 0 0 6px; font-size: 0.9rem; font-weight: 700; }
+.chk-lote-impresso { color: #14532D; }
 .chk-etiquetas { display: flex; flex-wrap: wrap; gap: 10px; }
 .chk-etiqueta { width: 7cm; max-width: 100%; border: 2px dashed var(--cor-primaria); border-radius: 8px; background: #fff; color: #000; padding: 8px 10px; box-sizing: border-box; }
 .chk-etq-nome { font-size: 1.25rem; font-weight: 800; overflow-wrap: anywhere; }
@@ -1014,12 +1016,13 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
   .chk-codigo { font-size: 2rem; }
 }
 /* Impressão (v7.10). (1) O CÓDIGO de retirada nunca sai na impressora num Ctrl+P comum: só quando a pessoa toca em "Imprimir" (a classe .chk-imprimindo existe só durante window.print()).
-   (2) "Imprimir etiquetas e recibo" imprime só a caixa #chkImprimivel; "Imprimir o relatório" imprime só #chkRelImprimivel. Base (qualquer navegador): visibility:hidden; onde o navegador sabe :has(),
+   (2) "Imprimir etiquetas e recibo" imprime só a caixa #chkImprimivel, e nela só os lotes marcados .chk-lote-alvo (os ainda não impressos); "Imprimir o relatório" imprime só #chkRelImprimivel. Base (qualquer navegador): visibility:hidden; onde o navegador sabe :has(),
    o resto da página sai com display:none (sem ocupar folha). A etiqueta não parte no meio; o recibo começa numa folha à parte; a saúde sai em quadro preto grosso (a impressora pode ser preto e branco). */
 @media print {
   body:not(.chk-imp-etiquetas) #chkImpressaoCx { display: none !important; }
   .chk-so-tela { display: none !important; }
   body.chk-imprimindo * { visibility: hidden !important; }
+  body.chk-imp-etiquetas .chk-lote:not(.chk-lote-alvo) { display: none !important; }
   body.chk-imp-etiquetas #chkImprimivel, body.chk-imp-etiquetas #chkImprimivel *, body.chk-imp-relatorio #chkRelImprimivel, body.chk-imp-relatorio #chkRelImprimivel * { visibility: visible !important; }
   body.chk-imp-etiquetas #chkImprimivel, body.chk-imp-relatorio #chkRelImprimivel { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }
   body.chk-imprimindo .chk-etiqueta { border: 1px solid #000; break-inside: avoid; page-break-inside: avoid; }

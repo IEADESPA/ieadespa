@@ -243,15 +243,20 @@ async function rodarViewport(nav, nome, viewport) {
     await page.emulateMediaType("screen");
     if (comum !== "none") problema(`num Ctrl+P comum o painel com os códigos não pode sair (display=${comum})`);
     await clicarId("chkImprimirBotao");
-    const imp = await page.evaluate(() => ({ lista: window.__impressoes.slice(), depois: document.body.className }));
-    if (imp.lista.length !== 1 || !/chk-imprimindo/.test(imp.lista[0]) || !/chk-imp-etiquetas/.test(imp.lista[0]) || /chk-imp-relatorio/.test(imp.lista[0]) || /chk-imp-|chk-imprimindo/.test(imp.depois)) problema(`imprimir devia pôr as classes das etiquetas só durante window.print(): ${JSON.stringify(imp)}`);
+    // (v7.10, revisão: as classes ficam no <body> até a pessoa responder se as etiquetas saíram — no celular o print() volta antes da prévia; só depois da resposta saem, e o lote conta como impresso)
+    const imp = await page.evaluate(() => ({ lista: window.__impressoes.slice(), durante: document.body.className, pergunta: !document.getElementById("modalOverlay").classList.contains("escondido"), alvos: [...document.querySelectorAll("#chkImprimivel .chk-lote-alvo")].length }));
+    if (imp.lista.length !== 1 || !/chk-imprimindo/.test(imp.lista[0]) || !/chk-imp-etiquetas/.test(imp.lista[0]) || /chk-imp-relatorio/.test(imp.lista[0]) || !imp.pergunta || !/chk-imprimindo/.test(imp.durante) || imp.alvos !== 1) problema(`imprimir devia pôr as classes das etiquetas e perguntar se saiu, com as classes ainda no <body> e o lote marcado: ${JSON.stringify(imp)}`);
+    await clicarId("modalConfirmar");
+    const depoisDaResposta = await page.evaluate(() => ({ depois: document.body.className, alvos: [...document.querySelectorAll("#chkImprimivel .chk-lote-alvo")].length, estado: (document.querySelector("#chkImprimivel .chk-lote-estado") || {}).textContent || "" }));
+    if (/chk-imp-|chk-imprimindo/.test(depoisDaResposta.depois) || depoisDaResposta.alvos !== 0 || !/Impresso/.test(depoisDaResposta.estado)) problema(`depois da resposta as classes e a marca saem e o lote vira 'Impresso': ${JSON.stringify(depoisDaResposta)}`);
     await page.emulateMediaType("print");
-    await page.evaluate(() => document.body.classList.add("chk-imprimindo", "chk-imp-etiquetas"));
+    // (como na impressão de verdade: o corpo leva as classes e os lotes que vão ao papel levam a marca de alvo)
+    await page.evaluate(() => { document.body.classList.add("chk-imprimindo", "chk-imp-etiquetas"); document.querySelectorAll("#chkImprimivel .chk-lote").forEach(l => l.classList.add("chk-lote-alvo")); });
     const iso = await page.evaluate(() => { const v = (s) => { const el = document.querySelector(s); return el ? getComputedStyle(el).visibility : "ausente"; }; const d = (s) => { const el = document.querySelector(s); return el ? getComputedStyle(el).display : "ausente"; };
       return { etiqueta: v("#chkImprimivel .chk-etiqueta"), codigo: v("#chkImprimivel .chk-codigo"), recibo: v("#chkImprimivel .chk-recibo"), menu: v("#sidebar"), titulo: v("#subMeupainelCheckininfantil > h3"), menuD: d("#sidebar"), tituloD: d("#subMeupainelCheckininfantil > h3"), listaD: d("#chkSalaCabecalho"), faixa: d("#chkImprimivel .chk-so-tela"), subaba: d("#subMeupainelCheckininfantil"), imprimivel: d("#chkImprimivel") }; });
     const margens = { top: "1cm", bottom: "1cm", left: "1cm", right: "1cm" };
     relatorio.folhas.etiquetas = Math.max(await folhas(undefined), await folhas(margens)); relatorio.tamanhosEtiquetas = folhas.ultimos;
-    await page.evaluate(() => document.body.classList.remove("chk-imprimindo", "chk-imp-etiquetas"));
+    await page.evaluate(() => { document.body.classList.remove("chk-imprimindo", "chk-imp-etiquetas"); document.querySelectorAll("#chkImprimivel .chk-lote-alvo").forEach(l => l.classList.remove("chk-lote-alvo")); });
     await page.emulateMediaType("screen");
     if (iso.etiqueta !== "visible" || iso.codigo !== "visible" || iso.recibo !== "visible" || iso.menu !== "hidden" || iso.titulo !== "hidden") problema(`na impressão só as etiquetas e o recibo deviam aparecer: ${JSON.stringify(iso)}`);
     if (iso.menuD !== "none" || iso.tituloD !== "none" || iso.listaD !== "none" || iso.subaba === "none" || iso.imprimivel === "none") problema(`na impressão o resto da página devia sair com display:none (sem ocupar folha) e as caixas das etiquetas ficar: ${JSON.stringify(iso)}`);

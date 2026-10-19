@@ -33,9 +33,23 @@ const CHK_SECOES = ["salas", "aprovacoes", "fichas"];
 const CHK_SECOES_FILHO = ["hist", "aut", "sau"];
 const CHK_MSG_FATOR = "Este ato precisa de uma confirmação recente de quem você é (chave de acesso ou código por e-mail). Tente de novo e confirme quando a tela pedir.";
 const CHK_MSG_SEM_CATALOGO = "Não foi possível carregar as opções do check-in agora. Verifique a internet e toque em Atualizar.";
+const CHK_MSG_SEM_OPCOES = "Não consegui carregar as opções do check-in. Toque em “Atualizar agora” e tente de novo.";                       // sala aberta e o catálogo sumiu
+const CHK_MSG_SEM_OPCOES_FILHO = "Não consegui carregar as opções do check-in. Feche esta parte, abra de novo e tente outra vez.";              // Meus filhos → quem pode retirar
+const CHK_MSG_SEM_OPCOES_FICHA = "Não consegui carregar as opções do check-in. Toque em “Buscar” de novo.";                                     // fichas assinadas
+const CHK_MSG_RESPOSTA_ESTRANHA = "Não consegui entender a resposta do servidor. Tente de novo.";
+const CHK_MSG_CODIGO_SAIU = "Códigos de retirada que ainda não tinham sido impressos saíram da tela. Se precisar, peça a segunda via.";
+const CHK_MSG_ENTRADA_PERDIDA = "Uma entrada foi registrada, mas você saiu da sala antes de ver o código. Entre de novo na sala e peça a segunda via.";
+const CHK_MSG_CONEXAO_CAIU = "A conexão caiu. Não sabemos se a entrada foi registrada. Confira na lista “Na sala” (a tela vai atualizar agora) antes de tentar de novo.";
+const CHK_MSG_AGUARDE_ENTRADA = "Aguarde: a entrada está sendo registrada.";
+const CHK_PERGUNTA_IMPRESSAO = "As etiquetas e o recibo saíram na impressora? Se não saíram, toque em Cancelar e imprima de novo.";
+const CHK_MS_DADO_VELHO = 30000;                // sem leitura bem-sucedida da sala há mais que isto: o carimbo da hora avisa que os dados são antigos
+const CHK_MAX_BUSCA = 8;                        // o servidor devolve no máximo 8 crianças por busca
+const CHK_MAX_SALAS_APROVACOES = 15;            // a fila de aprovações olha no máximo 15 salas por vez
+const CHK_MIN_MOTIVO_ENCERRAR = 5;              // motivo de encerrar a sala (liderança)
+const CHK_MIN_MOTIVO_PEDIDO = 3;                // motivo (opcional) do pedido de retirada por quem não está na lista
 const CHK_CLASSE_SELO = { ok: "cal-st-homologado", atencao: "cal-st-proposto", erro: "cal-st-indeferido", neutro: "cal-st-cancelado", info: "cal-st-deferido" };
 const CHK_FORMA_AUTORIZADO = { RESPONSAVEL: "cadastrado pelo responsável", FICHA_FISICA: "ficha assinada, registrada pela Secretaria" };
-const CHK_ROTULO_TIPO_RETIRANTE = { RESPONSAVEL: "responsável cadastrado", AUTORIZADO: "pessoa autorizada", TROUXE: "quem trouxe", OUTRO: "outra pessoa" };
+const CHK_ROTULO_TIPO_RETIRANTE = { RESPONSAVEL: "responsável cadastrado", AUTORIZADO: "pessoa autorizada", TROUXE: "quem trouxe", OUTRO: "outra pessoa", BAIXA_ADM: "baixa administrativa" };
 const CHK_ROTULO_SECAO = { salas: "Salas de hoje", aprovacoes: "Aprovações", fichas: "Fichas assinadas" };
 
 let chkDono = null;                // matrícula + tipo de sessão de quem a tela foi montada (não vaza dado ao trocar de login)
@@ -47,7 +61,7 @@ let chkAssinatura = "";            // assinatura do último snapshot: a lista s�
 let chkAcao = null;                // o painel de ação aberto: { tipo: "retirada" | "segundavia", registroId }
 let chkGatilhoForm = null;         // o id do botão que abriu o painel de ação (o foco volta para ele)
 let chkCi = null;                  // o formulário de check-in: { criancas: [...], resultados: [...] }
-let chkImpressao = null;           // { lotes: [{ tipo, etiquetas, recibo }], impressa } — o código só mora aqui (e no painel de impressão)
+let chkImpressao = null;           // { lotes: [{ tipo, etiquetas, recibo, impresso }] } — o código só mora aqui (e no painel de impressão); cada lote sabe se já foi impresso
 let chkSalasMeu = [], chkSalasGes = [];          // GET minhas-salas (as entradas, para abrir a sala)
 let chkAprovacoes = [];            // [{ sala, crianca }] — o que espera a liderança (retirada divergente e criança travada)
 let chkSecaoAtual = "salas";
@@ -55,6 +69,8 @@ let chkTimer = null;               // setInterval da atualização: só existe c
 let chkTimerBusca = null;          // setTimeout da busca de criança (espera o fim da digitação)
 let chkFalhas = 0;
 let chkEmVoo = 0;                  // leituras da sala a caminho (o relógio não empilha pedidos)
+let chkEmVooApr = 0, chkEpocaApr = 0;   // a fila de aprovações também não empilha pedidos (a época sobe quando a fila é descartada)
+let chkUltimaLeituraMs = 0;        // quando a sala foi lida com sucesso pela última vez (o carimbo avisa quando os dados ficam velhos)
 let chkSeqSala = 0, chkSeqLeitura = 0, chkSeqMeu = 0, chkSeqGes = 0, chkSeqBusca = 0, chkSeqResp = 0, chkSeqApr = 0, chkSeqFicha = 0, chkSeqRel = 0;
 const chkEmCurso = new Set();      // trava duplo clique nas ações que gravam
 
@@ -157,9 +173,15 @@ async function chkRequisitar(caminho, opcoes) {
     const comPrazo = Object.assign({}, opcoes || {});
     if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") comPrazo.signal = AbortSignal.timeout(CHK_TEMPO_LIMITE_MS);
     const res = await fetchProtegido(`${API_BASE}/${CHK_ROTA}/${caminho}`, comPrazo);
-    let corpo = null;
+    // Resposta recusada: o fetchProtegido troca o json() por um que nunca lança (página de erro do proxy vira { sucesso:false, mensagem }); a cópia, tirada antes, ainda diz se o corpo era JSON de verdade.
+    // Corpo que não é JSON (proxy, implantação em curso) é falha PASSAGEIRA: nunca prova que a sala deixou de existir.
+    let original = null;
+    if (res.status >= 400) { try { original = res.clone(); } catch { original = null; } }
+    let corpo = null, semJson = false;
     try { corpo = await res.json(); } catch { /* sem JSON */ }
-    if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { sucesso: false, mensagem: `Resposta inesperada do servidor (${res.status}).`, httpStatus: res.status };
+    if (original) { try { await original.json(); } catch { semJson = true; } }
+    if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { sucesso: false, mensagem: CHK_MSG_RESPOSTA_ESTRANHA, httpStatus: res.status, semJson: true };
+    if (semJson) corpo.semJson = true;
     if (res.status >= 400) corpo.sucesso = false;
     // 428: a confirmação reforçada (chave de acesso ou código por e-mail) não foi concluída; o fetchProtegido já tentou uma vez
     if (res.status === 428 || corpo.precisaFator) corpo.mensagem = CHK_MSG_FATOR;
@@ -182,8 +204,10 @@ function chkConsultaSala(sala, extra) { return `servicoId=${Number(sala.servicoI
 // Toast + texto fixo na tela (textContent: nada de HTML aqui). Quando o fetchProtegido já avisou (rede, sessão, 403, 5xx), só o texto vai para a tela.
 function chkMostrarResultado(data, idMensagem, destaque) {
   const texto = chkMsgErro(data);
-  if (!(data && data.jaAvisado)) mostrarToast(texto, data && data.sucesso === false ? "erro" : "sucesso");
-  chkEscrever(idMensagem, texto, destaque || !!(data && data.sucesso === false));
+  // semAviso: o ato deu certo, mas o sistema NÃO conseguiu avisar a liderança (ou o responsável): a mensagem do servidor manda ligar, e por isso aparece como alerta, não como "tudo certo"
+  const alerta = !!data && (data.sucesso === false || data.semAviso === true);
+  if (!(data && data.jaAvisado)) mostrarToast(texto, alerta ? "erro" : "sucesso");
+  chkEscrever(idMensagem, texto, destaque || alerta);
 }
 
 async function chkGarantirCatalogos(forcar) {
@@ -220,7 +244,9 @@ function chkLimparTela() {
   chkGeracao++;
   chkPararTimer(); chkPararBusca();
   chkCatalogos = null; chkSala = null; chkSnap = null; chkAssinatura = ""; chkAcao = null; chkGatilhoForm = null; chkCi = null; chkImpressao = null;
-  chkSalasMeu = []; chkSalasGes = []; chkAprovacoes = []; chkSecaoAtual = "salas"; chkFalhas = 0; chkEmVoo = 0;
+  chkSalasMeu = []; chkSalasGes = []; chkAprovacoes = []; chkSecaoAtual = "salas"; chkFalhas = 0; chkEmVoo = 0; chkEmVooApr = 0; chkEpocaApr++; chkUltimaLeituraMs = 0;
+  // o modal de confirmação aberto (com o nome de uma criança) não sobrevive à sessão que acabou: o fetchProtegido também chama isto quando o servidor devolve 401
+  if (typeof fecharModal === "function") fecharModal();
   // pedidos que ainda estão a caminho trazem dado do login anterior: a resposta velha é descartada
   chkSeqSala++; chkSeqLeitura++; chkSeqMeu++; chkSeqGes++; chkSeqBusca++; chkSeqResp++; chkSeqApr++; chkSeqFicha++; chkSeqRel++;
   chkEmCurso.clear();
@@ -245,16 +271,20 @@ function chkMostrarListas(ctx, mostrar) {
   const sala = chkEl(`chkSala${ctx}`);
   if (sala) sala.style.display = mostrar ? "none" : "";
 }
-// A sala (e tudo o que a acompanha) sai da tela e da memória.
-function chkFecharSalaInterno() {
+// Há código de retirada na tela que ninguém declarou impresso? (a pergunta de sair e o aviso do navegador olham isto)
+function chkHaCodigoNaoImpresso() { return !!chkImpressao && chkImpressao.lotes.some(l => !l.impresso); }
+// A sala (e tudo o que a acompanha) sai da tela e da memória. `avisar`: se havia código não impresso, um aviso diz que ele saiu (quem já perguntou antes passa false).
+function chkFecharSalaInterno(avisar = true) {
   const ctx = chkSala ? chkSala.ctx : null;
+  const perdeuCodigo = avisar && chkHaCodigoNaoImpresso();
   chkPararTimer(); chkPararBusca();
   chkSeqSala++; chkSeqLeitura++; chkSeqBusca++; chkSeqResp++; chkSeqRel++;
-  chkSala = null; chkSnap = null; chkAssinatura = ""; chkAcao = null; chkGatilhoForm = null; chkCi = null; chkImpressao = null; chkFalhas = 0; chkEmVoo = 0;
+  chkSala = null; chkSnap = null; chkAssinatura = ""; chkAcao = null; chkGatilhoForm = null; chkCi = null; chkImpressao = null; chkFalhas = 0; chkEmVoo = 0; chkUltimaLeituraMs = 0;
   chkEmCurso.clear();
   chkLimparImpressaoDaPagina();
   ["chkSalaMeu", "chkSalaGes"].forEach(id => { const el = chkEl(id); if (el) el.innerHTML = ""; });
   if (ctx) chkMostrarListas(ctx, true);
+  if (perdeuCodigo) mostrarToast(CHK_MSG_CODIGO_SAIU, "erro");
 }
 // Chamadas pela navegação (meus-dados.js e script.js): a sala, as listas e as fichas não ficam para trás quando a pessoa vai para outra tela.
 function chkAbaMudou(aba) {
@@ -271,7 +301,7 @@ function chkFecharContexto(ctx) {
   const ids = ctx === "Ges" ? ["chkGesSalasLista", "chkAprovacoesLista", "chkSalaGes"] : ["chkMeuSalasLista", "chkFilhosLista", "chkSalaMeu"];
   ids.forEach(id => { const el = chkEl(id); if (el) el.innerHTML = ""; });
   // (quem chama já está saindo da aba: a navegação avisa o módulo ANTES de esconder a aba, então não adianta perguntar o que está à vista — sem sala aberta, o relógio da fila para agora)
-  if (ctx === "Ges") { chkAprovacoes = []; chkSalasGes = []; chkSeqGes++; chkSeqApr++; if (!chkSala) chkPararTimer(); } else { chkSalasMeu = []; chkSeqMeu++; }
+  if (ctx === "Ges") { chkAprovacoes = []; chkSalasGes = []; chkSeqGes++; chkSeqApr++; chkEmVooApr = 0; chkEpocaApr++; if (!chkSala) chkPararTimer(); } else { chkSalasMeu = []; chkSeqMeu++; }
   chkMostrarListas(ctx, true);
 }
 function chkSairDasFichas() {
@@ -300,24 +330,35 @@ function chkTemOQueAtualizar() { return !!chkSala || chkAprovacoesVisiveis(); }
 function chkPaginaOculta() { return document.visibilityState === "hidden"; }
 function chkIniciarTimer() { if (chkTimer == null && !chkPaginaOculta()) chkTimer = setInterval(chkTique, CHK_INTERVALO_MS); }
 function chkPararTimerSeOciosa() { if (!chkTemOQueAtualizar()) chkPararTimer(); }
-function chkTique() {
+// `forcar`: a volta à página (o pedido que estava a caminho antes de o celular dormir pode nunca voltar: um novo é feito mesmo assim). O relógio de 8 s chama sem argumento.
+function chkTique(forcar) {
   if (!authToken || chkDono !== chkChaveDoDono()) { chkPararTimer(); return; }
   if (chkPaginaOculta()) { chkPararTimer(); return; }
   if (chkSala) {
     if (!chkContextoVisivel(chkSala.ctx)) { chkFecharSalaInterno(); return; }   // a pessoa foi para outra tela: a sala (e o código) saem
-    chkLerSala(false);
+    chkAtualizarCarimbo();   // sem leitura bem-sucedida há muito tempo, o carimbo avisa antes mesmo de a próxima resposta chegar
+    chkLerSala(forcar === true);
     return;
   }
-  if (chkAprovacoesVisiveis()) { chkCarregarAprovacoes(true); return; }
+  if (chkAprovacoesVisiveis()) { chkCarregarAprovacoes(true, forcar === true); return; }
   chkPararTimer();
 }
-// Ao voltar para o navegador (celular que dormiu, outra aba), a sala é refeita NA HORA e o relógio volta; escondida, o relógio para (e nada é pedido ao servidor à toa).
+// Ao voltar para o navegador (celular que dormiu, outra aba), a sala é refeita NA HORA (leitura forçada) e o relógio volta; escondida, o relógio para (e nada é pedido ao servidor à toa).
 function chkVisibilidadeMudou() {
   if (chkPaginaOculta()) { chkPararTimer(); return; }
   if (!authToken || !chkTemOQueAtualizar()) return;
   if (chkDono !== chkChaveDoDono()) return;
-  chkTique();
+  chkTique(true);
   chkIniciarTimer();
+}
+// O carimbo "Atualizado às hh:mm:ss". Passou de 30 s sem uma leitura bem-sucedida (rede ruim, celular que dormiu): ganha ⚠ e diz que os dados são antigos.
+function chkCarimboVelho() { return Date.now() - chkUltimaLeituraMs > CHK_MS_DADO_VELHO; }
+function chkAtualizarCarimbo() {
+  const el = chkEl("chkSalaAtualizado");
+  if (!el || !chkSnap) return;
+  el.textContent = chkCarimboVelho()
+    ? `⚠ Atualizado às ${chkHoraComSegundos(chkSnap.atualizadoEm)}: dados antigos — toque em “Atualizar agora”.`
+    : `Atualizado às ${chkHoraComSegundos(chkSnap.atualizadoEm)}. A tela se atualiza sozinha enquanto estiver aberta.`;
 }
 document.addEventListener("visibilitychange", chkVisibilidadeMudou);
 
@@ -339,9 +380,10 @@ function chkHtmlCartaoSala(s, ctx) {
   return `<div class="cal-cartao chk-sala-cartao" id="chkSalaCartao${ctx}${sid}x${eid}">
     <h5>${escaparHtmlEbd(s.equipeNome)} <span class="psc-legenda">${escaparHtmlEbd(s.congregacaoNome)}</span></h5>
     <p class="chk-selos">${s.faixa ? chkSelo(CHK_CLASSE_SELO.info, `Faixa: ${chkRotuloFaixa(s.faixa)}`) : chkSelo(CHK_CLASSE_SELO.erro, "⚠ Sem faixa etária definida")}
-      ${chkSelo(CHK_CLASSE_SELO.neutro, `Serviço às ${chkHoraServico(s.dataHora)}`)} ${chkHtmlJanela(j)}
+      ${chkSelo(CHK_CLASSE_SELO.neutro, s.diaAnterior === true ? `Serviço de ${formatarDataEbd(String(s.dataHora || "").slice(0, 10))} às ${chkHoraServico(s.dataHora)}` : `Serviço às ${chkHoraServico(s.dataHora)}`)} ${s.diaAnterior === true ? chkSelo(CHK_CLASSE_SELO.atencao, "Dia anterior") : ""} ${chkHtmlJanela(j)}
       ${s.ehMinha ? chkSelo(CHK_CLASSE_SELO.info, "Sou da equipe") : ""} ${s.ehGestao ? chkSelo(CHK_CLASSE_SELO.neutro, "Visão da liderança") : ""}</p>
     ${j && !j.aberta && j.mensagem ? `<p class="psc-legenda">${escaparHtmlEbd(j.mensagem)}</p>` : ""}
+    ${s.diaAnterior === true ? `<p class="psc-aviso" role="note">Este serviço foi num dia que já passou e ainda há criança sem retirada registrada, ou voluntário que não saiu. Abra a sala e use “Encerrar a sala” para dar baixa.</p>` : ""}
     <p class="chk-contagem">👶 ${Number(s.criancasNaSala) || 0} criança(s) na sala · 🧑 ${Number(s.voluntariosNaSala) || 0} voluntário(s) presente(s)</p>
     <div class="psc-acoes"><button type="button" class="btn-confirmar chk-btn" id="chkAbrir${ctx}${sid}x${eid}" data-on-click="chkAbrirSalaAcao" data-args-click="${argsAttr(sid, eid, ctx)}">📂 Abrir a sala</button></div>
   </div>`;
@@ -407,7 +449,7 @@ function chkMostrarSecaoAcao(secaoBruta, semCarregar) {
   chkSecaoAtual = secao;
   if (mudou) {
     if (chkSala && chkSala.ctx === "Ges") chkFecharSalaInterno();   // sair da seção apaga a sala (e o código) da tela
-    chkSeqGes++; chkSeqApr++;
+    chkSeqGes++; chkSeqApr++; chkEmVooApr = 0; chkEpocaApr++;
     chkSairDasFichas();
     const apr = chkEl("chkAprovacoesLista"); if (apr) apr.innerHTML = "";
     chkAprovacoes = [];
@@ -436,7 +478,7 @@ async function chkCarregarSalasGesAcao() {
 // ============================================================================
 function chkHtmlFilho(f) {
   const id = Number(f.menorId);
-  const botao = (secao, texto) => `<button type="button" class="btn-confirmar btn-secundario chk-btn" id="chkFhBtn${secao}${id}" aria-expanded="false" data-on-click="chkAlternarFilhoAcao" data-args-click="${argsAttr(id, secao.toLowerCase())}">${texto}</button>`;
+  const botao = (secao, texto) => `<button type="button" class="btn-confirmar btn-secundario chk-btn" id="chkFhBtn${secao}${id}" aria-expanded="false" aria-controls="chkFh${secao}${id}" data-on-click="chkAlternarFilhoAcao" data-args-click="${argsAttr(id, secao.toLowerCase())}">${texto}</button>`;
   return `<div class="cal-cartao chk-filho" id="chkFilho${id}">
     <h5><span class="chk-nome" id="chkFhNome${id}"></span> <span class="psc-legenda">${escaparHtmlEbd(chkAnos(f.idade))}${f.rotuloVinculo ? ` · ${escaparHtmlEbd(f.rotuloVinculo)}` : ""}</span></h5>
     <div class="psc-acoes chk-acoes">${botao("Hist", "📜 Histórico")} ${botao("Aut", "👥 Quem pode retirar")} ${botao("Sau", "⚕️ Saúde")}</div>
@@ -486,9 +528,9 @@ const CHK_CLASSE_SITUACAO = { NA_SALA: CHK_CLASSE_SELO.info, RETIRADA_PENDENTE: 
 function chkHtmlVisita(h) {
   return `<li class="chk-visita">
     <strong>${formatarDataEbd(h.data)}</strong> · ${escaparHtmlEbd(h.sala)}${h.congregacao ? ` (${escaparHtmlEbd(h.congregacao)})` : ""}
-    <br />Entrou às ${escaparHtmlEbd(chkHoraInstante(h.entregueEm))}${h.retiradoEm ? ` · saiu às ${escaparHtmlEbd(chkHoraInstante(h.retiradoEm))}` : ""}
-    ${chkSelo(CHK_CLASSE_SITUACAO[h.situacao] || CHK_CLASSE_SELO.neutro, h.rotuloSituacao || h.situacao)}
-    <br />Quem trouxe: ${escaparHtmlEbd(h.quemTrouxe || "—")}${h.quemRetirou ? ` · quem retirou: ${escaparHtmlEbd(h.quemRetirou)}` : ""}
+    <br />Entrou às ${escaparHtmlEbd(chkHoraInstante(h.entregueEm))}${h.baixaAdministrativa ? (h.encerradaEm ? ` · registro encerrado às ${escaparHtmlEbd(chkHoraInstante(h.encerradaEm))}` : "") : (h.retiradoEm ? ` · saiu às ${escaparHtmlEbd(chkHoraInstante(h.retiradoEm))}` : "")}
+    ${chkSelo(h.baixaAdministrativa ? CHK_CLASSE_SELO.atencao : (CHK_CLASSE_SITUACAO[h.situacao] || CHK_CLASSE_SELO.neutro), h.rotuloSituacao || h.situacao)}
+    <br />Quem trouxe: ${escaparHtmlEbd(h.quemTrouxe || "—")}${h.quemRetirou && !h.baixaAdministrativa ? ` · quem retirou: ${escaparHtmlEbd(h.quemRetirou)}` : ""}
     ${h.retiradaDivergente ? chkSelo(CHK_CLASSE_SELO.atencao, "Retirada por quem não estava na lista, aprovada pela liderança") : ""}
   </li>`;
 }
@@ -513,7 +555,7 @@ function chkHtmlAutorizados(pfx, id, data) {
   const ficha = pfx === "Fi";
   const itens = lista.map(a => `<li class="chk-autorizado" id="chk${pfx}AutItem${Number(a.autorizadoId)}">
       <strong>${escaparHtmlEbd(a.nome)}</strong> <span class="psc-legenda">${escaparHtmlEbd(a.rotuloParentesco || chkRotuloParentesco(a.parentesco))}${a.validoAte ? ` · vale até ${formatarDataEbd(a.validoAte)}` : " · sem prazo"}${a.forma ? ` · ${escaparHtmlEbd(CHK_FORMA_AUTORIZADO[a.forma] || a.forma)}` : ""}</span>
-      <button type="button" class="btn-link btn-link-perigo" id="chk${pfx}AutRev${Number(a.autorizadoId)}" data-on-click="chkRevogarAutorizadoAcao" data-args-click="${argsAttr(Number(a.autorizadoId), pfx, id)}">Revogar</button>
+      <button type="button" class="btn-link btn-link-perigo" id="chk${pfx}AutRev${Number(a.autorizadoId)}" aria-label="Revogar a autorização de ${escaparHtmlEbd(a.nome)}" data-on-click="chkRevogarAutorizadoAcao" data-args-click="${argsAttr(Number(a.autorizadoId), pfx, id)}">Revogar</button>
     </li>`).join("");
   const opcoesParentesco = chkOpcoes(chkCatalogos ? chkCatalogos.parentescos : [], x => x.codigo, x => x.rotulo, "— escolha —");
   return `<h6 class="chk-subtitulo" id="chk${pfx}AutTitulo${id}" tabindex="-1">👥 Quem pode retirar</h6>
@@ -542,10 +584,19 @@ function chkAplicarAutorizados(pfx, menorId, data) {
   cx.innerHTML = chkHtmlAutorizados(pfx, Number(menorId), data);
   return true;
 }
+// Aviso fixo (constante nossa) no lugar de uma seção: entra por textContent
+function chkAvisoNaCaixa(cx, texto) {
+  cx.innerHTML = "";
+  const p = chkNo("p", "subtitle psc-aviso", texto); p.setAttribute("role", "status");
+  cx.appendChild(p);
+}
 async function chkCarregarAutorizados(pfxBruto, menorId) {
   const pfx = chkPfxValido(pfxBruto), id = Number(menorId), geracao = chkGeracao;
-  const data = await chkObter(`autorizados?menorId=${id}`);
+  // "Quem é para a criança" vem do catálogo: se ele não carregou, a lista de parentescos ficaria vazia sem aviso
+  const [catalogo, data] = await Promise.all([chkGarantirCatalogos(), chkObter(`autorizados?menorId=${id}`)]);
   if (geracao !== chkGeracao || !chkSecaoFilhoAberta(pfx, "Aut", id)) return;   // a seção foi recolhida enquanto a resposta vinha: nada entra na tela
+  const cx = chkEl(`chk${pfx}Aut${id}`);
+  if (!catalogo && data.sucesso !== false && cx) { chkAvisoNaCaixa(cx, pfx === "Fi" ? CHK_MSG_SEM_OPCOES_FICHA : CHK_MSG_SEM_OPCOES_FILHO); return; }
   chkAplicarAutorizados(pfx, id, data);
 }
 async function chkAdicionarAutorizadoAcao(pfxBruto, menorId, botao) {
@@ -671,9 +722,10 @@ async function chkFichaBuscarAcao(botao) {
     const cx = chkEl("chkFichaCx");
     if (cx) cx.innerHTML = "";
     chkEscrever("chkFichaMsg", "Procurando a criança…", false);
-    const data = await chkObter(`autorizados?menorId=${menorId}`);
+    const [catalogo, data] = await Promise.all([chkGarantirCatalogos(), chkObter(`autorizados?menorId=${menorId}`)]);
     if (geracao !== chkGeracao || seq !== chkSeqFicha) return;
     if (data.sucesso === false || !Array.isArray(data.autorizados)) { chkMostrarResultado(data, "chkFichaMsg", true); return; }
+    if (!catalogo) { chkEscrever("chkFichaMsg", CHK_MSG_SEM_OPCOES_FICHA, true); return; }
     chkEscrever("chkFichaMsg", "", false);
     const menor = data.menor && typeof data.menor === "object" ? data.menor : {};
     if (cx) cx.innerHTML = `<div class="cal-cartao chk-ficha">
@@ -756,14 +808,21 @@ async function chkAbrirSalaAcao(servicoId, equipeId, ctxBruto) {
 }
 async function chkFecharSalaAcao() {
   if (!chkSala) return;
-  // há código na tela que ninguém levou: a saída pergunta antes (o código só aparece uma vez)
-  if (chkImpressao && !chkImpressao.impressa && !(await chkPerguntar("Há códigos de retirada na tela que ainda NÃO foram impressos. Eles não aparecem de novo (só a segunda via gera outro). Sair e apagar mesmo assim?", "Sair e apagar", "chkVoltarBotao"))) return;
-  if (!chkSala) return;
+  // a entrada está a caminho: sair agora faria a resposta (com os códigos) chegar a uma tela que já não é a mesma, e ninguém veria o código
+  if (chkEmCurso.has("checkin")) { mostrarToast(CHK_MSG_AGUARDE_ENTRADA, "erro"); return; }
+  // há código na tela que ninguém declarou impresso: a saída pergunta antes (o código só aparece uma vez)
+  const geracao = chkGeracao, seqSala = chkSeqSala;
+  if (chkHaCodigoNaoImpresso() && !(await chkPerguntar("Há códigos de retirada na tela que ainda NÃO foram impressos. Eles não aparecem de novo (só a segunda via gera outro). Sair e apagar mesmo assim?", "Sair e apagar", "chkVoltarBotao"))) return;
+  if (!chkSala || geracao !== chkGeracao || seqSala !== chkSeqSala) return;
   const gatilho = chkSala.gatilhoId;
-  chkFecharSalaInterno();
+  chkFecharSalaInterno(false);   // já perguntou: não avisa de novo
   chkFocarId(gatilho);
 }
-function chkAtualizarSalaAcao() { return chkLerSala(true); }
+// "Atualizar agora": o catálogo que faltou (a frase de "não consegui carregar as opções" manda tocar aqui) é pedido de novo antes de ler a sala
+async function chkAtualizarSalaAcao() {
+  if (chkSala && !chkCatalogos) await chkGarantirCatalogos();
+  return chkLerSala(true);
+}
 // A leitura da sala. `forcar`: o ato da pessoa (atualizar agora, depois de um ato): sempre pede, e a resposta mais nova vence. O relógio de 8 s só pede se o pedido anterior já voltou.
 async function chkLerSala(forcar) {
   const alvo = chkSala;
@@ -775,12 +834,15 @@ async function chkLerSala(forcar) {
   try { data = await chkObter(`sala?${chkConsultaSala(alvo)}`); } finally { if (seq === chkSeqSala && chkEmVoo > 0) chkEmVoo--; }
   if (geracao !== chkGeracao || seq !== chkSeqSala || leitura !== chkSeqLeitura || !chkSala) return;   // resposta velha: outra mais nova foi pedida, ou a pessoa saiu
   if (data.sucesso === false || !data.sala || typeof data.sala !== "object") {
-    // sem acesso (403) ou sala que deixou de existir (404/422): a sala sai da tela. Falha de rede ou do servidor: a tela fica como estava e tenta de novo (até 3 vezes)
-    if (data.httpStatus === 403 || data.httpStatus === 404 || data.httpStatus === 422) { chkSairDaSala(chkMsgErro(data), !!data.jaAvisado); return; }
+    // sem acesso (403) ou sala que deixou de existir (404/422 COM uma resposta do servidor que traz a mensagem): a sala sai da tela. Falha de rede ou do servidor, e também 404/422 sem JSON
+    // (proxy, implantação em curso: nunca prova que a sala acabou) — a tela fica como estava e tenta de novo (até 3 vezes)
+    const respostaDoServidor = !data.semJson && typeof data.mensagem === "string" && data.mensagem !== "";
+    if (data.httpStatus === 403 || ((data.httpStatus === 404 || data.httpStatus === 422) && respostaDoServidor)) { chkSairDaSala(chkMsgErro(data), !!data.jaAvisado); return; }
     if (data.sessaoExpirada) return;
     chkFalhas++;
     const parou = chkFalhas >= CHK_MAX_FALHAS;
     chkEscrever("chkSalaMsg", parou ? "Não foi possível atualizar a sala. A atualização automática parou: toque em “Atualizar agora”." : "Não foi possível atualizar agora. A tela tenta de novo em instantes.", true);
+    chkAtualizarCarimbo();
     if (parou) chkPararTimer();
     return;
   }
@@ -802,13 +864,13 @@ function chkAcharCrianca(registroId) {
 function chkAplicarSnapshot(snap) {
   if (!chkSala || !snap || typeof snap !== "object" || !snap.sala) return;
   chkSnap = snap;
+  chkUltimaLeituraMs = Date.now();
   const assinatura = JSON.stringify([snap.sala, snap.adultosPresentes, snap.lotacao, snap.criancas, snap.pendencias, snap.totais]);
-  const atualizado = chkEl("chkSalaAtualizado");
-  if (atualizado) atualizado.textContent = `Atualizado às ${chkHoraComSegundos(snap.atualizadoEm)}. A tela se atualiza sozinha enquanto estiver aberta.`;
+  chkAtualizarCarimbo();
   // a lista só é refeita quando algo mudou: sem piscar e sem tirar o foco de quem está usando
   if (assinatura !== chkAssinatura) {
     chkAssinatura = assinatura;
-    chkRenderCabecalho(); chkRenderPendencias(); chkRenderLotacao(); chkRenderVoluntarios(); chkRenderNaSala();
+    chkRenderCabecalho(); chkRenderPendencias(); chkRenderLotacao(); chkRenderVoluntarios(); chkRenderNaSala(); chkRenderEncerrar();
   }
   chkRenderCheckin();
   chkConferirAcaoAberta();
@@ -835,6 +897,10 @@ function chkRenderPendencias() {
     n("travadas") ? `🔒 ${n("travadas")} criança(s) travada(s) por erros do código` : "",
     n("segundasVias") ? `📝 ${n("segundasVias")} segunda(s) via(s) esperando outro adulto confirmar` : ""
   ].filter(Boolean);
+  // o leitor de tela reanuncia um role="alert" toda vez que ele é recriado: só se refaz quando o texto das pendências mudou (a lista da sala é refeita por qualquer mudança nas crianças)
+  const chave = itens.join("|");
+  if ((cx.getAttribute("data-chave") || "") === chave) return;
+  cx.setAttribute("data-chave", chave);
   cx.innerHTML = itens.length ? `<div class="cnl-aviso-senha chk-pendencias" role="alert"><strong>Atenção: o que está pendente nesta sala</strong>
     <ul class="chk-lista">${itens.map(t => `<li>${escaparHtmlEbd(t)}</li>`).join("")}</ul></div>` : "";
 }
@@ -858,10 +924,10 @@ function chkRenderVoluntarios() {
   const meuId = chkMeuId(), euPresente = chkEstouPresente();
   const itens = lista.map(v => {
     const mid = Number(v.membroId), eu = mid === meuId;
-    const selo = v.contaComoAdulto ? chkSelo(CHK_CLASSE_SELO.ok, "conta como adulto")
-      : v.apto ? chkSelo(CHK_CLASSE_SELO.neutro, "auxiliar: não conta como adulto") : chkSelo(CHK_CLASSE_SELO.erro, "⚠ não está apto agora: não conta");
+    // quem não conta na proporção aparece só assim, sem o motivo (ficha em dia, idade...): a razão não é assunto de quem opera a sala
+    const selo = v.contaComoAdulto ? chkSelo(CHK_CLASSE_SELO.ok, "conta como adulto") : chkSelo(CHK_CLASSE_SELO.neutro, "não conta na proporção agora");
     return `<li class="chk-voluntario" id="chkVol${mid}"><strong>${escaparHtmlEbd(v.nome)}</strong>${eu ? " (você)" : ""} <span class="psc-legenda">entrou às ${escaparHtmlEbd(chkHoraInstante(v.entrouEm))}</span> ${selo}
-      ${chkSala.ehGestao && !eu ? `<button type="button" class="btn-link btn-link-perigo" id="chkTirar${mid}" data-on-click="chkTirarVoluntarioAcao" data-args-click="${argsAttr(mid, ARG.elemento)}">Tirar da sala</button>` : ""}</li>`;
+      ${chkSala.ehGestao && !eu ? `<button type="button" class="btn-link btn-link-perigo" id="chkTirar${mid}" aria-label="Tirar ${escaparHtmlEbd(v.nome)} da sala" data-on-click="chkTirarVoluntarioAcao" data-args-click="${argsAttr(mid, ARG.elemento)}">Tirar da sala</button>` : ""}</li>`;
   }).join("");
   const botao = !chkSala.ehMinha ? ""
     : euPresente ? `<button type="button" class="btn-confirmar btn-secundario chk-btn" id="chkSairBotao" data-on-click="chkSairAcao" data-args-click="${argsAttr(ARG.elemento)}">🚶 Sair da sala</button>`
@@ -948,12 +1014,13 @@ function chkHtmlCrianca(c, opc) {
     ? `<div class="chk-aguardando" role="note"><strong>Quem pediu para retirar não está na lista.</strong>
         <dl class="cal-dl">${chkCampo("Quem pediu", `${escaparHtmlEbd((div.quem && div.quem.nome) || "—")}${div.quem && div.quem.parentesco ? ` (${escaparHtmlEbd(chkRotuloParentesco(div.quem.parentesco))})` : ""}`)}
         ${chkCampo("Documento conferido", div.quem && div.quem.documento ? escaparHtmlEbd(chkRotuloDocumento(div.quem.documento)) : "")}
-        ${chkCampo("Pedido às", escaparHtmlEbd(chkHoraInstante(div.pedidaEm)))}${chkHtmlContatosDaGestao(c)}</dl>
+        ${chkCampo("Pedido às", escaparHtmlEbd(chkHoraInstante(div.pedidaEm)))}
+        ${chkCampo("Motivo informado por quem registrou o pedido", div.motivo ? escaparHtmlEbd(div.motivo) : "")}${chkHtmlContatosDaGestao(c)}</dl>
         ${Number(div.pedidaPorMembroId) === meuId ? "<p class='psc-legenda'>Foi você quem registrou o pedido: outra pessoa da liderança precisa aprovar ou negar.</p>" : "<p class='psc-legenda'>Ligue para o responsável para confirmar antes de decidir. Aprovar libera a criança a quem pediu.</p>"}</div>`
     : "<div class=\"chk-aguardando\" role=\"note\"><strong>⏳ Aguardando a liderança.</strong> Alguém que não está na lista pediu para retirar esta criança. Ela continua na sala até a liderança decidir.</div>") : "";
   const avisoVia = via ? (Number(via.pedidaPorMembroId) === meuId
     ? "<p class=\"chk-aguardando\" role=\"note\">📝 Você pediu a segunda via: outro adulto da sala precisa conferir o documento e confirmar (em poucos minutos).</p>"
-    : `<p class="chk-aguardando" role="note">📝 Segunda via pedida${via.pessoaNome ? ` por ${escaparHtmlEbd(via.pessoaNome)}` : ""}: confira o documento dessa pessoa e confirme.</p>`) : "";
+    : `<p class="chk-aguardando" role="note">📝 Segunda via pedida${via.pessoaNome ? ` por ${escaparHtmlEbd(via.pessoaNome)}` : ""}${via.documento ? ` (documento conferido por quem pediu: ${escaparHtmlEbd(chkRotuloDocumento(via.documento))})` : ""}: confira o documento dessa pessoa e confirme.</p>`) : "";
   return `<div class="cal-cartao chk-crianca ${classe}" id="chkCrianca${id}">
     <h5><span class="chk-nome" id="chkNome${id}"></span> <span class="psc-legenda">${escaparHtmlEbd(chkAnos(c.idade))}</span></h5>
     <p class="chk-selos">${selos}</p>
@@ -964,7 +1031,7 @@ function chkHtmlCrianca(c, opc) {
       ${chkCampo("Pode retirar", podem.length ? `<ul class="chk-lista">${podem.map(p => `<li>${escaparHtmlEbd(p.nome || p.rotulo)}${p.nome ? ` <span class="psc-legenda">(${escaparHtmlEbd(p.rotulo)})</span>` : ""}</li>`).join("")}</ul>` : "")}
       ${Number.isFinite(tentativas) && tentativas < maxTentativas && naSala ? chkCampo("Tentativas de código que restam", `<strong>${tentativas}</strong>`) : ""}
     </dl>
-    ${travada ? `<div class="chk-aguardando" role="note"><strong>🔒 Criança travada.</strong> ${opc.gestao ? "Confirme quem está retirando e destrave, ou emita a segunda via." : "O código foi errado vezes demais. Peça à liderança para destravar ou emita a segunda via do código."}</div>` : ""}
+    ${travada ? `<div class="chk-aguardando" role="note"><strong>🔒 Criança travada.</strong> ${opc.gestao ? "Confirme quem está retirando e destrave, ou emita a segunda via." : "O código foi digitado errado muitas vezes. Peça à liderança para destravar ou emita a segunda via do código."}</div>` : ""}
     ${avisoDivergencia}${avisoVia}
     <div class="psc-acoes chk-acoes">${botoes}</div>
   </div>`;
@@ -1017,21 +1084,30 @@ function chkIdadeEm(nascimentoIso, hojeIso) {
   const [na, nm, nd] = nascimentoIso.split("-").map(Number), [ha, hm, hd] = hojeIso.split("-").map(Number);
   return ha - na - (hm < nm || (hm === nm && hd < nd) ? 1 : 0);
 }
-function chkHtmlCheckin() {
-  const cat = chkCatalogos;
-  const parentescos = chkOpcoes(cat.parentescos, x => x.codigo, x => x.rotulo, "— escolha —");
-  const documentos = chkOpcoes(cat.documentos, x => x.codigo, x => x.rotulo, "— escolha —");
-  const t = cat.textoSaude;
-  const extras = [0, 1, 2].map(i => `<div class="cal-form-grade">
-      <div class="input-group"><label for="chkCiExtraNome${i}">Pessoa ${i + 1}: nome</label><input type="text" id="chkCiExtraNome${i}" maxlength="150" autocomplete="off" /></div>
-      <div class="input-group"><label for="chkCiExtraPar${i}">Pessoa ${i + 1}: quem é para a criança</label><select id="chkCiExtraPar${i}">${parentescos}</select></div>
-    </div>`).join("");
-  const termo = t ? `<div id="chkCiVisTermoCx" class="chk-termo" role="group" aria-labelledby="chkCiVisTermoTitulo">
+// O texto da autorização de saúde que o responsável lê antes de marcar "concordo" (título, itens e a frase do aceite vêm do catálogo). Desenhado na montagem do formulário E de novo
+// (chkRedesenharTermo) quando o servidor diz que o texto mudou: o "concordo" só vale para o texto que está NA TELA, e o hash enviado é o desse mesmo texto.
+function chkHtmlTermo(t) {
+  return t ? `<div id="chkCiVisTermoCx" class="chk-termo" role="group" aria-labelledby="chkCiVisTermoTitulo">
         <h6 id="chkCiVisTermoTitulo" class="chk-subtitulo">${escaparHtmlEbd(t.titulo)}</h6>
         <p class="psc-legenda">O responsável que está aqui precisa ler este texto, em voz alta se preciso, antes de concordar:</p>
         <ul class="chk-termo-itens">${t.itens.map(i => `<li>${escaparHtmlEbd(i)}</li>`).join("")}</ul>
         <label class="opcao-checkbox"><input type="checkbox" id="chkCiVisConcordo" /> ${escaparHtmlEbd(t.aceite)}</label>
       </div>` : "";
+}
+function chkRedesenharTermo() {
+  const raiz = chkEl("chkCiVisTermoRaiz");
+  if (!raiz) return;
+  raiz.innerHTML = chkHtmlTermo(chkCatalogos ? chkCatalogos.textoSaude : null);   // a caixa "concordo" nova nasce desmarcada
+  chkVisSaudeDigitouAcao();
+}
+function chkHtmlCheckin() {
+  const cat = chkCatalogos;
+  const parentescos = chkOpcoes(cat.parentescos, x => x.codigo, x => x.rotulo, "— escolha —");
+  const documentos = chkOpcoes(cat.documentos, x => x.codigo, x => x.rotulo, "— escolha —");
+  const extras = [0, 1, 2].map(i => `<div class="cal-form-grade">
+      <div class="input-group"><label for="chkCiExtraNome${i}">Pessoa ${i + 1}: nome</label><input type="text" id="chkCiExtraNome${i}" maxlength="150" autocomplete="off" /></div>
+      <div class="input-group"><label for="chkCiExtraPar${i}">Pessoa ${i + 1}: quem é para a criança</label><select id="chkCiExtraPar${i}">${parentescos}</select></div>
+    </div>`).join("");
   return `<div class="cal-cartao chk-checkin">
     <h5>➕ Receber crianças (check-in)</h5>
     <p id="chkCiAviso" class="psc-aviso" role="status" aria-live="polite"></p>
@@ -1055,7 +1131,7 @@ function chkHtmlCheckin() {
             <input type="date" id="chkCiVisNasc" />
             <label for="chkCiVisSaude">Alergia ou condição de saúde (opcional, aparece na etiqueta)</label>
             <textarea id="chkCiVisSaude" rows="2" maxlength="${CHK_MAX_SAUDE}" autocomplete="off" spellcheck="false" data-on-input="chkVisSaudeDigitouAcao"></textarea>
-            ${termo}
+            <div id="chkCiVisTermoRaiz">${chkHtmlTermo(cat.textoSaude)}</div>
             <div class="psc-acoes"><button type="button" class="btn-confirmar chk-btn" id="chkCiVisAdicionar" data-on-click="chkAdicionarVisitanteAcao">➕ Adicionar o visitante</button></div>
             <p id="chkCiVisMsg" class="subtitle" role="status" aria-live="polite"></p>
           </div>
@@ -1131,7 +1207,9 @@ async function chkBuscarAcao() {
   if (geracao !== chkGeracao || seq !== chkSeqBusca || seqSala !== chkSeqSala || !chkCi) return;   // resposta velha: outra busca foi pedida, ou a pessoa saiu da sala
   if (data.sucesso === false || !Array.isArray(data.criancas)) { chkCi.resultados = []; chkRenderResultados(); chkMostrarResultado(data, msg, true); return; }
   chkCi.resultados = data.criancas.filter(c => c && typeof c === "object" && chkInteiro(c.menorId));
-  chkEscrever(msg, chkCi.resultados.length ? `${chkCi.resultados.length} criança(s) encontrada(s).` : "Nenhuma criança encontrada com esse nome. Se for visitante, use “Criança visitante”.", false);
+  // o servidor devolve no máximo 8: com 8 na mão a lista pode estar cortada, e a tela não finge que é tudo
+  const n = chkCi.resultados.length;
+  chkEscrever(msg, n >= CHK_MAX_BUSCA ? `Mostrando até ${CHK_MAX_BUSCA} crianças: digite mais letras do nome para afinar a busca.` : n ? `${n} criança(s) encontrada(s).` : "Nenhuma criança encontrada com esse nome. Se for visitante, use “Criança visitante”.", false);
   chkRenderResultados();
 }
 function chkRenderResultados() {
@@ -1145,7 +1223,7 @@ function chkRenderResultados() {
       <strong class="chk-nome" id="chkResNome${id}"></strong> <span class="psc-legenda">${escaparHtmlEbd(chkAnos(r.idade))}</span>
       <p class="chk-selos">${r.temResponsavel ? "" : chkSelo(CHK_CLASSE_SELO.atencao, "Sem responsável cadastrado")} ${r.jaNaSala ? chkSelo(CHK_CLASSE_SELO.erro, "Já está na sala") : ""} ${r.foraDaFaixa ? chkSelo(CHK_CLASSE_SELO.atencao, "Fora da faixa da sala") : ""}</p>
       ${r.temResponsavel ? "" : "<p class='psc-legenda'>Esta criança não tem responsável cadastrado pela Secretaria: quem a trouxe é registrado na hora. Avise a Secretaria para cadastrar o responsável.</p>"}
-      <div class="psc-acoes"><button type="button" class="btn-confirmar chk-btn" id="chkAdd${id}" ${r.jaNaSala ? "disabled" : ""} data-on-click="chkAdicionarMembroAcao" data-args-click="${argsAttr(id, ARG.elemento)}">➕ Adicionar</button></div>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar chk-btn" id="chkAdd${id}" aria-label="Adicionar ${escaparHtmlEbd(r.nome)} a esta entrada" ${r.jaNaSala ? "disabled" : ""} data-on-click="chkAdicionarMembroAcao" data-args-click="${argsAttr(id, ARG.elemento)}">➕ Adicionar</button></div>
     </div>`;
   }).join("");
   lista.forEach(r => { const n = chkEl(`chkResNome${Number(r.menorId)}`); if (n) n.textContent = String(r.nome == null ? "" : r.nome); });
@@ -1155,6 +1233,7 @@ async function chkAdicionarMembroAcao(menorId, botao) {
   const id = Number(menorId), msg = "chkCiBuscaMsg";
   const r = chkCi.resultados.find(x => Number(x.menorId) === id);
   if (!r) return;
+  if (!chkCatalogos) { mostrarToast(CHK_MSG_SEM_OPCOES, "erro"); chkEscrever(msg, CHK_MSG_SEM_OPCOES, true); return; }
   const limite = chkCatalogos.maxCriancas;
   if (chkCi.criancas.length >= limite) { chkEscrever(msg, `Faça o check-in de até ${limite} crianças por vez.`, true); return; }
   if (chkCi.criancas.some(c => c.tipo === "MEMBRO" && c.menorId === id)) { chkEscrever(msg, "Esta criança já está na lista.", true); return; }
@@ -1185,6 +1264,7 @@ function chkAdicionarVisitanteAcao() {
   if (!chkSala || !chkCi || !chkPodeOperar()) return;
   const msg = "chkCiVisMsg";
   const erro = (texto, foco) => { mostrarToast(texto, "erro"); chkEscrever(msg, texto, true); chkFocarId(foco); };
+  if (!chkCatalogos) { erro(CHK_MSG_SEM_OPCOES, "chkCiVisNome"); return; }
   const limite = chkCatalogos.maxCriancas;
   if (chkCi.criancas.length >= limite) { erro(`Faça o check-in de até ${limite} crianças por vez.`, "chkCiVisNome"); return; }
   const nome = chkEspacos(chkTexto("chkCiVisNome")), nascimento = chkTexto("chkCiVisNasc"), saude = chkEspacos(chkTexto("chkCiVisSaude"));
@@ -1198,7 +1278,7 @@ function chkAdicionarVisitanteAcao() {
   let dadosSaude = null;
   if (saude) {
     if (saude.length < 2 || saude.length > CHK_MAX_SAUDE || chkTemMarca(saude)) { erro(`A alergia ou condição de saúde aceita de 2 a ${CHK_MAX_SAUDE} caracteres, sem < ou >.`, "chkCiVisSaude"); return; }
-    const t = chkCatalogos.textoSaude;
+    const t = chkCatalogos.textoSaude;   // (o catálogo existe: conferido acima)
     if (!t || !t.hash) { erro("O texto de autorização da saúde não foi carregado. Toque em “Atualizar agora” e tente de novo.", "chkCiVisSaude"); return; }
     const concordo = chkEl("chkCiVisConcordo");
     if (!concordo || !concordo.checked) { erro("O responsável presente precisa ler o texto e marcar que concorda para a saúde ir na etiqueta.", "chkCiVisConcordo"); return; }
@@ -1213,7 +1293,7 @@ function chkAdicionarVisitanteAcao() {
 }
 // O texto da autorização de saúde mudou: o "concordo" que o responsável deu foi sobre o texto ANTIGO e não vale mais (o servidor recusaria de novo, a cada tentativa). O visitante que levava alergia
 // sai da lista e, se o formulário do visitante está vazio, volta para ele (nome, data e alergia preenchidos, caixa desmarcada): o responsável lê o texto novo, concorda de novo e adiciona outra vez.
-function chkReabrirVisitantesComSaude() {
+function chkReabrirVisitantesComSaude(textoAtualizado = true) {
   if (!chkCi) return;
   const comSaude = chkCi.criancas.filter(c => c.tipo === "VISITANTE" && c.saude);
   if (!comSaude.length) return;
@@ -1228,7 +1308,12 @@ function chkReabrirVisitantesComSaude() {
   const concordo = chkEl("chkCiVisConcordo"); if (concordo) concordo.checked = false;
   chkVisSaudeDigitouAcao(); chkAtualizarListaCheckin(); chkAtualizarTrouxe();
   const nomes = comSaude.map(c => c.nome).join(", ");
-  chkEscrever("chkCiVisMsg", `O texto da autorização de saúde mudou: ${nomes} saiu da lista. ${formVazio ? `${primeiro.nome} voltou para o formulário: peça ao responsável para ler o texto novo e marcar que concorda, e adicione de novo.${comSaude.length > 1 ? " Os outros também precisam ser adicionados de novo." : ""}` : "Peça ao responsável para ler o texto novo e marcar que concorda, e adicione de novo."}`, true);
+  const depois = formVazio
+    ? `${primeiro.nome} voltou para o formulário: peça ao responsável para ler o texto novo e marcar que concorda, e adicione de novo.${comSaude.length > 1 ? " Os outros também precisam ser adicionados de novo." : ""}`
+    : "Peça ao responsável para ler o texto novo e marcar que concorda, e adicione de novo.";
+  chkEscrever("chkCiVisMsg", textoAtualizado
+    ? `O texto da autorização de saúde mudou e já foi atualizado na tela: ${nomes} saiu da lista. ${depois}`
+    : `O texto da autorização de saúde mudou, mas não consegui carregar o texto novo: ${nomes} saiu da lista. Toque em “Atualizar agora” e, quando o texto novo aparecer, peça ao responsável para lê-lo e marcar que concorda, e adicione de novo.`, true);
   chkFocarId(formVazio ? "chkCiVisConcordo" : "chkCiVisNome");
 }
 // ---- a lista de crianças desta entrada ----
@@ -1246,7 +1331,7 @@ function chkAtualizarListaCheckin() {
       <span class="chk-nome" id="chkChipNome${i}"></span> <span class="psc-legenda">${escaparHtmlEbd(chkAnos(c.idade))}</span>
       ${c.tipo === "VISITANTE" ? chkSelo(CHK_CLASSE_SELO.neutro, "Visitante") : chkSelo(CHK_CLASSE_SELO.info, "Membro")}
       ${c.saude ? chkSelo(CHK_CLASSE_SELO.erro, "⚠ Saúde informada") : ""}${c.tipo === "MEMBRO" && !c.temResponsavel ? chkSelo(CHK_CLASSE_SELO.atencao, "Sem responsável cadastrado") : ""}
-      <button type="button" class="btn-link btn-link-perigo" data-on-click="chkRemoverCriancaAcao" data-args-click="${argsAttr(i)}">Remover</button></li>`).join("")}</ul>`
+      <button type="button" class="btn-link btn-link-perigo" aria-label="Remover ${escaparHtmlEbd(c.nome)} desta entrada" data-on-click="chkRemoverCriancaAcao" data-args-click="${argsAttr(i)}">Remover</button></li>`).join("")}</ul>`
     : "<p class='subtitle'>Nenhuma criança adicionada ainda. Busque uma criança membro ou adicione um visitante.</p>";
   lista.forEach((c, i) => { const n = chkEl(`chkChipNome${i}`); if (n) n.textContent = c.nome; });
 }
@@ -1292,6 +1377,7 @@ async function chkEnviarCheckinAcao(botao) {
   if (!chkSala || !chkCi || !chkPodeOperar()) return;
   const msg = "chkCiMsg";
   const erro = (texto, foco) => { mostrarToast(texto, "erro"); chkEscrever(msg, texto, true); if (foco) chkFocarId(foco); };
+  if (!chkCatalogos) { erro(CHK_MSG_SEM_OPCOES, ""); return; }
   const lista = chkCi.criancas, limite = chkCatalogos.maxCriancas;
   if (!lista.length) { erro("Adicione pelo menos uma criança: busque um membro ou adicione um visitante.", "chkCiBusca"); return; }
   if (lista.length > limite) { erro(`Faça o check-in de até ${limite} crianças por vez.`, "chkCiBusca"); return; }
@@ -1329,12 +1415,23 @@ async function chkEnviarCheckinAcao(botao) {
   const geracao = chkGeracao, seqSala = chkSeqSala;
   await chkProtegerBotao(botao || chkEl("chkCiEnviar"), async () => {
     const data = await chkPostar("checkin", corpo);
+    const gravou = data.sucesso === true && Array.isArray(data.etiquetas) && data.etiquetas.length > 0;
+    // O servidor gravou a entrada, mas a pessoa já saiu da sala (ou da aba) enquanto o pedido ia e voltava: os códigos não têm onde aparecer. Nada de nome nem código no aviso: só o que fazer.
+    if (gravou && geracao === chkGeracao && (seqSala !== chkSeqSala || !chkSala)) { mostrarToast(CHK_MSG_ENTRADA_PERDIDA, "erro"); return; }
     if (geracao !== chkGeracao || seqSala !== chkSeqSala || !chkSala) return;
-    if (data.sucesso !== true || !Array.isArray(data.etiquetas) || !data.etiquetas.length) {
+    if (!gravou) {
+      // a conexão caiu (ou a resposta não é do servidor): a entrada pode ter sido gravada. Tentar de novo às cegas faria a criança "já estar numa sala" sem o código na mão: antes, olhar a lista
+      if (data.falhaDeRede || data.semJson) { chkEscrever(msg, CHK_MSG_CONEXAO_CAIU, true); chkLerSala(true); return; }
       // recusa de regra (janela, lotação, criança já na sala...): a mensagem do servidor tal qual e o formulário intacto
       chkMostrarResultado(data, msg, true);
-      if (data.termoMudou) {   // o texto da autorização de saúde mudou: a tela pega o novo e o responsável lê de novo
-        chkGarantirCatalogos(true).then(() => { if (geracao !== chkGeracao || seqSala !== chkSeqSala) return; const c = chkEl("chkCiVisConcordo"); if (c) c.checked = false; chkReabrirVisitantesComSaude(); });
+      if (data.termoMudou) {   // o texto da autorização de saúde mudou: a tela pega o novo, redesenha o texto, e o responsável lê de novo
+        const hashAntigo = chkCatalogos && chkCatalogos.textoSaude ? chkCatalogos.textoSaude.hash : "";
+        chkGarantirCatalogos(true).then(() => {
+          if (geracao !== chkGeracao || seqSala !== chkSeqSala) return;
+          const hashNovo = chkCatalogos && chkCatalogos.textoSaude ? chkCatalogos.textoSaude.hash : "";
+          chkRedesenharTermo();   // o texto na tela passa a ser o novo (e a caixa "concordo" nasce desmarcada)
+          chkReabrirVisitantesComSaude(hashNovo !== hashAntigo);
+        });
       }
       if (data.httpStatus === 409) chkLerSala(true);
       return;
@@ -1350,7 +1447,7 @@ async function chkEnviarCheckinAcao(botao) {
 // 5) A ETIQUETA E O RECIBO (o código só existe aqui, em memória, e só nesta caixa; sai ao fechar, ao sair da sala, ao trocar de tela e ao trocar de login)
 // ============================================================================
 function chkReciboDaEtiqueta(et) {
-  return { sala: et.sala, congregacao: et.congregacao, instante: et.instante, trouxe: null, criancas: [{ nome: et.nome, codigo: et.codigo }], orientacao: et.orientacao || "Apresente o código na hora de retirar. Sem o código a criança não é entregue, mesmo a quem a equipe conhece." };
+  return { sala: et.sala, congregacao: et.congregacao, instante: et.instante, segundaViaEm: et.segundaViaEm || null, trouxe: null, criancas: [{ nome: et.nome, codigo: et.codigo }], orientacao: et.orientacao || "Apresente o código na hora de retirar. Sem o código a criança não é entregue, mesmo a quem a equipe conhece." };
 }
 // tudo o que é do código entra por createElement + textContent (nunca por texto de HTML)
 function chkNoEtiqueta(item, l, e) {
@@ -1361,7 +1458,8 @@ function chkNoEtiqueta(item, l, e) {
   const cod = chkNo("div", "chk-codigo", et.codigo == null ? "" : et.codigo); cod.id = `chkCodigo${l}x${e}`;
   raiz.appendChild(cod);
   if (et.saude) { const s = chkNo("div", "chk-alergia", `⚠ SAÚDE: ${et.saude}`); s.id = `chkEtqSaude${l}x${e}`; raiz.appendChild(s); }
-  raiz.appendChild(chkNo("div", "chk-etq-hora", `Entrada às ${chkHoraInstante(et.instante)}`));
+  raiz.appendChild(chkNo("div", "chk-etq-hora", `Entrada às ${chkHoraInstante(et.instante)}`));   // (na segunda via, `instante` é a entrada ORIGINAL da criança)
+  if (et.segundaViaEm) { const v = chkNo("div", "chk-etq-hora", `2ª via emitida às ${chkHoraInstante(et.segundaViaEm)}`); v.id = `chkEtqVia${l}x${e}`; raiz.appendChild(v); }
   if (item.foraDaFaixa) raiz.appendChild(chkNo("div", "chk-so-tela chk-aviso-faixa", "⚠ A idade está fora da faixa desta sala (o check-in foi feito mesmo assim)."));
   return raiz;
 }
@@ -1371,6 +1469,7 @@ function chkNoRecibo(recibo, l) {
   raiz.appendChild(chkNo("h6", "chk-recibo-titulo", "Recibo do responsável"));
   raiz.appendChild(chkNo("p", "chk-recibo-linha", [r.sala, r.congregacao].filter(Boolean).join(" · ")));
   raiz.appendChild(chkNo("p", "chk-recibo-linha", `Entrada às ${chkHoraInstante(r.instante)}${r.trouxe ? ` · quem trouxe: ${r.trouxe}` : ""}`));
+  if (r.segundaViaEm) { const v = chkNo("p", "chk-recibo-linha", `2ª via emitida às ${chkHoraInstante(r.segundaViaEm)}`); v.id = `chkReciboVia${l}`; raiz.appendChild(v); }
   (Array.isArray(r.criancas) ? r.criancas : []).forEach((c, k) => {
     const cod = chkNo("span", "chk-codigo chk-codigo-recibo", c && c.codigo != null ? c.codigo : ""); cod.id = `chkReciboCodigo${l}x${k}`;
     raiz.appendChild(chkNo("p", "chk-recibo-crianca", null, [chkNo("span", "chk-recibo-nome", c && c.nome != null ? c.nome : ""), document.createTextNode(" "), cod]));
@@ -1378,6 +1477,8 @@ function chkNoRecibo(recibo, l) {
   if (r.orientacao) raiz.appendChild(chkNo("p", "chk-recibo-orientacao", r.orientacao));
   return raiz;
 }
+// Cada lote (uma família que entrou, ou uma segunda via) sabe se já foi impresso. Os lotes que a impressão em curso leva ao papel (chkLotesAlvo) levam a marca .chk-lote-alvo: no papel só eles saem.
+let chkLotesAlvo = null;
 function chkRenderImpressao(comFoco) {
   const cx = chkEl("chkImpressaoCx");
   if (!cx) return;
@@ -1393,7 +1494,9 @@ function chkRenderImpressao(comFoco) {
   </div>`;
   const alvo = chkEl("chkImprimivel");
   chkImpressao.lotes.forEach((lote, l) => {
-    const raiz = chkNo("section", "chk-lote"); raiz.id = `chkLote${l}`;
+    const raiz = chkNo("section", chkLotesAlvo && chkLotesAlvo.includes(lote) ? "chk-lote chk-lote-alvo" : "chk-lote"); raiz.id = `chkLote${l}`;
+    const estado = chkNo("p", `chk-so-tela chk-lote-estado${lote.impresso ? " chk-lote-impresso" : ""}`, lote.impresso ? "✅ Impresso" : "⏳ Ainda não impresso"); estado.id = `chkLoteEstado${l}`;   // só na tela: o papel não leva
+    raiz.appendChild(estado);
     const etiquetas = chkNo("div", "chk-etiquetas");
     lote.etiquetas.forEach((it, e) => etiquetas.appendChild(chkNoEtiqueta(it, l, e)));
     raiz.appendChild(etiquetas);
@@ -1406,23 +1509,49 @@ function chkMostrarImpressao(tipo, etiquetas, recibo) {
   if (!chkSala) return;
   const itens = (Array.isArray(etiquetas) ? etiquetas : []).filter(x => x && typeof x === "object" && x.etiqueta && typeof x.etiqueta === "object");
   if (!itens.length) return;
-  if (!chkImpressao) chkImpressao = { lotes: [], impressa: false };
-  chkImpressao.lotes.push({ tipo, etiquetas: itens, recibo: recibo && typeof recibo === "object" ? recibo : chkReciboDaEtiqueta(itens[0].etiqueta) });
-  chkImpressao.impressa = false;
+  if (!chkImpressao) chkImpressao = { lotes: [] };
+  // Chega uma família nova: o que já foi impresso sai da memória e da tela (o papel da família seguinte nunca leva o código da anterior). O que NÃO foi impresso fica: ninguém perde um código sem decidir.
+  chkImpressao.lotes = chkImpressao.lotes.filter(l => !l.impresso);
+  chkImpressao.lotes.push({ tipo, etiquetas: itens, recibo: recibo && typeof recibo === "object" ? recibo : chkReciboDaEtiqueta(itens[0].etiqueta), impresso: false });
   chkRenderImpressao(true);
 }
-// Imprime só as etiquetas e o recibo: a classe que esconde o resto da página existe apenas durante a impressão (CSS @media print, app/style.css)
-function chkImprimirAcao() {
-  if (!chkImpressao) return;
+// Imprime só as etiquetas e o recibo dos lotes AINDA NÃO impressos (nenhum pendente: reimprime o que está na tela). As classes que escondem o resto da página ficam no <body> até a pessoa
+// responder se saiu na impressora: no celular o window.print() volta ANTES da prévia, e tirá-las logo imprimiria a página inteira (ou nada). Só depois do "sim" o lote conta como impresso.
+async function chkImprimirAcao() {
+  const impressao = chkImpressao;
+  if (!impressao || !chkSala) return;
+  if (chkEmCurso.has("imprimir")) { mostrarToast("Aguarde: a impressão anterior ainda está sendo confirmada.", "erro"); return; }
+  const geracao = chkGeracao, seqSala = chkSeqSala;
+  const pendentes = impressao.lotes.filter(l => !l.impresso);
+  const lotes = pendentes.length ? pendentes : impressao.lotes.slice();
+  if (!lotes.length) return;
+  chkLotesAlvo = lotes;
+  chkRenderImpressao(false);   // refaz o painel já com a marca nos lotes que vão ao papel
   const classes = document.body && document.body.classList;
   if (classes) classes.add("chk-imprimindo", "chk-imp-etiquetas");
-  try { window.print(); } finally { if (classes) classes.remove("chk-imprimindo", "chk-imp-etiquetas"); }
-  chkImpressao.impressa = true;
+  chkEmCurso.add("imprimir");
+  let saiu = false;
+  try {
+    try { window.print(); } catch { /* o navegador pode recusar a impressão: a pergunta abaixo decide */ }
+    saiu = await chkPerguntar(CHK_PERGUNTA_IMPRESSAO, "Sim, saíram", "chkImprimirBotao");
+  } finally {
+    chkEmCurso.delete("imprimir");
+    chkLimparImpressaoDaPagina();
+    if (chkLotesAlvo === lotes) chkLotesAlvo = null;
+  }
+  // a pessoa pode ter saído da sala (ou trocado de login) com a pergunta aberta: nada é escrito numa tela que já não é dela
+  if (impressao !== chkImpressao || geracao !== chkGeracao || seqSala !== chkSeqSala || !chkSala) return;
+  if (saiu) lotes.forEach(l => { l.impresso = true; });
+  chkRenderImpressao(false);   // (sem a marca dos lotes-alvo; com "Impresso" nos que a pessoa confirmou)
+  chkFocarId("chkImprimirBotao");
 }
 async function chkFecharImpressaoAcao() {
-  if (!chkImpressao) return;
-  if (!chkImpressao.impressa && !(await chkPerguntar("Os códigos de retirada ainda NÃO foram impressos e não aparecem de novo (só a segunda via gera outro). Fechar e apagar mesmo assim?", "Fechar e apagar", "chkFecharImpressaoBotao"))) return;
-  chkImpressao = null;
+  const impressao = chkImpressao;
+  if (!impressao) return;
+  const geracao = chkGeracao, seqSala = chkSeqSala;
+  if (chkHaCodigoNaoImpresso() && !(await chkPerguntar("Os códigos de retirada ainda NÃO foram impressos e não aparecem de novo (só a segunda via gera outro). Fechar e apagar mesmo assim?", "Fechar e apagar", "chkFecharImpressaoBotao"))) return;
+  if (impressao !== chkImpressao || geracao !== chkGeracao || seqSala !== chkSeqSala) return;   // saiu da sala com a pergunta aberta: já está tudo apagado
+  chkImpressao = null; chkLotesAlvo = null;
   chkRenderImpressao(false);
   chkLimparImpressaoDaPagina();
   chkFocarId("chkSalaTitulo");
@@ -1478,6 +1607,8 @@ function chkFormRetirada(c) {
         <select id="chkRtPar">${parentescos}</select>
         <label for="chkRtDoc">Documento que você conferiu</label>
         <select id="chkRtDoc">${documentos}</select>
+        <label for="chkRtMotivo">Motivo (opcional): por que essa pessoa não está na lista?</label>
+        <textarea id="chkRtMotivo" rows="2" maxlength="${CHK_MAX_MOTIVO}" autocomplete="off" spellcheck="false"></textarea>
       </div>
       <label for="chkRtCodigo">Código da etiqueta (6 letras e números)</label>
       <input type="text" id="chkRtCodigo" class="chk-campo-codigo" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" />
@@ -1491,7 +1622,8 @@ function chkFormRetirada(c) {
 }
 function chkAbrirRetiradaAcao(registroId, gatilho) {
   const c = chkAcharCrianca(registroId), area = chkEl("chkAcaoCx");
-  if (!c || !area || !chkSala || !chkPodeOperar() || !chkCatalogos) return;
+  if (!c || !area || !chkSala || !chkPodeOperar()) return;
+  if (!chkCatalogos) { mostrarToast(CHK_MSG_SEM_OPCOES, "erro"); chkEscrever("chkSalaMsg", CHK_MSG_SEM_OPCOES, true); return; }
   chkAcao = { tipo: "retirada", registroId: Number(registroId) };
   chkGatilhoForm = gatilho && typeof gatilho === "object" && gatilho.id ? gatilho.id : null;   // o id, não o elemento: a lista é refeita a cada leitura da sala
   area.innerHTML = chkFormRetirada(c);
@@ -1511,13 +1643,16 @@ async function chkEnviarRetiradaAcao() {
   const erro = (texto, foco) => { chkEscrever(msg, texto, true); if (foco) chkFocarId(foco); };
   const quem = chkTexto("chkRtQuem"), digitado = chkTexto("chkRtCodigo");
   if (!quem) { erro("Escolha quem está retirando a criança.", "chkRtQuem"); return; }
-  let retirante;
+  let retirante, motivo = "";
   if (quem === CHK_OUTRA) {
     const nome = chkEspacos(chkTexto("chkRtNome")), parentesco = chkTexto("chkRtPar"), documento = chkTexto("chkRtDoc");
+    motivo = chkEspacos(chkTexto("chkRtMotivo"));
     if (nome.length < 2 || nome.length > 150 || chkTemMarca(nome) || (nome.match(/\p{L}/gu) || []).length < 2) { erro("Informe o nome de quem está retirando (de 2 a 150 caracteres, com letras, sem < ou >).", "chkRtNome"); return; }
     if (!parentesco) { erro("Escolha quem é a pessoa para a criança.", "chkRtPar"); return; }
     if (!documento) { erro("Escolha o documento que você conferiu.", "chkRtDoc"); return; }
+    if ((motivo && motivo.length < CHK_MIN_MOTIVO_PEDIDO) || motivo.length > CHK_MAX_MOTIVO || chkTemMarca(motivo)) { erro(`O motivo (opcional) aceita de ${CHK_MIN_MOTIVO_PEDIDO} a ${CHK_MAX_MOTIVO} caracteres, sem < ou >.`, "chkRtMotivo"); return; }
     retirante = { outro: { nome, parentesco, documento } };
+    if (motivo) retirante.outro.motivo = motivo;   // opcional: o que o voluntário ouviu de quem pede (por que não está na lista); a liderança lê antes de decidir
   } else retirante = { ref: quem };
   if (!digitado) { erro("Digite o código da etiqueta.", "chkRtCodigo"); return; }
   const codigo = digitado.replace(/[\s-]/g, "").toUpperCase();
@@ -1570,7 +1705,8 @@ function chkFormSegundaVia(c) {
 }
 function chkAbrirSegundaViaAcao(registroId, gatilho) {
   const c = chkAcharCrianca(registroId), area = chkEl("chkAcaoCx");
-  if (!c || !area || !chkSala || !chkPodeOperar() || !chkCatalogos) return;
+  if (!c || !area || !chkSala || !chkPodeOperar()) return;
+  if (!chkCatalogos) { mostrarToast(CHK_MSG_SEM_OPCOES, "erro"); chkEscrever("chkSalaMsg", CHK_MSG_SEM_OPCOES, true); return; }
   chkAcao = { tipo: "segundavia", registroId: Number(registroId) };
   chkGatilhoForm = gatilho && typeof gatilho === "object" && gatilho.id ? gatilho.id : null;   // o id, não o elemento: a lista é refeita a cada leitura da sala
   area.innerHTML = chkFormSegundaVia(c);
@@ -1676,7 +1812,55 @@ function chkMontarGestaoDaSala() {
     <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario chk-btn" id="chkRelatorioBotao" data-on-click="chkAbrirRelatorioAcao" data-args-click="${argsAttr(ARG.elemento)}">📄 Abrir o relatório do dia</button></div>
     <p id="chkRelMsg" class="subtitle" role="status" aria-live="polite"></p>
     <div id="chkRelatorioCx"></div>
-  </div>`;
+  </div>
+  <div id="chkEncerrarCx"></div>`;
+}
+// ---- encerrar a sala (só a liderança): dá baixa nas crianças que ficaram nela depois que a janela do check-in fechou ----
+function chkCriancasDaSala() { return (chkSnap && Array.isArray(chkSnap.criancas) ? chkSnap.criancas : []).filter(c => c && typeof c === "object"); }
+function chkVoluntariosPresentes() { return (chkSnap && Array.isArray(chkSnap.adultosPresentes) ? chkSnap.adultosPresentes : []).filter(v => v && typeof v === "object"); }
+// O servidor confere tudo de novo; aqui só se decide se o botão aparece: sala vista pela liderança (aba da liderança, senha de liderança), serviço terminado (a janela do check-in fechou, ou o serviço
+// deixou de estar publicado) e algo a encerrar (criança sem retirada ou voluntário que não saiu). Vale também para a sala de um dia que passou (é por ela que a liderança dá baixa nas crianças que ficaram).
+function chkPodeEncerrar() {
+  const sala = chkSnap && chkSnap.sala && typeof chkSnap.sala === "object" ? chkSnap.sala : null;
+  const j = sala && sala.janela && typeof sala.janela === "object" ? sala.janela : null;
+  const terminou = (!!j && j.aberta === false) || (!!sala && typeof sala.servicoStatus === "string" && sala.servicoStatus !== "PUBLICADA");
+  return !!chkSala && chkSala.ctx === "Ges" && sessaoDeLiderancaNaTela() && terminou && (chkCriancasDaSala().length > 0 || chkVoluntariosPresentes().length > 0);   // (a lista da aba da liderança só tem salas da liderança)
+}
+function chkRenderEncerrar() {
+  const cx = chkEl("chkEncerrarCx");
+  if (!cx) return;
+  chkComFoco(() => {
+    cx.innerHTML = chkPodeEncerrar() ? `<div class="cal-cartao chk-gestao">
+      <h5>🔚 Encerrar a sala (liderança)</h5>
+      <p class="psc-legenda">Para quando o serviço acabou e ficaram crianças na lista (as famílias já levaram, ou ninguém registrou a saída). Dá baixa em todas as crianças que estão na sala e tira da sala quem ainda consta como presente; fica registrado com o seu nome e o motivo.</p>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar btn-perigo chk-btn" id="chkEncerrarBotao" data-on-click="chkEncerrarSalaAcao" data-args-click="${argsAttr(ARG.elemento)}">🔚 Encerrar a sala (dar baixa nas crianças que ficaram)</button></div>
+    </div>` : "";
+  });
+}
+async function chkEncerrarSalaAcao(botao) {
+  if (!chkPodeEncerrar()) return;
+  const geracao = chkGeracao, seqSala = chkSeqSala, sala = chkSala;   // a sala de agora: se a pessoa sair dela ou trocar de login com um modal aberto, nada é enviado
+  const mesmaTela = () => geracao === chkGeracao && seqSala === chkSeqSala && !!chkSala;
+  let motivo = "";
+  for (;;) {
+    const digitado = await pedirTexto(`Motivo para encerrar a sala (de ${CHK_MIN_MOTIVO_ENCERRAR} a ${CHK_MAX_MOTIVO} caracteres)`, "Ex.: o culto terminou e as famílias já levaram as crianças.", motivo);
+    if (digitado == null) { chkVoltarFoco(botao); return; }
+    motivo = chkEspacos(digitado);
+    if (motivo.length >= CHK_MIN_MOTIVO_ENCERRAR && motivo.length <= CHK_MAX_MOTIVO && !chkTemMarca(motivo)) break;
+    mostrarToast(`Escreva o motivo com ${CHK_MIN_MOTIVO_ENCERRAR} a ${CHK_MAX_MOTIVO} caracteres, sem < ou >.`, "erro");
+  }
+  chkVoltarFoco(botao);
+  if (!mesmaTela()) return;
+  const n = chkCriancasDaSala().length;
+  const pergunta = n > 0 ? `Dar baixa em ${n} criança(s) que ficaram na sala e encerrar a sala? Isto fica registrado com o seu nome.` : "Encerrar a sala? Os voluntários que ainda constam como presentes saem dela. Isto fica registrado com o seu nome.";
+  if (!(await chkPerguntar(pergunta, "Dar baixa e encerrar", botao))) return;
+  if (!mesmaTela()) return;
+  await chkProtegerBotao(botao, async () => {
+    const data = await chkPostar("encerrar-sala", { servicoId: sala.servicoId, equipeId: sala.equipeId, motivo });   // 428: o fetchProtegido confirma a identidade e repete a chamada uma vez
+    if (!mesmaTela()) return;
+    chkMostrarResultado(data, "chkSalaMsg", false);   // (a recusa do servidor já sai como alerta: sucesso === false)
+    await chkLerSala(true);
+  }, "encerrar");
 }
 function chkTabela(titulos, linhas) {
   const rolagem = chkNo("div", "chk-rolagem");
@@ -1691,6 +1875,29 @@ function chkTabela(titulos, linhas) {
   return rolagem;
 }
 const CHK_ROTULO_SITUACAO = { NA_SALA: "Na sala", RETIRADA_PENDENTE: "Aguardando a liderança", RETIRADA: "Retirada" };
+const CHK_ROTULO_ANTES_DA_BAIXA = { NA_SALA: "estava na sala", RETIRADA_PENDENTE: "estava aguardando a liderança" };   // (o Detalhe da baixa diz como a criança estava antes)
+const CHK_ROTULO_PROBLEMA = { SEM_FAIXA: "sala sem faixa etária" };   // (os outros códigos de recusa — ADULTOS_INSUFICIENTES, SALA_CHEIA — viram texto só trocando "_" por espaço)
+function chkPlural(n, singular, plural) { return `${n} ${n === 1 ? singular : plural}`; }
+// O "Detalhe" do relatório chega como texto de máquina (adultos=2;criancas=3, tentativa=2/5, geracao=2, RESPONSAVEL...). Função pura: vira português para a tela e para o papel; o que não é conhecido passa como veio.
+function chkTraduzirDetalhe(detalhe) {
+  const texto = String(detalhe == null ? "" : detalhe).trim();
+  if (!texto) return "";
+  return texto.split(";").map(parte => {
+    const p = parte.trim();
+    let m;
+    if ((m = /^adultos=(\d+)$/.exec(p))) return chkPlural(Number(m[1]), "adulto presente", "adultos presentes");
+    if ((m = /^criancas=(\d+)$/.exec(p))) return chkPlural(Number(m[1]), "criança na sala", "crianças na sala");
+    if ((m = /^tentativa=(\d+)\/(\d+)$/.exec(p))) return `tentativa ${m[1]} de ${m[2]}`;
+    if ((m = /^erros=(\d+)$/.exec(p))) return `${chkPlural(Number(m[1]), "erro seguido", "erros seguidos")} no código`;
+    if ((m = /^geracao=(\d+)$/.exec(p))) return `código novo (versão ${m[1]})`;
+    if ((m = /^baixadas=(\d+)$/.exec(p))) return chkPlural(Number(m[1]), "criança com baixa", "crianças com baixa");
+    if ((m = /^voluntarios=(\d+)$/.exec(p))) return chkPlural(Number(m[1]), "voluntário saiu da sala", "voluntários saíram da sala");
+    if (CHK_ROTULO_ANTES_DA_BAIXA[p]) return CHK_ROTULO_ANTES_DA_BAIXA[p];
+    if (CHK_ROTULO_TIPO_RETIRANTE[p]) return CHK_ROTULO_TIPO_RETIRANTE[p];
+    if (CHK_ROTULO_PROBLEMA[p]) return CHK_ROTULO_PROBLEMA[p];
+    return /^[A-Z][A-Z_]+$/.test(p) ? p.toLowerCase().replace(/_/g, " ") : p;
+  }).filter(Boolean).join("; ");
+}
 function chkRenderRelatorio(data) {
   const cx = chkEl("chkRelatorioCx");
   if (!cx) return;
@@ -1707,11 +1914,14 @@ function chkRenderRelatorio(data) {
   alvo.appendChild(chkNo("h6", "chk-subtitulo", "Voluntários"));
   alvo.appendChild(chkTabela(["Voluntário", "Entrou", "Saiu"], (Array.isArray(data.voluntarios) ? data.voluntarios : []).map(v => [v.nome, hora(v.entrouEm), v.saiuEm ? hora(v.saiuEm) : "ainda na sala"])));
   alvo.appendChild(chkNo("h6", "chk-subtitulo", "Crianças"));
-  alvo.appendChild(chkTabela(["Criança", "Tipo", "Idade", "Entrada", "Quem trouxe", "Situação", "Saída", "Quem retirou", "Retirada divergente"],
-    (Array.isArray(data.criancas) ? data.criancas : []).map(c => [c.nome, c.tipo === "VISITANTE" ? "Visitante" : "Membro", chkAnos(c.idade), hora(c.entregueEm), c.quemTrouxe || "—", CHK_ROTULO_SITUACAO[c.situacao] || c.situacao,
-      c.retiradoEm ? hora(c.retiradoEm) : "—", c.quemRetirou ? `${c.quemRetirou}${CHK_ROTULO_TIPO_RETIRANTE[c.tipoRetirante] ? ` (${CHK_ROTULO_TIPO_RETIRANTE[c.tipoRetirante]})` : ""}` : "—", c.retiradaDivergente ? "Sim" : "Não"])));
+  // (a baixa administrativa NÃO é retirada: ninguém registrou a quem a criança foi entregue; os motivos que a liderança escreveu saem só neste relatório, que é dela)
+  alvo.appendChild(chkTabela(["Criança", "Tipo", "Idade", "Entrada", "Quem trouxe", "Situação", "Saída", "Quem retirou", "Retirada divergente", "Motivos registrados"],
+    (Array.isArray(data.criancas) ? data.criancas : []).map(c => [c.nome, c.tipo === "VISITANTE" ? "Visitante" : "Membro", chkAnos(c.idade), hora(c.entregueEm), c.quemTrouxe || "—",
+      c.baixaAdministrativa ? "Baixa administrativa (sem retirada registrada)" : (CHK_ROTULO_SITUACAO[c.situacao] || c.situacao),
+      c.retiradoEm ? hora(c.retiradoEm) : "—", c.quemRetirou ? `${c.quemRetirou}${CHK_ROTULO_TIPO_RETIRANTE[c.tipoRetirante] ? ` (${CHK_ROTULO_TIPO_RETIRANTE[c.tipoRetirante]})` : ""}` : "—", c.retiradaDivergente ? "Sim" : "Não",
+      [c.motivoDoPedido ? `Pedido: ${c.motivoDoPedido}` : "", c.motivoDaDecisao ? `Decisão: ${c.motivoDaDecisao}` : "", c.baixaMotivo ? `Baixa: ${c.baixaMotivo}` : ""].filter(Boolean).join(" · ") || "—"])));
   alvo.appendChild(chkNo("h6", "chk-subtitulo", "Tudo o que foi registrado"));
-  alvo.appendChild(chkTabela(["Hora", "O que aconteceu", "Quem", "Detalhe"], (Array.isArray(data.eventos) ? data.eventos : []).map(e => [hora(e.em), e.rotulo || e.tipo, e.ator, e.detalhe || ""])));
+  alvo.appendChild(chkTabela(["Hora", "O que aconteceu", "Quem", "Detalhe"], (Array.isArray(data.eventos) ? data.eventos : []).map(e => [hora(e.em), e.rotulo || e.tipo, e.ator, chkTraduzirDetalhe(e.detalhe)])));
 }
 async function chkAbrirRelatorioAcao(botao) {
   if (!chkSala || !chkSala.ehGestao) return;
@@ -1739,26 +1949,34 @@ function chkImprimirRelatorioAcao() {
 }
 
 // ---- aba da liderança → Aprovações: o que espera a liderança em TODAS as salas de hoje do escopo ----
-function chkRenderAprovacoes() {
+function chkRenderAprovacoes(cortada) {
   const cx = chkEl("chkAprovacoesLista");
   if (!cx) return;
   chkComFoco(() => {
     cx.innerHTML = chkAprovacoes.length
       ? chkAprovacoes.map(x => `<div class="chk-apr-grupo"><p class="chk-apr-sala"><strong>${escaparHtmlEbd(x.sala.equipeNome)}</strong> · ${escaparHtmlEbd(x.sala.congregacaoNome)}</p>${chkHtmlCrianca(x.crianca, { operar: false, gestao: true })}</div>`).join("")
-      : "<p class='subtitle'>Nada espera a liderança agora: nenhuma retirada por quem não está na lista e nenhuma criança travada.</p>";
+      : cortada ? "<p class='subtitle'>Nada espera a liderança nas salas consultadas: nenhuma retirada por quem não está na lista e nenhuma criança travada. Veja o aviso acima: há mais salas.</p>"
+        : "<p class='subtitle'>Nada espera a liderança agora: nenhuma retirada por quem não está na lista e nenhuma criança travada.</p>";
     chkPreencherNomes(chkAprovacoes.map(x => x.crianca));
   });
 }
 function chkCarregarAprovacoesAcao() { return chkCarregarAprovacoes(false); }
-async function chkCarregarAprovacoes(silencioso) {
+// `silencioso`: o relógio de 8 s (sem a mensagem "Procurando…"); `forcar`: a volta à página pede mesmo com uma rodada a caminho. O relógio NUNCA empilha rodadas (cada uma é uma leitura de salas + uma por sala).
+async function chkCarregarAprovacoes(silencioso, forcar) {
   chkVerificarDono();
   if (!chkPodeAba() || chkSala) return;
-  const geracao = chkGeracao, seq = ++chkSeqApr;
+  if (silencioso && !forcar && chkEmVooApr > 0) return;
+  const geracao = chkGeracao, seq = ++chkSeqApr, epoca = chkEpocaApr;
+  chkEmVooApr++;
+  try { await chkRodadaDeAprovacoes(silencioso, geracao, seq); } finally { if (epoca === chkEpocaApr && chkEmVooApr > 0) chkEmVooApr--; }
+}
+async function chkRodadaDeAprovacoes(silencioso, geracao, seq) {
   if (!silencioso) chkEscrever("chkAprMsg", "Procurando o que espera a liderança…", false);
   const [catalogo, minhas] = await Promise.all([chkGarantirCatalogos(), chkObter("minhas-salas")]);
   if (geracao !== chkGeracao || seq !== chkSeqApr || chkSala) return;
   if (!catalogo || minhas.sucesso === false || !Array.isArray(minhas.salas)) { chkFalhaDasAprovacoes(minhas, catalogo, silencioso); return; }
-  const salas = minhas.salas.filter(s => s && typeof s === "object" && s.ehGestao && chkInteiro(s.servicoId) && chkInteiro(s.equipeId) && Number(s.criancasNaSala) > 0).slice(0, 15);
+  const elegiveis = minhas.salas.filter(s => s && typeof s === "object" && s.ehGestao && chkInteiro(s.servicoId) && chkInteiro(s.equipeId) && Number(s.criancasNaSala) > 0);
+  const salas = elegiveis.slice(0, CHK_MAX_SALAS_APROVACOES), cortada = elegiveis.length > salas.length;
   const leituras = await Promise.all(salas.map(s => chkObter(`sala?${chkConsultaSala(s)}`)));
   if (geracao !== chkGeracao || seq !== chkSeqApr || chkSala) return;
   const itens = [];
@@ -1772,8 +1990,10 @@ async function chkCarregarAprovacoes(silencioso) {
   if (falhou && !itens.length) { chkFalhaDasAprovacoes(falhou, true, silencioso); return; }
   if (chkFalhas > 0) chkFalhas = 0;
   chkAprovacoes = itens;
-  chkEscrever("chkAprMsg", itens.length ? `${itens.length} item(ns) esperando a liderança.` : "", false);
-  chkRenderAprovacoes();
+  // salas além do limite não são lidas: o corte nunca é em silêncio
+  const aviso = cortada ? `Mostrando as ${CHK_MAX_SALAS_APROVACOES} primeiras salas de ${elegiveis.length}. Abra a sala para ver o resto.` : "";
+  chkEscrever("chkAprMsg", [itens.length ? `${itens.length} item(ns) esperando a liderança.` : "", aviso].filter(Boolean).join(" "), cortada);
+  chkRenderAprovacoes(cortada);
   chkIniciarTimer();
 }
 function chkFalhaDasAprovacoes(resposta, catalogo, silencioso) {
@@ -1784,10 +2004,19 @@ function chkFalhaDasAprovacoes(resposta, catalogo, silencioso) {
   if (parou) chkPararTimer();
 }
 
+// Código de retirada na tela que ninguém declarou impresso: fechar a aba ou recarregar a página pede a confirmação do navegador (o código só aparece uma vez). Registrado uma vez, ao carregar o módulo.
+function chkAntesDeSair(evento) {
+  if (!chkHaCodigoNaoImpresso()) return undefined;
+  evento.preventDefault();
+  evento.returnValue = "";
+  return "";
+}
+if (typeof window.addEventListener === "function") window.addEventListener("beforeunload", chkAntesDeSair);
+
 registrarAcoes({
   chkAbrirRelatorioAcao, chkAbrirRetiradaAcao, chkAbrirSalaAcao, chkAbrirSegundaViaAcao, chkAdicionarAutorizadoAcao, chkAdicionarMembroAcao, chkAdicionarVisitanteAcao, chkAlternarFilhoAcao,
   chkApagarSaudeAcao, chkAtualizarSalaAcao, chkBuscaDigitouAcao, chkBuscarAcao, chkCarregarAprovacoesAcao, chkCarregarMeuPainelAcao, chkCarregarSalasGesAcao, chkConfirmarSegundaViaAcao,
-  chkDecidirAcao, chkDestravarAcao, chkEntrarAcao, chkEnviarCheckinAcao, chkEnviarRetiradaAcao, chkEnviarSegundaViaAcao, chkFecharAcaoAcao, chkFecharImpressaoAcao, chkFecharRelatorioAcao,
+  chkDecidirAcao, chkDestravarAcao, chkEncerrarSalaAcao, chkEntrarAcao, chkEnviarCheckinAcao, chkEnviarRetiradaAcao, chkEnviarSegundaViaAcao, chkFecharAcaoAcao, chkFecharImpressaoAcao, chkFecharRelatorioAcao,
   chkFecharSalaAcao, chkFichaBuscarAcao, chkGravarSaudeAcao, chkImprimirAcao, chkImprimirRelatorioAcao, chkMostrarSecaoAcao, chkMudouRetiranteAcao, chkMudouTrouxeAcao,
   chkRemoverCriancaAcao, chkRevogarAutorizadoAcao, chkSairAcao, chkTirarVoluntarioAcao, chkVisSaudeDigitouAcao
 });

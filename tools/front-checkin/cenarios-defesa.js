@@ -4,7 +4,7 @@
 
 module.exports = function registrar(H) {
   const { cenario, confere, montar, limpo, achar, descendentes, chamadas, texto, argsDe, visivel, clicarEResponder, esperar, esperaChegar, abrirMeuPainel, abrirSalaMeu, abrirAbaGestao, salaPronta, buscar,
-    adicionarMembro, escolherQuemTrouxe, enviarCheckin, checkinDoPedro, cartao, seloDe, botoes, F, ATAQUE, MIN, ocorrencias, lerApp } = H;
+    adicionarMembro, escolherQuemTrouxe, enviarCheckin, checkinDoPedro, cartao, seloDe, botoes, F, ATAQUE, MIN, ocorrencias, lerApp, imprimir } = H;
 
   cenario("Defesa: quem opera (PIN) chama as ações da liderança direto — nada é pedido ao servidor, nada abre", async () => {
     const c = await salaPronta(); const { S, env } = c;
@@ -59,12 +59,13 @@ module.exports = function registrar(H) {
     await d.env.ev("mostrarSubAbaMeupainel('checkininfantil')"); await d.env.ocioso();
     confere(!!d.env.e("chkSalaRaiz") && d.env.doc.body.innerHTML.includes(a.codigo) && chamadas(d.env, "GET checkin-infantil/minhas-salas").length === 0 && chamadas(d.env, "GET checkin-infantil/sala").length === 1, "tocar de novo em Check-in infantil com a sala aberta não a fecha, não apaga o código e só lê a sala");
     // imprimiu o primeiro lote, fez outro check-in: o segundo lote ainda NÃO foi impresso e fechar pergunta
-    d.env.doc.clicar(d.env.e("chkImprimirBotao")); await d.env.ocioso();
-    confere(d.env.g("chkImpressao").impressa === true, "o primeiro lote foi impresso");
+    await imprimir(d.env, true);
+    confere(d.env.g("chkImpressao").lotes[0].impresso === true, "o primeiro lote foi impresso");
     const b = await checkinDoPedro(d, 102);
-    confere(d.env.g("chkImpressao").impressa === false && d.env.g("chkImpressao").lotes.length === 2, "um lote novo volta a contar como NÃO impresso");
+    // o lote já impresso sai da tela e da memória quando a família seguinte chega: sobra só o novo, ainda NÃO impresso
+    confere(d.env.g("chkImpressao").lotes.length === 1 && d.env.g("chkImpressao").lotes[0].impresso === false && !d.env.doc.body.innerHTML.includes(a.codigo), "a família seguinte chega: o lote já impresso sai (com o código), e o novo conta como NÃO impresso");
     const m = await clicarEResponder(d.env, d.env.e("chkFecharImpressaoBotao"), false);
-    confere(m.aberto && /NÃO foram impressos/.test(m.texto) && !!d.env.e("chkCodigo1x0"), "fechar com o segundo lote não impresso pergunta e cancelar mantém os dois lotes");
+    confere(m.aberto && /NÃO foram impressos/.test(m.texto) && !!d.env.e("chkCodigo0x0") && d.env.e("chkCodigo0x0").textContent === b.codigo, "fechar com o lote novo não impresso pergunta e cancelar mantém o código");
   });
 
   cenario("Respostas de erro sem o campo 'sucesso' (o que a plataforma devolve em 403, 429 ou 5xx): sempre tratadas como erro, com a mensagem", async () => {
@@ -124,6 +125,8 @@ module.exports = function registrar(H) {
     regra(/body:not\(\.chk-imp-etiquetas\) #chkImpressaoCx \{ display: none !important; \}/, "o painel com os códigos não sai num Ctrl+P comum");
     regra(/\.chk-so-tela \{ display: none !important; \}/, "o aviso só da tela não sai no papel");
     regra(/body\.chk-imprimindo \* \{ visibility: hidden !important; \}/, "a impressão esconde tudo, menos o que foi pedido");
+    regra(/body\.chk-imp-etiquetas \.chk-lote:not\(\.chk-lote-alvo\) \{ display: none !important; \}/, "no papel só saem os lotes marcados como alvo (a família anterior, já impressa, não sai de novo)");
+    regra(/\.chk-lote-estado \{[^}]*font-weight: 700/, "o rótulo 'Impresso / Ainda não impresso' do lote é legível na tela (e some no papel: é .chk-so-tela)");
     regra(/body\.chk-imprimindo \.chk-recibo \{[^}]*break-before: page/, "o recibo começa numa folha à parte");
     regra(/body\.chk-imprimindo \.chk-etiqueta \{[^}]*break-inside: avoid/, "a etiqueta não parte no meio");
     regra(/body\.chk-imprimindo \.chk-alergia \{[^}]*border: 3px solid #000/, "a alergia sai com quadro grosso (impressora em preto e branco)");

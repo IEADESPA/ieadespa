@@ -237,9 +237,9 @@ module.exports = function registrar(H) {
   cenario("Extra B: voltar da sala com os códigos já impressos não pergunta nada", async () => {
     const c = await salaPronta(); const { env } = c;
     await checkinDoPedro(c, 101);
-    confere(!!env.g("chkImpressao") && env.g("chkImpressao").impressa === false, "o painel de códigos abriu e ainda não foi impresso");
-    env.doc.clicar(env.e("chkImprimirBotao")); await env.ocioso();
-    confere(env.g("chkImpressao").impressa === true && env.impressoes.length === 1, "a impressão foi pedida: os códigos contam como impressos");
+    confere(!!env.g("chkImpressao") && env.g("chkImpressao").lotes.length === 1 && env.g("chkImpressao").lotes[0].impresso === false, "o painel de códigos abriu e ainda não foi impresso");
+    await H.imprimir(env, true);
+    confere(env.g("chkImpressao").lotes[0].impresso === true && env.impressoes.length === 1, "a impressão foi pedida e confirmada: os códigos contam como impressos");
     const m = await clicarEResponder(env, env.e("chkVoltarBotao"), false);
     confere(m.aberto === false && env.g("chkSala") === null && !env.e("chkSalaRaiz"), "voltar com os códigos impressos sai direto, sem a pergunta");
   });

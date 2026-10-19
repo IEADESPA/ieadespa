@@ -123,6 +123,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const reg = c.S.registros[c.S.registros.length - 1];
     return { registro: reg, codigo: c.S.codigoDe(reg.registroId) };
   };
+  // "Imprimir etiquetas e recibo": o clique chama window.print() e a tela pergunta se as etiquetas saíram; `saiu` é a resposta (true = "Sim, saíram", false = "Cancelar")
+  const imprimir = async (env, saiu = true) => { const b = env.e("chkImprimirBotao"); if (b) b.focus(); env.doc.clicar(b); const m = await env.responderModal(saiu); await env.ocioso(); return m; };
   const cartao = (env, registroId) => env.e(`chkCrianca${registroId}`);
   const seloDe = (el, textoDoSelo) => descendentes(el).some(x => x.localName === "span" && /chk-selo/.test(x.className) && x.textContent.includes(textoDoSelo));
 
@@ -305,8 +307,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     S.entrar(S.salas[0], 45); S.entrar(S.salas[0], 44);
     await env.ev("chkLerSala(true)"); await env.ocioso();
     const vol = texto(env, "chkSalaVoluntarios");
-    confere(vol.includes("Edu Sem Habilitação") && /não está apto agora/.test(vol), "voluntário com apto=false aparece com o aviso");
-    confere(vol.includes("Duda Auxiliar") && /auxiliar: não conta como adulto/.test(vol), "adolescente apto aparece como auxiliar e não conta");
+    confere(vol.includes("Edu Sem Habilitação") && /não conta na proporção agora/.test(vol) && !/apto/.test(vol), "voluntário que não conta aparece só com 'não conta na proporção agora' (o servidor não manda o motivo ao operador)");
+    confere(vol.includes("Duda Auxiliar") && /não conta na proporção agora/.test(vol) && !/auxiliar: não conta|não está apto/.test(vol), "adolescente apto também aparece só como 'não conta na proporção agora', sem dizer o motivo");
     confere(texto(env, "chkSalaLotacao").includes("Adultos aptos presentes: 2"), "só os adultos aptos contam (2, não 4)");
     // com crianças e só dois adultos, sair é recusado: a mensagem do servidor tal qual
     S.semear({ menorId: 101, trouxeMembroId: 201 });
@@ -571,12 +573,13 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // privacidade
     confere(env.gravacoes.length === 0 && !JSON.stringify(env.gravacoes).includes(codigo), "nada em localStorage/sessionStorage");
     confere(!env.saidaConsole.join("\n").includes(codigo), "nada no console");
-    confere(env.g("chkImpressao").lotes.length === 1 && env.g("chkImpressao").impressa === false, "em memória: um lote, ainda não impresso");
-    // imprimir
-    env.doc.clicar(env.e("chkImprimirBotao")); await env.ocioso();
+    confere(env.g("chkImpressao").lotes.length === 1 && env.g("chkImpressao").lotes[0].impresso === false && /Ainda não impresso/.test(texto(env, "chkLoteEstado0")), "em memória: um lote, ainda não impresso (e a tela diz isso)");
+    // imprimir: a tela pergunta se saiu na impressora (as classes ficam no <body> até a resposta: ver cenarios-extra-c)
+    const imp = await imprimir(env, true);
+    confere(imp.aberto && /saíram na impressora/.test(imp.texto), "depois de imprimir a tela pergunta se as etiquetas e o recibo saíram");
     confere(env.impressoes.length === 1 && /chk-imprimindo/.test(env.impressoes[0].classes) && /chk-imp-etiquetas/.test(env.impressoes[0].classes) && !/chk-imp-relatorio/.test(env.impressoes[0].classes), "window.print() é chamado com as classes que isolam as etiquetas e o recibo");
-    confere(!/chk-imprimindo|chk-imp-/.test(env.doc.body.className), "e as classes de impressão saem do <body> depois");
-    confere(env.g("chkImpressao").impressa === true, "marcado como impresso");
+    confere(!/chk-imprimindo|chk-imp-/.test(env.doc.body.className), "e as classes de impressão saem do <body> depois da resposta");
+    confere(env.g("chkImpressao").lotes[0].impresso === true && /✅ Impresso/.test(texto(env, "chkLoteEstado0")), "marcado como impresso (e a tela diz isso)");
     // fechar e apagar (já impresso: sem pergunta)
     env.doc.clicar(env.e("chkFecharImpressaoBotao")); await env.ocioso();
     confere(env.modal().aberto === false && env.e("chkImpressaoCx").innerHTML === "", "já impresso: fecha sem perguntar");
@@ -712,9 +715,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
 
   // os cenários seguintes moram em arquivos próprios e recebem os mesmos auxiliares
   const H = { T, cenario, confere, esperar, montar, limpo, achar, descendentes, botao, botoes, chamadas, texto, argsDe, visivel, confereAcessibilidade, idsRepetidos, clicarEResponder, esperaChegar, nomeDe,
-    abrirMeuPainel, abrirSalaMeu, abrirAbaGestao, abrirSalaGestao, entrarNaSala, salaPronta, buscar, adicionarMembro, escolherQuemTrouxe, preencherOutraPessoa, enviarCheckin, checkinDoPedro, cartao, seloDe, ocorrencias,
+    abrirMeuPainel, abrirSalaMeu, abrirAbaGestao, abrirSalaGestao, entrarNaSala, salaPronta, buscar, adicionarMembro, escolherQuemTrouxe, preencherOutraPessoa, enviarCheckin, checkinDoPedro, cartao, seloDe, ocorrencias, imprimir,
     F, ATAQUE, ck, MEU, SALA, MIN, ALFABETO, criarAmbiente, lerApp, mutar, ambiente: () => ambienteAtual };
-  for (const arquivo of ["./cenarios-retirada", "./cenarios-lideranca", "./cenarios-filhos-e-falhas", "./cenarios-ataque-total", "./cenarios-defesa", "./cenarios-extra-a", "./cenarios-extra-b"]) {
+  for (const arquivo of ["./cenarios-retirada", "./cenarios-lideranca", "./cenarios-filhos-e-falhas", "./cenarios-ataque-total", "./cenarios-defesa", "./cenarios-extra-a", "./cenarios-extra-b", "./cenarios-extra-c", "./cenarios-extra-d"]) {
     try { require(arquivo)(H); } catch (erro) { if (erro && erro.code === "MODULE_NOT_FOUND" && String(erro.message).includes(arquivo.slice(2))) continue; throw erro; }
   }
 

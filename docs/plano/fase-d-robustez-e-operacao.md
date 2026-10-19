@@ -591,4 +591,4 @@ abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.
   (`ieadespa-homolog`) continua serverless e pausado. Total esperado: B1 R$ 75 + sites R$ 30,5 + Basic R$ 30,5 + testes/outros ~R$ 10 =
   **~R$ 145–150/mês**. **Reverter a troca** (se a Basic ficar lenta): `az sql db update -g ieadespa -s srv-app-sql -n app-db-prod --edition
   GeneralPurpose --compute-model Serverless --family Gen5 --capacity 1 --min-capacity 0.5 --auto-pause-delay 15`; ou subir para S0 (10 DTU,
-  R$ 3,056/dia). Em 01/11: baixar o orçamento `ieadespa-teto-mensal` de R$ 650 para R$ 300.
+  R$ 3,056/dia). O orçamento `ieadespa-teto-mensal` fica em R$ 650 (decisão dele em 19/10: há outros bancos e processos do sistema que ainda entram na conta).

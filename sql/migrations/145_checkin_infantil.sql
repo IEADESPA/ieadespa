@@ -16,6 +16,10 @@
 -- A sala é a mesma da v7.7: o par (serviço da escala, equipe com a marca "contato com menores"). Nada aqui altera o que já existe, salvo as colunas novas, que
 -- começam desligadas/vazias: a turma da EBD só passa a exigir aptidão do professor quando alguém marcá-la.
 --
+-- Revisão adversarial (19/10/2026), ainda ANTES de ir para produção: a baixa administrativa (RetiradoTipo = 'BAIXA_ADM', BaixaMotivo e os eventos BAIXA_ADMINISTRATIVA e
+-- SALA_ENCERRADA), o motivo do pedido de retirada divergente (DivergenciaPedidoMotivo), o aviso obrigatório CHECKIN_AUTORIZADOS_DEPENDENTES e as proteções novas dos gatilhos entraram
+-- neste mesmo arquivo. Quem já aplicou a versão anterior recebe o que falta ao reaplicar (as colunas e as regras CHECK são trocadas pelos blocos "idempotentes" logo abaixo).
+--
 -- Idempotente: seguro para reexecutar sem apagar dados.
 -- ============================================================
 
@@ -53,7 +57,7 @@ BEGIN
         EntregueEm              DATETIME2 NOT NULL CONSTRAINT DF_CheckinReg_Em DEFAULT SYSUTCDATETIME(),
         EntreguePorMembroId     INT NOT NULL REFERENCES dbo.MembroReferencia(MembroId),
         RetiradoEm              DATETIME2 NULL,
-        RetiradoTipo            NVARCHAR(12) NULL CONSTRAINT CK_CheckinReg_RetTipo CHECK (RetiradoTipo IS NULL OR RetiradoTipo IN ('RESPONSAVEL','AUTORIZADO','TROUXE','OUTRO')),
+        RetiradoTipo            NVARCHAR(12) NULL CONSTRAINT CK_CheckinReg_RetTipo CHECK (RetiradoTipo IS NULL OR RetiradoTipo IN ('RESPONSAVEL','AUTORIZADO','TROUXE','OUTRO','BAIXA_ADM')),
         RetiradoMembroId        INT NULL REFERENCES dbo.MembroReferencia(MembroId),
         RetiradoNome            NVARCHAR(150) NULL,
         RetiradoParentesco      NVARCHAR(20) NULL,
@@ -64,6 +68,8 @@ BEGIN
         DivergenciaDecididaPorId INT NULL REFERENCES dbo.MembroReferencia(MembroId),
         DivergenciaDecididaEm   DATETIME2 NULL,
         DivergenciaMotivo       NVARCHAR(300) NULL,
+        DivergenciaPedidoMotivo NVARCHAR(300) NULL,
+        BaixaMotivo             NVARCHAR(300) NULL,
         AnonimizadoEm           DATETIME2 NULL,
         CONSTRAINT CK_CheckinReg_Crianca CHECK (AnonimizadoEm IS NOT NULL
             OR (MenorMembroId IS NOT NULL AND VisitanteNome IS NULL AND VisitanteNascimento IS NULL)
@@ -76,7 +82,7 @@ BEGIN
                (Situacao = 'NA_SALA' AND RetiradoEm IS NULL AND RetiradoTipo IS NULL AND Divergente = 0)
             OR (Situacao = 'RETIRADA_PENDENTE' AND RetiradoEm IS NULL AND RetiradoTipo IS NOT NULL AND Divergente = 1 AND DivergenciaPedidaEm IS NOT NULL)
             OR (Situacao = 'RETIRADA' AND RetiradoEm IS NOT NULL AND RetiradoTipo IS NOT NULL AND RetiradoPorOperadorId IS NOT NULL
-                AND (RetiradoMembroId IS NOT NULL OR RetiradoNome IS NOT NULL OR AnonimizadoEm IS NOT NULL)
+                AND (RetiradoMembroId IS NOT NULL OR RetiradoNome IS NOT NULL OR AnonimizadoEm IS NOT NULL OR (RetiradoTipo = 'BAIXA_ADM' AND BaixaMotivo IS NOT NULL))
                 AND (Divergente = 0 OR (DivergenciaDecididaPorId IS NOT NULL AND DivergenciaDecididaEm IS NOT NULL)))),
         CONSTRAINT CK_CheckinReg_Tentativas CHECK (Tentativas >= 0)
     );
@@ -113,12 +119,42 @@ BEGIN
 END
 GO
 
+-- Revisão (19/10/2026) — BAIXA ADMINISTRATIVA e motivo do pedido divergente. A criança que ficou "na sala" depois do serviço, sem retirada registrada, trava o sistema (o índice acima só
+-- olha a situação, não o serviço): a liderança encerra a sala e cada criança recebe a baixa (RetiradoTipo = 'BAIXA_ADM': sem código, sem retirante; RetiradoPorOperadorId é QUEM deu a
+-- baixa e BaixaMotivo o porquê). DivergenciaPedidoMotivo é o que o voluntário ouviu de quem pediu a retirada divergente (a decisão da liderança tem o seu motivo, em DivergenciaMotivo).
+-- As colunas e as regras CHECK abaixo são idempotentes: quem aplicou a versão anterior recebe o que falta.
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.CheckinInfantilRegistros') AND name = N'DivergenciaPedidoMotivo')
+    ALTER TABLE dbo.CheckinInfantilRegistros ADD DivergenciaPedidoMotivo NVARCHAR(300) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.CheckinInfantilRegistros') AND name = N'BaixaMotivo')
+    ALTER TABLE dbo.CheckinInfantilRegistros ADD BaixaMotivo NVARCHAR(300) NULL;
+GO
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_CheckinReg_RetTipo' AND parent_object_id = OBJECT_ID(N'dbo.CheckinInfantilRegistros') AND definition NOT LIKE N'%BAIXA_ADM%')
+BEGIN
+    ALTER TABLE dbo.CheckinInfantilRegistros DROP CONSTRAINT CK_CheckinReg_RetTipo;
+    ALTER TABLE dbo.CheckinInfantilRegistros ADD CONSTRAINT CK_CheckinReg_RetTipo CHECK (RetiradoTipo IS NULL OR RetiradoTipo IN ('RESPONSAVEL','AUTORIZADO','TROUXE','OUTRO','BAIXA_ADM'));
+END
+GO
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_CheckinReg_Estado' AND parent_object_id = OBJECT_ID(N'dbo.CheckinInfantilRegistros') AND definition NOT LIKE N'%BAIXA_ADM%')
+BEGIN
+    ALTER TABLE dbo.CheckinInfantilRegistros DROP CONSTRAINT CK_CheckinReg_Estado;
+    ALTER TABLE dbo.CheckinInfantilRegistros ADD CONSTRAINT CK_CheckinReg_Estado CHECK (
+               (Situacao = 'NA_SALA' AND RetiradoEm IS NULL AND RetiradoTipo IS NULL AND Divergente = 0)
+            OR (Situacao = 'RETIRADA_PENDENTE' AND RetiradoEm IS NULL AND RetiradoTipo IS NOT NULL AND Divergente = 1 AND DivergenciaPedidaEm IS NOT NULL)
+            OR (Situacao = 'RETIRADA' AND RetiradoEm IS NOT NULL AND RetiradoTipo IS NOT NULL AND RetiradoPorOperadorId IS NOT NULL
+                AND (RetiradoMembroId IS NOT NULL OR RetiradoNome IS NOT NULL OR AnonimizadoEm IS NOT NULL OR (RetiradoTipo = 'BAIXA_ADM' AND BaixaMotivo IS NOT NULL))
+                AND (Divergente = 0 OR (DivergenciaDecididaPorId IS NOT NULL AND DivergenciaDecididaEm IS NOT NULL))));
+END
+GO
+
 -- O registro é prova de custódia: não se apaga, e o que prova (quando, quem entregou, quem retirou, de qual sala) não se altera. Os campos pessoais podem ser
 -- anonimizados e o dado de saúde pode ser apagado (revogação do consentimento, retenção), e só. "Quem entregou" e "quem retirou" incluem o NOME em texto livre, o
 -- documento conferido e a matrícula de quem trouxe a criança: só a anonimização (que preenche AnonimizadoEm no mesmo comando) os apaga; reescrever, nunca.
 -- A anonimização também TIRA as três matrículas (da criança, de quem trouxe e de quem retirou): achado na prova no banco real, o registro "anonimizado" de uma criança membro continuava
 -- ligado às pessoas pelos números de matrícula, o que é pseudonimizar e não anonimizar (os CHECK de baixo já aceitavam o nulo quando AnonimizadoEm está preenchido; faltava o gatilho
 -- deixar e a rotina de retenção fazer). Trocar uma matrícula por OUTRA, ou pôr uma onde não havia, continua proibido.
+-- Limite conhecido (revisão de 19/10/2026), que nenhum gatilho resolve: quem tem permissão ALTER na tabela pode desligar o gatilho (DISABLE TRIGGER) e TRUNCATE TABLE não dispara gatilho
+-- nenhum. Isso se fecha na permissão do usuário com que a aplicação conecta ao banco (sem ALTER nem direito de TRUNCATE nas tabelas CheckinInfantil*), não aqui.
 EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_CheckinRegistros_Protegido ON dbo.CheckinInfantilRegistros AFTER UPDATE, DELETE AS
 BEGIN
     SET NOCOUNT ON;
@@ -145,7 +181,18 @@ BEGIN
                 OR ISNULL(i.TrouxeNome, N'''') <> ISNULL(d.TrouxeNome, N'''')))
            OR (d.Situacao = N''RETIRADA'' AND i.AnonimizadoEm IS NULL AND (ISNULL(i.RetiradoNome, N'''') <> ISNULL(d.RetiradoNome, N'''') OR ISNULL(i.RetiradoParentesco, N'''') <> ISNULL(d.RetiradoParentesco, N'''')
                 OR ISNULL(i.RetiradoDocumento, N'''') <> ISNULL(d.RetiradoDocumento, N'''')))
-           OR (d.AnonimizadoEm IS NOT NULL AND ISNULL(i.AnonimizadoEm, ''19000101'') <> d.AnonimizadoEm))
+           OR (d.AnonimizadoEm IS NOT NULL AND ISNULL(i.AnonimizadoEm, ''19000101'') <> d.AnonimizadoEm)
+           -- (revisão) depois da retirada, quem decidiu, quando e o motivo (da decisão, do pedido e da baixa) também são prova: só a anonimização os apaga (para NULL), nunca os reescreve
+           OR (d.Situacao = N''RETIRADA'' AND (ISNULL(i.DivergenciaDecididaPorId, -1) <> ISNULL(d.DivergenciaDecididaPorId, -1)
+                OR ISNULL(i.DivergenciaDecididaEm, ''19000101'') <> ISNULL(d.DivergenciaDecididaEm, ''19000101'')
+                OR ISNULL(i.DivergenciaPedidaEm, ''19000101'') <> ISNULL(d.DivergenciaPedidaEm, ''19000101'')
+                OR (ISNULL(i.DivergenciaMotivo, N'''') <> ISNULL(d.DivergenciaMotivo, N'''') AND NOT (i.AnonimizadoEm IS NOT NULL AND i.DivergenciaMotivo IS NULL))
+                OR (ISNULL(i.DivergenciaPedidoMotivo, N'''') <> ISNULL(d.DivergenciaPedidoMotivo, N'''') AND NOT (i.AnonimizadoEm IS NOT NULL AND i.DivergenciaPedidoMotivo IS NULL))
+                OR (ISNULL(i.BaixaMotivo, N'''') <> ISNULL(d.BaixaMotivo, N'''') AND NOT (i.AnonimizadoEm IS NOT NULL AND i.BaixaMotivo IS NULL))))
+           -- (revisão) "anonimizado" só é verdade se de fato não sobrou nome, telefone, nascimento, saúde nem texto livre: com o carimbo no mesmo comando, o gatilho não deixa reescrever
+           -- esses campos para outro valor (o único texto aceito no nome do visitante é o neutro); e, depois do carimbo, nenhum deles volta a ter conteúdo
+           OR (i.AnonimizadoEm IS NOT NULL AND (i.TrouxeNome IS NOT NULL OR i.RetiradoNome IS NOT NULL OR i.TrouxeContato IS NOT NULL OR i.VisitanteNascimento IS NOT NULL OR i.SaudeTexto IS NOT NULL
+                OR i.DivergenciaMotivo IS NOT NULL OR i.DivergenciaPedidoMotivo IS NOT NULL OR i.BaixaMotivo IS NOT NULL OR (i.VisitanteNome IS NOT NULL AND i.VisitanteNome <> N''(anonimizado)''))))
     BEGIN
         RAISERROR(N''O registro de check-in infantil é prova de custódia: o que prova quando, quem entregou, quem retirou e de qual sala não se altera.'', 16, 1);
         ROLLBACK TRANSACTION;
@@ -165,11 +212,20 @@ BEGIN
         EquipeId        INT NOT NULL REFERENCES dbo.EscalasEquipes(EquipeId),
         Tipo            NVARCHAR(32) NOT NULL CONSTRAINT CK_CheckinEv_Tipo CHECK (Tipo IN
                         ('CHECKIN','CODIGO_ERRADO','CRIANCA_TRAVADA','CRIANCA_DESTRAVADA','RETIRADA','RETIRADA_DIVERGENTE_PEDIDA','RETIRADA_DIVERGENTE_APROVADA','RETIRADA_DIVERGENTE_NEGADA',
-                         'SEGUNDA_VIA_PEDIDA','SEGUNDA_VIA_EMITIDA','VOLUNTARIO_ENTROU','VOLUNTARIO_SAIU','SALA_RECUSOU_CHECKIN')),
+                         'SEGUNDA_VIA_PEDIDA','SEGUNDA_VIA_EMITIDA','VOLUNTARIO_ENTROU','VOLUNTARIO_SAIU','SALA_RECUSOU_CHECKIN','BAIXA_ADMINISTRATIVA','SALA_ENCERRADA')),
         AtorMembroId    INT NOT NULL REFERENCES dbo.MembroReferencia(MembroId),
         Em              DATETIME2 NOT NULL CONSTRAINT DF_CheckinEv_Em DEFAULT SYSUTCDATETIME(),
         Detalhe         NVARCHAR(100) NULL
     );
+END
+GO
+-- (revisão) quem aplicou a versão anterior recebe os dois tipos novos de evento (baixa administrativa e sala encerrada)
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_CheckinEv_Tipo' AND parent_object_id = OBJECT_ID(N'dbo.CheckinInfantilEventos') AND definition NOT LIKE N'%SALA_ENCERRADA%')
+BEGIN
+    ALTER TABLE dbo.CheckinInfantilEventos DROP CONSTRAINT CK_CheckinEv_Tipo;
+    ALTER TABLE dbo.CheckinInfantilEventos ADD CONSTRAINT CK_CheckinEv_Tipo CHECK (Tipo IN
+        ('CHECKIN','CODIGO_ERRADO','CRIANCA_TRAVADA','CRIANCA_DESTRAVADA','RETIRADA','RETIRADA_DIVERGENTE_PEDIDA','RETIRADA_DIVERGENTE_APROVADA','RETIRADA_DIVERGENTE_NEGADA',
+         'SEGUNDA_VIA_PEDIDA','SEGUNDA_VIA_EMITIDA','VOLUNTARIO_ENTROU','VOLUNTARIO_SAIU','SALA_RECUSOU_CHECKIN','BAIXA_ADMINISTRATIVA','SALA_ENCERRADA'));
 END
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CheckinEv_Registro' AND object_id = OBJECT_ID(N'dbo.CheckinInfantilEventos'))
@@ -275,6 +331,27 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CheckinAutVisita_Registro' AND object_id = OBJECT_ID(N'dbo.CheckinInfantilAutorizadosVisita'))
     CREATE INDEX IX_CheckinAutVisita_Registro ON dbo.CheckinInfantilAutorizadosVisita (RegistroId);
 GO
+-- (revisão) os nomes indicados para a visita são registro de custódia como o resto: não se apagam nem se reescrevem; só a anonimização (nome nulo) os altera.
+EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_CheckinAutorizadosVisita_Protegido ON dbo.CheckinInfantilAutorizadosVisita AFTER UPDATE, DELETE AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM inserted)
+    BEGIN
+        IF EXISTS (SELECT 1 FROM deleted)
+        BEGIN
+            RAISERROR(N''Os autorizados só desta visita são registro de custódia: não se apagam.'', 16, 1);
+            ROLLBACK TRANSACTION;
+        END
+        RETURN;
+    END
+    IF EXISTS (SELECT 1 FROM inserted i JOIN deleted d ON d.AutorizadoVisitaId = i.AutorizadoVisitaId
+        WHERE i.RegistroId <> d.RegistroId OR i.Parentesco <> d.Parentesco OR (i.Nome IS NOT NULL AND ISNULL(i.Nome, N'''') <> ISNULL(d.Nome, N'''')))
+    BEGIN
+        RAISERROR(N''Os autorizados só desta visita são registro de custódia: só a anonimização (nome nulo) os altera.'', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END');
+GO
 
 -- ---- 5) Saúde da criança membro (alergia e condição de saúde) ----
 -- Uma linha por criança, escrita pelo responsável (Meu Painel) ou pela Secretaria (ficha assinada), e só enquanto vale o consentimento de saúde da v7.7
@@ -356,6 +433,10 @@ IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_SEGUN
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_SEM_RETIRADA')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
     VALUES (N'CHECKIN_SEM_RETIRADA', N'Check-in infantil: criança sem retirada registrada depois do serviço', N'MENORES', NULL, NULL, 1, 1);
+-- (revisão) quando um responsável cadastrado é revogado, o que ele autorizou a retirar a criança deixa de valer e a liderança é avisada (sem nome de criança)
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_AUTORIZADOS_DEPENDENTES')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
+    VALUES (N'CHECKIN_AUTORIZADOS_DEPENDENTES', N'Check-in infantil: autorizações de retirada deixaram de valer porque o responsável que as fez foi revogado', N'MENORES', NULL, NULL, 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'EBD_PROFESSOR_RETIRADO')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
     VALUES (N'EBD_PROFESSOR_RETIRADO', N'EBD: professor saiu de turma com menores por falta de habilitação', N'MENORES', NULL, NULL, 1, 1);

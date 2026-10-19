@@ -19,19 +19,23 @@
 //  POST saude-apagar             body:{menorId}
 // ---- A equipe da sala (escalado + apto + adulto; para agir, precisa ter ENTRADO na sala) --------------------------------------------------------
 //  GET  sala?servicoId=&equipeId=              -> { sala, adultosPresentes[], lotacao, criancas[], totais, pendencias, atualizadoEm }    a tela atualiza sozinha; a liderança recebe visão com telefones
+//                                                                                                                                          (adultosPresentes[].apto só na visão da liderança; o voluntário recebe só contaComoAdulto)
 //  GET  buscar?servicoId=&equipeId=&q=         -> { criancas[{menorId,nome,idade,faixa,foraDaFaixa,temResponsavel,jaNaSala}] }          só da congregação da sala, 3+ letras
 //  GET  responsaveis?servicoId=&equipeId=&menorId= -> { responsaveis[{membroId,nome,vinculo,rotuloVinculo}] }
-//  GET  relatorio?servicoId=&equipeId=         -> { sala, voluntarios[], criancas[], eventos[] }                                          o relatório do dia da sala (também da liderança)
+//  GET  relatorio?servicoId=&equipeId=         -> { sala, voluntarios[], criancas[], eventos[] }                                          o relatório do dia da sala: ATO DE GESTÃO (só a liderança da congregação)
 //  POST entrar-na-sala           body:{servicoId, equipeId}
 //  POST sair-da-sala             body:{servicoId, equipeId, membroId?}   membroId só da liderança (tira quem esqueceu de sair)
 //  POST checkin                  body:{servicoId, equipeId, criancas[{menorId}|{visitante:{nome,nascimento,saude?:{texto,concordo,textoHash}}}], trouxe:{responsavelId}|{nome,parentesco,documento,contato?}, autorizadosVisita?[{nome,parentesco}]}
 //                                -> 201 { etiquetas[{registroId,etiqueta:{nome,idade,sala,codigo,saude,...}}], recibo }   O CÓDIGO SÓ SAI AQUI
-//  POST retirar                  body:{registroId, codigo, retirante:{ref}|{outro:{nome,parentesco,documento}}}   -> { retirada:true } | { divergente:true, aguardaLideranca:true }
+//  POST retirar                  body:{registroId, codigo, retirante:{ref}|{outro:{nome,parentesco,documento,motivo?}}}   -> { retirada:true } | { divergente:true, aguardaLideranca:true, avisados, semAviso }
+//                                (semAviso:true = a liderança NÃO foi avisada pelo sistema: a tela manda o voluntário ligar para ela)
 //  POST segunda-via-pedir        body:{registroId, pessoa:{ref}, documento}
-//  POST segunda-via-confirmar    body:{registroId}                       outro adulto da sala; -> { etiqueta }  (o código novo sai só aqui)
+//  POST segunda-via-confirmar    body:{registroId}                       outro adulto da sala; -> { etiqueta, avisados, semAviso }  (o código novo sai só aqui; semAviso:true = o responsável cadastrado não pôde ser avisado)
 // ---- Liderança da congregação (permissão habilitacao_voluntarios, sessão de liderança, no escopo) -------------------------------------------------
 //  POST decidir-divergencia      body:{registroId, aprovar:true|false, motivo}     pede a confirmação reforçada (428); quem pediu não decide
 //  POST destravar                body:{registroId}
+//  POST encerrar-sala            body:{servicoId, equipeId, motivo}                -> { baixadas, mensagem }   baixa administrativa das crianças que ficaram sem retirada (só depois que o check-in da sala
+//                                fechou); pede a confirmação reforçada (428); motivo de 5 a 300 caracteres; os voluntários presentes saem; repetir não é erro
 //
 // Respostas: { sucesso:true, ... } (200; 201 quando cria) · recusa de regra: 422 { sucesso:false, mensagem } · 400 dado ruim · 403 sem permissão · 404 não achou · 409 corrida perdida.
 // Toda resposta leva Cache-Control: no-store (a do check-in e a da segunda via trazem o código). Quem não tem acesso à sala recebe 403 ANTES de qualquer busca; sala que não existe e
@@ -81,7 +85,8 @@ module.exports = async function (context, req) {
   // A sala (par serviço + equipe) e quem está agindo nela. `modo`: "sala" (só carrega a sala: a função do banco confere o operador no ato, com a aptidão de AGORA),
   // "gestor" (liderança no escopo) ou "qualquer" (a equipe da sala ou a liderança no escopo: a leitura da sala).
   // `exigirMarca: false` (ler a sala e sair dela): a criança e o voluntário que JÁ estão lá dentro não podem ficar presos se a equipe perder a marca no meio do serviço.
-  async function abrirSala(origem, modo, { exigirMarca = true } = {}) {
+  // `sePresente`: quem tem presença aberta na sala passa da porta mesmo sem estar (mais) na escala (ex.: foi tirado da escala depois de entrar) — só o que o deixa SAIR usa isto.
+  async function abrirSala(origem, modo, { exigirMarca = true, sePresente = false } = {}) {
     const v = ck.validarSala(origem);
     if (!v.valido) return { falha: [400, v.mensagem] };
     const pool = await getPool();
@@ -90,7 +95,7 @@ module.exports = async function (context, req) {
     const comoGestor = gestao && gestorPodeVer(c.sala.congregacaoNome);
     // Sala que não existe, sala de outra congregação e sala em que a pessoa não tem relação nenhuma (não está escalada, não a lidera e não é da gestão da congregação) recebem a MESMA
     // resposta ("não existe"): nem a sala, nem a marca da equipe viram sonda para quem só tem um login (achado na prova no banco real, e2e-20: antes era 403 para uma e 404 para a outra).
-    if (!comoGestor && !(await db.relacionadoComASala(pool, c.sala, sessao.membroId))) return { falha: [404, ck.MENSAGENS.SALA_NAO_ENCONTRADA] };
+    if (!comoGestor && !(await db.relacionadoComASala(pool, c.sala, sessao.membroId)) && !(sePresente && (await db.estaPresente(pool, c.sala, sessao.membroId)))) return { falha: [404, ck.MENSAGENS.SALA_NAO_ENCONTRADA] };
     if (exigirMarca && !c.sala.comMarca) return { falha: [422, ck.MENSAGENS.SALA_SEM_MARCA] };
     if (modo === "sala") return { pool, sala: c.sala, comoGestor };
     if (modo === "gestor") {
@@ -132,7 +137,7 @@ module.exports = async function (context, req) {
       }
       if (acao === "historico") {
         const pool = await getPool();
-        responder(context, 200, { sucesso: true, historico: await db.historicoDoResponsavel(pool, { responsavelId: sessao.membroId, menorId: idDe(consulta.menorId) }) });
+        responder(context, 200, { sucesso: true, historico: await db.historicoDoResponsavel(pool, { responsavelId: sessao.membroId, menorId: idDe(consulta.menorId), hoje }) });
         return;
       }
       if (acao === "autorizados" || acao === "saude") {
@@ -145,7 +150,8 @@ module.exports = async function (context, req) {
         return resposta(context, r);
       }
       if (acao === "sala" || acao === "relatorio") {
-        const a = await abrirSala(consulta, "qualquer", { exigirMarca: false });
+        // O relatório do dia é ATO DE GESTÃO (contrato da v7.10): traz os motivos que a liderança escreveu e todos os atos do serviço; o voluntário recebe a tela da sala, não o relatório.
+        const a = await abrirSala(consulta, acao === "relatorio" ? "gestor" : "qualquer", { exigirMarca: false });
         if (a.falha) return erro(context, ...a.falha);
         if (acao === "relatorio") return responder(context, 200, { sucesso: true, ...(await db.relatorioDaSala(a.pool, a.sala)) });
         responder(context, 200, { sucesso: true, ...(await db.snapshotDaSala(a.pool, a.sala, { hoje, visao: a.comoGestor ? "GESTOR" : "OPERADOR" })) });
@@ -207,7 +213,7 @@ module.exports = async function (context, req) {
     }
     if (acao === "sair-da-sala") {
       const tiraOutro = corpo.membroId != null && corpo.membroId !== "" && idDe(corpo.membroId) !== Number(sessao.membroId);
-      const a = await abrirSala(corpo, tiraOutro ? "gestor" : "sala", { exigirMarca: false });
+      const a = await abrirSala(corpo, tiraOutro ? "gestor" : "sala", { exigirMarca: false, sePresente: !tiraOutro });
       if (a.falha) return erro(context, ...a.falha);
       const alvo = tiraOutro ? idDe(corpo.membroId) : Number(sessao.membroId);
       return resposta(context, await db.sairDaSala(a.pool, { sala: a.sala, membroId: alvo, porId: tiraOutro ? Number(sessao.membroId) : null, hoje }));
@@ -253,6 +259,17 @@ module.exports = async function (context, req) {
     }
 
     // =============================== Liderança da congregação ===============================
+    if (acao === "encerrar-sala") {
+      if (!gestao) return erro(context, 403, SEM_PERMISSAO);
+      const v = ck.validarEncerramentoSala(corpo);
+      if (!v.valido) return erro(context, 422, v.mensagem);
+      // sala que não existe e sala fora do escopo: a mesma resposta (404); equipe sem a marca também se encerra (a criança que ficou lá dentro precisa de baixa)
+      const a = await abrirSala(corpo, "gestor", { exigirMarca: false });
+      if (a.falha) return erro(context, ...a.falha);
+      // Dar baixa em criança sem a retirada registrada é ato de peso: a confirmação reforçada da vD.4 (chave de acesso ou código por e-mail, até 10 minutos).
+      if (!auth.exigirFatorRecente(req, context)) return;
+      return resposta(context, await db.encerrarSala(a.pool, { sala: a.sala, gestorId: sessao.membroId, motivo: v.motivo }));
+    }
     if (acao === "decidir-divergencia" || acao === "destravar") {
       if (!gestao) return erro(context, 403, SEM_PERMISSAO);
       const v = acao === "destravar" ? { valido: !!idDe(corpo.registroId), registroId: idDe(corpo.registroId), mensagem: "Informe registroId." } : ck.validarDecisaoDivergencia(corpo);

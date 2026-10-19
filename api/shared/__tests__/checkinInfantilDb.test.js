@@ -19,7 +19,7 @@ jest.mock("../db", () => {
   const sql = new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : (typeof prop === "string" && /^[A-Z]/.test(prop) ? () => undefined : undefined)) });
   return { getPool: async () => ({ request: novaRequisicao }), sql };
 });
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => undefined), sha256: () => "" }));
 jest.mock("../segredoSessao", () => ({ resolverSegredo: () => "segredo-de-teste-com-mais-de-16-caracteres" }));
 jest.mock("../financeiroSeguro", () => ({ ...jest.requireActual("../financeiroSeguro"), obterTrava: jest.fn(async () => true) }));
 jest.mock("../canaisDb", () => ({ ...jest.requireActual("../canaisDb"), notificarAgora: jest.fn(async () => ({ criadas: 1 })), lerPrazoDias: jest.fn(async (_p, _s, padrao) => padrao) }));
@@ -30,7 +30,7 @@ jest.mock("../menoresConsentimentoDb", () => ({ consentimentoVigente: jest.fn(as
 jest.mock("../psc", () => ({ ...jest.requireActual("../psc"), resolverDestinatariosDaCongregacao: jest.fn(async () => [{ membroId: 900, nome: "Dirigente", email: "d@e.org" }]) }));
 
 const { getPool } = require("../db");
-const { registrarAuditoria } = require("../auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../auditoria");
 const { notificarAgora } = require("../canaisDb");
 const { obterTrava } = require("../financeiroSeguro");
 const mmDb = require("../ministerioMenoresDb");
@@ -53,6 +53,9 @@ const apto = () => { mmDb.aptidaoDe.mockResolvedValue(APTO); mmDb.aptidaoEmLote.
 let pool;
 beforeEach(async () => {
   mockRegras = []; mockConsultas = []; jest.clearAllMocks(); apto();
+  db.limparCaches();                                                    // a configuração dos prazos fica 15 s em memória: cada teste parte do zero
+  notificarAgora.mockImplementation(async () => ({ criadas: 1 }));
+  require("../canaisDb").lerPrazoDias.mockImplementation(async (_p, _s, padrao) => padrao);
   mmDb.lerPrazos.mockResolvedValue({ adultosMinimos: 2 }); mmDb.lerPrazosFaixas.mockResolvedValue({});
   mcDb.consentimentoVigente.mockResolvedValue(false);
   pool = await getPool();
@@ -592,7 +595,7 @@ describe("lista de autorizados a retirar (criança membro)", () => {
   });
   test("contar e gravar são UM ato sob a trava da criança (vários pedidos ao mesmo tempo não furam o teto de 8; o e2e-21 achou 13 de 14 entrando)", async () => {
     responsavel();
-    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados WHERE MenorMembroId = @m AND RevogadoEm IS NULL/, [{ n: 2 }]);
+    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados a WHERE a\.MenorMembroId = @m AND a\.RevogadoEm IS NULL/, [{ n: 2 }]);
     quando(/INSERT INTO CheckinInfantilAutorizados/, [{ AutorizadoId: 12 }]);
     // a trava é simulada (financeiroSeguro.obterTrava); aqui ela deixa uma marca na lista de consultas para conferir a ORDEM: trava, depois contagem, depois gravação
     require("../financeiroSeguro").obterTrava.mockImplementationOnce(async (_exec, nome) => { mockConsultas.push({ sql: "TRAVA", inputs: { r: nome } }); return true; });
@@ -609,7 +612,7 @@ describe("lista de autorizados a retirar (criança membro)", () => {
   });
   test("teto de 8 atingido: recusa DENTRO da transação (sem gravar) e solta a trava", async () => {
     responsavel();
-    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados WHERE MenorMembroId = @m AND RevogadoEm IS NULL/, [{ n: 8 }]);
+    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados a WHERE a\.MenorMembroId = @m AND a\.RevogadoEm IS NULL/, [{ n: 8 }]);
     const r = await db.adicionarAutorizado(pool, { dados: dadosAut(), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
     expect(r).toMatchObject({ sucesso: false });
     expect(r.mensagem).toMatch(/até 8 pessoas autorizadas/);
@@ -618,7 +621,7 @@ describe("lista de autorizados a retirar (criança membro)", () => {
   });
   test("o responsável ativo adiciona; o adulto que já é membro vem com a matrícula; auditoria só com ids", async () => {
     responsavel();
-    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados WHERE MenorMembroId = @m AND RevogadoEm IS NULL/, [{ n: 2 }]);
+    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados a WHERE a\.MenorMembroId = @m AND a\.RevogadoEm IS NULL/, [{ n: 2 }]);
     quando(/INSERT INTO CheckinInfantilAutorizados/, [{ AutorizadoId: 12 }]);
     const r = await db.adicionarAutorizado(pool, { dados: dadosAut({ validoAte: "2026-12-31" }), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
     expect(r).toMatchObject({ sucesso: true, autorizadoId: 12 });
@@ -644,17 +647,17 @@ describe("lista de autorizados a retirar (criança membro)", () => {
     expect((await db.adicionarAutorizado(pool, { dados: dadosAut(), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE })).mensagem).toMatch(/até 8 pessoas/);
     mockRegras = mockRegras.filter(([p]) => !/COUNT/.test(p.source)); quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados/, [{ n: 0 }]);
     expect((await db.adicionarAutorizado(pool, { dados: dadosAut({ validoAte: "2026-10-01" }), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE })).mensagem).toMatch(/já passou/);
-    quando(/SELECT MembroId, DataNascimento FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 55, DataNascimento: new Date("2015-01-01T00:00:00Z") }]);
+    quando(/SELECT MembroId, Nome, DataNascimento FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 55, Nome: "Joaquim Pereira", DataNascimento: new Date("2015-01-01T00:00:00Z") }]);
     expect((await db.adicionarAutorizado(pool, { dados: dadosAut({ membroId: 55 }), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE })).mensagem).toMatch(/Só maiores de 18/);
     mockRegras = mockRegras.filter(([p]) => !/DataNascimento FROM MembroReferencia WHERE MembroId = @m/.test(p.source));
-    quando(/SELECT MembroId, DataNascimento FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 30, DataNascimento: new Date("1990-01-01T00:00:00Z") }]);
+    quando(/SELECT MembroId, Nome, DataNascimento FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 30, Nome: "Caio Souza", DataNascimento: new Date("1990-01-01T00:00:00Z") }]);
     expect((await db.adicionarAutorizado(pool, { dados: dadosAut({ membroId: 30 }), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE })).mensagem).toMatch(/a si mesma/);
     expect(com(/INSERT INTO CheckinInfantilAutorizados/)).toHaveLength(0);
   });
   test("o mesmo adulto duas vezes (índice único) é mensagem, não erro", async () => {
     responsavel();
     quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados/, [{ n: 1 }]);
-    quando(/SELECT MembroId, DataNascimento FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 55, DataNascimento: new Date("1980-01-01T00:00:00Z") }]);
+    quando(/SELECT MembroId, Nome, DataNascimento FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 55, Nome: "Joaquim Pereira", DataNascimento: new Date("1980-01-01T00:00:00Z") }]);
     const e = new Error("duplicado"); e.number = 2627;
     quando(/INSERT INTO CheckinInfantilAutorizados/, () => { throw e; });
     expect((await db.adicionarAutorizado(pool, { dados: dadosAut({ membroId: 55 }), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE })).mensagem).toMatch(/já está na lista/);
@@ -745,8 +748,10 @@ describe("retenção, histórico do responsável e Meus Dados", () => {
     quando(/SET TrouxeContato = NULL, SaudeTexto = CASE/, [{ n: 4 }]);
     quando(/SET VisitanteNome = CASE WHEN MenorMembroId IS NULL/, [{ n: 2 }]);
     quando(/UPDATE v SET Nome = NULL FROM CheckinInfantilAutorizadosVisita/, [{ n: 1 }]);
+    quando(/UPDATE v SET PessoaNome = NULL, PessoaMembroId = NULL FROM CheckinInfantilSegundasVias/, [{ n: 3 }]);
+    quando(/UPDATE CheckinInfantilAutorizados SET Nome = N'\(anonimizado\)'/, [{ n: 5 }]);
     const r = await db.aplicarRetencao(pool, { hoje: HOJE });
-    expect(r).toEqual({ contatosApagados: 4, anonimizados: 2, autorizadosDeVisitaAnonimizados: 1 });
+    expect(r).toEqual({ contatosApagados: 4, anonimizados: 2, autorizadosDeVisitaAnonimizados: 1, segundasViasAnonimizadas: 3, autorizadosAnonimizados: 5 });
     const curto = com(/SET TrouxeContato = NULL, SaudeTexto = CASE/)[0];
     expect(curto.inputs.d).toBe(90);
     expect(curto.sql).toMatch(/SaudeOrigem = 'BALCAO'/);
@@ -756,9 +761,21 @@ describe("retenção, histórico do responsável e Meus Dados", () => {
     expect(longo.sql).toMatch(/AnonimizadoEm = SYSUTCDATETIME\(\)/);
     // Achado na prova no banco real (e2e-19): o registro de criança MEMBRO "anonimizado" continuava ligado às pessoas pelas matrículas (criança, quem trouxe, quem retirou).
     expect(longo.sql).toMatch(/MenorMembroId = NULL, TrouxeMembroId = NULL, RetiradoMembroId = NULL/);
+    // Revisão da v7.10: os textos livres que a liderança e o voluntário escreveram (motivo da decisão, do pedido e da baixa) saem junto com o nome
+    expect(longo.sql).toMatch(/DivergenciaMotivo = NULL, DivergenciaPedidoMotivo = NULL, BaixaMotivo = NULL/);
+    // ... o nome de quem pediu a segunda via (texto livre e matrícula) sai com o registro anonimizado
+    const vias = com(/UPDATE v SET PessoaNome = NULL, PessoaMembroId = NULL FROM CheckinInfantilSegundasVias/)[0];
+    expect(vias.sql).toMatch(/r\.AnonimizadoEm IS NOT NULL/);
+    // ... e quem foi autorizado a retirar perde o nome, a matrícula e a referência da ficha 5 anos depois de revogado ou vencido (o texto neutro cumpre a coluna obrigatória)
+    const aut = com(/UPDATE CheckinInfantilAutorizados SET Nome = N'\(anonimizado\)'/)[0];
+    expect(aut.inputs.d).toBe(1825);
+    expect(aut.sql).toMatch(/AutorizadoMembroId = NULL/);
+    expect(aut.sql).toMatch(/RevogadoEm IS NOT NULL AND RevogadoEm < DATEADD\(DAY, -@d/);
+    expect(aut.sql).toMatch(/ValidoAte IS NOT NULL AND ValidoAte < DATEADD\(DAY, -@d/);
+    expect(aut.sql).toMatch(/Forma = 'FICHA_FISICA' THEN N'\(anonimizado\)'/);        // a ficha exige referência: o texto neutro no lugar
   });
   test("o histórico do responsável só traz as crianças de que ele é responsável ATIVO e nunca o código, o voluntário ou a saúde", async () => {
-    quando(/WHERE r\.MenorMembroId IS NOT NULL AND EXISTS \(SELECT 1 FROM VoluntariadoResponsaveis v/, [{
+    quando(/WHERE r\.MenorMembroId IS NOT NULL AND m\.DataNascimento IS NOT NULL/, [{
       RegistroId: 9, MenorMembroId: 30, CriancaNome: "Caio Souza", EquipeNome: "Maternal", CongregacaoNome: "Central", ServicoDataHora: new Date("2026-10-18T09:00:00Z"), EntregueEm: new Date("2026-10-18T12:05:00Z"),
       RetiradoEm: new Date("2026-10-18T13:30:00Z"), Situacao: "RETIRADA", TrouxeNomeResolvido: "Maria Souza", RetiradoNomeResolvido: "Dona Lúcia", Divergente: 0, CodigoHash: "h", SaudeTexto: "alergia", EntreguePorMembroId: 10
     }]);
@@ -766,6 +783,8 @@ describe("retenção, histórico do responsável e Meus Dados", () => {
     const consulta = com(/WHERE r\.MenorMembroId IS NOT NULL/)[0];
     expect(consulta.sql).toMatch(/v\.ResponsavelMembroId = @r AND v\.RevogadoEm IS NULL/);
     expect(consulta.inputs).toMatchObject({ r: 40, m: 30 });
+    // (revisão) só de quem AINDA é menor: quem fez 18 anos sai do histórico do responsável
+    expect(consulta.sql).toMatch(/m\.DataNascimento > DATEADD\(YEAR, -18, @hoje\)/);
     expect(h).toHaveLength(1);
     expect(h[0]).toMatchObject({ registroId: 9, menorId: 30, crianca: "Caio Souza", sala: "Maternal", quemTrouxe: "Maria Souza", quemRetirou: "Dona Lúcia", situacao: "RETIRADA", retiradaDivergente: false, data: "2026-10-18" });
     expect(JSON.stringify(h)).not.toMatch(/"h"|alergia|CodigoHash|Voluntário|"10"/);
@@ -862,5 +881,438 @@ describe("achados da prova no banco real", () => {
     const consulta = com(/FROM EscalasServicos s\s+JOIN EscalasEquipes e/)[0].sql;
     expect(consulta).toMatch(/OR EXISTS \(SELECT 1 FROM CheckinInfantilRegistros r WHERE r\.ServicoId = s\.ServicoId AND r\.EquipeId = e\.EquipeId AND r\.Situacao <> 'RETIRADA'\)/);
     expect(consulta).toMatch(/OR EXISTS \(SELECT 1 FROM CheckinInfantilVoluntarios v WHERE v\.ServicoId = s\.ServicoId AND v\.EquipeId = e\.EquipeId AND v\.SaiuEm IS NULL\)/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// Revisão adversarial da v7.10 (servidor). Cada teste abaixo reprova no código de antes da revisão (git show HEAD:api/shared/checkinInfantilDb.js) e passa no de agora; o banco de verdade
+// (gatilhos, CHECK, transações, corridas) é provado em tools/e2e-localdb/e2e-22-checkin-revisao.js.
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+describe("A1: encerrar a sala (baixa administrativa)", () => {
+  const FECHADA = "2026-10-18T15:30";                                  // o serviço é das 09:00 e a janela fecha 5 horas depois
+  const ABERTA = "2026-10-18T10:00";
+  const CONTA = /SELECT COUNT\(\*\) AS n FROM CheckinInfantilRegistros WHERE ServicoId = @s AND EquipeId = @e AND Situacao <> 'RETIRADA'/;
+  const encerrar = (extra = {}) => db.encerrarSala(pool, { sala: SALA, gestorId: 77, motivo: "Os voluntários esqueceram de registrar as retiradas.", agoraIso: FECHADA, ...extra });
+  const ordem = () => mockConsultas.map((c) => c.sql);
+  function preparar({ criancas = 3, baixadas = [{ RegistroId: 1, SituacaoAntes: "NA_SALA" }, { RegistroId: 2, SituacaoAntes: "NA_SALA" }, { RegistroId: 3, SituacaoAntes: "RETIRADA_PENDENTE" }], voluntarios = [{ MembroId: 10 }, { MembroId: 11 }] } = {}) {
+    quando(CONTA, [{ n: criancas }]);
+    quando(/DECLARE @b TABLE/, baixadas);
+    quando(/DECLARE @v TABLE/, voluntarios);
+  }
+
+  test("com o check-in da sala aberto e criança nela: recusa, desfaz a transação e não grava, não baixa e não audita nada", async () => {
+    preparar();
+    const r = await encerrar({ agoraIso: ABERTA });
+    expect(r).toMatchObject({ sucesso: false, mensagem: ck.MENSAGENS.SALA_AINDA_ABERTA });
+    expect(com(/DECLARE @b TABLE/)).toHaveLength(0);
+    expect(com(/DECLARE @v TABLE/)).toHaveLength(0);
+    expect(escritas()).toHaveLength(0);
+    expect(ordem()).toContain("ROLLBACK");
+    expect(ordem()).not.toContain("COMMIT");
+    expect(registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+  });
+
+  test("janela fechada: UMA baixa em lote (sem retirante, com quem deu a baixa e o motivo), os voluntários saem, os eventos imutáveis e a auditoria entram na MESMA transação, sob a trava da sala", async () => {
+    preparar();
+    require("../financeiroSeguro").obterTrava.mockImplementationOnce(async (_exec, nome) => { mockConsultas.push({ sql: "TRAVA", inputs: { r: nome } }); return true; });
+    const r = await encerrar();
+    expect(r).toEqual({ sucesso: true, baixadas: 3, mensagem: expect.stringMatching(/3 criança\(s\) receberam a baixa administrativa.*2 voluntário\(s\) saíram/) });
+    const baixa = com(/DECLARE @b TABLE/)[0];
+    expect(baixa.inputs).toMatchObject({ s: 5, e: 7, g: 77, m: "Os voluntários esqueceram de registrar as retiradas." });
+    expect(baixa.sql).toMatch(/SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME\(\), RetiradoTipo = 'BAIXA_ADM', RetiradoMembroId = NULL, RetiradoNome = NULL, RetiradoParentesco = NULL/);
+    expect(baixa.sql).toMatch(/RetiradoPorOperadorId = @g, BaixaMotivo = @m/);
+    expect(baixa.sql).toMatch(/WHERE ServicoId = @s AND EquipeId = @e AND Situacao IN \('NA_SALA', 'RETIRADA_PENDENTE'\)/);
+    expect(baixa.sql).toMatch(/OUTPUT INSERTED\.RegistroId, DELETED\.Situacao INTO @b/);                       // a tabela tem gatilho: OUTPUT só com INTO
+    expect(baixa.sql).toMatch(/UPDATE CheckinInfantilSegundasVias SET CanceladaEm = SYSUTCDATETIME\(\) WHERE ConfirmadaEm IS NULL AND CanceladaEm IS NULL AND RegistroId IN \(SELECT RegistroId FROM @b\)/);
+    expect(baixa.sql).not.toMatch(/CodigoHash|CodigoGeracao/);                                                    // a baixa não usa nem troca o código
+    expect(com(/DECLARE @v TABLE/)[0].sql).toMatch(/UPDATE CheckinInfantilVoluntarios SET SaiuEm = SYSUTCDATETIME\(\)[\s\S]*WHERE ServicoId = @s AND EquipeId = @e AND SaiuEm IS NULL/);
+    const eventos = com(/INSERT INTO CheckinInfantilEventos/).map((c) => c.inputs);
+    expect(eventos.map((x) => [x.t, x.r, x.a, x.d])).toEqual([
+      ["BAIXA_ADMINISTRATIVA", 1, 77, "NA_SALA"], ["BAIXA_ADMINISTRATIVA", 2, 77, "NA_SALA"], ["BAIXA_ADMINISTRATIVA", 3, 77, "RETIRADA_PENDENTE"],
+      ["VOLUNTARIO_SAIU", null, 77, "sala encerrada pela liderança"], ["VOLUNTARIO_SAIU", null, 77, "sala encerrada pela liderança"],
+      ["SALA_ENCERRADA", null, 77, "baixadas=3;voluntarios=2"]
+    ]);
+    // a ordem: BEGIN, trava, baixa, saída dos voluntários, eventos, auditoria (na transação), COMMIT
+    const o = ordem();
+    const iBegin = o.indexOf("BEGIN"), iTrava = o.indexOf("TRAVA"), iBaixa = o.findIndex((s) => /DECLARE @b TABLE/.test(s)), iEvento = o.findIndex((s) => /INSERT INTO CheckinInfantilEventos/.test(s)), iCommit = o.indexOf("COMMIT");
+    expect([iBegin < iTrava, iTrava < iBaixa, iBaixa < iEvento, iEvento < iCommit]).toEqual([true, true, true, true]);
+    expect(mockConsultas[iTrava].inputs).toMatchObject({ r: "checkin-sala:5:7" });
+    expect(registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);
+    expect(registrarAuditoriaNaTransacao.mock.calls[0][1]).toMatchObject({ acao: "CHECKIN_SALA_ENCERRADA", usuarioId: 77, dadosDepois: { servicoId: 5, equipeId: 7, baixadas: 3, voluntarios: 2 } });
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+    // o motivo (texto livre) nunca vai para evento, auditoria nem aviso: só para a coluna da baixa
+    expect(JSON.stringify([eventos, registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]), notificarAgora.mock.calls])).not.toMatch(/esqueceram/);
+  });
+
+  test("repetir não baixa de novo nem dá erro: sala já encerrada responde 'já estava' sem gravar evento nenhum", async () => {
+    preparar({ criancas: 0, baixadas: [], voluntarios: [] });
+    const r = await encerrar();
+    expect(r).toMatchObject({ sucesso: true, baixadas: 0, jaEncerrada: true });
+    expect(com(/DECLARE @b TABLE/)).toHaveLength(0);               // sem criança aberta nem a consulta da baixa é feita
+    expect(com(/INSERT INTO CheckinInfantilEventos/)).toHaveLength(0);
+    expect(registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+    expect(ordem()).toContain("ROLLBACK");
+  });
+
+  test("sem criança e com voluntário ainda 'presente': encerra mesmo com o check-in aberto (ninguém é baixado, os voluntários saem)", async () => {
+    preparar({ criancas: 0, baixadas: [], voluntarios: [{ MembroId: 10 }] });
+    const r = await encerrar({ agoraIso: ABERTA });
+    expect(r).toMatchObject({ sucesso: true, baixadas: 0 });
+    expect(r.jaEncerrada).toBeUndefined();
+    expect(com(/INSERT INTO CheckinInfantilEventos/).map((c) => c.inputs.t)).toEqual(["VOLUNTARIO_SAIU", "SALA_ENCERRADA"]);
+    expect(ordem()).toContain("COMMIT");
+  });
+
+  test("serviço cancelado com criança dentro: encerra mesmo com a janela ainda aberta", async () => {
+    preparar();
+    const r = await db.encerrarSala(pool, { sala: { ...SALA, servicoStatus: "CANCELADA" }, gestorId: 77, motivo: "Serviço cancelado com a sala ocupada.", agoraIso: ABERTA });
+    expect(r).toMatchObject({ sucesso: true, baixadas: 3 });
+  });
+
+  test("a sala ocupada por outra operação (trava): recusa sem consultar nem gravar", async () => {
+    require("../financeiroSeguro").obterTrava.mockResolvedValueOnce(false);
+    const r = await encerrar();
+    expect(r.sucesso).toBe(false); expect(r.mensagem).toMatch(/ocupada/);
+    expect(com(/DECLARE @b TABLE/)).toHaveLength(0);
+    expect(ordem()).toContain("ROLLBACK");
+  });
+
+  test("um erro no meio (o evento não grava): desfaz TUDO e propaga (nada fica meio encerrado)", async () => {
+    preparar();
+    quando(/INSERT INTO CheckinInfantilEventos/, () => { throw new Error("queda do banco"); });
+    await expect(encerrar()).rejects.toThrow(/queda do banco/);
+    expect(ordem()).toContain("ROLLBACK");
+    expect(ordem()).not.toContain("COMMIT");
+    expect(registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+  });
+});
+
+describe("A2: o que um responsável autorizou só vale enquanto ele continua responsável", () => {
+  const EFETIVO = /\(a\.Forma = 'FICHA_FISICA' OR EXISTS \(SELECT 1 FROM VoluntariadoResponsaveis vr WHERE vr\.MenorMembroId = a\.MenorMembroId AND vr\.ResponsavelMembroId = a\.RegistradoPorMembroId AND vr\.RevogadoEm IS NULL\)\)/;
+  test("a lista de quem pode retirar (carregarAutorizados) só traz a ficha da Secretaria OU quem foi autorizado por responsável ainda ativo", async () => {
+    await db.carregarAutorizados(pool, [{ RegistroId: 9, MenorMembroId: 30 }], { hoje: HOJE });
+    const c = com(/FROM CheckinInfantilAutorizados a/)[0];
+    expect(c.sql).toMatch(EFETIVO);
+    expect(c.sql).toMatch(/a\.RevogadoEm IS NULL AND \(a\.ValidoAte IS NULL OR a\.ValidoAte >= @hoje\)/);
+  });
+  test("a tela do responsável (autorizados) e o teto de 8 olham a mesma regra (a linha sem efeito nem aparece nem ocupa vaga)", async () => {
+    quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c ON c\.CongregacaoId = m\.CongregacaoId WHERE m\.MembroId = @m/, [{ MembroId: 30, Nome: "Caio Souza", DataNascimento: new Date("2021-03-01T00:00:00Z"), CongregacaoId: 1, CongregacaoNome: "Central" }]);
+    quando(/FROM VoluntariadoResponsaveis WHERE MenorMembroId = @m AND ResponsavelMembroId = @r AND RevogadoEm IS NULL/, [{ x: 1 }]);
+    await db.listarAutorizados(pool, { menorId: 30, atorId: 40, hoje: HOJE });
+    expect(com(/SELECT a\.AutorizadoId, a\.Nome, a\.Parentesco/)[0].sql).toMatch(EFETIVO);
+    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados a/, [{ n: 0 }]);
+    quando(/INSERT INTO CheckinInfantilAutorizados/, [{ AutorizadoId: 1 }]);
+    await db.adicionarAutorizado(pool, { dados: { menorId: 30, nome: "Dona Lúcia", parentesco: "AVO", membroId: null, validoAte: null, referencia: null }, atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
+    expect(com(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados a/)[0].sql).toMatch(EFETIVO);
+  });
+  test("revogar o responsável revoga o que ele autorizou (só a forma RESPONSAVEL, nunca a ficha), audita só ids e AVISA a liderança sem nome de criança", async () => {
+    quando(/UPDATE CheckinInfantilAutorizados SET RevogadoEm = SYSUTCDATETIME\(\), RevogadoPorMembroId = @por/, [{ n: 2 }]);
+    const r = await db.tratarAutorizadosDoResponsavelRevogado(pool, { menorId: 30, responsavelMembroId: 40, cadastroId: 12, congregacaoId: 1, por: 5 });
+    expect(r).toEqual({ revogados: 2, avisados: 1 });
+    const up = com(/UPDATE CheckinInfantilAutorizados SET RevogadoEm/)[0];
+    expect(up.inputs).toMatchObject({ m: 30, r: 40, por: 5 });
+    expect(up.sql).toMatch(/Forma = 'RESPONSAVEL' AND RegistradoPorMembroId = @r/);
+    expect(up.sql).toMatch(/NOT EXISTS \(SELECT 1 FROM VoluntariadoResponsaveis vr WHERE vr\.MenorMembroId = @m AND vr\.ResponsavelMembroId = @r AND vr\.RevogadoEm IS NULL\)/);
+    expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "CHECKIN_AUTORIZADOS_REVOGADOS_COM_RESPONSAVEL", usuarioId: 5, dadosDepois: { menorId: 30, quantidade: 2 } });
+    const aviso = notificarAgora.mock.calls[0][1];
+    expect(aviso).toMatchObject({ regraChave: "CHECKIN_AUTORIZADOS_DEPENDENTES", referenciaId: 12, referenciaTabela: "VoluntariadoResponsaveis" });
+    expect(aviso.destinatarios.map((d) => d.membroId)).toEqual([900]);
+    expect(aviso.mensagem).toMatch(/^2 autorização\(ões\)/);
+    expect(aviso.mensagem).not.toMatch(/Caio|Souza/);
+  });
+  test("sem nada a revogar não audita nem avisa; e se o aviso falhar o ato não falha (a leitura já ignora essas autorizações)", async () => {
+    quando(/UPDATE CheckinInfantilAutorizados SET RevogadoEm/, [{ n: 0 }]);
+    expect(await db.tratarAutorizadosDoResponsavelRevogado(pool, { menorId: 30, responsavelMembroId: 40, cadastroId: 12, congregacaoId: 1, por: 5 })).toEqual({ revogados: 0, avisados: 0 });
+    expect(registrarAuditoria).not.toHaveBeenCalled(); expect(notificarAgora).not.toHaveBeenCalled();
+    mockRegras = []; quando(/UPDATE CheckinInfantilAutorizados SET RevogadoEm/, [{ n: 1 }]);
+    require("../psc").resolverDestinatariosDaCongregacao.mockRejectedValueOnce(new Error("sem banco"));
+    expect(await db.tratarAutorizadosDoResponsavelRevogado(pool, { menorId: 30, responsavelMembroId: 40, cadastroId: 12, congregacaoId: 1, por: 5 })).toEqual({ revogados: 1, avisados: 0 });
+  });
+});
+
+describe("a tela da sala depois da revisão (B5, B10, C17, C24)", () => {
+  const REGISTROS = /SELECT r\.RegistroId, r\.ServicoId[\s\S]*WHERE r\.ServicoId = @s AND r\.EquipeId = @e AND r\.Situacao <> 'RETIRADA' ORDER BY r\.RegistroId/;
+  const reg = (extra = {}) => ({ RegistroId: 9, ServicoId: 5, EquipeId: 7, MenorMembroId: null, VisitanteNome: "Davi Lima", CriancaNome: "Davi Lima", IdadeAnos: 5, IdadeForaDaFaixa: 0, TrouxeNomeResolvido: "Paula Lima", TrouxeParentesco: "MAE", TrouxeContato: "94991112222",
+    SaudeTexto: null, Tentativas: 0, Travado: 0, Situacao: "NA_SALA", EntregueEm: new Date("2026-10-18T12:05:00Z"), ...extra });
+  function preparar(regs = [reg()]) {
+    salaCom([10, 11, 12], regs.length);
+    quando(REGISTROS, regs);
+    quando(/SELECT COUNT\(\*\) AS entregues/, [{ entregues: regs.length, retiradas: 0 }]);
+    mmDb.aptidaoEmLote.mockImplementation(async (_p, ids) => new Map(ids.map((i) => [Number(i), i === 11 ? { apto: false, contaComoAdulto: false, bloqueios: [{ codigo: "INCIDENTE_EM_APURACAO", mensagem: "x" }] } : APTO])));
+  }
+  const snapshot = (visao) => db.snapshotDaSala(pool, SALA, { hoje: HOJE, agoraIso: AGORA, visao });
+
+  test("o voluntário NÃO recebe 'apto' dos colegas (só 'contaComoAdulto'); a liderança continua recebendo", async () => {
+    preparar();
+    const op = await snapshot("OPERADOR");
+    expect(op.adultosPresentes).toHaveLength(3);
+    for (const a of op.adultosPresentes) { expect("apto" in a).toBe(false); expect(typeof a.contaComoAdulto).toBe("boolean"); expect(Object.keys(a).sort()).toEqual(["contaComoAdulto", "entrouEm", "membroId", "nome"]); }
+    expect(op.adultosPresentes.find((a) => a.membroId === 11).contaComoAdulto).toBe(false);
+    expect(op.lotacao.adultos).toBe(2);                                               // o colega inapto continua fora da conta da lotação
+    expect(JSON.stringify(op)).not.toMatch(/"apto"|INCIDENTE/);
+    const gestor = await snapshot("GESTOR");
+    expect(gestor.adultosPresentes.find((a) => a.membroId === 11)).toMatchObject({ apto: false, contaComoAdulto: false });
+    expect(JSON.stringify(gestor)).not.toMatch(/INCIDENTE/);                           // nem a liderança vê o motivo reservado
+  });
+
+  test("a segunda via pendente mostra DE QUEM é o pedido (nome do cadastro quando a pessoa é membro) e o documento conferido", async () => {
+    preparar();
+    quando(/FROM CheckinInfantilSegundasVias v LEFT JOIN MembroReferencia pm ON pm\.MembroId = v\.PessoaMembroId/, [{ ViaId: 3, RegistroId: 9, PedidaPorMembroId: 10, PedidaEm: new Date(), PessoaTipo: "RESPONSAVEL", PessoaNome: "Maria Souza (do cadastro)", Documento: "CNH" }]);
+    const s = await snapshot("OPERADOR");
+    expect(s.criancas[0].segundaViaPendente).toMatchObject({ viaId: 3, pedidaPorMembroId: 10, pessoaNome: "Maria Souza (do cadastro)", documento: "CNH" });
+    const c = com(/FROM CheckinInfantilSegundasVias v LEFT JOIN/)[0];
+    expect(c.sql).toMatch(/COALESCE\(pm\.Nome, v\.PessoaNome\) AS PessoaNome, v\.Documento/);
+    expect(c.sql).toMatch(/ConfirmadaEm IS NULL AND v\.CanceladaEm IS NULL/);
+  });
+
+  test("o motivo do pedido divergente só vai ao cartão da liderança (nunca ao voluntário)", async () => {
+    preparar([reg({ Situacao: "RETIRADA_PENDENTE", DivergenciaPedidaEm: new Date(), RetiradoNomeResolvido: "Roberto Dias", RetiradoParentesco: "AMIGO_FAMILIA", RetiradoDocumento: "RG", RetiradoPorOperadorId: 10, DivergenciaPedidoMotivo: "Disse que a mãe mandou." })]);
+    const g = await snapshot("GESTOR"), o = await snapshot("OPERADOR");
+    expect(g.criancas[0].divergencia).toMatchObject({ quem: { nome: "Roberto Dias" }, motivo: "Disse que a mãe mandou." });
+    expect("motivo" in o.criancas[0].divergencia).toBe(false);
+    expect(JSON.stringify(o)).not.toMatch(/mandou/);
+  });
+
+  test("criança no teto de erros sem o travamento gravado (queda no meio, ou prazo reduzido depois) aparece TRAVADA e conta como pendência", async () => {
+    preparar([reg({ Tentativas: 5, Travado: 0 })]);
+    const s = await snapshot("OPERADOR");
+    expect(s.criancas[0]).toMatchObject({ travado: true, tentativasRestantes: 0 });
+    expect(s.pendencias.travadas).toBe(1);
+    mockRegras = []; preparar([reg({ Tentativas: 4, Travado: 0 })]);
+    expect((await snapshot("OPERADOR")).criancas[0].travado).toBe(false);
+  });
+
+  test("a lista de salas de hoje inclui, para a liderança, a sala de um DIA ANTERIOR que ficou com criança ou voluntário (para encerrar), marcada como diaAnterior; o voluntário não a vê", async () => {
+    quando(/SELECT DISTINCT s\.ServicoId, s\.DataHora/, [
+      { ServicoId: 4, DataHora: new Date("2026-10-11T09:00:00Z"), Descricao: "Culto", ServicoStatus: "PUBLICADA", EquipeId: 7, EquipeNome: "Maternal", FaixaEtariaMenores: "MATERNAL", LiderMembroId: 600, CongregacaoId: 1, CongregacaoNome: "Central", Meu: 1 },
+      { ServicoId: 5, DataHora: new Date("2026-10-18T09:00:00Z"), Descricao: "Culto", ServicoStatus: "PUBLICADA", EquipeId: 7, EquipeNome: "Maternal", FaixaEtariaMenores: "MATERNAL", LiderMembroId: 600, CongregacaoId: 1, CongregacaoNome: "Central", Meu: 1 }
+    ]);
+    quando(/SELECT \(SELECT COUNT\(\*\) FROM CheckinInfantilRegistros/, [{ criancas: 2, voluntarios: 0 }]);
+    const operador = await db.minhasSalas(pool, { membroId: 10, hoje: HOJE, agoraIso: AGORA });
+    expect(operador.map((s) => s.servicoId)).toEqual([5]);
+    expect(operador[0].diaAnterior).toBe(false);
+    const gestao = await db.minhasSalas(pool, { membroId: 77, gestorPodeVer: (n) => n === "Central", hoje: HOJE, agoraIso: AGORA });
+    expect(gestao.map((s) => [s.servicoId, s.diaAnterior])).toEqual([[4, true], [5, false]]);
+    const lista = com(/SELECT DISTINCT s\.ServicoId, s\.DataHora/)[0].sql;
+    expect(lista).toMatch(/CAST\(s\.DataHora AS DATE\) < @hoje/);
+  });
+});
+
+describe("B9: o aviso obrigatório não falha em silêncio e nenhum erro de aviso vem depois do ato gravado", () => {
+  const CODIGO = "AB3K9Z";
+  const hashDe = (geracao = 1) => ck.hashCodigo(CODIGO, { registroId: 9, geracao, segredo: SEGREDO });
+  const registro = (extra = {}) => ({ RegistroId: 9, ServicoId: 5, EquipeId: 7, CongregacaoId: 1, MenorMembroId: 30, VisitanteNome: null, IdadeAnos: 5, FaixaSala: "MATERNAL", IdadeForaDaFaixa: 0, TrouxeMembroId: 40, TrouxeNome: null, TrouxeNomeResolvido: "Maria Souza",
+    TrouxeParentesco: null, SaudeTexto: null, CodigoGeracao: 1, Tentativas: 0, Travado: 0, Situacao: "NA_SALA", EntregueEm: new Date("2026-10-18T12:05:00Z"), EntreguePorMembroId: 10, CriancaNome: "Caio Souza", CodigoHash: hashDe(), ...extra });
+  const OUTRO = { registroId: 9, codigo: CODIGO, retirante: { outro: { nome: "Roberto Dias", parentesco: "AMIGO_FAMILIA", documento: "CNH", motivo: "Disse que a mãe mandou." } } };
+  const reais = () => notificarAgora.mockImplementation(async (_p, o) => ({ criadas: (o.destinatarios || []).length }));       // como o motor de verdade: sem destinatário, nada é criado
+  function preparar({ reg = registro() } = {}) {
+    escalado(); presenteNaSala(); reais();
+    quando(/WHERE r\.RegistroId = @r/, [reg]);
+    quando(/SELECT r\.MenorMembroId, r\.ResponsavelMembroId, r\.Vinculo, p\.Nome FROM VoluntariadoResponsaveis/, [{ MenorMembroId: 30, ResponsavelMembroId: 40, Vinculo: "MAE", Nome: "Maria Souza" }]);
+    quando(/UPDATE CheckinInfantilRegistros SET Tentativas = Tentativas \+ 1/, [{ tentativas: 1, hash: hashDe(), geracao: 1 }]);
+    quando(/UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA_PENDENTE'/, [{ n: 1 }]);
+    quando(/SELECT TOP 1 EventoId FROM CheckinInfantilEventos/, [{ EventoId: 321 }]);
+    quando(/SELECT p\.MembroId, p\.Nome, p\.Email FROM VoluntariadoResponsaveis/, [{ MembroId: 40, Nome: "Maria Souza", Email: "maria@e.org" }]);
+    quando(/SELECT MembroId, Nome, Email FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 600, Nome: "Líder", Email: "l@e.org" }]);
+  }
+  const retirar = (dados = OUTRO) => db.retirar(pool, { sala: SALA, registroId: 9, operadorId: 10, dados, hoje: HOJE });
+
+  test("retirada divergente: a lista de quem avisar é montada ANTES de gravar o pedido", async () => {
+    preparar();
+    require("../psc").resolverDestinatariosDaCongregacao.mockImplementationOnce(async () => { mockConsultas.push({ sql: "LISTA_DE_AVISO", inputs: {} }); return [{ membroId: 900, nome: "Dirigente", email: "d@e.org" }]; });
+    await retirar();
+    const o = mockConsultas.map((c) => c.sql);
+    expect(o.indexOf("LISTA_DE_AVISO")).toBeGreaterThanOrEqual(0);
+    expect(o.indexOf("LISTA_DE_AVISO")).toBeLessThan(o.findIndex((s) => /SET Tentativas = Tentativas \+ 1/.test(s)));
+    expect(o.indexOf("LISTA_DE_AVISO")).toBeLessThan(o.findIndex((s) => /SET Situacao = 'RETIRADA_PENDENTE'/.test(s)));
+  });
+  test("com o aviso saindo: a resposta diz que foi enviado à liderança (semAviso false) e leva o número de avisados; o motivo vai para a coluna do pedido", async () => {
+    preparar();
+    const r = await retirar();
+    expect(r).toMatchObject({ sucesso: true, divergente: true, aguardaLideranca: true, semAviso: false, avisados: 3 });
+    expect(r.mensagem).toMatch(/enviado à liderança/);
+    const up = com(/SET Situacao = 'RETIRADA_PENDENTE'/)[0];
+    expect(up.sql).toMatch(/DivergenciaPedidoMotivo = @mt/);
+    expect(up.inputs.mt).toBe("Disse que a mãe mandou.");
+    expect(JSON.stringify(registrarAuditoria.mock.calls)).not.toMatch(/mandou/);
+  });
+  test("o aviso NÃO sai (regra inativa: o motor devolve criadas 0): a resposta diz CLARAMENTE que a liderança não foi avisada, e o pedido continua válido", async () => {
+    preparar();
+    notificarAgora.mockImplementation(async () => ({ criadas: 0 }));
+    const r = await retirar();
+    expect(r).toMatchObject({ sucesso: true, divergente: true, aguardaLideranca: true, semAviso: true, avisados: 0 });
+    expect(r.mensagem).toMatch(/NÃO foi avisada/);
+    expect(r.mensagem).toMatch(/ligue agora para a liderança/);
+    expect(com(/SET Situacao = 'RETIRADA_PENDENTE'/)).toHaveLength(1);
+  });
+  test("a lista de quem avisar FALHA: o pedido é gravado, nada lança depois do UPDATE, e a resposta diz que ninguém foi avisado (antes: 500 e, na nova tentativa, 'já há um pedido')", async () => {
+    preparar();
+    require("../psc").resolverDestinatariosDaCongregacao.mockRejectedValueOnce(new Error("banco fora do ar"));
+    const r = await retirar();
+    expect(r).toMatchObject({ sucesso: true, divergente: true, semAviso: true, avisados: 0 });
+    expect(com(/SET Situacao = 'RETIRADA_PENDENTE'/)).toHaveLength(1);
+    expect(com(/INSERT INTO CheckinInfantilEventos/)[0].inputs.t).toBe("RETIRADA_DIVERGENTE_PEDIDA");
+    expect(notificarAgora).not.toHaveBeenCalled();                     // sem destinatário, nem tenta
+  });
+  test("o motor de aviso lança depois do UPDATE: ainda assim a resposta é de sucesso (com 'semAviso')", async () => {
+    preparar();
+    notificarAgora.mockRejectedValue(new Error("fila fora do ar"));
+    const r = await retirar();
+    expect(r).toMatchObject({ sucesso: true, divergente: true, semAviso: true });
+  });
+  test("motivo com marcação ou grande demais: recusa ANTES de reservar tentativa (nada é gasto)", async () => {
+    preparar();
+    for (const motivo of ["<b>x</b>", "m".repeat(301)]) {
+      const r = await retirar({ ...OUTRO, retirante: { outro: { ...OUTRO.retirante.outro, motivo } } });
+      expect(r.sucesso).toBe(false);
+    }
+    expect(com(/SET Tentativas = Tentativas \+ 1/)).toHaveLength(0);
+  });
+
+  describe("segunda via", () => {
+    function prepararVia() {
+      escalado(); presenteNaSala(); reais();
+      quando(/WHERE r\.RegistroId = @r/, [registro({ EntregueEm: new Date("2026-10-18T12:05:00Z") })]);
+      quando(/SELECT TOP 1 ViaId, PedidaPorMembroId FROM CheckinInfantilSegundasVias/, [{ ViaId: 3, PedidaPorMembroId: 10 }]);
+      quando(/UPDATE CheckinInfantilSegundasVias SET ConfirmadaPorMembroId/, [{ n: 1 }]);
+      quando(/UPDATE CheckinInfantilRegistros SET CodigoHash = @h, CodigoGeracao = @g/, [{ n: 1 }]);
+      quando(/SELECT p\.MembroId, p\.Nome, p\.Email FROM VoluntariadoResponsaveis/, [{ MembroId: 40, Nome: "Maria Souza", Email: "m@e.org" }]);
+      quando(/SELECT MembroId, Nome, Email FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 600, Nome: "Líder", Email: "l@e.org" }]);
+    }
+    const confirmar = () => db.confirmarSegundaVia(pool, { sala: SALA, operadorId: 11, registroId: 9, hoje: HOJE });
+    test("a lista de aviso é montada ANTES do commit e, se falhar, o código novo chega mesmo assim (antes: 500 depois do commit e o código se perdia)", async () => {
+      prepararVia();
+      require("../psc").resolverDestinatariosDaCongregacao.mockRejectedValueOnce(new Error("banco fora"));
+      const r = await confirmar();
+      expect(r.sucesso).toBe(true);
+      expect(r.etiqueta.codigo).toMatch(/^[A-HJKMNP-Z2-9]{6}$/);
+      expect(r).toMatchObject({ semAviso: true, avisados: 0 });
+      expect(r.mensagem).toMatch(/não conseguiu avisar o responsável/);
+      expect(mockConsultas.map((c) => c.sql)).toContain("COMMIT");
+    });
+    test("o aviso lança depois do commit: a resposta continua trazendo o código novo", async () => {
+      prepararVia();
+      notificarAgora.mockRejectedValue(new Error("fila fora"));
+      const r = await confirmar();
+      expect(r.sucesso).toBe(true); expect(r.etiqueta.codigo).toBeTruthy(); expect(r.semAviso).toBe(true);
+    });
+    test("aviso que sai: sem observação; criança visitante (nenhum responsável cadastrado a avisar) também não leva alerta", async () => {
+      prepararVia();
+      const r = await confirmar();
+      expect(r).toMatchObject({ sucesso: true, semAviso: false, avisados: 1 });
+      expect(r.mensagem).not.toMatch(/não conseguiu/);
+      mockRegras = []; mockConsultas = []; prepararVia();
+      trocar(/SELECT p\.MembroId, p\.Nome, p\.Email FROM VoluntariadoResponsaveis/, []);
+      trocar(/WHERE r\.RegistroId = @r/, [registro({ MenorMembroId: null, VisitanteNome: "Davi Lima", TrouxeMembroId: null, TrouxeNome: "Paula Lima", TrouxeNomeResolvido: "Paula Lima" })]);
+      const v = await confirmar();
+      expect(v).toMatchObject({ sucesso: true, semAviso: false, avisados: 0 });
+    });
+    test("a etiqueta da segunda via traz a hora de ENTRADA original ('instante') e, à parte, a hora da reemissão ('segundaViaEm')", async () => {
+      prepararVia();
+      const r = await confirmar();
+      expect(r.etiqueta.instante).toBe("2026-10-18T12:05:00.000Z");
+      expect(new Date(r.etiqueta.segundaViaEm).getTime()).toBeGreaterThan(new Date("2026-10-18T12:05:00Z").getTime());
+    });
+  });
+});
+
+describe("B11: cache de 15 segundos só da CONFIGURAÇÃO (prazos e proporção), nunca de dado de custódia", () => {
+  const { lerPrazoDias } = require("../canaisDb");
+  test("dez leituras seguidas dos prazos fazem UMA leitura de cada prazo (4 consultas, não 40)", async () => {
+    for (let i = 0; i < 10; i++) await db.lerPrazos(pool);
+    expect(lerPrazoDias).toHaveBeenCalledTimes(4);
+  });
+  test("dez chamadas da tela da sala fazem uma leitura dos prazos do check-in e uma dos prazos da proporção (e leem a sala de verdade em TODAS)", async () => {
+    salaCom([10, 11, 12], 0);
+    for (let i = 0; i < 10; i++) await db.snapshotDaSala(pool, SALA, { hoje: HOJE, agoraIso: AGORA, visao: "OPERADOR" });
+    expect(lerPrazoDias).toHaveBeenCalledTimes(4);
+    expect(mmDb.lerPrazos).toHaveBeenCalledTimes(1);
+    expect(mmDb.lerPrazosFaixas).toHaveBeenCalledTimes(1);
+    expect(com(/SELECT v\.MembroId, m\.Nome, v\.EntrouEm FROM CheckinInfantilVoluntarios/)).toHaveLength(10);     // a presença NÃO fica em cache
+    expect(com(/SELECT COUNT\(\*\) AS entregues/)).toHaveLength(10);
+  });
+  test("limparCaches() zera: a leitura seguinte volta ao banco, e o prazo novo vale", async () => {
+    await db.lerPrazos(pool); expect(lerPrazoDias).toHaveBeenCalledTimes(4);
+    db.limparCaches();
+    lerPrazoDias.mockImplementation(async (_p, sigla, padrao) => (sigla === ck.SIGLAS_PRAZO.tentativasCodigo ? 3 : padrao));
+    expect((await db.lerPrazos(pool)).tentativasCodigo).toBe(3);
+    expect(lerPrazoDias).toHaveBeenCalledTimes(8);
+  });
+  test("o cache vale por 15 segundos (passado o prazo, lê de novo) e uma leitura que FALHOU não fica guardada", async () => {
+    const agora = jest.spyOn(Date, "now");
+    try {
+      agora.mockReturnValue(1000000);
+      await db.lerPrazos(pool); expect(lerPrazoDias).toHaveBeenCalledTimes(4);
+      agora.mockReturnValue(1000000 + 14000); await db.lerPrazos(pool); expect(lerPrazoDias).toHaveBeenCalledTimes(4);
+      agora.mockReturnValue(1000000 + 15001); await db.lerPrazos(pool); expect(lerPrazoDias).toHaveBeenCalledTimes(8);
+      db.limparCaches(); lerPrazoDias.mockClear();
+      lerPrazoDias.mockRejectedValueOnce(new Error("banco fora"));
+      await expect(db.lerPrazos(pool)).rejects.toThrow(/banco fora/);
+      await db.lerPrazos(pool);                                         // a falha não foi guardada: lê de novo e funciona
+      expect(lerPrazoDias.mock.calls.length).toBeGreaterThanOrEqual(5);
+    } finally { agora.mockRestore(); }
+  });
+});
+
+describe("C15, C17, C23, C26", () => {
+  test("C15: autorizado com matrícula grava o NOME DO CADASTRO, nunca o digitado", async () => {
+    quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c ON c\.CongregacaoId = m\.CongregacaoId WHERE m\.MembroId = @m/, [{ MembroId: 30, Nome: "Caio Souza", DataNascimento: new Date("2021-03-01T00:00:00Z"), CongregacaoId: 1, CongregacaoNome: "Central" }]);
+    quando(/FROM VoluntariadoResponsaveis WHERE MenorMembroId = @m AND ResponsavelMembroId = @r AND RevogadoEm IS NULL/, [{ x: 1 }]);
+    quando(/SELECT MembroId, Nome, DataNascimento FROM MembroReferencia WHERE MembroId = @m/, [{ MembroId: 55, Nome: "Dina Avó do Cadastro", DataNascimento: new Date("1960-01-01T00:00:00Z") }]);
+    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados a/, [{ n: 0 }]);
+    quando(/INSERT INTO CheckinInfantilAutorizados/, [{ AutorizadoId: 12 }]);
+    await db.adicionarAutorizado(pool, { dados: { menorId: 30, nome: "Nome Digitado Que Não É Dela", parentesco: "AVO", membroId: 55, validoAte: null, referencia: null }, atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
+    expect(com(/INSERT INTO CheckinInfantilAutorizados/)[0].inputs).toMatchObject({ am: 55, n: "Dina Avó do Cadastro" });
+    mockConsultas = [];
+    await db.adicionarAutorizado(pool, { dados: { menorId: 30, nome: "Tio Sem Cadastro", parentesco: "TIO", membroId: null, validoAte: null, referencia: null }, atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
+    expect(com(/INSERT INTO CheckinInfantilAutorizados/)[0].inputs).toMatchObject({ am: null, n: "Tio Sem Cadastro" });         // sem matrícula, vale o nome digitado
+  });
+
+  test("C17: destravar também zera a criança que está no TETO de erros sem o travamento gravado (usa o prazo de tentativas)", async () => {
+    quando(/WHERE r\.RegistroId = @r/, [{ RegistroId: 9, ServicoId: 5, EquipeId: 7, Situacao: "NA_SALA" }]);
+    quando(/UPDATE CheckinInfantilRegistros SET Travado = 0, Tentativas = 0/, [{ n: 1 }]);
+    expect(await db.destravar(pool, { sala: SALA, registroId: 9, gestorId: 77 })).toMatchObject({ sucesso: true });
+    const up = com(/SET Travado = 0, Tentativas = 0/)[0];
+    expect(up.sql).toMatch(/\(Travado = 1 OR Tentativas >= @max\)/);
+    expect(up.inputs.max).toBe(5);
+  });
+  test("C17: a retirada de criança no teto sem o travamento responde 'travada' (e não gasta nem reserva tentativa)", async () => {
+    escalado(); presenteNaSala();
+    quando(/WHERE r\.RegistroId = @r/, [{ RegistroId: 9, ServicoId: 5, EquipeId: 7, MenorMembroId: null, VisitanteNome: "Davi", TrouxeMembroId: null, TrouxeNome: "Paula", Situacao: "NA_SALA", Travado: 0, Tentativas: 5, CodigoGeracao: 1 }]);
+    const r = await db.retirar(pool, { sala: SALA, registroId: 9, operadorId: 10, dados: { registroId: 9, codigo: "AB3K9Z", retirante: { ref: "TROUXE" } }, hoje: HOJE });
+    expect(r).toMatchObject({ sucesso: false, travada: true });
+    expect(com(/SET Tentativas = Tentativas \+ 1/)).toHaveLength(0);
+  });
+
+  test("C23: a recusa por lotação grava UM evento por sala por minuto (o histórico imutável não enche): o INSERT só vale se ainda não houve recusa no último minuto", async () => {
+    escalado(); presenteNaSala(); salaCom([10], 0);                       // um adulto só: a regra dos dois adultos recusa
+    quando(/FROM MembroReferencia WHERE MembroId = @m AND/, []);
+    const dados = { servicoId: 5, equipeId: 7, criancas: [{ tipo: "VISITANTE", nome: "Davi Lima", nascimento: "2021-03-01", idade: 5, saude: null }], trouxe: { nome: "Paula Lima", parentesco: "MAE", documento: "RG", contato: "94991112222" }, extras: [] };
+    const r = await db.fazerCheckin(pool, { sala: SALA, operadorId: 10, dados, hoje: HOJE, agoraIso: AGORA });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/nunca fica com um adulto só/);
+    const ins = com(/INSERT INTO CheckinInfantilEventos/)[0];
+    expect(ins.sql).toMatch(/WHERE \(SELECT COUNT\(\*\) FROM CheckinInfantilEventos WHERE ServicoId = @s AND EquipeId = @e AND Tipo = @t AND Em >= DATEADD\(MINUTE, -1, SYSUTCDATETIME\(\)\)\) < @max/);
+    expect(ins.inputs).toMatchObject({ s: 5, e: 7, a: 10, t: "SALA_RECUSOU_CHECKIN", max: ck.RECUSAS_POR_SALA_POR_MINUTO });
+    expect(ins.inputs.d).toMatch(/^ADULTOS_INSUFICIENTES;adultos=1;criancas=0$/);
+    expect(ck.RECUSAS_POR_SALA_POR_MINUTO).toBe(1);
+  });
+
+  test("C26: a busca de criança ignora acento e caixa ('joao' acha 'João'), e o visitante digitado de outro jeito é reconhecido dentro da transação", async () => {
+    quando(/SELECT TOP 8 m\.MembroId/, []);
+    await db.buscarCriancas(pool, { sala: SALA, termo: "joao", hoje: HOJE });
+    expect(com(/SELECT TOP 8 m\.MembroId/)[0].sql).toMatch(/m\.Nome COLLATE Latin1_General_CI_AI LIKE @t/);
+    mockConsultas = []; mockRegras = [];
+    escalado(); presenteNaSala(); salaCom([10, 11], 0);
+    quando(/FROM MembroReferencia WHERE MembroId = @m AND/, []);
+    quando(/VisitanteNome COLLATE Latin1_General_CI_AI = @vn/, [{ x: 1 }]);
+    const dados = { servicoId: 5, equipeId: 7, criancas: [{ tipo: "VISITANTE", nome: "João Lima", nascimento: "2021-03-01", idade: 5, saude: null }], trouxe: { nome: "Paula Lima", parentesco: "MAE", documento: "RG", contato: "94991112222" }, extras: [] };
+    const r = await db.fazerCheckin(pool, { sala: SALA, operadorId: 10, dados, hoje: HOJE, agoraIso: AGORA });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/já está numa sala/);
+    const dup = com(/VisitanteNome COLLATE Latin1_General_CI_AI = @vn/)[0];
+    expect(dup.sql).toMatch(/MenorMembroId IS NULL AND Situacao <> 'RETIRADA' AND VisitanteNascimento = @vd/);
+    expect(com(/INSERT INTO CheckinInfantilRegistros/)).toHaveLength(0);
+    expect(mockConsultas.map((c) => c.sql)).toContain("ROLLBACK");
   });
 });

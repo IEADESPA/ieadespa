@@ -85,7 +85,9 @@ const RIPDS = [
       "A custódia se apoia no cadastro de responsáveis da Secretaria (documento conferido), nunca no vínculo familiar de autoatendimento",
       "Só opera a sala quem está escalado nela, é adulto e apto hoje (a aptidão da v7.7 é recalculada a cada ato) e entrou na sala; a regra dos dois adultos e a proporção valem na porta, com a lotação lida dentro de uma transação com trava",
       "O registro de custódia e o histórico de atos não se apagam nem se alteram (gatilhos no banco); a auditoria geral recebe só ids e códigos: nunca nome de criança, código, saúde nem texto livre",
-      "O responsável vê só o histórico das próprias crianças (data, sala, quem trouxe, quem retirou), nunca o código, nunca o nome do voluntário, nunca a saúde dos outros",
+      "O responsável vê só o histórico das próprias crianças (data, sala, quem trouxe, quem retirou), nunca o código, nunca o nome do voluntário, nunca a saúde dos outros; quem fez 18 anos sai do histórico do responsável",
+      "A criança que ficou na sala sem retirada registrada é regularizada pela liderança (baixa administrativa, com motivo, só depois que o check-in da sala fecha, com confirmação reforçada e evento imutável): não vira retirada de ninguém e o responsável a vê como \"encerrada pela liderança\"",
+      "A autorização de retirada feita por um responsável deixa de valer quando ele deixa de ser responsável cadastrado (a liderança é avisada); o relatório do dia da sala é só da liderança; o voluntário não vê a aptidão dos colegas",
       "A criança visitante não ganha cadastro: nome e nascimento ficam só no registro da visita, o telefone de quem a trouxe é apagado em 90 dias e o registro é anonimizado em 5 anos"
     ],
     riscoResidual: "Médio — o risco humano permanece: um responsável que entrega o código a quem não devia, ou um voluntário que vê o código na etiqueta de uma criança (a etiqueta fica no peito dela). Mitigado pela retirada divergente com a liderança (a pessoa que pega o código ainda precisa ser aprovada se não estiver na lista), pelo aviso na hora aos responsáveis e pelo registro de tudo."

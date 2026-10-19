@@ -151,3 +151,46 @@ describe("a marca da turma (rota turmas/menores)", () => {
     expect((await ebd.buscarTurmaPorId(await require("../db").getPool(), 3)).contatoComMenores).toBe(false);
   });
 });
+
+// Achado da revisão adversarial da v7.10 (B4): "membroId" fracionário furava o portão. O driver do banco grava 5.9 como 5, mas o portão conferia o identificador como veio: a lista [5.9]
+// perdia o elemento, virava "sem ninguém para conferir" e a turma "com menores" designava um professor inapto. Agora o identificador tem uma grafia só (inteiro positivo) na rota E na função.
+describe("o identificador do professor tem uma grafia só (o portão não é burlado por número fracionário)", () => {
+  const preparar = () => {
+    quando(/SELECT \* FROM EbdTurmas WHERE TurmaId = @id/, [turmaBanco({ ContatoComMenores: 1 })]);
+    quando(/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, [{ Nome: "Central" }]);
+    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 7 }]);
+  };
+  const RUINS = [7.9, "7.9", "07", " 7", "7 ", "1e1", "0x7", true, [7], { a: 1 }, -7, 2 ** 40, "7; DROP TABLE EbdTurmaProfessores"];
+  test("a função designarProfessor recusa o identificador fracionário (e qualquer grafia não canônica) SEM consultar o portão nem gravar", async () => {
+    preparar();
+    const pool = await require("../db").getPool();
+    for (const membroId of RUINS) {
+      const r = await ebd.designarProfessor(pool, { turmaId: 3, membroId, principal: false, designadoPorMembroId: 5 });
+      expect(r.sucesso).toBe(false);
+    }
+    for (const turmaId of [3.5, "3.5", "03", true, [3]]) expect((await ebd.designarProfessor(pool, { turmaId, membroId: 7, principal: false, designadoPorMembroId: 5 })).sucesso).toBe(false);
+    expect(mmDb.aptosParaTurma).not.toHaveBeenCalled();
+    expect(escritas()).toHaveLength(0);
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("o número inteiro de verdade (e o texto canônico '7') passa pela mesma função e vai ao portão com o identificador certo", async () => {
+    preparar();
+    const pool = await require("../db").getPool();
+    const r = await ebd.designarProfessor(pool, { turmaId: "3", membroId: "7", principal: false, designadoPorMembroId: 5 });
+    expect(r.sucesso).toBe(true);
+    expect(mmDb.aptosParaTurma).toHaveBeenCalledWith(expect.anything(), { turmaId: 3, membroIds: [7] });
+    expect(mockConsultas.find((c) => /INSERT INTO EbdTurmaProfessores/.test(c.sql)).inputs).toMatchObject({ turmaId: 3, membroId: 7 });
+  });
+  test("a rota: membroId ou turmaId fracionário é 400, sem tocar o banco (nem a turma, nem o portão)", async () => {
+    preparar();
+    for (const membroId of RUINS) {
+      const r = await chamar("professores", { corpo: { turmaId: 3, membroId, principal: false }, token: EBD() });
+      expect(r.status).toBe(400);
+    }
+    for (const turmaId of [3.5, "3.5", "03"]) expect((await chamar("professores", { corpo: { turmaId, membroId: 7 }, token: EBD() })).status).toBe(400);
+    expect((await chamar("professores/encerrar", { corpo: { turmaId: 3, membroId: 7.9 }, token: EBD() })).status).toBe(400);
+    expect(mmDb.aptosParaTurma).not.toHaveBeenCalled();
+    expect(mockConsultas).toHaveLength(0);
+    expect(escritas()).toHaveLength(0);
+  });
+});

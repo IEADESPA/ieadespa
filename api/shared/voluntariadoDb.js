@@ -355,7 +355,7 @@ async function designarResponsavel(pool, { menorId, responsavelId, dados, por, a
 
 async function revogarResponsavel(pool, { responsavelId, por, autorizacao }) {
   const r = (await pool.request().input("id", sql.Int, responsavelId).query(`
-    SELECT r.ResponsavelId, r.MenorMembroId, r.RevogadoEm, c.Nome AS CongregacaoNome
+    SELECT r.ResponsavelId, r.ResponsavelMembroId, r.MenorMembroId, r.RevogadoEm, mn.CongregacaoId, c.Nome AS CongregacaoNome
     FROM VoluntariadoResponsaveis r JOIN MembroReferencia mn ON mn.MembroId = r.MenorMembroId LEFT JOIN Congregacoes c ON c.CongregacaoId = mn.CongregacaoId
     WHERE r.ResponsavelId = @id`)).recordset[0];
   if (!r || !autorizacao.podeCongregacao(r.CongregacaoNome)) return { sucesso: false, proibido: true, mensagem: FORA_DO_ESCOPO };
@@ -367,9 +367,17 @@ async function revogarResponsavel(pool, { responsavelId, por, autorizacao }) {
   await registrarAuditoria({ tabela: "VoluntariadoResponsaveis", registroId: responsavelId, acao: "RESPONSAVEL_REVOGADO", usuarioId: por, dadosDepois: { menorId: r.MenorMembroId } });
   // v7.7: a autorização de imagem valia enquanto QUEM A DEU era responsável ativo; se ele saiu, a foto do menor sem outra autorização vigente é apagada. Fail-soft: a rotina diária refaz.
   // v7.10: o mesmo vale para o dado de saúde do check-in infantil (só existe com o consentimento de saúde vigente).
+  let autorizadosSemEfeito = 0, avisoAutorizados = "";
   const limparFoto = async () => {
     try { await require("./menoresConsentimentoDb").apagarFotosDeMenoresSemConsentimento(pool, { menorId: r.MenorMembroId, por }); } catch (e) { /* a rotina diária refaz */ }
     try { await require("./checkinInfantilDb").apagarSaudeSemConsentimento(pool, { menorId: r.MenorMembroId }); } catch (e) { /* a rotina diária refaz */ }
+    // v7.10 (revisão): quem o responsável revogado autorizou a retirar a criança deixa de valer (a leitura do check-in já ignora; aqui a linha é revogada de vez) e a liderança é avisada (sem
+    // nome de criança). Fail-soft: o ato principal já foi gravado e a leitura já não honra essas autorizações mesmo que isto falhe.
+    try {
+      const t = await require("./checkinInfantilDb").tratarAutorizadosDoResponsavelRevogado(pool, { menorId: r.MenorMembroId, responsavelMembroId: r.ResponsavelMembroId, cadastroId: responsavelId, congregacaoId: r.CongregacaoId, por });
+      autorizadosSemEfeito = Number((t || {}).revogados || 0);
+      if (autorizadosSemEfeito) avisoAutorizados = ` ${autorizadosSemEfeito} autorização(ões) de retirada da criança que ele(a) tinha feito deixaram de valer${Number((t || {}).avisados || 0) > 0 ? " (a liderança foi avisada)" : ""}; para valerem de novo, o responsável atual refaz a lista ou a Secretaria registra a ficha assinada.`;
+    } catch (e) { /* a leitura do check-in já ignora as autorizações de quem não é mais responsável */ }
   };
   // 03/10/2026: era o ÚLTIMO responsável ativo? A adesão dada pelo responsável cadastrado fica suspensa (calculado na leitura; a prova continua) e o menor
   // não é mais escalado nem confirma escala até uma nova adesão. As escalas futuras já marcadas voltam na resposta, para a Secretaria decidir.
@@ -380,13 +388,13 @@ async function revogarResponsavel(pool, { responsavelId, por, autorizacao }) {
     const suspensa = vol.adesaoSuspensa(adesao);
     await limparFoto();
     return {
-      sucesso: true, adesaoSuspensa: suspensa, escalasFuturas,
+      sucesso: true, adesaoSuspensa: suspensa, escalasFuturas, autorizadosSemEfeito,
       mensagem: `Cadastro do responsável revogado. Era o último responsável ativo.${suspensa ? ` ${vol.MENSAGEM_ADESAO_SUSPENSA} (A adesão antiga continua guardada como prova, mas não vale mais.)` : ""}` +
-        (escalasFuturas.length ? ` Atenção: ${escalasFuturas.length} escala(s) futura(s) já marcada(s) para este(a) menor — remova-o(a) em “Remover da escala” ou peça a nova adesão antes da data.` : "")
+        (escalasFuturas.length ? ` Atenção: ${escalasFuturas.length} escala(s) futura(s) já marcada(s) para este(a) menor — remova-o(a) em “Remover da escala” ou peça a nova adesão antes da data.` : "") + avisoAutorizados
     };
   }
   await limparFoto();
-  return { sucesso: true, adesaoSuspensa: false, escalasFuturas: [], mensagem: "Cadastro do responsável revogado. O(a) menor ainda tem outro responsável ativo: a adesão continua valendo." };
+  return { sucesso: true, adesaoSuspensa: false, escalasFuturas: [], autorizadosSemEfeito, mensagem: `Cadastro do responsável revogado. O(a) menor ainda tem outro responsável ativo: a adesão continua valendo.${avisoAutorizados}` };
 }
 
 // Para a Secretaria: os responsáveis (ativos e revogados) de um menor.

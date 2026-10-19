@@ -154,8 +154,12 @@ module.exports = async function (context, req) {
         return;
       }
       if (metodo === "POST") {
-        const { turmaId, membroId, principal } = req.body || {};
-        if (!turmaId || !membroId) return erro(context, 400, "Informe turmaId e membroId.");
+        const { turmaId: turmaBruta, membroId: membroBruto, principal } = req.body || {};
+        if (!turmaBruta || !membroBruto) return erro(context, 400, "Informe turmaId e membroId.");
+        // Identificador na grafia canônica (inteiro positivo): "5.9" virava 5 no driver do banco e o portão da turma "com menores" conferia OUTRA pessoa (achado da revisão da v7.10).
+        const turmaId = auth.idDeRota(turmaBruta), membroId = auth.idDeRota(membroBruto);
+        if (!turmaId) return erro(context, 400, "turmaId inválido.");
+        if (!membroId) return erro(context, 400, "membroId inválido.");
         const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
         if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
         const resultado = await ebd.designarProfessor(pool, { turmaId, membroId, principal, designadoPorMembroId: usuario.membroId });
@@ -165,8 +169,11 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "professores/encerrar" && metodo === "POST") {
-      const { turmaId, membroId } = req.body || {};
-      if (!turmaId || !membroId) return erro(context, 400, "Informe turmaId e membroId.");
+      const { turmaId: turmaBruta, membroId: membroBruto } = req.body || {};
+      if (!turmaBruta || !membroBruto) return erro(context, 400, "Informe turmaId e membroId.");
+      const turmaId = auth.idDeRota(turmaBruta), membroId = auth.idDeRota(membroBruto);
+      if (!turmaId) return erro(context, 400, "turmaId inválido.");
+      if (!membroId) return erro(context, 400, "membroId inválido.");
       const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await ebd.encerrarProfessor(pool, { turmaId, membroId, registradoPorMembroId: usuario.membroId });

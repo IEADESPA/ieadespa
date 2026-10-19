@@ -21,7 +21,7 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
 
   console.log("== migração 145: esquema ==");
   for (const t of H.TABELAS_CK) ok((await escalar("SELECT COUNT(*) FROM sys.tables WHERE name = @t", { t })) === 1, `tabela ${t} existe`);
-  for (const g of ["TR_CheckinRegistros_Protegido", "TR_CheckinEventos_Imutavel", "TR_CheckinAutorizados_SemApagar", "TR_CheckinVias_SemApagar"]) {
+  for (const g of ["TR_CheckinRegistros_Protegido", "TR_CheckinEventos_Imutavel", "TR_CheckinAutorizados_SemApagar", "TR_CheckinAutorizadosVisita_Protegido", "TR_CheckinVias_SemApagar"]) {
     ok((await escalar("SELECT COUNT(*) FROM sys.triggers WHERE name = @t AND is_disabled = 0", { t: g })) === 1, `gatilho ${g} existe e está ligado`);
   }
   for (const [ix, tab] of [["UX_CheckinReg_MenorEmSala", "CheckinInfantilRegistros"], ["UX_CheckinReg_VisitanteEmSala", "CheckinInfantilRegistros"], ["UX_CheckinVol_Presente", "CheckinInfantilVoluntarios"], ["UX_CheckinVol_UmaSala", "CheckinInfantilVoluntarios"], ["UX_CheckinAut_MembroAtivo", "CheckinInfantilAutorizados"], ["UX_CheckinVia_Pendente", "CheckinInfantilSegundasVias"]]) {
@@ -152,6 +152,37 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   await nega("trocar a matrícula de quem retirou por OUTRA, mesmo anonimizando, é proibido", "UPDATE CheckinInfantilRegistros SET RetiradoMembroId = 7022, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rm1 }, /não se altera/);
   await aceita("a anonimização completa de uma criança MEMBRO (tira as três matrículas no mesmo comando que preenche AnonimizadoEm) passa", "UPDATE CheckinInfantilRegistros SET MenorMembroId = NULL, TrouxeMembroId = NULL, RetiradoMembroId = NULL, TrouxeNome = NULL, RetiradoNome = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rm1 });
   await nega("depois de anonimizada, ninguém recoloca uma matrícula nela", "UPDATE CheckinInfantilRegistros SET MenorMembroId = 7022 WHERE RegistroId = @r", { r: rm1 }, /não se altera/);
+  console.log("== (revisão) a baixa administrativa e os gatilhos reforçados ==");
+  const rBx = await ins({ VisitanteNome: "Visitante Baixa Gatilho E2E" });
+  await nega("BAIXA_ADM sem o motivo da baixa é recusada (CK do estado)", "UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME(), RetiradoTipo = 'BAIXA_ADM', RetiradoPorOperadorId = 6010 WHERE RegistroId = @r", { r: rBx }, /CK_CheckinReg_Estado/);
+  await nega("a baixa administrativa sem quem a deu (RetiradoPorOperadorId) também", "UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME(), RetiradoTipo = 'BAIXA_ADM', BaixaMotivo = N'Motivo de teste' WHERE RegistroId = @r", { r: rBx }, /CK_CheckinReg_Estado/);
+  await aceita("com o motivo e quem a deu, a baixa passa: sem retirante, sem nome, sem código usado", "UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME(), RetiradoTipo = 'BAIXA_ADM', RetiradoPorOperadorId = 6010, BaixaMotivo = N'Motivo de teste da baixa' WHERE RegistroId = @r", { r: rBx });
+  await nega("o motivo da baixa não se reescreve", "UPDATE CheckinInfantilRegistros SET BaixaMotivo = N'Outro motivo' WHERE RegistroId = @r", { r: rBx }, /não se altera/);
+  await nega("quem deu a baixa não se troca", "UPDATE CheckinInfantilRegistros SET RetiradoPorOperadorId = 6011 WHERE RegistroId = @r", { r: rBx }, /não se altera/);
+  await nega("a baixa não vira outro tipo de retirada", "UPDATE CheckinInfantilRegistros SET RetiradoTipo = 'RESPONSAVEL' WHERE RegistroId = @r", { r: rBx }, /não se altera|CK_CheckinReg_Estado/);
+  await nega("carimbar 'anonimizado' SEM tirar o motivo da baixa é proibido (o carimbo só vale se o texto livre sai de verdade)", "UPDATE CheckinInfantilRegistros SET VisitanteNome = N'(anonimizado)', VisitanteNascimento = NULL, TrouxeNome = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rBx }, /não se altera/);
+  await aceita("anonimizar a baixa tirando tudo (nome, quem trouxe e o motivo) passa", "UPDATE CheckinInfantilRegistros SET VisitanteNome = N'(anonimizado)', VisitanteNascimento = NULL, TrouxeNome = NULL, BaixaMotivo = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rBx });
+  await nega("depois de anonimizada, o motivo não volta", "UPDATE CheckinInfantilRegistros SET BaixaMotivo = N'Voltou' WHERE RegistroId = @r", { r: rBx }, /não se altera/);
+  const rDv = await ins({ VisitanteNome: "Visitante Divergente Gatilho E2E", Situacao: "RETIRADA", RetiradoEm: new Date(), RetiradoTipo: "OUTRO", RetiradoNome: "Fulano Retirante", RetiradoPorOperadorId: 6010, Divergente: true, DivergenciaPedidaEm: new Date(),
+    DivergenciaDecididaPorId: 6011, DivergenciaDecididaEm: new Date(), DivergenciaMotivo: "Confirmei com o responsável pelo telefone.", DivergenciaPedidoMotivo: "Disse que o pai mandou." });
+  await nega("depois da retirada, quem decidiu a divergência não se reescreve", "UPDATE CheckinInfantilRegistros SET DivergenciaDecididaPorId = 6010 WHERE RegistroId = @r", { r: rDv }, /não se altera/);
+  await nega("nem quando decidiu", "UPDATE CheckinInfantilRegistros SET DivergenciaDecididaEm = DATEADD(DAY, -3, DivergenciaDecididaEm) WHERE RegistroId = @r", { r: rDv }, /não se altera/);
+  await nega("nem o motivo da decisão", "UPDATE CheckinInfantilRegistros SET DivergenciaMotivo = N'Reescrito depois' WHERE RegistroId = @r", { r: rDv }, /não se altera/);
+  await nega("nem o motivo do pedido", "UPDATE CheckinInfantilRegistros SET DivergenciaPedidoMotivo = N'Reescrito depois' WHERE RegistroId = @r", { r: rDv }, /não se altera/);
+  await nega("carimbar 'anonimizado' REESCREVENDO o nome de quem retirou para outro texto é proibido", "UPDATE CheckinInfantilRegistros SET VisitanteNome = N'(anonimizado)', VisitanteNascimento = NULL, TrouxeNome = NULL, RetiradoNome = N'Nome Reescrito', DivergenciaMotivo = NULL, DivergenciaPedidoMotivo = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rDv }, /não se altera/);
+  await nega("carimbar 'anonimizado' deixando o motivo da decisão também", "UPDATE CheckinInfantilRegistros SET VisitanteNome = N'(anonimizado)', VisitanteNascimento = NULL, TrouxeNome = NULL, RetiradoNome = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rDv }, /não se altera/);
+  await aceita("a anonimização completa (nomes e os dois motivos fora, no mesmo comando) passa", "UPDATE CheckinInfantilRegistros SET VisitanteNome = N'(anonimizado)', VisitanteNascimento = NULL, TrouxeNome = NULL, RetiradoNome = NULL, DivergenciaMotivo = NULL, DivergenciaPedidoMotivo = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE RegistroId = @r", { r: rDv });
+  await nega("depois de anonimizado, o nome de quem retirou não volta a ter conteúdo", "UPDATE CheckinInfantilRegistros SET RetiradoNome = N'Voltou' WHERE RegistroId = @r", { r: rDv }, /não se altera/);
+  await aceita("o indicado só desta visita entra", "INSERT INTO CheckinInfantilAutorizadosVisita (RegistroId, Nome, Parentesco) VALUES (@r, N'Indicada Gatilho E2E', 'AVO')", { r: r1 });
+  const idVisita = await escalar("SELECT TOP 1 AutorizadoVisitaId FROM CheckinInfantilAutorizadosVisita WHERE Nome = N'Indicada Gatilho E2E'");
+  await nega("o nome do indicado só desta visita não se reescreve", "UPDATE CheckinInfantilAutorizadosVisita SET Nome = N'Outra Pessoa' WHERE AutorizadoVisitaId = @a", { a: idVisita }, /registro de custódia/);
+  await nega("nem o parentesco", "UPDATE CheckinInfantilAutorizadosVisita SET Parentesco = 'TIO' WHERE AutorizadoVisitaId = @a", { a: idVisita }, /registro de custódia/);
+  await nega("nem se apaga", "DELETE FROM CheckinInfantilAutorizadosVisita WHERE AutorizadoVisitaId = @a", { a: idVisita }, /não se apagam/);
+  await aceita("UPDATE que não alcança nenhum indicado não é erro", "UPDATE CheckinInfantilAutorizadosVisita SET Nome = NULL WHERE AutorizadoVisitaId = -1", {});
+  await aceita("só a anonimização (nome nulo) é aceita", "UPDATE CheckinInfantilAutorizadosVisita SET Nome = NULL WHERE AutorizadoVisitaId = @a", { a: idVisita });
+  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave = 'CHECKIN_AUTORIZADOS_DEPENDENTES' AND Obrigatoria = 1 AND CanalEmail = 1 AND Ativa = 1 AND Categoria = 'MENORES'")) === 1, "o aviso obrigatório das autorizações sem efeito existe (o destinatário não desliga)");
+  ok((await escalar("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CheckinInfantilRegistros') AND name IN ('DivergenciaPedidoMotivo', 'BaixaMotivo') AND is_nullable = 1")) === 2, "as colunas do motivo do pedido e da baixa existem e aceitam nulo");
+
   console.log("== o histórico de acréscimo ==");
   await aceita("um evento entra", "INSERT INTO CheckinInfantilEventos (RegistroId, ServicoId, EquipeId, Tipo, AtorMembroId, Detalhe) VALUES (@r, @s, @e, 'CHECKIN', 6010, N'adultos=2;criancas=1')", { r: r1, s: sv, e: eq.maternal });
   await aceita("evento sem registro (voluntário entrou na sala) também entra", "INSERT INTO CheckinInfantilEventos (RegistroId, ServicoId, EquipeId, Tipo, AtorMembroId) VALUES (NULL, @s, @e, 'VOLUNTARIO_ENTROU', 6010)", { s: sv, e: eq.maternal });
@@ -242,7 +273,7 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave IN ('CHECKIN_RETIRADA_DIVERGENTE', 'CHECKIN_SEGUNDA_VIA', 'CHECKIN_SEM_RETIRADA', 'EBD_PROFESSOR_RETIRADO')")) === 4, "nem as 4 regras de aviso");
   ok((await escalar("SELECT Ativa FROM NotificacaoRegras WHERE Chave = 'CHECKIN_SEM_RETIRADA'")) === false, "nem religa uma regra que a gestão desativou");
   ok((await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'")) === 1 && (await escalar("SELECT DiasRetencao FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'")) === 2000, "nem duplica a política de retenção nem desfaz o prazo ajustado");
-  ok((await escalar("SELECT COUNT(*) FROM sys.triggers WHERE name LIKE 'TR[_]Checkin%' AND is_disabled = 1")) === 0, "os 4 gatilhos continuam ligados");
+  ok((await escalar("SELECT COUNT(*) FROM sys.triggers WHERE name LIKE 'TR[_]Checkin%' AND is_disabled = 1")) === 0, "os 5 gatilhos continuam ligados");
   // quem já tinha aplicado a versão ANTIGA da 145 (o CHECK da saúde sem a exigência da origem) recebe o texto novo ao reaplicar
   await q("ALTER TABLE dbo.CheckinInfantilRegistros DROP CONSTRAINT CK_CheckinReg_Saude");
   await q(`ALTER TABLE dbo.CheckinInfantilRegistros ADD CONSTRAINT CK_CheckinReg_Saude CHECK ((SaudeTexto IS NULL AND SaudeOrigem IS NULL AND SaudeTextoVersao IS NULL AND SaudeTextoHash IS NULL)
@@ -253,13 +284,48 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   const rSolto = await ins({ VisitanteNome: "Visitante sem dependentes" });
   await nega("e o gatilho refeito continua valendo (apagar um registro sem nada ligado a ele)", "DELETE FROM CheckinInfantilRegistros WHERE RegistroId = @r", { r: rSolto }, /não se apaga/);
   await nega("e a regra nova do CHECK da saúde também (texto sem origem)", montar({ SaudeTexto: "alergia" }).texto, montar({ SaudeTexto: "alergia" }).params, /CK_CheckinReg_Saude/);
+  // (revisão) quem já tinha aplicado a versão ANTERIOR da 145 (sem a baixa administrativa, sem os dois motivos, sem o aviso das autorizações) recebe tudo ao reaplicar, com os dados no banco
+  const rAntes = await ins({ VisitanteNome: "Visitante Dados Da Versao Antiga" });
+  await q("UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME(), RetiradoTipo = 'OUTRO', RetiradoNome = N'Retirante Da Versao Antiga', RetiradoPorOperadorId = 6010 WHERE RegistroId = @r", { r: rAntes });
+  // (a versão anterior não conhecia a baixa: as linhas de baixa que a prova acima criou viram 'OUTRO' para o banco poder voltar a ela; só aqui os gatilhos ficam desligados)
+  await q("DISABLE TRIGGER dbo.TR_CheckinRegistros_Protegido ON dbo.CheckinInfantilRegistros; UPDATE CheckinInfantilRegistros SET RetiradoTipo = 'OUTRO', BaixaMotivo = NULL WHERE RetiradoTipo = 'BAIXA_ADM'; ENABLE TRIGGER dbo.TR_CheckinRegistros_Protegido ON dbo.CheckinInfantilRegistros");
+  await q("ALTER TABLE dbo.CheckinInfantilRegistros DROP CONSTRAINT CK_CheckinReg_Estado");
+  await q("ALTER TABLE dbo.CheckinInfantilRegistros DROP CONSTRAINT CK_CheckinReg_RetTipo");
+  await q("ALTER TABLE dbo.CheckinInfantilEventos DROP CONSTRAINT CK_CheckinEv_Tipo");
+  await q(`ALTER TABLE dbo.CheckinInfantilRegistros ADD CONSTRAINT CK_CheckinReg_RetTipo CHECK (RetiradoTipo IS NULL OR RetiradoTipo IN ('RESPONSAVEL','AUTORIZADO','TROUXE','OUTRO'))`);
+  await q(`ALTER TABLE dbo.CheckinInfantilRegistros ADD CONSTRAINT CK_CheckinReg_Estado CHECK (
+               (Situacao = 'NA_SALA' AND RetiradoEm IS NULL AND RetiradoTipo IS NULL AND Divergente = 0)
+            OR (Situacao = 'RETIRADA_PENDENTE' AND RetiradoEm IS NULL AND RetiradoTipo IS NOT NULL AND Divergente = 1 AND DivergenciaPedidaEm IS NOT NULL)
+            OR (Situacao = 'RETIRADA' AND RetiradoEm IS NOT NULL AND RetiradoTipo IS NOT NULL AND RetiradoPorOperadorId IS NOT NULL
+                AND (RetiradoMembroId IS NOT NULL OR RetiradoNome IS NOT NULL OR AnonimizadoEm IS NOT NULL)
+                AND (Divergente = 0 OR (DivergenciaDecididaPorId IS NOT NULL AND DivergenciaDecididaEm IS NOT NULL))))`);
+  await q(`ALTER TABLE dbo.CheckinInfantilEventos ADD CONSTRAINT CK_CheckinEv_Tipo CHECK (Tipo IN ('CHECKIN','CODIGO_ERRADO','CRIANCA_TRAVADA','CRIANCA_DESTRAVADA','RETIRADA','RETIRADA_DIVERGENTE_PEDIDA','RETIRADA_DIVERGENTE_APROVADA','RETIRADA_DIVERGENTE_NEGADA',
+    'SEGUNDA_VIA_PEDIDA','SEGUNDA_VIA_EMITIDA','VOLUNTARIO_ENTROU','VOLUNTARIO_SAIU','SALA_RECUSOU_CHECKIN'))`);
+  await q("ALTER TABLE dbo.CheckinInfantilRegistros DROP COLUMN DivergenciaPedidoMotivo, BaixaMotivo");
+  await q("DELETE FROM NotificacaoRegras WHERE Chave = 'CHECKIN_AUTORIZADOS_DEPENDENTES'");
+  ok((await escalar("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CheckinInfantilRegistros') AND name IN ('DivergenciaPedidoMotivo', 'BaixaMotivo')")) === 0
+    && (await escalar("SELECT COUNT(*) FROM sys.check_constraints WHERE name IN ('CK_CheckinReg_RetTipo', 'CK_CheckinReg_Estado') AND definition LIKE N'%BAIXA_ADM%'")) === 0
+    && (await escalar("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_CheckinEv_Tipo' AND definition LIKE N'%SALA_ENCERRADA%'")) === 0, "(preparo) o banco está como a versão ANTERIOR da 145 o deixou (sem as colunas, sem a baixa, sem os eventos novos)");
+  const antesRev = { registros: await escalar("SELECT COUNT(*) FROM CheckinInfantilRegistros"), eventos: await escalar("SELECT COUNT(*) FROM CheckinInfantilEventos") };
+  for (let i = 0; i < 2; i++) for (const lote of sqlTexto.split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean)) await pool.request().query(lote);
+  ok((await escalar("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.CheckinInfantilRegistros') AND name IN ('DivergenciaPedidoMotivo', 'BaixaMotivo') AND is_nullable = 1")) === 2, "reaplicar a 145 (duas vezes) acrescenta as duas colunas novas");
+  ok((await escalar("SELECT COUNT(*) FROM sys.check_constraints WHERE ((name IN ('CK_CheckinReg_RetTipo', 'CK_CheckinReg_Estado') AND definition LIKE N'%BAIXA_ADM%') OR (name = 'CK_CheckinEv_Tipo' AND definition LIKE N'%SALA_ENCERRADA%')) AND is_disabled = 0 AND is_not_trusted = 0")) === 3, "troca os três CHECK pelos novos (ligados e confiáveis)");
+  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave = 'CHECKIN_AUTORIZADOS_DEPENDENTES' AND Obrigatoria = 1")) === 1, "recria a regra de aviso que faltava");
+  ok((await escalar("SELECT COUNT(*) FROM CheckinInfantilRegistros")) === antesRev.registros && (await escalar("SELECT COUNT(*) FROM CheckinInfantilEventos")) === antesRev.eventos && (await escalar("SELECT RetiradoNome FROM CheckinInfantilRegistros WHERE RegistroId = @r", { r: rAntes })) === "Retirante Da Versao Antiga", "sem perder nem mexer nos dados que já estavam lá");
+  const rNovoTipo = await ins({ VisitanteNome: "Visitante Da Versao Nova E2E" });
+  await aceita("e a baixa administrativa já funciona no banco que veio da versão anterior", "UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME(), RetiradoTipo = 'BAIXA_ADM', RetiradoPorOperadorId = 6010, BaixaMotivo = N'Motivo de teste' WHERE RegistroId = @r", { r: rNovoTipo });
+  await aceita("os eventos novos entram", "INSERT INTO CheckinInfantilEventos (RegistroId, ServicoId, EquipeId, Tipo, AtorMembroId, Detalhe) VALUES (@r, @s, @e, 'BAIXA_ADMINISTRATIVA', 6010, N'NA_SALA')", { r: rNovoTipo, s: sv, e: eq.maternal });
+  await aceita("e o de encerramento da sala", "INSERT INTO CheckinInfantilEventos (ServicoId, EquipeId, Tipo, AtorMembroId, Detalhe) VALUES (@s, @e, 'SALA_ENCERRADA', 6010, N'baixadas=1;voluntarios=0')", { s: sv, e: eq.maternal });
+  await nega("e a baixa sem o motivo continua recusada no banco que veio da versão anterior", "UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME(), RetiradoTipo = 'BAIXA_ADM', RetiradoPorOperadorId = 6010 WHERE RegistroId = @r", { r: await ins({ VisitanteNome: "Visitante Sem Motivo E2E" }) }, /CK_CheckinReg_Estado/);
+
   await q("UPDATE Prazos SET Dias = 5 WHERE Sigla = 'CHECKIN_TENTATIVAS_CODIGO'");
   await q("UPDATE PoliticasRetencao SET DiasRetencao = 1825 WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'");
   await q("UPDATE NotificacaoRegras SET Ativa = 1 WHERE Chave = 'CHECKIN_SEM_RETIRADA'");
 
   console.log("== limpeza dos registros de teste (gatilhos desligados só aqui) ==");
   for (const [tabela, gatilho] of [["CheckinInfantilEventos", "TR_CheckinEventos_Imutavel"], ["CheckinInfantilSegundasVias", "TR_CheckinVias_SemApagar"], ["CheckinInfantilRegistros", "TR_CheckinRegistros_Protegido"], ["CheckinInfantilAutorizados", "TR_CheckinAutorizados_SemApagar"]]) {
-    const apaga = tabela === "CheckinInfantilRegistros" ? "DELETE FROM dbo.CheckinInfantilAutorizadosVisita; DELETE FROM dbo.CheckinInfantilRegistros" : `DELETE FROM dbo.${tabela}`;
+    if (tabela === "CheckinInfantilRegistros") await q("DISABLE TRIGGER dbo.TR_CheckinAutorizadosVisita_Protegido ON dbo.CheckinInfantilAutorizadosVisita; DELETE FROM dbo.CheckinInfantilAutorizadosVisita; ENABLE TRIGGER dbo.TR_CheckinAutorizadosVisita_Protegido ON dbo.CheckinInfantilAutorizadosVisita");
+    const apaga = `DELETE FROM dbo.${tabela}`;
     await q(`DISABLE TRIGGER dbo.${gatilho} ON dbo.${tabela}; ${apaga}; ENABLE TRIGGER dbo.${gatilho} ON dbo.${tabela}`);
   }
   await q("DELETE FROM dbo.CheckinInfantilVoluntarios; DELETE FROM dbo.CheckinInfantilSaude");

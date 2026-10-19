@@ -268,6 +268,21 @@ describe("portão da EBD (v7.10): a turma \"com menores\"", () => {
     expect(r.bloqueados.get(7)).toMatch(/habilitação para servir com menores pendente/);
     expect((await db.aptosParaTurma(pool, { turmaId: 3, membroIds: [], hoje: HOJE })).aptos.size).toBe(0);
   });
+  // Achado da revisão da v7.10 (B4): a lista [5.9] perdia o elemento em idsValidos, o portão achava que não havia ninguém a conferir e devolvia "turma sem marca" SEM consultar nada, e o
+  // driver do banco gravava 5.9 como 5. Uma lista que perdeu elementos é RECUSA (o portão fecha), com a turma marcada ou não.
+  test("identificador que perdeu elementos é RECUSA: [5.9], texto, zero, negativo e misturados fecham o portão — nunca viram 'turma sem marca'", async () => {
+    quando(/SELECT ContatoComMenores FROM EbdTurmas WHERE TurmaId = @t/, [{ ContatoComMenores: 0 }]);
+    for (const lista of [[5.9], ["5.9"], [0], [-1], ["abc"], [true], [null], [7, 5.9], ["05"], [2 ** 40]]) {
+      const r = await db.aptosParaTurma(pool, { turmaId: 3, membroIds: lista, hoje: HOJE });
+      expect(r.contatoComMenores).toBe(true);
+      expect(r.aptos.size).toBe(0);
+      expect(r.bloqueados.size).toBeGreaterThan(0);
+    }
+    expect(mockConsultas).toHaveLength(0);
+    const certo = await db.aptosParaTurma(pool, { turmaId: 3, membroIds: [7, "8"], hoje: HOJE });
+    expect(certo.contatoComMenores).toBe(false);
+    expect([...certo.aptos].sort()).toEqual([7, 8]);
+  });
   test("a varredura só olha turma ATIVA, MARCADA e professor ativo; sem ninguém, não faz nada", async () => {
     const r = await db.retirarInaptosDasTurmas(pool, { hoje: HOJE });
     expect(r).toEqual({ retirados: 0, vinculos: 0 });

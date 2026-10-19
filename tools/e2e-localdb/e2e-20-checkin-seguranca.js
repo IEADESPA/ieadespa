@@ -54,7 +54,7 @@ const NEGADO = [403, 404];
     "meus-filhos": { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: 200, mae: 200, conhecido: 200, secretariaPorPin: 200, gestor: 200, gestorDaVila: 200, gestorSemFator: 200, geral: 200 },
     historico: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: 200, mae: 200, conhecido: 200, secretariaPorPin: 200, gestor: 200, gestorDaVila: 200, gestorSemFator: 200, geral: 200 },
     sala: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: 200, gestorDaVila: "negado", gestorSemFator: 200, geral: 200 },
-    relatorio: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: 200, gestorDaVila: "negado", gestorSemFator: 200, geral: 200 },
+    relatorio: { semSessao: 401, tokenLixo: 401, voluntario: "negado", voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: 200, gestorDaVila: "negado", gestorSemFator: 200, geral: 200 },
     buscar: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: "negado", gestorDaVila: "negado", gestorSemFator: "negado", geral: "negado" },
     responsaveis: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: "negado", gestorDaVila: "negado", gestorSemFator: "negado", geral: "negado" },
     autorizados: { semSessao: 401, tokenLixo: 401, voluntario: "negado", voluntarioDaVila: "negado", mae: 200, conhecido: "negado", secretariaPorPin: "negado", gestor: 200, gestorDaVila: "negado", gestorSemFator: 200, geral: 200 },
@@ -81,6 +81,7 @@ const NEGADO = [403, 404];
     "segunda-via-confirmar": { corpo: { registroId: rCaio }, podem: ["voluntario"] },
     "decidir-divergencia": { corpo: { registroId: rEnzo, aprovar: true, motivo: "Confirmei com a mãe, pelo telefone cadastrado." }, podem: ["gestor", "geral"] },
     destravar: { corpo: { registroId: rDuda }, podem: ["gestor", "gestorSemFator", "geral"] },
+    "encerrar-sala": { corpo: { ...sala(svC), motivo: "Ficaram na sala depois do culto." }, podem: ["gestor", "geral"] },
     "autorizado-adicionar": { corpo: { menorId: K.bia, nome: "Pessoa Teste Seguranca", parentesco: "TIO" }, podem: ["mae"] },
     "autorizado-revogar": { corpo: { autorizadoId: 1 }, podem: [] },
     "saude-gravar": { corpo: { menorId: K.bia, texto: "Alergia teste" }, podem: ["mae"] },
@@ -95,7 +96,7 @@ const NEGADO = [403, 404];
     const antes = await retratoCk();
     const x = await post(acao, token, corpo);
     const esperado401 = nome === "semSessao" || nome === "tokenLixo";
-    const certo = esperado401 ? x.status === 401 : (acao === "decidir-divergencia" && nome === "gestorSemFator") ? x.status === 428 : NEGADO.includes(x.status);
+    const certo = esperado401 ? x.status === 401 : ((acao === "decidir-divergencia" || acao === "encerrar-sala") && nome === "gestorSemFator") ? x.status === 428 : NEGADO.includes(x.status);
     if (!certo) divergencias.push(`POST ${acao} como ${nome}: veio ${x.status} ${msg(x).slice(0, 70)}`);
     if ((await retratoCk()) !== antes) divergencias.push(`POST ${acao} como ${nome}: MEXEU NO BANCO (${x.status})`);
   }
@@ -157,7 +158,7 @@ const NEGADO = [403, 404];
 
   console.log("== a aptidão é reavaliada a CADA ato (quem perde a habilitação no meio do serviço para na hora) ==");
   await derrubarAptidao(CARLA);
-  const ATOS = [["sala", "GET", sala(svC)], ["relatorio", "GET", sala(svC)], ["buscar", "GET", { ...sala(svC), q: "Bia" }], ["responsaveis", "GET", { ...sala(svC), menorId: K.bia }],
+  const ATOS = [["sala", "GET", sala(svC)], ["buscar", "GET", { ...sala(svC), q: "Bia" }], ["responsaveis", "GET", { ...sala(svC), menorId: K.bia }],
     ["checkin", "POST", { ...sala(svC), criancas: [visitante("Visitante Sem Aptidao Teste", 4)], trouxe: trouxeLivre() }], ["retirar", "POST", { registroId: rJoana, codigo: cJoana, retirante: { ref: `RESP:${P.alice}` } }],
     ["segunda-via-pedir", "POST", { registroId: rJoana, pessoa: { ref: `RESP:${P.alice}` }, documento: "RG" }], ["segunda-via-confirmar", "POST", { registroId: rCaio }], ["entrar-na-sala", "POST", sala(svC)]];
   divergencias = [];
@@ -222,14 +223,14 @@ const NEGADO = [403, 404];
   ok(resultados.slice(5).every((s) => s === 422), "as três últimas são recusadas sem conferir (422 'travada')", resultados);
   r = await R(pin(ANA), rTeto, cTeto, { ref: "TROUXE" }); ok(r.status === 422 && r.body.travada === true, "depois do teto o código certo também não vale", r.body);
   r = await R(pin(ANA), rTeto, codigoErradoDe(cTeto), { ref: "TROUXE" }); ok((await doBanco(rTeto)).Tentativas === 5, "e o contador não passa de 5 (continua 5)");
-  await q("UPDATE Prazos SET Dias = 99 WHERE Sigla = 'CHECKIN_TENTATIVAS_CODIGO'");
+  await q("UPDATE Prazos SET Dias = 99 WHERE Sigla = 'CHECKIN_TENTATIVAS_CODIGO'"); H.db.limparCaches();      // a configuração dos prazos fica 15 s em memória: o roteiro mudou no banco e quer o efeito na hora
   r = anota(await checkin(pin(ANA), svC, eq.maternal, [visitante("Visitante Teto Cem Teste", 4)], trouxeLivre("Tia Teto Cem Teste"))); const rT2 = registrosDe(r)[0], cT2 = codigosDe(r)[0];
   for (let i = 0; i < 7; i++) await R(pin(ANA), rT2, codigoErradoDe(cT2), { ref: "TROUXE" });
   ok((await doBanco(rT2)).Tentativas === 5 && (await doBanco(rT2)).Travado === true, "mesmo que a Igreja configure 99 tentativas, o teto de 5 vale (a configuração só pode baixar)", await doBanco(rT2));
-  await q("UPDATE Prazos SET Dias = 0 WHERE Sigla = 'CHECKIN_TENTATIVAS_CODIGO'");
+  await q("UPDATE Prazos SET Dias = 0 WHERE Sigla = 'CHECKIN_TENTATIVAS_CODIGO'"); H.db.limparCaches();      // a configuração dos prazos fica 15 s em memória: o roteiro mudou no banco e quer o efeito na hora
   r = anota(await checkin(pin(ANA), svC, eq.maternal, [visitante("Visitante Teto Zero Teste", 4)], trouxeLivre("Tia Teto Zero Teste"))); const rT3 = registrosDe(r)[0], cT3 = codigosDe(r)[0];
   r = await R(pin(ANA), rT3, codigoErradoDe(cT3), { ref: "TROUXE" }); ok(r.status === 422 && r.body.tentativasRestantes === 4, "configurar 0 tentativas volta ao padrão (5): o prazo ruim nunca trava todas as crianças", r.body);
-  await q("UPDATE Prazos SET Dias = 5 WHERE Sigla = 'CHECKIN_TENTATIVAS_CODIGO'");
+  await q("UPDATE Prazos SET Dias = 5 WHERE Sigla = 'CHECKIN_TENTATIVAS_CODIGO'"); H.db.limparCaches();      // a configuração dos prazos fica 15 s em memória: o roteiro mudou no banco e quer o efeito na hora
 
   console.log("== a sala e a marca mudam no meio do serviço: a criança que está na sala precisa poder ser retirada ==");
   r = anota(await checkin(pin(ANA), svC, eq.maternal, [visitante("Visitante Marca Teste", 4)], trouxeLivre("Tia Marca Teste"))); const rMarca = registrosDe(r)[0], cMarca = codigosDe(r)[0];
@@ -298,6 +299,9 @@ const NEGADO = [403, 404];
   await fuzzarCaminhos("segunda-via-confirmar", (corpo) => ckPost("segunda-via-confirmar", pin(BRUNO), corpo), { registroId: rFz }, [["registroId"]]);
   await fuzzarCaminhos("decidir-divergencia", (corpo) => ckPost("decidir-divergencia", sec(), corpo), { registroId: rFz, aprovar: true, motivo: "Confirmei com o responsável por telefone." }, [["registroId"], ["aprovar"], ["motivo"]]);
   await fuzzarCaminhos("destravar", (corpo) => ckPost("destravar", sec(), corpo), { registroId: rFz }, [["registroId"]]);
+  // uma sala SEM criança nem voluntário (serviço novo): um motivo que por acaso seja válido não muda nada (idempotente); o resto é recusado
+  const svVazio = await H.servico(c1);
+  await fuzzarCaminhos("encerrar-sala", (corpo) => ckPost("encerrar-sala", sec(), corpo), { ...sala(svVazio), motivo: "Encerrando a sala de teste." }, [["servicoId"], ["equipeId"], ["motivo"]]);
   await fuzzarCaminhos("entrar-na-sala", (corpo) => ckPost("entrar-na-sala", pin(OLGA), corpo), sala(svF), [["servicoId"], ["equipeId"], ["membroId"]]);
   await fuzzarCaminhos("sair-da-sala", (corpo) => ckPost("sair-da-sala", sec(), corpo), { ...sala(svF), membroId: OLGA }, [["servicoId"], ["equipeId"], ["membroId"]]);
   await fuzzarCaminhos("autorizado-adicionar", (corpo) => ckPost("autorizado-adicionar", pin(P.alice), corpo), { menorId: K.bia, nome: "Fulana Fuzz Teste", parentesco: "TIO", membroId: P.dina, validoAte: "2099-01-01", ficha: false, referencia: "Pasta fuzz" }, [["menorId"], ["nome"], ["parentesco"], ["membroId"], ["validoAte"], ["ficha"], ["referencia"]]);

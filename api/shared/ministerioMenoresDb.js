@@ -434,6 +434,11 @@ async function turmaComMenores(pool, turmaId) {
 // O portão que a designação de professor usa: quem, dentre `membroIds`, pode ser designado na turma. Turma sem a marca libera todos (uma única consulta).
 async function aptosParaTurma(pool, { turmaId, membroIds, hoje = hojeBrasilia() }) {
   const ids = idsValidos(membroIds);
+  // Uma lista que PERDEU elementos (número fracionário, texto, zero, negativo) é recusa, não "sem a marca": antes, [5.9] virava lista vazia, o portão devolvia "turma sem marca" sem consultar
+  // nada e o driver do banco gravava 5.9 como 5 (achado da revisão da v7.10). Aqui nenhum identificador inválido passa: o portão fecha para todos.
+  const brutos = membroIds || [];
+  const canonico = (v) => (typeof v === "number" || typeof v === "string") && /^[1-9]\d{0,9}$/.test(String(v)) && Number(v) <= 2147483647;
+  if (brutos.some((v) => !canonico(v))) return { contatoComMenores: true, aptos: new Set(), bloqueados: new Map(brutos.map((v) => [Number(v), "identificador de membro inválido"])) };
   if (!ids.length || !(await turmaComMenores(pool, turmaId))) return { contatoComMenores: false, aptos: new Set(ids), bloqueados: new Map() };
   const aptidoes = await aptidaoEmLote(pool, ids, { hoje });
   const aptos = new Set(), bloqueados = new Map();

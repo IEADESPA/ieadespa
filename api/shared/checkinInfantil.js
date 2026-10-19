@@ -62,7 +62,8 @@ const DOCUMENTOS = { RG: "RG", CNH: "CNH", CPF: "CPF", OUTRO: "Outro documento c
 const SITUACOES = {
   NA_SALA: "Na sala",
   RETIRADA_PENDENTE: "Retirada aguardando aprovação da liderança",
-  RETIRADA: "Retirada"
+  RETIRADA: "Retirada",
+  BAIXA_ADMINISTRATIVA: "Encerrada pela liderança (a retirada não foi registrada na sala)"      // só no histórico do responsável: a situação no banco continua RETIRADA (RetiradoTipo = BAIXA_ADM)
 };
 
 const TIPOS_EVENTO = {
@@ -78,8 +79,13 @@ const TIPOS_EVENTO = {
   SEGUNDA_VIA_EMITIDA: "Segunda via do código, emitida",
   VOLUNTARIO_ENTROU: "Voluntário entrou na sala",
   VOLUNTARIO_SAIU: "Voluntário saiu da sala",
-  SALA_RECUSOU_CHECKIN: "Sala recusou um check-in"
+  SALA_RECUSOU_CHECKIN: "Sala recusou um check-in",
+  BAIXA_ADMINISTRATIVA: "Baixa administrativa: a criança ficou na sala sem retirada registrada e a liderança encerrou o registro",
+  SALA_ENCERRADA: "Sala encerrada pela liderança"
 };
+
+// Recusas de check-in por lotação gravam um evento imutável: no máximo UMA por sala a cada minuto (senão uma tela que insiste encheria a tabela de custódia, que não se apaga).
+const RECUSAS_POR_SALA_POR_MINUTO = 1;
 
 const MENSAGENS = {
   SEM_ACESSO_A_SALA: "Você não está escalado nesta sala, neste serviço, ou não está apto hoje para servir com menores. Procure o líder da equipe.",
@@ -98,7 +104,10 @@ const MENSAGENS = {
   SEM_NASCIMENTO: "O cadastro desta criança não tem a data de nascimento. Peça à Secretaria para completar, ou faça o check-in como visitante.",
   JA_NA_SALA: "Esta criança já está numa sala (ainda não foi retirada).",
   SEM_PERMISSAO_GESTAO: "Esta ação é da liderança da congregação (entrar com a senha de acesso administrativo).",
-  SEM_RESPONSAVEL: "Esta criança não tem responsável cadastrado pela Secretaria: faça o check-in como visitante e peça à Secretaria para cadastrar o responsável."
+  SEM_RESPONSAVEL: "Esta criança não tem responsável cadastrado pela Secretaria: faça o check-in como visitante e peça à Secretaria para cadastrar o responsável.",
+  SALA_AINDA_ABERTA: "A sala ainda está aberta e há criança nela: registre a retirada de cada uma com o código (ou, se for preciso, a liderança decide a divergência). Só depois que o check-in da sala fecha a liderança pode encerrá-la com baixa administrativa.",
+  SEM_AVISO_LIDERANCA: "ATENÇÃO: a liderança NÃO foi avisada pelo sistema. O pedido está registrado e a criança continua na sala, mas ligue agora para a liderança da congregação para ela decidir.",
+  SEM_AVISO_RESPONSAVEIS: "Atenção: o sistema não conseguiu avisar o responsável cadastrado da nova segunda via. Avise a liderança e o responsável."
 };
 
 // ---------------------------------------------------------------
@@ -291,6 +300,15 @@ function avaliarSaidaVoluntario({ adultos, criancas, contaComoAdulto, faixa, cri
   return { ok: true };
 }
 
+// A liderança só encerra a sala (baixa administrativa) quando o check-in dela já fechou — ou o serviço deixou de estar publicado, ou não há criança nela. Enquanto o serviço está em
+// andamento a criança sai pela retirada com código; a baixa administrativa é só para o que ficou para trás.
+function avaliarEncerramentoDaSala({ janela, servicoStatus, criancas }) {
+  if (!Number.isInteger(criancas) || criancas <= 0) return { ok: true };
+  if (servicoStatus !== "PUBLICADA") return { ok: true };
+  if (janela && janela.aberta) return { ok: false, mensagem: MENSAGENS.SALA_AINDA_ABERTA };
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------
 // Quem pode retirar a criança
 // ---------------------------------------------------------------
@@ -334,7 +352,14 @@ function classificarRetirante({ ref, outro }, autorizados) {
   if (!par.valido) return { erro: par.mensagem };
   const doc = validarDocumento(outro.documento);
   if (!doc.valido) return { erro: doc.mensagem };
-  return { divergente: true, tipo: "OUTRO", membroId: null, nome: nome.valor, parentesco: par.valor, documento: doc.valor };
+  // O motivo é opcional: o que o voluntário ouviu de quem pede (por que não é da lista, quem o mandou). O gestor o vê ao decidir; é texto livre e sai com a anonimização.
+  let motivo = null;
+  if (outro.motivo != null && outro.motivo !== "") {
+    const m = validarTextoLivre(outro.motivo, { min: 3, max: MAX_MOTIVO, rotulo: "O motivo do pedido" });
+    if (!m.valido) return { erro: m.mensagem };
+    motivo = m.valor;
+  }
+  return { divergente: true, tipo: "OUTRO", membroId: null, nome: nome.valor, parentesco: par.valor, documento: doc.valor, motivo };
 }
 
 // ---------------------------------------------------------------
@@ -454,6 +479,15 @@ function validarDecisaoDivergencia(d = {}) {
   return { valido: true, registroId, aprovar: d.aprovar, motivo: motivo.valor };
 }
 
+// O encerramento da sala (baixa administrativa das crianças que ficaram sem retirada): a sala, e o motivo da liderança, obrigatório (de 5 a 300 caracteres, texto sem marcação).
+function validarEncerramentoSala(d = {}) {
+  const sala = validarSala(d);
+  if (!sala.valido) return sala;
+  const motivo = validarTextoLivre(d.motivo, { min: 5, max: MAX_MOTIVO, rotulo: "O motivo do encerramento" });
+  if (!motivo.valido) return motivo;
+  return { valido: true, servicoId: sala.servicoId, equipeId: sala.equipeId, motivo: motivo.valor };
+}
+
 function validarPedidoSegundaVia(d = {}) {
   const registroId = idDe(d.registroId);
   if (!registroId) return { valido: false, mensagem: "Informe a criança (registroId)." };
@@ -514,23 +548,27 @@ function nomeParaEtiqueta(nome) {
 }
 const primeiroNome = (nome) => limpar(nome).split(" ")[0] || "";
 
-function montarEtiqueta({ nomeCrianca, idade, salaNome, congregacaoNome, codigo, saudeTexto, instante }) {
+// `instante`: a hora em que a criança ENTROU na sala. `segundaViaEm` (só na segunda via): a hora em que o código foi reemitido.
+function montarEtiqueta({ nomeCrianca, idade, salaNome, congregacaoNome, codigo, saudeTexto, instante, segundaViaEm = null }) {
   return {
     nome: nomeParaEtiqueta(nomeCrianca), idade, sala: salaNome, congregacao: congregacaoNome, codigo,
-    saude: saudeTexto || null, instante,
+    saude: saudeTexto || null, instante, ...(segundaViaEm ? { segundaViaEm } : {}),
     orientacao: "Guarde este código: sem ele a criança não é entregue, mesmo a quem a equipe conhece."
   };
 }
 
 // O que o responsável vê do histórico das próprias crianças: nunca o código, nunca o nome do voluntário, nunca a saúde, nunca o motivo da liderança.
 function linhaDoHistoricoParaResponsavel(r) {
-  return {
+  const base = {
     registroId: r.registroId, data: r.data, sala: r.salaNome, congregacao: r.congregacaoNome,
     entregueEm: r.entregueEm, retiradoEm: r.retiradoEm || null,
     situacao: r.situacao, rotuloSituacao: SITUACOES[r.situacao] || r.situacao,
     quemTrouxe: r.quemTrouxe || null, quemRetirou: r.quemRetirou || null,
     retiradaDivergente: !!r.divergente
   };
+  // A baixa administrativa NÃO é uma retirada: ninguém registrou a quem a criança foi entregue. O responsável vê isso com todas as letras (e o horário da baixa não vira "retirado em").
+  if (r.baixaAdministrativa) return { ...base, retiradoEm: null, quemRetirou: null, rotuloSituacao: SITUACOES.BAIXA_ADMINISTRATIVA, baixaAdministrativa: true, encerradaEm: r.retiradoEm || null };
+  return base;
 }
 
 // ---------------------------------------------------------------
@@ -547,15 +585,25 @@ function textoSegundaVia({ nomeCrianca, salaNome }) {
   return `Foi emitida a segunda via do código de retirada de ${primeiroNome(nomeCrianca)} na sala ${salaNome}, depois da conferência de documento e da confirmação de dois adultos da sala. O código antigo deixou de valer. Se não foi você ou alguém da sua lista, avise a liderança.`.slice(0, 1000);
 }
 function textoSemRetirada({ quantidade, salaNome, data }) {
-  return `${quantidade} criança(s) da sala ${salaNome} ficaram sem retirada registrada depois do serviço de ${data}. Confira com a equipe da sala e regularize o registro: a retirada precisa estar registrada para a Igreja provar a quem a criança foi entregue.`.slice(0, 1000);
+  return `${quantidade} criança(s) da sala ${salaNome} ficaram sem retirada registrada depois do serviço de ${data}. Confira com a equipe da sala e regularize o registro na aba Check-in infantil (botão "Encerrar a sala"): a liderança dá a baixa e escreve o motivo, para a Igreja provar o que aconteceu com cada criança.`.slice(0, 1000);
+}
+// Quando o responsável cadastrado que fez a lista de autorizados deixa de ser responsável, o que ele autorizou deixa de valer. A liderança é avisada (sem nome de criança) para decidir se registra de novo, com a ficha.
+function textoAutorizadosDeixaramDeValer({ quantidade }) {
+  return `${quantidade} autorização(ões) de retirada de criança deixaram de valer porque quem as fez deixou de ser responsável cadastrado. Se a família precisa delas, o responsável atual refaz a lista em Meu Painel ou a Secretaria registra de novo com a ficha assinada. Até lá, essas pessoas não retiram a criança.`.slice(0, 1000);
 }
 function textoProfessorRetirado({ turmaNome }) {
   return `Um professor saiu da turma ${turmaNome} por uma pendência na habilitação para servir com menores (a turma está marcada como "com menores"). Confira as vagas abertas e a regra dos dois adultos antes da próxima aula.`.slice(0, 1000);
 }
 
 // As referências dos avisos são números (Notificacoes.ReferenciaId é INT) e deduplicam: o mesmo fato não avisa duas vezes, e um fato novo (outra data, outro ciclo) reabre o aviso.
-// Uma sala-serviço sem retirada avisa uma vez por (serviço, equipe); o serviço tem id de verdade e a equipe cabe em dois dígitos de resto.
-function referenciaDeSemRetirada(servicoId, equipeId) { return (Number(servicoId) % 20000000) * 100 + (Number(equipeId) % 100); }
+// Uma sala-serviço sem retirada avisa uma vez por (serviço, equipe). Sem colisão: serviço × 1000 + equipe cabe no INT para serviço abaixo de 2 milhões e equipe abaixo de 1000 (muito além do que a
+// Igreja terá). Fora dessa faixa — nunca no uso real — a referência vem de um hash dos dois números (a chance de repetir é de 1 em 2 bilhões), no lugar do resto da divisão, que
+// juntava a equipe 5 e a equipe 105 do mesmo serviço e fazia o segundo aviso sumir (achado da revisão).
+function referenciaDeSemRetirada(servicoId, equipeId) {
+  const s = Number(servicoId), e = Number(equipeId);
+  if (Number.isInteger(s) && Number.isInteger(e) && s >= 1 && s < 2000000 && e >= 1 && e < 1000) return s * 1000 + e;
+  return (crypto.createHash("sha256").update(`sem-retirada|${s}|${e}`).digest().readUInt32BE(0) % 2147483646) + 1;
+}
 // Um aviso por (turma, professor, dia): se o professor volta e sai de novo em outro dia, avisa de novo. 40 000 turmas × 365 dias × 1 ano ainda cabem em INT com o resto abaixo.
 function referenciaDeProfessor(turmaId, membroId, dataIso) {
   const dias = mm.ordinalDeIso(dataIso) % 4096;
@@ -569,10 +617,10 @@ module.exports = {
   idDe, validarNome, validarTelefone, validarParentesco, validarDocumento, validarSaudeTexto, dataIsoValida, validarNascimentoDeMenor, lerRefPessoa,
   gerarCodigo, normalizarCodigo, hashCodigo, confereCodigo, tentativasPermitidas,
   faixaDaIdade, idadeForaDaFaixa, agoraBrasiliaIso, minutosDe, prazosDoCheckin, avaliarJanela,
-  avaliarLotacao, avaliarSaidaVoluntario,
+  avaliarLotacao, avaliarSaidaVoluntario, avaliarEncerramentoDaSala,
   montarAutorizados, classificarRetirante,
-  validarSala, validarCheckin, validarRetirada, validarDecisaoDivergencia, validarPedidoSegundaVia, validarAutorizado, validarSaudeDaCrianca,
+  validarSala, validarCheckin, validarRetirada, validarDecisaoDivergencia, validarEncerramentoSala, validarPedidoSegundaVia, validarAutorizado, validarSaudeDaCrianca,
   nomeParaEtiqueta, primeiroNome, montarEtiqueta, linhaDoHistoricoParaResponsavel,
-  textoRetiradaDivergentePais, textoRetiradaDivergenteGestao, textoSegundaVia, textoSemRetirada, textoProfessorRetirado,
+  textoRetiradaDivergentePais, textoRetiradaDivergenteGestao, textoSegundaVia, textoSemRetirada, textoAutorizadosDeixaramDeValer, textoProfessorRetirado, RECUSAS_POR_SALA_POR_MINUTO,
   referenciaDeSemRetirada, referenciaDeProfessor
 };

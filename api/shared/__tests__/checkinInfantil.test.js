@@ -413,3 +413,97 @@ describe("catálogos", () => {
     for (const sigla of Object.values(ck.SIGLAS_PRAZO)) { expect(sigla.length).toBeLessThanOrEqual(40); expect(sql).toContain(`'${sigla}'`); }
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Revisão adversarial da v7.10 (servidor): a regra pura do encerramento da sala, o motivo do pedido divergente, a referência do aviso sem colisão e o histórico da baixa
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+describe("encerrar a sala (baixa administrativa) — a regra pura", () => {
+  const aberta = ck.avaliarJanela({ servicoIso: "2026-10-18T09:00", agoraIso: "2026-10-18T10:00" });
+  const fechada = ck.avaliarJanela({ servicoIso: "2026-10-18T09:00", agoraIso: "2026-10-18T15:30" });
+  test("com o check-in aberto e criança na sala, a liderança NÃO encerra (a criança sai pela retirada com código)", () => {
+    expect(aberta.aberta).toBe(true);
+    const r = ck.avaliarEncerramentoDaSala({ janela: aberta, servicoStatus: "PUBLICADA", criancas: 3 });
+    expect(r.ok).toBe(false);
+    expect(r.mensagem).toBe(ck.MENSAGENS.SALA_AINDA_ABERTA);
+    expect(r.mensagem).toMatch(/ainda está aberta/);
+  });
+  test("com o check-in fechado, ou sem criança, ou com o serviço fora de 'publicado' (cancelado), encerra", () => {
+    expect(fechada.aberta).toBe(false);
+    expect(ck.avaliarEncerramentoDaSala({ janela: fechada, servicoStatus: "PUBLICADA", criancas: 3 }).ok).toBe(true);
+    expect(ck.avaliarEncerramentoDaSala({ janela: aberta, servicoStatus: "PUBLICADA", criancas: 0 }).ok).toBe(true);
+    expect(ck.avaliarEncerramentoDaSala({ janela: aberta, servicoStatus: "CANCELADA", criancas: 4 }).ok).toBe(true);
+    expect(ck.avaliarEncerramentoDaSala({ janela: aberta, servicoStatus: "RASCUNHO", criancas: 1 }).ok).toBe(true);
+  });
+  test("o corpo: sala com identificadores estritos e motivo de 5 a 300 caracteres, texto sem marcação", () => {
+    const ok = ck.validarEncerramentoSala({ servicoId: 5, equipeId: 7, motivo: "  Os voluntários   esqueceram o registro.  " });
+    expect(ok).toMatchObject({ valido: true, servicoId: 5, equipeId: 7, motivo: "Os voluntários esqueceram o registro." });
+    for (const motivo of [undefined, null, "", "    ", "abcd", "<b>motivo</b>", "x".repeat(301), ["motivo longo"], 12345678, {}]) expect(ck.validarEncerramentoSala({ servicoId: 5, equipeId: 7, motivo }).valido).toBe(false);
+    expect(ck.validarEncerramentoSala({ servicoId: 5, equipeId: 7, motivo: "abcde" }).valido).toBe(true);
+    expect(ck.validarEncerramentoSala({ servicoId: 5, equipeId: 7, motivo: "x".repeat(300) }).valido).toBe(true);
+    for (const sala of [{}, { servicoId: 5 }, { servicoId: "05", equipeId: 7 }, { servicoId: 5.5, equipeId: 7 }, { servicoId: 5, equipeId: "7; x" }]) expect(ck.validarEncerramentoSala({ ...sala, motivo: "motivo válido" }).valido).toBe(false);
+  });
+  test("o histórico ganha o evento da baixa e o do encerramento, e o código do evento cabe na coluna", () => {
+    expect(ck.TIPOS_EVENTO.BAIXA_ADMINISTRATIVA).toMatch(/Baixa administrativa/);
+    expect(ck.TIPOS_EVENTO.SALA_ENCERRADA).toMatch(/Sala encerrada/);
+    for (const tipo of Object.keys(ck.TIPOS_EVENTO)) expect(tipo.length).toBeLessThanOrEqual(32);
+  });
+});
+
+describe("motivo do pedido de retirada divergente (opcional, texto sem marcação, até 300 caracteres)", () => {
+  const lista = [];
+  const base = { nome: "Roberto Dias", parentesco: "AMIGO_FAMILIA", documento: "RG" };
+  test("sem motivo: continua valendo (motivo nulo); com motivo, vai limpo", () => {
+    expect(ck.classificarRetirante({ outro: base }, lista)).toMatchObject({ divergente: true, motivo: null });
+    expect(ck.classificarRetirante({ outro: { ...base, motivo: "" } }, lista).motivo).toBeNull();
+    expect(ck.classificarRetirante({ outro: { ...base, motivo: "  A mãe   mandou buscar. " } }, lista).motivo).toBe("A mãe mandou buscar.");
+  });
+  test("motivo ruim é recusado ANTES de qualquer tentativa (a regra pura devolve erro)", () => {
+    for (const motivo of ["<b>x</b>", "x".repeat(301), "ab", ["mãe"], 12345, {}]) expect(ck.classificarRetirante({ outro: { ...base, motivo } }, lista).erro).toBeTruthy();
+  });
+  test("quem retira da lista (ref) nunca leva motivo", () => {
+    const r = ck.classificarRetirante({ ref: "RESP:10" }, [{ ref: "RESP:10", tipo: "RESPONSAVEL", membroId: 10, nome: "Maria" }]);
+    expect(r.motivo).toBeUndefined();
+  });
+});
+
+describe("a referência do aviso 'sem retirada' não tem colisão (achado C21)", () => {
+  test("a equipe 5 e a equipe 105 do MESMO serviço têm referências diferentes (antes: o resto da divisão por 100 as juntava e o segundo aviso sumia)", () => {
+    expect(ck.referenciaDeSemRetirada(1234, 5)).not.toBe(ck.referenciaDeSemRetirada(1234, 105));
+    const vistas = new Set();
+    for (let s = 1; s <= 60; s++) for (let e = 1; e <= 250; e++) vistas.add(ck.referenciaDeSemRetirada(s, e));
+    expect(vistas.size).toBe(60 * 250);
+  });
+  test("cabe no INT (a coluna é INT) e é determinística, inclusive fora da faixa comum", () => {
+    for (const [s, e] of [[1, 1], [1999999, 999], [2000000, 1], [123456789, 5000], [2147483647, 2147483647]]) {
+      const a = ck.referenciaDeSemRetirada(s, e), b = ck.referenciaDeSemRetirada(s, e);
+      expect(Number.isInteger(a)).toBe(true); expect(a).toBeGreaterThan(0); expect(a).toBeLessThanOrEqual(2147483647); expect(a).toBe(b);
+    }
+  });
+});
+
+describe("o histórico do responsável e a etiqueta depois da revisão", () => {
+  const linha = { registroId: 1, data: "2026-10-18", salaNome: "Infantil", congregacaoNome: "Central", entregueEm: "2026-10-18T12:00:00.000Z", retiradoEm: "2026-10-18T19:00:00.000Z", situacao: "RETIRADA", quemTrouxe: "Maria", quemRetirou: null, divergente: false };
+  test("a baixa administrativa NÃO aparece como retirada: sem 'retirado em', sem quem retirou, com o rótulo e o horário do encerramento", () => {
+    const h = ck.linhaDoHistoricoParaResponsavel({ ...linha, baixaAdministrativa: true, quemRetirou: "Fulano que não devia aparecer" });
+    expect(h).toMatchObject({ situacao: "RETIRADA", baixaAdministrativa: true, retiradoEm: null, quemRetirou: null, encerradaEm: "2026-10-18T19:00:00.000Z" });
+    expect(h.rotuloSituacao).toMatch(/Encerrada pela liderança/);
+    expect(JSON.stringify(h)).not.toMatch(/Fulano|motivo/i);
+  });
+  test("a linha comum não ganha campo nenhum (a tela antiga continua igual)", () => {
+    expect(Object.keys(ck.linhaDoHistoricoParaResponsavel(linha)).sort()).toEqual(["congregacao", "data", "entregueEm", "quemRetirou", "quemTrouxe", "registroId", "retiradaDivergente", "retiradoEm", "rotuloSituacao", "sala", "situacao"]);
+  });
+  test("a etiqueta: 'instante' é a hora da entrada; 'segundaViaEm' só existe na segunda via", () => {
+    const orig = ck.montarEtiqueta({ nomeCrianca: "Davi Lima", idade: 7, salaNome: "I", congregacaoNome: "C", codigo: "AB3K9Z", saudeTexto: null, instante: "2026-10-18T12:00:00.000Z" });
+    expect("segundaViaEm" in orig).toBe(false);
+    const via = ck.montarEtiqueta({ nomeCrianca: "Davi Lima", idade: 7, salaNome: "I", congregacaoNome: "C", codigo: "AB3K9Z", saudeTexto: null, instante: "2026-10-18T12:00:00.000Z", segundaViaEm: "2026-10-18T14:30:00.000Z" });
+    expect(via).toMatchObject({ instante: "2026-10-18T12:00:00.000Z", segundaViaEm: "2026-10-18T14:30:00.000Z" });
+  });
+  test("os avisos novos: o da liderança manda ao botão 'Encerrar a sala'; o das autorizações sem efeito nunca leva nome de criança; todos cabem em 1000", () => {
+    const sem = ck.textoSemRetirada({ quantidade: 2, salaNome: "Infantil", data: "18/10/2026" });
+    expect(sem).toMatch(/Encerrar a sala/);
+    const dep = ck.textoAutorizadosDeixaramDeValer({ quantidade: 3 });
+    expect(dep).toMatch(/^3 autorização\(ões\)/);
+    for (const t of [sem, dep, ck.MENSAGENS.SEM_AVISO_LIDERANCA, ck.MENSAGENS.SEM_AVISO_RESPONSAVEIS, ck.MENSAGENS.SALA_AINDA_ABERTA]) expect(t.length).toBeLessThanOrEqual(1000);
+    expect(ck.MENSAGENS.SEM_AVISO_LIDERANCA).toMatch(/NÃO foi avisada/);
+  });
+});

@@ -17,7 +17,7 @@ jest.mock("../db", () => {
   const sql = new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : (typeof prop === "string" && /^[A-Z]/.test(prop) ? () => undefined : undefined)) });
   return { getPool: async () => ({ request: novaRequisicao }), sql };
 });
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => undefined), sha256: () => "" }));
 jest.mock("../segredoSessao", () => ({ resolverSegredo: () => "segredo-de-teste-com-mais-de-16-caracteres" }));
 jest.mock("../financeiroSeguro", () => ({ ...jest.requireActual("../financeiroSeguro"), obterTrava: jest.fn(async () => true) }));
 jest.mock("../canaisDb", () => ({ ...jest.requireActual("../canaisDb"), notificarAgora: jest.fn(async () => ({ criadas: 1 })), lerPrazoDias: jest.fn(async (_p, _s, padrao) => padrao) }));
@@ -52,7 +52,7 @@ const com = (padrao) => mockConsultas.filter((c) => padrao.test(c.sql));
 beforeEach(() => { mockRegras = []; mockConsultas = []; jest.clearAllMocks(); });
 
 const GETS = ["catalogos", "minhas-salas", "meus-filhos", "historico", "autorizados", "saude", "sala", "buscar", "responsaveis", "relatorio"];
-const POSTS = ["autorizado-adicionar", "autorizado-revogar", "saude-gravar", "saude-apagar", "entrar-na-sala", "sair-da-sala", "checkin", "retirar", "segunda-via-pedir", "segunda-via-confirmar", "decidir-divergencia", "destravar"];
+const POSTS = ["autorizado-adicionar", "autorizado-revogar", "saude-gravar", "saude-apagar", "entrar-na-sala", "sair-da-sala", "checkin", "retirar", "segunda-via-pedir", "segunda-via-confirmar", "decidir-divergencia", "destravar", "encerrar-sala"];
 const CORPO_SALA = { servicoId: 5, equipeId: 7 };
 
 describe("a porta de todas as rotas", () => {
@@ -81,6 +81,7 @@ describe("a porta de todas as rotas", () => {
         const r = await chamar(acao, { metodo: "POST", token: t, corpo: { registroId: 9, aprovar: true, motivo: "Confirmado pelo telefone." } });
         expect(r.status).toBe(403);
       }
+      expect((await chamar("encerrar-sala", { metodo: "POST", token: t, corpo: { ...CORPO_SALA, motivo: "Ficou na sala depois do culto." } })).status).toBe(403);
       expect((await chamar("autorizado-adicionar", { metodo: "POST", token: t, corpo: { menorId: 30, nome: "Dona Lúcia", parentesco: "AVO", ficha: true, referencia: "Ficha 3" } })).status).toBe(403);
       expect((await chamar("saude-gravar", { metodo: "POST", token: t, corpo: { menorId: 30, texto: "asma", ficha: true, referencia: "Ficha 3" } })).status).toBe(403);
     }
@@ -159,7 +160,9 @@ describe("a sala (porta e leitura)", () => {
       expect(r.body.mensagem).toBe(ck.MENSAGENS.SALA_SEM_MARCA);
     }
     expect((await chamar("sala", { token: PIN(10), query: CORPO_SALA })).status).toBe(200);
-    expect((await chamar("relatorio", { token: PIN(10), query: CORPO_SALA })).status).toBe(200);
+    // o relatório do dia é ATO DE GESTÃO (revisão da v7.10): o voluntário da sala não o lê; a liderança do escopo sim
+    expect((await chamar("relatorio", { token: PIN(10), query: CORPO_SALA })).status).toBe(403);
+    expect((await chamar("relatorio", { token: LOCAL(["habilitacao_voluntarios"]), query: CORPO_SALA })).status).toBe(200);
     quando(/SELECT TOP 1 PresencaId FROM CheckinInfantilVoluntarios WITH \(UPDLOCK\)/, [{ PresencaId: 1 }]);
     expect((await chamar("sair-da-sala", { metodo: "POST", token: PIN(10), corpo: CORPO_SALA })).status).toBe(200);
   });
@@ -276,12 +279,111 @@ describe("catálogo e as rotas do responsável", () => {
     expect(com(/INSERT INTO CheckinInfantilAutorizados/)).toHaveLength(0);
   });
   test("o histórico traz só o que o responsável pode ver", async () => {
-    quando(/WHERE r\.MenorMembroId IS NOT NULL AND EXISTS \(SELECT 1 FROM VoluntariadoResponsaveis v/, [{ RegistroId: 9, MenorMembroId: 30, CriancaNome: "Caio Souza", EquipeNome: "Maternal", CongregacaoNome: "Central", ServicoDataHora: new Date("2026-10-18T09:00:00Z"),
+    quando(/WHERE r\.MenorMembroId IS NOT NULL AND m\.DataNascimento IS NOT NULL/, [{ RegistroId: 9, MenorMembroId: 30, CriancaNome: "Caio Souza", EquipeNome: "Maternal", CongregacaoNome: "Central", ServicoDataHora: new Date("2026-10-18T09:00:00Z"),
       EntregueEm: new Date("2026-10-18T12:05:00Z"), RetiradoEm: null, Situacao: "NA_SALA", TrouxeNomeResolvido: "Maria Souza", RetiradoNomeResolvido: null, Divergente: 0, CodigoHash: "x", SaudeTexto: "asma" }]);
     const r = await chamar("historico", { token: PIN(40), query: { menorId: 30 } });
     expect(r.status).toBe(200);
     expect(com(/EXISTS \(SELECT 1 FROM VoluntariadoResponsaveis v/)[0].inputs).toMatchObject({ r: 40, m: 30 });
     expect(JSON.stringify(r.body)).not.toMatch(/"x"|asma|CodigoHash/);
     expect(r.body.historico[0]).toMatchObject({ registroId: 9, crianca: "Caio Souza", situacao: "NA_SALA" });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// Revisão adversarial da v7.10: as rotas novas e as que mudaram de porta (encerrar-sala, relatório só da gestão, sair da sala depois de tirado da escala)
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+describe("encerrar-sala (rota da liderança)", () => {
+  const SALA_BANCO = { ServicoId: 5, EquipeId: 7, EquipeNome: "Maternal", FaixaEtariaMenores: "MATERNAL", LiderMembroId: 600, ContatoComMenores: 1, Ativa: 1, CongregacaoId: 1, CongregacaoNome: "Central", DataHora: new Date("2020-01-05T09:00:00Z"), ServicoStatus: "PUBLICADA" };
+  const sala = (extra = {}) => quando(/FROM EscalasServicos s\s+JOIN EscalasEquipes e ON e\.EquipeId = @e/, [{ ...SALA_BANCO, ...extra }]);
+  const GESTAO = (escopo = ["Central"], fator = COM_FATOR) => LOCAL(["habilitacao_voluntarios"], escopo, 5, fator);
+  const corpo = (extra = {}) => ({ ...CORPO_SALA, motivo: "Os voluntários esqueceram de registrar as retiradas.", ...extra });
+  const encerrar = (token, c = corpo()) => chamar("encerrar-sala", { metodo: "POST", token, corpo: c });
+  const CONTA = /SELECT COUNT\(\*\) AS n FROM CheckinInfantilRegistros WHERE ServicoId = @s AND EquipeId = @e AND Situacao <> 'RETIRADA'/;
+
+  test("a ordem das portas: sem sessão 401; PIN, voluntário e liderança sem a permissão 403 ANTES de qualquer consulta; motivo ruim 422; sem a confirmação reforçada 428; fora do escopo 404 igual a 'não existe'", async () => {
+    expect((await chamar("encerrar-sala", { metodo: "POST", corpo: corpo() })).status).toBe(401);
+    for (const t of [PIN(10), PIN(1), GERAL(["pessoas"]), LOCAL(["pessoas"])]) expect((await encerrar(t)).status).toBe(403);
+    expect(mockConsultas).toHaveLength(0);
+    for (const motivo of [undefined, null, "", "abcd", "<b>x</b>", "x".repeat(301)]) expect((await encerrar(GESTAO(), corpo({ motivo }))).status).toBe(422);
+    expect(mockConsultas).toHaveLength(0);                                                                // a validação vem antes de qualquer consulta
+    sala();
+    expect((await encerrar(GESTAO(["Central"], null))).status).toBe(428);
+    expect(escritas()).toHaveLength(0);
+    const alheia = await encerrar(GESTAO(["Vila"]));
+    mockRegras = []; mockConsultas = [];
+    const naoExiste = await encerrar(GESTAO(["Vila"]));
+    expect(alheia.status).toBe(404); expect(naoExiste.status).toBe(404);
+    expect(naoExiste.body).toEqual(await encerrar(GESTAO(["Vila"])).then((x) => x.body));
+    for (const ruim of [{ servicoId: "0x10" }, { equipeId: "1e1" }, { servicoId: "05" }, { equipeId: -1 }]) expect((await encerrar(GESTAO(), corpo(ruim))).status).toBe(400);
+  });
+
+  test("com a confirmação reforçada e a sala fechada: 200 { sucesso, baixadas, mensagem } e a baixa é gravada em nome de quem encerrou", async () => {
+    sala();
+    quando(CONTA, [{ n: 2 }]);
+    quando(/DECLARE @b TABLE/, [{ RegistroId: 1, SituacaoAntes: "NA_SALA" }, { RegistroId: 2, SituacaoAntes: "NA_SALA" }]);
+    quando(/DECLARE @v TABLE/, []);
+    const r = await encerrar(GESTAO());
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ sucesso: true, baixadas: 2, mensagem: expect.stringMatching(/2 criança\(s\) receberam a baixa administrativa/) });
+    expect(r.headers).toMatchObject({ "Cache-Control": "no-store" });
+    expect(com(/DECLARE @b TABLE/)[0].inputs).toMatchObject({ s: 5, e: 7, g: 5, m: "Os voluntários esqueceram de registrar as retiradas." });
+  });
+
+  test("com o check-in ainda aberto e criança na sala: 422 com a explicação (a criança sai pela retirada)", async () => {
+    sala({ DataHora: new Date(Date.now() - 3 * 3600 * 1000) });                                         // o serviço começou agora (o horário de Brasília é gravado sem fuso: UTC menos 3 horas)
+    quando(CONTA, [{ n: 1 }]);
+    const r = await encerrar(GESTAO());
+    expect(r.status).toBe(422);
+    expect(r.body.mensagem).toBe(ck.MENSAGENS.SALA_AINDA_ABERTA);
+    expect(com(/DECLARE @b TABLE/)).toHaveLength(0);
+  });
+
+  test("a equipe SEM a marca (que perdeu a marca depois) também se encerra: a criança que ficou lá dentro precisa da baixa", async () => {
+    sala({ ContatoComMenores: 0 });
+    quando(CONTA, [{ n: 1 }]);
+    quando(/DECLARE @b TABLE/, [{ RegistroId: 1, SituacaoAntes: "NA_SALA" }]);
+    quando(/DECLARE @v TABLE/, []);
+    expect((await encerrar(GESTAO())).status).toBe(200);
+  });
+});
+
+describe("o relatório do dia é ato de gestão e sair da sala não depende da escala", () => {
+  const SALA_BANCO = { ServicoId: 5, EquipeId: 7, EquipeNome: "Maternal", FaixaEtariaMenores: "MATERNAL", LiderMembroId: 600, ContatoComMenores: 1, Ativa: 1, CongregacaoId: 1, CongregacaoNome: "Central", DataHora: new Date("2026-10-18T09:00:00Z"), ServicoStatus: "PUBLICADA" };
+  const sala = (extra = {}) => quando(/FROM EscalasServicos s\s+JOIN EscalasEquipes e ON e\.EquipeId = @e/, [{ ...SALA_BANCO, ...extra }]);
+  const escalado = (sim) => quando(/FROM EscalasAlocacoes WHERE ServicoId = @s AND EquipeId = @e AND MembroId = @m AND Status IN/, sim ? [{ x: 1 }] : []);
+
+  test("o voluntário escalado e presente NÃO lê o relatório (403, sem dado); o líder da equipe tampouco; a liderança do escopo lê; a de fora, 404", async () => {
+    sala(); escalado(true);
+    const v = await chamar("relatorio", { token: PIN(10), query: CORPO_SALA });
+    expect(v.status).toBe(403);
+    expect(JSON.stringify(v.body)).not.toMatch(/criancas|eventos|voluntarios/);
+    expect(com(/FROM CheckinInfantilEventos ev/)).toHaveLength(0);
+    expect((await chamar("relatorio", { token: PIN(600), query: CORPO_SALA })).status).toBe(403);
+    expect((await chamar("relatorio", { token: LOCAL(["habilitacao_voluntarios"]), query: CORPO_SALA })).status).toBe(200);
+    mockRegras = []; sala(); escalado(false);                                                           // a liderança de FORA do escopo, sem relação nenhuma com a sala
+    expect((await chamar("relatorio", { token: LOCAL(["habilitacao_voluntarios"], ["Vila"]), query: CORPO_SALA })).status).toBe(404);
+  });
+
+  test("quem entrou na sala e depois saiu da escala ainda SAI (antes: 404 e a presença ficava aberta); quem nunca teve relação com a sala continua recebendo 404", async () => {
+    sala(); escalado(false);
+    quando(/SELECT TOP 1 PresencaId FROM CheckinInfantilVoluntarios WITH \(UPDLOCK\)/, [{ PresencaId: 1 }]);
+    quando(/FROM CheckinInfantilVoluntarios WHERE ServicoId = @s AND EquipeId = @e AND MembroId = @m AND SaiuEm IS NULL/, [{ x: 1 }]);       // a presença aberta dele
+    expect((await chamar("sair-da-sala", { metodo: "POST", token: PIN(10), corpo: CORPO_SALA })).status).toBe(200);
+    mockRegras = []; mockConsultas = []; sala(); escalado(false);
+    quando(/SELECT TOP 1 PresencaId FROM CheckinInfantilVoluntarios WITH \(UPDLOCK\)/, [{ PresencaId: 1 }]);
+    const semRelacao = await chamar("sair-da-sala", { metodo: "POST", token: PIN(10), corpo: CORPO_SALA });          // sem presença aberta e sem escala
+    expect(semRelacao.status).toBe(404);
+    expect(com(/UPDATE CheckinInfantilVoluntarios SET SaiuEm/)).toHaveLength(0);
+  });
+
+  test("a leitura da sala entrega 'apto' só para a liderança (o voluntário recebe só contaComoAdulto)", async () => {
+    sala(); escalado(true);
+    quando(/SELECT v\.MembroId, m\.Nome, v\.EntrouEm FROM CheckinInfantilVoluntarios/, [{ MembroId: 10, Nome: "Ana", EntrouEm: new Date("2026-10-18T11:55:00Z") }, { MembroId: 11, Nome: "Bruno", EntrouEm: new Date("2026-10-18T11:56:00Z") }]);
+    const op = await chamar("sala", { token: PIN(10), query: CORPO_SALA });
+    expect(op.status).toBe(200);
+    expect(op.body.adultosPresentes.every((a) => !("apto" in a) && typeof a.contaComoAdulto === "boolean")).toBe(true);
+    const gestor = await chamar("sala", { token: LOCAL(["habilitacao_voluntarios"]), query: CORPO_SALA });
+    expect(gestor.status).toBe(200);
+    expect(gestor.body.adultosPresentes.every((a) => typeof a.apto === "boolean")).toBe(true);
   });
 });

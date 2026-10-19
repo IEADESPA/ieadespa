@@ -291,7 +291,13 @@ async function buscarVinculoProfessor(pool, turmaId, membroId) {
   return { turmaProfessorId: row.TurmaProfessorId, turmaId: row.TurmaId, membroId: row.MembroId, principal: row.Principal, ativo: row.Ativo };
 }
 
-async function designarProfessor(pool, { turmaId, membroId, principal, designadoPorMembroId }) {
+// Identificador na grafia canônica: inteiro positivo, só dígitos, dentro do INT do SQL. "5.9" (que o driver do banco grava como 5), "05", "1e1", true e [5] não são identificadores.
+const idCanonico = (v) => ((typeof v === "number" || typeof v === "string") && /^[1-9]\d{0,9}$/.test(String(v)) && Number(v) <= 2147483647 ? Number(v) : null);
+
+async function designarProfessor(pool, { turmaId: turmaBruta, membroId: membroBruto, principal, designadoPorMembroId }) {
+  // (v7.10, achado da revisão) o portão da turma "com menores" confere a pessoa pelo número: um número fracionário passava como "5.9" na conferência e era gravado como 5 pelo driver.
+  const turmaId = idCanonico(turmaBruta), membroId = idCanonico(membroBruto);
+  if (!turmaId || !membroId) return { sucesso: false, mensagem: "Informe a turma e o membro (números inteiros positivos)." };
   const turma = await buscarTurmaPorId(pool, turmaId);
   if (!turma) return { sucesso: false, mensagem: "Turma não encontrada." };
 
@@ -613,7 +619,7 @@ module.exports = {
   nomeTurmaValido, validarNovaTurma, podeDesignarProfessor, podeMatricularAluno,
   formatarMatricula, agruparPorAreaCongregacao, filtrarBuscaAgrupada,
   criarTurma, buscarTurmaPorId, listarTurmasPorCongregacao,
-  buscarVinculoProfessor, designarProfessor, encerrarProfessor, listarProfessoresPorTurma,
+  buscarVinculoProfessor, designarProfessor, idCanonico, encerrarProfessor, listarProfessoresPorTurma,
   buscarAlunoPorMembro, matricularAluno, transferirAluno, listarAlunosPorTurma,
   listarTurmasParaVisaoAgrupada, listarTurmasDoProfessor, ehProfessorAtivoDaCongregacao,
   // v6.8 — aluno não-membro

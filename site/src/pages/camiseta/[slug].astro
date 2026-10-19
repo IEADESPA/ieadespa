@@ -377,6 +377,20 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
           `;
         }
 
+        // 19/10/2026 — pico de gente: o servidor recusa com 503 + motivo "ocupado" ANTES de gravar qualquer coisa (fila cheia). Como nada foi gravado, é seguro repetir:
+        // a página tenta de novo sozinha, com pausa e um pouco de acaso (para não voltarem todos juntos), e mostra a espera. Qualquer outra resposta segue o fluxo normal.
+        async function enviarComEspera(url, init) {
+          const { avisoEspera, ...resto } = init;
+          for (let tentativa = 1; ; tentativa += 1) {
+            const resposta = await fetch(url, resto);
+            if (resposta.status !== 503 || tentativa >= 12) return resposta;
+            const corpo = await resposta.clone().json().catch(() => null);
+            if (!corpo || corpo.motivo !== "ocupado") return resposta;
+            if (avisoEspera) avisoEspera(tentativa);
+            await new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
+          }
+        }
+
         function precoLabel(v) {
           return v > 0 ? `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "grátis";
         }
@@ -469,7 +483,8 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
             // direta pelo navegador foi desativada de propósito, pra ninguém
             // conseguir escolher o próprio lote nem criar dois lotes "1" ao
             // mesmo tempo.
-            const pedidoRes = await fetch(criarPedidoUrl, {
+            const pedidoRes = await enviarComEspera(criarPedidoUrl, {
+              avisoEspera: (n) => { if (status) status.textContent = "Muita gente pedindo ao mesmo tempo. Aguarde, estamos tentando de novo (" + n + ")…"; },
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -501,6 +516,10 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
                 aplicarTamanhosEsgotados();
                 atualizarTotal();
               }
+              // 5xx (fora o "ocupado", já repetido acima): o servidor pode ter gravado antes de falhar — não mandar a pessoa enviar de novo às cegas.
+              if (pedidoRes.status >= 500 && !(pedidoRes.status === 503 && erro?.motivo === "ocupado")) {
+                throw new Error("Não conseguimos confirmar o seu pedido agora. Ele pode ter sido registrado: confira em Meus pedidos, com o seu telefone, antes de enviar de novo.");
+              }
               throw new Error(erro?.erro || "falha ao criar pedido");
             }
 
@@ -509,7 +528,8 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
             document.querySelectorAll(".item-linha, .item-linha-preco").forEach((linha, indice) => { if (indice > 1) linha.remove(); });
             atualizarTotal();
           } catch (err) {
-            if (status) status.textContent = (err && err.message && err.message !== "falha ao criar pedido") ? err.message : "Não foi possível enviar agora. Tente novamente em instantes.";
+            // erro de rede (a resposta pode ter se perdido depois de o servidor gravar): conferir antes de enviar de novo
+            if (status) status.textContent = (err && err.name === "TypeError") ? "Sua conexão falhou na hora de enviar. O pedido pode ter sido registrado: confira em Meus pedidos, com o seu telefone, antes de enviar de novo." : (err && err.message && err.message !== "falha ao criar pedido") ? err.message : "Não foi possível enviar agora. Tente novamente em instantes.";
             if (button) button.disabled = false;
           }
         });

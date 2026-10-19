@@ -571,6 +571,20 @@ const structuredData = startDate
         // 06/10/2026 — a página é estática: "inscrições encerradas" marcado no Directus
         // só sumiria daqui num rebuild. Pergunta à API ao abrir e esconde o formulário na
         // hora (mesma regra de prazo/encerramento, em `/api/status-inscricao/{id}`).
+        // 19/10/2026 — pico de gente: o servidor recusa com 503 + motivo "ocupado" ANTES de gravar qualquer coisa (fila cheia). Como nada foi gravado, é seguro repetir:
+        // a página tenta de novo sozinha, com pausa e um pouco de acaso (para não voltarem todos juntos), e mostra a espera. Qualquer outra resposta segue o fluxo normal.
+        async function enviarComEspera(url, init) {
+          const { avisoEspera, ...resto } = init;
+          for (let tentativa = 1; ; tentativa += 1) {
+            const resposta = await fetch(url, resto);
+            if (resposta.status !== 503 || tentativa >= 12) return resposta;
+            const corpo = await resposta.clone().json().catch(() => null);
+            if (!corpo || corpo.motivo !== "ocupado") return resposta;
+            if (avisoEspera) avisoEspera(tentativa);
+            await new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
+          }
+        }
+
         function encerrarInscricao(mensagem) {
           document.querySelectorAll("[data-inscricao-form]").forEach((form) => {
             form.hidden = true;
@@ -726,7 +740,8 @@ const structuredData = startDate
               // protege o telefone e grava tudo (`/api/criar-inscricao`). O navegador não
               // escreve mais no Directus. Vagas, lista de espera, aprovação e desconto
               // seguem as mesmas regras de antes, agora fora do alcance de quem chama à mão.
-              const res = await fetch(criarInscricaoUrl, {
+              const res = await enviarComEspera(criarInscricaoUrl, {
+                avisoEspera: (n) => { if (status) status.textContent = "Muita gente se inscrevendo ao mesmo tempo. Aguarde, estamos tentando de novo (" + n + ")…"; },
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -745,6 +760,8 @@ const structuredData = startDate
                 return;
               }
               if (res.status === 429) throw new Error("Muitas inscrições deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.");
+              // 5xx (fora o "ocupado", já repetido acima): o servidor pode ter gravado antes de falhar — não mandar a pessoa enviar de novo às cegas.
+              if (res.status >= 500 && !(res.status === 503 && json?.motivo === "ocupado")) throw new Error("Não conseguimos confirmar a inscrição agora. Ela pode ter sido registrada: aguarde um minuto e, para ter certeza, procure a organização do evento antes de tentar de novo.");
               if (!res.ok) throw new Error(json?.erro || "falha ao criar inscrição");
 
               if (cupomStatusEl && json.cupom) cupomStatusEl.textContent = json.cupom.mensagem || "";

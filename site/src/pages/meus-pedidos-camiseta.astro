@@ -176,16 +176,34 @@ const allPosts = visiblePosts(await getAllMensagens());
       const nome = nomeBloco && !nomeBloco.hidden ? nomeInput.value.trim() : "";
 
       try {
-        const res = await fetch(consultaUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(nome ? { telefone, nome } : { telefone }),
-        });
+        // 19/10/2026 — com o servidor ocupado a consulta falhava (5xx) e a tela dizia "Nenhum pedido encontrado": quem tinha pedido achava que o pedido sumiu. Agora erro de
+        // servidor nunca vira "nenhum pedido": repete sozinha algumas vezes e, se continuar, diz que o servidor está ocupado e que o pedido NÃO se perdeu.
+        let res!: Response;
+        for (let tentativa = 1; tentativa <= 4; tentativa += 1) {
+          res = await fetch(consultaUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(nome ? { telefone, nome } : { telefone }),
+          });
+          if (res.status < 500) break;
+          if (tentativa < 4) {
+            resultado.innerHTML = `<p class="text-sm text-muted-foreground">O servidor está muito ocupado. Tentando de novo (${tentativa})…</p>`;
+            await new Promise((r) => setTimeout(r, 2500 + Math.random() * 2500));
+          }
+        }
+        if (res.status >= 500) {
+          resultado.innerHTML = `<p class="text-sm text-muted-foreground">O servidor está muito ocupado agora, por isso não conseguimos consultar. <strong>Isso não quer dizer que o seu pedido sumiu.</strong> Tente de novo em alguns minutos.</p>`;
+          return;
+        }
         if (res.status === 429) {
           resultado.innerHTML = `<p class="text-sm text-muted-foreground">Muitas consultas deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.</p>`;
           return;
         }
-        const json = await res.json();
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json) {
+          resultado.innerHTML = `<p class="text-sm text-muted-foreground">${json?.erro || "Não foi possível consultar agora. Tente novamente em instantes."}</p>`;
+          return;
+        }
         const pedidos: Pedido[] = json?.pedidos ?? [];
 
         if (pedidos.length === 0) {

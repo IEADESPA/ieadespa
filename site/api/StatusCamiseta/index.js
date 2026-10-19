@@ -1,5 +1,5 @@
 const { avaliarJanela } = require("../src/lib/janela");
-const { limitesDoGrupo, temLimite, disponibilidade, usoDoAgregado, FILTRO_PECAS_DOS_LOTES_ABERTOS } = require("../src/lib/limiteLote");
+const { limitesDoGrupo, temLimite, disponibilidade, usoDoAgregado, umaVezPorChave, FILTRO_PECAS_DOS_LOTES_ABERTOS } = require("../src/lib/limiteLote");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
@@ -38,13 +38,16 @@ async function disponibilidadeDoLote(grupoId, grupo, headers) {
   const guardado = cacheLimite.get(grupoId);
   if (guardado && guardado.assinatura === assinatura && agora - guardado.em < CACHE_LIMITE_MS) return guardado.valor;
 
-  // as peças dos lotes ABERTOS da campanha (sem lote aberto, soma zero: o próximo pedido abre um lote novo)
-  const usoRes = await fetch(`${DIRECTUS_URL}/items/camiseta_itens_pedido?${FILTRO_PECAS_DOS_LOTES_ABERTOS(grupoId)}&aggregate[sum]=quantidade&groupBy[]=tamanho`, { headers });
-  if (!usoRes.ok) return undefined;
-  const uso = usoDoAgregado((await usoRes.json()).data);
-  const valor = disponibilidade(limites, uso, Array.isArray(grupo.tamanhos) ? grupo.tamanhos.map(String) : []);
-  cacheLimite.set(grupoId, { em: agora, assinatura, valor });
-  return valor;
+  // as peças dos lotes ABERTOS da campanha (sem lote aberto, soma zero: o próximo pedido abre um lote novo).
+  // Uma soma só por campanha de cada vez: quem chega com a memória vencida espera a MESMA resposta (ver o comentário do cache, acima).
+  return umaVezPorChave(`status-camiseta-uso:${grupoId}`, async () => {
+    const usoRes = await fetch(`${DIRECTUS_URL}/items/camiseta_itens_pedido?${FILTRO_PECAS_DOS_LOTES_ABERTOS(grupoId)}&aggregate[sum]=quantidade&groupBy[]=tamanho`, { headers });
+    if (!usoRes.ok) return undefined;
+    const uso = usoDoAgregado((await usoRes.json()).data);
+    const valor = disponibilidade(limites, uso, Array.isArray(grupo.tamanhos) ? grupo.tamanhos.map(String) : []);
+    cacheLimite.set(grupoId, { em: Date.now(), assinatura, valor });
+    return valor;
+  });
 }
 
 module.exports = async function (context, req) {
@@ -63,22 +66,31 @@ module.exports = async function (context, req) {
   const agora = Date.now();
   let guardado = cache.get(grupoId);
   if (!guardado || agora - guardado.em >= CACHE_MS) {
-    // `fields=*`: `limite_total` e `limites_tamanho` são campos novos e o Directus responde 403 a quem pede um campo que não existe.
-    const res = await fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=*`, { headers });
-    let corpo;
-    let grupo = null;
-    if (res.status === 404 || res.status === 403) {
-      corpo = { aberto: false, motivo: "inexistente", mensagem: "Camiseta não encontrada." };
-    } else if (!res.ok) {
-      // Directus indisponível: não esconder o formulário por isso (a API recusa se for o caso).
+    // Uma consulta só por campanha de cada vez (por instância): com a memória vencida e mil aberturas de página no mesmo segundo, todas esperam a MESMA resposta do Directus
+    // em vez de disparar mil consultas (medido em 19/10/2026: 200 aberturas simultâneas levavam ~20 s no meio e 4 falhavam).
+    const lida = await umaVezPorChave(`status-camiseta:${grupoId}`, async () => {
+      // `fields=*`: `limite_total` e `limites_tamanho` são campos novos e o Directus responde 403 a quem pede um campo que não existe.
+      const res = await fetch(`${DIRECTUS_URL}/items/camiseta_grupos/${grupoId}?fields=*`, { headers });
+      let corpo;
+      let grupo = null;
+      if (res.status === 404 || res.status === 403) {
+        corpo = { aberto: false, motivo: "inexistente", mensagem: "Camiseta não encontrada." };
+      } else if (!res.ok) {
+        // Directus indisponível: não esconder o formulário por isso (a API recusa se for o caso).
+        return { falhou: true };
+      } else {
+        grupo = (await res.json()).data;
+        corpo = avaliarJanela({ ativo: grupo.ativo !== false, ate: grupo.pedidos_ate, rotulo: "pedidos" });
+      }
+      const novo = { em: Date.now(), corpo, grupo };
+      cache.set(grupoId, novo);
+      return novo;
+    });
+    if (lida.falhou) {
       context.res = { status: 502, body: { erro: "Falha ao consultar a campanha." } };
       return;
-    } else {
-      grupo = (await res.json()).data;
-      corpo = avaliarJanela({ ativo: grupo.ativo !== false, ate: grupo.pedidos_ate, rotulo: "pedidos" });
     }
-    guardado = { em: agora, corpo, grupo };
-    cache.set(grupoId, guardado);
+    guardado = lida;
   }
 
   if (guardado.corpo.aberto === false || !guardado.grupo) return responder(guardado.corpo);

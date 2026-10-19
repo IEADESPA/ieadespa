@@ -714,7 +714,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
   const H = { T, cenario, confere, esperar, montar, limpo, achar, descendentes, botao, botoes, chamadas, texto, argsDe, visivel, confereAcessibilidade, idsRepetidos, clicarEResponder, esperaChegar, nomeDe,
     abrirMeuPainel, abrirSalaMeu, abrirAbaGestao, abrirSalaGestao, entrarNaSala, salaPronta, buscar, adicionarMembro, escolherQuemTrouxe, preencherOutraPessoa, enviarCheckin, checkinDoPedro, cartao, seloDe, ocorrencias,
     F, ATAQUE, ck, MEU, SALA, MIN, ALFABETO, criarAmbiente, lerApp, mutar, ambiente: () => ambienteAtual };
-  for (const arquivo of ["./cenarios-retirada", "./cenarios-lideranca", "./cenarios-filhos-e-falhas", "./cenarios-ataque-total", "./cenarios-defesa"]) {
+  for (const arquivo of ["./cenarios-retirada", "./cenarios-lideranca", "./cenarios-filhos-e-falhas", "./cenarios-ataque-total", "./cenarios-defesa", "./cenarios-extra-a", "./cenarios-extra-b"]) {
     try { require(arquivo)(H); } catch (erro) { if (erro && erro.code === "MODULE_NOT_FOUND" && String(erro.message).includes(arquivo.slice(2))) continue; throw erro; }
   }
 

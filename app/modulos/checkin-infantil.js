@@ -150,9 +150,13 @@ function chkHtmlTelefone(valor) {
 }
 
 // ---- chamadas à API (nunca lançam: erro de rede ou resposta que não é JSON viram { sucesso:false, mensagem }) ----
+// Tempo-limite de cada pedido (rede ruim, celular que dormiu): sem ele um pedido pendurado deixava a sala sem atualizar para sempre. `AbortSignal.timeout` não existe em navegador muito velho: sem ele, segue como antes.
+const CHK_TEMPO_LIMITE_MS = 20000;
 async function chkRequisitar(caminho, opcoes) {
   try {
-    const res = await fetchProtegido(`${API_BASE}/${CHK_ROTA}/${caminho}`, opcoes);
+    const comPrazo = Object.assign({}, opcoes || {});
+    if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") comPrazo.signal = AbortSignal.timeout(CHK_TEMPO_LIMITE_MS);
+    const res = await fetchProtegido(`${API_BASE}/${CHK_ROTA}/${caminho}`, comPrazo);
     let corpo = null;
     try { corpo = await res.json(); } catch { /* sem JSON */ }
     if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { sucesso: false, mensagem: `Resposta inesperada do servidor (${res.status}).`, httpStatus: res.status };
@@ -187,7 +191,8 @@ async function chkGarantirCatalogos(forcar) {
   const geracao = chkGeracao;
   const data = await chkObter("catalogos");
   if (geracao !== chkGeracao) return chkCatalogos;   // a pessoa trocou de login enquanto o catálogo vinha: o dela é outro
-  if (data.sucesso === false) { chkCatalogos = null; return null; }
+  // falha ao recarregar com a sala aberta (rede, 5xx): o catálogo que a tela já tinha continua valendo — zerá-lo deixava o formulário do check-in morto até sair e entrar na sala
+  if (data.sucesso === false) { if (!forcar) chkCatalogos = null; return chkCatalogos; }
   const lista = (v) => (Array.isArray(v) ? v.filter(x => x && typeof x === "object" && typeof x.codigo === "string") : []);
   const t = data.textoSaude && typeof data.textoSaude === "object" ? data.textoSaude : null;
   chkCatalogos = {

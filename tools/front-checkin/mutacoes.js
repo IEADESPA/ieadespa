@@ -7,6 +7,7 @@
 // Três grupos: (1) gerados do código — um por chamada de escaparHtmlEbd (a chamada some) e um por validação `if (...) { erro(...); return; }` (a condição vira falsa); (2) escritos à mão (abaixo);
 // (3) os dois dos mutantes EQUIVALENTES de propósito (EQUIVALENTES) não entram na conta: defesa em dupla camada ou texto que nunca vem de fora, com o motivo escrito ao lado.
 "use strict";
+const fs = require("fs");
 const path = require("path");
 const { fork } = require("child_process");
 const { lerApp } = require("./ambiente");
@@ -429,8 +430,9 @@ async function executarUma(m) {
   const { rodar } = require("./roteiro");
   const pares = paresDe(m);
   let T;
-  try { T = await Promise.race([rodar({ mutar: { [m[1]]: pares } }), new Promise((_, rej) => setTimeout(() => rej(new Error("TRAVOU (mais de 150 s)")), 150000))]); }
-  catch (e) { return { nome: m[0], estado: "INAPLICAVEL", detalhe: e.message.slice(0, 160) }; }
+  try { T = await Promise.race([rodar({ mutar: { [m[1]]: pares } }), new Promise((_, rej) => setTimeout(() => rej(new Error("TRAVOU (mais de 90 s)")), 90000))]); }
+  // o roteiro que não termina (a mutação deixa uma espera sem fim) é uma mutação ACUSADA: num CI ele estouraria o tempo e reprovaria; só não pode contar como "falha do roteiro" comum
+  catch (e) { return /^TRAVOU/.test(e.message) ? { nome: m[0], estado: "ACUSADA", detalhe: "o roteiro não termina (travou)", n: 1 } : { nome: m[0], estado: "INAPLICAVEL", detalhe: e.message.slice(0, 160) }; }
   if (T.falhas.some(f => /mutação inaplicável/.test(f))) return { nome: m[0], estado: "INAPLICAVEL", detalhe: T.falhas.find(f => /mutação inaplicável/.test(f)).slice(0, 160) };
   if (T.falhas.length) return { nome: m[0], estado: "ACUSADA", detalhe: T.falhas[0].slice(0, 120), n: T.falhas.length };
   return { nome: m[0], estado: "ESCAPOU" };
@@ -450,7 +452,11 @@ if (process.env.CHK_MUT_INDICES) {
     const conferir = args.includes("--conferir");
     const filtro = args.find(a => !a.startsWith("--")) || "";
     const todas = montarLista();
-    const indices = todas.map((m, i) => i).filter(i => todas[i][0].includes(filtro));
+    // CHK_DE / CHK_ATE: só as mutações de índice [DE, ATE) — para rodar a lista em pedaços curtos (a máquina do responsável reiniciou duas vezes em 19/10/2026 durante rodadas longas)
+    const de = Number(process.env.CHK_DE || 0), ate = Number(process.env.CHK_ATE || Infinity);
+    // CHK_LISTA: arquivo com nomes EXATOS de mutações (um por linha) — roda só essas (para refazer só as que tinham escapado)
+    const nomesDaLista = process.env.CHK_LISTA ? new Set(fs.readFileSync(process.env.CHK_LISTA, "utf8").split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean)) : null;
+    const indices = todas.map((m, i) => i).filter(i => i >= de && i < ate && todas[i][0].includes(filtro) && (!nomesDaLista || nomesDaLista.has(todas[i][0])));
     if (conferir) {
       let ruins = 0;
       for (const i of indices) for (const [de] of paresDe(todas[i])) { const n = conferirAncora(todas[i][1], de); if (n !== 1) { ruins++; console.log(`âncora com ${n} ocorrência(s): ${todas[i][0]} :: ${JSON.stringify(de.slice(0, 90))}`); } }
@@ -462,14 +468,21 @@ if (process.env.CHK_MUT_INDICES) {
     console.log(`base (sem mutação): ${base.total} verificações, ${base.falhas.length} falhas`);
     if (base.falhas.length) { base.falhas.forEach(f => console.log("  ✗ " + f)); process.exit(2); }
     const nProc = Math.max(1, Math.min(Number(process.env.CHK_PROCESSOS) || 6, indices.length));
-    const grupos = Array.from({ length: nProc }, () => []);
-    indices.forEach((i, k) => grupos[k % nProc].push(i));
+    // Lotes de poucas mutações, cada lote num processo NOVO: cada mutação deixa um ambiente de tela na memória do processo e, numa lista longa, um único processo chegava a 4 GB e
+    // estourava ("heap out of memory", 19/10/2026). CHK_LOTE = mutações por processo (padrão 4); nProc processos ao mesmo tempo.
+    const tamanhoLote = Math.max(1, Number(process.env.CHK_LOTE) || 4);
+    const lotes = [];
+    for (let k = 0; k < indices.length; k += tamanhoLote) lotes.push(indices.slice(k, k + tamanhoLote));
     const resultados = new Map();
-    await Promise.all(grupos.map(g => new Promise((ok) => {
-      const filho = fork(__filename, [], { env: Object.assign({}, process.env, { CHK_MUT_INDICES: g.join(",") }) });
-      filho.on("message", ({ i, r }) => { resultados.set(i, r); const rot = r.estado === "ACUSADA" ? `acusada (${String(r.n).padStart(2)})` : r.estado === "ESCAPOU" ? "ESCAPOU     " : "INAPLICÁVEL "; console.log(`${rot} ${r.nome}${r.detalhe ? "  <-  " + r.detalhe : ""}`); });
-      filho.on("exit", () => ok());
-    })));
+    await Promise.all(Array.from({ length: nProc }, async () => {
+      for (let lote = lotes.shift(); lote; lote = lotes.shift()) {
+        await new Promise((ok) => {
+          const filho = fork(__filename, [], { env: Object.assign({}, process.env, { CHK_MUT_INDICES: lote.join(",") }) });
+          filho.on("message", ({ i, r }) => { resultados.set(i, r); const rot = r.estado === "ACUSADA" ? `acusada (${String(r.n).padStart(2)})` : r.estado === "ESCAPOU" ? "ESCAPOU     " : "INAPLICÁVEL "; console.log(`${rot} ${r.nome}${r.detalhe ? "  <-  " + r.detalhe : ""}`); });
+          filho.on("exit", () => ok());
+        });
+      }
+    }));
     const rs = indices.map(i => resultados.get(i)).filter(Boolean);
     const acusadas = rs.filter(r => r.estado === "ACUSADA").length, escaparam = rs.filter(r => r.estado === "ESCAPOU"), inaplicaveis = rs.filter(r => r.estado === "INAPLICAVEL");
     console.log(`\nmutações: ${indices.length} · acusadas: ${acusadas} · escaparam: ${escaparam.length} · inaplicáveis: ${inaplicaveis.length}${rs.length < indices.length ? ` · sem resultado: ${indices.length - rs.length}` : ""}`);

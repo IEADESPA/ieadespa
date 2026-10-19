@@ -2530,7 +2530,10 @@ sala **avisa**, não impede. Uma família faz o check-in de até 6 crianças de 
 pai, mãe, tutor, com o documento conferido pela Secretaria) e é nele que o consentimento já se apoia. O vínculo familiar
 é de **autoatendimento** (qualquer membro pode declarar parentesco), então **não vale para custódia**: quem se diz
 "responsável legal" sozinho não vê histórico nem retira criança. Criança membro sem responsável cadastrado faz o
-check-in como visitante (a pessoa que traz é registrada na hora) e a tela sugere à Secretaria o cadastro.
+check-in como **membro**, com a pessoa que traz registrada na hora (nome, parentesco e documento conferido) e o selo
+"Sem responsável cadastrado" na tela, que sugere à Secretaria o cadastro *(texto emendado em 19/10/2026: o plano
+dizia "como visitante"; a construção ficou assim para a criança não perder o vínculo com a lista de autorizados e o
+histórico que o responsável vai ter depois do cadastro)*.
 
 **O código.** Um **código aleatório por criança, por visita**: 6 caracteres sem os parecidos (sem 0/O, 1/I/L), gerado no
 servidor, impresso na **etiqueta da criança** e no **recibo do responsável**. O servidor guarda só o **HMAC** do código
@@ -2584,6 +2587,64 @@ líder e a gestão), como já faz com as escalas.
 
 **Fora desta versão (por decisão):** QR no celular do responsável, impressora térmica com integração direta (imprime-se
 pelo navegador, em etiqueta ou papel comum) e modo sem internet — o código em papel já é a prova que a retirada exige.
+
+### Emendas ao contrato (19/10/2026) — depois da revisão adversarial independente
+
+Duas revisões independentes (uma só da tela, outra só do servidor; leitura do código e reproduções) acharam **22 e 32
+problemas, nenhum crítico**. O que o código resolve foi corrigido, cada correção com teste que falha no código antigo.
+O que o contrato precisou mudar:
+
+- **Encerramento da sala (antes só prometido).** A sala **não é mais "só encerra com a sala vazia"** quando alguém
+  esquece de registrar a retirada de uma criança: sem saída, o registro ficava "na sala" para sempre (a janela
+  fecha, ninguém reentra, o código antigo se perdeu e o check-in da semana seguinte era recusado). Agora a
+  **liderança** (`habilitacao_voluntarios` no escopo, confirmação reforçada) dá a **baixa administrativa** pela ação
+  `encerrar-sala`: só vale com a janela do serviço fechada (ou o serviço não publicado, ou sem criança), exige um
+  **motivo** de 5 a 300 caracteres, baixa em lote as crianças que ficaram (situação `RETIRADA`, tipo `BAIXA_ADM`, sem
+  código e sem retirante; quem deu a baixa e o motivo ficam gravados), cancela a segunda via pendente, faz sair os
+  voluntários presentes e registra eventos imutáveis (`BAIXA_ADMINISTRATIVA` por criança e `SALA_ENCERRADA`). Repetir
+  não faz nada. A lista de salas da liderança mostra também as de **dias anteriores** que ainda têm criança sem
+  retirada, marcadas "Dia anterior". O aviso diário "criança sem retirada" manda a liderança para esse botão.
+- **Autorizados dependem de responsável ativo.** A pessoa que o responsável autorizou só vale enquanto **quem a
+  cadastrou continuar sendo responsável ativo** da criança; as que a Secretaria registrou por **ficha assinada** valem
+  até serem revogadas ou vencerem. Ao revogar um responsável, as autorizações dele são revogadas de vez e a gestão
+  recebe um aviso obrigatório (sem nome de criança).
+- **O relatório do dia é ato de gestão** (já estava no contrato; o servidor o entregava também ao voluntário da
+  sala — corrigido: 403 para quem opera, 404 fora do escopo).
+- **O voluntário não vê a aptidão dos colegas.** A tela da sala mostra só quem **conta na proporção**; o motivo de
+  alguém não estar apto (incidente em apuração, cadastro nacional, autodenúncia) continua reservado, como na v7.7 e
+  na v7.8, e a gestão só vê o que a v7.7 já mostrava a ela.
+- **Retirada divergente** ganha um campo **opcional de motivo** (até 300 caracteres) que o gestor vê no cartão; o
+  motivo da **decisão** da gestão fica em outro campo.
+- **Aviso obrigatório que não consegue sair não cala.** Se ninguém pôde ser avisado (regra inativa, lista vazia,
+  erro), o ato vale e a resposta ao voluntário diz que **ninguém foi avisado e é preciso ligar para a liderança**;
+  nenhum erro de aviso derruba um ato já gravado (a segunda via perdia o código novo quando isso acontecia).
+- **Segunda via:** o segundo adulto passa a ver **quem pede e o documento conferido** (antes só "confirme"); a
+  etiqueta nova mostra a hora de **entrada original** e "2ª via emitida às …".
+- **Etiquetas e recibos:** cada entrada é um lote; só os lotes **ainda não impressos** vão ao papel (os códigos de
+  uma família nunca saem no papel da seguinte) e depois de imprimir a tela pergunta **se saíram na impressora**
+  (cancelar o diálogo não conta como impresso; a classe de impressão fica até a resposta, para o celular que
+  desenha a prévia depois).
+- **Consentimento de saúde do visitante:** quando o texto de autorização muda, a tela **redesenha o texto novo**
+  antes de o responsável poder concordar de novo (antes o "concordo" ia sobre um texto que ele não leu).
+- **LGPD (retenção):** além do registro, ficam anonimizados o motivo da divergência, o motivo da baixa, o nome e a
+  matrícula da pessoa da segunda via e as **autorizações revogadas ou vencidas há mais de 5 anos**. Registro ainda
+  aberto não se anonimiza (sai pela baixa administrativa). O responsável deixa de ver o histórico de quem já fez 18
+  anos. A busca de criança ignora acento.
+- **Desempenho:** prazos e parâmetros de proporção ficam em cache de 15 segundos por processo (a sala consultava a
+  configuração ~30 vezes a cada 8 segundos no banco de 5 DTU); nenhum dado de custódia entra em cache. A tela dá
+  tempo-limite de 20 segundos a cada pedido e avisa quando os dados da sala estão velhos.
+- **Sem solução nesta versão (registrado):** gravar a revogação do consentimento e apagar a saúde na **mesma**
+  transação (a leitura confere a vigência na hora e a rotina diária apaga: prova no e2e-21); o detector de
+  "divergência pendente há muito tempo"; fechar `TRUNCATE`/`DISABLE TRIGGER` nas tabelas do check-in (só se resolve
+  tirando essa permissão do usuário do banco: decisão de operação); a cadeia de hash da auditoria geral que pode
+  bifurcar com gravações simultâneas (anterior a esta versão e do sistema todo); busca de criança por GET leva
+  pedaço do nome no endereço (o Application Insights o registra).
+- **Decisões que ficam com o responsável da igreja (não implementadas):** (1) avisar os **responsáveis cadastrados**
+  sempre que quem trouxe a criança não é responsável cadastrado nem autorizado (hoje a pessoa digitada no balcão
+  ganha direito de retirar só com o código e ninguém é avisado); (2) a retirada comum com **dois olhares** ou
+  exigindo que quem retira seja outro voluntário que não o que fez o check-in (hoje só a divergente e a segunda via
+  têm dois olhares); (3) deixar o voluntário **reentrar na sala depois da janela** só para retirar com o código
+  (hoje só a baixa administrativa resolve).
 
 ## 🔒 Trava de Revisão 7-B — antes de avançar para a v7.11
 

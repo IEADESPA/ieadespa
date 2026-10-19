@@ -785,19 +785,27 @@ async function adicionarAutorizado(pool, { dados, atorId, forma, gestorPodeVer =
     if (idade == null || idade < vol.MAIORIDADE) return { sucesso: false, mensagem: "Só maiores de 18 anos (com a data de nascimento no cadastro) podem ser autorizados a retirar uma criança." };
   }
   if (dados.validoAte && dados.validoAte < hoje) return { sucesso: false, mensagem: "A validade não pode ser uma data que já passou." };
-  const ativos = Number((await pool.request().input("m", sql.Int, dados.menorId).query(`SELECT COUNT(*) AS n FROM CheckinInfantilAutorizados WHERE MenorMembroId = @m AND RevogadoEm IS NULL`)).recordset[0].n);
-  if (ativos >= ck.MAX_AUTORIZADOS_POR_CRIANCA) return { sucesso: false, mensagem: `Cada criança pode ter até ${ck.MAX_AUTORIZADOS_POR_CRIANCA} pessoas autorizadas. Revogue uma para incluir outra.` };
+  // Contar e gravar são UM ato, sob a trava da criança: com vários pedidos ao mesmo tempo o teto de 8 nunca é furado (o e2e-21 achou 13 de 14 nomes entrando quando a contagem era
+  // feita antes, fora da transação).
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  let id;
   try {
-    const r = await pool.request().input("m", sql.Int, dados.menorId).input("am", sql.Int, dados.membroId || null).input("n", sql.NVarChar(150), dados.nome).input("p", sql.NVarChar(20), dados.parentesco)
+    if (!(await obterTrava(execTx(transaction), `checkin-autorizados:${dados.menorId}`))) { await fecharTransacao(transaction, false); return { sucesso: false, mensagem: "O cadastro desta criança está ocupado com outra operação. Tente de novo em instantes." }; }
+    const ativos = Number((await new sql.Request(transaction).input("m", sql.Int, dados.menorId).query(`SELECT COUNT(*) AS n FROM CheckinInfantilAutorizados WHERE MenorMembroId = @m AND RevogadoEm IS NULL`)).recordset[0].n);
+    if (ativos >= ck.MAX_AUTORIZADOS_POR_CRIANCA) { await fecharTransacao(transaction, false); return { sucesso: false, mensagem: `Cada criança pode ter até ${ck.MAX_AUTORIZADOS_POR_CRIANCA} pessoas autorizadas. Revogue uma para incluir outra.` }; }
+    const r = await new sql.Request(transaction).input("m", sql.Int, dados.menorId).input("am", sql.Int, dados.membroId || null).input("n", sql.NVarChar(150), dados.nome).input("p", sql.NVarChar(20), dados.parentesco)
       .input("v", sql.Date, dados.validoAte || null).input("f", sql.NVarChar(12), forma).input("ref", sql.NVarChar(200), dados.referencia || null).input("por", sql.Int, Number(atorId))
       .query(`INSERT INTO CheckinInfantilAutorizados (MenorMembroId, AutorizadoMembroId, Nome, Parentesco, ValidoAte, Forma, Referencia, RegistradoPorMembroId) OUTPUT INSERTED.AutorizadoId VALUES (@m, @am, @n, @p, @v, @f, @ref, @por)`);
-    const id = Number(r.recordset[0].AutorizadoId);
-    await registrarAuditoria({ tabela: "CheckinInfantilAutorizados", registroId: id, acao: "CHECKIN_AUTORIZADO_ADICIONADO", usuarioId: Number(atorId), dadosDepois: { menorId: dados.menorId, forma } });
-    return { sucesso: true, autorizadoId: id, mensagem: "Pessoa autorizada a retirar a criança." };
+    id = Number(r.recordset[0].AutorizadoId);
+    await transaction.commit();
   } catch (e) {
+    await fecharTransacao(transaction, false);
     if (duplicado(e)) return { sucesso: false, mensagem: "Esta pessoa já está na lista de autorizados desta criança." };
     throw e;
   }
+  await registrarAuditoria({ tabela: "CheckinInfantilAutorizados", registroId: id, acao: "CHECKIN_AUTORIZADO_ADICIONADO", usuarioId: Number(atorId), dadosDepois: { menorId: dados.menorId, forma } });
+  return { sucesso: true, autorizadoId: id, mensagem: "Pessoa autorizada a retirar a criança." };
 }
 
 async function revogarAutorizado(pool, { autorizadoId, atorId, gestorPodeVer = null, hoje = hojeBrasilia() }) {

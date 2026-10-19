@@ -590,6 +590,32 @@ describe("lista de autorizados a retirar (criança membro)", () => {
     expect(b).toEqual(a);
     expect(escritas()).toHaveLength(0);
   });
+  test("contar e gravar são UM ato sob a trava da criança (vários pedidos ao mesmo tempo não furam o teto de 8; o e2e-21 achou 13 de 14 entrando)", async () => {
+    responsavel();
+    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados WHERE MenorMembroId = @m AND RevogadoEm IS NULL/, [{ n: 2 }]);
+    quando(/INSERT INTO CheckinInfantilAutorizados/, [{ AutorizadoId: 12 }]);
+    // a trava é simulada (financeiroSeguro.obterTrava); aqui ela deixa uma marca na lista de consultas para conferir a ORDEM: trava, depois contagem, depois gravação
+    require("../financeiroSeguro").obterTrava.mockImplementationOnce(async (_exec, nome) => { mockConsultas.push({ sql: "TRAVA", inputs: { r: nome } }); return true; });
+    await db.adicionarAutorizado(pool, { dados: dadosAut(), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
+    const ordem = mockConsultas.map((c) => c.sql);
+    const iBegin = ordem.indexOf("BEGIN");
+    const iTrava = ordem.indexOf("TRAVA");
+    const iConta = ordem.findIndex((s) => /SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados/.test(s));
+    const iGrava = ordem.findIndex((s) => /INSERT INTO CheckinInfantilAutorizados/.test(s));
+    const iCommit = ordem.indexOf("COMMIT");
+    expect(iBegin).toBeGreaterThanOrEqual(0);
+    expect([iBegin < iTrava, iTrava < iConta, iConta < iGrava, iGrava < iCommit]).toEqual([true, true, true, true]);
+    expect(mockConsultas[iTrava].inputs).toMatchObject({ r: "checkin-autorizados:30" });
+  });
+  test("teto de 8 atingido: recusa DENTRO da transação (sem gravar) e solta a trava", async () => {
+    responsavel();
+    quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados WHERE MenorMembroId = @m AND RevogadoEm IS NULL/, [{ n: 8 }]);
+    const r = await db.adicionarAutorizado(pool, { dados: dadosAut(), atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
+    expect(r).toMatchObject({ sucesso: false });
+    expect(r.mensagem).toMatch(/até 8 pessoas autorizadas/);
+    expect(escritas()).toHaveLength(0);
+    expect(mockConsultas.map((c) => c.sql)).toContain("ROLLBACK");
+  });
   test("o responsável ativo adiciona; o adulto que já é membro vem com a matrícula; auditoria só com ids", async () => {
     responsavel();
     quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados WHERE MenorMembroId = @m AND RevogadoEm IS NULL/, [{ n: 2 }]);

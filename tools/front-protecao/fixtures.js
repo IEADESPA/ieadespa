@@ -24,7 +24,10 @@ function extrairDoServidor(rel, nomes, escopo) {
   const corpo = nomes.map(x => partes.get(x)).join("\n") + `\nreturn { ${nomes.join(", ")} };`;
   return new Function(...Object.keys(escopo), corpo)(...Object.values(escopo));
 }
-const { mapearResumo } = extrairDoServidor("shared/protecaoDb.js", ["iso", "relogioDoIncidente", "mapearResumo"], { pm });
+// (Trava 7-B) o resumo passou a dizer se o caso é só do nível geral: somenteNivelGeral vem junto, extraída do mesmo arquivo
+const { mapearResumo } = extrairDoServidor("shared/protecaoDb.js", ["iso", "relogioDoIncidente", "somenteNivelGeral", "mapearResumo"], { pm });
+// (Trava 7-B) o que as respostas de registrar, reclassificar, decidir e vincular acrescentam à mensagem: o aviso que não alcançou ninguém fora do app e a retirada das escalas que falhou
+const { textoDoAviso, TEXTO_RETIRADA_FALHOU } = extrairDoServidor("shared/protecaoDb.js", ["textoDoAviso", "TEXTO_RETIRADA_FALHOU"], {});
 const { lista } = extrairDoServidor("GestaoProtecaoMenores/index.js", ["lista"], {});
 
 // o relógio das fixtures é FIXO (o mesmo SRV do roteiro): com AGORA_FIXA o roteiro dependia da hora em que rodava (uma comunicação digitada às 11:30 virava "anterior à ciência" depois das 15h30)
@@ -57,7 +60,10 @@ const linhaDoBanco = (o) => ({
   IncidenteId: o.id, Protocolo: o.protocolo || `PRO-2026-${String(o.id).padStart(4, "0")}`, Nivel: o.nivel || "ALEGACAO", Origem: o.origem || "MEMBRO", CongregacaoId: o.congregacaoId === undefined ? 2 : o.congregacaoId,
   CongregacaoNome: o.congregacaoNome === undefined ? "Sede" : o.congregacaoNome, DataOcorrencia: new Date(`${o.dataOcorrencia || hoje}T00:00:00Z`), ExigeComunicacao: o.exigeComunicacao === undefined ? (o.nivel || "ALEGACAO") === "ALEGACAO" : o.exigeComunicacao,
   PrazoNotificacaoEm: o.prazoEm ? new Date(o.prazoEm) : null, Status: o.status || "ABERTO", RegistradoEm: new Date(o.registradoEm || AGORA_FIXA - 3 * HORA), EncerradoEm: o.encerradoEm ? new Date(o.encerradoEm) : null,
-  NComunicacoes: o.nComunicacoes || 0, NComComprovante: o.nComComprovante || 0, NAnexos: o.nAnexos || 0, NSemDecisao: o.nSemDecisao || 0
+  NComunicacoes: o.nComunicacoes || 0, NComComprovante: o.nComComprovante || 0, NAnexos: o.nAnexos || 0, NSemDecisao: o.nSemDecisao || 0,
+  // (Trava 7-B) as duas marcas que a consulta traz: o "é da liderança" de quem registrou e se há envolvido só pelo nome (a ficha calcula pelas linhas dos envolvidos)
+  EnvolvidoDaLideranca: !!o.envolvidoDaLideranca,
+  EnvolvidoSemMatricula: o.envolvidoSemMatricula !== undefined ? !!o.envolvidoSemMatricula : (o.envolvidos || []).some(e => !e.membroId)
 });
 const resumo = (o, agora) => mapearResumo(linhaDoBanco(o), agora instanceof Date ? agora : new Date(agora));
 // a ordem da fila (listarIncidentes): o que pede ação primeiro — a comunicação mais urgente —, depois os demais abertos e por fim os encerrados
@@ -154,7 +160,8 @@ function contratoComOServidor() {
       "registradoEm", "encerradoEm", "descricao", "onde", "equipeNome", "relatadoPorRotulo", "conhecidoEm", "contatoCanal", "encerramento", "resultadoRotulo", "providencia", "envolvidoId", "ehMembro", "afastamentoCautelar", "ultimaDecisao",
       "orgaoRotulo", "formaRotulo", "comunicadoEm", "protocoloExterno", "referenciaArquivo", "observacao", "foraDoPrazo", "registradoPorNome", "decisaoRotulo", "decididaPorNome", "reclassificacoes", "relato", "adendos", "leituras",
       "acoes", "comunicar", "encerrar", "reclassificar", "decidirCautelar", "adendo", "encerramentoPossivel", "anexos", "clerigo", "avaliacao", "habilitacaoPorCongregacao", "porCongregacao", "geradoEm", "afastamentosCautelaresAtivos",
-      "suspeitasComunicadasNoPrazo", "suspeitasForaDoPrazoOuSemComunicacao", "horasMediasAteComunicar", "quaseAcidentes", "quebrasDePolitica", "suspeitasDeViolencia", "abertos", "motivos", "situacao", "vincularEnvolvido", "arquivarSemConteudo", "possiveisMembros", "registradoPor", "SEM_CONTEUDO_DE_PROTECAO"],
+      "suspeitasComunicadasNoPrazo", "suspeitasForaDoPrazoOuSemComunicacao", "horasMediasAteComunicar", "quaseAcidentes", "quebrasDePolitica", "suspeitasDeViolencia", "abertos", "motivos", "situacao", "vincularEnvolvido", "arquivarSemConteudo", "possiveisMembros", "registradoPor", "SEM_CONTEUDO_DE_PROTECAO",
+      "envolvidoDaLideranca", "somenteNivelGeral", "retiradaFalhou", "avisoExterno", "ATENÇÃO"],
     handler: ["niveis", "orgaos", "formas", "quemRelatou", "resultados", "decisoes", "contatosDeAjuda", "roteiroEscuta", "naoFaca", "horasPrazo", "papeis", "agora", "incidentes", "incidente", "padroes", "comite", "relatorio", "vincular-envolvido"],
     ajuda: ["contatosDeAjuda", "protocolo", "mensagem", "avisada"]
   };
@@ -163,4 +170,4 @@ function contratoComOServidor() {
   return faltam;
 }
 
-module.exports = { pm, hoje, HORA, ATAQUE, catalogos, catalogosComAtaque, resumo, filaDe, ordenarComoOServidor, detalhe, meus, confirmacaoDeAjuda, falhaDeAjuda, comite, padroes, relatorio, contratoComOServidor };
+module.exports = { pm, hoje, HORA, ATAQUE, textoDoAviso, TEXTO_RETIRADA_FALHOU, catalogos, catalogosComAtaque, resumo, filaDe, ordenarComoOServidor, detalhe, meus, confirmacaoDeAjuda, falhaDeAjuda, comite, padroes, relatorio, contratoComOServidor };

@@ -798,7 +798,7 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
       },
       ministerioMenores: {
         politicaDeComunicacao: [{ versao: 1, forma: "CLICKWRAP", aceitoEm: F.instante(-20), enderecoIp: A("ipP"), referencia: null }, { versao: 1, forma: "FICHA_FISICA", aceitoEm: F.instante(-40), enderecoIp: null, referencia: A("refP") }],
-        fichaConfirmadaEm: F.instante(-10), retiradasDaEscala: [{ equipe: A("eqRet"), em: F.instante(-6), escalasDesmarcadas: 3 }], comunicacoesADiretoria: comunicacoes,
+        fichaConfirmadaEm: F.instante(-10), retiradasDaEscala: [{ origem: "EQUIPE", equipe: A("eqRet"), turma: null, em: F.instante(-6), escalasDesmarcadas: 3 }], comunicacoesADiretoria: comunicacoes,
         consultasAoCadastroNacional: [{ fonte: A("fonte"), resultado: "NADA_CONSTA", em: F.instante(-5) }], aviso: A("avisoM")
       }
     };
@@ -823,6 +823,102 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
     e("cxMeusDadosLGPD").style.display = "none";
     await env.ev("alternarMeusDadosLGPD()"); await env.ocioso();
     confere(/Dados Cadastrais/.test(texto(env, "cxMeusDadosLGPD")), "Meus Dados: sem os blocos novos a tela continua inteira");
+  });
+
+  // ============================================================================================================================================
+  // 8) TRAVA 7-B: o professor de turma da EBD marcada "com menores" no painel, em Meu Painel e em Meus Dados
+  // ============================================================================================================================================
+  cenario("7B: Meu Painel do professor de turma com menores (sem equipe, com equipe e sem nada)", async () => {
+    const env = ambienteAtual = novo(); const { api } = env;
+    const S = { equipes: [], turmas: [{ turmaId: 5, nome: ATAQUE("turma") }] };
+    api.rotas = {
+      "GET ministerio-menores/catalogos": { corpo: F.catalogos({ gestao: false, geral: false, diretoria: false }) },
+      "GET ministerio-menores/minha-situacao": () => ({ corpo: F.minhaSituacao({ equipes: S.equipes, turmas: S.turmas }) }),
+      "GET ministerio-menores/politica": { corpo: F.politica(true) },
+      "GET consentimento-menor/meus-menores": { corpo: F.menoresDoResponsavel([]) }
+    };
+    env.sessao({ matricula: 20, pin: true });
+    await env.ev("carregarMeuPainelMenoresAcao()"); await env.ocioso();
+    let sit = texto(env, "mnrSituacao");
+    confere(sit.includes("[turma]") && /Turmas da EBD com menores em que eu leciono/.test(sit), "7B: o professor vê a turma da EBD com menores em que leciona");
+    confere(!/nenhuma equipe nem turma/.test(sit) && /Você não está em nenhuma equipe de escala com contato com menores/.test(sit), `7B: quem só é professor NÃO lê que não serve com menores (${sit.slice(-160)})`);
+    confere(/sai da turma no mesmo dia/.test(sit), "7B: o professor lê que sai da turma se uma validade vencer");
+    limpo(env, "7B/Meu Painel do professor", [ATAQUE("turma")]);
+    // equipe E turma: as duas listas
+    S.equipes = [{ equipeId: 3, nome: ATAQUE("equipe7b") }];
+    await env.ev("carregarMeuPainelMenoresAcao()"); await env.ocioso();
+    sit = texto(env, "mnrSituacao");
+    confere(sit.includes("[equipe7b]") && sit.includes("[turma]") && !/Você não está em nenhuma equipe/.test(sit), "7B: com equipe e turma aparecem as duas, sem o 'não está em nenhuma'");
+    // nem equipe nem turma
+    S.equipes = []; S.turmas = [];
+    await env.ev("carregarMeuPainelMenoresAcao()"); await env.ocioso();
+    sit = texto(env, "mnrSituacao");
+    confere(/Você não está em nenhuma equipe nem turma da EBD com contato com menores/.test(sit) && !/Turmas da EBD com menores em que eu leciono/.test(sit), "7B: sem equipe e sem turma a frase diz as duas coisas");
+    // resposta de API antiga (sem `turmas`): não quebra
+    S.turmas = undefined;
+    await env.ev("carregarMeuPainelMenoresAcao()"); await env.ocioso();
+    confere(/Você não está em nenhuma equipe nem turma da EBD/.test(texto(env, "mnrSituacao")), "7B: sem o campo `turmas` (servidor antigo) a tela segue inteira");
+  });
+
+  cenario("7B: o painel mostra as turmas da EBD de cada pessoa (e o professor sem equipe)", async () => {
+    const env = ambienteAtual = novo(); const { doc, api, e } = env;
+    const sede = { id: 2, nome: "Sede" };
+    const linhas = [
+      F.linha(51, "Professora Ana", sede, {}, [], [{ turmaId: 5, nome: ATAQUE("turmaAna"), congregacaoId: 2 }]),
+      F.linha(52, "Bruno", sede, {}, [{ equipeId: 3, nome: ATAQUE("equipeBruno"), liderMembroId: 9 }], [{ turmaId: 6, nome: "Juniores", congregacaoId: 2 }, { turmaId: 7, nome: ATAQUE("turmaBruno2"), congregacaoId: 2 }]),
+      F.linha(53, "Carla", sede, {})
+    ];
+    api.rotas = {
+      "GET ministerio-menores/catalogos": { corpo: F.catalogos({ gestao: true, geral: false, diretoria: false }) },
+      "GET catalogos/congregacoes": { corpo: [{ congregacaoId: 2, nome: "Sede", ativa: true }] },
+      "GET ministerio-menores/painel": () => ({ corpo: F.painel(linhas) })
+    };
+    env.sessao({ matricula: 7, nivel: "REGIONAL", permissoes: ["habilitacao_voluntarios"] });
+    await env.ev("carregarOpcoesMenoresAcao()"); await env.ocioso();
+    doc.clicar(e("btnMnrSecaoPainel")); doc.escolher(e("mnrPainelCong"), "2"); doc.clicar(botao(env, "Abrir o painel")); await env.ocioso();
+    const cartao = (nome) => [...e("mnrPainelLista").children].find(c => c.textContent.includes(nome)) || null;
+    const ana = cartao("Professora Ana"), bruno = cartao("Bruno"), carla = cartao("Carla");
+    confere(!!ana && /Turmas da EBD com menores: /.test(ana.textContent) && ana.textContent.includes("[turmaAna]") && !/Equipes com menores/.test(ana.textContent), "7B: a professora sem equipe aparece com a turma da EBD (e sem a linha das equipes)");
+    confere(!!bruno && bruno.textContent.includes("[equipeBruno]") && /Turmas da EBD com menores: Juniores, /.test(bruno.textContent) && bruno.textContent.includes("[turmaBruno2]"), "7B: quem está em equipe e em turma mostra as duas listas");
+    confere(!!carla && !/Turmas da EBD/.test(carla.textContent), "7B: quem não leciona em turma com menores não tem a linha das turmas");
+    limpo(env, "7B/painel", [ATAQUE("turmaAna"), ATAQUE("equipeBruno"), ATAQUE("turmaBruno2")]);
+    // painel sem ninguém: a frase fala de equipe E de turma
+    linhas.length = 0;
+    doc.clicar(botao(env, "Abrir o painel")); await env.ocioso();
+    confere(/Nenhuma pessoa serve em equipe nem leciona em turma da EBD com contato com menores/.test(texto(env, "mnrPainelLista")), "7B: o painel vazio fala de equipe e de turma da EBD");
+  });
+
+  cenario("7B: Meus Dados mostra a retirada da turma da EBD sem 'escala(s) desmarcada(s)'", async () => {
+    const env = ambienteAtual = novo(); const { api, e } = env;
+    const A = ATAQUE;
+    // a retirada como o servidor a monta (dadosDoTitular): da equipe, com escalas desmarcadas; da turma, com o vínculo de professor (sem escala)
+    const retirada = (x) => (x.TurmaId != null && x.EquipeId == null
+      ? { origem: "TURMA_EBD", equipe: x.TurmaNome ? `Turma ${x.TurmaNome} (EBD)` : "Turma da EBD", turma: x.TurmaNome || null, em: x.RetiradoEm, escalasDesmarcadas: 0 }
+      : { origem: "EQUIPE", equipe: x.EquipeNome, turma: null, em: x.RetiradoEm, escalasDesmarcadas: x.AlocacoesCanceladas });
+    const dados = {
+      sucesso: true, geradoEm: new Date().toISOString(),
+      membro: { nome: "Eu", congregacao: "Sede", extensao: null, status: "ATIVO", situacaoMembro: "ATIVO", fotoUrl: null, funcao: "x", cargoMinisterial: null, departamento: null, dizimistaFiel: 1, criadoEm: F.instante(-400) },
+      liderancas: [], assentos: [], processosDisciplinares: [], vinculosFamiliares: [], consentimentos: [], solicitacoesLgpd: [], casamentos: [], licencasCandidatura: [], voluntariado: null,
+      ministerioMenores: {
+        politicaDeComunicacao: [], fichaConfirmadaEm: null, comunicacoesADiretoria: [], consultasAoCadastroNacional: [], aviso: "x",
+        retiradasDaEscala: [
+          retirada({ TurmaId: 5, EquipeId: null, TurmaNome: A("turmaRet"), RetiradoEm: F.instante(-2) }),
+          retirada({ TurmaId: 6, EquipeId: null, TurmaNome: null, RetiradoEm: F.instante(-3) }),
+          retirada({ TurmaId: null, EquipeId: 3, EquipeNome: A("eqRet7b"), AlocacoesCanceladas: 2, RetiradoEm: F.instante(-4) })
+        ]
+      }
+    };
+    api.rotas = { "GET lgpd/meus-dados/20": { corpo: dados } };
+    env.sessao({ matricula: 20, pin: true });
+    e("cxMeusDadosLGPD").style.display = "none";
+    await env.ev("alternarMeusDadosLGPD()"); await env.ocioso();
+    const itensRet = [...e("cxMeusDadosLGPD").descendentes()].filter(x => x.localName === "li" && /Turma|eqRet7b/.test(x.textContent)).map(x => x.textContent);
+    const daTurma = itensRet.find(t => t.includes("[turmaRet]")), semNome = itensRet.find(t => /Turma da EBD/.test(t)), daEquipe = itensRet.find(t => t.includes("[eqRet7b]"));
+    confere(!!daTurma && /Turma .*\[turmaRet\] \(EBD\): você saiu da turma como professor/.test(daTurma) && !/escala\(s\) desmarcada\(s\)/.test(daTurma), `7B: a retirada da turma diz que a pessoa saiu da turma, sem 'escala(s) desmarcada(s)' (${daTurma})`);
+    confere(!!semNome && /Turma da EBD: você saiu da turma como professor/.test(semNome) && !/escala\(s\)/.test(semNome), `7B: a turma sem nome usa o rótulo do servidor (${semNome})`);
+    confere(!!daEquipe && /\(2 escala\(s\) desmarcada\(s\)\)/.test(daEquipe), "7B: a retirada da equipe continua com as escalas desmarcadas");
+    confere(/Retiradas automáticas da escala e das turmas da EBD/.test(texto(env, "cxMeusDadosLGPD")), "7B: o título das retiradas fala também das turmas da EBD");
+    limpo(env, "7B/Meus Dados", [A("turmaRet"), A("eqRet7b")]);
   });
 
   // ============================================================================================================================================

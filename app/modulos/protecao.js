@@ -180,11 +180,19 @@ async function prtPostarAjuda(corpo) {
     if (limite != null) clearTimeout(limite);
   }
 }
-// Toast + texto fixo na tela (textContent: nada de HTML aqui). Quando o fetchProtegido já avisou (rede, sessão, 403, 5xx), só o texto vai para a tela.
+// (Trava 7-B) Um ato que DEU CERTO pode voltar com um alerta do servidor: a retirada automática das escalas e turmas com menores não saiu (`retiradaFalhou`), ou o aviso à liderança
+// não alcançou ninguém fora do sistema (`avisoExterno` falso na reclassificação; o registro de incidente só diz isso no texto, que traz "ATENÇÃO:"). Não é um "tudo certo": a tela mostra
+// como alerta. (O canal de ajuda tem o caminho dele, com `avisada`: prtMostrarSucessoAjuda.)
+function prtTemAlerta(data) {
+  if (!data || data.sucesso === false) return false;
+  return data.retiradaFalhou === true || data.avisoExterno === false || String(data.mensagem == null ? "" : data.mensagem).includes("ATENÇÃO:");
+}
+// Toast + texto fixo na tela (textContent: nada de HTML aqui). Quando o fetchProtegido já avisou (rede, sessão, 403, 5xx), só o texto vai para a tela. Sucesso com alerta sai como erro e em destaque.
 function prtMostrarResultado(data, idMensagem, destaque) {
   const texto = prtMsgErro(data);
-  if (!(data && data.jaAvisado)) mostrarToast(texto, data && data.sucesso === false ? "erro" : "sucesso");
-  prtEscreverAviso(idMensagem, texto, destaque || !!(data && data.sucesso === false));
+  const alerta = prtTemAlerta(data);
+  if (!(data && data.jaAvisado)) mostrarToast(texto, (data && data.sucesso === false) || alerta ? "erro" : "sucesso");
+  prtEscreverAviso(idMensagem, texto, destaque || alerta || !!(data && data.sucesso === false));
 }
 
 async function prtGarantirCatalogos(forcar) {
@@ -223,6 +231,13 @@ const PRT_IDS_CAMPOS = ["prtRegOnde", "prtRegDescricao", "prtRegEnvMatricula", "
 const PRT_IDS_SELECTS = ["prtRegCong", "prtRegEquipe", "prtRegQuem", "prtRelAno"];
 const PRT_IDS_BLOCOS = ["prtRegCx", "prtRegAlegacaoCx", "prtRegEquipeCx", "prtDetalheCx", "prtSemAcesso"];
 const PRT_IDS_CONTADORES = ["prtRegDescContador", "prtRegRelatoContador"];
+// (Trava 7-B) "a pessoa envolvida é da liderança desta congregação?": os dois botões que o módulo cria no formulário de registro (o padrão é "não")
+const PRT_ID_LIDERANCA_NAO = "prtRegLiderancaNao", PRT_ID_LIDERANCA_SIM = "prtRegLiderancaSim";
+function prtVoltarLiderancaParaNao() {
+  const nao = prtEl(PRT_ID_LIDERANCA_NAO), sim = prtEl(PRT_ID_LIDERANCA_SIM);
+  if (nao) nao.checked = true;
+  if (sim) sim.checked = false;
+}
 // O modal de anexos do incidente (comprovantes) é o modal compartilhado do script.js: se ele está aberto para um incidente quando a sessão acaba ou muda, fecha e esvazia (lista de nomes de arquivo).
 function prtFecharModalDeAnexos() {
   const sobre = prtEl("modalOverlay");
@@ -241,6 +256,7 @@ function prtLimparTela() {
   PRT_IDS_CAMPOS.forEach(id => { const el = prtEl(id); if (el) el.value = ""; });
   PRT_IDS_SELECTS.forEach(id => { const el = prtEl(id); if (el) el.innerHTML = ""; });
   PRT_IDS_CONTADORES.forEach(id => { const el = prtEl(id); if (el) el.textContent = "0"; });
+  prtVoltarLiderancaParaNao();   // a resposta da pessoa anterior não fica marcada para quem entra depois
   PRT_IDS_BLOCOS.forEach(id => { const el = prtEl(id); if (el) el.style.display = "none"; });
   const lista = prtEl("prtListaCx"), filtro = prtEl("prtFiltroStatus");
   if (lista) lista.style.display = "";
@@ -527,8 +543,26 @@ function prtPrepararFormRegistro(congregacoes) {
   if (horas && horas.value === "") horas.value = "0";
   const roteiro = prtEl("prtRegRoteiro");
   if (roteiro) roteiro.innerHTML = prtHtmlRoteiro();
+  prtMontarPerguntaLideranca();
   prtMudouNivelAcao();
 }
+// (Trava 7-B) A pergunta "a pessoa envolvida é da liderança desta congregação?" (sim/não, padrão não) entra logo depois dos campos da pessoa envolvida, antes do bloco da suspeita.
+// Com "sim" o caso fica só com a Diretoria e o Comitê de Proteção: o Dirigente local não recebe o aviso nem vê o registro (a regra é do servidor: shared/protecaoDb.js, somenteNivelGeral).
+// Montada uma vez só (o texto é todo nosso, nada do servidor); se já existe, só fica como está.
+function prtMontarPerguntaLideranca() {
+  if (prtEl("prtRegLiderancaCx")) return;
+  const antes = prtEl("prtRegAlegacaoCx");
+  if (!antes || !antes.parentNode) return;
+  const cx = document.createElement("div");
+  cx.innerHTML = `<fieldset id="prtRegLiderancaCx" class="prt-nivel-grupo">
+      <legend>A pessoa envolvida é da liderança desta congregação?</legend>
+      <label class="prt-nivel" for="${PRT_ID_LIDERANCA_NAO}"><input type="radio" name="prtRegLideranca" id="${PRT_ID_LIDERANCA_NAO}" value="nao" checked /> <span>Não (ou não há pessoa envolvida)</span></label>
+      <label class="prt-nivel" for="${PRT_ID_LIDERANCA_SIM}"><input type="radio" name="prtRegLideranca" id="${PRT_ID_LIDERANCA_SIM}" value="sim" /> <span>Sim: é o Dirigente, um pastor, um obreiro ou outro líder desta congregação</span></label>
+      <p class="psc-legenda">Com "sim", o registro vai só para a Diretoria e o Comitê de Proteção: o Dirigente da congregação não recebe o aviso e não vê o registro. Vale mesmo sem saber o nome ou a matrícula.</p>
+    </fieldset>`;
+  antes.parentNode.insertBefore(cx, antes);
+}
+function prtLiderancaEnvolvida() { const sim = prtEl(PRT_ID_LIDERANCA_SIM); return !!(sim && sim.checked); }
 // O roteiro da escuta (acolher, registrar como foi dito, encaminhar) e o que NÃO fazer: o texto vem do catálogo do servidor.
 // o catálogo escreve "1. Acolher"; o <ol> já numera, e o número do texto fazia "1. 1. Acolher": o número escrito à mão (e o ponto, parêntese ou travessão depois dele) sai
 function prtPassoSemNumero(passo) {
@@ -630,11 +664,13 @@ function prtValidarRegistro(c) {
   return "";
 }
 function prtTextoConfirmarSuspeita(c) {
+  // a lei manda comunicar imediatamente; as 24 horas são o prazo MÁXIMO da Igreja (o servidor diz o mesmo: shared/protecaoMenores.js)
   const prazo = c.horas > 0
-    ? `o prazo de 24 horas para comunicar o Conselho Tutelar já está correndo (a Igreja soube há ${c.horas} h)`
-    : "o prazo de 24 horas para comunicar o Conselho Tutelar começa agora";
+    ? `a lei manda comunicar o Conselho Tutelar imediatamente, e o prazo máximo da Igreja (24 horas) já está correndo (a Igreja soube há ${c.horas} h)`
+    : "a lei manda comunicar o Conselho Tutelar imediatamente, e o prazo máximo da Igreja (24 horas) começa agora";
   const afasta = c.envMatricula ? `; a pessoa envolvida (matrícula ${c.envMatricula}), se for membro, sai das escalas com crianças por cautela (não é punição)` : "";
-  return `Isto é uma suspeita ou relato de violência contra criança ou adolescente. Ao enviar: ${prazo}${afasta}; e a liderança de proteção será avisada na hora. Não converse sobre o caso com outras pessoas. Enviar?`;
+  const quem = c.envLideranca ? "; como a pessoa envolvida é da liderança desta congregação, só a Diretoria e o Comitê de Proteção serão avisados (o Dirigente local, não)" : "; e a liderança de proteção será avisada na hora";
+  return `Isto é uma suspeita ou relato de violência contra criança ou adolescente. Ao enviar: ${prazo}${afasta}${quem}. Não converse sobre o caso com outras pessoas. Enviar?`;
 }
 function prtLerRegistro() {
   const horasTexto = prtTexto("prtRegHoras");
@@ -642,7 +678,7 @@ function prtLerRegistro() {
   return {
     nivel: prtNivelEscolhido(), data: prtTexto("prtRegData"), congregacaoId: prtInteiro(prtTexto("prtRegCong")), equipeId: prtInteiro(prtTexto("prtRegEquipe")),
     onde: prtTexto("prtRegOnde"), descricao: prtTexto("prtRegDescricao"), envMatriculaTexto: prtTexto("prtRegEnvMatricula"), envMatricula: prtInteiro(prtTexto("prtRegEnvMatricula")),
-    envNome: prtTexto("prtRegEnvNome"), quem: prtTexto("prtRegQuem"), relato: prtTexto("prtRegRelato"),
+    envNome: prtTexto("prtRegEnvNome"), envLideranca: prtLiderancaEnvolvida(), quem: prtTexto("prtRegQuem"), relato: prtTexto("prtRegRelato"),
     horas, horasValidas: Number.isInteger(horas) && horas >= 0 && horas <= PRT_MAX_HORAS_CIENCIA
   };
 }
@@ -657,6 +693,7 @@ async function prtEnviarRegistroAcao(botao) {
   if (c.onde) corpo.onde = c.onde;
   if (c.envMatricula) corpo.envolvidoMembroId = c.envMatricula;
   else if (c.envNome) corpo.envolvidoNome = c.envNome;
+  corpo.envolvidoDaLideranca = c.envLideranca === true;   // (Trava 7-B) sempre true/false: o servidor recusa (422) qualquer outro valor
   if (c.nivel === "ALEGACAO") { corpo.relatadoPor = c.quem; corpo.relato = c.relato; corpo.conhecidoHaHoras = c.horas; }
   const geracao = prtGeracao;
   await prtProtegerBotao(botao, async () => {
@@ -678,6 +715,7 @@ function prtLimparFormRegistro() {
   if (quem) quem.value = "";
   if (equipe) equipe.value = "";
   if (prtCatalogos) prtCatalogos.niveis.forEach((n, i) => { const r = prtEl(`prtRegNivel${i}`); if (r) r.checked = false; });
+  prtVoltarLiderancaParaNao();   // o próximo registro começa em "não"
   ["prtRegDescContador", "prtRegRelatoContador"].forEach(id => { const el = prtEl(id); if (el) { el.textContent = "0"; el.className = ""; } });
   prtMudouNivelAcao();
 }
@@ -688,10 +726,12 @@ function prtMostrarRespostaRegistro(data, nivelEscolhido) {
   if (!data) { cx.innerHTML = ""; return; }
   const cat = prtCatalogos;
   const exige = data.exigeComunicacao === true || nivelEscolhido === "ALEGACAO" || data.nivel === "ALEGACAO";
+  // (Trava 7-B) gravado, mas o aviso não alcançou ninguém fora do sistema: o título e a mensagem saem do "tudo certo" e a mensagem do servidor (que diz quem procurar) fica em destaque
+  const alerta = prtTemAlerta(data);
   cx.innerHTML = `<div class="cal-cartao cartao-area-ebd prt-resposta">
-    <h5 id="prtRegRespostaTitulo" tabindex="-1">✅ Registrado ${data.protocolo ? prtSelo("cal-st-homologado", data.protocolo) : ""}</h5>
-    <p>${escaparHtmlEbd(prtMsgErro(data))}</p>
-    ${exige ? `<p><strong>Prazo para comunicar o Conselho Tutelar:</strong> ${data.prazoEm ? prtDataHora(data.prazoEm) : "em até 24 horas depois de a Igreja ficar sabendo"}</p>` : ""}
+    <h5 id="prtRegRespostaTitulo" tabindex="-1">${alerta ? "⚠️ Registrado, mas leia o aviso abaixo" : "✅ Registrado"} ${data.protocolo ? prtSelo("cal-st-homologado", data.protocolo) : ""}</h5>
+    <p${alerta ? ` class="psc-aviso" role="alert"` : ""}>${escaparHtmlEbd(prtMsgErro(data))}</p>
+    ${exige ? `<p><strong>A lei manda comunicar ao Conselho Tutelar imediatamente.</strong> Prazo máximo da Igreja: ${data.prazoEm ? prtDataHora(data.prazoEm) : "24 horas depois de a Igreja ficar sabendo"}.</p>` : ""}
     <p><strong>O que fazer agora</strong></p>
     ${exige
     ? `<ul class="prt-nao-faca-lista">${(cat ? cat.naoFaca : []).map(t => `<li>${escaparHtmlEbd(t)}</li>`).join("")}<li>A comunicação ao Conselho Tutelar é feita pela liderança de proteção. Se a mensagem acima disser que não foi possível avisá-la, procure o Dirigente ou a Diretoria agora.</li></ul>
@@ -806,6 +846,8 @@ function prtSelosDoIncidente(i) {
   return [
     prtSelo(prtClasseNivel(i.nivel), i.nivelRotulo || i.nivel),
     i.origem === "CANAL_AJUDA" ? prtSelo("cal-st-proposto", `🧒 ${i.origemRotulo || "Canal de ajuda"}`) : "",
+    // (Trava 7-B) o caso que o Dirigente local não recebe (canal sem login, liderança local apontada, envolvido sem matrícula): só quem é do nível geral o vê, e com este selo
+    i.somenteNivelGeral === true ? prtSelo("cal-st-indeferido", "🔒 só Diretoria e Comitê") : "",
     aberto ? "" : prtSelo("cal-st-cancelado", `Encerrado${i.encerradoEm ? ` em ${calData(i.encerradoEm)}` : ""}`),
     i.exigeComunicacao && i.comunicado ? prtSelo("cal-st-homologado", "✅ comunicado ao órgão") : "",
     i.exigeComunicacao && i.comunicado && !i.comComprovante ? prtSelo("cal-st-indeferido", "📎 sem comprovante") : "",
@@ -963,6 +1005,14 @@ function prtHtmlBotoesDetalhe(d) {
     d.incidente.exigeComunicacao ? botao("abrirModalAnexos", ["IncidentesProtecao", id, `comprovante ${d.incidente.protocolo}`], "📎 Anexar comprovante", "btn-secundario") : ""
   ].filter(Boolean).join(" ");
 }
+// (Trava 7-B) por que o caso é só da Diretoria e do Comitê (texto nosso; a ordem é a da regra do servidor: canal sem login, liderança apontada, envolvido sem matrícula)
+function prtHtmlSoNivelGeral(inc) {
+  if (inc.somenteNivelGeral !== true) return "";
+  const porque = inc.origem === "CANAL_AJUDA" ? "o pedido veio do canal de ajuda, sem login"
+    : inc.envolvidoDaLideranca === true ? "quem registrou disse que a pessoa envolvida é da liderança da congregação"
+      : "há pessoa envolvida registrada sem matrícula do cadastro";
+  return `<p class="psc-aviso" id="prtFichaSoGeral"><strong>🔒 Só a Diretoria e o Comitê de Proteção tratam este caso</strong> (${porque}). O Dirigente da congregação não recebe os avisos e não vê esta ficha.</p>`;
+}
 function prtRenderDetalhe() {
   const d = prtDetalhe;
   const conteudo = prtEl("prtDetalheConteudo");
@@ -977,6 +1027,7 @@ function prtRenderDetalhe() {
   conteudo.innerHTML = `<div class="cal-cartao cartao-area-ebd prt-detalhe">
     <h4 id="prtDetalheTitulo" tabindex="-1">${escaparHtmlEbd(inc.protocolo)}</h4>
     <p class="prt-selos">${prtSelosDoIncidente(inc)}</p>
+    ${prtHtmlSoNivelGeral(inc)}
     ${prtRelogioDetalhe ? `<p class="prt-linha-relogio"><strong>Prazo para comunicar o Conselho Tutelar:</strong> ${prtHtmlRelogio("prtRelogioDet", inc.relogio.prazoEm)} <span class="psc-legenda">${prtDataHora(inc.relogio.prazoEm)}</span></p>` : ""}
     <dl class="cal-dl">
       ${prtCampo("Congregação", inc.congregacaoNome ? escaparHtmlEbd(inc.congregacaoNome) : "")}
@@ -1251,10 +1302,10 @@ function prtFecharFormAcao() {
   prtGatilhoForm = null;
   if (gatilho && gatilho.isConnected) prtFocar(gatilho);
 }
-// Depois de um ato que deu certo: a ficha e a fila são refeitas e a mensagem do servidor volta para o lugar dela.
-async function prtDepoisDoAto(id, mensagem) {
+// Depois de um ato que deu certo: a ficha e a fila são refeitas e a mensagem do servidor volta para o lugar dela (em destaque quando traz um alerta: Trava 7-B, prtTemAlerta).
+async function prtDepoisDoAto(id, data) {
   const ok = await prtCarregarDetalhe(id);
-  if (ok) prtEscreverAviso("prtDetalheMsg", mensagem, false);
+  if (ok) prtEscreverAviso("prtDetalheMsg", prtMsgErro(data), prtTemAlerta(data));
   prtCarregarIncidentesAcao();
 }
 function prtIncidenteAberto() { return prtDetalhe ? Number(prtDetalhe.incidente.incidenteId) : 0; }
@@ -1286,7 +1337,7 @@ async function prtEnviarComunicacaoAcao(botao) {
     if (id !== prtIncidenteAberto()) return;   // a pessoa abriu outro incidente (ou saiu) enquanto o pedido ia
     prtMostrarResultado(data, "prtFcMsg", false);
     if (data.sucesso === false) return;       // recusa de regra: mensagem do servidor e formulário aberto, com o que foi escrito
-    await prtDepoisDoAto(id, prtMsgErro(data));
+    await prtDepoisDoAto(id, data);
   }, `comunicacao${id}`);
 }
 async function prtEnviarAdendoAcao(botao) {
@@ -1299,7 +1350,7 @@ async function prtEnviarAdendoAcao(botao) {
     if (id !== prtIncidenteAberto()) return;
     prtMostrarResultado(data, "prtFaMsg", false);
     if (data.sucesso === false) return;
-    await prtDepoisDoAto(id, prtMsgErro(data));
+    await prtDepoisDoAto(id, data);
   }, `adendo${id}`);
 }
 async function prtEnviarReclassificacaoAcao(botao) {
@@ -1317,7 +1368,7 @@ async function prtEnviarReclassificacaoAcao(botao) {
     corpo.relatadoPor = quem; corpo.relato = relato;
   }
   const aviso = nivelNovo === "ALEGACAO"
-    ? "Reclassificar como suspeita ou relato de violência? O prazo de 24 horas para comunicar o Conselho Tutelar começa agora; a pessoa envolvida, se for membro, sai das escalas com crianças por cautela; a liderança de proteção será avisada. Só se sobe de nível: depois não dá para voltar atrás."
+    ? "Reclassificar como suspeita ou relato de violência? A lei manda comunicar o Conselho Tutelar imediatamente, e o prazo máximo da Igreja (24 horas) começa agora; a pessoa envolvida, se for membro, sai das escalas com crianças por cautela; a liderança de proteção será avisada. Só se sobe de nível: depois não dá para voltar atrás."
     : `Aumentar a gravidade do incidente para "${prtRotuloNivel(nivelNovo)}"? Só se sobe de nível: depois não dá para voltar atrás.`;
   if (!(await confirmarAcao(aviso, "Reclassificar"))) return;
   await prtProtegerBotao(botao, async () => {
@@ -1325,7 +1376,7 @@ async function prtEnviarReclassificacaoAcao(botao) {
     if (id !== prtIncidenteAberto()) return;
     prtMostrarResultado(data, "prtFrMsg", false);
     if (data.sucesso === false) return;
-    await prtDepoisDoAto(id, prtMsgErro(data));
+    await prtDepoisDoAto(id, data);
   }, `reclassificar${id}`);
 }
 async function prtEnviarDecisaoAcao(envolvidoId, botao) {
@@ -1346,7 +1397,7 @@ async function prtEnviarDecisaoAcao(envolvidoId, botao) {
     if (id !== prtIncidenteAberto()) return;
     prtMostrarResultado(data, "prtFdMsg", false);
     if (data.sucesso === false) return;
-    await prtDepoisDoAto(id, prtMsgErro(data));
+    await prtDepoisDoAto(id, data);
   }, `decisao${eid}`);
 }
 // Antes de pedir a confirmação de identidade (e de mostrar o "tem certeza"), vê se o caso pode mesmo encerrar: com a ficha desatualizada a pergunta seria à toa.
@@ -1377,7 +1428,7 @@ async function prtEnviarVinculoAcao(envolvidoId, botao) {
     if (id !== prtIncidenteAberto()) return;
     prtMostrarResultado(data, "prtFvMsg", false);
     if (data.sucesso === false) return;   // recusa de regra (matrícula que não existe, já vinculada...): mensagem do servidor e formulário aberto
-    await prtDepoisDoAto(id, prtMsgErro(data));   // se a pessoa vinculada é quem está olhando, a ficha passa a responder 404 e a tela mostra só que não foi possível abrir
+    await prtDepoisDoAto(id, data);   // se a pessoa vinculada é quem está olhando, a ficha passa a responder 404 e a tela mostra só que não foi possível abrir
   }, `vincular${eid}`);
 }
 async function prtEnviarEncerramentoAcao(botao) {
@@ -1402,7 +1453,7 @@ async function prtEnviarEncerramentoAcao(botao) {
     // o servidor pode recusar mesmo assim (o caso mudou desde que a ficha abriu): o motivo dele aparece, com o formulário aberto
     if (data.sucesso === false) { prtMostrarResultado(data, "prtFeMsg", true); return; }
     prtMostrarResultado(data, "prtFeMsg", false);
-    await prtDepoisDoAto(id, prtMsgErro(data));
+    await prtDepoisDoAto(id, data);
   }, `encerrar${id}`);
 }
 

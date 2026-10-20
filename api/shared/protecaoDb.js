@@ -282,6 +282,7 @@ async function registrarIncidente(pool, { dados, registrante, agora = new Date()
   void escalasDesmarcadas;
   return {
     sucesso: true, incidenteId, protocolo, prazoEm: prazo ? prazo.toISOString() : null, exigeComunicacao: d.exigeComunicacao,
+    avisoExterno: Number((aviso || {}).externas) > 0,                   // a tela mostra como alerta quando a liderança não foi alcançada fora do app
     mensagem: (d.exigeComunicacao
       ? `Registrado (protocolo ${protocolo}). Comunique o Conselho Tutelar imediatamente: o prazo máximo da Igreja (24 horas) já está contando.`
       : `Registrado (protocolo ${protocolo}).`)

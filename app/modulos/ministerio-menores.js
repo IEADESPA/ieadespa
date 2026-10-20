@@ -328,6 +328,8 @@ function mnrAplicarSituacao(resposta) {
   const s = mnrSituacao;
   const bloqueios = Array.isArray(s.bloqueios) ? s.bloqueios : [];
   const equipes = Array.isArray(s.equipes) ? s.equipes : [];
+  // (Trava 7-B) as turmas da EBD marcadas "com menores" em que a pessoa leciona também são serviço com menores (o professor que não está em equipe nenhuma ouvia "não está em nenhuma equipe")
+  const turmas = Array.isArray(s.turmas) ? s.turmas.filter(t => t && typeof t === "object") : [];
   const proximo = s.proximoVencimento && typeof s.proximoVencimento === "object" ? s.proximoVencimento : null;
   const faltam = bloqueios.length
     ? `<h5>O que falta para você servir com menores</h5>
@@ -344,7 +346,10 @@ function mnrAplicarSituacao(resposta) {
     <p class="psc-legenda">Verde: em dia. Amarelo: vence em até ${Number(mnrLimiteAlerta())} dias, hora de renovar. Vermelho: vencido. Exemplo: a certidão emitida em 10/03 vale por cerca de 6 meses; renove antes de acabar, porque no dia do vencimento você sai das escalas com crianças.</p>
     ${mnrRenderValidades(s.validades)}
     <h5>Equipes com menores em que eu sirvo</h5>
-    ${equipes.length ? `<ul class="vol-lista">${equipes.map(e => `<li>${escaparHtmlEbd(e.nome)}</li>`).join("")}</ul>` : "<p class='subtitle'>Você não está em nenhuma equipe com contato com menores.</p>"}
+    ${equipes.length ? `<ul class="vol-lista">${equipes.map(e => `<li>${escaparHtmlEbd(e.nome)}</li>`).join("")}</ul>` : `<p class='subtitle'>${turmas.length ? "Você não está em nenhuma equipe de escala com contato com menores." : "Você não está em nenhuma equipe nem turma da EBD com contato com menores."}</p>`}
+    ${turmas.length ? `<h5>Turmas da EBD com menores em que eu leciono</h5>
+      <ul class="vol-lista">${turmas.map(t => `<li>${escaparHtmlEbd(t.nome)}</li>`).join("")}</ul>
+      <p class="psc-legenda">Na turma marcada "com menores" só leciona quem está habilitado: se uma validade vencer, você sai da turma no mesmo dia, como sai das escalas.</p>` : ""}
   </div>`;
 }
 
@@ -751,12 +756,13 @@ function mnrRenderListaPainel() {
   const vistos = filtro && filtro !== "todos" ? todos.filter(v => v.status === filtro) : todos;
   lista.innerHTML = todos.length
     ? (vistos.length ? vistos.map(mnrRenderVoluntario).join("") : "<p class='subtitle'>Nenhum voluntário com esse filtro.</p>")
-    : "<p class='subtitle'>Nenhuma pessoa serve em equipe com contato com menores nesta seleção. (A marca fica em Habilitação de Voluntários, em cada equipe.)</p>";
+    : "<p class='subtitle'>Nenhuma pessoa serve em equipe nem leciona em turma da EBD com contato com menores nesta seleção. (A marca fica em Habilitação de Voluntários, em cada equipe, e na EBD, em cada turma.)</p>";
 }
 function mnrFiltrarPainelAcao() { mnrRenderListaPainel(); }
 function mnrRenderVoluntario(v) {
   const bloqueios = Array.isArray(v.bloqueios) ? v.bloqueios : [];
   const equipes = Array.isArray(v.equipes) ? v.equipes : [];
+  const turmas = Array.isArray(v.turmas) ? v.turmas : [];   // (Trava 7-B) professor de turma da EBD marcada "com menores": entra no painel mesmo sem equipe
   const proximo = v.proximoVencimento && typeof v.proximoVencimento === "object" ? v.proximoVencimento : null;
   const status = String(v.status || "");
   const detalhes = bloqueios.length
@@ -765,6 +771,7 @@ function mnrRenderVoluntario(v) {
   return `<div class="cal-cartao cartao-area-ebd mnr-vol">
     <h5>${escaparHtmlEbd(v.nome)} <span class="psc-legenda">matrícula ${Number(v.membroId)}${v.congregacaoNome ? ` · ${escaparHtmlEbd(v.congregacaoNome)}` : ""}</span> ${mnrSelo(mnrClasse(status), mnrTem(MNR_ROTULO_STATUS, status) ? MNR_ROTULO_STATUS[status] : status)}</h5>
     ${equipes.length ? `<p class="psc-legenda">Equipes com menores: ${equipes.map(e => escaparHtmlEbd(e)).join(", ")}</p>` : ""}
+    ${turmas.length ? `<p class="psc-legenda">Turmas da EBD com menores: ${turmas.map(t => escaparHtmlEbd(t)).join(", ")}</p>` : ""}
     ${detalhes}
     ${proximo ? `<p class="mnr-proximo"><strong>Próximo vencimento:</strong> ${escaparHtmlEbd(proximo.rotulo)} — ${mnrSeloPrazo(proximo.data)}</p>` : ""}
     ${mnrRenderValidades(v.validades)}
@@ -1085,6 +1092,12 @@ async function mnrPrepararFotoDeMenor(membroId, pessoa) {
 // ============================================================================
 const MNR_ROTULO_FORMA_POLITICA = { CLICKWRAP: "Aceite digital (com IP, data e hora)", FICHA_FISICA: "Ficha assinada, registrada pela Secretaria" };
 const MNR_ROTULO_CADASTRO = { CONSTA: "consta", NADA_CONSTA: "nada consta", INDISPONIVEL: "consulta indisponível" };
+// (Trava 7-B) Uma retirada é de uma equipe de escala (`origem` "EQUIPE": escalas desmarcadas) OU de uma turma da EBD com menores (`origem` "TURMA_EBD": sai o vínculo de professor,
+// não há escala a desmarcar, e "(0 escala(s) desmarcada(s))" dizia uma coisa errada). O nome da turma vem em `turma`; o rótulo pronto em `equipe` fica como reserva.
+function mnrLinhaRetiradaMeusDados(r) {
+  if (r && r.origem === "TURMA_EBD") return `${mnrDataHora(r.em)} — ${r.turma ? `Turma ${escaparHtmlEbd(r.turma)} (EBD)` : escaparHtmlEbd(r.equipe || "Turma da EBD")}: você saiu da turma como professor`;
+  return `${mnrDataHora(r.em)} — ${escaparHtmlEbd(r.equipe)} (${Number(r.escalasDesmarcadas) || 0} escala(s) desmarcada(s))`;
+}
 function mnrCartaoMeusDados(m) {
   if (!m || typeof m !== "object") return "";
   const lista = (x) => (Array.isArray(x) ? x : []);
@@ -1097,7 +1110,7 @@ function mnrCartaoMeusDados(m) {
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Ministério com menores</h4>
       ${itens("Aceites da política de comunicação", politicas.map(p => `versão ${escaparHtmlEbd(p.versao)} · ${escaparHtmlEbd(mnrTem(MNR_ROTULO_FORMA_POLITICA, p.forma) ? MNR_ROTULO_FORMA_POLITICA[p.forma] : p.forma)} · ${mnrDataHora(p.aceitoEm)}${p.enderecoIp ? ` · IP ${escaparHtmlEbd(p.enderecoIp)}` : ""}${p.referencia ? ` · ficha: ${escaparHtmlEbd(p.referencia)}` : ""}`))}
       ${linha("Ficha cadastral confirmada em", m.fichaConfirmadaEm ? mnrDataHora(m.fichaConfirmadaEm) : "")}
-      ${itens("Retiradas automáticas da escala", retiradas.map(r => `${mnrDataHora(r.em)} — ${escaparHtmlEbd(r.equipe)} (${Number(r.escalasDesmarcadas) || 0} escala(s) desmarcada(s))`))}
+      ${itens("Retiradas automáticas da escala e das turmas da EBD", retiradas.map(mnrLinhaRetiradaMeusDados))}
       ${itens("Comunicações que você fez à Diretoria", comunicacoes.map(c => `${escaparHtmlEbd(c.tipoRotulo || c.tipo)} · soube em ${mnrData(c.dataCiencia)} · comunicada em ${mnrDataHora(c.declaradaEm)} · ${escaparHtmlEbd(mnrTem(MNR_ROTULO_SITUACAO_AD, c.situacao) ? MNR_ROTULO_SITUACAO_AD[c.situacao] : c.situacao)}${c.decisaoRotulo ? ` (${escaparHtmlEbd(c.decisaoRotulo)}${c.decididaEm ? ` em ${mnrDataHora(c.decididaEm)}` : ""})` : ""}${c.decisaoObservacao ? ` — ${escaparHtmlEbd(c.decisaoObservacao)}` : ""}${c.liberadoEm ? ` · afastamento levantado em ${mnrDataHora(c.liberadoEm)}${c.liberacaoObservacao ? ` — ${escaparHtmlEbd(c.liberacaoObservacao)}` : ""}` : ""}`))}
       ${itens("Consultas ao cadastro nacional", consultas.map(c => `${escaparHtmlEbd(c.fonte)} · ${escaparHtmlEbd(mnrTem(MNR_ROTULO_CADASTRO, c.resultado) ? MNR_ROTULO_CADASTRO[c.resultado] : c.resultado)} · ${mnrDataHora(c.em)}`))}
       ${m.aviso ? `<p class="subtitle">${escaparHtmlEbd(m.aviso)}</p>` : ""}

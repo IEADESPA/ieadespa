@@ -2743,7 +2743,11 @@ notificada. Testar cada fluxo manualmente, não só confiar no "parece certo".
 
      A lista de responsáveis de uma criança continua visível ao voluntário apto da sala: é como ele escolhe quem
      trouxe.
-  5. *Deploy real aconteceu?* Ver o registro da produção logo abaixo.
+  5. *Deploy real aconteceu?* **Sim.** Merge `e5acfdc` na `main` em 20/10/2026 (reverter: `git revert -m 1 e5acfdc`).
+     A produção aplicou as migrações 145, 146 e 147 e passou na varredura de rotas (corrida 39482372783). O teste de
+     tela da produção deu 1.052 ações iguais no computador e 142 no celular, sem divergência e sem violação de CSP
+     (corrida 39482372666). As rotas novas respondem 401 sem login (`/api/checkin-infantil/*` e
+     `ebd-turmas/turmas/menores`) e a casca do aplicativo está na v34. Fechada esta trava, a FASE 7 segue para a v7.11.
 
 ## v7.11 — Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*
 

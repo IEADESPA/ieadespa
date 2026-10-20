@@ -2578,7 +2578,8 @@ ganham a atividade "Check-in infantil" (criança, saúde e custódia são dado s
 
 **Avisos.** Obrigatórios (o destinatário não desliga): *retirada divergente* (responsáveis, líder e gestão da
 congregação), *criança sem retirada registrada* (a rotina diária da manhã seguinte avisa a gestão se alguma criança
-ficou "na sala" depois do fim do serviço) e *segunda via emitida* (responsáveis).
+ficou "na sala" depois do fim do serviço), *segunda via emitida* (responsáveis) e, desde 20/10/2026, *criança entregue
+ou retirada por um terceiro* (responsáveis cadastrados; ver as emendas abaixo).
 
 **Portão da EBD.** A turma ganha a marca "com menores" (começa **desmarcada**, para nada mudar de uma hora para outra) e
 o nome que parece infantil ("Crianças", "Juniores"...) gera o mesmo alerta que a equipe sem marca já gera. Com a marca,
@@ -2639,9 +2640,17 @@ O que o contrato precisou mudar:
   tirando essa permissão do usuário do banco: decisão de operação); a cadeia de hash da auditoria geral que pode
   bifurcar com gravações simultâneas (anterior a esta versão e do sistema todo); busca de criança por GET leva
   pedaço do nome no endereço (o Application Insights o registra).
-- **Decisões que ficam com o responsável da igreja (não implementadas):** (1) avisar os **responsáveis cadastrados**
-  sempre que quem trouxe a criança não é responsável cadastrado nem autorizado (hoje a pessoa digitada no balcão
-  ganha direito de retirar só com o código e ninguém é avisado); (2) a retirada comum com **dois olhares** ou
+- **Aviso ao responsável quando um terceiro traz ou retira a criança (decidido pela liderança em 20/10/2026).** Quem
+  trouxe a criança sem ser responsável cadastrado (nome digitado no balcão) ganha direito de retirar só com o código;
+  agora os **responsáveis cadastrados** recebem, na hora, um aviso obrigatório em dois momentos: na **entrega**
+  (`CHECKIN_TERCEIRO_ENTREGA`) e na **retirada** feita por esse terceiro ou pelo indicado só para a visita por ele
+  (`CHECKIN_TERCEIRO_RETIRADA`). O texto nomeia o terceiro e o **primeiro** nome da criança (nunca documento, telefone
+  nem saúde); irmãos com os mesmos responsáveis recebem um aviso só. Não avisa quando quem trouxe é responsável
+  cadastrado, nem quando quem retira é da lista fixa (feita por um responsável ou com a ficha); criança visitante e
+  criança sem responsável cadastrado não têm a quem avisar (sem alarme). A retirada de quem **não está na lista**
+  continua com o aviso próprio (divergente). Se o aviso não sair, o ato vale (já está gravado) e a resposta ao voluntário
+  traz `semAviso` e manda ligar para a família.
+- **Decisões que ficam com o responsável da igreja (não implementadas):** (2) a retirada comum com **dois olhares** ou
   exigindo que quem retira seja outro voluntário que não o que fez o check-in (hoje só a divergente e a segunda via
   têm dois olhares); (3) deixar o voluntário **reentrar na sala depois da janela** só para retirar com o código
   (hoje só a baixa administrativa resolve).

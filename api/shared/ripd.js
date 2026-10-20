@@ -87,6 +87,7 @@ const RIPDS = [
       "O registro de custódia e o histórico de atos não se apagam nem se alteram (gatilhos no banco); a auditoria geral recebe só ids e códigos: nunca nome de criança, código, saúde nem texto livre",
       "O responsável vê só o histórico das próprias crianças (data, sala, quem trouxe, quem retirou), nunca o código, nunca o nome do voluntário, nunca a saúde dos outros; quem fez 18 anos sai do histórico do responsável",
       "A criança que ficou na sala sem retirada registrada é regularizada pela liderança (baixa administrativa, com motivo, só depois que o check-in da sala fecha, com confirmação reforçada e evento imutável): não vira retirada de ninguém e o responsável a vê como \"encerrada pela liderança\"",
+      "Quando a criança é entregue ou retirada por um TERCEIRO (quem trouxe sem ser responsável cadastrado, ou o indicado só para a visita por essa pessoa), os responsáveis cadastrados recebem na hora um aviso obrigatório com o nome do terceiro e o primeiro nome da criança (nunca documento, telefone nem saúde); se o aviso não sair, a resposta ao voluntário manda ligar para a família",
       "A autorização de retirada feita por um responsável deixa de valer quando ele deixa de ser responsável cadastrado (a liderança é avisada); o relatório do dia da sala é só da liderança; o voluntário não vê a aptidão dos colegas",
       "A criança visitante não ganha cadastro: nome e nascimento ficam só no registro da visita, o telefone de quem a trouxe é apagado em 90 dias e o registro é anonimizado em 5 anos"
     ],

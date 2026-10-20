@@ -1,8 +1,9 @@
 // ProtecaoVerificador (v7.8) — a rotina horária da proteção de crianças.
-// O prazo de 24 horas para comunicar o Conselho Tutelar não espera a rodada diária das 7h: esta rotina roda de hora em hora (.github/workflows/rotinas-protecao.yml, mesmo
+// O prazo máximo de 24 horas da Igreja para comunicar o Conselho Tutelar (a lei manda comunicar imediatamente) não espera a rodada diária das 7h: esta rotina roda de hora em hora (.github/workflows/rotinas-protecao.yml, mesmo
 // padrão do NotificacoesAgendador: httpTrigger protegido por segredo, shared/cronAuth.js) e faz duas coisas, nesta ordem:
 //   1) retira das escalas com menores quem está sob afastamento cautelar (refaz a retirada imediata caso ela tenha falhado);
-//   2) avalia SÓ as regras da proteção (aviso do incidente novo, relógio de 12 h / 4 h / vencido, padrão de quebras, Comitê incompleto, afastamento sem decisão). O motor não duplica aviso.
+//   2) avalia SÓ as duas regras da proteção que não podem esperar (REGRAS_DA_PROTECAO: a rede do aviso do incidente novo e o relógio de 12 h / 4 h / vencido) e reenvia os e-mails
+//      obrigatórios que não saíram. O motor não duplica aviso. Padrões, Comitê incompleto, afastamento sem decisão e o resumo ficam na rodada diária das 7h.
 // Resposta 500 quando a retirada ou um detector da proteção falha: o job do GitHub fica vermelho e alguém vê. O que protege criança não falha em silêncio.
 const { getPool } = require("../shared/db");
 const { avaliarRegras } = require("../shared/notificacaoMotor");

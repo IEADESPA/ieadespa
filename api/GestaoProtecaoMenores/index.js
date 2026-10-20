@@ -1,5 +1,5 @@
 // GestaoProtecaoMenores (v7.8 — Incidentes, notificação obrigatória e escuta protegida)
-// ECA Art. 13 e Art. 245 (comunicar a suspeita ao Conselho Tutelar; multa pela omissão); Lei 13.431/2017 (escuta protegida: a Igreja acolhe e encaminha, não inquire);
+// ECA Arts. 13, 70-B e 245 (comunicar a suspeita ao Conselho Tutelar imediatamente; multa pela omissão); Lei 14.344/2022, arts. 23 e 26; Lei 13.431/2017 (escuta protegida: a Igreja acolhe e encaminha, não inquire);
 // Regimento Art. 133 §5º; LGPD arts. 11 e 14.
 //
 // Toda a regra está em shared/protecaoMenores.js (pura, testada); o banco, em shared/protecaoDb.js. O afastamento cautelar do envolvido vale em todas as escalas, convites,
@@ -8,7 +8,9 @@
 // ---- De qualquer pessoa logada (inclusive PIN) ---------------------------------------------------------------------------------------------------
 //  GET  catalogos     -> { niveis[], orgaos[], formas[], quemRelatou[], resultados[], decisoes[], contatosDeAjuda[], roteiroEscuta[], naoFaca[], horasPrazo, papeis:{gestao,geral} }
 //  GET  meus          -> { incidentes[{protocolo,nivelRotulo,dataOcorrencia,situacao,registradoEm}] }      (só o que a própria pessoa registrou, sem relato nem andamento)
-//  POST registrar     body:{nivel,dataOcorrencia,congregacaoId,equipeId?,onde?,descricao,envolvidoMembroId?,envolvidoNome?,relatadoPor?,relato?,conhecidoHaHoras?}
+//  POST registrar     body:{nivel,dataOcorrencia,congregacaoId,equipeId?,onde?,descricao,envolvidoMembroId?,envolvidoNome?,envolvidoDaLideranca?,relatadoPor?,relato?,conhecidoHaHoras?}
+//                     (envolvidoDaLideranca: true/false — "a pessoa envolvida é da liderança desta congregação"; marcado, ou com o envolvido sem matrícula válida, o caso fica só com o
+//                      nível geral: o Dirigente local não recebe o aviso, não vê a fila nem lê o relato — shared/protecaoDb.js, somenteNivelGeral)
 // ---- Gestão (permissão protecao_menores, sessão de liderança; o Dirigente só enxerga a sua congregação) -----------------------------------------------
 //  GET  incidentes?status=ABERTO|ENCERRADO   -> { incidentes[] }       GET incidente?incidenteId=  -> { detalhe }
 //  POST relato        body:{incidenteId}          -> lê o relato (confirmação reforçada; cada leitura fica registrada)

@@ -298,6 +298,31 @@ async function registrarManual(pool, { menorId, responsavelId, finalidade, conce
   };
 }
 
+// Exclusão LGPD (art. 18, VI) do próprio menor, executada pelo Encarregado (Trava 7-B, 20/10/2026): cada finalidade cuja ÚLTIMA linha concede ganha a linha de revogação, na transação da
+// exclusão (`novaRequisicao` = () => new sql.Request(transaction)). A trilha é de acréscimo e a linha precisa de um responsável: fica o mesmo que concedeu. A forma é a ficha
+// (FICHA_FISICA, com a solicitação como referência e o Encarregado como quem registrou); se o Encarregado é o próprio responsável que concedeu (a regra CK_MenoresConsent_Ficha não
+// deixa), a linha é dele, como CLICK_RESP sem IP — o mesmo que a revogação do responsável faz sem IP. Os efeitos (apagar a foto e a saúde) quem chama faz na mesma transação.
+// Devolve as finalidades revogadas.
+async function revogarNaExclusaoLgpd(novaRequisicao, { menorId, por, solicitacaoId }) {
+  const revogadas = [];
+  for (const finalidade of mc.CODIGOS_FINALIDADE) {
+    const t = mc.textoDe(finalidade);
+    const r = await novaRequisicao().input("mn", sql.Int, menorId).input("f", sql.NVarChar(14), finalidade).input("ver", sql.Int, t.versao).input("h", sql.NVarChar(64), t.hash)
+      .input("por", sql.Int, por).input("ip", sql.NVarChar(45), mc.IP_INDISPONIVEL).input("ref", sql.NVarChar(200), `Solicitação LGPD ${solicitacaoId}: exclusão executada pelo Encarregado de Dados`.slice(0, mc.MAX_REFERENCIA || 200))
+      .query(`INSERT INTO ${TABELA} (MenorMembroId, ResponsavelMembroId, Finalidade, Concedido, TextoVersao, TextoHash, Forma, EnderecoIp, Referencia, RegistradoPorMembroId)
+              SELECT u.MenorMembroId, u.ResponsavelMembroId, u.Finalidade, 0, @ver, @h,
+                     CASE WHEN u.ResponsavelMembroId = @por THEN N'CLICK_RESP' ELSE N'FICHA_FISICA' END,
+                     CASE WHEN u.ResponsavelMembroId = @por THEN @ip ELSE NULL END,
+                     @ref,
+                     CASE WHEN u.ResponsavelMembroId = @por THEN NULL ELSE @por END
+              FROM ${TABELA} u WITH (UPDLOCK, HOLDLOCK)
+              WHERE u.MenorMembroId = @mn AND u.Finalidade = @f AND u.Concedido = 1 AND ${ULTIMA("u")};
+              SELECT @@ROWCOUNT AS n`);
+    if (Number(((r.recordset || [])[0] || {}).n) > 0) revogadas.push(finalidade);
+  }
+  return revogadas;
+}
+
 // ---------------------------------------------------------------
 // Retenção do IP (LGPD art. 16) e direito de acesso do titular (art. 18)
 // ---------------------------------------------------------------
@@ -341,5 +366,5 @@ async function dadosDoTitular(pool, membroId) {
 
 module.exports = {
   lerMembro, mapearLinha, carregarContexto, estadoDaFinalidade, estadosDoContexto, acessoAoMenor, estadoDoMenor, menoresDoResponsavel, consentimentoVigente,
-  inserirLinha, apagarFotoDoMenor, apagarFotosDeMenoresSemConsentimento, conceder, revogar, registrarManual, anonimizarIpsVencidos, dadosDoTitular
+  inserirLinha, apagarFotoDoMenor, apagarFotosDeMenoresSemConsentimento, conceder, revogar, registrarManual, revogarNaExclusaoLgpd, anonimizarIpsVencidos, dadosDoTitular
 };

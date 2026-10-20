@@ -85,7 +85,7 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   await insFalha("documento fora da lista é recusado", { TrouxeDocumento: "PASSAPORTE" }, /CK_CheckinReg_TrouxeDoc|truncat/i);
   await insFalha("saúde sem origem é recusada", { SaudeTexto: "alergia a amendoim" }, /CK_CheckinReg_Saude/);
   await insFalha("saúde do balcão sem versão e hash do texto é recusada", { SaudeTexto: "alergia a amendoim", SaudeOrigem: "BALCAO" }, /CK_CheckinReg_Saude/);
-  await insFalha("origem da saúde fora da lista é recusada", { SaudeTexto: "alergia", SaudeOrigem: "OUTRA" }, /CK_CheckinReg_Saude(Origem)?/);   // (as duas regras recusam; o banco diz qualquer uma delas, conforme a ordem em que foram criadas)
+  await insFalha("origem da saúde fora da lista é recusada", { SaudeTexto: "alergia", SaudeOrigem: "OUTRA" }, /CK_CheckinReg_Saude(Origem)?/);   // (as duas regras recusam; o banco diz qualquer uma delas, conforme a ordem em que foram criadas)
   await insFalha("RETIRADA sem horário nem quem retirou é recusada", { Situacao: "RETIRADA" }, /CK_CheckinReg_Estado/);
   await insFalha("retirada pendente sem a marca de divergente é recusada", { Situacao: "RETIRADA_PENDENTE", RetiradoTipo: "OUTRO", DivergenciaPedidaEm: new Date() }, /CK_CheckinReg_Estado/);
   await insFalha("criança 'na sala' com dados de retirada é recusada", { RetiradoTipo: "RESPONSAVEL" }, /CK_CheckinReg_Estado/);

@@ -59,9 +59,9 @@ const RIPDS = [
     medidasMitigacao: [
       "A Igreja COMUNICA, não investiga: não há campo de pergunta nem de inquirição; o formulário mostra o roteiro (acolher, registrar como foi dito, encaminhar) e o que NÃO fazer",
       "O relato fica em tabela à parte, só de acréscimo (gatilho no banco); um relato por incidente (repetir a escuta machuca de novo); só a liderança de proteção lê, com a confirmação reforçada (vD.4), e cada leitura fica registrada",
-      "Quem é envolvido nunca vê o incidente: para ele não existe; o Dirigente só enxerga a sua congregação",
+      "Quem é envolvido nunca vê o incidente: para ele não existe; o Dirigente só enxerga a sua congregação, e o caso fica só com a Diretoria e o Comitê quando quem registra diz que a pessoa envolvida é da liderança local ou quando algum envolvido não tem matrícula (o Dirigente apontado só pelo nome não recebe nem lê o próprio caso)",
       "Os avisos (e-mail sai do sistema) não levam nome de criança, nome do envolvido nem conteúdo; a auditoria não leva o nível do incidente, quem registrou nem o número do caso das suspeitas de violência",
-      "O prazo de 24 horas é calculado na leitura (vence mesmo sem rotina) e uma rotina de hora em hora avisa em 12 h, 4 h e vencido; o caso de suspeita de violência só encerra com comunicação COM comprovante e a decisão do Comitê sobre o afastamento; uma suspeita nunca é rebaixada",
+      "A lei manda comunicar ao Conselho Tutelar imediatamente; o prazo MÁXIMO interno de 24 horas é calculado na leitura (vence mesmo sem rotina) e uma rotina de hora em hora avisa em 12 h, 4 h e vencido; o caso de suspeita de violência só encerra com comunicação COM comprovante e a decisão do Comitê sobre o afastamento; uma suspeita nunca é rebaixada",
       "O afastamento cautelar é medida protetiva, não punição: a mensagem à pessoa não diz o motivo, ela só volta pela decisão do Comitê e o sistema não rebaixa sozinho; ninguém decide sobre o próprio afastamento",
       "O canal de ajuda sem login não guarda IP nem cabeçalhos e responde sempre com os telefones 100 e 190; tem limite por origem e teto por hora contra inundação",
       "O Comitê de Proteção precisa de pelo menos 3 pessoas e uma que não seja do clero (calculado do cadastro, não digitado); sem isso a Diretoria é avisada toda semana"
@@ -99,7 +99,7 @@ const RIPDS = [
     riscoIdentificado: "Dado de saúde de criança é sensível por natureza; impresso num crachá no peito dela, qualquer pessoa o lê; guardado depois do consentimento, vira dado sem finalidade; e um erro de transcrição pode ser tão perigoso quanto a falta do aviso.",
     medidasMitigacao: [
       "Só com o consentimento específico e em destaque do responsável (finalidade SAUDE_CRACHA, texto versionado com hash): sem consentimento vigente o dado nem é gravado e não sai na etiqueta",
-      "Revogar o consentimento apaga o dado e as cópias nos registros de check-in na mesma operação; a rotina diária apaga o de quem perdeu o consentimento por outro caminho (responsável desativado, criança que fez 18 anos)",
+      "Revogar o consentimento apaga o dado e as cópias nos registros de check-in logo em seguida; se esse apagar falhar, a tela da sala e a etiqueta da segunda via já não mostram a saúde (a leitura confere o consentimento na hora) e a rotina diária apaga o que ficou, inclusive de quem perdeu o consentimento por outro caminho (responsável desativado, criança que fez 18 anos); a exclusão LGPD do titular apaga a saúde e revoga os consentimentos na mesma transação",
       "Quem informa é o responsável (Meu Painel) ou a Secretaria com a ficha assinada (a referência é obrigatória); o texto é livre só até 400 caracteres e sem marcação, e nunca vai para a auditoria",
       "O dado informado no balcão para criança visitante vale só para aquela visita e é apagado em 90 dias",
       "O que sai na etiqueta é só o texto que o responsável escolheu; a equipe da sala o lê, a liderança também, mais ninguém; o responsável pode apagá-lo quando quiser",

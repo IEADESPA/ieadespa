@@ -355,7 +355,7 @@ GO
 
 -- ---- 5) Saúde da criança membro (alergia e condição de saúde) ----
 -- Uma linha por criança, escrita pelo responsável (Meu Painel) ou pela Secretaria (ficha assinada), e só enquanto vale o consentimento de saúde da v7.7
--- (MinisterioMenoresConsentimentos, finalidade SAUDE_CRACHA). Revogar o consentimento apaga esta linha e as cópias nos registros, na mesma operação.
+-- (MinisterioMenoresConsentimentos, finalidade SAUDE_CRACHA). Revogar o consentimento apaga esta linha e as cópias nos registros logo em seguida (se falhar, a leitura não mostra e a rotina diária apaga).
 
 IF OBJECT_ID(N'dbo.CheckinInfantilSaude', N'U') IS NULL
 BEGIN

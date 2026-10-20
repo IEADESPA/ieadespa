@@ -199,7 +199,8 @@ describe("revogar e listar (Secretaria)", () => {
     expect(chamadas[3].sql).toMatch(/AS SuspensaSemResponsavel/);
     expect(chamadas[4].sql).toMatch(/CAST\(s\.DataHora AS DATE\) >= @hoje/);
     // nada é alterado na adesão (a prova): nenhuma escrita além da revogação
-    expect(chamadas.filter(c => /^\s*(INSERT|UPDATE|DELETE)/i.test(c.sql)).map(c => c.sql)).toEqual([expect.stringMatching(/UPDATE VoluntariadoResponsaveis SET RevogadoEm/)]);
+    // (v7.10, revisão) a única escrita a mais é a revogação do que ELE autorizou a retirar a criança no check-in (a leitura já ignora; aqui a linha é revogada de vez); a adesão não é tocada
+    expect(chamadas.filter(c => /^\s*(INSERT|UPDATE|DELETE)/i.test(c.sql)).map(c => c.sql)).toEqual([expect.stringMatching(/UPDATE VoluntariadoResponsaveis SET RevogadoEm/), expect.stringMatching(/UPDATE CheckinInfantilAutorizados SET RevogadoEm/)]);
   });
   test("lista os responsáveis do menor, ativos e revogados, com o documento que a Secretaria conferiu", async () => {
     const { pool } = criarPoolFalso([[menor()], [

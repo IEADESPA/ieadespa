@@ -19,6 +19,7 @@ const setoresTecnicosDb = require("../shared/setoresTecnicosDb");
 const mmDb = require("../shared/ministerioMenoresDb");
 const vistoriaDb = require("../shared/vistoriaAntecedentesDb");
 const menoresConsentimentoDb = require("../shared/menoresConsentimentoDb");
+const checkinInfantilDb = require("../shared/checkinInfantilDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -120,6 +121,8 @@ module.exports = async function (context, req) {
   const consentimentosMenores = await menoresConsentimentoDb.dadosDoTitular(pool, alvo);
   // v7.7 — ministério com menores: o aceite da política (com o IP dela), a ficha confirmada, as retiradas da escala e as comunicações que a própria pessoa fez à Diretoria.
   const ministerioMenores = await mmDb.dadosDoTitular(pool, alvo);
+  // v7.10 — check-in infantil: quantas vezes a pessoa (como criança, como quem trouxe ou retirou, como autorizada) consta nos registros e se há dado de saúde dela guardado.
+  const checkinInfantil = await checkinInfantilDb.dadosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -142,7 +145,8 @@ module.exports = async function (context, req) {
       setoresTecnicos,
       vistoriasAntecedentes,
       consentimentosMenores,
-      ministerioMenores
+      ministerioMenores,
+      checkinInfantil
     }
   };
 };

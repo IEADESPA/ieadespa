@@ -40,6 +40,9 @@ Cada versão parte da base da anterior (`BASE=...`):
 - **v7.8** (incidentes de proteção), base `cenario-protecao`: `e2e-13` (setup e migração 144), `e2e-14` (fluxos), `e2e-15` (segurança),
   `e2e-16` (corridas com vários processos) e `e2e-17` (o que a revisão independente pediu: vínculo do envolvido, tetos, regra obrigatória,
   rotina horária, reenvio de e-mail).
+- **v7.10** (check-in infantil), base `cenario-checkin` (`bash rodar.sh preparar-checkin` a refaz a partir da `cenario-protecao`): `e2e-18` (migração 145 e cenário),
+  `e2e-19` (fluxos), `e2e-20` (segurança), `e2e-21` (corridas com vários processos) e `e2e-22` (a revisão adversarial do servidor: encerrar a sala, autorizados × responsável
+  revogado, portão da EBD, retenção, avisos que não falham em silêncio, cache dos prazos). **Cada um parte da base sozinho** (não rode dois no mesmo banco).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

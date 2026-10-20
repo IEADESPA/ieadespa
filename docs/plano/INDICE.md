@@ -153,7 +153,7 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 56/85 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 64/86 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -168,8 +168,8 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | v7.7 | [Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*](fase-7-saude-eventos-e-comunicacao.md#v77--habilitação-para-ministério-com-menores-7ª-rodada--obrigação-legal-vigente) | ✅ 10/10 |
 | v7.8 | [Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*](fase-7-saude-eventos-e-comunicacao.md#v78--incidentes-notificação-obrigatória-e-escuta-protegida-7ª-rodada--obrigação-legal) | ✅ 7/7 |
 | v7.9 | [Movida para a v8.1 (fase 8), na íntegra](fase-7-saude-eventos-e-comunicacao.md#v79--movida-para-a-v81-fase-8-na-íntegra) | — |
-| v7.10 | [Check-in infantil com cadeia de custódia *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v710--check-in-infantil-com-cadeia-de-custódia-7ª-rodada) | ⬜ 0/7 |
-| 🔒 7-B | [antes de avançar para a v7.11](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-b--antes-de-avançar-para-a-v711) | — |
+| v7.10 | [Check-in infantil com cadeia de custódia *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v710--check-in-infantil-com-cadeia-de-custódia-7ª-rodada) | ✅ 7/7 |
+| 🔒 7-B | [antes de avançar para a v7.11](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-b--antes-de-avançar-para-a-v711) | ✅ 1/1 |
 | v7.11 | [Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v711--cuidado-pastoral-filas-com-responsável-prazo-e-sigilo-7ª-rodada) | ⬜ 0/4 |
 | v7.12 | [Comunicação: consentimento granular e envio segmentado *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v712--comunicação-consentimento-granular-e-envio-segmentado-7ª-rodada) | ⬜ 0/5 |
 | v7.13 | [Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*](fase-7-saude-eventos-e-comunicacao.md#v713--eventos-inscrições-e-congressos-7ª-rodada--expande-v74) | ⬜ 0/5 |

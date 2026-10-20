@@ -69,12 +69,23 @@ module.exports = async function (context, req) {
   } catch (e) {
     context.log.error("[MENORES] falha na retenção LGPD dos consentimentos:", e.message);
   }
+  // v7.10 — check-in infantil: o dado de saúde de quem perdeu o consentimento sai, o telefone de visitante e a saúde do balcão saem no prazo curto e, no prazo de guarda, o
+  // registro é anonimizado. Fail-soft como as outras retenções (a próxima rodada repete); o que protege criança de verdade — a retirada e os avisos — não depende disto.
+  let retencaoCheckin = null;
+  try {
+    const checkinDb = require("../shared/checkinInfantilDb");
+    const saude = await checkinDb.apagarSaudeSemConsentimento(pool);
+    retencaoCheckin = { saudeApagada: saude.apagadas, ...(await checkinDb.aplicarRetencao(pool)) };
+    context.log(`[CHECKIN] retenção LGPD: ${retencaoCheckin.saudeApagada} saúde(s) sem consentimento apagada(s), ${retencaoCheckin.contatosApagados} contato(s) de visitante apagado(s), ${retencaoCheckin.anonimizados} registro(s) anonimizado(s).`);
+  } catch (e) {
+    context.log.error("[CHECKIN] falha na retenção LGPD:", e.message);
+  }
   // A rotina é fail-soft de propósito (uma falha não derruba as outras), mas a retirada que protege criança e os detectores do ministério com menores NÃO podem falhar em silêncio:
   // aí a resposta é 500, o job do GitHub fica vermelho e o aviso de "rotina falhou" sai. (Tudo o mais já rodou: a resposta vem no fim.)
-  const falhaMenores = retiradaFalhou || falhas.some((k) => String(k).startsWith("MENORES_") || String(k).startsWith("PROTECAO_"));
+  const falhaMenores = retiradaFalhou || falhas.some((k) => String(k).startsWith("MENORES_") || String(k).startsWith("PROTECAO_") || String(k).startsWith("CHECKIN_") || String(k).startsWith("EBD_PROFESSOR"));
   context.res = {
     status: falhaMenores ? 500 : 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: !falhaMenores, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retiradaMenores, retiradaFalhou, detectoresComFalha: falhas },
+    body: { sucesso: !falhaMenores, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, detectoresComFalha: falhas },
   };
 };

@@ -220,7 +220,10 @@ async function conceder(pool, { menorId, responsavelId, finalidade, aceito, text
 
 // Qualquer responsável ATIVO revoga (não só quem concedeu) — a qualquer momento, sem caixa, sem hash e sem exigir IP público (LGPD art. 8º, § 5º). Revogar IMAGEM apaga
 // o arquivo da foto do menor. Revogar o que já estava revogado não grava de novo (mas, para IMAGEM, ainda limpa uma foto que tenha sobrado: quem pede para apagar
-// quer a foto apagada). v7.10: quando o dado de saúde do crachá existir, é AQUI (finalidade SAUDE_CRACHA) que ele deve ser apagado.
+// quer a foto apagada). v7.10: revogar SAUDE_CRACHA apaga o dado de saúde da criança e as cópias nos registros do check-in infantil, na mesma operação (idem pela ficha).
+async function apagarSaudeAoRevogar(pool, { menorId, por }) {
+  return require("./checkinInfantilDb").apagarSaudeDoMenor(pool, { menorId, por });
+}
 async function revogar(pool, { menorId, responsavelId, finalidade, ip = null, cadeia = null, hoje = hojeBrasilia() }) {
   const v = mc.validarRevogar({ menorId, responsavelId, finalidade });
   if (!v.valido) return { sucesso: false, ...(v.proibido ? { proibido: true } : {}), mensagem: v.mensagem };
@@ -235,6 +238,7 @@ async function revogar(pool, { menorId, responsavelId, finalidade, ip = null, ca
   const ehImagem = d.finalidade === "IMAGEM";
   if (linha && !linha.concedido) {
     const fotoApagada = ehImagem ? await apagarFotoDoMenor(pool, { menorId: d.menorId, fotoUrl: menor.FotoUrl, por: d.responsavelId }) : false;
+    if (d.finalidade === "SAUDE_CRACHA") await apagarSaudeAoRevogar(pool, { menorId: d.menorId, por: d.responsavelId });     // quem pede para apagar quer o dado apagado, mesmo que a linha já estivesse revogada
     return { sucesso: true, jaRevogada: true, fotoApagada, mensagem: mc.mensagemJaRevogado({ finalidade: d.finalidade, fotoApagada }), estado: estadoDaFinalidade(d.finalidade, linha, ctx.ativos, { visitanteId: d.responsavelId }) };
   }
   const t = mc.textoDe(d.finalidade);
@@ -244,6 +248,7 @@ async function revogar(pool, { menorId, responsavelId, finalidade, ip = null, ca
   const fotoApagada = ehImagem && !!menor.FotoUrl;
   await registrarAuditoria({ tabela: TABELA, registroId: id, acao: "MENOR_CONSENTIMENTO_REVOGADO", usuarioId: d.responsavelId, dadosDepois: { menorId: d.menorId, finalidade: d.finalidade, forma: "CLICK_RESP", fotoApagada } });
   if (ehImagem) await apagarFotoDoMenor(pool, { menorId: d.menorId, fotoUrl: menor.FotoUrl, por: d.responsavelId });
+  if (d.finalidade === "SAUDE_CRACHA") await apagarSaudeAoRevogar(pool, { menorId: d.menorId, por: d.responsavelId });
   const nova = { consentimentoId: id, menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: false, textoVersao: t.versao, textoHash: t.hash, forma: "CLICK_RESP", registradoEm: new Date().toISOString(), referencia: null };
   return {
     sucesso: true, consentimentoId: id, fotoApagada, mensagem: mc.mensagemRevogado({ finalidade: d.finalidade, menorNome: menor.Nome, fotoApagada }),
@@ -276,6 +281,7 @@ async function registrarManual(pool, { menorId, responsavelId, finalidade, conce
     if (atual.situacao === "CONCEDIDO" && linha.textoHash === d.textoHash) return { sucesso: false, mensagem: mc.mensagemJaConcedido() };
   } else if (linha && !linha.concedido) {
     const fotoApagada = ehImagem ? await apagarFotoDoMenor(pool, { menorId: d.menorId, fotoUrl: menor.FotoUrl, por: d.registradoPor }) : false;
+    if (d.finalidade === "SAUDE_CRACHA") await apagarSaudeAoRevogar(pool, { menorId: d.menorId, por: d.registradoPor });
     return { sucesso: true, jaRevogada: true, fotoApagada, mensagem: mc.mensagemJaRevogado({ finalidade: d.finalidade, fotoApagada }), estado: estadoDaFinalidade(d.finalidade, linha, ctx.ativos, { paraGestao: true }) };
   }
   const id = await inserirLinha(pool, { menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: d.concedido, textoVersao: d.textoVersao, textoHash: d.textoHash, forma: "FICHA_FISICA", referencia: d.referencia, por: d.registradoPor });
@@ -284,11 +290,37 @@ async function registrarManual(pool, { menorId, responsavelId, finalidade, conce
   await registrarAuditoria({ tabela: TABELA, registroId: id, acao: "MENOR_CONSENTIMENTO_FICHA", usuarioId: d.registradoPor,
     dadosDepois: { menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: d.concedido, forma: "FICHA_FISICA", textoVersao: d.textoVersao, textoHash: d.textoHash, referenciaTamanho: d.referencia.length, fotoApagada } });
   if (!d.concedido && ehImagem) await apagarFotoDoMenor(pool, { menorId: d.menorId, fotoUrl: menor.FotoUrl, por: d.registradoPor });
+  if (!d.concedido && d.finalidade === "SAUDE_CRACHA") await apagarSaudeAoRevogar(pool, { menorId: d.menorId, por: d.registradoPor });
   const nova = { consentimentoId: id, menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: d.concedido, textoVersao: d.textoVersao, textoHash: d.textoHash, forma: "FICHA_FISICA", registradoEm: new Date().toISOString(), referencia: d.referencia };
   return {
     sucesso: true, consentimentoId: id, fotoApagada, mensagem: mc.mensagemRegistroManual({ finalidade: d.finalidade, menorNome: menor.Nome, concedido: d.concedido, fotoApagada }),
     estado: estadoDaFinalidade(d.finalidade, nova, ctx.ativos, { paraGestao: true })
   };
+}
+
+// Exclusão LGPD (art. 18, VI) do próprio menor, executada pelo Encarregado (Trava 7-B, 20/10/2026): cada finalidade cuja ÚLTIMA linha concede ganha a linha de revogação, na transação da
+// exclusão (`novaRequisicao` = () => new sql.Request(transaction)). A trilha é de acréscimo e a linha precisa de um responsável: fica o mesmo que concedeu. A forma é a ficha
+// (FICHA_FISICA, com a solicitação como referência e o Encarregado como quem registrou); se o Encarregado é o próprio responsável que concedeu (a regra CK_MenoresConsent_Ficha não
+// deixa), a linha é dele, como CLICK_RESP sem IP — o mesmo que a revogação do responsável faz sem IP. Os efeitos (apagar a foto e a saúde) quem chama faz na mesma transação.
+// Devolve as finalidades revogadas.
+async function revogarNaExclusaoLgpd(novaRequisicao, { menorId, por, solicitacaoId }) {
+  const revogadas = [];
+  for (const finalidade of mc.CODIGOS_FINALIDADE) {
+    const t = mc.textoDe(finalidade);
+    const r = await novaRequisicao().input("mn", sql.Int, menorId).input("f", sql.NVarChar(14), finalidade).input("ver", sql.Int, t.versao).input("h", sql.NVarChar(64), t.hash)
+      .input("por", sql.Int, por).input("ip", sql.NVarChar(45), mc.IP_INDISPONIVEL).input("ref", sql.NVarChar(200), `Solicitação LGPD ${solicitacaoId}: exclusão executada pelo Encarregado de Dados`.slice(0, mc.MAX_REFERENCIA || 200))
+      .query(`INSERT INTO ${TABELA} (MenorMembroId, ResponsavelMembroId, Finalidade, Concedido, TextoVersao, TextoHash, Forma, EnderecoIp, Referencia, RegistradoPorMembroId)
+              SELECT u.MenorMembroId, u.ResponsavelMembroId, u.Finalidade, 0, @ver, @h,
+                     CASE WHEN u.ResponsavelMembroId = @por THEN N'CLICK_RESP' ELSE N'FICHA_FISICA' END,
+                     CASE WHEN u.ResponsavelMembroId = @por THEN @ip ELSE NULL END,
+                     @ref,
+                     CASE WHEN u.ResponsavelMembroId = @por THEN NULL ELSE @por END
+              FROM ${TABELA} u WITH (UPDLOCK, HOLDLOCK)
+              WHERE u.MenorMembroId = @mn AND u.Finalidade = @f AND u.Concedido = 1 AND ${ULTIMA("u")};
+              SELECT @@ROWCOUNT AS n`);
+    if (Number(((r.recordset || [])[0] || {}).n) > 0) revogadas.push(finalidade);
+  }
+  return revogadas;
 }
 
 // ---------------------------------------------------------------
@@ -334,5 +366,5 @@ async function dadosDoTitular(pool, membroId) {
 
 module.exports = {
   lerMembro, mapearLinha, carregarContexto, estadoDaFinalidade, estadosDoContexto, acessoAoMenor, estadoDoMenor, menoresDoResponsavel, consentimentoVigente,
-  inserirLinha, apagarFotoDoMenor, apagarFotosDeMenoresSemConsentimento, conceder, revogar, registrarManual, anonimizarIpsVencidos, dadosDoTitular
+  inserirLinha, apagarFotoDoMenor, apagarFotosDeMenoresSemConsentimento, conceder, revogar, registrarManual, revogarNaExclusaoLgpd, anonimizarIpsVencidos, dadosDoTitular
 };

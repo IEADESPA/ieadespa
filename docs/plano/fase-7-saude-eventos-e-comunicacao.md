@@ -2483,28 +2483,38 @@ uma versão grande: o módulo da AFM **e** a contagem de faltas da CLI (Art. 27)
 Peça operacional que sustenta na prática a v7.7: sem controle de entrega e
 retirada, a política de proteção é só documento.
 
-- [ ] Check-in por família com **etiqueta de segurança**: código aleatório por
+- [x] Check-in por família com **etiqueta de segurança**: código aleatório por
       criança, impresso na etiqueta e no recibo do responsável, **obrigatório na
       retirada** — quem não tem o código não retira, ainda que seja conhecido.
-- [ ] Lista de **pessoas autorizadas a retirar** por criança (reaproveita
-      `VinculosFamiliares` e o flag `ResponsavelLegal`, v1.7 — já existe) e alerta
-      de retirada divergente.
-- [ ] Alergia/condição de saúde impressa na etiqueta (com o consentimento da
+      *(Só o HMAC do código é guardado; 5 erros travam a criança, com a tentativa reservada no banco antes de
+      conferir; segunda via com dois adultos.)*
+- [x] Lista de **pessoas autorizadas a retirar** por criança e alerta de retirada divergente. *(Texto emendado:
+      a custódia se apoia no cadastro de responsáveis da Secretaria, `VoluntariadoResponsaveis`, e não no vínculo
+      familiar de autoatendimento — ver o contrato. A divergente só sai com o código e a aprovação da liderança.)*
+- [x] Alergia/condição de saúde impressa na etiqueta (com o consentimento da
       v7.7) e contagem de lotação por sala em tempo real — a proporção
       adulto/criança deixa de ser estimativa.
-- [ ] Registro de horário e de **quem entregou e quem retirou** — é a prova
-      auditável que protege a igreja e a família.
-- [ ] Bloqueio de voluntário sem habilitação vigente (v7.7) na sala, no ato do
-      check-in. *(Planning Center Check-Ins; FellowshipOne; ChurchSuite)*
-- [ ] **Integração com o Portal do Membro (vB.5)**: "meus filhos" no
-      autoatendimento é o pai/responsável legal (`VinculosFamiliares`,
-      `ResponsavelLegal`) consultando o histórico de check-in/check-out dos
-      próprios filhos pelo celular — nunca fazendo o check-in ele mesmo (isso
-      continua sendo ação de voluntário na sala, com a etiqueta física). Sub-aba
-      nova em "Meu Painel", mesma infraestrutura de login/PWA da vB.5.
-- [ ] **Portão da EBD** (o "próximo degrau" que a v7.8 deixou registrado): a turma da EBD marcada como
+- [x] Registro de horário e de **quem entregou e quem retirou** — é a prova
+      auditável que protege a igreja e a família. *(Histórico só de acréscimo, com gatilho no banco; 5 anos.)*
+- [x] Bloqueio de voluntário sem habilitação vigente (v7.7) na sala, no ato do
+      check-in. *(Planning Center Check-Ins; FellowshipOne; ChurchSuite)* *(A aptidão é reavaliada a cada ato; e,
+      desde a Trava 7-B, quem perde a aptidão com a sala aberta tem a presença encerrada e a liderança é avisada.)*
+- [x] **Integração com o Portal do Membro (vB.5)**: "meus filhos" no autoatendimento é o responsável cadastrado
+      consultando o histórico de check-in/check-out dos próprios filhos pelo celular — nunca fazendo o check-in ele
+      mesmo (isso continua sendo ação de voluntário na sala, com a etiqueta física). Sub-aba nova em "Meu Painel".
+- [x] **Portão da EBD** (o "próximo degrau" que a v7.8 deixou registrado): a turma da EBD marcada como
       "com menores" só aceita professor **apto** (a aptidão da v7.7) e perde, na rotina diária, o professor que
-      deixou de ser apto — hoje só as escalas e os canais passam pelo portão.
+      deixou de ser apto. *(Desde a Trava 7-B, o professor da turma marcada também precisa ser adulto e apto a
+      cada ato, e entra no painel e nos avisos de renovação.)*
+
+  **Prova (20/10/2026).** Servidor: jest do `api` inteiro verde; no SQL Server de verdade (LocalDB, handlers
+  reais) e2e-18 (setup e garantias da 145) 241, e2e-19 (fluxos) 413, e2e-20 (segurança) 246, e2e-21 (corridas
+  com vários processos) 49 e e2e-22 (revisão) 189 verificações, 0 falhas. Tela: `tools/front-checkin` 1.488
+  verificações, 0 falhas, e a prova de mutação completa (648 mutações; ver a Trava 7-B). Entrega: migração 145
+  (`sql/migrations/145_checkin_infantil.sql`), `shared/checkinInfantil.js` (a regra, pura),
+  `shared/checkinInfantilDb.js`, a Function `GestaoCheckinInfantil` (`/api/checkin-infantil/<ação>`), o módulo
+  `app/modulos/checkin-infantil.js` (aba Check-in infantil e sub-aba de Meu Painel), a marca "com menores" da
+  turma da EBD e a rota `POST /api/ebd-turmas/turmas/menores`.
 
 ### Contrato da v7.10 (decisões tomadas antes de construir)
 
@@ -2530,7 +2540,10 @@ sala **avisa**, não impede. Uma família faz o check-in de até 6 crianças de 
 pai, mãe, tutor, com o documento conferido pela Secretaria) e é nele que o consentimento já se apoia. O vínculo familiar
 é de **autoatendimento** (qualquer membro pode declarar parentesco), então **não vale para custódia**: quem se diz
 "responsável legal" sozinho não vê histórico nem retira criança. Criança membro sem responsável cadastrado faz o
-check-in como visitante (a pessoa que traz é registrada na hora) e a tela sugere à Secretaria o cadastro.
+check-in como **membro**, com a pessoa que traz registrada na hora (nome, parentesco e documento conferido) e o selo
+"Sem responsável cadastrado" na tela, que sugere à Secretaria o cadastro *(texto emendado em 19/10/2026: o plano
+dizia "como visitante"; a construção ficou assim para a criança não perder o vínculo com a lista de autorizados e o
+histórico que o responsável vai ter depois do cadastro)*.
 
 **O código.** Um **código aleatório por criança, por visita**: 6 caracteres sem os parecidos (sem 0/O, 1/I/L), gerado no
 servidor, impresso na **etiqueta da criança** e no **recibo do responsável**. O servidor guarda só o **HMAC** do código
@@ -2575,7 +2588,8 @@ ganham a atividade "Check-in infantil" (criança, saúde e custódia são dado s
 
 **Avisos.** Obrigatórios (o destinatário não desliga): *retirada divergente* (responsáveis, líder e gestão da
 congregação), *criança sem retirada registrada* (a rotina diária da manhã seguinte avisa a gestão se alguma criança
-ficou "na sala" depois do fim do serviço) e *segunda via emitida* (responsáveis).
+ficou "na sala" depois do fim do serviço), *segunda via emitida* (responsáveis) e, desde 20/10/2026, *criança entregue
+ou retirada por um terceiro* (responsáveis cadastrados; ver as emendas abaixo).
 
 **Portão da EBD.** A turma ganha a marca "com menores" (começa **desmarcada**, para nada mudar de uma hora para outra) e
 o nome que parece infantil ("Crianças", "Juniores"...) gera o mesmo alerta que a equipe sem marca já gera. Com a marca,
@@ -2584,6 +2598,72 @@ líder e a gestão), como já faz com as escalas.
 
 **Fora desta versão (por decisão):** QR no celular do responsável, impressora térmica com integração direta (imprime-se
 pelo navegador, em etiqueta ou papel comum) e modo sem internet — o código em papel já é a prova que a retirada exige.
+
+### Emendas ao contrato (19/10/2026) — depois da revisão adversarial independente
+
+Duas revisões independentes (uma só da tela, outra só do servidor; leitura do código e reproduções) acharam **22 e 32
+problemas, nenhum crítico**. O que o código resolve foi corrigido, cada correção com teste que falha no código antigo.
+O que o contrato precisou mudar:
+
+- **Encerramento da sala (antes só prometido).** A sala **não é mais "só encerra com a sala vazia"** quando alguém
+  esquece de registrar a retirada de uma criança: sem saída, o registro ficava "na sala" para sempre (a janela
+  fecha, ninguém reentra, o código antigo se perdeu e o check-in da semana seguinte era recusado). Agora a
+  **liderança** (`habilitacao_voluntarios` no escopo, confirmação reforçada) dá a **baixa administrativa** pela ação
+  `encerrar-sala`: só vale com a janela do serviço fechada (ou o serviço não publicado, ou sem criança), exige um
+  **motivo** de 5 a 300 caracteres, baixa em lote as crianças que ficaram (situação `RETIRADA`, tipo `BAIXA_ADM`, sem
+  código e sem retirante; quem deu a baixa e o motivo ficam gravados), cancela a segunda via pendente, faz sair os
+  voluntários presentes e registra eventos imutáveis (`BAIXA_ADMINISTRATIVA` por criança e `SALA_ENCERRADA`). Repetir
+  não faz nada. A lista de salas da liderança mostra também as de **dias anteriores** que ainda têm criança sem
+  retirada, marcadas "Dia anterior". O aviso diário "criança sem retirada" manda a liderança para esse botão.
+- **Autorizados dependem de responsável ativo.** A pessoa que o responsável autorizou só vale enquanto **quem a
+  cadastrou continuar sendo responsável ativo** da criança; as que a Secretaria registrou por **ficha assinada** valem
+  até serem revogadas ou vencerem. Ao revogar um responsável, as autorizações dele são revogadas de vez e a gestão
+  recebe um aviso obrigatório (sem nome de criança).
+- **O relatório do dia é ato de gestão** (já estava no contrato; o servidor o entregava também ao voluntário da
+  sala — corrigido: 403 para quem opera, 404 fora do escopo).
+- **O voluntário não vê a aptidão dos colegas.** A tela da sala mostra só quem **conta na proporção**; o motivo de
+  alguém não estar apto (incidente em apuração, cadastro nacional, autodenúncia) continua reservado, como na v7.7 e
+  na v7.8, e a gestão só vê o que a v7.7 já mostrava a ela.
+- **Retirada divergente** ganha um campo **opcional de motivo** (até 300 caracteres) que o gestor vê no cartão; o
+  motivo da **decisão** da gestão fica em outro campo.
+- **Aviso obrigatório que não consegue sair não cala.** Se ninguém pôde ser avisado (regra inativa, lista vazia,
+  erro), o ato vale e a resposta ao voluntário diz que **ninguém foi avisado e é preciso ligar para a liderança**;
+  nenhum erro de aviso derruba um ato já gravado (a segunda via perdia o código novo quando isso acontecia).
+- **Segunda via:** o segundo adulto passa a ver **quem pede e o documento conferido** (antes só "confirme"); a
+  etiqueta nova mostra a hora de **entrada original** e "2ª via emitida às …".
+- **Etiquetas e recibos:** cada entrada é um lote; só os lotes **ainda não impressos** vão ao papel (os códigos de
+  uma família nunca saem no papel da seguinte) e depois de imprimir a tela pergunta **se saíram na impressora**
+  (cancelar o diálogo não conta como impresso; a classe de impressão fica até a resposta, para o celular que
+  desenha a prévia depois).
+- **Consentimento de saúde do visitante:** quando o texto de autorização muda, a tela **redesenha o texto novo**
+  antes de o responsável poder concordar de novo (antes o "concordo" ia sobre um texto que ele não leu).
+- **LGPD (retenção):** além do registro, ficam anonimizados o motivo da divergência, o motivo da baixa, o nome e a
+  matrícula da pessoa da segunda via e as **autorizações revogadas ou vencidas há mais de 5 anos**. Registro ainda
+  aberto não se anonimiza (sai pela baixa administrativa). O responsável deixa de ver o histórico de quem já fez 18
+  anos. A busca de criança ignora acento.
+- **Desempenho:** prazos e parâmetros de proporção ficam em cache de 15 segundos por processo (a sala consultava a
+  configuração ~30 vezes a cada 8 segundos no banco de 5 DTU); nenhum dado de custódia entra em cache. A tela dá
+  tempo-limite de 20 segundos a cada pedido e avisa quando os dados da sala estão velhos.
+- **Sem solução nesta versão (registrado):** gravar a revogação do consentimento e apagar a saúde na **mesma**
+  transação (a leitura confere a vigência na hora e a rotina diária apaga: prova no e2e-21); o detector de
+  "divergência pendente há muito tempo"; fechar `TRUNCATE`/`DISABLE TRIGGER` nas tabelas do check-in (só se resolve
+  tirando essa permissão do usuário do banco: decisão de operação); a cadeia de hash da auditoria geral que pode
+  bifurcar com gravações simultâneas (anterior a esta versão e do sistema todo); busca de criança por GET leva
+  pedaço do nome no endereço (o Application Insights o registra).
+- **Aviso ao responsável quando um terceiro traz ou retira a criança (decidido pela liderança em 20/10/2026).** Quem
+  trouxe a criança sem ser responsável cadastrado (nome digitado no balcão) ganha direito de retirar só com o código;
+  agora os **responsáveis cadastrados** recebem, na hora, um aviso obrigatório em dois momentos: na **entrega**
+  (`CHECKIN_TERCEIRO_ENTREGA`) e na **retirada** feita por esse terceiro ou pelo indicado só para a visita por ele
+  (`CHECKIN_TERCEIRO_RETIRADA`). O texto nomeia o terceiro e o **primeiro** nome da criança (nunca documento, telefone
+  nem saúde); irmãos com os mesmos responsáveis recebem um aviso só. Não avisa quando quem trouxe é responsável
+  cadastrado, nem quando quem retira é da lista fixa (feita por um responsável ou com a ficha); criança visitante e
+  criança sem responsável cadastrado não têm a quem avisar (sem alarme). A retirada de quem **não está na lista**
+  continua com o aviso próprio (divergente). Se o aviso não sair, o ato vale (já está gravado) e a resposta ao voluntário
+  traz `semAviso` e manda ligar para a família.
+- **Decisões que ficam com o responsável da igreja (não implementadas):** (2) a retirada comum com **dois olhares** ou
+  exigindo que quem retira seja outro voluntário que não o que fez o check-in (hoje só a divergente e a segunda via
+  têm dois olhares); (3) deixar o voluntário **reentrar na sala depois da janela** só para retirar com o código
+  (hoje só a baixa administrativa resolve).
 
 ## 🔒 Trava de Revisão 7-B — antes de avançar para a v7.11
 
@@ -2595,6 +2675,75 @@ tratam de obrigação legal já vigente, com multa por omissão, e de dado de
 criança. Um bug de tela aqui não é só inconveniente — pode significar
 voluntário sem antecedente verificado atuando com menor, ou suspeita não
 notificada. Testar cada fluxo manualmente, não só confiar no "parece certo".
+
+- [x] **Fechada em 20/10/2026** — auditoria de v7.7, v7.8 e v7.10 (a v7.9 foi para a v8.1). Duas revisões
+  independentes, só de leitura: uma das costuras ENTRE as versões (quem não está apto chega à criança por algum
+  caminho?) e outra da lei, do plano e do README. **Nenhum achado crítico; 2 altos, 14 médios e 11 baixos, todos
+  corrigidos com teste que falha no código de antes** (migrações 146 e 147; os textos da 145 ajustados antes de ela
+  ir para a produção). O que mudou:
+  - **Aviso que só foi para o sino não conta (alto).** O aviso obrigatório contava como entregue ao entrar no sino
+    do app, que a mãe pode nunca abrir. Agora só conta quem foi alcançado **fora do app** (e-mail aceito ou push);
+    sem isso, a resposta ao voluntário ou à liderança manda ligar. Push ligado nas regras do check-in; o reenvio do
+    e-mail que falhou vale também para as regras obrigatórias do check-in, de menores e da EBD.
+  - **Liderança afastada fora do check-in (alto).** Quem tem pendência reservada à Diretoria (afastamento cautelar
+    da v7.8, comunicação em análise, cadastro nacional, restrição, fora de comunhão) não vê a sala nem age como
+    gestão. Incluir autorizado "por ficha" pede a confirmação reforçada, e **toda** inclusão avisa os responsáveis.
+  - **Quem perde a aptidão com a sala aberta sai da sala.** A presença é encerrada e o líder e a gestão recebem o
+    aviso obrigatório "uma pessoa da equipe precisa sair da sala agora", dizendo se a sala ficou abaixo dos dois
+    adultos. O portão da EBD confere, a cada ato, que o professor da turma marcada é adulto e apto; esse professor
+    entra no painel e nos avisos de renovação.
+  - **Proteção.** O texto da lei foi corrigido: comunicar ao Conselho Tutelar **imediatamente** (ECA arts. 13 e
+    70-B; Lei 14.344/2022, arts. 23 e 26); 24 horas é o prazo máximo interno. O caso fica só com a Diretoria e o
+    Comitê quando quem registra marca que a pessoa envolvida é da liderança local, ou quando algum envolvido não
+    tem matrícula: o Dirigente apontado só pelo nome não recebe nem lê o próprio caso. A retirada das escalas que
+    falha depois de um afastamento aparece como alerta.
+  - **LGPD.** A exclusão do titular apaga a saúde da criança e as cópias, e revoga os consentimentos e as
+    autorizações de retirada, na mesma transação; o registro de custódia fica pelos 5 anos. A saúde copiada do
+    cadastro só aparece na sala e na segunda via com o consentimento vigente. A saúde do visitante só vai na
+    etiqueta com a concordância do pai, da mãe ou do tutor(a). A busca de criança vai por POST, para o nome não
+    ficar no endereço.
+  - **Outros.** Lembrete único à liderança da divergência parada há 20 minutos; a baixa administrativa avisa o
+    responsável; o aviso "sem retirada" olha 90 dias e cai na gestão geral; a criança membro registrada como
+    visitante é recusada; a trilha de auditoria lê o topo da cadeia com trava (a cadeia não bifurca mais com
+    gravações simultâneas).
+
+  As 5 perguntas:
+  1. *Código novo roda de ponta a ponta no ambiente real?* **Sim.** Banco SQL Server de verdade, recriado do zero
+     com todas as migrações (até a 147) e os handlers reais. As 19 baterias passaram com 0 falhas:
+     - v7.6: e2e-2 a 6 (117, 307, 136, 120 e 19 verificações);
+     - v7.7: e2e-8 a 12 (187, 221, 24, 107 e 43);
+     - v7.8: e2e-14 a 17 (146, 163, 20 e 51);
+     - v7.10: e2e-18 a 22 (241, 413, 246, 49 e 189).
+
+     Na homologação, a migração e a varredura de rotas passaram (corrida 39461418301).
+  2. *Toda tela abre e mostra dado de verdade?* **Sim.** Na homologação:
+     - teste de tela completo: 1.052 ações iguais no computador e 142 no celular, 0 divergência e 0 violação de CSP
+       (corrida 39461406618);
+     - prova em navegador de verdade, com login e a API real respondendo 200: check-in no Meu Painel (39462933544)
+       e na aba da liderança (39463828848), proteção (39463333614) e ministério com menores (39463549945).
+
+     Provas da tela: `tools/front-checkin` (1.488 verificações e a prova de mutação com 648 mutações),
+     `tools/front-protecao` (808) e `tools/front-menores` (322).
+  3. *README e código narram a mesma coisa?* **Sim.** O README perdeu a lista velha de tabelas que "ainda não
+     existem" (EBD, eventos e proteção já existem) e ganhou a v7.10 e as migrações 146 e 147. ROPA e RIPD descrevem
+     com exatidão o prazo imediato, a revogação da saúde e a exclusão LGPD. Os itens da v7.10 foram reescritos (a
+     custódia usa o cadastro de responsáveis da Secretaria, não o vínculo familiar).
+  4. *O que ficou para trás foi corrigido, não só anotado?* **Sim, o que o código resolve.** A revogação da saúde
+     não é a mesma transação, mas a leitura não mostra o dado e a rotina diária o apaga. O detector de divergência
+     parada e a busca por POST foram feitos, e a cadeia da auditoria foi corrigida. **Ficam com o responsável da
+     Igreja (decisões, não código):**
+     - dois olhares na retirada comum;
+     - deixar o voluntário reentrar na sala depois da janela só para retirar;
+     - tratar como divergente a retirada por quem está com afastamento cautelar (hoje o afastamento tira a pessoa
+       da equipe, não de quem traz ou retira a própria criança);
+     - exigir o membro que não é do clero nas decisões do Comitê;
+     - se o caso volta ao Dirigente depois de vincular a matrícula do envolvido (hoje não volta);
+     - turmas da EBD a marcar "com menores" (ação humana);
+     - cadastrar o Comitê de Proteção (ação humana).
+
+     A lista de responsáveis de uma criança continua visível ao voluntário apto da sala: é como ele escolhe quem
+     trouxe.
+  5. *Deploy real aconteceu?* Ver o registro da produção logo abaixo.
 
 ## v7.11 — Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*
 

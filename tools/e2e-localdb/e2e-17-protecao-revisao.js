@@ -38,7 +38,7 @@ const chamarRotina = async (handler, headers = {}) => { const ctx = { bindingDat
   ok(d.status === 200 && d.body.envolvidos.length === 1 && d.body.envolvidos[0].membroId == null && d.body.acoes.vincularEnvolvido === true, "a Diretoria vê o envolvido só por nome e a ação de vincular", d.body.acoes);
   ok(Array.isArray(d.body.possiveisMembros), "e recebe a lista de pessoas do cadastro para escolher", typeof d.body.possiveisMembros);
   d = await GET(P, "incidente", dirCentral, { incidenteId: alg });
-  ok(d.status === 200 && d.body.acoes.vincularEnvolvido === false && !("possiveisMembros" in d.body && d.body.possiveisMembros && d.body.possiveisMembros.length), "o Dirigente da congregação não vincula e não recebe a lista de pessoas", d.body.acoes);
+  ok(d.status === 404 && !JSON.stringify(d.body).includes("Fulano") && !("possiveisMembros" in (d.body || {})), "Trava 7-B: com o envolvido só por nome, o Dirigente da congregação nem vê o caso (404): não lê, não vincula e não recebe a lista de pessoas", [d.status, d.body && d.body.acoes]);
   r = await POST(P, "vincular-envolvido", dirCentral, { incidenteId: alg, membroId: 6011 }); ok(r.status === 403, "o Dirigente é recusado (nível geral)", r.status);
   r = await POST(P, "vincular-envolvido", PIN(6013), { incidenteId: alg, membroId: 6011 }); ok(r.status === 403, "quem registrou também", r.status);
   r = await POST(P, "vincular-envolvido", semFator, { incidenteId: alg, membroId: 6011 }); ok(r.status === 428, "sem a confirmação reforçada: 428", r.status);

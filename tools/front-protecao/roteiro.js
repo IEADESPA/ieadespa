@@ -111,7 +111,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
     confere(scripts.includes("modulos/protecao.js"), "o index.html não carrega modulos/protecao.js");
     const sw = lerApp("service-worker.js");
-    confere(/ieadespa-app-shell-v33/.test(sw) && sw.includes('"/modulos/protecao.js"'), "o service worker devia estar na v33 com /modulos/protecao.js na casca");
+    // a casca sobe de versão a cada entrega (v34 na v7.10): basta não ser anterior à v33, a da v7.8, e trazer o módulo
+    const versaoSw = Number((/ieadespa-app-shell-v(\d+)/.exec(sw) || [])[1]);
+    confere(versaoSw >= 33 && sw.includes('"/modulos/protecao.js"'), `o service worker devia estar na v33 ou depois com /modulos/protecao.js na casca (v${versaoSw})`);
     confere(env.errosDaPagina === 0, `index.html com estrutura quebrada (${env.errosDaPagina} erro(s))`);
   });
 
@@ -334,7 +336,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const radios = [...niveis.descendentes()].filter(x => x.localName === "input" && x.type === "radio");
     confere(radios.length === 3 && radios.every(r => r.getAttribute("name") === "prtRegNivel"), "devia haver 3 níveis em radios do mesmo grupo");
     confere(pm.CODIGOS_NIVEL.every(c => radios.some(r => r.value.startsWith(c))), "os níveis do catálogo devem estar nos radios");
-    confere(niveis.textContent.includes("A lei manda comunicar ao Conselho Tutelar em até 24 horas") && niveis.textContent.includes("Algo que podia ter dado errado"), "a descrição de cada nível (catálogo) devia aparecer ao lado do rótulo");
+    confere(niveis.textContent.includes("A lei manda comunicar ao Conselho Tutelar imediatamente; o prazo máximo da Igreja é de 24 horas") && niveis.textContent.includes("Algo que podia ter dado errado"), "a descrição de cada nível (catálogo) devia aparecer ao lado do rótulo");
     confere(e("prtRegAlegacaoCx").style.display === "none", "o bloco da suspeita de violência só aparece quando o nível é escolhido");
     confere(texto(env, "prtRegData") === "" && e("prtRegData").value === HOJE, `a data devia começar em hoje (${e("prtRegData").value})`);
     confere([...e("prtRegCong").options].some(o => o.textContent.includes("[congReg]")), "as congregações públicas devem estar no seletor");
@@ -370,9 +372,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
     await enviar();
     const q = chamadas(env, "POST protecao-menores/registrar");
     confere(q.length === 1 && !env.modal().aberto, "quebra de política: devia enviar sem pedir confirmação");
-    confere(q[0] && JSON.stringify(q[0].corpo) === JSON.stringify({ nivel: "QUEBRA_POLITICA", dataOcorrencia: HOJE, congregacaoId: 2, descricao: "Adulto ficou a sós com uma criança na sala.", onde: "Sala do Maternal", envolvidoMembroId: 41 }) && typeof q[0].corpo.congregacaoId === "number" && typeof q[0].corpo.envolvidoMembroId === "number", `corpo da quebra de política: ${JSON.stringify(q[0] && q[0].corpo)}`);
+    confere(q[0] && JSON.stringify(q[0].corpo) === JSON.stringify({ nivel: "QUEBRA_POLITICA", dataOcorrencia: HOJE, congregacaoId: 2, descricao: "Adulto ficou a sós com uma criança na sala.", onde: "Sala do Maternal", envolvidoMembroId: 41, envolvidoDaLideranca: false }) && typeof q[0].corpo.congregacaoId === "number" && typeof q[0].corpo.envolvidoMembroId === "number", `corpo da quebra de política: ${JSON.stringify(q[0] && q[0].corpo)}`);
     const resp = texto(env, "prtRegResposta");
-    confere(resp.includes("[protoNovo]") && resp.includes("[msgReg]") && /Obrigado por registrar/.test(resp) && !/24 horas para comunicar/.test(resp.replace(ATAQUE("msgReg"), "")), "a resposta (protocolo, mensagem, o que fazer) devia aparecer; sem o relógio, que é só da suspeita");
+    confere(resp.includes("[protoNovo]") && resp.includes("[msgReg]") && /Obrigado por registrar/.test(resp) && !/Prazo máximo da Igreja/.test(resp.replace(ATAQUE("msgReg"), "")), "a resposta (protocolo, mensagem, o que fazer) devia aparecer; sem o relógio, que é só da suspeita");
     confere(e("prtRegDescricao").value === "" && e("prtRegOnde").value === "" && e("prtRegEnvMatricula").value === "", "depois de enviar, o formulário devia ser limpo");
     confere(chamadas(env, "GET protecao-menores/meus").length === 1 && env.toasts().length === 1, "depois de enviar, 'Meus registros' é refeito e sai um toast só");
     limpo(env, "Meu Painel/quebra registrada", [ATAQUE("protoNovo"), ATAQUE("msgReg")]);
@@ -400,7 +402,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     e("prtRegHoras").value = "0"; env.limparRegistro();
     let ato = env.ev("prtEnviarRegistroAcao(document.getElementById('prtRegBotao'))");
     let m = await env.responderModal(false); await esperar(ato); await env.ocioso();
-    confere(m.aberto && /prazo de 24 horas para comunicar o Conselho Tutelar começa agora/.test(m.texto) && /sai das escalas com crianças por cautela/.test(m.texto) && /liderança de proteção será avisada/.test(m.texto) && /matrícula 41/.test(m.texto), `a confirmação devia dizer o efeito real: ${m.texto.slice(0, 120)}`);
+    confere(m.aberto && /a lei manda comunicar o Conselho Tutelar imediatamente, e o prazo máximo da Igreja \(24 horas\) começa agora/.test(m.texto) && /sai das escalas com crianças por cautela/.test(m.texto) && /liderança de proteção será avisada/.test(m.texto) && /matrícula 41/.test(m.texto), `a confirmação devia dizer o efeito real: ${m.texto.slice(0, 120)}`);
     confere(chamadas(env, "POST protecao-menores/registrar").length === 0 && e("prtRegRelato").value === RELATO, "CANCELAR a confirmação não envia e não apaga o relato");
     e("prtRegHoras").value = "5"; env.limparRegistro();
     ato = env.ev("prtEnviarRegistroAcao(document.getElementById('prtRegBotao'))"); m = await env.responderModal(false); await esperar(ato);
@@ -419,10 +421,10 @@ async function rodar({ mutar = {}, so = null } = {}) {
     S.modo = "ok"; env.limparRegistro();
     ato = env.ev("prtEnviarRegistroAcao(document.getElementById('prtRegBotao'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
     const a = chamadas(env, "POST protecao-menores/registrar");
-    confere(a.length === 1 && JSON.stringify(a[0].corpo) === JSON.stringify({ nivel: "ALEGACAO", dataOcorrencia: HOJE, congregacaoId: 2, descricao: "Criança contou algo sobre um adulto.", envolvidoMembroId: 41, relatadoPor: "PROPRIA_CRIANCA", relato: RELATO, conhecidoHaHoras: 0 }), `corpo da suspeita: ${JSON.stringify(a[0] && a[0].corpo)}`);
+    confere(a.length === 1 && JSON.stringify(a[0].corpo) === JSON.stringify({ nivel: "ALEGACAO", dataOcorrencia: HOJE, congregacaoId: 2, descricao: "Criança contou algo sobre um adulto.", envolvidoMembroId: 41, envolvidoDaLideranca: false, relatadoPor: "PROPRIA_CRIANCA", relato: RELATO, conhecidoHaHoras: 0 }), `corpo da suspeita: ${JSON.stringify(a[0] && a[0].corpo)}`);
     confere(typeof a[0].corpo.conhecidoHaHoras === "number" && typeof a[0].corpo.envolvidoMembroId === "number", "horas e matrícula vão como NÚMERO");
     const r2 = texto(env, "prtRegResposta");
-    confere(r2.includes("[protoNovo]") && r2.includes("Prazo para comunicar o Conselho Tutelar") && !/escala/i.test(r2) && /O que fazer agora/.test(r2) && pm.NAO_FACA.every(n => r2.includes(n.slice(0, 40))), "a resposta da suspeita devia trazer protocolo, prazo e o que fazer agora (e não revelar escalas desmarcadas)");
+    confere(r2.includes("[protoNovo]") && r2.includes("A lei manda comunicar ao Conselho Tutelar imediatamente.") && r2.includes("Prazo máximo da Igreja") && !/em até 24 horas/.test(r2) && !/escala/i.test(r2) && /O que fazer agora/.test(r2) && pm.NAO_FACA.every(n => r2.includes(n.slice(0, 40))), "a resposta da suspeita devia trazer protocolo, prazo e o que fazer agora (e não revelar escalas desmarcadas)");
     confere(!!link(env, "tel:100", e("prtRegResposta")) && !!link(env, "tel:190", e("prtRegResposta")), "a resposta da suspeita devia trazer 100 e 190");
     confere(e("prtRegRelato").value === "" && e("prtRegEnvMatricula").value === "" && e("prtRegDescricao").value === "", "depois de enviar a suspeita, o RELATO e o resto do formulário devem sair do campo");
     confere(![0, 1, 2].some(i => e(`prtRegNivel${i}`).checked) && e("prtRegAlegacaoCx").style.display === "none", "depois de enviar, o nível volta a nenhum escolhido");
@@ -435,14 +437,14 @@ async function rodar({ mutar = {}, so = null } = {}) {
       ato = env.ev("prtEnviarRegistroAcao(document.getElementById('prtRegBotao'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
       const rr = texto(env, "prtRegResposta");
       confere(rr.includes("[protoRep]") && /já tinha sido registrado/.test(rr) && !/Não é preciso fazer mais nada/.test(rr), `M3 (${modo}): a suspeita repetida NÃO pode dizer que não é preciso fazer nada: ${rr.slice(0, 100)}`);
-      confere(pm.NAO_FACA.every(n => rr.includes(n.slice(0, 40))) && /Prazo para comunicar o Conselho Tutelar/.test(rr) && !!link(env, "tel:100", e("prtRegResposta")) && !!link(env, "tel:190", e("prtRegResposta")), `M3 (${modo}): a suspeita repetida mostra o que NÃO fazer, o prazo e o 100 e o 190`);
+      confere(pm.NAO_FACA.every(n => rr.includes(n.slice(0, 40))) && /Prazo máximo da Igreja/.test(rr) && !!link(env, "tel:100", e("prtRegResposta")) && !!link(env, "tel:190", e("prtRegResposta")), `M3 (${modo}): a suspeita repetida mostra o que NÃO fazer, o prazo e o 100 e o 190`);
       confere(chamadas(env, "POST protecao-menores/registrar").length === 1 && !/escala/i.test(rr), `M3 (${modo}): um pedido só, e a resposta não fala de escalas`);
       limpo(env, `Meu Painel/suspeita repetida ${modo}`, [ATAQUE("protoRep")]);
     }
     // uma quebra de política repetida segue SEM o relógio nem o NÃO FAÇA
     S.modo = "repetido"; escolherNivel(env, "QUEBRA_POLITICA"); doc.escolher(e("prtRegCong"), "2"); e("prtRegData").value = HOJE; e("prtRegDescricao").value = "Adulto ficou a sós com uma criança na sala."; env.limparRegistro();
     doc.clicar(e("prtRegBotao")); await env.ocioso();
-    confere(/Obrigado por registrar/.test(texto(env, "prtRegResposta")) && !/Prazo para comunicar/.test(texto(env, "prtRegResposta")) && !pm.NAO_FACA.some(n => texto(env, "prtRegResposta").includes(n.slice(0, 40))), "M3: a quebra de política repetida não mostra prazo nem o NÃO FAÇA da suspeita");
+    confere(/Obrigado por registrar/.test(texto(env, "prtRegResposta")) && !/Prazo máximo da Igreja/.test(texto(env, "prtRegResposta")) && !pm.NAO_FACA.some(n => texto(env, "prtRegResposta").includes(n.slice(0, 40))), "M3: a quebra de política repetida não mostra prazo nem o NÃO FAÇA da suspeita");
     S.modo = "ok";
     // (d) depois de registrar, a data volta para hoje (a data do fato anterior não fica para o próximo registro)
     escolherNivel(env, "QUASE_ACIDENTE"); doc.escolher(e("prtRegCong"), "2"); e("prtRegData").value = "2026-10-05"; e("prtRegDescricao").value = "Criança saiu da sala e foi achada logo."; env.limparRegistro();
@@ -1110,7 +1112,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const { doc, api, e } = env;
     S.posts = [];
     api.rotas["POST protecao-menores/adendo"] = (c) => { S.posts.push(["adendo", c.corpo]); return S.recusa ? { status: 422, corpo: { sucesso: false, mensagem: `Já há 5 adendos. ${ATAQUE("msgAdendo")}` } } : { status: 201, corpo: { sucesso: true, mensagem: "Adendo registrado." } }; };
-    api.rotas["POST protecao-menores/reclassificar"] = (c) => { if (c.corpo.nivelNovo === "ALEGACAO" && !S.fatorOk) return { status: 428, corpo: { sucesso: false, precisaFator: true, mensagem: "Confirme de novo." } }; S.posts.push(["reclassificar", c.corpo]); return { corpo: { sucesso: true, nivel: c.corpo.nivelNovo, prazoEm: em(24), escalasDesmarcadas: null, mensagem: c.corpo.nivelNovo === "ALEGACAO" ? "Incidente reclassificado como suspeita de violência: o prazo de 24 horas para comunicar o Conselho Tutelar começou a contar agora." : "Incidente reclassificado." } }; };
+    api.rotas["POST protecao-menores/reclassificar"] = (c) => { if (c.corpo.nivelNovo === "ALEGACAO" && !S.fatorOk) return { status: 428, corpo: { sucesso: false, precisaFator: true, mensagem: "Confirme de novo." } }; S.posts.push(["reclassificar", c.corpo]); return { corpo: { sucesso: true, nivel: c.corpo.nivelNovo, prazoEm: em(24), escalasDesmarcadas: null, avisados: 2, avisoExterno: true, mensagem: c.corpo.nivelNovo === "ALEGACAO" ? "Incidente reclassificado como suspeita de violência: comunique o Conselho Tutelar imediatamente (o prazo máximo da Igreja, de 24 horas, começou a contar agora)." : "Incidente reclassificado." } }; };
     // ---- adendo
     await abrirFicha(env, 1);
     doc.clicar(botao(env, "Adendo", e("prtDetalheConteudo"))); await env.ocioso();
@@ -1165,12 +1167,13 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const RELATO = "A criança contou, sozinha, o que aconteceu no banheiro.";
     e("prtFrRelato").value = RELATO; env.limparRegistro();
     ato = env.ev("prtEnviarReclassificacaoAcao(document.getElementById('prtFrNivel'))"); m = await env.responderModal(false); await esperar(ato);
-    confere(/prazo de 24 horas para comunicar o Conselho Tutelar começa agora/.test(m.texto) && /sai das escalas com crianças/.test(m.texto) && /liderança de proteção será avisada/.test(m.texto), `a confirmação (suspeita) devia dizer o efeito real: ${m.texto.slice(0, 100)}`);
+    confere(/A lei manda comunicar o Conselho Tutelar imediatamente, e o prazo máximo da Igreja \(24 horas\) começa agora/.test(m.texto) && /sai das escalas com crianças/.test(m.texto) && /liderança de proteção será avisada/.test(m.texto), `a confirmação (suspeita) devia dizer o efeito real: ${m.texto.slice(0, 100)}`);
     env.limparRegistro();
     ato = env.ev("prtEnviarReclassificacaoAcao(document.getElementById('prtFrNivel'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
     confere(S.posts.length === 1 && JSON.stringify(S.posts[0][1]) === JSON.stringify({ incidenteId: 9, nivelNovo: "ALEGACAO", motivo: "Foi a terceira vez e houve contato indevido.", relatadoPor: "VOLUNTARIO", relato: RELATO }), `corpo: ${JSON.stringify(S.posts[0] && S.posts[0][1])}`);
     confere(chamadas(env, "POST protecao-menores/reclassificar").length === 2 && env.g("window.__fatorPedidos") === 1, "reclassificar para suspeita: o 428 é repetido UMA vez");
-    confere(/o prazo de 24 horas/.test(texto(env, "prtDetalheMsg")) && e("prtFormAcao").innerHTML === "", "reclassificado: mensagem do servidor na ficha e formulário fechado");
+    confere(/o prazo máximo da Igreja, de 24 horas/.test(texto(env, "prtDetalheMsg")) && e("prtFormAcao").innerHTML === "", "reclassificado: mensagem do servidor na ficha e formulário fechado");
+    confere(!/psc-aviso/.test(e("prtDetalheMsg").className), "7B: reclassificado com a liderança avisada fora do app (avisoExterno) e sem falha na retirada: a mensagem NÃO sai como alerta");
     confere(!doc.body.textContent.includes("A criança contou, sozinha"), "o relato digitado sai da tela depois de enviado");
     confereAcessibilidade(env, ["prtFormAcao"], "Reclassificar");
   });
@@ -1616,7 +1619,9 @@ cenario("Padrões, Comitê e relatório: saem da página ao sair da aba e a resp
     confere(blocoPrint.includes("#prtRelatoCx, #prtDetalheCx { display: none !important; }"), "L8: a caixa do relato e a ficha do incidente têm de sumir em QUALQUER impressão (display:none !important dentro de @media print)");
     const blocoDisplay = css.slice(css.indexOf("@supports selector(:has(*))"));
     confere(blocoDisplay.includes("@media print") && blocoDisplay.includes("body.prt-imprimindo *:not(#prtRelImprimivel):not(#prtRelImprimivel *):not(:has(#prtRelImprimivel)) { display: none !important; }"), "L8: na impressão do relatório, tudo o que não é o relatório (nem uma pasta dele) sai com display:none (sem folha em branco no fim)");
-    confere(blocoDisplay.includes("body.prt-imprimindo *:has(#prtRelImprimivel) {") && /min-height: 0 !important/.test(blocoDisplay) && /overflow: visible !important/.test(blocoDisplay), "L8: as pastas onde o relatório está perdem altura mínima e rolagem na impressão");
+    // (a regra da própria pasta do relatório: a v7.10 trouxe uma regra irmã para as etiquetas do check-in, e o bloco inteiro passava com a dela)
+    const regraPasta = (/body\.prt-imprimindo \*:has\(#prtRelImprimivel\) \{[^}]*\}/.exec(blocoDisplay) || [""])[0];
+    confere(!!regraPasta && /min-height: 0 !important/.test(regraPasta) && /overflow: visible !important/.test(regraPasta), "L8: as pastas onde o relatório está perdem altura mínima e rolagem na impressão");
     confere(css.includes("body.prt-imprimindo * { visibility: hidden !important; }"), "L8: a base de visibility:hidden segue como reserva para quem não sabe :has()");
     env.api.rotas["GET protecao-menores/relatorio-anual"] = { status: 500, corpo: { sucesso: false, mensagem: "Erro interno." } };
     doc.clicar(botao(env, "Atualizar", e("prtSecaoRelatorio"))); await env.ocioso();
@@ -1733,6 +1738,157 @@ cenario("Padrões, Comitê e relatório: saem da página ao sair da aba e a resp
     presaD.liberar(); await envD.ocioso();
     confere(!envD.doc.body.textContent.includes("[descB]"), "atraso (ficha): a ficha que chega depois de sair da sessão NÃO entra na tela");
     confere(envD.intervalos.size === 0, "e nenhum intervalo sobrou");
+  });
+
+  // ============================================================================================================================================
+  // 7) TRAVA 7-B: "a pessoa envolvida é da liderança?", o selo "só Diretoria e Comitê", o ato que dá certo com um ALERTA e o texto da lei ("imediatamente")
+  // ============================================================================================================================================
+  const toastDeErro = (env) => [...env.e("toastContainer").children].some(t => /toast-erro/.test(t.className));
+  const toastDeSucesso = (env) => [...env.e("toastContainer").children].some(t => /toast-sucesso/.test(t.className));
+
+  cenario("7B: a pergunta da liderança no registro, o aviso que não alcançou ninguém e o texto da lei", async () => {
+    const env = ambienteAtual = novo(); const { doc, api, e } = env;
+    const S = { externas: 1, criadas: 1 };
+    api.rotas = {
+      "GET protecao-menores/catalogos": () => ({ corpo: F.catalogosComAtaque({ gestao: false, geral: false }) }),
+      "GET protecao-menores/meus": () => ({ corpo: F.meus([]) }),
+      "GET congregacoes-publico": { corpo: [{ congregacaoId: 2, nome: "Sede", ativa: true }] },
+      "POST protecao-menores/registrar": (c) => {
+        const exige = c.corpo.nivel === "ALEGACAO";
+        // a mensagem como o servidor a monta (registrarIncidente): o texto do aviso vem de textoDoAviso, extraída de shared/protecaoDb.js
+        const mensagem = (exige ? `Registrado (protocolo ${ATAQUE("proto7b")}). Comunique o Conselho Tutelar imediatamente: o prazo máximo da Igreja (24 horas) já está contando.` : `Registrado (protocolo ${ATAQUE("proto7b")}).`)
+          + F.textoDoAviso({ criadas: S.criadas, externas: S.externas }, { liderancaEnvolvida: c.corpo.envolvidoDaLideranca === true })
+          + (exige ? " Não faça perguntas à criança e não converse sobre o caso com outras pessoas." : "");
+        return { status: 201, corpo: { sucesso: true, incidenteId: 90, protocolo: ATAQUE("proto7b"), prazoEm: exige ? em(24) : null, exigeComunicacao: exige, mensagem } };
+      }
+    };
+    env.sessao({ matricula: 20, pin: true });
+    await env.ev("mostrarSubAbaMeupainel('protecao')"); await env.ocioso();
+    // a pergunta: um grupo com legenda, sim/não do mesmo grupo, "não" marcado de saída, logo antes do bloco da suspeita
+    const grupo = e("prtRegLiderancaCx");
+    const legenda = grupo ? [...grupo.descendentes()].find(x => x.localName === "legend") : null;
+    confere(!!grupo && grupo.localName === "fieldset" && !!legenda && /A pessoa envolvida é da liderança desta congregação\?/.test(legenda.textContent), "7B: a pergunta 'a pessoa envolvida é da liderança desta congregação?' devia estar no formulário, num fieldset com legend");
+    const nao = e("prtRegLiderancaNao"), sim = e("prtRegLiderancaSim");
+    confere(!!nao && !!sim && nao.checked === true && sim.checked === false && nao.type === "radio" && sim.type === "radio" && nao.getAttribute("name") === sim.getAttribute("name"), "7B: sim/não (rádio do mesmo grupo), com 'não' marcado de saída");
+    const filhos = e("prtRegAlegacaoCx").parentNode.children;
+    confere(!!grupo && filhos.indexOf(grupo.parentNode) >= 0 && filhos.indexOf(grupo.parentNode) === filhos.indexOf(e("prtRegAlegacaoCx")) - 1, "7B: a pergunta fica logo antes do bloco da suspeita (depois da pessoa envolvida)");
+    confere(/só para a Diretoria e o Comitê de Proteção/.test(grupo ? grupo.textContent : "") && /não recebe o aviso/.test(grupo ? grupo.textContent : ""), "7B: a pergunta explica o efeito do 'sim'");
+    if (grupo) confereAcessibilidade(env, ["prtRegLiderancaCx"], "7B/pergunta");
+    await env.ev("mostrarSubAbaMeupainel('protecao')"); await env.ocioso();
+    confere([...doc.body.descendentes()].filter(x => x.id === "prtRegLiderancaCx").length === 1, "7B: abrir a sub-aba de novo não duplica a pergunta");
+
+    const preencher = () => { escolherNivel(env, "QUEBRA_POLITICA"); doc.escolher(e("prtRegCong"), "2"); e("prtRegData").value = HOJE; e("prtRegDescricao").value = "Adulto ficou a sós com uma criança na sala."; };
+    const marcarSim = () => { e("prtRegLiderancaSim").checked = true; e("prtRegLiderancaNao").checked = false; };
+    const registrar = async () => { env.limparRegistro(); doc.clicar(e("prtRegBotao")); await env.ocioso(); return chamadas(env, "POST protecao-menores/registrar"); };
+    // "não" (o padrão): vai false, como booleano; a liderança foi avisada fora do app: a resposta de sempre
+    preencher();
+    let p = await registrar();
+    confere(p.length === 1 && p[0].corpo.envolvidoDaLideranca === false, `7B: com 'não' o registro manda envolvidoDaLideranca: false (${JSON.stringify(p[0] && p[0].corpo)})`);
+    confere(/A liderança foi avisada/.test(texto(env, "prtRegResposta")) && /✅ Registrado/.test(texto(env, "prtRegResposta")) && !/psc-aviso/.test(e("prtRegMsg").className) && toastDeSucesso(env) && !toastDeErro(env), "7B: com a liderança avisada fora do app a resposta é a de sempre (sem alerta)");
+    // "sim": vai true, e a pergunta volta para "não"
+    preencher(); marcarSim();
+    p = await registrar();
+    confere(p.length === 1 && p[0].corpo.envolvidoDaLideranca === true, `7B: com 'sim' o registro manda envolvidoDaLideranca: true (${JSON.stringify(p[0] && p[0].corpo)})`);
+    confere(e("prtRegLiderancaNao").checked === true && e("prtRegLiderancaSim").checked === false, "7B: depois de registrar, a pergunta volta para 'não'");
+    // o aviso ficou só no sistema (o e-mail não saiu): ALERTA, não "tudo certo"
+    S.externas = 0; S.criadas = 1;
+    preencher(); await registrar();
+    const pAlerta = [...e("prtRegResposta").descendentes()].find(x => x.localName === "p" && /psc-aviso/.test(x.className));
+    confere(/ATENÇÃO: o aviso à liderança ficou só no sistema/.test(texto(env, "prtRegMsg")) && /psc-aviso/.test(e("prtRegMsg").className) && toastDeErro(env) && !toastDeSucesso(env), "7B: o aviso que ficou só no sistema sai em destaque e com o toast de erro (não como sucesso)");
+    confere(!!pAlerta && /ligue agora para o Dirigente ou a Diretoria/.test(pAlerta.textContent) && pAlerta.getAttribute("role") === "alert" && !/✅/.test(texto(env, "prtRegResposta")) && /leia o aviso abaixo/.test(texto(env, "prtRegResposta")), "7B: a resposta tira o ✅ e mostra a mensagem do servidor como alerta");
+    // ninguém avisado, com a liderança local apontada: o servidor manda procurar a Diretoria ou o Comitê, e a tela mostra como está
+    S.criadas = 0;
+    preencher(); marcarSim(); await registrar();
+    confere(/não foi possível avisar a liderança agora: procure a Diretoria \(Presidente ou Secretário Geral\) ou o Comitê de Proteção pessoalmente/.test(texto(env, "prtRegResposta")) && /psc-aviso/.test(e("prtRegMsg").className) && toastDeErro(env), "7B: ninguém avisado: alerta com quem procurar (a Diretoria, porque a liderança local foi apontada)");
+    limpo(env, "7B/registro com alerta", [ATAQUE("proto7b")]);
+    // a suspeita: o aviso fixo diz "imediatamente"; com "sim" a confirmação diz que só a Diretoria e o Comitê serão avisados
+    S.criadas = 1; S.externas = 1;
+    escolherNivel(env, "ALEGACAO"); doc.escolher(e("prtRegCong"), "2"); e("prtRegData").value = HOJE; e("prtRegDescricao").value = "Criança contou algo sobre um adulto.";
+    doc.escolher(e("prtRegQuem"), "PROPRIA_CRIANCA"); e("prtRegRelato").value = "Ela disse que o tio mexe com ela quando ninguém vê."; e("prtRegHoras").value = "0";
+    const avisoFixo = texto(env, "prtRegAlegacaoCx");
+    confere(/A lei manda comunicar ao Conselho Tutelar imediatamente; o prazo máximo da Igreja é de 24 horas/.test(avisoFixo) && !/em até 24 horas/.test(avisoFixo), "7B: o aviso da suspeita (index.html) diz 'imediatamente' e que 24 horas é o prazo máximo da Igreja");
+    marcarSim(); env.limparRegistro();
+    let ato = env.ev("prtEnviarRegistroAcao(document.getElementById('prtRegBotao'))"); let m = await env.responderModal(false); await esperar(ato);
+    confere(m.aberto && /só a Diretoria e o Comitê de Proteção serão avisados \(o Dirigente local, não\)/.test(m.texto) && !/liderança de proteção será avisada na hora/.test(m.texto) && /imediatamente/.test(m.texto), `7B: com 'sim' a confirmação da suspeita diz quem será avisado: ${m.texto.slice(0, 160)}`);
+    ato = env.ev("prtEnviarRegistroAcao(document.getElementById('prtRegBotao'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
+    p = chamadas(env, "POST protecao-menores/registrar");
+    confere(p.length === 1 && p[0].corpo.envolvidoDaLideranca === true && !!p[0].corpo.relato, "7B: a suspeita com 'sim' sai com envolvidoDaLideranca: true");
+    const r = texto(env, "prtRegResposta");
+    confere(/A lei manda comunicar ao Conselho Tutelar imediatamente\./.test(r) && /Prazo máximo da Igreja/.test(r) && !/em até 24 horas/.test(r), "7B: a resposta da suspeita diz 'imediatamente' e o prazo máximo da Igreja");
+    // troca de login: o "sim" da pessoa anterior não fica marcado
+    marcarSim();
+    env.ev("prtLimparTela()");
+    confere(e("prtRegLiderancaNao").checked === true && e("prtRegLiderancaSim").checked === false, "7B: a troca de login (limpeza da tela) devolve a pergunta para 'não'");
+    // o topo da aba da liderança também diz "imediatamente"
+    const topo = [...e("abaProtecao").children].find(x => x.localName === "p");
+    confere(!!topo && /comunicada ao Conselho Tutelar imediatamente/.test(topo.textContent) && /prazo máximo da Igreja é de 24 horas/.test(topo.textContent) && !/em até 24 horas/.test(topo.textContent), "7B: o topo da aba (index.html) diz 'imediatamente' e que 24 horas é o prazo máximo da Igreja");
+  });
+
+  cenario("7B: o selo 'só Diretoria e Comitê' na fila e na ficha, e o ato que dá certo com um alerta", async () => {
+    const base = { comunicacoes: [{ protocoloExterno: "CT-2026/1", registradoPorNome: "Eu" }], nAnexos: 0, decisoes: [], reclassificacoes: [], leituras: [], relato: { registrado: true, adendos: 0 } };
+    const { env, S } = await preparar({ estado: {
+      fila: [
+        { id: 31, protocolo: "PRO-LID", prazoEm: em(5), envolvidoDaLideranca: true },
+        { id: 32, protocolo: "PRO-SEMMAT", prazoEm: em(6), envolvidoSemMatricula: true },
+        { id: 33, protocolo: "PRO-CANAL", origem: "CANAL_AJUDA", prazoEm: em(7) },
+        { id: 34, protocolo: "PRO-COMUM", nivel: "QUEBRA_POLITICA", exigeComunicacao: false }
+      ],
+      det: {
+        31: () => Object.assign({}, base, { id: 31, protocolo: "PRO-LID", envolvidoDaLideranca: true, envolvidos: [{ envolvidoId: 51, membroId: 61, nome: "Pessoa apontada", ultimaDecisao: null, nDecisoes: 0 }] }),
+        32: () => Object.assign({}, base, { id: 32, protocolo: "PRO-SEMMAT", envolvidos: [{ envolvidoId: 52, membroId: null, nome: "Só o nome" }] }),
+        33: () => Object.assign({}, base, { id: 33, protocolo: "PRO-CANAL", origem: "CANAL_AJUDA", envolvidos: [] }),
+        34: () => Object.assign({}, base, { id: 34, protocolo: "PRO-COMUM", nivel: "QUEBRA_POLITICA", exigeComunicacao: false, comunicacoes: [], relato: { registrado: false, adendos: 0 }, envolvidos: [{ envolvidoId: 54, membroId: 64, nome: "Membro comum" }] })
+      }
+    } });
+    const { doc, api, e } = env;
+    const selos = (raiz) => (raiz ? [...raiz.descendentes()].filter(x => /\bprt-selo\b/.test(x.className) && /só Diretoria e Comitê/.test(x.textContent)).length : -1);   // (o <p class="prt-selos"> que os envolve não conta)
+    for (const [id, tem] of [[31, true], [32, true], [33, true], [34, false]]) confere(selos(cartaoDe(env, id)) === (tem ? 1 : 0), `7B: o cartão ${id} ${tem ? "devia" : "não devia"} ter o selo 'só Diretoria e Comitê' (${selos(cartaoDe(env, id))})`);
+    // a ficha: o selo e o porquê (texto nosso, pela ordem da regra do servidor)
+    for (const [id, porque] of [[31, /quem registrou disse que a pessoa envolvida é da liderança da congregação/], [32, /pessoa envolvida registrada sem matrícula/], [33, /o pedido veio do canal de ajuda, sem login/]]) {
+      await abrirFicha(env, id);
+      confere(selos(e("prtDetalheConteudo")) === 1 && !!e("prtFichaSoGeral") && porque.test(texto(env, "prtFichaSoGeral")) && /O Dirigente da congregação não recebe os avisos e não vê esta ficha/.test(texto(env, "prtFichaSoGeral")), `7B: a ficha ${id} mostra o selo e por que só o nível geral trata o caso (${texto(env, "prtFichaSoGeral").slice(0, 90)})`);
+    }
+    await abrirFicha(env, 34);
+    confere(selos(e("prtDetalheConteudo")) === 0 && !e("prtFichaSoGeral"), "7B: a ficha comum não tem o selo nem a explicação");
+
+    // o ato que dá certo, mas com um alerta do servidor: retirada das escalas que falhou (decidir, vincular, reclassificar) e aviso que não saiu do sistema (reclassificar)
+    S.posts = [];
+    api.rotas["POST protecao-menores/cautelar-decidir"] = (c) => { S.posts.push(["decidir", c.corpo]); return { corpo: { sucesso: true, decisao: c.corpo.decisao, escalasDesmarcadas: null, retiradaFalhou: true, mensagem: `Afastamento mantido.${F.TEXTO_RETIRADA_FALHOU}` } }; };
+    api.rotas["POST protecao-menores/vincular-envolvido"] = (c) => { S.posts.push(["vincular", c.corpo]); return { corpo: { sucesso: true, escalasDesmarcadas: null, retiradaFalhou: true, mensagem: `Pessoa vinculada e afastada por cautela; o Comitê precisa decidir sobre o afastamento.${F.TEXTO_RETIRADA_FALHOU}` } }; };
+    api.rotas["POST protecao-menores/reclassificar"] = (c) => { S.posts.push(["reclassificar", c.corpo]); return { corpo: S.reclass }; };
+    const alertaNaFicha = (qual, rx) => {
+      confere(rx.test(texto(env, "prtDetalheMsg")) && /psc-aviso/.test(e("prtDetalheMsg").className), `7B (${qual}): a mensagem do servidor fica na ficha EM DESTAQUE (${texto(env, "prtDetalheMsg").slice(0, 90)})`);
+      confere(toastDeErro(env) && !toastDeSucesso(env), `7B (${qual}): o toast sai como erro, não como sucesso`);
+    };
+    // decidir (manter o afastamento)
+    await abrirFicha(env, 31);
+    doc.clicar(botao(env, "Decidir o afastamento", e("prtDetalheConteudo"))); await env.ocioso();
+    doc.escolher(e("prtFdDecisao"), "MANTIDO_AFASTADO"); e("prtFdObs").value = "Há elementos que justificam manter o afastamento."; env.limparRegistro();
+    let ato = env.ev("prtEnviarDecisaoAcao(51, document.getElementById('prtFdDecisao'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
+    confere(S.posts.length === 1 && S.posts[0][0] === "decidir", "7B: a decisão foi enviada");
+    alertaNaFicha("decidir", /Afastamento mantido\. ATENÇÃO: o afastamento foi gravado, mas a retirada automática das escalas e turmas com menores NÃO saiu agora/);
+    // vincular a pessoa registrada só pelo nome
+    await abrirFicha(env, 32);
+    doc.clicar(botao(env, "Vincular a uma pessoa do cadastro", e("prtDetalheConteudo"))); await env.ocioso();
+    e("prtFvMatricula").value = "77"; env.limparRegistro();
+    ato = env.ev("prtEnviarVinculoAcao(52, document.getElementById('prtFvMatricula'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
+    confere(S.posts.length === 2 && S.posts[1][0] === "vincular", "7B: o vínculo foi enviado");
+    alertaNaFicha("vincular", /Pessoa vinculada e afastada por cautela.*ATENÇÃO: o afastamento foi gravado/);
+    // reclassificar para suspeita: com o aviso que ficou só no sistema (avisoExterno: false) e com a retirada que falhou
+    const textoReclass = (o) => "Incidente reclassificado como suspeita de violência: comunique o Conselho Tutelar imediatamente (o prazo máximo da Igreja, de 24 horas, começou a contar agora)."
+      + (o.retirada ? F.TEXTO_RETIRADA_FALHOU : "") + (o.externas ? "" : F.textoDoAviso({ criadas: o.criadas, externas: 0 }));
+    for (const [qual, o, rx] of [["reclassificar, aviso só no sistema", { criadas: 2, externas: 0 }, /ATENÇÃO: o aviso à liderança ficou só no sistema \(o e-mail não saiu\): ligue agora/],
+      ["reclassificar, ninguém avisado", { criadas: 0, externas: 0 }, /ATENÇÃO: não foi possível avisar a liderança agora/],
+      ["reclassificar, retirada que falhou", { criadas: 2, externas: 1, retirada: true }, /ATENÇÃO: o afastamento foi gravado/]]) {
+      S.reclass = Object.assign({ sucesso: true, nivel: "ALEGACAO", prazoEm: em(24), escalasDesmarcadas: null, avisados: o.criadas, avisoExterno: o.externas > 0, mensagem: textoReclass(o) }, o.retirada ? { retiradaFalhou: true } : {});
+      await abrirFicha(env, 34);
+      doc.clicar(botao(env, "Reclassificar", e("prtDetalheConteudo"))); await env.ocioso();
+      doc.escolher(e("prtFrNivel"), "ALEGACAO"); e("prtFrMotivo").value = "A criança contou mais coisas depois.";
+      doc.escolher(e("prtFrQuem"), "VOLUNTARIO"); e("prtFrRelato").value = "A criança contou, sozinha, o que aconteceu."; env.limparRegistro();
+      ato = env.ev("prtEnviarReclassificacaoAcao(document.getElementById('prtFrNivel'))"); await env.responderModal(true); await esperar(ato); await env.ocioso();
+      confere(S.posts[S.posts.length - 1][0] === "reclassificar", `7B (${qual}): a reclassificação foi enviada`);
+      alertaNaFicha(qual, rx);
+    }
   });
 
   // ---- execução ----

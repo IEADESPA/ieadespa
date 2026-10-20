@@ -74,6 +74,8 @@ async function abrirNavegador(perfilDir, opcoes = {}) {
     args: [
       // local: nada sai para a internet (fontes do Google falham na hora, igual nas duas versões); remoto: o front vem do endereço real
       ...(opcoes.remoto ? [] : ["--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1"]),
+      // sem GPU: em 19/10/2026 o notebook do responsável (Windows 11 Insider) deu duas telas azuis na memória de vídeo; a prova de tela não precisa de placa de vídeo
+      "--disable-gpu",
       "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--disable-component-update",
       // Linux (runner do GitHub): /dev/shm é pequeno e o Chrome usa a memória partilhada para os renderizadores; sem a flag, páginas pesadas travam
       ...(process.platform === "linux" ? ["--disable-dev-shm-usage", "--no-sandbox"] : []),

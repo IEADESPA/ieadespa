@@ -1,7 +1,10 @@
 // shared/protecaoMenores.js (v7.8 — Incidentes, notificação obrigatória e escuta protegida)
 //
-// ECA, Art. 13 (suspeita ou confirmação de maus-tratos deve ser comunicada ao Conselho Tutelar) e Art. 245 (multa de 3 a 20 salários de referência pela omissão, dobrada na
-// reincidência); Lei 13.431/2017 (escuta protegida: quem acolhe NÃO inquire, registra o relato espontâneo e encaminha); Regimento Art. 133 §5º (afastamento cautelar).
+// ECA, Art. 13 (suspeita ou confirmação de maus-tratos deve ser comunicada ao Conselho Tutelar), Art. 70-B, parágrafo único (quem cuida de criança por razão de "ministério"
+// também responde pela comunicação; pune o "injustificado retardamento ou omissão") e Art. 245 (multa de 3 a 20 salários de referência pela omissão, dobrada na reincidência);
+// Lei 14.344/2022, art. 23 (comunicar IMEDIATAMENTE) e art. 26 (a omissão é crime); Lei 13.431/2017 (escuta protegida: quem acolhe NÃO inquire, registra o relato espontâneo
+// e encaminha); Regimento Art. 133 §5º (afastamento cautelar).
+// A lei não dá prazo de horas: manda comunicar já. As 24 horas do relógio são o prazo MÁXIMO interno da Igreja (Trava 7-B, 20/10/2026), nunca "o prazo da lei".
 //
 // Este módulo é a REGRA, pura (sem banco): níveis do incidente, o relógio das 24 horas, o que fecha um caso, a composição do Comitê, os padrões de pequenas quebras e o
 // que cada aviso diz. O banco (shared/protecaoDb.js) só reúne os fatos e grava o que aqui se decide.
@@ -16,7 +19,7 @@ const { inteiroPositivo } = require("./setoresTecnicos");
 // Vocabulário
 // ---------------------------------------------------------------
 
-const HORAS_PRAZO = 24;                     // ECA Art. 13 + decisão do plano: SLA curto de 24 horas da ciência da suspeita
+const HORAS_PRAZO = 24;                     // a lei manda comunicar imediatamente (ECA Arts. 13 e 70-B; Lei 14.344/2022, art. 23): 24 horas da ciência é o teto INTERNO da Igreja
 const MS_HORA = 3600000;
 const LIMITE_ATENCAO_HORAS = 12;            // a partir daqui o relógio fica amarelo
 const LIMITE_CRITICO_HORAS = 4;             // e daqui vermelho
@@ -34,7 +37,7 @@ const COMITE_MINIMO = 3;
 const NIVEIS = {
   QUASE_ACIDENTE: { rotulo: "Quase-acidente", ordem: 1, descricao: "Algo que podia ter dado errado com uma criança ou adolescente, mas não deu (ex.: criança saiu da sala sem ser vista e foi achada logo)." },
   QUEBRA_POLITICA: { rotulo: "Quebra de política de proteção", ordem: 2, descricao: "Alguém descumpriu uma regra de proteção (ex.: adulto a sós com uma criança, uso do celular para falar com menor fora do combinado)." },
-  ALEGACAO: { rotulo: "Suspeita ou relato de violência", ordem: 3, descricao: "Uma criança ou adolescente contou, ou alguém suspeita, que sofreu maus-tratos, abuso ou violência. A lei manda comunicar ao Conselho Tutelar em até 24 horas." }
+  ALEGACAO: { rotulo: "Suspeita ou relato de violência", ordem: 3, descricao: "Uma criança ou adolescente contou, ou alguém suspeita, que sofreu maus-tratos, abuso ou violência. A lei manda comunicar ao Conselho Tutelar imediatamente; o prazo máximo da Igreja é de 24 horas." }
 };
 const CODIGOS_NIVEL = Object.keys(NIVEIS);
 const NIVEL_EXIGE_COMUNICACAO = { QUASE_ACIDENTE: false, QUEBRA_POLITICA: false, ALEGACAO: true };
@@ -82,7 +85,7 @@ const CONTATOS_DE_AJUDA = [
 const ROTEIRO_ESCUTA = [
   { passo: "1. Acolher", texto: "Ouça com calma, sem espanto e sem pressa. Diga: \"Obrigado por me contar. Você não tem culpa.\" Não prometa guardar segredo: diga que vai pedir ajuda a quem pode proteger." },
   { passo: "2. Registrar o que foi dito", texto: "Escreva o relato com as palavras da própria criança, do jeito que ela falou, sem corrigir e sem interpretar. Registre só o que ela contou de livre vontade." },
-  { passo: "3. Encaminhar", texto: "A Igreja não investiga. O sistema avisa a liderança e o prazo de 24 horas para comunicar ao Conselho Tutelar começa a contar. Quem apura são as autoridades." }
+  { passo: "3. Encaminhar", texto: "A Igreja não investiga. O sistema avisa a liderança, que deve comunicar ao Conselho Tutelar imediatamente (o prazo máximo da Igreja, de 24 horas, começa a contar). Quem apura são as autoridades." }
 ];
 const NAO_FACA = [
   "Não faça perguntas para \"tirar a verdade\" (ex.: \"Tem certeza?\", \"Quem fez isso?\", \"Como foi exatamente?\"). Repetir a conversa machuca de novo.",
@@ -159,7 +162,7 @@ function referenciaDoAviso(incidenteId, bloco) {
 // Validação do registro de um incidente
 // ---------------------------------------------------------------
 
-// d = { nivel, dataOcorrencia, congregacaoId, equipeId?, onde?, descricao, envolvidoMembroId?, envolvidoNome?, relatadoPor?, relato?, conhecidoHaHoras? }
+// d = { nivel, dataOcorrencia, congregacaoId, equipeId?, onde?, descricao, envolvidoMembroId?, envolvidoNome?, envolvidoDaLideranca?, relatadoPor?, relato?, conhecidoHaHoras? }
 function validarIncidente(d, { hoje, agora = new Date(), origem = "MEMBRO" } = {}) {
   const dados = d && typeof d === "object" && !Array.isArray(d) ? d : {};
   const nivel = limpar(dados.nivel);
@@ -181,6 +184,10 @@ function validarIncidente(d, { hoje, agora = new Date(), origem = "MEMBRO" } = {
   if (dados.envolvidoMembroId != null && dados.envolvidoMembroId !== "") { envolvidoMembroId = idPositivo(dados.envolvidoMembroId); if (!envolvidoMembroId) return { valido: false, mensagem: "A matrícula da pessoa envolvida não é válida." }; }
   const envolvidoNome = limpar(dados.envolvidoNome);
   if (envolvidoNome.length > 150 || temMarca(envolvidoNome)) return { valido: false, mensagem: "Nome da pessoa envolvida: até 150 caracteres, sem < ou >." };
+  // "A pessoa envolvida é da liderança desta congregação" (Trava 7-B): marcado, o caso fica SÓ com o nível geral (Diretoria e Comitê) — o Dirigente local não recebe o aviso, não vê
+  // a fila nem lê o relato. Vale mesmo sem nome nem matrícula (quem registra pode ter medo de nomear o líder). Só sim ou não: texto, número ou outro valor é recusado.
+  if (dados.envolvidoDaLideranca != null && typeof dados.envolvidoDaLideranca !== "boolean") return { valido: false, mensagem: "Responda sim ou não: a pessoa envolvida é da liderança desta congregação?" };
+  const envolvidoDaLideranca = dados.envolvidoDaLideranca === true;
 
   const exige = NIVEL_EXIGE_COMUNICACAO[nivel];
   let relatadoPor = null, relato = null;
@@ -207,7 +214,7 @@ function validarIncidente(d, { hoje, agora = new Date(), origem = "MEMBRO" } = {
   const conhecidoEm = new Date(a.getTime() - horas * MS_HORA);
   return {
     valido: true,
-    dados: { nivel, dataOcorrencia, congregacaoId, equipeId, onde: onde || null, descricao, envolvidoMembroId, envolvidoNome: envolvidoNome || null, relatadoPor, relato, origem, conhecidoEm, exigeComunicacao: exige }
+    dados: { nivel, dataOcorrencia, congregacaoId, equipeId, onde: onde || null, descricao, envolvidoMembroId, envolvidoNome: envolvidoNome || null, envolvidoDaLideranca, relatadoPor, relato, origem, conhecidoEm, exigeComunicacao: exige }
   };
 }
 
@@ -391,12 +398,12 @@ function formatarPrazo(prazoEm) {
   return `${p(b.getUTCDate())}/${p(b.getUTCMonth() + 1)} às ${p(b.getUTCHours())}h${p(b.getUTCMinutes())}`;
 }
 function textoIncidenteNovo({ nivel, prazoEm }) {
-  if (NIVEL_EXIGE_COMUNICACAO[nivel]) return `Foi registrada uma suspeita ou relato de violência contra criança ou adolescente. A lei manda comunicar ao Conselho Tutelar em até 24 horas: o prazo termina em ${formatarPrazo(prazoEm)}. Abra Proteção de Crianças → Incidentes, comunique o órgão e registre o protocolo.`;
+  if (NIVEL_EXIGE_COMUNICACAO[nivel]) return `Foi registrada uma suspeita ou relato de violência contra criança ou adolescente. A lei manda comunicar ao Conselho Tutelar imediatamente: o prazo máximo da Igreja termina em ${formatarPrazo(prazoEm)}. Abra Proteção de Crianças → Incidentes, comunique o órgão e registre o protocolo.`;
   return `Foi registrado um incidente de proteção (${NIVEIS[nivel] ? NIVEIS[nivel].rotulo.toLowerCase() : "incidente"}). Abra Proteção de Crianças → Incidentes para conferir e tomar a providência.`;
 }
 function textoPrazo({ etapa, prazoEm }) {
   if (etapa === "DOZE_HORAS") return `Atenção: há uma suspeita de violência contra criança ou adolescente ainda SEM comunicação ao Conselho Tutelar. Restam menos de 12 horas (prazo: ${formatarPrazo(prazoEm)}). Abra Proteção de Crianças → Incidentes.`;
-  if (etapa === "QUATRO_HORAS") return `URGENTE: restam menos de 4 horas para comunicar ao Conselho Tutelar uma suspeita de violência contra criança ou adolescente (prazo: ${formatarPrazo(prazoEm)}). A omissão tem multa prevista no ECA. Abra Proteção de Crianças → Incidentes agora.`;
+  if (etapa === "QUATRO_HORAS") return `URGENTE: restam menos de 4 horas para comunicar ao Conselho Tutelar uma suspeita de violência contra criança ou adolescente (prazo: ${formatarPrazo(prazoEm)}). A lei manda comunicar imediatamente: a omissão é crime (Lei 14.344/2022, art. 26) e tem multa no ECA. Abra Proteção de Crianças → Incidentes agora.`;
   return `PRAZO VENCIDO: a comunicação ao Conselho Tutelar de uma suspeita de violência contra criança ou adolescente não foi registrada (o prazo terminou em ${formatarPrazo(prazoEm)}). Comunique agora e registre o protocolo em Proteção de Crianças → Incidentes.`;
 }
 function textoPadrao({ tipo, total }) {
@@ -430,8 +437,10 @@ function textoCautelarLevantada() {
 }
 // `avisada`: o aviso à liderança de fato foi criado. A criança só lê que "a liderança foi avisada" quando isso é verdade (regra de aviso desligada, ninguém para receber ou e-mail fora do ar
 // deixam `avisada` falso): nesse caso o texto diz o que houve e manda ligar. O 100 e o 190 estão nas DUAS versões. O padrão é a versão honesta (sem promessa): quem esquecer de passar o valor não promete.
-function textoConfirmacaoDeAjuda({ avisada = false } = {}) {
+// `soNoApp` (Trava 7-B): o pedido ficou guardado para a liderança, mas nenhuma mensagem saiu (e-mail fora do ar): o texto diz isso, sem prometer que alguém já sabe, e manda ligar.
+function textoConfirmacaoDeAjuda({ avisada = false, soNoApp = false } = {}) {
   if (avisada === true) return "Recebemos o que você contou. Obrigado por confiar. Pessoas preparadas da liderança da Igreja foram avisadas. Você não tem culpa de nada. Se existe perigo agora, ligue 190. Para falar com alguém a qualquer hora, ligue 100 (de graça).";
+  if (soNoApp === true) return "Recebemos o seu pedido e ele ficou guardado para a liderança da Igreja, mas não conseguimos mandar a mensagem para ninguém agora. Por favor, ligue 100 (Disque Direitos Humanos, de graça, 24 horas) ou 190 agora, ou fale com um adulto de confiança. Você não tem culpa de nada.";
   return "Recebemos o seu pedido, mas não conseguimos avisar ninguém da liderança agora. Por favor, ligue 100 (Disque Direitos Humanos, de graça, 24 horas) ou 190 agora, ou fale com um adulto de confiança. Você não tem culpa de nada.";
 }
 

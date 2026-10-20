@@ -4,7 +4,7 @@
 // Duas finalidades, cada uma com o seu texto e o seu hash — uma não vale pela outra:
 //   IMAGEM        a foto do(a) menor no cadastro, no crachá e em materiais internos da Igreja;
 //   SAUDE_CRACHA  a alergia ou condição de saúde que o responsável ESCOLHE informar para constar no crachá do check-in infantil (v7.10). Dado sensível: só para
-//                 o cuidado e a segurança do(a) menor. O dado em si chega com a v7.10; o consentimento já pode ser dado e revogado.
+//                 o cuidado e a segurança do(a) menor. O dado fica em CheckinInfantilSaude (shared/checkinInfantilDb.js), só enquanto este consentimento vale; revogar o apaga.
 //
 // Regra pura, sem banco (a parte com banco está em shared/menoresConsentimentoDb.js). Princípios:
 //  1) TRILHA DE ACRÉSCIMO: cada concessão ou revogação é uma linha nova (tabela MinisterioMenoresConsentimentos, migração 143); o estado atual de cada par
@@ -28,7 +28,9 @@ const sha256 = (txt) => crypto.createHash("sha256").update(txt).digest("hex");
 const limpar = (v) => (typeof v === "string" ? v.trim() : typeof v === "number" && Number.isFinite(v) ? String(v) : "");
 const temMarca = (s) => /[<>]/.test(s);
 
-const CONSENTIMENTO_VERSAO = 1;
+// Versão 2 (v7.10): o check-in infantil passou a existir, e o texto da saúde deixou de dizer que ele "ainda está sendo preparado" (o que é impresso e guardado ficou escrito).
+// Nada se ampliou (a finalidade é a mesma), então quem autorizou na versão 1 continua autorizado: o hash guardado prova o texto da época e a tela só mostra "texto desatualizado".
+const CONSENTIMENTO_VERSAO = 2;
 const MAIORIDADE = vol.MAIORIDADE;
 const IP_RETENCAO_DIAS_PADRAO = vol.IP_RETENCAO_DIAS_PADRAO;
 const IP_ANONIMIZADO = "anonimizado";
@@ -115,7 +117,7 @@ const TEXTOS_BRUTOS = {
       ITEM_RESPONSAVEL,
       {
         codigo: "O_QUE", base: "LGPD, art. 14, § 1º (consentimento específico e em destaque)",
-        texto: "O que será feito: se eu quiser, informo uma alergia ou uma condição de saúde do(a) menor (por exemplo, alergia a amendoim ou a leite, ou necessidade de remédio) para a Igreja imprimir no crachá do check-in infantil, de modo que a equipe da sala saiba cuidar dele(a). Informo só o que eu escolher: não preciso entregar laudo nem diagnóstico. O check-in infantil com crachá ainda está sendo preparado: a autorização fica registrada desde já, vale só para essa finalidade e não depende de nenhuma outra."
+        texto: "O que será feito: se eu quiser, informo uma alergia ou uma condição de saúde do(a) menor (por exemplo, alergia a amendoim ou a leite, ou necessidade de remédio) para a Igreja imprimir no crachá do check-in infantil, de modo que a equipe da sala saiba cuidar dele(a). Informo só o que eu escolher: não preciso entregar laudo nem diagnóstico. O que eu informar fica guardado no cadastro do(a) menor e é impresso no crachá a cada check-in infantil. Esta autorização vale só para essa finalidade e não depende de nenhuma outra."
       },
       {
         codigo: "DADO_SENSIVEL", base: "LGPD, art. 11, I (dado sensível: consentimento específico e destacado), e art. 14, § 1º",
@@ -309,7 +311,7 @@ function mensagemConcedido({ finalidade, menorNome }) {
 }
 function mensagemRevogado({ finalidade, menorNome, fotoApagada = false }) {
   return finalidade === "SAUDE_CRACHA"
-    ? `Autorização revogada. A informação de saúde de ${nomeOu(menorNome)} deixa de ser usada no crachá. A participação dele(a) não muda.`
+    ? `Autorização revogada. A informação de saúde de ${nomeOu(menorNome)} deixa de ser usada no crachá e foi apagada. A participação dele(a) não muda.`
     : `Autorização revogada. ${fotoApagada ? `A foto de ${nomeOu(menorNome)} foi apagada e a imagem` : `A imagem de ${nomeOu(menorNome)}`} deixa de ser usada. A participação dele(a) não muda.`;
 }
 function mensagemJaRevogado({ finalidade, fotoApagada = false }) {

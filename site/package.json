@@ -17,7 +17,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node scripts/localizar-imagens.mjs",
     "check": "astro check",
     "release:check": "npm run check && npm run build && npm run format:check",
     "preview": "astro preview",

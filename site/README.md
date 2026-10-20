@@ -104,7 +104,7 @@ quem não deveria vê-lo.
 | `mural_oracao` | Pedido de oração, nome opcional, confidencial | Leitura pública só do que é `aprovado=true`, não confidencial e dos últimos 90 dias; contador `orando_count` só é escrito pela Function `OrarMural/index.js` |
 | `contato_mensagens` | Formulário de contato (inclui LGPD/pedido de oração) | Só cria publicamente, nunca lida |
 | `push_subscriptions` | Inscrição de notificação push | Só cria publicamente; edição usa o próprio endpoint como "senha de posse" |
-| `pageviews` | Caminho da página + domínio de origem + data (sem IP, sem cookie) | Só cria publicamente |
+| `pageviews` | Caminho da página + domínio de origem + data (sem IP, sem cookie) | Só cria publicamente (permissão que o site já não usa: quem grava é a Function `RegistrarVisita`, com o token de administrador, em lote) |
 | `contas` | E-mail da "Minha Conta" | Sem leitura/escrita pública — só via Functions da Minha Conta |
 | `contas_codigos` | Código de login de 6 dígitos (hash SHA-256) | Sem leitura/escrita pública |
 | `enquete_votos` | Voto (enquete + opção + e-mail) | Sem leitura/escrita pública — só via `ConsultarEnquete/index.js`/`VotarEnquete/index.js` |
@@ -365,6 +365,21 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   `site/scripts/directus-limite-esquema.mjs`. Provas: `limite-unidade.cjs` (130, com 7 mutações que têm de reprovar), `limite-carga.cjs` (Directus
   real, 1 a 8 instâncias em processos separados), `limite.cjs` (HTTP, roda no CI) e o emulador `swa-local.cjs` (site + API contra um Directus de
   teste, sem tocar a produção).
+- **Vagas e cupom das inscrições em evento (16/10/2026)** — medido no Directus local: com 20 vagas e 40 inscrições ao mesmo tempo, as 40 saíam
+  **confirmadas** ("conta os confirmados, depois grava", sem trava), e o limite de usos do cupom tinha a mesma falha (lia `usos` e gravava
+  `usos + n`). Agora, quando o evento tem limite de vagas (sem aprovação) ou o cupom tem limite de usos, a inscrição grava na MESMA transação uma
+  senha no livro `evento_controle` (chave única `evento:n`, n = última + 1; ler a última senha, SÓ ENTÃO contar confirmados e usos; se outra
+  inscrição pegou a senha o banco recusa e a leitura é refeita) — a mesma técnica do limite de pedidos das camisetas, em `api/src/lib/vagasEvento.js`
+  (o raciocínio está no cabeçalho). Diferente do pedido de camiseta, **ninguém é recusado por falta de vaga**: quem não cabe entra na lista de
+  espera, e o cupom esgotado só deixa de dar desconto. O limite do cupom passa a ser a **contagem das inscrições com o código**; o campo `usos` é só o
+  número que o painel mostra. Evento sem limite e cupom sem limite seguem direto, sem trava. Estabilidade: fila de uma inscrição por vez por evento e
+  instância (503 "tente de novo" na hora quando não daria tempo), hash do telefone assíncrono depois das recusas baratas, memória de 3 s da senha e
+  das contagens, leitura do evento uma vez só por instância; falha do Directus ao ler o evento agora é 503, não "evento não encontrado". Sem o esquema
+  aplicado a função grava do jeito antigo (e avisa no log), nunca deixa de aceitar inscrição. Esquema (a coleção do livro + 1 campo na inscrição,
+  repetível, só acrescenta): `site/scripts/directus-vagas-esquema.mjs` — **aplicar no Directus ANTES de publicar o código**. Provas:
+  `vagas-evento-unidade.cjs` (sem rede; inclui o teste do teste: sem a chave única, ou contando antes de ler a senha, a corrida estoura),
+  `inscricao-carga.cjs` (Directus real local, 1 a 8 instâncias em processos separados; 120 inscrições para 40 vagas, com cupom e com grupos: sempre
+  exato) e `inscricao-vagas.cjs` (HTTP, roda no CI).
 - **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
   trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
   Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de
@@ -708,12 +723,34 @@ Quality/Pollen/Solar/Roads/Time Zone/Weather (sem aplicação real para um site 
 - **Performance**: `srcset` responsivo (3 larguras) nas capas de conteúdo, `fetchpriority="high"`
   nelas, `Cache-Control` de longo prazo para assets com hash de conteúdo, `preconnect`/
   `dns-prefetch` para o Directus.
+- **Imagens do Directus servidas pelo próprio site**: depois do `astro build`,
+  `scripts/localizar-imagens.mjs` (encadeado em `npm run build`, que é o que o Static Web Apps
+  roda) varre o HTML montado atrás de `https://<Directus>/assets/<id>?...`, baixa cada imagem
+  distinta uma vez (4 ao mesmo tempo, 30 s, 2 tentativas, só se a resposta for `image/*`), grava em
+  `dist/media/<hash do conteúdo>.<ext>` e troca a URL por `/media/...` (`og:image`,
+  `twitter:image` e o JSON-LD pela URL absoluta do site). Assim nenhum visitante pede imagem ao
+  Directus (1 núcleo, de 0,3 a 1,4 s de CPU cada). Se um download falha, a resposta não é imagem
+  (SVG fica de fora de propósito: aberto direto no nosso domínio executaria script) ou o total passa
+  de 120 MB, aquela ocorrência fica com a URL do Directus e o resumo avisa — a montagem nunca falha
+  por isso. `/media/*` tem `Cache-Control` de 1 ano (`immutable`; o nome muda com o conteúdo) em
+  `public/staticwebapp.config.json`. As telas do painel, que desenham a imagem no navegador,
+  continuam no Directus. Prova sem rede: `scripts/testes/imagens-locais-unidade.cjs`.
 - **SEO**: `sitemap.xml`, `rss.xml`, dados estruturados (`VideoObject`, `FAQPage`), busca rápida
   (Ctrl/Cmd+K, 10 tipos de conteúdo), atalho de vídeo com miniatura estática ("facade" do YouTube,
   sem carregar o player até o clique).
 - **Analytics próprio, sem cookie**: contador de visitas (`pageviews`, só caminho + origem + data)
   com dashboard nativo no Directus Insights; notificação push de conteúdo novo como alternativa a
   newsletter por e-mail.
+- **Contador de visitas em lote (16/10/2026)**: o navegador chama `POST /api/registrar-visita`
+  (`api/RegistrarVisita/`, mesma origem, sem pré-voo CORS) em vez de gravar direto no Directus (antes:
+  duas requisições por visita; o Directus B1, de 1 núcleo, chegava a 100 % de CPU com ~60–70
+  visitantes por minuto). A Function ignora robôs, valida `{ path, referrer_domain }`, limita a 120
+  visitas por IP em 5 min e guarda a visita num buffer em memória; o Directus recebe UM
+  `POST /items/pageviews` com o array de linhas a cada 25 visitas ou 10 s (uma gravação por vez por
+  instância; falha devolve as linhas ao buffer, no máximo 500, e nunca derruba a visita).
+  **Perda aceita**: se a instância reciclar, somem as visitas ainda no buffer (no máximo as dos
+  últimos 10 s) — é só um contador. Regra e provas: `api/src/lib/visitas.js` e
+  `scripts/testes/visitas-unidade.cjs`.
 
 ### E-mail transacional
 

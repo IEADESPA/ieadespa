@@ -251,7 +251,7 @@ Arquivo: [`fase-11-sistema-campal.md`](fase-11-sistema-campal.md) — 0 bloco(s)
 
 ## FASE 12 — Inteligência, Indicadores e Benchmarking
 
-Arquivo: [`fase-12-inteligencia-e-indicadores.md`](fase-12-inteligencia-e-indicadores.md) — 7 bloco(s) · itens 0/13 concluídos.
+Arquivo: [`fase-12-inteligencia-e-indicadores.md`](fase-12-inteligencia-e-indicadores.md) — 8 bloco(s) · itens 0/13 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -262,3 +262,4 @@ Arquivo: [`fase-12-inteligencia-e-indicadores.md`](fase-12-inteligencia-e-indica
 | v12.4 | [Painel executivo denominacional](fase-12-inteligencia-e-indicadores.md#v124--painel-executivo-denominacional) | ⬜ 0/3 |
 | · | [📌 Pendência entre fases — Trilha de discipulado (self-service, vB.5)](fase-12-inteligencia-e-indicadores.md#-pendência-entre-fases--trilha-de-discipulado-self-service-vb5) | — |
 | 🔒 12-B | [antes de encerrar a FASE 12 (e o roadmap comprometido até aqui)](fase-12-inteligencia-e-indicadores.md#-trava-de-revisão-12-b--antes-de-encerrar-a-fase-12-e-o-roadmap-comprometido-até-aqui) | — |
+| · | [Visão de longo prazo — integração total e sistema próprio de criação de sites (registrada em 19/10/2026)](fase-12-inteligencia-e-indicadores.md#visão-de-longo-prazo--integração-total-e-sistema-próprio-de-criação-de-sites-registrada-em-19102026) | — |

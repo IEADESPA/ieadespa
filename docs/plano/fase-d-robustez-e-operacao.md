@@ -554,5 +554,41 @@ abre-se a 🔒 Trava 7-A e a FASE 7 segue pra v7.6.
   dessa consulta por hora era igual à de chamadas, 1 para 1). A correção está em `auth.temSessaoAssinada(req)`: só uma sessão
   nossa (assinada e no prazo, conferida na memória) justifica a leitura; token do Azure, inválido ou vencido não vira sessão e o
   handler responde 401 sozinho. Provas: `entradaUnica.test.js` (5 testes novos; voltando a condição antiga, 3 reprovam) e a suíte
-  inteira (5.226 testes). Efeito esperado: o banco volta a pausar sem uso; conferir o custo diário no Azure (Cost Management) e o
-  estado do banco (`Paused` fora do horário de trabalho).
+  inteira (5.226 testes). **Confirmado em 16/10/2026:** o banco pausou às 13h03 (Belém), 60 minutos depois do último uso; a cobrança por
+  hora caiu de ~2.440 vCore-segundos (ligado o tempo todo) para 96 na hora da pausa e 0 depois. O custo em reais aparece no
+  Cost Management com um dia de atraso: conferir 17/10 (esperado ~R$ 8 em vez de ~R$ 87). O orçamento `ieadespa-teto-mensal`
+  (R$ 650/mês, avisos em 50 %, 80 %, 100 % e na previsão de 100 %, pelo grupo de ação `ieadespa-alertas`) já existia desde 01/10.
+
+- **16/10/2026 (tarde) — alívio do servidor do site e trava de vagas (a "tabela" aprovada pelo responsável; troca de plano adiada por ele).**
+  Diagnóstico do pico da Marcha: o gargalo era o Directus (plano B1, 1 núcleo) a 100 % de CPU com ~60–70 visitantes por minuto, não os
+  pedidos. Entregue, tudo em produção e conferido lá: (1) **contador de visitas leve** (PR #44): `POST /api/registrar-visita`, as visitas
+  ficam num buffer em memória da Function e o Directus recebe UM POST em lote a cada 25 visitas ou 10 s — cada visita deixou de ser
+  duas requisições ao Directus (gravação + pré-voo) e passou a ser uma só à Function; perda aceita de propósito: as visitas ainda no
+  buffer se a instância reciclar (no máximo ~10 s); a permissão pública de criar em `pageviews` continua para as páginas antigas em cache
+  (removê-la depois fecha o spam direto); (2) **imagens servidas pelo próprio site** (PR #43): passo `localizar-imagens.mjs` depois do
+  `astro build` baixa cada imagem do Directus uma vez e reescreve o HTML para `/media/<hash>` com cache de 1 ano (nunca derruba a
+  montagem; SVG não é trazido; hoje o site não tem imagem do Directus fora das páginas de campanha, então o passo não faz nada até a
+  próxima campanha); (3) **trava de vagas e de cupom das inscrições em evento** (PRs #42 e #45): medido, 40 inscrições simultâneas
+  para 20 vagas saíam as 40 confirmadas; agora a senha única do livro `evento_controle` (mesma técnica do limite de pedidos) mantém vagas e
+  usos do cupom exatos (120 inscrições para 40 vagas, com cupom e grupos, 1 a 8 instâncias: sempre exato); ninguém é recusado, quem não cabe
+  vai para a lista de espera; leitura que falha repete, gravação nunca (ver o cabeçalho de `site/api/src/lib/vagasEvento.js`); esquema
+  aplicado no Directus de produção antes do código (`site/scripts/directus-vagas-esquema.mjs`); (4) Always On e (5) registro HTTP do
+  Directus ligados. **Provas em produção:** `inscricao-vagas.cjs` 18/18 (agora também no CI), contador com 30 visitas simultâneas
+  (todas gravadas em `pageviews`, robô ignorado, corpo inválido 400). **Lição de processo:** as baterias de CI usam todas o MESMO
+  Directus de produção; três PRs abertos ao mesmo tempo sobrecarregaram o B1 e geraram falhas falsas (503) — vale "uma mudança = um PR" e
+  esperar a bateria de um terminar antes de empurrar outro. **Fica para o responsável:** decidir o plano do Directus (B2 = ~R$ 156/mês, 2
+  núcleos) e, em 17/10, conferir o custo diário do banco SQL e quantas vezes ele acorda por dia para decidir `autoPauseDelay` 60 → 15 min.
+
+- **19/10/2026 — corte de custo do banco do sistema (teto exigido pelo responsável: no máximo R$ 300/mês).** A conta de 17/09 a 16/10
+  foi de R$ 1.810, 80 % dela computação do `app-db-prod` ligado 24 h (já corrigido em 16/10) e o resto armazenamento SQL cobrado pelo
+  MÁXIMO configurado (32 GB, R$ 46,42 por banco, para 48 MB usados), plano B1 do Directus (R$ 2,51/dia), os dois Static Web Apps (R$ 1,54/dia
+  cada) e uma Function App antiga (`func-ieadespa-api`, Flex Consumption, R$ 62, removida em 03/10). Medido: o banco do sistema, em 14 dias,
+  teve CPU máxima de 6 % de 1 vCore (p99 2 %, média ~0), workers ≤ 3 %, E/S e log ≤ 1 %. Feito em 19/10: (1) as três rotinas diárias das 7h
+  saem coladas (10h00, 10h06, 10h12 UTC; antes 10h00/10h30/11h00 deixavam o banco ligado das 7h às 9h todo dia); (2) pausa automática de 60
+  para 15 min nos dois bancos e limite de tamanho de 32 GB para 2 GB (o de testes passou a pausar em ~2 min de ociosidade); (3) **banco de
+  produção trocado de serverless (GP_S_Gen5, R$ 5,17 por vCore-hora, cerca de R$ 3,6/h ligado) para o nível fixo Basic (5 DTU, R$ 1,0167/dia =
+  ~R$ 30,50/mês, 2 GB inclusos)**: leva ~80 s, sem pausa/despertar (some a retomada lenta de 30–60 s), custo previsível. O banco de testes
+  (`ieadespa-homolog`) continua serverless e pausado. Total esperado: B1 R$ 75 + sites R$ 30,5 + Basic R$ 30,5 + testes/outros ~R$ 10 =
+  **~R$ 145–150/mês**. **Reverter a troca** (se a Basic ficar lenta): `az sql db update -g ieadespa -s srv-app-sql -n app-db-prod --edition
+  GeneralPurpose --compute-model Serverless --family Gen5 --capacity 1 --min-capacity 0.5 --auto-pause-delay 15`; ou subir para S0 (10 DTU,
+  R$ 3,056/dia). O orçamento `ieadespa-teto-mensal` fica em R$ 650 (decisão dele em 19/10: há outros bancos e processos do sistema que ainda entram na conta).

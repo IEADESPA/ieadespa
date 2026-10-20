@@ -318,10 +318,10 @@ diz em que arquivo ela está e em que pé ela anda.
 
 - **Concluídas:** FASES 0 a 6 e as FASES B (consolidação da base) e C (integração com o site), salvo uns
   poucos itens adiados de propósito, que o índice marca como 🟡.
-- **Em andamento — FASE 7:** v7.1 a v7.8 entregues e no ar (PSC, Calendário oficial, Canais oficiais, Eventos e
-  congressos, Escalas e voluntariado, Setores Técnicos, Ministério com menores, Incidentes de proteção de crianças).
-  A 🔒 Trava 7-A foi fechada em 08/10/2026. Próxima: **v7.10** (check-in infantil); a antiga v7.9 (faltas na CLI) foi
-  fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte (04/10/2026) estão
+- **Em andamento — FASE 7:** v7.1 a v7.8 e v7.10 entregues e no ar (PSC, Calendário oficial, Canais oficiais, Eventos e
+  congressos, Escalas e voluntariado, Setores Técnicos, Ministério com menores, Incidentes de proteção de crianças, Check-in
+  infantil com cadeia de custódia). As 🔒 Travas 7-A (08/10/2026) e 7-B (20/10/2026) estão fechadas. Próxima: **v7.11**
+  (cuidado pastoral); a antiga v7.9 (faltas na CLI) foi fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte (04/10/2026) estão
   feitos; só a chave site↔sistema nos dois portais do Azure depende de gente. O resumo em prosa completo está no
   começo do [arquivo da fase 7](docs/plano/fase-7-saude-eventos-e-comunicacao.md).
 - **FASE D (retrofit de robustez e operação):** vD.1 a vD.8 feitas e Trava D-B fechada (06 a 08/10/2026): prova de
@@ -343,7 +343,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | C | Integração com o site institucional | concluída | [fase-c-integracao-com-o-site](docs/plano/fase-c-integracao-com-o-site.md) |
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
-| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.8 entregues; Trava 7-A fechada em 08/10/2026; próxima: v7.10; a antiga v7.9 foi fundida à v8.1 na fase 8; Trava 7-B antes da v7.11) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.8 e v7.10 entregues; Travas 7-A e 7-B fechadas em 08/10 e 20/10/2026; próxima: v7.11; a antiga v7.9 foi fundida à v8.1 na fase 8) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
 | D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A) | vD.1–vD.8 feitas e Trava D-B fechada (06–08/10/2026); ficam só decisões do responsável | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |

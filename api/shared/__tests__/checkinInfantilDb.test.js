@@ -314,6 +314,83 @@ describe("check-in", () => {
     expect(r.etiquetas[0].etiqueta.codigo).not.toBe(r.etiquetas[1].etiqueta.codigo);
     expect(com(/UPDATE CheckinInfantilRegistros SET CodigoHash/).map((c) => c.inputs.r)).toEqual([100, 101]);
   });
+
+  describe("aviso ao responsável quando quem trouxe é um terceiro (decisão de 20/10/2026)", () => {
+    const TERCEIRO = { nome: "Rosa Lima", parentesco: "TIA", documento: "RG", contato: "94991112222" };
+    const responsaveisDoBanco = (...ids) => quando(/SELECT p\.MembroId, p\.Nome, p\.Email FROM VoluntariadoResponsaveis/, ids.map((i) => ({ MembroId: i, Nome: `Responsável ${i}`, Email: `r${i}@e.org` })));
+    const avisosDoTerceiro = () => notificarAgora.mock.calls.filter((c) => /^CHECKIN_TERCEIRO_/.test(c[1].regraChave));
+    const doisIrmaos = () => {
+      quando(/SELECT MembroId, Nome, DataNascimento, CongregacaoId FROM MembroReferencia WHERE MembroId IN/, [criancaBanco(), criancaBanco({ MembroId: 31, Nome: "Dara Souza" })]);
+      mockRegras.unshift(mockRegras.pop());
+    };
+
+    test("nome livre + criança membro: os responsáveis cadastrados são avisados, com o nome do terceiro e o primeiro nome da criança, e nada mais", async () => {
+      prepararFeliz(); responsaveisDoBanco(40, 41);
+      const r = await checkin(dadosMembro({ trouxe: TERCEIRO }));
+      expect(r).toMatchObject({ sucesso: true, avisados: 1, semAviso: false, mensagem: "Criança entregue na sala." });
+      const av = avisosDoTerceiro();
+      expect(av).toHaveLength(1);
+      expect(av[0][1]).toMatchObject({ regraChave: "CHECKIN_TERCEIRO_ENTREGA", referenciaId: 100, referenciaTabela: "CheckinInfantilRegistros", aguardarEntrega: false });
+      expect(av[0][1].destinatarios.map((d) => d.membroId)).toEqual([40, 41]);
+      expect(av[0][1].mensagem).toMatch(/Caio foi entregue na sala Maternal por Rosa Lima/);
+      expect(av[0][1].mensagem).not.toMatch(/Souza|RG|94991112222|saúde/i);
+    });
+    test("quem trouxe é responsável cadastrado: ninguém é avisado", async () => {
+      prepararFeliz(); responsaveisDoBanco(40, 41);
+      const r = await checkin(dadosMembro());
+      expect(r).toMatchObject({ sucesso: true, avisados: 0, semAviso: false });
+      expect(avisosDoTerceiro()).toHaveLength(0);
+    });
+    test("irmãos com os mesmos responsáveis: um aviso só, com os dois primeiros nomes", async () => {
+      prepararFeliz(); responsaveisDoBanco(40); doisIrmaos();
+      const r = await checkin(dadosMembro({ trouxe: TERCEIRO, criancas: [{ tipo: "MEMBRO", menorId: 30 }, { tipo: "MEMBRO", menorId: 31 }] }));
+      expect(r.sucesso).toBe(true);
+      const av = avisosDoTerceiro();
+      expect(av).toHaveLength(1);
+      expect(av[0][1].mensagem).toMatch(/^Caio e Dara foram entregues/);
+      expect(av[0][1].referenciaId).toBe(100);
+    });
+    test("irmãos com responsáveis diferentes: um aviso para cada grupo", async () => {
+      prepararFeliz(); doisIrmaos();
+      quando(/SELECT p\.MembroId, p\.Nome, p\.Email FROM VoluntariadoResponsaveis/, (i) => (i.m === 30 ? [{ MembroId: 40, Nome: "A", Email: "a@e.org" }] : [{ MembroId: 50, Nome: "B", Email: "b@e.org" }]));
+      const r = await checkin(dadosMembro({ trouxe: TERCEIRO, criancas: [{ tipo: "MEMBRO", menorId: 30 }, { tipo: "MEMBRO", menorId: 31 }] }));
+      expect(r.sucesso).toBe(true);
+      const av = avisosDoTerceiro();
+      expect(av.map((c) => c[1].destinatarios.map((d) => d.membroId))).toEqual([[40], [50]]);
+      expect(av.map((c) => c[1].referenciaId)).toEqual([100, 101]);
+      expect(av[0][1].mensagem).toMatch(/^Caio foi entregue/); expect(av[1][1].mensagem).toMatch(/^Dara foi entregue/);
+    });
+    test("o aviso falha (erro ou nenhum criado): a entrada vale e está gravada, mas a resposta diz que ninguém foi avisado (semAviso)", async () => {
+      for (const falha of [async () => { throw new Error("fila fora do ar"); }, async () => ({ criadas: 0 })]) {
+        mockRegras = []; mockConsultas = [];
+        prepararFeliz(); responsaveisDoBanco(40);
+        notificarAgora.mockImplementation(falha);
+        const r = await checkin(dadosMembro({ trouxe: TERCEIRO }));
+        expect(r.sucesso).toBe(true);
+        expect(r.etiquetas).toHaveLength(1);
+        expect(r.semAviso).toBe(true);
+        expect(r.mensagem).toMatch(/não conseguiu avisar o responsável cadastrado/);
+        expect(com(/INSERT INTO CheckinInfantilRegistros/)).toHaveLength(1);
+      }
+    });
+    test("não conseguir nem montar a lista de responsáveis também é semAviso (e não derruba a entrada)", async () => {
+      prepararFeliz();
+      quando(/SELECT p\.MembroId, p\.Nome, p\.Email FROM VoluntariadoResponsaveis/, () => { throw new Error("banco caiu"); });
+      const r = await checkin(dadosMembro({ trouxe: TERCEIRO }));
+      expect(r).toMatchObject({ sucesso: true, semAviso: true });
+      expect(avisosDoTerceiro()).toHaveLength(0);
+    });
+    test("visitante e criança sem responsável cadastrado: não há a quem avisar, e isso não é alarme", async () => {
+      prepararFeliz();
+      const v = await checkin({ servicoId: 5, equipeId: 7, criancas: [{ tipo: "VISITANTE", nome: "Davi Lima", nascimento: "2021-03-02", idade: 5, saude: null }], trouxe: TERCEIRO, extras: [] });
+      expect(v).toMatchObject({ sucesso: true, avisados: 0, semAviso: false });
+      mockRegras = []; mockConsultas = [];
+      prepararFeliz(); responsaveisDoBanco();
+      const m = await checkin(dadosMembro({ trouxe: TERCEIRO }));
+      expect(m).toMatchObject({ sucesso: true, avisados: 0, semAviso: false });
+      expect(avisosDoTerceiro()).toHaveLength(0);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -333,6 +410,74 @@ describe("retirada", () => {
     quando(/UPDATE CheckinInfantilRegistros SET Tentativas = Tentativas \+ 1/, tentativa ? [tentativa] : []);
   }
   const retirar = (d = dados(), extra = {}) => db.retirar(pool, { sala: SALA, registroId: 9, operadorId: 10, dados: d, hoje: HOJE, ...extra });
+
+  describe("aviso ao responsável quando quem retira é um terceiro (decisão de 20/10/2026)", () => {
+    const responsaveis = (...ids) => quando(/SELECT p\.MembroId, p\.Nome, p\.Email FROM VoluntariadoResponsaveis/, ids.map((i) => ({ MembroId: i, Nome: `Responsável ${i}`, Email: `r${i}@e.org` })));
+    const doTerceiro = () => notificarAgora.mock.calls.filter((c) => /^CHECKIN_TERCEIRO_/.test(c[1].regraChave));
+    const liberar = () => quando(/UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA'/, [{ n: 1 }]);
+    const livre = { TrouxeMembroId: null, TrouxeNome: "Rosa Lima", TrouxeNomeResolvido: "Rosa Lima" };
+
+    test("retira quem trouxe sem ser responsável cadastrado: os responsáveis são avisados (CHECKIN_TERCEIRO_RETIRADA), com o nome do terceiro e o primeiro nome da criança", async () => {
+      preparar({ reg: registro(livre) }); liberar(); responsaveis(40, 41);
+      const r = await retirar(dados({ retirante: { ref: "TROUXE" } }));
+      expect(r).toMatchObject({ sucesso: true, retirada: true, avisados: 1, semAviso: false, mensagem: "Criança entregue a quem a retirou." });
+      const av = doTerceiro();
+      expect(av).toHaveLength(1);
+      expect(av[0][1]).toMatchObject({ regraChave: "CHECKIN_TERCEIRO_RETIRADA", referenciaId: 9, referenciaTabela: "CheckinInfantilRegistros", aguardarEntrega: false });
+      expect(av[0][1].destinatarios.map((d) => d.membroId)).toEqual([40, 41]);
+      expect(av[0][1].mensagem).toMatch(/Caio foi retirado\(a\) da sala Maternal por Rosa Lima/);
+      expect(av[0][1].mensagem).not.toMatch(/Souza/);
+    });
+    test("retira o indicado só para a visita por um terceiro: avisa; indicado por um responsável cadastrado, não", async () => {
+      const visita = [{ AutorizadoVisitaId: 7, RegistroId: 9, Nome: "Carla Dias", Parentesco: "TIO" }];
+      preparar({ reg: registro(livre) }); liberar(); responsaveis(40);
+      trocar(/FROM CheckinInfantilAutorizadosVisita WHERE RegistroId IN/, visita);
+      await retirar(dados({ retirante: { ref: "VIS:7" } }));
+      expect(doTerceiro()).toHaveLength(1);
+      expect(doTerceiro()[0][1].mensagem).toMatch(/por Carla Dias/);
+      mockRegras = []; mockConsultas = []; notificarAgora.mockClear();
+      preparar(); liberar(); responsaveis(40);                                                      // quem trouxe é o responsável 40
+      trocar(/FROM CheckinInfantilAutorizadosVisita WHERE RegistroId IN/, visita);
+      const r = await retirar(dados({ retirante: { ref: "VIS:7" } }));
+      expect(r).toMatchObject({ sucesso: true, retirada: true, avisados: 0, semAviso: false });
+      expect(doTerceiro()).toHaveLength(0);
+    });
+    test("retira o responsável cadastrado, quem trouxe sendo responsável ou alguém da lista fixa: nenhum aviso de terceiro", async () => {
+      preparar(); liberar(); responsaveis(40);
+      for (const ref of ["RESP:40", "TROUXE"]) {
+        notificarAgora.mockClear(); mockConsultas = [];
+        expect(await retirar(dados({ retirante: { ref } }))).toMatchObject({ sucesso: true, retirada: true, avisados: 0, semAviso: false });
+        expect(doTerceiro()).toHaveLength(0);
+      }
+      quando(/FROM CheckinInfantilAutorizados a\s+WHERE a\.MenorMembroId IN/, [{ AutorizadoId: 5, MenorMembroId: 30, AutorizadoMembroId: null, Nome: "Dona Lúcia", Parentesco: "AVO", ValidoAte: null }]);
+      notificarAgora.mockClear();
+      expect(await retirar(dados({ retirante: { ref: "AUT:5" } }))).toMatchObject({ sucesso: true, retirada: true, semAviso: false });
+      expect(doTerceiro()).toHaveLength(0);
+    });
+    test("o aviso falha: a criança JÁ saiu (vale e está gravado), e a resposta manda avisar (semAviso)", async () => {
+      for (const falha of [async () => { throw new Error("fila fora do ar"); }, async () => ({ criadas: 0 })]) {
+        mockRegras = []; mockConsultas = [];
+        preparar({ reg: registro(livre) }); liberar(); responsaveis(40);
+        notificarAgora.mockImplementation(falha);
+        const r = await retirar(dados({ retirante: { ref: "TROUXE" } }));
+        expect(r).toMatchObject({ sucesso: true, retirada: true, semAviso: true });
+        expect(r.mensagem).toMatch(/não conseguiu avisar o responsável cadastrado/);
+        expect(com(/UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA'/)).toHaveLength(1);
+      }
+    });
+    test("criança visitante (sem responsável cadastrado) retirada por quem trouxe: sem aviso e sem alarme; e a retirada divergente segue só com o aviso próprio", async () => {
+      preparar({ reg: registro({ ...livre, MenorMembroId: null, VisitanteNome: "Davi Lima", CriancaNome: "Davi Lima" }) }); liberar();
+      expect(await retirar(dados({ retirante: { ref: "TROUXE" } }))).toMatchObject({ sucesso: true, retirada: true, avisados: 0, semAviso: false });
+      expect(doTerceiro()).toHaveLength(0);
+      mockRegras = []; mockConsultas = []; notificarAgora.mockClear();
+      preparar({ reg: registro(livre) }); responsaveis(40);
+      quando(/UPDATE CheckinInfantilRegistros SET Situacao = 'RETIRADA_PENDENTE'/, [{ n: 1 }]);
+      const d = await retirar(dados({ retirante: { outro: { nome: "Roberto Dias", parentesco: "AMIGO_FAMILIA", documento: "RG" } } }));
+      expect(d).toMatchObject({ sucesso: true, divergente: true });
+      expect(doTerceiro()).toHaveLength(0);
+      expect(notificarAgora.mock.calls.every((c) => c[1].regraChave === "CHECKIN_RETIRADA_DIVERGENTE")).toBe(true);
+    });
+  });
 
   test("código certo e pessoa da lista: a criança sai, só vale se ainda está na sala com a MESMA geração do código, e a tentativa é zerada", async () => {
     preparar();

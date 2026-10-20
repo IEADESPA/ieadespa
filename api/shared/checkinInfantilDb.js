@@ -436,7 +436,7 @@ async function saudeVigenteDosMenores(pool, menorIds, hoje) {
 }
 
 // `dados`: já validado por ck.validarCheckin. Devolve, por criança, a etiqueta (com o código, que só aparece AQUI) e o recibo do responsável.
-async function fazerCheckin(pool, { sala, operadorId, dados, hoje = hojeBrasilia(), agoraIso = ck.agoraBrasiliaIso() }) {
+async function fazerCheckin(pool, { sala, operadorId, dados, hoje = hojeBrasilia(), agoraIso = ck.agoraBrasiliaIso(), deps = {} }) {
   if (sala.servicoStatus !== "PUBLICADA") return { sucesso: false, mensagem: ck.MENSAGENS.SERVICO_NAO_PUBLICADO };
   if (sala.equipeAtiva === false) return { sucesso: false, mensagem: ck.MENSAGENS.EQUIPE_DESATIVADA };
   const prazos = await lerPrazos(pool);
@@ -561,13 +561,21 @@ async function fazerCheckin(pool, { sala, operadorId, dados, hoje = hojeBrasilia
   for (const x of criados) {
     await registrarAuditoria({ tabela: "CheckinInfantilRegistros", registroId: x.registroId, acao: "CHECKIN_INFANTIL_ENTREGA", usuarioId: Number(operadorId), dadosDepois: { servicoId: sala.servicoId, equipeId: sala.equipeId, tipo: x.c.tipo } });
   }
+  // Quem trouxe sem ser responsável cadastrado (nome livre): os responsáveis cadastrados das crianças membro são avisados (o aviso nomeia a pessoa e o primeiro nome da criança, nada mais).
+  let aviso = { avisados: 0, semAviso: false };
+  if (!dados.trouxe.membroId) {
+    aviso = await avisarResponsaveisDeTerceiro(pool, { regraChave: "CHECKIN_TERCEIRO_ENTREGA", deps,
+      itens: criados.filter((x) => x.c.tipo === "MEMBRO").map((x) => ({ registroId: x.registroId, menorId: x.c.menorId, nome: x.c.nome })),
+      texto: (grupo) => ck.textoTerceiroNaEntrega({ nomesCriancas: grupo.map((i) => i.nome), salaNome: sala.equipeNome, nomeQuemTrouxe: dados.trouxe.nome }) });
+  }
   const instante = new Date().toISOString();
   const etiquetas = criados.map((x) => ({
     registroId: x.registroId, foraDaFaixa: x.foraDaFaixa,
     etiqueta: ck.montarEtiqueta({ nomeCrianca: x.c.nome, idade: x.c.idade, salaNome: sala.equipeNome, congregacaoNome: sala.congregacaoNome, codigo: x.codigo, saudeTexto: x.saudeTexto, instante })
   }));
   return {
-    sucesso: true, mensagem: criados.length === 1 ? "Criança entregue na sala." : `${criados.length} crianças entregues na sala.`,
+    sucesso: true, mensagem: `${criados.length === 1 ? "Criança entregue na sala." : `${criados.length} crianças entregues na sala.`}${aviso.semAviso ? ` ${ck.MENSAGENS.SEM_AVISO_TERCEIRO}` : ""}`,
+    avisados: aviso.avisados, semAviso: aviso.semAviso,
     etiquetas,
     recibo: {
       sala: sala.equipeNome, congregacao: sala.congregacaoNome, instante, trouxe: trouxeNomeMembro || dados.trouxe.nome,
@@ -609,12 +617,43 @@ async function reservarTentativa(pool, { registroId, max }) {
   return r.recordset[0] || null;
 }
 
+// Os responsáveis cadastrados pela Secretaria (vigentes) de uma criança membro.
+async function responsaveisVigentesDe(pool, menorMembroId) {
+  if (!menorMembroId) return [];
+  return (await pool.request().input("m", sql.Int, Number(menorMembroId)).query(`SELECT p.MembroId, p.Nome, p.Email FROM VoluntariadoResponsaveis r JOIN MembroReferencia p ON p.MembroId = r.ResponsavelMembroId WHERE r.MenorMembroId = @m AND r.RevogadoEm IS NULL`)).recordset
+    .map((p) => ({ membroId: Number(p.MembroId), nome: p.Nome, email: p.Email }));
+}
+
+// Aviso ao responsável cadastrado quando a criança é entregue ou retirada por um TERCEIRO (alguém que não é responsável cadastrado). Decisão da liderança de 20/10/2026: quem tem a guarda
+// sabe, na hora, que outra pessoa trouxe ou levou a criança. Depois que o ato já está gravado NADA lança: o aviso falhar não desfaz a entrada nem a saída, mas a resposta diz que ninguém
+// foi avisado (`semAviso`) para o voluntário ligar. Criança sem responsável cadastrado não tem a quem avisar (visitante, por exemplo): sem aviso e sem alarme.
+// `itens`: [{ registroId, menorId, nome }]; `texto(grupo)` monta a mensagem de cada grupo de crianças com os mesmos responsáveis (irmãos chegam num aviso só).
+async function avisarResponsaveisDeTerceiro(pool, { regraChave, itens, texto, deps = {} }) {
+  let semAviso = false, avisados = 0;
+  const grupos = new Map();
+  try {
+    for (const it of itens) {
+      const pais = await responsaveisVigentesDe(pool, it.menorId);
+      if (!pais.length) continue;
+      const chave = pais.map((p) => p.membroId).sort((a, b) => a - b).join(",");
+      if (!grupos.has(chave)) grupos.set(chave, { pais, itens: [] });
+      grupos.get(chave).itens.push(it);
+    }
+  } catch (e) { console.error("[CHECKIN] não foi possível montar a lista de responsáveis a avisar (terceiro):", e.message); semAviso = true; }
+  for (const g of grupos.values()) {
+    try {
+      const a = await (deps.notificarAgora || notificarAgora)(pool, { regraChave, destinatarios: g.pais, mensagem: texto(g.itens), referenciaId: g.itens[0].registroId, referenciaTabela: "CheckinInfantilRegistros", aguardarEntrega: false });
+      const criadas = Number((a || {}).criadas || 0);
+      avisados += criadas;
+      if (criadas === 0) semAviso = true;
+    } catch (e) { console.error("[CHECKIN] falha ao avisar o responsável sobre o terceiro:", e.message); semAviso = true; }
+  }
+  return { avisados, semAviso };
+}
+
 async function listaDeInteressados(pool, registro, sala) {
   // quem recebe o aviso: os responsáveis cadastrados da criança (com o primeiro nome dela), o líder da sala e a gestão da congregação (sem nome de criança)
-  const pais = registro.MenorMembroId
-    ? (await pool.request().input("m", sql.Int, Number(registro.MenorMembroId)).query(`SELECT p.MembroId, p.Nome, p.Email FROM VoluntariadoResponsaveis r JOIN MembroReferencia p ON p.MembroId = r.ResponsavelMembroId WHERE r.MenorMembroId = @m AND r.RevogadoEm IS NULL`)).recordset
-        .map((p) => ({ membroId: Number(p.MembroId), nome: p.Nome, email: p.Email }))
-    : [];
+  const pais = await responsaveisVigentesDe(pool, registro.MenorMembroId);
   const lider = sala.liderMembroId ? await pool.request().input("m", sql.Int, sala.liderMembroId).query(`SELECT MembroId, Nome, Email FROM MembroReferencia WHERE MembroId = @m`).then((r) => r.recordset.map((p) => ({ membroId: Number(p.MembroId), nome: p.Nome, email: p.Email }))) : [];
   const gestao = (await require("./psc").resolverDestinatariosDaCongregacao(pool, { permissao: "habilitacao_voluntarios", congregacaoId: sala.congregacaoId })).map((d) => ({ membroId: d.membroId, nome: d.nome, email: d.email }));
   return { pais, gestao: [...new Map([...lider, ...gestao].map((d) => [d.membroId, d])).values()] };
@@ -672,7 +711,14 @@ async function retirar(pool, { sala, registroId, operadorId, dados, hoje = hojeB
     if (Number(r.recordset[0].n) !== 1) return { sucesso: false, mudou: true, mensagem: ck.MENSAGENS.MUDOU };
     await registrarEvento(exec(pool), { registroId, servicoId: sala.servicoId, equipeId: sala.equipeId, tipo: "RETIRADA", atorId: Number(operadorId), detalhe: tipoBanco });
     await registrarAuditoria({ tabela: "CheckinInfantilRegistros", registroId: Number(registroId), acao: "CHECKIN_INFANTIL_RETIRADA", usuarioId: Number(operadorId), dadosDepois: { servicoId: sala.servicoId, equipeId: sala.equipeId, tipo: tipoBanco } });
-    return { sucesso: true, retirada: true, mensagem: "Criança entregue a quem a retirou." };
+    // Quem retira é um terceiro (quem trouxe sem ser responsável cadastrado, ou indicado só para a visita por essa pessoa): o responsável cadastrado é avisado. Divergente tem o aviso próprio.
+    let aviso = { avisados: 0, semAviso: false };
+    if (quem.terceiro && reg0.MenorMembroId) {
+      aviso = await avisarResponsaveisDeTerceiro(pool, { regraChave: "CHECKIN_TERCEIRO_RETIRADA", deps,
+        itens: [{ registroId: Number(registroId), menorId: Number(reg0.MenorMembroId), nome: reg0.CriancaNome }],
+        texto: (grupo) => ck.textoTerceiroNaRetirada({ nomeCrianca: grupo[0].nome, salaNome: sala.equipeNome, nomeQuemRetirou: quem.nome }) });
+    }
+    return { sucesso: true, retirada: true, avisados: aviso.avisados, semAviso: aviso.semAviso, mensagem: `Criança entregue a quem a retirou.${aviso.semAviso ? ` ${ck.MENSAGENS.SEM_AVISO_TERCEIRO}` : ""}` };
   }
   const r = await pool.request().input("r", sql.Int, registroId).input("g", sql.Int, Number(t.geracao)).input("nm", sql.NVarChar(150), quem.nome).input("pa", sql.NVarChar(20), quem.parentesco)
     .input("dc", sql.NVarChar(10), quem.documento).input("op", sql.Int, Number(operadorId)).input("mt", sql.NVarChar(300), quem.motivo || null)

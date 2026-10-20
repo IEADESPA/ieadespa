@@ -430,6 +430,13 @@ IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_RETIR
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_SEGUNDA_VIA')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
     VALUES (N'CHECKIN_SEGUNDA_VIA', N'Check-in infantil: foi emitida a segunda via do código de retirada da sua criança', N'MENORES', NULL, NULL, 1, 1);
+-- (decisão da liderança, 20/10/2026) quem tem a guarda sabe, na hora, que a criança foi entregue ou retirada por alguém que não é responsável cadastrado (nome livre ou indicado só para a visita)
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_TERCEIRO_ENTREGA')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
+    VALUES (N'CHECKIN_TERCEIRO_ENTREGA', N'Check-in infantil: sua criança foi entregue na sala por alguém que não está cadastrado como responsável', N'MENORES', NULL, NULL, 1, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_TERCEIRO_RETIRADA')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
+    VALUES (N'CHECKIN_TERCEIRO_RETIRADA', N'Check-in infantil: sua criança foi retirada da sala por alguém que não está cadastrado como responsável', N'MENORES', NULL, NULL, 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_SEM_RETIRADA')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
     VALUES (N'CHECKIN_SEM_RETIRADA', N'Check-in infantil: criança sem retirada registrada depois do serviço', N'MENORES', NULL, NULL, 1, 1);

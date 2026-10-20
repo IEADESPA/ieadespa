@@ -107,7 +107,8 @@ const MENSAGENS = {
   SEM_RESPONSAVEL: "Esta criança não tem responsável cadastrado pela Secretaria: faça o check-in como visitante e peça à Secretaria para cadastrar o responsável.",
   SALA_AINDA_ABERTA: "A sala ainda está aberta e há criança nela: registre a retirada de cada uma com o código (ou, se for preciso, a liderança decide a divergência). Só depois que o check-in da sala fecha a liderança pode encerrá-la com baixa administrativa.",
   SEM_AVISO_LIDERANCA: "ATENÇÃO: a liderança NÃO foi avisada pelo sistema. O pedido está registrado e a criança continua na sala, mas ligue agora para a liderança da congregação para ela decidir.",
-  SEM_AVISO_RESPONSAVEIS: "Atenção: o sistema não conseguiu avisar o responsável cadastrado da nova segunda via. Avise a liderança e o responsável."
+  SEM_AVISO_RESPONSAVEIS: "Atenção: o sistema não conseguiu avisar o responsável cadastrado da nova segunda via. Avise a liderança e o responsável.",
+  SEM_AVISO_TERCEIRO: "Atenção: o sistema não conseguiu avisar o responsável cadastrado de que a criança foi entregue ou retirada por alguém que não está no cadastro. Avise a liderança e ligue para o responsável."
 };
 
 // ---------------------------------------------------------------
@@ -336,6 +337,18 @@ function montarAutorizados({ responsaveis = [], fixos = [], trouxe = null, daVis
   return lista;
 }
 
+// Terceiro = pessoa que nenhum responsável cadastrado pela Secretaria indicou: quem trouxe a criança sem ser responsável cadastrado, ou os que ESSA pessoa indicou só para a visita.
+// Quem está na lista fixa (feita pelo responsável ou com a ficha assinada) e quem trouxe sendo responsável cadastrado não são terceiros. Sem a entrada "quem trouxe" na lista, o indicado
+// só para a visita conta como terceiro (na dúvida, avisa).
+function ehTerceiroNaoCadastrado(achado, autorizados) {
+  if (achado.tipo === "TROUXE") return !achado.membroId;
+  if (achado.autorizadoVisitaId) {
+    const trouxe = autorizados.find((a) => a.tipo === "TROUXE");
+    return !(trouxe && trouxe.membroId);
+  }
+  return false;
+}
+
 // Quem está retirando: alguém da lista (`refPessoa`) ou "outra pessoa" (`outro`: nome, parentesco, documento). Devolve { divergente, tipo, membroId, nome, parentesco, documento } ou { erro }.
 function classificarRetirante({ ref, outro }, autorizados) {
   if (ref != null) {
@@ -343,7 +356,7 @@ function classificarRetirante({ ref, outro }, autorizados) {
     if (!lido) return { erro: "Escolha quem está retirando a criança." };
     const achado = autorizados.find((a) => a.ref === (lido.tipo === "TROUXE" ? "TROUXE" : `${lido.tipo}:${lido.id}`));
     if (!achado) return { erro: "Essa pessoa não está na lista de quem pode retirar esta criança. Se for outra pessoa, escolha \"outra pessoa\"." };
-    return { divergente: false, tipo: achado.tipo, membroId: achado.membroId || null, nome: achado.nome || null, parentesco: null, documento: null };
+    return { divergente: false, tipo: achado.tipo, membroId: achado.membroId || null, nome: achado.nome || null, parentesco: null, documento: null, terceiro: ehTerceiroNaoCadastrado(achado, autorizados) };
   }
   if (!ehObjeto(outro)) return { erro: "Escolha quem está retirando a criança." };
   const nome = validarNome(outro.nome, "o nome de quem está retirando");
@@ -584,6 +597,15 @@ function textoRetiradaDivergenteGestao({ salaNome }) {
 function textoSegundaVia({ nomeCrianca, salaNome }) {
   return `Foi emitida a segunda via do código de retirada de ${primeiroNome(nomeCrianca)} na sala ${salaNome}, depois da conferência de documento e da confirmação de dois adultos da sala. O código antigo deixou de valer. Se não foi você ou alguém da sua lista, avise a liderança.`.slice(0, 1000);
 }
+// O terceiro é nomeado ao responsável (é quem o reconhece: "é a minha irmã"); nunca vão documento, telefone nem dado de saúde. O aviso ao responsável leva só o primeiro nome da criança.
+function textoTerceiroNaEntrega({ nomesCriancas, salaNome, nomeQuemTrouxe }) {
+  const nomes = (nomesCriancas || []).map(primeiroNome);
+  const quem = nomes.length > 1 ? `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}` : nomes[0];
+  return `${quem} ${nomes.length > 1 ? "foram entregues" : "foi entregue"} na sala ${salaNome} por ${nomeQuemTrouxe}, que não está cadastrado como responsável. Se foi você quem pediu, não precisa fazer nada; se não foi, vá até a sala ou avise a liderança agora.`.slice(0, 1000);
+}
+function textoTerceiroNaRetirada({ nomeCrianca, salaNome, nomeQuemRetirou }) {
+  return `${primeiroNome(nomeCrianca)} foi retirado(a) da sala ${salaNome} por ${nomeQuemRetirou}, que não está cadastrado como responsável (é quem a trouxe ou foi indicado só para esta visita). Se foi você quem pediu, não precisa fazer nada; se não foi, avise a liderança agora.`.slice(0, 1000);
+}
 function textoSemRetirada({ quantidade, salaNome, data }) {
   return `${quantidade} criança(s) da sala ${salaNome} ficaram sem retirada registrada depois do serviço de ${data}. Confira com a equipe da sala e regularize o registro na aba Check-in infantil (botão "Encerrar a sala"): a liderança dá a baixa e escreve o motivo, para a Igreja provar o que aconteceu com cada criança.`.slice(0, 1000);
 }
@@ -621,6 +643,7 @@ module.exports = {
   montarAutorizados, classificarRetirante,
   validarSala, validarCheckin, validarRetirada, validarDecisaoDivergencia, validarEncerramentoSala, validarPedidoSegundaVia, validarAutorizado, validarSaudeDaCrianca,
   nomeParaEtiqueta, primeiroNome, montarEtiqueta, linhaDoHistoricoParaResponsavel,
+  ehTerceiroNaoCadastrado, textoTerceiroNaEntrega, textoTerceiroNaRetirada,
   textoRetiradaDivergentePais, textoRetiradaDivergenteGestao, textoSegundaVia, textoSemRetirada, textoAutorizadosDeixaramDeValer, textoProfessorRetirado, RECUSAS_POR_SALA_POR_MINUTO,
   referenciaDeSemRetirada, referenciaDeProfessor
 };

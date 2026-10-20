@@ -410,6 +410,58 @@ const contar = (rs) => rs.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 
   await limpar();
 
   // ====================================================================================================================================================
+  console.log("== decisão de 20/10: o responsável cadastrado é avisado quando um TERCEIRO traz ou retira a criança ==");
+  await H.crianca({ id: 7310, nome: "Lia Terceira E2E", idade: 4, cong: c1, resp: [[P.alice, "MAE"], [P.bernardo, "PAI"]] });
+  await H.crianca({ id: 7311, nome: "Davi Responsavel E2E", idade: 4, cong: c1, resp: [[P.alice, "MAE"]] });
+  await H.crianca({ id: 7312, nome: "Noa Indicada E2E", idade: 4, cong: c1, resp: [[P.alice, "MAE"]] });
+  await H.crianca({ id: 7313, nome: "Teo Regra Inativa E2E", idade: 4, cong: c1, resp: [[P.alice, "MAE"]] });
+  const svTer = await H.abrirSala(c1, eq.maternal, [ANA, BRUNO, CARLA]);
+  const quantas = async (regra) => (await notif(regra)).length;
+  let nE = await quantas("CHECKIN_TERCEIRO_ENTREGA"), nR = await quantas("CHECKIN_TERCEIRO_RETIRADA");
+  r = anota(await checkin(pin(ANA), svTer, eq.maternal, [{ menorId: 7310 }], trouxeLivre("Tia Rosa Terceira", { parentesco: "TIO" }))); const rLia = registrosDe(r)[0], cLia = codigosDe(r)[0];
+  ok(r.status === 201 && r.body.avisados === 2 && r.body.semAviso === false && !/não conseguiu avisar/.test(msg(r)), "nome livre + criança membro: o check-in vale e os DOIS responsáveis cadastrados são avisados", r.body);
+  const avE = (await notif("CHECKIN_TERCEIRO_ENTREGA")).slice(nE);
+  ok(avE.length === 2 && avE.map((a) => a.d).sort().join() === [P.alice, P.bernardo].sort().join() && avE.every((a) => a.t === "CheckinInfantilRegistros" && a.r === rLia), "o aviso vai para a mãe e para o pai, ligado ao registro da criança", avE);
+  ok(avE.every((a) => /^Lia foi entregue na sala .+ por Tia Rosa Terceira, que não está cadastrado como responsável/.test(a.m) && !/Terceira E2E|RG|98888|7777/.test(a.m)), "o texto nomeia o terceiro e só o PRIMEIRO nome da criança (nunca sobrenome, documento nem telefone)", avE.map((a) => a.m));
+  r = await R(pin(BRUNO), rLia, cLia, { ref: "TROUXE" });
+  ok(r.status === 200 && r.body.retirada === true && r.body.avisados === 2 && r.body.semAviso === false, "o terceiro que trouxe retira a criança com o código: a saída vale e os responsáveis são avisados de novo", r.body);
+  const avR = (await notif("CHECKIN_TERCEIRO_RETIRADA")).slice(nR);
+  ok(avR.length === 2 && avR.every((a) => /^Lia foi retirado\(a\) da sala .+ por Tia Rosa Terceira/.test(a.m) && !/Terceira E2E|RG|98888/.test(a.m)), "o aviso da retirada tem regra e referência próprias (não é engolido pelo da entrada)", avR.map((a) => a.m));
+  // quem trouxe é responsável cadastrado: ninguém é avisado, nem na entrada nem na retirada
+  nE = await quantas("CHECKIN_TERCEIRO_ENTREGA"); nR = await quantas("CHECKIN_TERCEIRO_RETIRADA");
+  r = anota(await checkin(pin(ANA), svTer, eq.maternal, [{ menorId: 7311 }], mae)); const rDavi = registrosDe(r)[0], cDavi = codigosDe(r)[0];
+  ok(r.status === 201 && r.body.avisados === 0 && r.body.semAviso === false, "quem trouxe é responsável cadastrado: nenhum aviso de terceiro", r.body);
+  r = await R(pin(BRUNO), rDavi, cDavi, { ref: `RESP:${P.alice}` });
+  ok(r.status === 200 && r.body.retirada === true && r.body.avisados === 0 && r.body.semAviso === false, "e a mãe retira: nenhum aviso de terceiro", r.body);
+  ok((await quantas("CHECKIN_TERCEIRO_ENTREGA")) === nE && (await quantas("CHECKIN_TERCEIRO_RETIRADA")) === nR, "nenhuma linha nova nas duas regras de terceiro");
+  // indicado só para a visita por um terceiro: o responsável é avisado na retirada dele
+  r = anota(await checkin(pin(ANA), svTer, eq.maternal, [{ menorId: 7312 }], trouxeLivre("Tio Vizinho Terceiro"), { autorizadosVisita: [{ nome: "Carla Indicada Visita", parentesco: "TIO" }] })); const rNoa = registrosDe(r)[0], cNoa = codigosDe(r)[0];
+  ok(r.status === 201, "(Noa entra trazida por um vizinho, que indica a Carla só para esta visita)", r.body);
+  const visNoa = (await refsDe(pin(ANA), svTer, rNoa)).find((x) => /só esta visita/.test(x.rotulo || ""));
+  nR = await quantas("CHECKIN_TERCEIRO_RETIRADA");
+  r = await R(pin(BRUNO), rNoa, cNoa, { ref: visNoa && visNoa.ref });
+  const avNoa = (await notif("CHECKIN_TERCEIRO_RETIRADA")).slice(nR);
+  ok(r.status === 200 && r.body.retirada === true && avNoa.length === 1 && avNoa[0].d === P.alice && /por Carla Indicada Visita/.test(avNoa[0].m), "o indicado só para a visita por um terceiro retira: a mãe é avisada com o nome dele", [r.body, avNoa]);
+  // a retirada DIVERGENTE continua só com o aviso próprio
+  r = anota(await checkin(pin(ANA), svTer, eq.maternal, [{ menorId: 7313 }], mae)); const rTeo = registrosDe(r)[0], cTeo = codigosDe(r)[0];
+  nR = await quantas("CHECKIN_TERCEIRO_RETIRADA");
+  r = await R(pin(BRUNO), rTeo, cTeo, { outro: { nome: "Roberto Desconhecido", parentesco: "AMIGO_FAMILIA", documento: "RG" } });
+  ok(r.status === 200 && r.body.divergente === true && (await quantas("CHECKIN_TERCEIRO_RETIRADA")) === nR, "quem NÃO está na lista (divergente): vai para a aprovação da liderança, sem aviso de terceiro (tem o aviso próprio)", r.body);
+  // o aviso impossível (regra desligada): o ato vale e o voluntário é avisado de que a família NÃO foi
+  await q("UPDATE NotificacaoRegras SET Ativa = 0 WHERE Chave IN ('CHECKIN_TERCEIRO_ENTREGA', 'CHECKIN_TERCEIRO_RETIRADA')");
+  try {
+    await H.crianca({ id: 7314, nome: "Ivo Sem Aviso E2E", idade: 4, cong: c1, resp: [[P.alice, "MAE"]] });
+    r = anota(await checkin(pin(ANA), svTer, eq.maternal, [{ menorId: 7314 }], trouxeLivre("Tia Sem Aviso Terceira")));
+    ok(r.status === 201 && r.body.etiquetas.length === 1 && r.body.semAviso === true && /não conseguiu avisar o responsável cadastrado/.test(msg(r)), "regra desligada: a entrada vale e está gravada, e a resposta diz que a família NÃO foi avisada", [r.status, msg(r)]);
+    r = await R(pin(BRUNO), registrosDe(r)[0], codigosDe(r)[0], { ref: "TROUXE" });
+    ok(r.status === 200 && r.body.retirada === true && r.body.semAviso === true && /não conseguiu avisar o responsável cadastrado/.test(msg(r)), "e na retirada: a criança saiu, e a resposta diz que a família NÃO foi avisada", [r.status, msg(r)]);
+  } finally { await q("UPDATE NotificacaoRegras SET Ativa = 1 WHERE Chave IN ('CHECKIN_TERCEIRO_ENTREGA', 'CHECKIN_TERCEIRO_RETIRADA')"); }
+  // visitante (sem responsável cadastrado): não há a quem avisar, e isso não é alarme
+  r = await checkin(pin(ANA), svTer, eq.maternal, [visitante("Visitante Sem Familia Teste", 4)], trouxeLivre("Tia Visitante Terceira"));
+  ok(r.status === 201 && r.body.avisados === 0 && r.body.semAviso === false, "visitante: sem responsável cadastrado, sem aviso e sem alarme", r.body);
+  await limpar();
+
+  // ====================================================================================================================================================
   console.log("== o que as trilhas não podem dizer ==");
   const todoTexto = await H.textoDasTabelas();
   ok(CODIGOS.length > 10 && CODIGOS.every((c) => !todoTexto.includes(c)), `nenhum dos ${CODIGOS.length} códigos emitidos aparece em tabela, auditoria ou aviso`);

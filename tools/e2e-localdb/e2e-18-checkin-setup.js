@@ -55,8 +55,8 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   const prazos = Object.fromEntries((await q("SELECT Sigla, Dias FROM Prazos WHERE Sigla LIKE 'CHECKIN[_]%'")).map((p) => [p.Sigla, p.Dias]));
   ok(Object.keys(prazos).length === 4 && prazos.CHECKIN_ABRE_MINUTOS_ANTES === 60 && prazos.CHECKIN_FECHA_HORAS_DEPOIS === 5 && prazos.CHECKIN_TENTATIVAS_CODIGO === 5 && prazos.CHECKIN_VISITANTE_CONTATO_DIAS === 90,
     "os 4 prazos nascem com 60 minutos, 5 horas, 5 tentativas e 90 dias", prazos);
-  const regras = await q("SELECT Chave, Obrigatoria, CanalEmail, Categoria, PermissaoAlvo, Ativa FROM NotificacaoRegras WHERE Chave IN ('CHECKIN_RETIRADA_DIVERGENTE', 'CHECKIN_SEGUNDA_VIA', 'CHECKIN_SEM_RETIRADA', 'EBD_PROFESSOR_RETIRADO')");
-  ok(regras.length === 4, "as 4 regras de aviso existem", regras.map((r) => r.Chave));
+  const regras = await q("SELECT Chave, Obrigatoria, CanalEmail, Categoria, PermissaoAlvo, Ativa FROM NotificacaoRegras WHERE Chave IN ('CHECKIN_RETIRADA_DIVERGENTE', 'CHECKIN_SEGUNDA_VIA', 'CHECKIN_TERCEIRO_ENTREGA', 'CHECKIN_TERCEIRO_RETIRADA', 'CHECKIN_SEM_RETIRADA', 'EBD_PROFESSOR_RETIRADO')");
+  ok(regras.length === 6, "as 6 regras de aviso existem", regras.map((r) => r.Chave));
   ok(regras.every((r) => r.Obrigatoria === true && r.CanalEmail === true && r.Ativa === true && r.Categoria === "MENORES" && r.PermissaoAlvo === null), "todas obrigatórias (o destinatário não desliga), por e-mail, ativas, de menores e sem permissão-alvo (o ato diz quem avisa)", regras);
   ok((await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)' AND DiasRetencao = 1825 AND Ativo = 1 AND LEN(BaseLegal) BETWEEN 100 AND 300")) === 1,
     "a política de retenção (5 anos) está lá e o texto cabe na coluna (300 caracteres)", await escalar("SELECT LEN(BaseLegal) FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'"));
@@ -270,7 +270,7 @@ const iso = (s) => new Date(`${s}T00:00:00Z`);
   ok(JSON.stringify(antes) === JSON.stringify(depois), "reaplicar duas vezes não cria objeto nenhum (tabelas, índices, CHECK, gatilhos) nem mexe nos dados", { antes, depois });
   ok((await escalar("SELECT COUNT(*) FROM Prazos WHERE Sigla LIKE 'CHECKIN[_]%'")) === 4, "nem duplica os prazos");
   ok((await escalar("SELECT Dias FROM Prazos WHERE Sigla = 'CHECKIN_TENTATIVAS_CODIGO'")) === 3, "nem desfaz o ajuste que a Igreja fez num prazo");
-  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave IN ('CHECKIN_RETIRADA_DIVERGENTE', 'CHECKIN_SEGUNDA_VIA', 'CHECKIN_SEM_RETIRADA', 'EBD_PROFESSOR_RETIRADO')")) === 4, "nem as 4 regras de aviso");
+  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave IN ('CHECKIN_RETIRADA_DIVERGENTE', 'CHECKIN_SEGUNDA_VIA', 'CHECKIN_TERCEIRO_ENTREGA', 'CHECKIN_TERCEIRO_RETIRADA', 'CHECKIN_SEM_RETIRADA', 'EBD_PROFESSOR_RETIRADO')")) === 6, "nem as 6 regras de aviso");
   ok((await escalar("SELECT Ativa FROM NotificacaoRegras WHERE Chave = 'CHECKIN_SEM_RETIRADA'")) === false, "nem religa uma regra que a gestão desativou");
   ok((await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'")) === 1 && (await escalar("SELECT DiasRetencao FROM PoliticasRetencao WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)'")) === 2000, "nem duplica a política de retenção nem desfaz o prazo ajustado");
   ok((await escalar("SELECT COUNT(*) FROM sys.triggers WHERE name LIKE 'TR[_]Checkin%' AND is_disabled = 1")) === 0, "os 5 gatilhos continuam ligados");

@@ -192,6 +192,31 @@ describe("quem pode retirar", () => {
     expect(ck.classificarRetirante({ ref: "VIS:9" }, lista)).toMatchObject({ divergente: false, tipo: "AUTORIZADO" });
     expect(ck.classificarRetirante({ ref: "TROUXE" }, lista)).toMatchObject({ divergente: false, tipo: "TROUXE", nome: "Ana Vizinha" });
   });
+  test("terceiro = quem nenhum responsável cadastrado indicou: quem trouxe sem ser responsável e os indicados só para a visita; a lista fixa e o responsável que trouxe, não", () => {
+    expect(ck.classificarRetirante({ ref: "TROUXE" }, lista).terceiro).toBe(true);                 // Ana Vizinha trouxe a criança (nome livre)
+    expect(ck.classificarRetirante({ ref: "VIS:9" }, lista).terceiro).toBe(true);                  // indicada por quem não é responsável cadastrado
+    expect(ck.classificarRetirante({ ref: "RESP:10" }, lista).terceiro).toBe(false);
+    expect(ck.classificarRetirante({ ref: "AUT:5" }, lista).terceiro).toBe(false);                 // a lista fixa foi feita pelo responsável ou com a ficha
+    const comResponsavelQueTrouxe = lista.map((x) => (x.ref === "TROUXE" ? { ...x, membroId: 10 } : x));
+    expect(ck.classificarRetirante({ ref: "TROUXE" }, comResponsavelQueTrouxe).terceiro).toBe(false);   // trouxe sendo responsável cadastrado
+    expect(ck.classificarRetirante({ ref: "VIS:9" }, comResponsavelQueTrouxe).terceiro).toBe(false);    // indicada por um responsável cadastrado
+    expect(ck.classificarRetirante({ ref: "VIS:9" }, lista.filter((x) => x.ref !== "TROUXE")).terceiro).toBe(true);   // sem a entrada de quem trouxe: na dúvida, avisa
+    expect(ck.classificarRetirante({ outro: { nome: "Roberto Dias", parentesco: "AMIGO_FAMILIA", documento: "RG" } }, lista).terceiro).toBeUndefined();   // divergente tem o aviso próprio
+  });
+  test("o aviso do terceiro nomeia o terceiro e só o primeiro nome da criança; nunca documento, telefone nem saúde; irmãos num aviso só; cabe em 1000", () => {
+    const um = ck.textoTerceiroNaEntrega({ nomesCriancas: ["Caio Souza"], salaNome: "Maternal", nomeQuemTrouxe: "Rosa Lima" });
+    expect(um).toMatch(/^Caio foi entregue na sala Maternal por Rosa Lima, que não está cadastrado como responsável/);
+    expect(um).not.toMatch(/Souza/);
+    const dois = ck.textoTerceiroNaEntrega({ nomesCriancas: ["Caio Souza", "Dara Souza"], salaNome: "Maternal", nomeQuemTrouxe: "Rosa Lima" });
+    expect(dois).toMatch(/^Caio e Dara foram entregues na sala Maternal/);
+    const tres = ck.textoTerceiroNaEntrega({ nomesCriancas: ["Caio Souza", "Dara Souza", "Elis Souza"], salaNome: "Maternal", nomeQuemTrouxe: "Rosa Lima" });
+    expect(tres).toMatch(/^Caio, Dara e Elis foram entregues/);
+    const ret = ck.textoTerceiroNaRetirada({ nomeCrianca: "Caio Souza", salaNome: "Maternal", nomeQuemRetirou: "Rosa Lima" });
+    expect(ret).toMatch(/^Caio foi retirado\(a\) da sala Maternal por Rosa Lima/);
+    expect(ret).not.toMatch(/Souza/);
+    for (const t of [um, dois, tres, ret]) expect(t.length).toBeLessThanOrEqual(1000);
+    expect(ck.textoTerceiroNaEntrega({ nomesCriancas: ["Caio"], salaNome: "S".repeat(2000), nomeQuemTrouxe: "R" }).length).toBe(1000);
+  });
   test("referência que não está na lista é recusada (não vira divergente por engano)", () => {
     for (const ref of ["RESP:99", "AUT:6", "AUT:99", "VIS:1", "RESP:10 ", "resp:10", "RESP:0", "RESP:-1", "RESP:1e1", "RESP:010", "AUT", "", "TROUXE ", 10, null, {}, []]) {
       const r = ck.classificarRetirante({ ref }, lista);

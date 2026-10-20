@@ -1,5 +1,5 @@
 // GestaoCheckinInfantil (v7.10 — Check-in infantil com cadeia de custódia)
-// ECA arts. 70 e 70-A; Lei 14.811/2024; LGPD arts. 11 e 14.
+// ECA arts. 70, 70-A e 70-B; Lei 14.811/2024; LGPD arts. 11 e 14.
 //
 // Toda a regra está em shared/checkinInfantil.js (pura, testada); o banco, em shared/checkinInfantilDb.js. A sala é a da v7.7: o par (serviço da escala, equipe com a marca
 // "contato com menores"). Opera a sala quem está escalado nela e apto hoje (a aptidão é reavaliada a cada ato); a liderança da congregação (permissão
@@ -20,7 +20,7 @@
 // ---- A equipe da sala (escalado + apto + adulto; para agir, precisa ter ENTRADO na sala) --------------------------------------------------------
 //  GET  sala?servicoId=&equipeId=              -> { sala, adultosPresentes[], lotacao, criancas[], totais, pendencias, atualizadoEm }    a tela atualiza sozinha; a liderança recebe visão com telefones
 //                                                                                                                                          (adultosPresentes[].apto só na visão da liderança; o voluntário recebe só contaComoAdulto)
-//  GET  buscar?servicoId=&equipeId=&q=         -> { criancas[{menorId,nome,idade,faixa,foraDaFaixa,temResponsavel,jaNaSala}] }          só da congregação da sala, 3+ letras
+//  POST buscar body:{servicoId,equipeId,q}       -> { criancas[{menorId,nome,idade,faixa,foraDaFaixa,temResponsavel,jaNaSala}] }          só da congregação da sala, 3+ letras
 //  GET  responsaveis?servicoId=&equipeId=&menorId= -> { responsaveis[{membroId,nome,vinculo,rotuloVinculo}] }
 //  GET  relatorio?servicoId=&equipeId=         -> { sala, voluntarios[], criancas[], eventos[] }                                          o relatório do dia da sala: ATO DE GESTÃO (só a liderança da congregação)
 //  POST entrar-na-sala           body:{servicoId, equipeId}
@@ -169,12 +169,11 @@ module.exports = async function (context, req) {
         responder(context, 200, { sucesso: true, ...(await db.snapshotDaSala(a.pool, a.sala, { hoje, visao: a.comoGestor ? "GESTOR" : "OPERADOR" })) });
         return;
       }
-      if (acao === "buscar" || acao === "responsaveis") {
+      if (acao === "responsaveis") {
         const a = await abrirSala(consulta, "sala");
         if (a.falha) return erro(context, ...a.falha);
         const op = await db.conferirOperador(a.pool, a.sala, sessao.membroId, { hoje });
         if (!op.sucesso) return resposta(context, op);
-        if (acao === "buscar") return resposta(context, await db.buscarCriancas(a.pool, { sala: a.sala, termo: consulta.q, hoje }));
         const menorId = idDe(consulta.menorId);
         if (!menorId) return erro(context, 400, "Informe menorId.");
         return resposta(context, await db.responsaveisDaCrianca(a.pool, { sala: a.sala, menorId }));
@@ -183,6 +182,15 @@ module.exports = async function (context, req) {
     }
 
     if (metodo !== "POST") return erro(context, 405, "Método não suportado.");
+
+    // A busca de criança vai por POST (Trava 7-B): por GET, o pedaço do nome digitado ia no endereço, e o endereço fica nos registros da plataforma (Application Insights).
+    if (acao === "buscar") {
+      const a = await abrirSala(corpo, "sala");
+      if (a.falha) return erro(context, ...a.falha);
+      const op = await db.conferirOperador(a.pool, a.sala, sessao.membroId, { hoje });
+      if (!op.sucesso) return resposta(context, op);
+      return resposta(context, await db.buscarCriancas(a.pool, { sala: a.sala, termo: corpo.q, hoje }));
+    }
 
     // =============================== Responsável: lista de autorizados e saúde dos próprios filhos ===============================
     if (acao === "autorizado-adicionar") {

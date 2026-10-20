@@ -346,7 +346,7 @@ module.exports = function registrar(H) {
     de.ev("limparSessao()"); await de.ocioso();
     confere(esperandoBusca() === 0, `sair da sessão cancela a busca que esperava (${esperandoBusca()} esperando)`);
     de.dispararTemporizador(350); await de.ocioso();
-    confere(chamadas(de, "GET checkin-infantil/buscar").length === 0, "e nenhuma busca sai depois disso");
+    confere(chamadas(de, "POST checkin-infantil/buscar").length === 0, "e nenhuma busca sai depois disso");
   });
 
   // ============================================================================================================================================

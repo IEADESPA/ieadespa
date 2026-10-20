@@ -422,3 +422,15 @@ describe("Trava 7-B: a liderança com pendência reservada (afastamento cautelar
     expect(escritas()).toHaveLength(0);
   });
 });
+
+describe("Trava 7-B: a busca de criança vai por POST (o nome digitado não vai no endereço)", () => {
+  test("GET buscar não existe mais (404, sem consultar nada); POST buscar abre a sala pelo corpo", async () => {
+    const g = await chamar("buscar", { token: PIN(), query: { ...CORPO_SALA, q: "Caio" } });
+    expect(g.status).toBe(404);
+    expect(mockConsultas).toHaveLength(0);
+    const p = await chamar("buscar", { metodo: "POST", token: PIN(), corpo: { ...CORPO_SALA, q: "Caio" } });
+    expect(p.status).toBe(404);                                                 // a sala não existe no banco simulado: a mesma resposta de "não existe"
+    expect(mockConsultas.length).toBeGreaterThan(0);
+    expect(JSON.stringify(mockConsultas.map((c) => c.inputs))).toMatch(/"s":5/);
+  });
+});

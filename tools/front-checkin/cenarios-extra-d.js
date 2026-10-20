@@ -183,11 +183,11 @@ module.exports = function registrar(H) {
   cenario("F22: nenhum número de status HTTP na tela; 'resposta inesperada' virou frase em português; 'errado vezes demais' foi corrigida", async () => {
     const c = await salaPronta(); const { S, env } = c;
     // 200 que não é JSON numa leitura (não é o check-in: ali a frase é a da conexão)
-    env.api.rotas["GET checkin-infantil/buscar"] = { status: 200, corpo: "<html>x</html>", naoJson: true };
+    env.api.rotas["POST checkin-infantil/buscar"] = { status: 200, corpo: "<html>x</html>", naoJson: true };
     env.e("chkCiBusca").value = "Ped"; env.doc.clicar(env.e("chkCiBuscar")); await env.ocioso();
     confere(texto(env, "chkCiBuscaMsg") === "Não consegui entender a resposta do servidor. Tente de novo.", `a frase: ${texto(env, "chkCiBuscaMsg")}`);
     confere(!/\d{3}|inesperada/.test(texto(env, "chkCiBuscaMsg")), "sem número de status, sem 'inesperada'");
-    delete env.api.rotas["GET checkin-infantil/buscar"];
+    delete env.api.rotas["POST checkin-infantil/buscar"];
     const modulo = env.lerMutado("modulos/checkin-infantil.js");
     confere(!/Resposta inesperada/.test(modulo) && !/\$\{res\.status\}/.test(modulo), "o módulo não monta texto com o status HTTP");
     // criança travada para quem opera

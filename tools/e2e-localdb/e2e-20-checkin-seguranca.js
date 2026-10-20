@@ -129,7 +129,7 @@ const NEGADO = [403, 404];
     await mesma(`checkin por ${nome}: idem`, chkReal, chkFalso);
     const sairReal = await post("sair-da-sala", token, sala(svC)), sairFalso = await post("sair-da-sala", token, { servicoId: INEXISTENTE, equipeId: eq.maternal });
     await mesma(`sair-da-sala por ${nome}: idem`, sairReal, sairFalso);
-    const buscaReal = await get("buscar", token, { ...sala(svC), q: "Bia" }), buscaFalsa = await get("buscar", token, { servicoId: INEXISTENTE, equipeId: eq.maternal, q: "Bia" });
+    const buscaReal = await post("buscar", token, { ...sala(svC), q: "Bia" }), buscaFalsa = await post("buscar", token, { servicoId: INEXISTENTE, equipeId: eq.maternal, q: "Bia" });
     await mesma(`buscar por ${nome}: idem`, buscaReal, buscaFalsa);
   }
   for (const [nome, token] of [["a liderança da Vila", secVila()]]) for (const acao of ["decidir-divergencia", "destravar"]) {
@@ -158,7 +158,7 @@ const NEGADO = [403, 404];
 
   console.log("== a aptidão é reavaliada a CADA ato (quem perde a habilitação no meio do serviço para na hora) ==");
   await derrubarAptidao(CARLA);
-  const ATOS = [["sala", "GET", sala(svC)], ["buscar", "GET", { ...sala(svC), q: "Bia" }], ["responsaveis", "GET", { ...sala(svC), menorId: K.bia }],
+  const ATOS = [["sala", "GET", sala(svC)], ["buscar", "POST", { ...sala(svC), q: "Bia" }], ["responsaveis", "GET", { ...sala(svC), menorId: K.bia }],
     ["checkin", "POST", { ...sala(svC), criancas: [visitante("Visitante Sem Aptidao Teste", 4)], trouxe: trouxeLivre() }], ["retirar", "POST", { registroId: rJoana, codigo: cJoana, retirante: { ref: `RESP:${P.alice}` } }],
     ["segunda-via-pedir", "POST", { registroId: rJoana, pessoa: { ref: `RESP:${P.alice}` }, documento: "RG" }], ["segunda-via-confirmar", "POST", { registroId: rCaio }], ["entrar-na-sala", "POST", sala(svC)]];
   divergencias = [];
@@ -308,9 +308,13 @@ const NEGADO = [403, 404];
   await fuzzarCaminhos("autorizado-revogar", (corpo) => ckPost("autorizado-revogar", pin(P.alice), corpo), { autorizadoId: 1 }, [["autorizadoId"]]);
   await fuzzarCaminhos("saude-gravar", (corpo) => ckPost("saude-gravar", pin(P.alice), corpo), { menorId: K.bia, texto: "Alergia fuzz", ficha: false, referencia: "Pasta fuzz" }, [["menorId"], ["texto"], ["ficha"], ["referencia"]]);
   await fuzzarCaminhos("saude-apagar", (corpo) => ckPost("saude-apagar", pin(P.alice), corpo), { menorId: K.bia }, [["menorId"]]);
-  for (const [acao, base, campos] of [["sala", sala(svF), ["servicoId", "equipeId"]], ["buscar", { ...sala(svF), q: "Bia" }, ["servicoId", "equipeId", "q"]], ["responsaveis", { ...sala(svF), menorId: K.bia }, ["servicoId", "equipeId", "menorId"]], ["autorizados", { menorId: K.bia }, ["menorId"]], ["saude", { menorId: K.bia }, ["menorId"]], ["historico", { menorId: K.bia }, ["menorId"]], ["relatorio", sala(svF), ["servicoId", "equipeId"]]]) {
+  for (const [acao, base, campos] of [["sala", sala(svF), ["servicoId", "equipeId"]], ["responsaveis", { ...sala(svF), menorId: K.bia }, ["servicoId", "equipeId", "menorId"]], ["autorizados", { menorId: K.bia }, ["menorId"]], ["saude", { menorId: K.bia }, ["menorId"]], ["historico", { menorId: K.bia }, ["menorId"]], ["relatorio", sala(svF), ["servicoId", "equipeId"]]]) {
     await H.fuzzar(ok, `GET ${acao}`, (corpo) => ckGet(acao, acao === "autorizados" || acao === "saude" || acao === "historico" ? pin(P.alice) : acao === "sala" || acao === "relatorio" ? sec() : pin(ANA), corpo), base, campos);
   }
+
+  // Trava 7-B: a busca vai por POST (o nome digitado não vai no endereço, que fica nos registros da plataforma); por GET ela não existe mais
+  await H.fuzzar(ok, "POST buscar", (corpo) => ckPost("buscar", pin(ANA), corpo), { ...sala(svF), q: "Bia" }, ["servicoId", "equipeId", "q"]);
+  r = await ckGet("buscar", pin(ANA), { ...sala(svF), q: "Bia" }); ok(r.status === 404 && !JSON.stringify(r.body).includes("Bia"), "Trava 7-B: GET buscar não existe mais (404), e nada da criança volta", [r.status, r.body]);
 
   console.log("== injeção e marcação: o texto livre é dado, nunca comando nem tela ==");
   const INJECOES = ["'; DROP TABLE CheckinInfantilRegistros; --", "' OR '1'='1", "\"; EXEC xp_cmdshell('dir'); --", "Robert'); DELETE FROM CheckinInfantilEventos;--", "<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "${7*7}", "{{7*7}}", "%00", "‮evil", "\u0000x", "a".repeat(1000)];
@@ -331,7 +335,7 @@ const NEGADO = [403, 404];
       ok(x.status !== 500, `${acao} com ${JSON.stringify(t).slice(0, 30)}: sem erro 500`, x.body);
       if (x.status < 300) aceitos.push([acao, t]);
     }
-    const busca = await ckGet("buscar", pin(ANA), { ...sala(svF), q: t });
+    const busca = await ckPost("buscar", pin(ANA), { ...sala(svF), q: t });
     ok(busca.status !== 500 && busca.status !== 200 || (busca.status === 200 && busca.body.criancas.length === 0), `buscar com ${JSON.stringify(t).slice(0, 30)}: sem 500 e sem resultado`, busca.body);
   }
   ok((await escalar("SELECT COUNT(*) FROM sys.tables WHERE name LIKE 'CheckinInfantil%'")) === antesTabelas && (await escalar("SELECT COUNT(*) FROM CheckinInfantilEventos")) > 0, "as tabelas do check-in continuam todas lá, e o histórico segue com as linhas (nenhum comando de apagar rodou)");

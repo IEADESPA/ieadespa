@@ -1,4 +1,4 @@
-// app/modulos/checkin-infantil.js — v7.10: Check-in infantil com cadeia de custódia (ECA arts. 70 e 70-A; Lei 14.811/2024; LGPD arts. 11 e 14).
+// app/modulos/checkin-infantil.js — v7.10: Check-in infantil com cadeia de custódia (ECA arts. 70, 70-A e 70-B; Lei 14.811/2024; LGPD arts. 11 e 14).
 // Script clássico, carregado pelo index.html DEPOIS do script.js e do eventos.js: compartilha o escopo global com eles. As ações que o HTML pede deste módulo são
 // registradas aqui mesmo, no fim do arquivo (registrarAcoes mescla). Todos os nomes de nível superior começam com "chk"/"CHK_" (scripts clássicos dividem um só escopo).
 //
@@ -31,7 +31,9 @@ const CHK_CTX = ["Meu", "Ges"];                 // onde a sala está aberta: Meu
 const CHK_PFX = ["Fh", "Fi"];                   // o painel da criança: Meus filhos (Fh) ou a ficha assinada da liderança (Fi)
 const CHK_SECOES = ["salas", "aprovacoes", "fichas"];
 const CHK_SECOES_FILHO = ["hist", "aut", "sau"];
-const CHK_MSG_FATOR = "Este ato precisa de uma confirmação recente de quem você é (chave de acesso ou código por e-mail). Tente de novo e confirme quando a tela pedir.";
+const CHK_PARENTESCOS_QUE_AUTORIZAM_SAUDE = ["PAI", "MAE", "TUTOR"];
+const CHK_MSG_SAUDE_SO_RESPONSAVEL = "A informação de saúde na etiqueta só pode ser autorizada pelo pai, pela mãe ou pelo tutor(a) da criança. Tire a saúde do visitante (ou escolha quem a trouxe corretamente) e avise a equipe da sala de viva voz.";
+const CHK_MSG_FATOR ="Este ato precisa de uma confirmação recente de quem você é (chave de acesso ou código por e-mail). Tente de novo e confirme quando a tela pedir.";
 const CHK_MSG_SEM_CATALOGO = "Não foi possível carregar as opções do check-in agora. Verifique a internet e toque em Atualizar.";
 const CHK_MSG_SEM_OPCOES = "Não consegui carregar as opções do check-in. Toque em “Atualizar agora” e tente de novo.";                       // sala aberta e o catálogo sumiu
 const CHK_MSG_SEM_OPCOES_FILHO = "Não consegui carregar as opções do check-in. Feche esta parte, abra de novo e tente outra vez.";              // Meus filhos → quem pode retirar
@@ -1203,7 +1205,8 @@ async function chkBuscarAcao() {
   if (/[<>%_\[\]]/.test(q)) { chkEscrever(msg, "Use só letras no nome (sem < > % _ [ ]).", true); chkFocarId("chkCiBusca"); return; }
   const geracao = chkGeracao, seq = ++chkSeqBusca, seqSala = chkSeqSala, sala = chkSala;
   chkEscrever(msg, "Buscando…", false);
-  const data = await chkObter(`buscar?${chkConsultaSala(sala, `&q=${encodeURIComponent(q)}`)}`);
+  // por POST: o pedaço do nome digitado não vai no endereço (o endereço fica nos registros da plataforma)
+  const data = await chkPostar("buscar", { servicoId: Number(sala.servicoId), equipeId: Number(sala.equipeId), q });
   if (geracao !== chkGeracao || seq !== chkSeqBusca || seqSala !== chkSeqSala || !chkCi) return;   // resposta velha: outra busca foi pedida, ou a pessoa saiu da sala
   if (data.sucesso === false || !Array.isArray(data.criancas)) { chkCi.resultados = []; chkRenderResultados(); chkMostrarResultado(data, msg, true); return; }
   chkCi.resultados = data.criancas.filter(c => c && typeof c === "object" && chkInteiro(c.menorId));
@@ -1281,7 +1284,7 @@ function chkAdicionarVisitanteAcao() {
     const t = chkCatalogos.textoSaude;   // (o catálogo existe: conferido acima)
     if (!t || !t.hash) { erro("O texto de autorização da saúde não foi carregado. Toque em “Atualizar agora” e tente de novo.", "chkCiVisSaude"); return; }
     const concordo = chkEl("chkCiVisConcordo");
-    if (!concordo || !concordo.checked) { erro("O responsável presente precisa ler o texto e marcar que concorda para a saúde ir na etiqueta.", "chkCiVisConcordo"); return; }
+    if (!concordo || !concordo.checked) { erro("O responsável presente (pai, mãe ou tutor) precisa ler o texto e marcar que concorda para a saúde ir na etiqueta.", "chkCiVisConcordo"); return; }
     dadosSaude = { texto: saude, concordo: true, textoHash: t.hash };
   }
   chkCi.criancas.push({ tipo: "VISITANTE", nome, nascimento, idade, saude: dadosSaude });
@@ -1392,6 +1395,8 @@ async function chkEnviarCheckinAcao(botao) {
     if (!documento) { erro("Escolha o documento que você conferiu de quem trouxe.", "chkCiTrouxeDoc"); return; }
     if (chkHaVisitante() && !telefone) { erro("Informe o telefone de quem trouxe (com DDD): há criança visitante e a liderança precisa falar com o responsável.", "chkCiTrouxeTel"); return; }
     if (telefone && (telefone.length < 10 || telefone.length > 13)) { erro("Informe o telefone com DDD (10 a 13 números).", "chkCiTrouxeTel"); return; }
+    // (Trava 7-B) a saúde do visitante na etiqueta só vale com a concordância do pai, da mãe ou do tutor(a) — a mesma regra do servidor
+    if (lista.some(c => c.tipo === "VISITANTE" && c.saude) && !CHK_PARENTESCOS_QUE_AUTORIZAM_SAUDE.includes(parentesco)) { erro(CHK_MSG_SAUDE_SO_RESPONSAVEL, "chkCiTrouxePar"); return; }
     trouxe = { nome, parentesco, documento };
     if (telefone) trouxe.contato = telefone;
   } else {

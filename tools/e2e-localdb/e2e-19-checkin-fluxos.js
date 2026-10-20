@@ -410,11 +410,11 @@ const VISITANTES = (n, base = "Visitante") => Array.from({ length: n }, (_, i) =
   r = await ckGet("sala", pin(P.alice), sala(svR)); ok(r.status === 404, "a mãe (PIN) não vê a sala: 404", r.body);
   r = await ckGet("sala", secVila(), sala(svR)); ok(r.status === 404, "a Secretaria da Vila não vê a sala da Central: 404", r.body);
   r = await ckGet("sala", sec(), { servicoId: 99999999, equipeId: eq.maternal }); ok(r.status === 404, "sala que não existe: 404", r.body);
-  r = await ckGet("buscar", pin(ANA), { ...sala(svR), q: "Bia" }); ok(r.status === 200 && r.body.criancas.length === 1 && r.body.criancas[0].menorId === K.bia && r.body.criancas[0].temResponsavel === true, "a busca por 3 letras acha a Bia, da congregação da sala", r.body);
-  r = await ckGet("buscar", pin(ANA), { ...sala(svR), q: "Heitor" }); ok(r.status === 200 && r.body.criancas.every((c) => c.menorId !== K.heitorVila) && r.body.criancas.every((c) => c.menorId !== K.heitor), "a busca não traz a criança da Vila nem o maior de idade (Heitor)", r.body);
-  r = await ckGet("buscar", pin(ANA), { ...sala(svR), q: "Bi" }); ok(r.status === 422, "busca com menos de 3 letras: 422", r.body);
-  r = await ckGet("buscar", pin(ANA), { ...sala(svR), q: "%%%" }); ok(r.status === 422, "busca com curinga (%): 422", r.body);
-  r = await ckGet("buscar", pin(OLGA), { ...sala(svR), q: "Bia" }); ok(r.status === 404, "quem não é da sala não busca criança: 404", r.body);
+  r = await ckPost("buscar", pin(ANA), { ...sala(svR), q: "Bia" }); ok(r.status === 200 && r.body.criancas.length === 1 && r.body.criancas[0].menorId === K.bia && r.body.criancas[0].temResponsavel === true, "a busca por 3 letras acha a Bia, da congregação da sala", r.body);
+  r = await ckPost("buscar", pin(ANA), { ...sala(svR), q: "Heitor" }); ok(r.status === 200 && r.body.criancas.every((c) => c.menorId !== K.heitorVila) && r.body.criancas.every((c) => c.menorId !== K.heitor), "a busca não traz a criança da Vila nem o maior de idade (Heitor)", r.body);
+  r = await ckPost("buscar", pin(ANA), { ...sala(svR), q: "Bi" }); ok(r.status === 422, "busca com menos de 3 letras: 422", r.body);
+  r = await ckPost("buscar", pin(ANA), { ...sala(svR), q: "%%%" }); ok(r.status === 422, "busca com curinga (%): 422", r.body);
+  r = await ckPost("buscar", pin(OLGA), { ...sala(svR), q: "Bia" }); ok(r.status === 404, "quem não é da sala não busca criança: 404", r.body);
   r = await ckGet("responsaveis", pin(ANA), { ...sala(svR), menorId: K.bia }); ok(r.status === 200 && r.body.responsaveis.length === 2, "responsáveis da Bia para escolher 'quem trouxe'", r.body);
   r = await ckGet("responsaveis", pin(ANA), { ...sala(svR), menorId: K.heitorVila }); ok(r.status === 404, "responsáveis de criança de outra congregação: 404", r.body);
 

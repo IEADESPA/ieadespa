@@ -939,7 +939,7 @@ async function detectarVencimentos(pool, { faixa, hoje = hojeBrasilia() } = {}) 
     const proximo = itens[0];
     const referenciaId = mm.referenciaDoAviso(ap.habilitacaoId, proximo.data);
     const pessoa = await lerEmail(pool, l.membroId);
-    if (pessoa) fatos.push({ referenciaId, destinatarios: [pessoa], fatoGerador: mm.textoVencendo({ itens, faixa }) });
+    if (pessoa) fatos.push({ referenciaId, destinatarios: [pessoa], fatoGerador: mm.textoVencendo({ itens, faixa, comTurmas: Array.isArray(l.turmas) && l.turmas.length > 0 }) });
     // Os líderes das equipes e a secretaria da congregação sabem com a mesma antecedência (não é só problema do voluntário). Do professor de turma da EBD com menores
     // (Trava 7-B), sabe também a gestão da EBD da congregação da turma: é quem a retirada da turma avisa no dia do vencimento.
     const lideres = [];

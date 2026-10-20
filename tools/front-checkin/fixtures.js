@@ -269,17 +269,11 @@ function criarServidor(op = {}) {
             baixaAdministrativa: r.situacao === "RETIRADA" && r.retiradoTipo === "BAIXA_ADM", baixaMotivo: r.baixaMotivo || null, motivoDoPedido: r.divergenciaPedidoMotivo || null, motivoDaDecisao: r.divergenciaMotivo || null })),
           eventos: S.eventos.filter(e => e.servicoId === s.servicoId && e.equipeId === s.equipeId).map(e => ({ eventoId: e.eventoId, registroId: e.registroId, tipo: e.tipo, rotulo: ck.TIPOS_EVENTO[e.tipo] || e.tipo, ator: nomeDe(e.ator), em: iso(e.em), detalhe: e.detalhe })) } };
       }
-      if (acao === "buscar" || acao === "responsaveis") {
+      if (acao === "responsaveis") {
         const a = abrirSala(q, "sala");
         if (a.falha) return falha(...a.falha);
         const op = conferirOperador(a.s, sess.membroId);
         if (!op.sucesso) return respostaHttp(op);
-        if (acao === "buscar") {
-          const t = String(q.q == null ? "" : q.q).trim();
-          if (t.length < 3 || t.length > 60 || /[<>%_\[\]]/.test(t)) return respostaHttp({ sucesso: false, mensagem: "Digite ao menos 3 letras do nome da criança." });
-          const achados = S.membros.filter(x => x.congregacao === a.s.congregacaoNome && x.idade < vol.MAIORIDADE && x.nome.toLowerCase().includes(t.toLowerCase())).slice(0, 8);
-          return respostaHttp({ sucesso: true, criancas: achados.map(x => ({ menorId: x.menorId, nome: x.nome, idade: x.idade, faixa: ck.faixaDaIdade(x.idade), foraDaFaixa: ck.idadeForaDaFaixa(x.idade, a.s.faixa), temResponsavel: x.responsaveis.length > 0, jaNaSala: S.registros.some(r => r.menorId === x.menorId && r.situacao !== "RETIRADA") })) });
-        }
         const menorId = idDe(q.menorId);
         if (!menorId) return falha(400, "Informe menorId.");
         const mm2 = membroDe(menorId);
@@ -289,6 +283,17 @@ function criarServidor(op = {}) {
       return falha(404, "Ação inválida.");
     }
     if (metodo !== "POST") return falha(405, "Método não suportado.");
+    // a busca de criança vai por POST (Trava 7-B: o nome digitado não vai no endereço)
+    if (acao === "buscar") {
+      const a = abrirSala(corpo, "sala");
+      if (a.falha) return falha(...a.falha);
+      const op = conferirOperador(a.s, sess.membroId);
+      if (!op.sucesso) return respostaHttp(op);
+      const t = String(corpo.q == null ? "" : corpo.q).trim();
+      if (t.length < 3 || t.length > 60 || /[<>%_\[\]]/.test(t)) return respostaHttp({ sucesso: false, mensagem: "Digite ao menos 3 letras do nome da criança." });
+      const achados = S.membros.filter(x => x.congregacao === a.s.congregacaoNome && x.idade < vol.MAIORIDADE && x.nome.toLowerCase().includes(t.toLowerCase())).slice(0, 8);
+      return respostaHttp({ sucesso: true, criancas: achados.map(x => ({ menorId: x.menorId, nome: x.nome, idade: x.idade, faixa: ck.faixaDaIdade(x.idade), foraDaFaixa: ck.idadeForaDaFaixa(x.idade, a.s.faixa), temResponsavel: x.responsaveis.length > 0, jaNaSala: S.registros.some(r => r.menorId === x.menorId && r.situacao !== "RETIRADA") })) });
+    }
 
     // ---- o responsável: lista de autorizados e saúde ----
     if (acao === "autorizado-adicionar") {

@@ -109,7 +109,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
   };
   const adicionarMembro = async (env, menorId) => { env.doc.clicar(env.e(`chkAdd${menorId}`)); await env.ocioso(); };
   const escolherQuemTrouxe = (env, valor) => { env.doc.escolher(env.e("chkCiTrouxe"), valor); };
-  const preencherOutraPessoa = (env, { nome = "Tia Zeza", par = "TIO", doc = "RG", tel = "" } = {}) => {
+  const preencherOutraPessoa = (env, { nome = "Tia Zeza", par = "MAE", doc = "RG", tel = "" } = {}) => {
     env.doc.escolher(env.e("chkCiTrouxe"), "OUTRA");
     env.e("chkCiTrouxeNome").value = nome; env.e("chkCiTrouxePar").value = par; env.e("chkCiTrouxeDoc").value = doc; env.e("chkCiTrouxeTel").value = tel;
   };
@@ -362,13 +362,13 @@ async function rodar({ mutar = {}, so = null } = {}) {
     await env.ev("chkLerSala(true)"); await env.ocioso();
     env.limparRegistro();
     env.doc.digitar(env.e("chkCiBusca"), "Pe");
-    confere(chamadas(env, "GET checkin-infantil/buscar").length === 0 && ![...env.temporizadores.values()].some(t => t.ms === 350), "com menos de 3 letras nada é pedido e nenhum temporizador é armado");
+    confere(chamadas(env, "POST checkin-infantil/buscar").length === 0 && ![...env.temporizadores.values()].some(t => t.ms === 350), "com menos de 3 letras nada é pedido e nenhum temporizador é armado");
     env.doc.digitar(env.e("chkCiBusca"), "Ped");
     env.doc.digitar(env.e("chkCiBusca"), "Pedr");
-    confere([...env.temporizadores.values()].filter(t => t.ms === 350).length === 1 && chamadas(env, "GET checkin-infantil/buscar").length === 0, "digitando mais, um só temporizador de 350 ms (o anterior é cancelado) e ainda nada foi pedido");
+    confere([...env.temporizadores.values()].filter(t => t.ms === 350).length === 1 && chamadas(env, "POST checkin-infantil/buscar").length === 0, "digitando mais, um só temporizador de 350 ms (o anterior é cancelado) e ainda nada foi pedido");
     env.dispararTemporizador(350); await env.ocioso();
-    const b1 = chamadas(env, "GET checkin-infantil/buscar");
-    confere(b1.length === 1 && b1[0].consulta.servicoId === "501" && b1[0].consulta.equipeId === "31" && b1[0].consulta.q === "Pedr", "GET buscar com a sala e o termo");
+    const b1 = chamadas(env, "POST checkin-infantil/buscar");
+    confere(b1.length === 1 && b1[0].corpo.servicoId === 501 && b1[0].corpo.equipeId === 31 && b1[0].corpo.q === "Pedr" && Object.keys(b1[0].consulta).length === 0, "POST buscar com a sala e o termo no corpo (nada do nome no endereço)");
     const r1 = env.e("chkRes101");
     confere(!!r1 && r1.textContent.includes("Pedro Souza") && r1.textContent.includes("[menor101]") && r1.textContent.includes("4 anos"), "o resultado mostra o nome (texto de ataque como texto) e a idade");
     confere(!!env.e("chkAdd101") && env.e("chkAdd101").disabled === false && JSON.stringify(argsDe(env.e("chkAdd101"))[0]) === "101", "botão Adicionar habilitado, com o id numérico");
@@ -391,14 +391,14 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // o botão Buscar e os textos que não valem (nenhum pedido)
     env.limparRegistro();
     env.e("chkCiBusca").value = "Pe"; env.doc.clicar(env.e("chkCiBuscar")); await env.ocioso();
-    confere(chamadas(env, "GET checkin-infantil/buscar").length === 0 && /pelo menos 3 letras/.test(texto(env, "chkCiBuscaMsg")) && env.foco() === env.e("chkCiBusca"), "Buscar com menos de 3 letras: mensagem, foco no campo, nada pedido");
+    confere(chamadas(env, "POST checkin-infantil/buscar").length === 0 && /pelo menos 3 letras/.test(texto(env, "chkCiBuscaMsg")) && env.foco() === env.e("chkCiBusca"), "Buscar com menos de 3 letras: mensagem, foco no campo, nada pedido");
     env.e("chkCiBusca").value = "Ped%"; env.doc.clicar(env.e("chkCiBuscar")); await env.ocioso();
-    confere(chamadas(env, "GET checkin-infantil/buscar").length === 0 && /só letras/.test(texto(env, "chkCiBuscaMsg")), "texto com % ou _ ou colchete: a tela avisa antes de pedir");
+    confere(chamadas(env, "POST checkin-infantil/buscar").length === 0 && /só letras/.test(texto(env, "chkCiBuscaMsg")), "texto com % ou _ ou colchete: a tela avisa antes de pedir");
     env.e("chkCiBusca").value = "Ped"; env.doc.clicar(env.e("chkCiBuscar")); await env.ocioso();
-    confere(chamadas(env, "GET checkin-infantil/buscar").length === 1 && !!env.e("chkRes101"), "o botão Buscar também busca");
+    confere(chamadas(env, "POST checkin-infantil/buscar").length === 1 && !!env.e("chkRes101"), "o botão Buscar também busca");
     // resposta velha: a busca antiga volta depois da nova e NÃO vale
     env.limparRegistro();
-    const presa = env.retem(x => x.chave === "GET checkin-infantil/buscar" && x.consulta.q === "Pedro");
+    const presa = env.retem(x => x.chave === "POST checkin-infantil/buscar" && x.corpo && x.corpo.q === "Pedro");
     env.e("chkCiBusca").value = "Pedro"; env.doc.clicar(env.e("chkCiBuscar")); await esperaChegar(presa);
     env.e("chkCiBusca").value = "Teo"; env.doc.clicar(env.e("chkCiBuscar")); await env.ocioso();
     presa.liberar(); await env.ocioso(); env.api.retencoes.length = 0;
@@ -621,13 +621,13 @@ async function rodar({ mutar = {}, so = null } = {}) {
     env.doc.digitar(env.e("chkCiVisSaude"), "Alergia a amendoim e leite");
     env.doc.marcar(env.e("chkCiVisConcordo"), true);
     env.doc.clicar(env.e("chkCiVisAdicionar")); await env.ocioso();
-    preencherOutraPessoa(env, { nome: "Tia Zeza", par: "TIO", doc: "CNH", tel: "(11) 99999-0000" });
+    preencherOutraPessoa(env, { nome: "Tia Zeza", par: "MAE", doc: "CNH", tel: "(11) 99999-0000" });   // (Trava 7-B) a saúde do visitante só com pai, mãe ou tutor(a)
     env.e("chkCiExtraNome0").value = "Vovó Lia"; env.e("chkCiExtraPar0").value = "AVO"; env.e("chkCiExtraNome1").value = "Tio Beto"; env.e("chkCiExtraPar1").value = "TIO";
     env.limparRegistro();
     await enviarCheckin(env);
     const p = chamadas(env, "POST checkin-infantil/checkin")[0];
     const hash = F.mc.textoDe("SAUDE_CRACHA").hash;
-    confere(JSON.stringify(p.corpo) === JSON.stringify({ servicoId: 501, equipeId: 31, trouxe: { nome: "Tia Zeza", parentesco: "TIO", documento: "CNH", contato: "11999990000" },
+    confere(JSON.stringify(p.corpo) === JSON.stringify({ servicoId: 501, equipeId: 31, trouxe: { nome: "Tia Zeza", parentesco: "MAE", documento: "CNH", contato: "11999990000" },
       criancas: [{ visitante: { nome: "Visitante Oito", nascimento: "2018-01-01", saude: { texto: "Alergia a amendoim e leite", concordo: true, textoHash: hash } } }], autorizadosVisita: [{ nome: "Vovó Lia", parentesco: "AVO" }, { nome: "Tio Beto", parentesco: "TIO" }] }), `corpo do visitante: ${JSON.stringify(p && p.corpo)}`);
     confere(p.corpo.criancas[0].visitante.saude.textoHash === hash && p.corpo.trouxe.contato === "11999990000" && typeof p.corpo.criancas[0].visitante.saude.concordo === "boolean", "o hash do texto que a tela mostrou, o telefone só com números e o 'concordo' como booleano");
     const reg = S.registros[S.registros.length - 1];
@@ -717,7 +717,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
   const H = { T, cenario, confere, esperar, montar, limpo, achar, descendentes, botao, botoes, chamadas, texto, argsDe, visivel, confereAcessibilidade, idsRepetidos, clicarEResponder, esperaChegar, nomeDe,
     abrirMeuPainel, abrirSalaMeu, abrirAbaGestao, abrirSalaGestao, entrarNaSala, salaPronta, buscar, adicionarMembro, escolherQuemTrouxe, preencherOutraPessoa, enviarCheckin, checkinDoPedro, cartao, seloDe, ocorrencias, imprimir,
     F, ATAQUE, ck, MEU, SALA, MIN, ALFABETO, criarAmbiente, lerApp, mutar, ambiente: () => ambienteAtual };
-  for (const arquivo of ["./cenarios-retirada", "./cenarios-lideranca", "./cenarios-filhos-e-falhas", "./cenarios-ataque-total", "./cenarios-defesa", "./cenarios-extra-a", "./cenarios-extra-b", "./cenarios-extra-c", "./cenarios-extra-d"]) {
+  for (const arquivo of ["./cenarios-retirada", "./cenarios-lideranca", "./cenarios-filhos-e-falhas", "./cenarios-ataque-total", "./cenarios-defesa", "./cenarios-extra-a", "./cenarios-extra-b", "./cenarios-extra-c", "./cenarios-extra-d", "./cenarios-trava7b"]) {
     try { require(arquivo)(H); } catch (erro) { if (erro && erro.code === "MODULE_NOT_FOUND" && String(erro.message).includes(arquivo.slice(2))) continue; throw erro; }
   }
 

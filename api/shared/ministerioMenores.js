@@ -509,9 +509,9 @@ function listaEmTexto(itens) {
   return `${itens.slice(0, -1).join(", ")} e ${itens[itens.length - 1]}`;
 }
 
-function textoVencendo({ itens, faixa }) {
+function textoVencendo({ itens, faixa, comTurmas = false }) {
   const lista = listaEmTexto(itens.map((i) => `${i.rotulo} (${formatarDataBr(i.data)})`));
-  return `Ministério com menores: o que vence em até ${faixa} dias na sua habilitação — ${lista}. A renovação leva dias para sair: providencie agora, porque no dia do vencimento você sai automaticamente das escalas com crianças e adolescentes. Veja o que fazer em Meu Painel → Ministério com menores.`.slice(0, 1000);
+  return `Ministério com menores: o que vence em até ${faixa} dias na sua habilitação — ${lista}. A renovação leva dias para sair: providencie agora, porque no dia do vencimento você sai automaticamente das escalas${comTurmas ? " e das turmas da EBD" : ""} com crianças e adolescentes. Veja o que fazer em Meu Painel → Ministério com menores.`.slice(0, 1000);
 }
 function textoRetiradaPessoa({ equipes, nEscalas }) {
   const onde = listaEmTexto(equipes);

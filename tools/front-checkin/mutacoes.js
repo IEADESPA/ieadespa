@@ -383,7 +383,7 @@ const MANUAIS = [
   ["ligação: a sub-aba não está na lista de sub-abas", S, "\"menores\", \"protecao\", \"checkininfantil\", \"minhasconquistas\"", "\"menores\", \"protecao\", \"minhasconquistas\""],
   ["ligação: a sub-aba não tem título", S, "protecao: \"Proteção de crianças\", checkininfantil: \"Check-in infantil\", minhasconquistas", "protecao: \"Proteção de crianças\", minhasconquistas"],
   ["ligação: a sub-aba não tem ajuda", S, "  \"meupainel:checkininfantil\": \"Check-in infantil: as salas de hoje em que você serve", "  \"meupainel:checkininfantil_X\": \"Check-in infantil: as salas de hoje em que você serve"],
-  ["ligação: a aba não tem ajuda", S, "  checkininfantil: \"Check-in infantil (ECA arts. 70 e 70-A;", "  checkininfantil_X: \"Check-in infantil (ECA arts. 70 e 70-A;"],
+  ["ligação: a aba não tem ajuda", S, "  checkininfantil: \"Check-in infantil (ECA arts. 70, 70-A e 70-B;", "  checkininfantil_X: \"Check-in infantil (ECA arts. 70, 70-A e 70-B;"],
   ["ligação: o título da aba some", D, "protecao: \"Proteção de Crianças\", checkininfantil: \"Check-in Infantil\",", "protecao: \"Proteção de Crianças\","],
   ["ligação: o módulo não entra no HTML", H, "  <script src=\"modulos/checkin-infantil.js\"></script>\n", ""],
   ["ligação: a casca offline esquece o módulo", W, "\"/modulos/checkin-infantil.js\", ", ""],
@@ -686,7 +686,13 @@ const MANUAIS = [
   ["F16: 'voluntarios=N' não é traduzido", P, "    if ((m = /^voluntarios=(\\d+)$/.exec(p)))", "    if (false && (m = /^voluntarios=(\\d+)$/.exec(p)))"],
   ["F16: a situação antes da baixa não é traduzida", P, "    if (CHK_ROTULO_ANTES_DA_BAIXA[p]) return CHK_ROTULO_ANTES_DA_BAIXA[p];\n", ""],
   ["F16: a baixa de quem estava na sala perde o 'estava'", P, "NA_SALA: \"estava na sala\"", "NA_SALA: \"na sala\""],
-  ["F16: a baixa de quem esperava a liderança perde o rótulo", P, "RETIRADA_PENDENTE: \"estava aguardando a liderança\" };   // (o Detalhe", "};   // (o Detalhe"]
+  ["F16: a baixa de quem esperava a liderança perde o rótulo", P, "RETIRADA_PENDENTE: \"estava aguardando a liderança\" };   // (o Detalhe", "};   // (o Detalhe"],
+  // Trava 7-B (20/10/2026)
+  ["Trava 7-B: a saúde do visitante vai com quem não é pai, mãe nem tutor", P, "if (lista.some(c => c.tipo === \"VISITANTE\" && c.saude) && !CHK_PARENTESCOS_QUE_AUTORIZAM_SAUDE.includes(parentesco))", "if (false)"],
+  ["Trava 7-B: o tio passa a autorizar a saúde", P, "const CHK_PARENTESCOS_QUE_AUTORIZAM_SAUDE = [\"PAI\", \"MAE\", \"TUTOR\"];", "const CHK_PARENTESCOS_QUE_AUTORIZAM_SAUDE = [\"PAI\", \"MAE\", \"TUTOR\", \"TIO\"];"],
+  ["Trava 7-B: a mãe deixa de autorizar a saúde", P, "const CHK_PARENTESCOS_QUE_AUTORIZAM_SAUDE = [\"PAI\", \"MAE\", \"TUTOR\"];", "const CHK_PARENTESCOS_QUE_AUTORIZAM_SAUDE = [\"PAI\", \"TUTOR\"];"],
+  ["Trava 7-B: a recusa da saúde não foca o parentesco", P, "{ erro(CHK_MSG_SAUDE_SO_RESPONSAVEL, \"chkCiTrouxePar\"); return; }", "{ erro(CHK_MSG_SAUDE_SO_RESPONSAVEL, \"\"); return; }"],
+  ["Trava 7-B: a busca volta ao GET (o nome no endereço)", P, "const data = await chkPostar(\"buscar\", { servicoId: Number(sala.servicoId), equipeId: Number(sala.equipeId), q });", "const data = await chkObter(`buscar?${chkConsultaSala(sala, `&q=${encodeURIComponent(q)}`)}`);"]
 ];
 
 // ------------------------------------------------------------ monta a lista

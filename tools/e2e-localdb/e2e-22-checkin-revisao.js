@@ -402,8 +402,8 @@ const contar = (rs) => rs.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 
   r = await ckPost("sair-da-sala", pin(OLGA), sala(svT)); ok(r.status === 404, "(quem nunca teve relação com a sala continua recebendo 404)", r.status);
   // C26: acento
   await H.crianca({ id: 7305, nome: "João Acentuado E2E", idade: 4, cong: c1, resp: [[P.alice, "MAE"]] });
-  r = await ckGet("buscar", pin(BRUNO), { ...sala(svP), q: "joao acentuado" }); ok(r.status === 200 && r.body.criancas.some((c) => c.menorId === 7305), "C26: buscar 'joao acentuado' acha 'João Acentuado' (a busca ignora acento e caixa)", r.body);
-  r = await ckGet("buscar", pin(BRUNO), { ...sala(svP), q: "JOÃO ACENTUADO" }); ok(r.status === 200 && r.body.criancas.some((c) => c.menorId === 7305), "e 'JOÃO ACENTUADO' também", r.body);
+  r = await ckPost("buscar", pin(BRUNO), { ...sala(svP), q: "joao acentuado" }); ok(r.status === 200 && r.body.criancas.some((c) => c.menorId === 7305), "C26: buscar 'joao acentuado' acha 'João Acentuado' (a busca ignora acento e caixa)", r.body);
+  r = await ckPost("buscar", pin(BRUNO), { ...sala(svP), q: "JOÃO ACENTUADO" }); ok(r.status === 200 && r.body.criancas.some((c) => c.menorId === 7305), "e 'JOÃO ACENTUADO' também", r.body);
   const svU = await H.abrirSala(c1, eq.maternal, [ANA, BRUNO, CARLA]);
   r = anota(await checkin(pin(ANA), svU, eq.maternal, [{ visitante: { nome: "Joao Visitante Acento", nascimento: "2022-03-04" } }], trouxeLivre())); ok(r.status === 201, "(o visitante 'Joao Visitante Acento' entra)", r.body);
   r = await checkin(pin(ANA), svU, eq.maternal, [{ visitante: { nome: "João Visitante Acento", nascimento: "2022-03-04" } }], trouxeLivre()); ok(r.status === 422 && /já está numa sala/.test(msg(r)), "o MESMO visitante digitado com acento ('João') é reconhecido: 422 'já está numa sala'", [r.status, msg(r)]);

@@ -35,7 +35,7 @@ module.exports = function registrar(H) {
     env.limparRegistro();
     env.e("chkCiBusca").value = "Pedro";
     await env.ev("chkBuscarAcao()"); await env.ocioso();
-    confere(chamadas(env, "GET checkin-infantil/buscar").length === 0, "a busca chamada direto por quem não é da equipe não pede nada ao servidor");
+    confere(chamadas(env, "POST checkin-infantil/buscar").length === 0, "a busca chamada direto por quem não é da equipe não pede nada ao servidor");
     env.ev(`chkAbrirRetiradaAcao(${a.registroId}, null)`); env.ev(`chkAbrirSegundaViaAcao(${a.registroId}, null)`);
     confere(!env.e("chkRtPainel") && !env.e("chkSvPainel") && env.g("chkAcao") === null, "os painéis de retirada e de segunda via nem abrem");
   });
@@ -49,10 +49,10 @@ module.exports = function registrar(H) {
     confere(env.ev("chkPodeOperar()") === false && !!env.g("chkCi"), "a leitura mostra que a pessoa não está mais na sala (o formulário em memória continua)");
     env.limparRegistro();
     env.dispararTemporizador(350); await env.ocioso();
-    confere(chamadas(env, "GET checkin-infantil/buscar").length === 0, "o temporizador que dispara depois da saída não pede nada");
+    confere(chamadas(env, "POST checkin-infantil/buscar").length === 0, "o temporizador que dispara depois da saída não pede nada");
     env.e("chkCiBusca").value = "Pedro";
     await env.ev("chkBuscarAcao()"); await env.ocioso();
-    confere(chamadas(env, "GET checkin-infantil/buscar").length === 0, "e a busca chamada direto também não");
+    confere(chamadas(env, "POST checkin-infantil/buscar").length === 0, "e a busca chamada direto também não");
   });
 
   cenario("Extra B: o envio da retirada confere de novo se quem opera ainda está na sala (a sessão passou a ser de outra pessoa sem a tela ser limpa)", async () => {

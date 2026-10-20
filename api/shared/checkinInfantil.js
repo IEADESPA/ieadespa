@@ -1,5 +1,5 @@
 // shared/checkinInfantil.js (v7.10 — Check-in infantil com cadeia de custódia)
-// ECA arts. 70 e 70-A (prevenção); Lei 14.811/2024 (art. 59-A do ECA); LGPD arts. 11 e 14 (dado de saúde e dado de criança).
+// ECA arts. 70, 70-A e 70-B (prevenção; o 70-B obriga as entidades e quem cuida de criança por ministério); Lei 14.811/2024 (art. 59-A do ECA); LGPD arts. 11 e 14 (dado de saúde e dado de criança).
 //
 // A REGRA do check-in, pura, sem banco (a parte com banco está em shared/checkinInfantilDb.js). O que mora aqui:
 //  - o código de retirada: gerado ao acaso, guardado só como HMAC, conferido em tempo constante;
@@ -56,6 +56,8 @@ const PARENTESCOS = {
   PAI: "Pai", MAE: "Mãe", AVO: "Avô ou avó", TIO: "Tio ou tia", IRMAO: "Irmão ou irmã (18 anos ou mais)", PADRINHO: "Padrinho ou madrinha",
   TUTOR: "Tutor(a)", AMIGO_FAMILIA: "Amigo(a) da família", OUTRO: "Outra pessoa de confiança do responsável"
 };
+// Quem pode autorizar a saúde do visitante na etiqueta, no balcão (o responsável legal: LGPD art. 14, § 1º).
+const PARENTESCOS_QUE_AUTORIZAM_SAUDE = ["PAI", "MAE", "TUTOR"];
 // O que o voluntário conferiu no balcão (nunca se guarda o número do documento).
 const DOCUMENTOS = { RG: "RG", CNH: "CNH", CPF: "CPF", OUTRO: "Outro documento com foto" };
 
@@ -101,10 +103,10 @@ const MENSAGENS = {
   MUDOU: "O registro mudou enquanto você agia (outra pessoa atuou nele). Atualize a tela e confira.",
   CRIANCA_NAO_ACHADA: "Criança não encontrada nesta sala.",
   NAO_E_MENOR: "Só crianças e adolescentes com menos de 18 anos fazem check-in infantil.",
-  SEM_NASCIMENTO: "O cadastro desta criança não tem a data de nascimento. Peça à Secretaria para completar, ou faça o check-in como visitante.",
+  SEM_NASCIMENTO: "O cadastro desta criança não tem a data de nascimento. Só nesse caso, faça o check-in como visitante (com a data que quem a trouxe informar) e peça à Secretaria para completar o cadastro.",
   JA_NA_SALA: "Esta criança já está numa sala (ainda não foi retirada).",
   SEM_PERMISSAO_GESTAO: "Esta ação é da liderança da congregação (entrar com a senha de acesso administrativo).",
-  SEM_RESPONSAVEL: "Esta criança não tem responsável cadastrado pela Secretaria: faça o check-in como visitante e peça à Secretaria para cadastrar o responsável.",
+  SEM_RESPONSAVEL: "Esta criança não tem responsável cadastrado pela Secretaria: faça o check-in dela como membro, informando quem a trouxe pelo nome, e peça à Secretaria para cadastrar o responsável.",
   SALA_AINDA_ABERTA: "A sala ainda está aberta e há criança nela: registre a retirada de cada uma com o código (ou, se for preciso, a liderança decide a divergência). Só depois que o check-in da sala fecha a liderança pode encerrá-la com baixa administrativa.",
   SEM_AVISO_LIDERANCA: "ATENÇÃO: a liderança NÃO foi avisada pelo sistema. O pedido está registrado e a criança continua na sala, mas ligue agora para a liderança da congregação para ela decidir.",
   SEM_AVISO_RESPONSAVEIS: "Atenção: o sistema não conseguiu avisar o responsável cadastrado da nova segunda via. Avise a liderança e o responsável.",
@@ -454,6 +456,11 @@ function validarCheckin(d = {}, { hoje }) {
   }
   const trouxe = validarTrouxe(d.trouxe, { exigeContato: haVisitante });
   if (!trouxe.valido) return trouxe;
+  // (Trava 7-B) a saúde do visitante é dado sensível de criança: o consentimento é de pai, mãe ou responsável legal (LGPD art. 14, § 1º). Quem trouxe e é tio, avó, amigo...
+  // não autoriza a etiqueta com a saúde — a criança entra sem ela, e a equipe é avisada de viva voz.
+  if (criancas.some((c) => c.tipo === "VISITANTE" && c.saude) && !PARENTESCOS_QUE_AUTORIZAM_SAUDE.includes(trouxe.valor.parentesco)) {
+    return { valido: false, mensagem: "A informação de saúde na etiqueta só pode ser autorizada pelo pai, pela mãe ou pelo tutor(a) da criança. Faça o check-in sem ela e avise a equipe da sala de viva voz." };
+  }
   let extras = [];
   if (d.autorizadosVisita != null) {
     if (!Array.isArray(d.autorizadosVisita)) return { valido: false, mensagem: "autorizadosVisita deve ser uma lista." };
@@ -635,7 +642,7 @@ function referenciaDeProfessor(turmaId, membroId, dataIso) {
 module.exports = {
   ALFABETO_CODIGO, TAMANHO_CODIGO, FORMATO_CODIGO, TENTATIVAS_PADRAO, TENTATIVAS_TETO, JANELA_ANTES_MIN_PADRAO, JANELA_DEPOIS_HORAS_PADRAO, VISITANTE_CONTATO_DIAS_PADRAO,
   SEGUNDA_VIA_MINUTOS, MAX_CRIANCAS_POR_CHECKIN, MAX_AUTORIZADOS_VISITA, MAX_AUTORIZADOS_POR_CRIANCA, MAX_NOME, MAX_SAUDE, MAX_MOTIVO, MAX_REFERENCIA, LIMITE_LISTA,
-  SIGLAS_PRAZO, PARENTESCOS, DOCUMENTOS, SITUACOES, TIPOS_EVENTO, MENSAGENS,
+  SIGLAS_PRAZO, PARENTESCOS, PARENTESCOS_QUE_AUTORIZAM_SAUDE, DOCUMENTOS, SITUACOES, TIPOS_EVENTO, MENSAGENS,
   idDe, validarNome, validarTelefone, validarParentesco, validarDocumento, validarSaudeTexto, dataIsoValida, validarNascimentoDeMenor, lerRefPessoa,
   gerarCodigo, normalizarCodigo, hashCodigo, confereCodigo, tentativasPermitidas,
   faixaDaIdade, idadeForaDaFaixa, agoraBrasiliaIso, minutosDe, prazosDoCheckin, avaliarJanela,

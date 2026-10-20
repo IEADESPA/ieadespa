@@ -261,7 +261,18 @@ describe("validação do check-in", () => {
     expect(v(corpo({ trouxe: { ...livre, contato: "123" } })).valido).toBe(false);
   });
   test("a saúde do visitante exige texto, a concordância do responsável presente e o hash do texto mostrado", () => {
-    const vis = (saude) => v(corpo({ criancas: [{ visitante: { nome: "Davi", nascimento: "2019-03-02", saude } }], trouxe: { responsavelId: 10 } }));
+    const trouxe = (parentesco) => ({ nome: "Paula Lima", parentesco, documento: "RG", contato: "94991112222" });
+    const vis = (saude, quem = trouxe("MAE")) => v(corpo({ criancas: [{ visitante: { nome: "Davi", nascimento: "2019-03-02", saude } }], trouxe: quem }));
+    // (Trava 7-B) só pai, mãe ou tutor(a) autoriza a saúde do visitante na etiqueta (LGPD art. 14, § 1º); sem saúde, qualquer parentesco traz o visitante
+    const ok = { texto: "alergia a amendoim", concordo: true, textoHash: "abc" };
+    for (const p of ["PAI", "MAE", "TUTOR"]) expect(vis(ok, trouxe(p)).valido).toBe(true);
+    for (const p of ["TIO", "AVO", "IRMAO", "PADRINHO", "AMIGO_FAMILIA", "OUTRO"]) {
+      const r = vis(ok, trouxe(p));
+      expect(r.valido).toBe(false);
+      expect(r.mensagem).toMatch(/só pode ser autorizada pelo pai, pela mãe ou pelo tutor/);
+      expect(vis(null, trouxe(p)).valido).toBe(true);
+    }
+    expect(vis(ok, { responsavelId: 10 }).valido).toBe(false);          // o responsável cadastrado de OUTRA criança não autoriza a saúde do visitante
     expect(vis({ texto: "alergia a amendoim", concordo: true, textoHash: "ABC" }).criancas[0].saude).toEqual({ texto: "alergia a amendoim", textoHash: "abc" });
     expect(vis({ texto: "alergia a amendoim", concordo: false, textoHash: "abc" }).valido).toBe(false);
     expect(vis({ texto: "alergia a amendoim", textoHash: "abc" }).valido).toBe(false);

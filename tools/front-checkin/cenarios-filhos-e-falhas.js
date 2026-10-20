@@ -449,13 +449,13 @@ module.exports = function registrar(H) {
     confere(/não está apto hoje/.test(texto(d.env, "chkSalaMsg")) && d.env.toasts().filter(t => /não está apto hoje/.test(t)).length === 1 && !!d.env.e("chkEntrarBotao"), "entrar recusado (403): a mensagem do servidor, um aviso só, e o botão continua");
     delete d.env.api.rotas["POST checkin-infantil/entrar-na-sala"];
     // buscar: 422 e 500
-    const e2 = await salaPronta(); e2.env.api.rotas["GET checkin-infantil/buscar"] = { status: 422, corpo: { sucesso: false, mensagem: "Digite ao menos 3 letras do nome da criança." } };
+    const e2 = await salaPronta(); e2.env.api.rotas["POST checkin-infantil/buscar"] = { status: 422, corpo: { sucesso: false, mensagem: "Digite ao menos 3 letras do nome da criança." } };
     e2.env.e("chkCiBusca").value = "Ped"; e2.env.doc.clicar(e2.env.e("chkCiBuscar")); await e2.env.ocioso();
     confere(/Digite ao menos 3 letras/.test(texto(e2.env, "chkCiBuscaMsg")) && texto(e2.env, "chkCiResultados") === "", "busca recusada (422): a mensagem do servidor e nenhum resultado");
-    e2.env.api.rotas["GET checkin-infantil/buscar"] = { status: 500, corpo: { sucesso: false, mensagem: "Erro interno ao processar o check-in infantil." } };
+    e2.env.api.rotas["POST checkin-infantil/buscar"] = { status: 500, corpo: { sucesso: false, mensagem: "Erro interno ao processar o check-in infantil." } };
     e2.env.doc.clicar(e2.env.e("chkCiBuscar")); await e2.env.ocioso();
     confere(/Erro interno/.test(texto(e2.env, "chkCiBuscaMsg")), "busca com erro do servidor: a mensagem na tela");
-    delete e2.env.api.rotas["GET checkin-infantil/buscar"];
+    delete e2.env.api.rotas["POST checkin-infantil/buscar"];
     // responsáveis da criança falham ao adicionar: a criança não entra na lista
     e2.env.api.rotas["GET checkin-infantil/responsaveis"] = { status: 500, corpo: { sucesso: false, mensagem: "Erro interno ao processar o check-in infantil." } };
     await buscar(e2.env, "Pedro"); await adicionarMembro(e2.env, 101);

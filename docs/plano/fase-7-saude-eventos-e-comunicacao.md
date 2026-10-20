@@ -2483,28 +2483,38 @@ uma versão grande: o módulo da AFM **e** a contagem de faltas da CLI (Art. 27)
 Peça operacional que sustenta na prática a v7.7: sem controle de entrega e
 retirada, a política de proteção é só documento.
 
-- [ ] Check-in por família com **etiqueta de segurança**: código aleatório por
+- [x] Check-in por família com **etiqueta de segurança**: código aleatório por
       criança, impresso na etiqueta e no recibo do responsável, **obrigatório na
       retirada** — quem não tem o código não retira, ainda que seja conhecido.
-- [ ] Lista de **pessoas autorizadas a retirar** por criança (reaproveita
-      `VinculosFamiliares` e o flag `ResponsavelLegal`, v1.7 — já existe) e alerta
-      de retirada divergente.
-- [ ] Alergia/condição de saúde impressa na etiqueta (com o consentimento da
+      *(Só o HMAC do código é guardado; 5 erros travam a criança, com a tentativa reservada no banco antes de
+      conferir; segunda via com dois adultos.)*
+- [x] Lista de **pessoas autorizadas a retirar** por criança e alerta de retirada divergente. *(Texto emendado:
+      a custódia se apoia no cadastro de responsáveis da Secretaria, `VoluntariadoResponsaveis`, e não no vínculo
+      familiar de autoatendimento — ver o contrato. A divergente só sai com o código e a aprovação da liderança.)*
+- [x] Alergia/condição de saúde impressa na etiqueta (com o consentimento da
       v7.7) e contagem de lotação por sala em tempo real — a proporção
       adulto/criança deixa de ser estimativa.
-- [ ] Registro de horário e de **quem entregou e quem retirou** — é a prova
-      auditável que protege a igreja e a família.
-- [ ] Bloqueio de voluntário sem habilitação vigente (v7.7) na sala, no ato do
-      check-in. *(Planning Center Check-Ins; FellowshipOne; ChurchSuite)*
-- [ ] **Integração com o Portal do Membro (vB.5)**: "meus filhos" no
-      autoatendimento é o pai/responsável legal (`VinculosFamiliares`,
-      `ResponsavelLegal`) consultando o histórico de check-in/check-out dos
-      próprios filhos pelo celular — nunca fazendo o check-in ele mesmo (isso
-      continua sendo ação de voluntário na sala, com a etiqueta física). Sub-aba
-      nova em "Meu Painel", mesma infraestrutura de login/PWA da vB.5.
-- [ ] **Portão da EBD** (o "próximo degrau" que a v7.8 deixou registrado): a turma da EBD marcada como
+- [x] Registro de horário e de **quem entregou e quem retirou** — é a prova
+      auditável que protege a igreja e a família. *(Histórico só de acréscimo, com gatilho no banco; 5 anos.)*
+- [x] Bloqueio de voluntário sem habilitação vigente (v7.7) na sala, no ato do
+      check-in. *(Planning Center Check-Ins; FellowshipOne; ChurchSuite)* *(A aptidão é reavaliada a cada ato; e,
+      desde a Trava 7-B, quem perde a aptidão com a sala aberta tem a presença encerrada e a liderança é avisada.)*
+- [x] **Integração com o Portal do Membro (vB.5)**: "meus filhos" no autoatendimento é o responsável cadastrado
+      consultando o histórico de check-in/check-out dos próprios filhos pelo celular — nunca fazendo o check-in ele
+      mesmo (isso continua sendo ação de voluntário na sala, com a etiqueta física). Sub-aba nova em "Meu Painel".
+- [x] **Portão da EBD** (o "próximo degrau" que a v7.8 deixou registrado): a turma da EBD marcada como
       "com menores" só aceita professor **apto** (a aptidão da v7.7) e perde, na rotina diária, o professor que
-      deixou de ser apto — hoje só as escalas e os canais passam pelo portão.
+      deixou de ser apto. *(Desde a Trava 7-B, o professor da turma marcada também precisa ser adulto e apto a
+      cada ato, e entra no painel e nos avisos de renovação.)*
+
+  **Prova (20/10/2026).** Servidor: jest do `api` inteiro verde; no SQL Server de verdade (LocalDB, handlers
+  reais) e2e-18 (setup e garantias da 145) 241, e2e-19 (fluxos) 413, e2e-20 (segurança) 246, e2e-21 (corridas
+  com vários processos) 49 e e2e-22 (revisão) 189 verificações, 0 falhas. Tela: `tools/front-checkin` 1.488
+  verificações, 0 falhas, e a prova de mutação completa (648 mutações; ver a Trava 7-B). Entrega: migração 145
+  (`sql/migrations/145_checkin_infantil.sql`), `shared/checkinInfantil.js` (a regra, pura),
+  `shared/checkinInfantilDb.js`, a Function `GestaoCheckinInfantil` (`/api/checkin-infantil/<ação>`), o módulo
+  `app/modulos/checkin-infantil.js` (aba Check-in infantil e sub-aba de Meu Painel), a marca "com menores" da
+  turma da EBD e a rota `POST /api/ebd-turmas/turmas/menores`.
 
 ### Contrato da v7.10 (decisões tomadas antes de construir)
 

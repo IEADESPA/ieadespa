@@ -716,10 +716,14 @@ async function executarUma(m) {
   return { nome: m[0], estado: "ESCAPOU" };
 }
 
-if (process.env.CHK_MUT_INDICES) {
+if (process.env.CHK_SO_BASE) {
+  // processo filho: só a rodada sem mutação, devolvida ao pai
+  (async () => { const T = await require("./roteiro").rodar({}); process.send({ total: T.total, falhas: T.falhas }, () => process.exit(0)); })();
+} else if (process.env.CHK_MUT_INDICES) {
   // processo filho: roda as mutações dos índices recebidos e devolve cada resultado ao pai
   const lista = montarLista();
   const vivo = setInterval(() => {}, 1000);
+  setInterval(() => { if (process.memoryUsage().rss > 2.4e9) process.exit(97); }, 500).unref();      // segunda cerca: memória fora do monte do V8 (o pai conta o que faltou como acusada)
   (async () => {
     for (const i of process.env.CHK_MUT_INDICES.split(",").map(Number)) process.send({ i, r: await executarUma(lista[i]) });
     clearInterval(vivo); process.exit(0);
@@ -741,23 +745,40 @@ if (process.env.CHK_MUT_INDICES) {
       console.log(`${indices.length} mutações, ${ruins} âncora(s) que não casam exatamente uma vez`);
       process.exit(ruins ? 1 : 0);
     }
-    const { rodar } = require("./roteiro");
-    const base = await rodar({});
+    // A rodada sem mutação vai num processo próprio (20/10/2026): feita aqui, o pai ficava com ~2 GB presos a prova inteira, somados aos filhos.
+    const base = await new Promise((ok) => {
+      const filho = fork(__filename, [], { execArgv: ["--max-old-space-size=2048"], env: Object.assign({}, process.env, { CHK_SO_BASE: "1" }) });
+      let r = null;
+      filho.on("message", (m) => { r = m; });
+      filho.on("exit", () => ok(r || { total: 0, falhas: ["a rodada sem mutação não terminou (processo encerrado)"] }));
+    });
     console.log(`base (sem mutação): ${base.total} verificações, ${base.falhas.length} falhas`);
     if (base.falhas.length) { base.falhas.forEach(f => console.log("  ✗ " + f)); process.exit(2); }
     const nProc = Math.max(1, Math.min(Number(process.env.CHK_PROCESSOS) || 6, indices.length));
     // Lotes de poucas mutações, cada lote num processo NOVO: cada mutação deixa um ambiente de tela na memória do processo e, numa lista longa, um único processo chegava a 4 GB e
     // estourava ("heap out of memory", 19/10/2026). CHK_LOTE = mutações por processo (padrão 4); nProc processos ao mesmo tempo.
-    const tamanhoLote = Math.max(1, Number(process.env.CHK_LOTE) || 4);
+    const tamanhoLote = Math.max(1, Number(process.env.CHK_LOTE) || 1);   // (era 4: cada mutação deixava ~1 GB e o processo chegava a ~3,8 GB; com 1 por processo o pico é de ~1,5 GB)
     const lotes = [];
     for (let k = 0; k < indices.length; k += tamanhoLote) lotes.push(indices.slice(k, k + tamanhoLote));
     const resultados = new Map();
     await Promise.all(Array.from({ length: nProc }, async () => {
       for (let lote = lotes.shift(); lote; lote = lotes.shift()) {
         await new Promise((ok) => {
-          const filho = fork(__filename, [], { env: Object.assign({}, process.env, { CHK_MUT_INDICES: lote.join(",") }) });
+          // Teto de memória por processo (20/10/2026): uma mutação que deixa o roteiro girando sem fim engolia memória sem limite durante os 90 s do tempo-limite (a memória livre chegou a 23 MB, o
+          // commit passou de 43 GB e a máquina do responsável reiniciou com tela azul 0x10E). Com o teto o processo morre sozinho e a mutação conta como acusada ("estourou a memória").
+          const filho = fork(__filename, [], { execArgv: ["--max-old-space-size=2048"], env: Object.assign({}, process.env, { CHK_MUT_INDICES: lote.join(",") }) });
+          const paredeDura = setTimeout(() => { try { filho.kill(); } catch { } }, 150000 * lote.length);        // nenhum processo passa do tempo de parede, mesmo preso num laço síncrono
           filho.on("message", ({ i, r }) => { resultados.set(i, r); const rot = r.estado === "ACUSADA" ? `acusada (${String(r.n).padStart(2)})` : r.estado === "ESCAPOU" ? "ESCAPOU     " : "INAPLICÁVEL "; console.log(`${rot} ${r.nome}${r.detalhe ? "  <-  " + r.detalhe : ""}`); });
-          filho.on("exit", () => ok());
+          filho.on("exit", () => {
+            clearTimeout(paredeDura);
+            // o que o processo não chegou a devolver (morreu pelo teto de memória ou pelo tempo de parede): o roteiro não termina nessa mutação, e isso é acusada (num CI ele reprovaria)
+            for (const i of lote) {
+              if (resultados.has(i)) continue;
+              const r = { nome: todas[i][0], estado: "ACUSADA", detalhe: "o roteiro estourou a memória ou o tempo (processo encerrado)", n: 1 };
+              resultados.set(i, r); console.log(`acusada ( 1) ${r.nome}  <-  ${r.detalhe}`);
+            }
+            ok();
+          });
         });
       }
     }));
